@@ -928,6 +928,20 @@ and docker rm -f (SIGKILL) never runs atexit — tempfix1's samples LOST
 (sidecar final=False). Samples now ride a 30s slow throttle; next
 instrumented arm delivers the F/m regression.
 
+## B2C1 COMPLETE (2026-07-27 22:05Z): B2c band-gate PASS + dispatch verdict
+Verdicts: 2 pass, 2 fail, 4 finished (12907+13236 pass) — band holds with
+FR13_CONV_WB_BATCHED engaged (preseeded needles fired). Garble eyeball 4/4
+clean. SPEED NOT QUOTABLE (ctrace rider confound, recorded). Deliverables:
+- DISPATCH TAGS FINAL: 6329/6329 FULL — piecewise-fallback hypothesis dead
+  at scale; the ~28ms/event in-span idle is host time between the begin
+  event and the FULL-replay enqueue (or a residual per-event sync).
+- ctrace corpus: 34k records snapshotted (b2c1_ctrace_snapshot.jsonl; the
+  container-local file died at teardown ~1 min after the last snapshot) —
+  per-node draft/parent/argmax/prob = the branch-tail join dataset.
+NEXT: b2c2 clean arm (B2c + timers, NO debug rider) = B2c's real speed
+verdict; sub-bracket instrument (begin→replay-enqueue split + logits-compute
+bracket) authored for the boot after.
+
 ## REGRESS1 COMPLETE (2026-07-27 21:00Z): per-step F/m DELIVERED + 2P/2F at 0.6
 Verdicts: 2 pass, 2 fail, 4 finished (12907 + 13236 pass — 13236's coin flip
 landed pass; the 2P band reappears at TRUE 0.6). Tuple: accept 4.561 | eps
