@@ -679,3 +679,36 @@ NEXT (correct instrument): SAME-SESSION A/B — one boot running the =3 arm
 and the =2 arm back-to-back on the same subset, so phase/co-residency and
 host state are shared; compare slopes within that boot. Only then decide
 whether =2 costs per-event, and only then attribute.
+
+## POOLED REGRESSION (7 arms, all modes): NO MODE DIFFERENCE DETECTABLE
+Fit over every arm-level tuple measured (=1, =2, =3, staged):
+    step_wall_ms = 235.5 + 49.2 * eps      (R ~ exact; residuals below)
+  =3  boot23  eps 1.441 step 305.5  resid  -0.9   slope 18.70
+  stg boot16  eps 1.847 step 325.0  resid  -1.4   slope 16.97
+  stg boot24  eps 1.899 step 331.5  resid  +2.5   slope 17.00
+  =3  armA    eps 2.093 step 337.0  resid  -1.5   slope 15.96
+  =2  boot54  eps 2.554 step 375.0  resid +13.9   slope 15.16
+  =2  boot53  eps 2.645 step 351.5  resid -14.2   slope 14.51
+  =1  s1go    eps 2.740 step 371.8  resid  +1.5   slope 14.70
+Mean residual by mode: =1 +1.5 | =2 -0.1 (spread 28) | =3 -1.2 | stg +0.6
+=> ALL FOUR MODES SIT ON THE SAME LINE within +/-1.6ms of each other.
+CORRECTION TO MY OWN CLAIM: the "slope ladder" (=3 18.7 > stg 17.0 > =2
+14.8) was an ARTIFACT. Slope = (accept+1)/step_wall does NOT normalize
+eps, because step_wall itself grows with eps (F + m*eps). Slope predicted
+from eps ALONE reproduces every arm: eps 1.4 -> 18.1, eps 2.0 -> 16.5,
+eps 2.6 -> 15.1. The arms differ in WORKLOAD PHASE, not in mode.
+WHAT THIS MEANS FOR S1: the one-graph =2 region neither costs nor saves
+measurable step time vs =3 or staged. Detection floor here is ~±15ms/step
+(the =2 residual spread) = ~4% of step. S1's graph fusion did NOT move the
+step-time needle.
+WHERE THE TIME ACTUALLY IS: fixed 235.5ms/step + 49.2ms per verify event.
+At eps 2.5 the FIXED term is ~66% of the step — and the measured verify
+forward alone is ~194-218ms/step (sfwd sidecars), i.e. essentially the
+whole fixed term. The remaining lever is the VERIFY FORWARD (= exactly
+what S2 targets), not the sampler/committer region.
+NOTE: 49.2ms/event marginal now matches the native ~49ms/event figure from
+bar17-r2 — the tree's per-event cost is no longer the outlier it was.
+NEXT INSTRUMENT (to resolve below ±15ms): per-STEP regression from the
+sfwd sidecar (thousands of steps/arm, each with known draft count) instead
+of arm-level aggregates; gives F and m per mode with real confidence
+intervals.
