@@ -18309,6 +18309,9 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "        if not _fr13_sg_used:\n"
     ) + anchor.replace("        with record", "            with record").replace(
         "            sampler_output", "                sampler_output"
+    ) + (
+        "        if getattr(self, \"_fr13_sg_warmup_mode\", False):\n"
+        "            return sampler_output\n"
     )
     text = text.replace(anchor, inject, 1)
     GPU_MODEL_RUNNER_PATH.write_text(text)

@@ -113,7 +113,22 @@ def _fr13_sg_warmup_capture(self):
                 hidden = hs[0] if isinstance(hs, tuple) else hs
                 logits = self.model.compute_logits(
                     torch.rand_like(hidden[: (n + 1) * B]))
-                out = self._sample(logits, md)
+                # route through sample_tokens: the =2 capture harness wraps
+                # ITS call to _sample (calling self._sample directly bypasses
+                # the wrapper entirely — boot-29f: done 0/4, all-eager)
+                import types as _types
+                _ns = _types.SimpleNamespace(
+                    scheduled_spec_decode_tokens={
+                        _w: [0] * n for _w in _fr13_wids})
+                self._fr13_sg_warmup_mode = True
+                try:
+                    self.execute_model_state = (
+                        _ns, logits, md, None, hidden, hidden,
+                        None, None, None, None)
+                    out = self.sample_tokens(None)
+                finally:
+                    self._fr13_sg_warmup_mode = False
+                    self.execute_model_state = None
                 del out
             ent = getattr(self, "_fr13_sg_graphs", {}).get(
                 (tuple([n] * B), tuple(logits.shape)))
