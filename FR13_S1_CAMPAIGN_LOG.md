@@ -245,3 +245,25 @@ reproduces live shapes exactly (B in 1..4 x fixed 21-tok drafts).
 Boot-29 = WARMUP CAPTURE: pre-capture the =2 graph per B-key during the
 boot's quiet capture phase; live steps replay-only. Boot-28 arm continues
 as staged band point while the build proceeds.
+
+### Boot-29 warmup-capture design (PINNED, build in progress)
+Fabricator `_fr13_sg_warmup_capture(self)` (module-tail injection, called
+at end of capture_model, inside the boot's quiet window):
+per B in 1..max_num_seqs:
+1. Tree choices from serve config (21-node constant); ndt = [21]*B.
+2. TEMP monkey-patch SpecDecodeMetadata.make_dummy -> real tree index
+   layout (target = sampled_start+parent_local, self = sampled_start+
+   node_idx+1, sampled_start += 22) + tree_parent/self attrs — the
+   _dummy_run pipeline (line 8005) then builds a TREE-SHAPED forward,
+   engaging the GDN defer route so real products/stash exist.
+3. TEMP swap input_batch.sampling_metadata -> dummy B-sized (temp 0.6,
+   generators={} -> bulk-gen uniforms), per _dummy_sampler_run pattern.
+4. self._dummy_run(uniform_decode, force_attention, mode NONE) ->
+   defer products staged; logits via model.compute_logits (exact live
+   dtype + (22B, V) shape; key = (tuple([21]*B), logits.shape)).
+5. self._sample(logits, md) TWICE: first = warm-set staged run (Triton
+   warm), second = the capture — in the same quiet window where vLLM's
+   ~180 FULL graphs capture successfully.
+6. Restore patched seams; skip live publishes (nothing to publish);
+   dummy-slot GDN state safe (zero-on-alloc baked).
+Live steps then REPLAY-only; composition checks already guard mismatch.
