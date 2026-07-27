@@ -7266,7 +7266,10 @@ def _fr13_sg_commit_device_route(products, output_token_ids, accepted_tree_rows,
         banks_list=_banks,
     )
     _fr13_sg_capchk("post-committer-launch")
-    stacks['flags'][:, 0].fill_(0)
+    # NOTE: flags deliberately NOT zeroed in-graph (boot-22 death: the
+    # staged tail validates flags==1 BEFORE its launch call; the lib-entry
+    # consume-once guard then absorbs the launch => no double-commit, and
+    # the next forward re-stages flags fresh)
     return output_token_ids
 
 
@@ -7314,7 +7317,10 @@ def _fr13_sg_commit_state_part(dm, stash):
         num_layers=len(_order), num_spec_decodes=nreq,
         output_scale=float(stacks['output_scale']),
         use_qk_l2norm_in_kernel=True, burn_node_bank=_bn)
-    stacks['flags'][:, 0].fill_(0)
+    # NOTE: flags deliberately NOT zeroed in-graph (boot-22 death: the
+    # staged tail validates flags==1 BEFORE its launch call; the lib-entry
+    # consume-once guard then absorbs the launch => no double-commit, and
+    # the next forward re-stages flags fresh)
 
 
 def fr13_sg_post_replay_publish(stash, ndt_host):
