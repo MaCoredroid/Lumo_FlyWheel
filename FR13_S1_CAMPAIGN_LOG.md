@@ -551,3 +551,27 @@ BOOT-51 = clean full arm (LIVEPAIR off, no diagnostics): behavioral band
 (2P/2F), personal garble eyeball, mid-run accept, arm-end
 measured_tps_fullstep_wall + eps + prefill_frac, slope vs staged 17.0 /
 =3 18.7. That measurement decides whether =2 is already shippable.
+
+## BOOT-51 CLEAN ARM: GARBLE CONFIRMED — =2 replay IS broken live
+All 4 tasks, immediate multilingual token salad from turn 1 ("Let me
+understand the jacket الرسول prestazioni Va الجزائ..."), accept ~1.9-2.0,
+death 0. LINE STOPPED.
+SELF-CORRECTION: my boot-48/49 LIVEPAIR "exoneration" was WRONG. The arms
+were never RNG-paired (the staged rerun redraws uniforms/q internally),
+and matching accept LENS hid wrong token CONTENT — lens agreeing says
+nothing when the sampled ids differ (which they visibly did: replay0
+near-vocab-max vs staged0 normal, EVERY sample). The near-vocab-max ids
+(243944, 244024, 200559, 105070...) are the garble in the raw: the =2
+replay emits wrong-token content while accept structure looks plausible.
+STANDING LESSON (already in memory, re-learned the hard way): a scalar/
+structural metric (accept lens) is blind to per-token defects; gate on
+CONTENT.
+WHAT IS SOLID: capture works 4/4 every boot; ids byte-equal + state
+ULP-equal in warmup checks (but those checks are VACUOUS — degenerate
+accept-0 contexts).
+NEXT: the honest instrument is a CONTENT gate at live steps —
+replay ids vs staged ids on the SAME step with RNG genuinely neutralized
+(pin uniforms INSIDE both arms via FR13_SG_PIN_UNIFORMS for the probe
+step only, so the staged redraw is also pinned; boot-47 pinned only one
+side). If ids still differ under both-pinned => hard defect with content
+evidence; then bisect the region (=3 + sampler only, etc.).
