@@ -166,3 +166,21 @@ model-return + CPU perf_counter deltas at mark/stop records — separates
 in-replay stream time from host tail at zero extra sync cost. Meanwhile
 subspan1 accumulates n for the exec-vs-drafts marginal regression (the
 ~28ms/event should reappear in exec's marginal).
+
+## FINAL DISCRIMINATOR (subspan2, n=435): THE IDLE IS INSIDE THE GRAPH
+  cpu_tail (mark→span-end host path): mean 1.1ms, median 0.4ms
+  exec (stream time):                 mean 266.9ms
+  ratio ~0.001-0.005 => HOST TAIL REFUTED. The host enqueues the replay and
+  reaches the stop event in ~1ms; the STREAM genuinely runs the whole span.
+=> The ~26ms/event + fixed excess is NON-KERNEL STREAM TIME CAPTURED INSIDE
+the FULL graph: captured cross-stream wait/fence nodes are the prime suspect
+(subtree-parallel side streams + overlap fences — the multistream lesson
+says side streams SERIALIZE on this SM-saturated part; captured joins would
+add that serialization to every replay). Secondary: capture-shape kernel
+specialization differing from the eager probe's kernel times.
+ELIMINATION LADDER COMPLETE: piecewise ✗ (8k FULL) → pre-launch host ✗
+(35µs) → post-model host tail ✗ (0.4ms) → IN-REPLAY STREAM TIME ✓.
+NEXT: subtree_ab probe — launcher-direct A/B boot (NEEDS-assertion exempt),
+FR13_SUBTREE_PARALLEL=1 vs 0, timers + samples, graph mode, probe workload;
+if exec collapses at =0, the captured side-stream topology is the cost and
+subtree-parallel's +4.7% B=1 claim gets eps-adjusted re-pricing at B=4.
