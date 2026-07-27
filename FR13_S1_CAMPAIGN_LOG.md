@@ -423,3 +423,24 @@ Boot-41 adds changed-vs-baseline per arm (eN,rN): splits spurious-write
 (replay writes junk) vs missing-write (replay skips those layers'
 commits — e.g., a baked layer-subset in the batched launch or the
 host-eager conv loop).
+
+## Boot-41: ROOT CAUSE CONVICTED — batched commit breaks a cross-layer
+## ordering dependency on ATTN_KV_REMAP-adjacent layers
+Split verdict: (e1,r1) on every diverging layer, every key — BOTH arms
+write the stride-4 layers' state, with DIFFERENT values, under byte-
+identical pinned inputs. Synthesis (fits all data):
+- The staged committer commits layers SEQUENTIALLY (cf. the standing
+  "GDN verify dispatch = sequential rank-1" note); the =2 graph's ONE
+  batched launch commits all layers in PARALLEL.
+- The post-full-attn GDN layers (12,16,20,24,... = the ATTN_KV_REMAP
+  neighborhood) have a commit-time dependency on a neighbor layer's
+  freshly-committed/remapped state: sequential sees NEW, parallel sees
+  OLD => deterministic state divergence on exactly that stride-4 set,
+  ids unaffected, context-independent. Live: state poison on those
+  layers => fine-then-garble + accept collapse.
+FIX (boot-42 design): TWO-PHASE batched launch — phase 1 commits the
+independent layers, phase 2 (after phase-1 completes, still in-graph as
+a second kernel) commits the remap-adjacent set. Alternative: pre-stage
+copies of the consumed neighbor state so order stops mattering.
+Gate: selfcheck must show STATE EQUAL x4 (ids already BYTE-EQUAL x4)
+before any live arm.
