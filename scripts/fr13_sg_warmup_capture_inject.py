@@ -90,9 +90,16 @@ def _fr13_sg_warmup_capture(self):
     def _make_sm(B):
         def _f(v):
             return torch.full((B,), v, device=device)
+        # boot-53 ROOT-CAUSE FIX: top_p/top_k MUST be real tensors here —
+        # with None the captured graph OMITS the top-k/top-p constraint
+        # kernels, so live replays sample from the unfiltered tail (rare-token
+        # salad + reject-everything). Values are refilled from live metadata
+        # before each replay; only the presence of the ops is baked.
         return _SM(
             temperature=_f(0.6), all_greedy=False, all_random=True,
-            top_p=None, top_k=None, generators={}, max_num_logprobs=None,
+            top_p=_f(0.8),
+            top_k=torch.full((B,), 20, dtype=torch.int64, device=device),
+            generators={}, max_num_logprobs=None,
             logprob_token_ids=None, no_penalties=True, prompt_token_ids=None,
             frequency_penalties=_f(0.0), presence_penalties=_f(0.0),
             repetition_penalties=_f(1.0),
