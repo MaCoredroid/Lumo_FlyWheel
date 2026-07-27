@@ -16312,19 +16312,41 @@ class _Fr13SfwdGpuTimer:
             }
             if final or with_samples:
                 # per-step samples (parallel arrays): the per-STEP regression
-                # instrument — step_wall/sfwd vs drafts with real n, resolving
-                # F/m below the arm-level noise floor. Carried on the slow
-                # (30s) throttle + final so SIGKILL teardown cannot lose them.
-                payload["per_step"] = {
-                    "fwd_drafts": self._fwd_samples_d,
-                    "fwd_ms": self._fwd_samples_ms,
-                    "wall_drafts": self._wall_samples_d,
-                    "wall_ms": self._wall_samples_ms,
-                    "samples_capped": (
-                        len(self._fwd_samples_ms) >= self._samples_max
-                        or len(self._wall_samples_ms) >= self._samples_max
-                    ),
-                }
+                # instrument. FIX v2 (2026-07-27): write to a SEPARATE sibling
+                # file — the 1s-throttle rewrites of the MAIN file would erase
+                # an embedded per_step within a second (observed: regress1
+                # showed 0 samples at 523 timed steps), and SIGKILL teardown
+                # races the last rewrite. The .samples file is only ever
+                # written WITH data (30s cadence + final), so it survives.
+                try:
+                    _sp_payload = {
+                        "schema": "fr13.sfwd_per_step_samples.v1",
+                        "pid": __import__("os").getpid(),
+                        "final": bool(final),
+                        "fwd_drafts": self._fwd_samples_d,
+                        "fwd_ms": self._fwd_samples_ms,
+                        "wall_drafts": self._wall_samples_d,
+                        "wall_ms": self._wall_samples_ms,
+                        "samples_capped": (
+                            len(self._fwd_samples_ms) >= self._samples_max
+                            or len(self._wall_samples_ms) >= self._samples_max
+                        ),
+                    }
+                    _so = out
+                    if "{pid}" in _so:
+                        _so = _so.replace(
+                            "{pid}", str(__import__("os").getpid()))
+                    else:
+                        _so = _so + ".samples." + str(
+                            __import__("os").getpid())
+                    _sf = __import__("pathlib").Path(_so)
+                    _sf.parent.mkdir(parents=True, exist_ok=True)
+                    _st = _sf.with_suffix(_sf.suffix + ".tmp")
+                    _st.write_text(
+                        _json.dumps(_sp_payload), encoding="utf-8")
+                    _st.replace(_sf)
+                except Exception:  # noqa: BLE001
+                    pass
             # per-pid suffix so multiple workers do not clobber one file.
             _p = out
             if "{pid}" in out:
