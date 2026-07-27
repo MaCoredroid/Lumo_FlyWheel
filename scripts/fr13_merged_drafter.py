@@ -1,25 +1,26 @@
 #!/usr/bin/env python3
-"""FR13 merged drafter orchestration (MTP-k spine + Arctic-suffix grow-to-cat33333, ADAPTIVE Mode B).
+"""FR13 merged drafter orchestration — TAIL MODE (the shipped tail6 design).
 
 Keeps the patcher edit THIN: the patcher injects hooks that call into this CPU-testable module,
 mirroring the fr13_device_multidraft_kernel.py separate-module pattern. Ties together:
-  - lifecycle: note_new_requests / ingest_committed / retire_requests (Arctic SuffixDecodingCache),
-  - a rolling per-req committed-suffix buffer (for the speculate pattern),
-  - decide_and_fill: per batch ROW (keyed by req_id) speculate -> adapter -> assemble -> fill, with
-    the ADAPTIVE gate: SKIP the deep MTP spine forwards ONLY when ALL active rows have a full-depth
-    Arctic match; otherwise return None => caller runs the full MTP loop (never-regress).
+  - lifecycle: note_new_requests / ingest_from_sequence / retire_requests (Arctic
+    SuffixDecodingCache) — runs at the runner every step,
+  - a rolling per-req committed-suffix buffer (the speculate pattern seed),
+  - decide_tail: the depth-6..11 Arctic suffix CHAIN appended past the native MTP head
+    (head = depths 1-5, 100%% native/byte-identical; the tail only ADDS candidates —
+    never-regress via the monotone committer; cold rows pad and simply never accept).
 
-Gate-1 (committer contract) makes every filled candidate lossless regardless. The Arctic cache is
-container-only (C++ ext); the module is import-free of arctic at top level and lets tests inject a
-mock via set_cache_for_test(). All heavy correctness lives in the already-proven CPU components
-(fr13_mtp_suffix_assembly 36/36, fr13_arctic_suffix_adapter 30/30, fr13_merged_fill 35/35).
+ENGAGEMENT PROOF (tail mode): TAIL[hit] > 0 in the needle. The tail costs ~0.3ms/step of
+host trie-walk — it is NOT MTP-drafted (no extra sequential forwards).
 
-v1 NOTE (flat-chain adapter): Arctic .token_ids is a flat continuation chain -> fills the deep
-SPINE only; deep BRANCHES fall back to PAD when the MTP forwards were skipped (MTP topk for those
-depths is unavailable). PAD is Gate-1 lossless (commits ~0) but the deep branch slots carry no
-accept benefit in v1 -- the deep SPINE (Arctic) is the accept driver. A later version can widen
-suffix_rel with Arctic's suffix-TREE alternatives to feed real deep branches. Root (d0) branches are
-always MTP topk (computed pre-loop), so the near tree is unaffected.
+The Arctic cache is container-only (C++ ext); the module is import-free of arctic at top
+level and lets tests inject a mock via set_cache_for_test().
+
+HISTORY: the head-MERGE path (decide_and_fill — MTP-k spine + Arctic grow-to-cat33333,
+adaptive skip of the deep MTP forwards) was DELETED 2026-07-27 (cleanup+bake,
+FR13_CLEANUP_BAKE_PLAN.md): Front-2/merge closed as a no-go, the path was dormant-by-design
+in tail mode, and its zeroed counters in the shared needle caused a live misread
+(boot-54 era: zeros mistaken for tail disengagement). git history has the code.
 """
 from __future__ import annotations
 
@@ -36,9 +37,8 @@ _PREWARMED = False        # design §6b: harness-aware trie pre-warm done once a
 _COMMITTED: dict = {}     # req_id -> list[int] rolling recent-committed tokens (<= max_tree_depth)
 _INGESTED_LEN: dict = {}  # req_id -> #tokens already fed to Arctic add_active_response (non-gappy)
 STATS = {
-    "speculate_fired": 0, "skip_fired": 0, "assembler_engaged": 0,
-    "match_full": 0, "match_partial_norun": 0, "always_fill_miss": 0,
     "started": 0, "retired": 0, "ingested": 0, "prewarm_seeded": 0,
+    "tail_speculate_fired": 0, "tail_hit": 0, "tail_all_cold": 0, "tail_branch_real": 0,
 }
 
 
@@ -221,116 +221,10 @@ def retire_requests(cache, gone_req_ids):
         STATS["retired"] += 1
 
 
-# ---- the seam decision (:13361 speculate + :13860 fill) ---------------------
-def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_depth, mtp_k,
-                    device, pad_token, max_spec_tokens=16, max_spec_factor=4.0, min_token_prob=0.0,
-                    vocab_size=None):
-    """ADAPTIVE Mode B. Returns (spine_tokens, wide_topk, do_skip):
-      * (spine_tokens, wide_topk, True)  when ALL active rows have a full-depth (>= N_DEPTH-mtp_k)
-        Arctic match -> caller SKIPS the deep spine forwards and packs these columns.
-      * (None, None, False)              otherwise -> caller runs the FULL MTP loop (never-regress);
-        Arctic is IGNORED this step.
-    mtp_near_per_depth[d]: an indexable of per-row MTP spine tokens for the mtp_k drafted depths
-      (d in 0..mtp_k-1); mtp_topk_per_depth[d]: per-row [rank2,rank3] for the near depths.
-    All ints; row order == spec_row_req_ids order (req_id-keyed by the caller)."""
-    from fr13_arctic_suffix_adapter import (arctic_draft_to_suffix_rel, arctic_tree_to_suffix_rel,
-                                            arctic_flat_tree_to_suffix_rel, arctic_match_confidence)
-    from fr13_mtp_suffix_assembly import assemble_cat33333
-    from fr13_merged_fill import build_cat33333_columns
-
-    # v2 (default): use_tree_spec=True -> the trie SUBTREE (parents/probs) fills cat33333 SPINE +
-    # BRANCHES (the trie-branches->tree-branches mapping). v1 (FR13_MERGED_TREE_SPEC=0): flat chain,
-    # spine only, branches = MTP fallback. Both Gate-1 lossless + never-regress.
-    _use_tree = os.environ.get("FR13_MERGED_TREE_SPEC", "1") != "0"
-    # FLAVOR: 'adaptive' (default, Flavor A) = skip deep MTP forwards ONLY on a batch-wide
-    # full-depth Arctic match, else full MTP (never-regress). 'always' (Flavor B) = ALWAYS run
-    # just mtp_k forwards + suffix-fill the whole deep tree unconditionally (max drafter speed;
-    # accept degrades toward root-only on a miss -- still lossless via the committer).
-    _flavor = os.environ.get("FR13_MERGED_FLAVOR", "adaptive")
-    # CONFIDENCE-GATED skip (merge16d verdict): blanket skip fired on trie COVERAGE (match_full 96%) not
-    # confidence -> accept collapsed 3.61->1.97 -> -17% speed. Gate the skip on the arctic match's MIN
-    # per-node prob: skip ONLY when the suffix stats strongly expect the model to follow (>= threshold),
-    # else full MTP (never-regress = baseline accept). Default 0.0 = OFF (blanket, back-compat).
-    _min_prob = float(os.environ.get("FR13_MERGED_SKIP_MIN_PROB", "0.0"))
-
-    B = len(spec_row_req_ids)
-    if B == 0:
-        return None, None, False
-    need = N_DEPTH - mtp_k
-    assembled = []
-    all_full = True
-    for b in range(B):
-        req_id = spec_row_req_ids[b]
-        near = [int(mtp_near_per_depth[d][b]) for d in range(mtp_k)]
-        # deep MTP spine unknown (skipped) -> placeholder = last near token (only used if Arctic short)
-        mtp_spine = near + [near[-1]] * (N_DEPTH - mtp_k)
-        mtp_topk = {d: [int(x[b]) for x in mtp_topk_per_depth.get(d, [])] for d in range(N_DEPTH)}
-        pattern = list(_COMMITTED.get(req_id, [])) + near
-        suffix_rel = {}
-        _row_conf = 1.0   # match confidence for the gated skip (1.0 = no signal -> don't block)
-        if cache is not None:
-            try:
-                if _use_tree:
-                    # HYBRID: FLAT (deep chain) drives the spine + depth-coverage (skip engagement),
-                    # TREE (use_tree_spec) supplies branch alternatives -> best of both. OVERHEAD:
-                    # only pay the 2nd (tree) speculate when the flat is a FULL-depth match -- on a
-                    # non-full row (won't skip on Flavor A) the branches are discarded anyway, so
-                    # skipping the tree call there ~halves the arctic latency that trips the emit-wedge.
-                    flat_d = cache.speculate(
-                        req_id, pattern, max_spec_tokens=max_spec_tokens,
-                        max_spec_factor=max_spec_factor, min_token_prob=min_token_prob,
-                        use_tree_spec=False)
-                    _row_conf = arctic_match_confidence(flat_d)   # flat drives the spine -> its confidence
-                    _flat_rel = arctic_draft_to_suffix_rel(flat_d, max_rel=need)
-                    if len(_flat_rel) >= need:
-                        tree_d = cache.speculate(
-                            req_id, pattern, max_spec_tokens=max_spec_tokens,
-                            max_spec_factor=max_spec_factor, min_token_prob=min_token_prob,
-                            use_tree_spec=True)
-                        suffix_rel = arctic_flat_tree_to_suffix_rel(flat_d, tree_d, max_rel=need)
-                    else:
-                        suffix_rel = _flat_rel   # non-full -> flat-only (discarded on Flavor A miss)
-                else:
-                    draft = cache.speculate(
-                        req_id, pattern, max_spec_tokens=max_spec_tokens,
-                        max_spec_factor=max_spec_factor, min_token_prob=min_token_prob,
-                        use_tree_spec=False)
-                    _row_conf = arctic_match_confidence(draft)
-                    suffix_rel = arctic_draft_to_suffix_rel(draft, max_rel=need)
-                STATS["speculate_fired"] += 1
-            except Exception:
-                suffix_rel = {}
-        # Skip requires full depth AND (when gated) enough confidence -- a low-prob deep match is
-        # exactly the over-confident-but-wrong case that collapsed accept, so fall back to full MTP.
-        if len(suffix_rel) >= need:
-            # confidence HISTOGRAM over full-depth matches (threshold calibration; independent of gating)
-            _b = ("conf_h0" if _row_conf < 0.05 else "conf_h1" if _row_conf < 0.15
-                  else "conf_h2" if _row_conf < 0.30 else "conf_h3" if _row_conf < 0.50 else "conf_h4")
-            STATS[_b] = STATS.get(_b, 0) + 1
-            if _min_prob > 0.0 and _row_conf < _min_prob:
-                STATS["conf_gated"] = STATS.get("conf_gated", 0) + 1   # full-depth but blocked by low conf
-        if len(suffix_rel) < need or (_min_prob > 0.0 and _row_conf < _min_prob):
-            all_full = False
-        nodes, _ = assemble_cat33333(mtp_spine, mtp_topk, suffix_rel, mtp_k)
-        assembled.append(nodes)
-
-    if not all_full and _flavor != "always":
-        STATS["match_partial_norun"] += 1
-        _maybe_log_engagement()
-        return None, None, False   # Flavor A never-regress: caller runs full MTP, Arctic ignored
-    # Flavor B ('always'): fill + skip UNCONDITIONALLY -- even a partial/empty match packs (missing
-    # deep depths -> assemble MTP-placeholder + PAD branches; those nodes just don't accept). Max
-    # drafter speed, accept degrades to root-only on a miss. Lossless via the committer regardless.
-    if all_full:
-        STATS["match_full"] += 1
-    else:
-        STATS["always_fill_miss"] += 1   # Flavor B skipped a non-full match (accept degrades)
-    STATS["assembler_engaged"] += 1
-    spine_tokens, wide_topk = build_cat33333_columns(assembled, device, pad_token, vocab_size=vocab_size)
-    STATS["skip_fired"] += 1
-    _maybe_log_engagement()
-    return spine_tokens, wide_topk, True
-
+# ---- head-merge seam DELETED 2026-07-27 -------------------------------------
+# decide_and_fill (the adaptive MTP-k + Arctic grow-to-cat33333 head-merge path) lived
+# here. Removed with the patcher's FR13_MERGED_DRAFTER_SEAM (cleanup+bake). git history
+# has the code; do not resurrect without a fresh gate — Front-2/merge was a closed no-go.
 
 _TAIL_WIDE_TOPK = {}
 
@@ -421,7 +315,9 @@ _LOG_N = 0
 
 def _maybe_log_engagement():
     """Periodic engagement needle to the vLLM logger (-> docker log) for the ENGAGED gate.
-    match_full>0 (not just speculate_fired>0) is the non-gappy proof; skip_fired is the speed win."""
+    TAIL[hit]>0 is THE engagement proof in tail mode (the only mode since the head-merge
+    deletion). Leads with TAIL so a truncated log line can never hide engagement again
+    (boot-54-era misread: merge-counter zeros at the front, TAIL[...] truncated off)."""
     global _LOG_N
     _LOG_N += 1
     if _LOG_N % _LOG_EVERY != 0:
@@ -434,19 +330,11 @@ def _maybe_log_engagement():
         except Exception:
             _oob_n, _oob_last = 0, None
         logging.getLogger("vllm.fr13_merged_drafter").info(
-            "[FR13_MERGED ENGAGED] speculate_fired=%d match_full=%d match_partial=%d "
-            "always_fill_miss=%d skip_fired=%d assembler_engaged=%d started=%d ingested=%d retired=%d "
-            "arctic_oob_dropped=%d last_oob=%s conf_gated=%d "
-            "TAIL[fired=%d hit=%d cold=%d br_real=%d] "
-            "confhist[<.05|.05-.15|.15-.30|.30-.50|>=.50]=%d|%d|%d|%d|%d",
-            STATS["speculate_fired"], STATS["match_full"], STATS["match_partial_norun"],
-            STATS["always_fill_miss"], STATS["skip_fired"], STATS["assembler_engaged"],
+            "[FR13_MERGED ENGAGED] TAIL[fired=%d hit=%d cold=%d br_real=%d] "
+            "started=%d ingested=%d retired=%d arctic_oob_dropped=%d last_oob=%s",
+            STATS.get("tail_speculate_fired", 0), STATS.get("tail_hit", 0),
+            STATS.get("tail_all_cold", 0), STATS.get("tail_branch_real", 0),
             STATS["started"], STATS["ingested"], STATS["retired"], _oob_n, _oob_last,
-            STATS.get("conf_gated", 0),
-            STATS.get("tail_speculate_fired", 0), STATS.get("tail_hit", 0), STATS.get("tail_all_cold", 0),
-            STATS.get("tail_branch_real", 0),
-            STATS.get("conf_h0", 0), STATS.get("conf_h1", 0), STATS.get("conf_h2", 0),
-            STATS.get("conf_h3", 0), STATS.get("conf_h4", 0),
         )
     except Exception:
         pass

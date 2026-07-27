@@ -271,20 +271,10 @@ def _patch_gdn_attn() -> bool:
             "                    visible[node, cur] = 1\n"
             "                    cur = parent[cur]\n"
             "            self.fr10_tree_parent = torch.tensor(parent, dtype=torch.int32, device=device)\n"
-            "            # FR13_HC_INTERNAL preseed: the tree-decode shape's\n"
-            "            # FIRST scan invocation happens INSIDE graph capture\n"
-            "            # (eager warmup covers prefill shapes only), so the\n"
-            "            # host-derived slot map must exist BEFORE capture.\n"
-            "            # Failure here is non-fatal: the launcher's capture\n"
-            "            # guard still fail-louds if the flag is on unseeded.\n"
+            "            # Preseed wrapper. (The FR13_HC_INTERNAL preseed that\n"
+            "            # lived here was removed 2026-07-27 -- mechanism\n"
+            "            # retired, FR13_CLEANUP_BAKE_PLAN.md.)\n"
             "            try:\n"
-            "                from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
-            "                    hc_internal_preseed as _fr13_hc_preseed,\n"
-            "                )\n"
-            "                _fr13_hc_npad = 1 if len(parent) <= 1 else (\n"
-            "                    1 << (len(parent) - 1).bit_length()\n"
-            "                )\n"
-            "                _fr13_hc_preseed(parent, len(parent), _fr13_hc_npad, device)\n"
             "                # FR13_SUBTREE_PARALLEL preseed (task #60): path\n"
             "                # decomposition + fp32 export buffer must exist\n"
             "                # before capture; (vh, dv, dk) = the 3-dim ssm\n"
@@ -315,9 +305,9 @@ def _patch_gdn_attn() -> bool:
             "                except Exception as _fr13_sp_exc:\n"
             "                    print('[FR13_SUBTREE_PARALLEL] preseed failed: '\n"
             "                          + repr(_fr13_sp_exc), flush=True)\n"
-            "            except Exception as _fr13_hc_exc:\n"
-            "                print('[FR13_HC_INTERNAL] preseed failed: '\n"
-            "                      + repr(_fr13_hc_exc), flush=True)\n"
+            "            except Exception as _fr13_ps_exc:\n"
+            "                print('[FR13_PRESEED] wrapper failed: '\n"
+            "                      + repr(_fr13_ps_exc), flush=True)\n"
             "            self.fr10_tree_strict_mask = strict\n"
             "            self.fr10_tree_visible_mask = visible\n"
             "            source_by_width = {}\n"
@@ -6888,19 +6878,21 @@ def _fr13_conv_commit_to_col0(
     accepted_lens_buf,
     replay_rows,
     do_commit,
-    do_burn,
 ):
     """STATELESS-TREE conv committer (post-accept, host-eager; conv has no kernel).
 
     Copies THIS step's committed-leaf conv window into col 0 (the req running row)
-    for every committed (row, layer), then burns the ephemeral spec cols
-    1..num_spec. Leaf node id = accepted_paths[b, acc_len-1] (post-refill = THIS
-    step's accept); dst col0 == spec_state_indices[b,0] == block_table[b,0] == the
-    SSM RUNROW_COMMIT target, so conv + SSM commit to / init from the SAME running
-    row. Byte-neutral on no-cache decode (col0 receives the same window the current
-    accepted-leaf-node read carries; burned cols are regenerated fresh next forward).
+    for every committed (row, layer). Leaf node id = accepted_paths[b, acc_len-1]
+    (post-refill = THIS step's accept); dst col0 == spec_state_indices[b,0] ==
+    block_table[b,0] == the SSM RUNROW_COMMIT target, so conv + SSM commit to /
+    init from the SAME running row. Byte-neutral on no-cache decode (col0 receives
+    the same window the current accepted-leaf-node read carries).
+    BURN DELETED 2026-07-27 (FR13_APC_BURN_NODE_BANK): the spec-col burn was proven
+    redundant for the served path — every served reader is col-0 under
+    RUNROW_INIT=1 and spec cols are regenerated fresh next forward. The legacy
+    runrow=0 path (where burn was load-bearing) is retired; callers fail loud.
     """
-    if replay_rows <= 0 or not (do_commit or do_burn):
+    if replay_rows <= 0 or not do_commit:
         return
     import torch
     for _prefix in sorted(replay_layers):
@@ -6939,9 +6931,6 @@ def _fr13_conv_commit_to_col0(
             # index_select snapshots the source rows before the write -> no alias
             # hazard even when a leaf row coincides with col 0.
             _conv.index_copy_(0, _dst, _conv.index_select(0, _src))
-        if do_burn and _spec_cols > 1:
-            _burn = _ssi[:replay_rows, 1:_spec_cols].reshape(-1).to(torch.long)
-            _conv.index_fill_(0, _burn, 0.0)
 
 
 def _fr13_replay_durable_ab_enabled():
@@ -7304,11 +7293,11 @@ def _fr13_sg_commit_device_route(products, output_token_ids, accepted_tree_rows,
     import os as _os
     _runrow_commit = _os.environ.get('FR13_APC_COMMIT_TO_RUNNING_ROW', '1') == '1'
     _runrow_init = _os.environ.get('FR13_TREE_RUNROW_INIT', '1') == '1'
-    _burn = _os.environ.get('FR13_APC_BURN_NODE_BANK', '0') == '1'
-    if not (_runrow_commit and _runrow_init and not _burn):
+    # FR13_APC_BURN_NODE_BANK DELETED 2026-07-27 (burn redundant for the served path)
+    if not (_runrow_commit and _runrow_init):
         raise RuntimeError(
             'S1 device route requires stateless-tree defaults '
-            '(commit=init=1 burn=0)')
+            '(commit=init=1)')
     globals()['_FR13_SG_DEFER_STASH'] = (row_buf, row_len, path_buf, path_len)
     import os as _os2
     if _os2.environ.get("FR13_STEP_GRAPH_SCOPE", "full") == "half":
@@ -7325,7 +7314,7 @@ def _fr13_sg_commit_device_route(products, output_token_ids, accepted_tree_rows,
     pbuf[:nreq, :k].copy_(gdn_paths[:, :k].to(pbuf.dtype))
     lbuf[:nreq].copy_(path_len.to(lbuf.dtype))
     _fr13_sg_capchk("post-fill1")
-    _fr13_conv_commit_to_col0(layers, pbuf, lbuf, nreq, _runrow_commit, _burn)
+    _fr13_conv_commit_to_col0(layers, pbuf, lbuf, nreq, _runrow_commit)
     _fr13_sg_capchk("post-conv-commit")
     # fill 2: replay (spec-row) order via the wrapper-refilled perm static —
     # the staged tail's host-list reorder, expressed as index_select
@@ -7363,7 +7352,7 @@ def _fr13_sg_commit_device_route(products, output_token_ids, accepted_tree_rows,
             output_scale=float(stacks['output_scale']),
             use_qk_l2norm_in_kernel=True,
             runrow_commit=_runrow_commit, runrow_init=_runrow_init,
-            burn_node_bank=_burn,
+            burn_node_bank=False,  # burn DELETED 2026-07-27 (kernel kwarg kept, dead)
             banks_list=_banks[_ph_lo:_ph_hi],
         )
     _fr13_sg_capchk("post-committer-launch")
@@ -7395,14 +7384,13 @@ def _fr13_sg_commit_state_part(dm, stash):
     import os as _os3
     _rc = _os3.environ.get('FR13_APC_COMMIT_TO_RUNNING_ROW', '1') == '1'
     _ri = _os3.environ.get('FR13_TREE_RUNROW_INIT', '1') == '1'
-    _bn = _os3.environ.get('FR13_APC_BURN_NODE_BANK', '0') == '1'
     cols = int(pbuf.size(1))
     k = min(cols, int(gdn_paths.shape[1]))
     pbuf[:nreq, :cols].zero_()
     lbuf[:nreq].zero_()
     pbuf[:nreq, :k].copy_(gdn_paths[:, :k].to(pbuf.dtype))
     lbuf[:nreq].copy_(path_len.to(lbuf.dtype))
-    _fr13_conv_commit_to_col0(layers, pbuf, lbuf, nreq, _rc, _bn)
+    _fr13_conv_commit_to_col0(layers, pbuf, lbuf, nreq, _rc)
     pbuf[:nreq, :k].copy_(gdn_paths.index_select(0, perm)[:, :k].to(pbuf.dtype))
     lbuf[:nreq].copy_(path_len.index_select(0, perm).to(lbuf.dtype))
     from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
@@ -7418,7 +7406,7 @@ def _fr13_sg_commit_state_part(dm, stash):
         A_logs=stacks['A_log'], dt_biases=stacks['dt_bias'],
         num_layers=len(_order), num_spec_decodes=nreq,
         output_scale=float(stacks['output_scale']),
-        use_qk_l2norm_in_kernel=True, burn_node_bank=_bn)
+        use_qk_l2norm_in_kernel=True, burn_node_bank=False)  # burn DELETED 2026-07-27
     # NOTE: flags deliberately NOT zeroed in-graph (boot-22 death: the
     # staged tail validates flags==1 BEFORE its launch call; the lib-entry
     # consume-once guard then absorbs the launch => no double-commit, and
@@ -8080,17 +8068,11 @@ def _lumo_tree_canonical_multidraft_sample(
             _fr13_runrow_init = (
                 os.environ.get("FR13_TREE_RUNROW_INIT", "1") == "1"
             )
-            # BAKED (2026-07-22): burn defaults OFF -- red-team (7-agent workflow,
-            # wf_16247424-fb2) + live SWE confirmed the burn is redundant for the
-            # served path (every served reader is col-0 under RUNROW_INIT=1). The
-            # tri-flag assert is relaxed to allow burn=0 ONLY when commit/init are
-            # BOTH still 1 (the red-team's hard requirement: redundancy holds
-            # exclusively because RUNROW_INIT=1 redirects h0 to col-0; the legacy
-            # RUNROW_INIT=0 path reads a col>=1 row and burn is load-bearing there,
-            # so burn=0 must never coexist with commit/init=0).
-            _fr13_burn_node_bank = (
-                os.environ.get("FR13_APC_BURN_NODE_BANK", "0") == "1"
-            )
+            # BURN DELETED 2026-07-27 (was FR13_APC_BURN_NODE_BANK, baked OFF since
+            # 2026-07-22: red-team wf_16247424-fb2 + live SWE proved the spec-col
+            # burn redundant for the served path — every served reader is col-0
+            # under RUNROW_INIT=1). The legacy runrow=0 path, where burn was
+            # load-bearing, is RETIRED: commit/init must both be 1 (fail loud).
             if _fr13_runrow_commit != _fr13_runrow_init:
                 raise RuntimeError(
                     "FR13 STATELESS-TREE: COMMIT_TO_RUNNING_ROW/TREE_RUNROW_INIT "
@@ -8098,16 +8080,14 @@ def _lumo_tree_canonical_multidraft_sample(
                         _fr13_runrow_commit, _fr13_runrow_init,
                     )
                 )
-            if (not _fr13_runrow_commit or not _fr13_runrow_init) and not _fr13_burn_node_bank:
+            if not _fr13_runrow_commit or not _fr13_runrow_init:
                 raise RuntimeError(
-                    "FR13 STATELESS-TREE: burn cannot be OFF when "
-                    "COMMIT_TO_RUNNING_ROW/TREE_RUNROW_INIT=0 (the legacy non-"
-                    "stateless path reads a col>=1 row -- burn is load-bearing "
-                    "there per the red-team finding; got commit=%r init=%r "
-                    "burn=%r)" % (
+                    "FR13 STATELESS-TREE: the legacy non-stateless path "
+                    "(COMMIT_TO_RUNNING_ROW/TREE_RUNROW_INIT=0) was RETIRED "
+                    "2026-07-27 with the burn deletion (it read col>=1 rows "
+                    "and depended on the burn; got commit=%r init=%r)" % (
                         _fr13_runrow_commit,
                         _fr13_runrow_init,
-                        _fr13_burn_node_bank,
                     )
                 )
             # STATELESS-TREE conv committer (post-accept; gated -> no-op when OFF).
@@ -8117,7 +8097,6 @@ def _lumo_tree_canonical_multidraft_sample(
                 _accepted_lens_buf,
                 _fr13_replay_rows,
                 _fr13_runrow_commit,
-                _fr13_burn_node_bank,
             )
             if _fr13_replay_rows:
                 if int(_accepted_path_buf.size(0)) < _fr13_replay_rows:
@@ -8263,7 +8242,7 @@ def _lumo_tree_canonical_multidraft_sample(
                         use_qk_l2norm_in_kernel=True,
                         runrow_commit=_fr13_runrow_commit,
                         runrow_init=_fr13_runrow_init,
-                        burn_node_bank=_fr13_burn_node_bank,
+                        burn_node_bank=False,  # burn DELETED 2026-07-27
                         banks_list=_ep_banks,
                     )
                     _fr13_sbr_stacks['flags'][:, 0].fill_(0)
@@ -8450,7 +8429,7 @@ def _lumo_tree_canonical_multidraft_sample(
                                 use_qk_l2norm_in_kernel=True,
                                 runrow_commit=_fr13_runrow_commit,
                                 runrow_init=_fr13_runrow_init,
-                                burn_node_bank=_fr13_burn_node_bank,
+                                burn_node_bank=False,  # burn DELETED 2026-07-27
                             )
                             _fr13_flags[0].fill_(0)
                     if _fr13_ov2_enable:
@@ -8589,7 +8568,7 @@ def _lumo_tree_canonical_multidraft_sample(
                         use_qk_l2norm_in_kernel=True,
                         runrow_commit=_fr13_runrow_commit,
                         runrow_init=_fr13_runrow_init,
-                        burn_node_bank=_fr13_burn_node_bank,
+                        burn_node_bank=False,  # burn DELETED 2026-07-27
                     )
                     # FR13: vestigial EXACT_SEED committer call REMOVED (twin of the
                     # removal in the eager-pack branch above; same rationale -- never
@@ -12421,53 +12400,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         dim=-1,
                     ).indices
 
-            # FR13_MERGED_DRAFTER_SEAM: adaptive MTP-k(=1) + Arctic-suffix grow-to-cat33333.
-            # After the root is drafted, speculate per spec-row; on a BATCH-WIDE full-depth match,
-            # fill the deep spine/branches from Arctic and SKIP the deep MTP forwards
-            # (_fr10_spine_steps=0). Else leave the MTP path untouched (never-regress). Sidecar-gated,
-            # wide-tree only, own try/except so it can NEVER break the drafter. speculate() is the
-            # ONLY Arctic call here; lifecycle runs at the runner (_patch_gpu_model_runner_merged_drafter).
-            if _fr10_is_wide:
-                try:
-                    import sys as _fr13_ms_sys
-                    if "/workspace/scripts" not in _fr13_ms_sys.path:
-                        _fr13_ms_sys.path.insert(0, "/workspace/scripts")
-                    import fr13_merged_drafter as _fr13_ms
-                    if (_fr13_ms.merged_on() and int(_fr10_spine_steps) >= 4
-                            and not os.path.exists("/logs/fr13_tail_mode.arm")):
-                        from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_ms_gdn
-                        _fr13_ms_ids = getattr(_fr13_ms_gdn, "_LUMO_FA_SPEC_ROW_REQ_IDS", None)
-                        _fr13_ms_B = int(draft_token_ids.shape[0])
-                        # B=4 mixed prefill/decode: SPEC_ROW_REQ_IDS is the spec-row SUBSET (len<B) -> the
-                        # merged seam otherwise skips ~half at B=4 (falls back to MTP). Fall back to the
-                        # SAMPLER row ids (unconditional full batch, patch:11250, row-aligned) so Arctic engages.
-                        if _fr13_ms_ids is None or len(_fr13_ms_ids) != _fr13_ms_B:
-                            _fr13_ms_ids = getattr(_fr13_ms_gdn, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None)
-                        _fr13_ms_cache = _fr13_ms.get_cache()
-                        if (_fr13_ms_cache is not None and _fr13_ms_ids is not None
-                                and len(_fr13_ms_ids) == _fr13_ms_B):
-                            _fr13_ms_root = [int(_x) for _x in draft_token_ids.detach().reshape(-1).cpu().tolist()]
-                            _fr13_ms_wt0 = _fr10_wide_topk.get(0)
-                            if _fr13_ms_wt0 is not None and int(_fr13_ms_wt0.shape[1]) > 2:
-                                _fr13_ms_c1 = [int(_x) for _x in _fr13_ms_wt0[:, 1].detach().cpu().tolist()]
-                                _fr13_ms_c2 = [int(_x) for _x in _fr13_ms_wt0[:, 2].detach().cpu().tolist()]
-                                _fr13_ms_topk = {0: [_fr13_ms_c1, _fr13_ms_c2]}
-                            else:
-                                _fr13_ms_topk = {}
-                            # vocab_size from the root lm-head logits width -> bounds-guard arctic
-                            # candidate ids at the fill boundary (an OOB draft token = CUDA
-                            # device-side assert that kills EngineCore; observed merge16c 2026-07-15).
-                            _fr13_ms_vocab = int(_fr10_logits.shape[-1])
-                            _fr13_ms_spine, _fr13_ms_wide, _fr13_ms_skip = _fr13_ms.decide_and_fill(
-                                _fr13_ms_cache, [str(_r) for _r in _fr13_ms_ids], [_fr13_ms_root],
-                                _fr13_ms_topk, 1, draft_token_ids.device, _fr13_ms_root[0],
-                                vocab_size=_fr13_ms_vocab)
-                            if _fr13_ms_skip and _fr13_ms_spine is not None:
-                                _fr10_spine_tokens = list(_fr13_ms_spine)
-                                _fr10_wide_topk = _fr13_ms_wide
-                                _fr10_spine_steps = 0
-                except Exception:
-                    pass
+            # FR13_MERGED_DRAFTER_SEAM DELETED 2026-07-27 (cleanup+bake,
+            # FR13_CLEANUP_BAKE_PLAN.md): the head-merge decide_and_fill path
+            # (adaptive MTP-k + Arctic grow-to-cat33333) was dormant-by-design in
+            # tail mode and Front-2/merge closed as a no-go. Tail mode (decide_tail,
+            # below) is the shipped design. git history has the seam.
 
             if self.allowed_attn_types is not None:
                 for group_md in per_group_attn_metadata:

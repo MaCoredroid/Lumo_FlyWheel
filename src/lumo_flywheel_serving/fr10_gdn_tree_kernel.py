@@ -181,9 +181,15 @@ def hc_internal_on() -> bool:
     Incompatible with FR13_PARENT_GATHER (runtime parent index cannot use the
     trace-time slot map) and PIGGYBACK_EXPORT (chain end may be a leaf); the
     launcher fails loud on either pairing.
+
+    RETIRED 2026-07-27 (cleanup+bake, FR13_CLEANUP_BAKE_PLAN.md): never gated
+    in, and PARENT_GATHER — with which it is incompatible — is now the BAKED
+    default. Mechanism hard-disabled below (env wiring also removed from the
+    launchers). The HC_MASK constexpr branches in the kernel body remain as
+    trace-time-dead code; their excision is a recorded follow-up requiring its
+    own bit-exact gate cycle.
     """
-    raw = os.environ.get("FR13_HC_INTERNAL", "")
-    return raw.strip().lower() in ("1", "true", "yes", "on")
+    return False
 
 
 def hc_internal_selfcheck_on() -> bool:

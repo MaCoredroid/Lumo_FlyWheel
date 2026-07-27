@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""CPU gate for the merged-drafter orchestration (mock SuffixDecodingCache).
+"""CPU gate for the merged-drafter orchestration (mock SuffixDecodingCache) — TAIL MODE.
 
-Verifies lifecycle (start/add/stop/evict + rolling buffer), the ADAPTIVE gate (all-rows full-depth
-match -> skip+columns; any miss -> None = never-regress), pattern = committed ++ mtp-near, and the
-engagement counters (needle for the live ENGAGED assert).
+Verifies lifecycle (start/add/stop/evict + rolling buffer + non-gappy delta ingest) and
+decide_tail (the shipped tail6 path: Arctic chain appended past the native MTP head;
+hit / cold / pattern-seed / pad semantics + TAIL engagement counters).
+
+decide_and_fill (head-merge) tests were removed 2026-07-27 with the path itself
+(cleanup+bake, FR13_CLEANUP_BAKE_PLAN.md).
 """
 import os
 import sys
@@ -73,92 +76,47 @@ check(md._COMMITTED["r_new"] == [10, 11, 12], f"suffix capped to max_tree_depth=
 md.retire_requests(c, ["r_old"])
 check(("stop", "r_old") in c.calls and "r_old" not in md._COMMITTED, "retire -> stop + buffer dropped")
 
-print("[2] adaptive gate: ALL rows full-depth match -> skip + columns")
+print("[2] decide_tail: hit rows get the Arctic chain, short rows pad, pattern = committed++head")
 md.reset_for_test()
-# mtp_k=1, need = 5-1 = 4 deep tokens; both rows get >=4 from arctic
-c = MockCache({"ra": [50, 51, 52, 53], "rb": [60, 61, 62, 63]})
+c = MockCache({"ra": [50, 51, 52, 53, 54, 55], "rb": [60, 61]})   # ra full 6-deep, rb only 2
 c.active_requests = {"ra", "rb"}
 md._COMMITTED["ra"] = [9, 8]; md._COMMITTED["rb"] = [7]
-near = [[1000, 2000]]                        # depth0 (root) per-row: ra=1000, rb=2000
-topk = {d: [[3000 + d, 3001 + d], [4000 + d, 4001 + d]] for d in range(5)}  # per-depth [rank2,rank3] cols
-spine, wide, skip = md.decide_and_fill(c, ["ra", "rb"], near, topk, mtp_k=1, device=DEV, pad_token=0)
-check(skip is True, "all-full-match -> do_skip True")
-check(spine is not None and len(spine) == 5, "returns 5 spine columns")
-check(spine[0].tolist() == [1000, 2000], "spine d0 = MTP root (row-major)")
-check(spine[1].tolist() == [50, 60], "spine d1 = arctic rel0 (row-major, req-keyed)")
-check(spine[4].tolist() == [53, 63], "spine d4 = arctic rel3")
-# pattern = committed ++ near
+# native MTP head, depths 0..4; per-depth per-row indexables (row order == req order)
+head = [[100, 200], [101, 201], [102, 202], [103, 203], [104, 204]]
+tail = md.decide_tail(c, ["ra", "rb"], head, head_depth=5, tail_len=6, device=DEV, pad_token=0)
+check(tail is not None and len(tail) == 6, f"returns tail_len=6 columns (got {None if tail is None else len(tail)})")
+check(tail[0].tolist() == [50, 60], f"tail d0 = arctic rel0 per row (got {tail[0].tolist()})")
+check(tail[1].tolist() == [51, 61], "tail d1 = arctic rel1 per row")
+check(tail[2].tolist()[0] == 52 and tail[2].tolist()[1] == 0, "short row pads past its match (pad_token)")
+check(tail[5].tolist()[0] == 55, "deep row carries the full 6-token chain")
 spec_calls = [x for x in c.calls if x[0] == "spec"]
-check(("spec", "ra", [9, 8, 1000]) in spec_calls, f"pattern ra = committed++near ({[x for x in spec_calls if x[1]=='ra']})")
-check(("spec", "rb", [7, 2000]) in spec_calls, "pattern rb = committed++near")
-check(md.STATS["skip_fired"] == 1 and md.STATS["assembler_engaged"] == 1, "engagement counters incremented")
+check(("spec", "ra", [9, 8, 100, 101, 102, 103, 104]) in spec_calls,
+      f"pattern ra = committed++native-head ({[x for x in spec_calls if x[1] == 'ra']})")
+check(("spec", "rb", [7, 200, 201, 202, 203, 204]) in spec_calls, "pattern rb = committed++native-head")
+check(md.STATS["tail_speculate_fired"] == 2, "tail_speculate_fired == 2")
+check(md.STATS["tail_hit"] == 2, f"tail_hit == 2 (both rows matched; got {md.STATS['tail_hit']})")
+check(md.STATS["tail_all_cold"] == 0, "no all-cold step")
 
-print("[3] adaptive gate: ANY row short match -> None = never-regress")
+print("[3] decide_tail: all-cold step -> pad columns + tail_all_cold counted")
 md.reset_for_test()
-c = MockCache({"ra": [50, 51, 52, 53], "rb": [60]})   # rb only 1 token < need 4
-c.active_requests = {"ra", "rb"}
-spine, wide, skip = md.decide_and_fill(c, ["ra", "rb"], [[1000, 2000]], topk, mtp_k=1, device=DEV, pad_token=0)
-check(skip is False and spine is None and wide is None, "partial match -> (None,None,False) never-regress")
-check(md.STATS["match_partial_norun"] == 1 and md.STATS["skip_fired"] == 0, "no skip fired; partial-norun counted")
-check(md.STATS["speculate_fired"] == 2, "speculate still fired for both rows (needle non-vacuous)")
+c = MockCache({})                      # speculate returns empty draft for every row
+c.active_requests = {"ra"}
+md._COMMITTED["ra"] = [9]
+tail = md.decide_tail(c, ["ra"], [[100], [101], [102], [103], [104]], head_depth=5, tail_len=6,
+                      device=DEV, pad_token=0)
+check(tail is not None and all(t.tolist() == [0] for t in tail), "cold row -> all-pad columns (never-regress)")
+check(md.STATS["tail_all_cold"] == 1 and md.STATS["tail_hit"] == 0, "tail_all_cold counted, no hit")
 
-print("[4] cache=None (arctic unavailable) -> graceful no-op, never-regress")
+print("[4] cache=None / empty batch -> graceful no-op")
 md.reset_for_test()
-spine, wide, skip = md.decide_and_fill(None, ["ra"], [[1000]], topk, mtp_k=1, device=DEV, pad_token=0)
-check(skip is False and spine is None, "no cache -> None (full MTP fallback)")
+check(md.decide_tail(None, ["ra"], [[1]] * 5, 5, 6, DEV, 0) is None, "no cache -> None (head-only fallback)")
+check(md.decide_tail(MockCache({}), [], [], 5, 6, DEV, 0) is None, "empty batch -> None")
 md.note_new_requests(None, {"r": [1]}); md.ingest_from_sequence(None, "r", [1, 2], 2); md.retire_requests(None, ["r"])
 check(md._COMMITTED.get("r") is None, "lifecycle no-ops safely with cache=None (buffer maintained then cleared on retire)")
 
-print("[5] mtp_k=2: near covers d0,d1; arctic fills d2,d3,d4 (need=3)")
-md.reset_for_test()
-c = MockCache({"ra": [70, 71, 72]})           # 3 tokens == need for mtp_k=2
-c.active_requests = {"ra"}
-near2 = [[1000], [1001]]                       # d0=1000, d1=1001 for row0
-spine, wide, skip = md.decide_and_fill(c, ["ra"], near2, topk, mtp_k=2, device=DEV, pad_token=0)
-check(skip is True, "mtp_k=2 all-full -> skip")
-check(spine[0].tolist() == [1000] and spine[1].tolist() == [1001], "d0,d1 = MTP near")
-check(spine[2].tolist() == [70] and spine[4].tolist() == [72], "d2..d4 = arctic (need=3)")
-
-print("[CONF] confidence-gated skip: FR13_MERGED_SKIP_MIN_PROB gates on arctic MIN-prob (merge16d fix)")
-import os as _os
-
-
-class MockDraftP:
-    def __init__(self, toks, probs): self.token_ids = toks; self.probs = probs
-
-
-class MockCacheP(MockCache):
-    def __init__(self, spec_map, prob_map): super().__init__(spec_map); self.prob_map = prob_map
-    def speculate(self, req_id, pattern, **kw):
-        self.calls.append(("spec", req_id, list(pattern)))
-        return MockDraftP(list(self.spec_map.get(req_id, [])), list(self.prob_map.get(req_id, [])))
-
-
-_near = [[1000]]
-_topk = {d: [[3000 + d, 3001 + d], [4000 + d, 4001 + d]] for d in range(5)}
-# LOW min-prob (0.3) full-depth match, threshold 0.5 -> must NOT skip (never-regress)
-md.reset_for_test(); _os.environ["FR13_MERGED_SKIP_MIN_PROB"] = "0.5"
-c = MockCacheP({"ra": [50, 51, 52, 53]}, {"ra": [0.9, 0.9, 0.3, 0.9]}); c.active_requests = {"ra"}
-md._COMMITTED["ra"] = [9, 8]
-_, _, skip_lo = md.decide_and_fill(c, ["ra"], _near, _topk, mtp_k=1, device=DEV, pad_token=0)
-check(skip_lo is False, "low-conf (min-prob 0.3 < 0.5) full match -> NO skip (never-regress)")
-# HIGH min-prob (0.8) -> skip
-md.reset_for_test()
-c2 = MockCacheP({"ra": [50, 51, 52, 53]}, {"ra": [0.9, 0.8, 0.85, 0.9]}); c2.active_requests = {"ra"}
-md._COMMITTED["ra"] = [9, 8]
-_, _, skip_hi = md.decide_and_fill(c2, ["ra"], _near, _topk, mtp_k=1, device=DEV, pad_token=0)
-check(skip_hi is True, "high-conf (min-prob 0.8 >= 0.5) full match -> skip")
-# threshold OFF (0.0, default) -> blanket skip even at low conf (back-compat)
-md.reset_for_test(); _os.environ["FR13_MERGED_SKIP_MIN_PROB"] = "0.0"
-c3 = MockCacheP({"ra": [50, 51, 52, 53]}, {"ra": [0.9, 0.9, 0.3, 0.9]}); c3.active_requests = {"ra"}
-md._COMMITTED["ra"] = [9, 8]
-_, _, skip_off = md.decide_and_fill(c3, ["ra"], _near, _topk, mtp_k=1, device=DEV, pad_token=0)
-check(skip_off is True, "threshold OFF (0.0) -> blanket skip at low conf (back-compat)")
-_os.environ.pop("FR13_MERGED_SKIP_MIN_PROB", None)
-
 print(f"\n{PASS}/{PASS+FAIL} checks PASS")
 if FAIL == 0:
-    print(">>> PASS — merged-drafter orchestration: lifecycle + rolling buffer, adaptive gate "
-          "(all-match->skip, any-miss->never-regress), CONFIDENCE-gated skip, req-keyed pattern, needle.")
+    print(">>> PASS — merged-drafter TAIL orchestration: lifecycle + rolling buffer, decide_tail "
+          "(hit/pad/cold, committed++head pattern seed), TAIL engagement counters.")
     sys.exit(0)
 sys.exit(1)

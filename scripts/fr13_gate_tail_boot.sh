@@ -55,7 +55,8 @@ done
 wait
 curl -fsS "http://127.0.0.1:$PORT/metrics" 2>/dev/null | grep -E "spec_decode_num_(accepted|draft)_tokens" > "$RUN/metrics_after.txt" 2>/dev/null || true
 echo "--- ENGAGEMENT (drafter needle: TAIL[fired hit cold]) ---" | tee -a "$RUN/gate.log"
-docker logs "$C" 2>&1 | grep -oE "TAIL\[fired=[0-9]+ hit=[0-9]+ cold=[0-9]+\]" | tail -3 | tee -a "$RUN/gate.log"
+# needle format gained ` br_real=N` inside the bracket 2026-07-2x — regex tolerates both forms
+docker logs "$C" 2>&1 | grep -oE "TAIL\[fired=[0-9]+ hit=[0-9]+ cold=[0-9]+( br_real=[0-9]+)?\]" | tail -3 | tee -a "$RUN/gate.log"
 echo "--- ACCEPT per-position (positions 6-20 non-zero => TAIL accepts => >5 signal) ---" | tee -a "$RUN/gate.log"
 curl -fsS "http://127.0.0.1:$PORT/metrics" 2>/dev/null | grep -E "spec_decode_num_accepted_tokens_per_pos" | tail -25 | tee -a "$RUN/gate.log"
 echo "--- aggregate accept/draft (before -> after) ---" | tee -a "$RUN/gate.log"
