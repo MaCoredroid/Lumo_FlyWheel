@@ -743,3 +743,93 @@ obviously the lever: the verify forward is already inside vLLM's own CUDA
 graphs and its ~200ms is GPU work (98.6ms weight-read floor + tree rows),
 not launch overhead. Verify that claim (full-graph vs piecewise for the
 tree decode shape) BEFORE investing in S2.
+
+## POST-SESSION AUDIT (2026-07-27, 7-agent verification of boots 47-54 claims)
+Independent re-verification against primary records; supersedes the
+final-hour transcript numbers where they conflict.
+
+### Regression claims (a074cf45b / 0fa12a74a) — DOWNGRADED, not overturned
+- Pooled tree fit reproduces exactly: 235.42 + 49.25*eps, R^2=0.894 — but
+  n=7 gives WIDE CIs: F +/-43ms, m +/-19.5 ms/event. "R ~ exact" overstated.
+- Transcription: the 'stg boot16' tuple is actually the BOOT-19 record;
+  dscg (staged, eps 2.323, step 335.6) was OMITTED and carries a -14.2ms
+  residual — the +/-14ms spread hits STAGED too, it is NOT =2-specific.
+  n=8 fit with dscg: 236.5 + 47.95, R^2=0.85.
+- Honest mode-detection floor at arm level is ~+/-100ms (df=2), not the
+  quoted +/-15ms. "No mode difference" stands as a point estimate
+  (F(3,2)=0.03); a sub-15ms claim needs the per-STEP sidecar regression.
+- NATIVE "fit" 160.4+44.6 is an exact 2-POINT line (native_b4 eps 2.608,
+  native_b8 eps 5.067; zero df) whose slope is identified solely by the
+  B=4->B=8 contrast (batch, 4-vs-8 task set, boot date, prefill_frac
+  0.14-0.17 vs tree 0.39-0.64 all conflated). native_b4 was health-flagged
+  (3/4 early-exit) with vacuous pair dumps.
+- => "deficit is FIXED +75.1 / marginal at parity +4.6" is ONE consistent
+  reading, NOT a measured fact (fixed-deficit CI [32,118]; marginal-diff
+  CI [-15,+24]; eps=0 intercepts extrapolate 1.4-2.6 below the data).
+  ROBUST version: TOTAL deficit ~85-90 ms/step at operating eps 2.0-2.6
+  (87.2+/-12.1 at eps 2.6 where native_b4 is direct data); tree ~0.92x
+  native there; bar17-r2's ~140ms/event row-tax confirmed dead (marginal
+  CI excludes 140). Win conditions numerically survive: cut ~85ms OR
+  accept >= 5.0.
+
+### Drafter / tail — the final-hour "11 sequential passes" model is WRONG
+- The depth-6-11 tail is NOT MTP-drafted: FR13_TAIL_MODE=1 caps the MTP
+  loop at the depth-5 head (root + 4 graph-replayed spine forwards);
+  depths 6-11 come from the Arctic suffix trie (host walk ~0.3ms). The
+  live boot's TAIL counters read TAIL[fired=12854 hit=12731]=99.0% —
+  the tail IS engaged. The session's "suffix never fires" misread zeroed
+  HEAD-MERGE counters (speculate_fired etc., by-design dormant in tail
+  mode) from a log line truncated at exactly 'TAIL[fir'. The user's
+  correction ("suffix tail is 6 so drafter we are also 5") was RIGHT.
+- Ergonomics trap fixed in understanding (needle docstring says
+  "match_full>0 is the engagement proof" — that is merge-mode only; in
+  tail mode the proof is TAIL[hit]>0).
+- dfwd ~54ms/step IS real GPU span (drain-artifact theory formally
+  retracted in FR13_LEVER_REDESIGN.md; DVK bake 94.9->56.3 corroborates);
+  it is the HEAD loop (~4 iters), so tail-cut saves ~0.3ms drafter, not
+  ~29ms. The "3.6x cheaper than native" compare is confounded (our DVK-64k
+  head vs native full-vocab, cross-boot).
+- Per-depth accept (task #33's histogram) ALREADY ANSWERED from bracket
+  counters across 7 clean arms: tail d6-11 carries 0.85-1.31 accept/event
+  = 19-27% of total; comb d1-5 = 3.41-3.91; branch siblings +0.14-0.29
+  vs straight chain (mostly depth 1). TAIL-CUT IS AN ANTI-LEVER: realistic
+  saving ~5ms/step vs break-even accept loss 0.43-0.47 -> net -14..-21%
+  TPS, and accept falls AWAY from the >=5.0 win condition. The accept>5
+  route is a BETTER tail: native11's trained head earns 1.699 in d6-11 vs
+  Arctic's 0.85-1.31 (+0.4-0.8 headroom at ~zero step cost). Open piece
+  of #33 = Q2 suffix-complement miss-coverage.
+
+### Decomposition numbers (final-hour tables) — corrected
+- gaps "~70ms" and "~44ms" BOTH fail on a consistent basis. Boot-54
+  task-window recompute: wall 375.0 - sfwd 242.6 - dfwd 55.1 - cfwd 66.5
+  => host/gaps ~10.8 ms/step (boot-53: 8.4), upper bound 77.3 only if the
+  in-graph committer were free.
+- sfwd is NOT "essentially the whole fixed term": 3-point fit gives
+  sfwd ~ 155 + 31*eps — a ~155ms fixed part (~2/3 of F) plus most of the
+  49.2ms/event marginal living INSIDE the verify forward.
+- Committer band 39-66 ms/span (39 = boot-23 =3 staged basis; boot-53/54
+  60-66 on the ~20% staged-timed steps; in-graph cost unmeasured). Burn
+  drop confirmed baked (FR13_APC_BURN_NODE_BANK=0 live).
+
+### Engagement / validity audits — all PASS
+- Boot-53 constraint-kernel fix (6eba91b1b) present in live source and on
+  the active =2 path; SELFCHECK BYTE-EQUAL; reproduces across 3 arms.
+- RNG pin (a4348d178) disarmed in speed arms (env absent, defaults 0,
+  zero LIVEPAIR needles) — no observer effect.
+- Double temp still live (rejection_sampler.py:152+158). NEW nuances:
+  (a) tree_self_logits get a SINGLE apply => parent rows 0.36 vs tree
+  rows 0.6 asymmetry inside the same arm; (b) native arms booted via the
+  STOCK launcher (nativemtp5/nativemtp5apc/nativemtp11apc kinds) ran at
+  TRUE 0.6 — not temp-matched vs tree; e5 fit bars (patched launcher)
+  ARE matched. Decision on the fix remains QUEUED (user).
+- "Same-session A/B" is actually TWO boots back-to-back (m3 14:52Z ->
+  torn down -> m2 15:49Z), same driver/subset; phase control partial.
+- S2 premise check largely answered: live boot captures FULL decode CUDA
+  graphs at exactly the B=4 tree shape (FULL=4, largest=88=4x22).
+  Residual: measure runtime FULL-vs-piecewise dispatch fraction (cheap).
+- Housekeeping flagged: "keep =3" is transcript-only (committed default
+  everywhere = FR13_STEP_GRAPH=0 staged; #72 defers the bake decision to
+  arm-B's tuple); #45 closed with a pre-rebase verdict; #49/#50/#60
+  stale; FR13_STEP_GRAPH_DESIGN.md needs an outcome note (projections
+  refuted); armA(=3) verdicts 2P/2F (12907+13236) not yet in this log —
+  vs =2's 1P/3F x2 (small-n, watch arm B).
