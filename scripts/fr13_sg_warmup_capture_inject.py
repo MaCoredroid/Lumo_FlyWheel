@@ -87,6 +87,7 @@ def _fr13_sg_warmup_capture(self):
     _orig_specids = getattr(_tk, "_LUMO_FA_SPEC_ROW_REQ_IDS", None)
     _orig_last = getattr(_tk, "_LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS", None)
     captured = 0
+    _rng_state = torch.cuda.get_rng_state(device)
     try:
         for B in range(1, maxB + 1):
             md = _make_md(B)
@@ -111,8 +112,15 @@ def _fr13_sg_warmup_capture(self):
                     uniform_decode=True,
                 )
                 hidden = hs[0] if isinstance(hs, tuple) else hs
+                _gen = globals().get("_FR13_SG_WU_GEN")
+                if _gen is None:
+                    _gen = torch.Generator(device=device)
+                    _gen.manual_seed(torch.initial_seed() & 0x7FFFFFFF)
+                    globals()["_FR13_SG_WU_GEN"] = _gen
+                _h = hidden[: (n + 1) * B]
                 logits = self.model.compute_logits(
-                    torch.rand_like(hidden[: (n + 1) * B]))
+                    torch.rand(_h.shape, dtype=_h.dtype, device=_h.device,
+                               generator=_gen))
                 # route through sample_tokens: the =2 capture harness wraps
                 # ITS call to _sample (calling self._sample directly bypasses
                 # the wrapper entirely — boot-29f: done 0/4, all-eager)
@@ -130,6 +138,11 @@ def _fr13_sg_warmup_capture(self):
                     self._fr13_sg_warmup_mode = False
                     self.execute_model_state = None
                 del out
+            try:
+                torch.cuda.set_rng_state(_rng_state, device)
+            except Exception as _rse:
+                print("[FR13_STEP_GRAPH] warmup rng-restore failed: "
+                      + str(_rse)[:120], flush=True)
             ent = getattr(self, "_fr13_sg_graphs", {}).get(
                 (tuple([n] * B), tuple(logits.shape)))
             if ent is not None:
