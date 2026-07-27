@@ -531,3 +531,23 @@ sampler-row req ids + spec-row req ids; if broken rows == permuted rows
 => fix is aligning the uniforms/q (and any row-indexed refill) through
 the same perm the graph's committer fill-2 uses (or refilling them in
 spec order). The warmup check missed it because fabricated perm == identity.
+
+## Boots 48-50: LIVEPAIR REFRAME — no structural defect visible; measure the
+## current stack end-to-end (boot-51 = full clean arm)
+Paired-uniform attempt was DEFEATED (the staged rerun redraws uniforms/q
+internally), so LIVEPAIR arms are NOT RNG-paired. With that understood:
+- boot-49 samples 2,3: replay_lens == staged_lens EXACTLY ([1,1,5,4],
+  [1,1,7,3]) — the =2 REPLAY ACCEPTS DEEP (5,7,4,3) on live steps.
+- Only token VALUES differ, and only at rejected rows (recovery draws) =
+  RNG-explained, not a defect.
+- draft_eq all True (draft refill correct). tls_eq uniform-False =
+  probe artifact (processors run in-place/after the staged arm), not
+  row-discriminating.
+KEY REALIZATION: the last FULL live arm was boot-31; since then the stack
+gained md draft-ids refill (boot-33), logits-static (boot-31), timer
+capture-guards (boot-30), philox cure. Boots 32-50 were diagnostics
+killed early. The accept-1.00 + garble evidence is from the OLD stack.
+BOOT-51 = clean full arm (LIVEPAIR off, no diagnostics): behavioral band
+(2P/2F), personal garble eyeball, mid-run accept, arm-end
+measured_tps_fullstep_wall + eps + prefill_frac, slope vs staged 17.0 /
+=3 18.7. That measurement decides whether =2 is already shippable.
