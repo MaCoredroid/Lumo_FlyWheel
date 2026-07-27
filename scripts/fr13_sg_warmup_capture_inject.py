@@ -28,6 +28,30 @@ def _fr13_sg_warmup_capture(self):
     parents_template = [path_to_idx.get(tuple(p[:-1]), -1) for p in choices]
     maxB = int(self.scheduler_config.max_num_seqs)
 
+    def _fr13_fill_coherent(B, md2):
+        """Two-pass drafter-coherent inputs: pass-1 neutral forward
+        establishes argmax drafts at the parent rows; inputs then carry
+        those drafts at tree positions so products cohere and the walk
+        reaches DEEP accepts (the accept-0 blindspot fix)."""
+        _base = 11
+        self.input_ids.gpu[: (n + 1) * B].fill_(_base)
+        _hs1 = self._dummy_run(
+            (n + 1) * B,
+            cudagraph_runtime_mode=CUDAGraphMode.NONE,
+            force_attention=True,
+            uniform_decode=True,
+        )
+        _h1 = (_hs1[0] if isinstance(_hs1, tuple) else _hs1)[: (n + 1) * B]
+        _lg1 = self.model.compute_logits(_h1)
+        _D = _lg1[md2.target_logits_indices.long()].argmax(dim=-1)
+        md2.draft_token_ids.copy_(_D.to(torch.int32))
+        for _r in range(B):
+            _ss = _r * (n + 1)
+            self.input_ids.gpu[_ss] = _base
+            self.input_ids.gpu[_ss + 1: _ss + 1 + n] = _D[
+                _r * n: (_r + 1) * n].to(self.input_ids.gpu.dtype)
+        return _D
+
     def _make_md(B):
         ndt = [n] * B
         parents = []
@@ -103,6 +127,7 @@ def _fr13_sg_warmup_capture(self):
             logits = None
             for _phase in ("warm", "warm2", "capture"):
                 self._fr13_sg_skip_seen = False  # print EVERY skip reason
+                _fr13_fill_coherent(B, md)
                 _fr13_wids = ["fr13-warmup-%d" % _r for _r in range(B)]
                 _tk._LUMO_FA_SAMPLER_ROW_REQ_IDS = _fr13_wids
                 _tk._LUMO_FA_SPEC_ROW_REQ_IDS = list(_fr13_wids)
@@ -119,16 +144,10 @@ def _fr13_sg_warmup_capture(self):
                     _gen.manual_seed(torch.initial_seed() & 0x7FFFFFFF)
                     globals()["_FR13_SG_WU_GEN"] = _gen
                 _h = hidden[: (n + 1) * B]
-                # boot-37: capture in a DEEP-ACCEPT context (real logits +
-                # argmax drafts). Boot-36 selfcheck: random-logits capture
-                # rejects all drafts and the baked region freezes the
-                # degenerate accept-0 output (replay0=38352 constant across
-                # keys AND boots = capture-time token re-emitted forever —
-                # the live accept-1.0 + garble signature).
+                # boot-45: inputs are drafter-coherent (set by
+                # _fr13_fill_coherent above); logits from the coherent
+                # forward — deep-accept capture context.
                 logits = self.model.compute_logits(_h)
-                md.draft_token_ids.copy_(
-                    logits[md.target_logits_indices.long()]
-                    .argmax(dim=-1).to(torch.int32))
                 # route through sample_tokens: the =2 capture harness wraps
                 # ITS call to _sample (calling self._sample directly bypasses
                 # the wrapper entirely — boot-29f: done 0/4, all-eager)
@@ -207,6 +226,7 @@ def _fr13_sg_warmup_capture(self):
                           self.num_decode_draft_tokens.np[:B] = n
                           self.num_decode_draft_tokens.np[B:] = -1
                           self.num_decode_draft_tokens.copy_to_gpu()
+                          _fr13_fill_coherent(B, md)
                           hs2 = self._dummy_run(
                               (n + 1) * B,
                               cudagraph_runtime_mode=CUDAGraphMode.NONE,
@@ -215,13 +235,8 @@ def _fr13_sg_warmup_capture(self):
                           )
                           _h2 = (hs2[0] if isinstance(hs2, tuple)
                                  else hs2)[: (n + 1) * B]
-                          # REAL logits: drafts=argmax(real) => deep accepts
-                          # (random logits vs real products reject everything)
                           _lg2 = self.model.compute_logits(_h2)
                           torch.cuda.manual_seed(999)  # pair DEFAULT-gen draws
-                          md.draft_token_ids.copy_(
-                              _lg2[md.target_logits_indices.long()]
-                              .argmax(dim=-1).to(torch.int32))
                           _saved2 = None
                           _dead2 = self._fr13_sg_dead
                           if _mode == "eager":
