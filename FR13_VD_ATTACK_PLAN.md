@@ -68,3 +68,31 @@ tail6 shape, temp 0.6): profiler window 150:24, ~40 completion probes. Read
 per-kernel GPU times + component ratios ONLY (walls inflated by eager+CUPTI).
 Deliverable: named kernels for D1 and re-ranked V2/V3/V4 → then author the
 top fix behind a flag with a same-boot byte/band gate.
+
+## PROBE RESULTS (run_20260727T195333Z, 24 active steps, EAGER basis)
+DRAFTER window 79.2 ms/step (72 window-calls):
+- gemvx **BF16** 27.9 ms/step, n=217 (~9/step, ~3.1ms/call ≈ 216GB/s — the
+  gemv itself is near-bandwidth-EFFICIENT; the DVK slice is resident in BF16
+  = 0.67GB/read; the lever is TRAFFIC, not kernel choice)
+- cutlass fp8 blockwise (MTP layer projections) 8.6 | everything else < 1
+=> D1' RANKED #1: halve lm_head draft traffic — fp8 (or int8) DVK slice
+   0.67→0.33GB → ~−14ms/step; DRAFT-side only (committer keeps losslessness;
+   draft-logit quantization may shift accept slightly → accept-gate it).
+   Secondary: audit the ~9 gemv calls/step multiplicity.
+VERIFY window 306.1 ms/step eager (kernel sum ~148; eager launch-gap
+inflation ~150 — graphs already reclaim this in prod):
+- fp8 GEMMs 115.6 (n~256/step) = only ~17% over the 98.6 weight floor →
+  GEMMs are near-efficient, NOT a lever (re-confirms the M-tile refutation)
+- tree-specific kernels are SMALL: _tree_gdn_path 12.9 + index_copy 4.1 +
+  scatter_gather 3.7 + conv_wb_fused 2.8 + soup ~5 ≈ ~28 ms/step
+- attention ~0.9 at the probe's SHORT context — the agentic verify fixed
+  excess must be KV reads at long context (not probed here; state-bytes
+  levers are the matching attack, currently user-PARKED)
+=> V-front honest re-rank: kernel-side verify headroom ≈ 20-28ms (scan+soup),
+   NOT ~90; the remainder of graphed-verify-over-floor at agentic contexts =
+   KV traffic + in-graph bubbles. B2c/V3 still valid but small.
+COMMITTER window 43.3 ms/step eager (kernel sum ~14; dominated by the 248k
+softmax 4.1 + hundreds of micro-kernels/step) → launch-count-bound, already
+graph-captured in prod; matches the ~40-45ms full-coverage staged spans.
+NEXT: regress1 arm (running) delivers the per-step F/m regression; then
+author D1' (fp8 DVK slice) behind a flag + accept-gate.
