@@ -97,3 +97,32 @@ softmax 4.1 + hundreds of micro-kernels/step) → launch-count-bound, already
 graph-captured in prod; matches the ~40-45ms full-coverage staged spans.
 NEXT: regress1 arm (running) delivers the per-step F/m regression; then
 author D1' (fp8 DVK slice) behind a flag + accept-gate.
+
+## PER-STEP REGRESSION (regress1 harvest, n=3010, mid-run preliminary)
+  step_wall = 210.9(±1.4) + 61.4(±0.6)·drafts   R²=0.933
+  sfwd      = 130.8(±1.1) + 43.3(±0.5)·drafts   R²=0.911
+- The pooled arm-level fit (235.5+49.2) was WRONG both ways: fixed lower
+  (211), marginal higher (61.4) — resolves the high-eps above-line drift
+  (tempfix1 +22.5 at eps 2.57 was the pooled m underfit).
+- Verify fixed 130.8 vs 98.6 weights => fixed excess only ~32 (KV at this
+  workload + fixed kernels + fixed idle).
+- **IN-SPAN IDLE (the campaign, user call 2026-07-27 "lets tackle in span
+  idle"): verify marginal 43.3/event vs ~11-12/event of measured kernels =>
+  ~30ms/EVENT of non-kernel time INSIDE the verify span, scaling with
+  events (~75ms/step at eps 2.5); + drafter span ~15 and committer span ~20
+  over their kernel content => ~110ms/step total in-span idle.** The earlier
+  "host/gaps ~11ms" counted only BETWEEN-span gaps — the in-span idle is
+  cuda-event-bracketed stream idle = host work landing between the start
+  event and kernel launches (per-request input-prep, metadata/block-table
+  python, publishes). PRIME SUSPECTS: per-request prep loops inside
+  execute_model (scales with spec requests — matches the per-EVENT scaling
+  signature), inter-phase host seams, committer serial waits.
+ATTACK PLAN (exact-math only):
+ 1. Name it: host-phase CPU timers (perf_counter, no syncs) around the prep
+    phases inside execute_model + propose + committer dispatch — sampled,
+    sidecar-dumped; rides the B2c gate boot.
+ 2. vLLM --async-scheduling / prep-overlap: investigate whether input-prep
+    (N+1) can overlap forward(N) in this build + patch compatibility — the
+    structural fix if the suspect confirms.
+ 3. Vectorize the hottest per-request python loops (cheap, targeted).
+ 4. Committer-under-drafter overlap for the committer span's serial wait.
