@@ -18364,16 +18364,15 @@ def _patch_gpu_model_runner_sample_return_probe() -> bool:
     if "sample-return" in text:
         return False
     anchor = (
-        "            sampling_metadata,\n"
-        "        )\n"
+        "        _fr13_cfwd_end(_fr13_cfwd_ev)\n"
         "        return sampler_output\n"
     )
     if anchor not in text:
-        raise RuntimeError("FR13_SG sample-return probe anchor not found")
+        raise RuntimeError("FR13_SG sample-return probe anchor not found "
+                           "(expects post-CFWD text; ordering)")
     text = text.replace(
         anchor,
-        "            sampling_metadata,\n"
-        "        )\n"
+        "        _fr13_cfwd_end(_fr13_cfwd_ev)\n"
         "        __import__(\"vllm.v1.sample.rejection_sampler\", "
         "fromlist=[\"_x\"])._fr13_sg_capchk(\"sample-return\")\n"
         "        return sampler_output\n",
@@ -19032,7 +19031,6 @@ def main() -> int:
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_bonus_handoff()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_exec_lock()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_warmup_capture()),
-        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_sample_return_probe()),
         # FR13_SLOT_REORDER (edits 1+4/5): spine-first canonical KV slot layout,
         # default OFF. Must run AFTER remap_apply (whose _sample anchor precedes
         # this patch's propose_draft_token_ids restore anchor in program order,
@@ -19050,6 +19048,7 @@ def main() -> int:
         # are owned by another workstream). Must run AFTER the sfwd timer
         # patch, whose module block defines the _fr13_cfwd_* helpers.
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_cfwd_gpu_timer()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_sample_return_probe()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_boundary_log()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_preprocess_context_flag()),
