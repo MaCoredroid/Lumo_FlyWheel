@@ -16010,6 +16010,7 @@ class _Fr13SfwdGpuTimer:
         self._fwd_samples_cg = []  # cudagraph dispatch tag per fwd sample
         self._fwd_samples_host = []  # FR13_SUBSPAN begin→pre-replay ms (-1 = no mark)
         self._fwd_samples_exec = []  # FR13_SUBSPAN pre-replay→stop ms
+        self._fwd_samples_cpu_tail = []  # CPU perf_counter mark→end ms (host-tail discriminator)
         self._wall_samples_d = []
         self._wall_samples_ms = []
         # FR13_TORCH_PROF="<skip>:<active>" (2026-07-27, V+D attribution):
@@ -16222,16 +16223,26 @@ class _Fr13SfwdGpuTimer:
         stop_ev = _t.cuda.Event(enable_timing=True)
         stop_ev.record()  # async on the current (forward) stream
         # FR13_SUBSPAN: harvest the wrapper's pre-replay mark + close window.
+        # CPU-clock tail (mark #2, zero-sync discriminator): perf_counter at
+        # the mark (wrapper) vs here — if cpu_tail ≈ exec_ms the span is
+        # host-bound after enqueue (host tail); if cpu_tail << exec_ms the
+        # stream genuinely runs that long (in-replay waits).
         _rm = getattr(_t, "_fr13_replay_mark", None)
+        _rm_cpu = getattr(_t, "_fr13_replay_mark_cpu", None)
+        import time as _time_m
+        _cpu_tail = -1.0
+        if _rm_cpu is not None:
+            _cpu_tail = round((_time_m.perf_counter() - float(_rm_cpu)) * 1000.0, 4)
         _t._fr13_sfwd_open = False
         _t._fr13_replay_mark = None
+        _t._fr13_replay_mark_cpu = None
         if self._rf is not None:
             try:
                 self._rf.__exit__(None, None, None)
             except Exception:  # noqa: BLE001
                 pass
             self._rf = None
-        self._pending.append((start_ev, stop_ev, n_reqs, _cg, _rm))
+        self._pending.append((start_ev, stop_ev, n_reqs, _cg, _rm, _cpu_tail))
         self._drain(blocking=False)
         # bound the backlog: if we ever exceed the cap (should not at steady
         # B<=4 decode), force a drain of the OLDEST pair (it is certainly done).
@@ -16243,7 +16254,7 @@ class _Fr13SfwdGpuTimer:
         # non-blocking completion poll; we never elapsed_time() an incomplete
         # stop (that would block the live decode stream).
         while self._pending:
-            start_ev, stop_ev, n_reqs, _cg, _rm = self._pending[0]
+            start_ev, stop_ev, n_reqs, _cg, _rm, _cpu_tail = self._pending[0]
             try:
                 done = stop_ev.query()
             except Exception:  # noqa: BLE001
@@ -16276,6 +16287,7 @@ class _Fr13SfwdGpuTimer:
                             _h = _x = -1.0
                     self._fwd_samples_host.append(_h)
                     self._fwd_samples_exec.append(_x)
+                    self._fwd_samples_cpu_tail.append(float(_cpu_tail))
                 if self._counter is not None:
                     self._counter.inc(secs)
             except Exception:  # noqa: BLE001
@@ -16360,6 +16372,7 @@ class _Fr13SfwdGpuTimer:
                         "fwd_cg": self._fwd_samples_cg,
                         "fwd_host_ms": self._fwd_samples_host,
                         "fwd_exec_ms": self._fwd_samples_exec,
+                        "fwd_cpu_tail_ms": self._fwd_samples_cpu_tail,
                         "wall_drafts": self._wall_samples_d,
                         "wall_ms": self._wall_samples_ms,
                         "samples_capped": (
@@ -19504,6 +19517,8 @@ def _patch_cudagraph_wrapper_subspan_mark() -> bool:
         "                _fr13_rm = torch.cuda.Event(enable_timing=True)\n"
         "                _fr13_rm.record()\n"
         "                torch._fr13_replay_mark = _fr13_rm\n"
+        "                import time as _fr13_rt\n"
+        "                torch._fr13_replay_mark_cpu = _fr13_rt.perf_counter()\n"
         "            except Exception:\n"
         "                pass\n"
         "        entry.cudagraph.replay()\n"
