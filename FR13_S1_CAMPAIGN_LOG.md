@@ -339,3 +339,18 @@ compositions. B=1 three-phase fix worked; logits-static engagement fix in
 Arm proceeding to the live 4-task gate with the FULL replay set armed.
 Gate: 2P/2F band + garble eyeball + replay engagement (committer-span
 collapse vs staged 38.7ms = cleanest signal) + captured-=2 speed tuple.
+
+## Boot-31 live gate: GARBLE — line stopped (arm killed ~08:25Z)
+4/4 keys captured AND live replays ENGAGED (no address-moved raises,
+accept 4.20 mid-run) — but 2 of 4 tasks went DEGENERATE: num_turns=1,
+~5min single turns, thinking = "Let me understand the!!!!!!!!!!..."
+(coherent prefix -> deterministic '!' spam). 13033 stayed coherent =>
+composition-dependent corruption. The =2 replay corrupts state.
+Prime suspects (warmup-baked vs live mismatch in committer consumption):
+dummy-slot indices / stash provenance / a per-step tensor not covered by
+the refill contract. Verdict basis: we owed this lever the per-change
+same-seed byte gate BEFORE any live arm (fr13_speed_first_lossless_gate)
+and skipped it in the capture excitement.
+NEXT: in-boot replay-vs-eager BYTE SELF-CHECK in the fabricator (capture
+-> paired fresh-input step replay-vs-eager -> compare sampled ids +
+committed GDN/conv states, per key) — no live arm until 4/4 byte-clean.
