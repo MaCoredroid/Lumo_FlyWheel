@@ -609,3 +609,27 @@ EVIDENCE CHAIN that cracked it: both-sides RNG pin => walk products
 byte-identical while emitted tokens still diverged => difference had to be
 the sampling DISTRIBUTION, not the walk/state/RNG => missing constraint
 kernels.
+
+### Boot-53 FINAL RECORD (first honest captured-=2 speed tuple)
+Verdicts: 1 pass, 3 fail, 4 finished (12907 resolved; 13033/13236/13398
+failed) = s1go/dscg band.
+Speed: measured_tps_fullstep_wall 38.384 | step_wall 351.468ms @ eps 2.645
+| accept 4.101 | prefill_frac 0.642 | s_per_fwd_gpu 0.0867 | death 0.
+SLOPE (accept+1)/step = 14.51 tps/eps.
+SCOREBOARD (slope basis, the eps-independent comparison):
+  =3 graph (boot-23)      18.7
+  staged (boot-16/24)     17.0 / 17.0
+  =1 graph (s1go)         14.7
+  =2 graph (boot-53)      14.51   <-- SLOWEST per-event so far
+READ: =2 now WORKS (garble fixed, real task PASS) but its per-event
+economics are the worst of the ladder — the one-graph =2 region is not
+paying off yet. Raw tps 38.4 is the highest number on the board ONLY
+because eps 2.645 was high (workload phase), and prefill_frac 0.642 is
+also the highest (heavy prefill share) — both confound raw tps; the slope
+is the honest read.
+Accept 4.101 is近 the staged band (4.5-4.7) but below it.
+NEXT (one lever at a time): (a) confirm the slope with a second =2 arm
+(single sample, workload-sensitive), (b) if it holds, decompose why the
+=2 replay costs more per event than =3 (extra baked constraint kernels +
+per-step metadata refills are the new suspects — they were ADDED by the
+fix), (c) only then consider S2.
