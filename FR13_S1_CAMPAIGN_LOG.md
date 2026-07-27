@@ -905,3 +905,20 @@ deploy_speed_msr.json at arm end; tempfix1 replicates at true temp 0.6.
 INSTRUMENT ADDED for the residual F/m question: per-step (drafts, ms) samples
 in the sfwd timer final JSON (teardown-only dump) — tempfix1 carries it =>
 per-STEP regression with real CIs replaces arm-level n=7 fits.
+
+## CLEANBAKE1 GATE: PASS (2026-07-27 18:52Z) — cleaned+baked build behaviorally
+## neutral, tuple ON the pooled line
+Verdicts: 1 pass, 3 fail, 4 finished (12907 pass; 13236 patch_apply_failed —
+the known flip-flopper, whitespace-tail, same class as boot-54; 13033
+tests_failed coherent; 13398 tests_failed after its known context-marathon,
+COMPRESSION_FAILED at 75k tokens). Within the 1P-2P historical band for this
+subset. Garble eyeball: all 4 traces clean (0 flags, 0 nonascii).
+Speed: 27.548 tps wall | step 311.545ms @ eps 1.5795 | accept 4.4337 |
+pf 0.5785 | floor_ratio 3.160 | drafter 54.77 | committer 45.61 (full-coverage
+staged basis) | engaged tok_per_draft=21.
+Pooled-line check: predicted 313.2 @ eps 1.58 -> residual -1.7ms. ON the line.
+=> the bake (8 defaults) + deletions (head-merge/burn/HC) are confirmed
+behavior- and speed-neutral on the served path. NOTE this arm still runs
+LEGACY temp (0.36) — its boot predates the temp fix => it doubles as the
+re-base A/B control. tempfix1 (true 0.6 + per-step samples) auto-started
+18:5xZ (container up).
