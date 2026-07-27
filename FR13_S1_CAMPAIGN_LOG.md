@@ -60,3 +60,20 @@ consecutive band-positive vs 1P/3F references (16-task confirm queued).
 Speed: 31.343 tps wall | step 325.023ms @ eps 1.847 | accept 4.515 |
 prefill_frac 0.454. Staged line consistent w/ boot-16 (331.8 @ 1.94 pf .63);
 lower pf confirms boot-16's prefill was path variance.
+
+## boot-23 record — FIRST LIVE =3 ARM (walk+products+conv+committer IN-GRAPH)
+Verdicts: 2P/2F (12907+13236 pass; 13033+13398 fail) — IDENTICAL set to both
+staged arms => behavioral parity in captured mode; third consecutive
+band-positive vs 1P/3F references.
+Stability: 4 mode3 graphs, ~2h15m captured-mode soak, death 0, zero engine
+incidents. KV-remap verified intact (mechanism + empirics). Image identity
+verified constant across all arms (official swebench per-instance, local
+digest sha256:4232400..., runner never re-pulls).
+Speed: 26.946 tps wall | step 305.479ms @ eps 1.441 | accept 4.713 |
+prefill_frac 0.434 | committer-span (CFWD basis) 39.654ms/step | drafter
+56.121ms/step | s_per_fwd_gpu 0.138. Lowest absolute step_wall of any 4-task
+arm BUT lowest eps too (13398 ran a 2h solo IERS-branch marathon, eps→1
+dominating the average) => speed verdict = staged-parity-class, committer
+attribution INCOMPLETE (staged component pairs were lost with boots 16/19
+records). Next-arm protocol: preserve FULL component records + overlap-phase
+window pairs; 13398 style watch-item (terse/marathon trajectory) stands.
