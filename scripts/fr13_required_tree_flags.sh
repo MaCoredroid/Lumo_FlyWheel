@@ -31,6 +31,20 @@ FR13_REQUIRED_TREE_FLAGS=(
   "FR13_KV_REMAP_SYNCFREE=1"  # zero-host-sync KV remap (patch-time baked; offline byte gate PASS; bv1 4-task gate 2026-07-24: accept 4.411, cfwd 12.33ms/event, 0 errors)
   "FR13_INPUTPREP_GUARD=1"    # draft-slot rescue + committed-slot async assert (crash-fix stack; r8 16-task survival + bv1 clean)
   "FR13_DRAFT_VOCAB_K=65536"  # BAKED 2026-07-26: gather-64k drafter head (measured 128-id-block subset, broad 3.14M-tok corpus; fp8 scale-aligned; verifier full-head=lossless). Live 4-task dvkg64L: accept 5.552 == full-head same-workload control 5.556 (dvkdump), drafter_gpu 94.9->56.3ms/step; exact draft-id coverage 97.1% == contig-128k at half the read. Set 0 for full head."
+  # --- cleanup+bake 2026-07-27 (FR13_CLEANUP_BAKE_PLAN.md; cleanbake1 gate PASS: 1P/3F band-in, tuple ON pooled line) ---
+  # Registered HERE (not just launcher defaults) per the config-drift lesson in this file's header:
+  # the registry is the single source AND the variant harness's fail-loud NEEDS assertion, so a
+  # boot that loses any of these fails loud instead of silently drifting. Diagnostics that must
+  # disable one (e.g. eager attribution probes with DRAFTER_GRAPH=0) boot via the launcher
+  # directly, not the variant harness.
+  "FR13_ENABLE_APC=1"         # cache ON (goal = spec+cache; APC lossless proven MISS==HIT)
+  "FR13_TAW=1"                # ran clean in every S1/A-B arm
+  "FR13_PARENT_GATHER=1"      # byte-identical selfcheck-gated (lean recomposition 2026-07-25)
+  "FR13_COMMITTER_GRAPH=1"    # CG committer graph
+  "FR13_CONV_PREGATHER=1"     # re-gated 2026-07-25 lean recomposition
+  "FR13_FLAGS_INKERNEL=1"
+  "FR13_SUBTREE_PARALLEL=1"   # #60: byte-exact + graph-safe + B=1 +4.7%
+  "FR13_DRAFTER_GRAPH=1"      # R4 whole-spine drafter capture (the -40ms lever)
   # FR13_DRAFT_VOCAB_BLOCKS default = scripts/fr13_dvk_subset_blocks.json (launcher); unset BLOCKS with K>0 => contig slice (diagnostic only — NOT a valid frequency cap, see FR13_DVK_RESEARCH_BRIEF.md)
   # FR13_PARENT_GATHER RE-GATED 2026-07-25 via lean recomposition (bsweep2 29.02 winner; every arm since =1 incl bar19 8/16 band-pass). Old note: REVERTED 2026-07-24: loop escalation common factor (bar16/bv4/bv5); bit-identity proven EAGER-only — graph-capture suspect. Loop epidemic later root-caused to HOST DRIVER degradation (reverts stand precautionary). Re-gate under capture (regate_queue.sh 2a) before any re-bake.
   # FR13_CONV_PREGATHER RE-GATED 2026-07-25 (same lean recomposition). Old note: REVERTED 2026-07-24: loop escalation; token hole = col0 row change under stable req-id. FIX BUILT 2026-07-24: composite (req_ids, col0 page-ids) token — publish in _prepare_inputs + trigger/consume in lockstep; stage refuses without col0. Re-gate = regate_queue.sh 2b.
