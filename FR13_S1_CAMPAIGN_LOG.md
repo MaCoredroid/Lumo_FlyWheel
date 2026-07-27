@@ -408,3 +408,18 @@ FR13_SG_PIN_UNIFORMS=1 (fill returns constant 0.5) applied in BOTH arms
 ALSO revisit: the LIVE accept-1.0 may trace to the conv-commit host-eager
 sub-step (accepted-lens host reads baked at capture) — audit whether
 _fr13_conv_commit_to_col0 consumes host-read lens inside the capture.
+
+## Boots 39-41: THE STATE CONVICTION
+Boot-39/40 (pinned uniforms): sampled ids BYTE-EQUAL eager-vs-replay on
+ALL FOUR KEYS — the =2 graph's token path is faithful. BUT committed
+SSM/conv STATE DIVERGES on a FIXED stride-4 layer set every key & boot:
+{12:conv, 16:ssm+conv, 20:ssm+conv, 24:ssm, ...} (list truncated at 6).
+This is the live fine-then-garble mechanism: correct tokens now, poisoned
+state on those layers corrupts later steps.
+PATTERN NOTE: {12,16,20,24}=stride 4 == the GDN layers immediately AFTER
+the hybrid's full-attention layers (full-attn at 11,15,19,23 in the 3:1
+layout) — the ATTN_KV_REMAP neighborhood.
+Boot-41 adds changed-vs-baseline per arm (eN,rN): splits spurious-write
+(replay writes junk) vs missing-write (replay skips those layers'
+commits — e.g., a baked layer-subset in the batched launch or the
+host-eager conv loop).
