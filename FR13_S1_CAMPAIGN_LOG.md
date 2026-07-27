@@ -331,3 +331,11 @@ Arm continues to the live 4-task gate with B=2/3/4 replaying from step 1.
 Gates now: behavioral band (2P/2F), garble eyeball, replay engagement,
 captured-=2 speed vs staged 331.5ms @ eps 1.9 (slope basis: staged 17.0,
 =3 18.7).
+
+## BOOT-31: 4/4 KEYS — complete =2 key set warmup-captured (~08:15Z)
+WARMUP-CAPTURED B=1 ((21,),(22,248320)), B=2, B=3, B=4 — all four
+compositions. B=1 three-phase fix worked; logits-static engagement fix in
+(live logits copied into the captured tensor on ptr mismatch, ~0.2ms).
+Arm proceeding to the live 4-task gate with the FULL replay set armed.
+Gate: 2P/2F band + garble eyeball + replay engagement (committer-span
+collapse vs staged 38.7ms = cleanest signal) + captured-=2 speed tuple.
