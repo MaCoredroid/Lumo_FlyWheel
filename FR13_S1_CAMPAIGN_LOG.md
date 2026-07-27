@@ -884,3 +884,24 @@ ALL pre-fix absolute accept/behavior numbers now carry the 0.36 caveat;
 tempfix1 sets the new reference band. Side effect resolved: the parent-row
 (0.36) vs tree-self (0.6) asymmetry inside the tree arm collapses to a
 uniform 0.6.
+
+## HONEST HOLE CLOSED (2026-07-27, live cleanbake1 mid-run): host/gaps ~11ms
+## CONFIRMED with FULL committer coverage — the [11,77] ambiguity resolves to 11
+The =2/=3 arms could not time the in-graph committer (capture-guarded events,
+~20% staged coverage) => the audit's [11, 77]ms host-gap band. The CANONICAL
+default (STEP_GRAPH=0) runs the committer on the staged path EVERY step, and
+cleanbake1 boots with all three async span timers armed => full coverage:
+  wall 735.50s/2467 steps = 298.1 ms/step @ eps 1.369 (boot-cumulative)
+  sfwd 487.14s/2534      = 192.2 ms/step   (fit 155+31*eps -> 197.5, -5)
+  dfwd 156.19s/2877      =  54.3 ms/span
+  cfwd 108.90s/2711      =  40.2 ms/span   <- n_spans ~= n_steps = FULL coverage
+  residual host/gaps     = ~11.4 ms/step
+The committer measured across ALL steps is 40.2ms (boot-23 staged basis 39.7
+reproduced) — NOT free, so the 77ms upper bound collapses. Host overhead on
+the deployed path is ~11ms/step; the remaining floor gap is GPU work.
+Caveats: boot-cumulative window (warmup included; per-timer denominators
+differ slightly); canonical task-window decomposition lands in each arm's
+deploy_speed_msr.json at arm end; tempfix1 replicates at true temp 0.6.
+INSTRUMENT ADDED for the residual F/m question: per-step (drafts, ms) samples
+in the sfwd timer final JSON (teardown-only dump) — tempfix1 carries it =>
+per-STEP regression with real CIs replaces arm-level n=7 fits.
