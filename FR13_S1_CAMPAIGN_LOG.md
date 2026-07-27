@@ -498,3 +498,21 @@ draft tokens as the dummy forward's input ids at tree positions (dummy
 input_ids seam), so products cohere with drafts and the check reaches
 deep accepts; replay-vs-eager at accept~5 then reproduces the live bug
 in-warmup (12min/boot iteration) or fully exonerates the graph.
+
+## Boot-45: coherent-fill ineffective (accept still 1; in0 still 0) —
+## PIVOT to LIVE-PAIR probe
+Two-pass coherent fabrication did not move accepts (fill either
+overwritten inside _dummy_run's batch prep or position mapping wrong).
+ASIDE: token id 0 renders as '!' — the live "!!!..." garble is argmax-of-
+broken-context token-0 spam; in0=0 in every degenerate check context is
+the same phenomenon. Fabricated-context realism is a rabbit hole (3
+iterations); the sharper instrument exists:
+BOOT-46 DESIGN — LIVE-PAIR probe at first live replay per key:
+1. snapshot committed-state slot rows (existing _snap machinery),
+2. REPLAY the live step (record ids + stash lens),
+3. restore state, force-flags re-arm (the side-stream warmup protocol's
+   save/restore + force-flags already do exactly this),
+4. run the STAGED committer on the SAME live stash/products,
+5. byte-compare ids + accepted lens + committed rows, print one-shot.
+Real live deep-accept inputs, direct staged-vs-replay pair, no fabricated
+context — answers "what differs at accept>0" in one boot.
