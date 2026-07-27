@@ -590,3 +590,22 @@ NOT the =2 garble cause (staged and replay share this code).
 DECISION NEEDED (user): fix + re-baseline the reference band, or keep the
 current regime for continuity. Not changed unilaterally — it moves every
 arm's behavior and would invalidate the standing band mid-campaign.
+
+## BOOT-53: GARBLE FIXED — constraint-kernel omission was the root cause
+Fix (6eba91b1b): warmup capture now builds dummy SamplingMetadata with REAL
+top_p/top_k TENSORS (were None => the graph never recorded the top-k/top-p
+constraint kernels), and the replay refills temperature/top_p/top_k VALUES
+from live metadata each step (the graph bakes addresses).
+LIVE RESULT (boot-53, diagnostics off): garble GONE. Coherent English,
+real work — 12907 landed a genuine one-char fix in separable.py::_cstack
+("all 11 tests pass") and EVALUATED PASS. Accept recovered 1.9 -> 2.9-3.6.
+Verdicts: 12907 PASS; 13033/13236/13398 fail (13398 emitted raw tool_call
+markup = known qwen-code protocol quirk, ended early n=7).
+=> 1 pass, 3 fail, 4 finished — at the s1go/dscg reference band (1P/3F),
+below boot-16/24's 2P/2F. Accept still under the staged 4.5-4.7 band;
+next questions are (a) is the accept gap real or composition, (b) speed
+tuple at arm end.
+EVIDENCE CHAIN that cracked it: both-sides RNG pin => walk products
+byte-identical while emitted tokens still diverged => difference had to be
+the sampling DISTRIBUTION, not the walk/state/RNG => missing constraint
+kernels.
