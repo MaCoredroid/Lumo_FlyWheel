@@ -263,10 +263,16 @@ def _fr13_sg_warmup_capture(self):
                       for (_nm_a, _ea), (_nm_b, _eb) in zip(_post["eager"], _post["replay"]):
                           if _ea is None or _eb is None:
                               continue
+                          _s0e = dict((str(_n0), _e0) for _n0, _e0 in _s0)
+                          _b0 = _s0e.get(str(_nm_a))
                           if not torch.equal(_ea[1], _eb[1]):
-                              _sdiff.append(str(_nm_a) + ":ssm")
+                              _sdiff.append(str(_nm_a) + ":ssm(e%s,r%s)" % (
+                                  int(not torch.equal(_ea[1], _b0[1])) if _b0 else "?",
+                                  int(not torch.equal(_eb[1], _b0[1])) if _b0 else "?"))
                           if not torch.equal(_ea[2], _eb[2]):
-                              _sdiff.append(str(_nm_a) + ":conv")
+                              _sdiff.append(str(_nm_a) + ":conv(e%s,r%s)" % (
+                                  int(not torch.equal(_ea[2], _b0[2])) if _b0 else "?",
+                                  int(not torch.equal(_eb[2], _b0[2])) if _b0 else "?"))
                       print("[FR13_STEP_GRAPH] SELFCHECK B=%d STATE %s" % (
                           B, ("EQUAL" if not _sdiff else "DIVERGED " + str(_sdiff[:6]))),
                           flush=True)
