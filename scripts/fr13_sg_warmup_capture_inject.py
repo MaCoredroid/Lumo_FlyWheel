@@ -194,6 +194,7 @@ def _fr13_sg_warmup_capture(self):
 
                       _s0 = _snap()
                       _pair = {}
+                      _post = {}
                       import os as _os5
                       _os5.environ["FR13_SG_PIN_UNIFORMS"] = "1"
                       _key2 = (tuple([n] * B), tuple(logits.shape))
@@ -244,6 +245,7 @@ def _fr13_sg_warmup_capture(self):
                                   self._fr13_sg_graphs[_key2] = _saved2
                           _ids2 = _so2.sampled_token_ids.detach().clone()
                           _pair[_mode] = _ids2
+                          _post[_mode] = _snap()
                           _tls0 = -1
                           try:
                               _tls0 = int(ent["tls"][0].argmax().item())
@@ -257,6 +259,17 @@ def _fr13_sg_warmup_capture(self):
                                 flush=True)
                       _restore(_s0)
                       _os5.environ.pop("FR13_SG_PIN_UNIFORMS", None)
+                      _sdiff = []
+                      for (_nm_a, _ea), (_nm_b, _eb) in zip(_post["eager"], _post["replay"]):
+                          if _ea is None or _eb is None:
+                              continue
+                          if not torch.equal(_ea[1], _eb[1]):
+                              _sdiff.append(str(_nm_a) + ":ssm")
+                          if not torch.equal(_ea[2], _eb[2]):
+                              _sdiff.append(str(_nm_a) + ":conv")
+                      print("[FR13_STEP_GRAPH] SELFCHECK B=%d STATE %s" % (
+                          B, ("EQUAL" if not _sdiff else "DIVERGED " + str(_sdiff[:6]))),
+                          flush=True)
                       if bool(torch.equal(_pair["eager"], _pair["replay"])):
                           print("[FR13_STEP_GRAPH] SELFCHECK B=%d BYTE-EQUAL"
                                 % B, flush=True)
