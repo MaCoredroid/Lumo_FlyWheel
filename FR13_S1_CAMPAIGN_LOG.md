@@ -516,3 +516,18 @@ BOOT-46 DESIGN — LIVE-PAIR probe at first live replay per key:
 5. byte-compare ids + accepted lens + committed rows, print one-shot.
 Real live deep-accept inputs, direct staged-vs-replay pair, no fabricated
 context — answers "what differs at accept>0" in one boot.
+
+## Boot-46 LIVEPAIR: PER-ROW MISALIGNMENT convicted (the decisive datum)
+LIVEPAIR B=4 ids_equal=False replay_lens=[1,1,10,2] staged_lens=[2,5,10,2]
+replay0=[244020,...] staged0=[271,16,...]
+Rows 2,3: replay == staged EXACTLY (deep accepts 10 and 2 work through
+the graph). Rows 0,1: collapse with different tokens. Same step, same
+inputs => PER-ROW MISALIGNMENT: a permutation (sampler-order vs spec-row
+order) applied on one side of the refill/consume boundary but not the
+other; aligned rows = fixed points of the live perm. Retro-explains the
+accept~1.0 aggregate (misaligned rows dominate most steps).
+NEXT (boot-47): print at LIVEPAIR time — ent["perm"] values + live
+sampler-row req ids + spec-row req ids; if broken rows == permuted rows
+=> fix is aligning the uniforms/q (and any row-indexed refill) through
+the same perm the graph's committer fill-2 uses (or refilling them in
+spec order). The warmup check missed it because fabricated perm == identity.
