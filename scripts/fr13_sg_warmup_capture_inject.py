@@ -273,6 +273,23 @@ def _fr13_sg_warmup_capture(self):
                               _sdiff.append(str(_nm_a) + ":conv(e%s,r%s)" % (
                                   int(not torch.equal(_ea[2], _b0[2])) if _b0 else "?",
                                   int(not torch.equal(_eb[2], _b0[2])) if _b0 else "?"))
+                      if _sdiff:
+                          for (_nx, _ex), (_ny, _ey) in zip(_post["eager"], _post["replay"]):
+                              if _ex is None or _ey is None:
+                                  continue
+                              if not torch.equal(_ex[2], _ey[2]) or not torch.equal(_ex[1], _ey[1]):
+                                  _b1 = dict((str(_n1), _e1) for _n1, _e1 in _s0).get(str(_nx))
+                                  print("[FR13_STEP_GRAPH] STATEVAL %s ssm(e=%.6g,r=%.6g,b=%.6g) "
+                                        "conv(e=%.6g,r=%.6g,b=%.6g)" % (
+                                            str(_nx).split(".layers.")[-1],
+                                            float(_ex[1].float().abs().sum()),
+                                            float(_ey[1].float().abs().sum()),
+                                            float(_b1[1].float().abs().sum()) if _b1 else -1,
+                                            float(_ex[2].float().abs().sum()),
+                                            float(_ey[2].float().abs().sum()),
+                                            float(_b1[2].float().abs().sum()) if _b1 else -1),
+                                        flush=True)
+                                  break
                       print("[FR13_STEP_GRAPH] SELFCHECK B=%d STATE %s" % (
                           B, ("EQUAL" if not _sdiff else "DIVERGED " + str(_sdiff[:6]))),
                           flush=True)
