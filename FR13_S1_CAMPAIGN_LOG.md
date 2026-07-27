@@ -833,3 +833,35 @@ final-hour transcript numbers where they conflict.
   stale; FR13_STEP_GRAPH_DESIGN.md needs an outcome note (projections
   refuted); armA(=3) verdicts 2P/2F (12907+13236) not yet in this log —
   vs =2's 1P/3F x2 (small-n, watch arm B).
+
+## A/B COMPLETE + #72 CLOSED (2026-07-27 17:13Z)
+Arm B (s1ab_m2, =2) finished: 2 pass, 2 fail, 4 finished (12907+13236 pass,
+13033+13398 fail — SAME per-task outcomes as arm A). Final tuples:
+  armA =3: accept 4.3766 | eps 2.0934 | tps 33.399 | step 336.99ms | pf .394
+  armB =2: accept 3.6973 | eps 1.6568 | tps 25.106 | step 309.98ms | pf .296
+Pooled-line residuals: =3 -1.5ms | =2 -7.0ms => BOTH arms on step=235.5+49.2*eps.
+The =2/=3 band worry dissolves (arm B 2P/2F). Accept 4.38 vs 3.70 = workload
+composition (arm B's 13398 ran a 4543s solo exploration tail), comb-basis in
+band. VERDICT: no mode buys speed or behavior; FR13_STEP_GRAPH stays 0.
+
+## CLEANUP + BAKE EXECUTED (2026-07-27, FR13_CLEANUP_BAKE_PLAN.md; commits
+## 429cad7f6 plan, e21d626f1 bake, 8bca48c2b delete)
+- BAKED as launcher defaults: ENABLE_APC, TAW, PARENT_GATHER, COMMITTER_GRAPH,
+  CONV_PREGATHER, FLAGS_INKERNEL, SUBTREE_PARALLEL, DRAFTER_GRAPH (all =1);
+  KIND defaults to tail6 (canonical config); fr13_launch_locked.sh retired
+  HISTORICAL.
+- DELETED: head-merge decide_and_fill seam + module path (needle now TAIL-led,
+  truncation-misread trap killed); committer burn (FR13_APC_BURN_NODE_BANK) +
+  legacy runrow=0 path (retired fail-loud; kernel burn kwarg dead-False);
+  FR13_HC_INTERNAL mechanism (hc_internal_on()->False, wiring+preseed removed);
+  suffonly KIND. Kernel-body HC_MASK/BURN constexpr excision = follow-up with
+  its own bit-exact gate.
+- OFFLINE GATE PASS: edited patcher applied end-to-end in a throwaway container
+  on the pristine image tree — all steps True (except the known patch-time
+  env-gated APC_ZERO_MAMBA, False without its env), full compileall of patched
+  vllm PASS, deletions verified tombstone-only in patched outputs;
+  merged-drafter unit tests rewritten for the tail surface: 24/24 PASS.
+- LIVE GATE: cleanbake1 (tail6, subset_b4_four, B=4, temp 0.6, NO stack
+  exports — baked defaults under test) launched; gates = engagement needles +
+  garble-free traces + 2P/2F band + tuple on the pooled line. Next after PASS:
+  double-temp fix as its own milestone + same-subset A/B re-base.

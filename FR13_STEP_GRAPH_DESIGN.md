@@ -1,5 +1,19 @@
 # FR13_STEP_GRAPH — one CUDA graph per decode step (design)
 
+> **OUTCOME (2026-07-27) — SPEED PROJECTIONS REFUTED; correctness milestone
+> delivered.** The pooled regression (commit a074cf45b) + the same-driver
+> =3-vs-=2 A/B (s1ab arms, FR13_S1_CAMPAIGN_LOG.md) put every mode (=1/=2/=3/
+> staged) on ONE line `step ≈ 235.5 + 49.2·eps` — S1 fusion moved step time by
+> less than the ~±14ms cross-arm noise floor. The "~60-90ms of inter-phase host
+> glue" premise below was wrong for the fused region: that host cost had already
+> been hoisted out (boots 24+) to make capture legal, and the honest residual
+> host/gap figure is ~11ms/step (post-session audit). "Projected step ~150ms /
+> floor_ratio ~1.5" did NOT materialize. What the build DID deliver: the capture
+> machinery works (4/4 keys per boot), and chasing its garble root-caused the
+> constraint-kernel capture omission (6eba91b1b) plus the double-temperature
+> finding. DISPOSITION: FR13_STEP_GRAPH stays default 0 (staged); =2/=3 remain
+> in-tree behind the flag as proven-working (cleanup+bake, task #72 closed).
+
 **User call 2026-07-26: this is the active structural build, upfront; verify
 state-bytes levers (KV fp8, mamba dtype) PARKED.**
 
