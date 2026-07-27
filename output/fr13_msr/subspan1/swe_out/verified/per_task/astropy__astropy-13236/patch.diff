@@ -1,0 +1,20 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index 5afe2127a..ba0112b8a 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -1243,8 +1243,13 @@ class Table:
+         # mixin class
+         if (not isinstance(data, Column) and not data_is_mixin
+                 and isinstance(data, np.ndarray) and len(data.dtype) > 1):
+-            data = data.view(NdarrayMixin)
+-            data_is_mixin = True
++            warnings.warn(
++                "In the future adding a structured ndarray to a Table will "
++                "add it as a Column (instead of as an NdarrayMixin). "
++                "To suppress this warning, wrap the data in a Column: "
++                "t['col'] = Column(data)",
++                FutureWarning,
++                stacklevel=2)
+ 
+         # Get the final column name using precedence.  Some objects may not
+         # have an info attribute. Also avoid creating info as a side effect.
