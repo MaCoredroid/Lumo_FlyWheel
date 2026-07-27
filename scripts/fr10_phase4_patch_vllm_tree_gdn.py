@@ -16004,6 +16004,7 @@ class _Fr13SfwdGpuTimer:
         )
         self._fwd_samples_d = []
         self._fwd_samples_ms = []
+        self._fwd_samples_cg = []  # cudagraph dispatch tag per fwd sample
         self._wall_samples_d = []
         self._wall_samples_ms = []
         # FR13_TORCH_PROF="<skip>:<active>" (2026-07-27, V+D attribution):
@@ -16176,11 +16177,12 @@ class _Fr13SfwdGpuTimer:
             except Exception:  # noqa: BLE001
                 pass
 
-    def begin(self, num_reqs=1):
+    def begin(self, num_reqs=1, cg_mode=None):
         """Return a fresh start cuda-event (recorded on the current stream), or
         None when disabled. Called only on pure-decode steps. num_reqs = the
         spec events (drafts) this timed step will process (the s/fwd_gpu
-        denominator)."""
+        denominator). cg_mode = the step's cudagraph dispatch decision,
+        stored as a compact tag on the per-step sample."""
         if not self._enabled:
             return None
         import torch as _t
@@ -16192,9 +16194,13 @@ class _Fr13SfwdGpuTimer:
                 self._rf.__enter__()
             except Exception:  # noqa: BLE001
                 self._rf = None
+        try:
+            _cg = str(cg_mode).rsplit(".", 1)[-1][:12] if cg_mode is not None else "?"
+        except Exception:  # noqa: BLE001
+            _cg = "?"
         ev = _t.cuda.Event(enable_timing=True)
         ev.record()  # async on the current (forward) stream
-        return (ev, int(max(1, num_reqs)))
+        return (ev, int(max(1, num_reqs)), _cg)
 
     def end(self, start):
         """Record the stop event (async), enqueue the pair, and drain any pairs
@@ -16202,7 +16208,7 @@ class _Fr13SfwdGpuTimer:
         No per-step synchronize."""
         if start is None or not self._enabled:
             return
-        start_ev, n_reqs = start
+        start_ev, n_reqs, _cg = start
         import torch as _t
         stop_ev = _t.cuda.Event(enable_timing=True)
         stop_ev.record()  # async on the current (forward) stream
@@ -16212,7 +16218,7 @@ class _Fr13SfwdGpuTimer:
             except Exception:  # noqa: BLE001
                 pass
             self._rf = None
-        self._pending.append((start_ev, stop_ev, n_reqs))
+        self._pending.append((start_ev, stop_ev, n_reqs, _cg))
         self._drain(blocking=False)
         # bound the backlog: if we ever exceed the cap (should not at steady
         # B<=4 decode), force a drain of the OLDEST pair (it is certainly done).
@@ -16224,7 +16230,7 @@ class _Fr13SfwdGpuTimer:
         # non-blocking completion poll; we never elapsed_time() an incomplete
         # stop (that would block the live decode stream).
         while self._pending:
-            start_ev, stop_ev, n_reqs = self._pending[0]
+            start_ev, stop_ev, n_reqs, _cg = self._pending[0]
             try:
                 done = stop_ev.query()
             except Exception:  # noqa: BLE001
@@ -16244,6 +16250,7 @@ class _Fr13SfwdGpuTimer:
                 if len(self._fwd_samples_ms) < self._samples_max:
                     self._fwd_samples_d.append(int(n_reqs))
                     self._fwd_samples_ms.append(round(float(ms), 4))
+                    self._fwd_samples_cg.append(_cg)
                 if self._counter is not None:
                     self._counter.inc(secs)
             except Exception:  # noqa: BLE001
@@ -16325,6 +16332,7 @@ class _Fr13SfwdGpuTimer:
                         "final": bool(final),
                         "fwd_drafts": self._fwd_samples_d,
                         "fwd_ms": self._fwd_samples_ms,
+                        "fwd_cg": self._fwd_samples_cg,
                         "wall_drafts": self._wall_samples_d,
                         "wall_ms": self._wall_samples_ms,
                         "samples_capped": (
@@ -16406,9 +16414,11 @@ def _fr13_sfwd_is_pure_decode(max_num_scheduled_tokens, num_tokens, num_reqs,
 
 
 def _fr13_sfwd_begin(max_num_scheduled_tokens, num_tokens, num_reqs,
-                     uniform_decode_query_len):
+                     uniform_decode_query_len, cg_mode=None):
     """Return a start event if FR13_SFWD_GPU_TIMER=1 AND this is a pure-decode
-    step, else None (no event, no cost)."""
+    step, else None (no event, no cost). cg_mode = the step's cudagraph
+    dispatch decision (FULL vs PIECEWISE vs NONE) — tagged onto the per-step
+    samples to discriminate the in-span-idle hypothesis (2026-07-27)."""
     if __import__("os").environ.get("FR13_SFWD_GPU_TIMER", "0") != "1":
         return None
     if torch.cuda.is_current_stream_capturing():
@@ -16429,7 +16439,7 @@ def _fr13_sfwd_begin(max_num_scheduled_tokens, num_tokens, num_reqs,
     if not _fr13_sfwd_pure:
         return None
     try:
-        return _fr13_sfwd_timer().begin(num_reqs=num_reqs)
+        return _fr13_sfwd_timer().begin(num_reqs=num_reqs, cg_mode=cg_mode)
     except Exception:  # noqa: BLE001
         return None
 
@@ -16682,6 +16692,7 @@ def _fr13_cfwd_end(start_ev):
         "            num_tokens_unpadded,\n"
         "            num_reqs,\n"
         "            self.uniform_decode_query_len,\n"
+        "            cudagraph_mode,\n"
         "        )\n"
         "        with (\n"
         "            set_forward_context(\n"
