@@ -444,3 +444,20 @@ a second kernel) commits the remap-adjacent set. Alternative: pre-stage
 copies of the consumed neighbor state so order stops mattering.
 Gate: selfcheck must show STATE EQUAL x4 (ids already BYTE-EQUAL x4)
 before any live arm.
+
+### Boot-41 final + boot-42 fix plan (two-phase launch, implementation notes)
+4/4 keys confirm: ids BYTE-EQUAL, STATE DIVERGED (e1,r1) stride-4 set.
+Eager arm = STAGED committer (per-layer SEQUENTIAL dispatch); replay =
+ONE batched launch => ordering dependency broken for post-full-attn GDN
+layers. NOTE: =3 also captured the batched commit_state_part — its live
+2P/2F may have absorbed small state noise; re-examine after the fix.
+Implementation (boot-42):
+1. Adjacent-set detection at runtime: GDN layer index i is remap-adjacent
+   iff layer i-1 is NOT in _FR13_REPLAY_LAYERS (i-1 was full-attn).
+2. REORDER stacks layer_order at build: independent layers first,
+   adjacent last (one-time permutation at stack construction).
+3. Route + commit_state_part: TWO launch_all calls with SLICED stack
+   views (rows [0..k) then [k..n)) + banks_list slices — no kernel
+   change; kernel-order between the two launches enforces the dependency
+   (same stream, still fully in-graph).
+Gate before live: selfcheck STATE EQUAL x4 + ids BYTE-EQUAL x4.
