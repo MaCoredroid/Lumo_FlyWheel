@@ -175,3 +175,25 @@ Boot-26 package (this commit):
   entanglement was the poison (adopt private); identical attempt-2
   failure => concurrent-thread landing => next lever = capture-step
   serialization (pause batch-queue pipelining for the one capture step).
+
+## Boot-26 (killed post-payload) + boot-27 launch: mode discriminant
+Boot-26 verdict: SHARED-POOL ENTANGLEMENT REFUTED. Attempt 1 (shared pool)
+invalidated; pool-leak fix engaged ("pool-recording ended after abort");
+attempt 2 ran on a PRIVATE pool and invalidated with the IDENTICAL
+signature (status 2 at pre-capture-end, last Active fwd-tail). Poison is
+pool-independent + deterministic. Hooks audit: zero forward hooks in
+vllm/v1, zero global module hooks => the bracketed sliver truly has no
+CUDA ops in our thread.
+Remaining hypotheses + the discriminant (boot-27, this commit):
+(i) mode-gated unsafe action in OUR thread — but thread_local only errors
+    on own-thread actions, and the sliver is empty… unless the action
+    precedes fwd-tail with LATE status flip;
+(ii) structural stream/event violation (another thread interacting with
+    the capturing stream's history) — invalid in EVERY mode.
+Attempt ladder now 3: shared/thread_local -> private/thread_local ->
+private/RELAXED. relaxed-success => (i) (and the graph is still only our
+stream's recording; replay correctness remains byte-gated vs staged);
+relaxed-fail => (ii) confirmed => build capture-step serialization
+(pause batch-queue pipelining for the single capture step).
+Stream log preserved: s1fullgo_stream.boot26.log. Staged reference
+unchanged (banked x2).
