@@ -575,3 +575,18 @@ replay ids vs staged ids on the SAME step with RNG genuinely neutralized
 step only, so the staged redraw is also pinned; boot-47 pinned only one
 side). If ids still differ under both-pinned => hard defect with content
 evidence; then bisect the region (=3 + sampler only, etc.).
+
+## SEPARATE FINDING (not the =2 garble): DOUBLE temperature application
+Stock rejection_sampler.py has ONE `target_logits = apply_sampling_constraints(...)`.
+The patched file has TWO in sequence (patcher injects its own copy above the
+stock call; introduced e87808ee5 2026-06-05 / 44adae753 2026-06-07).
+apply_sampling_constraints applies TEMPERATURE + top-k/top-p, so the tree
+target logits are scaled by 1/T twice => effective temp 0.36, not 0.6
+(top-k/top-p are idempotent; temperature is NOT).
+SCOPE: the call sits in the shared spec-decode forward, so EVERY spec arm
+(tree AND native MTP bars) has been affected equally since 2026-06-05 —
+cross-arm comparisons remain valid, but the absolute regime is temp 0.36.
+NOT the =2 garble cause (staged and replay share this code).
+DECISION NEEDED (user): fix + re-baseline the reference band, or keep the
+current regime for continuity. Not changed unilaterally — it moves every
+arm's behavior and would invalidate the standing band mid-campaign.
