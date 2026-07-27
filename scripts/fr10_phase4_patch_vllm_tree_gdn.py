@@ -16006,6 +16006,18 @@ class _Fr13SfwdGpuTimer:
         self._fwd_samples_ms = []
         self._wall_samples_d = []
         self._wall_samples_ms = []
+        # FR13_TORCH_PROF="<skip>:<active>" (2026-07-27, V+D attribution):
+        # one torch.profiler window over `active` pure-decode steps after
+        # `skip`, driven from wall_mark (the per-step tick). The three span
+        # timers enter record_function windows (FR13_W_VERIFY/DRAFTER/
+        # COMMITTER) so kernels attribute per component. DIAGNOSTIC-tier
+        # (CUPTI overhead inflates wall; kernel GPU times remain valid).
+        # Dump: FR13_TORCH_PROF_OUT (default /logs/fr13_torch_prof) .json+.txt.
+        self._prof_spec = __import__("os").environ.get("FR13_TORCH_PROF", "")
+        self._prof = None
+        self._prof_steps = 0
+        self._prof_done = False
+        self._rf = None
         # throttled incremental sidecar dump (prometheus-independent live channel)
         import time as _time
         self._dump_period_s = float(
@@ -16045,6 +16057,7 @@ class _Fr13SfwdGpuTimer:
         from the previous pure-decode step, attributed to the PREVIOUS step's
         drafts; rejects deltas above the idle cap."""
         import time as _time
+        self._prof_tick()
         now = _time.perf_counter()
         if self._wall_prev_t is not None:
             d = now - self._wall_prev_t
@@ -16065,6 +16078,104 @@ class _Fr13SfwdGpuTimer:
         self._wall_prev_t = None
         self._wall_prev_n = 0
 
+    def _prof_tick(self):
+        """FR13_TORCH_PROF driver: called once per pure-decode step
+        (from wall_mark). Starts/stops the single profiler window and
+        post-processes on completion. Never raises."""
+        if not self._prof_spec or self._prof_done:
+            return
+        try:
+            skip_s, active_s = self._prof_spec.split(":")
+            skip, active = int(skip_s), int(active_s)
+            self._prof_steps += 1
+            if self._prof is None and self._prof_steps > skip:
+                import torch as _t
+                from torch.profiler import profile as _P, ProfilerActivity as _A
+                self._prof = _P(activities=[_A.CPU, _A.CUDA])
+                self._prof.__enter__()
+                print("[FR13_TORCH_PROF] window START (step %d, active %d)"
+                      % (self._prof_steps, active), flush=True)
+            elif self._prof is not None and self._prof_steps > skip + active:
+                _p = self._prof
+                self._prof = None
+                self._prof_done = True
+                _p.__exit__(None, None, None)
+                self._prof_dump(_p, active)
+        except Exception as _e:  # noqa: BLE001
+            self._prof_done = True
+            try:
+                print("[FR13_TORCH_PROF] DISABLED: %r" % (_e,), flush=True)
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _prof_dump(self, prof, active):
+        """Attribute CUDA kernel time to the FR13_W_* windows and dump
+        per-window totals + top kernels. Runs once, off the hot path."""
+        import json as _json
+        import os as _os
+        out = _os.environ.get("FR13_TORCH_PROF_OUT", "/logs/fr13_torch_prof")
+        windows = {}
+
+        def _collect(ev, sink):
+            try:
+                for k in getattr(ev, "kernels", []) or []:
+                    sink[k.name] = [
+                        sink.get(k.name, [0.0, 0])[0] + float(k.duration),
+                        sink.get(k.name, [0.0, 0])[1] + 1,
+                    ]
+            except Exception:  # noqa: BLE001
+                pass
+            for ch in getattr(ev, "cpu_children", []) or []:
+                _collect(ch, sink)
+
+        try:
+            for ev in prof.events():
+                nm = getattr(ev, "name", "")
+                if not str(nm).startswith("FR13_W_"):
+                    continue
+                w = windows.setdefault(str(nm), {
+                    "calls": 0, "cuda_us_total": 0.0, "kernels": {},
+                })
+                w["calls"] += 1
+                try:
+                    w["cuda_us_total"] += float(ev.device_time_total)
+                except Exception:  # noqa: BLE001
+                    pass
+                _collect(ev, w["kernels"])
+            lines = ["FR13_TORCH_PROF (active_steps=%d)" % active]
+            payload = {"active_steps": active, "windows": {}}
+            for wn, w in sorted(windows.items()):
+                per_step_ms = (w["cuda_us_total"] / 1000.0) / max(1, active)
+                lines.append("\\n== %s: calls=%d cuda_ms_per_step=%.3f"
+                             % (wn, w["calls"], per_step_ms))
+                top = sorted(w["kernels"].items(),
+                             key=lambda kv: -kv[1][0])[:40]
+                payload["windows"][wn] = {
+                    "calls": w["calls"],
+                    "cuda_ms_per_step": round(per_step_ms, 3),
+                    "top_kernels": [
+                        {"name": k, "us_total": round(v[0], 1), "n": v[1],
+                         "ms_per_step": round(v[0] / 1000.0 / max(1, active), 4)}
+                        for k, v in top
+                    ],
+                }
+                for k, v in top[:25]:
+                    lines.append("  %8.3f ms/step  n=%-6d %s"
+                                 % (v[0] / 1000.0 / max(1, active), v[1], k[:120]))
+            _pp = __import__("pathlib").Path(out)
+            _pp.parent.mkdir(parents=True, exist_ok=True)
+            _pp.with_suffix(".json").write_text(
+                _json.dumps(payload, indent=1), encoding="utf-8")
+            _pp.with_suffix(".txt").write_text(
+                "\\n".join(lines) + "\\n", encoding="utf-8")
+            print("[FR13_TORCH_PROF] window DONE -> %s.{json,txt}" % out,
+                  flush=True)
+        except Exception as _e:  # noqa: BLE001
+            try:
+                print("[FR13_TORCH_PROF] dump failed: %r" % (_e,), flush=True)
+            except Exception:  # noqa: BLE001
+                pass
+
     def begin(self, num_reqs=1):
         """Return a fresh start cuda-event (recorded on the current stream), or
         None when disabled. Called only on pure-decode steps. num_reqs = the
@@ -16075,6 +16186,12 @@ class _Fr13SfwdGpuTimer:
         import torch as _t
         if not _t.cuda.is_available():
             return None
+        if self._prof_spec and self._prof is not None and self._rf is None:
+            try:
+                self._rf = _t.profiler.record_function("FR13_W_VERIFY")
+                self._rf.__enter__()
+            except Exception:  # noqa: BLE001
+                self._rf = None
         ev = _t.cuda.Event(enable_timing=True)
         ev.record()  # async on the current (forward) stream
         return (ev, int(max(1, num_reqs)))
@@ -16089,6 +16206,12 @@ class _Fr13SfwdGpuTimer:
         import torch as _t
         stop_ev = _t.cuda.Event(enable_timing=True)
         stop_ev.record()  # async on the current (forward) stream
+        if self._rf is not None:
+            try:
+                self._rf.__exit__(None, None, None)
+            except Exception:  # noqa: BLE001
+                pass
+            self._rf = None
         self._pending.append((start_ev, stop_ev, n_reqs))
         self._drain(blocking=False)
         # bound the backlog: if we ever exceed the cap (should not at steady
@@ -16298,6 +16421,12 @@ class _Fr13SpanTimer:
         self._sidecar_env = sidecar_env
         self._label = label
         self._enabled = __import__("os").environ.get(flag, "0") == "1"
+        # FR13_TORCH_PROF window tag (probe runs only): record_function is a
+        # cheap no-op when no profiler is active, so gating on the env alone
+        # is safe and needs no cross-module profiler-state link.
+        self._prof_on = bool(__import__("os").environ.get("FR13_TORCH_PROF"))
+        self._rf = None
+        self._rf_name = "FR13_W_" + label.upper()
         self._pending = _c.deque()
         self._max_pending = 256
         self._accum_s = 0.0
@@ -16327,6 +16456,12 @@ class _Fr13SpanTimer:
         import torch as _t
         if not _t.cuda.is_available():
             return None
+        if self._prof_on and self._rf is None:
+            try:
+                self._rf = _t.profiler.record_function(self._rf_name)
+                self._rf.__enter__()
+            except Exception:  # noqa: BLE001
+                self._rf = None
         ev = _t.cuda.Event(enable_timing=True)
         ev.record()
         return ev
@@ -16337,6 +16472,12 @@ class _Fr13SpanTimer:
         import torch as _t
         stop_ev = _t.cuda.Event(enable_timing=True)
         stop_ev.record()
+        if self._rf is not None:
+            try:
+                self._rf.__exit__(None, None, None)
+            except Exception:  # noqa: BLE001
+                pass
+            self._rf = None
         self._pending.append((start_ev, stop_ev))
         self._drain(False)
         if len(self._pending) > self._max_pending:
