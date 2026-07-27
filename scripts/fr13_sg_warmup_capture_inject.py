@@ -101,7 +101,7 @@ def _fr13_sg_warmup_capture(self):
             self.num_decode_draft_tokens.np[B:] = -1
             self.num_decode_draft_tokens.copy_to_gpu()
             logits = None
-            for _phase in ("warm", "capture"):
+            for _phase in ("warm", "warm2", "capture"):
                 self._fr13_sg_skip_seen = False  # print EVERY skip reason
                 _fr13_wids = ["fr13-warmup-%d" % _r for _r in range(B)]
                 _tk._LUMO_FA_SAMPLER_ROW_REQ_IDS = _fr13_wids
