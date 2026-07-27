@@ -148,3 +148,21 @@ path = a large injected observer effect (the very per-event-sync pathology
 under investigation; sfwd samples unaffected — debug lives in the sampler
 region). b2c1 deliverables = band + dispatch tags (FULL at n=2727) + corpus.
 B2c's REAL speed gate = a clean arm without the debug rider.
+
+## SUBSPAN FIRST SPLIT (subspan1 live, first 54 samples): HYPOTHESIS 2 ALSO
+## REFUTED — the idle is NOT pre-launch host python
+  host_ms (begin→replay-enqueue): mean 0.0, median 0.0
+  exec_ms (enqueue→span-end):     mean 250.9, median 268.2 (early/cold basis)
+The span's start event is immediately followed by the replay enqueue. The
+in-span excess therefore lives AFTER enqueue, in one of two places the
+current mark cannot separate:
+ (a) INSIDE the replay's stream time — e.g. captured cross-stream wait nodes
+     (subtree-parallel side streams, overlap fences) baked into the graph;
+ (b) HOST TAIL — python between model-return and the span's stop event (our
+     post-forward capture hooks etc.); a late-recorded stop event completes
+     immediately when the stream has drained => elapsed folds host tail in.
+NEXT INSTRUMENT (mark #2, authored for the boot after subspan1): an event at
+model-return + CPU perf_counter deltas at mark/stop records — separates
+in-replay stream time from host tail at zero extra sync cost. Meanwhile
+subspan1 accumulates n for the exec-vs-drafts marginal regression (the
+~28ms/event should reappear in exec's marginal).
