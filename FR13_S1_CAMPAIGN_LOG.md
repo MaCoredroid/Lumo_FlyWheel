@@ -633,3 +633,27 @@ NEXT (one lever at a time): (a) confirm the slope with a second =2 arm
 =2 replay costs more per event than =3 (extra baked constraint kernels +
 per-step metadata refills are the new suspects — they were ADDED by the
 fix), (c) only then consider S2.
+
+## BOOT-54: =2 slope CONFIRMED (2-arm agreement) — functional, not faster
+Verdicts: 1 pass, 3 fail, 4 finished (12907 resolved+PASS again;
+13033/13236/13398 failed). Garble-free, coherent traces, death 0 — the
+constraint fix REPRODUCES.
+Speed: 38.731 tps wall | step 375.020ms @ eps 2.554 | accept 4.686 |
+prefill_frac 0.390 | s_per_fwd_gpu 0.095 | slope 15.16 tps/eps.
+TWO-ARM =2 SUMMARY (the honest, eps-independent read):
+  boot-53: slope 14.51 (accept 4.101, step 351.5, eps 2.645, prefill .642)
+  boot-54: slope 15.16 (accept 4.686, step 375.0, eps 2.554, prefill .390)
+  mean ~14.8 tps/eps
+LADDER (slope): =3 18.7 > staged 17.0 > =1 14.7 ~= =2 14.8
+=> CONFIRMED: the one-graph =2 region is the SLOWEST per-event of the
+ladder, ~21% below =3, despite accept parity (4.686 vs staged 4.5-4.7).
+Its raw tps (38-39) leads the board only via high eps + phase.
+Behavioral band: 1P/3F both arms (s1go/dscg band, below boot-16/24 2P/2F).
+Note prefill_frac swung .642 -> .390 across the two arms with slope stable
+(14.5/15.2) => the slope IS the robust statistic, as designed.
+NEXT: decompose WHY =2 costs more per event than =3 (task #72 step 2).
+Suspects, in order: (1) the constraint kernels the garble fix moved INSIDE
+the graph (top-k/top-p now execute per replay in-region), (2) the per-step
+temperature/top_p/top_k refills added alongside, (3) the double
+apply_sampling_constraints (temp²) — cheap to test by comparing CFWD/SFWD
+sidecar spans boot-54 (=2) vs boot-23 (=3) at matched eps.
