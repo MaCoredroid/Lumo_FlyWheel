@@ -75,10 +75,11 @@ DRAFTER window 79.2 ms/step (72 window-calls):
   gemv itself is near-bandwidth-EFFICIENT; the DVK slice is resident in BF16
   = 0.67GB/read; the lever is TRAFFIC, not kernel choice)
 - cutlass fp8 blockwise (MTP layer projections) 8.6 | everything else < 1
-=> D1' RANKED #1: halve lm_head draft traffic — fp8 (or int8) DVK slice
-   0.67→0.33GB → ~−14ms/step; DRAFT-side only (committer keeps losslessness;
-   draft-logit quantization may shift accept slightly → accept-gate it).
-   Secondary: audit the ~9 gemv calls/step multiplicity.
+=> D1' (fp8 DVK slice, ~−14ms) — **PARKED by user 2026-07-27**: draft-logit
+   quantization is distribution-touching; joins KV-fp8 + mamba-dtype in the
+   parked state-bytes/quantization family. The campaign stays EXACT-MATH.
+   Remaining drafter lever: the call-multiplicity audit (~9 gemv/step vs ~5
+   expected — if redundant, exact-math savings ~6-9ms; one code-read decides).
 VERIFY window 306.1 ms/step eager (kernel sum ~148; eager launch-gap
 inflation ~150 — graphs already reclaim this in prod):
 - fp8 GEMMs 115.6 (n~256/step) = only ~17% over the 98.6 weight floor →
