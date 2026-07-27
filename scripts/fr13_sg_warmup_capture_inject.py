@@ -205,15 +205,19 @@ def _fr13_sg_warmup_capture(self):
                           )
                           _h2 = (hs2[0] if isinstance(hs2, tuple)
                                  else hs2)[: (n + 1) * B]
-                          _lg2 = self.model.compute_logits(torch.rand(
-                              _h2.shape, dtype=_h2.dtype, device=_h2.device,
-                              generator=globals()["_FR13_SG_WU_GEN"]))
+                          # REAL logits: drafts=argmax(real) => deep accepts
+                          # (random logits vs real products reject everything)
+                          _lg2 = self.model.compute_logits(_h2)
+                          torch.cuda.manual_seed(999)  # pair DEFAULT-gen draws
                           md.draft_token_ids.copy_(
                               _lg2[md.target_logits_indices.long()]
                               .argmax(dim=-1).to(torch.int32))
                           _saved2 = None
+                          _dead2 = self._fr13_sg_dead
                           if _mode == "eager":
                               _saved2 = self._fr13_sg_graphs.pop(_key2, None)
+                              self._fr13_sg_dead = True  # force STAGED (warm
+                              # set would route into a RE-CAPTURE otherwise)
                           self._fr13_sg_warmup_mode = True
                           try:
                               self.execute_model_state = (
@@ -226,6 +230,7 @@ def _fr13_sg_warmup_capture(self):
                           finally:
                               self._fr13_sg_warmup_mode = False
                               self.execute_model_state = None
+                              self._fr13_sg_dead = _dead2
                               if _saved2 is not None:
                                   self._fr13_sg_graphs[_key2] = _saved2
                           _pair[_mode] = _so2.sampled_token_ids.detach().clone()
