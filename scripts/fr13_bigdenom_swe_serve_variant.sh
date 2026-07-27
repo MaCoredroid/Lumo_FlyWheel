@@ -423,7 +423,23 @@ else
   if grep -q "^FR13_SCAN_ALIGN=1$" "$ARMDIR/container_env.txt" && [ "${FR13_ALLOW_SCAN_ALIGN:-0}" != "1" ]; then
     echo "FAIL: FR13_SCAN_ALIGN=1 present — K1 must NOT be baked (set FR13_ALLOW_SCAN_ALIGN=1 for the recompute diagnostic)"; exit 3
   fi
+  # FR13_NEEDS_ALLOW (2026-07-27, sanctioned diagnostic override): a
+  # space-separated list of KEY=VALUE pairs that REPLACE the registry
+  # expectation for THIS arm only — so experiment arms that must flip one
+  # pinned flag (e.g. FR13_SUBTREE_PARALLEL=0 for the capture-topology A/B)
+  # run through the FULL live-SWE pipeline instead of fleeing to probe
+  # boots (user call: even kernel measurements use SWE tasks). LOUD: every
+  # override is printed; drift protection stays for everything unlisted.
   for need in "${NEEDS[@]}"; do
+    _ov=""
+    for kv in ${FR13_NEEDS_ALLOW:-}; do
+      [[ "${kv%%=*}" == "${need%%=*}" ]] && _ov="$kv"
+    done
+    if [[ -n "$_ov" ]]; then
+      echo "NEEDS-OVERRIDE (diagnostic arm): expecting $_ov instead of $need"
+      grep -q "^$_ov$" "$ARMDIR/container_env.txt" || { echo "FAIL: override pin not live: $_ov"; exit 3; }
+      continue
+    fi
     grep -q "^$need$" "$ARMDIR/container_env.txt" || { echo "FAIL: env pin missing: $need"; exit 3; }
   done
   # arm-specific OPT flag must be LIVE in container env
