@@ -429,7 +429,7 @@ def fr13_device_multidraft_commit(
         and _fr13_commit_trace_fh() is None
         and not all_greedy
     ):
-        if (os.environ.get("FR13_STEP_GRAPH", "0") == "1"
+        if (os.environ.get("FR13_STEP_GRAPH", "0") in ("1", "3")
                 and not _FR13_SG_CAP_DEAD):
             return fr13_taw_commit_captured(
                 num_draft_tokens, draft_token_ids, tree_parent_indices,
