@@ -126,3 +126,19 @@ ATTACK PLAN (exact-math only):
     structural fix if the suspect confirms.
  3. Vectorize the hottest per-request python loops (cheap, targeted).
  4. Committer-under-drafter overlap for the committer span's serial wait.
+
+## DISPATCH-TAG RESULT (b2c1 live, first 365 samples): HYPOTHESIS 1 REFUTED
+**365/365 pure-decode verify forwards ran as FULL graph replays** — zero
+piecewise fallback. The ~28ms/event in-span idle is NOT capture-coverage;
+it sits between the span's start event and/or around the FULL replay:
+per-request host work (attn/GDN metadata assembly, patched seams) or a
+residual per-event DtoH sync (invisible to kernel tables — consistent with
+the profiler seeing nothing). NEXT DISCRIMINATOR is CPU-side and free:
+code-inspect the per-event paths between sfwd-begin and the replay launch
+for .item()/.cpu()/synchronize + python request loops (the 07-25
+SAMPLER_SYNC_KILL pattern); then host-phase timers if inspection is
+ambiguous. B2c riders healthy: CONV_WB_BATCHED preseeded needles firing;
+ctrace corpus flowing (mis-pathed to /vllm-workspace/1 — snapshotted;
+schema RICHER than .commit: per-node draft_token_id/parent/target_argmax/
+target_prob_draft => the branch-tail join can condition on exact rescue
+events with accept probabilities).
