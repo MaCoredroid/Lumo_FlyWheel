@@ -456,6 +456,27 @@ def _patch_gdn_attn() -> bool:
             "                            )\n"
             "                        _fr13_ep_union[str(_fr13_name)] = _fr13_layer\n"
             "                    _fr13_ep_names = sorted(_fr13_ep_union)\n"
+            "                    # boot-42 two-phase commit: post-full-attn GDN layers\n"
+            "                    # (predecessor NOT a GDN layer) go LAST so the batched\n"
+            "                    # commit can run them in a 2nd stream-ordered launch\n"
+            "                    _fr13_ep_idxset = set()\n"
+            "                    for _fr13_n2 in _fr13_ep_names:\n"
+            "                        try:\n"
+            "                            _fr13_ep_idxset.add(int(str(_fr13_n2).split(\".layers.\")[1].split(\".\")[0]))\n"
+            "                        except Exception:\n"
+            "                            pass\n"
+            "                    _fr13_ep_ind, _fr13_ep_adj = [], []\n"
+            "                    for _fr13_n2 in _fr13_ep_names:\n"
+            "                        try:\n"
+            "                            _fr13_i2 = int(str(_fr13_n2).split(\".layers.\")[1].split(\".\")[0])\n"
+            "                        except Exception:\n"
+            "                            _fr13_i2 = 0\n"
+            "                        if _fr13_i2 > 0 and (_fr13_i2 - 1) not in _fr13_ep_idxset:\n"
+            "                            _fr13_ep_adj.append(_fr13_n2)\n"
+            "                        else:\n"
+            "                            _fr13_ep_ind.append(_fr13_n2)\n"
+            "                    _fr13_ep_names = _fr13_ep_ind + _fr13_ep_adj\n"
+            "                    _fr13_ep_adj_split = len(_fr13_ep_ind)\n"
             "                    _fr13_ep_layers = [\n"
             "                        _fr13_ep_union[_fr13_n] for _fr13_n in _fr13_ep_names\n"
             "                    ]\n"
@@ -560,6 +581,7 @@ def _patch_gdn_attn() -> bool:
             "                        for _fr13_i_, _fr13_nm_ in enumerate(_fr13_ep_names)\n"
             "                    }\n"
             "                    _fr13_gdn_mod._FR13_EAGER_PACK_STACKS = {\n"
+            "                        \"adj_split\": _fr13_ep_adj_split,\n"
             "                        \"layer_order\": tuple(_fr13_ep_names),\n"
             "                        \"flags\": _fr13_ep_flags,\n"
             "                        \"ring_k\": _fr13_ep_ring_k,\n"
@@ -7317,21 +7339,33 @@ def _fr13_sg_commit_device_route(products, output_token_ids, accepted_tree_rows,
     if torch.cuda.is_current_stream_capturing():
         _g._FR13_SG_CONSUMED_PTRS = _fr13_sg_consumed_ptrs(
             stacks, tbl, pbuf, lbuf, _banks, perm)
-    _fr13_sg_launch_all(
-        bank_anchor=tbl[4], bank_off16=tbl[1], bank_shape=tbl[2],
-        bank_stride=tbl[3],
-        spec_state_indices=stacks['spec_idx'], prev_lens=stacks['prev_lens'],
-        accepted_paths=pbuf, accepted_lens=lbuf,
-        k_rings=stacks['ring_k'], v_rings=stacks['ring_v'],
-        a_rings=stacks['ring_a'], b_rings=stacks['ring_b'],
-        A_logs=stacks['A_log'], dt_biases=stacks['dt_bias'],
-        num_layers=len(_order), num_spec_decodes=nreq,
-        output_scale=float(stacks['output_scale']),
-        use_qk_l2norm_in_kernel=True,
-        runrow_commit=_runrow_commit, runrow_init=_runrow_init,
-        burn_node_bank=_burn,
-        banks_list=_banks,
-    )
+    # boot-42 TWO-PHASE commit: independent layers first, post-full-attn
+    # (remap-adjacent) layers in a second stream-ordered launch — the one
+    # batched launch broke the staged path's sequential cross-layer
+    # dependency (boots 39-41 state conviction).
+    _adj_split = int(stacks.get('adj_split', len(_order)))
+    for _ph_lo, _ph_hi in ((0, _adj_split), (_adj_split, len(_order))):
+        if _ph_lo == _ph_hi:
+            continue
+        _fr13_sg_launch_all(
+            bank_anchor=tbl[4], bank_off16=tbl[1][_ph_lo:_ph_hi],
+            bank_shape=tbl[2], bank_stride=tbl[3],
+            spec_state_indices=stacks['spec_idx'][_ph_lo:_ph_hi],
+            prev_lens=stacks['prev_lens'][_ph_lo:_ph_hi],
+            accepted_paths=pbuf, accepted_lens=lbuf,
+            k_rings=stacks['ring_k'][_ph_lo:_ph_hi],
+            v_rings=stacks['ring_v'][_ph_lo:_ph_hi],
+            a_rings=stacks['ring_a'][_ph_lo:_ph_hi],
+            b_rings=stacks['ring_b'][_ph_lo:_ph_hi],
+            A_logs=stacks['A_log'][_ph_lo:_ph_hi],
+            dt_biases=stacks['dt_bias'][_ph_lo:_ph_hi],
+            num_layers=_ph_hi - _ph_lo, num_spec_decodes=nreq,
+            output_scale=float(stacks['output_scale']),
+            use_qk_l2norm_in_kernel=True,
+            runrow_commit=_runrow_commit, runrow_init=_runrow_init,
+            burn_node_bank=_burn,
+            banks_list=_banks[_ph_lo:_ph_hi],
+        )
     _fr13_sg_capchk("post-committer-launch")
     # NOTE: flags deliberately NOT zeroed in-graph (boot-22 death: the
     # staged tail validates flags==1 BEFORE its launch call; the lib-entry
