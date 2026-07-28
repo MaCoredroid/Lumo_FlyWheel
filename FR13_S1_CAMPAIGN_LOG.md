@@ -928,6 +928,11 @@ and docker rm -f (SIGKILL) never runs atexit — tempfix1's samples LOST
 (sidecar final=False). Samples now ride a 30s slow throttle; next
 instrumented arm delivers the F/m regression.
 
+## SUBTREE0 KILLED-BY-DECISION (2026-07-28 00:4xZ, user call): the verdict
+## (fixed collapses to the 98.6 floor at =0; marginal rises 37.5→59.8) was
+## banked at n=569, ~5σ both effects, window-matched. Band moot (=0 never
+## deploys). Partial verdicts = NA basis. GPU handed to subtree_nsys.
+
 ## SUBSPAN2 KILLED-BY-DECISION (2026-07-27 23:5xZ, user call): discriminator
 ## conclusive at n=2728 — cpu_tail mean 0.51ms / median 0.38 / p99 0.52 vs
 ## exec ~267ms. Host-tail hypothesis flat-lined; the verify span is stream
