@@ -282,6 +282,23 @@ subspan fits. Then the fix ranking gets rebuilt from real-context numbers.
   fusions, attention decode-row cost — design on the B=1 marathon case
   where they are unambiguous, price at deployment via decode share).
 
+## PREFILL FRONT (opened 2026-07-28, user discussion): the non-tree share
+prefill_frac 0.3-0.6 of deployment wall persists WITH APC on. Three buckets:
+1. Genuinely new tokens per agent turn — irreducible workload.
+2. Hybrid-state granularity: mamba_block_size 1024 boundaries waste up to
+   1023 re-prefilled tokens per hit; 1024→8192 fix designed+queued (TTFT
+   tradeoff gate needed).
+3. **Tree-caused eviction pressure (the built, ungated lever pair)**: the
+   mamba STATE pool is ~127 pages (fp32 SSM snapshots, 48 layers, gpu_util
+   .70 — distinct from the ~507-block full-attn KV pool). Tree reserves
+   1+21 pages/request vs native 1+5: at B=4 → 88 vs 24 reserved → cached
+   checkpoints 39 vs 103 pages (~2.6x less) → LRU evicts what the next turn
+   would hit. FIX PAIR built 07-24, offline byte-gated, never live-gated:
+   FR13_CONV_NODEBANK (spec columns → private bank; pool keeps running rows
+   only) + FR13_SPEC_BLOCKS_CAP (21→12). SEQUENCE when the front opens:
+   measure the miss split (new-tokens vs boundary vs eviction; marginal-hit
+   time-series diagnostic exists) → gate NODEBANK+CAP → blocksize gate.
+
 - **REBUILT LEVER RANKING (per-draft @ B=1 real ctx, exact-math only):**
   1. attention 77 vs ~14 KV-read floor => ~60ms class (splitkv config /
      kernel efficiency at long ctx) — THE new campaign target
