@@ -198,10 +198,27 @@ subtree-parallel's +4.7% B=1 claim gets eps-adjusted re-pricing at B=4.
    subtree=1 nets −16..−27ms/step BETTER. Do NOT unbake.
 FIX HYPOTHESIS => **FR13_SUBTREE_SINGLESTREAM**: launch the same subtree
 kernels on the MAIN stream (the multistream refutation says side streams
-cannot overlap here anyway → the side-stream topology contributes only the
+cannot overlap here anyway → the side-side topology contributes only the
 baked wait nodes). Expected: keep −22.3/event, delete +32.7 fixed →
 ~−33ms/step at operating eps on top of the current board. Design read next;
 flag-gated build; live gate per standard.
+**REFUTED BY SOURCE READ (before building — 2026-07-28):** `_launch_paths`
+(fr10_gdn_tree_kernel.py:3828) is ALREADY single-stream — one
+`_tree_gdn_path_kernel` launch per path LEVEL on the current stream; no side
+streams, no wait nodes anywhere in the subtree path (the only Stream() near
+it is the committer-graph capture warmup, standard idiom, once at capture).
+=> the +32.7ms fixed lives in the PER-LEVEL LAUNCH STRUCTURE: 48 layers ×
+level barriers × small-kernel durations (level-1 sibling kernels are
+tiny-work but latency/occupancy-bound) and/or inter-level drain bubbles —
+unresolvable by reading. MEASUREMENT NEXT BOOT (per the
+kernel-measurements-on-SWE rule): subtree_nsys arm — the proven July-22
+nsys-on-live-task runner adapted (14598 marathon, 300s window, SIGSTOP
+teardown freeze, reduce_tail6_nsys.py reducer) — names level-kernel
+durations vs gaps AND delivers the real-context kernel floor (the standing
+caveat) in one boot. Fix design follows the named numbers: candidates are
+level-count tightening, sibling fold-in with in-register branch emission
+(out_j from the parent state without carry), or accepting the level barrier
+as the price of path concurrency and re-drawing the floor.
 CAVEAT retained: the marginal split (kernels vs waits inside 37.5/event)
 still needs the real-context kernel measurement (nsys-on-live-task) — the
 eager probe's kernel floor mixes subtree-eager mode and short context.
