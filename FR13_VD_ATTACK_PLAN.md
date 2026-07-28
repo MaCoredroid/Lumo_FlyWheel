@@ -263,6 +263,25 @@ subspan fits. Then the fix ranking gets rebuilt from real-context numbers.
   CANNOT be path-kernel durations or launch counts (+56 launches ≈ 0.3ms)
   — mechanism UNRESOLVED but bounded; keep=1 stands (net positive at
   operating eps); deprioritized behind the bigger levers below.
+## NSYS B=4 DEPLOYMENT-POINT CAPTURE (2026-07-28 01:51Z, 321 drafts, 255s):
+- **GPU 97% busy (host gap 8.1s/255s); decode-segmented idle 36ms/step on
+  ~1s mixed-step walls => OVERLAP LEVERS DEAD AT DEPLOYMENT** (co-residency
+  already fills the waits; committer-under-drafter shelved by data).
+- **MOST B=4 STEPS ARE MIXED**: prefill chunks co-scheduled with decode rows
+  share the weight passes (gemm 545/attention 154 per mixed step include
+  prefill work). The pure-decode fits (217+59, 132.7+37.65) describe ONLY
+  the pure-decode share of deployment wall; prefill_frac 0.3-0.6 of time is
+  a different regime that verify-row levers do not touch.
+- Decode-invariants across ALL regimes: scan ~10-11/draft (done);
+  drafts/step 2.26 ✓.
+- CONSEQUENCE for ranking: B=1-derived "over-floor" figures for
+  attention/GEMM partially amortize into shared passes at deployment; their
+  deployment value scales with the decode share. The regime-robust levers:
+  (a) ACCEPT (untouched by all of this — raises tokens on every regime),
+  (b) decode-row kernel efficiencies that appear in BOTH captures (soup
+  fusions, attention decode-row cost — design on the B=1 marathon case
+  where they are unambiguous, price at deployment via decode share).
+
 - **REBUILT LEVER RANKING (per-draft @ B=1 real ctx, exact-math only):**
   1. attention 77 vs ~14 KV-read floor => ~60ms class (splitkv config /
      kernel efficiency at long ctx) — THE new campaign target
