@@ -928,6 +928,13 @@ and docker rm -f (SIGKILL) never runs atexit — tempfix1's samples LOST
 (sidecar final=False). Samples now ride a 30s slow throttle; next
 instrumented arm delivers the F/m regression.
 
+## SUBSPAN2 KILLED-BY-DECISION (2026-07-27 23:5xZ, user call): discriminator
+## conclusive at n=2728 — cpu_tail mean 0.51ms / median 0.38 / p99 0.52 vs
+## exec ~267ms. Host-tail hypothesis flat-lined; the verify span is stream
+## time inside the captured graph. Partial verdicts (1P/1F/2-in-flight) = NA
+## basis, NOT counted toward the band (deliberate early stop, not a wall).
+## GPU handed to subtree0 (live-SWE capture-topology experiment) ~45min early.
+
 ## SUBSPAN1 COMPLETE (2026-07-27 23:06Z): B2c speed POSITIVE + best board tps
 Verdicts: 1 pass, 3 fail, 4 finished (12907; 13236 flipped back — coin-flip
 class; band 1P-2P holds). Garble 4/4 clean.
