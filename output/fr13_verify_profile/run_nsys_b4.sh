@@ -22,10 +22,7 @@ DUR=300
 mkdir -p "$RUNROOT"
 echo "=== NSYS REAL-TASK ARM tail6 21-node delay=${DELAY}s dur=${DUR}s ==="
 date -u +%Y-%m-%dT%H:%M:%SZ
-for _i in $(seq 1 720); do
-  true # no stage marker needed (queue empty) 2>/dev/null && break
-  sleep 30
-done
+# (no stage-marker wait: queue was empty at launch)
 while docker ps --format '{{.Names}}' | grep -q fr13; do sleep 30; done
 sleep 20
 if [[ -n "$(docker ps -q)" ]]; then echo "FAIL: docker ps not empty"; docker ps; exit 2; fi
