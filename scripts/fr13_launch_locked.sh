@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+# ============================ HISTORICAL — RETIRED 2026-07-27 ============================
+# This is the cat9-era locked launcher (2026-06-13 gold gate). SUPERSEDED by the canonical
+# tail6 config: scripts/fr13_bigdenom_swe_serve_variant.sh (KIND defaults to tail6) over
+# scripts/fr13_launch_forked_fa2_tree_server.sh with the proven stack baked as defaults.
+# See FR13_CLEANUP_BAKE_PLAN.md. Kept for provenance only — do NOT use for new gates.
+# NOTE: FR13_APC_BURN_NODE_BANK was deleted from the code 2026-07-27 (burn proven redundant
+# for the served path); the historical export below is now a no-op and has been removed.
+# =========================================================================================
 # FR13 LOCKED LAUNCHER (2026-06-13) — boots the EXACT B=1 SWE-Verified gold-gate cat9 pipeline
 # (== main HEAD default-ON serving path == b7887c89). Every flag pinned explicitly so a run is
 # NOT env-default-dependent. Diagnostics are forced OFF unless armed via `--arm FR13_<FLAG>`.
@@ -23,7 +31,7 @@ export FR13_TREE_SAMPLE_ROW=1         # FIX-A
 export FR13_REPLAY_ROUTE=1            # replay route (ALWAYS ON)
 export FR13_APC_COMMIT_TO_RUNNING_ROW=1  # stateless col-0 lifecycle (write leaf->col0)
 export FR13_TREE_RUNROW_INIT=1           #   ... read col-0
-export FR13_APC_BURN_NODE_BANK=1         #   ... burn node cols (all 3 = one lifecycle, now baked default-on)
+# FR13_APC_BURN_NODE_BANK export removed 2026-07-27 (flag deleted; burn redundant for served path)
 export FR13_FA2_TREE_BIAS=1
 export FR13_FA2_PREFILL_NATIVE=1
 export FR13_TREE_ATTN_EXP2_SOFTMAX=1
@@ -34,6 +42,7 @@ export FR13_CONV_COMMITTED_PATH=1
 # file's header). Do not re-hardcode `export FR13_ATTN_KV_REMAP=1` etc. here --
 # that duplication is exactly what let these fixes drift out of the general
 # campaign launcher for weeks (found+fixed 2026-07-22).
+source "$HERE/fr13_canonical_env.sh"
 source "$HERE/fr13_required_tree_flags.sh"
 for _fr13_req in "${FR13_REQUIRED_TREE_FLAGS[@]}"; do
   export "${_fr13_req%%=*}=${_fr13_req#*=}"

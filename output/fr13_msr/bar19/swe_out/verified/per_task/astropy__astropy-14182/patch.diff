@@ -1,0 +1,28 @@
+diff --git a/astropy/io/ascii/rst.py b/astropy/io/ascii/rst.py
+index abdeba8ef..0b568ec25 100644
+--- a/astropy/io/ascii/rst.py
++++ b/astropy/io/ascii/rst.py
+@@ -57,10 +57,20 @@ class RST(FixedWidth):
+     data_class = SimpleRSTData
+     header_class = SimpleRSTHeader
+ 
+-    def __init__(self):
+-        super().__init__(delimiter_pad=None, bookend=False)
++    def __init__(self, header_rows=None):
++        if header_rows is None:
++            header_rows = ["name"]
++        super().__init__(delimiter_pad=None, bookend=False, header_rows=header_rows)
++        # For RST: top separator at line 0, headers at lines 1..N, middle separator at N+1, data at N+2
++        self.header.position_line = 0
++        self.header.start_line = 1
++        self.data.start_line = len(header_rows) + 2
+ 
+     def write(self, lines):
+         lines = super().write(lines)
+-        lines = [lines[1]] + lines + [lines[1]]
++        # The parent output is: [header_row_1, ..., header_row_N, separator, data_1, ...]
++        # We need: [separator, header_row_1, ..., header_row_N, separator, data_1, ...]
++        num_header_rows = len(self.data.header_rows)
++        separator = lines[num_header_rows]
++        lines = [separator] + lines + [separator]
+         return lines

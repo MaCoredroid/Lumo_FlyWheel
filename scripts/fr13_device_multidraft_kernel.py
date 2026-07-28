@@ -420,6 +420,31 @@ def fr13_device_multidraft_commit(
     # SAME per-request tensor ops, draw order, draw sizes, and generators =>
     # products BYTE-IDENTICAL at the same seeds (gated CPU-only by
     # scripts/fr13_dm_depthsync_byte_gate.py).
+    # FR13_TAW (S1, default OFF): fully-tensorized zero-readback walk.
+    # Distribution-equal (fr13_taw_equiv_gate.py PASS), NOT byte-equal to the
+    # legacy rng stream; gates as its own live arm. Trace diagnostics and
+    # all_greedy stay on the legacy path (same exclusions as depthsync).
+    if (
+        os.environ.get("FR13_TAW", "0") == "1"
+        and _fr13_commit_trace_fh() is None
+        and not all_greedy
+    ):
+        if (os.environ.get("FR13_STEP_GRAPH", "0") in ("1", "3")
+                and not _FR13_SG_CAP_DEAD):
+            return fr13_taw_commit_captured(
+                num_draft_tokens, draft_token_ids, tree_parent_indices,
+                target_logits, tree_self_logits, bonus_token_ids,
+                max_spec_len, generators=generators)
+        return fr13_taw_commit(
+            num_draft_tokens,
+            draft_token_ids,
+            tree_parent_indices,
+            target_logits,
+            tree_self_logits,
+            bonus_token_ids,
+            max_spec_len,
+            generators=generators,
+        )
     if (
         os.environ.get("FR13_DM_DEPTHSYNC", "0") == "1"
         and _fr13_commit_trace_fh() is None
@@ -863,3 +888,688 @@ def _fr13_md_gpu_timed(_orig):
 
 
 fr13_device_multidraft_commit = _fr13_md_gpu_timed(fr13_device_multidraft_commit)
+
+
+# ---------------------------------------------------------------------------
+# FR13_TAW (S1): fully-tensorized tree-accept walk — zero per-node readbacks.
+# Distribution-equal to the legacy/depthsync walk (NOT byte-equal: draws are
+# pre-drawn uniforms consumed by inverse-CDF, so the rng stream differs), the
+# same standard used when device-multidraft replaced the numpy host walk.
+# Capture-legal core: after topology prep, the walk is ~(max_spec_len+1)
+# fixed iterations of batched tensor ops with NO .item()/.tolist(). The
+# product materialization shim at the end does ONE batched DtoH — the S1
+# wrapper phase moves consumers to the tensor products and drops the shim.
+# ---------------------------------------------------------------------------
+_FR13_TAW_TOPO_CACHE: dict = {}
+_FR13_TAW_ANNOUNCED = False
+_FR13_BULK_GEN = None
+
+
+def _fr13_pin_uniforms():
+    """FR13_SG_PIN_UNIFORMS=1 (selfcheck-only): pin uniform draws to 0.5 so
+    accept/recovery are deterministic functions of logits alone — makes the
+    eager-vs-replay pair byte-comparable (RNG sequencing differs by design)."""
+    import os
+    return os.environ.get("FR13_SG_PIN_UNIFORMS", "0") == "1"
+
+
+def _fr13_bulk_gen(device):
+    """POISON-IMMUNE bulk RNG (twin of the topk_topp port): a silently-
+    aborted capture leaves the DEFAULT philox generator graph-registered and
+    every default-gen draw dies ('Offset increment outside graph capture' —
+    the boot-14 post-DISABLE death was THIS module's uniform fallback).
+    Explicit generators survive; the unseeded bulk draw was never
+    reproducible, so this is distribution-equal."""
+    global _FR13_BULK_GEN
+    if _FR13_BULK_GEN is None:
+        g = torch.Generator(device=device)
+        g.manual_seed(torch.initial_seed() & 0x7FFFFFFF)
+        _FR13_BULK_GEN = g
+    return _FR13_BULK_GEN
+
+
+def _fr13_taw_topology(parents_key, parents_cpu, counts, max_spec_len, device):
+    """Per-shape topology tables (STEP-CONSTANT for the fixed tree): for each
+    request-local parent node id (-1=root), the padded child-node table and
+    counts. Cached by (parents tuple, counts tuple)."""
+    key = (parents_key, tuple(counts), int(max_spec_len))
+    hit = _FR13_TAW_TOPO_CACHE.get(key)
+    if hit is not None:
+        return hit
+    nreq = len(counts)
+    nmax = max(int(c) for c in counts) if counts else 0
+    wmax = 1
+    child_lists: list = []
+    starts = []
+    s = 0
+    for c in counts:
+        starts.append(s)
+        s += int(c)
+    for req_i in range(nreq):
+        st, n = starts[req_i], int(counts[req_i])
+        per_parent = {}
+        for node in range(n):
+            par = int(parents_cpu[st + node])
+            per_parent.setdefault(par, []).append(node)
+        child_lists.append(per_parent)
+        for v in per_parent.values():
+            wmax = max(wmax, len(v))
+    # tables indexed [req, parent+1] -> padded child node ids / count
+    # (parent -1 = root maps to slot 0)
+    ctab = torch.full((nreq, nmax + 1, wmax), -1, dtype=torch.long)
+    ccnt = torch.zeros((nreq, nmax + 1), dtype=torch.long)
+    for req_i in range(nreq):
+        for par, kids in child_lists[req_i].items():
+            ctab[req_i, par + 1, : len(kids)] = torch.tensor(kids)
+            ccnt[req_i, par + 1] = len(kids)
+    out = (
+        ctab.to(device),
+        ccnt.to(device),
+        torch.tensor(starts, dtype=torch.long, device=device),
+        wmax,
+        torch.tensor(counts, dtype=torch.long, device=device),
+    )
+    _FR13_TAW_TOPO_CACHE[key] = out
+    return out
+
+
+def _fr13_taw_inv_cdf(weights, u):
+    """source = inverse-CDF draw: first index where cumsum(weights) > u*mass.
+    weights [B, W] (>=0, rows may be all-zero), u [B] in [0,1)."""
+    cs = torch.cumsum(weights, dim=-1)
+    total = cs[:, -1:]
+    thresh = u.unsqueeze(-1).to(weights.dtype) * total
+    return (cs <= thresh).sum(dim=-1).clamp(max=weights.shape[-1] - 1)
+
+
+def fr13_taw_commit(
+    num_draft_tokens,
+    draft_token_ids,
+    tree_parent_indices,
+    target_logits,
+    tree_self_logits,
+    bonus_token_ids,
+    max_spec_len: int,
+    *,
+    generators=None,
+    uniforms=None,
+    defer_materialize=False,
+):
+    """FR13_TAW: batched zero-readback walk. Returns the SAME products as
+    fr13_device_multidraft_commit via a single materialization DtoH.
+    defer_materialize=True (S1 capture mode): returns the DEVICE tensors
+    (row_buf, row_len, path_buf, path_len) with NO DtoH — the S1 wrapper
+    materializes post-replay. Zero syncs inside => capture-legal."""
+    global _FR13_TAW_ANNOUNCED
+    if not _FR13_TAW_ANNOUNCED:
+        _FR13_TAW_ANNOUNCED = True
+        print("[FR13_TAW] ENGAGED: tensorized tree-accept walk "
+              "(zero per-node readbacks; distribution-equal gate)", flush=True)
+    device = target_logits.device
+    global _FR13_SG_TOPOLOGY
+    if not defer_materialize and torch.cuda.is_available():
+        defer_materialize = bool(
+            torch.cuda.is_current_stream_capturing() or _FR13_SG_FORCE_DEFER)
+    if defer_materialize and _FR13_SG_TOPOLOGY is not None:
+        # S1 capture mode: topology pre-read OUTSIDE the capture (step-constant)
+        parents_cpu, counts = _FR13_SG_TOPOLOGY
+    elif defer_materialize:
+        raise RuntimeError("FR13_TAW capture without cached topology (warmup step missing)")
+    else:
+        parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
+        if hasattr(num_draft_tokens, "detach"):
+            counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
+        else:
+            counts = [int(x) for x in num_draft_tokens]
+        _FR13_SG_TOPOLOGY = (parents_cpu, counts)  # eager call caches for capture
+    nreq = len(counts)
+    row_cap = int(max_spec_len) + 1
+    ctab, ccnt, starts_t, wmax, counts_t = _fr13_taw_topology(
+        tuple(parents_cpu), parents_cpu, counts, max_spec_len, device
+    )
+    drafts_t = draft_token_ids.detach().to(device=device, dtype=torch.long).reshape(-1)
+    V = int(target_logits.shape[-1])
+
+    # S1 handoff: the STEP_GRAPH wrapper pre-fills _FR13_SG_UNIFORMS outside
+    # the capture; consume it here so the captured region has zero seeding
+    # syncs. (Shape must match; wrapper owns refill per replay.)
+    if uniforms is None and _FR13_SG_UNIFORMS is not None and _FR13_SG_UNIFORMS.shape == (nreq, row_cap, 3):
+        uniforms = _FR13_SG_UNIFORMS
+    # pre-drawn uniforms [B, row_cap, 3]: (u_source, u_accept, u_residual).
+    # Per-request determinism: seed a DEVICE generator from each host
+    # generator (depthsync's proven pattern) — never silently fall to the
+    # global stream on device mismatch (the tawcg live-FAIL root cause
+    # candidate: cuda device + cpu gens dropped per-req seeding entirely).
+    if uniforms is None:
+        uniforms = torch.empty(nreq, row_cap, 3, device=device)
+        if generators:
+            for req_i in range(nreq):
+                g = generators.get(req_i)
+                if g is None:
+                    uniforms[req_i] = torch.rand(
+                        row_cap, 3, device=device,
+                        generator=_fr13_bulk_gen(device))
+                elif g.device.type == device.type:
+                    uniforms[req_i] = torch.rand(
+                        row_cap, 3, device=device, generator=g
+                    )
+                else:
+                    dev_gen = torch.Generator(device=device)
+                    seed_t = torch.randint(
+                        0, 2 ** 31 - 1, (1,), device=g.device, generator=g
+                    )
+                    dev_gen.manual_seed(int(seed_t.item()))
+                    uniforms[req_i] = torch.rand(
+                        row_cap, 3, device=device, generator=dev_gen
+                    )
+        else:
+            uniforms.uniform_(generator=_fr13_bulk_gen(device))
+    if _fr13_pin_uniforms():
+        uniforms.fill_(0.5)
+
+    cur = torch.full((nreq,), -1, dtype=torch.long, device=device)  # parent node
+    alive = torch.ones(nreq, dtype=torch.bool, device=device)
+    # +1 trash column: capture-legal masked writes via scatter_ (no
+    # boolean-mask indexing => no nonzero host sync inside the capture)
+    row_buf = torch.full((nreq, row_cap + 1), -1, dtype=torch.long, device=device)
+    row_len = torch.zeros(nreq, dtype=torch.long, device=device)
+    _trash = torch.full((nreq,), row_cap, dtype=torch.long, device=device)
+    path_buf = torch.full((nreq, row_cap + 1), -1, dtype=torch.long, device=device)
+    path_len = torch.zeros(nreq, dtype=torch.long, device=device)
+    bonus_flat = bonus_token_ids.reshape(-1).to(device=device, dtype=torch.long)
+    ar = torch.arange(nreq, device=device)
+
+    for level in range(row_cap):
+        kids = ctab[ar, cur + 1]              # [B, W]
+        nk = ccnt[ar, cur + 1]                # [B]
+        has_kids = (nk > 0) & alive
+        # ---- leaf/bonus rows (alive, no children): self-row sample or bonus id
+        leaf = alive & ~ (nk > 0)
+        if True:  # capture-legal: leaf block runs unconditionally (mask-internal)
+            # careful host-free: compute for ALL rows, apply masked
+            cp_ok = (cur >= 0) & (cur < counts_t)
+            self_rows = torch.softmax(
+                tree_self_logits[(starts_t + cur.clamp(min=0)).clamp(max=tree_self_logits.shape[0] - 1)].to(torch.float32),
+                dim=-1,
+            )
+            tok_self = _fr13_taw_inv_cdf(self_rows, uniforms[:, level, 2])
+            tok_bonus = bonus_flat[ar.clamp(max=bonus_flat.numel() - 1)]
+            tok_leaf = torch.where(cp_ok, tok_self, tok_bonus)
+            emit = leaf
+            row_buf.scatter_(1, torch.where(emit, row_len, _trash).unsqueeze(1),
+                             tok_leaf.unsqueeze(1))
+            row_len = row_len + emit.long()
+            alive = alive & ~leaf
+        # capture-legal: fixed-depth loop, no data-dependent break
+        # ---- parent target row: legacy uses target_logits[start+children[0]]
+        first_child = kids[:, 0].clamp(min=0)
+        p = torch.softmax(
+            target_logits[(starts_t + first_child).clamp(max=target_logits.shape[0] - 1)].to(torch.float32),
+            dim=-1,
+        )                                      # [B, V]
+        p = p / p.sum(dim=-1, keepdim=True)
+        kid_tokens = drafts_t[(starts_t.unsqueeze(1) + kids.clamp(min=0)).clamp(max=drafts_t.numel() - 1)]  # [B, W]
+        kid_mask = kids >= 0
+        overlaps = torch.gather(p, 1, kid_tokens.clamp(min=0)) * kid_mask
+        mass = overlaps.sum(dim=-1)            # [B]
+        zero_mass = has_kids & (mass <= 0)
+        # source draw (inverse-CDF over overlaps)
+        src = _fr13_taw_inv_cdf(overlaps, uniforms[:, level, 0])  # [B]
+        tok = kid_tokens[ar, src]              # [B]
+        # accept prob = min(1, p[tok] / q_mix_tok); q_mix = weight mass of
+        # children sharing tok (weights = overlaps / mass)
+        same = (kid_tokens == tok.unsqueeze(1)) & kid_mask
+        q_mix_tok = (overlaps * same).sum(dim=-1) / mass.clamp(min=1e-30)
+        p_tok = torch.gather(p, 1, tok.unsqueeze(1)).squeeze(1)
+        acc_p = (p_tok / q_mix_tok.clamp(min=1e-30)).clamp(max=1.0)
+        accepted = has_kids & ~zero_mass & (uniforms[:, level, 1] < acc_p)
+        # rejected rows: residual sample over full vocab (or plain p on zero mass)
+        rejected = has_kids & ~accepted
+        if True:  # capture-legal: rejected block runs unconditionally (mask-internal)
+            weights = overlaps / mass.clamp(min=1e-30).unsqueeze(-1)
+            q_mix_v = torch.zeros_like(p)
+            q_mix_v.scatter_add_(1, kid_tokens.clamp(min=0), weights * kid_mask)
+            residual = (p - q_mix_v).clamp(min=0)
+            rmass = residual.sum(dim=-1, keepdim=True)
+            residual = torch.where(rmass > 0, residual / rmass.clamp(min=1e-30), p)
+            residual = torch.where(zero_mass.unsqueeze(1), p, residual)
+            tok_rej = _fr13_taw_inv_cdf(residual, uniforms[:, level, 2])
+            tok = torch.where(rejected, tok_rej, tok)
+        # emit token for every has_kids row; record path node for accepted
+        row_buf.scatter_(1, torch.where(has_kids, row_len, _trash).unsqueeze(1),
+                         tok.unsqueeze(1))
+        row_len = row_len + has_kids.long()
+        acc_node = kids[ar, src]
+        path_buf.scatter_(1, torch.where(accepted, path_len, _trash).unsqueeze(1),
+                          acc_node.unsqueeze(1))
+        path_len = path_len + accepted.long()
+        cur = torch.where(accepted, acc_node, cur)
+        alive = alive & accepted
+
+    if defer_materialize:
+        # S1 capture mode: everything above is pure tensor ops (zero syncs).
+        return row_buf[:, :row_cap], row_len, path_buf[:, :row_cap], path_len
+
+    # ---- materialization shim (ONE batched DtoH; wrapper phase removes this)
+    row_buf = row_buf[:, :row_cap]
+    path_buf = path_buf[:, :row_cap]
+    rb = row_buf.cpu().tolist()
+    rl = row_len.cpu().tolist()
+    pb = path_buf.cpu().tolist()
+    pl = path_len.cpu().tolist()
+    out_rows = [r[: int(l)] for r, l in zip(rb, rl)]
+    accepted_node_paths = [pth[: int(l)] for pth, l in zip(pb, pl)]
+    accepted_lens = [int(l) for l in pl]
+    accepted_rows = accepted_lens  # legacy alias shape (per-req accepted count)
+    accepted_token_rows = [r[: int(l)] for r, l in zip(rb, pl)]
+    return out_rows, accepted_rows, accepted_lens, accepted_node_paths, accepted_token_rows
+
+
+def fr13_taw_products_device(row_buf, row_len, path_buf, path_len,
+                             output_token_ids, accepted_tree_rows):
+    """S1-full (=2) in-capture product consumption: fill the sampler output
+    tensors ON DEVICE from the TAW defer products, replacing the host-list
+    committer glue (out_rows python loops / .tolist()) that cannot run inside
+    a capture. Byte contract vs the host route is gated CPU-side
+    (scripts/fr13_taw_products_device_byte_gate.py).
+
+    Returns (gdn_paths, gdn_rows): the +1-shifted 0-padded accepted node paths
+    [nreq, k] and per-request last-path-node rows [nreq] the CG committer body
+    consumes (host route: _gdn_path = [node+1 ...], row = last or 0)."""
+    nreq, cols = output_token_ids.shape
+    k = min(cols, row_buf.shape[1])
+    ar = torch.arange(k, device=row_buf.device)
+    mask = ar.unsqueeze(0) < row_len.unsqueeze(1)
+    output_token_ids.fill_(-1)
+    output_token_ids[:, :k] = torch.where(
+        mask, row_buf[:, :k], torch.full_like(row_buf[:, :k], -1))
+    accepted_tree_rows.copy_(path_len)
+    pmask = ar.unsqueeze(0) < path_len.unsqueeze(1)
+    gdn_paths = torch.where(
+        pmask, path_buf[:, :k] + 1, torch.zeros_like(path_buf[:, :k]))
+    last_idx = (path_len - 1).clamp(min=0)
+    gdn_rows = torch.where(
+        path_len > 0,
+        gdn_paths.gather(1, last_idx.unsqueeze(1)).squeeze(1),
+        torch.zeros_like(path_len))
+    return gdn_paths, gdn_rows
+
+
+def fr13_taw_materialize(row_buf, row_len, path_buf, path_len):
+    """Post-replay materialization of TAW device products into the legacy
+    host-list contract (ONE batched DtoH). Used by the S1 wrapper."""
+    rb = row_buf.cpu().tolist()
+    rl = row_len.cpu().tolist()
+    pb = path_buf.cpu().tolist()
+    pl = path_len.cpu().tolist()
+    out_rows = [r[: int(l)] for r, l in zip(rb, rl)]
+    accepted_node_paths = [pth[: int(l)] for pth, l in zip(pb, pl)]
+    accepted_lens = [int(l) for l in pl]
+    accepted_rows = accepted_lens
+    accepted_token_rows = [r[: int(l)] for r, l in zip(rb, pl)]
+    return out_rows, accepted_rows, accepted_lens, accepted_node_paths, accepted_token_rows
+
+
+# ---- S1 wrapper handoff: pre-drawn uniforms static (set by the STEP_GRAPH
+# wrapper OUTSIDE the capture; TAW consumes it INSIDE, keeping the captured
+# region free of generator seeding .item() syncs). None => TAW draws its own.
+_FR13_SG_UNIFORMS = None
+
+
+def fr13_sg_set_uniforms(u):
+    global _FR13_SG_UNIFORMS
+    _FR13_SG_UNIFORMS = u
+
+
+def fr13_sg_fill_uniforms(nreq, row_cap, device, generators=None):
+    """Draw the per-step uniforms OUTSIDE the graph into (or as) the static.
+    Returns the tensor (callers keep it static and refill per replay)."""
+    global _FR13_SG_UNIFORMS
+    if (_FR13_SG_UNIFORMS is None
+            or _FR13_SG_UNIFORMS.shape != (nreq, row_cap, 3)):
+        _FR13_SG_UNIFORMS = torch.empty(nreq, row_cap, 3, device=device)
+    u = _FR13_SG_UNIFORMS
+    if generators:
+        for req_i in range(nreq):
+            g = generators.get(req_i)
+            if g is None:
+                # poison-immune (boot-24: an aborted capture leaves the
+                # DEFAULT philox in captured-offset state; the retry's
+                # pre-capture draw here then raised "Offset increment
+                # outside graph capture" and burned attempt 2 for free)
+                u[req_i] = torch.rand(row_cap, 3, device=device,
+                                      generator=_fr13_bulk_gen(device))
+            elif g.device.type == device.type if hasattr(device, "type") else str(g.device) == str(device):
+                u[req_i] = torch.rand(row_cap, 3, device=device, generator=g)
+            else:
+                dev_gen = torch.Generator(device=device)
+                seed_t = torch.randint(0, 2 ** 31 - 1, (1,), device=g.device, generator=g)
+                dev_gen.manual_seed(int(seed_t.item()))
+                u[req_i] = torch.rand(row_cap, 3, device=device, generator=dev_gen)
+    else:
+        u.uniform_(generator=_fr13_bulk_gen(u.device))
+    if _fr13_pin_uniforms():
+        u.fill_(0.5)
+    return u
+
+
+# S1 topology handoff (step-constant; wrapper pre-reads OUTSIDE the capture)
+_FR13_SG_TOPOLOGY = None
+# S1-full (=2): replay-order permutation static (sampler-row -> spec-row
+# order), wrapper-owned per key, refilled pre-replay (never baked stale)
+_FR13_SG_PERM = None
+# S1-full (=2) pre-capture warmup: forces the defer/device route on an EAGER
+# side-stream run (warms Triton configs + allocates every persistent buffer
+# OUTSIDE the capture — first-run cudaMalloc inside capture invalidates it)
+_FR13_SG_FORCE_DEFER = False
+
+
+def fr13_sg_set_perm(t):
+    global _FR13_SG_PERM
+    _FR13_SG_PERM = t
+
+
+def fr13_sg_set_force_defer(v):
+    global _FR13_SG_FORCE_DEFER
+    _FR13_SG_FORCE_DEFER = bool(v)
+
+
+def fr13_sg_set_topology(tree_parent_indices, num_draft_tokens):
+    global _FR13_SG_TOPOLOGY
+    parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
+    if hasattr(num_draft_tokens, "detach"):
+        counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
+    else:
+        counts = [int(x) for x in num_draft_tokens]
+    _FR13_SG_TOPOLOGY = (parents_cpu, counts)
+    return _FR13_SG_TOPOLOGY
+
+
+# ---------------------------------------------------------------------------
+# S1 v2: capture the TAW walk region ONLY (all our code, RNG-free inside —
+# uniforms pre-drawn, no philox) => an aborted capture cannot poison vLLM's
+# graph-safe sampler generators (the boot-2 EngineDead). Managed entirely in
+# this module; the dispatcher routes here when FR13_STEP_GRAPH=1.
+# ---------------------------------------------------------------------------
+_FR13_SG_CAP = {}
+_FR13_SG_CAP_DEAD = False
+
+
+def _fr13_s3_setup(nreq, device):
+    """=3 capture-prep (walk+products+committer in the LIVE-PROVEN =1 in-
+    dispatcher region — zero vLLM sampler code in-graph): replay-order perm
+    static + state save (col0 SSM/conv rows + scan flags — the side-stream
+    warmup executes a real commit) + module handles. Raises on missing state
+    (=> DISABLED => staged, survivable)."""
+    import importlib
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as g
+    import vllm.v1.sample.rejection_sampler as rs
+    tk = importlib.import_module("lumo_flywheel_serving.fr10_gdn_tree_kernel")
+    rid = getattr(g, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None)
+    sid = getattr(g, "_LUMO_FA_SPEC_ROW_REQ_IDS", None)
+    stk = getattr(g, "_FR13_EAGER_PACK_STACKS", None)
+    lay = getattr(g, "_FR13_REPLAY_LAYERS", None)
+    if (not rid or not sid or len(sid) != nreq or len(rid) < nreq
+            or stk is None or not lay):
+        raise RuntimeError(
+            f"S3 setup: rows/stacks missing rid={rid and len(rid)} "
+            f"sid={sid and len(sid)} nreq={nreq} stk={stk is not None}")
+    idx = {str(r): i for i, r in enumerate(rid[:nreq])}
+    perm_list = [idx.get(str(r)) for r in sid]
+    if any(p is None for p in perm_list):
+        raise RuntimeError("S3 setup: spec req id missing from sampler rows")
+    perm = torch.as_tensor(perm_list, dtype=torch.long, device=device)
+    fr13_sg_set_perm(perm)
+    saved = []
+    for li, pref in enumerate(list(stk["layer_order"])):
+        ly = lay[pref]
+        c0 = stk["spec_idx"][li, :nreq, 0].to(torch.long)
+        cvs = getattr(ly, "_fr13_replay_conv_state", None)
+        saved.append((ly, c0, ly._fr13_replay_ssm_state[c0].clone(),
+                      cvs[c0].clone() if cvs is not None else None))
+    return {"g": g, "rs": rs, "tk": tk, "perm": perm, "saved": saved,
+            "flags_sv": stk["flags"][:, 0].clone(), "stk": stk}
+
+
+def _fr13_s3_restore(s3):
+    for ly, c0, sv, cv in s3["saved"]:
+        ly._fr13_replay_ssm_state[c0] = sv
+        if cv is not None:
+            ly._fr13_replay_conv_state[c0] = cv
+    s3["stk"]["flags"][:, 0].copy_(s3["flags_sv"])
+
+
+def _fr13_s3_perm_refill(ent, nreq):
+    """Replay-time perm rebuild from CURRENT host row lists. False on any
+    composition mismatch => caller falls back to eager for THIS call only."""
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as g
+    rid = getattr(g, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None)
+    sid = getattr(g, "_LUMO_FA_SPEC_ROW_REQ_IDS", None)
+    if not rid or not sid or len(sid) != nreq or len(rid) < nreq:
+        return False
+    idx = {str(r): i for i, r in enumerate(rid[:nreq])}
+    pl = [idx.get(str(r)) for r in sid]
+    if any(p is None for p in pl):
+        return False
+    ent["perm"].copy_(torch.as_tensor(pl, dtype=torch.long))
+    return True
+_FR13_SG_STREAM = None
+
+
+def fr13_taw_commit_captured(
+    num_draft_tokens, draft_token_ids, tree_parent_indices,
+    target_logits, tree_self_logits, bonus_token_ids, max_spec_len,
+    *, generators=None,
+):
+    global _FR13_SG_CAP_DEAD, _FR13_SG_STREAM, _FR13_SG_TOPOLOGY
+    device = target_logits.device
+    # counts TUPLE in the key (not just nreq): [21,21,21,0] and [21,0,21,21]
+    # share every shape (boot-5 lesson generalized) but the captured walk
+    # bakes per-request tables — a permuted-zero replay would silently commit
+    # the wrong requests' tokens. One small DtoH per call buys soundness.
+    if hasattr(num_draft_tokens, "detach"):
+        counts_h = tuple(int(x) for x in num_draft_tokens.detach().cpu().tolist())
+    else:
+        counts_h = tuple(int(x) for x in num_draft_tokens)
+    nreq = len(counts_h)
+    key = (counts_h, tuple(target_logits.shape), tuple(draft_token_ids.reshape(-1).shape),
+           int(bonus_token_ids.numel()))
+    ent = _FR13_SG_CAP.get(key)
+    row_cap = int(max_spec_len) + 1
+    try:
+        if ent is None and key not in _FR13_SG_CAP:
+            # warmup: eager TAW. Clear the shared uniforms handoff first — a
+            # same-shape ent["uni"] left set by another key's replay would be
+            # consumed here as ALREADY-USED draws (cross-step RNG reuse).
+            fr13_sg_set_uniforms(None)
+            _FR13_SG_CAP[key] = False  # warmup done marker
+            return fr13_taw_commit(
+                num_draft_tokens, draft_token_ids, tree_parent_indices,
+                target_logits, tree_self_logits, bonus_token_ids,
+                max_spec_len, generators=generators)
+        if ent is False or ent is None:
+            pass  # uniforms handled per-branch below
+        else:
+            fr13_sg_set_uniforms(ent["uni"])
+        fr13_sg_fill_uniforms(nreq, row_cap, device, generators)
+        if ent is False:
+            # capture on 2nd call. TOPOLOGY MUST COME FROM THIS CALL'S ARGS:
+            # _FR13_SG_TOPOLOGY holds whichever EAGER call ran last, and any
+            # other batch shape can run between this key's warmup and now.
+            # Boot-7 fatal: a 4-req key captured a 3-req walk off the stale
+            # global (counts [21,21,21,0] vs [21,21,21] — same 63-node tpi),
+            # and the capture-step return fed 3 products into a 4-request
+            # committer. Host reads are legal here (pre-capture).
+            _parents_cap = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
+            _FR13_SG_TOPOLOGY = (_parents_cap, list(counts_h))
+            # per-key uniforms static (so the graph bakes this key's tensor
+            # address, immune to other keys' reallocation of the shared global)
+            uni = torch.empty(nreq, row_cap, 3, device=device)
+            fr13_sg_set_uniforms(uni)
+            fr13_sg_fill_uniforms(nreq, row_cap, device, generators)
+            statics = {
+                "ndt": num_draft_tokens.clone() if hasattr(num_draft_tokens, "clone") else num_draft_tokens,
+                "dti": draft_token_ids.clone(),
+                "tpi": tree_parent_indices.clone(),
+                "tl": target_logits.clone(),
+                "sl": tree_self_logits.clone(),
+                "bti": bonus_token_ids.clone(),
+            }
+            _mode3 = os.environ.get("FR13_STEP_GRAPH", "0") == "3"
+            _s3 = None
+            if _mode3:
+                try:
+                    _s3 = _fr13_s3_setup(nreq, device)
+                except RuntimeError as _s3e:
+                    # transient (mixed/transitional step, e.g. sid=1 nreq=3 at
+                    # a task boundary — boot-21): eager THIS call, stay armed;
+                    # the next same-key step retries the capture.
+                    if not globals().get("_FR13_S3_SKIP_SEEN"):
+                        globals()["_FR13_S3_SKIP_SEEN"] = True
+                        print(f"[FR13_STEP_GRAPH] S3 setup skip (first): {_s3e}",
+                              flush=True)
+                    return fr13_taw_commit(
+                        num_draft_tokens, draft_token_ids, tree_parent_indices,
+                        target_logits, tree_self_logits, bonus_token_ids,
+                        max_spec_len, generators=generators)
+
+            def _region():
+                _o = fr13_taw_commit(
+                    statics["ndt"], statics["dti"], statics["tpi"],
+                    statics["tl"], statics["sl"], statics["bti"],
+                    max_spec_len, generators=None, defer_materialize=True)
+                if _mode3:
+                    # products + conv col0 + device committer, all device ops
+                    # (the =2-era state part, reused verbatim in-region)
+                    _s3["rs"]._fr13_sg_commit_state_part(
+                        __import__("sys").modules["_fr13_device_multidraft_kernel"],
+                        _o)
+                return _o
+
+            g = torch.cuda.CUDAGraph()
+            torch.cuda.synchronize()
+            # documented pre-capture warmup ON A SIDE STREAM (classic
+            # StreamCaptureInvalidated fix: allocator blocks get stream-
+            # assigned before capture)
+            if _FR13_SG_STREAM is None:
+                _FR13_SG_STREAM = torch.cuda.Stream()
+            _FR13_SG_STREAM.wait_stream(torch.cuda.current_stream())
+            with torch.cuda.stream(_FR13_SG_STREAM):
+                _warm = _region()
+            torch.cuda.current_stream().wait_stream(_FR13_SG_STREAM)
+            torch.cuda.synchronize()
+            if _mode3:
+                # the warmup executed a REAL commit — restore col0 SSM/conv
+                # rows + scan flags before the capture replays the same step
+                _fr13_s3_restore(_s3)
+                torch.cuda.synchronize()
+            if int(_warm[0].shape[0]) != nreq:
+                raise RuntimeError(
+                    f"TAW-capture pre-capture row skew: warm_rows={int(_warm[0].shape[0])} "
+                    f"nreq={nreq} key={key}")
+            # manual begin/end with g.reset() repair on failure: reset()
+            # destroys the underlying graph AND unregisters the philox
+            # generators (the ctx manager's __exit__ skips that cleanup when
+            # capture_end itself throws => the persistent post-abort poison)
+            prev2 = torch.cuda.current_stream()
+            torch.cuda.set_stream(_FR13_SG_STREAM)
+            try:
+                g.capture_begin()
+                out = _region()
+                g.capture_end()
+            except Exception:
+                # abort order matters: END the open capture first (else the
+                # eager fallback itself runs "while capturing"), THEN reset
+                # to unregister philox, THEN restore the stream.
+                try:
+                    g.capture_end()
+                except Exception:
+                    pass
+                try:
+                    g.reset()
+                except Exception:
+                    pass
+                torch.cuda.set_stream(prev2)
+                torch.cuda.synchronize()
+                raise
+            torch.cuda.set_stream(prev2)
+            if int(out[0].shape[0]) != nreq:
+                # never store or return from a wrong-row graph (the boot-7
+                # fatal path was THIS return, unguarded)
+                try:
+                    g.reset()
+                except Exception:
+                    pass
+                raise RuntimeError(
+                    f"TAW-capture captured row skew: rows={int(out[0].shape[0])} "
+                    f"nreq={nreq} key={key}")
+            g.replay()
+            _FR13_SG_CAP[key] = {"g": g, "statics": statics, "out": out,
+                                 "uni": uni, "mode3": _mode3,
+                                 "perm": (_s3["perm"] if _mode3 else None),
+                                 "tk": (_s3["tk"] if _mode3 else None)}
+            print(f"[FR13_STEP_GRAPH] TAW-walk captured key={key} "
+                  f"mode3={_mode3}", flush=True)
+            if _mode3:
+                # the graph committed state this step: the staged tail must
+                # skip its own scan launch (consume-once flag in the kernel
+                # lib entry). Conv col0 copy is idempotent — left alone.
+                _s3["tk"]._FR13_S1_STATE_DONE = True
+            _mat = fr13_taw_materialize(*out)
+            if len(_mat[0]) != nreq:
+                raise RuntimeError(
+                    f"TAW-capture capture-step product mismatch: products={len(_mat[0])} "
+                    f"nreq={nreq} key={key}")
+            return _mat
+        # replay path
+        if ent.get("mode3") and not _fr13_s3_perm_refill(ent, nreq):
+            # transient composition mismatch: eager THIS call, stay armed
+            return fr13_taw_commit(
+                num_draft_tokens, draft_token_ids, tree_parent_indices,
+                target_logits, tree_self_logits, bonus_token_ids,
+                max_spec_len, generators=generators)
+        for name, src in (("ndt", num_draft_tokens), ("dti", draft_token_ids),
+                          ("tpi", tree_parent_indices), ("tl", target_logits),
+                          ("sl", tree_self_logits), ("bti", bonus_token_ids)):
+            dst = ent["statics"][name]
+            if hasattr(dst, "copy_"):
+                dst.copy_(src, non_blocking=True)
+        ent["g"].replay()
+        if ent.get("mode3"):
+            ent["tk"]._FR13_S1_STATE_DONE = True
+        _mat = fr13_taw_materialize(*ent["out"])
+        if len(_mat[0]) != nreq:
+            raise RuntimeError(
+                f"TAW-capture product-shape mismatch: products={len(_mat[0])} "
+                f"nreq={nreq} key={key} ent_rows={ent['out'][0].shape} "
+                f"counts_head={num_draft_tokens.reshape(-1)[:4].tolist() if hasattr(num_draft_tokens, 'reshape') else num_draft_tokens}")
+        return _mat
+    except Exception as e:
+        _FR13_SG_CAP_DEAD = True
+        import traceback as _tb
+        _tb.print_exc()
+        # philox repair: destroy the failed graph object so its destructor
+        # unregisters the generators (else every later eager rand crashes
+        # with "Offset increment outside graph capture")
+        try:
+            import gc as _gc
+            for _v in ("g",):
+                if _v in dir():
+                    pass
+            locals_g = locals().get("g")
+            if locals_g is not None:
+                del locals_g
+            _gc.collect()
+            torch.cuda.synchronize()
+        except Exception:
+            pass
+        print("[FR13_STEP_GRAPH] TAW-capture DISABLED (eager fallback): "
+              + type(e).__name__ + ": " + str(e)[:160], flush=True)
+        # clear the shared uniforms handoff: post-DEAD eager steps must draw
+        # fresh per-call (a lingering same-shape ent["uni"] would be re-
+        # consumed every step => cross-step RNG reuse)
+        fr13_sg_set_uniforms(None)
+        return fr13_taw_commit(
+            num_draft_tokens, draft_token_ids, tree_parent_indices,
+            target_logits, tree_self_logits, bonus_token_ids,
+            max_spec_len, generators=generators)

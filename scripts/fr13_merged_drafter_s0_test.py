@@ -84,29 +84,14 @@ except py_compile.PyCompileError as e:
 # idempotent: re-running merged returns False (sentinel guard)
 check(patcher._patch_gpu_model_runner_merged_drafter() is False, "merged patch idempotent (sentinel)")
 
-# --- S4 seam: version-INDEPENDENT syntax+indent check of the injected seam block ---
-# (the eagle patch anchors on stock eagle whose version varies across host pristine copies; extract
-# the FR13_MERGED_DRAFTER_SEAM block straight from the patcher's `new` string, dedent, wrap, parse.)
-import ast, textwrap
+# --- S4 seam DELETED 2026-07-27 (cleanup+bake): assert the deletion is complete ---
+# The head-merge decide_and_fill seam was removed (FR13_CLEANUP_BAKE_PLAN.md); a tombstone
+# comment marks the site. Assert: tombstone present, no live decide_and_fill call anywhere,
+# and the tail path (decide_tail) is still wired.
 psrc = PATCHER.read_text()
-_s = psrc.find("# FR13_MERGED_DRAFTER_SEAM")
-_e = psrc.find("# FR13_CHASE_DIAG", _s)
-check(0 < _s < _e, "seam block present in patcher `new` string")
-if 0 < _s < _e:
-    block = psrc[_s:_e]
-    # the block sits at 12-space method indent; dedent to 0 and wrap in a def to validate syntax
-    dedented = textwrap.dedent("            " + block.rstrip())
-    wrapped = "def _seam(self, draft_token_ids, _fr10_wide_topk, _fr10_is_wide, _fr10_spine_tokens, _fr10_spine_steps):\n" \
-        + "\n".join("    " + ln for ln in dedented.splitlines())
-    try:
-        ast.parse(wrapped)
-        check(True, "seam block SYNTAX+INDENT valid (version-independent)")
-    except SyntaxError as e:
-        check(False, f"seam block syntax err: {e}")
-    check("_fr13_ms.decide_and_fill" in block and "_fr10_spine_steps = 0" in block,
-          "seam calls decide_and_fill + sets spine_steps=0 on skip")
-    check("if _fr13_ms.merged_on()" in block, "seam behind merged_on() sidecar gate (byte-id off)")
-    check("except Exception:" in block, "seam wrapped in own try/except (can't break drafter)")
+check("# FR13_MERGED_DRAFTER_SEAM DELETED" in psrc, "seam tombstone present in patcher")
+check("decide_and_fill(" not in psrc, "no live decide_and_fill call remains in patcher")
+check("decide_tail" in psrc, "tail path (decide_tail) still wired in patcher")
 
 # best-effort: apply the eagle patch to a pristine copy if one matches the target version
 EAGLE_CANDIDATES = [

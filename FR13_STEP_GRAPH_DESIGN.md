@@ -1,0 +1,178 @@
+# FR13_STEP_GRAPH — one CUDA graph per decode step (design)
+
+> **OUTCOME (2026-07-27) — SPEED PROJECTIONS REFUTED; correctness milestone
+> delivered.** The pooled regression (commit a074cf45b) + the same-driver
+> =3-vs-=2 A/B (s1ab arms, FR13_S1_CAMPAIGN_LOG.md) put every mode (=1/=2/=3/
+> staged) on ONE line `step ≈ 235.5 + 49.2·eps` — S1 fusion moved step time by
+> less than the ~±14ms cross-arm noise floor. The "~60-90ms of inter-phase host
+> glue" premise below was wrong for the fused region: that host cost had already
+> been hoisted out (boots 24+) to make capture legal, and the honest residual
+> host/gap figure is ~11ms/step (post-session audit). "Projected step ~150ms /
+> floor_ratio ~1.5" did NOT materialize. What the build DID deliver: the capture
+> machinery works (4/4 keys per boot), and chasing its garble root-caused the
+> constraint-kernel capture omission (6eba91b1b) plus the double-temperature
+> finding. DISPOSITION: FR13_STEP_GRAPH stays default 0 (staged); =2/=3 remain
+> in-tree behind the flag as proven-working (cleanup+bake, task #72 closed).
+
+**User call 2026-07-26: this is the active structural build, upfront; verify
+state-bytes levers (KV fp8, mamba dtype) PARKED.**
+
+## Why
+
+Measured step anatomy at B=4 (composed projection ~292ms): verify forward
+~95ms (≈ the weight-read floor — already one FULL graph), drafter ~46-56
+(R4 graph), committer ~6-10 (CG graph after bake), sampler ~4, and **~60-90ms
+of inter-phase host python/scheduler/sampler glue and phase gaps** that no
+kernel lever can touch. Three separate graphs with host hops between them is
+the ceiling of the current architecture; one graph per step is the floor of
+the next one. Projected step ~150ms => floor_ratio ~1.5; beyond that accept is
+the campaign lever (physics asymptote ≈1.2 — drafter bytes + KV/state streams
+sit above the 98.6ms pure-weight floor by construction).
+
+## Why it is capture-legal (the three hard parts are already solved)
+
+1. **Committer under varying accept-len**: FR13_COMMITTER_GRAPH already proved
+   state-neutral fixed-shape padding (a=-1e4 => decay 1, k=v=b=0 => no write)
+   is BYTE-IDENTICAL to the varlen committer across accept-len 1..12 × active
+   batch 1..4 (fr13_committer_graph_varying ALL-IDENTICAL). The committer body
+   is capture-legal at fixed (MAX_B × MAX_PATH) shapes TODAY.
+2. **Sampler**: vLLM's rejection sampler emits fixed-shape output
+   [B, max_spec_len+1] with -1 padding — data-dependent VALUES, static SHAPES.
+   Its kernels (uniform draws included — pre-generated per-step RNG tensor as
+   graph input) are capture-legal. The host-side .tolist() consumers move
+   POST-replay (async-output pattern, already shipped for sampled ids).
+3. **Drafter**: R4 already captures the full 4-iter spine loop with static
+   root/hidden/pos/slen inputs. In S1 the root gather (committed-leaf hidden →
+   drafter input) moves INSIDE the graph: it is a tensor-indexed gather off
+   the sampler's accepted-len tensor — GPU-data-dependent indexing is
+   capture-legal (values flow, shapes fixed).
+
+## Staging
+
+### S1 — sample+commit+draft in ONE graph (the near rung)
+Capture boundary: from `rejection_sampler(...)` kernel entry through CG
+committer body through R4 drafter loop end (packed draft tensor + static
+spine/wide views). Host hops per step: exactly one (verify forward -> S1
+replay), plus deferred DtoH of sampled ids (unchanged async pattern).
+- Inputs (static buffers): verify logits view, RNG uniforms [B, max_spec+1]
+  (filled per step pre-replay), seq-len/slot tensors.
+- Outputs: accepted_len [B], committed path [B, MAX_PATH], draft package
+  (spine/leaf/wide statics — unchanged from R4).
+- The current host code between phases (accepted-path python walk, ssi
+  prebuild host arithmetic, drafter root staging) must be re-expressed as
+  tensor ops — most already are (SSI_PREBUILD, batched gathers); audit the
+  residue with the same offline map used for R4.
+- Gate ladder: offline patch-and-parse -> same-boot byte gate (S1-graph vs
+  staged path, temp 0.6 fixed seed, in-process) -> probe accept band ->
+  4-task live arm vs composed baseline (eps-matched pair, one lever).
+
+### S2 — fold the verify forward in (the far rung)
+One graph per step. Additional requirements:
+- GPU-resident metadata: seq-lens/slot-mapping increments as tensor ops
+  (FA2 fork consumes seqused_k tensors already; GDN spec_state_indices are
+  value-static per topology; audit the scheduler-owned host ints).
+- APC page-boundary steps allocate blocks on host: hybrid cadence — replay the
+  full-step graph between boundaries, fall back to the staged path on the
+  boundary step (or pre-allocate pages for an N-step horizon).
+- Scheduler stays out of the graph: steady-state decode steps only; any
+  prefill/mixed step uses the staged path (UNIFORM_DISPATCH_GUARD pattern).
+
+### S1 side-stream committer (overlap, captured concurrency)
+CUDA graphs preserve the stream concurrency recorded at capture. Dependency
+audit: the drafter consumes the sampler's accepted path + verify-written KV,
+NOT the committer's state writes => capture the CG committer body on a SIDE
+stream (event-fenced: sampler-out -> {committer side, drafter main};
+step-end joins both). Post-CG the committer is compute/launch-shaped, so it
+overlaps the drafter's byte-bound first iteration on the shared-bandwidth box
+(byte-under-byte would not). Expected −5..8ms, free inside the same capture;
+the S1 byte gate covers it (wrong deps = loud byte mismatch, not silence).
+Prior art: FR13_REPLAY_MULTISTREAM machinery (#43).
+
+## Cost-gate arithmetic
+S1 eliminates the sampler->committer->drafter host glue (~30-50ms measured
+class); S2 the remaining scheduler/prepare hop (~20-40ms). Both are
+glue-elimination, not byte reduction — orthogonal to accept and to the parked
+byte levers, composable with everything shipped.
+
+## S1 touchpoint map (MEASURED from live-container source, 2026-07-26)
+Sampler span (runner 4792-4945): 2 host syncs, both partial-prefill discard
+bookkeeping (np.nonzero + .tolist) — empty on steady decode, hoistable
+pre-replay. Eagle propose span: 44 raw sites, classified:
+- REAL per-step: (1) ONE stacked tail DtoH + decide_tail host python —
+  measured 0.3ms (dsplit tail+mid), stays POST-replay (suffix cache is
+  host-resident; not a blocker at 0.3ms); (2) FR13_DEDUP_SIBLINGS
+  .any().item() + rare .item() loops — tensorizable; (3) prepare-input
+  numpy/tolist cluster (seq_lens/query_start_loc) — S2 territory
+  (scheduler-owned metadata), untouched by S1.
+- Instrument-gated (OFF clean): dsplit syncs x4, metrics payload dumps,
+  selfcheck compares. Boot-time only: embed/lm_head weight compares.
+- ZERO unconditional per-step synchronizes in the span.
+=> S1 capture boundary: rejection-sampler entry -> CG committer (side
+stream) -> R4 spine loop end. Post-replay host: one DtoH + 0.3ms tail +
+pack (0.0ms measured). Surface is CLEANER than R4's was at build start.
+
+## S1 architecture decision (2026-07-26, from live-source read)
+The committer replay is invoked INSIDE the rejection sampler (the S1-era
+sampled-committer port — launch_tree_gdn_replay_all_layers lives in
+rejection_sampler.py). So the S1 span is: _sample (sampler kernels + CG
+committer) -> runner glue -> propose (R4 loop). A CUDA graph CANNOT capture
+another graph's replay => S1 re-captures the BODIES eagerly under ONE
+capture: when FR13_STEP_GRAPH=1, the CG and R4 replay branches are FORCED to
+their eager bodies during S1 capture (both bodies proven capture-legal by
+their own graphs), and the S1 graph becomes the only replay. CG/R4 remain
+the staged path (STEP_GRAPH=0). Eligibility mirrors R4's (uniform all-spec
+decode, B-keyed) + sampler RNG-as-input.
+
+## S1 capture-legality audit of the sampler (2026-07-26, live source)
+FR13_DEVICE_MULTIDRAFT is BAKED default ON: the deployed accept walk runs in
+fr13_device_multidraft_commit ON DEVICE (class-9 fail-loud, no silent
+fallback); the numpy host walk is legacy-mode (=0) only. => the deployed S1
+span is GPU-clean end to end: device multidraft commit + CG committer body +
+R4 drafter body. Remaining RNG question: how fr13_device_multidraft_commit
+consumes per-req generators (torch philox = graph-safe replay; byte gate
+needs a pinned-uniforms mode either way) — next read.
+
+## S1 sub-build: tensorized tree-accept walk (FR13_TAW) — REQUIRED first
+CORRECTION to the audit: fr13_device_multidraft_commit is device-RNG but
+HOST-STEPPED — the accept walk loops on host with torch.multinomial(...)
+.item() per node (per-draw DtoH syncs + host branching). Not capture-legal
+as-is. S1 therefore starts with FR13_TAW: re-express the walk as ~6 fixed
+depth iterations of batched tensor ops over the CONSTANT topology
+(precomputed children tables), pre-drawn uniforms/categoricals [B, depth+1]
+as explicit inputs, zero .item(). Equivalence gate: distribution-level vs the
+existing walk (the 20k-trial harness pattern device-multidraft itself used)
++ same-seed trace equality with pinned draws. TAW is also the pinned-uniforms
+mechanism the S1 byte gate needs — one build serves both.
+ALSO measured 2026-07-26: CG at B=4 is NEUTRAL (MAX_B=1 per-commit replay
+x4 ~= batched 24ms; dvkcg step-wall flat at 353.7). The committer win
+(~23ms) is still on the table and lands via S1's batched in-graph committer
+body — do not chase a separate CG MAX_B=4 fix.
+
+## First build steps (S1)
+1. Map every host touchpoint between sampler entry and drafter end in the
+   live-container source (read-first discipline): .tolist()/.item()/host
+   branches; classify each as (a) already-tensor, (b) tensorizable, (c) must
+   move post-replay.
+2. Pre-generated RNG tensor input for the rejection sampler (seeded per step —
+   determinism preserved for byte gates).
+3. Single capture wrapping the three existing bodies; statics inventory
+   extends R4's dict.
+4. Byte gate harness: same-boot staged-vs-graph, 512-step probe, temp 0.6.
+
+## ONE-GO GATE (USER CALL 2026-07-26: "verify the whole s1 attempt in one go in 4 task gate")
+Supersedes incremental staging. Build EVERYTHING, gate as ONE 4-task live arm:
+- Stack: canonical env + FR13_TAW=1 (seeding-fixed) + FR13_STEP_GRAPH=1
+  (capture wrapper: TAW sampler body + committer body + R4 drafter body, one
+  graph, side-stream committer) vs the dscg record (335.6ms @ eps 2.32).
+- The arm IS the verification: engagement needles (TAW ENGAGED +
+  STEP_GRAPH captured + shim + CG-bypass note), accept band 5.5±, per-position
+  profile, empty-file_path discriminator vs 0.8% floor, garble eyeball,
+  4-task verdicts, step_wall @ eps target ~280ms (ratio ~2.9).
+- Wrapper build notes (pinned): capture region = _sample entry (device
+  multidraft w/ TAW pre-drawn uniforms as static input) through
+  ATTN_KV_REMAP apply through propose's R4 loop end (spine/wide statics);
+  discard-indices numpy hoisted pre-replay; async prev_sampled bookkeeping +
+  decide_tail (0.3ms) + dedup + pack stay post-replay; verify-logits/hidden
+  read from the FULL-graph's stable output buffers (assert data_ptr stability
+  at capture); eligibility = uniform all-spec decode step, B-keyed graphs,
+  fail-loud staged-path fallback with one-shot needle.

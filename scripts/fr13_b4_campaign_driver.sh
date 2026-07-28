@@ -17,6 +17,10 @@ set -uo pipefail
 cd /home/mark/shared/lumoFlyWheel
 RUNROOT=${RUNROOT:-output/fr13_bigdenom_swe}
 SUBSET=${SUBSET:-subset_b4_sixteen.json}
+# ALL baked flags + era-fix protections live in the canonical registry —
+# never here, never in seq files (two lost-protection regressions taught
+# this: ATTN_KV_REMAP near-loss, SSE_HEARTBEAT emit-wedge return).
+source "$(dirname "${BASH_SOURCE[0]}")/fr13_canonical_env.sh"
 WALL=${WALL:-1800}   # codex wall per task = deployment-faithful 30min (retries still ~2x)
 # WALL=0 => NO wall: emit EMPTY AGENT_WALL_S so the runner omits --agent-wall-s (a "0" would
 # pass --agent-wall-s 0 = 0s = instant timeout). Hang protection = the 600s stall-watchdog.

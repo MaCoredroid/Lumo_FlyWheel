@@ -162,6 +162,307 @@ def npad_invariant_on() -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def hc_internal_on() -> bool:
+    """FR13_HC_INTERNAL: compact the scan's h_cache to INTERNAL-node rows only.
+
+    The one-hot ancestor reads (``tl.sum(tl.where(offs == j, h_cache, 0.0))``)
+    can only ever SELECT a row whose node appears in some strict_mask ancestry
+    row -- i.e. a node with children. Leaf rows are written at :1274 but never
+    re-read, so caching them is pure register/local-memory waste (the measured
+    BV wall: h_cache = [N_SPAN, BLOCK_V, DIM_K] fp32 tiles). When ON, the
+    launcher derives the internal-node set from the static tree descriptor
+    once (host-side, outside capture), packs a trace-time slot map, and the
+    kernel keeps HC_ROWS (= next-pow2 internal count) rows instead of N_SPAN.
+    Values are identical: internal reads select the identical state through
+    the identical one-hot primitive (0.0 + x = x), and a leaf j's skipped
+    iteration only removed a select whose runtime ``ancestor`` bit is always 0.
+    Default OFF => HC_MASK=0 => every compacted branch is trace-time dead and
+    the served launch is byte-identical to the locked path (bug-class #10).
+    Incompatible with FR13_PARENT_GATHER (runtime parent index cannot use the
+    trace-time slot map) and PIGGYBACK_EXPORT (chain end may be a leaf); the
+    launcher fails loud on either pairing.
+
+    RETIRED 2026-07-27 (cleanup+bake, FR13_CLEANUP_BAKE_PLAN.md): never gated
+    in, and PARENT_GATHER — with which it is incompatible — is now the BAKED
+    default. Mechanism hard-disabled below (env wiring also removed from the
+    launchers). The HC_MASK constexpr branches in the kernel body remain as
+    trace-time-dead code; their excision is a recorded follow-up requiring its
+    own bit-exact gate cycle.
+    """
+    return False
+
+
+def hc_internal_selfcheck_on() -> bool:
+    """In-process byte-identity gate for FR13_HC_INTERNAL.
+
+    Same discipline as ``parent_gather_selfcheck_on``: run the scan BOTH ways
+    on the SAME inputs in the SAME process (full-span h_cache -> out_ref,
+    compacted -> out) and raise on any bit difference. Boot under
+    enforce_eager: the host compare forces a DtoH sync. The graph-capture leg
+    is gated separately (gate_live pattern) per the eager-vs-graph lesson.
+    """
+    raw = os.environ.get("FR13_HC_INTERNAL_SELFCHECK", "")
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+_FR13_HC_DESC_CACHE: dict = {}
+
+
+def _hc_pack(parents: set, n_actual: int):
+    """Pack an internal-node set into (mask, rows, slots_lo, slots_hi)."""
+    mask = 0
+    slots_lo = 0
+    slots_hi = 0
+    slot = 0
+    for node in sorted(parents):
+        if node >= 32:
+            raise RuntimeError(
+                f"FR13_HC_INTERNAL: internal node index {node} >= 32 unsupported"
+            )
+        mask |= 1 << node
+        if node < 16:
+            slots_lo |= slot << (4 * node)
+        else:
+            slots_hi |= slot << (4 * (node - 16))
+        slot += 1
+    if slot > 16:
+        raise RuntimeError(
+            f"FR13_HC_INTERNAL: {slot} internal nodes exceed the 4-bit slot map"
+        )
+    rows = 1
+    while rows < slot:
+        rows *= 2
+    out = (mask, rows, slots_lo, slots_hi) if mask else (0, 0, 0, 0)
+    print(
+        f"[FR13_HC_INTERNAL] derived: n_actual={n_actual} internal={slot} "
+        f"mask=0x{mask:x} rows={rows}",
+        flush=True,
+    )
+    return out
+
+
+def subtree_parallel_on() -> bool:
+    """FR13_SUBTREE_PARALLEL: path-decomposed tree scan (queue task #60).
+
+    The monolithic scan serializes ALL nodes inside every program. A tree
+    decomposes into vertex-disjoint PATHS (heavy-path style): level-0 = the
+    heavy path from the root; level-k paths hang off earlier levels. Paths
+    within a level have no data dependence -> they scan CONCURRENTLY on a
+    grid axis (one launch per level; tail6 = 2 launches, critical path
+    21 -> ~13 node-times). Each program is a pure chain, so the h_cache /
+    one-hot ancestor machinery VANISHES entirely; cross-path handoff is an
+    fp32 HBM export (bit-exact roundtrip). Per-node math = the same
+    _gdn_node_step -> values identical; codegen differs (bug-class #10) so
+    the in-process selfcheck + capture arm gate it. Supersedes PARENT_GATHER
+    and HC_INTERNAL when ON (there is no h_cache to optimize).
+    """
+    raw = os.environ.get("FR13_SUBTREE_PARALLEL", "")
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def subtree_parallel_selfcheck_on() -> bool:
+    """In-process byte gate: monolith -> out_ref vs path route -> out."""
+    raw = os.environ.get("FR13_SUBTREE_PARALLEL_SELFCHECK", "")
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+_FR13_SUBTREE_CACHE: dict = {}
+
+
+def _subtree_decompose(parent) -> list:
+    """Heavy-path decomposition -> list of LEVELS; each level is a list of
+    (path_nodes, parent_node) with parent_node = -1 for the root path.
+
+    Heavy child = the child whose subtree is DEEPEST (ties -> lowest id, a
+    deterministic choice). Every node belongs to exactly one path; a path's
+    root's parent node always lives in an EARLIER level -> one launch per
+    level with an fp32 state export between levels.
+    """
+    n = len(parent)
+    children: list = [[] for _ in range(n)]
+    for i in range(1, n):
+        children[int(parent[i])].append(i)
+    depth = [1] * n
+    for i in range(n - 1, -1, -1):
+        if children[i]:
+            depth[i] = 1 + max(depth[c] for c in children[i])
+    levels: list = []
+    # (path start node, parent node, level index)
+    stack = [(0, -1, 0)]
+    while stack:
+        start, par, lvl = stack.pop()
+        path = []
+        cur = start
+        while True:
+            path.append(cur)
+            ch = children[cur]
+            if not ch:
+                break
+            heavy = max(ch, key=lambda c: (depth[c], -c))
+            for c in ch:
+                if c != heavy:
+                    stack.append((c, cur, lvl + 1))
+            cur = heavy
+        while len(levels) <= lvl:
+            levels.append([])
+        levels[lvl].append((path, par))
+    return levels
+
+
+def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
+                    device) -> None:
+    """Preseed path tensors + the fp32 state-export buffer at builder init
+    (outside capture; the tree-decode-first-call-inside-capture class)."""
+    key = ("subtree", int(n_actual))
+    if key in _FR13_SUBTREE_CACHE:
+        return
+    levels = _subtree_decompose([int(p) for p in parent])
+    dev_levels = []
+    for lvl in levels:
+        max_len = max(len(p) for p, _ in lvl)
+        nodes = torch.full((len(lvl), max_len), -1, dtype=torch.int32)
+        pars = torch.empty(len(lvl), dtype=torch.int32)
+        for i, (p, par) in enumerate(lvl):
+            nodes[i, : len(p)] = torch.tensor(p, dtype=torch.int32)
+            pars[i] = par
+        dev_levels.append(
+            (nodes.to(device), pars.to(device), max_len, len(lvl))
+        )
+    # export mask: nodes that are some later-level path root's parent
+    need = set()
+    for lvl in levels[1:]:
+        for _p, par in lvl:
+            need.add(int(par))
+    emask = torch.zeros(int(n_actual), dtype=torch.int32)
+    for nd in need:
+        emask[nd] = 1
+    export = torch.zeros(
+        int(n_actual), int(vh), int(dv), int(dk),
+        dtype=torch.float32, device=device,
+    )
+    _FR13_SUBTREE_CACHE[key] = {
+        "levels": dev_levels,
+        "emask": emask.to(device),
+        "export": export,
+        "n_levels": len(levels),
+        "critical": sum(l[2] for l in dev_levels),
+    }
+    print(
+        f"[FR13_SUBTREE_PARALLEL] preseeded: n={n_actual} levels="
+        f"{[l[3] for l in dev_levels]} lens={[l[2] for l in dev_levels]} "
+        f"critical={sum(l[2] for l in dev_levels)} (monolith {n_actual})",
+        flush=True,
+    )
+
+
+def subtree_get(n_actual: int):
+    st = _FR13_SUBTREE_CACHE.get(("subtree", int(n_actual)))
+    if st is None:
+        raise RuntimeError(
+            f"FR13_SUBTREE_PARALLEL: no preseed for n_actual={n_actual} "
+            "(builder-init wiring missing; cannot derive inside capture)"
+        )
+    return st
+
+
+def hc_slot_map_get(n_actual: int, n_pad: int, device) -> torch.Tensor:
+    """Device int32[n_pad] node->compacted-slot map (leaves/pad -> 0).
+
+    Enables FR13_HC_INTERNAL + FR13_PARENT_GATHER together: the parent-gather
+    branch's parent index is RUNTIME, so its one-hot select needs a runtime
+    slot lookup instead of the trace-time constexpr map. A leaf can never be
+    a parent (internal by definition), so the 0 filler is unreachable on the
+    select path; parent_i < 0 (root) is handled by the existing where().
+    Built from the preseeded/derived mask; cached per (shape, device);
+    allocation is capture-guarded like every other preseed buffer.
+    """
+    key = ("slotmap", int(n_actual), int(n_pad), str(device))
+    hit = _FR13_HC_DESC_CACHE.get(key)
+    if hit is not None:
+        return hit
+    desc = _FR13_HC_DESC_CACHE.get(("shape", int(n_actual), int(n_pad)))
+    if desc is None:
+        raise RuntimeError(
+            "FR13_HC_INTERNAL slot map requested before preseed "
+            f"(n_actual={n_actual}, n_pad={n_pad})"
+        )
+    if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_HC_INTERNAL: slot-map allocation inside graph capture; "
+            "preseed must run at builder init"
+        )
+    mask, _rows, slots_lo, slots_hi = desc
+    vals = []
+    for node in range(int(n_pad)):
+        if node < 32 and ((mask >> node) & 1):
+            if node < 16:
+                vals.append((slots_lo >> (4 * node)) & 15)
+            else:
+                vals.append((slots_hi >> (4 * (node - 16))) & 15)
+        else:
+            vals.append(0)
+    t = torch.tensor(vals, dtype=torch.int32).to(device)
+    _FR13_HC_DESC_CACHE[key] = t
+    return t
+
+
+def hc_internal_preseed(parent, n_actual: int, n_pad: int, device=None) -> None:
+    """Preseed the HC descriptor from the HOST parent list at builder init.
+
+    REQUIRED for graph boots: the tree-decode shape's FIRST scan invocation
+    happens INSIDE CUDA-graph capture (vLLM's eager warmup covers prefill
+    shapes only), so the strict_mask host read in ``_hc_internal_desc`` can
+    never run there. The parent list gives the internal set directly
+    (internal == appears as someone's immediate parent). Keyed by
+    (n_actual, n_pad) — the served tree shape is locked per boot.
+    """
+    parents = {int(p) for p in parent if int(p) >= 0}
+    _FR13_HC_DESC_CACHE[("shape", int(n_actual), int(n_pad))] = _hc_pack(
+        parents, int(n_actual)
+    )
+    if device is not None:
+        # PG-compat runtime slot map preseeded here too (outside capture).
+        hc_slot_map_get(int(n_actual), int(n_pad), device)
+
+
+def _hc_internal_desc(strict_mask: torch.Tensor, n_actual: int, n_pad: int):
+    """One-time host derivation of (HC_MASK, HC_ROWS, HC_SLOTS_LO, HC_SLOTS_HI).
+
+    internal set = { immediate parent of i : i in [1, n_actual) } -- and every
+    strict-ancestor of any node IS some node's immediate parent (the next node
+    down its path), so this set covers every row the one-hot reads can select.
+    Cached by (descriptor ptr, n_actual, n_pad): the served tree descriptors
+    are static buffers. The first call must happen OUTSIDE graph capture
+    (vLLM's eager warmup); fail loud otherwise -- never silently fall back.
+    """
+    hit = _FR13_HC_DESC_CACHE.get(("shape", int(n_actual), int(n_pad)))
+    if hit is not None:
+        return hit
+    key = (int(strict_mask.data_ptr()), int(n_actual), int(n_pad))
+    hit = _FR13_HC_DESC_CACHE.get(key)
+    if hit is not None:
+        return hit
+    if strict_mask.is_cuda and torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_HC_INTERNAL: first-call descriptor derivation hit graph "
+            "capture and no init-time preseed exists (hc_internal_preseed "
+            "was not called for this shape); the builder-init wiring is broken"
+        )
+    sm_host = strict_mask[:n_actual, :n_actual].detach().to("cpu")
+    parents: set = set()
+    for i in range(1, n_actual):
+        row = sm_host[i]
+        p = -1
+        for j in range(0, i):
+            if int(row[j]) != 0:
+                p = j  # largest-index ancestor == immediate parent (topo order)
+        if p >= 0:
+            parents.add(p)
+    out = _hc_pack(parents, n_actual)
+    _FR13_HC_DESC_CACHE[key] = out
+    return out
+
+
 @dataclass(frozen=True)
 class Tree:
     parent: tuple[int, ...]
@@ -368,17 +669,10 @@ def _linear_remap_rows_gather_from_bank_kernel(
 _FR13_CONV_NODEBANK: dict = {}
 
 
-def conv_nodebank_get(layer_key, B: int, n_tree: int, row_elems: int,
-                      dtype, device):
-    """Per-layer [B, N_TREE, ROW_ELEMS] conv node bank (allocated once)."""
-    st = _FR13_CONV_NODEBANK.get(layer_key)
-    if (
-        st is None or st.shape[0] < B or st.shape[1] != n_tree
-        or st.shape[2] != row_elems or st.dtype != dtype
-    ):
-        st = torch.zeros(max(B, 4), n_tree, row_elems, dtype=dtype, device=device)
-        _FR13_CONV_NODEBANK[layer_key] = st
-    return st
+
+
+
+
 
 
 def _remap_state_rows(
@@ -541,12 +835,17 @@ def _fr13_conv_col0_pregather_kernel(
     ssi_ptr,           # [L, B_STRIDE0/...] int32 stacked spec_state_indices
     ssi_stride_l, ssi_stride_b,
     out_ptr,           # [L, B, ROW_ELEMS] staging (same dtype as banks)
-    row_stride,        # conv bank row stride in ELEMENTS
-    ROW_ELEMS: tl.constexpr,
+    row_stride,        # conv bank ROW stride in elements (page stride)
+    s1, s2,            # conv bank C/L strides in elements
+    ROW_ELEMS: tl.constexpr,   # C * CONV_L (LOGICAL conv elements only)
+    CONV_L: tl.constexpr,
     ELEM_BYTES: tl.constexpr,
     B: tl.constexpr,
     BLOCK: tl.constexpr,
 ):
+    # Copies ONLY the conv-logical [C, L] block of each col0 row (page-safe:
+    # conv and ssm share the mamba page; a flat page copy both wastes ~8x
+    # staging and cannot be .view(C, L)'d by consumers — the r5 crash).
     pid_l = tl.program_id(0)
     pid_b = tl.program_id(1)
     pid_c = tl.program_id(2)
@@ -557,7 +856,12 @@ def _fr13_conv_col0_pregather_kernel(
     row = tl.load(ssi_ptr + pid_l * ssi_stride_l + pid_b * ssi_stride_b)
     offs = pid_c * BLOCK + tl.arange(0, BLOCK)
     mask = offs < ROW_ELEMS
-    vals = tl.load(base + row.to(tl.int64) * row_stride + offs, mask=mask)
+    c_idx = offs // CONV_L
+    l_idx = offs % CONV_L
+    vals = tl.load(
+        base + row.to(tl.int64) * row_stride + c_idx * s1 + l_idx * s2,
+        mask=mask,
+    )
     tl.store(out_ptr + (pid_l * B + pid_b) * ROW_ELEMS + offs, vals, mask=mask)
 
 
@@ -581,13 +885,22 @@ def launch_conv_col0_pregather(
     L = len(conv_banks)
     b0 = conv_banks[0]
     dev = b0.device
-    row_elems = int(b0.stride(0))
+    # LOGICAL conv elements only (C * L_conv), NOT stride(0): the conv view is
+    # as_strided over a shared mamba page (stride(0) = whole-page ~2M elems);
+    # consumers .view(B, C, L_conv) the staged rows.
+    conv_c = int(b0.size(1))
+    conv_l = int(b0.size(2))
+    row_elems = conv_c * conv_l
     st = _FR13_CONV_PREGATHER
     ptrs = [int(b.data_ptr()) for b in conv_banks]
     if st.get("ptrs") != ptrs:
         for b in conv_banks:
-            if b.dtype != b0.dtype or int(b.stride(0)) != row_elems:
-                raise RuntimeError("FR13_CONV_PREGATHER: bank dtype/stride mismatch")
+            if (
+                b.dtype != b0.dtype
+                or b.stride() != b0.stride()
+                or b.shape[1:] != b0.shape[1:]
+            ):
+                raise RuntimeError("FR13_CONV_PREGATHER: bank dtype/stride/shape mismatch")
             if (int(b.data_ptr()) - ptrs[0]) % 16 != 0:
                 raise RuntimeError("FR13_CONV_PREGATHER: bank ptr not 16B-aligned vs anchor")
         st["ptrs"] = ptrs
@@ -607,17 +920,53 @@ def launch_conv_col0_pregather(
     _fr13_conv_col0_pregather_kernel[grid](
         st["anchor"], st["off16"], ssi_stack,
         ssi_stack.stride(0), ssi_stack.stride(1),
-        st["staging"], row_elems,
-        ROW_ELEMS=row_elems, ELEM_BYTES=ebytes, B=B, BLOCK=BLOCK,
+        st["staging"], int(b0.stride(0)),
+        int(b0.stride(1)), int(b0.stride(2)),
+        ROW_ELEMS=row_elems, CONV_L=conv_l, ELEM_BYTES=ebytes, B=B, BLOCK=BLOCK,
     )
     st["token"] = req_ids_token
     st["n"] = B
+    st["_scnt"] = st.get("_scnt", 0) + 1
+    if st["_scnt"] % 512 == 1:
+        print(f"[FR13_CPG_STAGE] stages={st['_scnt']}", flush=True)
 
 
 def conv_col0_staged(req_ids_token, layer_idx: int):
-    """Return the staged [B, C, W]-flat view for layer_idx if fresh, else None."""
+    """Return the staged [B, C, W]-flat view for layer_idx if fresh, else None.
+
+    Engagement needle (observer-safe: host dict increment + 1-in-4096 print):
+    a pregather arm where `served` stays 0 is VACUOUS (always falling back to
+    the legacy gather) — its clean result proves nothing about the lever.
+    """
     st = _FR13_CONV_PREGATHER
-    if not st or st.get("token") != req_ids_token or st.get("token") is None:
+    staged = st.get("token") if st else None
+    ok = staged is not None and staged == req_ids_token
+    c = st.setdefault("_cnt", [0, 0])  # [served, fallback]
+    c[0 if ok else 1] += 1
+    if (c[0] + c[1]) % 4096 == 1:
+        if ok:
+            why = "match"
+        elif staged is None:
+            why = "no-stage"
+        elif not isinstance(staged, tuple) or not isinstance(req_ids_token, tuple) \
+                or len(staged) != len(req_ids_token):
+            why = f"shape staged={type(staged).__name__} offered={type(req_ids_token).__name__}"
+        else:
+            parts = []
+            names = ("pairs", "seq")
+            for i, (a, b) in enumerate(zip(staged, req_ids_token)):
+                if a != b:
+                    nm = names[i] if i < len(names) else str(i)
+                    if nm == "seq":
+                        parts.append(f"seq staged={a} offered={b}")
+                    else:
+                        parts.append(nm)
+            why = "diff:" + ",".join(parts)
+        print(
+            f"[FR13_CPG_SERVE] served={c[0]} fallback={c[1]} last={why}",
+            flush=True,
+        )
+    if not ok:
         return None
     return st["staging"][layer_idx, : st.get("n", 0)]
 
@@ -1075,6 +1424,11 @@ def _tree_gdn_kernel(
     RING_EXPORT: tl.constexpr = False,
     FLAGS_EXPORT: tl.constexpr = False,
     FLAGS_ROWS: tl.constexpr = 0,
+    HC_MASK: tl.constexpr = 0,
+    HC_ROWS: tl.constexpr = 0,
+    HC_SLOTS_LO: tl.constexpr = 0,
+    HC_SLOTS_HI: tl.constexpr = 0,
+    hc_slot_map=None,
 ):
     # N_LOOP is the span (loop bound, offs_n lane count, h_cache rows) of the
     # scan/reduction. Default (0) means "use N_PAD" -- the per-tree padded span
@@ -1119,7 +1473,17 @@ def _tree_gdn_kernel(
     # Sequential rank-1 tree scan. Each row caches the post-token state for one
     # tree node, so children start from their parent's fp32 checkpoint without
     # reloading h0 or replaying ancestors from HBM.
-    h_cache = tl.zeros((N_SPAN, BLOCK_V, DIM_K), dtype=tl.float32)
+    # FR13_HC_INTERNAL (HC_MASK != 0): keep rows ONLY for INTERNAL nodes -- an
+    # ancestor is by definition a node with children, so the one-hot selects
+    # below can never hit a leaf row. Slot map is trace-time (HC_SLOTS_LO/HI,
+    # 4 bits per node); the footprint drops N_SPAN -> HC_ROWS fp32 tiles.
+    # Default HC_MASK=0 => trace-time dead => the alloc is the exact locked
+    # form (bug-class #10 constexpr-dead).
+    if HC_MASK == 0:
+        h_cache = tl.zeros((N_SPAN, BLOCK_V, DIM_K), dtype=tl.float32)
+    else:
+        h_cache = tl.zeros((HC_ROWS, BLOCK_V, DIM_K), dtype=tl.float32)
+        offs_h = tl.arange(0, HC_ROWS)
     for i in tl.static_range(0, N_SPAN):
         state_i = b_h0
         if PARENT_GATHER:
@@ -1144,10 +1508,23 @@ def _tree_gdn_kernel(
                         )
                     is_anc = (anc_bit != 0) & (j < N_ACTUAL)
                     parent_i = tl.where(is_anc, j, parent_i)
-                h_par = tl.sum(
-                    tl.where((offs_n == parent_i)[:, None, None], h_cache, 0.0),
-                    axis=0,
-                )
+                if HC_MASK == 0:
+                    h_par = tl.sum(
+                        tl.where((offs_n == parent_i)[:, None, None], h_cache, 0.0),
+                        axis=0,
+                    )
+                else:
+                    # FR13_HC_INTERNAL + PARENT_GATHER: runtime slot lookup
+                    # (a parent is internal by definition, so the map entry
+                    # is always a real slot; parent_i < 0 is masked to 0 and
+                    # the result discarded by the where() below).
+                    _par_slot = tl.load(
+                        hc_slot_map + tl.maximum(parent_i, 0)
+                    )
+                    h_par = tl.sum(
+                        tl.where((offs_h == _par_slot)[:, None, None], h_cache, 0.0),
+                        axis=0,
+                    )
                 state_i = tl.where(parent_i >= 0, h_par, b_h0)
         else:
             for j in tl.static_range(0, i):
@@ -1158,20 +1535,57 @@ def _tree_gdn_kernel(
                 # N_LOOP == 0 (default served path) the span equals N_PAD, every
                 # i,j < N_PAD, and the load is the EXACT prior unguarded form --
                 # constexpr-dead guard => byte-identical codegen (bug-class #10).
-                if N_LOOP == 0:
-                    anc_bit = tl.load(strict_mask + i * N_PAD + j)
-                else:
-                    anc_bit = tl.load(
-                        strict_mask + i * N_PAD + j,
-                        mask=(i < N_PAD) & (j < N_PAD),
-                        other=0,
+                if HC_MASK == 0:
+                    if N_LOOP == 0:
+                        anc_bit = tl.load(strict_mask + i * N_PAD + j)
+                    else:
+                        anc_bit = tl.load(
+                            strict_mask + i * N_PAD + j,
+                            mask=(i < N_PAD) & (j < N_PAD),
+                            other=0,
+                        )
+                    ancestor = (anc_bit != 0) & (j < N_ACTUAL)
+                    h_j = tl.sum(
+                        tl.where((offs_n == j)[:, None, None], h_cache, 0.0),
+                        axis=0,
                     )
-                ancestor = (anc_bit != 0) & (j < N_ACTUAL)
-                h_j = tl.sum(
-                    tl.where((offs_n == j)[:, None, None], h_cache, 0.0),
-                    axis=0,
-                )
-                state_i = tl.where(ancestor, h_j, state_i)
+                    state_i = tl.where(ancestor, h_j, state_i)
+                else:
+                    # FR13_HC_INTERNAL: a leaf j can never satisfy `ancestor`
+                    # (only nodes with children appear in strict ancestry), so
+                    # its iteration is skipped at trace time -- the select it
+                    # would compute is discarded at runtime in the locked form.
+                    # Internal j reads its COMPACTED row through the identical
+                    # one-hot primitive selecting the identical value.
+                    if ((HC_MASK >> j) & 1) == 1:
+                        if N_LOOP == 0:
+                            anc_bit = tl.load(strict_mask + i * N_PAD + j)
+                        else:
+                            anc_bit = tl.load(
+                                strict_mask + i * N_PAD + j,
+                                mask=(i < N_PAD) & (j < N_PAD),
+                                other=0,
+                            )
+                        ancestor = (anc_bit != 0) & (j < N_ACTUAL)
+                        if j < 16:
+                            h_j = tl.sum(
+                                tl.where(
+                                    (offs_h == ((HC_SLOTS_LO >> (4 * j)) & 15))[:, None, None],
+                                    h_cache,
+                                    0.0,
+                                ),
+                                axis=0,
+                            )
+                        else:
+                            h_j = tl.sum(
+                                tl.where(
+                                    (offs_h == ((HC_SLOTS_HI >> (4 * (j - 16))) & 15))[:, None, None],
+                                    h_cache,
+                                    0.0,
+                                ),
+                                axis=0,
+                            )
+                        state_i = tl.where(ancestor, h_j, state_i)
 
         b_q = tl.load(
             q + (i * NUM_KH + pid_kh) * DIM_K + offs_k,
@@ -1271,7 +1685,24 @@ def _tree_gdn_kernel(
             RAW_GATING=RAW_GATING,
             SCAN_ALIGN=SCAN_ALIGN,
         )
-        h_cache = tl.where((offs_n == i)[:, None, None], state_i[None, :, :], h_cache)
+        if HC_MASK == 0:
+            h_cache = tl.where((offs_n == i)[:, None, None], state_i[None, :, :], h_cache)
+        else:
+            # FR13_HC_INTERNAL: leaf states are never re-read -> only internal
+            # nodes keep a compacted row (identical one-hot store form).
+            if ((HC_MASK >> i) & 1) == 1:
+                if i < 16:
+                    h_cache = tl.where(
+                        (offs_h == ((HC_SLOTS_LO >> (4 * i)) & 15))[:, None, None],
+                        state_i[None, :, :],
+                        h_cache,
+                    )
+                else:
+                    h_cache = tl.where(
+                        (offs_h == ((HC_SLOTS_HI >> (4 * (i - 16))) & 15))[:, None, None],
+                        state_i[None, :, :],
+                        h_cache,
+                    )
         tl.store(
             out + (i * NUM_VH + pid_vh) * DIM_V + offs_v,
             out_i,
@@ -1303,6 +1734,201 @@ def _tree_gdn_kernel(
             _pb_state,
             mask=v_mask[:, None],
         )
+
+
+@triton.jit
+def _tree_gdn_path_kernel(
+    q,
+    k,
+    v,
+    g,
+    beta,
+    raw_a,
+    raw_b,
+    A_log,
+    dt_bias,
+    h0,
+    h0_indices,
+    h0_num_accepted_tokens,
+    path_nodes,     # [n_paths, MAX_PATH_LEN] int32 node ids, -1 padded
+    path_parent,    # [n_paths] int32 parent NODE id of the path root (-1 => h0)
+    state_export,   # [N_TOTAL, NUM_VH, DIM_V, DIM_K] fp32 handoff buffer
+    export_mask,    # [N_TOTAL] int32 1 => export this node's post-state
+    out,
+    ring_k,
+    ring_v,
+    ring_a,
+    ring_b,
+    flags_ptr,
+    N_ACTUAL: tl.constexpr,
+    NUM_KH: tl.constexpr,
+    NUM_VH: tl.constexpr,
+    DIM_K: tl.constexpr,
+    DIM_V: tl.constexpr,
+    BLOCK_V: tl.constexpr,
+    OUTPUT_SCALE: tl.constexpr,
+    USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
+    H0_IS_BANK: tl.constexpr,
+    H0_INDEX_ROW: tl.constexpr,
+    H0_BATCH_INDEX: tl.constexpr,
+    H0_BANK_STRIDE: tl.constexpr,
+    H0_USE_ACCEPTED_COLUMN: tl.constexpr,
+    RAW_GATING: tl.constexpr,
+    SCAN_ALIGN: tl.constexpr,
+    MAX_PATH_LEN: tl.constexpr,
+    RING_EXPORT: tl.constexpr = False,
+    FLAGS_EXPORT: tl.constexpr = False,
+    FLAGS_ROWS: tl.constexpr = 0,
+):
+    # FR13_SUBTREE_PARALLEL path scan: one program = one PATH (pure chain).
+    # State is carried in registers node-to-node -- NO h_cache, NO one-hot
+    # ancestor machinery. The path root's state comes from h0 (par < 0) or
+    # the fp32 export of its parent node (written by an earlier level's
+    # launch; fp32 store->load is bit-exact). Per-node math is the identical
+    # _gdn_node_step; per-path node order equals the monolith's path order.
+    pid_vh = tl.program_id(0)
+    pid_v = tl.program_id(1)
+    pid_path = tl.program_id(2)
+    head_group = NUM_VH // NUM_KH
+    pid_kh = pid_vh // head_group
+    offs_k = tl.arange(0, DIM_K)
+    offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
+    v_mask = offs_v < DIM_V
+
+    par = tl.load(path_parent + pid_path)
+    # h0 source (identical addressing to the monolith)
+    h0_base = h0
+    if H0_IS_BANK:
+        h0_column = 0
+        if H0_USE_ACCEPTED_COLUMN:
+            h0_column = tl.maximum(
+                tl.load(h0_num_accepted_tokens + H0_BATCH_INDEX).to(tl.int64) - 1,
+                0,
+            )
+        h0_index = tl.load(h0_indices + H0_INDEX_ROW + h0_column)
+        h0_base = h0 + h0_index * H0_BANK_STRIDE
+    b_h0 = tl.load(
+        h0_base + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
+        mask=v_mask[:, None],
+        other=0.0,
+    ).to(tl.float32)
+    par_state = tl.load(
+        state_export
+        + ((tl.maximum(par, 0).to(tl.int64) * NUM_VH + pid_vh) * DIM_V
+           + offs_v[:, None]) * DIM_K
+        + offs_k[None, :],
+        mask=(par >= 0) & v_mask[:, None],
+        other=0.0,
+    )
+    state_i = tl.where(par >= 0, par_state, b_h0)
+
+    for i in tl.static_range(0, MAX_PATH_LEN):
+        node = tl.load(path_nodes + pid_path * MAX_PATH_LEN + i)
+        n_ok = (node >= 0) & (node < N_ACTUAL)
+        node_c = tl.maximum(node, 0)
+        b_q = tl.load(
+            q + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
+            mask=n_ok,
+            other=0.0,
+        ).to(tl.float32)
+        b_k_raw = tl.load(
+            k + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
+            mask=n_ok,
+            other=0.0,
+        )
+        b_k = b_k_raw.to(tl.float32)
+        b_v_raw = tl.load(
+            v + (node_c * NUM_VH + pid_vh) * DIM_V + offs_v,
+            mask=n_ok & v_mask,
+            other=0.0,
+        )
+        b_v = b_v_raw.to(tl.float32)
+        if RING_EXPORT:
+            tl.store(
+                ring_k + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
+                b_k_raw,
+                mask=n_ok
+                & (pid_v == 0)
+                & (pid_vh % head_group == 0),
+            )
+            tl.store(
+                ring_v + (node_c * NUM_VH + pid_vh) * DIM_V + offs_v,
+                b_v_raw,
+                mask=n_ok & v_mask,
+            )
+        b_b = tl.load(
+            beta + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+        ).to(tl.float32)
+        b_g = tl.load(
+            g + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+        ).to(tl.float32)
+        b_raw_a = b_g
+        b_raw_b = b_b
+        b_a_log = b_g
+        b_dt_bias = b_b
+        if RAW_GATING:
+            b_raw_b_in = tl.load(
+                raw_b + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+            )
+            b_raw_b = b_raw_b_in.to(tl.float32)
+            b_raw_a_in = tl.load(
+                raw_a + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+            )
+            b_raw_a = b_raw_a_in.to(tl.float32)
+            if RING_EXPORT:
+                tl.store(
+                    ring_a + node_c * NUM_VH + pid_vh,
+                    b_raw_a_in,
+                    mask=n_ok & (pid_v == 0),
+                )
+                tl.store(
+                    ring_b + node_c * NUM_VH + pid_vh,
+                    b_raw_b_in,
+                    mask=n_ok & (pid_v == 0),
+                )
+            b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
+            b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
+        new_state, out_i = _gdn_node_step(
+            state_i,
+            b_q,
+            b_k,
+            b_v,
+            b_b,
+            b_g,
+            b_raw_a,
+            b_raw_b,
+            b_a_log,
+            b_dt_bias,
+            OUTPUT_SCALE=OUTPUT_SCALE,
+            USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
+            RAW_GATING=RAW_GATING,
+            SCAN_ALIGN=SCAN_ALIGN,
+        )
+        # padded lanes must NOT advance the carried state
+        state_i = tl.where(n_ok, new_state, state_i)
+        tl.store(
+            out + (node_c * NUM_VH + pid_vh) * DIM_V + offs_v,
+            out_i,
+            mask=n_ok & v_mask,
+        )
+        do_exp = tl.load(export_mask + node_c)
+        tl.store(
+            state_export
+            + ((node_c.to(tl.int64) * NUM_VH + pid_vh) * DIM_V
+               + offs_v[:, None]) * DIM_K
+            + offs_k[None, :],
+            state_i,
+            mask=n_ok & (do_exp != 0) & v_mask[:, None],
+        )
+    if FLAGS_EXPORT:
+        # FR13_FLAGS_INKERNEL under the subtree route: same staging-freshness
+        # store as the monolith tail (values identical: flags[0]=1 staged,
+        # flags[1]=rows). Exactly ONE program stores — the launcher passes
+        # FLAGS_EXPORT=True only on the level-0 launch; pid_path==0 guards
+        # within it. Stream-ordered before any later consumer.
+        _fl_mask = (pid_vh == 0) & (pid_v == 0) & (pid_path == 0)
+        tl.store(flags_ptr + 0, 1, mask=_fl_mask)
+        tl.store(flags_ptr + 1, FLAGS_ROWS, mask=_fl_mask)
 
 
 @triton.jit
@@ -2123,10 +2749,12 @@ def launch_tree_gdn_replay(
         )
     path_cols = int(accepted_paths.shape[1])
     if path_cols > spec_cols:
-        raise ValueError(
-            f"path cols {path_cols} exceed spec cols {spec_cols}; linear publish "
-            "columns must be valid spec columns"
-        )
+        # FR13_SPEC_BLOCKS_CAP: the accepted-paths BUFFER stays tree-wide
+        # (22) while the capped ssi is narrower (13). Content is bounded by
+        # accepted_len <= MAX_PATH (12) < spec_cols, and every path-col read
+        # below is masked by accepted_len, so clamping the window is
+        # value-identical (cols >= spec_cols were only ever masked lanes).
+        path_cols = spec_cols
     if prev_lens.numel() < num_spec_decodes or accepted_lens.numel() < num_spec_decodes:
         raise ValueError(
             "prev_lens/accepted_lens must cover num_spec_decodes="
@@ -2533,6 +3161,96 @@ def build_replay_bank_pointer_table(
     return ptrs, (int(shape0[0]), int(shape0[1]), int(shape0[2]), int(shape0[3])), int(stride0)
 
 
+def _fr13_native_committer_all_layers_device(
+    banks_list, spec_state_indices, accepted_paths, accepted_lens,
+    k_rings, v_rings, a_rings, b_rings, A_logs, dt_biases,
+    num_layers, num_spec_decodes, output_scale, use_qk_l2norm_in_kernel,
+    burn_node_bank, root_node=0, max_path=16,
+):
+    """S1 (=2) IN-CAPTURE committer: the CG body's fixed-shape neutral-padded
+    fused_sigmoid sequence with the segment layout built ON DEVICE — no host
+    .tolist()/torch.tensor(list) (every other committer flavor is host-layout
+    and capture-illegal). Neutral padding semantics (a=-1e4 => decay 1,
+    k=v=b=0 => no write) byte-proven by the CG gates. Persistent per-(sig)
+    buffers => graph-stable addresses; every fill op is a device op recorded
+    into the outer S1 graph, so replays recompute the layout from the live
+    accepted_paths/lens device tensors. burn must be OFF (stateless-tree
+    default; the S1 route asserts it) — fused_sigmoid touches col0 only."""
+    from vllm.model_executor.layers.fla.ops import (
+        fused_sigmoid_gating_delta_rule_update as _sg,
+    )
+    if burn_node_bank:
+        raise RuntimeError("S1 device committer requires burn OFF")
+    L = int(num_layers)
+    B = int(num_spec_decodes)
+    dev = k_rings.device
+    num_kh, dim_k = int(k_rings.shape[-2]), int(k_rings.shape[-1])
+    num_vh, dim_v = int(v_rings.shape[-2]), int(v_rings.shape[-1])
+    MAX_PATH = int(max_path)
+    MAXT = B * MAX_PATH
+    SCRATCH = int(banks_list[0].shape[0]) - 1
+    RING = int(k_rings.shape[2])
+    sig = ("s1dev", L, B, MAX_PATH, num_kh, dim_k, num_vh, dim_v, id(banks_list[0]))
+    st = _FR13_GRAPH_COMMITTER.get(sig)
+    if st is None:
+        # device-op-only init (capture-legal on first use): no tensor-from-list
+        _dt = k_rings.dtype
+        st = dict(
+            kbuf=torch.zeros(L, MAXT, num_kh, dim_k, device=dev, dtype=_dt),
+            vbuf=torch.zeros(L, MAXT, num_vh, dim_v, device=dev, dtype=_dt),
+            abuf=torch.full((L, MAXT, num_vh), -1e4, device=dev, dtype=_dt),
+            bbuf=torch.zeros(L, MAXT, num_vh, device=dev, dtype=_dt),
+            qbuf=torch.zeros(1, MAXT, num_kh, dim_k, device=dev, dtype=_dt),
+            cu=(torch.arange(B + 1, device=dev, dtype=torch.int64) * MAX_PATH).to(torch.int32),
+            ssi=torch.zeros(L, B, MAX_PATH, device=dev, dtype=torch.int32),
+            ar=torch.arange(MAX_PATH, device=dev),
+            arb=torch.arange(B, device=dev),
+        )
+        _FR13_GRAPH_COMMITTER[sig] = st
+    # ---- neutralize, then masked-overwrite real slots (all device ops) ----
+    st["abuf"].fill_(-1e4)
+    st["bbuf"].zero_()
+    st["kbuf"].zero_()
+    st["vbuf"].zero_()
+    st["ssi"].fill_(SCRATCH)
+    acc = accepted_lens[:B].to(torch.long)
+    node_mat = torch.empty(B, MAX_PATH, dtype=torch.long, device=dev)
+    node_mat[:, 0] = int(root_node)
+    node_mat[:, 1:] = accepted_paths[:B, : MAX_PATH - 1].to(torch.long).clamp(min=0)
+    valid = st["ar"].unsqueeze(0) <= acc.unsqueeze(1)          # [B, MAX_PATH]
+    safe_nodes = torch.where(
+        valid, node_mat, torch.zeros_like(node_mat)).clamp(0, RING - 1)
+    bidx = st["arb"].view(B, 1)
+    k_sel = k_rings[:, bidx, safe_nodes]                        # [L,B,MP,kh,dk]
+    v_sel = v_rings[:, bidx, safe_nodes]
+    a_sel = a_rings[:, bidx, safe_nodes]                        # [L,B,MP,vh]
+    b_sel = b_rings[:, bidx, safe_nodes]
+    m4 = valid.view(1, B, MAX_PATH, 1, 1)
+    m3 = valid.view(1, B, MAX_PATH, 1)
+    st["kbuf"].view(L, B, MAX_PATH, num_kh, dim_k)[:] = torch.where(
+        m4, k_sel, torch.zeros_like(k_sel))
+    st["vbuf"].view(L, B, MAX_PATH, num_vh, dim_v)[:] = torch.where(
+        m4, v_sel, torch.zeros_like(v_sel))
+    st["abuf"].view(L, B, MAX_PATH, num_vh)[:] = torch.where(
+        m3, a_sel, torch.full_like(a_sel, -1e4))
+    st["bbuf"].view(L, B, MAX_PATH, num_vh)[:] = torch.where(
+        m3, b_sel, torch.zeros_like(b_sel))
+    st["ssi"][:, :, :] = spec_state_indices[:, :B, 0:1].to(torch.int32)
+    for _L in range(L):
+        _sg(
+            A_log=A_logs[_L],
+            a=st["abuf"][_L].reshape(1, MAXT, num_vh),
+            b=st["bbuf"][_L].reshape(1, MAXT, num_vh),
+            dt_bias=dt_biases[_L], q=st["qbuf"],
+            k=st["kbuf"][_L].reshape(1, MAXT, num_kh, dim_k),
+            v=st["vbuf"][_L].reshape(1, MAXT, num_vh, dim_v),
+            scale=output_scale, initial_state=banks_list[_L],
+            inplace_final_state=True, cu_seqlens=st["cu"],
+            ssm_state_indices=st["ssi"][_L],
+            use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+        )
+
+
 def launch_tree_gdn_replay_all_layers(
     *,
     bank_anchor: torch.Tensor,
@@ -2571,6 +3289,11 @@ def launch_tree_gdn_replay_all_layers(
     build_replay_bank_pointer_table's pointer list (the caller re-asserts
     the live banks' data_ptr() each commit, which also pins the anchor).
     """
+    if globals().pop("_FR13_S1_STATE_DONE", False):
+        # =3: scan state already committed inside the S1 graph this step —
+        # the staged tail must not double-commit (fused update is not
+        # idempotent). Consume-once, set by the dm wrapper post-replay.
+        return
     if num_spec_decodes <= 0:
         return
     if num_layers <= 0:
@@ -2644,10 +3367,12 @@ def launch_tree_gdn_replay_all_layers(
         )
     path_cols = int(accepted_paths.shape[1])
     if path_cols > spec_cols:
-        raise ValueError(
-            f"path cols {path_cols} exceed spec cols {spec_cols}; linear publish "
-            "columns must be valid spec columns"
-        )
+        # FR13_SPEC_BLOCKS_CAP: the accepted-paths BUFFER stays tree-wide
+        # (22) while the capped ssi is narrower (13). Content is bounded by
+        # accepted_len <= MAX_PATH (12) < spec_cols, and every path-col read
+        # below is masked by accepted_len, so clamping the window is
+        # value-identical (cols >= spec_cols were only ever masked lanes).
+        path_cols = spec_cols
     if prev_lens.ndim != 2 or prev_lens.shape[0] < num_layers or (
         prev_lens.shape[1] < num_spec_decodes
     ):
@@ -2687,6 +3412,24 @@ def launch_tree_gdn_replay_all_layers(
         _spec_cols = int(spec_state_indices.shape[2])
         # env is dropped by EngineCore worker curation -> sidecar files are the
         # deployment-armable path (same pattern as _fr13_committer_native_on).
+        if (torch.cuda.is_current_stream_capturing()
+                or globals().get("_FR13_S1_FORCE_DEVICE", False)):
+            # S1 (=2) outer capture (or its eager side-stream warmup, forced
+            # via _FR13_S1_FORCE_DEVICE): EVERY other committer flavor is
+            # host-layout (.tolist/tensor-from-list) or a nested graph replay
+            # — both capture-illegal. The device-layout variant computes the
+            # same fixed-shape neutral-padded layout with device ops.
+            _fr13_native_committer_all_layers_device(
+                banks_list=banks_list, spec_state_indices=spec_state_indices,
+                accepted_paths=accepted_paths, accepted_lens=accepted_lens,
+                k_rings=k_rings, v_rings=v_rings, a_rings=a_rings,
+                b_rings=b_rings, A_logs=A_logs, dt_biases=dt_biases,
+                num_layers=num_layers, num_spec_decodes=num_spec_decodes,
+                output_scale=output_scale,
+                use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+                burn_node_bank=burn_node_bank,
+            )
+            return
         if (os.environ.get("FR13_COMMITTER_GRAPH") == "1"
                 or os.path.exists("/logs/fr13_committer_graph.arm")
                 or os.path.exists("/tmp/fr13_committer_graph.arm")):
@@ -3052,13 +3795,89 @@ def launch_tree_gdn_prepared(
     # FR13_PARENT_GATHER: default OFF => the launch below is byte-identical to the
     # locked path (PARENT_GATHER=False threads through as a dead constexpr branch).
     _parent_gather = parent_gather_on()
+    # FR13_HC_INTERNAL: compact h_cache to internal-node rows (leaves are never
+    # re-read). One-time host derivation from the static tree descriptor,
+    # cached; the first call for a shape must be OUTSIDE graph capture (vLLM
+    # eager warmup) -- _hc_internal_desc fails loud otherwise. Default OFF =>
+    # HC_MASK=0 => trace-time dead => byte-identical locked launch.
+    _hc_mask = 0
+    _hc_rows = 0
+    _hc_slots_lo = 0
+    _hc_slots_hi = 0
+    _hc_slot_map = strict_mask  # dummy pointer when off/PG-off (dead code)
+    if hc_internal_on():
+        if piggyback_export:
+            raise ValueError(
+                "FR13_HC_INTERNAL is incompatible with PIGGYBACK_EXPORT "
+                "(the chain-end node may be a leaf with no cached row)"
+            )
+        _hc_mask, _hc_rows, _hc_slots_lo, _hc_slots_hi = _hc_internal_desc(
+            strict_mask, n_actual, n_pad
+        )
+        if _parent_gather and _hc_mask != 0:
+            # HCxPG compat: the parent-gather branch's runtime parent index
+            # reads its compacted slot from a device map (preseeded at
+            # builder init; the getter fail-louds under capture).
+            _hc_slot_map = hc_slot_map_get(n_actual, n_pad, strict_mask.device)
     grid = (num_vh, triton.cdiv(dim_v, _bv))
 
     _flags_export = staging_flags is not None
     _flags_arg = staging_flags if _flags_export else strict_mask  # dummy ptr when off (dead code)
     _flags_rows = int(staging_rows) if _flags_export else 0
 
-    def _launch(_out, _pg_flag):
+    def _launch_paths(_out):
+        # FR13_SUBTREE_PARALLEL route: one launch per path level; paths in a
+        # level scan concurrently on grid axis 2. RING/RAW semantics match
+        # the monolith per node; PIGGYBACK unsupported (asserted below).
+        st = subtree_get(n_actual)
+        for _li, (_nodes, _pars, _mlen, _npaths) in enumerate(st["levels"]):
+            _tree_gdn_path_kernel[(num_vh, triton.cdiv(dim_v, _bv), _npaths)](
+                q,
+                k,
+                v,
+                g,
+                beta,
+                raw_a,
+                raw_b,
+                A_log,
+                dt_bias,
+                h0,
+                h0_indices,
+                h0_num_accepted_tokens,
+                _nodes,
+                _pars,
+                st["export"],
+                st["emask"],
+                _out,
+                ring_k,
+                ring_v,
+                ring_a,
+                ring_b,
+                _flags_arg,
+                N_ACTUAL=n_actual,
+                NUM_KH=num_kh,
+                NUM_VH=num_vh,
+                DIM_K=dim_k,
+                DIM_V=dim_v,
+                BLOCK_V=_bv,
+                OUTPUT_SCALE=output_scale,
+                USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+                H0_IS_BANK=h0_is_bank,
+                H0_INDEX_ROW=h0_index_row,
+                H0_BATCH_INDEX=h0_batch_index,
+                H0_BANK_STRIDE=h0_bank_stride,
+                H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
+                RAW_GATING=raw_gating,
+                SCAN_ALIGN=_scan_align,
+                MAX_PATH_LEN=_mlen,
+                RING_EXPORT=_ring_export,
+                FLAGS_EXPORT=_flags_export and (_li == 0),
+                FLAGS_ROWS=_flags_rows,
+                num_warps=_num_warps,
+                **_extra_launch_kwargs,
+            )
+
+    def _launch(_out, _pg_flag, _hc=(_hc_mask, _hc_rows, _hc_slots_lo, _hc_slots_hi)):
         _tree_gdn_kernel[grid](
             q,
             k,
@@ -3106,6 +3925,11 @@ def launch_tree_gdn_prepared(
             RING_EXPORT=_ring_export,
             FLAGS_EXPORT=_flags_export,
             FLAGS_ROWS=_flags_rows,
+            HC_MASK=_hc[0],
+            HC_ROWS=_hc[1],
+            HC_SLOTS_LO=_hc[2],
+            HC_SLOTS_HI=_hc[3],
+            hc_slot_map=_hc_slot_map,
             num_warps=_num_warps,
             **_extra_launch_kwargs,
         )
@@ -3123,6 +3947,40 @@ def launch_tree_gdn_prepared(
                 "FR13_PARENT_GATHER SELFCHECK MISMATCH: parent gather is NOT "
                 f"byte-identical to the ancestor loop (max_abs={_diff:.3e}, "
                 f"n_actual={_n}, n_pad={n_pad})"
+            )
+    elif subtree_parallel_on():
+        if piggyback_export:
+            raise ValueError(
+                "FR13_SUBTREE_PARALLEL does not support PIGGYBACK_EXPORT"
+            )
+        if subtree_parallel_selfcheck_on():
+            # In-process byte gate: monolith -> out_ref, path route -> out.
+            out_ref = torch.empty_like(out)
+            _launch(out_ref, _parent_gather)
+            _launch_paths(out)
+            _n = int(n_actual)
+            if not torch.equal(out_ref[:_n], out[:_n]):
+                _diff = (out_ref[:_n].float() - out[:_n].float()).abs().max().item()
+                raise RuntimeError(
+                    "FR13_SUBTREE_PARALLEL SELFCHECK MISMATCH: path route is "
+                    f"NOT byte-identical to the monolith (max_abs={_diff:.3e}, "
+                    f"n_actual={_n})"
+                )
+        else:
+            _launch_paths(out)
+    elif hc_internal_selfcheck_on() and _hc_mask != 0:
+        # In-process byte-identity gate for FR13_HC_INTERNAL (same discipline:
+        # boot enforce_eager; the host compare syncs).
+        out_ref = torch.empty_like(out)
+        _launch(out_ref, _parent_gather, _hc=(0, 0, 0, 0))
+        _launch(out, _parent_gather)
+        _n = int(n_actual)
+        if not torch.equal(out_ref[:_n], out[:_n]):
+            _diff = (out_ref[:_n].float() - out[:_n].float()).abs().max().item()
+            raise RuntimeError(
+                "FR13_HC_INTERNAL SELFCHECK MISMATCH: compacted h_cache is NOT "
+                f"byte-identical to the full-span cache (max_abs={_diff:.3e}, "
+                f"n_actual={_n}, n_pad={n_pad}, hc_mask=0x{_hc_mask:x})"
             )
     else:
         _launch(out, _parent_gather)

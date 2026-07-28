@@ -298,7 +298,7 @@ if [[ "$OFFLOAD_AGENT" == "1" ]]; then
   # alienware-local proxy (127.0.0.1:8023). vLLM /metrics still read GB10-locally.
   AGENT_ARGS=(--agent-host "$OFFLOAD_HOST" \
               --agent-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
-  echo "proxy OK (OFFLOADED to $OFFLOAD_HOST:$OFFLOAD_PROXY_PORT; forced temp 0.0, pair dumps on, auto-continue on)"
+  echo "proxy OK (OFFLOADED to $OFFLOAD_HOST:$OFFLOAD_PROXY_PORT; pair dumps on (see OFFLOAD_PROXY_OK line for real temp/nudge config))"
 else
   echo "[offload] OFFLOAD_AGENT=0 — legacy on-GB10 proxy+agent (co-located)"
   LUMO_PROXY_FORCE_TEMPERATURE=0.0 \

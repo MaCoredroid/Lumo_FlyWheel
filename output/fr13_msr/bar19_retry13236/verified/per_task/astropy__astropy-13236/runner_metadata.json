@@ -1,0 +1,62 @@
+{
+  "instance_id": "astropy__astropy-13236",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "started_at": "2026-07-26T13:24:38Z",
+  "repo": "astropy/astropy",
+  "base_commit": "6ed769d58d89380ebaa1ef52b300691eefda8928",
+  "agent": {
+    "elapsed_s": 3005.176,
+    "exit_code": 0,
+    "timed_out": false,
+    "container_name": "swe-qwen-astropy__astropy-13236-1785072278",
+    "offloaded": true,
+    "codex_host": "alienware",
+    "network_drop": false,
+    "agent_env": "instance_image",
+    "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13236:latest",
+    "host_arch": "x86_64",
+    "image_arch": "x86_64"
+  },
+  "codex": {
+    "elapsed_s": 3005.176,
+    "exit_code": 0,
+    "timed_out": false,
+    "container_name": "swe-qwen-astropy__astropy-13236-1785072278",
+    "offloaded": true,
+    "codex_host": "alienware",
+    "network_drop": false,
+    "agent_env": "instance_image",
+    "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13236:latest",
+    "host_arch": "x86_64",
+    "image_arch": "x86_64"
+  },
+  "empty_patch_retry": {
+    "cause": "agent_gave_up",
+    "attempted": true,
+    "max_retries": 0,
+    "recovered_patch_bytes": 0,
+    "attempts_used": 0
+  },
+  "vllm_request_metrics_bytes": 0,
+  "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+  "patch_bytes": 0,
+  "eval": {
+    "exit_code": 1,
+    "elapsed_s": 0.13
+  },
+  "eval_report": {
+    "track": "swe_bench",
+    "instance_id": "astropy__astropy-13236",
+    "model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+    "dataset_name": "princeton-nlp/SWE-bench_Verified",
+    "patch_path": "/home/mark/shared/lumoFlyWheel/output/fr13_msr/bar19_retry13236/verified/per_task/astropy__astropy-13236/patch.diff",
+    "prediction_path": "/home/mark/shared/lumoFlyWheel/output/fr13_msr/bar19_retry13236/verified/per_task/astropy__astropy-13236/eval/predictions.jsonl",
+    "verdict": "failed",
+    "passed": false,
+    "failure_mode": "patch_apply_failed",
+    "harness_exit_code": 0,
+    "eval_wall_clock_seconds": 0.0,
+    "error": "empty_patch"
+  },
+  "ended_at": "2026-07-26T14:14:44Z"
+}

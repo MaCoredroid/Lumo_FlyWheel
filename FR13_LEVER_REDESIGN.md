@@ -1,0 +1,143 @@
+# FR13 lever redesign — hardware-measurement-driven (2026-07-25)
+
+## The hardware frame that ranks everything
+
+Decode-only, cache-ON, B-aware floor (now recorded per arm by fr13_measure):
+`floor(B) = max(weight-read 98.6ms, 0.54ms/row x rows_per_step)`.
+
+| regime | rows/step | floor | measured (tree) | gap |
+|---|---|---|---|---|
+| B=1 (eps 1) | 22 | 98.6ms | ~330-400ms | ~3.5x |
+| B=4 deploy (eps 2.2-3.3) | 48-70 | 98.6ms | 473-663ms | 4.8-6.7x |
+| B=8 (eps ~6-7, sweep pending) | ~140-155 | ~98.6ms (crossover ~183 rows) | TBD | TBD |
+
+Marginal cost per extra co-resident event: hardware ~12ms (tree, 22 rows x
+0.54) vs measured ~140ms. **The 10x marginal slope is the campaign.** Native's
+marginal: hardware ~3ms, measured ~49ms — native wastes 16x on the margin but
+has 3.7x fewer rows to waste on.
+
+## Composition decision (g3 + isolation-gate data)
+
+g3 (sealed 6-lever stack): 24.64 tps @ eps 2.16, step 473ms — bar17r2-class,
+NOT g1-class (36.36 @ 2.67, step 397ms). Isolation gates already ranked the
+levers: PG 35.22, HC 36.69, CPG 34.16, flags 33.35 (winners) vs nodebank
+28.05, cap 29.62, wb 31.14 (**all below the 32.14 no-lever baseline**).
+
+**Lean stack** (tree_lean_b4, running): PG + CPG + FLAGS + SUBTREE.
+**Unbake-and-DELETE list** (executes when the lean arm confirms, per the
+delete-dead-flags discipline; git preserves):
+- FR13_CONV_NODEBANK family: conv_nodebank_get/preseed/dst_rows (kernel
+  module), patcher dual-arm writeback wrap, bank fetch, committer leaf bank
+  read, builder preseeds. ~150 kernel + ~700 patcher lines.
+- FR13_SPEC_BLOCKS_CAP: structurally tied to nodebank (capped pages need
+  bank storage for replay reads) — deletes with it. The cache-hit-rate
+  concern it addressed moves to the mamba_block_size 1024->8192 route
+  (project_fr13_apc_blocksize_fix, queued big-N).
+- FR13_CONV_WB_BATCHED: batched-writeback kernel + capacity-keyed staging.
+  ~200 lines. (The single-arm-writeback redesign is MOOT if nodebank goes.)
+
+Keep baked: sync-kill, SLOT_REORDER, ATTN_KV_REMAP (correctness), stateless
+core, SUBTREE_PARALLEL. RED-TEAM CORRECTION (2026-07-25 workflow): the raw
+PG/HC "wins" were PHANTOM eps-amortization (adjusted -1.66/-0.06); CPG/flags
+within-noise; subtree SUPERSEDES PG and HC on the tree launch. WB_BATCHED
+moved OFF the delete list — only genuine per-step reducer (F=324ms best,
+adjusted +2.30) — pending a matched-eps re-run. Deletion must follow the
+blast-radius checklist (patcher:1020 module-scope import + :1035-37 globals
+are unconditional).
+
+## Redesign queue (ranked by hardware-measured size at deployment eps)
+
+1. **R4: full drafter-loop CUDA-graph capture (~90ms/step, the largest).**
+   dfwd ~93-95ms is host python BETWEEN piecewise-captured pieces (2g:
+   propose python = 20% of window; meta-reuse A/B PROVED the metadata builds
+   are ~0 of it — the cost is piecewise dispatch + set_forward_context +
+   sampling glue x4 iterations). The dmr selfcheck result is the key
+   enabler: iterations 2..N are FIELD-IDENTICAL in metadata construction,
+   i.e. the loop body is graph-invariant — the whole 4-iteration loop can
+   capture as ONE graph per batch size. Design: dedicated graph runner
+   around the spine loop (inputs: hidden, tokens, positions; outputs: 4
+   draft tokens + hidden), device-side metadata increments (already device
+   tensors + the fused slot-mapping kernel), _greedy_sample stays in-graph
+   (argmax). Merged-drafter host branches (fired/skip) become captured
+   variants keyed (batch, flavor) or device selects.
+2. **R3/soup: gather-chain fusion (~15ms/step at B=1, ~3x at deploy eps).**
+   The pre/post-scan index_select/gather soup in the patched forward —
+   fuse into single kernels; candidates from the verify-kernel-first
+   differential (norms/gather-soup +20 > attn-rows +14).
+3. **Norms (~8.5ms at B=1, row-scaled).** Same 48-layer norm kernels over
+   22 rows vs native 6 — data-movement bound; wins come from row-count
+   reduction (NOT tree reshape — anti-solution) or fusing norm into
+   neighbor ops where vLLM hasn't already.
+4. **Committer -> floor (~4ms/event target).**
+
+## Test protocol per lever (established today)
+
+Offloaded real-SWE arms only (agent never local), cache-ON, decode-only
+metric + B-aware floor; 4-task at B=4 for iteration, B-sweep table
+(tree/native x B1/B4/B8) as the frame; every record read eps-matched;
+byte/equivalence selfcheck gate BEFORE any speed read (dmr pattern).
+
+## GOAL REFRAME (user, 2026-07-25 evening)
+
+Target = HARDWARE FLOOR (floor_ratio -> 1.0), not native. Native = reference
+only. Every lever gates on delta step_wall_ms toward floor(B) at matched eps
++ behavior band. Floor budget at B=4 (lean, 355ms today): drafter -75 (R4),
+verify-forward trio -85 (soup > scan/BV > norms), committer -21, glue -10
+=> ~160ms/step ~ floor_ratio 1.5, where tps = comb x eps / floor and accept
+is the remaining lever (comb 5.78 already banked).
+
+## Verify-forward kernel budget (B=1 ledger, 2026-07-26)
+
+GPU kernel time split (120s window): GEMM/weights ~44.4s (irreducible) vs
+non-GEMM ~15s (25% at 22 rows; scales to ~46% at 50 rows == the -120..150
+verify gap). Ranked row-scaled targets inside verify:
+1. **attn rows**: flash_fwd_splitkv 6.5s + unified_attention 1.2s — the
+   FA2 fork's tree attention at M=22 queries; splitkv geometry is built for
+   long-KV/few-query — M-row efficiency is the biggest non-GEMM item.
+2. **small-kernel chains** (~4s): per_block_quant, silu_and_mul, index/
+   scatter/elementwise, topk — fusion pass (compile region or hand-fused).
+3. **scan** 1.5s: subtree shipped; BV re-tile only if (1)+(2) leave it top.
+Drafter CLOSED (dsplit: post-loop 0.3ms; span was drain artifact). Ladder:
+verify(1,2) -> committer fuse (-23) -> glue overlap (-10) -> floor ~1.2.
+
+## Drafter final accounting + FR-Spec revival design (2026-07-26)
+
+dsplit3 (needle v2, replay covered): loop = 70.0ms STEADY at B=1; tail+pack
+0.3ms. The drain-artifact theory was wrong — the span was honest. 70ms =
+4 sequential drafter iterations' traffic incl. 4-5 full lm_head reads/step
+(0.77GB fp8 each ~2.8ms) for GUESS tokens. Lever: **reduced-vocab draft
+head** — S3-era FR-Spec refutation is STALE (assumed host-bound drafter).
+Key implementation insight: BPE ids are ~frequency-ordered, so subset =
+ids [0, K): the head slice lm_head.weight[:K] is CONTIGUOUS (zero-copy
+view incl. per-block fp8 scales), logits[:, :K] argmax yields REAL vocab
+ids directly (no mapping); tokens >= K (rare merges, specials incl. EOS)
+simply never draft — verifier emits them via bonus, lossless by
+construction. Env FR13_DRAFT_VOCAB_K (0=off); gate = accept delta on live
+tasks (code workloads have rare-identifier mass — measure, don't assume).
+Remaining ~10ms/iter unexplained above head+lm_head estimates: one
+in-replay kernel attribution read before further drafter work.
+
+## Verifier attack (V-ladder, designed 2026-07-26)
+
+Measured basis: verify differential vs native at eps~1.8-2.3 = per-event
+norms/gather-soup +20 > scan +15 > attn-rows +14 (GEMM/lm_head ZERO delta —
+M-tile dead). Committer handled separately (CG re-gate queued). Python glue
+around verify is ALREADY conquered (FR13_EAGER_PACK cache baked ON, PG/CPG/
+FLAGS_INKERNEL/subtree shipped) — remaining mass is inside-forward row-scaled
+kernels.
+
+- V2 attn-rows (+14/event): flash splitkv at M=22 vs native M=6. Microbench
+  scripts/fr13_attn_mgeom_bench.py (queued inside cg_combo container) decides:
+  tax_ratio ~=3.67 => row-linear, CLOSED (accept is the only lever);
+  >>3.67 => tile/occupancy headroom; if num_splits moves t22 => cheapest fix is
+  a launch-param env (FR13_ATTN_NUM_SPLITS), else fork kernel M-tile work.
+  Gate ladder: microbench -> flag-gated variant -> same-boot byte gate (FA2
+  fork floor: 0.0 with known single-ULP MMA exceptions) -> probe -> live arm.
+- V3 scan (+15/event): subtree-parallel shipped (+4.7% B=1, deployment link
+  pending); BV re-tile conditional stays parked behind the register-wall
+  finding (re-tile = HBM tax, do-not-re-run without new design).
+- Sampler 4.2 + residual soup: post-CG profiler pass re-ranks; no build until
+  attn/scan verdicts land.
+
+Sequencing (GPU serialized): dvkg64L live arm -> cg_combo (committer graph
+re-gate + attn microbench in-container) -> V2 verdict -> composed live arm.

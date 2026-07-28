@@ -26,8 +26,10 @@ cd /home/mark/shared/lumoFlyWheel
 # shellcheck source=fr13_required_tree_flags.sh
 source scripts/fr13_required_tree_flags.sh
 
-ARM=${1:?usage: fr13_bigdenom_swe_serve_variant.sh <arm> <KIND> <subset.json>}
-KIND=${2:?cat9|cat9-opta|cat9-opt1|nativemtp5|nativemtp5apc|nativemtp5_exseed|cat6root|cat10}
+ARM=${1:?usage: fr13_bigdenom_swe_serve_variant.sh <arm> [KIND=tail6] [subset.json]}
+# KIND defaults to tail6 = the CANONICAL deployed config (cleanup+bake 2026-07-27,
+# FR13_CLEANUP_BAKE_PLAN.md): cat33333 head + 6-node Arctic tail, 21 nodes, BV=8.
+KIND=${2:-tail6}
 SUBSET=${3:?subset json}
 
 RUNROOT=${RUNROOT:-output/fr13_bigdenom_swe}
@@ -236,7 +238,8 @@ case "$KIND" in
   # only the root forward, Arctic fills deep spine+branches, MTP deep forwards SKIPPED). == the closed
   # Front-2 config (arctic-only deep drafter, prev -17% B=4) -- re-run on the FIXED pipeline as the control
   # isolating "arctic alone" vs tail6 (MTP-head+arctic-tail) vs t33333 (MTP-only). NO tail mode.
-  suffonly)  LAUNCHER=forked; TREEARG="$T33333_TREE";   EXPECT_RATIO=15; declare -a XFLAGS=(FR13_DRAFT_SOURCE=merged FR13_MERGED_FLAVOR=always) ;;
+  # suffonly KIND REMOVED 2026-07-27: it exercised the head-merge decide_and_fill path
+  # (FR13_MERGED_FLAVOR), deleted in cleanup+bake (Front-2 control; closed no-go).
   t55555)    LAUNCHER=forked; TREEARG="$T55555_TREE";   EXPECT_RATIO=25; declare -a XFLAGS=() ;;
   cat55222)  LAUNCHER=forked; TREEARG="$CAT55222_TREE";  EXPECT_RATIO=16; declare -a XFLAGS=() ;;
   cat55221)  LAUNCHER=forked; TREEARG="$CAT55221_TREE";  EXPECT_RATIO=15; declare -a XFLAGS=() ;;
@@ -420,7 +423,23 @@ else
   if grep -q "^FR13_SCAN_ALIGN=1$" "$ARMDIR/container_env.txt" && [ "${FR13_ALLOW_SCAN_ALIGN:-0}" != "1" ]; then
     echo "FAIL: FR13_SCAN_ALIGN=1 present — K1 must NOT be baked (set FR13_ALLOW_SCAN_ALIGN=1 for the recompute diagnostic)"; exit 3
   fi
+  # FR13_NEEDS_ALLOW (2026-07-27, sanctioned diagnostic override): a
+  # space-separated list of KEY=VALUE pairs that REPLACE the registry
+  # expectation for THIS arm only — so experiment arms that must flip one
+  # pinned flag (e.g. FR13_SUBTREE_PARALLEL=0 for the capture-topology A/B)
+  # run through the FULL live-SWE pipeline instead of fleeing to probe
+  # boots (user call: even kernel measurements use SWE tasks). LOUD: every
+  # override is printed; drift protection stays for everything unlisted.
   for need in "${NEEDS[@]}"; do
+    _ov=""
+    for kv in ${FR13_NEEDS_ALLOW:-}; do
+      [[ "${kv%%=*}" == "${need%%=*}" ]] && _ov="$kv"
+    done
+    if [[ -n "$_ov" ]]; then
+      echo "NEEDS-OVERRIDE (diagnostic arm): expecting $_ov instead of $need"
+      grep -q "^$_ov$" "$ARMDIR/container_env.txt" || { echo "FAIL: override pin not live: $_ov"; exit 3; }
+      continue
+    fi
     grep -q "^$need$" "$ARMDIR/container_env.txt" || { echo "FAIL: env pin missing: $need"; exit 3; }
   done
   # arm-specific OPT flag must be LIVE in container env

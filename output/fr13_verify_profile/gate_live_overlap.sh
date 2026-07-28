@@ -84,7 +84,7 @@ print(f'ENGAGEMENT OK tok/draft={t/d:.2f}')" || return 3
     python3 scripts/fr10_quick_decode_tps_probe.py \
       --endpoint "http://127.0.0.1:$PORT" --model qwen3.6-27b \
       --prompts-file output/fr13_acceptance_ladder/prompts_swe4.json \
-      --max-tokens 64 --temperature 0.0 --top-p 1.0 --seed 1313 \
+      --max-tokens 64 --temperature 0.6 --top-p 1.0 --seed 1313 \
       --samples-per-prompt 1 --batch-size 1 --warmup-samples 0 --wait-health 0 \
       --modes tree_mtp --out "$ARMDIR/probe_r${R}.json" \
       > "$ARMDIR/probe_r${R}_stdout.log" 2>&1 || { echo "FAIL: probe r$R"; return 4; }
@@ -105,7 +105,7 @@ python3 - <<'EOF'
 def deltas(arm):
     out = {}
     for phase in ("pre", "post"):
-        for line in open(f"output/fr13_verify_profile/ringwb_{arm}/metrics_{phase}.txt"):
+        for line in open(f"output/fr13_verify_profile/ovl_{arm}/metrics_{phase}.txt"):
             parts = line.split()
             if len(parts) != 2:
                 continue
@@ -113,7 +113,7 @@ def deltas(arm):
             out.setdefault(k, {})[phase] = float(parts[1])
     return {k: v.get("post", 0) - v.get("pre", 0) for k, v in out.items()}
 
-on, off = deltas("on"), deltas("off")
+on, off = deltas("ovlon"), deltas("ovloff")
 def ratio(name_frag_num, name_frag_den, d):
     num = sum(v for k, v in d.items() if name_frag_num in k)
     den = sum(v for k, v in d.items() if name_frag_den in k)

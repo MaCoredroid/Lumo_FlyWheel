@@ -1,0 +1,44 @@
+diff --git a/astropy/coordinates/builtin_frames/__init__.py b/astropy/coordinates/builtin_frames/__init__.py
+index 6fd688c28..131509874 100644
+--- a/astropy/coordinates/builtin_frames/__init__.py
++++ b/astropy/coordinates/builtin_frames/__init__.py
+@@ -50,6 +50,7 @@ from . import cirs_observed_transforms
+ from . import icrs_observed_transforms
+ from . import intermediate_rotation_transforms
+ from . import ecliptic_transforms
++from . import itrs_observed_transforms
+ 
+ # Import this after importing other frames, since this requires various
+ # transformtions to set up the LSR frames
+diff --git a/astropy/time/core.py b/astropy/time/core.py
+index 0ba523642..e1f0812ea 100644
+--- a/astropy/time/core.py
++++ b/astropy/time/core.py
+@@ -2894,6 +2894,8 @@ def update_leap_seconds(files=None):
+         return erfa.leap_seconds.update(table)
+ 
+     except Exception as exc:
+-        warn("leap-second auto-update failed due to the following "
+-             f"exception: {exc!r}", AstropyWarning)
++        from astropy.utils.iers import conf as iers_conf
++        if iers_conf.auto_download:
++            warn("leap-second auto-update failed due to the following "
++                 f"exception: {exc!r}", AstropyWarning)
+         return 0
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index dae42fba8..3ade7b3f3 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -263,10 +263,9 @@ class IERS(QTable):
+         utc : float or array
+             fractional part of MJD
+         """
+-        try:  # see if this is a Time object
++        from astropy.time import Time
++        if isinstance(jd1, Time):
+             jd1, jd2 = jd1.utc.jd1, jd1.utc.jd2
+-        except Exception:
+-            pass
+ 
+         mjd = np.floor(jd1 - MJD_ZERO + jd2)
+         utc = jd1 - (MJD_ZERO+mjd) + jd2

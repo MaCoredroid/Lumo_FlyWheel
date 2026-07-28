@@ -30,7 +30,27 @@ FR13_REQUIRED_TREE_FLAGS=(
   "FR13_COMMITTER_BATCHED=1"  # B2b batched all-layers committer (tail6_batched_f70 16-task gate: span 47->36ms, verify FLAT, comb 3.592, 8P/8F; byte gate fr13_committer_graph_varying ALL-IDENTICAL)
   "FR13_KV_REMAP_SYNCFREE=1"  # zero-host-sync KV remap (patch-time baked; offline byte gate PASS; bv1 4-task gate 2026-07-24: accept 4.411, cfwd 12.33ms/event, 0 errors)
   "FR13_INPUTPREP_GUARD=1"    # draft-slot rescue + committed-slot async assert (crash-fix stack; r8 16-task survival + bv1 clean)
-  "FR13_PARENT_GATHER=1"      # scan parent-gather (bv3 gate 2026-07-24: accept 4.734, fails coherent, sfwd no-regress; offline byte gate bit-identical tail6-21n-BV8)
-  "FR13_CONV_PREGATHER=1"     # all-layer conv col0 staging (bv3 same gate; offline byte gate 48/48 equal + stale-token fallback)
+  "FR13_DRAFT_VOCAB_K=65536"  # BAKED 2026-07-26: gather-64k drafter head (measured 128-id-block subset, broad 3.14M-tok corpus; fp8 scale-aligned; verifier full-head=lossless). Live 4-task dvkg64L: accept 5.552 == full-head same-workload control 5.556 (dvkdump), drafter_gpu 94.9->56.3ms/step; exact draft-id coverage 97.1% == contig-128k at half the read. Set 0 for full head."
+  # --- cleanup+bake 2026-07-27 (FR13_CLEANUP_BAKE_PLAN.md; cleanbake1 gate PASS: 1P/3F band-in, tuple ON pooled line) ---
+  # Registered HERE (not just launcher defaults) per the config-drift lesson in this file's header:
+  # the registry is the single source AND the variant harness's fail-loud NEEDS assertion, so a
+  # boot that loses any of these fails loud instead of silently drifting. Diagnostics that must
+  # disable one (e.g. eager attribution probes with DRAFTER_GRAPH=0) boot via the launcher
+  # directly, not the variant harness.
+  "FR13_ENABLE_APC=1"         # cache ON (goal = spec+cache; APC lossless proven MISS==HIT)
+  "FR13_TAW=1"                # ran clean in every S1/A-B arm
+  "FR13_PARENT_GATHER=1"      # byte-identical selfcheck-gated (lean recomposition 2026-07-25)
+  "FR13_COMMITTER_GRAPH=1"    # CG committer graph
+  "FR13_CONV_PREGATHER=1"     # re-gated 2026-07-25 lean recomposition
+  "FR13_FLAGS_INKERNEL=1"
+  "FR13_SUBTREE_PARALLEL=1"   # #60: byte-exact + graph-safe + B=1 +4.7%
+  "FR13_DRAFTER_GRAPH=1"      # R4 whole-spine drafter capture (the -40ms lever)
+  # FR13_DRAFT_VOCAB_BLOCKS default = scripts/fr13_dvk_subset_blocks.json (launcher); unset BLOCKS with K>0 => contig slice (diagnostic only — NOT a valid frequency cap, see FR13_DVK_RESEARCH_BRIEF.md)
+  # FR13_PARENT_GATHER RE-GATED 2026-07-25 via lean recomposition (bsweep2 29.02 winner; every arm since =1 incl bar19 8/16 band-pass). Old note: REVERTED 2026-07-24: loop escalation common factor (bar16/bv4/bv5); bit-identity proven EAGER-only — graph-capture suspect. Loop epidemic later root-caused to HOST DRIVER degradation (reverts stand precautionary). Re-gate under capture (regate_queue.sh 2a) before any re-bake.
+  # FR13_CONV_PREGATHER RE-GATED 2026-07-25 (same lean recomposition). Old note: REVERTED 2026-07-24: loop escalation; token hole = col0 row change under stable req-id. FIX BUILT 2026-07-24: composite (req_ids, col0 page-ids) token — publish in _prepare_inputs + trigger/consume in lockstep; stage refuses without col0. Re-gate = regate_queue.sh 2b.
   # FR13_SSI_PREBUILD: unconditional kernel-lib code (no flag) — batched committer ssi broadcast; byte gate ALL-IDENTICAL + bv1 clean. Registry marker for drift awareness.
+  # FR13_HC_INTERNAL RETIRED 2026-07-27 (cleanup+bake): never gated in, incompatible with the now-BAKED PARENT_GATHER. Mechanism hard-disabled (hc_internal_on()->False); env wiring removed. Kernel-body HC_MASK dead branches remain (excision = follow-up with its own bit-exact gate, FR13_CLEANUP_BAKE_PLAN.md).
+  # FR13_CONV_NODEBANK QUEUED (built 2026-07-24, default OFF): conv node deposits -> private per-layer bank; pool keeps col0 only (spec-page surgery 1+2). Offline route byte gate CPU PASS 36/36 incl. ordinal-perm composition cases. Gate = regate_queue.sh 2e. Patch-time incompat raises: TCF_SELFCHECK / RUNROW_INIT!=1 / FULL_CAPTURE.
+  # FR13_SPEC_BLOCKS_CAP QUEUED (built 2026-07-24, default 0=OFF): MambaSpec num_speculative_blocks min-cap (21->12 => 13 pages/request, ~+9 pages reclaimed) + gdn_attn page-col width caps. REQUIRES FR13_CONV_NODEBANK=1 (patcher main raises otherwise). Gate = regate_queue.sh 2f.
+  "FR13_CONV_WB_BATCHED=1"  # B2c BAKED 2026-07-27: offline byte gate PASS (07-24) + b2c1 band PASS (2P/2F garble-free) + subspan1 speed positive (sfwd fit -6.7 fixed/-2.4 per event; step -20 vs model at eps 2.7); batched conv writeback across requests.
 )

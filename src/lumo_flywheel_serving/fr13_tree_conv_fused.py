@@ -394,6 +394,10 @@ def replay_conv_state_linear_remap_prepared(
     conv_state.index_copy_(0, dst_rows, vals)
 
 
+
+
+
+
 # ---------------------------------------------------------------------------
 # TEST-ONLY legacy reference replicas (the byte A/B's Arm A).
 # Pinned to the patcher's conv_replacement text / the frozen library fns by
@@ -694,9 +698,158 @@ try:  # triton is only present in the serving container; import lazily-safe
                 mask=c_mask,
             )
 
+    @triton.jit
+    def _fr13_conv_wb_fused_batched_kernel(
+        source_z,      # [B*S, C] contiguous staging (request b's source at b*S)
+        state_src,     # [N*L] shared per-topology table (per-b LOCAL rows)
+        dst_rows,      # [B*N] flat destination rows
+        conv_state,    # strided base (page view or bank view)
+        stride_cs0,
+        stride_cs1,
+        stride_cs2,
+        S: tl.constexpr,
+        N: tl.constexpr,
+        C: tl.constexpr,
+        L: tl.constexpr,
+        BLOCK_C: tl.constexpr,
+    ):
+        # FR13_CONV_WB_BATCHED (B2c): ONE launch for ALL requests' node
+        # writebacks — replaces the per-b python loop's B launches (the
+        # measured committer host-gap slice is launch/glue-dominated).
+        # Identical inner body to _fr13_conv_wb_fused_kernel; the b axis only
+        # offsets the source base and selects dst_rows[b*N + n]. Destinations
+        # are disjoint across programs => order-free, byte-identical to the
+        # per-b launch sequence by construction (pure data movement).
+        pid0 = tl.program_id(0)
+        pid_c = tl.program_id(1)
+        pid_b = pid0 // N
+        pid_n = pid0 % N
+        offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)
+        c_mask = offs_c < C
+        dst = tl.load(dst_rows + pid0).to(tl.int64)
+        base = conv_state + dst * stride_cs0
+        src_base = pid_b.to(tl.int64) * S
+        for s in tl.static_range(0, L):
+            src = tl.load(state_src + pid_n * L + s).to(tl.int64) + src_base
+            vals = tl.load(source_z + src * C + offs_c, mask=c_mask, other=0)
+            tl.store(
+                base + offs_c * stride_cs1 + s * stride_cs2,
+                vals,
+                mask=c_mask,
+            )
+
 except Exception:  # pragma: no cover - CPU-only host env
     triton = None
     tl = None
+
+
+_FR13_CONV_WB_STAGING: dict = {}
+
+
+def conv_wb_staging_get(layer_key, rows_needed: int, c: int, dtype, device):
+    """Persistent [ROWS_CAP, C] source staging for the batched writeback.
+
+    CAPACITY-keyed (layer, c, dtype): the actual per-request source rows S
+    are only known at forward time, so preseed allocates an upper bound
+    (max_num_seqs * (state_len + n_tree + 1) >= max_num_seqs * S) at builder
+    init — OUTSIDE capture (tree-decode first call is INSIDE capture, the 2d
+    class). A rows_needed beyond capacity fail-louds under capture rather
+    than reallocating a captured address.
+    """
+    import torch as _t
+    key = (layer_key, int(c), str(dtype))
+    st = _FR13_CONV_WB_STAGING.get(key)
+    if st is None or st.shape[0] < int(rows_needed):
+        if _t.cuda.is_available() and _t.cuda.is_current_stream_capturing():
+            raise RuntimeError(
+                "FR13_CONV_WB_BATCHED: staging (re)allocation inside graph "
+                f"capture (layer={layer_key}, rows_needed={rows_needed}, "
+                f"have={0 if st is None else int(st.shape[0])}); preseed at "
+                "builder init with the capacity bound"
+            )
+        st = _t.zeros(int(rows_needed), int(c), dtype=dtype, device=device)
+        _FR13_CONV_WB_STAGING[key] = st
+    return st
+
+
+def conv_wb_staging_preseed(layer_keys, rows_cap: int, c: int,
+                            dtype, device) -> None:
+    """Preseed batched-writeback staging at builder init (outside capture)."""
+    import torch as _t
+    if isinstance(dtype, str):
+        dtype = getattr(_t, dtype)
+    for k in layer_keys:
+        conv_wb_staging_get(str(k), int(rows_cap), int(c), dtype, device)
+    print(
+        f"[FR13_CONV_WB_BATCHED] preseeded {len(layer_keys)} stagings: "
+        f"rows_cap={rows_cap} c={c} dtype={dtype}",
+        flush=True,
+    )
+
+
+def launch_conv_state_writeback_batched(
+    *,
+    source_z: torch.Tensor,
+    state_src: torch.Tensor,
+    dst_rows: torch.Tensor,
+    conv_state: torch.Tensor,
+    tree_n: int,
+    state_len: int,
+    batch: int,
+    src_rows_per_b: int,
+) -> None:
+    """B2c batched form of :func:`launch_conv_state_writeback`.
+
+    Same byte-copy contract per (b, n): identical source elements to
+    identical destinations, no cast; destinations disjoint across (b, n).
+    """
+    if triton is None:
+        raise RuntimeError("triton unavailable; FR13_CONV_WB_BATCHED needs the serving container")
+    if source_z.dtype != conv_state.dtype:
+        raise ValueError(
+            f"FR13_CONV_WB_BATCHED requires matching dtypes, got source "
+            f"{source_z.dtype} vs conv_state {conv_state.dtype}"
+        )
+    if not source_z.is_contiguous():
+        raise ValueError("source_z staging must be contiguous")
+    b = int(batch)
+    n = int(tree_n)
+    L = int(state_len)
+    S = int(src_rows_per_b)
+    C = int(source_z.size(1))
+    if b <= 0 or n <= 0:
+        return
+    if int(source_z.size(0)) < b * S:
+        raise ValueError(
+            f"staging rows {int(source_z.size(0))} < batch*S={b * S}"
+        )
+    if int(state_src.numel()) < n * L:
+        raise ValueError(
+            f"state_src covers {int(state_src.numel())} < tree_n*state_len={n * L}"
+        )
+    if int(dst_rows.numel()) < b * n:
+        raise ValueError(f"dst_rows covers {int(dst_rows.numel())} < batch*tree_n={b * n}")
+    if int(conv_state.size(1)) != C or int(conv_state.size(2)) != L:
+        raise ValueError(
+            f"conv_state dims {tuple(conv_state.shape[1:])} != (C={C}, L={L})"
+        )
+    BLOCK_C = 1024
+    grid = (b * n, triton.cdiv(C, BLOCK_C))
+    _fr13_conv_wb_fused_batched_kernel[grid](
+        source_z,
+        state_src,
+        dst_rows,
+        conv_state,
+        conv_state.stride(0),
+        conv_state.stride(1),
+        conv_state.stride(2),
+        S=S,
+        N=n,
+        C=C,
+        L=L,
+        BLOCK_C=BLOCK_C,
+        num_warps=4,
+    )
 
 
 def launch_conv_state_writeback(

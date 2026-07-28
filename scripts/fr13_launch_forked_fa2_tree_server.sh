@@ -226,8 +226,9 @@ SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens
 # unset -> "SD"), so is_conv_state_dim_first() is False -> the DS num_accepted>1 raise
 # (mamba_utils.py:315) does NOT apply. fp32 SSM-state cache = SGLang default + vLLM #26807
 # lossless lever. mamba_block_size multiple of 8 (causal_conv1d align), <= max-num-batched.
-# Default OFF => APC_FLAGS empty => serve command byte-identical to the locked cat9 path.
-FR13_ENABLE_APC=${FR13_ENABLE_APC:-0}
+# BAKED default-ON 2026-07-27 (cleanup+bake): APC lossless proven (MISS==HIT byte-identical;
+# blocksize fix baked); every S1/A-B gate arm ran APC=1. Export 0 to get the legacy no-cache boot.
+FR13_ENABLE_APC=${FR13_ENABLE_APC:-1}
 MAMBA_BLOCK_SIZE=${MAMBA_BLOCK_SIZE:-1024}
 MAMBA_SSM_CACHE_DTYPE=${MAMBA_SSM_CACHE_DTYPE:-float32}
 # APC LOSSLESS FIX (2026-06-21, proven run_20260621T013300Z): default max-num-batched-tokens to
@@ -553,6 +554,17 @@ PY
 # absent in-container (the patcher reads flags at patch time inside the container).
 # Placed BEFORE the explicit -e list: docker takes the LAST occurrence of a name,
 # so the explicit entries below keep their ${VAR:-default} semantics unchanged.
+# FR13_TORCHPROF: arm vLLM's BUILT-IN torch profiler (with_stack defaults
+# TRUE in-engine) via serve CLI config — engine config, not env, so the
+# worker-env-drop class cannot touch it. Window control = POST /start_profile
+# + /stop_profile (routes attach only when this config is set). DIAGNOSTIC
+# ARM ONLY: in-window numbers carry capture overhead; label everything
+# derived from it diagnostic-only, never compare as clean speed.
+FR13_PROFILER_FLAGS=""
+if [[ "${FR13_TORCHPROF:-0}" == "1" ]]; then
+  FR13_PROFILER_FLAGS="--profiler-config.profiler=torch --profiler-config.torch_profiler_dir=/logs/torchprof"
+fi
+
 FR13_ENV_FORWARD_ARGS=()
 while IFS= read -r _v; do
   case "$(declare -p "$_v" 2>/dev/null)" in declare\ -a*|declare\ -A*) continue;; esac
@@ -634,6 +646,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DEVICE_MULTIDRAFT="${FR13_DEVICE_MULTIDRAFT:-1}" \
   -e FR13_DEVICE_MULTIDRAFT_KERNEL="${FR13_DEVICE_MULTIDRAFT_KERNEL:-/workspace/scripts/fr13_device_multidraft_kernel.py}" \
   -e FR13_DM_DEPTHSYNC="${FR13_DM_DEPTHSYNC:-0}" \
+  -e FR13_TAW="${FR13_TAW:-1}" \
   -e FR13_SAMPLED_REPLAY_BATCHED="${FR13_SAMPLED_REPLAY_BATCHED:-0}" \
   -e FR13_REPLAY_MULTISTREAM="${FR13_REPLAY_MULTISTREAM:-0}" \
   -e FR13_REPLAY_MULTISTREAM_N="${FR13_REPLAY_MULTISTREAM_N:-4}" \
@@ -663,13 +676,25 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_TREE_GDN_GEOM_OVERRIDE="${FR13_TREE_GDN_GEOM_OVERRIDE:-}" \
   -e FR13_APC_COMMIT_TO_RUNNING_ROW="${FR13_APC_COMMIT_TO_RUNNING_ROW:-1}" \
   -e FR13_TREE_RUNROW_INIT="${FR13_TREE_RUNROW_INIT:-1}" \
-  -e FR13_APC_BURN_NODE_BANK="${FR13_APC_BURN_NODE_BANK:-0}" \
-  -e FR13_COMMITTER_GRAPH="${FR13_COMMITTER_GRAPH:-0}" \
+  -e FR13_COMMITTER_GRAPH="${FR13_COMMITTER_GRAPH:-1}" \
   -e FR13_REPLAY_ONLY_GPU_TIMER="${FR13_REPLAY_ONLY_GPU_TIMER:-0}" \
   -e FR13_REPLAY_ONLY_GPU_TIMER_JSON="${FR13_REPLAY_ONLY_GPU_TIMER_JSON:-}" \
   -e FR13_GRAPH_TIMER="${FR13_GRAPH_TIMER:-0}" \
   -e FR13_GRAPH_TIMER_JSON="${FR13_GRAPH_TIMER_JSON:-}" \
   -e FR13_CONV_PREGATHER="${FR13_CONV_PREGATHER:-1}" \
+  -e FR13_FLAGS_INKERNEL="${FR13_FLAGS_INKERNEL:-1}" \
+  -e FR13_CONV_NODEBANK="${FR13_CONV_NODEBANK:-0}" \
+  -e FR13_CONV_WB_BATCHED="${FR13_CONV_WB_BATCHED:-0}" \
+  -e FR13_SPEC_BLOCKS_CAP="${FR13_SPEC_BLOCKS_CAP:-0}" \
+  -e FR13_SUBTREE_PARALLEL="${FR13_SUBTREE_PARALLEL:-1}" \
+  -e FR13_SUBTREE_PARALLEL_SELFCHECK="${FR13_SUBTREE_PARALLEL_SELFCHECK:-0}" \
+  -e FR13_DRAFTER_GRAPH="${FR13_DRAFTER_GRAPH:-1}" \
+  -e FR13_DFWD_SPLIT_NEEDLE="${FR13_DFWD_SPLIT_NEEDLE:-0}" \
+  -e FR13_DVK_DRAFTID_DUMP="${FR13_DVK_DRAFTID_DUMP:-}" \
+  -e FR13_STEP_GRAPH="${FR13_STEP_GRAPH:-0}" \
+  -e FR13_TEMP_LEGACY_DOUBLE="${FR13_TEMP_LEGACY_DOUBLE:-0}" \
+  -e FR13_DRAFT_VOCAB_K="${FR13_DRAFT_VOCAB_K:-65536}" \
+  -e FR13_DRAFT_VOCAB_BLOCKS="${FR13_DRAFT_VOCAB_BLOCKS:-/workspace/scripts/fr13_dvk_subset_blocks.json}" \
   -e FR13_KVREMAP_TIMER="${FR13_KVREMAP_TIMER:-0}" \
   -e FR13_KVREMAP_TIMER_JSON="${FR13_KVREMAP_TIMER_JSON:-}" \
   -e FR13_STATEREMAP_TIMER="${FR13_STATEREMAP_TIMER:-0}" \
@@ -864,7 +889,7 @@ exec \"\${NSYS_PREFIX[@]}\" vllm serve /models/qwen3.6-27b-fp8 --served-model-na
   --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
   --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
   --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \
-  --speculative-config \"\$SPEC_CONFIG\" $APC_FLAGS $CG_FLAGS $KV_FP8_FLAGS $FR13_SERVE_BATCH_FLAGS \
+  --speculative-config \"\$SPEC_CONFIG\" $APC_FLAGS $CG_FLAGS $KV_FP8_FLAGS $FR13_SERVE_BATCH_FLAGS $FR13_PROFILER_FLAGS \
   $(if [[ "${ENFORCE_EAGER:-0}" == "1" ]]; then printf '%s' '--enforce-eager'; fi)"
 
 # DURABLE OOM BACKSTOP: spawn the detached GPU/unified-mem guard for THIS container.
