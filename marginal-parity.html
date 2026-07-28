@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Marginal Parity: A Speculative Tree Kills Its Per-Event Tax - Lumo FlyWheel Vol. VIII</title>
-<meta name="description" content="Illustrated systems paper on where a speculative-decoding deficit actually lives: a branched token-tree whose per-event row tax (~140ms/event) is now statistically dead, leaving a purely fixed per-step deficit of ~85-90ms. Includes a seven-week silent temperature bug, a captured CUDA graph that dropped its sampling constraints, a profiling reversal that dissolved an optimization campaign, and the campaign auditing its own parity claim.">
-<meta property="og:title" content="Marginal Parity: A Speculative Tree Kills Its Per-Event Tax">
-<meta property="og:description" content="The per-event tax is dead, the fixed tax remains — plus two silent bugs and a profiling reversal, on a Gated-DeltaNet hybrid inside vLLM.">
+<title>Every Lever We Pulled: A Speculative-Decoding Speed Campaign in Full - Lumo FlyWheel Vol. VIII</title>
+<meta name="description" content="A complete inventory of a speculative-decoding speed campaign: sixteen attempts to make a branched token-tree decoder faster on a Gated-DeltaNet hybrid, reported with the observation that motivated each, its mechanism, its measured effect, and the gate that decided it. Eight worked, eight did not, and together they moved the deficit from a per-event tax to a fixed per-step one.">
+<meta property="og:title" content="Every Lever We Pulled: A Speculative-Decoding Speed Campaign in Full">
+<meta property="og:description" content="Sixteen speed attempts on a branched speculative decoder — mechanism, measured effect, and deciding evidence for each. Eight worked; eight did not; the failures are reported at the same length.">
 <meta name="author" content="Mark Ma">
 <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#f7f8f7" media="(prefers-color-scheme: light)">
@@ -1234,14 +1234,14 @@
 
   <header class="hero">
     <p class="kicker">Volume VIII / illustrated systems paper</p>
-    <h1>Marginal Parity</h1>
-    <p class="title-subtitle">A Speculative Tree Kills Its Per-Event Tax &mdash; What's Left Is Fixed, Plus Two Silent Bugs and a Profiling Reversal</p>
-    <p class="subhead"><a href="keep-or-replay.html">Vol.&nbsp;VII</a> left the branched token-tree accepting more tokens than native linear decode and losing on throughput anyway, with the deficit charged to the committer. Nine hundred and eighty-four commits later the picture has changed shape entirely. The tree's <strong>per-event</strong> cost &mdash; the tax it paid for every token it committed, once measured at roughly 140&nbsp;ms/event against native's 49 &mdash; is now <strong>statistically indistinguishable from native's</strong>. The entire remaining deficit is a <em>fixed</em> per-step term of about 85&ndash;90&nbsp;ms. That is not a smaller gap so much as a different gap: it no longer scales with how much the tree accepts, which makes the two ways to win arithmetic rather than mysterious. Along the way we found the target logits had been at the wrong temperature for seven weeks, a captured CUDA graph had been silently dropping its sampling constraints, and a profiling run at realistic context length dissolved most of an optimization campaign we had been running for days.</p>
+    <h1>Every Lever We Pulled</h1>
+    <p class="title-subtitle">A Speed Campaign in Full &mdash; Sixteen Attempts to Make a Branched Speculative Tree Faster, What Each One Actually Did, and the Measurement That Decided It</p>
+    <p class="subhead"><a href="keep-or-replay.html">Vol.&nbsp;VII</a> left the branched token-tree accepting more tokens than native linear decode and losing on throughput anyway. This volume is the campaign that followed: nine hundred and eighty-four commits of speed work, reported as an inventory rather than a narrative. Every attempt gets the same four questions &mdash; <strong>what observation motivated it, what mechanism it used, what it measurably did, and what evidence decided it</strong>. Eight levers paid and are baked; eight did not, including one that consumed thirty-five boots and delivered a real engineering milestone with no speed at all. Throughput went from 32.9 to 43.6 tokens per second, and the attempts collectively revealed something none of them was looking for: the deficit had changed shape, from a per-token tax into a fixed per-step one.</p>
     <div class="hero-tldr" aria-label="TLDR and headline result">
-      <p class="tldr-copy"><strong>TL;DR:</strong> the deficit moved from <em>marginal</em> to <em>fixed</em>. A regression over seven tree arms and two native arms puts the tree's per-event slope at +4.6&nbsp;ms/event over native with a confidence interval of [&minus;15,&nbsp;+24] &mdash; the historic ~140&nbsp;ms/event row tax is <strong>confirmed dead</strong> (its own interval excludes 140), killed by the kernel work of the last three volumes plus a subtree-parallel scan. What remains is ~85&ndash;90&nbsp;ms/step that does not scale with acceptance, leaving the tree at ~0.92&times; native at the operating point and two quantified win conditions: cut ~85&nbsp;ms of fixed cost, or push acceptance to &ge;&nbsp;5.0. Throughput on our own board went <strong>32.3&nbsp;&rarr;&nbsp;38.4&nbsp;&rarr;&nbsp;43.6 tok/s</strong>, and one arm touched native's predicted rate &mdash; a result we then audited and <em>downgraded ourselves</em>, because the native comparand is a two-point line with zero degrees of freedom. Two silent bugs surfaced: the spec target logits had run at an effective temperature of 0.36 instead of 0.6 since early June, and a warmup graph capture built with an empty sampling config had baked out the top-k/top-p kernels, so live replays sampled an unfiltered tail. And an nsys capture at deployment showed the GPU already 97% busy &mdash; retiring an entire class of overlap levers we were about to build.</p>
+      <p class="tldr-copy"><strong>TL;DR:</strong> an inventory of a speed campaign. <strong>What paid:</strong> a truncated drafter head (drafter 94.9&nbsp;&rarr;&nbsp;56.3&nbsp;ms/step at unchanged acceptance), whole-spine drafter graph capture (~&minus;40&nbsp;ms), a batched all-layer committer (span 47&nbsp;&rarr;&nbsp;36&nbsp;ms), in-kernel replay staging (32.85&nbsp;&rarr;&nbsp;38.01 tok/s), a sync-free KV remap (committer to 12.33&nbsp;ms/event), a subtree-parallel scan exploiting the independence of disjoint branches (&minus;22.3&nbsp;ms/event against a +32.7&nbsp;ms fixed cost, crossing over well below where we run), and fused-then-batched conv write-back (&minus;20&nbsp;ms/step). <strong>What didn't:</strong> capturing the whole speculative region into one CUDA graph &mdash; thirty-five boots, a genuine milestone, and a speed effect below the detection floor because the prerequisite for capture had already removed the cost it targeted; overlap and async hiding, dead at deployment because the GPU is already 97% busy; single-streaming the subtree scan, refuted by a source read before any build; cutting the deep tail, an anti-lever because the tail carries most of the acceptance; and four more. <strong>What it added up to:</strong> the tree's per-event cost, once ~140&nbsp;ms/event against native's 49, is now statistically indistinguishable from native's, and the whole remaining deficit is fixed &mdash; which is why the accept-beyond-5 work became a direct win condition.</p>
       <div class="hero-result">
-        <span class="hero-number">140&nbsp;&rarr;&nbsp;0</span>
-        <p><strong>the per-event row tax, in ms/event, is gone</strong> &mdash; the tree once paid ~140&nbsp;ms for every event it committed against native's ~49; the measured marginal difference is now +4.6&nbsp;ms/event with a CI of [&minus;15,&nbsp;+24], statistically parity, and the interval excludes the old figure outright. The deficit that remains is <strong>fixed</strong>: ~85&ndash;90&nbsp;ms/step regardless of acceptance, tree at ~0.92&times; native. Board throughput climbed <strong>32.3&nbsp;&rarr;&nbsp;43.6 tok/s</strong> on one consistent basis. Two win conditions, both now arithmetic: cut the fixed term, or reach accept&nbsp;&ge;&nbsp;5.0.</p>
+        <span class="hero-number">8 / 16</span>
+        <p><strong>attempts that paid, out of sixteen tried</strong> &mdash; each gated the same way: an offline byte-identity check, a live in-band garble-free run, and a speed signal. Together they took the board from <strong>32.9 to 43.6 tok/s</strong> and, without being aimed at it, killed the per-event row tax: the tree's marginal cost is now <strong>+4.6&nbsp;ms/event</strong> over native with an interval of [&minus;15,&nbsp;+24] that excludes the historic ~140. The eight that failed are reported at the same length as the eight that worked, because the reason a lever missed is usually more portable than the reason one landed.</p>
       </div>
     </div>
     <div class="byline">
@@ -1253,10 +1253,11 @@
     <div class="paper-nav">
       <a href="#abstract">Abstract</a>
       <a href="#reader-map">Reader map</a>
-      <a href="#shape">The shape of the deficit</a>
-      <a href="#levers">What we built</a>
+      <a href="#method">How we judged</a>
+      <a href="#worked">What worked</a>
+      <a href="#didnt">What didn't</a>
+      <a href="#shape">What it added up to</a>
       <a href="#bugs">Two silent bugs</a>
-      <a href="#measurement">Measuring the measurement</a>
       <a href="#results">Results</a>
       <a href="#museum">Failure museum</a>
       <a href="#reflection">Reflection</a>
@@ -1269,43 +1270,44 @@
   <main>
     <section class="section" id="abstract">
       <h2>Abstract</h2>
-      <p>A speculative decoder's cost has two parts: a <em>fixed</em> per-step term paid whether it accepts one token or ten, and a <em>marginal</em> per-event term paid for each speculative event it commits. Which of the two carries your deficit determines what you should optimize, and until this volume we had the answer wrong in a specific and expensive way. <a href="keep-or-replay.html">Vol.&nbsp;VII</a> charged the tree's throughput loss to the committer &mdash; a per-event replay through forty-eight recurrent layers &mdash; and an earlier measurement had the tree paying roughly 140&nbsp;ms/event against native's 49. This volume reports that the marginal tax is <strong>gone</strong>: fitting step time against acceptance across seven tree arms puts the tree's per-event slope within a few milliseconds of native's, with a confidence interval that excludes the historic figure outright. The kernel work of the last three volumes, plus a subtree-parallel scan that exploits the independence of a tree's disjoint branches, removed it.</p>
-      <p>What remains is a purely <em>fixed</em> deficit of roughly 85&ndash;90&nbsp;ms per step: the drafter that must propose a twenty-one-node tree where native proposes a five-token chain, the committer's staged span, and host publishes. Because it does not scale with acceptance, the win conditions become arithmetic rather than architectural guesswork &mdash; cut about 85&nbsp;ms of fixed cost and the tree reaches native at equal acceptance, or raise acceptance to 5.0 and it wins at the current cost. Measured throughput on one consistent basis climbed from 32.3 to 43.6 tokens per second across the campaign, and a single arm at the operating point matched what our native fit predicts. We report that arm and then <em>downgrade it ourselves</em>: the native comparand is a two-point line with zero degrees of freedom, confounded across batch size, task set, boot date, and prefill fraction, so &ldquo;parity&rdquo; is one consistent reading of the data and not a measured fact. The robust statement is the one we lead with &mdash; marginal parity, fixed deficit, ~0.92&times; native at the operating point.</p>
-      <p>Two silent bugs surfaced and both are worth the telling. The patcher had been injecting a second sampling-constraint application on top of the stock one, so every speculative arm since early June had been drafting and verifying at an <em>effective temperature of 0.36</em> rather than the intended 0.6 &mdash; seven weeks of absolute numbers quietly off-regime, though the comparisons between arms survive. And a CUDA-graph warmup capture had been constructed with a dummy sampling configuration whose top-k and top-p were unset, so the captured graph omitted the constraint kernels entirely and live replays sampled from an unfiltered tail: rare-token salad, acceptance collapsing to ~1.9, four tasks garbled out of four. Finally, a profiling reversal worth internalizing: the ~26&nbsp;ms/event of &ldquo;non-kernel idle&rdquo; we had spent days chasing turned out to be substantially an artifact of profiling at short context, and a capture at the real deployment point showed the GPU already 97% busy &mdash; which retires the entire overlap-lever class we were queuing up to build.</p>
+      <p>This volume is an inventory of a speculative-decoding speed campaign. Over six days and nine hundred and eighty-four commits we tried sixteen distinct ways to make a branched token-tree decoder faster on a Gated-DeltaNet hybrid, and this page reports all sixteen at comparable depth &mdash; the observation that motivated each, the mechanism it used, the effect it measurably had, and the evidence that decided it. Eight are now baked as defaults. Eight are not, and their post-mortems are the more transferable half of the document.</p>
+      <p>The attempts that paid share a pattern: they removed <em>host and launch structure</em> rather than arithmetic. Capturing the whole spine draft into a CUDA graph, drafting from a truncated output head so the drafter reads half the weights while the verifier keeps the full head, committing all forty-eight layers in one batched pass instead of forty-eight calls, staging replay inputs inside the kernel, removing host synchronizations from the KV remap, and batching the convolution write-back across concurrent requests. The one attempt with genuinely new structure is a subtree-parallel scan: a recurrent scan is sequential along a path, but a <em>tree</em> is only sequential along each path, so its disjoint branches can be scanned concurrently &mdash; worth &minus;22.3&nbsp;ms per event against a +32.7&nbsp;ms fixed topology cost, crossing over far below our operating point.</p>
+      <p>The attempts that failed failed in instructive ways. The largest &mdash; capturing the entire speculative region into a single CUDA graph &mdash; consumed thirty-five boots, produced a real engineering milestone, and moved throughput by less than the detection floor, because making the capture legal had already required hoisting out the host cost the capture was supposed to eliminate. An entire class of overlap and async-hiding levers turned out to be dead at the deployment point, where the GPU is already 97% busy and most steps mix prefill with decode. One fix was refuted by reading the source before anything was built. One proposed saving would have cut the deep suffix tail, which turned out to be carrying most of the acceptance it was competing with.</p>
+      <p>Collectively the campaign also produced a result none of its attempts was aiming at. Fitting step time against speculative events per step &mdash; <code>step = F + m&nbsp;&times;&nbsp;eps</code> &mdash; across seven tree arms puts the tree's marginal per-event cost within a few milliseconds of native's, with an interval that excludes the ~140&nbsp;ms/event row tax measured earlier in the series. The deficit has moved from the slope into the intercept: roughly 85&ndash;90&nbsp;ms per step that does not scale with acceptance. That reframing is worth more than any single lever, because a fixed cost is diluted by a better speculator where a marginal one is aggravated by it &mdash; which turns the accept-beyond-5 work from a nice-to-have into a direct win condition. Two silent bugs and three measurement reversals, all documented here, are the reason it took this long to be able to say so.</p>
 
-      <div class="definition-box" aria-label="The governing distinction">
-        <p><strong>The governing distinction (fixed vs marginal):</strong> model step time as <code>step = F + m &times; eps</code>, where <em>eps</em> is speculative events per step and <em>m</em> is the marginal cost of an event. A deficit in <em>m</em> scales with how well your speculator works &mdash; the better it accepts, the more it pays, and no amount of acceptance saves you. A deficit in <em>F</em> is a constant toll that acceptance <em>dilutes</em>: raise accept per event and the fixed cost is amortized over more committed tokens. Discovering that our deficit had moved from <em>m</em> to <em>F</em> is the whole result, because it converts &ldquo;the tree is structurally slower&rdquo; into two arithmetic targets &mdash; and it makes the accept-beyond-5 work a direct win condition rather than a nice-to-have.</p>
+      <div class="definition-box" aria-label="How to read an attempt">
+        <p><strong>How every attempt in this paper is reported:</strong> <em>observation</em> &mdash; the measurement that suggested there was time to recover; <em>mechanism</em> &mdash; what the change actually does to the work; <em>effect</em> &mdash; the measured delta, in the units it was measured in; <em>evidence</em> &mdash; the gate that decided it, and its basis. Nothing here ships on a speed number alone: every state-touching lever must first be <em>byte-identical</em> to the path it replaces on an offline gate, then land inside the campaign's live pass/fail band garble-free, and only then is its speed signal admissible. Several attempts below produced a speed number and were still rejected, and one produced no speed number and was kept.</p>
       </div>
 
       <h3>Names in this paper</h3>
       <div class="glossary-strip" aria-label="Names in this paper">
         <div><dfn>native (MTP-5)</dfn><span>stock vLLM linear multi-token-prediction decode, a 5-token chain; the throughput bar.</span></div>
-        <div><dfn>tree (tail6)</dfn><span>the branched 21-node token-tree verifier with a deep Arctic suffix tail past depth-5, on TREE_ATTN.</span></div>
-        <div><dfn>eps</dfn><span>speculative events per step &mdash; the regression's x-axis. Higher eps means more speculation per physical step.</span></div>
-        <div><dfn>F (fixed)</dfn><span>the per-step intercept: drafter, committer span, host publishes &mdash; paid regardless of acceptance.</span></div>
-        <div><dfn>m (marginal)</dfn><span>the per-event slope: what one more speculative event costs. This is where the tree's tax used to live.</span></div>
-        <div><dfn>row tax</dfn><span>the historic ~140&nbsp;ms/event penalty the tree paid over native &mdash; the thing this volume reports dead.</span></div>
-        <div><dfn>subtree-parallel</dfn><span>partitioning the tree's nodes at runtime into a shared prefix plus independent subtrees, scanned concurrently.</span></div>
-        <div><dfn>in-span idle</dfn><span>non-kernel time measured inside the verify span &mdash; chased for days, then largely explained as a short-context artifact.</span></div>
-        <div><dfn>double-temp</dfn><span>the bug: sampling constraints applied twice, giving an effective temperature of 0.36 instead of 0.6.</span></div>
-        <div><dfn>constraint omission</dfn><span>the bug: a warmup capture with unset top-k/top-p baked a graph with no constraint kernels, so replays sampled the raw tail.</span></div>
-        <div><dfn>band</dfn><span>the pass/fail envelope a run must sit in to be trusted &mdash; the campaign's own regression gate.</span></div>
-        <div><dfn>measured_tps_fullstep_wall</dfn><span>the one consistent throughput basis on our board; always quoted with eps and prefill fraction.</span></div>
+        <div><dfn>tree (tail6)</dfn><span>the branched 21-node token-tree verifier with a deep retrieved suffix tail past depth-5.</span></div>
+        <div><dfn>eps</dfn><span>speculative events per step. Throughput depends on it, so every number here is quoted with it.</span></div>
+        <div><dfn>F / m</dfn><span>the fixed per-step and marginal per-event terms of <code>step = F + m &times; eps</code>.</span></div>
+        <div><dfn>row tax</dfn><span>the historic ~140&nbsp;ms/event penalty the tree paid over native &mdash; the thing this campaign's levers collectively killed.</span></div>
+        <div><dfn>drafter / verify / committer</dfn><span>the three spans of a speculative step: propose, score, write back the accepted state.</span></div>
+        <div><dfn>byte gate</dfn><span>an offline check that a lever's committed state is bit-identical to the path it replaces. The first gate every lever must pass.</span></div>
+        <div><dfn>band</dfn><span>the live pass/fail envelope a run must land in to be trusted at all &mdash; correctness before speed.</span></div>
+        <div><dfn>subtree-parallel</dfn><span>partitioning the tree into a shared prefix plus independent subtrees, scanned concurrently.</span></div>
+        <div><dfn>step-graph (=2/=3)</dfn><span>capturing the whole speculative region into one CUDA graph &mdash; the campaign's largest attempt, and its largest miss.</span></div>
+        <div><dfn>detection floor</dfn><span>the smallest effect an instrument can honestly resolve. Several attempts landed under it, which is a verdict, not a result.</span></div>
+        <div><dfn>measured_tps_fullstep_wall</dfn><span>the one throughput basis on our board; always quoted with eps and prefill fraction.</span></div>
       </div>
 
       <div class="abstract-grid">
         <div class="panel">
           <h2>Contribution</h2>
-          <p>One structural result and a great deal of measurement discipline. The result is that a branched speculative verifier's per-event cost on a recurrent hybrid can be brought to parity with a linear chain's &mdash; the row tax is not inherent to branching &mdash; which relocates the entire deficit into a fixed term and makes the remaining problem arithmetic. The discipline is the rest: a per-step regression that retired our own pooled fit, an instrument that had to be debugged before it could measure, a profiling reversal that killed a lever class, and a self-audit that downgraded our most quotable number.</p>
-          <p>This page is the sequel to <a href="keep-or-replay.html">Vol.&nbsp;VII</a> and is self-contained. Like the prior volumes it is a research report rather than an announcement: it keeps the <a href="#levers">lever ledger</a> with what each bought, a full <a href="#museum">failure museum</a> of refuted hypotheses and observer effects, and a <a href="#limitations">limits</a> section that states plainly which of our own headlines will not survive contact with a proper native control.</p>
+          <p>A complete, comparably-reported speed campaign: sixteen attempts on a branched speculative decoder, with mechanism, measured effect, and deciding evidence for each &mdash; failures at the same length as successes. Plus the structural finding they collectively produced, that the decoder's deficit lives in a fixed per-step term rather than a per-event one, which changes what is worth optimizing next.</p>
+          <p>This page is the sequel to <a href="keep-or-replay.html">Vol.&nbsp;VII</a> and is self-contained. It is written as a ledger on purpose. Most published performance work reports the levers that worked, which makes the field's failure knowledge private; the eight misses here &mdash; including a thirty-five-boot capture effort and an entire lever class that only exists at batch one &mdash; are the part we would most want to have read before starting.</p>
         </div>
         <aside class="panel">
           <h2>Status</h2>
           <div class="claim-list">
-            <div class="claim"><span class="state pass">ROW TAX DEAD</span><p>Marginal cost now +4.6&nbsp;ms/event over native, CI [&minus;15,&nbsp;+24] &mdash; statistically parity, and the interval excludes the historic ~140&nbsp;ms/event outright.</p></div>
-            <div class="claim"><span class="state pass">THROUGHPUT</span><p>Board climbed 32.3&nbsp;&rarr;&nbsp;38.4&nbsp;&rarr;&nbsp;43.6 tok/s on one consistent basis; best arm accept 4.749 at eps 2.701, garble-free.</p></div>
-            <div class="claim"><span class="state pass">BUGS FOUND</span><p>Seven weeks of spec arms at effective temp 0.36 (fixed); a captured graph silently missing its top-k/top-p kernels (root-caused and fixed).</p></div>
-            <div class="claim"><span class="state warn">STILL BEHIND</span><p>~85&ndash;90&nbsp;ms/step fixed deficit remains; tree ~0.92&times; native at the operating point. The single-arm &ldquo;parity&rdquo; reading is downgraded by our own audit.</p></div>
+            <div class="claim"><span class="state pass">8 LEVERS BAKED</span><p>Drafter head truncation, drafter graph capture, batched committer, ring staging, sync-free remap, subtree-parallel scan, conv write-back, gather recomposition. Board 32.9&nbsp;&rarr;&nbsp;43.6 tok/s.</p></div>
+            <div class="claim"><span class="state warn">8 ATTEMPTS MISSED</span><p>Step-graph capture (below detection floor), overlap class (dead at deployment), single-streaming (refuted by source read), tail-cut (anti-lever), and four more &mdash; all documented with mechanism.</p></div>
+            <div class="claim"><span class="state pass">STRUCTURAL RESULT</span><p>Per-event cost now +4.6&nbsp;ms/event over native, CI [&minus;15,&nbsp;+24], excluding the historic ~140. Deficit is fixed (~85&ndash;90&nbsp;ms/step), so acceptance now dilutes it.</p></div>
+            <div class="claim"><span class="state warn">STILL BEHIND</span><p>Tree ~0.92&times; native at the operating point. One arm touched the native fit's predicted rate; our own audit downgrades that reading.</p></div>
           </div>
         </aside>
       </div>
@@ -1313,14 +1315,13 @@
       <div class="source-exhibit" aria-label="Falsification checks">
         <div class="source-head">
           <strong>What would falsify this?</strong>
-          <span>Skeptic checks before trusting the headline</span>
+          <span>Skeptic checks before trusting the ledger</span>
         </div>
         <div class="grid">
+          <div class="box bad"><span class="tag">Lever effects</span><p>A baked lever's measured delta not reproducing on a fresh boot at matched eps &mdash; most were qualified on a single arm, and cross-boot phase is a live confound in this workload.</p></div>
           <div class="box bad"><span class="tag">Row tax</span><p>A properly-powered native control &mdash; more than two points, matched batch and task set &mdash; showing the tree's per-event slope materially above native's after all.</p></div>
-          <div class="box bad"><span class="tag">Fixed vs marginal</span><p>Step time failing to be linear in eps, or the intercept absorbing per-event work through a correlated confound (prefill fraction is the obvious candidate).</p></div>
-          <div class="box bad"><span class="tag">Throughput</span><p>The 43.6 arm not reproducing on a fresh boot, or the board's gains tracing to workload phase rather than the baked levers.</p></div>
-          <div class="box bad"><span class="tag">Bug impact</span><p>The temperature fix moving arm-to-arm <em>comparisons</em>, not just the absolute regime &mdash; which would invalidate the campaign's A/Bs, not merely re-base them.</p></div>
-          <div class="box bad"><span class="tag">Idle</span><p>The in-span idle reappearing at real context on a fresh capture &mdash; which would revive the lever class the deployment profile retired.</p></div>
+          <div class="box bad"><span class="tag">Attribution</span><p>A lever's gain tracing to workload phase or acceptance drift rather than the mechanism claimed, which the eps-artifact episode shows is easy to do.</p></div>
+          <div class="box bad"><span class="tag">Dead classes</span><p>The overlap levers paying at some concurrency we did not profile, or the in-span idle reappearing at real context on a fresh capture.</p></div>
         </div>
       </div>
     </section>
@@ -1328,9 +1329,9 @@
     <section class="section" id="reader-map">
       <h2>Five-Minute Reader Map</h2>
       <aside class="sidenote">
-        <p><strong>Read path:</strong> the shape of the deficit first &mdash; it reframes everything &mdash; then what we built, then the two bugs, then the measurement story and the results. The museum and reflection are the retrospective.</p>
+        <p><strong>Read path:</strong> the gate discipline first, so the verdicts mean something; then the two ledgers &mdash; what worked, what didn't; then what the attempts collectively revealed. Bugs, reversals, and the museum are why several verdicts took so long.</p>
       </aside>
-      <p>The shortest version: a speculative decoder pays a fixed cost per step and a marginal cost per accepted event. Our tree used to pay a large marginal penalty, which meant accepting more tokens made it <em>worse</em> relative to native. That penalty is now gone, and the whole remaining deficit is a fixed per-step toll &mdash; which acceptance dilutes rather than aggravates. Two silent bugs and one profiling reversal are the reason it took nine hundred commits to be able to say so with a straight face.</p>
+      <p>The shortest version: sixteen attempts, eight paid. The ones that paid removed host and launch structure &mdash; graph capture, batching, in-kernel staging, and one genuinely new idea, scanning a tree's independent branches concurrently. The ones that missed mostly targeted costs that had already moved, or gaps that only exist at batch one. Together they killed the tree's per-token penalty, which relocated the whole deficit into a fixed per-step cost that acceptance can dilute.</p>
 
       <div class="source-exhibit" aria-label="Five-minute reading path">
         <div class="source-head">
@@ -1338,21 +1339,209 @@
           <span>The blog path before the full paper path</span>
         </div>
         <div class="grid">
-          <div class="box good"><span class="tag">The shape</span><p>step = F + m&times;eps. The tree's marginal <em>m</em> reached native's (+4.6&nbsp;ms/event, CI spans zero); the ~140&nbsp;ms/event row tax is dead. The deficit is now all in fixed <em>F</em>.</p></div>
-          <div class="box good"><span class="tag">What we built</span><p>Eight levers baked as defaults &mdash; subtree-parallel scan, drafter and committer graph capture, gather and conv batching &mdash; taking the board from 32.3 to 43.6 tok/s.</p></div>
-          <div class="box bad"><span class="tag">Two bugs</span><p>Seven weeks at effective temp 0.36 instead of 0.6; and a captured graph built from an empty sampling config that dropped the top-k/top-p kernels, garbling live replays.</p></div>
-          <div class="box warn"><span class="tag">The reversal</span><p>The ~26&nbsp;ms/event &ldquo;idle&rdquo; we chased for days was largely a short-context artifact, and at deployment the GPU is 97% busy &mdash; retiring the overlap-lever class outright.</p></div>
-          <div class="box info"><span class="tag">Honest close</span><p>~85&ndash;90&nbsp;ms/step fixed deficit remains, tree ~0.92&times; native. Two arithmetic win conditions; our own best number audited and downgraded.</p></div>
+          <div class="box info"><span class="tag">The gates</span><p>Byte-identity offline, then an in-band garble-free live run, then a speed signal. Speed numbers from an arm that failed correctness are inadmissible &mdash; and one arm's numbers were struck for exactly that reason.</p></div>
+          <div class="box good"><span class="tag">What worked</span><p>Truncated draft head, drafter graph capture, batched committer, ring staging, sync-free remap, subtree-parallel scan, conv write-back batching. Mostly host and launch structure, not arithmetic.</p></div>
+          <div class="box bad"><span class="tag">What didn't</span><p>Whole-region graph capture (35 boots, below the detection floor), the overlap class (GPU already 97% busy), single-streaming (refuted by reading the code), tail-cut (the tail carries the accept).</p></div>
+          <div class="box good"><span class="tag">The sum</span><p>Per-event tax dead: +4.6&nbsp;ms/event over native, interval excludes ~140. Deficit now fixed at ~85&ndash;90&nbsp;ms/step, which acceptance dilutes.</p></div>
+          <div class="box warn"><span class="tag">Why it took 984 commits</span><p>Two silent bugs (a squared temperature; a graph missing its sampling constraints) and three measurement reversals that each dissolved work in progress.</p></div>
         </div>
       </div>
     </section>
+    <section class="section" id="method">
+      <h2>How We Judged an Attempt</h2>
+      <aside class="sidenote">
+        <p><strong>The order matters:</strong> correctness gates run before speed gates, and a speed number from an arm that failed correctness is not a number at all. Two arms in this campaign produced attractive speed figures that were struck from the record for exactly that reason.</p>
+      </aside>
+      <p>Every verdict in the two ledgers below rests on the same pipeline, and it is worth stating before the results because several attempts were decided by the pipeline rather than by their own merits.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The gate pipeline. An attempt must clear each stage before the next one's numbers are admissible.</caption>
+          <thead><tr><th>#</th><th>Gate</th><th>What it establishes</th><th>Failure means</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>Offline byte gate</td><td>The committed state produced by the lever is <em>bit-identical</em> to the path it replaces, across varying accepted lengths and batch sizes.</td><td>Rejected outright &mdash; this campaign is exact-math only. A lever that changes outputs is a different experiment.</td></tr>
+            <tr><td>2</td><td>Live band gate</td><td>A real agentic run lands inside the campaign's standing pass/fail envelope, garble-free, with engagement needles proving the lever actually fired.</td><td>Speed numbers from the arm are inadmissible, whatever they say.</td></tr>
+            <tr><td>3</td><td>Speed signal</td><td>A measured delta, quoted on one basis &mdash; full-step wall clock &mdash; alongside its acceptance rate and prefill fraction, since both move it.</td><td>Below the detection floor is a verdict of &ldquo;no effect,&rdquo; not a small win.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Why acceptance is quoted next to every speed number</h3>
+      <p>Throughput here is committed tokens over wall time, and both terms move with how much the speculator accepts. A run with higher acceptance takes longer per step <em>and</em> produces more tokens per step, so comparing bare tokens-per-second across two arms that accepted differently compares their workloads, not their code. This campaign learned that the expensive way: a convincing ranking of CUDA-graph modes turned out to be one regression line seen at four different acceptance rates, and it had been justifying work that moved nothing. The rule that came out of it &mdash; never quote throughput without its acceptance rate and prefill fraction &mdash; is why every row in the ledgers below carries them.</p>
+
+      <h3>The three instruments</h3>
+      <p>Three measurements decide most of what follows. <strong>Span timers</strong> bracket the three phases of a speculative step &mdash; drafter, verify forward, committer &mdash; on the GPU, which localizes a cost to a phase. <strong>A per-step regression</strong> records every individual step with its own draft count, then fits <code>step = F + m&nbsp;&times;&nbsp;eps</code> to separate what a step costs to exist from what each additional speculative event costs; this is the instrument that produced the campaign's structural result, and it replaced an arm-level fit that was wrong in both directions. <strong>Kernel profiles</strong> attribute time inside a phase to specific kernels, and are the only instrument that can distinguish real work from a gap.</p>
+      <p>Two properties of these instruments turned out to matter as much as their readings. They must be placed on the code path the deployment actually takes &mdash; one committer timer in this series was wrapping a function the live path never called &mdash; and they must not perturb what they measure: a diagnostic that copied per-row data to the host inside the span it was timing inflated that span from 42 to 106 milliseconds, and its arm's speed numbers were struck.</p>
+    </section>
+    <section class="section" id="worked">
+      <h2>What Worked</h2>
+      <aside class="sidenote">
+        <p><strong>The pattern:</strong> seven of the eight removed <em>host and launch structure</em> &mdash; graph capture, batching, in-kernel staging, removing synchronizations. Only one changed the shape of the computation itself.</p>
+        <p><strong>What none of them did:</strong> change any arithmetic. Every lever here is byte-identical to the path it replaced, which is why they compose.</p>
+      </aside>
+      <p>Eight attempts paid and are baked as launcher defaults. The summary table first, then the three worth explaining in depth.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The attempts that paid. Effects are measured, in the units they were measured in; every one is byte-identical to the path it replaces.</caption>
+          <thead><tr><th>Attempt</th><th>Observation that motivated it</th><th>Mechanism</th><th>Measured effect</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Truncated draft head</strong></td>
+              <td>Drafter GPU time was dominated by reading the full-vocabulary output projection, once per drafted level.</td>
+              <td>Draft from a gathered 64k-entry head; the <em>verifier</em> keeps the full head, so the committed distribution is untouched.</td>
+              <td class="num">drafter 94.9&nbsp;&rarr;&nbsp;56.3&nbsp;ms/step</td>
+            </tr>
+            <tr>
+              <td><strong>Drafter graph capture</strong></td>
+              <td>Span timers put the drafter at ~93&ndash;95&nbsp;ms/step, of which a decomposition attributed the large majority to host launch glue, not compute.</td>
+              <td>Capture the whole spine draft as a CUDA graph per batch size; host branches become captured variants or device-side selects.</td>
+              <td class="num">~&minus;40&nbsp;ms/step</td>
+            </tr>
+            <tr>
+              <td><strong>Batched all-layer committer</strong></td>
+              <td>The committer was issuing one call per recurrent layer &mdash; forty-eight per commit.</td>
+              <td>Commit every layer in a single batched pass.</td>
+              <td class="num">committer span 47&nbsp;&rarr;&nbsp;36&nbsp;ms, verify unchanged</td>
+            </tr>
+            <tr>
+              <td><strong>In-kernel replay staging</strong></td>
+              <td>The committer's replay inputs were being assembled on the host each step.</td>
+              <td>Stage the replay ring inside the kernel instead.</td>
+              <td class="num">32.85&nbsp;&rarr;&nbsp;38.01 tok/s; accept 4.520</td>
+            </tr>
+            <tr>
+              <td><strong>Sync-free KV remap</strong></td>
+              <td>The Vol.&nbsp;V re-linearizer carried host synchronizations on the critical path.</td>
+              <td>Remove every host sync from the remap.</td>
+              <td class="num">committer 12.33&nbsp;ms/event; 0 errors</td>
+            </tr>
+            <tr>
+              <td><strong>Subtree-parallel scan</strong></td>
+              <td>The scan walked all 22 tree nodes serially inside every program, though disjoint branches share no data dependence.</td>
+              <td>Partition nodes at runtime from the parent array into a shared prefix plus K independent subtrees on an added program axis.</td>
+              <td class="num">&minus;22.3&nbsp;ms/event against +32.7&nbsp;ms fixed; +4.7% at B=1</td>
+            </tr>
+            <tr>
+              <td><strong>Conv write-back, fused then batched</strong></td>
+              <td>Convolution state write-back ran per request, per step.</td>
+              <td>Fuse the write-back, then batch it across concurrent requests.</td>
+              <td class="num">&minus;6.7&nbsp;ms fixed, &minus;2.4&nbsp;ms/event; ~&minus;20&nbsp;ms/step</td>
+            </tr>
+            <tr>
+              <td><strong>Gather recomposition</strong></td>
+              <td>Per-node gathers and branch-flag handling were making host round-trips.</td>
+              <td>Recompose parent and conv gathers; move branch flags into the kernel.</td>
+              <td class="num">byte-identical; selfcheck-gated</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The truncated draft head &mdash; and why it had been refuted before</h3>
+      <p><strong>Observation.</strong> The drafter's GPU time was dominated by weight traffic, and its largest single read is the output projection over the full vocabulary &mdash; paid once per drafted level.</p>
+      <p><strong>Mechanism.</strong> Draft from a gathered subset of the output head &mdash; 64k entries rather than the full vocabulary &mdash; so the drafter reads roughly half the bytes. The verifier keeps the full head, so every committed token is still scored against the true distribution and the result is lossless by construction. A draft token the truncated head cannot propose is simply a draft that does not get proposed; it is never a token that gets committed wrongly.</p>
+      <p><strong>Effect and evidence.</strong> Drafter GPU time fell from <strong>94.9 to 56.3&nbsp;ms/step</strong>. The quality question &mdash; does a smaller draft head propose worse drafts? &mdash; was settled with a matched control on the same workload: acceptance was <strong>5.552</strong> with the truncated head against <strong>5.556</strong> with the full head. The reason it is free is measurable: the 64k gather covers <strong>97.1%</strong> of the draft ids actually used, at half the read.</p>
+      <p><strong>Why this is the campaign's most instructive success.</strong> <a href="keep-or-replay.html">Vol.&nbsp;VII</a> reported this exact lever <em>refuted</em>. It had been ranked the top drafter lever on a bytes argument, then killed by measurement: the drafter was host-orchestration-bound, so halving its largest weight read bought about two percent of a wall dominated by launch glue. That verdict was correct at the time and stopped being correct the moment drafter graph capture removed the host cost. With the glue gone, what remained was actual weight traffic, and the original arithmetic became true. A refutation carries an implicit clause &mdash; <em>while this other thing dominates</em> &mdash; and because we had recorded the reasoning alongside the verdict, revisiting it was cheap.</p>
+
+      <h3>The subtree-parallel scan &mdash; the one structural change</h3>
+      <p><strong>Observation.</strong> The recurrent scan kernel processed all twenty-two tree nodes serially inside every program. Its only parallel axes were over heads and value tiles; the node axis was sequential, because a recurrent scan is inherently sequential.</p>
+      <p><strong>Mechanism.</strong> A scan is sequential <em>along a path</em>. A tree is only sequential along each path &mdash; after the shared prefix, its disjoint subtrees have no data dependence on one another whatsoever. So partition the nodes at runtime from the parent array into a prefix plus K independent subtrees, scan the prefix in one phase, then scan the subtrees concurrently on an added program axis, each still serial internally. The critical path drops from the node count to roughly the prefix plus the deepest subtree, and the saving <em>grows</em> with wider trees &mdash; which is the direction the acceptance work pushes.</p>
+      <p><strong>Effect and evidence.</strong> Byte-exactness was the first question, and it has a clean argument: per-node arithmetic is unchanged and the order within each path is unchanged, so the floating-point chains are identical. That was confirmed on a self-check gate, then in a capture arm. Speed measured +4.7% at batch one. The more interesting number came later, from a window-matched live measurement on real tasks: the decomposition itself is worth <strong>&minus;22.3&nbsp;ms per event</strong>, while the captured side-stream topology it requires carries a <strong>+32.7&nbsp;ms fixed</strong> cost per step. Those cross over at about 1.47 events per step &mdash; well below where we operate &mdash; so the lever is a clear net win at the operating point, and the measurement's explicit conclusion was to leave it baked.</p>
+      <p>That fixed component prompted its own follow-up attempt, which failed instructively and appears in the next section.</p>
+
+      <h3>The committer sequence &mdash; three levers on one span</h3>
+      <p><strong>Observation.</strong> <a href="keep-or-replay.html">Vol.&nbsp;VII</a> localized most of the tree's deficit to the committer, and left it at roughly 17&nbsp;ms/event after dropping a redundant scratch-zeroing. Span timers showed the remainder was structure, not arithmetic: forty-eight per-layer calls, host-side assembly of the replay inputs, and host synchronizations inside the re-linearizer.</p>
+      <p><strong>Mechanism and effect, in sequence.</strong> Batching all forty-eight layers into one pass took the span from <strong>47 to 36&nbsp;ms</strong> with the verify forward unchanged &mdash; the control that matters, since a lever that moves an untouched span is measuring phase, not itself. Staging the replay ring inside the kernel instead of assembling it host-side took the board from <strong>32.85 to 38.01 tok/s</strong> at accept 4.520. Removing the host synchronizations from the KV remap brought the committer to <strong>12.33&nbsp;ms/event</strong> with no errors.</p>
+      <p><strong>Evidence.</strong> Each passed an offline byte gate before any live run &mdash; the batched committer's gate compared committed state across varying accepted lengths and batch sizes and returned all-identical &mdash; then a live agentic gate, in-band and garble-free. The committer that Vol.&nbsp;VII called the dominant term is no longer the dominant term.</p>
+    </section>
+    <section class="section" id="didnt">
+      <h2>What Didn't</h2>
+      <aside class="sidenote">
+        <p><strong>Reported at the same length as the successes,</strong> because the reason a lever misses is usually more portable than the reason one lands. Four of these eight were killed by a measurement rather than by an implementation, and one was killed by reading the source before anything was built.</p>
+      </aside>
+      <p>Eight attempts did not pay. Two were designed and refuted before implementation, three were built and measured to no effect, two were killed by the regime they would have shipped into, and one turned out to be actively harmful.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The attempts that missed, with what decided each.</caption>
+          <thead><tr><th>Attempt</th><th>Why it looked right</th><th>What killed it</th><th>Verdict basis</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Whole-region graph capture</strong></td>
+              <td>The speculative region &mdash; walk, products, conv, committer &mdash; ran as many small launches with visible gaps between them.</td>
+              <td>Making the capture legal required hoisting the host cost out first; only launch gaps remained, and those are below the detection floor.</td>
+              <td class="num">35 boots; 7-arm pooled regression, all modes within &plusmn;1.6&nbsp;ms of one line</td>
+            </tr>
+            <tr>
+              <td><strong>Overlap / async hiding</strong></td>
+              <td>Batch-one profiles showed real gaps to hide host work behind.</td>
+              <td>At the deployment point the GPU is already 97% busy and most steps mix prefill with decode. There is no idle to overlap into.</td>
+              <td class="num">nsys capture at B=4 deployment</td>
+            </tr>
+            <tr>
+              <td><strong>Single-streaming the subtree scan</strong></td>
+              <td>The subtree lever carried a +32.7&nbsp;ms fixed side-stream cost; moving the kernels back to one stream should remove it.</td>
+              <td>A source read: the launch was <em>already</em> single-stream. The 32.7&nbsp;ms is the per-level launch structure itself.</td>
+              <td class="num">source read, before any build</td>
+            </tr>
+            <tr>
+              <td><strong>Cutting the deep tail</strong></td>
+              <td>The deep suffix tail costs drafter time and its per-position acceptance is low.</td>
+              <td>An anti-lever &mdash; the tail carries 0.85&ndash;1.31 of the acceptance. Removing it costs more throughput than it saves.</td>
+              <td class="num">per-position acceptance attribution</td>
+            </tr>
+            <tr>
+              <td><strong>Attention row reduction</strong></td>
+              <td>Attention rows carried a measurable per-event cost that scaled with tree width.</td>
+              <td>Likely a structural floor: the tile already covers all 22 rows in one key-value pass, with the GEMM delta proven ~0. No lossless design exists under the no-reshape constraint.</td>
+              <td class="num">tile analysis + GEMM delta measurement</td>
+            </tr>
+            <tr>
+              <td><strong>Hierarchical-commit compatibility</strong></td>
+              <td>A banked &minus;9.6&nbsp;ms/step sitting idle, blocked only on a compatibility fix with the gather lever.</td>
+              <td>Never reconciled with the gather recomposition that shipped instead; the mechanism was hard-disabled and deleted in cleanup.</td>
+              <td class="num">superseded by the shipped gather path</td>
+            </tr>
+            <tr>
+              <td><strong>fp8 draft slice</strong></td>
+              <td>The truncated draft head halved the drafter's read; an fp8 slice would halve it again.</td>
+              <td>Parked by policy, not by measurement &mdash; it touches the draft distribution, and this campaign is exact-math only.</td>
+              <td class="num">scope decision</td>
+            </tr>
+            <tr>
+              <td><strong>Effective-batch config probes</strong></td>
+              <td>Nominal batch four runs at an effective concurrency near 1.3, so every additional event per step multiplies throughput at fixed wall time.</td>
+              <td>Tried once against scheduler knobs with no durable win; deferred until the per-step tax is closer to the floor, where sharing a weight read pays more.</td>
+              <td class="num">config-space probe, inconclusive</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The big one: capturing the whole speculative region</h3>
+      <p>This attempt is worth its own account, because it consumed more of the campaign than any success in the previous section and because its failure mode is one we would not have predicted.</p>
+      <p><strong>Observation.</strong> The speculative region &mdash; the rejection walk, the product assembly, the convolution update, the committer &mdash; executed as a long sequence of small kernel launches with host work interleaved. Capturing the whole region into a single CUDA graph would eliminate the per-launch overhead and the interleaved host work in one move. The arithmetic was attractive and the design was sound.</p>
+      <p><strong>What it took.</strong> Thirty-five boots. The region had to be made capture-legal first, which meant hoisting host-dependent work out of it, replacing data-dependent control flow with device-side selects, and building a warmup capture for every key shape. Along the way it produced a genuine correctness milestone &mdash; the whole region captured, byte-identical, with the committer running in-graph &mdash; and it produced both of the silent bugs documented in the <a href="#bugs">next section</a>, since the warmup capture is exactly where the missing sampling constraints came from.</p>
+      <p><strong>What it delivered on speed: nothing measurable.</strong> The honest instrument was a pooled regression across seven arms spanning every graph mode. All four modes land on <em>one line</em> &mdash; <code>step = 235.5 + 49.2&nbsp;&times;&nbsp;eps</code> &mdash; with mode residuals inside &plusmn;1.6&nbsp;ms. There is no detectable mode difference at all.</p>
+      <p><strong>Why.</strong> The prerequisite ate the prize. To make the region capturable we had to hoist its host cost out first &mdash; and that host cost <em>was</em> the thing the capture was meant to eliminate. What remained inside the captured region was launch gaps, and launch gaps in this region are smaller than the instrument can resolve. The lever's projection had been computed against a cost that its own enabling work removed.</p>
+      <p><strong>The near-miss worth recording.</strong> Before the pooled regression, arm-level numbers appeared to show a clean ranking of the modes &mdash; a &ldquo;slope ladder&rdquo; in which one mode looked 21% worse per event than another. It was an artifact: throughput-per-event is not normalized by acceptance, because step time itself grows with acceptance, and the arms had been running at different acceptance rates. Acceptance alone reproduces every arm's apparent slope. We had been about to attribute a real-looking 21% difference to a code path that does not cause it. The correction is recorded in the campaign log against our own earlier claim.</p>
+
+      <h3>The lever class that only exists at batch one</h3>
+      <p><strong>Observation.</strong> Profiling a single request showed gaps &mdash; time when the GPU had nothing queued while the host prepared the next piece of work. Overlap is the standard answer, and a queue of designs existed to hide host work behind GPU work and to overlap the committer under the drafter.</p>
+      <p><strong>What killed it.</strong> A profile at the actual deployment configuration &mdash; four concurrent requests, the shape we ship &mdash; showed the <strong>GPU already 97% busy</strong>, with the remaining idle segmented across steps rather than pooled into hideable gaps. There is nothing to overlap into. The same capture showed why the batch-one intuition misleads: most steps at deployment are <em>mixed</em>, with prefill and decode sharing weight passes, so a pure-decode model describes only the decode share of the wall.</p>
+      <p><strong>The rule we adopted.</strong> Design at batch one, where mechanisms are legible and a single request's structure can be reasoned about &mdash; but <em>price</em> every lever by its share at the deployment point before building it. A millisecond saved in a gap that does not exist at concurrency is a millisecond of nothing, and we had a queue of such levers ready to build.</p>
+
+      <h3>Two attempts killed before they were built</h3>
+      <p>The cheapest two verdicts in the campaign are worth noting for their cost. <strong>Single-streaming the subtree scan</strong> was designed to remove the +32.7&nbsp;ms fixed cost that the subtree lever brought with it &mdash; a clean idea with a real target. One source read killed it: the launch was already single-stream, so the fixed cost is the per-level launch structure, not stream overhead. Total cost, one file. <strong>Cutting the deep tail</strong> proposed dropping the retrieved suffix nodes to save drafter time, on the observation that their per-position acceptance is low. Attribution showed the tail carries 0.85&ndash;1.31 of the acceptance &mdash; low <em>rate</em> over many positions is not low <em>contribution</em> &mdash; making it an anti-lever. Both refutations cost less than an hour and would each have cost days to discover after implementation.</p>
+    </section>
     <section class="section" id="shape">
-      <h2>The Shape of the Deficit</h2>
+      <h2>What It All Added Up To</h2>
       <aside class="sidenote">
         <p><strong>The model:</strong> <code>step = F + m &times; eps</code>. Fit step time against speculative events per step, and the intercept <em>F</em> is what you pay for existing while the slope <em>m</em> is what you pay per event. Where your deficit sits decides what you optimize.</p>
         <p><strong>Why it matters:</strong> a marginal deficit gets <em>worse</em> as your speculator improves. A fixed deficit gets <em>diluted</em>. Same milliseconds, opposite strategy.</p>
       </aside>
-      <p>For six volumes we treated the tree's slowness as a property of branching &mdash; the committer replay, the wider verify, the per-node work &mdash; and every one of those is a <em>per-event</em> cost. That framing predicted something uncomfortable: the better the tree got at accepting, the more of these costs it would pay, so its acceptance advantage could never fully convert. Vol.&nbsp;VII's numbers were consistent with exactly that, and an earlier measurement had the tree paying roughly <strong>140&nbsp;ms per event</strong> against native's <strong>49</strong>.</p>
+      <p>None of the sixteen attempts was aiming at this, but together they produced the campaign's most consequential result &mdash; visible only once enough of them had landed to re-fit the model. For six volumes we treated the tree's slowness as a property of branching &mdash; the committer replay, the wider verify, the per-node work &mdash; and every one of those is a <em>per-event</em> cost. That framing predicted something uncomfortable: the better the tree got at accepting, the more of these costs it would pay, so its acceptance advantage could never fully convert. Vol.&nbsp;VII's numbers were consistent with exactly that, and an earlier measurement had the tree paying roughly <strong>140&nbsp;ms per event</strong> against native's <strong>49</strong>.</p>
       <p>Fitting step time against speculative events per step, across seven tree arms spanning every graph mode we ship, gives a different answer:</p>
 
       <div class="table-wrap">
@@ -1424,75 +1613,6 @@
         </div>
       </div>
     </section>
-    <section class="section" id="levers">
-      <h2>What We Built</h2>
-      <aside class="sidenote">
-        <p><strong>The bar for baking a lever:</strong> an offline byte gate (the committed state must be bit-identical), a live band gate (the run must land inside the campaign's pass/fail envelope, garble-free), and a speed signal. Nothing ships on a speed number alone.</p>
-        <p><strong>Why so many small ones:</strong> with the deficit now fixed rather than marginal, there is no single 85&nbsp;ms lever to find. It is a collection of tens of milliseconds, each gated.</p>
-      </aside>
-      <p>The campaign's engineering output is a set of levers now baked as launcher defaults. Each was gated the same way &mdash; byte-identical committed state offline, an in-band garble-free live run, and a speed signal &mdash; and several are direct descendants of mechanisms the earlier volumes built. The ones that moved the board most:</p>
-
-      <div class="table-wrap">
-        <table>
-          <caption>The baked lever ledger. Every state-touching lever is byte-identical to the path it replaces; the effects are measured, not projected.</caption>
-          <thead><tr><th>Lever</th><th>What it does</th><th>Measured effect</th></tr></thead>
-          <tbody>
-            <tr>
-              <td>Truncated drafter head</td>
-              <td>Draft from a 64k-entry gathered output head instead of the full vocabulary; the verifier keeps the full head, so the result stays lossless.</td>
-              <td class="num">drafter 94.9&nbsp;&rarr;&nbsp;56.3&nbsp;ms/step; accept 5.552 vs a full-head control's 5.556 &mdash; unchanged</td>
-            </tr>
-            <tr>
-              <td>Drafter graph capture</td>
-              <td>Capture the whole spine draft as a CUDA graph, removing per-level launch and host glue.</td>
-              <td class="num">the ~&minus;40&nbsp;ms lever</td>
-            </tr>
-            <tr>
-              <td>In-kernel replay-ring staging</td>
-              <td>Stage the committer's replay inputs inside the kernel rather than assembling them on the host.</td>
-              <td class="num">TPS 38.01 vs 32.85 baseline; accept 4.520</td>
-            </tr>
-            <tr>
-              <td>Batched all-layers committer</td>
-              <td>Commit every layer in one batched pass instead of forty-eight per-layer calls.</td>
-              <td class="num">committer span 47&nbsp;&rarr;&nbsp;36&nbsp;ms, verify flat</td>
-            </tr>
-            <tr>
-              <td>Sync-free KV remap</td>
-              <td>The Vol.&nbsp;V re-linearizer with every host synchronization removed.</td>
-              <td class="num">committer 12.33&nbsp;ms/event</td>
-            </tr>
-            <tr>
-              <td>Subtree-parallel scan</td>
-              <td>Partition the tree at runtime into a shared prefix plus independent subtrees and scan them concurrently &mdash; the branches have no data dependence on each other.</td>
-              <td class="num">byte-exact, graph-safe, +4.7% at B=1</td>
-            </tr>
-            <tr>
-              <td>Fused / batched conv write-back</td>
-              <td>Fuse the convolution state write-back, then batch it across concurrent requests.</td>
-              <td class="num">&minus;6.7&nbsp;ms fixed, &minus;2.4&nbsp;ms/event; ~&minus;20&nbsp;ms/step at the operating point</td>
-            </tr>
-            <tr>
-              <td>Parent gather / conv pregather / in-kernel flags</td>
-              <td>Recompose the per-node gathers and move branch flags into the kernel, cutting host round-trips.</td>
-              <td class="num">byte-identical, selfcheck-gated</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <h3>The lever that came back from the dead</h3>
-      <p>The truncated drafter head deserves a paragraph, because <a href="keep-or-replay.html">Vol.&nbsp;VII</a> reported it <em>refuted</em>. The idea &mdash; draft from a reduced vocabulary so the drafter reads a fraction of the output-projection weights, while the verifier keeps the full head so nothing is lost &mdash; was ranked the top drafter lever and then killed by measurement: the drafter turned out to be host-orchestration-bound, so cutting its largest weight read bought about two percent of a wall dominated by launch glue.</p>
-      <p>That verdict was correct <em>at the time</em> and stopped being correct once the drafter's host cost was removed. With the spine draft captured as a graph, the glue is gone and what remains is actual weight traffic &mdash; at which point halving the read does exactly what the original arithmetic said it would: the drafter falls from 94.9 to 56.3&nbsp;ms per step. And it is free in quality: on a matched workload the truncated head accepts 5.552 against a full-head control's 5.556, because the 64k gather covers 97.1% of the draft ids actually used at half the bytes.</p>
-      <p>The general lesson is worth stating plainly, since it is the kind of thing that quietly wastes years: <strong>a lever refuted against one bottleneck is not refuted permanently.</strong> Removing the dominant cost re-ranks everything behind it, and a measured &ldquo;no&rdquo; carries an implicit &ldquo;while this other thing dominates.&rdquo; We had recorded the refutation with its reasoning attached, which is the only reason it was cheap to revisit.</p>
-
-      <h3>Subtree-parallel, and a fixed cost it brought with it</h3>
-      <p>The one lever with genuinely new structure is the subtree-parallel scan. The recurrent scan had been walking all of the tree's nodes serially inside every program, because a scan is inherently sequential along a path. But a <em>tree</em> is only sequential along each path: after the shared prefix, its disjoint branches have no data dependence on one another at all. Partitioning the nodes at runtime from the parent array into a prefix plus K independent subtrees, and giving the subtrees their own program axis, shortens the critical path from the node count to roughly the prefix plus the deepest subtree &mdash; and the win <em>grows</em> with wider trees, which is exactly the direction the accept-beyond-5 work pushes.</p>
-      <p>It also came with an honest complication that the campaign measured rather than assumed. The captured side-stream topology this required carries a <strong>fixed +32.7&nbsp;ms</strong> cost per step, while the decomposition itself is worth a real <strong>&minus;22.3&nbsp;ms per event</strong>. Those cross over at an acceptance of about 1.47 events per step &mdash; well below where we operate &mdash; so the lever is a clear net win at the operating point and stays baked. A follow-up that hoped to remove the fixed part by putting the work back on a single stream was refuted by reading the source: the launch was already single-stream, and the 32.7&nbsp;ms is the per-level launch structure itself.</p>
-
-      <h3>What we deleted</h3>
-      <p>The campaign also removed machinery. The committer's node-bank burn &mdash; the 43&nbsp;ms of scratch-zeroing that <a href="keep-or-replay.html">Vol.&nbsp;VII</a> proved redundant &mdash; is now deleted outright rather than defaulted off, with its legacy path retired fail-loud. A head-merge seam that had been superseded by the tail design, an internal mechanism that duplicated the subtree preseed, and a decode kind that no longer had a purpose all went with it. This matters for a reason beyond tidiness: every one of those was a live branch that a future measurement could have silently taken, and this series has now lost enough weeks to configuration that could reach an unintended path that deleting is cheaper than guarding.</p>
-    </section>
     <section class="section" id="bugs">
       <h2>Two Silent Bugs</h2>
       <aside class="sidenote">
@@ -1563,52 +1683,6 @@
         </div>
       </div>
     </section>
-    <section class="section" id="measurement">
-      <h2>Measuring the Measurement</h2>
-      <aside class="sidenote">
-        <p><strong>The theme:</strong> for most of this campaign the obstacle was not the GPU. It was knowing what our own numbers meant &mdash; and three separate times, a result we had been optimizing against turned out to be a property of how we were measuring.</p>
-      </aside>
-      <p>Three measurement stories, in the order they happened, because each one changed what we worked on next.</p>
-
-      <h3>The slope ladder that wasn't</h3>
-      <p>We ship the speculative step in several CUDA-graph modes, and arm-level numbers appeared to rank them cleanly &mdash; a &ldquo;ladder&rdquo; of throughput-per-event slopes that made one fusion mode look clearly best and justified building more fusion. Pooling seven arms into a single regression dissolved it: <strong>all four modes lie on one line</strong>, <code>step = 235.5 + 49.2&nbsp;&times;&nbsp;eps</code>, within a couple of milliseconds. The ladder was an <em>eps artifact</em> &mdash; the arms had been running at different acceptance rates, and comparing their aggregate throughput was comparing points along one curve rather than different curves. The graph-fusion work it had been justifying was moving nothing, and we stopped it.</p>
-      <p>Then the pooled fit itself failed. Nine arm-level points cannot separate an intercept from a slope with any confidence &mdash; the honest mode-detection floor at arm level turned out to be about &plusmn;100&nbsp;ms, not the &plusmn;15 we had been quoting. Replacing it with a <em>per-step</em> regression &mdash; thousands of individual steps, each with its own known draft count, from an instrumented sidecar &mdash; gave real intervals and showed the pooled fit had been wrong in both directions at once: <code>step = 217.1 + 59.0&nbsp;&times;&nbsp;drafts</code> at R&sup2;&nbsp;=&nbsp;0.94. The pooled fit was retired.</p>
-      <p>That instrument had to be debugged before it could measure, which is its own small lesson. The first version wrote per-step arrays into a file that the harness rewrote every second, so a run with five hundred timed steps reported zero samples; the second lost its data to the container teardown's kill signal. Only the third &mdash; a separate sidecar file, throttled dumps, and a poller catching the rewrite boundary &mdash; actually retained what it recorded.</p>
-
-      <h3>The idle that dissolved</h3>
-      <p>The per-step regression exposed something real and alarming: roughly <strong>28&ndash;30&nbsp;ms per event of non-kernel time inside the verify span</strong>. Time inside our own timing brackets that no kernel accounted for. We made that the campaign, and worked it as an elimination:</p>
-      <div class="table-wrap">
-        <table>
-          <caption>Hypotheses for the in-span idle, and the instrument that killed each.</caption>
-          <thead><tr><th>Hypothesis</th><th>Instrument</th><th>Verdict</th></tr></thead>
-          <tbody>
-            <tr><td>Host work before launch</td><td>Split the span into host-side and execution halves</td><td><span class="pill bad">refuted</span> host side measured ~0.0&nbsp;ms</td></tr>
-            <tr><td>Host tail after enqueue</td><td>CPU-clock tail discriminator at the span end</td><td><span class="pill bad">refuted</span> tail 0.4&ndash;0.5&nbsp;ms against 267&nbsp;ms of execution</td></tr>
-            <tr><td>Silent fallback to piecewise graphs</td><td>Tag every step with its dispatch mode</td><td><span class="pill bad">refuted</span> 6329 of 6329 steps were full-graph</td></tr>
-            <tr><td>Cross-stream waits inside the captured graph</td><td>nsys capture on live tasks</td><td><span class="pill warn">superseded</span> &mdash; see below</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p>The last one is where it turned. Profiling on live tasks at <em>realistic context length</em> showed the verify span is mostly <strong>real kernels</strong> after all: attention at <strong>77&nbsp;ms per draft</strong> against <strong>0.9&nbsp;ms</strong> at the short contexts we had been profiling, plus about 158&nbsp;ms of GEMM, 29.5 of output projection, and 9.9 of scan. The ~26&nbsp;ms/event of &ldquo;idle&rdquo; was substantially an artifact of profiling at short context, where the attention kernels are nearly free and the fixed overheads dominate the picture. The phenomenon we had been attacking for days was, in large part, a property of the bench.</p>
-      <p>This is not a wasted campaign &mdash; the eliminations are real, the instruments now exist, and a genuine fixed side-stream cost was found and quantified along the way. But the floor moved <em>up</em>: much of what looked like recoverable overhead is attention work that scales with context, and the honest lever list was rebuilt around kernel efficiency rather than gap-hunting.</p>
-
-      <h3>The deployment capture that retired a lever class</h3>
-      <p>The last measurement is the one with the widest implications. Everything above was profiled at batch one, where a single request's structure is legible. Capturing at the actual deployment point &mdash; four concurrent requests, the configuration we ship &mdash; showed the <strong>GPU is already 97% busy</strong>. There is no idle to overlap into. An entire class of levers we had queued, the overlap and async-hiding family, is <strong>dead at deployment</strong> regardless of how well it profiles at batch one.</p>
-      <p>The capture also showed why single-request intuitions mislead here: most steps at deployment are <em>mixed</em>, with prefill and decode sharing the same weight passes, so a pure-decode model covers only the decode share of the wall clock. What survives as regime-robust are the levers whose benefit does not depend on finding gaps: <strong>acceptance</strong>, and the per-row efficiency of the decode kernels themselves. The working rule we adopted is to design at batch one, where mechanisms are visible, but to <em>price</em> every lever by its decode share at deployment &mdash; because a millisecond saved in a gap that does not exist at B=4 is a millisecond of nothing.</p>
-
-      <div class="source-exhibit" aria-label="Three measurement reversals">
-        <div class="source-head">
-          <strong>Three times the measurement was the finding</strong>
-          <span>Each reversal changed what we built next</span>
-        </div>
-        <div class="grid">
-          <div class="box warn"><span class="tag">eps artifact</span><p>A convincing ladder of graph-mode slopes was one line seen at different acceptance rates. It had been justifying fusion work that moved nothing.</p></div>
-          <div class="box warn"><span class="tag">short-context artifact</span><p>~26&nbsp;ms/event of unexplained in-span idle was largely an artifact of profiling at short context, where attention costs 0.9&nbsp;ms instead of 77.</p></div>
-          <div class="box bad"><span class="tag">B=1 artifact</span><p>Overlap levers that look valuable at batch one are dead at deployment: the GPU is already 97% busy, and most steps are mixed prefill/decode.</p></div>
-          <div class="box good"><span class="tag">What survived</span><p>Per-step regression with real intervals, a working sidecar instrument, a quantified fixed side-stream cost, and a lever list ranked by profile data rather than intuition.</p></div>
-        </div>
-      </div>
-    </section>
     <section class="section" id="results">
       <h2>Results</h2>
       <aside class="sidenote">
@@ -1669,124 +1743,97 @@
     <section class="section" id="museum">
       <h2>Failure Museum</h2>
       <aside class="sidenote">
-        <p><strong>The pattern of this volume:</strong> almost every entry is an <em>observer</em> problem rather than an engineering one &mdash; a measurement that changed the system, an artifact of the bench, an instrument that lost its own data, or a claim that outran its degrees of freedom.</p>
+        <p><strong>Scope:</strong> the engineering misses have their own <a href="#didnt">ledger</a>. This museum is for the <em>measurement</em> failures &mdash; the times an instrument lied, lost its data, changed what it measured, or answered a question we had not actually asked.</p>
       </aside>
-      <p>Twelve refuted hypotheses, artifacts, and self-corrections, grouped by what went wrong: the <strong>artifacts</strong> (real measurements of the wrong thing), the <strong>eliminations</strong> (good hypotheses the instruments killed), and the <strong>observer effects</strong> (measurements that changed or lost their subject).</p>
+      <p>Eight entries, in three families: <strong>eliminations</strong> that were correct and still cost time, <strong>observer effects</strong> where the instrument altered or lost its subject, and <strong>claims that outran their evidence</strong> &mdash; including two we had to retract ourselves.</p>
 
       <div class="grid" aria-label="Failure families">
-        <div class="box warn"><span class="tag">Artifacts</span><h3>Measuring the bench</h3><p>A slope ladder that was one line, an idle that was short-context, and levers that only exist at batch one.</p></div>
-        <div class="box warn"><span class="tag">Eliminations</span><h3>Good hypotheses, killed</h3><p>Host prep, host tail, piecewise fallback, single-streaming &mdash; each plausible, each refuted by a targeted instrument.</p></div>
-        <div class="box warn"><span class="tag">Observer effects</span><h3>The instrument as adversary</h3><p>A debug rider that doubled the span it measured, a sampler that lost its samples, and a claim with no degrees of freedom.</p></div>
+        <div class="box warn"><span class="tag">Eliminations</span><h3>Right answers, expensive</h3><p>Three plausible explanations for a phantom, each correctly killed by a targeted instrument &mdash; while the phantom itself was partly an artifact.</p></div>
+        <div class="box warn"><span class="tag">Observer effects</span><h3>The instrument as adversary</h3><p>A diagnostic that doubled the span it timed, an instrument that lost its own samples twice, and a timer on a function the deploy path never called.</p></div>
+        <div class="box warn"><span class="tag">Overreach</span><h3>Claims we retracted</h3><p>An exoneration issued on a half-pinned comparison, and a parity headline resting on a line with no degrees of freedom.</p></div>
       </div>
 
       <details class="fold">
         <summary>
           <span>Full failure ledger</span>
-          <small>Twelve entries, grouped by family, with the signal and the refutation for each.</small>
+          <small>Eight measurement failures, grouped by family, with what each cost and the lesson.</small>
         </summary>
         <div class="fold-body">
           <p class="failure-note"><strong>Status key:</strong> <span class="pill good">settled</span> a real dead end later evidence upheld; <span class="pill warn">superseded</span> the observation was real but the framing was replaced; <span class="pill bad">contaminated</span> the measurement could not support its conclusion.</p>
 
           <div class="failure-ledger" aria-label="Detailed failure museum">
-            <p class="failure-note"><strong>Family A &mdash; artifacts: real measurements of the wrong thing.</strong></p>
-
-            <article class="failure-card contaminated">
-              <header><h3>The graph-mode slope ladder</h3><span class="pill bad">contaminated</span></header>
-              <p><strong>Why it looked right:</strong> arm-level throughput ranked our CUDA-graph modes in a clean order, with a consistent spread. It read as a real ranking and justified further fusion work.</p>
-              <ul><li><strong>What killed it:</strong> pooling the arms into one regression put all four modes on a single line within a couple of milliseconds. The arms had simply been running at different acceptance rates &mdash; the &ldquo;ladder&rdquo; was different points on one curve. The fusion work it justified was moving nothing.</li></ul>
-              <p class="conclusion"><strong>Lesson:</strong> if throughput depends on a covariate, comparing aggregates across arms that differ in that covariate ranks the covariate, not the arms. Regress; don't rank.</p>
-            </article>
+            <p class="failure-note"><strong>Family A &mdash; correct eliminations of a partly-phantom target.</strong></p>
 
             <article class="failure-card superseded">
-              <header><h3>The ~26&nbsp;ms/event of in-span idle</h3><span class="pill warn">superseded</span></header>
-              <p><strong>Why it looked right:</strong> a per-step regression with thousands of samples showed substantial non-kernel time inside our own verify-span brackets. It was reproducible, it was large, and it survived several eliminations &mdash; so it became the campaign.</p>
-              <ul><li><strong>What killed it:</strong> profiling on live tasks at realistic context showed the verify span is mostly real kernels: attention alone runs 77&nbsp;ms per draft at real context against 0.9&nbsp;ms at the short contexts we had been profiling. The &ldquo;idle&rdquo; was substantially an artifact of the bench, and the floor moved up.</li></ul>
-              <p class="conclusion"><strong>Lesson:</strong> profile at the context length you deploy at. A short prompt makes attention nearly free, which inflates every fixed overhead's apparent share and can manufacture a phantom gap.</p>
+              <header><h3>The in-span idle that was largely a bench artifact</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked right:</strong> the per-step regression showed roughly 28&ndash;30&nbsp;ms per event of non-kernel time <em>inside</em> our own verify-span brackets. Reproducible over thousands of steps, large enough to matter, and it survived three eliminations &mdash; so it became the campaign's target.</p>
+              <ul><li><strong>What killed it:</strong> profiling on live tasks at realistic context showed the verify span is mostly real kernels. Attention alone runs <strong>77&nbsp;ms per draft</strong> at deployment context against <strong>0.9&nbsp;ms</strong> at the short contexts we had been profiling. The &ldquo;idle&rdquo; was substantially an artifact of the bench, and the achievable floor moved up.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> profile at the context length you deploy at. A short prompt makes attention nearly free, which inflates every fixed overhead's apparent share and can manufacture a gap that is not there.</p>
             </article>
-
-            <article class="failure-card settled">
-              <header><h3>The overlap-lever class</h3><span class="pill good">settled</span></header>
-              <p><strong>Why it looked right:</strong> at batch one there were visible gaps, and a queue of designs existed to hide host work behind GPU work. Overlap is the standard answer to a gap.</p>
-              <ul><li><strong>What killed it:</strong> a capture at the actual deployment point &mdash; four concurrent requests &mdash; showed the GPU already 97% busy, with most steps mixing prefill and decode so they share weight passes. There is no idle to overlap into. The whole class is dead where we ship, however well it profiles at batch one.</li></ul>
-              <p class="conclusion"><strong>Lesson:</strong> design at batch one where mechanisms are visible, but price every lever by its share at the deployment point. A millisecond saved in a gap that does not exist at concurrency is nothing.</p>
-            </article>
-
-            <article class="failure-card superseded">
-              <header><h3>The eleven-pass drafter model</h3><span class="pill warn">superseded</span></header>
-              <p><strong>Why it looked right:</strong> counters suggested the drafter was making about eleven sequential passes, which would have made pass-count the dominant drafter lever and implied a specific, attractive fix.</p>
-              <ul><li><strong>What killed it:</strong> the counters were misread &mdash; the tail is retrieval-sourced and engaged nearly always, so the counter was measuring something else entirely. A related proposal to cut the deep tail for speed turned out to be an <em>anti</em>-lever: the tail carries 0.85&ndash;1.31 of the acceptance, so removing it costs more than it saves.</li></ul>
-              <p class="conclusion"><strong>Lesson:</strong> before optimizing against a counter, confirm what increments it. And check whether the thing you plan to cut is carrying the benefit you are trying to protect.</p>
-            </article>
-
-            <p class="failure-note"><strong>Family B &mdash; eliminations: good hypotheses the instruments killed.</strong></p>
 
             <article class="failure-card settled">
               <header><h3>Host preparation before launch</h3><span class="pill good">settled</span></header>
-              <p><strong>Why it looked right:</strong> the natural explanation for non-kernel time inside a span is host work landing between the span's opening and the actual launch &mdash; input preparation, metadata assembly, the usual suspects.</p>
+              <p><strong>Why it looked right:</strong> the natural explanation for non-kernel time inside a span is host work between the span opening and the launch &mdash; input preparation, metadata assembly.</p>
               <ul><li><strong>What killed it:</strong> splitting the span into a host half and an execution half measured the host side at essentially zero. The idle sat entirely after enqueue.</li></ul>
-              <p class="conclusion"><strong>Lesson:</strong> split the bracket before theorizing about what is inside it. One extra event answers the question that a week of hypotheses cannot.</p>
+              <p class="conclusion"><strong>Lesson:</strong> split the bracket before theorizing about what is inside it. One extra event answers what a week of hypotheses cannot.</p>
             </article>
 
             <article class="failure-card settled">
-              <header><h3>A host tail after enqueue</h3><span class="pill good">settled</span></header>
-              <p><strong>Why it looked right:</strong> if not before the launch, then after it &mdash; a host tail folded into a late stop event would look exactly like in-span idle.</p>
-              <ul><li><strong>What killed it:</strong> a CPU-clock discriminator at the span end measured a tail of 0.4&ndash;0.5&nbsp;ms against 267&nbsp;ms of execution. Conclusive, and it pushed the search inside the captured graph.</li></ul>
-              <p class="conclusion"><strong>Lesson:</strong> a discriminator that separates two hypotheses by three orders of magnitude is worth building even when you expect it to say &ldquo;neither.&rdquo;</p>
+              <header><h3>A host tail after enqueue, and a silent piecewise fallback</h3><span class="pill good">settled</span></header>
+              <p><strong>Why they looked right:</strong> if the idle was not before the launch it might be after it &mdash; a host tail folded into a late stop event. And a step that quietly fell back from a full captured graph to piecewise execution would carry exactly the kind of overhead no kernel table shows.</p>
+              <ul><li><strong>What killed them:</strong> a CPU-clock discriminator measured the tail at 0.4&ndash;0.5&nbsp;ms against 267&nbsp;ms of execution. And tagging every step with its dispatch mode returned full-graph on <strong>6329 of 6329</strong> steps &mdash; no fallbacks at all.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> make the system state its own mode on every step. &ldquo;Is it silently doing the slow thing&rdquo; is the cheapest question to answer definitively and the most expensive to leave open.</p>
             </article>
 
-            <article class="failure-card settled">
-              <header><h3>Silent fallback to piecewise graphs</h3><span class="pill good">settled</span></header>
-              <p><strong>Why it looked right:</strong> a step that quietly fell back from a full captured graph to piecewise execution would carry exactly the kind of overhead that no kernel table shows.</p>
-              <ul><li><strong>What killed it:</strong> tagging every step with its dispatch mode returned full-graph on 6329 of 6329 steps. No fallbacks at all.</li></ul>
-              <p class="conclusion"><strong>Lesson:</strong> the cheapest way to test &ldquo;is it silently doing the slow thing&rdquo; is to make the system state its own mode on every step.</p>
-            </article>
-
-            <article class="failure-card settled">
-              <header><h3>Single-streaming the subtree scan</h3><span class="pill good">settled</span></header>
-              <p><strong>Why it looked right:</strong> the subtree-parallel lever brought a fixed +32.7&nbsp;ms side-stream cost; putting the same kernels back on one stream looked like a clean way to keep the win and drop the tax.</p>
-              <ul><li><strong>What killed it:</strong> a source read, before any build &mdash; the launch was already single-stream. The 32.7&nbsp;ms is the per-level launch structure itself, not stream overhead.</li></ul>
-              <p class="conclusion"><strong>Lesson:</strong> read the code path before designing a fix for what you assume it does. The cheapest refutation in this whole volume cost one file read.</p>
-            </article>
-
-            <article class="failure-card superseded">
-              <header><h3>Step-graph capture as a speed lever</h3><span class="pill warn">superseded</span></header>
-              <p><strong>Why it looked right:</strong> capturing the whole step into one graph projected substantial savings from eliminated launch overhead, and the projection was arithmetically sound.</p>
-              <ul><li><strong>What killed it:</strong> both arms landed on the pooled line &mdash; the speed projections did not materialize, because the host cost had already been hoisted out to make capture legal in the first place. Only launch gaps remained, and they were below the detection floor. The work delivered a correctness milestone and stays off as a speed lever.</li></ul>
-              <p class="conclusion"><strong>Lesson:</strong> when a prerequisite for a lever removes the cost the lever targets, the lever's projection is already spent. Re-derive the projection after the prerequisite lands.</p>
-            </article>
-
-            <p class="failure-note"><strong>Family C &mdash; observer effects: the instrument as adversary.</strong></p>
+            <p class="failure-note"><strong>Family B &mdash; observer effects.</strong></p>
 
             <article class="failure-card contaminated">
               <header><h3>A debug rider that doubled its own span</h3><span class="pill bad">contaminated</span></header>
-              <p><strong>Why it looked right:</strong> an arm carrying a detailed per-row trace produced a committer span of 106&nbsp;ms against a normal 42 &mdash; a dramatic and apparently important regression.</p>
-              <ul><li><strong>What killed it:</strong> the trace itself. Its per-row device-to-host copies were serializing the very span it was measuring. The arm's correctness results stand; its speed numbers were struck from the record and re-run on a clean arm.</li></ul>
-              <p class="conclusion"><strong>Lesson:</strong> a diagnostic that touches the device inside the region it times is not measuring that region. Keep speed arms and trace arms separate, and mark trace-arm timings unquotable at the source.</p>
+              <p><strong>Why it looked right:</strong> an arm carrying a detailed per-row trace reported a committer span of <strong>106&nbsp;ms</strong> against a normal <strong>42</strong> &mdash; a dramatic and apparently urgent regression.</p>
+              <ul><li><strong>What killed it:</strong> the trace itself. Its per-row device-to-host copies were serializing the very span it was timing. The arm's correctness results stand; its speed numbers were struck from the record and re-measured on a clean arm.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> a diagnostic that touches the device inside the region it times is not measuring that region. Keep trace arms and speed arms separate, and mark trace-arm timings unquotable at the source.</p>
             </article>
 
             <article class="failure-card contaminated">
-              <header><h3>The sampler that lost its samples</h3><span class="pill bad">contaminated</span></header>
-              <p><strong>Why it looked right:</strong> the per-step instrument was the right idea and eventually produced the volume's central result. Its first two versions simply reported nothing.</p>
-              <ul><li><strong>What killed them:</strong> version one wrote into a file the harness rewrote every second, so a run with hundreds of timed steps reported zero samples; version two lost everything to the container teardown's kill signal. Only a separate sidecar with throttled dumps and a boundary-catching poller actually retained data.</li></ul>
-              <p class="conclusion"><strong>Lesson:</strong> an instrument's persistence path is part of the instrument. Validate that it survives the harness's own lifecycle before trusting a null result from it.</p>
+              <header><h3>The instrument that lost its own samples, twice</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> the per-step sampler was the right idea and eventually produced the campaign's central result. Its first two versions simply reported nothing, which reads like a null result rather than a broken tool.</p>
+              <ul><li><strong>What killed them:</strong> version one wrote into a file the harness rewrote every second, so a run with hundreds of timed steps reported zero samples; version two lost everything to the container teardown's kill signal. Only a separate sidecar with throttled dumps and a boundary-catching poller retained data.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> an instrument's persistence path is part of the instrument. Validate that it survives the harness's own lifecycle before believing a null reading from it.</p>
             </article>
 
             <article class="failure-card contaminated">
-              <header><h3>The exoneration we had to retract</h3><span class="pill bad">contaminated</span></header>
-              <p><strong>Why it looked right:</strong> during the garble hunt, a paired-replay probe appeared to clear the captured replay path: its outputs differed from the staged rerun's only in ways that randomness could explain.</p>
-              <ul><li><strong>What killed it:</strong> only one arm's random state had been pinned. With both sides pinned the comparison inverted &mdash; identical draws, identical walk products, still-divergent tokens &mdash; which is what finally localized the bug to the sampling distribution. The exoneration was self-corrected in the record.</li></ul>
-              <p class="conclusion"><strong>Lesson:</strong> &ldquo;the difference is explained by randomness&rdquo; is only admissible when the randomness is pinned on <em>both</em> arms. A half-pinned comparison can exonerate the guilty.</p>
+              <header><h3>A timer on a function the deploy path never called</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> the committer replay was timed around a real replay function, and the numbers were plausible enough to feed an entire investigation.</p>
+              <ul><li><strong>What killed it:</strong> that function was the batched sibling; the deployed path calls the singular per-layer variant through its own loop. Moving the timer into the one shared function both wrappers call &mdash; and dividing by the per-commit layer count &mdash; changed the attribution materially.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> verify the call graph before trusting a timer, especially when a same-named sibling exists. Instrument the function the deployment actually executes.</p>
+            </article>
+
+            <p class="failure-note"><strong>Family C &mdash; claims that outran their evidence.</strong></p>
+
+            <article class="failure-card contaminated">
+              <header><h3>The exoneration we retracted</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> during the garble hunt a paired-replay probe appeared to clear the captured replay path &mdash; its outputs differed from a staged rerun only in ways randomness could explain.</p>
+              <ul><li><strong>What killed it:</strong> only one arm's random state had been pinned. With both sides pinned the comparison inverted: identical draws, identical walk products, still-divergent tokens &mdash; which is precisely what localized the bug to the sampling distribution and found the missing constraint kernels.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> &ldquo;the difference is explained by randomness&rdquo; is admissible only when the randomness is pinned on <em>both</em> arms. A half-pinned comparison can exonerate the guilty.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header><h3>Our own parity headline</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> the best arm measured 43.57 tok/s where the native fit predicts about 43.7 &mdash; parity, in a series that had never reached it, and an extremely quotable sentence.</p>
+              <ul><li><strong>What killed it:</strong> our own audit. The native comparand is an exact two-point line with zero degrees of freedom, whose slope is identified by a single batch-4-versus-batch-8 contrast in which batch size, task set, boot date, and prefill fraction all vary together &mdash; and one of the two points had three of its four tasks exit early. The tree side is a single arm at one prefill fraction.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> audit your best number before publishing it, not after. A fit with no residual degrees of freedom is not evidence, however precisely it passes through your data.</p>
             </article>
           </div>
         </div>
       </details>
     </section>
     <section class="section" id="reflection">
-      <h2>Reflection: When the Instrument Is the Subject</h2>
+      <h2>Reflection: What Sixteen Attempts Taught</h2>
       <aside class="sidenote">
         <p><strong>Worth stating plainly:</strong> the single most valuable artifact this campaign produced is not a kernel. It is a per-step regression with real confidence intervals, and the discipline to let it retire our own earlier claims.</p>
       </aside>
-      <p>Nine hundred commits produced one structural result &mdash; the deficit moved from marginal to fixed &mdash; and a great deal of evidence about how such a result gets found. Nearly every wrong turn in this volume came from the same place: a number that was real, reproducible, and about something other than what we thought. The graph-mode ladder was real and was about acceptance rates. The in-span idle was real and was substantially about context length. The batch-one gaps are real and are about batch one. None of these were sloppy measurements; each was a correct measurement of the wrong quantity, which is a much harder failure to notice because it survives repetition.</p>
+      <p>Sorting sixteen attempts into eight that paid and eight that did not, the sorting rule is unusually clean. <strong>Every lever that paid removed structure &mdash; host work, launch counts, synchronizations, serialization &mdash; and none of them changed any arithmetic.</strong> Every lever that missed either targeted a cost that had already moved, or targeted a gap that existed only in the regime we were profiling rather than the one we ship. That is a more useful heuristic than any individual result here: before building, ask whether the cost you are attacking is still where you measured it, and whether it exists at your deployment point.</p>
+      <p>The second lesson is about the shape of a wrong turn. Nearly every one in this volume came from a number that was real, reproducible, and about something other than what we thought. The graph-mode ladder was real and was about acceptance rates. The in-span idle was real and was substantially about context length. The batch-one gaps are real and are about batch one. None of these were sloppy measurements; each was a correct measurement of the wrong quantity, which is much harder to notice because it survives repetition.</p>
       <p>The defense that actually worked was structural rather than careful: fit a model with a covariate in it, and report intervals. The moment step time was regressed against acceptance instead of compared across arms, the ladder dissolved, the pooled fit was exposed as wrong in both directions, and the fixed-versus-marginal split &mdash; the thing that reframed the whole project &mdash; fell out of the same fit. Intervals then did the second half of the job by telling us which of our own headlines to retire, including the most quotable one in this volume.</p>
 
       <div class="table-wrap">
@@ -1805,6 +1852,14 @@
             <tr>
               <td>Profile at the deployment point, not the legible one</td>
               <td>Short context made attention nearly free and manufactured a phantom idle; batch one shows gaps that do not exist at concurrency. Design where mechanisms are visible, price where you ship.</td>
+            </tr>
+            <tr>
+              <td>Check whether the prerequisite eats the prize</td>
+              <td>Whole-region graph capture was worth building only because of the host cost inside the region &mdash; and making it capture-legal required hoisting that host cost out first. Thirty-five boots for an effect below the detection floor. Re-derive a projection after its enabling work lands, not before.</td>
+            </tr>
+            <tr>
+              <td>Levers that remove structure pay; levers that chase moved costs don't</td>
+              <td>All eight successes removed host work, launch counts, synchronizations, or serialization &mdash; and changed no arithmetic. Most misses targeted a cost that had already shifted or a gap that only exists at batch one.</td>
             </tr>
             <tr>
               <td>A refutation carries an implicit &ldquo;while this dominates&rdquo;</td>
