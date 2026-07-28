@@ -184,3 +184,24 @@ NEXT: subtree_ab probe — launcher-direct A/B boot (NEEDS-assertion exempt),
 FR13_SUBTREE_PARALLEL=1 vs 0, timers + samples, graph mode, probe workload;
 if exec collapses at =0, the captured side-stream topology is the cost and
 subtree-parallel's +4.7% B=1 claim gets eps-adjusted re-pricing at B=4.
+[superseded by the live-SWE subtree0 arm per the kernel-measurements-on-SWE rule]
+
+## SUBTREE0 VERDICT (live SWE, n=569, window-matched control): BOTH EFFECTS
+  subtree=1 (control, subspan1 early window): 132.2 + 37.49(±1.15)·drafts
+  subtree=0 (this arm):                        99.5 + 59.79(±4.75)·drafts
+  (control full-run 134.0 + 37.22 — no window/context confound)
+1. **Captured side-stream topology CONVICTED for the fixed tax: +32.7ms/step**
+   — at =0 the fixed term sits AT the 98.6 weight floor. The entire fixed
+   in-graph excess was captured cross-stream waits.
+2. **The subtree DECOMPOSITION is a real marginal win: −22.3ms/event** (serial
+   scan 59.8 vs 37.5). Crossover eps ≈ 1.47 → at operating eps 2.2-2.7,
+   subtree=1 nets −16..−27ms/step BETTER. Do NOT unbake.
+FIX HYPOTHESIS => **FR13_SUBTREE_SINGLESTREAM**: launch the same subtree
+kernels on the MAIN stream (the multistream refutation says side streams
+cannot overlap here anyway → the side-stream topology contributes only the
+baked wait nodes). Expected: keep −22.3/event, delete +32.7 fixed →
+~−33ms/step at operating eps on top of the current board. Design read next;
+flag-gated build; live gate per standard.
+CAVEAT retained: the marginal split (kernels vs waits inside 37.5/event)
+still needs the real-context kernel measurement (nsys-on-live-task) — the
+eager probe's kernel floor mixes subtree-eager mode and short context.
