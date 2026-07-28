@@ -1,0 +1,1944 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Marginal Parity: A Speculative Tree Kills Its Per-Event Tax - Lumo FlyWheel Vol. VIII</title>
+<meta name="description" content="Illustrated systems paper on where a speculative-decoding deficit actually lives: a branched token-tree whose per-event row tax (~140ms/event) is now statistically dead, leaving a purely fixed per-step deficit of ~85-90ms. Includes a seven-week silent temperature bug, a captured CUDA graph that dropped its sampling constraints, a profiling reversal that dissolved an optimization campaign, and the campaign auditing its own parity claim.">
+<meta property="og:title" content="Marginal Parity: A Speculative Tree Kills Its Per-Event Tax">
+<meta property="og:description" content="The per-event tax is dead, the fixed tax remains — plus two silent bugs and a profiling reversal, on a Gated-DeltaNet hybrid inside vLLM.">
+<meta name="author" content="Mark Ma">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f8f7" media="(prefers-color-scheme: light)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23111111'/%3E%3Ccircle cx='16' cy='22' r='4' fill='%238bd3dd'/%3E%3Ccircle cx='30' cy='16' r='4' fill='%23e7c76f'/%3E%3Ccircle cx='30' cy='30' r='4' fill='%238bd3dd'/%3E%3Cpath d='M16 22 L30 16 M16 22 L30 30' stroke='%233b3934' stroke-width='3'/%3E%3Cpath d='M38 41 h14' stroke='%23a7d98d' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='44' r='4' fill='%238bd3dd'/%3E%3Ccircle cx='30' cy='44' r='4' fill='%238bd3dd'/%3E%3Ccircle cx='44' cy='44' r='4' fill='%23a7d98d'/%3E%3Cpath d='M16 44 h28' stroke='%233b3934' stroke-width='3'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #111111;
+    --paper: #171717;
+    --paper-2: #202020;
+    --paper-3: #292929;
+    --ink: #f2efe7;
+    --text: #d8d3c8;
+    --muted: #a8a196;
+    --quiet: #7f776d;
+    --rule: #3b3934;
+    --rule-2: #565147;
+    --cyan: #8bd3dd;
+    --green: #a7d98d;
+    --amber: #e7c76f;
+    --rose: #d88989;
+    --cyan-soft: #193235;
+    --green-soft: #233320;
+    --amber-soft: #3b3018;
+    --rose-soft: #3a2323;
+    --grid-major: rgba(255, 255, 255, 0.025);
+    --grid-minor: rgba(255, 255, 255, 0.018);
+    --grid-opacity: 0.42;
+    --link-underline: rgba(139, 211, 221, 0.36);
+    --soft-panel: rgba(255, 255, 255, 0.018);
+    --soft-panel-2: rgba(255, 255, 255, 0.012);
+    --soft-panel-3: rgba(255, 255, 255, 0.026);
+    --flow-wash: rgba(139, 211, 221, 0.035);
+    --flow-bg: #0c0c0c;
+    --flow-card-bg: #101010;
+    --control-bg: #121212;
+    --green-wash: rgba(167, 217, 141, 0.045);
+    --bias-on-fill: rgba(231, 199, 111, 0.5);
+    --bias-off-fill: rgba(255, 255, 255, 0.03);
+    --bias-off-stroke: rgba(255, 255, 255, 0.08);
+    --callout-fill: rgba(255, 255, 255, 0.02);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f7;
+      --paper: #ffffff;
+      --paper-2: #eef1f0;
+      --paper-3: #dde3e1;
+      --ink: #151715;
+      --text: #303431;
+      --muted: #626a64;
+      --quiet: #7a827d;
+      --rule: #d8ddd9;
+      --rule-2: #b7c0bb;
+      --cyan: #1c7380;
+      --green: #3f7b3a;
+      --amber: #876812;
+      --rose: #a54444;
+      --cyan-soft: #e3f3f5;
+      --green-soft: #e4f2df;
+      --amber-soft: #f3ead2;
+      --rose-soft: #f5dfdf;
+      --grid-major: rgba(18, 24, 22, 0.055);
+      --grid-minor: rgba(18, 24, 22, 0.038);
+      --grid-opacity: 0.55;
+      --link-underline: rgba(28, 115, 128, 0.34);
+      --soft-panel: rgba(18, 24, 22, 0.028);
+      --soft-panel-2: rgba(18, 24, 22, 0.018);
+      --soft-panel-3: rgba(18, 24, 22, 0.038);
+      --flow-wash: rgba(28, 115, 128, 0.075);
+      --flow-bg: #fbfbfa;
+      --flow-card-bg: #ffffff;
+      --control-bg: #f8faf9;
+      --green-wash: rgba(63, 123, 58, 0.08);
+      --bias-on-fill: rgba(135, 104, 18, 0.22);
+      --bias-off-fill: rgba(18, 24, 22, 0.035);
+      --bias-off-stroke: rgba(18, 24, 22, 0.12);
+      --callout-fill: rgba(18, 24, 22, 0.025);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+      linear-gradient(var(--grid-minor) 1px, transparent 1px);
+    background-size: 56px 56px;
+    opacity: var(--grid-opacity);
+  }
+  ::selection { background: var(--cyan-soft); color: var(--ink); }
+  a {
+    color: var(--cyan);
+    text-decoration: none;
+    border-bottom: 1px solid var(--link-underline);
+  }
+  a:hover { border-bottom-color: currentColor; }
+  a:focus-visible {
+    outline: 3px solid var(--cyan);
+    outline-offset: 3px;
+  }
+  strong { color: var(--ink); font-weight: 720; }
+  code, .mono {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    color: var(--cyan);
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 1px 5px;
+  }
+
+  .page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 28px 92px;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .brandmark {
+    color: var(--ink);
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .topbar nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px 16px;
+  }
+  .topbar a {
+    color: var(--muted);
+    border-bottom-color: transparent;
+  }
+  .topbar a:hover { color: var(--cyan); }
+
+  header.hero {
+    min-height: 88vh;
+    display: grid;
+    align-content: center;
+    padding: 52px 0 42px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .kicker {
+    margin: 0 0 18px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  h1 {
+    max-width: 980px;
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: clamp(42px, 7vw, 82px);
+    line-height: 1.02;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .title-subtitle {
+    max-width: 820px;
+    margin: 14px 0 0;
+    color: var(--amber);
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.45;
+    text-wrap: balance;
+  }
+  .subhead {
+    max-width: 900px;
+    margin: 18px 0 0;
+    color: var(--text);
+    font-size: 21px;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .hero-tldr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 0.46fr);
+    gap: 22px;
+    align-items: end;
+    max-width: 980px;
+    margin: 26px 0 0;
+    padding: 18px 0 20px;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .hero-tldr p {
+    margin: 0;
+    color: var(--text);
+  }
+  .hero-tldr .tldr-copy {
+    max-width: 68ch;
+    font-size: 18px;
+    line-height: 1.58;
+    text-wrap: pretty;
+  }
+  .hero-result {
+    justify-self: end;
+    width: min(100%, 330px);
+  }
+  .hero-number {
+    display: block;
+    color: var(--green);
+    font-family: var(--serif);
+    font-size: clamp(40px, 4.3vw, 62px);
+    line-height: 0.96;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+  .hero-result p {
+    margin-top: 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .byline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin: 28px 0 0;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .byline span:not(:first-child)::before {
+    content: "/";
+    color: var(--rule-2);
+    margin-right: 14px;
+  }
+  .paper-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin: 34px 0 0;
+  }
+  .paper-nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 8px 12px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--paper);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .paper-nav a:hover {
+    color: var(--cyan);
+    border-color: var(--cyan);
+  }
+
+  .section {
+    margin: 74px 0;
+  }
+  .section h2 {
+    max-width: 780px;
+    margin: 0 0 16px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 36px;
+    line-height: 1.12;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .section h3 {
+    margin: 0 0 8px;
+    color: var(--ink);
+    font-size: 18px;
+    line-height: 1.3;
+  }
+  .section > p,
+  .main-col > p {
+    max-width: 74ch;
+    margin: 0 0 18px;
+    text-wrap: pretty;
+  }
+  .main-col > p:last-child,
+  .section > p:last-child { margin-bottom: 0; }
+
+  .abstract-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+    gap: 18px;
+    margin-top: 34px;
+  }
+  .panel {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 22px;
+  }
+  .panel h2,
+  .panel h3 {
+    margin: 0 0 12px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .panel p {
+    margin: 0 0 14px;
+  }
+  .panel p:last-child { margin-bottom: 0; }
+  .claim-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .claim {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .claim:last-child { border-bottom: 0; padding-bottom: 0; }
+  .claim .state {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 850;
+    color: var(--muted);
+  }
+  .claim p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .state.pass { color: var(--green); }
+  .state.warn { color: var(--amber); }
+  .state.info { color: var(--cyan); }
+
+  .sidenote {
+    color: var(--muted);
+    border-left: 1px solid var(--rule-2);
+    padding-left: 13px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .sidenote::before {
+    content: "plain explanation";
+    display: block;
+    margin-bottom: 7px;
+    color: var(--amber);
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .sidenote p {
+    margin: 0 0 10px;
+  }
+  .sidenote p:last-child { margin-bottom: 0; }
+
+  .figure {
+    margin: 28px 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 20px;
+    overflow: hidden;
+  }
+  .figure-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .figure-head strong { color: var(--cyan); }
+  .caption {
+    max-width: 78ch;
+    margin: 14px 0 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+  .diagram text {
+    font-family: var(--mono);
+    fill: var(--text);
+    font-size: 13px;
+  }
+  .diagram .label {
+    fill: var(--ink);
+    font-weight: 800;
+  }
+  .diagram .tiny {
+    fill: var(--muted);
+    font-size: 11px;
+  }
+  .diagram .node {
+    fill: var(--paper-2);
+    stroke: var(--rule-2);
+    stroke-width: 1.2;
+  }
+  .diagram .node-cyan { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .diagram .node-green { fill: var(--green-soft); stroke: var(--green); }
+  .diagram .node-amber { fill: var(--amber-soft); stroke: var(--amber); }
+  .diagram .node-rose { fill: var(--rose-soft); stroke: var(--rose); }
+  .diagram .edge {
+    stroke: var(--rule-2);
+    stroke-width: 1.6;
+    fill: none;
+  }
+  .diagram .arrow {
+    stroke: var(--cyan);
+    stroke-width: 1.6;
+    fill: none;
+    marker-end: url(#arrow);
+  }
+  .diagram .dash {
+    stroke-dasharray: 6 5;
+  }
+
+  .flow-figure {
+    clear: both;
+    background:
+      linear-gradient(180deg, var(--flow-wash), transparent 36%),
+      var(--flow-bg);
+    overflow-x: auto;
+    scrollbar-color: var(--cyan) var(--paper-2);
+  }
+  .flow-figure.is-paused .flow-edge,
+  .flow-figure.is-paused .flow-node,
+  .flow-figure.is-paused .bias-on,
+  .flow-figure.is-paused .scan-window,
+  .flow-figure.is-paused .cache-cursor {
+    animation-play-state: paused;
+  }
+  .flow-control {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--control-bg);
+    color: var(--text);
+    font: 800 12px var(--mono);
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: border-color 160ms cubic-bezier(0.25, 1, 0.5, 1), color 160ms cubic-bezier(0.25, 1, 0.5, 1), background 160ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  .flow-control:hover,
+  .flow-control:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-why {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    margin: 16px 0 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--rule);
+  }
+  .flow-why div {
+    background: var(--flow-card-bg);
+    padding: 13px 14px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .flow-why strong {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .code-grounding {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .code-grounding a {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 7px 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-decoration: none;
+  }
+  .code-grounding a:hover,
+  .code-grounding a:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-svg .lane {
+    fill: var(--soft-panel);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-title {
+    fill: var(--ink);
+    font: 800 16px var(--mono);
+  }
+  .flow-svg .flow-sub {
+    fill: var(--muted);
+    font: 12px var(--mono);
+  }
+  .flow-svg .math {
+    fill: var(--text);
+    font: 13px var(--mono);
+  }
+  .flow-svg .native-fill { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .flow-svg .tree-fill { fill: var(--green-soft); stroke: var(--green); }
+  .flow-svg .fa-fill { fill: var(--amber-soft); stroke: var(--amber); }
+  .flow-svg .commit-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .bad-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .meta-fill {
+    fill: var(--soft-panel-3);
+    stroke: var(--rule-2);
+  }
+  .flow-svg .kernel-card {
+    fill: var(--soft-panel);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-node {
+    stroke-width: 1.4;
+    animation: nodePulse 3.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .flow-svg .flow-node.s2 { animation-delay: 0.35s; }
+  .flow-svg .flow-node.s3 { animation-delay: 0.7s; }
+  .flow-svg .flow-edge {
+    fill: none;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 10 9;
+    animation: flowDash 2.4s linear infinite;
+  }
+  .flow-svg .native-edge { stroke: var(--cyan); }
+  .flow-svg .tree-edge { stroke: var(--green); animation-duration: 2.9s; }
+  .flow-svg .fa-edge { stroke: var(--amber); animation-duration: 2.1s; }
+  .flow-svg .warn-edge { stroke: var(--amber); animation-duration: 3s; }
+  .flow-svg .commit-edge { stroke: var(--rose); animation-duration: 3.2s; }
+  .flow-svg .bad-edge {
+    stroke: var(--rose);
+    stroke-dasharray: 7 8;
+    animation-duration: 3.8s;
+  }
+  .flow-svg .quiet-edge {
+    stroke: var(--rule-2);
+    stroke-dasharray: 2 8;
+    animation-duration: 4.4s;
+  }
+  .flow-svg .bias-on {
+    fill: var(--bias-on-fill);
+    animation: biasGlow 2.6s ease-in-out infinite;
+  }
+  .flow-svg .bias-off {
+    fill: var(--bias-off-fill);
+    stroke: var(--bias-off-stroke);
+  }
+  .flow-svg .code-label {
+    fill: var(--cyan);
+    font: 11px var(--mono);
+  }
+  .flow-svg .callout {
+    fill: var(--callout-fill);
+    stroke: var(--rule-2);
+    stroke-width: 1;
+  }
+  .flow-svg .scan-window {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 5 5;
+    animation: scanWindow 3.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+  .flow-svg .cache-cursor {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 4 4;
+  }
+  .flow-svg .legend-dot { stroke: none; }
+  @keyframes flowDash {
+    to { stroke-dashoffset: -38; }
+  }
+  @keyframes nodePulse {
+    0%, 100% { opacity: 0.82; }
+    45%, 55% { opacity: 1; stroke-width: 2.7; }
+  }
+  @keyframes biasGlow {
+    0%, 100% { opacity: 0.48; }
+    50% { opacity: 1; }
+  }
+  @keyframes scanWindow {
+    0%, 100% { transform: translateX(0); opacity: 0.65; }
+    50% { transform: translateX(96px); opacity: 1; }
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.52fr);
+    gap: 28px;
+    align-items: start;
+  }
+  .mini-card {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .mini-card p {
+    margin: 0 0 12px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .mini-card p:last-child { margin-bottom: 0; }
+
+  .definition-box,
+  .glossary-strip {
+    margin: 22px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--soft-panel);
+  }
+  .definition-box {
+    max-width: 900px;
+    padding: 16px 18px;
+  }
+  .definition-box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 16px;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .glossary-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: hidden;
+  }
+  .glossary-strip div {
+    padding: 14px 16px;
+    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .glossary-strip div:nth-child(3n) { border-right: 0; }
+  .glossary-strip div:nth-last-child(-n + 3) { border-bottom: 0; }
+  .glossary-strip dfn {
+    display: block;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-style: normal;
+    font-weight: 850;
+  }
+  .glossary-strip span {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .confidence-row {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 14px;
+    align-items: start;
+    margin: 20px 0 24px;
+    padding: 15px 17px;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--green-wash);
+  }
+  .confidence-row strong {
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .confidence-row p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .fold {
+    margin: 26px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--soft-panel-2);
+    overflow: hidden;
+  }
+  .fold > summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+    min-height: 58px;
+    padding: 15px 18px;
+    cursor: pointer;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 850;
+    list-style: none;
+  }
+  .fold > summary::-webkit-details-marker { display: none; }
+  .fold > summary::after {
+    content: "+";
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    color: var(--cyan);
+    font-size: 18px;
+    line-height: 1;
+  }
+  .fold[open] > summary {
+    border-bottom: 1px solid var(--rule);
+    background: var(--soft-panel);
+  }
+  .fold[open] > summary::after { content: "-"; }
+  .fold > summary small {
+    display: block;
+    grid-column: 1;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .fold-body {
+    padding: 18px;
+  }
+  .fold-body > :first-child { margin-top: 0; }
+  .fold-body > :last-child { margin-bottom: 0; }
+
+  .equation {
+    margin: 22px 0;
+    padding: 18px 20px;
+    background: var(--flow-bg);
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.85;
+  }
+  .equation .muted { color: var(--muted); }
+  .equation .hl { color: var(--amber); }
+  .equation .ok { color: var(--green); }
+
+  .source-exhibit {
+    margin: 24px 0;
+    background: var(--flow-bg);
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .source-exhibit .source-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .source-exhibit .source-head strong {
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .source-exhibit pre {
+    margin: 0;
+    padding: 16px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+  .source-exhibit code {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+  }
+  .source-exhibit .source-note {
+    margin: 0;
+    padding: 0 16px 16px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .source-exhibit > .grid {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    margin: 16px;
+  }
+
+  .compare-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    margin: 24px 0;
+    overflow: hidden;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--rule);
+  }
+  .compare-strip article {
+    min-height: 100%;
+    padding: 18px;
+    background: var(--paper);
+  }
+  .compare-strip h3 {
+    margin-bottom: 9px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .compare-strip p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+    margin: 24px 0;
+  }
+  .box {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .box .tag {
+    display: inline-flex;
+    margin-bottom: 10px;
+    padding: 3px 7px;
+    border-radius: 5px;
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 760;
+  }
+  .box.good .tag { color: var(--green); background: var(--green-soft); }
+  .box.warn .tag { color: var(--amber); background: var(--amber-soft); }
+  .box.bad .tag { color: var(--rose); background: var(--rose-soft); }
+  .box.info .tag { color: var(--cyan); background: var(--cyan-soft); }
+  .box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    margin: 24px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--paper);
+    scrollbar-color: var(--cyan) var(--paper-2);
+  }
+  table {
+    border-collapse: collapse;
+    min-width: 760px;
+    width: 100%;
+    font-size: 14px;
+  }
+  caption {
+    caption-side: top;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 850;
+    text-align: left;
+  }
+  th, td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--rule);
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--paper-2);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 850;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td.num {
+    font-family: var(--mono);
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .pill {
+    display: inline-flex;
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+  .pill.good { color: var(--green); background: var(--green-soft); }
+  .pill.warn { color: var(--amber); background: var(--amber-soft); }
+  .pill.info { color: var(--cyan); background: var(--cyan-soft); }
+  .pill.bad { color: var(--rose); background: var(--rose-soft); }
+
+  .failure-note {
+    margin: 0 0 14px;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-ledger {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .failure-card {
+    min-width: 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .failure-card.contaminated { border-color: var(--rose); }
+  .failure-card.superseded { border-color: var(--amber); }
+  .failure-card.settled { border-color: var(--rule-2); }
+  .failure-card.open { border-color: var(--cyan); }
+  .failure-card header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .failure-card h3 {
+    margin: 0;
+    min-width: 0;
+    max-width: 58ch;
+    color: var(--ink);
+    font-size: 17px;
+    line-height: 1.25;
+  }
+  .failure-card p {
+    margin: 0 0 10px;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-card p:last-child { margin-bottom: 0; }
+  .failure-card ul {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0 12px;
+    padding-left: 18px;
+    color: var(--text);
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+  .failure-card .conclusion {
+    padding-top: 10px;
+    border-top: 1px solid var(--rule);
+    color: var(--text);
+  }
+  .failure-card code { overflow-wrap: anywhere; }
+
+  .shape-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin: 24px 0;
+  }
+  .shape {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .shape h3 {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .shape h3 span {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .path-list {
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .path-list li {
+    padding: 3px 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .receipt-list {
+    columns: 2 330px;
+    column-gap: 34px;
+    margin: 22px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .receipt-list li {
+    break-inside: avoid;
+    margin: 0 0 12px;
+    font-size: 15px;
+  }
+
+  footer {
+    margin-top: 86px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  @media (min-width: 1040px) {
+    header.hero > .sidenote,
+    .section > .sidenote {
+      float: right;
+      clear: right;
+      width: 282px;
+      margin: 6px 0 20px 34px;
+    }
+  }
+  @media (max-width: 960px) {
+    .page { padding: 0 18px 72px; }
+    .topbar { flex-direction: column; align-items: flex-start; }
+    .topbar nav { justify-content: flex-start; }
+    header.hero { min-height: auto; padding: 26px 0 20px; }
+    h1 { font-size: 40px; }
+    .subhead {
+      margin-top: 18px;
+      font-size: 17px;
+      line-height: 1.48;
+    }
+    .title-subtitle {
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .byline span:not(:first-child)::before { content: none; }
+    .abstract-grid, .two-col, .shape-grid, .hero-tldr, .confidence-row { grid-template-columns: 1fr; }
+    .glossary-strip { grid-template-columns: 1fr; }
+    .glossary-strip div,
+    .glossary-strip div:nth-child(3n),
+    .glossary-strip div:nth-last-child(-n + 3) {
+      border-right: 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .glossary-strip div:last-child { border-bottom: 0; }
+    .compare-strip { grid-template-columns: 1fr; }
+    .table-wrap::before,
+    .flow-figure::before {
+      display: inline-flex;
+      position: sticky;
+      left: 8px;
+      z-index: 1;
+      margin: 8px 8px 0;
+      padding: 4px 7px;
+      border: 1px solid var(--rule);
+      border-radius: 5px;
+      background: var(--paper);
+      color: var(--muted);
+      font: 800 11px var(--mono);
+    }
+    .table-wrap::before { content: "wide table: scroll sideways"; }
+    .flow-figure::before { content: "wide figure: scroll sideways"; }
+    .section { margin: 56px 0; }
+    .section h2 { font-size: 30px; }
+    .hero-result {
+      justify-self: start;
+      width: 100%;
+    }
+    .hero-tldr {
+      gap: 14px;
+      margin-top: 16px;
+      padding: 12px 0 14px;
+    }
+    .hero-tldr .tldr-copy {
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .hero-number { font-size: 36px; }
+    .byline { margin-top: 16px; }
+    .paper-nav {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      margin-top: 18px;
+      padding-bottom: 6px;
+      scrollbar-color: var(--rule-2) transparent;
+    }
+    .paper-nav a {
+      flex: 0 0 auto;
+    }
+    .sidenote {
+      display: block;
+      margin: 18px 0 22px;
+      padding: 13px 16px 13px 14px;
+      background: var(--paper-2);
+      border: 1px solid var(--rule);
+      border-left: 1px solid var(--rule-2);
+      border-radius: 7px;
+    }
+    .claim { grid-template-columns: 1fr; gap: 4px; }
+    .flow-figure .flow-svg {
+      width: 960px;
+      max-width: none;
+    }
+    .flow-why { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+    .flow-svg .flow-edge,
+    .flow-svg .flow-node,
+    .flow-svg .bias-on,
+    .flow-svg .scan-window,
+    .flow-svg .cache-cursor {
+      animation: none !important;
+    }
+    .flow-svg .flow-edge { stroke-dashoffset: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <div class="brandmark">Lumo FlyWheel / Serving Lab</div>
+    <nav aria-label="Site navigation">
+      <a href="index.html">Vol. I</a>
+      <a href="round-f.html">Vol. II</a>
+      <a href="gdn-tree-scan.html">Vol. III</a>
+      <a href="gdn-prefix-cache.html">Vol. IV</a>
+      <a href="stateless-tree.html">Vol. V</a>
+      <a href="spine-reorder.html">Vol. VI</a>
+      <a href="keep-or-replay.html">Vol. VII</a>
+      <a href="https://github.com/MaCoredroid/Lumo_FlyWheel">Repository</a>
+    </nav>
+  </div>
+
+  <header class="hero">
+    <p class="kicker">Volume VIII / illustrated systems paper</p>
+    <h1>Marginal Parity</h1>
+    <p class="title-subtitle">A Speculative Tree Kills Its Per-Event Tax &mdash; What's Left Is Fixed, Plus Two Silent Bugs and a Profiling Reversal</p>
+    <p class="subhead"><a href="keep-or-replay.html">Vol.&nbsp;VII</a> left the branched token-tree accepting more tokens than native linear decode and losing on throughput anyway, with the deficit charged to the committer. Nine hundred and eighty-four commits later the picture has changed shape entirely. The tree's <strong>per-event</strong> cost &mdash; the tax it paid for every token it committed, once measured at roughly 140&nbsp;ms/event against native's 49 &mdash; is now <strong>statistically indistinguishable from native's</strong>. The entire remaining deficit is a <em>fixed</em> per-step term of about 85&ndash;90&nbsp;ms. That is not a smaller gap so much as a different gap: it no longer scales with how much the tree accepts, which makes the two ways to win arithmetic rather than mysterious. Along the way we found the target logits had been at the wrong temperature for seven weeks, a captured CUDA graph had been silently dropping its sampling constraints, and a profiling run at realistic context length dissolved most of an optimization campaign we had been running for days.</p>
+    <div class="hero-tldr" aria-label="TLDR and headline result">
+      <p class="tldr-copy"><strong>TL;DR:</strong> the deficit moved from <em>marginal</em> to <em>fixed</em>. A regression over seven tree arms and two native arms puts the tree's per-event slope at +4.6&nbsp;ms/event over native with a confidence interval of [&minus;15,&nbsp;+24] &mdash; the historic ~140&nbsp;ms/event row tax is <strong>confirmed dead</strong> (its own interval excludes 140), killed by the kernel work of the last three volumes plus a subtree-parallel scan. What remains is ~85&ndash;90&nbsp;ms/step that does not scale with acceptance, leaving the tree at ~0.92&times; native at the operating point and two quantified win conditions: cut ~85&nbsp;ms of fixed cost, or push acceptance to &ge;&nbsp;5.0. Throughput on our own board went <strong>32.3&nbsp;&rarr;&nbsp;38.4&nbsp;&rarr;&nbsp;43.6 tok/s</strong>, and one arm touched native's predicted rate &mdash; a result we then audited and <em>downgraded ourselves</em>, because the native comparand is a two-point line with zero degrees of freedom. Two silent bugs surfaced: the spec target logits had run at an effective temperature of 0.36 instead of 0.6 since early June, and a warmup graph capture built with an empty sampling config had baked out the top-k/top-p kernels, so live replays sampled an unfiltered tail. And an nsys capture at deployment showed the GPU already 97% busy &mdash; retiring an entire class of overlap levers we were about to build.</p>
+      <div class="hero-result">
+        <span class="hero-number">140&nbsp;&rarr;&nbsp;0</span>
+        <p><strong>the per-event row tax, in ms/event, is gone</strong> &mdash; the tree once paid ~140&nbsp;ms for every event it committed against native's ~49; the measured marginal difference is now +4.6&nbsp;ms/event with a CI of [&minus;15,&nbsp;+24], statistically parity, and the interval excludes the old figure outright. The deficit that remains is <strong>fixed</strong>: ~85&ndash;90&nbsp;ms/step regardless of acceptance, tree at ~0.92&times; native. Board throughput climbed <strong>32.3&nbsp;&rarr;&nbsp;43.6 tok/s</strong> on one consistent basis. Two win conditions, both now arithmetic: cut the fixed term, or reach accept&nbsp;&ge;&nbsp;5.0.</p>
+      </div>
+    </div>
+    <div class="byline">
+      <span><strong>Mark Ma</strong></span>
+      <span>ML systems / inference</span>
+      <span>Qwen 3.6-27B FP8 / GB10</span>
+      <span>July 2026</span>
+    </div>
+    <div class="paper-nav">
+      <a href="#abstract">Abstract</a>
+      <a href="#reader-map">Reader map</a>
+      <a href="#shape">The shape of the deficit</a>
+      <a href="#levers">What we built</a>
+      <a href="#bugs">Two silent bugs</a>
+      <a href="#measurement">Measuring the measurement</a>
+      <a href="#results">Results</a>
+      <a href="#museum">Failure museum</a>
+      <a href="#reflection">Reflection</a>
+      <a href="#limitations">Limits</a>
+      <a href="#future">Future work</a>
+      <a href="#receipts">Source trail</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="section" id="abstract">
+      <h2>Abstract</h2>
+      <p>A speculative decoder's cost has two parts: a <em>fixed</em> per-step term paid whether it accepts one token or ten, and a <em>marginal</em> per-event term paid for each speculative event it commits. Which of the two carries your deficit determines what you should optimize, and until this volume we had the answer wrong in a specific and expensive way. <a href="keep-or-replay.html">Vol.&nbsp;VII</a> charged the tree's throughput loss to the committer &mdash; a per-event replay through forty-eight recurrent layers &mdash; and an earlier measurement had the tree paying roughly 140&nbsp;ms/event against native's 49. This volume reports that the marginal tax is <strong>gone</strong>: fitting step time against acceptance across seven tree arms puts the tree's per-event slope within a few milliseconds of native's, with a confidence interval that excludes the historic figure outright. The kernel work of the last three volumes, plus a subtree-parallel scan that exploits the independence of a tree's disjoint branches, removed it.</p>
+      <p>What remains is a purely <em>fixed</em> deficit of roughly 85&ndash;90&nbsp;ms per step: the drafter that must propose a twenty-one-node tree where native proposes a five-token chain, the committer's staged span, and host publishes. Because it does not scale with acceptance, the win conditions become arithmetic rather than architectural guesswork &mdash; cut about 85&nbsp;ms of fixed cost and the tree reaches native at equal acceptance, or raise acceptance to 5.0 and it wins at the current cost. Measured throughput on one consistent basis climbed from 32.3 to 43.6 tokens per second across the campaign, and a single arm at the operating point matched what our native fit predicts. We report that arm and then <em>downgrade it ourselves</em>: the native comparand is a two-point line with zero degrees of freedom, confounded across batch size, task set, boot date, and prefill fraction, so &ldquo;parity&rdquo; is one consistent reading of the data and not a measured fact. The robust statement is the one we lead with &mdash; marginal parity, fixed deficit, ~0.92&times; native at the operating point.</p>
+      <p>Two silent bugs surfaced and both are worth the telling. The patcher had been injecting a second sampling-constraint application on top of the stock one, so every speculative arm since early June had been drafting and verifying at an <em>effective temperature of 0.36</em> rather than the intended 0.6 &mdash; seven weeks of absolute numbers quietly off-regime, though the comparisons between arms survive. And a CUDA-graph warmup capture had been constructed with a dummy sampling configuration whose top-k and top-p were unset, so the captured graph omitted the constraint kernels entirely and live replays sampled from an unfiltered tail: rare-token salad, acceptance collapsing to ~1.9, four tasks garbled out of four. Finally, a profiling reversal worth internalizing: the ~26&nbsp;ms/event of &ldquo;non-kernel idle&rdquo; we had spent days chasing turned out to be substantially an artifact of profiling at short context, and a capture at the real deployment point showed the GPU already 97% busy &mdash; which retires the entire overlap-lever class we were queuing up to build.</p>
+
+      <div class="definition-box" aria-label="The governing distinction">
+        <p><strong>The governing distinction (fixed vs marginal):</strong> model step time as <code>step = F + m &times; eps</code>, where <em>eps</em> is speculative events per step and <em>m</em> is the marginal cost of an event. A deficit in <em>m</em> scales with how well your speculator works &mdash; the better it accepts, the more it pays, and no amount of acceptance saves you. A deficit in <em>F</em> is a constant toll that acceptance <em>dilutes</em>: raise accept per event and the fixed cost is amortized over more committed tokens. Discovering that our deficit had moved from <em>m</em> to <em>F</em> is the whole result, because it converts &ldquo;the tree is structurally slower&rdquo; into two arithmetic targets &mdash; and it makes the accept-beyond-5 work a direct win condition rather than a nice-to-have.</p>
+      </div>
+
+      <h3>Names in this paper</h3>
+      <div class="glossary-strip" aria-label="Names in this paper">
+        <div><dfn>native (MTP-5)</dfn><span>stock vLLM linear multi-token-prediction decode, a 5-token chain; the throughput bar.</span></div>
+        <div><dfn>tree (tail6)</dfn><span>the branched 21-node token-tree verifier with a deep Arctic suffix tail past depth-5, on TREE_ATTN.</span></div>
+        <div><dfn>eps</dfn><span>speculative events per step &mdash; the regression's x-axis. Higher eps means more speculation per physical step.</span></div>
+        <div><dfn>F (fixed)</dfn><span>the per-step intercept: drafter, committer span, host publishes &mdash; paid regardless of acceptance.</span></div>
+        <div><dfn>m (marginal)</dfn><span>the per-event slope: what one more speculative event costs. This is where the tree's tax used to live.</span></div>
+        <div><dfn>row tax</dfn><span>the historic ~140&nbsp;ms/event penalty the tree paid over native &mdash; the thing this volume reports dead.</span></div>
+        <div><dfn>subtree-parallel</dfn><span>partitioning the tree's nodes at runtime into a shared prefix plus independent subtrees, scanned concurrently.</span></div>
+        <div><dfn>in-span idle</dfn><span>non-kernel time measured inside the verify span &mdash; chased for days, then largely explained as a short-context artifact.</span></div>
+        <div><dfn>double-temp</dfn><span>the bug: sampling constraints applied twice, giving an effective temperature of 0.36 instead of 0.6.</span></div>
+        <div><dfn>constraint omission</dfn><span>the bug: a warmup capture with unset top-k/top-p baked a graph with no constraint kernels, so replays sampled the raw tail.</span></div>
+        <div><dfn>band</dfn><span>the pass/fail envelope a run must sit in to be trusted &mdash; the campaign's own regression gate.</span></div>
+        <div><dfn>measured_tps_fullstep_wall</dfn><span>the one consistent throughput basis on our board; always quoted with eps and prefill fraction.</span></div>
+      </div>
+
+      <div class="abstract-grid">
+        <div class="panel">
+          <h2>Contribution</h2>
+          <p>One structural result and a great deal of measurement discipline. The result is that a branched speculative verifier's per-event cost on a recurrent hybrid can be brought to parity with a linear chain's &mdash; the row tax is not inherent to branching &mdash; which relocates the entire deficit into a fixed term and makes the remaining problem arithmetic. The discipline is the rest: a per-step regression that retired our own pooled fit, an instrument that had to be debugged before it could measure, a profiling reversal that killed a lever class, and a self-audit that downgraded our most quotable number.</p>
+          <p>This page is the sequel to <a href="keep-or-replay.html">Vol.&nbsp;VII</a> and is self-contained. Like the prior volumes it is a research report rather than an announcement: it keeps the <a href="#levers">lever ledger</a> with what each bought, a full <a href="#museum">failure museum</a> of refuted hypotheses and observer effects, and a <a href="#limitations">limits</a> section that states plainly which of our own headlines will not survive contact with a proper native control.</p>
+        </div>
+        <aside class="panel">
+          <h2>Status</h2>
+          <div class="claim-list">
+            <div class="claim"><span class="state pass">ROW TAX DEAD</span><p>Marginal cost now +4.6&nbsp;ms/event over native, CI [&minus;15,&nbsp;+24] &mdash; statistically parity, and the interval excludes the historic ~140&nbsp;ms/event outright.</p></div>
+            <div class="claim"><span class="state pass">THROUGHPUT</span><p>Board climbed 32.3&nbsp;&rarr;&nbsp;38.4&nbsp;&rarr;&nbsp;43.6 tok/s on one consistent basis; best arm accept 4.749 at eps 2.701, garble-free.</p></div>
+            <div class="claim"><span class="state pass">BUGS FOUND</span><p>Seven weeks of spec arms at effective temp 0.36 (fixed); a captured graph silently missing its top-k/top-p kernels (root-caused and fixed).</p></div>
+            <div class="claim"><span class="state warn">STILL BEHIND</span><p>~85&ndash;90&nbsp;ms/step fixed deficit remains; tree ~0.92&times; native at the operating point. The single-arm &ldquo;parity&rdquo; reading is downgraded by our own audit.</p></div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="source-exhibit" aria-label="Falsification checks">
+        <div class="source-head">
+          <strong>What would falsify this?</strong>
+          <span>Skeptic checks before trusting the headline</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">Row tax</span><p>A properly-powered native control &mdash; more than two points, matched batch and task set &mdash; showing the tree's per-event slope materially above native's after all.</p></div>
+          <div class="box bad"><span class="tag">Fixed vs marginal</span><p>Step time failing to be linear in eps, or the intercept absorbing per-event work through a correlated confound (prefill fraction is the obvious candidate).</p></div>
+          <div class="box bad"><span class="tag">Throughput</span><p>The 43.6 arm not reproducing on a fresh boot, or the board's gains tracing to workload phase rather than the baked levers.</p></div>
+          <div class="box bad"><span class="tag">Bug impact</span><p>The temperature fix moving arm-to-arm <em>comparisons</em>, not just the absolute regime &mdash; which would invalidate the campaign's A/Bs, not merely re-base them.</p></div>
+          <div class="box bad"><span class="tag">Idle</span><p>The in-span idle reappearing at real context on a fresh capture &mdash; which would revive the lever class the deployment profile retired.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="reader-map">
+      <h2>Five-Minute Reader Map</h2>
+      <aside class="sidenote">
+        <p><strong>Read path:</strong> the shape of the deficit first &mdash; it reframes everything &mdash; then what we built, then the two bugs, then the measurement story and the results. The museum and reflection are the retrospective.</p>
+      </aside>
+      <p>The shortest version: a speculative decoder pays a fixed cost per step and a marginal cost per accepted event. Our tree used to pay a large marginal penalty, which meant accepting more tokens made it <em>worse</em> relative to native. That penalty is now gone, and the whole remaining deficit is a fixed per-step toll &mdash; which acceptance dilutes rather than aggravates. Two silent bugs and one profiling reversal are the reason it took nine hundred commits to be able to say so with a straight face.</p>
+
+      <div class="source-exhibit" aria-label="Five-minute reading path">
+        <div class="source-head">
+          <strong>Read in this order</strong>
+          <span>The blog path before the full paper path</span>
+        </div>
+        <div class="grid">
+          <div class="box good"><span class="tag">The shape</span><p>step = F + m&times;eps. The tree's marginal <em>m</em> reached native's (+4.6&nbsp;ms/event, CI spans zero); the ~140&nbsp;ms/event row tax is dead. The deficit is now all in fixed <em>F</em>.</p></div>
+          <div class="box good"><span class="tag">What we built</span><p>Eight levers baked as defaults &mdash; subtree-parallel scan, drafter and committer graph capture, gather and conv batching &mdash; taking the board from 32.3 to 43.6 tok/s.</p></div>
+          <div class="box bad"><span class="tag">Two bugs</span><p>Seven weeks at effective temp 0.36 instead of 0.6; and a captured graph built from an empty sampling config that dropped the top-k/top-p kernels, garbling live replays.</p></div>
+          <div class="box warn"><span class="tag">The reversal</span><p>The ~26&nbsp;ms/event &ldquo;idle&rdquo; we chased for days was largely a short-context artifact, and at deployment the GPU is 97% busy &mdash; retiring the overlap-lever class outright.</p></div>
+          <div class="box info"><span class="tag">Honest close</span><p>~85&ndash;90&nbsp;ms/step fixed deficit remains, tree ~0.92&times; native. Two arithmetic win conditions; our own best number audited and downgraded.</p></div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="shape">
+      <h2>The Shape of the Deficit</h2>
+      <aside class="sidenote">
+        <p><strong>The model:</strong> <code>step = F + m &times; eps</code>. Fit step time against speculative events per step, and the intercept <em>F</em> is what you pay for existing while the slope <em>m</em> is what you pay per event. Where your deficit sits decides what you optimize.</p>
+        <p><strong>Why it matters:</strong> a marginal deficit gets <em>worse</em> as your speculator improves. A fixed deficit gets <em>diluted</em>. Same milliseconds, opposite strategy.</p>
+      </aside>
+      <p>For six volumes we treated the tree's slowness as a property of branching &mdash; the committer replay, the wider verify, the per-node work &mdash; and every one of those is a <em>per-event</em> cost. That framing predicted something uncomfortable: the better the tree got at accepting, the more of these costs it would pay, so its acceptance advantage could never fully convert. Vol.&nbsp;VII's numbers were consistent with exactly that, and an earlier measurement had the tree paying roughly <strong>140&nbsp;ms per event</strong> against native's <strong>49</strong>.</p>
+      <p>Fitting step time against speculative events per step, across seven tree arms spanning every graph mode we ship, gives a different answer:</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Step time as a linear function of speculative events per step. The slopes are the per-event cost; the intercepts are the fixed per-step cost.</caption>
+          <thead><tr><th>Arm</th><th>Fit</th><th>Fixed <em>F</em></th><th>Marginal <em>m</em></th></tr></thead>
+          <tbody>
+            <tr><td>native (MTP-5)</td><td class="mono">step = 160.4 + 44.6 &times; eps</td><td class="num">160.4 ms</td><td class="num">44.6 ms/event</td></tr>
+            <tr><td>tree (7 arms, all modes)</td><td class="mono">step = 235.5 + 49.2 &times; eps</td><td class="num">235.5 ms</td><td class="num">49.2 ms/event</td></tr>
+            <tr><td><strong>difference</strong></td><td>&mdash;</td><td class="num"><strong>+75 ms</strong> (fixed)</td><td class="num"><strong>+4.6 ms/event</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The slopes are the result. The tree's per-event cost is <strong>+4.6&nbsp;ms</strong> over native &mdash; against a confidence interval of [&minus;15,&nbsp;+24], which spans zero. Statistically the two lines are parallel: one more accepted event costs the tree what it costs native. The historic ~140&nbsp;ms/event row tax is not merely reduced, it is <strong>excluded by the interval</strong>. Whatever the tree still pays, it does not pay it per token.</p>
+      <p>The entire remaining deficit sits in the intercept, and it is large: about 75&nbsp;ms/step on this fit, or &mdash; on the more robust reading our own audit prefers &mdash; a total deficit of <strong>85&ndash;90&nbsp;ms/step</strong> at the operating range, measured where the native data is direct rather than extrapolated. That leaves the tree at roughly <strong>0.92&times; native</strong> where it actually runs.</p>
+
+      <div class="figure" aria-labelledby="fig1-title">
+        <div class="figure-head"><strong id="fig1-title">Figure 1</strong><span>Two nearly-parallel lines: the tree's per-event slope has reached native's, and the whole gap is now a vertical offset</span></div>
+        <svg class="diagram" viewBox="0 0 1120 440" role="img" aria-label="Step time versus speculative events per step. Native and tree fit lines have nearly identical slopes (44.6 and 49.2 ms per event) separated by a fixed vertical offset of about 75ms; a dashed historic line shows the old 140ms-per-event tree slope diverging steeply.">
+          <defs>
+            <marker id="f1-a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L8,3 z" fill="#c9c4b8"></path></marker>
+          </defs>
+          <!-- axes: x eps 0..3 mapped 140..1020 (293.3/unit); y step 0..500ms mapped 380..60 (0.64/ms) -->
+          <line x1="140" y1="60" x2="140" y2="380" stroke="#3b3934" stroke-width="1"></line>
+          <line x1="140" y1="380" x2="1040" y2="380" stroke="#3b3934" stroke-width="1"></line>
+          <text x="96" y="64" class="tiny">500</text><text x="96" y="188" class="tiny">300</text><text x="96" y="316" class="tiny">100</text>
+          <text x="40" y="200" class="tiny">step</text><text x="40" y="216" class="tiny">time</text><text x="40" y="232" class="tiny">(ms)</text>
+          <text x="136" y="400" class="tiny">0</text><text x="429" y="400" class="tiny">1</text><text x="722" y="400" class="tiny">2</text><text x="1015" y="400" class="tiny">3</text>
+          <text x="520" y="422" class="tiny">speculative events per step (eps)</text>
+
+          <!-- historic tree slope 140ms/event, intercept ~160: y = 380 - 0.64*(160+140x); x=0 ->277.6, x=1.6 -> 380-0.64*384=134 -->
+          <line x1="140" y1="277" x2="609" y2="134" stroke="#d88989" stroke-width="2" stroke-dasharray="6 4"></line>
+          <text x="440" y="118" class="tiny" fill="#d88989">historic tree: ~140 ms/event</text>
+          <text x="440" y="134" class="tiny" fill="#d88989">(the row tax &mdash; now excluded)</text>
+
+          <!-- tree line: F=235.5 m=49.2 ; x=0: y=380-0.64*235.5=229.3 ; x=3: 380-0.64*383.1=134.8 -->
+          <line x1="140" y1="229" x2="1020" y2="135" stroke="#8bd3dd" stroke-width="2.5"></line>
+          <!-- native line: F=160.4 m=44.6 ; x=0: y=380-0.64*160.4=277.3 ; x=3: 380-0.64*294.2=191.7 -->
+          <line x1="140" y1="277" x2="1020" y2="192" stroke="#a7d98d" stroke-width="2.5"></line>
+
+          <!-- fixed offset bracket at eps ~2.6 (x=140+2.6*293.3=902.6) tree y=380-0.64*(235.5+127.9)=147.4 ; native y=380-0.64*(160.4+116)=203.1 -->
+          <line x1="903" y1="147" x2="903" y2="203" stroke="#e7c76f" stroke-width="2"></line>
+          <path d="M903 147 L903 203" class="arrow" style="stroke:#e7c76f;marker-end:url(#f1-a)"></path>
+          <text x="915" y="168" class="tiny" fill="#e7c76f">the whole remaining gap:</text>
+          <text x="915" y="184" class="tiny" fill="#e7c76f">~75&ndash;90 ms, FIXED</text>
+
+          <text x="700" y="252" class="tiny" fill="#8bbf73">native: 44.6 ms/event</text>
+          <text x="700" y="130" class="tiny" fill="#6fb5c2">tree: 49.2 ms/event</text>
+          <text x="140" y="52" class="tiny">Parallel lines = equal marginal cost. The tree's slope reached native's; only the offset remains.</text>
+        </svg>
+        <p class="caption">Figure 1 is the volume in one picture. The dashed rose line is where the tree used to be &mdash; a steep ~140&nbsp;ms/event slope that diverged from native the more the tree accepted, so acceptance could never pay for itself. The solid cyan and green lines are the measured fits now: <em>nearly parallel</em>, differing by +4.6&nbsp;ms/event with an interval spanning zero. All that separates them is a vertical offset, the fixed per-step cost. A gap that is a slope gets worse as your speculator improves; a gap that is an offset gets amortized away by exactly the thing the tree is good at.</p>
+      </div>
+
+      <h3>Why the reframe changes the strategy</h3>
+      <p>Throughput is committed tokens over step time, so with the deficit purely fixed the two ways to win fall out as arithmetic. <strong>Cut the fixed term</strong> &mdash; roughly 85&nbsp;ms &mdash; and the tree reaches native at equal acceptance; the fixed term is not mysterious either, being mostly the drafter proposing a twenty-one-node tree where native proposes a five-token chain (~54&nbsp;ms), the committer's staged span (~39&nbsp;ms), and host publishes. Or <strong>raise acceptance</strong>: at the current fixed cost, an accept of 5.0 clears native at the operating point, because every additional token committed per event spreads the same toll over more output. We sit at 4.3&ndash;4.75.</p>
+      <p>That second condition is the one worth dwelling on, because it is the inversion. Under the old marginal-tax picture, the accept-beyond-5 work was a nice-to-have that the row tax would partly eat. Under a fixed-cost picture, acceptance is a <em>direct</em> win condition &mdash; the tree's one native advantage now converts cleanly, and every token of accept above the current rate is throughput we keep. The deep suffix tail of <a href="keep-or-replay.html">Vol.&nbsp;VII</a> stopped being a curiosity and became the shortest path to beating native.</p>
+
+      <div class="source-exhibit" aria-label="The two win conditions">
+        <div class="source-head">
+          <strong>Two win conditions, both arithmetic</strong>
+          <span>What a fixed-only deficit buys you</span>
+        </div>
+        <div class="grid">
+          <div class="box good"><span class="tag">Cut fixed</span><p>~85&nbsp;ms/step reaches native at equal accept. Largest owned components: drafter ~54&nbsp;ms, committer span ~39&nbsp;ms.</p></div>
+          <div class="box good"><span class="tag">Raise accept</span><p>Accept &ge; 5.0 beats native at the current fixed cost. We are at 4.3&ndash;4.75 &mdash; the deep-tail work is now a direct win condition.</p></div>
+          <div class="box info"><span class="tag">Why it inverted</span><p>Fixed costs are diluted by acceptance; marginal costs are aggravated by it. The same milliseconds imply opposite strategies.</p></div>
+          <div class="box warn"><span class="tag">Honest bound</span><p>Tree ~0.92&times; native at the operating point. The reframe is a better problem, not a solved one.</p></div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="levers">
+      <h2>What We Built</h2>
+      <aside class="sidenote">
+        <p><strong>The bar for baking a lever:</strong> an offline byte gate (the committed state must be bit-identical), a live band gate (the run must land inside the campaign's pass/fail envelope, garble-free), and a speed signal. Nothing ships on a speed number alone.</p>
+        <p><strong>Why so many small ones:</strong> with the deficit now fixed rather than marginal, there is no single 85&nbsp;ms lever to find. It is a collection of tens of milliseconds, each gated.</p>
+      </aside>
+      <p>The campaign's engineering output is a set of levers now baked as launcher defaults. Each was gated the same way &mdash; byte-identical committed state offline, an in-band garble-free live run, and a speed signal &mdash; and several are direct descendants of mechanisms the earlier volumes built. The ones that moved the board most:</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The baked lever ledger. Every state-touching lever is byte-identical to the path it replaces; the effects are measured, not projected.</caption>
+          <thead><tr><th>Lever</th><th>What it does</th><th>Measured effect</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Truncated drafter head</td>
+              <td>Draft from a 64k-entry gathered output head instead of the full vocabulary; the verifier keeps the full head, so the result stays lossless.</td>
+              <td class="num">drafter 94.9&nbsp;&rarr;&nbsp;56.3&nbsp;ms/step; accept 5.552 vs a full-head control's 5.556 &mdash; unchanged</td>
+            </tr>
+            <tr>
+              <td>Drafter graph capture</td>
+              <td>Capture the whole spine draft as a CUDA graph, removing per-level launch and host glue.</td>
+              <td class="num">the ~&minus;40&nbsp;ms lever</td>
+            </tr>
+            <tr>
+              <td>In-kernel replay-ring staging</td>
+              <td>Stage the committer's replay inputs inside the kernel rather than assembling them on the host.</td>
+              <td class="num">TPS 38.01 vs 32.85 baseline; accept 4.520</td>
+            </tr>
+            <tr>
+              <td>Batched all-layers committer</td>
+              <td>Commit every layer in one batched pass instead of forty-eight per-layer calls.</td>
+              <td class="num">committer span 47&nbsp;&rarr;&nbsp;36&nbsp;ms, verify flat</td>
+            </tr>
+            <tr>
+              <td>Sync-free KV remap</td>
+              <td>The Vol.&nbsp;V re-linearizer with every host synchronization removed.</td>
+              <td class="num">committer 12.33&nbsp;ms/event</td>
+            </tr>
+            <tr>
+              <td>Subtree-parallel scan</td>
+              <td>Partition the tree at runtime into a shared prefix plus independent subtrees and scan them concurrently &mdash; the branches have no data dependence on each other.</td>
+              <td class="num">byte-exact, graph-safe, +4.7% at B=1</td>
+            </tr>
+            <tr>
+              <td>Fused / batched conv write-back</td>
+              <td>Fuse the convolution state write-back, then batch it across concurrent requests.</td>
+              <td class="num">&minus;6.7&nbsp;ms fixed, &minus;2.4&nbsp;ms/event; ~&minus;20&nbsp;ms/step at the operating point</td>
+            </tr>
+            <tr>
+              <td>Parent gather / conv pregather / in-kernel flags</td>
+              <td>Recompose the per-node gathers and move branch flags into the kernel, cutting host round-trips.</td>
+              <td class="num">byte-identical, selfcheck-gated</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The lever that came back from the dead</h3>
+      <p>The truncated drafter head deserves a paragraph, because <a href="keep-or-replay.html">Vol.&nbsp;VII</a> reported it <em>refuted</em>. The idea &mdash; draft from a reduced vocabulary so the drafter reads a fraction of the output-projection weights, while the verifier keeps the full head so nothing is lost &mdash; was ranked the top drafter lever and then killed by measurement: the drafter turned out to be host-orchestration-bound, so cutting its largest weight read bought about two percent of a wall dominated by launch glue.</p>
+      <p>That verdict was correct <em>at the time</em> and stopped being correct once the drafter's host cost was removed. With the spine draft captured as a graph, the glue is gone and what remains is actual weight traffic &mdash; at which point halving the read does exactly what the original arithmetic said it would: the drafter falls from 94.9 to 56.3&nbsp;ms per step. And it is free in quality: on a matched workload the truncated head accepts 5.552 against a full-head control's 5.556, because the 64k gather covers 97.1% of the draft ids actually used at half the bytes.</p>
+      <p>The general lesson is worth stating plainly, since it is the kind of thing that quietly wastes years: <strong>a lever refuted against one bottleneck is not refuted permanently.</strong> Removing the dominant cost re-ranks everything behind it, and a measured &ldquo;no&rdquo; carries an implicit &ldquo;while this other thing dominates.&rdquo; We had recorded the refutation with its reasoning attached, which is the only reason it was cheap to revisit.</p>
+
+      <h3>Subtree-parallel, and a fixed cost it brought with it</h3>
+      <p>The one lever with genuinely new structure is the subtree-parallel scan. The recurrent scan had been walking all of the tree's nodes serially inside every program, because a scan is inherently sequential along a path. But a <em>tree</em> is only sequential along each path: after the shared prefix, its disjoint branches have no data dependence on one another at all. Partitioning the nodes at runtime from the parent array into a prefix plus K independent subtrees, and giving the subtrees their own program axis, shortens the critical path from the node count to roughly the prefix plus the deepest subtree &mdash; and the win <em>grows</em> with wider trees, which is exactly the direction the accept-beyond-5 work pushes.</p>
+      <p>It also came with an honest complication that the campaign measured rather than assumed. The captured side-stream topology this required carries a <strong>fixed +32.7&nbsp;ms</strong> cost per step, while the decomposition itself is worth a real <strong>&minus;22.3&nbsp;ms per event</strong>. Those cross over at an acceptance of about 1.47 events per step &mdash; well below where we operate &mdash; so the lever is a clear net win at the operating point and stays baked. A follow-up that hoped to remove the fixed part by putting the work back on a single stream was refuted by reading the source: the launch was already single-stream, and the 32.7&nbsp;ms is the per-level launch structure itself.</p>
+
+      <h3>What we deleted</h3>
+      <p>The campaign also removed machinery. The committer's node-bank burn &mdash; the 43&nbsp;ms of scratch-zeroing that <a href="keep-or-replay.html">Vol.&nbsp;VII</a> proved redundant &mdash; is now deleted outright rather than defaulted off, with its legacy path retired fail-loud. A head-merge seam that had been superseded by the tail design, an internal mechanism that duplicated the subtree preseed, and a decode kind that no longer had a purpose all went with it. This matters for a reason beyond tidiness: every one of those was a live branch that a future measurement could have silently taken, and this series has now lost enough weeks to configuration that could reach an unintended path that deleting is cheaper than guarding.</p>
+    </section>
+    <section class="section" id="bugs">
+      <h2>Two Silent Bugs</h2>
+      <aside class="sidenote">
+        <p><strong>What makes these worth telling:</strong> neither crashed, neither tripped a gate, and both lived inside code that had been reviewed and shipped. One changed every number we published for seven weeks; the other made a captured graph quietly stop doing part of its job.</p>
+      </aside>
+      <p>Two defects surfaced in this campaign that had been running silently for a long time. They are unrelated in mechanism but share a shape: a piece of configuration that was <em>absent</em> rather than wrong, in a place where absence had a plausible-looking effect instead of an error.</p>
+
+      <h3>Bug one: seven weeks at the wrong temperature</h3>
+      <p>Our patcher injects a sampling-constraint application into the speculative verify path. It had been written against an image whose stock rejection sampler did <em>not</em> apply constraints itself, and its guard checked only for the patcher's own copy &mdash; not for a stock one. When the stock file later grew its own application, the guard did not notice, and both fired. Applying a temperature scaling twice does not apply it twice as hard in a linear way; it <strong>squares</strong> it. A requested temperature of 0.6 became an effective <code>0.6&sup2; = 0.36</code>, and had been so for every speculative arm since the fifth of June &mdash; roughly seven weeks of campaigns.</p>
+      <p>A temperature that is too low is a particularly quiet bug, because nothing breaks. The model simply samples more greedily than intended; drafts get easier to guess, acceptance drifts up, and every arm is wrong in the same direction, so A/B comparisons keep looking sane. There was even a subtler side effect: the second application landed asymmetrically, so parent rows were being evaluated at 0.36 while the tree's own rows saw 0.6 &mdash; an inconsistency inside a single arm that no gate was watching for.</p>
+      <p>The fix applies the constraint only when the stock path lacks it, with a patch-time escape hatch (<code>FR13_TEMP_LEGACY_DOUBLE=1</code>) that reproduces the old double-apply byte for byte &mdash; deliberately kept, because the honest way to re-base seven weeks of numbers is an A/B against the bug rather than a declaration. That A/B is reassuring: at true 0.6 the best arm accepts <strong>4.331</strong> against the 0.36 control's <strong>4.434</strong>, a difference of about a tenth of a token. The <em>comparisons</em> the campaign made survive; the <em>absolute regime</em> they were made in does not, and every pre-fix number now carries the caveat.</p>
+
+      <div class="figure" aria-labelledby="fig2-title">
+        <div class="figure-head"><strong id="fig2-title">Figure 2</strong><span>Two absences with plausible symptoms: a guard that checked the wrong thing, and a capture built from an empty config</span></div>
+        <svg class="diagram" viewBox="0 0 1120 400" role="img" aria-label="Diagram of two bugs: constraints applied twice squaring the temperature from 0.6 to 0.36, and a warmup graph capture built with top-k and top-p unset omitting the constraint kernels so live replays sample an unfiltered tail">
+          <defs>
+            <marker id="f2-a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L8,3 z" fill="#8bd3dd"></path></marker>
+            <marker id="f2-r" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L8,3 z" fill="#d88989"></path></marker>
+          </defs>
+          <text x="24" y="28" class="label">A. Double apply &mdash; the guard checked for our copy, not the stock one</text>
+          <rect x="40" y="52" width="150" height="52" rx="8" class="node node-cyan"></rect>
+          <text x="56" y="76" class="tiny">logits</text><text x="56" y="94" class="tiny">requested T = 0.6</text>
+          <path d="M192 78 H250" class="arrow" style="marker-end:url(#f2-a)"></path>
+          <rect x="258" y="52" width="160" height="52" rx="8" class="node node-amber"></rect>
+          <text x="274" y="76" class="tiny">stock apply</text><text x="274" y="94" class="tiny">(new; unnoticed)</text>
+          <path d="M420 78 H478" class="arrow" style="marker-end:url(#f2-r)"></path>
+          <rect x="486" y="52" width="160" height="52" rx="8" class="node node-rose"></rect>
+          <text x="502" y="76" class="tiny">our apply</text><text x="502" y="94" class="tiny">(guard blind to stock)</text>
+          <path d="M648 78 H706" class="arrow" style="marker-end:url(#f2-r)"></path>
+          <rect x="714" y="52" width="200" height="52" rx="8" class="node node-rose"></rect>
+          <text x="730" y="76" class="tiny">effective T = 0.6&sup2; = 0.36</text><text x="730" y="94" class="tiny">for 7 weeks</text>
+          <text x="40" y="132" class="tiny">Nothing errors. Sampling is merely greedier than intended &mdash; drafts get easier, accept drifts up, and every arm is wrong the same way.</text>
+
+          <text x="24" y="196" class="label">B. Constraint omission &mdash; the warmup capture was built with top-k / top-p unset</text>
+          <rect x="40" y="222" width="200" height="56" rx="8" class="node node-amber"></rect>
+          <text x="56" y="246" class="tiny">warmup capture with</text><text x="56" y="264" class="tiny">dummy config: top_k/top_p = None</text>
+          <path d="M242 250 H300" class="arrow" style="marker-end:url(#f2-r)"></path>
+          <rect x="308" y="222" width="210" height="56" rx="8" class="node node-rose"></rect>
+          <text x="324" y="246" class="tiny">graph records NO</text><text x="324" y="264" class="tiny">top-k / top-p kernels</text>
+          <path d="M520 250 H578" class="arrow" style="marker-end:url(#f2-r)"></path>
+          <rect x="586" y="222" width="200" height="56" rx="8" class="node node-rose"></rect>
+          <text x="602" y="246" class="tiny">live replay samples</text><text x="602" y="264" class="tiny">the UNFILTERED tail</text>
+          <path d="M788 250 H846" class="arrow" style="marker-end:url(#f2-r)"></path>
+          <rect x="854" y="222" width="190" height="56" rx="8" class="node node-rose"></rect>
+          <text x="870" y="246" class="tiny">rare-token salad;</text><text x="870" y="264" class="tiny">accept collapses to ~1.9</text>
+          <text x="40" y="308" class="tiny">A CUDA graph records the kernels it saw at capture time. Capture with a constraint that is None, and the constraint is not slow &mdash; it is absent.</text>
+          <text x="40" y="340" class="tiny">The fix: capture with REAL top-k / top-p tensors (so the kernels are recorded), then refill their VALUES from live metadata each step &mdash;</text>
+          <text x="40" y="362" class="tiny">because a graph bakes addresses, not numbers. Garble went to zero; acceptance recovered 1.9 &rarr; 2.9&ndash;3.6.</text>
+        </svg>
+        <p class="caption">Figure 2 shows both bugs as the same species. In (A) a guard tested for the wrong thing, so a constraint ran twice and squared a temperature &mdash; a change with no error and a plausible-looking effect. In (B) a graph was captured from a configuration whose constraints were unset, so the recorded graph simply had no constraint kernels in it; every replay afterwards sampled an unfiltered distribution at full speed. Neither failed loudly. Both were found only by measurements that could not be explained any other way.</p>
+      </div>
+
+      <h3>Bug two: a captured graph that forgot to filter</h3>
+      <p>The second bug is a CUDA-graph hazard worth generalizing. To capture the sampler into a graph we build a warmup step with a dummy sampling configuration. That dummy had <code>top_k</code> and <code>top_p</code> unset. A graph records the kernels that actually execute during capture &mdash; so with no constraints present, the captured graph contained <strong>no top-k or top-p kernels at all</strong>. Every subsequent live replay ran at full speed and sampled from the raw, unfiltered tail of the distribution.</p>
+      <p>The symptom was spectacular and, for a while, misleading: rare-token salad in the output, acceptance collapsing to about <strong>1.9</strong>, and four of four tasks garbling. It looked like a state-corruption bug &mdash; exactly the family this series has chased since Vol.&nbsp;V &mdash; and the hunt went there first, through a long arc of paired-replay probes comparing a live replay against a staged rerun on the same inputs. Those probes produced a per-row misalignment signature, then an apparent exoneration that we later had to retract because only one arm's random state had been pinned.</p>
+      <p>What cracked it was pinning <em>both</em> sides. With the randomness identical on both arms, the walk products came out byte-identical while the emitted tokens still diverged. That combination is decisive: if the state and the walk and the random draws all agree and the tokens do not, the difference cannot be in the state, the walk, or the RNG &mdash; it has to be in the <strong>sampling distribution itself</strong>. From there the missing constraint kernels were a short step. The fix captures with real constraint tensors so the kernels are recorded, and refills their values from live metadata each step, because a graph bakes addresses rather than numbers. Garble went to zero, output returned to coherent English, and on the first clean boot the agent landed a genuine one-character fix in a real file with its tests passing.</p>
+
+      <div class="source-exhibit" aria-label="The two bugs compared">
+        <div class="source-head">
+          <strong>Same species, different subsystems</strong>
+          <span>Absent configuration with a plausible-looking effect</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">Double temp</span><p>A guard checked for our own injection, not the stock one. Two applies squared the temperature: 0.6&nbsp;&rarr;&nbsp;0.36, for seven weeks. Comparisons survive; the absolute regime does not.</p></div>
+          <div class="box bad"><span class="tag">Constraint omission</span><p>A warmup capture with unset top-k/top-p produced a graph with no constraint kernels. Replays sampled the unfiltered tail; accept collapsed to 1.9.</p></div>
+          <div class="box good"><span class="tag">What found them</span><p>Both-sides RNG pinning: identical state and draws, divergent tokens &rArr; the distribution is the only remaining suspect. Elimination, not inspection.</p></div>
+          <div class="box info"><span class="tag">The general lesson</span><p>Capture-time configuration is part of a graph's semantics. If a knob is unset when you capture, its kernel does not exist at replay &mdash; silently, and at full speed.</p></div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="measurement">
+      <h2>Measuring the Measurement</h2>
+      <aside class="sidenote">
+        <p><strong>The theme:</strong> for most of this campaign the obstacle was not the GPU. It was knowing what our own numbers meant &mdash; and three separate times, a result we had been optimizing against turned out to be a property of how we were measuring.</p>
+      </aside>
+      <p>Three measurement stories, in the order they happened, because each one changed what we worked on next.</p>
+
+      <h3>The slope ladder that wasn't</h3>
+      <p>We ship the speculative step in several CUDA-graph modes, and arm-level numbers appeared to rank them cleanly &mdash; a &ldquo;ladder&rdquo; of throughput-per-event slopes that made one fusion mode look clearly best and justified building more fusion. Pooling seven arms into a single regression dissolved it: <strong>all four modes lie on one line</strong>, <code>step = 235.5 + 49.2&nbsp;&times;&nbsp;eps</code>, within a couple of milliseconds. The ladder was an <em>eps artifact</em> &mdash; the arms had been running at different acceptance rates, and comparing their aggregate throughput was comparing points along one curve rather than different curves. The graph-fusion work it had been justifying was moving nothing, and we stopped it.</p>
+      <p>Then the pooled fit itself failed. Nine arm-level points cannot separate an intercept from a slope with any confidence &mdash; the honest mode-detection floor at arm level turned out to be about &plusmn;100&nbsp;ms, not the &plusmn;15 we had been quoting. Replacing it with a <em>per-step</em> regression &mdash; thousands of individual steps, each with its own known draft count, from an instrumented sidecar &mdash; gave real intervals and showed the pooled fit had been wrong in both directions at once: <code>step = 217.1 + 59.0&nbsp;&times;&nbsp;drafts</code> at R&sup2;&nbsp;=&nbsp;0.94. The pooled fit was retired.</p>
+      <p>That instrument had to be debugged before it could measure, which is its own small lesson. The first version wrote per-step arrays into a file that the harness rewrote every second, so a run with five hundred timed steps reported zero samples; the second lost its data to the container teardown's kill signal. Only the third &mdash; a separate sidecar file, throttled dumps, and a poller catching the rewrite boundary &mdash; actually retained what it recorded.</p>
+
+      <h3>The idle that dissolved</h3>
+      <p>The per-step regression exposed something real and alarming: roughly <strong>28&ndash;30&nbsp;ms per event of non-kernel time inside the verify span</strong>. Time inside our own timing brackets that no kernel accounted for. We made that the campaign, and worked it as an elimination:</p>
+      <div class="table-wrap">
+        <table>
+          <caption>Hypotheses for the in-span idle, and the instrument that killed each.</caption>
+          <thead><tr><th>Hypothesis</th><th>Instrument</th><th>Verdict</th></tr></thead>
+          <tbody>
+            <tr><td>Host work before launch</td><td>Split the span into host-side and execution halves</td><td><span class="pill bad">refuted</span> host side measured ~0.0&nbsp;ms</td></tr>
+            <tr><td>Host tail after enqueue</td><td>CPU-clock tail discriminator at the span end</td><td><span class="pill bad">refuted</span> tail 0.4&ndash;0.5&nbsp;ms against 267&nbsp;ms of execution</td></tr>
+            <tr><td>Silent fallback to piecewise graphs</td><td>Tag every step with its dispatch mode</td><td><span class="pill bad">refuted</span> 6329 of 6329 steps were full-graph</td></tr>
+            <tr><td>Cross-stream waits inside the captured graph</td><td>nsys capture on live tasks</td><td><span class="pill warn">superseded</span> &mdash; see below</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The last one is where it turned. Profiling on live tasks at <em>realistic context length</em> showed the verify span is mostly <strong>real kernels</strong> after all: attention at <strong>77&nbsp;ms per draft</strong> against <strong>0.9&nbsp;ms</strong> at the short contexts we had been profiling, plus about 158&nbsp;ms of GEMM, 29.5 of output projection, and 9.9 of scan. The ~26&nbsp;ms/event of &ldquo;idle&rdquo; was substantially an artifact of profiling at short context, where the attention kernels are nearly free and the fixed overheads dominate the picture. The phenomenon we had been attacking for days was, in large part, a property of the bench.</p>
+      <p>This is not a wasted campaign &mdash; the eliminations are real, the instruments now exist, and a genuine fixed side-stream cost was found and quantified along the way. But the floor moved <em>up</em>: much of what looked like recoverable overhead is attention work that scales with context, and the honest lever list was rebuilt around kernel efficiency rather than gap-hunting.</p>
+
+      <h3>The deployment capture that retired a lever class</h3>
+      <p>The last measurement is the one with the widest implications. Everything above was profiled at batch one, where a single request's structure is legible. Capturing at the actual deployment point &mdash; four concurrent requests, the configuration we ship &mdash; showed the <strong>GPU is already 97% busy</strong>. There is no idle to overlap into. An entire class of levers we had queued, the overlap and async-hiding family, is <strong>dead at deployment</strong> regardless of how well it profiles at batch one.</p>
+      <p>The capture also showed why single-request intuitions mislead here: most steps at deployment are <em>mixed</em>, with prefill and decode sharing the same weight passes, so a pure-decode model covers only the decode share of the wall clock. What survives as regime-robust are the levers whose benefit does not depend on finding gaps: <strong>acceptance</strong>, and the per-row efficiency of the decode kernels themselves. The working rule we adopted is to design at batch one, where mechanisms are visible, but to <em>price</em> every lever by its decode share at deployment &mdash; because a millisecond saved in a gap that does not exist at B=4 is a millisecond of nothing.</p>
+
+      <div class="source-exhibit" aria-label="Three measurement reversals">
+        <div class="source-head">
+          <strong>Three times the measurement was the finding</strong>
+          <span>Each reversal changed what we built next</span>
+        </div>
+        <div class="grid">
+          <div class="box warn"><span class="tag">eps artifact</span><p>A convincing ladder of graph-mode slopes was one line seen at different acceptance rates. It had been justifying fusion work that moved nothing.</p></div>
+          <div class="box warn"><span class="tag">short-context artifact</span><p>~26&nbsp;ms/event of unexplained in-span idle was largely an artifact of profiling at short context, where attention costs 0.9&nbsp;ms instead of 77.</p></div>
+          <div class="box bad"><span class="tag">B=1 artifact</span><p>Overlap levers that look valuable at batch one are dead at deployment: the GPU is already 97% busy, and most steps are mixed prefill/decode.</p></div>
+          <div class="box good"><span class="tag">What survived</span><p>Per-step regression with real intervals, a working sidecar instrument, a quantified fixed side-stream cost, and a lever list ranked by profile data rather than intuition.</p></div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="results">
+      <h2>Results</h2>
+      <aside class="sidenote">
+        <p><strong>One basis, always qualified:</strong> every throughput number on our board is full-step wall-clock, and the campaign's rule is to quote it only alongside its acceptance rate and prefill fraction &mdash; because both move it, and a bare tokens-per-second number across arms is close to meaningless.</p>
+        <p><strong>Why the caveats are this loud:</strong> the most quotable result in this volume is also the one our own audit downgraded. It is reported here with the audit attached.</p>
+      </aside>
+      <p>The board over the campaign, on one consistent full-step wall-clock basis:</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Board progression. Throughput is full-step wall clock; acceptance and prefill fraction are quoted because both move it. The final row is the best measured arm.</caption>
+          <thead>
+            <tr><th>Arm</th><th>Accept</th><th>eps</th><th>Step</th><th>Prefill frac.</th><th>Throughput</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Vol.&nbsp;VII closeout (tail6)</td><td class="num">4.286</td><td class="num">&mdash;</td><td class="num">&mdash;</td><td class="num">&mdash;</td><td class="num">32.85</td></tr>
+            <tr><td>early campaign</td><td class="num">&mdash;</td><td class="num">1.899</td><td class="num">331.5 ms</td><td class="num">&mdash;</td><td class="num">32.28</td></tr>
+            <tr><td>+ replay-ring staging</td><td class="num">4.520</td><td class="num">&mdash;</td><td class="num">&mdash;</td><td class="num">&mdash;</td><td class="num">38.01</td></tr>
+            <tr><td>mid campaign</td><td class="num">4.101</td><td class="num">2.645</td><td class="num">351.5 ms</td><td class="num">0.642</td><td class="num">38.38</td></tr>
+            <tr><td>temperature fixed (true 0.6)</td><td class="num">4.331</td><td class="num">2.571</td><td class="num">384.5 ms</td><td class="num">0.414</td><td class="num">35.64</td></tr>
+            <tr><td><strong>best board arm</strong></td><td class="num"><strong>4.749</strong></td><td class="num">2.701</td><td class="num">356.4 ms</td><td class="num">0.504</td><td class="num"><strong>43.57</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The best arm accepts <strong>4.749</strong> tokens per event at true temperature 0.6 &mdash; the highest clean acceptance the tree has recorded &mdash; and turns in <strong>43.57</strong> tokens per second, the best number on the board, garble-free across all four tasks with verdicts inside the campaign's standing band. Against Vol.&nbsp;VII's 32.85 on the same basis that is a gain of about a third.</p>
+
+      <h3>The parity claim, and why we downgraded it</h3>
+      <p>At that arm's operating point our native fit predicts about <strong>43.7</strong> tokens per second. The tree measured 43.57. Read literally, the tree reached native throughput for the first time in this series &mdash; and the temptation to lead with that sentence is exactly why the campaign ran a seven-agent audit against its own claims. The audit's verdict on this one is unambiguous, and we are reporting it rather than burying it:</p>
+      <div class="table-wrap">
+        <table>
+          <caption>Our own audit of the parity reading.</caption>
+          <thead><tr><th>Problem</th><th>Detail</th></tr></thead>
+          <tbody>
+            <tr><td>The native line has zero degrees of freedom</td><td>It is an exact two-point fit. With two points and two parameters, nothing is estimated &mdash; the line simply passes through both.</td></tr>
+            <tr><td>Its slope is one confounded contrast</td><td>The only thing identifying it is a batch-4 versus batch-8 comparison, in which batch size, task set, boot date, and prefill fraction all vary together.</td></tr>
+            <tr><td>One of the two points is health-flagged</td><td>Three of its four tasks exited early, with vacuous diagnostic dumps.</td></tr>
+            <tr><td>The tree arm is a single run</td><td>One arm at one prefill fraction, with workload-phase effects unquantified.</td></tr>
+            <tr><td>The intervals are wide</td><td>The fixed-deficit interval spans [32,&nbsp;118]&nbsp;ms; the marginal difference spans [&minus;15,&nbsp;+24]&nbsp;ms/event.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>So &ldquo;the tree reached native parity&rdquo; is <em>one consistent reading</em> of the data and not a measured fact. What survives the audit is the pair of statements this volume actually leads with, both of which hold under the wide intervals: the marginal per-event difference is <strong>statistically indistinguishable from zero and excludes the historic 140&nbsp;ms/event</strong>, and the total deficit at the operating range is <strong>85&ndash;90&nbsp;ms/step</strong> &mdash; measured where the native data is direct rather than extrapolated &mdash; leaving the tree at about <strong>0.92&times; native</strong>. The best arm is real and it is the best we have measured; it is not yet a parity result.</p>
+
+      <div class="source-exhibit" aria-label="What survives the audit">
+        <div class="source-head">
+          <strong>What survives, and what does not</strong>
+          <span>Separating the robust claims from the quotable one</span>
+        </div>
+        <div class="grid">
+          <div class="box good"><span class="tag">Survives</span><p>The row tax is dead &mdash; the marginal interval excludes ~140&nbsp;ms/event. This is the volume's result.</p></div>
+          <div class="box good"><span class="tag">Survives</span><p>Deficit is ~85&ndash;90&nbsp;ms/step and fixed; tree ~0.92&times; native at the operating point; both win conditions are arithmetic.</p></div>
+          <div class="box good"><span class="tag">Survives</span><p>Board 32.85&nbsp;&rarr;&nbsp;43.57 on one basis, best accept 4.749 clean at true temperature, garble-free and in-band.</p></div>
+          <div class="box bad"><span class="tag">Downgraded</span><p>&ldquo;Reached native parity.&rdquo; A single arm against a two-point, zero-degrees-of-freedom native line with confounded slope. Not a measured fact.</p></div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="museum">
+      <h2>Failure Museum</h2>
+      <aside class="sidenote">
+        <p><strong>The pattern of this volume:</strong> almost every entry is an <em>observer</em> problem rather than an engineering one &mdash; a measurement that changed the system, an artifact of the bench, an instrument that lost its own data, or a claim that outran its degrees of freedom.</p>
+      </aside>
+      <p>Twelve refuted hypotheses, artifacts, and self-corrections, grouped by what went wrong: the <strong>artifacts</strong> (real measurements of the wrong thing), the <strong>eliminations</strong> (good hypotheses the instruments killed), and the <strong>observer effects</strong> (measurements that changed or lost their subject).</p>
+
+      <div class="grid" aria-label="Failure families">
+        <div class="box warn"><span class="tag">Artifacts</span><h3>Measuring the bench</h3><p>A slope ladder that was one line, an idle that was short-context, and levers that only exist at batch one.</p></div>
+        <div class="box warn"><span class="tag">Eliminations</span><h3>Good hypotheses, killed</h3><p>Host prep, host tail, piecewise fallback, single-streaming &mdash; each plausible, each refuted by a targeted instrument.</p></div>
+        <div class="box warn"><span class="tag">Observer effects</span><h3>The instrument as adversary</h3><p>A debug rider that doubled the span it measured, a sampler that lost its samples, and a claim with no degrees of freedom.</p></div>
+      </div>
+
+      <details class="fold">
+        <summary>
+          <span>Full failure ledger</span>
+          <small>Twelve entries, grouped by family, with the signal and the refutation for each.</small>
+        </summary>
+        <div class="fold-body">
+          <p class="failure-note"><strong>Status key:</strong> <span class="pill good">settled</span> a real dead end later evidence upheld; <span class="pill warn">superseded</span> the observation was real but the framing was replaced; <span class="pill bad">contaminated</span> the measurement could not support its conclusion.</p>
+
+          <div class="failure-ledger" aria-label="Detailed failure museum">
+            <p class="failure-note"><strong>Family A &mdash; artifacts: real measurements of the wrong thing.</strong></p>
+
+            <article class="failure-card contaminated">
+              <header><h3>The graph-mode slope ladder</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> arm-level throughput ranked our CUDA-graph modes in a clean order, with a consistent spread. It read as a real ranking and justified further fusion work.</p>
+              <ul><li><strong>What killed it:</strong> pooling the arms into one regression put all four modes on a single line within a couple of milliseconds. The arms had simply been running at different acceptance rates &mdash; the &ldquo;ladder&rdquo; was different points on one curve. The fusion work it justified was moving nothing.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> if throughput depends on a covariate, comparing aggregates across arms that differ in that covariate ranks the covariate, not the arms. Regress; don't rank.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header><h3>The ~26&nbsp;ms/event of in-span idle</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked right:</strong> a per-step regression with thousands of samples showed substantial non-kernel time inside our own verify-span brackets. It was reproducible, it was large, and it survived several eliminations &mdash; so it became the campaign.</p>
+              <ul><li><strong>What killed it:</strong> profiling on live tasks at realistic context showed the verify span is mostly real kernels: attention alone runs 77&nbsp;ms per draft at real context against 0.9&nbsp;ms at the short contexts we had been profiling. The &ldquo;idle&rdquo; was substantially an artifact of the bench, and the floor moved up.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> profile at the context length you deploy at. A short prompt makes attention nearly free, which inflates every fixed overhead's apparent share and can manufacture a phantom gap.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>The overlap-lever class</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> at batch one there were visible gaps, and a queue of designs existed to hide host work behind GPU work. Overlap is the standard answer to a gap.</p>
+              <ul><li><strong>What killed it:</strong> a capture at the actual deployment point &mdash; four concurrent requests &mdash; showed the GPU already 97% busy, with most steps mixing prefill and decode so they share weight passes. There is no idle to overlap into. The whole class is dead where we ship, however well it profiles at batch one.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> design at batch one where mechanisms are visible, but price every lever by its share at the deployment point. A millisecond saved in a gap that does not exist at concurrency is nothing.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header><h3>The eleven-pass drafter model</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked right:</strong> counters suggested the drafter was making about eleven sequential passes, which would have made pass-count the dominant drafter lever and implied a specific, attractive fix.</p>
+              <ul><li><strong>What killed it:</strong> the counters were misread &mdash; the tail is retrieval-sourced and engaged nearly always, so the counter was measuring something else entirely. A related proposal to cut the deep tail for speed turned out to be an <em>anti</em>-lever: the tail carries 0.85&ndash;1.31 of the acceptance, so removing it costs more than it saves.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> before optimizing against a counter, confirm what increments it. And check whether the thing you plan to cut is carrying the benefit you are trying to protect.</p>
+            </article>
+
+            <p class="failure-note"><strong>Family B &mdash; eliminations: good hypotheses the instruments killed.</strong></p>
+
+            <article class="failure-card settled">
+              <header><h3>Host preparation before launch</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> the natural explanation for non-kernel time inside a span is host work landing between the span's opening and the actual launch &mdash; input preparation, metadata assembly, the usual suspects.</p>
+              <ul><li><strong>What killed it:</strong> splitting the span into a host half and an execution half measured the host side at essentially zero. The idle sat entirely after enqueue.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> split the bracket before theorizing about what is inside it. One extra event answers the question that a week of hypotheses cannot.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>A host tail after enqueue</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> if not before the launch, then after it &mdash; a host tail folded into a late stop event would look exactly like in-span idle.</p>
+              <ul><li><strong>What killed it:</strong> a CPU-clock discriminator at the span end measured a tail of 0.4&ndash;0.5&nbsp;ms against 267&nbsp;ms of execution. Conclusive, and it pushed the search inside the captured graph.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> a discriminator that separates two hypotheses by three orders of magnitude is worth building even when you expect it to say &ldquo;neither.&rdquo;</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>Silent fallback to piecewise graphs</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> a step that quietly fell back from a full captured graph to piecewise execution would carry exactly the kind of overhead that no kernel table shows.</p>
+              <ul><li><strong>What killed it:</strong> tagging every step with its dispatch mode returned full-graph on 6329 of 6329 steps. No fallbacks at all.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> the cheapest way to test &ldquo;is it silently doing the slow thing&rdquo; is to make the system state its own mode on every step.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>Single-streaming the subtree scan</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> the subtree-parallel lever brought a fixed +32.7&nbsp;ms side-stream cost; putting the same kernels back on one stream looked like a clean way to keep the win and drop the tax.</p>
+              <ul><li><strong>What killed it:</strong> a source read, before any build &mdash; the launch was already single-stream. The 32.7&nbsp;ms is the per-level launch structure itself, not stream overhead.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> read the code path before designing a fix for what you assume it does. The cheapest refutation in this whole volume cost one file read.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header><h3>Step-graph capture as a speed lever</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked right:</strong> capturing the whole step into one graph projected substantial savings from eliminated launch overhead, and the projection was arithmetically sound.</p>
+              <ul><li><strong>What killed it:</strong> both arms landed on the pooled line &mdash; the speed projections did not materialize, because the host cost had already been hoisted out to make capture legal in the first place. Only launch gaps remained, and they were below the detection floor. The work delivered a correctness milestone and stays off as a speed lever.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> when a prerequisite for a lever removes the cost the lever targets, the lever's projection is already spent. Re-derive the projection after the prerequisite lands.</p>
+            </article>
+
+            <p class="failure-note"><strong>Family C &mdash; observer effects: the instrument as adversary.</strong></p>
+
+            <article class="failure-card contaminated">
+              <header><h3>A debug rider that doubled its own span</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> an arm carrying a detailed per-row trace produced a committer span of 106&nbsp;ms against a normal 42 &mdash; a dramatic and apparently important regression.</p>
+              <ul><li><strong>What killed it:</strong> the trace itself. Its per-row device-to-host copies were serializing the very span it was measuring. The arm's correctness results stand; its speed numbers were struck from the record and re-run on a clean arm.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> a diagnostic that touches the device inside the region it times is not measuring that region. Keep speed arms and trace arms separate, and mark trace-arm timings unquotable at the source.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header><h3>The sampler that lost its samples</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> the per-step instrument was the right idea and eventually produced the volume's central result. Its first two versions simply reported nothing.</p>
+              <ul><li><strong>What killed them:</strong> version one wrote into a file the harness rewrote every second, so a run with hundreds of timed steps reported zero samples; version two lost everything to the container teardown's kill signal. Only a separate sidecar with throttled dumps and a boundary-catching poller actually retained data.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> an instrument's persistence path is part of the instrument. Validate that it survives the harness's own lifecycle before trusting a null result from it.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header><h3>The exoneration we had to retract</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> during the garble hunt, a paired-replay probe appeared to clear the captured replay path: its outputs differed from the staged rerun's only in ways that randomness could explain.</p>
+              <ul><li><strong>What killed it:</strong> only one arm's random state had been pinned. With both sides pinned the comparison inverted &mdash; identical draws, identical walk products, still-divergent tokens &mdash; which is what finally localized the bug to the sampling distribution. The exoneration was self-corrected in the record.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> &ldquo;the difference is explained by randomness&rdquo; is only admissible when the randomness is pinned on <em>both</em> arms. A half-pinned comparison can exonerate the guilty.</p>
+            </article>
+          </div>
+        </div>
+      </details>
+    </section>
+    <section class="section" id="reflection">
+      <h2>Reflection: When the Instrument Is the Subject</h2>
+      <aside class="sidenote">
+        <p><strong>Worth stating plainly:</strong> the single most valuable artifact this campaign produced is not a kernel. It is a per-step regression with real confidence intervals, and the discipline to let it retire our own earlier claims.</p>
+      </aside>
+      <p>Nine hundred commits produced one structural result &mdash; the deficit moved from marginal to fixed &mdash; and a great deal of evidence about how such a result gets found. Nearly every wrong turn in this volume came from the same place: a number that was real, reproducible, and about something other than what we thought. The graph-mode ladder was real and was about acceptance rates. The in-span idle was real and was substantially about context length. The batch-one gaps are real and are about batch one. None of these were sloppy measurements; each was a correct measurement of the wrong quantity, which is a much harder failure to notice because it survives repetition.</p>
+      <p>The defense that actually worked was structural rather than careful: fit a model with a covariate in it, and report intervals. The moment step time was regressed against acceptance instead of compared across arms, the ladder dissolved, the pooled fit was exposed as wrong in both directions, and the fixed-versus-marginal split &mdash; the thing that reframed the whole project &mdash; fell out of the same fit. Intervals then did the second half of the job by telling us which of our own headlines to retire, including the most quotable one in this volume.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The portable lessons.</caption>
+          <thead><tr><th>Lesson</th><th>What it means here</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Regress against the covariate; don't rank aggregates</td>
+              <td>Comparing arm-level throughput when arms differ in acceptance ranks acceptance. One regression dissolved a convincing four-mode ladder and the work it had justified.</td>
+            </tr>
+            <tr>
+              <td>Fixed and marginal costs imply opposite strategies</td>
+              <td>A marginal deficit is aggravated by a better speculator; a fixed one is diluted by it. Learning which we had turned acceptance work from a nice-to-have into a direct win condition.</td>
+            </tr>
+            <tr>
+              <td>Profile at the deployment point, not the legible one</td>
+              <td>Short context made attention nearly free and manufactured a phantom idle; batch one shows gaps that do not exist at concurrency. Design where mechanisms are visible, price where you ship.</td>
+            </tr>
+            <tr>
+              <td>A refutation carries an implicit &ldquo;while this dominates&rdquo;</td>
+              <td>The truncated drafter head was correctly refuted when the drafter was host-bound, and became a 38&nbsp;ms lever once the host cost was captured away. Record why a lever died, so you know when to revisit it.</td>
+            </tr>
+            <tr>
+              <td>Capture-time configuration is part of a graph's semantics</td>
+              <td>A warmup built with unset constraints produced a graph with no constraint kernels &mdash; not slower, absent. Replays then sampled an unfiltered tail at full speed, silently.</td>
+            </tr>
+            <tr>
+              <td>Audit your own best number</td>
+              <td>Our most quotable result rested on a two-point line with zero degrees of freedom. Running the audit before publishing is cheaper than being corrected after.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="limitations">
+      <h2>Threats to Validity</h2>
+      <aside class="sidenote">
+        <p><strong>Honest scope:</strong> the robust claim is the marginal one &mdash; the row tax is dead, with an interval that excludes it. Nearly everything else in this volume is a point estimate with wide intervals, and we say so where it matters.</p>
+      </aside>
+      <div class="grid">
+        <div class="box warn">
+          <span class="tag">The native control</span>
+          <h3>Two points, zero degrees of freedom</h3>
+          <p>Our native line is an exact fit through two arms whose slope is identified by a single batch-4 versus batch-8 contrast, with batch size, task set, boot date, and prefill fraction all varying together &mdash; and one of the two points had three of four tasks exit early. Every native comparison in this volume, including the parity reading, inherits that weakness. A properly-powered native sweep is the single highest-value measurement we do not yet have.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Wide intervals</span>
+          <h3>Point estimates doing heavy lifting</h3>
+          <p>The fixed-deficit interval spans [32,&nbsp;118]&nbsp;ms and the marginal difference spans [&minus;15,&nbsp;+24]&nbsp;ms/event. &ldquo;The deficit is fixed&rdquo; is well supported at the level of <em>which term carries it</em>; the precise 85&ndash;90&nbsp;ms figure is a working number, not a measured constant.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Single arms</span>
+          <h3>Best-board results are one run each</h3>
+          <p>The 43.57 arm, like most cells on the board, is a single run at one prefill fraction, on a four-task subset, with workload-phase effects unquantified. The campaign's band gate catches gross breakage, not run-to-run variance of a few percent.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Re-based history</span>
+          <h3>Seven weeks of numbers carry a caveat</h3>
+          <p>Every pre-fix absolute number was taken at an effective temperature of 0.36. The controlled A/B suggests arm-to-arm comparisons survive &mdash; accept moved about a tenth of a token &mdash; but any absolute figure from that period should be read as off-regime, and the new reference band starts after the fix.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="future">
+      <h2>Future Work</h2>
+      <aside class="sidenote">
+        <p><strong>The frame:</strong> with the deficit fixed, every remaining lever is worth exactly its milliseconds divided by the step &mdash; and acceptance is worth more than it used to be, because it now dilutes the toll instead of multiplying it.</p>
+      </aside>
+      <p>The two win conditions are arithmetic: cut roughly 85&nbsp;ms of fixed per-step cost, or reach an acceptance of 5.0. Profiling at real context rebuilt the lever ranking around actual kernel cost rather than gap-hunting, and it puts the work in a clear order.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The rebuilt lever ranking after real-context profiling, with status.</caption>
+          <thead><tr><th>Lever</th><th>Idea</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Attention efficiency</td><td>The largest kernel class at real context, running several times above its key-value read floor &mdash; a split-KV scheduling and tiling problem rather than a byte problem.</td><td><span class="pill warn">ranked #1</span> designed, not built</td></tr>
+            <tr><td>Verify GEMM and output-projection efficiency</td><td>The next two classes by measured cost; the output projection has an obvious analogue in the drafter-side truncation that already paid off.</td><td><span class="pill warn">ranked next</span></td></tr>
+            <tr><td>Acceptance beyond 5.0</td><td>A direct win condition now: a better deep tail converts straight into throughput because the fixed toll is amortized over more committed tokens.</td><td><span class="pill good">win condition</span></td></tr>
+            <tr><td>Overlap and async hiding</td><td>Hide host work behind GPU work.</td><td><span class="pill bad">dead at deployment</span> GPU already 97% busy</td></tr>
+            <tr><td>Scan</td><td>The recurrent scan itself.</td><td><span class="pill good">done</span> invariant at 10&ndash;11 per draft</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>A new front: the tree is crowding out the prefix cache</h3>
+      <p>The newest finding is not a speed lever at all, and it connects this work back to <a href="gdn-prefix-cache.html">Vol.&nbsp;IV</a>. The recurrent state pool is a fixed number of pages, and a speculative decoder must reserve enough of them to hold its in-flight state. A five-token chain reserves few; a twenty-one-node tree reserves many. At four concurrent requests the tree reserves <strong>88 pages against native's 24</strong> &mdash; and since the pool is finite, that leaves <strong>39 cacheable checkpoints against native's 103</strong>.</p>
+      <p>In other words the tree does not only cost time per step; it costs <em>prefix-cache capacity</em>, which on an agentic workload full of repeated context is its own throughput term &mdash; one that none of the step-time analysis in this volume captures. Two ungated fixes exist for it, capping the node-bank reservation and the speculative block allocation, with a real trade-off against block size to be measured rather than assumed. The measure-first sequence is written; the measurement has not run. It is a reminder that a decoder's cost has more axes than its step time, and that the ones you are not instrumenting are the ones most likely to be paying for your wins.</p>
+    </section>
+
+    <section class="section" id="config">
+      <h2>Canonical Config Appendix</h2>
+      <aside class="sidenote">
+        <p><strong>Why config gets its own section:</strong> this series has now lost more time to flags that were not what we thought they were than to any kernel. There is one source of truth, and the harness fails loudly if a run does not match it.</p>
+      </aside>
+      <details class="fold">
+        <summary>
+          <span>Config table: the baked defaults</span>
+          <small>All gated the same way &mdash; offline byte gate, live band gate, speed signal.</small>
+        </summary>
+        <div class="fold-body">
+          <div class="table-wrap">
+            <table>
+              <caption>The baked configuration after this campaign's cleanup.</caption>
+              <thead><tr><th>Surface</th><th>Setting</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td>Correctness inheritance</td><td><code>FR13_ATTN_KV_REMAP</code>, <code>FR13_SLOT_REORDER</code></td><td>The garble fix of Vol.&nbsp;V and the acceptance fix of Vol.&nbsp;VI, now defaults with a fail-loud boot assertion after they were found silently off for weeks.</td></tr>
+                <tr><td>Drafter</td><td><code>FR13_DRAFTER_GRAPH</code>, <code>FR13_DRAFT_VOCAB_K=65536</code></td><td>Whole-spine graph capture plus the truncated draft head; together the largest fixed-cost reduction in the campaign.</td></tr>
+                <tr><td>Committer</td><td><code>FR13_COMMITTER_BATCHED</code>, <code>FR13_COMMITTER_GRAPH</code>, <code>FR13_RING_EXPORT</code>, <code>FR13_KV_REMAP_SYNCFREE</code></td><td>Batched all-layer commit, graph capture, in-kernel ring staging, and a sync-free remap.</td></tr>
+                <tr><td>Scan and gathers</td><td><code>FR13_SUBTREE_PARALLEL</code>, <code>FR13_PARENT_GATHER</code>, <code>FR13_CONV_PREGATHER</code>, <code>FR13_FLAGS_INKERNEL</code></td><td>Independent-subtree concurrency plus gather recomposition; all byte-identical and selfcheck-gated.</td></tr>
+                <tr><td>Conv write-back</td><td><code>FR13_CONV_WB_FUSED</code>, <code>FR13_CONV_WB_BATCHED</code></td><td>Fused, then batched across concurrent requests &mdash; the campaign's last bake.</td></tr>
+                <tr><td>Cache and topology</td><td><code>FR13_ENABLE_APC</code>, <code>KIND=tail6</code></td><td>Prefix caching on (the goal is speculation <em>and</em> cache); the 21-node deep-tail tree is now the canonical decode shape.</td></tr>
+                <tr><td>Temperature</td><td>single constraint apply; <code>FR13_TEMP_LEGACY_DOUBLE</code> for the control arm</td><td>True 0.6 after the double-apply fix, with a byte-reproducing legacy hatch kept only for re-basing old numbers.</td></tr>
+                <tr><td>Hardware / model</td><td>GB10, ~273&nbsp;GB/s unified LPDDR5X; Qwen 3.6-27B-FP8 GDN hybrid; B=4, temp 0.6</td><td>The ~98.6&nbsp;ms weight-read floor that sets what &ldquo;fast&rdquo; can mean here.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section class="section" id="receipts">
+      <h2>Source Trail</h2>
+      <p>The claims above are grounded in the campaign log, the headroom ledger, and the audit records. This work runs on <code>main</code>; the levers are launcher defaults and the deleted machinery is gone rather than gated.</p>
+      <details class="fold">
+        <summary>
+          <span>Full source trail</span>
+          <small>The campaign log, the ledgers, the profiles, and the prior volumes.</small>
+        </summary>
+        <div class="fold-body">
+          <ul class="receipt-list">
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_S1_CAMPAIGN_LOG.md">The campaign log</a> - every arm on the board with its acceptance, prefill fraction, and verdicts; the regression fits; the post-session audit that downgraded the parity reading.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_BEAT_NATIVE_HEADROOM.md">The headroom ledger</a> - the hardware frame, the ranked buckets, and the designs behind each lever.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_VERIFY_PROFILE_FINDINGS.md">Verify profile findings</a> - the real-context kernel attribution that moved the floor up and rebuilt the lever ranking.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_VD_ATTACK_PLAN.md">Verify and drafter attack plan</a> - the bytes ledger and the ranked levers behind the drafter work.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_CONFIG_DRIFT_AUDIT.md">Config drift audit</a> - the single-source-of-truth flag file and the fail-loud boot assertion.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_STEP_GRAPH_DESIGN.md">Step-graph design</a> - including the outcome note recording that its speed projections were refuted.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_required_tree_flags.sh">Required tree flags</a> - the baked defaults, each annotated with the gate that qualified it.</li>
+            <li><a href="keep-or-replay.html">Vol. VII</a> - the committer asymmetry and the per-event framing this volume revises.</li>
+            <li><a href="spine-reorder.html">Vol. VI</a> - the contiguous-spine reorder, now a baked default.</li>
+            <li><a href="stateless-tree.html">Vol. V</a> - the stateless-tree lifecycle and the attention-KV remap.</li>
+            <li><a href="gdn-prefix-cache.html">Vol. IV</a> - the prefix cache whose capacity the new prefill front concerns.</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p>Volume VIII. Standalone GitHub Pages research paper. Prior context remains available in <a href="index.html">Vol. I</a>, <a href="round-f.html">Vol. II</a>, <a href="gdn-tree-scan.html">Vol. III</a>, <a href="gdn-prefix-cache.html">Vol. IV</a>, <a href="stateless-tree.html">Vol. V</a>, <a href="spine-reorder.html">Vol. VI</a>, and <a href="keep-or-replay.html">Vol. VII</a>, but this page does not require them. Last updated 2026-07-28.</p>
+  </footer>
+</div>
+</body>
+</html>
