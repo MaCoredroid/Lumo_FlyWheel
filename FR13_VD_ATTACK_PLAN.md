@@ -219,6 +219,34 @@ caveat) in one boot. Fix design follows the named numbers: candidates are
 level-count tightening, sibling fold-in with in-register branch emission
 (out_j from the parent state without carry), or accepting the level barrier
 as the price of path concurrency and re-drawing the floor.
+
+## SUBTREE_NSYS RESULTS (2026-07-28 01:07Z, 300s window, 691 drafts, B=1
+## real 14598 context — per-draft ≈ per-step at CONC=1): THE FLOOR MOVES UP
+Top kernels (ms/draft): gemm_mlp 142.6+12.4+2.8 ≈ 158 | **attention
+flash_splitkv 63.8 + unified 13.4 ≈ 77** | **lm_head 29.5** | tree scan
+9.85 | norm-soup ≈ 27 | committer bits ~6 (conv_wb_batched 1.97 = B2c ✓).
+Kernel sum ≈ ~310/draft ≈ the B=1 step wall — **at REAL context the verify
+span is mostly REAL KERNEL WORK.** The "26ms/event in-span idle" was
+substantially a SHORT-CONTEXT artifact of the eager probe's kernel floor
+(attention measured ~0.9 there vs ~77 here). Consequences:
+1. FLOOR REWRITE: real-ctx attention (~77 at B=1; scales per-event with
+   context) + the found verify lm_head (29.5) move INTO the measured
+   baseline; the attackable idle pile SHRINKS accordingly. Honest floor
+   ratio is closer than the short-ctx accounting suggested.
+2. NEW DATA-RANKED LEVERS (exact-math): (a) attention splitkv at real ctx
+   runs ~4.5x over its ~14ms analytic KV-read floor → attention
+   config/kernel efficiency = now the TOP verify lever candidate;
+   (b) verify lm_head 29.5 vs ~5-9ms read floor → efficiency lever
+   (quantization variants are PARKED; kernel/config only);
+   (c) **cudaMemcpyAsync: 169 calls/draft, 282ms/draft CPU-side** — a
+   structural smell needing attribution (which subsystem issues 169
+   copies per draft; if pageable-staging serializes the stream it is a
+   major hidden cost, if fully overlapped it is host-CPU burn only).
+3. Subtree 32.7 fixed tax (real-task A/B) still stands; the level-gap
+   query runs offline on the exported sqlite (748MB, on disk).
+NEXT (all CPU, no GPU needed): sqlite queries — per-level path-kernel gap
+analysis, memcpy source attribution, per-step bucket normalization vs the
+subspan fits. Then the fix ranking gets rebuilt from real-context numbers.
 CAVEAT retained: the marginal split (kernels vs waits inside 37.5/event)
 still needs the real-context kernel measurement (nsys-on-live-task) — the
 eager probe's kernel floor mixes subtree-eager mode and short context.
