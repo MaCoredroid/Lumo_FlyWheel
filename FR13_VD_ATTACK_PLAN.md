@@ -247,6 +247,31 @@ substantially a SHORT-CONTEXT artifact of the eager probe's kernel floor
 NEXT (all CPU, no GPU needed): sqlite queries — per-level path-kernel gap
 analysis, memcpy source attribution, per-step bucket normalization vs the
 subspan fits. Then the fix ranking gets rebuilt from real-context numbers.
+
+## SQLITE ATTRIBUTIONS (2026-07-28, offline): the honest real-context map
+- **GPU busy fraction 0.89**: kernels 265.4s + memcpy 1.5s of the 299.9s
+  window at B=1 => TOTAL non-GPU idle ≈ 48ms/draft across EVERYTHING
+  (committer serialization + host + drafter gaps + sampler). The step is
+  work-dominated at real context; overlap territory is bounded at ~48.
+- **Memcpy smell = BENIGN**: GPU-side memcpy totals 2.2ms/draft (390
+  D2D/draft = in-graph ring/static copies, 288MB at high BW). The 282ms
+  CPU-side API time overlaps under an 89%-busy GPU — host burn, not
+  critical path. NO lever.
+- **Sync events: 7.0ms/draft** (type-3 stream/event) — small.
+- **Path kernel: 103.7 instances/draft ≈ 48 layers × ~2.16 levels, mean
+  100µs => scan total 10.4ms/draft GPU.** The subtree +32.7ms fixed tax
+  CANNOT be path-kernel durations or launch counts (+56 launches ≈ 0.3ms)
+  — mechanism UNRESOLVED but bounded; keep=1 stands (net positive at
+  operating eps); deprioritized behind the bigger levers below.
+- **REBUILT LEVER RANKING (per-draft @ B=1 real ctx, exact-math only):**
+  1. attention 77 vs ~14 KV-read floor => ~60ms class (splitkv config /
+     kernel efficiency at long ctx) — THE new campaign target
+  2. verify GEMM ~150 vs ~99 weight floor => ~50ms class (fp8 blockwise
+     dequant/config at M=22; verify against per-shape autotune first)
+  3. lm_head 29.5 vs ~5-9 floor => ~20ms class
+  4. norm-soup ~27 (fusion continuations)
+  5. total idle ~48 (committer-under-drafter overlap; bounded)
+  6. scan 10.4 — already efficient, close to done
 CAVEAT retained: the marginal split (kernels vs waits inside 37.5/event)
 still needs the real-context kernel measurement (nsys-on-live-task) — the
 eager probe's kernel floor mixes subtree-eager mode and short context.
