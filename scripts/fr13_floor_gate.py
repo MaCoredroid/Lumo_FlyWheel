@@ -1154,6 +1154,8 @@ def validate_runtime_boundary_snapshot(
 
 
 def validate_subset(path: Path, task_count: int) -> dict[str, Any]:
+    if task_count not in EVIDENCE_SETS:
+        raise GateError(f"{path}: unsupported canonical subset size {task_count}")
     expected = EVIDENCE_SETS[task_count]
     actual_hash = sha256_file(path)
     if actual_hash != expected["sha256"]:
@@ -1161,12 +1163,11 @@ def validate_subset(path: Path, task_count: int) -> dict[str, Any]:
             f"{path}: canonical subset sha256 mismatch; "
             f"expected {expected['sha256']}, got {actual_hash}"
         )
-    try:
-        payload = json.loads(read_text(path))
-    except json.JSONDecodeError as error:
-        raise GateError(f"{path}: invalid subset JSON: {error}") from error
+    payload = exact_json(path, label=f"{path}: canonical subset")
     if payload.get("dataset_name") != "princeton-nlp/SWE-bench_Verified":
         raise GateError(f"{path}: subset is not SWE-bench_Verified")
+    if payload.get("split") != "test":
+        raise GateError(f"{path}: canonical subset split is not test")
     actual_ids = payload.get("instance_ids")
     if actual_ids != list(expected["task_ids"]):
         raise GateError(
@@ -1177,6 +1178,24 @@ def validate_subset(path: Path, task_count: int) -> dict[str, Any]:
         "sha256": actual_hash,
         "task_ids": list(expected["task_ids"]),
     }
+
+
+def validate_canonical_subset(path: Path) -> dict[str, Any]:
+    """Bind an exact4/exact16 subset by pinned bytes and parsed task identity."""
+    actual_hash = sha256_file(path)
+    matching_counts = [
+        task_count
+        for task_count, expected in EVIDENCE_SETS.items()
+        if actual_hash == expected["sha256"]
+    ]
+    if len(matching_counts) != 1:
+        raise GateError(
+            f"{path}: fixed32 subset SHA-256 is not canonical exact4/exact16; "
+            f"got {actual_hash}"
+        )
+    task_count = matching_counts[0]
+    binding = validate_subset(path, task_count)
+    return {"task_count": task_count, **binding}
 
 
 def parse_orchestrator(arm_dir: Path, task_count: int) -> dict[str, Any]:
@@ -2231,12 +2250,15 @@ def validate_fixed32_ingress_and_census(
             != task_bindings[task_id][
                 "trace_completed_logical_model_requests"
             ]
-            or successful_task_ids
-            != task_bindings[task_id]["trace_model_request_id_sha256s"]
+            or (
+                task_bindings[task_id]["trace_engine_id_joinable"]
+                and successful_task_ids
+                != task_bindings[task_id]["trace_model_request_id_sha256s"]
+            )
         ):
             raise GateError(
-                f"{census_path}: task successful request ID set differs from "
-                "terminal trace"
+                f"{census_path}: task successful request evidence differs "
+                "from terminal trace"
             )
 
     return {
@@ -2279,50 +2301,24 @@ def _fixed32_trace_model_requests(
     if not raw:
         raise GateError(f"{trace_path}: fixed32 trace is empty")
     events: list[dict[str, Any]] = []
-    response_ids: list[str] = []
     for line_number, line in enumerate(text.splitlines(), start=1):
         if not line.strip():
             raise GateError(f"{trace_path}:{line_number}: blank JSONL record")
         event = exact_json_text(line, label=f"{trace_path}:{line_number}")
         events.append(event)
-        if event.get("type") == "assistant":
-            message = event.get("message")
-            if (
-                isinstance(message, dict)
-                and message.get("role") == "assistant"
-                and message.get("stop_reason") is not None
-            ):
-                response_id = message.get("id")
-                if (
-                    not isinstance(response_id, str)
-                    or not response_id
-                    or not isinstance(message.get("usage"), dict)
-                ):
-                    raise GateError(
-                        f"{trace_path}:{line_number}: terminal assistant "
-                        "record lacks response ID or usage"
-                    )
-                response_ids.append(response_id)
-        elif (
-            event.get("type") == "message"
-            and event.get("role") == "assistant"
-            and event.get("stop_reason") is not None
-        ):
-            response_id = event.get("id")
-            if (
-                not isinstance(response_id, str)
-                or not response_id
-                or not isinstance(event.get("usage"), dict)
-            ):
-                raise GateError(
-                    f"{trace_path}:{line_number}: terminal message record "
-                    "lacks response ID or usage"
-                )
-            response_ids.append(response_id)
-    if not response_ids or len(set(response_ids)) != len(response_ids):
-        raise GateError(
-            f"{trace_path}: terminal model response IDs are empty or duplicated"
+    try:
+        trace_requests = (
+            fixed32_contract.validate_fixed32_trace_model_requests(
+                events,
+                expected_session_id=fixed32_contract.fixed32_trace_session_id(
+                    provenance.get("instance_id")
+                ),
+            )
         )
+    except Fixed32ContractError as error:
+        raise GateError(f"{trace_path}: {error}") from error
+    response_ids = trace_requests["model_request_ids"]
+    completed_requests = trace_requests["completed_logical_model_requests"]
     response_id_digests = sorted(
         hashlib.sha256(response_id.encode("utf-8")).hexdigest()
         for response_id in response_ids
@@ -2340,7 +2336,7 @@ def _fixed32_trace_model_requests(
         or provenance.get("trace_bytes") != len(raw)
         or provenance.get("event_count") != len(events)
         or provenance.get("trace_completed_logical_model_requests")
-        != len(response_ids)
+        != completed_requests
         or provenance.get("trace_model_request_ids_sha256")
         != response_ids_sha256
     ):
@@ -2351,9 +2347,10 @@ def _fixed32_trace_model_requests(
     return {
         **_fixed32_artifact_identity(trace_path),
         "event_count": len(events),
-        "completed_logical_model_requests": len(response_ids),
+        "completed_logical_model_requests": completed_requests,
         "model_request_id_sha256s": response_id_digests,
         "model_request_ids_sha256": response_ids_sha256,
+        "engine_id_joinable": trace_requests["engine_id_joinable"],
     }
 
 
@@ -2627,6 +2624,7 @@ def build_fixed32_chat_traffic_audit(
             "trace_completed_logical_model_requests": trace[
                 "completed_logical_model_requests"
             ],
+            "trace_engine_id_joinable": trace["engine_id_joinable"],
             "trace_model_request_id_sha256s": trace[
                 "model_request_id_sha256s"
             ],
@@ -2640,7 +2638,11 @@ def build_fixed32_chat_traffic_audit(
         audit_tasks[task_id] = {
             "task_key_id": task_key_id,
             "dataset_record_sha256": dataset_record_digests[task_id],
-            "trace": trace,
+            "trace": {
+                key: value
+                for key, value in trace.items()
+                if key != "engine_id_joinable"
+            },
             "task_auth": {
                 **evidence,
                 "evidence_before_sha256": before_sha256,
@@ -8794,7 +8796,7 @@ def self_test(repo: Path) -> None:
                 write_rebound_trace(trace_path, metadata_path, events)
             expect_gate_error(
                 rerun_b1_fixture,
-                "task successful request ID set differs from terminal trace",
+                "task successful request evidence differs from terminal trace",
             )
         finally:
             for path, raw in original_swap_artifacts.items():
@@ -8813,7 +8815,7 @@ def self_test(repo: Path) -> None:
             )
             expect_gate_error(
                 rerun_b1_fixture,
-                "terminal model response IDs are empty or duplicated",
+                "legacy terminal response IDs are empty or duplicated",
             )
         finally:
             for path, raw in original_swap_artifacts.items():
@@ -9290,7 +9292,7 @@ def self_test(repo: Path) -> None:
         trace_path.write_text("{}\n", encoding="utf-8")
         expect_gate_error(
             rerun_b1_fixture,
-            "terminal model response IDs are empty",
+            "legacy terminal response IDs are empty",
         )
         trace_path.write_bytes(good_trace)
 
@@ -9325,7 +9327,7 @@ def self_test(repo: Path) -> None:
         )
         expect_gate_error(
             rerun_b1_fixture,
-            "terminal model response IDs are empty",
+            "legacy terminal response IDs are empty",
         )
         trace_path.write_bytes(good_trace)
         task_metadata_path.write_bytes(good_task_metadata)

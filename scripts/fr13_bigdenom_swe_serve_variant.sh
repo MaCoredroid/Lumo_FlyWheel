@@ -379,24 +379,12 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, "scripts")
-from fr13_floor_gate import EVIDENCE_SETS, GateError, validate_subset
+from fr13_floor_gate import validate_canonical_subset
 
 
 subset_path = Path(sys.argv[1]).resolve()
-matches = []
-for task_count in sorted(EVIDENCE_SETS):
-    try:
-        validate_subset(subset_path, task_count)
-    except GateError:
-        continue
-    matches.append(task_count)
-if len(matches) != 1:
-    raise SystemExit(
-        f"{subset_path}: fixed32 requires the exact canonical 4-task or "
-        "16-task SWE-Verified subset"
-    )
-binding = validate_subset(subset_path, matches[0])
-print(matches[0])
+binding = validate_canonical_subset(subset_path)
+print(binding["task_count"])
 print(",".join(binding["task_ids"]))
 PY
   )
@@ -628,22 +616,17 @@ from pathlib import Path
 repo = Path.cwd().resolve()
 sys.path.insert(0, str(repo / "scripts"))
 from fr13_floor_gate import (  # noqa: E402
-    GateError,
     build_fixed32_chat_traffic_audit,
-    exact_json,
     pinned_dataset_record_digests,
-    validate_subset,
+    validate_canonical_subset,
 )
 
 subset_path = Path(sys.argv[1]).resolve()
 arm_dir = Path(sys.argv[2]).resolve()
 mode = sys.argv[3]
 output_path = Path(sys.argv[4]).resolve()
-raw_subset = exact_json(subset_path, label=str(subset_path))
-task_ids = raw_subset.get("task_ids")
-if not isinstance(task_ids, list) or len(task_ids) not in {4, 16}:
-    raise GateError(f"{subset_path}: fixed32 subset is not exact4/exact16")
-subset = validate_subset(subset_path, len(task_ids))
+subset = validate_canonical_subset(subset_path)
+task_ids = subset["task_ids"]
 audit = build_fixed32_chat_traffic_audit(
     arm_dir,
     mode=mode,

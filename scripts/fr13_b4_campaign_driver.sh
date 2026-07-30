@@ -44,18 +44,27 @@ FIXED32_SEQUENCE="scripts/fr13_fixed32_floor_timers_seq.sh"
 if [[ -n "${SEQUENCE_FILE:-}" ]] \
    && [[ "$(realpath "$SEQUENCE_FILE")" == "$PWD/$FIXED32_SEQUENCE" ]]; then
   FIXED32_MANIFEST_ACTIVE=1
-  case "$(realpath "$SUBSET")" in
-    "$PWD/config/fr13_fixed32/subset_b4_four.json")
-      FIXED32_TASK_COUNT=4
-      ;;
-    "$PWD/config/fr13_fixed32/subset_b4_sixteen.json")
-      FIXED32_TASK_COUNT=16
-      ;;
-    *)
-      echo "FAIL: fixed32 requires the canonical real SWE-Verified 4- or 16-task subset" >&2
+  if ! FIXED32_TASK_COUNT=$(
+    .venv/bin/python - "$SUBSET" <<'PY'
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "scripts")
+from fr13_floor_gate import validate_canonical_subset
+
+
+binding = validate_canonical_subset(Path(sys.argv[1]))
+print(binding["task_count"])
+PY
+  ); then
+    echo "FAIL: fixed32 requires the canonical real SWE-Verified 4- or 16-task subset" >&2
+    exit 2
+  fi
+  [[ "$FIXED32_TASK_COUNT" == "4" || "$FIXED32_TASK_COUNT" == "16" ]] \
+    || {
+      echo "FAIL: fixed32 canonical task count is invalid" >&2
       exit 2
-      ;;
-  esac
+    }
   .venv/bin/python scripts/fr13_runtime_manifest.py \
     --repo "$PWD" \
     --profile fixed32 \

@@ -117,7 +117,7 @@ def test_fixed32_campaign_closes_ingress_before_fetch_and_terminal_audit() -> No
     assert "build_fixed32_chat_traffic_audit" in serve
 
 
-def test_floor_and_depth_require_exact_ingress_and_trace_id_sets() -> None:
+def test_floor_and_depth_require_exact_ingress_and_trace_evidence() -> None:
     floor = source(FLOOR)
     depth = source(DEPTH)
     required_gates = (
@@ -133,6 +133,6 @@ def test_floor_and_depth_require_exact_ingress_and_trace_id_sets() -> None:
         assert gate in floor
         assert gate in depth
     assert "trace_model_request_id_sha256s" in floor
-    assert "task successful request ID set differs from terminal trace" in floor
+    assert "task successful request evidence differs from terminal trace" in floor
     assert "trace_request_id_sha256s" in depth
-    assert "task trace/engine request ID set differs" in depth
+    assert "task trace/engine request evidence differs" in depth

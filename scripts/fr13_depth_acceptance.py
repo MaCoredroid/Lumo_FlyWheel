@@ -13,6 +13,9 @@ import re
 import tempfile
 from typing import Any
 
+from fr13_fixed32_contract import ContractError as Fixed32ContractError
+from fr13_fixed32_contract import fixed32_trace_session_id
+from fr13_fixed32_contract import validate_fixed32_trace_model_requests
 from fr13_fixed32_work_census import CensusError as WorkCensusError
 from fr13_fixed32_work_census import CONV_PREGATHER_BLOCK
 from fr13_fixed32_work_census import CONV_PREGATHER_LAYERS
@@ -2016,7 +2019,6 @@ def validate_real_task_artifacts(
         except UnicodeDecodeError as error:
             raise ValueError(f"{trace_path}: task trace is not UTF-8") from error
         trace_events: list[dict[str, Any]] = []
-        response_ids: list[str] = []
         for line_number, line in enumerate(trace_text.splitlines(), start=1):
             if not line.strip():
                 raise ValueError(f"{trace_path}:{line_number}: blank JSONL record")
@@ -2024,41 +2026,15 @@ def validate_real_task_artifacts(
             if not isinstance(event, dict):
                 raise ValueError(f"{trace_path}:{line_number}: non-object record")
             trace_events.append(event)
-            if event.get("type") == "assistant":
-                message = event.get("message")
-                if (
-                    isinstance(message, dict)
-                    and message.get("role") == "assistant"
-                    and message.get("stop_reason") is not None
-                ):
-                    response_id = message.get("id")
-                    if (
-                        not isinstance(response_id, str)
-                        or not response_id
-                        or not isinstance(message.get("usage"), dict)
-                    ):
-                        raise ValueError(
-                            f"{trace_path}:{line_number}: terminal assistant "
-                            "record is incomplete"
-                        )
-                    response_ids.append(response_id)
-            elif (
-                event.get("type") == "message"
-                and event.get("role") == "assistant"
-                and event.get("stop_reason") is not None
-            ):
-                response_id = event.get("id")
-                if (
-                    not isinstance(response_id, str)
-                    or not response_id
-                    or not isinstance(event.get("usage"), dict)
-                ):
-                    raise ValueError(
-                        f"{trace_path}:{line_number}: terminal message is incomplete"
-                    )
-                response_ids.append(response_id)
-        if not response_ids or len(response_ids) != len(set(response_ids)):
-            raise ValueError(f"{trace_path}: terminal response IDs are empty/duplicate")
+        try:
+            trace_requests = validate_fixed32_trace_model_requests(
+                trace_events,
+                expected_session_id=fixed32_trace_session_id(task_id),
+            )
+        except Fixed32ContractError as error:
+            raise ValueError(f"{trace_path}: {error}") from error
+        response_ids = trace_requests["model_request_ids"]
+        completed_requests = trace_requests["completed_logical_model_requests"]
         response_digests = sorted(
             hashlib.sha256(value.encode("utf-8")).hexdigest()
             for value in response_ids
@@ -2074,7 +2050,7 @@ def validate_real_task_artifacts(
             type(trace["event_count"]) is not int
             or trace["event_count"] != len(trace_events)
             or type(trace["completed_logical_model_requests"]) is not int
-            or trace["completed_logical_model_requests"] != len(response_ids)
+            or trace["completed_logical_model_requests"] != completed_requests
             or trace["model_request_id_sha256s"] != response_digests
             or trace["model_request_ids_sha256"] != response_set_sha256
         ):
@@ -2118,12 +2094,12 @@ def validate_real_task_artifacts(
             ):
                 raise ValueError(f"{audit_path}: task {task_id} auth digest differs")
         if (
-            task_auth["completed_logical_model_requests"] != len(response_ids)
+            task_auth["completed_logical_model_requests"] != completed_requests
             or task_auth["aborted_logical_requests"] != 0
             or task_auth["failed_attempts"] != 0
             or task_auth["accepted_attempts"]
             != task_auth["completed_attempts"]
-            or task_auth["completed_attempts"] < len(response_ids)
+            or task_auth["completed_attempts"] < completed_requests
         ):
             raise ValueError(f"{audit_path}: task {task_id} auth/trace counts differ")
 
@@ -2267,7 +2243,8 @@ def validate_real_task_artifacts(
         }
         task_bindings[task_id] = {
             "task_key_id": expected_task_key,
-            "trace_count": len(response_ids),
+            "trace_count": completed_requests,
+            "trace_engine_id_joinable": trace_requests["engine_id_joinable"],
             "trace_request_id_sha256s": response_digests,
             "task_auth": task_auth,
             "interval": interval,
@@ -2871,16 +2848,19 @@ def validate_real_task_artifacts(
     }
     if any(
         successful_by_task[task_id] != task_bindings[task_id]["trace_count"]
-        or sorted(
-            engine_id
-            for engine_id, key in successful_engine_ids.items()
-            if key == task_bindings[task_id]["task_key_id"]
+        or (
+            task_bindings[task_id]["trace_engine_id_joinable"]
+            and sorted(
+                engine_id
+                for engine_id, key in successful_engine_ids.items()
+                if key == task_bindings[task_id]["task_key_id"]
+            )
+            != task_bindings[task_id]["trace_request_id_sha256s"]
         )
-        != task_bindings[task_id]["trace_request_id_sha256s"]
         for task_id in expected_ids
     ):
         raise ValueError(
-            f"{census_path}: task trace/engine request ID set differs"
+            f"{census_path}: task trace/engine request evidence differs"
         )
     expected_census_identity = {
         "event_schema": WORK_CENSUS_EVENT_SCHEMA,
@@ -5114,7 +5094,7 @@ def self_test() -> None:
             expect_gate_payload_failure(
                 bad_trace_gate,
                 "self-consistent non-assistant task trace",
-                "terminal response IDs are empty/duplicate",
+                "legacy terminal response IDs are empty or duplicated",
             )
         finally:
             trace_artifact.write_bytes(original_trace_bytes)
@@ -5210,7 +5190,7 @@ def self_test() -> None:
             expect_gate_payload_failure(
                 swap_gate,
                 "cross-task terminal response ID swap",
-                "task trace/engine request ID set differs",
+                "task trace/engine request evidence differs",
             )
         finally:
             for path, raw in original_swap_traces.items():
@@ -5233,7 +5213,7 @@ def self_test() -> None:
             expect_gate_payload_failure(
                 replay_gate,
                 "same-task terminal response ID replay",
-                "terminal response IDs are empty/duplicate",
+                "legacy terminal response IDs are empty or duplicated",
             )
         finally:
             for path, raw in original_swap_traces.items():

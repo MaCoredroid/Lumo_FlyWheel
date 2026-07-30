@@ -12,6 +12,7 @@ import platform
 import subprocess
 import sys
 import tempfile
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -643,6 +644,386 @@ def validate_process_pid1_argv(
     if argv != expected:
         raise ContractError(f"fixed32 PID1 argv mismatch: {argv!r}")
     return expected
+
+
+def _fixed32_trace_message(event: dict[str, Any]) -> dict[str, Any] | None:
+    if event.get("type") == "assistant":
+        message = event.get("message")
+        if isinstance(message, dict) and message.get("role") == "assistant":
+            return message
+    if event.get("type") == "message" and event.get("role") == "assistant":
+        return event
+    return None
+
+
+def _fixed32_nonempty_text_record(message: dict[str, Any]) -> bool:
+    content = message.get("content")
+    return isinstance(content, list) and any(
+        isinstance(item, dict)
+        and item.get("type") == "text"
+        and isinstance(item.get("text"), str)
+        and bool(item["text"].strip())
+        for item in content
+    )
+
+
+def fixed32_trace_session_id(instance_id: str) -> str:
+    if not isinstance(instance_id, str) or not instance_id:
+        raise ContractError("fixed32 trace instance ID must be nonempty")
+    return str(
+        uuid.uuid5(
+            uuid.NAMESPACE_URL,
+            f"urn:fr13:fixed32:trace-session:{instance_id}",
+        )
+    )
+
+
+def _fixed32_qwen_group_request_id(event_ids: list[str]) -> str:
+    payload = json.dumps(
+        event_ids,
+        ensure_ascii=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return f"qwen-assistant-group-sha256:{hashlib.sha256(payload).hexdigest()}"
+
+
+def _validate_fixed32_qwen_nested_error_boundary(
+    events: list[dict[str, Any]],
+    *,
+    result_index: int,
+    session_id: str,
+    final_result_uuid: str,
+) -> None:
+    result = events[result_index]
+    usage = result.get("usage")
+    error = result.get("error")
+    if (
+        result.get("subtype") != "error_during_execution"
+        or result.get("is_error") is not True
+        or type(result.get("num_turns")) is not int
+        or result["num_turns"] != 0
+        or type(result.get("duration_ms")) is not int
+        or result["duration_ms"] != 0
+        or type(result.get("duration_api_ms")) is not int
+        or result["duration_api_ms"] != 0
+        or result.get("permission_denials") != []
+        or result.get("session_id") != session_id
+        or "result" in result
+        or "parent_tool_use_id" in result
+    ):
+        raise ContractError(
+            "fixed32 qwen nested error boundary state is invalid"
+        )
+    if (
+        not isinstance(usage, dict)
+        or set(usage) != {"input_tokens", "output_tokens"}
+        or type(usage["input_tokens"]) is not int
+        or usage["input_tokens"] != 0
+        or type(usage["output_tokens"]) is not int
+        or usage["output_tokens"] != 0
+    ):
+        raise ContractError(
+            "fixed32 qwen nested error boundary usage is not zero"
+        )
+    if (
+        not isinstance(error, dict)
+        or set(error) != {"message"}
+        or not isinstance(error["message"], str)
+        or not error["message"].strip()
+    ):
+        raise ContractError(
+            "fixed32 qwen nested error boundary message is invalid"
+        )
+    result_uuid = result.get("uuid")
+    if (
+        not isinstance(result_uuid, str)
+        or not result_uuid
+        or result_uuid == final_result_uuid
+    ):
+        raise ContractError(
+            "fixed32 qwen nested/final result identities are invalid"
+        )
+    if result_index == 0 or result_index + 1 >= len(events) - 1:
+        raise ContractError(
+            "fixed32 qwen nested error boundary position is invalid"
+        )
+    nested_user = events[result_index - 1]
+    top_level_user = events[result_index + 1]
+    if (
+        nested_user.get("type") != "user"
+        or not isinstance(nested_user.get("parent_tool_use_id"), str)
+        or not nested_user["parent_tool_use_id"]
+        or top_level_user.get("type") != "user"
+        or "parent_tool_use_id" not in top_level_user
+        or top_level_user["parent_tool_use_id"] is not None
+    ):
+        raise ContractError(
+            "fixed32 qwen nested error boundary transition is invalid"
+        )
+def validate_fixed32_trace_model_requests(
+    events: list[dict[str, Any]],
+    *,
+    expected_session_id: str | None = None,
+) -> dict[str, Any]:
+    """Reconcile legacy terminals or pinned Qwen assistant response groups."""
+    if not events or any(not isinstance(event, dict) for event in events):
+        raise ContractError("fixed32 trace events must be nonempty objects")
+
+    terminal_records: list[
+        tuple[int, dict[str, Any], dict[str, Any], str]
+    ] = []
+    result_records: list[tuple[int, dict[str, Any]]] = []
+    for index, event in enumerate(events):
+        if event.get("type") == "result":
+            result_records.append((index, event))
+        message = _fixed32_trace_message(event)
+        if message is None or message.get("stop_reason") is None:
+            continue
+        response_id = message.get("id")
+        if (
+            not isinstance(response_id, str)
+            or not response_id
+            or not isinstance(message.get("usage"), dict)
+        ):
+            raise ContractError(
+                "fixed32 terminal assistant record lacks response ID or usage"
+            )
+        terminal_records.append((index, event, message, response_id))
+
+    if not result_records:
+        response_ids = [record[3] for record in terminal_records]
+        if not response_ids or len(response_ids) != len(set(response_ids)):
+            raise ContractError(
+                "fixed32 legacy terminal response IDs are empty or duplicated"
+            )
+        return {
+            "trace_format": "legacy_terminal_records",
+            "completed_logical_model_requests": len(response_ids),
+            "model_request_ids": response_ids,
+            "engine_id_joinable": True,
+        }
+
+    if (
+        len(result_records) > 2
+        or result_records[-1][0] != len(events) - 1
+    ):
+        raise ContractError(
+            "fixed32 qwen trace requires one final result and at most one "
+            "nested error boundary"
+        )
+    result = result_records[-1][1]
+    num_turns = result.get("num_turns")
+    if (
+        result.get("subtype") != "success"
+        or result.get("is_error") is not False
+        or type(num_turns) is not int
+        or num_turns <= 0
+    ):
+        raise ContractError("fixed32 qwen result terminal state is invalid")
+    for key in ("uuid", "session_id"):
+        if not isinstance(result.get(key), str) or not result[key]:
+            raise ContractError(f"fixed32 qwen result {key} is invalid")
+    for key in ("duration_ms", "duration_api_ms"):
+        value = result.get(key)
+        if type(value) is not int or value < 0:
+            raise ContractError(f"fixed32 qwen result {key} is invalid")
+    if (
+        not isinstance(result.get("usage"), dict)
+        or result.get("permission_denials") != []
+    ):
+        raise ContractError("fixed32 qwen result evidence is incomplete")
+
+    result_session_id = result["session_id"]
+    if (
+        expected_session_id is not None
+        and result_session_id != expected_session_id
+    ):
+        raise ContractError(
+            "fixed32 qwen result session does not bind to the task"
+        )
+
+    nested_error_index: int | None = None
+    if len(result_records) == 2:
+        nested_error_index = result_records[0][0]
+        _validate_fixed32_qwen_nested_error_boundary(
+            events,
+            result_index=nested_error_index,
+            session_id=result_session_id,
+            final_result_uuid=result["uuid"],
+        )
+
+    qwen_event_ids = [event.get("uuid") for event in events]
+    if (
+        any(not isinstance(event_id, str) or not event_id for event_id in qwen_event_ids)
+        or len(qwen_event_ids) != len(set(qwen_event_ids))
+    ):
+        raise ContractError(
+            "fixed32 qwen event identities are empty or duplicated"
+        )
+
+    tool_use_ids: set[str] = set()
+    assistant_groups: list[list[tuple[dict[str, Any], dict[str, Any], str]]] = []
+    previous_was_assistant = False
+    for event_index, event in enumerate(events[:-1]):
+        event_type = event.get("type")
+        if event_type not in {"system", "user", "assistant", "result"}:
+            raise ContractError(
+                "fixed32 qwen pre-result event type is invalid"
+            )
+        if event.get("session_id") != result_session_id:
+            raise ContractError(
+                "fixed32 qwen pre-result session identity differs"
+            )
+
+        if event_type == "result":
+            if event_index != nested_error_index:
+                raise ContractError(
+                    "fixed32 qwen pre-final result is not the nested error boundary"
+                )
+            previous_was_assistant = False
+            continue
+
+        parent_tool_use_id = event.get("parent_tool_use_id")
+        if parent_tool_use_id is not None:
+            if (
+                not isinstance(parent_tool_use_id, str)
+                or not parent_tool_use_id
+            ):
+                raise ContractError(
+                    "fixed32 qwen parent tool identity is invalid"
+                )
+            if parent_tool_use_id not in tool_use_ids:
+                raise ContractError(
+                    "fixed32 qwen event has an unknown or non-ancestral parent tool"
+                )
+
+        if event_type != "assistant":
+            previous_was_assistant = False
+            continue
+        message = _fixed32_trace_message(event)
+        if message is None:
+            raise ContractError("fixed32 qwen assistant record is malformed")
+        event_id = event.get("uuid")
+        if (
+            not isinstance(event_id, str)
+            or not event_id
+            or message.get("id") != event_id
+            or not isinstance(message.get("usage"), dict)
+        ):
+            raise ContractError(
+                "fixed32 qwen assistant session or event identity differs"
+            )
+        content = message.get("content")
+        if not isinstance(content, list) or not content:
+            raise ContractError(
+                "fixed32 qwen assistant content is empty or invalid"
+            )
+        event_tool_ids: list[str] = []
+        event_tool_id_set: set[str] = set()
+        for item in content:
+            if not isinstance(item, dict):
+                raise ContractError(
+                    "fixed32 qwen assistant content item is invalid"
+                )
+            if item.get("type") != "tool_use":
+                continue
+            tool_id = item.get("id")
+            if (
+                not isinstance(tool_id, str)
+                or not tool_id
+                or tool_id in tool_use_ids
+                or tool_id in event_tool_id_set
+            ):
+                raise ContractError(
+                    "fixed32 qwen tool-use identity is empty or duplicated"
+                )
+            event_tool_ids.append(tool_id)
+            event_tool_id_set.add(tool_id)
+        stop_reason = message.get("stop_reason")
+        if stop_reason not in {None, "tool_use"}:
+            raise ContractError(
+                "fixed32 qwen assistant stop reason is invalid"
+            )
+        if (stop_reason == "tool_use") != bool(event_tool_ids):
+            raise ContractError(
+                "fixed32 qwen tool-use terminal/content evidence differs"
+            )
+        tool_use_ids.update(event_tool_ids)
+
+        record = (event, message, event_id)
+        if previous_was_assistant:
+            assistant_groups[-1].append(record)
+        else:
+            assistant_groups.append([record])
+        previous_was_assistant = True
+
+    if not assistant_groups or events[-2].get("type") != "assistant":
+        raise ContractError(
+            "fixed32 qwen trace has no final assistant response group"
+        )
+
+    top_level_groups = 0
+    response_ids: list[str] = []
+    for group_index, group in enumerate(assistant_groups):
+        parent_ids = {record[0].get("parent_tool_use_id") for record in group}
+        if len(parent_ids) != 1:
+            raise ContractError(
+                "fixed32 qwen contiguous assistant group changes parent identity"
+            )
+        parent_tool_use_id = next(iter(parent_ids))
+        if parent_tool_use_id is None:
+            top_level_groups += 1
+
+        terminal_seen = False
+        terminal_count = 0
+        nonempty_text_count = 0
+        for _event, message, _event_id in group:
+            if message.get("stop_reason") == "tool_use":
+                terminal_seen = True
+                terminal_count += 1
+            elif terminal_seen:
+                raise ContractError(
+                    "fixed32 qwen assistant group continues after a terminal record"
+                )
+            if _fixed32_nonempty_text_record(message):
+                nonempty_text_count += 1
+
+        is_final_group = group_index == len(assistant_groups) - 1
+        if is_final_group:
+            if (
+                parent_tool_use_id is not None
+                or terminal_count != 0
+                or nonempty_text_count != 1
+            ):
+                raise ContractError(
+                    "fixed32 qwen final assistant response group is invalid"
+                )
+        elif terminal_count == 0:
+            raise ContractError(
+                "fixed32 qwen non-final assistant response group is incomplete"
+            )
+
+        response_ids.append(
+            _fixed32_qwen_group_request_id(
+                [record[2] for record in group]
+            )
+        )
+
+    if top_level_groups != num_turns:
+        raise ContractError(
+            "fixed32 qwen result turn count and top-level response groups "
+            "do not reconcile"
+        )
+    if len(response_ids) != len(set(response_ids)):
+        raise ContractError(
+            "fixed32 qwen response group identities are duplicated"
+        )
+    return {
+        "trace_format": "qwen_result",
+        "completed_logical_model_requests": len(response_ids),
+        "model_request_ids": response_ids,
+        "engine_id_joinable": False,
+    }
 
 
 def _exact_file_record(path: Path, *, display_path: str) -> dict[str, Any]:

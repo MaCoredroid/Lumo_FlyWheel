@@ -45,6 +45,12 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+SCRIPT_DIR = REPO_ROOT / "scripts"
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import fr13_fixed32_contract as fixed32_contract  # noqa: E402
+
 DEFAULT_OUT_ROOT = REPO_ROOT / "output" / "swe_bench_q36_a_temp06"
 DEFAULT_REPO_CACHE = REPO_ROOT / ".cache" / "swe_bench_repos"
 DEFAULT_HF_HOME = REPO_ROOT / ".cache" / "huggingface"
@@ -291,7 +297,8 @@ QWEN_CODE_TEMPLATE = (
     "-w /workspace qwen-code-runner:v1 "
     # user 2026-07-07: NO turn limit (100000 = effectively unlimited); tasks run to natural
     # submit/give-up. Backstop = 600s stall-watchdog + QWEN_STREAM_IDLE_TIMEOUT_MS, NOT a turn cap.
-    "--yolo --output-format stream-json --max-session-turns 100000 -p"
+    "--yolo --output-format stream-json --max-session-turns 100000 "
+    "--session-id {session_id} -p"
 )
 
 
@@ -411,7 +418,9 @@ _INSTANCE_CONTAINER_PATH = (
 _INSTANCE_WRAPPER = (
     "printf %s \"$SWE_AGENTS_B64\" | base64 -d > /testbed/AGENTS.md; "
     "PROMPT=$(printf %s \"$SWE_PROMPT_B64\" | base64 -d); "
-    "/opt/qwen/bin/qwen --yolo --output-format stream-json --max-session-turns 100000 -p \"$PROMPT\"; "
+    "/opt/qwen/bin/qwen --yolo --output-format stream-json "
+    "--max-session-turns 100000 --session-id \"$SWE_SESSION_ID\" "
+    "-p \"$PROMPT\"; "
     "rc=$?; "
     # Diff against HEAD, NOT base_commit. In the SWE-bench per-instance image /testbed
     # HEAD is `<base_commit> + the committed env-setup commit` (efa06c664 "SWE-bench";
@@ -429,7 +438,7 @@ _INSTANCE_WRAPPER = (
 def _instance_agent_command(*, container_name: str, image: str, endpoint: str,
                             model: str, host_out_dir: str, bundle_src: str,
                             agents_md_b64: str, prompt_b64: str,
-                            base_commit: str) -> str:
+                            base_commit: str, session_id: str) -> str:
     """Render the instance_image docker command. Same qwen flags/env as the
     legacy qwen-code template, but the image is the per-instance eval image, the
     node+qwen runtime is bind-mounted read-only from the host bundle at
@@ -451,6 +460,7 @@ def _instance_agent_command(*, container_name: str, image: str, endpoint: str,
         f"-e PATH={_INSTANCE_CONTAINER_PATH} "
         f"-e SWE_AGENTS_B64='{agents_md_b64}' -e SWE_PROMPT_B64='{prompt_b64}' "
         f"-e SWE_BASE_COMMIT='{base_commit}' "
+        f"-e SWE_SESSION_ID='{session_id}' "
         f"-v {host_out_dir}:/out -v {bundle_src}:/opt/qwen:ro "
         f"-w /testbed {image} "
         f"bash -c '{_INSTANCE_WRAPPER}'"
@@ -1023,7 +1033,6 @@ def _fixed32_real_task_provenance(
     assistant_output_event_count = 0
     qwen_assistant_event_count = 0
     codex_agent_message_event_count = 0
-    qwen_model_request_ids: list[str] = []
     usage_records: list[dict[str, Any]] = []
     for event in events:
         usage_records.extend(_fixed32_usage_records(event))
@@ -1036,34 +1045,10 @@ def _fixed32_real_task_provenance(
                 is_assistant_event = True
                 qwen_assistant_event_count += 1
                 assistant_content = message.get("content")
-                if message.get("stop_reason") is not None:
-                    response_id = message.get("id")
-                    if (
-                        not isinstance(response_id, str)
-                        or not response_id
-                        or not isinstance(message.get("usage"), dict)
-                    ):
-                        raise Fixed32BoundaryError(
-                            f"fixed32 real-task provenance {instance_id}: "
-                            "terminal qwen assistant record lacks response ID or usage"
-                        )
-                    qwen_model_request_ids.append(response_id)
         elif event_type == "message" and event.get("role") == "assistant":
             is_assistant_event = True
             qwen_assistant_event_count += 1
             assistant_content = event.get("content")
-            if event.get("stop_reason") is not None:
-                response_id = event.get("id")
-                if (
-                    not isinstance(response_id, str)
-                    or not response_id
-                    or not isinstance(event.get("usage"), dict)
-                ):
-                    raise Fixed32BoundaryError(
-                        f"fixed32 real-task provenance {instance_id}: "
-                        "terminal qwen message record lacks response ID or usage"
-                    )
-                qwen_model_request_ids.append(response_id)
         elif event_type == "item.completed":
             item = event.get("item")
             if isinstance(item, dict) and item.get("type") == "agent_message":
@@ -1080,14 +1065,19 @@ def _fixed32_real_task_provenance(
             f"fixed32 real-task provenance {instance_id}: "
             "trace contains no nonempty assistant/model output"
         )
-    if (
-        not qwen_model_request_ids
-        or len(set(qwen_model_request_ids)) != len(qwen_model_request_ids)
-    ):
+    try:
+        trace_requests = fixed32_contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=fixed32_contract.fixed32_trace_session_id(
+                instance_id
+            ),
+        )
+    except fixed32_contract.ContractError as exc:
         raise Fixed32BoundaryError(
             f"fixed32 real-task provenance {instance_id}: "
-            "trace cannot independently count unique completed model requests"
-        )
+            f"trace cannot independently count completed model requests: {exc}"
+        ) from exc
+    qwen_model_request_ids = trace_requests["model_request_ids"]
     request_id_digests = sorted(
         hashlib.sha256(response_id.encode("utf-8")).hexdigest()
         for response_id in qwen_model_request_ids
@@ -2258,6 +2248,7 @@ def _run_agent_local(
         workspace=str(workspace),
         endpoint=endpoint,
         model=model,
+        session_id=fixed32_contract.fixed32_trace_session_id(instance_id),
     )
     # Pass the prompt as a separate argv element instead of shell-embedding it.
     # The dynamic agent_gave_up retry prompt is built from the prior-attempt trace
@@ -2611,6 +2602,7 @@ def _run_agent_remote(
         workspace=remote_ws,
         endpoint=endpoint,
         model=model,
+        session_id=fixed32_contract.fixed32_trace_session_id(instance_id),
     )
     # BUGFIX: CODEX_TEMPLATE no longer carries a {prompt} placeholder — the local path
     # appends the prompt as a separate argv element (see L459-466). The remote path used
@@ -2742,6 +2734,7 @@ def _run_agent_instance(
     started = time.monotonic()
     safe_id = instance_id.replace("/", "_")[:48]
     container_name = f"swe-qwen-{safe_id}-{int(time.time())}"
+    trace_session_id = fixed32_contract.fixed32_trace_session_id(instance_id)
     # ARCH PLACEMENT (user 2026-07-05): derive the image variant from the AGENT
     # host's architecture. Some instances only publish x86_64 images — those must
     # run on the x86 offload host; on an aarch64 host with no arm64 variant we
@@ -2810,7 +2803,8 @@ def _run_agent_instance(
         cmd = _instance_agent_command(
             container_name=container_name, image=image, endpoint=endpoint, model=model,
             host_out_dir=remote_out, bundle_src="~/qwen_agent_bundle",
-            agents_md_b64=agents_b64, prompt_b64=prompt_b64, base_commit=base_commit)
+            agents_md_b64=agents_b64, prompt_b64=prompt_b64,
+            base_commit=base_commit, session_id=trace_session_id)
         ssh_cmd = [
             "ssh",
             *_EVAL_SSH_OPTS,
@@ -2880,7 +2874,8 @@ def _run_agent_instance(
         container_name=container_name, image=image, endpoint=endpoint, model=model,
         host_out_dir=str(Path(workspace).resolve()),
         bundle_src=os.path.expanduser("~/qwen_agent_bundle"),
-        agents_md_b64=agents_b64, prompt_b64=prompt_b64, base_commit=base_commit)
+        agents_md_b64=agents_b64, prompt_b64=prompt_b64,
+        base_commit=base_commit, session_id=trace_session_id)
     cmd_argv = shlex.split(cmd)
     try:
         with trace_path.open("w", encoding="utf-8") as tf, \
@@ -3483,19 +3478,18 @@ def main(argv: list[str] | None = None) -> int:
     if fixed32_enabled and any(value is None for value in fixed32_values):
         parser.error("all six --fixed32-* runtime binding options are required together")
     fixed32_client = None
+    fixed32_subset = None
     if fixed32_enabled:
         if args.limit is not None or args.skip_existing:
             parser.error("fixed32 campaigns forbid --limit and --skip-existing")
-        canonical_subsets = {
-            (REPO_ROOT / "config/fr13_fixed32/subset_b4_four.json").resolve(),
-            (REPO_ROOT / "config/fr13_fixed32/subset_b4_sixteen.json").resolve(),
-        }
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        from fr13_floor_gate import GateError as FloorGateError
+        from fr13_floor_gate import validate_canonical_subset
+
         try:
-            subset_path = args.subset.resolve(strict=True)
-        except OSError as error:
-            parser.error(f"fixed32 subset cannot be resolved: {error}")
-        if subset_path not in canonical_subsets:
-            parser.error("fixed32 requires the canonical SWE-Verified 4-task or 16-task subset")
+            fixed32_subset = validate_canonical_subset(args.subset)
+        except FloorGateError as error:
+            parser.error(f"fixed32 canonical subset validation failed: {error}")
         try:
             serving_batch = int(os.environ["MAX_NUM_SEQS_OVR"])
         except (KeyError, ValueError):
@@ -3504,7 +3498,6 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(
                 "fixed32 requires concurrency to equal the serving batch (exactly B1 or B4)"
             )
-        sys.path.insert(0, str(REPO_ROOT / "scripts"))
         from fr13_fixed32_flush_protocol import Fixed32FlushClient
 
         fixed32_client = Fixed32FlushClient(
@@ -3540,9 +3533,9 @@ def main(argv: list[str] | None = None) -> int:
     if fixed32_enabled:
         if "SWE-bench_Verified" not in dataset_name:
             parser.error(f"fixed32 dataset is not SWE-bench Verified: {dataset_name!r}")
-        if len(instance_ids) not in (4, 16):
+        if fixed32_subset is None or instance_ids != fixed32_subset["task_ids"]:
             parser.error(
-                f"fixed32 canonical campaign must contain 4 or 16 tasks, got {len(instance_ids)}"
+                "fixed32 loaded task set differs from the validated canonical subset"
             )
     dataset_tag = args.dataset_tag or ("pro" if "Pro" in dataset_name else "verified")
     dataset_out = args.out_root / dataset_tag
