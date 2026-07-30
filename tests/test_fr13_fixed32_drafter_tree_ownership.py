@@ -41,6 +41,107 @@ def _runtime() -> dict[str, object]:
     return namespace
 
 
+def test_kv16_selects_only_the_exact_target_full_attention_layers() -> None:
+    namespace = _runtime()
+    captured = (
+        *TARGET_LAYERS[:5],
+        DRAFTER_LAYER,
+        *TARGET_LAYERS[5:],
+    )
+
+    selected = namespace["_fr13_fixed32_target_kv_layer_names"](captured)
+
+    assert selected == TARGET_LAYERS
+
+
+@pytest.mark.parametrize(
+    "captured",
+    (
+        TARGET_LAYERS,
+        (*TARGET_LAYERS, DRAFTER_LAYER, DRAFTER_LAYER),
+        (*TARGET_LAYERS[:-1], DRAFTER_LAYER),
+        (*TARGET_LAYERS, DRAFTER_LAYER, "unexpected.full.attn"),
+    ),
+)
+def test_kv16_rejects_full_attention_layer_ownership_drift(
+    captured: tuple[str, ...],
+) -> None:
+    namespace = _runtime()
+
+    with pytest.raises(RuntimeError, match="layer ownership drift"):
+        namespace["_fr13_fixed32_target_kv_layer_names"](captured)
+
+
+def test_generated_runner_stages_mtp_after_target16(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "gpu_model_runner.py"
+    target.write_text(
+        "class GPUModelRunner:\n"
+        "    def sample_tokens(self, logits, spec_decode_metadata):\n"
+        '        with record_function_or_nullcontext("gpu_model_runner: sample"):\n'
+        "            sampler_output = self._sample(logits, spec_decode_metadata)\n"
+        "        return sampler_output\n"
+    )
+    monkeypatch.setattr(PATCHER, "GPU_MODEL_RUNNER_PATH", target)
+
+    assert PATCHER._patch_gpu_model_runner_attn_kv_remap_apply() is True
+    generated = target.read_text()
+
+    assert generated.count("_fr13_fixed32_target_kv_layer_names(") == 1
+    assert (
+        "for _fr13_f32_name in _fr13_f32_target_layer_names"
+        in generated
+    )
+    assert "for _fr13_f32_name in _fr13_f32_layer_names" not in generated
+    assert generated.count("_fr13_f32_kv16(") == 1
+    assert "_fr13_f32_kv1(" not in generated
+    assert "_fr13_fixed32_mtp_kv_payload" in generated
+    identity_guard = generated.index(
+        "FR13 fixed32 measured KV event identity drift"
+    )
+    guard = generated.index("if _fr13_f32_dstpi is None:")
+    assert identity_guard < generated.index("_fr13_f32_kv16(")
+    assert guard < generated.index("_fr13_f32_kv16(")
+    assert generated.index("_fr13_f32_kv16(") < generated.index(
+        "_fr13_fixed32_mtp_kv_payload ="
+    )
+    compile(generated, str(target), "exec")
+
+
+def test_generated_eagle_consumes_mtp_after_first_pass(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "eagle.py"
+    target.write_text(
+        "class EagleProposer:\n"
+        "    def propose(self, token_indices_to_sample):\n"
+        "        with set_forward_context():\n"
+        "            ret_hidden_states = self.model(**model_kwargs)\n"
+        "            last_hidden_states = ret_hidden_states\n"
+        "        sample_hidden_states = "
+        "last_hidden_states[token_indices_to_sample]\n"
+        "        return self.propose_tree(sample_hidden_states)\n"
+    )
+    monkeypatch.setattr(PATCHER, "EAGLE_PATH", target)
+
+    assert PATCHER._patch_eagle_fixed32_mtp_kv_remap() is True
+    generated = target.read_text()
+
+    first_pass = generated.index("ret_hidden_states = self.model(**model_kwargs)")
+    mtp_call = generated.index("_fr13_mtp_kv1(")
+    sample = generated.index(
+        "sample_hidden_states = last_hidden_states[token_indices_to_sample]"
+    )
+    proposal = generated.index("self.propose_tree(sample_hidden_states)")
+    assert first_pass < mtp_call < sample < proposal
+    assert "slot_pi=" not in generated
+    assert generated.count("_fr13_mtp_kv1(") == 1
+    compile(generated, str(target), "exec")
+
+
 def _open_drafter_capture(
     batch_size: int, graph_id: int
 ) -> dict[str, object]:

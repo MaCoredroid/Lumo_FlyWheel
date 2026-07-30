@@ -265,8 +265,21 @@ ACCEPTED_PATH_CAPACITY = COMMIT_PATH_CAP
 REQUEST_KEY_PATH_CAPACITY = COMMIT_PATH_CAP
 KV_REMAP_PATH_CAPACITY = COMMIT_PATH_CAP
 KV_REMAP_GROUPS = 1
-KV_REMAP_CACHE_TENSORS = TREE_ATTENTION_LAYERS
+KV_REMAP_TARGET_CACHE_TENSORS = TREE_ATTENTION_LAYERS
+KV_REMAP_DRAFTER_CACHE_TENSORS = 1
+KV_REMAP_CACHE_TENSORS = (
+    KV_REMAP_TARGET_CACHE_TENSORS + KV_REMAP_DRAFTER_CACHE_TENSORS
+)
 KV_REMAP_PLANES = 2
+KV_REMAP_TARGET_PAIR_SLOTS = KV_REMAP_PATH_CAPACITY
+KV_REMAP_DRAFTER_PAIR_SLOTS = KV_REMAP_PATH_CAPACITY
+KV_REMAP_PAIR_SLOTS = (
+    KV_REMAP_TARGET_PAIR_SLOTS + KV_REMAP_DRAFTER_PAIR_SLOTS
+)
+KV_REMAP_TARGET_PREPARE_CALLS = 1
+KV_REMAP_DRAFTER_PREPARE_CALLS = 1
+KV_REMAP_TARGET_APPLY_CACHE_CALLS = KV_REMAP_TARGET_CACHE_TENSORS
+KV_REMAP_DRAFTER_APPLY_CACHE_CALLS = KV_REMAP_DRAFTER_CACHE_TENSORS
 CONV_COMMIT_LAYERS = GDN_LAYERS
 CONV_PREGATHER_LAYERS = GDN_LAYERS
 CONV_PREGATHER_BLOCK = 1024
@@ -316,8 +329,17 @@ FIXED_EXECUTION_SIGNATURE = {
     "request_key_path_capacity": REQUEST_KEY_PATH_CAPACITY,
     "kv_remap_path_capacity": KV_REMAP_PATH_CAPACITY,
     "kv_remap_groups": KV_REMAP_GROUPS,
+    "kv_remap_target_cache_tensors": KV_REMAP_TARGET_CACHE_TENSORS,
+    "kv_remap_drafter_cache_tensors": KV_REMAP_DRAFTER_CACHE_TENSORS,
     "kv_remap_cache_tensors": KV_REMAP_CACHE_TENSORS,
     "kv_remap_planes": KV_REMAP_PLANES,
+    "kv_remap_target_pair_slots": KV_REMAP_TARGET_PAIR_SLOTS,
+    "kv_remap_drafter_pair_slots": KV_REMAP_DRAFTER_PAIR_SLOTS,
+    "kv_remap_pair_slots": KV_REMAP_PAIR_SLOTS,
+    "kv_remap_target_prepare_calls": KV_REMAP_TARGET_PREPARE_CALLS,
+    "kv_remap_drafter_prepare_calls": KV_REMAP_DRAFTER_PREPARE_CALLS,
+    "kv_remap_target_apply_cache_calls": KV_REMAP_TARGET_APPLY_CACHE_CALLS,
+    "kv_remap_drafter_apply_cache_calls": KV_REMAP_DRAFTER_APPLY_CACHE_CALLS,
     "conv_commit_layers": CONV_COMMIT_LAYERS,
     "conv_pregather_layers": CONV_PREGATHER_LAYERS,
     "conv_pregather_block": CONV_PREGATHER_BLOCK,
@@ -519,8 +541,17 @@ def validate_contract() -> None:
         "request_key_path_capacity",
         "kv_remap_path_capacity",
         "kv_remap_groups",
+        "kv_remap_target_cache_tensors",
+        "kv_remap_drafter_cache_tensors",
         "kv_remap_cache_tensors",
         "kv_remap_planes",
+        "kv_remap_target_pair_slots",
+        "kv_remap_drafter_pair_slots",
+        "kv_remap_pair_slots",
+        "kv_remap_target_prepare_calls",
+        "kv_remap_drafter_prepare_calls",
+        "kv_remap_target_apply_cache_calls",
+        "kv_remap_drafter_apply_cache_calls",
         "conv_commit_layers",
         "conv_pregather_layers",
         "conv_pregather_block",
@@ -556,8 +587,17 @@ def validate_contract() -> None:
         REQUEST_KEY_PATH_CAPACITY,
         KV_REMAP_PATH_CAPACITY,
         KV_REMAP_GROUPS,
+        KV_REMAP_TARGET_CACHE_TENSORS,
+        KV_REMAP_DRAFTER_CACHE_TENSORS,
         KV_REMAP_CACHE_TENSORS,
         KV_REMAP_PLANES,
+        KV_REMAP_TARGET_PAIR_SLOTS,
+        KV_REMAP_DRAFTER_PAIR_SLOTS,
+        KV_REMAP_PAIR_SLOTS,
+        KV_REMAP_TARGET_PREPARE_CALLS,
+        KV_REMAP_DRAFTER_PREPARE_CALLS,
+        KV_REMAP_TARGET_APPLY_CACHE_CALLS,
+        KV_REMAP_DRAFTER_APPLY_CACHE_CALLS,
         CONV_COMMIT_LAYERS,
         CONV_PREGATHER_LAYERS,
         CONV_PREGATHER_BLOCK,
@@ -589,7 +629,16 @@ def validate_contract() -> None:
         16,
         1,
         16,
+        1,
+        17,
         2,
+        16,
+        16,
+        32,
+        1,
+        1,
+        16,
+        1,
         48,
         48,
         1024,

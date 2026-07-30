@@ -1,0 +1,65 @@
+{
+  "schema": "fr13.fixed32.campaign_failure_summary.v1",
+  "campaign": {
+    "tag": "b1_4swe_f32_20260730T075529Z",
+    "batch_size": 1,
+    "concurrency": 1,
+    "task_count": 4,
+    "task_ids": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033",
+      "astropy__astropy-13236",
+      "astropy__astropy-13398"
+    ],
+    "source_git_commit": "cabd79585b759f3feb22857e7d1c34ddf5491524"
+  },
+  "outcome": {
+    "status": "INVALID_ABORTED",
+    "acceptance_evidence": false,
+    "tail6_started": true,
+    "tail6_completed": false,
+    "hydra27_started": false,
+    "tasks_started": 1,
+    "tasks_completed": 0,
+    "post_task_timing_brackets": 0,
+    "serving_gate_return_code": 14
+  },
+  "failure": {
+    "arm": "tail6_fixed32",
+    "task_id": "astropy__astropy-12907",
+    "phase": "first_task_first_physical_fixed32_verify_post_sample_pre_kv16_remap",
+    "phase_source": "RECONSTRUCTED_FROM_ORDERED_RUNTIME_MARKERS",
+    "root_error": "FR13 fixed32 KV16 cache set is not exactly 16x2",
+    "wrapper_error": "FR13 fixed32 KV16/census completion failed: RuntimeError:FR13 fixed32 KV16 cache set is not exactly 16x2",
+    "gate_error": "FR13 fixed32 prior sample failed: sample raised before fixed32 proposal seal: RuntimeError:FR13 fixed32 KV16/census completion failed: RuntimeError:FR13 fixed32 KV16 cache set is not exactly 16x2",
+    "runtime_cause_status": "EXACT_FAILURE_SITE_EXPOSED",
+    "static_analysis_conclusion": "The captured full-attention group contains the canonical 16 target full-attention layers plus the separate persistent MTP drafter layer. The fixed32 KV16 route passed that 17-layer group to an exact-16 target-cache guard instead of selecting the canonical target-layer set. The target caches require a post-sample remap while the verify permutation is live. Eagle then restores the flat map and its first-pass MTP forward rewrites the drafter cache, so MTP requires a separate fixed one-cache flat remap after that fresh write and before tree proposal."
+  },
+  "observer_evidence": {
+    "pre_task_complete_work_census_events": 0,
+    "post_task_complete_work_census_events": null,
+    "physical_fixed32_work_engaged": true,
+    "physical_drafts": 31,
+    "physical_rows": 32,
+    "committer_replay_enqueued": true,
+    "committer_replay_completion_status": "UNKNOWN_AFTER_ENQUEUE",
+    "kv16_remap_called": false,
+    "proposal_sealed": false,
+    "async_original_cause_preserved": true
+  },
+  "closure": {
+    "runtime_manifest_launch_end_byte_equal": true,
+    "runtime_manifest_file_sha256": "ad02727905937abf41f40b9f2eba5ef325cecdd9f4259d107730f62690d603f1",
+    "external_manifest_launch_end_byte_equal": true,
+    "external_manifest_file_sha256": "a422f6f0cb3ffbf4c3e0a6953ba2766f197933db8ba3712af7648953049f5c6d"
+  },
+  "privacy": {
+    "contains_prompts": false,
+    "contains_responses": false,
+    "contains_environment": false,
+    "contains_process_identity": false,
+    "contains_request_identity": false,
+    "contains_task_patches": false,
+    "contains_raw_logs": false
+  }
+}

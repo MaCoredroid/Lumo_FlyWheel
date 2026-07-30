@@ -2179,14 +2179,19 @@ def _validate_fixed32_kv16_contract(
     num_spec_decodes: int,
     dst_pi: torch.Tensor | None,
     batch_indices: torch.Tensor | None,
+    expected_cache_tensors: int = 16,
 ) -> tuple[int, int]:
-    """Host-shape portion of the strict fixed32 KV16 route contract."""
+    """Validate one fixed32 Bx16 cache-remap route."""
     b = int(num_spec_decodes)
     if b not in (1, 2, 3, 4):
         raise ValueError(f"FR13_FIXED32_KV_REMAP16 requires B=1..4, got {b}")
-    if not isinstance(kv_caches, (list, tuple)) or len(kv_caches) != 16:
+    if (
+        not isinstance(kv_caches, (list, tuple))
+        or len(kv_caches) != expected_cache_tensors
+    ):
         raise ValueError(
-            "FR13_FIXED32_KV_REMAP16 requires exactly 16 cache tensors, "
+            "FR13_FIXED32_KV_REMAP16 requires exactly "
+            f"{expected_cache_tensors} cache tensors, "
             f"got {type(kv_caches).__name__} len="
             f"{len(kv_caches) if isinstance(kv_caches, (list, tuple)) else 'n/a'}"
         )
@@ -2249,6 +2254,8 @@ def _validate_fixed32_kv16_contract(
     ]
     if batch_indices is not None:
         contract_tensors.append(("batch_indices", batch_indices))
+    if dst_pi is not None:
+        contract_tensors.append(("dst_pi", dst_pi))
     for label, tensor in contract_tensors:
         if tensor.dtype not in integer_dtypes:
             raise TypeError(
@@ -2260,11 +2267,6 @@ def _validate_fixed32_kv16_contract(
                 f"FR13_FIXED32_KV_REMAP16 {label} device "
                 f"{tensor.device} != {slot_mapping.device}"
             )
-    if dst_pi is not None and dst_pi.device != slot_mapping.device:
-        raise ValueError(
-            "FR13_FIXED32_KV_REMAP16 dst_pi device mismatch: "
-            f"{dst_pi.device} != {slot_mapping.device}"
-        )
     cache_capacity = None
     for index, kv in enumerate(kv_caches):
         if not torch.is_tensor(kv):
@@ -2307,11 +2309,13 @@ def _launch_attn_kv_linear_remap_syncfree_fixed16_impl(
     num_spec_decodes: int,
     dst_pi: torch.Tensor | None = None,
     batch_indices: torch.Tensor | None = None,
+    expected_cache_tensors: int = 16,
 ) -> None:
-    """Strict fixed32 cache walk: Bx16 pairs over all 16 two-plane caches.
+    """Strict fixed32 cache walk over Bx16 source/destination pairs.
 
     Pure batches use the original prefix-contiguous qsl route. Mixed batches
-    provide the ordered full-batch row index for each compact spec row.
+    provide the ordered full-batch row index for each compact spec row. The
+    public target and drafter routes fix the cache count at 16 and 1.
     """
     b, cache_capacity = _validate_fixed32_kv16_contract(
         kv_caches=kv_caches,
@@ -2322,6 +2326,7 @@ def _launch_attn_kv_linear_remap_syncfree_fixed16_impl(
         num_spec_decodes=num_spec_decodes,
         dst_pi=dst_pi,
         batch_indices=batch_indices,
+        expected_cache_tensors=expected_cache_tensors,
     )
     device = slot_mapping.device
     if batch_indices is None:
@@ -2352,9 +2357,7 @@ def _launch_attn_kv_linear_remap_syncfree_fixed16_impl(
 
     lens_ok = ((acc >= 0) & (acc <= 16)).all()
     active_pos = m_idx < acc
-    paths_ok = (
-        (~active_pos) | ((ap >= 1) & (ap < 32))
-    ).all()
+    paths_ok = ((~active_pos) | ((ap >= 1) & (ap < 32))).all()
     spans_ok = (spans == 32).all()
     destination_ok = ((dst_off >= 1) & (dst_off < 32)).all()
     mapping_shape_ok = (
@@ -2430,6 +2433,30 @@ def launch_attn_kv_linear_remap_syncfree_fixed16(
         num_spec_decodes=num_spec_decodes,
         dst_pi=dst_pi,
         batch_indices=batch_indices,
+    )
+
+
+def launch_attn_kv_linear_remap_syncfree_fixed1_drafter(
+    *,
+    kv_caches,
+    slot_mapping: torch.Tensor,
+    query_start_loc: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    num_accepted_tokens: torch.Tensor,
+    num_spec_decodes: int,
+    batch_indices: torch.Tensor | None = None,
+) -> None:
+    """Compact fresh MTP KV after its first-pass write through the flat map."""
+    return _launch_attn_kv_linear_remap_syncfree_fixed16_impl(
+        kv_caches=kv_caches,
+        slot_mapping=slot_mapping,
+        query_start_loc=query_start_loc,
+        accepted_paths=accepted_paths,
+        num_accepted_tokens=num_accepted_tokens,
+        num_spec_decodes=num_spec_decodes,
+        dst_pi=None,
+        batch_indices=batch_indices,
+        expected_cache_tensors=1,
     )
 
 

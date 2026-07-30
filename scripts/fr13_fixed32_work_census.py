@@ -58,9 +58,18 @@ from fr13_fixed32_topology import (
     HYDRA27_ACTIVE_DRAFTS,
     HYDRA27_VALID_MASK,
     KV_REMAP_CACHE_TENSORS,
+    KV_REMAP_DRAFTER_APPLY_CACHE_CALLS,
+    KV_REMAP_DRAFTER_CACHE_TENSORS,
+    KV_REMAP_DRAFTER_PAIR_SLOTS,
+    KV_REMAP_DRAFTER_PREPARE_CALLS,
     KV_REMAP_GROUPS,
+    KV_REMAP_PAIR_SLOTS,
     KV_REMAP_PATH_CAPACITY,
     KV_REMAP_PLANES,
+    KV_REMAP_TARGET_APPLY_CACHE_CALLS,
+    KV_REMAP_TARGET_CACHE_TENSORS,
+    KV_REMAP_TARGET_PAIR_SLOTS,
+    KV_REMAP_TARGET_PREPARE_CALLS,
     MODEL_LAYERS,
     MTP_FORWARD_CALLS,
     OUTPUT_PUBLISH_CAPACITY,
@@ -81,10 +90,10 @@ from fr13_fixed32_topology import (
     WALK_CAP,
 )
 
-SCHEMA = "fr13-fixed32-work-census-v5"
-TERMINAL_SCHEMA = "fr13-fixed32-work-census-terminal-v5"
-REPORT_SCHEMA = "fr13-fixed32-work-census-report-v5"
-SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v5"
+SCHEMA = "fr13-fixed32-work-census-v6"
+TERMINAL_SCHEMA = "fr13-fixed32-work-census-terminal-v6"
+REPORT_SCHEMA = "fr13-fixed32-work-census-report-v6"
+SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v6"
 
 TAIL_MODE = "tail6_fixed32"
 HYDRA_MODE = "hydra27_fixed32"
@@ -153,7 +162,7 @@ COMMITTER_RING_LAYER_PATH_ROWS_PER_REQUEST = (
 OUTPUT_PUBLISH_ROUTE = "device_fixed32"
 ACCEPTED_PATH_PACK_ROUTE = "device_fixed16"
 REQUEST_KEY_PACK_ROUTE = "device_rowmap"
-KV_REMAP_ROUTE = "syncfree_fixed16"
+KV_REMAP_ROUTE = "syncfree_target16_postsample_drafter1_postforward"
 CONV_COMMIT_ROUTE = "stateless_col0_fixed"
 CONV_PREGATHER_ROUTE = "in_graph_preconsume"
 COMMITTER_ROUTE = "fixed16_device_fill_graph"
@@ -380,10 +389,18 @@ KV_REMAP_KEYS = frozenset(
         "route",
         "path_capacity",
         "pair_slots",
+        "target_pair_slots",
+        "drafter_pair_slots",
         "kv_groups",
+        "target_cache_tensors",
+        "drafter_cache_tensors",
         "kv_cache_tensors",
         "kv_planes",
+        "target_prepare_calls",
+        "drafter_prepare_calls",
         "prepare_calls",
+        "target_apply_cache_calls",
+        "drafter_apply_cache_calls",
         "apply_cache_calls",
         "src_pair_rows",
         "dst_pair_rows",
@@ -1539,11 +1556,22 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         expected={
             "route": KV_REMAP_ROUTE,
             "path_capacity": KV_REMAP_PATH_CAPACITY,
-            "pair_slots": KV_REMAP_PATH_CAPACITY * batch_size,
+            "pair_slots": KV_REMAP_PAIR_SLOTS * batch_size,
+            "target_pair_slots": KV_REMAP_TARGET_PAIR_SLOTS * batch_size,
+            "drafter_pair_slots": KV_REMAP_DRAFTER_PAIR_SLOTS * batch_size,
             "kv_groups": KV_REMAP_GROUPS,
+            "target_cache_tensors": KV_REMAP_TARGET_CACHE_TENSORS,
+            "drafter_cache_tensors": KV_REMAP_DRAFTER_CACHE_TENSORS,
             "kv_cache_tensors": KV_REMAP_CACHE_TENSORS,
             "kv_planes": KV_REMAP_PLANES,
-            "prepare_calls": 1,
+            "target_prepare_calls": KV_REMAP_TARGET_PREPARE_CALLS,
+            "drafter_prepare_calls": KV_REMAP_DRAFTER_PREPARE_CALLS,
+            "prepare_calls": (
+                KV_REMAP_TARGET_PREPARE_CALLS
+                + KV_REMAP_DRAFTER_PREPARE_CALLS
+            ),
+            "target_apply_cache_calls": KV_REMAP_TARGET_APPLY_CACHE_CALLS,
+            "drafter_apply_cache_calls": KV_REMAP_DRAFTER_APPLY_CACHE_CALLS,
             "apply_cache_calls": KV_REMAP_CACHE_TENSORS,
             "src_pair_rows": kv_pair_rows,
             "dst_pair_rows": kv_pair_rows,
@@ -1873,10 +1901,30 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "route": kv_remap["route"],
             "path_capacity": kv_remap["path_capacity"],
             "pair_slots_per_request": int(kv_remap["pair_slots"]) // batch_size,
+            "target_pair_slots_per_request": (
+                int(kv_remap["target_pair_slots"]) // batch_size
+            ),
+            "drafter_pair_slots_per_request": (
+                int(kv_remap["drafter_pair_slots"]) // batch_size
+            ),
             "kv_groups": kv_remap["kv_groups"],
+            "target_cache_tensors": kv_remap["target_cache_tensors"],
+            "drafter_cache_tensors": kv_remap["drafter_cache_tensors"],
             "kv_cache_tensors": kv_remap["kv_cache_tensors"],
             "kv_planes": kv_remap["kv_planes"],
+            "target_prepare_calls_per_event": kv_remap[
+                "target_prepare_calls"
+            ],
+            "drafter_prepare_calls_per_event": kv_remap[
+                "drafter_prepare_calls"
+            ],
             "prepare_calls_per_event": kv_remap["prepare_calls"],
+            "target_apply_cache_calls_per_event": kv_remap[
+                "target_apply_cache_calls"
+            ],
+            "drafter_apply_cache_calls_per_event": kv_remap[
+                "drafter_apply_cache_calls"
+            ],
             "apply_cache_calls_per_event": kv_remap["apply_cache_calls"],
             "src_pair_rows_per_request": (int(kv_remap["src_pair_rows"]) // batch_size),
             "dst_pair_rows_per_request": (int(kv_remap["dst_pair_rows"]) // batch_size),
@@ -2830,11 +2878,22 @@ def reference_event(
         "kv_remap": {
             "route": KV_REMAP_ROUTE,
             "path_capacity": KV_REMAP_PATH_CAPACITY,
-            "pair_slots": KV_REMAP_PATH_CAPACITY * batch_size,
+            "pair_slots": KV_REMAP_PAIR_SLOTS * batch_size,
+            "target_pair_slots": KV_REMAP_TARGET_PAIR_SLOTS * batch_size,
+            "drafter_pair_slots": KV_REMAP_DRAFTER_PAIR_SLOTS * batch_size,
             "kv_groups": KV_REMAP_GROUPS,
+            "target_cache_tensors": KV_REMAP_TARGET_CACHE_TENSORS,
+            "drafter_cache_tensors": KV_REMAP_DRAFTER_CACHE_TENSORS,
             "kv_cache_tensors": KV_REMAP_CACHE_TENSORS,
             "kv_planes": KV_REMAP_PLANES,
-            "prepare_calls": 1,
+            "target_prepare_calls": KV_REMAP_TARGET_PREPARE_CALLS,
+            "drafter_prepare_calls": KV_REMAP_DRAFTER_PREPARE_CALLS,
+            "prepare_calls": (
+                KV_REMAP_TARGET_PREPARE_CALLS
+                + KV_REMAP_DRAFTER_PREPARE_CALLS
+            ),
+            "target_apply_cache_calls": KV_REMAP_TARGET_APPLY_CACHE_CALLS,
+            "drafter_apply_cache_calls": KV_REMAP_DRAFTER_APPLY_CACHE_CALLS,
             "apply_cache_calls": KV_REMAP_CACHE_TENSORS,
             "src_pair_rows": (
                 KV_REMAP_CACHE_TENSORS * KV_REMAP_PATH_CAPACITY * batch_size
@@ -3495,6 +3554,36 @@ def run_self_test() -> dict[str, Any]:
     )
     event_tamper("request-key-host-dict", ("request_key_pack", "host_dict_inserts"), 1)
     event_tamper("kv-remap-pairs", ("kv_remap", "pair_slots"), 15)
+    event_tamper(
+        "kv-remap-target-pairs",
+        ("kv_remap", "target_pair_slots"),
+        15,
+    )
+    event_tamper(
+        "kv-remap-drafter-pairs",
+        ("kv_remap", "drafter_pair_slots"),
+        15,
+    )
+    event_tamper(
+        "kv-remap-target-prepare",
+        ("kv_remap", "target_prepare_calls"),
+        0,
+    )
+    event_tamper(
+        "kv-remap-drafter-prepare",
+        ("kv_remap", "drafter_prepare_calls"),
+        0,
+    )
+    event_tamper(
+        "kv-remap-target-apply",
+        ("kv_remap", "target_apply_cache_calls"),
+        15,
+    )
+    event_tamper(
+        "kv-remap-drafter-apply",
+        ("kv_remap", "drafter_apply_cache_calls"),
+        0,
+    )
     event_tamper("kv-remap-skip", ("kv_remap", "skips"), 1)
     event_tamper("conv-commit-rows", ("conv_commit", "index_copy_rows"), 47)
     event_tamper("conv-commit-skip", ("conv_commit", "skips"), 1)

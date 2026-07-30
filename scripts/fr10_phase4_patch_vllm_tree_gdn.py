@@ -150,6 +150,21 @@ _FR13_FIXED32_MODES = {
 }
 _FR13_FIXED32_MODE = os.environ.get("FR13_FIXED32_MODE", "").strip()
 _FR13_FIXED32_TREE_SOURCE = repr(list(_FR13_FIXED32_CHOICES))
+_FR13_FIXED32_SLOT_PI = tuple(
+    [0]
+    + [
+        index + 1
+        for index, choice in enumerate(_FR13_FIXED32_CHOICES)
+        if all(value == 0 for value in choice)
+    ]
+    + [
+        index + 1
+        for index, choice in enumerate(_FR13_FIXED32_CHOICES)
+        if not all(value == 0 for value in choice)
+    ]
+)
+assert len(_FR13_FIXED32_SLOT_PI) == 32
+assert sorted(_FR13_FIXED32_SLOT_PI) == list(range(32))
 
 _FR13_FIXED32_SAMPLER_COMPACTION_SOURCE = r'''
 def _fr13_fixed32_compact_sampler_row_plan(
@@ -363,6 +378,33 @@ _FR13_FIXED32_TARGET_TREE_LAYERS = frozenset(
     "language_model.model.layers.%d.self_attn.attn" % layer
     for layer in range(3, 64, 4)
 )
+
+
+def _fr13_fixed32_target_kv_layer_names(layer_names):
+    # Hybrid grouping also includes MTP, whose KV uses the restored flat map.
+    captured = tuple(layer_names)
+    expected_group = _FR13_FIXED32_TARGET_TREE_LAYERS | {
+        _FR13_FIXED32_DRAFTER_TREE_LAYER
+    }
+    if len(captured) != 17 or frozenset(captured) != expected_group:
+        raise RuntimeError(
+            "FR13 fixed32 KV16 full-attention layer ownership drift"
+        )
+    target_names = tuple(
+        name
+        for name in captured
+        if name in _FR13_FIXED32_TARGET_TREE_LAYERS
+    )
+    if (
+        len(target_names) != 16
+        or frozenset(target_names) != _FR13_FIXED32_TARGET_TREE_LAYERS
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 KV16 target layer selection drift"
+        )
+    return target_names
+
+
 _FR13_FIXED32_NONPURE_DISPATCH = {
     "guarded_steps": 0,
     "piecewise_steps": 0,
@@ -2632,6 +2674,14 @@ def _fr13_fixed32_drafter_proposal_begin(
         raise RuntimeError("FR13 fixed32 pending event is malformed")
     measured = isinstance(pending, dict)
     if measured:
+        if (
+            pending.get("target_kv_complete") is not True
+            or pending.get("drafter_kv_complete") is not None
+            or pending.get("kv_complete") is not None
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 proposal began outside the split KV lifecycle"
+            )
         expected_identity = (
             pending.get("mode"),
             int(pending.get("batch_size", -1)),
@@ -3715,6 +3765,8 @@ def _fr13_fixed32_observed_kv(
     group_count,
     cache_count,
     cache_plane_counts,
+    drafter_cache_count,
+    drafter_cache_plane_counts,
     accepted_paths_shape,
     accepted_lens_shape,
 ):
@@ -3722,6 +3774,9 @@ def _fr13_fixed32_observed_kv(
         raise RuntimeError("FR13 fixed32 KV has no observed event")
     batch = int(batch_size)
     planes = tuple(int(value) for value in cache_plane_counts)
+    drafter_planes = tuple(
+        int(value) for value in drafter_cache_plane_counts
+    )
     path_shape = tuple(int(value) for value in accepted_paths_shape)
     lens_shape = tuple(int(value) for value in accepted_lens_shape)
     caches = int(cache_count)
@@ -3730,6 +3785,8 @@ def _fr13_fixed32_observed_kv(
         or int(group_count) != 1
         or caches != 16
         or planes != (2,) * caches
+        or int(drafter_cache_count) != 1
+        or drafter_planes != (2,)
         or path_shape != (batch, 16)
         or lens_shape != (batch,)
         or "kv_remap" in observed
@@ -3742,21 +3799,32 @@ def _fr13_fixed32_observed_kv(
                     group_count,
                     caches,
                     planes,
+                    drafter_cache_count,
+                    drafter_planes,
                     path_shape,
                     lens_shape,
                 )
             )
         )
-    pair_rows = caches * 16 * batch
+    total_caches = caches + int(drafter_cache_count)
+    pair_rows = total_caches * 16 * batch
     observed["kv_remap"] = {
-        "route": "syncfree_fixed16",
+        "route": "syncfree_target16_postsample_drafter1_postforward",
         "path_capacity": 16,
-        "pair_slots": 16 * batch,
+        "pair_slots": 32 * batch,
+        "target_pair_slots": 16 * batch,
+        "drafter_pair_slots": 16 * batch,
         "kv_groups": int(group_count),
-        "kv_cache_tensors": caches,
+        "target_cache_tensors": caches,
+        "drafter_cache_tensors": int(drafter_cache_count),
+        "kv_cache_tensors": total_caches,
         "kv_planes": 2,
-        "prepare_calls": 1,
-        "apply_cache_calls": caches,
+        "target_prepare_calls": 1,
+        "drafter_prepare_calls": 1,
+        "prepare_calls": 2,
+        "target_apply_cache_calls": caches,
+        "drafter_apply_cache_calls": int(drafter_cache_count),
+        "apply_cache_calls": total_caches,
         "src_pair_rows": pair_rows,
         "dst_pair_rows": pair_rows,
         "identity_safe_writes": pair_rows,
@@ -3824,7 +3892,10 @@ def _fr13_fixed32_failure_counts(observed, taw):
             ("output_publish", "device_fixed32"),
             ("accepted_path_pack", "device_fixed16"),
             ("request_key_pack", "device_rowmap"),
-            ("kv_remap", "syncfree_fixed16"),
+            (
+                "kv_remap",
+                "syncfree_target16_postsample_drafter1_postforward",
+            ),
             ("conv_commit", "stateless_col0_fixed"),
             ("conv_pregather", "in_graph_preconsume"),
             ("committer", "fixed16_device_fill_graph"),
@@ -3979,7 +4050,7 @@ def _fr13_fixed32_observed_build_record(
         )
     valid_mask = int(taw_payload["valid_mask"])
     record = {
-        "schema": "fr13-fixed32-work-census-v5",
+        "schema": "fr13-fixed32-work-census-v6",
         "event_id": (
             str(identity[0]) + ":" + str(pid) + ":" + str(index)
         ),
@@ -4081,7 +4152,9 @@ def _fr13_fixed32_complete_pending_event():
         raise RuntimeError("FR13 fixed32 completion state is malformed")
     event_index = len(events)
     if (
-        pending.get("kv_complete") is not True
+        pending.get("target_kv_complete") is not True
+        or pending.get("drafter_kv_complete") is not True
+        or pending.get("kv_complete") is not True
         or int(pending.get("event_index", -1)) != event_index
         or tuple(pending.get("request_ids", ()))
         != tuple(observed.get("request_ids", ()))
@@ -20041,6 +20114,204 @@ def _patch_eagle_tree_consumption_verify() -> bool:
     return True
 
 
+def _patch_eagle_fixed32_mtp_kv_remap() -> bool:
+    """Consume the deferred MTP KV compaction after Eagle's fresh first pass."""
+    text = EAGLE_PATH.read_text()
+    sentinel = "# FR13_FIXED32_MTP_KV_POSTFORWARD"
+    if sentinel in text:
+        return False
+    anchor = (
+        "        sample_hidden_states = "
+        "last_hidden_states[token_indices_to_sample]\n"
+    )
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            "EAGLE fixed32 post-forward MTP KV anchor is not unique"
+        )
+    inject = (
+        f"        {sentinel}: first-pass MTP KV is now fresh and flat-mapped.\n"
+        f"        if {bool(_FR13_FIXED32_MODE)!r}:\n"
+        "            try:\n"
+        "                from vllm.model_executor.layers.mamba import (\n"
+        "                    gdn_linear_attn as _fr13_mtp_kv_gdn,\n"
+        "                )\n"
+        "                from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
+        "                    launch_attn_kv_linear_remap_syncfree_fixed1_drafter "
+        "as _fr13_mtp_kv1,\n"
+        "                )\n"
+        "                _fr13_mtp_payload = getattr(\n"
+        "                    self, '_fr13_fixed32_mtp_kv_payload', None\n"
+        "                )\n"
+        "                _fr13_mtp_needs_remap = int(_fr13_tsr_nrows) > 0\n"
+        "                if (_fr13_mtp_payload is not None) != "
+        "_fr13_mtp_needs_remap:\n"
+        "                    raise RuntimeError(\n"
+        "                        'FR13 fixed32 MTP KV payload/commit freshness drift'\n"
+        "                    )\n"
+        "                if _fr13_mtp_payload is not None:\n"
+        "                    _fr13_mtp_keys = {\n"
+        "                        'schema', 'mode', 'compact_batch', 'batch_rows',\n"
+        "                        'spec_batch_indices', 'full_request_ids',\n"
+        "                        'spec_request_ids', 'measured',\n"
+        "                        'forward_step_index', 'event_index', 'mtp_kv',\n"
+        "                        'accepted_paths', 'accepted_lens',\n"
+        "                        'batch_indices', 'target_group_count',\n"
+        "                        'target_cache_count', 'target_plane_counts',\n"
+        "                        'accepted_paths_shape', 'accepted_lens_shape',\n"
+        "                        'permutation_group_id',\n"
+        "                        'permutation_slot_mapping',\n"
+        "                        'permutation_query_start_loc',\n"
+        "                        'permutation_spans', 'slot_restore_complete',\n"
+        "                    }\n"
+        "                    _fr13_mtp_proposal = getattr(\n"
+        "                        _fr13_mtp_kv_gdn,\n"
+        "                        '_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT', None,\n"
+        "                    )\n"
+        "                    _fr13_mtp_pending = getattr(\n"
+        "                        _fr13_mtp_kv_gdn,\n"
+        "                        '_FR13_FIXED32_PENDING_EVENT', None,\n"
+        "                    )\n"
+        "                    _fr13_mtp_measured = "
+        "_fr13_mtp_payload.get('measured')\n"
+        "                    _fr13_mtp_B = int(\n"
+        "                        _fr13_mtp_payload.get('compact_batch', -1)\n"
+        "                    )\n"
+        "                    _fr13_mtp_batch_rows = int(\n"
+        "                        _fr13_mtp_payload.get('batch_rows', -1)\n"
+        "                    )\n"
+        "                    _fr13_mtp_spec_indices = "
+        "_fr13_mtp_payload.get('spec_batch_indices')\n"
+        "                    if (\n"
+        "                        not isinstance(_fr13_mtp_payload, dict)\n"
+        "                        or set(_fr13_mtp_payload) != _fr13_mtp_keys\n"
+        "                        or _fr13_mtp_payload.get('schema')\n"
+        "                        != 'fr13-fixed32-mtp-kv-payload-v1'\n"
+        "                        or type(_fr13_mtp_measured) is not bool\n"
+        "                        or not 1 <= _fr13_mtp_B <= 4\n"
+        "                        or _fr13_mtp_B != int(_fr13_tsr_nrows)\n"
+        "                        or not 1 <= _fr13_mtp_batch_rows <= 4\n"
+        "                        or _fr13_mtp_batch_rows != int(batch_size)\n"
+        "                        or _fr13_mtp_batch_rows\n"
+        "                        != int(common_attn_metadata.num_reqs)\n"
+        "                        or not isinstance(_fr13_mtp_spec_indices, tuple)\n"
+        "                        or len(_fr13_mtp_spec_indices) != _fr13_mtp_B\n"
+        "                        or _fr13_mtp_spec_indices\n"
+        "                        != tuple(_fr13_tsr_spec_indices)\n"
+        "                        or _fr13_mtp_payload.get('slot_restore_complete')\n"
+        "                        is not True\n"
+        "                        or _fr13_mtp_payload.get(\n"
+        "                            'permutation_query_start_loc'\n"
+        "                        ) is not common_attn_metadata.query_start_loc\n"
+        "                        or not isinstance(_fr13_mtp_proposal, dict)\n"
+        "                        or _fr13_mtp_proposal.get('mode')\n"
+        "                        != _fr13_mtp_payload.get('mode')\n"
+        "                        or int(_fr13_mtp_proposal.get('batch_size', -1))\n"
+        "                        != _fr13_mtp_batch_rows\n"
+        "                        or tuple(_fr13_mtp_proposal.get('request_ids', ()))\n"
+        "                        != tuple(\n"
+        "                            _fr13_mtp_payload.get('full_request_ids', ())\n"
+        "                        )\n"
+        "                        or bool(_fr13_mtp_proposal.get('measured'))\n"
+        "                        is not _fr13_mtp_measured\n"
+        "                    ):\n"
+        "                        raise RuntimeError(\n"
+        "                            'FR13 fixed32 MTP KV payload identity drift'\n"
+        "                        )\n"
+        "                    if _fr13_mtp_measured:\n"
+        "                        if (\n"
+        "                            not isinstance(_fr13_mtp_pending, dict)\n"
+        "                            or _fr13_mtp_pending.get(\n"
+        "                                'target_kv_complete'\n"
+        "                            ) is not True\n"
+        "                            or _fr13_mtp_pending.get(\n"
+        "                                'drafter_kv_complete'\n"
+        "                            ) is not None\n"
+        "                            or _fr13_mtp_pending.get('kv_complete')\n"
+        "                            is not None\n"
+        "                            or int(_fr13_mtp_pending.get(\n"
+        "                                'forward_step_index', -1\n"
+        "                            )) != int(_fr13_mtp_payload.get(\n"
+        "                                'forward_step_index', -2\n"
+        "                            ))\n"
+        "                            or tuple(_fr13_mtp_pending.get(\n"
+        "                                'request_ids', ()\n"
+        "                            )) != tuple(_fr13_mtp_payload.get(\n"
+        "                                'spec_request_ids', ()\n"
+        "                            ))\n"
+        "                        ):\n"
+        "                            raise RuntimeError(\n"
+        "                                'FR13 fixed32 measured MTP KV lifecycle drift'\n"
+        "                            )\n"
+        "                    elif _fr13_mtp_pending is not None:\n"
+        "                        raise RuntimeError(\n"
+        "                            'FR13 fixed32 unmeasured MTP saw pending event'\n"
+        "                        )\n"
+        "                    _fr13_mtp_slot_mapping = (\n"
+        "                        self._slot_mapping_buffer[:slot_mapping_size]\n"
+        "                    )\n"
+        "                    _fr13_mtp_kv1(\n"
+        "                        kv_caches=(_fr13_mtp_payload['mtp_kv'],),\n"
+        "                        slot_mapping=_fr13_mtp_slot_mapping,\n"
+        "                        query_start_loc=(\n"
+        "                            common_attn_metadata.query_start_loc\n"
+        "                        ),\n"
+        "                        accepted_paths=(\n"
+        "                            _fr13_mtp_payload['accepted_paths']\n"
+        "                        ),\n"
+        "                        num_accepted_tokens=(\n"
+        "                            _fr13_mtp_payload['accepted_lens']\n"
+        "                        ),\n"
+        "                        num_spec_decodes=_fr13_mtp_B,\n"
+        "                        batch_indices=(\n"
+        "                            _fr13_mtp_payload['batch_indices']\n"
+        "                        ),\n"
+        "                    )\n"
+        "                    if _fr13_mtp_measured:\n"
+        "                        _fr13_mtp_observed = "
+        "_fr13_mtp_pending.get('observed_work')\n"
+        "                        _fr13_mtp_kv_gdn._fr13_fixed32_observed_kv(\n"
+        "                            _fr13_mtp_observed,\n"
+        "                            _fr13_mtp_B,\n"
+        "                            _fr13_mtp_payload['target_group_count'],\n"
+        "                            _fr13_mtp_payload['target_cache_count'],\n"
+        "                            _fr13_mtp_payload['target_plane_counts'],\n"
+        "                            1,\n"
+        "                            (int(_fr13_mtp_payload['mtp_kv'].shape[0]),),\n"
+        "                            _fr13_mtp_payload['accepted_paths_shape'],\n"
+        "                            _fr13_mtp_payload['accepted_lens_shape'],\n"
+        "                        )\n"
+        "                        _fr13_mtp_events = getattr(\n"
+        "                            _fr13_mtp_kv_gdn,\n"
+        "                            '_FR13_FIXED32_CENSUS_EVENTS', None,\n"
+        "                        )\n"
+        "                        if (\n"
+        "                            not isinstance(_fr13_mtp_events, list)\n"
+        "                            or int(_fr13_mtp_payload.get(\n"
+        "                                'event_index', -1\n"
+        "                            )) != len(_fr13_mtp_events)\n"
+        "                        ):\n"
+        "                            raise RuntimeError(\n"
+        "                                'FR13 fixed32 MTP KV event index drift'\n"
+        "                            )\n"
+        "                        _fr13_mtp_pending['event_index'] = int(\n"
+        "                            _fr13_mtp_payload['event_index']\n"
+        "                        )\n"
+        "                        _fr13_mtp_pending['drafter_kv_complete'] = True\n"
+        "                        _fr13_mtp_pending['kv_complete'] = True\n"
+        "                    self._fr13_fixed32_mtp_kv_payload = None\n"
+        "            except Exception as _fr13_mtp_kv_exc:\n"
+        "                raise RuntimeError(\n"
+        "                    'FR13 fixed32 MTP KV1/final census completion failed: '\n"
+        "                    + type(_fr13_mtp_kv_exc).__name__ + ':'\n"
+        "                    + str(_fr13_mtp_kv_exc)\n"
+        "                ) from _fr13_mtp_kv_exc\n"
+        + anchor
+    )
+    text = text.replace(anchor, inject, 1)
+    EAGLE_PATH.write_text(text)
+    return True
+
+
 def _patch_eagle_mtp_draft_trace() -> bool:
     text = EAGLE_PATH.read_text()
     sentinel = "# FR10_MTP_DRAFT_TRACE"
@@ -24536,6 +24807,32 @@ def _patch_gpu_model_runner_slot_reorder() -> bool:
         # into its own buffer (eagle.py:469) for the DRAFT model's KV writes and
         # must see the flat layout. Sampling + FR13_ATTN_KV_REMAP already ran.
         _sr_act = getattr(self, "_fr13_sr_active", None)
+        _sr_payload = getattr(
+            getattr(self, "drafter", None),
+            "_fr13_fixed32_mtp_kv_payload",
+            None,
+        )
+        if _sr_payload is not None:
+            _sr_payload_gid = _sr_payload.get("permutation_group_id")
+            _sr_payload_entry = (
+                _sr_act.get(_sr_payload_gid)
+                if isinstance(_sr_act, dict)
+                else None
+            )
+            if (
+                _sr_payload.get("schema")
+                != "fr13-fixed32-mtp-kv-payload-v1"
+                or _sr_payload.get("slot_restore_complete") is not False
+                or not isinstance(_sr_payload_entry, tuple)
+                or len(_sr_payload_entry) != 2
+                or _sr_payload_entry[0]
+                is not _sr_payload.get("permutation_slot_mapping")
+                or tuple(_sr_payload_entry[1])
+                != tuple(_sr_payload.get("permutation_spans", ()))
+            ):
+                raise RuntimeError(
+                    "FR13 fixed32 MTP KV payload/slot restore drift"
+                )
         if _sr_act:
             for _sr_sm, _sr_spans in _sr_act.values():
                 for _sr_q0 in _sr_spans:
@@ -24543,6 +24840,8 @@ def _patch_gpu_model_runner_slot_reorder() -> bool:
                         _sr_q0 : _sr_q0 + self._fr13_sr_tree_n
                     ][self._fr13_sr_pi_t]
             self._fr13_sr_active = {}
+        if _sr_payload is not None:
+            _sr_payload["slot_restore_complete"] = True
         num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
         spec_config = self.speculative_config
         assert spec_config is not None
@@ -26675,6 +26974,10 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                    _fr13_f32_kv_gdn, '_FR13_FIXED32_PENDING_EVENT', None\n"
         "                )\n"
         "                _fr13_f32_measured = isinstance(_fr13_f32_pending, dict)\n"
+        "                if _fr13_f32_pending is not None and not _fr13_f32_measured:\n"
+        "                    raise RuntimeError(\n"
+        "                        'FR13 fixed32 pending event is malformed before KV'\n"
+        "                    )\n"
         "                _fr13_f32_B = (\n"
         "                    int(_fr13_f32_pending['batch_size'])\n"
         "                    if _fr13_f32_measured\n"
@@ -26692,8 +26995,17 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                    raise RuntimeError(\n"
         "                        'FR13 fixed32 KV16 requires exactly one full-attn group'\n"
         "                    )\n"
+        "                (_fr13_f32_group_id, _fr13_f32_group) = next(\n"
+        "                    iter(_fr13_f32_groups.items())\n"
+        "                )\n"
         "                (_fr13_f32_sm, _fr13_f32_layer_names,\n"
-        "                 _fr13_f32_qsl) = next(iter(_fr13_f32_groups.values()))\n"
+        "                 _fr13_f32_qsl) = _fr13_f32_group\n"
+        "                _fr13_f32_target_layer_names = (\n"
+        "                    _fr13_f32_kv_gdn."
+        "_fr13_fixed32_target_kv_layer_names(\n"
+        "                        _fr13_f32_layer_names\n"
+        "                    )\n"
+        "                )\n"
         "                _fr13_f32_batch_rows = int(getattr(\n"
         "                    _fr13_f32_kv_gdn, '_FR13_FIXED32_BATCH_ROWS', -1\n"
         "                ))\n"
@@ -26758,6 +27070,86 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                    raise RuntimeError(\n"
         "                        'FR13 fixed32 KV16 compact/full row-map drift'\n"
         "                    )\n"
+        "                if _fr13_f32_measured:\n"
+        "                    _fr13_f32_observed = _fr13_f32_pending.get(\n"
+        "                        'observed_work'\n"
+        "                    )\n"
+        "                    _fr13_f32_current_fwd = int(getattr(\n"
+        "                        _fr13_f32_kv_gdn,\n"
+        "                        '_FR13_FIXED32_CURRENT_FORWARD_STEP', -1,\n"
+        "                    ))\n"
+        "                    if (\n"
+        "                        _fr13_f32_current_fwd < 0\n"
+        "                        or _fr13_f32_pending.get('mode')\n"
+        "                        != getattr(\n"
+        "                            _fr13_f32_kv_gdn,\n"
+        "                            '_FR13_FIXED32_MODE', None,\n"
+        "                        )\n"
+        "                        or int(_fr13_f32_pending.get(\n"
+        "                            'forward_step_index', -1\n"
+        "                        )) != _fr13_f32_current_fwd\n"
+        "                        or tuple(_fr13_f32_pending.get(\n"
+        "                            'request_ids', ()\n"
+        "                        )) != _fr13_f32_spec_rids\n"
+        "                        or not isinstance(_fr13_f32_observed, dict)\n"
+        "                        or _fr13_f32_observed.get('mode')\n"
+        "                        != _fr13_f32_pending.get('mode')\n"
+        "                        or int(_fr13_f32_observed.get(\n"
+        "                            'batch_size', -1\n"
+        "                        )) != _fr13_f32_B\n"
+        "                        or int(_fr13_f32_observed.get(\n"
+        "                            'forward_step_index', -1\n"
+        "                        )) != _fr13_f32_current_fwd\n"
+        "                        or tuple(_fr13_f32_observed.get(\n"
+        "                            'request_ids', ()\n"
+        "                        )) != _fr13_f32_spec_rids\n"
+        "                    ):\n"
+        "                        raise RuntimeError(\n"
+        "                            'FR13 fixed32 measured KV event identity drift'\n"
+        "                        )\n"
+        "                _fr13_f32_sr_active = getattr(\n"
+        "                    self, '_fr13_sr_active', None\n"
+        "                )\n"
+        f"                _fr13_f32_expected_pi = {_FR13_FIXED32_SLOT_PI!r}\n"
+        "                _fr13_f32_sr_entry = (\n"
+        "                    _fr13_f32_sr_active.get(_fr13_f32_group_id)\n"
+        "                    if isinstance(_fr13_f32_sr_active, dict)\n"
+        "                    else None\n"
+        "                )\n"
+        "                if (\n"
+        "                    not isinstance(_fr13_f32_sr_active, dict)\n"
+        "                    or len(_fr13_f32_sr_active) != 1\n"
+        "                    or not isinstance(_fr13_f32_sr_entry, tuple)\n"
+        "                    or len(_fr13_f32_sr_entry) != 2\n"
+        "                    or _fr13_f32_sr_entry[0] is not _fr13_f32_sm\n"
+        "                    or not isinstance(_fr13_f32_sr_entry[1], list)\n"
+        "                    or len(_fr13_f32_sr_entry[1]) != _fr13_f32_B\n"
+        "                    or int(getattr(self, '_fr13_sr_tree_n', -1)) != 32\n"
+        "                    or tuple(getattr(self, '_fr13_sr_pi_cpu', ()))\n"
+        "                    != _fr13_f32_expected_pi\n"
+        "                    or not torch.is_tensor(getattr(\n"
+        "                        self, '_fr13_sr_pi_t', None\n"
+        "                    ))\n"
+        "                    or int(self._fr13_sr_pi_t.numel()) != 32\n"
+        "                ):\n"
+        "                    raise RuntimeError(\n"
+        "                        'FR13 fixed32 current-step slot permutation drift'\n"
+        "                    )\n"
+        "                _fr13_f32_sr_spans = tuple(\n"
+        "                    int(_fr13_f32_span)\n"
+        "                    for _fr13_f32_span in _fr13_f32_sr_entry[1]\n"
+        "                )\n"
+        "                _fr13_f32_drafter = getattr(self, 'drafter', None)\n"
+        "                if (\n"
+        "                    _fr13_f32_drafter is None\n"
+        "                    or getattr(\n"
+        "                        _fr13_f32_drafter,\n"
+        "                        '_fr13_fixed32_mtp_kv_payload', None,\n"
+        "                    ) is not None\n"
+        "                ):\n"
+        "                    raise RuntimeError(\n"
+        "                        'FR13 fixed32 MTP KV payload owner is busy'\n"
+        "                    )\n"
         "                _fr13_f32_index_tensor = (\n"
         "                    None\n"
         "                    if _fr13_f32_measured\n"
@@ -26770,13 +27162,20 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                _fr13_f32_kvs = getattr(\n"
         "                    self, '_fr13_fixed32_kv_caches', None\n"
         "                )\n"
+        "                _fr13_f32_mtp_kv = getattr(\n"
+        "                    self, '_fr13_fixed32_mtp_kv_cache', None\n"
+        "                )\n"
+        "                if (_fr13_f32_kvs is None) != (_fr13_f32_mtp_kv is None):\n"
+        "                    raise RuntimeError(\n"
+        "                        'FR13 fixed32 KV cache ownership initialized partially'\n"
+        "                    )\n"
         "                if _fr13_f32_kvs is None:\n"
         "                    _fr13_f32_fwd = (\n"
         "                        self.vllm_config.compilation_config.static_forward_context\n"
         "                    )\n"
         "                    _fr13_f32_kvs = tuple(\n"
         "                        getattr(_fr13_f32_fwd[_fr13_f32_name], 'kv_cache', None)\n"
-        "                        for _fr13_f32_name in _fr13_f32_layer_names\n"
+        "                        for _fr13_f32_name in _fr13_f32_target_layer_names\n"
         "                    )\n"
         "                    if (\n"
         "                        len(_fr13_f32_kvs) != 16\n"
@@ -26789,7 +27188,22 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                        raise RuntimeError(\n"
         "                            'FR13 fixed32 KV16 cache set is not exactly 16x2'\n"
         "                        )\n"
+        "                    _fr13_f32_mtp_name = (\n"
+        "                        _fr13_f32_kv_gdn._FR13_FIXED32_DRAFTER_TREE_LAYER\n"
+        "                    )\n"
+        "                    _fr13_f32_mtp_kv = getattr(\n"
+        "                        _fr13_f32_fwd[_fr13_f32_mtp_name],\n"
+        "                        'kv_cache', None,\n"
+        "                    )\n"
+        "                    if (\n"
+        "                        not torch.is_tensor(_fr13_f32_mtp_kv)\n"
+        "                        or int(_fr13_f32_mtp_kv.shape[0]) != 2\n"
+        "                    ):\n"
+        "                        raise RuntimeError(\n"
+        "                            'FR13 fixed32 MTP KV cache is not exactly 1x2'\n"
+        "                        )\n"
         "                    self._fr13_fixed32_kv_caches = _fr13_f32_kvs\n"
+        "                    self._fr13_fixed32_mtp_kv_cache = _fr13_f32_mtp_kv\n"
         "                _fr13_f32_paths = getattr(\n"
         "                    _fr13_f32_kv_gdn,\n"
         "                    '_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR', None\n"
@@ -26800,41 +27214,38 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                )\n"
         "                if _fr13_f32_paths is None or _fr13_f32_lens is None:\n"
         "                    raise RuntimeError('FR13 fixed32 KV16 path buffers missing')\n"
+        "                _fr13_f32_paths_view = (\n"
+        "                    _fr13_f32_paths[:_fr13_f32_B, :16]\n"
+        "                )\n"
+        "                _fr13_f32_lens_view = _fr13_f32_lens[:_fr13_f32_B]\n"
         "                _fr13_f32_dstpi = getattr(self, '_fr13_sr_pi_t', None)\n"
+        "                if _fr13_f32_dstpi is None:\n"
+        "                    raise RuntimeError(\n"
+        "                        'FR13 fixed32 KV remap has no slot permutation'\n"
+        "                    )\n"
+        "                if _fr13_f32_measured and any(\n"
+        "                    _fr13_f32_pending.get(_fr13_f32_field) is not None\n"
+        "                    for _fr13_f32_field in (\n"
+        "                        'target_kv_complete',\n"
+        "                        'drafter_kv_complete',\n"
+        "                        'kv_complete',\n"
+        "                        'event_index',\n"
+        "                    )\n"
+        "                ):\n"
+        "                    raise RuntimeError(\n"
+        "                        'FR13 fixed32 target KV stage began twice'\n"
+        "                    )\n"
         "                _fr13_f32_kv16(\n"
         "                    kv_caches=_fr13_f32_kvs,\n"
         "                    slot_mapping=_fr13_f32_sm,\n"
         "                    query_start_loc=_fr13_f32_qsl,\n"
-        "                    accepted_paths=_fr13_f32_paths[:_fr13_f32_B, :16],\n"
-        "                    num_accepted_tokens=_fr13_f32_lens[:_fr13_f32_B],\n"
+        "                    accepted_paths=_fr13_f32_paths_view,\n"
+        "                    num_accepted_tokens=_fr13_f32_lens_view,\n"
         "                    num_spec_decodes=_fr13_f32_B,\n"
         "                    dst_pi=_fr13_f32_dstpi,\n"
         "                    batch_indices=_fr13_f32_index_tensor,\n"
         "                )\n"
         "                if _fr13_f32_measured:\n"
-        "                    _fr13_f32_observed = _fr13_f32_pending.get(\n"
-        "                        'observed_work'\n"
-        "                    )\n"
-        "                    _fr13_f32_kv_gdn._fr13_fixed32_observed_kv(\n"
-        "                        _fr13_f32_observed,\n"
-        "                        _fr13_f32_B,\n"
-        "                        len(_fr13_f32_groups),\n"
-        "                        len(_fr13_f32_kvs),\n"
-        "                        tuple(\n"
-        "                            int(_fr13_f32_kv.shape[0])\n"
-        "                            for _fr13_f32_kv in _fr13_f32_kvs\n"
-        "                        ),\n"
-        "                        tuple(\n"
-        "                            int(_fr13_f32_dim)\n"
-        "                            for _fr13_f32_dim in\n"
-        "                            _fr13_f32_paths[:_fr13_f32_B, :16].shape\n"
-        "                        ),\n"
-        "                        tuple(\n"
-        "                            int(_fr13_f32_dim)\n"
-        "                            for _fr13_f32_dim in\n"
-        "                            _fr13_f32_lens[:_fr13_f32_B].shape\n"
-        "                        ),\n"
-        "                    )\n"
         "                    _fr13_f32_events = getattr(\n"
         "                        _fr13_f32_kv_gdn,\n"
         "                        '_FR13_FIXED32_CENSUS_EVENTS', None,\n"
@@ -26864,15 +27275,56 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                            'FR13 fixed32 replay/event count diverged: '\n"
         "                            + repr(_fr13_f32_cc)\n"
         "                        )\n"
-        "                    if _fr13_f32_pending.get('kv_complete') is not None:\n"
-        "                        raise RuntimeError('FR13 fixed32 KV completed twice')\n"
-        "                    _fr13_f32_pending['kv_complete'] = True\n"
-        "                    _fr13_f32_pending['event_index'] = (\n"
+        "                    _fr13_f32_pending['target_kv_complete'] = True\n"
+        "                _fr13_f32_payload = {\n"
+        "                    'schema': 'fr13-fixed32-mtp-kv-payload-v1',\n"
+        "                    'mode': getattr(\n"
+        "                        _fr13_f32_kv_gdn, '_FR13_FIXED32_MODE', None\n"
+        "                    ),\n"
+        "                    'compact_batch': _fr13_f32_B,\n"
+        "                    'batch_rows': _fr13_f32_batch_rows,\n"
+        "                    'spec_batch_indices': _fr13_f32_spec_indices,\n"
+        "                    'full_request_ids': _fr13_f32_sampler_rids,\n"
+        "                    'spec_request_ids': _fr13_f32_spec_rids,\n"
+        "                    'measured': _fr13_f32_measured,\n"
+        "                    'forward_step_index': (\n"
+        "                        int(_fr13_f32_pending['forward_step_index'])\n"
+        "                        if _fr13_f32_measured else -1\n"
+        "                    ),\n"
+        "                    'event_index': (\n"
         "                        _fr13_f32_event_index\n"
-        "                    )\n"
+        "                        if _fr13_f32_measured else -1\n"
+        "                    ),\n"
+        "                    'mtp_kv': _fr13_f32_mtp_kv,\n"
+        "                    'accepted_paths': _fr13_f32_paths_view,\n"
+        "                    'accepted_lens': _fr13_f32_lens_view,\n"
+        "                    'batch_indices': _fr13_f32_index_tensor,\n"
+        "                    'target_group_count': len(_fr13_f32_groups),\n"
+        "                    'target_cache_count': len(_fr13_f32_kvs),\n"
+        "                    'target_plane_counts': tuple(\n"
+        "                        int(_fr13_f32_kv.shape[0])\n"
+        "                        for _fr13_f32_kv in _fr13_f32_kvs\n"
+        "                    ),\n"
+        "                    'accepted_paths_shape': tuple(\n"
+        "                        int(_fr13_f32_dim)\n"
+        "                        for _fr13_f32_dim in _fr13_f32_paths_view.shape\n"
+        "                    ),\n"
+        "                    'accepted_lens_shape': tuple(\n"
+        "                        int(_fr13_f32_dim)\n"
+        "                        for _fr13_f32_dim in _fr13_f32_lens_view.shape\n"
+        "                    ),\n"
+        "                    'permutation_group_id': _fr13_f32_group_id,\n"
+        "                    'permutation_slot_mapping': _fr13_f32_sm,\n"
+        "                    'permutation_query_start_loc': _fr13_f32_qsl,\n"
+        "                    'permutation_spans': _fr13_f32_sr_spans,\n"
+        "                    'slot_restore_complete': False,\n"
+        "                }\n"
+        "                _fr13_f32_drafter._fr13_fixed32_mtp_kv_payload = (\n"
+        "                    _fr13_f32_payload\n"
+        "                )\n"
         "            except Exception as _fr13_f32_kv_exc:\n"
         "                raise RuntimeError(\n"
-        "                    'FR13 fixed32 KV16/census completion failed: '\n"
+        "                    'FR13 fixed32 target KV16/deferred MTP staging failed: '\n"
         "                    + type(_fr13_f32_kv_exc).__name__ + ':'\n"
         "                    + str(_fr13_f32_kv_exc)\n"
         "                ) from _fr13_f32_kv_exc\n"
@@ -27662,15 +28114,6 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
         observed = namespace["_fr13_fixed32_observed_take"](
             mode, batch, event_index
         )
-        namespace["_fr13_fixed32_observed_kv"](
-            observed,
-            batch,
-            1,
-            16,
-            (2,) * 16,
-            (batch, 16),
-            (batch,),
-        )
         taw_wrapper = {
             "mode": mode,
             "valid_mask": reference["valid_mask"],
@@ -27686,8 +28129,7 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
             "request_ids": request_ids,
             "taw": taw_wrapper,
             "observed_work": observed,
-            "kv_complete": True,
-            "event_index": event_index,
+            "target_kv_complete": True,
         }
         measured = namespace["_fr13_fixed32_drafter_proposal_begin"](
             mode,
@@ -27698,6 +28140,21 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
         )
         if measured is not True:
             raise AssertionError("pending event did not mark proposal measured")
+        namespace["_fr13_fixed32_observed_kv"](
+            observed,
+            batch,
+            1,
+            16,
+            (2,) * 16,
+            1,
+            (2,),
+            (batch, 16),
+            (batch,),
+        )
+        pending = namespace["_FR13_FIXED32_PENDING_EVENT"]
+        pending["event_index"] = event_index
+        pending["drafter_kv_complete"] = True
+        pending["kv_complete"] = True
         graph_by_batch = namespace["_FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH"]
         if batch not in graph_by_batch:
             drafter_graph_id = 30_000 + batch
@@ -29295,6 +29752,7 @@ def main() -> int:
         (SCHEDULER_PATH, _patch_scheduler_fr13_freereq_cleanup()),
         (SCHEDULER_PATH, _patch_scheduler_mamba_block_align_45477()),
         (EAGLE_PATH, _patch_eagle_tree_consumption_verify()),
+        (EAGLE_PATH, _patch_eagle_fixed32_mtp_kv_remap()),
         (EAGLE_PATH, _patch_eagle_mtp_draft_trace()),
         (EAGLE_PATH, _patch_eagle_dfwd_split_timer()),
         (TREE_ATTN_PATH, _patch_tree_attn_spec_config_override()),
