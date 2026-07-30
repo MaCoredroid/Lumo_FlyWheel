@@ -21,7 +21,7 @@ patcher = importlib.util.module_from_spec(PATCHER_SPEC)
 PATCHER_SPEC.loader.exec_module(patcher)
 
 
-def _runtime_functions(*names: str) -> dict[str, object]:
+def _runtime_functions(*names: str, mode: str) -> dict[str, object]:
     tree = ast.parse(patcher._FR13_FIXED32_OBSERVED_RUNTIME_SOURCE)
     wanted = set(names)
     definitions = [
@@ -31,6 +31,7 @@ def _runtime_functions(*names: str) -> dict[str, object]:
     ]
     assert {node.name for node in definitions} == wanted
     namespace: dict[str, object] = {"torch": torch}
+    exec(patcher._fr13_fixed32_runtime_bindings(mode), namespace)
     exec(
         compile(
             ast.Module(body=definitions, type_ignores=[]),
@@ -58,15 +59,16 @@ def test_final_full_preseed_requires_physical_32_row_descriptor(
         "_fr13_fixed32_graph_descriptor",
         "_fr13_fixed32_final_full_preseed_postcheck_required",
         "_fr13_fixed32_final_full_preseed_needed",
+        mode=mode,
     )
     namespace.update(
         {
-            "_FR13_FIXED32_MODE": mode,
-            "_FR13_FIXED32_VALID_MASK": valid_mask,
             "_FR13_FIXED32_PROFILE_MEMORY_SCOPE": False,
             "_FR13_FIXED32_PROFILE_CAPTURE_SCOPE": None,
         }
     )
+    assert namespace["_FR13_FIXED32_MODE"] == mode
+    assert namespace["_FR13_FIXED32_VALID_MASK"] == valid_mask
     needed = namespace["_fr13_fixed32_final_full_preseed_needed"]
     postcheck = namespace[
         "_fr13_fixed32_final_full_preseed_postcheck_required"
@@ -277,6 +279,7 @@ def test_preseed_postcondition_binds_all_current_bank_aliases(
 ) -> None:
     namespace = _runtime_functions(
         "_fr13_fixed32_assert_final_full_preseed_ready",
+        mode=mode,
     )
     order = tuple(f"gdn.{index}" for index in range(48))
     ssm_banks = tuple(object() for _ in order)
@@ -332,10 +335,6 @@ def test_preseed_postcondition_binds_all_current_bank_aliases(
     monkeypatch.setitem(sys.modules, "_fr13_device_multidraft_kernel", taw)
     namespace.update(
         {
-            "_FR13_FIXED32_MODE": mode,
-            "_FR13_FIXED32_VALID_MASK": (
-                0x7A9CE73F if mode == "tail6_fixed32" else 0x7ABDFFFF
-            ),
             "_FR13_FIXED32_PRESEED_CAP": capacity,
             "_FR13_FIXED32_PRESEEDED_BATCHES": set(
                 range(1, capacity + 1)

@@ -3950,6 +3950,23 @@ def _fr13_fixed32_complete_pending_event():
 '''
 
 
+def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
+    """Bake fixed32 identity into generated runtime modules."""
+    resolved_mode = _FR13_FIXED32_MODE if mode is None else mode
+    if not resolved_mode:
+        valid_mask = 0
+    elif resolved_mode in _FR13_FIXED32_MODES:
+        valid_mask = _FR13_FIXED32_MODES[resolved_mode][0]
+    else:
+        raise RuntimeError(
+            f"unsupported FR13_FIXED32_MODE={resolved_mode!r}"
+        )
+    return (
+        f"_FR13_FIXED32_MODE = {resolved_mode!r}\n"
+        f"_FR13_FIXED32_VALID_MASK = {valid_mask!r}\n"
+    )
+
+
 def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     """Validate the fixed-work campaign before emitting any runtime source."""
     mode = _FR13_FIXED32_MODE
@@ -4955,7 +4972,7 @@ def _patch_gdn_linear() -> bool:
             "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, conv_wb_staging_get, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, launch_conv_state_writeback, launch_conv_state_writeback_batched, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
             "\n"
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
-            f"_FR13_FIXED32_MODE = {_FR13_FIXED32_MODE!r}\n"
+            f"{_fr13_fixed32_runtime_bindings()}"
             f"{_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE}\n"
             "# FR13 DEPRECATION: FR13_APC_HIT_RECURRENT_SUFFIX is force-OFF at gdn\n"
             "# import (this EngineCore process hosts EVERY gate, TP=1) so no stray\n"
