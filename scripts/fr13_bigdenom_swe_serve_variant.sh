@@ -1131,12 +1131,14 @@ mode = sys.argv[4]
 output_path = Path(sys.argv[5])
 
 
-def counter(name):
+def counter(name, *, required):
     values = []
     for line in metrics_path.read_text(encoding="utf-8").splitlines():
         metric_name = line.split(None, 1)[0].split("{", 1)[0]
         if metric_name == name:
             values.append(float(line.rsplit(None, 1)[-1]))
+    if not values and not required:
+        return None
     if len(values) != 1:
         raise SystemExit(
             f"expected one pretask metric {name}, got {len(values)}"
@@ -1147,7 +1149,7 @@ def counter(name):
     return int(value)
 
 
-required_pretask_metrics = (
+optional_worker_metrics = (
     "vllm:fr13_decode_forward_gpu_seconds_total",
     "vllm:fr13_decode_forward_gpu_steps_total",
     "vllm:fr13_decode_forward_gpu_drafts_total",
@@ -1156,12 +1158,16 @@ required_pretask_metrics = (
     "vllm:fr13_decode_step_wall_steps_total",
     "vllm:fr13_decode_step_wall_attempts_total",
     "vllm:fr13_decode_step_wall_rejected_total",
+)
+required_pretask_metrics = (
     "vllm:spec_decode_num_drafts_total",
     "vllm:spec_decode_num_draft_tokens_total",
 )
 pretask_values = {
-    name: counter(name) for name in required_pretask_metrics
+    name: counter(name, required=True) for name in required_pretask_metrics
 }
+for name in optional_worker_metrics:
+    counter(name, required=False)
 
 
 ready = json.loads(ready_path.read_text(encoding="utf-8"))

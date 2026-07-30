@@ -149,6 +149,7 @@ EXPECTED_METRIC_LABELS = {
     )
     for key in METRICS
 }
+PRETASK_REQUIRED_METRICS = frozenset({"spec_drafts", "spec_tokens"})
 SAMPLE_RE = re.compile(
     r"^(?P<name>[^\s{]+)(?:\{(?P<labels>[^}]*)\})?\s+"
     r"(?P<value>[-+0-9.eE]+)$"
@@ -452,6 +453,44 @@ def metric_snapshot_text(
     missing = sorted(set(METRICS) - set(found))
     if missing:
         raise GateError(f"{label}: missing required metrics {missing}")
+    return found, labels
+
+
+def pretask_metric_snapshot_text(
+    text: str,
+    *,
+    label: str,
+) -> tuple[dict[str, float], dict[str, str]]:
+    """Parse a raw generation-zero API scrape without requiring lazy worker series."""
+
+    wanted = {metric: key for key, metric in METRICS.items()}
+    found: dict[str, float] = {}
+    labels: dict[str, str] = {}
+    for line in text.splitlines():
+        match = SAMPLE_RE.match(line)
+        if match is None:
+            if line.startswith(tuple(wanted)):
+                raise GateError(f"{label}: malformed pretask metric line {line!r}")
+            continue
+        key = wanted.get(match.group("name"))
+        if key is None:
+            continue
+        if key in found:
+            raise GateError(f"{label}: duplicate metric series for {METRICS[key]}")
+        value = float(match.group("value"))
+        if not math.isfinite(value) or value < 0:
+            raise GateError(f"{label}: invalid metric {METRICS[key]}={value}")
+        if key in INTEGRAL_METRICS:
+            integral(value, f"{label}:{key}")
+        found[key] = value
+        labels[key] = match.group("labels") or ""
+    missing = sorted(PRETASK_REQUIRED_METRICS - set(found))
+    if missing:
+        raise GateError(f"{label}: missing required pretask metrics {missing}")
+    if any(value != 0.0 for value in found.values()):
+        raise GateError(f"{label}: pretask decode metrics are not exact zero")
+    if any(labels[key] != EXPECTED_METRIC_LABELS[key] for key in found):
+        raise GateError(f"{label}: pretask metric labels differ from the contract")
     return found, labels
 
 
@@ -1449,7 +1488,14 @@ def validate_fixed32_pretask_zero_traffic(
         {"path", "sha256", "spec_drafts", "spec_tokens"},
         f"{marker_path}:metrics",
     )
-    metric_values, _metric_labels = metric_snapshot(metrics_path)
+    _metrics_raw, metrics_text = strict_utf8_artifact(
+        metrics_path,
+        label=str(metrics_path),
+    )
+    metric_values, _metric_labels = pretask_metric_snapshot_text(
+        metrics_text,
+        label=str(metrics_path),
+    )
     if (
         metrics["path"] != str(metrics_path.resolve())
         or metrics["sha256"] != sha256_file(metrics_path)
@@ -1459,7 +1505,6 @@ def validate_fixed32_pretask_zero_traffic(
         or isinstance(metrics["spec_tokens"], bool)
         or integral(metric_values["spec_drafts"], f"{metrics_path}:spec drafts") != 0
         or integral(metric_values["spec_tokens"], f"{metrics_path}:spec tokens") != 0
-        or any(value != 0.0 for value in metric_values.values())
     ):
         raise GateError(f"{marker_path}: pretask decode metrics are not exact zero")
 
