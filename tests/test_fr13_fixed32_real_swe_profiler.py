@@ -70,6 +70,8 @@ def test_fixed32_profiler_binds_proven_capture_and_real_swe_evidence() -> None:
     assert "LUMO_NSYS_DELAY_S=${LUMO_NSYS_DELAY_S:-1200}" in text
     assert "LUMO_NSYS_DURATION_S=${LUMO_NSYS_DURATION_S:-300}" in text
     assert "LUMO_NSYS_FLUSH_MS=${LUMO_NSYS_FLUSH_MS:-100}" in text
+    assert "LUMO_NSYS_SESSION_TIMEOUT_S=${LUMO_NSYS_SESSION_TIMEOUT_S:-1500}" in text
+    assert "validate_nsys_delayed_collection_timeouts" in text
     assert (
         '[[ "$LUMO_NSYS_BIN" == '
         '"/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys" ]]'

@@ -176,6 +176,58 @@ def test_profile_lifecycle_contract_is_async_exact_and_recoverable() -> None:
     assert attribution_branch < floor_order_branch
 
 
+@pytest.mark.parametrize(
+    ("session_timeout_s", "collection_timeout_s", "expected_error"),
+    (
+        ("1500", "1500", None),
+        (
+            "1499",
+            "1500",
+            "session discovery timeout must cover delay plus capture duration",
+        ),
+        (
+            "1500",
+            "1499",
+            "Collection-entry timeout must cover delay plus capture duration",
+        ),
+    ),
+)
+def test_profile_timeouts_cover_canonical_delayed_collection(
+    session_timeout_s: str,
+    collection_timeout_s: str,
+    expected_error: str | None,
+) -> None:
+    script = r"""
+source "$1"
+LUMO_NSYS_DELAY_S=1200
+LUMO_NSYS_DURATION_S=300
+LUMO_NSYS_SESSION_TIMEOUT_S=$2
+LUMO_NSYS_COLLECTION_TIMEOUT_S=$3
+validate_nsys_delayed_collection_timeouts
+"""
+    completed = subprocess.run(
+        [
+            "bash",
+            "-c",
+            script,
+            "--",
+            os.fspath(PROFILE),
+            session_timeout_s,
+            collection_timeout_s,
+        ],
+        cwd=REPO,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    if expected_error is None:
+        assert completed.returncode == 0, completed.stderr
+    else:
+        assert completed.returncode == 1
+        assert expected_error in completed.stderr
+
+
 def test_attribution_sequence_is_tail_only_and_acceptance_orders_are_unchanged() -> None:
     script = r"""
 run_variant() {

@@ -724,6 +724,23 @@ wait_for_fresh_stable_report() {
   done
 }
 
+validate_nsys_delayed_collection_timeouts() {
+  local minimum_timeout_s=$((LUMO_NSYS_DELAY_S + LUMO_NSYS_DURATION_S))
+
+  (( LUMO_NSYS_SESSION_TIMEOUT_S >= minimum_timeout_s )) || {
+    echo \
+      "FAIL: Nsight session discovery timeout must cover delay plus capture duration" \
+      >&2
+    return 1
+  }
+  (( LUMO_NSYS_COLLECTION_TIMEOUT_S >= minimum_timeout_s )) || {
+    echo \
+      "FAIL: Nsight Collection-entry timeout must cover delay plus capture duration" \
+      >&2
+    return 1
+  }
+}
+
 profile_cleanup() {
   local rc=$?
   trap - EXIT INT TERM
@@ -801,7 +818,7 @@ export LUMO_NSYS_DURATION_S=${LUMO_NSYS_DURATION_S:-300}
 export LUMO_NSYS_FLUSH_MS=${LUMO_NSYS_FLUSH_MS:-100}
 export LUMO_NSYS_CONFIG_DIRECTIVES="${LUMO_NSYS_CONFIG_DIRECTIVES:-CuptiUseRawGpuTimestamps=false}"
 export LUMO_NSYS_OUTPUT=/logs/fr13_fixed32_b1_real_swe
-LUMO_NSYS_SESSION_TIMEOUT_S=${LUMO_NSYS_SESSION_TIMEOUT_S:-600}
+LUMO_NSYS_SESSION_TIMEOUT_S=${LUMO_NSYS_SESSION_TIMEOUT_S:-1500}
 LUMO_NSYS_COLLECTION_TIMEOUT_S=${LUMO_NSYS_COLLECTION_TIMEOUT_S:-1500}
 LUMO_NSYS_COLLECTION_MAX_S=${LUMO_NSYS_COLLECTION_MAX_S:-420}
 LUMO_NSYS_REPORT_TIMEOUT_S=${LUMO_NSYS_REPORT_TIMEOUT_S:-900}
@@ -895,6 +912,7 @@ for _positive_lifecycle_value in \
   }
 done
 unset _positive_lifecycle_value
+validate_nsys_delayed_collection_timeouts || exit 2
 [[ "$LUMO_NSYS_REPORT_STABLE_POLLS" =~ ^[1-9][0-9]*$ ]] \
   && (( LUMO_NSYS_REPORT_STABLE_POLLS >= 3 )) || {
   echo "FAIL: Nsight report stability requires at least three polls" >&2
