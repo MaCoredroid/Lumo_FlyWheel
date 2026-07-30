@@ -31,6 +31,29 @@ IMAGE_OS = "linux"
 IMAGE_ARCHITECTURE = "arm64"
 VLLM_VERSION = "0.19.2rc1.dev134+gfe9c3d6c5"
 
+NSYS_PROFILE_BINARY = Path(
+    "/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys"
+)
+NSYS_PROFILE_OUTPUT = Path("/logs/fr13_fixed32_b1_real_swe")
+NSYS_PROFILE_PREFIX = (
+    str(NSYS_PROFILE_BINARY),
+    "profile",
+    "--delay",
+    "1200",
+    "--duration",
+    "300",
+    "--trace=cuda,cuda-sw,nvtx",
+    "--cuda-graph-trace=node",
+    "--cuda-flush-interval",
+    "100",
+    "--discard-environment=true",
+    "--sample=none",
+    "--cpuctxsw=none",
+    "--force-overwrite=true",
+    "-o",
+    str(NSYS_PROFILE_OUTPUT),
+)
+
 FA2_REPO_RELATIVE = (
     "output/auto_research/"
     "qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-"
@@ -592,6 +615,34 @@ def expected_pid1_argv(concurrency: int) -> list[str]:
         "--middleware",
         "lumo_flywheel_serving.inference_proxy.Fixed32EngineIngressMiddleware",
     ]
+
+
+def expected_process_pid1_argv(
+    concurrency: int,
+    *,
+    attribution_only: bool,
+) -> list[str]:
+    if type(attribution_only) is not bool:
+        raise ContractError("fixed32 attribution-only selector must be boolean")
+    vllm_argv = expected_pid1_argv(concurrency)
+    if not attribution_only:
+        return vllm_argv
+    return [*NSYS_PROFILE_PREFIX, "vllm", *vllm_argv[2:]]
+
+
+def validate_process_pid1_argv(
+    argv: object,
+    concurrency: int,
+    *,
+    attribution_only: bool,
+) -> list[str]:
+    expected = expected_process_pid1_argv(
+        concurrency,
+        attribution_only=attribution_only,
+    )
+    if argv != expected:
+        raise ContractError(f"fixed32 PID1 argv mismatch: {argv!r}")
+    return expected
 
 
 def _exact_file_record(path: Path, *, display_path: str) -> dict[str, Any]:

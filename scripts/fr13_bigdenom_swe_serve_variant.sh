@@ -916,7 +916,8 @@ PY
     "$ARMDIR/fixed32_process_identity.json" \
     "$MAX_NUM_SEQS_OVR" \
     "$CONTAINER" \
-    "$ARMDIR/fixed32_container_identity.json" <<'PY'
+    "$ARMDIR/fixed32_container_identity.json" \
+    "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" <<'PY'
 import json
 import subprocess
 import sys
@@ -930,6 +931,7 @@ process_path = Path(sys.argv[2])
 concurrency = int(sys.argv[3])
 container_name = sys.argv[4]
 container_identity_path = Path(sys.argv[5])
+attribution_only_text = sys.argv[6]
 runtime = contract.validate_runtime_attestation(
     json.loads(runtime_path.read_text(encoding="utf-8"))
 )
@@ -940,10 +942,18 @@ pid1 = process.get("pid1")
 engine = process.get("engine_core")
 if not isinstance(pid1, dict) or pid1.get("pid") != 1:
     raise SystemExit("fixed32 PID1 identity is malformed")
-if pid1.get("argv") != contract.expected_pid1_argv(concurrency):
+if attribution_only_text not in {"0", "1"}:
     raise SystemExit(
-        f"fixed32 PID1 argv mismatch: {pid1.get('argv')!r}"
+        "fixed32 attribution-only selector must be exactly 0 or 1"
     )
+try:
+    contract.validate_process_pid1_argv(
+        pid1.get("argv"),
+        concurrency,
+        attribution_only=attribution_only_text == "1",
+    )
+except contract.ContractError as error:
+    raise SystemExit(str(error)) from error
 if not isinstance(engine, dict):
     raise SystemExit("fixed32 EngineCore identity is malformed")
 fa2_path = str(contract.CONTAINER_FA2_DESTINATION)
