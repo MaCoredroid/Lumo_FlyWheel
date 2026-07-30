@@ -20,6 +20,7 @@ from fr13_fixed32_topology import FIXED32_CHOICES, PHYSICAL_DRAFTS
 EXTERNAL_SCHEMA = "fr13-fixed32-external-manifest-v1"
 RUNTIME_SCHEMA = "fr13-fixed32-runtime-attestation-v1"
 CANONICAL_FORMAT = "utf8-json-sort-keys-compact-v1"
+RUNTIME_ATTESTATION_MODE = 0o644
 
 IMAGE_REFERENCE = (
     "vllm/vllm-openai@"
@@ -942,7 +943,12 @@ def validate_runtime_attestation(payload: object) -> dict[str, Any]:
     return payload
 
 
-def atomic_write_json(path: Path, payload: object) -> None:
+def atomic_write_json(
+    path: Path,
+    payload: object,
+    *,
+    mode: int | None = None,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     raw = canonical_bytes(payload) + b"\n"
     with tempfile.NamedTemporaryFile(
@@ -951,6 +957,8 @@ def atomic_write_json(path: Path, payload: object) -> None:
         temporary = Path(handle.name)
         handle.write(raw)
         handle.flush()
+        if mode is not None:
+            os.fchmod(handle.fileno(), mode)
         os.fsync(handle.fileno())
     os.replace(temporary, path)
 
@@ -1097,7 +1105,15 @@ def main() -> int:
         else:
             payload = build_runtime_attestation()
             validate_runtime_attestation(payload)
-        atomic_write_json(args.output, payload)
+        atomic_write_json(
+            args.output,
+            payload,
+            mode=(
+                RUNTIME_ATTESTATION_MODE
+                if args.command == "runtime-attestation"
+                else None
+            ),
+        )
     except (ContractError, OSError, subprocess.SubprocessError) as error:
         print(f"FAIL fixed32 contract: {error}", file=sys.stderr)
         return 2
