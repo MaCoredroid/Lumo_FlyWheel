@@ -34,6 +34,7 @@ SUBSET=${3:?subset json}
 
 RUNROOT=${RUNROOT:-output/fr13_bigdenom_swe}
 ARMDIR="$RUNROOT/$ARM"
+ARMDIR_ABS=$(realpath -m "$ARMDIR")
 [[ -f "$SUBSET" ]] || SUBSET="output/fr13_b1_gold_swe/$SUBSET"
 [[ -f "$SUBSET" ]] || { echo "FAIL: subset not found: $SUBSET"; exit 2; }
 CONTAINER="fr13-bigdenom-$ARM"
@@ -49,7 +50,19 @@ OFFLOAD_PROXY_PORT=${LUMO_OFFLOAD_PROXY_PORT:-8023}
 GB10_TS_IP=${GB10_TS_IP:-100.103.10.122}
 OFFLOAD_HELPER=scripts/swe_x86_helpers/offload_codex_proxy.sh
 OFFLOAD_LINK_DOWN_MAX_S=${OFFLOAD_LINK_DOWN_MAX_S:-300}
+if [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" ]]; then
+  [[ "$OFFLOAD_AGENT" == "1" ]] \
+    || { echo "FAIL: fixed32 requires OFFLOAD_AGENT=1"; exit 2; }
+  [[ ! -e "$ARMDIR" ]] \
+    || { echo "FAIL: fixed32 arm directory already exists: $ARMDIR"; exit 2; }
+fi
 mkdir -p "$ARMDIR/logs"
+FIXED32_MODE=""
+FIXED32_PRODUCER_PID=""
+FIXED32_REQUEST_PATH="$ARMDIR_ABS/logs/fr13_fixed32_flush_request.json"
+FIXED32_ACK_PATH="$ARMDIR_ABS/logs/fr13_fixed32_flush_ack.json"
+FIXED32_PID_PATH="$ARMDIR_ABS/logs/fr13_fixed32_engine_pid"
+FIXED32_BOUNDARY_SNAPSHOT_PATH="$ARMDIR_ABS/logs/fr13_fixed32_boundary_snapshot"
 
 # Arm dispatch: launcher + TREE + extra flags + expected draft-token ratio.
 CAT6ROOT_TREE="[(0,),(1,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0)]"
@@ -83,6 +96,33 @@ T33333_TREE="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0)
 # Arctic-filled spine CHAIN (depths 6-11) = 21 nodes -> n_pad=32, wide_D=11. Head byte-identical baseline;
 # the tail ADDS only (never-regress via the committer). == tail_tree_order(tail_len=6) from fr13_mtp_suffix_assembly.
 TAIL6_TREE="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0)]"
+# HYDRA23: tail6 with only the human-depth-5 MTP siblings traded for one
+# four-node Arctic continuation below the root rank-1 candidate. The main
+# depth-11 spine and both siblings through human depth 4 are unchanged.
+HYDRA23_TREE="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(1,0),(0,0,0),(0,0,1),(0,0,2),(1,0,0),(0,0,0,0),(0,0,0,1),(0,0,0,2),(1,0,0,0),(0,0,0,0,0),(1,0,0,0,0),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0)]"
+# Fixed-32 has one topology authority. Do not duplicate the 31 paths or masks
+# in shell: a source/topology drift must fail before the server can launch.
+mapfile -t _FIXED32_CONTRACT < <(
+  .venv/bin/python - <<'PY'
+import sys
+sys.path.insert(0, "scripts")
+import fr13_fixed32_topology as t
+t.validate_contract()
+print(repr(list(t.FIXED32_CHOICES)))
+print(f"{t.TAIL6_VALID_MASK:#x}")
+print(f"{t.HYDRA27_VALID_MASK:#x}")
+print(t.TAIL6_ACTIVE_DRAFTS)
+print(t.HYDRA27_ACTIVE_DRAFTS)
+PY
+)
+(( ${#_FIXED32_CONTRACT[@]} == 5 )) \
+  || { echo "FAIL: fixed32 topology authority did not emit five fields"; exit 2; }
+FIXED32_TREE=${_FIXED32_CONTRACT[0]}
+FIXED32_TAIL_MASK=${_FIXED32_CONTRACT[1]}
+FIXED32_HYDRA_MASK=${_FIXED32_CONTRACT[2]}
+FIXED32_TAIL_ACTIVE=${_FIXED32_CONTRACT[3]}
+FIXED32_HYDRA_ACTIVE=${_FIXED32_CONTRACT[4]}
+unset _FIXED32_CONTRACT
 # 333 = widths [3,3,3]: depth-3 spine (spine_steps=2) + 2 branches/depth (9 choices). SAME width
 # as t33333, differs ONLY in depth -> dfwd(t33333)-dfwd(t333) = 2 spine-steps' drafter cost.
 T333_TREE="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2)]"
@@ -183,6 +223,39 @@ case "$KIND" in
   # FR13_TAIL_MODE=1 (caps native spine_steps=4 + appends Arctic tail) + FR13_DRAFT_SOURCE=merged (the
   # Arctic cache lifecycle) + BV=8 (n_pad=32 register budget). EXPECT_RATIO=21 = the tree node count.
   tail6)     LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8) ;;
+  # Root-rescue trade: exact 23-node topology, same four native MTP head
+  # forwards and main Arctic tail as tail6, plus one host trie walk.
+  hydra23)   LAUNCHER=forked; TREEARG="$HYDRA23_TREE"; EXPECT_RATIO=23; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=1) ;;
+  # Same 31 physical drafts and verifier rows in both arms. Only the active
+  # sampler mask differs; every other fixed-work route is shared.
+  tail6_fixed32)
+    LAUNCHER=forked
+    TREEARG="$FIXED32_TREE"
+    EXPECT_RATIO=31
+    FIXED32_MODE=tail6_fixed32
+    declare -a XFLAGS=(
+      FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged
+      FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0
+      FR13_FIXED32_MODE=tail6_fixed32
+      "FR13_FIXED32_VALID_MASK=$FIXED32_TAIL_MASK"
+      "FR13_FIXED32_ACTIVE_NODES=$FIXED32_TAIL_ACTIVE"
+      FR13_FIXED32_PHYSICAL_DRAFTS=31
+    )
+    ;;
+  hydra27_fixed32)
+    LAUNCHER=forked
+    TREEARG="$FIXED32_TREE"
+    EXPECT_RATIO=31
+    FIXED32_MODE=hydra27_fixed32
+    declare -a XFLAGS=(
+      FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged
+      FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0
+      FR13_FIXED32_MODE=hydra27_fixed32
+      "FR13_FIXED32_VALID_MASK=$FIXED32_HYDRA_MASK"
+      "FR13_FIXED32_ACTIVE_NODES=$FIXED32_HYDRA_ACTIVE"
+      FR13_FIXED32_PHYSICAL_DRAFTS=31
+    )
+    ;;
   # REPLAY-TIMER probe: tail6 + FR13_REPLAY_GPU_TIMER=1 -> coarse GPU-time of the accepted-path GDN replay
   # per step (sidecar). Settles the 94ms-committer split: replay ~=80ms => the replay is the bottleneck
   # (re-compute, reducible via stateless-tree gather = real lever); replay ~=11ms => the cost is sync-wait/
@@ -246,6 +319,27 @@ case "$KIND" in
   cat9f)     LAUNCHER=forked; TREEARG="[(0,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0),(0,1),(0,0,1),(0,0,0,1),(0,0,0,0,1)]"; EXPECT_RATIO=9;  declare -a XFLAGS=() ;;
   *) echo "FAIL: unknown KIND=$KIND"; exit 2 ;;
 esac
+
+if [[ -n "$FIXED32_MODE" ]]; then
+  if [[ "${CAPTURE_ONLY:-0}" == "1" \
+     || "${ACCEPT_SPEED_PROBE:-0}" == "1" \
+     || "${PROBE_ONLY:-0}" == "1" ]]; then
+    echo "FAIL: fixed32 campaigns forbid all positive-token probe modes"
+    exit 2
+  fi
+  # Sidecar readers glob per-PID files. A reused arm name must not silently
+  # aggregate a prior producer into this campaign.
+  for _timer_path in \
+    "${FR13_SFWD_GPU_TIMER_JSON:-}" \
+    "${FR13_DFWD_GPU_TIMER_JSON:-}" \
+    "${FR13_CFWD_GPU_TIMER_JSON:-}"; do
+    [[ -n "$_timer_path" ]] || continue
+    [[ "$_timer_path" == /workspace/* ]] \
+      && _timer_path="$PWD/${_timer_path#/workspace/}"
+    rm -f "$_timer_path" "$_timer_path".*
+  done
+  unset _timer_path
+fi
 # NATIVE_DECODE: arms whose DECODE is the native/linear MTP path (no tree), so the
 # tree-flag class-9 pins + the tree-only worker environ needle DO NOT APPLY and the
 # native-appropriate asserts run instead. Covers LAUNCHER=native (nativemtp5[apc], no
@@ -266,6 +360,39 @@ if (( NATIVE_DECODE == 1 )); then PROBE_MODE=naive_mtp; else PROBE_MODE=tree_mtp
 # subset + MAX_NUM_SEQS_OVR=4 + SWE_CONCURRENCY=4.
 MAX_NUM_SEQS_OVR=${MAX_NUM_SEQS_OVR:-1}
 SWE_CONCURRENCY=${SWE_CONCURRENCY:-1}
+if [[ -n "$FIXED32_MODE" ]]; then
+  [[ "$MAX_NUM_SEQS_OVR" == "$SWE_CONCURRENCY" ]] \
+    || {
+      echo "FAIL: fixed32 server capacity and SWE concurrency must match"
+      exit 2
+    }
+  [[ "$SWE_CONCURRENCY" == "1" || "$SWE_CONCURRENCY" == "4" ]] \
+    || { echo "FAIL: fixed32 concurrency must be exactly 1 or 4"; exit 2; }
+  .venv/bin/python - "$SUBSET" <<'PY'
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "scripts")
+from fr13_floor_gate import EVIDENCE_SETS, GateError, validate_subset
+
+
+subset_path = Path(sys.argv[1]).resolve()
+matches = []
+for task_count in sorted(EVIDENCE_SETS):
+    try:
+        validate_subset(subset_path, task_count)
+    except GateError:
+        continue
+    matches.append(task_count)
+if len(matches) != 1:
+    raise SystemExit(
+        f"{subset_path}: fixed32 requires the exact canonical 4-task or "
+        "16-task SWE-Verified subset"
+    )
+print(f"fixed32 canonical SWE-Verified subset OK: tasks={matches[0]}")
+PY
+  (( $? == 0 )) || { echo "FAIL: fixed32 canonical task-set binding"; exit 2; }
+fi
 
 echo "=== BIGDENOM-VARIANT SWEServe ARM $ARM kind=$KIND launcher=$LAUNCHER expect=$EXPECT_RATIO xflags=[${XFLAGS[*]:-none}] subset=$SUBSET ==="
 date -u +%Y-%m-%dT%H:%M:%SZ | tee "$ARMDIR/arm_started_at.txt"
@@ -300,7 +427,12 @@ pkill -f "lumo_flywheel_serving.inference_proxy" 2>/dev/null
 sleep 1
 
 teardown(){
+  local rc=$?
+  local flush_rc=0
+  trap - EXIT
+  set +e
   echo "[teardown] kill proxy + docker rm -f $CONTAINER + recover_host_memory"
+  # Stop every ingress path before asking EngineCore for its terminal snapshot.
   kill "$(cat /tmp/track_b_e2e_proxy_${PROXY_PORT}.pid 2>/dev/null)" 2>/dev/null
   pkill -f "lumo_flywheel_serving.inference_proxy" 2>/dev/null
   [[ -n "${WATCHDOG_PID:-}" ]] && kill "$WATCHDOG_PID" 2>/dev/null
@@ -308,12 +440,35 @@ teardown(){
     LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
       bash "$OFFLOAD_HELPER" stop "$OFFLOAD_HOST" >> "$ARMDIR/offload_teardown.log" 2>&1 || true
   fi
+  if [[ -n "$FIXED32_MODE" ]]; then
+    if [[ -n "$FIXED32_PRODUCER_PID" && -f "$FIXED32_ACK_PATH" ]]; then
+      .venv/bin/python scripts/fr13_fixed32_flush_protocol.py \
+        --container "$CONTAINER" \
+        --producer-pid "$FIXED32_PRODUCER_PID" \
+        --mode "$FIXED32_MODE" \
+        --request "$FIXED32_REQUEST_PATH" \
+        --ack "$FIXED32_ACK_PATH" \
+        --action final \
+        > "$ARMDIR/fixed32_final_flush.json" \
+        2> "$ARMDIR/fixed32_final_flush.stderr"
+      flush_rc=$?
+    else
+      echo "fixed32 final flush missing PID or ready ack" \
+        > "$ARMDIR/fixed32_final_flush.stderr"
+      flush_rc=1
+    fi
+    if (( flush_rc != 0 )); then
+      echo "FAIL: fixed32 terminal flush rc=$flush_rc" >&2
+      (( rc == 0 )) && rc=13
+    fi
+  fi
   docker logs "$CONTAINER" > "$ARMDIR/docker_full.log" 2>&1 || true
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
   recover_host || true
   sleep 2
   free -g | tee "$ARMDIR/free_after_teardown.txt"
   date -u +%Y-%m-%dT%H:%M:%SZ | tee "$ARMDIR/arm_ended_at.txt"
+  exit "$rc"
 }
 trap teardown EXIT
 
@@ -322,7 +477,7 @@ trap teardown EXIT
 for kv in "${XFLAGS[@]:-}"; do [[ -n "$kv" ]] && export "$kv"; done
 if [[ "$LAUNCHER" == "locked" ]]; then
   CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.78}" MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
-  FR13_RUN_DIR="$PWD/$ARMDIR" LOG_DIR="$PWD/$ARMDIR/logs" \
+  FR13_RUN_DIR="$ARMDIR_ABS" LOG_DIR="$ARMDIR_ABS/logs" \
   scripts/fr13_launch_locked.sh > "$ARMDIR/launch.log" 2>&1
   RC=$?
 elif [[ "$LAUNCHER" == "native" ]]; then
@@ -333,7 +488,7 @@ elif [[ "$LAUNCHER" == "native" ]]; then
   # inert on the native path). Same CONTAINER/PORT/RUN_DIR wiring as the others so
   # the offload proxy / health / warmup / teardown machinery is identical.
   CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.78}" MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
-  FR13_RUN_DIR="$PWD/$ARMDIR" LOG_DIR="$PWD/$ARMDIR/logs" \
+  FR13_RUN_DIR="$ARMDIR_ABS" LOG_DIR="$ARMDIR_ABS/logs" \
   scripts/fr13_launch_native_mtp_server.sh > "$ARMDIR/launch.log" 2>&1
   RC=$?
 else
@@ -356,7 +511,7 @@ else
   CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.78}" MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
   TREE="$TREEARG" FR10_METRICS=0 BATCH_INVARIANT="${BATCH_INVARIANT:-0}" \
   LUMO_FB_KERNEL_ROWS=1 LUMO_FB_PROJ_PAD_ROWS=16 \
-  FR13_RUN_DIR="$PWD/$ARMDIR" LOG_DIR="$PWD/$ARMDIR/logs" \
+  FR13_RUN_DIR="$ARMDIR_ABS" LOG_DIR="$ARMDIR_ABS/logs" \
   scripts/fr13_launch_forked_fa2_tree_server.sh > "$ARMDIR/launch.log" 2>&1
   RC=$?
 fi
@@ -375,6 +530,174 @@ while (( $(date +%s) < T0 + ${HEALTH_TIMEOUT_S:-1200} )); do
 done
 (( HEALTHY == 1 )) || { echo "FAIL: health not up in 1200s"; docker logs "$CONTAINER" 2>&1 | tail -40; exit 2; }
 echo "healthy after $(( $(date +%s) - T0 ))s"
+
+if [[ -n "$FIXED32_MODE" ]]; then
+  mapfile -t _fixed32_pid_lines < <(sed '/^[[:space:]]*$/d' "$FIXED32_PID_PATH")
+  (( ${#_fixed32_pid_lines[@]} == 1 )) \
+    || { echo "FAIL: fixed32 EngineCore PID file must contain exactly one line"; exit 3; }
+  FIXED32_PRODUCER_PID=${_fixed32_pid_lines[0]}
+  [[ "$FIXED32_PRODUCER_PID" =~ ^[1-9][0-9]*$ ]] \
+    || { echo "FAIL: invalid fixed32 EngineCore PID: $FIXED32_PRODUCER_PID"; exit 3; }
+  unset _fixed32_pid_lines
+  docker exec "$CONTAINER" test -r "/proc/$FIXED32_PRODUCER_PID/cmdline" \
+    || { echo "FAIL: fixed32 EngineCore PID is not live"; exit 3; }
+  docker exec "$CONTAINER" sh -c \
+    "tr '\\0' ' ' < /proc/$FIXED32_PRODUCER_PID/cmdline" \
+    > "$ARMDIR/fixed32_engine_cmdline.txt"
+  grep -q "EngineCore" "$ARMDIR/fixed32_engine_cmdline.txt" \
+    || { echo "FAIL: fixed32 producer PID is not EngineCore"; exit 3; }
+  # docker exec does not attach stdin unless -i is explicit. Without it,
+  # `python3 -` exits zero after reading an empty stream and leaves an empty
+  # identity artifact.
+  docker exec -i "$CONTAINER" python3 - "$FIXED32_PRODUCER_PID" \
+    > "$ARMDIR/fixed32_process_identity.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+
+def process_record(pid):
+    root = Path("/proc") / str(pid)
+    argv = [
+        value.decode("utf-8", errors="strict")
+        for value in root.joinpath("cmdline").read_bytes().split(b"\0")
+        if value
+    ]
+    environ = [
+        value.decode("utf-8", errors="strict")
+        for value in root.joinpath("environ").read_bytes().split(b"\0")
+        if value
+    ]
+    if any("=" not in value for value in environ):
+        raise SystemExit(f"PID {pid} contains a malformed environment entry")
+    names = [value.split("=", 1)[0] for value in environ]
+    if len(names) != len(set(names)):
+        raise SystemExit(f"PID {pid} contains duplicate environment names")
+    maps = [
+        line
+        for line in root.joinpath("maps").read_text().splitlines()
+        if "_vllm_fa2_C.abi3.so" in line
+    ]
+    return {
+        "pid": int(pid),
+        "argv": argv,
+        "environ": sorted(environ),
+        "forked_fa2_maps": maps,
+    }
+
+
+engine_pid = int(sys.argv[1])
+payload = {
+    "schema": "fr13-fixed32-process-identity-v1",
+    "pid1": process_record(1),
+    "engine_core": process_record(engine_pid),
+}
+print(json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True))
+PY
+  (( $? == 0 )) || { echo "FAIL: fixed32 process identity capture"; exit 3; }
+  [[ -s "$ARMDIR/fixed32_process_identity.json" ]] \
+    || { echo "FAIL: fixed32 process identity capture was empty"; exit 3; }
+  .venv/bin/python - \
+    "$ARMDIR/logs/fr13_fixed32_runtime_attestation.json" \
+    "$ARMDIR/fixed32_process_identity.json" \
+    "$MAX_NUM_SEQS_OVR" \
+    "$CONTAINER" \
+    "$ARMDIR/fixed32_container_identity.json" <<'PY'
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "scripts")
+import fr13_fixed32_contract as contract
+
+runtime_path = Path(sys.argv[1])
+process_path = Path(sys.argv[2])
+concurrency = int(sys.argv[3])
+container_name = sys.argv[4]
+container_identity_path = Path(sys.argv[5])
+runtime = contract.validate_runtime_attestation(
+    json.loads(runtime_path.read_text(encoding="utf-8"))
+)
+process = json.loads(process_path.read_text(encoding="utf-8"))
+if process.get("schema") != "fr13-fixed32-process-identity-v1":
+    raise SystemExit("fixed32 process identity schema mismatch")
+pid1 = process.get("pid1")
+engine = process.get("engine_core")
+if not isinstance(pid1, dict) or pid1.get("pid") != 1:
+    raise SystemExit("fixed32 PID1 identity is malformed")
+if pid1.get("argv") != contract.expected_pid1_argv(concurrency):
+    raise SystemExit(
+        f"fixed32 PID1 argv mismatch: {pid1.get('argv')!r}"
+    )
+if not isinstance(engine, dict):
+    raise SystemExit("fixed32 EngineCore identity is malformed")
+fa2_path = str(contract.CONTAINER_FA2_DESTINATION)
+if not any(fa2_path in line for line in engine.get("forked_fa2_maps", [])):
+    raise SystemExit("fixed32 EngineCore has not mapped the pinned FA2 binary")
+inspect = subprocess.run(
+    ["docker", "inspect", container_name],
+    check=True,
+    capture_output=True,
+    text=True,
+)
+rows = json.loads(inspect.stdout)
+if len(rows) != 1 or not isinstance(rows[0], dict):
+    raise SystemExit("fixed32 container inspect did not return one object")
+row = rows[0]
+container_identity = {
+    "schema": "fr13-fixed32-container-identity-v1",
+    "name": row.get("Name"),
+    "image_id": row.get("Image"),
+    "configured_image": (row.get("Config") or {}).get("Image"),
+    "platform": row.get("Platform"),
+    "running": (row.get("State") or {}).get("Running"),
+}
+expected_container_identity = {
+    "schema": "fr13-fixed32-container-identity-v1",
+    "name": f"/{container_name}",
+    "image_id": contract.IMAGE_ID,
+    "configured_image": contract.IMAGE_REFERENCE,
+    "platform": contract.IMAGE_OS,
+    "running": True,
+}
+if container_identity != expected_container_identity:
+    raise SystemExit(
+        "fixed32 running container identity mismatch: "
+        f"{container_identity!r}"
+    )
+contract.atomic_write_json(container_identity_path, container_identity)
+print(
+    "fixed32 runtime identity OK: "
+    f"runtime={runtime['overall_canonical_sha256']} "
+    f"pid1_args={len(pid1['argv'])}"
+)
+PY
+  (( $? == 0 )) || { echo "FAIL: fixed32 runtime/process attestation"; exit 3; }
+  .venv/bin/python - \
+    "$CONTAINER" "$FIXED32_PRODUCER_PID" "$FIXED32_MODE" \
+    "$FIXED32_REQUEST_PATH" "$FIXED32_ACK_PATH" \
+    > "$ARMDIR/fixed32_ready_ack.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "scripts")
+from fr13_fixed32_flush_protocol import Fixed32FlushClient
+
+container, pid, mode, request, ack = sys.argv[1:]
+client = Fixed32FlushClient(
+    container=container,
+    producer_pid=int(pid),
+    mode=mode,
+    request_path=Path(request),
+    ack_path=Path(ack),
+)
+print(json.dumps(client.connect().as_dict(), sort_keys=True))
+PY
+  (( $? == 0 )) || { echo "FAIL: fixed32 generation-zero ready ack"; exit 3; }
+  echo "fixed32 runtime ready: mode=$FIXED32_MODE producer_pid=$FIXED32_PRODUCER_PID"
+fi
 
 # ---- class 9: flag state in container env ----
 # The FR13 tree/APC machinery is DELIBERATELY ABSENT on the native MTP path
@@ -498,25 +821,28 @@ case "$KIND" in
       && echo "[needle] OPT-A patch present in boot log" || echo "[needle] OPT-A patch line not in boot log (override engages at forward time on GB10+small-M)";;
 esac
 
-# ---- warmup probe (fires spec engagement) ----
-curl -fsS "http://127.0.0.1:$PORT/metrics" > "$ARMDIR/metrics_before_warmup.txt"
-.venv/bin/python scripts/fr10_quick_decode_tps_probe.py \
-  --endpoint "http://127.0.0.1:$PORT" --model qwen3.6-27b \
-  --prompts-file output/fr13_acceptance_ladder/prompts_swe4.json \
-  --samples-per-prompt 1 --batch-size 1 --seed 1313 --top-p 1.0 \
-  --wait-health 60 --request-timeout 900 --warmup-samples 0 \
-  --modes "$PROBE_MODE" \
-  --prompt-limit "${WARMUP_PROMPT_LIMIT:-1}" --max-tokens "${WARMUP_MAX_TOKENS:-16}" --temperature 0.0 \
-  --out "$ARMDIR/warmup_probe.json" \
-  --request-metrics-out "$ARMDIR/warmup_request_metrics.jsonl" \
-  > "$ARMDIR/warmup_probe_stdout.log" 2>&1
-RC=$?
-curl -fsS "http://127.0.0.1:$PORT/metrics" > "$ARMDIR/metrics_after_warmup.txt"
-if (( RC != 0 )); then
-  echo "FAIL: warmup probe rc=$RC"
-  tail -20 "$ARMDIR/warmup_probe_stdout.log"; docker logs "$CONTAINER" 2>&1 | tail -30; exit 4
-fi
-.venv/bin/python - "$ARMDIR" "$EXPECT_RATIO" <<'PY'
+# ---- warmup probe (legacy arms only; fixed32 permits canonical SWE traffic only) ----
+if [[ -z "$FIXED32_MODE" ]]; then
+  curl -fsS "http://127.0.0.1:$PORT/metrics" > "$ARMDIR/metrics_before_warmup.txt"
+  WARMUP_TEMPERATURE=0.0
+  .venv/bin/python scripts/fr10_quick_decode_tps_probe.py \
+    --endpoint "http://127.0.0.1:$PORT" --model qwen3.6-27b \
+    --prompts-file output/fr13_acceptance_ladder/prompts_swe4.json \
+    --samples-per-prompt 1 --batch-size 1 --seed 1313 --top-p 1.0 \
+    --wait-health 60 --request-timeout 900 --warmup-samples 0 \
+    --modes "$PROBE_MODE" \
+    --prompt-limit "${WARMUP_PROMPT_LIMIT:-1}" --max-tokens "${WARMUP_MAX_TOKENS:-16}" \
+    --temperature "$WARMUP_TEMPERATURE" \
+    --out "$ARMDIR/warmup_probe.json" \
+    --request-metrics-out "$ARMDIR/warmup_request_metrics.jsonl" \
+    > "$ARMDIR/warmup_probe_stdout.log" 2>&1
+  RC=$?
+  curl -fsS "http://127.0.0.1:$PORT/metrics" > "$ARMDIR/metrics_after_warmup.txt"
+  if (( RC != 0 )); then
+    echo "FAIL: warmup probe rc=$RC"
+    tail -20 "$ARMDIR/warmup_probe_stdout.log"; docker logs "$CONTAINER" 2>&1 | tail -30; exit 4
+  fi
+  .venv/bin/python - "$ARMDIR" "$EXPECT_RATIO" <<'PY'
 import sys
 from pathlib import Path
 armdir, expect = Path(sys.argv[1]), float(sys.argv[2])
@@ -535,7 +861,46 @@ assert abs(ratio - expect) < 1e-9, \
     f"draft-shape FAIL (class 9): draft_tokens/drafts={ratio} expected {expect}"
 print(f"spec engagement OK: drafts delta={d} draft_tokens/drafts={ratio}")
 PY
-(( $? == 0 )) || { echo "FAIL: spec engagement raw-counter assert"; exit 4; }
+  (( $? == 0 )) || { echo "FAIL: spec engagement raw-counter assert"; exit 4; }
+
+  # Container env is not sufficient: these one-time kernel messages prove the
+  # route executed after the legacy warmup decode.
+  if (( NATIVE_DECODE == 0 )); then
+    docker logs "$CONTAINER" > "$ARMDIR/docker_after_warmup.log" 2>&1
+    if grep -q "^FR13_SUBTREE_PARALLEL=1$" "$ARMDIR/container_env.txt"; then
+      grep -F -m1 "[FR13_SUBTREE_PARALLEL ENGAGED]" \
+        "$ARMDIR/docker_after_warmup.log" >/dev/null \
+        || { echo "FAIL: subtree path route did not emit its runtime engagement needle"; exit 4; }
+      echo "subtree runtime engagement OK ($KIND)"
+    else
+      echo "subtree runtime engagement needle SKIPPED (route explicitly disabled)"
+    fi
+    if grep -q "^FR13_SUBTREE_PARALLEL_SELFCHECK=1$" "$ARMDIR/container_env.txt"; then
+      grep -F -m1 "[FR13_SUBTREE_PARALLEL SELFCHECK PASS]" \
+        "$ARMDIR/docker_after_warmup.log" >/dev/null \
+        || { echo "FAIL: subtree selfcheck was armed but emitted no byte-equal PASS"; exit 4; }
+      echo "subtree byte selfcheck OK ($KIND)"
+    fi
+    if [[ "$KIND" == "hydra23" ]]; then
+      grep -F -m1 \
+        "FR13_HYDRA23 exact topology engaged: nodes=23 rescue_chains=rank1:4" \
+        "$ARMDIR/docker_after_warmup.log" >/dev/null \
+        || { echo "FAIL: exact Hydra23 topology runtime needle missing"; exit 4; }
+      _hydra_floor_line="$(
+        grep -F -m1 "[FR13_SUBTREE_PARALLEL] preseeded: n=24 schedule=hydra23_floor" \
+          "$ARMDIR/docker_after_warmup.log" || true
+      )"
+      [[ "$_hydra_floor_line" == *"levels=[1, 9]"* \
+         && "$_hydra_floor_line" == *"lens=[4, 8]"* \
+         && "$_hydra_floor_line" == *"critical=12"* \
+         && "$_hydra_floor_line" == *"route_armed=1"* ]] \
+        || { echo "FAIL: Hydra23 hardware-floor schedule/worker arm needle missing: $_hydra_floor_line"; exit 4; }
+      echo "Hydra23 floor schedule OK: critical=12"
+    fi
+  fi
+else
+  echo "fixed32 pretask generation warmup SKIPPED: canonical SWE traffic only"
+fi
 
 # ---- FR13 APC worker-env engagement assert (only for APC arms) ----
 # The APC fixes read os.environ.get(FR13_APC_*) INSIDE the EngineCore worker (pid 176).
@@ -567,8 +932,12 @@ if [[ -n "${FR13_APC_REQUIRE_SNAP_FIX:-}${FR13_APC_REQUIRE_HIT_SUFFIX_CAP:-}" ]]
   echo "APC worker-env engagement OK: $APC_MARKER_TXT"
 fi
 
-curl -fsS -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" \
-  > "$ARMDIR/reset_prefix_cache.txt" 2>&1 || echo "WARN: reset_prefix_cache failed (non-fatal)"
+if [[ -z "$FIXED32_MODE" ]]; then
+  curl -fsS -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" \
+    > "$ARMDIR/reset_prefix_cache.txt" 2>&1 || echo "WARN: reset_prefix_cache failed (non-fatal)"
+else
+  echo "fixed32 pretask prefix-cache reset SKIPPED: fresh container"
+fi
 
 # ---- CAPTURE_ONLY: G1 kernel-confirm capture (boot + warmup fired the tree-decode payload dump, exit) ----
 # The warmup above ran a tree_mtp decode; with FR10_TREE_GDN_CAPTURE_PAYLOAD + FR12_SUBKERNEL_CAPTURE set
@@ -640,7 +1009,7 @@ if [[ "$OFFLOAD_AGENT" == "1" ]]; then
     bash "$OFFLOAD_HELPER" sync "$OFFLOAD_HOST" > "$ARMDIR/offload_sync.log" 2>&1 \
     || { echo "FAIL: offload proxy sync"; cat "$ARMDIR/offload_sync.log"; exit 5; }
   LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
-    bash "$OFFLOAD_HELPER" start "$OFFLOAD_HOST" "$GB10_TS_IP" "$PWD/$ARMDIR" \
+    bash "$OFFLOAD_HELPER" start "$OFFLOAD_HOST" "$GB10_TS_IP" "$ARMDIR_ABS" \
     > "$ARMDIR/offload_start.log" 2>&1 \
     || { echo "FAIL: offload proxy start"; cat "$ARMDIR/offload_start.log"; exit 5; }
   cat "$ARMDIR/offload_start.log"
@@ -650,10 +1019,10 @@ if [[ "$OFFLOAD_AGENT" == "1" ]]; then
   echo "proxy OK (OFFLOADED to $OFFLOAD_HOST:$OFFLOAD_PROXY_PORT)"
 else
   LUMO_PROXY_FORCE_TEMPERATURE="${DEPLOY_FORCE_TEMP:-0.6}" \
-  LUMO_PROXY_REQUEST_DUMP_DIR="$PWD/$ARMDIR/proxy_request_dumps" \
-  LUMO_PROXY_PAIR_DUMP_DIR="$PWD/$ARMDIR/proxy_pair_dumps" \
-  LUMO_PROXY_LOG_PATH="$PWD/$ARMDIR/proxy.log" \
-  LUMO_PROXY_NOHUP_PATH="$PWD/$ARMDIR/proxy.nohup" \
+  LUMO_PROXY_REQUEST_DUMP_DIR="$ARMDIR_ABS/proxy_request_dumps" \
+  LUMO_PROXY_PAIR_DUMP_DIR="$ARMDIR_ABS/proxy_pair_dumps" \
+  LUMO_PROXY_LOG_PATH="$ARMDIR_ABS/proxy.log" \
+  LUMO_PROXY_NOHUP_PATH="$ARMDIR_ABS/proxy.nohup" \
   LUMO_PROXY_STATE_ROOT="/tmp/fr13_bigdenom_proxy_state_${ARM}" \
   bash scripts/swe_x86_helpers/relaunch_proxy.sh > "$ARMDIR/proxy_launch.log" 2>&1
   sleep 3
@@ -688,12 +1057,29 @@ if ssh -o BatchMode=yes -o ConnectTimeout=15 "$EVAL_HOST" \
   EVAL_ARGS=(--eval-host "$EVAL_HOST")
   echo "eval offload: $EVAL_HOST reachable" | tee "$ARMDIR/eval_offload_preflight.txt"
 else
-  echo "WARN: eval offload $EVAL_HOST UNREACHABLE — eval attempted locally" | tee "$ARMDIR/eval_offload_preflight.txt"
+  if [[ -n "$FIXED32_MODE" ]]; then
+    echo "FAIL: fixed32 evaluator offload $EVAL_HOST is unavailable" \
+      | tee "$ARMDIR/eval_offload_preflight.txt"
+    exit 5
+  fi
+  echo "WARN: eval offload $EVAL_HOST UNREACHABLE — eval attempted locally" \
+    | tee "$ARMDIR/eval_offload_preflight.txt"
 fi
 
 # ---- SWE window: /metrics bracketing + codex loop ----
 WALL_ARGS=()
 [[ -n "${AGENT_WALL_S:-}" ]] && WALL_ARGS=(--agent-wall-s "$AGENT_WALL_S")
+FIXED32_RUNNER_ARGS=()
+if [[ -n "$FIXED32_MODE" ]]; then
+  FIXED32_RUNNER_ARGS=(
+    --fixed32-container "$CONTAINER"
+    --fixed32-producer-pid "$FIXED32_PRODUCER_PID"
+    --fixed32-mode "$FIXED32_MODE"
+    --fixed32-flush-request "$FIXED32_REQUEST_PATH"
+    --fixed32-flush-ack "$FIXED32_ACK_PATH"
+    --fixed32-boundary-snapshot "$FIXED32_BOUNDARY_SNAPSHOT_PATH"
+  )
+fi
 
 # NETWORK-LINK WATCHDOG (OFFLOAD only; req #4/#5) — see fr13_bigdenom_swe_serve.sh
 LINKLOG="$ARMDIR/offload_link_state.log"
@@ -724,6 +1110,118 @@ if [[ "$OFFLOAD_AGENT" == "1" ]]; then
 fi
 
 curl -fsS "http://127.0.0.1:$PORT/metrics" > "$ARMDIR/metrics_before_swe.txt"
+if [[ -n "$FIXED32_MODE" ]]; then
+  .venv/bin/python - \
+    "$ARMDIR/metrics_before_swe.txt" \
+    "$ARMDIR/logs/fr13_fixed32_work_census.jsonl" \
+    "$ARMDIR/fixed32_ready_ack.json" \
+    "$FIXED32_MODE" \
+    "$ARMDIR/fixed32_pretask_zero_traffic.json" <<'PY'
+import hashlib
+import json
+import math
+import sys
+from pathlib import Path
+
+
+metrics_path = Path(sys.argv[1])
+census_path = Path(sys.argv[2])
+ready_path = Path(sys.argv[3])
+mode = sys.argv[4]
+output_path = Path(sys.argv[5])
+
+
+def counter(name):
+    values = []
+    for line in metrics_path.read_text(encoding="utf-8").splitlines():
+        metric_name = line.split(None, 1)[0].split("{", 1)[0]
+        if metric_name == name:
+            values.append(float(line.rsplit(None, 1)[-1]))
+    if len(values) != 1:
+        raise SystemExit(
+            f"expected one pretask metric {name}, got {len(values)}"
+        )
+    value = values[0]
+    if not math.isfinite(value) or value != 0:
+        raise SystemExit(f"pretask metric {name} is nonzero: {value!r}")
+    return int(value)
+
+
+required_pretask_metrics = (
+    "vllm:fr13_decode_forward_gpu_seconds_total",
+    "vllm:fr13_decode_forward_gpu_steps_total",
+    "vllm:fr13_decode_forward_gpu_drafts_total",
+    "vllm:fr13_decode_step_wall_seconds_total",
+    "vllm:fr13_decode_step_wall_drafts_total",
+    "vllm:fr13_decode_step_wall_steps_total",
+    "vllm:fr13_decode_step_wall_attempts_total",
+    "vllm:fr13_decode_step_wall_rejected_total",
+    "vllm:spec_decode_num_drafts_total",
+    "vllm:spec_decode_num_draft_tokens_total",
+)
+pretask_values = {
+    name: counter(name) for name in required_pretask_metrics
+}
+
+
+ready = json.loads(ready_path.read_text(encoding="utf-8"))
+ready_counters = ready.get("counters")
+if (
+    ready.get("mode") != mode
+    or ready.get("generation") != 0
+    or ready.get("action") != "ready"
+    or ready.get("status") != "ok"
+    or not isinstance(ready_counters, dict)
+    or ready_counters.get("pure_decode_forward_steps") != 0
+    or ready_counters.get("complete_work_census_events") != 0
+    or ready_counters.get("work_census_first_forward_step") is not None
+    or ready_counters.get("work_census_last_forward_step") is not None
+    or ready_counters.get("sfwd_pending") != 0
+    or ready_counters.get("dfwd_pending") != 0
+    or ready_counters.get("cfwd_pending") != 0
+):
+    raise SystemExit("fixed32 ready ack is not a zero-work baseline")
+
+census_bytes = census_path.read_bytes() if census_path.exists() else b""
+if census_bytes.strip():
+    raise SystemExit("fixed32 work census is nonempty before canonical tasks")
+metrics_bytes = metrics_path.read_bytes()
+payload = {
+    "schema": "fr13-fixed32-pretask-zero-traffic-v1",
+    "mode": mode,
+    "no_positive_probe": True,
+    "generation_probe_commands_executed": 0,
+    "metrics": {
+        "path": str(metrics_path.resolve()),
+        "sha256": hashlib.sha256(metrics_bytes).hexdigest(),
+        "spec_drafts": pretask_values["vllm:spec_decode_num_drafts_total"],
+        "spec_tokens": pretask_values[
+            "vllm:spec_decode_num_draft_tokens_total"
+        ],
+    },
+    "work_census": {
+        "path": str(census_path.resolve()),
+        "exists": census_path.exists(),
+        "bytes": len(census_bytes),
+        "sha256": hashlib.sha256(census_bytes).hexdigest(),
+    },
+    "ready_ack": {
+        "path": str(ready_path.resolve()),
+        "sha256": hashlib.sha256(ready_path.read_bytes()).hexdigest(),
+        "generation": ready["generation"],
+    },
+}
+temporary = output_path.with_name(output_path.name + ".tmp")
+temporary.write_text(
+    json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+    + "\n",
+    encoding="utf-8",
+)
+temporary.replace(output_path)
+print("fixed32 pretask zero-traffic baseline OK")
+PY
+  (( $? == 0 )) || { echo "FAIL: fixed32 pretask zero-traffic baseline"; exit 5; }
+fi
 S0=$(date +%s)
 .venv/bin/python scripts/run_swe_bench_q36_a.py \
   --subset "$SUBSET" \
@@ -731,6 +1229,7 @@ S0=$(date +%s)
   --concurrency "$SWE_CONCURRENCY" \
   --eval-timeout-s "${EVAL_TIMEOUT_S:-1800}" \
   "${WALL_ARGS[@]}" \
+  "${FIXED32_RUNNER_ARGS[@]}" \
   "${EVAL_ARGS[@]}" \
   "${AGENT_ARGS[@]}" \
   > "$ARMDIR/swe_orchestrator.log" 2>&1
@@ -745,14 +1244,212 @@ tail -5 "$ARMDIR/swe_orchestrator.log"
 
 # ---- OFFLOAD: fetch alienware pair-dumps back (resilient rsync, req #3) ----
 if [[ "$OFFLOAD_AGENT" == "1" ]]; then
-  LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
-    bash "$OFFLOAD_HELPER" fetch "$OFFLOAD_HOST" "$PWD/$ARMDIR" \
-    > "$ARMDIR/offload_fetch.log" 2>&1 || echo "WARN: offload fetch errors (see offload_fetch.log)"
+  if LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
+      bash "$OFFLOAD_HELPER" fetch "$OFFLOAD_HOST" "$ARMDIR_ABS" \
+      > "$ARMDIR/offload_fetch.log" 2>&1; then
+    printf 'ok\n' > "$ARMDIR/offload_fetch_status.txt"
+  elif [[ -n "$FIXED32_MODE" ]]; then
+    printf 'error\n' > "$ARMDIR/offload_fetch_status.txt"
+    echo "FAIL: fixed32 offload pair-dump fetch failed"
+    SWERC=13
+  else
+    echo "WARN: offload fetch errors (see offload_fetch.log)"
+  fi
   cat "$ARMDIR/offload_fetch.log"
   if [[ -f "$LINK_DEAD_MARKER" ]]; then
     echo "OFFLOAD_LINK_DEAD: $(cat "$LINK_DEAD_MARKER") — deploy-speed window for $ARM DISCARDED" \
       | tee "$ARMDIR/DEPLOY_SPEED_DISCARDED.flag"
     SWERC=12
+  fi
+fi
+
+if [[ -n "$FIXED32_MODE" ]]; then
+  if ! .venv/bin/python - \
+      "$ARMDIR/metrics_before_swe.txt" \
+      "$ARMDIR/metrics_after_swe.txt" \
+      "$EXPECT_RATIO" <<'PY'
+import math
+import sys
+from pathlib import Path
+
+
+before_path, after_path = Path(sys.argv[1]), Path(sys.argv[2])
+expected_ratio = float(sys.argv[3])
+
+
+def value(path, name):
+    values = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        metric_name = line.split(None, 1)[0].split("{", 1)[0]
+        if metric_name == name:
+            values.append(float(line.rsplit(None, 1)[-1]))
+    if len(values) != 1:
+        raise SystemExit(
+            f"{path}: expected one metric {name}, got {len(values)}"
+        )
+    result = values[0]
+    if not math.isfinite(result) or result < 0:
+        raise SystemExit(f"{path}: invalid metric {name}: {result!r}")
+    return result
+
+
+draft_name = "vllm:spec_decode_num_drafts_total"
+token_name = "vllm:spec_decode_num_draft_tokens_total"
+drafts = value(after_path, draft_name) - value(before_path, draft_name)
+tokens = value(after_path, token_name) - value(before_path, token_name)
+if drafts <= 0:
+    raise SystemExit(f"canonical-task spec engagement is empty: drafts={drafts}")
+ratio = tokens / drafts
+if abs(ratio - expected_ratio) >= 1e-9:
+    raise SystemExit(
+        "canonical-task draft shape mismatch: "
+        f"draft_tokens/drafts={ratio} expected={expected_ratio}"
+    )
+print(
+    "canonical-task spec engagement OK: "
+    f"drafts delta={drafts} draft_tokens/drafts={ratio}"
+)
+PY
+  then
+    echo "FAIL: fixed32 canonical-task spec engagement"
+    SWERC=15
+  fi
+
+  docker logs "$CONTAINER" > "$ARMDIR/docker_after_tasks.log" 2>&1
+  if grep -q "^FR13_SUBTREE_PARALLEL=1$" "$ARMDIR/container_env.txt"; then
+    grep -F -m1 "[FR13_SUBTREE_PARALLEL ENGAGED]" \
+      "$ARMDIR/docker_after_tasks.log" >/dev/null \
+      || { echo "FAIL: fixed32 canonical tasks emitted no subtree runtime needle"; SWERC=15; }
+  fi
+  grep -F -m1 \
+    "[FR13_FIXED32] topology engaged: mode=$FIXED32_MODE" \
+    "$ARMDIR/docker_after_tasks.log" >/dev/null \
+    || { echo "FAIL: fixed32 canonical tasks emitted no topology needle"; SWERC=15; }
+  grep -F -m1 "[FR13_FIXED32_WORK] engaged:" \
+    "$ARMDIR/docker_after_tasks.log" >/dev/null \
+    || { echo "FAIL: fixed32 canonical tasks emitted no work needle"; SWERC=15; }
+
+  if ! .venv/bin/python - \
+      "$SUBSET" \
+      "$ARMDIR/proxy_pair_dumps" \
+      "$FIXED32_MODE" \
+      "$ARMDIR/fixed32_positive_traffic_audit.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+
+subset_path = Path(sys.argv[1])
+pair_root = Path(sys.argv[2])
+mode = sys.argv[3]
+output_path = Path(sys.argv[4])
+
+
+def strict_pairs(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key {key!r}")
+        result[key] = value
+    return result
+
+
+def positive_usage(value):
+    if isinstance(value, list):
+        return any(positive_usage(item) for item in value)
+    if not isinstance(value, dict):
+        return False
+    usage = value.get("usage")
+    if isinstance(usage, dict):
+        for key in {
+            "input_tokens",
+            "output_tokens",
+            "total_tokens",
+            "prompt_tokens",
+            "completion_tokens",
+            "cache_read_input_tokens",
+        }:
+            item = usage.get(key)
+            if (
+                isinstance(item, int)
+                and not isinstance(item, bool)
+                and item > 0
+            ):
+                return True
+    return any(positive_usage(item) for item in value.values())
+
+
+subset = json.loads(subset_path.read_text(encoding="utf-8"))
+task_ids = subset.get("instance_ids")
+if (
+    not isinstance(task_ids, list)
+    or not task_ids
+    or any(not isinstance(task_id, str) or not task_id for task_id in task_ids)
+    or len(task_ids) != len(set(task_ids))
+):
+    raise SystemExit("fixed32 subset has invalid instance_ids")
+bindings = {task_id: 0 for task_id in task_ids}
+positive_pairs = 0
+zero_usage_pairs = 0
+for pair_path in sorted(pair_root.iterdir()):
+    if not pair_path.is_file():
+        continue
+    pair = json.loads(
+        pair_path.read_text(encoding="utf-8"),
+        object_pairs_hook=strict_pairs,
+        parse_constant=lambda value: (_ for _ in ()).throw(
+            ValueError(f"nonfinite JSON constant {value}")
+        ),
+    )
+    response = pair.get("response")
+    request = pair.get("request")
+    if not isinstance(request, dict) or not isinstance(response, dict):
+        raise SystemExit(f"{pair_path}: incomplete proxy pair")
+    if not positive_usage(response):
+        zero_usage_pairs += 1
+        continue
+    positive_pairs += 1
+    request_text = json.dumps(
+        request, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+    )
+    matched = [
+        task_id
+        for task_id in task_ids
+        if f"# SWE-Bench task: {task_id}" in request_text
+    ]
+    if len(matched) != 1:
+        raise SystemExit(
+            f"{pair_path}: positive-usage request binds {len(matched)} tasks"
+        )
+    bindings[matched[0]] += 1
+missing = sorted(task_id for task_id, count in bindings.items() if count == 0)
+if missing or positive_pairs == 0:
+    raise SystemExit(
+        f"canonical tasks lack positive proxy traffic: missing={missing!r}"
+    )
+payload = {
+    "schema": "fr13-fixed32-positive-traffic-audit-v1",
+    "mode": mode,
+    "all_positive_usage_pairs_bound_to_one_canonical_task": True,
+    "positive_pair_count": positive_pairs,
+    "zero_usage_pair_count": zero_usage_pairs,
+    "task_positive_pair_counts": bindings,
+}
+temporary = output_path.with_name(output_path.name + ".tmp")
+temporary.write_text(
+    json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+    + "\n",
+    encoding="utf-8",
+)
+temporary.replace(output_path)
+print(
+    "fixed32 positive traffic audit OK: "
+    f"positive_pairs={positive_pairs} tasks={len(task_ids)}"
+)
+PY
+  then
+    echo "FAIL: fixed32 positive traffic was not exclusively canonical-task bound"
+    SWERC=16
   fi
 fi
 
@@ -782,8 +1479,12 @@ for m in metas:
 print(json.dumps(health, indent=2))
 PY
 
-NPAIR=$(ls "$ARMDIR/proxy_pair_dumps" 2>/dev/null | wc -l)
+NPAIR=$(find "$ARMDIR/proxy_pair_dumps" -maxdepth 1 -type f 2>/dev/null | wc -l)
 echo "pair dumps captured: $NPAIR"
+if [[ -n "$FIXED32_MODE" && "$NPAIR" -eq 0 ]]; then
+  echo "FAIL: fixed32 captured zero proxy pair dumps"
+  SWERC=14
+fi
 
 echo "ARM_DONE $ARM kind=$KIND swerc=$SWERC"
 exit $SWERC

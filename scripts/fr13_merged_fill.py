@@ -93,18 +93,33 @@ def build_cat33333_columns(assembled_rows, device, pad_token, width=3, vocab_siz
     return spine_tokens, wide_topk
 
 
-def build_tail_columns(tail_rows, device, pad_token, tail_len, vocab_size=None):
-    """Build the TAIL spine tensors (accept>5 mtp_k=5 mode): a PURE Arctic chain appended after the
-    MTP head. The tail tree's chain nodes are all rk==0, so the packer reads ONLY _fr10_spine_tokens[pp]
-    for them -- NO wide_topk. Returns a list of `tail_len` int64 [batch] tensors on `device` (spine token
-    per tail depth), to be APPENDED to the native MTP head's _fr10_spine_tokens (5 -> 5+tail_len).
+def build_tail_and_hydra_columns(
+    tail_rows,
+    chain_rows,
+    device,
+    pad_token,
+    tail_len,
+    branch_chains=((1, 4),),
+    carry_short_chains=False,
+    vocab_size=None,
+    work_counters=None,
+):
+    """Build Tail spine and optional Hydra path columns with one device construction.
 
-    tail_rows: list length batch; entry b = a list of `tail_len` Arctic chain tokens for row b, OR None
-               (cold/no-match -> PAD every tail depth: Gate-1 lossless, never matches past the head).
-    Same OOB bounds-guard as build_cat33333_columns (an OOB Arctic id = CUDA device-side assert).
+    The packed tensor is column-major ``[tail_len + hydra_paths, batch]``.
+    Each returned tensor is therefore a contiguous row view. ``chain_rows=None``
+    disables Hydra packing; this is the Tail-only fast path. When
+    ``carry_short_chains`` is true, a physical chain may be longer than its
+    Arctic lookup: the remaining columns repeat that branch's last in-vocab
+    token. Fixed-32 uses this for the four permanently inactive rank-2 slots.
     """
     B = len(tail_rows)
     assert B > 0, "empty batch"
+    assert tail_len >= 0, f"tail_len must be non-negative, got {tail_len}"
+    if chain_rows is not None:
+        assert len(chain_rows) == B, (
+            f"tail/hydra batch mismatch: {B} != {len(chain_rows)}"
+        )
     vs = int(vocab_size) if vocab_size is not None else None
     pad = int(pad_token)
     if vs is not None and not (0 <= pad < vs):
@@ -121,11 +136,123 @@ def build_tail_columns(tail_rows, device, pad_token, tail_len, vocab_size=None):
             return pad
         return v
 
-    tail_tokens = []
+    paths = []
+    if chain_rows is not None:
+        for root_rank, chain_len in branch_chains:
+            root_rank = int(root_rank)
+            chain_len = int(chain_len)
+            assert root_rank > 0, "hydra rescue roots must be non-spine ranks"
+            assert chain_len >= 0, "hydra rescue chain lengths must be non-negative"
+            for j in range(chain_len):
+                paths.append(((root_rank,) + (0,) * (j + 1), root_rank, j))
+
+    def hnode(row, root_rank, j):
+        toks = row.get(root_rank) if isinstance(row, dict) else None
+        if not toks:
+            return pad
+        if j >= len(toks):
+            if not carry_short_chains:
+                return pad
+            if work_counters is not None:
+                work_counters["rescue_carry_slots"] = (
+                    int(work_counters.get("rescue_carry_slots", 0)) + 1
+                )
+            # Do not revisit/count an OOB source for every carry column. Find
+            # the most recent usable lookup result once per physical column.
+            for token in reversed(toks):
+                if token is None:
+                    continue
+                candidate = int(token)
+                if vs is None or 0 <= candidate < vs:
+                    return candidate
+            return pad
+        if toks[j] is None:
+            return pad
+        v = int(toks[j])
+        if vs is not None and not (0 <= v < vs):
+            global _OOB_DROPPED, _OOB_LAST
+            _OOB_DROPPED += 1
+            _OOB_LAST = ("hydra", int(root_rank), int(j), v)
+            return pad
+        return v
+
+    host_columns = []
     for j in range(tail_len):
-        col = [tnode(tail_rows[b], j) for b in range(B)]
-        tail_tokens.append(torch.tensor(col, dtype=torch.int64, device=device))
+        host_columns.append([tnode(tail_rows[b], j) for b in range(B)])
+
+    # Preserve the historical Hydra OOB visitation order (batch, then path)
+    # while transposing the host values into contiguous device-side rows.
+    hydra_columns = [[] for _path in paths]
+    if chain_rows is not None:
+        for b in range(B):
+            for col, (_path, root_rank, j) in enumerate(paths):
+                hydra_columns[col].append(hnode(chain_rows[b], root_rank, j))
+    host_columns.extend(hydra_columns)
+
+    if not host_columns:
+        return [], {}
+    packed = torch.tensor(
+        host_columns,
+        dtype=torch.int64,
+        device=device,
+    )
+    tail_tokens = [packed[j] for j in range(tail_len)]
+    path_tokens = {
+        path: packed[tail_len + col]
+        for col, (path, _root_rank, _j) in enumerate(paths)
+    }
+    return tail_tokens, path_tokens
+
+
+def build_tail_columns(tail_rows, device, pad_token, tail_len, vocab_size=None):
+    """Build the TAIL spine tensors (accept>5 mtp_k=5 mode): a PURE Arctic chain appended after the
+    MTP head. The tail tree's chain nodes are all rk==0, so the packer reads ONLY _fr10_spine_tokens[pp]
+    for them -- NO wide_topk. Returns a list of `tail_len` int64 [batch] tensors on `device` (spine token
+    per tail depth), to be APPENDED to the native MTP head's _fr10_spine_tokens (5 -> 5+tail_len).
+
+    tail_rows: list length batch; entry b = a list of `tail_len` Arctic chain tokens for row b, OR None
+               (cold/no-match -> PAD every tail depth: Gate-1 lossless, never matches past the head).
+    Same OOB bounds-guard as build_cat33333_columns (an OOB Arctic id = CUDA device-side assert).
+    """
+    tail_tokens, _path_tokens = build_tail_and_hydra_columns(
+        tail_rows,
+        None,
+        device,
+        pad_token,
+        tail_len,
+        vocab_size=vocab_size,
+    )
     return tail_tokens
+
+
+def build_hydra_path_columns(
+    chain_rows,
+    device,
+    pad_token,
+    branch_chains=((1, 4),),
+    carry_short_chains=False,
+    vocab_size=None,
+):
+    """Build full-path token columns for Arctic continuations off root siblings.
+
+    ``chain_rows[b]`` is ``{root_rank: [continuation tokens...]}`` for batch
+    row ``b``. The returned dict is keyed by the actual tree path, because
+    ``(1,0)`` and ``(2,0)`` cannot use the all-zero spine's depth-indexed
+    ``wide_topk`` slot. Missing, short, or OOB rows are pad-filled losslessly.
+    """
+    B = len(chain_rows)
+    assert B > 0, "empty batch"
+    _tail_tokens, path_tokens = build_tail_and_hydra_columns(
+        [None] * B,
+        chain_rows,
+        device,
+        pad_token,
+        0,
+        branch_chains=branch_chains,
+        carry_short_chains=carry_short_chains,
+        vocab_size=vocab_size,
+    )
+    return path_tokens
 
 
 def build_tail_branch_columns(branch_rows, device, pad_token, head_depth, tail_branch_depths,

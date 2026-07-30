@@ -39,6 +39,9 @@ _INGESTED_LEN: dict = {}  # req_id -> #tokens already fed to Arctic add_active_r
 STATS = {
     "started": 0, "retired": 0, "ingested": 0, "prewarm_seeded": 0,
     "tail_speculate_fired": 0, "tail_hit": 0, "tail_all_cold": 0, "tail_branch_real": 0,
+    "hydra_speculate_fired": 0, "hydra_hit": 0, "hydra_real": 0,
+    "hydra_rank2_hit": 0, "hydra_rank3_hit": 0,
+    "fixed32_events": 0, "fixed32_rows": 0, "fixed32_carry_slots": 0,
 }
 
 
@@ -87,11 +90,17 @@ def set_cache_for_test(mock):
 
 def reset_for_test():
     global _CACHE, _CACHE_INIT_FAILED, _COMMITTED, _INGESTED_LEN, _PREWARMED
+    global _TAIL_WIDE_TOPK, _TAIL_PATH_TOKENS
+    global _FIXED32_WORK_SERIAL, _FIXED32_LAST_WORK
     _CACHE = None
     _CACHE_INIT_FAILED = False
     _PREWARMED = False
     _COMMITTED = {}
     _INGESTED_LEN = {}
+    _TAIL_WIDE_TOPK = {}
+    _TAIL_PATH_TOKENS = {}
+    _FIXED32_WORK_SERIAL = 0
+    _FIXED32_LAST_WORK = None
     for k in STATS:
         STATS[k] = 0
 
@@ -227,6 +236,9 @@ def retire_requests(cache, gone_req_ids):
 # has the code; do not resurrect without a fresh gate — Front-2/merge was a closed no-go.
 
 _TAIL_WIDE_TOPK = {}
+_TAIL_PATH_TOKENS = {}
+_FIXED32_WORK_SERIAL = 0
+_FIXED32_LAST_WORK = None
 
 
 def get_tail_wide_topk():
@@ -235,9 +247,16 @@ def get_tail_wide_topk():
     return _TAIL_WIDE_TOPK
 
 
+def get_tail_path_tokens():
+    """Hydra conditional-chain columns keyed by full tree path from the last call."""
+    return _TAIL_PATH_TOKENS
+
+
 def decide_tail(cache, spec_row_req_ids, mtp_head_per_depth, head_depth, tail_len,
                 device, pad_token, max_spec_tokens=32, max_spec_factor=4.0, min_token_prob=0.0,
-                vocab_size=None):
+                vocab_size=None, hydra_seed_per_rank=None,
+                hydra_branch_chains=((1, 4),), physical_branch_chains=None,
+                carry_short_chains=False, strict=False, work_counters=None):
     """accept>5 TAIL (mtp_k=head_depth mode): the MTP head (depths 0..head_depth-1) is 100% native
     (byte-identical baseline, filled by the drafter's own forwards); this ONLY produces the deep Arctic
     CHAIN past the head (depths head_depth..head_depth+tail_len-1) to APPEND to _fr10_spine_tokens.
@@ -248,9 +267,20 @@ def decide_tail(cache, spec_row_req_ids, mtp_head_per_depth, head_depth, tail_le
 
     mtp_head_per_depth: list length head_depth; entry d is a per-row-indexable of the native MTP spine
                         token at depth d (e.g. _fr10_spine_tokens[d].cpu().tolist()), row order ==
-                        spec_row_req_ids order (req_id-keyed by the caller)."""
+                        spec_row_req_ids order (req_id-keyed by the caller).
+
+    ``hydra_seed_per_rank`` additionally runs flat Arctic walks conditioned
+    only on committed tokens plus each root sibling. Those candidates remain
+    distribution-lossless through the parent-aware committer, but Hydra23 is
+    a candidate trade and is not monotone in acceptance versus tail6."""
     from fr13_arctic_suffix_adapter import arctic_draft_to_suffix_rel, arctic_tree_to_suffix_rel
-    from fr13_merged_fill import build_tail_columns, build_tail_branch_columns
+    from fr13_merged_fill import (
+        build_tail_branch_columns,
+        build_tail_and_hydra_columns,
+    )
+    global _TAIL_WIDE_TOPK, _TAIL_PATH_TOKENS
+    _TAIL_WIDE_TOPK = {}
+    _TAIL_PATH_TOKENS = {}
     # Direction-2 d6-handoff repair (default 0 => spine-only == shipped tail6, byte-identical, NO drift).
     # The WORKER DROPS FR13_* env, so read the launcher-written /logs sidecar (like tail_on/merged_on) for
     # the branch value "<tail_branches> <tail_branch_depths>". When on: use the arctic TREE adapter (ranked
@@ -264,24 +294,75 @@ def decide_tail(cache, spec_row_req_ids, mtp_head_per_depth, head_depth, tail_le
     except Exception:
         _tb, _tbd = 0, 0
     _branched = _tb > 0 and _tbd > 0
+    _hydra_on = bool(hydra_seed_per_rank)
+    if _hydra_on and _branched:
+        raise ValueError("hydra conditional chains and tail sibling branches are mutually exclusive")
+    _hydra_chains = tuple(
+        (int(root_rank), int(chain_len))
+        for root_rank, chain_len in hydra_branch_chains
+    )
+    _physical_chains = (
+        _hydra_chains
+        if physical_branch_chains is None
+        else tuple(
+            (int(root_rank), int(chain_len))
+            for root_rank, chain_len in physical_branch_chains
+        )
+    )
+    B = len(spec_row_req_ids)
+    if _hydra_on:
+        if any(root_rank <= 0 or chain_len < 0 for root_rank, chain_len in _hydra_chains):
+            raise ValueError(f"invalid hydra branch chains: {_hydra_chains!r}")
+        lookup_lengths = dict(_hydra_chains)
+        if (
+            len(lookup_lengths) != len(_hydra_chains)
+            or any(root_rank <= 0 or chain_len < 0
+                   for root_rank, chain_len in _physical_chains)
+            or any(
+                root_rank not in lookup_lengths
+                or chain_len < lookup_lengths[root_rank]
+                for root_rank, chain_len in _physical_chains
+            )
+            or set(lookup_lengths) != {root_rank for root_rank, _ in _physical_chains}
+        ):
+            raise ValueError(
+                "physical hydra chains must contain every lookup chain at "
+                f"equal-or-greater length: lookup={_hydra_chains!r} "
+                f"physical={_physical_chains!r}"
+            )
+        for root_rank, chain_len in _hydra_chains:
+            seeds = hydra_seed_per_rank.get(root_rank)
+            if chain_len and (seeds is None or len(seeds) != B):
+                raise ValueError(
+                    f"hydra root rank {root_rank} needs {B} row-aligned seeds"
+                )
     _to_rel = arctic_tree_to_suffix_rel if _branched else arctic_draft_to_suffix_rel
 
-    B = len(spec_row_req_ids)
     if B == 0 or cache is None:
         return None
     tail_rows = []
     branch_rows = [None] * B
+    hydra_rows = []
     any_hit = False
     for b in range(B):
         req_id = spec_row_req_ids[b]
         head = [int(mtp_head_per_depth[d][b]) for d in range(head_depth)]
-        pattern = list(_COMMITTED.get(req_id, [])) + head
+        committed = list(_COMMITTED.get(req_id, []))
+        pattern = committed + head
         row = None
         try:
             draft = cache.speculate(
                 req_id, pattern, max_spec_tokens=max_spec_tokens,
                 max_spec_factor=max_spec_factor, min_token_prob=min_token_prob,
                 use_tree_spec=_branched)
+            if work_counters is not None:
+                work_counters["main_lookup_calls"] = (
+                    int(work_counters.get("main_lookup_calls", 0)) + 1
+                )
+                work_counters["main_lookup_tokens"] = (
+                    int(work_counters.get("main_lookup_tokens", 0))
+                    + int(max_spec_tokens)
+                )
             STATS["tail_speculate_fired"] = STATS.get("tail_speculate_fired", 0) + 1
             rel = _to_rel(draft, max_rel=tail_len)  # {0..: [ranked tok,...]} = depths head+..
             row = [(rel[j][0] if rel.get(j) else None) for j in range(tail_len)]
@@ -297,16 +378,281 @@ def decide_tail(cache, spec_row_req_ids, mtp_head_per_depth, head_depth, tail_le
                 any_hit = True
                 STATS["tail_hit"] = STATS.get("tail_hit", 0) + 1
         except Exception:
+            if strict:
+                raise
             row = None
         tail_rows.append(row)
+        hydra_row = {}
+        if _hydra_on:
+            for root_rank, chain_len in _hydra_chains:
+                seeds = hydra_seed_per_rank.get(root_rank)
+                if chain_len == 0:
+                    hydra_row[root_rank] = []
+                    continue
+                seed = int(seeds[b])
+                try:
+                    hydra_draft = cache.speculate(
+                        req_id,
+                        committed + [seed],
+                        max_spec_tokens=chain_len,
+                        max_spec_factor=max_spec_factor,
+                        min_token_prob=min_token_prob,
+                        use_tree_spec=False,
+                    )
+                    if work_counters is not None:
+                        call_key = f"rank{int(root_rank)}_lookup_calls"
+                        token_key = f"rank{int(root_rank)}_lookup_tokens"
+                        work_counters[call_key] = (
+                            int(work_counters.get(call_key, 0)) + 1
+                        )
+                        work_counters[token_key] = (
+                            int(work_counters.get(token_key, 0))
+                            + int(chain_len)
+                        )
+                    STATS["hydra_speculate_fired"] = (
+                        STATS.get("hydra_speculate_fired", 0) + 1
+                    )
+                    hydra_rel = arctic_draft_to_suffix_rel(
+                        hydra_draft, max_rel=chain_len
+                    )
+                    raw_chain = [
+                        hydra_rel[j][0] if hydra_rel.get(j) else None
+                        for j in range(chain_len)
+                    ]
+                    real = sum(token is not None for token in raw_chain)
+                    STATS["hydra_real"] = STATS.get("hydra_real", 0) + real
+                    if real:
+                        STATS["hydra_hit"] = STATS.get("hydra_hit", 0) + 1
+                        rank_key = f"hydra_rank{root_rank + 1}_hit"
+                        STATS[rank_key] = STATS.get(rank_key, 0) + 1
+                    # A conditional path must never borrow the main spine's
+                    # token. On a short/cold Arctic result, carry this branch's
+                    # own latest valid token (starting at its root seed).
+                    hydra_chain = []
+                    prev = seed
+                    for token in raw_chain:
+                        if token is None:
+                            hydra_chain.append(prev)
+                            continue
+                        token = int(token)
+                        hydra_chain.append(token)
+                        if vocab_size is None or 0 <= token < int(vocab_size):
+                            prev = token
+                    hydra_row[root_rank] = hydra_chain
+                except Exception:
+                    if strict:
+                        raise
+                    hydra_row[root_rank] = [seed] * chain_len
+        hydra_rows.append(hydra_row if hydra_row else None)
     if not any_hit:
         STATS["tail_all_cold"] = STATS.get("tail_all_cold", 0) + 1
     _maybe_log_engagement()
-    _spine = build_tail_columns(tail_rows, device, pad_token, tail_len, vocab_size=vocab_size)
-    global _TAIL_WIDE_TOPK
+    _spine, _TAIL_PATH_TOKENS = build_tail_and_hydra_columns(
+        tail_rows,
+        hydra_rows if _hydra_on else None,
+        device,
+        pad_token,
+        tail_len,
+        branch_chains=_physical_chains,
+        carry_short_chains=carry_short_chains,
+        vocab_size=vocab_size,
+        work_counters=work_counters,
+    )
     _TAIL_WIDE_TOPK = (build_tail_branch_columns(branch_rows, device, pad_token, head_depth, _tbd, _tb,
                                                  vocab_size=vocab_size) if _branched else {})
     return _spine
+
+
+def decide_fixed32(
+    cache,
+    spec_row_req_ids,
+    mtp_head_per_depth,
+    hydra_seed_per_rank,
+    device,
+    pad_token,
+    *,
+    vocab_size=None,
+    max_spec_factor=4.0,
+    min_token_prob=0.0,
+):
+    """Build the common 31-draft payload for both fixed-32 logical arms.
+
+    Every request executes exactly three Arctic calls: main/6, rank-1/4, and
+    rank-2/2. The physical rank-2 chain has six columns, so its final four
+    columns carry the last valid rank-2 token without another lookup. Together
+    with the native 15-node MTP head this always publishes 31 draft columns.
+    Logical Tail6 versus Hydra27 selection happens later through the sampler
+    validity mask and cannot alter drafter work.
+    """
+    from fr13_fixed32_topology import (
+        ARCTIC_LOOKUP_CHAINS,
+        ARCTIC_LOOKUP_CALLS_PER_REQUEST,
+        ARCTIC_LOOKUP_TOKENS_PER_REQUEST,
+        ARCTIC_MAIN_TAIL_LENGTH,
+        PHYSICAL_BRANCH_CHAINS,
+        PHYSICAL_DRAFTS,
+        RESCUE_CARRY_SLOTS_PER_REQUEST,
+        branch_paths,
+        validate_contract,
+    )
+
+    validate_contract()
+    B = len(spec_row_req_ids)
+    if not 1 <= B <= 4:
+        raise RuntimeError(f"fixed32 drafter requires B in [1,4], got {B}")
+    if cache is None:
+        raise RuntimeError("fixed32 drafter requires a live Arctic cache")
+    if len(mtp_head_per_depth) != N_DEPTH:
+        raise RuntimeError(
+            f"fixed32 drafter requires exactly {N_DEPTH} MTP head depths, "
+            f"got {len(mtp_head_per_depth)}"
+        )
+    if set(hydra_seed_per_rank or {}) != {
+        rank for rank, _length in ARCTIC_LOOKUP_CHAINS
+    }:
+        raise RuntimeError(
+            "fixed32 drafter requires row-aligned rank-1 and rank-2 root seeds"
+        )
+
+    work = {
+        "batch_size": B,
+        "main_lookup_calls": 0,
+        "main_lookup_tokens": 0,
+        "rank1_lookup_calls": 0,
+        "rank1_lookup_tokens": 0,
+        "rank2_lookup_calls": 0,
+        "rank2_lookup_tokens": 0,
+        "rescue_carry_slots": 0,
+    }
+    tail = decide_tail(
+        cache,
+        spec_row_req_ids,
+        mtp_head_per_depth,
+        head_depth=N_DEPTH,
+        tail_len=ARCTIC_MAIN_TAIL_LENGTH,
+        device=device,
+        pad_token=pad_token,
+        max_spec_tokens=ARCTIC_MAIN_TAIL_LENGTH,
+        max_spec_factor=max_spec_factor,
+        min_token_prob=min_token_prob,
+        vocab_size=vocab_size,
+        hydra_seed_per_rank=hydra_seed_per_rank,
+        hydra_branch_chains=ARCTIC_LOOKUP_CHAINS,
+        physical_branch_chains=PHYSICAL_BRANCH_CHAINS,
+        carry_short_chains=True,
+        strict=True,
+        work_counters=work,
+    )
+    paths = get_tail_path_tokens()
+    expected_paths = set(branch_paths(PHYSICAL_BRANCH_CHAINS))
+    if tail is None or len(tail) != ARCTIC_MAIN_TAIL_LENGTH:
+        raise RuntimeError("fixed32 main tail did not produce exactly six columns")
+    if set(paths) != expected_paths:
+        raise RuntimeError(
+            "fixed32 rescue pack path mismatch: "
+            f"expected={sorted(expected_paths)} actual={sorted(paths)}"
+        )
+    if N_DEPTH * 3 + len(tail) + len(paths) != PHYSICAL_DRAFTS:
+        raise RuntimeError("fixed32 drafter pack is not exactly 31 columns")
+    work.update(
+        {
+            "arctic_lookup_calls": (
+                int(work["main_lookup_calls"])
+                + int(work["rank1_lookup_calls"])
+                + int(work["rank2_lookup_calls"])
+            ),
+            "arctic_requested_tokens": (
+                int(work["main_lookup_tokens"])
+                + int(work["rank1_lookup_tokens"])
+                + int(work["rank2_lookup_tokens"])
+            ),
+            "main_tail_columns": len(tail),
+            "rescue_path_columns": len(paths),
+            "merge_fill_calls": 1,
+            "merge_fill_columns": len(tail) + len(paths),
+            "merge_fill_rows": B * (len(tail) + len(paths)),
+        }
+    )
+    expected_work = {
+        "batch_size": B,
+        "main_lookup_calls": B,
+        "main_lookup_tokens": ARCTIC_MAIN_TAIL_LENGTH * B,
+        "rank1_lookup_calls": B,
+        "rank1_lookup_tokens": ARCTIC_LOOKUP_CHAINS[0][1] * B,
+        "rank2_lookup_calls": B,
+        "rank2_lookup_tokens": ARCTIC_LOOKUP_CHAINS[1][1] * B,
+        "rescue_carry_slots": RESCUE_CARRY_SLOTS_PER_REQUEST * B,
+        "arctic_lookup_calls": ARCTIC_LOOKUP_CALLS_PER_REQUEST * B,
+        "arctic_requested_tokens": ARCTIC_LOOKUP_TOKENS_PER_REQUEST * B,
+        "main_tail_columns": ARCTIC_MAIN_TAIL_LENGTH,
+        "rescue_path_columns": sum(length for _rank, length in PHYSICAL_BRANCH_CHAINS),
+        "merge_fill_calls": 1,
+        "merge_fill_columns": (
+            ARCTIC_MAIN_TAIL_LENGTH
+            + sum(length for _rank, length in PHYSICAL_BRANCH_CHAINS)
+        ),
+        "merge_fill_rows": B
+        * (
+            ARCTIC_MAIN_TAIL_LENGTH
+            + sum(length for _rank, length in PHYSICAL_BRANCH_CHAINS)
+        ),
+    }
+    if work != expected_work:
+        raise RuntimeError(
+            "fixed32 drafter observed work drift: "
+            f"actual={work!r} expected={expected_work!r}"
+        )
+
+    STATS["fixed32_events"] += 1
+    STATS["fixed32_rows"] += B
+    STATS["fixed32_carry_slots"] += RESCUE_CARRY_SLOTS_PER_REQUEST * B
+    global _FIXED32_WORK_SERIAL, _FIXED32_LAST_WORK
+    _FIXED32_WORK_SERIAL += 1
+    _FIXED32_LAST_WORK = {
+        "serial": _FIXED32_WORK_SERIAL,
+        **work,
+    }
+    return tail
+
+
+def get_fixed32_drafter_last_work():
+    """Return the last successfully completed fixed32 call-boundary census."""
+    if _FIXED32_LAST_WORK is None:
+        return None
+    return dict(_FIXED32_LAST_WORK)
+
+
+def get_fixed32_drafter_work_serial():
+    """Return the successful fixed32 decision serial without exposing mutable work."""
+    return int(_FIXED32_WORK_SERIAL)
+
+
+def get_fixed32_drafter_work(batch_size):
+    """Return the exact per-event drafter census expected by fixed-32."""
+    from fr13_fixed32_topology import (
+        ARCTIC_LOOKUP_CHAINS,
+        ARCTIC_LOOKUP_CALLS_PER_REQUEST,
+        ARCTIC_LOOKUP_TOKENS_PER_REQUEST,
+        ARCTIC_MAIN_TAIL_LENGTH,
+        MTP_FORWARD_CALLS,
+        PHYSICAL_DRAFTS,
+        RESCUE_CARRY_SLOTS_PER_REQUEST,
+    )
+
+    B = int(batch_size)
+    if not 1 <= B <= 4:
+        raise RuntimeError(f"fixed32 drafter census requires B in [1,4], got {B}")
+    return {
+        "mtp_forward_calls": MTP_FORWARD_CALLS,
+        "mtp_forward_rows": MTP_FORWARD_CALLS * B,
+        "arctic_lookup_calls": ARCTIC_LOOKUP_CALLS_PER_REQUEST * B,
+        "arctic_requested_tokens": ARCTIC_LOOKUP_TOKENS_PER_REQUEST * B,
+        "main_tail_length": ARCTIC_MAIN_TAIL_LENGTH,
+        "rescue_chains": [list(chain) for chain in ARCTIC_LOOKUP_CHAINS],
+        "carry_fill_slots": RESCUE_CARRY_SLOTS_PER_REQUEST * B,
+        "pack_columns": PHYSICAL_DRAFTS,
+        "packed_rows": PHYSICAL_DRAFTS * B,
+    }
 
 
 _LOG_EVERY = 50
@@ -331,9 +677,14 @@ def _maybe_log_engagement():
             _oob_n, _oob_last = 0, None
         logging.getLogger("vllm.fr13_merged_drafter").info(
             "[FR13_MERGED ENGAGED] TAIL[fired=%d hit=%d cold=%d br_real=%d] "
-            "started=%d ingested=%d retired=%d arctic_oob_dropped=%d last_oob=%s",
+            "HYDRA[fired=%d hit=%d rank2_hit=%d rank3_hit=%d real=%d] "
+            "started=%d ingested=%d retired=%d "
+            "arctic_oob_dropped=%d last_oob=%s",
             STATS.get("tail_speculate_fired", 0), STATS.get("tail_hit", 0),
             STATS.get("tail_all_cold", 0), STATS.get("tail_branch_real", 0),
+            STATS.get("hydra_speculate_fired", 0), STATS.get("hydra_hit", 0),
+            STATS.get("hydra_rank2_hit", 0), STATS.get("hydra_rank3_hit", 0),
+            STATS.get("hydra_real", 0),
             STATS["started"], STATS["ingested"], STATS["retired"], _oob_n, _oob_last,
         )
     except Exception:

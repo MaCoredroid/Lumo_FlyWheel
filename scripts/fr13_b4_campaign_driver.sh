@@ -6,17 +6,20 @@
 #
 # Env: BSIZE (vLLM max_num_seqs, default 4), CONC (codex concurrency, default 4),
 #      TAG (arm-name + sidecar + deploy-json suffix, default b4), RUNROOT, SUBSET, WALL.
+#      FR13_{S,D,C}FWD_GPU_TIMER may be set to 0 by clean measurement-off
+#      sequences; each retains the historical default of 1 when unset.
 #
 #   B=1 CLEAN run (user 2026-06-16): B=1 => eff_conc 1, ONE codex task at a time, so
 #   s/fwd_gpu has NO co-residency confound and is directly comparable across shapes:
-#     BSIZE=1 CONC=1 TAG=b1 RUNROOT=output/fr13_b1_swe SUBSET=subset_b4_four.json \
+#     BSIZE=1 CONC=1 TAG=b1 RUNROOT=output/fr13_b1_swe \
+#       SUBSET=output/fr13_b1_gold_swe/subset_b4_four.json \
 #       bash scripts/fr13_b4_campaign_driver.sh
 #
 # Usage line layout: <arm_dir> <vehicle:native|variant> <KIND_or_SPEC_N> <expect> <offload>
 set -uo pipefail
 cd /home/mark/shared/lumoFlyWheel
 RUNROOT=${RUNROOT:-output/fr13_bigdenom_swe}
-SUBSET=${SUBSET:-subset_b4_sixteen.json}
+SUBSET=${SUBSET:-output/fr13_b1_gold_swe/subset_b4_sixteen.json}
 # ALL baked flags + era-fix protections live in the canonical registry —
 # never here, never in seq files (two lost-protection regressions taught
 # this: ATTN_KV_REMAP near-loss, SSE_HEARTBEAT emit-wedge return).
@@ -31,25 +34,109 @@ CONC=${CONC:-4}      # codex task concurrency. B=1 clean => CONC=1 (one task at 
 TAG=${TAG:-b4}       # arm-name / sidecar / deploy-json suffix (keeps B=1 + B=4 separate).
 mkdir -p "$RUNROOT" output/fr13_sfwd_sidecar
 
+FIXED32_MANIFEST_ACTIVE=0
+FIXED32_MANIFEST_FINALIZED=0
+FIXED32_TASK_COUNT=""
+FIXED32_SEQUENCE="scripts/fr13_fixed32_floor_timers_seq.sh"
+if [[ -n "${SEQUENCE_FILE:-}" ]] \
+   && [[ "$(realpath "$SEQUENCE_FILE")" == "$PWD/$FIXED32_SEQUENCE" ]]; then
+  FIXED32_MANIFEST_ACTIVE=1
+  case "$(realpath "$SUBSET")" in
+    "$PWD/output/fr13_b1_gold_swe/subset_b4_four.json")
+      FIXED32_TASK_COUNT=4
+      ;;
+    "$PWD/output/fr13_b1_gold_swe/subset_b4_sixteen.json")
+      FIXED32_TASK_COUNT=16
+      ;;
+    *)
+      echo "FAIL: fixed32 requires the canonical real SWE-Verified 4- or 16-task subset" >&2
+      exit 2
+      ;;
+  esac
+  .venv/bin/python scripts/fr13_runtime_manifest.py \
+    --repo "$PWD" \
+    --profile fixed32 \
+    --sequence "$FIXED32_SEQUENCE" \
+    --output "$RUNROOT/runtime_manifest.at_launch.json" \
+    || { echo "FAIL: fixed32 launch manifest"; exit 2; }
+  .venv/bin/python scripts/fr13_fixed32_contract.py external-manifest \
+    --repo "$PWD" \
+    --output "$RUNROOT/external_manifest.at_launch.json" \
+    || { echo "FAIL: fixed32 external launch manifest"; exit 2; }
+fi
+
+finalize_fixed32_manifest() {
+  (( FIXED32_MANIFEST_ACTIVE == 1 )) || return 0
+  (( FIXED32_MANIFEST_FINALIZED == 0 )) || return 0
+  FIXED32_MANIFEST_FINALIZED=1
+  .venv/bin/python scripts/fr13_runtime_manifest.py \
+    --repo "$PWD" \
+    --profile fixed32 \
+    --sequence "$FIXED32_SEQUENCE" \
+    --output "$RUNROOT/runtime_manifest.at_end.json" \
+    || return 1
+  cmp -s \
+    "$RUNROOT/runtime_manifest.at_launch.json" \
+    "$RUNROOT/runtime_manifest.at_end.json" \
+    || {
+      echo "FAIL: fixed32 runtime/source manifest changed during campaign" >&2
+      return 1
+    }
+  .venv/bin/python scripts/fr13_fixed32_contract.py external-manifest \
+    --repo "$PWD" \
+    --output "$RUNROOT/external_manifest.at_end.json" \
+    || return 1
+  cmp -s \
+    "$RUNROOT/external_manifest.at_launch.json" \
+    "$RUNROOT/external_manifest.at_end.json" \
+    || {
+      echo "FAIL: fixed32 external artifacts changed during campaign" >&2
+      return 1
+    }
+  echo "fixed32 runtime/source manifest byte-equal at campaign end"
+  echo "fixed32 image/model/FA2 manifest byte-equal at campaign end"
+}
+
+campaign_exit() {
+  local rc=$?
+  trap - EXIT
+  if (( FIXED32_MANIFEST_ACTIVE == 1 && FIXED32_MANIFEST_FINALIZED == 0 )); then
+    finalize_fixed32_manifest
+    local manifest_rc=$?
+    (( rc == 0 && manifest_rc != 0 )) && rc=14
+  fi
+  exit "$rc"
+}
+trap campaign_exit EXIT
+
 run_native() {  # arm spec_n expect offload
   local arm=$1 spec_n=$2 expect=$3 offload=$4
   echo "===== NATIVE ARM $arm (E$spec_n) B=$BSIZE offload=$offload ====="
   OFFLOAD_AGENT=$offload SPEC_N=$spec_n MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL_ENV \
-    FR13_SFWD_GPU_TIMER=1 \
+    FR13_SFWD_GPU_TIMER="${FR13_SFWD_GPU_TIMER:-1}" \
     FR13_SFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}.json \
-    FR13_DFWD_GPU_TIMER=1 \
+    FR13_DFWD_GPU_TIMER="${FR13_DFWD_GPU_TIMER:-1}" \
     FR13_DFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}_dfwd.json \
-    FR13_CFWD_GPU_TIMER=1 \
+    FR13_CFWD_GPU_TIMER="${FR13_CFWD_GPU_TIMER:-1}" \
     FR13_CFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}_cfwd.json \
     bash scripts/fr13_bigdenom_swe_serve.sh "$arm" native "$SUBSET" \
     > "$RUNROOT/$arm.runlog" 2>&1
   local rc=$?
   echo "[$arm] serve rc=$rc"
   reduce "$arm" native_e$spec_n "$expect" "$BSIZE"
+  if (( rc != 0 )); then
+    echo "[$arm] FAIL: serving/gate rc=$rc; terminating campaign"
+    exit "$rc"
+  fi
 }
 
 run_variant() {  # arm kind expect offload
   local arm=$1 kind=$2 expect=$3 offload=$4
+  if [[ "$kind" == "tail6_fixed32" || "$kind" == "hydra27_fixed32" ]] \
+     && (( FIXED32_MANIFEST_ACTIVE != 1 )); then
+    echo "FAIL: fixed32 arms require the exact canonical fixed32 sequence" >&2
+    exit 2
+  fi
   echo "===== VARIANT ARM $arm (kind=$kind) B=$BSIZE offload=$offload ====="
   # FR13_DEVICE_MULTIDRAFT=1 -> the device-side temp>0 multidraft committer (the real
   # t0.6 speed lever; lossless-within-floor; user 2026-06-16 accepted). Engages on tree
@@ -57,17 +144,21 @@ run_variant() {  # arm kind expect offload
   OFFLOAD_AGENT=$offload MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL_ENV \
     FR13_DEVICE_MULTIDRAFT=${FR13_DEVICE_MULTIDRAFT:-1} \
     FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
-    FR13_SFWD_GPU_TIMER=1 \
+    FR13_SFWD_GPU_TIMER="${FR13_SFWD_GPU_TIMER:-1}" \
     FR13_SFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}.json \
-    FR13_DFWD_GPU_TIMER=1 \
+    FR13_DFWD_GPU_TIMER="${FR13_DFWD_GPU_TIMER:-1}" \
     FR13_DFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}_dfwd.json \
-    FR13_CFWD_GPU_TIMER=1 \
+    FR13_CFWD_GPU_TIMER="${FR13_CFWD_GPU_TIMER:-1}" \
     FR13_CFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}_cfwd.json \
     bash scripts/fr13_bigdenom_swe_serve_variant.sh "$arm" "$kind" "$SUBSET" \
     > "$RUNROOT/$arm.runlog" 2>&1
   local rc=$?
   echo "[$arm] serve rc=$rc"
   reduce "$arm" "$arm" "$expect" "$BSIZE"
+  if (( rc != 0 )); then
+    echo "[$arm] FAIL: serving/gate rc=$rc; terminating campaign"
+    exit "$rc"
+  fi
 }
 
 reduce() {  # arm label expect bsize
@@ -105,4 +196,19 @@ else
   run_variant threethree_${TAG}  333      9  1
 fi
 
+finalize_fixed32_manifest || exit 14
+if (( FIXED32_MANIFEST_ACTIVE == 1 )); then
+  .venv/bin/python scripts/fr13_floor_gate.py \
+    --repo "$PWD" \
+    --runroot "$RUNROOT" \
+    --tag "$TAG" \
+    --task-count "$FIXED32_TASK_COUNT" \
+    --expect-concurrency "$CONC" \
+    > "$RUNROOT/fixed32_floor_gate.json" \
+    || {
+      rc=$?
+      echo "FAIL: fixed32 floor gate rc=$rc" >&2
+      exit "$rc"
+    }
+fi
 echo "===== CAMPAIGN DRIVER DONE ====="

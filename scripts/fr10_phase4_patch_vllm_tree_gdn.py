@@ -77,6 +77,3741 @@ FP8_UTILS_PATH = Path(
 )
 
 
+_FR13_FIXED32_CHOICES: tuple[tuple[int, ...], ...] = (
+    (0,),
+    (1,),
+    (2,),
+    (0, 0),
+    (0, 1),
+    (0, 2),
+    (1, 0),
+    (2, 0),
+    (0, 0, 0),
+    (0, 0, 1),
+    (0, 0, 2),
+    (1, 0, 0),
+    (2, 0, 0),
+    (0, 0, 0, 0),
+    (0, 0, 0, 1),
+    (0, 0, 0, 2),
+    (1, 0, 0, 0),
+    (2, 0, 0, 0),
+    (0, 0, 0, 0, 0),
+    (0, 0, 0, 0, 1),
+    (0, 0, 0, 0, 2),
+    (1, 0, 0, 0, 0),
+    (2, 0, 0, 0, 0),
+    (0, 0, 0, 0, 0, 0),
+    (2, 0, 0, 0, 0, 0),
+    (0, 0, 0, 0, 0, 0, 0),
+    (2, 0, 0, 0, 0, 0, 0),
+    (0, 0, 0, 0, 0, 0, 0, 0),
+    (0, 0, 0, 0, 0, 0, 0, 0, 0),
+    (0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+    (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+)
+_FR13_FIXED32_PARENT = (
+    -1,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    2,
+    3,
+    4,
+    4,
+    4,
+    7,
+    8,
+    9,
+    9,
+    9,
+    12,
+    13,
+    14,
+    14,
+    14,
+    17,
+    18,
+    19,
+    23,
+    24,
+    25,
+    26,
+    28,
+    29,
+    30,
+)
+_FR13_FIXED32_MODES = {
+    "tail6_fixed32": (0x7A9CE73F, 21),
+    "hydra27_fixed32": (0x7ABDFFFF, 27),
+}
+_FR13_FIXED32_MODE = os.environ.get("FR13_FIXED32_MODE", "").strip()
+_FR13_FIXED32_TREE_SOURCE = repr(list(_FR13_FIXED32_CHOICES))
+
+_FR13_FIXED32_SAMPLER_COMPACTION_SOURCE = r'''
+def _fr13_fixed32_compact_sampler_row_plan(
+    num_draft_tokens,
+    batch_rows,
+    spec_batch_indices,
+):
+    """Validate the full sampler rows and return their compact spec map."""
+    if (
+        not isinstance(num_draft_tokens, (list, tuple))
+        or not 1 <= len(num_draft_tokens) <= 4
+        or type(batch_rows) is not int
+        or batch_rows != len(num_draft_tokens)
+        or not isinstance(spec_batch_indices, tuple)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 full/compact sampler row contract is missing"
+        )
+    full_counts = tuple(num_draft_tokens)
+    if any(
+        type(value) is not int or value not in (0, 31)
+        for value in full_counts
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 sampler rows must be zero or physical-31; "
+            "truncated positive drafts are forbidden"
+        )
+    expected_indices = tuple(
+        index for index, value in enumerate(full_counts) if value == 31
+    )
+    if (
+        not 1 <= len(spec_batch_indices) <= 4
+        or any(type(index) is not int for index in spec_batch_indices)
+        or tuple(sorted(set(spec_batch_indices))) != spec_batch_indices
+        or any(not 0 <= index < batch_rows for index in spec_batch_indices)
+        or spec_batch_indices != expected_indices
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 published compact spec-row indices drifted"
+        )
+    return full_counts, spec_batch_indices
+
+
+def _fr13_fixed32_live_sampler_row_plan(num_draft_tokens):
+    from vllm.model_executor.layers.mamba import (
+        gdn_linear_attn as _fr13_f32_plan_gdn,
+    )
+
+    return _fr13_fixed32_compact_sampler_row_plan(
+        num_draft_tokens,
+        getattr(_fr13_f32_plan_gdn, "_FR13_FIXED32_BATCH_ROWS", None),
+        getattr(
+            _fr13_f32_plan_gdn,
+            "_FR13_FIXED32_SPEC_BATCH_INDICES",
+            None,
+        ),
+    )
+
+
+def _fr13_fixed32_prepare_mixed_sampler_io(
+    output_token_ids,
+    accepted_tree_rows,
+    bonus_token_ids,
+    spec_batch_indices,
+    generators,
+):
+    """Build compact-spec destinations while retaining full sampler output."""
+    full_batch = int(output_token_ids.shape[0])
+    compact_batch = len(spec_batch_indices)
+    if (
+        output_token_ids.ndim != 2
+        or tuple(output_token_ids.shape) != (full_batch, 32)
+        or accepted_tree_rows.ndim != 1
+        or tuple(accepted_tree_rows.shape) != (full_batch,)
+        or bonus_token_ids.ndim < 1
+        or int(bonus_token_ids.shape[0]) != full_batch
+        or int(bonus_token_ids.numel()) != full_batch
+        or not 1 <= compact_batch < full_batch <= 4
+        or output_token_ids.device != accepted_tree_rows.device
+        or output_token_ids.device != bonus_token_ids.device
+    ):
+        raise RuntimeError("FR13 fixed32 mixed sampler I/O geometry drift")
+    index_tensor = torch.tensor(
+        spec_batch_indices,
+        dtype=torch.long,
+        device=output_token_ids.device,
+    )
+    compact_output = torch.empty(
+        (compact_batch, 32),
+        dtype=output_token_ids.dtype,
+        device=output_token_ids.device,
+    )
+    compact_accepted = torch.empty(
+        (compact_batch,),
+        dtype=accepted_tree_rows.dtype,
+        device=accepted_tree_rows.device,
+    )
+    compact_bonus = bonus_token_ids.index_select(0, index_tensor).contiguous()
+    compact_generators = None
+    if generators:
+        if (
+            not hasattr(generators, "get")
+            or not hasattr(generators, "keys")
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 mixed sampler generators have no index map"
+            )
+        generator_keys = tuple(generators.keys())
+        if any(
+            type(key) is not int or not 0 <= key < full_batch
+            for key in generator_keys
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 mixed sampler generator key is out of range"
+            )
+        compact_generators = {}
+        for compact_index, full_index in enumerate(spec_batch_indices):
+            generator = generators.get(full_index)
+            if generator is not None:
+                compact_generators[compact_index] = generator
+        if not compact_generators:
+            compact_generators = None
+    return (
+        index_tensor,
+        compact_output,
+        compact_accepted,
+        compact_bonus,
+        compact_generators,
+    )
+
+
+def _fr13_fixed32_finish_mixed_sampler_io(
+    output_token_ids,
+    accepted_tree_rows,
+    bonus_token_ids,
+    index_tensor,
+    compact_output,
+    compact_accepted,
+):
+    """Restore compact spec results and bonus-only zero rows to full order."""
+    output_token_ids.fill_(-1)
+    output_token_ids[:, 0].copy_(bonus_token_ids.reshape(-1))
+    output_token_ids.index_copy_(0, index_tensor, compact_output)
+    accepted_tree_rows.zero_()
+    accepted_tree_rows.index_copy_(0, index_tensor, compact_accepted)
+    return output_token_ids
+'''
+
+_FR13_FIXED32_TSR_NONPREFIX_SOURCE = r'''
+def _fr13_fixed32_tsr_nonprefix_update(
+    token_indices_to_sample,
+    query_start_loc,
+    compact_leaf_rows,
+    spec_batch_indices,
+):
+    """Write compact accepted leaves into their exact full proposer rows."""
+    compact_batch = len(spec_batch_indices)
+    if (
+        not isinstance(spec_batch_indices, tuple)
+        or compact_batch < 1
+        or any(type(index) is not int for index in spec_batch_indices)
+        or tuple(sorted(set(spec_batch_indices))) != spec_batch_indices
+        or token_indices_to_sample.ndim != 1
+        or query_start_loc.ndim != 1
+        or compact_leaf_rows.ndim != 1
+        or int(compact_leaf_rows.numel()) != compact_batch
+        or any(
+            not 0 <= index < int(token_indices_to_sample.numel())
+            or index + 1 >= int(query_start_loc.numel())
+            for index in spec_batch_indices
+        )
+        or query_start_loc.device != token_indices_to_sample.device
+        or compact_leaf_rows.device != token_indices_to_sample.device
+    ):
+        raise RuntimeError("FR13 fixed32 TSR nonprefix geometry drift")
+    index_tensor = torch.tensor(
+        spec_batch_indices,
+        dtype=torch.long,
+        device=token_indices_to_sample.device,
+    )
+    base_rows = query_start_loc.index_select(0, index_tensor)
+    mapped_rows = (
+        base_rows.to(token_indices_to_sample.dtype)
+        + compact_leaf_rows.to(token_indices_to_sample.dtype)
+    )
+    result = token_indices_to_sample.clone()
+    result.index_copy_(0, index_tensor, mapped_rows)
+    return result
+'''
+
+_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE = r'''
+# FR13_FIXED32_OBSERVED_RUNTIME: event-scoped, host-only accounting at the
+# successful runtime call sites. This deliberately records tensor geometry and
+# enqueue deltas without reading device values or synchronizing the stream.
+_FR13_FIXED32_OBSERVED_CURRENT = None
+_FR13_FIXED32_CAPTURE_CONTEXT = None
+_FR13_FIXED32_CAPTURE_MANIFESTS = {}
+_FR13_FIXED32_CAPTURE_FROZEN = False
+_FR13_FIXED32_GRAPH_REPLAY_EVIDENCE = []
+_FR13_FIXED32_PROFILE_CAPTURE_SCOPE = None
+_FR13_FIXED32_PROFILE_MEMORY_SCOPE = False
+_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT = None
+_FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS = {}
+_FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH = {}
+_FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE = {}
+_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT = None
+_FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE = []
+_FR13_FIXED32_NONPURE_DISPATCH = {
+    "guarded_steps": 0,
+    "piecewise_steps": 0,
+    "none_steps": 0,
+    "forbidden_full_steps": 0,
+}
+_FR13_FIXED32_NONPURE_COMMIT_REPLAYS_BY_BATCH = {
+    1: 0,
+    2: 0,
+    3: 0,
+    4: 0,
+}
+
+
+def _fr13_fixed32_observed_new_state(
+    mode,
+    batch_size,
+    forward_step_index,
+    execution_basis,
+    request_ids=(),
+):
+    return {
+        "mode": mode,
+        "batch_size": int(batch_size),
+        "forward_step_index": int(forward_step_index),
+        "request_ids": tuple(str(value) for value in request_ids),
+        "batch_purity": None,
+        "execution_basis": execution_basis,
+        "forward_graph_id": None,
+        "forward_graph_signature": None,
+        "forward_graph_replays": 0,
+        "tree_layers": set(),
+        "tree_calls": 0,
+        "tree_q_rows": 0,
+        "tree_bias_shape": None,
+        "gdn_layers": set(),
+        "gdn_calls": set(),
+        "gdn_scan_calls": 0,
+        "gdn_launches": 0,
+        "gdn_path_programs": 0,
+        "gdn_padded_slots": 0,
+        "gdn_nodes": 0,
+        "gdn_critical_path": None,
+        "gdn_grid_z": None,
+        "gdn_max_path_lengths": None,
+        "gdn_export_or_mask": None,
+        "gdn_parent_sha256": None,
+        "gdn_ancestry_sha256": None,
+        "conv_consume_layers": set(),
+        "conv_consume_calls": 0,
+        "conv_consume_hits": 0,
+        "conv_consume_fallbacks": 0,
+        "conv_freshness_matches": 0,
+        "conv_stage_calls": 0,
+        "conv_stage_replays": 0,
+        "conv_stage_before_all_consumes": False,
+        "conv_stage_layer": None,
+        "conv_stage_layers": 0,
+        "conv_stage_row_elems": 0,
+        "conv_stage_block": 0,
+        "conv_stage_programs": 0,
+        "conv_stage_ssi_pointer_entries": 0,
+        "conv_stage_ssi_groups": 0,
+        "conv_stage_source": None,
+        "conv_stage_instance": None,
+        "conv_source_layers": {},
+        "conv_commit": None,
+        "conv_pregather": None,
+        "committer": None,
+        "preforward_pack": None,
+        "output_publish": None,
+        "accepted_path_pack": None,
+        "request_key_pack": None,
+        "drafter": None,
+        "drafter_runtime": None,
+    }
+
+
+def _fr13_fixed32_manifest_entry(entry, label):
+    if not isinstance(entry, tuple) or len(entry) != 2:
+        raise RuntimeError("FR13 fixed32 " + str(label) + " manifest is missing")
+    signature, canonical = entry
+    if (
+        not isinstance(signature, str)
+        or len(signature) != 64
+        or not isinstance(canonical, str)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 " + str(label) + " manifest has bad types"
+        )
+    actual_signature = __import__("hashlib").sha256(
+        canonical.encode("ascii")
+    ).hexdigest()
+    if actual_signature != signature:
+        raise RuntimeError(
+            "FR13 fixed32 "
+            + str(label)
+            + " manifest signature/canonical mismatch"
+        )
+    return signature, canonical
+
+
+def _fr13_fixed32_observed_current(stage):
+    if not _FR13_FIXED32_MODE:
+        return None
+    event = globals().get("_FR13_FIXED32_OBSERVED_CURRENT")
+    if not isinstance(event, dict):
+        raise RuntimeError(
+            "FR13 fixed32 observed runtime has no open event at " + str(stage)
+        )
+    return event
+
+
+def _fr13_fixed32_observed_event_active():
+    if not _FR13_FIXED32_MODE:
+        return False
+    event = globals().get("_FR13_FIXED32_OBSERVED_CURRENT")
+    if event is None:
+        return False
+    if (
+        not isinstance(event, dict)
+        or event.get("mode") != _FR13_FIXED32_MODE
+        or int(event.get("forward_step_index", -1)) < 0
+        or int(globals().get("_FR13_FIXED32_CURRENT_FORWARD_STEP", -1))
+        != int(event.get("forward_step_index", -1))
+    ):
+        raise RuntimeError("FR13 fixed32 active-event marker is incoherent")
+    return True
+
+
+def _fr13_fixed32_profile_capture_scope_begin(
+    runtime_mode,
+    num_tokens,
+    num_reqs,
+    uniform,
+    has_lora,
+    num_active_loras,
+):
+    global _FR13_FIXED32_PROFILE_CAPTURE_SCOPE
+    if not _FR13_FIXED32_MODE:
+        return
+    if _FR13_FIXED32_PROFILE_CAPTURE_SCOPE is not None:
+        raise RuntimeError("FR13 fixed32 profile capture scopes overlapped")
+    if (
+        _FR13_FIXED32_CAPTURE_FROZEN
+        or _FR13_FIXED32_PROFILE_MEMORY_SCOPE is not True
+        or _FR13_FIXED32_OBSERVED_CURRENT is not None
+        or globals().get("_FR13_FIXED32_PENDING_EVENT") is not None
+        or _FR13_FIXED32_CAPTURE_CONTEXT is not None
+        or _FR13_FIXED32_CAPTURE_MANIFESTS
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 profile capture began outside pristine bootstrap"
+        )
+    descriptor = _fr13_fixed32_graph_descriptor(
+        runtime_mode,
+        num_tokens,
+        num_reqs,
+        uniform,
+        has_lora,
+        num_active_loras,
+    )
+    _FR13_FIXED32_PROFILE_CAPTURE_SCOPE = {
+        "descriptor": descriptor,
+        "graph_id": None,
+        "completed": False,
+    }
+
+
+def _fr13_fixed32_profile_capture_scope_end():
+    global _FR13_FIXED32_PROFILE_CAPTURE_SCOPE
+    if not _FR13_FIXED32_MODE:
+        return
+    scope = _FR13_FIXED32_PROFILE_CAPTURE_SCOPE
+    # Clear before validating so an exceptional/unbalanced profile attempt
+    # cannot leave a stale bypass marker behind.
+    _FR13_FIXED32_PROFILE_CAPTURE_SCOPE = None
+    if (
+        not isinstance(scope, dict)
+        or set(scope) != {"descriptor", "graph_id", "completed"}
+        or not isinstance(scope.get("descriptor"), dict)
+        or not isinstance(scope.get("graph_id"), int)
+        or int(scope["graph_id"]) <= 0
+        or scope.get("completed") is not True
+        or _FR13_FIXED32_CAPTURE_CONTEXT is not None
+        or _FR13_FIXED32_CAPTURE_MANIFESTS
+        or _FR13_FIXED32_OBSERVED_CURRENT is not None
+        or globals().get("_FR13_FIXED32_PENDING_EVENT") is not None
+        or _FR13_FIXED32_CAPTURE_FROZEN
+        or _FR13_FIXED32_PROFILE_MEMORY_SCOPE is not True
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 profile capture scope did not close cleanly: "
+            + repr(scope)
+        )
+
+
+def _fr13_fixed32_profile_memory_scope_begin():
+    global _FR13_FIXED32_PROFILE_MEMORY_SCOPE
+    if not _FR13_FIXED32_MODE:
+        return
+    if (
+        _FR13_FIXED32_PROFILE_MEMORY_SCOPE is not False
+        or _FR13_FIXED32_PROFILE_CAPTURE_SCOPE is not None
+        or _FR13_FIXED32_CAPTURE_CONTEXT is not None
+        or _FR13_FIXED32_CAPTURE_MANIFESTS
+        or _FR13_FIXED32_OBSERVED_CURRENT is not None
+        or globals().get("_FR13_FIXED32_PENDING_EVENT") is not None
+        or _FR13_FIXED32_CAPTURE_FROZEN
+        or globals().get("_FR13_FIXED32_PRESEEDED_BATCHES")
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 profile-memory scope began outside pristine bootstrap"
+        )
+    _FR13_FIXED32_PROFILE_MEMORY_SCOPE = True
+
+
+def _fr13_fixed32_profile_memory_scope_end():
+    global _FR13_FIXED32_PROFILE_MEMORY_SCOPE
+    if not _FR13_FIXED32_MODE:
+        return
+    active = _FR13_FIXED32_PROFILE_MEMORY_SCOPE
+    _FR13_FIXED32_PROFILE_MEMORY_SCOPE = False
+    if (
+        active is not True
+        or _FR13_FIXED32_PROFILE_CAPTURE_SCOPE is not None
+        or _FR13_FIXED32_CAPTURE_CONTEXT is not None
+        or _FR13_FIXED32_CAPTURE_MANIFESTS
+        or _FR13_FIXED32_OBSERVED_CURRENT is not None
+        or globals().get("_FR13_FIXED32_PENDING_EVENT") is not None
+        or _FR13_FIXED32_CAPTURE_FROZEN
+        or globals().get("_FR13_FIXED32_PRESEEDED_BATCHES")
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 profile-memory scope did not close cleanly"
+        )
+    for layer in (
+        globals().get("_FR13_REPLAY_LAYERS", {}) or {}
+    ).values():
+        layer._fr13_replay_ssm_state = None
+        layer._fr13_replay_conv_state = None
+
+
+def _fr13_fixed32_boot_preseed_allowed():
+    return bool(
+        _FR13_FIXED32_MODE
+        and _FR13_FIXED32_PROFILE_MEMORY_SCOPE is False
+        and _FR13_FIXED32_PROFILE_CAPTURE_SCOPE is None
+        and _FR13_FIXED32_CAPTURE_CONTEXT is None
+        and not _FR13_FIXED32_CAPTURE_MANIFESTS
+        and _FR13_FIXED32_OBSERVED_CURRENT is None
+        and globals().get("_FR13_FIXED32_PENDING_EVENT") is None
+        and not _FR13_FIXED32_CAPTURE_FROZEN
+    )
+
+
+def _fr13_fixed32_boot_preseed_inputs():
+    if (
+        not _fr13_fixed32_boot_preseed_allowed()
+        or globals().get("_FR13_FIXED32_PRESEEDED_BATCHES")
+    ):
+        return None
+    stacks = globals().get("_FR13_EAGER_PACK_STACKS")
+    layers = globals().get("_FR13_REPLAY_LAYERS")
+    if stacks is None or layers is None:
+        return None
+    if not isinstance(stacks, dict) or not isinstance(layers, dict):
+        raise RuntimeError("FR13 fixed32 preseed registries are malformed")
+    raw_order = stacks.get("layer_order")
+    if not isinstance(raw_order, (list, tuple)):
+        return None
+    order = tuple(str(name) for name in raw_order)
+    if (
+        len(order) != 48
+        or len(set(order)) != 48
+        or any(not name for name in order)
+    ):
+        raise RuntimeError("FR13 fixed32 preseed layer order is malformed")
+    if any(name not in layers for name in order):
+        return None
+    layer_objects = tuple(layers[name] for name in order)
+    banks = tuple(
+        getattr(layer, "_fr13_replay_ssm_state", None)
+        for layer in layer_objects
+    )
+    conv_banks = tuple(
+        getattr(layer, "_fr13_replay_conv_state", None)
+        for layer in layer_objects
+    )
+    if any(bank is None for bank in banks + conv_banks):
+        return None
+    return stacks, layers, order, layer_objects, banks, conv_banks
+
+
+def _fr13_fixed32_observed_nonpure_dispatch(cudagraph_mode_name):
+    if not _FR13_FIXED32_MODE:
+        return
+    counters = _FR13_FIXED32_NONPURE_DISPATCH
+    name = str(cudagraph_mode_name).upper()
+    counters["guarded_steps"] += 1
+    if name == "PIECEWISE":
+        counters["piecewise_steps"] += 1
+        return
+    if name == "NONE":
+        counters["none_steps"] += 1
+        return
+    counters["forbidden_full_steps"] += 1
+    raise RuntimeError(
+        "FR13 fixed32 nonpure dispatch resolved forbidden mode " + repr(name)
+    )
+
+
+def _fr13_fixed32_nonpure_dispatch_counters():
+    counters = dict(_FR13_FIXED32_NONPURE_DISPATCH)
+    if (
+        set(counters)
+        != {
+            "guarded_steps",
+            "piecewise_steps",
+            "none_steps",
+            "forbidden_full_steps",
+        }
+        or any(type(value) is not int or value < 0 for value in counters.values())
+        or counters["guarded_steps"]
+        != (
+            counters["piecewise_steps"]
+            + counters["none_steps"]
+            + counters["forbidden_full_steps"]
+        )
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 nonpure dispatch counters are incoherent: "
+            + repr(counters)
+        )
+    return counters
+
+
+def _fr13_fixed32_nonpure_commit_replays_by_batch():
+    counters = dict(_FR13_FIXED32_NONPURE_COMMIT_REPLAYS_BY_BATCH)
+    if (
+        set(counters) != {1, 2, 3, 4}
+        or any(type(value) is not int or value < 0 for value in counters.values())
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 nonpure commit replay counters are incoherent: "
+            + repr(counters)
+        )
+    return counters
+
+
+def _fr13_fixed32_observed_begin(
+    mode,
+    batch_size,
+    forward_step_index,
+    request_ids,
+    batch_rows,
+    spec_rows,
+    physical_draft_counts,
+):
+    global _FR13_FIXED32_CAPTURE_FROZEN
+    global _FR13_FIXED32_OBSERVED_CURRENT
+    if not _FR13_FIXED32_MODE:
+        return
+    batch = int(batch_size)
+    forward = int(forward_step_index)
+    req_ids = tuple(str(value) for value in request_ids)
+    physical_counts = tuple(int(value) for value in physical_draft_counts)
+    if (
+        mode != _FR13_FIXED32_MODE
+        or batch not in (1, 2, 3, 4)
+        or forward < 0
+        or len(req_ids) != batch
+        or any(not value for value in req_ids)
+        or len(set(req_ids)) != batch
+        or int(batch_rows) != batch
+        or int(spec_rows) != batch
+        or len(physical_counts) != batch
+        or any(value != 31 for value in physical_counts)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 observed begin identity drift: "
+            + repr(
+                (
+                    mode,
+                    batch,
+                    forward,
+                    req_ids,
+                    batch_rows,
+                    spec_rows,
+                    physical_counts,
+                )
+            )
+        )
+    if _FR13_FIXED32_OBSERVED_CURRENT is not None:
+        raise RuntimeError("FR13 fixed32 observed events overlapped")
+    if globals().get("_FR13_FIXED32_PENDING_EVENT") is not None:
+        raise RuntimeError(
+            "FR13 fixed32 began a forward before prior KV completion"
+        )
+    if _FR13_FIXED32_CAPTURE_CONTEXT is not None:
+        raise RuntimeError("FR13 fixed32 measured event began during capture")
+    if _FR13_FIXED32_PROFILE_CAPTURE_SCOPE is not None:
+        raise RuntimeError(
+            "FR13 fixed32 measured event began during profile capture scope"
+        )
+    if _FR13_FIXED32_PROFILE_MEMORY_SCOPE is not False:
+        raise RuntimeError(
+            "FR13 fixed32 measured event began during profile-memory scope"
+        )
+    capacity = int(globals().get("_FR13_FIXED32_PRESEED_CAP", 0))
+    captured_batches = []
+    for _signature, canonical in _FR13_FIXED32_CAPTURE_MANIFESTS.values():
+        try:
+            manifest = __import__("json").loads(canonical)
+            if (
+                manifest.get("mode") == _FR13_FIXED32_MODE
+                and manifest.get("descriptor", {}).get("runtime_mode") == "FULL"
+                and int(manifest.get("physical_rows_per_request", -1)) == 32
+            ):
+                captured_batches.append(int(manifest["batch_size"]))
+        except Exception as error:
+            raise RuntimeError(
+                "FR13 fixed32 stored capture manifest is malformed"
+            ) from error
+    if (
+        capacity not in (1, 2, 3, 4)
+        or sorted(captured_batches) != list(range(1, capacity + 1))
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 full-graph capture set is incomplete before freeze: "
+            + repr((captured_batches, capacity))
+        )
+    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+        fixed32_conv_col0_pregather_counters as _fr13_f32_pregather_counters,
+    )
+    pregather = _fr13_f32_pregather_counters()
+    capture_by_batch = pregather.get("graph_capture_stages_by_batch", {})
+    actual_by_batch = pregather.get("actual_stages_by_batch", {})
+    if (
+        pregather.get("preseeded") is not True
+        or int(pregather.get("pointer_entries", -1)) != 48
+        or int(pregather.get("max_batch_size", -1)) != capacity
+        or tuple(pregather.get("preseeded_batches", ()))
+        != tuple(range(1, capacity + 1))
+        or int(pregather.get("graph_capture_stages", -1)) != capacity
+        or {
+            batch: int(
+                capture_by_batch.get(
+                    batch, capture_by_batch.get(str(batch), -1)
+                )
+            )
+            for batch in (1, 2, 3, 4)
+        }
+        != {
+            batch: 1 if batch <= capacity else 0
+            for batch in (1, 2, 3, 4)
+        }
+        or int(pregather.get("actual_stages", -1)) != 0
+        or any(
+            int(actual_by_batch.get(batch, actual_by_batch.get(str(batch), -1)))
+            != 0
+            for batch in (1, 2, 3, 4)
+        )
+        or int(pregather.get("profile_capture_stages", -1)) != 0
+        or int(pregather.get("aux_capture_stages", -1)) != 0
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 pregather capture set is incomplete before freeze: "
+            + repr(pregather)
+        )
+    if _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT is not None:
+        raise RuntimeError(
+            "FR13 fixed32 measured forward began during drafter proposal"
+        )
+    _FR13_FIXED32_CAPTURE_FROZEN = True
+    globals()["_FR13_FIXED32_CURRENT_FORWARD_STEP"] = forward
+    _FR13_FIXED32_OBSERVED_CURRENT = _fr13_fixed32_observed_new_state(
+        mode, batch, forward, "unbound", req_ids
+    )
+    _FR13_FIXED32_OBSERVED_CURRENT["batch_purity"] = {
+        "batch_rows": batch,
+        "spec_rows": batch,
+        "physical_draft_counts": list(physical_counts),
+        "mixed_pseudo_rows": 0,
+        "all_physical_31": True,
+    }
+
+
+def _fr13_fixed32_observed_work_target(stage, capturing, batch_size):
+    batch = int(batch_size)
+    if bool(capturing):
+        context = globals().get("_FR13_FIXED32_CAPTURE_CONTEXT")
+        if context is None:
+            if globals().get("_FR13_FIXED32_OBSERVED_CURRENT") is not None:
+                raise RuntimeError(
+                    "FR13 fixed32 capture/recompile began during measured event"
+                )
+            # Auxiliary PIECEWISE captures at boot are not acceptance graphs.
+            return None, False
+        capture_batch = int(context["descriptor"]["num_reqs"])
+        if batch != capture_batch:
+            raise RuntimeError(
+                "FR13 fixed32 capture call batch drift at "
+                + str(stage)
+                + ": "
+                + repr((batch, capture_batch))
+            )
+        return context["work"], True
+    event = globals().get("_FR13_FIXED32_OBSERVED_CURRENT")
+    if event is None:
+        if globals().get("_FR13_FIXED32_CAPTURE_FROZEN", False):
+            raise RuntimeError(
+                "FR13 fixed32 unscoped eager work after capture freeze at "
+                + str(stage)
+            )
+        # Profile/warmup execution before the first measured event.
+        return None, False
+    if batch != int(event["batch_size"]):
+        raise RuntimeError(
+            "FR13 fixed32 eager work batch drift at "
+            + str(stage)
+            + ": "
+            + repr((batch, event["batch_size"]))
+        )
+    if event["execution_basis"] not in ("unbound", "eager_direct"):
+        raise RuntimeError(
+            "FR13 fixed32 eager work mixed with graph replay at " + str(stage)
+        )
+    event["execution_basis"] = "eager_direct"
+    return event, False
+
+
+def _fr13_fixed32_observed_tree_attn(
+    layer_name, q_rows, bias_shape, capturing=False
+):
+    rows = int(q_rows)
+    if rows <= 0 or rows % 32 != 0:
+        raise RuntimeError(
+            "FR13 fixed32 tree-attention rows are not fixed32: " + str(rows)
+        )
+    event, _capture = _fr13_fixed32_observed_work_target(
+        "tree attention", capturing, rows // 32
+    )
+    if event is None:
+        return
+    name = str(layer_name)
+    shape = tuple(int(value) for value in bias_shape)
+    expected_rows = int(event["batch_size"]) * 32
+    if not name or rows != expected_rows or shape != (32, 32):
+        raise RuntimeError(
+            "FR13 fixed32 tree-attention work drift: "
+            + repr((name, rows, expected_rows, shape))
+        )
+    if name in event["tree_layers"]:
+        raise RuntimeError(
+            "FR13 fixed32 tree-attention layer executed twice: " + name
+        )
+    event["tree_layers"].add(name)
+    event["tree_calls"] += 1
+    event["tree_q_rows"] += rows
+    prior_shape = event["tree_bias_shape"]
+    if prior_shape is not None and prior_shape != shape:
+        raise RuntimeError("FR13 fixed32 tree-attention bias shape changed")
+    event["tree_bias_shape"] = shape
+
+
+def _fr13_fixed32_observed_gdn(
+    layer_name,
+    batch_index,
+    batch_size,
+    n_actual,
+    n_pad,
+    q_rows,
+    k_rows,
+    v_rows,
+    out_rows,
+    strict_mask_shape,
+    visible_mask_shape,
+    runtime_state,
+    capturing=False,
+):
+    event, _capture = _fr13_fixed32_observed_work_target(
+        "GDN scan", capturing, batch_size
+    )
+    if event is None:
+        return
+    name = str(layer_name)
+    batch = int(event["batch_size"])
+    index = int(batch_index)
+    shapes = (
+        int(n_actual),
+        int(n_pad),
+        int(q_rows),
+        int(k_rows),
+        int(v_rows),
+        int(out_rows),
+        tuple(int(value) for value in strict_mask_shape),
+        tuple(int(value) for value in visible_mask_shape),
+    )
+    if (
+        not name
+        or index < 0
+        or index >= batch
+        or shapes != (32, 32, 32, 32, 32, 32, (32, 32), (32, 32))
+    ):
+        raise RuntimeError("FR13 fixed32 GDN physical geometry drift: " + repr(shapes))
+    call_key = (name, index)
+    if call_key in event["gdn_calls"]:
+        raise RuntimeError(
+            "FR13 fixed32 GDN layer/request executed twice: " + repr(call_key)
+        )
+    if not isinstance(runtime_state, dict):
+        raise RuntimeError("FR13 fixed32 GDN runtime state is missing")
+    contract = runtime_state.get("fixed32_contract")
+    if not isinstance(contract, dict):
+        raise RuntimeError("FR13 fixed32 GDN schedule contract is missing")
+    normalized_contract = {
+        "path_counts": tuple(int(value) for value in contract.get("path_counts", ())),
+        "max_lengths": tuple(int(value) for value in contract.get("max_lengths", ())),
+        "launches": int(contract.get("launches", -1)),
+        "programs": int(contract.get("programs", -1)),
+        "padded_slots": int(contract.get("padded_slots", -1)),
+        "critical": int(contract.get("critical", -1)),
+        "export_or_mask": int(contract.get("export_or_mask", -1)),
+    }
+    expected_contract = {
+        "path_counts": (1, 11),
+        "max_lengths": (5, 7),
+        "launches": 2,
+        "programs": 12,
+        "padded_slots": 82,
+        "critical": 12,
+        "export_or_mask": 16915,
+    }
+    if normalized_contract != expected_contract:
+        raise RuntimeError(
+            "FR13 fixed32 GDN schedule work drift: "
+            + repr(normalized_contract)
+        )
+    if {
+        "schedule": runtime_state.get("schedule"),
+        "route_armed": runtime_state.get("route_armed"),
+        "n_levels": int(runtime_state.get("n_levels", -1)),
+        "critical": int(runtime_state.get("critical", -1)),
+        "parent_nodes": int(runtime_state.get("parent_nodes", -1)),
+        "emask_rows": int(runtime_state.get("emask_rows", -1)),
+        "export_rows": int(runtime_state.get("export_rows", -1)),
+    } != {
+        "schedule": "fixed32",
+        "route_armed": True,
+        "n_levels": 2,
+        "critical": 12,
+        "parent_nodes": 32,
+        "emask_rows": 32,
+        "export_rows": 32,
+    }:
+        raise RuntimeError(
+            "FR13 fixed32 GDN runtime schedule state drift: "
+            + repr(runtime_state)
+        )
+    parent_digest = contract.get("parent_sha256")
+    ancestry_digest = contract.get("ancestry_sha256")
+    if (
+        not isinstance(parent_digest, str)
+        or len(parent_digest) != 64
+        or not isinstance(ancestry_digest, str)
+        or len(ancestry_digest) != 64
+    ):
+        raise RuntimeError("FR13 fixed32 GDN topology digests are missing")
+    for key, value in (
+        ("gdn_parent_sha256", parent_digest),
+        ("gdn_ancestry_sha256", ancestry_digest),
+    ):
+        prior = event[key]
+        if prior is not None and prior != value:
+            raise RuntimeError("FR13 fixed32 GDN topology digest changed")
+        event[key] = value
+    event["gdn_calls"].add(call_key)
+    event["gdn_layers"].add(name)
+    event["gdn_scan_calls"] += 1
+    event["gdn_launches"] += normalized_contract["launches"]
+    event["gdn_path_programs"] += normalized_contract["programs"]
+    event["gdn_padded_slots"] += normalized_contract["padded_slots"]
+    event["gdn_nodes"] += int(n_actual)
+    event["gdn_critical_path"] = normalized_contract["critical"]
+    event["gdn_grid_z"] = normalized_contract["path_counts"]
+    event["gdn_max_path_lengths"] = normalized_contract["max_lengths"]
+    prior_export = event["gdn_export_or_mask"]
+    if (
+        prior_export is not None
+        and int(prior_export) != normalized_contract["export_or_mask"]
+    ):
+        raise RuntimeError("FR13 fixed32 GDN export mask changed")
+    event["gdn_export_or_mask"] = normalized_contract["export_or_mask"]
+
+
+def _fr13_fixed32_conv_runtime_contract(state, batch_size):
+    batch = int(batch_size)
+    if not isinstance(state, dict):
+        raise RuntimeError("FR13 fixed32 conv pregather state is missing")
+    capacity = state.get("max_batch_size")
+    banks = state.get("banks")
+    layer_order = state.get("layer_order")
+    offsets = state.get("off16")
+    sources = state.get("ssi_sources")
+    ssi_ptrs = state.get("ssi_ptrs")
+    ssi_strides = state.get("ssi_strides")
+    staging = state.get("staging")
+    row_elems = state.get("row_elems")
+    block = state.get("block")
+    contract = state.get("contract")
+    if (
+        type(capacity) is not int
+        or capacity not in (1, 2, 3, 4)
+        or not 1 <= batch <= capacity
+        or state.get("mode") != _FR13_FIXED32_MODE
+        or tuple(state.get("preseeded_batches", ()))
+        != tuple(range(1, capacity + 1))
+        or not isinstance(banks, tuple)
+        or len(banks) != 48
+        or not isinstance(layer_order, tuple)
+        or len(layer_order) != 48
+        or len(set(layer_order)) != 48
+        or any(not isinstance(name, str) or not name for name in layer_order)
+        or not isinstance(contract, dict)
+        or contract.get("route") != "in_graph_preconsume"
+        or contract.get("staging_bank_nonalias") is not True
+        or int(contract.get("block", -1)) != 1024
+        or int(contract.get("layers", -1)) != 48
+        or int(contract.get("pointer_entries", -1)) != 48
+        or int(contract.get("ssi_pointer_entries", -1)) != 48
+        or int(contract.get("ssi_groups", -1)) != 3
+        or type(row_elems) is not int
+        or row_elems <= 0
+        or type(block) is not int
+        or block != 1024
+        or not torch.is_tensor(offsets)
+        or tuple(int(value) for value in offsets.shape) != (48,)
+        or str(offsets.dtype) != "torch.int64"
+        or not offsets.is_contiguous()
+        or not torch.is_tensor(staging)
+        or not isinstance(sources, tuple)
+        or len(sources) != 48
+        or any(not torch.is_tensor(source) for source in sources)
+        or any(
+            source.ndim != 2
+            or int(source.shape[0]) < capacity
+            or int(source.shape[1]) < 1
+            or str(source.dtype) != "torch.int32"
+            or source.device != staging.device
+            or any(int(value) <= 0 for value in source.stride())
+            for source in sources
+        )
+        or len({int(source.data_ptr()) for source in sources}) != 3
+        or not torch.is_tensor(ssi_ptrs)
+        or tuple(int(value) for value in ssi_ptrs.shape) != (48,)
+        or str(ssi_ptrs.dtype) != "torch.int64"
+        or not ssi_ptrs.is_contiguous()
+        or not torch.is_tensor(ssi_strides)
+        or tuple(int(value) for value in ssi_strides.shape) != (48,)
+        or str(ssi_strides.dtype) != "torch.int64"
+        or not ssi_strides.is_contiguous()
+        or tuple(int(value) for value in staging.shape)
+        != (48, capacity, row_elems)
+        or tuple(int(value) for value in staging.stride())
+        != (capacity * row_elems, row_elems, 1)
+        or not staging.is_contiguous()
+        or any(not torch.is_tensor(bank) for bank in banks)
+        or any(
+            bank.device != staging.device or bank.dtype != staging.dtype
+            for bank in banks
+        )
+        or offsets.device != staging.device
+        or ssi_ptrs.device != staging.device
+        or ssi_strides.device != staging.device
+        or int(banks[0].shape[1]) * int(banks[0].shape[2]) != row_elems
+    ):
+        raise RuntimeError("FR13 fixed32 conv pregather runtime contract drift")
+    source_identity = (
+        tuple(id(bank) for bank in banks),
+        id(offsets),
+        tuple(id(source) for source in sources),
+        id(ssi_ptrs),
+        id(ssi_strides),
+        id(staging),
+    )
+    source_data_ptrs = (
+        tuple(int(bank.data_ptr()) for bank in banks),
+        int(offsets.data_ptr()),
+        tuple(int(source.data_ptr()) for source in sources),
+        int(ssi_ptrs.data_ptr()),
+        int(ssi_strides.data_ptr()),
+        int(staging.data_ptr()),
+    )
+    if (
+        state.get("source_identity") != source_identity
+        or state.get("source_data_ptrs") != source_data_ptrs
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 conv pregather persistent source identity drift"
+        )
+    bank_data_keys = [int(bank.data_ptr()) for bank in banks]
+    bank_storage_keys = [
+        int(bank.untyped_storage().data_ptr()) for bank in banks
+    ]
+    ssi_data_keys = [int(source.data_ptr()) for source in sources]
+    ssi_storage_keys = [
+        int(source.untyped_storage().data_ptr()) for source in sources
+    ]
+    bank_data_groups = [
+        list(dict.fromkeys(bank_data_keys)).index(key)
+        for key in bank_data_keys
+    ]
+    bank_storage_groups = [
+        list(dict.fromkeys(bank_storage_keys)).index(key)
+        for key in bank_storage_keys
+    ]
+    ssi_data_groups = [
+        list(dict.fromkeys(ssi_data_keys)).index(key)
+        for key in ssi_data_keys
+    ]
+    ssi_storage_groups = [
+        list(dict.fromkeys(ssi_storage_keys)).index(key)
+        for key in ssi_storage_keys
+    ]
+    staging_storage_key = int(staging.untyped_storage().data_ptr())
+    if (
+        len(set(ssi_data_groups)) != 3
+        or staging_storage_key in set(bank_storage_keys)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 conv pregather alias contract drift"
+        )
+    layout_payload = {
+        "capacity": capacity,
+        "row_elems": row_elems,
+        "block": block,
+        "device_type": str(staging.device.type),
+        "layer_order": list(layer_order),
+        "bank_shapes": [
+            [int(value) for value in bank.shape] for bank in banks
+        ],
+        "bank_strides": [
+            [int(value) for value in bank.stride()] for bank in banks
+        ],
+        "bank_dtypes": [str(bank.dtype) for bank in banks],
+        "bank_storage_offsets": [
+            int(bank.storage_offset()) for bank in banks
+        ],
+        "bank_data_alias_groups": bank_data_groups,
+        "bank_storage_alias_groups": bank_storage_groups,
+        "ssi_pointer_entries": 48,
+        "ssi_groups": 3,
+        "ssi_source_shapes": [
+            [int(value) for value in source.shape] for source in sources
+        ],
+        "ssi_source_strides": [
+            [int(value) for value in source.stride()] for source in sources
+        ],
+        "ssi_source_dtypes": [str(source.dtype) for source in sources],
+        "ssi_source_storage_offsets": [
+            int(source.storage_offset()) for source in sources
+        ],
+        "ssi_data_alias_groups": ssi_data_groups,
+        "ssi_storage_alias_groups": ssi_storage_groups,
+        "ordered_source_consume_mapping": [
+            {
+                "index": index,
+                "layer": layer_order[index],
+                "bank_data_alias_group": bank_data_groups[index],
+                "bank_storage_alias_group": bank_storage_groups[index],
+                "ssi_data_alias_group": ssi_data_groups[index],
+                "ssi_storage_alias_group": ssi_storage_groups[index],
+            }
+            for index in range(48)
+        ],
+        "ssi_ptr_shape": [int(value) for value in ssi_ptrs.shape],
+        "ssi_ptr_stride": [int(value) for value in ssi_ptrs.stride()],
+        "ssi_ptr_dtype": str(ssi_ptrs.dtype),
+        "ssi_stride_shape": [int(value) for value in ssi_strides.shape],
+        "ssi_stride_stride": [int(value) for value in ssi_strides.stride()],
+        "ssi_stride_dtype": str(ssi_strides.dtype),
+        "offset_shape": [int(value) for value in offsets.shape],
+        "offset_stride": [int(value) for value in offsets.stride()],
+        "offset_dtype": str(offsets.dtype),
+        "staging_shape": [int(value) for value in staging.shape],
+        "staging_stride": [int(value) for value in staging.stride()],
+        "staging_dtype": str(staging.dtype),
+        "staging_storage_offset": int(staging.storage_offset()),
+        "staging_bank_nonalias": True,
+        "grid": [
+            48,
+            batch,
+            (row_elems + block - 1) // block,
+        ],
+    }
+    instance_payload = {
+        "source_identity": source_identity,
+        "source_data_ptrs": source_data_ptrs,
+    }
+    layout_canonical = __import__("json").dumps(
+        layout_payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+    )
+    instance_canonical = __import__("json").dumps(
+        instance_payload,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return {
+        "layers": 48,
+        "ssi_pointer_entries": 48,
+        "ssi_groups": 3,
+        "row_elems": row_elems,
+        "block": block,
+        "programs": 48 * batch * ((row_elems + block - 1) // block),
+        "layout_sha256": __import__("hashlib").sha256(
+            layout_canonical.encode("ascii")
+        ).hexdigest(),
+        "instance_sha256": __import__("hashlib").sha256(
+            instance_canonical.encode("ascii")
+        ).hexdigest(),
+    }
+
+
+def _fr13_fixed32_observed_conv_stage(
+    layer_name,
+    layer_index,
+    batch_size,
+    runtime_state,
+    counters_before,
+    counters_after,
+    capturing=False,
+):
+    event, is_capture = _fr13_fixed32_observed_work_target(
+        "conv pregather graph stage", capturing, batch_size
+    )
+    if event is None:
+        raise RuntimeError(
+            "FR13 fixed32 conv graph stage ran outside final FULL capture"
+        )
+    batch = int(batch_size)
+    index = int(layer_index)
+    name = str(layer_name)
+    if (
+        is_capture is not True
+        or bool(capturing) is not True
+        or not name
+        or index != 0
+        or batch != int(event["batch_size"])
+        or int(event["conv_stage_calls"]) != 0
+        or int(event["conv_consume_calls"]) != 0
+        or int(event["gdn_scan_calls"]) != 0
+        or event["gdn_calls"]
+        or event["conv_source_layers"] != {0: name}
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 conv graph stage ordering drift: "
+            + repr(
+                (
+                    name,
+                    index,
+                    batch,
+                    is_capture,
+                    capturing,
+                    event["conv_stage_calls"],
+                    event["conv_consume_calls"],
+                    event["gdn_scan_calls"],
+                )
+            )
+        )
+    if not isinstance(counters_before, dict) or not isinstance(
+        counters_after, dict
+    ):
+        raise RuntimeError("FR13 fixed32 conv graph stage counters are missing")
+    capture_delta = _fr13_fixed32_counter_delta(
+        counters_after, counters_before, "graph_capture_stages"
+    )
+    capture_batch_delta = _fr13_fixed32_batch_counter_delta(
+        counters_after,
+        counters_before,
+        "graph_capture_stages_by_batch",
+        batch,
+    )
+    other_capture_deltas = {
+        other: _fr13_fixed32_batch_counter_delta(
+            counters_after,
+            counters_before,
+            "graph_capture_stages_by_batch",
+            other,
+        )
+        for other in (1, 2, 3, 4)
+        if other != batch
+    }
+    if (
+        counters_before.get("preseeded") is not True
+        or counters_after.get("preseeded") is not True
+        or capture_delta != 1
+        or capture_batch_delta != 1
+        or any(value != 0 for value in other_capture_deltas.values())
+        or int(counters_after.get("actual_stages", -1)) != 0
+        or any(
+            int(value) != 0
+            for value in counters_after.get("actual_stages_by_batch", {}).values()
+        )
+        or int(counters_after.get("profile_capture_stages", -1)) != 0
+        or int(counters_after.get("aux_capture_stages", -1)) != 0
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 conv graph stage counter drift: "
+            + repr(
+                (
+                    capture_delta,
+                    capture_batch_delta,
+                    other_capture_deltas,
+                    counters_after,
+                )
+            )
+        )
+    normalized = _fr13_fixed32_conv_runtime_contract(runtime_state, batch)
+    event["conv_stage_calls"] = 1
+    event["conv_stage_before_all_consumes"] = True
+    event["conv_stage_layer"] = name
+    event["conv_stage_layers"] = int(normalized["layers"])
+    event["conv_stage_row_elems"] = int(normalized["row_elems"])
+    event["conv_stage_block"] = int(normalized["block"])
+    event["conv_stage_programs"] = int(normalized["programs"])
+    event["conv_stage_ssi_pointer_entries"] = int(
+        normalized["ssi_pointer_entries"]
+    )
+    event["conv_stage_ssi_groups"] = int(normalized["ssi_groups"])
+    event["conv_stage_source"] = str(normalized["layout_sha256"])
+    event["conv_stage_instance"] = str(normalized["instance_sha256"])
+
+
+def _fr13_fixed32_observed_conv_source(
+    layer_name, layer_index, batch_size, capturing=False
+):
+    event, is_capture = _fr13_fixed32_observed_work_target(
+        "conv pregather live SSI source", capturing, batch_size
+    )
+    if event is None:
+        return
+    name = str(layer_name)
+    index = int(layer_index)
+    sources = event["conv_source_layers"]
+    if (
+        is_capture is not True
+        or bool(capturing) is not True
+        or not name
+        or not 0 <= index < 48
+        or index in sources
+        or name in sources.values()
+        or int(event["conv_consume_calls"]) != len(sources)
+        or (
+            index == 0
+            and (
+                sources
+                or int(event["conv_stage_calls"]) != 0
+                or int(event["gdn_scan_calls"]) != 0
+            )
+        )
+        or (
+            index != 0
+            and (
+                int(event["conv_stage_calls"]) != 1
+                or event["conv_stage_before_all_consumes"] is not True
+            )
+        )
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 live SSI source validation ordering drift: "
+            + repr((name, index, sources, event["conv_stage_calls"]))
+        )
+    sources[index] = name
+
+
+def _fr13_fixed32_observed_conv_consume(
+    layer_name, layer_index, batch_size, hit, capturing=False
+):
+    event, _capture = _fr13_fixed32_observed_work_target(
+        "conv pregather consume", capturing, batch_size
+    )
+    if event is None:
+        return
+    name = str(layer_name)
+    index = int(layer_index)
+    batch = int(batch_size)
+    if not name or batch != int(event["batch_size"]):
+        raise RuntimeError(
+            "FR13 fixed32 conv consume identity drift: "
+            + repr((name, batch))
+        )
+    if (
+        int(event["conv_stage_calls"]) != 1
+        or event["conv_stage_before_all_consumes"] is not True
+        or not isinstance(event["conv_stage_layer"], str)
+        or not event["conv_stage_layer"]
+        or event["conv_source_layers"].get(index) != name
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 conv pregather consumed before graph stage: " + name
+        )
+    if name in event["conv_consume_layers"]:
+        raise RuntimeError(
+            "FR13 fixed32 conv pregather consumed twice for layer " + name
+        )
+    event["conv_consume_layers"].add(name)
+    event["conv_consume_calls"] += 1
+    if bool(hit):
+        event["conv_consume_hits"] += 1
+        event["conv_freshness_matches"] += 1
+    else:
+        event["conv_consume_fallbacks"] += 1
+        raise RuntimeError(
+            "FR13 fixed32 conv pregather missed for layer " + name
+        )
+
+
+def _fr13_fixed32_graph_descriptor(
+    runtime_mode,
+    num_tokens,
+    num_reqs,
+    uniform,
+    has_lora,
+    num_active_loras,
+):
+    descriptor = {
+        "runtime_mode": str(runtime_mode),
+        "num_tokens": int(num_tokens),
+        "num_reqs": int(num_reqs) if num_reqs is not None else None,
+        "uniform": bool(uniform),
+        "has_lora": bool(has_lora),
+        "num_active_loras": int(num_active_loras),
+    }
+    batch = descriptor["num_reqs"]
+    if (
+        descriptor["runtime_mode"] != "FULL"
+        or batch not in (1, 2, 3, 4)
+        or descriptor["num_tokens"] != batch * 32
+        or descriptor["uniform"] is not True
+        or descriptor["has_lora"] is not False
+        or descriptor["num_active_loras"] != 0
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 full-graph descriptor drift: " + repr(descriptor)
+        )
+    return descriptor
+
+
+def _fr13_fixed32_validate_forward_work(work, label):
+    batch = int(work["batch_size"])
+    expected_gdn_calls = 48 * batch
+    stage_row_elems = int(work["conv_stage_row_elems"])
+    stage_block = int(work["conv_stage_block"])
+    expected_stage_programs = (
+        -1
+        if stage_row_elems <= 0 or stage_block <= 0
+        else 48
+        * batch
+        * ((stage_row_elems + stage_block - 1) // stage_block)
+    )
+    actual = {
+        "tree_calls": int(work["tree_calls"]),
+        "tree_layers": len(work["tree_layers"]),
+        "tree_q_rows": int(work["tree_q_rows"]),
+        "tree_bias_shape": work["tree_bias_shape"],
+        "gdn_calls": int(work["gdn_scan_calls"]),
+        "gdn_pairs": len(work["gdn_calls"]),
+        "gdn_layers": len(work["gdn_layers"]),
+        "gdn_launches": int(work["gdn_launches"]),
+        "gdn_path_programs": int(work["gdn_path_programs"]),
+        "gdn_padded_slots": int(work["gdn_padded_slots"]),
+        "gdn_nodes": int(work["gdn_nodes"]),
+        "gdn_critical_path": work["gdn_critical_path"],
+        "gdn_grid_z": work["gdn_grid_z"],
+        "gdn_max_path_lengths": work["gdn_max_path_lengths"],
+        "gdn_export_or_mask": work["gdn_export_or_mask"],
+        "conv_calls": int(work["conv_consume_calls"]),
+        "conv_layers": len(work["conv_consume_layers"]),
+        "conv_hits": int(work["conv_consume_hits"]),
+        "conv_fallbacks": int(work["conv_consume_fallbacks"]),
+        "conv_freshness": int(work["conv_freshness_matches"]),
+        "conv_stage_calls": int(work["conv_stage_calls"]),
+        "conv_stage_replays": int(work["conv_stage_replays"]),
+        "conv_stage_before_all_consumes": work[
+            "conv_stage_before_all_consumes"
+        ],
+        "conv_stage_layers": int(work["conv_stage_layers"]),
+        "conv_stage_programs": int(work["conv_stage_programs"]),
+        "conv_stage_ssi_pointer_entries": int(
+            work["conv_stage_ssi_pointer_entries"]
+        ),
+        "conv_stage_ssi_groups": int(work["conv_stage_ssi_groups"]),
+        "conv_stage_row_elems_positive": stage_row_elems > 0,
+        "conv_stage_block": stage_block,
+        "conv_stage_layer_present": (
+            isinstance(work["conv_stage_layer"], str)
+            and bool(work["conv_stage_layer"])
+        ),
+        "conv_stage_source_sha256": (
+            isinstance(work["conv_stage_source"], str)
+            and len(work["conv_stage_source"]) == 64
+        ),
+        "conv_stage_instance_sha256": (
+            isinstance(work["conv_stage_instance"], str)
+            and len(work["conv_stage_instance"]) == 64
+        ),
+        "conv_source_validations": len(work["conv_source_layers"]),
+        "conv_source_indices": tuple(sorted(work["conv_source_layers"])),
+        "conv_source_names": (
+            set(work["conv_source_layers"].values())
+            == set(work["conv_consume_layers"])
+        ),
+    }
+    expected = {
+        "tree_calls": 16,
+        "tree_layers": 16,
+        "tree_q_rows": 16 * batch * 32,
+        "tree_bias_shape": (32, 32),
+        "gdn_calls": expected_gdn_calls,
+        "gdn_pairs": expected_gdn_calls,
+        "gdn_layers": 48,
+        "gdn_launches": expected_gdn_calls * 2,
+        "gdn_path_programs": expected_gdn_calls * 12,
+        "gdn_padded_slots": expected_gdn_calls * 82,
+        "gdn_nodes": expected_gdn_calls * 32,
+        "gdn_critical_path": 12,
+        "gdn_grid_z": (1, 11),
+        "gdn_max_path_lengths": (5, 7),
+        "gdn_export_or_mask": 16915,
+        "conv_calls": 48,
+        "conv_layers": 48,
+        "conv_hits": 48,
+        "conv_fallbacks": 0,
+        "conv_freshness": 48,
+        "conv_stage_calls": 1,
+        "conv_stage_replays": 0 if str(label) == "captured" else 1,
+        "conv_stage_before_all_consumes": True,
+        "conv_stage_layers": 48,
+        "conv_stage_programs": expected_stage_programs,
+        "conv_stage_ssi_pointer_entries": 48,
+        "conv_stage_ssi_groups": 3,
+        "conv_stage_row_elems_positive": True,
+        "conv_stage_block": 1024,
+        "conv_stage_layer_present": True,
+        "conv_stage_source_sha256": True,
+        "conv_stage_instance_sha256": True,
+        "conv_source_validations": 48,
+        "conv_source_indices": tuple(range(48)),
+        "conv_source_names": True,
+    }
+    if actual != expected:
+        raise RuntimeError(
+            "FR13 fixed32 "
+            + str(label)
+            + " forward work is incomplete: "
+            + repr((actual, expected))
+        )
+
+
+def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
+    """Publish arm-comparable structure from live instance-bound manifests."""
+    if not _FR13_FIXED32_MODE:
+        return []
+    capacity = int(globals().get("_FR13_FIXED32_PRESEED_CAP", 0))
+    if capacity not in (1, 2, 3, 4):
+        raise RuntimeError("FR13 fixed32 forward registry has invalid capacity")
+    if measured_by_batch is None:
+        measured_by_batch = {
+            batch: sum(
+                int(row.get("batch_size", -1)) == batch
+                and row.get("event_complete") is True
+                and int(row.get("matching_replays", -1)) == 1
+                for row in _FR13_FIXED32_GRAPH_REPLAY_EVIDENCE
+            )
+            for batch in (1, 2, 3, 4)
+        }
+    normalized_measured = {
+        batch: int(
+            measured_by_batch.get(
+                batch, measured_by_batch.get(str(batch), -1)
+            )
+        )
+        for batch in (1, 2, 3, 4)
+    }
+    runtime_sys = __import__("sys")
+    if "/workspace/scripts" not in runtime_sys.path:
+        runtime_sys.path.insert(0, "/workspace/scripts")
+    from fr13_fixed32_work_census import (
+        forward_graph_structural_manifest,
+        forward_graph_structural_signature,
+    )
+    manifests = {}
+    for graph_id, entry in _FR13_FIXED32_CAPTURE_MANIFESTS.items():
+        _instance_signature, canonical = _fr13_fixed32_manifest_entry(
+            entry, "forward graph " + str(graph_id)
+        )
+        manifest = __import__("json").loads(canonical)
+        descriptor = manifest.get("descriptor")
+        tree = manifest.get("tree_attn")
+        gdn = manifest.get("gdn")
+        conv = manifest.get("conv_pregather")
+        batch = int(manifest.get("batch_size", -1))
+        if (
+            manifest.get("schema")
+            != "fr13-fixed32-forward-graph-manifest-v2"
+            or manifest.get("mode") != _FR13_FIXED32_MODE
+            or batch not in range(1, capacity + 1)
+            or batch in manifests
+            or not isinstance(descriptor, dict)
+            or descriptor.get("runtime_mode") != "FULL"
+            or int(descriptor.get("num_reqs", -1)) != batch
+            or int(descriptor.get("num_tokens", -1)) != 32 * batch
+            or descriptor.get("uniform") is not True
+            or descriptor.get("has_lora") is not False
+            or int(descriptor.get("num_active_loras", -1)) != 0
+            or not isinstance(tree, dict)
+            or not isinstance(gdn, dict)
+            or not isinstance(conv, dict)
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 live forward manifest registry drift: "
+                + repr((graph_id, manifest))
+            )
+        tree_calls = int(tree.get("calls", -1))
+        scan_calls = int(gdn.get("scan_calls", -1))
+        row_elems = int(conv.get("row_elems", -1))
+        block = int(conv.get("block", -1))
+        conv_layout_sha256 = conv.get("layout_sha256")
+        conv_instance_sha256 = conv.get("instance_sha256")
+        if (
+            tree_calls <= 0
+            or scan_calls <= 0
+            or row_elems <= 0
+            or block <= 0
+            or not isinstance(conv_layout_sha256, str)
+            or len(conv_layout_sha256) != 64
+            or not isinstance(conv_instance_sha256, str)
+            or len(conv_instance_sha256) != 64
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 forward structural divisors are invalid"
+            )
+        structural = {
+            "schema": "fr13-fixed32-forward-graph-structural-manifest-v1",
+            "batch_size": batch,
+            "descriptor_geometry": {
+                "physical_drafts": (
+                    int(descriptor["num_tokens"]) // batch - 1
+                ),
+                "verify_rows_per_request": (
+                    int(descriptor["num_tokens"]) // batch
+                ),
+                "verify_rows": int(descriptor["num_tokens"]),
+                "model_layers": (
+                    len(tree.get("layers", ())) + len(gdn.get("layers", ()))
+                ),
+            },
+            "tree_attention": {
+                "layers": len(tree.get("layers", ())),
+                "calls_per_event": tree_calls,
+                "q_rows_per_call": int(tree.get("q_rows", -1)) // tree_calls,
+                "bias_shape": list(tree.get("bias_shape", ())),
+                "physical_parent_sha256": gdn.get("parent_sha256"),
+            },
+            "gdn": {
+                "layers": len(gdn.get("layers", ())),
+                "scan_calls": scan_calls,
+                "launches_per_scan": (
+                    int(gdn.get("launches", -1)) // scan_calls
+                ),
+                "path_programs_per_scan": (
+                    int(gdn.get("path_programs", -1)) // scan_calls
+                ),
+                "padded_slots_per_scan": (
+                    int(gdn.get("padded_slots", -1)) // scan_calls
+                ),
+                "nodes_per_scan": int(gdn.get("nodes", -1)) // scan_calls,
+                "critical_path": int(gdn.get("critical_path", -1)),
+                "grid_z": list(gdn.get("grid_z", ())),
+                "max_path_lengths": list(
+                    gdn.get("max_path_lengths", ())
+                ),
+                "export_or_mask": int(gdn.get("export_or_mask", -1)),
+            },
+            "conv_pregather": {
+                "route": conv.get("route"),
+                "stage_calls": int(conv.get("stage_calls", -1)),
+                "stage_before_all_consumes": conv.get(
+                    "stage_before_all_consumes"
+                ),
+                "layers": int(conv.get("layers", -1)),
+                "requests": int(conv.get("requests", -1)),
+                "row_elems": row_elems,
+                "block": block,
+                "grid": [
+                    int(conv.get("layers", -1)),
+                    batch,
+                    (row_elems + block - 1) // block,
+                ],
+                "programs": int(conv.get("programs", -1)),
+                "ssi_pointer_entries": int(
+                    conv.get("ssi_pointer_entries", -1)
+                ),
+                "ssi_groups": int(conv.get("ssi_groups", -1)),
+                "source_validations": len(
+                    conv.get("source_validations", ())
+                ),
+                "staged_rows": int(conv.get("staged_rows", -1)),
+                "consume_calls": int(conv.get("consume_calls", -1)),
+                "consume_hits": int(conv.get("consume_hits", -1)),
+                "consume_fallbacks": int(
+                    conv.get("consume_fallbacks", -1)
+                ),
+                "freshness_matches": int(
+                    conv.get("freshness_matches", -1)
+                ),
+            },
+        }
+        expected = forward_graph_structural_manifest(batch)
+        if structural != expected:
+            raise RuntimeError(
+                "FR13 fixed32 live forward structure drift: "
+                + repr((structural, expected))
+            )
+        structural_canonical = __import__("json").dumps(
+            structural,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        live_structural_signature = __import__("hashlib").sha256(
+            structural_canonical.encode("ascii")
+        ).hexdigest()
+        if live_structural_signature != forward_graph_structural_signature(batch):
+            raise RuntimeError(
+                "FR13 fixed32 live forward structural signature drift"
+            )
+        manifests[batch] = {
+            "conv": conv,
+            "structural_signature": live_structural_signature,
+            "conv_layout_sha256": conv_layout_sha256,
+        }
+    if sorted(manifests) != list(range(1, capacity + 1)):
+        raise RuntimeError(
+            "FR13 fixed32 live forward registry is not contiguous: "
+            + repr(sorted(manifests))
+        )
+    return [
+        {
+            "batch_size": batch,
+            "graph_signature": manifests[batch]["structural_signature"],
+            "conv_layout_sha256": manifests[batch]["conv_layout_sha256"],
+            "captures": 1,
+            "capture_origin": "final_full",
+            "stage_calls": int(manifests[batch]["conv"]["stage_calls"]),
+            "stage_before_all_consumes": manifests[batch]["conv"][
+                "stage_before_all_consumes"
+            ],
+            "layers": int(manifests[batch]["conv"]["layers"]),
+            "requests": int(manifests[batch]["conv"]["requests"]),
+            "row_elems": int(manifests[batch]["conv"]["row_elems"]),
+            "programs": int(manifests[batch]["conv"]["programs"]),
+            "ssi_pointer_entries": int(
+                manifests[batch]["conv"]["ssi_pointer_entries"]
+            ),
+            "ssi_groups": int(manifests[batch]["conv"]["ssi_groups"]),
+            "source_validations": len(
+                manifests[batch]["conv"]["source_validations"]
+            ),
+            "staged_rows": int(manifests[batch]["conv"]["staged_rows"]),
+            "consume_calls": int(manifests[batch]["conv"]["consume_calls"]),
+            "consume_hits": int(manifests[batch]["conv"]["consume_hits"]),
+            "consume_fallbacks": int(
+                manifests[batch]["conv"]["consume_fallbacks"]
+            ),
+            "freshness_matches": int(
+                manifests[batch]["conv"]["freshness_matches"]
+            ),
+            "measured_replays": normalized_measured[batch],
+        }
+        for batch in range(1, capacity + 1)
+    ]
+
+
+def _fr13_fixed32_capture_begin(
+    graph_id,
+    runtime_mode,
+    num_tokens,
+    num_reqs,
+    uniform,
+    has_lora,
+    num_active_loras,
+):
+    global _FR13_FIXED32_CAPTURE_CONTEXT
+    if not _FR13_FIXED32_MODE:
+        return
+    if (
+        _FR13_FIXED32_CAPTURE_FROZEN
+        or _FR13_FIXED32_OBSERVED_CURRENT is not None
+        or globals().get("_FR13_FIXED32_PENDING_EVENT") is not None
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 full-graph capture/recompile after measurement began"
+        )
+    if _FR13_FIXED32_CAPTURE_CONTEXT is not None:
+        raise RuntimeError("FR13 fixed32 full-graph captures overlapped")
+    identity = int(graph_id)
+    if identity <= 0 or identity in _FR13_FIXED32_CAPTURE_MANIFESTS:
+        raise RuntimeError(
+            "FR13 fixed32 full-graph identity was reused: " + str(identity)
+        )
+    descriptor = _fr13_fixed32_graph_descriptor(
+        runtime_mode,
+        num_tokens,
+        num_reqs,
+        uniform,
+        has_lora,
+        num_active_loras,
+    )
+    batch = int(descriptor["num_reqs"])
+    profile_scope = globals().get("_FR13_FIXED32_PROFILE_CAPTURE_SCOPE")
+    if profile_scope is not None:
+        if (
+            not isinstance(profile_scope, dict)
+            or set(profile_scope) != {"descriptor", "graph_id", "completed"}
+            or profile_scope.get("descriptor") != descriptor
+            or profile_scope.get("graph_id") is not None
+            or profile_scope.get("completed") is not False
+            or _FR13_FIXED32_CAPTURE_CONTEXT is not None
+            or _FR13_FIXED32_CAPTURE_MANIFESTS
+            or _FR13_FIXED32_OBSERVED_CURRENT is not None
+            or globals().get("_FR13_FIXED32_PENDING_EVENT") is not None
+            or _FR13_FIXED32_CAPTURE_FROZEN
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 profile capture begin scope drift: "
+                + repr(profile_scope)
+            )
+        profile_scope["graph_id"] = identity
+        return
+    if _FR13_FIXED32_PROFILE_MEMORY_SCOPE is not False:
+        raise RuntimeError(
+            "FR13 fixed32 final capture began inside profile-memory scope"
+        )
+    _FR13_FIXED32_CAPTURE_CONTEXT = {
+        "graph_id": identity,
+        "descriptor": descriptor,
+        "work": _fr13_fixed32_observed_new_state(
+            _FR13_FIXED32_MODE, batch, -1, "capture_manifest"
+        ),
+    }
+
+
+def _fr13_fixed32_capture_end(
+    graph_id,
+    runtime_mode,
+    num_tokens,
+    num_reqs,
+    uniform,
+    has_lora,
+    num_active_loras,
+):
+    global _FR13_FIXED32_CAPTURE_CONTEXT
+    if not _FR13_FIXED32_MODE:
+        return None
+    profile_scope = globals().get("_FR13_FIXED32_PROFILE_CAPTURE_SCOPE")
+    if profile_scope is not None:
+        descriptor = _fr13_fixed32_graph_descriptor(
+            runtime_mode,
+            num_tokens,
+            num_reqs,
+            uniform,
+            has_lora,
+            num_active_loras,
+        )
+        identity = int(graph_id)
+        if (
+            not isinstance(profile_scope, dict)
+            or set(profile_scope) != {"descriptor", "graph_id", "completed"}
+            or profile_scope.get("descriptor") != descriptor
+            or profile_scope.get("graph_id") != identity
+            or profile_scope.get("completed") is not False
+            or _FR13_FIXED32_CAPTURE_CONTEXT is not None
+            or _FR13_FIXED32_CAPTURE_MANIFESTS
+            or _FR13_FIXED32_OBSERVED_CURRENT is not None
+            or globals().get("_FR13_FIXED32_PENDING_EVENT") is not None
+            or _FR13_FIXED32_CAPTURE_FROZEN
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 profile capture end scope drift: "
+                + repr((identity, descriptor, profile_scope))
+            )
+        profile_scope["completed"] = True
+        return None
+    context = _FR13_FIXED32_CAPTURE_CONTEXT
+    if _FR13_FIXED32_PROFILE_MEMORY_SCOPE is not False:
+        raise RuntimeError(
+            "FR13 fixed32 final capture ended inside profile-memory scope"
+        )
+    if not isinstance(context, dict):
+        raise RuntimeError("FR13 fixed32 full-graph capture has no context")
+    descriptor = _fr13_fixed32_graph_descriptor(
+        runtime_mode,
+        num_tokens,
+        num_reqs,
+        uniform,
+        has_lora,
+        num_active_loras,
+    )
+    identity = int(graph_id)
+    if (
+        identity != int(context["graph_id"])
+        or descriptor != context["descriptor"]
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 full-graph capture identity changed: "
+            + repr((identity, descriptor, context))
+        )
+    work = context["work"]
+    _fr13_fixed32_validate_forward_work(work, "captured")
+    payload = {
+        "schema": "fr13-fixed32-forward-graph-manifest-v2",
+        "mode": _FR13_FIXED32_MODE,
+        "batch_size": int(work["batch_size"]),
+        "physical_rows_per_request": 32,
+        "descriptor": descriptor,
+        "tree_attn": {
+            "layers": sorted(work["tree_layers"]),
+            "calls": int(work["tree_calls"]),
+            "q_rows": int(work["tree_q_rows"]),
+            "bias_shape": list(work["tree_bias_shape"]),
+        },
+        "gdn": {
+            "layers": sorted(work["gdn_layers"]),
+            "call_pairs": [
+                [name, index] for name, index in sorted(work["gdn_calls"])
+            ],
+            "scan_calls": int(work["gdn_scan_calls"]),
+            "launches": int(work["gdn_launches"]),
+            "path_programs": int(work["gdn_path_programs"]),
+            "padded_slots": int(work["gdn_padded_slots"]),
+            "nodes": int(work["gdn_nodes"]),
+            "critical_path": int(work["gdn_critical_path"]),
+            "grid_z": list(work["gdn_grid_z"]),
+            "max_path_lengths": list(work["gdn_max_path_lengths"]),
+            "export_or_mask": int(work["gdn_export_or_mask"]),
+            "parent_sha256": work["gdn_parent_sha256"],
+            "ancestry_sha256": work["gdn_ancestry_sha256"],
+        },
+        "conv_pregather": {
+            "route": "in_graph_preconsume",
+            "stage_calls": int(work["conv_stage_calls"]),
+            "stage_before_all_consumes": work[
+                "conv_stage_before_all_consumes"
+            ],
+            "stage_layer": work["conv_stage_layer"],
+            "layers": int(work["conv_stage_layers"]),
+            "requests": int(work["batch_size"]),
+            "row_elems": int(work["conv_stage_row_elems"]),
+            "block": int(work["conv_stage_block"]),
+            "programs": int(work["conv_stage_programs"]),
+            "ssi_pointer_entries": int(
+                work["conv_stage_ssi_pointer_entries"]
+            ),
+            "ssi_groups": int(work["conv_stage_ssi_groups"]),
+            "staged_rows": int(work["conv_stage_layers"])
+            * int(work["batch_size"]),
+            "layout_sha256": work["conv_stage_source"],
+            "instance_sha256": work["conv_stage_instance"],
+            "source_validations": [
+                [index, work["conv_source_layers"][index]]
+                for index in sorted(work["conv_source_layers"])
+            ],
+            "consume_layers": sorted(work["conv_consume_layers"]),
+            "consume_calls": int(work["conv_consume_calls"]),
+            "consume_hits": int(work["conv_consume_hits"]),
+            "consume_fallbacks": int(work["conv_consume_fallbacks"]),
+            "freshness_matches": int(work["conv_freshness_matches"]),
+        },
+    }
+    canonical = __import__("json").dumps(
+        payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+    )
+    signature = __import__("hashlib").sha256(
+        canonical.encode("ascii")
+    ).hexdigest()
+    _FR13_FIXED32_CAPTURE_MANIFESTS[identity] = (signature, canonical)
+    _FR13_FIXED32_CAPTURE_CONTEXT = None
+    return signature
+
+
+def _fr13_fixed32_observed_graph_replay(
+    graph_id,
+    graph_signature,
+    runtime_mode,
+    num_tokens,
+    num_reqs,
+    uniform,
+    has_lora,
+    num_active_loras,
+):
+    event = _fr13_fixed32_observed_current("full cudagraph replay")
+    if event is None:
+        return
+    descriptor = _fr13_fixed32_graph_descriptor(
+        runtime_mode,
+        num_tokens,
+        num_reqs,
+        uniform,
+        has_lora,
+        num_active_loras,
+    )
+    identity = int(graph_id)
+    entry = _FR13_FIXED32_CAPTURE_MANIFESTS.get(identity)
+    expected_signature, canonical = _fr13_fixed32_manifest_entry(
+        entry,
+        "forward graph " + str(identity),
+    )
+    if (
+        not isinstance(graph_signature, str)
+        or graph_signature != expected_signature
+        or event["execution_basis"] != "unbound"
+        or int(event["forward_graph_replays"]) != 0
+        or int(descriptor["num_reqs"]) != int(event["batch_size"])
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 replay identity/signature/batch drift: "
+            + repr(
+                (
+                    identity,
+                    graph_signature,
+                    expected_signature,
+                    descriptor,
+                    event["execution_basis"],
+                    event["forward_graph_replays"],
+                    event["batch_size"],
+                )
+            )
+        )
+    manifest = __import__("json").loads(canonical)
+    if (
+        manifest.get("schema") != "fr13-fixed32-forward-graph-manifest-v2"
+        or manifest.get("mode") != event["mode"]
+        or int(manifest.get("batch_size", -1)) != int(event["batch_size"])
+        or manifest.get("descriptor") != descriptor
+        or int(manifest.get("physical_rows_per_request", -1)) != 32
+    ):
+        raise RuntimeError("FR13 fixed32 replay manifest semantic drift")
+    # The graph begins with the fixed pregather kernel on every replay. Bind
+    # that captured stage to the still-live persistent operands and prove no
+    # profile, auxiliary, or host-side fixed stage entered the route.
+    tree_kernel = __import__(
+        "lumo_flywheel_serving.fr10_gdn_tree_kernel",
+        fromlist=(
+            "_FR13_FIXED32_CONV_PREGATHER",
+            "fixed32_conv_col0_pregather_counters",
+        ),
+    )
+    pregather_state = getattr(
+        tree_kernel, "_FR13_FIXED32_CONV_PREGATHER", {}
+    ).get("state")
+    conv = manifest.get("conv_pregather")
+    if not isinstance(conv, dict):
+        raise RuntimeError("FR13 fixed32 replay conv manifest is missing")
+    live_conv = _fr13_fixed32_conv_runtime_contract(
+        pregather_state, event["batch_size"]
+    )
+    pregather_counters = tree_kernel.fixed32_conv_col0_pregather_counters()
+    batch_key = int(event["batch_size"])
+    captures_by_batch = pregather_counters.get(
+        "graph_capture_stages_by_batch"
+    )
+    if (
+        conv.get("route") != "in_graph_preconsume"
+        or int(conv.get("stage_calls", -1)) != 1
+        or conv.get("stage_before_all_consumes") is not True
+        or int(conv.get("layers", -1)) != 48
+        or int(conv.get("requests", -1)) != batch_key
+        or int(conv.get("row_elems", -1)) != int(live_conv["row_elems"])
+        or int(conv.get("block", -1)) != int(live_conv["block"])
+        or int(conv.get("programs", -1)) != int(live_conv["programs"])
+        or int(conv.get("ssi_pointer_entries", -1)) != 48
+        or int(conv.get("ssi_groups", -1)) != 3
+        or conv.get("layout_sha256") != live_conv["layout_sha256"]
+        or conv.get("instance_sha256") != live_conv["instance_sha256"]
+        or len(conv.get("source_validations", ())) != 48
+        or [int(row[0]) for row in conv.get("source_validations", ())]
+        != list(range(48))
+        or not isinstance(captures_by_batch, dict)
+        or int(
+            captures_by_batch.get(
+                batch_key, captures_by_batch.get(str(batch_key), -1)
+            )
+        )
+        != 1
+        or int(pregather_counters.get("actual_stages", -1)) != 0
+        or any(
+            int(value) != 0
+            for value in pregather_counters.get(
+                "actual_stages_by_batch", {}
+            ).values()
+        )
+        or int(pregather_counters.get("profile_capture_stages", -1)) != 0
+        or int(pregather_counters.get("aux_capture_stages", -1)) != 0
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 graph replay conv stage provenance drift: "
+            + repr(
+                (
+                    conv,
+                    live_conv,
+                    pregather_counters,
+                )
+            )
+        )
+    tree = manifest["tree_attn"]
+    gdn = manifest["gdn"]
+    event["tree_layers"] = set(tree["layers"])
+    event["tree_calls"] = int(tree["calls"])
+    event["tree_q_rows"] = int(tree["q_rows"])
+    event["tree_bias_shape"] = tuple(tree["bias_shape"])
+    event["gdn_layers"] = set(gdn["layers"])
+    event["gdn_calls"] = {
+        (str(name), int(index)) for name, index in gdn["call_pairs"]
+    }
+    event["gdn_scan_calls"] = int(gdn["scan_calls"])
+    event["gdn_launches"] = int(gdn["launches"])
+    event["gdn_path_programs"] = int(gdn["path_programs"])
+    event["gdn_padded_slots"] = int(gdn["padded_slots"])
+    event["gdn_nodes"] = int(gdn["nodes"])
+    event["gdn_critical_path"] = int(gdn["critical_path"])
+    event["gdn_grid_z"] = tuple(gdn["grid_z"])
+    event["gdn_max_path_lengths"] = tuple(gdn["max_path_lengths"])
+    event["gdn_export_or_mask"] = int(gdn["export_or_mask"])
+    event["gdn_parent_sha256"] = gdn["parent_sha256"]
+    event["gdn_ancestry_sha256"] = gdn["ancestry_sha256"]
+    event["conv_stage_calls"] = int(conv["stage_calls"])
+    event["conv_stage_replays"] = 1
+    event["conv_stage_before_all_consumes"] = conv[
+        "stage_before_all_consumes"
+    ]
+    event["conv_stage_layer"] = conv["stage_layer"]
+    event["conv_stage_layers"] = int(conv["layers"])
+    event["conv_stage_row_elems"] = int(conv["row_elems"])
+    event["conv_stage_block"] = int(conv["block"])
+    event["conv_stage_programs"] = int(conv["programs"])
+    event["conv_stage_ssi_pointer_entries"] = int(
+        conv["ssi_pointer_entries"]
+    )
+    event["conv_stage_ssi_groups"] = int(conv["ssi_groups"])
+    event["conv_stage_source"] = conv["layout_sha256"]
+    event["conv_stage_instance"] = conv["instance_sha256"]
+    event["conv_source_layers"] = {
+        int(index): str(name)
+        for index, name in conv["source_validations"]
+    }
+    event["conv_consume_layers"] = set(conv["consume_layers"])
+    event["conv_consume_calls"] = int(conv["consume_calls"])
+    event["conv_consume_hits"] = int(conv["consume_hits"])
+    event["conv_consume_fallbacks"] = int(conv["consume_fallbacks"])
+    event["conv_freshness_matches"] = int(conv["freshness_matches"])
+    event["execution_basis"] = "cudagraph_full_replay"
+    event["forward_graph_id"] = identity
+    event["forward_graph_signature"] = expected_signature
+    event["forward_graph_replays"] = 1
+    _fr13_fixed32_validate_forward_work(event, "replayed")
+    _FR13_FIXED32_GRAPH_REPLAY_EVIDENCE.append(
+        {
+            "mode": event["mode"],
+            "batch_size": int(event["batch_size"]),
+            "forward_step_index": int(event["forward_step_index"]),
+            "graph_id": identity,
+            "graph_signature": expected_signature,
+            "matching_replays": 1,
+            "conv_pregather_stage_replays": 1,
+            "event_index": None,
+            "event_complete": False,
+        }
+    )
+
+
+def _fr13_fixed32_drafter_proposal_begin(
+    mode,
+    request_ids,
+    sampled_rows,
+    metadata_num_reqs,
+    metadata_batch_size,
+):
+    global _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT
+    if not _FR13_FIXED32_MODE:
+        return
+    req_ids = tuple(str(value) for value in request_ids)
+    batch = len(req_ids)
+    if (
+        mode != _FR13_FIXED32_MODE
+        or batch not in (1, 2, 3, 4)
+        or int(sampled_rows) != batch
+        or int(metadata_num_reqs) != batch
+        or int(metadata_batch_size) != batch
+        or any(not value for value in req_ids)
+        or len(set(req_ids)) != batch
+        or _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT is not None
+        or _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT is not None
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 drafter proposal begin drift: "
+            + repr(
+                (
+                    mode,
+                    req_ids,
+                    sampled_rows,
+                    metadata_num_reqs,
+                    metadata_batch_size,
+                )
+            )
+        )
+    pending = globals().get("_FR13_FIXED32_PENDING_EVENT")
+    if pending is not None and not isinstance(pending, dict):
+        raise RuntimeError("FR13 fixed32 pending event is malformed")
+    measured = isinstance(pending, dict)
+    if measured:
+        expected_identity = (
+            pending.get("mode"),
+            int(pending.get("batch_size", -1)),
+            tuple(pending.get("request_ids", ())),
+        )
+        actual_identity = (mode, batch, req_ids)
+        if expected_identity != actual_identity:
+            raise RuntimeError(
+                "FR13 fixed32 verify/proposer request identity drift: "
+                + repr((expected_identity, actual_identity))
+            )
+    proposal = {
+        "mode": mode,
+        "batch_size": batch,
+        "request_ids": req_ids,
+        "measured": measured,
+        "forward_step_index": (
+            int(pending.get("forward_step_index", -1))
+            if measured
+            else -1
+        ),
+        "mtp_execution_basis": "unbound",
+        "mtp_forward_calls": 0,
+        "mtp_forward_rows": 0,
+        "graph_id": None,
+        "graph_signature": None,
+        "graph_replays": 0,
+        "graph_captures": 0,
+        "arctic": None,
+        "publish": None,
+    }
+    if measured:
+        evidence = {
+            "mode": mode,
+            "batch_size": batch,
+            "request_ids": req_ids,
+            "forward_step_index": int(proposal["forward_step_index"]),
+            "proposal_begins": 1,
+            "proposal_ends": 0,
+            "graph_id": None,
+            "graph_signature": None,
+            "graph_captures": 0,
+            "matching_replays": 0,
+            "event_index": None,
+            "event_complete": False,
+        }
+        _FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE.append(evidence)
+        proposal["replay_evidence"] = evidence
+    _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT = proposal
+    return measured
+
+
+def _fr13_fixed32_drafter_graph_capture_begin(graph_id, batch_size):
+    global _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT
+    if not _FR13_FIXED32_MODE:
+        return
+    proposal = _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT
+    batch = int(batch_size)
+    identity = int(graph_id)
+    if (
+        not isinstance(proposal, dict)
+        or batch != int(proposal["batch_size"])
+        or identity <= 0
+        or _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT is not None
+        or identity in _FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS
+        or batch in _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 lazy/duplicate drafter graph capture: "
+            + repr((identity, batch))
+        )
+    _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT = {
+        "graph_id": identity,
+        "batch_size": batch,
+        "mtp_forward_calls": 0,
+        "mtp_forward_rows": 0,
+    }
+    proposal["graph_captures"] = 1
+
+
+def _fr13_fixed32_drafter_mtp_forward(batch_size, capturing):
+    batch = int(batch_size)
+    if bool(capturing):
+        context = _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT
+        if (
+            not isinstance(context, dict)
+            or batch != int(context["batch_size"])
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 unscoped drafter capture MTP call"
+            )
+        context["mtp_forward_calls"] += 1
+        context["mtp_forward_rows"] += batch
+        return
+    proposal = _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT
+    if (
+        not isinstance(proposal, dict)
+        or batch != int(proposal["batch_size"])
+        or proposal["mtp_execution_basis"] not in ("unbound", "eager_direct")
+    ):
+        raise RuntimeError("FR13 fixed32 eager drafter MTP call drift")
+    proposal["mtp_execution_basis"] = "eager_direct"
+    proposal["mtp_forward_calls"] += 1
+    proposal["mtp_forward_rows"] += batch
+
+
+def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
+    global _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT
+    if not _FR13_FIXED32_MODE:
+        return None
+    context = _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT
+    identity = int(graph_id)
+    batch = int(batch_size)
+    if (
+        not isinstance(context, dict)
+        or identity != int(context["graph_id"])
+        or batch != int(context["batch_size"])
+        or int(context["mtp_forward_calls"]) != 4
+        or int(context["mtp_forward_rows"]) != 4 * batch
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 drafter graph capture work drift: "
+            + repr((identity, batch, context))
+        )
+    payload = {
+        "schema": "fr13-fixed32-drafter-graph-manifest-v1",
+        "batch_size": batch,
+        "mtp_forward_calls": 4,
+        "mtp_forward_rows": 4 * batch,
+    }
+    canonical = __import__("json").dumps(
+        payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+    )
+    signature = __import__("hashlib").sha256(
+        canonical.encode("ascii")
+    ).hexdigest()
+    _FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS[identity] = (
+        signature,
+        canonical,
+    )
+    _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH[batch] = identity
+    proposal = _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT
+    if not isinstance(proposal, dict):
+        raise RuntimeError(
+            "FR13 fixed32 drafter proposal disappeared at capture end"
+        )
+    _FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE[identity] = {
+        "batch_size": batch,
+        "graph_signature": signature,
+        "captures": 1,
+        "capture_origin": (
+            "measured" if proposal["measured"] else "unmeasured"
+        ),
+        "measured_replays": 0,
+        "unmeasured_replays": 0,
+    }
+    _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT = None
+    proposal["captured_graph_id"] = identity
+    proposal["captured_graph_signature"] = signature
+    return signature
+
+
+def _fr13_fixed32_drafter_graph_replay(
+    graph_id, graph_signature, batch_size
+):
+    proposal = _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT
+    identity = int(graph_id)
+    batch = int(batch_size)
+    if not isinstance(proposal, dict):
+        raise RuntimeError("FR13 fixed32 drafter replay has no proposal")
+    expected_signature, canonical = _fr13_fixed32_manifest_entry(
+        _FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS.get(identity),
+        "drafter graph " + str(identity),
+    )
+    manifest = __import__("json").loads(canonical)
+    if (
+        graph_signature != expected_signature
+        or _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH.get(batch) != identity
+        or int(manifest.get("batch_size", -1)) != batch
+        or int(manifest.get("mtp_forward_calls", -1)) != 4
+        or int(manifest.get("mtp_forward_rows", -1)) != 4 * batch
+        or batch != int(proposal["batch_size"])
+        or proposal["mtp_execution_basis"] != "unbound"
+        or int(proposal["mtp_forward_calls"]) != 0
+        or int(proposal["graph_replays"]) != 0
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 drafter graph replay drift: "
+            + repr(
+                (
+                    identity,
+                    graph_signature,
+                    expected_signature,
+                    batch,
+                    proposal,
+                )
+            )
+        )
+    proposal["mtp_execution_basis"] = "cudagraph_replay"
+    proposal["mtp_forward_calls"] = 4
+    proposal["mtp_forward_rows"] = 4 * batch
+    proposal["graph_id"] = identity
+    proposal["graph_signature"] = expected_signature
+    proposal["graph_replays"] = 1
+    lifecycle = _FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE.get(identity)
+    if (
+        not isinstance(lifecycle, dict)
+        or int(lifecycle.get("captures", -1)) != 1
+        or int(lifecycle.get("batch_size", -1)) != batch
+        or lifecycle.get("graph_signature") != expected_signature
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 drafter graph lifecycle is missing"
+        )
+    lifecycle[
+        "measured_replays" if proposal["measured"] else "unmeasured_replays"
+    ] += 1
+    if proposal["measured"]:
+        evidence = proposal.get("replay_evidence")
+        if (
+            not isinstance(evidence, dict)
+            or int(evidence.get("proposal_begins", -1)) != 1
+            or int(evidence.get("matching_replays", -1)) != 0
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 drafter replay evidence is missing"
+            )
+        evidence["graph_id"] = identity
+        evidence["graph_signature"] = expected_signature
+        evidence["graph_captures"] = int(proposal["graph_captures"])
+        evidence["matching_replays"] = 1
+
+
+def _fr13_fixed32_drafter_graph_registry():
+    rows = []
+    for batch in sorted(_FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH):
+        graph_id = _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH[batch]
+        signature, _canonical = _fr13_fixed32_manifest_entry(
+            _FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS.get(graph_id),
+            "drafter graph " + str(graph_id),
+        )
+        lifecycle = _FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE.get(graph_id)
+        if (
+            not isinstance(lifecycle, dict)
+            or int(lifecycle.get("batch_size", -1)) != int(batch)
+            or lifecycle.get("graph_signature") != signature
+            or int(lifecycle.get("captures", -1)) != 1
+            or lifecycle.get("capture_origin")
+            not in ("measured", "unmeasured")
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 drafter graph registry drifted"
+            )
+        rows.append(
+            {
+                "batch_size": int(batch),
+                "graph_signature": signature,
+                "captures": 1,
+                "capture_origin": lifecycle["capture_origin"],
+                "measured_replays": int(lifecycle["measured_replays"]),
+                "unmeasured_replays": int(
+                    lifecycle["unmeasured_replays"]
+                ),
+            }
+        )
+    return rows
+
+
+def _fr13_fixed32_drafter_observed_arctic(work):
+    proposal = _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT
+    if not isinstance(proposal, dict) or not isinstance(work, dict):
+        raise RuntimeError("FR13 fixed32 Arctic observation is unscoped")
+    batch = int(proposal["batch_size"])
+    actual = {
+        "batch_size": int(work.get("batch_size", -1)),
+        "main_lookup_calls": int(work.get("main_lookup_calls", -1)),
+        "main_lookup_tokens": int(work.get("main_lookup_tokens", -1)),
+        "rank1_lookup_calls": int(work.get("rank1_lookup_calls", -1)),
+        "rank1_lookup_tokens": int(work.get("rank1_lookup_tokens", -1)),
+        "rank2_lookup_calls": int(work.get("rank2_lookup_calls", -1)),
+        "rank2_lookup_tokens": int(work.get("rank2_lookup_tokens", -1)),
+        "rescue_carry_slots": int(work.get("rescue_carry_slots", -1)),
+        "arctic_lookup_calls": int(work.get("arctic_lookup_calls", -1)),
+        "arctic_requested_tokens": int(
+            work.get("arctic_requested_tokens", -1)
+        ),
+        "main_tail_columns": int(work.get("main_tail_columns", -1)),
+        "rescue_path_columns": int(
+            work.get("rescue_path_columns", -1)
+        ),
+        "merge_fill_calls": int(work.get("merge_fill_calls", -1)),
+        "merge_fill_columns": int(work.get("merge_fill_columns", -1)),
+        "merge_fill_rows": int(work.get("merge_fill_rows", -1)),
+    }
+    expected = {
+        "batch_size": batch,
+        "main_lookup_calls": batch,
+        "main_lookup_tokens": 6 * batch,
+        "rank1_lookup_calls": batch,
+        "rank1_lookup_tokens": 4 * batch,
+        "rank2_lookup_calls": batch,
+        "rank2_lookup_tokens": 2 * batch,
+        "rescue_carry_slots": 4 * batch,
+        "arctic_lookup_calls": 3 * batch,
+        "arctic_requested_tokens": 12 * batch,
+        "main_tail_columns": 6,
+        "rescue_path_columns": 10,
+        "merge_fill_calls": 1,
+        "merge_fill_columns": 16,
+        "merge_fill_rows": 16 * batch,
+    }
+    if proposal["arctic"] is not None or actual != expected:
+        raise RuntimeError(
+            "FR13 fixed32 direct Arctic/fill work drift: "
+            + repr((actual, expected))
+        )
+    proposal["arctic"] = actual
+
+
+def _fr13_fixed32_drafter_observed_publish(
+    packed_shape, packed_dtype, packed_device_type, tree_paths
+):
+    proposal = _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT
+    if not isinstance(proposal, dict):
+        raise RuntimeError("FR13 fixed32 drafter publish is unscoped")
+    batch = int(proposal["batch_size"])
+    shape = tuple(int(value) for value in packed_shape)
+    paths = tuple(tuple(int(value) for value in path) for path in tree_paths)
+    index = {path: node + 1 for node, path in enumerate(paths)}
+    try:
+        physical_parent = (-1,) + tuple(
+            0 if len(path) == 1 else int(index[path[:-1]])
+            for path in paths
+        )
+    except KeyError as error:
+        raise RuntimeError(
+            "FR13 fixed32 drafter parent is missing"
+        ) from error
+    expected_parent = (
+        -1, 0, 0, 0, 1, 1, 1, 2, 3, 4, 4, 4, 7, 8, 9, 9,
+        9, 12, 13, 14, 14, 14, 17, 18, 19, 23, 24, 25, 26, 28,
+        29, 30,
+    )
+    if (
+        proposal["publish"] is not None
+        or proposal["arctic"] is None
+        or shape != (batch, 31)
+        or str(packed_dtype) not in ("torch.int64", "int64")
+        or str(packed_device_type) != "cuda"
+        or len(paths) != 31
+        or physical_parent != expected_parent
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 final drafter publish/parent drift: "
+            + repr(
+                (
+                    shape,
+                    packed_dtype,
+                    packed_device_type,
+                    physical_parent,
+                )
+            )
+        )
+    proposal["publish"] = {
+        "pack_columns": 31,
+        "packed_rows": 31 * batch,
+        "physical_parent": physical_parent,
+        "physical_parent_sha256": __import__("hashlib").sha256(
+            __import__("json").dumps(
+                list(physical_parent),
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ).encode("ascii")
+        ).hexdigest(),
+        "publish_shape": shape,
+    }
+
+
+def _fr13_fixed32_drafter_proposal_end(
+    mode,
+    request_ids,
+    output_shape,
+    output_dtype,
+    output_device_type,
+    outer_handoff_completed,
+):
+    global _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT
+    proposal = _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT
+    req_ids = tuple(str(value) for value in request_ids)
+    if not isinstance(proposal, dict):
+        raise RuntimeError("FR13 fixed32 drafter proposal end is unscoped")
+    batch = int(proposal["batch_size"])
+    if (
+        mode != proposal["mode"]
+        or req_ids != proposal["request_ids"]
+        or tuple(int(value) for value in output_shape) != (batch, 31)
+        or str(output_dtype) not in ("torch.int64", "int64")
+        or str(output_device_type) != "cuda"
+        or outer_handoff_completed is not True
+        or proposal["mtp_execution_basis"] != "cudagraph_replay"
+        or int(proposal["mtp_forward_calls"]) != 4
+        or int(proposal["mtp_forward_rows"]) != 4 * batch
+        or int(proposal["graph_replays"]) != 1
+        or int(proposal["graph_captures"]) not in (0, 1)
+        or not isinstance(proposal["graph_id"], int)
+        or not isinstance(proposal["graph_signature"], str)
+        or not isinstance(proposal["arctic"], dict)
+        or not isinstance(proposal["publish"], dict)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 completed drafter proposal work drift: "
+            + repr(proposal)
+        )
+    if proposal["measured"]:
+        pending = globals().get("_FR13_FIXED32_PENDING_EVENT")
+        observed = (
+            pending.get("observed_work")
+            if isinstance(pending, dict)
+            else None
+        )
+        if (
+            not isinstance(pending, dict)
+            or not isinstance(observed, dict)
+            or tuple(pending.get("request_ids", ())) != req_ids
+            or observed.get("drafter") is not None
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 drafter could not bind measured event"
+            )
+        arctic = proposal["arctic"]
+        publish = proposal["publish"]
+        observed["drafter"] = {
+            "mtp_forward_calls": 4,
+            "mtp_forward_rows": 4 * batch,
+            "arctic_lookup_calls": int(arctic["arctic_lookup_calls"]),
+            "arctic_requested_tokens": int(
+                arctic["arctic_requested_tokens"]
+            ),
+            "main_tail_length": 6,
+            "rescue_chains": [[1, 4], [2, 2]],
+            "carry_fill_slots": int(arctic["rescue_carry_slots"]),
+            "pack_columns": 31,
+            "packed_rows": 31 * batch,
+        }
+        request_ids_sha256 = __import__("hashlib").sha256(
+            __import__("json").dumps(
+                list(req_ids),
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ).encode("ascii")
+        ).hexdigest()
+        observed["drafter_runtime"] = {
+            "association": "same_runner_step",
+            "forward_step_index": int(proposal["forward_step_index"]),
+            "batch_size": batch,
+            "request_ids_sha256": request_ids_sha256,
+            "proposal_begins": 1,
+            "proposal_ends": 1,
+            "graph_id": int(proposal["graph_id"]),
+            "graph_signature": proposal["graph_signature"],
+            "graph_captures": int(proposal["graph_captures"]),
+            "graph_replays": 1,
+            "mtp_observation": "capture_manifest_bound_replay",
+            "mtp_forward_calls": 4,
+            "mtp_forward_rows": 4 * batch,
+            "arctic_ledger": [
+                {
+                    "kind": "main",
+                    "calls": int(arctic["main_lookup_calls"]),
+                    "tokens": int(arctic["main_lookup_tokens"]),
+                },
+                {
+                    "kind": "rank1",
+                    "calls": int(arctic["rank1_lookup_calls"]),
+                    "tokens": int(arctic["rank1_lookup_tokens"]),
+                },
+                {
+                    "kind": "rank2",
+                    "calls": int(arctic["rank2_lookup_calls"]),
+                    "tokens": int(arctic["rank2_lookup_tokens"]),
+                },
+            ],
+            "arctic_lookup_calls": int(arctic["arctic_lookup_calls"]),
+            "arctic_requested_tokens": int(
+                arctic["arctic_requested_tokens"]
+            ),
+            "merge_fill_calls": int(arctic["merge_fill_calls"]),
+            "merge_fill_columns": int(arctic["merge_fill_columns"]),
+            "merge_fill_rows": int(arctic["merge_fill_rows"]),
+            "rescue_carry_slots": int(arctic["rescue_carry_slots"]),
+            "publish_shape": list(publish["publish_shape"]),
+            "physical_parent_sha256": publish[
+                "physical_parent_sha256"
+            ],
+            "outer_handoff_calls": 1,
+        }
+        evidence = proposal.get("replay_evidence")
+        if (
+            not isinstance(evidence, dict)
+            or int(evidence.get("proposal_begins", -1)) != 1
+            or int(evidence.get("proposal_ends", -1)) != 0
+            or int(evidence.get("matching_replays", -1)) != 1
+            or int(evidence.get("graph_captures", -1))
+            != int(proposal["graph_captures"])
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 drafter proposal evidence drifted"
+            )
+        evidence["proposal_ends"] = 1
+        _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT = None
+        _fr13_fixed32_complete_pending_event()
+        return
+    _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT = None
+
+
+def _fr13_fixed32_counter_delta(after, before, key):
+    return int(after.get(key, -1)) - int(before.get(key, -1))
+
+
+def _fr13_fixed32_batch_counter_delta(after, before, key, batch):
+    after_map = after.get(key)
+    before_map = before.get(key)
+    if not isinstance(after_map, dict) or not isinstance(before_map, dict):
+        raise RuntimeError("FR13 fixed32 counter map is missing: " + str(key))
+    return int(after_map.get(batch, after_map.get(str(batch), -1))) - int(
+        before_map.get(batch, before_map.get(str(batch), -1))
+    )
+
+
+def _fr13_fixed32_observed_commit(
+    mode,
+    batch_size,
+    layer_count,
+    accepted_paths_shape,
+    accepted_lens_shape,
+    committer_before,
+    committer_after,
+    committer_contract,
+    pregather_before,
+    pregather_after,
+    pregather_contract,
+):
+    event = _fr13_fixed32_observed_current("fixed commit")
+    if event is None:
+        return
+    batch = int(batch_size)
+    path_shape = tuple(int(value) for value in accepted_paths_shape)
+    lens_shape = tuple(int(value) for value in accepted_lens_shape)
+    if (
+        mode != event["mode"]
+        or batch != int(event["batch_size"])
+        or int(layer_count) != 48
+        or len(path_shape) != 2
+        or path_shape[0] < batch
+        or path_shape[1] != 16
+        or len(lens_shape) != 1
+        or lens_shape[0] < batch
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 commit input geometry drift: "
+            + repr((mode, batch, layer_count, path_shape, lens_shape))
+        )
+    if not all(
+        isinstance(value, dict)
+        for value in (
+            committer_before,
+            committer_after,
+            committer_contract,
+            pregather_before,
+            pregather_after,
+            pregather_contract,
+        )
+    ):
+        raise RuntimeError("FR13 fixed32 commit runtime contracts are missing")
+    replay_delta = _fr13_fixed32_counter_delta(
+        committer_after, committer_before, "actual_replays_enqueued"
+    )
+    replay_batch_delta = _fr13_fixed32_batch_counter_delta(
+        committer_after,
+        committer_before,
+        "actual_replays_by_batch",
+        batch,
+    )
+    capture_delta = _fr13_fixed32_counter_delta(
+        committer_after, committer_before, "captures"
+    )
+    other_replay_deltas = {
+        other: _fr13_fixed32_batch_counter_delta(
+            committer_after,
+            committer_before,
+            "actual_replays_by_batch",
+            other,
+        )
+        for other in (1, 2, 3, 4)
+        if other != batch
+    }
+    committer_graph_dead = int(
+        replay_delta != 1
+        or replay_batch_delta != 1
+        or capture_delta != 0
+        or any(value != 0 for value in other_replay_deltas.values())
+        or committer_after.get("fast_route_ready") is not True
+        or committer_after.get("all_batches_ready") is not True
+    )
+    if committer_graph_dead:
+        raise RuntimeError(
+            "FR13 fixed32 committer enqueue delta drift: "
+            + repr(
+                (
+                    replay_delta,
+                    replay_batch_delta,
+                    capture_delta,
+                    other_replay_deltas,
+                    committer_after,
+                )
+            )
+        )
+    normalized_committer = {
+        "batch": int(committer_contract.get("batch", -1)),
+        "path_cap": int(committer_contract.get("path_cap", -1)),
+        "neutralizations": int(
+            committer_contract.get("neutralizations", -1)
+        ),
+        "ring_gathers": int(committer_contract.get("ring_gathers", -1)),
+        "fused_calls": int(committer_contract.get("fused_calls", -1)),
+        "graph_replays_per_event": int(
+            committer_contract.get("graph_replays_per_event", -1)
+        ),
+        "preseed_capacity": int(
+            committer_contract.get("preseed_capacity", -1)
+        ),
+    }
+    committer_fallback = int(
+        normalized_committer["batch"] != batch
+        or normalized_committer["path_cap"] != 16
+        or normalized_committer["neutralizations"] != 5
+        or normalized_committer["ring_gathers"] != 4
+        or normalized_committer["fused_calls"] != 48
+        or normalized_committer["graph_replays_per_event"] != 1
+        or normalized_committer["preseed_capacity"] < batch
+    )
+    if committer_fallback:
+        raise RuntimeError(
+            "FR13 fixed32 committer graph contract drift: "
+            + repr(normalized_committer)
+        )
+    stage_delta = _fr13_fixed32_counter_delta(
+        pregather_after, pregather_before, "actual_stages"
+    )
+    stage_batch_delta = _fr13_fixed32_batch_counter_delta(
+        pregather_after,
+        pregather_before,
+        "actual_stages_by_batch",
+        batch,
+    )
+    other_stage_deltas = {
+        other: _fr13_fixed32_batch_counter_delta(
+            pregather_after,
+            pregather_before,
+            "actual_stages_by_batch",
+            other,
+        )
+        for other in (1, 2, 3, 4)
+        if other != batch
+    }
+    row_elems = int(pregather_contract.get("row_elems", -1))
+    block = int(pregather_contract.get("block", -1))
+    pregather_layers = int(pregather_contract.get("layers", -1))
+    graph_capture_delta = _fr13_fixed32_counter_delta(
+        pregather_after, pregather_before, "graph_capture_stages"
+    )
+    if (
+        pregather_before.get("preseeded") is not True
+        or pregather_after.get("preseeded") is not True
+        or int(pregather_after.get("pointer_entries", -1)) != 48
+        or stage_delta != 0
+        or stage_batch_delta != 0
+        or any(value != 0 for value in other_stage_deltas.values())
+        or graph_capture_delta != 0
+        or int(pregather_after.get("profile_capture_stages", -1)) != 0
+        or int(pregather_after.get("aux_capture_stages", -1)) != 0
+        or any(
+            int(value) != 0
+            for value in pregather_after.get(
+                "actual_stages_by_batch", {}
+            ).values()
+        )
+        or pregather_contract.get("route") != "in_graph_preconsume"
+        or pregather_layers != 48
+        or row_elems <= 0
+        or block <= 0
+        or int(pregather_contract.get("graph_capture_stages", -1)) <= 0
+        or int(event["conv_stage_calls"]) != 1
+        or int(event["conv_stage_replays"]) != 1
+        or event["conv_stage_before_all_consumes"] is not True
+        or int(event["conv_stage_layers"]) != pregather_layers
+        or int(event["conv_stage_row_elems"]) != row_elems
+        or int(event["conv_stage_block"]) != block
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 conv pregather stage drift: "
+            + repr(
+                (
+                    stage_delta,
+                    stage_batch_delta,
+                    other_stage_deltas,
+                    pregather_contract,
+                    pregather_after,
+                )
+            )
+        )
+    conv_rows = int(layer_count) * batch
+    event["conv_commit"] = {
+        "route": "stateless_col0_fixed",
+        "layers": int(layer_count),
+        "requests": batch,
+        "leaf_select_rows": conv_rows,
+        "index_select_rows": conv_rows,
+        "index_copy_rows": conv_rows,
+        "skips": 0,
+        "fallback": 0,
+    }
+    programs = pregather_layers * batch * ((row_elems + block - 1) // block)
+    event["conv_pregather"] = {
+        "route": "in_graph_preconsume",
+        "layout_sha256": event["conv_stage_source"],
+        "stage_calls": int(event["conv_stage_replays"]),
+        "stage_before_all_consumes": event[
+            "conv_stage_before_all_consumes"
+        ],
+        "layers": pregather_layers,
+        "requests": batch,
+        "row_elems": row_elems,
+        "programs": programs,
+        "staged_rows": pregather_layers * batch,
+        "consume_calls": int(event["conv_consume_calls"]),
+        "consume_hits": int(event["conv_consume_hits"]),
+        "consume_fallbacks": int(event["conv_consume_fallbacks"]),
+        "freshness_matches": int(event["conv_freshness_matches"]),
+    }
+    path_cap = normalized_committer["path_cap"]
+    fused_calls = normalized_committer["fused_calls"]
+    ring_gathers = normalized_committer["ring_gathers"]
+    event["committer"] = {
+        "route": "fixed16_device_fill_graph",
+        "layers": fused_calls,
+        "requests": batch,
+        "path_capacity": path_cap,
+        "layout_slots": path_cap * batch,
+        "ring_gather_ops": ring_gathers,
+        "ring_layer_path_rows": (
+            ring_gathers * fused_calls * path_cap * batch
+        ),
+        "neutralize_ops": normalized_committer["neutralizations"],
+        "fused_layer_calls": fused_calls,
+        "graph_replays": replay_delta,
+        "graph_captures": capture_delta,
+        "host_lens_readbacks": 0,
+        "host_flag_readbacks": 0,
+        "pointer_table_rebuilds": 0,
+        "overflow": int(path_shape[1] > path_cap or 12 > path_cap),
+        "fallback": committer_fallback,
+        "graph_dead": committer_graph_dead,
+    }
+
+
+def _fr13_fixed32_observed_preforward_pack(
+    batch_size,
+    tensor_shapes,
+    tensor_dtypes,
+    tensor_device_types,
+    zero_calls,
+    copy_calls,
+):
+    event = _fr13_fixed32_observed_current("pre-forward request-key pack")
+    if event is None:
+        return
+    batch = int(batch_size)
+    shapes = tuple(
+        tuple(int(value) for value in shape) for shape in tensor_shapes
+    )
+    if (
+        batch != int(event["batch_size"])
+        or shapes
+        != ((batch, 16), (batch,), (batch, 16), (batch,))
+        or tuple(str(value) for value in tensor_dtypes)
+        != ("torch.int32",) * 4
+        or tuple(str(value) for value in tensor_device_types)
+        != ("cuda",) * 4
+        or int(zero_calls) != 2
+        or int(copy_calls) != 2
+        or event["preforward_pack"] is not None
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 direct pre-forward pack drift: "
+            + repr(
+                (
+                    batch,
+                    shapes,
+                    tensor_dtypes,
+                    tensor_device_types,
+                    zero_calls,
+                    copy_calls,
+                )
+            )
+        )
+    event["preforward_pack"] = {
+        "zero_calls": 2,
+        "copy_calls": 2,
+    }
+
+
+def _fr13_fixed32_observed_publish_pack(
+    batch_size,
+    tensor_shapes,
+    tensor_dtypes,
+    tensor_device_types,
+    post_output_copy_calls,
+    post_path_pack_copy_calls,
+    post_rowmap_copy_calls,
+    taw_loop_iterations,
+):
+    event = _fr13_fixed32_observed_current("device publish/pack")
+    if event is None:
+        return
+    batch = int(batch_size)
+    actual_shapes = tuple(
+        tuple(int(value) for value in shape) for shape in tensor_shapes
+    )
+    expected_shapes = (
+        (batch, 32),
+        (batch, 32),
+        (batch,),
+        (batch,),
+        (batch, 16),
+        (batch, 16),
+        (batch,),
+        (batch,),
+        (batch, 16),
+        (batch,),
+    )
+    dtypes = tuple(str(value) for value in tensor_dtypes)
+    devices = tuple(str(value) for value in tensor_device_types)
+    if (
+        batch != int(event["batch_size"])
+        or actual_shapes != expected_shapes
+        or dtypes
+        != (
+            "torch.int64",
+            "torch.int32",
+            "torch.int64",
+            "torch.int32",
+            "torch.int64",
+            "torch.int32",
+            "torch.int64",
+            "torch.int32",
+            "torch.int32",
+            "torch.int32",
+        )
+        or devices != ("cuda",) * len(expected_shapes)
+        or int(post_output_copy_calls) != 2
+        or int(post_path_pack_copy_calls) != 2
+        or int(post_rowmap_copy_calls) != 2
+        or int(taw_loop_iterations) != 12
+        or event["preforward_pack"]
+        != {"zero_calls": 2, "copy_calls": 2}
+        or any(
+            event[name] is not None
+            for name in (
+                "output_publish",
+                "accepted_path_pack",
+                "request_key_pack",
+            )
+        )
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 direct publish/pack geometry drift: "
+            + repr(
+                (
+                    batch,
+                    actual_shapes,
+                    dtypes,
+                    devices,
+                    post_output_copy_calls,
+                    post_path_pack_copy_calls,
+                    post_rowmap_copy_calls,
+                    taw_loop_iterations,
+                )
+            )
+        )
+    event["output_publish"] = {
+        "route": "device_fixed32",
+        "capacity": 32,
+        "requests": batch,
+        "launches": 2,
+        "slots_written": 32 * batch,
+        "accepted_rows_written": batch,
+        "host_materializations": 0,
+        "host_scalar_writes": 0,
+        "dtoh": 0,
+        "h2d": 0,
+        "fallback": 0,
+    }
+    event["accepted_path_pack"] = {
+        "route": "device_fixed16",
+        "capacity": 16,
+        "requests": batch,
+        "pack_launches": 2,
+        "slots_written": 16 * batch,
+        "source_walk_slots": 12 * batch,
+        "lens_written": batch,
+        "host_path_items": 0,
+        "overflow": 0,
+        "fallback": 0,
+    }
+    event["request_key_pack"] = {
+        "route": "device_rowmap",
+        "sampler_rows": batch,
+        "spec_rows": batch,
+        "map_passes": 2,
+        "path_slots_gathered": 32 * batch,
+        "lens_gathered": 2 * batch,
+        "zero_launches": 2,
+        "gather_launches": 4,
+        "host_dict_inserts": 0,
+        "host_hash_lookups": 0,
+        "missing": 0,
+        "fallback": 0,
+    }
+
+
+def _fr13_fixed32_observed_take(mode, batch_size, forward_step_index):
+    global _FR13_FIXED32_OBSERVED_CURRENT
+    event = _fr13_fixed32_observed_current("commit seal")
+    if event is None:
+        return None
+    batch = int(batch_size)
+    forward = int(forward_step_index)
+    if (
+        mode != event["mode"]
+        or batch != int(event["batch_size"])
+        or forward != int(event["forward_step_index"])
+    ):
+        raise RuntimeError("FR13 fixed32 observed seal identity drift")
+    _fr13_fixed32_validate_forward_work(event, "event")
+    if (
+        event["execution_basis"] != "cudagraph_full_replay"
+        or int(event["forward_graph_replays"]) != 1
+        or not isinstance(event["forward_graph_id"], int)
+        or not isinstance(event["forward_graph_signature"], str)
+        or len(event["forward_graph_signature"]) != 64
+        or not isinstance(event["conv_commit"], dict)
+        or not isinstance(event["conv_pregather"], dict)
+        or not isinstance(event["committer"], dict)
+        or not isinstance(event["preforward_pack"], dict)
+        or not isinstance(event["output_publish"], dict)
+        or not isinstance(event["accepted_path_pack"], dict)
+        or not isinstance(event["request_key_pack"], dict)
+        or not isinstance(event["batch_purity"], dict)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 event lacks one exact full-graph replay: "
+            + repr(
+                {
+                    "execution_basis": event["execution_basis"],
+                    "graph_replays": event["forward_graph_replays"],
+                    "graph_id": event["forward_graph_id"],
+                    "graph_signature": event["forward_graph_signature"],
+                }
+            )
+        )
+    observed = {
+        "mode": event["mode"],
+        "batch_size": batch,
+        "forward_step_index": forward,
+        "request_ids": tuple(event["request_ids"]),
+        "batch_purity": dict(event["batch_purity"]),
+        "execution_provenance": {
+            "observed_route": event["execution_basis"],
+            "graph_id": int(event["forward_graph_id"]),
+            "graph_signature": event["forward_graph_signature"],
+            "matching_replays": int(event["forward_graph_replays"]),
+            "observed_fields": [
+                "full_graph_identity",
+                "full_graph_signature",
+                "full_graph_batch_descriptor",
+                "full_graph_replay_enqueue",
+                "conv_pregather_freshness_token",
+                "committer_replay_delta",
+                "conv_pregather_stage_delta",
+                "taw_payload",
+                "preforward_pack_call_boundaries",
+                "post_taw_publish_call_boundaries",
+                "kv_fixed16_geometry",
+            ],
+            "contract_derived_fields": [
+                "tree_attn_inner_calls",
+                "gdn_inner_launches",
+                "gdn_export_or_mask",
+                "committer_graph_inner_ops",
+                "kv_inner_apply_calls",
+                "conv_commit_inner_aten_ops",
+            ],
+        },
+        "tree_attn": {
+            "calls": int(event["tree_calls"]),
+            "q_rows": int(event["tree_q_rows"]),
+            "bias_shape": list(event["tree_bias_shape"]),
+            "physical_parent_digest": event["gdn_parent_sha256"],
+            "bias_digest": event["gdn_ancestry_sha256"],
+        },
+        "gdn": {
+            "scan_calls": int(event["gdn_scan_calls"]),
+            "launches": int(event["gdn_launches"]),
+            "path_programs": int(event["gdn_path_programs"]),
+            "padded_slots": int(event["gdn_padded_slots"]),
+            "nodes": int(event["gdn_nodes"]),
+            "critical_path": int(event["gdn_critical_path"]),
+            "grid_z": list(event["gdn_grid_z"]),
+            "max_path_lengths": list(event["gdn_max_path_lengths"]),
+            "export_or_mask": int(event["gdn_export_or_mask"]),
+        },
+        "conv_commit": dict(event["conv_commit"]),
+        "conv_pregather": dict(event["conv_pregather"]),
+        "committer": dict(event["committer"]),
+        "output_publish": dict(event["output_publish"]),
+        "accepted_path_pack": dict(event["accepted_path_pack"]),
+        "request_key_pack": dict(event["request_key_pack"]),
+        "drafter": None,
+        "drafter_runtime": None,
+    }
+    _FR13_FIXED32_OBSERVED_CURRENT = None
+    return observed
+
+
+def _fr13_fixed32_observed_kv(
+    observed,
+    batch_size,
+    group_count,
+    cache_count,
+    cache_plane_counts,
+    accepted_paths_shape,
+    accepted_lens_shape,
+):
+    if not isinstance(observed, dict):
+        raise RuntimeError("FR13 fixed32 KV has no observed event")
+    batch = int(batch_size)
+    planes = tuple(int(value) for value in cache_plane_counts)
+    path_shape = tuple(int(value) for value in accepted_paths_shape)
+    lens_shape = tuple(int(value) for value in accepted_lens_shape)
+    caches = int(cache_count)
+    if (
+        batch != int(observed.get("batch_size", -1))
+        or int(group_count) != 1
+        or caches != 16
+        or planes != (2,) * caches
+        or path_shape != (batch, 16)
+        or lens_shape != (batch,)
+        or "kv_remap" in observed
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 KV observed geometry drift: "
+            + repr(
+                (
+                    batch,
+                    group_count,
+                    caches,
+                    planes,
+                    path_shape,
+                    lens_shape,
+                )
+            )
+        )
+    pair_rows = caches * 16 * batch
+    observed["kv_remap"] = {
+        "route": "syncfree_fixed16",
+        "path_capacity": 16,
+        "pair_slots": 16 * batch,
+        "kv_groups": int(group_count),
+        "kv_cache_tensors": caches,
+        "kv_planes": 2,
+        "prepare_calls": 1,
+        "apply_cache_calls": caches,
+        "src_pair_rows": pair_rows,
+        "dst_pair_rows": pair_rows,
+        "identity_safe_writes": pair_rows,
+        "host_syncs": 0,
+        "skips": 0,
+        "fallback": 0,
+    }
+
+
+def _fr13_fixed32_failure_counts(observed, taw):
+    if not isinstance(observed, dict) or not isinstance(taw, dict):
+        raise RuntimeError("FR13 fixed32 failure evidence is missing")
+
+    def count(section, field):
+        value = observed.get(section, {}).get(field)
+        if type(value) is not int or value < 0:
+            raise RuntimeError(
+                "FR13 fixed32 failure source is not a nonnegative int: "
+                + str(section)
+                + "."
+                + str(field)
+            )
+        return value
+
+    purity = observed.get("batch_purity")
+    if not isinstance(purity, dict) or set(purity) != {
+        "batch_rows",
+        "spec_rows",
+        "physical_draft_counts",
+        "mixed_pseudo_rows",
+        "all_physical_31",
+    }:
+        raise RuntimeError("FR13 fixed32 batch-purity evidence is malformed")
+    batch = int(observed.get("batch_size", -1))
+    batch_rows = purity.get("batch_rows")
+    spec_rows = purity.get("spec_rows")
+    mixed_rows = purity.get("mixed_pseudo_rows")
+    physical_counts = purity.get("physical_draft_counts")
+    if (
+        type(batch_rows) is not int
+        or type(spec_rows) is not int
+        or type(mixed_rows) is not int
+        or not isinstance(physical_counts, list)
+        or any(type(value) is not int or value < 0 for value in physical_counts)
+        or type(purity.get("all_physical_31")) is not bool
+        or batch_rows != batch
+        or not 0 <= spec_rows <= batch_rows
+        or len(physical_counts) != batch_rows
+        or mixed_rows != batch_rows - spec_rows
+        or purity["all_physical_31"]
+        is not all(value == 31 for value in physical_counts)
+    ):
+        raise RuntimeError("FR13 fixed32 batch-purity evidence is incoherent")
+    topology_cache_hit = taw.get("topology_cache_hit")
+    cache_misses = taw.get("cache_misses")
+    if (
+        type(topology_cache_hit) is not bool
+        or type(cache_misses) is not int
+        or cache_misses < 0
+    ):
+        raise RuntimeError("FR13 fixed32 TAW cache evidence is malformed")
+    route_mismatches = sum(
+        observed.get(section, {}).get("route") != route
+        for section, route in (
+            ("output_publish", "device_fixed32"),
+            ("accepted_path_pack", "device_fixed16"),
+            ("request_key_pack", "device_rowmap"),
+            ("kv_remap", "syncfree_fixed16"),
+            ("conv_commit", "stateless_col0_fixed"),
+            ("conv_pregather", "in_graph_preconsume"),
+            ("committer", "fixed16_device_fill_graph"),
+        )
+    )
+    taw_iterations = taw.get("loop_iterations")
+    output_capacity = observed.get("output_publish", {}).get("capacity")
+    accepted_capacity = observed.get("accepted_path_pack", {}).get("capacity")
+    if (
+        type(taw_iterations) is not int
+        or taw_iterations < 0
+        or type(output_capacity) is not int
+        or output_capacity < 0
+        or type(accepted_capacity) is not int
+        or accepted_capacity < 0
+    ):
+        raise RuntimeError("FR13 fixed32 capacity failure evidence is malformed")
+    return {
+        "fallback": sum(
+            count(section, field)
+            for section, field in (
+                ("output_publish", "fallback"),
+                ("accepted_path_pack", "fallback"),
+                ("request_key_pack", "fallback"),
+                ("kv_remap", "fallback"),
+                ("conv_commit", "fallback"),
+                ("conv_pregather", "consume_fallbacks"),
+                ("committer", "fallback"),
+            )
+        ) + route_mismatches,
+        "overflow": (
+            count("accepted_path_pack", "overflow")
+            + count("committer", "overflow")
+            + int(taw_iterations > accepted_capacity)
+            + int(taw_iterations > output_capacity)
+        ),
+        "graph_dead": (
+            count("committer", "graph_dead")
+            + int(
+                observed["committer"].get("route")
+                != "fixed16_device_fill_graph"
+            )
+            + int(observed["committer"].get("graph_replays") != 1)
+            + int(observed["committer"].get("graph_captures") != 0)
+        ),
+        "mixed_pseudo": (
+            batch_rows
+            - spec_rows
+            + sum(value != 31 for value in physical_counts)
+        ),
+        "taw_cache_miss": cache_misses + int(topology_cache_hit is not True),
+    }
+
+
+def _fr13_fixed32_observed_build_record(
+    observed, taw_payload, event_index, producer_pid
+):
+    if not isinstance(observed, dict):
+        raise RuntimeError("FR13 fixed32 census observation is missing")
+    identity = (
+        observed.get("mode"),
+        int(observed.get("batch_size", -1)),
+        int(observed.get("forward_step_index", -1)),
+    )
+    index = int(event_index)
+    pid = int(producer_pid)
+    if (
+        identity[0] != _FR13_FIXED32_MODE
+        or identity[1] not in (1, 2, 3, 4)
+        or identity[2] < 0
+        or index < 0
+        or pid <= 0
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 observed event identity is invalid: "
+            + repr((identity, index, pid))
+        )
+    observed_request_ids = tuple(observed.get("request_ids", ()))
+    request_ids_sha256 = __import__("hashlib").sha256(
+        __import__("json").dumps(
+            list(observed_request_ids),
+            ensure_ascii=True,
+            separators=(",", ":"),
+        ).encode("ascii")
+    ).hexdigest()
+    if (
+        len(observed_request_ids) != identity[1]
+        or observed.get("drafter_runtime", {}).get("request_ids_sha256")
+        != request_ids_sha256
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 request identity digest did not bind event"
+        )
+    if (
+        not isinstance(taw_payload, dict)
+        or set(taw_payload)
+        != {"mode", "valid_mask", "batch_size", "taw"}
+        or taw_payload.get("mode") != identity[0]
+        or type(taw_payload.get("valid_mask")) is not int
+        or taw_payload.get("valid_mask")
+        != int(globals().get("_FR13_FIXED32_VALID_MASK", -1))
+        or type(taw_payload.get("batch_size")) is not int
+        or taw_payload.get("batch_size") != identity[1]
+        or not isinstance(taw_payload.get("taw"), dict)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 TAW wrapper identity/schema mismatch"
+        )
+    actual_taw = taw_payload.get("taw")
+    try:
+        __import__("json").dumps(
+            actual_taw,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(
+            "FR13 fixed32 TAW payload is not canonical JSON"
+        ) from exc
+    for section in (
+        "drafter",
+        "drafter_runtime",
+        "output_publish",
+        "accepted_path_pack",
+        "request_key_pack",
+        "conv_commit",
+        "conv_pregather",
+        "committer",
+        "kv_remap",
+    ):
+        actual = observed.get(section)
+        if not isinstance(actual, dict):
+            raise RuntimeError(
+                "FR13 fixed32 observed section is missing at "
+                + section
+            )
+    tree_observed = observed.get("tree_attn")
+    gdn_observed = observed.get("gdn")
+    batch_purity = observed.get("batch_purity")
+    if (
+        not isinstance(tree_observed, dict)
+        or not isinstance(gdn_observed, dict)
+        or not isinstance(batch_purity, dict)
+    ):
+        raise RuntimeError("FR13 fixed32 tree/GDN observations are missing")
+    failures = _fr13_fixed32_failure_counts(observed, actual_taw)
+    if any(value != 0 for value in failures.values()):
+        raise RuntimeError(
+            "FR13 fixed32 observed failure evidence is nonzero: "
+            + repr(failures)
+        )
+    valid_mask = int(taw_payload["valid_mask"])
+    record = {
+        "schema": "fr13-fixed32-work-census-v5",
+        "event_id": (
+            str(identity[0]) + ":" + str(pid) + ":" + str(index)
+        ),
+        "event_index": index,
+        "forward_step_index": identity[2],
+        "producer_pid": pid,
+        "event_complete": True,
+        "mode": identity[0],
+        "batch_size": identity[1],
+        "physical_drafts": 31,
+        "verify_rows": 32 * identity[1],
+        "active_nodes": valid_mask.bit_count(),
+        "valid_mask": valid_mask,
+        "batch_purity": dict(batch_purity),
+        "drafter": dict(observed["drafter"]),
+        "drafter_runtime": dict(observed["drafter_runtime"]),
+        "tree_attn": dict(tree_observed),
+        "gdn": dict(gdn_observed),
+        "taw": dict(actual_taw),
+        "output_publish": dict(observed["output_publish"]),
+        "accepted_path_pack": dict(observed["accepted_path_pack"]),
+        "request_key_pack": dict(observed["request_key_pack"]),
+        "kv_remap": dict(observed["kv_remap"]),
+        "conv_commit": dict(observed["conv_commit"]),
+        "conv_pregather": dict(observed["conv_pregather"]),
+        "committer": dict(observed["committer"]),
+        "failures": failures,
+    }
+    provenance = observed.get("execution_provenance")
+    evidence = (
+        _FR13_FIXED32_GRAPH_REPLAY_EVIDENCE[-1]
+        if _FR13_FIXED32_GRAPH_REPLAY_EVIDENCE
+        else None
+    )
+    if (
+        not isinstance(provenance, dict)
+        or not isinstance(evidence, dict)
+        or evidence.get("event_complete") is not False
+        or evidence.get("mode") != record.get("mode")
+        or int(evidence.get("batch_size", -1))
+        != int(record.get("batch_size", -1))
+        or int(evidence.get("forward_step_index", -1))
+        != int(record.get("forward_step_index", -1))
+        or evidence.get("graph_id") != provenance.get("graph_id")
+        or evidence.get("graph_signature")
+        != provenance.get("graph_signature")
+        or int(evidence.get("matching_replays", -1)) != 1
+        or int(provenance.get("matching_replays", -1)) != 1
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 replay evidence did not bind completed event: "
+            + repr((evidence, provenance))
+        )
+    evidence["event_index"] = int(record["event_index"])
+    evidence["event_complete"] = True
+    drafter_evidence = [
+        row
+        for row in _FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE
+        if (
+            row.get("event_complete") is False
+            and row.get("mode") == record.get("mode")
+            and int(row.get("batch_size", -1))
+            == int(record.get("batch_size", -1))
+            and int(row.get("forward_step_index", -1))
+            == int(record.get("forward_step_index", -1))
+        )
+    ]
+    runtime = observed.get("drafter_runtime")
+    if (
+        len(drafter_evidence) != 1
+        or not isinstance(runtime, dict)
+        or tuple(drafter_evidence[0].get("request_ids", ()))
+        != tuple(observed.get("request_ids", ()))
+        or drafter_evidence[0].get("graph_id") != runtime.get("graph_id")
+        or drafter_evidence[0].get("graph_signature")
+        != runtime.get("graph_signature")
+        or int(drafter_evidence[0].get("proposal_begins", -1)) != 1
+        or int(drafter_evidence[0].get("proposal_ends", -1)) != 1
+        or int(drafter_evidence[0].get("matching_replays", -1)) != 1
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 drafter evidence did not bind completed event: "
+            + repr((drafter_evidence, runtime))
+        )
+    drafter_evidence[0]["event_index"] = int(record["event_index"])
+    drafter_evidence[0]["event_complete"] = True
+    return record
+
+
+def _fr13_fixed32_complete_pending_event():
+    global _FR13_FIXED32_PENDING_EVENT
+    global _FR13_FIXED32_COMPLETE_EVENTS
+    pending = globals().get("_FR13_FIXED32_PENDING_EVENT")
+    if not isinstance(pending, dict):
+        raise RuntimeError("FR13 fixed32 completion has no pending event")
+    observed = pending.get("observed_work")
+    events = globals().get("_FR13_FIXED32_CENSUS_EVENTS")
+    if not isinstance(observed, dict) or not isinstance(events, list):
+        raise RuntimeError("FR13 fixed32 completion state is malformed")
+    event_index = len(events)
+    if (
+        pending.get("kv_complete") is not True
+        or int(pending.get("event_index", -1)) != event_index
+        or tuple(pending.get("request_ids", ()))
+        != tuple(observed.get("request_ids", ()))
+        or not isinstance(observed.get("drafter_runtime"), dict)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 event sealed before KV/drafter completion"
+        )
+    runtime_os = __import__("os")
+    bound = _fr13_fixed32_observed_build_record(
+        observed,
+        pending.get("taw"),
+        event_index,
+        runtime_os.getpid(),
+    )
+    events.append(bound)
+    _FR13_FIXED32_PENDING_EVENT = None
+    _FR13_FIXED32_COMPLETE_EVENTS = len(events)
+'''
+
+
+def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
+    """Validate the fixed-work campaign before emitting any runtime source."""
+    mode = _FR13_FIXED32_MODE
+    if not mode:
+        return None
+    if mode not in _FR13_FIXED32_MODES:
+        raise RuntimeError(f"unsupported FR13_FIXED32_MODE={mode!r}")
+    expected_mask, expected_active = _FR13_FIXED32_MODES[mode]
+    try:
+        configured_mask = int(
+            os.environ.get("FR13_FIXED32_VALID_MASK", ""), 0
+        )
+        configured_active = int(
+            os.environ.get("FR13_FIXED32_ACTIVE_NODES", "")
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            "fixed32 mask/active-draft environment is missing or malformed"
+        ) from exc
+    if (configured_mask, configured_active) != (
+        expected_mask,
+        expected_active,
+    ):
+        raise RuntimeError(
+            "fixed32 mode contract mismatch: "
+            f"mode={mode} mask={configured_mask:#x}/{expected_mask:#x} "
+            f"active={configured_active}/{expected_active}"
+        )
+    required_one = (
+        "FR13_FIXED32_WORK_CENSUS",
+        "FR13_FIXED32_DEVICE_PUBLISH",
+        "FR13_FIXED32_ACCEPT_PACK",
+        "FR13_FIXED32_REQKEY_DEVICE",
+        "FR13_FIXED32_KV_REMAP16",
+        "FR13_FIXED32_COMMIT_DEVICE_FILL",
+        "FR13_DEVICE_MULTIDRAFT",
+        "FR13_DRAFTER_GRAPH",
+        "FR13_DRAFTER_SINGLE_LOGITS",
+        "FR13_DM_DEPTHSYNC",
+        "FR13_TAW",
+        "FR13_PARENT_GATHER",
+        "FR13_SUBTREE_PARALLEL",
+        "FR13_EAGER_PACK",
+        "FR13_COMMIT_BATCH_OUTPUT",
+        "FR13_COMMITTER_NATIVE",
+        "FR13_COMMITTER_BATCHED",
+        "FR13_COMMITTER_GRAPH",
+        "FR13_RING_EXPORT",
+        "FR13_REPLAY_ROUTE",
+        "FR13_ATTN_KV_REMAP",
+        "FR13_SLOT_REORDER",
+        "FR13_KV_REMAP_SYNCFREE",
+        "FR13_TREE_CONV_FUSED",
+        "FR13_CONV_WB_FUSED",
+        "FR13_CONV_WB_BATCHED",
+        "FR13_CONV_PREGATHER",
+        "FR13_CONV_COMMITTED_PATH",
+        "FR13_APC_COMMIT_TO_RUNNING_ROW",
+        "FR13_TREE_RUNROW_INIT",
+        "FR13_FLAGS_INKERNEL",
+    )
+    missing = [name for name in required_one if os.environ.get(name) != "1"]
+    if missing:
+        raise RuntimeError(
+            "fixed32 required route flags are not exactly 1: " + repr(missing)
+        )
+    required_zero = (
+        "FR13_STEP_GRAPH",
+        "FR13_COMMIT_OVERLAP",
+        "FR13_REPLAY_MULTISTREAM",
+        "FR13_BRANCH_ACCEPT_DIAG",
+        "FR13_FORCE_SPINE_COMMIT",
+        "FR13_FIX1_SELFCHECK",
+        "FR13_COMMIT_ARGMAX_GATE",
+        "FR13_FORK_MARGIN_DUMP",
+        "FR13_CHASE_DIAG",
+        "FR13_REPLAY_BOUNDARY_LOG",
+        "FR13_SUBTREE_PARALLEL_SELFCHECK",
+        "FR13_PARENT_GATHER_SELFCHECK",
+    )
+    armed_alternates = [
+        name for name in required_zero if os.environ.get(name, "0") != "0"
+    ]
+    if armed_alternates:
+        raise RuntimeError(
+            "fixed32 alternate/diagnostic routes must be exactly 0: "
+            + repr(armed_alternates)
+        )
+    if os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "0":
+        raise RuntimeError("fixed32 forbids FR10_ALLOW_LINEAR_FALLBACK")
+    if int(os.environ.get("FR13_FIXED32_TAW_WALK_CAP", "0")) != 12:
+        raise RuntimeError("fixed32 requires FR13_FIXED32_TAW_WALK_CAP=12")
+    if len(_FR13_FIXED32_CHOICES) != 31:
+        raise RuntimeError("fixed32 physical topology must contain 31 drafts")
+    index = {choice: i + 1 for i, choice in enumerate(_FR13_FIXED32_CHOICES)}
+    parent = [-1]
+    for choice in _FR13_FIXED32_CHOICES:
+        parent.append(0 if len(choice) == 1 else index[choice[:-1]])
+    if tuple(parent) != _FR13_FIXED32_PARENT:
+        raise RuntimeError("fixed32 physical parent vector drifted")
+    return expected_mask, expected_active
+
+
 
 
 
@@ -85,6 +3820,8 @@ def _patch_gdn_attn() -> bool:
     text = GDN_ATTN_PATH.read_text()
     if "fr10_tree_parent" in text:
         return False
+    fixed32_mode = _FR13_FIXED32_MODE
+    fixed32_path_cols = "16" if fixed32_mode else "self.num_spec + 1"
 
     # FR13_SPEC_BLOCKS_CAP consumer-side width caps: gdn_attn derives ssi
     # widths from self.num_spec (a TOKEN count) rather than the capped
@@ -103,6 +3840,9 @@ def _patch_gdn_attn() -> bool:
         (
             "from vllm.v1.kv_cache_interface import AttentionSpec, MambaSpec\n"
             "\n"
+            f"_FR13_FIXED32_MODE = {fixed32_mode!r}\n"
+            f"_FR13_FIXED32_TREE_SOURCE = {_FR13_FIXED32_TREE_SOURCE!r}\n"
+            f"_FR13_FIXED32_PARENT = {_FR13_FIXED32_PARENT!r}\n"
             "_FR10_TREE_COUNTERS = []\n"
             "_FR10_SIGNAL_INSTALLED = False\n"
             "\n"
@@ -202,6 +3942,15 @@ def _patch_gdn_attn() -> bool:
             "            dtype=torch.int32,\n"
             "            device=device,\n"
             "        )\n"
+            "        if _FR13_FIXED32_MODE:\n"
+            "            from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
+            "                register_fixed32_conv_col0_ssi_group as _fr13_f32_ssi_group,\n"
+            "            )\n"
+            "            _fr13_f32_ssi_group(\n"
+            "                layer_names=tuple(str(_name) for _name in layer_names),\n"
+            "                spec_state_indices=self.spec_state_indices_tensor,\n"
+            "                max_batch_size=min(4, int(self.decode_cudagraph_max_bs)),\n"
+            "            )\n"
             "\n"
             "        self.fr10_tree_parent = None\n"
             "        self.fr10_tree_strict_mask = None\n"
@@ -218,7 +3967,7 @@ def _patch_gdn_attn() -> bool:
             "            int(self.vllm_config.scheduler_config.max_num_seqs),\n"
             "        )\n"
             "        self.fr10_tree_accepted_paths = torch.zeros(\n"
-            "            (self.fr10_tree_accepted_path_bs, self.num_spec + 1),\n"
+            f"            (self.fr10_tree_accepted_path_bs, {fixed32_path_cols}),\n"
             "            dtype=torch.int32,\n"
             "            device=device,\n"
             "        )\n"
@@ -227,10 +3976,30 @@ def _patch_gdn_attn() -> bool:
             "            dtype=torch.int32,\n"
             "            device=device,\n"
             "        )\n"
+            "        self.fr13_fixed32_slot_paths = (\n"
+            "            torch.zeros_like(self.fr10_tree_accepted_paths)\n"
+            "            if _FR13_FIXED32_MODE else None\n"
+            "        )\n"
+            "        self.fr13_fixed32_slot_lens = (\n"
+            "            torch.zeros_like(self.fr10_tree_accepted_lens)\n"
+            "            if _FR13_FIXED32_MODE else None\n"
+            "        )\n"
+            "        self.fr13_fixed32_slot_path_tmp = (\n"
+            "            torch.zeros((16,), dtype=torch.int32, device=device)\n"
+            "            if _FR13_FIXED32_MODE else None\n"
+            "        )\n"
+            "        self.fr13_fixed32_slot_len_tmp = (\n"
+            "            torch.zeros((), dtype=torch.int32, device=device)\n"
+            "            if _FR13_FIXED32_MODE else None\n"
+            "        )\n"
             "        try:\n"
             "            from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr10_gdn_linear\n"
             "            _fr10_gdn_linear._LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR = self.fr10_tree_accepted_paths\n"
             "            _fr10_gdn_linear._LUMO_FA_ACCEPTED_TREE_LENS_TENSOR = self.fr10_tree_accepted_lens\n"
+            "            _fr10_gdn_linear._LUMO_FA_FIXED32_SLOT_PATHS = self.fr13_fixed32_slot_paths\n"
+            "            _fr10_gdn_linear._LUMO_FA_FIXED32_SLOT_LENS = self.fr13_fixed32_slot_lens\n"
+            "            _fr10_gdn_linear._LUMO_FA_FIXED32_SLOT_PATH_TMP = self.fr13_fixed32_slot_path_tmp\n"
+            "            _fr10_gdn_linear._LUMO_FA_FIXED32_SLOT_LEN_TMP = self.fr13_fixed32_slot_len_tmp\n"
             "        except Exception as _fr10_path_buf_exc:\n"
             "            if os.environ.get(\"FR10_ALLOW_LINEAR_FALLBACK\", \"0\") != \"1\":\n"
             "                raise RuntimeError(\"FR10 tree accepted-path buffer export failed: \" + type(_fr10_path_buf_exc).__name__ + \":\" + str(_fr10_path_buf_exc)) from _fr10_path_buf_exc\n"
@@ -244,12 +4013,20 @@ def _patch_gdn_attn() -> bool:
             "            spec_token_tree = None\n"
             "        if spec_token_tree is None and self.speculative_config is not None:\n"
             "            spec_token_tree = self.speculative_config.speculative_token_tree\n"
+            "        if _FR13_FIXED32_MODE:\n"
+            "            spec_token_tree = _FR13_FIXED32_TREE_SOURCE\n"
             "        if spec_token_tree is not None:\n"
             "            tree_choices = sorted(ast.literal_eval(spec_token_tree), key=lambda _p: (len(_p), _p))\n"
+            "            if _FR13_FIXED32_MODE and tree_choices != ast.literal_eval(\n"
+            "                _FR13_FIXED32_TREE_SOURCE\n"
+            "            ):\n"
+            "                raise RuntimeError('fixed32 GDN physical topology drifted')\n"
             "            index = {choice: i + 1 for i, choice in enumerate(tree_choices)}\n"
             "            parent = [-1]\n"
             "            for choice in tree_choices:\n"
             "                parent.append(0 if len(choice) == 1 else index[choice[:-1]])\n"
+            "            if _FR13_FIXED32_MODE and tuple(parent) != _FR13_FIXED32_PARENT:\n"
+            "                raise RuntimeError('fixed32 GDN physical parent vector drifted')\n"
             "            path0_nodes = [0] + [\n"
             "                index[choice]\n"
             "                for choice in tree_choices\n"
@@ -277,6 +4054,12 @@ def _patch_gdn_attn() -> bool:
             "            # Preseed wrapper. (The FR13_HC_INTERNAL preseed that\n"
             "            # lived here was removed 2026-07-27 -- mechanism\n"
             "            # retired, FR13_CLEANUP_BAKE_PLAN.md.)\n"
+            "            _fr13_sp_required = (\n"
+            "                os.environ.get('FR13_SUBTREE_PARALLEL', '')\n"
+            "                .strip().lower() in ('1', 'true', 'yes', 'on')\n"
+            "                or os.path.exists('/logs/fr13_subtree_parallel.arm')\n"
+            "                or os.path.exists('/tmp/fr13_subtree_parallel.arm')\n"
+            "            )\n"
             "            try:\n"
             "                # FR13_SUBTREE_PARALLEL preseed (task #60): path\n"
             "                # decomposition + fp32 export buffer must exist\n"
@@ -305,12 +4088,21 @@ def _patch_gdn_attn() -> bool:
             "                        print('[FR13_SUBTREE_PARALLEL] preseed '\n"
             "                              'SKIPPED: no 3-dim ssm shape',\n"
             "                              flush=True)\n"
+            "                        if _fr13_sp_required:\n"
+            "                            raise RuntimeError(\n"
+            "                                'FR13_SUBTREE_PARALLEL: armed route '\n"
+            "                                'requires a 3-dim ssm shape'\n"
+            "                            )\n"
             "                except Exception as _fr13_sp_exc:\n"
             "                    print('[FR13_SUBTREE_PARALLEL] preseed failed: '\n"
             "                          + repr(_fr13_sp_exc), flush=True)\n"
+            "                    if _fr13_sp_required:\n"
+            "                        raise\n"
             "            except Exception as _fr13_ps_exc:\n"
             "                print('[FR13_PRESEED] wrapper failed: '\n"
             "                      + repr(_fr13_ps_exc), flush=True)\n"
+            "                if _fr13_sp_required:\n"
+            "                    raise\n"
             "            self.fr10_tree_strict_mask = strict\n"
             "            self.fr10_tree_visible_mask = visible\n"
             "            source_by_width = {}\n"
@@ -392,7 +4184,14 @@ def _patch_gdn_attn() -> bool:
             "                from vllm.model_executor.layers.mamba import (\n"
             "                    gdn_linear_attn as _fr13_gdn_mod,\n"
             "                )\n"
-            "                _fr13_ring_bs = int(self.fr10_tree_accepted_path_bs)\n"
+            "                _fr13_ring_bs = int(\n"
+            "                    min(\n"
+            "                        4,\n"
+            "                        self.vllm_config.scheduler_config.max_num_seqs,\n"
+            "                    )\n"
+            "                    if _FR13_FIXED32_MODE\n"
+            "                    else self.fr10_tree_accepted_path_bs\n"
+            "                )\n"
             "                _fr13_spec_cols = int(getattr(self, '_fr13_page_cols', int(self.num_spec) + 1))  # FR13_SPEC_BLOCKS_CAP-aware: the replay ssi stack must match the (possibly capped) ssi width or the per-step copy_ shape-mismatches\n"
             "                _fr13_fwd_ctx = (\n"
             "                    self.vllm_config.compilation_config.static_forward_context\n"
@@ -583,10 +4382,12 @@ def _patch_gdn_attn() -> bool:
             "                        \"ring_b\": _fr13_ep_ring_b,\n"
             "                        \"prev_lens\": _fr13_ep_prev_lens,\n"
             "                        \"spec_idx\": _fr13_ep_spec_idx,\n"
+            "                        \"ssi_col0\": _fr13_ep_spec_idx[:, :, 0],\n"
             "                        \"A_log\": _fr13_ep_alog,\n"
             "                        \"dt_bias\": _fr13_ep_dtb,\n"
             "                        \"output_scale\": _fr13_ep_scale,\n"
             "                        \"num_layers\": _fr13_ep_count,\n"
+            "                        \"fixed32_server_cap\": _fr13_ring_bs,\n"
             "                    }\n"
             "                else:\n"
             "                    for _fr13_name in layer_names:\n"
@@ -907,12 +4708,14 @@ def _patch_gdn_linear() -> bool:
         "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n",
         (
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
-            "from lumo_flywheel_serving.fr10_gdn_tree_kernel import gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_state_linear_remap\n"
+            "from lumo_flywheel_serving.fr10_gdn_tree_kernel import gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_state_linear_remap, subtree_get\n"
             "from lumo_flywheel_serving.fr13_replay_conv_remap import replay_conv_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
             "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, conv_wb_staging_get, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, launch_conv_state_writeback, launch_conv_state_writeback_batched, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
             "\n"
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
+            f"_FR13_FIXED32_MODE = {_FR13_FIXED32_MODE!r}\n"
+            f"{_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE}\n"
             "# FR13 DEPRECATION: FR13_APC_HIT_RECURRENT_SUFFIX is force-OFF at gdn\n"
             "# import (this EngineCore process hosts EVERY gate, TP=1) so no stray\n"
             "# export can re-engage it. The dead retired-cache family that was\n"
@@ -2689,14 +6492,58 @@ def _fr13_conv_subop_mab(
                             # (2026-07-24 rewire): the original consume sat in
                             # the deleted NPR diagnostic branch (2026-07-25) =
                             # DEAD twin, so the lever was VACUOUS on the
-                            # deployed stack. Under RUNROW_INIT=1 this gather
-                            # reads col0 pre-remap == exactly what the commit-
-                            # time staging captured (post-commit truth of step
-                            # N-1); the (req_ids, col0 page-ids, seq-1) token
-                            # guards page slides AND intervening steps. Values
-                            # byte-identical (pure copy of the same rows);
-                            # fallback = the legacy per-layer gather below.
+                            # deployed stack. Fixed32 captures one 48xB stage at
+                            # final-FULL graph entry, before layer-0 consumes;
+                            # every replay therefore gathers the CURRENT live
+                            # ssi col0 rows. The legacy non-fixed route retains
+                            # its prior-step request/page/sequence token guard.
+                            # Both routes are pure copies; legacy fallback is
+                            # the per-layer gather below.
                             _fr13_cpg_cbank = None
+                            _fr13_cpg_capturing2 = bool(
+                                torch.cuda.is_available()
+                                and torch.cuda.is_current_stream_capturing()
+                            )
+                            _fr13_cpg_capture_ctx2 = globals().get(
+                                "_FR13_FIXED32_CAPTURE_CONTEXT"
+                            )
+                            _fr13_cpg_accept_capture2 = False
+                            if (
+                                _FR13_FIXED32_MODE
+                                and _fr13_cpg_capturing2
+                                and _fr13_cpg_capture_ctx2 is not None
+                            ):
+                                _fr13_cpg_capture_desc2 = (
+                                    _fr13_cpg_capture_ctx2.get("descriptor")
+                                    if isinstance(_fr13_cpg_capture_ctx2, dict)
+                                    else None
+                                )
+                                if (
+                                    not isinstance(
+                                        _fr13_cpg_capture_desc2, dict
+                                    )
+                                    or _fr13_cpg_capture_desc2.get(
+                                        "runtime_mode"
+                                    )
+                                    != "FULL"
+                                    or int(
+                                        _fr13_cpg_capture_desc2.get(
+                                            "num_reqs", -1
+                                        )
+                                    )
+                                    != int(_fr13_tcf_b)
+                                    or int(
+                                        _fr13_cpg_capture_desc2.get(
+                                            "num_tokens", -1
+                                        )
+                                    )
+                                    != int(_fr13_tcf_b) * 32
+                                ):
+                                    raise RuntimeError(
+                                        "FR13 fixed32 capture pregather "
+                                        "context drifted"
+                                    )
+                                _fr13_cpg_accept_capture2 = True
                             if (
                                 globals().get("_FR13_CONV_PREGATHER_ON", False)
                                 and os.environ.get(
@@ -2705,8 +6552,17 @@ def _fr13_conv_subop_mab(
                                 # staged windows are COL0; only the
                                 # RUNROW_INIT=1 route reads col0 here (the
                                 # same env the prepare fn reads per call).
+                                import lumo_flywheel_serving.fr10_gdn_tree_kernel as _fr13_cpg_kernel2
                                 from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
                                     conv_col0_staged as _fr13_cpg_staged2,
+                                    fixed32_conv_col0_pregather_counters
+                                    as _fr13_cpg_counters2,
+                                    launch_fixed32_conv_col0_pregather
+                                    as _fr13_cpg_graph_stage2,
+                                    selfcheck_fixed32_conv_col0_ssi_sources
+                                    as _fr13_cpg_ssi_selfcheck2,
+                                    validate_fixed32_conv_col0_ssi_source
+                                    as _fr13_cpg_validate_ssi2,
                                 )
                                 _fr13_cpg_idx2 = globals().get(
                                     "_FR13_CPG_LAYER_IDX", {}).get(str(self.prefix))
@@ -2715,17 +6571,197 @@ def _fr13_conv_subop_mab(
                                 _fr13_cpg_seq2 = globals().get(
                                     "_LUMO_FA_STEP_SEQ", None)
                                 if (
-                                    _fr13_cpg_idx2 is not None
-                                    and _fr13_cpg_pairs2 is not None
-                                    and _fr13_cpg_seq2 is not None
+                                    _FR13_FIXED32_MODE
+                                    and not _fr13_cpg_capturing2
                                 ):
-                                    _fr13_cpg_f2 = _fr13_cpg_staged2(
-                                        (
-                                            _fr13_cpg_pairs2,
-                                            int(_fr13_cpg_seq2) - 1,
-                                        ),
-                                        int(_fr13_cpg_idx2),
+                                    _fr13_cpg_ssi_selfcheck2(
+                                        num_spec_decodes=int(_fr13_tcf_b),
                                     )
+                                if (
+                                    _fr13_cpg_idx2 is not None
+                                    and (
+                                        _fr13_cpg_accept_capture2
+                                        or _fr13_cpg_seq2 is not None
+                                    )
+                                    and (
+                                        _FR13_FIXED32_MODE
+                                        or _fr13_cpg_pairs2 is not None
+                                    )
+                                ):
+                                    if _fr13_cpg_accept_capture2:
+                                        # The final FULL graph begins with one
+                                        # 48xB pregather launch at fixed layer
+                                        # index 0. Replay therefore refreshes
+                                        # staging from the current persistent
+                                        # ssi/banks before any layer consumes it,
+                                        # including the first real event and
+                                        # request turnover.
+                                        _fr13_cpg_state2 = getattr(
+                                            _fr13_cpg_kernel2,
+                                            "_FR13_FIXED32_CONV_PREGATHER",
+                                            {},
+                                        ).get("state")
+                                        _fr13_cpg_cap2 = (
+                                            None
+                                            if not isinstance(
+                                                _fr13_cpg_state2, dict
+                                            )
+                                            else _fr13_cpg_state2.get(
+                                                "max_batch_size"
+                                            )
+                                        )
+                                        _fr13_cpg_staging2 = (
+                                            None
+                                            if not isinstance(
+                                                _fr13_cpg_state2, dict
+                                            )
+                                            else _fr13_cpg_state2.get("staging")
+                                        )
+                                        if (
+                                            type(_fr13_cpg_cap2) is not int
+                                            or _fr13_cpg_cap2 not in (1, 2, 3, 4)
+                                            or _fr13_cpg_cap2 < int(_fr13_tcf_b)
+                                            or _fr13_cpg_state2.get("mode")
+                                            != _FR13_FIXED32_MODE
+                                            or tuple(
+                                                _fr13_cpg_state2.get(
+                                                    "preseeded_batches", ()
+                                                )
+                                            )
+                                            != tuple(
+                                                range(1, _fr13_cpg_cap2 + 1)
+                                            )
+                                            or not torch.is_tensor(
+                                                _fr13_cpg_staging2
+                                            )
+                                            or _fr13_cpg_staging2.ndim != 3
+                                            or tuple(
+                                                int(_fr13_cpg_dim2)
+                                                for _fr13_cpg_dim2
+                                                in _fr13_cpg_staging2.shape[:2]
+                                            )
+                                            != (48, _fr13_cpg_cap2)
+                                            or int(
+                                                _fr13_cpg_staging2.shape[2]
+                                            )
+                                            != int(
+                                                conv_state.shape[1]
+                                                * conv_state.shape[2]
+                                            )
+                                            or _fr13_cpg_staging2.device
+                                            != conv_state.device
+                                            or _fr13_cpg_staging2.dtype
+                                            != conv_state.dtype
+                                            or not 0
+                                            <= int(_fr13_cpg_idx2)
+                                            < 48
+                                        ):
+                                            raise RuntimeError(
+                                                "FR13 fixed32 capture pregather "
+                                                "lease contract drifted"
+                                            )
+                                        _fr13_cpg_ref_bank2 = (
+                                            _fr13_cpg_state2["banks"][
+                                                int(_fr13_cpg_idx2)
+                                            ]
+                                        )
+                                        if (
+                                            int(_fr13_cpg_ref_bank2.data_ptr())
+                                            != int(conv_state.data_ptr())
+                                            or tuple(
+                                                int(_fr13_cpg_dim2)
+                                                for _fr13_cpg_dim2
+                                                in _fr13_cpg_ref_bank2.shape
+                                            )
+                                            != tuple(
+                                                int(_fr13_cpg_dim2)
+                                                for _fr13_cpg_dim2
+                                                in conv_state.shape
+                                            )
+                                            or tuple(
+                                                int(_fr13_cpg_dim2)
+                                                for _fr13_cpg_dim2
+                                                in _fr13_cpg_ref_bank2.stride()
+                                            )
+                                            != tuple(
+                                                int(_fr13_cpg_dim2)
+                                                for _fr13_cpg_dim2
+                                                in conv_state.stride()
+                                            )
+                                            or int(
+                                                _fr13_cpg_ref_bank2.storage_offset()
+                                            )
+                                            != int(conv_state.storage_offset())
+                                            or _fr13_cpg_ref_bank2.dtype
+                                            != conv_state.dtype
+                                            or _fr13_cpg_ref_bank2.device
+                                            != conv_state.device
+                                        ):
+                                            raise RuntimeError(
+                                                "FR13 fixed32 capture pregather "
+                                                "layer/bank alias drifted"
+                                            )
+                                        _fr13_cpg_validate_ssi2(
+                                            layer_name=str(self.prefix),
+                                            layer_index=int(_fr13_cpg_idx2),
+                                            spec_state_indices=(
+                                                spec_state_indices_tensor
+                                            ),
+                                            num_spec_decodes=int(_fr13_tcf_b),
+                                        )
+                                        if (
+                                            _fr13_cpg_capturing2
+                                            or _fr13_fixed32_observed_event_active()
+                                        ):
+                                            _fr13_fixed32_observed_conv_source(
+                                                str(self.prefix),
+                                                int(_fr13_cpg_idx2),
+                                                int(_fr13_tcf_b),
+                                                _fr13_cpg_capturing2,
+                                            )
+                                        if int(_fr13_cpg_idx2) == 0:
+                                            _fr13_cpg_before2 = (
+                                                _fr13_cpg_counters2()
+                                            )
+                                            _fr13_cpg_graph_stage2(
+                                                num_spec_decodes=int(
+                                                    _fr13_tcf_b
+                                                ),
+                                                req_ids_token=None,
+                                                graph_capture=True,
+                                            )
+                                            _fr13_cpg_after2 = (
+                                                _fr13_cpg_counters2()
+                                            )
+                                            if (
+                                                _fr13_cpg_capturing2
+                                                or _fr13_fixed32_observed_event_active()
+                                            ):
+                                                _fr13_fixed32_observed_conv_stage(
+                                                    str(self.prefix),
+                                                    int(_fr13_cpg_idx2),
+                                                    int(_fr13_tcf_b),
+                                                    _fr13_cpg_state2,
+                                                    _fr13_cpg_before2,
+                                                    _fr13_cpg_after2,
+                                                    _fr13_cpg_capturing2,
+                                                )
+                                        _fr13_cpg_f2 = _fr13_cpg_staging2[
+                                            int(_fr13_cpg_idx2),
+                                            : int(_fr13_tcf_b),
+                                        ]
+                                    else:
+                                        _fr13_cpg_f2 = _fr13_cpg_staged2(
+                                            (
+                                                (
+                                                    _FR13_FIXED32_MODE
+                                                    if _FR13_FIXED32_MODE
+                                                    else _fr13_cpg_pairs2
+                                                ),
+                                                int(_fr13_cpg_seq2) - 1,
+                                            ),
+                                            int(_fr13_cpg_idx2),
+                                        )
                                     if (
                                         _fr13_cpg_f2 is not None
                                         and int(_fr13_cpg_f2.shape[0])
@@ -2743,6 +6779,20 @@ def _fr13_conv_subop_mab(
                                         conv_state=conv_state,
                                         bank_rows=_fr13_committed_bank_rows,
                                     )
+                                )
+                            if (
+                                _FR13_FIXED32_MODE
+                                and (
+                                    _fr13_cpg_capturing2
+                                    or _fr13_fixed32_observed_event_active()
+                                )
+                            ):
+                                _fr13_fixed32_observed_conv_consume(
+                                    str(self.prefix),
+                                    int(_fr13_cpg_idx2),
+                                    int(_fr13_tcf_b),
+                                    _fr13_cpg_cbank is not None,
+                                    _fr13_cpg_capturing2,
                                 )
                             if os.environ.get("FR13_TCF_SELFCHECK", "0") == "1":
                                 if torch.cuda.is_current_stream_capturing():
@@ -4749,6 +8799,184 @@ def _fr13_conv_subop_mab(
                             # conv committer can copy this-step's committed leaf
                             # window -> col 0 and burn the ephemeral cols.
                             self._fr13_replay_conv_state = conv_state
+                            if _FR13_FIXED32_MODE:
+                                _fr13_f32_done = globals().setdefault(
+                                    "_FR13_FIXED32_PRESEEDED_BATCHES", set()
+                                )
+                                _fr13_f32_B = int(
+                                    attn_metadata.num_spec_decodes
+                                )
+                                _fr13_f32_inputs = (
+                                    _fr13_fixed32_boot_preseed_inputs()
+                                )
+                                if _fr13_f32_inputs is not None:
+                                        (
+                                            _fr13_f32_stacks,
+                                            _fr13_f32_layers,
+                                            _fr13_f32_order,
+                                            _fr13_f32_layer_objects,
+                                            _fr13_f32_banks,
+                                            _fr13_f32_conv_banks,
+                                        ) = _fr13_f32_inputs
+                                        _fr13_f32_stacks[
+                                            "fixed32_order"
+                                        ] = _fr13_f32_order
+                                        _fr13_f32_stacks[
+                                            "fixed32_layers"
+                                        ] = _fr13_f32_layer_objects
+                                        _fr13_f32_stacks[
+                                            "fixed32_banks"
+                                        ] = _fr13_f32_banks
+                                        _fr13_f32_stacks[
+                                            "fixed32_conv_banks"
+                                        ] = _fr13_f32_conv_banks
+                                        _fr13_f32_stacks[
+                                            "fixed32_bank_anchor"
+                                        ] = _fr13_f32_banks[0]
+                                        _fr13_f32_stacks[
+                                            "fixed32_bank_shape"
+                                        ] = tuple(
+                                            int(_fr13_f32_dim)
+                                            for _fr13_f32_dim
+                                            in _fr13_f32_banks[0].shape
+                                        )
+                                        _fr13_f32_stacks[
+                                            "fixed32_bank_stride"
+                                        ] = int(
+                                            _fr13_f32_banks[0].stride(0)
+                                        )
+                                        _fr13_f32_stacks[
+                                            "fixed32_output_scale"
+                                        ] = float(
+                                            _fr13_f32_stacks["output_scale"]
+                                        )
+                                        _fr13_f32_stacks[
+                                            "fixed32_qk_l2norm"
+                                        ] = True
+                                        import importlib.util as _fr13_f32_ilu
+                                        import sys as _fr13_f32_sys
+                                        _fr13_f32_dm = _fr13_f32_sys.modules.get(
+                                            "_fr13_device_multidraft_kernel"
+                                        )
+                                        if _fr13_f32_dm is None:
+                                            _fr13_f32_path = os.environ.get(
+                                                "FR13_DEVICE_MULTIDRAFT_KERNEL",
+                                                "/workspace/scripts/"
+                                                "fr13_device_multidraft_kernel.py",
+                                            )
+                                            _fr13_f32_spec = (
+                                                _fr13_f32_ilu.spec_from_file_location(
+                                                    "_fr13_device_multidraft_kernel",
+                                                    _fr13_f32_path,
+                                                )
+                                            )
+                                            if (
+                                                _fr13_f32_spec is None
+                                                or _fr13_f32_spec.loader is None
+                                            ):
+                                                raise RuntimeError(
+                                                    "FR13 fixed32 cannot load "
+                                                    "device committer module"
+                                                )
+                                            _fr13_f32_dm = (
+                                                _fr13_f32_ilu.module_from_spec(
+                                                    _fr13_f32_spec
+                                                )
+                                            )
+                                            _fr13_f32_spec.loader.exec_module(
+                                                _fr13_f32_dm
+                                            )
+                                            _fr13_f32_sys.modules[
+                                                "_fr13_device_multidraft_kernel"
+                                            ] = _fr13_f32_dm
+                                        _fr13_f32_dm.fr13_fixed32_taw_preseed(
+                                            spec_state_indices_tensor.device,
+                                            mode=_FR13_FIXED32_MODE,
+                                        )
+                                        from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                                            preseed_fixed32_committer_graphs_all_batches
+                                            as _fr13_f32_preseed,
+                                            preseed_fixed32_conv_col0_pregather
+                                            as _fr13_f32_pregather,
+                                            selfcheck_fixed32_conv_col0_ssi_sources
+                                            as _fr13_f32_pregather_selfcheck,
+                                        )
+                                        _fr13_f32_cap = min(
+                                            4,
+                                            int(
+                                                _fr13_f32_stacks[
+                                                    "fixed32_server_cap"
+                                                ]
+                                            ),
+                                        )
+                                        if (
+                                            _fr13_f32_cap < 1
+                                            or int(
+                                                _fr13_f32_stacks[
+                                                    "ring_k"
+                                                ].shape[1]
+                                            ) < _fr13_f32_cap
+                                            or int(
+                                                _fr10_accepted_paths_tensor.shape[0]
+                                            ) < _fr13_f32_cap
+                                        ):
+                                            raise RuntimeError(
+                                                "FR13 fixed32 preseed capacity "
+                                                "does not cover server occupancy"
+                                            )
+                                        _fr13_f32_preseed(
+                                            banks_list=_fr13_f32_banks,
+                                            spec_state_indices=(
+                                                _fr13_f32_stacks["spec_idx"]
+                                            ),
+                                            accepted_paths=(
+                                                _fr10_accepted_paths_tensor[
+                                                    :_fr13_f32_cap, :16
+                                                ].contiguous()
+                                            ),
+                                            accepted_lens=(
+                                                _fr10_accepted_lens_tensor[
+                                                    :_fr13_f32_cap
+                                                ]
+                                            ),
+                                            k_rings=_fr13_f32_stacks["ring_k"],
+                                            v_rings=_fr13_f32_stacks["ring_v"],
+                                            a_rings=_fr13_f32_stacks["ring_a"],
+                                            b_rings=_fr13_f32_stacks["ring_b"],
+                                            A_logs=_fr13_f32_stacks["A_log"],
+                                            dt_biases=_fr13_f32_stacks[
+                                                "dt_bias"
+                                            ],
+                                            num_layers=48,
+                                            max_batch_size=_fr13_f32_cap,
+                                            output_scale=(
+                                                _fr13_f32_stacks[
+                                                    "fixed32_output_scale"
+                                                ]
+                                            ),
+                                            use_qk_l2norm_in_kernel=(
+                                                _fr13_f32_stacks[
+                                                    "fixed32_qk_l2norm"
+                                                ]
+                                            ),
+                                            burn_node_bank=False,
+                                            root_node=0,
+                                            max_path=16,
+                                        )
+                                        _fr13_f32_pregather(
+                                            conv_banks=_fr13_f32_conv_banks,
+                                            layer_order=_fr13_f32_order,
+                                            max_batch_size=_fr13_f32_cap,
+                                        )
+                                        _fr13_f32_pregather_selfcheck(
+                                            num_spec_decodes=_fr13_f32_B,
+                                        )
+                                        _fr13_f32_done.update(
+                                            range(1, _fr13_f32_cap + 1)
+                                        )
+                                        globals()[
+                                            "_FR13_FIXED32_PRESEED_CAP"
+                                        ] = _fr13_f32_cap
                         # FR13_RING_EXPORT: when ON, the scan kernel stages the
                         # ring in-kernel from its own inputs (byte-copy contract
                         # preserved; see _tree_gdn_kernel RING_EXPORT), removing
@@ -4840,6 +9068,70 @@ def _fr13_conv_subop_mab(
                             else None
                         ),
                     )
+                    if (
+                        _FR13_FIXED32_MODE
+                        and (
+                            bool(
+                                torch.cuda.is_available()
+                                and torch.cuda.is_current_stream_capturing()
+                            )
+                            or _fr13_fixed32_observed_event_active()
+                        )
+                    ):
+                        _fr13_f32_scan_state = subtree_get(
+                            int(tree_n),
+                            int(value_tree.shape[1]),
+                            int(value_tree.shape[2]),
+                            int(query_spec.shape[-1]),
+                            query_spec.device,
+                        )
+                        _fr13_fixed32_observed_gdn(
+                            str(self.prefix),
+                            int(fr10_b),
+                            int(attn_metadata.num_spec_decodes),
+                            int(tree_n),
+                            int(tree_n_pad),
+                            int(query_spec[0, start:end].shape[0]),
+                            int(key_spec[0, start:end].shape[0]),
+                            int(value_tree[start:end].shape[0]),
+                            int(core_attn_out_spec[0, start:end].shape[0]),
+                            tuple(
+                                int(value)
+                                for value in attn_metadata.fr10_tree_strict_mask.shape
+                            ),
+                            tuple(
+                                int(value)
+                                for value in attn_metadata.fr10_tree_visible_mask.shape
+                            ),
+                            {
+                                "schedule": _fr13_f32_scan_state.get("schedule"),
+                                "route_armed": _fr13_f32_scan_state.get(
+                                    "route_armed"
+                                ),
+                                "n_levels": int(
+                                    _fr13_f32_scan_state.get("n_levels", -1)
+                                ),
+                                "critical": int(
+                                    _fr13_f32_scan_state.get("critical", -1)
+                                ),
+                                "parent_nodes": len(
+                                    _fr13_f32_scan_state.get("parent", ())
+                                ),
+                                "emask_rows": int(
+                                    _fr13_f32_scan_state["emask"].shape[0]
+                                ),
+                                "export_rows": int(
+                                    _fr13_f32_scan_state["export"].shape[0]
+                                ),
+                                "fixed32_contract": _fr13_f32_scan_state.get(
+                                    "fixed32_contract"
+                                ),
+                            },
+                            bool(
+                                torch.cuda.is_available()
+                                and torch.cuda.is_current_stream_capturing()
+                            ),
+                        )
                     if _fr12_native_spine_scan_enabled:
                         assert _fr12_scan_path0_node_tensor is not None
                         _fr12_scan_path0_len = int(
@@ -6898,8 +11190,15 @@ def _fr13_conv_commit_to_col0(
     if replay_rows <= 0 or not do_commit:
         return
     import torch
-    for _prefix in sorted(replay_layers):
-        _layer = replay_layers[_prefix]
+    _layer_items = (
+        enumerate(replay_layers)
+        if isinstance(replay_layers, tuple)
+        else (
+            (_prefix, replay_layers[_prefix])
+            for _prefix in sorted(replay_layers)
+        )
+    )
+    for _prefix, _layer in _layer_items:
         _conv = getattr(_layer, "_fr13_replay_conv_state", None)
         _ssi = getattr(_layer, "_fr13_replay_spec_idx", None)
         if _conv is None or _ssi is None:
@@ -7487,6 +11786,347 @@ def fr13_sg_post_replay_publish(stash, ndt_host):
                 + repr(_fr13_sg_cpg_exc)) from _fr13_sg_cpg_exc
 
 
+def _fr13_fixed32_taw_work_callback(payload):
+    """Capture one exact TAW work payload without materializing device data."""
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _g
+    if getattr(_g, "_FR13_FIXED32_PENDING_TAW", None) is not None:
+        raise RuntimeError("FR13 fixed32 TAW callback overlapped an event")
+    _g._FR13_FIXED32_PENDING_TAW = payload
+
+
+def _fr13_fixed32_device_commit_route(
+    products,
+    output_token_ids,
+    accepted_tree_rows,
+):
+    """Consume the fixed TAW products through one strict device-only route."""
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _g
+    if not isinstance(products, tuple) or len(products) != 5:
+        raise RuntimeError("FR13 fixed32 TAW must return exactly five tensors")
+    (
+        device_output,
+        device_output_lens,
+        device_paths,
+        device_lens,
+        device_last_rows,
+    ) = products
+    tensors = (
+        device_output,
+        device_output_lens,
+        device_paths,
+        device_lens,
+        device_last_rows,
+    )
+    if any(not torch.is_tensor(_x) for _x in tensors):
+        raise RuntimeError("FR13 fixed32 TAW returned a non-tensor product")
+    batch = int(device_output.shape[0])
+    expected_shapes = (
+        (batch, 32),
+        (batch,),
+        (batch, 16),
+        (batch,),
+        (batch,),
+    )
+    if (
+        not 1 <= batch <= 4
+        or tuple(tuple(_x.shape) for _x in tensors) != expected_shapes
+        or any(_x.dtype != torch.int64 for _x in tensors)
+        or any(_x.device != device_output.device for _x in tensors)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 TAW product geometry/dtype/device drift"
+        )
+    if (
+        int(output_token_ids.shape[0]) != batch
+        or int(output_token_ids.shape[1]) != 32
+        or int(accepted_tree_rows.shape[0]) != batch
+    ):
+        raise RuntimeError("FR13 fixed32 caller output geometry drift")
+    _fixed_batch_rows = int(
+        getattr(_g, "_FR13_FIXED32_BATCH_ROWS", -1)
+    )
+    _fixed_spec_rows = int(
+        getattr(_g, "_FR13_FIXED32_SPEC_ROWS", -1)
+    )
+    _fixed_observed = getattr(_g, "_FR13_FIXED32_OBSERVED_CURRENT", None)
+    _fixed_pure_event = isinstance(_fixed_observed, dict)
+    if (
+        _fixed_spec_rows != batch
+        or _fixed_batch_rows < batch
+        or (
+            _fixed_pure_event
+            and (
+                _fixed_batch_rows != batch
+                or int(
+                    getattr(
+                        _g,
+                        "_FR13_FIXED32_CURRENT_FORWARD_STEP",
+                        -1,
+                    )
+                )
+                != int(_fixed_observed.get("forward_step_index", -2))
+            )
+        )
+        or (
+            not _fixed_pure_event
+            and _fixed_batch_rows == batch
+        )
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 commit pure/mixed row geometry drift"
+        )
+
+    output_token_ids.copy_(device_output)
+    accepted_tree_rows.copy_(device_last_rows)
+    slot_paths = getattr(_g, "_LUMO_FA_FIXED32_SLOT_PATHS", None)
+    slot_lens = getattr(_g, "_LUMO_FA_FIXED32_SLOT_LENS", None)
+    spec_paths = getattr(_g, "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR", None)
+    spec_lens = getattr(_g, "_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR", None)
+    if (
+        slot_paths is None
+        or slot_lens is None
+        or spec_paths is None
+        or spec_lens is None
+        or int(slot_paths.shape[1]) != 16
+        or int(spec_paths.shape[1]) != 16
+        or int(slot_paths.shape[0]) < batch
+        or int(spec_paths.shape[0]) < batch
+    ):
+        raise RuntimeError("FR13 fixed32 persistent path buffers are missing")
+    sampler_req_ids = tuple(
+        str(value)
+        for value in (
+            getattr(_g, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None) or ()
+        )
+    )
+    spec_req_ids = tuple(
+        str(value)
+        for value in (
+            getattr(_g, "_LUMO_FA_SPEC_ROW_REQ_IDS", None) or ()
+        )
+    )
+    spec_batch_indices = getattr(
+        _g, "_FR13_FIXED32_SPEC_BATCH_INDICES", None
+    )
+    if (
+        not 1 <= _fixed_batch_rows <= 4
+        or len(sampler_req_ids) != _fixed_batch_rows
+        or len(spec_req_ids) != batch
+        or not isinstance(spec_batch_indices, tuple)
+        or len(spec_batch_indices) != batch
+        or any(type(value) is not int for value in spec_batch_indices)
+        or len(set(sampler_req_ids)) != len(sampler_req_ids)
+        or len(set(spec_req_ids)) != len(spec_req_ids)
+        or any(req_id not in sampler_req_ids for req_id in spec_req_ids)
+    ):
+        raise RuntimeError("FR13 fixed32 compact-spec request map drift")
+    slot_indices = tuple(
+        sampler_req_ids.index(req_id) for req_id in spec_req_ids
+    )
+    if slot_indices != spec_batch_indices:
+        raise RuntimeError("FR13 fixed32 compact-spec batch-index map drift")
+    for compact_row, slot_row in enumerate(slot_indices):
+        slot_paths[slot_row].copy_(device_paths[compact_row])
+        slot_lens[slot_row].copy_(device_lens[compact_row])
+    # Compact spec rows are always dense; only pure events also have
+    # sampler-row == compact-spec-row order.
+    spec_paths[:batch].copy_(device_paths)
+    spec_lens[:batch].copy_(device_lens)
+    _g._LUMO_FA_TREE_COMMIT_NROWS = batch
+
+    stacks = getattr(_g, "_FR13_EAGER_PACK_STACKS", None)
+    order = stacks.get("fixed32_order") if stacks else None
+    layers = stacks.get("fixed32_layers") if stacks else None
+    banks = stacks.get("fixed32_banks") if stacks else None
+    conv_banks = stacks.get("fixed32_conv_banks") if stacks else None
+    bank_anchor = stacks.get("fixed32_bank_anchor") if stacks else None
+    bank_shape = stacks.get("fixed32_bank_shape") if stacks else None
+    bank_stride = stacks.get("fixed32_bank_stride") if stacks else None
+    output_scale = stacks.get("fixed32_output_scale") if stacks else None
+    qk_l2norm = stacks.get("fixed32_qk_l2norm") if stacks else None
+    if (
+        stacks is None
+        or not isinstance(order, tuple)
+        or not isinstance(layers, tuple)
+        or not isinstance(banks, tuple)
+        or not isinstance(conv_banks, tuple)
+        or len(order) != 48
+        or len(layers) != 48
+        or len(banks) != 48
+        or len(conv_banks) != 48
+        or bank_anchor is not banks[0]
+        or not isinstance(bank_shape, tuple)
+        or len(bank_shape) != 4
+        or not isinstance(bank_stride, int)
+        or not isinstance(output_scale, float)
+        or qk_l2norm is not True
+        or int(stacks.get("num_layers", 0)) != 48
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 persistent 48-layer bank tuples are missing"
+        )
+    if getattr(_g, "_FR13_FIXED32_PENDING_EVENT", None) is not None:
+        raise RuntimeError("FR13 fixed32 prior event did not complete KV remap")
+
+    import lumo_flywheel_serving.fr10_gdn_tree_kernel as _fixed_tree_kernel
+    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+        fixed32_committer_counters as _fixed_commit_counters,
+        fixed32_conv_col0_pregather_counters as _fixed_pregather_counters,
+        launch_tree_gdn_replay_all_layers as _fixed_replay,
+    )
+    _fixed_commit_before = _fixed_commit_counters()
+    _fixed_pregather_before = _fixed_pregather_counters()
+
+    _fr13_conv_commit_to_col0(
+        layers,
+        spec_paths,
+        spec_lens,
+        batch,
+        True,
+    )
+    _fixed_replay(
+        bank_anchor=bank_anchor,
+        bank_off16=stacks["spec_idx"],
+        bank_shape=bank_shape,
+        bank_stride=bank_stride,
+        spec_state_indices=stacks["spec_idx"],
+        prev_lens=stacks["prev_lens"],
+        accepted_paths=spec_paths[:batch],
+        accepted_lens=spec_lens[:batch],
+        k_rings=stacks["ring_k"],
+        v_rings=stacks["ring_v"],
+        a_rings=stacks["ring_a"],
+        b_rings=stacks["ring_b"],
+        A_logs=stacks["A_log"],
+        dt_biases=stacks["dt_bias"],
+        num_layers=48,
+        num_spec_decodes=batch,
+        output_scale=output_scale,
+        use_qk_l2norm_in_kernel=qk_l2norm,
+        runrow_commit=True,
+        runrow_init=True,
+        burn_node_bank=False,
+        banks_list=banks,
+    )
+    if not _fixed_pure_event:
+        _nonpure_replays = getattr(
+            _g, "_FR13_FIXED32_NONPURE_COMMIT_REPLAYS_BY_BATCH", None
+        )
+        if (
+            not isinstance(_nonpure_replays, dict)
+            or batch not in _nonpure_replays
+            or type(_nonpure_replays[batch]) is not int
+            or _nonpure_replays[batch] < 0
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 nonpure committer replay ledger drift"
+            )
+        _nonpure_replays[batch] += 1
+    stacks["flags"][:, 0].zero_()
+    _fixed_commit_after = _fixed_commit_counters()
+    _fixed_pregather_after = _fixed_pregather_counters()
+    _fixed_commit_route = getattr(
+        _fixed_tree_kernel, "_FR13_FIXED32_COMMITTER_FAST_ROUTE", {}
+    ).get("state")
+    _fixed_pregather_route = getattr(
+        _fixed_tree_kernel, "_FR13_FIXED32_CONV_PREGATHER", {}
+    ).get("state")
+    if (
+        not isinstance(_fixed_commit_route, dict)
+        or not isinstance(_fixed_pregather_route, dict)
+        or batch not in _fixed_commit_route.get("states_by_batch", {})
+    ):
+        raise RuntimeError("FR13 fixed32 runtime route state disappeared")
+    _fixed_commit_contract = _fixed_commit_route[
+        "states_by_batch"
+    ][batch].get("contract")
+    _fixed_pregather_contract = {
+        "route": _fixed_pregather_route.get("contract", {}).get("route"),
+        "layers": int(
+            _fixed_pregather_route.get("contract", {}).get("layers", -1)
+        ),
+        "row_elems": int(_fixed_pregather_route.get("row_elems", -1)),
+        "block": int(_fixed_pregather_route.get("block", -1)),
+        "graph_capture_stages": int(
+            _fixed_pregather_route.get("graph_capture_stages", -1)
+        ),
+    }
+    if _fixed_pure_event:
+        _g._fr13_fixed32_observed_commit(
+            _FR13_FIXED32_MODE,
+            batch,
+            len(layers),
+            tuple(int(value) for value in spec_paths.shape),
+            tuple(int(value) for value in spec_lens.shape),
+            _fixed_commit_before,
+            _fixed_commit_after,
+            _fixed_commit_contract,
+            _fixed_pregather_before,
+            _fixed_pregather_after,
+            _fixed_pregather_contract,
+        )
+
+    taw_work = getattr(_g, "_FR13_FIXED32_PENDING_TAW", None)
+    _g._FR13_FIXED32_PENDING_TAW = None
+    if (
+        not isinstance(taw_work, dict)
+        or set(taw_work)
+        != {"mode", "valid_mask", "batch_size", "taw"}
+        or taw_work.get("mode") != _FR13_FIXED32_MODE
+        or type(taw_work.get("valid_mask")) is not int
+        or taw_work.get("valid_mask") != _FR13_FIXED32_VALID_MASK
+        or type(taw_work.get("batch_size")) is not int
+        or taw_work.get("batch_size") != batch
+        or not isinstance(taw_work.get("taw"), dict)
+    ):
+        raise RuntimeError("FR13 fixed32 TAW work callback did not bind")
+    _fixed_pack_tensors = (
+        device_output,
+        output_token_ids,
+        device_last_rows,
+        accepted_tree_rows,
+        device_paths,
+        slot_paths[:batch],
+        device_lens,
+        slot_lens[:batch],
+        spec_paths[:batch],
+        spec_lens[:batch],
+    )
+    if _fixed_pure_event:
+        _g._fr13_fixed32_observed_publish_pack(
+            batch,
+            tuple(
+                tuple(int(value) for value in tensor.shape)
+                for tensor in _fixed_pack_tensors
+            ),
+            tuple(str(tensor.dtype) for tensor in _fixed_pack_tensors),
+            tuple(tensor.device.type for tensor in _fixed_pack_tensors),
+            2,
+            2,
+            2,
+            int(taw_work.get("taw", {}).get("loop_iterations", -1)),
+        )
+        forward_step = int(
+            getattr(_g, "_FR13_FIXED32_CURRENT_FORWARD_STEP", -1)
+        )
+        observed_work = _g._fr13_fixed32_observed_take(
+            _FR13_FIXED32_MODE,
+            batch,
+            forward_step,
+        )
+        _g._FR13_FIXED32_PENDING_EVENT = {
+            "mode": _FR13_FIXED32_MODE,
+            "batch_size": batch,
+            "forward_step_index": forward_step,
+            "request_ids": tuple(observed_work["request_ids"]),
+            "taw": taw_work,
+            # The verify event remains pending through KV and the immediately
+            # following same-runner-step proposal. Proposal end is the sole seal.
+            "observed_work": observed_work,
+        }
+    return output_token_ids
+
+
 def _lumo_tree_canonical_multidraft_sample(
     output_token_ids: torch.Tensor,
     accepted_tree_rows: torch.Tensor,
@@ -7514,6 +12154,122 @@ def _lumo_tree_canonical_multidraft_sample(
             'FR13 greedy-via-rejection: all_greedy with draft_probs!=None is '
             'not a valid combination (greedy MTP always passes draft_probs=None)'
         )
+    if _FR13_FIXED32_MODE:
+        if all_greedy or draft_probs is not None or int(max_spec_len) != 31:
+            raise RuntimeError(
+                "FR13 fixed32 requires sampled temp>0, no draft_probs, "
+                "and max_spec_len=31"
+            )
+        import importlib.util as _fr13_f32_ilu
+        import sys as _fr13_f32_sys
+        _fr13_f32_dm = _fr13_f32_sys.modules.get(
+            "_fr13_device_multidraft_kernel"
+        )
+        if _fr13_f32_dm is None:
+            _fr13_f32_path = __import__("os").environ.get(
+                "FR13_DEVICE_MULTIDRAFT_KERNEL",
+                "/workspace/scripts/fr13_device_multidraft_kernel.py",
+            )
+            _fr13_f32_spec = _fr13_f32_ilu.spec_from_file_location(
+                "_fr13_device_multidraft_kernel",
+                _fr13_f32_path,
+            )
+            if _fr13_f32_spec is None or _fr13_f32_spec.loader is None:
+                raise RuntimeError("FR13 fixed32 device module cannot load")
+            _fr13_f32_dm = _fr13_f32_ilu.module_from_spec(_fr13_f32_spec)
+            _fr13_f32_spec.loader.exec_module(_fr13_f32_dm)
+            _fr13_f32_sys.modules[
+                "_fr13_device_multidraft_kernel"
+            ] = _fr13_f32_dm
+        _fr13_f32_dm.fr13_fixed32_taw_set_work_callback(
+            _fr13_fixed32_taw_work_callback
+        )
+        (
+            _fr13_f32_full_counts,
+            _fr13_f32_spec_indices,
+        ) = _fr13_fixed32_live_sampler_row_plan(num_draft_tokens)
+        _fr13_f32_full_batch = len(_fr13_f32_full_counts)
+        _fr13_f32_batch = len(_fr13_f32_spec_indices)
+        _fr13_f32_mixed = _fr13_f32_batch != _fr13_f32_full_batch
+        _fr13_f32_rows = 31 * _fr13_f32_batch
+        if (
+            int(target_logits.ndim) != 2
+            or int(tree_self_logits.ndim) != 2
+            or int(target_logits.shape[1]) <= 0
+            or int(target_logits.shape[1])
+            != int(tree_self_logits.shape[1])
+            or int(draft_token_ids.ndim) != 1
+            or int(tree_parent_indices.ndim) != 1
+            or int(draft_token_ids.numel()) != _fr13_f32_rows
+            or int(tree_parent_indices.numel()) != _fr13_f32_rows
+            or int(target_logits.shape[0]) != _fr13_f32_rows
+            or int(tree_self_logits.shape[0]) != _fr13_f32_rows
+            or int(output_token_ids.ndim) != 2
+            or tuple(output_token_ids.shape)
+            != (_fr13_f32_full_batch, 32)
+            or int(accepted_tree_rows.ndim) != 1
+            or tuple(accepted_tree_rows.shape)
+            != (_fr13_f32_full_batch,)
+            or int(bonus_token_ids.ndim) < 1
+            or int(bonus_token_ids.shape[0]) != _fr13_f32_full_batch
+            or int(bonus_token_ids.numel()) != _fr13_f32_full_batch
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 compact draft and full sampler geometry drift"
+            )
+        _fr13_f32_index_tensor = None
+        _fr13_f32_output = output_token_ids
+        _fr13_f32_accepted = accepted_tree_rows
+        _fr13_f32_bonus = bonus_token_ids
+        _fr13_f32_generators = generators
+        if _fr13_f32_mixed:
+            (
+                _fr13_f32_index_tensor,
+                _fr13_f32_output,
+                _fr13_f32_accepted,
+                _fr13_f32_bonus,
+                _fr13_f32_generators,
+            ) = _fr13_fixed32_prepare_mixed_sampler_io(
+                output_token_ids,
+                accepted_tree_rows,
+                bonus_token_ids,
+                _fr13_f32_spec_indices,
+                generators,
+            )
+        _fr13_f32_counts = (
+            _fr13_f32_dm.fr13_fixed32_taw_preseeded_counts(
+                draft_token_ids.device,
+                mode=_FR13_FIXED32_MODE,
+                valid_mask=_FR13_FIXED32_VALID_MASK,
+                batch_size=_fr13_f32_batch,
+            )
+        )
+        _fr13_f32_output = _fr13_fixed32_device_commit_route(
+            _fr13_f32_dm.fr13_fixed32_taw_commit(
+                _fr13_f32_counts,
+                draft_token_ids,
+                tree_parent_indices,
+                target_logits,
+                tree_self_logits,
+                _fr13_f32_bonus,
+                max_spec_len,
+                generators=_fr13_f32_generators,
+                all_greedy=False,
+                mode=_FR13_FIXED32_MODE,
+            ),
+            _fr13_f32_output,
+            _fr13_f32_accepted,
+        )
+        if _fr13_f32_mixed:
+            return _fr13_fixed32_finish_mixed_sampler_io(
+                output_token_ids,
+                accepted_tree_rows,
+                bonus_token_ids,
+                _fr13_f32_index_tensor,
+                _fr13_f32_output,
+                _fr13_f32_accepted,
+            )
+        return _fr13_f32_output
     _fr13_sg_capchk("committer-fn-entry")
     if __import__('os').environ.get('FR13_FORCE_SPINE_COMMIT', '0') == '1':
         # FR13_FORCE_SPINE_COMMIT is a GREEDY-committer diagnostic. The
@@ -8631,6 +13387,13 @@ def _lumo_tree_canonical_multidraft_sample(
         pass
     return output_token_ids
 '''
+    helper = (
+        f"\n_FR13_FIXED32_MODE = {_FR13_FIXED32_MODE!r}\n"
+        f"_FR13_FIXED32_VALID_MASK = "
+        f"{_FR13_FIXED32_MODES.get(_FR13_FIXED32_MODE, (0, 0))[0]!r}\n"
+        + _FR13_FIXED32_SAMPLER_COMPACTION_SOURCE
+        + helper
+    )
     if helper_anchor not in text:
         raise RuntimeError("tree path-LCP helper anchor not found")
     text = text.replace(helper_anchor, helper + helper_anchor, 1)
@@ -9293,11 +14056,22 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
             _lspec = getattr(self.vllm_config, "speculative_config", None)
             if not _ltree_src:
                 _ltree_src = getattr(_lspec, "speculative_token_tree", None) if _lspec is not None else None
-            _lumo_tree_meta_debug["mode"] = _fr10_mode
+""" + (
+        f"""            _ltree_src = {_FR13_FIXED32_TREE_SOURCE!r}
+"""
+        if _FR13_FIXED32_MODE
+        else ""
+    ) + """            _lumo_tree_meta_debug["mode"] = _fr10_mode
             _lumo_tree_meta_debug["has_tree_src"] = bool(_ltree_src)
             if _fr10_mode == "tree_mtp" and _ltree_src:
                 _choices = sorted(__import__("ast").literal_eval(_ltree_src), key=lambda _p: (len(_p), _p))
-                _max_depth = max(len(_t) for _t in _choices)
+""" + (
+        f"""                if tuple(_choices) != {_FR13_FIXED32_CHOICES!r}:
+                    raise RuntimeError("fixed32 sampler metadata topology drifted")
+"""
+        if _FR13_FIXED32_MODE
+        else ""
+    ) + """                _max_depth = max(len(_t) for _t in _choices)
                 _lumo_tree_meta_debug["tree_len"] = int(len(_choices))
                 _lumo_tree_meta_debug["max_depth"] = int(_max_depth)
                 if len(_choices) > 0:
@@ -9813,6 +14587,24 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
 
         # Copy the tensors to the GPU.
 """
+    if _FR13_FIXED32_MODE:
+        inject = inject.replace(
+            "            if (\n"
+            "                _fr10_mode == \"tree_mtp\"\n",
+            f"            _fr10_tree_src = {_FR13_FIXED32_TREE_SOURCE!r}\n"
+            "            if (\n"
+            "                _fr10_mode == \"tree_mtp\"\n",
+            1,
+        )
+        inject = inject.replace(
+            "                _fr10_depth_offsets = np.array(\n",
+            f"                if tuple(_fr10_choices) != {_FR13_FIXED32_CHOICES!r}:\n"
+            "                    raise RuntimeError(\n"
+            "                        \"fixed32 depth-position topology drifted\"\n"
+            "                    )\n"
+            "                _fr10_depth_offsets = np.array(\n",
+            1,
+        )
     if anchor not in text:
         raise RuntimeError("gpu_model_runner slot-mapping position anchor not found")
     text = text.replace(anchor, inject, 1)
@@ -9940,6 +14732,8 @@ def _patch_gpu_model_runner_row_req_ids_fresh() -> bool:
     INVALIDATE the spec-row list (the spec section re-publishes it when spec
     rows exist this step).
     """
+    if _FR13_FIXED32_MODE:
+        return False
     text = GPU_MODEL_RUNNER_PATH.read_text()
     sentinel = "# FR13_PB_ROWIDS_FRESH"
     if sentinel in text:
@@ -10273,6 +15067,201 @@ def _patch_gpu_model_runner_decode_mode_globals() -> bool:
     return True
 
 
+def _patch_gpu_model_runner_fixed32_slot_lifecycle() -> bool:
+    """Move persistent fixed32 accepted-path truth with vLLM batch slots."""
+    if not _FR13_FIXED32_MODE:
+        return False
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_FIXED32_SLOT_LIFECYCLE"
+    if sentinel in text:
+        return False
+    anchor = "        self._may_reorder_batch(scheduler_output)\n"
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            "FR13 fixed32 slot lifecycle reorder anchor is not unique"
+        )
+    inject = anchor + (
+        f"        {sentinel}: apply builder deltas to persistent device rows.\n"
+        "        from vllm.model_executor.layers.mamba import (\n"
+        "            gdn_linear_attn as _fr13_f32_sl_gdn,\n"
+        "        )\n"
+        "        _fr13_f32_sl_paths = getattr(\n"
+        "            _fr13_f32_sl_gdn, '_LUMO_FA_FIXED32_SLOT_PATHS', None\n"
+        "        )\n"
+        "        _fr13_f32_sl_lens = getattr(\n"
+        "            _fr13_f32_sl_gdn, '_LUMO_FA_FIXED32_SLOT_LENS', None\n"
+        "        )\n"
+        "        _fr13_f32_sl_ptmp = getattr(\n"
+        "            _fr13_f32_sl_gdn, '_LUMO_FA_FIXED32_SLOT_PATH_TMP', None\n"
+        "        )\n"
+        "        _fr13_f32_sl_ltmp = getattr(\n"
+        "            _fr13_f32_sl_gdn, '_LUMO_FA_FIXED32_SLOT_LEN_TMP', None\n"
+        "        )\n"
+        "        if (\n"
+        "            _fr13_f32_sl_paths is None\n"
+        "            or _fr13_f32_sl_lens is None\n"
+        "            or _fr13_f32_sl_ptmp is None\n"
+        "            or _fr13_f32_sl_ltmp is None\n"
+        "            or int(_fr13_f32_sl_paths.shape[1]) != 16\n"
+        "        ):\n"
+        "            raise RuntimeError('FR13 fixed32 slot buffers are missing')\n"
+        "        _fr13_f32_sl_builder = self.input_batch.batch_update_builder\n"
+        "        for _fr13_f32_sl_removed in _fr13_f32_sl_builder.removed:\n"
+        "            _fr13_f32_sl_i = int(_fr13_f32_sl_removed)\n"
+        "            _fr13_f32_sl_paths[_fr13_f32_sl_i].zero_()\n"
+        "            _fr13_f32_sl_lens[_fr13_f32_sl_i].zero_()\n"
+        "        for _fr13_f32_sl_added in _fr13_f32_sl_builder.added:\n"
+        "            _fr13_f32_sl_i = int(_fr13_f32_sl_added[0])\n"
+        "            _fr13_f32_sl_paths[_fr13_f32_sl_i].zero_()\n"
+        "            _fr13_f32_sl_lens[_fr13_f32_sl_i].zero_()\n"
+        "        for _fr13_f32_sl_move in _fr13_f32_sl_builder.moved:\n"
+        "            (_fr13_f32_sl_src, _fr13_f32_sl_dst,\n"
+        "             _fr13_f32_sl_direction) = _fr13_f32_sl_move\n"
+        "            _fr13_f32_sl_src = int(_fr13_f32_sl_src)\n"
+        "            _fr13_f32_sl_dst = int(_fr13_f32_sl_dst)\n"
+        "            _fr13_f32_sl_name = getattr(\n"
+        "                _fr13_f32_sl_direction, 'name', ''\n"
+        "            )\n"
+        "            if _fr13_f32_sl_name == 'SWAP':\n"
+        "                _fr13_f32_sl_ptmp.copy_(\n"
+        "                    _fr13_f32_sl_paths[_fr13_f32_sl_src]\n"
+        "                )\n"
+        "                _fr13_f32_sl_ltmp.copy_(\n"
+        "                    _fr13_f32_sl_lens[_fr13_f32_sl_src]\n"
+        "                )\n"
+        "                _fr13_f32_sl_paths[_fr13_f32_sl_src].copy_(\n"
+        "                    _fr13_f32_sl_paths[_fr13_f32_sl_dst]\n"
+        "                )\n"
+        "                _fr13_f32_sl_lens[_fr13_f32_sl_src].copy_(\n"
+        "                    _fr13_f32_sl_lens[_fr13_f32_sl_dst]\n"
+        "                )\n"
+        "                _fr13_f32_sl_paths[_fr13_f32_sl_dst].copy_(\n"
+        "                    _fr13_f32_sl_ptmp\n"
+        "                )\n"
+        "                _fr13_f32_sl_lens[_fr13_f32_sl_dst].copy_(\n"
+        "                    _fr13_f32_sl_ltmp\n"
+        "                )\n"
+        "            elif _fr13_f32_sl_name == 'UNIDIRECTIONAL':\n"
+        "                _fr13_f32_sl_paths[_fr13_f32_sl_dst].copy_(\n"
+        "                    _fr13_f32_sl_paths[_fr13_f32_sl_src]\n"
+        "                )\n"
+        "                _fr13_f32_sl_lens[_fr13_f32_sl_dst].copy_(\n"
+        "                    _fr13_f32_sl_lens[_fr13_f32_sl_src]\n"
+        "                )\n"
+        "                _fr13_f32_sl_paths[_fr13_f32_sl_src].zero_()\n"
+        "                _fr13_f32_sl_lens[_fr13_f32_sl_src].zero_()\n"
+        "            else:\n"
+        "                raise RuntimeError(\n"
+        "                    'FR13 fixed32 unknown slot move direction: '\n"
+        "                    + repr(_fr13_f32_sl_direction)\n"
+        "                )\n"
+    )
+    text = text.replace(anchor, inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
+def _patch_gpu_model_runner_fixed32_profile_capture_scope() -> bool:
+    """Keep throwaway CUDA-memory profile graphs out of acceptance manifests."""
+    if not _FR13_FIXED32_MODE:
+        return False
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_FIXED32_PROFILE_CAPTURE_SCOPE"
+    if sentinel in text:
+        return False
+    profile_memory_begin_anchor = (
+        "    def _init_minimal_kv_cache_for_profiling(self) -> None:\n"
+        "        from vllm.v1.core.kv_cache_utils import (\n"
+    )
+    profile_memory_begin_inject = (
+        "    def _init_minimal_kv_cache_for_profiling(self) -> None:\n"
+        "        from vllm.model_executor.layers.mamba import (\n"
+        "            gdn_linear_attn as _fr13_f32_profile_memory_gdn,\n"
+        "        )\n"
+        "        _fr13_f32_profile_memory_gdn."
+        "_fr13_fixed32_profile_memory_scope_begin()\n"
+        "        from vllm.v1.core.kv_cache_utils import (\n"
+    )
+    if text.count(profile_memory_begin_anchor) != 1:
+        raise RuntimeError(
+            "FR13 fixed32 profile-memory begin anchor is not unique"
+        )
+    text = text.replace(
+        profile_memory_begin_anchor, profile_memory_begin_inject, 1
+    )
+    profile_memory_end_anchor = (
+        "        logger.debug(\"Cleaned up profiling KV cache and CUDA graphs\")\n"
+    )
+    profile_memory_end_inject = (
+        "        from vllm.model_executor.layers.mamba import (\n"
+        "            gdn_linear_attn as _fr13_f32_profile_memory_gdn,\n"
+        "        )\n"
+        "        _fr13_f32_profile_memory_gdn."
+        "_fr13_fixed32_profile_memory_scope_end()\n"
+        + profile_memory_end_anchor
+    )
+    if text.count(profile_memory_end_anchor) != 1:
+        raise RuntimeError(
+            "FR13 fixed32 profile-memory end anchor is not unique"
+        )
+    text = text.replace(
+        profile_memory_end_anchor, profile_memory_end_inject, 1
+    )
+    anchor = """                    self._warmup_and_capture(
+                        desc,
+                        cudagraph_runtime_mode=mode,
+                        profile_seq_lens=(
+                            min(
+                                self.max_model_len,
+                                self.max_num_tokens // desc.num_tokens,
+                            )
+                            if mode == CUDAGraphMode.FULL and i == 0
+                            else None
+                        ),
+                    )
+"""
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            "FR13 fixed32 profile capture call anchor is not unique"
+        )
+    inject = f"""                    {sentinel}: the graphs made here are
+                    # discarded by clear_all_graphs() and cannot attest runtime
+                    # verifier work. Pair a strict marker around FULL only.
+                    _fr13_f32_profile_scope = mode == CUDAGraphMode.FULL
+                    if _fr13_f32_profile_scope:
+                        from vllm.model_executor.layers.mamba import (
+                            gdn_linear_attn as _fr13_f32_profile_gdn,
+                        )
+                        _fr13_f32_profile_gdn._fr13_fixed32_profile_capture_scope_begin(
+                            mode.name,
+                            desc.num_tokens,
+                            desc.num_reqs,
+                            desc.uniform,
+                            desc.has_lora,
+                            desc.num_active_loras,
+                        )
+                    try:
+                        self._warmup_and_capture(
+                            desc,
+                            cudagraph_runtime_mode=mode,
+                            profile_seq_lens=(
+                                min(
+                                    self.max_model_len,
+                                    self.max_num_tokens // desc.num_tokens,
+                                )
+                                if mode == CUDAGraphMode.FULL and i == 0
+                                else None
+                            ),
+                        )
+                    finally:
+                        if _fr13_f32_profile_scope:
+                            _fr13_f32_profile_gdn._fr13_fixed32_profile_capture_scope_end()
+"""
+    text = text.replace(anchor, inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_model_runner_tree_reqkey() -> bool:
     """FR13_TREE_REQKEY: re-key the tree accepted-path/lens buffers by request.
 
@@ -10305,7 +15294,144 @@ def _patch_gpu_model_runner_tree_reqkey() -> bool:
         "            # accepted tree paths/lens (request-id keyed; zeros for a first\n"
         "            # spec step) into the persistent batch-position-keyed device\n"
         "            # buffers before the forward reads them.\n"
-        "            if __import__(\"os\").environ.get(\"FR13_TREE_REQKEY\", \"1\") == \"1\":\n"
+        f"            if {bool(_FR13_FIXED32_MODE)!r}:\n"
+        "                try:\n"
+        "                    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_rk_gdn\n"
+        "                    # Arctic lifecycle still consumes existing runner IDs;\n"
+        "                    # acceptance/committer state never keys by them.\n"
+        "                    _fr13_rk_req_ids = [\n"
+        "                        str(_fr13_rk_rid)\n"
+        "                        for _fr13_rk_rid in self.input_batch.req_ids[:num_reqs]\n"
+        "                    ]\n"
+        "                    _fr13_rk_gdn._LUMO_FA_SAMPLER_ROW_REQ_IDS = _fr13_rk_req_ids\n"
+        "                    _fr13_rk_gdn._LUMO_FA_SPEC_ROW_REQ_IDS = None\n"
+        "                    _fr13_rk_gdn._FR13_FIXED32_SPEC_BATCH_INDICES = None\n"
+        "                    _fr13_rk_gdn._LUMO_FA_TREE_COMMIT_NROWS = 0\n"
+        "                    self._fr13_rf_seq = getattr(self, '_fr13_rf_seq', 0) + 1\n"
+        "                    _fr13_rk_gdn._LUMO_FA_STEP_SEQ = self._fr13_rf_seq\n"
+        "                    _fr13_rk_spec_n = sum(\n"
+        "                        1 for _fr13_rk_i in range(num_reqs)\n"
+        "                        if int(num_decode_draft_tokens[_fr13_rk_i]) >= 0\n"
+        "                    )\n"
+        "                    _fr13_rk_spec_rids = [\n"
+        "                        _fr13_rk_req_ids[_fr13_rk_i]\n"
+        "                        for _fr13_rk_i in range(num_reqs)\n"
+        "                        if int(num_decode_draft_tokens[_fr13_rk_i]) >= 0\n"
+        "                    ]\n"
+        "                    _fr13_rk_spec_indices = tuple(\n"
+        "                        _fr13_rk_i\n"
+        "                        for _fr13_rk_i in range(num_reqs)\n"
+        "                        if int(num_decode_draft_tokens[_fr13_rk_i]) >= 0\n"
+        "                    )\n"
+        "                    if (\n"
+        "                        len(_fr13_rk_spec_rids) != _fr13_rk_spec_n\n"
+        "                        or len(_fr13_rk_spec_indices) != _fr13_rk_spec_n\n"
+        "                        or tuple(\n"
+        "                            _fr13_rk_req_ids[_fr13_rk_i]\n"
+        "                            for _fr13_rk_i in _fr13_rk_spec_indices\n"
+        "                        ) != tuple(_fr13_rk_spec_rids)\n"
+        "                    ):\n"
+        "                        raise RuntimeError('FR13 fixed32 spec-row map drift')\n"
+        "                    _fr13_rk_gdn._LUMO_FA_SPEC_ROW_REQ_IDS = (\n"
+        "                        _fr13_rk_spec_rids\n"
+        "                    )\n"
+        "                    _fr13_rk_gdn._FR13_FIXED32_SPEC_BATCH_INDICES = (\n"
+        "                        _fr13_rk_spec_indices\n"
+        "                    )\n"
+        "                    _fr13_rk_gdn._FR13_FIXED32_BATCH_ROWS = int(num_reqs)\n"
+        "                    _fr13_rk_gdn._FR13_FIXED32_SPEC_ROWS = int(_fr13_rk_spec_n)\n"
+        "                    _fr13_rk_pure = (\n"
+        "                        _fr13_rk_spec_n == int(num_reqs)\n"
+        "                        and int(num_reqs) in (1, 2, 3, 4)\n"
+        "                        and all(\n"
+        "                            int(num_decode_draft_tokens[_fr13_rk_i]) == 31\n"
+        "                            for _fr13_rk_i in range(num_reqs)\n"
+        "                        )\n"
+        "                    )\n"
+        "                    if _fr13_rk_pure:\n"
+        "                        _fr13_rk_fwd = int(getattr(\n"
+        "                            _fr13_rk_gdn,\n"
+        "                            '_FR13_FIXED32_PURE_DECODE_FORWARD_STEPS',\n"
+        "                            0,\n"
+        "                        ))\n"
+        "                        _fr13_rk_gdn._FR13_FIXED32_CURRENT_FORWARD_STEP = (\n"
+        "                            _fr13_rk_fwd\n"
+        "                        )\n"
+        "                        _fr13_rk_gdn._fr13_fixed32_observed_begin(\n"
+        "                            _fr13_rk_gdn._FR13_FIXED32_MODE,\n"
+        "                            int(num_reqs),\n"
+        "                            _fr13_rk_fwd,\n"
+        "                            tuple(_fr13_rk_req_ids),\n"
+        "                            int(num_reqs),\n"
+        "                            int(_fr13_rk_spec_n),\n"
+        "                            tuple(\n"
+        "                                int(num_decode_draft_tokens[_fr13_rk_i])\n"
+        "                                for _fr13_rk_i in range(num_reqs)\n"
+        "                            ),\n"
+        "                        )\n"
+        "                        _fr13_rk_gdn._FR13_FIXED32_PURE_DECODE_FORWARD_STEPS = (\n"
+        "                            _fr13_rk_fwd + 1\n"
+        "                        )\n"
+        "                    else:\n"
+        "                        _fr13_rk_gdn._FR13_FIXED32_CURRENT_FORWARD_STEP = -1\n"
+        "                    _fr13_rk_paths = getattr(\n"
+        "                        _fr13_rk_gdn, '_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR', None\n"
+        "                    )\n"
+        "                    _fr13_rk_lens = getattr(\n"
+        "                        _fr13_rk_gdn, '_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR', None\n"
+        "                    )\n"
+        "                    _fr13_rk_slot_paths = getattr(\n"
+        "                        _fr13_rk_gdn, '_LUMO_FA_FIXED32_SLOT_PATHS', None\n"
+        "                    )\n"
+        "                    _fr13_rk_slot_lens = getattr(\n"
+        "                        _fr13_rk_gdn, '_LUMO_FA_FIXED32_SLOT_LENS', None\n"
+        "                    )\n"
+        "                    if any(_fr13_rk_x is None for _fr13_rk_x in (\n"
+        "                        _fr13_rk_paths, _fr13_rk_lens,\n"
+        "                        _fr13_rk_slot_paths, _fr13_rk_slot_lens,\n"
+        "                    )):\n"
+        "                        raise RuntimeError('FR13 fixed32 row-map buffers missing')\n"
+        "                    _fr13_rk_paths[:_fr13_rk_spec_n].zero_()\n"
+        "                    _fr13_rk_lens[:_fr13_rk_spec_n].zero_()\n"
+        "                    if _fr13_rk_pure:\n"
+        "                        _fr13_rk_paths[:num_reqs].copy_(\n"
+        "                            _fr13_rk_slot_paths[:num_reqs]\n"
+        "                        )\n"
+        "                        _fr13_rk_lens[:num_reqs].copy_(\n"
+        "                            _fr13_rk_slot_lens[:num_reqs]\n"
+        "                        )\n"
+        "                        _fr13_rk_pack_tensors = (\n"
+        "                            _fr13_rk_paths[:num_reqs],\n"
+        "                            _fr13_rk_lens[:num_reqs],\n"
+        "                            _fr13_rk_slot_paths[:num_reqs],\n"
+        "                            _fr13_rk_slot_lens[:num_reqs],\n"
+        "                        )\n"
+        "                        _fr13_rk_gdn._fr13_fixed32_observed_preforward_pack(\n"
+        "                            int(num_reqs),\n"
+        "                            tuple(tuple(int(_d) for _d in _t.shape)\n"
+        "                                  for _t in _fr13_rk_pack_tensors),\n"
+        "                            tuple(str(_t.dtype) for _t in _fr13_rk_pack_tensors),\n"
+        "                            tuple(_t.device.type for _t in _fr13_rk_pack_tensors),\n"
+        "                            2,\n"
+        "                            2,\n"
+        "                        )\n"
+        "                    else:\n"
+        "                        _fr13_rk_s = 0\n"
+        "                        for _fr13_rk_b in range(num_reqs):\n"
+        "                            if int(num_decode_draft_tokens[_fr13_rk_b]) >= 0:\n"
+        "                                _fr13_rk_paths[_fr13_rk_s].copy_(\n"
+        "                                    _fr13_rk_slot_paths[_fr13_rk_b]\n"
+        "                                )\n"
+        "                                _fr13_rk_lens[_fr13_rk_s].copy_(\n"
+        "                                    _fr13_rk_slot_lens[_fr13_rk_b]\n"
+        "                                )\n"
+        "                                _fr13_rk_s += 1\n"
+        "                except Exception as _fr13_rk_exc:\n"
+        "                    raise RuntimeError(\n"
+        "                        'FR13 fixed32 device row-map failed: '\n"
+        "                        + type(_fr13_rk_exc).__name__ + ':' + str(_fr13_rk_exc)\n"
+        "                    ) from _fr13_rk_exc\n"
+        "            elif __import__(\"os\").environ.get(\"FR13_TREE_REQKEY\", \"1\") == \"1\":\n"
         "                try:\n"
         "                    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_rk_gdn\n"
         "                    _fr13_rk_req_ids = [\n"
@@ -10534,7 +15660,36 @@ def _patch_gpu_model_runner_replay_draft_reqkey() -> bool:
         "                # FR13_DFWD_GPU_TIMER: time the DRAFTER (propose = all D\n"
         "                # spine forwards) with async cuda events; inert unless\n"
         "                # FR13_DFWD_GPU_TIMER=1 => byte-identical when off.\n"
-        "                _fr13_dfwd_ev = _fr13_dfwd_begin()\n"
+        f"                _fr13_f32_draft_on = {bool(_FR13_FIXED32_MODE)!r}\n"
+        "                _fr13_f32_draft_measured = False\n"
+        "                _fr13_f32_draft_req_ids = None\n"
+        "                _fr13_f32_draft_gdn = None\n"
+        "                if _fr13_f32_draft_on:\n"
+        "                    from vllm.model_executor.layers.mamba import (\n"
+        "                        gdn_linear_attn as _fr13_f32_draft_gdn,\n"
+        "                    )\n"
+        "                    _fr13_f32_draft_req_ids = tuple(\n"
+        "                        str(_rid) for _rid in\n"
+        "                        self.input_batch.req_ids[:self.input_batch.num_reqs]\n"
+        "                    )\n"
+        "                    if not torch.is_tensor(sampled_token_ids):\n"
+        "                        raise RuntimeError(\n"
+        "                            'FR13 fixed32 sampled_token_ids is not a tensor'\n"
+        "                        )\n"
+        "                    _fr13_f32_draft_measured = bool(\n"
+        "                        _fr13_f32_draft_gdn._fr13_fixed32_drafter_proposal_begin(\n"
+        "                            _fr13_f32_draft_gdn._FR13_FIXED32_MODE,\n"
+        "                            _fr13_f32_draft_req_ids,\n"
+        "                            int(sampled_token_ids.shape[0]),\n"
+        "                            int(spec_decode_common_attn_metadata.num_reqs),\n"
+        "                            int(spec_decode_common_attn_metadata.batch_size()),\n"
+        "                        )\n"
+        "                    )\n"
+        "                _fr13_dfwd_ev = (\n"
+        "                    _fr13_dfwd_begin()\n"
+        "                    if (not _fr13_f32_draft_on or _fr13_f32_draft_measured)\n"
+        "                    else None\n"
+        "                )\n"
         "                self._draft_token_ids = self.propose_draft_token_ids(\n"
         "                    scheduler_output,\n"
         "                    sampled_token_ids,\n"
@@ -10567,6 +15722,19 @@ def _patch_gpu_model_runner_replay_draft_reqkey() -> bool:
         "                except Exception:\n"
         "                    self._fr13_replay_draft_token_req_ids = []\n"
         "                self._copy_draft_token_ids_to_cpu(scheduler_output)\n"
+        "                if _fr13_f32_draft_on:\n"
+        "                    if not torch.is_tensor(self._draft_token_ids):\n"
+        "                        raise RuntimeError(\n"
+        "                            'FR13 fixed32 drafter output is not a tensor'\n"
+        "                        )\n"
+        "                    _fr13_f32_draft_gdn._fr13_fixed32_drafter_proposal_end(\n"
+        "                        _fr13_f32_draft_gdn._FR13_FIXED32_MODE,\n"
+        "                        _fr13_f32_draft_req_ids,\n"
+        "                        tuple(int(_d) for _d in self._draft_token_ids.shape),\n"
+        "                        str(self._draft_token_ids.dtype),\n"
+        "                        self._draft_token_ids.device.type,\n"
+        "                        True,\n"
+        "                    )\n"
     )
     if propose_anchor not in text:
         raise RuntimeError("FR13 replay draft reqkey propose anchor not found")
@@ -11703,11 +16871,15 @@ def _patch_mamba_utils_preprocess_context_flag() -> bool:
     fire on it snapshots the WRONG conv block into the APC align cache ->
     intermittent garbled/runaway poisoning (carrier b). At that single phase
     chokepoint: (1) set a module flag the override reads (True=preprocess), and
-    (2) for postprocess return the RAW remainder (skip tree translation) so
+    (2) when the fixed device committer writes the accepted state directly to
+    the running row, return the RAW bias for both phases before consulting any
+    host accepted-path state, and (3) for legacy non-running-row postprocess
+    return the RAW remainder (skip tree translation) so
     get_conv_copy_spec falls through to stock suffix-slice. Gated by
-    FR13_APC_CONV_FIX (default 1). Inert when APC off (align copy never runs);
-    with the gate off, both the flag-respecting override branch and this raw
-    return are bypassed -> behavior byte-identical to pre-fix."""
+    FR13_APC_COMMIT_TO_RUNNING_ROW (default 1) and FR13_APC_CONV_FIX (default
+    1), respectively. Inert when APC off (align copy never runs); with both
+    gates off, the flag-respecting override branch and raw returns are bypassed
+    -> behavior byte-identical to pre-fix."""
     text = MAMBA_UTILS_PATH.read_text()
     sentinel = "# FR13_APC_CONV_PREPROCESS_FLAG"
     if sentinel in text:
@@ -11743,6 +16915,13 @@ def _patch_mamba_utils_preprocess_context_flag() -> bool:
         bias_anchor,
         bias_anchor
         + "    _fr13_mecopy._FR13_IN_PREPROCESS = phase == \"preprocess\"  " + sentinel + "\n"
+        "    if os.environ.get(\"FR13_APC_COMMIT_TO_RUNNING_ROW\", \"1\") == \"1\":\n"
+        "        # The device committer has already placed the accepted temporal\n"
+        "        # and convolution state in running row/column 0. No accepted-\n"
+        "        # tree positional translation is needed, and fixed32 deliberately\n"
+        "        # does not publish host accepted-path globals. Return before any\n"
+        "        # host lookup so 1024-token block rollover is device-only too.\n"
+        "        return int(linear_bias)\n"
         "    if (\n"
         "        os.environ.get(\"FR13_APC_CONV_FIX\", \"1\") == \"1\"\n"
         "        and phase == \"postprocess\"\n"
@@ -11803,6 +16982,17 @@ def _patch_eagle_tree_consumption_verify() -> bool:
         return False
 
     text = text.replace("import ast\n", "import ast\nimport json\nimport os\n", 1)
+    text = text.replace(
+        "import os\n",
+        "import os\n" + _FR13_FIXED32_TSR_NONPREFIX_SOURCE,
+        1,
+    )
+    if _FR13_FIXED32_MODE:
+        text = text.replace(
+            "import os\n",
+            f"import os\n_FR13_FIXED32_MODE = {_FR13_FIXED32_MODE!r}\n",
+            1,
+        )
 
     tree_parse_old = """        # Parse the speculative token tree.
         spec_token_tree = self.speculative_config.speculative_token_tree
@@ -11824,6 +17014,27 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             ast.literal_eval(spec_token_tree), key=lambda _p: (len(_p), _p)
         )
 """
+    if _FR13_FIXED32_MODE:
+        fixed_tree = repr(_FR13_FIXED32_TREE_SOURCE)
+        fixed_choices = repr(list(_FR13_FIXED32_CHOICES))
+        tree_parse_new = tree_parse_new.replace(
+            "        assert spec_token_tree is not None\n",
+            (
+                f"        spec_token_tree = {fixed_tree}\n"
+                "        assert spec_token_tree is not None\n"
+            ),
+            1,
+        ).replace(
+            "        )\n",
+            (
+                "        )\n"
+                f"        if self.tree_choices != {fixed_choices}:\n"
+                "            raise RuntimeError(\n"
+                "                'FR13 fixed32 EAGLE physical topology drifted'\n"
+                "            )\n"
+            ),
+            1,
+        )
     if tree_parse_old not in text:
         raise RuntimeError("EAGLE tree parse anchor not found")
     text = text.replace(tree_parse_old, tree_parse_new, 1)
@@ -11933,11 +17144,92 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
                 # FR13_TSR_ROWMAP_BEGIN (pure row map; unit-tested verbatim:
                 # row = base + (len > 0 ? paths[b, len-1] : 0))
-                _fr13_tsr_n = min(
-                    int(_fr13_tsr_nrows),
-                    int(batch_size),
-                    int(_fr13_tsr_paths.size(0)),
-                )
+                _fr13_tsr_fixed = bool(getattr(
+                    _fr13_tsr_gdn, "_FR13_FIXED32_MODE", None
+                ))
+                if _fr13_tsr_fixed:
+                    _fr13_tsr_batch_rows = int(getattr(
+                        _fr13_tsr_gdn, "_FR13_FIXED32_BATCH_ROWS", -1
+                    ))
+                    _fr13_tsr_spec_rows = int(getattr(
+                        _fr13_tsr_gdn, "_FR13_FIXED32_SPEC_ROWS", -1
+                    ))
+                    _fr13_tsr_spec_indices = getattr(
+                        _fr13_tsr_gdn,
+                        "_FR13_FIXED32_SPEC_BATCH_INDICES",
+                        None,
+                    )
+                    _fr13_tsr_sampler_rids = tuple(
+                        str(_fr13_tsr_rid)
+                        for _fr13_tsr_rid in (
+                            getattr(
+                                _fr13_tsr_gdn,
+                                "_LUMO_FA_SAMPLER_ROW_REQ_IDS",
+                                None,
+                            ) or ()
+                        )
+                    )
+                    _fr13_tsr_spec_rids = tuple(
+                        str(_fr13_tsr_rid)
+                        for _fr13_tsr_rid in (
+                            getattr(
+                                _fr13_tsr_gdn,
+                                "_LUMO_FA_SPEC_ROW_REQ_IDS",
+                                None,
+                            ) or ()
+                        )
+                    )
+                    if (
+                        not 1 <= _fr13_tsr_nrows <= 4
+                        or _fr13_tsr_spec_rows != _fr13_tsr_nrows
+                        or _fr13_tsr_batch_rows != int(batch_size)
+                        or not 1 <= _fr13_tsr_batch_rows <= 4
+                        or not isinstance(_fr13_tsr_spec_indices, tuple)
+                        or len(_fr13_tsr_spec_indices) != _fr13_tsr_nrows
+                        or any(
+                            type(_fr13_tsr_i) is not int
+                            for _fr13_tsr_i in _fr13_tsr_spec_indices
+                        )
+                        or tuple(sorted(set(_fr13_tsr_spec_indices)))
+                        != _fr13_tsr_spec_indices
+                        or any(
+                            not 0 <= _fr13_tsr_i < _fr13_tsr_batch_rows
+                            for _fr13_tsr_i in _fr13_tsr_spec_indices
+                        )
+                        or len(_fr13_tsr_sampler_rids)
+                        != _fr13_tsr_batch_rows
+                        or len(_fr13_tsr_spec_rids) != _fr13_tsr_nrows
+                        or len(set(_fr13_tsr_sampler_rids))
+                        != len(_fr13_tsr_sampler_rids)
+                        or len(set(_fr13_tsr_spec_rids))
+                        != len(_fr13_tsr_spec_rids)
+                        or tuple(
+                            _fr13_tsr_sampler_rids[_fr13_tsr_i]
+                            for _fr13_tsr_i in _fr13_tsr_spec_indices
+                        ) != _fr13_tsr_spec_rids
+                        or int(_fr13_tsr_paths.size(0)) < _fr13_tsr_nrows
+                        or int(_fr13_tsr_lens.numel()) < _fr13_tsr_nrows
+                        or int(token_indices_to_sample.numel())
+                        != _fr13_tsr_batch_rows
+                        or int(common_attn_metadata.query_start_loc.numel())
+                        < _fr13_tsr_batch_rows + 1
+                    ):
+                        raise RuntimeError(
+                            "FR13 fixed32 TSR compact/full row-map drift"
+                        )
+                    _fr13_tsr_n = _fr13_tsr_nrows
+                    _fr13_tsr_nonprefix = (
+                        _fr13_tsr_spec_indices
+                        != tuple(range(_fr13_tsr_n))
+                    )
+                else:
+                    _fr13_tsr_n = min(
+                        int(_fr13_tsr_nrows),
+                        int(batch_size),
+                        int(_fr13_tsr_paths.size(0)),
+                    )
+                    _fr13_tsr_spec_indices = tuple(range(_fr13_tsr_n))
+                    _fr13_tsr_nonprefix = False
                 _fr13_tsr_len_n = _fr13_tsr_lens[:_fr13_tsr_n].to(torch.long)
                 _fr13_tsr_leaf = _fr13_tsr_paths[:_fr13_tsr_n].gather(
                     1,
@@ -11949,14 +17241,24 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_tsr_leaf,
                     _fr13_tsr_zero_row,
                 )
-                _fr13_tsr_base = common_attn_metadata.query_start_loc[
-                    :_fr13_tsr_n
-                ]
-                token_indices_to_sample = token_indices_to_sample.clone()
-                token_indices_to_sample[:_fr13_tsr_n] = (
-                    _fr13_tsr_base.to(token_indices_to_sample.dtype)
-                    + _fr13_tsr_leaf.to(token_indices_to_sample.dtype)
-                )
+                if _fr13_tsr_nonprefix:
+                    token_indices_to_sample = (
+                        _fr13_fixed32_tsr_nonprefix_update(
+                            token_indices_to_sample,
+                            common_attn_metadata.query_start_loc,
+                            _fr13_tsr_leaf,
+                            _fr13_tsr_spec_indices,
+                        )
+                    )
+                else:
+                    _fr13_tsr_base = common_attn_metadata.query_start_loc[
+                        :_fr13_tsr_n
+                    ]
+                    token_indices_to_sample = token_indices_to_sample.clone()
+                    token_indices_to_sample[:_fr13_tsr_n] = (
+                        _fr13_tsr_base.to(token_indices_to_sample.dtype)
+                        + _fr13_tsr_leaf.to(token_indices_to_sample.dtype)
+                    )
                 # FR13_TSR_ROWMAP_END
 """ + tsr_anchor
     if tsr_anchor not in text:
@@ -12049,9 +17351,93 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             (0, 0), (0, 1), (0, 2),
             (0, 0, 0), (0, 0, 1), (0, 0, 2),
         ]
+        # HYDRA23 is the one non-caterpillar topology admitted to the optimized
+        # wide drafter. Its four conditional descendants are filled by Arctic
+        # and keyed by their full paths, never by the zero-spine depth alias.
+        _fr13_hydra23_choices = [
+            (0,), (1,), (2,),
+            (0, 0), (0, 1), (0, 2), (1, 0),
+            (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0),
+            (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2),
+            (1, 0, 0, 0),
+            (0, 0, 0, 0, 0), (1, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        ]
+        _fr13_hydra23_tail_paths = [
+            (1, 0), (1, 0, 0), (1, 0, 0, 0), (1, 0, 0, 0, 0),
+        ]
+        _fr13_fixed32_choices = [
+            (0,), (1,), (2,),
+            (0, 0), (0, 1), (0, 2), (1, 0), (2, 0),
+            (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0),
+            (2, 0, 0),
+            (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2),
+            (1, 0, 0, 0), (2, 0, 0, 0),
+            (0, 0, 0, 0, 0), (0, 0, 0, 0, 1),
+            (0, 0, 0, 0, 2), (1, 0, 0, 0, 0),
+            (2, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0),
+            (2, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        ]
+        _fr13_fixed32_tail_paths = [
+            (1, 0), (1, 0, 0), (1, 0, 0, 0), (1, 0, 0, 0, 0),
+            (2, 0), (2, 0, 0), (2, 0, 0, 0), (2, 0, 0, 0, 0),
+            (2, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0),
+        ]
         _fr10_tree_choices_current = [
             tuple(_x) for _x in getattr(self, "tree_choices", [])
         ]
+        _fr13_is_fixed32 = (
+            bool(_FR13_FIXED32_MODE)
+            and _fr10_active_decode_mode == "tree_mtp"
+            and int(self.num_speculative_tokens) == 31
+            and _fr10_tree_choices_current == _fr13_fixed32_choices
+        )
+        if bool(_FR13_FIXED32_MODE) != _fr13_is_fixed32:
+            raise RuntimeError(
+                "FR13 fixed32 mode/topology mismatch: mode="
+                + repr(_FR13_FIXED32_MODE)
+                + " exact_shape=" + str(_fr13_is_fixed32)
+                + " nodes=" + str(len(_fr10_tree_choices_current))
+            )
+        _fr13_hydra23_armed = os.path.exists("/logs/fr13_hydra23.arm")
+        _fr13_is_hydra23 = (
+            _fr10_active_decode_mode == "tree_mtp"
+            and int(self.num_speculative_tokens) == 23
+            and _fr10_tree_choices_current == _fr13_hydra23_choices
+        )
+        if _fr13_hydra23_armed != _fr13_is_hydra23:
+            raise RuntimeError(
+                "FR13_HYDRA23 sidecar/topology mismatch: armed="
+                + str(_fr13_hydra23_armed)
+                + " exact_shape=" + str(_fr13_is_hydra23)
+                + " nodes=" + str(len(_fr10_tree_choices_current))
+            )
+        if _fr13_is_hydra23:
+            if (
+                not os.path.exists("/logs/fr13_tail_mode.arm")
+                or not os.path.exists(
+                    "/logs/fr13_draft_source_merged.arm"
+                )
+            ):
+                raise RuntimeError(
+                    "FR13_HYDRA23 requires tail-mode and merged-drafter sidecars"
+                )
+            logger.info_once(
+                "FR13_HYDRA23 exact topology engaged: nodes=%d rescue_chains=%s",
+                len(_fr13_hydra23_choices),
+                "rank1:4",
+            )
         _fr10_is_caterpillar = (
             _fr10_active_decode_mode == "tree_mtp"
             and int(self.num_speculative_tokens) == 9
@@ -12116,7 +17502,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             )
         )
         _fr10_is_wide = (
-            _fr10_wide_choices_ok
+            (_fr10_wide_choices_ok or _fr13_is_hydra23 or _fr13_is_fixed32)
             and not (
                 _fr10_is_caterpillar
                 or _fr10_is_spine_only
@@ -12137,6 +17523,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
         _fr10_wide_D = 0
         _fr10_wide_width = {}
         _fr10_wide_plan = []
+        _fr10_wide_paths = []
         _fr10_wide_spine_steps = 0
         if _fr10_is_wide:
             _fr10_wide_D = max(
@@ -12162,6 +17549,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr10_wide_plan = [
                 (len(_p) - 1, _p[-1]) for _p in _fr10_wide_src_choices
             ]
+            _fr10_wide_paths = list(_fr10_wide_src_choices)
             # NOTE: logger.info_once hashes (msg, *args) to dedup, so EVERY arg
             # must be hashable -- pass the widths dict + tree as STRINGS, never
             # the dict/list objects (a dict arg raises TypeError: unhashable
@@ -12421,6 +17809,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             # argmax-tie). off => byte-identical prior capture width.
             _fr13_dedup_sib = (
                 __import__('os').environ.get('FR13_DEDUP_SIBLINGS', '1') == '1'
+                and not _fr13_is_fixed32
             )
             _fr13_dedup_slack = 3 if _fr13_dedup_sib else 0
             if _fr10_is_wide:
@@ -12605,6 +17994,15 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 torch.cuda.synchronize()
                 _fr13_ds_t0 = __import__("time").monotonic()
             _fr13_dg_key = int(batch_size)
+            _fr13_f32_dg_gdn = None
+            if _fr13_is_fixed32:
+                from vllm.model_executor.layers.mamba import (
+                    gdn_linear_attn as _fr13_f32_dg_gdn,
+                )
+                if not _fr13_dg_on:
+                    raise RuntimeError(
+                        "FR13 fixed32 requires the full four-forward drafter graph"
+                    )
             _fr13_dg_all = getattr(self, "_fr13_dg_graphs", None)
             if _fr13_dg_all is None:
                 _fr13_dg_all = self._fr13_dg_graphs = {}
@@ -12638,6 +18036,12 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 _dg["pos"].copy_(positions)
                 _dg["slen"].copy_(common_attn_metadata.seq_lens)
                 _dg["graph"].replay()
+                if _fr13_is_fixed32:
+                    _fr13_f32_dg_gdn._fr13_fixed32_drafter_graph_replay(
+                        id(_dg["graph"]),
+                        _dg.get("fixed32_signature"),
+                        _fr13_dg_key,
+                    )
                 for _dg_i in range(4):
                     _fr10_spine_tokens.append(_dg["spine"][_dg_i])
                     if (_dg_i + 1) in _fr10_leaf_steps:
@@ -12721,6 +18125,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 # form; the context-manager does this internally).
                 _fr13_dg_prev_stream = torch.cuda.current_stream()
                 torch.cuda.set_stream(self._fr13_dg_stream)
+                if _fr13_is_fixed32:
+                    _fr13_f32_dg_gdn._fr13_fixed32_drafter_graph_capture_begin(
+                        id(_fr13_dg_g),
+                        _fr13_dg_key,
+                    )
                 _fr13_dg_g.capture_begin(pool=self._fr13_dg_pool)
             # FR13_RESHAPE_DEPTH3: cat9/chain5 keep range(4) (depth-5 spine);
             # the depth-3 shapes (chain3/cat3w) run 2 post-root steps. Each
@@ -12798,6 +18207,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     slot_mapping=self._get_slot_mapping(input_batch_size),
                 ):
                     ret_hidden_states = self.model(**model_kwargs)
+                    if _fr13_is_fixed32:
+                        _fr13_f32_dg_gdn._fr13_fixed32_drafter_mtp_forward(
+                            int(batch_size),
+                            _fr13_dg_cap,
+                        )
                     if not self.model_returns_tuple():
                         last_hidden_states = ret_hidden_states
                         hidden_states = ret_hidden_states
@@ -12931,7 +18345,20 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 # call's outputs + KV/seq_lens mutations are eager-equivalent.
                 _fr13_dg_g.capture_end()
                 torch.cuda.set_stream(_fr13_dg_prev_stream)
+                if _fr13_is_fixed32:
+                    _dg["fixed32_signature"] = (
+                        _fr13_f32_dg_gdn._fr13_fixed32_drafter_graph_capture_end(
+                            id(_fr13_dg_g),
+                            _fr13_dg_key,
+                        )
+                    )
                 _fr13_dg_g.replay()
+                if _fr13_is_fixed32:
+                    _fr13_f32_dg_gdn._fr13_fixed32_drafter_graph_replay(
+                        id(_fr13_dg_g),
+                        _dg["fixed32_signature"],
+                        _fr13_dg_key,
+                    )
                 _dg["graph"] = _fr13_dg_g
                 _fr13_dg_all[_fr13_dg_key] = _dg
                 print(
@@ -12943,14 +18370,19 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             if _fr13_ds_on:
                 torch.cuda.synchronize()
                 _fr13_ds_t1 = __import__("time").monotonic()
+            _fr13_hydra_path_tokens = {}
+            _fr13_fixed32_path_tokens = {}
             # accept>5 TAIL append (sidecar /logs/fr13_tail_mode.arm): the native MTP head loop
             # above produced head_depth spine tokens (depths 0..head_depth-1) + head branches
             # (byte-identical baseline). Retrieve the deep Arctic chain (depths head_depth..wide_D-1)
             # and APPEND to _fr10_spine_tokens (head_depth -> wide_D) so the wide packer sees wide_D
-            # spine tensors. Head unchanged + tail only ADDS => lossless never-regress (committer
-            # accept=p(S), source/depth-blind). Own try/except: NEVER break the drafter.
+            # spine tensors. Standard tail mode is add-only. HYDRA23 trades two
+            # head siblings for four conditional nodes, so it is distribution-
+            # lossless through the parent-aware committer but not accept-monotone
+            # versus tail6. Own try/except: NEVER break the drafter.
             if _fr10_is_wide and os.path.exists("/logs/fr13_tail_mode.arm"):
                 _fr13_t_skip = ""
+                _fr13_hydra_contract_error = False
                 try:
                     import sys as _fr13_t_sys
                     if "/workspace/scripts" not in _fr13_t_sys.path:
@@ -12986,13 +18418,71 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             # syncs + one .item() — each was a full stream
                             # sync waiting on the drafter forwards (and the
                             # R4 replay). Values byte-identical.
-                            _fr13_t_stack = torch.stack([
+                            _fr13_t_host_cols = [
                                 _fr10_spine_tokens[_d].detach().reshape(-1)
                                 for _d in range(_fr13_t_hd)
-                            ]).cpu()
+                            ]
+                            if _fr13_is_hydra23:
+                                _fr13_hydra_contract_error = True
+                                _fr13_t_root_wtk = _fr10_wide_topk.get(0)
+                                if (
+                                    _fr13_t_root_wtk is None
+                                    or int(_fr13_t_root_wtk.shape[1]) < 2
+                                ):
+                                    raise RuntimeError(
+                                        "FR13_HYDRA23 root topk needs column 1"
+                                    )
+                                # Keep the rescue seed in the existing
+                                # single stacked DtoH synchronization.
+                                _fr13_t_host_cols.append(
+                                    _fr13_t_root_wtk[:, 1].detach().reshape(-1),
+                                )
+                            elif _fr13_is_fixed32:
+                                _fr13_t_root_wtk = _fr10_wide_topk.get(0)
+                                if (
+                                    _fr13_t_root_wtk is None
+                                    or int(_fr13_t_root_wtk.shape[1]) < 3
+                                ):
+                                    raise RuntimeError(
+                                        "FR13 fixed32 root topk needs ranks 1 and 2"
+                                    )
+                                _fr13_t_host_cols.extend(
+                                    [
+                                        _fr13_t_root_wtk[:, 1].detach().reshape(-1),
+                                        _fr13_t_root_wtk[:, 2].detach().reshape(-1),
+                                    ]
+                                )
+                            _fr13_t_stack = torch.stack(_fr13_t_host_cols).cpu()
+                            _fr13_hydra_contract_error = False
                             _fr13_t_head = [
                                 [int(_x) for _x in _fr13_t_stack[_d].tolist()]
                                 for _d in range(_fr13_t_hd)]
+                            _fr13_t_hydra_seeds = (
+                                {
+                                    1: [
+                                        int(_x)
+                                        for _x in _fr13_t_stack[_fr13_t_hd].tolist()
+                                    ],
+                                }
+                                if _fr13_is_hydra23
+                                else (
+                                    {
+                                        1: [
+                                            int(_x)
+                                            for _x in _fr13_t_stack[
+                                                _fr13_t_hd
+                                            ].tolist()
+                                        ],
+                                        2: [
+                                            int(_x)
+                                            for _x in _fr13_t_stack[
+                                                _fr13_t_hd + 1
+                                            ].tolist()
+                                        ],
+                                    }
+                                    if _fr13_is_fixed32 else None
+                                )
+                            )
                             # FR13_DVK_DRAFTID_DUMP (instrumented runs only):
                             # spine draft ids are ALREADY on host here — one
                             # json line per drafter call, zero extra syncs.
@@ -13014,12 +18504,89 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                     self._fr13_dvkd_fh = None
                             _fr13_t_vocab = int(_fr10_logits.shape[-1])
                             _fr13_t_pad = int(_fr13_t_stack[0, 0])
-                            _fr13_t_cols = _fr13_t.decide_tail(
-                                _fr13_t_cache, [str(_r) for _r in _fr13_t_ids], _fr13_t_head,
-                                _fr13_t_hd, _fr13_t_len, _fr10_spine_tokens[0].device,
-                                _fr13_t_pad, vocab_size=_fr13_t_vocab)
+                            if _fr13_is_fixed32:
+                                _fr13_t_work_serial = (
+                                    _fr13_t.get_fixed32_drafter_work_serial()
+                                )
+                                _fr13_t_cols = _fr13_t.decide_fixed32(
+                                    _fr13_t_cache,
+                                    [str(_r) for _r in _fr13_t_ids],
+                                    _fr13_t_head,
+                                    _fr13_t_hydra_seeds,
+                                    _fr10_spine_tokens[0].device,
+                                    _fr13_t_pad,
+                                    vocab_size=_fr13_t_vocab,
+                                )
+                                _fr13_t_work = (
+                                    _fr13_t.get_fixed32_drafter_last_work()
+                                )
+                                if (
+                                    not isinstance(_fr13_t_work, dict)
+                                    or int(_fr13_t_work.get("serial", -1))
+                                    != int(_fr13_t_work_serial) + 1
+                                ):
+                                    raise RuntimeError(
+                                        "FR13 fixed32 drafter work snapshot is stale"
+                                    )
+                                _fr13_f32_dg_gdn._fr13_fixed32_drafter_observed_arctic(
+                                    _fr13_t_work
+                                )
+                            else:
+                                _fr13_t_cols = _fr13_t.decide_tail(
+                                    _fr13_t_cache, [str(_r) for _r in _fr13_t_ids], _fr13_t_head,
+                                    _fr13_t_hd, _fr13_t_len, _fr10_spine_tokens[0].device,
+                                    _fr13_t_pad, vocab_size=_fr13_t_vocab,
+                                    hydra_seed_per_rank=_fr13_t_hydra_seeds,
+                                    hydra_branch_chains=((1, 4),))
                             if _fr13_t_cols is not None:
                                 _fr10_spine_tokens.extend(_fr13_t_cols)
+                                if _fr13_is_hydra23:
+                                    _fr13_hydra_contract_error = True
+                                    _fr13_t_paths = dict(
+                                        _fr13_t.get_tail_path_tokens()
+                                    )
+                                    if set(_fr13_t_paths) != set(
+                                        _fr13_hydra23_tail_paths
+                                    ):
+                                        raise RuntimeError(
+                                            "FR13_HYDRA23 Arctic path set mismatch: "
+                                            + repr(sorted(_fr13_t_paths))
+                                        )
+                                    for _fr13_hp, _fr13_ht in _fr13_t_paths.items():
+                                        if (
+                                            tuple(_fr13_ht.shape)
+                                            != tuple(_fr10_spine_tokens[0].shape)
+                                            or _fr13_ht.dtype != torch.int64
+                                            or _fr13_ht.device
+                                            != _fr10_spine_tokens[0].device
+                                        ):
+                                            raise RuntimeError(
+                                                "FR13_HYDRA23 bad column for "
+                                                + repr(_fr13_hp)
+                                            )
+                                    _fr13_hydra_path_tokens = _fr13_t_paths
+                                    _fr13_hydra_contract_error = False
+                                elif _fr13_is_fixed32:
+                                    _fr13_t_paths = dict(
+                                        _fr13_t.get_tail_path_tokens()
+                                    )
+                                    if set(_fr13_t_paths) != set(
+                                        _fr13_fixed32_tail_paths
+                                    ):
+                                        raise RuntimeError(
+                                            "FR13 fixed32 Arctic path set mismatch: "
+                                            + repr(sorted(_fr13_t_paths))
+                                        )
+                                    if (
+                                        15 + len(_fr13_t_cols)
+                                        + len(_fr13_t_paths)
+                                        != 31
+                                    ):
+                                        raise RuntimeError(
+                                            "FR13 fixed32 drafter work is not "
+                                            "15 native + 6 tail + 10 rescue = 31"
+                                        )
+                                    _fr13_fixed32_path_tokens = _fr13_t_paths
                                 # Direction-2 d6-branch: merge the tail-branch wide_topk (free packer keys
                                 # head_depth-1.. ; the head fills only 0..head_depth-2) so the wide packer
                                 # fills the d6/d7 tail branch nodes from the arctic runner-ups. Empty {}
@@ -13031,6 +18598,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             else:
                                 _fr13_t_skip = "decide_none"
                 except Exception as _fr13_t_exc:
+                    if _fr13_is_fixed32:
+                        raise
+                    if _fr13_is_hydra23 and _fr13_hydra_contract_error:
+                        raise
                     _fr13_t_skip = "exc:%r" % (_fr13_t_exc,)
                 # POST-TRY RECONCILIATION (OUTSIDE the try -- red-team FINDING 1, make-or-break): tail
                 # mode serves a wide_D-deep tree, so the wide packer REQUIRES wide_D spine tensors with
@@ -13038,8 +18609,50 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 # repeating the last spine token -- a [batch] int64 tensor (torch.stack needs matching
                 # shape), NOT a scalar. Lossless: a repeated deep token ~never matches the model past the
                 # head, and the committer verifies each row against its OWN target -> never a wrong accept.
-                while len(_fr10_spine_tokens) < int(_fr10_wide_D):
-                    _fr10_spine_tokens.append(_fr10_spine_tokens[-1])
+                if _fr13_is_fixed32:
+                    if _fr13_t_skip:
+                        raise RuntimeError(
+                            "FR13 fixed32 drafter skipped: " + _fr13_t_skip
+                        )
+                    if len(_fr10_spine_tokens) != int(_fr10_wide_D):
+                        raise RuntimeError(
+                            "FR13 fixed32 spine pack is not exactly depth 11"
+                        )
+                    if set(_fr13_fixed32_path_tokens) != set(
+                        _fr13_fixed32_tail_paths
+                    ):
+                        raise RuntimeError(
+                            "FR13 fixed32 rescue columns are incomplete"
+                        )
+                else:
+                    while len(_fr10_spine_tokens) < int(_fr10_wide_D):
+                        _fr10_spine_tokens.append(_fr10_spine_tokens[-1])
+                if _fr13_is_hydra23:
+                    _fr13_h_root = _fr10_wide_topk.get(0)
+                    if _fr13_h_root is None or int(_fr13_h_root.shape[1]) < 2:
+                        raise RuntimeError(
+                            "FR13_HYDRA23 cannot reconcile without root topk"
+                        )
+                    for _fr13_h_rank, _fr13_h_len in ((1, 4),):
+                        _fr13_h_prev = _fr13_h_root[:, _fr13_h_rank]
+                        for _fr13_h_j in range(_fr13_h_len):
+                            _fr13_h_path = (
+                                (_fr13_h_rank,)
+                                + (0,) * (_fr13_h_j + 1)
+                            )
+                            _fr13_h_col = _fr13_hydra_path_tokens.get(
+                                _fr13_h_path
+                            )
+                            if (
+                                _fr13_h_col is None
+                                or tuple(_fr13_h_col.shape)
+                                != tuple(_fr13_h_prev.shape)
+                                or _fr13_h_col.dtype != torch.int64
+                                or _fr13_h_col.device != _fr13_h_prev.device
+                            ):
+                                _fr13_h_col = _fr13_h_prev
+                            _fr13_hydra_path_tokens[_fr13_h_path] = _fr13_h_col
+                            _fr13_h_prev = _fr13_h_col
                 # Direction-2 branch PAD-fallback (mirror the spine pad above): the branched tail tree has
                 # branch nodes (rk>0) whose _fr10_wide_topk keys are filled by decide_tail's merge ONLY when
                 # the tail path engaged; on a cold/dummy forward (decide_tail None/skip) those keys are absent
@@ -13283,10 +18896,29 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "FR13_RESHAPE_WIDE: collected "
                         + str(len(_fr10_spine_tokens))
                         + " spine tokens, expected D=" + str(_fr10_wide_D)
-                    )
+                )
                 _fr10_wide_cols = []
-                for _fr10_pp, _fr10_rk in _fr10_wide_plan:
-                    if _fr10_rk == 0:
+                for _fr10_path, (_fr10_pp, _fr10_rk) in zip(
+                    _fr10_wide_paths, _fr10_wide_plan
+                ):
+                    if (
+                        (
+                            _fr13_is_hydra23
+                            and _fr10_path in _fr13_hydra_path_tokens
+                        )
+                        or (
+                            _fr13_is_fixed32
+                            and _fr10_path in _fr13_fixed32_path_tokens
+                        )
+                    ):
+                        _fr10_wide_cols.append(
+                            (
+                                _fr13_fixed32_path_tokens[_fr10_path]
+                                if _fr13_is_fixed32
+                                else _fr13_hydra_path_tokens[_fr10_path]
+                            )
+                        )
+                    elif _fr10_rk == 0:
                         _fr10_wide_cols.append(_fr10_spine_tokens[_fr10_pp])
                     else:
                         _fr10_wt = _fr10_wide_topk.get(_fr10_pp)
@@ -13307,6 +18939,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     torch.cuda.synchronize()
                     _fr13_ds_t2 = __import__("time").monotonic()
                 _fr10_packed = torch.stack(_fr10_wide_cols, dim=1)
+                if _fr13_is_fixed32:
+                    _fr13_f32_dg_gdn._fr13_fixed32_drafter_observed_publish(
+                        tuple(int(_d) for _d in _fr10_packed.shape),
+                        str(_fr10_packed.dtype),
+                        _fr10_packed.device.type,
+                        tuple(_fr10_wide_paths),
+                    )
                 if _fr13_ds_on:
                     torch.cuda.synchronize()
                     _fr13_ds_t3 = __import__("time").monotonic()
@@ -13897,9 +19536,22 @@ def _patch_tree_attn_spec_config_override() -> bool:
             spec_token_tree = None
         if spec_token_tree is None and (spec := spec_config):
             spec_token_tree = spec.speculative_token_tree
+""" + (
+            f"""        spec_token_tree = {_FR13_FIXED32_TREE_SOURCE!r}
+"""
+            if _FR13_FIXED32_MODE
+            else ""
+        ) + """\
         tree_choices: list[tuple[int, ...]] = (
             sorted(ast.literal_eval(spec_token_tree), key=lambda _p: (len(_p), _p)) if spec_token_tree is not None else [(0,)]
         )
+""" + (
+            f"""        if tree_choices != {list(_FR13_FIXED32_CHOICES)!r}:
+            raise RuntimeError("FR13 fixed32 tree-attention topology drifted")
+"""
+            if _FR13_FIXED32_MODE
+            else ""
+        ) + """\
 """
         if old not in text:
             raise RuntimeError("tree attention spec tree anchor not found")
@@ -14591,6 +20243,29 @@ def _fr13_tree_attn_op_capture(
     value_cache,
     attn_metadata,
 ):
+    # Fixed32 accounting is part of the acceptance route, not the optional
+    # capture diagnostic below. Keep it outside that diagnostic's fail-open
+    # try/except and execute it only after unified_attention returned.
+    layer_name = str(getattr(layer, "layer_name", ""))
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_f32_gdn
+    if getattr(_fr13_f32_gdn, "_FR13_FIXED32_MODE", ""):
+        _fr13_f32_capturing = bool(
+            torch.cuda.is_available()
+            and torch.cuda.is_current_stream_capturing()
+        )
+        if (
+            _fr13_f32_capturing
+            or _fr13_f32_gdn._fr13_fixed32_observed_event_active()
+        ):
+            _fr13_f32_bias = getattr(attn_metadata, "tree_attn_bias", None)
+            if _fr13_f32_bias is None:
+                raise RuntimeError("FR13 fixed32 tree attention has no bias tensor")
+            _fr13_f32_gdn._fr13_fixed32_observed_tree_attn(
+                layer_name,
+                int(query.shape[0]),
+                tuple(int(value) for value in _fr13_f32_bias.shape),
+                _fr13_f32_capturing,
+            )
     path = os.environ.get("FR13_TREE_ATTN_OP_CAPTURE")
     # FR13_FA2_MAB shares this hook's dense-KV gather + carrier-event gating but
     # is an independent diagnostic: it runs even when the op-capture SAVE path
@@ -14605,7 +20280,6 @@ def _fr13_tree_attn_op_capture(
     except Exception:
         return
     try:
-        layer_name = str(getattr(layer, "layer_name", ""))
         # The A/B can sweep all 16 full_attention layers via its own LAYER
         # filter (default "*"); the save path keeps its own layer default.
         if mab_on and not path:
@@ -16467,6 +22141,16 @@ def _fr13_sfwd_begin(max_num_scheduled_tokens, num_tokens, num_reqs,
         max_num_scheduled_tokens, num_tokens, num_reqs, uniform_decode_query_len
     )
     try:
+        from vllm.model_executor.layers.mamba import (
+            gdn_linear_attn as _fr13_sfwd_gdn,
+        )
+        if getattr(_fr13_sfwd_gdn, "_FR13_FIXED32_MODE", ""):
+            _fr13_sfwd_pure = (
+                _fr13_sfwd_gdn._fr13_fixed32_observed_event_active()
+            )
+    except ImportError:
+        pass
+    try:
         # FR13_STEP_WALL: wall bookkeeping runs on EVERY step while the flag
         # is on -- pure steps extend the start-to-start chain, mixed/prefill
         # steps break it.
@@ -16685,6 +22369,17 @@ def _fr13_cfwd_begin():
         return None  # boot-29i: event ops inside a capture invalidate it
     if __import__("os").environ.get("FR13_CFWD_GPU_TIMER", "0") != "1":
         return None
+    try:
+        from vllm.model_executor.layers.mamba import (
+            gdn_linear_attn as _fr13_cfwd_gdn,
+        )
+        if (
+            getattr(_fr13_cfwd_gdn, "_FR13_FIXED32_MODE", "")
+            and not _fr13_cfwd_gdn._fr13_fixed32_observed_event_active()
+        ):
+            return None
+    except ImportError:
+        pass
     try:
         return _fr13_cfwd_timer().begin()
     except Exception:  # noqa: BLE001
@@ -17804,13 +23499,46 @@ def _patch_gpu_model_runner_uniform_dispatch_guard() -> bool:
                 cudagraph_stats,
             ) = self._determine_batch_execution_and_padding(
 """
+    if _FR13_FIXED32_MODE:
+        guard = guard.replace(
+            "self.num_decode_draft_tokens.np[:num_reqs] < 0",
+            "self.num_decode_draft_tokens.np[:num_reqs] != 31",
+        )
     text = text.replace(tuple_open, guard, 1)
     new_call = anchor.replace(
         "                num_encoder_reqs=len(scheduler_output.scheduled_encoder_inputs),\n",
         "                num_encoder_reqs=len(scheduler_output.scheduled_encoder_inputs),\n"
         "                force_uniform_decode=_fr13_force_uniform,\n",
     )
+    if _FR13_FIXED32_MODE:
+        new_call += """            if _fr13_force_uniform is False:
+                from vllm.model_executor.layers.mamba import (
+                    gdn_linear_attn as _fr13_dispatch_gdn,
+                )
+                _fr13_dispatch_gdn._fr13_fixed32_observed_nonpure_dispatch(
+                    cudagraph_mode.name
+                )
+"""
     text = text.replace(anchor, new_call, 1)
+    if _FR13_FIXED32_MODE:
+        draft_guard_index = text.find(
+            "self.num_decode_draft_tokens.np[:num_reqs] != 31"
+        )
+        dispatch_index = text.find(
+            ") = self._determine_batch_execution_and_padding(",
+            draft_guard_index,
+        )
+        observer_index = text.find(
+            "_fr13_fixed32_observed_nonpure_dispatch(",
+            dispatch_index,
+        )
+        logger_index = text.find("logger.debug", observer_index)
+        if not (
+            0 <= draft_guard_index < dispatch_index < observer_index < logger_index
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 emitted nonpure dispatch guard ordering drift"
+            )
     GPU_MODEL_RUNNER_PATH.write_text(text)
     return True
 
@@ -18861,6 +24589,740 @@ def _fr13_sg_execute_model_locked(self, *a, **k):
         return _fr13_sg_orig_execute_model(self, *a, **k)
 GPUModelRunner.execute_model = _fr13_sg_execute_model_locked
 """
+    if _FR13_FIXED32_MODE:
+        fixed_flush = r'''
+
+# FR13_FIXED32_FLUSH: queue-only SIGUSR2 control plane. The worker acquires
+# the execute lock, synchronizes CUDA exactly once, drains completed timers,
+# atomically snapshots the census/timers, then replaces the ack last.
+import json as _fr13_f32_flush_json
+import hashlib as _fr13_f32_flush_hashlib
+import os as _fr13_f32_flush_os
+import queue as _fr13_f32_flush_queue
+import re as _fr13_f32_flush_re
+import signal as _fr13_f32_flush_signal
+import sys as _fr13_f32_flush_sys
+from pathlib import Path as _Fr13F32FlushPath
+
+_FR13_FIXED32_FLUSH_MODE = __FR13_FIXED32_MODE__
+_FR13_FIXED32_FLUSH_REQUEST_SCHEMA = "fr13-fixed32-flush-request-v1"
+_FR13_FIXED32_FLUSH_ACK_SCHEMA = "fr13-fixed32-flush-ack-v1"
+_FR13_FIXED32_FLUSH_REQUEST_KEYS = frozenset({
+    "schema", "mode", "producer_pid", "prev_generation", "generation",
+    "nonce", "action",
+})
+_FR13_FIXED32_FLUSH_NONCE_RE = _fr13_f32_flush_re.compile(r"^[0-9a-f]{64}$")
+_FR13_FIXED32_FLUSH_READY_NONCE = "0" * 64
+_FR13_FIXED32_FLUSH_QUEUE = _fr13_f32_flush_queue.Queue()
+_FR13_FIXED32_FLUSH_GENERATION = 0
+_FR13_FIXED32_FLUSH_TERMINAL = False
+_FR13_FIXED32_FLUSH_PID = _fr13_f32_flush_os.getpid()
+_FR13_FIXED32_FLUSH_PID_PATH = _Fr13F32FlushPath(
+    _fr13_f32_flush_os.environ.get(
+        "FR13_FIXED32_ENGINE_PID_FILE", "/logs/fr13_fixed32_engine_pid"
+    )
+)
+_FR13_FIXED32_FLUSH_REQUEST_PATH = _Fr13F32FlushPath(
+    _fr13_f32_flush_os.environ.get(
+        "FR13_FIXED32_FLUSH_REQUEST_PATH",
+        "/logs/fr13_fixed32_flush_request.json",
+    )
+)
+_FR13_FIXED32_FLUSH_ACK_PATH = _Fr13F32FlushPath(
+    _fr13_f32_flush_os.environ.get(
+        "FR13_FIXED32_FLUSH_ACK_PATH", "/logs/fr13_fixed32_flush_ack.json"
+    )
+)
+_FR13_FIXED32_FLUSH_CENSUS_PATH = _Fr13F32FlushPath(
+    _fr13_f32_flush_os.environ.get(
+        "FR13_FIXED32_WORK_CENSUS_PATH",
+        "/logs/fr13_fixed32_work_census.jsonl",
+    )
+)
+_FR13_FIXED32_FLUSH_BOUNDARY_PATH = _Fr13F32FlushPath(
+    _fr13_f32_flush_os.environ.get(
+        "FR13_FIXED32_BOUNDARY_SNAPSHOT_PATH",
+        "/logs/fr13_fixed32_boundary_snapshot",
+    )
+)
+
+
+def _fr13_f32_flush_atomic_text(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(
+        path.name + ".tmp."
+        + str(_FR13_FIXED32_FLUSH_PID) + "."
+        + str(_fr13_sg_threading.get_ident())
+    )
+    with open(tmp, "w", encoding="utf-8") as handle:
+        handle.write(text)
+        handle.flush()
+        _fr13_f32_flush_os.fsync(handle.fileno())
+    _fr13_f32_flush_os.replace(tmp, path)
+
+
+def _fr13_f32_flush_duplicate_checked(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key " + repr(key))
+        result[key] = value
+    return result
+
+
+def _fr13_f32_flush_reject_constant(value):
+    raise ValueError("non-finite JSON constant " + repr(value))
+
+
+def _fr13_f32_flush_read_request():
+    raw = _FR13_FIXED32_FLUSH_REQUEST_PATH.read_text(encoding="utf-8")
+    if len(raw.encode("utf-8")) > 1024 * 1024:
+        raise ValueError("flush request exceeds 1 MiB")
+    request = _fr13_f32_flush_json.loads(
+        raw,
+        object_pairs_hook=_fr13_f32_flush_duplicate_checked,
+        parse_constant=_fr13_f32_flush_reject_constant,
+    )
+    if not isinstance(request, dict):
+        raise ValueError("flush request root is not an object")
+    if frozenset(request) != _FR13_FIXED32_FLUSH_REQUEST_KEYS:
+        raise ValueError("flush request keys mismatch")
+    if request["schema"] != _FR13_FIXED32_FLUSH_REQUEST_SCHEMA:
+        raise ValueError("flush request schema mismatch")
+    if request["mode"] != _FR13_FIXED32_FLUSH_MODE:
+        raise ValueError("flush request mode mismatch")
+    if (
+        not isinstance(request["producer_pid"], int)
+        or isinstance(request["producer_pid"], bool)
+        or request["producer_pid"] != _FR13_FIXED32_FLUSH_PID
+    ):
+        raise ValueError("flush request producer_pid mismatch")
+    for key in ("prev_generation", "generation"):
+        if not isinstance(request[key], int) or isinstance(request[key], bool):
+            raise ValueError("flush request " + key + " is not an integer")
+    if request["prev_generation"] != _FR13_FIXED32_FLUSH_GENERATION:
+        raise ValueError("flush request prev_generation mismatch")
+    if request["generation"] != _FR13_FIXED32_FLUSH_GENERATION + 1:
+        raise ValueError("flush request generation is not the next generation")
+    nonce = request["nonce"]
+    if (
+        not isinstance(nonce, str)
+        or _FR13_FIXED32_FLUSH_NONCE_RE.fullmatch(nonce) is None
+        or nonce == _FR13_FIXED32_FLUSH_READY_NONCE
+    ):
+        raise ValueError("flush request nonce is invalid")
+    if request["action"] not in ("snapshot", "final"):
+        raise ValueError("flush request action is invalid")
+    return request
+
+
+def _fr13_f32_flush_runtime_state():
+    try:
+        from vllm.model_executor.layers.mamba import (
+            gdn_linear_attn as gdn,
+        )
+    except Exception:
+        gdn = None
+    events = (
+        list(getattr(gdn, "_FR13_FIXED32_CENSUS_EVENTS", ()) or ())
+        if gdn is not None else []
+    )
+    forward_steps = int(
+        getattr(gdn, "_FR13_FIXED32_PURE_DECODE_FORWARD_STEPS", 0)
+        if gdn is not None else 0
+    )
+    first = events[0]["forward_step_index"] if events else None
+    last = events[-1]["forward_step_index"] if events else None
+    sfwd = globals().get("_FR13_SFWD_GPU_TIMER")
+    dfwd = globals().get("_FR13_DFWD_TIMER")
+    cfwd = globals().get("_FR13_CFWD_TIMER")
+    return gdn, events, forward_steps, first, last, sfwd, dfwd, cfwd
+
+
+def _fr13_f32_flush_counters(*, require_drained):
+    (
+        gdn, events, forward_steps, first, last, sfwd, dfwd, cfwd,
+    ) = _fr13_f32_flush_runtime_state()
+    sfwd_pending = len(sfwd._pending) if sfwd is not None else 0
+    dfwd_pending = len(dfwd._pending) if dfwd is not None else 0
+    cfwd_pending = len(cfwd._pending) if cfwd is not None else 0
+    if require_drained and (sfwd_pending or dfwd_pending or cfwd_pending):
+        raise RuntimeError(
+            "fixed32 timer drain left pending events: "
+            + repr((sfwd_pending, dfwd_pending, cfwd_pending))
+        )
+    return {
+        "pure_decode_forward_steps": forward_steps,
+        "complete_work_census_events": len(events),
+        "work_census_first_forward_step": first,
+        "work_census_last_forward_step": last,
+        "sfwd_pending": sfwd_pending,
+        "dfwd_pending": dfwd_pending,
+        "cfwd_pending": cfwd_pending,
+    }
+
+
+def _fr13_f32_flush_reconcile():
+    (
+        gdn, events, forward_steps, _first, _last, sfwd, dfwd, cfwd,
+    ) = _fr13_f32_flush_runtime_state()
+    if gdn is None:
+        if forward_steps or events:
+            raise RuntimeError("fixed32 GDN state disappeared")
+        return
+    if getattr(gdn, "_FR13_FIXED32_PENDING_TAW", None) is not None:
+        raise RuntimeError("fixed32 flush saw a pending TAW callback")
+    if getattr(gdn, "_FR13_FIXED32_PENDING_EVENT", None) is not None:
+        raise RuntimeError("fixed32 flush saw an incomplete KV16 event")
+    if getattr(gdn, "_FR13_FIXED32_OBSERVED_CURRENT", None) is not None:
+        raise RuntimeError("fixed32 flush saw an incomplete observed-work event")
+    if getattr(gdn, "_FR13_FIXED32_CAPTURE_CONTEXT", None) is not None:
+        raise RuntimeError("fixed32 flush saw an incomplete graph capture")
+    if getattr(gdn, "_FR13_FIXED32_PROFILE_CAPTURE_SCOPE", None) is not None:
+        raise RuntimeError("fixed32 flush saw an incomplete profile capture scope")
+    if getattr(gdn, "_FR13_FIXED32_PROFILE_MEMORY_SCOPE", False) is not False:
+        raise RuntimeError("fixed32 flush saw an incomplete profile-memory scope")
+    if getattr(gdn, "_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT", None) is not None:
+        raise RuntimeError("fixed32 flush saw an incomplete drafter proposal")
+    if getattr(
+        gdn, "_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT", None
+    ) is not None:
+        raise RuntimeError("fixed32 flush saw an incomplete drafter graph capture")
+    if len(events) != forward_steps:
+        raise RuntimeError(
+            "fixed32 complete events != pure forward steps: "
+            + str(len(events)) + "!=" + str(forward_steps)
+        )
+    expected_indices = list(range(len(events)))
+    if [event.get("event_index") for event in events] != expected_indices:
+        raise RuntimeError("fixed32 census event indices are not contiguous")
+    fwd_indices = [event.get("forward_step_index") for event in events]
+    if fwd_indices != expected_indices:
+        raise RuntimeError("fixed32 census forward indices are not contiguous")
+    if any(
+        event.get("producer_pid") != _FR13_FIXED32_FLUSH_PID
+        or event.get("mode") != _FR13_FIXED32_FLUSH_MODE
+        or event.get("event_complete") is not True
+        for event in events
+    ):
+        raise RuntimeError("fixed32 census event identity mismatch")
+    replay_evidence = list(
+        getattr(gdn, "_FR13_FIXED32_GRAPH_REPLAY_EVIDENCE", ()) or ()
+    )
+    if len(replay_evidence) != len(events):
+        raise RuntimeError(
+            "fixed32 replay evidence/event count mismatch: "
+            + repr((len(replay_evidence), len(events)))
+        )
+    capture_manifests = getattr(
+        gdn, "_FR13_FIXED32_CAPTURE_MANIFESTS", {}
+    )
+    for event, evidence in zip(events, replay_evidence, strict=True):
+        graph_id = evidence.get("graph_id")
+        graph_signature = evidence.get("graph_signature")
+        manifest_entry = (
+            capture_manifests.get(graph_id)
+            if isinstance(capture_manifests, dict)
+            else None
+        )
+        try:
+            checked_signature, _canonical = gdn._fr13_fixed32_manifest_entry(
+                manifest_entry,
+                "forward graph " + str(graph_id),
+            )
+        except Exception as error:
+            raise RuntimeError(
+                "fixed32 forward manifest canonical check failed"
+            ) from error
+        if (
+            evidence.get("mode") != event.get("mode")
+            or evidence.get("batch_size") != event.get("batch_size")
+            or evidence.get("event_index") != event.get("event_index")
+            or evidence.get("forward_step_index")
+            != event.get("forward_step_index")
+            or evidence.get("event_complete") is not True
+            or evidence.get("matching_replays") != 1
+            or not isinstance(graph_id, int)
+            or not isinstance(graph_signature, str)
+            or _FR13_FIXED32_FLUSH_NONCE_RE.fullmatch(graph_signature) is None
+            or checked_signature != graph_signature
+        ):
+            raise RuntimeError(
+                "fixed32 graph replay evidence did not attest event: "
+                + repr((event, evidence, manifest_entry))
+            )
+    drafter_evidence = list(
+        getattr(gdn, "_FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE", ()) or ()
+    )
+    if len(drafter_evidence) != len(events):
+        raise RuntimeError(
+            "fixed32 drafter evidence/event count mismatch: "
+            + repr((len(drafter_evidence), len(events)))
+        )
+    for event, evidence in zip(events, drafter_evidence, strict=True):
+        runtime = event.get("drafter_runtime")
+        if (
+            not isinstance(runtime, dict)
+            or evidence.get("mode") != event.get("mode")
+            or evidence.get("batch_size") != event.get("batch_size")
+            or evidence.get("event_index") != event.get("event_index")
+            or evidence.get("forward_step_index")
+            != event.get("forward_step_index")
+            or evidence.get("event_complete") is not True
+            or evidence.get("proposal_begins") != 1
+            or evidence.get("proposal_ends") != 1
+            or evidence.get("matching_replays") != 1
+            or evidence.get("graph_id") != runtime.get("graph_id")
+            or evidence.get("graph_signature")
+            != runtime.get("graph_signature")
+            or evidence.get("graph_captures")
+            != runtime.get("graph_captures")
+        ):
+            raise RuntimeError(
+                "fixed32 drafter replay evidence did not attest event: "
+                + repr((event, evidence))
+            )
+    drafter_registry = gdn._fr13_fixed32_drafter_graph_registry()
+    measured_by_batch = {
+        batch: sum(
+            int(event["batch_size"]) == batch for event in events
+        )
+        for batch in (1, 2, 3, 4)
+    }
+    if any(
+        int(row["measured_replays"])
+        != measured_by_batch[int(row["batch_size"])]
+        for row in drafter_registry
+    ):
+        raise RuntimeError(
+            "fixed32 drafter graph registry/event counts diverged: "
+            + repr((drafter_registry, measured_by_batch))
+        )
+    expected_drafts = sum(int(event["batch_size"]) for event in events)
+    if sfwd is None and events:
+        raise RuntimeError("fixed32 SFWD timer was not instantiated")
+    if sfwd is not None and (
+        int(sfwd._n_steps) != len(events)
+        or int(sfwd._n_drafts) != expected_drafts
+    ):
+        raise RuntimeError(
+            "fixed32 SFWD/event reconciliation failed: "
+            + repr((sfwd._n_steps, sfwd._n_drafts, len(events), expected_drafts))
+        )
+    for label, timer in (("dfwd", dfwd), ("cfwd", cfwd)):
+        if timer is None and events:
+            raise RuntimeError("fixed32 " + label + " timer was not instantiated")
+        if timer is not None and int(timer._n_spans) != len(events):
+            raise RuntimeError(
+                "fixed32 " + label + " span/event count mismatch: "
+                + str(timer._n_spans) + "!=" + str(len(events))
+            )
+    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+        fixed32_committer_counters as commit_counters,
+        fixed32_conv_col0_pregather_counters as pregather_counters,
+    )
+    cc = commit_counters()
+    pc = pregather_counters()
+    preseed_cap = int(getattr(gdn, "_FR13_FIXED32_PRESEED_CAP", 0))
+    nonpure_replays_by_batch = (
+        gdn._fr13_fixed32_nonpure_commit_replays_by_batch()
+    )
+    nonpure_dispatch = gdn._fr13_fixed32_nonpure_dispatch_counters()
+    if (
+        nonpure_dispatch["forbidden_full_steps"] != 0
+        or sum(nonpure_replays_by_batch.values())
+        > nonpure_dispatch["guarded_steps"]
+    ):
+        raise RuntimeError(
+            "fixed32 nonpure dispatch/committer ledgers diverged: "
+            + repr((nonpure_dispatch, nonpure_replays_by_batch))
+        )
+    expected_replays_by_batch = {
+        batch: sum(
+            int(event["batch_size"]) == batch
+            for event in events
+        ) + int(nonpure_replays_by_batch[batch])
+        for batch in (1, 2, 3, 4)
+    }
+    expected_ready_capacities = {
+        batch: preseed_cap
+        for batch in range(1, preseed_cap + 1)
+    }
+    if (
+        int(cc["actual_replays_enqueued"])
+        != len(events) + sum(nonpure_replays_by_batch.values())
+        or preseed_cap not in (1, 2, 3, 4)
+        or int(cc["captures"]) != preseed_cap
+        or int(cc["preseeded_graphs"]) != preseed_cap
+        or tuple(cc["preseeded_batches"])
+        != tuple(range(1, preseed_cap + 1))
+        or dict(cc["ready_capacities"])
+        != expected_ready_capacities
+        or int(cc["maximum_ready_capacity"]) != preseed_cap
+        or cc.get("required_capacity") != preseed_cap
+        or cc.get("all_batches_ready") is not True
+        or dict(cc["actual_replays_by_batch"])
+        != expected_replays_by_batch
+    ):
+        raise RuntimeError(
+            "fixed32 committer counters mismatch: "
+            + repr(
+                (
+                    cc,
+                    expected_ready_capacities,
+                    expected_replays_by_batch,
+                )
+            )
+        )
+    expected_pregather_replays_by_batch = {
+        batch: sum(
+            int(event["batch_size"]) == batch
+            for event in events
+        )
+        for batch in (1, 2, 3, 4)
+    }
+    if (
+        pc.get("preseeded") is not True
+        or int(pc["pointer_entries"]) != 48
+        or int(pc["max_batch_size"]) != preseed_cap
+        or tuple(pc["preseeded_batches"])
+        != tuple(range(1, preseed_cap + 1))
+        or int(pc["graph_capture_stages"]) != preseed_cap
+        or {
+            batch: int(
+                pc["graph_capture_stages_by_batch"].get(
+                    batch,
+                    pc["graph_capture_stages_by_batch"].get(str(batch), -1),
+                )
+            )
+            for batch in (1, 2, 3, 4)
+        }
+        != {
+            batch: 1 if batch <= preseed_cap else 0
+            for batch in (1, 2, 3, 4)
+        }
+        or int(pc["profile_capture_stages"]) != 0
+        or int(pc["aux_capture_stages"]) != 0
+        or int(pc["actual_stages"]) != 0
+        or dict(pc["actual_stages_by_batch"])
+        != {batch: 0 for batch in (1, 2, 3, 4)}
+    ):
+        raise RuntimeError(
+            "fixed32 conv pregather counters mismatch: "
+            + repr((pc, expected_pregather_replays_by_batch))
+        )
+    forward_registry = gdn._fr13_fixed32_forward_graph_registry(
+        expected_pregather_replays_by_batch
+    )
+    if [
+        int(row["measured_replays"]) for row in forward_registry
+    ] != [
+        expected_pregather_replays_by_batch[batch]
+        for batch in range(1, preseed_cap + 1)
+    ]:
+        raise RuntimeError(
+            "fixed32 forward graph registry/event counts diverged: "
+            + repr(forward_registry)
+        )
+
+
+def _fr13_f32_flush_write_census(events, *, final):
+    records = list(events)
+    if final:
+        if not records:
+            raise RuntimeError("fixed32 final census cannot be empty")
+        if "/workspace/scripts" not in _fr13_f32_flush_sys.path:
+            _fr13_f32_flush_sys.path.insert(0, "/workspace/scripts")
+        from fr13_fixed32_work_census import (
+            reference_terminal_summary as terminal_summary,
+        )
+        from vllm.model_executor.layers.mamba import (
+            gdn_linear_attn as gdn,
+        )
+        from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+            fixed32_conv_col0_pregather_counters,
+        )
+        measured_by_batch = {
+            batch: sum(
+                int(event["batch_size"]) == batch for event in records
+            )
+            for batch in (1, 2, 3, 4)
+        }
+        pregather = fixed32_conv_col0_pregather_counters()
+        records.append(
+            terminal_summary(
+                records,
+                drafter_graph_registry=(
+                    gdn._fr13_fixed32_drafter_graph_registry()
+                ),
+                forward_graph_registry=(
+                    gdn._fr13_fixed32_forward_graph_registry(
+                        measured_by_batch
+                    )
+                ),
+                conv_pregather_auxiliary={
+                    "profile_capture_stages": int(
+                        pregather["profile_capture_stages"]
+                    ),
+                    "aux_capture_stages": int(
+                        pregather["aux_capture_stages"]
+                    ),
+                    "host_actual_stages": int(
+                        pregather["actual_stages"]
+                    ),
+                    "host_actual_stages_by_batch": {
+                        str(batch): int(
+                            pregather["actual_stages_by_batch"].get(
+                                batch,
+                                pregather["actual_stages_by_batch"].get(
+                                    str(batch), -1
+                                ),
+                            )
+                        )
+                        for batch in (1, 2, 3, 4)
+                    },
+                },
+                nonpure_dispatch=(
+                    gdn._fr13_fixed32_nonpure_dispatch_counters()
+                ),
+                nonpure_committer_replays_by_batch={
+                    str(batch): int(value)
+                    for batch, value in (
+                        gdn._fr13_fixed32_nonpure_commit_replays_by_batch()
+                    ).items()
+                },
+            )
+        )
+    body = "".join(
+        _fr13_f32_flush_json.dumps(
+            record, sort_keys=True, separators=(",", ":")
+        ) + "\n"
+        for record in records
+    )
+    _fr13_f32_flush_atomic_text(_FR13_FIXED32_FLUSH_CENSUS_PATH, body)
+
+
+def _fr13_f32_flush_write_boundary(request, counters):
+    (
+        _gdn, events, _forward_steps, _first, _last, sfwd, dfwd, cfwd,
+    ) = _fr13_f32_flush_runtime_state()
+    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+        fixed32_committer_counters as commit_counters,
+        fixed32_conv_col0_pregather_counters as pregather_counters,
+    )
+    batch_histogram = {str(batch): 0 for batch in (1, 2, 3, 4)}
+    for event in events:
+        batch_histogram[str(int(event["batch_size"]))] += 1
+    pregather_metrics = dict(pregather_counters())
+    pregather_metrics["graph_replay_stages"] = len(events)
+    pregather_metrics["graph_replay_stages_by_batch"] = {
+        batch: int(batch_histogram[str(batch)]) for batch in (1, 2, 3, 4)
+    }
+    canonical_events = _fr13_f32_flush_json.dumps(
+        events, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    spec_drafts = sum(int(event["batch_size"]) for event in events)
+    snapshot = {
+        "schema": "fr13-fixed32-boundary-snapshot-v2",
+        "mode": _FR13_FIXED32_FLUSH_MODE,
+        "producer_pid": _FR13_FIXED32_FLUSH_PID,
+        "generation": request["generation"],
+        "nonce": request["nonce"],
+        "action": request["action"],
+        "counters": counters,
+        "metrics": {
+            "fixed32": {
+                "pure_decode_forward_steps": counters[
+                    "pure_decode_forward_steps"
+                ],
+                "complete_work_census_events": counters[
+                    "complete_work_census_events"
+                ],
+                "complete_spec_rows": spec_drafts,
+                "spec_drafts": spec_drafts,
+                "spec_tokens": 31 * spec_drafts,
+                "batch_histogram": batch_histogram,
+                "first_forward_step": counters[
+                    "work_census_first_forward_step"
+                ],
+                "last_forward_step": counters[
+                    "work_census_last_forward_step"
+                ],
+                "events_sha256": _fr13_f32_flush_hashlib.sha256(
+                    canonical_events
+                ).hexdigest(),
+            },
+            "sfwd": {
+                "gpu_seconds": (
+                    float(sfwd._accum_s) if sfwd is not None else 0.0
+                ),
+                "steps": int(sfwd._n_steps) if sfwd is not None else 0,
+                "drafts": int(sfwd._n_drafts) if sfwd is not None else 0,
+                "wall_seconds": (
+                    float(sfwd._wall_accum_s) if sfwd is not None else 0.0
+                ),
+                "wall_drafts": (
+                    int(sfwd._wall_drafts) if sfwd is not None else 0
+                ),
+                "wall_steps": (
+                    int(sfwd._wall_steps) if sfwd is not None else 0
+                ),
+                "wall_rejected": (
+                    int(sfwd._wall_rejected) if sfwd is not None else 0
+                ),
+            },
+            "dfwd": {
+                "gpu_seconds": (
+                    float(dfwd._accum_s) if dfwd is not None else 0.0
+                ),
+                "spans": int(dfwd._n_spans) if dfwd is not None else 0,
+            },
+            "cfwd": {
+                "gpu_seconds": (
+                    float(cfwd._accum_s) if cfwd is not None else 0.0
+                ),
+                "spans": int(cfwd._n_spans) if cfwd is not None else 0,
+            },
+            "committer": commit_counters(),
+            "conv_pregather": pregather_metrics,
+        },
+    }
+    boundary_path = _Fr13F32FlushPath(
+        str(_FR13_FIXED32_FLUSH_BOUNDARY_PATH)
+        + "." + str(request["generation"]) + ".json"
+    )
+    if boundary_path.exists():
+        raise RuntimeError(
+            "fixed32 immutable boundary snapshot already exists: "
+            + str(boundary_path)
+        )
+    _fr13_f32_flush_atomic_text(
+        boundary_path,
+        _fr13_f32_flush_json.dumps(
+            snapshot, sort_keys=True, separators=(",", ":")
+        ) + "\n",
+    )
+
+
+def _fr13_f32_flush_write_ack(*, generation, nonce, action, status, counters):
+    ack = {
+        "schema": _FR13_FIXED32_FLUSH_ACK_SCHEMA,
+        "mode": _FR13_FIXED32_FLUSH_MODE,
+        "producer_pid": _FR13_FIXED32_FLUSH_PID,
+        "generation": generation,
+        "nonce": nonce,
+        "action": action,
+        "status": status,
+        "counters": counters,
+    }
+    _fr13_f32_flush_atomic_text(
+        _FR13_FIXED32_FLUSH_ACK_PATH,
+        _fr13_f32_flush_json.dumps(
+            ack, sort_keys=True, separators=(",", ":")
+        ) + "\n",
+    )
+
+
+def _fr13_f32_flush_one(request):
+    global _FR13_FIXED32_FLUSH_GENERATION, _FR13_FIXED32_FLUSH_TERMINAL
+    action = request["action"]
+    with _FR13_SG_EXEC_LOCK:
+        # The protocol permits exactly this one global CUDA synchronization.
+        torch.cuda.synchronize()
+        (
+            _gdn, events, _steps, _first, _last, sfwd, dfwd, cfwd,
+        ) = _fr13_f32_flush_runtime_state()
+        for timer in (sfwd, dfwd, cfwd):
+            if timer is not None:
+                timer._drain(False)
+        _fr13_f32_flush_reconcile()
+        counters = _fr13_f32_flush_counters(require_drained=True)
+        _fr13_f32_flush_write_boundary(request, counters)
+        if sfwd is not None:
+            sfwd._dump_json(final=(action == "final"), with_samples=True)
+        if dfwd is not None:
+            dfwd._dump()
+        if cfwd is not None:
+            cfwd._dump()
+        _fr13_f32_flush_write_census(events, final=(action == "final"))
+        _FR13_FIXED32_FLUSH_GENERATION = request["generation"]
+        if action == "final":
+            _FR13_FIXED32_FLUSH_TERMINAL = True
+        # Ack is the final filesystem replacement in a successful transaction.
+        _fr13_f32_flush_write_ack(
+            generation=request["generation"],
+            nonce=request["nonce"],
+            action=action,
+            status="ok",
+            counters=counters,
+        )
+
+
+def _fr13_f32_flush_worker():
+    while True:
+        _FR13_FIXED32_FLUSH_QUEUE.get()
+        if _FR13_FIXED32_FLUSH_TERMINAL:
+            continue
+        try:
+            request = _fr13_f32_flush_read_request()
+        except Exception as exc:
+            print(
+                "[FR13_FIXED32_FLUSH] rejected unbound request: " + repr(exc),
+                flush=True,
+            )
+            continue
+        try:
+            _fr13_f32_flush_one(request)
+        except Exception as exc:
+            print(
+                "[FR13_FIXED32_FLUSH] failed generation "
+                + str(request["generation"]) + ": " + repr(exc),
+                flush=True,
+            )
+            # A validly-bound runtime failure is explicit; malformed requests
+            # above receive no ack because no trusted transaction exists.
+            try:
+                _fr13_f32_flush_write_ack(
+                    generation=request["generation"],
+                    nonce=request["nonce"],
+                    action=request["action"],
+                    status="error:" + type(exc).__name__,
+                    counters=_fr13_f32_flush_counters(require_drained=False),
+                )
+            except Exception:
+                pass
+
+
+def _fr13_f32_flush_signal_handler(_signum, _frame):
+    _FR13_FIXED32_FLUSH_QUEUE.put_nowait(None)
+
+
+_fr13_f32_flush_signal.signal(
+    _fr13_f32_flush_signal.SIGUSR2,
+    _fr13_f32_flush_signal_handler,
+)
+_FR13_FIXED32_FLUSH_THREAD = _fr13_sg_threading.Thread(
+    target=_fr13_f32_flush_worker,
+    name="fr13-fixed32-flush",
+    daemon=True,
+)
+_FR13_FIXED32_FLUSH_THREAD.start()
+_fr13_f32_flush_atomic_text(
+    _FR13_FIXED32_FLUSH_PID_PATH,
+    str(_FR13_FIXED32_FLUSH_PID) + "\n",
+)
+_fr13_f32_flush_write_ack(
+    generation=0,
+    nonce=_FR13_FIXED32_FLUSH_READY_NONCE,
+    action="ready",
+    status="ok",
+    counters=_fr13_f32_flush_counters(require_drained=True),
+)
+'''
+        fixed_flush = fixed_flush.replace(
+            "__FR13_FIXED32_MODE__", repr(_FR13_FIXED32_MODE)
+        )
+        text += fixed_flush
     GPU_MODEL_RUNNER_PATH.write_text(text)
     return True
 
@@ -19274,7 +25736,221 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         raise RuntimeError("FR13_ATTN_KV_REMAP_APPLY anchor not found")
     inject = anchor + (
         f"\n        {sentinel}: re-linearize committed-path full-attn KV.\n"
-        "        if __import__(\"os\").environ.get(\"FR13_ATTN_KV_REMAP\", \"0\") == \"1\":\n"
+        f"        if {bool(_FR13_FIXED32_MODE)!r} and spec_decode_metadata is not None:\n"
+        "            try:\n"
+        "                import os as _fr13_f32_kv_os\n"
+        "                import sys as _fr13_f32_kv_sys\n"
+        "                from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_f32_kv_gdn\n"
+        "                from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
+        "                    fixed32_committer_counters as _fr13_f32_commit_counts,\n"
+        "                    launch_attn_kv_linear_remap_syncfree_fixed16 as _fr13_f32_kv16,\n"
+        "                )\n"
+        "                _fr13_f32_pending = getattr(\n"
+        "                    _fr13_f32_kv_gdn, '_FR13_FIXED32_PENDING_EVENT', None\n"
+        "                )\n"
+        "                _fr13_f32_measured = isinstance(_fr13_f32_pending, dict)\n"
+        "                _fr13_f32_B = (\n"
+        "                    int(_fr13_f32_pending['batch_size'])\n"
+        "                    if _fr13_f32_measured\n"
+        "                    else int(getattr(\n"
+        "                        _fr13_f32_kv_gdn,\n"
+        "                        '_FR13_FIXED32_SPEC_ROWS', -1,\n"
+        "                    ))\n"
+        "                )\n"
+        "                if not 1 <= _fr13_f32_B <= 4:\n"
+        "                    raise RuntimeError('FR13 fixed32 KV16 compact B drift')\n"
+        "                _fr13_f32_groups = getattr(\n"
+        "                    self, '_fr13_attn_remap_groups', None\n"
+        "                )\n"
+        "                if not isinstance(_fr13_f32_groups, dict) or len(_fr13_f32_groups) != 1:\n"
+        "                    raise RuntimeError(\n"
+        "                        'FR13 fixed32 KV16 requires exactly one full-attn group'\n"
+        "                    )\n"
+        "                (_fr13_f32_sm, _fr13_f32_layer_names,\n"
+        "                 _fr13_f32_qsl) = next(iter(_fr13_f32_groups.values()))\n"
+        "                _fr13_f32_batch_rows = int(getattr(\n"
+        "                    _fr13_f32_kv_gdn, '_FR13_FIXED32_BATCH_ROWS', -1\n"
+        "                ))\n"
+        "                _fr13_f32_spec_indices = getattr(\n"
+        "                    _fr13_f32_kv_gdn,\n"
+        "                    '_FR13_FIXED32_SPEC_BATCH_INDICES', None,\n"
+        "                )\n"
+        "                _fr13_f32_sampler_rids = tuple(\n"
+        "                    str(_fr13_f32_rid)\n"
+        "                    for _fr13_f32_rid in (\n"
+        "                        getattr(\n"
+        "                            _fr13_f32_kv_gdn,\n"
+        "                            '_LUMO_FA_SAMPLER_ROW_REQ_IDS', None,\n"
+        "                        ) or ()\n"
+        "                    )\n"
+        "                )\n"
+        "                _fr13_f32_spec_rids = tuple(\n"
+        "                    str(_fr13_f32_rid)\n"
+        "                    for _fr13_f32_rid in (\n"
+        "                        getattr(\n"
+        "                            _fr13_f32_kv_gdn,\n"
+        "                            '_LUMO_FA_SPEC_ROW_REQ_IDS', None,\n"
+        "                        ) or ()\n"
+        "                    )\n"
+        "                )\n"
+        "                if not isinstance(_fr13_f32_spec_indices, tuple):\n"
+        "                    raise RuntimeError(\n"
+        "                        'FR13 fixed32 KV16 spec batch-index map missing'\n"
+        "                    )\n"
+        "                if (\n"
+        "                    not 1 <= _fr13_f32_batch_rows <= 4\n"
+        "                    or len(_fr13_f32_spec_indices) != _fr13_f32_B\n"
+        "                    or any(\n"
+        "                        type(_fr13_f32_i) is not int\n"
+        "                        for _fr13_f32_i in _fr13_f32_spec_indices\n"
+        "                    )\n"
+        "                    or tuple(sorted(set(_fr13_f32_spec_indices)))\n"
+        "                    != _fr13_f32_spec_indices\n"
+        "                    or any(\n"
+        "                        not 0 <= _fr13_f32_i < _fr13_f32_batch_rows\n"
+        "                        for _fr13_f32_i in _fr13_f32_spec_indices\n"
+        "                    )\n"
+        "                    or len(_fr13_f32_sampler_rids) != _fr13_f32_batch_rows\n"
+        "                    or len(_fr13_f32_spec_rids) != _fr13_f32_B\n"
+        "                    or tuple(\n"
+        "                        _fr13_f32_sampler_rids[_fr13_f32_i]\n"
+        "                        for _fr13_f32_i in _fr13_f32_spec_indices\n"
+        "                    ) != _fr13_f32_spec_rids\n"
+        "                    or (\n"
+        "                        _fr13_f32_measured\n"
+        "                        and (\n"
+        "                            _fr13_f32_batch_rows != _fr13_f32_B\n"
+        "                            or _fr13_f32_spec_indices\n"
+        "                            != tuple(range(_fr13_f32_B))\n"
+        "                        )\n"
+        "                    )\n"
+        "                    or (\n"
+        "                        not _fr13_f32_measured\n"
+        "                        and _fr13_f32_batch_rows <= _fr13_f32_B\n"
+        "                    )\n"
+        "                ):\n"
+        "                    raise RuntimeError(\n"
+        "                        'FR13 fixed32 KV16 compact/full row-map drift'\n"
+        "                    )\n"
+        "                _fr13_f32_index_tensor = (\n"
+        "                    None\n"
+        "                    if _fr13_f32_measured\n"
+        "                    else torch.tensor(\n"
+        "                        _fr13_f32_spec_indices,\n"
+        "                        dtype=torch.long,\n"
+        "                        device=_fr13_f32_qsl.device,\n"
+        "                    )\n"
+        "                )\n"
+        "                _fr13_f32_kvs = getattr(\n"
+        "                    self, '_fr13_fixed32_kv_caches', None\n"
+        "                )\n"
+        "                if _fr13_f32_kvs is None:\n"
+        "                    _fr13_f32_fwd = (\n"
+        "                        self.vllm_config.compilation_config.static_forward_context\n"
+        "                    )\n"
+        "                    _fr13_f32_kvs = tuple(\n"
+        "                        getattr(_fr13_f32_fwd[_fr13_f32_name], 'kv_cache', None)\n"
+        "                        for _fr13_f32_name in _fr13_f32_layer_names\n"
+        "                    )\n"
+        "                    if (\n"
+        "                        len(_fr13_f32_kvs) != 16\n"
+        "                        or any(\n"
+        "                            not torch.is_tensor(_fr13_f32_kv)\n"
+        "                            or int(_fr13_f32_kv.shape[0]) != 2\n"
+        "                            for _fr13_f32_kv in _fr13_f32_kvs\n"
+        "                        )\n"
+        "                    ):\n"
+        "                        raise RuntimeError(\n"
+        "                            'FR13 fixed32 KV16 cache set is not exactly 16x2'\n"
+        "                        )\n"
+        "                    self._fr13_fixed32_kv_caches = _fr13_f32_kvs\n"
+        "                _fr13_f32_paths = getattr(\n"
+        "                    _fr13_f32_kv_gdn,\n"
+        "                    '_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR', None\n"
+        "                )\n"
+        "                _fr13_f32_lens = getattr(\n"
+        "                    _fr13_f32_kv_gdn,\n"
+        "                    '_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR', None\n"
+        "                )\n"
+        "                if _fr13_f32_paths is None or _fr13_f32_lens is None:\n"
+        "                    raise RuntimeError('FR13 fixed32 KV16 path buffers missing')\n"
+        "                _fr13_f32_dstpi = getattr(self, '_fr13_sr_pi_t', None)\n"
+        "                _fr13_f32_kv16(\n"
+        "                    kv_caches=_fr13_f32_kvs,\n"
+        "                    slot_mapping=_fr13_f32_sm,\n"
+        "                    query_start_loc=_fr13_f32_qsl,\n"
+        "                    accepted_paths=_fr13_f32_paths[:_fr13_f32_B, :16],\n"
+        "                    num_accepted_tokens=_fr13_f32_lens[:_fr13_f32_B],\n"
+        "                    num_spec_decodes=_fr13_f32_B,\n"
+        "                    dst_pi=_fr13_f32_dstpi,\n"
+        "                    batch_indices=_fr13_f32_index_tensor,\n"
+        "                )\n"
+        "                if _fr13_f32_measured:\n"
+        "                    _fr13_f32_observed = _fr13_f32_pending.get(\n"
+        "                        'observed_work'\n"
+        "                    )\n"
+        "                    _fr13_f32_kv_gdn._fr13_fixed32_observed_kv(\n"
+        "                        _fr13_f32_observed,\n"
+        "                        _fr13_f32_B,\n"
+        "                        len(_fr13_f32_groups),\n"
+        "                        len(_fr13_f32_kvs),\n"
+        "                        tuple(\n"
+        "                            int(_fr13_f32_kv.shape[0])\n"
+        "                            for _fr13_f32_kv in _fr13_f32_kvs\n"
+        "                        ),\n"
+        "                        tuple(\n"
+        "                            int(_fr13_f32_dim)\n"
+        "                            for _fr13_f32_dim in\n"
+        "                            _fr13_f32_paths[:_fr13_f32_B, :16].shape\n"
+        "                        ),\n"
+        "                        tuple(\n"
+        "                            int(_fr13_f32_dim)\n"
+        "                            for _fr13_f32_dim in\n"
+        "                            _fr13_f32_lens[:_fr13_f32_B].shape\n"
+        "                        ),\n"
+        "                    )\n"
+        "                    _fr13_f32_events = getattr(\n"
+        "                        _fr13_f32_kv_gdn,\n"
+        "                        '_FR13_FIXED32_CENSUS_EVENTS', None,\n"
+        "                    )\n"
+        "                    if _fr13_f32_events is None:\n"
+        "                        _fr13_f32_events = []\n"
+        "                        _fr13_f32_kv_gdn._FR13_FIXED32_CENSUS_EVENTS = (\n"
+        "                            _fr13_f32_events\n"
+        "                        )\n"
+        "                    _fr13_f32_event_index = len(_fr13_f32_events)\n"
+        "                    _fr13_f32_fwd_index = int(\n"
+        "                        _fr13_f32_pending['forward_step_index']\n"
+        "                    )\n"
+        "                    if _fr13_f32_fwd_index < 0:\n"
+        "                        raise RuntimeError(\n"
+        "                            'FR13 fixed32 completed event has no forward index'\n"
+        "                        )\n"
+        "                    _fr13_f32_cc = _fr13_f32_commit_counts()\n"
+        "                    _fr13_f32_nonpure = sum(\n"
+        "                        _fr13_f32_kv_gdn."
+        "_fr13_fixed32_nonpure_commit_replays_by_batch().values()\n"
+        "                    )\n"
+        "                    if int(_fr13_f32_cc['actual_replays_enqueued']) != (\n"
+        "                        _fr13_f32_event_index + 1 + _fr13_f32_nonpure\n"
+        "                    ):\n"
+        "                        raise RuntimeError(\n"
+        "                            'FR13 fixed32 replay/event count diverged: '\n"
+        "                            + repr(_fr13_f32_cc)\n"
+        "                        )\n"
+        "                    if _fr13_f32_pending.get('kv_complete') is not None:\n"
+        "                        raise RuntimeError('FR13 fixed32 KV completed twice')\n"
+        "                    _fr13_f32_pending['kv_complete'] = True\n"
+        "                    _fr13_f32_pending['event_index'] = (\n"
+        "                        _fr13_f32_event_index\n"
+        "                    )\n"
+        "            except Exception as _fr13_f32_kv_exc:\n"
+        "                raise RuntimeError(\n"
+        "                    'FR13 fixed32 KV16/census completion failed: '\n"
+        "                    + type(_fr13_f32_kv_exc).__name__ + ':'\n"
+        "                    + str(_fr13_f32_kv_exc)\n"
+        "                ) from _fr13_f32_kv_exc\n"
+        "        elif __import__(\"os\").environ.get(\"FR13_ATTN_KV_REMAP\", \"0\") == \"1\":\n"
         "            try:\n"
         "                from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_akr_gdn\n"
         "                from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
@@ -19507,6 +26183,66 @@ def _patch_cudagraph_wrapper_subspan_mark() -> bool:
         raise RuntimeError(
             "FR13_SUBSPAN: cudagraph replay anchor not found in cuda_graph.py"
         )
+    if _FR13_FIXED32_MODE:
+        capture_begin_anchor = (
+            "            cudagraph = torch.cuda.CUDAGraph()\n"
+            "\n"
+            "            with ExitStack() as stack:\n"
+        )
+        capture_begin_inject = (
+            "            cudagraph = torch.cuda.CUDAGraph()\n"
+            "            if self.runtime_mode.name == \"FULL\":\n"
+            "                from vllm.model_executor.layers.mamba import (\n"
+            "                    gdn_linear_attn as _fr13_f32_capture_gdn,\n"
+            "                )\n"
+            "                _fr13_f32_capture_gdn._fr13_fixed32_capture_begin(\n"
+            "                    id(cudagraph),\n"
+            "                    self.runtime_mode.name,\n"
+            "                    entry.batch_descriptor.num_tokens,\n"
+            "                    entry.batch_descriptor.num_reqs,\n"
+            "                    entry.batch_descriptor.uniform,\n"
+            "                    entry.batch_descriptor.has_lora,\n"
+            "                    entry.batch_descriptor.num_active_loras,\n"
+            "                )\n"
+            "\n"
+            "            with ExitStack() as stack:\n"
+        )
+        if capture_begin_anchor not in text:
+            raise RuntimeError(
+                "FR13 fixed32 cudagraph capture-begin anchor not found"
+            )
+        text = text.replace(
+            capture_begin_anchor, capture_begin_inject, 1
+        )
+        capture_end_anchor = (
+            "            # here we always use weak ref for the output\n"
+            "            # to save memory\n"
+            "            entry.output = weak_ref_tensors(output)\n"
+            "            entry.cudagraph = cudagraph\n"
+        )
+        capture_end_inject = (
+            "            if self.runtime_mode.name == \"FULL\":\n"
+            "                entry._fr13_fixed32_graph_signature = (\n"
+            "                    _fr13_f32_capture_gdn._fr13_fixed32_capture_end(\n"
+            "                        id(cudagraph),\n"
+            "                        self.runtime_mode.name,\n"
+            "                        entry.batch_descriptor.num_tokens,\n"
+            "                        entry.batch_descriptor.num_reqs,\n"
+            "                        entry.batch_descriptor.uniform,\n"
+            "                        entry.batch_descriptor.has_lora,\n"
+            "                        entry.batch_descriptor.num_active_loras,\n"
+            "                    )\n"
+            "                )\n"
+            "            # here we always use weak ref for the output\n"
+            "            # to save memory\n"
+            "            entry.output = weak_ref_tensors(output)\n"
+            "            entry.cudagraph = cudagraph\n"
+        )
+        if capture_end_anchor not in text:
+            raise RuntimeError(
+                "FR13 fixed32 cudagraph capture-end anchor not found"
+            )
+        text = text.replace(capture_end_anchor, capture_end_inject, 1)
     inject = (
         "        get_offloader().sync_prev_onload()\n"
         "        " + sentinel + ": pre-replay boundary for the sfwd\n"
@@ -19522,7 +26258,28 @@ def _patch_cudagraph_wrapper_subspan_mark() -> bool:
         "            except Exception:\n"
         "                pass\n"
         "        entry.cudagraph.replay()\n"
-        "        return entry.output\n"
+        + (
+            "        if getattr(torch, \"_fr13_sfwd_open\", False):\n"
+            "            from vllm.model_executor.layers.mamba import (\n"
+            "                gdn_linear_attn as _fr13_f32_replay_gdn,\n"
+            "            )\n"
+            "            if _fr13_f32_replay_gdn._fr13_fixed32_observed_event_active():\n"
+            "                _fr13_f32_replay_gdn._fr13_fixed32_observed_graph_replay(\n"
+            "                    id(entry.cudagraph),\n"
+            "                    getattr(\n"
+            "                        entry, \"_fr13_fixed32_graph_signature\", None\n"
+            "                    ),\n"
+            "                    self.runtime_mode.name,\n"
+            "                    entry.batch_descriptor.num_tokens,\n"
+            "                    entry.batch_descriptor.num_reqs,\n"
+            "                    entry.batch_descriptor.uniform,\n"
+            "                    entry.batch_descriptor.has_lora,\n"
+            "                    entry.batch_descriptor.num_active_loras,\n"
+            "                )\n"
+            if _FR13_FIXED32_MODE
+            else ""
+        )
+        + "        return entry.output\n"
     )
     text = text.replace(anchor, inject, 1)
     if "import torch" not in text:
@@ -19531,7 +26288,1725 @@ def _patch_cudagraph_wrapper_subspan_mark() -> bool:
     return True
 
 
+def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
+    """Execute the emitted capture/replay observer and representative tampers."""
+    import copy
+    import sys
+    import types
+
+    import torch
+
+    from fr13_fixed32_work_census import reference_event
+
+    kernel_name = "lumo_flywheel_serving.fr10_gdn_tree_kernel"
+    prior_package = sys.modules.get("lumo_flywheel_serving")
+    prior_kernel = sys.modules.get(kernel_name)
+    package = prior_package or types.ModuleType("lumo_flywheel_serving")
+    if not hasattr(package, "__path__"):
+        package.__path__ = []
+    kernel = types.ModuleType(kernel_name)
+    sys.modules["lumo_flywheel_serving"] = package
+    sys.modules[kernel_name] = kernel
+
+    def new_runtime(mode: str, capacity: int) -> dict[str, object]:
+        namespace: dict[str, object] = {
+            "_FR13_FIXED32_MODE": mode,
+            "_FR13_FIXED32_PRESEED_CAP": capacity,
+            "_FR13_FIXED32_VALID_MASK": (
+                0x7A9CE73F if mode == "tail6_fixed32" else 0x7ABDFFFF
+            ),
+            "torch": torch,
+        }
+        exec(_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE, namespace)
+        namespace["_FR13_FIXED32_CENSUS_EVENTS"] = []
+        namespace["_FR13_FIXED32_COMPLETE_EVENTS"] = 0
+        row_elems = int(
+            reference_event(mode, 1, "conv-state")["conv_pregather"][
+                "row_elems"
+            ]
+        )
+        banks = tuple(
+            torch.empty(
+                (capacity + 1, row_elems // 2, 2),
+                dtype=torch.float32,
+            )
+            for _ in range(48)
+        )
+        offsets = torch.arange(48, dtype=torch.int64)
+        ssi_groups = tuple(
+            torch.zeros((capacity, 1), dtype=torch.int32) for _ in range(3)
+        )
+        ssi_sources = tuple(
+            ssi_groups[min(layer // 16, 2)] for layer in range(48)
+        )
+        ssi_ptrs = torch.tensor(
+            [int(source.data_ptr()) for source in ssi_sources],
+            dtype=torch.int64,
+        )
+        ssi_strides = torch.tensor(
+            [int(source.stride(0)) for source in ssi_sources],
+            dtype=torch.int64,
+        )
+        staging = torch.empty(
+            (48, capacity, row_elems), dtype=torch.float32
+        )
+        state = {
+            "mode": mode,
+            "max_batch_size": capacity,
+            "preseeded_batches": tuple(range(1, capacity + 1)),
+            "banks": banks,
+            "layer_order": tuple(f"gdn.{layer}" for layer in range(48)),
+            "off16": offsets,
+            "ssi_sources": ssi_sources,
+            "ssi_ptrs": ssi_ptrs,
+            "ssi_strides": ssi_strides,
+            "staging": staging,
+            "row_elems": row_elems,
+            "block": 1024,
+            "token": None,
+            "n": 0,
+            "stages": 0,
+            "stages_by_batch": {batch: 0 for batch in (1, 2, 3, 4)},
+            "graph_capture_stages": 0,
+            "graph_capture_stages_by_batch": {
+                batch: 0 for batch in (1, 2, 3, 4)
+            },
+            "profile_capture_stages": 0,
+            "aux_capture_stages": 0,
+            "contract": {
+                "mode": mode,
+                "route": "in_graph_preconsume",
+                "block": 1024,
+                "layers": 48,
+                "pointer_entries": 48,
+                "ssi_pointer_entries": 48,
+                "ssi_groups": 3,
+                "preseeded_batches": tuple(range(1, capacity + 1)),
+                "staging_capacity": capacity,
+                "row_elems": row_elems,
+                "staging_bank_nonalias": True,
+            },
+        }
+        state["source_identity"] = (
+            tuple(id(bank) for bank in banks),
+            id(offsets),
+            tuple(id(source) for source in ssi_sources),
+            id(ssi_ptrs),
+            id(ssi_strides),
+            id(staging),
+        )
+        state["source_data_ptrs"] = (
+            tuple(int(bank.data_ptr()) for bank in banks),
+            int(offsets.data_ptr()),
+            tuple(int(source.data_ptr()) for source in ssi_sources),
+            int(ssi_ptrs.data_ptr()),
+            int(ssi_strides.data_ptr()),
+            int(staging.data_ptr()),
+        )
+        kernel._FR13_FIXED32_CONV_PREGATHER = {"state": state}
+
+        def pregather_counters():
+            return {
+                "preseeded": True,
+                "pointer_entries": 48,
+                "preseeded_batches": tuple(range(1, capacity + 1)),
+                "max_batch_size": capacity,
+                "actual_stages": int(state["stages"]),
+                "actual_stages_by_batch": dict(state["stages_by_batch"]),
+                "graph_capture_stages": int(
+                    state["graph_capture_stages"]
+                ),
+                "graph_capture_stages_by_batch": dict(
+                    state["graph_capture_stages_by_batch"]
+                ),
+                "profile_capture_stages": int(
+                    state["profile_capture_stages"]
+                ),
+                "aux_capture_stages": int(state["aux_capture_stages"]),
+            }
+
+        kernel.fixed32_conv_col0_pregather_counters = pregather_counters
+        return namespace
+
+    def scan_runtime(reference: dict[str, object]) -> dict[str, object]:
+        tree = reference["tree_attn"]
+        return {
+            "schedule": "fixed32",
+            "route_armed": True,
+            "n_levels": 2,
+            "critical": 12,
+            "parent_nodes": 32,
+            "emask_rows": 32,
+            "export_rows": 32,
+            "fixed32_contract": {
+                "path_counts": (1, 11),
+                "max_lengths": (5, 7),
+                "launches": 2,
+                "programs": 12,
+                "padded_slots": 82,
+                "critical": 12,
+                "export_or_mask": reference["gdn"]["export_or_mask"],
+                "parent_sha256": tree["physical_parent_digest"],
+                "ancestry_sha256": tree["bias_digest"],
+            },
+        }
+
+    def capture_graph(
+        namespace: dict[str, object],
+        mode: str,
+        batch: int,
+        graph_id: int,
+        *,
+        tree_layers: int = 16,
+    ) -> tuple[str, tuple[object, ...]]:
+        reference = reference_event(mode, batch, "capture")
+        descriptor: tuple[object, ...] = (
+            "FULL",
+            batch * 32,
+            batch,
+            True,
+            False,
+            0,
+        )
+        namespace["_fr13_fixed32_capture_begin"](graph_id, *descriptor)
+        for layer in range(tree_layers):
+            namespace["_fr13_fixed32_observed_tree_attn"](
+                f"attn.{layer}",
+                batch * 32,
+                (32, 32),
+                True,
+            )
+        state = kernel._FR13_FIXED32_CONV_PREGATHER["state"]
+        namespace["_fr13_fixed32_observed_conv_source"](
+            "gdn.0", 0, batch, True
+        )
+        counters_before = kernel.fixed32_conv_col0_pregather_counters()
+        state["graph_capture_stages"] += 1
+        state["graph_capture_stages_by_batch"][batch] += 1
+        counters_after = kernel.fixed32_conv_col0_pregather_counters()
+        namespace["_fr13_fixed32_observed_conv_stage"](
+            "gdn.0",
+            0,
+            batch,
+            state,
+            counters_before,
+            counters_after,
+            True,
+        )
+        runtime = scan_runtime(reference)
+        for layer in range(48):
+            if layer:
+                namespace["_fr13_fixed32_observed_conv_source"](
+                    f"gdn.{layer}", layer, batch, True
+                )
+            namespace["_fr13_fixed32_observed_conv_consume"](
+                f"gdn.{layer}",
+                layer,
+                batch,
+                True,
+                True,
+            )
+            for row in range(batch):
+                namespace["_fr13_fixed32_observed_gdn"](
+                    f"gdn.{layer}",
+                    row,
+                    batch,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    (32, 32),
+                    (32, 32),
+                    runtime,
+                    True,
+                )
+        signature = namespace["_fr13_fixed32_capture_end"](
+            graph_id, *descriptor
+        )
+        if not isinstance(signature, str) or len(signature) != 64:
+            raise AssertionError("capture did not return a SHA-256 signature")
+        return signature, descriptor
+
+    def capture_capacity(
+        namespace: dict[str, object],
+        mode: str,
+        base_graph_id: int,
+        capacity: int,
+    ) -> dict[int, tuple[int, str, tuple[object, ...]]]:
+        graphs = {}
+        for batch in range(1, capacity + 1):
+            graph_id = base_graph_id + batch
+            signature, descriptor = capture_graph(
+                namespace, mode, batch, graph_id
+            )
+            graphs[batch] = (graph_id, signature, descriptor)
+        return graphs
+
+    def counter_snapshot(
+        total: int,
+        by_batch: dict[int, int],
+        *,
+        pregather: bool,
+    ) -> dict[str, object]:
+        if pregather:
+            return {
+                "preseeded": True,
+                "pointer_entries": 48,
+                "actual_stages": 0,
+                "actual_stages_by_batch": {
+                    batch: 0 for batch in (1, 2, 3, 4)
+                },
+                "graph_capture_stages": 4,
+                "graph_capture_stages_by_batch": {
+                    batch: 1 for batch in (1, 2, 3, 4)
+                },
+                "profile_capture_stages": 0,
+                "aux_capture_stages": 0,
+            }
+        return {
+            "captures": 4,
+            "actual_replays_enqueued": total,
+            "actual_replays_by_batch": dict(by_batch),
+            "fast_route_ready": True,
+            "all_batches_ready": True,
+        }
+
+    def complete_event(
+        namespace: dict[str, object],
+        mode: str,
+        batch: int,
+        graph: tuple[int, str, tuple[object, ...]],
+        event_index: int,
+        replay_counts: dict[int, int],
+        stage_counts: dict[int, int],
+        taw_mutator=None,
+    ) -> None:
+        request_ids = tuple(
+            f"{mode}:event:{event_index}:request:{row}"
+            for row in range(batch)
+        )
+        reference = reference_event(
+            mode,
+            batch,
+            f"selftest-{mode}-{batch}",
+            event_index=event_index,
+            forward_step_index=event_index,
+            request_ids=request_ids,
+        )
+        step_seq = 100 + event_index
+        namespace["_LUMO_FA_STEP_SEQ"] = step_seq
+        namespace["_fr13_fixed32_observed_begin"](
+            mode,
+            batch,
+            event_index,
+            request_ids,
+            batch,
+            batch,
+            (31,) * batch,
+        )
+        graph_id, signature, descriptor = graph
+        namespace["_fr13_fixed32_observed_graph_replay"](
+            graph_id, signature, *descriptor
+        )
+        namespace["_fr13_fixed32_observed_preforward_pack"](
+            batch,
+            ((batch, 16), (batch,), (batch, 16), (batch,)),
+            ("torch.int32",) * 4,
+            ("cuda",) * 4,
+            2,
+            2,
+        )
+        namespace["_fr13_fixed32_observed_publish_pack"](
+            batch,
+            (
+                (batch, 32),
+                (batch, 32),
+                (batch,),
+                (batch,),
+                (batch, 16),
+                (batch, 16),
+                (batch,),
+                (batch,),
+                (batch, 16),
+                (batch,),
+            ),
+            (
+                "torch.int64",
+                "torch.int32",
+                "torch.int64",
+                "torch.int32",
+                "torch.int64",
+                "torch.int32",
+                "torch.int64",
+                "torch.int32",
+                "torch.int32",
+                "torch.int32",
+            ),
+            ("cuda",) * 10,
+            2,
+            2,
+            2,
+            12,
+        )
+        replay_before = counter_snapshot(
+            sum(replay_counts.values()), replay_counts, pregather=False
+        )
+        stage_before = counter_snapshot(
+            sum(stage_counts.values()), stage_counts, pregather=True
+        )
+        replay_counts[batch] += 1
+        replay_after = counter_snapshot(
+            sum(replay_counts.values()), replay_counts, pregather=False
+        )
+        stage_after = counter_snapshot(
+            sum(stage_counts.values()), stage_counts, pregather=True
+        )
+        namespace["_fr13_fixed32_observed_commit"](
+            mode,
+            batch,
+            48,
+            (4, 16),
+            (4,),
+            replay_before,
+            replay_after,
+            {
+                "batch": batch,
+                "path_cap": 16,
+                "neutralizations": 5,
+                "ring_gathers": 4,
+                "fused_calls": 48,
+                "graph_replays_per_event": 1,
+                "preseed_capacity": 4,
+            },
+            stage_before,
+            stage_after,
+            {
+                "route": "in_graph_preconsume",
+                "layers": 48,
+                "row_elems": reference["conv_pregather"]["row_elems"],
+                "block": 1024,
+                "graph_capture_stages": 4,
+            },
+        )
+        observed = namespace["_fr13_fixed32_observed_take"](
+            mode, batch, event_index
+        )
+        namespace["_fr13_fixed32_observed_kv"](
+            observed,
+            batch,
+            1,
+            16,
+            (2,) * 16,
+            (batch, 16),
+            (batch,),
+        )
+        taw_wrapper = {
+            "mode": mode,
+            "valid_mask": reference["valid_mask"],
+            "batch_size": batch,
+            "taw": copy.deepcopy(reference["taw"]),
+        }
+        if taw_mutator is not None:
+            taw_mutator(taw_wrapper)
+        namespace["_FR13_FIXED32_PENDING_EVENT"] = {
+            "mode": mode,
+            "batch_size": batch,
+            "forward_step_index": event_index,
+            "request_ids": request_ids,
+            "taw": taw_wrapper,
+            "observed_work": observed,
+            "kv_complete": True,
+            "event_index": event_index,
+        }
+        measured = namespace["_fr13_fixed32_drafter_proposal_begin"](
+            mode,
+            request_ids,
+            batch,
+            batch,
+            batch,
+        )
+        if measured is not True:
+            raise AssertionError("pending event did not mark proposal measured")
+        graph_by_batch = namespace["_FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH"]
+        if batch not in graph_by_batch:
+            drafter_graph_id = 30_000 + batch
+            namespace["_fr13_fixed32_drafter_graph_capture_begin"](
+                drafter_graph_id,
+                batch,
+            )
+            for _ in range(4):
+                namespace["_fr13_fixed32_drafter_mtp_forward"](batch, True)
+            drafter_signature = namespace[
+                "_fr13_fixed32_drafter_graph_capture_end"
+            ](drafter_graph_id, batch)
+        else:
+            drafter_graph_id = graph_by_batch[batch]
+            drafter_signature = namespace[
+                "_FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS"
+            ][drafter_graph_id][0]
+        namespace["_fr13_fixed32_drafter_graph_replay"](
+            drafter_graph_id,
+            drafter_signature,
+            batch,
+        )
+        namespace["_fr13_fixed32_drafter_observed_arctic"](
+            {
+                "batch_size": batch,
+                "main_lookup_calls": batch,
+                "main_lookup_tokens": 6 * batch,
+                "rank1_lookup_calls": batch,
+                "rank1_lookup_tokens": 4 * batch,
+                "rank2_lookup_calls": batch,
+                "rank2_lookup_tokens": 2 * batch,
+                "rescue_carry_slots": 4 * batch,
+                "arctic_lookup_calls": 3 * batch,
+                "arctic_requested_tokens": 12 * batch,
+                "main_tail_columns": 6,
+                "rescue_path_columns": 10,
+                "merge_fill_calls": 1,
+                "merge_fill_columns": 16,
+                "merge_fill_rows": 16 * batch,
+            }
+        )
+        namespace["_fr13_fixed32_drafter_observed_publish"](
+            (batch, 31),
+            "torch.int64",
+            "cuda",
+            _FR13_FIXED32_CHOICES,
+        )
+        namespace["_fr13_fixed32_drafter_proposal_end"](
+            mode,
+            request_ids,
+            (batch, 31),
+            "torch.int64",
+            "cuda",
+            True,
+        )
+        events = namespace["_FR13_FIXED32_CENSUS_EVENTS"]
+        if len(events) != event_index + 1:
+            raise AssertionError("proposal end did not solely append the event")
+        bound = events[-1]
+        if (
+            bound["tree_attn"] != reference["tree_attn"]
+            or bound["gdn"] != reference["gdn"]
+            or bound["committer"] != reference["committer"]
+            or bound["kv_remap"] != reference["kv_remap"]
+            or bound["output_publish"] != reference["output_publish"]
+            or bound["accepted_path_pack"] != reference["accepted_path_pack"]
+            or bound["request_key_pack"] != reference["request_key_pack"]
+            or bound["drafter"] != reference["drafter"]
+        ):
+            raise AssertionError("valid observed event did not bind reference")
+
+    tamper_count = 0
+
+    def expect_failure(name: str, action) -> None:
+        nonlocal tamper_count
+        try:
+            action()
+        except RuntimeError:
+            tamper_count += 1
+            return
+        raise AssertionError(f"tamper {name!r} unexpectedly passed")
+
+    def taw_wrapper_tamper(mutator) -> None:
+        namespace = new_runtime("tail6_fixed32", 1)
+        signature, descriptor = capture_graph(
+            namespace,
+            "tail6_fixed32",
+            1,
+            29_000,
+        )
+        complete_event(
+            namespace,
+            "tail6_fixed32",
+            1,
+            (29_000, signature, descriptor),
+            0,
+            {1: 0},
+            {1: 0},
+            taw_mutator=mutator,
+        )
+
+    try:
+        sampler_compaction: dict[str, object] = {"torch": torch}
+        exec(
+            _FR13_FIXED32_SAMPLER_COMPACTION_SOURCE,
+            sampler_compaction,
+        )
+        compact_plan = sampler_compaction[
+            "_fr13_fixed32_compact_sampler_row_plan"
+        ]
+        prepare_mixed = sampler_compaction[
+            "_fr13_fixed32_prepare_mixed_sampler_io"
+        ]
+        finish_mixed = sampler_compaction[
+            "_fr13_fixed32_finish_mixed_sampler_io"
+        ]
+        tsr_nonprefix: dict[str, object] = {"torch": torch}
+        exec(_FR13_FIXED32_TSR_NONPREFIX_SOURCE, tsr_nonprefix)
+        update_tsr_nonprefix = tsr_nonprefix[
+            "_fr13_fixed32_tsr_nonprefix_update"
+        ]
+        tsr_rows = update_tsr_nonprefix(
+            torch.tensor([10, 20, 30, 40], dtype=torch.int32),
+            torch.tensor([0, 32, 64, 96, 128], dtype=torch.int32),
+            torch.tensor([3, 7], dtype=torch.int32),
+            (1, 3),
+        )
+        if tsr_rows.tolist() != [10, 35, 30, 103]:
+            raise AssertionError("nonprefix TSR accepted-leaf row map drifted")
+        expect_failure(
+            "nonprefix-tsr-geometry",
+            lambda: update_tsr_nonprefix(
+                torch.tensor([10, 20, 30, 40], dtype=torch.int32),
+                torch.tensor([0, 32, 64, 96, 128], dtype=torch.int32),
+                torch.tensor([3], dtype=torch.int32),
+                (1, 3),
+            ),
+        )
+        if compact_plan([31, 0, 31, 0], 4, (0, 2)) != (
+            (31, 0, 31, 0),
+            (0, 2),
+        ):
+            raise AssertionError("mixed sampler compact row plan drifted")
+        full_output = torch.zeros((4, 32), dtype=torch.int32)
+        full_accepted = torch.full((4,), 99, dtype=torch.int32)
+        full_bonus = torch.tensor(
+            [[101], [102], [103], [104]],
+            dtype=torch.int32,
+        )
+        generators = {0: "generator-0", 2: "generator-2"}
+        (
+            compact_indices,
+            compact_output,
+            compact_accepted,
+            compact_bonus,
+            compact_generators,
+        ) = prepare_mixed(
+            full_output,
+            full_accepted,
+            full_bonus,
+            (0, 2),
+            generators,
+        )
+        compact_output.fill_(-1)
+        compact_output[0, :3] = torch.tensor([11, 12, 13])
+        compact_output[1, :2] = torch.tensor([21, 22])
+        compact_accepted.copy_(torch.tensor([2, 1]))
+        finish_mixed(
+            full_output,
+            full_accepted,
+            full_bonus,
+            compact_indices,
+            compact_output,
+            compact_accepted,
+        )
+        expected_output = torch.full((4, 32), -1, dtype=torch.int32)
+        expected_output[:, 0] = full_bonus.reshape(-1)
+        expected_output[0] = compact_output[0]
+        expected_output[2] = compact_output[1]
+        if (
+            not torch.equal(compact_bonus, full_bonus[[0, 2]])
+            or compact_generators
+            != {0: "generator-0", 1: "generator-2"}
+            or not torch.equal(full_output, expected_output)
+            or full_accepted.tolist() != [2, 0, 1, 0]
+        ):
+            raise AssertionError("mixed sampler compact/full I/O drifted")
+        nonprefix_output = torch.zeros((4, 32), dtype=torch.int32)
+        nonprefix_accepted = torch.full((4,), 99, dtype=torch.int32)
+        if compact_plan([0, 31, 0, 31], 4, (1, 3)) != (
+            (0, 31, 0, 31),
+            (1, 3),
+        ):
+            raise AssertionError("nonprefix mixed sampler row plan drifted")
+        (
+            nonprefix_indices,
+            nonprefix_compact_output,
+            nonprefix_compact_accepted,
+            nonprefix_bonus,
+            nonprefix_generators,
+        ) = prepare_mixed(
+            nonprefix_output,
+            nonprefix_accepted,
+            full_bonus,
+            (1, 3),
+            {0: "nonspec-only-generator"},
+        )
+        nonprefix_compact_output.fill_(-1)
+        nonprefix_compact_output[0, :2] = torch.tensor([31, 32])
+        nonprefix_compact_output[1, :3] = torch.tensor([41, 42, 43])
+        nonprefix_compact_accepted.copy_(torch.tensor([1, 2]))
+        finish_mixed(
+            nonprefix_output,
+            nonprefix_accepted,
+            full_bonus,
+            nonprefix_indices,
+            nonprefix_compact_output,
+            nonprefix_compact_accepted,
+        )
+        nonprefix_expected = torch.full((4, 32), -1, dtype=torch.int32)
+        nonprefix_expected[:, 0] = full_bonus.reshape(-1)
+        nonprefix_expected[1] = nonprefix_compact_output[0]
+        nonprefix_expected[3] = nonprefix_compact_output[1]
+        if (
+            not torch.equal(nonprefix_bonus, full_bonus[[1, 3]])
+            or nonprefix_generators is not None
+            or not torch.equal(nonprefix_output, nonprefix_expected)
+            or nonprefix_accepted.tolist() != [0, 1, 0, 2]
+        ):
+            raise AssertionError("nonprefix mixed sampler restore drifted")
+        expect_failure(
+            "mixed-sampler-truncated-positive",
+            lambda: compact_plan([31, 7, 0, 0], 4, (0, 1)),
+        )
+        expect_failure(
+            "mixed-sampler-index-map",
+            lambda: compact_plan([31, 0, 31, 0], 4, (0, 3)),
+        )
+        expect_failure(
+            "mixed-sampler-generator-key",
+            lambda: prepare_mixed(
+                torch.zeros((4, 32), dtype=torch.int32),
+                torch.zeros(4, dtype=torch.int32),
+                full_bonus,
+                (0, 2),
+                {4: "out-of-range-generator"},
+            ),
+        )
+
+        dispatch_runtime = new_runtime("tail6_fixed32", 1)
+        dispatch_runtime["_fr13_fixed32_observed_nonpure_dispatch"](
+            "PIECEWISE"
+        )
+        dispatch_runtime["_fr13_fixed32_observed_nonpure_dispatch"]("NONE")
+        if dispatch_runtime[
+            "_fr13_fixed32_nonpure_dispatch_counters"
+        ]() != {
+            "guarded_steps": 2,
+            "piecewise_steps": 1,
+            "none_steps": 1,
+            "forbidden_full_steps": 0,
+        }:
+            raise AssertionError("nonpure dispatch accounting drifted")
+        expect_failure(
+            "nonpure-dispatch-full",
+            lambda: dispatch_runtime[
+                "_fr13_fixed32_observed_nonpure_dispatch"
+            ]("FULL"),
+        )
+        dispatch_runtime["_FR13_FIXED32_NONPURE_DISPATCH"][
+            "guarded_steps"
+        ] += 1
+        expect_failure(
+            "nonpure-dispatch-counter-coherence",
+            dispatch_runtime["_fr13_fixed32_nonpure_dispatch_counters"],
+        )
+        mixed_runtime = new_runtime("tail6_fixed32", 4)
+        mixed_runtime["_FR13_FIXED32_CAPTURE_FROZEN"] = True
+        mixed_runtime["_FR13_FIXED32_CURRENT_FORWARD_STEP"] = -1
+        if mixed_runtime["_fr13_fixed32_observed_event_active"]():
+            raise AssertionError("mixed step opened a measured fixed32 event")
+        mixed_runtime["_fr13_fixed32_observed_nonpure_dispatch"](
+            "PIECEWISE"
+        )
+        expect_failure(
+            "mixed-direct-observer-must-stay-strict",
+            lambda: mixed_runtime["_fr13_fixed32_observed_tree_attn"](
+                "attn.0",
+                32,
+                (32, 32),
+                False,
+            ),
+        )
+
+        profile_descriptor = ("FULL", 32, 1, True, False, 0)
+        profile_runtime = new_runtime("tail6_fixed32", 1)
+        profile_layers = {
+            f"gdn.{layer}": types.SimpleNamespace(
+                _fr13_replay_ssm_state=object(),
+                _fr13_replay_conv_state=object(),
+            )
+            for layer in range(48)
+        }
+        profile_runtime["_FR13_REPLAY_LAYERS"] = profile_layers
+        profile_runtime["_FR13_EAGER_PACK_STACKS"] = {
+            "layer_order": tuple(profile_layers)
+        }
+        profile_runtime["_fr13_fixed32_profile_memory_scope_begin"]()
+        if profile_runtime["_fr13_fixed32_boot_preseed_allowed"]():
+            raise AssertionError("profile-memory scope allowed persistent preseed")
+        profile_runtime["_fr13_fixed32_profile_capture_scope_begin"](
+            *profile_descriptor
+        )
+        profile_runtime["_fr13_fixed32_capture_begin"](
+            9_001, *profile_descriptor
+        )
+        # The throwaway profile graph may execute fixed-mode GDN work, but it
+        # cannot open an acceptance manifest or direct fixed pregather stage.
+        profile_runtime["_fr13_fixed32_observed_conv_consume"](
+            "gdn.0", 0, 1, False, True
+        )
+        if (
+            profile_runtime["_fr13_fixed32_capture_end"](
+                9_001, *profile_descriptor
+            )
+            is not None
+        ):
+            raise AssertionError("profile throwaway returned a graph signature")
+        profile_runtime["_fr13_fixed32_profile_capture_scope_end"]()
+        if (
+            profile_runtime["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"] is not None
+            or profile_runtime["_FR13_FIXED32_CAPTURE_CONTEXT"] is not None
+            or profile_runtime["_FR13_FIXED32_CAPTURE_MANIFESTS"]
+            or profile_runtime["_FR13_FIXED32_OBSERVED_CURRENT"] is not None
+        ):
+            raise AssertionError("profile throwaway polluted acceptance state")
+        profile_runtime["_fr13_fixed32_profile_memory_scope_end"]()
+        if any(
+            layer._fr13_replay_ssm_state is not None
+            or layer._fr13_replay_conv_state is not None
+            for layer in profile_layers.values()
+        ):
+            raise AssertionError(
+                "profile cleanup left mixed-generation transient bank refs"
+            )
+        qwen_gdn_layers = [
+            layer for layer in range(64) if layer % 4 != 3
+        ]
+        ready_at = []
+        for layer in qwen_gdn_layers:
+            current = profile_layers[f"gdn.{qwen_gdn_layers.index(layer)}"]
+            current._fr13_replay_ssm_state = object()
+            current._fr13_replay_conv_state = object()
+            inputs = profile_runtime[
+                "_fr13_fixed32_boot_preseed_inputs"
+            ]()
+            if inputs is not None:
+                ready_at.append(layer)
+                profile_runtime.setdefault(
+                    "_FR13_FIXED32_PRESEEDED_BATCHES", set()
+                ).add(1)
+        if len(qwen_gdn_layers) != 48 or ready_at != [62]:
+            raise AssertionError(
+                "Qwen final-cache bank publication did not become complete "
+                "at the last executing GDN layer"
+            )
+        if (
+            profile_runtime["_fr13_fixed32_boot_preseed_inputs"]()
+            is not None
+        ):
+            raise AssertionError("Qwen fixed32 preseed trigger was not one-shot")
+        if not profile_runtime["_fr13_fixed32_boot_preseed_allowed"]():
+            raise AssertionError("final-cache warmup could not own preseed")
+        profile_signature, profile_final_descriptor = capture_graph(
+            profile_runtime, "tail6_fixed32", 1, 9_002
+        )
+        profile_graphs = {
+            1: (9_002, profile_signature, profile_final_descriptor)
+        }
+        first_state = kernel._FR13_FIXED32_CONV_PREGATHER["state"]
+        if first_state["token"] is not None or int(first_state["n"]) != 0:
+            raise AssertionError("first real replay unexpectedly required a token")
+        complete_event(
+            profile_runtime,
+            "tail6_fixed32",
+            1,
+            profile_graphs[1],
+            0,
+            {1: 0},
+            {1: 0},
+        )
+        if first_state["token"] is not None or int(first_state["n"]) != 0:
+            raise AssertionError("graph replay mutated legacy host-stage token")
+        if len(profile_runtime["_FR13_FIXED32_CAPTURE_MANIFESTS"]) != 1:
+            raise AssertionError("profile throwaway counted as a final graph")
+
+        nested_profile = new_runtime("tail6_fixed32", 1)
+        nested_profile["_fr13_fixed32_profile_memory_scope_begin"]()
+        nested_profile["_fr13_fixed32_profile_capture_scope_begin"](
+            *profile_descriptor
+        )
+        expect_failure(
+            "profile-nested-begin",
+            lambda: nested_profile[
+                "_fr13_fixed32_profile_capture_scope_begin"
+            ](*profile_descriptor),
+        )
+        expect_failure(
+            "profile-unbalanced-end",
+            nested_profile["_fr13_fixed32_profile_capture_scope_end"],
+        )
+        if nested_profile["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"] is not None:
+            raise AssertionError("unbalanced profile scope was not cleared")
+        nested_profile["_fr13_fixed32_profile_memory_scope_end"]()
+
+        profile_measured = new_runtime("tail6_fixed32", 1)
+        profile_measured["_fr13_fixed32_profile_memory_scope_begin"]()
+        profile_measured["_fr13_fixed32_profile_capture_scope_begin"](
+            *profile_descriptor
+        )
+        expect_failure(
+            "profile-measured-begin",
+            lambda: profile_measured["_fr13_fixed32_observed_begin"](
+                "tail6_fixed32",
+                1,
+                0,
+                ("profile-overlap",),
+                1,
+                1,
+                (31,),
+            ),
+        )
+        expect_failure(
+            "profile-incomplete-after-measured-reject",
+            profile_measured["_fr13_fixed32_profile_capture_scope_end"],
+        )
+        profile_measured["_fr13_fixed32_profile_memory_scope_end"]()
+
+        mismatched_profile = new_runtime("tail6_fixed32", 1)
+        mismatched_profile["_fr13_fixed32_profile_memory_scope_begin"]()
+        mismatched_profile["_fr13_fixed32_profile_capture_scope_begin"](
+            *profile_descriptor
+        )
+        mismatched_profile["_fr13_fixed32_capture_begin"](
+            9_003, *profile_descriptor
+        )
+        expect_failure(
+            "profile-mismatched-end-id",
+            lambda: mismatched_profile["_fr13_fixed32_capture_end"](
+                9_004, *profile_descriptor
+            ),
+        )
+        expect_failure(
+            "profile-mismatched-scope-close",
+            mismatched_profile["_fr13_fixed32_profile_capture_scope_end"],
+        )
+        mismatched_profile["_fr13_fixed32_profile_memory_scope_end"]()
+
+        stale_profile = new_runtime("tail6_fixed32", 1)
+        stale_profile["_FR13_FIXED32_PROFILE_MEMORY_SCOPE"] = True
+        stale_profile["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"] = {
+            "descriptor": {},
+            "graph_id": 1,
+            "completed": True,
+        }
+        expect_failure(
+            "profile-stale-marker-final-capture",
+            lambda: stale_profile["_fr13_fixed32_capture_begin"](
+                9_005, *profile_descriptor
+            ),
+        )
+        missing_inner_profile = new_runtime("tail6_fixed32", 1)
+        missing_inner_profile["_FR13_FIXED32_PROFILE_MEMORY_SCOPE"] = True
+        expect_failure(
+            "profile-memory-missing-inner-marker",
+            lambda: missing_inner_profile["_fr13_fixed32_capture_begin"](
+                9_007, *profile_descriptor
+            ),
+        )
+        for label, key, value in (
+            ("current", "_FR13_FIXED32_OBSERVED_CURRENT", {}),
+            ("pending", "_FR13_FIXED32_PENDING_EVENT", {}),
+            ("frozen", "_FR13_FIXED32_CAPTURE_FROZEN", True),
+            ("capture", "_FR13_FIXED32_CAPTURE_CONTEXT", {}),
+        ):
+            dirty_profile = new_runtime("tail6_fixed32", 1)
+            dirty_profile["_fr13_fixed32_profile_memory_scope_begin"]()
+            dirty_profile[key] = value
+            expect_failure(
+                "profile-begin-with-" + label,
+                lambda runtime=dirty_profile: runtime[
+                    "_fr13_fixed32_profile_capture_scope_begin"
+                ](*profile_descriptor),
+            )
+        existing_manifest = new_runtime("tail6_fixed32", 1)
+        capture_graph(
+            existing_manifest, "tail6_fixed32", 1, 9_006
+        )
+        expect_failure(
+            "profile-begin-with-final-manifest",
+            lambda: existing_manifest[
+                "_fr13_fixed32_profile_capture_scope_begin"
+            ](*profile_descriptor),
+        )
+        auxiliary_stage = new_runtime("tail6_fixed32", 1)
+        auxiliary_state = kernel._FR13_FIXED32_CONV_PREGATHER["state"]
+        expect_failure(
+            "piecewise-or-aux-direct-stage",
+            lambda: auxiliary_stage[
+                "_fr13_fixed32_observed_conv_stage"
+            ](
+                "gdn.0",
+                0,
+                1,
+                auxiliary_state,
+                kernel.fixed32_conv_col0_pregather_counters(),
+                kernel.fixed32_conv_col0_pregather_counters(),
+                True,
+            ),
+        )
+
+        valid_cases = []
+        for mode_index, mode in enumerate(
+            ("tail6_fixed32", "hydra27_fixed32")
+        ):
+            namespace = new_runtime(mode, 4)
+            graphs = capture_capacity(
+                namespace,
+                mode,
+                10_000 + mode_index * 100,
+                4,
+            )
+            replay_counts = {batch: 0 for batch in range(1, 5)}
+            stage_counts = {batch: 0 for batch in range(1, 5)}
+            for event_index, batch in enumerate((1, 4)):
+                complete_event(
+                    namespace,
+                    mode,
+                    batch,
+                    graphs[batch],
+                    event_index,
+                    replay_counts,
+                    stage_counts,
+                )
+                valid_cases.append([mode, batch])
+            evidence = namespace["_FR13_FIXED32_GRAPH_REPLAY_EVIDENCE"]
+            forward_registry = namespace[
+                "_fr13_fixed32_forward_graph_registry"
+            ](
+                {
+                    batch: sum(
+                        int(event["batch_size"]) == batch
+                        for event in namespace["_FR13_FIXED32_CENSUS_EVENTS"]
+                    )
+                    for batch in (1, 2, 3, 4)
+                }
+            )
+            if (
+                len(namespace["_FR13_FIXED32_CAPTURE_MANIFESTS"]) != 4
+                or len(evidence) != 2
+                or any(row["event_complete"] is not True for row in evidence)
+                or len(forward_registry) != 4
+                or any(
+                    row["ssi_pointer_entries"] != 48
+                    or row["ssi_groups"] != 3
+                    or row["source_validations"] != 48
+                    for row in forward_registry
+                )
+            ):
+                raise AssertionError(
+                    "all-B manifests/replay evidence did not reconcile"
+                )
+        expect_failure(
+            "taw-wrapper-missing-valid-mask",
+            lambda: taw_wrapper_tamper(
+                lambda wrapper: wrapper.pop("valid_mask")
+            ),
+        )
+        expect_failure(
+            "taw-wrapper-wrong-valid-mask",
+            lambda: taw_wrapper_tamper(
+                lambda wrapper: wrapper.__setitem__("valid_mask", 0)
+            ),
+        )
+        expect_failure(
+            "taw-wrapper-extra-key",
+            lambda: taw_wrapper_tamper(
+                lambda wrapper: wrapper.__setitem__("unexpected", 1)
+            ),
+        )
+        expect_failure(
+            "taw-bool-int-type-confusion",
+            lambda: taw_wrapper_tamper(
+                lambda wrapper: wrapper["taw"].__setitem__(
+                    "topology_cache_hit",
+                    1,
+                )
+            ),
+        )
+
+        def armed_runtime(graph_id: int):
+            namespace = new_runtime("tail6_fixed32", 1)
+            signature, descriptor = capture_graph(
+                namespace, "tail6_fixed32", 1, graph_id
+            )
+            namespace["_LUMO_FA_STEP_SEQ"] = 8
+            namespace["_fr13_fixed32_observed_begin"](
+                "tail6_fixed32",
+                1,
+                0,
+                ("armed-request",),
+                1,
+                1,
+                (31,),
+            )
+            return namespace, signature, descriptor
+
+        def drafter_replay_runtime(
+            graph_id: int,
+            *,
+            request_ids: tuple[str, ...] = ("draft-request",),
+            arctic: bool = False,
+        ):
+            namespace = new_runtime("tail6_fixed32", len(request_ids))
+            measured = namespace["_fr13_fixed32_drafter_proposal_begin"](
+                "tail6_fixed32",
+                request_ids,
+                len(request_ids),
+                len(request_ids),
+                len(request_ids),
+            )
+            if measured is not False:
+                raise AssertionError("unbound drafter warmup became measured")
+            namespace["_fr13_fixed32_drafter_graph_capture_begin"](
+                graph_id, len(request_ids)
+            )
+            for _ in range(4):
+                namespace["_fr13_fixed32_drafter_mtp_forward"](
+                    len(request_ids), True
+                )
+            signature = namespace[
+                "_fr13_fixed32_drafter_graph_capture_end"
+            ](graph_id, len(request_ids))
+            namespace["_fr13_fixed32_drafter_graph_replay"](
+                graph_id, signature, len(request_ids)
+            )
+            if arctic:
+                batch = len(request_ids)
+                namespace["_fr13_fixed32_drafter_observed_arctic"](
+                    {
+                        "batch_size": batch,
+                        "main_lookup_calls": batch,
+                        "main_lookup_tokens": 6 * batch,
+                        "rank1_lookup_calls": batch,
+                        "rank1_lookup_tokens": 4 * batch,
+                        "rank2_lookup_calls": batch,
+                        "rank2_lookup_tokens": 2 * batch,
+                        "rescue_carry_slots": 4 * batch,
+                        "arctic_lookup_calls": 3 * batch,
+                        "arctic_requested_tokens": 12 * batch,
+                        "main_tail_columns": 6,
+                        "rescue_path_columns": 10,
+                        "merge_fill_calls": 1,
+                        "merge_fill_columns": 16,
+                        "merge_fill_rows": 16 * batch,
+                    }
+                )
+            return namespace, signature
+
+        namespace, signature, descriptor = armed_runtime(20_001)
+        expect_failure(
+            "capture-after-begin",
+            lambda: namespace["_fr13_fixed32_capture_begin"](
+                20_002, *descriptor
+            ),
+        )
+        namespace = new_runtime("tail6_fixed32", 1)
+        expect_failure(
+            "incomplete-capture",
+            lambda: capture_graph(
+                namespace,
+                "tail6_fixed32",
+                1,
+                20_003,
+                tree_layers=15,
+            ),
+        )
+        reference = reference_event("tail6_fixed32", 1, "tamper-gdn")
+        runtime = scan_runtime(reference)
+        namespace = new_runtime("tail6_fixed32", 1)
+        namespace["_fr13_fixed32_capture_begin"](
+            20_011, "FULL", 32, 1, True, False, 0
+        )
+        expect_failure(
+            "logical-node-sized-gdn",
+            lambda: namespace["_fr13_fixed32_observed_gdn"](
+                "gdn.0",
+                0,
+                1,
+                27,
+                32,
+                27,
+                27,
+                27,
+                27,
+                (32, 32),
+                (32, 32),
+                runtime,
+                True,
+            ),
+        )
+        namespace = new_runtime("tail6_fixed32", 1)
+        namespace["_fr13_fixed32_capture_begin"](
+            20_012, "FULL", 32, 1, True, False, 0
+        )
+        program_drift = copy.deepcopy(runtime)
+        program_drift["fixed32_contract"]["programs"] = 11
+        expect_failure(
+            "gdn-program-count",
+            lambda: namespace["_fr13_fixed32_observed_gdn"](
+                "gdn.0",
+                0,
+                1,
+                32,
+                32,
+                32,
+                32,
+                32,
+                32,
+                (32, 32),
+                (32, 32),
+                program_drift,
+                True,
+            ),
+        )
+        namespace = new_runtime("tail6_fixed32", 1)
+        namespace["_fr13_fixed32_capture_begin"](
+            20_013, "FULL", 32, 1, True, False, 0
+        )
+        expect_failure(
+            "conv-consume-before-stage",
+            lambda: namespace["_fr13_fixed32_observed_conv_consume"](
+                "gdn.0", 0, 1, False, True
+            ),
+        )
+        namespace = new_runtime("tail6_fixed32", 1)
+        namespace["_fr13_fixed32_capture_begin"](
+            20_014, "FULL", 32, 1, True, False, 0
+        )
+        namespace["_fr13_fixed32_observed_conv_source"](
+            "gdn.0", 0, 1, True
+        )
+        state = kernel._FR13_FIXED32_CONV_PREGATHER["state"]
+        counters_before = kernel.fixed32_conv_col0_pregather_counters()
+        state["graph_capture_stages"] += 1
+        state["graph_capture_stages_by_batch"][1] += 1
+        counters_after = kernel.fixed32_conv_col0_pregather_counters()
+        namespace["_fr13_fixed32_observed_conv_stage"](
+            "gdn.0",
+            0,
+            1,
+            state,
+            counters_before,
+            counters_after,
+            True,
+        )
+        expect_failure(
+            "conv-pregather-miss-after-valid-stage",
+            lambda: namespace["_fr13_fixed32_observed_conv_consume"](
+                "gdn.0", 0, 1, False, True
+            ),
+        )
+        expect_failure(
+            "conv-duplicate-stage",
+            lambda: namespace["_fr13_fixed32_observed_conv_stage"](
+                "gdn.0",
+                0,
+                1,
+                state,
+                counters_before,
+                counters_after,
+                True,
+            ),
+        )
+        wrong_stage = new_runtime("tail6_fixed32", 1)
+        wrong_stage["_fr13_fixed32_capture_begin"](
+            20_015, "FULL", 32, 1, True, False, 0
+        )
+        expect_failure(
+            "conv-stage-wrong-layer-index",
+            lambda: wrong_stage["_fr13_fixed32_observed_conv_stage"](
+                "gdn.1",
+                1,
+                1,
+                kernel._FR13_FIXED32_CONV_PREGATHER["state"],
+                kernel.fixed32_conv_col0_pregather_counters(),
+                kernel.fixed32_conv_col0_pregather_counters(),
+                True,
+            ),
+        )
+        namespace, signature, descriptor = armed_runtime(20_004)
+        expect_failure(
+            "wrong-graph-id",
+            lambda: namespace["_fr13_fixed32_observed_graph_replay"](
+                20_005, signature, *descriptor
+            ),
+        )
+        namespace, _signature, descriptor = armed_runtime(20_006)
+        expect_failure(
+            "wrong-signature",
+            lambda: namespace["_fr13_fixed32_observed_graph_replay"](
+                20_006, "0" * 64, *descriptor
+            ),
+        )
+        namespace, signature, _descriptor = armed_runtime(20_007)
+        expect_failure(
+            "wrong-batch",
+            lambda: namespace["_fr13_fixed32_observed_graph_replay"](
+                20_007,
+                signature,
+                "FULL",
+                64,
+                2,
+                True,
+                False,
+                0,
+            ),
+        )
+        namespace, signature, descriptor = armed_runtime(20_008)
+        namespace["_fr13_fixed32_observed_graph_replay"](
+            20_008, signature, *descriptor
+        )
+        expect_failure(
+            "duplicate-replay",
+            lambda: namespace["_fr13_fixed32_observed_graph_replay"](
+                20_008, signature, *descriptor
+            ),
+        )
+        namespace, _signature, _descriptor = armed_runtime(20_009)
+        expect_failure(
+            "missing-replay",
+            lambda: namespace["_fr13_fixed32_observed_take"](
+                "tail6_fixed32", 1, 0
+            ),
+        )
+        namespace = new_runtime("tail6_fixed32", 4)
+        capture_graph(namespace, "tail6_fixed32", 1, 20_010)
+        expect_failure(
+            "incomplete-all-b-capture-set",
+            lambda: namespace["_fr13_fixed32_observed_begin"](
+                "tail6_fixed32",
+                1,
+                0,
+                ("incomplete-request",),
+                1,
+                1,
+                (31,),
+            ),
+        )
+        namespace = new_runtime("tail6_fixed32", 1)
+        namespace["_fr13_fixed32_drafter_proposal_begin"](
+            "tail6_fixed32", ("mtp3",), 1, 1, 1
+        )
+        namespace["_fr13_fixed32_drafter_graph_capture_begin"](21_001, 1)
+        for _ in range(3):
+            namespace["_fr13_fixed32_drafter_mtp_forward"](1, True)
+        expect_failure(
+            "drafter-mtp3",
+            lambda: namespace["_fr13_fixed32_drafter_graph_capture_end"](
+                21_001, 1
+            ),
+        )
+        namespace = new_runtime("tail6_fixed32", 1)
+        namespace["_fr13_fixed32_drafter_proposal_begin"](
+            "tail6_fixed32", ("duplicate-capture",), 1, 1, 1
+        )
+        namespace["_fr13_fixed32_drafter_graph_capture_begin"](21_002, 1)
+        expect_failure(
+            "drafter-duplicate-capture",
+            lambda: namespace["_fr13_fixed32_drafter_graph_capture_begin"](
+                21_003, 1
+            ),
+        )
+        namespace, drafter_signature = drafter_replay_runtime(21_004)
+        expect_failure(
+            "drafter-duplicate-replay",
+            lambda: namespace["_fr13_fixed32_drafter_graph_replay"](
+                21_004, drafter_signature, 1
+            ),
+        )
+        namespace = new_runtime("tail6_fixed32", 1)
+        namespace["_FR13_FIXED32_PENDING_EVENT"] = {
+            "mode": "tail6_fixed32",
+            "batch_size": 1,
+            "request_ids": ("request-a",),
+            "forward_step_index": 0,
+        }
+        expect_failure(
+            "drafter-request-reorder",
+            lambda: namespace["_fr13_fixed32_drafter_proposal_begin"](
+                "tail6_fixed32", ("request-b",), 1, 1, 1
+            ),
+        )
+        for name, sampled, metadata_reqs, metadata_batch in (
+            ("drafter-sampled-shape", 2, 1, 1),
+            ("drafter-metadata-num-reqs", 1, 2, 1),
+            ("drafter-metadata-batch", 1, 1, 2),
+        ):
+            namespace = new_runtime("tail6_fixed32", 1)
+            expect_failure(
+                name,
+                lambda namespace=namespace, sampled=sampled,
+                metadata_reqs=metadata_reqs,
+                metadata_batch=metadata_batch: namespace[
+                    "_fr13_fixed32_drafter_proposal_begin"
+                ](
+                    "tail6_fixed32",
+                    ("shape-request",),
+                    sampled,
+                    metadata_reqs,
+                    metadata_batch,
+                ),
+            )
+        namespace = new_runtime("tail6_fixed32", 1)
+        expect_failure(
+            "drafter-missing-proposal",
+            lambda: namespace["_fr13_fixed32_drafter_graph_capture_begin"](
+                21_005, 1
+            ),
+        )
+        for name, field, value in (
+            ("arctic-main-calls", "main_lookup_calls", 0),
+            ("arctic-total-tokens", "arctic_requested_tokens", 11),
+            ("arctic-carry-slots", "rescue_carry_slots", 3),
+        ):
+            namespace, _signature = drafter_replay_runtime(21_100 + tamper_count)
+            work = {
+                "batch_size": 1,
+                "main_lookup_calls": 1,
+                "main_lookup_tokens": 6,
+                "rank1_lookup_calls": 1,
+                "rank1_lookup_tokens": 4,
+                "rank2_lookup_calls": 1,
+                "rank2_lookup_tokens": 2,
+                "rescue_carry_slots": 4,
+                "arctic_lookup_calls": 3,
+                "arctic_requested_tokens": 12,
+                "main_tail_columns": 6,
+                "rescue_path_columns": 10,
+                "merge_fill_calls": 1,
+                "merge_fill_columns": 16,
+                "merge_fill_rows": 16,
+            }
+            work[field] = value
+            expect_failure(
+                name,
+                lambda namespace=namespace, work=work: namespace[
+                    "_fr13_fixed32_drafter_observed_arctic"
+                ](work),
+            )
+        for name, shape in (
+            ("drafter-bx21-publish", (1, 21)),
+            ("drafter-bx27-publish", (1, 27)),
+        ):
+            namespace, _signature = drafter_replay_runtime(
+                21_200 + tamper_count, arctic=True
+            )
+            expect_failure(
+                name,
+                lambda namespace=namespace, shape=shape: namespace[
+                    "_fr13_fixed32_drafter_observed_publish"
+                ](shape, "torch.int64", "cuda", _FR13_FIXED32_CHOICES),
+            )
+        namespace, _signature = drafter_replay_runtime(
+            21_300, arctic=True
+        )
+        expect_failure(
+            "drafter-parent-geometry",
+            lambda: namespace["_fr13_fixed32_drafter_observed_publish"](
+                (1, 31),
+                "torch.int64",
+                "cuda",
+                tuple(reversed(_FR13_FIXED32_CHOICES)),
+            ),
+        )
+        namespace, signature = drafter_replay_runtime(21_301)
+        old_signature, canonical = namespace[
+            "_FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS"
+        ][21_301]
+        namespace["_FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS"][21_301] = (
+            old_signature,
+            canonical + " ",
+        )
+        namespace["_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT"][
+            "graph_replays"
+        ] = 0
+        namespace["_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT"][
+            "mtp_execution_basis"
+        ] = "unbound"
+        namespace["_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT"][
+            "mtp_forward_calls"
+        ] = 0
+        namespace["_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT"][
+            "mtp_forward_rows"
+        ] = 0
+        expect_failure(
+            "drafter-manifest-canonical",
+            lambda: namespace["_fr13_fixed32_drafter_graph_replay"](
+                21_301, signature, 1
+            ),
+        )
+        namespace, signature, descriptor = armed_runtime(21_302)
+        old_signature, canonical = namespace[
+            "_FR13_FIXED32_CAPTURE_MANIFESTS"
+        ][21_302]
+        namespace["_FR13_FIXED32_CAPTURE_MANIFESTS"][21_302] = (
+            old_signature,
+            canonical + " ",
+        )
+        expect_failure(
+            "forward-manifest-canonical",
+            lambda: namespace["_fr13_fixed32_observed_graph_replay"](
+                21_302, signature, *descriptor
+            ),
+        )
+        for name, callback in (
+            (
+                "preforward-pack-dtype",
+                lambda namespace: namespace[
+                    "_fr13_fixed32_observed_preforward_pack"
+                ](
+                    1,
+                    ((1, 16), (1,), (1, 16), (1,)),
+                    ("torch.int64",) * 4,
+                    ("cuda",) * 4,
+                    2,
+                    2,
+                ),
+            ),
+            (
+                "preforward-pack-op-count",
+                lambda namespace: namespace[
+                    "_fr13_fixed32_observed_preforward_pack"
+                ](
+                    1,
+                    ((1, 16), (1,), (1, 16), (1,)),
+                    ("torch.int32",) * 4,
+                    ("cuda",) * 4,
+                    1,
+                    2,
+                ),
+            ),
+        ):
+            namespace, _signature, _descriptor = armed_runtime(
+                21_400 + tamper_count
+            )
+            expect_failure(name, lambda namespace=namespace, callback=callback: callback(namespace))
+        namespace, _signature, _descriptor = armed_runtime(21_500)
+        namespace["_fr13_fixed32_observed_preforward_pack"](
+            1,
+            ((1, 16), (1,), (1, 16), (1,)),
+            ("torch.int32",) * 4,
+            ("cuda",) * 4,
+            2,
+            2,
+        )
+        expect_failure(
+            "preforward-pack-duplicate",
+            lambda: namespace["_fr13_fixed32_observed_preforward_pack"](
+                1,
+                ((1, 16), (1,), (1, 16), (1,)),
+                ("torch.int32",) * 4,
+                ("cuda",) * 4,
+                2,
+                2,
+            ),
+        )
+        namespace, _signature, _descriptor = armed_runtime(21_501)
+        namespace["_fr13_fixed32_observed_preforward_pack"](
+            1,
+            ((1, 16), (1,), (1, 16), (1,)),
+            ("torch.int32",) * 4,
+            ("cuda",) * 4,
+            2,
+            2,
+        )
+        expect_failure(
+            "post-pack-output-shape",
+            lambda: namespace["_fr13_fixed32_observed_publish_pack"](
+                1,
+                (
+                    (1, 31), (1, 32), (1,), (1,), (1, 16),
+                    (1, 16), (1,), (1,), (1, 16), (1,),
+                ),
+                (
+                    "torch.int64", "torch.int32", "torch.int64",
+                    "torch.int32", "torch.int64", "torch.int32",
+                    "torch.int64", "torch.int32", "torch.int32",
+                    "torch.int32",
+                ),
+                ("cuda",) * 10,
+                2,
+                2,
+                2,
+                12,
+            ),
+        )
+        for name, dtype0, output_calls in (
+            ("post-pack-output-dtype", "torch.int32", 2),
+            ("post-pack-op-count", "torch.int64", 1),
+        ):
+            namespace, _signature, _descriptor = armed_runtime(
+                21_510 + tamper_count
+            )
+            namespace["_fr13_fixed32_observed_preforward_pack"](
+                1,
+                ((1, 16), (1,), (1, 16), (1,)),
+                ("torch.int32",) * 4,
+                ("cuda",) * 4,
+                2,
+                2,
+            )
+            dtypes = (
+                dtype0,
+                "torch.int32",
+                "torch.int64",
+                "torch.int32",
+                "torch.int64",
+                "torch.int32",
+                "torch.int64",
+                "torch.int32",
+                "torch.int32",
+                "torch.int32",
+            )
+            expect_failure(
+                name,
+                lambda namespace=namespace, dtypes=dtypes,
+                output_calls=output_calls: namespace[
+                    "_fr13_fixed32_observed_publish_pack"
+                ](
+                    1,
+                    (
+                        (1, 32), (1, 32), (1,), (1,), (1, 16),
+                        (1, 16), (1,), (1,), (1, 16), (1,),
+                    ),
+                    dtypes,
+                    ("cuda",) * 10,
+                    output_calls,
+                    2,
+                    2,
+                    12,
+                ),
+            )
+        namespace, _signature, _descriptor = armed_runtime(21_550)
+        namespace["_fr13_fixed32_observed_preforward_pack"](
+            1,
+            ((1, 16), (1,), (1, 16), (1,)),
+            ("torch.int32",) * 4,
+            ("cuda",) * 4,
+            2,
+            2,
+        )
+        valid_post_args = (
+            1,
+            (
+                (1, 32), (1, 32), (1,), (1,), (1, 16),
+                (1, 16), (1,), (1,), (1, 16), (1,),
+            ),
+            (
+                "torch.int64", "torch.int32", "torch.int64",
+                "torch.int32", "torch.int64", "torch.int32",
+                "torch.int64", "torch.int32", "torch.int32",
+                "torch.int32",
+            ),
+            ("cuda",) * 10,
+            2,
+            2,
+            2,
+            12,
+        )
+        namespace["_fr13_fixed32_observed_publish_pack"](*valid_post_args)
+        expect_failure(
+            "post-pack-duplicate",
+            lambda: namespace["_fr13_fixed32_observed_publish_pack"](
+                *valid_post_args
+            ),
+        )
+        namespace, _signature = drafter_replay_runtime(21_551, arctic=True)
+        namespace["_fr13_fixed32_drafter_observed_publish"](
+            (1, 31), "torch.int64", "cuda", _FR13_FIXED32_CHOICES
+        )
+        expect_failure(
+            "outer-handoff-incomplete",
+            lambda: namespace["_fr13_fixed32_drafter_proposal_end"](
+                "tail6_fixed32",
+                ("draft-request",),
+                (1, 31),
+                "torch.int64",
+                "cuda",
+                False,
+            ),
+        )
+        namespace, _signature = drafter_replay_runtime(21_600, arctic=True)
+        namespace["_fr13_fixed32_drafter_observed_publish"](
+            (1, 31), "torch.int64", "cuda", _FR13_FIXED32_CHOICES
+        )
+        namespace["_fr13_fixed32_drafter_proposal_end"](
+            "tail6_fixed32",
+            ("draft-request",),
+            (1, 31),
+            "torch.int64",
+            "cuda",
+            True,
+        )
+        if (
+            namespace["_FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE"]
+            or namespace["_FR13_FIXED32_CENSUS_EVENTS"]
+            or namespace["_fr13_fixed32_drafter_graph_registry"]()[0][
+                "capture_origin"
+            ]
+            != "unmeasured"
+        ):
+            raise AssertionError(
+                "mixed/prefill drafter proposal contaminated measured events"
+            )
+        expect_failure(
+            "duplicate-proposal-end",
+            lambda: namespace["_fr13_fixed32_drafter_proposal_end"](
+                "tail6_fixed32",
+                ("draft-request",),
+                (1, 31),
+                "torch.int64",
+                "cuda",
+                True,
+            ),
+        )
+        namespace = new_runtime("tail6_fixed32", 1)
+        namespace["_FR13_FIXED32_PENDING_EVENT"] = {
+            "mode": "tail6_fixed32",
+            "batch_size": 1,
+            "forward_step_index": 0,
+            "request_ids": ("no-proposal",),
+            "observed_work": {},
+            "taw": {},
+            "kv_complete": True,
+            "event_index": 0,
+        }
+        expect_failure(
+            "pending-event-without-proposal",
+            namespace["_fr13_fixed32_complete_pending_event"],
+        )
+        return {
+            "schema": "fr13-fixed32-observed-runtime-self-test-v1",
+            "status": "PASS",
+            "valid_cases": valid_cases,
+            "all_b_capture_capacity": 4,
+            "tamper_tests_passed": tamper_count,
+        }
+    finally:
+        if prior_package is None:
+            sys.modules.pop("lumo_flywheel_serving", None)
+        else:
+            sys.modules["lumo_flywheel_serving"] = prior_package
+        if prior_kernel is None:
+            sys.modules.pop(kernel_name, None)
+        else:
+            sys.modules[kernel_name] = prior_kernel
+
+
 def main() -> int:
+    _fr13_fixed32_validate_patch_env()
+    if _FR13_FIXED32_MODE:
+        _fr13_mode_path = Path("/logs/fr13_fixed32_mode.flag")
+        _fr13_mode_tmp = _fr13_mode_path.with_name(
+            _fr13_mode_path.name + f".tmp.{os.getpid()}"
+        )
+        _fr13_mode_tmp.write_text(_FR13_FIXED32_MODE + "\n")
+        os.replace(_fr13_mode_tmp, _fr13_mode_path)
     _fr13_write_subop_mab_sidecar()
     try:
         with open('/logs/fr13_dfwd_split.flag', 'w') as _fh:
@@ -19566,6 +28041,14 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_verify_input_ids()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_draft_handoff_trim()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_row_req_ids_fresh()),
+        (
+            GPU_MODEL_RUNNER_PATH,
+            _patch_gpu_model_runner_fixed32_profile_capture_scope(),
+        ),
+        (
+            GPU_MODEL_RUNNER_PATH,
+            _patch_gpu_model_runner_fixed32_slot_lifecycle(),
+        ),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_inputprep_guard()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_reqkey()),
@@ -19645,4 +28128,13 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    if os.sys.argv[1:] == ["--self-test"]:
+        print(
+            __import__("json").dumps(
+                _fr13_fixed32_observed_runtime_self_test(),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        raise SystemExit(0)
     raise SystemExit(main())

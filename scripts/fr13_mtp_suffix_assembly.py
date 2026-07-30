@@ -129,6 +129,15 @@ def assemble_cat33333(mtp_spine, mtp_topk_per_depth, suffix_rel, mtp_k):
 TAIL_HEAD_DEPTH = 5          # cat33333 head depths 0..4 (MTP-drafted, 3 nodes/depth)
 TAIL_LEN = 16                # Arctic chain nodes past the head (depths 6..21); 15+16=31 -> n_pad=32
 
+# HYDRA23 reallocates only the two human-depth-5 head siblings to a conditional
+# continuation behind the root rank-1 rescue branch. The main five-token MTP
+# spine, all siblings through human depth 4, and six-token Arctic tail stay
+# unchanged:
+#   tail6 21 - depth-5 siblings 2 + rescue continuation 4 = 23 nodes.
+HYDRA23_TAIL_LEN = 6
+HYDRA23_KEEP_HEAD_BRANCH_DEPTHS = 4
+HYDRA23_BRANCH_CHAINS = ((1, 4),)
+
 
 def tail_tree_order(head_depth: int = TAIL_HEAD_DEPTH, tail_len: int = TAIL_LEN,
                     branches_per_depth: int = BRANCHES_PER_DEPTH,
@@ -153,6 +162,70 @@ def tail_tree_order(head_depth: int = TAIL_HEAD_DEPTH, tail_len: int = TAIL_LEN,
                 # tail branch = sibling of spine node j (both children of (0,)*(head_depth+j))
                 order.append((0,) * (head_depth + j) + (r,))
     return order
+
+
+def hydra23_branch_chain_paths(
+    branch_chains=HYDRA23_BRANCH_CHAINS,
+):
+    """Return the conditional Arctic continuation paths for the rescue branches.
+
+    A chain length excludes its already-present root seed. For example,
+    ``(1, 4)`` emits ``(1,0)`` through ``(1,0,0,0,0)``.
+    """
+    paths = []
+    for root_rank, chain_len in branch_chains:
+        root_rank = int(root_rank)
+        chain_len = int(chain_len)
+        assert root_rank > 0, "hydra rescue roots must be non-spine ranks"
+        assert chain_len >= 0, "hydra rescue chain lengths must be non-negative"
+        for j in range(chain_len):
+            paths.append((root_rank,) + (0,) * (j + 1))
+    return paths
+
+
+def hydra23_tree_order(
+    head_depth: int = TAIL_HEAD_DEPTH,
+    tail_len: int = HYDRA23_TAIL_LEN,
+    branches_per_depth: int = BRANCHES_PER_DEPTH,
+    keep_head_branch_depths: int = HYDRA23_KEEP_HEAD_BRANCH_DEPTHS,
+    branch_chains=HYDRA23_BRANCH_CHAINS,
+):
+    """Return the sorted 23-node traded-Hydra topology.
+
+    Keep the all-zero depth-11 tail6 spine and both MTP siblings through human
+    depth 4. Drop only the two human-depth-5 siblings and extend the root
+    rank-1 rescue node with an Arctic-conditioned chain of length 4.
+    """
+    assert head_depth >= keep_head_branch_depths >= 1
+    assert tail_len >= 1
+    order = []
+    for d in range(head_depth):
+        order.append((0,) * (d + 1))
+        if d < keep_head_branch_depths:
+            for rank in range(1, branches_per_depth + 1):
+                order.append((0,) * d + (rank,))
+    for j in range(tail_len):
+        order.append((0,) * (head_depth + 1 + j))
+    order.extend(hydra23_branch_chain_paths(branch_chains))
+    order = sorted(order, key=lambda path: (len(path), path))
+
+    expected = (
+        head_depth
+        + keep_head_branch_depths * branches_per_depth
+        + tail_len
+        + sum(int(chain_len) for _rank, chain_len in branch_chains)
+    )
+    assert len(order) == expected, f"hydra topology must have {expected} nodes"
+    assert len(set(order)) == len(order), "hydra topology contains duplicate paths"
+    paths = set(order)
+    assert all(
+        len(path) == 1 or path[:-1] in paths
+        for path in order
+    ), "hydra topology is not parent-closed"
+    return order
+
+
+HYDRA23_ORDER = hydra23_tree_order()
 
 
 def assemble_tail_tree(mtp_spine, mtp_topk_per_depth, suffix_rel, mtp_k,

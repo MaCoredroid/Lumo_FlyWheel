@@ -2,6 +2,13 @@
 set -euo pipefail
 
 REPO=${REPO:-/home/mark/shared/lumoFlyWheel}
+_FR13_LOCAL_ENV_SOURCED=0
+if [[ -n "${FR13_FIXED32_MODE:-}" && -f "$REPO/.lumo.local.env" ]]; then
+  set -a
+  source "$REPO/.lumo.local.env"
+  set +a
+  _FR13_LOCAL_ENV_SOURCED=1
+fi
 # shellcheck source=fr13_required_tree_flags.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fr13_required_tree_flags.sh"
 for _fr13_req in "${FR13_REQUIRED_TREE_FLAGS[@]}"; do
@@ -12,6 +19,7 @@ unset _fr13_req _fr13_req_k _fr13_req_v
 IMAGE=${IMAGE:-"vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776"}
 CONTAINER=${CONTAINER:-fr13-forked-fa2-tree}
 PORT=${PORT:-9950}
+_FR13_GPU_UTIL_EXPLICIT=${GPU_UTIL+x}
 GPU_UTIL=${GPU_UTIL:-0.88}
 # DURABLE OOM GUARD (2026-06-24): ALWAYS cap the container cgroup so the host keeps
 # ~12GiB headroom -> Claude/watchdog/tmux can NEVER be the kernel OOM victim (GB10
@@ -20,6 +28,7 @@ GPU_UTIL=${GPU_UTIL:-0.88}
 # (relaunchable + LOUD), never the host. Diagnostics should also run ENFORCE_EAGER=1
 # (the cuda-graph CAPTURE spike is the real trigger; eager stays flat). Default-ON so
 # no caller can forget it (the repeat OOMs were callers that didn't set it).
+_FR13_DOCKER_MEM_CAP_EXPLICIT=${DOCKER_MEM_CAP+x}
 DOCKER_MEM_CAP=${DOCKER_MEM_CAP:-105g}
 # UNIFIED-MEM OOM lesson (2026-06-24, dmesg-confirmed): the --memory cap does NOT
 # constrain GPU/unified allocation (NVRM bypasses the cgroup), and a GPU OOM makes
@@ -39,14 +48,18 @@ MAX_NUM_SEQS=${MAX_NUM_SEQS:-4}
 # alienware (GB10 = vLLM-only), so the container can safely take more of the 117G box
 # while still leaving OS headroom. Only auto-bumps when the caller hasn't set these.
 if (( MAX_NUM_SEQS >= 4 )); then
-  DOCKER_MEM_CAP=${DOCKER_MEM_CAP:-112g}   # +7g host room for the B>=4 KV footprint
+  if [[ -z "$_FR13_DOCKER_MEM_CAP_EXPLICIT" ]]; then
+    DOCKER_MEM_CAP=112g
+  fi
   # SHRINK the device KV/mamba pool (user 2026-07-06). This is a GDN-HYBRID (48 mamba
   # layers vs 16 attention): the device block-pool is mostly mamba state. Measured live:
   # KV pool usage 0-6% (~3.5G peak) of a 58G reservation at 0.80 => ~16x over-provisioned.
   # On UNIFIED memory every GB reserved for KV is a GB denied to the host/system, so
   # shrinking KV frees unified room. 0.62 keeps a ~30G KV pool (~8x the observed peak,
   # ample for 4 long concurrent turns) and frees ~34G for the system => no wedge at B=4.
-  GPU_UTIL=${GPU_UTIL:-0.62}
+  if [[ -z "$_FR13_GPU_UTIL_EXPLICIT" ]]; then
+    GPU_UTIL=0.62
+  fi
 fi
 ATTENTION_BACKEND=${ATTENTION_BACKEND:-TREE_ATTN}
 FR10_DECODE_MODE_DEFAULT=${FR10_DECODE_MODE_DEFAULT:-tree_mtp}
@@ -220,6 +233,146 @@ PY
 )}
 SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$NUM_SPECULATIVE_TOKENS,\"speculative_token_tree\":\"$TREE\"}"}
 
+# Fixed-32 is a closed execution bucket, not a generic <=32-node tree. Validate
+# the topology/mask tuple and all route pins before patching or allocating GPU
+# memory so an inherited legacy/fallback flag cannot produce evidence.
+if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
+  [[ "$MAX_NUM_SEQS" =~ ^[1-4]$ ]] \
+    || { echo "fixed32 requires MAX_NUM_SEQS in [1,4], got $MAX_NUM_SEQS" >&2; exit 2; }
+  TREE="$TREE" \
+  SPEC_CONFIG="$SPEC_CONFIG" \
+  FR13_FIXED32_MODE="$FR13_FIXED32_MODE" \
+  FR13_FIXED32_VALID_MASK="${FR13_FIXED32_VALID_MASK:-}" \
+  FR13_FIXED32_ACTIVE_NODES="${FR13_FIXED32_ACTIVE_NODES:-}" \
+  FR13_FIXED32_PHYSICAL_DRAFTS="${FR13_FIXED32_PHYSICAL_DRAFTS:-}" \
+  FR13_FIXED32_TAW_WALK_CAP="${FR13_FIXED32_TAW_WALK_CAP:-}" \
+  NUM_SPECULATIVE_TOKENS="$NUM_SPECULATIVE_TOKENS" \
+    .venv/bin/python - <<'PY'
+import ast
+import json
+import os
+import sys
+
+sys.path.insert(0, "scripts")
+import fr13_fixed32_topology as topology
+
+topology.validate_contract()
+mode = os.environ["FR13_FIXED32_MODE"]
+expected = {
+    "tail6_fixed32": (
+        topology.TAIL6_VALID_MASK,
+        topology.TAIL6_ACTIVE_DRAFTS,
+    ),
+    "hydra27_fixed32": (
+        topology.HYDRA27_VALID_MASK,
+        topology.HYDRA27_ACTIVE_DRAFTS,
+    ),
+}
+if mode not in expected:
+    raise SystemExit(f"unsupported fixed32 mode: {mode!r}")
+tree = tuple(tuple(path) for path in ast.literal_eval(os.environ["TREE"]))
+if tree != topology.FIXED32_CHOICES:
+    raise SystemExit("fixed32 TREE differs from FIXED32_CHOICES")
+mask_text = os.environ["FR13_FIXED32_VALID_MASK"]
+try:
+    mask = int(mask_text, 0)
+except ValueError as error:
+    raise SystemExit(f"invalid fixed32 mask {mask_text!r}") from error
+try:
+    active = int(os.environ["FR13_FIXED32_ACTIVE_NODES"])
+    physical_drafts = int(os.environ["FR13_FIXED32_PHYSICAL_DRAFTS"])
+    walk_cap = int(os.environ["FR13_FIXED32_TAW_WALK_CAP"])
+    spec_tokens = int(os.environ["NUM_SPECULATIVE_TOKENS"])
+except ValueError as error:
+    raise SystemExit("fixed32 integer route pin is malformed") from error
+if (mask, active) != expected[mode]:
+    raise SystemExit(
+        f"fixed32 mode tuple mismatch: mode={mode} mask={mask:#x} active={active}"
+    )
+if (
+    physical_drafts != topology.PHYSICAL_DRAFTS
+    or walk_cap != topology.WALK_CAP
+    or spec_tokens != topology.PHYSICAL_DRAFTS
+):
+    raise SystemExit(
+        "fixed32 shape mismatch: "
+        f"physical_drafts={physical_drafts} walk_cap={walk_cap} "
+        f"spec_tokens={spec_tokens}"
+    )
+config = json.loads(os.environ["SPEC_CONFIG"])
+if config != {
+    "method": "qwen3_5_mtp",
+    "num_speculative_tokens": topology.PHYSICAL_DRAFTS,
+    "speculative_token_tree": os.environ["TREE"],
+}:
+    raise SystemExit("fixed32 SPEC_CONFIG contains an alternate method/shape")
+PY
+
+  _fixed32_required_one=(
+    FR13_FIXED32_WORK_CENSUS FR13_FIXED32_DEVICE_PUBLISH
+    FR13_FIXED32_ACCEPT_PACK FR13_FIXED32_REQKEY_DEVICE
+    FR13_FIXED32_KV_REMAP16 FR13_FIXED32_COMMIT_DEVICE_FILL
+    FR13_DEVICE_MULTIDRAFT FR13_DRAFTER_GRAPH
+    FR13_DRAFTER_SINGLE_LOGITS FR13_DM_DEPTHSYNC
+    FR13_TAW FR13_PARENT_GATHER FR13_SUBTREE_PARALLEL FR13_EAGER_PACK
+    FR13_COMMIT_BATCH_OUTPUT FR13_COMMITTER_NATIVE FR13_COMMITTER_BATCHED
+    FR13_COMMITTER_GRAPH FR13_RING_EXPORT FR13_REPLAY_ROUTE
+    FR13_ATTN_KV_REMAP FR13_SLOT_REORDER FR13_KV_REMAP_SYNCFREE
+    FR13_FA2_TREE_BIAS FR13_TREE_CONV_FUSED FR13_CONV_WB_FUSED
+    FR13_CONV_WB_BATCHED FR13_CONV_PREGATHER FR13_CONV_COMMITTED_PATH
+    FR13_APC_COMMIT_TO_RUNNING_ROW FR13_TREE_RUNROW_INIT
+    FR13_FLAGS_INKERNEL FR13_SFWD_GPU_TIMER FR13_DFWD_GPU_TIMER
+    FR13_CFWD_GPU_TIMER FR13_TIMER_EXPLICIT_FLUSH
+  )
+  for _fixed32_pin in "${_fixed32_required_one[@]}"; do
+    [[ "${!_fixed32_pin:-}" == "1" ]] \
+      || { echo "fixed32 requires $_fixed32_pin=1" >&2; exit 2; }
+  done
+  _fixed32_required_zero=(
+    FR13_MULTIDRAFT_GPU_TIMER FR13_REPLAY_GPU_TIMER
+    FR13_COMMIT_FULL_GPU_TIMER FR13_COMMITTER_SG_TIMER
+    FR13_REPLAY_ONLY_GPU_TIMER FR13_GRAPH_TIMER FR13_KVREMAP_TIMER
+    FR13_STATEREMAP_TIMER FR13_DFWD_SPLIT_NEEDLE FR13_STEP_GRAPH
+    FR13_COMMIT_OVERLAP FR13_REPLAY_MULTISTREAM
+    FR13_BRANCH_ACCEPT_DIAG FR13_FORCE_SPINE_COMMIT
+    FR13_FIX1_SELFCHECK FR13_COMMIT_ARGMAX_GATE
+    FR13_FORK_MARGIN_DUMP FR13_CHASE_DIAG
+    FR13_REPLAY_BOUNDARY_LOG FR13_GDN_SUBOP_MAB FR13_CONV_SUBOP_MAB
+    FR13_FA2_MAB FR13_REPLAY_DURABLE_AB FR13_TREE_POSREAD_PROBE
+    FR13_LEAK_PROBE FR13_SERVE_LOG FR13_TORCH_DET_WARN
+    FR13_TCF_DIAG_OVERRIDE FR13_TCF_SELFCHECK
+    FR13_SUBTREE_PARALLEL_SELFCHECK FR13_PARENT_GATHER_SELFCHECK
+    FR13_TORCHPROF LUMO_NSYS_WRAP_VLLM
+    LUMO_FA_ACTIVATION_REPLAY_BATCH4_DIAG
+    LUMO_FA_REPLAY_COMMIT_BATCH4_RUNNER_DIAG
+    LUMO_IR_DIAGNOSTIC_UNISOLATED
+    LUMO_IR_ALLOW_UNVERIFIED_SPINES2_MEASUREMENT
+  )
+  for _fixed32_pin in "${_fixed32_required_zero[@]}"; do
+    [[ "${!_fixed32_pin:-0}" == "0" ]] \
+      || { echo "fixed32 requires $_fixed32_pin=0" >&2; exit 2; }
+  done
+  _fixed32_required_empty=(
+    FR13_PREWARM_TRIE FR13_TORCH_PROF FR13_DVK_DRAFTID_DUMP
+    FR10_TREE_GDN_CAPTURE_PAYLOAD FR10_TREE_GDN_COMMIT_HANDOFF_LOG
+    FR10_TREE_GDN_SRC_NATIVE_PAYLOAD FR10_ROOT_HIDDEN_CAPTURE
+    FR10_ROOT_LOGIT_CAPTURE FR10_LAYER_HIDDEN_CAPTURE
+    FR12_FULL_ATTN_CAPTURE FR12_SUBKERNEL_CAPTURE
+    FR13_TREE_ATTN_OP_CAPTURE FR13_FLASH_ATTN_OP_CAPTURE
+    FR13_PREPROCESS_INPUT_CAPTURE FR13_PREFILL_GDN_CAPTURE
+    FR13_DECODE_GDN_CAPTURE FR10_SPINE_LOGIT_CAPTURE
+    FR13_FINAL_LOGIT_CAPTURE FR13_HIDDEN_SUBSTITUTE
+    LUMO_MTP_DRAFT_TRACE_FILE LUMO_TREE_SAMPLER_DEBUG_LOG
+    LUMO_TREE_PATH_LCP_LOG
+  )
+  for _fixed32_pin in "${_fixed32_required_empty[@]}"; do
+    [[ -z "${!_fixed32_pin:-}" ]] \
+      || { echo "fixed32 requires $_fixed32_pin to be empty" >&2; exit 2; }
+  done
+  unset _fixed32_pin _fixed32_required_one _fixed32_required_zero
+  unset _fixed32_required_empty
+fi
+
 # FR13_ENABLE_APC (default 0): prefix caching for the GDN-hybrid. With spec-decode on,
 # vLLM auto-forces mamba_cache_mode=align (config.py), which hard-requires chunked-prefill
 # (a 2nd behavioral change). Qwen3-Next uses the SD conv layout (VLLM_SSM_CONV_STATE_LAYOUT
@@ -379,9 +532,145 @@ if [[ ! -f "$FORKED_FA2_SO" ]]; then
   echo "forked FA2 .so not found: $FORKED_FA2_SO" >&2
   exit 2
 fi
+if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
+  _fixed32_expected_mem=105g
+  [[ "$MAX_NUM_SEQS" == "4" ]] && _fixed32_expected_mem=112g
+  [[ "$MAX_NUM_SEQS" == "1" || "$MAX_NUM_SEQS" == "4" ]] \
+    || { echo "fixed32 requires MAX_NUM_SEQS=1 or 4" >&2; exit 2; }
+  _fixed32_exact_pairs=(
+    "GPU_UTIL|$GPU_UTIL|0.70"
+    "MAX_MODEL_LEN|$MAX_MODEL_LEN|131072"
+    "DOCKER_MEM_CAP|$DOCKER_MEM_CAP|$_fixed32_expected_mem"
+    "ATTENTION_BACKEND|$ATTENTION_BACKEND|TREE_ATTN"
+    "FR10_DECODE_MODE_DEFAULT|$FR10_DECODE_MODE_DEFAULT|tree_mtp"
+    "FR10_METRICS|$FR10_METRICS|0"
+    "BATCH_INVARIANT|$BATCH_INVARIANT|0"
+    "FR13_TAIL_MODE|${FR13_TAIL_MODE:-0}|1"
+    "FR13_DRAFT_SOURCE|${FR13_DRAFT_SOURCE:-mtp}|merged"
+    "FR13_TREE_GDN_GEOM_OVERRIDE|${FR13_TREE_GDN_GEOM_OVERRIDE:-}|BV=8"
+    "FR13_HYDRA23|${FR13_HYDRA23:-0}|0"
+    "FR13_TAIL_BRANCHES|${FR13_TAIL_BRANCHES:-0}|0"
+    "FR13_TAIL_BRANCH_DEPTHS|${FR13_TAIL_BRANCH_DEPTHS:-0}|0"
+    "FR13_FA2_PREFILL_NATIVE|$FR13_FA2_PREFILL_NATIVE|1"
+    "FR13_TREE_ATTN_EXP2_SOFTMAX|$FR13_TREE_ATTN_EXP2_SOFTMAX|1"
+    "FR13_BI_TREE_ATTN|$FR13_BI_TREE_ATTN|0"
+    "FR13_ENABLE_APC|$FR13_ENABLE_APC|1"
+    "FR13_APC_CONFIG_ONLY|${FR13_APC_CONFIG_ONLY:-0}|0"
+    "MAMBA_BLOCK_SIZE|$MAMBA_BLOCK_SIZE|1024"
+    "MAMBA_SSM_CACHE_DTYPE|$MAMBA_SSM_CACHE_DTYPE|float32"
+    "APC_MAX_NUM_BATCHED_TOKENS|$APC_MAX_NUM_BATCHED_TOKENS|4096"
+    "APC_BLOCK_SIZE|$APC_BLOCK_SIZE|1024"
+    "LUMO_LONG_PREFILL_THRESHOLD|$LUMO_LONG_PREFILL_THRESHOLD|1024"
+    "CUDAGRAPH_MODE|$CUDAGRAPH_MODE|FULL_AND_PIECEWISE"
+    "FR13_FULL_ATTN_KV_FP8|${FR13_FULL_ATTN_KV_FP8:-0}|0"
+    "ENFORCE_EAGER|${ENFORCE_EAGER:-0}|0"
+    "SEED|${SEED:-0}|0"
+    "PYTORCH_CUDA_ALLOC_CONF|$PYTORCH_CUDA_ALLOC_CONF|expandable_segments:True"
+    "GPU_OOM_GUARD|$GPU_OOM_GUARD|1"
+    "LUMO_FB_KERNEL_ROWS|$LUMO_FB_KERNEL_ROWS|1"
+    "LUMO_FB_PROJ_PAD_ROWS|$LUMO_FB_PROJ_PAD_ROWS|16"
+    "FR13_INPUTPREP_GUARD|${FR13_INPUTPREP_GUARD:-}|1"
+    "FR13_DRAFT_VOCAB_K|${FR13_DRAFT_VOCAB_K:-}|65536"
+    "FR13_DRAFT_VOCAB_BLOCKS|${FR13_DRAFT_VOCAB_BLOCKS:-}|/workspace/scripts/fr13_dvk_subset_blocks.json"
+    "FR13_APC_CONV_FIX|${FR13_APC_CONV_FIX:-}|1"
+    "FR13_APC_CONV_SNAPSHOT|${FR13_APC_CONV_SNAPSHOT:-}|1"
+    "FR13_APC_ZERO_MAMBA_ON_ALLOC|${FR13_APC_ZERO_MAMBA_ON_ALLOC:-}|1"
+    "FR13_APC_COPY_SRC_FIX|${FR13_APC_COPY_SRC_FIX:-}|1"
+    "FR13_FREE_TREE_POSGLOBALS|${FR13_FREE_TREE_POSGLOBALS:-}|0"
+    "FR13_APC_BLOCK_ALIGN_45477|${FR13_APC_BLOCK_ALIGN_45477:-1}|1"
+    "FR13_SFWD_GPU_TIMER_MAXPENDING|${FR13_SFWD_GPU_TIMER_MAXPENDING:-}|256"
+    "FR13_SFWD_GPU_TIMER_SAMPLES_MAX|${FR13_SFWD_GPU_TIMER_SAMPLES_MAX:-}|200000"
+    "FR13_SFWD_GPU_TIMER_DUMP_S|${FR13_SFWD_GPU_TIMER_DUMP_S:-}|1"
+    "FR13_SFWD_SAMPLES_DUMP_S|${FR13_SFWD_SAMPLES_DUMP_S:-}|30"
+    "FR13_SPAN_GPU_TIMER_DUMP_S|${FR13_SPAN_GPU_TIMER_DUMP_S:-}|1"
+    "FR13_STEP_WALL_CAP_S|${FR13_STEP_WALL_CAP_S:-}|1.5"
+    "FR13_WEIGHT_FLOOR_MS|${FR13_WEIGHT_FLOOR_MS:-}|98.6"
+    "FR13_COMPUTE_MS_PER_ROW|${FR13_COMPUTE_MS_PER_ROW:-}|0.54"
+  )
+  for _fixed32_pair in "${_fixed32_exact_pairs[@]}"; do
+    IFS='|' read -r _fixed32_name _fixed32_actual _fixed32_expected \
+      <<< "$_fixed32_pair"
+    [[ "$_fixed32_actual" == "$_fixed32_expected" ]] || {
+      echo "fixed32 requires $_fixed32_name=$_fixed32_expected, got $_fixed32_actual" >&2
+      exit 2
+    }
+  done
+  [[ -z "$FR13_SERVE_BATCH_FLAGS" ]] \
+    || { echo "fixed32 forbids FR13_SERVE_BATCH_FLAGS" >&2; exit 2; }
+  PYTHONPATH="$REPO/scripts" .venv/bin/python - \
+    "$REPO" "$IMAGE" "$FORKED_FA2_SO" "$TREE" "$SPEC_CONFIG" <<'PY'
+import sys
+from pathlib import Path
+
+import fr13_fixed32_contract as contract
+
+repo, image, fa2_raw, tree, spec_config = sys.argv[1:]
+fa2 = Path(fa2_raw).resolve(strict=True)
+expected_fa2 = Path(repo).resolve() / contract.FA2_REPO_RELATIVE
+if image != contract.IMAGE_REFERENCE:
+    raise SystemExit(f"fixed32 image override is forbidden: {image!r}")
+contract._docker_image_record()
+if fa2 != expected_fa2:
+    raise SystemExit(f"fixed32 FA2 realpath mismatch: {fa2} != {expected_fa2}")
+if fa2.stat().st_size != contract.FA2_SIZE:
+    raise SystemExit("fixed32 FA2 size mismatch")
+if contract.sha256_file(fa2) != contract.FA2_SHA256:
+    raise SystemExit("fixed32 FA2 sha256 mismatch")
+if tree != contract.fixed32_tree_text():
+    raise SystemExit("fixed32 TREE text differs from canonical contract")
+if spec_config != contract.speculative_config_text():
+    raise SystemExit("fixed32 SPEC_CONFIG differs from canonical contract")
+PY
+  unset _fixed32_actual _fixed32_exact_pairs _fixed32_expected
+  unset _fixed32_expected_mem _fixed32_name _fixed32_pair
+fi
 
 mkdir -p "$LOG_DIR"
 LOG_DIR=$(realpath "$LOG_DIR")
+if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
+  [[ "${FR13_FIXED32_ENGINE_PID_FILE:-/logs/fr13_fixed32_engine_pid}" == \
+     "/logs/fr13_fixed32_engine_pid" ]] \
+    || { echo "fixed32 EngineCore PID path override is forbidden" >&2; exit 2; }
+  [[ "${FR13_FIXED32_FLUSH_REQUEST_PATH:-/logs/fr13_fixed32_flush_request.json}" == \
+     "/logs/fr13_fixed32_flush_request.json" ]] \
+    || { echo "fixed32 flush request path override is forbidden" >&2; exit 2; }
+  [[ "${FR13_FIXED32_FLUSH_ACK_PATH:-/logs/fr13_fixed32_flush_ack.json}" == \
+     "/logs/fr13_fixed32_flush_ack.json" ]] \
+    || { echo "fixed32 flush ack path override is forbidden" >&2; exit 2; }
+  [[ "${FR13_FIXED32_WORK_CENSUS_PATH:-/logs/fr13_fixed32_work_census.jsonl}" == \
+     "/logs/fr13_fixed32_work_census.jsonl" ]] \
+    || { echo "fixed32 work census path override is forbidden" >&2; exit 2; }
+  [[ "${FR13_FIXED32_BOUNDARY_SNAPSHOT_PATH:-/logs/fr13_fixed32_boundary_snapshot}" == \
+     "/logs/fr13_fixed32_boundary_snapshot" ]] \
+    || { echo "fixed32 boundary snapshot path override is forbidden" >&2; exit 2; }
+  FR13_FIXED32_ENGINE_PID_FILE=/logs/fr13_fixed32_engine_pid
+  FR13_FIXED32_FLUSH_REQUEST_PATH=/logs/fr13_fixed32_flush_request.json
+  FR13_FIXED32_FLUSH_ACK_PATH=/logs/fr13_fixed32_flush_ack.json
+  FR13_FIXED32_WORK_CENSUS_PATH=/logs/fr13_fixed32_work_census.jsonl
+  FR13_FIXED32_BOUNDARY_SNAPSHOT_PATH=/logs/fr13_fixed32_boundary_snapshot
+  export FR13_FIXED32_ENGINE_PID_FILE FR13_FIXED32_FLUSH_REQUEST_PATH
+  export FR13_FIXED32_FLUSH_ACK_PATH FR13_FIXED32_WORK_CENSUS_PATH
+  export FR13_FIXED32_BOUNDARY_SNAPSHOT_PATH
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_engine_pid" \
+    "$LOG_DIR/fr13_fixed32_flush_request.json" \
+    "$LOG_DIR/fr13_fixed32_flush_ack.json" \
+    "$LOG_DIR/fr13_fixed32_work_census.jsonl" \
+    "$LOG_DIR/fr13_fixed32_runtime_attestation.json" \
+    "$LOG_DIR"/fr13_fixed32_boundary_snapshot.*.json \
+    "$LOG_DIR/fr13_fixed32_mode.flag"
+  printf '%s\n' "$FR13_FIXED32_MODE" > "$LOG_DIR/fr13_fixed32_mode.flag"
+  printf '%s\n' \
+    "mode=$FR13_FIXED32_MODE" \
+    "pid=$FR13_FIXED32_ENGINE_PID_FILE" \
+    "request=$FR13_FIXED32_FLUSH_REQUEST_PATH" \
+    "ack=$FR13_FIXED32_FLUSH_ACK_PATH" \
+    "census=$FR13_FIXED32_WORK_CENSUS_PATH" \
+    "boundary=$FR13_FIXED32_BOUNDARY_SNAPSHOT_PATH" \
+    > "$LOG_DIR/fr13_fixed32_runtime_paths.txt"
+else
+  rm -f "$LOG_DIR/fr13_fixed32_mode.flag" 2>/dev/null || true
+fi
 # FR13_COMMITTER_NATIVE sidecar (worker-env-drop-proof): the EngineCore worker drops FR13_* env vars, so
 # fr10_gdn_tree_kernel reads this sidecar (written here in pid-1 where the env IS present). See its
 # _fr13_committer_native_on(). Removed when the flag is off so a stale file can't leak into a later boot.
@@ -422,6 +711,38 @@ if [[ "${FR13_COMMITTER_GRAPH:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_committer_graph.arm" 2>/dev/null || true
 fi
+# FR13_SUBTREE_PARALLEL sidecars. EngineCore receives a curated environment
+# that drops these FR13_* gates, so env-only reads silently select the
+# monolithic scan. The worker-visible /logs arms are the serving authority;
+# env reads remain supported by the kernel for offline/eager use.
+_fr13_subtree_parallel="${FR13_SUBTREE_PARALLEL:-1}"
+_fr13_subtree_selfcheck="${FR13_SUBTREE_PARALLEL_SELFCHECK:-0}"
+case "$_fr13_subtree_parallel" in
+  0|1) ;;
+  *) echo "FR13_SUBTREE_PARALLEL must be 0 or 1" >&2; exit 2 ;;
+esac
+case "$_fr13_subtree_selfcheck" in
+  0|1) ;;
+  *) echo "FR13_SUBTREE_PARALLEL_SELFCHECK must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "$_fr13_subtree_selfcheck" == "1" && "$_fr13_subtree_parallel" != "1" ]]; then
+  echo "FR13_SUBTREE_PARALLEL_SELFCHECK=1 requires FR13_SUBTREE_PARALLEL=1" >&2
+  exit 2
+fi
+if [[ "$_fr13_subtree_selfcheck" == "1" && "${ENFORCE_EAGER:-0}" != "1" ]]; then
+  echo "FR13_SUBTREE_PARALLEL_SELFCHECK=1 requires ENFORCE_EAGER=1" >&2
+  exit 2
+fi
+if [[ "$_fr13_subtree_parallel" == "1" ]]; then
+  : > "$LOG_DIR/fr13_subtree_parallel.arm"
+else
+  rm -f "$LOG_DIR/fr13_subtree_parallel.arm" 2>/dev/null || true
+fi
+if [[ "$_fr13_subtree_selfcheck" == "1" ]]; then
+  : > "$LOG_DIR/fr13_subtree_parallel_selfcheck.arm"
+else
+  rm -f "$LOG_DIR/fr13_subtree_parallel_selfcheck.arm" 2>/dev/null || true
+fi
 # FR13_COMMIT_ARGMAX_GATE sidecar (same worker-env-drop workaround): the worker curation drops the flag
 # (keeps only *_DUMP). The patched rejection_sampler reads this sidecar OR the (dropped) env.
 if [[ "${FR13_COMMIT_ARGMAX_GATE:-0}" == "1" ]]; then
@@ -454,6 +775,15 @@ if [[ "${FR13_TAIL_MODE:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_tail_mode.arm" 2>/dev/null || true
 fi
+# HYDRA23 exact-shape sidecar. The worker strips FR13_* variables, while the
+# patched drafter must fail loud if its full-path Arctic columns are paired
+# with any other tree.
+if [[ "${FR13_HYDRA23:-0}" == "1" ]]; then
+  : > "$LOG_DIR/fr13_hydra23.arm"
+  echo "[launch] HYDRA23 ON -> /logs/fr13_hydra23.arm (root-rank1 rescue chain length 4)"
+else
+  rm -f "$LOG_DIR/fr13_hydra23.arm" 2>/dev/null || true
+fi
 # Direction-2 d6-branch: bridge FR13_TAIL_BRANCHES/DEPTHS past the worker env-strip via a /logs sidecar
 # (value-carrying, like the prewarm corpus). decide_tail reads "<branches> <depths>". Absent => spine-only.
 if [[ -n "${FR13_TAIL_BRANCHES:-}" && "${FR13_TAIL_BRANCHES:-0}" != "0" ]]; then
@@ -472,7 +802,7 @@ fi
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 
 set -a
-if [[ -f "$REPO/.lumo.local.env" ]]; then
+if (( _FR13_LOCAL_ENV_SOURCED == 0 )) && [[ -f "$REPO/.lumo.local.env" ]]; then
   source "$REPO/.lumo.local.env"
 fi
 set +a
@@ -572,7 +902,7 @@ while IFS= read -r _v; do
   FR13_ENV_FORWARD_ARGS+=( -e "${_v}=${!_v}" )
 done < <(compgen -v | grep -E '^(FR[0-9]+_|LUMO_|VLLM_)' | sort)
 
-docker run -d --name "$CONTAINER" --gpus all --ipc=host \
+docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   --memory="$DOCKER_MEM_CAP" --memory-swap="$DOCKER_MEM_CAP" \
   --cap-add=SYS_PTRACE \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
@@ -831,16 +1161,34 @@ import os
 import subprocess
 import sys
 
-# FR13 merged drafter (MTP-k spine + Arctic suffix-decoding grow-to-cat33333):
-# install the REAL Snowflake suffix cache (arctic_inference.suffix_decoding.
-# SuffixDecodingCache, surfaced by vllm.v1.spec_decode.suffix_decoding) IN THE
-# CONTAINER. Arctic builds a C++ ext + pulls torch at build, so it must live in
-# the vLLM image -- the host CPU-venv build fails. Guarded TWO ways:
-#   (1) NO-OP unless FR13_DRAFT_SOURCE=merged  (default 'mtp' => byte-identical
-#       locked cat9 path, ZERO install, ZERO new deps);
-#   (2) NO-OP when arctic_inference is already present (idempotent reboots).
-# Pattern: git 29116417 run_track_b_loop.py:1165 (proven Round-2/Track-B install).
-if os.environ.get('FR13_DRAFT_SOURCE', 'mtp') != 'merged':
+# FR13 merged drafter (MTP-k spine + Arctic suffix decoding). Fixed32 always
+# reinstalls the exact hash-pinned source and fails closed on import/version
+# drift. Legacy merged arms retain their historical best-effort behavior.
+fixed32 = bool(os.environ.get('FR13_FIXED32_MODE'))
+if fixed32:
+    sys.path.insert(0, '/workspace/scripts')
+    import fr13_fixed32_contract as contract
+
+    print('[FR13-PRELAUNCH] installing hash-pinned Arctic for fixed32')
+    subprocess.run([
+        sys.executable, '-m', 'pip', 'install',
+        '--disable-pip-version-check', '--force-reinstall', '--no-deps',
+        contract.ARCTIC_PINNED_REQUIREMENT,
+    ], check=True)
+    from arctic_inference.suffix_decoding import SuffixDecodingCache
+    import importlib.metadata
+
+    version = importlib.metadata.version('arctic-inference')
+    if version != contract.ARCTIC_VERSION:
+        raise SystemExit(
+            f'fixed32 Arctic version mismatch: {version} != {contract.ARCTIC_VERSION}'
+        )
+    print(
+        '[FR13-PRELAUNCH] fixed32 Arctic pinned OK '
+        f'version={version} cache={SuffixDecodingCache.__module__}.'
+        f'{SuffixDecodingCache.__qualname__}'
+    )
+elif os.environ.get('FR13_DRAFT_SOURCE', 'mtp') != 'merged':
     print('[FR13-PRELAUNCH] FR13_DRAFT_SOURCE!=merged -- skipping arctic-inference install')
 elif importlib.util.find_spec('arctic_inference') is None:
     print('[FR13-PRELAUNCH] installing arctic-inference for suffix decoding (merged drafter)')
@@ -858,6 +1206,10 @@ elif importlib.util.find_spec('arctic_inference') is None:
 else:
     print('[FR13-PRELAUNCH] arctic-inference already available')
 PY
+if [[ -n \"\${FR13_FIXED32_MODE:-}\" ]]; then
+  python3 /workspace/scripts/fr13_fixed32_contract.py runtime-attestation \
+    --output /logs/fr13_fixed32_runtime_attestation.json
+fi
 NSYS_PREFIX=()
 case \"\${LUMO_NSYS_WRAP_VLLM,,}\" in
   1|true|yes|on)

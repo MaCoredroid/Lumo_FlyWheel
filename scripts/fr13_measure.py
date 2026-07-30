@@ -1866,9 +1866,9 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "fullstep_alignment_ratio": fullstep_alignment_ratio,
         "fullstep_alignment_ratio_note": (
             "derived_tps_fullstep_gpu / measured_tps_fullstep_wall. Post-fix (2026-07-22) this "
-            "should sit close to but somewhat below 1 -- the residual gap is REAL host overhead "
+            "should sit close to but somewhat above 1 -- the residual gap is REAL host overhead "
             "(overhead_other_ms_per_event) that the GPU-only derived basis structurally excludes, "
-            "not a unit-mismatch artifact. A ratio still far below 1 (e.g. <0.8) after the fix "
+            "not a unit-mismatch artifact. A ratio still far above 1 (e.g. >1.2) after the fix "
             "warrants investigating overhead_other_ms_per_event directly."
         ),
         # FR13_DFWD/CFWD_GPU_TIMER component spans (where the tree overhead

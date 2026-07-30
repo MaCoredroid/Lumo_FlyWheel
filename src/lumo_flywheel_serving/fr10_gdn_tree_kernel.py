@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 from dataclasses import dataclass
+
+import torch
+import triton
+import triton.language as tl
 
 
 _FR13_COMMITTER_NATIVE_ANNOUNCED = False
@@ -17,12 +23,6 @@ def _fr13_committer_native_on() -> bool:
         if os.path.exists(_p):
             return True
     return False
-
-
-import torch
-import triton
-import triton.language as tl
-
 
 NODE_FAMILIES = (2, 3, 6, 8, 14)
 QK_HEADS = 16
@@ -257,16 +257,279 @@ def subtree_parallel_on() -> bool:
     and HC_INTERNAL when ON (there is no h_cache to optimize).
     """
     raw = os.environ.get("FR13_SUBTREE_PARALLEL", "")
-    return raw.strip().lower() in ("1", "true", "yes", "on")
+    if raw.strip().lower() in ("1", "true", "yes", "on"):
+        return True
+    return any(
+        os.path.exists(path)
+        for path in (
+            "/logs/fr13_subtree_parallel.arm",
+            "/tmp/fr13_subtree_parallel.arm",
+        )
+    )
 
 
 def subtree_parallel_selfcheck_on() -> bool:
     """In-process byte gate: monolith -> out_ref vs path route -> out."""
     raw = os.environ.get("FR13_SUBTREE_PARALLEL_SELFCHECK", "")
-    return raw.strip().lower() in ("1", "true", "yes", "on")
+    if raw.strip().lower() in ("1", "true", "yes", "on"):
+        return True
+    return any(
+        os.path.exists(path)
+        for path in (
+            "/logs/fr13_subtree_parallel_selfcheck.arm",
+            "/tmp/fr13_subtree_parallel_selfcheck.arm",
+        )
+    )
+
+
+_FR13_FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
+_FR13_FIXED32_MODE_SIDECARS = (
+    "/logs/fr13_fixed32_mode.flag",
+    "/tmp/fr13_fixed32_mode.flag",
+)
+
+
+def _fr13_resolve_fixed32_mode() -> str | None:
+    """Resolve a single fixed32 route from env and worker-visible sidecars.
+
+    The EngineCore worker may receive a curated environment, so the launcher
+    can persist the exact mode string in a sidecar. Multiple sources are
+    accepted only when they agree. A malformed, unreadable, or conflicting
+    source is a configuration error, never permission to use a legacy route.
+    """
+    sources: list[tuple[str, str]] = []
+    raw_env = os.environ.get("FR13_FIXED32_MODE")
+    if raw_env is not None and raw_env.strip():
+        sources.append(("env:FR13_FIXED32_MODE", raw_env.strip()))
+    for path in _FR13_FIXED32_MODE_SIDECARS:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="ascii") as handle:
+                raw_sidecar = handle.read(128)
+        except (OSError, UnicodeError) as error:
+            raise RuntimeError(
+                f"FR13_FIXED32_MODE: cannot read sidecar {path}: {error}"
+            ) from error
+        if len(raw_sidecar) >= 128:
+            raise RuntimeError(
+                f"FR13_FIXED32_MODE: sidecar {path} exceeds 127 bytes"
+            )
+        sources.append((f"sidecar:{path}", raw_sidecar.strip()))
+    if not sources:
+        armed_features = [
+            feature
+            for feature in (
+                "FR13_FIXED32_KV_REMAP16",
+                "FR13_FIXED32_COMMIT_DEVICE_FILL",
+            )
+            if os.environ.get(feature, "").strip() == "1"
+        ]
+        if armed_features:
+            raise RuntimeError(
+                "FR13_FIXED32_MODE is missing while fixed32 feature flags "
+                f"are armed: {armed_features}"
+            )
+        return None
+    invalid = [(source, value) for source, value in sources
+               if value not in _FR13_FIXED32_MODES]
+    if invalid:
+        raise RuntimeError(
+            "FR13_FIXED32_MODE: invalid fixed32 route source(s): "
+            + ", ".join(f"{source}={value!r}" for source, value in invalid)
+        )
+    modes = {value for _source, value in sources}
+    if len(modes) != 1:
+        raise RuntimeError(
+            "FR13_FIXED32_MODE: conflicting route sources: "
+            + ", ".join(f"{source}={value!r}" for source, value in sources)
+        )
+    mode = modes.pop()
+    for feature in (
+        "FR13_FIXED32_KV_REMAP16",
+        "FR13_FIXED32_COMMIT_DEVICE_FILL",
+    ):
+        raw_feature = os.environ.get(feature)
+        if raw_feature is not None and raw_feature.strip() not in ("", "1"):
+            raise RuntimeError(
+                f"{feature}={raw_feature!r} conflicts with armed fixed32 mode"
+            )
+    return mode
+
+
+_FR13_FIXED32_MODE = _fr13_resolve_fixed32_mode()
+_FR13_SUBTREE_ROUTE_REQUESTED = (
+    subtree_parallel_on() or _FR13_FIXED32_MODE is not None
+)
+_FR13_SUBTREE_SELFCHECK_REQUESTED = subtree_parallel_selfcheck_on()
+if _FR13_SUBTREE_SELFCHECK_REQUESTED and not _FR13_SUBTREE_ROUTE_REQUESTED:
+    raise RuntimeError(
+        "FR13_SUBTREE_PARALLEL_SELFCHECK is armed while the path route "
+        "is disabled"
+    )
 
 
 _FR13_SUBTREE_CACHE: dict = {}
+
+
+def _subtree_cache_key(
+    n_actual: int, vh: int, dv: int, dk: int, device
+) -> tuple:
+    """Shape/device-complete key for graph-stable path tensors and scratch."""
+    return (
+        "subtree",
+        int(n_actual),
+        int(vh),
+        int(dv),
+        int(dk),
+        str(torch.device(device)),
+    )
+
+
+# Exact Hydra23 verifier parent vector (implicit root + 23 draft nodes).
+# The device-length path kernel executes only real nodes, so all nine paths
+# whose parents are produced by the root prefix can share level 1. This keeps
+# the dependency length (4 + 8 = 12), exports only nodes {0, 1, 4, 8}, and
+# needs two launches. Every other topology uses the generic decomposition.
+_FR13_HYDRA23_PARENT = (
+    -1, 0, 0, 0, 1, 1, 1, 2, 4, 4, 4, 7,
+    8, 8, 8, 11, 12, 15, 16, 18, 19, 20, 21, 22,
+)
+_FR13_HYDRA23_SUBTREE_LEVELS = (
+    (
+        ((0, 1, 4, 8), -1),
+    ),
+    (
+        ((12, 16, 18, 19, 20, 21, 22, 23), 8),
+        ((2, 7, 11, 15, 17), 0),
+        ((3,), 0),
+        ((5,), 1),
+        ((6,), 1),
+        ((9,), 4),
+        ((10,), 4),
+        ((13,), 8),
+        ((14,), 8),
+    ),
+)
+
+# Exact root-inclusive fixed32 physical topology. Both logical modes use these
+# rows and differ only in the sampler validity mask.
+_FR13_FIXED32_PARENT = (
+    -1, 0, 0, 0, 1, 1, 1, 2, 3, 4, 4, 4, 7, 8, 9, 9,
+    9, 12, 13, 14, 14, 14, 17, 18, 19, 23, 24, 25, 26, 28, 29, 30,
+)
+_FR13_FIXED32_SUBTREE_LEVELS = (
+    (
+        ((0, 1, 4, 9, 14), -1),
+    ),
+    (
+        ((19, 24, 26, 28, 29, 30, 31), 14),
+        ((2, 7, 12, 17, 22), 0),
+        ((3, 8, 13, 18, 23, 25, 27), 0),
+        ((5,), 1),
+        ((6,), 1),
+        ((10,), 4),
+        ((11,), 4),
+        ((15,), 9),
+        ((16,), 9),
+        ((20,), 14),
+        ((21,), 14),
+    ),
+)
+_FR13_FIXED32_PARENT_SHA256 = (
+    "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd"
+)
+_FR13_FIXED32_ANCESTRY_SHA256 = (
+    "90873d81e83ce1644ee4701e043b7e9d26e83b7a7ca752d538a0e6eed1946dad"
+)
+_FR13_FIXED32_LEVELS_SHA256 = (
+    "65d91ed364a87abd50d184d902c5d045c4eebf77d172610707fc419667099311"
+)
+_FR13_FIXED32_COVERAGE_SHA256 = (
+    "23b22df6bf551a4e788327db3b3d3d96e1eca49078d2c6bd0049da2d390eca8b"
+)
+
+
+def _fr13_canonical_sha256(value) -> str:
+    payload = json.dumps(
+        value, ensure_ascii=True, separators=(",", ":")
+    ).encode("ascii")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _fr13_tree_ancestry(parent) -> tuple[tuple[int, ...], ...]:
+    parent_tuple = tuple(int(value) for value in parent)
+    rows = []
+    for node in range(len(parent_tuple)):
+        visible = [0] * len(parent_tuple)
+        cursor = node
+        while cursor >= 0:
+            visible[cursor] = 1
+            cursor = parent_tuple[cursor]
+        rows.append(tuple(visible))
+    return tuple(rows)
+
+
+def _fr13_fixed32_schedule_contract(levels) -> dict[str, object]:
+    """Validate and summarize the exact fixed32 execution schedule."""
+    normalized = tuple(
+        tuple((tuple(int(node) for node in path), int(parent))
+              for path, parent in level)
+        for level in levels
+    )
+    coverage = tuple(sorted(
+        node
+        for level in normalized
+        for path, _parent in level
+        for node in path
+    ))
+    path_counts = tuple(len(level) for level in normalized)
+    max_lengths = tuple(
+        max(len(path) for path, _parent in level) for level in normalized
+    )
+    padded_slots = sum(
+        count * length
+        for count, length in zip(path_counts, max_lengths, strict=True)
+    )
+    export_or_mask = sum(
+        1 << int(parent)
+        for level in normalized[1:]
+        for _path, parent in level
+    )
+    contract = {
+        "path_counts": path_counts,
+        "max_lengths": max_lengths,
+        "launches": len(normalized),
+        "programs": sum(path_counts),
+        "padded_slots": padded_slots,
+        "critical": sum(max_lengths),
+        "export_or_mask": export_or_mask,
+        "parent_sha256": _fr13_canonical_sha256(_FR13_FIXED32_PARENT),
+        "ancestry_sha256": _fr13_canonical_sha256(
+            _fr13_tree_ancestry(_FR13_FIXED32_PARENT)
+        ),
+        "levels_sha256": _fr13_canonical_sha256(normalized),
+        "coverage_sha256": _fr13_canonical_sha256(coverage),
+    }
+    expected = {
+        "path_counts": (1, 11),
+        "max_lengths": (5, 7),
+        "launches": 2,
+        "programs": 12,
+        "padded_slots": 82,
+        "critical": 12,
+        "export_or_mask": 16915,
+        "parent_sha256": _FR13_FIXED32_PARENT_SHA256,
+        "ancestry_sha256": _FR13_FIXED32_ANCESTRY_SHA256,
+        "levels_sha256": _FR13_FIXED32_LEVELS_SHA256,
+        "coverage_sha256": _FR13_FIXED32_COVERAGE_SHA256,
+    }
+    if contract != expected or coverage != tuple(range(32)):
+        raise RuntimeError(
+            "FR13_FIXED32: exact GDN schedule contract mismatch "
+            f"actual={contract!r} coverage={coverage!r}"
+        )
+    return contract
 
 
 def _subtree_decompose(parent) -> list:
@@ -278,6 +541,19 @@ def _subtree_decompose(parent) -> list:
     root's parent node always lives in an EARLIER level -> one launch per
     level with an fp32 state export between levels.
     """
+    parent = [int(p) for p in parent]
+    fixed32_parent = globals().get("_FR13_FIXED32_PARENT")
+    if fixed32_parent is not None and tuple(parent) == fixed32_parent:
+        return [
+            [(list(path), int(par)) for path, par in level]
+            for level in _FR13_FIXED32_SUBTREE_LEVELS
+        ]
+    if tuple(parent) == _FR13_HYDRA23_PARENT:
+        return [
+            [(list(path), int(par)) for path, par in level]
+            for level in _FR13_HYDRA23_SUBTREE_LEVELS
+        ]
+
     n = len(parent)
     children: list = [[] for _ in range(n)]
     for i in range(1, n):
@@ -309,24 +585,133 @@ def _subtree_decompose(parent) -> list:
     return levels
 
 
+def _validate_subtree_decomposition(parent, levels) -> None:
+    """Fail before capture if a static path descriptor violates tree order."""
+    parent = tuple(int(p) for p in parent)
+    expected = set(range(len(parent)))
+    seen: set[int] = set()
+    earlier: set[int] = set()
+    if not levels:
+        raise ValueError("FR13_SUBTREE_PARALLEL: empty decomposition")
+
+    for level_idx, level in enumerate(levels):
+        if not level:
+            raise ValueError(
+                f"FR13_SUBTREE_PARALLEL: empty level {level_idx}"
+            )
+        current: set[int] = set()
+        for raw_path, raw_par in level:
+            path = [int(node) for node in raw_path]
+            par = int(raw_par)
+            if not path:
+                raise ValueError(
+                    f"FR13_SUBTREE_PARALLEL: empty path in level {level_idx}"
+                )
+            root = path[0]
+            if root not in expected:
+                raise ValueError(
+                    f"FR13_SUBTREE_PARALLEL: node {root} out of range"
+                )
+            if int(parent[root]) != par:
+                raise ValueError(
+                    "FR13_SUBTREE_PARALLEL: path root/parent mismatch "
+                    f"root={root} descriptor={par} tree={parent[root]}"
+                )
+            if par < 0 and (root != 0 or par != -1):
+                raise ValueError(
+                    "FR13_SUBTREE_PARALLEL: invalid root path "
+                    f"root={root} parent={par}"
+                )
+            if par >= 0 and par not in earlier:
+                raise ValueError(
+                    "FR13_SUBTREE_PARALLEL: path parent is not in an "
+                    f"earlier level root={root} parent={par} level={level_idx}"
+                )
+            if len(set(path)) != len(path):
+                raise ValueError(
+                    "FR13_SUBTREE_PARALLEL: duplicate node within path "
+                    f"{path}"
+                )
+            for prev, node in zip(path, path[1:]):
+                if node not in expected or int(parent[node]) != prev:
+                    raise ValueError(
+                        "FR13_SUBTREE_PARALLEL: non-parent path edge "
+                        f"{prev}->{node}"
+                    )
+            overlap = seen.intersection(path) | current.intersection(path)
+            if overlap:
+                raise ValueError(
+                    "FR13_SUBTREE_PARALLEL: duplicate nodes "
+                    f"{sorted(overlap)}"
+                )
+            current.update(path)
+        seen.update(current)
+        earlier.update(current)
+
+    if seen != expected:
+        raise ValueError(
+            "FR13_SUBTREE_PARALLEL: decomposition coverage mismatch "
+            f"missing={sorted(expected - seen)} extra={sorted(seen - expected)}"
+        )
+
+
 def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
                     device) -> None:
     """Preseed path tensors + the fp32 state-export buffer at builder init
     (outside capture; the tree-decode-first-call-inside-capture class)."""
-    key = ("subtree", int(n_actual))
+    parent_tuple = tuple(int(p) for p in parent)
+    if len(parent_tuple) != int(n_actual):
+        raise ValueError(
+            "FR13_SUBTREE_PARALLEL: parent length mismatch "
+            f"len={len(parent_tuple)} n_actual={n_actual}"
+        )
+    if (
+        _FR13_FIXED32_MODE is not None
+        and parent_tuple != _FR13_FIXED32_PARENT
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32: armed runtime offered a non-fixed physical tree "
+            f"mode={_FR13_FIXED32_MODE!r} n_actual={n_actual} "
+            f"parent_sha256={_fr13_canonical_sha256(parent_tuple)}"
+        )
+    key = _subtree_cache_key(n_actual, vh, dv, dk, device)
     if key in _FR13_SUBTREE_CACHE:
+        if _FR13_SUBTREE_CACHE[key].get("parent") != parent_tuple:
+            raise RuntimeError(
+                "FR13_SUBTREE_PARALLEL: shape/device cache collision for "
+                f"different parent vectors (key={key!r})"
+            )
         return
-    levels = _subtree_decompose([int(p) for p in parent])
+    levels = _subtree_decompose(parent_tuple)
+    _validate_subtree_decomposition(parent_tuple, levels)
+    fixed_contract = None
+    if parent_tuple == _FR13_FIXED32_PARENT:
+        fixed_contract = _fr13_fixed32_schedule_contract(levels)
+        schedule = "fixed32"
+    elif parent_tuple == _FR13_HYDRA23_PARENT:
+        schedule = "hydra23_floor"
+    else:
+        schedule = "heavy_path"
+    route_armed = _FR13_SUBTREE_ROUTE_REQUESTED
+    selfcheck_armed = _FR13_SUBTREE_SELFCHECK_REQUESTED
     dev_levels = []
     for lvl in levels:
         max_len = max(len(p) for p, _ in lvl)
         nodes = torch.full((len(lvl), max_len), -1, dtype=torch.int32)
         pars = torch.empty(len(lvl), dtype=torch.int32)
+        lengths = torch.empty(len(lvl), dtype=torch.int32)
         for i, (p, par) in enumerate(lvl):
             nodes[i, : len(p)] = torch.tensor(p, dtype=torch.int32)
             pars[i] = par
+            lengths[i] = len(p)
         dev_levels.append(
-            (nodes.to(device), pars.to(device), max_len, len(lvl))
+            (
+                nodes.to(device),
+                pars.to(device),
+                max_len,
+                len(lvl),
+                lengths.to(device),
+            )
         )
     # export mask: nodes that are some later-level path root's parent
     need = set()
@@ -345,24 +730,57 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
         "emask": emask.to(device),
         "export": export,
         "n_levels": len(levels),
-        "critical": sum(l[2] for l in dev_levels),
+        "critical": sum(level[2] for level in dev_levels),
+        "parent": parent_tuple,
+        "schedule": schedule,
+        "fixed32_contract": fixed_contract,
+        "route_armed": route_armed,
+        "selfcheck_armed": selfcheck_armed,
+        "engaged_announced": False,
+        "selfcheck_pass_announced": False,
     }
     print(
-        f"[FR13_SUBTREE_PARALLEL] preseeded: n={n_actual} levels="
-        f"{[l[3] for l in dev_levels]} lens={[l[2] for l in dev_levels]} "
-        f"critical={sum(l[2] for l in dev_levels)} (monolith {n_actual})",
+        f"[FR13_SUBTREE_PARALLEL] preseeded: n={n_actual} "
+        f"schedule={schedule} levels="
+        f"{[level[3] for level in dev_levels]} "
+        f"lens={[level[2] for level in dev_levels]} "
+        f"critical={sum(level[2] for level in dev_levels)} "
+        f"(monolith {n_actual}) "
+        f"route_armed={int(route_armed)} "
+        f"selfcheck_armed={int(selfcheck_armed)}",
         flush=True,
     )
 
 
-def subtree_get(n_actual: int):
-    st = _FR13_SUBTREE_CACHE.get(("subtree", int(n_actual)))
+def subtree_get(n_actual: int, vh: int, dv: int, dk: int, device):
+    st = _FR13_SUBTREE_CACHE.get(
+        _subtree_cache_key(n_actual, vh, dv, dk, device)
+    )
     if st is None:
         raise RuntimeError(
-            f"FR13_SUBTREE_PARALLEL: no preseed for n_actual={n_actual} "
+            "FR13_SUBTREE_PARALLEL: no preseed for "
+            f"n_actual={n_actual} shape=({vh},{dv},{dk}) device={device} "
             "(builder-init wiring missing; cannot derive inside capture)"
         )
     return st
+
+
+def fixed32_offline_selftest() -> dict[str, object]:
+    """Pure CPU validation for topology, coverage, and fixed work counts."""
+    levels = _subtree_decompose(_FR13_FIXED32_PARENT)
+    _validate_subtree_decomposition(_FR13_FIXED32_PARENT, levels)
+    contract = _fr13_fixed32_schedule_contract(levels)
+    normalized = tuple(
+        tuple((tuple(path), parent) for path, parent in level)
+        for level in levels
+    )
+    if normalized != _FR13_FIXED32_SUBTREE_LEVELS:
+        raise AssertionError("fixed32 decomposition did not select exact levels")
+    return {
+        "mode_values": tuple(sorted(_FR13_FIXED32_MODES)),
+        "rows": len(_FR13_FIXED32_PARENT),
+        **contract,
+    }
 
 
 def hc_slot_map_get(n_actual: int, n_pad: int, device) -> torch.Tensor:
@@ -777,7 +1195,8 @@ def _fr13_span_end(prefix: str, start_ev) -> None:
             st["acc"][1] += 1
         except Exception:
             pass
-    import json as _sj, time as _st
+    import json as _sj
+    import time as _st
     out = os.environ.get(prefix + "_JSON")
     if out and (_st.monotonic() - st["last"][0]) > 5.0:
         st["last"][0] = _st.monotonic()
@@ -832,9 +1251,10 @@ def launch_tree_state_linear_remap(
 def _fr13_conv_col0_pregather_kernel(
     anchor_ptr,        # layer-0 conv bank base (elements of DTYPE)
     off16_ptr,         # [L] int64: (ptr_l - ptr_0) // 16
-    ssi_ptr,           # [L, B_STRIDE0/...] int32 stacked spec_state_indices
-    ssi_stride_l, ssi_stride_b,
+    ssi_ptrs,          # [L] int64: live group-local SSI base pointers
+    ssi_strides,       # [L] int64: live SSI batch strides in int32 elements
     out_ptr,           # [L, B, ROW_ELEMS] staging (same dtype as banks)
+    out_stride_l, out_stride_b,
     row_stride,        # conv bank ROW stride in elements (page stride)
     s1, s2,            # conv bank C/L strides in elements
     ROW_ELEMS: tl.constexpr,   # C * CONV_L (LOGICAL conv elements only)
@@ -853,7 +1273,12 @@ def _fr13_conv_col0_pregather_kernel(
         return
     off16 = tl.load(off16_ptr + pid_l)
     base = anchor_ptr + off16 * (16 // ELEM_BYTES)
-    row = tl.load(ssi_ptr + pid_l * ssi_stride_l + pid_b * ssi_stride_b)
+    # SSI is a scalar int32 load, so the raw-pointer table does not affect the
+    # bank copy's vectorization/alignment contract. Each pointer names the
+    # full-capacity group tensor that the metadata builder refreshes before
+    # every graph replay.
+    ssi_ptr = tl.load(ssi_ptrs + pid_l).to(tl.pointer_type(tl.int32))
+    row = tl.load(ssi_ptr + pid_b * tl.load(ssi_strides + pid_l))
     offs = pid_c * BLOCK + tl.arange(0, BLOCK)
     mask = offs < ROW_ELEMS
     c_idx = offs // CONV_L
@@ -862,10 +1287,621 @@ def _fr13_conv_col0_pregather_kernel(
         base + row.to(tl.int64) * row_stride + c_idx * s1 + l_idx * s2,
         mask=mask,
     )
-    tl.store(out_ptr + (pid_l * B + pid_b) * ROW_ELEMS + offs, vals, mask=mask)
+    tl.store(
+        out_ptr + pid_l * out_stride_l + pid_b * out_stride_b + offs,
+        vals,
+        mask=mask,
+    )
 
 
 _FR13_CONV_PREGATHER: dict = {}
+_FR13_FIXED32_CONV_PREGATHER: dict = {}
+_FR13_FIXED32_CONV_SSI_GROUPS: dict[tuple[str, ...], dict[str, object]] = {}
+_FR13_FIXED32_BATCHES = (1, 2, 3, 4)
+
+
+def register_fixed32_conv_col0_ssi_group(
+    *,
+    layer_names,
+    spec_state_indices: torch.Tensor,
+    max_batch_size: int,
+) -> None:
+    """Register one builder-owned, replay-refreshed SSI tensor.
+
+    Qwen3-Next exposes three GDN KV-cache groups. Each builder owns one
+    full-capacity ``spec_state_indices_tensor`` and refreshes it before model
+    forward/replay. Repeated builder construction replaces the same group
+    registration until pregather preseed freezes the final three-group map.
+    """
+    if _FR13_FIXED32_MODE is None:
+        return
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_PREGATHER SSI group registration during capture"
+        )
+    names = tuple(sorted(str(name) for name in layer_names))
+    capacity = int(max_batch_size)
+    if (
+        not names
+        or len(names) != len(set(names))
+        or capacity not in _FR13_FIXED32_BATCHES
+        or not torch.is_tensor(spec_state_indices)
+        or spec_state_indices.device.type != "cuda"
+        or spec_state_indices.dtype != torch.int32
+        or spec_state_indices.ndim != 2
+        or int(spec_state_indices.shape[0]) < capacity
+        or int(spec_state_indices.shape[1]) < 1
+        or any(int(value) <= 0 for value in spec_state_indices.stride())
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_PREGATHER invalid builder-owned SSI group: "
+            f"layers={names!r} capacity={capacity} "
+            f"shape={getattr(spec_state_indices, 'shape', None)!r}"
+        )
+    state = _FR13_FIXED32_CONV_PREGATHER.get("state")
+    prior = _FR13_FIXED32_CONV_SSI_GROUPS.get(names)
+    if state is not None and (
+        prior is None
+        or int(prior["data_ptr"]) != int(spec_state_indices.data_ptr())
+        or tuple(prior["stride"])
+        != tuple(int(value) for value in spec_state_indices.stride())
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_PREGATHER builder SSI group changed after preseed"
+        )
+    for other_names in _FR13_FIXED32_CONV_SSI_GROUPS:
+        if other_names != names and set(other_names).intersection(names):
+            raise RuntimeError(
+                "FR13_FIXED32_CONV_PREGATHER layer moved between SSI groups"
+            )
+    _FR13_FIXED32_CONV_SSI_GROUPS[names] = {
+        "layers": names,
+        "tensor": spec_state_indices,
+        "capacity": capacity,
+        "shape": tuple(int(value) for value in spec_state_indices.shape),
+        "stride": tuple(int(value) for value in spec_state_indices.stride()),
+        "data_ptr": int(spec_state_indices.data_ptr()),
+    }
+
+
+def _validate_fixed32_conv_pregather_preseed(
+    *,
+    conv_banks,
+    layer_order,
+    max_batch_size: int,
+) -> tuple[
+    torch.Tensor,
+    list[int],
+    int,
+    int,
+    int,
+    tuple[torch.Tensor, ...],
+]:
+    """Validate and materialize the fixed32 pregather pointer contract once."""
+    if _FR13_FIXED32_MODE is None:
+        raise RuntimeError(
+            "fixed32 conv pregather preseed requires FR13_FIXED32_MODE"
+        )
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_PREGATHER preseed called inside capture"
+        )
+    if not isinstance(conv_banks, (list, tuple)) or len(conv_banks) != 48:
+        raise ValueError(
+            "FR13_FIXED32_CONV_PREGATHER requires exactly 48 conv banks"
+        )
+    capacity = int(max_batch_size)
+    if capacity not in _FR13_FIXED32_BATCHES:
+        raise ValueError(
+            "FR13_FIXED32_CONV_PREGATHER max_batch_size must be 1..4, "
+            f"got {capacity}"
+        )
+    order = tuple(str(name) for name in layer_order)
+    groups = tuple(_FR13_FIXED32_CONV_SSI_GROUPS.values())
+    registered_layers = {
+        name: group["tensor"]
+        for group in groups
+        for name in group["layers"]
+    }
+    if (
+        len(order) != 48
+        or len(set(order)) != 48
+        or len(groups) != 3
+        or set(registered_layers) != set(order)
+        or any(int(group["capacity"]) < capacity for group in groups)
+    ):
+        raise ValueError(
+            "FR13_FIXED32_CONV_PREGATHER requires exactly three builder SSI "
+            f"groups covering the 48-layer order: groups={len(groups)} "
+            f"registered={len(registered_layers)} order={len(order)}"
+        )
+    ssi_sources = tuple(registered_layers[name] for name in order)
+
+    anchor = conv_banks[0]
+    if not torch.is_tensor(anchor) or anchor.ndim != 3:
+        raise ValueError(
+            "FR13_FIXED32_CONV_PREGATHER bank[0] must be a 3D tensor"
+        )
+    if anchor.device.type != "cuda" or any(
+        source.device != anchor.device for source in ssi_sources
+    ):
+        raise ValueError(
+            "FR13_FIXED32_CONV_PREGATHER requires one CUDA device, got "
+            f"banks={anchor.device}"
+        )
+    element_bytes = anchor.element_size()
+    if element_bytes <= 0 or 16 % element_bytes:
+        raise ValueError(
+            "FR13_FIXED32_CONV_PREGATHER element size must divide 16, got "
+            f"{element_bytes}"
+        )
+    shape = tuple(int(value) for value in anchor.shape)
+    stride = tuple(int(value) for value in anchor.stride())
+    pointers = []
+    for index, bank in enumerate(conv_banks):
+        if not torch.is_tensor(bank):
+            raise TypeError(
+                f"FR13_FIXED32_CONV_PREGATHER bank[{index}] is not a tensor"
+            )
+        if (
+            bank.device != anchor.device
+            or bank.dtype != anchor.dtype
+            or tuple(int(value) for value in bank.shape) != shape
+            or tuple(int(value) for value in bank.stride()) != stride
+        ):
+            raise ValueError(
+                "FR13_FIXED32_CONV_PREGATHER bank contract mismatch at "
+                f"index {index}"
+            )
+        pointer = int(bank.data_ptr())
+        if pointer % 16:
+            raise ValueError(
+                "FR13_FIXED32_CONV_PREGATHER bank pointer is not 16-byte "
+                f"aligned at index {index}: {pointer:#x}"
+            )
+        if any(int(value) <= 0 for value in bank.stride()):
+            raise ValueError(
+                "FR13_FIXED32_CONV_PREGATHER bank strides must be positive at "
+                f"index {index}: {tuple(int(value) for value in bank.stride())}"
+            )
+        pointers.append(pointer)
+    return (
+        anchor,
+        pointers,
+        shape[1] * shape[2],
+        shape[2],
+        element_bytes,
+        ssi_sources,
+    )
+
+
+def preseed_fixed32_conv_col0_pregather(
+    *,
+    conv_banks,
+    layer_order,
+    max_batch_size: int,
+) -> dict[str, object]:
+    """Build the pointer table and warm B1 through the server capacity.
+
+    This is the only fixed32 entry allowed to inspect conv-bank ``data_ptr``
+    values. Call it after all 48 banks and the three builder-owned persistent
+    SSI groups are registered, but before any measured request can run.
+    """
+    capacity = int(max_batch_size)
+    batches = tuple(range(1, capacity + 1))
+    (
+        anchor,
+        pointers,
+        row_elems,
+        conv_l,
+        element_bytes,
+        ssi_sources,
+    ) = (
+        _validate_fixed32_conv_pregather_preseed(
+            conv_banks=conv_banks,
+            layer_order=layer_order,
+            max_batch_size=capacity,
+        )
+    )
+    existing = _FR13_FIXED32_CONV_PREGATHER.get("state")
+    bank_refs = tuple(conv_banks)
+    if existing is not None:
+        if (
+            existing["mode"] != _FR13_FIXED32_MODE
+            or existing["max_batch_size"] != capacity
+            or tuple(existing["layer_order"])
+            != tuple(str(name) for name in layer_order)
+            or len(existing["banks"]) != 48
+            or any(
+                old is not new
+                for old, new in zip(existing["banks"], bank_refs, strict=True)
+            )
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_CONV_PREGATHER was already preseeded with "
+                "different persistent operands"
+            )
+        return dict(existing["contract"])
+
+    offsets = torch.tensor(
+        [(pointer - pointers[0]) // 16 for pointer in pointers],
+        dtype=torch.int64,
+        device=anchor.device,
+    )
+    ssi_ptrs = torch.tensor(
+        [int(source.data_ptr()) for source in ssi_sources],
+        dtype=torch.int64,
+        device=anchor.device,
+    )
+    ssi_strides = torch.tensor(
+        [int(source.stride(0)) for source in ssi_sources],
+        dtype=torch.int64,
+        device=anchor.device,
+    )
+    staging = torch.empty(
+        48,
+        capacity,
+        row_elems,
+        dtype=anchor.dtype,
+        device=anchor.device,
+    )
+    expected_staging_stride = (capacity * row_elems, row_elems, 1)
+    if (
+        not staging.is_contiguous()
+        or tuple(int(value) for value in staging.stride())
+        != expected_staging_stride
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_PREGATHER staging layout drifted: "
+            f"shape={tuple(staging.shape)} stride={tuple(staging.stride())}"
+        )
+    staging_lo = int(staging.data_ptr())
+    staging_hi = staging_lo + int(staging.numel()) * staging.element_size()
+    for index, bank in enumerate(bank_refs):
+        bank_lo = int(bank.data_ptr())
+        bank_hi = bank_lo + (
+            sum(
+                (int(size) - 1) * int(bank.stride(dim))
+                for dim, size in enumerate(bank.shape)
+            )
+            + 1
+        ) * bank.element_size()
+        if staging_lo < bank_hi and bank_lo < staging_hi:
+            raise RuntimeError(
+                "FR13_FIXED32_CONV_PREGATHER staging aliases bank "
+                f"{index}: staging=[{staging_lo:#x},{staging_hi:#x}) "
+                f"bank=[{bank_lo:#x},{bank_hi:#x})"
+            )
+    block = 1024
+    state = {
+        "mode": _FR13_FIXED32_MODE,
+        "max_batch_size": capacity,
+        "preseeded_batches": batches,
+        "banks": bank_refs,
+        "layer_order": tuple(str(name) for name in layer_order),
+        "anchor": anchor,
+        "off16": offsets,
+        "ssi_sources": ssi_sources,
+        "ssi_ptrs": ssi_ptrs,
+        "ssi_strides": ssi_strides,
+        "staging": staging,
+        "row_elems": row_elems,
+        "conv_l": conv_l,
+        "element_bytes": element_bytes,
+        "block": block,
+        "token": None,
+        "n": 0,
+        "stages": 0,
+        "stages_by_batch": {batch: 0 for batch in batches},
+        "graph_capture_stages": 0,
+        "graph_capture_stages_by_batch": {
+            batch: 0 for batch in batches
+        },
+        "profile_capture_stages": 0,
+        "aux_capture_stages": 0,
+        "live_selfchecked_batches": set(),
+        "source_identity": (
+            tuple(id(bank) for bank in bank_refs),
+            id(offsets),
+            tuple(id(source) for source in ssi_sources),
+            id(ssi_ptrs),
+            id(ssi_strides),
+            id(staging),
+        ),
+        "source_data_ptrs": (
+            tuple(int(bank.data_ptr()) for bank in bank_refs),
+            int(offsets.data_ptr()),
+            tuple(int(source.data_ptr()) for source in ssi_sources),
+            int(ssi_ptrs.data_ptr()),
+            int(ssi_strides.data_ptr()),
+            int(staging.data_ptr()),
+        ),
+        "contract": {
+            "mode": _FR13_FIXED32_MODE,
+            "route": "in_graph_preconsume",
+            "block": block,
+            "layers": 48,
+            "pointer_entries": 48,
+            "ssi_pointer_entries": 48,
+            "ssi_groups": 3,
+            "preseeded_batches": batches,
+            "staging_capacity": capacity,
+            "row_elems": row_elems,
+            "staging_bank_nonalias": True,
+        },
+    }
+    # Warm every B specialization from an independent, in-range zero source.
+    # Builder rows above the current eager B may be uninitialized at boot.
+    safe_ssi = torch.zeros(
+        (capacity, 1), dtype=torch.int32, device=anchor.device
+    )
+    safe_ptrs = torch.full(
+        (48,), int(safe_ssi.data_ptr()), dtype=torch.int64, device=anchor.device
+    )
+    safe_strides = torch.full(
+        (48,), int(safe_ssi.stride(0)), dtype=torch.int64, device=anchor.device
+    )
+    for batch in batches:
+        grid = (48, batch, triton.cdiv(row_elems, block))
+        _fr13_conv_col0_pregather_kernel[grid](
+            anchor,
+            offsets,
+            safe_ptrs,
+            safe_strides,
+            staging,
+            staging.stride(0),
+            staging.stride(1),
+            int(anchor.stride(0)),
+            int(anchor.stride(1)),
+            int(anchor.stride(2)),
+            ROW_ELEMS=row_elems,
+            CONV_L=conv_l,
+            ELEM_BYTES=element_bytes,
+            B=batch,
+            BLOCK=block,
+        )
+    _FR13_FIXED32_CONV_PREGATHER["state"] = state
+    print(
+        "[FR13_FIXED32_CONV_PREGATHER] preseeded: "
+        f"layers=48 pointer_entries=48 batches={list(batches)}",
+        flush=True,
+    )
+    return dict(state["contract"])
+
+
+def selfcheck_fixed32_conv_col0_ssi_sources(
+    *, num_spec_decodes: int
+) -> None:
+    """Boot-only value check of the live pointer table for one batch."""
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_PREGATHER live SSI selfcheck during capture"
+        )
+    state = _FR13_FIXED32_CONV_PREGATHER.get("state")
+    if state is None:
+        return
+    batch = int(num_spec_decodes)
+    if not 1 <= batch <= int(state["max_batch_size"]):
+        raise RuntimeError(
+            f"FR13_FIXED32_CONV_PREGATHER selfcheck invalid B={batch}"
+        )
+    checked = state["live_selfchecked_batches"]
+    if batch in checked:
+        return
+    sources = state["ssi_sources"]
+    for pointer in dict.fromkeys(int(source.data_ptr()) for source in sources):
+        layers = [
+            index
+            for index, source in enumerate(sources)
+            if int(source.data_ptr()) == pointer
+        ]
+        source = sources[layers[0]]
+        rows = source[:batch, 0]
+        row_min = int(rows.min().item())
+        row_max = int(rows.max().item())
+        bank_rows = min(int(state["banks"][index].shape[0]) for index in layers)
+        if row_min < 0 or row_max >= bank_rows:
+            raise RuntimeError(
+                "FR13_FIXED32_CONV_PREGATHER live SSI row is out of bounds: "
+                f"B={batch} layers={layers!r} min={row_min} max={row_max} "
+                f"bank_rows={bank_rows}"
+            )
+    row_elems = int(state["row_elems"])
+    block = int(state["block"])
+    grid = (48, batch, triton.cdiv(row_elems, block))
+    _fr13_conv_col0_pregather_kernel[grid](
+        state["anchor"],
+        state["off16"],
+        state["ssi_ptrs"],
+        state["ssi_strides"],
+        state["staging"],
+        state["staging"].stride(0),
+        state["staging"].stride(1),
+        int(state["anchor"].stride(0)),
+        int(state["anchor"].stride(1)),
+        int(state["anchor"].stride(2)),
+        ROW_ELEMS=row_elems,
+        CONV_L=int(state["conv_l"]),
+        ELEM_BYTES=int(state["element_bytes"]),
+        B=batch,
+        BLOCK=block,
+    )
+    for layer, (bank, source) in enumerate(
+        zip(state["banks"], sources, strict=True)
+    ):
+        expected = bank.index_select(
+            0, source[:batch, 0].to(torch.long)
+        ).reshape(batch, row_elems)
+        if not torch.equal(state["staging"][layer, :batch], expected):
+            raise RuntimeError(
+                "FR13_FIXED32_CONV_PREGATHER live SSI byte selfcheck failed "
+                f"for B={batch} layer={layer}"
+            )
+    checked.add(batch)
+
+
+def validate_fixed32_conv_col0_ssi_source(
+    *,
+    layer_name: str,
+    layer_index: int,
+    spec_state_indices: torch.Tensor,
+    num_spec_decodes: int,
+) -> None:
+    """Validate the live forward view against the builder-owned source map."""
+    state = _FR13_FIXED32_CONV_PREGATHER.get("state")
+    index = int(layer_index)
+    batch = int(num_spec_decodes)
+    if (
+        state is None
+        or not torch.cuda.is_current_stream_capturing()
+        or batch not in state["live_selfchecked_batches"]
+        or not 0 <= index < 48
+        or str(layer_name) != state["layer_order"][index]
+        or not 1 <= batch <= int(state["max_batch_size"])
+        or not torch.is_tensor(spec_state_indices)
+        or spec_state_indices.dtype != torch.int32
+        or spec_state_indices.device != state["anchor"].device
+        or spec_state_indices.ndim != 2
+        or int(spec_state_indices.shape[0]) < batch
+        or int(spec_state_indices.shape[1]) < 1
+        or int(spec_state_indices.data_ptr())
+        != int(state["ssi_sources"][index].data_ptr())
+        or tuple(int(value) for value in spec_state_indices.stride())
+        != tuple(int(value) for value in state["ssi_sources"][index].stride())
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_PREGATHER live SSI source mapping drift: "
+            f"layer={layer_name!r} index={index} B={batch}"
+        )
+
+
+def launch_fixed32_conv_col0_pregather(
+    *,
+    num_spec_decodes: int,
+    req_ids_token=None,
+    graph_capture: bool = False,
+) -> None:
+    """Capture the one fixed pregather launch at verifier-graph entry."""
+    state = _FR13_FIXED32_CONV_PREGATHER.get("state")
+    if state is None:
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_PREGATHER missing all-B warmup preseed"
+        )
+    if state["mode"] != _FR13_FIXED32_MODE:
+        raise RuntimeError("FR13_FIXED32_CONV_PREGATHER mode drift")
+    if type(graph_capture) is not bool or graph_capture is not True:
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_PREGATHER host stages are forbidden; "
+            "the fixed route is captured in the final FULL verifier graph"
+        )
+    if not torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_PREGATHER graph stage ran outside CUDA capture"
+        )
+    if req_ids_token is not None:
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_PREGATHER in-graph route is tokenless"
+        )
+    batch = int(num_spec_decodes)
+    if not 1 <= batch <= int(state["max_batch_size"]):
+        raise ValueError(
+            "FR13_FIXED32_CONV_PREGATHER batch exceeds preseeded server "
+            f"capacity: B={batch} capacity={state['max_batch_size']}"
+        )
+    if (
+        state.get("source_identity")
+        != (
+            tuple(id(bank) for bank in state["banks"]),
+            id(state["off16"]),
+            tuple(id(source) for source in state["ssi_sources"]),
+            id(state["ssi_ptrs"]),
+            id(state["ssi_strides"]),
+            id(state["staging"]),
+        )
+        or state.get("source_data_ptrs")
+        != (
+            tuple(int(bank.data_ptr()) for bank in state["banks"]),
+            int(state["off16"].data_ptr()),
+            tuple(int(source.data_ptr()) for source in state["ssi_sources"]),
+            int(state["ssi_ptrs"].data_ptr()),
+            int(state["ssi_strides"].data_ptr()),
+            int(state["staging"].data_ptr()),
+        )
+        or not state["staging"].is_contiguous()
+        or tuple(int(value) for value in state["staging"].shape)
+        != (48, int(state["max_batch_size"]), int(state["row_elems"]))
+        or tuple(int(value) for value in state["staging"].stride())
+        != (
+            int(state["max_batch_size"]) * int(state["row_elems"]),
+            int(state["row_elems"]),
+            1,
+        )
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_PREGATHER persistent operand identity drift"
+        )
+    block = int(state["block"])
+    row_elems = int(state["row_elems"])
+    grid = (48, batch, triton.cdiv(row_elems, block))
+    _fr13_conv_col0_pregather_kernel[grid](
+        state["anchor"],
+        state["off16"],
+        state["ssi_ptrs"],
+        state["ssi_strides"],
+        state["staging"],
+        state["staging"].stride(0),
+        state["staging"].stride(1),
+        int(state["anchor"].stride(0)),
+        int(state["anchor"].stride(1)),
+        int(state["anchor"].stride(2)),
+        ROW_ELEMS=row_elems,
+        CONV_L=int(state["conv_l"]),
+        ELEM_BYTES=int(state["element_bytes"]),
+        B=batch,
+        BLOCK=block,
+    )
+    state["graph_capture_stages"] += 1
+    state["graph_capture_stages_by_batch"][batch] += 1
+
+
+def fixed32_conv_col0_pregather_counters() -> dict[str, object]:
+    """Return fixed pregather preseed and actual-launch facts."""
+    state = _FR13_FIXED32_CONV_PREGATHER.get("state")
+    if state is None:
+        return {
+            "preseeded": False,
+            "pointer_entries": 0,
+            "preseeded_batches": (),
+            "max_batch_size": 0,
+            "actual_stages": 0,
+            "actual_stages_by_batch": {
+                batch: 0 for batch in _FR13_FIXED32_BATCHES
+            },
+            "graph_capture_stages": 0,
+            "graph_capture_stages_by_batch": {
+                batch: 0 for batch in _FR13_FIXED32_BATCHES
+            },
+            "profile_capture_stages": 0,
+            "aux_capture_stages": 0,
+        }
+    return {
+        "preseeded": True,
+        "pointer_entries": 48,
+        "preseeded_batches": tuple(state["preseeded_batches"]),
+        "max_batch_size": int(state["max_batch_size"]),
+        "actual_stages": int(state["stages"]),
+        "actual_stages_by_batch": {
+            batch: int(state["stages_by_batch"].get(batch, 0))
+            for batch in _FR13_FIXED32_BATCHES
+        },
+        "graph_capture_stages": int(state["graph_capture_stages"]),
+        "graph_capture_stages_by_batch": {
+            batch: int(state["graph_capture_stages_by_batch"].get(batch, 0))
+            for batch in _FR13_FIXED32_BATCHES
+        },
+        "profile_capture_stages": int(state["profile_capture_stages"]),
+        "aux_capture_stages": int(state["aux_capture_stages"]),
+    }
 
 
 def launch_conv_col0_pregather(
@@ -882,6 +1918,11 @@ def launch_conv_col0_pregather(
     device syncs, fail-safe by construction. Values byte-identical to the
     per-layer gather (pure copy).
     """
+    if _FR13_FIXED32_MODE is not None:
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_PREGATHER post-commit/host trigger is forbidden; "
+            "the final FULL verifier graph owns the one pre-consume stage"
+        )
     L = len(conv_banks)
     b0 = conv_banks[0]
     dev = b0.device
@@ -911,6 +1952,22 @@ def launch_conv_col0_pregather(
             L, int(ssi_stack.shape[1]), row_elems, dtype=b0.dtype, device=dev
         )
         st["anchor"] = b0
+    ssi_ptr_values = [
+        int(ssi_stack[layer].data_ptr()) for layer in range(L)
+    ]
+    ssi_stride_values = [int(ssi_stack.stride(1)) for _ in range(L)]
+    if (
+        st.get("ssi_ptr_values") != ssi_ptr_values
+        or st.get("ssi_stride_values") != ssi_stride_values
+    ):
+        st["ssi_ptr_values"] = ssi_ptr_values
+        st["ssi_stride_values"] = ssi_stride_values
+        st["ssi_ptrs"] = torch.tensor(
+            ssi_ptr_values, dtype=torch.int64, device=dev
+        )
+        st["ssi_strides"] = torch.tensor(
+            ssi_stride_values, dtype=torch.int64, device=dev
+        )
     ebytes = b0.element_size()
     if (16 % ebytes) != 0:
         raise RuntimeError("FR13_CONV_PREGATHER: element size must divide 16")
@@ -918,9 +1975,9 @@ def launch_conv_col0_pregather(
     BLOCK = 1024
     grid = (L, B, triton.cdiv(row_elems, BLOCK))
     _fr13_conv_col0_pregather_kernel[grid](
-        st["anchor"], st["off16"], ssi_stack,
-        ssi_stack.stride(0), ssi_stack.stride(1),
-        st["staging"], int(b0.stride(0)),
+        st["anchor"], st["off16"], st["ssi_ptrs"], st["ssi_strides"],
+        st["staging"], st["staging"].stride(0), st["staging"].stride(1),
+        int(b0.stride(0)),
         int(b0.stride(1)), int(b0.stride(2)),
         ROW_ELEMS=row_elems, CONV_L=conv_l, ELEM_BYTES=ebytes, B=B, BLOCK=BLOCK,
     )
@@ -938,7 +1995,14 @@ def conv_col0_staged(req_ids_token, layer_idx: int):
     a pregather arm where `served` stays 0 is VACUOUS (always falling back to
     the legacy gather) — its clean result proves nothing about the lever.
     """
-    st = _FR13_CONV_PREGATHER
+    if _FR13_FIXED32_MODE is not None:
+        st = _FR13_FIXED32_CONV_PREGATHER.get("state")
+        if st is None:
+            raise RuntimeError(
+                "FR13_FIXED32_CONV_PREGATHER consumer ran before preseed"
+            )
+    else:
+        st = _FR13_CONV_PREGATHER
     staged = st.get("token") if st else None
     ok = staged is not None and staged == req_ids_token
     c = st.setdefault("_cnt", [0, 0])  # [served, fallback]
@@ -1092,6 +2156,284 @@ def launch_attn_kv_linear_remap_syncfree(**kwargs):
         _fr13_span_end("FR13_KVREMAP_TIMER", _t)
 
 
+def _fr13_fixed32_device_assert(condition: torch.Tensor, message: str) -> None:
+    """Enqueue a fail-closed scalar device assertion without a host readback."""
+    if condition.numel() != 1:
+        raise ValueError(
+            "FR13_FIXED32: device assertion condition must be scalar, got "
+            f"{tuple(condition.shape)}"
+        )
+    if not hasattr(torch, "_assert_async"):
+        raise RuntimeError(
+            "FR13_FIXED32 requires torch._assert_async for sync-free guards"
+        )
+    torch._assert_async(condition, message)
+
+
+def _validate_fixed32_kv16_contract(
+    *,
+    kv_caches,
+    slot_mapping: torch.Tensor,
+    query_start_loc: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    num_accepted_tokens: torch.Tensor,
+    num_spec_decodes: int,
+    dst_pi: torch.Tensor | None,
+    batch_indices: torch.Tensor | None,
+) -> tuple[int, int]:
+    """Host-shape portion of the strict fixed32 KV16 route contract."""
+    b = int(num_spec_decodes)
+    if b not in (1, 2, 3, 4):
+        raise ValueError(f"FR13_FIXED32_KV_REMAP16 requires B=1..4, got {b}")
+    if not isinstance(kv_caches, (list, tuple)) or len(kv_caches) != 16:
+        raise ValueError(
+            "FR13_FIXED32_KV_REMAP16 requires exactly 16 cache tensors, "
+            f"got {type(kv_caches).__name__} len="
+            f"{len(kv_caches) if isinstance(kv_caches, (list, tuple)) else 'n/a'}"
+        )
+    if accepted_paths.ndim != 2 or tuple(accepted_paths.shape) != (b, 16):
+        raise ValueError(
+            "FR13_FIXED32_KV_REMAP16 requires accepted_paths shape "
+            f"{(b, 16)}, got {tuple(accepted_paths.shape)}"
+        )
+    if num_accepted_tokens.ndim != 1 or num_accepted_tokens.numel() != b:
+        raise ValueError(
+            "FR13_FIXED32_KV_REMAP16 requires accepted lengths shape "
+            f"{(b,)}, got {tuple(num_accepted_tokens.shape)}"
+        )
+    if query_start_loc.ndim != 1:
+        raise ValueError(
+            "FR13_FIXED32_KV_REMAP16 query_start_loc must be 1D, "
+            f"got {tuple(query_start_loc.shape)}"
+        )
+    required_qsl = 2 if batch_indices is not None else b + 1
+    if int(query_start_loc.shape[0]) < required_qsl:
+        raise ValueError(
+            "FR13_FIXED32_KV_REMAP16 query_start_loc is too short: "
+            f"shape={tuple(query_start_loc.shape)} required={required_qsl}"
+        )
+    if batch_indices is not None and (
+        batch_indices.ndim != 1
+        or tuple(batch_indices.shape) != (b,)
+    ):
+        raise ValueError(
+            "FR13_FIXED32_KV_REMAP16 batch_indices must have shape "
+            f"{(b,)}, got {tuple(batch_indices.shape)}"
+        )
+    if slot_mapping.numel() <= 0:
+        raise ValueError("FR13_FIXED32_KV_REMAP16 requires nonempty slot_mapping")
+    if dst_pi is not None and dst_pi.numel() < 17:
+        raise ValueError(
+            "FR13_FIXED32_KV_REMAP16 dst_pi must cover offsets 0..16, "
+            f"got {dst_pi.numel()}"
+        )
+    integer_dtypes = {
+        torch.int8,
+        torch.int16,
+        torch.int32,
+        torch.int64,
+        torch.uint8,
+    }
+    if batch_indices is not None and batch_indices.dtype not in (
+        torch.int32,
+        torch.int64,
+    ):
+        raise TypeError(
+            "FR13_FIXED32_KV_REMAP16 batch_indices must be int32/int64, "
+            f"got {batch_indices.dtype}"
+        )
+    contract_tensors = [
+        ("slot_mapping", slot_mapping),
+        ("query_start_loc", query_start_loc),
+        ("accepted_paths", accepted_paths),
+        ("num_accepted_tokens", num_accepted_tokens),
+    ]
+    if batch_indices is not None:
+        contract_tensors.append(("batch_indices", batch_indices))
+    for label, tensor in contract_tensors:
+        if tensor.dtype not in integer_dtypes:
+            raise TypeError(
+                f"FR13_FIXED32_KV_REMAP16 {label} must be integer, "
+                f"got {tensor.dtype}"
+            )
+        if tensor.device != slot_mapping.device:
+            raise ValueError(
+                f"FR13_FIXED32_KV_REMAP16 {label} device "
+                f"{tensor.device} != {slot_mapping.device}"
+            )
+    if dst_pi is not None and dst_pi.device != slot_mapping.device:
+        raise ValueError(
+            "FR13_FIXED32_KV_REMAP16 dst_pi device mismatch: "
+            f"{dst_pi.device} != {slot_mapping.device}"
+        )
+    cache_capacity = None
+    for index, kv in enumerate(kv_caches):
+        if not torch.is_tensor(kv):
+            raise TypeError(
+                f"FR13_FIXED32_KV_REMAP16 cache[{index}] is not a tensor"
+            )
+        if kv.dim() < 3 or int(kv.shape[0]) != 2:
+            raise ValueError(
+                "FR13_FIXED32_KV_REMAP16 cache must have exactly two K/V "
+                f"planes: cache[{index}] shape={tuple(kv.shape)}"
+            )
+        if int(kv.shape[1]) <= 0 or int(kv.shape[2]) <= 0:
+            raise ValueError(
+                f"FR13_FIXED32_KV_REMAP16 cache[{index}] has empty slot axes"
+            )
+        capacity = int(kv.shape[1]) * int(kv.shape[2])
+        if cache_capacity is None:
+            cache_capacity = capacity
+        elif capacity != cache_capacity:
+            raise ValueError(
+                "FR13_FIXED32_KV_REMAP16 cache slot capacities differ: "
+                f"cache[0]={cache_capacity} cache[{index}]={capacity}"
+            )
+        if kv.device != slot_mapping.device:
+            raise ValueError(
+                "FR13_FIXED32_KV_REMAP16 cache/slot device mismatch: "
+                f"cache[{index}]={kv.device} slots={slot_mapping.device}"
+            )
+    assert cache_capacity is not None
+    return b, cache_capacity
+
+
+def _launch_attn_kv_linear_remap_syncfree_fixed16_impl(
+    *,
+    kv_caches,
+    slot_mapping: torch.Tensor,
+    query_start_loc: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    num_accepted_tokens: torch.Tensor,
+    num_spec_decodes: int,
+    dst_pi: torch.Tensor | None = None,
+    batch_indices: torch.Tensor | None = None,
+) -> None:
+    """Strict fixed32 cache walk: Bx16 pairs over all 16 two-plane caches.
+
+    Pure batches use the original prefix-contiguous qsl route. Mixed batches
+    provide the ordered full-batch row index for each compact spec row.
+    """
+    b, cache_capacity = _validate_fixed32_kv16_contract(
+        kv_caches=kv_caches,
+        slot_mapping=slot_mapping,
+        query_start_loc=query_start_loc,
+        accepted_paths=accepted_paths,
+        num_accepted_tokens=num_accepted_tokens,
+        num_spec_decodes=num_spec_decodes,
+        dst_pi=dst_pi,
+        batch_indices=batch_indices,
+    )
+    device = slot_mapping.device
+    if batch_indices is None:
+        qsl_full = query_start_loc[: b + 1].to(torch.long)
+        qsl_starts = qsl_full[:-1]
+        qsl_ends = qsl_full[1:]
+        batch_indices_ok = None
+    else:
+        full_indices = batch_indices.to(torch.long)
+        safe_indices = full_indices.clamp(0, query_start_loc.numel() - 2)
+        qsl_starts = query_start_loc[safe_indices].to(torch.long)
+        qsl_ends = query_start_loc[safe_indices + 1].to(torch.long)
+        batch_indices_ok = (
+            (full_indices >= 0)
+            & (full_indices + 1 < query_start_loc.numel())
+        ).all()
+        if b > 1:
+            batch_indices_ok = batch_indices_ok & (
+                full_indices[1:] > full_indices[:-1]
+            ).all()
+    spans = qsl_ends - qsl_starts
+    acc = num_accepted_tokens.to(torch.long).view(b, 1)
+    m_idx = torch.arange(16, device=device).view(1, 16)
+    ap = accepted_paths.to(device=device, dtype=torch.long)
+    dst_off = m_idx + 1
+    if dst_pi is not None:
+        dst_off = dst_pi.to(device=device, dtype=torch.long)[dst_off]
+
+    lens_ok = ((acc >= 0) & (acc <= 16)).all()
+    active_pos = m_idx < acc
+    paths_ok = (
+        (~active_pos) | ((ap >= 1) & (ap < 32))
+    ).all()
+    spans_ok = (spans == 32).all()
+    destination_ok = ((dst_off >= 1) & (dst_off < 32)).all()
+    mapping_shape_ok = (
+        (qsl_starts >= 0)
+        & (qsl_ends <= int(slot_mapping.numel()))
+    ).all()
+    contract_ok = (
+        lens_ok
+        & paths_ok
+        & spans_ok
+        & destination_ok
+        & mapping_shape_ok
+    )
+    if batch_indices_ok is not None:
+        contract_ok = contract_ok & batch_indices_ok
+    _fr13_fixed32_device_assert(
+        contract_ok,
+        "FR13_FIXED32_KV_REMAP16 dynamic contract violation",
+    )
+
+    qsl = qsl_starts.view(b, 1)
+    active = active_pos & (ap != dst_off)
+    n_slots = int(slot_mapping.shape[0])
+    dst_flat = (qsl + dst_off).clamp_(0, n_slots - 1).reshape(b * 16)
+    src_flat = (qsl + ap).clamp_(0, n_slots - 1).reshape(b * 16)
+    sm = slot_mapping.reshape(-1)
+    dst_slot = sm[dst_flat].to(torch.long)
+    src_slot = sm[src_flat].to(torch.long)
+    active_flat = active.reshape(b * 16)
+    _fr13_fixed32_device_assert(
+        (
+            (dst_slot >= 0)
+            & (dst_slot < cache_capacity)
+            & (src_slot >= 0)
+            & (src_slot < cache_capacity)
+        ).all(),
+        "FR13_FIXED32_KV_REMAP16 slot_mapping exceeds cache capacity",
+    )
+    for kv in kv_caches:
+        block_size = int(kv.shape[2])
+        src_vals = kv[
+            :, src_slot // block_size, src_slot % block_size
+        ].clone()
+        dst_prior = kv[
+            :, dst_slot // block_size, dst_slot % block_size
+        ].clone()
+        mask = active_flat.view(
+            1, b * 16, *([1] * (src_vals.dim() - 2))
+        )
+        kv[:, dst_slot // block_size, dst_slot % block_size] = torch.where(
+            mask, src_vals, dst_prior
+        )
+
+
+def launch_attn_kv_linear_remap_syncfree_fixed16(
+    *,
+    kv_caches,
+    slot_mapping: torch.Tensor,
+    query_start_loc: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    num_accepted_tokens: torch.Tensor,
+    num_spec_decodes: int,
+    dst_pi: torch.Tensor | None = None,
+    batch_indices: torch.Tensor | None = None,
+) -> None:
+    """Public strict KV16 entry point for fixed32 patcher wiring."""
+    return _launch_attn_kv_linear_remap_syncfree_fixed16_impl(
+        kv_caches=kv_caches,
+        slot_mapping=slot_mapping,
+        query_start_loc=query_start_loc,
+        accepted_paths=accepted_paths,
+        num_accepted_tokens=num_accepted_tokens,
+        num_spec_decodes=num_spec_decodes,
+        dst_pi=dst_pi,
+        batch_indices=batch_indices,
+    )
+
+
 def _launch_attn_kv_linear_remap_syncfree_impl(
     *,
     kv_caches,
@@ -1121,6 +2463,16 @@ def _launch_attn_kv_linear_remap_syncfree_impl(
       into a device-side ``valid`` scalar that deactivates ALL pairs.
     - no engagement-needle return (the legacy fn stays the diagnostic arm).
     """
+    if _FR13_FIXED32_MODE is not None:
+        return launch_attn_kv_linear_remap_syncfree_fixed16(
+            kv_caches=kv_caches,
+            slot_mapping=slot_mapping,
+            query_start_loc=query_start_loc,
+            accepted_paths=accepted_paths,
+            num_accepted_tokens=num_accepted_tokens,
+            num_spec_decodes=num_spec_decodes,
+            dst_pi=dst_pi,
+        )
     b = int(num_spec_decodes)
     if b <= 0 or not kv_caches:
         return
@@ -1750,8 +3102,10 @@ def _tree_gdn_path_kernel(
     h0,
     h0_indices,
     h0_num_accepted_tokens,
+    invocation_counter,
     path_nodes,     # [n_paths, MAX_PATH_LEN] int32 node ids, -1 padded
     path_parent,    # [n_paths] int32 parent NODE id of the path root (-1 => h0)
+    path_lengths,   # [n_paths] int32 active nodes; device-loaded graph-stable bound
     state_export,   # [N_TOTAL, NUM_VH, DIM_V, DIM_K] fp32 handoff buffer
     export_mask,    # [N_TOTAL] int32 1 => export this node's post-state
     out,
@@ -1774,6 +3128,7 @@ def _tree_gdn_path_kernel(
     H0_BANK_STRIDE: tl.constexpr,
     H0_USE_ACCEPTED_COLUMN: tl.constexpr,
     RAW_GATING: tl.constexpr,
+    COUNT_INVOCATION: tl.constexpr,
     SCAN_ALIGN: tl.constexpr,
     MAX_PATH_LEN: tl.constexpr,
     RING_EXPORT: tl.constexpr = False,
@@ -1789,6 +3144,13 @@ def _tree_gdn_path_kernel(
     pid_vh = tl.program_id(0)
     pid_v = tl.program_id(1)
     pid_path = tl.program_id(2)
+    if COUNT_INVOCATION:
+        tl.atomic_add(
+            invocation_counter,
+            1,
+            sem="relaxed",
+            mask=(pid_vh == 0) & (pid_v == 0) & (pid_path == 0),
+        )
     head_group = NUM_VH // NUM_KH
     pid_kh = pid_vh // head_group
     offs_k = tl.arange(0, DIM_K)
@@ -1822,7 +3184,8 @@ def _tree_gdn_path_kernel(
     )
     state_i = tl.where(par >= 0, par_state, b_h0)
 
-    for i in tl.static_range(0, MAX_PATH_LEN):
+    path_len = tl.load(path_lengths + pid_path)
+    for i in tl.range(0, path_len):
         node = tl.load(path_nodes + pid_path * MAX_PATH_LEN + i)
         n_ok = (node >= 0) & (node < N_ACTUAL)
         node_c = tl.maximum(node, 0)
@@ -1904,7 +3267,8 @@ def _tree_gdn_path_kernel(
             RAW_GATING=RAW_GATING,
             SCAN_ALIGN=SCAN_ALIGN,
         )
-        # padded lanes must NOT advance the carried state
+        # Keep the descriptor guard value-neutral if a corrupt node slips past
+        # preseed validation; valid dynamic-loop iterations always have n_ok.
         state_i = tl.where(n_ok, new_state, state_i)
         tl.store(
             out + (node_c * NUM_VH + pid_vh) * DIM_V + offs_v,
@@ -2189,7 +3553,9 @@ def _fr13_sg_drain_dump():
     events (no host sync). Subtract from the fr13_committer_gpu span (~88ms) to
     split fused_sigmoid-GPU vs host gathers+dispatch-gaps -- settles whether the
     replay is host-bound (batch/graph reducible) or fused_sigmoid-bound."""
-    import os as _o, json as _j, time as _tm
+    import json as _j
+    import os as _o
+    import time as _tm
     _p = _FR13_SG_PENDING
     while _p:
         _a, _b = _p[0]
@@ -2244,7 +3610,9 @@ def _fr13_replay_only_drain(blocking):
     wraps the whole self.rejection_sampler dispatch (accept/LCP/bonus decision INCLUDED,
     a broader/different quantity). Answers: what does the pure state-commit replay cost,
     live, apples-to-apples against the micro-bench's 14.97ms and native's 7ms floor."""
-    import os as _o, json as _j, time as _tm
+    import json as _j
+    import os as _o
+    import time as _tm
     _p = _FR13_REPLAY_ONLY_PENDING
     while _p:
         _a, _b = _p[0]
@@ -2537,7 +3905,10 @@ def _fr13_native_committer_all_layers_graph(
         _e0, _e1, _e2, _e3 = (torch.cuda.Event(enable_timing=True) for _ in range(4))
         _e0.record()
     # ---- fill fixed buffers: full re-neutralize (cheap memset) then overwrite real slots ----
-    abuf.fill_(-1e4); bbuf.zero_(); kbuf.zero_(); vbuf.zero_()
+    abuf.fill_(-1e4)
+    bbuf.zero_()
+    kbuf.zero_()
+    vbuf.zero_()
     ssi_buf.fill_(SCRATCH)
     for b in range(B):
         _nl = seg[b]
@@ -2577,7 +3948,8 @@ def _fr13_native_committer_all_layers_graph(
         for _L in range(L):
             col0 = spec_state_indices[_L][:B, 0].to(torch.long)
             saved.append((col0, banks_list[_L][col0].clone()))
-        _s = torch.cuda.Stream(); _s.wait_stream(torch.cuda.current_stream())
+        _s = torch.cuda.Stream()
+        _s.wait_stream(torch.cuda.current_stream())
         with torch.cuda.stream(_s):
             for _ in range(3):
                 _loop()
@@ -2633,7 +4005,8 @@ def _fr13_native_committer_all_layers_graph(
                 _FR13_GT_ACCUM[3] += 1
             except Exception:
                 pass
-        import json as _gt_j, time as _gt_tm
+        import json as _gt_j
+        import time as _gt_tm
         _gt_out = os.environ.get("FR13_GRAPH_TIMER_JSON")
         if _gt_out and (_gt_tm.monotonic() - _FR13_GT_LAST_DUMP[0]) > 5.0:
             _FR13_GT_LAST_DUMP[0] = _gt_tm.monotonic()
@@ -3251,6 +4624,1058 @@ def _fr13_native_committer_all_layers_device(
         )
 
 
+_FR13_FIXED32_COMMITTER = {}
+_FR13_FIXED32_COMMITTER_FAST_ROUTE: dict[str, object] = {}
+_FR13_FIXED32_COMMITTER_CALLBACKS = []
+_FR13_FIXED32_COMMITTER_COUNTERS = {
+    "captures": 0,
+    "actual_replays_enqueued": 0,
+    "actual_replays_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
+}
+_FR13_FIXED32_COMMITTER_ANNOUNCED = False
+_FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY = None
+
+
+def fixed32_committer_counters() -> dict[str, object]:
+    """Return enqueue/capture facts recorded by the fixed committer route."""
+    preseeded_batches = tuple(sorted({
+        int(state["batch"]) for state in _FR13_FIXED32_COMMITTER.values()
+    }))
+    ready_capacities = {
+        int(state["batch"]): max(
+            int(state.get("preseed_capacity", 0)),
+            0,
+        )
+        for state in _FR13_FIXED32_COMMITTER.values()
+    }
+    maximum_ready_capacity = max(ready_capacities.values(), default=0)
+    required_capacity = _FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY
+    fast_route = _FR13_FIXED32_COMMITTER_FAST_ROUTE.get("state")
+    fast_route_ready = (
+        fast_route is not None
+        and fast_route["mode"] == _FR13_FIXED32_MODE
+        and int(fast_route["capacity"]) == required_capacity
+    )
+    return {
+        "captures": int(_FR13_FIXED32_COMMITTER_COUNTERS["captures"]),
+        "actual_replays_enqueued": int(
+            _FR13_FIXED32_COMMITTER_COUNTERS["actual_replays_enqueued"]
+        ),
+        "actual_replays_by_batch": dict(
+            _FR13_FIXED32_COMMITTER_COUNTERS["actual_replays_by_batch"]
+        ),
+        "preseeded_graphs": len(_FR13_FIXED32_COMMITTER),
+        "preseeded_batches": preseeded_batches,
+        "ready_capacities": ready_capacities,
+        "maximum_ready_capacity": maximum_ready_capacity,
+        "required_capacity": required_capacity,
+        "fast_route_ready": fast_route_ready,
+        "all_batches_ready": (
+            fast_route_ready
+            and tuple(range(1, required_capacity + 1))
+            == tuple(sorted(
+                batch
+                for batch, capacity in ready_capacities.items()
+                if capacity == required_capacity
+            ))
+            and all(
+                ready_capacities[batch] == required_capacity
+                for batch in range(1, required_capacity + 1)
+            )
+        ),
+    }
+
+
+def register_fixed32_committer_replay_callback(callback) -> None:
+    """Register a hook invoked only after an actual graph replay is enqueued."""
+    if not callable(callback):
+        raise TypeError("fixed32 committer replay callback must be callable")
+    if callback not in _FR13_FIXED32_COMMITTER_CALLBACKS:
+        _FR13_FIXED32_COMMITTER_CALLBACKS.append(callback)
+
+
+def unregister_fixed32_committer_replay_callback(callback) -> None:
+    """Remove a previously registered replay hook."""
+    try:
+        _FR13_FIXED32_COMMITTER_CALLBACKS.remove(callback)
+    except ValueError:
+        pass
+
+
+def _fr13_fixed32_committer_signature(
+    *,
+    banks_list,
+    spec_state_indices,
+    k_rings,
+    v_rings,
+    a_rings,
+    b_rings,
+    A_logs,
+    dt_biases,
+    num_spec_decodes,
+    output_scale,
+    use_qk_l2norm_in_kernel,
+) -> tuple:
+    """Preseed-only pointer-complete signature for captured operands."""
+    return (
+        "fixed32_committer_v1",
+        str(k_rings.device),
+        int(num_spec_decodes),
+        tuple(int(bank.data_ptr()) for bank in banks_list),
+        int(spec_state_indices.data_ptr()),
+        int(k_rings.data_ptr()),
+        int(v_rings.data_ptr()),
+        int(a_rings.data_ptr()),
+        int(b_rings.data_ptr()),
+        int(A_logs.data_ptr()),
+        int(dt_biases.data_ptr()),
+        tuple(int(value) for value in k_rings.shape),
+        tuple(int(value) for value in v_rings.shape),
+        tuple(int(value) for value in a_rings.shape),
+        tuple(int(value) for value in b_rings.shape),
+        tuple(
+            (
+                tuple(int(value) for value in bank.shape),
+                tuple(int(value) for value in bank.stride()),
+                str(bank.dtype),
+            )
+            for bank in banks_list
+        ),
+        str(k_rings.dtype),
+        str(v_rings.dtype),
+        str(a_rings.dtype),
+        str(b_rings.dtype),
+        str(A_logs.dtype),
+        str(dt_biases.dtype),
+        float(output_scale),
+        bool(use_qk_l2norm_in_kernel),
+    )
+
+
+def _fr13_fixed32_committer_identity_key(
+    *,
+    banks_list,
+    spec_state_indices,
+    k_rings,
+    v_rings,
+    a_rings,
+    b_rings,
+    A_logs,
+    dt_biases,
+    output_scale,
+    use_qk_l2norm_in_kernel,
+) -> tuple:
+    """Constant-size identity key for the preseeded measured route."""
+    return (
+        "fixed32_committer_fast_v1",
+        _FR13_FIXED32_MODE,
+        id(banks_list),
+        id(banks_list[0]),
+        id(banks_list[-1]),
+        id(spec_state_indices),
+        id(k_rings),
+        id(v_rings),
+        id(a_rings),
+        id(b_rings),
+        id(A_logs),
+        id(dt_biases),
+        float(output_scale),
+        bool(use_qk_l2norm_in_kernel),
+    )
+
+
+def _validate_fixed32_committer_contract(
+    *,
+    banks_list,
+    spec_state_indices,
+    accepted_paths,
+    accepted_lens,
+    k_rings,
+    v_rings,
+    a_rings,
+    b_rings,
+    A_logs,
+    dt_biases,
+    num_layers,
+    num_spec_decodes,
+    burn_node_bank,
+    root_node=0,
+    max_path=16,
+) -> tuple[int, int, int, int]:
+    """Validate fixed32 graph shapes without reading dynamic device values."""
+    layers = int(num_layers)
+    batch = int(num_spec_decodes)
+    if _FR13_FIXED32_MODE is None:
+        raise RuntimeError(
+            "fixed32 committer requested without FR13_FIXED32_MODE"
+        )
+    if layers != 48:
+        raise ValueError(
+            f"FR13_FIXED32_COMMIT_DEVICE_FILL requires 48 layers, got {layers}"
+        )
+    if batch not in (1, 2, 3, 4):
+        raise ValueError(
+            f"FR13_FIXED32_COMMIT_DEVICE_FILL requires B=1..4, got {batch}"
+        )
+    if int(max_path) != 16 or int(root_node) != 0:
+        raise ValueError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL requires path cap 16/root 0, "
+            f"got cap={max_path} root={root_node}"
+        )
+    if burn_node_bank:
+        raise RuntimeError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL requires burn_node_bank=False"
+        )
+    if not isinstance(banks_list, (list, tuple)) or len(banks_list) != 48:
+        raise ValueError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL requires exactly 48 state banks"
+        )
+    _bank_ptrs, bank_shape, _bank_stride = build_replay_bank_pointer_table(
+        list(banks_list)
+    )
+    device = k_rings.device
+    if device.type != "cuda":
+        raise ValueError(
+            f"FR13_FIXED32_COMMIT_DEVICE_FILL requires CUDA, got {device}"
+        )
+    for label, tensor in (
+        ("spec_state_indices", spec_state_indices),
+        ("accepted_paths", accepted_paths),
+        ("accepted_lens", accepted_lens),
+        ("k_rings", k_rings),
+        ("v_rings", v_rings),
+        ("a_rings", a_rings),
+        ("b_rings", b_rings),
+        ("A_logs", A_logs),
+        ("dt_biases", dt_biases),
+    ):
+        if not torch.is_tensor(tensor):
+            raise TypeError(
+                f"FR13_FIXED32_COMMIT_DEVICE_FILL {label} is not a tensor"
+            )
+        if tensor.device != device:
+            raise ValueError(
+                "FR13_FIXED32_COMMIT_DEVICE_FILL device mismatch: "
+                f"{label}={tensor.device} rings={device}"
+            )
+    for index, bank in enumerate(banks_list):
+        if bank.device != device:
+            raise ValueError(
+                "FR13_FIXED32_COMMIT_DEVICE_FILL bank device mismatch: "
+                f"bank[{index}]={bank.device} rings={device}"
+            )
+    if accepted_paths.ndim != 2 or tuple(accepted_paths.shape) != (
+        batch,
+        16,
+    ):
+        raise ValueError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL requires accepted_paths "
+            f"shape={(batch, 16)}, got {tuple(accepted_paths.shape)}"
+        )
+    if accepted_lens.ndim != 1 or accepted_lens.numel() != batch:
+        raise ValueError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL requires accepted_lens "
+            f"shape={(batch,)}, got {tuple(accepted_lens.shape)}"
+        )
+    integer_dtypes = {
+        torch.int8,
+        torch.int16,
+        torch.int32,
+        torch.int64,
+        torch.uint8,
+    }
+    if accepted_paths.dtype not in integer_dtypes or (
+        accepted_lens.dtype not in integer_dtypes
+    ):
+        raise TypeError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL accepted paths/lens must be "
+            f"integer, got {accepted_paths.dtype}/{accepted_lens.dtype}"
+        )
+    if spec_state_indices.dtype not in integer_dtypes:
+        raise TypeError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL spec_state_indices must be "
+            f"integer, got {spec_state_indices.dtype}"
+        )
+    if not accepted_paths.is_contiguous() or not accepted_lens.is_contiguous():
+        raise ValueError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL accepted inputs must be contiguous"
+        )
+    if k_rings.ndim != 5:
+        raise ValueError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL k_rings must be "
+            f"(48,B,32,KH,DK), got {tuple(k_rings.shape)}"
+        )
+    ring_layers, ring_batch, ring_rows, num_kh, dim_k = (
+        int(value) for value in k_rings.shape
+    )
+    if ring_layers != 48 or ring_batch < batch or ring_rows != 32:
+        raise ValueError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL requires ring prefix "
+            f"(48,>={batch},32), got {tuple(k_rings.shape[:3])}"
+        )
+    if spec_state_indices.ndim != 3 or (
+        int(spec_state_indices.shape[0]) != 48
+        or int(spec_state_indices.shape[1]) < batch
+        or int(spec_state_indices.shape[2]) < 1
+    ):
+        raise ValueError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL invalid spec_state_indices "
+            f"shape={tuple(spec_state_indices.shape)}"
+        )
+    num_vh = int(v_rings.shape[-2]) if v_rings.ndim == 5 else -1
+    dim_v = int(v_rings.shape[-1]) if v_rings.ndim == 5 else -1
+    expected_v = (48, ring_batch, 32, num_vh, dim_v)
+    expected_ab = (48, ring_batch, 32, num_vh)
+    if tuple(v_rings.shape) != expected_v:
+        raise ValueError(
+            f"FR13_FIXED32_COMMIT_DEVICE_FILL v shape must be {expected_v}, "
+            f"got {tuple(v_rings.shape)}"
+        )
+    if tuple(a_rings.shape) != expected_ab or tuple(b_rings.shape) != expected_ab:
+        raise ValueError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL a/b shapes must be "
+            f"{expected_ab}, got {tuple(a_rings.shape)}/{tuple(b_rings.shape)}"
+        )
+    _bank_rows, bank_vh, bank_dim_v, bank_dim_k = bank_shape
+    if (
+        num_vh != bank_vh
+        or dim_v != bank_dim_v
+        or dim_k != bank_dim_k
+    ):
+        raise ValueError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL ring/bank payload mismatch: "
+            f"ring={(num_vh, dim_v, dim_k)} "
+            f"bank={(bank_vh, bank_dim_v, bank_dim_k)}"
+        )
+    if not (
+        k_rings.dtype
+        == v_rings.dtype
+        == a_rings.dtype
+        == b_rings.dtype
+    ):
+        raise TypeError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL ring dtypes differ: "
+            f"{k_rings.dtype}/{v_rings.dtype}/{a_rings.dtype}/"
+            f"{b_rings.dtype}"
+        )
+    if num_vh <= 0 or num_kh <= 0 or num_vh % num_kh:
+        raise ValueError(
+            f"FR13_FIXED32_COMMIT_DEVICE_FILL invalid heads {num_vh}/{num_kh}"
+        )
+    if tuple(A_logs.shape) != (48, num_vh) or (
+        tuple(dt_biases.shape) != (48, num_vh)
+    ):
+        raise ValueError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL gates must have shape "
+            f"{(48, num_vh)}, got {tuple(A_logs.shape)}/"
+            f"{tuple(dt_biases.shape)}"
+        )
+    if not all(tensor.is_contiguous() for tensor in (
+        spec_state_indices,
+        k_rings,
+        v_rings,
+        a_rings,
+        b_rings,
+        A_logs,
+        dt_biases,
+    )):
+        raise ValueError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL captured tensors must be contiguous"
+        )
+    return num_kh, dim_k, num_vh, dim_v
+
+
+def _fr13_fixed32_committer_fast_state(
+    *,
+    banks_list,
+    spec_state_indices,
+    accepted_paths,
+    accepted_lens,
+    k_rings,
+    v_rings,
+    a_rings,
+    b_rings,
+    A_logs,
+    dt_biases,
+    num_layers,
+    num_spec_decodes,
+    output_scale,
+    use_qk_l2norm_in_kernel,
+    burn_node_bank,
+) -> tuple[dict, int]:
+    """Resolve one preseeded graph without persistent pointer/shape walks."""
+    route = _FR13_FIXED32_COMMITTER_FAST_ROUTE.get("state")
+    if route is None:
+        raise RuntimeError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL missing all-B fast-route preseed"
+        )
+    batch = int(num_spec_decodes)
+    capacity = int(route["capacity"])
+    required_capacity = _FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY
+    if (
+        _FR13_FIXED32_MODE != route["mode"]
+        or required_capacity != capacity
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL fixed route mode/capacity drift: "
+            f"mode={_FR13_FIXED32_MODE}/{route['mode']} "
+            f"capacity={required_capacity}/{capacity}"
+        )
+    if int(num_layers) != 48 or burn_node_bank:
+        raise RuntimeError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL fixed route requires "
+            "num_layers=48 and burn_node_bank=False"
+        )
+    if not 1 <= batch <= capacity:
+        raise ValueError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL batch exceeds preseeded server "
+            f"capacity: B={batch} capacity={capacity}"
+        )
+    if (
+        not isinstance(banks_list, tuple)
+        or len(banks_list) != 48
+        or banks_list is not route["banks"]
+        or banks_list[0] is not route["bank_anchor"]
+        or banks_list[-1] is not route["bank_tail"]
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL persistent bank-container "
+            "identity drift; reuse the exact preseeded 48-bank tuple"
+        )
+    identity_key = _fr13_fixed32_committer_identity_key(
+        banks_list=banks_list,
+        spec_state_indices=spec_state_indices,
+        k_rings=k_rings,
+        v_rings=v_rings,
+        a_rings=a_rings,
+        b_rings=b_rings,
+        A_logs=A_logs,
+        dt_biases=dt_biases,
+        output_scale=output_scale,
+        use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+    )
+    if identity_key != route["identity_key"]:
+        raise RuntimeError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL persistent operand identity "
+            "drift; reuse the exact preseeded spec/ring/gate tensors and "
+            "fixed scalar options"
+        )
+    state = route["states_by_batch"].get(batch)
+    if (
+        state is None
+        or state.get("graph") is None
+        or int(state.get("preseed_capacity", 0)) != capacity
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL missing preseeded graph for "
+            f"B={batch} at server capacity {capacity}"
+        )
+    if not torch.is_tensor(accepted_paths) or not torch.is_tensor(accepted_lens):
+        raise TypeError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL accepted paths/lens must be tensors"
+        )
+    if (
+        tuple(accepted_paths.shape) != (batch, 16)
+        or tuple(accepted_lens.shape) != (batch,)
+        or not accepted_paths.is_contiguous()
+        or not accepted_lens.is_contiguous()
+        or accepted_paths.device != route["device"]
+        or accepted_lens.device != route["device"]
+        or accepted_paths.dtype != state["accepted_paths"].dtype
+        or accepted_lens.dtype != state["accepted_lens"].dtype
+    ):
+        raise ValueError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL dynamic accepted-input "
+            f"contract drift for B={batch}"
+        )
+    return state, batch
+
+
+def _fr13_fixed32_committer_graph_body(
+    *,
+    state,
+    banks_list,
+    spec_state_indices,
+    k_rings,
+    v_rings,
+    a_rings,
+    b_rings,
+    A_logs,
+    dt_biases,
+    output_scale,
+    use_qk_l2norm_in_kernel,
+) -> None:
+    """Record the constant five-fill/four-gather/48-call graph body."""
+    from vllm.model_executor.layers.fla.ops import (
+        fused_sigmoid_gating_delta_rule_update as _sg,
+    )
+
+    layers = 48
+    batch = state["batch"]
+    path_cap = 16
+    total = batch * path_cap
+    num_kh = state["num_kh"]
+    dim_k = state["dim_k"]
+    num_vh = state["num_vh"]
+    dim_v = state["dim_v"]
+
+    # Exactly five full neutralizations per replay.
+    state["abuf"].fill_(-1e4)
+    state["bbuf"].zero_()
+    state["kbuf"].zero_()
+    state["vbuf"].zero_()
+    state["ssi"].fill_(state["scratch"])
+
+    accepted_lens = state["accepted_lens"].to(torch.long)
+    node_mat = state["node_mat"]
+    node_mat[:, 0] = 0
+    node_mat[:, 1:] = (
+        state["accepted_paths"][:, :15].to(torch.long).clamp(min=0)
+    )
+    valid = state["path_offsets"].unsqueeze(0) <= accepted_lens.unsqueeze(1)
+    safe_nodes = torch.where(
+        valid, node_mat, torch.zeros_like(node_mat)
+    ).clamp(0, 31)
+    batch_index = state["batch_offsets"].view(batch, 1)
+
+    # Four full [48,B,16] ring gathers, including neutral slots.
+    k_selected = k_rings[:, batch_index, safe_nodes]
+    v_selected = v_rings[:, batch_index, safe_nodes]
+    a_selected = a_rings[:, batch_index, safe_nodes]
+    b_selected = b_rings[:, batch_index, safe_nodes]
+    mask4 = valid.view(1, batch, path_cap, 1, 1)
+    mask3 = valid.view(1, batch, path_cap, 1)
+    state["kbuf"].view(
+        layers, batch, path_cap, num_kh, dim_k
+    ).copy_(torch.where(mask4, k_selected, torch.zeros_like(k_selected)))
+    state["vbuf"].view(
+        layers, batch, path_cap, num_vh, dim_v
+    ).copy_(torch.where(mask4, v_selected, torch.zeros_like(v_selected)))
+    state["abuf"].view(
+        layers, batch, path_cap, num_vh
+    ).copy_(torch.where(
+        mask3, a_selected, torch.full_like(a_selected, -1e4)
+    ))
+    state["bbuf"].view(
+        layers, batch, path_cap, num_vh
+    ).copy_(torch.where(mask3, b_selected, torch.zeros_like(b_selected)))
+    state["ssi"].copy_(
+        spec_state_indices[:, :batch, 0:1]
+        .to(torch.int32)
+        .expand(layers, batch, path_cap)
+    )
+
+    for layer in range(layers):
+        _sg(
+            A_log=A_logs[layer],
+            a=state["abuf"][layer].reshape(1, total, num_vh),
+            b=state["bbuf"][layer].reshape(1, total, num_vh),
+            dt_bias=dt_biases[layer],
+            q=state["qbuf"],
+            k=state["kbuf"][layer].reshape(1, total, num_kh, dim_k),
+            v=state["vbuf"][layer].reshape(1, total, num_vh, dim_v),
+            scale=output_scale,
+            initial_state=banks_list[layer],
+            inplace_final_state=True,
+            cu_seqlens=state["cu"],
+            ssm_state_indices=state["ssi"][layer],
+            use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+        )
+
+
+def _fr13_fixed32_validate_running_rows(
+    *, spec_state_indices: torch.Tensor, batch: int, bank_rows: int
+) -> torch.Tensor:
+    """Assert in-range, per-layer-distinct running rows without host readback."""
+    running_rows = spec_state_indices[:, :batch, 0].to(torch.long)
+    sorted_rows = torch.sort(running_rows, dim=1).values
+    distinct = (
+        (sorted_rows[:, 1:] != sorted_rows[:, :-1]).all()
+        if batch > 1
+        else torch.ones((), dtype=torch.bool, device=running_rows.device)
+    )
+    _fr13_fixed32_device_assert(
+        (
+            (running_rows >= 0).all()
+            & (running_rows < int(bank_rows)).all()
+            & distinct
+        ),
+        "FR13_FIXED32_COMMIT_DEVICE_FILL running-row contract violation",
+    )
+    return running_rows
+
+
+def preseed_fixed32_committer_graph(
+    *,
+    banks_list,
+    spec_state_indices,
+    accepted_paths,
+    accepted_lens,
+    k_rings,
+    v_rings,
+    a_rings,
+    b_rings,
+    A_logs,
+    dt_biases,
+    num_layers,
+    num_spec_decodes,
+    output_scale,
+    use_qk_l2norm_in_kernel=True,
+    burn_node_bank=False,
+    root_node=0,
+    max_path=16,
+) -> dict[str, object]:
+    """Warm and capture one fixed16 graph; call before measured events."""
+    num_kh, dim_k, num_vh, dim_v = _validate_fixed32_committer_contract(
+        banks_list=banks_list,
+        spec_state_indices=spec_state_indices,
+        accepted_paths=accepted_paths,
+        accepted_lens=accepted_lens,
+        k_rings=k_rings,
+        v_rings=v_rings,
+        a_rings=a_rings,
+        b_rings=b_rings,
+        A_logs=A_logs,
+        dt_biases=dt_biases,
+        num_layers=num_layers,
+        num_spec_decodes=num_spec_decodes,
+        burn_node_bank=burn_node_bank,
+        root_node=root_node,
+        max_path=max_path,
+    )
+    batch = int(num_spec_decodes)
+    signature = _fr13_fixed32_committer_signature(
+        banks_list=banks_list,
+        spec_state_indices=spec_state_indices,
+        k_rings=k_rings,
+        v_rings=v_rings,
+        a_rings=a_rings,
+        b_rings=b_rings,
+        A_logs=A_logs,
+        dt_biases=dt_biases,
+        num_spec_decodes=batch,
+        output_scale=output_scale,
+        use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+    )
+    existing = _FR13_FIXED32_COMMITTER.get(signature)
+    if existing is not None:
+        return dict(existing["contract"])
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL preseed called inside capture"
+        )
+
+    device = k_rings.device
+    dtype = k_rings.dtype
+    total = batch * 16
+    scratch = int(banks_list[0].shape[0]) - 1
+    state = {
+        "batch": batch,
+        "bank_rows": int(banks_list[0].shape[0]),
+        "num_kh": num_kh,
+        "dim_k": dim_k,
+        "num_vh": num_vh,
+        "dim_v": dim_v,
+        "scratch": scratch,
+        "accepted_paths": torch.zeros(
+            batch, 16, dtype=accepted_paths.dtype, device=device
+        ),
+        "accepted_lens": torch.zeros(
+            batch, dtype=accepted_lens.dtype, device=device
+        ),
+        "node_mat": torch.zeros(
+            batch, 16, dtype=torch.long, device=device
+        ),
+        "path_offsets": torch.arange(16, device=device),
+        "batch_offsets": torch.arange(batch, device=device),
+        "kbuf": torch.zeros(
+            48, total, num_kh, dim_k, device=device, dtype=dtype
+        ),
+        "vbuf": torch.zeros(
+            48, total, num_vh, dim_v, device=device, dtype=dtype
+        ),
+        "abuf": torch.full(
+            (48, total, num_vh), -1e4, device=device, dtype=dtype
+        ),
+        "bbuf": torch.zeros(
+            48, total, num_vh, device=device, dtype=dtype
+        ),
+        "qbuf": torch.zeros(
+            1, total, num_kh, dim_k, device=device, dtype=dtype
+        ),
+        "cu": (
+            torch.arange(batch + 1, device=device, dtype=torch.int64) * 16
+        ).to(torch.int32),
+        "ssi": torch.full(
+            (48, batch, 16),
+            scratch,
+            dtype=torch.int32,
+            device=device,
+        ),
+        "graph": None,
+        "preseed_capacity": 0,
+        "contract": {
+            "mode": _FR13_FIXED32_MODE,
+            "batch": batch,
+            "path_cap": 16,
+            "neutralizations": 5,
+            "ring_gathers": 4,
+            "fused_calls": 48,
+            "graph_replays_per_event": 1,
+            "preseed_capacity": 0,
+        },
+    }
+
+    def graph_body() -> None:
+        _fr13_fixed32_committer_graph_body(
+            state=state,
+            banks_list=banks_list,
+            spec_state_indices=spec_state_indices,
+            k_rings=k_rings,
+            v_rings=v_rings,
+            a_rings=a_rings,
+            b_rings=b_rings,
+            A_logs=A_logs,
+            dt_biases=dt_biases,
+            output_scale=output_scale,
+            use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+        )
+
+    running_rows = _fr13_fixed32_validate_running_rows(
+        spec_state_indices=spec_state_indices,
+        batch=batch,
+        bank_rows=int(banks_list[0].shape[0]),
+    )
+    saved_rows = [
+        bank[running_rows[layer]].clone()
+        for layer, bank in enumerate(banks_list)
+    ]
+    capture_stream = torch.cuda.Stream(device=device)
+    capture_stream.wait_stream(torch.cuda.current_stream(device))
+    with torch.cuda.stream(capture_stream):
+        for _ in range(3):
+            graph_body()
+    torch.cuda.current_stream(device).wait_stream(capture_stream)
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph, stream=capture_stream):
+        graph_body()
+    torch.cuda.current_stream(device).wait_stream(capture_stream)
+    for layer, bank in enumerate(banks_list):
+        bank[running_rows[layer]] = saved_rows[layer]
+    state["graph"] = graph
+    _FR13_FIXED32_COMMITTER[signature] = state
+    _FR13_FIXED32_COMMITTER_COUNTERS["captures"] += 1
+    print(
+        "[FR13_FIXED32_COMMIT_DEVICE_FILL] preseeded: "
+        f"mode={_FR13_FIXED32_MODE} B={batch} path_cap=16 "
+        "neutralizations=5 gathers=4 fused_calls=48 replays=1",
+        flush=True,
+    )
+    return dict(state["contract"])
+
+
+def preseed_fixed32_committer_graphs_all_batches(
+    *,
+    banks_list,
+    spec_state_indices,
+    accepted_paths,
+    accepted_lens,
+    k_rings,
+    v_rings,
+    a_rings,
+    b_rings,
+    A_logs,
+    dt_biases,
+    num_layers,
+    max_batch_size,
+    output_scale,
+    use_qk_l2norm_in_kernel=True,
+    burn_node_bank=False,
+    root_node=0,
+    max_path=16,
+) -> dict[str, object]:
+    """Capture fixed committer graphs for every supported batch before serving.
+
+    ``accepted_paths`` and ``accepted_lens`` have the exact server capacity.
+    The API temporarily seeds distinct, in-range running rows so every
+    occupancy up to that capacity can be captured before those slots have
+    carried live requests, then restores the state-index tensor before
+    returning. ``banks_list`` must be the persistent tuple reused by measured
+    replay, and the captured tensor objects and their storage must not be
+    rebound after this call.
+    """
+    capacity = int(max_batch_size)
+    global _FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY
+    prior_capacity = _FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY
+    if prior_capacity is not None and prior_capacity != capacity:
+        raise RuntimeError(
+            "FR13 fixed32 committer server capacity changed after preseed: "
+            f"{prior_capacity} -> {capacity}"
+        )
+    if capacity not in _FR13_FIXED32_BATCHES:
+        raise ValueError(
+            "FR13 fixed32 all-B preseed max_batch_size must be 1..4, "
+            f"got {capacity}"
+        )
+    batches = tuple(range(1, capacity + 1))
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL all-B preseed called inside capture"
+        )
+    if (
+        not torch.is_tensor(accepted_paths)
+        or tuple(accepted_paths.shape) != (capacity, 16)
+        or not accepted_paths.is_contiguous()
+    ):
+        raise ValueError(
+            "FR13 fixed32 all-B preseed requires contiguous accepted_paths "
+            f"shape={(capacity, 16)}, got "
+            f"{getattr(accepted_paths, 'shape', None)}"
+        )
+    if (
+        not torch.is_tensor(accepted_lens)
+        or tuple(accepted_lens.shape) != (capacity,)
+        or not accepted_lens.is_contiguous()
+    ):
+        raise ValueError(
+            "FR13 fixed32 all-B preseed requires contiguous accepted_lens "
+            f"shape={(capacity,)}, got "
+            f"{getattr(accepted_lens, 'shape', None)}"
+        )
+    if (
+        not torch.is_tensor(spec_state_indices)
+        or spec_state_indices.ndim != 3
+        or int(spec_state_indices.shape[0]) != 48
+        or int(spec_state_indices.shape[1]) < capacity
+        or int(spec_state_indices.shape[2]) < 1
+    ):
+        raise ValueError(
+            "FR13 fixed32 all-B preseed requires spec_state_indices "
+            f"shape=(48,>={capacity},>=1), got "
+            f"{getattr(spec_state_indices, 'shape', None)}"
+        )
+    if not isinstance(banks_list, tuple) or len(banks_list) != 48:
+        raise ValueError(
+            "FR13 fixed32 all-B preseed requires a persistent 48-bank tuple"
+        )
+    bank_rows = int(banks_list[0].shape[0])
+    if bank_rows < capacity + 1:
+        raise ValueError(
+            "FR13 fixed32 all-B preseed has too few bank rows for distinct "
+            f"warmup slots: rows={bank_rows} capacity={capacity}"
+        )
+    if not torch.is_tensor(k_rings) or (
+        k_rings.ndim != 5 or int(k_rings.shape[1]) < capacity
+    ):
+        raise ValueError(
+            "FR13 fixed32 all-B preseed ring batch must cover server "
+            f"capacity {capacity}, got "
+            f"{getattr(k_rings, 'shape', None)}"
+        )
+
+    saved_roots = spec_state_indices[:, :capacity, 0].clone()
+    safe_roots = torch.arange(
+        bank_rows - capacity - 1,
+        bank_rows - 1,
+        dtype=spec_state_indices.dtype,
+        device=spec_state_indices.device,
+    )
+    states = {}
+    try:
+        spec_state_indices[:, :capacity, 0].copy_(
+            safe_roots.view(1, capacity).expand(48, capacity)
+        )
+        for batch in batches:
+            preseed_fixed32_committer_graph(
+                banks_list=banks_list,
+                spec_state_indices=spec_state_indices,
+                accepted_paths=accepted_paths[:batch],
+                accepted_lens=accepted_lens[:batch],
+                k_rings=k_rings,
+                v_rings=v_rings,
+                a_rings=a_rings,
+                b_rings=b_rings,
+                A_logs=A_logs,
+                dt_biases=dt_biases,
+                num_layers=num_layers,
+                num_spec_decodes=batch,
+                output_scale=output_scale,
+                use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+                burn_node_bank=burn_node_bank,
+                root_node=root_node,
+                max_path=max_path,
+            )
+            signature = _fr13_fixed32_committer_signature(
+                banks_list=banks_list,
+                spec_state_indices=spec_state_indices,
+                k_rings=k_rings,
+                v_rings=v_rings,
+                a_rings=a_rings,
+                b_rings=b_rings,
+                A_logs=A_logs,
+                dt_biases=dt_biases,
+                num_spec_decodes=batch,
+                output_scale=output_scale,
+                use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+            )
+            states[batch] = _FR13_FIXED32_COMMITTER[signature]
+    finally:
+        spec_state_indices[:, :capacity, 0].copy_(saved_roots)
+
+    if tuple(sorted(states)) != batches:
+        raise RuntimeError(
+            "FR13 fixed32 all-B preseed did not cover every occupancy through "
+            f"server capacity {capacity}"
+        )
+    for state in states.values():
+        state["preseed_capacity"] = max(
+            int(state.get("preseed_capacity", 0)),
+            capacity,
+        )
+        state["contract"]["preseed_capacity"] = state["preseed_capacity"]
+    identity_key = _fr13_fixed32_committer_identity_key(
+        banks_list=banks_list,
+        spec_state_indices=spec_state_indices,
+        k_rings=k_rings,
+        v_rings=v_rings,
+        a_rings=a_rings,
+        b_rings=b_rings,
+        A_logs=A_logs,
+        dt_biases=dt_biases,
+        output_scale=output_scale,
+        use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+    )
+    prior_route = _FR13_FIXED32_COMMITTER_FAST_ROUTE.get("state")
+    if (
+        prior_route is not None
+        and prior_route["identity_key"] != identity_key
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 committer persistent operands changed after "
+            "all-B preseed"
+        )
+    _FR13_FIXED32_COMMITTER_FAST_ROUTE["state"] = {
+        "mode": _FR13_FIXED32_MODE,
+        "capacity": capacity,
+        "identity_key": identity_key,
+        "banks": banks_list,
+        "bank_anchor": banks_list[0],
+        "bank_tail": banks_list[-1],
+        "spec_state_indices": spec_state_indices,
+        "k_rings": k_rings,
+        "v_rings": v_rings,
+        "a_rings": a_rings,
+        "b_rings": b_rings,
+        "A_logs": A_logs,
+        "dt_biases": dt_biases,
+        "device": k_rings.device,
+        "output_scale": float(output_scale),
+        "use_qk_l2norm_in_kernel": bool(use_qk_l2norm_in_kernel),
+        "states_by_batch": dict(states),
+    }
+    _FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY = capacity
+    print(
+        "[FR13_FIXED32_COMMIT_DEVICE_FILL] all-B ready: "
+        f"batches={list(batches)} graphs_ready={len(batches)}",
+        flush=True,
+    )
+    return {
+        "mode": _FR13_FIXED32_MODE,
+        "max_batch_size": capacity,
+        "batches": batches,
+        "graphs": {
+            batch: dict(states[batch]["contract"])
+            for batch in batches
+        },
+        "all_batches_ready": True,
+    }
+
+
+def _fr13_fixed32_committer_replay(
+    *,
+    banks_list,
+    spec_state_indices,
+    accepted_paths,
+    accepted_lens,
+    k_rings,
+    v_rings,
+    a_rings,
+    b_rings,
+    A_logs,
+    dt_biases,
+    num_layers,
+    num_spec_decodes,
+    output_scale,
+    use_qk_l2norm_in_kernel,
+    runrow_init,
+    burn_node_bank,
+) -> None:
+    """Copy live inputs and enqueue exactly one preseeded fixed16 replay."""
+    if not runrow_init:
+        raise RuntimeError(
+            "FR13_FIXED32_COMMIT_DEVICE_FILL requires runrow_init=True"
+        )
+    state, batch = _fr13_fixed32_committer_fast_state(
+        banks_list=banks_list,
+        spec_state_indices=spec_state_indices,
+        accepted_paths=accepted_paths,
+        accepted_lens=accepted_lens,
+        k_rings=k_rings,
+        v_rings=v_rings,
+        a_rings=a_rings,
+        b_rings=b_rings,
+        A_logs=A_logs,
+        dt_biases=dt_biases,
+        num_layers=num_layers,
+        num_spec_decodes=num_spec_decodes,
+        output_scale=output_scale,
+        use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+        burn_node_bank=burn_node_bank,
+    )
+
+    state["accepted_paths"].copy_(accepted_paths)
+    state["accepted_lens"].copy_(accepted_lens)
+    _fr13_fixed32_validate_running_rows(
+        spec_state_indices=spec_state_indices,
+        batch=batch,
+        bank_rows=int(state["bank_rows"]),
+    )
+    lens = state["accepted_lens"].to(torch.long).view(batch, 1)
+    positions = torch.arange(16, device=accepted_paths.device).view(1, 16)
+    active = positions < lens
+    paths = state["accepted_paths"].to(torch.long)
+    dynamic_ok = (
+        (lens >= 0).all()
+        & (lens <= 15).all()
+        & ((~active) | ((paths >= 0) & (paths < 32))).all()
+    )
+    _fr13_fixed32_device_assert(
+        dynamic_ok,
+        "FR13_FIXED32_COMMIT_DEVICE_FILL dynamic contract violation",
+    )
+    state["graph"].replay()
+
+    counters = _FR13_FIXED32_COMMITTER_COUNTERS
+    counters["actual_replays_enqueued"] += 1
+    counters["actual_replays_by_batch"][batch] += 1
+    event = {
+        "mode": _FR13_FIXED32_MODE,
+        "batch": batch,
+        "replay_index": counters["actual_replays_enqueued"],
+        "status": "enqueued",
+    }
+    for callback in tuple(_FR13_FIXED32_COMMITTER_CALLBACKS):
+        callback(dict(event))
+    global _FR13_FIXED32_COMMITTER_ANNOUNCED
+    if not _FR13_FIXED32_COMMITTER_ANNOUNCED:
+        _FR13_FIXED32_COMMITTER_ANNOUNCED = True
+        print(
+            "[FR13_FIXED32_COMMIT_DEVICE_FILL ENGAGED] "
+            f"mode={_FR13_FIXED32_MODE} B={batch} fixed16 one-replay",
+            flush=True,
+        )
+
+
 def launch_tree_gdn_replay_all_layers(
     *,
     bank_anchor: torch.Tensor,
@@ -3286,10 +5711,38 @@ def launch_tree_gdn_replay_all_layers(
     bank tensor (pointer arg = alignment anchor; byte-A/B fix, see the
     kernel) and bank_off16 is the int64 device table of
     (bank[i].data_ptr() - bank[0].data_ptr()) // 16 derived from
-    build_replay_bank_pointer_table's pointer list (the caller re-asserts
-    the live banks' data_ptr() each commit, which also pins the anchor).
+    build_replay_bank_pointer_table's pointer list. Fixed32 mode binds a
+    persistent bank tuple and all captured operands during all-B preseed;
+    measured replay uses only its constant-size identity key. Legacy mode
+    retains the pointer and shape validation below.
     """
-    if globals().pop("_FR13_S1_STATE_DONE", False):
+    state_already_committed = globals().pop("_FR13_S1_STATE_DONE", False)
+    if _FR13_FIXED32_MODE is not None:
+        if state_already_committed:
+            raise RuntimeError(
+                "FR13_FIXED32_COMMIT_DEVICE_FILL cannot bypass the fixed16 "
+                "graph via _FR13_S1_STATE_DONE"
+            )
+        _fr13_fixed32_committer_replay(
+            banks_list=banks_list,
+            spec_state_indices=spec_state_indices,
+            accepted_paths=accepted_paths,
+            accepted_lens=accepted_lens,
+            k_rings=k_rings,
+            v_rings=v_rings,
+            a_rings=a_rings,
+            b_rings=b_rings,
+            A_logs=A_logs,
+            dt_biases=dt_biases,
+            num_layers=num_layers,
+            num_spec_decodes=num_spec_decodes,
+            output_scale=output_scale,
+            use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+            runrow_init=runrow_init,
+            burn_node_bank=burn_node_bank,
+        )
+        return
+    if state_already_committed:
         # =3: scan state already committed inside the S1 graph this step —
         # the staged tail must not double-commit (fused update is not
         # idempotent). Consume-once, set by the dm wrapper post-replay.
@@ -3824,13 +6277,40 @@ def launch_tree_gdn_prepared(
     _flags_export = staging_flags is not None
     _flags_arg = staging_flags if _flags_export else strict_mask  # dummy ptr when off (dead code)
     _flags_rows = int(staging_rows) if _flags_export else 0
+    _subtree_state = _FR13_SUBTREE_CACHE.get(
+        _subtree_cache_key(
+            n_actual, num_vh, dim_v, dim_k, q.device
+        )
+    )
+    if _FR13_SUBTREE_ROUTE_REQUESTED and _subtree_state is None:
+        raise RuntimeError(
+            f"FR13_SUBTREE_PARALLEL: no preseed for n_actual={n_actual}; "
+            "the armed route cannot fall back to the monolithic scan"
+        )
+    _subtree_route_armed = bool(
+        _subtree_state is not None and _subtree_state["route_armed"]
+    )
+    _subtree_selfcheck_armed = bool(
+        _subtree_state is not None
+        and _subtree_state["selfcheck_armed"]
+    )
 
-    def _launch_paths(_out):
+    def _launch_paths(_out, _count=count_invocation):
         # FR13_SUBTREE_PARALLEL route: one launch per path level; paths in a
         # level scan concurrently on grid axis 2. RING/RAW semantics match
         # the monolith per node; PIGGYBACK unsupported (asserted below).
-        st = subtree_get(n_actual)
-        for _li, (_nodes, _pars, _mlen, _npaths) in enumerate(st["levels"]):
+        st = _subtree_state
+        if st is None:
+            raise RuntimeError(
+                f"FR13_SUBTREE_PARALLEL: no preseed for n_actual={n_actual}"
+            )
+        for _li, (
+            _nodes,
+            _pars,
+            _mlen,
+            _npaths,
+            _lengths,
+        ) in enumerate(st["levels"]):
             _tree_gdn_path_kernel[(num_vh, triton.cdiv(dim_v, _bv), _npaths)](
                 q,
                 k,
@@ -3844,8 +6324,10 @@ def launch_tree_gdn_prepared(
                 h0,
                 h0_indices,
                 h0_num_accepted_tokens,
+                invocation_counter,
                 _nodes,
                 _pars,
+                _lengths,
                 st["export"],
                 st["emask"],
                 _out,
@@ -3868,6 +6350,7 @@ def launch_tree_gdn_prepared(
                 H0_BANK_STRIDE=h0_bank_stride,
                 H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
                 RAW_GATING=raw_gating,
+                COUNT_INVOCATION=_count and (_li == 0),
                 SCAN_ALIGN=_scan_align,
                 MAX_PATH_LEN=_mlen,
                 RING_EXPORT=_ring_export,
@@ -3876,8 +6359,21 @@ def launch_tree_gdn_prepared(
                 num_warps=_num_warps,
                 **_extra_launch_kwargs,
             )
+        if not st["engaged_announced"]:
+            st["engaged_announced"] = True
+            print(
+                "[FR13_SUBTREE_PARALLEL ENGAGED] "
+                f"n_actual={n_actual} schedule={st['schedule']} "
+                f"critical={st['critical']}",
+                flush=True,
+            )
 
-    def _launch(_out, _pg_flag, _hc=(_hc_mask, _hc_rows, _hc_slots_lo, _hc_slots_hi)):
+    def _launch(
+        _out,
+        _pg_flag,
+        _hc=(_hc_mask, _hc_rows, _hc_slots_lo, _hc_slots_hi),
+        _count=count_invocation,
+    ):
         _tree_gdn_kernel[grid](
             q,
             k,
@@ -3916,7 +6412,7 @@ def launch_tree_gdn_prepared(
             H0_BANK_STRIDE=h0_bank_stride,
             H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
             RAW_GATING=raw_gating,
-            COUNT_INVOCATION=count_invocation,
+            COUNT_INVOCATION=_count,
             SCAN_ALIGN=_scan_align,
             N_LOOP=_n_loop,
             PARENT_GATHER=_pg_flag,
@@ -3934,37 +6430,113 @@ def launch_tree_gdn_prepared(
             **_extra_launch_kwargs,
         )
 
+    def _byte_equal(_left, _right):
+        return torch.equal(
+            _left.contiguous().view(torch.uint8),
+            _right.contiguous().view(torch.uint8),
+        )
+
+    def _snapshot_external():
+        _snapshot = {}
+        if _ring_export:
+            _snapshot.update(
+                ring_k=ring_k.clone(),
+                ring_v=ring_v.clone(),
+                ring_a=ring_a.clone(),
+                ring_b=ring_b.clone(),
+            )
+        if _flags_export:
+            _snapshot["flags"] = _flags_arg.clone()
+        return _snapshot
+
+    def _restore_external(_snapshot):
+        for _name, _tensor in _snapshot.items():
+            if _name == "ring_k":
+                ring_k.copy_(_tensor)
+            elif _name == "ring_v":
+                ring_v.copy_(_tensor)
+            elif _name == "ring_a":
+                ring_a.copy_(_tensor)
+            elif _name == "ring_b":
+                ring_b.copy_(_tensor)
+            else:
+                _flags_arg.copy_(_tensor)
+
+    def _external_mismatches(_reference):
+        _actual = _snapshot_external()
+        return [
+            _name
+            for _name, _tensor in _reference.items()
+            if not _byte_equal(_actual[_name], _tensor)
+        ]
+
+    def _counter_before_selfcheck():
+        return invocation_counter.clone() if count_invocation else None
+
+    def _assert_counter_once(_before, _label):
+        if _before is not None and not torch.equal(
+            invocation_counter, _before + 1
+        ):
+            raise RuntimeError(
+                f"{_label} SELFCHECK MISMATCH: invocation counter did not "
+                "advance exactly once"
+            )
+
     if parent_gather_selfcheck_on():
         # In-process byte-identity gate: run BOTH scans on the SAME inputs and
         # raise on any bit difference (boot enforce_eager; the host compare syncs).
         out_ref = torch.empty_like(out)
-        _launch(out_ref, False)
+        _external_before = _snapshot_external()
+        _counter_before = _counter_before_selfcheck()
+        _launch(out_ref, False, _count=False)
+        _external_ref = _snapshot_external()
+        _restore_external(_external_before)
         _launch(out, True)
         _n = int(n_actual)
-        if not torch.equal(out_ref[:_n], out[:_n]):
+        _external_bad = _external_mismatches(_external_ref)
+        if not _byte_equal(out_ref[:_n], out[:_n]) or _external_bad:
             _diff = (out_ref[:_n].float() - out[:_n].float()).abs().max().item()
             raise RuntimeError(
                 "FR13_PARENT_GATHER SELFCHECK MISMATCH: parent gather is NOT "
                 f"byte-identical to the ancestor loop (max_abs={_diff:.3e}, "
-                f"n_actual={_n}, n_pad={n_pad})"
+                f"n_actual={_n}, n_pad={n_pad}, external={_external_bad})"
             )
-    elif subtree_parallel_on():
+        _assert_counter_once(_counter_before, "FR13_PARENT_GATHER")
+    elif _subtree_route_armed:
         if piggyback_export:
             raise ValueError(
                 "FR13_SUBTREE_PARALLEL does not support PIGGYBACK_EXPORT"
             )
-        if subtree_parallel_selfcheck_on():
-            # In-process byte gate: monolith -> out_ref, path route -> out.
+        if _subtree_selfcheck_armed:
+            # In-process byte gate: monolith -> reference, restore every
+            # externally visible buffer, then path route -> candidate.
             out_ref = torch.empty_like(out)
-            _launch(out_ref, _parent_gather)
+            _external_before = _snapshot_external()
+            _counter_before = _counter_before_selfcheck()
+            _launch(out_ref, _parent_gather, _count=False)
+            _external_ref = _snapshot_external()
+            _restore_external(_external_before)
             _launch_paths(out)
             _n = int(n_actual)
-            if not torch.equal(out_ref[:_n], out[:_n]):
+            _external_bad = _external_mismatches(_external_ref)
+            if not _byte_equal(out_ref[:_n], out[:_n]) or _external_bad:
                 _diff = (out_ref[:_n].float() - out[:_n].float()).abs().max().item()
                 raise RuntimeError(
                     "FR13_SUBTREE_PARALLEL SELFCHECK MISMATCH: path route is "
                     f"NOT byte-identical to the monolith (max_abs={_diff:.3e}, "
-                    f"n_actual={_n})"
+                    f"n_actual={_n}, external={_external_bad})"
+                )
+            _assert_counter_once(_counter_before, "FR13_SUBTREE_PARALLEL")
+            _st = _subtree_state
+            assert _st is not None
+            if not _st["selfcheck_pass_announced"]:
+                _st["selfcheck_pass_announced"] = True
+                print(
+                    "[FR13_SUBTREE_PARALLEL SELFCHECK PASS] "
+                    f"byte_equal=1 external_state_equal=1 counter_once=1 "
+                    f"n_actual={_n} "
+                    f"schedule={_st['schedule']} critical={_st['critical']}",
+                    flush=True,
                 )
         else:
             _launch_paths(out)
@@ -3972,16 +6544,28 @@ def launch_tree_gdn_prepared(
         # In-process byte-identity gate for FR13_HC_INTERNAL (same discipline:
         # boot enforce_eager; the host compare syncs).
         out_ref = torch.empty_like(out)
-        _launch(out_ref, _parent_gather, _hc=(0, 0, 0, 0))
+        _external_before = _snapshot_external()
+        _counter_before = _counter_before_selfcheck()
+        _launch(
+            out_ref,
+            _parent_gather,
+            _hc=(0, 0, 0, 0),
+            _count=False,
+        )
+        _external_ref = _snapshot_external()
+        _restore_external(_external_before)
         _launch(out, _parent_gather)
         _n = int(n_actual)
-        if not torch.equal(out_ref[:_n], out[:_n]):
+        _external_bad = _external_mismatches(_external_ref)
+        if not _byte_equal(out_ref[:_n], out[:_n]) or _external_bad:
             _diff = (out_ref[:_n].float() - out[:_n].float()).abs().max().item()
             raise RuntimeError(
                 "FR13_HC_INTERNAL SELFCHECK MISMATCH: compacted h_cache is NOT "
                 f"byte-identical to the full-span cache (max_abs={_diff:.3e}, "
-                f"n_actual={_n}, n_pad={n_pad}, hc_mask=0x{_hc_mask:x})"
+                f"n_actual={_n}, n_pad={n_pad}, hc_mask=0x{_hc_mask:x}, "
+                f"external={_external_bad})"
             )
+        _assert_counter_once(_counter_before, "FR13_HC_INTERNAL")
     else:
         _launch(out, _parent_gather)
     return out, None
