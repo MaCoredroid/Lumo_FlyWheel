@@ -880,7 +880,7 @@ _FIXED32_COUNTER_KEYS = frozenset(
         "cfwd_pending",
     }
 )
-_FIXED32_BOUNDARY_SNAPSHOT_SCHEMA = "fr13-fixed32-boundary-snapshot-v2"
+_FIXED32_BOUNDARY_SNAPSHOT_SCHEMA = "fr13-fixed32-boundary-snapshot-v3"
 _FIXED32_BOUNDARY_TOP_KEYS = frozenset(
     {
         "schema",
@@ -916,8 +916,11 @@ _FIXED32_REQUIRED_METRICS = {
 }
 
 
-def _validate_fixed32_ack(ack: Any, *, label: str) -> dict[str, Any]:
-    counters = ack.counters
+def _validate_fixed32_counter_payload(
+    counters: Any,
+    *,
+    label: str,
+) -> dict[str, Any]:
     if not isinstance(counters, dict) or set(counters) != _FIXED32_COUNTER_KEYS:
         raise Fixed32BoundaryError(
             f"{label} counters keys mismatch: {sorted(counters) if isinstance(counters, dict) else counters!r}"
@@ -955,6 +958,38 @@ def _validate_fixed32_ack(ack: Any, *, label: str) -> dict[str, Any]:
     return dict(counters)
 
 
+def _validate_fixed32_ack(ack: Any, *, label: str) -> dict[str, Any]:
+    mode = getattr(ack, "mode", None)
+    if not isinstance(mode, str):
+        raise Fixed32BoundaryError(f"{label}.mode must be a string")
+    producer_pid = getattr(ack, "producer_pid", None)
+    if type(producer_pid) is not int or producer_pid <= 0:
+        raise Fixed32BoundaryError(
+            f"{label}.producer_pid must be a positive integer"
+        )
+    generation = getattr(ack, "generation", None)
+    if type(generation) is not int or generation < 0:
+        raise Fixed32BoundaryError(
+            f"{label}.generation must be a nonnegative integer"
+        )
+    nonce = getattr(ack, "nonce", None)
+    if (
+        not isinstance(nonce, str)
+        or len(nonce) != 64
+        or any(character not in "0123456789abcdef" for character in nonce)
+    ):
+        raise Fixed32BoundaryError(
+            f"{label}.nonce must be 64 lowercase hex characters"
+        )
+    action = getattr(ack, "action", None)
+    if not isinstance(action, str):
+        raise Fixed32BoundaryError(f"{label}.action must be a string")
+    return _validate_fixed32_counter_payload(
+        getattr(ack, "counters", None),
+        label=label,
+    )
+
+
 def _fixed32_duplicate_checked(
     pairs: list[tuple[str, Any]],
 ) -> dict[str, Any]:
@@ -986,6 +1021,38 @@ def _fixed32_nonnegative_int(value: Any, label: str) -> int:
     return value
 
 
+def _fixed32_optional_nonnegative_int(value: Any, label: str) -> int | None:
+    if value is None:
+        return None
+    return _fixed32_nonnegative_int(value, label)
+
+
+def _fixed32_nonnegative_int_map(
+    value: Any,
+    *,
+    expected_keys: frozenset[str],
+    label: str,
+) -> dict[str, int]:
+    if not isinstance(value, dict) or frozenset(value) != expected_keys:
+        actual = sorted(value) if isinstance(value, dict) else type(value).__name__
+        raise Fixed32BoundaryError(
+            f"{label} keys mismatch: expected={sorted(expected_keys)} actual={actual}"
+        )
+    return {
+        key: _fixed32_nonnegative_int(item, f"{label}.{key}")
+        for key, item in value.items()
+    }
+
+
+def _fixed32_nonnegative_int_list(value: Any, *, label: str) -> list[int]:
+    if not isinstance(value, list):
+        raise Fixed32BoundaryError(f"{label} must be a list")
+    return [
+        _fixed32_nonnegative_int(item, f"{label}[{index}]")
+        for index, item in enumerate(value)
+    ]
+
+
 def _fixed32_nonnegative_float(value: Any, label: str) -> float:
     if (
         isinstance(value, bool)
@@ -1003,6 +1070,10 @@ def _load_fixed32_boundary_snapshot(
     ack: Any,
     server_capacity: int,
 ) -> tuple[dict[str, Any], Path, str]:
+    ack_counters = _validate_fixed32_ack(
+        ack,
+        label="generation boundary snapshot ack",
+    )
     path = Path(f"{base_path}.{ack.generation}.json")
     try:
         raw = path.read_bytes()
@@ -1025,6 +1096,18 @@ def _load_fixed32_boundary_snapshot(
             f"invalid generation boundary snapshot {path}: {error}"
         ) from error
     _fixed32_exact_keys(payload, _FIXED32_BOUNDARY_TOP_KEYS, str(path))
+    producer_pid = _fixed32_nonnegative_int(
+        payload["producer_pid"], f"{path}:producer_pid"
+    )
+    _fixed32_nonnegative_int(
+        payload["generation"], f"{path}:generation"
+    )
+    if producer_pid == 0:
+        raise Fixed32BoundaryError(f"{path}:producer_pid must be positive")
+    snapshot_counters = _validate_fixed32_counter_payload(
+        payload["counters"],
+        label=f"{path}:snapshot",
+    )
     if (
         payload["schema"] != _FIXED32_BOUNDARY_SNAPSHOT_SCHEMA
         or payload["mode"] != ack.mode
@@ -1032,7 +1115,7 @@ def _load_fixed32_boundary_snapshot(
         or payload["generation"] != ack.generation
         or payload["nonce"] != ack.nonce
         or payload["action"] != ack.action
-        or payload["counters"] != ack.counters
+        or snapshot_counters != ack_counters
     ):
         raise Fixed32BoundaryError(
             f"generation boundary snapshot does not bind to ack: {path}"
@@ -1070,15 +1153,30 @@ def _load_fixed32_boundary_snapshot(
     spec_drafts = _fixed32_nonnegative_int(
         fixed["spec_drafts"], f"{path}:fixed32.spec_drafts"
     )
+    complete_spec_rows = _fixed32_nonnegative_int(
+        fixed["complete_spec_rows"],
+        f"{path}:fixed32.complete_spec_rows",
+    )
+    spec_tokens = _fixed32_nonnegative_int(
+        fixed["spec_tokens"], f"{path}:fixed32.spec_tokens"
+    )
+    first_forward_step = _fixed32_optional_nonnegative_int(
+        fixed["first_forward_step"],
+        f"{path}:fixed32.first_forward_step",
+    )
+    last_forward_step = _fixed32_optional_nonnegative_int(
+        fixed["last_forward_step"],
+        f"{path}:fixed32.last_forward_step",
+    )
     if (
-        steps != ack.counters["pure_decode_forward_steps"]
-        or events != ack.counters["complete_work_census_events"]
-        or fixed["first_forward_step"]
-        != ack.counters["work_census_first_forward_step"]
-        or fixed["last_forward_step"]
-        != ack.counters["work_census_last_forward_step"]
-        or fixed["complete_spec_rows"] != spec_drafts
-        or fixed["spec_tokens"] != 31 * spec_drafts
+        steps != ack_counters["pure_decode_forward_steps"]
+        or events != ack_counters["complete_work_census_events"]
+        or first_forward_step
+        != ack_counters["work_census_first_forward_step"]
+        or last_forward_step
+        != ack_counters["work_census_last_forward_step"]
+        or complete_spec_rows != spec_drafts
+        or spec_tokens != 31 * spec_drafts
     ):
         raise Fixed32BoundaryError(f"{path}: fixed counters do not reconcile")
     histogram = fixed["batch_histogram"]
@@ -1139,29 +1237,178 @@ def _load_fixed32_boundary_snapshot(
 
     committer = metrics["committer"]
     conv = metrics["conv_pregather"]
-    if (
-        not isinstance(committer, dict)
-        or committer.get("all_batches_ready") is not True
-        or committer.get("required_capacity") != server_capacity
-        or committer.get("preseeded_graphs") != server_capacity
-        or committer.get("captures") != server_capacity
-        or committer.get("actual_replays_enqueued") != events
-        or not isinstance(conv, dict)
-        or conv.get("preseeded") is not True
-        or conv.get("pointer_entries") != 48
-        or conv.get("max_batch_size") != server_capacity
-        or conv.get("actual_stages") != events
-    ):
-        raise Fixed32BoundaryError(
-            f"{path}: committer/pregather counters do not reconcile"
-        )
     expected_by_batch = {str(batch): histogram[batch] for batch in range(1, 5)}
+    expected_capture_by_batch = {
+        str(batch): int(batch <= server_capacity) for batch in range(1, 5)
+    }
+    zero_by_batch = {str(batch): 0 for batch in range(1, 5)}
+    expected_ready_capacities = {
+        str(batch): server_capacity
+        for batch in range(1, server_capacity + 1)
+    }
+    expected_preseeded_batches = list(range(1, server_capacity + 1))
+    batch_keys = frozenset(str(batch) for batch in range(1, 5))
+    ready_capacity_keys = frozenset(expected_ready_capacities)
+    _fixed32_exact_keys(
+        committer,
+        frozenset(
+            {
+                "actual_replays_by_batch",
+                "actual_replays_enqueued",
+                "all_batches_ready",
+                "captures",
+                "fast_route_ready",
+                "maximum_ready_capacity",
+                "nonpure_dispatch",
+                "nonpure_committer_replays_by_batch",
+                "nonpure_committer_replays_enqueued",
+                "preseeded_batches",
+                "preseeded_graphs",
+                "ready_capacities",
+                "required_capacity",
+            }
+        ),
+        f"{path}:committer",
+    )
+    _fixed32_exact_keys(
+        conv,
+        frozenset(
+            {
+                "preseeded",
+                "pointer_entries",
+                "preseeded_batches",
+                "max_batch_size",
+                "graph_capture_stages",
+                "graph_capture_stages_by_batch",
+                "profile_capture_stages",
+                "aux_capture_stages",
+                "actual_stages",
+                "actual_stages_by_batch",
+                "graph_replay_stages",
+                "graph_replay_stages_by_batch",
+            }
+        ),
+        f"{path}:conv_pregather",
+    )
+    for key in (
+        "actual_replays_enqueued",
+        "captures",
+        "maximum_ready_capacity",
+        "nonpure_committer_replays_enqueued",
+        "preseeded_graphs",
+        "required_capacity",
+    ):
+        _fixed32_nonnegative_int(committer[key], f"{path}:committer.{key}")
+    for key in (
+        "pointer_entries",
+        "max_batch_size",
+        "graph_capture_stages",
+        "profile_capture_stages",
+        "aux_capture_stages",
+        "actual_stages",
+        "graph_replay_stages",
+    ):
+        _fixed32_nonnegative_int(conv[key], f"{path}:conv_pregather.{key}")
+    committer_by_batch = _fixed32_nonnegative_int_map(
+        committer["actual_replays_by_batch"],
+        expected_keys=batch_keys,
+        label=f"{path}:committer.actual_replays_by_batch",
+    )
+    nonpure_replays_by_batch = _fixed32_nonnegative_int_map(
+        committer["nonpure_committer_replays_by_batch"],
+        expected_keys=batch_keys,
+        label=(
+            f"{path}:committer.nonpure_committer_replays_by_batch"
+        ),
+    )
+    nonpure_dispatch = _fixed32_nonnegative_int_map(
+        committer["nonpure_dispatch"],
+        expected_keys=frozenset(
+            {
+                "guarded_steps",
+                "piecewise_steps",
+                "none_steps",
+                "forbidden_full_steps",
+            }
+        ),
+        label=f"{path}:committer.nonpure_dispatch",
+    )
+    committer_ready_capacities = _fixed32_nonnegative_int_map(
+        committer["ready_capacities"],
+        expected_keys=ready_capacity_keys,
+        label=f"{path}:committer.ready_capacities",
+    )
+    committer_preseeded_batches = _fixed32_nonnegative_int_list(
+        committer["preseeded_batches"],
+        label=f"{path}:committer.preseeded_batches",
+    )
+    conv_capture_by_batch = _fixed32_nonnegative_int_map(
+        conv["graph_capture_stages_by_batch"],
+        expected_keys=batch_keys,
+        label=f"{path}:conv_pregather.graph_capture_stages_by_batch",
+    )
+    conv_host_by_batch = _fixed32_nonnegative_int_map(
+        conv["actual_stages_by_batch"],
+        expected_keys=batch_keys,
+        label=f"{path}:conv_pregather.actual_stages_by_batch",
+    )
+    conv_replays_by_batch = _fixed32_nonnegative_int_map(
+        conv["graph_replay_stages_by_batch"],
+        expected_keys=batch_keys,
+        label=f"{path}:conv_pregather.graph_replay_stages_by_batch",
+    )
+    conv_preseeded_batches = _fixed32_nonnegative_int_list(
+        conv["preseeded_batches"],
+        label=f"{path}:conv_pregather.preseeded_batches",
+    )
+    nonpure_replays = committer[
+        "nonpure_committer_replays_enqueued"
+    ]
+    expected_raw_by_batch = {
+        str(batch): expected_by_batch[str(batch)]
+        + nonpure_replays_by_batch[str(batch)]
+        for batch in range(1, 5)
+    }
     if (
-        committer.get("actual_replays_by_batch") != expected_by_batch
-        or conv.get("actual_stages_by_batch") != expected_by_batch
+        committer["all_batches_ready"] is not True
+        or committer["fast_route_ready"] is not True
+        or committer["required_capacity"] != server_capacity
+        or committer["maximum_ready_capacity"] != server_capacity
+        or committer["preseeded_graphs"] != server_capacity
+        or committer["captures"] != server_capacity
+        or committer_preseeded_batches != expected_preseeded_batches
+        or committer_ready_capacities != expected_ready_capacities
+        or nonpure_dispatch["guarded_steps"]
+        != (
+            nonpure_dispatch["piecewise_steps"]
+            + nonpure_dispatch["none_steps"]
+            + nonpure_dispatch["forbidden_full_steps"]
+        )
+        or nonpure_dispatch["forbidden_full_steps"] != 0
+        or nonpure_replays != sum(nonpure_replays_by_batch.values())
+        or nonpure_replays > nonpure_dispatch["guarded_steps"]
+        or any(
+            nonpure_replays_by_batch[str(batch)]
+            for batch in range(server_capacity, 5)
+        )
+        or committer["actual_replays_enqueued"]
+        != events + nonpure_replays
+        or committer_by_batch != expected_raw_by_batch
+        or conv["preseeded"] is not True
+        or conv["pointer_entries"] != 48
+        or conv_preseeded_batches != expected_preseeded_batches
+        or conv["max_batch_size"] != server_capacity
+        or conv["graph_capture_stages"] != server_capacity
+        or conv_capture_by_batch != expected_capture_by_batch
+        or conv["profile_capture_stages"] != 0
+        or conv["aux_capture_stages"] != 0
+        or conv["actual_stages"] != 0
+        or conv_host_by_batch != zero_by_batch
+        or conv["graph_replay_stages"] != events
+        or conv_replays_by_batch != expected_by_batch
     ):
         raise Fixed32BoundaryError(
-            f"{path}: per-batch committer/pregather counts do not reconcile"
+            f"{path}: committer/nonpure/in-graph pregather counters do not reconcile"
         )
     return payload, path, hashlib.sha256(raw).hexdigest()
 

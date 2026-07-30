@@ -26329,7 +26329,7 @@ def _fr13_f32_flush_write_census(events, *, final):
 
 def _fr13_f32_flush_write_boundary(request, counters):
     (
-        _gdn, events, _forward_steps, _first, _last, sfwd, dfwd, cfwd,
+        gdn, events, _forward_steps, _first, _last, sfwd, dfwd, cfwd,
     ) = _fr13_f32_flush_runtime_state()
     from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
         fixed32_committer_counters as commit_counters,
@@ -26343,12 +26343,32 @@ def _fr13_f32_flush_write_boundary(request, counters):
     pregather_metrics["graph_replay_stages_by_batch"] = {
         batch: int(batch_histogram[str(batch)]) for batch in (1, 2, 3, 4)
     }
+    nonpure_replays_by_batch = {
+        batch: int(value)
+        for batch, value in (
+            gdn._fr13_fixed32_nonpure_commit_replays_by_batch()
+        ).items()
+    }
+    nonpure_dispatch = {
+        key: int(value)
+        for key, value in (
+            gdn._fr13_fixed32_nonpure_dispatch_counters()
+        ).items()
+    }
+    committer_metrics = dict(commit_counters())
+    committer_metrics["nonpure_committer_replays_enqueued"] = sum(
+        nonpure_replays_by_batch.values()
+    )
+    committer_metrics["nonpure_committer_replays_by_batch"] = (
+        nonpure_replays_by_batch
+    )
+    committer_metrics["nonpure_dispatch"] = nonpure_dispatch
     canonical_events = _fr13_f32_flush_json.dumps(
         events, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
     spec_drafts = sum(int(event["batch_size"]) for event in events)
     snapshot = {
-        "schema": "fr13-fixed32-boundary-snapshot-v2",
+        "schema": "fr13-fixed32-boundary-snapshot-v3",
         "mode": _FR13_FIXED32_FLUSH_MODE,
         "producer_pid": _FR13_FIXED32_FLUSH_PID,
         "generation": request["generation"],
@@ -26408,7 +26428,7 @@ def _fr13_f32_flush_write_boundary(request, counters):
                 ),
                 "spans": int(cfwd._n_spans) if cfwd is not None else 0,
             },
-            "committer": commit_counters(),
+            "committer": committer_metrics,
             "conv_pregather": pregather_metrics,
         },
     }

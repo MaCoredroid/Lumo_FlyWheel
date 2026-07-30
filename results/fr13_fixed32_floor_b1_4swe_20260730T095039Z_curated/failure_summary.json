@@ -1,0 +1,83 @@
+{
+  "campaign": {
+    "batch_size": 1,
+    "concurrency": 1,
+    "declared_task_count": 4,
+    "source_git_commit": "ddb27f98f4c9f4c3e5a4f44c0321e9fc16582764",
+    "tag": "b1_4swe_f32_20260730T095039Z",
+    "workload": "canonical_swe_bench_verified_exact4"
+  },
+  "closure": {
+    "external_manifest_canonical_sha256": "2b68022a4660245ceba01a0b4d41eb552f1bd647031a9d430526e66be1c2a6a0",
+    "external_manifest_file_sha256": "a422f6f0cb3ffbf4c3e0a6953ba2766f197933db8ba3712af7648953049f5c6d",
+    "external_manifest_launch_end_byte_equal": true,
+    "no_campaign_containers_remain": true,
+    "runtime_manifest_canonical_sha256": "ecab053e298eb96f11aebae11253b8b30519c3f0c625ea100a36f647c2d0e89e",
+    "runtime_manifest_file_sha256": "2f2204c52596813d96d354240035204ad743b270fab90d1beeab75da1525bab9",
+    "runtime_manifest_launch_end_byte_equal": true,
+    "terminal_flush_status": "ok"
+  },
+  "failure": {
+    "arm": "tail6_fixed32",
+    "phase": "first_task_post_boundary_validation",
+    "root_error": "committer/pregather counters do not reconcile",
+    "runtime_cause_status": "VALID_RUNTIME_SNAPSHOT_REJECTED_BY_STALE_TASK_VALIDATOR",
+    "static_analysis_conclusion": "The runtime completed one committer graph replay and one captured in-graph pregather replay per fixed32 event. Host pregather stages correctly remained zero because host staging is forbidden. The task-side boundary validator still required host stages to equal event count and therefore rejected valid in-graph counters. The authoritative floor gate already enforces the correct split between zero host stages, one capture per supported batch specialization, and one graph replay per event.",
+    "wrapper_chain": [
+      "task post-boundary validation failed",
+      "direct orchestrator failed",
+      "no valid complete task bracket",
+      "serving gate terminated campaign"
+    ]
+  },
+  "observer_evidence": {
+    "candidate_post_boundary_snapshot_sha256": "3ea2534aeb149da517bd20727ab6a24cb8272b589cc1378b6a4b72fc52dc7fc8",
+    "committer_graph_replays": 520,
+    "complete_pre_post_brackets": 0,
+    "complete_work_census_events": 520,
+    "event_batch_histogram": {
+      "1": 520,
+      "2": 0,
+      "3": 0,
+      "4": 0
+    },
+    "event_sha256": "d9ad33b6d165f7e7ad289d4d1b455b1c1e9e870b1774c12aeb78428ca8719720",
+    "final_boundary_snapshot_sha256": "a7247c89700927d6e305e251003f31a8f06cb25b4c5dac17331f83d55e3fcff9",
+    "forward_step_first": 0,
+    "forward_step_last": 519,
+    "host_pregather_stages": 0,
+    "in_graph_pregather_captures": 1,
+    "in_graph_pregather_replays": 520,
+    "pending_timer_samples": 0,
+    "pre_boundary_snapshot_sha256": "8cad400313ce8e8a2a111e418a7be45cf01d491aaf3f5d389627097e579c6b6a",
+    "profile_or_auxiliary_pregather_captures": 0,
+    "speculative_rows": 520,
+    "speculative_tokens": 16120,
+    "work_census_terminal_records": 1
+  },
+  "outcome": {
+    "acceptance_evidence": false,
+    "direct_orchestrator_return_code": 1,
+    "evaluated_tasks": 0,
+    "finalized_tasks": 0,
+    "hydra27_started": false,
+    "serving_gate_return_code": 14,
+    "status": "INVALID_ABORTED",
+    "tail6_completed": false,
+    "tail6_started": true,
+    "tasks_started": 1,
+    "timing_result_present": false
+  },
+  "privacy": {
+    "contains_environment": false,
+    "contains_process_identity": false,
+    "contains_prompts": false,
+    "contains_raw_logs": false,
+    "contains_request_identity": false,
+    "contains_responses": false,
+    "contains_source_paths": false,
+    "contains_task_identity": false,
+    "contains_task_patches": false
+  },
+  "schema": "fr13.fixed32.campaign_failure_summary.v1"
+}

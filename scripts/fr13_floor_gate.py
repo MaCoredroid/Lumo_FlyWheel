@@ -219,7 +219,7 @@ BOOTSTRAP_SEED = 20260729
 RUNTIME_MANIFEST_PROFILE = "fixed32"
 RUNTIME_MANIFEST_SEQUENCE = "scripts/fr13_fixed32_floor_timers_seq.sh"
 FIXED32_BOUNDARY_SCHEMA = "fr13-fixed32-task-boundary-v1"
-FIXED32_RUNTIME_SNAPSHOT_SCHEMA = "fr13-fixed32-boundary-snapshot-v2"
+FIXED32_RUNTIME_SNAPSHOT_SCHEMA = "fr13-fixed32-boundary-snapshot-v3"
 FIXED32_COUNTER_KEYS = frozenset(
     {
         "pure_decode_forward_steps",
@@ -385,26 +385,26 @@ def validate_fixed32_counters(payload: object, *, label: str) -> dict[str, Any]:
     return payload
 
 
-def validate_fixed32_ack(
+def strict_fixed32_ack_payload(
     payload: object,
     *,
     label: str,
-    mode: str,
-    producer_pid: int,
 ) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise GateError(f"{label}: ack must be an object")
     exact_keys(payload, FLUSH_ACK_KEYS, label)
-    if (
-        payload["schema"] != FLUSH_ACK_SCHEMA
-        or payload["mode"] != mode
-        or payload["producer_pid"] != producer_pid
-        or payload["status"] != "ok"
-    ):
-        raise GateError(f"{label}: ack identity/status mismatch")
-    generation = payload["generation"]
-    if isinstance(generation, bool) or not isinstance(generation, int) or generation < 0:
-        raise GateError(f"{label}: invalid generation")
+    if payload["schema"] != FLUSH_ACK_SCHEMA or payload["status"] != "ok":
+        raise GateError(f"{label}: ack schema/status mismatch")
+    if not isinstance(payload["mode"], str):
+        raise GateError(f"{label}.mode: expected string")
+    ack_producer_pid = strict_positive_int(
+        payload["producer_pid"],
+        label=f"{label}.producer_pid",
+    )
+    generation = strict_nonnegative_int(
+        payload["generation"],
+        label=f"{label}.generation",
+    )
     nonce = payload["nonce"]
     if (
         not isinstance(nonce, str)
@@ -413,8 +413,26 @@ def validate_fixed32_ack(
         raise GateError(f"{label}: invalid nonce")
     if not isinstance(payload["action"], str):
         raise GateError(f"{label}: action must be a string")
-    validate_fixed32_counters(payload["counters"], label=label)
-    return payload
+    counters = validate_fixed32_counters(payload["counters"], label=label)
+    return {
+        **payload,
+        "producer_pid": ack_producer_pid,
+        "generation": generation,
+        "counters": counters,
+    }
+
+
+def validate_fixed32_ack(
+    payload: object,
+    *,
+    label: str,
+    mode: str,
+    producer_pid: int,
+) -> dict[str, Any]:
+    ack = strict_fixed32_ack_payload(payload, label=label)
+    if ack["mode"] != mode or ack["producer_pid"] != producer_pid:
+        raise GateError(f"{label}: ack identity mismatch")
+    return ack
 
 
 def integral(value: float, label: str) -> int:
@@ -422,6 +440,67 @@ def integral(value: float, label: str) -> int:
     if not math.isfinite(value) or abs(value - rounded) > 1e-6:
         raise GateError(f"{label} is not an integral counter: {value}")
     return int(rounded)
+
+
+def strict_nonnegative_int(value: object, *, label: str) -> int:
+    if type(value) is not int or value < 0:
+        raise GateError(f"{label}: expected nonnegative integer")
+    return value
+
+
+def strict_positive_int(value: object, *, label: str) -> int:
+    result = strict_nonnegative_int(value, label=label)
+    if result == 0:
+        raise GateError(f"{label}: expected positive integer")
+    return result
+
+
+def strict_optional_nonnegative_int(
+    value: object,
+    *,
+    label: str,
+) -> int | None:
+    if value is None:
+        return None
+    return strict_nonnegative_int(value, label=label)
+
+
+def strict_nonnegative_number(value: object, *, label: str) -> float:
+    if (
+        type(value) not in {int, float}
+        or not math.isfinite(float(value))
+        or float(value) < 0.0
+    ):
+        raise GateError(f"{label}: expected finite nonnegative number")
+    return float(value)
+
+
+def strict_nonnegative_int_map(
+    value: object,
+    *,
+    expected_keys: set[str] | frozenset[str],
+    label: str,
+) -> dict[str, int]:
+    if not isinstance(value, dict):
+        raise GateError(f"{label}: expected object")
+    exact_keys(value, expected_keys, label)
+    return {
+        key: strict_nonnegative_int(item, label=f"{label}.{key}")
+        for key, item in value.items()
+    }
+
+
+def strict_nonnegative_int_list(
+    value: object,
+    *,
+    label: str,
+) -> list[int]:
+    if not isinstance(value, list):
+        raise GateError(f"{label}: expected list")
+    return [
+        strict_nonnegative_int(item, label=f"{label}[{index}]")
+        for index, item in enumerate(value)
+    ]
 
 
 def metric_snapshot_text(
@@ -535,6 +614,10 @@ def validate_runtime_boundary_snapshot(
     reference: object,
     census_path: Path,
 ) -> dict[str, Any]:
+    ack = strict_fixed32_ack_payload(
+        ack,
+        label=f"{path}:ack",
+    )
     payload = exact_json(path, label=str(path))
     exact_keys(
         payload,
@@ -550,14 +633,26 @@ def validate_runtime_boundary_snapshot(
         },
         str(path),
     )
+    snapshot_producer_pid = strict_positive_int(
+        payload["producer_pid"],
+        label=f"{path}:producer_pid",
+    )
+    snapshot_generation = strict_nonnegative_int(
+        payload["generation"],
+        label=f"{path}:generation",
+    )
+    snapshot_counters = validate_fixed32_counters(
+        payload["counters"],
+        label=f"{path}:snapshot",
+    )
     if (
         payload["schema"] != FIXED32_RUNTIME_SNAPSHOT_SCHEMA
         or payload["mode"] != ack["mode"]
-        or payload["producer_pid"] != ack["producer_pid"]
-        or payload["generation"] != ack["generation"]
+        or snapshot_producer_pid != ack["producer_pid"]
+        or snapshot_generation != ack["generation"]
         or payload["nonce"] != ack["nonce"]
         or payload["action"] != ack["action"]
-        or payload["counters"] != ack["counters"]
+        or snapshot_counters != ack["counters"]
     ):
         raise GateError(f"{path}: runtime snapshot does not bind to flush ack")
     expected_reference = {
@@ -566,8 +661,32 @@ def validate_runtime_boundary_snapshot(
         "path": str(path),
         "sha256": sha256_file(path),
     }
-    if reference is not None and reference != expected_reference:
-        raise GateError(f"{path}: task boundary runtime snapshot reference mismatch")
+    if reference is not None:
+        if not isinstance(reference, dict):
+            raise GateError(
+                f"{path}: task boundary runtime snapshot reference is malformed"
+            )
+        exact_keys(
+            reference,
+            {"schema", "generation", "path", "sha256"},
+            f"{path}:reference",
+        )
+        reference_generation = strict_nonnegative_int(
+            reference["generation"],
+            label=f"{path}:reference.generation",
+        )
+        if (
+            reference["schema"] != FIXED32_RUNTIME_SNAPSHOT_SCHEMA
+            or reference_generation != expected_reference["generation"]
+            or not isinstance(reference["path"], str)
+            or reference["path"] != expected_reference["path"]
+            or not isinstance(reference["sha256"], str)
+            or re.fullmatch(r"[0-9a-f]{64}", reference["sha256"]) is None
+            or reference["sha256"] != expected_reference["sha256"]
+        ):
+            raise GateError(
+                f"{path}: task boundary runtime snapshot reference mismatch"
+            )
 
     metrics = payload["metrics"]
     exact_keys(
@@ -591,34 +710,56 @@ def validate_runtime_boundary_snapshot(
         },
         f"{path}:fixed32",
     )
-    steps = integral(
-        float(fixed["pure_decode_forward_steps"]), f"{path}:fixed32 steps"
+    steps = strict_nonnegative_int(
+        fixed["pure_decode_forward_steps"],
+        label=f"{path}:fixed32.pure_decode_forward_steps",
     )
-    events = integral(
-        float(fixed["complete_work_census_events"]), f"{path}:fixed32 events"
+    events = strict_nonnegative_int(
+        fixed["complete_work_census_events"],
+        label=f"{path}:fixed32.complete_work_census_events",
     )
-    spec_drafts = integral(float(fixed["spec_drafts"]), f"{path}:spec drafts")
+    complete_spec_rows = strict_nonnegative_int(
+        fixed["complete_spec_rows"],
+        label=f"{path}:fixed32.complete_spec_rows",
+    )
+    spec_drafts = strict_nonnegative_int(
+        fixed["spec_drafts"],
+        label=f"{path}:fixed32.spec_drafts",
+    )
+    spec_tokens = strict_nonnegative_int(
+        fixed["spec_tokens"],
+        label=f"{path}:fixed32.spec_tokens",
+    )
+    first_forward_step = strict_optional_nonnegative_int(
+        fixed["first_forward_step"],
+        label=f"{path}:fixed32.first_forward_step",
+    )
+    last_forward_step = strict_optional_nonnegative_int(
+        fixed["last_forward_step"],
+        label=f"{path}:fixed32.last_forward_step",
+    )
     if (
         steps != ack["counters"]["pure_decode_forward_steps"]
         or events != ack["counters"]["complete_work_census_events"]
-        or fixed["first_forward_step"]
+        or first_forward_step
         != ack["counters"]["work_census_first_forward_step"]
-        or fixed["last_forward_step"]
+        or last_forward_step
         != ack["counters"]["work_census_last_forward_step"]
-        or fixed["complete_spec_rows"] != spec_drafts
-        or fixed["spec_tokens"] != 31 * spec_drafts
+        or complete_spec_rows != spec_drafts
+        or spec_tokens != 31 * spec_drafts
     ):
         raise GateError(f"{path}: fixed counters do not reconcile")
     histogram = fixed["batch_histogram"]
-    if not isinstance(histogram, dict) or set(histogram) != {"1", "2", "3", "4"}:
-        raise GateError(f"{path}: batch histogram keys mismatch")
+    batch_counts_raw = strict_nonnegative_int_map(
+        histogram,
+        expected_keys={"1", "2", "3", "4"},
+        label=f"{path}:fixed32.batch_histogram",
+    )
     batch_counts = {
-        int(batch): integral(float(count), f"{path}:batch {batch}")
-        for batch, count in histogram.items()
+        int(batch): count for batch, count in batch_counts_raw.items()
     }
     if (
-        any(count < 0 for count in batch_counts.values())
-        or sum(batch_counts.values()) != events
+        sum(batch_counts.values()) != events
         or sum(batch * count for batch, count in batch_counts.items()) != spec_drafts
         or any(
             batch > server_capacity and count
@@ -626,6 +767,11 @@ def validate_runtime_boundary_snapshot(
         )
     ):
         raise GateError(f"{path}: batch histogram does not reconcile")
+    if (
+        not isinstance(fixed["events_sha256"], str)
+        or re.fullmatch(r"[0-9a-f]{64}", fixed["events_sha256"]) is None
+    ):
+        raise GateError(f"{path}: fixed32 events digest is malformed")
 
     sfwd = metrics["sfwd"]
     exact_keys(
@@ -641,26 +787,37 @@ def validate_runtime_boundary_snapshot(
         },
         f"{path}:sfwd",
     )
-    sfwd_values = {
-        key: float(value)
-        for key, value in sfwd.items()
+    sfwd_values: dict[str, float | int] = {
+        "gpu_seconds": strict_nonnegative_number(
+            sfwd["gpu_seconds"],
+            label=f"{path}:sfwd.gpu_seconds",
+        ),
+        "wall_seconds": strict_nonnegative_number(
+            sfwd["wall_seconds"],
+            label=f"{path}:sfwd.wall_seconds",
+        ),
     }
-    if any(not math.isfinite(value) or value < 0 for value in sfwd_values.values()):
-        raise GateError(f"{path}: SFWD values must be finite and nonnegative")
     for key in ("steps", "drafts", "wall_drafts", "wall_steps", "wall_rejected"):
-        integral(sfwd_values[key], f"{path}:sfwd {key}")
+        sfwd_values[key] = strict_nonnegative_int(
+            sfwd[key],
+            label=f"{path}:sfwd.{key}",
+        )
     if (
-        integral(sfwd_values["steps"], f"{path}:sfwd steps") != steps
-        or integral(sfwd_values["drafts"], f"{path}:sfwd drafts") != spec_drafts
+        sfwd_values["steps"] != steps
+        or sfwd_values["drafts"] != spec_drafts
     ):
         raise GateError(f"{path}: SFWD counters do not reconcile")
     for label in ("dfwd", "cfwd"):
         span = metrics[label]
         exact_keys(span, {"gpu_seconds", "spans"}, f"{path}:{label}")
-        seconds = float(span["gpu_seconds"])
-        if not math.isfinite(seconds) or seconds < 0:
-            raise GateError(f"{path}: {label} seconds are invalid")
-        if integral(float(span["spans"]), f"{path}:{label} spans") != events:
+        strict_nonnegative_number(
+            span["gpu_seconds"],
+            label=f"{path}:{label}.gpu_seconds",
+        )
+        if strict_nonnegative_int(
+            span["spans"],
+            label=f"{path}:{label}.spans",
+        ) != events:
             raise GateError(f"{path}: {label} spans do not reconcile")
 
     committer = metrics["committer"]
@@ -672,23 +829,64 @@ def validate_runtime_boundary_snapshot(
         str(batch): int(batch <= server_capacity) for batch in range(1, 5)
     }
     zero_by_batch = {str(batch): 0 for batch in range(1, 5)}
-    pregather_keys = {
-        "preseeded",
-        "pointer_entries",
-        "preseeded_batches",
-        "max_batch_size",
-        "graph_capture_stages",
-        "graph_capture_stages_by_batch",
-        "profile_capture_stages",
-        "aux_capture_stages",
-        "actual_stages",
-        "actual_stages_by_batch",
-        "graph_replay_stages",
-        "graph_replay_stages_by_batch",
+    expected_ready_capacities = {
+        str(batch): server_capacity
+        for batch in range(1, server_capacity + 1)
     }
-    if isinstance(pregather, dict):
-        exact_keys(pregather, pregather_keys, f"{path}:conv_pregather")
-    pregather_integer_keys = (
+    expected_preseeded_batches = list(range(1, server_capacity + 1))
+    batch_keys = {"1", "2", "3", "4"}
+    if not isinstance(committer, dict) or not isinstance(pregather, dict):
+        raise GateError(f"{path}: fixed32 counter groups must be objects")
+    exact_keys(
+        committer,
+        {
+            "actual_replays_by_batch",
+            "actual_replays_enqueued",
+            "all_batches_ready",
+            "captures",
+            "fast_route_ready",
+            "maximum_ready_capacity",
+            "nonpure_committer_replays_by_batch",
+            "nonpure_committer_replays_enqueued",
+            "nonpure_dispatch",
+            "preseeded_batches",
+            "preseeded_graphs",
+            "ready_capacities",
+            "required_capacity",
+        },
+        f"{path}:committer",
+    )
+    exact_keys(
+        pregather,
+        {
+            "preseeded",
+            "pointer_entries",
+            "preseeded_batches",
+            "max_batch_size",
+            "graph_capture_stages",
+            "graph_capture_stages_by_batch",
+            "profile_capture_stages",
+            "aux_capture_stages",
+            "actual_stages",
+            "actual_stages_by_batch",
+            "graph_replay_stages",
+            "graph_replay_stages_by_batch",
+        },
+        f"{path}:conv_pregather",
+    )
+    for key in (
+        "actual_replays_enqueued",
+        "captures",
+        "maximum_ready_capacity",
+        "nonpure_committer_replays_enqueued",
+        "preseeded_graphs",
+        "required_capacity",
+    ):
+        strict_nonnegative_int(
+            committer[key],
+            label=f"{path}:committer.{key}",
+        )
+    for key in (
         "pointer_entries",
         "max_batch_size",
         "graph_capture_stages",
@@ -696,63 +894,109 @@ def validate_runtime_boundary_snapshot(
         "aux_capture_stages",
         "actual_stages",
         "graph_replay_stages",
-    )
-    pregather_integer_types_ok = isinstance(pregather, dict) and all(
-        isinstance(pregather.get(key), int)
-        and not isinstance(pregather.get(key), bool)
-        for key in pregather_integer_keys
-    )
-    pregather_maps_ok = isinstance(pregather, dict) and all(
-        isinstance(pregather.get(key), dict)
-        and set(pregather[key]) == {"1", "2", "3", "4"}
-        and all(
-            isinstance(value, int) and not isinstance(value, bool)
-            for value in pregather[key].values()
+    ):
+        strict_nonnegative_int(
+            pregather[key],
+            label=f"{path}:conv_pregather.{key}",
         )
-        for key in (
-            "graph_capture_stages_by_batch",
-            "actual_stages_by_batch",
-            "graph_replay_stages_by_batch",
-        )
+    committer_by_batch = strict_nonnegative_int_map(
+        committer["actual_replays_by_batch"],
+        expected_keys=batch_keys,
+        label=f"{path}:committer.actual_replays_by_batch",
     )
-    preseeded_batches = pregather.get("preseeded_batches") if isinstance(
-        pregather, dict
-    ) else None
-    preseeded_batches_ok = (
-        isinstance(preseeded_batches, list)
-        and all(
-            isinstance(batch, int) and not isinstance(batch, bool)
-            for batch in preseeded_batches
-        )
-        and preseeded_batches == list(range(1, server_capacity + 1))
+    nonpure_by_batch = strict_nonnegative_int_map(
+        committer["nonpure_committer_replays_by_batch"],
+        expected_keys=batch_keys,
+        label=(
+            f"{path}:committer.nonpure_committer_replays_by_batch"
+        ),
     )
+    nonpure_dispatch = strict_nonnegative_int_map(
+        committer["nonpure_dispatch"],
+        expected_keys={
+            "guarded_steps",
+            "piecewise_steps",
+            "none_steps",
+            "forbidden_full_steps",
+        },
+        label=f"{path}:committer.nonpure_dispatch",
+    )
+    committer_ready_capacities = strict_nonnegative_int_map(
+        committer["ready_capacities"],
+        expected_keys=set(expected_ready_capacities),
+        label=f"{path}:committer.ready_capacities",
+    )
+    committer_preseeded_batches = strict_nonnegative_int_list(
+        committer["preseeded_batches"],
+        label=f"{path}:committer.preseeded_batches",
+    )
+    capture_by_batch = strict_nonnegative_int_map(
+        pregather["graph_capture_stages_by_batch"],
+        expected_keys=batch_keys,
+        label=f"{path}:conv_pregather.graph_capture_stages_by_batch",
+    )
+    host_by_batch = strict_nonnegative_int_map(
+        pregather["actual_stages_by_batch"],
+        expected_keys=batch_keys,
+        label=f"{path}:conv_pregather.actual_stages_by_batch",
+    )
+    replay_by_batch = strict_nonnegative_int_map(
+        pregather["graph_replay_stages_by_batch"],
+        expected_keys=batch_keys,
+        label=f"{path}:conv_pregather.graph_replay_stages_by_batch",
+    )
+    pregather_preseeded_batches = strict_nonnegative_int_list(
+        pregather["preseeded_batches"],
+        label=f"{path}:conv_pregather.preseeded_batches",
+    )
+    nonpure_replays = committer[
+        "nonpure_committer_replays_enqueued"
+    ]
+    expected_raw_by_batch = {
+        str(batch): expected_by_batch[str(batch)]
+        + nonpure_by_batch[str(batch)]
+        for batch in range(1, 5)
+    }
     if (
-        not isinstance(committer, dict)
-        or committer.get("all_batches_ready") is not True
-        or committer.get("required_capacity") != server_capacity
-        or committer.get("captures") != server_capacity
-        or committer.get("preseeded_graphs") != server_capacity
-        or committer.get("actual_replays_enqueued") != events
-        or committer.get("actual_replays_by_batch") != expected_by_batch
-        or not isinstance(pregather, dict)
-        or not pregather_integer_types_ok
-        or not pregather_maps_ok
-        or not preseeded_batches_ok
-        or pregather.get("preseeded") is not True
-        or pregather.get("pointer_entries") != 48
-        or pregather.get("max_batch_size") != server_capacity
-        or pregather.get("graph_capture_stages") != server_capacity
-        or pregather.get("graph_capture_stages_by_batch")
-        != expected_capture_by_batch
-        or pregather.get("profile_capture_stages") != 0
-        or pregather.get("aux_capture_stages") != 0
-        or pregather.get("actual_stages") != 0
-        or pregather.get("actual_stages_by_batch") != zero_by_batch
-        or pregather.get("graph_replay_stages") != events
-        or pregather.get("graph_replay_stages_by_batch") != expected_by_batch
+        committer["all_batches_ready"] is not True
+        or committer["fast_route_ready"] is not True
+        or committer["required_capacity"] != server_capacity
+        or committer["maximum_ready_capacity"] != server_capacity
+        or committer["captures"] != server_capacity
+        or committer["preseeded_graphs"] != server_capacity
+        or committer_preseeded_batches != expected_preseeded_batches
+        or committer_ready_capacities != expected_ready_capacities
+        or nonpure_dispatch["guarded_steps"]
+        != (
+            nonpure_dispatch["piecewise_steps"]
+            + nonpure_dispatch["none_steps"]
+            + nonpure_dispatch["forbidden_full_steps"]
+        )
+        or nonpure_dispatch["forbidden_full_steps"] != 0
+        or nonpure_replays != sum(nonpure_by_batch.values())
+        or nonpure_replays > nonpure_dispatch["guarded_steps"]
+        or any(
+            nonpure_by_batch[str(batch)]
+            for batch in range(server_capacity, 5)
+        )
+        or committer["actual_replays_enqueued"]
+        != events + nonpure_replays
+        or committer_by_batch != expected_raw_by_batch
+        or pregather["preseeded"] is not True
+        or pregather["pointer_entries"] != 48
+        or pregather_preseeded_batches != expected_preseeded_batches
+        or pregather["max_batch_size"] != server_capacity
+        or pregather["graph_capture_stages"] != server_capacity
+        or capture_by_batch != expected_capture_by_batch
+        or pregather["profile_capture_stages"] != 0
+        or pregather["aux_capture_stages"] != 0
+        or pregather["actual_stages"] != 0
+        or host_by_batch != zero_by_batch
+        or pregather["graph_replay_stages"] != events
+        or replay_by_batch != expected_by_batch
     ):
         raise GateError(
-            f"{path}: committer/in-graph pregather counters do not reconcile"
+            f"{path}: committer/nonpure/in-graph pregather counters do not reconcile"
         )
 
     census_lines = read_text(census_path).splitlines()
@@ -804,6 +1048,15 @@ def validate_runtime_boundary_snapshot(
         "sha256": expected_reference["sha256"],
         "generation": ack["generation"],
         "events_sha256": expected_events_hash,
+        "committer": {
+            "actual_replays_enqueued": committer[
+                "actual_replays_enqueued"
+            ],
+            "actual_replays_by_batch": committer_by_batch,
+            "nonpure_committer_replays_enqueued": nonpure_replays,
+            "nonpure_committer_replays_by_batch": nonpure_by_batch,
+            "nonpure_dispatch": nonpure_dispatch,
+        },
     }
 
 
@@ -1990,6 +2243,7 @@ def validate_flush_chain(
     windows_by_task = {window["task_id"]: window for window in windows}
     task_acks: list[dict[str, Any]] = []
     task_reports: dict[str, Any] = {}
+    runtime_by_generation: dict[int, dict[str, Any]] = {}
     for task_dir in task_dirs:
         boundary_path = task_dir / "fixed32_task_boundary.json"
         boundary = exact_json(boundary_path, label=str(boundary_path))
@@ -2082,6 +2336,9 @@ def validate_flush_chain(
                     arm_dir / "logs" / "fr13_fixed32_work_census.jsonl"
                 ),
             )
+            runtime_by_generation[ack["generation"]] = runtime_reports[
+                snapshot
+            ]
 
         metadata_path = task_dir / "runner_metadata.json"
         metadata = exact_json(metadata_path, label=str(metadata_path))
@@ -2131,6 +2388,41 @@ def validate_flush_chain(
         reference=None,
         census_path=arm_dir / "logs" / "fr13_fixed32_work_census.jsonl",
     )
+    runtime_by_generation[final_ack["generation"]] = final_runtime
+    census_path = arm_dir / "logs" / "fr13_fixed32_work_census.jsonl"
+    census_lines = read_text(census_path).splitlines()
+    if not census_lines:
+        raise GateError(f"{census_path}: terminal census is empty")
+    terminal = exact_json_text(
+        census_lines[-1],
+        label=f"{census_path}:terminal",
+    )
+    terminal_nonpure_by_batch = strict_nonnegative_int_map(
+        terminal.get("nonpure_committer_replays_by_batch"),
+        expected_keys={"1", "2", "3", "4"},
+        label=f"{census_path}:terminal.nonpure_committer_replays_by_batch",
+    )
+    terminal_nonpure_dispatch = strict_nonnegative_int_map(
+        terminal.get("nonpure_dispatch"),
+        expected_keys={
+            "guarded_steps",
+            "piecewise_steps",
+            "none_steps",
+            "forbidden_full_steps",
+        },
+        label=f"{census_path}:terminal.nonpure_dispatch",
+    )
+    if (
+        final_runtime["committer"][
+            "nonpure_committer_replays_by_batch"
+        ]
+        != terminal_nonpure_by_batch
+        or final_runtime["committer"]["nonpure_dispatch"]
+        != terminal_nonpure_dispatch
+    ):
+        raise GateError(
+            f"{census_path}: final runtime nonpure ledgers differ from terminal"
+        )
     stderr_path = arm_dir / "fixed32_final_flush.stderr"
     if read_text(stderr_path) != "":
         raise GateError(f"{stderr_path}: terminal flush wrote stderr")
@@ -2204,6 +2496,50 @@ def validate_flush_chain(
         for previous, current in zip(ordered, ordered[1:], strict=False)
     ):
         raise GateError(f"{arm_dir}: flush counters regress across generations")
+    if set(runtime_by_generation) != set(expected_generations[1:]):
+        raise GateError(
+            f"{arm_dir}: runtime snapshot generations do not match flush chain"
+        )
+    ordered_runtime = [
+        runtime_by_generation[generation]
+        for generation in expected_generations[1:]
+    ]
+    for previous, current in zip(
+        ordered_runtime,
+        ordered_runtime[1:],
+        strict=False,
+    ):
+        previous_committer = previous["committer"]
+        current_committer = current["committer"]
+        if (
+            current_committer["actual_replays_enqueued"]
+            < previous_committer["actual_replays_enqueued"]
+            or current_committer["nonpure_committer_replays_enqueued"]
+            < previous_committer["nonpure_committer_replays_enqueued"]
+            or any(
+                current_committer[map_name][batch]
+                < previous_committer[map_name][batch]
+                for map_name in (
+                    "actual_replays_by_batch",
+                    "nonpure_committer_replays_by_batch",
+                )
+                for batch in ("1", "2", "3", "4")
+            )
+            or any(
+                current_committer["nonpure_dispatch"][key]
+                < previous_committer["nonpure_dispatch"][key]
+                for key in (
+                    "guarded_steps",
+                    "piecewise_steps",
+                    "none_steps",
+                    "forbidden_full_steps",
+                )
+            )
+        ):
+            raise GateError(
+                f"{arm_dir}: runtime committer/nonpure ledgers regress "
+                "across generations"
+            )
 
     final_counters = final_ack["counters"]
     if (
@@ -4580,6 +4916,14 @@ def write_fixture_arm(
                     "captures": concurrency,
                     "actual_replays_enqueued": step,
                     "actual_replays_by_batch": by_batch,
+                    "nonpure_committer_replays_enqueued": 0,
+                    "nonpure_committer_replays_by_batch": zero_by_batch,
+                    "nonpure_dispatch": {
+                        "guarded_steps": 0,
+                        "piecewise_steps": 0,
+                        "none_steps": 0,
+                        "forbidden_full_steps": 0,
+                    },
                     "preseeded_graphs": concurrency,
                     "preseeded_batches": list(range(1, concurrency + 1)),
                     "ready_capacities": {
@@ -4588,6 +4932,7 @@ def write_fixture_arm(
                     },
                     "maximum_ready_capacity": concurrency,
                     "required_capacity": concurrency,
+                    "fast_route_ready": True,
                     "all_batches_ready": True,
                 },
                 "conv_pregather": {
@@ -5314,7 +5659,7 @@ def self_test(repo: Path) -> None:
             label: str,
             mutate: Any,
             needle: str = (
-                "committer/in-graph pregather counters do not reconcile"
+                "committer/nonpure/in-graph pregather counters do not reconcile"
             ),
         ) -> None:
             tampered = json.loads(json.dumps(good_runtime_snapshot))
