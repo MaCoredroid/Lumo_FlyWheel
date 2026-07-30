@@ -176,6 +176,43 @@ def test_b1_context_is_contiguous_through_prefill_and_tree_accept() -> None:
         next_root,
     ]
 
+    calls_before_async_stage = list(cache.calls)
+    row[prompt_len + 1 : prompt_len + 32] = -1
+    md.stage_fixed32_step(
+        cache,
+        ("request-0",),
+        np.asarray([row]),
+        (prompt_len,),
+        (prompt_len + 32,),
+        (32,),
+        (31,),
+        (prompt_len + 2,),
+        (False,),
+        4,
+    )
+    assert cache.calls == calls_before_async_stage
+    assert md._FIXED32_PENDING_STEP["rows"][0]["safe_end"] == prompt_len + 4
+    assert md._COMMITTED["request-0"][-4:] == [
+        first_root,
+        *accepted,
+        next_root,
+    ]
+    final_root = 20_003
+    md.finalize_fixed32_step(
+        cache,
+        ("request-0",),
+        _accepted_record(
+            4,
+            ("request-0",),
+            {"request-0": [final_root]},
+        ),
+        (final_root,),
+        4,
+        30_000,
+    )
+    assert md._INGESTED_LEN["request-0"] == prompt_len + 5
+    assert md._COMMITTED["request-0"][-1] == final_root
+
 
 def test_b4_mixed_rows_use_exact_request_owners() -> None:
     md = _module()
@@ -187,6 +224,12 @@ def test_b4_mixed_rows_use_exact_request_owners() -> None:
         "old": list(range(400, 450)),
     }
     md.note_new_requests(cache, prompts, strict=True)
+    cache.add_active_response("a", [1_001])
+    cache.add_active_response("c", [1_003])
+    md._INGESTED_LEN["a"] = 51
+    md._INGESTED_LEN["c"] = 51
+    md._COMMITTED["a"] = prompts["a"][-23:] + [1_001]
+    md._COMMITTED["c"] = prompts["c"][-23:] + [1_003]
 
     request_ids = ("b", "a", "d", "c")
     rows = np.zeros((4, 96), dtype=np.int64)
@@ -201,7 +244,7 @@ def test_b4_mixed_rows_use_exact_request_owners() -> None:
         request_ids,
         rows,
         (50, 50, 40, 50),
-        (10, 50, 0, 50),
+        (10, 81, 0, 50),
         (8, 32, 40, 32),
         (0, 31, 0, 31),
         (50, 51, 40, 51),
@@ -240,6 +283,152 @@ def test_b4_mixed_rows_use_exact_request_owners() -> None:
     assert md._INGESTED_LEN["a"] == 54
     assert md._INGESTED_LEN["d"] == 41
     assert md._INGESTED_LEN["c"] == 53
+
+
+@pytest.mark.parametrize(
+    ("accepted_drafts", "expected_boundary"),
+    ((0, 12), (31, 43)),
+)
+def test_async_spec_stage_uses_owned_arctic_watermark(
+    accepted_drafts: int,
+    expected_boundary: int,
+) -> None:
+    md = _module()
+    cache = RecordingCache()
+    prompt = list(range(10))
+    row = np.full(96, -1, dtype=np.int64)
+    row[: len(prompt)] = prompt
+
+    md.stage_fixed32_step(
+        cache,
+        ("request-0",),
+        np.asarray([row]),
+        (10,),
+        (9,),
+        (1,),
+        (0,),
+        (10,),
+        (False,),
+        1,
+    )
+    first_root = 100
+    md.finalize_fixed32_step(
+        cache,
+        ("request-0",),
+        None,
+        (first_root,),
+        1,
+        1_000,
+    )
+    md.stage_fixed32_step(
+        cache,
+        ("request-0",),
+        np.asarray([row]),
+        (10,),
+        (10,),
+        (32,),
+        (31,),
+        (11,),
+        (False,),
+        2,
+    )
+    accepted = list(range(200, 200 + accepted_drafts))
+    bonus = 500
+    md.finalize_fixed32_step(
+        cache,
+        ("request-0",),
+        _accepted_record(
+            2,
+            ("request-0",),
+            {"request-0": accepted + [bonus]},
+        ),
+        (bonus,),
+        2,
+        1_000,
+    )
+    assert md._INGESTED_LEN["request-0"] == expected_boundary
+    committed_before = list(md._COMMITTED["request-0"])
+    calls_before = list(cache.calls)
+
+    md.stage_fixed32_step(
+        cache,
+        ("request-0",),
+        np.asarray([row]),
+        (10,),
+        (42,),
+        (32,),
+        (31,),
+        (12,),
+        (False,),
+        3,
+    )
+
+    assert md._FIXED32_PENDING_STEP["rows"][0]["safe_end"] == expected_boundary
+    assert md._COMMITTED["request-0"] == committed_before
+    assert cache.calls == calls_before
+    if accepted_drafts == 31:
+        accepted_again = list(range(600, 631))
+        bonus_again = 700
+        md.finalize_fixed32_step(
+            cache,
+            ("request-0",),
+            _accepted_record(
+                3,
+                ("request-0",),
+                {"request-0": accepted_again + [bonus_again]},
+            ),
+            (bonus_again,),
+            3,
+            1_000,
+        )
+        assert md._INGESTED_LEN["request-0"] == 75
+        calls_before_repeated_stage = list(cache.calls)
+        md.stage_fixed32_step(
+            cache,
+            ("request-0",),
+            np.asarray([row]),
+            (10,),
+            (74,),
+            (32,),
+            (31,),
+            (13,),
+            (False,),
+            4,
+        )
+        assert md._FIXED32_PENDING_STEP["rows"][0]["safe_end"] == 75
+        assert cache.calls == calls_before_repeated_stage
+
+
+@pytest.mark.parametrize("computed", (10, 43))
+def test_async_spec_stage_rejects_watermark_outside_correctable_range(
+    computed: int,
+) -> None:
+    md = _module()
+    cache = RecordingCache()
+    prompt = list(range(10))
+    row = np.zeros(96, dtype=np.int64)
+    md.note_new_requests(cache, {"request-0": prompt}, strict=True)
+    cache.add_active_response("request-0", [100, 101])
+    md._INGESTED_LEN["request-0"] = 12
+    md._COMMITTED["request-0"] = prompt + [100, 101]
+    calls_before = list(cache.calls)
+
+    with pytest.raises(RuntimeError, match="sequence geometry drift"):
+        md.stage_fixed32_step(
+            cache,
+            ("request-0",),
+            np.asarray([row]),
+            (10,),
+            (computed,),
+            (32,),
+            (31,),
+            (12,),
+            (False,),
+            1,
+        )
+
+    assert cache.calls == calls_before
+    assert md._FIXED32_PENDING_STEP is None
 
 
 def test_strict_cache_failures_do_not_advance_python_bookkeeping() -> None:

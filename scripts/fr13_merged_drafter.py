@@ -441,44 +441,9 @@ def stage_fixed32_step(
         computed = int(computed_lengths[index])
         scheduled = int(scheduled_lengths[index])
         drafts = int(scheduled_draft_lengths[index])
-        committed = int(committed_lengths[index])
+        host_non_spec = int(committed_lengths[index])
         discard = bool(discard_rows[index])
-        safe_end = computed + scheduled - drafts
         sequence = token_rows[index]
-        if (
-            prompt_len < 0
-            or computed < 0
-            or scheduled <= 0
-            or drafts not in (0, 31)
-            or drafts > scheduled
-            or (
-                drafts == 31
-                and (
-                    scheduled != 32
-                    or safe_end != committed
-                    or discard
-                )
-            )
-            or not computed <= safe_end <= committed <= len(sequence)
-            or prompt_len > committed
-            or discard is not (safe_end < committed)
-        ):
-            raise RuntimeError(
-                "fixed32 Arctic staged sequence geometry drift: "
-                + repr(
-                    (
-                        req_id,
-                        prompt_len,
-                        computed,
-                        scheduled,
-                        drafts,
-                        safe_end,
-                        committed,
-                        discard,
-                        len(sequence),
-                    )
-                )
-            )
         restart = req_id in restart_ids
         is_active = req_id in active_ids
         if not restart and not is_active and (
@@ -516,6 +481,69 @@ def stage_fixed32_step(
             raise RuntimeError(
                 "fixed32 Arctic staged row has a short ingest watermark"
             )
+
+        committed_span = scheduled - drafts
+        owned_spec = drafts == 31 and is_active and not restart
+        if owned_spec:
+            # Async scheduling leaves the host token row behind accepted
+            # drafts. The prior exact finalization owns the committed boundary.
+            safe_end = prior
+            lower = max(prompt_len, computed - drafts + committed_span)
+            upper = computed + committed_span
+        else:
+            safe_end = (
+                host_non_spec
+                if drafts == 31
+                else computed + committed_span
+            )
+            lower = safe_end
+            upper = safe_end
+        if (
+            prompt_len < 0
+            or computed < 0
+            or scheduled <= 0
+            or drafts not in (0, 31)
+            or committed_span <= 0
+            or host_non_spec < prompt_len
+            or (
+                drafts == 31
+                and (
+                    scheduled != 32
+                    or discard
+                    or not lower <= safe_end <= upper
+                    or not prompt_len <= host_non_spec <= safe_end
+                    or safe_end > len(sequence)
+                    or (owned_spec and req_id not in _COMMITTED)
+                    or (
+                        not owned_spec
+                        and safe_end != computed + committed_span
+                    )
+                )
+            )
+            or (
+                drafts == 0
+                and (
+                    not computed <= safe_end <= host_non_spec <= len(sequence)
+                    or discard is not (safe_end < host_non_spec)
+                )
+            )
+        ):
+            raise RuntimeError(
+                "fixed32 Arctic staged sequence geometry drift: "
+                + repr(
+                    (
+                        req_id,
+                        prompt_len,
+                        computed,
+                        scheduled,
+                        drafts,
+                        safe_end,
+                        host_non_spec,
+                        discard,
+                        len(sequence),
+                    )
+                )
+            )
         if safe_end < prior and not (
             safe_end < prompt_len and prior == prompt_len
         ):
@@ -524,14 +552,21 @@ def stage_fixed32_step(
                 + repr((req_id, safe_end, prior, prompt_len))
             )
         delta = (
-            [int(token) for token in sequence[prior:safe_end]]
-            if safe_end > prior
-            else []
+            []
+            if owned_spec
+            else (
+                [int(token) for token in sequence[prior:safe_end]]
+                if safe_end > prior
+                else []
+            )
         )
-        suffix_start = max(0, safe_end - int(max_tree_depth))
-        suffix = [
-            int(token) for token in sequence[suffix_start:safe_end]
-        ]
+        if owned_spec:
+            suffix = list(_COMMITTED[req_id])[-int(max_tree_depth) :]
+        else:
+            suffix_start = max(0, safe_end - int(max_tree_depth))
+            suffix = [
+                int(token) for token in sequence[suffix_start:safe_end]
+            ]
         if len(delta) != max(0, safe_end - prior):
             raise RuntimeError("fixed32 Arctic staged delta is incomplete")
         rows.append(
