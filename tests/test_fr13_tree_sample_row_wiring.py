@@ -57,13 +57,11 @@ def _tsr_inject_snippet() -> str:
     return TEXT[start:TEXT.index('"""', start)]
 
 
-def test_flag_default_on_everywhere() -> None:
-    assert 'os.environ.get("FR13_TREE_SAMPLE_ROW", "1") == "1"' in TEXT
-    assert '"FR13_TREE_SAMPLE_ROW", "0"' not in TEXT
-    assert "'FR13_TREE_SAMPLE_ROW', '1'" not in TEXT
-    assert '\\"FR13_TREE_SAMPLE_ROW\\", \\"1\\"' not in TEXT
-    assert 'environ.get("FR13_TREE_SAMPLE_ROW")' not in TEXT
-    assert "environ.get('FR13_TREE_SAMPLE_ROW')" not in TEXT
+def test_flag_is_baked_on_in_eagle() -> None:
+    snippet = _tsr_inject_snippet()
+    assert "_fr13_tsr_on = True  # FR13_TREE_SAMPLE_ROW baked ON" in snippet
+    assert 'environ.get("FR13_TREE_SAMPLE_ROW"' not in snippet
+    assert "environ.get('FR13_TREE_SAMPLE_ROW'" not in snippet
 
 
 def test_launcher_default_on_and_passthrough() -> None:
@@ -93,13 +91,13 @@ def test_fail_louds_present() -> None:
 
 
 def test_freshness_contract_three_legs() -> None:
-    # Leg 1: the tree committer publishes its row count -- BOTH twins
-    # (greedy + sampled), inside the rejection-sampler helper (tree path
-    # only => native/naive decode can never arm the fix).
+    # Leg 1: both current committer routes publish their row count inside the
+    # rejection-sampler helper (fixed32 device route + generic tree route).
     helper = _helper_snippet()
     assert helper.count(
         "_lumo_tree_commit_gdn._LUMO_FA_TREE_COMMIT_NROWS = len("
-    ) == 2
+    ) == 1
+    assert "_g._LUMO_FA_TREE_COMMIT_NROWS = batch" in helper
     # Leg 2: the REQKEY pre-forward rewrite zeroes it at the start of every
     # step (prefill proposes / commit-less steps => verbatim stock row).
     assert (
@@ -191,6 +189,8 @@ def _run_rowmap_fragment(
     qsl: list[int],
     stock_tis: list[int],
     batch_size: int,
+    *,
+    spec_batch_indices: tuple[int, ...] | None = None,
 ) -> list[int]:
     """Exec the VERBATIM committed row-map fragment on CPU tensors."""
     # Slice at line starts so textwrap.dedent sees the uniform 16-space
@@ -198,8 +198,26 @@ def _run_rowmap_fragment(
     begin = TEXT.rindex("\n", 0, TEXT.index("# FR13_TSR_ROWMAP_BEGIN")) + 1
     end = TEXT.rindex("\n", 0, TEXT.index("# FR13_TSR_ROWMAP_END")) + 1
     frag = textwrap.dedent(TEXT[begin:end])
+    if spec_batch_indices is None:
+        gdn = SimpleNamespace(_FR13_FIXED32_MODE=None)
+    else:
+        sampler_rids = tuple(
+            f"request-{index}" for index in range(batch_size)
+        )
+        spec_rids = tuple(
+            sampler_rids[index] for index in spec_batch_indices
+        )
+        gdn = SimpleNamespace(
+            _FR13_FIXED32_MODE="tail6_fixed32",
+            _FR13_FIXED32_BATCH_ROWS=batch_size,
+            _FR13_FIXED32_SPEC_ROWS=nrows,
+            _FR13_FIXED32_SPEC_BATCH_INDICES=spec_batch_indices,
+            _LUMO_FA_SAMPLER_ROW_REQ_IDS=sampler_rids,
+            _LUMO_FA_SPEC_ROW_REQ_IDS=spec_rids,
+        )
     ns = {
         "torch": torch,
+        "_fr13_tsr_gdn": gdn,
         "_fr13_tsr_nrows": nrows,
         "batch_size": batch_size,
         "_fr13_tsr_paths": torch.tensor(paths_rows, dtype=torch.int32),
@@ -211,6 +229,8 @@ def _run_rowmap_fragment(
             stock_tis, dtype=torch.int32
         ),
     }
+    module = _load_patcher_module()
+    exec(module._FR13_FIXED32_TSR_NONPREFIX_SOURCE, ns)
     exec(compile(frag, "<fr13_tsr_rowmap>", "exec"), ns)
     return [int(x) for x in ns["token_indices_to_sample"].tolist()]
 
@@ -309,3 +329,19 @@ def test_rowmap_alt_leaf_lower_than_len_never_negative() -> None:
         batch_size=2,
     )
     assert out == [1, 10]
+
+
+def test_fixed32_rowmap_nonprefix_spec_rows() -> None:
+    out = _run_rowmap_fragment(
+        paths_rows=[
+            _pad([1, 2, 4]),
+            _pad([1, 3]),
+        ],
+        lens=[3, 2],
+        nrows=2,
+        qsl=[0, 10, 20, 30, 40],
+        stock_tis=[0, 13, 20, 32],
+        batch_size=4,
+        spec_batch_indices=(1, 3),
+    )
+    assert out == [0, 14, 20, 33]

@@ -49,10 +49,16 @@ export LUMO_PROXY_NONSTREAM_BYPASS=1
 # the offload helper. Empty/unset -> OFF -> byte-identical legacy path (the locked pipeline runs OFF).
 export LUMO_PROXY_THINK_BUDGET=${LUMO_PROXY_THINK_BUDGET:-}
 [ -n "${LUMO_PROXY_THINK_CUTOFF:-}" ] && export LUMO_PROXY_THINK_CUTOFF
-export LUMO_PROXY_REQUEST_DUMP_DIR=${LUMO_PROXY_REQUEST_DUMP_DIR:-/tmp/lumo_proxy_request_dumps}
 export LUMO_PROXY_FORCE_TEMPERATURE=${LUMO_PROXY_FORCE_TEMPERATURE:-0.6}
-# pair-dump dir is read from the env by inference_proxy (LUMO_PROXY_PAIR_DUMP_DIR)
-[ -n "${LUMO_PROXY_PAIR_DUMP_DIR:-}" ] && export LUMO_PROXY_PAIR_DUMP_DIR
+if [ "${LUMO_PROXY_FIXED32_DISABLE_RAW_DUMPS:-0}" = "1" ]; then
+  unset LUMO_PROXY_PAIR_DUMP_DIR LUMO_PROXY_REQUEST_DUMP_DIR
+  export LUMO_PROXY_FIXED32_DISABLE_RAW_DUMPS=1
+else
+  unset LUMO_PROXY_FIXED32_DISABLE_RAW_DUMPS
+  export LUMO_PROXY_REQUEST_DUMP_DIR=${LUMO_PROXY_REQUEST_DUMP_DIR:-/tmp/lumo_proxy_request_dumps}
+  # pair-dump dir is read from the env by inference_proxy.
+  [ -n "${LUMO_PROXY_PAIR_DUMP_DIR:-}" ] && export LUMO_PROXY_PAIR_DUMP_DIR
+fi
 # Qwen3/Qwen3-Next thinking-mode sampling is the GENERAL default for ALL agentic
 # serving (no-spec / spine / tree, cache on|off) -- the degenerate temperature-only
 # regime causes <think> + tool-call argument runaway regardless of inference path.
@@ -78,8 +84,11 @@ STATE_ROOT=${LUMO_PROXY_STATE_ROOT:-/tmp/lumo_offload_proxy_${LISTEN_PORT}_state
 NOHUP_PATH=${LUMO_PROXY_NOHUP_PATH:-/tmp/lumo_offload_proxy_${LISTEN_PORT}.nohup}
 
 mkdir -p "$(dirname "$LUMO_TRACK_B_REQUEST_METRICS_OUT")" "$STATE_ROOT" \
-         "${LUMO_PROXY_PAIR_DUMP_DIR:-/tmp/lumo_offload_pair_dumps}" \
-         "$LUMO_PROXY_REQUEST_DUMP_DIR" 2>/dev/null
+  2>/dev/null
+if [ "${LUMO_PROXY_FIXED32_DISABLE_RAW_DUMPS:-0}" != "1" ]; then
+  mkdir -p "${LUMO_PROXY_PAIR_DUMP_DIR:-/tmp/lumo_offload_pair_dumps}" \
+    "$LUMO_PROXY_REQUEST_DUMP_DIR" 2>/dev/null
+fi
 
 # kill any old offload proxy (pid-file then port)
 OLD=$(cat "$PID_FILE" 2>/dev/null || true)

@@ -70,8 +70,19 @@ silent fallback to the host walk (bug-class 9).
 
 from __future__ import annotations
 
+import argparse
+import ast
+import hashlib
+import importlib.util
+import inspect
+import json
+import math
 import os
-from typing import Sequence
+from pathlib import Path
+import sys
+import textwrap
+from types import SimpleNamespace
+from typing import Any, Callable, Sequence
 
 try:
     import torch
@@ -413,6 +424,20 @@ def fr13_device_multidraft_commit(
     if target_logits is None or tree_self_logits is None:
         raise RuntimeError(
             "FR13_DEVICE_MULTIDRAFT: missing target/self logits (disengaged)"
+        )
+    fixed32_mode = os.environ.get("FR13_FIXED32_MODE", "").strip()
+    if fixed32_mode:
+        return fr13_fixed32_taw_commit(
+            num_draft_tokens,
+            draft_token_ids,
+            tree_parent_indices,
+            target_logits,
+            tree_self_logits,
+            bonus_token_ids,
+            max_spec_len,
+            generators=generators,
+            all_greedy=all_greedy,
+            mode=fixed32_mode,
         )
     # FR13_DM_DEPTHSYNC (S1/P1, default OFF => byte-identical ship): route to
     # the depth-synchronous walk (~2 batched readbacks per LEVEL instead of
@@ -864,7 +889,8 @@ def _fr13_md_gpu_timed(_orig):
         import os
         if os.environ.get("FR13_MULTIDRAFT_GPU_TIMER", "0") != "1":
             return _orig(*a, **k)
-        import torch, json
+        import json
+        import torch
         _s = torch.cuda.Event(enable_timing=True)
         _e = torch.cuda.Event(enable_timing=True)
         _s.record()
@@ -888,6 +914,1410 @@ def _fr13_md_gpu_timed(_orig):
 
 
 fr13_device_multidraft_commit = _fr13_md_gpu_timed(fr13_device_multidraft_commit)
+
+
+# ---------------------------------------------------------------------------
+# FR13 fixed-32 TAW: one physical 31-draft tree, fixed 12-iteration walk, and
+# device-only fixed-capacity products. This route is completely separate from
+# legacy TAW. It is selected only by FR13_FIXED32_MODE; an unset mode leaves
+# every legacy branch above and below unchanged.
+# ---------------------------------------------------------------------------
+_FR13_FIXED32_TOPOLOGY = None
+_FR13_FIXED32_TAW_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
+_FR13_FIXED32_TAW_WORK_CALLBACK: Callable[[dict[str, Any]], None] | None = None
+_FR13_FIXED32_TAW_LAST_WORK: dict[str, Any] | None = None
+_FR13_FIXED32_WORK_ANNOUNCED = False
+_FR13_FIXED32_BATCHES = (1, 2, 3, 4)
+_FR13_FIXED32_INTEGER_DTYPES = None
+_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-source-v1"
+_FR13_FIXED32_TAW_SOURCE_SHA256 = (
+    "ff9fdeb6529876732cc949ab4f2636a7cee04edaec2524c39657a34d3d8b3250"
+)
+_FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
+_FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
+_FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
+    "_fr13_fixed32_topology",
+    "_fr13_fixed32_device_key",
+    "_fr13_fixed32_expected_active",
+    "_fr13_fixed32_parse_int",
+    "_fr13_fixed32_taw_source_contract",
+    "_fr13_fixed32_runtime_contract",
+    "fr13_fixed32_taw_cache_key",
+    "fr13_fixed32_taw_preseed",
+    "fr13_fixed32_taw_preseeded_counts",
+    "_fr13_fixed32_integer_dtypes",
+    "_fr13_fixed32_require_tensor",
+    "_fr13_fixed32_device_assert",
+    "_fr13_pin_uniforms",
+    "_fr13_bulk_gen",
+    "_fr13_fixed32_fill_uniforms",
+    "_fr13_fixed32_validate_inputs",
+    "_fr13_fixed32_tensor_layout",
+    "_fr13_fixed32_layout_contract",
+    "_fr13_fixed32_taw_execute",
+    "_fr13_fixed32_publish_work",
+    "fr13_fixed32_taw_commit",
+    "_fr13_taw_inv_cdf",
+)
+_FR13_FIXED32_TAW_GEOMETRY = {
+    "physical_drafts": 31,
+    "physical_rows": 32,
+    "walk_cap": 12,
+    "fanout": 3,
+    "output_capacity": 32,
+    "accepted_path_capacity": 16,
+}
+_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS = {
+    "walk_levels": 12,
+    "full_vocab_row_gathers": 24,
+    "full_vocab_fp32_casts": 24,
+    "full_vocab_softmax_calls": 24,
+    "full_vocab_normalizations": 36,
+    "full_vocab_cdf_calls": 24,
+    "source_cdf_calls": 12,
+    "qmix_zero_fills": 12,
+    "qmix_scatter_add_calls": 12,
+    "residual_subtract_calls": 12,
+    "residual_clamp_calls": 12,
+    "residual_where_calls": 24,
+    "output_scatter_calls": 24,
+    "path_scatter_calls": 12,
+}
+
+
+def _fr13_fixed32_topology():
+    """Load and validate the sibling fixed-32 topology contract once."""
+    global _FR13_FIXED32_TOPOLOGY
+    if _FR13_FIXED32_TOPOLOGY is not None:
+        return _FR13_FIXED32_TOPOLOGY
+    path = Path(__file__).resolve().with_name("fr13_fixed32_topology.py")
+    if not path.is_file():
+        raise RuntimeError(f"FR13 fixed32 topology contract is missing: {path}")
+    module_name = "_fr13_fixed32_topology_contract"
+    module = sys.modules.get(module_name)
+    if module is None:
+        spec = importlib.util.spec_from_file_location(module_name, path)
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"cannot load FR13 fixed32 topology: {path}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        sys.modules[module_name] = module
+    module.validate_contract()
+    if (
+        module.PHYSICAL_DRAFTS != 31
+        or module.PHYSICAL_ROWS != 32
+        or module.WALK_CAP != 12
+        or module.COMMIT_PATH_CAP != 16
+        or module.SAMPLER_MAX_FANOUT != 3
+        or tuple(module.DRAFT_PARENT)
+        != (
+            -1,
+            -1,
+            -1,
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            3,
+            6,
+            7,
+            8,
+            8,
+            8,
+            11,
+            12,
+            13,
+            13,
+            13,
+            16,
+            17,
+            18,
+            22,
+            23,
+            24,
+            25,
+            27,
+            28,
+            29,
+        )
+    ):
+        raise RuntimeError("FR13 fixed32 topology constants drifted")
+    _FR13_FIXED32_TOPOLOGY = module
+    return module
+
+
+def _fr13_fixed32_device_key(device) -> tuple[str, int | None]:
+    normalized = torch.device(device)
+    index = normalized.index
+    if normalized.type == "cuda" and index is None:
+        index = torch.cuda.current_device()
+    return normalized.type, index
+
+
+def _fr13_fixed32_expected_active(topology, mode: str) -> int:
+    if mode == "tail6_fixed32":
+        return int(topology.TAIL6_ACTIVE_DRAFTS)
+    if mode == "hydra27_fixed32":
+        return int(topology.HYDRA27_ACTIVE_DRAFTS)
+    raise RuntimeError(f"unknown FR13_FIXED32_MODE {mode!r}")
+
+
+def _fr13_fixed32_parse_int(raw: str, *, name: str) -> int:
+    try:
+        return int(raw, 0)
+    except (TypeError, ValueError) as error:
+        raise RuntimeError(f"{name} must be an integer, got {raw!r}") from error
+
+
+def _fr13_fixed32_taw_source_contract(topology) -> dict[str, Any]:
+    """Bind the audited fixed TAW source and geometry without tracing a live event."""
+    global _FR13_FIXED32_TAW_SOURCE_CACHE
+    global _FR13_FIXED32_TAW_SOURCE_CODES
+
+    functions = []
+    codes = []
+    for name in _FR13_FIXED32_TAW_SOURCE_FUNCTIONS:
+        function = globals().get(name)
+        code = getattr(function, "__code__", None)
+        if code is None:
+            raise RuntimeError(f"FR13 fixed32 TAW source function is missing: {name}")
+        functions.append((name, function))
+        codes.append((name, code))
+
+    if _FR13_FIXED32_TAW_SOURCE_CACHE is not None:
+        if _FR13_FIXED32_TAW_SOURCE_CODES != tuple(codes):
+            raise RuntimeError("FR13 fixed32 TAW source objects changed after binding")
+        digest = _FR13_FIXED32_TAW_SOURCE_CACHE["source_contract_sha256"]
+        if digest != _FR13_FIXED32_TAW_SOURCE_SHA256:
+            raise RuntimeError(
+                "FR13 fixed32 TAW pinned source digest changed after binding"
+            )
+        return {
+            key: (
+                dict(value)
+                if isinstance(value, dict)
+                else value
+            )
+            for key, value in _FR13_FIXED32_TAW_SOURCE_CACHE.items()
+        }
+
+    geometry = {
+        "physical_drafts": int(topology.PHYSICAL_DRAFTS),
+        "physical_rows": int(topology.PHYSICAL_ROWS),
+        "walk_cap": int(topology.WALK_CAP),
+        "fanout": int(topology.SAMPLER_MAX_FANOUT),
+        "output_capacity": int(topology.OUTPUT_PUBLISH_CAPACITY),
+        "accepted_path_capacity": int(topology.ACCEPTED_PATH_CAPACITY),
+    }
+    if geometry != _FR13_FIXED32_TAW_GEOMETRY:
+        raise RuntimeError(
+            "FR13 fixed32 TAW source geometry drift: " + repr(geometry)
+        )
+
+    normalized_sources = {}
+    for name, function in functions:
+        try:
+            source = textwrap.dedent(inspect.getsource(function))
+            parsed = ast.parse(source)
+        except (OSError, TypeError, SyntaxError) as error:
+            raise RuntimeError(
+                f"FR13 fixed32 cannot inspect TAW source function {name}"
+            ) from error
+        definitions = [
+            node
+            for node in parsed.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        if len(definitions) != 1 or definitions[0].name != name:
+            raise RuntimeError(
+                f"FR13 fixed32 TAW source parse was ambiguous for {name}"
+            )
+        normalized_sources[name] = ast.dump(
+            definitions[0],
+            annotate_fields=True,
+            include_attributes=False,
+        )
+
+    canonical = json.dumps(
+        {
+            "schema": _FR13_FIXED32_TAW_SOURCE_SCHEMA,
+            "functions": normalized_sources,
+            "geometry": geometry,
+            "tensor_call_census": _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS,
+        },
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    digest = hashlib.sha256(canonical.encode("ascii")).hexdigest()
+    if digest != _FR13_FIXED32_TAW_SOURCE_SHA256:
+        raise RuntimeError(
+            "FR13 fixed32 TAW source digest drift: "
+            f"{digest} != {_FR13_FIXED32_TAW_SOURCE_SHA256}"
+        )
+    contract = {
+        "source_contract_schema": _FR13_FIXED32_TAW_SOURCE_SCHEMA,
+        "source_contract_sha256": digest,
+        "tensor_call_census": dict(_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS),
+    }
+    _FR13_FIXED32_TAW_SOURCE_CODES = tuple(codes)
+    _FR13_FIXED32_TAW_SOURCE_CACHE = contract
+    return {
+        key: dict(value) if isinstance(value, dict) else value
+        for key, value in contract.items()
+    }
+
+
+def _fr13_fixed32_runtime_contract(mode: str) -> tuple[Any, int]:
+    """Validate all fixed-route pins without inspecting device values."""
+    topology = _fr13_fixed32_topology()
+    if mode not in topology.VALID_MASK_BY_MODE:
+        raise RuntimeError(f"unknown FR13_FIXED32_MODE {mode!r}")
+    env_mode = os.environ.get("FR13_FIXED32_MODE", "")
+    if env_mode != mode:
+        raise RuntimeError(
+            f"FR13 fixed32 mode mismatch: argument={mode!r} environment={env_mode!r}"
+        )
+    mask_raw = os.environ.get("FR13_FIXED32_VALID_MASK")
+    active_raw = os.environ.get("FR13_FIXED32_ACTIVE_NODES")
+    walk_raw = os.environ.get("FR13_FIXED32_TAW_WALK_CAP")
+    missing = [
+        name
+        for name, raw in (
+            ("FR13_FIXED32_VALID_MASK", mask_raw),
+            ("FR13_FIXED32_ACTIVE_NODES", active_raw),
+            ("FR13_FIXED32_TAW_WALK_CAP", walk_raw),
+        )
+        if raw is None
+    ]
+    if missing:
+        raise RuntimeError(f"FR13 fixed32 missing route pins: {missing}")
+    mask = _fr13_fixed32_parse_int(
+        mask_raw,
+        name="FR13_FIXED32_VALID_MASK",
+    )
+    active = _fr13_fixed32_parse_int(
+        active_raw,
+        name="FR13_FIXED32_ACTIVE_NODES",
+    )
+    walk_cap = _fr13_fixed32_parse_int(
+        walk_raw,
+        name="FR13_FIXED32_TAW_WALK_CAP",
+    )
+    expected_mask = int(topology.VALID_MASK_BY_MODE[mode])
+    expected_active = _fr13_fixed32_expected_active(topology, mode)
+    if mask != expected_mask:
+        raise RuntimeError(
+            f"{mode}: validity mask {mask:#x} != contract {expected_mask:#x}"
+        )
+    if active != expected_active:
+        raise RuntimeError(
+            f"{mode}: active nodes {active} != contract {expected_active}"
+        )
+    if walk_cap != int(topology.WALK_CAP):
+        raise RuntimeError(
+            f"{mode}: TAW walk cap {walk_cap} != contract {topology.WALK_CAP}"
+        )
+    if os.environ.get("FR13_TAW") != "1":
+        raise RuntimeError("FR13 fixed32 route requires FR13_TAW=1")
+    if os.environ.get("LUMO_TREE_SAMPLER_DEBUG_LOG"):
+        raise RuntimeError(
+            "FR13 fixed32 route forbids host commit-trace materialization"
+        )
+    return topology, mask
+
+
+def fr13_fixed32_taw_cache_key(
+    mode: str,
+    valid_mask: int,
+    batch_size: int,
+    device,
+) -> tuple[Any, ...]:
+    """Return the mode/mask/B/device cache key used by the fixed route."""
+    if batch_size not in _FR13_FIXED32_BATCHES:
+        raise RuntimeError(f"FR13 fixed32 batch must be 1..4, got {batch_size}")
+    return (
+        mode,
+        int(valid_mask),
+        int(batch_size),
+        _fr13_fixed32_device_key(device),
+    )
+
+
+def fr13_fixed32_taw_preseed(
+    device,
+    *,
+    mode: str | None = None,
+    valid_mask: int | None = None,
+) -> tuple[tuple[Any, ...], ...]:
+    """Preseed fixed child tables and persistent products for B=1..4.
+
+    This warmup API performs the only host-to-device construction of the
+    topology tables. The measured commit route requires a cache hit and never
+    creates, transfers, or falls back to a topology.
+    """
+    if torch is None:
+        raise RuntimeError("FR13 fixed32 preseed requires torch")
+    topology = _fr13_fixed32_topology()
+    _fr13_fixed32_taw_source_contract(topology)
+    if mode is None:
+        mode = os.environ.get("FR13_FIXED32_MODE", "")
+    if mode not in topology.VALID_MASK_BY_MODE:
+        raise RuntimeError(f"unknown FR13 fixed32 preseed mode {mode!r}")
+    expected_mask = int(topology.VALID_MASK_BY_MODE[mode])
+    if valid_mask is None:
+        raw_mask = os.environ.get("FR13_FIXED32_VALID_MASK")
+        valid_mask = (
+            expected_mask
+            if raw_mask is None
+            else _fr13_fixed32_parse_int(
+                raw_mask,
+                name="FR13_FIXED32_VALID_MASK",
+            )
+        )
+    if int(valid_mask) != expected_mask:
+        raise RuntimeError(
+            f"{mode}: preseed mask {int(valid_mask):#x} != contract {expected_mask:#x}"
+        )
+    normalized_device = torch.device(device)
+    if normalized_device.type == "cuda" and torch.cuda.is_current_stream_capturing():
+        raise RuntimeError("FR13 fixed32 preseed is forbidden during capture")
+
+    child_table, child_counts = topology.sampler_child_table(mode)
+    if (
+        len(child_table) != topology.PHYSICAL_ROWS
+        or len(child_table[0]) != topology.SAMPLER_MAX_FANOUT
+        or len(child_counts) != topology.PHYSICAL_ROWS
+    ):
+        raise RuntimeError(f"{mode}: fixed child-table contract drifted")
+    table_base = torch.tensor(
+        child_table,
+        dtype=torch.long,
+        device=normalized_device,
+    )
+    counts_base = torch.tensor(
+        child_counts,
+        dtype=torch.long,
+        device=normalized_device,
+    )
+    parent_base = torch.tensor(
+        topology.DRAFT_PARENT,
+        dtype=torch.long,
+        device=normalized_device,
+    )
+
+    keys = []
+    for batch_size in _FR13_FIXED32_BATCHES:
+        key = fr13_fixed32_taw_cache_key(
+            mode,
+            int(valid_mask),
+            batch_size,
+            normalized_device,
+        )
+        entry = {
+            "mode": mode,
+            "valid_mask": int(valid_mask),
+            "batch_size": batch_size,
+            "draft_counts": torch.full(
+                (batch_size,),
+                int(topology.PHYSICAL_DRAFTS),
+                dtype=torch.int32,
+                device=normalized_device,
+            ),
+            "child_table": table_base.unsqueeze(0).expand(batch_size, -1, -1).clone(),
+            "child_counts": counts_base.unsqueeze(0).expand(batch_size, -1).clone(),
+            "expected_parent": parent_base.unsqueeze(0).expand(batch_size, -1).clone(),
+            "starts": (
+                torch.arange(
+                    batch_size,
+                    dtype=torch.long,
+                    device=normalized_device,
+                )
+                * int(topology.PHYSICAL_DRAFTS)
+            ),
+            "uniforms": torch.empty(
+                (
+                    batch_size,
+                    int(topology.WALK_CAP),
+                    3,
+                ),
+                dtype=torch.float32,
+                device=normalized_device,
+            ),
+            "draft_tokens": torch.empty(
+                (
+                    batch_size,
+                    int(topology.PHYSICAL_DRAFTS),
+                ),
+                dtype=torch.long,
+                device=normalized_device,
+            ),
+            "bonus_tokens": torch.empty(
+                batch_size,
+                dtype=torch.long,
+                device=normalized_device,
+            ),
+            "output_tokens": torch.full(
+                (
+                    batch_size,
+                    int(topology.OUTPUT_PUBLISH_CAPACITY),
+                ),
+                -1,
+                dtype=torch.long,
+                device=normalized_device,
+            ),
+            "output_lens": torch.zeros(
+                batch_size,
+                dtype=torch.long,
+                device=normalized_device,
+            ),
+            "accepted_path_rows": torch.zeros(
+                (
+                    batch_size,
+                    int(topology.ACCEPTED_PATH_CAPACITY),
+                ),
+                dtype=torch.long,
+                device=normalized_device,
+            ),
+            "accepted_lens": torch.zeros(
+                batch_size,
+                dtype=torch.long,
+                device=normalized_device,
+            ),
+            "last_row": torch.zeros(
+                batch_size,
+                dtype=torch.long,
+                device=normalized_device,
+            ),
+        }
+        _FR13_FIXED32_TAW_CACHE[key] = entry
+        keys.append(key)
+    return tuple(keys)
+
+
+def fr13_fixed32_taw_preseeded_counts(
+    device,
+    *,
+    mode: str,
+    valid_mask: int,
+    batch_size: int,
+):
+    """Return the cache-owned fixed [31]*B tensor; never allocate on this route."""
+    if torch is None:
+        raise RuntimeError("FR13 fixed32 preseeded counts require torch")
+    key = fr13_fixed32_taw_cache_key(
+        mode,
+        int(valid_mask),
+        int(batch_size),
+        device,
+    )
+    entry = _FR13_FIXED32_TAW_CACHE.get(key)
+    if entry is None:
+        raise RuntimeError(
+            "FR13 fixed32 draft-count cache miss; preseed before requesting counts"
+        )
+    counts = entry.get("draft_counts")
+    expected_device = torch.device(device)
+    if (
+        not isinstance(counts, torch.Tensor)
+        or tuple(counts.shape) != (int(batch_size),)
+        or counts.dtype != torch.int32
+        or counts.device != expected_device
+        or tuple(counts.stride()) != (1,)
+        or not counts.is_contiguous()
+    ):
+        raise RuntimeError("FR13 fixed32 preseeded draft-count layout drift")
+    return counts
+
+
+def fr13_fixed32_taw_set_work_callback(
+    callback: Callable[[dict[str, Any]], None] | None,
+) -> None:
+    """Set the complete-event TAW work callback used by the census owner."""
+    if callback is not None and not callable(callback):
+        raise TypeError("FR13 fixed32 TAW work callback must be callable")
+    global _FR13_FIXED32_TAW_WORK_CALLBACK
+    _FR13_FIXED32_TAW_WORK_CALLBACK = callback
+
+
+def fr13_fixed32_taw_last_work() -> dict[str, Any] | None:
+    """Return the last host-side fixed-work counter payload."""
+    if _FR13_FIXED32_TAW_LAST_WORK is None:
+        return None
+    result = dict(_FR13_FIXED32_TAW_LAST_WORK)
+    result["taw"] = dict(_FR13_FIXED32_TAW_LAST_WORK["taw"])
+    return result
+
+
+def _fr13_fixed32_integer_dtypes():
+    global _FR13_FIXED32_INTEGER_DTYPES
+    if _FR13_FIXED32_INTEGER_DTYPES is None:
+        _FR13_FIXED32_INTEGER_DTYPES = frozenset(
+            {
+                torch.int8,
+                torch.int16,
+                torch.int32,
+                torch.int64,
+                torch.uint8,
+            }
+        )
+    return _FR13_FIXED32_INTEGER_DTYPES
+
+
+def _fr13_fixed32_require_tensor(
+    name: str,
+    value,
+    *,
+    device,
+    integer: bool = False,
+    floating: bool = False,
+) -> None:
+    if not isinstance(value, torch.Tensor):
+        raise RuntimeError(f"FR13 fixed32 {name} must be a torch.Tensor")
+    if value.device != device:
+        raise RuntimeError(
+            f"FR13 fixed32 {name} device {value.device} != {device}; "
+            "host/device transfers are forbidden"
+        )
+    if integer and value.dtype not in _fr13_fixed32_integer_dtypes():
+        raise RuntimeError(
+            f"FR13 fixed32 {name} must have integer dtype, got {value.dtype}"
+        )
+    if floating and not value.dtype.is_floating_point:
+        raise RuntimeError(
+            f"FR13 fixed32 {name} must have floating dtype, got {value.dtype}"
+        )
+
+
+def _fr13_fixed32_device_assert(condition, message: str) -> None:
+    assert_async = getattr(torch, "_assert_async", None)
+    if assert_async is None:
+        raise RuntimeError("FR13 fixed32 requires torch._assert_async")
+    assert_async(condition, message)
+
+
+def _fr13_fixed32_fill_uniforms(
+    entry: dict[str, Any],
+    *,
+    generators=None,
+    uniforms=None,
+):
+    target = entry["uniforms"]
+    if generators:
+        raise RuntimeError(
+            "FR13 fixed32 forbids per-request generator maps; "
+            "the fixed route requires one bulk device RNG call"
+        )
+    if uniforms is not None:
+        _fr13_fixed32_require_tensor(
+            "uniforms",
+            uniforms,
+            device=target.device,
+            floating=True,
+        )
+        if (
+            tuple(uniforms.shape) != tuple(target.shape)
+            or uniforms.dtype != torch.float32
+            or tuple(uniforms.stride()) != tuple(target.stride())
+            or not uniforms.is_contiguous()
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 uniforms layout drift: "
+                + repr(
+                    {
+                        "shape": tuple(uniforms.shape),
+                        "dtype": str(uniforms.dtype),
+                        "stride": tuple(uniforms.stride()),
+                        "contiguous": bool(uniforms.is_contiguous()),
+                        "expected_shape": tuple(target.shape),
+                        "expected_stride": tuple(target.stride()),
+                    }
+                )
+            )
+        _fr13_fixed32_device_assert(
+            torch.all((uniforms >= 0.0) & (uniforms < 1.0)),
+            "FR13 fixed32 uniforms must be in [0,1)",
+        )
+        return uniforms, "provided_uniforms"
+
+    target.uniform_(generator=_fr13_bulk_gen(target.device))
+    if _fr13_pin_uniforms():
+        target.fill_(0.5)
+        return target, "bulk_device_generator_then_pin"
+    return target, "bulk_device_generator"
+
+
+def _fr13_fixed32_tensor_layout(value) -> dict[str, Any]:
+    if not isinstance(value, torch.Tensor):
+        raise RuntimeError("FR13 fixed32 layout value is not a tensor")
+    return {
+        "shape": [int(dimension) for dimension in value.shape],
+        "dtype": str(value.dtype),
+        "stride": [int(dimension) for dimension in value.stride()],
+        "contiguous": bool(value.is_contiguous()),
+    }
+
+
+def _fr13_fixed32_validate_inputs(
+    topology,
+    entry: dict[str, Any],
+    num_draft_tokens,
+    draft_token_ids,
+    tree_parent_indices,
+    target_logits,
+    tree_self_logits,
+    bonus_token_ids,
+    max_spec_len: int,
+) -> tuple[Any, Any]:
+    device = target_logits.device
+    batch_size = entry["batch_size"]
+    physical_drafts = int(topology.PHYSICAL_DRAFTS)
+    flat_rows = batch_size * physical_drafts
+    if (
+        not isinstance(max_spec_len, int)
+        or isinstance(max_spec_len, bool)
+        or max_spec_len != physical_drafts
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 max_spec_len must equal 31 physical drafts, got "
+            f"{max_spec_len!r}"
+        )
+    for name, value in (
+        ("num_draft_tokens", num_draft_tokens),
+        ("draft_token_ids", draft_token_ids),
+        ("tree_parent_indices", tree_parent_indices),
+        ("bonus_token_ids", bonus_token_ids),
+    ):
+        _fr13_fixed32_require_tensor(
+            name,
+            value,
+            device=device,
+            integer=True,
+        )
+    _fr13_fixed32_require_tensor(
+        "target_logits",
+        target_logits,
+        device=device,
+        floating=True,
+    )
+    _fr13_fixed32_require_tensor(
+        "tree_self_logits",
+        tree_self_logits,
+        device=device,
+        floating=True,
+    )
+    if target_logits.ndim != 2 or int(target_logits.shape[1]) <= 0:
+        raise RuntimeError("FR13 fixed32 vocabulary must be nonempty")
+    vocab_size = int(target_logits.shape[1])
+    expected_layouts = {
+        "draft_counts": {
+            "shape": [batch_size],
+            "dtype": "torch.int32",
+            "stride": [1],
+            "contiguous": True,
+        },
+        "draft_input": {
+            "shape": [flat_rows],
+            "dtype": "torch.int32",
+            "stride": [1],
+            "contiguous": True,
+        },
+        "parent_input": {
+            "shape": [flat_rows],
+            "dtype": "torch.int32",
+            "stride": [1],
+            "contiguous": True,
+        },
+        "target_logits": {
+            "shape": [flat_rows, vocab_size],
+            "dtype": "torch.float32",
+            "stride": [vocab_size, 1],
+            "contiguous": True,
+        },
+        "self_logits": {
+            "shape": [flat_rows, vocab_size],
+            "dtype": "torch.float32",
+            "stride": [vocab_size, 1],
+            "contiguous": True,
+        },
+        "bonus_input": {
+            "shape": [batch_size, 1],
+            "dtype": "torch.int32",
+            "stride": [1, 1],
+            "contiguous": True,
+        },
+    }
+    actual_layouts = {
+        "draft_counts": _fr13_fixed32_tensor_layout(num_draft_tokens),
+        "draft_input": _fr13_fixed32_tensor_layout(draft_token_ids),
+        "parent_input": _fr13_fixed32_tensor_layout(tree_parent_indices),
+        "target_logits": _fr13_fixed32_tensor_layout(target_logits),
+        "self_logits": _fr13_fixed32_tensor_layout(tree_self_logits),
+        "bonus_input": _fr13_fixed32_tensor_layout(bonus_token_ids),
+    }
+    if num_draft_tokens is not entry.get("draft_counts"):
+        raise RuntimeError(
+            "FR13 fixed32 requires the cache-owned preseeded draft-count tensor"
+        )
+    if actual_layouts != expected_layouts:
+        raise RuntimeError(
+            "FR13 fixed32 live input layout drift: "
+            + repr((actual_layouts, expected_layouts))
+        )
+
+    counts = num_draft_tokens.reshape(batch_size)
+    parents = tree_parent_indices.reshape(batch_size, physical_drafts)
+    drafts_input = draft_token_ids.reshape(batch_size, physical_drafts)
+    bonus_input = bonus_token_ids.reshape(batch_size)
+    _fr13_fixed32_device_assert(
+        torch.all(counts == physical_drafts),
+        "FR13 fixed32 requires every active request to have exactly 31 drafts",
+    )
+    _fr13_fixed32_device_assert(
+        torch.all(parents == entry["expected_parent"]),
+        "FR13 fixed32 physical parent vector mismatch",
+    )
+    _fr13_fixed32_device_assert(
+        torch.all((drafts_input >= 0) & (drafts_input < vocab_size)),
+        "FR13 fixed32 draft token id is outside the vocabulary",
+    )
+    _fr13_fixed32_device_assert(
+        torch.all((bonus_input >= 0) & (bonus_input < vocab_size)),
+        "FR13 fixed32 bonus token id is outside the vocabulary",
+    )
+    drafts = entry["draft_tokens"]
+    bonus = entry["bonus_tokens"]
+    drafts.copy_(drafts_input, non_blocking=True)
+    bonus.copy_(bonus_input, non_blocking=True)
+    return drafts, bonus
+
+
+def _fr13_fixed32_layout_contract(
+    topology,
+    entry: dict[str, Any],
+    num_draft_tokens,
+    draft_token_ids,
+    tree_parent_indices,
+    target_logits,
+    tree_self_logits,
+    bonus_token_ids,
+    uniforms,
+    *,
+    rng_route: str,
+) -> dict[str, Any]:
+    """Validate and publish the live layouts that select the audited call graph."""
+    batch = int(entry["batch_size"])
+    physical_drafts = int(topology.PHYSICAL_DRAFTS)
+    vocab = int(target_logits.shape[1])
+    expected_cache_layouts = {
+        "draft_counts": ([batch], "torch.int32", [1]),
+        "child_table": ([batch, 32, 3], "torch.int64", [96, 3, 1]),
+        "child_counts": ([batch, 32], "torch.int64", [32, 1]),
+        "expected_parent": ([batch, 31], "torch.int64", [31, 1]),
+        "starts": ([batch], "torch.int64", [1]),
+        "uniforms": ([batch, 12, 3], "torch.float32", [36, 3, 1]),
+        "draft_tokens": ([batch, 31], "torch.int64", [31, 1]),
+        "bonus_tokens": ([batch], "torch.int64", [1]),
+        "output_tokens": ([batch, 32], "torch.int64", [32, 1]),
+        "output_lens": ([batch], "torch.int64", [1]),
+        "accepted_path_rows": ([batch, 16], "torch.int64", [16, 1]),
+        "accepted_lens": ([batch], "torch.int64", [1]),
+        "last_row": ([batch], "torch.int64", [1]),
+    }
+    actual_cache_layouts = {}
+    for name in expected_cache_layouts:
+        value = entry.get(name)
+        layout = _fr13_fixed32_tensor_layout(value)
+        actual_cache_layouts[name] = (
+            layout["shape"],
+            layout["dtype"],
+            layout["stride"],
+        )
+        if not layout["contiguous"]:
+            raise RuntimeError(
+                f"FR13 fixed32 cached tensor is noncontiguous: {name}"
+            )
+    if actual_cache_layouts != expected_cache_layouts:
+        raise RuntimeError(
+            "FR13 fixed32 cached tensor layout drift: "
+            + repr((actual_cache_layouts, expected_cache_layouts))
+        )
+
+    live = {
+        "count": _fr13_fixed32_tensor_layout(num_draft_tokens),
+        "draft": _fr13_fixed32_tensor_layout(draft_token_ids),
+        "parent": _fr13_fixed32_tensor_layout(tree_parent_indices),
+        "target": _fr13_fixed32_tensor_layout(target_logits),
+        "self": _fr13_fixed32_tensor_layout(tree_self_logits),
+        "bonus": _fr13_fixed32_tensor_layout(bonus_token_ids),
+        "uniform": _fr13_fixed32_tensor_layout(uniforms),
+    }
+    expected_live = {
+        "count": {
+            "shape": [batch],
+            "dtype": "torch.int32",
+            "stride": [1],
+            "contiguous": True,
+        },
+        "draft": {
+            "shape": [batch * physical_drafts],
+            "dtype": "torch.int32",
+            "stride": [1],
+            "contiguous": True,
+        },
+        "parent": {
+            "shape": [batch * physical_drafts],
+            "dtype": "torch.int32",
+            "stride": [1],
+            "contiguous": True,
+        },
+        "target": {
+            "shape": [batch * physical_drafts, vocab],
+            "dtype": "torch.float32",
+            "stride": [vocab, 1],
+            "contiguous": True,
+        },
+        "self": {
+            "shape": [batch * physical_drafts, vocab],
+            "dtype": "torch.float32",
+            "stride": [vocab, 1],
+            "contiguous": True,
+        },
+        "bonus": {
+            "shape": [batch, 1],
+            "dtype": "torch.int32",
+            "stride": [1, 1],
+            "contiguous": True,
+        },
+        "uniform": {
+            "shape": [batch, 12, 3],
+            "dtype": "torch.float32",
+            "stride": [36, 3, 1],
+            "contiguous": True,
+        },
+    }
+    if live != expected_live:
+        raise RuntimeError(
+            "FR13 fixed32 published tensor layout drift: "
+            + repr((live, expected_live))
+        )
+    if rng_route not in (
+        "bulk_device_generator",
+        "bulk_device_generator_then_pin",
+        "provided_uniforms",
+    ):
+        raise RuntimeError(f"FR13 fixed32 unknown RNG route: {rng_route!r}")
+
+    count_route = (
+        "preseeded_cuda_fixed31"
+        if num_draft_tokens.device.type == "cuda"
+        else "preseeded_cpu_fixed31_test"
+    )
+    return {
+        "count_route": count_route,
+        "rng_route": rng_route,
+        "vocab_size": vocab,
+        "count_shape": live["count"]["shape"],
+        "count_dtype": live["count"]["dtype"],
+        "count_stride": live["count"]["stride"],
+        "count_contiguous": live["count"]["contiguous"],
+        "draft_shape": live["draft"]["shape"],
+        "draft_dtype": live["draft"]["dtype"],
+        "draft_stride": live["draft"]["stride"],
+        "draft_contiguous": live["draft"]["contiguous"],
+        "parent_shape": live["parent"]["shape"],
+        "parent_dtype": live["parent"]["dtype"],
+        "parent_stride": live["parent"]["stride"],
+        "parent_contiguous": live["parent"]["contiguous"],
+        "bonus_shape": live["bonus"]["shape"],
+        "bonus_dtype": live["bonus"]["dtype"],
+        "bonus_stride": live["bonus"]["stride"],
+        "bonus_contiguous": live["bonus"]["contiguous"],
+        "target_shape": live["target"]["shape"],
+        "target_dtype": live["target"]["dtype"],
+        "target_stride": live["target"]["stride"],
+        "target_contiguous": live["target"]["contiguous"],
+        "self_shape": live["self"]["shape"],
+        "self_dtype": live["self"]["dtype"],
+        "self_stride": live["self"]["stride"],
+        "self_contiguous": live["self"]["contiguous"],
+        "uniform_shape": live["uniform"]["shape"],
+        "uniform_dtype": live["uniform"]["dtype"],
+        "uniform_stride": live["uniform"]["stride"],
+        "uniform_contiguous": live["uniform"]["contiguous"],
+        "child_table_shape": list(expected_cache_layouts["child_table"][0]),
+        "child_counts_shape": list(expected_cache_layouts["child_counts"][0]),
+        "output_shape": list(expected_cache_layouts["output_tokens"][0]),
+        "output_lens_shape": list(expected_cache_layouts["output_lens"][0]),
+        "accepted_path_shape": list(
+            expected_cache_layouts["accepted_path_rows"][0]
+        ),
+        "accepted_lens_shape": list(expected_cache_layouts["accepted_lens"][0]),
+        "last_row_shape": list(expected_cache_layouts["last_row"][0]),
+    }
+
+
+def _fr13_fixed32_taw_execute(
+    topology,
+    entry: dict[str, Any],
+    drafts,
+    target_logits,
+    tree_self_logits,
+    bonus_flat,
+    uniforms,
+    *,
+    walk_cap: int,
+) -> tuple[Any, Any, Any, Any, Any, int]:
+    """Run the fixed device core; every loop body has the same B/V shapes."""
+    batch_size = entry["batch_size"]
+    physical_drafts = int(topology.PHYSICAL_DRAFTS)
+    output_capacity = int(topology.OUTPUT_PUBLISH_CAPACITY)
+    path_capacity = int(topology.ACCEPTED_PATH_CAPACITY)
+    fanout = int(topology.SAMPLER_MAX_FANOUT)
+    if walk_cap != int(topology.WALK_CAP):
+        raise RuntimeError(f"FR13 fixed32 core walk {walk_cap} != {topology.WALK_CAP}")
+    if walk_cap > path_capacity or walk_cap > output_capacity:
+        raise RuntimeError("FR13 fixed32 walk can overflow fixed products")
+    child_table = entry["child_table"]
+    child_counts = entry["child_counts"]
+    if tuple(child_table.shape) != (
+        batch_size,
+        int(topology.PHYSICAL_ROWS),
+        fanout,
+    ):
+        raise RuntimeError(
+            f"FR13 fixed32 child-table shape drifted: {tuple(child_table.shape)}"
+        )
+    if tuple(child_counts.shape) != (
+        batch_size,
+        int(topology.PHYSICAL_ROWS),
+    ):
+        raise RuntimeError(
+            f"FR13 fixed32 child-count shape drifted: {tuple(child_counts.shape)}"
+        )
+    _fr13_fixed32_device_assert(
+        torch.all((child_counts >= 0) & (child_counts <= fanout)),
+        "FR13 fixed32 sampler fanout overflow",
+    )
+
+    device = target_logits.device
+    starts = entry["starts"]
+    output_tokens = entry["output_tokens"]
+    output_lens = entry["output_lens"]
+    accepted_path_rows = entry["accepted_path_rows"]
+    accepted_lens = entry["accepted_lens"]
+    last_row = entry["last_row"]
+    output_tokens.fill_(-1)
+    output_lens.zero_()
+    accepted_path_rows.zero_()
+    accepted_lens.zero_()
+    last_row.zero_()
+
+    current = torch.full(
+        (batch_size,),
+        -1,
+        dtype=torch.long,
+        device=device,
+    )
+    alive = torch.ones(batch_size, dtype=torch.bool, device=device)
+    request_rows = torch.arange(batch_size, device=device)
+    output_trash = torch.full(
+        (batch_size,),
+        output_capacity - 1,
+        dtype=torch.long,
+        device=device,
+    )
+    path_trash = torch.full(
+        (batch_size,),
+        path_capacity - 1,
+        dtype=torch.long,
+        device=device,
+    )
+    loop_iterations = 0
+
+    for level in range(walk_cap):
+        loop_iterations += 1
+        parent_slots = current + 1
+        kids = child_table[request_rows, parent_slots]
+        child_count = child_counts[request_rows, parent_slots]
+        has_kids = alive & (child_count > 0)
+        leaf = alive & (child_count == 0)
+
+        # Full-vocab self CDF rows execute for every request at every level.
+        current_valid = (current >= 0) & (current < physical_drafts)
+        self_indices = starts + current.clamp(min=0, max=physical_drafts - 1)
+        self_prob = torch.softmax(
+            tree_self_logits[self_indices].to(torch.float32),
+            dim=-1,
+        )
+        self_prob = self_prob / self_prob.sum(dim=-1, keepdim=True)
+        self_token = _fr13_taw_inv_cdf(
+            self_prob,
+            uniforms[:, level, 2],
+        )
+        leaf_token = torch.where(current_valid, self_token, bonus_flat)
+        output_tokens.scatter_(
+            1,
+            torch.where(leaf, output_lens, output_trash).unsqueeze(1),
+            leaf_token.unsqueeze(1),
+        )
+        output_lens.add_(leaf.to(output_lens.dtype))
+        alive = alive & ~leaf
+
+        # Full-vocab target/source/qmix/residual rows also execute for every
+        # request at every level. The validity mask exists only in child_table.
+        first_child = kids[:, 0].clamp(min=0)
+        target_indices = starts + first_child
+        target_prob = torch.softmax(
+            target_logits[target_indices].to(torch.float32),
+            dim=-1,
+        )
+        target_prob = target_prob / target_prob.sum(dim=-1, keepdim=True)
+        kid_tokens = drafts.gather(1, kids.clamp(min=0))
+        kid_mask = kids >= 0
+        overlaps = torch.gather(target_prob, 1, kid_tokens.clamp(min=0)) * kid_mask
+        overlap_mass = overlaps.sum(dim=-1)
+        zero_mass = has_kids & (overlap_mass <= 0)
+        source = _fr13_taw_inv_cdf(
+            overlaps,
+            uniforms[:, level, 0],
+        )
+        selected_token = kid_tokens[request_rows, source]
+        same_token = (kid_tokens == selected_token.unsqueeze(1)) & kid_mask
+        q_mix_token = (overlaps * same_token).sum(dim=-1) / overlap_mass.clamp(
+            min=1e-30
+        )
+        target_at_token = torch.gather(
+            target_prob,
+            1,
+            selected_token.unsqueeze(1),
+        ).squeeze(1)
+        accept_probability = (target_at_token / q_mix_token.clamp(min=1e-30)).clamp(
+            max=1.0
+        )
+        accepted = has_kids & ~zero_mass & (uniforms[:, level, 1] < accept_probability)
+        rejected = has_kids & ~accepted
+
+        weights = overlaps / overlap_mass.clamp(min=1e-30).unsqueeze(1)
+        q_mix_vocab = torch.zeros_like(target_prob)
+        q_mix_vocab.scatter_add_(
+            1,
+            kid_tokens.clamp(min=0),
+            weights * kid_mask,
+        )
+        residual = (target_prob - q_mix_vocab).clamp(min=0)
+        residual_mass = residual.sum(dim=-1, keepdim=True)
+        residual = torch.where(
+            residual_mass > 0,
+            residual / residual_mass.clamp(min=1e-30),
+            target_prob,
+        )
+        residual = torch.where(
+            zero_mass.unsqueeze(1),
+            target_prob,
+            residual,
+        )
+        rejected_token = _fr13_taw_inv_cdf(
+            residual,
+            uniforms[:, level, 2],
+        )
+        emitted_token = torch.where(
+            rejected,
+            rejected_token,
+            selected_token,
+        )
+        output_tokens.scatter_(
+            1,
+            torch.where(has_kids, output_lens, output_trash).unsqueeze(1),
+            emitted_token.unsqueeze(1),
+        )
+        output_lens.add_(has_kids.to(output_lens.dtype))
+
+        accepted_node = kids[request_rows, source]
+        accepted_row = accepted_node + 1
+        accepted_path_rows.scatter_(
+            1,
+            torch.where(
+                accepted,
+                accepted_lens,
+                path_trash,
+            ).unsqueeze(1),
+            accepted_row.unsqueeze(1),
+        )
+        accepted_lens.add_(accepted.to(accepted_lens.dtype))
+        current = torch.where(accepted, accepted_node, current)
+        alive = alive & accepted
+
+    if loop_iterations != int(topology.WALK_CAP):
+        raise RuntimeError(f"FR13 fixed32 executed {loop_iterations} walk iterations")
+    _fr13_fixed32_device_assert(
+        torch.all(output_lens <= output_capacity),
+        "FR13 fixed32 output overflow",
+    )
+    _fr13_fixed32_device_assert(
+        torch.all(accepted_lens <= path_capacity),
+        "FR13 fixed32 accepted-path overflow",
+    )
+
+    output_columns = torch.arange(
+        output_capacity,
+        device=device,
+    ).unsqueeze(0)
+    output_tokens.copy_(
+        torch.where(
+            output_columns < output_lens.unsqueeze(1),
+            output_tokens,
+            torch.full_like(output_tokens, -1),
+        )
+    )
+    path_columns = torch.arange(
+        path_capacity,
+        device=device,
+    ).unsqueeze(0)
+    accepted_path_rows.copy_(
+        torch.where(
+            path_columns < accepted_lens.unsqueeze(1),
+            accepted_path_rows,
+            torch.zeros_like(accepted_path_rows),
+        )
+    )
+    last_index = (accepted_lens - 1).clamp(min=0)
+    last_row.copy_(
+        torch.where(
+            accepted_lens > 0,
+            accepted_path_rows.gather(
+                1,
+                last_index.unsqueeze(1),
+            ).squeeze(1),
+            torch.zeros_like(accepted_lens),
+        )
+    )
+    return (
+        output_tokens,
+        output_lens,
+        accepted_path_rows,
+        accepted_lens,
+        last_row,
+        loop_iterations,
+    )
+
+
+def _fr13_fixed32_publish_work(
+    topology,
+    *,
+    mode: str,
+    valid_mask: int,
+    batch_size: int,
+    loop_iterations: int,
+    source_contract: dict[str, Any],
+    layout_contract: dict[str, Any],
+) -> None:
+    taw = {
+        "preseeded_batches": list(_FR13_FIXED32_BATCHES),
+        "topology_cache_hit": True,
+        "cache_misses": 0,
+        "table_shape": [
+            batch_size,
+            int(topology.PHYSICAL_ROWS),
+            int(topology.SAMPLER_MAX_FANOUT),
+        ],
+        "buffer_capacity": int(topology.OUTPUT_PUBLISH_CAPACITY),
+        "loop_iterations": int(loop_iterations),
+        "uniform_slots": int(topology.TAW_UNIFORM_SLOTS) * batch_size,
+        "child_lanes": int(topology.TAW_CHILD_LANES) * batch_size,
+        "target_rows": int(topology.WALK_CAP) * batch_size,
+        "self_rows": int(topology.WALK_CAP) * batch_size,
+        "self_cdf_rows": int(topology.WALK_CAP) * batch_size,
+        "source_cdf_rows": int(topology.WALK_CAP) * batch_size,
+        "residual_cdf_rows": int(topology.WALK_CAP) * batch_size,
+        "qmix_rows": int(topology.WALK_CAP) * batch_size,
+        "residual_rows": int(topology.WALK_CAP) * batch_size,
+        "row_scatter_slots": int(topology.TAW_ROW_SCATTER_SLOTS) * batch_size,
+        "path_scatter_slots": int(topology.TAW_PATH_SCATTER_SLOTS) * batch_size,
+    }
+    if (
+        set(source_contract)
+        != {
+            "source_contract_schema",
+            "source_contract_sha256",
+            "tensor_call_census",
+        }
+        or source_contract["source_contract_schema"]
+        != _FR13_FIXED32_TAW_SOURCE_SCHEMA
+        or source_contract["source_contract_sha256"]
+        != _FR13_FIXED32_TAW_SOURCE_SHA256
+        or source_contract["tensor_call_census"]
+        != _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS
+    ):
+        raise RuntimeError("FR13 fixed32 TAW source contract drift at publish")
+    overlap = (
+        set(taw).intersection(source_contract)
+        | set(taw).intersection(layout_contract)
+        | set(source_contract).intersection(layout_contract)
+    )
+    if overlap:
+        raise RuntimeError(
+            "FR13 fixed32 TAW work payload keys overlap: " + repr(sorted(overlap))
+        )
+    taw.update(source_contract)
+    taw.update(layout_contract)
+    payload = {
+        "mode": mode,
+        "valid_mask": int(valid_mask),
+        "batch_size": int(batch_size),
+        "taw": taw,
+    }
+    global _FR13_FIXED32_TAW_LAST_WORK
+    _FR13_FIXED32_TAW_LAST_WORK = payload
+    callback = _FR13_FIXED32_TAW_WORK_CALLBACK
+    if callback is None:
+        if os.environ.get("FR13_FIXED32_WORK_CENSUS") == "1":
+            raise RuntimeError(
+                "FR13 fixed32 work census is armed without a TAW callback"
+            )
+        return
+    callback(payload)
+
+
+def _fr13_fixed32_announce(topology) -> None:
+    global _FR13_FIXED32_WORK_ANNOUNCED
+    if _FR13_FIXED32_WORK_ANNOUNCED:
+        return
+    _FR13_FIXED32_WORK_ANNOUNCED = True
+    print(
+        "[FR13_FIXED32_WORK] engaged: physical_drafts=31 rows=32 "
+        f"gdn_launches={topology.GDN_LAUNCHES} "
+        f"gdn_programs={topology.GDN_PATH_PROGRAMS} "
+        f"gdn_slots={topology.GDN_PADDED_SLOTS} "
+        f"taw_walk={topology.WALK_CAP} "
+        f"taw_buffer={topology.OUTPUT_PUBLISH_CAPACITY} "
+        f"output_slots={topology.OUTPUT_PUBLISH_CAPACITY} "
+        f"path_slots={topology.ACCEPTED_PATH_CAPACITY} "
+        f"reqkey_slots={topology.REQUEST_KEY_PATH_CAPACITY} "
+        f"kv_slots={topology.KV_REMAP_PATH_CAPACITY} "
+        f"conv_layers={topology.CONV_COMMIT_LAYERS} "
+        f"committer_slots={topology.COMMIT_PATH_CAP}",
+        flush=True,
+    )
+
+
+def fr13_fixed32_taw_commit(
+    num_draft_tokens,
+    draft_token_ids,
+    tree_parent_indices,
+    target_logits,
+    tree_self_logits,
+    bonus_token_ids,
+    max_spec_len: int,
+    *,
+    generators=None,
+    uniforms=None,
+    all_greedy: bool = False,
+    mode: str | None = None,
+):
+    """Run the fail-closed fixed-32 TAW and return five device tensors.
+
+    Returns ``(output_tokens, output_lens, accepted_path_rows, accepted_lens,
+    last_row)``. Output is int64 ``[B,32]`` padded with -1. Accepted paths are
+    root-inclusive GDN row ids (draft-local node + 1), int64 ``[B,16]`` padded
+    with zero. No scalar or tensor value is materialized on the host.
+    """
+    if torch is None:
+        raise RuntimeError("FR13 fixed32 TAW requires torch")
+    if mode is None:
+        mode = os.environ.get("FR13_FIXED32_MODE", "")
+    topology, valid_mask = _fr13_fixed32_runtime_contract(mode)
+    source_contract = _fr13_fixed32_taw_source_contract(topology)
+    if all_greedy:
+        raise RuntimeError(
+            "FR13 fixed32 acceptance route requires sampled temp>0 requests"
+        )
+    if target_logits is None or tree_self_logits is None:
+        raise RuntimeError("FR13 fixed32 TAW requires target and self logits")
+    if not isinstance(target_logits, torch.Tensor):
+        raise RuntimeError("FR13 fixed32 target_logits must be a tensor")
+    if not isinstance(num_draft_tokens, torch.Tensor):
+        raise RuntimeError("FR13 fixed32 num_draft_tokens must be a tensor")
+    batch_size = int(num_draft_tokens.shape[0])
+    if batch_size not in _FR13_FIXED32_BATCHES:
+        raise RuntimeError(f"FR13 fixed32 batch must be 1..4, got {batch_size}")
+    key = fr13_fixed32_taw_cache_key(
+        mode,
+        valid_mask,
+        batch_size,
+        target_logits.device,
+    )
+    entry = _FR13_FIXED32_TAW_CACHE.get(key)
+    if entry is None:
+        raise RuntimeError(
+            "FR13 fixed32 topology cache miss; call "
+            "fr13_fixed32_taw_preseed(device, mode=...) before serving"
+        )
+    drafts, bonus_flat = _fr13_fixed32_validate_inputs(
+        topology,
+        entry,
+        num_draft_tokens,
+        draft_token_ids,
+        tree_parent_indices,
+        target_logits,
+        tree_self_logits,
+        bonus_token_ids,
+        max_spec_len,
+    )
+    fixed_uniforms, rng_route = _fr13_fixed32_fill_uniforms(
+        entry,
+        generators=generators,
+        uniforms=uniforms,
+    )
+    layout_contract = _fr13_fixed32_layout_contract(
+        topology,
+        entry,
+        num_draft_tokens,
+        draft_token_ids,
+        tree_parent_indices,
+        target_logits,
+        tree_self_logits,
+        bonus_token_ids,
+        fixed_uniforms,
+        rng_route=rng_route,
+    )
+    (
+        output_tokens,
+        output_lens,
+        accepted_path_rows,
+        accepted_lens,
+        last_row,
+        loop_iterations,
+    ) = _fr13_fixed32_taw_execute(
+        topology,
+        entry,
+        drafts,
+        target_logits,
+        tree_self_logits,
+        bonus_flat,
+        fixed_uniforms,
+        walk_cap=int(topology.WALK_CAP),
+    )
+    _fr13_fixed32_publish_work(
+        topology,
+        mode=mode,
+        valid_mask=valid_mask,
+        batch_size=batch_size,
+        loop_iterations=loop_iterations,
+        source_contract=source_contract,
+        layout_contract=layout_contract,
+    )
+    _fr13_fixed32_announce(topology)
+    return (
+        output_tokens,
+        output_lens,
+        accepted_path_rows,
+        accepted_lens,
+        last_row,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1028,8 +2458,6 @@ def fr13_taw_commit(
         tuple(parents_cpu), parents_cpu, counts, max_spec_len, device
     )
     drafts_t = draft_token_ids.detach().to(device=device, dtype=torch.long).reshape(-1)
-    V = int(target_logits.shape[-1])
-
     # S1 handoff: the STEP_GRAPH wrapper pre-fills _FR13_SG_UNIFORMS outside
     # the capture; consume it here so the captured region has zero seeding
     # syncs. (Shape must match; wrapper owns refill per replay.)
@@ -1157,11 +2585,15 @@ def fr13_taw_commit(
     rl = row_len.cpu().tolist()
     pb = path_buf.cpu().tolist()
     pl = path_len.cpu().tolist()
-    out_rows = [r[: int(l)] for r, l in zip(rb, rl)]
-    accepted_node_paths = [pth[: int(l)] for pth, l in zip(pb, pl)]
-    accepted_lens = [int(l) for l in pl]
+    out_rows = [r[: int(length)] for r, length in zip(rb, rl)]
+    accepted_node_paths = [
+        pth[: int(length)] for pth, length in zip(pb, pl)
+    ]
+    accepted_lens = [int(length) for length in pl]
     accepted_rows = accepted_lens  # legacy alias shape (per-req accepted count)
-    accepted_token_rows = [r[: int(l)] for r, l in zip(rb, pl)]
+    accepted_token_rows = [
+        r[: int(length)] for r, length in zip(rb, pl)
+    ]
     return out_rows, accepted_rows, accepted_lens, accepted_node_paths, accepted_token_rows
 
 
@@ -1202,11 +2634,15 @@ def fr13_taw_materialize(row_buf, row_len, path_buf, path_len):
     rl = row_len.cpu().tolist()
     pb = path_buf.cpu().tolist()
     pl = path_len.cpu().tolist()
-    out_rows = [r[: int(l)] for r, l in zip(rb, rl)]
-    accepted_node_paths = [pth[: int(l)] for pth, l in zip(pb, pl)]
-    accepted_lens = [int(l) for l in pl]
+    out_rows = [r[: int(length)] for r, length in zip(rb, rl)]
+    accepted_node_paths = [
+        pth[: int(length)] for pth, length in zip(pb, pl)
+    ]
+    accepted_lens = [int(length) for length in pl]
     accepted_rows = accepted_lens
-    accepted_token_rows = [r[: int(l)] for r, l in zip(rb, pl)]
+    accepted_token_rows = [
+        r[: int(length)] for r, length in zip(rb, pl)
+    ]
     return out_rows, accepted_rows, accepted_lens, accepted_node_paths, accepted_token_rows
 
 
@@ -1573,3 +3009,774 @@ def fr13_taw_commit_captured(
             num_draft_tokens, draft_token_ids, tree_parent_indices,
             target_logits, tree_self_logits, bonus_token_ids,
             max_spec_len, generators=generators)
+
+
+# ---------------------------------------------------------------------------
+# CPU-only fixed32 contract tests. These execute the production tensor core;
+# they do not import vLLM, launch a model, or make performance claims.
+# ---------------------------------------------------------------------------
+def _fr13_fixed32_test_set_env(topology, mode: str) -> None:
+    os.environ["FR13_FIXED32_MODE"] = mode
+    os.environ["FR13_FIXED32_VALID_MASK"] = hex(int(topology.VALID_MASK_BY_MODE[mode]))
+    os.environ["FR13_FIXED32_ACTIVE_NODES"] = str(
+        _fr13_fixed32_expected_active(topology, mode)
+    )
+    os.environ["FR13_FIXED32_TAW_WALK_CAP"] = str(topology.WALK_CAP)
+    os.environ["FR13_TAW"] = "1"
+    os.environ["FR13_FIXED32_WORK_CENSUS"] = "1"
+    os.environ.pop("LUMO_TREE_SAMPLER_DEBUG_LOG", None)
+
+
+def _fr13_fixed32_test_fixture(
+    topology,
+    mode: str,
+    batch_size: int,
+    *,
+    vocab_size: int = 97,
+) -> dict[str, Any]:
+    physical_drafts = int(topology.PHYSICAL_DRAFTS)
+    drafts_one = torch.arange(1, physical_drafts + 1, dtype=torch.int32)
+    drafts = drafts_one.repeat(batch_size, 1)
+    target_logits = torch.full(
+        (batch_size * physical_drafts, vocab_size),
+        float("-inf"),
+        dtype=torch.float32,
+    )
+    target_logits[:, 0] = 0.0
+    self_logits = torch.full_like(target_logits, float("-inf"))
+    self_logits[:, vocab_size - 1] = 0.0
+    children = topology.active_child_lists(mode)
+    for request_index in range(batch_size):
+        start = request_index * physical_drafts
+        for child_nodes in children.values():
+            first_child = child_nodes[0]
+            token = int(drafts_one[first_child])
+            target_logits[start + first_child].fill_(float("-inf"))
+            target_logits[start + first_child, token] = 0.0
+    return {
+        "counts": fr13_fixed32_taw_preseeded_counts(
+            torch.device("cpu"),
+            mode=mode,
+            valid_mask=int(topology.VALID_MASK_BY_MODE[mode]),
+            batch_size=batch_size,
+        ),
+        "drafts": drafts.reshape(-1),
+        "parents": torch.tensor(
+            topology.DRAFT_PARENT,
+            dtype=torch.int32,
+        ).repeat(batch_size),
+        "target": target_logits,
+        "self": self_logits,
+        "bonus": torch.full(
+            (batch_size, 1),
+            vocab_size - 2,
+            dtype=torch.int32,
+        ),
+        "uniforms": torch.full(
+            (
+                batch_size,
+                int(topology.WALK_CAP),
+                3,
+            ),
+            0.1,
+            dtype=torch.float32,
+        ),
+    }
+
+
+def _fr13_fixed32_test_call(
+    topology,
+    mode: str,
+    fixture: dict[str, Any],
+):
+    return fr13_fixed32_taw_commit(
+        fixture["counts"],
+        fixture["drafts"],
+        fixture["parents"],
+        fixture["target"],
+        fixture["self"],
+        fixture["bonus"],
+        int(topology.PHYSICAL_DRAFTS),
+        uniforms=fixture["uniforms"],
+        mode=mode,
+    )
+
+
+def _fr13_fixed32_expect_runtime_error(
+    function: Callable[[], Any],
+    *,
+    contains: str,
+) -> None:
+    try:
+        function()
+    except RuntimeError as error:
+        if contains not in str(error):
+            raise AssertionError(
+                f"expected {contains!r} in RuntimeError: {error}"
+            ) from error
+    else:
+        raise AssertionError(f"expected RuntimeError containing {contains!r}")
+
+
+def _fr13_fixed32_test_accept_leaf_depth_pad(topology) -> None:
+    mode = "tail6_fixed32"
+    _fr13_fixed32_test_set_env(topology, mode)
+    fixture = _fr13_fixed32_test_fixture(topology, mode, 1)
+    output, output_lens, paths, path_lens, last_row = _fr13_fixed32_test_call(
+        topology, mode, fixture
+    )
+    children = topology.active_child_lists(mode)
+    expected_nodes = []
+    current = -1
+    while current in children:
+        current = children[current][0]
+        expected_nodes.append(current)
+    expected_path = torch.tensor(
+        [node + 1 for node in expected_nodes],
+        dtype=torch.long,
+    )
+    if not torch.equal(path_lens, torch.tensor([11], dtype=torch.long)):
+        raise AssertionError(f"max-depth accepted lens mismatch: {path_lens}")
+    if not torch.equal(paths[0, :11], expected_path):
+        raise AssertionError("max-depth accepted path mismatch")
+    if not torch.equal(last_row, torch.tensor([31], dtype=torch.long)):
+        raise AssertionError(f"max-depth last row mismatch: {last_row}")
+    if not torch.equal(output_lens, torch.tensor([12], dtype=torch.long)):
+        raise AssertionError(f"leaf output lens mismatch: {output_lens}")
+    if not torch.equal(
+        output[0, 11:12],
+        torch.tensor([96], dtype=torch.long),
+    ):
+        raise AssertionError("leaf did not emit the self-target token")
+    if not torch.equal(
+        output[0, 12:],
+        torch.full((20,), -1, dtype=torch.long),
+    ):
+        raise AssertionError("fixed output padding is not -1")
+    if not torch.equal(
+        paths[0, 11:],
+        torch.zeros(5, dtype=torch.long),
+    ):
+        raise AssertionError("fixed accepted-path padding is not zero")
+
+
+def _fr13_fixed32_test_reject_residual_zero_mass(topology) -> None:
+    mode = "tail6_fixed32"
+    _fr13_fixed32_test_set_env(topology, mode)
+    fixture = _fr13_fixed32_test_fixture(topology, mode, 1)
+    children = topology.active_child_lists(mode)[-1]
+    child_tokens = [int(fixture["drafts"][child]) for child in children]
+    target_row = children[0]
+    fixture["target"][target_row].fill_(float("-inf"))
+    for token in child_tokens:
+        fixture["target"][target_row, token] = math.log(0.05)
+    fixture["target"][target_row, 90] = math.log(0.85)
+    fixture["uniforms"][0, 0, 1] = 0.9
+    output, output_lens, _paths, path_lens, last_row = _fr13_fixed32_test_call(
+        topology, mode, fixture
+    )
+    if not torch.equal(output[0, :1], torch.tensor([90])):
+        raise AssertionError("rejection did not sample the canonical residual")
+    if not torch.equal(output_lens, torch.tensor([1])):
+        raise AssertionError("rejection output length mismatch")
+    if not torch.equal(path_lens, torch.tensor([0])):
+        raise AssertionError("rejected source entered the accepted path")
+    if not torch.equal(last_row, torch.tensor([0])):
+        raise AssertionError("rejection last row must be zero")
+
+    zero_fixture = _fr13_fixed32_test_fixture(topology, mode, 1)
+    zero_fixture["target"][target_row].fill_(float("-inf"))
+    zero_fixture["target"][target_row, 91] = 0.0
+    zero_output, _ol, _paths, zero_lens, _last = _fr13_fixed32_test_call(
+        topology, mode, zero_fixture
+    )
+    if not torch.equal(zero_output[0, :1], torch.tensor([91])):
+        raise AssertionError("zero-overlap row did not sample target p")
+    if not torch.equal(zero_lens, torch.tensor([0])):
+        raise AssertionError("zero-overlap row was accepted")
+
+
+def _fr13_fixed32_test_duplicate_semantics(topology) -> None:
+    mode = "tail6_fixed32"
+    _fr13_fixed32_test_set_env(topology, mode)
+    fixture = _fr13_fixed32_test_fixture(topology, mode, 1)
+    root_children = topology.active_child_lists(mode)[-1]
+    for child in root_children:
+        fixture["drafts"][child] = 5
+    target_row = root_children[0]
+    fixture["target"][target_row].fill_(float("-inf"))
+    fixture["target"][target_row, 5] = math.log(0.4)
+    fixture["target"][target_row, 92] = math.log(0.6)
+    fixture["uniforms"][0, 0, 0] = 0.5
+    fixture["uniforms"][0, 0, 1] = 0.3
+    output, _ol, paths, path_lens, _last = _fr13_fixed32_test_call(
+        topology, mode, fixture
+    )
+    if not torch.equal(output[0, :1], torch.tensor([5])):
+        raise AssertionError("duplicate child acceptance emitted wrong token")
+    if not torch.equal(path_lens, torch.tensor([1])):
+        raise AssertionError("duplicate q_mix acceptance probability is wrong")
+    if not torch.equal(paths[0, :1], torch.tensor([2])):
+        raise AssertionError("duplicate source inverse-CDF selected wrong child")
+
+    fixture["uniforms"][0, 0, 1] = 0.5
+    rejected, _ol, _paths, rejected_lens, _last = _fr13_fixed32_test_call(
+        topology, mode, fixture
+    )
+    if not torch.equal(rejected[0, :1], torch.tensor([92])):
+        raise AssertionError("duplicate q_mix residual is wrong")
+    if not torch.equal(rejected_lens, torch.tensor([0])):
+        raise AssertionError("duplicate q_mix rejection entered the path")
+
+
+def _fr13_fixed32_test_inactive_poison(topology) -> None:
+    mode = "tail6_fixed32"
+    _fr13_fixed32_test_set_env(topology, mode)
+    clean = _fr13_fixed32_test_fixture(topology, mode, 1)
+    clean_result = tuple(
+        tensor.clone() for tensor in _fr13_fixed32_test_call(topology, mode, clean)
+    )
+    poisoned = _fr13_fixed32_test_fixture(topology, mode, 1)
+    for node in topology.TAIL6_INACTIVE_DRAFT_IDS:
+        poisoned["drafts"][node] = 94
+        poisoned["target"][node].fill_(12345.0)
+        poisoned["self"][node].fill_(-12345.0)
+        poisoned["self"][node, 93] = 12345.0
+    poison_result = tuple(
+        tensor.clone() for tensor in _fr13_fixed32_test_call(topology, mode, poisoned)
+    )
+    if not all(
+        torch.equal(left, right) for left, right in zip(clean_result, poison_result)
+    ):
+        raise AssertionError("inactive-node poison changed fixed32 results")
+
+
+def _fr13_fixed32_test_bonus_core(topology) -> None:
+    mode = "tail6_fixed32"
+    _fr13_fixed32_test_set_env(topology, mode)
+    fixture = _fr13_fixed32_test_fixture(topology, mode, 1)
+    key = fr13_fixed32_taw_cache_key(
+        mode,
+        int(topology.VALID_MASK_BY_MODE[mode]),
+        1,
+        torch.device("cpu"),
+    )
+    entry = dict(_FR13_FIXED32_TAW_CACHE[key])
+    entry["child_counts"] = entry["child_counts"].clone()
+    entry["child_counts"][:, 0] = 0
+    drafts, bonus = _fr13_fixed32_validate_inputs(
+        topology,
+        entry,
+        fixture["counts"],
+        fixture["drafts"],
+        fixture["parents"],
+        fixture["target"],
+        fixture["self"],
+        fixture["bonus"],
+        int(topology.PHYSICAL_DRAFTS),
+    )
+    result = _fr13_fixed32_taw_execute(
+        topology,
+        entry,
+        drafts,
+        fixture["target"],
+        fixture["self"],
+        bonus,
+        fixture["uniforms"],
+        walk_cap=int(topology.WALK_CAP),
+    )
+    output, output_lens, _paths, path_lens, _last, loops = result
+    if not torch.equal(output[0, :1], fixture["bonus"].reshape(-1)):
+        raise AssertionError("root leaf did not emit the bonus token")
+    if not torch.equal(output_lens, torch.tensor([1])):
+        raise AssertionError("bonus output length mismatch")
+    if not torch.equal(path_lens, torch.tensor([0])):
+        raise AssertionError("bonus branch accepted a draft node")
+    if loops != 12:
+        raise AssertionError("bonus branch did not run all 12 iterations")
+
+
+def _fr13_fixed32_test_mode_switch_batches(topology) -> None:
+    entries = {}
+    callback_rows = []
+    taw_by_batch = {}
+    expected_taw_keys = {
+        "preseeded_batches",
+        "topology_cache_hit",
+        "cache_misses",
+        "table_shape",
+        "buffer_capacity",
+        "loop_iterations",
+        "uniform_slots",
+        "child_lanes",
+        "target_rows",
+        "self_rows",
+        "self_cdf_rows",
+        "source_cdf_rows",
+        "residual_cdf_rows",
+        "qmix_rows",
+        "residual_rows",
+        "row_scatter_slots",
+        "path_scatter_slots",
+        "source_contract_schema",
+        "source_contract_sha256",
+        "tensor_call_census",
+        "count_route",
+        "rng_route",
+        "vocab_size",
+        "count_shape",
+        "count_dtype",
+        "count_stride",
+        "count_contiguous",
+        "draft_shape",
+        "draft_dtype",
+        "draft_stride",
+        "draft_contiguous",
+        "parent_shape",
+        "parent_dtype",
+        "parent_stride",
+        "parent_contiguous",
+        "bonus_shape",
+        "bonus_dtype",
+        "bonus_stride",
+        "bonus_contiguous",
+        "target_shape",
+        "target_dtype",
+        "target_stride",
+        "target_contiguous",
+        "self_shape",
+        "self_dtype",
+        "self_stride",
+        "self_contiguous",
+        "uniform_shape",
+        "uniform_dtype",
+        "uniform_stride",
+        "uniform_contiguous",
+        "child_table_shape",
+        "child_counts_shape",
+        "output_shape",
+        "output_lens_shape",
+        "accepted_path_shape",
+        "accepted_lens_shape",
+        "last_row_shape",
+    }
+    fr13_fixed32_taw_set_work_callback(callback_rows.append)
+    for mode in ("tail6_fixed32", "hydra27_fixed32"):
+        _fr13_fixed32_test_set_env(topology, mode)
+        mask = int(topology.VALID_MASK_BY_MODE[mode])
+        keys = fr13_fixed32_taw_preseed(
+            "cpu",
+            mode=mode,
+            valid_mask=mask,
+        )
+        if len(keys) != 4:
+            raise AssertionError(f"{mode}: preseed did not build B1..4")
+        for batch_size in _FR13_FIXED32_BATCHES:
+            key = fr13_fixed32_taw_cache_key(
+                mode,
+                mask,
+                batch_size,
+                torch.device("cpu"),
+            )
+            entry = _FR13_FIXED32_TAW_CACHE[key]
+            entries[(mode, batch_size)] = entry
+            counts = fr13_fixed32_taw_preseeded_counts(
+                torch.device("cpu"),
+                mode=mode,
+                valid_mask=mask,
+                batch_size=batch_size,
+            )
+            if counts is not entry["draft_counts"]:
+                raise AssertionError(f"{mode}/B{batch_size}: count cache identity drifted")
+            if not torch.equal(
+                counts,
+                torch.full((batch_size,), 31, dtype=torch.int32),
+            ):
+                raise AssertionError(f"{mode}/B{batch_size}: count values drifted")
+            if tuple(entry["child_table"].shape) != (
+                batch_size,
+                32,
+                3,
+            ):
+                raise AssertionError(f"{mode}/B{batch_size}: child-table shape drifted")
+            fixture = _fr13_fixed32_test_fixture(
+                topology,
+                mode,
+                batch_size,
+            )
+            if batch_size == 4:
+                fixture["drafts"] = fixture["drafts"].to(torch.int32)
+                fixture["bonus"] = fixture["bonus"].to(torch.int32)
+            result = tuple(
+                tensor.clone()
+                for tensor in _fr13_fixed32_test_call(
+                    topology,
+                    mode,
+                    fixture,
+                )
+            )
+            expected_shapes = (
+                (batch_size, 32),
+                (batch_size,),
+                (batch_size, 16),
+                (batch_size,),
+                (batch_size,),
+            )
+            if tuple(tuple(tensor.shape) for tensor in result) != (expected_shapes):
+                raise AssertionError(f"{mode}/B{batch_size}: product shape drifted")
+            work = callback_rows[-1]
+            if (
+                set(work) != {"mode", "valid_mask", "batch_size", "taw"}
+                or set(work["taw"]) != expected_taw_keys
+                or work["mode"] != mode
+                or work["valid_mask"] != mask
+                or work["batch_size"] != batch_size
+                or work["taw"]["loop_iterations"] != 12
+                or work["taw"]["table_shape"] != [batch_size, 32, 3]
+            ):
+                raise AssertionError(f"{mode}/B{batch_size}: callback counters drifted")
+            expected_layout_values = {
+                "count_route": "preseeded_cpu_fixed31_test",
+                "rng_route": "provided_uniforms",
+                "vocab_size": 97,
+                "count_shape": [batch_size],
+                "count_dtype": "torch.int32",
+                "count_stride": [1],
+                "count_contiguous": True,
+                "draft_shape": [batch_size * 31],
+                "draft_dtype": "torch.int32",
+                "draft_stride": [1],
+                "draft_contiguous": True,
+                "parent_shape": [batch_size * 31],
+                "parent_dtype": "torch.int32",
+                "parent_stride": [1],
+                "parent_contiguous": True,
+                "bonus_shape": [batch_size, 1],
+                "bonus_dtype": "torch.int32",
+                "bonus_stride": [1, 1],
+                "bonus_contiguous": True,
+                "target_shape": [batch_size * 31, 97],
+                "target_dtype": "torch.float32",
+                "target_stride": [97, 1],
+                "target_contiguous": True,
+                "self_shape": [batch_size * 31, 97],
+                "self_dtype": "torch.float32",
+                "self_stride": [97, 1],
+                "self_contiguous": True,
+                "uniform_shape": [batch_size, 12, 3],
+                "uniform_dtype": "torch.float32",
+                "uniform_stride": [36, 3, 1],
+                "uniform_contiguous": True,
+                "child_table_shape": [batch_size, 32, 3],
+                "child_counts_shape": [batch_size, 32],
+                "output_shape": [batch_size, 32],
+                "output_lens_shape": [batch_size],
+                "accepted_path_shape": [batch_size, 16],
+                "accepted_lens_shape": [batch_size],
+                "last_row_shape": [batch_size],
+            }
+            for name, expected in expected_layout_values.items():
+                if work["taw"][name] != expected:
+                    raise AssertionError(
+                        f"{mode}/B{batch_size}: {name} callback drifted"
+                    )
+            if (
+                work["taw"]["source_contract_schema"]
+                != _FR13_FIXED32_TAW_SOURCE_SCHEMA
+                or work["taw"]["source_contract_sha256"]
+                != _FR13_FIXED32_TAW_SOURCE_SHA256
+                or work["taw"]["tensor_call_census"]
+                != _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS
+            ):
+                raise AssertionError(
+                    f"{mode}/B{batch_size}: source contract callback drifted"
+                )
+            prior_mode_work = taw_by_batch.setdefault(batch_size, dict(work["taw"]))
+            if work["taw"] != prior_mode_work:
+                raise AssertionError(
+                    f"{mode}/B{batch_size}: TAW work changed with active-node mask"
+                )
+    if entries[("tail6_fixed32", 1)] is entries[("hydra27_fixed32", 1)]:
+        raise AssertionError("Tail/Hydra cache entries collided")
+    tail_key = fr13_fixed32_taw_cache_key(
+        "tail6_fixed32",
+        int(topology.TAIL6_VALID_MASK),
+        1,
+        torch.device("cpu"),
+    )
+    if _FR13_FIXED32_TAW_CACHE[tail_key] is not entries[("tail6_fixed32", 1)]:
+        raise AssertionError("Tail-Hydra-Tail mode switch lost Tail cache")
+    fr13_fixed32_taw_set_work_callback(None)
+
+
+def _fr13_fixed32_test_fail_loud(topology) -> None:
+    mode = "tail6_fixed32"
+    _fr13_fixed32_test_set_env(topology, mode)
+    mask = int(topology.VALID_MASK_BY_MODE[mode])
+    fixture = _fr13_fixed32_test_fixture(topology, mode, 1)
+    fr13_fixed32_taw_set_work_callback(lambda _payload: None)
+
+    os.environ["FR13_FIXED32_VALID_MASK"] = hex(mask ^ 1)
+    _fr13_fixed32_expect_runtime_error(
+        lambda: _fr13_fixed32_test_call(topology, mode, fixture),
+        contains="validity mask",
+    )
+    _fr13_fixed32_test_set_env(topology, mode)
+    os.environ["FR13_FIXED32_TAW_WALK_CAP"] = "11"
+    _fr13_fixed32_expect_runtime_error(
+        lambda: _fr13_fixed32_test_call(topology, mode, fixture),
+        contains="walk cap",
+    )
+    _fr13_fixed32_test_set_env(topology, mode)
+
+    wrong_parent = dict(fixture)
+    wrong_parent["parents"] = fixture["parents"].clone()
+    wrong_parent["parents"][0] = 7
+    _fr13_fixed32_expect_runtime_error(
+        lambda: _fr13_fixed32_test_call(
+            topology,
+            mode,
+            wrong_parent,
+        ),
+        contains="physical parent",
+    )
+    mixed = _fr13_fixed32_test_fixture(topology, mode, 2)
+    mixed["counts"] = mixed["counts"].clone()
+    mixed["counts"][1] = 0
+    _fr13_fixed32_expect_runtime_error(
+        lambda: _fr13_fixed32_test_call(topology, mode, mixed),
+        contains="cache-owned preseeded draft-count",
+    )
+    _fr13_fixed32_expect_runtime_error(
+        lambda: fr13_fixed32_taw_commit(
+            fixture["counts"],
+            fixture["drafts"],
+            fixture["parents"],
+            fixture["target"],
+            fixture["self"],
+            fixture["bonus"],
+            30,
+            uniforms=fixture["uniforms"],
+            mode=mode,
+        ),
+        contains="max_spec_len",
+    )
+
+    key = fr13_fixed32_taw_cache_key(
+        mode,
+        mask,
+        1,
+        torch.device("cpu"),
+    )
+    bad_fanout = dict(_FR13_FIXED32_TAW_CACHE[key])
+    bad_fanout["child_counts"] = bad_fanout["child_counts"].clone()
+    bad_fanout["child_counts"][0, 0] = 4
+    drafts, bonus = _fr13_fixed32_validate_inputs(
+        topology,
+        bad_fanout,
+        fixture["counts"],
+        fixture["drafts"],
+        fixture["parents"],
+        fixture["target"],
+        fixture["self"],
+        fixture["bonus"],
+        31,
+    )
+    _fr13_fixed32_expect_runtime_error(
+        lambda: _fr13_fixed32_taw_execute(
+            topology,
+            bad_fanout,
+            drafts,
+            fixture["target"],
+            fixture["self"],
+            bonus,
+            fixture["uniforms"],
+            walk_cap=12,
+        ),
+        contains="fanout",
+    )
+    overflow_topology = SimpleNamespace(
+        WALK_CAP=17,
+        ACCEPTED_PATH_CAPACITY=16,
+        OUTPUT_PUBLISH_CAPACITY=32,
+        PHYSICAL_DRAFTS=31,
+        SAMPLER_MAX_FANOUT=3,
+        PHYSICAL_ROWS=32,
+    )
+    _fr13_fixed32_expect_runtime_error(
+        lambda: _fr13_fixed32_taw_execute(
+            overflow_topology,
+            _FR13_FIXED32_TAW_CACHE[key],
+            drafts,
+            fixture["target"],
+            fixture["self"],
+            bonus,
+            fixture["uniforms"],
+            walk_cap=17,
+        ),
+        contains="overflow",
+    )
+    fr13_fixed32_taw_set_work_callback(None)
+
+
+def _fr13_fixed32_test_adversarial_contract(topology) -> None:
+    mode = "tail6_fixed32"
+    _fr13_fixed32_test_set_env(topology, mode)
+    fixture = _fr13_fixed32_test_fixture(topology, mode, 1)
+    fr13_fixed32_taw_set_work_callback(lambda _payload: None)
+
+    copied_count = dict(fixture)
+    copied_count["counts"] = fixture["counts"].clone()
+    _fr13_fixed32_expect_runtime_error(
+        lambda: _fr13_fixed32_test_call(topology, mode, copied_count),
+        contains="cache-owned preseeded draft-count",
+    )
+    for name in ("drafts", "parents"):
+        wrong_integer_dtype = dict(fixture)
+        wrong_integer_dtype[name] = fixture[name].to(torch.int64)
+        _fr13_fixed32_expect_runtime_error(
+            lambda candidate=wrong_integer_dtype: _fr13_fixed32_test_call(
+                topology,
+                mode,
+                candidate,
+            ),
+            contains="live input layout drift",
+        )
+
+    wrong_target_dtype = dict(fixture)
+    wrong_target_dtype["target"] = fixture["target"].to(torch.float64)
+    _fr13_fixed32_expect_runtime_error(
+        lambda: _fr13_fixed32_test_call(topology, mode, wrong_target_dtype),
+        contains="live input layout drift",
+    )
+    noncontiguous_target = dict(fixture)
+    noncontiguous_target["target"] = fixture["target"].t().contiguous().t()
+    _fr13_fixed32_expect_runtime_error(
+        lambda: _fr13_fixed32_test_call(topology, mode, noncontiguous_target),
+        contains="live input layout drift",
+    )
+    wrong_bonus_shape = dict(fixture)
+    wrong_bonus_shape["bonus"] = fixture["bonus"].reshape(-1)
+    _fr13_fixed32_expect_runtime_error(
+        lambda: _fr13_fixed32_test_call(topology, mode, wrong_bonus_shape),
+        contains="live input layout drift",
+    )
+    noncontiguous_uniforms = dict(fixture)
+    noncontiguous_uniforms["uniforms"] = torch.full(
+        (1, 12, 6),
+        0.1,
+        dtype=torch.float32,
+    )[:, :, ::2]
+    _fr13_fixed32_expect_runtime_error(
+        lambda: _fr13_fixed32_test_call(topology, mode, noncontiguous_uniforms),
+        contains="uniforms layout drift",
+    )
+    _fr13_fixed32_expect_runtime_error(
+        lambda: fr13_fixed32_taw_commit(
+            fixture["counts"],
+            fixture["drafts"],
+            fixture["parents"],
+            fixture["target"],
+            fixture["self"],
+            fixture["bonus"],
+            31,
+            generators={0: object()},
+            mode=mode,
+        ),
+        contains="forbids per-request generator maps",
+    )
+
+    global _FR13_FIXED32_TAW_SOURCE_SHA256
+    saved_digest = _FR13_FIXED32_TAW_SOURCE_SHA256
+    try:
+        _FR13_FIXED32_TAW_SOURCE_SHA256 = "0" * 64
+        _fr13_fixed32_expect_runtime_error(
+            lambda: _fr13_fixed32_taw_source_contract(topology),
+            contains="pinned source digest changed after binding",
+        )
+    finally:
+        _FR13_FIXED32_TAW_SOURCE_SHA256 = saved_digest
+    _fr13_fixed32_taw_source_contract(topology)
+
+    global _fr13_taw_inv_cdf
+    saved_inv_cdf = _fr13_taw_inv_cdf
+
+    def replacement_inv_cdf(probabilities, uniforms):
+        return saved_inv_cdf(probabilities, uniforms)
+
+    try:
+        _fr13_taw_inv_cdf = replacement_inv_cdf
+        _fr13_fixed32_expect_runtime_error(
+            lambda: _fr13_fixed32_taw_source_contract(topology),
+            contains="source objects changed after binding",
+        )
+    finally:
+        _fr13_taw_inv_cdf = saved_inv_cdf
+    _fr13_fixed32_taw_source_contract(topology)
+    fr13_fixed32_taw_set_work_callback(None)
+
+
+def fr13_fixed32_taw_self_test() -> None:
+    """Run the CPU-only production-core fixed32 gate."""
+    if torch is None:
+        raise RuntimeError("FR13 fixed32 self-test requires torch")
+    topology = _fr13_fixed32_topology()
+    environment_names = (
+        "FR13_FIXED32_MODE",
+        "FR13_FIXED32_VALID_MASK",
+        "FR13_FIXED32_ACTIVE_NODES",
+        "FR13_FIXED32_TAW_WALK_CAP",
+        "FR13_TAW",
+        "FR13_FIXED32_WORK_CENSUS",
+        "LUMO_TREE_SAMPLER_DEBUG_LOG",
+    )
+    saved_environment = {name: os.environ.get(name) for name in environment_names}
+    tests = (
+        _fr13_fixed32_test_mode_switch_batches,
+        _fr13_fixed32_test_accept_leaf_depth_pad,
+        _fr13_fixed32_test_reject_residual_zero_mass,
+        _fr13_fixed32_test_duplicate_semantics,
+        _fr13_fixed32_test_inactive_poison,
+        _fr13_fixed32_test_bonus_core,
+        _fr13_fixed32_test_fail_loud,
+        _fr13_fixed32_test_adversarial_contract,
+    )
+    try:
+        for test in tests:
+            fr13_fixed32_taw_set_work_callback(lambda _payload: None)
+            test(topology)
+    finally:
+        fr13_fixed32_taw_set_work_callback(None)
+        for name, value in saved_environment.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+    print(
+        f"PASS fr13_fixed32_taw groups={len(tests)} modes=2 batches=1..4 walk=12",
+        flush=True,
+    )
+
+
+def _fr13_device_multidraft_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="FR13 device multidraft offline gates")
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="run the CPU-only fixed32 TAW production-core gate",
+    )
+    return parser
+
+
+def _fr13_device_multidraft_main(
+    argv: Sequence[str] | None = None,
+) -> int:
+    args = _fr13_device_multidraft_parser().parse_args(argv)
+    if not args.self_test:
+        raise SystemExit("use --self-test")
+    fr13_fixed32_taw_self_test()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_fr13_device_multidraft_main())

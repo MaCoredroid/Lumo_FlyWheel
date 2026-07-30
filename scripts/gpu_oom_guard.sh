@@ -20,7 +20,9 @@
 #
 # Detached + self-protected. Exits cleanly once no fr13 container is alive.
 set -uo pipefail
-cd /home/mark/shared/lumoFlyWheel 2>/dev/null || true
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO=${REPO:-$(cd "$SCRIPT_DIR/.." && pwd)}
+cd "$REPO" 2>/dev/null || true
 
 FLOOR_MIB=${GPU_GUARD_FLOOR_MIB:-9000}   # kill container if avail < this (MiB)
 POLL_S=${GPU_GUARD_POLL_S:-2}

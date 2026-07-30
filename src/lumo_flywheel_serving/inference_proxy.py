@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import fcntl
 import hashlib
+import hmac
 import itertools
 import json
 import os
 import queue
+import re
+import secrets
+import stat
 import sys
 import threading
 import time
@@ -30,6 +35,1697 @@ from .tuned_config import (
 TRACK_B_REQUEST_METRICS_SCHEMA = "lumo.track_b.vllm_request_metrics.v1"
 TRACK_B_REQUEST_METRICS_PRODUCER = "track_b_vllm_request_metrics_patch"
 TRACK_B_REQUEST_METRICS_OUT_ENV = "LUMO_TRACK_B_REQUEST_METRICS_OUT"
+
+FIXED32_PROXY_SECRET_FILE_ENV = "LUMO_PROXY_FIXED32_SECRET_FILE"
+FIXED32_PROXY_TASK_IDS_ENV = "LUMO_PROXY_FIXED32_TASK_IDS"
+FIXED32_PROXY_LEDGER_PATH_ENV = "LUMO_PROXY_FIXED32_LEDGER_PATH"
+FIXED32_ENGINE_SECRET_FILE_ENV = "FR13_FIXED32_INGRESS_SECRET_FILE"
+FIXED32_ENGINE_TASK_IDS_ENV = "FR13_FIXED32_INGRESS_TASK_IDS"
+FIXED32_ENGINE_LEDGER_PATH_ENV = "FR13_FIXED32_ENGINE_INGRESS_LEDGER_PATH"
+FIXED32_ENGINE_MAX_BODY_BYTES_ENV = "FR13_FIXED32_INGRESS_MAX_BODY_BYTES"
+
+FIXED32_INGRESS_SECRETS_SCHEMA = "fr13-fixed32-ingress-secrets-v1"
+FIXED32_INGRESS_LEDGER_SCHEMA = "fr13.fixed32.ingress-ledger-record.v1"
+FIXED32_INGRESS_BEGIN_SCHEMA = "fr13-fixed32-ingress-begin-v1"
+FIXED32_INGRESS_FINALIZE_SCHEMA = "fr13-fixed32-ingress-finalize-v1"
+FIXED32_PROXY_BEGIN_PATH = "/admin/fixed32/ingress/begin"
+FIXED32_PROXY_FINALIZE_PATH = "/admin/fixed32/ingress/finalize"
+FIXED32_PROXY_TASK_EVIDENCE_PATH = "/admin/fixed32/ingress/task-evidence"
+FIXED32_ENGINE_BEGIN_PATH = "/fr13/fixed32/ingress/begin"
+FIXED32_ENGINE_FINALIZE_PATH = "/fr13/fixed32/ingress/finalize"
+FIXED32_TASK_KEY_HEADER = "X-Fr13-Task-Key-ID"
+FIXED32_REQUEST_ID_HEADER = "X-Request-ID"
+
+_FIXED32_ZERO_DIGEST = "0" * 64
+_FIXED32_HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
+_FIXED32_TASK_BEARER_RE = re.compile(r"^fr13t1\.([0-9a-f]{64})\.([0-9a-f]{64})$")
+_FIXED32_WIRE_RE = re.compile(r"^fr13-(chat|responses)-[0-9a-f]{32}$")
+_FIXED32_LEDGER_KEYS = frozenset(
+    {
+        "schema",
+        "seq",
+        "role",
+        "phase",
+        "event",
+        "route",
+        "task_key_id",
+        "logical_id_sha256",
+        "wire_id_sha256",
+        "engine_request_id_sha256",
+        "status_code",
+        "outcome",
+        "reason",
+        "evidence_sha256",
+        "prev_sha256",
+        "record_sha256",
+    }
+)
+_FIXED32_PROXY_EVENTS = frozenset(
+    {
+        "request_rejected",
+        "campaign_begin",
+        "logical_begin",
+        "attempt_begin",
+        "attempt_result",
+        "logical_complete",
+        "campaign_finalize",
+    }
+)
+_FIXED32_ENGINE_EVENTS = frozenset(
+    {
+        "request_rejected",
+        "campaign_begin",
+        "request_accepted",
+        "request_complete",
+        "campaign_finalize",
+    }
+)
+
+
+class Fixed32IngressError(RuntimeError):
+    """Fixed32 exclusive-ingress configuration or evidence is invalid."""
+
+
+class Fixed32JSONError(Fixed32IngressError):
+    """A fixed32 client or evidence JSON value is ambiguous or invalid."""
+
+
+class Fixed32IngressAdmissionError(Fixed32IngressError):
+    def __init__(self, status: int, reason: str) -> None:
+        super().__init__(reason)
+        self.status = status
+        self.reason = reason
+
+
+class Fixed32IngressSecrets(NamedTuple):
+    task_hmac_key: bytes
+    engine_bearer: str
+
+
+class Fixed32LogicalRequest(NamedTuple):
+    logical_id: str
+    logical_id_sha256: str
+    route: str
+    task_key_id: str
+
+
+class Fixed32UpstreamAttempt(NamedTuple):
+    logical_id: str
+    logical_id_sha256: str
+    route: str
+    task_key_id: str
+    wire_id: str
+    wire_id_sha256: str
+    engine_request_id: str
+    engine_request_id_sha256: str
+    evidence_sha256: str
+
+
+class Fixed32EngineRequest(NamedTuple):
+    route: str
+    task_key_id: str
+    wire_id_sha256: str
+    engine_request_id_sha256: str
+    evidence_sha256: str
+
+
+class Fixed32TrackedResponse:
+    """requests.Response facade that closes an attempt after body consumption."""
+
+    def __init__(
+        self,
+        response: requests.Response,
+        *,
+        ingress: "Fixed32ProxyIngress",
+        attempt: Fixed32UpstreamAttempt,
+    ) -> None:
+        self._response = response
+        self._ingress = ingress
+        self._attempt = attempt
+        self._lock = threading.Lock()
+        self._finished = False
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._response, name)
+
+    def _finish(self, *, exception: bool) -> None:
+        with self._lock:
+            if self._finished:
+                return
+            self._ingress.finish_attempt(
+                self._attempt,
+                status_code=(
+                    None if exception else int(self._response.status_code)
+                ),
+                exception=exception,
+            )
+            self._finished = True
+
+    @property
+    def content(self) -> bytes:
+        try:
+            content = self._response.content
+        except BaseException:
+            self._finish(exception=True)
+            raise
+        self._finish(exception=False)
+        return content
+
+    def json(self, **kwargs: Any) -> Any:
+        try:
+            value = self._response.json(**kwargs)
+        except BaseException:
+            self._finish(exception=True)
+            raise
+        self._finish(exception=False)
+        return value
+
+    def iter_content(self, *args: Any, **kwargs: Any) -> Any:
+        try:
+            yield from self._response.iter_content(*args, **kwargs)
+        except BaseException:
+            self._finish(exception=True)
+            raise
+        self._finish(exception=False)
+
+    def close(self) -> None:
+        try:
+            self._response.close()
+        finally:
+            self._finish(exception=True)
+
+
+def _fixed32_canonical_bytes(value: Any) -> bytes:
+    return json.dumps(
+        value,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def _fixed32_json_loads(value: str | bytes) -> Any:
+    def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in payload:
+                raise Fixed32JSONError("fixed32 JSON has duplicate keys")
+            payload[key] = item
+        return payload
+
+    def reject_nonfinite(constant: str) -> Any:
+        raise Fixed32JSONError(
+            f"fixed32 JSON has nonfinite constant {constant!r}"
+        )
+
+    try:
+        return json.loads(
+            value,
+            object_pairs_hook=reject_duplicates,
+            parse_constant=reject_nonfinite,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise Fixed32JSONError("fixed32 JSON is invalid") from exc
+
+
+def _fixed32_sha256_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def parse_fixed32_task_ids(value: str | list[str] | tuple[str, ...]) -> tuple[str, ...]:
+    if isinstance(value, str):
+        candidates = value.split(",")
+    elif isinstance(value, (list, tuple)):
+        candidates = list(value)
+    else:
+        raise Fixed32IngressError("fixed32 canonical task IDs must be CSV or a sequence")
+    task_ids: list[str] = []
+    for candidate in candidates:
+        if (
+            not isinstance(candidate, str)
+            or not candidate
+            or candidate != candidate.strip()
+            or len(candidate.encode("utf-8")) > 512
+            or any(ord(char) < 0x20 for char in candidate)
+            or "," in candidate
+        ):
+            raise Fixed32IngressError("fixed32 canonical task ID is malformed")
+        task_ids.append(candidate)
+    if not task_ids or len(set(task_ids)) != len(task_ids):
+        raise Fixed32IngressError("fixed32 canonical task IDs must be nonempty and unique")
+    return tuple(sorted(task_ids))
+
+
+def fixed32_canonical_task_set_sha256(
+    task_ids: str | list[str] | tuple[str, ...],
+) -> str:
+    return hashlib.sha256(
+        _fixed32_canonical_bytes(list(parse_fixed32_task_ids(task_ids)))
+    ).hexdigest()
+
+
+def fixed32_task_key_id(instance_id: str) -> str:
+    task_ids = parse_fixed32_task_ids([instance_id])
+    return hashlib.sha256(
+        b"fr13-fixed32-task-key-id-v1\0" + task_ids[0].encode("utf-8")
+    ).hexdigest()
+
+
+def load_fixed32_ingress_secrets(path: str | Path) -> Fixed32IngressSecrets:
+    secret_path = Path(path)
+    try:
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(secret_path, flags)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise Fixed32IngressError(
+                "fixed32 ingress secret must be a regular non-symlink file"
+            ) from exc
+        raise Fixed32IngressError("fixed32 ingress secret file is unavailable") from exc
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            raise Fixed32IngressError(
+                "fixed32 ingress secret must be a regular non-symlink file"
+            )
+        if stat.S_IMODE(info.st_mode) != 0o600 or info.st_uid != os.geteuid():
+            raise Fixed32IngressError(
+                "fixed32 ingress secret must be owned by the process user with mode 0600"
+            )
+        if info.st_size <= 0 or info.st_size > 16 * 1024:
+            raise Fixed32IngressError("fixed32 ingress secret file size is invalid")
+        chunks: list[bytes] = []
+        remaining = info.st_size
+        while remaining:
+            chunk = os.read(descriptor, remaining)
+            if not chunk:
+                raise Fixed32IngressError(
+                    "fixed32 ingress secret file was truncated"
+                )
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+    finally:
+        os.close(descriptor)
+    try:
+        pairs = json.loads(raw, object_pairs_hook=lambda items: items)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise Fixed32IngressError("fixed32 ingress secret JSON is invalid") from exc
+    if not isinstance(pairs, list):
+        raise Fixed32IngressError("fixed32 ingress secret JSON must be an object")
+    payload: dict[str, Any] = {}
+    for item in pairs:
+        if not isinstance(item, tuple) or len(item) != 2 or item[0] in payload:
+            raise Fixed32IngressError("fixed32 ingress secret JSON has duplicate keys")
+        payload[item[0]] = item[1]
+    if set(payload) != {"schema", "task_hmac_key_hex", "engine_bearer"}:
+        raise Fixed32IngressError("fixed32 ingress secret JSON keys mismatch")
+    key_hex = payload["task_hmac_key_hex"]
+    engine_bearer = payload["engine_bearer"]
+    if payload["schema"] != FIXED32_INGRESS_SECRETS_SCHEMA:
+        raise Fixed32IngressError("fixed32 ingress secret schema mismatch")
+    if (
+        not isinstance(key_hex, str)
+        or len(key_hex) < 64
+        or len(key_hex) % 2
+        or key_hex.lower() != key_hex
+        or any(char not in "0123456789abcdef" for char in key_hex)
+    ):
+        raise Fixed32IngressError("fixed32 task HMAC key must be lowercase hex with >=256 bits")
+    if (
+        not isinstance(engine_bearer, str)
+        or not 32 <= len(engine_bearer) <= 512
+        or engine_bearer != engine_bearer.strip()
+        or any(char.isspace() or ord(char) < 0x21 for char in engine_bearer)
+    ):
+        raise Fixed32IngressError("fixed32 engine bearer is malformed")
+    return Fixed32IngressSecrets(bytes.fromhex(key_hex), engine_bearer)
+
+
+def derive_fixed32_task_bearer(
+    secret_file: str | Path,
+    instance_id: str,
+) -> tuple[str, str]:
+    secret = load_fixed32_ingress_secrets(secret_file)
+    return _derive_fixed32_task_bearer_from_secrets(secret, instance_id)
+
+
+def _derive_fixed32_task_bearer_from_secrets(
+    secret: Fixed32IngressSecrets,
+    instance_id: str,
+) -> tuple[str, str]:
+    task_id = parse_fixed32_task_ids([instance_id])[0]
+    key_id = fixed32_task_key_id(task_id)
+    digest = hmac.new(
+        secret.task_hmac_key,
+        b"fr13-fixed32-task-bearer-v1\0" + task_id.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    bearer = f"fr13t1.{key_id}.{digest}"
+    if hmac.compare_digest(bearer, secret.engine_bearer):
+        raise Fixed32IngressError("fixed32 task and engine bearers are not distinct")
+    return bearer, key_id
+
+
+def _fixed32_authorization_bearer(headers: Any) -> str | None:
+    if _fixed32_has_duplicate_critical_headers(headers):
+        return None
+    value = headers.get("Authorization") if hasattr(headers, "get") else None
+    if not isinstance(value, str):
+        return None
+    scheme, separator, bearer = value.partition(" ")
+    if not separator or scheme.lower() != "bearer" or not bearer:
+        return None
+    return bearer
+
+
+def _fixed32_has_duplicate_critical_headers(headers: Any) -> bool:
+    get_all = getattr(headers, "get_all", None)
+    if not callable(get_all):
+        return False
+    return any(
+        len(get_all(name, [])) != 1
+        for name in (
+            "Authorization",
+            FIXED32_TASK_KEY_HEADER,
+            FIXED32_REQUEST_ID_HEADER,
+        )
+        if get_all(name, [])
+    )
+
+
+def _fixed32_attempt_evidence_sha256(
+    *,
+    route: str,
+    task_key_id: str,
+    wire_id: str,
+    engine_request_id: str,
+) -> str:
+    return hashlib.sha256(
+        _fixed32_canonical_bytes(
+            {
+                "engine_request_id": engine_request_id,
+                "route": route,
+                "task_key_id": task_key_id,
+                "wire_id": wire_id,
+            }
+        )
+    ).hexdigest()
+
+
+class Fixed32DigestLedger:
+    """Single-writer, append-only SHA-256 chain for digest-only ingress evidence."""
+
+    def __init__(self, path: str | Path, *, role: str) -> None:
+        if role not in {"proxy", "engine"}:
+            raise Fixed32IngressError("fixed32 ledger role is invalid")
+        self.path = Path(path)
+        self.role = role
+        self._lock = threading.Lock()
+        self._records = 0
+        self._head = _FIXED32_ZERO_DIGEST
+        self._poisoned = False
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_APPEND
+            self._fd = os.open(self.path, flags, 0o600)
+        except OSError as exc:
+            raise Fixed32IngressError(
+                "fixed32 ingress ledger must be a new path"
+            ) from exc
+
+    @property
+    def records(self) -> int:
+        return self._records
+
+    @property
+    def head(self) -> str:
+        return self._head
+
+    def append(
+        self,
+        *,
+        phase: str,
+        event: str,
+        route: str | None = None,
+        task_key_id: str | None = None,
+        logical_id_sha256: str | None = None,
+        wire_id_sha256: str | None = None,
+        engine_request_id_sha256: str | None = None,
+        status_code: int | None = None,
+        outcome: str | None = None,
+        reason: str | None = None,
+        evidence_sha256: str | None = None,
+    ) -> dict[str, Any]:
+        with self._lock:
+            if self._poisoned:
+                raise Fixed32IngressError("fixed32 ingress ledger is poisoned")
+            row: dict[str, Any] = {
+                "schema": FIXED32_INGRESS_LEDGER_SCHEMA,
+                "seq": self._records,
+                "role": self.role,
+                "phase": phase,
+                "event": event,
+                "route": route,
+                "task_key_id": task_key_id,
+                "logical_id_sha256": logical_id_sha256,
+                "wire_id_sha256": wire_id_sha256,
+                "engine_request_id_sha256": engine_request_id_sha256,
+                "status_code": status_code,
+                "outcome": outcome,
+                "reason": reason,
+                "evidence_sha256": evidence_sha256,
+                "prev_sha256": self._head,
+            }
+            digest = hashlib.sha256(_fixed32_canonical_bytes(row)).hexdigest()
+            row["record_sha256"] = digest
+            encoded = _fixed32_canonical_bytes(row) + b"\n"
+            try:
+                written = os.write(self._fd, encoded)
+                if written != len(encoded):
+                    raise OSError("short append")
+                os.fsync(self._fd)
+            except OSError as exc:
+                self._poisoned = True
+                raise Fixed32IngressError("fixed32 ingress ledger append failed") from exc
+            self._records += 1
+            self._head = digest
+            return row
+
+    def close(self) -> None:
+        with self._lock:
+            if getattr(self, "_fd", -1) >= 0:
+                os.close(self._fd)
+                self._fd = -1
+
+
+def _validate_fixed32_ledger_row(row: dict[str, Any], *, role: str) -> None:
+    event = row["event"]
+    route = row["route"]
+    if row["phase"] not in {"preflight", "campaign"}:
+        raise Fixed32IngressError("fixed32 ingress ledger phase is invalid")
+    if route is not None and route not in {"chat", "responses"}:
+        raise Fixed32IngressError("fixed32 ingress ledger route is invalid")
+    status_code = row["status_code"]
+    if status_code is not None and (
+        isinstance(status_code, bool)
+        or not isinstance(status_code, int)
+        or not 100 <= status_code <= 599
+    ):
+        raise Fixed32IngressError("fixed32 ingress ledger status is invalid")
+
+    digest_fields = {
+        "task": row["task_key_id"],
+        "logical": row["logical_id_sha256"],
+        "wire": row["wire_id_sha256"],
+        "engine": row["engine_request_id_sha256"],
+        "evidence": row["evidence_sha256"],
+    }
+
+    def exact_digests(*required: str) -> None:
+        required_set = set(required)
+        if any(
+            (value is None) != (name not in required_set)
+            for name, value in digest_fields.items()
+        ):
+            raise Fixed32IngressError(
+                "fixed32 ingress ledger event digest fields mismatch"
+            )
+
+    if event == "request_rejected":
+        if (
+            route is None
+            or row["outcome"] != "rejected"
+            or row["reason"]
+            not in {
+                "missing_bearer",
+                "malformed_bearer",
+                "unknown_task_key",
+                "invalid_task_bearer",
+                "invalid_engine_bearer",
+                "campaign_not_active",
+                "campaign_finalized",
+                "invalid_task_key",
+                "invalid_wire_id",
+                "request_id_mismatch",
+                "invalid_json",
+                "body_too_large",
+                "duplicate_header",
+                "duplicate_engine_request_id",
+            }
+            or status_code is not None
+        ):
+            raise Fixed32IngressError(
+                "fixed32 ingress rejection fields mismatch"
+            )
+        exact_digests(*(("task",) if row["task_key_id"] is not None else ()))
+        return
+    if event == "campaign_begin":
+        if (
+            row["phase"] != "preflight"
+            or route is not None
+            or row["outcome"] != "begun"
+            or row["reason"] is not None
+            or status_code is not None
+        ):
+            raise Fixed32IngressError("fixed32 ingress begin fields mismatch")
+        exact_digests("evidence")
+        return
+    if event == "campaign_finalize":
+        if (
+            row["phase"] != "campaign"
+            or route is not None
+            or row["outcome"] != "finalized"
+            or row["reason"] is not None
+            or status_code is not None
+        ):
+            raise Fixed32IngressError("fixed32 ingress finalize fields mismatch")
+        exact_digests("evidence")
+        return
+    if role == "proxy" and event == "logical_begin":
+        if (
+            row["phase"] != "campaign"
+            or route is None
+            or row["outcome"] != "accepted"
+            or row["reason"] is not None
+            or status_code is not None
+        ):
+            raise Fixed32IngressError("fixed32 logical begin fields mismatch")
+        exact_digests("task", "logical")
+        return
+    if role == "proxy" and event == "attempt_begin":
+        if (
+            row["phase"] != "campaign"
+            or route is None
+            or row["outcome"] != "dispatched"
+            or row["reason"] is not None
+            or status_code is not None
+        ):
+            raise Fixed32IngressError("fixed32 attempt begin fields mismatch")
+        exact_digests("task", "logical", "wire", "engine", "evidence")
+        return
+    if role == "proxy" and event == "attempt_result":
+        response = row["outcome"] == "response"
+        exception = row["outcome"] == "exception"
+        if (
+            row["phase"] != "campaign"
+            or route is None
+            or not (response or exception)
+            or (response and (status_code is None or row["reason"] is not None))
+            or (
+                exception
+                and (
+                    status_code is not None
+                    or row["reason"] != "network_error"
+                )
+            )
+        ):
+            raise Fixed32IngressError("fixed32 attempt result fields mismatch")
+        exact_digests("task", "logical", "wire", "engine", "evidence")
+        return
+    if role == "proxy" and event == "logical_complete":
+        completed = row["outcome"] == "completed" and row["reason"] is None
+        aborted = (
+            row["outcome"] == "aborted"
+            and row["reason"] in {"handler_error", "no_completed_attempt"}
+        )
+        if (
+            row["phase"] != "campaign"
+            or route is None
+            or not (completed or aborted)
+            or status_code is not None
+        ):
+            raise Fixed32IngressError(
+                "fixed32 logical completion fields mismatch"
+            )
+        exact_digests("task", "logical")
+        return
+    if role == "engine" and event == "request_accepted":
+        if (
+            row["phase"] != "campaign"
+            or route is None
+            or row["outcome"] != "accepted"
+            or row["reason"] is not None
+            or status_code is not None
+        ):
+            raise Fixed32IngressError(
+                "fixed32 engine acceptance fields mismatch"
+            )
+        exact_digests("task", "wire", "engine", "evidence")
+        return
+    if role == "engine" and event == "request_complete":
+        completed = row["outcome"] == "completed" and row["reason"] is None
+        failed = row["outcome"] == "exception" and row["reason"] == "app_error"
+        if (
+            row["phase"] != "campaign"
+            or route is None
+            or not (completed or failed)
+            or status_code is not None
+        ):
+            raise Fixed32IngressError(
+                "fixed32 engine completion fields mismatch"
+            )
+        exact_digests("task", "wire", "engine", "evidence")
+        return
+    raise Fixed32IngressError("fixed32 ingress ledger event is invalid for role")
+
+
+def verify_fixed32_ingress_ledger(
+    path: str | Path,
+    *,
+    expected_role: str | None = None,
+    require_finalized: bool = False,
+) -> dict[str, Any]:
+    """Verify chain integrity and lifecycle ordering without exposing request IDs."""
+    try:
+        raw = Path(path).read_bytes()
+    except OSError as exc:
+        raise Fixed32IngressError("fixed32 ingress ledger is unavailable") from exc
+    if not raw or not raw.endswith(b"\n"):
+        raise Fixed32IngressError("fixed32 ingress ledger is empty or truncated")
+    rows: list[dict[str, Any]] = []
+    for line in raw.splitlines():
+        try:
+            pairs = json.loads(line, object_pairs_hook=lambda items: items)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise Fixed32IngressError("fixed32 ingress ledger JSONL is invalid") from exc
+        if not isinstance(pairs, list):
+            raise Fixed32IngressError("fixed32 ingress ledger row is not an object")
+        row: dict[str, Any] = {}
+        for item in pairs:
+            if not isinstance(item, tuple) or len(item) != 2 or item[0] in row:
+                raise Fixed32IngressError("fixed32 ingress ledger row has duplicate keys")
+            row[item[0]] = item[1]
+        rows.append(row)
+    role = expected_role or rows[0].get("role")
+    if role not in {"proxy", "engine"}:
+        raise Fixed32IngressError("fixed32 ingress ledger role is invalid")
+    allowed_events = _FIXED32_PROXY_EVENTS if role == "proxy" else _FIXED32_ENGINE_EVENTS
+    phase = "preflight"
+    previous = _FIXED32_ZERO_DIGEST
+    active_logical: set[str] = set()
+    active_attempts: dict[str, str] = {}
+    logical_terminal_attempts: dict[str, int] = {}
+    active_engine: set[str] = set()
+    finalized = False
+    aborted_logical_requests = 0
+    zero_attempt_logical_requests = 0
+    failed_attempts = 0
+    failed_engine_requests = 0
+    for seq, row in enumerate(rows):
+        if set(row) != _FIXED32_LEDGER_KEYS:
+            raise Fixed32IngressError("fixed32 ingress ledger row keys mismatch")
+        if (
+            row["schema"] != FIXED32_INGRESS_LEDGER_SCHEMA
+            or row["seq"] != seq
+            or row["role"] != role
+            or row["event"] not in allowed_events
+            or row["prev_sha256"] != previous
+        ):
+            raise Fixed32IngressError("fixed32 ingress ledger chain metadata mismatch")
+        for key in (
+            "task_key_id",
+            "logical_id_sha256",
+            "wire_id_sha256",
+            "engine_request_id_sha256",
+            "evidence_sha256",
+            "prev_sha256",
+            "record_sha256",
+        ):
+            value = row[key]
+            if value is not None and (
+                not isinstance(value, str) or _FIXED32_HEX64_RE.fullmatch(value) is None
+            ):
+                raise Fixed32IngressError("fixed32 ingress ledger digest is malformed")
+        unsigned = dict(row)
+        claimed = unsigned.pop("record_sha256")
+        actual = hashlib.sha256(_fixed32_canonical_bytes(unsigned)).hexdigest()
+        if not hmac.compare_digest(str(claimed), actual):
+            raise Fixed32IngressError("fixed32 ingress ledger record digest mismatch")
+        _validate_fixed32_ledger_row(row, role=role)
+        event = row["event"]
+        if finalized or row["phase"] != phase:
+            raise Fixed32IngressError("fixed32 ingress ledger phase ordering mismatch")
+        if event == "campaign_begin":
+            if phase != "preflight":
+                raise Fixed32IngressError("fixed32 ingress campaign began twice")
+            phase = "campaign"
+        elif event == "campaign_finalize":
+            if phase != "campaign" or active_logical or active_attempts or active_engine:
+                raise Fixed32IngressError("fixed32 ingress finalized with active work")
+            phase = "finalized"
+            finalized = True
+        elif event == "logical_begin":
+            logical = row["logical_id_sha256"]
+            if phase != "campaign" or logical is None or logical in active_logical:
+                raise Fixed32IngressError("fixed32 logical request ordering mismatch")
+            active_logical.add(logical)
+            logical_terminal_attempts[logical] = 0
+        elif event == "attempt_begin":
+            logical = row["logical_id_sha256"]
+            wire = row["wire_id_sha256"]
+            if (
+                logical not in active_logical
+                or wire is None
+                or wire in active_attempts
+            ):
+                raise Fixed32IngressError("fixed32 attempt ordering mismatch")
+            active_attempts[wire] = str(logical)
+        elif event == "attempt_result":
+            wire = row["wire_id_sha256"]
+            if wire not in active_attempts:
+                raise Fixed32IngressError("fixed32 attempt result has no begin")
+            logical_terminal_attempts[active_attempts[str(wire)]] += 1
+            del active_attempts[str(wire)]
+            if row["outcome"] == "exception":
+                failed_attempts += 1
+        elif event == "logical_complete":
+            logical = row["logical_id_sha256"]
+            if logical not in active_logical or logical in active_attempts.values():
+                raise Fixed32IngressError("fixed32 logical completion ordering mismatch")
+            active_logical.remove(str(logical))
+            if logical_terminal_attempts.pop(str(logical)) == 0:
+                zero_attempt_logical_requests += 1
+            if row["outcome"] == "aborted":
+                aborted_logical_requests += 1
+        elif event == "request_accepted":
+            engine_id = row["engine_request_id_sha256"]
+            if phase != "campaign" or engine_id is None or engine_id in active_engine:
+                raise Fixed32IngressError("fixed32 engine acceptance ordering mismatch")
+            active_engine.add(engine_id)
+        elif event == "request_complete":
+            engine_id = row["engine_request_id_sha256"]
+            if engine_id not in active_engine:
+                raise Fixed32IngressError("fixed32 engine completion has no acceptance")
+            active_engine.remove(str(engine_id))
+            if row["outcome"] == "exception":
+                failed_engine_requests += 1
+        elif event != "request_rejected":
+            raise Fixed32IngressError("fixed32 ingress ledger event ordering mismatch")
+        previous = str(claimed)
+    if require_finalized and not finalized:
+        raise Fixed32IngressError("fixed32 ingress ledger is not finalized")
+    if require_finalized and (
+        aborted_logical_requests
+        or zero_attempt_logical_requests
+        or failed_attempts
+        or failed_engine_requests
+    ):
+        raise Fixed32IngressError(
+            "fixed32 finalized ingress ledger contains incomplete logical work"
+        )
+    return {
+        "schema": "fr13-fixed32-ingress-ledger-verification-v1",
+        "role": role,
+        "phase": phase,
+        "records": len(rows),
+        "chain_head_sha256": previous,
+        "active_requests": len(active_logical) + len(active_engine),
+        "active_attempts": len(active_attempts),
+        "aborted_logical_requests": aborted_logical_requests,
+        "zero_attempt_logical_requests": zero_attempt_logical_requests,
+        "failed_attempts": failed_attempts,
+        "failed_engine_requests": failed_engine_requests,
+    }
+
+
+def _fixed32_control_payload(
+    payload: Any,
+    *,
+    task_ids: tuple[str, ...],
+) -> None:
+    expected = {
+        "schema": FIXED32_INGRESS_BEGIN_SCHEMA,
+        "canonical_task_count": len(task_ids),
+        "canonical_task_set_sha256": fixed32_canonical_task_set_sha256(task_ids),
+    }
+    if payload != expected:
+        raise Fixed32IngressAdmissionError(400, "control_contract_mismatch")
+
+
+def _fixed32_finalize_payload(payload: Any) -> None:
+    if payload != {"schema": FIXED32_INGRESS_FINALIZE_SCHEMA}:
+        raise Fixed32IngressAdmissionError(400, "control_contract_mismatch")
+
+
+class Fixed32ProxyIngress:
+    """Exclusive task-authenticated proxy ingress and upstream-attempt ledger."""
+
+    def __init__(
+        self,
+        *,
+        secret_file: str | Path,
+        canonical_task_ids: str | list[str] | tuple[str, ...],
+        ledger_path: str | Path,
+    ) -> None:
+        self.secrets = load_fixed32_ingress_secrets(secret_file)
+        self.task_ids = parse_fixed32_task_ids(canonical_task_ids)
+        self.canonical_task_set_sha256 = fixed32_canonical_task_set_sha256(
+            self.task_ids
+        )
+        self._bearers: dict[str, str] = {}
+        for task_id in self.task_ids:
+            bearer, key_id = _derive_fixed32_task_bearer_from_secrets(
+                self.secrets, task_id
+            )
+            if hmac.compare_digest(bearer, self.secrets.engine_bearer):
+                raise Fixed32IngressError("fixed32 task bearer equals engine bearer")
+            self._bearers[key_id] = bearer
+        self.ledger = Fixed32DigestLedger(ledger_path, role="proxy")
+        self._lock = threading.RLock()
+        self.phase = "preflight"
+        self._active: dict[str, Fixed32LogicalRequest] = {}
+        self._attempts: dict[str, Fixed32UpstreamAttempt] = {}
+        self._logical_attempt_counts: dict[str, dict[str, int]] = {}
+        self._task_counts = {
+            key_id: {
+                "accepted_logical_requests": 0,
+                "completed_logical_model_requests": 0,
+                "aborted_logical_requests": 0,
+                "accepted_attempts": 0,
+                "completed_attempts": 0,
+                "failed_attempts": 0,
+            }
+            for key_id in sorted(self._bearers)
+        }
+        self.preflight_rejected_requests = 0
+        self.campaign_rejected_requests = 0
+
+    @classmethod
+    def from_env(cls) -> "Fixed32ProxyIngress | None":
+        values = {
+            "secret_file": os.environ.get(FIXED32_PROXY_SECRET_FILE_ENV, "").strip(),
+            "canonical_task_ids": os.environ.get(FIXED32_PROXY_TASK_IDS_ENV, "").strip(),
+            "ledger_path": os.environ.get(FIXED32_PROXY_LEDGER_PATH_ENV, "").strip(),
+        }
+        present = {key: bool(value) for key, value in values.items()}
+        if not any(present.values()):
+            return None
+        if not all(present.values()):
+            raise Fixed32IngressError("fixed32 proxy ingress env is incomplete")
+        forbidden_capture_env = (
+            "LUMO_PROXY_PAIR_DUMP_DIR",
+            "LUMO_PROXY_REQUEST_DUMP_DIR",
+            "LUMO_PROXY_SSE_DUMP_DIR",
+        )
+        if any(os.environ.get(name, "").strip() for name in forbidden_capture_env):
+            raise Fixed32IngressError(
+                "fixed32 exclusive ingress forbids raw request/stream capture"
+            )
+        return cls(**values)
+
+    def _task_key_for_bearer(self, bearer: str | None) -> tuple[str | None, str]:
+        if bearer is None:
+            return None, "missing_bearer"
+        match = _FIXED32_TASK_BEARER_RE.fullmatch(bearer)
+        if match is None:
+            return None, "malformed_bearer"
+        key_id = match.group(1)
+        expected = self._bearers.get(key_id)
+        if expected is None:
+            hmac.compare_digest(bearer, f"fr13t1.{key_id}.{'0' * 64}")
+            return None, "unknown_task_key"
+        if not hmac.compare_digest(bearer, expected):
+            return None, "invalid_task_bearer"
+        return key_id, ""
+
+    def is_engine_control_bearer(self, bearer: str | None) -> bool:
+        return isinstance(bearer, str) and hmac.compare_digest(
+            bearer, self.secrets.engine_bearer
+        )
+
+    def _reject(self, *, route: str, task_key_id: str | None, reason: str) -> None:
+        with self._lock:
+            phase = self.phase
+            if phase == "finalized":
+                return
+            if phase == "preflight":
+                self.preflight_rejected_requests += 1
+            else:
+                self.campaign_rejected_requests += 1
+            self.ledger.append(
+                phase=phase,
+                event="request_rejected",
+                route=route,
+                task_key_id=task_key_id,
+                outcome="rejected",
+                reason=reason,
+            )
+
+    def begin(self, payload: Any) -> dict[str, Any]:
+        with self._lock:
+            _fixed32_control_payload(payload, task_ids=self.task_ids)
+            if self.phase != "preflight" or self._active or self._attempts:
+                raise Fixed32IngressAdmissionError(409, "campaign_state_conflict")
+            self.ledger.append(
+                phase="preflight",
+                event="campaign_begin",
+                outcome="begun",
+                evidence_sha256=self.canonical_task_set_sha256,
+            )
+            self.phase = "campaign"
+            return {
+                "schema": "fr13-fixed32-proxy-ingress-begin-v1",
+                "role": "proxy",
+                "phase": self.phase,
+                "canonical_task_count": len(self.task_ids),
+                "canonical_task_set_sha256": self.canonical_task_set_sha256,
+                "preflight_rejected_requests": self.preflight_rejected_requests,
+                "ledger_records": self.ledger.records,
+                "ledger_chain_head_sha256": self.ledger.head,
+            }
+
+    def start_logical(
+        self,
+        *,
+        authorization_bearer: str | None,
+        route: str,
+    ) -> Fixed32LogicalRequest:
+        with self._lock:
+            key_id, reason = self._task_key_for_bearer(authorization_bearer)
+            if key_id is None:
+                self._reject(route=route, task_key_id=None, reason=reason)
+                raise Fixed32IngressAdmissionError(401, reason)
+            if self.phase != "campaign":
+                reason = (
+                    "campaign_finalized"
+                    if self.phase == "finalized"
+                    else "campaign_not_active"
+                )
+                self._reject(route=route, task_key_id=key_id, reason=reason)
+                raise Fixed32IngressAdmissionError(409, reason)
+            logical_id = f"fr13-logical-{secrets.token_hex(16)}"
+            logical_digest = _fixed32_sha256_text(logical_id)
+            context = Fixed32LogicalRequest(
+                logical_id, logical_digest, route, key_id
+            )
+            if logical_id in self._active:
+                raise Fixed32IngressError("fixed32 logical ID collision")
+            self.ledger.append(
+                phase="campaign",
+                event="logical_begin",
+                route=route,
+                task_key_id=key_id,
+                logical_id_sha256=logical_digest,
+                outcome="accepted",
+            )
+            self._active[logical_id] = context
+            self._logical_attempt_counts[logical_id] = {
+                "terminal_attempts": 0,
+                "successful_attempts": 0,
+            }
+            self._task_counts[key_id]["accepted_logical_requests"] += 1
+            return context
+
+    def begin_attempt(
+        self,
+        logical: Fixed32LogicalRequest,
+    ) -> Fixed32UpstreamAttempt:
+        with self._lock:
+            if self.phase != "campaign" or self._active.get(logical.logical_id) != logical:
+                raise Fixed32IngressError("fixed32 attempt has no active logical request")
+            wire_id = f"fr13-{logical.route}-{secrets.token_hex(16)}"
+            if _FIXED32_WIRE_RE.fullmatch(wire_id) is None:
+                raise Fixed32IngressError("fixed32 generated wire ID is malformed")
+            engine_id = (
+                f"chatcmpl-{wire_id}"
+                if logical.route == "chat"
+                else f"{wire_id}_0"
+            )
+            attempt = Fixed32UpstreamAttempt(
+                logical.logical_id,
+                logical.logical_id_sha256,
+                logical.route,
+                logical.task_key_id,
+                wire_id,
+                _fixed32_sha256_text(wire_id),
+                engine_id,
+                _fixed32_sha256_text(engine_id),
+                _fixed32_attempt_evidence_sha256(
+                    route=logical.route,
+                    task_key_id=logical.task_key_id,
+                    wire_id=wire_id,
+                    engine_request_id=engine_id,
+                ),
+            )
+            if wire_id in self._attempts:
+                raise Fixed32IngressError("fixed32 wire ID collision")
+            self.ledger.append(
+                phase="campaign",
+                event="attempt_begin",
+                route=attempt.route,
+                task_key_id=attempt.task_key_id,
+                logical_id_sha256=attempt.logical_id_sha256,
+                wire_id_sha256=attempt.wire_id_sha256,
+                engine_request_id_sha256=attempt.engine_request_id_sha256,
+                outcome="dispatched",
+                evidence_sha256=attempt.evidence_sha256,
+            )
+            self._attempts[wire_id] = attempt
+            self._task_counts[attempt.task_key_id]["accepted_attempts"] += 1
+            return attempt
+
+    def finish_attempt(
+        self,
+        attempt: Fixed32UpstreamAttempt,
+        *,
+        status_code: int | None,
+        exception: bool,
+    ) -> None:
+        with self._lock:
+            if self._attempts.get(attempt.wire_id) != attempt:
+                raise Fixed32IngressError("fixed32 attempt completion has no begin")
+            self.ledger.append(
+                phase="campaign",
+                event="attempt_result",
+                route=attempt.route,
+                task_key_id=attempt.task_key_id,
+                logical_id_sha256=attempt.logical_id_sha256,
+                wire_id_sha256=attempt.wire_id_sha256,
+                engine_request_id_sha256=attempt.engine_request_id_sha256,
+                status_code=status_code,
+                outcome="exception" if exception else "response",
+                reason="network_error" if exception else None,
+                evidence_sha256=attempt.evidence_sha256,
+            )
+            del self._attempts[attempt.wire_id]
+            logical_counts = self._logical_attempt_counts[attempt.logical_id]
+            logical_counts["terminal_attempts"] += 1
+            if (
+                not exception
+                and status_code is not None
+                and 200 <= status_code < 300
+            ):
+                logical_counts["successful_attempts"] += 1
+            key = "failed_attempts" if exception else "completed_attempts"
+            self._task_counts[attempt.task_key_id][key] += 1
+
+    def finish_logical(
+        self,
+        logical: Fixed32LogicalRequest,
+        *,
+        aborted: bool,
+    ) -> None:
+        with self._lock:
+            if self._active.get(logical.logical_id) != logical:
+                raise Fixed32IngressError("fixed32 logical completion has no begin")
+            if any(
+                attempt.logical_id == logical.logical_id
+                for attempt in self._attempts.values()
+            ):
+                raise Fixed32IngressError("fixed32 logical request has active attempts")
+            attempt_counts = self._logical_attempt_counts[logical.logical_id]
+            effective_aborted = aborted or attempt_counts["successful_attempts"] <= 0
+            self.ledger.append(
+                phase="campaign",
+                event="logical_complete",
+                route=logical.route,
+                task_key_id=logical.task_key_id,
+                logical_id_sha256=logical.logical_id_sha256,
+                outcome="aborted" if effective_aborted else "completed",
+                reason=(
+                    "handler_error"
+                    if aborted
+                    else (
+                        "no_completed_attempt"
+                        if effective_aborted
+                        else None
+                    )
+                ),
+            )
+            del self._active[logical.logical_id]
+            del self._logical_attempt_counts[logical.logical_id]
+            if effective_aborted:
+                self._task_counts[logical.task_key_id][
+                    "aborted_logical_requests"
+                ] += 1
+            else:
+                self._task_counts[logical.task_key_id][
+                    "completed_logical_model_requests"
+                ] += 1
+
+    def task_evidence(self, bearer: str | None) -> dict[str, Any]:
+        with self._lock:
+            key_id, reason = self._task_key_for_bearer(bearer)
+            if key_id is None:
+                raise Fixed32IngressAdmissionError(401, reason)
+            counts = self._task_counts[key_id]
+            return {
+                "schema": "fr13-fixed32-task-auth-evidence-v1",
+                "task_key_id": key_id,
+                "completed_logical_model_requests": counts[
+                    "completed_logical_model_requests"
+                ],
+                "aborted_logical_requests": counts[
+                    "aborted_logical_requests"
+                ],
+                "accepted_attempts": counts["accepted_attempts"],
+                "completed_attempts": counts["completed_attempts"],
+                "failed_attempts": counts["failed_attempts"],
+                "phase": self.phase,
+                "ledger_records": self.ledger.records,
+                "ledger_chain_head_sha256": self.ledger.head,
+            }
+
+    def finalize(self, payload: Any) -> dict[str, Any]:
+        with self._lock:
+            _fixed32_finalize_payload(payload)
+            if self.phase != "campaign" or self._active or self._attempts:
+                raise Fixed32IngressAdmissionError(409, "active_requests")
+            totals = {
+                key: sum(counts[key] for counts in self._task_counts.values())
+                for key in next(iter(self._task_counts.values()))
+            }
+            self.ledger.append(
+                phase="campaign",
+                event="campaign_finalize",
+                outcome="finalized",
+                evidence_sha256=self.canonical_task_set_sha256,
+            )
+            self.phase = "finalized"
+            return {
+                "schema": "fr13-fixed32-proxy-ingress-finalize-v1",
+                "role": "proxy",
+                "phase": self.phase,
+                "canonical_task_count": len(self.task_ids),
+                "canonical_task_set_sha256": self.canonical_task_set_sha256,
+                "active_requests": 0,
+                "active_attempts": 0,
+                "accepted_logical_requests": totals["accepted_logical_requests"],
+                "completed_logical_requests": totals[
+                    "completed_logical_model_requests"
+                ],
+                "aborted_logical_requests": totals[
+                    "aborted_logical_requests"
+                ],
+                "accepted_attempts": totals["accepted_attempts"],
+                "completed_attempts": totals["completed_attempts"],
+                "failed_attempts": totals["failed_attempts"],
+                "preflight_rejected_requests": self.preflight_rejected_requests,
+                "campaign_rejected_requests": self.campaign_rejected_requests,
+                "task_evidence": [
+                    {"task_key_id": key_id, **dict(counts)}
+                    for key_id, counts in sorted(self._task_counts.items())
+                ],
+                "ledger_records": self.ledger.records,
+                "ledger_chain_head_sha256": self.ledger.head,
+            }
+
+
+class Fixed32EngineIngress:
+    """Engine-side admission state independent of the proxy process."""
+
+    def __init__(
+        self,
+        *,
+        secret_file: str | Path,
+        canonical_task_ids: str | list[str] | tuple[str, ...],
+        ledger_path: str | Path,
+    ) -> None:
+        self.secrets = load_fixed32_ingress_secrets(secret_file)
+        self.task_ids = parse_fixed32_task_ids(canonical_task_ids)
+        self.canonical_task_set_sha256 = fixed32_canonical_task_set_sha256(
+            self.task_ids
+        )
+        self.task_key_ids = frozenset(
+            fixed32_task_key_id(task_id) for task_id in self.task_ids
+        )
+        if any(
+            hmac.compare_digest(
+                _derive_fixed32_task_bearer_from_secrets(
+                    self.secrets, task_id
+                )[0],
+                self.secrets.engine_bearer,
+            )
+            for task_id in self.task_ids
+        ):
+            raise Fixed32IngressError("fixed32 task bearer equals engine bearer")
+        self.ledger = Fixed32DigestLedger(ledger_path, role="engine")
+        self._lock = threading.RLock()
+        self.phase = "preflight"
+        self._active: dict[str, Fixed32EngineRequest] = {}
+        self._task_counts = {
+            key_id: {"accepted_engine_requests": 0, "completed_engine_requests": 0}
+            for key_id in sorted(self.task_key_ids)
+        }
+        self.preflight_rejected_requests = 0
+        self.campaign_rejected_requests = 0
+
+    def is_engine_bearer(self, bearer: str | None) -> bool:
+        return isinstance(bearer, str) and hmac.compare_digest(
+            bearer, self.secrets.engine_bearer
+        )
+
+    def reject(self, *, route: str, task_key_id: str | None, reason: str) -> None:
+        with self._lock:
+            phase = self.phase
+            if phase == "finalized":
+                return
+            if phase == "preflight":
+                self.preflight_rejected_requests += 1
+            else:
+                self.campaign_rejected_requests += 1
+            self.ledger.append(
+                phase=phase,
+                event="request_rejected",
+                route=route,
+                task_key_id=(
+                    task_key_id if task_key_id in self.task_key_ids else None
+                ),
+                outcome="rejected",
+                reason=reason,
+            )
+
+    def begin(self, payload: Any) -> dict[str, Any]:
+        with self._lock:
+            _fixed32_control_payload(payload, task_ids=self.task_ids)
+            if self.phase != "preflight" or self._active:
+                raise Fixed32IngressAdmissionError(409, "campaign_state_conflict")
+            self.ledger.append(
+                phase="preflight",
+                event="campaign_begin",
+                outcome="begun",
+                evidence_sha256=self.canonical_task_set_sha256,
+            )
+            self.phase = "campaign"
+            return {
+                "schema": "fr13-fixed32-engine-ingress-begin-v1",
+                "role": "engine",
+                "phase": self.phase,
+                "canonical_task_count": len(self.task_ids),
+                "canonical_task_set_sha256": self.canonical_task_set_sha256,
+                "preflight_rejected_requests": self.preflight_rejected_requests,
+                "ledger_records": self.ledger.records,
+                "ledger_chain_head_sha256": self.ledger.head,
+            }
+
+    def accept(
+        self,
+        *,
+        route: str,
+        task_key_id: str,
+        wire_id: str,
+        engine_request_id: str,
+    ) -> Fixed32EngineRequest:
+        with self._lock:
+            if self.phase != "campaign":
+                reason = (
+                    "campaign_finalized"
+                    if self.phase == "finalized"
+                    else "campaign_not_active"
+                )
+                self.reject(
+                    route=route, task_key_id=task_key_id, reason=reason
+                )
+                raise Fixed32IngressAdmissionError(409, reason)
+            if task_key_id not in self.task_key_ids:
+                self.reject(
+                    route=route,
+                    task_key_id=None,
+                    reason="invalid_task_key",
+                )
+                raise Fixed32IngressAdmissionError(401, "invalid_task_key")
+            engine_digest = _fixed32_sha256_text(engine_request_id)
+            context = Fixed32EngineRequest(
+                route,
+                task_key_id,
+                _fixed32_sha256_text(wire_id),
+                engine_digest,
+                _fixed32_attempt_evidence_sha256(
+                    route=route,
+                    task_key_id=task_key_id,
+                    wire_id=wire_id,
+                    engine_request_id=engine_request_id,
+                ),
+            )
+            if engine_digest in self._active:
+                raise Fixed32IngressAdmissionError(409, "duplicate_engine_request_id")
+            self.ledger.append(
+                phase="campaign",
+                event="request_accepted",
+                route=route,
+                task_key_id=task_key_id,
+                wire_id_sha256=context.wire_id_sha256,
+                engine_request_id_sha256=context.engine_request_id_sha256,
+                outcome="accepted",
+                evidence_sha256=context.evidence_sha256,
+            )
+            self._active[engine_digest] = context
+            self._task_counts[task_key_id]["accepted_engine_requests"] += 1
+            return context
+
+    def complete(self, context: Fixed32EngineRequest, *, exception: bool) -> None:
+        with self._lock:
+            if self._active.get(context.engine_request_id_sha256) != context:
+                raise Fixed32IngressError("fixed32 engine completion has no acceptance")
+            self.ledger.append(
+                phase="campaign",
+                event="request_complete",
+                route=context.route,
+                task_key_id=context.task_key_id,
+                wire_id_sha256=context.wire_id_sha256,
+                engine_request_id_sha256=context.engine_request_id_sha256,
+                outcome="exception" if exception else "completed",
+                reason="app_error" if exception else None,
+                evidence_sha256=context.evidence_sha256,
+            )
+            del self._active[context.engine_request_id_sha256]
+            if not exception:
+                self._task_counts[context.task_key_id][
+                    "completed_engine_requests"
+                ] += 1
+
+    def finalize(self, payload: Any) -> dict[str, Any]:
+        with self._lock:
+            _fixed32_finalize_payload(payload)
+            if self.phase != "campaign" or self._active:
+                raise Fixed32IngressAdmissionError(409, "active_requests")
+            totals = {
+                key: sum(counts[key] for counts in self._task_counts.values())
+                for key in next(iter(self._task_counts.values()))
+            }
+            self.ledger.append(
+                phase="campaign",
+                event="campaign_finalize",
+                outcome="finalized",
+                evidence_sha256=self.canonical_task_set_sha256,
+            )
+            self.phase = "finalized"
+            return {
+                "schema": "fr13-fixed32-engine-ingress-finalize-v1",
+                "role": "engine",
+                "phase": self.phase,
+                "canonical_task_count": len(self.task_ids),
+                "canonical_task_set_sha256": self.canonical_task_set_sha256,
+                "active_requests": 0,
+                "accepted_engine_requests": totals["accepted_engine_requests"],
+                "completed_engine_requests": totals["completed_engine_requests"],
+                "preflight_rejected_requests": self.preflight_rejected_requests,
+                "campaign_rejected_requests": self.campaign_rejected_requests,
+                "task_evidence": [
+                    {"task_key_id": key_id, **dict(counts)}
+                    for key_id, counts in sorted(self._task_counts.items())
+                ],
+                "ledger_records": self.ledger.records,
+                "ledger_chain_head_sha256": self.ledger.head,
+            }
+
+
+async def _fixed32_asgi_json(
+    send: Any,
+    status: int,
+    payload: dict[str, Any],
+) -> None:
+    body = _fixed32_canonical_bytes(payload)
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode("ascii")),
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": body, "more_body": False})
+
+
+class Fixed32EngineIngressMiddleware:
+    """ASGI guard that rejects unauthorized inference before invoking vLLM."""
+
+    def __init__(
+        self,
+        app: Any,
+        *,
+        secret_file: str | Path | None = None,
+        canonical_task_ids: str | list[str] | tuple[str, ...] | None = None,
+        ledger_path: str | Path | None = None,
+        max_body_bytes: int | None = None,
+    ) -> None:
+        self.app = app
+        secret_file = secret_file or os.environ.get(FIXED32_ENGINE_SECRET_FILE_ENV)
+        canonical_task_ids = canonical_task_ids or os.environ.get(
+            FIXED32_ENGINE_TASK_IDS_ENV
+        )
+        ledger_path = ledger_path or os.environ.get(FIXED32_ENGINE_LEDGER_PATH_ENV)
+        if not secret_file or not canonical_task_ids or not ledger_path:
+            raise Fixed32IngressError("fixed32 engine ingress configuration is incomplete")
+        if max_body_bytes is None:
+            max_body_bytes = int(
+                os.environ.get(FIXED32_ENGINE_MAX_BODY_BYTES_ENV, str(64 * 1024 * 1024))
+            )
+        if not isinstance(max_body_bytes, int) or not 1 <= max_body_bytes <= 1024**3:
+            raise Fixed32IngressError("fixed32 engine max body bytes is invalid")
+        self.max_body_bytes = max_body_bytes
+        self.ingress = Fixed32EngineIngress(
+            secret_file=secret_file,
+            canonical_task_ids=canonical_task_ids,
+            ledger_path=ledger_path,
+        )
+
+    @staticmethod
+    def _headers(scope: dict[str, Any]) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        critical = {
+            "authorization",
+            FIXED32_TASK_KEY_HEADER.lower(),
+            FIXED32_REQUEST_ID_HEADER.lower(),
+        }
+        for raw_key, raw_value in scope.get("headers", []):
+            try:
+                key = raw_key.decode("ascii").lower()
+                value = raw_value.decode("ascii")
+            except (UnicodeDecodeError, AttributeError):
+                continue
+            if key in critical and key in headers:
+                raise Fixed32IngressAdmissionError(400, "duplicate_header")
+            headers[key] = value
+        return headers
+
+    async def _body(self, receive: Any) -> bytes:
+        chunks: list[bytes] = []
+        size = 0
+        while True:
+            message = await receive()
+            if message.get("type") == "http.disconnect":
+                raise Fixed32IngressAdmissionError(400, "invalid_json")
+            if message.get("type") != "http.request":
+                continue
+            chunk = message.get("body", b"")
+            if not isinstance(chunk, bytes):
+                raise Fixed32IngressAdmissionError(400, "invalid_json")
+            size += len(chunk)
+            if size > self.max_body_bytes:
+                raise Fixed32IngressAdmissionError(413, "body_too_large")
+            chunks.append(chunk)
+            if not message.get("more_body", False):
+                return b"".join(chunks)
+
+    @staticmethod
+    def _bearer(headers: dict[str, str]) -> str | None:
+        value = headers.get("authorization")
+        if value is None:
+            return None
+        scheme, separator, bearer = value.partition(" ")
+        if not separator or scheme.lower() != "bearer" or not bearer:
+            return None
+        return bearer
+
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        scope_type = scope.get("type")
+        if scope_type == "lifespan":
+            await self.app(scope, receive, send)
+            return
+        if scope_type == "websocket":
+            await send(
+                {
+                    "type": "websocket.close",
+                    "code": 1008,
+                    "reason": "fixed32 exclusive ingress",
+                }
+            )
+            return
+        if scope_type != "http":
+            await self.app(scope, receive, send)
+            return
+        path = str(scope.get("path", ""))
+        method = str(scope.get("method", "")).upper()
+        route = {
+            "/v1/chat/completions": "chat",
+            "/v1/responses": "responses",
+        }.get(path)
+        if method == "GET" and path in {"/health", "/metrics", "/v1/models"}:
+            await self.app(scope, receive, send)
+            return
+        if not (
+            method == "POST"
+            and (
+                route is not None
+                or path
+                in {FIXED32_ENGINE_BEGIN_PATH, FIXED32_ENGINE_FINALIZE_PATH}
+            )
+        ):
+            await _fixed32_asgi_json(
+                send, 403, {"error": {"code": "fixed32_route_not_allowed"}}
+            )
+            return
+        try:
+            headers = self._headers(scope)
+        except Fixed32IngressAdmissionError as exc:
+            if method == "POST" and route is not None:
+                try:
+                    self.ingress.reject(
+                        route=route,
+                        task_key_id=None,
+                        reason=exc.reason,
+                    )
+                except Fixed32IngressError:
+                    await _fixed32_asgi_json(
+                        send, 503, {"error": {"code": "ingress_evidence_failure"}}
+                    )
+                    return
+            await _fixed32_asgi_json(send, exc.status, {"error": {"code": exc.reason}})
+            return
+        bearer = self._bearer(headers)
+        if path in {FIXED32_ENGINE_BEGIN_PATH, FIXED32_ENGINE_FINALIZE_PATH}:
+            if method != "POST" or not self.ingress.is_engine_bearer(bearer):
+                await _fixed32_asgi_json(
+                    send, 401, {"error": {"code": "unauthorized"}}
+                )
+                return
+            try:
+                body = await self._body(receive)
+                payload = _fixed32_json_loads(body)
+                result = (
+                    self.ingress.begin(payload)
+                    if path == FIXED32_ENGINE_BEGIN_PATH
+                    else self.ingress.finalize(payload)
+                )
+            except Fixed32IngressAdmissionError as exc:
+                await _fixed32_asgi_json(
+                    send, exc.status, {"error": {"code": exc.reason}}
+                )
+                return
+            except Fixed32JSONError:
+                await _fixed32_asgi_json(
+                    send, 400, {"error": {"code": "invalid_json"}}
+                )
+                return
+            except (Fixed32IngressError, UnicodeDecodeError, json.JSONDecodeError):
+                await _fixed32_asgi_json(
+                    send, 503, {"error": {"code": "ingress_evidence_failure"}}
+                )
+                return
+            await _fixed32_asgi_json(send, 200, result)
+            return
+        if method != "POST" or route is None:
+            await self.app(scope, receive, send)
+            return
+        task_key_id = headers.get(FIXED32_TASK_KEY_HEADER.lower())
+        if bearer is None:
+            reason = "missing_bearer"
+        elif not self.ingress.is_engine_bearer(bearer):
+            reason = "invalid_engine_bearer"
+        else:
+            reason = ""
+        if reason:
+            try:
+                self.ingress.reject(
+                    route=route, task_key_id=task_key_id, reason=reason
+                )
+            except Fixed32IngressError:
+                await _fixed32_asgi_json(
+                    send, 503, {"error": {"code": "ingress_evidence_failure"}}
+                )
+                return
+            await _fixed32_asgi_json(send, 401, {"error": {"code": reason}})
+            return
+        try:
+            body = await self._body(receive)
+            wire_id = headers.get(FIXED32_REQUEST_ID_HEADER.lower(), "")
+            match = _FIXED32_WIRE_RE.fullmatch(wire_id)
+            if match is None or match.group(1) != route:
+                raise Fixed32IngressAdmissionError(400, "invalid_wire_id")
+            if route == "responses":
+                try:
+                    payload = _fixed32_json_loads(body)
+                except (
+                    UnicodeDecodeError,
+                    json.JSONDecodeError,
+                    Fixed32IngressError,
+                ) as exc:
+                    raise Fixed32IngressAdmissionError(400, "invalid_json") from exc
+                if not isinstance(payload, dict) or payload.get("request_id") != wire_id:
+                    raise Fixed32IngressAdmissionError(400, "request_id_mismatch")
+                engine_request_id = f"{wire_id}_0"
+            else:
+                try:
+                    payload = _fixed32_json_loads(body)
+                except (
+                    UnicodeDecodeError,
+                    json.JSONDecodeError,
+                    Fixed32IngressError,
+                ) as exc:
+                    raise Fixed32IngressAdmissionError(400, "invalid_json") from exc
+                if not isinstance(payload, dict):
+                    raise Fixed32IngressAdmissionError(400, "invalid_json")
+                engine_request_id = f"chatcmpl-{wire_id}"
+            context = self.ingress.accept(
+                route=route,
+                task_key_id=task_key_id or "",
+                wire_id=wire_id,
+                engine_request_id=engine_request_id,
+            )
+        except Fixed32IngressAdmissionError as exc:
+            if exc.reason not in {"campaign_not_active", "campaign_finalized", "invalid_task_key"}:
+                try:
+                    self.ingress.reject(
+                        route=route,
+                        task_key_id=task_key_id,
+                        reason=exc.reason,
+                    )
+                except Fixed32IngressError:
+                    await _fixed32_asgi_json(
+                        send, 503, {"error": {"code": "ingress_evidence_failure"}}
+                    )
+                    return
+            await _fixed32_asgi_json(send, exc.status, {"error": {"code": exc.reason}})
+            return
+        except Fixed32IngressError:
+            await _fixed32_asgi_json(
+                send, 503, {"error": {"code": "ingress_evidence_failure"}}
+            )
+            return
+
+        replayed = False
+
+        async def replay_receive() -> dict[str, Any]:
+            nonlocal replayed
+            if not replayed:
+                replayed = True
+                return {"type": "http.request", "body": body, "more_body": False}
+            return await receive()
+
+        try:
+            await self.app(scope, replay_receive, send)
+        except BaseException:
+            self.ingress.complete(context, exception=True)
+            raise
+        self.ingress.complete(context, exception=False)
+
+
+def fixed32_engine_ingress_middleware_from_env(app: Any) -> Any:
+    """Wrap an ASGI app only when the complete engine ingress env is configured."""
+    values = (
+        os.environ.get(FIXED32_ENGINE_SECRET_FILE_ENV, "").strip(),
+        os.environ.get(FIXED32_ENGINE_TASK_IDS_ENV, "").strip(),
+        os.environ.get(FIXED32_ENGINE_LEDGER_PATH_ENV, "").strip(),
+    )
+    if not any(values):
+        return app
+    if not all(values):
+        raise Fixed32IngressError("fixed32 engine ingress env is incomplete")
+    return Fixed32EngineIngressMiddleware(app)
 
 # FR13 SWE served-stream instrument (env-gated, default OFF): when
 # LUMO_PROXY_PAIR_DUMP_DIR is set, every UPSTREAM /v1/responses call (the
@@ -110,7 +1806,13 @@ INFERENCE_PATHS = {"/v1/responses", "/v1/chat/completions"}
 # softer — Codex skips model-refresh and proceeds to /v1/responses normally).
 # Keep the empty set so the proxy falls back to 403 on GET /v1/models.
 INFERENCE_GET_PATHS: set[str] = set()
-ADMIN_PATHS = {"/admin/load_tuned_config", "/admin/invalidate"}
+ADMIN_PATHS = {
+    "/admin/load_tuned_config",
+    "/admin/invalidate",
+    FIXED32_PROXY_BEGIN_PATH,
+    FIXED32_PROXY_FINALIZE_PATH,
+    FIXED32_PROXY_TASK_EVIDENCE_PATH,
+}
 CAMPAIGN_CLASSES = {"eval", "rollout"}
 REQUEST_CLASS_HEADERS = (
     "X-Lumo-Request-Class",
@@ -1353,6 +3055,13 @@ def _filtered_headers(headers: Any) -> dict[str, str]:
     return filtered
 
 
+def _overwrite_header(headers: dict[str, str], name: str, value: str) -> None:
+    for key in tuple(headers):
+        if key.lower() == name.lower():
+            del headers[key]
+    headers[name] = value
+
+
 def _write_json_error(
     handler: BaseHTTPRequestHandler,
     status: int,
@@ -2163,12 +3872,22 @@ def _write_chunked_stream(
             _write_sse_capture_record(_cap)
 
 
-def _read_json_body(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
+def _read_json_body(
+    handler: BaseHTTPRequestHandler,
+    *,
+    strict_fixed32: bool = False,
+) -> dict[str, Any]:
     content_length = int(handler.headers.get("Content-Length", "0"))
+    if strict_fixed32 and not 0 <= content_length <= 64 * 1024:
+        raise Fixed32IngressAdmissionError(413, "body_too_large")
     raw_body = handler.rfile.read(content_length)
     try:
-        payload = json.loads(raw_body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        payload = (
+            _fixed32_json_loads(raw_body)
+            if strict_fixed32
+            else json.loads(raw_body.decode("utf-8"))
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, Fixed32IngressError) as exc:
         raise StructuredValidationError(
             message="Invalid JSON request body",
             issues=[ValidationIssue(field="body", message=str(exc))],
@@ -2382,11 +4101,17 @@ def build_proxy_handler(
     state_root: str | Path | None = None,
     registry_path: str | Path | None = None,
     request_metrics_capture: TrackBRequestMetricsCapture | None = None,
+    fixed32_ingress: Fixed32ProxyIngress | None = None,
 ) -> type[BaseHTTPRequestHandler]:
     state_store = RuntimeStateStore(state_root or Path.cwd() / "output" / "serving_state")
     registry = load_registry(registry_path) if registry_path is not None else {}
     admission = AdmissionController(state_store)
     capture = request_metrics_capture if request_metrics_capture is not None else TrackBRequestMetricsCapture.from_env(upstream_base_url)
+    ingress = (
+        fixed32_ingress
+        if fixed32_ingress is not None
+        else Fixed32ProxyIngress.from_env()
+    )
 
     class ProxyHandler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -2395,10 +4120,33 @@ def build_proxy_handler(
             if not is_inference_get_path(self.path):
                 _write_json_error(self, 403, "Blocked by codex-bench-proxy: inference paths only")
                 return
+            upstream_headers = _filtered_headers(self.headers)
+            if ingress is not None:
+                if _fixed32_has_duplicate_critical_headers(self.headers):
+                    _write_json_error(
+                        self,
+                        400,
+                        "Duplicate fixed32 security header",
+                        code="duplicate_header",
+                    )
+                    return
+                bearer = _fixed32_authorization_bearer(self.headers)
+                task_key_id, _reason = ingress._task_key_for_bearer(bearer)
+                if task_key_id is None:
+                    _write_json_error(self, 401, "Unauthorized fixed32 task")
+                    return
+                _overwrite_header(
+                    upstream_headers,
+                    "Authorization",
+                    f"Bearer {ingress.secrets.engine_bearer}",
+                )
+                _overwrite_header(
+                    upstream_headers, FIXED32_TASK_KEY_HEADER, task_key_id
+                )
             try:
                 upstream = requests.get(
                     f"{upstream_base_url}{self.path}",
-                    headers=_filtered_headers(self.headers),
+                    headers=upstream_headers,
                     timeout=15,
                 )
             except requests.RequestException as exc:
@@ -2444,6 +4192,81 @@ def build_proxy_handler(
                 return
 
         def do_POST(self) -> None:  # noqa: N802
+            if ingress is not None and self.path in {
+                "/admin/load_tuned_config",
+                "/admin/invalidate",
+            }:
+                self.close_connection = True
+                _write_json_error(
+                    self,
+                    403,
+                    "Legacy admin endpoint is disabled during fixed32",
+                    code="fixed32_admin_disabled",
+                    headers={"Connection": "close"},
+                )
+                return
+            if (
+                ingress is None
+                or self.path in ADMIN_PATHS
+                or not is_inference_path(self.path)
+            ):
+                self._do_POST_inner()
+                return
+            route = "chat" if self.path == "/v1/chat/completions" else "responses"
+            if _fixed32_has_duplicate_critical_headers(self.headers):
+                try:
+                    ingress._reject(
+                        route=route,
+                        task_key_id=None,
+                        reason="duplicate_header",
+                    )
+                except Fixed32IngressError:
+                    _write_json_error(
+                        self,
+                        503,
+                        "Fixed32 ingress evidence failure",
+                        code="ingress_evidence_failure",
+                    )
+                    return
+                _write_json_error(
+                    self,
+                    400,
+                    "Duplicate fixed32 security header",
+                    code="duplicate_header",
+                )
+                return
+            try:
+                logical = ingress.start_logical(
+                    authorization_bearer=_fixed32_authorization_bearer(self.headers),
+                    route=route,
+                )
+            except Fixed32IngressAdmissionError as exc:
+                _write_json_error(
+                    self,
+                    exc.status,
+                    "Fixed32 ingress rejected the request",
+                    code=exc.reason,
+                )
+                return
+            except Fixed32IngressError:
+                _write_json_error(
+                    self,
+                    503,
+                    "Fixed32 ingress evidence failure",
+                    code="ingress_evidence_failure",
+                )
+                return
+            self._fixed32_logical_request = logical
+            aborted = False
+            try:
+                self._do_POST_inner()
+            except BaseException:
+                aborted = True
+                raise
+            finally:
+                ingress.finish_logical(logical, aborted=aborted)
+
+        def _do_POST_inner(self) -> None:
             if self.path in ADMIN_PATHS:
                 self._handle_admin_request()
                 return
@@ -2468,13 +4291,21 @@ def build_proxy_handler(
             think_cap_answer_budget = 32768
             if self.path == "/v1/responses":
                 try:
-                    request_json = json.loads(raw_body.decode("utf-8"))
-                except (UnicodeDecodeError, json.JSONDecodeError):
+                    request_json = (
+                        _fixed32_json_loads(raw_body)
+                        if ingress is not None
+                        else json.loads(raw_body.decode("utf-8"))
+                    )
+                except (
+                    UnicodeDecodeError,
+                    json.JSONDecodeError,
+                    Fixed32IngressError,
+                ):
                     _write_json_error(self, 400, "Invalid JSON request body")
                     return
                 # TEMP DEBUG: dump request bodies to LUMO_PROXY_REQUEST_DUMP_DIR
                 req_dump_dir = os.environ.get("LUMO_PROXY_REQUEST_DUMP_DIR")
-                if req_dump_dir:
+                if req_dump_dir and ingress is None:
                     try:
                         import pathlib as _pl
                         _pl.Path(req_dump_dir).mkdir(parents=True, exist_ok=True)
@@ -2524,16 +4355,32 @@ def build_proxy_handler(
                     )
             elif self.path == "/v1/chat/completions":
                 try:
-                    parsed_json = json.loads(raw_body.decode("utf-8"))
+                    parsed_json = (
+                        _fixed32_json_loads(raw_body)
+                        if ingress is not None
+                        else json.loads(raw_body.decode("utf-8"))
+                    )
                     request_json = parsed_json if isinstance(parsed_json, dict) else None
-                except (UnicodeDecodeError, json.JSONDecodeError):
+                except (
+                    UnicodeDecodeError,
+                    json.JSONDecodeError,
+                    Fixed32IngressError,
+                ):
                     request_json = None
+                if ingress is not None and request_json is None:
+                    _write_json_error(
+                        self,
+                        400,
+                        "Invalid JSON request body",
+                        code="invalid_json",
+                    )
+                    return
                 # qwen-code path: force sampling pins (temp 0.6 hard constraint) on the
                 # chat body and re-serialize. Env-gated -> unset = byte-identical passthrough
                 # (so the codex/responses regime and the lossless A/B are unaffected).
                 if isinstance(request_json, dict):
                     req_dump_dir = os.environ.get("LUMO_PROXY_REQUEST_DUMP_DIR")
-                    if req_dump_dir:
+                    if req_dump_dir and ingress is None:
                         try:
                             import pathlib as _pl
                             _pl.Path(req_dump_dir).mkdir(parents=True, exist_ok=True)
@@ -2607,24 +4454,98 @@ def build_proxy_handler(
             _up_max_retries = int(os.environ.get("LUMO_PROXY_UPSTREAM_MAX_RETRIES", "6"))
             _up_backoff = float(os.environ.get("LUMO_PROXY_UPSTREAM_BACKOFF_S", "3"))
 
+            def _post_upstream_once(
+                *,
+                request_payload: bytes,
+                request_headers: dict[str, str],
+                timeout: float,
+                stream: bool,
+            ) -> Any:
+                if ingress is None:
+                    return requests.post(
+                        f"{upstream_base_url}{self.path}",
+                        data=request_payload,
+                        headers=request_headers,
+                        timeout=timeout,
+                        stream=stream,
+                    )
+                logical = self._fixed32_logical_request
+                attempt = ingress.begin_attempt(logical)
+                outgoing_headers = dict(request_headers)
+                _overwrite_header(
+                    outgoing_headers,
+                    "Authorization",
+                    f"Bearer {ingress.secrets.engine_bearer}",
+                )
+                _overwrite_header(
+                    outgoing_headers,
+                    FIXED32_TASK_KEY_HEADER,
+                    attempt.task_key_id,
+                )
+                _overwrite_header(
+                    outgoing_headers,
+                    FIXED32_REQUEST_ID_HEADER,
+                    attempt.wire_id,
+                )
+                outgoing_payload = request_payload
+                try:
+                    if attempt.route == "responses":
+                        request_object = _fixed32_json_loads(request_payload)
+                        if not isinstance(request_object, dict):
+                            raise Fixed32IngressError(
+                                "fixed32 responses payload is not an object"
+                            )
+                        request_object = dict(request_object)
+                        request_object["request_id"] = attempt.wire_id
+                        outgoing_payload = _fixed32_canonical_bytes(request_object)
+                    response = requests.post(
+                        f"{upstream_base_url}{self.path}",
+                        data=outgoing_payload,
+                        headers=outgoing_headers,
+                        timeout=timeout,
+                        stream=stream,
+                    )
+                except requests.RequestException:
+                    ingress.finish_attempt(
+                        attempt, status_code=None, exception=True
+                    )
+                    raise
+                except BaseException:
+                    ingress.finish_attempt(
+                        attempt, status_code=None, exception=True
+                    )
+                    raise
+                if stream:
+                    return Fixed32TrackedResponse(
+                        response, ingress=ingress, attempt=attempt
+                    )
+                ingress.finish_attempt(
+                    attempt,
+                    status_code=int(response.status_code),
+                    exception=False,
+                )
+                return response
+
             def _post_upstream_resilient() -> "requests.Response | None":
                 backoff = _up_backoff
                 last_exc: Exception | None = None
                 for net_attempt in range(1, _up_max_retries + 1):
                     try:
-                        return requests.post(
-                            f"{upstream_base_url}{self.path}",
-                            data=payload,
-                            headers=headers,
+                        return _post_upstream_once(
+                            request_payload=payload,
+                            request_headers=headers,
                             timeout=_up_timeout,
                             stream=True,
                         )
                     except requests.RequestException as exc:  # connect/read drop
                         last_exc = exc
+                        error_detail = (
+                            f": {exc}" if ingress is None else ""
+                        )
                         sys.stderr.write(
                             f"[proxy][NET-DROP] upstream POST {self.path} "
                             f"attempt={net_attempt}/{_up_max_retries} "
-                            f"err={type(exc).__name__}: {exc} — "
+                            f"err={type(exc).__name__}{error_detail} — "
                             f"CLASSIFIED network-drop (not a model/measurement "
                             f"failure); reconnecting in {backoff:.0f}s\n"
                         )
@@ -2634,7 +4555,14 @@ def build_proxy_handler(
                             backoff = min(backoff * 2, 60.0)
                 sys.stderr.write(
                     f"[proxy][NET-GIVEUP] upstream POST {self.path} failed after "
-                    f"{_up_max_retries} reconnect attempts: {last_exc}\n"
+                    f"{_up_max_retries} reconnect attempts"
+                    + (
+                        f": {last_exc}\n"
+                        if ingress is None
+                        else (
+                            f": {type(last_exc).__name__ if last_exc else 'unknown'}\n"
+                        )
+                    )
                 )
                 sys.stderr.flush()
                 return None
@@ -2715,7 +4643,8 @@ def build_proxy_handler(
                     response_headers["Content-Length"] = str(len(response_content))
                 elif isinstance(parsed, dict):
                     non_streaming_parsed = parsed
-                    _pair_dump_upstream("initial", payload, parsed)
+                    if ingress is None:
+                        _pair_dump_upstream("initial", payload, parsed)
                 # FR13 thinking cap, call B (the </think> injection). Call A was capped at the
                 # thinking budget. If it dead-ended in reasoning (hit the budget, emitted no action),
                 # force-close the thinking via a continue_final_message re-issue: a partial assistant
@@ -2738,10 +4667,9 @@ def build_proxy_handler(
                         cont_payload = json.dumps(cont_req).encode("utf-8")
                         try:
                             _cont_sent = time.time()
-                            cont_resp = requests.post(
-                                f"{upstream_base_url}{self.path}",
-                                data=cont_payload,
-                                headers=headers,
+                            cont_resp = _post_upstream_once(
+                                request_payload=cont_payload,
+                                request_headers=headers,
                                 timeout=_up_timeout,
                                 stream=False,
                             )
@@ -2753,9 +4681,12 @@ def build_proxy_handler(
                                 except json.JSONDecodeError:
                                     cont_parsed = None
                                 if isinstance(cont_parsed, dict):
-                                    _pair_dump_upstream(
-                                        "think_cap_continue", cont_payload, cont_parsed
-                                    )
+                                    if ingress is None:
+                                        _pair_dump_upstream(
+                                            "think_cap_continue",
+                                            cont_payload,
+                                            cont_parsed,
+                                        )
                                     non_streaming_parsed = _think_merge_continuation(
                                         non_streaming_parsed, cont_parsed
                                     )
@@ -2816,10 +4747,9 @@ def build_proxy_handler(
                             retry_elapsed_s = 0.0
                             for _retry_400_attempt in range(2):
                                 _retry_sent = time.time()
-                                retry_resp = requests.post(
-                                    f"{upstream_base_url}{self.path}",
-                                    data=retry_payload,
-                                    headers=headers,
+                                retry_resp = _post_upstream_once(
+                                    request_payload=retry_payload,
+                                    request_headers=headers,
                                     timeout=600,
                                     stream=False,
                                 )
@@ -2842,7 +4772,12 @@ def build_proxy_handler(
                                 except json.JSONDecodeError:
                                     retry_parsed = None
                                 if isinstance(retry_parsed, dict):
-                                    _pair_dump_upstream("auto_continue", retry_payload, retry_parsed)
+                                    if ingress is None:
+                                        _pair_dump_upstream(
+                                            "auto_continue",
+                                            retry_payload,
+                                            retry_parsed,
+                                        )
                                     # Merge: keep accumulated output from prior calls,
                                     # then append the new output items.
                                     prev_output = list(non_streaming_parsed.get("output", []) or [])
@@ -3001,7 +4936,57 @@ def build_proxy_handler(
 
         def _handle_admin_request(self) -> None:
             try:
-                payload = _read_json_body(self)
+                fixed_control = self.path in {
+                    FIXED32_PROXY_BEGIN_PATH,
+                    FIXED32_PROXY_FINALIZE_PATH,
+                    FIXED32_PROXY_TASK_EVIDENCE_PATH,
+                }
+                bearer = None
+                if fixed_control:
+                    if ingress is None:
+                        self.close_connection = True
+                        _write_json_error(
+                            self,
+                            404,
+                            "Fixed32 ingress is not configured",
+                            code="fixed32_ingress_disabled",
+                        )
+                        return
+                    bearer = _fixed32_authorization_bearer(self.headers)
+                    if _fixed32_has_duplicate_critical_headers(self.headers):
+                        self.close_connection = True
+                        raise Fixed32IngressAdmissionError(
+                            400, "duplicate_header"
+                        )
+                    if self.path == FIXED32_PROXY_TASK_EVIDENCE_PATH:
+                        task_key_id, reason = ingress._task_key_for_bearer(
+                            bearer
+                        )
+                        if task_key_id is None:
+                            self.close_connection = True
+                            raise Fixed32IngressAdmissionError(401, reason)
+                    else:
+                        if not ingress.is_engine_control_bearer(bearer):
+                            self.close_connection = True
+                            raise Fixed32IngressAdmissionError(401, "unauthorized")
+                payload = _read_json_body(
+                    self, strict_fixed32=fixed_control
+                )
+                if fixed_control:
+                    if self.path == FIXED32_PROXY_TASK_EVIDENCE_PATH:
+                        if payload != {}:
+                            raise Fixed32IngressAdmissionError(
+                                400, "control_contract_mismatch"
+                            )
+                        result = ingress.task_evidence(bearer)
+                    else:
+                        result = (
+                            ingress.begin(payload)
+                            if self.path == FIXED32_PROXY_BEGIN_PATH
+                            else ingress.finalize(payload)
+                        )
+                    _write_json_payload(self, 200, result)
+                    return
                 if self.path == "/admin/load_tuned_config":
                     bundle_path = _validate_load_tuned_config_payload(payload)
                     bundle = load_tuned_config_bundle(bundle_path)
@@ -3037,10 +5022,17 @@ def build_proxy_handler(
                     state = state_store.record_invalidate(weight_version_id=weight_version_id)
                     flush_status = "not_attempted"
                     try:
+                        invalidate_headers = _filtered_headers(self.headers)
+                        if ingress is not None:
+                            _overwrite_header(
+                                invalidate_headers,
+                                "Authorization",
+                                f"Bearer {ingress.secrets.engine_bearer}",
+                            )
                         response = requests.post(
                             f"{upstream_base_url}/reset_prefix_cache",
                             timeout=10,
-                            headers=_filtered_headers(self.headers),
+                            headers=invalidate_headers,
                         )
                         response.raise_for_status()
                         flush_status = "flushed"
@@ -3058,6 +5050,22 @@ def build_proxy_handler(
                         },
                     )
                     return
+            except Fixed32IngressAdmissionError as exc:
+                _write_json_error(
+                    self,
+                    exc.status,
+                    "Fixed32 ingress control rejected the request",
+                    code=exc.reason,
+                )
+                return
+            except Fixed32IngressError:
+                _write_json_error(
+                    self,
+                    503,
+                    "Fixed32 ingress evidence failure",
+                    code="ingress_evidence_failure",
+                )
+                return
             except StructuredValidationError as exc:
                 _write_json_payload(self, 400, exc.as_error_payload())
                 return

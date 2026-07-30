@@ -29,7 +29,9 @@ from __future__ import annotations
 import argparse
 import concurrent.futures as _cf
 import datetime as _dt
+import hashlib
 import json
+import math
 import os
 import shlex
 import shutil
@@ -46,6 +48,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT_ROOT = REPO_ROOT / "output" / "swe_bench_q36_a_temp06"
 DEFAULT_REPO_CACHE = REPO_ROOT / ".cache" / "swe_bench_repos"
 DEFAULT_HF_HOME = REPO_ROOT / ".cache" / "huggingface"
+PINNED_SWE_VERIFIED_PARQUET = (
+    DEFAULT_HF_HOME
+    / "hub"
+    / "datasets--princeton-nlp--SWE-bench_Verified"
+    / "blobs"
+    / "a45b1fe4e2f0c8390b2b2938ac83e92ed5979000856808f3679c07812e9e6dcd"
+)
 DEFAULT_ENDPOINT = "http://127.0.0.1:8022/v1"
 DEFAULT_METRICS_URL = "http://127.0.0.1:9950/metrics"
 DEFAULT_MODEL = "qwen3.6-27b"
@@ -68,11 +77,177 @@ DEFAULT_DCGM_INTERVAL_S = 0.1  # 10 Hz — 1/10th of Track B's 100 Hz default to
 # per-task dcgm_samples.jsonl under GitHub's 100 MB per-file hard limit. At 10 Hz a
 # 30-min Codex task lands ~6 MB; 100 Hz lands ~60 MB and risks rejection at the
 # campaign scale (500 + 731 instances).
+FIXED32_INGRESS_SECRET_FILE_ENV = "FR13_FIXED32_INGRESS_SECRET_FILE"
+
+
+def _fixed32_task_auth(instance_id: str) -> tuple[str, str]:
+    secret_file = os.environ.get(FIXED32_INGRESS_SECRET_FILE_ENV, "").strip()
+    if not secret_file:
+        raise Fixed32BoundaryError(
+            f"fixed32 requires {FIXED32_INGRESS_SECRET_FILE_ENV}"
+        )
+    sys.path.insert(0, str(REPO_ROOT / "src"))
+    from lumo_flywheel_serving.inference_proxy import (
+        derive_fixed32_task_bearer,
+    )
+
+    try:
+        return derive_fixed32_task_bearer(secret_file, instance_id)
+    except Exception as exc:
+        raise Fixed32BoundaryError(
+            f"fixed32 task credential derivation failed for {instance_id}: "
+            f"{type(exc).__name__}"
+        ) from exc
+
+
+def _fixed32_task_auth_evidence(
+    *,
+    endpoint: str,
+    task_bearer: str,
+    task_key_id: str,
+) -> dict[str, Any]:
+    normalized_endpoint = endpoint.rstrip("/")
+    evidence_url = (
+        normalized_endpoint[:-3]
+        if normalized_endpoint.endswith("/v1")
+        else normalized_endpoint
+    ) + "/admin/fixed32/ingress/task-evidence"
+    if AGENT_HOST:
+        remote_query = (
+            "import os,sys,urllib.request;"
+            "req=urllib.request.Request(sys.argv[1],data=b'{}',method='POST',"
+            "headers={'Authorization':'Bearer '+os.environ['FR13_TASK_BEARER'],"
+            "'Content-Type':'application/json'});"
+            "print(urllib.request.urlopen(req,timeout=30).read().decode('utf-8'))"
+        )
+        command = (
+            "IFS= read -r FR13_TASK_BEARER && export FR13_TASK_BEARER && "
+            "python3 -c "
+            + shlex.quote(remote_query)
+            + " "
+            + shlex.quote(evidence_url)
+        )
+        completed = subprocess.run(
+            ["ssh", *_EVAL_SSH_OPTS, AGENT_HOST, command],
+            input=task_bearer + "\n",
+            text=True,
+            capture_output=True,
+            timeout=45,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise Fixed32BoundaryError(
+                "fixed32 task-auth evidence query failed on the agent host"
+            )
+        raw = completed.stdout
+    else:
+        import urllib.request
+
+        request = urllib.request.Request(
+            evidence_url,
+            data=b"{}",
+            headers={
+                "Authorization": f"Bearer {task_bearer}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                raw = response.read().decode("utf-8")
+        except Exception as exc:
+            raise Fixed32BoundaryError(
+                "fixed32 task-auth evidence query failed"
+            ) from exc
+    try:
+        def _no_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+            parsed: dict[str, Any] = {}
+            for key, value in pairs:
+                if key in parsed:
+                    raise ValueError("duplicate task-auth evidence key")
+                parsed[key] = value
+            return parsed
+
+        def _reject_nonfinite(value: str) -> Any:
+            raise ValueError(f"nonfinite task-auth evidence value: {value}")
+
+        payload = json.loads(
+            raw,
+            object_pairs_hook=_no_duplicate_keys,
+            parse_constant=_reject_nonfinite,
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise Fixed32BoundaryError(
+            "fixed32 task-auth evidence response is invalid JSON"
+        ) from exc
+    expected_keys = {
+        "schema",
+        "task_key_id",
+        "completed_logical_model_requests",
+        "aborted_logical_requests",
+        "accepted_attempts",
+        "completed_attempts",
+        "failed_attempts",
+        "phase",
+        "ledger_records",
+        "ledger_chain_head_sha256",
+    }
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != expected_keys
+        or payload["schema"] != "fr13-fixed32-task-auth-evidence-v1"
+        or payload["task_key_id"] != task_key_id
+        or payload["phase"] != "campaign"
+    ):
+        raise Fixed32BoundaryError("fixed32 task-auth evidence contract mismatch")
+    for key in (
+        "completed_logical_model_requests",
+        "aborted_logical_requests",
+        "accepted_attempts",
+        "completed_attempts",
+        "failed_attempts",
+        "ledger_records",
+    ):
+        value = payload[key]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise Fixed32BoundaryError(
+                f"fixed32 task-auth evidence {key} is invalid"
+            )
+    head = payload["ledger_chain_head_sha256"]
+    if (
+        not isinstance(head, str)
+        or len(head) != 64
+        or any(char not in "0123456789abcdef" for char in head)
+    ):
+        raise Fixed32BoundaryError(
+            "fixed32 task-auth evidence ledger head is invalid"
+        )
+    return payload
+
+
+def _agent_subprocess_env(task_bearer: str | None) -> dict[str, str]:
+    env = dict(os.environ)
+    for name in (
+        FIXED32_INGRESS_SECRET_FILE_ENV,
+        "LUMO_PROXY_FIXED32_SECRET_FILE",
+        "LUMO_PROXY_FIXED32_LEDGER_PATH",
+        "FR13_FIXED32_ENGINE_INGRESS_LEDGER_PATH",
+    ):
+        env.pop(name, None)
+    env["OPENAI_API_KEY"] = task_bearer if task_bearer is not None else "EMPTY"
+    return env
+
+
+def _remote_agent_command(command: str) -> str:
+    return (
+        "IFS= read -r OPENAI_API_KEY && export OPENAI_API_KEY && "
+        f"{command}"
+    )
 
 CODEX_TEMPLATE = (
     "docker run --rm --name {container_name} --network=host -u 1000:1000 "
     "-v {workspace}:/workspace:rw "
-    "-e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp "
+    "-e OPENAI_API_KEY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp "
     "-w /workspace codex-runner:v1 "
     "codex exec --json --skip-git-repo-check "
     "--dangerously-bypass-approvals-and-sandbox -C /workspace "
@@ -96,7 +271,7 @@ CODEX_TEMPLATE = (
 QWEN_CODE_TEMPLATE = (
     "docker run --rm --name {container_name} --network=host -u 1000:1000 "
     "-v {workspace}:/workspace:rw "
-    "-e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} "
+    "-e OPENAI_API_KEY -e OPENAI_BASE_URL={endpoint} "
     "-e OPENAI_MODEL={model} -e QWEN_MODEL={model} -e HOME=/tmp "
     # R1 context-budget fix (FR13_CONTEXT_COMPRESSION_DESIGN, verified in-image v0.19.4):
     # qwen-code reserves max(ESCALATED_MAX_TOKENS=64000, outputTokenLimit=65536) output tokens
@@ -264,7 +439,7 @@ def _instance_agent_command(*, container_name: str, image: str, endpoint: str,
     the eval image."""
     return (
         f"docker run --rm --name {container_name} --network=host -u 0:0 "
-        f"-e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} "
+        f"-e OPENAI_API_KEY -e OPENAI_BASE_URL={endpoint} "
         f"-e OPENAI_MODEL={model} -e QWEN_MODEL={model} -e HOME=/tmp "
         f"-e QWEN_CODE_MAX_OUTPUT_TOKENS=32768 "
         # §79: instance-image agents were MISSING the idle-timeout raise (the legacy
@@ -397,7 +572,7 @@ def _autocommit_task_artifacts(task_dir: Path, instance_id: str) -> None:
         pass  # auto-commit is observability; a git error must never fail the run
 
 
-def _metrics_text(metrics_url: str) -> str:
+def _metrics_text(metrics_url: str, *, strict: bool = False) -> str:
     """Fetch a Prometheus metrics snapshot from the vLLM container."""
     import urllib.request
     try:
@@ -405,6 +580,10 @@ def _metrics_text(metrics_url: str) -> str:
         with urllib.request.urlopen(req, timeout=10) as resp:
             return resp.read().decode("utf-8", errors="replace")
     except Exception as exc:  # noqa: BLE001
+        if strict:
+            raise RuntimeError(
+                f"metrics fetch failed: {type(exc).__name__}: {exc}"
+            ) from exc
         return f"# metrics fetch failed: {type(exc).__name__}: {exc}\n"
 
 
@@ -434,7 +613,7 @@ def _sidecar_fwd_gpu_totals() -> dict | None:
     if os.path.exists(base):
         files.add(base)
     secs = steps = drafts = 0.0
-    wall_s = wall_drafts = wall_steps = 0.0
+    wall_s = wall_drafts = wall_steps = wall_rejected = 0.0
     found = False
     for f in files:
         try:
@@ -447,6 +626,7 @@ def _sidecar_fwd_gpu_totals() -> dict | None:
             wall_s += float(d.get("decode_step_wall_seconds", 0.0))
             wall_drafts += float(d.get("n_drafts_in_wall_steps", 0.0))
             wall_steps += float(d.get("n_wall_steps", 0.0))
+            wall_rejected += float(d.get("n_wall_rejected", 0.0))
             found = True
         except Exception:  # noqa: BLE001
             continue
@@ -454,6 +634,8 @@ def _sidecar_fwd_gpu_totals() -> dict | None:
         "seconds": secs, "steps": steps, "drafts": drafts,
         "wall_seconds": wall_s, "wall_drafts": wall_drafts,
         "wall_steps": wall_steps,
+        "wall_attempts": wall_steps + wall_rejected,
+        "wall_rejected": wall_rejected,
     } if found else None
 
 
@@ -488,7 +670,12 @@ def _sidecar_span_totals(env_name: str) -> dict | None:
     return {"seconds": secs, "spans": spans} if found else None
 
 
-def _metrics_snapshot(metrics_url: str) -> str:
+def _metrics_snapshot(
+    metrics_url: str,
+    *,
+    strict: bool = False,
+    fixed32_counters: dict[str, Any] | None = None,
+) -> str:
     """/metrics text, plus (FR13_SFWD_GPU_TIMER) synthetic counter lines carrying the
     worker timer's cumulative pure-decode-forward GPU seconds AND its MATCHED
     denominators (pure-decode forward count + drafts-on-those-steps). The matched
@@ -502,7 +689,7 @@ def _metrics_snapshot(metrics_url: str) -> str:
     Double-count guard: if /metrics ALREADY exposes the seconds counter (multiprocess
     aggregation active), use that and do NOT append. No-op / byte-identical when the
     timer is off / no sidecar."""
-    text = _metrics_text(metrics_url)
+    text = _metrics_text(metrics_url, strict=strict)
     if "fr13_decode_forward_gpu_seconds_total" not in text:
         t = _sidecar_fwd_gpu_totals()
         if t is not None:
@@ -517,6 +704,14 @@ def _metrics_snapshot(metrics_url: str) -> str:
             text += f"vllm:fr13_decode_step_wall_seconds_total {t['wall_seconds']:.9f}\n"
             text += f"vllm:fr13_decode_step_wall_drafts_total {t['wall_drafts']:.1f}\n"
             text += f"vllm:fr13_decode_step_wall_steps_total {t['wall_steps']:.1f}\n"
+            text += (
+                "vllm:fr13_decode_step_wall_attempts_total "
+                f"{t['wall_attempts']:.1f}\n"
+            )
+            text += (
+                "vllm:fr13_decode_step_wall_rejected_total "
+                f"{t['wall_rejected']:.1f}\n"
+            )
     # FR13_DFWD/CFWD_GPU_TIMER: the SAME synthetic-line route for the drafter /
     # committer span timers (their prometheus Counters are also worker-process-
     # local in single-API-server mode; the sidecar is the robust channel). The
@@ -537,7 +732,1237 @@ def _metrics_snapshot(metrics_url: str) -> str:
             text += "\n"
         text += f"vllm:{_mbase}_seconds_total {st['seconds']:.9f}\n"
         text += f"vllm:{_mbase}_spans_total {st['spans']:.1f}\n"
+    if fixed32_counters is not None:
+        if not text.endswith("\n"):
+            text += "\n"
+        text += (
+            "vllm:fr13_fixed32_pure_decode_forward_steps_total "
+            f"{fixed32_counters['pure_decode_forward_steps']}\n"
+        )
+        text += (
+            "vllm:fr13_fixed32_complete_work_census_events_total "
+            f"{fixed32_counters['complete_work_census_events']}\n"
+        )
+        sidecar = _sidecar_fwd_gpu_totals()
+        if sidecar is None:
+            raise RuntimeError("fixed32 snapshot has no SFWD timer sidecar")
+        if int(sidecar["steps"]) != fixed32_counters["pure_decode_forward_steps"]:
+            raise RuntimeError(
+                "fixed32 flush/SFWD sidecar mismatch: "
+                f"ack={fixed32_counters['pure_decode_forward_steps']} "
+                f"sidecar={sidecar['steps']}"
+            )
     return text
+
+
+class Fixed32BoundaryError(RuntimeError):
+    """A fixed32 task lacks a valid runtime interval or real-task provenance."""
+
+
+_FIXED32_TOKEN_USAGE_FIELDS = frozenset(
+    {
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "prompt_tokens",
+        "completion_tokens",
+        "cached_input_tokens",
+        "cache_read_input_tokens",
+        "cache_creation_input_tokens",
+    }
+)
+_FIXED32_AGENT_TERMINAL_FIELDS = (
+    "exit_code",
+    "timed_out",
+    "offloaded",
+    "network_drop",
+    "stall_killed",
+    "cause",
+    "ws_down_rc",
+    "patch_down_rc",
+    "setup_error",
+    "transport_error",
+    "dispatch_error",
+    "error",
+    "elapsed_s",
+    "container_name",
+    "codex_host",
+    "agent_env",
+    "instance_image",
+)
+
+
+def _fixed32_has_model_output(value: Any) -> bool:
+    """Return whether an assistant content value contains model-emitted output."""
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, list):
+        return any(_fixed32_has_model_output(item) for item in value)
+    if not isinstance(value, dict):
+        return False
+    if value.get("type") in {"tool_use", "function_call"}:
+        return bool(str(value.get("name", "")).strip())
+    return any(
+        _fixed32_has_model_output(value.get(key))
+        for key in ("text", "thinking", "content", "output_text")
+        if key in value
+    )
+
+
+def _fixed32_usage_records(value: Any) -> list[dict[str, Any]]:
+    """Collect every explicit ``usage`` object without interpreting other numbers."""
+    records: list[dict[str, Any]] = []
+    if isinstance(value, list):
+        for item in value:
+            records.extend(_fixed32_usage_records(item))
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            if key == "usage" and isinstance(item, dict):
+                records.append(item)
+            else:
+                records.extend(_fixed32_usage_records(item))
+    return records
+
+
+def _fixed32_real_task_provenance(
+    *,
+    instance_id: str,
+    trace_path: Path,
+    agent_meta: dict[str, Any],
+    task_key_id: str,
+    task_auth_before: dict[str, Any],
+    task_auth_after: dict[str, Any],
+) -> dict[str, Any]:
+    """Validate and describe the real offloaded model run for one fixed32 task.
+
+    This deliberately accepts both qwen-code instance-image JSONL
+    (``type=assistant`` with a nested assistant ``message``) and Codex JSONL
+    (completed ``agent_message`` items). Every physical line must be a JSON
+    object; a partial final line therefore fails closed.
+    """
+    if not isinstance(agent_meta, dict):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: agent metadata is not an object"
+        )
+    if (
+        not isinstance(task_key_id, str)
+        or len(task_key_id) != 64
+        or any(char not in "0123456789abcdef" for char in task_key_id)
+    ):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: task key ID is malformed"
+        )
+    evidence_counter_keys = (
+        "completed_logical_model_requests",
+        "aborted_logical_requests",
+        "accepted_attempts",
+        "completed_attempts",
+        "failed_attempts",
+    )
+    if (
+        not isinstance(task_auth_before, dict)
+        or not isinstance(task_auth_after, dict)
+        or task_auth_before.get("task_key_id") != task_key_id
+        or task_auth_after.get("task_key_id") != task_key_id
+    ):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            "task-auth evidence does not bind to the task key"
+        )
+    task_auth_deltas: dict[str, int] = {}
+    for key in evidence_counter_keys:
+        before = task_auth_before.get(key)
+        after = task_auth_after.get(key)
+        if (
+            isinstance(before, bool)
+            or not isinstance(before, int)
+            or isinstance(after, bool)
+            or not isinstance(after, int)
+            or before < 0
+            or after < before
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                f"task-auth counter {key} is invalid"
+            )
+        task_auth_deltas[key] = after - before
+
+    exit_code = agent_meta.get("exit_code")
+    if isinstance(exit_code, bool) or not isinstance(exit_code, int):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            f"agent exit_code must be an integer, got {exit_code!r}"
+        )
+    if not isinstance(agent_meta.get("timed_out"), bool):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            f"agent timed_out must be boolean, got {agent_meta.get('timed_out')!r}"
+        )
+    if exit_code != 0 or agent_meta["timed_out"]:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            f"agent terminal state is incomplete: exit_code={exit_code} "
+            f"timed_out={agent_meta['timed_out']}"
+        )
+    if agent_meta.get("offloaded") is not True:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            f"agent offloaded must be true, got {agent_meta.get('offloaded')!r}"
+        )
+    if agent_meta.get("network_drop") is not False:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            f"agent network_drop must be false, got {agent_meta.get('network_drop')!r}"
+        )
+    stall_killed = agent_meta.get("stall_killed")
+    if stall_killed is not None and stall_killed is not False:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            f"agent stall_killed is set: {stall_killed!r}"
+        )
+    ws_down_rc = agent_meta.get("ws_down_rc")
+    if ws_down_rc is not None and (
+        isinstance(ws_down_rc, bool)
+        or not isinstance(ws_down_rc, int)
+        or ws_down_rc != 0
+    ):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            f"workspace transport failed with rc={ws_down_rc!r}"
+        )
+    patch_down_rc = agent_meta.get("patch_down_rc")
+    if patch_down_rc is not None and (
+        isinstance(patch_down_rc, bool)
+        or not isinstance(patch_down_rc, int)
+        or patch_down_rc not in (0, 1)
+    ):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            f"patch transport failed with rc={patch_down_rc!r}"
+        )
+    for key in ("setup_error", "transport_error", "dispatch_error"):
+        if agent_meta.get(key):
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                f"agent terminal field {key}={agent_meta[key]!r}"
+            )
+    terminal_cause = " ".join(
+        str(agent_meta.get(key, ""))
+        for key in ("cause", "error")
+        if agent_meta.get(key)
+    ).lower()
+    if any(
+        marker in terminal_cause
+        for marker in ("setup", "transport", "network_drop", "network-drop", "stall")
+    ):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            f"infrastructure terminal cause {terminal_cause!r}"
+        )
+
+    try:
+        raw_trace = trace_path.read_bytes()
+    except OSError as exc:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            f"cannot read trace {trace_path}: {type(exc).__name__}: {exc}"
+        ) from exc
+    if not raw_trace:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: trace is empty: {trace_path}"
+        )
+    try:
+        trace_text = raw_trace.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: trace is not UTF-8: {trace_path}"
+        ) from exc
+
+    events: list[dict[str, Any]] = []
+
+    def _trace_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        parsed: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in parsed:
+                raise ValueError("duplicate trace key")
+            parsed[key] = value
+        return parsed
+
+    def _trace_nonfinite(value: str) -> Any:
+        raise ValueError(f"nonfinite trace value: {value}")
+
+    for line_number, line in enumerate(trace_text.splitlines(), start=1):
+        if not line.strip():
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                f"blank JSONL record at {trace_path}:{line_number}"
+            )
+        try:
+            event = json.loads(
+                line,
+                object_pairs_hook=_trace_object,
+                parse_constant=_trace_nonfinite,
+            )
+        except (ValueError, json.JSONDecodeError) as exc:
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                f"invalid JSON at {trace_path}:{line_number}: {exc}"
+            ) from exc
+        if not isinstance(event, dict):
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                f"JSONL record is not an object at {trace_path}:{line_number}"
+            )
+        events.append(event)
+    if not events:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: trace has no JSONL events"
+        )
+
+    assistant_event_count = 0
+    assistant_output_event_count = 0
+    qwen_assistant_event_count = 0
+    codex_agent_message_event_count = 0
+    qwen_model_request_ids: list[str] = []
+    usage_records: list[dict[str, Any]] = []
+    for event in events:
+        usage_records.extend(_fixed32_usage_records(event))
+        event_type = event.get("type")
+        assistant_content: Any = None
+        is_assistant_event = False
+        if event_type == "assistant":
+            message = event.get("message")
+            if isinstance(message, dict) and message.get("role") == "assistant":
+                is_assistant_event = True
+                qwen_assistant_event_count += 1
+                assistant_content = message.get("content")
+                if message.get("stop_reason") is not None:
+                    response_id = message.get("id")
+                    if (
+                        not isinstance(response_id, str)
+                        or not response_id
+                        or not isinstance(message.get("usage"), dict)
+                    ):
+                        raise Fixed32BoundaryError(
+                            f"fixed32 real-task provenance {instance_id}: "
+                            "terminal qwen assistant record lacks response ID or usage"
+                        )
+                    qwen_model_request_ids.append(response_id)
+        elif event_type == "message" and event.get("role") == "assistant":
+            is_assistant_event = True
+            qwen_assistant_event_count += 1
+            assistant_content = event.get("content")
+            if event.get("stop_reason") is not None:
+                response_id = event.get("id")
+                if (
+                    not isinstance(response_id, str)
+                    or not response_id
+                    or not isinstance(event.get("usage"), dict)
+                ):
+                    raise Fixed32BoundaryError(
+                        f"fixed32 real-task provenance {instance_id}: "
+                        "terminal qwen message record lacks response ID or usage"
+                    )
+                qwen_model_request_ids.append(response_id)
+        elif event_type == "item.completed":
+            item = event.get("item")
+            if isinstance(item, dict) and item.get("type") == "agent_message":
+                is_assistant_event = True
+                codex_agent_message_event_count += 1
+                assistant_content = item.get("text", item.get("content"))
+        if is_assistant_event:
+            assistant_event_count += 1
+            if _fixed32_has_model_output(assistant_content):
+                assistant_output_event_count += 1
+
+    if assistant_output_event_count <= 0:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            "trace contains no nonempty assistant/model output"
+        )
+    if (
+        not qwen_model_request_ids
+        or len(set(qwen_model_request_ids)) != len(qwen_model_request_ids)
+    ):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            "trace cannot independently count unique completed model requests"
+        )
+    request_id_digests = sorted(
+        hashlib.sha256(response_id.encode("utf-8")).hexdigest()
+        for response_id in qwen_model_request_ids
+    )
+    if (
+        task_auth_deltas["completed_logical_model_requests"]
+        != len(qwen_model_request_ids)
+        or task_auth_deltas["aborted_logical_requests"] != 0
+        or task_auth_deltas["failed_attempts"] != 0
+        or task_auth_deltas["accepted_attempts"]
+        != (
+            task_auth_deltas["completed_attempts"]
+            + task_auth_deltas["failed_attempts"]
+        )
+        or task_auth_deltas["completed_attempts"]
+        < task_auth_deltas["completed_logical_model_requests"]
+    ):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            "trace and task-auth request counts do not reconcile"
+        )
+
+    usage_max_by_field: dict[str, int] = {}
+    positive_usage_record_count = 0
+    for usage in usage_records:
+        recognized: dict[str, int] = {}
+        for key in _FIXED32_TOKEN_USAGE_FIELDS:
+            value = usage.get(key)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                continue
+            recognized[key] = value
+            usage_max_by_field[key] = max(value, usage_max_by_field.get(key, 0))
+        if any(value > 0 for value in recognized.values()):
+            positive_usage_record_count += 1
+    positive_token_usage = any(value > 0 for value in usage_max_by_field.values())
+    if not positive_token_usage:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            "trace contains no recognized positive token usage"
+        )
+
+    return {
+        "schema": "fr13-fixed32-real-task-provenance-v2",
+        "instance_id": instance_id,
+        "task_key_id": task_key_id,
+        "trace_completed_logical_model_requests": len(qwen_model_request_ids),
+        "trace_model_request_ids_sha256": hashlib.sha256(
+            json.dumps(
+                request_id_digests,
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest(),
+        "completed_logical_model_requests": task_auth_deltas[
+            "completed_logical_model_requests"
+        ],
+        "aborted_logical_requests": task_auth_deltas[
+            "aborted_logical_requests"
+        ],
+        "accepted_attempts": task_auth_deltas["accepted_attempts"],
+        "completed_attempts": task_auth_deltas["completed_attempts"],
+        "failed_attempts": task_auth_deltas["failed_attempts"],
+        "task_auth_evidence_before_sha256": hashlib.sha256(
+            json.dumps(
+                task_auth_before,
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest(),
+        "task_auth_evidence_after_sha256": hashlib.sha256(
+            json.dumps(
+                task_auth_after,
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest(),
+        "task_auth_evidence_after_ledger_records": task_auth_after[
+            "ledger_records"
+        ],
+        "task_auth_evidence_after_ledger_chain_head_sha256": task_auth_after[
+            "ledger_chain_head_sha256"
+        ],
+        "trace_path": str(trace_path.resolve()),
+        "trace_sha256": hashlib.sha256(raw_trace).hexdigest(),
+        "trace_bytes": len(raw_trace),
+        "event_count": len(events),
+        "assistant_event_count": assistant_event_count,
+        "assistant_output_event_count": assistant_output_event_count,
+        "qwen_assistant_event_count": qwen_assistant_event_count,
+        "codex_agent_message_event_count": codex_agent_message_event_count,
+        "positive_token_usage": positive_token_usage,
+        "usage_record_count": len(usage_records),
+        "positive_usage_record_count": positive_usage_record_count,
+        "usage_max_by_field": dict(sorted(usage_max_by_field.items())),
+        "agent_terminal": {
+            key: agent_meta.get(key) for key in _FIXED32_AGENT_TERMINAL_FIELDS
+        },
+    }
+
+
+_FIXED32_COUNTER_KEYS = frozenset(
+    {
+        "pure_decode_forward_steps",
+        "complete_work_census_events",
+        "work_census_first_forward_step",
+        "work_census_last_forward_step",
+        "sfwd_pending",
+        "dfwd_pending",
+        "cfwd_pending",
+    }
+)
+_FIXED32_BOUNDARY_SNAPSHOT_SCHEMA = "fr13-fixed32-boundary-snapshot-v3"
+_FIXED32_BOUNDARY_TOP_KEYS = frozenset(
+    {
+        "schema",
+        "mode",
+        "producer_pid",
+        "generation",
+        "nonce",
+        "action",
+        "counters",
+        "metrics",
+    }
+)
+_FIXED32_BOUNDARY_METRIC_KEYS = frozenset(
+    {"fixed32", "sfwd", "dfwd", "cfwd", "committer", "conv_pregather"}
+)
+_FIXED32_REQUIRED_METRICS = {
+    "vllm:fr13_decode_forward_gpu_seconds_total",
+    "vllm:fr13_decode_forward_gpu_steps_total",
+    "vllm:fr13_decode_forward_gpu_drafts_total",
+    "vllm:fr13_decode_step_wall_seconds_total",
+    "vllm:fr13_decode_step_wall_drafts_total",
+    "vllm:fr13_decode_step_wall_steps_total",
+    "vllm:fr13_decode_step_wall_attempts_total",
+    "vllm:fr13_decode_step_wall_rejected_total",
+    "vllm:spec_decode_num_drafts_total",
+    "vllm:spec_decode_num_draft_tokens_total",
+    "vllm:fr13_fixed32_pure_decode_forward_steps_total",
+    "vllm:fr13_fixed32_complete_work_census_events_total",
+    "vllm:fr13_drafter_gpu_seconds_total",
+    "vllm:fr13_drafter_gpu_spans_total",
+    "vllm:fr13_committer_gpu_seconds_total",
+    "vllm:fr13_committer_gpu_spans_total",
+}
+
+
+def _validate_fixed32_counter_payload(
+    counters: Any,
+    *,
+    label: str,
+) -> dict[str, Any]:
+    if not isinstance(counters, dict) or set(counters) != _FIXED32_COUNTER_KEYS:
+        raise Fixed32BoundaryError(
+            f"{label} counters keys mismatch: {sorted(counters) if isinstance(counters, dict) else counters!r}"
+        )
+    for key in (
+        "pure_decode_forward_steps",
+        "complete_work_census_events",
+        "sfwd_pending",
+        "dfwd_pending",
+        "cfwd_pending",
+    ):
+        value = counters[key]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise Fixed32BoundaryError(f"{label}.{key} must be a nonnegative integer")
+    for key in ("work_census_first_forward_step", "work_census_last_forward_step"):
+        value = counters[key]
+        if value is not None and (
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+        ):
+            raise Fixed32BoundaryError(f"{label}.{key} must be null or nonnegative int")
+    if any(counters[key] != 0 for key in ("sfwd_pending", "dfwd_pending", "cfwd_pending")):
+        raise Fixed32BoundaryError(f"{label} acknowledged pending timer samples")
+
+    steps = counters["pure_decode_forward_steps"]
+    events = counters["complete_work_census_events"]
+    first = counters["work_census_first_forward_step"]
+    last = counters["work_census_last_forward_step"]
+    if events > steps:
+        raise Fixed32BoundaryError(f"{label} census events exceed pure-decode steps")
+    if events == 0:
+        if first is not None or last is not None:
+            raise Fixed32BoundaryError(f"{label} empty census must have null first/last")
+    elif first is None or last is None or not 0 <= first <= last < steps:
+        raise Fixed32BoundaryError(f"{label} census first/last range is invalid")
+    return dict(counters)
+
+
+def _validate_fixed32_ack(ack: Any, *, label: str) -> dict[str, Any]:
+    mode = getattr(ack, "mode", None)
+    if not isinstance(mode, str):
+        raise Fixed32BoundaryError(f"{label}.mode must be a string")
+    producer_pid = getattr(ack, "producer_pid", None)
+    if type(producer_pid) is not int or producer_pid <= 0:
+        raise Fixed32BoundaryError(
+            f"{label}.producer_pid must be a positive integer"
+        )
+    generation = getattr(ack, "generation", None)
+    if type(generation) is not int or generation < 0:
+        raise Fixed32BoundaryError(
+            f"{label}.generation must be a nonnegative integer"
+        )
+    nonce = getattr(ack, "nonce", None)
+    if (
+        not isinstance(nonce, str)
+        or len(nonce) != 64
+        or any(character not in "0123456789abcdef" for character in nonce)
+    ):
+        raise Fixed32BoundaryError(
+            f"{label}.nonce must be 64 lowercase hex characters"
+        )
+    action = getattr(ack, "action", None)
+    if not isinstance(action, str):
+        raise Fixed32BoundaryError(f"{label}.action must be a string")
+    return _validate_fixed32_counter_payload(
+        getattr(ack, "counters", None),
+        label=label,
+    )
+
+
+def _fixed32_duplicate_checked(
+    pairs: list[tuple[str, Any]],
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in payload:
+            raise Fixed32BoundaryError(f"duplicate boundary snapshot key {key!r}")
+        payload[key] = value
+    return payload
+
+
+def _fixed32_reject_constant(value: str) -> Any:
+    raise Fixed32BoundaryError(
+        f"non-finite boundary snapshot constant {value!r}"
+    )
+
+
+def _fixed32_exact_keys(payload: Any, expected: frozenset[str], label: str) -> None:
+    if not isinstance(payload, dict) or frozenset(payload) != expected:
+        actual = sorted(payload) if isinstance(payload, dict) else type(payload).__name__
+        raise Fixed32BoundaryError(
+            f"{label} keys mismatch: expected={sorted(expected)} actual={actual}"
+        )
+
+
+def _fixed32_nonnegative_int(value: Any, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise Fixed32BoundaryError(f"{label} must be a nonnegative integer")
+    return value
+
+
+def _fixed32_optional_nonnegative_int(value: Any, label: str) -> int | None:
+    if value is None:
+        return None
+    return _fixed32_nonnegative_int(value, label)
+
+
+def _fixed32_nonnegative_int_map(
+    value: Any,
+    *,
+    expected_keys: frozenset[str],
+    label: str,
+) -> dict[str, int]:
+    if not isinstance(value, dict) or frozenset(value) != expected_keys:
+        actual = sorted(value) if isinstance(value, dict) else type(value).__name__
+        raise Fixed32BoundaryError(
+            f"{label} keys mismatch: expected={sorted(expected_keys)} actual={actual}"
+        )
+    return {
+        key: _fixed32_nonnegative_int(item, f"{label}.{key}")
+        for key, item in value.items()
+    }
+
+
+def _fixed32_nonnegative_int_list(value: Any, *, label: str) -> list[int]:
+    if not isinstance(value, list):
+        raise Fixed32BoundaryError(f"{label} must be a list")
+    return [
+        _fixed32_nonnegative_int(item, f"{label}[{index}]")
+        for index, item in enumerate(value)
+    ]
+
+
+def _fixed32_nonnegative_float(value: Any, label: str) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+        or float(value) < 0.0
+    ):
+        raise Fixed32BoundaryError(f"{label} must be finite and nonnegative")
+    return float(value)
+
+
+def _load_fixed32_boundary_snapshot(
+    *,
+    base_path: Path,
+    ack: Any,
+    server_capacity: int,
+) -> tuple[dict[str, Any], Path, str]:
+    ack_counters = _validate_fixed32_ack(
+        ack,
+        label="generation boundary snapshot ack",
+    )
+    path = Path(f"{base_path}.{ack.generation}.json")
+    try:
+        raw = path.read_bytes()
+    except OSError as error:
+        raise Fixed32BoundaryError(
+            f"cannot read generation boundary snapshot {path}: {error}"
+        ) from error
+    if not raw or len(raw) > 1024 * 1024:
+        raise Fixed32BoundaryError(
+            f"generation boundary snapshot has invalid size: {path}"
+        )
+    try:
+        payload = json.loads(
+            raw,
+            object_pairs_hook=_fixed32_duplicate_checked,
+            parse_constant=_fixed32_reject_constant,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise Fixed32BoundaryError(
+            f"invalid generation boundary snapshot {path}: {error}"
+        ) from error
+    _fixed32_exact_keys(payload, _FIXED32_BOUNDARY_TOP_KEYS, str(path))
+    producer_pid = _fixed32_nonnegative_int(
+        payload["producer_pid"], f"{path}:producer_pid"
+    )
+    _fixed32_nonnegative_int(
+        payload["generation"], f"{path}:generation"
+    )
+    if producer_pid == 0:
+        raise Fixed32BoundaryError(f"{path}:producer_pid must be positive")
+    snapshot_counters = _validate_fixed32_counter_payload(
+        payload["counters"],
+        label=f"{path}:snapshot",
+    )
+    if (
+        payload["schema"] != _FIXED32_BOUNDARY_SNAPSHOT_SCHEMA
+        or payload["mode"] != ack.mode
+        or payload["producer_pid"] != ack.producer_pid
+        or payload["generation"] != ack.generation
+        or payload["nonce"] != ack.nonce
+        or payload["action"] != ack.action
+        or snapshot_counters != ack_counters
+    ):
+        raise Fixed32BoundaryError(
+            f"generation boundary snapshot does not bind to ack: {path}"
+        )
+    metrics = payload["metrics"]
+    _fixed32_exact_keys(
+        metrics,
+        _FIXED32_BOUNDARY_METRIC_KEYS,
+        f"{path}:metrics",
+    )
+    fixed = metrics["fixed32"]
+    _fixed32_exact_keys(
+        fixed,
+        frozenset(
+            {
+                "pure_decode_forward_steps",
+                "complete_work_census_events",
+                "complete_spec_rows",
+                "spec_drafts",
+                "spec_tokens",
+                "batch_histogram",
+                "first_forward_step",
+                "last_forward_step",
+                "events_sha256",
+            }
+        ),
+        f"{path}:fixed32",
+    )
+    steps = _fixed32_nonnegative_int(
+        fixed["pure_decode_forward_steps"], f"{path}:fixed32.steps"
+    )
+    events = _fixed32_nonnegative_int(
+        fixed["complete_work_census_events"], f"{path}:fixed32.events"
+    )
+    spec_drafts = _fixed32_nonnegative_int(
+        fixed["spec_drafts"], f"{path}:fixed32.spec_drafts"
+    )
+    complete_spec_rows = _fixed32_nonnegative_int(
+        fixed["complete_spec_rows"],
+        f"{path}:fixed32.complete_spec_rows",
+    )
+    spec_tokens = _fixed32_nonnegative_int(
+        fixed["spec_tokens"], f"{path}:fixed32.spec_tokens"
+    )
+    first_forward_step = _fixed32_optional_nonnegative_int(
+        fixed["first_forward_step"],
+        f"{path}:fixed32.first_forward_step",
+    )
+    last_forward_step = _fixed32_optional_nonnegative_int(
+        fixed["last_forward_step"],
+        f"{path}:fixed32.last_forward_step",
+    )
+    if (
+        steps != ack_counters["pure_decode_forward_steps"]
+        or events != ack_counters["complete_work_census_events"]
+        or first_forward_step
+        != ack_counters["work_census_first_forward_step"]
+        or last_forward_step
+        != ack_counters["work_census_last_forward_step"]
+        or complete_spec_rows != spec_drafts
+        or spec_tokens != 31 * spec_drafts
+    ):
+        raise Fixed32BoundaryError(f"{path}: fixed counters do not reconcile")
+    histogram = fixed["batch_histogram"]
+    if not isinstance(histogram, dict) or set(histogram) != {"1", "2", "3", "4"}:
+        raise Fixed32BoundaryError(f"{path}: batch histogram keys mismatch")
+    histogram = {
+        int(batch): _fixed32_nonnegative_int(count, f"{path}:batch{batch}")
+        for batch, count in histogram.items()
+    }
+    if (
+        sum(histogram.values()) != events
+        or sum(batch * count for batch, count in histogram.items()) != spec_drafts
+        or any(batch > server_capacity and count for batch, count in histogram.items())
+    ):
+        raise Fixed32BoundaryError(f"{path}: batch histogram does not reconcile")
+    digest = fixed["events_sha256"]
+    if (
+        not isinstance(digest, str)
+        or len(digest) != 64
+        or any(char not in "0123456789abcdef" for char in digest)
+    ):
+        raise Fixed32BoundaryError(f"{path}: events digest is malformed")
+
+    sfwd = metrics["sfwd"]
+    _fixed32_exact_keys(
+        sfwd,
+        frozenset(
+            {
+                "gpu_seconds",
+                "steps",
+                "drafts",
+                "wall_seconds",
+                "wall_drafts",
+                "wall_steps",
+                "wall_rejected",
+            }
+        ),
+        f"{path}:sfwd",
+    )
+    _fixed32_nonnegative_float(sfwd["gpu_seconds"], f"{path}:sfwd.gpu_seconds")
+    _fixed32_nonnegative_float(sfwd["wall_seconds"], f"{path}:sfwd.wall_seconds")
+    for key in ("steps", "drafts", "wall_drafts", "wall_steps", "wall_rejected"):
+        _fixed32_nonnegative_int(sfwd[key], f"{path}:sfwd.{key}")
+    if sfwd["steps"] != steps or sfwd["drafts"] != spec_drafts:
+        raise Fixed32BoundaryError(f"{path}: SFWD counters do not reconcile")
+    for label in ("dfwd", "cfwd"):
+        span = metrics[label]
+        _fixed32_exact_keys(
+            span,
+            frozenset({"gpu_seconds", "spans"}),
+            f"{path}:{label}",
+        )
+        _fixed32_nonnegative_float(
+            span["gpu_seconds"], f"{path}:{label}.gpu_seconds"
+        )
+        if _fixed32_nonnegative_int(span["spans"], f"{path}:{label}.spans") != events:
+            raise Fixed32BoundaryError(f"{path}: {label} spans do not reconcile")
+
+    committer = metrics["committer"]
+    conv = metrics["conv_pregather"]
+    expected_by_batch = {str(batch): histogram[batch] for batch in range(1, 5)}
+    expected_capture_by_batch = {
+        str(batch): int(batch <= server_capacity) for batch in range(1, 5)
+    }
+    zero_by_batch = {str(batch): 0 for batch in range(1, 5)}
+    expected_ready_capacities = {
+        str(batch): server_capacity
+        for batch in range(1, server_capacity + 1)
+    }
+    expected_preseeded_batches = list(range(1, server_capacity + 1))
+    batch_keys = frozenset(str(batch) for batch in range(1, 5))
+    ready_capacity_keys = frozenset(expected_ready_capacities)
+    _fixed32_exact_keys(
+        committer,
+        frozenset(
+            {
+                "actual_replays_by_batch",
+                "actual_replays_enqueued",
+                "all_batches_ready",
+                "captures",
+                "fast_route_ready",
+                "maximum_ready_capacity",
+                "nonpure_dispatch",
+                "nonpure_committer_replays_by_batch",
+                "nonpure_committer_replays_enqueued",
+                "preseeded_batches",
+                "preseeded_graphs",
+                "ready_capacities",
+                "required_capacity",
+            }
+        ),
+        f"{path}:committer",
+    )
+    _fixed32_exact_keys(
+        conv,
+        frozenset(
+            {
+                "preseeded",
+                "pointer_entries",
+                "preseeded_batches",
+                "max_batch_size",
+                "graph_capture_stages",
+                "graph_capture_stages_by_batch",
+                "profile_capture_stages",
+                "aux_capture_stages",
+                "actual_stages",
+                "actual_stages_by_batch",
+                "graph_replay_stages",
+                "graph_replay_stages_by_batch",
+            }
+        ),
+        f"{path}:conv_pregather",
+    )
+    for key in (
+        "actual_replays_enqueued",
+        "captures",
+        "maximum_ready_capacity",
+        "nonpure_committer_replays_enqueued",
+        "preseeded_graphs",
+        "required_capacity",
+    ):
+        _fixed32_nonnegative_int(committer[key], f"{path}:committer.{key}")
+    for key in (
+        "pointer_entries",
+        "max_batch_size",
+        "graph_capture_stages",
+        "profile_capture_stages",
+        "aux_capture_stages",
+        "actual_stages",
+        "graph_replay_stages",
+    ):
+        _fixed32_nonnegative_int(conv[key], f"{path}:conv_pregather.{key}")
+    committer_by_batch = _fixed32_nonnegative_int_map(
+        committer["actual_replays_by_batch"],
+        expected_keys=batch_keys,
+        label=f"{path}:committer.actual_replays_by_batch",
+    )
+    nonpure_replays_by_batch = _fixed32_nonnegative_int_map(
+        committer["nonpure_committer_replays_by_batch"],
+        expected_keys=batch_keys,
+        label=(
+            f"{path}:committer.nonpure_committer_replays_by_batch"
+        ),
+    )
+    nonpure_dispatch = _fixed32_nonnegative_int_map(
+        committer["nonpure_dispatch"],
+        expected_keys=frozenset(
+            {
+                "guarded_steps",
+                "piecewise_steps",
+                "none_steps",
+                "forbidden_full_steps",
+            }
+        ),
+        label=f"{path}:committer.nonpure_dispatch",
+    )
+    committer_ready_capacities = _fixed32_nonnegative_int_map(
+        committer["ready_capacities"],
+        expected_keys=ready_capacity_keys,
+        label=f"{path}:committer.ready_capacities",
+    )
+    committer_preseeded_batches = _fixed32_nonnegative_int_list(
+        committer["preseeded_batches"],
+        label=f"{path}:committer.preseeded_batches",
+    )
+    conv_capture_by_batch = _fixed32_nonnegative_int_map(
+        conv["graph_capture_stages_by_batch"],
+        expected_keys=batch_keys,
+        label=f"{path}:conv_pregather.graph_capture_stages_by_batch",
+    )
+    conv_host_by_batch = _fixed32_nonnegative_int_map(
+        conv["actual_stages_by_batch"],
+        expected_keys=batch_keys,
+        label=f"{path}:conv_pregather.actual_stages_by_batch",
+    )
+    conv_replays_by_batch = _fixed32_nonnegative_int_map(
+        conv["graph_replay_stages_by_batch"],
+        expected_keys=batch_keys,
+        label=f"{path}:conv_pregather.graph_replay_stages_by_batch",
+    )
+    conv_preseeded_batches = _fixed32_nonnegative_int_list(
+        conv["preseeded_batches"],
+        label=f"{path}:conv_pregather.preseeded_batches",
+    )
+    nonpure_replays = committer[
+        "nonpure_committer_replays_enqueued"
+    ]
+    expected_raw_by_batch = {
+        str(batch): expected_by_batch[str(batch)]
+        + nonpure_replays_by_batch[str(batch)]
+        for batch in range(1, 5)
+    }
+    if (
+        committer["all_batches_ready"] is not True
+        or committer["fast_route_ready"] is not True
+        or committer["required_capacity"] != server_capacity
+        or committer["maximum_ready_capacity"] != server_capacity
+        or committer["preseeded_graphs"] != server_capacity
+        or committer["captures"] != server_capacity
+        or committer_preseeded_batches != expected_preseeded_batches
+        or committer_ready_capacities != expected_ready_capacities
+        or nonpure_dispatch["guarded_steps"]
+        != (
+            nonpure_dispatch["piecewise_steps"]
+            + nonpure_dispatch["none_steps"]
+            + nonpure_dispatch["forbidden_full_steps"]
+        )
+        or nonpure_dispatch["forbidden_full_steps"] != 0
+        or nonpure_replays != sum(nonpure_replays_by_batch.values())
+        or nonpure_replays > nonpure_dispatch["guarded_steps"]
+        or any(
+            nonpure_replays_by_batch[str(batch)]
+            for batch in range(server_capacity, 5)
+        )
+        or committer["actual_replays_enqueued"]
+        != events + nonpure_replays
+        or committer_by_batch != expected_raw_by_batch
+        or conv["preseeded"] is not True
+        or conv["pointer_entries"] != 48
+        or conv_preseeded_batches != expected_preseeded_batches
+        or conv["max_batch_size"] != server_capacity
+        or conv["graph_capture_stages"] != server_capacity
+        or conv_capture_by_batch != expected_capture_by_batch
+        or conv["profile_capture_stages"] != 0
+        or conv["aux_capture_stages"] != 0
+        or conv["actual_stages"] != 0
+        or conv_host_by_batch != zero_by_batch
+        or conv["graph_replay_stages"] != events
+        or conv_replays_by_batch != expected_by_batch
+    ):
+        raise Fixed32BoundaryError(
+            f"{path}: committer/nonpure/in-graph pregather counters do not reconcile"
+        )
+    return payload, path, hashlib.sha256(raw).hexdigest()
+
+
+def _fixed32_metrics_snapshot(
+    *,
+    metrics_url: str,
+    snapshot: dict[str, Any],
+) -> str:
+    """Render required counters from one immutable runtime generation."""
+    raw = _metrics_text(metrics_url, strict=True)
+    retained = []
+    for line in raw.splitlines():
+        stripped = line.lstrip()
+        series = (
+            stripped.split("{", 1)[0].split(None, 1)[0]
+            if stripped
+            else ""
+        )
+        if series not in _FIXED32_REQUIRED_METRICS:
+            retained.append(line)
+    metrics = snapshot["metrics"]
+    fixed = metrics["fixed32"]
+    sfwd = metrics["sfwd"]
+    dfwd = metrics["dfwd"]
+    cfwd = metrics["cfwd"]
+    exact = (
+        (
+            "vllm:fr13_decode_forward_gpu_seconds_total",
+            sfwd["gpu_seconds"],
+            "",
+        ),
+        ("vllm:fr13_decode_forward_gpu_steps_total", sfwd["steps"], ""),
+        ("vllm:fr13_decode_forward_gpu_drafts_total", sfwd["drafts"], ""),
+        (
+            "vllm:fr13_decode_step_wall_seconds_total",
+            sfwd["wall_seconds"],
+            "",
+        ),
+        (
+            "vllm:fr13_decode_step_wall_drafts_total",
+            sfwd["wall_drafts"],
+            "",
+        ),
+        ("vllm:fr13_decode_step_wall_steps_total", sfwd["wall_steps"], ""),
+        (
+            "vllm:fr13_decode_step_wall_attempts_total",
+            sfwd["wall_steps"] + sfwd["wall_rejected"],
+            "",
+        ),
+        (
+            "vllm:fr13_decode_step_wall_rejected_total",
+            sfwd["wall_rejected"],
+            "",
+        ),
+        (
+            "vllm:spec_decode_num_drafts_total",
+            fixed["spec_drafts"],
+            '{engine="0",model_name="qwen3.6-27b"}',
+        ),
+        (
+            "vllm:spec_decode_num_draft_tokens_total",
+            fixed["spec_tokens"],
+            '{engine="0",model_name="qwen3.6-27b"}',
+        ),
+        (
+            "vllm:fr13_fixed32_pure_decode_forward_steps_total",
+            fixed["pure_decode_forward_steps"],
+            "",
+        ),
+        (
+            "vllm:fr13_fixed32_complete_work_census_events_total",
+            fixed["complete_work_census_events"],
+            "",
+        ),
+        ("vllm:fr13_drafter_gpu_seconds_total", dfwd["gpu_seconds"], ""),
+        ("vllm:fr13_drafter_gpu_spans_total", dfwd["spans"], ""),
+        ("vllm:fr13_committer_gpu_seconds_total", cfwd["gpu_seconds"], ""),
+        ("vllm:fr13_committer_gpu_spans_total", cfwd["spans"], ""),
+    )
+    retained.extend(
+        f"{name}{labels} {value:.17g}"
+        if isinstance(value, float)
+        else f"{name}{labels} {value}"
+        for name, value, labels in exact
+    )
+    return "\n".join(retained) + "\n"
+
+
+class _Fixed32TaskBracket:
+    """One task's strict flush-before-metrics evidence bracket."""
+
+    def __init__(
+        self,
+        *,
+        client: Any,
+        task_dir: Path,
+        instance_id: str,
+        boundary_snapshot_base: Path,
+        server_capacity: int,
+    ) -> None:
+        self.client = client
+        self.task_dir = task_dir
+        self.instance_id = instance_id
+        self.boundary_snapshot_base = boundary_snapshot_base
+        self.server_capacity = server_capacity
+        self.pre_ack = None
+        self.post_ack = None
+        self.pre_snapshot_ref = None
+        self.post_snapshot_ref = None
+        self.post_attempted = False
+        self.artifact_path = task_dir / "fixed32_task_boundary.json"
+
+    @property
+    def started(self) -> bool:
+        return self.pre_ack is not None
+
+    @property
+    def complete(self) -> bool:
+        return self.post_ack is not None
+
+    def _write_artifact(self) -> None:
+        pre = self.pre_ack.as_dict() if self.pre_ack is not None else None
+        post = self.post_ack.as_dict() if self.post_ack is not None else None
+        interval = None
+        if pre is not None and post is not None:
+            interval = {
+                "start_forward_step": pre["counters"]["pure_decode_forward_steps"],
+                "end_forward_step": post["counters"]["pure_decode_forward_steps"],
+                "expected_complete_events": (
+                    post["counters"]["complete_work_census_events"]
+                    - pre["counters"]["complete_work_census_events"]
+                ),
+            }
+        payload = {
+            "schema": "fr13-fixed32-task-boundary-v1",
+            "instance_id": self.instance_id,
+            "mode": self.client.mode,
+            "producer_pid": self.client.producer_pid,
+            "pre": pre,
+            "post": post,
+            "pre_runtime_snapshot": self.pre_snapshot_ref,
+            "post_runtime_snapshot": self.post_snapshot_ref,
+            "forward_step_interval": interval,
+        }
+        temporary = self.artifact_path.with_suffix(".json.tmp")
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, self.artifact_path)
+
+    def pre(self, metrics_path: Path) -> None:
+        if self.started or self.post_attempted:
+            raise Fixed32BoundaryError("fixed32 task pre bracket was invoked twice")
+        try:
+            ack = self.client.snapshot()
+            _validate_fixed32_ack(ack, label="pre")
+            snapshot, snapshot_path, snapshot_sha = (
+                _load_fixed32_boundary_snapshot(
+                    base_path=self.boundary_snapshot_base,
+                    ack=ack,
+                    server_capacity=self.server_capacity,
+                )
+            )
+            metrics = _fixed32_metrics_snapshot(
+                metrics_url=DEFAULT_METRICS_URL,
+                snapshot=snapshot,
+            )
+        except Exception as exc:
+            raise Fixed32BoundaryError(
+                f"fixed32 pre bracket failed: {type(exc).__name__}: {exc}"
+            ) from exc
+        self.pre_ack = ack
+        self.pre_snapshot_ref = {
+            "schema": snapshot["schema"],
+            "generation": ack.generation,
+            "path": str(snapshot_path),
+            "sha256": snapshot_sha,
+        }
+        metrics_path.write_text(metrics, encoding="utf-8")
+        self._write_artifact()
+
+    def post(self, metrics_path: Path) -> dict[str, Any]:
+        if not self.started:
+            raise Fixed32BoundaryError("fixed32 post bracket has no pre bracket")
+        if self.post_attempted:
+            if self.complete:
+                return json.loads(self.artifact_path.read_text(encoding="utf-8"))
+            raise Fixed32BoundaryError("fixed32 post bracket already failed")
+        self.post_attempted = True
+        try:
+            ack = self.client.snapshot()
+            counters = _validate_fixed32_ack(ack, label="post")
+            pre_counters = self.pre_ack.counters
+            start = pre_counters["pure_decode_forward_steps"]
+            end = counters["pure_decode_forward_steps"]
+            event_delta = (
+                counters["complete_work_census_events"]
+                - pre_counters["complete_work_census_events"]
+            )
+            if end <= start:
+                raise Fixed32BoundaryError("fixed32 real task produced no pure-decode step")
+            if event_delta != end - start:
+                raise Fixed32BoundaryError(
+                    "fixed32 task interval has incomplete census events: "
+                    f"steps={end - start} events={event_delta}"
+                )
+            snapshot, snapshot_path, snapshot_sha = (
+                _load_fixed32_boundary_snapshot(
+                    base_path=self.boundary_snapshot_base,
+                    ack=ack,
+                    server_capacity=self.server_capacity,
+                )
+            )
+            metrics = _fixed32_metrics_snapshot(
+                metrics_url=DEFAULT_METRICS_URL,
+                snapshot=snapshot,
+            )
+        except Exception as exc:
+            raise Fixed32BoundaryError(
+                f"fixed32 post bracket failed: {type(exc).__name__}: {exc}"
+            ) from exc
+        self.post_ack = ack
+        self.post_snapshot_ref = {
+            "schema": snapshot["schema"],
+            "generation": ack.generation,
+            "path": str(snapshot_path),
+            "sha256": snapshot_sha,
+        }
+        metrics_path.write_text(metrics, encoding="utf-8")
+        self._write_artifact()
+        return json.loads(self.artifact_path.read_text(encoding="utf-8"))
 
 
 def _spawn_dcgm_sampler(out_path: Path, interval_s: float = DEFAULT_DCGM_INTERVAL_S
@@ -588,8 +2013,27 @@ def _load_subset(subset_json: Path) -> tuple[str, list[str]]:
     return dataset_name, instance_ids
 
 
-def _load_dataset(dataset_name: str) -> dict[str, dict]:
+def _load_dataset(
+    dataset_name: str,
+    *,
+    pinned_verified: bool = False,
+) -> dict[str, dict]:
     os.environ.setdefault("HF_HOME", str(DEFAULT_HF_HOME))
+    if pinned_verified:
+        if dataset_name != "princeton-nlp/SWE-bench_Verified":
+            raise RuntimeError(
+                f"fixed32 dataset is not the pinned SWE-Verified source: "
+                f"{dataset_name!r}"
+            )
+        if not PINNED_SWE_VERIFIED_PARQUET.is_file():
+            raise RuntimeError(
+                f"pinned SWE-Verified Parquet is missing: "
+                f"{PINNED_SWE_VERIFIED_PARQUET}"
+            )
+        import pyarrow.parquet as pq
+
+        rows = pq.read_table(PINNED_SWE_VERIFIED_PARQUET).to_pylist()
+        return {row["instance_id"]: dict(row) for row in rows}
     from datasets import load_dataset
 
     ds = load_dataset(dataset_name, split="test")
@@ -791,6 +2235,7 @@ def _run_agent_local(
     trace_path: Path,
     base_commit: str | None = None,
     prompt: str = DEFAULT_AGENT_PROMPT,
+    task_bearer: str | None = None,
 ) -> dict[str, Any]:
     """Run codex-runner:v1 and capture trace/stdout/stderr to separate files.
 
@@ -805,7 +2250,7 @@ def _run_agent_local(
             remote_host=None, workspace=workspace, endpoint=endpoint, model=model,
             timeout_s=timeout_s, instance_id=instance_id, base_commit=base_commit,
             stdout_path=stdout_path, stderr_path=stderr_path, trace_path=trace_path,
-            prompt=prompt,
+            prompt=prompt, task_bearer=task_bearer,
         )
     container_name = f"swe-agent-{instance_id.replace('/', '_')[:48]}-{int(time.time())}"
     cmd = _agent_template().format(
@@ -837,6 +2282,7 @@ def _run_agent_local(
                 # timeout_s<=0 => NO harness wall (codex runs to its own idle/turn limit).
                 timeout=(None if timeout_s <= 0 else max(timeout_s, 30)),
                 check=False,
+                env=_agent_subprocess_env(task_bearer),
             )
             rc = completed.returncode
         except subprocess.TimeoutExpired:
@@ -1111,6 +2557,7 @@ def _run_agent_remote(
     trace_path: Path,
     base_commit: str | None = None,
     prompt: str = DEFAULT_AGENT_PROMPT,
+    task_bearer: str | None = None,
 ) -> dict[str, Any]:
     """Run codex-runner:v1 ON alienware (x86) over SSH, keeping the GB10 vLLM-only.
 
@@ -1127,7 +2574,7 @@ def _run_agent_remote(
             remote_host=host, workspace=workspace, endpoint=endpoint, model=model,
             timeout_s=timeout_s, instance_id=instance_id, base_commit=base_commit,
             stdout_path=stdout_path, stderr_path=stderr_path, trace_path=trace_path,
-            prompt=prompt,
+            prompt=prompt, task_bearer=task_bearer,
         )
     started = time.monotonic()
     safe_id = instance_id.replace("/", "_")[:48]
@@ -1172,13 +2619,15 @@ def _run_agent_remote(
     # stdin" -> empty patch / agent_gave_up in ~3s (every offload SWE episode). Append the
     # prompt as a shell-quoted positional arg so it survives the ssh remote login shell and
     # reaches `codex exec` as its positional prompt, mirroring the local argv append.
-    remote_cmd = remote_cmd + " " + shlex.quote(prompt)
+    remote_cmd = _remote_agent_command(
+        remote_cmd + " " + shlex.quote(prompt)
+    )
     timed_out = False
     rc: int | None = None
     # run codex over SSH; trace (codex --json) -> trace_path, ssh stderr -> stderr_path.
     # SSH timeout = codex wall + a teardown buffer; a true codex timeout is
     # handled by killing the remote container (mirrors the local path).
-    ssh_codex = ["ssh", *_EVAL_SSH_OPTS, "-o", f"ConnectTimeout=20", host, remote_cmd]
+    ssh_codex = ["ssh", *_EVAL_SSH_OPTS, "-o", "ConnectTimeout=20", host, remote_cmd]
     # FR13 §59: Popen + trace-growth stall-watchdog (env LUMO_SWE_STALL_KILL_S,
     # default 0=OFF). Wall timeout is enforced inside the monitor so OFF behavior
     # matches the legacy subprocess.run(timeout=wall). timeout_s<=0 => no wall.
@@ -1195,7 +2644,20 @@ def _run_agent_remote(
 
     with trace_path.open("w", encoding="utf-8") as tf, \
          stderr_path.open("w", encoding="utf-8") as ef:
-        proc = subprocess.Popen(ssh_codex, stdout=tf, stderr=ef)
+        proc = subprocess.Popen(
+            ssh_codex,
+            stdin=subprocess.PIPE,
+            stdout=tf,
+            stderr=ef,
+        )
+        if proc.stdin is None:
+            raise Fixed32BoundaryError("agent credential pipe is unavailable")
+        proc.stdin.write(
+            ((task_bearer if task_bearer is not None else "EMPTY") + "\n").encode(
+                "utf-8"
+            )
+        )
+        proc.stdin.close()
         mon = _monitor_proc_with_stall_watchdog(
             proc, trace_path=trace_path, wall_timeout_s=wall_timeout_s,
             stall_kill_s=stall_kill_s, poll_s=5.0, on_stall_kill=_remote_stall_kill,
@@ -1267,6 +2729,7 @@ def _run_agent_instance(
     stderr_path: Path,
     trace_path: Path,
     prompt: str = DEFAULT_AGENT_PROMPT,
+    task_bearer: str | None = None,
 ) -> dict[str, Any]:
     """SWE_AGENT_ENV=instance_image (§58): run qwen-code INSIDE the SWE-bench
     per-instance eval image editing /testbed, with the node+qwen runtime injected
@@ -1348,12 +2811,26 @@ def _run_agent_instance(
             container_name=container_name, image=image, endpoint=endpoint, model=model,
             host_out_dir=remote_out, bundle_src="~/qwen_agent_bundle",
             agents_md_b64=agents_b64, prompt_b64=prompt_b64, base_commit=base_commit)
-        ssh_cmd = ["ssh", *_EVAL_SSH_OPTS, "-o", "ConnectTimeout=20", remote_host, cmd]
+        ssh_cmd = [
+            "ssh",
+            *_EVAL_SSH_OPTS,
+            "-o",
+            "ConnectTimeout=20",
+            remote_host,
+            _remote_agent_command(cmd),
+        ]
         try:
             with trace_path.open("w", encoding="utf-8") as tf, \
                  stderr_path.open("w", encoding="utf-8") as ef:
                 completed = subprocess.run(
-                    ssh_cmd, stdout=tf, stderr=ef,
+                    ssh_cmd,
+                    input=(
+                        task_bearer if task_bearer is not None else "EMPTY"
+                    )
+                    + "\n",
+                    text=True,
+                    stdout=tf,
+                    stderr=ef,
                     timeout=(None if timeout_s <= 0 else max(timeout_s, 30) + 120),
                     check=False)
             rc = completed.returncode
@@ -1373,6 +2850,8 @@ def _run_agent_instance(
         pd = _net_retry(
             ["scp", *_EVAL_SSH_OPTS, f"{remote_host}:{remote_out}/patch.diff", str(patch_local)],
             what=f"qwen_patch_down:{instance_id}", timeout=120, max_attempts=4, ok_rcs=(0, 1))
+        if pd.returncode not in (0, 1):
+            net_drop = True
         if pd.returncode != 0 and not patch_local.is_file():
             patch_local.write_text("", encoding="utf-8")
         _net_retry(["ssh", *_EVAL_SSH_OPTS, remote_host,
@@ -1384,8 +2863,9 @@ def _run_agent_instance(
         return {"elapsed_s": round(elapsed, 3), "exit_code": rc if rc is not None else -1,
                 "timed_out": timed_out, "container_name": container_name, "offloaded": True,
                 "codex_host": remote_host, "network_drop": net_drop,
+                "patch_down_rc": pd.returncode,
                 "agent_env": "instance_image", "instance_image": image,
-                    "host_arch": host_machine, "image_arch": sweb_arch}
+                "host_arch": host_machine, "image_arch": sweb_arch}
 
     # ---- local docker path (secondary; production uses --codex-host) ----
     insp = subprocess.run(["docker", "image", "inspect", image],
@@ -1407,7 +2887,9 @@ def _run_agent_instance(
              stderr_path.open("w", encoding="utf-8") as ef:
             completed = subprocess.run(
                 cmd_argv, stdout=tf, stderr=ef,
-                timeout=(None if timeout_s <= 0 else max(timeout_s, 30)), check=False)
+                timeout=(None if timeout_s <= 0 else max(timeout_s, 30)),
+                check=False,
+                env=_agent_subprocess_env(task_bearer))
         rc = completed.returncode
     except subprocess.TimeoutExpired:
         timed_out = True
@@ -1496,6 +2978,7 @@ def _process_one(
     agent_wall_s: int,
     eval_timeout_s: int,
     skip_existing: bool,
+    fixed32_bracket: _Fixed32TaskBracket | None = None,
 ) -> dict[str, Any]:
     # Use absolute paths everywhere so docker volume mounts and git
     # worktree add (which resolves relative to -C cache) both work.
@@ -1527,6 +3010,18 @@ def _process_one(
         "repo": instance.get("repo"),
         "base_commit": instance.get("base_commit"),
     }
+    task_bearer: str | None = None
+    task_key_id: str | None = None
+    if fixed32_bracket is not None:
+        task_bearer, task_key_id = _fixed32_task_auth(instance_id)
+        summary["fixed32_dataset_record_sha256"] = hashlib.sha256(
+            json.dumps(
+                instance,
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
 
     cache_path = None
     try:
@@ -1549,6 +3044,11 @@ def _process_one(
             )
         _write_agents_md(workspace_path, instance)
     except Exception as exc:  # noqa: BLE001
+        if fixed32_bracket is not None:
+            raise Fixed32BoundaryError(
+                f"fixed32 task hydration failed for {instance_id}: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
         summary["status"] = "hydration_failed"
         summary["error"] = f"{type(exc).__name__}: {exc}"
         summary["traceback"] = traceback.format_exc()
@@ -1576,30 +3076,76 @@ def _process_one(
     proxy_offset_before = (
         proxy_capture.stat().st_size if proxy_capture.is_file() else 0
     )
-    metrics_pre.write_text(_metrics_snapshot(DEFAULT_METRICS_URL), encoding="utf-8")
+    if fixed32_bracket is not None:
+        fixed32_bracket.pre(metrics_pre)
+    else:
+        metrics_pre.write_text(_metrics_snapshot(DEFAULT_METRICS_URL), encoding="utf-8")
 
     # Start the DCGM/NVML sampler in parallel with the Codex agent.
     dcgm_proc = _spawn_dcgm_sampler(dcgm_samples)
 
-    codex_meta = _run_agent_dispatch(
-        workspace=workspace_path,
-        endpoint=endpoint,
-        model=model,
-        timeout_s=agent_wall_s,
-        instance_id=instance_id,
-        base_commit=instance["base_commit"],
-        stdout_path=qwen_stdout,
-        stderr_path=qwen_stderr,
-        trace_path=qwen_trace,
-    )
-    summary["agent"] = codex_meta
-    # Backward-compat: keep the legacy "codex" key so existing reducers
-    # (meta.get("codex") in fr13_bigdenom_swe_serve.sh, fr13_standard_metrics.py)
-    # still resolve. New reducers read meta.get("agent") or meta.get("codex").
-    summary["codex"] = codex_meta
-
-    _stop_dcgm_sampler(dcgm_proc)
-    metrics_post.write_text(_metrics_snapshot(DEFAULT_METRICS_URL), encoding="utf-8")
+    try:
+        task_auth_before = None
+        if fixed32_bracket is not None:
+            if task_bearer is None or task_key_id is None:
+                raise Fixed32BoundaryError("fixed32 task credential is unavailable")
+            task_auth_before = _fixed32_task_auth_evidence(
+                endpoint=(
+                    AGENT_ENDPOINT
+                    if AGENT_HOST and AGENT_ENDPOINT
+                    else endpoint
+                ),
+                task_bearer=task_bearer,
+                task_key_id=task_key_id,
+            )
+        codex_meta = _run_agent_dispatch(
+            workspace=workspace_path,
+            endpoint=endpoint,
+            model=model,
+            timeout_s=agent_wall_s,
+            instance_id=instance_id,
+            base_commit=instance["base_commit"],
+            stdout_path=qwen_stdout,
+            stderr_path=qwen_stderr,
+            trace_path=qwen_trace,
+            task_bearer=task_bearer,
+        )
+        if fixed32_bracket is not None:
+            if task_bearer is None or task_key_id is None or task_auth_before is None:
+                raise Fixed32BoundaryError("fixed32 task-auth state is unavailable")
+            task_auth_after = _fixed32_task_auth_evidence(
+                endpoint=(
+                    AGENT_ENDPOINT
+                    if AGENT_HOST and AGENT_ENDPOINT
+                    else endpoint
+                ),
+                task_bearer=task_bearer,
+                task_key_id=task_key_id,
+            )
+            summary["fixed32_real_task_provenance"] = _fixed32_real_task_provenance(
+                instance_id=instance_id,
+                trace_path=qwen_trace,
+                agent_meta=codex_meta,
+                task_key_id=task_key_id,
+                task_auth_before=task_auth_before,
+                task_auth_after=task_auth_after,
+            )
+        summary["agent"] = codex_meta
+        # Backward-compat: keep the legacy "codex" key so existing reducers
+        # (meta.get("codex") in fr13_bigdenom_swe_serve.sh, fr13_standard_metrics.py)
+        # still resolve. New reducers read meta.get("agent") or meta.get("codex").
+        summary["codex"] = codex_meta
+    except Fixed32BoundaryError:
+        raise
+    except Exception as exc:
+        if fixed32_bracket is not None:
+            raise Fixed32BoundaryError(
+                f"fixed32 agent dispatch failed for {instance_id}: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+        raise
+    finally:
+        _stop_dcgm_sampler(dcgm_proc)
 
     patch_text = ""
     try:
@@ -1641,21 +3187,74 @@ def _process_one(
             retry_stdout = task_dir / f"qwen_stdout_retry{suffix}.log"
             retry_dcgm = _spawn_dcgm_sampler(task_dir / f"dcgm_samples_retry{suffix}.jsonl")
             try:
+                retry_auth_before = None
+                if fixed32_bracket is not None:
+                    if task_bearer is None or task_key_id is None:
+                        raise Fixed32BoundaryError(
+                            "fixed32 retry task credential is unavailable"
+                        )
+                    retry_auth_before = _fixed32_task_auth_evidence(
+                        endpoint=(
+                            AGENT_ENDPOINT
+                            if AGENT_HOST and AGENT_ENDPOINT
+                            else endpoint
+                        ),
+                        task_bearer=task_bearer,
+                        task_key_id=task_key_id,
+                    )
                 codex_meta_retry = _run_agent_dispatch(
                     workspace=workspace_path, endpoint=endpoint, model=model,
                     timeout_s=agent_wall_s, instance_id=instance_id,
                     base_commit=instance["base_commit"],
                     stdout_path=retry_stdout, stderr_path=retry_stderr, trace_path=retry_trace,
                     prompt=retry_prompt,
+                    task_bearer=task_bearer,
                 )
-            except Exception as exc:  # noqa: BLE001 — a retry dispatch failure must never crash the task
-                _stop_dcgm_sampler(retry_dcgm)
+                if fixed32_bracket is not None:
+                    if (
+                        task_bearer is None
+                        or task_key_id is None
+                        or retry_auth_before is None
+                    ):
+                        raise Fixed32BoundaryError(
+                            "fixed32 retry task-auth state is unavailable"
+                        )
+                    retry_auth_after = _fixed32_task_auth_evidence(
+                        endpoint=(
+                            AGENT_ENDPOINT
+                            if AGENT_HOST and AGENT_ENDPOINT
+                            else endpoint
+                        ),
+                        task_bearer=task_bearer,
+                        task_key_id=task_key_id,
+                    )
+                    retry_provenance = _fixed32_real_task_provenance(
+                        instance_id=instance_id,
+                        trace_path=retry_trace,
+                        agent_meta=codex_meta_retry,
+                        task_key_id=task_key_id,
+                        task_auth_before=retry_auth_before,
+                        task_auth_after=retry_auth_after,
+                    )
+            except Fixed32BoundaryError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — non-fixed32 retries remain best-effort
+                if fixed32_bracket is not None:
+                    raise Fixed32BoundaryError(
+                        f"fixed32 retry agent dispatch failed for {instance_id}: "
+                        f"{type(exc).__name__}: {exc}"
+                    ) from exc
                 summary[f"codex_retry{suffix}_dispatch_error"] = f"{type(exc).__name__}: {exc}"
                 print(f"[{_iso_now()}]    {instance_id}: retry {ridx} dispatch failed "
                       f"({type(exc).__name__}: {exc}); keeping empty patch as failed", flush=True)
                 break
-            _stop_dcgm_sampler(retry_dcgm)
+            finally:
+                _stop_dcgm_sampler(retry_dcgm)
             summary[f"codex_retry{suffix}"] = codex_meta_retry
+            if fixed32_bracket is not None:
+                summary.setdefault("fixed32_real_task_retry_provenance", []).append(
+                    retry_provenance
+                )
             try:
                 retry_patch = _extract_patch(cache_path, workspace_path, instance["base_commit"])
             except Exception as exc:  # noqa: BLE001
@@ -1672,7 +3271,10 @@ def _process_one(
         else:
             summary["empty_patch_retry"]["attempts_used"] = max_retries
 
-    metrics_post.write_text(_metrics_snapshot(DEFAULT_METRICS_URL), encoding="utf-8")
+    if fixed32_bracket is not None:
+        summary["fixed32_task_boundary"] = fixed32_bracket.post(metrics_post)
+    else:
+        metrics_post.write_text(_metrics_snapshot(DEFAULT_METRICS_URL), encoding="utf-8")
 
     # Slice the new proxy rows into a per-task file (matches Track B layout).
     # This must happen after the optional empty-patch retry so retry traffic is
@@ -1858,7 +3460,68 @@ def main(argv: list[str] | None = None) -> int:
                              "endpoint (default http://127.0.0.1:8023/v1). Distinct from --endpoint "
                              "(the on-GB10 legacy proxy) because 8022 is taken on alienware. "
                              "--codex-endpoint is a deprecated alias.")
+    parser.add_argument("--fixed32-container")
+    parser.add_argument("--fixed32-producer-pid", type=int)
+    parser.add_argument(
+        "--fixed32-mode",
+        choices=("tail6_fixed32", "hydra27_fixed32"),
+    )
+    parser.add_argument("--fixed32-flush-request", type=Path)
+    parser.add_argument("--fixed32-flush-ack", type=Path)
+    parser.add_argument("--fixed32-boundary-snapshot", type=Path)
     args = parser.parse_args(argv)
+
+    fixed32_values = (
+        args.fixed32_container,
+        args.fixed32_producer_pid,
+        args.fixed32_mode,
+        args.fixed32_flush_request,
+        args.fixed32_flush_ack,
+        args.fixed32_boundary_snapshot,
+    )
+    fixed32_enabled = any(value is not None for value in fixed32_values)
+    if fixed32_enabled and any(value is None for value in fixed32_values):
+        parser.error("all six --fixed32-* runtime binding options are required together")
+    fixed32_client = None
+    if fixed32_enabled:
+        if args.limit is not None or args.skip_existing:
+            parser.error("fixed32 campaigns forbid --limit and --skip-existing")
+        canonical_subsets = {
+            (REPO_ROOT / "config/fr13_fixed32/subset_b4_four.json").resolve(),
+            (REPO_ROOT / "config/fr13_fixed32/subset_b4_sixteen.json").resolve(),
+        }
+        try:
+            subset_path = args.subset.resolve(strict=True)
+        except OSError as error:
+            parser.error(f"fixed32 subset cannot be resolved: {error}")
+        if subset_path not in canonical_subsets:
+            parser.error("fixed32 requires the canonical SWE-Verified 4-task or 16-task subset")
+        try:
+            serving_batch = int(os.environ["MAX_NUM_SEQS_OVR"])
+        except (KeyError, ValueError):
+            parser.error("fixed32 requires integer MAX_NUM_SEQS_OVR in the runner environment")
+        if serving_batch not in (1, 4) or args.concurrency != serving_batch:
+            parser.error(
+                "fixed32 requires concurrency to equal the serving batch (exactly B1 or B4)"
+            )
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        from fr13_fixed32_flush_protocol import Fixed32FlushClient
+
+        fixed32_client = Fixed32FlushClient(
+            container=args.fixed32_container,
+            producer_pid=args.fixed32_producer_pid,
+            mode=args.fixed32_mode,
+            request_path=args.fixed32_flush_request,
+            ack_path=args.fixed32_flush_ack,
+        )
+        try:
+            ready = fixed32_client.connect()
+            _validate_fixed32_ack(ready, label="ready")
+        except Exception as error:
+            parser.error(
+                f"fixed32 runtime generation-zero binding failed: "
+                f"{type(error).__name__}: {error}"
+            )
 
     global EVAL_HOST, AGENT_HOST, AGENT_ENDPOINT
     EVAL_HOST = args.eval_host
@@ -1874,6 +3537,13 @@ def main(argv: list[str] | None = None) -> int:
     dataset_name, instance_ids = _load_subset(args.subset)
     if args.limit is not None:
         instance_ids = instance_ids[: args.limit]
+    if fixed32_enabled:
+        if "SWE-bench_Verified" not in dataset_name:
+            parser.error(f"fixed32 dataset is not SWE-bench Verified: {dataset_name!r}")
+        if len(instance_ids) not in (4, 16):
+            parser.error(
+                f"fixed32 canonical campaign must contain 4 or 16 tasks, got {len(instance_ids)}"
+            )
     dataset_tag = args.dataset_tag or ("pro" if "Pro" in dataset_name else "verified")
     dataset_out = args.out_root / dataset_tag
     per_task_root = dataset_out / "per_task"
@@ -1881,7 +3551,10 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"=== [{_iso_now()}] dataset={dataset_name} tag={dataset_tag} n={len(instance_ids)} "
           f"concurrency={args.concurrency} ===", flush=True)
-    dataset_records = _load_dataset(dataset_name)
+    dataset_records = _load_dataset(
+        dataset_name,
+        pinned_verified=fixed32_enabled,
+    )
     missing = [i for i in instance_ids if i not in dataset_records]
     if missing:
         print(f"WARNING: {len(missing)} subset instances missing from dataset: {missing[:5]}",
@@ -1938,37 +3611,61 @@ def main(argv: list[str] | None = None) -> int:
     def _job(iid: str) -> dict[str, Any]:
         t0 = time.time()
         print(f"[{_iso_now()}] -> {iid}", flush=True)
-        try:
-            res = _process_one(
+        fixed32_bracket = (
+            _Fixed32TaskBracket(
+                client=fixed32_client,
+                task_dir=(per_task_root / iid).resolve(),
                 instance_id=iid,
-                instance=dataset_records[iid],
-                dataset_name=dataset_name,
-                per_task_root=per_task_root,
-                repo_cache_root=args.repo_cache,
-                endpoint=args.endpoint,
-                model=args.model,
-                model_name=args.model_name,
-                agent_wall_s=args.agent_wall_s,
-                eval_timeout_s=args.eval_timeout_s,
-                skip_existing=args.skip_existing,
+                boundary_snapshot_base=args.fixed32_boundary_snapshot,
+                server_capacity=serving_batch,
             )
-        except Exception as exc:  # noqa: BLE001
-            res = {"instance_id": iid, "status": "orchestrator_crash",
-                   "error": f"{type(exc).__name__}: {exc}",
-                   "traceback": traceback.format_exc()}
-            # PERSIST the crash (2026-07-06): previously the traceback lived only
-            # in this in-memory dict — an orchestrator_crash left NOTHING on disk
-            # to diagnose (cost a wasted GPU boot to rediscover via reproduction).
-            # Print to the run log AND write a per-task crash file.
-            print(f"[{_iso_now()}] !! {iid} orchestrator_crash: {res['error']}\n"
-                  f"{res['traceback']}", flush=True)
+            if fixed32_client is not None
+            else None
+        )
+        try:
             try:
-                crash_dir = per_task_root / iid  # same layout as _process_one task_dir
-                crash_dir.mkdir(parents=True, exist_ok=True)
-                (crash_dir / "orchestrator_crash.json").write_text(
-                    json.dumps(res, indent=1), encoding="utf-8")
-            except Exception:
-                pass
+                res = _process_one(
+                    instance_id=iid,
+                    instance=dataset_records[iid],
+                    dataset_name=dataset_name,
+                    per_task_root=per_task_root,
+                    repo_cache_root=args.repo_cache,
+                    endpoint=args.endpoint,
+                    model=args.model,
+                    model_name=args.model_name,
+                    agent_wall_s=args.agent_wall_s,
+                    eval_timeout_s=args.eval_timeout_s,
+                    skip_existing=args.skip_existing,
+                    fixed32_bracket=fixed32_bracket,
+                )
+            except Fixed32BoundaryError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                res = {"instance_id": iid, "status": "orchestrator_crash",
+                       "error": f"{type(exc).__name__}: {exc}",
+                       "traceback": traceback.format_exc()}
+                # PERSIST the crash (2026-07-06): previously the traceback lived only
+                # in this in-memory dict — an orchestrator_crash left NOTHING on disk
+                # to diagnose (cost a wasted GPU boot to rediscover via reproduction).
+                # Print to the run log AND write a per-task crash file.
+                print(f"[{_iso_now()}] !! {iid} orchestrator_crash: {res['error']}\n"
+                      f"{res['traceback']}", flush=True)
+                try:
+                    crash_dir = per_task_root / iid
+                    crash_dir.mkdir(parents=True, exist_ok=True)
+                    (crash_dir / "orchestrator_crash.json").write_text(
+                        json.dumps(res, indent=1), encoding="utf-8")
+                except Exception:
+                    pass
+        finally:
+            if (
+                fixed32_bracket is not None
+                and fixed32_bracket.started
+                and not fixed32_bracket.complete
+            ):
+                fixed32_bracket.post(
+                    fixed32_bracket.task_dir / "vllm_metrics_post.txt"
+                )
         verdict = (res.get("eval_report") or {}).get("verdict", res.get("status", "?"))
         elapsed = time.time() - t0
         print(f"[{_iso_now()}] <- {iid} verdict={verdict} elapsed_total={elapsed:.1f}s",

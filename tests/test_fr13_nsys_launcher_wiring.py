@@ -15,10 +15,12 @@ def test_nsys_wrapper_is_off_by_default_and_mounts_only_when_enabled() -> None:
         text = launcher_path.read_text()
 
         assert "LUMO_NSYS_WRAP_VLLM=${LUMO_NSYS_WRAP_VLLM:-0}" in text
-        assert "LUMO_NSYS_OUTPUT=${LUMO_NSYS_OUTPUT:-/logs/nsys_vllm_${CONTAINER}}" in text
+        assert (
+            "LUMO_NSYS_OUTPUT=${LUMO_NSYS_OUTPUT:-/logs/nsys_vllm_${CONTAINER}}" in text
+        )
         assert "NSYS_DOCKER_ARGS=()" in text
         assert 'if _lumo_truthy "$LUMO_NSYS_WRAP_VLLM"; then' in text
-        assert 'for nsight_mount in /opt/nvidia /usr/local/cuda-13.0; do' in text
+        assert "for nsight_mount in /opt/nvidia /usr/local/cuda-13.0; do" in text
         assert 'NSYS_DOCKER_ARGS+=(-v "$nsight_mount:$nsight_mount:ro")' in text
         assert '"${NSYS_DOCKER_ARGS[@]}" \\' in text
 
@@ -39,7 +41,7 @@ def test_nsys_wrapper_wraps_the_in_container_vllm_serve_exec() -> None:
         assert '-e LUMO_NSYS_FLUSH_MS="$LUMO_NSYS_FLUSH_MS"' in text
         assert '-e LUMO_NSYS_OUTPUT="$LUMO_NSYS_OUTPUT"' in text
         assert "NSYS_PREFIX=()" in text
-        assert '--cuda-graph-trace=node' in text
+        assert "--cuda-graph-trace=node" in text
         # Without a periodic CUPTI flush, per-kernel rows (incl. graph node-level
         # kernels) are dropped as incomplete at the delayed-duration session stop
         # on GB10; fr13_b1_profile_bind exports had ZERO kernel tables.
@@ -70,3 +72,9 @@ def test_nsys_wrapper_wraps_the_in_container_vllm_serve_exec() -> None:
             "/models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b"
         ) in text
         assert "exec vllm serve /models/qwen3.6-27b-fp8" not in text
+
+
+def test_fixed32_launcher_omits_environment_from_nsys_report() -> None:
+    text = (REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh").read_text()
+
+    assert "--discard-environment=true" in text
