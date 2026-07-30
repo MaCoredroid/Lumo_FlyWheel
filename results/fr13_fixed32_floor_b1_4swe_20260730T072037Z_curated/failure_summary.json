@@ -1,0 +1,57 @@
+{
+  "schema": "fr13.fixed32.campaign_failure_summary.v1",
+  "campaign": {
+    "tag": "b1_4swe_f32_20260730T072037Z",
+    "batch_size": 1,
+    "concurrency": 1,
+    "task_count": 4,
+    "task_ids": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033",
+      "astropy__astropy-13236",
+      "astropy__astropy-13398"
+    ],
+    "source_git_commit": "00f36a92f12626a74570a2a7bc5ec509d70fd85c"
+  },
+  "outcome": {
+    "status": "INVALID_ABORTED",
+    "acceptance_evidence": false,
+    "tail6_started": true,
+    "tail6_completed": false,
+    "hydra27_started": false,
+    "post_task_timing_brackets": 0,
+    "serving_gate_return_code": 14
+  },
+  "failure": {
+    "arm": "tail6_fixed32",
+    "task_id": "astropy__astropy-12907",
+    "phase": "first_pure_fixed32_verify_post_commit",
+    "visible_error": "FR13 fixed32 prior sample did not seal: sample raised before fixed32 proposal seal",
+    "root_cause_status": "MASKED_BY_ASYNC_GATE",
+    "diagnostic_conclusion": "The first physical-32 verify event completed target sampling and the device committer, then sample_tokens raised. The gate retained only a generic poison string, so the original exception was not available in the engine traceback. Static audit narrowed the hidden failure to KV16/census completion, first measured proposal sealing, or later sample bookkeeping."
+  },
+  "observer_evidence": {
+    "long_chunked_prefill_owner_bootstrap_completed": true,
+    "lazy_drafter_graph_capture_batch": 1,
+    "lazy_drafter_graph_capture_completed": true,
+    "physical_fixed32_work_engaged": true,
+    "device_committer_engaged": true,
+    "pre_task_complete_work_census_events": 0,
+    "post_task_complete_work_census_events": null,
+    "prior_ids_none_failure_recurred": false
+  },
+  "closure": {
+    "runtime_manifest_launch_end_byte_equal": true,
+    "runtime_manifest_sha256": "47b6402c92ff5469d20ea03517a74b012b804058257522eefe701e66be97921d",
+    "external_manifest_launch_end_byte_equal": true,
+    "external_manifest_sha256": "a422f6f0cb3ffbf4c3e0a6953ba2766f197933db8ba3712af7648953049f5c6d"
+  },
+  "privacy": {
+    "contains_prompts": false,
+    "contains_responses": false,
+    "contains_environment": false,
+    "contains_process_identity": false,
+    "contains_task_patches": false,
+    "contains_raw_logs": false
+  }
+}

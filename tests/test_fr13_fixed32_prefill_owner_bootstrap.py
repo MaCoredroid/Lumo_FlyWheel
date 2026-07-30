@@ -483,5 +483,67 @@ def test_fixed32_async_gate_raises_on_a_completed_unsealed_sample(
 
     assert namespace["_FR13_FIXED32_SAMPLE_PENDING"] == {}
     assert namespace["_FR13_FIXED32_SAMPLE_FAILURE"] == (
-        "sample returned before fixed32 proposal seal"
+        "sample returned before fixed32 proposal seal",
+        None,
     )
+
+
+@pytest.mark.parametrize(
+    ("release_first", "failure_phase"),
+    (
+        (False, "before"),
+        (True, "after"),
+    ),
+)
+def test_fixed32_async_gate_preserves_the_original_sample_exception(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    release_first: bool,
+    failure_phase: str,
+) -> None:
+    patcher = _load_fixed32_patcher(monkeypatch)
+    target = tmp_path / "gpu_model_runner.py"
+    target.write_text(
+        "class GPUModelRunner:\n"
+        "    def __init__(self):\n"
+        "        self.execute_model_state = None\n"
+        "    def execute_model(self):\n"
+        "        self.execute_model_state = object()\n"
+        "        return None\n"
+        "    def sample_tokens(self, release_first):\n"
+        "        self.execute_model_state = None\n"
+        "        if release_first:\n"
+        "            if True:\n"
+        "                # FR13_FIXED32_DRAFTER_PROPOSAL_SEALED\n"
+        "        raise ValueError('original sample failure')\n"
+    )
+    patcher.GPU_MODEL_RUNNER_PATH = target
+    assert patcher._patch_gpu_model_runner_exec_lock() is True
+    source = target.read_text()
+    gate_source = source.split(
+        "# FR13_FIXED32_FLUSH: queue-only SIGUSR2 control plane",
+        1,
+    )[0]
+    namespace: dict[str, object] = {}
+    exec(compile(gate_source, str(target), "exec"), namespace)
+    runner = namespace["GPUModelRunner"]()
+
+    assert runner.execute_model() is None
+    with pytest.raises(ValueError, match="original sample failure") as sample_error:
+        runner.sample_tokens(release_first)
+
+    failure = namespace["_FR13_FIXED32_SAMPLE_FAILURE"]
+    assert failure[0] == (
+        f"sample raised {failure_phase} fixed32 proposal seal: "
+        "ValueError:original sample failure"
+    )
+    assert failure[1] is sample_error.value
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            f"prior sample failed: sample raised {failure_phase} "
+            "fixed32 proposal seal: ValueError:original sample failure"
+        ),
+    ) as execute_error:
+        runner.execute_model()
+    assert execute_error.value.__cause__ is sample_error.value

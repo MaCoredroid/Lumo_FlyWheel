@@ -25419,10 +25419,14 @@ def _fr13_sg_execute_model_locked(self, *a, **k):
         ):
             _FR13_FIXED32_SAMPLE_COND.wait()
         if _FR13_FIXED32_SAMPLE_FAILURE is not None:
-            raise RuntimeError(
-                "FR13 fixed32 prior sample did not seal: "
-                + _FR13_FIXED32_SAMPLE_FAILURE
+            failure_summary, failure_cause = _FR13_FIXED32_SAMPLE_FAILURE
+            failure_error = RuntimeError(
+                "FR13 fixed32 prior sample failed: "
+                + failure_summary
             )
+            if failure_cause is not None:
+                raise failure_error from failure_cause
+            raise failure_error
         result = _fr13_sg_orig_execute_model(self, *a, **k)
         if (
             result is None
@@ -25443,6 +25447,7 @@ def _fr13_fixed32_sample_tokens_guarded(self, *a, **k):
     global _FR13_FIXED32_SAMPLE_FAILURE
     key = id(self)
     completed = False
+    raised = None
     with _FR13_FIXED32_SAMPLE_COND:
         generation = _FR13_FIXED32_SAMPLE_PENDING.get(key)
     owner = (
@@ -25453,6 +25458,9 @@ def _fr13_fixed32_sample_tokens_guarded(self, *a, **k):
     try:
         result = _fr13_fixed32_orig_sample_tokens(self, *a, **k)
         completed = True
+    except BaseException as exc:
+        raised = exc
+        raise
     finally:
         released = bool(
             getattr(_FR13_FIXED32_SAMPLE_TLS, "released", False)
@@ -25466,10 +25474,21 @@ def _fr13_fixed32_sample_tokens_guarded(self, *a, **k):
             ):
                 del _FR13_FIXED32_SAMPLE_PENDING[key]
             if owner is not None and (not completed or not released):
-                _FR13_FIXED32_SAMPLE_FAILURE = (
+                failure_summary = (
                     "sample returned before fixed32 proposal seal"
                     if completed
-                    else "sample raised before fixed32 proposal seal"
+                    else (
+                        "sample raised after fixed32 proposal seal: "
+                        if released
+                        else "sample raised before fixed32 proposal seal: "
+                    )
+                    + type(raised).__name__
+                    + ":"
+                    + str(raised)
+                )
+                _FR13_FIXED32_SAMPLE_FAILURE = (
+                    failure_summary,
+                    raised,
                 )
                 _FR13_FIXED32_SAMPLE_COND.notify_all()
         _FR13_FIXED32_SAMPLE_TLS.owner = None
