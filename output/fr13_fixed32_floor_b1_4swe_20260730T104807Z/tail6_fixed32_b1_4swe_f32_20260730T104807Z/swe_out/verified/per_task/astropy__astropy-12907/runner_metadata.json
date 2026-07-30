@@ -1,0 +1,162 @@
+{
+  "instance_id": "astropy__astropy-12907",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "started_at": "2026-07-30T10:55:49Z",
+  "repo": "astropy/astropy",
+  "base_commit": "d16bfe05a744909de4b27f5875fe0d4ed41ce607",
+  "fixed32_dataset_record_sha256": "bcadb9e2ee9c01d1951516eeb31a5864abb90adc8e3bedc5419ce4eb414517db",
+  "fixed32_real_task_provenance": {
+    "schema": "fr13-fixed32-real-task-provenance-v1",
+    "instance_id": "astropy__astropy-12907",
+    "trace_path": "/home/mark/shared/lumoFlyWheel/output/fr13_fixed32_floor_b1_4swe_20260730T104807Z/tail6_fixed32_b1_4swe_f32_20260730T104807Z/swe_out/verified/per_task/astropy__astropy-12907/qwen_trace.jsonl",
+    "trace_sha256": "129fd10b07408bca80cc19d0a36443bb7aa79c719109948b16207519e11f285d",
+    "trace_bytes": 44577,
+    "event_count": 44,
+    "assistant_event_count": 32,
+    "assistant_output_event_count": 25,
+    "qwen_assistant_event_count": 32,
+    "codex_agent_message_event_count": 0,
+    "positive_token_usage": true,
+    "usage_record_count": 33,
+    "positive_usage_record_count": 12,
+    "usage_max_by_field": {
+      "cache_read_input_tokens": 0,
+      "input_tokens": 298047,
+      "output_tokens": 2837,
+      "total_tokens": 300884
+    },
+    "agent_terminal": {
+      "exit_code": 0,
+      "timed_out": false,
+      "offloaded": true,
+      "network_drop": false,
+      "stall_killed": null,
+      "cause": null,
+      "ws_down_rc": null,
+      "patch_down_rc": 0,
+      "setup_error": null,
+      "transport_error": null,
+      "dispatch_error": null,
+      "error": null,
+      "elapsed_s": 198.878,
+      "container_name": "swe-qwen-astropy__astropy-12907-1785408950",
+      "codex_host": "alienware",
+      "agent_env": "instance_image",
+      "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-12907:latest"
+    }
+  },
+  "agent": {
+    "elapsed_s": 198.878,
+    "exit_code": 0,
+    "timed_out": false,
+    "container_name": "swe-qwen-astropy__astropy-12907-1785408950",
+    "offloaded": true,
+    "codex_host": "alienware",
+    "network_drop": false,
+    "patch_down_rc": 0,
+    "agent_env": "instance_image",
+    "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-12907:latest",
+    "host_arch": "x86_64",
+    "image_arch": "x86_64"
+  },
+  "codex": {
+    "elapsed_s": 198.878,
+    "exit_code": 0,
+    "timed_out": false,
+    "container_name": "swe-qwen-astropy__astropy-12907-1785408950",
+    "offloaded": true,
+    "codex_host": "alienware",
+    "network_drop": false,
+    "patch_down_rc": 0,
+    "agent_env": "instance_image",
+    "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-12907:latest",
+    "host_arch": "x86_64",
+    "image_arch": "x86_64"
+  },
+  "fixed32_task_boundary": {
+    "forward_step_interval": {
+      "end_forward_step": 520,
+      "expected_complete_events": 520,
+      "start_forward_step": 0
+    },
+    "instance_id": "astropy__astropy-12907",
+    "mode": "tail6_fixed32",
+    "post": {
+      "action": "snapshot",
+      "counters": {
+        "cfwd_pending": 0,
+        "complete_work_census_events": 520,
+        "dfwd_pending": 0,
+        "pure_decode_forward_steps": 520,
+        "sfwd_pending": 0,
+        "work_census_first_forward_step": 0,
+        "work_census_last_forward_step": 519
+      },
+      "generation": 2,
+      "mode": "tail6_fixed32",
+      "nonce": "7c17b5ee25dff1e8d4c31d5e049999519e571e3f00a05740504127af5f5fa2e5",
+      "producer_pid": 256,
+      "schema": "fr13-fixed32-flush-ack-v1",
+      "status": "ok"
+    },
+    "post_runtime_snapshot": {
+      "generation": 2,
+      "path": "/home/mark/shared/lumoFlyWheel/output/fr13_fixed32_floor_b1_4swe_20260730T104807Z/tail6_fixed32_b1_4swe_f32_20260730T104807Z/logs/fr13_fixed32_boundary_snapshot.2.json",
+      "schema": "fr13-fixed32-boundary-snapshot-v3",
+      "sha256": "c8b9b95814c9c422986d73ed49386fd0c95b0cf9bed3cb55c3edb7e970e6c170"
+    },
+    "pre": {
+      "action": "snapshot",
+      "counters": {
+        "cfwd_pending": 0,
+        "complete_work_census_events": 0,
+        "dfwd_pending": 0,
+        "pure_decode_forward_steps": 0,
+        "sfwd_pending": 0,
+        "work_census_first_forward_step": null,
+        "work_census_last_forward_step": null
+      },
+      "generation": 1,
+      "mode": "tail6_fixed32",
+      "nonce": "f86dbfad02b0443a4dbf2c16c7fd60a50359b8d45672214c60d92d6ead1579a4",
+      "producer_pid": 256,
+      "schema": "fr13-fixed32-flush-ack-v1",
+      "status": "ok"
+    },
+    "pre_runtime_snapshot": {
+      "generation": 1,
+      "path": "/home/mark/shared/lumoFlyWheel/output/fr13_fixed32_floor_b1_4swe_20260730T104807Z/tail6_fixed32_b1_4swe_f32_20260730T104807Z/logs/fr13_fixed32_boundary_snapshot.1.json",
+      "schema": "fr13-fixed32-boundary-snapshot-v3",
+      "sha256": "e258375144fa54d5275aa360ffed3e10f635cdeedaee62fb0f4ee5e84ece0d90"
+    },
+    "producer_pid": 256,
+    "schema": "fr13-fixed32-task-boundary-v1"
+  },
+  "vllm_request_metrics_bytes": 0,
+  "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+  "patch_bytes": 504,
+  "eval": {
+    "exit_code": 0,
+    "elapsed_s": 52.2,
+    "offloaded": true,
+    "eval_host": "alienware"
+  },
+  "eval_report": {
+    "track": "swe_bench",
+    "instance_id": "astropy__astropy-12907",
+    "model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+    "dataset_name": "princeton-nlp/SWE-bench_Verified",
+    "verdict": "resolved",
+    "passed": true,
+    "failure_mode": "tests_passed",
+    "harness_exit_code": 0,
+    "eval_wall_clock_seconds": 50.446,
+    "error": null,
+    "arch": "x86_64",
+    "eval_host": "mark-Alienware-Aurora-ACT1250",
+    "run_id": "x86eval-out-1785409149",
+    "namespace": "swebench",
+    "cache_level": "env"
+  },
+  "ended_at": "2026-07-30T11:00:01Z"
+}
