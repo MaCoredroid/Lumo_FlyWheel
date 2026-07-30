@@ -345,7 +345,7 @@ PY
     FR13_LEAK_PROBE FR13_SERVE_LOG FR13_TORCH_DET_WARN
     FR13_TCF_DIAG_OVERRIDE FR13_TCF_SELFCHECK
     FR13_SUBTREE_PARALLEL_SELFCHECK FR13_PARENT_GATHER_SELFCHECK
-    FR13_TORCHPROF LUMO_NSYS_WRAP_VLLM
+    FR13_TORCHPROF
     LUMO_FA_ACTIVATION_REPLAY_BATCH4_DIAG
     LUMO_FA_REPLAY_COMMIT_BATCH4_RUNNER_DIAG
     LUMO_IR_DIAGNOSTIC_UNISOLATED
@@ -355,6 +355,22 @@ PY
     [[ "${!_fixed32_pin:-0}" == "0" ]] \
       || { echo "fixed32 requires $_fixed32_pin=0" >&2; exit 2; }
   done
+  case "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}:${LUMO_NSYS_WRAP_VLLM:-0}:${FR13_FIXED32_NVTX_PROFILE:-0}" in
+    0:0:0|1:1:1)
+      ;;
+    0:*)
+      echo "fixed32 acceptance requires Nsight and NVTX profiling disabled" >&2
+      exit 2
+      ;;
+    1:*)
+      echo "fixed32 attribution requires Nsight and NVTX profiling enabled" >&2
+      exit 2
+      ;;
+    *)
+      echo "fixed32 attribution mode must be exactly 0 or 1" >&2
+      exit 2
+      ;;
+  esac
   _fixed32_required_empty=(
     FR13_PREWARM_TRIE FR13_TORCH_PROF FR13_DVK_DRAFTID_DUMP
     FR10_TREE_GDN_CAPTURE_PAYLOAD FR10_TREE_GDN_COMMIT_HANDOFF_LOG
