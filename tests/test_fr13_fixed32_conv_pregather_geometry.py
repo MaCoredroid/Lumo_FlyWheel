@@ -84,6 +84,32 @@ def test_pregather_grid_is_fixed_for_physical_31(
     assert tail["conv_pregather"] == hydra["conv_pregather"]
 
 
+@pytest.mark.parametrize(
+    ("batch_size", "expected_programs"),
+    ((1, 16320), (4, 65280)),
+)
+def test_conv_commit_is_two_fixed_grids_for_physical_31(
+    batch_size: int,
+    expected_programs: int,
+) -> None:
+    tail = census.reference_event("tail6_fixed32", batch_size, "tail")
+    hydra = census.reference_event("hydra27_fixed32", batch_size, "hydra")
+    commit = tail["conv_commit"]
+
+    assert commit["route"] == "fixed32_two_launch_col0"
+    assert commit["row_elems"] == 348160
+    assert commit["block"] == 1024
+    assert commit["gather_launches"] == 1
+    assert commit["scatter_launches"] == 1
+    assert commit["gather_programs"] == expected_programs
+    assert commit["scatter_programs"] == expected_programs
+    assert commit["staged_rows"] == 48 * batch_size
+    assert commit["scattered_rows"] == 48 * batch_size
+    assert commit["staging_reused"] is True
+    assert commit["host_syncs"] == 0
+    assert tail["conv_commit"] == hydra["conv_commit"]
+
+
 @pytest.mark.parametrize("batch_size", (1, 4))
 def test_logical_mask_does_not_change_physical_work(batch_size: int) -> None:
     tail = census.reference_event("tail6_fixed32", batch_size, "same-work")

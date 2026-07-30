@@ -92,10 +92,10 @@ from fr13_fixed32_topology import (
     WALK_CAP,
 )
 
-SCHEMA = "fr13-fixed32-work-census-v7"
-TERMINAL_SCHEMA = "fr13-fixed32-work-census-terminal-v7"
-REPORT_SCHEMA = "fr13-fixed32-work-census-report-v7"
-SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v7"
+SCHEMA = "fr13-fixed32-work-census-v8"
+TERMINAL_SCHEMA = "fr13-fixed32-work-census-terminal-v8"
+REPORT_SCHEMA = "fr13-fixed32-work-census-report-v8"
+SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v8"
 
 TAIL_MODE = "tail6_fixed32"
 HYDRA_MODE = "hydra27_fixed32"
@@ -165,7 +165,7 @@ OUTPUT_PUBLISH_ROUTE = "device_fixed32"
 ACCEPTED_PATH_PACK_ROUTE = "device_fixed16"
 REQUEST_KEY_PACK_ROUTE = "device_rowmap"
 KV_REMAP_ROUTE = "syncfree_target16_postsample_drafter1_postforward"
-CONV_COMMIT_ROUTE = "stateless_col0_fixed"
+CONV_COMMIT_ROUTE = "fixed32_two_launch_col0"
 CONV_PREGATHER_ROUTE = "in_graph_preconsume"
 COMMITTER_ROUTE = "fixed16_device_fill_graph"
 if TREE_ATTENTION_LAYERS + GDN_LAYERS != MODEL_LAYERS:
@@ -418,9 +418,16 @@ CONV_COMMIT_KEYS = frozenset(
         "route",
         "layers",
         "requests",
-        "leaf_select_rows",
-        "index_select_rows",
-        "index_copy_rows",
+        "row_elems",
+        "block",
+        "gather_launches",
+        "scatter_launches",
+        "gather_programs",
+        "scatter_programs",
+        "staged_rows",
+        "scattered_rows",
+        "staging_reused",
+        "host_syncs",
         "skips",
         "fallback",
     }
@@ -559,6 +566,7 @@ FIXED_WORK_SCOPE = {
         "preforward_request_key_tensor_ops",
         "post_taw_output_path_request_key_tensor_ops",
         "committer_replay_delta",
+        "conv_commit_two_launch_delta",
         "conv_pregather_capture_manifest_bound_replay",
         "kv_fixed16_geometry",
         "taw_live_layout_and_route",
@@ -570,7 +578,7 @@ FIXED_WORK_SCOPE = {
         "taw.ast_pinned_fixed_12_iteration_tensor_call_census",
         "committer_graph_inner_ops",
         "kv_inner_apply_calls",
-        "conv_commit_inner_aten_ops",
+        "conv_commit_inner_launch_programs",
         "conv_pregather_inner_launch_programs",
     ],
     "data_dependent_unproven": [
@@ -1608,6 +1616,18 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         label=f"{source}.kv_remap",
     )
     conv_rows = CONV_COMMIT_LAYERS * batch_size
+    conv_commit_programs = (
+        CONV_COMMIT_LAYERS
+        * batch_size
+        * (
+            (
+                CONV_PREGATHER_ROW_ELEMS
+                + CONV_PREGATHER_BLOCK
+                - 1
+            )
+            // CONV_PREGATHER_BLOCK
+        )
+    )
     conv_commit = _fixed_section(
         event["conv_commit"],
         keys=CONV_COMMIT_KEYS,
@@ -1615,9 +1635,16 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "route": CONV_COMMIT_ROUTE,
             "layers": CONV_COMMIT_LAYERS,
             "requests": batch_size,
-            "leaf_select_rows": conv_rows,
-            "index_select_rows": conv_rows,
-            "index_copy_rows": conv_rows,
+            "row_elems": CONV_PREGATHER_ROW_ELEMS,
+            "block": CONV_PREGATHER_BLOCK,
+            "gather_launches": 1,
+            "scatter_launches": 1,
+            "gather_programs": conv_commit_programs,
+            "scatter_programs": conv_commit_programs,
+            "staged_rows": conv_rows,
+            "scattered_rows": conv_rows,
+            "staging_reused": True,
+            "host_syncs": 0,
             "skips": 0,
             "fallback": 0,
         },
@@ -1963,15 +1990,26 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         "conv_commit": {
             "route": conv_commit["route"],
             "layers": conv_commit["layers"],
-            "leaf_select_rows_per_request": (
-                int(conv_commit["leaf_select_rows"]) // batch_size
+            "row_elems": conv_commit["row_elems"],
+            "block": conv_commit["block"],
+            "gather_launches_per_event": conv_commit["gather_launches"],
+            "scatter_launches_per_event": conv_commit[
+                "scatter_launches"
+            ],
+            "gather_programs_per_request": (
+                int(conv_commit["gather_programs"]) // batch_size
             ),
-            "index_select_rows_per_request": (
-                int(conv_commit["index_select_rows"]) // batch_size
+            "scatter_programs_per_request": (
+                int(conv_commit["scatter_programs"]) // batch_size
             ),
-            "index_copy_rows_per_request": (
-                int(conv_commit["index_copy_rows"]) // batch_size
+            "staged_rows_per_request": (
+                int(conv_commit["staged_rows"]) // batch_size
             ),
+            "scattered_rows_per_request": (
+                int(conv_commit["scattered_rows"]) // batch_size
+            ),
+            "staging_reused": conv_commit["staging_reused"],
+            "host_syncs": conv_commit["host_syncs"],
             "skips": conv_commit["skips"],
             "fallback": conv_commit["fallback"],
         },
@@ -2942,9 +2980,16 @@ def reference_event(
             "route": CONV_COMMIT_ROUTE,
             "layers": CONV_COMMIT_LAYERS,
             "requests": batch_size,
-            "leaf_select_rows": CONV_COMMIT_LAYERS * batch_size,
-            "index_select_rows": CONV_COMMIT_LAYERS * batch_size,
-            "index_copy_rows": CONV_COMMIT_LAYERS * batch_size,
+            "row_elems": CONV_PREGATHER_ROW_ELEMS,
+            "block": CONV_PREGATHER_BLOCK,
+            "gather_launches": 1,
+            "scatter_launches": 1,
+            "gather_programs": conv_programs,
+            "scatter_programs": conv_programs,
+            "staged_rows": CONV_COMMIT_LAYERS * batch_size,
+            "scattered_rows": CONV_COMMIT_LAYERS * batch_size,
+            "staging_reused": True,
+            "host_syncs": 0,
             "skips": 0,
             "fallback": 0,
         },
@@ -3625,7 +3670,26 @@ def run_self_test() -> dict[str, Any]:
         0,
     )
     event_tamper("kv-remap-skip", ("kv_remap", "skips"), 1)
-    event_tamper("conv-commit-rows", ("conv_commit", "index_copy_rows"), 47)
+    event_tamper(
+        "conv-commit-gather-launches",
+        ("conv_commit", "gather_launches"),
+        48,
+    )
+    event_tamper(
+        "conv-commit-scatter-programs",
+        ("conv_commit", "scatter_programs"),
+        47,
+    )
+    event_tamper(
+        "conv-commit-staging",
+        ("conv_commit", "staging_reused"),
+        False,
+    )
+    event_tamper(
+        "conv-commit-host-sync",
+        ("conv_commit", "host_syncs"),
+        1,
+    )
     event_tamper("conv-commit-skip", ("conv_commit", "skips"), 1)
     event_tamper(
         "conv-pregather-old-route",

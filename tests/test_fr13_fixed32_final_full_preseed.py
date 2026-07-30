@@ -292,6 +292,9 @@ def test_preseed_postcondition_binds_all_current_bank_aliases(
         for index, name in enumerate(order)
     }
     staging = torch.empty((48, capacity, 10))
+    commit_ssi = object()
+    accepted_paths = object()
+    accepted_lens = object()
     pregather_state = {
         "mode": mode,
         "banks": conv_banks,
@@ -299,12 +302,23 @@ def test_preseed_postcondition_binds_all_current_bank_aliases(
         "staging": staging,
         "row_elems": 10,
         "anchor": torch.empty(1),
+        "commit_spec_state_indices": commit_ssi,
+        "accepted_paths": accepted_paths,
+        "accepted_lens": accepted_lens,
+        "contract": {
+            "commit_route": "fixed32_two_launch_col0",
+            "commit_bank_nonoverlap": True,
+        },
     }
     committer_state = {"banks": ssm_banks}
     kernel = ModuleType("lumo_flywheel_serving.fr10_gdn_tree_kernel")
     kernel._FR13_FIXED32_CONV_PREGATHER = {"state": pregather_state}
     kernel._FR13_FIXED32_COMMITTER_FAST_ROUTE = {
         "state": committer_state
+    }
+    kernel.audit_fixed32_conv_commit_lease = lambda: {
+        "lease_audited": True,
+        "route": "fixed32_two_launch_col0",
     }
     kernel.fixed32_conv_col0_pregather_counters = lambda: {
         "preseeded": True,
@@ -339,14 +353,34 @@ def test_preseed_postcondition_binds_all_current_bank_aliases(
             "_FR13_FIXED32_PRESEEDED_BATCHES": set(
                 range(1, capacity + 1)
             ),
-            "_FR13_EAGER_PACK_STACKS": {"layer_order": order},
+            "_FR13_EAGER_PACK_STACKS": {
+                "layer_order": order,
+                "spec_idx": commit_ssi,
+            },
             "_FR13_REPLAY_LAYERS": layers,
+            "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR": accepted_paths,
+            "_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR": accepted_lens,
         }
     )
     assert_ready = namespace[
         "_fr13_fixed32_assert_final_full_preseed_ready"
     ]
     assert_ready(batch)
+
+    namespace["_FR13_EAGER_PACK_STACKS"]["spec_idx"] = object()
+    with pytest.raises(RuntimeError, match="did not publish lease"):
+        assert_ready(batch)
+    namespace["_FR13_EAGER_PACK_STACKS"]["spec_idx"] = commit_ssi
+
+    namespace["_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR"] = object()
+    with pytest.raises(RuntimeError, match="did not publish lease"):
+        assert_ready(batch)
+    namespace["_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR"] = accepted_paths
+
+    namespace["_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR"] = object()
+    with pytest.raises(RuntimeError, match="did not publish lease"):
+        assert_ready(batch)
+    namespace["_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR"] = accepted_lens
 
     layers[order[-1]]._fr13_replay_conv_state = object()
     with pytest.raises(
