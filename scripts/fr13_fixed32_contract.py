@@ -687,13 +687,494 @@ def _fixed32_qwen_group_request_id(event_ids: list[str]) -> str:
     return f"qwen-assistant-group-sha256:{hashlib.sha256(payload).hexdigest()}"
 
 
+def _fixed32_qwen_hidden_agent_terminal_request_id(
+    *,
+    agent_tool_use_id: str,
+    child_event_ids: list[str],
+    outer_tool_result_event_id: str,
+) -> str:
+    payload = json.dumps(
+        {
+            "agent_tool_use_id": agent_tool_use_id,
+            "child_event_ids": child_event_ids,
+            "outer_tool_result_event_id": outer_tool_result_event_id,
+        },
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return (
+        "qwen-hidden-agent-terminal-sha256:"
+        f"{hashlib.sha256(payload).hexdigest()}"
+    )
+
+
+def _fixed32_qwen_user_tool_result(
+    event: dict[str, Any],
+) -> tuple[str, bool] | None:
+    if event.get("type") != "user":
+        return None
+    message = event.get("message")
+    if not isinstance(message, dict) or message.get("role") != "user":
+        return None
+    content = message.get("content")
+    if not isinstance(content, list) or len(content) != 1:
+        return None
+    item = content[0]
+    if not isinstance(item, dict) or item.get("type") != "tool_result":
+        return None
+    tool_use_id = item.get("tool_use_id")
+    is_error = item.get("is_error")
+    if (
+        not isinstance(tool_use_id, str)
+        or not tool_use_id
+        or type(is_error) is not bool
+    ):
+        return None
+    return tool_use_id, is_error
+
+
+def _fixed32_qwen_user_text(event: dict[str, Any]) -> bool:
+    if event.get("type") != "user":
+        return False
+    message = event.get("message")
+    if not isinstance(message, dict) or message.get("role") != "user":
+        return False
+    content = message.get("content")
+    if not isinstance(content, list) or len(content) != 1:
+        return False
+    item = content[0]
+    return (
+        isinstance(item, dict)
+        and item.get("type") == "text"
+        and isinstance(item.get("text"), str)
+        and bool(item["text"].strip())
+    )
+
+
+def _fixed32_qwen_tool_descends_from(
+    tool_use_records: dict[str, dict[str, Any]],
+    tool_use_id: str,
+    ancestor_tool_use_id: str,
+) -> bool:
+    current_tool_use_id: str | None = tool_use_id
+    visited: set[str] = set()
+    while current_tool_use_id is not None:
+        if current_tool_use_id == ancestor_tool_use_id:
+            return True
+        if current_tool_use_id in visited:
+            raise ContractError("fixed32 qwen tool ancestry contains a cycle")
+        visited.add(current_tool_use_id)
+        record = tool_use_records.get(current_tool_use_id)
+        if record is None:
+            return False
+        current_tool_use_id = record["parent_tool_use_id"]
+    return False
+
+
+def _fixed32_qwen_agent_outer_result_is_async(
+    event: dict[str, Any],
+) -> bool:
+    message = event.get("message")
+    if not isinstance(message, dict):
+        return False
+    content = message.get("content")
+    if not isinstance(content, list) or len(content) != 1:
+        return False
+    item = content[0]
+    if not isinstance(item, dict):
+        return False
+    result_content = item.get("content")
+    return isinstance(result_content, str) and (
+        result_content.startswith("Background agent launched successfully.")
+        or result_content.startswith("Fork started")
+        or result_content.startswith("Teammate ")
+    )
+
+
+def _fixed32_qwen_agent_outer_result_is_failure(
+    event: dict[str, Any],
+) -> bool:
+    message = event.get("message")
+    if not isinstance(message, dict):
+        return False
+    content = message.get("content")
+    if not isinstance(content, list) or len(content) != 1:
+        return False
+    item = content[0]
+    if not isinstance(item, dict):
+        return False
+    result_content = item.get("content")
+    return isinstance(result_content, str) and (
+        result_content.startswith("Failed to run subagent:")
+        or result_content.startswith("Subagent execution failed.")
+        or result_content.startswith("Agent was cancelled by the user.")
+        or result_content.startswith(
+            "(subagent produced no model-visible output)"
+        )
+    )
+
+
+def _fixed32_qwen_hidden_agent_terminal_requests(
+    events: list[dict[str, Any]],
+    *,
+    assistant_groups: list[
+        list[tuple[dict[str, Any], dict[str, Any], str, int]]
+    ],
+    tool_use_records: dict[str, dict[str, Any]],
+    nested_error_index: int | None,
+    nested_error_parent_tool_use_id: str | None,
+) -> list[tuple[int, str]]:
+    groups_by_parent: dict[
+        str,
+        list[list[tuple[dict[str, Any], dict[str, Any], str, int]]],
+    ] = {}
+    for group in assistant_groups:
+        parent_tool_use_id = group[0][0].get("parent_tool_use_id")
+        if isinstance(parent_tool_use_id, str):
+            groups_by_parent.setdefault(parent_tool_use_id, []).append(group)
+    for parent_tool_use_id in groups_by_parent:
+        origin = tool_use_records.get(parent_tool_use_id)
+        if origin is None or origin["name"] != "agent":
+            raise ContractError(
+                "fixed32 qwen nested response has a non-agent parent"
+            )
+
+    agent_sessions: dict[str, dict[str, Any]] = {}
+    for agent_tool_use_id, origin in tool_use_records.items():
+        if origin["name"] != "agent":
+            continue
+        params = origin["input"]
+        if not isinstance(params, dict):
+            raise ContractError("fixed32 qwen agent input is not an object")
+
+        outer_result_indices: list[int] = []
+        for event_index, event in enumerate(events[:-1]):
+            tool_result = _fixed32_qwen_user_tool_result(event)
+            if (
+                tool_result is not None
+                and tool_result[0] == agent_tool_use_id
+            ):
+                outer_result_indices.append(event_index)
+        if len(outer_result_indices) != 1:
+            raise ContractError(
+                "fixed32 qwen agent has no unique owner tool result"
+            )
+        outer_result_index = outer_result_indices[0]
+        outer_result_event = events[outer_result_index]
+        if (
+            "parent_tool_use_id" not in outer_result_event
+            or outer_result_event["parent_tool_use_id"]
+            != origin["parent_tool_use_id"]
+            or outer_result_index <= origin["event_index"]
+        ):
+            raise ContractError(
+                "fixed32 qwen agent owner tool result is invalid"
+            )
+        outer_result = _fixed32_qwen_user_tool_result(outer_result_event)
+        if outer_result is None:
+            raise ContractError("fixed32 qwen agent tool result is malformed")
+        outer_result_content = outer_result_event["message"]["content"][0].get(
+            "content"
+        )
+        if (
+            not isinstance(outer_result_content, str)
+            or not outer_result_content.strip()
+        ):
+            raise ContractError(
+                "fixed32 qwen agent tool result content is empty"
+            )
+
+        prompt_indices = [
+            event_index
+            for event_index, event in enumerate(events[:-1])
+            if event.get("parent_tool_use_id") == agent_tool_use_id
+            and _fixed32_qwen_user_text(event)
+        ]
+        descendant_event_indices = [
+            event_index
+            for event_index, event in enumerate(events[:-1])
+            if isinstance(event.get("parent_tool_use_id"), str)
+            and _fixed32_qwen_tool_descends_from(
+                tool_use_records,
+                event["parent_tool_use_id"],
+                agent_tool_use_id,
+            )
+        ]
+
+        if not prompt_indices:
+            if descendant_event_indices or outer_result[1] is not True:
+                raise ContractError(
+                    "fixed32 qwen agent has no provable setup-error closure"
+                )
+            agent_sessions[agent_tool_use_id] = {
+                "outer_result_index": outer_result_index,
+                "prompt_index": None,
+                "hidden": False,
+            }
+            continue
+        allowed_fields = {
+            "description",
+            "isolation",
+            "name",
+            "prompt",
+            "run_in_background",
+            "subagent_type",
+        }
+        if not set(params) <= allowed_fields:
+            raise ContractError(
+                "fixed32 qwen agent input contains unknown fields"
+            )
+        for field in ("description", "prompt"):
+            if (
+                not isinstance(params.get(field), str)
+                or not params[field].strip()
+            ):
+                raise ContractError(
+                    f"fixed32 qwen agent {field} is empty or invalid"
+                )
+        if (
+            "run_in_background" in params
+            and type(params["run_in_background"]) is not bool
+        ):
+            raise ContractError(
+                "fixed32 qwen agent background selector is invalid"
+            )
+        for field in ("isolation", "name", "subagent_type"):
+            if field in params and not isinstance(params[field], str):
+                raise ContractError(
+                    f"fixed32 qwen agent {field} selector is invalid"
+                )
+        if (
+            "subagent_type" in params
+            and not params["subagent_type"].strip()
+        ):
+            raise ContractError(
+                "fixed32 qwen agent subagent_type selector is invalid"
+            )
+        subagent_type = params.get("subagent_type")
+        if params.get("run_in_background") is True or (
+            isinstance(subagent_type, str)
+            and subagent_type.strip().lower() == "fork"
+        ):
+            raise ContractError(
+                "fixed32 qwen asynchronous agent invocation is unsupported"
+            )
+        if "isolation" in params:
+            raise ContractError(
+                "fixed32 qwen isolated agent invocation is unsupported"
+            )
+        if isinstance(params.get("name"), str) and params["name"]:
+            raise ContractError(
+                "fixed32 qwen teammate agent invocation is unsupported"
+            )
+        if len(prompt_indices) != 1:
+            raise ContractError(
+                "fixed32 qwen agent initial prompt is missing or duplicated"
+            )
+        prompt_index = prompt_indices[0]
+        prompt_text = events[prompt_index]["message"]["content"][0]["text"]
+        error_boundary = (
+            nested_error_index is not None
+            and outer_result_index == nested_error_index + 1
+        )
+        if (
+            prompt_index <= origin["event_index"]
+            or prompt_index >= outer_result_index
+            or outer_result[1]
+            or not isinstance(params.get("prompt"), str)
+            or not params["prompt"].strip()
+            or prompt_text != params["prompt"]
+            or _fixed32_qwen_agent_outer_result_is_async(outer_result_event)
+            or (
+                _fixed32_qwen_agent_outer_result_is_failure(
+                    outer_result_event
+                )
+                and not error_boundary
+            )
+        ):
+            raise ContractError(
+                "fixed32 qwen foreground agent closure is invalid"
+            )
+
+        if any(
+            origin["event_index"] < event_index < prompt_index
+            for event_index in descendant_event_indices
+        ):
+            raise ContractError(
+                "fixed32 qwen agent activity precedes its initial prompt"
+            )
+        if any(
+            event_index > outer_result_index
+            for event_index in descendant_event_indices
+        ):
+            raise ContractError(
+                "fixed32 qwen agent continues after its owner result"
+            )
+
+        for event_index in range(prompt_index, outer_result_index):
+            if event_index == nested_error_index:
+                if (
+                    nested_error_parent_tool_use_id is None
+                    or not _fixed32_qwen_tool_descends_from(
+                        tool_use_records,
+                        nested_error_parent_tool_use_id,
+                        agent_tool_use_id,
+                    )
+                ):
+                    raise ContractError(
+                        "fixed32 qwen agent error boundary is not in its subtree"
+                    )
+                continue
+            event_parent = events[event_index].get("parent_tool_use_id")
+            if (
+                not isinstance(event_parent, str)
+                or not _fixed32_qwen_tool_descends_from(
+                    tool_use_records,
+                    event_parent,
+                    agent_tool_use_id,
+                )
+            ):
+                raise ContractError(
+                    "fixed32 qwen agent session is not a serial subtree"
+                )
+
+        if (
+            error_boundary
+            and nested_error_parent_tool_use_id != agent_tool_use_id
+        ):
+            raise ContractError(
+                "fixed32 qwen agent error boundary belongs to another tool"
+            )
+        agent_sessions[agent_tool_use_id] = {
+            "outer_result_index": outer_result_index,
+            "prompt_index": prompt_index,
+            "error_boundary": error_boundary,
+            # The stream exposes child tool rounds but returns the child's
+            # final assistant text only through the successful owner result.
+            "hidden": not error_boundary,
+        }
+
+    if nested_error_index is not None:
+        boundary_origin = tool_use_records.get(
+            nested_error_parent_tool_use_id or ""
+        )
+        if (
+            (boundary_origin is None or boundary_origin["name"] != "agent")
+            and events[nested_error_index + 1].get("parent_tool_use_id")
+            is not None
+        ):
+            raise ContractError(
+                "fixed32 qwen nested error boundary transition is invalid"
+            )
+
+    for agent_tool_use_id, session in agent_sessions.items():
+        prompt_index = session["prompt_index"]
+        if prompt_index is None:
+            continue
+        outer_result_index = session["outer_result_index"]
+        cursor = prompt_index + 1
+        nested_groups = groups_by_parent.get(agent_tool_use_id, [])
+        for nested_group in nested_groups:
+            if nested_group[0][3] != cursor:
+                raise ContractError(
+                    "fixed32 qwen agent response groups are not contiguous"
+                )
+            expected_tool_ids: list[str] = []
+            for _event, message, _event_id, _event_index in nested_group:
+                expected_tool_ids.extend(
+                    item["id"]
+                    for item in message["content"]
+                    if item.get("type") == "tool_use"
+                )
+            if not expected_tool_ids:
+                raise ContractError(
+                    "fixed32 qwen agent response group has no tool call"
+                )
+            cursor = nested_group[-1][3] + 1
+            for expected_tool_id in expected_tool_ids:
+                expected_record = tool_use_records[expected_tool_id]
+                if expected_record["name"] == "agent":
+                    child_session = agent_sessions[expected_tool_id]
+                    child_start = (
+                        child_session["prompt_index"]
+                        if child_session["prompt_index"] is not None
+                        else child_session["outer_result_index"]
+                    )
+                    if child_start != cursor:
+                        raise ContractError(
+                            "fixed32 qwen nested agent transition is invalid"
+                        )
+                    cursor = child_session["outer_result_index"] + 1
+                    continue
+                if cursor >= outer_result_index:
+                    raise ContractError(
+                        "fixed32 qwen agent tool result is missing"
+                    )
+                tool_result_event = events[cursor]
+                tool_result = _fixed32_qwen_user_tool_result(
+                    tool_result_event
+                )
+                if (
+                    tool_result_event.get("parent_tool_use_id")
+                    != agent_tool_use_id
+                    or tool_result is None
+                    or tool_result[0] != expected_tool_id
+                ):
+                    raise ContractError(
+                        "fixed32 qwen agent tool results do not reconcile"
+                    )
+                cursor += 1
+
+        if session["error_boundary"]:
+            if cursor != nested_error_index:
+                raise ContractError(
+                    "fixed32 qwen agent error transition is invalid"
+                )
+            cursor += 1
+        if cursor != outer_result_index:
+            raise ContractError(
+                "fixed32 qwen agent terminal transition is invalid"
+            )
+
+    hidden_requests: list[tuple[int, str]] = []
+    for agent_tool_use_id, session in agent_sessions.items():
+        if not session["hidden"]:
+            continue
+        prompt_index = session["prompt_index"]
+        outer_result_index = session["outer_result_index"]
+        if prompt_index is None:
+            raise ContractError(
+                "fixed32 qwen hidden agent request has no initial prompt"
+            )
+        hidden_requests.append(
+            (
+                outer_result_index,
+                _fixed32_qwen_hidden_agent_terminal_request_id(
+                    agent_tool_use_id=agent_tool_use_id,
+                    child_event_ids=[
+                        events[event_index]["uuid"]
+                        for event_index in range(
+                            prompt_index,
+                            outer_result_index,
+                        )
+                    ],
+                    outer_tool_result_event_id=events[outer_result_index][
+                        "uuid"
+                    ],
+                ),
+            )
+        )
+    return hidden_requests
+
+
 def _validate_fixed32_qwen_nested_error_boundary(
     events: list[dict[str, Any]],
     *,
     result_index: int,
     session_id: str,
     final_result_uuid: str,
-) -> None:
+) -> str:
     result = events[result_index]
     usage = result.get("usage")
     error = result.get("error")
@@ -749,17 +1230,24 @@ def _validate_fixed32_qwen_nested_error_boundary(
         )
     nested_user = events[result_index - 1]
     top_level_user = events[result_index + 1]
+    next_parent = top_level_user.get("parent_tool_use_id")
     if (
         nested_user.get("type") != "user"
         or not isinstance(nested_user.get("parent_tool_use_id"), str)
         or not nested_user["parent_tool_use_id"]
         or top_level_user.get("type") != "user"
         or "parent_tool_use_id" not in top_level_user
-        or top_level_user["parent_tool_use_id"] is not None
+        or (
+            next_parent is not None
+            and (not isinstance(next_parent, str) or not next_parent)
+        )
     ):
         raise ContractError(
             "fixed32 qwen nested error boundary transition is invalid"
         )
+    return nested_user["parent_tool_use_id"]
+
+
 def validate_fixed32_trace_model_requests(
     events: list[dict[str, Any]],
     *,
@@ -800,6 +1288,7 @@ def validate_fixed32_trace_model_requests(
             "trace_format": "legacy_terminal_records",
             "completed_logical_model_requests": len(response_ids),
             "model_request_ids": response_ids,
+            "hidden_terminal_model_requests": 0,
             "engine_id_joinable": True,
         }
 
@@ -843,13 +1332,16 @@ def validate_fixed32_trace_model_requests(
         )
 
     nested_error_index: int | None = None
+    nested_error_parent_tool_use_id: str | None = None
     if len(result_records) == 2:
         nested_error_index = result_records[0][0]
-        _validate_fixed32_qwen_nested_error_boundary(
-            events,
-            result_index=nested_error_index,
-            session_id=result_session_id,
-            final_result_uuid=result["uuid"],
+        nested_error_parent_tool_use_id = (
+            _validate_fixed32_qwen_nested_error_boundary(
+                events,
+                result_index=nested_error_index,
+                session_id=result_session_id,
+                final_result_uuid=result["uuid"],
+            )
         )
 
     qwen_event_ids = [event.get("uuid") for event in events]
@@ -862,7 +1354,10 @@ def validate_fixed32_trace_model_requests(
         )
 
     tool_use_ids: set[str] = set()
-    assistant_groups: list[list[tuple[dict[str, Any], dict[str, Any], str]]] = []
+    assistant_groups: list[
+        list[tuple[dict[str, Any], dict[str, Any], str, int]]
+    ] = []
+    tool_use_records: dict[str, dict[str, Any]] = {}
     previous_was_assistant = False
     for event_index, event in enumerate(events[:-1]):
         event_type = event.get("type")
@@ -939,6 +1434,12 @@ def validate_fixed32_trace_model_requests(
                 )
             event_tool_ids.append(tool_id)
             event_tool_id_set.add(tool_id)
+            tool_use_records[tool_id] = {
+                "event_index": event_index,
+                "name": item.get("name"),
+                "input": item.get("input"),
+                "parent_tool_use_id": parent_tool_use_id,
+            }
         stop_reason = message.get("stop_reason")
         if stop_reason not in {None, "tool_use"}:
             raise ContractError(
@@ -950,7 +1451,7 @@ def validate_fixed32_trace_model_requests(
             )
         tool_use_ids.update(event_tool_ids)
 
-        record = (event, message, event_id)
+        record = (event, message, event_id, event_index)
         if previous_was_assistant:
             assistant_groups[-1].append(record)
         else:
@@ -963,7 +1464,7 @@ def validate_fixed32_trace_model_requests(
         )
 
     top_level_groups = 0
-    response_ids: list[str] = []
+    request_records: list[tuple[int, str]] = []
     for group_index, group in enumerate(assistant_groups):
         parent_ids = {record[0].get("parent_tool_use_id") for record in group}
         if len(parent_ids) != 1:
@@ -977,7 +1478,7 @@ def validate_fixed32_trace_model_requests(
         terminal_seen = False
         terminal_count = 0
         nonempty_text_count = 0
-        for _event, message, _event_id in group:
+        for _event, message, _event_id, _event_index in group:
             if message.get("stop_reason") == "tool_use":
                 terminal_seen = True
                 terminal_count += 1
@@ -1003,9 +1504,12 @@ def validate_fixed32_trace_model_requests(
                 "fixed32 qwen non-final assistant response group is incomplete"
             )
 
-        response_ids.append(
-            _fixed32_qwen_group_request_id(
-                [record[2] for record in group]
+        request_records.append(
+            (
+                group[0][3],
+                _fixed32_qwen_group_request_id(
+                    [record[2] for record in group]
+                ),
             )
         )
 
@@ -1014,6 +1518,18 @@ def validate_fixed32_trace_model_requests(
             "fixed32 qwen result turn count and top-level response groups "
             "do not reconcile"
         )
+    hidden_requests = _fixed32_qwen_hidden_agent_terminal_requests(
+        events,
+        assistant_groups=assistant_groups,
+        tool_use_records=tool_use_records,
+        nested_error_index=nested_error_index,
+        nested_error_parent_tool_use_id=(
+            nested_error_parent_tool_use_id
+        ),
+    )
+    request_records.extend(hidden_requests)
+    request_records.sort(key=lambda record: record[0])
+    response_ids = [record[1] for record in request_records]
     if len(response_ids) != len(set(response_ids)):
         raise ContractError(
             "fixed32 qwen response group identities are duplicated"
@@ -1022,6 +1538,7 @@ def validate_fixed32_trace_model_requests(
         "trace_format": "qwen_result",
         "completed_logical_model_requests": len(response_ids),
         "model_request_ids": response_ids,
+        "hidden_terminal_model_requests": len(hidden_requests),
         "engine_id_joinable": False,
     }
 

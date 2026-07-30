@@ -70,6 +70,25 @@ def _context_event(
     }
 
 
+def _user_event(
+    *,
+    event_id: str,
+    session_id: str,
+    content: list[dict[str, Any]],
+    parent_tool_use_id: str | None,
+) -> dict[str, Any]:
+    return {
+        "type": "user",
+        "uuid": event_id,
+        "session_id": session_id,
+        "parent_tool_use_id": parent_tool_use_id,
+        "message": {
+            "role": "user",
+            "content": content,
+        },
+    }
+
+
 def _qwen_result_trace(
     instance_id: str = TASK_A,
 ) -> list[dict[str, Any]]:
@@ -152,6 +171,34 @@ def _task_evidence(task_key_id: str, logical: int, records: int) -> dict[str, An
         "phase": "campaign",
         "ledger_records": records,
         "ledger_chain_head_sha256": f"{records:064x}",
+    }
+
+
+def test_legacy_terminal_records_return_without_a_result_event() -> None:
+    events = [
+        _assistant_event(
+            response_id="legacy-response",
+            session_id="legacy-session",
+            content=[
+                {
+                    "type": "tool_use",
+                    "id": "legacy-tool",
+                    "name": "read_file",
+                    "input": {},
+                }
+            ],
+            stop_reason="tool_use",
+        )
+    ]
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(events)
+
+    assert trace_requests == {
+        "trace_format": "legacy_terminal_records",
+        "completed_logical_model_requests": 1,
+        "model_request_ids": ["legacy-response"],
+        "hidden_terminal_model_requests": 0,
+        "engine_id_joinable": True,
     }
 
 
@@ -279,16 +326,20 @@ def _parallel_qwen_result_trace() -> list[dict[str, Any]]:
                 {
                     "type": "tool_use",
                     "id": "parallel-parent-tool",
-                    "name": "task",
-                    "input": {},
+                    "name": "agent",
+                    "input": {
+                        "description": "inspect the repository",
+                        "prompt": "delegated task",
+                        "subagent_type": "Explore",
+                    },
                 }
             ],
             stop_reason="tool_use",
         ),
-        _context_event(
-            event_type="user",
+        _user_event(
             event_id="parallel-dispatch-result",
             session_id=session_id,
+            content=[{"type": "text", "text": "delegated task"}],
             parent_tool_use_id="parallel-parent-tool",
         ),
     ]
@@ -315,19 +366,39 @@ def _parallel_qwen_result_trace() -> list[dict[str, Any]]:
                     parent_tool_use_id="parallel-parent-tool",
                 )
             )
-        events.append(
-            _context_event(
-                event_type="user",
-                event_id=f"nested-{group_index}-result",
-                session_id=session_id,
-                parent_tool_use_id="parallel-parent-tool",
+        for terminal_index in range(terminal_width):
+            events.append(
+                _user_event(
+                    event_id=(
+                        f"nested-{group_index}-result-{terminal_index}"
+                    ),
+                    session_id=session_id,
+                    content=[
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": (
+                                f"nested-{group_index}-call-{terminal_index}"
+                            ),
+                            "content": "tool result",
+                            "is_error": False,
+                        }
+                    ],
+                    parent_tool_use_id="parallel-parent-tool",
+                )
             )
-        )
     events.append(
-        _context_event(
-            event_type="user",
+        _user_event(
             event_id="parallel-top-resume",
             session_id=session_id,
+            content=[
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "parallel-parent-tool",
+                    "content": "nested exploration complete",
+                    "is_error": False,
+                }
+            ],
+            parent_tool_use_id=None,
         )
     )
     for group_index in range(1, 9):
@@ -422,7 +493,7 @@ def _insert_nested_error_boundary(events: list[dict[str, Any]]) -> int:
     return boundary_index
 
 
-def test_parallel_terminal_records_count_as_19_response_groups(
+def test_parallel_terminal_records_count_as_20_model_requests(
     tmp_path: Path,
 ) -> None:
     runner = _load_runner()
@@ -445,9 +516,10 @@ def test_parallel_terminal_records_count_as_19_response_groups(
         expected_session_id=session_id,
     )
 
-    assert trace_requests["completed_logical_model_requests"] == 19
-    assert len(trace_requests["model_request_ids"]) == 19
-    assert len(set(trace_requests["model_request_ids"])) == 19
+    assert trace_requests["completed_logical_model_requests"] == 20
+    assert trace_requests["hidden_terminal_model_requests"] == 1
+    assert len(trace_requests["model_request_ids"]) == 20
+    assert len(set(trace_requests["model_request_ids"])) == 20
 
     trace_path = tmp_path / "qwen_parallel_trace.jsonl"
     trace_path.write_text(
@@ -466,21 +538,605 @@ def test_parallel_terminal_records_count_as_19_response_groups(
         },
         task_key_id=task_key_id,
         task_auth_before=_task_evidence(task_key_id, 0, 1),
-        task_auth_after=_task_evidence(task_key_id, 19, 77),
+        task_auth_after=_task_evidence(task_key_id, 20, 81),
     )
-    assert provenance["trace_completed_logical_model_requests"] == 19
-    assert provenance["completed_logical_model_requests"] == 19
+    assert provenance["trace_completed_logical_model_requests"] == 20
+    assert provenance["completed_logical_model_requests"] == 20
 
     floor_trace = floor_gate._fixed32_trace_model_requests(
         trace_path,
         provenance=provenance,
     )
-    assert floor_trace["completed_logical_model_requests"] == 19
-    assert len(floor_trace["model_request_id_sha256s"]) == 19
+    assert floor_trace["completed_logical_model_requests"] == 20
+    assert len(floor_trace["model_request_id_sha256s"]) == 20
     assert floor_trace["engine_id_joinable"] is False
 
 
-def test_zero_work_nested_error_is_only_a_group_boundary() -> None:
+def _nested_agent_qwen_result_trace() -> list[dict[str, Any]]:
+    session_id = contract.fixed32_trace_session_id(TASK_A)
+    return [
+        _context_event(
+            event_type="system",
+            event_id="nested-system",
+            session_id=session_id,
+        ),
+        _assistant_event(
+            response_id="nested-top-agent",
+            session_id=session_id,
+            content=[
+                {
+                    "type": "tool_use",
+                    "id": "nested-agent-tool",
+                    "name": "agent",
+                    "input": {
+                        "description": "delegate task",
+                        "prompt": "delegated task",
+                    },
+                }
+            ],
+            stop_reason="tool_use",
+        ),
+        _user_event(
+            event_id="nested-agent-prompt",
+            session_id=session_id,
+            content=[{"type": "text", "text": "delegated task"}],
+            parent_tool_use_id="nested-agent-tool",
+        ),
+        _assistant_event(
+            response_id="nested-visible-turn-0",
+            session_id=session_id,
+            content=[
+                {
+                    "type": "tool_use",
+                    "id": "nested-call-0",
+                    "name": "read_file",
+                    "input": {},
+                }
+            ],
+            stop_reason="tool_use",
+            parent_tool_use_id="nested-agent-tool",
+        ),
+        _user_event(
+            event_id="nested-result-0",
+            session_id=session_id,
+            content=[
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "nested-call-0",
+                    "content": "first result",
+                    "is_error": False,
+                }
+            ],
+            parent_tool_use_id="nested-agent-tool",
+        ),
+        _assistant_event(
+            response_id="nested-visible-turn-1",
+            session_id=session_id,
+            content=[
+                {
+                    "type": "tool_use",
+                    "id": "nested-call-1",
+                    "name": "read_file",
+                    "input": {},
+                }
+            ],
+            stop_reason="tool_use",
+            parent_tool_use_id="nested-agent-tool",
+        ),
+        _user_event(
+            event_id="nested-result-1",
+            session_id=session_id,
+            content=[
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "nested-call-1",
+                    "content": "second result",
+                    "is_error": False,
+                }
+            ],
+            parent_tool_use_id="nested-agent-tool",
+        ),
+        _user_event(
+            event_id="nested-agent-result",
+            session_id=session_id,
+            content=[
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "nested-agent-tool",
+                    "content": "agent terminal response",
+                    "is_error": False,
+                }
+            ],
+            parent_tool_use_id=None,
+        ),
+        _assistant_event(
+            response_id="nested-top-final",
+            session_id=session_id,
+            content=[{"type": "text", "text": "completed"}],
+            stop_reason=None,
+        ),
+        {
+            "type": "result",
+            "subtype": "success",
+            "uuid": "nested-final-result",
+            "session_id": session_id,
+            "is_error": False,
+            "duration_ms": 100,
+            "duration_api_ms": 90,
+            "num_turns": 2,
+            "result": "completed",
+            "usage": {"input_tokens": 2, "output_tokens": 2},
+            "permission_denials": [],
+        },
+    ]
+
+
+def _event_by_uuid(
+    events: list[dict[str, Any]],
+    event_id: str,
+) -> dict[str, Any]:
+    return next(event for event in events if event.get("uuid") == event_id)
+
+
+def test_closed_nested_agent_counts_one_hidden_terminal_request(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    events = _nested_agent_qwen_result_trace()
+    expected_session_id = contract.fixed32_trace_session_id(TASK_A)
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=expected_session_id,
+    )
+
+    assert trace_requests["completed_logical_model_requests"] == 5
+    assert trace_requests["hidden_terminal_model_requests"] == 1
+    assert len(trace_requests["model_request_ids"]) == 5
+    hidden_ids = [
+        request_id
+        for request_id in trace_requests["model_request_ids"]
+        if request_id.startswith("qwen-hidden-agent-terminal-sha256:")
+    ]
+    assert len(hidden_ids) == 1
+    assert trace_requests["model_request_ids"] == (
+        contract.validate_fixed32_trace_model_requests(
+            copy.deepcopy(events),
+            expected_session_id=expected_session_id,
+        )["model_request_ids"]
+    )
+
+    trace_path = tmp_path / "nested_agent_trace.jsonl"
+    trace_path.write_text(
+        "".join(json.dumps(event) + "\n" for event in events),
+        encoding="utf-8",
+    )
+    task_key_id = "c" * 64
+    provenance = runner._fixed32_real_task_provenance(
+        instance_id=TASK_A,
+        trace_path=trace_path,
+        agent_meta={
+            "exit_code": 0,
+            "timed_out": False,
+            "offloaded": True,
+            "network_drop": False,
+        },
+        task_key_id=task_key_id,
+        task_auth_before=_task_evidence(task_key_id, 0, 1),
+        task_auth_after=_task_evidence(task_key_id, 5, 21),
+    )
+    assert provenance["trace_completed_logical_model_requests"] == 5
+    assert provenance["completed_logical_model_requests"] == 5
+    assert floor_gate._fixed32_trace_model_requests(
+        trace_path,
+        provenance=provenance,
+    )["completed_logical_model_requests"] == 5
+
+
+def test_nested_non_agent_parent_fails_closed() -> None:
+    events = _nested_agent_qwen_result_trace()
+    _event_by_uuid(events, "nested-top-agent")["message"]["content"][0][
+        "name"
+    ] = "read_file"
+
+    with pytest.raises(contract.ContractError, match="non-agent parent"):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )
+
+
+def test_prompt_only_agent_counts_hidden_terminal_request() -> None:
+    events = _nested_agent_qwen_result_trace()
+    events[3:7] = []
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+    )
+
+    assert trace_requests["completed_logical_model_requests"] == 3
+    assert trace_requests["hidden_terminal_model_requests"] == 1
+
+
+def test_agent_setup_error_without_a_child_prompt_adds_no_request() -> None:
+    events = _nested_agent_qwen_result_trace()
+    events[2:7] = []
+    _event_by_uuid(events, "nested-agent-result")["message"]["content"][0][
+        "is_error"
+    ] = True
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+    )
+
+    assert trace_requests["completed_logical_model_requests"] == 2
+    assert trace_requests["hidden_terminal_model_requests"] == 0
+
+
+def test_schema_rejected_agent_setup_error_adds_no_request() -> None:
+    events = _nested_agent_qwen_result_trace()
+    events[2:7] = []
+    agent_input = _event_by_uuid(events, "nested-top-agent")["message"][
+        "content"
+    ][0]["input"]
+    del agent_input["prompt"]
+    _event_by_uuid(events, "nested-agent-result")["message"]["content"][0][
+        "is_error"
+    ] = True
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+    )
+
+    assert trace_requests["completed_logical_model_requests"] == 2
+    assert trace_requests["hidden_terminal_model_requests"] == 0
+
+
+def test_agent_success_without_a_child_prompt_fails_closed() -> None:
+    events = _nested_agent_qwen_result_trace()
+    events[2:7] = []
+
+    with pytest.raises(contract.ContractError, match="setup-error closure"):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )
+
+
+@pytest.mark.parametrize(
+    "input_update",
+    (
+        {"run_in_background": True},
+        {"subagent_type": "fork"},
+        {"name": "worker"},
+        {"isolation": "worktree"},
+    ),
+)
+def test_asynchronous_agent_modes_fail_closed(
+    input_update: dict[str, Any],
+) -> None:
+    events = _nested_agent_qwen_result_trace()
+    agent_input = _event_by_uuid(events, "nested-top-agent")["message"][
+        "content"
+    ][0]["input"]
+    agent_input.update(input_update)
+
+    with pytest.raises(contract.ContractError, match="agent invocation"):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("run_in_background", "false"),
+        ("isolation", 1),
+        ("subagent_type", 1),
+        ("subagent_type", " "),
+        ("name", 1),
+    ),
+)
+def test_agent_mode_selectors_must_be_typed(
+    field: str,
+    value: Any,
+) -> None:
+    events = _nested_agent_qwen_result_trace()
+    _event_by_uuid(events, "nested-top-agent")["message"]["content"][0][
+        "input"
+    ][field] = value
+
+    with pytest.raises(contract.ContractError, match="selector is invalid"):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )
+
+
+def test_agent_input_must_be_an_object() -> None:
+    events = _nested_agent_qwen_result_trace()
+    _event_by_uuid(events, "nested-top-agent")["message"]["content"][0][
+        "input"
+    ] = []
+
+    with pytest.raises(contract.ContractError, match="input is not an object"):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )
+
+
+@pytest.mark.parametrize("field", ("description", "prompt"))
+def test_agent_required_text_fields_must_be_nonempty(field: str) -> None:
+    events = _nested_agent_qwen_result_trace()
+    _event_by_uuid(events, "nested-top-agent")["message"]["content"][0][
+        "input"
+    ][field] = ""
+
+    with pytest.raises(contract.ContractError, match="empty or invalid"):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )
+
+
+def test_agent_input_unknown_field_fails_closed() -> None:
+    events = _nested_agent_qwen_result_trace()
+    _event_by_uuid(events, "nested-top-agent")["message"]["content"][0][
+        "input"
+    ]["unexpected"] = True
+
+    with pytest.raises(contract.ContractError, match="unknown fields"):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )
+
+
+def test_agent_outer_result_content_must_be_nonempty() -> None:
+    events = _nested_agent_qwen_result_trace()
+    _event_by_uuid(events, "nested-agent-result")["message"]["content"][0][
+        "content"
+    ] = ""
+
+    with pytest.raises(contract.ContractError, match="content is empty"):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )
+
+
+@pytest.mark.parametrize(
+    "content",
+    (
+        "Failed to run subagent: setup failed",
+        "Subagent execution failed.",
+        "Agent was cancelled by the user. Partial result follows:",
+        "(subagent produced no model-visible output)",
+    ),
+)
+def test_agent_failure_owner_results_fail_closed(content: str) -> None:
+    events = _nested_agent_qwen_result_trace()
+    _event_by_uuid(events, "nested-agent-result")["message"]["content"][0][
+        "content"
+    ] = content
+
+    with pytest.raises(contract.ContractError, match="closure is invalid"):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )
+
+
+def test_agent_prompt_must_match_the_dispatched_prompt() -> None:
+    events = _nested_agent_qwen_result_trace()
+    _event_by_uuid(events, "nested-agent-prompt")["message"]["content"][0][
+        "text"
+    ] = "different task"
+
+    with pytest.raises(contract.ContractError, match="closure is invalid"):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )
+
+
+def _nested_wrong_terminal_tool_result(
+    events: list[dict[str, Any]],
+) -> None:
+    _event_by_uuid(events, "nested-result-1")["message"]["content"][0][
+        "tool_use_id"
+    ] = "nested-call-0"
+
+
+def _nested_missing_terminal_tool_result(
+    events: list[dict[str, Any]],
+) -> None:
+    events.remove(_event_by_uuid(events, "nested-result-1"))
+
+
+def _nested_outer_wrong_tool_result(
+    events: list[dict[str, Any]],
+) -> None:
+    _event_by_uuid(events, "nested-agent-result")["message"]["content"][0][
+        "tool_use_id"
+    ] = "nested-call-1"
+
+
+def _nested_outer_not_top_level(
+    events: list[dict[str, Any]],
+) -> None:
+    _event_by_uuid(events, "nested-agent-result")[
+        "parent_tool_use_id"
+    ] = "nested-agent-tool"
+
+
+def _nested_outer_error_tool_result(
+    events: list[dict[str, Any]],
+) -> None:
+    _event_by_uuid(events, "nested-agent-result")["message"]["content"][0][
+        "is_error"
+    ] = True
+
+
+def _nested_interposed_context(
+    events: list[dict[str, Any]],
+) -> None:
+    outer_index = events.index(_event_by_uuid(events, "nested-agent-result"))
+    events.insert(
+        outer_index,
+        _context_event(
+            event_type="system",
+            event_id="nested-interposed-system",
+            session_id=contract.fixed32_trace_session_id(TASK_A),
+        ),
+    )
+
+
+def _nested_duplicate_outer_result(
+    events: list[dict[str, Any]],
+) -> None:
+    outer = copy.deepcopy(_event_by_uuid(events, "nested-agent-result"))
+    outer["uuid"] = "nested-agent-result-duplicate"
+    events.insert(events.index(_event_by_uuid(events, "nested-top-final")), outer)
+
+
+def _nested_child_event_after_outer_result(
+    events: list[dict[str, Any]],
+) -> None:
+    final_index = events.index(_event_by_uuid(events, "nested-top-final"))
+    events.insert(
+        final_index,
+        _user_event(
+            event_id="nested-late-child-event",
+            session_id=contract.fixed32_trace_session_id(TASK_A),
+            content=[{"type": "text", "text": "late child event"}],
+            parent_tool_use_id="nested-agent-tool",
+        ),
+    )
+
+
+def _nested_descendant_event_after_outer_result(
+    events: list[dict[str, Any]],
+) -> None:
+    final_index = events.index(_event_by_uuid(events, "nested-top-final"))
+    events.insert(
+        final_index,
+        _user_event(
+            event_id="nested-late-descendant-event",
+            session_id=contract.fixed32_trace_session_id(TASK_A),
+            content=[{"type": "text", "text": "late descendant event"}],
+            parent_tool_use_id="nested-call-0",
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    (
+        _nested_wrong_terminal_tool_result,
+        _nested_missing_terminal_tool_result,
+        _nested_outer_wrong_tool_result,
+        _nested_outer_not_top_level,
+        _nested_outer_error_tool_result,
+        _nested_interposed_context,
+        _nested_duplicate_outer_result,
+        _nested_child_event_after_outer_result,
+        _nested_descendant_event_after_outer_result,
+    ),
+)
+def test_nested_agent_closure_tamper_fails_closed(
+    mutate: Any,
+) -> None:
+    events = _nested_agent_qwen_result_trace()
+    mutate(events)
+
+    with pytest.raises(contract.ContractError, match="agent"):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )
+
+
+def test_failed_child_tool_result_still_reconciles_the_agent_request() -> None:
+    events = _nested_agent_qwen_result_trace()
+    _event_by_uuid(events, "nested-result-1")["message"]["content"][0][
+        "is_error"
+    ] = True
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+    )
+
+    assert trace_requests["completed_logical_model_requests"] == 5
+    assert trace_requests["hidden_terminal_model_requests"] == 1
+
+
+def test_nested_agent_error_boundary_does_not_infer_hidden_request() -> None:
+    events = _nested_agent_qwen_result_trace()
+    outer_index = events.index(_event_by_uuid(events, "nested-agent-result"))
+    events.insert(
+        outer_index,
+        {
+            "type": "result",
+            "subtype": "error_during_execution",
+            "uuid": "nested-agent-error-boundary",
+            "session_id": contract.fixed32_trace_session_id(TASK_A),
+            "is_error": True,
+            "duration_ms": 0,
+            "duration_api_ms": 0,
+            "num_turns": 0,
+            "error": {"message": "nested task failed"},
+            "usage": {"input_tokens": 0, "output_tokens": 0},
+            "permission_denials": [],
+        },
+    )
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+    )
+
+    assert trace_requests["completed_logical_model_requests"] == 4
+    assert trace_requests["hidden_terminal_model_requests"] == 0
+
+
+def test_nested_agent_error_boundary_must_bind_to_that_agent() -> None:
+    events = _nested_agent_qwen_result_trace()
+    _event_by_uuid(events, "nested-result-1")[
+        "parent_tool_use_id"
+    ] = "nested-call-1"
+    outer_index = events.index(_event_by_uuid(events, "nested-agent-result"))
+    events.insert(
+        outer_index,
+        {
+            "type": "result",
+            "subtype": "error_during_execution",
+            "uuid": "nested-agent-wrong-parent-error-boundary",
+            "session_id": contract.fixed32_trace_session_id(TASK_A),
+            "is_error": True,
+            "duration_ms": 0,
+            "duration_api_ms": 0,
+            "num_turns": 0,
+            "error": {"message": "nested task failed"},
+            "usage": {"input_tokens": 0, "output_tokens": 0},
+            "permission_denials": [],
+        },
+    )
+
+    with pytest.raises(contract.ContractError, match="belongs to another tool"):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )
+
+
+def test_zero_work_nested_error_suppresses_hidden_terminal_request() -> None:
     events = _parallel_qwen_result_trace()
     baseline = contract.validate_fixed32_trace_model_requests(
         events,
@@ -493,8 +1149,15 @@ def test_zero_work_nested_error_is_only_a_group_boundary() -> None:
         expected_session_id=contract.fixed32_trace_session_id(TASK_A),
     )
 
+    assert baseline["completed_logical_model_requests"] == 20
+    assert baseline["hidden_terminal_model_requests"] == 1
     assert with_boundary["completed_logical_model_requests"] == 19
-    assert with_boundary["model_request_ids"] == baseline["model_request_ids"]
+    assert with_boundary["hidden_terminal_model_requests"] == 0
+    assert with_boundary["model_request_ids"] == [
+        request_id
+        for request_id in baseline["model_request_ids"]
+        if not request_id.startswith("qwen-hidden-agent-terminal-sha256:")
+    ]
     assert events[-1]["num_turns"] == 10
 
 
@@ -646,7 +1309,7 @@ def test_nested_error_boundary_transition_tamper_fails(
     boundary_index = _insert_nested_error_boundary(events)
     mutate(events, boundary_index)
 
-    with pytest.raises(contract.ContractError, match="transition is invalid"):
+    with pytest.raises(contract.ContractError):
         contract.validate_fixed32_trace_model_requests(
             events,
             expected_session_id=contract.fixed32_trace_session_id(TASK_A),
