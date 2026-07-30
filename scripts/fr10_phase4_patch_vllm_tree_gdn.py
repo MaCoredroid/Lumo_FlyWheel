@@ -12659,11 +12659,19 @@ def _fr13_fixed32_device_commit_route(
         fixed32_conv_col0_pregather_counters as _fixed_pregather_counters,
         launch_fixed32_conv_commit_to_col0 as _fixed_conv_commit,
         launch_tree_gdn_replay_all_layers as _fixed_replay,
+        validate_fixed32_conv_commit_rows as _fixed_conv_commit_rows,
     )
     _fixed_commit_before = _fixed_commit_counters()
     _fixed_conv_commit_before = _fixed_conv_commit_counters()
     _fixed_pregather_before = _fixed_pregather_counters()
 
+    _fixed_conv_commit_rows(
+        spec_state_indices=stacks["spec_idx"],
+        accepted_paths=spec_paths,
+        accepted_lens=spec_lens,
+        batch=batch,
+        bank_rows=int(conv_banks[0].shape[0]),
+    )
     _fixed_conv_commit(
         conv_banks=conv_banks,
         spec_state_indices=stacks["spec_idx"],

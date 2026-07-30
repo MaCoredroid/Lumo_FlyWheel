@@ -14,6 +14,8 @@ pytestmark = pytest.mark.skipif(
 )
 
 DEPLOYED_CONV_SHAPE = (10_240, 34)
+DEPLOYED_PAGE_ELEMS = 2_097_152
+GAP_SENTINEL = -4096.0
 
 
 def _page_shared_bank(
@@ -21,6 +23,7 @@ def _page_shared_bank(
     rows: int,
     seed: int,
     conv_shape: tuple[int, int] = (3, 2),
+    channel_contiguous: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     ssm_shape = (2, 2)
     page_elems = math.prod(conv_shape) + math.prod(ssm_shape) + 5
@@ -33,11 +36,20 @@ def _page_shared_bank(
         .add_(seed * 1000)
         .to(torch.bfloat16)
     )
-    conv = torch.as_strided(
-        raw,
-        size=(rows, *conv_shape),
-        stride=(page_elems, conv_shape[1], 1),
-    )
+    if channel_contiguous:
+        # vLLM stores SD as [row, state_len, dim], then GDN consumes its
+        # [row, dim, state_len] transpose.
+        conv = torch.as_strided(
+            raw,
+            size=(rows, conv_shape[1], conv_shape[0]),
+            stride=(page_elems, conv_shape[0], 1),
+        ).transpose(1, 2)
+    else:
+        conv = torch.as_strided(
+            raw,
+            size=(rows, *conv_shape),
+            stride=(page_elems, conv_shape[1], 1),
+        )
     ssm = torch.as_strided(
         raw,
         size=(rows, *ssm_shape),
@@ -49,6 +61,8 @@ def _page_shared_bank(
 
 def _install_preseed(
     monkeypatch: pytest.MonkeyPatch,
+    *,
+    channel_contiguous: bool,
 ) -> tuple[
     tuple[torch.Tensor, ...],
     tuple[torch.Tensor, ...],
@@ -67,11 +81,18 @@ def _install_preseed(
             rows=4,
             seed=index,
             conv_shape=DEPLOYED_CONV_SHAPE,
+            channel_contiguous=channel_contiguous,
         )
         raws.append(raw)
         banks.append(bank)
     bank_tuple = tuple(banks)
     assert bank_tuple[0][0].numel() == 348_160
+    expected_inner_stride = (
+        (1, DEPLOYED_CONV_SHAPE[0])
+        if channel_contiguous
+        else (DEPLOYED_CONV_SHAPE[1], 1)
+    )
+    assert bank_tuple[0].stride()[1:] == expected_inner_stride
     for group_index in range(3):
         names = order[group_index * 16 : (group_index + 1) * 16]
         kernel.register_fixed32_conv_col0_ssi_group(
@@ -153,10 +174,212 @@ def _legacy_commit_reference(
         bank.index_copy_(0, dst, bank.index_select(0, src))
 
 
-def test_b1_zero_accept_and_b4_alias_cycle_are_whole_page_exact(
-    monkeypatch: pytest.MonkeyPatch,
+def _exact_deployed_page_bank(
+    *, rows: int
+) -> tuple[torch.Tensor, torch.Tensor]:
+    raw = torch.full(
+        (rows * DEPLOYED_PAGE_ELEMS,),
+        GAP_SENTINEL,
+        dtype=torch.bfloat16,
+        device="cuda",
+    )
+    channels, state_length = DEPLOYED_CONV_SHAPE
+    bank = torch.as_strided(
+        raw,
+        size=(rows, state_length, channels),
+        stride=(DEPLOYED_PAGE_ELEMS, channels, 1),
+    ).transpose(1, 2)
+    values = (
+        torch.arange(
+            channels * state_length, dtype=torch.int32, device="cuda"
+        )
+        .remainder_(251)
+        .to(torch.bfloat16)
+        .view(channels, state_length)
+    )
+    for row in range(rows):
+        bank[row].copy_(values + row * 256)
+    return raw, bank
+
+
+def _assert_deployed_page_gaps_are_sentinel(
+    raw: torch.Tensor, *, rows: int
 ) -> None:
-    raws, banks, commit_ssi, paths, lens = _install_preseed(monkeypatch)
+    row_elems = math.prod(DEPLOYED_CONV_SHAPE)
+    gaps = raw.view(rows, DEPLOYED_PAGE_ELEMS)[:, row_elems:]
+    assert torch.all(gaps == GAP_SENTINEL)
+
+
+def test_exact_outer_stride_high_row_and_page_gaps_are_kernel_exact() -> None:
+    rows = 8
+    high_row = rows - 1
+    raw, bank = _exact_deployed_page_bank(rows=rows)
+    assert bank.shape == (rows, *DEPLOYED_CONV_SHAPE)
+    assert bank.stride() == (
+        DEPLOYED_PAGE_ELEMS,
+        1,
+        DEPLOYED_CONV_SHAPE[0],
+    )
+    _assert_deployed_page_gaps_are_sentinel(raw, rows=rows)
+
+    row_elems = math.prod(DEPLOYED_CONV_SHAPE)
+    block = 1024
+    grid = (1, 1, (row_elems + block - 1) // block)
+    off16 = torch.zeros((1,), dtype=torch.int64, device="cuda")
+    ssi = torch.tensor([[high_row]], dtype=torch.int32, device="cuda")
+    ssi_ptrs = torch.tensor(
+        [int(ssi.data_ptr())], dtype=torch.int64, device="cuda"
+    )
+    ssi_strides = torch.tensor(
+        [int(ssi.stride(0))], dtype=torch.int64, device="cuda"
+    )
+    staging = torch.empty(
+        (1, 1, row_elems), dtype=bank.dtype, device="cuda"
+    )
+    kernel._fr13_conv_col0_pregather_kernel[grid](
+        bank,
+        off16,
+        ssi_ptrs,
+        ssi_strides,
+        staging,
+        staging.stride(0),
+        staging.stride(1),
+        bank.stride(0),
+        bank.stride(1),
+        bank.stride(2),
+        ROW_ELEMS=row_elems,
+        CONV_L=DEPLOYED_CONV_SHAPE[1],
+        ELEM_BYTES=bank.element_size(),
+        B=1,
+        BLOCK=block,
+    )
+    assert torch.equal(staging[0, 0], bank[high_row].reshape(-1))
+    _assert_deployed_page_gaps_are_sentinel(raw, rows=rows)
+
+    spec_state_indices = torch.zeros(
+        (1, 1, 2), dtype=torch.int32, device="cuda"
+    )
+    spec_state_indices[0, 0] = torch.tensor(
+        [0, high_row], dtype=torch.int32, device="cuda"
+    )
+    accepted_paths = torch.zeros(
+        (1, 16), dtype=torch.int32, device="cuda"
+    )
+    accepted_paths[0, 0] = 1
+    accepted_lens = torch.ones((1,), dtype=torch.int32, device="cuda")
+    expected_raw = raw.clone()
+    expected_bank = torch.as_strided(
+        expected_raw, size=bank.shape, stride=bank.stride()
+    )
+    _legacy_commit_reference(
+        banks=(expected_bank,),
+        spec_state_indices=spec_state_indices,
+        accepted_paths=accepted_paths,
+        accepted_lens=accepted_lens,
+        batch=1,
+    )
+    kernel._fr13_fixed32_conv_commit_gather_kernel[grid](
+        bank,
+        off16,
+        spec_state_indices,
+        accepted_paths,
+        accepted_lens,
+        staging,
+        staging.stride(0),
+        staging.stride(1),
+        spec_state_indices.stride(0),
+        spec_state_indices.stride(1),
+        spec_state_indices.stride(2),
+        accepted_paths.stride(0),
+        accepted_paths.stride(1),
+        accepted_lens.stride(0),
+        bank.stride(0),
+        ROW_ELEMS=row_elems,
+        ELEM_BYTES=bank.element_size(),
+        SPEC_COLS=spec_state_indices.shape[2],
+        PATH_COLS=accepted_paths.shape[1],
+        B=1,
+        BLOCK=block,
+    )
+    kernel._fr13_fixed32_conv_commit_scatter_kernel[grid](
+        bank,
+        off16,
+        spec_state_indices,
+        staging,
+        staging.stride(0),
+        staging.stride(1),
+        spec_state_indices.stride(0),
+        spec_state_indices.stride(1),
+        spec_state_indices.stride(2),
+        bank.stride(0),
+        ROW_ELEMS=row_elems,
+        ELEM_BYTES=bank.element_size(),
+        B=1,
+        BLOCK=block,
+    )
+    assert torch.equal(raw, expected_raw)
+    _assert_deployed_page_gaps_are_sentinel(raw, rows=rows)
+    assert not torch.equal(staging[0, 0], bank[high_row].reshape(-1))
+
+    kernel._fr13_conv_col0_pregather_kernel[grid](
+        bank,
+        off16,
+        ssi_ptrs,
+        ssi_strides,
+        staging,
+        staging.stride(0),
+        staging.stride(1),
+        bank.stride(0),
+        bank.stride(1),
+        bank.stride(2),
+        ROW_ELEMS=row_elems,
+        CONV_L=DEPLOYED_CONV_SHAPE[1],
+        ELEM_BYTES=bank.element_size(),
+        B=1,
+        BLOCK=block,
+    )
+    assert torch.equal(staging[0, 0], bank[high_row].reshape(-1))
+    _assert_deployed_page_gaps_are_sentinel(raw, rows=rows)
+
+
+@pytest.mark.parametrize(
+    "channel_contiguous",
+    (False, True),
+    ids=("last-dimension-contiguous", "canonical-channel-contiguous"),
+)
+def test_deployed_layout_pregather_and_two_launch_commit_are_page_exact(
+    monkeypatch: pytest.MonkeyPatch,
+    channel_contiguous: bool,
+) -> None:
+    raws, banks, commit_ssi, paths, lens = _install_preseed(
+        monkeypatch, channel_contiguous=channel_contiguous
+    )
+
+    state = kernel._FR13_FIXED32_CONV_PREGATHER["state"]
+    seen_sources: set[int] = set()
+    for source in state["ssi_sources"]:
+        if id(source) in seen_sources:
+            continue
+        seen_sources.add(id(source))
+        source[:, 0].copy_(
+            torch.tensor([3, 1, 2, 0], dtype=torch.int32, device="cuda")
+        )
+    expected_staging = tuple(
+        bank.index_select(0, source[:4, 0].to(torch.long)).reshape(4, -1)
+        for bank, source in zip(
+            banks, state["ssi_sources"], strict=True
+        )
+    )
+    before_pregather = tuple(raw.clone() for raw in raws)
+    kernel.selfcheck_fixed32_conv_col0_ssi_sources(num_spec_decodes=4)
+    assert all(
+        torch.equal(state["staging"][layer, :4], expected)
+        for layer, expected in enumerate(expected_staging)
+    )
+    assert all(
+        torch.equal(raw, before)
+        for raw, before in zip(raws, before_pregather, strict=True)
+    )
 
     paths.fill_(31)
     lens.zero_()

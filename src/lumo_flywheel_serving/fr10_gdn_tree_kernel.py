@@ -1310,10 +1310,7 @@ def _fr13_fixed32_conv_commit_gather_kernel(
     path_stride_s,
     lens_stride_b,
     row_stride,
-    s1,
-    s2,
     ROW_ELEMS: tl.constexpr,
-    CONV_L: tl.constexpr,
     ELEM_BYTES: tl.constexpr,
     SPEC_COLS: tl.constexpr,
     PATH_COLS: tl.constexpr,
@@ -1346,13 +1343,8 @@ def _fr13_fixed32_conv_commit_gather_kernel(
     base = anchor_ptr + off16 * (16 // ELEM_BYTES)
     offs = pid_c * BLOCK + tl.arange(0, BLOCK)
     mask = offs < ROW_ELEMS
-    c_idx = offs // CONV_L
-    l_idx = offs % CONV_L
     values = tl.load(
-        base
-        + src_row.to(tl.int64) * row_stride
-        + c_idx * s1
-        + l_idx * s2,
+        base + src_row.to(tl.int64) * row_stride + offs,
         mask=mask,
     )
     tl.store(
@@ -1377,10 +1369,7 @@ def _fr13_fixed32_conv_commit_scatter_kernel(
     ssi_stride_b,
     ssi_stride_s,
     row_stride,
-    s1,
-    s2,
     ROW_ELEMS: tl.constexpr,
-    CONV_L: tl.constexpr,
     ELEM_BYTES: tl.constexpr,
     B: tl.constexpr,
     BLOCK: tl.constexpr,
@@ -1401,8 +1390,6 @@ def _fr13_fixed32_conv_commit_scatter_kernel(
     base = anchor_ptr + off16 * (16 // ELEM_BYTES)
     offs = pid_c * BLOCK + tl.arange(0, BLOCK)
     mask = offs < ROW_ELEMS
-    c_idx = offs // CONV_L
-    l_idx = offs % CONV_L
     values = tl.load(
         staging
         + pid_l * staging_stride_l
@@ -1411,10 +1398,7 @@ def _fr13_fixed32_conv_commit_scatter_kernel(
         mask=mask,
     )
     tl.store(
-        base
-        + dst_row.to(tl.int64) * row_stride
-        + c_idx * s1
-        + l_idx * s2,
+        base + dst_row.to(tl.int64) * row_stride + offs,
         values,
         mask=mask,
     )
@@ -1425,6 +1409,34 @@ _FR13_FIXED32_CONV_PREGATHER: dict = {}
 _FR13_FIXED32_CONV_SSI_GROUPS: dict[tuple[str, ...], dict[str, object]] = {}
 _FR13_FIXED32_BATCHES = (1, 2, 3, 4)
 _FR13_FIXED32_CONV_COMMIT_ROUTE = "fixed32_two_launch_col0"
+
+
+def _fixed32_conv_page_safe_row_span(
+    shape: tuple[int, ...], stride: tuple[int, ...]
+) -> int | None:
+    """Return the dense logical row span when it fits in one cache page."""
+    if (
+        len(shape) != 3
+        or len(stride) != 3
+        or any(value <= 0 for value in shape)
+        or any(value <= 0 for value in stride)
+    ):
+        return None
+    channels, state_length = shape[1:]
+    channel_stride, state_stride = stride[1:]
+    if (channel_stride, state_stride) not in (
+        (state_length, 1),
+        (1, channels),
+    ):
+        return None
+    logical_row_span = (
+        (channels - 1) * channel_stride
+        + (state_length - 1) * state_stride
+        + 1
+    )
+    if stride[0] < logical_row_span:
+        return None
+    return logical_row_span
 
 
 def register_fixed32_conv_col0_ssi_group(
@@ -1564,15 +1576,13 @@ def _validate_fixed32_conv_pregather_preseed(
         )
     shape = tuple(int(value) for value in anchor.shape)
     stride = tuple(int(value) for value in anchor.stride())
+    logical_row_span = _fixed32_conv_page_safe_row_span(shape, stride)
     if (
-        any(value <= 0 for value in shape)
-        or shape[0] < capacity
-        or stride[2] != 1
-        or stride[1] != shape[2]
-        or stride[0] < shape[1] * shape[2]
+        shape[0] < capacity
+        or logical_row_span is None
     ):
         raise ValueError(
-            "FR13_FIXED32_CONV_PREGATHER requires page-safe contiguous "
+            "FR13_FIXED32_CONV_PREGATHER requires page-safe dense "
             f"logical rows, got shape={shape} stride={stride}"
         )
     pointers = []
@@ -1610,7 +1620,7 @@ def _validate_fixed32_conv_pregather_preseed(
                 pointer
                 + (
                     (shape[0] - 1) * stride[0]
-                    + shape[1] * shape[2]
+                    + logical_row_span
                 )
                 * element_bytes,
                 index,
@@ -1934,10 +1944,7 @@ def preseed_fixed32_conv_col0_pregather(
             safe_paths.stride(1),
             safe_lens.stride(0),
             int(anchor.stride(0)),
-            int(anchor.stride(1)),
-            int(anchor.stride(2)),
             ROW_ELEMS=row_elems,
-            CONV_L=conv_l,
             ELEM_BYTES=element_bytes,
             SPEC_COLS=int(safe_commit_ssi.shape[2]),
             PATH_COLS=int(safe_paths.shape[1]),
@@ -1955,10 +1962,7 @@ def preseed_fixed32_conv_col0_pregather(
             safe_commit_ssi.stride(1),
             safe_commit_ssi.stride(2),
             int(anchor.stride(0)),
-            int(anchor.stride(1)),
-            int(anchor.stride(2)),
             ROW_ELEMS=row_elems,
-            CONV_L=conv_l,
             ELEM_BYTES=element_bytes,
             B=batch,
             BLOCK=block,
@@ -2344,10 +2348,7 @@ def launch_fixed32_conv_commit_to_col0(
         accepted_paths.stride(1),
         accepted_lens.stride(0),
         int(state["anchor"].stride(0)),
-        int(state["anchor"].stride(1)),
-        int(state["anchor"].stride(2)),
         ROW_ELEMS=row_elems,
-        CONV_L=int(state["conv_l"]),
         ELEM_BYTES=int(state["element_bytes"]),
         SPEC_COLS=int(spec_state_indices.shape[2]),
         PATH_COLS=int(accepted_paths.shape[1]),
@@ -2365,10 +2366,7 @@ def launch_fixed32_conv_commit_to_col0(
         spec_state_indices.stride(1),
         spec_state_indices.stride(2),
         int(state["anchor"].stride(0)),
-        int(state["anchor"].stride(1)),
-        int(state["anchor"].stride(2)),
         ROW_ELEMS=row_elems,
-        CONV_L=int(state["conv_l"]),
         ELEM_BYTES=int(state["element_bytes"]),
         B=batch,
         BLOCK=block,
@@ -5781,6 +5779,89 @@ def _fr13_fixed32_validate_running_rows(
         "FR13_FIXED32_COMMIT_DEVICE_FILL running-row contract violation",
     )
     return running_rows
+
+
+def validate_fixed32_conv_commit_rows(
+    *,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    accepted_lens: torch.Tensor,
+    batch: int,
+    bank_rows: int,
+) -> None:
+    """Enqueue row/path guards before fixed32 raw-pointer conv access."""
+    if (
+        type(batch) is not int
+        or not 1 <= batch <= 4
+        or type(bank_rows) is not int
+        or bank_rows <= 0
+        or not torch.is_tensor(spec_state_indices)
+        or spec_state_indices.dtype != torch.int32
+        or spec_state_indices.ndim != 3
+        or int(spec_state_indices.shape[0]) != 48
+        or int(spec_state_indices.shape[1]) < batch
+        or int(spec_state_indices.shape[2]) != 32
+        or not torch.is_tensor(accepted_paths)
+        or accepted_paths.dtype != torch.int32
+        or accepted_paths.ndim != 2
+        or int(accepted_paths.shape[0]) < batch
+        or int(accepted_paths.shape[1]) != 16
+        or not torch.is_tensor(accepted_lens)
+        or accepted_lens.dtype != torch.int32
+        or accepted_lens.ndim != 1
+        or int(accepted_lens.shape[0]) < batch
+        or accepted_paths.device != spec_state_indices.device
+        or accepted_lens.device != spec_state_indices.device
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_COMMIT row-guard geometry/dtype/device drift"
+        )
+
+    active_rows = spec_state_indices[:, :batch, :].to(torch.long)
+    running_rows = active_rows[:, :, 0]
+    sorted_running = torch.sort(running_rows, dim=1).values
+    distinct_running = (
+        (sorted_running[:, 1:] != sorted_running[:, :-1]).all()
+        if batch > 1
+        else torch.ones(
+            (), dtype=torch.bool, device=spec_state_indices.device
+        )
+    )
+    lens = accepted_lens[:batch].to(torch.long).view(batch, 1)
+    paths = accepted_paths[:batch].to(torch.long)
+    positions = torch.arange(
+        int(accepted_paths.shape[1]),
+        device=accepted_paths.device,
+        dtype=torch.long,
+    ).view(1, -1)
+    active_paths = positions < lens
+    leaf_pos = (lens.view(-1) - 1).clamp(
+        min=0, max=int(accepted_paths.shape[1]) - 1
+    )
+    leaf_nodes = paths.gather(1, leaf_pos.view(batch, 1)).view(batch)
+    leaf_nodes = torch.where(
+        lens.view(-1) > 0, leaf_nodes, torch.zeros_like(leaf_nodes)
+    ).clamp(min=0, max=int(spec_state_indices.shape[2]) - 1)
+    selected_rows = active_rows.gather(
+        2,
+        leaf_nodes.view(1, batch, 1).expand(
+            int(spec_state_indices.shape[0]), batch, 1
+        ),
+    ).view(int(spec_state_indices.shape[0]), batch)
+    contract_ok = (
+        (active_rows >= 0).all()
+        & (active_rows < bank_rows).all()
+        & distinct_running
+        & (lens >= 0).all()
+        & (lens <= 15).all()
+        & ((~active_paths) | ((paths >= 0) & (paths < 32))).all()
+        & (selected_rows >= 0).all()
+        & (selected_rows < bank_rows).all()
+    )
+    _fr13_fixed32_device_assert(
+        contract_ok,
+        "FR13_FIXED32_CONV_COMMIT precommit row/path contract violation",
+    )
 
 
 def preseed_fixed32_committer_graph(
