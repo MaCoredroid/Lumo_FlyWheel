@@ -36,6 +36,8 @@ _CACHE_INIT_FAILED = False
 _PREWARMED = False        # design §6b: harness-aware trie pre-warm done once at boot
 _COMMITTED: dict = {}     # req_id -> list[int] rolling recent-committed tokens (<= max_tree_depth)
 _INGESTED_LEN: dict = {}  # req_id -> #tokens already fed to Arctic add_active_response (non-gappy)
+_FIXED32_PENDING_STEP = None
+_FIXED32_LIFECYCLE_POISON = None
 STATS = {
     "started": 0, "retired": 0, "ingested": 0, "prewarm_seeded": 0,
     "tail_speculate_fired": 0, "tail_hit": 0, "tail_all_cold": 0, "tail_branch_real": 0,
@@ -91,7 +93,8 @@ def set_cache_for_test(mock):
 def reset_for_test():
     global _CACHE, _CACHE_INIT_FAILED, _COMMITTED, _INGESTED_LEN, _PREWARMED
     global _TAIL_WIDE_TOPK, _TAIL_PATH_TOKENS
-    global _FIXED32_WORK_SERIAL, _FIXED32_LAST_WORK
+    global _FIXED32_WORK_SERIAL, _FIXED32_LAST_WORK, _FIXED32_PENDING_STEP
+    global _FIXED32_LIFECYCLE_POISON
     _CACHE = None
     _CACHE_INIT_FAILED = False
     _PREWARMED = False
@@ -101,6 +104,8 @@ def reset_for_test():
     _TAIL_PATH_TOKENS = {}
     _FIXED32_WORK_SERIAL = 0
     _FIXED32_LAST_WORK = None
+    _FIXED32_PENDING_STEP = None
+    _FIXED32_LIFECYCLE_POISON = None
     for k in STATS:
         STATS[k] = 0
 
@@ -175,11 +180,83 @@ def maybe_prewarm(cache):
 
 
 # ---- lifecycle (RUNNER + COMMIT-SITE frames) --------------------------------
-def note_new_requests(cache, req_id_to_prompt):
+def _fixed32_require_unpoisoned():
+    if _FIXED32_LIFECYCLE_POISON is not None:
+        raise RuntimeError(
+            "fixed32 Arctic lifecycle is poisoned: "
+            + repr(_FIXED32_LIFECYCLE_POISON)
+        )
+
+
+def _fixed32_poison(phase, step_seq=None):
+    global _FIXED32_LIFECYCLE_POISON
+    if _FIXED32_LIFECYCLE_POISON is None:
+        _FIXED32_LIFECYCLE_POISON = {
+            "phase": str(phase),
+            "step_seq": None if step_seq is None else int(step_seq),
+        }
+
+
+def note_new_requests(cache, req_id_to_prompt, *, strict=False):
     """start_request for reqs not yet active (evict a stale cached response first).
     Port of vllm SuffixDecodingProposer :63-70. Sets _INGESTED_LEN to the prompt length so the
     subsequent delta-ingest does NOT re-feed the prompt (Arctic start_request already ingests it)."""
+    if strict and cache is None:
+        raise RuntimeError("fixed32 Arctic cache is unavailable")
     if cache is None:
+        return
+    if strict:
+        _fixed32_require_unpoisoned()
+        plans = []
+        for req_id, prompt in req_id_to_prompt.items():
+            prompt = [int(token) for token in prompt]
+            prompt_len = len(prompt)
+            is_active = req_id in cache.active_requests
+            is_cached = req_id in cache.cached_requests
+            prior = _INGESTED_LEN.get(req_id)
+            if is_active and (
+                not is_cached
+                or prior is None
+                or int(prior) < prompt_len
+            ):
+                raise RuntimeError(
+                    "fixed32 Arctic active request has no consistent owner"
+                )
+            if not is_active and (
+                prior is not None or req_id in _COMMITTED
+            ):
+                raise RuntimeError(
+                    "fixed32 Arctic inactive request retained local state"
+                )
+            plans.append(
+                (req_id, prompt, prompt_len, is_active, is_cached, prior)
+            )
+        try:
+            for req_id, prompt, _prompt_len, is_active, is_cached, _prior in plans:
+                if is_active:
+                    continue
+                if is_cached:
+                    cache.evict_cached_response(req_id)
+                    if req_id in cache.cached_requests:
+                        raise RuntimeError(
+                            "fixed32 Arctic cached response survived eviction"
+                        )
+                cache.start_request(req_id, prompt)
+                if (
+                    req_id not in cache.active_requests
+                    or req_id not in cache.cached_requests
+                ):
+                    raise RuntimeError(
+                        "fixed32 Arctic request start did not publish ownership: "
+                        + repr(req_id)
+                    )
+        except Exception:
+            _fixed32_poison("note_new_requests")
+            raise
+        for req_id, _prompt, prompt_len, is_active, _is_cached, _prior in plans:
+            if not is_active:
+                _INGESTED_LEN[req_id] = prompt_len
+                STATS["started"] += 1
         return
     for req_id, prompt in req_id_to_prompt.items():
         try:
@@ -193,7 +270,15 @@ def note_new_requests(cache, req_id_to_prompt):
             pass
 
 
-def ingest_from_sequence(cache, req_id, seq_list, num_tokens, max_tree_depth=24):
+def ingest_from_sequence(
+    cache,
+    req_id,
+    seq_list,
+    num_tokens,
+    max_tree_depth=24,
+    *,
+    strict=False,
+):
     """RUNNER hook (authoritative, NON-GAPPY): feed Arctic the NEW committed tokens since the last
     ingest, sourced from input_batch.token_ids_cpu[i, :num_tokens] (the real full sequence, incl the
     bonus token) -- NOT accepted-drafts-only (which would be gappy). Keeps _COMMITTED = the recent
@@ -203,6 +288,53 @@ def ingest_from_sequence(cache, req_id, seq_list, num_tokens, max_tree_depth=24)
     # sequence. A prior O(num_tokens)-per-step `seq=[int(t) for t in seq_list[:num_tokens]]` stalled
     # the server on long agentic contexts (100k+ tok x B4 x hundreds of steps) -> dropped the agent
     # socket (UND_ERR_SOCKET) -> empty patches. This is O(delta + max_tree_depth) per step.
+    if strict:
+        _fixed32_require_unpoisoned()
+        if (
+            cache is None
+            or req_id not in cache.active_requests
+            or req_id not in cache.cached_requests
+            or req_id not in _INGESTED_LEN
+        ):
+            raise RuntimeError(
+                "fixed32 Arctic ingest has no active cached owner: "
+                + repr(req_id)
+            )
+        num_tokens = int(num_tokens)
+        max_tree_depth = int(max_tree_depth)
+        if num_tokens < 0 or max_tree_depth <= 0 or num_tokens > len(seq_list):
+            raise RuntimeError(
+                "fixed32 Arctic ingest sequence bounds drift: "
+                + repr((req_id, num_tokens, len(seq_list), max_tree_depth))
+            )
+        last = int(_INGESTED_LEN[req_id])
+        new = (
+            [int(x) for x in seq_list[last:num_tokens]]
+            if num_tokens > last
+            else []
+        )
+        start = max(0, num_tokens - max_tree_depth)
+        suffix = [int(x) for x in seq_list[start:num_tokens]]
+        if len(new) != max(0, num_tokens - last):
+            raise RuntimeError("fixed32 Arctic ingest delta is incomplete")
+        if new:
+            try:
+                cache.add_active_response(req_id, new)
+                if (
+                    req_id not in cache.active_requests
+                    or req_id not in cache.cached_requests
+                ):
+                    raise RuntimeError(
+                        "fixed32 Arctic owner disappeared after ingest"
+                    )
+            except Exception:
+                _fixed32_poison("ingest_from_sequence")
+                raise
+            _INGESTED_LEN[req_id] = num_tokens
+            STATS["ingested"] += 1
+        _COMMITTED[req_id] = suffix
+        return
+
     last = _INGESTED_LEN.get(req_id, 0)
     if num_tokens > last:
         new = [int(x) for x in seq_list[last:num_tokens]]   # delta only
@@ -217,8 +349,34 @@ def ingest_from_sequence(cache, req_id, seq_list, num_tokens, max_tree_depth=24)
     _COMMITTED[req_id] = [int(x) for x in seq_list[start:num_tokens]]   # recent suffix only
 
 
-def retire_requests(cache, gone_req_ids):
+def retire_requests(cache, gone_req_ids, *, strict=False):
     """RUNNER frame: stop_request for reqs no longer in the batch. Port of :92-95."""
+    if strict:
+        _fixed32_require_unpoisoned()
+        gone_req_ids = tuple(gone_req_ids)
+        if len(set(gone_req_ids)) != len(gone_req_ids):
+            raise RuntimeError("fixed32 Arctic retire request IDs are duplicated")
+        for req_id in gone_req_ids:
+            if cache is None or req_id not in cache.active_requests:
+                raise RuntimeError(
+                    "fixed32 Arctic retire has no active owner: "
+                    + repr(req_id)
+                )
+        try:
+            for req_id in gone_req_ids:
+                cache.stop_request(req_id)
+                if req_id in cache.active_requests:
+                    raise RuntimeError(
+                        "fixed32 Arctic request remained active after retire"
+                    )
+        except Exception:
+            _fixed32_poison("retire_requests")
+            raise
+        for req_id in gone_req_ids:
+            _COMMITTED.pop(req_id, None)
+            _INGESTED_LEN.pop(req_id, None)
+            STATS["retired"] += 1
+        return
     for req_id in gone_req_ids:
         if cache is not None:
             try:
@@ -228,6 +386,397 @@ def retire_requests(cache, gone_req_ids):
         _COMMITTED.pop(req_id, None)
         _INGESTED_LEN.pop(req_id, None)
         STATS["retired"] += 1
+
+
+def stage_fixed32_step(
+    cache,
+    request_ids,
+    token_rows,
+    prompt_lengths,
+    computed_lengths,
+    scheduled_lengths,
+    scheduled_draft_lengths,
+    committed_lengths,
+    discard_rows,
+    step_seq,
+    *,
+    restart_request_ids=(),
+    max_tree_depth=24,
+):
+    """Publish the exact pre-forward committed boundary for one fixed32 step."""
+    global _FIXED32_PENDING_STEP
+    _fixed32_require_unpoisoned()
+    request_ids = tuple(str(req_id) for req_id in request_ids)
+    restart_ids = {str(req_id) for req_id in restart_request_ids}
+    batch = len(request_ids)
+    fields = (
+        token_rows,
+        prompt_lengths,
+        computed_lengths,
+        scheduled_lengths,
+        scheduled_draft_lengths,
+        committed_lengths,
+        discard_rows,
+    )
+    if (
+        cache is None
+        or not hasattr(cache, "active_requests")
+        or not hasattr(cache, "cached_requests")
+        or _FIXED32_PENDING_STEP is not None
+        or not 1 <= batch <= 4
+        or len(set(request_ids)) != batch
+        or any(len(field) < batch for field in fields)
+        or type(step_seq) is not int
+        or step_seq <= 0
+        or int(max_tree_depth) <= 0
+        or not restart_ids.issubset(request_ids)
+    ):
+        raise RuntimeError("fixed32 Arctic step staging ownership drift")
+
+    rows = []
+    active_ids = {str(req_id) for req_id in cache.active_requests}
+    cached_ids = {str(req_id) for req_id in cache.cached_requests}
+    for index, req_id in enumerate(request_ids):
+        prompt_len = int(prompt_lengths[index])
+        computed = int(computed_lengths[index])
+        scheduled = int(scheduled_lengths[index])
+        drafts = int(scheduled_draft_lengths[index])
+        committed = int(committed_lengths[index])
+        discard = bool(discard_rows[index])
+        safe_end = computed + scheduled - drafts
+        sequence = token_rows[index]
+        if (
+            prompt_len < 0
+            or computed < 0
+            or scheduled <= 0
+            or drafts not in (0, 31)
+            or drafts > scheduled
+            or (
+                drafts == 31
+                and (
+                    scheduled != 32
+                    or safe_end != committed
+                    or discard
+                )
+            )
+            or not computed <= safe_end <= committed <= len(sequence)
+            or prompt_len > committed
+            or discard is not (safe_end < committed)
+        ):
+            raise RuntimeError(
+                "fixed32 Arctic staged sequence geometry drift: "
+                + repr(
+                    (
+                        req_id,
+                        prompt_len,
+                        computed,
+                        scheduled,
+                        drafts,
+                        safe_end,
+                        committed,
+                        discard,
+                        len(sequence),
+                    )
+                )
+            )
+        restart = req_id in restart_ids
+        is_active = req_id in active_ids
+        if not restart and not is_active and (
+            req_id in _INGESTED_LEN or req_id in _COMMITTED
+        ):
+            raise RuntimeError(
+                "fixed32 Arctic staged inactive row retained local state: "
+                + repr(req_id)
+            )
+        if not restart and is_active and req_id not in cached_ids:
+            raise RuntimeError(
+                "fixed32 Arctic staged row is active but not cached: "
+                + repr(req_id)
+            )
+        prompt = (
+            None
+            if is_active and not restart
+            else [int(token) for token in sequence[:prompt_len]]
+        )
+        prior = (
+            prompt_len
+            if restart
+            else (
+                int(_INGESTED_LEN[req_id])
+                if is_active and req_id in _INGESTED_LEN
+                else prompt_len if not is_active else None
+            )
+        )
+        if prior is None:
+            raise RuntimeError(
+                "fixed32 Arctic staged row has no ingest watermark: "
+                + repr(req_id)
+            )
+        if prior < prompt_len:
+            raise RuntimeError(
+                "fixed32 Arctic staged row has a short ingest watermark"
+            )
+        if safe_end < prior and not (
+            safe_end < prompt_len and prior == prompt_len
+        ):
+            raise RuntimeError(
+                "fixed32 Arctic staged row regressed behind its watermark: "
+                + repr((req_id, safe_end, prior, prompt_len))
+            )
+        delta = (
+            [int(token) for token in sequence[prior:safe_end]]
+            if safe_end > prior
+            else []
+        )
+        suffix_start = max(0, safe_end - int(max_tree_depth))
+        suffix = [
+            int(token) for token in sequence[suffix_start:safe_end]
+        ]
+        if len(delta) != max(0, safe_end - prior):
+            raise RuntimeError("fixed32 Arctic staged delta is incomplete")
+        rows.append(
+            {
+                "request_id": req_id,
+                "restart": restart,
+                "was_active": is_active,
+                "prompt": prompt,
+                "prompt_len": prompt_len,
+                "was_cached": req_id in cached_ids,
+                "delta": delta,
+                "suffix": suffix,
+                "safe_end": safe_end,
+                "scheduled_drafts": drafts,
+                "discard": discard,
+            }
+        )
+
+    live = set(request_ids)
+    retired = tuple(req_id for req_id in active_ids if req_id not in live)
+    try:
+        for row in rows:
+            req_id = row["request_id"]
+            prompt = row["prompt"]
+            if prompt is None:
+                continue
+            if row["restart"] and row["was_active"]:
+                cache.stop_request(req_id)
+                if req_id in cache.active_requests:
+                    raise RuntimeError(
+                        "fixed32 Arctic staged restart kept an active owner"
+                    )
+            if req_id in cache.cached_requests:
+                cache.evict_cached_response(req_id)
+                if req_id in cache.cached_requests:
+                    raise RuntimeError(
+                        "fixed32 Arctic staged cache eviction failed"
+                    )
+            cache.start_request(req_id, prompt)
+            if (
+                req_id not in cache.active_requests
+                or req_id not in cache.cached_requests
+            ):
+                raise RuntimeError(
+                    "fixed32 Arctic staged request start lost ownership"
+                )
+        for row in rows:
+            delta = row["delta"]
+            if not delta:
+                continue
+            req_id = row["request_id"]
+            if (
+                req_id not in cache.active_requests
+                or req_id not in cache.cached_requests
+            ):
+                raise RuntimeError(
+                    "fixed32 Arctic staged delta lost request ownership"
+                )
+            cache.add_active_response(req_id, delta)
+            if (
+                req_id not in cache.active_requests
+                or req_id not in cache.cached_requests
+            ):
+                raise RuntimeError(
+                    "fixed32 Arctic staged owner disappeared after ingest"
+                )
+        for req_id in retired:
+            cache.stop_request(req_id)
+            if req_id in cache.active_requests:
+                raise RuntimeError(
+                    "fixed32 Arctic staged retirement kept an active owner"
+                )
+    except Exception:
+        _fixed32_poison("stage_fixed32_step", step_seq)
+        raise
+
+    for req_id in retired:
+        _COMMITTED.pop(req_id, None)
+        _INGESTED_LEN.pop(req_id, None)
+        STATS["retired"] += 1
+    for row in rows:
+        req_id = row["request_id"]
+        if row["prompt"] is not None:
+            _INGESTED_LEN[req_id] = int(row["prompt_len"])
+            STATS["started"] += 1
+        if row["delta"]:
+            _INGESTED_LEN[req_id] = int(row["safe_end"])
+            STATS["ingested"] += 1
+        _COMMITTED[req_id] = list(row["suffix"])
+    _FIXED32_PENDING_STEP = {
+        "step_seq": step_seq,
+        "request_ids": request_ids,
+        "rows": tuple(rows),
+        "max_tree_depth": int(max_tree_depth),
+    }
+
+
+def finalize_fixed32_step(
+    cache,
+    request_ids,
+    accepted_output,
+    next_token_ids,
+    step_seq,
+    vocab_size,
+):
+    """Append accepted tree-path tokens plus the current sampled token."""
+    global _FIXED32_PENDING_STEP
+    _fixed32_require_unpoisoned()
+    pending = _FIXED32_PENDING_STEP
+    request_ids = tuple(str(req_id) for req_id in request_ids)
+    next_token_ids = tuple(int(token) for token in next_token_ids)
+    if (
+        not isinstance(pending, dict)
+        or pending.get("step_seq") != int(step_seq)
+        or pending.get("request_ids") != request_ids
+        or len(next_token_ids) != len(request_ids)
+        or int(vocab_size) <= 0
+    ):
+        raise RuntimeError("fixed32 Arctic finalization ownership drift")
+
+    accepted_by_req = {}
+    if accepted_output is not None:
+        if (
+            not isinstance(accepted_output, dict)
+            or set(accepted_output)
+            != {
+                "step_seq",
+                "request_ids",
+                "full_request_ids",
+                "output_rows",
+                "output_lens",
+            }
+            or accepted_output.get("step_seq") != int(step_seq)
+            or accepted_output.get("full_request_ids") != request_ids
+        ):
+            raise RuntimeError(
+                "fixed32 Arctic accepted-output freshness drift"
+            )
+        spec_ids = tuple(
+            str(req_id)
+            for req_id in accepted_output.get("request_ids", ())
+        )
+        output_rows = tuple(accepted_output.get("output_rows", ()))
+        output_lens = tuple(accepted_output.get("output_lens", ()))
+        if (
+            len(spec_ids) != len(output_rows)
+            or len(spec_ids) != len(output_lens)
+            or len(set(spec_ids)) != len(spec_ids)
+            or any(req_id not in request_ids for req_id in spec_ids)
+        ):
+            raise RuntimeError(
+                "fixed32 Arctic accepted-output row map drift"
+            )
+        for req_id, output_row, output_len in zip(
+            spec_ids, output_rows, output_lens
+        ):
+            output_len = int(output_len)
+            output_row = tuple(output_row)
+            values = [int(token) for token in output_row[:output_len]]
+            padding = [int(token) for token in output_row[output_len:]]
+            if (
+                len(output_row) != 32
+                or not 1 <= output_len <= 32
+                or len(values) != output_len
+                or any(token != -1 for token in padding)
+            ):
+                raise RuntimeError(
+                    "fixed32 Arctic accepted-output length drift"
+                )
+            accepted_by_req[str(req_id)] = values
+
+    max_tree_depth = int(pending["max_tree_depth"])
+    actions = []
+    for index, row in enumerate(pending["rows"]):
+        req_id = row["request_id"]
+        output = accepted_by_req.get(req_id)
+        if (
+            req_id not in cache.active_requests
+            or req_id not in cache.cached_requests
+        ):
+            raise RuntimeError(
+                "fixed32 Arctic finalization lost request ownership"
+            )
+        if row["discard"]:
+            if output is not None:
+                raise RuntimeError(
+                    "fixed32 Arctic discard row received tree output"
+                )
+            continue
+        if row["scheduled_drafts"] > 0 and output is None:
+            raise RuntimeError(
+                "fixed32 Arctic spec row has no accepted tree output"
+            )
+        if row["scheduled_drafts"] == 0 and output is not None:
+            raise RuntimeError(
+                "fixed32 Arctic non-spec row received tree output"
+            )
+        next_token = next_token_ids[index]
+        accepted = [] if output is None else output[:-1]
+        if output is not None and output[-1] != next_token:
+            raise RuntimeError(
+                "fixed32 Arctic committer bonus disagrees with Eagle root"
+            )
+        if len(accepted) > int(row["scheduled_drafts"]):
+            raise RuntimeError(
+                "fixed32 Arctic accepted more drafts than scheduled"
+            )
+        extra = accepted + [next_token]
+        if any(not 0 <= token < int(vocab_size) for token in extra):
+            raise RuntimeError(
+                "fixed32 Arctic finalized token is outside the vocabulary"
+            )
+        safe_end = int(row["safe_end"])
+        if (
+            _INGESTED_LEN.get(req_id) != safe_end
+            or req_id not in cache.active_requests
+            or req_id not in cache.cached_requests
+        ):
+            raise RuntimeError(
+                "fixed32 Arctic finalization watermark drift: "
+                + repr((req_id, _INGESTED_LEN.get(req_id), safe_end))
+            )
+        actions.append((req_id, safe_end, extra))
+
+    try:
+        for req_id, _safe_end, extra in actions:
+            cache.add_active_response(req_id, extra)
+            if (
+                req_id not in cache.active_requests
+                or req_id not in cache.cached_requests
+            ):
+                raise RuntimeError(
+                    "fixed32 Arctic owner disappeared after finalization"
+                )
+    except Exception:
+        _fixed32_poison("finalize_fixed32_step", step_seq)
+        raise
+
+    for req_id, safe_end, extra in actions:
+        _INGESTED_LEN[req_id] = safe_end + len(extra)
+        _COMMITTED[req_id] = (
+            list(_COMMITTED.get(req_id, ())) + extra
+        )[-max_tree_depth:]
+        STATS["ingested"] += 1
+    _FIXED32_PENDING_STEP = None
 
 
 # ---- head-merge seam DELETED 2026-07-27 -------------------------------------

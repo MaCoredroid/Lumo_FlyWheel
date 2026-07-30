@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """FR13 merged-drafter patcher SELF-TEST (gate c, host-runnable, no GPU).
 
-Applies the runner-side patch chain (tree_reqkey -> merged_drafter) to a FRESH copy of a pristine
-vLLM gpu_model_runner.py and asserts: the anchor matched, the FR13_MERGED_DRAFTER_LIFECYCLE marker
+Applies the runner-side patch chain (row_ids_fresh -> tree_reqkey -> merged_drafter) to a FRESH
+copy of a pristine vLLM gpu_model_runner.py and asserts: the anchor matched, the
+FR13_MERGED_DRAFTER_LIFECYCLE marker
 is present, the merged logic is behind the `if _fr13_md.merged_on():` sidecar gate (=> byte-identical
 when off), the patched file COMPILES, and the patch is idempotent. Catches anchor drift / syntax
 errors BEFORE a GPU boot.
@@ -29,9 +30,11 @@ PASS = FAIL = 0
 def check(cond, msg):
     global PASS, FAIL
     if cond:
-        PASS += 1; print(f"  [PASS] {msg}")
+        PASS += 1
+        print(f"  [PASS] {msg}")
     else:
-        FAIL += 1; print(f"  [FAIL] {msg}")
+        FAIL += 1
+        print(f"  [FAIL] {msg}")
 
 
 pristine = next((p for p in PRISTINE_CANDIDATES if os.path.exists(p)), None)
@@ -50,29 +53,42 @@ work = tmp / "gpu_model_runner.py"
 shutil.copy(pristine, work)
 patcher.GPU_MODEL_RUNNER_PATH = work
 
-# reqkey MUST run first (my hook anchors on its output line)
+# The lifecycle hook anchors on the unconditional row-owner prelude.
+r_rowids = patcher._patch_gpu_model_runner_row_req_ids_fresh()
+check(bool(r_rowids), "row_req_ids_fresh patch applied (produces lifecycle anchor)")
 r_reqkey = patcher._patch_gpu_model_runner_tree_reqkey()
-check(bool(r_reqkey), "tree_reqkey patch applied (produces the anchor)")
+check(bool(r_reqkey), "tree_reqkey patch applied")
 try:
     r_merged = patcher._patch_gpu_model_runner_merged_drafter()
     applied_ok = True
 except Exception as e:
-    r_merged = None; applied_ok = False
+    r_merged = None
+    applied_ok = False
     print(f"  [FAIL] merged_drafter patch raised: {e!r}")
 check(applied_ok and bool(r_merged), "merged_drafter patch applied (anchor matched)")
 
 text = work.read_text()
 check("# FR13_TREE_REQKEY_REWRITE" in text, "reqkey marker present")
 check("# FR13_MERGED_DRAFTER_LIFECYCLE" in text, "merged-drafter marker present")
-check("if _fr13_md.merged_on():" in text, "merged logic behind merged_on() sidecar gate (byte-id off)")
-check("_fr13_md.note_new_requests" in text and "_fr13_md.ingest_from_sequence" in text
-      and "_fr13_md.retire_requests" in text, "all 3 lifecycle calls injected")
-# the merged block must be inside its OWN try/except (can't disable reqkey)
+check(
+    "_fr13_md_on = _fr13_md.merged_on()" in text
+    and "if _fr13_md_on:" in text,
+    "merged logic behind merged_on() sidecar gate (legacy byte-id off)",
+)
+check(
+    "_fr13_md.note_new_requests" in text
+    and "_fr13_md.ingest_from_sequence" in text
+    and "_fr13_md.retire_requests" in text
+    and "_fr13_md.stage_fixed32_step" in text,
+    "legacy and fixed32 lifecycle calls injected",
+)
+# The lifecycle has a local exception boundary. Fixed32 rethrows; legacy
+# retains the historical best-effort isolation.
 _idx = text.find("# FR13_MERGED_DRAFTER_LIFECYCLE")
 _seg = text[_idx:_idx + 3000]
-_try = _seg.find("\n                    try:")
-_exc = _seg.find("\n                    except Exception:")
-check(0 <= _try < _exc, "merged block wrapped in own try/except (own error isolation)")
+_try = _seg.find("\n            try:")
+_exc = _seg.find("\n            except Exception")
+check(0 <= _try < _exc, "merged block has its own exception boundary")
 
 # COMPILES (the decisive syntax/indent check in real context)
 try:
@@ -102,12 +118,15 @@ _matched = False
 for _ep in EAGLE_CANDIDATES:
     if not os.path.exists(_ep):
         continue
-    ework = tmp / "eagle.py"; shutil.copy(_ep, ework); patcher.EAGLE_PATH = ework
+    ework = tmp / "eagle.py"
+    shutil.copy(_ep, ework)
+    patcher.EAGLE_PATH = ework
     try:
         patcher._patch_eagle_tree_consumption_verify()
         py_compile.compile(str(ework), doraise=True)
         check("# FR13_MERGED_DRAFTER_SEAM" in ework.read_text(), f"eagle patch applied+compiles ({os.path.basename(os.path.dirname(_ep))})")
-        _matched = True; break
+        _matched = True
+        break
     except Exception:
         continue
 if not _matched:

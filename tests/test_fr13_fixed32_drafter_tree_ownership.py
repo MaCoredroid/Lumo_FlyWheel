@@ -27,6 +27,10 @@ census = __import__("fr13_fixed32_work_census")
 
 
 DRAFTER_LAYER = "mtp.layers.0.self_attn.attn"
+TARGET_LAYERS = tuple(
+    f"language_model.model.layers.{layer}.self_attn.attn"
+    for layer in range(3, 64, 4)
+)
 
 
 def _runtime() -> dict[str, object]:
@@ -116,6 +120,66 @@ def test_unscoped_one_row_attention_remains_invalid_for_target() -> None:
         )
 
 
+@pytest.mark.parametrize("batch_size", (1, 2, 3, 4))
+def test_target_tree_attention_requires_exact_layer_set(
+    batch_size: int,
+) -> None:
+    namespace = _runtime()
+    namespace["_fr13_fixed32_capture_begin"](
+        40_100 + batch_size,
+        "FULL",
+        32 * batch_size,
+        batch_size,
+        True,
+        False,
+        0,
+    )
+
+    for layer_name in TARGET_LAYERS:
+        namespace["_fr13_fixed32_observed_tree_attn"](
+            layer_name,
+            32 * batch_size,
+            (32, 32),
+            True,
+        )
+
+    work = namespace["_FR13_FIXED32_CAPTURE_CONTEXT"]["work"]
+    assert work["tree_layers"] == set(TARGET_LAYERS)
+    assert work["tree_calls"] == 16
+    assert work["tree_q_rows"] == 16 * 32 * batch_size
+    assert work["tree_bias_shape"] == (32, 32)
+
+
+@pytest.mark.parametrize(
+    "layer_name",
+    (
+        "attn.0",
+        "language_model.model.layers.4.self_attn.attn",
+        "language_model.model.layers.3.self_attn",
+        DRAFTER_LAYER,
+    ),
+)
+def test_target_correct_geometry_wrong_layer_fails(layer_name: str) -> None:
+    namespace = _runtime()
+    namespace["_fr13_fixed32_capture_begin"](
+        40_200,
+        "FULL",
+        32,
+        1,
+        True,
+        False,
+        0,
+    )
+
+    with pytest.raises(RuntimeError, match="tree-attention work drift"):
+        namespace["_fr13_fixed32_observed_tree_attn"](
+            layer_name,
+            32,
+            (32, 32),
+            True,
+        )
+
+
 @pytest.mark.parametrize(
     ("layer_name", "rows", "bias_shape"),
     (
@@ -178,6 +242,75 @@ def test_owner_lifecycle_rejects_cross_scope_begins() -> None:
         drafter_proposal["_fr13_fixed32_capture_begin"](
             43_001, "FULL", 32, 1, True, False, 0
         )
+
+
+def test_drafter_ownership_rejects_profile_scope_overlap() -> None:
+    for profile_capture, profile_memory in (
+        (None, True),
+        ({}, False),
+        ({}, True),
+    ):
+        namespace = _runtime()
+        namespace["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"] = profile_capture
+        namespace["_FR13_FIXED32_PROFILE_MEMORY_SCOPE"] = profile_memory
+        with pytest.raises(RuntimeError, match="proposal begin drift"):
+            namespace["_fr13_fixed32_drafter_proposal_begin"](
+                "tail6_fixed32", ("profile-open",), 1, 1, 1
+            )
+
+    proposal_first = _runtime()
+    proposal_first["_fr13_fixed32_drafter_proposal_begin"](
+        "tail6_fixed32", ("proposal-first",), 1, 1, 1
+    )
+    with pytest.raises(RuntimeError, match="outside pristine bootstrap"):
+        proposal_first["_fr13_fixed32_profile_memory_scope_begin"]()
+
+    profile_capture_begin = _runtime()
+    profile_capture_begin["_FR13_FIXED32_PROFILE_MEMORY_SCOPE"] = True
+    profile_capture_begin["_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT"] = {}
+    with pytest.raises(RuntimeError, match="outside pristine bootstrap"):
+        profile_capture_begin["_fr13_fixed32_profile_capture_scope_begin"](
+            "FULL", 32, 1, True, False, 0
+        )
+
+    profile_memory_end = _runtime()
+    profile_memory_end["_FR13_FIXED32_PROFILE_MEMORY_SCOPE"] = True
+    profile_memory_end["_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT"] = {}
+    with pytest.raises(RuntimeError, match="did not close cleanly"):
+        profile_memory_end["_fr13_fixed32_profile_memory_scope_end"]()
+
+    capture_begin = _runtime()
+    capture_begin["_fr13_fixed32_drafter_proposal_begin"](
+        "tail6_fixed32", ("capture-profile",), 1, 1, 1
+    )
+    capture_begin["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"] = {}
+    with pytest.raises(RuntimeError, match="lazy/duplicate drafter graph capture"):
+        capture_begin["_fr13_fixed32_drafter_graph_capture_begin"](43_100, 1)
+
+    observer = _open_drafter_capture(1, 43_101)
+    observer["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"] = {}
+    with pytest.raises(RuntimeError, match="ownership scope drift"):
+        observer["_fr13_fixed32_observed_tree_attn"](
+            DRAFTER_LAYER, 1, (1, 1), True
+        )
+
+    profile_end = _runtime()
+    profile_end["_FR13_FIXED32_PROFILE_MEMORY_SCOPE"] = True
+    profile_end["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"] = {
+        "descriptor": {
+            "runtime_mode": "FULL",
+            "num_tokens": 32,
+            "num_reqs": 1,
+            "uniform": True,
+            "has_lora": False,
+            "num_active_loras": 0,
+        },
+        "graph_id": 43_102,
+        "completed": True,
+    }
+    profile_end["_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT"] = {}
+    with pytest.raises(RuntimeError, match="did not close cleanly"):
+        profile_end["_fr13_fixed32_profile_capture_scope_end"]()
 
 
 def _emitted_tree_attention_hook():

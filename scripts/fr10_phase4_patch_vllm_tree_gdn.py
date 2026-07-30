@@ -357,7 +357,12 @@ _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH = {}
 _FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE = {}
 _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT = None
 _FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE = []
+_FR13_FIXED32_ACCEPTED_OUTPUT_CURRENT = None
 _FR13_FIXED32_DRAFTER_TREE_LAYER = "mtp.layers.0.self_attn.attn"
+_FR13_FIXED32_TARGET_TREE_LAYERS = frozenset(
+    "language_model.model.layers.%d.self_attn.attn" % layer
+    for layer in range(3, 64, 4)
+)
 _FR13_FIXED32_NONPURE_DISPATCH = {
     "guarded_steps": 0,
     "piecewise_steps": 0,
@@ -508,6 +513,8 @@ def _fr13_fixed32_profile_capture_scope_begin(
         or globals().get("_FR13_FIXED32_PENDING_EVENT") is not None
         or _FR13_FIXED32_CAPTURE_CONTEXT is not None
         or _FR13_FIXED32_CAPTURE_MANIFESTS
+        or _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT is not None
+        or _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT is not None
     ):
         raise RuntimeError(
             "FR13 fixed32 profile capture began outside pristine bootstrap"
@@ -548,6 +555,8 @@ def _fr13_fixed32_profile_capture_scope_end():
         or globals().get("_FR13_FIXED32_PENDING_EVENT") is not None
         or _FR13_FIXED32_CAPTURE_FROZEN
         or _FR13_FIXED32_PROFILE_MEMORY_SCOPE is not True
+        or _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT is not None
+        or _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT is not None
     ):
         raise RuntimeError(
             "FR13 fixed32 profile capture scope did not close cleanly: "
@@ -568,6 +577,8 @@ def _fr13_fixed32_profile_memory_scope_begin():
         or globals().get("_FR13_FIXED32_PENDING_EVENT") is not None
         or _FR13_FIXED32_CAPTURE_FROZEN
         or globals().get("_FR13_FIXED32_PRESEEDED_BATCHES")
+        or _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT is not None
+        or _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT is not None
     ):
         raise RuntimeError(
             "FR13 fixed32 profile-memory scope began outside pristine bootstrap"
@@ -590,6 +601,8 @@ def _fr13_fixed32_profile_memory_scope_end():
         or globals().get("_FR13_FIXED32_PENDING_EVENT") is not None
         or _FR13_FIXED32_CAPTURE_FROZEN
         or globals().get("_FR13_FIXED32_PRESEEDED_BATCHES")
+        or _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT is not None
+        or _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT is not None
     ):
         raise RuntimeError(
             "FR13 fixed32 profile-memory scope did not close cleanly"
@@ -1153,6 +1166,8 @@ def _fr13_fixed32_observed_tree_attn(
             or target_capture is not None
             or target_event is not None
             or capturing is not True
+            or _FR13_FIXED32_PROFILE_CAPTURE_SCOPE is not None
+            or _FR13_FIXED32_PROFILE_MEMORY_SCOPE is not False
         ):
             raise RuntimeError(
                 "FR13 fixed32 tree-attention ownership scope drift: "
@@ -1230,7 +1245,11 @@ def _fr13_fixed32_observed_tree_attn(
     if event is None:
         return
     expected_rows = int(event["batch_size"]) * 32
-    if not name or rows != expected_rows or shape != (32, 32):
+    if (
+        name not in _FR13_FIXED32_TARGET_TREE_LAYERS
+        or rows != expected_rows
+        or shape != (32, 32)
+    ):
         raise RuntimeError(
             "FR13 fixed32 tree-attention work drift: "
             + repr((name, rows, expected_rows, shape))
@@ -1847,6 +1866,7 @@ def _fr13_fixed32_validate_forward_work(work, label):
     actual = {
         "tree_calls": int(work["tree_calls"]),
         "tree_layers": len(work["tree_layers"]),
+        "tree_layer_set": frozenset(work["tree_layers"]),
         "tree_q_rows": int(work["tree_q_rows"]),
         "tree_bias_shape": work["tree_bias_shape"],
         "gdn_calls": int(work["gdn_scan_calls"]),
@@ -1900,6 +1920,7 @@ def _fr13_fixed32_validate_forward_work(work, label):
     expected = {
         "tree_calls": 16,
         "tree_layers": 16,
+        "tree_layer_set": _FR13_FIXED32_TARGET_TREE_LAYERS,
         "tree_q_rows": 16 * batch * 32,
         "tree_bias_shape": (32, 32),
         "gdn_calls": expected_gdn_calls,
@@ -2591,6 +2612,8 @@ def _fr13_fixed32_drafter_proposal_begin(
         or _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT is not None
         or _FR13_FIXED32_OBSERVED_CURRENT is not None
         or _FR13_FIXED32_CAPTURE_CONTEXT is not None
+        or _FR13_FIXED32_PROFILE_CAPTURE_SCOPE is not None
+        or _FR13_FIXED32_PROFILE_MEMORY_SCOPE is not False
     ):
         raise RuntimeError(
             "FR13 fixed32 drafter proposal begin drift: "
@@ -2681,6 +2704,8 @@ def _fr13_fixed32_drafter_graph_capture_begin(graph_id, batch_size):
         or _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT is not None
         or _FR13_FIXED32_OBSERVED_CURRENT is not None
         or _FR13_FIXED32_CAPTURE_CONTEXT is not None
+        or _FR13_FIXED32_PROFILE_CAPTURE_SCOPE is not None
+        or _FR13_FIXED32_PROFILE_MEMORY_SCOPE is not False
         or identity in _FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS
         or batch in _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH
     ):
@@ -12311,6 +12336,22 @@ def _fr13_fixed32_device_commit_route(
     )
     if slot_indices != spec_batch_indices:
         raise RuntimeError("FR13 fixed32 compact-spec batch-index map drift")
+    step_seq = int(getattr(_g, "_LUMO_FA_STEP_SEQ", -1))
+    if (
+        step_seq <= 0
+        or getattr(_g, "_FR13_FIXED32_ACCEPTED_OUTPUT_CURRENT", None)
+        is not None
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 accepted-output freshness publish drift"
+        )
+    _g._FR13_FIXED32_ACCEPTED_OUTPUT_CURRENT = {
+        "step_seq": step_seq,
+        "request_ids": spec_req_ids,
+        "full_request_ids": sampler_req_ids,
+        "output_tokens": device_output,
+        "output_lens": device_output_lens,
+    }
     for compact_row, slot_row in enumerate(slot_indices):
         slot_paths[slot_row].copy_(device_paths[compact_row])
         slot_lens[slot_row].copy_(device_lens[compact_row])
@@ -15114,12 +15155,10 @@ def _patch_gpu_model_runner_row_req_ids_fresh() -> bool:
     propose after a non-spec step (e.g. an n>1 completions fork joining the
     batch) read a STALE 1-row list against B=2 packed rows -> chain-packer
     fail-loud. Worse, a stale list of the RIGHT length would bind silently
-    wrong. Publish the full-batch list unconditionally at _prepare_inputs and
-    INVALIDATE the spec-row list (the spec section re-publishes it when spec
-    rows exist this step).
+    wrong. Publish the full-batch list unconditionally at _prepare_inputs.
+    Fixed32 additionally invalidates the compact spec-row list before
+    `use_spec_decode`; its spec branch republishes the current compact map.
     """
-    if _FR13_FIXED32_MODE:
-        return False
     text = GPU_MODEL_RUNNER_PATH.read_text()
     sentinel = "# FR13_PB_ROWIDS_FRESH"
     if sentinel in text:
@@ -15135,10 +15174,31 @@ def _patch_gpu_model_runner_row_req_ids_fresh() -> bool:
         "            from vllm.model_executor.layers.mamba import (\n"
         "                gdn_linear_attn as _fr13_rf_gdn,\n"
         "            )\n"
-        "            _fr13_rf_gdn._LUMO_FA_SAMPLER_ROW_REQ_IDS = [\n"
+        "            _fr13_rf_req_ids = [\n"
         "                str(_fr13_rf_rid)\n"
-        "                for _fr13_rf_rid in self.input_batch.req_ids\n"
+        "                for _fr13_rf_rid in self.input_batch.req_ids[:num_reqs]\n"
         "            ]\n"
+        f"            if {bool(_FR13_FIXED32_MODE)!r} and (\n"
+        "                int(num_reqs) not in (1, 2, 3, 4)\n"
+        "                or len(_fr13_rf_req_ids) != int(num_reqs)\n"
+        "                or any(not _fr13_rf_rid for _fr13_rf_rid in _fr13_rf_req_ids)\n"
+        "                or len(set(_fr13_rf_req_ids)) != int(num_reqs)\n"
+        "            ):\n"
+        "                raise RuntimeError(\n"
+        "                    'FR13 fixed32 full row-owner publish drift: '\n"
+        "                    + repr((num_reqs, _fr13_rf_req_ids))\n"
+        "                )\n"
+        "            self._fr13_rf_seq = getattr(self, '_fr13_rf_seq', 0) + 1\n"
+        "            _fr13_rf_gdn._LUMO_FA_STEP_SEQ = self._fr13_rf_seq\n"
+        f"            if {bool(_FR13_FIXED32_MODE)!r}:\n"
+        "                _fr13_rf_gdn._FR13_FIXED32_ACCEPTED_OUTPUT_CURRENT = None\n"
+        "            _fr13_rf_gdn._LUMO_FA_SAMPLER_ROW_REQ_IDS = _fr13_rf_req_ids\n"
+        f"            if {bool(_FR13_FIXED32_MODE)!r}:\n"
+        "                _fr13_rf_gdn._LUMO_FA_SPEC_ROW_REQ_IDS = None\n"
+        "                _fr13_rf_gdn._FR13_FIXED32_SPEC_BATCH_INDICES = None\n"
+        "                _fr13_rf_gdn._FR13_FIXED32_BATCH_ROWS = int(num_reqs)\n"
+        "                _fr13_rf_gdn._FR13_FIXED32_SPEC_ROWS = 0\n"
+        "                _fr13_rf_gdn._LUMO_FA_TREE_COMMIT_NROWS = 0\n"
         "            # FR13_CPG_ROWID_TOKEN: host col0 PAGE-ID per request (the\n"
         "            # mamba running-row block id). Folded into the pregather\n"
         "            # freshness token so a col0 page slide/realloc under a\n"
@@ -15213,14 +15273,10 @@ def _patch_gpu_model_runner_row_req_ids_fresh() -> bool:
         "                except Exception:\n"
         "                    _fr13_rf_spec_pairs = None\n"
         "            _fr13_rf_gdn._LUMO_FA_SPEC_ROW_CONV_COL0 = _fr13_rf_spec_pairs\n"
-        "            # FR13_CPG step-seq: monotone engine-step counter. The\n"
-        "            # pregather token folds (staged_seq) and the consumer\n"
-        "            # requires seq_now == staged_seq + 1 — an intervening\n"
-        "            # engine step (e.g. a native/prefill step that rewrites\n"
-        "            # col0 conv state IN PLACE, invisible to req-id and\n"
-        "            # page-id equality) forces the legacy gather.\n"
-        "            self._fr13_rf_seq = getattr(self, '_fr13_rf_seq', 0) + 1\n"
-        "            _fr13_rf_gdn._LUMO_FA_STEP_SEQ = self._fr13_rf_seq\n"
+        "            # FR13_CPG step-seq is published with the row owner above.\n"
+        "            # The pregather token folds it and requires the consumer's\n"
+        "            # seq_now == staged_seq + 1, so an intervening engine step\n"
+        "            # forces the legacy gather.\n"
         "            # NOTE (dbg11): do NOT invalidate _LUMO_FA_SPEC_ROW_REQ_IDS\n"
         "            # here -- the variant-B ring mapper reads it as the\n"
         "            # PREV-step spec-row order (the activation ring is\n"
@@ -15761,18 +15817,30 @@ def _patch_gpu_model_runner_tree_reqkey() -> bool:
         f"            if {bool(_FR13_FIXED32_MODE)!r}:\n"
         "                try:\n"
         "                    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_rk_gdn\n"
-        "                    # Arctic lifecycle still consumes existing runner IDs;\n"
-        "                    # acceptance/committer state never keys by them.\n"
+        "                    # The unconditional pre-use_spec_decode publisher owns\n"
+        "                    # full-batch identity and the one-per-step sequence.\n"
         "                    _fr13_rk_req_ids = [\n"
         "                        str(_fr13_rk_rid)\n"
         "                        for _fr13_rk_rid in self.input_batch.req_ids[:num_reqs]\n"
         "                    ]\n"
-        "                    _fr13_rk_gdn._LUMO_FA_SAMPLER_ROW_REQ_IDS = _fr13_rk_req_ids\n"
-        "                    _fr13_rk_gdn._LUMO_FA_SPEC_ROW_REQ_IDS = None\n"
-        "                    _fr13_rk_gdn._FR13_FIXED32_SPEC_BATCH_INDICES = None\n"
-        "                    _fr13_rk_gdn._LUMO_FA_TREE_COMMIT_NROWS = 0\n"
-        "                    self._fr13_rf_seq = getattr(self, '_fr13_rf_seq', 0) + 1\n"
-        "                    _fr13_rk_gdn._LUMO_FA_STEP_SEQ = self._fr13_rf_seq\n"
+        "                    if (\n"
+        "                        tuple(getattr(\n"
+        "                            _fr13_rk_gdn,\n"
+        "                            '_LUMO_FA_SAMPLER_ROW_REQ_IDS', (),\n"
+        "                        )) != tuple(_fr13_rk_req_ids)\n"
+        "                        or getattr(_fr13_rk_gdn, '_LUMO_FA_SPEC_ROW_REQ_IDS', 0)\n"
+        "                        is not None\n"
+        "                        or getattr(\n"
+        "                            _fr13_rk_gdn,\n"
+        "                            '_FR13_FIXED32_SPEC_BATCH_INDICES', 0,\n"
+        "                        ) is not None\n"
+        "                        or int(getattr(\n"
+        "                            _fr13_rk_gdn, '_LUMO_FA_STEP_SEQ', -1,\n"
+        "                        )) != int(getattr(self, '_fr13_rf_seq', -2))\n"
+        "                    ):\n"
+        "                        raise RuntimeError(\n"
+        "                            'FR13 fixed32 prelude/spec ownership drift'\n"
+        "                        )\n"
         "                    _fr13_rk_spec_n = sum(\n"
         "                        1 for _fr13_rk_i in range(num_reqs)\n"
         "                        if int(num_decode_draft_tokens[_fr13_rk_i]) >= 0\n"
@@ -16199,6 +16267,7 @@ def _patch_gpu_model_runner_replay_draft_reqkey() -> bool:
         "                        self._draft_token_ids.device.type,\n"
         "                        True,\n"
         "                    )\n"
+        "                # FR13_FIXED32_DRAFTER_PROPOSAL_SEALED\n"
     )
     if propose_anchor not in text:
         raise RuntimeError("FR13 replay draft reqkey propose anchor not found")
@@ -18860,16 +18929,57 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr13_t_skip = "geom_len%d_hd%d_tlen%d" % (len(_fr10_spine_tokens), _fr13_t_hd, _fr13_t_len)
                     else:
                         from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_t_gdn
-                        _fr13_t_ids = getattr(_fr13_t_gdn, "_LUMO_FA_SPEC_ROW_REQ_IDS", None)
                         _fr13_t_cache = _fr13_t.get_cache()
                         _fr13_t_B = int(_fr10_spine_tokens[0].shape[0])
-                        # B=4 mixed prefill/decode: SPEC_ROW_REQ_IDS is the spec-row SUBSET (len<B) ->
-                        # the tail padded 100% (measured tailg4b: ids2_ne_B4 x101). Fall back to the
-                        # SAMPLER row ids -- set UNCONDITIONALLY to the FULL batch (patch:11250), so
-                        # length==B and ROW-ALIGNED with the drafter's spine_tokens. decide_tail keys
-                        # _COMMITTED by req_id: spec rows hit Arctic; non-spec (cold) -> pad (lossless).
-                        if _fr13_t_ids is None or len(_fr13_t_ids) != _fr13_t_B:
-                            _fr13_t_ids = getattr(_fr13_t_gdn, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None)
+                        if _fr13_is_fixed32:
+                            # The proposal wrapper owns the current full padded
+                            # batch. Never let a stale compact spec-row list win.
+                            _fr13_t_ids = getattr(
+                                _fr13_t_gdn,
+                                "_LUMO_FA_SAMPLER_ROW_REQ_IDS",
+                                None,
+                            )
+                            _fr13_t_proposal = getattr(
+                                _fr13_t_gdn,
+                                "_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT",
+                                None,
+                            )
+                            if (
+                                not isinstance(_fr13_t_proposal, dict)
+                                or _fr13_t_ids is None
+                                or len(_fr13_t_ids) != _fr13_t_B
+                                or tuple(str(_r) for _r in _fr13_t_ids)
+                                != tuple(_fr13_t_proposal.get("request_ids", ()))
+                                or int(_fr13_t_proposal.get("batch_size", -1))
+                                != _fr13_t_B
+                            ):
+                                raise RuntimeError(
+                                    "FR13 fixed32 drafter row-owner drift: "
+                                    + repr(
+                                        (
+                                            _fr13_t_ids,
+                                            _fr13_t_B,
+                                            _fr13_t_proposal,
+                                        )
+                                    )
+                                )
+                        else:
+                            _fr13_t_ids = getattr(
+                                _fr13_t_gdn,
+                                "_LUMO_FA_SPEC_ROW_REQ_IDS",
+                                None,
+                            )
+                            # B=4 mixed prefill/decode: compact spec IDs can be
+                            # shorter than the padded proposal rows.
+                            if (
+                                _fr13_t_ids is None
+                                or len(_fr13_t_ids) != _fr13_t_B
+                            ):
+                                _fr13_t_ids = getattr(
+                                    _fr13_t_gdn,
+                                    "_LUMO_FA_SAMPLER_ROW_REQ_IDS",
+                                    None,
+                                )
                         if _fr13_t_cache is None:
                             _fr13_t_skip = "cache_none"
                         elif _fr13_t_ids is None:
@@ -18916,7 +19026,165 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                         _fr13_t_root_wtk[:, 2].detach().reshape(-1),
                                     ]
                                 )
-                            _fr13_t_stack = torch.stack(_fr13_t_host_cols).cpu()
+                            _fr13_t_accept_host = None
+                            _fr13_t_next_host = None
+                            if _fr13_is_fixed32:
+                                _fr13_t_step_seq = int(getattr(
+                                    _fr13_t_gdn,
+                                    "_LUMO_FA_STEP_SEQ",
+                                    -1,
+                                ))
+                                _fr13_t_accept = getattr(
+                                    _fr13_t_gdn,
+                                    "_FR13_FIXED32_ACCEPTED_OUTPUT_CURRENT",
+                                    None,
+                                )
+                                _fr13_t_spec_B = 0
+                                if _fr13_t_accept is not None:
+                                    _fr13_t_spec_ids = tuple(
+                                        str(_r) for _r in
+                                        _fr13_t_accept.get("request_ids", ())
+                                    )
+                                    _fr13_t_full_ids = tuple(
+                                        str(_r) for _r in
+                                        _fr13_t_accept.get(
+                                            "full_request_ids", ()
+                                        )
+                                    )
+                                    _fr13_t_accept_tokens = (
+                                        _fr13_t_accept.get("output_tokens")
+                                    )
+                                    _fr13_t_accept_lens = (
+                                        _fr13_t_accept.get("output_lens")
+                                    )
+                                    _fr13_t_spec_B = len(_fr13_t_spec_ids)
+                                    if (
+                                        set(_fr13_t_accept)
+                                        != {
+                                            "step_seq",
+                                            "request_ids",
+                                            "full_request_ids",
+                                            "output_tokens",
+                                            "output_lens",
+                                        }
+                                        or int(_fr13_t_accept.get(
+                                            "step_seq", -1
+                                        )) != _fr13_t_step_seq
+                                        or _fr13_t_full_ids
+                                        != tuple(str(_r) for _r in _fr13_t_ids)
+                                        or not 1 <= _fr13_t_spec_B <= _fr13_t_B
+                                        or len(set(_fr13_t_spec_ids))
+                                        != _fr13_t_spec_B
+                                        or any(
+                                            _r not in _fr13_t_full_ids
+                                            for _r in _fr13_t_spec_ids
+                                        )
+                                        or not torch.is_tensor(
+                                            _fr13_t_accept_tokens
+                                        )
+                                        or not torch.is_tensor(
+                                            _fr13_t_accept_lens
+                                        )
+                                        or tuple(_fr13_t_accept_tokens.shape)
+                                        != (_fr13_t_spec_B, 32)
+                                        or tuple(_fr13_t_accept_lens.shape)
+                                        != (_fr13_t_spec_B,)
+                                        or _fr13_t_accept_tokens.dtype
+                                        != torch.int64
+                                        or _fr13_t_accept_lens.dtype
+                                        != torch.int64
+                                        or _fr13_t_accept_tokens.device
+                                        != _fr10_spine_tokens[0].device
+                                        or _fr13_t_accept_lens.device
+                                        != _fr10_spine_tokens[0].device
+                                    ):
+                                        raise RuntimeError(
+                                            "FR13 fixed32 accepted-output "
+                                            "device record drift"
+                                        )
+                                _fr13_t_host_matrix = torch.stack(
+                                    _fr13_t_host_cols
+                                )
+                                _fr13_t_payload_parts = [
+                                    _fr13_t_host_matrix.reshape(-1)
+                                ]
+                                if _fr13_t_accept is not None:
+                                    _fr13_t_payload_parts.extend(
+                                        [
+                                            _fr13_t_accept_tokens.reshape(-1),
+                                            _fr13_t_accept_lens.reshape(-1),
+                                        ]
+                                    )
+                                _fr13_t_payload_parts.append(
+                                    next_token_ids.detach().reshape(-1).to(
+                                        dtype=_fr13_t_host_matrix.dtype
+                                    )
+                                )
+                                _fr13_t_payload = torch.cat(
+                                    _fr13_t_payload_parts
+                                ).cpu()
+                                _fr13_t_offset = (
+                                    len(_fr13_t_host_cols) * _fr13_t_B
+                                )
+                                _fr13_t_stack = _fr13_t_payload[
+                                    :_fr13_t_offset
+                                ].reshape(
+                                    len(_fr13_t_host_cols),
+                                    _fr13_t_B,
+                                )
+                                if _fr13_t_accept is not None:
+                                    _fr13_t_accept_count = (
+                                        _fr13_t_spec_B * 32
+                                    )
+                                    _fr13_t_accept_rows_host = (
+                                        _fr13_t_payload[
+                                            _fr13_t_offset:
+                                            _fr13_t_offset
+                                            + _fr13_t_accept_count
+                                        ].reshape(_fr13_t_spec_B, 32)
+                                    )
+                                    _fr13_t_offset += _fr13_t_accept_count
+                                    _fr13_t_accept_lens_host = (
+                                        _fr13_t_payload[
+                                            _fr13_t_offset:
+                                            _fr13_t_offset
+                                            + _fr13_t_spec_B
+                                        ]
+                                    )
+                                    _fr13_t_offset += _fr13_t_spec_B
+                                    _fr13_t_accept_host = {
+                                        "step_seq": _fr13_t_step_seq,
+                                        "request_ids": _fr13_t_spec_ids,
+                                        "full_request_ids": _fr13_t_full_ids,
+                                        "output_rows": tuple(
+                                            tuple(int(_x) for _x in _row)
+                                            for _row in
+                                            _fr13_t_accept_rows_host.tolist()
+                                        ),
+                                        "output_lens": tuple(
+                                            int(_x) for _x in
+                                            _fr13_t_accept_lens_host.tolist()
+                                        ),
+                                    }
+                                _fr13_t_next_host = tuple(
+                                    int(_x) for _x in
+                                    _fr13_t_payload[
+                                        _fr13_t_offset:
+                                        _fr13_t_offset + _fr13_t_B
+                                    ].tolist()
+                                )
+                                if (
+                                    len(_fr13_t_next_host) != _fr13_t_B
+                                    or _fr13_t_offset + _fr13_t_B
+                                    != int(_fr13_t_payload.numel())
+                                ):
+                                    raise RuntimeError(
+                                        "FR13 fixed32 host lifecycle payload drift"
+                                    )
+                            else:
+                                _fr13_t_stack = torch.stack(
+                                    _fr13_t_host_cols
+                                ).cpu()
                             _fr13_hydra_contract_error = False
                             _fr13_t_head = [
                                 [int(_x) for _x in _fr13_t_stack[_d].tolist()]
@@ -18969,6 +19237,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             _fr13_t_vocab = int(_fr10_logits.shape[-1])
                             _fr13_t_pad = int(_fr13_t_stack[0, 0])
                             if _fr13_is_fixed32:
+                                _fr13_t.finalize_fixed32_step(
+                                    _fr13_t_cache,
+                                    [str(_r) for _r in _fr13_t_ids],
+                                    _fr13_t_accept_host,
+                                    _fr13_t_next_host,
+                                    _fr13_t_step_seq,
+                                    _fr13_t_vocab,
+                                )
                                 _fr13_t_work_serial = (
                                     _fr13_t.get_fixed32_drafter_work_serial()
                                 )
@@ -24013,40 +24289,77 @@ def _patch_gpu_model_runner_merged_drafter() -> bool:
     self.input_batch (req_ids, token_ids_cpu, num_prompt_tokens, num_computed_tokens_cpu) is in
     scope. Sidecar-gated (fr13_merged_drafter.merged_on() reads /logs/fr13_draft_source_merged.arm,
     worker-env-drop-proof); speculate() + tree-fill happen at the drafter seam. Default (no sidecar)
-    = full no-op => byte-identical. Injected AFTER the reqkey block sets _fr13_rk_req_ids; wrapped in
-    its OWN try/except so a merged-path error can NEVER disable the (correctness-critical) reqkey
-    rewrite or the runner. Must register AFTER _patch_gpu_model_runner_tree_reqkey."""
+    = full no-op => byte-identical. Injected after the unconditional full-batch row-owner publish,
+    before `use_spec_decode`, so chunked-prefill proposals have current IDs and an active Arctic
+    request. Fixed32 is fail-closed; other modes retain the legacy error-isolated behavior."""
     text = GPU_MODEL_RUNNER_PATH.read_text()
     sentinel = "# FR13_MERGED_DRAFTER_LIFECYCLE"
     if sentinel in text:
         return False
-    anchor = "                    _fr13_rk_gdn._LUMO_FA_SAMPLER_ROW_REQ_IDS = _fr13_rk_req_ids\n"
+    anchor = (
+        "            _fr13_rf_gdn._LUMO_FA_SAMPLER_ROW_REQ_IDS = "
+        "_fr13_rf_req_ids\n"
+    )
     if anchor not in text:
         raise RuntimeError("FR13 merged-drafter runner anchor (SAMPLER_ROW_REQ_IDS) not found")
     inject = anchor + (
-        "                    " + sentinel + ": Arctic lifecycle, sidecar-gated, error-isolated.\n"
-        "                    try:\n"
-        "                        import sys as _fr13_md_sys\n"
-        "                        if \"/workspace/scripts\" not in _fr13_md_sys.path:\n"
-        "                            _fr13_md_sys.path.insert(0, \"/workspace/scripts\")\n"
-        "                        import fr13_merged_drafter as _fr13_md\n"
-        "                        if _fr13_md.merged_on():\n"
-        "                            _fr13_md_cache = _fr13_md.get_cache()\n"
-        "                            _fr13_md.maybe_prewarm(_fr13_md_cache)\n"
-        "                            _fr13_md_new = {}\n"
-        "                            for _fr13_md_i, _fr13_md_rid in enumerate(_fr13_rk_req_ids):\n"
-        "                                if _fr13_md_cache is not None and _fr13_md_rid not in _fr13_md_cache.active_requests:\n"
-        "                                    _fr13_md_np = int(self.input_batch.num_prompt_tokens[_fr13_md_i])\n"
-        "                                    _fr13_md_new[_fr13_md_rid] = [int(_x) for _x in self.input_batch.token_ids_cpu[_fr13_md_i, :_fr13_md_np]]\n"
-        "                            _fr13_md.note_new_requests(_fr13_md_cache, _fr13_md_new)\n"
-        "                            for _fr13_md_i, _fr13_md_rid in enumerate(_fr13_rk_req_ids):\n"
-        "                                _fr13_md_nt = int(self.input_batch.num_computed_tokens_cpu[_fr13_md_i])\n"
-        "                                _fr13_md.ingest_from_sequence(_fr13_md_cache, _fr13_md_rid, self.input_batch.token_ids_cpu[_fr13_md_i], _fr13_md_nt)\n"
-        "                            if _fr13_md_cache is not None:\n"
-        "                                _fr13_md_live = set(_fr13_rk_req_ids)\n"
-        "                                _fr13_md.retire_requests(_fr13_md_cache, [_fr13_md_r for _fr13_md_r in list(_fr13_md_cache.active_requests) if _fr13_md_r not in _fr13_md_live])\n"
-        "                    except Exception:\n"
-        "                        pass\n"
+        "            " + sentinel + ": pre-spec Arctic lifecycle, sidecar-gated.\n"
+        "            try:\n"
+        "                import sys as _fr13_md_sys\n"
+        "                if \"/workspace/scripts\" not in _fr13_md_sys.path:\n"
+        "                    _fr13_md_sys.path.insert(0, \"/workspace/scripts\")\n"
+        "                import fr13_merged_drafter as _fr13_md\n"
+        "                _fr13_md_on = _fr13_md.merged_on()\n"
+        f"                if {bool(_FR13_FIXED32_MODE)!r} and not _fr13_md_on:\n"
+        "                    raise RuntimeError('FR13 fixed32 merged drafter is not armed')\n"
+        "                if _fr13_md_on:\n"
+        "                    _fr13_md_cache = _fr13_md.get_cache()\n"
+        f"                    if {bool(_FR13_FIXED32_MODE)!r} and _fr13_md_cache is None:\n"
+        "                        raise RuntimeError('FR13 fixed32 Arctic cache is unavailable')\n"
+        "                    _fr13_md.maybe_prewarm(_fr13_md_cache)\n"
+        f"                    if {bool(_FR13_FIXED32_MODE)!r}:\n"
+        "                        _fr13_md_sched = scheduler_output.num_scheduled_tokens\n"
+        "                        _fr13_md_drafts = scheduler_output.scheduled_spec_decode_tokens\n"
+        "                        _fr13_md_restarts = {\n"
+        "                            str(_req.req_id)\n"
+        "                            for _req in scheduler_output.scheduled_new_reqs\n"
+        "                        }\n"
+        "                        _fr13_md_restarts.update(\n"
+        "                            str(_rid) for _rid in\n"
+        "                            scheduler_output.scheduled_cached_reqs.resumed_req_ids\n"
+        "                        )\n"
+        "                        _fr13_md.stage_fixed32_step(\n"
+        "                            _fr13_md_cache,\n"
+        "                            _fr13_rf_req_ids,\n"
+        "                            self.input_batch.token_ids_cpu,\n"
+        "                            self.input_batch.num_prompt_tokens,\n"
+        "                            self.input_batch.num_computed_tokens_cpu,\n"
+        "                            [int(_fr13_md_sched[_rid]) for _rid in _fr13_rf_req_ids],\n"
+        "                            [len(_fr13_md_drafts.get(_rid, ())) for _rid in _fr13_rf_req_ids],\n"
+        "                            self.input_batch.num_tokens_no_spec,\n"
+        "                            self.discard_request_mask.np,\n"
+        "                            int(self._fr13_rf_seq),\n"
+        "                            restart_request_ids=_fr13_md_restarts,\n"
+        "                        )\n"
+        "                    else:\n"
+        "                        _fr13_md_new = {}\n"
+        "                        for _fr13_md_i, _fr13_md_rid in enumerate(_fr13_rf_req_ids):\n"
+        "                            if _fr13_md_cache is not None and _fr13_md_rid not in _fr13_md_cache.active_requests:\n"
+        "                                _fr13_md_np = int(self.input_batch.num_prompt_tokens[_fr13_md_i])\n"
+        "                                _fr13_md_new[_fr13_md_rid] = [int(_x) for _x in self.input_batch.token_ids_cpu[_fr13_md_i, :_fr13_md_np]]\n"
+        "                        _fr13_md.note_new_requests(_fr13_md_cache, _fr13_md_new)\n"
+        "                        for _fr13_md_i, _fr13_md_rid in enumerate(_fr13_rf_req_ids):\n"
+        "                            _fr13_md_nt = int(self.input_batch.num_computed_tokens_cpu[_fr13_md_i])\n"
+        "                            _fr13_md.ingest_from_sequence(_fr13_md_cache, _fr13_md_rid, self.input_batch.token_ids_cpu[_fr13_md_i], _fr13_md_nt)\n"
+        "                        if _fr13_md_cache is not None:\n"
+        "                            _fr13_md_live = set(_fr13_rf_req_ids)\n"
+        "                            _fr13_md.retire_requests(_fr13_md_cache, [_fr13_md_r for _fr13_md_r in list(_fr13_md_cache.active_requests) if _fr13_md_r not in _fr13_md_live])\n"
+        "            except Exception as _fr13_md_exc:\n"
+        f"                if {bool(_FR13_FIXED32_MODE)!r}:\n"
+        "                    raise RuntimeError(\n"
+        "                        'FR13 fixed32 merged-drafter lifecycle failed: '\n"
+        "                        + type(_fr13_md_exc).__name__ + ':' + str(_fr13_md_exc)\n"
+        "                    ) from _fr13_md_exc\n"
     )
     text = text.replace(anchor, inject, 1)
     GPU_MODEL_RUNNER_PATH.write_text(text)
@@ -25035,14 +25348,144 @@ def _patch_gpu_model_runner_exec_lock() -> bool:
     no hooks) => the cause is the batch-queue pipelining thread interacting
     with the capture window. Fix: execute_model holds a module lock for its
     whole body; the =2 capture section holds the same lock exclusively.
-    Normal steps: sample_tokens does NOT take the lock, so the designed
-    execute(N+1)/sample(N) overlap is untouched. Capture steps: we wait for
-    the in-flight forward, capture solo, release — a one-step stall, once
-    per key."""
+    Normal non-fixed32 steps leave execute(N+1)/sample(N) overlap untouched.
+    Fixed32 keeps async scheduling enabled but gates execute(N+1) until
+    sample(N) has sealed its sampler, Arctic, drafter, and census singletons.
+    Ordinary bookkeeping after that seal can still overlap. Capture steps wait
+    for the in-flight forward, capture solo, then release."""
     text = GPU_MODEL_RUNNER_PATH.read_text()
     if "_fr13_sg_orig_execute_model" in text:
         return False
-    text += """
+    if _FR13_FIXED32_MODE:
+        release_anchor = (
+            "                # FR13_FIXED32_DRAFTER_PROPOSAL_SEALED\n"
+        )
+        if text.count(release_anchor) != 1:
+            raise RuntimeError(
+                "FR13 fixed32 async gate release anchor drifted"
+            )
+        text = text.replace(
+            release_anchor,
+            release_anchor
+            + "                _fr13_fixed32_sample_gate_release(self)\n",
+            1,
+        )
+        text += r'''
+
+# FR13 fixed32 async step gate. Keep async scheduling configured, but do not
+# let execute(N+1) overwrite fixed32 per-step singletons before sample(N)
+# finishes the drafter proposal and census seal.
+import threading as _fr13_sg_threading
+_FR13_SG_EXEC_LOCK = _fr13_sg_threading.RLock()
+_FR13_FIXED32_SAMPLE_COND = _fr13_sg_threading.Condition(
+    _FR13_SG_EXEC_LOCK
+)
+_FR13_FIXED32_SAMPLE_PENDING = {}
+_FR13_FIXED32_SAMPLE_GENERATION = 0
+_FR13_FIXED32_SAMPLE_FAILURE = None
+_FR13_FIXED32_SAMPLE_TLS = _fr13_sg_threading.local()
+_fr13_sg_orig_execute_model = GPUModelRunner.execute_model
+_fr13_fixed32_orig_sample_tokens = GPUModelRunner.sample_tokens
+
+
+def _fr13_fixed32_sample_gate_release(self):
+    owner = getattr(_FR13_FIXED32_SAMPLE_TLS, "owner", None)
+    if (
+        not isinstance(owner, tuple)
+        or len(owner) != 2
+        or owner[0] != id(self)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 sample gate release has no sample owner"
+        )
+    key, generation = owner
+    with _FR13_FIXED32_SAMPLE_COND:
+        if _FR13_FIXED32_SAMPLE_PENDING.get(key) != generation:
+            raise RuntimeError(
+                "FR13 fixed32 sample gate generation drifted at release"
+            )
+        del _FR13_FIXED32_SAMPLE_PENDING[key]
+        _FR13_FIXED32_SAMPLE_TLS.released = True
+        _FR13_FIXED32_SAMPLE_COND.notify_all()
+
+
+def _fr13_sg_execute_model_locked(self, *a, **k):
+    global _FR13_FIXED32_SAMPLE_FAILURE, _FR13_FIXED32_SAMPLE_GENERATION
+    key = id(self)
+    with _FR13_FIXED32_SAMPLE_COND:
+        while (
+            key in _FR13_FIXED32_SAMPLE_PENDING
+            and _FR13_FIXED32_SAMPLE_FAILURE is None
+        ):
+            _FR13_FIXED32_SAMPLE_COND.wait()
+        if _FR13_FIXED32_SAMPLE_FAILURE is not None:
+            raise RuntimeError(
+                "FR13 fixed32 prior sample did not seal: "
+                + _FR13_FIXED32_SAMPLE_FAILURE
+            )
+        result = _fr13_sg_orig_execute_model(self, *a, **k)
+        if (
+            result is None
+            and getattr(self, "execute_model_state", None) is not None
+        ):
+            if key in _FR13_FIXED32_SAMPLE_PENDING:
+                raise RuntimeError(
+                    "FR13 fixed32 execute published a duplicate sample gate"
+                )
+            _FR13_FIXED32_SAMPLE_GENERATION += 1
+            _FR13_FIXED32_SAMPLE_PENDING[key] = (
+                _FR13_FIXED32_SAMPLE_GENERATION
+            )
+        return result
+
+
+def _fr13_fixed32_sample_tokens_guarded(self, *a, **k):
+    global _FR13_FIXED32_SAMPLE_FAILURE
+    key = id(self)
+    completed = False
+    with _FR13_FIXED32_SAMPLE_COND:
+        generation = _FR13_FIXED32_SAMPLE_PENDING.get(key)
+    owner = (
+        None if generation is None else (key, int(generation))
+    )
+    _FR13_FIXED32_SAMPLE_TLS.owner = owner
+    _FR13_FIXED32_SAMPLE_TLS.released = False
+    try:
+        result = _fr13_fixed32_orig_sample_tokens(self, *a, **k)
+        completed = True
+    finally:
+        released = bool(
+            getattr(_FR13_FIXED32_SAMPLE_TLS, "released", False)
+        )
+        with _FR13_FIXED32_SAMPLE_COND:
+            if (
+                owner is not None
+                and not released
+                and _FR13_FIXED32_SAMPLE_PENDING.get(key)
+                == owner[1]
+            ):
+                del _FR13_FIXED32_SAMPLE_PENDING[key]
+            if owner is not None and (not completed or not released):
+                _FR13_FIXED32_SAMPLE_FAILURE = (
+                    "sample returned before fixed32 proposal seal"
+                    if completed
+                    else "sample raised before fixed32 proposal seal"
+                )
+                _FR13_FIXED32_SAMPLE_COND.notify_all()
+        _FR13_FIXED32_SAMPLE_TLS.owner = None
+        _FR13_FIXED32_SAMPLE_TLS.released = False
+    if owner is not None and not released:
+        raise RuntimeError(
+            "FR13 fixed32 sample returned before proposal seal"
+        )
+    return result
+
+
+GPUModelRunner.execute_model = _fr13_sg_execute_model_locked
+GPUModelRunner.sample_tokens = _fr13_fixed32_sample_tokens_guarded
+'''
+    else:
+        text += """
 
 # FR13 S1 capture-step serialization (see fr10_phase4 patcher)
 import threading as _fr13_sg_threading
@@ -26951,7 +27394,8 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
         namespace["_fr13_fixed32_capture_begin"](graph_id, *descriptor)
         for layer in range(tree_layers):
             namespace["_fr13_fixed32_observed_tree_attn"](
-                f"attn.{layer}",
+                "language_model.model.layers.%d.self_attn.attn"
+                % (3 + 4 * layer),
                 batch * 32,
                 (32, 32),
                 True,
@@ -27546,6 +27990,140 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
                 (32, 32),
                 False,
             ),
+        )
+        wrong_target_layer = new_runtime("tail6_fixed32", 1)
+        wrong_target_layer["_fr13_fixed32_capture_begin"](
+            8_901, "FULL", 32, 1, True, False, 0
+        )
+        expect_failure(
+            "target-tree-layer-allowlist",
+            lambda: wrong_target_layer[
+                "_fr13_fixed32_observed_tree_attn"
+            ](
+                "language_model.model.layers.4.self_attn.attn",
+                32,
+                (32, 32),
+                True,
+            ),
+        )
+        final_layer_set = new_runtime("tail6_fixed32", 1)
+        original_validator = final_layer_set[
+            "_fr13_fixed32_validate_forward_work"
+        ]
+        captured_work = {}
+
+        def capture_valid_work(work, label):
+            captured_work["work"] = copy.deepcopy(work)
+            return original_validator(work, label)
+
+        final_layer_set["_fr13_fixed32_validate_forward_work"] = (
+            capture_valid_work
+        )
+        capture_graph(
+            final_layer_set,
+            "tail6_fixed32",
+            1,
+            8_905,
+        )
+        final_layer_set["_fr13_fixed32_validate_forward_work"] = (
+            original_validator
+        )
+        wrong_set_work = captured_work["work"]
+        wrong_set_work["tree_layers"].remove(
+            "language_model.model.layers.3.self_attn.attn"
+        )
+        wrong_set_work["tree_layers"].add(
+            "language_model.model.layers.4.self_attn.attn"
+        )
+        expect_failure(
+            "target-tree-final-layer-set",
+            lambda: original_validator(wrong_set_work, "captured"),
+        )
+
+        profile_drafter = new_runtime("tail6_fixed32", 1)
+        profile_drafter["_fr13_fixed32_profile_memory_scope_begin"]()
+        expect_failure(
+            "profile-memory-rejects-drafter-proposal",
+            lambda: profile_drafter[
+                "_fr13_fixed32_drafter_proposal_begin"
+            ]("tail6_fixed32", ("profile",), 1, 1, 1),
+        )
+        profile_capture_drafter = new_runtime("tail6_fixed32", 1)
+        profile_capture_drafter["_FR13_FIXED32_PROFILE_MEMORY_SCOPE"] = True
+        profile_capture_drafter[
+            "_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT"
+        ] = {}
+        expect_failure(
+            "profile-capture-begin-rejects-drafter-owner",
+            lambda: profile_capture_drafter[
+                "_fr13_fixed32_profile_capture_scope_begin"
+            ]("FULL", 32, 1, True, False, 0),
+        )
+        profile_memory_end_drafter = new_runtime("tail6_fixed32", 1)
+        profile_memory_end_drafter[
+            "_FR13_FIXED32_PROFILE_MEMORY_SCOPE"
+        ] = True
+        profile_memory_end_drafter[
+            "_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT"
+        ] = {}
+        expect_failure(
+            "profile-memory-end-rejects-drafter-owner",
+            profile_memory_end_drafter[
+                "_fr13_fixed32_profile_memory_scope_end"
+            ],
+        )
+        drafter_profile = new_runtime("tail6_fixed32", 1)
+        drafter_profile["_fr13_fixed32_drafter_proposal_begin"](
+            "tail6_fixed32", ("drafter",), 1, 1, 1
+        )
+        expect_failure(
+            "drafter-proposal-rejects-profile-memory",
+            drafter_profile["_fr13_fixed32_profile_memory_scope_begin"],
+        )
+        drafter_profile["_FR13_FIXED32_PROFILE_MEMORY_SCOPE"] = True
+        expect_failure(
+            "profile-memory-rejects-drafter-capture",
+            lambda: drafter_profile[
+                "_fr13_fixed32_drafter_graph_capture_begin"
+            ](8_902, 1),
+        )
+        drafter_observer = new_runtime("tail6_fixed32", 1)
+        drafter_observer["_fr13_fixed32_drafter_proposal_begin"](
+            "tail6_fixed32", ("observer",), 1, 1, 1
+        )
+        drafter_observer["_fr13_fixed32_drafter_graph_capture_begin"](
+            8_903, 1
+        )
+        drafter_observer["_FR13_FIXED32_PROFILE_MEMORY_SCOPE"] = True
+        expect_failure(
+            "profile-memory-rejects-drafter-observer",
+            lambda: drafter_observer[
+                "_fr13_fixed32_observed_tree_attn"
+            ](
+                drafter_observer["_FR13_FIXED32_DRAFTER_TREE_LAYER"],
+                1,
+                (1, 1),
+                True,
+            ),
+        )
+        profile_end_owner = new_runtime("tail6_fixed32", 1)
+        profile_end_owner["_FR13_FIXED32_PROFILE_MEMORY_SCOPE"] = True
+        profile_end_owner["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"] = {
+            "descriptor": {
+                "runtime_mode": "FULL",
+                "num_tokens": 32,
+                "num_reqs": 1,
+                "uniform": True,
+                "has_lora": False,
+                "num_active_loras": 0,
+            },
+            "graph_id": 8_904,
+            "completed": True,
+        }
+        profile_end_owner["_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT"] = {}
+        expect_failure(
+            "profile-capture-end-rejects-drafter-owner",
+            profile_end_owner["_fr13_fixed32_profile_capture_scope_end"],
         )
 
         profile_descriptor = ("FULL", 32, 1, True, False, 0)
@@ -28728,8 +29306,8 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_reqkey()),
         # FR13_MERGED_DRAFTER: Arctic SuffixDecodingCache lifecycle at the runner,
-        # sidecar-gated (no-op unless FR13_DRAFT_SOURCE=merged). MUST run AFTER
-        # tree_reqkey (anchors on its _fr13_rk_req_ids line).
+        # sidecar-gated (no-op unless FR13_DRAFT_SOURCE=merged). It anchors on the
+        # unconditional row-owner prelude emitted above.
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_merged_drafter()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_attn_kv_remap_capture()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_attn_kv_remap_apply()),
@@ -28745,7 +29323,6 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_sample_async_spec_capture_guard()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_target_logits_handoff()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_bonus_handoff()),
-        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_exec_lock()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_warmup_capture()),
         # FR13_SLOT_REORDER (edits 1+4/5): spine-first canonical KV slot layout,
         # default OFF. Must run AFTER remap_apply (whose _sample anchor precedes
@@ -28756,6 +29333,9 @@ def main() -> int:
         # graph-replay crash fix (NOT flag-gated; pure correctness guard).
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_uniform_dispatch_guard()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_draft_reqkey()),
+        # Fixed32 async release anchors after drafter proposal/census sealing
+        # emitted by replay_draft_reqkey above.
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_exec_lock()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_fr13_det_warn()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_boundary_tap_d()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_sfwd_gpu_timer()),

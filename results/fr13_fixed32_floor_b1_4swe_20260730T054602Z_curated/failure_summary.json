@@ -1,0 +1,53 @@
+{
+  "schema": "fr13.fixed32.campaign_failure_summary.v1",
+  "campaign": {
+    "tag": "b1_4swe_f32_20260730T054602Z",
+    "batch_size": 1,
+    "concurrency": 1,
+    "task_count": 4,
+    "task_ids": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033",
+      "astropy__astropy-13236",
+      "astropy__astropy-13398"
+    ],
+    "source_git_commit": "72fc1fb3fc0b6d42afa33ca5e537243c6e6e0496"
+  },
+  "outcome": {
+    "status": "INVALID_ABORTED",
+    "acceptance_evidence": false,
+    "tail6_started": true,
+    "tail6_completed": false,
+    "hydra27_started": false,
+    "post_task_timing_brackets": 0,
+    "serving_gate_return_code": 14
+  },
+  "failure": {
+    "arm": "tail6_fixed32",
+    "task_id": "astropy__astropy-12907",
+    "scheduler_step": 0,
+    "phase": "first_chunked_prefill_proposal",
+    "prompt_tokens": 22869,
+    "scheduled_prefill_tokens": 1024,
+    "error": "FR13 fixed32 drafter skipped: ids_none",
+    "root_cause": "The fixed32 patch disabled the unconditional pre-use_spec_decode full-row request-ID publisher and Arctic lifecycle. Pinned vLLM legitimately invokes Eagle for the dummy sampled token on an intermediate chunked-prefill step, before the spec-only replacement publisher can run."
+  },
+  "observer_evidence": {
+    "lazy_drafter_graph_capture_batch": 1,
+    "lazy_drafter_graph_capture_completed": true,
+    "prior_one_row_target_observer_failure_recurred": false
+  },
+  "closure": {
+    "runtime_manifest_launch_end_byte_equal": true,
+    "runtime_manifest_sha256": "50b032252141826ae1df0cbc6bffa82af003e271408b14ffdb2699f0a5e16953",
+    "external_manifest_launch_end_byte_equal": true,
+    "external_manifest_sha256": "a422f6f0cb3ffbf4c3e0a6953ba2766f197933db8ba3712af7648953049f5c6d"
+  },
+  "privacy": {
+    "contains_prompts": false,
+    "contains_responses": false,
+    "contains_environment": false,
+    "contains_task_patches": false,
+    "contains_raw_logs": false
+  }
+}
