@@ -298,6 +298,7 @@ def test_preseed_postcondition_binds_all_current_bank_aliases(
     pregather_state = {
         "mode": mode,
         "banks": conv_banks,
+        "ssm_banks": ssm_banks,
         "layer_order": order,
         "staging": staging,
         "row_elems": 10,
@@ -307,7 +308,12 @@ def test_preseed_postcondition_binds_all_current_bank_aliases(
         "accepted_lens": accepted_lens,
         "contract": {
             "commit_route": "fixed32_two_launch_col0",
-            "commit_bank_nonoverlap": True,
+            "commit_bank_overlap_policy": "exact_alias_only_16x3",
+            "commit_bank_partial_overlap": False,
+            "commit_bank_alias_groups": 16,
+            "commit_bank_alias_width": 3,
+            "commit_bank_destination_guard": "alias_row_unique",
+            "commit_null_row_rejected": True,
         },
     }
     committer_state = {"banks": ssm_banks}
@@ -381,6 +387,11 @@ def test_preseed_postcondition_binds_all_current_bank_aliases(
     with pytest.raises(RuntimeError, match="did not publish lease"):
         assert_ready(batch)
     namespace["_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR"] = accepted_lens
+
+    pregather_state["ssm_banks"] = (*ssm_banks[:-1], object())
+    with pytest.raises(RuntimeError, match="did not publish lease"):
+        assert_ready(batch)
+    pregather_state["ssm_banks"] = ssm_banks
 
     layers[order[-1]]._fr13_replay_conv_state = object()
     with pytest.raises(

@@ -29,6 +29,23 @@ def _fixed_route_tree(patcher_tree: ast.Module) -> ast.Module:
     return ast.parse(sources[0].value)
 
 
+def _observed_runtime_tree(patcher_tree: ast.Module) -> ast.Module:
+    sources = [
+        node.value.value
+        for node in patcher_tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name)
+            and target.id == "_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE"
+            for target in node.targets
+        )
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    ]
+    assert len(sources) == 1
+    return ast.parse(sources[0])
+
+
 def _called_name(call: ast.Call) -> str:
     if isinstance(call.func, ast.Name):
         return call.func.id
@@ -63,17 +80,17 @@ def test_fixed_route_uses_two_launch_path_and_generic_routes_stay_generic() -> N
     assert len(all_calls) == 3
 
 
-def test_fixed_route_guards_rows_before_raw_conv_commit_and_replay() -> None:
+def test_fixed_route_delegates_row_guard_to_launcher_before_replay() -> None:
     tree = _fixed_route_tree(ast.parse(PATCHER_PATH.read_text()))
     route = _function(tree, "_fr13_fixed32_device_commit_route")
     calls = [
         _called_name(node) for node in ast.walk(route) if isinstance(node, ast.Call)
     ]
 
-    assert calls.count("_fixed_conv_commit_rows") == 1
+    assert "_fixed_conv_commit_rows" not in calls
+    assert "validate_fixed32_conv_commit_rows" not in ast.unparse(route)
     assert calls.count("_fixed_conv_commit") == 1
     assert calls.count("_fixed_replay") == 1
-    assert calls.index("_fixed_conv_commit_rows") < calls.index("_fixed_conv_commit")
     assert calls.index("_fixed_conv_commit") < calls.index("_fixed_replay")
 
 
@@ -100,6 +117,10 @@ def test_launcher_is_exactly_gather_then_scatter_without_host_sync() -> None:
         "_fr13_fixed32_conv_commit_gather_kernel",
         "_fr13_fixed32_conv_commit_scatter_kernel",
     ]
+    assert calls.index("validate_fixed32_conv_commit_rows") < calls.index(
+        kernel_calls[0]
+    )
+    assert calls.index(kernel_calls[0]) < calls.index(kernel_calls[1])
     assert not any(name.endswith(banned_suffixes) for name in calls), calls
     assert not any(isinstance(node, ast.Try) for node in ast.walk(launcher))
     assert "for bank in conv_banks" not in source
@@ -215,6 +236,7 @@ def test_preseed_binds_exact_commit_operands_and_warms_b1_through_b4() -> None:
     }
 
     assert {
+        "ssm_banks",
         "commit_spec_state_indices",
         "accepted_paths",
         "accepted_lens",
@@ -224,6 +246,77 @@ def test_preseed_binds_exact_commit_operands_and_warms_b1_through_b4() -> None:
         "accepted_paths",
         "accepted_lens",
     } <= identity_names
+    assert "existing['ssm_banks']" in source
+    assert "ssm_bank_refs" in source
+    assert "zip(existing['ssm_banks'], ssm_bank_refs, strict=True)" in source
     assert "_fr13_fixed32_conv_commit_gather_kernel" in source
     assert "_fr13_fixed32_conv_commit_scatter_kernel" in source
-    assert "commit_bank_nonoverlap" in source
+    assert "commit_bank_overlap_policy" in source
+    assert "commit_bank_partial_overlap" in source
+    assert "commit_bank_alias_groups" in source
+    assert "commit_bank_alias_width" in source
+    assert "commit_bank_destination_guard" in source
+    assert "commit_null_row_rejected" in source
+    assert "commit_bank_nonoverlap" not in source
+
+
+def test_patcher_runtime_identity_tuple_matches_kernel_state_order() -> None:
+    tree = _observed_runtime_tree(ast.parse(PATCHER_PATH.read_text()))
+    runtime = _function(tree, "_fr13_fixed32_conv_runtime_contract")
+    assignments = {
+        target.id: node.value
+        for node in ast.walk(runtime)
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+        and target.id in {"source_identity", "source_data_ptrs"}
+    }
+    assert set(assignments) == {"source_identity", "source_data_ptrs"}
+    assert all(isinstance(value, ast.Tuple) for value in assignments.values())
+
+    identity = assignments["source_identity"]
+    assert isinstance(identity, ast.Tuple)
+    assert [ast.unparse(value) for value in identity.elts] == [
+        "tuple((id(bank) for bank in banks))",
+        "tuple((id(bank) for bank in ssm_banks))",
+        "id(offsets)",
+        "id(bank_alias_ids_device)",
+        "tuple((id(source) for source in sources))",
+        "id(ssi_ptrs)",
+        "id(ssi_strides)",
+        "id(commit_spec_state_indices)",
+        "id(accepted_paths)",
+        "id(accepted_lens)",
+        "id(staging)",
+    ]
+    data_ptrs = assignments["source_data_ptrs"]
+    assert isinstance(data_ptrs, ast.Tuple)
+    assert [ast.unparse(value) for value in data_ptrs.elts] == [
+        "tuple((int(bank.data_ptr()) for bank in banks))",
+        "tuple((int(bank.data_ptr()) for bank in ssm_banks))",
+        ("tuple((int(bank.untyped_storage().data_ptr()) for bank in ssm_banks))"),
+        "int(offsets.data_ptr())",
+        "int(bank_alias_ids_device.data_ptr())",
+        "tuple((int(source.data_ptr()) for source in sources))",
+        "int(ssi_ptrs.data_ptr())",
+        "int(ssi_strides.data_ptr())",
+        "int(commit_spec_state_indices.data_ptr())",
+        "int(accepted_paths.data_ptr())",
+        "int(accepted_lens.data_ptr())",
+        "int(staging.data_ptr())",
+    ]
+
+
+def test_patcher_preseed_binds_companion_ssm_banks() -> None:
+    tree = ast.parse(PATCHER_PATH.read_text())
+    fragments = [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and "_fr13_f32_pregather(" in node.value
+    ]
+
+    assert len(fragments) == 1
+    assert "conv_banks=_fr13_f32_conv_banks" in fragments[0]
+    assert "ssm_banks=_fr13_f32_banks" in fragments[0]

@@ -1506,6 +1506,7 @@ def register_fixed32_conv_col0_ssi_group(
 def _validate_fixed32_conv_pregather_preseed(
     *,
     conv_banks,
+    ssm_banks,
     layer_order,
     max_batch_size: int,
 ) -> tuple[
@@ -1515,6 +1516,11 @@ def _validate_fixed32_conv_pregather_preseed(
     int,
     int,
     tuple[torch.Tensor, ...],
+    tuple[tuple[int, ...], ...],
+    tuple[int, ...],
+    tuple[int, ...],
+    tuple[int, ...],
+    tuple[int, ...],
 ]:
     """Validate and materialize the fixed32 pregather pointer contract once."""
     if _FR13_FIXED32_MODE is None:
@@ -1529,6 +1535,10 @@ def _validate_fixed32_conv_pregather_preseed(
         raise ValueError(
             "FR13_FIXED32_CONV_PREGATHER requires exactly 48 conv banks"
         )
+    if not isinstance(ssm_banks, (list, tuple)) or len(ssm_banks) != 48:
+        raise ValueError(
+            "FR13_FIXED32_CONV_PREGATHER requires exactly 48 companion SSM banks"
+        )
     capacity = int(max_batch_size)
     if capacity not in _FR13_FIXED32_BATCHES:
         raise ValueError(
@@ -1540,6 +1550,11 @@ def _validate_fixed32_conv_pregather_preseed(
     registered_layers = {
         name: group["tensor"]
         for group in groups
+        for name in group["layers"]
+    }
+    registered_group_ids = {
+        name: group_index
+        for group_index, group in enumerate(groups)
         for name in group["layers"]
     }
     if (
@@ -1555,6 +1570,7 @@ def _validate_fixed32_conv_pregather_preseed(
             f"registered={len(registered_layers)} order={len(order)}"
         )
     ssi_sources = tuple(registered_layers[name] for name in order)
+    ssi_group_ids = tuple(registered_group_ids[name] for name in order)
 
     anchor = conv_banks[0]
     if not torch.is_tensor(anchor) or anchor.ndim != 3:
@@ -1587,6 +1603,8 @@ def _validate_fixed32_conv_pregather_preseed(
         )
     pointers = []
     bank_spans = []
+    ssm_pointers = []
+    ssm_storage_pointers = []
     for index, bank in enumerate(conv_banks):
         if not torch.is_tensor(bank):
             raise TypeError(
@@ -1626,14 +1644,85 @@ def _validate_fixed32_conv_pregather_preseed(
                 index,
             )
         )
-    ordered_spans = sorted(bank_spans)
-    for left, right in zip(ordered_spans, ordered_spans[1:]):
+        ssm_bank = ssm_banks[index]
+        if (
+            not torch.is_tensor(ssm_bank)
+            or ssm_bank.device != anchor.device
+            or int(bank.untyped_storage().data_ptr())
+            != int(ssm_bank.untyped_storage().data_ptr())
+        ):
+            raise ValueError(
+                "FR13_FIXED32_CONV_PREGATHER conv/SSM storage binding mismatch "
+                f"at index {index}"
+            )
+        ssm_pointers.append(int(ssm_bank.data_ptr()))
+        ssm_storage_pointers.append(
+            int(ssm_bank.untyped_storage().data_ptr())
+        )
+
+    indices_by_pointer: dict[int, list[int]] = {}
+    span_by_pointer: dict[int, tuple[int, int, int]] = {}
+    for lo, hi, index in bank_spans:
+        indices_by_pointer.setdefault(lo, []).append(index)
+        span_by_pointer.setdefault(lo, (lo, hi, index))
+    ordered_unique_spans = sorted(span_by_pointer.values())
+    for left, right in zip(
+        ordered_unique_spans, ordered_unique_spans[1:]
+    ):
         if right[0] < left[1]:
             raise ValueError(
-                "FR13_FIXED32_CONV_PREGATHER conv bank spans overlap: "
+                "FR13_FIXED32_CONV_PREGATHER conv bank spans partially overlap: "
                 f"bank[{left[2]}]=[{left[0]:#x},{left[1]:#x}) "
                 f"bank[{right[2]}]=[{right[0]:#x},{right[1]:#x})"
             )
+
+    alias_classes = tuple(
+        sorted(
+            (tuple(indices) for indices in indices_by_pointer.values()),
+            key=lambda indices: indices[0],
+        )
+    )
+    if (
+        len(alias_classes) != 16
+        or any(len(indices) != 3 for indices in alias_classes)
+        or any(
+            len({ssi_group_ids[index] for index in indices}) != 3
+            for indices in alias_classes
+        )
+    ):
+        raise ValueError(
+            "FR13_FIXED32_CONV_PREGATHER requires 16 exact conv aliases of "
+            "width 3, each spanning all three SSI groups"
+        )
+    ssm_indices_by_pointer: dict[int, list[int]] = {}
+    for index, pointer in enumerate(ssm_pointers):
+        ssm_indices_by_pointer.setdefault(pointer, []).append(index)
+    ssm_alias_classes = tuple(
+        sorted(
+            (tuple(indices) for indices in ssm_indices_by_pointer.values()),
+            key=lambda indices: indices[0],
+        )
+    )
+    if ssm_alias_classes != alias_classes:
+        raise ValueError(
+            "FR13_FIXED32_CONV_PREGATHER conv/SSM alias topology mismatch"
+        )
+
+    alias_ids_by_layer = [-1] * 48
+    alias_ranks_by_layer = [-1] * 48
+    for alias_id, indices in enumerate(alias_classes):
+        for alias_rank, index in enumerate(indices):
+            alias_ids_by_layer[index] = alias_id
+            alias_ranks_by_layer[index] = alias_rank
+    alias_ids = tuple(alias_ids_by_layer)
+    alias_ranks = tuple(alias_ranks_by_layer)
+    if (
+        set(alias_ids) != set(range(16))
+        or set(alias_ranks) != {0, 1, 2}
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_PREGATHER alias topology materialization failed"
+        )
     return (
         anchor,
         pointers,
@@ -1641,12 +1730,18 @@ def _validate_fixed32_conv_pregather_preseed(
         shape[2],
         element_bytes,
         ssi_sources,
+        alias_classes,
+        alias_ids,
+        alias_ranks,
+        tuple(ssm_pointers),
+        tuple(ssm_storage_pointers),
     )
 
 
 def preseed_fixed32_conv_col0_pregather(
     *,
     conv_banks,
+    ssm_banks,
     layer_order,
     max_batch_size: int,
     commit_spec_state_indices: torch.Tensor,
@@ -1668,15 +1763,22 @@ def preseed_fixed32_conv_col0_pregather(
         conv_l,
         element_bytes,
         ssi_sources,
+        alias_classes,
+        alias_ids,
+        alias_ranks,
+        ssm_pointers,
+        ssm_storage_pointers,
     ) = (
         _validate_fixed32_conv_pregather_preseed(
             conv_banks=conv_banks,
+            ssm_banks=ssm_banks,
             layer_order=layer_order,
             max_batch_size=capacity,
         )
     )
     existing = _FR13_FIXED32_CONV_PREGATHER.get("state")
     bank_refs = tuple(conv_banks)
+    ssm_bank_refs = tuple(ssm_banks)
     if (
         not torch.is_tensor(commit_spec_state_indices)
         or commit_spec_state_indices.device != anchor.device
@@ -1717,6 +1819,12 @@ def preseed_fixed32_conv_col0_pregather(
                 old is not new
                 for old, new in zip(existing["banks"], bank_refs, strict=True)
             )
+            or any(
+                old is not new
+                for old, new in zip(
+                    existing["ssm_banks"], ssm_bank_refs, strict=True
+                )
+            )
             or existing.get("commit_spec_state_indices")
             is not commit_spec_state_indices
             or existing.get("accepted_paths") is not accepted_paths
@@ -1730,6 +1838,11 @@ def preseed_fixed32_conv_col0_pregather(
 
     offsets = torch.tensor(
         [(pointer - pointers[0]) // 16 for pointer in pointers],
+        dtype=torch.int64,
+        device=anchor.device,
+    )
+    alias_ids_device = torch.tensor(
+        alias_ids,
         dtype=torch.int64,
         device=anchor.device,
     )
@@ -1784,11 +1897,18 @@ def preseed_fixed32_conv_col0_pregather(
         "max_batch_size": capacity,
         "preseeded_batches": batches,
         "banks": bank_refs,
+        "ssm_banks": ssm_bank_refs,
         "layer_order": tuple(str(name) for name in layer_order),
         "anchor": anchor,
         "bank_shape": tuple(int(value) for value in anchor.shape),
         "bank_stride": tuple(int(value) for value in anchor.stride()),
         "bank_data_ptrs": tuple(pointers),
+        "ssm_bank_data_ptrs": ssm_pointers,
+        "ssm_bank_storage_ptrs": ssm_storage_pointers,
+        "bank_alias_classes": alias_classes,
+        "bank_alias_ids": alias_ids,
+        "bank_alias_ranks": alias_ranks,
+        "bank_alias_ids_device": alias_ids_device,
         "off16": offsets,
         "ssi_sources": ssi_sources,
         "ssi_ptrs": ssi_ptrs,
@@ -1822,7 +1942,9 @@ def preseed_fixed32_conv_col0_pregather(
         "live_selfchecked_batches": set(),
         "source_identity": (
             tuple(id(bank) for bank in bank_refs),
+            tuple(id(bank) for bank in ssm_bank_refs),
             id(offsets),
+            id(alias_ids_device),
             tuple(id(source) for source in ssi_sources),
             id(ssi_ptrs),
             id(ssi_strides),
@@ -1833,7 +1955,13 @@ def preseed_fixed32_conv_col0_pregather(
         ),
         "source_data_ptrs": (
             tuple(int(bank.data_ptr()) for bank in bank_refs),
+            tuple(int(bank.data_ptr()) for bank in ssm_bank_refs),
+            tuple(
+                int(bank.untyped_storage().data_ptr())
+                for bank in ssm_bank_refs
+            ),
             int(offsets.data_ptr()),
+            int(alias_ids_device.data_ptr()),
             tuple(int(source.data_ptr()) for source in ssi_sources),
             int(ssi_ptrs.data_ptr()),
             int(ssi_strides.data_ptr()),
@@ -1873,14 +2001,24 @@ def preseed_fixed32_conv_col0_pregather(
             "commit_gather_launches_per_event": 1,
             "commit_scatter_launches_per_event": 1,
             "commit_staging_reused": True,
-            "commit_bank_nonoverlap": True,
+            "commit_bank_overlap_policy": "exact_alias_only_16x3",
+            "commit_bank_partial_overlap": False,
+            "commit_bank_alias_groups": 16,
+            "commit_bank_alias_width": 3,
+            "commit_bank_destination_guard": "alias_row_unique",
+            "commit_null_row_rejected": True,
             "commit_ssi_bound": True,
             "commit_paths_bound": True,
         },
     }
-    # Warm every B specialization from an independent, in-range zero source.
+    if int(anchor.shape[0]) <= 3 * capacity:
+        raise ValueError(
+            "FR13_FIXED32_CONV_PREGATHER needs one non-null warmup row per "
+            f"alias/request: rows={int(anchor.shape[0])} capacity={capacity}"
+        )
+    # Warm every B specialization from independent, non-null physical rows.
     # Builder rows above the current eager B may be uninitialized at boot.
-    safe_ssi = torch.zeros(
+    safe_ssi = torch.ones(
         (capacity, 1), dtype=torch.int32, device=anchor.device
     )
     safe_ptrs = torch.full(
@@ -1889,9 +2027,22 @@ def preseed_fixed32_conv_col0_pregather(
     safe_strides = torch.full(
         (48,), int(safe_ssi.stride(0)), dtype=torch.int64, device=anchor.device
     )
+    safe_commit_rows = (
+        torch.tensor(
+            alias_ranks,
+            dtype=torch.int32,
+            device=anchor.device,
+        ).view(48, 1)
+        * capacity
+        + torch.arange(
+            capacity,
+            dtype=torch.int32,
+            device=anchor.device,
+        ).view(1, capacity)
+        + 1
+    )
     safe_commit_ssi = (
-        torch.arange(capacity, dtype=torch.int32, device=anchor.device)
-        .view(1, capacity, 1)
+        safe_commit_rows.view(48, capacity, 1)
         .expand(48, capacity, int(commit_spec_state_indices.shape[2]))
         .contiguous()
     )
@@ -2120,7 +2271,9 @@ def launch_fixed32_conv_col0_pregather(
         state.get("source_identity")
         != (
             tuple(id(bank) for bank in state["banks"]),
+            tuple(id(bank) for bank in state["ssm_banks"]),
             id(state["off16"]),
+            id(state["bank_alias_ids_device"]),
             tuple(id(source) for source in state["ssi_sources"]),
             id(state["ssi_ptrs"]),
             id(state["ssi_strides"]),
@@ -2132,7 +2285,13 @@ def launch_fixed32_conv_col0_pregather(
         or state.get("source_data_ptrs")
         != (
             tuple(int(bank.data_ptr()) for bank in state["banks"]),
+            tuple(int(bank.data_ptr()) for bank in state["ssm_banks"]),
+            tuple(
+                int(bank.untyped_storage().data_ptr())
+                for bank in state["ssm_banks"]
+            ),
             int(state["off16"].data_ptr()),
+            int(state["bank_alias_ids_device"].data_ptr()),
             tuple(int(source.data_ptr()) for source in state["ssi_sources"]),
             int(state["ssi_ptrs"].data_ptr()),
             int(state["ssi_strides"].data_ptr()),
@@ -2192,8 +2351,14 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
         conv_l,
         element_bytes,
         ssi_sources,
+        alias_classes,
+        alias_ids,
+        alias_ranks,
+        ssm_pointers,
+        ssm_storage_pointers,
     ) = _validate_fixed32_conv_pregather_preseed(
         conv_banks=state["banks"],
+        ssm_banks=state["ssm_banks"],
         layer_order=state["layer_order"],
         max_batch_size=int(state["max_batch_size"]),
     )
@@ -2233,6 +2398,21 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
         or state["mode"] != _FR13_FIXED32_MODE
         or anchor is not state["anchor"]
         or tuple(pointers) != state.get("bank_data_ptrs")
+        or tuple(ssm_pointers) != state.get("ssm_bank_data_ptrs")
+        or tuple(ssm_storage_pointers)
+        != state.get("ssm_bank_storage_ptrs")
+        or tuple(alias_classes) != state.get("bank_alias_classes")
+        or tuple(alias_ids) != state.get("bank_alias_ids")
+        or tuple(alias_ranks) != state.get("bank_alias_ranks")
+        or not torch.is_tensor(state.get("bank_alias_ids_device"))
+        or state["bank_alias_ids_device"].dtype != torch.int64
+        or state["bank_alias_ids_device"].device != anchor.device
+        or tuple(state["bank_alias_ids_device"].shape) != (48,)
+        or not state["bank_alias_ids_device"].is_contiguous()
+        or tuple(
+            int(value) for value in state["bank_alias_ids_device"].tolist()
+        )
+        != tuple(alias_ids)
         or any(
             source is not expected
             for source, expected in zip(
@@ -2266,7 +2446,12 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
         "lease_audited": True,
         "route": state["contract"]["commit_route"],
         "layers": 48,
-        "bank_nonoverlap": True,
+        "bank_overlap_policy": "exact_alias_only_16x3",
+        "bank_partial_overlap": False,
+        "bank_alias_groups": 16,
+        "bank_alias_width": 3,
+        "bank_destination_guard": "alias_row_unique",
+        "null_row_rejected": True,
         "staging_bank_nonalias": True,
     }
 
@@ -2329,6 +2514,14 @@ def launch_fixed32_conv_commit_to_col0(
         raise RuntimeError(
             "FR13_FIXED32_CONV_COMMIT persistent identity/geometry drift"
         )
+    validate_fixed32_conv_commit_rows(
+        spec_state_indices=spec_state_indices,
+        accepted_paths=accepted_paths,
+        accepted_lens=accepted_lens,
+        bank_alias_ids=state["bank_alias_ids_device"],
+        batch=batch,
+        bank_rows=int(state["anchor"].shape[0]),
+    )
     row_elems = int(state["row_elems"])
     block = int(state["block"])
     grid = (48, batch, triton.cdiv(row_elems, block))
@@ -5786,6 +5979,7 @@ def validate_fixed32_conv_commit_rows(
     spec_state_indices: torch.Tensor,
     accepted_paths: torch.Tensor,
     accepted_lens: torch.Tensor,
+    bank_alias_ids: torch.Tensor,
     batch: int,
     bank_rows: int,
 ) -> None:
@@ -5812,6 +6006,11 @@ def validate_fixed32_conv_commit_rows(
         or int(accepted_lens.shape[0]) < batch
         or accepted_paths.device != spec_state_indices.device
         or accepted_lens.device != spec_state_indices.device
+        or not torch.is_tensor(bank_alias_ids)
+        or bank_alias_ids.dtype != torch.int64
+        or bank_alias_ids.device != spec_state_indices.device
+        or tuple(bank_alias_ids.shape) != (48,)
+        or not bank_alias_ids.is_contiguous()
     ):
         raise RuntimeError(
             "FR13_FIXED32_CONV_COMMIT row-guard geometry/dtype/device drift"
@@ -5819,14 +6018,13 @@ def validate_fixed32_conv_commit_rows(
 
     active_rows = spec_state_indices[:, :batch, :].to(torch.long)
     running_rows = active_rows[:, :, 0]
-    sorted_running = torch.sort(running_rows, dim=1).values
-    distinct_running = (
-        (sorted_running[:, 1:] != sorted_running[:, :-1]).all()
-        if batch > 1
-        else torch.ones(
-            (), dtype=torch.bool, device=spec_state_indices.device
-        )
-    )
+    physical_destinations = (
+        bank_alias_ids.view(48, 1) * bank_rows + running_rows
+    ).reshape(-1)
+    sorted_destinations = torch.sort(physical_destinations).values
+    distinct_destinations = (
+        sorted_destinations[1:] != sorted_destinations[:-1]
+    ).all()
     lens = accepted_lens[:batch].to(torch.long).view(batch, 1)
     paths = accepted_paths[:batch].to(torch.long)
     positions = torch.arange(
@@ -5849,9 +6047,11 @@ def validate_fixed32_conv_commit_rows(
         ),
     ).view(int(spec_state_indices.shape[0]), batch)
     contract_ok = (
-        (active_rows >= 0).all()
+        (active_rows > 0).all()
         & (active_rows < bank_rows).all()
-        & distinct_running
+        & (bank_alias_ids >= 0).all()
+        & (bank_alias_ids < 16).all()
+        & distinct_destinations
         & (lens >= 0).all()
         & (lens <= 15).all()
         & ((~active_paths) | ((paths >= 0) & (paths < 32))).all()

@@ -786,6 +786,11 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
         if not isinstance(pregather_state, dict)
         else tuple(pregather_state.get("banks", ()))
     )
+    pregather_ssm_banks = (
+        ()
+        if not isinstance(pregather_state, dict)
+        else tuple(pregather_state.get("ssm_banks", ()))
+    )
     committer_banks = (
         ()
         if not isinstance(committer_state, dict)
@@ -861,6 +866,16 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
                 )
             )
         ),
+        "pregather_ssm_bank_aliases": (
+            len(pregather_ssm_banks) == 48
+            and len(current_ssm) == 48
+            and all(
+                bank is current
+                for bank, current in zip(
+                    pregather_ssm_banks, current_ssm, strict=True
+                )
+            )
+        ),
         "committer_bank_aliases": (
             len(committer_banks) == 48
             and len(current_ssm) == 48
@@ -896,11 +911,46 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
             if not isinstance(pregather_state, dict)
             else pregather_state.get("contract", {}).get("commit_route")
         ),
-        "commit_bank_nonoverlap": (
+        "commit_bank_overlap_policy": (
             None
             if not isinstance(pregather_state, dict)
             else pregather_state.get("contract", {}).get(
-                "commit_bank_nonoverlap"
+                "commit_bank_overlap_policy"
+            )
+        ),
+        "commit_bank_partial_overlap": (
+            None
+            if not isinstance(pregather_state, dict)
+            else pregather_state.get("contract", {}).get(
+                "commit_bank_partial_overlap"
+            )
+        ),
+        "commit_bank_alias_groups": (
+            None
+            if not isinstance(pregather_state, dict)
+            else pregather_state.get("contract", {}).get(
+                "commit_bank_alias_groups"
+            )
+        ),
+        "commit_bank_alias_width": (
+            None
+            if not isinstance(pregather_state, dict)
+            else pregather_state.get("contract", {}).get(
+                "commit_bank_alias_width"
+            )
+        ),
+        "commit_bank_destination_guard": (
+            None
+            if not isinstance(pregather_state, dict)
+            else pregather_state.get("contract", {}).get(
+                "commit_bank_destination_guard"
+            )
+        ),
+        "commit_null_row_rejected": (
+            None
+            if not isinstance(pregather_state, dict)
+            else pregather_state.get("contract", {}).get(
+                "commit_null_row_rejected"
             )
         ),
         "commit_lease_audited": commit_audit.get("lease_audited"),
@@ -936,13 +986,19 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
         "current_ssm_complete": True,
         "current_conv_complete": True,
         "pregather_bank_aliases": True,
+        "pregather_ssm_bank_aliases": True,
         "committer_bank_aliases": True,
         "staging_shape": (48, capacity, row_elems),
         "commit_ssi_alias": True,
         "commit_paths_alias": True,
         "commit_lens_alias": True,
         "commit_route": "fixed32_two_launch_col0",
-        "commit_bank_nonoverlap": True,
+        "commit_bank_overlap_policy": "exact_alias_only_16x3",
+        "commit_bank_partial_overlap": False,
+        "commit_bank_alias_groups": 16,
+        "commit_bank_alias_width": 3,
+        "commit_bank_destination_guard": "alias_row_unique",
+        "commit_null_row_rejected": True,
         "commit_lease_audited": True,
         "committer_captures": capacity,
         "committer_preseeded_graphs": capacity,
@@ -1516,11 +1572,19 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         raise RuntimeError("FR13 fixed32 conv pregather state is missing")
     capacity = state.get("max_batch_size")
     banks = state.get("banks")
+    ssm_banks = state.get("ssm_banks")
     layer_order = state.get("layer_order")
     offsets = state.get("off16")
+    bank_alias_classes = state.get("bank_alias_classes")
+    bank_alias_ids = state.get("bank_alias_ids")
+    bank_alias_ranks = state.get("bank_alias_ranks")
+    bank_alias_ids_device = state.get("bank_alias_ids_device")
     sources = state.get("ssi_sources")
     ssi_ptrs = state.get("ssi_ptrs")
     ssi_strides = state.get("ssi_strides")
+    commit_spec_state_indices = state.get("commit_spec_state_indices")
+    accepted_paths = state.get("accepted_paths")
+    accepted_lens = state.get("accepted_lens")
     staging = state.get("staging")
     row_elems = state.get("row_elems")
     block = state.get("block")
@@ -1534,6 +1598,8 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         != tuple(range(1, capacity + 1))
         or not isinstance(banks, tuple)
         or len(banks) != 48
+        or not isinstance(ssm_banks, tuple)
+        or len(ssm_banks) != 48
         or not isinstance(layer_order, tuple)
         or len(layer_order) != 48
         or len(set(layer_order)) != 48
@@ -1546,6 +1612,13 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         or int(contract.get("pointer_entries", -1)) != 48
         or int(contract.get("ssi_pointer_entries", -1)) != 48
         or int(contract.get("ssi_groups", -1)) != 3
+        or contract.get("commit_bank_overlap_policy")
+        != "exact_alias_only_16x3"
+        or contract.get("commit_bank_partial_overlap") is not False
+        or int(contract.get("commit_bank_alias_groups", -1)) != 16
+        or int(contract.get("commit_bank_alias_width", -1)) != 3
+        or contract.get("commit_bank_destination_guard") != "alias_row_unique"
+        or contract.get("commit_null_row_rejected") is not True
         or type(row_elems) is not int
         or row_elems <= 0
         or type(block) is not int
@@ -1554,6 +1627,20 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         or tuple(int(value) for value in offsets.shape) != (48,)
         or str(offsets.dtype) != "torch.int64"
         or not offsets.is_contiguous()
+        or not isinstance(bank_alias_classes, tuple)
+        or len(bank_alias_classes) != 16
+        or any(
+            not isinstance(indices, tuple) or len(indices) != 3
+            for indices in bank_alias_classes
+        )
+        or not isinstance(bank_alias_ids, tuple)
+        or len(bank_alias_ids) != 48
+        or not isinstance(bank_alias_ranks, tuple)
+        or len(bank_alias_ranks) != 48
+        or not torch.is_tensor(bank_alias_ids_device)
+        or tuple(int(value) for value in bank_alias_ids_device.shape) != (48,)
+        or str(bank_alias_ids_device.dtype) != "torch.int64"
+        or not bank_alias_ids_device.is_contiguous()
         or not torch.is_tensor(staging)
         or not isinstance(sources, tuple)
         or len(sources) != 48
@@ -1582,11 +1669,40 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         != (capacity * row_elems, row_elems, 1)
         or not staging.is_contiguous()
         or any(not torch.is_tensor(bank) for bank in banks)
+        or any(not torch.is_tensor(bank) for bank in ssm_banks)
         or any(
             bank.device != staging.device or bank.dtype != staging.dtype
             for bank in banks
         )
+        or any(bank.device != staging.device for bank in ssm_banks)
+        or any(
+            int(bank.untyped_storage().data_ptr())
+            != int(ssm_bank.untyped_storage().data_ptr())
+            for bank, ssm_bank in zip(banks, ssm_banks, strict=True)
+        )
+        or not torch.is_tensor(commit_spec_state_indices)
+        or commit_spec_state_indices.device != staging.device
+        or str(commit_spec_state_indices.dtype) != "torch.int32"
+        or commit_spec_state_indices.ndim != 3
+        or int(commit_spec_state_indices.shape[0]) != 48
+        or int(commit_spec_state_indices.shape[1]) < capacity
+        or int(commit_spec_state_indices.shape[2]) < 1
+        or not commit_spec_state_indices.is_contiguous()
+        or not torch.is_tensor(accepted_paths)
+        or accepted_paths.device != staging.device
+        or str(accepted_paths.dtype) != "torch.int32"
+        or accepted_paths.ndim != 2
+        or int(accepted_paths.shape[0]) < capacity
+        or int(accepted_paths.shape[1]) != 16
+        or not accepted_paths.is_contiguous()
+        or not torch.is_tensor(accepted_lens)
+        or accepted_lens.device != staging.device
+        or str(accepted_lens.dtype) != "torch.int32"
+        or accepted_lens.ndim != 1
+        or int(accepted_lens.shape[0]) < capacity
+        or not accepted_lens.is_contiguous()
         or offsets.device != staging.device
+        or bank_alias_ids_device.device != staging.device
         or ssi_ptrs.device != staging.device
         or ssi_strides.device != staging.device
         or int(banks[0].shape[1]) * int(banks[0].shape[2]) != row_elems
@@ -1594,18 +1710,31 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         raise RuntimeError("FR13 fixed32 conv pregather runtime contract drift")
     source_identity = (
         tuple(id(bank) for bank in banks),
+        tuple(id(bank) for bank in ssm_banks),
         id(offsets),
+        id(bank_alias_ids_device),
         tuple(id(source) for source in sources),
         id(ssi_ptrs),
         id(ssi_strides),
+        id(commit_spec_state_indices),
+        id(accepted_paths),
+        id(accepted_lens),
         id(staging),
     )
     source_data_ptrs = (
         tuple(int(bank.data_ptr()) for bank in banks),
+        tuple(int(bank.data_ptr()) for bank in ssm_banks),
+        tuple(
+            int(bank.untyped_storage().data_ptr()) for bank in ssm_banks
+        ),
         int(offsets.data_ptr()),
+        int(bank_alias_ids_device.data_ptr()),
         tuple(int(source.data_ptr()) for source in sources),
         int(ssi_ptrs.data_ptr()),
         int(ssi_strides.data_ptr()),
+        int(commit_spec_state_indices.data_ptr()),
+        int(accepted_paths.data_ptr()),
+        int(accepted_lens.data_ptr()),
         int(staging.data_ptr()),
     )
     if (
@@ -1619,6 +1748,10 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
     bank_storage_keys = [
         int(bank.untyped_storage().data_ptr()) for bank in banks
     ]
+    ssm_data_keys = [int(bank.data_ptr()) for bank in ssm_banks]
+    ssm_storage_keys = [
+        int(bank.untyped_storage().data_ptr()) for bank in ssm_banks
+    ]
     ssi_data_keys = [int(source.data_ptr()) for source in sources]
     ssi_storage_keys = [
         int(source.untyped_storage().data_ptr()) for source in sources
@@ -1631,6 +1764,13 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         list(dict.fromkeys(bank_storage_keys)).index(key)
         for key in bank_storage_keys
     ]
+    ssm_data_groups = [
+        list(dict.fromkeys(ssm_data_keys)).index(key) for key in ssm_data_keys
+    ]
+    ssm_storage_groups = [
+        list(dict.fromkeys(ssm_storage_keys)).index(key)
+        for key in ssm_storage_keys
+    ]
     ssi_data_groups = [
         list(dict.fromkeys(ssi_data_keys)).index(key)
         for key in ssi_data_keys
@@ -1640,8 +1780,32 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         for key in ssi_storage_keys
     ]
     staging_storage_key = int(staging.untyped_storage().data_ptr())
+    live_alias_classes = tuple(
+        tuple(
+            index
+            for index, pointer in enumerate(bank_data_keys)
+            if pointer == unique_pointer
+        )
+        for unique_pointer in dict.fromkeys(bank_data_keys)
+    )
+    live_alias_ids = tuple(bank_data_groups)
+    live_alias_ranks = tuple(
+        live_alias_classes[alias_id].index(index)
+        for index, alias_id in enumerate(live_alias_ids)
+    )
     if (
-        len(set(ssi_data_groups)) != 3
+        live_alias_classes != bank_alias_classes
+        or live_alias_ids != bank_alias_ids
+        or live_alias_ranks != bank_alias_ranks
+        or len(live_alias_classes) != 16
+        or any(len(indices) != 3 for indices in live_alias_classes)
+        or ssm_data_groups != bank_data_groups
+        or ssm_storage_keys != bank_storage_keys
+        or tuple(state.get("bank_data_ptrs", ())) != tuple(bank_data_keys)
+        or tuple(state.get("ssm_bank_data_ptrs", ())) != tuple(ssm_data_keys)
+        or tuple(state.get("ssm_bank_storage_ptrs", ()))
+        != tuple(ssm_storage_keys)
+        or len(set(ssi_data_groups)) != 3
         or staging_storage_key in set(bank_storage_keys)
     ):
         raise RuntimeError(
@@ -1665,6 +1829,40 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         ],
         "bank_data_alias_groups": bank_data_groups,
         "bank_storage_alias_groups": bank_storage_groups,
+        "bank_alias_classes": [list(indices) for indices in bank_alias_classes],
+        "bank_alias_ids": list(bank_alias_ids),
+        "bank_alias_ranks": list(bank_alias_ranks),
+        "ssm_bank_shapes": [
+            [int(value) for value in bank.shape] for bank in ssm_banks
+        ],
+        "ssm_bank_strides": [
+            [int(value) for value in bank.stride()] for bank in ssm_banks
+        ],
+        "ssm_bank_dtypes": [str(bank.dtype) for bank in ssm_banks],
+        "ssm_bank_storage_offsets": [
+            int(bank.storage_offset()) for bank in ssm_banks
+        ],
+        "ssm_bank_data_alias_groups": ssm_data_groups,
+        "ssm_bank_storage_alias_groups": ssm_storage_groups,
+        "bank_alias_ids_shape": [
+            int(value) for value in bank_alias_ids_device.shape
+        ],
+        "bank_alias_ids_stride": [
+            int(value) for value in bank_alias_ids_device.stride()
+        ],
+        "bank_alias_ids_dtype": str(bank_alias_ids_device.dtype),
+        "commit_bank_overlap_policy": contract[
+            "commit_bank_overlap_policy"
+        ],
+        "commit_bank_partial_overlap": contract[
+            "commit_bank_partial_overlap"
+        ],
+        "commit_bank_alias_groups": contract["commit_bank_alias_groups"],
+        "commit_bank_alias_width": contract["commit_bank_alias_width"],
+        "commit_bank_destination_guard": contract[
+            "commit_bank_destination_guard"
+        ],
+        "commit_null_row_rejected": contract["commit_null_row_rejected"],
         "ssi_pointer_entries": 48,
         "ssi_groups": 3,
         "ssi_source_shapes": [
@@ -1685,6 +1883,10 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
                 "layer": layer_order[index],
                 "bank_data_alias_group": bank_data_groups[index],
                 "bank_storage_alias_group": bank_storage_groups[index],
+                "ssm_bank_data_alias_group": ssm_data_groups[index],
+                "ssm_bank_storage_alias_group": ssm_storage_groups[index],
+                "bank_alias_id": bank_alias_ids[index],
+                "bank_alias_rank": bank_alias_ranks[index],
                 "ssi_data_alias_group": ssi_data_groups[index],
                 "ssi_storage_alias_group": ssi_storage_groups[index],
             }
@@ -3501,7 +3703,14 @@ def _fr13_fixed32_observed_commit(
         or conv_row_elems <= 0
         or conv_block <= 0
         or conv_commit_contract.get("staging_reused") is not True
-        or conv_commit_contract.get("bank_nonoverlap") is not True
+        or conv_commit_contract.get("commit_bank_overlap_policy")
+        != "exact_alias_only_16x3"
+        or conv_commit_contract.get("commit_bank_partial_overlap") is not False
+        or int(conv_commit_contract.get("commit_bank_alias_groups", -1)) != 16
+        or int(conv_commit_contract.get("commit_bank_alias_width", -1)) != 3
+        or conv_commit_contract.get("commit_bank_destination_guard")
+        != "alias_row_unique"
+        or conv_commit_contract.get("commit_null_row_rejected") is not True
         or conv_commit_contract.get("ssi_bound") is not True
         or conv_commit_contract.get("paths_bound") is not True
         or gather_delta != 1
@@ -9624,6 +9833,7 @@ def _fr13_conv_subop_mab(
                                         )
                                         _fr13_f32_pregather(
                                             conv_banks=_fr13_f32_conv_banks,
+                                            ssm_banks=_fr13_f32_banks,
                                             layer_order=_fr13_f32_order,
                                             max_batch_size=_fr13_f32_cap,
                                             commit_spec_state_indices=(
@@ -12659,19 +12869,11 @@ def _fr13_fixed32_device_commit_route(
         fixed32_conv_col0_pregather_counters as _fixed_pregather_counters,
         launch_fixed32_conv_commit_to_col0 as _fixed_conv_commit,
         launch_tree_gdn_replay_all_layers as _fixed_replay,
-        validate_fixed32_conv_commit_rows as _fixed_conv_commit_rows,
     )
     _fixed_commit_before = _fixed_commit_counters()
     _fixed_conv_commit_before = _fixed_conv_commit_counters()
     _fixed_pregather_before = _fixed_pregather_counters()
 
-    _fixed_conv_commit_rows(
-        spec_state_indices=stacks["spec_idx"],
-        accepted_paths=spec_paths,
-        accepted_lens=spec_lens,
-        batch=batch,
-        bank_rows=int(conv_banks[0].shape[0]),
-    )
     _fixed_conv_commit(
         conv_banks=conv_banks,
         spec_state_indices=stacks["spec_idx"],
@@ -12759,8 +12961,25 @@ def _fr13_fixed32_device_commit_route(
         "staging_reused": _fixed_pregather_route.get("contract", {}).get(
             "commit_staging_reused"
         ),
-        "bank_nonoverlap": _fixed_pregather_route.get("contract", {}).get(
-            "commit_bank_nonoverlap"
+        "commit_bank_overlap_policy": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_bank_overlap_policy"),
+        "commit_bank_partial_overlap": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_bank_partial_overlap"),
+        "commit_bank_alias_groups": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_bank_alias_groups"),
+        "commit_bank_alias_width": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_bank_alias_width"),
+        "commit_bank_destination_guard": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_bank_destination_guard"),
+        "commit_null_row_rejected": _fixed_pregather_route.get(
+            "contract", {}
+        ).get(
+            "commit_null_row_rejected"
         ),
         "ssi_bound": _fixed_pregather_route.get("contract", {}).get(
             "commit_ssi_bound"
@@ -28183,18 +28402,33 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
             or reference_row_elems != row_elems
         ):
             raise AssertionError("fixed32 self-test conv geometry drifted")
-        banks = tuple(
+        physical_banks = tuple(
             torch.empty(
                 (
-                    capacity + 1,
+                    3 * capacity + 1,
                     GDN_CONV_CHANNELS,
                     GDN_CONV_STATE_LENGTH,
                 ),
                 dtype=torch.uint8,
             )
-            for _ in range(48)
+            for _ in range(16)
+        )
+        banks = tuple(
+            physical_banks[layer % 16] for layer in range(48)
+        )
+        ssm_banks = tuple(
+            physical_banks[layer % 16].view(-1) for layer in range(48)
         )
         offsets = torch.arange(48, dtype=torch.int64)
+        bank_alias_classes = tuple(
+            (alias_id, alias_id + 16, alias_id + 32)
+            for alias_id in range(16)
+        )
+        bank_alias_ids = tuple(layer % 16 for layer in range(48))
+        bank_alias_ranks = tuple(layer // 16 for layer in range(48))
+        bank_alias_ids_device = torch.tensor(
+            bank_alias_ids, dtype=torch.int64
+        )
         ssi_groups = tuple(
             torch.zeros((capacity, 1), dtype=torch.int32) for _ in range(3)
         )
@@ -28209,6 +28443,11 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
             [int(source.stride(0)) for source in ssi_sources],
             dtype=torch.int64,
         )
+        commit_spec_state_indices = torch.zeros(
+            (48, capacity, 1), dtype=torch.int32
+        )
+        accepted_paths = torch.zeros((capacity, 16), dtype=torch.int32)
+        accepted_lens = torch.ones((capacity,), dtype=torch.int32)
         staging = torch.empty(
             (48, capacity, row_elems), dtype=torch.uint8
         )
@@ -28217,11 +28456,19 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
             "max_batch_size": capacity,
             "preseeded_batches": tuple(range(1, capacity + 1)),
             "banks": banks,
+            "ssm_banks": ssm_banks,
             "layer_order": tuple(f"gdn.{layer}" for layer in range(48)),
             "off16": offsets,
+            "bank_alias_classes": bank_alias_classes,
+            "bank_alias_ids": bank_alias_ids,
+            "bank_alias_ranks": bank_alias_ranks,
+            "bank_alias_ids_device": bank_alias_ids_device,
             "ssi_sources": ssi_sources,
             "ssi_ptrs": ssi_ptrs,
             "ssi_strides": ssi_strides,
+            "commit_spec_state_indices": commit_spec_state_indices,
+            "accepted_paths": accepted_paths,
+            "accepted_lens": accepted_lens,
             "staging": staging,
             "row_elems": row_elems,
             "block": 1024,
@@ -28247,22 +28494,51 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
                 "staging_capacity": capacity,
                 "row_elems": row_elems,
                 "staging_bank_nonalias": True,
+                "commit_bank_overlap_policy": "exact_alias_only_16x3",
+                "commit_bank_partial_overlap": False,
+                "commit_bank_alias_groups": 16,
+                "commit_bank_alias_width": 3,
+                "commit_bank_destination_guard": "alias_row_unique",
+                "commit_null_row_rejected": True,
             },
         }
+        state["bank_data_ptrs"] = tuple(
+            int(bank.data_ptr()) for bank in banks
+        )
+        state["ssm_bank_data_ptrs"] = tuple(
+            int(bank.data_ptr()) for bank in ssm_banks
+        )
+        state["ssm_bank_storage_ptrs"] = tuple(
+            int(bank.untyped_storage().data_ptr()) for bank in ssm_banks
+        )
         state["source_identity"] = (
             tuple(id(bank) for bank in banks),
+            tuple(id(bank) for bank in ssm_banks),
             id(offsets),
+            id(bank_alias_ids_device),
             tuple(id(source) for source in ssi_sources),
             id(ssi_ptrs),
             id(ssi_strides),
+            id(commit_spec_state_indices),
+            id(accepted_paths),
+            id(accepted_lens),
             id(staging),
         )
         state["source_data_ptrs"] = (
             tuple(int(bank.data_ptr()) for bank in banks),
+            tuple(int(bank.data_ptr()) for bank in ssm_banks),
+            tuple(
+                int(bank.untyped_storage().data_ptr())
+                for bank in ssm_banks
+            ),
             int(offsets.data_ptr()),
+            int(bank_alias_ids_device.data_ptr()),
             tuple(int(source.data_ptr()) for source in ssi_sources),
             int(ssi_ptrs.data_ptr()),
             int(ssi_strides.data_ptr()),
+            int(commit_spec_state_indices.data_ptr()),
+            int(accepted_paths.data_ptr()),
+            int(accepted_lens.data_ptr()),
             int(staging.data_ptr()),
         )
         kernel._FR13_FIXED32_CONV_PREGATHER = {"state": state}
@@ -28594,7 +28870,12 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
                 "row_elems": reference["conv_commit"]["row_elems"],
                 "block": reference["conv_commit"]["block"],
                 "staging_reused": True,
-                "bank_nonoverlap": True,
+                "commit_bank_overlap_policy": "exact_alias_only_16x3",
+                "commit_bank_partial_overlap": False,
+                "commit_bank_alias_groups": 16,
+                "commit_bank_alias_width": 3,
+                "commit_bank_destination_guard": "alias_row_unique",
+                "commit_null_row_rejected": True,
                 "ssi_bound": True,
                 "paths_bound": True,
             },

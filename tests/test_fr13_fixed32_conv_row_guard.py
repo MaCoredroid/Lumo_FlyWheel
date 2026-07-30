@@ -43,19 +43,35 @@ def _load_guard(assert_fn):
     return namespace[GUARD_NAME]
 
 
-def _guard_inputs() -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+def _guard_inputs() -> tuple[
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+]:
     spec_state_indices = torch.zeros((48, 4, 32), dtype=torch.int32)
-    for batch_index in range(4):
-        spec_state_indices[:, batch_index, :].fill_(batch_index)
+    for layer in range(48):
+        alias_rank = layer // 16
+        for batch_index in range(4):
+            spec_state_indices[layer, batch_index, :].fill_(
+                alias_rank * 4 + batch_index + 1
+            )
     accepted_paths = torch.zeros((4, 16), dtype=torch.int32)
     accepted_lens = torch.ones((4,), dtype=torch.int32)
-    return spec_state_indices, accepted_paths, accepted_lens
+    bank_alias_ids = torch.arange(16, dtype=torch.int64).repeat(3)
+    return (
+        spec_state_indices,
+        accepted_paths,
+        accepted_lens,
+        bank_alias_ids,
+    )
 
 
 def _guard_result(
     spec_state_indices: torch.Tensor,
     accepted_paths: torch.Tensor,
     accepted_lens: torch.Tensor,
+    bank_alias_ids: torch.Tensor,
     *,
     batch: int = 4,
     bank_rows: int = 64,
@@ -73,6 +89,7 @@ def _guard_result(
         spec_state_indices=spec_state_indices,
         accepted_paths=accepted_paths,
         accepted_lens=accepted_lens,
+        bank_alias_ids=bank_alias_ids,
         batch=batch,
         bank_rows=bank_rows,
     )
@@ -87,7 +104,12 @@ def test_precommit_guard_accepts_valid_capacity_backed_b1_and_b4() -> None:
 
 
 def test_precommit_guard_ignores_poisoned_inactive_capacity_slots_for_b1() -> None:
-    spec_state_indices, accepted_paths, accepted_lens = _guard_inputs()
+    (
+        spec_state_indices,
+        accepted_paths,
+        accepted_lens,
+        bank_alias_ids,
+    ) = _guard_inputs()
     spec_state_indices[:, 1:, :].fill_(64)
     accepted_paths[1:, :].fill_(32)
     accepted_lens[1:].fill_(16)
@@ -96,6 +118,7 @@ def test_precommit_guard_ignores_poisoned_inactive_capacity_slots_for_b1() -> No
         spec_state_indices,
         accepted_paths,
         accepted_lens,
+        bank_alias_ids,
         batch=1,
     )
 
@@ -105,26 +128,40 @@ def test_precommit_guard_ignores_poisoned_inactive_capacity_slots_for_b1() -> No
     (
         "oob_nonselected_source",
         "oob_selected_source",
+        "null_nonselected_source",
         "duplicate_destination",
+        "cross_alias_destination",
         "invalid_active_path",
         "invalid_accepted_length",
+        "invalid_alias_id",
     ),
 )
 def test_precommit_guard_rejects_unsafe_dynamic_rows_and_paths(
     mutation: str,
 ) -> None:
-    spec_state_indices, accepted_paths, accepted_lens = _guard_inputs()
+    (
+        spec_state_indices,
+        accepted_paths,
+        accepted_lens,
+        bank_alias_ids,
+    ) = _guard_inputs()
     if mutation == "oob_nonselected_source":
         spec_state_indices[17, 2, 31] = 64
     elif mutation == "oob_selected_source":
         accepted_paths[2, 0] = 5
         spec_state_indices[17, 2, 5] = 64
+    elif mutation == "null_nonselected_source":
+        spec_state_indices[17, 2, 31] = 0
     elif mutation == "duplicate_destination":
         spec_state_indices[:, 1, 0] = spec_state_indices[:, 0, 0]
+    elif mutation == "cross_alias_destination":
+        spec_state_indices[16, 3, 0] = spec_state_indices[0, 0, 0]
     elif mutation == "invalid_active_path":
         accepted_paths[2, 0] = 32
     elif mutation == "invalid_accepted_length":
         accepted_lens[2] = 16
+    elif mutation == "invalid_alias_id":
+        bank_alias_ids[17] = 16
     else:
         raise AssertionError(mutation)
 
@@ -132,4 +169,15 @@ def test_precommit_guard_rejects_unsafe_dynamic_rows_and_paths(
         spec_state_indices,
         accepted_paths,
         accepted_lens,
+        bank_alias_ids,
     )
+
+
+def test_precommit_guard_allows_source_aliases_after_gather_barrier() -> None:
+    operands = list(_guard_inputs())
+    spec_state_indices = operands[0]
+    accepted_paths = operands[1]
+    spec_state_indices[16, 3, 7] = spec_state_indices[0, 0, 7]
+    accepted_paths[3, 0] = 7
+
+    assert _guard_result(*operands)

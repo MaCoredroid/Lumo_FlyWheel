@@ -76,16 +76,19 @@ def _install_preseed(
     order = tuple(f"gdn.{index:02d}" for index in range(48))
     raws = []
     banks = []
-    for index in range(48):
-        raw, bank, _ = _page_shared_bank(
-            rows=4,
+    ssm_banks = []
+    for index in range(16):
+        raw, bank, ssm_bank = _page_shared_bank(
+            rows=13,
             seed=index,
             conv_shape=DEPLOYED_CONV_SHAPE,
             channel_contiguous=channel_contiguous,
         )
         raws.append(raw)
         banks.append(bank)
-    bank_tuple = tuple(banks)
+        ssm_banks.append(ssm_bank)
+    bank_tuple = tuple(banks) * 3
+    ssm_bank_tuple = tuple(ssm_banks) * 3
     assert bank_tuple[0][0].numel() == 348_160
     expected_inner_stride = (
         (1, DEPLOYED_CONV_SHAPE[0])
@@ -105,6 +108,13 @@ def _install_preseed(
     commit_ssi = torch.zeros(
         (48, 4, 32), dtype=torch.int32, device="cuda"
     )
+    for alias_rank in range(3):
+        for batch_index in range(4):
+            commit_ssi[
+                alias_rank * 16 : (alias_rank + 1) * 16,
+                batch_index,
+                :,
+            ].fill_(alias_rank * 4 + batch_index + 1)
     accepted_paths = torch.zeros(
         (4, 16), dtype=torch.int32, device="cuda"
     )
@@ -112,6 +122,7 @@ def _install_preseed(
     before_preseed = tuple(raw.clone() for raw in raws)
     contract = kernel.preseed_fixed32_conv_col0_pregather(
         conv_banks=bank_tuple,
+        ssm_banks=ssm_bank_tuple,
         layer_order=order,
         max_batch_size=4,
         commit_spec_state_indices=commit_ssi,
@@ -119,8 +130,17 @@ def _install_preseed(
         accepted_lens=accepted_lens,
     )
     assert contract["commit_route"] == "fixed32_two_launch_col0"
-    assert contract["commit_bank_nonoverlap"] is True
-    assert kernel.audit_fixed32_conv_commit_lease()["lease_audited"] is True
+    assert contract["commit_bank_overlap_policy"] == "exact_alias_only_16x3"
+    assert contract["commit_bank_partial_overlap"] is False
+    assert contract["commit_bank_alias_groups"] == 16
+    assert contract["commit_bank_alias_width"] == 3
+    assert contract["commit_bank_destination_guard"] == "alias_row_unique"
+    audit = kernel.audit_fixed32_conv_commit_lease()
+    assert audit["lease_audited"] is True
+    assert audit["bank_overlap_policy"] == "exact_alias_only_16x3"
+    assert audit["bank_partial_overlap"] is False
+    assert audit["bank_alias_groups"] == 16
+    assert audit["bank_alias_width"] == 3
     assert all(
         torch.equal(raw, before)
         for raw, before in zip(raws, before_preseed, strict=True)
@@ -140,12 +160,12 @@ def _bank_views_for_raw_clones(
 ) -> tuple[torch.Tensor, ...]:
     return tuple(
         torch.as_strided(
-            raw,
+            raws[layer % 16],
             size=bank.shape,
             stride=bank.stride(),
             storage_offset=bank.storage_offset(),
         )
-        for raw, bank in zip(raws, banks, strict=True)
+        for layer, bank in enumerate(banks)
     )
 
 
@@ -167,11 +187,18 @@ def _legacy_commit_reference(
     leaf_node = torch.where(
         accepted > 0, leaf_node, torch.zeros_like(leaf_node)
     ).clamp(0, int(spec_state_indices.shape[2]) - 1).to(torch.long)
+    snapshots = []
+    destinations = []
     for layer, bank in enumerate(banks):
         layer_ssi = spec_state_indices[layer]
         dst = layer_ssi[:batch, 0].to(torch.long)
         src = layer_ssi[rows, leaf_node].to(torch.long)
-        bank.index_copy_(0, dst, bank.index_select(0, src))
+        destinations.append(dst)
+        snapshots.append(bank.index_select(0, src).clone())
+    for bank, dst, snapshot in zip(
+        banks, destinations, snapshots, strict=True
+    ):
+        bank.index_copy_(0, dst, snapshot)
 
 
 def _exact_deployed_page_bank(
@@ -362,7 +389,7 @@ def test_deployed_layout_pregather_and_two_launch_commit_are_page_exact(
             continue
         seen_sources.add(id(source))
         source[:, 0].copy_(
-            torch.tensor([3, 1, 2, 0], dtype=torch.int32, device="cuda")
+            torch.tensor([4, 2, 3, 1], dtype=torch.int32, device="cuda")
         )
     expected_staging = tuple(
         bank.index_select(0, source[:4, 0].to(torch.long)).reshape(4, -1)
@@ -403,13 +430,12 @@ def test_deployed_layout_pregather_and_two_launch_commit_are_page_exact(
         for raw, expected in zip(raws, zero_expected, strict=True)
     )
 
-    # Max accepted length with an explicit src==dst leaf remains byte-neutral.
-    commit_ssi[:, 0, 0] = 0
-    commit_ssi[:, 0, 2] = 0
+    # Max supported accepted length with src==dst remains byte-neutral.
+    commit_ssi[:, 0, 2] = commit_ssi[:, 0, 0]
     paths.zero_()
-    paths[0, 15] = 2
+    paths[0, 14] = 2
     lens.zero_()
-    lens[0] = 16
+    lens[0] = 15
     max_len_expected = tuple(raw.clone() for raw in raws)
     _legacy_commit_reference(
         banks=_bank_views_for_raw_clones(max_len_expected, banks),
@@ -430,12 +456,15 @@ def test_deployed_layout_pregather_and_two_launch_commit_are_page_exact(
         for raw, expected in zip(raws, max_len_expected, strict=True)
     )
 
-    commit_ssi[:, :, 0] = torch.arange(
-        4, dtype=torch.int32, device="cuda"
-    )
-    commit_ssi[:, :, 1] = torch.tensor(
-        [1, 2, 3, 0], dtype=torch.int32, device="cuda"
-    )
+    for alias_rank in range(3):
+        layer_slice = slice(alias_rank * 16, (alias_rank + 1) * 16)
+        roots = (
+            torch.arange(4, dtype=torch.int32, device="cuda")
+            + alias_rank * 4
+            + 1
+        )
+        commit_ssi[layer_slice, :, 0] = roots
+        commit_ssi[layer_slice, :, 1] = roots.roll(-1)
     paths.zero_()
     paths[:, 0] = 1
     lens.fill_(1)
@@ -465,14 +494,59 @@ def test_deployed_layout_pregather_and_two_launch_commit_are_page_exact(
     assert counters["scatter_launches_by_batch"][4] == 1
 
 
-def test_preseed_rejects_overlapping_layer_banks(
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    (
+        ("partial_overlap", "partially overlap"),
+        ("wrong_ssi_group", "spanning all three SSI groups"),
+        ("companion_misbind", "storage binding mismatch"),
+    ),
+)
+def test_preseed_rejects_unsafe_alias_topologies(
     monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+    message: str,
 ) -> None:
     monkeypatch.setattr(kernel, "_FR13_FIXED32_MODE", "tail6_fixed32")
     monkeypatch.setattr(kernel, "_FR13_FIXED32_CONV_PREGATHER", {})
     monkeypatch.setattr(kernel, "_FR13_FIXED32_CONV_SSI_GROUPS", {})
     order = tuple(f"gdn.{index:02d}" for index in range(48))
-    _, bank, _ = _page_shared_bank(rows=8, seed=0)
+    raws = []
+    banks = []
+    ssm_banks = []
+    for pool in range(16):
+        raw, bank, ssm_bank = _page_shared_bank(
+            rows=14 if pool == 0 else 13,
+            seed=pool,
+        )
+        raws.append(raw)
+        banks.append(bank[:13])
+        ssm_banks.append(ssm_bank[:13])
+    conv_aliases = list(tuple(banks) * 3)
+    ssm_aliases = list(tuple(ssm_banks) * 3)
+    if mutation == "partial_overlap":
+        conv_aliases[16] = torch.as_strided(
+            raws[0],
+            size=conv_aliases[16].shape,
+            stride=conv_aliases[16].stride(),
+            storage_offset=8,
+        )
+    elif mutation == "wrong_ssi_group":
+        conv_aliases[1], conv_aliases[16] = (
+            conv_aliases[16],
+            conv_aliases[1],
+        )
+        ssm_aliases[1], ssm_aliases[16] = (
+            ssm_aliases[16],
+            ssm_aliases[1],
+        )
+    elif mutation == "companion_misbind":
+        ssm_aliases[0], ssm_aliases[1] = (
+            ssm_aliases[1],
+            ssm_aliases[0],
+        )
+    else:
+        raise AssertionError(mutation)
     for group_index in range(3):
         kernel.register_fixed32_conv_col0_ssi_group(
             layer_names=order[group_index * 16 : (group_index + 1) * 16],
@@ -481,9 +555,10 @@ def test_preseed_rejects_overlapping_layer_banks(
             ),
             max_batch_size=4,
         )
-    with pytest.raises(ValueError, match="bank spans overlap"):
+    with pytest.raises(ValueError, match=message):
         kernel.preseed_fixed32_conv_col0_pregather(
-            conv_banks=(bank,) * 48,
+            conv_banks=tuple(conv_aliases),
+            ssm_banks=tuple(ssm_aliases),
             layer_order=order,
             max_batch_size=4,
             commit_spec_state_indices=torch.zeros(
