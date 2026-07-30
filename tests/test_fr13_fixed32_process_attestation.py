@@ -13,6 +13,7 @@ import fr13_fixed32_contract as contract  # noqa: E402
 EXPECTED_NSYS_PREFIX = (
     "/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys",
     "profile",
+    "--session-new=%q{LUMO_NSYS_SESSION_NAME}",
     "--delay",
     "1200",
     "--duration",
@@ -80,20 +81,21 @@ def test_exact_nsys_pid1_is_required_for_attribution() -> None:
     (
         (0, "/tmp/nsys"),
         (1, "launch"),
-        (2, "--duration"),
-        (3, "1199"),
-        (4, "--delay"),
-        (5, "301"),
-        (6, "--trace=cuda,nvtx"),
-        (7, "--cuda-graph-trace=graph"),
-        (8, "--cuda-flush-interval=101"),
-        (9, "99"),
-        (10, "--discard-environment=false"),
-        (11, "--sample=process-tree"),
-        (12, "--cpuctxsw=process-tree"),
-        (13, "--force-overwrite=false"),
-        (14, "--output"),
-        (15, "/logs/other"),
+        (2, "--session-new=unrelated-session"),
+        (3, "--duration"),
+        (4, "1199"),
+        (5, "--delay"),
+        (6, "301"),
+        (7, "--trace=cuda,nvtx"),
+        (8, "--cuda-graph-trace=graph"),
+        (9, "--cuda-flush-interval=101"),
+        (10, "99"),
+        (11, "--discard-environment=false"),
+        (12, "--sample=process-tree"),
+        (13, "--cpuctxsw=process-tree"),
+        (14, "--force-overwrite=false"),
+        (15, "--output"),
+        (16, "/logs/other"),
     ),
 )
 def test_nsys_pid1_prefix_tamper_fails(
@@ -129,5 +131,5 @@ def test_live_attestation_receives_the_selector_explicitly() -> None:
     ).read_text(encoding="utf-8")
 
     assert '"${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" <<\'PY\'' in serve
-    assert "attribution_only_text = sys.argv[6]" in serve
+    assert "attribution_only_text = sys.argv[7]" in serve
     assert "attribution_only_text = os.environ" not in serve

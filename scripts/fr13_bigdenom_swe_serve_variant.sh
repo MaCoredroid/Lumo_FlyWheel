@@ -41,6 +41,8 @@ ARMDIR_ABS=$(realpath -m "$ARMDIR")
 [[ -f "$SUBSET" ]] || SUBSET="output/fr13_b1_gold_swe/$SUBSET"
 [[ -f "$SUBSET" ]] || { echo "FAIL: subset not found: $SUBSET"; exit 2; }
 CONTAINER="fr13-bigdenom-$ARM"
+CONTAINER_RUNTIME_REF="$CONTAINER"
+FIXED32_CIDFILE=""
 PORT=9950
 PROXY_PORT=8022
 EVAL_HOST=${EVAL_HOST:-alienware}
@@ -326,6 +328,10 @@ case "$KIND" in
 esac
 
 if [[ -n "$FIXED32_MODE" ]]; then
+  # Fixed32 must never operate on a reusable Docker name. The launcher-created
+  # cidfile promotes this to the immutable container ID after a successful run.
+  CONTAINER_RUNTIME_REF=""
+  FIXED32_CIDFILE="$ARMDIR_ABS/logs/fr13_fixed32_container.cid"
   if [[ "${CAPTURE_ONLY:-0}" == "1" \
      || "${ACCEPT_SPEED_PROBE:-0}" == "1" \
      || "${PROBE_ONLY:-0}" == "1" ]]; then
@@ -675,13 +681,58 @@ OLDPID=$(cat /tmp/track_b_e2e_proxy_${PROXY_PORT}.pid 2>/dev/null || true)
 pkill -f "lumo_flywheel_serving.inference_proxy" 2>/dev/null
 sleep 1
 
+_fixed32_container_identity_matches() {
+  local container_ref=$1
+  local identity=""
+  local actual_id=""
+  local actual_name=""
+  local extra=""
+  [[ "$container_ref" =~ ^[0-9a-f]{64}$ ]] || return 1
+  identity=$(
+    docker inspect --format '{{.Id}} {{.Name}}' "$container_ref" 2>/dev/null
+  ) || return 1
+  read -r actual_id actual_name extra <<< "$identity"
+  [[ -z "$extra" ]] \
+    && [[ "$actual_id" == "$container_ref" ]] \
+    && [[ "$actual_name" == "/$CONTAINER" ]]
+}
+
+_promote_fixed32_container_from_cidfile() {
+  local -a container_ids=()
+  local candidate=""
+  [[ -f "$FIXED32_CIDFILE" && ! -L "$FIXED32_CIDFILE" ]] || return 1
+  mapfile -t container_ids < "$FIXED32_CIDFILE"
+  (( ${#container_ids[@]} == 1 )) \
+    && [[ "${container_ids[0]}" =~ ^[0-9a-f]{64}$ ]] || return 1
+  candidate=${container_ids[0]}
+  _fixed32_container_identity_matches "$candidate" || return 1
+  CONTAINER_RUNTIME_REF=$candidate
+  echo "fixed32 container identity promoted: id=$CONTAINER_RUNTIME_REF name=$CONTAINER"
+}
+
+_fixed32_remove_attested_container() {
+  local container_ref=$1
+  local log_output=$2
+  if ! _fixed32_container_identity_matches "$container_ref"; then
+    echo "fixed32 container logs/removal skipped without exact re-attestation" >&2
+    return 1
+  fi
+  docker logs "$container_ref" > "$log_output" 2>&1 || true
+  if ! _fixed32_container_identity_matches "$container_ref"; then
+    echo "fixed32 container removal skipped after identity/name drift" >&2
+    return 1
+  fi
+  docker rm -f "$container_ref" >/dev/null 2>&1
+}
+
 teardown(){
   local rc=$?
   local flush_rc=0
   local audit_rc=0
+  local fixed32_container_attested=1
   trap - EXIT
   set +e
-  echo "[teardown] kill proxy + docker rm -f $CONTAINER + recover_host_memory"
+  echo "[teardown] kill proxy + attest/remove run container + recover_host_memory"
   # Stop every ingress path before asking EngineCore for its terminal snapshot.
   kill "$(cat /tmp/track_b_e2e_proxy_${PROXY_PORT}.pid 2>/dev/null)" 2>/dev/null
   pkill -f "lumo_flywheel_serving.inference_proxy" 2>/dev/null
@@ -691,9 +742,16 @@ teardown(){
       bash "$OFFLOAD_HELPER" stop "$OFFLOAD_HOST" >> "$ARMDIR/offload_teardown.log" 2>&1 || true
   fi
   if [[ -n "$FIXED32_MODE" ]]; then
-    if [[ -n "$FIXED32_PRODUCER_PID" && -f "$FIXED32_ACK_PATH" ]]; then
+    if [[ -z "$CONTAINER_RUNTIME_REF" ]]; then
+      _promote_fixed32_container_from_cidfile >/dev/null 2>&1 || true
+    fi
+    if ! _fixed32_container_identity_matches "$CONTAINER_RUNTIME_REF"; then
+      fixed32_container_attested=0
+      echo "fixed32 teardown skipped container operations: immutable ID/name attestation failed" \
+        > "$ARMDIR/fixed32_final_flush.stderr"
+    elif [[ -n "$FIXED32_PRODUCER_PID" && -f "$FIXED32_ACK_PATH" ]]; then
       .venv/bin/python scripts/fr13_fixed32_flush_protocol.py \
-        --container "$CONTAINER" \
+        --container "$CONTAINER_RUNTIME_REF" \
         --producer-pid "$FIXED32_PRODUCER_PID" \
         --mode "$FIXED32_MODE" \
         --request "$FIXED32_REQUEST_PATH" \
@@ -707,6 +765,7 @@ teardown(){
         > "$ARMDIR/fixed32_final_flush.stderr"
       flush_rc=1
     fi
+    (( fixed32_container_attested == 1 )) || flush_rc=1
     if (( flush_rc != 0 )); then
       echo "FAIL: fixed32 terminal flush rc=$flush_rc" >&2
       (( rc == 0 )) && rc=13
@@ -721,8 +780,14 @@ teardown(){
       fi
     fi
   fi
-  docker logs "$CONTAINER" > "$ARMDIR/docker_full.log" 2>&1 || true
-  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+  if [[ -n "$FIXED32_MODE" ]]; then
+    [[ -n "$CONTAINER_RUNTIME_REF" ]] \
+      && _fixed32_remove_attested_container \
+        "$CONTAINER_RUNTIME_REF" "$ARMDIR/docker_full.log" || true
+  elif [[ -n "$CONTAINER_RUNTIME_REF" ]]; then
+    docker logs "$CONTAINER_RUNTIME_REF" > "$ARMDIR/docker_full.log" 2>&1 || true
+    docker rm -f "$CONTAINER_RUNTIME_REF" >/dev/null 2>&1 || true
+  fi
   [[ -n "$FIXED32_INGRESS_SECRET_FILE" ]] \
     && rm -f "$FIXED32_INGRESS_SECRET_FILE"
   recover_host || true
@@ -813,6 +878,10 @@ else
   RC=$?
 fi
 if (( RC != 0 )); then echo "FAIL: launcher rc=$RC"; tail -30 "$ARMDIR/launch.log"; exit 2; fi
+if [[ -n "$FIXED32_MODE" ]]; then
+  _promote_fixed32_container_from_cidfile \
+    || { echo "FAIL: fixed32 launcher cidfile identity mismatch"; exit 2; }
+fi
 
 T0=$(date +%s)
 HEALTHY=0
@@ -820,12 +889,12 @@ HEALTHY=0
 # one-time Triton compile (tail6_pb 29-col/N_PAD=32 blew the 1200s window).
 while (( $(date +%s) < T0 + ${HEALTH_TIMEOUT_S:-1200} )); do
   if curl -fsS -m 3 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then HEALTHY=1; break; fi
-  if [[ "$(docker inspect -f '{{.State.Status}}' "$CONTAINER" 2>/dev/null)" != "running" ]]; then
-    echo "FAIL: container died before health"; docker logs "$CONTAINER" 2>&1 | tail -40; exit 2
+  if [[ "$(docker inspect -f '{{.State.Status}}' "$CONTAINER_RUNTIME_REF" 2>/dev/null)" != "running" ]]; then
+    echo "FAIL: container died before health"; docker logs "$CONTAINER_RUNTIME_REF" 2>&1 | tail -40; exit 2
   fi
   sleep 5
 done
-(( HEALTHY == 1 )) || { echo "FAIL: health not up in 1200s"; docker logs "$CONTAINER" 2>&1 | tail -40; exit 2; }
+(( HEALTHY == 1 )) || { echo "FAIL: health not up in 1200s"; docker logs "$CONTAINER_RUNTIME_REF" 2>&1 | tail -40; exit 2; }
 echo "healthy after $(( $(date +%s) - T0 ))s"
 
 if [[ -n "$FIXED32_MODE" ]]; then
@@ -836,18 +905,21 @@ if [[ -n "$FIXED32_MODE" ]]; then
   [[ "$FIXED32_PRODUCER_PID" =~ ^[1-9][0-9]*$ ]] \
     || { echo "FAIL: invalid fixed32 EngineCore PID: $FIXED32_PRODUCER_PID"; exit 3; }
   unset _fixed32_pid_lines
-  docker exec "$CONTAINER" test -r "/proc/$FIXED32_PRODUCER_PID/cmdline" \
+  docker exec "$CONTAINER_RUNTIME_REF" test -r "/proc/$FIXED32_PRODUCER_PID/cmdline" \
     || { echo "FAIL: fixed32 EngineCore PID is not live"; exit 3; }
-  docker exec "$CONTAINER" sh -c \
+  docker exec "$CONTAINER_RUNTIME_REF" sh -c \
     "tr '\\0' ' ' < /proc/$FIXED32_PRODUCER_PID/cmdline" \
     > "$ARMDIR/fixed32_engine_cmdline.txt"
   grep -q "EngineCore" "$ARMDIR/fixed32_engine_cmdline.txt" \
     || { echo "FAIL: fixed32 producer PID is not EngineCore"; exit 3; }
   # docker exec does not attach stdin unless -i is explicit. Without it,
   # `python3 -` exits zero after reading an empty stream and leaves an empty
-  # identity artifact.
-  docker exec -i "$CONTAINER" python3 - "$FIXED32_PRODUCER_PID" \
-    > "$ARMDIR/fixed32_process_identity.json" <<'PY'
+  # identity artifact. Publish only a complete capture so the profiler cannot
+  # bind an Nsight session from a partially written process identity.
+  PROCESS_IDENTITY_TMP="$ARMDIR/.fixed32_process_identity.json.tmp.$$"
+  rm -f "$PROCESS_IDENTITY_TMP"
+  docker exec -i "$CONTAINER_RUNTIME_REF" python3 - "$FIXED32_PRODUCER_PID" \
+    > "$PROCESS_IDENTITY_TMP" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -891,13 +963,27 @@ payload = {
 }
 print(json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True))
 PY
-  (( $? == 0 )) || { echo "FAIL: fixed32 process identity capture"; exit 3; }
-  [[ -s "$ARMDIR/fixed32_process_identity.json" ]] \
-    || { echo "FAIL: fixed32 process identity capture was empty"; exit 3; }
+  if (( $? != 0 )); then
+    rm -f "$PROCESS_IDENTITY_TMP"
+    echo "FAIL: fixed32 process identity capture"
+    exit 3
+  fi
+  if [[ ! -s "$PROCESS_IDENTITY_TMP" || -L "$PROCESS_IDENTITY_TMP" ]]; then
+    rm -f "$PROCESS_IDENTITY_TMP"
+    echo "FAIL: fixed32 process identity capture was empty or aliased"
+    exit 3
+  fi
+  mv -T "$PROCESS_IDENTITY_TMP" "$ARMDIR/fixed32_process_identity.json" \
+    || {
+      rm -f "$PROCESS_IDENTITY_TMP"
+      echo "FAIL: fixed32 process identity publish"
+      exit 3
+    }
   .venv/bin/python - \
     "$ARMDIR/logs/fr13_fixed32_runtime_attestation.json" \
     "$ARMDIR/fixed32_process_identity.json" \
     "$MAX_NUM_SEQS_OVR" \
+    "$CONTAINER_RUNTIME_REF" \
     "$CONTAINER" \
     "$ARMDIR/fixed32_container_identity.json" \
     "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" <<'PY'
@@ -912,9 +998,10 @@ import fr13_fixed32_contract as contract
 runtime_path = Path(sys.argv[1])
 process_path = Path(sys.argv[2])
 concurrency = int(sys.argv[3])
-container_name = sys.argv[4]
-container_identity_path = Path(sys.argv[5])
-attribution_only_text = sys.argv[6]
+container_ref = sys.argv[4]
+container_name = sys.argv[5]
+container_identity_path = Path(sys.argv[6])
+attribution_only_text = sys.argv[7]
 runtime = contract.validate_runtime_attestation(
     json.loads(runtime_path.read_text(encoding="utf-8"))
 )
@@ -943,7 +1030,7 @@ fa2_path = str(contract.CONTAINER_FA2_DESTINATION)
 if not any(fa2_path in line for line in engine.get("forked_fa2_maps", [])):
     raise SystemExit("fixed32 EngineCore has not mapped the pinned FA2 binary")
 inspect = subprocess.run(
-    ["docker", "inspect", container_name],
+    ["docker", "inspect", container_ref],
     check=True,
     capture_output=True,
     text=True,
@@ -982,7 +1069,7 @@ print(
 PY
   (( $? == 0 )) || { echo "FAIL: fixed32 runtime/process attestation"; exit 3; }
   .venv/bin/python - \
-    "$CONTAINER" "$FIXED32_PRODUCER_PID" "$FIXED32_MODE" \
+    "$CONTAINER_RUNTIME_REF" "$FIXED32_PRODUCER_PID" "$FIXED32_MODE" \
     "$FIXED32_REQUEST_PATH" "$FIXED32_ACK_PATH" \
     > "$ARMDIR/fixed32_ready_ack.json" <<'PY'
 import json
@@ -1012,7 +1099,7 @@ fi
 # the FR10_DECODE_MODE_DEFAULT worker needle DO NOT APPLY; we assert the stock
 # native config instead (the spec method + no tree env leaked in). All other
 # (locked/forked) arms keep the identical class-9 gate.
-docker exec "$CONTAINER" env | sort > "$ARMDIR/container_env.txt"
+docker exec "$CONTAINER_RUNTIME_REF" env | sort > "$ARMDIR/container_env.txt"
 if (( NATIVE_DECODE == 1 )); then
   # Native MTP: assert the stock spec method is live (native qwen3_5_mtp, NO
   # speculative_token_tree) and NO tree env leaked in. Applies to LAUNCHER=native AND
@@ -1086,7 +1173,7 @@ fi
 # proof (the MTP drafter actually ran) is the spec-engagement ratio assert below, so
 # skip this needle for all native-decode arms.
 if (( NATIVE_DECODE == 0 )); then
-  docker exec "$CONTAINER" bash -lc '
+  docker exec "$CONTAINER_RUNTIME_REF" bash -lc '
 hit=""; pids=""
 for p in $(ls /proc | grep -E "^[0-9]+$"); do
   e="/proc/$p/environ"; [ -r "$e" ] || continue
@@ -1110,7 +1197,7 @@ else
 fi
 
 # ---- FULL CUDA capture needle (skip under --enforce-eager: no graphs to capture) ----
-docker logs "$CONTAINER" > "$ARMDIR/boot_log_snapshot.txt" 2>&1
+docker logs "$CONTAINER_RUNTIME_REF" > "$ARMDIR/boot_log_snapshot.txt" 2>&1
 if [[ "${ENFORCE_EAGER:-0}" == "1" ]]; then
   echo "[capture needle] SKIPPED (ENFORCE_EAGER=1: eager mode has no CUDA graph capture)"
 else
@@ -1147,7 +1234,7 @@ if [[ -z "$FIXED32_MODE" ]]; then
   curl -fsS "http://127.0.0.1:$PORT/metrics" > "$ARMDIR/metrics_after_warmup.txt"
   if (( RC != 0 )); then
     echo "FAIL: warmup probe rc=$RC"
-    tail -20 "$ARMDIR/warmup_probe_stdout.log"; docker logs "$CONTAINER" 2>&1 | tail -30; exit 4
+    tail -20 "$ARMDIR/warmup_probe_stdout.log"; docker logs "$CONTAINER_RUNTIME_REF" 2>&1 | tail -30; exit 4
   fi
   .venv/bin/python - "$ARMDIR" "$EXPECT_RATIO" <<'PY'
 import sys
@@ -1173,7 +1260,7 @@ PY
   # Container env is not sufficient: these one-time kernel messages prove the
   # route executed after the legacy warmup decode.
   if (( NATIVE_DECODE == 0 )); then
-    docker logs "$CONTAINER" > "$ARMDIR/docker_after_warmup.log" 2>&1
+    docker logs "$CONTAINER_RUNTIME_REF" > "$ARMDIR/docker_after_warmup.log" 2>&1
     if grep -q "^FR13_SUBTREE_PARALLEL=1$" "$ARMDIR/container_env.txt"; then
       grep -F -m1 "[FR13_SUBTREE_PARALLEL ENGAGED]" \
         "$ARMDIR/docker_after_warmup.log" >/dev/null \
@@ -1221,13 +1308,13 @@ fi
 if [[ -n "${FR13_APC_REQUIRE_SNAP_FIX:-}${FR13_APC_REQUIRE_HIT_SUFFIX_CAP:-}" ]]; then
   APC_MARKER="${FR13_APC_BRIDGE_MARKER_FILE:-/logs/fr13_apc_bridge_loaded.flag}"
   # copy the worker-written marker out of the container's /logs to the arm dir
-  docker exec "$CONTAINER" sh -c "cat '$APC_MARKER' 2>/dev/null" > "$ARMDIR/apc_bridge_marker.txt" 2>/dev/null
+  docker exec "$CONTAINER_RUNTIME_REF" sh -c "cat '$APC_MARKER' 2>/dev/null" > "$ARMDIR/apc_bridge_marker.txt" 2>/dev/null
   # any bridge error file is a hard fail (a swallowed read must never look like engagement)
-  if docker exec "$CONTAINER" sh -c "test -f /logs/fr13_apc_bridge_error.flag" 2>/dev/null; then
-    echo "FAIL: APC bridge error flag present in worker:"; docker exec "$CONTAINER" cat /logs/fr13_apc_bridge_error.flag 2>/dev/null; exit 4
+  if docker exec "$CONTAINER_RUNTIME_REF" sh -c "test -f /logs/fr13_apc_bridge_error.flag" 2>/dev/null; then
+    echo "FAIL: APC bridge error flag present in worker:"; docker exec "$CONTAINER_RUNTIME_REF" cat /logs/fr13_apc_bridge_error.flag 2>/dev/null; exit 4
   fi
   APC_MARKER_TXT="$(cat "$ARMDIR/apc_bridge_marker.txt" 2>/dev/null)"
-  [[ -n "$APC_MARKER_TXT" ]] || { echo "FAIL: APC engagement marker $APC_MARKER absent/empty in worker (gdn bridge did not run)"; docker logs "$CONTAINER" 2>&1 | tail -30; exit 4; }
+  [[ -n "$APC_MARKER_TXT" ]] || { echo "FAIL: APC engagement marker $APC_MARKER absent/empty in worker (gdn bridge did not run)"; docker logs "$CONTAINER_RUNTIME_REF" 2>&1 | tail -30; exit 4; }
   if [[ -n "${FR13_APC_REQUIRE_SNAP_FIX:-}" ]]; then
     grep -q "SNAP_FIX=${FR13_APC_REQUIRE_SNAP_FIX}\b" "$ARMDIR/apc_bridge_marker.txt" \
       || { echo "FAIL: APC worker SNAP_FIX != required ${FR13_APC_REQUIRE_SNAP_FIX} (vacuous gate). marker: $APC_MARKER_TXT"; exit 4; }
@@ -1417,7 +1504,7 @@ WALL_ARGS=()
 FIXED32_RUNNER_ARGS=()
 if [[ -n "$FIXED32_MODE" ]]; then
   FIXED32_RUNNER_ARGS=(
-    --fixed32-container "$CONTAINER"
+    --fixed32-container "$CONTAINER_RUNTIME_REF"
     --fixed32-producer-pid "$FIXED32_PRODUCER_PID"
     --fixed32-mode "$FIXED32_MODE"
     --fixed32-flush-request "$FIXED32_REQUEST_PATH"
@@ -1715,7 +1802,7 @@ PY
     SWERC=15
   fi
 
-  docker logs "$CONTAINER" > "$ARMDIR/docker_after_tasks.log" 2>&1
+  docker logs "$CONTAINER_RUNTIME_REF" > "$ARMDIR/docker_after_tasks.log" 2>&1
   if grep -q "^FR13_SUBTREE_PARALLEL=1$" "$ARMDIR/container_env.txt"; then
     grep -F -m1 "[FR13_SUBTREE_PARALLEL ENGAGED]" \
       "$ARMDIR/docker_after_tasks.log" >/dev/null \
@@ -1732,7 +1819,7 @@ fi
 
 # ---- OPT-1 post-run engagement needle ----
 if [[ "$KIND" == "cat9-opt1" ]]; then
-  docker logs "$CONTAINER" 2>&1 | grep -m1 "FR13_COMMITTER_SYNCKILL engaged" \
+  docker logs "$CONTAINER_RUNTIME_REF" 2>&1 | grep -m1 "FR13_COMMITTER_SYNCKILL engaged" \
     | tee "$ARMDIR/opt1_synckill_needle.txt" \
     || { echo "FAIL: OPT-1 synckill never engaged (vacuous arm)"; SWERC=9; }
 fi

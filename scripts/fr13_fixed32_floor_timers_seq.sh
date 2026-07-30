@@ -22,6 +22,7 @@ unset _FR13_FIXED32_SCRIPT_DIR _FR13_FIXED32_REPO
 export HF_HUB_OFFLINE=1
 export DEPLOY_FORCE_TEMP=0.6
 export FR10_METRICS=0
+export SWE_EMPTY_PATCH_RETRIES=0
 # Formal fixed32 campaigns publish curated summaries only. The generic SWE
 # runner otherwise force-adds raw per-task traces after each completed task.
 export LUMO_SWE_AUTOCOMMIT=0
@@ -170,17 +171,23 @@ export LUMO_FA_REPLAY_COMMIT_BATCH4_RUNNER_DIAG=0
 export LUMO_IR_DIAGNOSTIC_UNISOLATED=0
 export LUMO_IR_ALLOW_UNVERIFIED_SPINES2_MEASUREMENT=0
 
-case "${FR13_FLOOR_ORDER:-TH}" in
-  TH)
-    run_variant tail6_fixed32_${TAG} tail6_fixed32 31 1
-    run_variant hydra27_fixed32_${TAG} hydra27_fixed32 31 1
-    ;;
-  HT)
-    run_variant hydra27_fixed32_${TAG} hydra27_fixed32 31 1
-    run_variant tail6_fixed32_${TAG} tail6_fixed32 31 1
-    ;;
-  *)
-    echo "FR13_FLOOR_ORDER must be TH or HT, got: ${FR13_FLOOR_ORDER:-}" >&2
-    exit 2
-    ;;
-esac
+if [[ "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" == "1" ]]; then
+  # The bounded profiler wraps one server lifecycle. Never schedule a second
+  # arm after its report is finalized and the wrapped Tail target is stopped.
+  run_variant tail6_fixed32_${TAG} tail6_fixed32 31 1
+else
+  case "${FR13_FLOOR_ORDER:-TH}" in
+    TH)
+      run_variant tail6_fixed32_${TAG} tail6_fixed32 31 1
+      run_variant hydra27_fixed32_${TAG} hydra27_fixed32 31 1
+      ;;
+    HT)
+      run_variant hydra27_fixed32_${TAG} hydra27_fixed32 31 1
+      run_variant tail6_fixed32_${TAG} tail6_fixed32 31 1
+      ;;
+    *)
+      echo "FR13_FLOOR_ORDER must be TH or HT, got: ${FR13_FLOOR_ORDER:-}" >&2
+      exit 2
+      ;;
+  esac
+fi

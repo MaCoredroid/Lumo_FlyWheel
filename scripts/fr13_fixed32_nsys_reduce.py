@@ -555,6 +555,14 @@ def _validate_process_identity(
         raise ReductionError(
             "process identity PID1 environment is not attribution-only"
         )
+    session_name = pid1_environment.get("LUMO_NSYS_SESSION_NAME", "")
+    if re.fullmatch(
+        r"fr13-fixed32-[0-9]{8}T[0-9]{6}Z-p[1-9][0-9]*",
+        session_name,
+    ) is None:
+        raise ReductionError(
+            "process identity PID1 environment has no pinned Nsight session name"
+        )
     _string_list(pid1["forked_fa2_maps"], label="PID1 FA2 maps")
 
     if _string_list(engine["argv"], label="EngineCore argv") != [

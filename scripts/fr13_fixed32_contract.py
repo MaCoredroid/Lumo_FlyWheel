@@ -39,6 +39,7 @@ NSYS_PROFILE_OUTPUT = Path("/logs/fr13_fixed32_b1_real_swe")
 NSYS_PROFILE_PREFIX = (
     str(NSYS_PROFILE_BINARY),
     "profile",
+    "--session-new=%q{LUMO_NSYS_SESSION_NAME}",
     "--delay",
     "1200",
     "--duration",

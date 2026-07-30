@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ if str(SCRIPTS) not in sys.path:
 
 import fr13_fixed32_contract as contract  # noqa: E402
 import fr13_floor_gate as floor_gate  # noqa: E402
+import fr13_runtime_manifest as runtime_manifest  # noqa: E402
 
 
 def _load_runner() -> Any:
@@ -62,12 +64,16 @@ def _context_event(
     session_id: str,
     parent_tool_use_id: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    event = {
         "type": event_type,
         "uuid": event_id,
         "session_id": session_id,
         "parent_tool_use_id": parent_tool_use_id,
     }
+    if event_type == "system":
+        event["subtype"] = "init"
+        event["qwen_code_version"] = "0.19.4"
+    return event
 
 
 def _user_event(
@@ -174,6 +180,134 @@ def _task_evidence(task_key_id: str, logical: int, records: int) -> dict[str, An
     }
 
 
+def _fixed32_bundle_observation(runner: Any) -> dict[str, Any]:
+    return {
+        "qwen_code_version": runner._FIXED32_QWEN_CODE_VERSION,
+        "bundle_tree": copy.deepcopy(
+            runner._FIXED32_QWEN_BUNDLE_TREE_EXPECTED
+        ),
+    }
+
+
+def _fixed32_agent_meta(
+    runner: Any,
+    task_dir: Path,
+    instance_id: str = TASK_A,
+    **overrides: Any,
+) -> dict[str, Any]:
+    workspace = task_dir / "workspace"
+    workspace.mkdir(exist_ok=True)
+    attestation = runner._build_fixed32_qwen_runtime_attestation(
+        bundle_observation=_fixed32_bundle_observation(runner),
+        host_mode="remote",
+    )
+    digest = runner._persist_fixed32_qwen_runtime_attestation(
+        workspace=workspace,
+        attestation=attestation,
+    )
+    post_digest = runner._persist_fixed32_qwen_runtime_attestation(
+        workspace=workspace,
+        attestation=attestation,
+        filename="qwen_runtime_attestation_post.json",
+    )
+    pinned_image = runner._FIXED32_AGENT_IMAGE_IDENTITIES[instance_id]
+    image = pinned_image["repo_digest"].split("@", 1)[0] + ":latest"
+    image_identity = runner._validate_fixed32_agent_image_observation(
+        {
+            "instance_id": instance_id,
+            "image": image,
+            "id": pinned_image["id"],
+            "repo_digest": pinned_image["repo_digest"],
+            "architecture": "amd64",
+            "os": "linux",
+        },
+        instance_id=instance_id,
+        expected_image=image,
+    )
+    image_digest = runner._fixed32_canonical_json_sha256(image_identity)
+    placement = runner._validate_fixed32_agent_placement_observation(
+        copy.deepcopy(runner._FIXED32_AGENT_HOST_IDENTITY),
+        measured_observation=copy.deepcopy(
+            runner._FIXED32_MEASURED_HOST_IDENTITY
+        ),
+        remote_host="alienware",
+    )
+    placement_digest = runner._fixed32_canonical_json_sha256(placement)
+    bundle_observation = _fixed32_bundle_observation(runner)
+    remote_settings_observation = {
+        **runner._fixed32_expected_remote_settings_observation(),
+        "file_identity_sha256": "1" * 64,
+    }
+    remote_settings_digest = runner._fixed32_canonical_json_sha256(
+        remote_settings_observation
+    )
+    mounted_proof = {
+        "schema": runner._FIXED32_MOUNTED_RUNTIME_PROOF_SCHEMA,
+        "bundle_tree": {
+            "container_path": "/opt/qwen",
+            "mount_mode": "ro",
+            "write_probe_errno": 30,
+            "observation": bundle_observation,
+        },
+        "system_settings": {
+            "container_path": runner._FIXED32_QWEN_SETTINGS_CONTAINER_PATH,
+            "mount_mode": "ro",
+            "write_probe_errno": 30,
+            **remote_settings_observation,
+        },
+    }
+    mounted_proof_digest = (
+        runner._validate_fixed32_mounted_runtime_proof(
+            mounted_proof,
+            expected_bundle_observation=bundle_observation,
+        )
+    )
+    mounted_proof_path = (
+        task_dir / runner._FIXED32_MOUNTED_RUNTIME_PROOF_FILENAME
+    )
+    mounted_proof_path.write_text(
+        json.dumps(
+            mounted_proof,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="ascii",
+    )
+    meta = {
+        "exit_code": 0,
+        "timed_out": False,
+        "offloaded": True,
+        "network_drop": False,
+        "agent_env": "instance_image",
+        "instance_image": image,
+        "instance_image_identity": image_identity,
+        "instance_image_identity_sha256": image_digest,
+        "instance_image_postrun_identity_sha256": image_digest,
+        "instance_image_run_reference": pinned_image["repo_digest"],
+        "agent_placement": placement,
+        "agent_placement_sha256": placement_digest,
+        "agent_postrun_placement_sha256": placement_digest,
+        "qwen_bundle_snapshot": attestation["bundle_snapshot"],
+        "qwen_remote_settings_observation": remote_settings_observation,
+        "qwen_remote_settings_observation_sha256": remote_settings_digest,
+        "qwen_remote_settings_postrun_observation_sha256": (
+            remote_settings_digest
+        ),
+        "qwen_mounted_runtime_proof": mounted_proof,
+        "qwen_mounted_runtime_proof_sha256": mounted_proof_digest,
+        "qwen_mounted_runtime_proof_file_sha256": (
+            runner.hashlib.sha256(mounted_proof_path.read_bytes()).hexdigest()
+        ),
+        "qwen_runtime_attestation": attestation,
+        "qwen_runtime_attestation_sha256": digest,
+        "qwen_runtime_postrun_attestation_sha256": post_digest,
+    }
+    meta.update(overrides)
+    return meta
+
+
 def test_legacy_terminal_records_return_without_a_result_event() -> None:
     events = [
         _assistant_event(
@@ -237,12 +371,7 @@ def test_qwen_result_trace_counts_the_final_null_stop_turn(
     provenance = runner._fixed32_real_task_provenance(
         instance_id=TASK_A,
         trace_path=trace_path,
-        agent_meta={
-            "exit_code": 0,
-            "timed_out": False,
-            "offloaded": True,
-            "network_drop": False,
-        },
+        agent_meta=_fixed32_agent_meta(runner, tmp_path),
         task_key_id=task_key_id,
         task_auth_before=_task_evidence(task_key_id, 0, 1),
         task_auth_after=_task_evidence(task_key_id, 13, 53),
@@ -530,12 +659,7 @@ def test_parallel_terminal_records_count_as_20_model_requests(
     provenance = runner._fixed32_real_task_provenance(
         instance_id=TASK_A,
         trace_path=trace_path,
-        agent_meta={
-            "exit_code": 0,
-            "timed_out": False,
-            "offloaded": True,
-            "network_drop": False,
-        },
+        agent_meta=_fixed32_agent_meta(runner, tmp_path),
         task_key_id=task_key_id,
         task_auth_before=_task_evidence(task_key_id, 0, 1),
         task_auth_after=_task_evidence(task_key_id, 20, 81),
@@ -715,12 +839,7 @@ def test_closed_nested_agent_counts_one_hidden_terminal_request(
     provenance = runner._fixed32_real_task_provenance(
         instance_id=TASK_A,
         trace_path=trace_path,
-        agent_meta={
-            "exit_code": 0,
-            "timed_out": False,
-            "offloaded": True,
-            "network_drop": False,
-        },
+        agent_meta=_fixed32_agent_meta(runner, tmp_path),
         task_key_id=task_key_id,
         task_auth_before=_task_evidence(task_key_id, 0, 1),
         task_auth_after=_task_evidence(task_key_id, 5, 21),
@@ -1461,3 +1580,724 @@ def test_qwen_launchers_pin_the_task_session_id() -> None:
     assert "--session-id {session_id}" in runner.QWEN_CODE_TEMPLATE
     assert '--session-id "$SWE_SESSION_ID"' in runner._INSTANCE_WRAPPER
     assert f"-e SWE_SESSION_ID='{session_id}'" in command
+    assert runner._FIXED32_QWEN_SETTINGS_ENV not in command
+
+
+def test_fixed32_qwen_launcher_mounts_only_narrow_system_settings() -> None:
+    runner = _load_runner()
+    command = runner._instance_agent_command(
+        container_name="agent",
+        image="image",
+        endpoint="http://127.0.0.1:8023/v1",
+        model="model",
+        host_out_dir="/tmp/out",
+        bundle_src="/tmp/bundle",
+        agents_md_b64="YQ==",
+        prompt_b64="Yg==",
+        base_commit="deadbeef",
+        session_id=contract.fixed32_trace_session_id(TASK_A),
+        system_settings_src="/tmp/qwen-system-settings.json",
+        bundle_observation=_fixed32_bundle_observation(runner),
+    )
+
+    assert (
+        "-e QWEN_CODE_SYSTEM_SETTINGS_PATH="
+        "/run/fr13/qwen-system-settings.json"
+    ) in command
+    assert (
+        "-v /tmp/qwen-system-settings.json:"
+        "/run/fr13/qwen-system-settings.json:ro"
+    ) in command
+    assert "--bare" not in command
+    assert "grep_search" not in command
+
+
+def test_fixed32_qwen_settings_are_exact_and_auto_skill_only() -> None:
+    runner = _load_runner()
+
+    metadata = runner._fixed32_qwen_settings_metadata()
+
+    assert runner._FIXED32_QWEN_SETTINGS_PATH.read_bytes() == (
+        b'{"memory":{"enableAutoSkill":false}}\n'
+    )
+    assert metadata == {
+        "source": "config/fr13_fixed32/qwen_system_settings.json",
+        "bytes": 37,
+        "sha256": (
+            "8a872a4f6f257f6d7a45f24f42500964"
+            "f56e1500c5342218b71d02afe4d31fb6"
+        ),
+        "container_path": "/run/fr13/qwen-system-settings.json",
+        "mount_mode": "ro",
+        "environment": {
+            "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+            "value": "/run/fr13/qwen-system-settings.json",
+        },
+        "remote_file": {
+            "mode": "0444",
+            "uid": 1000,
+            "gid": 1000,
+            "nlink": 1,
+            "xattrs": [],
+        },
+        "enable_auto_skill": False,
+    }
+
+
+def test_fixed32_qwen_identity_pins_full_executable_tree() -> None:
+    runner = _load_runner()
+    tree = runner._FIXED32_QWEN_BUNDLE_TREE_EXPECTED
+
+    assert tree["roots"] == ["**"]
+    assert tree["summary"]["entry_count"] == 10_499
+    assert tree["summary"]["regular_file_bytes"] == 327_941_291
+    assert tree["manifest_sha256"] == (
+        "2643d1d64c03887654794d9bd00a88fb"
+        "f9ced7362e034557cf196b8a37e744bc"
+    )
+    assert set(tree["entrypoints"]) == set(
+        runner._FIXED32_QWEN_BUNDLE_TREE_REQUIRED_ENTRYPOINTS
+    )
+
+
+def test_remote_settings_rehash_expands_tilde_inside_python(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    calls: list[list[str]] = []
+
+    def fake_net_retry(
+        argv: list[str],
+        **_kwargs: Any,
+    ) -> Any:
+        calls.append(argv)
+        return runner.subprocess.CompletedProcess(
+            argv,
+            0,
+            json.dumps(
+                {
+                    **runner._fixed32_expected_remote_settings_observation(),
+                    "file_identity_sha256": "1" * 64,
+                }
+            ),
+            "",
+        )
+
+    monkeypatch.setattr(runner, "_net_retry", fake_net_retry)
+    runner._verify_fixed32_qwen_settings_remote(
+        host="alienware",
+        remote_path="~/lumo_proxy_offload/codex_work/task/settings.json",
+    )
+
+    remote_command = calls[0][-1]
+    assert ".expanduser()" in remote_command
+    assert "os.O_NOFOLLOW" in remote_command
+    assert "before.st_nlink != 1" in remote_command
+    assert "os.listxattr" in remote_command
+    assert "identity(after_read) != identity(opened)" in remote_command
+    assert "~/lumo_proxy_offload/codex_work/task/settings.json" in remote_command
+
+
+def test_fixed32_runtime_mode_rejects_legacy_and_non_qwen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    monkeypatch.setenv("SWE_AGENT", "qwen_code")
+    monkeypatch.setenv("SWE_AGENT_ENV", "legacy")
+    with pytest.raises(runner.Fixed32BoundaryError, match="instance_image"):
+        runner._validate_fixed32_agent_runtime_mode(
+            remote_host="alienware"
+        )
+
+    monkeypatch.setenv("SWE_AGENT_ENV", "instance_image")
+    monkeypatch.setenv("SWE_AGENT", "codex")
+    with pytest.raises(runner.Fixed32BoundaryError, match="qwen_code"):
+        runner._validate_fixed32_agent_runtime_mode(
+            remote_host="alienware"
+        )
+
+    monkeypatch.setenv("SWE_AGENT", "qwen")
+    with pytest.raises(runner.Fixed32BoundaryError, match="agent-host"):
+        runner._validate_fixed32_agent_runtime_mode(remote_host=None)
+    runner._validate_fixed32_agent_runtime_mode(remote_host="alienware")
+
+
+def test_fixed32_main_rejects_local_agent_before_runtime_binding(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    runner = _load_runner()
+    monkeypatch.setenv("SWE_AGENT", "qwen")
+    monkeypatch.setenv("SWE_AGENT_ENV", "instance_image")
+    monkeypatch.setenv("SWE_EMPTY_PATCH_RETRIES", "0")
+
+    with pytest.raises(SystemExit, match="2"):
+        runner.main(
+            [
+                "--subset",
+                "/does/not/exist.json",
+                "--fixed32-container",
+                "engine",
+                "--fixed32-producer-pid",
+                "1",
+                "--fixed32-mode",
+                "tail6_fixed32",
+                "--fixed32-flush-request",
+                "/tmp/request",
+                "--fixed32-flush-ack",
+                "/tmp/ack",
+                "--fixed32-boundary-snapshot",
+                "/tmp/snapshot",
+            ]
+        )
+
+    assert "requires --agent-host" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    (
+        lambda runner, value: value.__setitem__(
+            "qwen_code_version",
+            "0.19.6",
+        ),
+        lambda runner, value: value["bundle_tree"].__setitem__(
+            "manifest_sha256", "0" * 64
+        ),
+        lambda runner, value: value["bundle_tree"]["summary"].__setitem__(
+            "entry_count", 1
+        ),
+        lambda runner, value: value["bundle_tree"]["entrypoints"].pop(
+            "bin/qwen"
+        ),
+    ),
+)
+def test_fixed32_qwen_bundle_attestation_fails_closed(
+    mutate: Any,
+) -> None:
+    runner = _load_runner()
+    observation = _fixed32_bundle_observation(runner)
+    mutate(runner, observation)
+
+    with pytest.raises(runner.Fixed32BoundaryError):
+        runner._validate_fixed32_qwen_bundle_observation(observation)
+
+
+def _write_minimal_qwen_bundle(root: Path) -> Path:
+    package_root = root / "npm/lib/node_modules/@qwen-code/qwen-code"
+    (root / "bin").mkdir(parents=True)
+    (root / "node/bin").mkdir(parents=True)
+    (root / "npm/bin").mkdir(parents=True)
+    (package_root / "chunks").mkdir(parents=True)
+    (root / "bin/qwen").write_text("#!/bin/sh\n", encoding="ascii")
+    (root / "node/bin/node").write_bytes(b"node")
+    (package_root / "cli-entry.js").write_text("cli\n", encoding="ascii")
+    (package_root / "package.json").write_text(
+        '{"version":"0.19.4"}\n',
+        encoding="ascii",
+    )
+    (package_root / "chunks/unpinned.js").write_text(
+        "before\n",
+        encoding="ascii",
+    )
+    (root / "npm/bin/qwen").symlink_to(
+        "../lib/node_modules/@qwen-code/qwen-code/cli-entry.js"
+    )
+    for executable in (
+        root / "bin/qwen",
+        root / "node/bin/node",
+        package_root / "cli-entry.js",
+    ):
+        executable.chmod(0o755)
+    return package_root / "chunks/unpinned.js"
+
+
+def test_qwen_tree_manifest_covers_previously_unlisted_runtime_file(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    bundle_root = tmp_path / "qwen"
+    runtime_file = _write_minimal_qwen_bundle(bundle_root)
+
+    before = runner._observe_fixed32_qwen_bundle_local(bundle_root)
+    runtime_file.write_text("after\n", encoding="ascii")
+    after = runner._observe_fixed32_qwen_bundle_local(bundle_root)
+
+    assert (
+        before["bundle_tree"]["manifest_sha256"]
+        != after["bundle_tree"]["manifest_sha256"]
+    )
+
+
+@pytest.mark.parametrize(
+    "violation",
+    ("hardlink", "xattr", "absolute_symlink", "dangling_symlink", "fifo", "nonascii"),
+)
+def test_qwen_tree_manifest_rejects_noncanonical_entries(
+    tmp_path: Path,
+    violation: str,
+) -> None:
+    runner = _load_runner()
+    bundle_root = tmp_path / "qwen"
+    runtime_file = _write_minimal_qwen_bundle(bundle_root)
+    if violation == "hardlink":
+        os.link(runtime_file, runtime_file.with_name("hardlink.js"))
+    elif violation == "xattr":
+        try:
+            os.setxattr(runtime_file, b"user.fr13-test", b"x")
+        except OSError:
+            pytest.skip("test filesystem does not support user xattrs")
+    elif violation in {"absolute_symlink", "dangling_symlink"}:
+        runtime_file.unlink()
+        runtime_file.symlink_to(
+            "/etc/passwd"
+            if violation == "absolute_symlink"
+            else "missing-target.js"
+        )
+    elif violation == "fifo":
+        runtime_file.unlink()
+        os.mkfifo(runtime_file)
+    elif violation == "nonascii":
+        runtime_file.with_name("runtime-\N{LATIN SMALL LETTER E WITH ACUTE}.js").write_text(
+            "noncanonical\n",
+            encoding="utf-8",
+        )
+
+    with pytest.raises(runner.Fixed32BoundaryError):
+        runner._observe_fixed32_qwen_bundle_local(bundle_root)
+
+
+def test_fixed32_remote_paths_and_command_isolate_read_only_settings() -> None:
+    runner = _load_runner()
+    container, task_root, out_dir, settings = (
+        runner._fixed32_remote_agent_paths(TASK_A, nonce="unit")
+    )
+    pinned = runner._FIXED32_AGENT_IMAGE_IDENTITIES[TASK_A]
+    snapshot = (
+        f"{task_root}/qwen_bundle-"
+        f"{runner._FIXED32_QWEN_BUNDLE_TREE_SHA256}"
+    )
+    command = runner._instance_agent_command(
+        container_name=container,
+        image=pinned["repo_digest"],
+        endpoint="http://127.0.0.1:8023/v1",
+        model="model",
+        host_out_dir=out_dir,
+        bundle_src=snapshot,
+        agents_md_b64="YQ==",
+        prompt_b64="Yg==",
+        base_commit="deadbeef",
+        session_id=contract.fixed32_trace_session_id(TASK_A),
+        system_settings_src=settings,
+        bundle_observation=_fixed32_bundle_observation(runner),
+    )
+
+    assert settings == f"{task_root}/qwen_system_settings.json"
+    assert not settings.startswith(out_dir + "/")
+    assert f"-v {settings}:/run/fr13/qwen-system-settings.json:ro" in command
+    assert f"-v {out_dir}:/out" in command
+    assert f"-v {snapshot}:/opt/qwen:ro" in command
+    assert "~/qwen_agent_bundle:/opt/qwen" not in command
+    assert "fr13_qwen_tree_scanner.py /opt/qwen" in command
+    assert "qwen_mounted_runtime_proof.json" in command
+    assert f"-w /testbed {pinned['repo_digest']} bash" in command
+    assert "-e QWEN_STREAM_IDLE_TIMEOUT_MS=600000" in command
+    for variable in runner._FIXED32_CLEARED_AGENT_ENV:
+        assert f"-e {variable}=" in command
+
+
+def test_fixed32_remote_cleanup_is_fail_loud(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    calls: list[list[str]] = []
+
+    def fail_cleanup(argv: list[str], **_kwargs: Any) -> Any:
+        calls.append(argv)
+        return runner.subprocess.CompletedProcess(argv, 1, "", "failed")
+
+    monkeypatch.setattr(runner, "_net_retry", fail_cleanup)
+    with pytest.raises(runner.Fixed32BoundaryError, match="cleanup failed"):
+        runner._cleanup_remote_agent_task(
+            host="alienware",
+            instance_id=TASK_A,
+            container_name="swe-qwen-task-unit",
+            task_root="~/swe_codex_offload/task-unit",
+        )
+
+    cleanup_command = calls[0][-1]
+    assert cleanup_command.startswith("set -eu;")
+    assert "test ! -e" in cleanup_command
+    assert "test ! -L" in cleanup_command
+    assert "echo ok" not in cleanup_command
+
+
+def _run_settings_script(
+    runner: Any,
+    *,
+    action: str,
+    path: Path,
+) -> Any:
+    return runner.subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            runner._FIXED32_QWEN_SETTINGS_REMOTE_SCRIPT,
+            action,
+            str(path),
+            runner.base64.b64encode(
+                runner._FIXED32_QWEN_SETTINGS_BYTES
+            ).decode("ascii"),
+            runner._FIXED32_QWEN_SETTINGS_MODE,
+            str(runner._FIXED32_QWEN_SETTINGS_UID),
+            str(runner._FIXED32_QWEN_SETTINGS_GID),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+@pytest.mark.parametrize(
+    "violation",
+    ("swap", "symlink", "hardlink", "mode", "xattr"),
+)
+def test_fixed32_settings_reject_path_identity_and_metadata_tamper(
+    tmp_path: Path,
+    violation: str,
+) -> None:
+    runner = _load_runner()
+    if (
+        os.getuid() != runner._FIXED32_QWEN_SETTINGS_UID
+        or os.getgid() != runner._FIXED32_QWEN_SETTINGS_GID
+    ):
+        pytest.skip("test process does not have the canonical remote owner")
+    path = tmp_path / "qwen_system_settings.json"
+    installed = _run_settings_script(
+        runner,
+        action="create",
+        path=path,
+    )
+    assert installed.returncode == 0, installed.stderr
+    before = runner._validate_fixed32_remote_settings_observation(
+        json.loads(installed.stdout)
+    )
+
+    if violation == "swap":
+        replacement = tmp_path / "replacement.json"
+        replacement.write_bytes(runner._FIXED32_QWEN_SETTINGS_BYTES)
+        replacement.chmod(0o444)
+        os.replace(replacement, path)
+    elif violation == "symlink":
+        path.unlink()
+        path.symlink_to(runner._FIXED32_QWEN_SETTINGS_PATH)
+    elif violation == "hardlink":
+        os.link(path, tmp_path / "settings-hardlink.json")
+    elif violation == "mode":
+        path.chmod(0o644)
+    elif violation == "xattr":
+        try:
+            os.setxattr(path, b"user.fr13-test", b"x")
+        except OSError:
+            pytest.skip("test filesystem does not support user xattrs")
+
+    verified = _run_settings_script(
+        runner,
+        action="verify",
+        path=path,
+    )
+    if violation == "swap":
+        assert verified.returncode == 0, verified.stderr
+        after = runner._validate_fixed32_remote_settings_observation(
+            json.loads(verified.stdout)
+        )
+        with pytest.raises(
+            runner.Fixed32BoundaryError,
+            match="file identity changed",
+        ):
+            runner._require_fixed32_remote_settings_stable(before, after)
+    else:
+        assert verified.returncode != 0
+
+
+def test_fixed32_snapshot_path_is_content_addressed_and_promoted_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    calls: list[list[str]] = []
+    observation = _fixed32_bundle_observation(runner)
+
+    def fake_net_retry(argv: list[str], **_kwargs: Any) -> Any:
+        calls.append(argv)
+        return runner.subprocess.CompletedProcess(argv, 0, "", "")
+
+    inspected_paths: list[str] = []
+
+    def fake_inspect(_host: str, path: str) -> dict[str, Any]:
+        inspected_paths.append(path)
+        return copy.deepcopy(observation)
+
+    monkeypatch.setattr(runner, "_net_retry", fake_net_retry)
+    monkeypatch.setattr(
+        runner,
+        "_inspect_fixed32_qwen_bundle_remote_path",
+        fake_inspect,
+    )
+    snapshot, observed = runner._create_fixed32_qwen_snapshot_remote(
+        host="alienware",
+        instance_id=TASK_A,
+        task_root="~/lumo_proxy_offload/codex_work/task-unit",
+    )
+
+    assert snapshot.endswith(
+        "/qwen_bundle-" + runner._FIXED32_QWEN_BUNDLE_TREE_SHA256
+    )
+    assert inspected_paths == [
+        "~/lumo_proxy_offload/codex_work/task-unit/.qwen_bundle_snapshot",
+        snapshot,
+    ]
+    assert observed == observation
+    assert "$HOME/qwen_agent_bundle" in calls[0][-1]
+    assert "mv --" in calls[1][-1]
+
+
+@pytest.mark.parametrize(
+    ("section", "field", "value"),
+    (
+        ("bundle_tree", "write_probe_errno", 13),
+        ("bundle_tree", "mount_mode", "rw"),
+        ("system_settings", "write_probe_errno", 13),
+        ("system_settings", "mode", "0644"),
+        ("system_settings", "file_identity_sha256", "0" * 64),
+    ),
+)
+def test_mounted_runtime_proof_tamper_fails_runner_and_gate(
+    section: str,
+    field: str,
+    value: Any,
+) -> None:
+    runner = _load_runner()
+    observation = _fixed32_bundle_observation(runner)
+    proof = {
+        "schema": runner._FIXED32_MOUNTED_RUNTIME_PROOF_SCHEMA,
+        "bundle_tree": {
+            "container_path": "/opt/qwen",
+            "mount_mode": "ro",
+            "write_probe_errno": 30,
+            "observation": observation,
+        },
+        "system_settings": {
+            "container_path": runner._FIXED32_QWEN_SETTINGS_CONTAINER_PATH,
+            "mount_mode": "ro",
+            "write_probe_errno": 30,
+            **runner._fixed32_expected_remote_settings_observation(),
+            "file_identity_sha256": "1" * 64,
+        },
+    }
+    if section == "system_settings" and field == "file_identity_sha256":
+        value = "not-a-digest"
+    proof[section][field] = value
+
+    with pytest.raises(runner.Fixed32BoundaryError):
+        runner._validate_fixed32_mounted_runtime_proof(
+            proof,
+            expected_bundle_observation=observation,
+        )
+    with pytest.raises(floor_gate.GateError):
+        floor_gate._fixed32_mounted_runtime_proof(
+            proof,
+            label="proof",
+        )
+
+
+def test_fixed32_agent_placement_pins_alias_kernel_machine_and_daemon() -> None:
+    runner = _load_runner()
+    placement = runner._validate_fixed32_agent_placement_observation(
+        copy.deepcopy(runner._FIXED32_AGENT_HOST_IDENTITY),
+        measured_observation=copy.deepcopy(
+            runner._FIXED32_MEASURED_HOST_IDENTITY
+        ),
+        remote_host="alienware",
+    )
+
+    assert placement["agent_host_identity"]["machine"] == "x86_64"
+    assert placement["measured_host_identity"]["machine"] == "aarch64"
+    assert floor_gate._fixed32_agent_placement(
+        placement,
+        label="placement",
+    ) == runner._fixed32_canonical_json_sha256(placement)
+    with pytest.raises(runner.Fixed32BoundaryError, match="exact canonical"):
+        runner._validate_fixed32_agent_placement_observation(
+            copy.deepcopy(runner._FIXED32_AGENT_HOST_IDENTITY),
+            measured_observation=copy.deepcopy(
+                runner._FIXED32_MEASURED_HOST_IDENTITY
+            ),
+            remote_host="mark-Alienware-Aurora-ACT1250",
+        )
+    tampered = copy.deepcopy(runner._FIXED32_AGENT_HOST_IDENTITY)
+    tampered["docker_daemon_id_sha256"] = "0" * 64
+    with pytest.raises(runner.Fixed32BoundaryError, match="Docker daemon"):
+        runner._validate_fixed32_agent_placement_observation(
+            tampered,
+            measured_observation=copy.deepcopy(
+                runner._FIXED32_MEASURED_HOST_IDENTITY
+            ),
+            remote_host="alienware",
+        )
+    tampered_measured = copy.deepcopy(
+        runner._FIXED32_MEASURED_HOST_IDENTITY
+    )
+    tampered_measured["kernel"] = "changed"
+    with pytest.raises(runner.Fixed32BoundaryError, match="measured host"):
+        runner._validate_fixed32_agent_placement_observation(
+            copy.deepcopy(runner._FIXED32_AGENT_HOST_IDENTITY),
+            measured_observation=tampered_measured,
+            remote_host="alienware",
+        )
+
+
+def test_fixed32_measured_host_identity_is_observed_live(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    observation = copy.deepcopy(runner._FIXED32_MEASURED_HOST_IDENTITY)
+    calls: list[list[str]] = []
+
+    def fake_run(argv: list[str], **_kwargs: Any) -> Any:
+        calls.append(argv)
+        return runner.subprocess.CompletedProcess(
+            argv,
+            0,
+            json.dumps(observation, sort_keys=True),
+            "",
+        )
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    assert runner._inspect_fixed32_measured_host_local() == observation
+    assert calls == [[sys.executable, "-c", runner._FIXED32_HOST_IDENTITY_SCRIPT]]
+
+    observation["docker_daemon_id_sha256"] = "0" * 64
+    with pytest.raises(runner.Fixed32BoundaryError, match="measured host"):
+        runner._inspect_fixed32_measured_host_local()
+
+
+def test_fixed32_runtime_manifest_includes_qwen_settings() -> None:
+    path = "config/fr13_fixed32/qwen_system_settings.json"
+    assert path in runtime_manifest.FIXED32_RUNTIME_DATA_AND_CONFIG
+    manifest = runtime_manifest.build_manifest(
+        REPO,
+        profile="fixed32",
+        sequence="scripts/fr13_fixed32_floor_timers_seq.sh",
+    )
+    records = manifest["closures"]["runtime_data_and_config"]
+    record = next(item for item in records if item["path"] == path)
+    assert record == {
+        "path": path,
+        "sha256": (
+            "8a872a4f6f257f6d7a45f24f42500964"
+            "f56e1500c5342218b71d02afe4d31fb6"
+        ),
+        "size": 37,
+    }
+
+
+def test_fixed32_retry_policy_is_exactly_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    monkeypatch.setenv("SWE_EMPTY_PATCH_RETRIES", "0")
+    runner._validate_fixed32_retry_policy()
+    for invalid in ("1", "00", ""):
+        monkeypatch.setenv("SWE_EMPTY_PATCH_RETRIES", invalid)
+        with pytest.raises(runner.Fixed32BoundaryError, match="exactly"):
+            runner._validate_fixed32_retry_policy()
+
+
+def test_fixed32_agent_image_identity_is_independently_pinned() -> None:
+    runner = _load_runner()
+    expected = copy.deepcopy(
+        floor_gate.FIXED32_AGENT_IMAGE_IDENTITIES[TASK_A]
+    )
+
+    assert floor_gate._fixed32_agent_image_identity(
+        expected,
+        task_id=TASK_A,
+        label="image",
+    ) == runner._fixed32_canonical_json_sha256(expected)
+    expected["repo_digest"] = expected["repo_digest"][:-1] + "0"
+    with pytest.raises(floor_gate.GateError, match="image identity differs"):
+        floor_gate._fixed32_agent_image_identity(
+            expected,
+            task_id=TASK_A,
+            label="image",
+        )
+
+
+def test_floor_gate_requires_v3_qwen_runtime_attestation() -> None:
+    runner = _load_runner()
+    attestation = runner._build_fixed32_qwen_runtime_attestation(
+        bundle_observation=_fixed32_bundle_observation(runner),
+        host_mode="remote",
+    )
+
+    assert floor_gate.FIXED32_REAL_TASK_PROVENANCE_SCHEMA == (
+        "fr13-fixed32-real-task-provenance-v3"
+    )
+    assert floor_gate._fixed32_qwen_runtime_attestation(
+        attestation,
+        label="test attestation",
+    ) == runner._fixed32_canonical_json_sha256(attestation)
+
+    attestation["system_settings"]["mount_mode"] = "rw"
+    with pytest.raises(floor_gate.GateError, match="system-settings evidence"):
+        floor_gate._fixed32_qwen_runtime_attestation(
+            attestation,
+            label="test attestation",
+        )
+
+
+def test_fixed32_provenance_rejects_trace_version_or_postrun_digest(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    events = _qwen_result_trace()
+    events[0]["qwen_code_version"] = "0.19.6"
+    trace_path = tmp_path / "qwen_trace.jsonl"
+    trace_path.write_text(
+        "".join(json.dumps(event) + "\n" for event in events),
+        encoding="utf-8",
+    )
+    task_key_id = "d" * 64
+    meta = _fixed32_agent_meta(runner, tmp_path)
+
+    with pytest.raises(
+        runner.Fixed32BoundaryError,
+        match="pinned Qwen 0.19.4",
+    ):
+        runner._fixed32_real_task_provenance(
+            instance_id=TASK_A,
+            trace_path=trace_path,
+            agent_meta=meta,
+            task_key_id=task_key_id,
+            task_auth_before=_task_evidence(task_key_id, 0, 1),
+            task_auth_after=_task_evidence(task_key_id, 13, 53),
+        )
+
+    events[0]["qwen_code_version"] = "0.19.4"
+    trace_path.write_text(
+        "".join(json.dumps(event) + "\n" for event in events),
+        encoding="utf-8",
+    )
+    meta["qwen_runtime_postrun_attestation_sha256"] = "0" * 64
+    with pytest.raises(
+        runner.Fixed32BoundaryError,
+        match="pre/post runtime attestation digests differ",
+    ):
+        runner._fixed32_real_task_provenance(
+            instance_id=TASK_A,
+            trace_path=trace_path,
+            agent_meta=meta,
+            task_key_id=task_key_id,
+            task_auth_before=_task_evidence(task_key_id, 0, 1),
+            task_auth_after=_task_evidence(task_key_id, 13, 53),
+        )

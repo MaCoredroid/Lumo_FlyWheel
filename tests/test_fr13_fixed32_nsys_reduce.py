@@ -275,6 +275,7 @@ def _provenance_fixture(tmp_path: Path) -> dict[str, object]:
         "FR13_FIXED32_ATTRIBUTION_ONLY=1",
         "FR13_FIXED32_NVTX_PROFILE=1",
         "LUMO_NSYS_WRAP_VLLM=1",
+        "LUMO_NSYS_SESSION_NAME=fr13-fixed32-20260730T120000Z-p1234",
         "PRIVATE_FIXTURE_VALUE=must-not-appear-in-reduced-output",
     ]
     process_identity = arm_dir / "fixed32_process_identity.json"
@@ -502,6 +503,40 @@ def test_provenance_rejects_tampered_profile_environment(tmp_path: Path) -> None
     with pytest.raises(
         reducer.ReductionError,
         match="PID1 environment is not attribution-only",
+    ):
+        reducer._build_attribution_provenance(**fixture)
+
+
+@pytest.mark.parametrize(
+    "session_name",
+    (
+        None,
+        "profile-1234",
+        "fr13-fixed32-20260730T120000-p1234",
+        "fr13-fixed32-20260730T120000Z-p0",
+    ),
+)
+def test_provenance_rejects_missing_or_bad_pinned_session_name(
+    tmp_path: Path,
+    session_name: str | None,
+) -> None:
+    fixture = _provenance_fixture(tmp_path)
+    path = Path(fixture["process_identity"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["pid1"]["environ"] = [
+        entry
+        for entry in payload["pid1"]["environ"]
+        if not entry.startswith("LUMO_NSYS_SESSION_NAME=")
+    ]
+    if session_name is not None:
+        payload["pid1"]["environ"].append(
+            f"LUMO_NSYS_SESSION_NAME={session_name}"
+        )
+    path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(
+        reducer.ReductionError,
+        match="PID1 environment has no pinned Nsight session name",
     ):
         reducer._build_attribution_provenance(**fixture)
 

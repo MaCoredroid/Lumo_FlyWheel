@@ -970,13 +970,135 @@ def _task_evidence(
     }
 
 
-def test_runner_v2_counts_only_terminal_qwen_assistant_records(
+def _fixed32_agent_meta(runner: Any, task_dir: Path) -> dict[str, Any]:
+    workspace = task_dir / "workspace"
+    workspace.mkdir(exist_ok=True)
+    observation = {
+        "qwen_code_version": runner._FIXED32_QWEN_CODE_VERSION,
+        "bundle_tree": json.loads(
+            json.dumps(runner._FIXED32_QWEN_BUNDLE_TREE_EXPECTED)
+        ),
+    }
+    attestation = runner._build_fixed32_qwen_runtime_attestation(
+        bundle_observation=observation,
+        host_mode="remote",
+    )
+    digest = runner._persist_fixed32_qwen_runtime_attestation(
+        workspace=workspace,
+        attestation=attestation,
+    )
+    post_digest = runner._persist_fixed32_qwen_runtime_attestation(
+        workspace=workspace,
+        attestation=attestation,
+        filename="qwen_runtime_attestation_post.json",
+    )
+    pinned_image = runner._FIXED32_AGENT_IMAGE_IDENTITIES[TASK_IDS[0]]
+    image = pinned_image["repo_digest"].split("@", 1)[0] + ":latest"
+    image_identity = runner._validate_fixed32_agent_image_observation(
+        {
+            "instance_id": TASK_IDS[0],
+            "image": image,
+            "id": pinned_image["id"],
+            "repo_digest": pinned_image["repo_digest"],
+            "architecture": "amd64",
+            "os": "linux",
+        },
+        instance_id=TASK_IDS[0],
+        expected_image=image,
+    )
+    image_digest = runner._fixed32_canonical_json_sha256(image_identity)
+    placement = runner._validate_fixed32_agent_placement_observation(
+        json.loads(json.dumps(runner._FIXED32_AGENT_HOST_IDENTITY)),
+        measured_observation=json.loads(
+            json.dumps(runner._FIXED32_MEASURED_HOST_IDENTITY)
+        ),
+        remote_host="alienware",
+    )
+    placement_digest = runner._fixed32_canonical_json_sha256(placement)
+    remote_settings_observation = {
+        **runner._fixed32_expected_remote_settings_observation(),
+        "file_identity_sha256": "1" * 64,
+    }
+    remote_settings_digest = runner._fixed32_canonical_json_sha256(
+        remote_settings_observation
+    )
+    mounted_proof = {
+        "schema": runner._FIXED32_MOUNTED_RUNTIME_PROOF_SCHEMA,
+        "bundle_tree": {
+            "container_path": "/opt/qwen",
+            "mount_mode": "ro",
+            "write_probe_errno": 30,
+            "observation": observation,
+        },
+        "system_settings": {
+            "container_path": runner._FIXED32_QWEN_SETTINGS_CONTAINER_PATH,
+            "mount_mode": "ro",
+            "write_probe_errno": 30,
+            **remote_settings_observation,
+        },
+    }
+    mounted_proof_digest = (
+        runner._validate_fixed32_mounted_runtime_proof(
+            mounted_proof,
+            expected_bundle_observation=observation,
+        )
+    )
+    mounted_proof_path = (
+        task_dir / runner._FIXED32_MOUNTED_RUNTIME_PROOF_FILENAME
+    )
+    mounted_proof_path.write_text(
+        json.dumps(
+            mounted_proof,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="ascii",
+    )
+    return {
+        "exit_code": 0,
+        "timed_out": False,
+        "offloaded": True,
+        "network_drop": False,
+        "agent_env": "instance_image",
+        "instance_image": image,
+        "instance_image_identity": image_identity,
+        "instance_image_identity_sha256": image_digest,
+        "instance_image_postrun_identity_sha256": image_digest,
+        "instance_image_run_reference": pinned_image["repo_digest"],
+        "agent_placement": placement,
+        "agent_placement_sha256": placement_digest,
+        "agent_postrun_placement_sha256": placement_digest,
+        "qwen_bundle_snapshot": attestation["bundle_snapshot"],
+        "qwen_remote_settings_observation": remote_settings_observation,
+        "qwen_remote_settings_observation_sha256": remote_settings_digest,
+        "qwen_remote_settings_postrun_observation_sha256": (
+            remote_settings_digest
+        ),
+        "qwen_mounted_runtime_proof": mounted_proof,
+        "qwen_mounted_runtime_proof_sha256": mounted_proof_digest,
+        "qwen_mounted_runtime_proof_file_sha256": (
+            runner.hashlib.sha256(mounted_proof_path.read_bytes()).hexdigest()
+        ),
+        "qwen_runtime_attestation": attestation,
+        "qwen_runtime_attestation_sha256": digest,
+        "qwen_runtime_postrun_attestation_sha256": post_digest,
+    }
+
+
+def test_runner_v3_counts_only_terminal_qwen_assistant_records(
     tmp_path: Path,
 ) -> None:
     runner = _load_runner()
     task_key_id = "a" * 64
     trace = tmp_path / "qwen_trace.jsonl"
     events = [
+        {
+            "type": "system",
+            "subtype": "init",
+            "qwen_code_version": "0.19.4",
+        },
         {
             "type": "assistant",
             "message": {
@@ -1023,12 +1145,7 @@ def test_runner_v2_counts_only_terminal_qwen_assistant_records(
     provenance = runner._fixed32_real_task_provenance(
         instance_id=TASK_IDS[0],
         trace_path=trace,
-        agent_meta={
-            "exit_code": 0,
-            "timed_out": False,
-            "offloaded": True,
-            "network_drop": False,
-        },
+        agent_meta=_fixed32_agent_meta(runner, tmp_path),
         task_key_id=task_key_id,
         task_auth_before=_task_evidence(
             task_key_id, logical=3, attempts=4, records=10
@@ -1037,7 +1154,7 @@ def test_runner_v2_counts_only_terminal_qwen_assistant_records(
             task_key_id, logical=5, attempts=6, records=20
         ),
     )
-    assert provenance["schema"] == "fr13-fixed32-real-task-provenance-v2"
+    assert provenance["schema"] == "fr13-fixed32-real-task-provenance-v3"
     assert provenance["trace_completed_logical_model_requests"] == 2
     assert provenance["completed_logical_model_requests"] == 2
     assert provenance["accepted_attempts"] == 2
@@ -1076,7 +1193,7 @@ def test_runner_passes_only_the_derived_bearer_to_agent_environment(
         '{"type":"assistant","value":NaN}\n',
     ),
 )
-def test_runner_v2_rejects_ambiguous_trace_json(
+def test_runner_v3_rejects_ambiguous_trace_json(
     tmp_path: Path,
     trace_line: str,
 ) -> None:
@@ -1088,12 +1205,7 @@ def test_runner_v2_rejects_ambiguous_trace_json(
         runner._fixed32_real_task_provenance(
             instance_id=TASK_IDS[0],
             trace_path=trace,
-            agent_meta={
-                "exit_code": 0,
-                "timed_out": False,
-                "offloaded": True,
-                "network_drop": False,
-            },
+            agent_meta=_fixed32_agent_meta(runner, tmp_path),
             task_key_id=task_key_id,
             task_auth_before=_task_evidence(
                 task_key_id, logical=0, attempts=0, records=1

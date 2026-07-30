@@ -78,3 +78,18 @@ def test_fixed32_launcher_omits_environment_from_nsys_report() -> None:
     text = (REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh").read_text()
 
     assert "--discard-environment=true" in text
+
+
+def test_fixed32_launcher_pins_session_and_container_creation_identity() -> None:
+    text = (REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh").read_text()
+
+    assert '\\"--session-new=%q{LUMO_NSYS_SESSION_NAME}\\"' in text
+    assert 'FR13_FIXED32_CIDFILE="$LOG_DIR/fr13_fixed32_container.cid"' in text
+    assert '[[ ! -e "$FR13_FIXED32_CIDFILE" && ! -L "$FR13_FIXED32_CIDFILE" ]]' in text
+    assert "FR13_FIXED32_DOCKER_ARGS=(\n    --cidfile\n" in text
+    assert (
+        'docker ps -aq --filter "name=^/${CONTAINER}$"'
+        in text
+    )
+    assert 'GPU_GUARD_CONTAINER_ID="$FR13_FIXED32_CONTAINER_ID"' in text
+    assert 'GPU_GUARD_EXPECTED_NAME="$CONTAINER"' in text

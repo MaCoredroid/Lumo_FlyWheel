@@ -648,6 +648,8 @@ mkdir -p "$LOG_DIR"
 LOG_DIR=$(realpath "$LOG_DIR")
 FR13_FIXED32_DOCKER_ARGS=()
 FR13_FIXED32_MIDDLEWARE_FLAGS=""
+FR13_FIXED32_CIDFILE=""
+FR13_FIXED32_CONTAINER_ID=""
 if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   : "${FR13_FIXED32_INGRESS_SECRET_FILE:?fixed32 ingress secret file is required}"
   : "${FR13_FIXED32_INGRESS_TASK_IDS:?fixed32 canonical task ID list is required}"
@@ -734,12 +736,17 @@ PY
   FR13_FIXED32_ENGINE_INGRESS_LEDGER_PATH=/logs/fr13_fixed32_engine_ingress.jsonl
   FR13_FIXED32_CONTAINER_INGRESS_SECRET_FILE=/run/fr13_fixed32_ingress_secret
   FR13_FIXED32_CONTAINER_INGRESS_SECRET_SOURCE=/run/fr13_fixed32_ingress_secret.host
+  FR13_FIXED32_CIDFILE="$LOG_DIR/fr13_fixed32_container.cid"
+  [[ ! -e "$FR13_FIXED32_CIDFILE" && ! -L "$FR13_FIXED32_CIDFILE" ]] \
+    || { echo "fixed32 container cidfile must be new" >&2; exit 2; }
   export FR13_FIXED32_ENGINE_PID_FILE FR13_FIXED32_FLUSH_REQUEST_PATH
   export FR13_FIXED32_FLUSH_ACK_PATH FR13_FIXED32_WORK_CENSUS_PATH
   export FR13_FIXED32_BOUNDARY_SNAPSHOT_PATH
   export FR13_FIXED32_ENGINE_INGRESS_LEDGER_PATH
   export FR13_FIXED32_INGRESS_TASK_IDS
   FR13_FIXED32_DOCKER_ARGS=(
+    --cidfile
+    "$FR13_FIXED32_CIDFILE"
     -v
     "$FR13_FIXED32_INGRESS_SECRET_FILE:$FR13_FIXED32_CONTAINER_INGRESS_SECRET_SOURCE:ro"
     -e
@@ -897,7 +904,21 @@ if [[ -n "${FR13_PREWARM_TRIE:-}" && -f "${FR13_PREWARM_TRIE}" ]]; then
 else
   rm -f "$LOG_DIR/fr13_prewarm_corpus.jsonl" 2>/dev/null || true
 fi
-docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
+  _fixed32_same_name_containers=$(
+    docker ps -aq --filter "name=^/${CONTAINER}$"
+  ) || {
+    echo "unable to enumerate the exact fixed32 container name" >&2
+    exit 2
+  }
+  if [[ -n "$_fixed32_same_name_containers" ]]; then
+    echo "fixed32 exact container name already exists: $CONTAINER" >&2
+    exit 2
+  fi
+  unset _fixed32_same_name_containers
+else
+  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+fi
 
 set -a
 if (( _FR13_LOCAL_ENV_SOURCED == 0 )) && [[ -f "$REPO/.lumo.local.env" ]]; then
@@ -936,6 +957,14 @@ LUMO_NSYS_TRACE=${LUMO_NSYS_TRACE:-cuda,nvtx}
 LUMO_NSYS_OUTPUT=${LUMO_NSYS_OUTPUT:-/logs/nsys_vllm_${CONTAINER}}
 NSYS_DOCKER_ARGS=()
 if _lumo_truthy "$LUMO_NSYS_WRAP_VLLM"; then
+  if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
+    [[ "${LUMO_NSYS_SESSION_NAME:-}" =~ \
+       ^fr13-fixed32-[0-9]{8}T[0-9]{6}Z-p[1-9][0-9]*$ ]] \
+      || {
+        echo "fixed32 attribution requires a pinned run-unique Nsight session name" >&2
+        exit 2
+      }
+  fi
   for nsight_mount in /opt/nvidia /usr/local/cuda-13.0; do
     if [[ ! -e "$nsight_mount" ]]; then
       echo "LUMO_NSYS_WRAP_VLLM enabled but Nsight mount path is missing: $nsight_mount" >&2
@@ -1458,6 +1487,7 @@ case \"\${LUMO_NSYS_WRAP_VLLM,,}\" in
     NSYS_PREFIX=(
       \"\$LUMO_NSYS_BIN\"
       profile
+      \"--session-new=%q{LUMO_NSYS_SESSION_NAME}\"
       --delay \"\$LUMO_NSYS_DELAY_S\"
       --duration \"\$LUMO_NSYS_DURATION_S\"
       --trace=\"\$LUMO_NSYS_TRACE\"
@@ -1481,14 +1511,45 @@ exec \"\${NSYS_PREFIX[@]}\" vllm serve /models/qwen3.6-27b-fp8 --served-model-na
   \$FR13_FIXED32_MIDDLEWARE_FLAGS \
   $(if [[ "${ENFORCE_EAGER:-0}" == "1" ]]; then printf '%s' '--enforce-eager'; fi)"
 
+if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
+  [[ -f "$FR13_FIXED32_CIDFILE" && ! -L "$FR13_FIXED32_CIDFILE" ]] \
+    || { echo "fixed32 Docker cidfile is missing or aliased" >&2; exit 2; }
+  mapfile -t _fixed32_container_ids < "$FR13_FIXED32_CIDFILE"
+  (( ${#_fixed32_container_ids[@]} == 1 )) \
+    && [[ "${_fixed32_container_ids[0]}" =~ ^[0-9a-f]{64}$ ]] \
+    || { echo "fixed32 Docker cidfile is malformed" >&2; exit 2; }
+  _fixed32_container_id=${_fixed32_container_ids[0]}
+  _fixed32_container_identity=$(
+    docker inspect --format '{{.Id}} {{.Name}}' "$_fixed32_container_id"
+  ) || { echo "fixed32 Docker cidfile identity is unavailable" >&2; exit 2; }
+  read -r _fixed32_actual_id _fixed32_actual_name _fixed32_extra \
+    <<< "$_fixed32_container_identity"
+  [[ -z "$_fixed32_extra" ]] \
+    && [[ "$_fixed32_actual_id" == "$_fixed32_container_id" ]] \
+    && [[ "$_fixed32_actual_name" == "/$CONTAINER" ]] \
+    || { echo "fixed32 Docker cidfile identity mismatch" >&2; exit 2; }
+  FR13_FIXED32_CONTAINER_ID=$_fixed32_container_id
+  echo "[launch] fixed32 container identity id=$_fixed32_container_id name=$CONTAINER"
+  unset _fixed32_actual_id _fixed32_actual_name _fixed32_container_id
+  unset _fixed32_container_identity _fixed32_container_ids _fixed32_extra
+fi
+
 # DURABLE OOM BACKSTOP: spawn the detached GPU/unified-mem guard for THIS container.
 # It docker-kills the container if unified-avail nears the wall, converting an
 # incipient GPU OOM (which would otherwise nuke the systemd --user session and take
 # Claude down with it) into a relaunchable+loud container kill. Self-exits when the
 # container is gone. Default-ON in the chokepoint so no caller can forget it.
 if [[ "${GPU_OOM_GUARD:-1}" == "1" ]]; then
-  GPU_GUARD_NAME_GLOB="$CONTAINER" setsid bash "$(dirname "$0")/gpu_oom_guard.sh" \
-    >/dev/null 2>&1 </dev/null &
+  if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
+    GPU_GUARD_CONTAINER_ID="$FR13_FIXED32_CONTAINER_ID" \
+    GPU_GUARD_EXPECTED_NAME="$CONTAINER" \
+      setsid bash "$(dirname "$0")/gpu_oom_guard.sh" \
+      >/dev/null 2>&1 </dev/null &
+  else
+    GPU_GUARD_NAME_GLOB="$CONTAINER" \
+      setsid bash "$(dirname "$0")/gpu_oom_guard.sh" \
+      >/dev/null 2>&1 </dev/null &
+  fi
   disown 2>/dev/null || true
-  echo "[launch] gpu_oom_guard armed for container=$CONTAINER (floor=${GPU_GUARD_FLOOR_MIB:-9000}MiB)"
+  echo "[launch] gpu_oom_guard armed for container=${FR13_FIXED32_CONTAINER_ID:-$CONTAINER} (floor=${GPU_GUARD_FLOOR_MIB:-9000}MiB)"
 fi

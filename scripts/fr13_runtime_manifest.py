@@ -95,6 +95,7 @@ FIXED32_RUNTIME_DATA_AND_CONFIG = (
     "docker/chat_templates/qwen3-openai-codex.jinja",
     "model_registry.yaml",
     "output/fr13_acceptance_ladder/prompts_swe4.json",
+    "config/fr13_fixed32/qwen_system_settings.json",
     "config/fr13_fixed32/subset_b4_four.json",
     "config/fr13_fixed32/subset_b4_sixteen.json",
     "scripts/fr13_dvk_subset_blocks.json",

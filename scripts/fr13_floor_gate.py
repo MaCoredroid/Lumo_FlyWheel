@@ -234,7 +234,212 @@ SFWD_SAMPLE_SIDECAR_SCHEMA = "fr13.sfwd_per_step_samples.v2"
 FIXED32_CHAT_TRAFFIC_AUDIT_SCHEMA = (
     "fr13-fixed32-chat-task-provenance-audit-v2"
 )
-FIXED32_REAL_TASK_PROVENANCE_SCHEMA = "fr13-fixed32-real-task-provenance-v2"
+FIXED32_REAL_TASK_PROVENANCE_SCHEMA = "fr13-fixed32-real-task-provenance-v3"
+FIXED32_QWEN_RUNTIME_ATTESTATION_SCHEMA = (
+    "fr13-fixed32-qwen-runtime-attestation-v1"
+)
+FIXED32_MOUNTED_RUNTIME_PROOF_SCHEMA = (
+    "fr13-fixed32-qwen-mounted-runtime-proof-v1"
+)
+FIXED32_MOUNTED_RUNTIME_PROOF_FILENAME = (
+    "qwen_mounted_runtime_proof.json"
+)
+FIXED32_AGENT_PLACEMENT_SCHEMA = "fr13-fixed32-agent-placement-v1"
+FIXED32_QWEN_CODE_VERSION = "0.19.4"
+FIXED32_QWEN_SYSTEM_SETTINGS_SHA256 = (
+    "8a872a4f6f257f6d7a45f24f42500964f56e1500c5342218b71d02afe4d31fb6"
+)
+FIXED32_QWEN_BUNDLE_TREE = {
+    "schema": "fr13-qwen-agent-bundle-manifest-v1",
+    "roots": ["**"],
+    "summary": {
+        "entry_count": 10_499,
+        "directory_count": 1_514,
+        "regular_file_count": 8_970,
+        "symlink_count": 15,
+        "regular_file_bytes": 327_941_291,
+        "executable_regular_file_count": 93,
+        "manifest_bytes": 2_057_964,
+    },
+    "entrypoints": {
+        "bin/qwen": {
+            "path": "bin/qwen",
+            "type": "file",
+            "mode": "0755",
+            "bytes": 217,
+            "sha256": (
+                "286a61bd49fd103d0ea29a8d971030b60ac0a6e7f19b292bdf9b39858e1161e2"
+            ),
+        },
+        "node/bin/node": {
+            "path": "node/bin/node",
+            "type": "file",
+            "mode": "0755",
+            "bytes": 124_835_376,
+            "sha256": (
+                "93956de2e59480474a7b46571da1651180b1a050cdf32641ebec4ce6e478e068"
+            ),
+        },
+        "npm/bin/qwen": {
+            "path": "npm/bin/qwen",
+            "type": "symlink",
+            "mode": "0777",
+            "target": (
+                "../lib/node_modules/@qwen-code/qwen-code/cli-entry.js"
+            ),
+        },
+        "npm/lib/node_modules/@qwen-code/qwen-code/cli-entry.js": {
+            "path": (
+                "npm/lib/node_modules/@qwen-code/qwen-code/cli-entry.js"
+            ),
+            "type": "file",
+            "mode": "0755",
+            "bytes": 777,
+            "sha256": (
+                "98335eda2e0eaa737640cb5d43da032dee457ff7931c429f972ba3ff8a695d3a"
+            ),
+        },
+    },
+    "manifest_sha256": (
+        "2643d1d64c03887654794d9bd00a88fbf9ced7362e034557cf196b8a37e744bc"
+    ),
+}
+FIXED32_CLEARED_AGENT_ENVIRONMENT = [
+    "BASH_ENV",
+    "LD_LIBRARY_PATH",
+    "LD_PRELOAD",
+    "NODE_OPTIONS",
+    "NODE_PATH",
+]
+FIXED32_QWEN_REMOTE_SETTINGS = {
+    "bytes": 37,
+    "sha256": FIXED32_QWEN_SYSTEM_SETTINGS_SHA256,
+    "mode": "0444",
+    "uid": 1000,
+    "gid": 1000,
+    "nlink": 1,
+    "xattrs": [],
+}
+FIXED32_MEASURED_HOST_IDENTITY = {
+    "hostname_sha256": (
+        "4a30015a37d4584ee4bb29d3144df3ad061b688baaff100d4b0dc675e4988a87"
+    ),
+    "system": "Linux",
+    "machine": "aarch64",
+    "kernel": "6.14.0-1015-nvidia",
+    "machine_id_sha256": (
+        "2bbfaa2351d92eefaec4bdf90f25f31ebab0973aaf88d7f9c01650b01cdd9113"
+    ),
+    "docker_daemon_id_sha256": (
+        "53fb603eb13afb8d6eb165a2aefa510dd6f9c06faf7c4c80a7e966ce4d5c4fce"
+    ),
+}
+FIXED32_AGENT_HOST_IDENTITY = {
+    "hostname_sha256": (
+        "84674d76bbc389eb6479d5f3a617bf6b25e05f486d455353e945a700df66afa4"
+    ),
+    "system": "Linux",
+    "machine": "x86_64",
+    "kernel": "6.14.0-37-generic",
+    "machine_id_sha256": (
+        "e49c50112bb466cb283df00e3f3e7344abc702f887f78550ba44c8611ef657f8"
+    ),
+    "docker_daemon_id_sha256": (
+        "2606e93ef9583c1aabb076ed439f9fcf1d60068ddd9ecdc464bbe3a29d9f371f"
+    ),
+}
+FIXED32_AGENT_PLACEMENT = {
+    "schema": FIXED32_AGENT_PLACEMENT_SCHEMA,
+    "agent_host_identity": FIXED32_AGENT_HOST_IDENTITY,
+    "measured_host_identity": FIXED32_MEASURED_HOST_IDENTITY,
+    "identities_distinct": True,
+}
+FIXED32_AGENT_IMAGE_IDENTITIES = {
+    task_id: {
+        "instance_id": task_id,
+        "image": (
+            "swebench/sweb.eval.x86_64."
+            f"{task_id.replace('__', '_1776_')}:latest"
+        ),
+        "id": f"sha256:{image_id}",
+        "repo_digest": (
+            "swebench/sweb.eval.x86_64."
+            f"{task_id.replace('__', '_1776_')}@sha256:{repo_digest}"
+        ),
+        "architecture": "amd64",
+        "os": "linux",
+    }
+    for task_id, (image_id, repo_digest) in zip(
+        CANONICAL_TASK_IDS,
+        (
+            (
+                "cce639c4d4c4f8a47893a81a1a1894d3f2c77e603694da4000581450783ef532",
+                "f3f63bb87d581c0e7b47f900dd82165b71040e1758d3c29e915e2b18da9baf63",
+            ),
+            (
+                "bdbc30d363cfbd9902e0d338fc959782d1a92a9e85236c0dca92c95372088783",
+                "42797a2c686ed35b43e28dd2f58149381c3bf79abea2346fb7062c009e9fa528",
+            ),
+            (
+                "236d427ece8e0d3d282598d981ec9a3baff668041cab16f4545500956cb807db",
+                "a43e166eb5ae9e477349b87d800ece7648f8c746f88d94f6f6cff0df1e2caf82",
+            ),
+            (
+                "1047cc1d43b1a33fd5c3c5ca53b85d7380cdda26bf4c18ada15dd12a8d9b076d",
+                "423240067cb26131788348337e59a4d51225fd491eccab99e919c1bc4d4b02e0",
+            ),
+            (
+                "67e4955c1ea7f9013a51299a236574f87bc1ca2da02c9aa6ac640f8ce61d2f8b",
+                "6b3593a3d1fa032b8b81f9a1e33738aae14c1cdc8fd887e0a089592c7f9abf9b",
+            ),
+            (
+                "38c16ead9bc5b6a8cfb991a85511471ca91a1f334ca5d9001830c069beb3c94e",
+                "c645e9435a1499dab327b76fae926057a2f407a291b5d173bf1971b7a6fe911b",
+            ),
+            (
+                "fc877eb6e9cada009834e33eeab24e7d6690e189932d3f3c4e5f7a911e7e57b6",
+                "bcc442a117def63c8011091500b4e2dd49980a08b74e3c2fbdad4e42745278bb",
+            ),
+            (
+                "3ac2306a3e172713ad0f00dd5daa6d3cfd6990fe3b52afbf585fe1d6161ae8b9",
+                "f0277869f5874118b6395d945a278d88e8912dbb2970ee2d0289f5591adab8a3",
+            ),
+            (
+                "770f48b2842d8115639b73b022994b2e1b20af676367509244b9dcbad3f903e9",
+                "374a7f3206d23fd41aaf6ac3361a34dad941bdbe92ec81ff1b4c3e0163e38453",
+            ),
+            (
+                "f896444b1e4977454bd415d711926f7ce0f25c8b4c6c417b26d38df59e8a3ca6",
+                "89fc1b9379b349c8d1773cc3e6982cb32d2732f90a240047c688735db35c5212",
+            ),
+            (
+                "3925b434247f8fc7aabe79a902d03d4566d697c4f35b7a39fdfa209263efb358",
+                "bb1ec8d27d478ab7469805680c824a4030fa3f32a592558f7a02485b76f3226b",
+            ),
+            (
+                "1a8a749d6b8edb837761e2d09bdf9459e3bdb2436d4070412d886de135ff0a3a",
+                "113488bfd3a6fb9678705496c18791bf46d98ad0303a682a3d405223eb2e85c4",
+            ),
+            (
+                "f1f44383c21a57c5047ac6cdb4375407350dd14d54e455ec3b5dfec79ee26c7c",
+                "a6aea03ce1c6a2e897e78a4339e44f02643deb9007e0628a058034779181ce71",
+            ),
+            (
+                "290a743498af81faf833324ccb3dfaf877e1d4fdd60594efc1a5f4835601316e",
+                "a8d0f9829ec24dfb23a2f0097a245ee60faf1b396b33b3af5c22d7ac5f3c00ab",
+            ),
+            (
+                "3f3a0c5f4cd49b03ef4fde7f8e8bdf18833ee685d223395893b61426a6e62b8d",
+                "f1ff70694c403ee7018fef2a00638caa1555948d1c9b821175a7f4bdf2933a52",
+            ),
+            (
+                "99afb65d48b892e0d2e015eeb0794175d26e6a092c81598aa5a32fb0978b30cc",
+                "b29a3bf3daebe6055a2bba46bc98db070043acd53801bd783c2f620813a87eae",
+            ),
+        ),
+        strict=True,
+    )
+}
 FIXED32_INGRESS_LEDGER_SCHEMA = "fr13.fixed32.ingress-ledger-record.v1"
 FIXED32_INGRESS_PREFLIGHT_SCHEMA = "fr13-fixed32-ingress-auth-preflight-v1"
 FIXED32_PROXY_INGRESS_BEGIN_SCHEMA = "fr13-fixed32-proxy-ingress-begin-v1"
@@ -2292,6 +2497,173 @@ def validate_fixed32_ingress_and_census(
     }
 
 
+def _fixed32_qwen_runtime_attestation(
+    payload: dict[str, Any],
+    *,
+    label: str,
+) -> str:
+    exact_keys(
+        payload,
+        {
+            "schema",
+            "launcher",
+            "agent_env",
+            "host_mode",
+            "qwen_code_version",
+            "bundle_tree",
+            "bundle_manifest_sha256",
+            "bundle_snapshot",
+            "cleared_agent_environment",
+            "system_settings",
+        },
+        label,
+    )
+    if (
+        payload["schema"] != FIXED32_QWEN_RUNTIME_ATTESTATION_SCHEMA
+        or payload["launcher"] != "qwen-code-instance-image"
+        or payload["agent_env"] != "instance_image"
+        or payload["host_mode"] != "remote"
+        or payload["qwen_code_version"] != FIXED32_QWEN_CODE_VERSION
+    ):
+        raise GateError(f"{label}: Qwen runtime identity is not canonical")
+    if payload["bundle_tree"] != FIXED32_QWEN_BUNDLE_TREE:
+        raise GateError(f"{label}: Qwen executable bundle tree differs")
+    if (
+        _fixed32_digest(
+            payload["bundle_manifest_sha256"],
+            label=f"{label}:bundle_manifest_sha256",
+        )
+        != FIXED32_QWEN_BUNDLE_TREE["manifest_sha256"]
+    ):
+        raise GateError(f"{label}: Qwen bundle manifest digest differs")
+    if payload["bundle_snapshot"] != {
+        "kind": "per-task-content-addressed-snapshot",
+        "basename": (
+            "qwen_bundle-" + FIXED32_QWEN_BUNDLE_TREE["manifest_sha256"]
+        ),
+        "container_path": "/opt/qwen",
+        "mount_mode": "ro",
+    }:
+        raise GateError(f"{label}: Qwen bundle snapshot identity differs")
+    if (
+        payload["cleared_agent_environment"]
+        != FIXED32_CLEARED_AGENT_ENVIRONMENT
+    ):
+        raise GateError(f"{label}: Qwen injection environment is not cleared")
+    expected_settings = {
+        "source": "config/fr13_fixed32/qwen_system_settings.json",
+        "bytes": 37,
+        "sha256": FIXED32_QWEN_SYSTEM_SETTINGS_SHA256,
+        "container_path": "/run/fr13/qwen-system-settings.json",
+        "mount_mode": "ro",
+        "environment": {
+            "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+            "value": "/run/fr13/qwen-system-settings.json",
+        },
+        "remote_file": {
+            "mode": "0444",
+            "uid": 1000,
+            "gid": 1000,
+            "nlink": 1,
+            "xattrs": [],
+        },
+        "enable_auto_skill": False,
+    }
+    if payload["system_settings"] != expected_settings:
+        raise GateError(f"{label}: Qwen system-settings evidence differs")
+    return canonical_json_sha256(payload)
+
+
+def _fixed32_agent_image_identity(
+    payload: Any,
+    *,
+    task_id: str,
+    label: str,
+) -> str:
+    expected = FIXED32_AGENT_IMAGE_IDENTITIES.get(task_id)
+    if expected is None:
+        raise GateError(f"{label}: task has no pinned agent image identity")
+    if payload != expected:
+        raise GateError(f"{label}: agent image identity differs")
+    return canonical_json_sha256(payload)
+
+
+def _fixed32_agent_placement(payload: Any, *, label: str) -> str:
+    if payload != FIXED32_AGENT_PLACEMENT:
+        raise GateError(f"{label}: agent placement identity differs")
+    if (
+        payload["agent_host_identity"] == payload["measured_host_identity"]
+        or payload["identities_distinct"] is not True
+    ):
+        raise GateError(f"{label}: agent and measured hosts are not distinct")
+    return canonical_json_sha256(payload)
+
+
+def _fixed32_remote_settings_observation(
+    payload: Any,
+    *,
+    label: str,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise GateError(f"{label}: remote settings observation is not an object")
+    identity_digest = payload.get("file_identity_sha256")
+    static_payload = {
+        key: value
+        for key, value in payload.items()
+        if key != "file_identity_sha256"
+    }
+    if (
+        static_payload != FIXED32_QWEN_REMOTE_SETTINGS
+        or not isinstance(identity_digest, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", identity_digest)
+    ):
+        raise GateError(f"{label}: remote settings identity differs")
+    return {
+        **FIXED32_QWEN_REMOTE_SETTINGS,
+        "file_identity_sha256": identity_digest,
+    }
+
+
+def _fixed32_mounted_runtime_proof(
+    payload: Any,
+    *,
+    label: str,
+) -> str:
+    identity_digest = (
+        payload.get("system_settings", {}).get("file_identity_sha256")
+        if isinstance(payload, dict)
+        and isinstance(payload.get("system_settings"), dict)
+        else None
+    )
+    if (
+        not isinstance(identity_digest, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", identity_digest)
+    ):
+        raise GateError(f"{label}: mounted settings identity is malformed")
+    expected = {
+        "schema": FIXED32_MOUNTED_RUNTIME_PROOF_SCHEMA,
+        "bundle_tree": {
+            "container_path": "/opt/qwen",
+            "mount_mode": "ro",
+            "write_probe_errno": 30,
+            "observation": {
+                "qwen_code_version": FIXED32_QWEN_CODE_VERSION,
+                "bundle_tree": FIXED32_QWEN_BUNDLE_TREE,
+            },
+        },
+        "system_settings": {
+            "container_path": "/run/fr13/qwen-system-settings.json",
+            "mount_mode": "ro",
+            "write_probe_errno": 30,
+            **FIXED32_QWEN_REMOTE_SETTINGS,
+            "file_identity_sha256": identity_digest,
+        },
+    }
+    if payload != expected:
+        raise GateError(f"{label}: mounted runtime proof differs")
+    return canonical_json_sha256(payload)
+
+
 def _fixed32_trace_model_requests(
     trace_path: Path,
     *,
@@ -2306,6 +2678,17 @@ def _fixed32_trace_model_requests(
             raise GateError(f"{trace_path}:{line_number}: blank JSONL record")
         event = exact_json_text(line, label=f"{trace_path}:{line_number}")
         events.append(event)
+    init_event = events[0]
+    if (
+        init_event.get("type") != "system"
+        or init_event.get("subtype") != "init"
+        or init_event.get("qwen_code_version")
+        != FIXED32_QWEN_CODE_VERSION
+    ):
+        raise GateError(
+            f"{trace_path}: trace does not start with the pinned Qwen "
+            f"{FIXED32_QWEN_CODE_VERSION} init record"
+        )
     try:
         trace_requests = (
             fixed32_contract.validate_fixed32_trace_model_requests(
@@ -2341,7 +2724,7 @@ def _fixed32_trace_model_requests(
         != response_ids_sha256
     ):
         raise GateError(
-            f"{trace_path}: v2 provenance does not match strict trace request "
+            f"{trace_path}: v3 provenance does not match strict trace request "
             "evidence"
         )
     return {
@@ -2470,6 +2853,7 @@ def build_fixed32_chat_traffic_audit(
             or agent.get("offloaded") is not True
             or agent.get("network_drop") is not False
             or agent.get("stall_killed") not in {None, False}
+            or agent.get("agent_env") != "instance_image"
         ):
             raise GateError(
                 f"{metadata_path}: fixed32 task agent did not complete cleanly"
@@ -2519,7 +2903,221 @@ def build_fixed32_chat_traffic_audit(
             or provenance.get("task_key_id") != task_key_id
         ):
             raise GateError(
-                f"{metadata_path}: fixed32 task provenance v2 is not exact"
+                f"{metadata_path}: fixed32 task provenance v3 is not exact"
+            )
+        expected_image = FIXED32_AGENT_IMAGE_IDENTITIES[task_id]
+        image_identity = agent.get("instance_image_identity")
+        image_identity_sha256 = _fixed32_agent_image_identity(
+            image_identity,
+            task_id=task_id,
+            label=f"{metadata_path}:instance_image_identity",
+        )
+        if (
+            agent.get("instance_image") != expected_image["image"]
+            or _fixed32_digest(
+                agent.get("instance_image_identity_sha256"),
+                label=(
+                    f"{metadata_path}:"
+                    "agent.instance_image_identity_sha256"
+                ),
+            )
+            != image_identity_sha256
+            or _fixed32_digest(
+                agent.get("instance_image_postrun_identity_sha256"),
+                label=(
+                    f"{metadata_path}:"
+                    "agent.instance_image_postrun_identity_sha256"
+                ),
+            )
+            != image_identity_sha256
+            or agent.get("instance_image_run_reference")
+            != expected_image["repo_digest"]
+            or provenance.get("instance_image_identity_sha256")
+            != image_identity_sha256
+            or provenance.get("instance_image_id") != expected_image["id"]
+            or provenance.get("instance_image_repo_digest")
+            != expected_image["repo_digest"]
+        ):
+            raise GateError(
+                f"{metadata_path}: agent image pre/run/post evidence differs"
+            )
+        placement = agent.get("agent_placement")
+        placement_sha256 = _fixed32_agent_placement(
+            placement,
+            label=f"{metadata_path}:agent_placement",
+        )
+        if (
+            _fixed32_digest(
+                agent.get("agent_placement_sha256"),
+                label=f"{metadata_path}:agent.agent_placement_sha256",
+            )
+            != placement_sha256
+            or _fixed32_digest(
+                agent.get("agent_postrun_placement_sha256"),
+                label=(
+                    f"{metadata_path}:"
+                    "agent.agent_postrun_placement_sha256"
+                ),
+            )
+            != placement_sha256
+            or provenance.get("agent_placement_sha256")
+            != placement_sha256
+            or provenance.get("agent_host_identity")
+            != FIXED32_AGENT_HOST_IDENTITY
+            or provenance.get("measured_host_identity")
+            != FIXED32_MEASURED_HOST_IDENTITY
+        ):
+            raise GateError(
+                f"{metadata_path}: agent placement pre/post evidence differs"
+            )
+        nested_attestation = agent.get("qwen_runtime_attestation")
+        if not isinstance(nested_attestation, dict):
+            raise GateError(
+                f"{metadata_path}: Qwen runtime attestation is missing"
+            )
+        attestation_sha256 = _fixed32_qwen_runtime_attestation(
+            nested_attestation,
+            label=f"{metadata_path}:qwen_runtime_attestation",
+        )
+        if (
+            _fixed32_digest(
+                agent.get("qwen_runtime_attestation_sha256"),
+                label=(
+                    f"{metadata_path}:"
+                    "agent.qwen_runtime_attestation_sha256"
+                ),
+            )
+            != attestation_sha256
+            or _fixed32_digest(
+                agent.get("qwen_runtime_postrun_attestation_sha256"),
+                label=(
+                    f"{metadata_path}:"
+                    "agent.qwen_runtime_postrun_attestation_sha256"
+                ),
+            )
+            != attestation_sha256
+        ):
+            raise GateError(
+                f"{metadata_path}: Qwen pre/post attestation digests differ"
+            )
+        attestation_path = task_dir / "qwen_runtime_attestation.json"
+        postrun_attestation_path = (
+            task_dir / "qwen_runtime_attestation_post.json"
+        )
+        attestation_raw, attestation_text = strict_utf8_artifact(
+            attestation_path,
+            label=str(attestation_path),
+        )
+        postrun_raw, postrun_text = strict_utf8_artifact(
+            postrun_attestation_path,
+            label=str(postrun_attestation_path),
+        )
+        persisted_attestation = exact_json_text(
+            attestation_text,
+            label=str(attestation_path),
+        )
+        persisted_postrun_attestation = exact_json_text(
+            postrun_text,
+            label=str(postrun_attestation_path),
+        )
+        mounted_proof_path = (
+            task_dir / FIXED32_MOUNTED_RUNTIME_PROOF_FILENAME
+        )
+        mounted_proof_raw, mounted_proof_text = strict_utf8_artifact(
+            mounted_proof_path,
+            label=str(mounted_proof_path),
+        )
+        persisted_mounted_proof = exact_json_text(
+            mounted_proof_text,
+            label=str(mounted_proof_path),
+        )
+        mounted_proof_sha256 = _fixed32_mounted_runtime_proof(
+            persisted_mounted_proof,
+            label=str(mounted_proof_path),
+        )
+        remote_settings_observation = (
+            _fixed32_remote_settings_observation(
+                agent.get("qwen_remote_settings_observation"),
+                label=f"{metadata_path}:qwen_remote_settings_observation",
+            )
+        )
+        remote_settings_observation_sha256 = canonical_json_sha256(
+            remote_settings_observation
+        )
+        if mounted_proof_raw != (
+            json.dumps(
+                persisted_mounted_proof,
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        ).encode("ascii"):
+            raise GateError(
+                f"{mounted_proof_path}: proof is not canonical JSON"
+            )
+        if (
+            persisted_attestation != nested_attestation
+            or persisted_postrun_attestation != nested_attestation
+            or _fixed32_qwen_runtime_attestation(
+                persisted_attestation,
+                label=str(attestation_path),
+            )
+            != attestation_sha256
+            or _fixed32_qwen_runtime_attestation(
+                persisted_postrun_attestation,
+                label=str(postrun_attestation_path),
+            )
+            != attestation_sha256
+            or provenance.get("qwen_code_version")
+            != FIXED32_QWEN_CODE_VERSION
+            or provenance.get("qwen_system_settings_sha256")
+            != FIXED32_QWEN_SYSTEM_SETTINGS_SHA256
+            or provenance.get("qwen_runtime_attestation_sha256")
+            != attestation_sha256
+            or provenance.get("qwen_runtime_attestation_file_sha256")
+            != hashlib.sha256(attestation_raw).hexdigest()
+            or provenance.get(
+                "qwen_runtime_postrun_attestation_file_sha256"
+            )
+            != hashlib.sha256(postrun_raw).hexdigest()
+            or agent.get("qwen_bundle_snapshot")
+            != nested_attestation["bundle_snapshot"]
+            or provenance.get("qwen_bundle_snapshot")
+            != nested_attestation["bundle_snapshot"]
+            or agent.get("qwen_mounted_runtime_proof")
+            != persisted_mounted_proof
+            or agent.get("qwen_mounted_runtime_proof_sha256")
+            != mounted_proof_sha256
+            or agent.get("qwen_mounted_runtime_proof_file_sha256")
+            != hashlib.sha256(mounted_proof_raw).hexdigest()
+            or provenance.get("qwen_mounted_runtime_proof_sha256")
+            != mounted_proof_sha256
+            or provenance.get(
+                "qwen_mounted_runtime_proof_file_sha256"
+            )
+            != hashlib.sha256(mounted_proof_raw).hexdigest()
+            or persisted_mounted_proof["system_settings"][
+                "file_identity_sha256"
+            ]
+            != remote_settings_observation["file_identity_sha256"]
+            or provenance.get(
+                "qwen_remote_settings_file_identity_sha256"
+            )
+            != remote_settings_observation["file_identity_sha256"]
+            or agent.get("qwen_remote_settings_observation_sha256")
+            != remote_settings_observation_sha256
+            or agent.get(
+                "qwen_remote_settings_postrun_observation_sha256"
+            )
+            != remote_settings_observation_sha256
+            or provenance.get(
+                "qwen_remote_settings_observation_sha256"
+            )
+            != remote_settings_observation_sha256
+        ):
+            raise GateError(
+                f"{metadata_path}: Qwen runtime attestation evidence differs"
             )
         trace = _fixed32_trace_model_requests(
             task_dir / "qwen_trace.jsonl",
@@ -3526,7 +4124,7 @@ def validate_source_fingerprint(repo: Path, runroot: Path) -> dict[str, Any]:
     summary = launch.get("summary")
     if (
         not isinstance(summary, dict)
-        or summary.get("file_count") != 61
+        or summary.get("file_count") != 62
         or summary.get("python_package_file_count") != 25
     ):
         raise GateError(f"{at_launch}: runtime closure cardinality is not pinned")
@@ -6472,6 +7070,85 @@ def fixture_runtime_attestation() -> dict[str, Any]:
     return payload
 
 
+def fixture_qwen_runtime_attestation() -> dict[str, Any]:
+    bundle_tree = json.loads(
+        json.dumps(FIXED32_QWEN_BUNDLE_TREE, sort_keys=True)
+    )
+    payload = {
+        "schema": FIXED32_QWEN_RUNTIME_ATTESTATION_SCHEMA,
+        "launcher": "qwen-code-instance-image",
+        "agent_env": "instance_image",
+        "host_mode": "remote",
+        "qwen_code_version": FIXED32_QWEN_CODE_VERSION,
+        "bundle_tree": bundle_tree,
+        "bundle_manifest_sha256": bundle_tree["manifest_sha256"],
+        "bundle_snapshot": {
+            "kind": "per-task-content-addressed-snapshot",
+            "basename": (
+                "qwen_bundle-" + bundle_tree["manifest_sha256"]
+            ),
+            "container_path": "/opt/qwen",
+            "mount_mode": "ro",
+        },
+        "cleared_agent_environment": list(
+            FIXED32_CLEARED_AGENT_ENVIRONMENT
+        ),
+        "system_settings": {
+            "source": "config/fr13_fixed32/qwen_system_settings.json",
+            "bytes": 37,
+            "sha256": FIXED32_QWEN_SYSTEM_SETTINGS_SHA256,
+            "container_path": "/run/fr13/qwen-system-settings.json",
+            "mount_mode": "ro",
+            "environment": {
+                "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+                "value": "/run/fr13/qwen-system-settings.json",
+            },
+            "remote_file": {
+                "mode": "0444",
+                "uid": 1000,
+                "gid": 1000,
+                "nlink": 1,
+                "xattrs": [],
+            },
+            "enable_auto_skill": False,
+        },
+    }
+    _fixed32_qwen_runtime_attestation(
+        payload,
+        label="fixture Qwen runtime attestation",
+    )
+    return payload
+
+
+def fixture_mounted_runtime_proof() -> dict[str, Any]:
+    payload = {
+        "schema": FIXED32_MOUNTED_RUNTIME_PROOF_SCHEMA,
+        "bundle_tree": {
+            "container_path": "/opt/qwen",
+            "mount_mode": "ro",
+            "write_probe_errno": 30,
+            "observation": {
+                "qwen_code_version": FIXED32_QWEN_CODE_VERSION,
+                "bundle_tree": json.loads(
+                    json.dumps(FIXED32_QWEN_BUNDLE_TREE)
+                ),
+            },
+        },
+        "system_settings": {
+            "container_path": "/run/fr13/qwen-system-settings.json",
+            "mount_mode": "ro",
+            "write_probe_errno": 30,
+            **FIXED32_QWEN_REMOTE_SETTINGS,
+            "file_identity_sha256": "1" * 64,
+        },
+    }
+    _fixed32_mounted_runtime_proof(
+        payload,
+        label="fixture mounted-runtime proof",
+    )
+    return payload
+
+
 def write_fixture_arm(
     repo: Path,
     runroot: Path,
@@ -7349,7 +8026,7 @@ def write_fixture_arm(
             json.dumps(boundary, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        trace_events = [
+        model_trace_events = [
             {
                 "type": "assistant",
                 "message": {
@@ -7371,6 +8048,19 @@ def write_fixture_arm(
             }
             for engine_request_id in engine_request_ids[task_id]
         ]
+        trace_events = [
+            {
+                "type": "system",
+                "subtype": "init",
+                "qwen_code_version": FIXED32_QWEN_CODE_VERSION,
+                "uuid": "system",
+                "session_id": fixed32_contract.fixed32_trace_session_id(
+                    task_id
+                ),
+                "parent_tool_use_id": None,
+            },
+            *model_trace_events,
+        ]
         trace_path = task_dir / "qwen_trace.jsonl"
         trace_path.write_text(
             "\n".join(
@@ -7386,15 +8076,107 @@ def write_fixture_arm(
             encoding="utf-8",
         )
         raw_trace = trace_path.read_bytes()
+        qwen_runtime_attestation = fixture_qwen_runtime_attestation()
+        qwen_runtime_attestation_sha256 = canonical_json_sha256(
+            qwen_runtime_attestation
+        )
+        qwen_attestation_path = (
+            task_dir / "qwen_runtime_attestation.json"
+        )
+        qwen_postrun_attestation_path = (
+            task_dir / "qwen_runtime_attestation_post.json"
+        )
+        qwen_attestation_text = (
+            json.dumps(
+                qwen_runtime_attestation,
+                ensure_ascii=True,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        qwen_attestation_path.write_text(
+            qwen_attestation_text,
+            encoding="utf-8",
+        )
+        qwen_postrun_attestation_path.write_text(
+            qwen_attestation_text,
+            encoding="utf-8",
+        )
+        image_identity = json.loads(
+            json.dumps(FIXED32_AGENT_IMAGE_IDENTITIES[task_id])
+        )
+        image_identity_sha256 = canonical_json_sha256(image_identity)
+        placement = json.loads(json.dumps(FIXED32_AGENT_PLACEMENT))
+        placement_sha256 = canonical_json_sha256(placement)
+        mounted_runtime_proof = fixture_mounted_runtime_proof()
+        mounted_runtime_proof_sha256 = canonical_json_sha256(
+            mounted_runtime_proof
+        )
+        remote_settings_observation = {
+            **FIXED32_QWEN_REMOTE_SETTINGS,
+            "file_identity_sha256": "1" * 64,
+        }
+        remote_settings_observation_sha256 = canonical_json_sha256(
+            remote_settings_observation
+        )
+        mounted_runtime_proof_path = (
+            task_dir / FIXED32_MOUNTED_RUNTIME_PROOF_FILENAME
+        )
+        mounted_runtime_proof_path.write_text(
+            json.dumps(
+                mounted_runtime_proof,
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n",
+            encoding="ascii",
+        )
         agent = {
             "elapsed_s": 1.0,
             "exit_code": 0,
             "timed_out": False,
             "offloaded": True,
-            "codex_host": "offload-host",
+            "codex_host": "alienware",
             "network_drop": False,
             "stall_killed": False,
             "patch_down_rc": 0,
+            "agent_env": "instance_image",
+            "instance_image": image_identity["image"],
+            "instance_image_identity": image_identity,
+            "instance_image_identity_sha256": image_identity_sha256,
+            "instance_image_postrun_identity_sha256": image_identity_sha256,
+            "instance_image_run_reference": image_identity["repo_digest"],
+            "agent_placement": placement,
+            "agent_placement_sha256": placement_sha256,
+            "agent_postrun_placement_sha256": placement_sha256,
+            "qwen_bundle_snapshot": qwen_runtime_attestation[
+                "bundle_snapshot"
+            ],
+            "qwen_remote_settings_observation": (
+                remote_settings_observation
+            ),
+            "qwen_remote_settings_observation_sha256": (
+                remote_settings_observation_sha256
+            ),
+            "qwen_remote_settings_postrun_observation_sha256": (
+                remote_settings_observation_sha256
+            ),
+            "qwen_mounted_runtime_proof": mounted_runtime_proof,
+            "qwen_mounted_runtime_proof_sha256": (
+                mounted_runtime_proof_sha256
+            ),
+            "qwen_mounted_runtime_proof_file_sha256": sha256_file(
+                mounted_runtime_proof_path
+            ),
+            "qwen_runtime_attestation": qwen_runtime_attestation,
+            "qwen_runtime_attestation_sha256": (
+                qwen_runtime_attestation_sha256
+            ),
+            "qwen_runtime_postrun_attestation_sha256": (
+                qwen_runtime_attestation_sha256
+            ),
         }
         agent_terminal = {
             "exit_code": 0,
@@ -7403,6 +8185,7 @@ def write_fixture_arm(
             "network_drop": False,
             "stall_killed": False,
             "patch_down_rc": 0,
+            "agent_env": "instance_image",
         }
         eval_report = {
             "track": "swe_bench",
@@ -7430,23 +8213,57 @@ def write_fixture_arm(
             "schema": FIXED32_REAL_TASK_PROVENANCE_SCHEMA,
             "instance_id": task_id,
             "task_key_id": task_key_ids[task_id],
+            "qwen_code_version": FIXED32_QWEN_CODE_VERSION,
+            "qwen_system_settings_sha256": (
+                FIXED32_QWEN_SYSTEM_SETTINGS_SHA256
+            ),
+            "instance_image_identity_sha256": image_identity_sha256,
+            "instance_image_id": image_identity["id"],
+            "instance_image_repo_digest": image_identity["repo_digest"],
+            "agent_placement_sha256": placement_sha256,
+            "agent_host_identity": placement["agent_host_identity"],
+            "measured_host_identity": placement[
+                "measured_host_identity"
+            ],
+            "qwen_bundle_snapshot": qwen_runtime_attestation[
+                "bundle_snapshot"
+            ],
+            "qwen_remote_settings_file_identity_sha256": "1" * 64,
+            "qwen_remote_settings_observation_sha256": (
+                remote_settings_observation_sha256
+            ),
+            "qwen_mounted_runtime_proof_sha256": (
+                mounted_runtime_proof_sha256
+            ),
+            "qwen_mounted_runtime_proof_file_sha256": sha256_file(
+                mounted_runtime_proof_path
+            ),
+            "qwen_runtime_attestation_sha256": (
+                qwen_runtime_attestation_sha256
+            ),
+            "qwen_runtime_attestation_file_sha256": sha256_file(
+                qwen_attestation_path
+            ),
+            "qwen_runtime_postrun_attestation_file_sha256": sha256_file(
+                qwen_postrun_attestation_path
+            ),
             "trace_path": str(trace_path.resolve()),
             "trace_sha256": hashlib.sha256(raw_trace).hexdigest(),
             "trace_bytes": len(raw_trace),
             "event_count": len(trace_events),
-            "assistant_event_count": len(trace_events),
-            "assistant_output_event_count": len(trace_events),
-            "qwen_assistant_event_count": len(trace_events),
+            "assistant_event_count": len(model_trace_events),
+            "assistant_output_event_count": len(model_trace_events),
+            "qwen_assistant_event_count": len(model_trace_events),
             "codex_agent_message_event_count": 0,
             "positive_token_usage": True,
-            "usage_record_count": len(trace_events),
-            "positive_usage_record_count": len(trace_events),
+            "usage_record_count": len(model_trace_events),
+            "positive_usage_record_count": len(model_trace_events),
             "usage_max_by_field": {
                 "input_tokens": 128,
                 "output_tokens": 32,
                 "total_tokens": 160,
             },
-            "trace_completed_logical_model_requests": len(trace_events),
+            "trace_completed_logical_model_requests": len(model_trace_events),
             "trace_model_request_ids_sha256": hashlib.sha256(
                 json.dumps(
                     trace_request_digests,
@@ -7763,7 +8580,7 @@ def self_test(repo: Path) -> None:
         assert b1["gates"]["fixed32_scope_limitations_explicit"]
         assert b1["external_artifact_fingerprint"]["byte_equal"]
         assert b1["matched_runtime_attestation"]["byte_equal"]
-        assert b1["source_runtime_fingerprint"]["file_count"] == 61
+        assert b1["source_runtime_fingerprint"]["file_count"] == 62
         assert b1["source_runtime_fingerprint"]["python_package_file_count"] == 25
         tail_metric_brackets = b1["arms"]["tail6_fixed32"]["provenance"][
             "task_metric_brackets"
@@ -8782,9 +9599,20 @@ def self_test(repo: Path) -> None:
             [json.loads(line) for line in path.read_text().splitlines()]
             for path in swap_trace_paths
         ]
-        swap_events[0][0]["message"]["id"], swap_events[1][0]["message"]["id"] = (
-            swap_events[1][0]["message"]["id"],
-            swap_events[0][0]["message"]["id"],
+        swap_assistant_events = [
+            next(
+                event
+                for event in events
+                if event.get("type") == "assistant"
+            )
+            for events in swap_events
+        ]
+        (
+            swap_assistant_events[0]["message"]["id"],
+            swap_assistant_events[1]["message"]["id"],
+        ) = (
+            swap_assistant_events[1]["message"]["id"],
+            swap_assistant_events[0]["message"]["id"],
         )
         try:
             for trace_path, metadata_path, events in zip(
@@ -8806,7 +9634,17 @@ def self_test(repo: Path) -> None:
             json.loads(line)
             for line in swap_trace_paths[0].read_text().splitlines()
         ]
-        replay_events.append(json.loads(json.dumps(replay_events[0])))
+        replay_events.append(
+            json.loads(
+                json.dumps(
+                    next(
+                        event
+                        for event in replay_events
+                        if event.get("type") == "assistant"
+                    )
+                )
+            )
+        )
         try:
             write_rebound_trace(
                 swap_trace_paths[0],
@@ -9292,23 +10130,33 @@ def self_test(repo: Path) -> None:
         trace_path.write_text("{}\n", encoding="utf-8")
         expect_gate_error(
             rerun_b1_fixture,
-            "legacy terminal response IDs are empty",
+            "trace does not start with the pinned Qwen 0.19.4 init record",
         )
         trace_path.write_bytes(good_trace)
 
         task_metadata_path = first_task_dir / "runner_metadata.json"
         good_task_metadata = task_metadata_path.read_bytes()
         empty_model_trace = (
-            json.dumps(
-                {
-                    "type": "message",
-                    "role": "user",
-                    "content": "No model output.",
-                    "usage": {"input_tokens": 1},
-                },
-                ensure_ascii=True,
-                separators=(",", ":"),
-                sort_keys=True,
+            "\n".join(
+                json.dumps(
+                    event,
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+                for event in (
+                    {
+                        "type": "system",
+                        "subtype": "init",
+                        "qwen_code_version": FIXED32_QWEN_CODE_VERSION,
+                    },
+                    {
+                        "type": "message",
+                        "role": "user",
+                        "content": "No model output.",
+                        "usage": {"input_tokens": 1},
+                    },
+                )
             )
             + "\n"
         ).encode("utf-8")

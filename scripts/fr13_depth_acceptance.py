@@ -106,7 +106,7 @@ FIXED32_CHAT_AUDIT_CHECKS = frozenset(
         "raw_proxy_request_and_response_dumps_disabled",
     }
 )
-FIXED32_REAL_TASK_PROVENANCE_SCHEMA = "fr13-fixed32-real-task-provenance-v2"
+FIXED32_REAL_TASK_PROVENANCE_SCHEMA = "fr13-fixed32-real-task-provenance-v3"
 FIXED32_INGRESS_LEDGER_SCHEMA = "fr13.fixed32.ingress-ledger-record.v1"
 FIXED32_INGRESS_LEDGER_KEYS = frozenset(
     {
