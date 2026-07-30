@@ -1,0 +1,274 @@
+{
+  "acceptance": {
+    "acceptance_valid": false,
+    "cap_ms": 113.39,
+    "diagnostic_floor_ratio": 2.8644294727531667,
+    "diagnostic_point_estimate_only": true,
+    "floor_ms": 98.6,
+    "gap_to_cap_ms": 169.04274601346225,
+    "one_sided_u95_floor_ratio": null,
+    "required_one_sided_u95_floor_ratio_lte": 1.15,
+    "required_wall_reduction_fraction": 0.5985238907297412,
+    "status": "INVALID_DIAGNOSTIC_ONLY"
+  },
+  "artifacts": {
+    "canonical_exact4_subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "deploy_speed_aggregate_sha256": "4b0019e2541b65b6db19161033ee26266dd427007b1d58a743ed21580d6f4d55",
+    "external_manifest": {
+      "end_sha256": "a422f6f0cb3ffbf4c3e0a6953ba2766f197933db8ba3712af7648953049f5c6d",
+      "launch_end_byte_equal": true,
+      "launch_sha256": "a422f6f0cb3ffbf4c3e0a6953ba2766f197933db8ba3712af7648953049f5c6d"
+    },
+    "final_boundary_snapshot": {
+      "generation": 9,
+      "sha256": "dddc5485e3f15c25b6f2365905057349128c62f1b57e47b2c4e4ae1fde18fadb"
+    },
+    "runtime_manifest": {
+      "end_sha256": "eddec2befd17f6eb140d148842cd94fd5b7afdbf9c819b8392c3d24ecc5d02db",
+      "launch_end_byte_equal": true,
+      "launch_sha256": "eddec2befd17f6eb140d148842cd94fd5b7afdbf9c819b8392c3d24ecc5d02db"
+    },
+    "work_census_file_sha256": "63b731dc52cd56bb4612be38200e25a8868a6168f29ed0a287ab971754874554"
+  },
+  "campaign": {
+    "arm": "tail6_fixed32",
+    "batch_size": 1,
+    "concurrency": 1,
+    "fixed_geometry": {
+      "physical_draft_rows_per_event": 31,
+      "root_rows_per_event": 1,
+      "total_rows_per_event": 32
+    },
+    "tag": "b1_4swe_f32_20260730T104807Z",
+    "task_count_completed": 4,
+    "task_count_declared": 4,
+    "workload": "canonical_swe_bench_verified_exact4"
+  },
+  "curation": {
+    "omitted_or_withheld": [
+      {
+        "field": "census_semantic_hash",
+        "reason": "The semantic hash was not unambiguously identified as a file digest; the authoritative census file SHA256 is retained instead."
+      },
+      {
+        "field": "health_reported_orchestrator_return_code",
+        "reason": "A later gate stage overwrote this health field, so the direct orchestrator and driver return codes are reported instead."
+      },
+      {
+        "field": "raw_artifact_commit_ids_and_paths",
+        "reason": "Withheld under the curated-publication privacy policy."
+      },
+      {
+        "field": "source_git_commit",
+        "reason": "The feature branch advanced through automatic raw-artifact commits during the campaign, making a single campaign source value ambiguous."
+      }
+    ],
+    "raw_bodies_inspected": false,
+    "source_basis": "Aggregate metrics, invariant counters, immutable manifest comparisons, artifact digests, and publication audit findings."
+  },
+  "diagnostics": {
+    "acceptance_behavior": {
+      "accepted_drafts_per_event": 4.001555494555769,
+      "committed_tokens_per_event": 5.001555494555769,
+      "depth_survival_probability": {
+        "1": 0.938695,
+        "10": 0.125995,
+        "11": 0.114466,
+        "2": 0.744716,
+        "3": 0.574481,
+        "4": 0.447067,
+        "5": 0.358633,
+        "6": 0.221292,
+        "7": 0.179934,
+        "8": 0.156602,
+        "9": 0.139674
+      },
+      "earlier_one_task_tail_value": 4.527,
+      "earlier_one_task_value_comparable": false,
+      "first_three_tasks_weighted_accepted_drafts_per_event": 4.442369132464979,
+      "fixed_physical_work_drift_detected": false,
+      "fourth_task_event_share": 0.8138439015463446,
+      "interpretation": "The earlier one-task value came from a different SWE-Verified task. In exact4, the long fourth task dominates the event weighting and has lower deep-draft survival; the fixed32 census does not show physical-work drift."
+    },
+    "kernel_timing_ms_per_step": {
+      "cfwd_gpu": 23.788323681465172,
+      "dfwd_gpu": 51.238868724024634,
+      "full_step_gpu_component_sum": 264.76816092803534,
+      "full_step_wall": 282.43274601346224,
+      "gpu_component_full_step_tps": 18.890320788666145,
+      "measured_full_step_wall_tps": 17.708837113092294,
+      "residual_or_seams": 17.6645850854269,
+      "server_request_decode_per_event": 278.9377277302505,
+      "sfwd_gpu": 189.74096852254552
+    },
+    "optimization_gap": {
+      "auxiliary_plus_residual_ms": 92.6917774909167,
+      "auxiliary_reduction_required_if_sfwd_reaches_floor_fraction": 0.8404389213331318,
+      "auxiliary_time_allowed_if_sfwd_reaches_floor_ms": 14.790000000000006,
+      "first_priority": "SFWD GPU graph execution",
+      "sfwd_exceeds_acceptance_cap_ms": 76.35096852254553,
+      "sfwd_floor_ratio": 1.9243505935349445
+    },
+    "roofline_status": {
+      "classification": "UNMEASURED",
+      "compute_floor_model": "0.54 ms per row multiplied by 32 rows",
+      "compute_floor_ms": 17.28,
+      "floor_definition": "max(weight-read floor, analytic compute floor)",
+      "floor_excludes": [
+        "dynamic FA2 KV traversal",
+        "drafter GPU work",
+        "committer GPU work",
+        "host and scheduler seams"
+      ],
+      "next_valid_measurement": "Use NCU and Nsys attribution on a real SWE-Verified B1 run; do not substitute a synthetic probe.",
+      "weight_read_floor_ms": 98.6
+    },
+    "sfwd_distribution_ms": {
+      "all_events_tagged_full": true,
+      "begin_to_pre_replay_mean": 0.0348,
+      "cpu_tail_mean": 0.775,
+      "interpretation": "The dominant SFWD time is inside GPU graph execution, not Python setup, graph misses, or the CPU tail.",
+      "mean": 189.74096852254552,
+      "p50": 189.548,
+      "p95": 207.263,
+      "p99": 211.713,
+      "replay_to_stop_gpu_mean": 189.706,
+      "sample_event_count": 21858
+    }
+  },
+  "event_bases": {
+    "census": {
+      "b1_batch_histogram": {
+        "1": 21858
+      },
+      "committer_actual_replays": 21858,
+      "complete_pure_b1_events": 21858,
+      "final_generation": 9,
+      "first_step": 0,
+      "last_step": 21857,
+      "nonpure_committer_replays": 0,
+      "nonpure_dispatch": {
+        "forbidden_full": 0,
+        "guarded": 1290,
+        "none": 1265,
+        "piecewise": 25
+      },
+      "speculative_tokens": 677598
+    },
+    "prometheus_wall_series": {
+      "basis_count": 21588,
+      "campaign_delta_steps_used_for_wall_mean": 21587,
+      "full_step_wall_ms": 282.43274601346224
+    },
+    "request_decode_and_gpu_counters": {
+      "acceptance_event_delta": 21858,
+      "cfwd_span_delta": 21858,
+      "dfwd_span_delta": 21858,
+      "request_decode_event_delta": 21858,
+      "sfwd_event_delta": 21858
+    },
+    "warning": "The 21858-event census and request/GPU-counter basis is not the 21588-count Prometheus wall-series basis. The reported wall mean uses a 21587-step campaign delta; these denominators are preserved and are not silently substituted."
+  },
+  "outcome": {
+    "b4_status": "NOT_RUN",
+    "driver_return_code": 14,
+    "formal_sequence_status": "STOPPED_AFTER_TAIL6_GATE",
+    "hydra23_b1_status": "NOT_RUN",
+    "invalidity_evidence": {
+      "chat_request_count": 270,
+      "proxy_pair_dump_count": 0,
+      "topology_needle_present": false,
+      "work_census_complete": true,
+      "work_needle_present": true
+    },
+    "invalidity_reasons": [
+      {
+        "code": "CHAT_ROUTE_HAS_NO_RESPONSE_PAIR_DUMPS",
+        "detail": "The workload used the chat-completions route while the pair dumper only supported the responses route, so zero pair dumps was expected."
+      },
+      {
+        "code": "EXPECTED_TOPOLOGY_NEEDLE_NOT_EMITTED",
+        "detail": "The production patcher did not emit the exact topology marker required by the gate even though the work marker and complete fixed32 census were present."
+      },
+      {
+        "code": "PAIR_BASED_TASK_PROVENANCE_UNPROVABLE",
+        "detail": "The gate required task-bound positive pair evidence that the chat route could not produce."
+      }
+    ],
+    "orchestrator_elapsed_seconds": 7464,
+    "orchestrator_return_code": 0,
+    "serving_gate_return_code": 14,
+    "status": "INVALID_DIAGNOSTIC_ONLY",
+    "tail6_b1_status": "FOUR_TASKS_COMPLETED_GATE_INVALID",
+    "task_results": [
+      {
+        "accepted_drafts_per_event": 4.476923076923077,
+        "elapsed_seconds": 198.878,
+        "events": 520,
+        "instance_id": "astropy__astropy-12907",
+        "request_decode_ms_per_event": 252.9240489267977,
+        "sfwd_gpu_ms_per_step": 172.63003689692558,
+        "swe_result": "resolved"
+      },
+      {
+        "accepted_drafts_per_event": 4.496014171833481,
+        "elapsed_seconds": 374.235,
+        "events": 1129,
+        "instance_id": "astropy__astropy-13033",
+        "request_decode_ms_per_event": 252.20877627712823,
+        "sfwd_gpu_ms_per_step": 171.8896816446255,
+        "swe_result": "failed"
+      },
+      {
+        "accepted_drafts_per_event": 4.409917355371901,
+        "elapsed_seconds": 816.645,
+        "events": 2420,
+        "instance_id": "astropy__astropy-13236",
+        "request_decode_ms_per_event": 265.6643562409007,
+        "sfwd_gpu_ms_per_step": 182.7730553934398,
+        "swe_result": "failed"
+      },
+      {
+        "accepted_drafts_per_event": 3.900725167238181,
+        "elapsed_seconds": 5840.275,
+        "events": 17789,
+        "instance_id": "astropy__astropy-13398",
+        "request_decode_ms_per_event": 283.20023029771335,
+        "sfwd_gpu_ms_per_step": 192.3220094524983,
+        "swe_result": "failed"
+      }
+    ]
+  },
+  "privacy": {
+    "contains_environment": false,
+    "contains_process_identity": false,
+    "contains_prompts": false,
+    "contains_public_benchmark_instance_ids": true,
+    "contains_raw_logs": false,
+    "contains_raw_request_or_response_bodies": false,
+    "contains_request_dump_filenames": false,
+    "contains_source_commit_ids": false,
+    "contains_source_paths": false,
+    "contains_task_patch_content": false,
+    "public_identity_scope": "Canonical public SWE-bench Verified instance identifiers only."
+  },
+  "publication": {
+    "acceptance_artifacts_published": false,
+    "clean_successor_required": true,
+    "curated_artifact_state_at_generation": "LOCAL_UNCOMMITTED",
+    "fourth_task_raw_outputs_pushed": false,
+    "raw_artifact_remediation_status": "PENDING",
+    "raw_outputs_auto_published_task_count": 3,
+    "raw_outputs_reached_main": false,
+    "raw_outputs_scope": "FEATURE_BRANCH_ONLY"
+  },
+  "schema": "fr13.fixed32.invalid_campaign_diagnostic.v1",
+  "teardown": {
+    "campaign_containers_remaining": false,
+    "complete": true,
+    "offload_proxy_remaining": false,
+    "samplers_remaining": false,
+    "task_containers_remaining": false,
+    "watchdogs_remaining": false
+  }
+}
