@@ -26632,6 +26632,11 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
 
     import torch
 
+    from fr13_fixed32_topology import (
+        CONV_PREGATHER_ROW_ELEMS,
+        GDN_CONV_CHANNELS,
+        GDN_CONV_STATE_LENGTH,
+    )
     from fr13_fixed32_work_census import reference_event
 
     kernel_name = "lumo_flywheel_serving.fr10_gdn_tree_kernel"
@@ -26656,15 +26661,25 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
         exec(_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE, namespace)
         namespace["_FR13_FIXED32_CENSUS_EVENTS"] = []
         namespace["_FR13_FIXED32_COMPLETE_EVENTS"] = 0
-        row_elems = int(
+        reference_row_elems = int(
             reference_event(mode, 1, "conv-state")["conv_pregather"][
                 "row_elems"
             ]
         )
+        row_elems = GDN_CONV_CHANNELS * GDN_CONV_STATE_LENGTH
+        if (
+            row_elems != CONV_PREGATHER_ROW_ELEMS
+            or reference_row_elems != row_elems
+        ):
+            raise AssertionError("fixed32 self-test conv geometry drifted")
         banks = tuple(
             torch.empty(
-                (capacity + 1, row_elems // 2, 2),
-                dtype=torch.float32,
+                (
+                    capacity + 1,
+                    GDN_CONV_CHANNELS,
+                    GDN_CONV_STATE_LENGTH,
+                ),
+                dtype=torch.uint8,
             )
             for _ in range(48)
         )
@@ -26684,7 +26699,7 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
             dtype=torch.int64,
         )
         staging = torch.empty(
-            (48, capacity, row_elems), dtype=torch.float32
+            (48, capacity, row_elems), dtype=torch.uint8
         )
         state = {
             "mode": mode,
