@@ -16,9 +16,12 @@ PATCHER = (
     / "fr10_phase4_patch_vllm_tree_gdn.py"
 )
 FORMAL_SEQUENCE = (
+    Path(__file__).resolve().parents[1] / "scripts" / "fr13_fixed32_floor_timers_seq.sh"
+)
+LAUNCHER = (
     Path(__file__).resolve().parents[1]
     / "scripts"
-    / "fr13_fixed32_floor_timers_seq.sh"
+    / "fr13_launch_forked_fa2_tree_server.sh"
 )
 
 
@@ -351,10 +354,17 @@ def test_nonpositive_span_period_disables_live_rewrites(
 
 def test_formal_sequence_disables_periodic_timer_sidecars() -> None:
     source = FORMAL_SEQUENCE.read_text(encoding="utf-8")
+    launcher = LAUNCHER.read_text(encoding="utf-8")
 
     assert "export FR13_SFWD_GPU_TIMER_DUMP_S=0\n" in source
     assert "export FR13_SPAN_GPU_TIMER_DUMP_S=0\n" in source
     assert "export FR13_TIMER_EXPLICIT_FLUSH=1\n" in source
+    assert (
+        '"FR13_SFWD_GPU_TIMER_DUMP_S|${FR13_SFWD_GPU_TIMER_DUMP_S:-}|0"'
+    ) in launcher
+    assert (
+        '"FR13_SPAN_GPU_TIMER_DUMP_S|${FR13_SPAN_GPU_TIMER_DUMP_S:-}|0"'
+    ) in launcher
 
 
 def test_flush_boundaries_break_wall_chain_after_snapshot() -> None:
@@ -388,8 +398,7 @@ def test_flush_boundaries_break_wall_chain_after_snapshot() -> None:
         next(
             node
             for node in tree.body
-            if isinstance(node, ast.FunctionDef)
-            and node.name == "_fr13_f32_flush_one"
+            if isinstance(node, ast.FunctionDef) and node.name == "_fr13_f32_flush_one"
         ),
     )
     assert flush_one is not None
@@ -412,8 +421,7 @@ def test_explicit_flush_emits_complete_timer_sidecars(
     flush_definition = next(
         node
         for node in tree.body
-        if isinstance(node, ast.FunctionDef)
-        and node.name == "_fr13_f32_flush_one"
+        if isinstance(node, ast.FunctionDef) and node.name == "_fr13_f32_flush_one"
     )
     calls: list[object] = []
     events = [{"event_index": 0}]
@@ -426,9 +434,7 @@ def test_explicit_flush_emits_complete_timer_sidecars(
             calls.append((self.name, "drain", blocking))
 
         def _dump_json(self, *, final: bool, with_samples: bool) -> None:
-            calls.append(
-                (self.name, "dump_json", final, with_samples)
-            )
+            calls.append((self.name, "dump_json", final, with_samples))
 
         def _dump(self) -> None:
             calls.append((self.name, "dump"))
@@ -443,9 +449,7 @@ def test_explicit_flush_emits_complete_timer_sidecars(
         "_FR13_FIXED32_FLUSH_TERMINAL": False,
         "_FR13_SG_EXEC_LOCK": contextlib.nullcontext(),
         "torch": SimpleNamespace(
-            cuda=SimpleNamespace(
-                synchronize=lambda: calls.append("synchronize")
-            )
+            cuda=SimpleNamespace(synchronize=lambda: calls.append("synchronize"))
         ),
         "_fr13_f32_flush_runtime_state": lambda: (
             None,
@@ -464,17 +468,11 @@ def test_explicit_flush_emits_complete_timer_sidecars(
         "_fr13_f32_flush_write_boundary": lambda req, values: calls.append(
             ("boundary", req, values)
         ),
-        "_fr13_f32_flush_break_wall_chain": lambda: calls.append(
-            "wall_break"
-        ),
+        "_fr13_f32_flush_break_wall_chain": lambda: calls.append("wall_break"),
         "_fr13_f32_flush_write_census": (
-            lambda values, *, final: calls.append(
-                ("census", values, final)
-            )
+            lambda values, *, final: calls.append(("census", values, final))
         ),
-        "_fr13_f32_flush_write_ack": lambda **kwargs: calls.append(
-            ("ack", kwargs)
-        ),
+        "_fr13_f32_flush_write_ack": lambda **kwargs: calls.append(("ack", kwargs)),
     }
     exec(
         compile(
