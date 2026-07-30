@@ -600,6 +600,247 @@ def _fr13_fixed32_profile_memory_scope_end():
         layer._fr13_replay_conv_state = None
 
 
+def _fr13_fixed32_final_full_preseed_postcheck_required(runtime_mode):
+    """Return whether this capture must prove the persistent preseed bundle."""
+    if not _FR13_FIXED32_MODE:
+        return False
+    mode = str(runtime_mode).upper()
+    if mode == "PIECEWISE":
+        return False
+    if mode != "FULL":
+        raise RuntimeError(
+            "FR13 fixed32 cudagraph preseed mode is invalid: " + repr(mode)
+        )
+    if _FR13_FIXED32_PROFILE_MEMORY_SCOPE is True:
+        # Throwaway memory-profile graphs must not publish persistent cache
+        # pointers, even though their FULL descriptor has capture geometry.
+        return False
+    if (
+        _FR13_FIXED32_PROFILE_MEMORY_SCOPE is not False
+        or _FR13_FIXED32_PROFILE_CAPTURE_SCOPE is not None
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 final preseed resolved inside invalid profile scope"
+        )
+    return True
+
+
+def _fr13_fixed32_final_full_preseed_needed(
+    runtime_mode,
+    num_tokens,
+    num_reqs,
+    uniform,
+    has_lora,
+    num_active_loras,
+):
+    """Return whether final FULL capture still needs an actual-cache producer."""
+    if not _fr13_fixed32_final_full_preseed_postcheck_required(runtime_mode):
+        return False
+    _fr13_fixed32_graph_descriptor(
+        str(runtime_mode).upper(),
+        num_tokens,
+        num_reqs,
+        uniform,
+        has_lora,
+        num_active_loras,
+    )
+    done = globals().get("_FR13_FIXED32_PRESEEDED_BATCHES")
+    capacity = int(globals().get("_FR13_FIXED32_PRESEED_CAP", 0))
+    if not done and capacity == 0:
+        return True
+    if (
+        capacity not in (1, 2, 3, 4)
+        or set(done or ()) != set(range(1, capacity + 1))
+        or int(num_reqs) > capacity
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 final preseed lifecycle drifted: "
+            + repr((done, capacity, num_reqs))
+        )
+    return False
+
+
+def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
+    """Fail before CUDA capture unless the eager producer published its lease."""
+    batch = int(num_reqs)
+    capacity = int(globals().get("_FR13_FIXED32_PRESEED_CAP", 0))
+    done = globals().get("_FR13_FIXED32_PRESEEDED_BATCHES")
+    import lumo_flywheel_serving.fr10_gdn_tree_kernel as _fr13_f32_kernel
+    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+        fixed32_committer_counters as _fr13_f32_cc,
+        fixed32_conv_col0_pregather_counters as _fr13_f32_pc,
+    )
+    pregather = _fr13_f32_pc()
+    committer = _fr13_f32_cc()
+    pregather_state = getattr(
+        _fr13_f32_kernel, "_FR13_FIXED32_CONV_PREGATHER", {}
+    ).get("state")
+    committer_state = getattr(
+        _fr13_f32_kernel, "_FR13_FIXED32_COMMITTER_FAST_ROUTE", {}
+    ).get("state")
+    stacks = globals().get("_FR13_EAGER_PACK_STACKS")
+    layers = globals().get("_FR13_REPLAY_LAYERS")
+    order = (
+        ()
+        if not isinstance(stacks, dict)
+        else tuple(str(value) for value in stacks.get("layer_order", ()))
+    )
+    current_ssm = (
+        ()
+        if not isinstance(layers, dict) or len(order) != 48
+        else tuple(
+            getattr(layers.get(name), "_fr13_replay_ssm_state", None)
+            for name in order
+        )
+    )
+    current_conv = (
+        ()
+        if not isinstance(layers, dict) or len(order) != 48
+        else tuple(
+            getattr(layers.get(name), "_fr13_replay_conv_state", None)
+            for name in order
+        )
+    )
+    pregather_banks = (
+        ()
+        if not isinstance(pregather_state, dict)
+        else tuple(pregather_state.get("banks", ()))
+    )
+    committer_banks = (
+        ()
+        if not isinstance(committer_state, dict)
+        else tuple(committer_state.get("banks", ()))
+    )
+    staging = (
+        None
+        if not isinstance(pregather_state, dict)
+        else pregather_state.get("staging")
+    )
+    taw_batches = []
+    taw_module = __import__("sys").modules.get(
+        "_fr13_device_multidraft_kernel"
+    )
+    if (
+        taw_module is not None
+        and isinstance(pregather_state, dict)
+        and capacity in (1, 2, 3, 4)
+    ):
+        for taw_batch in range(1, capacity + 1):
+            taw_module.fr13_fixed32_taw_preseeded_counts(
+                pregather_state["anchor"].device,
+                mode=_FR13_FIXED32_MODE,
+                valid_mask=int(_FR13_FIXED32_VALID_MASK),
+                batch_size=taw_batch,
+            )
+            taw_batches.append(taw_batch)
+    actual = {
+        "batch": batch,
+        "capacity": capacity,
+        "done": tuple(sorted(int(value) for value in (done or ()))),
+        "mode": (
+            None
+            if not isinstance(pregather_state, dict)
+            else pregather_state.get("mode")
+        ),
+        "preseeded": pregather.get("preseeded"),
+        "pointer_entries": pregather.get("pointer_entries"),
+        "max_batch_size": pregather.get("max_batch_size"),
+        "preseeded_batches": tuple(
+            pregather.get("preseeded_batches", ())
+        ),
+        "layer_order": order,
+        "pregather_layer_order": (
+            ()
+            if not isinstance(pregather_state, dict)
+            else tuple(pregather_state.get("layer_order", ()))
+        ),
+        "current_ssm_complete": (
+            len(current_ssm) == 48
+            and all(value is not None for value in current_ssm)
+        ),
+        "current_conv_complete": (
+            len(current_conv) == 48
+            and all(value is not None for value in current_conv)
+        ),
+        "pregather_bank_aliases": (
+            len(pregather_banks) == 48
+            and len(current_conv) == 48
+            and all(
+                bank is current
+                for bank, current in zip(
+                    pregather_banks, current_conv, strict=True
+                )
+            )
+        ),
+        "committer_bank_aliases": (
+            len(committer_banks) == 48
+            and len(current_ssm) == 48
+            and all(
+                bank is current
+                for bank, current in zip(
+                    committer_banks, current_ssm, strict=True
+                )
+            )
+        ),
+        "staging_shape": (
+            None
+            if not torch.is_tensor(staging)
+            else tuple(int(value) for value in staging.shape)
+        ),
+        "committer_captures": committer.get("captures"),
+        "committer_preseeded_graphs": committer.get("preseeded_graphs"),
+        "committer_preseeded_batches": tuple(
+            committer.get("preseeded_batches", ())
+        ),
+        "committer_required_capacity": committer.get(
+            "required_capacity"
+        ),
+        "committer_all_batches_ready": committer.get(
+            "all_batches_ready"
+        ),
+        "taw_batches": tuple(taw_batches),
+    }
+    row_elems = (
+        -1
+        if not isinstance(pregather_state, dict)
+        else int(pregather_state.get("row_elems", -1))
+    )
+    expected = {
+        "batch": batch,
+        "capacity": capacity,
+        "done": tuple(range(1, capacity + 1)),
+        "mode": _FR13_FIXED32_MODE,
+        "preseeded": True,
+        "pointer_entries": 48,
+        "max_batch_size": capacity,
+        "preseeded_batches": tuple(range(1, capacity + 1)),
+        "layer_order": order,
+        "pregather_layer_order": order,
+        "current_ssm_complete": True,
+        "current_conv_complete": True,
+        "pregather_bank_aliases": True,
+        "committer_bank_aliases": True,
+        "staging_shape": (48, capacity, row_elems),
+        "committer_captures": capacity,
+        "committer_preseeded_graphs": capacity,
+        "committer_preseeded_batches": tuple(
+            range(1, capacity + 1)
+        ),
+        "committer_required_capacity": capacity,
+        "committer_all_batches_ready": True,
+        "taw_batches": tuple(range(1, capacity + 1)),
+    }
+    if (
+        capacity not in (1, 2, 3, 4)
+        or not 1 <= batch <= capacity
+        or actual != expected
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 final FULL eager preseed did not publish lease: "
+            + repr((actual, expected))
+        )
+
+
 def _fr13_fixed32_boot_preseed_allowed():
     return bool(
         _FR13_FIXED32_MODE
@@ -15262,6 +15503,84 @@ def _patch_gpu_model_runner_fixed32_profile_capture_scope() -> bool:
     return True
 
 
+def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
+    """Publish actual-cache fixed32 operands before the first final FULL graph.
+
+    vLLM's stock warmup uses ``for_cudagraph_capture=False`` metadata even for
+    FULL descriptors. Fixed speculative rows are capture-shaped, so that
+    generic warmup cannot publish the 48 live GDN bank references required by
+    the pregather/committer preseed bundle. Run one eager NONE forward with the
+    final FULL descriptor and capture-shaped metadata after stock warmups, then
+    fail before CUDA capture unless every persistent alias is ready.
+    """
+    if not _FR13_FIXED32_MODE:
+        return False
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_FIXED32_FINAL_FULL_PRESEED"
+    if sentinel in text:
+        return False
+    anchor = (
+        "                profile_seq_lens=profile_seq_lens,\n"
+        "            )\n"
+        "        self._dummy_run(\n"
+        "            desc.num_tokens,\n"
+        "            cudagraph_runtime_mode=cudagraph_runtime_mode,\n"
+    )
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            "FR13 fixed32 final FULL preseed anchor is not unique"
+        )
+    inject = (
+        "                profile_seq_lens=profile_seq_lens,\n"
+        "            )\n"
+        "        " + sentinel + ": the generic warmup above does not set\n"
+        "        # for_cudagraph_capture=True, so it cannot publish fixed spec\n"
+        "        # rows or the live 48-bank lease. Run one eager producer after\n"
+        "        # all generic warmups and immediately before real capture.\n"
+        "        from vllm.model_executor.layers.mamba import (\n"
+        "            gdn_linear_attn as _fr13_f32_preseed_gdn,\n"
+        "        )\n"
+        "        _fr13_f32_preseed_postcheck = (\n"
+        "            _fr13_f32_preseed_gdn."
+        "_fr13_fixed32_final_full_preseed_postcheck_required(\n"
+        "                cudagraph_runtime_mode.name,\n"
+        "            )\n"
+        "        )\n"
+        "        if _fr13_f32_preseed_postcheck:\n"
+        "            if _fr13_f32_preseed_gdn."
+        "_fr13_fixed32_final_full_preseed_needed(\n"
+        "                cudagraph_runtime_mode.name,\n"
+        "                desc.num_tokens,\n"
+        "                desc.num_reqs,\n"
+        "                desc.uniform,\n"
+        "                desc.has_lora,\n"
+        "                desc.num_active_loras,\n"
+        "            ):\n"
+        "                self._dummy_run(\n"
+        "                    desc.num_tokens,\n"
+        "                    cudagraph_runtime_mode=CUDAGraphMode.NONE,\n"
+        "                    force_attention=True,\n"
+        "                    uniform_decode=desc.uniform,\n"
+        "                    allow_microbatching=allow_microbatching,\n"
+        "                    skip_eplb=True,\n"
+        "                    remove_lora=False,\n"
+        "                    is_graph_capturing=True,\n"
+        "                    num_active_loras=desc.num_active_loras,\n"
+        "                    profile_seq_lens=profile_seq_lens,\n"
+        "                )\n"
+        "            _fr13_f32_preseed_gdn."
+        "_fr13_fixed32_assert_final_full_preseed_ready(\n"
+        "                desc.num_reqs,\n"
+        "            )\n"
+        "        self._dummy_run(\n"
+        "            desc.num_tokens,\n"
+        "            cudagraph_runtime_mode=cudagraph_runtime_mode,\n"
+    )
+    text = text.replace(anchor, inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_model_runner_tree_reqkey() -> bool:
     """FR13_TREE_REQKEY: re-key the tree accepted-path/lens buffers by request.
 
@@ -28044,6 +28363,10 @@ def main() -> int:
         (
             GPU_MODEL_RUNNER_PATH,
             _patch_gpu_model_runner_fixed32_profile_capture_scope(),
+        ),
+        (
+            GPU_MODEL_RUNNER_PATH,
+            _patch_gpu_model_runner_fixed32_final_full_preseed(),
         ),
         (
             GPU_MODEL_RUNNER_PATH,
