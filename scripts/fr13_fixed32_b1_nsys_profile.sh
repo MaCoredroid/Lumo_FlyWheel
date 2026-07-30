@@ -62,6 +62,10 @@ git check-ignore -q "$RUNROOT_ABS" || {
   echo "FAIL: canonical exact4 SWE-Verified subset hash drift" >&2
   exit 2
 }
+[[ "$LUMO_NSYS_BIN" == "/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys" ]] || {
+  echo "FAIL: fixed32 attribution requires the pinned Nsight Systems binary" >&2
+  exit 2
+}
 [[ -x "$LUMO_NSYS_BIN" ]] || {
   echo "FAIL: Nsight Systems executable is unavailable" >&2
   exit 2
@@ -78,8 +82,8 @@ for _positive_nsys_value in \
   }
 done
 unset _positive_nsys_value
-(( LUMO_NSYS_DELAY_S >= 1200 && LUMO_NSYS_DURATION_S >= 300 )) || {
-  echo "FAIL: attribution requires at least the proven 1200s delay/300s capture" >&2
+[[ "$LUMO_NSYS_DELAY_S" == "1200" && "$LUMO_NSYS_DURATION_S" == "300" ]] || {
+  echo "FAIL: attribution requires the canonical 1200s delay/300s capture" >&2
   exit 2
 }
 [[ "$LUMO_NSYS_FLUSH_MS" == "100" ]] || {
@@ -126,6 +130,10 @@ if ! .venv/bin/python scripts/fr13_fixed32_nsys_reduce.py \
   --runtime-manifest-end "$RUNROOT/runtime_manifest.at_end.json" \
   --external-manifest-launch "$RUNROOT/external_manifest.at_launch.json" \
   --external-manifest-end "$RUNROOT/external_manifest.at_end.json" \
+  --process-identity "$RUNROOT/$ARM/fixed32_process_identity.json" \
+  --container-identity "$RUNROOT/$ARM/fixed32_container_identity.json" \
+  --runtime-attestation \
+    "$RUNROOT/$ARM/logs/fr13_fixed32_runtime_attestation.json" \
   --pretask-zero-traffic "$RUNROOT/$ARM/fixed32_pretask_zero_traffic.json" \
   --proxy-ledger "$RUNROOT/$ARM/logs/fr13_fixed32_proxy_ingress.jsonl" \
   --engine-ledger "$RUNROOT/$ARM/logs/fr13_fixed32_engine_ingress.jsonl" \

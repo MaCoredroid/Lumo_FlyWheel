@@ -166,6 +166,65 @@ def test_build_summary_rejects_materially_negative_step_residual() -> None:
         )
 
 
+def _write_runtime_attestation(logs: Path) -> Path:
+    contract = reducer.fixed32_contract
+    arctic_files = [
+        {
+            "path": "arctic_inference/suffix_decoding/cache.py",
+            "size": 32,
+            "sha256": hashlib.sha256(b"fixed32-nsys-fixture-arctic").hexdigest(),
+        }
+    ]
+    payload = {
+        "schema": contract.RUNTIME_SCHEMA,
+        "canonical_format": contract.CANONICAL_FORMAT,
+        "python": {
+            "version": "3.12.3",
+            "implementation": "CPython",
+        },
+        "vllm": {
+            "version": contract.VLLM_VERSION,
+            "module_path": "/usr/local/lib/python3.12/dist-packages/vllm/__init__.py",
+        },
+        "forked_fa2": {
+            "source": {
+                "path": str(contract.CONTAINER_FA2_SOURCE),
+                "size": contract.FA2_SIZE,
+                "sha256": contract.FA2_SHA256,
+            },
+            "destination": {
+                "path": str(contract.CONTAINER_FA2_DESTINATION),
+                "size": contract.FA2_SIZE,
+                "sha256": contract.FA2_SHA256,
+            },
+            "byte_identical": True,
+        },
+        "arctic": {
+            "name": "arctic-inference",
+            "version": contract.ARCTIC_VERSION,
+            "files": arctic_files,
+            "canonical_sha256": hashlib.sha256(
+                contract.canonical_bytes(arctic_files)
+            ).hexdigest(),
+            "cache_class_module": "arctic_inference.suffix_decoding.cache",
+            "cache_class_qualname": "SuffixDecodingCache",
+            "pinned_source_url": contract.ARCTIC_SDIST_URL,
+            "pinned_source_sha256": contract.ARCTIC_SDIST_SHA256,
+        },
+    }
+    payload["overall_canonical_sha256"] = hashlib.sha256(
+        contract.canonical_bytes(payload)
+    ).hexdigest()
+    contract.validate_runtime_attestation(payload)
+    path = logs / "fr13_fixed32_runtime_attestation.json"
+    path.write_text(
+        json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+        + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
 def _provenance_fixture(tmp_path: Path) -> dict[str, object]:
     manifest = tmp_path / "manifest.json"
     manifest.write_text('{"schema":"fixture"}\n', encoding="utf-8")
@@ -210,6 +269,64 @@ def _provenance_fixture(tmp_path: Path) -> dict[str, object]:
         + "\n",
         encoding="utf-8",
     )
+
+    contract = reducer.fixed32_contract
+    profile_environment = [
+        "FR13_FIXED32_ATTRIBUTION_ONLY=1",
+        "FR13_FIXED32_NVTX_PROFILE=1",
+        "LUMO_NSYS_WRAP_VLLM=1",
+        "PRIVATE_FIXTURE_VALUE=must-not-appear-in-reduced-output",
+    ]
+    process_identity = arm_dir / "fixed32_process_identity.json"
+    process_identity.write_text(
+        json.dumps(
+            {
+                "schema": "fr13-fixed32-process-identity-v1",
+                "pid1": {
+                    "pid": 1,
+                    "argv": contract.expected_process_pid1_argv(
+                        1,
+                        attribution_only=True,
+                    ),
+                    "environ": profile_environment,
+                    "forked_fa2_maps": [],
+                },
+                "engine_core": {
+                    "pid": 321,
+                    "argv": ["VLLM::EngineCore"],
+                    "environ": profile_environment,
+                    "forked_fa2_maps": [
+                        "7f000000-7f100000 r-xp 00000000 00:00 0 "
+                        f"{contract.CONTAINER_FA2_DESTINATION}"
+                    ],
+                },
+            },
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    container_identity = arm_dir / "fixed32_container_identity.json"
+    container_identity.write_text(
+        json.dumps(
+            {
+                "schema": "fr13-fixed32-container-identity-v1",
+                "name": f"/fr13-bigdenom-{arm_dir.name}",
+                "image_id": contract.IMAGE_ID,
+                "configured_image": contract.IMAGE_REFERENCE,
+                "platform": contract.IMAGE_OS,
+                "running": True,
+            },
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    runtime_attestation = _write_runtime_attestation(logs)
 
     task_key = fixed32_task_key_id(reducer.EXACT4_TASK_IDS[0])
     task_set = fixed32_canonical_task_set_sha256(reducer.EXACT4_TASK_IDS)
@@ -306,6 +423,7 @@ def _provenance_fixture(tmp_path: Path) -> dict[str, object]:
     return {
         "batch_size": 1,
         "concurrency": 1,
+        "container_identity": container_identity,
         "driver_rc": 86,
         "engine_ledger": engine_path,
         "external_manifest_end": manifest,
@@ -319,7 +437,9 @@ def _provenance_fixture(tmp_path: Path) -> dict[str, object]:
         "nsys_flush_ms": 100,
         "nsys_trace": "cuda,cuda-sw,nvtx",
         "pretask_zero_traffic": marker,
+        "process_identity": process_identity,
         "proxy_ledger": proxy_path,
+        "runtime_attestation": runtime_attestation,
         "runtime_manifest_end": manifest,
         "runtime_manifest_launch": manifest,
         "subset": REPO / "config/fr13_fixed32/subset_b4_four.json",
@@ -336,9 +456,124 @@ def test_provenance_binds_exact4_b1_and_cross_ledger_completion(
     assert provenance["exact4_subset"]["task_count"] == 4
     assert provenance["ingress"]["matched_completed_attempts"] == 1
     assert provenance["nsight"]["discard_environment"] is True
+    assert provenance["process_identity"]["pid1_attribution_contract_exact"] is True
+    assert (
+        provenance["container_identity"]["pinned_container_contract_exact"] is True
+    )
+    assert (
+        provenance["container_identity"]["running_at_identity_capture"] is True
+    )
+    assert provenance["runtime_attestation"]["pinned_runtime_contract_exact"] is True
     rendered = json.dumps(provenance, sort_keys=True)
     assert str(tmp_path) not in rendered
     assert "astropy__astropy" not in rendered
+    assert '"argv"' not in rendered
+    assert '"environ"' not in rendered
+    assert "VLLM::EngineCore" not in rendered
+    assert "must-not-appear-in-reduced-output" not in rendered
+    assert "/fr13-bigdenom-arm" not in rendered
+
+
+def test_provenance_rejects_tampered_process_identity(tmp_path: Path) -> None:
+    fixture = _provenance_fixture(tmp_path)
+    path = Path(fixture["process_identity"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["pid1"]["argv"][3] = "1201"
+    path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(
+        reducer.ReductionError,
+        match="PID1 argv is not the exact attribution contract",
+    ):
+        reducer._build_attribution_provenance(**fixture)
+
+
+def test_provenance_rejects_tampered_profile_environment(tmp_path: Path) -> None:
+    fixture = _provenance_fixture(tmp_path)
+    path = Path(fixture["process_identity"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["pid1"]["environ"] = [
+        entry
+        for entry in payload["pid1"]["environ"]
+        if entry != "LUMO_NSYS_WRAP_VLLM=1"
+    ]
+    path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(
+        reducer.ReductionError,
+        match="PID1 environment is not attribution-only",
+    ):
+        reducer._build_attribution_provenance(**fixture)
+
+
+def test_provenance_rejects_tampered_container_identity(tmp_path: Path) -> None:
+    fixture = _provenance_fixture(tmp_path)
+    path = Path(fixture["container_identity"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["image_id"] = "sha256:" + "0" * 64
+    path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(
+        reducer.ReductionError,
+        match="container identity does not match the pinned contract",
+    ):
+        reducer._build_attribution_provenance(**fixture)
+
+
+def test_provenance_rejects_tampered_runtime_attestation(tmp_path: Path) -> None:
+    fixture = _provenance_fixture(tmp_path)
+    path = Path(fixture["runtime_attestation"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["vllm"]["version"] = "tampered"
+    digest_payload = {
+        key: value
+        for key, value in payload.items()
+        if key != "overall_canonical_sha256"
+    }
+    payload["overall_canonical_sha256"] = hashlib.sha256(
+        reducer.fixed32_contract.canonical_bytes(digest_payload)
+    ).hexdigest()
+    path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(
+        reducer.ReductionError,
+        match="runtime attestation does not match the pinned contract",
+    ):
+        reducer._build_attribution_provenance(**fixture)
+
+
+@pytest.mark.parametrize(
+    "artifact_key",
+    ("process_identity", "container_identity", "runtime_attestation"),
+)
+def test_provenance_requires_runtime_identity_artifacts(
+    tmp_path: Path,
+    artifact_key: str,
+) -> None:
+    fixture = _provenance_fixture(tmp_path)
+    Path(fixture[artifact_key]).unlink()
+
+    with pytest.raises(reducer.ReductionError, match="is unavailable"):
+        reducer._build_attribution_provenance(**fixture)
+
+
+@pytest.mark.parametrize(
+    ("field", "tampered"),
+    (("nsys_delay_s", 1201), ("nsys_duration_s", 301)),
+)
+def test_provenance_rejects_larger_noncanonical_capture_timing(
+    tmp_path: Path,
+    field: str,
+    tampered: int,
+) -> None:
+    fixture = _provenance_fixture(tmp_path)
+    fixture[field] = tampered
+
+    with pytest.raises(
+        reducer.ReductionError,
+        match="canonical 1200s delay/300s duration",
+    ):
+        reducer._build_attribution_provenance(**fixture)
 
 
 def test_main_runs_three_reports_separately_and_writes_canonical_json(
@@ -414,6 +649,12 @@ def test_main_runs_three_reports_separately_and_writes_canonical_json(
                 "--external-manifest-launch",
                 evidence,
                 "--external-manifest-end",
+                evidence,
+                "--process-identity",
+                evidence,
+                "--container-identity",
+                evidence,
+                "--runtime-attestation",
                 evidence,
                 "--pretask-zero-traffic",
                 evidence,

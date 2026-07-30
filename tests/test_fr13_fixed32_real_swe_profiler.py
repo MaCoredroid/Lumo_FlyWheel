@@ -70,11 +70,24 @@ def test_fixed32_profiler_binds_proven_capture_and_real_swe_evidence() -> None:
     assert "LUMO_NSYS_DELAY_S=${LUMO_NSYS_DELAY_S:-1200}" in text
     assert "LUMO_NSYS_DURATION_S=${LUMO_NSYS_DURATION_S:-300}" in text
     assert "LUMO_NSYS_FLUSH_MS=${LUMO_NSYS_FLUSH_MS:-100}" in text
+    assert (
+        '[[ "$LUMO_NSYS_BIN" == '
+        '"/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys" ]]'
+        in text
+    )
+    assert (
+        '[[ "$LUMO_NSYS_DELAY_S" == "1200" && '
+        '"$LUMO_NSYS_DURATION_S" == "300" ]]'
+        in text
+    )
     assert "cuda,cuda-sw,nvtx" in text
     assert "CuptiUseRawGpuTimestamps=false" in text
     assert "git check-ignore" in text
     assert "--runtime-manifest-launch" in text
     assert "--external-manifest-launch" in text
+    assert "--process-identity" in text
+    assert "--container-identity" in text
+    assert "--runtime-attestation" in text
     assert "--pretask-zero-traffic" in text
     assert "--proxy-ledger" in text
     assert "--engine-ledger" in text

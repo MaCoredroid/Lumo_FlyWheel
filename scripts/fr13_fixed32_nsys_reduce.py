@@ -18,6 +18,11 @@ from math import ceil
 from pathlib import Path
 from typing import Any
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if os.fspath(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, os.fspath(SCRIPT_DIR))
+import fr13_fixed32_contract as fixed32_contract  # noqa: E402
+
 
 DEFAULT_NSYS_BIN = Path("/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys")
 REPORT_NAMES = (
@@ -454,6 +459,207 @@ def _artifact_identity(raw: bytes) -> dict[str, int | str]:
     }
 
 
+def _require_exact_artifact_path(
+    path: Path,
+    expected_path: Path,
+    *,
+    label: str,
+) -> None:
+    if path.is_symlink():
+        raise ReductionError(f"{label} must not be a symlink")
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError as exc:
+        raise ReductionError(f"{label} is unavailable") from exc
+    if resolved != expected_path.resolve():
+        raise ReductionError(f"{label} is not the expected arm-local artifact")
+
+
+def _string_list(value: Any, *, label: str) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ReductionError(f"{label} must be an array of strings")
+    return value
+
+
+def _environment_map(value: Any, *, label: str) -> dict[str, str]:
+    entries = _string_list(value, label=label)
+    environment: dict[str, str] = {}
+    for entry in entries:
+        if "=" not in entry:
+            raise ReductionError(f"{label} contains a malformed entry")
+        name, setting = entry.split("=", 1)
+        if not name or name in environment:
+            raise ReductionError(f"{label} contains an empty or duplicate name")
+        environment[name] = setting
+    return environment
+
+
+def _validate_process_identity(
+    path: Path,
+    *,
+    arm_dir: Path,
+    concurrency: int,
+) -> dict[str, Any]:
+    expected_path = arm_dir / "fixed32_process_identity.json"
+    _require_exact_artifact_path(path, expected_path, label="process identity")
+    payload, raw = _strict_json_object(path, label="process identity")
+    _exact_keys(
+        payload,
+        {"schema", "pid1", "engine_core"},
+        label="process identity",
+    )
+    if payload["schema"] != "fr13-fixed32-process-identity-v1":
+        raise ReductionError("process identity schema mismatch")
+
+    pid1 = payload["pid1"]
+    engine = payload["engine_core"]
+    record_keys = {"pid", "argv", "environ", "forked_fa2_maps"}
+    if not isinstance(pid1, dict) or not isinstance(engine, dict):
+        raise ReductionError("process identity records must be objects")
+    _exact_keys(pid1, record_keys, label="PID1 process identity")
+    _exact_keys(engine, record_keys, label="EngineCore process identity")
+    if isinstance(pid1["pid"], bool) or pid1["pid"] != 1:
+        raise ReductionError("process identity PID1 record is invalid")
+    if (
+        isinstance(engine["pid"], bool)
+        or not isinstance(engine["pid"], int)
+        or engine["pid"] <= 1
+    ):
+        raise ReductionError("process identity EngineCore PID is invalid")
+
+    pid1_argv = _string_list(pid1["argv"], label="PID1 argv")
+    try:
+        fixed32_contract.validate_process_pid1_argv(
+            pid1_argv,
+            concurrency,
+            attribution_only=True,
+        )
+    except fixed32_contract.ContractError as exc:
+        raise ReductionError(
+            "process identity PID1 argv is not the exact attribution contract"
+        ) from exc
+
+    pid1_environment = _environment_map(
+        pid1["environ"],
+        label="PID1 environment",
+    )
+    expected_profile_environment = {
+        "FR13_FIXED32_ATTRIBUTION_ONLY": "1",
+        "FR13_FIXED32_NVTX_PROFILE": "1",
+        "LUMO_NSYS_WRAP_VLLM": "1",
+    }
+    if any(
+        pid1_environment.get(name) != setting
+        for name, setting in expected_profile_environment.items()
+    ):
+        raise ReductionError(
+            "process identity PID1 environment is not attribution-only"
+        )
+    _string_list(pid1["forked_fa2_maps"], label="PID1 FA2 maps")
+
+    if _string_list(engine["argv"], label="EngineCore argv") != [
+        "VLLM::EngineCore"
+    ]:
+        raise ReductionError("process identity EngineCore argv is not exact")
+    _environment_map(engine["environ"], label="EngineCore environment")
+    engine_maps = _string_list(
+        engine["forked_fa2_maps"],
+        label="EngineCore FA2 maps",
+    )
+    pinned_fa2 = str(fixed32_contract.CONTAINER_FA2_DESTINATION)
+    if not any(pinned_fa2 in mapping for mapping in engine_maps):
+        raise ReductionError(
+            "process identity does not prove the pinned EngineCore FA2 mapping"
+        )
+
+    return {
+        **_artifact_identity(raw),
+        "engine_core_identity_exact": True,
+        "engine_core_pinned_fa2_mapped": True,
+        "pid1_attribution_contract_exact": True,
+        "profile_environment_contract_exact": True,
+        "schema": "fr13-fixed32-process-identity-v1",
+    }
+
+
+def _validate_container_identity(
+    path: Path,
+    *,
+    arm_dir: Path,
+) -> dict[str, Any]:
+    expected_path = arm_dir / "fixed32_container_identity.json"
+    _require_exact_artifact_path(path, expected_path, label="container identity")
+    payload, raw = _strict_json_object(path, label="container identity")
+    _exact_keys(
+        payload,
+        {
+            "schema",
+            "name",
+            "image_id",
+            "configured_image",
+            "platform",
+            "running",
+        },
+        label="container identity",
+    )
+    expected = {
+        "schema": "fr13-fixed32-container-identity-v1",
+        "name": f"/fr13-bigdenom-{arm_dir.name}",
+        "image_id": fixed32_contract.IMAGE_ID,
+        "configured_image": fixed32_contract.IMAGE_REFERENCE,
+        "platform": fixed32_contract.IMAGE_OS,
+        "running": True,
+    }
+    if payload != expected:
+        raise ReductionError("container identity does not match the pinned contract")
+    return {
+        **_artifact_identity(raw),
+        "arm_name_bound": True,
+        "pinned_container_contract_exact": True,
+        "running_at_identity_capture": True,
+        "schema": "fr13-fixed32-container-identity-v1",
+    }
+
+
+def _validate_runtime_attestation(
+    path: Path,
+    *,
+    arm_dir: Path,
+) -> dict[str, Any]:
+    expected_path = arm_dir / "logs" / "fr13_fixed32_runtime_attestation.json"
+    _require_exact_artifact_path(path, expected_path, label="runtime attestation")
+    payload, raw = _strict_json_object(path, label="runtime attestation")
+    _exact_keys(
+        payload,
+        {
+            "schema",
+            "canonical_format",
+            "python",
+            "vllm",
+            "forked_fa2",
+            "arctic",
+            "overall_canonical_sha256",
+        },
+        label="runtime attestation",
+    )
+    try:
+        validated = fixed32_contract.validate_runtime_attestation(payload)
+    except fixed32_contract.ContractError as exc:
+        raise ReductionError(
+            "runtime attestation does not match the pinned contract"
+        ) from exc
+    canonical_sha256 = _require_digest(
+        validated.get("overall_canonical_sha256"),
+        label="runtime attestation canonical SHA-256",
+    )
+    return {
+        **_artifact_identity(raw),
+        "overall_canonical_sha256": canonical_sha256,
+        "pinned_runtime_contract_exact": True,
+        "schema": fixed32_contract.RUNTIME_SCHEMA,
+    }
+
+
 def _validate_exact4_subset(path: Path) -> dict[str, Any]:
     payload, raw = _strict_json_object(path, label="canonical exact4 subset")
     digest = hashlib.sha256(raw).hexdigest()
@@ -749,6 +955,9 @@ def _build_attribution_provenance(
     runtime_manifest_end: Path,
     external_manifest_launch: Path,
     external_manifest_end: Path,
+    process_identity: Path,
+    container_identity: Path,
+    runtime_attestation: Path,
     pretask_zero_traffic: Path,
     proxy_ledger: Path,
     engine_ledger: Path,
@@ -772,9 +981,9 @@ def _build_attribution_provenance(
         raise ReductionError(
             "bounded attribution driver must have a nonzero shell exit code"
         )
-    if nsys_delay_s < 1200 or nsys_duration_s < 300:
+    if nsys_delay_s != 1200 or nsys_duration_s != 300:
         raise ReductionError(
-            "Nsight capture must use at least the proven 1200s delay/300s duration"
+            "Nsight capture must use the canonical 1200s delay/300s duration"
         )
     if nsys_flush_ms != 100:
         raise ReductionError("Nsight attribution requires a 100ms CUDA flush")
@@ -786,9 +995,18 @@ def _build_attribution_provenance(
         raise ReductionError("Nsight report environment capture must be disabled")
 
     subset_identity = _validate_exact4_subset(subset)
+    pretask_identity = _validate_pretask_zero_traffic(
+        pretask_zero_traffic,
+        mode=mode,
+    )
+    arm_dir = pretask_zero_traffic.parent.resolve()
     return {
         "batch_size": 1,
         "bounded_capture": True,
+        "container_identity": _validate_container_identity(
+            container_identity,
+            arm_dir=arm_dir,
+        ),
         "concurrency": 1,
         "driver_exit_code": driver_rc,
         "exact4_subset": subset_identity,
@@ -809,17 +1027,23 @@ def _build_attribution_provenance(
             "trace": nsys_trace,
             "version": _nsys_version(nsys_bin),
         },
-        "pretask_zero_traffic": _validate_pretask_zero_traffic(
-            pretask_zero_traffic,
-            mode=mode,
+        "pretask_zero_traffic": pretask_identity,
+        "process_identity": _validate_process_identity(
+            process_identity,
+            arm_dir=arm_dir,
+            concurrency=concurrency,
         ),
         "real_swe_verified": True,
+        "runtime_attestation": _validate_runtime_attestation(
+            runtime_attestation,
+            arm_dir=arm_dir,
+        ),
         "runtime_manifest": _validate_manifest_pair(
             runtime_manifest_launch,
             runtime_manifest_end,
             label="runtime",
         ),
-        "schema": "fr13.fixed32.nsys_attribution_provenance.v1",
+        "schema": "fr13.fixed32.nsys_attribution_provenance.v2",
     }
 
 
@@ -905,6 +1129,9 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument("--runtime-manifest-end", type=Path)
     parser.add_argument("--external-manifest-launch", type=Path)
     parser.add_argument("--external-manifest-end", type=Path)
+    parser.add_argument("--process-identity", type=Path)
+    parser.add_argument("--container-identity", type=Path)
+    parser.add_argument("--runtime-attestation", type=Path)
     parser.add_argument("--pretask-zero-traffic", type=Path)
     parser.add_argument("--proxy-ledger", type=Path)
     parser.add_argument("--engine-ledger", type=Path)
@@ -950,6 +1177,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             "runtime_manifest_end",
             "external_manifest_launch",
             "external_manifest_end",
+            "process_identity",
+            "container_identity",
+            "runtime_attestation",
             "pretask_zero_traffic",
             "proxy_ledger",
             "engine_ledger",
@@ -976,6 +1206,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             runtime_manifest_end=args.runtime_manifest_end,
             external_manifest_launch=args.external_manifest_launch,
             external_manifest_end=args.external_manifest_end,
+            process_identity=args.process_identity,
+            container_identity=args.container_identity,
+            runtime_attestation=args.runtime_attestation,
             pretask_zero_traffic=args.pretask_zero_traffic,
             proxy_ledger=args.proxy_ledger,
             engine_ledger=args.engine_ledger,
