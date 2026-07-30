@@ -357,6 +357,7 @@ _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH = {}
 _FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE = {}
 _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT = None
 _FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE = []
+_FR13_FIXED32_DRAFTER_TREE_LAYER = "mtp.layers.0.self_attn.attn"
 _FR13_FIXED32_NONPURE_DISPATCH = {
     "guarded_steps": 0,
     "piecewise_steps": 0,
@@ -1068,9 +1069,12 @@ def _fr13_fixed32_observed_begin(
             "FR13 fixed32 pregather capture set is incomplete before freeze: "
             + repr(pregather)
         )
-    if _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT is not None:
+    if (
+        _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT is not None
+        or _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT is not None
+    ):
         raise RuntimeError(
-            "FR13 fixed32 measured forward began during drafter proposal"
+            "FR13 fixed32 measured forward began during drafter work"
         )
     _FR13_FIXED32_CAPTURE_FROZEN = True
     globals()["_FR13_FIXED32_CURRENT_FORWARD_STEP"] = forward
@@ -1134,6 +1138,88 @@ def _fr13_fixed32_observed_tree_attn(
     layer_name, q_rows, bias_shape, capturing=False
 ):
     rows = int(q_rows)
+    name = str(layer_name)
+    shape = tuple(int(value) for value in bias_shape)
+    proposal = globals().get("_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT")
+    drafter_capture = globals().get(
+        "_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT"
+    )
+    if proposal is not None or drafter_capture is not None:
+        target_capture = globals().get("_FR13_FIXED32_CAPTURE_CONTEXT")
+        target_event = globals().get("_FR13_FIXED32_OBSERVED_CURRENT")
+        if (
+            not isinstance(proposal, dict)
+            or not isinstance(drafter_capture, dict)
+            or target_capture is not None
+            or target_event is not None
+            or capturing is not True
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 tree-attention ownership scope drift: "
+                + repr(
+                    (
+                        type(proposal).__name__,
+                        type(drafter_capture).__name__,
+                        target_capture is not None,
+                        target_event is not None,
+                        capturing,
+                    )
+                )
+            )
+        batch = drafter_capture.get("batch_size")
+        tree_calls = drafter_capture.get("tree_attn_calls")
+        tree_rows = drafter_capture.get("tree_attn_rows")
+        mtp_calls = drafter_capture.get("mtp_forward_calls")
+        mtp_rows = drafter_capture.get("mtp_forward_rows")
+        prior_name = drafter_capture.get("tree_attn_layer")
+        prior_shape = drafter_capture.get("tree_attn_bias_shape")
+        if (
+            type(batch) is not int
+            or batch not in (1, 2, 3, 4)
+            or drafter_capture.get("capturing") is not True
+            or type(drafter_capture.get("graph_id")) is not int
+            or int(drafter_capture["graph_id"]) <= 0
+            or drafter_capture.get("mode") != proposal.get("mode")
+            or drafter_capture.get("request_ids")
+            != proposal.get("request_ids")
+            or batch != proposal.get("batch_size")
+            or proposal.get("mode") != _FR13_FIXED32_MODE
+            or proposal.get("mtp_execution_basis") != "unbound"
+            or proposal.get("graph_captures") != 1
+            or proposal.get("graph_replays") != 0
+            or proposal.get("mtp_forward_calls") != 0
+            or proposal.get("mtp_forward_rows") != 0
+            or type(tree_calls) is not int
+            or type(tree_rows) is not int
+            or type(mtp_calls) is not int
+            or type(mtp_rows) is not int
+            or tree_calls not in (0, 1, 2, 3)
+            or tree_rows != tree_calls * batch
+            or mtp_calls != tree_calls
+            or mtp_rows != tree_rows
+            or name != _FR13_FIXED32_DRAFTER_TREE_LAYER
+            or rows != batch
+            or shape != (1, 1)
+            or prior_name not in (None, name)
+            or prior_shape not in (None, shape)
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 drafter tree-attention work drift: "
+                + repr(
+                    (
+                        name,
+                        rows,
+                        shape,
+                        proposal,
+                        drafter_capture,
+                    )
+                )
+            )
+        drafter_capture["tree_attn_calls"] = tree_calls + 1
+        drafter_capture["tree_attn_rows"] = tree_rows + rows
+        drafter_capture["tree_attn_layer"] = name
+        drafter_capture["tree_attn_bias_shape"] = shape
+        return
     if rows <= 0 or rows % 32 != 0:
         raise RuntimeError(
             "FR13 fixed32 tree-attention rows are not fixed32: " + str(rows)
@@ -1143,8 +1229,6 @@ def _fr13_fixed32_observed_tree_attn(
     )
     if event is None:
         return
-    name = str(layer_name)
-    shape = tuple(int(value) for value in bias_shape)
     expected_rows = int(event["batch_size"]) * 32
     if not name or rows != expected_rows or shape != (32, 32):
         raise RuntimeError(
@@ -2100,6 +2184,8 @@ def _fr13_fixed32_capture_begin(
         _FR13_FIXED32_CAPTURE_FROZEN
         or _FR13_FIXED32_OBSERVED_CURRENT is not None
         or globals().get("_FR13_FIXED32_PENDING_EVENT") is not None
+        or _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT is not None
+        or _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT is not None
     ):
         raise RuntimeError(
             "FR13 fixed32 full-graph capture/recompile after measurement began"
@@ -2503,6 +2589,8 @@ def _fr13_fixed32_drafter_proposal_begin(
         or len(set(req_ids)) != batch
         or _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT is not None
         or _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT is not None
+        or _FR13_FIXED32_OBSERVED_CURRENT is not None
+        or _FR13_FIXED32_CAPTURE_CONTEXT is not None
     ):
         raise RuntimeError(
             "FR13 fixed32 drafter proposal begin drift: "
@@ -2583,8 +2671,16 @@ def _fr13_fixed32_drafter_graph_capture_begin(graph_id, batch_size):
     if (
         not isinstance(proposal, dict)
         or batch != int(proposal["batch_size"])
+        or proposal.get("mode") != _FR13_FIXED32_MODE
+        or proposal.get("mtp_execution_basis") != "unbound"
+        or int(proposal.get("mtp_forward_calls", -1)) != 0
+        or int(proposal.get("mtp_forward_rows", -1)) != 0
+        or int(proposal.get("graph_replays", -1)) != 0
+        or int(proposal.get("graph_captures", -1)) != 0
         or identity <= 0
         or _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT is not None
+        or _FR13_FIXED32_OBSERVED_CURRENT is not None
+        or _FR13_FIXED32_CAPTURE_CONTEXT is not None
         or identity in _FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS
         or batch in _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH
     ):
@@ -2594,9 +2690,16 @@ def _fr13_fixed32_drafter_graph_capture_begin(graph_id, batch_size):
         )
     _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT = {
         "graph_id": identity,
+        "mode": proposal["mode"],
         "batch_size": batch,
+        "request_ids": proposal["request_ids"],
+        "capturing": True,
         "mtp_forward_calls": 0,
         "mtp_forward_rows": 0,
+        "tree_attn_calls": 0,
+        "tree_attn_rows": 0,
+        "tree_attn_layer": None,
+        "tree_attn_bias_shape": None,
     }
     proposal["graph_captures"] = 1
 
@@ -2608,6 +2711,14 @@ def _fr13_fixed32_drafter_mtp_forward(batch_size, capturing):
         if (
             not isinstance(context, dict)
             or batch != int(context["batch_size"])
+            or context.get("capturing") is not True
+            or int(context.get("tree_attn_calls", -1))
+            != int(context.get("mtp_forward_calls", -1)) + 1
+            or int(context.get("tree_attn_rows", -1))
+            != int(context.get("mtp_forward_rows", -1)) + batch
+            or context.get("tree_attn_layer")
+            != _FR13_FIXED32_DRAFTER_TREE_LAYER
+            or context.get("tree_attn_bias_shape") != (1, 1)
         ):
             raise RuntimeError(
                 "FR13 fixed32 unscoped drafter capture MTP call"
@@ -2640,16 +2751,26 @@ def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
         or batch != int(context["batch_size"])
         or int(context["mtp_forward_calls"]) != 4
         or int(context["mtp_forward_rows"]) != 4 * batch
+        or int(context.get("tree_attn_calls", -1)) != 4
+        or int(context.get("tree_attn_rows", -1)) != 4 * batch
+        or context.get("tree_attn_layer")
+        != _FR13_FIXED32_DRAFTER_TREE_LAYER
+        or context.get("tree_attn_bias_shape") != (1, 1)
+        or context.get("capturing") is not True
     ):
         raise RuntimeError(
             "FR13 fixed32 drafter graph capture work drift: "
             + repr((identity, batch, context))
         )
     payload = {
-        "schema": "fr13-fixed32-drafter-graph-manifest-v1",
+        "schema": "fr13-fixed32-drafter-graph-manifest-v2",
         "batch_size": batch,
         "mtp_forward_calls": 4,
         "mtp_forward_rows": 4 * batch,
+        "tree_attn_calls": 4,
+        "tree_attn_rows": 4 * batch,
+        "tree_attn_layer": _FR13_FIXED32_DRAFTER_TREE_LAYER,
+        "tree_attn_bias_shape": [1, 1],
     }
     canonical = __import__("json").dumps(
         payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True
@@ -2699,9 +2820,16 @@ def _fr13_fixed32_drafter_graph_replay(
     if (
         graph_signature != expected_signature
         or _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH.get(batch) != identity
+        or manifest.get("schema")
+        != "fr13-fixed32-drafter-graph-manifest-v2"
         or int(manifest.get("batch_size", -1)) != batch
         or int(manifest.get("mtp_forward_calls", -1)) != 4
         or int(manifest.get("mtp_forward_rows", -1)) != 4 * batch
+        or int(manifest.get("tree_attn_calls", -1)) != 4
+        or int(manifest.get("tree_attn_rows", -1)) != 4 * batch
+        or manifest.get("tree_attn_layer")
+        != _FR13_FIXED32_DRAFTER_TREE_LAYER
+        or manifest.get("tree_attn_bias_shape") != [1, 1]
         or batch != int(proposal["batch_size"])
         or proposal["mtp_execution_basis"] != "unbound"
         or int(proposal["mtp_forward_calls"]) != 0
@@ -26627,6 +26755,7 @@ def _patch_cudagraph_wrapper_subspan_mark() -> bool:
 def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
     """Execute the emitted capture/replay observer and representative tampers."""
     import copy
+    import json
     import sys
     import types
 
@@ -26895,6 +27024,32 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
             graphs[batch] = (graph_id, signature, descriptor)
         return graphs
 
+    def capture_drafter_forwards(
+        namespace: dict[str, object],
+        batch: int,
+        calls: int = 4,
+    ) -> None:
+        for _ in range(calls):
+            namespace["_fr13_fixed32_observed_tree_attn"](
+                "mtp.layers.0.self_attn.attn",
+                batch,
+                (1, 1),
+                True,
+            )
+            namespace["_fr13_fixed32_drafter_mtp_forward"](batch, True)
+
+    def expected_drafter_manifest(batch: int) -> dict[str, object]:
+        return {
+            "schema": "fr13-fixed32-drafter-graph-manifest-v2",
+            "batch_size": batch,
+            "mtp_forward_calls": 4,
+            "mtp_forward_rows": 4 * batch,
+            "tree_attn_calls": 4,
+            "tree_attn_rows": 4 * batch,
+            "tree_attn_layer": "mtp.layers.0.self_attn.attn",
+            "tree_attn_bias_shape": [1, 1],
+        }
+
     def counter_snapshot(
         total: int,
         by_batch: dict[int, int],
@@ -27087,11 +27242,30 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
                 drafter_graph_id,
                 batch,
             )
-            for _ in range(4):
-                namespace["_fr13_fixed32_drafter_mtp_forward"](batch, True)
+            capture_drafter_forwards(namespace, batch)
+            context = namespace["_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT"]
+            if (
+                context.get("tree_attn_calls") != 4
+                or context.get("tree_attn_rows") != 4 * batch
+                or context.get("mtp_forward_calls") != 4
+                or context.get("mtp_forward_rows") != 4 * batch
+                or namespace["_FR13_FIXED32_CAPTURE_CONTEXT"] is not None
+                or namespace["_FR13_FIXED32_OBSERVED_CURRENT"] is not None
+            ):
+                raise AssertionError(
+                    "drafter capture contaminated target ownership"
+                )
             drafter_signature = namespace[
                 "_fr13_fixed32_drafter_graph_capture_end"
             ](drafter_graph_id, batch)
+            stored_signature, canonical = namespace[
+                "_FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS"
+            ][drafter_graph_id]
+            if (
+                stored_signature != drafter_signature
+                or json.loads(canonical) != expected_drafter_manifest(batch)
+            ):
+                raise AssertionError("drafter tree-attention manifest drifted")
         else:
             drafter_graph_id = graph_by_batch[batch]
             drafter_signature = namespace[
@@ -27697,6 +27871,27 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
             )
             return namespace, signature, descriptor
 
+        def open_drafter_capture(
+            graph_id: int,
+            *,
+            batch: int = 1,
+        ) -> dict[str, object]:
+            namespace = new_runtime("tail6_fixed32", batch)
+            request_ids = tuple(
+                f"open-drafter-{graph_id}-{row}" for row in range(batch)
+            )
+            namespace["_fr13_fixed32_drafter_proposal_begin"](
+                "tail6_fixed32",
+                request_ids,
+                batch,
+                batch,
+                batch,
+            )
+            namespace["_fr13_fixed32_drafter_graph_capture_begin"](
+                graph_id, batch
+            )
+            return namespace
+
         def drafter_replay_runtime(
             graph_id: int,
             *,
@@ -27716,13 +27911,32 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
             namespace["_fr13_fixed32_drafter_graph_capture_begin"](
                 graph_id, len(request_ids)
             )
-            for _ in range(4):
-                namespace["_fr13_fixed32_drafter_mtp_forward"](
-                    len(request_ids), True
+            capture_drafter_forwards(namespace, len(request_ids))
+            context = namespace["_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT"]
+            if (
+                context.get("tree_attn_calls") != 4
+                or context.get("tree_attn_rows") != 4 * len(request_ids)
+                or context.get("mtp_forward_calls") != 4
+                or context.get("mtp_forward_rows") != 4 * len(request_ids)
+                or namespace["_FR13_FIXED32_CAPTURE_CONTEXT"] is not None
+                or namespace["_FR13_FIXED32_OBSERVED_CURRENT"] is not None
+                or namespace["_FR13_FIXED32_CAPTURE_MANIFESTS"]
+            ):
+                raise AssertionError(
+                    "warmup drafter capture contaminated target ownership"
                 )
             signature = namespace[
                 "_fr13_fixed32_drafter_graph_capture_end"
             ](graph_id, len(request_ids))
+            stored_signature, canonical = namespace[
+                "_FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS"
+            ][graph_id]
+            if (
+                stored_signature != signature
+                or json.loads(canonical)
+                != expected_drafter_manifest(len(request_ids))
+            ):
+                raise AssertionError("warmup drafter manifest drifted")
             namespace["_fr13_fixed32_drafter_graph_replay"](
                 graph_id, signature, len(request_ids)
             )
@@ -27748,6 +27962,39 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
                     }
                 )
             return namespace, signature
+
+        drafter_tree_attention_batches = []
+        for batch in range(1, 5):
+            request_ids = tuple(
+                f"tree-attn-b{batch}-request-{row}" for row in range(batch)
+            )
+            namespace, signature = drafter_replay_runtime(
+                31_000 + batch,
+                request_ids=request_ids,
+            )
+            proposal = namespace["_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT"]
+            registry = namespace["_fr13_fixed32_drafter_graph_registry"]()
+            if (
+                proposal.get("mtp_execution_basis") != "cudagraph_replay"
+                or proposal.get("mtp_forward_calls") != 4
+                or proposal.get("mtp_forward_rows") != 4 * batch
+                or proposal.get("graph_captures") != 1
+                or proposal.get("graph_replays") != 1
+                or proposal.get("graph_signature") != signature
+                or len(registry) != 1
+                or registry[0].get("batch_size") != batch
+                or registry[0].get("graph_signature") != signature
+                or registry[0].get("capture_origin") != "unmeasured"
+                or registry[0].get("unmeasured_replays") != 1
+                or registry[0].get("measured_replays") != 0
+                or namespace["_FR13_FIXED32_CAPTURE_CONTEXT"] is not None
+                or namespace["_FR13_FIXED32_OBSERVED_CURRENT"] is not None
+                or namespace["_FR13_FIXED32_CAPTURE_MANIFESTS"]
+            ):
+                raise AssertionError(
+                    "B1-B4 drafter tree-attention ownership drifted"
+                )
+            drafter_tree_attention_batches.append(batch)
 
         namespace, signature, descriptor = armed_runtime(20_001)
         expect_failure(
@@ -27944,8 +28191,7 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
             "tail6_fixed32", ("mtp3",), 1, 1, 1
         )
         namespace["_fr13_fixed32_drafter_graph_capture_begin"](21_001, 1)
-        for _ in range(3):
-            namespace["_fr13_fixed32_drafter_mtp_forward"](1, True)
+        capture_drafter_forwards(namespace, 1, calls=3)
         expect_failure(
             "drafter-mtp3",
             lambda: namespace["_fr13_fixed32_drafter_graph_capture_end"](
@@ -28008,6 +28254,79 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
             "drafter-missing-proposal",
             lambda: namespace["_fr13_fixed32_drafter_graph_capture_begin"](
                 21_005, 1
+            ),
+        )
+        namespace = new_runtime("tail6_fixed32", 1)
+        namespace["_fr13_fixed32_capture_begin"](
+            21_006, "FULL", 32, 1, True, False, 0
+        )
+        expect_failure(
+            "drafter-row-inside-target-capture",
+            lambda: namespace["_fr13_fixed32_observed_tree_attn"](
+                "mtp.layers.0.self_attn.attn", 1, (1, 1), True
+            ),
+        )
+        namespace = new_runtime("tail6_fixed32", 1)
+        namespace["_fr13_fixed32_drafter_proposal_begin"](
+            "tail6_fixed32", ("proposal-only",), 1, 1, 1
+        )
+        expect_failure(
+            "drafter-proposal-only",
+            lambda: namespace["_fr13_fixed32_observed_tree_attn"](
+                "mtp.layers.0.self_attn.attn", 1, (1, 1), True
+            ),
+        )
+        namespace = open_drafter_capture(21_007)
+        namespace["_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT"] = None
+        expect_failure(
+            "drafter-capture-only",
+            lambda: namespace["_fr13_fixed32_observed_tree_attn"](
+                "mtp.layers.0.self_attn.attn", 1, (1, 1), True
+            ),
+        )
+        namespace = open_drafter_capture(21_008)
+        namespace["_FR13_FIXED32_CAPTURE_CONTEXT"] = {}
+        expect_failure(
+            "drafter-target-overlap",
+            lambda: namespace["_fr13_fixed32_observed_tree_attn"](
+                "mtp.layers.0.self_attn.attn", 1, (1, 1), True
+            ),
+        )
+        namespace = open_drafter_capture(21_009)
+        expect_failure(
+            "drafter-wrong-layer",
+            lambda: namespace["_fr13_fixed32_observed_tree_attn"](
+                "language_model.model.layers.3.self_attn.attn",
+                1,
+                (1, 1),
+                True,
+            ),
+        )
+        namespace = open_drafter_capture(21_010)
+        expect_failure(
+            "drafter-wrong-rows",
+            lambda: namespace["_fr13_fixed32_observed_tree_attn"](
+                "mtp.layers.0.self_attn.attn", 2, (1, 1), True
+            ),
+        )
+        namespace = open_drafter_capture(21_011)
+        expect_failure(
+            "drafter-wrong-bias",
+            lambda: namespace["_fr13_fixed32_observed_tree_attn"](
+                "mtp.layers.0.self_attn.attn", 1, (32, 32), True
+            ),
+        )
+        namespace = open_drafter_capture(21_012)
+        namespace["_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT"][
+            "mtp_forward_calls"
+        ] = 1
+        namespace["_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT"][
+            "mtp_forward_rows"
+        ] = 1
+        expect_failure(
+            "drafter-ordinal-skew",
+            lambda: namespace["_fr13_fixed32_observed_tree_attn"](
+                "mtp.layers.0.self_attn.attn", 1, (1, 1), True
             ),
         )
         for name, field, value in (
@@ -28336,6 +28655,7 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
             "status": "PASS",
             "valid_cases": valid_cases,
             "all_b_capture_capacity": 4,
+            "drafter_tree_attention_batches": drafter_tree_attention_batches,
             "tamper_tests_passed": tamper_count,
         }
     finally:

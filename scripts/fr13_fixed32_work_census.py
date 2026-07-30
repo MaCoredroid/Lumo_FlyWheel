@@ -721,10 +721,14 @@ def _fixed_section(
 
 def _drafter_graph_signature(batch_size: int) -> str:
     manifest = {
-        "schema": "fr13-fixed32-drafter-graph-manifest-v1",
+        "schema": "fr13-fixed32-drafter-graph-manifest-v2",
         "batch_size": batch_size,
         "mtp_forward_calls": MTP_FORWARD_CALLS,
         "mtp_forward_rows": MTP_FORWARD_CALLS * batch_size,
+        "tree_attn_calls": MTP_FORWARD_CALLS,
+        "tree_attn_rows": MTP_FORWARD_CALLS * batch_size,
+        "tree_attn_layer": "mtp.layers.0.self_attn.attn",
+        "tree_attn_bias_shape": [1, 1],
     }
     canonical = json.dumps(
         manifest,
