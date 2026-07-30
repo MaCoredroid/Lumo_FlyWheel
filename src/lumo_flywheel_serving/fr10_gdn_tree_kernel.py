@@ -491,11 +491,10 @@ def _fr13_fixed32_schedule_contract(levels) -> dict[str, object]:
         count * length
         for count, length in zip(path_counts, max_lengths, strict=True)
     )
-    export_or_mask = sum(
-        1 << int(parent)
-        for level in normalized[1:]
-        for _path, parent in level
-    )
+    export_or_mask = 0
+    for level in normalized[1:]:
+        for _path, parent in level:
+            export_or_mask |= 1 << int(parent)
     contract = {
         "path_counts": path_counts,
         "max_lengths": max_lengths,
