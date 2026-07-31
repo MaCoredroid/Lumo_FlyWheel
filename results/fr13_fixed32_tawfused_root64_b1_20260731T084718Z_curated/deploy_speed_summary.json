@@ -1,0 +1,109 @@
+{
+  "aggregate": {
+    "accept_per_event": 4.533822840181221,
+    "aggregate_decode_tps_idle_and_prefill_inclusive": 16.151422991070493,
+    "aggregate_window_wall_s": 2187.051878929138,
+    "batch_size": 1,
+    "committed_per_event": 5.533822840181221,
+    "effective_concurrency": 0.6833946703120239,
+    "events_per_step": 1,
+    "fullstep_alignment_ratio": 1.072060930800242,
+    "generation_tokens": 35324,
+    "n_tasks": 4,
+    "prefill_fraction": 0.2940703998268761,
+    "spec_accepted_tokens": 29021,
+    "spec_draft_tokens": 198431,
+    "spec_drafts": 6401,
+    "tokens_per_draft": 31
+  },
+  "baseline_comparison": {
+    "accept_per_event": {
+      "baseline": 4.850362131401966,
+      "candidate": 4.533822840181221,
+      "delta": -0.316539291220745,
+      "relative_change": -0.06526096044899876
+    },
+    "fullstep_wall_tps": {
+      "baseline": 23.924272677413224,
+      "candidate": 23.699675859449716,
+      "delta": -0.2245968179635085,
+      "relative_change": -0.009387822191792239
+    },
+    "request_wall_ms_per_event": {
+      "baseline": 244.53667663323623,
+      "candidate": 233.4978281137433,
+      "delta": -11.038848519492916,
+      "relative_change": -0.045141893115891674
+    },
+    "reference": "results/fr13_fixed32_directleaf_root64_b1_20260731T070340Z_curated",
+    "verdict": "REJECTED_ACCEPTANCE_AND_FULL_TPS_REGRESSION"
+  },
+  "floor_correction": {
+    "correct_root64_floor_ms": 117.910031004,
+    "correct_root64_floor_ratio": 1.9803050353351368,
+    "legacy_reducer_floor_is_full_step_hardware_floor": false,
+    "legacy_reducer_floor_ms": 98.6,
+    "legacy_reducer_floor_ratio": 2.3681321309710275,
+    "legacy_values_superseded_for_acceptance": true,
+    "reason": "The embedded reducer reference is the legacy target-weight-stream lower bound. This root64 run requires the five-64k-draft-head mandatory-weight ledger."
+  },
+  "per_task": [
+    {
+      "accept_per_event": 4.566355140186916,
+      "events": 535,
+      "instance_id": "astropy__astropy-12907",
+      "per_request_decode_tps": 28.11687583229811,
+      "request_decode_wall_ms_per_event": 214.83498832110804,
+      "sfwd_gpu_ms_per_event": 155.73941693172273
+    },
+    {
+      "accept_per_event": 5.046511627906977,
+      "events": 731,
+      "instance_id": "astropy__astropy-13033",
+      "per_request_decode_tps": 27.791444024365894,
+      "request_decode_wall_ms_per_event": 216.92083064398553,
+      "sfwd_gpu_ms_per_event": 157.91193161323777
+    },
+    {
+      "accept_per_event": 4.568867924528302,
+      "events": 1060,
+      "instance_id": "astropy__astropy-13236",
+      "per_request_decode_tps": 24.801044720607972,
+      "request_decode_wall_ms_per_event": 222.77002781486787,
+      "sfwd_gpu_ms_per_event": 161.57850595150354
+    },
+    {
+      "accept_per_event": 4.4284662576687115,
+      "events": 4075,
+      "instance_id": "astropy__astropy-13398",
+      "per_request_decode_tps": 22.875533932058435,
+      "request_decode_wall_ms_per_event": 241.7122754158932,
+      "sfwd_gpu_ms_per_event": 174.8272251770396
+    }
+  ],
+  "schema": "fr13.measure.deploy_speed.tawfused.curated.v1",
+  "source": {
+    "schema": "fr13.measure.deploy_speed.v1",
+    "sha256": "89b8397409e1f8340c7a808fed940fe556ca295a92a3a39215fcc1963db5c65b",
+    "source_commit": "4f867f2178eadec6db78f73a81ee9a31f2b084ec"
+  },
+  "throughput": {
+    "decode_step_counter_wall_s_per_event": 0.23812583138692636,
+    "decode_step_counter_wall_tps": 23.239069898256492,
+    "derived_fullstep_gpu_tps": 24.91369890605674,
+    "derived_sfwd_verify_tps_gpu": 32.72396265293906,
+    "fullstep_request_wall_s_per_event": 0.2334978281137433,
+    "fullstep_request_wall_tps": 23.699675859449716,
+    "fullstep_request_wall_tps_formula": "committed_per_event / fullstep_request_wall_s_per_event",
+    "per_request_decode_tps": 24.372554549382055,
+    "sfwd_gpu_s_per_event": 0.16910613481843126
+  },
+  "validity": {
+    "b4_measured": false,
+    "candidate_decision": "REJECTED",
+    "hydra_b1_measured": false,
+    "reason": "Tail exact4 provenance is valid, but acceptance fell enough that the acceptance-weighted full-step wall TPS regressed despite lower wall time. Hydra and B4 are unmeasured.",
+    "tail_exact4_measurement_valid": true,
+    "use": "REJECTED_KERNEL_CANDIDATE_DIAGNOSTIC"
+  }
+}

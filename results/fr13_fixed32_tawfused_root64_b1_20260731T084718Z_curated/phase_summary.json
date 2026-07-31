@@ -1,0 +1,95 @@
+{
+  "acceptance_target": {
+    "cap_ms": 135.5965356546,
+    "floor_ms": 117.910031004,
+    "gpu_component_budget_ms_if_residual_unchanged": 124.2183880045192,
+    "gpu_component_gap_ms_if_residual_zero": 86.52314480906253,
+    "gpu_component_reduction_fraction_if_residual_unchanged": 0.44075919907132854,
+    "gpu_component_reduction_fraction_if_residual_zero": 0.3895338973496192,
+    "wall_gap_ms": 97.90129245914332
+  },
+  "basis": {
+    "component_complete_events": 6401,
+    "component_span_basis": {
+      "cfwd": 6401,
+      "dfwd": 6401,
+      "sfwd": 6401
+    },
+    "request_wall_steps": 6401,
+    "warning": "The acceptance comparator uses aggregate request decode wall divided by all 6401 spec events. The reducer also reports a separate 6276-step decode-step wall counter; it is published separately and is not substituted into the baseline comparison."
+  },
+  "breakdown": {
+    "cfwd": {
+      "gpu_ms_per_event": 15.201953595624317,
+      "gpu_seconds": 97.30770496559126,
+      "share_of_wall": 0.06510533189293316
+    },
+    "dfwd": {
+      "gpu_ms_per_event": 37.811592049606936,
+      "gpu_seconds": 242.03200070953397,
+      "share_of_wall": 0.16193551929394331
+    },
+    "gpu_component_sum_ms_per_event": 222.11968046366252,
+    "gpu_component_sum_share_of_wall": 0.9512708630225966,
+    "other_residual_ms_per_event": 11.378147650080791,
+    "other_residual_share_of_wall": 0.048729136977403394,
+    "sfwd": {
+      "gpu_ms_per_event": 169.10613481843126,
+      "gpu_seconds": 1082.4483689727786,
+      "share_of_wall": 0.7242300118357201
+    },
+    "wall_ms_per_event": 233.4978281137433
+  },
+  "comparison_to_directleaf_baseline": {
+    "cfwd": {
+      "baseline_ms": 21.417012811138857,
+      "candidate_ms": 15.201953595624317,
+      "delta_ms": -6.21505921551454,
+      "relative_change": -0.2901926272501516
+    },
+    "dfwd": {
+      "baseline_ms": 38.30415895894231,
+      "candidate_ms": 37.811592049606936,
+      "delta_ms": -0.4925669093353733,
+      "relative_change": -0.01285935842798036
+    },
+    "gpu_component_sum": {
+      "baseline_ms": 228.40920848200142,
+      "candidate_ms": 222.11968046366252,
+      "delta_ms": -6.289528018338899,
+      "relative_change": -0.027536227896146848
+    },
+    "other_residual": {
+      "baseline_ms": 16.127468151234808,
+      "candidate_ms": 11.378147650080791,
+      "delta_ms": -4.749320501154017,
+      "relative_change": -0.29448642878208897
+    },
+    "sfwd": {
+      "baseline_ms": 168.68803671192026,
+      "candidate_ms": 169.10613481843126,
+      "delta_ms": 0.4180981065109961,
+      "relative_change": 0.0024785284994750523
+    },
+    "wall": {
+      "baseline_ms": 244.53667663323623,
+      "candidate_ms": 233.4978281137433,
+      "delta_ms": -11.038848519492916,
+      "relative_change": -0.045141893115891674
+    }
+  },
+  "diagnostic": {
+    "gpu_component_sum_floor_ratio": 1.8838064800112493,
+    "kernel_result": "CFWD fell 6.215 ms/event (29.02%), but SFWD was unchanged and remains the dominant phase. The acceptance regression more than erased the wall-time gain in full-step TPS.",
+    "sfwd_floor_ratio": 1.4341963391791024,
+    "wall_floor_ratio": 1.9803050353351368
+  },
+  "schema": "fr13.fixed32.tawfused.phase_summary.curated.v1",
+  "validity": {
+    "b4_measured": false,
+    "candidate_decision": "REJECTED",
+    "hydra_b1_measured": false,
+    "tail_exact4_measurement_valid": true,
+    "use": "KERNEL_DIAGNOSTIC_ONLY"
+  }
+}

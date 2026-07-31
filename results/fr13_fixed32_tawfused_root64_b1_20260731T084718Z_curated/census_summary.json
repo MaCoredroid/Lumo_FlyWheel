@@ -1,0 +1,82 @@
+{
+  "aggregate": {
+    "bad_events": 0,
+    "batch_histogram": {
+      "1": 6401,
+      "2": 0,
+      "3": 0,
+      "4": 0
+    },
+    "event_count": 6401,
+    "first_event_index": 0,
+    "first_forward_step_index": 0,
+    "last_event_index": 6400,
+    "last_forward_step_index": 6400,
+    "mode": "tail6_fixed32"
+  },
+  "committer_and_graphs": {
+    "committer_graph_replays": 6401,
+    "committer_nonpure_replays": 0,
+    "conv_pregather_graph_replays": 6401,
+    "conv_pregather_host_actual_stages": 0,
+    "drafter_graph_measured_replays": 6401,
+    "forward_graph_measured_replays": 6401,
+    "measured_replays_per_event": 1
+  },
+  "conv_commit": {
+    "direct_launches": 6401,
+    "direct_launches_per_event": 1,
+    "fallback": 0,
+    "full_node_writebacks": 0,
+    "gather_launches": 0,
+    "host_syncs": 0,
+    "route": "fixed32_direct_source_col0",
+    "scatter_launches": 0
+  },
+  "fixed_geometry": {
+    "active_nodes_per_event": 21,
+    "physical_draft_rows_per_event": 31,
+    "verify_rows_per_event": 32
+  },
+  "integrity": {
+    "events_sha256": "6485777831a25733a99cbb1f397484577f61478c809c7f65235f9d5221cd43bc",
+    "final": true,
+    "final_boundary_generation": 9,
+    "final_flush_status": "ok",
+    "pending": {
+      "cfwd": 0,
+      "dfwd": 0,
+      "sfwd": 0
+    },
+    "raw_census_file_sha256": "0b05882d567a8f941897b2b296dc79c95978f3fe1bf9ea182b21a33a5cdfb3d0",
+    "terminal_schema": "fr13-fixed32-work-census-terminal-v10"
+  },
+  "schema": "fr13.fixed32.tawfused.work_census.curated.v1",
+  "scope": {
+    "contains_raw_event_records": false,
+    "event_schema": "fr13-fixed32-work-census-v10",
+    "summary_only": true
+  },
+  "taw_fused_route": {
+    "chunk_stats_launches": 76812,
+    "chunk_stats_launches_per_event": 12,
+    "full_vocab_probability_materializations": 0,
+    "full_vocab_residual_materializations": 0,
+    "host_syncs": 0,
+    "reduce_sample_commit_launches": 76812,
+    "reduce_sample_commit_launches_per_event": 12,
+    "route": "fixed32_fused_chunk_cdf",
+    "source_contract_sha256": "9a722bd73fcda5405cbbee70dab44806547f2e78985869d618df4fe88cb3f0e1",
+    "vocab_chunk_size": 4096,
+    "vocab_chunks_per_row": 64,
+    "vocab_size": 248320,
+    "walk_levels": 12
+  },
+  "validity": {
+    "b4_measured": false,
+    "candidate_decision": "REJECTED",
+    "hydra_b1_measured": false,
+    "note": "The complete census validates the measured real Tail exact4 decode work and fused TAW route. It does not supply Hydra or B4 measurements, and the candidate is rejected by its acceptance-weighted throughput regression.",
+    "tail_exact4_measurement_valid": true
+  }
+}

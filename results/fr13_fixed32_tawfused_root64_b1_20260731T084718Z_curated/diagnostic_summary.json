@@ -1,0 +1,181 @@
+{
+  "acceptance": {
+    "cap_ms": 135.5965356546,
+    "candidate_point_floor_ratio": 1.9803050353351368,
+    "candidate_tail_exact4_provenance_valid": true,
+    "floor": {
+      "bandwidth_bytes_per_s": 273000000000,
+      "component_formula": "target_model + full_bf16_head + mtp_forward + 5 * draft_64k_bf16_head",
+      "mandatory_weight_bytes": 32189438464,
+      "mandatory_weight_floor_ms": 117.910031004,
+      "nonweight_costs_included": false,
+      "scenario": "root_64k_five_64k_draft_heads"
+    },
+    "gap_to_cap_ms": 97.90129245914332,
+    "measured_wall_ms_per_event": 233.4978281137433,
+    "one_sided_u95_floor_ratio": null,
+    "required_one_sided_u95_floor_ratio_lte": 1.15,
+    "required_speedup": 1.7220043785522932,
+    "required_wall_reduction_fraction": 0.4192813836857312,
+    "status": "TAIL_POINT_ESTIMATE_ABOVE_CAP_FULL_CAMPAIGN_INCOMPLETE",
+    "why_no_u95_acceptance": "Hydra and B4 were not measured, so this result cannot close the formal floor campaign. The Tail point estimate alone is already 1.9803x the corrected root64 floor."
+  },
+  "artifacts": {
+    "canonical_exact4_subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "chat_traffic_audit_sha256": "b86ea5e4ae21f90f41516516e5da3d8959f9c80080f2eb4947839164a264f9f3",
+    "deploy_speed_aggregate_sha256": "89b8397409e1f8340c7a808fed940fe556ca295a92a3a39215fcc1963db5c65b",
+    "external_manifest": {
+      "end_sha256": "a422f6f0cb3ffbf4c3e0a6953ba2766f197933db8ba3712af7648953049f5c6d",
+      "launch_end_byte_equal": true,
+      "launch_sha256": "a422f6f0cb3ffbf4c3e0a6953ba2766f197933db8ba3712af7648953049f5c6d",
+      "overall_canonical_sha256": "2b68022a4660245ceba01a0b4d41eb552f1bd647031a9d430526e66be1c2a6a0"
+    },
+    "final_boundary_snapshot": {
+      "final_flush_status": "ok",
+      "generation": 9,
+      "sha256": "bea6b802a76498283915130ee9e4ceaa4288c9663399fa798a5aaa33326211b0"
+    },
+    "root64_floor_ledger_sha256": "3507bc71b5b7cf72d090de00d45b03a736493121be0a1680e4db19519714c8b4",
+    "runtime_manifest": {
+      "end_sha256": "5d82154784a9d6f9533cddaa2c8f2ae1333a370e06bd6400f9522d5f2c28b0c1",
+      "launch_end_byte_equal": true,
+      "launch_sha256": "5d82154784a9d6f9533cddaa2c8f2ae1333a370e06bd6400f9522d5f2c28b0c1",
+      "overall_canonical_sha256": "7ebac34f121796031864b5e4a727cf39ba09bfc5ba1ae387a390adee86099553"
+    },
+    "swe_campaign_summary_sha256": "2b118e321621f16618443bf67d3042b18cb62d7a897cf719c3e42337d4c268ed",
+    "work_census_file_sha256": "0b05882d567a8f941897b2b296dc79c95978f3fe1bf9ea182b21a33a5cdfb3d0",
+    "work_census_semantic_events_sha256": "6485777831a25733a99cbb1f397484577f61478c809c7f65235f9d5221cd43bc"
+  },
+  "campaign": {
+    "arm": "tail6_fixed32",
+    "batch_size": 1,
+    "concurrency": 1,
+    "draft_vocab_root": 1,
+    "ended_at": "2026-07-31T09:38:06Z",
+    "fixed_geometry": {
+      "active_nodes_per_event": 21,
+      "physical_draft_rows_per_event": 31,
+      "total_verify_rows_per_event": 32
+    },
+    "floor_order": "TH",
+    "source_commit": "4f867f2178eadec6db78f73a81ee9a31f2b084ec",
+    "started_at": "2026-07-31T08:47:33Z",
+    "tag": "tawfused_root64_b1_20260731T084718Z",
+    "task_count_declared": 4,
+    "workload": "canonical_swe_bench_verified_exact4"
+  },
+  "curation": {
+    "raw_bodies_inspected": false,
+    "raw_trace_content_published": false,
+    "source_basis": "Aggregate reducer metrics, task-boundary counters, strict trace request-count output, authenticated ingress counts, immutable manifest comparisons, artifact digests, evaluation verdicts, and final work-census totals.",
+    "withheld": [
+      "prompts",
+      "raw traces",
+      "raw logs",
+      "request and response bodies",
+      "task patches and task outputs",
+      "process and host identities",
+      "environment dumps",
+      "absolute source paths"
+    ]
+  },
+  "optimization_decision": {
+    "accept_per_event": {
+      "baseline": 4.850362131401966,
+      "candidate": 4.533822840181221
+    },
+    "fullstep_wall_tps": {
+      "baseline": 23.924272677413224,
+      "candidate": 23.699675859449716
+    },
+    "reason": "The fused TAW kernel lowered wall time, but changed the realized acceptance path enough to reduce both accepted drafts per event and acceptance-weighted full-step wall TPS. The candidate also resolved only one of four real tasks.",
+    "resolved_tasks": {
+      "baseline_known": "2/3 evaluated; task 4 was not evaluated by the older runner",
+      "candidate": "1/4"
+    },
+    "status": "REJECTED"
+  },
+  "outcome": {
+    "b4_status": "NOT_RUN",
+    "formal_sequence_status": "TAIL_EXACT4_COMPLETE_HYDRA_UNMEASURED_B4_UNMEASURED",
+    "hydra_b1_status": "NOT_MEASURED",
+    "orchestrator_return_code": 0,
+    "resolved_rate": 0.25,
+    "status": "VALID_TAIL_EXACT4_REJECTED_KERNEL_CANDIDATE",
+    "tail_b1_status": "EXACT4_COMPLETE_PROVENANCE_VALID",
+    "task_results": [
+      {
+        "accepted_drafts_per_event": 4.566355140186916,
+        "event_interval": [
+          0,
+          535
+        ],
+        "events": 535,
+        "hidden_failed_compaction_requests": 0,
+        "hidden_successful_compaction_requests": 0,
+        "instance_id": "astropy__astropy-12907",
+        "logical_model_requests": 12,
+        "swe_result": "resolved"
+      },
+      {
+        "accepted_drafts_per_event": 5.046511627906977,
+        "event_interval": [
+          535,
+          1266
+        ],
+        "events": 731,
+        "hidden_failed_compaction_requests": 0,
+        "hidden_successful_compaction_requests": 0,
+        "instance_id": "astropy__astropy-13033",
+        "logical_model_requests": 19,
+        "swe_result": "failed"
+      },
+      {
+        "accepted_drafts_per_event": 4.568867924528302,
+        "event_interval": [
+          1266,
+          2326
+        ],
+        "events": 1060,
+        "hidden_failed_compaction_requests": 0,
+        "hidden_successful_compaction_requests": 0,
+        "instance_id": "astropy__astropy-13236",
+        "logical_model_requests": 26,
+        "swe_result": "failed"
+      },
+      {
+        "accepted_drafts_per_event": 4.4284662576687115,
+        "event_interval": [
+          2326,
+          6401
+        ],
+        "events": 4075,
+        "hidden_failed_compaction_requests": 0,
+        "hidden_successful_compaction_requests": 1,
+        "instance_id": "astropy__astropy-13398",
+        "logical_model_requests": 67,
+        "normal_model_requests": 66,
+        "swe_result": "failed"
+      }
+    ]
+  },
+  "privacy": {
+    "contains_environment": false,
+    "contains_process_identity": false,
+    "contains_prompts": false,
+    "contains_public_benchmark_instance_ids": true,
+    "contains_raw_logs": false,
+    "contains_raw_request_or_response_bodies": false,
+    "contains_raw_traces": false,
+    "contains_source_commit_ids": true,
+    "contains_task_patch_content": false,
+    "public_identity_scope": "Canonical public SWE-bench Verified instance identifiers and immutable source commit only."
+  },
+  "publication": {
+    "curated_aggregate_only": true,
+    "hydra_measurement_published": false,
+    "raw_outputs_published": false,
+    "tail_exact4_measurement_published": true
+  },
+  "schema": "fr13.fixed32.tawfused.rejected_campaign_diagnostic.v1"
+}
