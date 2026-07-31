@@ -1,0 +1,49 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow16_source_candidate.v1",
+  "status": "experimental_source_candidate_cpu_static_only_not_deploy_ready",
+  "base_commit": "e45a7e7355b9ba9fea3ee6c30afbf7d8e85b1cdd",
+  "measurement_basis": {
+    "workload": "real SWE-Verified fixed32 Tail6 B1 Nsight attribution",
+    "measured_commit": "1a7a765447c8ce6068e0dd5d3a344d58ace85f2b",
+    "attribution_sha256": "685c410a0ba09d00c8b244bfa06809530337cea383b88fa92a5da1013eadf2d0",
+    "sfwd_events": 882,
+    "note": "The trace predates the current conv-remap, direct-leaf-commit, and GDN dead-I/O patches; FA2 geometry is still the pinned 64x64 four-warp kernel."
+  },
+  "observed_b1_ms_per_event": {
+    "sfwd_projected": 174.813673,
+    "fa2_tree_attention": 24.708601,
+    "target_fp8_cutlass": 112.312954,
+    "conv_source_stage_memcpy": 0.089708
+  },
+  "candidate": {
+    "scope": "B1, params.d=256, params.h=24, noncausal, full-window, no ALiBi, no appended KV, tree_bias=32x32, seqlen_q=32, num_splits<=1",
+    "stock": {
+      "block_m": 64,
+      "block_n": 64,
+      "warps": 4,
+      "ctas_per_b1_layer": 24
+    },
+    "qrow16": {
+      "block_m": 16,
+      "block_n": 64,
+      "warps": 1,
+      "ctas_per_b1_layer": 48
+    },
+    "numerical_mechanism": "Each CTA owns complete query rows and traverses the full ordered K-block loop. There is no executed KV split, output combine, or changed num_splits value. Warp-local row and lane coordinates match the stock tile for all 32 real rows. AllowSplit=false discards the 128-thread combine block for the one-warp traits; BOOL_SWITCH still compiles the Split=true main-kernel variant, while the runtime num_splits<=1 predicate prevents its execution. A static assertion fixes kGmemRowsPerThread=16, matching the public FA2 API invariant that paged-KV blocks are divisible by 16.",
+    "performance_risk": "Each head rereads K/V in two query CTAs. The doubled KV traffic can offset the occupancy and masked-row gains at long contexts.",
+    "estimated_saving_ms_per_event": {
+      "low": 6.0,
+      "high": 12.0,
+      "hard_upper_bound": 24.708601,
+      "classification": "estimate, not measured"
+    }
+  },
+  "required_gates": [
+    "production-toolchain CUDA compile without a GPU",
+    "bytewise stock-versus-qrow16 FA2 output and LSE A/B on real fixed32 matrices",
+    "canonical real SWE-Verified Tail6 exact4 then exact16",
+    "Hydra23 B1 and Tail6/Hydra23 B4 wall and acceptance"
+  ],
+  "b4_status": "stock fallback by construction; Q64 already launches 96 CTAs/layer on B4, so the B1 occupancy candidate is disabled",
+  "gpu_used_for_this_candidate": false
+}
