@@ -1,0 +1,20 @@
+{
+  "schema": "fr13.fixed32.batch_gdn.byte_gate.source.v1",
+  "date_utc": "2026-07-31",
+  "branch": "agent/fixed32-gdn-batch2launch",
+  "exact_safe_base": "47de87295387cf25e900c566bfd3c8002df4d264",
+  "candidate_commit": "f75c023c94973fef62ba5c35d84fdbb42f16e754",
+  "gate_code_commit": "d642d7067fbf1a83cf205f281cf7fde33f903137",
+  "claims": {
+    "cpu_static_gate": true,
+    "gpu_byte_parity": false,
+    "performance": false
+  },
+  "sha256": {
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "cb0922d51174f8751aa8f5368ec6ffa56820e151c314b6e879d2033ddbe4f810",
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "e177b5cdc9f0d6d88183a840d82c546871a88aed3b00f2d2a8519701b8559085",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh": "1844ccf3260fd97679d9ce088ef6c1ea716268147d857d3cb49d948796f2c631",
+    "tests/test_fr13_fixed32_gdn_batch_byte_ab.py": "441e0eb56fa3f233307ed07dd13f6e831abd4274ebce9b38412347b26fc80ab1",
+    "tests/test_fr13_fixed32_gdn_batch_launch.py": "918f58bb4964036a67945511cd9b96a945862b2956fb843bca5f78638e092d2b"
+  }
+}
