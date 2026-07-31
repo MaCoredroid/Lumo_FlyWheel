@@ -35,6 +35,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
     "scripts/fr10_quick_decode_tps_probe.py",
     "scripts/fr13_arctic_suffix_adapter.py",
+    "scripts/fr13_b4_gdn_bv64_pass.py",
     "scripts/fr13_b4_campaign_driver.sh",
     "scripts/fr13_bigdenom_swe_serve_variant.sh",
     "scripts/fr13_canonical_env.sh",

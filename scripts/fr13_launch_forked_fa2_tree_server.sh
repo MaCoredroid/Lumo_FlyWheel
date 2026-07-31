@@ -132,6 +132,10 @@ FR13_DFWD_UNIFIED_BM8_LIVE_PASS_JSON=${FR13_DFWD_UNIFIED_BM8_LIVE_PASS_JSON:-$RE
 FR13_DFWD_UNIFIED_BM8_LIVE_PASS_SHA256=${FR13_DFWD_UNIFIED_BM8_LIVE_PASS_SHA256:-570caf42e3e75ff0d3717042b0dfc58b23a90041e71103f70a07f6d7563445b5}
 FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256=3baccaa1a83907e15561b1cf807f15a41bd4764513bb43c4046b434937c3274b
 FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON=${FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON:-/logs/fr13_dfwd_unified_bm8.production_capture.json}
+FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON=${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON:-}
+FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256=${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256:-}
+FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON=${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON:-}
+FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256=${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256:-}
 FR13_FIXED32_CUTLASS_WAVE=${FR13_FIXED32_CUTLASS_WAVE:-stock}
 FR13_FIXED32_CUTLASS_WAVE_SO=${FR13_FIXED32_CUTLASS_WAVE_SO:-}
 FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL=${FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL:-/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl}
@@ -1349,6 +1353,14 @@ if [[ -n "$_fr13_batch_gdn_bv_production" \
   echo "FR13_FIXED32_BATCH_GDN_BV_PRODUCTION requires FR13_FIXED32_BATCH_GDN_PRODUCTION=1" >&2
   exit 2
 fi
+if [[ "$_fr13_batch_gdn_production" != "1" \
+      && ( -n "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
+           || -n "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256" \
+           || -n "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
+           || -n "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" ) ]]; then
+  echo "FR13 fixed32 B4 GDN graph PASS inputs require the production selector" >&2
+  exit 2
+fi
 rm -f \
   "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag" \
   "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag" \
@@ -1409,13 +1421,44 @@ if [[ "$_fr13_batch_gdn_production" == "1" ]]; then
     || { echo "FR13_FIXED32_BATCH_GDN_PRODUCTION requires FR13_FIXED32_MODE" >&2; exit 2; }
   [[ "$MAX_NUM_SEQS" =~ ^[234]$ ]] \
     || { echo "FR13_FIXED32_BATCH_GDN_PRODUCTION requires MAX_NUM_SEQS=2, 3, or 4" >&2; exit 2; }
-  [[ -f "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json" \
-     && ! -L "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json" ]] \
-    || { echo "FR13_FIXED32_BATCH_GDN_PRODUCTION requires a regular live-gate PASS record" >&2; exit 2; }
   if [[ -n "$_fr13_batch_gdn_bv_production" ]]; then
+    [[ "$_fr13_batch_gdn_bv_production" == "64" ]] \
+      || { echo "FR13 fixed32 batched wide-BV production is restricted to BV64" >&2; exit 2; }
+    [[ "$MAX_NUM_SEQS" == "4" ]] \
+      || { echo "FR13 fixed32 BV64 production requires MAX_NUM_SEQS=4" >&2; exit 2; }
+    [[ "${FR13_FIXED32_MODE:-}" == "tail6_fixed32" ]] \
+      || { echo "FR13 fixed32 BV64 production requires tail6_fixed32" >&2; exit 2; }
+    [[ "${ENFORCE_EAGER:-0}" == "0" \
+       && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" ]] \
+      || { echo "FR13 fixed32 BV64 production requires the FULL graph runtime" >&2; exit 2; }
+    [[ -f "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
+       && ! -L "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
+       && "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
+       && -f "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
+       && ! -L "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
+       && "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+      || { echo "FR13 fixed32 BV64 production requires a pinned completed exact4 graph gate" >&2; exit 2; }
+    rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json"
+    python3 scripts/fr13_b4_gdn_bv64_pass.py install \
+      --live-result "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
+      --expected-live-sha256 "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256" \
+      --gate-verdict "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
+      --expected-gate-verdict-sha256 "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" \
+      --kernel-source src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py \
+      --out "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json" \
+      || { echo "FR13 fixed32 BV64 graph PASS attestation failed" >&2; exit 2; }
     printf '%s\n' "$_fr13_batch_gdn_bv_production" \
       > "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag"
     chmod 400 "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag"
+  else
+    [[ -z "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
+       && -z "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256" \
+       && -z "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
+       && -z "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" ]] \
+      || { echo "FR13 graph PASS inputs are BV64 B4 production only" >&2; exit 2; }
+    [[ -f "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json" \
+       && ! -L "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json" ]] \
+      || { echo "FR13_FIXED32_BATCH_GDN_PRODUCTION requires a regular live-gate PASS record" >&2; exit 2; }
   fi
   echo "1" > "$LOG_DIR/fr13_fixed32_batch_gdn_production.arm"
 else

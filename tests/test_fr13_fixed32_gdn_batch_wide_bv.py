@@ -195,7 +195,7 @@ def test_combined_candidate_requires_diagnostic_and_selects_all_b2_b4(
     assert kernel.fixed32_batch_gdn_selector(1) is None
 
 
-def test_wide_live_pass_is_source_bound_and_production_validates_it(
+def test_wide_graph_pass_is_source_bound_and_production_is_exact_b4(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -226,8 +226,22 @@ def test_wide_live_pass_is_source_bound_and_production_validates_it(
         reference_bv=8,
         candidate_bv=64,
     )
+    with pytest.raises(RuntimeError, match="PASS record is invalid"):
+        kernel._fr13_fixed32_batch_gdn_production_control()
+    pass_path.unlink()
+
+    kernel._fr13_fixed32_batch_gdn_live_pass_emit(
+        task_marker="swe_verified:astropy__astropy-12907",
+        batch=4,
+        layer_keys=set(range(48)),
+        reference_bv=8,
+        candidate_bv=64,
+        graph_id=71,
+        graph_signature="c" * 64,
+        capture_records=48,
+    )
     payload = json.loads(pass_path.read_text(encoding="ascii"))
-    assert payload["schema"] == "fr13.fixed32.batch_gdn.live_pass.v2"
+    assert payload["schema"] == "fr13.fixed32.batch_gdn.graph_live_pass.v1"
     assert payload["source_sha256"] == source_sha
     assert payload["physical_rows_per_request"] == 32
     assert payload["reference_physical_launches_per_layer"] == 8
@@ -236,6 +250,18 @@ def test_wide_live_pass_is_source_bound_and_production_validates_it(
         kernel._FR13_FIXED32_BATCH_GDN_BV_BYTE_SURFACES
     )
     assert kernel._fr13_fixed32_batch_gdn_production_control() == payload
+    monkeypatch.setattr(
+        kernel, "_fr13_fixed32_batch_gdn_byte_ab_control", lambda: (False, None)
+    )
+    monkeypatch.setattr(
+        kernel, "_fr13_fixed32_batch_gdn_graph_byte_ab_control", lambda: False
+    )
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE", None)
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_GDN_PATH_BV_PRODUCTION", None)
+    assert kernel.fixed32_batch_gdn_selector(1) is None
+    assert kernel.fixed32_batch_gdn_selector(2) is None
+    assert kernel.fixed32_batch_gdn_selector(3) is None
+    assert kernel.fixed32_batch_gdn_selector(4) == "production"
 
     payload["source_sha256"] = "b" * 64
     pass_path.write_text(json.dumps(payload), encoding="ascii")

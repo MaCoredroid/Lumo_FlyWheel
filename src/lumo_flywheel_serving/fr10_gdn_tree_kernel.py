@@ -1372,43 +1372,37 @@ def _fr13_fixed32_batch_gdn_production_control() -> dict[str, object] | None:
         )
         wide_invalid = False
     else:
-        payload_batch = payload.get("batch")
-        reference_launches = (
-            2 * payload_batch if type(payload_batch) is int else -1
-        )
-        schema = payload.get("schema")
-        graph_schema = schema == "fr13.fixed32.batch_gdn.graph_live_pass.v1"
-        schema_invalid = schema not in (
-            "fr13.fixed32.batch_gdn.live_pass.v2",
-            "fr13.fixed32.batch_gdn.graph_live_pass.v1",
-        )
-        if graph_schema:
-            graph_signature = payload.get("graph_signature")
-            schema_invalid = schema_invalid or (
-                payload.get("gate_mode") != "post_replay_shadow"
-                or type(payload.get("graph_id")) is not int
-                or payload["graph_id"] <= 0
-                or not isinstance(graph_signature, str)
-                or len(graph_signature) != 64
-                or any(
-                    character not in "0123456789abcdef"
-                    for character in graph_signature
-                )
-                or payload.get("capture_records") != 48
-                or payload.get("real_task_authenticated") is not True
-                or payload.get("graph_baseline_byte_equal") is not True
+        graph_signature = payload.get("graph_signature")
+        schema_invalid = (
+            payload.get("schema")
+            != "fr13.fixed32.batch_gdn.graph_live_pass.v1"
+            or payload.get("gate_mode") != "post_replay_shadow"
+            or type(payload.get("graph_id")) is not int
+            or payload["graph_id"] <= 0
+            or not isinstance(graph_signature, str)
+            or len(graph_signature) != 64
+            or any(
+                character not in "0123456789abcdef"
+                for character in graph_signature
             )
+            or payload.get("capture_records") != 48
+            or payload.get("real_task_authenticated") is not True
+            or payload.get("graph_baseline_byte_equal") is not True
+        )
         wide_invalid = (
-            payload.get("candidate")
+            production_bv != 64
+            or payload.get("batch") != 4
+            or payload.get("candidate")
             != _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_ID
             or payload.get("source_sha256")
             != _fr13_fixed32_batch_gdn_source_sha256()
-            or payload.get("mode") != _FR13_FIXED32_MODE
+            or _FR13_FIXED32_MODE != "tail6_fixed32"
+            or payload.get("mode") != "tail6_fixed32"
             or payload.get("physical_rows_per_request") != 32
             or payload.get("reference_bv") != 8
-            or payload.get("candidate_bv") != production_bv
+            or payload.get("candidate_bv") != 64
             or payload.get("reference_physical_launches_per_layer")
-            != reference_launches
+            != 8
             or payload.get("candidate_physical_launches_per_layer") != 2
             or payload.get("compared_byte_surfaces")
             != list(_FR13_FIXED32_BATCH_GDN_BV_BYTE_SURFACES)
@@ -1423,7 +1417,7 @@ def _fr13_fixed32_batch_gdn_production_control() -> dict[str, object] | None:
 
 
 def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
-    """Resolve the B2-B4 diagnostic/production route; default is legacy."""
+    """Resolve diagnostics or exact-B4 wide production; default is legacy."""
     batch = int(batch_size)
     if batch <= 1:
         # A MAX_NUM_SEQS=4 lifecycle can still drain or start at B1. Keep that
@@ -1499,6 +1493,11 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
         # BV8 path. Real serving replays the graph and never re-enters Python.
         return None
     if production is not None:
+        if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None and batch < 4:
+            # FULL capture and serving can descend through B3/B2 as requests
+            # drain. The graph credential qualifies only exact B4; lower
+            # batches must stay on the established per-request BV8 path.
+            return None
         if int(production["batch"]) != batch:
             raise RuntimeError(
                 "FR13_FIXED32_BATCH_GDN_PRODUCTION batch does not match its "
