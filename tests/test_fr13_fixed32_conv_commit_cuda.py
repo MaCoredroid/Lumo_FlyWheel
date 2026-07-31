@@ -479,7 +479,11 @@ def test_deployed_layout_pregather_and_direct_commit_are_page_exact(
         )
     )
     before_pregather = tuple(raw.clone() for raw in raws)
-    kernel.selfcheck_fixed32_conv_col0_ssi_sources(num_spec_decodes=4)
+    for batch in range(1, 5):
+        kernel.selfcheck_fixed32_conv_col0_ssi_sources(
+            num_spec_decodes=batch
+        )
+    assert state["live_selfchecked_batches"] == {1, 2, 3, 4}
     assert all(
         torch.equal(state["staging"][layer, :4], expected)
         for layer, expected in enumerate(expected_staging)

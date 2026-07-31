@@ -11070,9 +11070,22 @@ def _fr13_conv_subop_mab(
                                                 _fr13_wbb_srows
                                             ),
                                         )
-                                        _fr13_f32_pregather_selfcheck(
-                                            num_spec_decodes=_fr13_f32_B,
-                                        )
+                                        if _fr13_f32_B != _fr13_f32_cap:
+                                            raise RuntimeError(
+                                                "FR13 fixed32 initial pregather "
+                                                "producer must cover server "
+                                                "capacity: "
+                                                f"B={_fr13_f32_B} "
+                                                f"capacity={_fr13_f32_cap}"
+                                            )
+                                        for _fr13_f32_live_B in range(
+                                            1, _fr13_f32_cap + 1
+                                        ):
+                                            _fr13_f32_pregather_selfcheck(
+                                                num_spec_decodes=(
+                                                    _fr13_f32_live_B
+                                                ),
+                                            )
                                         _fr13_f32_done.update(
                                             range(1, _fr13_f32_cap + 1)
                                         )
