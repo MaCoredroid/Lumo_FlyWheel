@@ -95,10 +95,10 @@ from fr13_fixed32_topology import (
     WALK_CAP,
 )
 
-SCHEMA = "fr13-fixed32-work-census-v9"
-TERMINAL_SCHEMA = "fr13-fixed32-work-census-terminal-v9"
-REPORT_SCHEMA = "fr13-fixed32-work-census-report-v9"
-SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v9"
+SCHEMA = "fr13-fixed32-work-census-v10"
+TERMINAL_SCHEMA = "fr13-fixed32-work-census-terminal-v10"
+REPORT_SCHEMA = "fr13-fixed32-work-census-report-v10"
+SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v10"
 
 TAIL_MODE = "tail6_fixed32"
 HYDRA_MODE = "hydra27_fixed32"
@@ -134,26 +134,27 @@ TAW_LOOP_ITERATIONS = WALK_CAP
 TAW_CHILD_LANES_PER_REQUEST = TAW_CHILD_LANES
 TAW_ROWS_PER_REQUEST = WALK_CAP
 TAW_BUFFER_CAPACITY = OUTPUT_PUBLISH_CAPACITY
-TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-source-v1"
+TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-source-v3"
 TAW_SOURCE_CONTRACT_SHA256 = (
-    "ff9fdeb6529876732cc949ab4f2636a7cee04edaec2524c39657a34d3d8b3250"
+    "9a722bd73fcda5405cbbee70dab44806547f2e78985869d618df4fe88cb3f0e1"
 )
 TAW_TENSOR_CALL_CENSUS = {
     "walk_levels": 12,
-    "full_vocab_row_gathers": 24,
-    "full_vocab_fp32_casts": 24,
-    "full_vocab_softmax_calls": 24,
-    "full_vocab_normalizations": 36,
-    "full_vocab_cdf_calls": 24,
-    "source_cdf_calls": 12,
-    "qmix_zero_fills": 12,
-    "qmix_scatter_add_calls": 12,
-    "residual_subtract_calls": 12,
-    "residual_clamp_calls": 12,
-    "residual_where_calls": 24,
-    "output_scatter_calls": 24,
-    "path_scatter_calls": 12,
+    "target_rows": 12,
+    "self_rows": 12,
+    "vocab_chunks_per_row": 64,
+    "vocab_chunk_size": 4096,
+    "chunk_stats_launches": 12,
+    "chunk_stats_programs_per_request": 1536,
+    "reduce_sample_commit_launches": 12,
+    "reduce_sample_commit_programs_per_request": 12,
+    "full_vocab_probability_materializations": 0,
+    "full_vocab_residual_materializations": 0,
+    "host_syncs": 0,
 }
+TAW_ROUTE = "fixed32_fused_chunk_cdf"
+TAW_VOCAB_CHUNKS = 64
+TAW_VOCAB_CHUNK_SIZE = 4096
 TAW_COUNT_ROUTE = "preseeded_cuda_fixed31"
 TAW_RNG_ROUTE = "bulk_device_generator"
 TAW_VOCAB_SIZE = 248_320
@@ -285,6 +286,7 @@ GDN_KEYS = frozenset(
 )
 TAW_KEYS = frozenset(
     {
+        "route",
         "preseeded_batches",
         "topology_cache_hit",
         "cache_misses",
@@ -302,6 +304,15 @@ TAW_KEYS = frozenset(
         "residual_rows",
         "row_scatter_slots",
         "path_scatter_slots",
+        "vocab_chunks",
+        "vocab_chunk_size",
+        "chunk_stats_launches",
+        "chunk_stats_programs",
+        "reduce_sample_commit_launches",
+        "reduce_sample_commit_programs",
+        "full_vocab_probability_materializations",
+        "full_vocab_residual_materializations",
+        "host_syncs",
         "source_contract_schema",
         "source_contract_sha256",
         "tensor_call_census",
@@ -343,6 +354,9 @@ TAW_KEYS = frozenset(
         "accepted_path_shape",
         "accepted_lens_shape",
         "last_row_shape",
+        "fused_partial_shape",
+        "fused_current_shape",
+        "fused_alive_shape",
     }
 )
 TAW_TENSOR_CALL_CENSUS_KEYS = frozenset(TAW_TENSOR_CALL_CENSUS)
@@ -584,7 +598,7 @@ FIXED_WORK_SCOPE = {
         "tree_attn_inner_calls",
         "gdn_inner_launches",
         "gdn_export_or_mask",
-        "taw.ast_pinned_fixed_12_iteration_tensor_call_census",
+        "taw.ast_pinned_fixed_12_iteration_fused_kernel_census",
         "committer_graph_inner_ops",
         "kv_inner_apply_calls",
         "conv_commit_inner_launch_programs",
@@ -1317,6 +1331,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
 
     taw = _mapping(event["taw"], f"{source}.taw")
     _exact_keys(taw, TAW_KEYS, f"{source}.taw")
+    taw_route = _string(taw["route"], f"{source}.taw.route")
     taw_preseeded_batches = _integer_tuple(
         taw["preseeded_batches"],
         f"{source}.taw.preseeded_batches",
@@ -1355,6 +1370,36 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     taw_path_scatter_slots = _integer(
         taw["path_scatter_slots"], f"{source}.taw.path_scatter_slots"
     )
+    taw_vocab_chunks = _integer(
+        taw["vocab_chunks"], f"{source}.taw.vocab_chunks"
+    )
+    taw_vocab_chunk_size = _integer(
+        taw["vocab_chunk_size"], f"{source}.taw.vocab_chunk_size"
+    )
+    taw_chunk_stats_launches = _integer(
+        taw["chunk_stats_launches"], f"{source}.taw.chunk_stats_launches"
+    )
+    taw_chunk_stats_programs = _integer(
+        taw["chunk_stats_programs"], f"{source}.taw.chunk_stats_programs"
+    )
+    taw_reduce_launches = _integer(
+        taw["reduce_sample_commit_launches"],
+        f"{source}.taw.reduce_sample_commit_launches",
+    )
+    taw_reduce_programs = _integer(
+        taw["reduce_sample_commit_programs"],
+        f"{source}.taw.reduce_sample_commit_programs",
+    )
+    taw_probability_materializations = _integer(
+        taw["full_vocab_probability_materializations"],
+        f"{source}.taw.full_vocab_probability_materializations",
+    )
+    taw_residual_materializations = _integer(
+        taw["full_vocab_residual_materializations"],
+        f"{source}.taw.full_vocab_residual_materializations",
+    )
+    taw_host_syncs = _integer(taw["host_syncs"], f"{source}.taw.host_syncs")
+    _expect(taw_route, TAW_ROUTE, f"{source}.taw.route")
     _expect(
         taw_preseeded_batches,
         SUPPORTED_BATCH_SIZES,
@@ -1410,6 +1455,38 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         TAW_PATH_SCATTER_SLOTS * batch_size,
         f"{source}.taw.path_scatter_slots",
     )
+    _expect(taw_vocab_chunks, TAW_VOCAB_CHUNKS, f"{source}.taw.vocab_chunks")
+    _expect(
+        taw_vocab_chunk_size,
+        TAW_VOCAB_CHUNK_SIZE,
+        f"{source}.taw.vocab_chunk_size",
+    )
+    _expect(
+        taw_chunk_stats_launches,
+        WALK_CAP,
+        f"{source}.taw.chunk_stats_launches",
+    )
+    _expect(
+        taw_chunk_stats_programs,
+        WALK_CAP * 2 * TAW_VOCAB_CHUNKS * batch_size,
+        f"{source}.taw.chunk_stats_programs",
+    )
+    _expect(
+        taw_reduce_launches,
+        WALK_CAP,
+        f"{source}.taw.reduce_sample_commit_launches",
+    )
+    _expect(
+        taw_reduce_programs,
+        WALK_CAP * batch_size,
+        f"{source}.taw.reduce_sample_commit_programs",
+    )
+    for field_name, field_value in (
+        ("full_vocab_probability_materializations", taw_probability_materializations),
+        ("full_vocab_residual_materializations", taw_residual_materializations),
+        ("host_syncs", taw_host_syncs),
+    ):
+        _expect(field_value, 0, f"{source}.taw.{field_name}")
     taw_source_schema = _string(
         taw["source_contract_schema"],
         f"{source}.taw.source_contract_schema",
@@ -1526,6 +1603,13 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         "accepted_path_shape": (batch_size, ACCEPTED_PATH_CAPACITY),
         "accepted_lens_shape": (batch_size,),
         "last_row_shape": (batch_size,),
+        "fused_partial_shape": (
+            batch_size,
+            2,
+            TAW_VOCAB_CHUNKS,
+        ),
+        "fused_current_shape": (batch_size,),
+        "fused_alive_shape": (batch_size,),
     }
     taw_cache_shapes: dict[str, list[int]] = {}
     for field_name, expected_shape in expected_taw_cache_shapes.items():
@@ -2731,6 +2815,7 @@ def validate_campaign(
 def _reference_taw(batch_size: int) -> dict[str, Any]:
     rows = batch_size * PHYSICAL_DRAFTS
     return {
+        "route": TAW_ROUTE,
         "preseeded_batches": list(SUPPORTED_BATCH_SIZES),
         "topology_cache_hit": True,
         "cache_misses": 0,
@@ -2748,6 +2833,17 @@ def _reference_taw(batch_size: int) -> dict[str, Any]:
         "residual_rows": TAW_ROWS_PER_REQUEST * batch_size,
         "row_scatter_slots": TAW_ROW_SCATTER_SLOTS * batch_size,
         "path_scatter_slots": TAW_PATH_SCATTER_SLOTS * batch_size,
+        "vocab_chunks": TAW_VOCAB_CHUNKS,
+        "vocab_chunk_size": TAW_VOCAB_CHUNK_SIZE,
+        "chunk_stats_launches": WALK_CAP,
+        "chunk_stats_programs": (
+            WALK_CAP * 2 * TAW_VOCAB_CHUNKS * batch_size
+        ),
+        "reduce_sample_commit_launches": WALK_CAP,
+        "reduce_sample_commit_programs": WALK_CAP * batch_size,
+        "full_vocab_probability_materializations": 0,
+        "full_vocab_residual_materializations": 0,
+        "host_syncs": 0,
         "source_contract_schema": TAW_SOURCE_CONTRACT_SCHEMA,
         "source_contract_sha256": TAW_SOURCE_CONTRACT_SHA256,
         "tensor_call_census": dict(TAW_TENSOR_CALL_CENSUS),
@@ -2793,6 +2889,9 @@ def _reference_taw(batch_size: int) -> dict[str, Any]:
         "accepted_path_shape": [batch_size, ACCEPTED_PATH_CAPACITY],
         "accepted_lens_shape": [batch_size],
         "last_row_shape": [batch_size],
+        "fused_partial_shape": [batch_size, 2, TAW_VOCAB_CHUNKS],
+        "fused_current_shape": [batch_size],
+        "fused_alive_shape": [batch_size],
     }
 
 
@@ -3550,8 +3649,8 @@ def run_self_test() -> dict[str, Any]:
     )
     event_tamper(
         "taw-tensor-call-count",
-        ("taw", "tensor_call_census", "full_vocab_softmax_calls"),
-        23,
+        ("taw", "tensor_call_census", "chunk_stats_launches"),
+        11,
     )
     event_tamper(
         "taw-count-route",

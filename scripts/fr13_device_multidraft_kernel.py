@@ -92,6 +92,437 @@ except Exception:  # pragma: no cover - torch always present in the vLLM image
 import numpy as np
 
 
+try:  # Triton is present in the serving image, not on CPU-only audit hosts.
+    import triton
+    import triton.language as tl
+except Exception:  # pragma: no cover - exercised by CPU-only source gates
+    triton = None
+    tl = None
+
+
+_FR13_FIXED32_TAW_VOCAB_CHUNKS = 64
+_FR13_FIXED32_TAW_CHUNK_SIZE = 4096
+_FR13_FIXED32_TAW_MAX_VOCAB = (
+    _FR13_FIXED32_TAW_VOCAB_CHUNKS * _FR13_FIXED32_TAW_CHUNK_SIZE
+)
+_FR13_FIXED32_TAW_ROW_KINDS = 2
+
+
+if triton is not None:
+
+    @triton.jit
+    def _fr13_fixed32_taw_chunk_stats_kernel(
+        target_logits,
+        self_logits,
+        child_table,
+        current_state,
+        partial_max,
+        partial_sum,
+        VOCAB: tl.constexpr,
+        LEVEL: tl.constexpr,
+        PHYSICAL_DRAFTS: tl.constexpr,
+        PHYSICAL_ROWS: tl.constexpr,
+        FANOUT: tl.constexpr,
+        NUM_CHUNKS: tl.constexpr,
+        CHUNK_SIZE: tl.constexpr,
+    ):
+        """Compute indexed self/target online-softmax statistics per chunk."""
+        pid = tl.program_id(0)
+        chunk = pid % NUM_CHUNKS
+        row_kind = (pid // NUM_CHUNKS) % 2
+        request = pid // (2 * NUM_CHUNKS)
+
+        if LEVEL == 0:
+            current = -1
+        else:
+            current = tl.load(current_state + request).to(tl.int64)
+        parent_slot = tl.maximum(0, tl.minimum(current + 1, PHYSICAL_ROWS - 1))
+        first_child = tl.load(
+            child_table
+            + request * PHYSICAL_ROWS * FANOUT
+            + parent_slot * FANOUT
+        ).to(tl.int64)
+        first_child = tl.maximum(first_child, 0)
+        self_row = tl.maximum(0, tl.minimum(current, PHYSICAL_DRAFTS - 1))
+        local_row = tl.where(row_kind == 0, self_row, first_child)
+        row = request * PHYSICAL_DRAFTS + local_row
+
+        offsets = chunk * CHUNK_SIZE + tl.arange(0, CHUNK_SIZE)
+        valid = offsets < VOCAB
+        base = tl.where(row_kind == 0, self_logits, target_logits)
+        logits = tl.load(
+            base + row * VOCAB + offsets,
+            mask=valid,
+            other=float("-inf"),
+        ).to(tl.float32)
+        chunk_has_values = chunk * CHUNK_SIZE < VOCAB
+        row_max = tl.max(logits, axis=0)
+        chunk_has_finite_mass = (
+            chunk_has_values
+            & (row_max > float("-inf"))
+            & (row_max < float("inf"))
+        )
+        safe_max = tl.where(chunk_has_finite_mass, row_max, 0.0)
+        exponentials = tl.where(
+            valid & chunk_has_finite_mass,
+            tl.exp(logits - safe_max),
+            0.0,
+        )
+        row_sum = tl.sum(exponentials, axis=0)
+        output = (request * 2 + row_kind) * NUM_CHUNKS + chunk
+        tl.store(
+            partial_max + output,
+            tl.where(chunk_has_finite_mass, row_max, float("-inf")),
+        )
+        tl.store(partial_sum + output, row_sum)
+
+
+    @triton.jit
+    def _fr13_fixed32_taw_reduce_sample_commit_kernel(
+        target_logits,
+        self_logits,
+        child_table,
+        child_counts,
+        drafts,
+        bonus,
+        uniforms,
+        partial_max,
+        partial_sum,
+        current_state,
+        alive_state,
+        output_tokens,
+        output_lens,
+        accepted_path_rows,
+        accepted_lens,
+        last_row,
+        VOCAB: tl.constexpr,
+        LEVEL: tl.constexpr,
+        WALK_CAP: tl.constexpr,
+        PHYSICAL_DRAFTS: tl.constexpr,
+        PHYSICAL_ROWS: tl.constexpr,
+        FANOUT: tl.constexpr,
+        OUTPUT_CAPACITY: tl.constexpr,
+        PATH_CAPACITY: tl.constexpr,
+        NUM_CHUNKS: tl.constexpr,
+        CHUNK_SIZE: tl.constexpr,
+    ):
+        """Reduce chunk masses, sample both CDFs, and advance one walk level."""
+        request = tl.program_id(0)
+        chunk_offsets = tl.arange(0, NUM_CHUNKS)
+        self_stats = request * 2 * NUM_CHUNKS + chunk_offsets
+        target_stats = self_stats + NUM_CHUNKS
+
+        self_partial_max = tl.load(partial_max + self_stats)
+        self_partial_sum = tl.load(partial_sum + self_stats)
+        target_partial_max = tl.load(partial_max + target_stats)
+        target_partial_sum = tl.load(partial_sum + target_stats)
+        self_max = tl.max(self_partial_max, axis=0)
+        target_max = tl.max(target_partial_max, axis=0)
+        self_chunk_mass = self_partial_sum * tl.exp(self_partial_max - self_max)
+        target_chunk_mass = target_partial_sum * tl.exp(
+            target_partial_max - target_max
+        )
+        self_total = tl.sum(self_chunk_mass, axis=0)
+        target_total = tl.sum(target_chunk_mass, axis=0)
+        self_chunk_prob = self_chunk_mass / tl.maximum(self_total, 1.0e-30)
+        target_chunk_prob = target_chunk_mass / tl.maximum(
+            target_total, 1.0e-30
+        )
+
+        if LEVEL == 0:
+            current = -1
+            alive = request == request
+            output_len = 0
+            path_len = 0
+            output_init = tl.arange(0, OUTPUT_CAPACITY)
+            path_init = tl.arange(0, PATH_CAPACITY)
+            tl.store(
+                output_tokens + request * OUTPUT_CAPACITY + output_init,
+                -1,
+            )
+            tl.store(
+                accepted_path_rows + request * PATH_CAPACITY + path_init,
+                0,
+            )
+        else:
+            current = tl.load(current_state + request).to(tl.int64)
+            alive = tl.load(alive_state + request) != 0
+            output_len = tl.load(output_lens + request).to(tl.int64)
+            path_len = tl.load(accepted_lens + request).to(tl.int64)
+
+        parent_slot = tl.maximum(0, tl.minimum(current + 1, PHYSICAL_ROWS - 1))
+        child_count = tl.load(
+            child_counts + request * PHYSICAL_ROWS + parent_slot
+        ).to(tl.int64)
+        has_kids = alive & (child_count > 0)
+        leaf = alive & (child_count == 0)
+        current_valid = (current >= 0) & (current < PHYSICAL_DRAFTS)
+        self_row = tl.maximum(0, tl.minimum(current, PHYSICAL_DRAFTS - 1))
+
+        uniform_base = request * WALK_CAP * 3 + LEVEL * 3
+        uniform_source = tl.load(uniforms + uniform_base)
+        uniform_accept = tl.load(uniforms + uniform_base + 1)
+        uniform_residual = tl.load(uniforms + uniform_base + 2)
+
+        self_cdf = tl.cumsum(self_chunk_prob, axis=0)
+        self_threshold = uniform_residual * tl.sum(self_chunk_prob, axis=0)
+        self_chunk = tl.sum(
+            (self_cdf <= self_threshold).to(tl.int32), axis=0
+        )
+        self_chunk = tl.minimum(self_chunk, NUM_CHUNKS - 1)
+        self_prior = tl.sum(
+            tl.where(chunk_offsets < self_chunk, self_chunk_prob, 0.0),
+            axis=0,
+        )
+        vocab_offsets = (
+            self_chunk * CHUNK_SIZE + tl.arange(0, CHUNK_SIZE)
+        )
+        self_valid = vocab_offsets < VOCAB
+        self_values = tl.load(
+            self_logits
+            + (request * PHYSICAL_DRAFTS + self_row) * VOCAB
+            + vocab_offsets,
+            mask=self_valid,
+            other=float("-inf"),
+        ).to(tl.float32)
+        self_weights = tl.where(
+            self_valid,
+            tl.exp(self_values - self_max) / tl.maximum(self_total, 1.0e-30),
+            0.0,
+        )
+        self_local_cdf = tl.cumsum(self_weights, axis=0)
+        self_within = self_threshold - self_prior
+        self_local_token = tl.sum(
+            (self_local_cdf <= self_within).to(tl.int32),
+            axis=0,
+        )
+        self_token = tl.minimum(
+            self_chunk * CHUNK_SIZE + self_local_token,
+            VOCAB - 1,
+        )
+        bonus_token = tl.load(bonus + request).to(tl.int64)
+        leaf_token = tl.where(current_valid, self_token, bonus_token)
+        if LEVEL == 0:
+            output_len_after_leaf = leaf.to(tl.int64)
+        else:
+            output_len_after_leaf = output_len + leaf.to(tl.int64)
+        tl.store(
+            output_tokens + request * OUTPUT_CAPACITY + output_len,
+            leaf_token,
+            mask=leaf,
+        )
+
+        kid_lanes = tl.arange(0, 4)
+        kid_mask = kid_lanes < FANOUT
+        kids = tl.load(
+            child_table
+            + request * PHYSICAL_ROWS * FANOUT
+            + parent_slot * FANOUT
+            + kid_lanes,
+            mask=kid_mask,
+            other=-1,
+        ).to(tl.int64)
+        valid_kid = kid_mask & (kids >= 0)
+        safe_kids = tl.maximum(kids, 0)
+        kid_tokens = tl.load(
+            drafts + request * PHYSICAL_DRAFTS + safe_kids,
+            mask=kid_mask,
+            other=0,
+        ).to(tl.int64)
+        target_row = tl.maximum(
+            tl.sum(tl.where(kid_lanes == 0, kids, 0), axis=0),
+            0,
+        )
+        target_base = (
+            target_logits
+            + (request * PHYSICAL_DRAFTS + target_row) * VOCAB
+        )
+        kid_logits = tl.load(
+            target_base + kid_tokens,
+            mask=valid_kid,
+            other=float("-inf"),
+        ).to(tl.float32)
+        kid_prob = tl.where(
+            valid_kid,
+            tl.exp(kid_logits - target_max)
+            / tl.maximum(target_total, 1.0e-30),
+            0.0,
+        )
+        overlap_mass = tl.sum(kid_prob, axis=0)
+        zero_mass = has_kids & (overlap_mass <= 0.0)
+        source_cdf = tl.cumsum(kid_prob, axis=0)
+        source_threshold = uniform_source * overlap_mass
+        source = tl.sum(
+            (source_cdf <= source_threshold).to(tl.int32),
+            axis=0,
+        )
+        source = tl.minimum(source, FANOUT - 1)
+        selected_token = tl.sum(
+            tl.where(kid_lanes == source, kid_tokens, 0),
+            axis=0,
+        )
+        selected_prob = tl.sum(
+            tl.where(kid_lanes == source, kid_prob, 0.0),
+            axis=0,
+        )
+        same_selected = valid_kid & (kid_tokens == selected_token)
+        selected_qmix = tl.sum(
+            tl.where(same_selected, kid_prob, 0.0),
+            axis=0,
+        ) / tl.maximum(overlap_mass, 1.0e-30)
+        accept_probability = tl.minimum(
+            selected_prob / tl.maximum(selected_qmix, 1.0e-30),
+            1.0,
+        )
+        accepted = (
+            has_kids
+            & (~zero_mass)
+            & (uniform_accept < accept_probability)
+        )
+        rejected = has_kids & (~accepted)
+
+        lane_i = kid_lanes[:, None]
+        lane_j = kid_lanes[None, :]
+        same_matrix = (
+            (kid_tokens[:, None] == kid_tokens[None, :])
+            & valid_kid[:, None]
+            & valid_kid[None, :]
+        )
+        same_mass = tl.sum(
+            tl.where(same_matrix, kid_prob[None, :], 0.0),
+            axis=1,
+        )
+        has_prior_duplicate = (
+            tl.sum(
+                tl.where(same_matrix & (lane_j < lane_i), 1, 0),
+                axis=1,
+            )
+            > 0
+        )
+        qmix_mass = same_mass / tl.maximum(overlap_mass, 1.0e-30)
+        correction = tl.where(
+            valid_kid & (~has_prior_duplicate),
+            tl.minimum(kid_prob, qmix_mass),
+            0.0,
+        )
+        kid_chunks = kid_tokens // CHUNK_SIZE
+        chunk_correction = tl.sum(
+            tl.where(
+                (chunk_offsets[:, None] == kid_chunks[None, :])
+                & valid_kid[None, :]
+                & (~has_prior_duplicate[None, :]),
+                correction[None, :],
+                0.0,
+            ),
+            axis=1,
+        )
+        residual_chunk_prob = tl.maximum(
+            target_chunk_prob - chunk_correction,
+            0.0,
+        )
+        residual_total = tl.sum(residual_chunk_prob, axis=0)
+        use_target = zero_mass | (residual_total <= 0.0)
+        residual_chunk_prob = tl.where(
+            use_target,
+            target_chunk_prob,
+            residual_chunk_prob,
+        )
+        residual_cdf = tl.cumsum(residual_chunk_prob, axis=0)
+        residual_threshold = uniform_residual * tl.sum(
+            residual_chunk_prob, axis=0
+        )
+        residual_chunk = tl.sum(
+            (residual_cdf <= residual_threshold).to(tl.int32),
+            axis=0,
+        )
+        residual_chunk = tl.minimum(residual_chunk, NUM_CHUNKS - 1)
+        residual_prior = tl.sum(
+            tl.where(
+                chunk_offsets < residual_chunk,
+                residual_chunk_prob,
+                0.0,
+            ),
+            axis=0,
+        )
+        residual_offsets = (
+            residual_chunk * CHUNK_SIZE + tl.arange(0, CHUNK_SIZE)
+        )
+        residual_valid = residual_offsets < VOCAB
+        target_values = tl.load(
+            target_base + residual_offsets,
+            mask=residual_valid,
+            other=float("-inf"),
+        ).to(tl.float32)
+        target_prob = tl.where(
+            residual_valid,
+            tl.exp(target_values - target_max)
+            / tl.maximum(target_total, 1.0e-30),
+            0.0,
+        )
+        token_correction = tl.sum(
+            tl.where(
+                (residual_offsets[:, None] == kid_tokens[None, :])
+                & valid_kid[None, :]
+                & (~has_prior_duplicate[None, :]),
+                correction[None, :],
+                0.0,
+            ),
+            axis=1,
+        )
+        residual_weights = tl.maximum(target_prob - token_correction, 0.0)
+        residual_weights = tl.where(
+            use_target,
+            target_prob,
+            residual_weights,
+        )
+        residual_local_cdf = tl.cumsum(residual_weights, axis=0)
+        residual_within = residual_threshold - residual_prior
+        residual_local_token = tl.sum(
+            (residual_local_cdf <= residual_within).to(tl.int32),
+            axis=0,
+        )
+        rejected_token = tl.minimum(
+            residual_chunk * CHUNK_SIZE + residual_local_token,
+            VOCAB - 1,
+        )
+        emitted_token = tl.where(
+            rejected,
+            rejected_token,
+            selected_token,
+        )
+        tl.store(
+            output_tokens
+            + request * OUTPUT_CAPACITY
+            + output_len_after_leaf,
+            emitted_token,
+            mask=has_kids,
+        )
+        output_len_new = output_len_after_leaf + has_kids.to(tl.int64)
+
+        accepted_node = tl.sum(
+            tl.where(kid_lanes == source, kids, 0),
+            axis=0,
+        )
+        tl.store(
+            accepted_path_rows + request * PATH_CAPACITY + path_len,
+            accepted_node + 1,
+            mask=accepted,
+        )
+        path_len_new = path_len + accepted.to(tl.int64)
+        current_new = tl.where(accepted, accepted_node, current)
+        alive_new = (alive & (~leaf)) & accepted
+        tl.store(current_state + request, current_new)
+        tl.store(alive_state + request, alive_new.to(tl.int8))
+        tl.store(output_lens + request, output_len_new)
+        tl.store(accepted_lens + request, path_len_new)
+
+        if LEVEL == WALK_CAP - 1:
+            tl.store(
+                last_row + request,
+                tl.where(path_len_new > 0, current_new + 1, 0),
+            )
+
+
 # ---------------------------------------------------------------------------
 # MEASUREMENT-ONLY commit trace (FR13 garble mechanism binding, 2026-07-10).
 # Gated on LUMO_TREE_SAMPLER_DEBUG_LOG (the ONE diagnostic flag proven to reach
@@ -930,9 +1361,9 @@ _FR13_FIXED32_TAW_WARMUPS: dict[tuple[Any, ...], dict[str, Any]] = {}
 _FR13_FIXED32_WORK_ANNOUNCED = False
 _FR13_FIXED32_BATCHES = (1, 2, 3, 4)
 _FR13_FIXED32_INTEGER_DTYPES = None
-_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-source-v1"
+_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-source-v3"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "ff9fdeb6529876732cc949ab4f2636a7cee04edaec2524c39657a34d3d8b3250"
+    "9a722bd73fcda5405cbbee70dab44806547f2e78985869d618df4fe88cb3f0e1"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
@@ -955,10 +1386,16 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_validate_inputs",
     "_fr13_fixed32_tensor_layout",
     "_fr13_fixed32_layout_contract",
+    "_fr13_fixed32_taw_execute_torch",
+    "_fr13_fixed32_taw_execute_fused",
     "_fr13_fixed32_taw_execute",
     "_fr13_fixed32_publish_work",
     "fr13_fixed32_taw_commit",
     "_fr13_taw_inv_cdf",
+)
+_FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (
+    "_fr13_fixed32_taw_chunk_stats_kernel",
+    "_fr13_fixed32_taw_reduce_sample_commit_kernel",
 )
 _FR13_FIXED32_TAW_GEOMETRY = {
     "physical_drafts": 31,
@@ -970,19 +1407,17 @@ _FR13_FIXED32_TAW_GEOMETRY = {
 }
 _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS = {
     "walk_levels": 12,
-    "full_vocab_row_gathers": 24,
-    "full_vocab_fp32_casts": 24,
-    "full_vocab_softmax_calls": 24,
-    "full_vocab_normalizations": 36,
-    "full_vocab_cdf_calls": 24,
-    "source_cdf_calls": 12,
-    "qmix_zero_fills": 12,
-    "qmix_scatter_add_calls": 12,
-    "residual_subtract_calls": 12,
-    "residual_clamp_calls": 12,
-    "residual_where_calls": 24,
-    "output_scatter_calls": 24,
-    "path_scatter_calls": 12,
+    "target_rows": 12,
+    "self_rows": 12,
+    "vocab_chunks_per_row": 64,
+    "vocab_chunk_size": 4096,
+    "chunk_stats_launches": 12,
+    "chunk_stats_programs_per_request": 1536,
+    "reduce_sample_commit_launches": 12,
+    "reduce_sample_commit_programs_per_request": 12,
+    "full_vocab_probability_materializations": 0,
+    "full_vocab_residual_materializations": 0,
+    "host_syncs": 0,
 }
 
 
@@ -1142,10 +1577,34 @@ def _fr13_fixed32_taw_source_contract(topology) -> dict[str, Any]:
             include_attributes=False,
         )
 
+    try:
+        module_tree = ast.parse(
+            Path(__file__).resolve().read_text(encoding="utf-8")
+        )
+    except (OSError, SyntaxError) as error:
+        raise RuntimeError("FR13 fixed32 cannot inspect fused TAW kernels") from error
+    kernel_definitions = {
+        node.name: node
+        for node in ast.walk(module_tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in _FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS
+    }
+    if set(kernel_definitions) != set(_FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS):
+        raise RuntimeError("FR13 fixed32 fused TAW kernel source is incomplete")
+    normalized_kernels = {
+        name: ast.dump(
+            kernel_definitions[name],
+            annotate_fields=True,
+            include_attributes=False,
+        )
+        for name in _FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS
+    }
+
     canonical = json.dumps(
         {
             "schema": _FR13_FIXED32_TAW_SOURCE_SCHEMA,
             "functions": normalized_sources,
+            "kernels": normalized_kernels,
             "geometry": geometry,
             "tensor_call_census": _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS,
         },
@@ -1393,6 +1852,34 @@ def fr13_fixed32_taw_preseed(
                 dtype=torch.long,
                 device=normalized_device,
             ),
+            "fused_partial_max": torch.empty(
+                (
+                    batch_size,
+                    _FR13_FIXED32_TAW_ROW_KINDS,
+                    _FR13_FIXED32_TAW_VOCAB_CHUNKS,
+                ),
+                dtype=torch.float32,
+                device=normalized_device,
+            ),
+            "fused_partial_sum": torch.empty(
+                (
+                    batch_size,
+                    _FR13_FIXED32_TAW_ROW_KINDS,
+                    _FR13_FIXED32_TAW_VOCAB_CHUNKS,
+                ),
+                dtype=torch.float32,
+                device=normalized_device,
+            ),
+            "fused_current": torch.empty(
+                batch_size,
+                dtype=torch.long,
+                device=normalized_device,
+            ),
+            "fused_alive": torch.empty(
+                batch_size,
+                dtype=torch.int8,
+                device=normalized_device,
+            ),
         }
         _FR13_FIXED32_TAW_CACHE[key] = entry
         keys.append(key)
@@ -1469,6 +1956,10 @@ def _fr13_fixed32_taw_cache_lease(entry: dict[str, Any]) -> tuple[Any, ...]:
         "accepted_path_rows",
         "accepted_lens",
         "last_row",
+        "fused_partial_max",
+        "fused_partial_sum",
+        "fused_current",
+        "fused_alive",
     )
     lease = []
     for name in tensor_names:
@@ -1695,6 +2186,10 @@ def fr13_fixed32_taw_warm_execute(
         "accepted_path_rows",
         "accepted_lens",
         "last_row",
+        "fused_partial_max",
+        "fused_partial_sum",
+        "fused_current",
+        "fused_alive",
     )
     saved_cache = tuple(
         {
@@ -2121,6 +2616,10 @@ def _fr13_fixed32_layout_contract(
         "accepted_path_rows": ([batch, 16], "torch.int64", [16, 1]),
         "accepted_lens": ([batch], "torch.int64", [1]),
         "last_row": ([batch], "torch.int64", [1]),
+        "fused_partial_max": ([batch, 2, 64], "torch.float32", [128, 64, 1]),
+        "fused_partial_sum": ([batch, 2, 64], "torch.float32", [128, 64, 1]),
+        "fused_current": ([batch], "torch.int64", [1]),
+        "fused_alive": ([batch], "torch.int8", [1]),
     }
     actual_cache_layouts = {}
     for name in expected_cache_layouts:
@@ -2252,10 +2751,17 @@ def _fr13_fixed32_layout_contract(
         ),
         "accepted_lens_shape": list(expected_cache_layouts["accepted_lens"][0]),
         "last_row_shape": list(expected_cache_layouts["last_row"][0]),
+        "fused_partial_shape": list(
+            expected_cache_layouts["fused_partial_max"][0]
+        ),
+        "fused_current_shape": list(
+            expected_cache_layouts["fused_current"][0]
+        ),
+        "fused_alive_shape": list(expected_cache_layouts["fused_alive"][0]),
     }
 
 
-def _fr13_fixed32_taw_execute(
+def _fr13_fixed32_taw_execute_torch(
     topology,
     entry: dict[str, Any],
     drafts,
@@ -2500,6 +3006,171 @@ def _fr13_fixed32_taw_execute(
     )
 
 
+def _fr13_fixed32_taw_execute_fused(
+    topology,
+    entry: dict[str, Any],
+    drafts,
+    target_logits,
+    tree_self_logits,
+    bonus_flat,
+    uniforms,
+    *,
+    walk_cap: int,
+) -> tuple[Any, Any, Any, Any, Any, int]:
+    """Launch the fixed two-kernel-per-level TAW implementation."""
+    if triton is None or tl is None:
+        raise RuntimeError("FR13 fixed32 fused TAW requires Triton")
+    if not target_logits.is_cuda:
+        raise RuntimeError("FR13 fixed32 fused TAW requires CUDA tensors")
+    batch_size = int(entry["batch_size"])
+    vocab = int(target_logits.shape[1])
+    if walk_cap != int(topology.WALK_CAP):
+        raise RuntimeError(
+            f"FR13 fixed32 fused TAW walk {walk_cap} != {topology.WALK_CAP}"
+        )
+    if vocab <= 0 or vocab > _FR13_FIXED32_TAW_MAX_VOCAB:
+        raise RuntimeError(
+            "FR13 fixed32 fused TAW vocabulary exceeds its fixed geometry: "
+            f"{vocab} not in [1,{_FR13_FIXED32_TAW_MAX_VOCAB}]"
+        )
+    partial_shape = (
+        batch_size,
+        _FR13_FIXED32_TAW_ROW_KINDS,
+        _FR13_FIXED32_TAW_VOCAB_CHUNKS,
+    )
+    expected_scratch = {
+        "fused_partial_max": (partial_shape, torch.float32),
+        "fused_partial_sum": (partial_shape, torch.float32),
+        "fused_current": ((batch_size,), torch.int64),
+        "fused_alive": ((batch_size,), torch.int8),
+    }
+    for name, (shape, dtype) in expected_scratch.items():
+        value = entry.get(name)
+        if (
+            not isinstance(value, torch.Tensor)
+            or tuple(value.shape) != tuple(shape)
+            or value.dtype != dtype
+            or value.device != target_logits.device
+            or not value.is_contiguous()
+        ):
+            raise RuntimeError(
+                f"FR13 fixed32 fused TAW scratch layout drift: {name}"
+            )
+
+    physical_drafts = int(topology.PHYSICAL_DRAFTS)
+    physical_rows = int(topology.PHYSICAL_ROWS)
+    fanout = int(topology.SAMPLER_MAX_FANOUT)
+    output_capacity = int(topology.OUTPUT_PUBLISH_CAPACITY)
+    path_capacity = int(topology.ACCEPTED_PATH_CAPACITY)
+    partial_max = entry["fused_partial_max"]
+    partial_sum = entry["fused_partial_sum"]
+    current_state = entry["fused_current"]
+    alive_state = entry["fused_alive"]
+    output_tokens = entry["output_tokens"]
+    output_lens = entry["output_lens"]
+    accepted_path_rows = entry["accepted_path_rows"]
+    accepted_lens = entry["accepted_lens"]
+    last_row = entry["last_row"]
+    child_table = entry["child_table"]
+    child_counts = entry["child_counts"]
+
+    stats_grid = (
+        batch_size
+        * _FR13_FIXED32_TAW_ROW_KINDS
+        * _FR13_FIXED32_TAW_VOCAB_CHUNKS,
+    )
+    reduce_grid = (batch_size,)
+    for level in range(walk_cap):
+        _fr13_fixed32_taw_chunk_stats_kernel[stats_grid](
+            target_logits,
+            tree_self_logits,
+            child_table,
+            current_state,
+            partial_max,
+            partial_sum,
+            VOCAB=vocab,
+            LEVEL=level,
+            PHYSICAL_DRAFTS=physical_drafts,
+            PHYSICAL_ROWS=physical_rows,
+            FANOUT=fanout,
+            NUM_CHUNKS=_FR13_FIXED32_TAW_VOCAB_CHUNKS,
+            CHUNK_SIZE=_FR13_FIXED32_TAW_CHUNK_SIZE,
+            num_warps=8,
+        )
+        _fr13_fixed32_taw_reduce_sample_commit_kernel[reduce_grid](
+            target_logits,
+            tree_self_logits,
+            child_table,
+            child_counts,
+            drafts,
+            bonus_flat,
+            uniforms,
+            partial_max,
+            partial_sum,
+            current_state,
+            alive_state,
+            output_tokens,
+            output_lens,
+            accepted_path_rows,
+            accepted_lens,
+            last_row,
+            VOCAB=vocab,
+            LEVEL=level,
+            WALK_CAP=walk_cap,
+            PHYSICAL_DRAFTS=physical_drafts,
+            PHYSICAL_ROWS=physical_rows,
+            FANOUT=fanout,
+            OUTPUT_CAPACITY=output_capacity,
+            PATH_CAPACITY=path_capacity,
+            NUM_CHUNKS=_FR13_FIXED32_TAW_VOCAB_CHUNKS,
+            CHUNK_SIZE=_FR13_FIXED32_TAW_CHUNK_SIZE,
+            num_warps=8,
+        )
+    return (
+        output_tokens,
+        output_lens,
+        accepted_path_rows,
+        accepted_lens,
+        last_row,
+        walk_cap,
+    )
+
+
+def _fr13_fixed32_taw_execute(
+    topology,
+    entry: dict[str, Any],
+    drafts,
+    target_logits,
+    tree_self_logits,
+    bonus_flat,
+    uniforms,
+    *,
+    walk_cap: int,
+) -> tuple[Any, Any, Any, Any, Any, int]:
+    """Dispatch CUDA to the fused kernel and retain the exact CPU oracle."""
+    if target_logits.is_cuda:
+        return _fr13_fixed32_taw_execute_fused(
+            topology,
+            entry,
+            drafts,
+            target_logits,
+            tree_self_logits,
+            bonus_flat,
+            uniforms,
+            walk_cap=walk_cap,
+        )
+    return _fr13_fixed32_taw_execute_torch(
+        topology,
+        entry,
+        drafts,
+        target_logits,
+        tree_self_logits,
+        bonus_flat,
+        uniforms,
+        walk_cap=walk_cap,
+    )
+
+
 def _fr13_fixed32_publish_work(
     topology,
     *,
@@ -2511,6 +3182,7 @@ def _fr13_fixed32_publish_work(
     layout_contract: dict[str, Any],
 ) -> None:
     taw = {
+        "route": "fixed32_fused_chunk_cdf",
         "preseeded_batches": list(_FR13_FIXED32_BATCHES),
         "topology_cache_hit": True,
         "cache_misses": 0,
@@ -2532,6 +3204,20 @@ def _fr13_fixed32_publish_work(
         "residual_rows": int(topology.WALK_CAP) * batch_size,
         "row_scatter_slots": int(topology.TAW_ROW_SCATTER_SLOTS) * batch_size,
         "path_scatter_slots": int(topology.TAW_PATH_SCATTER_SLOTS) * batch_size,
+        "vocab_chunks": _FR13_FIXED32_TAW_VOCAB_CHUNKS,
+        "vocab_chunk_size": _FR13_FIXED32_TAW_CHUNK_SIZE,
+        "chunk_stats_launches": int(topology.WALK_CAP),
+        "chunk_stats_programs": (
+            int(topology.WALK_CAP)
+            * _FR13_FIXED32_TAW_ROW_KINDS
+            * _FR13_FIXED32_TAW_VOCAB_CHUNKS
+            * batch_size
+        ),
+        "reduce_sample_commit_launches": int(topology.WALK_CAP),
+        "reduce_sample_commit_programs": int(topology.WALK_CAP) * batch_size,
+        "full_vocab_probability_materializations": 0,
+        "full_vocab_residual_materializations": 0,
+        "host_syncs": 0,
     }
     if (
         set(source_contract)
@@ -3794,6 +4480,7 @@ def _fr13_fixed32_test_mode_switch_batches(topology) -> None:
     callback_rows = []
     taw_by_batch = {}
     expected_taw_keys = {
+        "route",
         "preseeded_batches",
         "topology_cache_hit",
         "cache_misses",
@@ -3811,6 +4498,15 @@ def _fr13_fixed32_test_mode_switch_batches(topology) -> None:
         "residual_rows",
         "row_scatter_slots",
         "path_scatter_slots",
+        "vocab_chunks",
+        "vocab_chunk_size",
+        "chunk_stats_launches",
+        "chunk_stats_programs",
+        "reduce_sample_commit_launches",
+        "reduce_sample_commit_programs",
+        "full_vocab_probability_materializations",
+        "full_vocab_residual_materializations",
+        "host_syncs",
         "source_contract_schema",
         "source_contract_sha256",
         "tensor_call_census",
@@ -3852,6 +4548,9 @@ def _fr13_fixed32_test_mode_switch_batches(topology) -> None:
         "accepted_path_shape",
         "accepted_lens_shape",
         "last_row_shape",
+        "fused_partial_shape",
+        "fused_current_shape",
+        "fused_alive_shape",
     }
     fr13_fixed32_taw_set_work_callback(callback_rows.append)
     for mode in ("tail6_fixed32", "hydra27_fixed32"):
@@ -3967,6 +4666,9 @@ def _fr13_fixed32_test_mode_switch_batches(topology) -> None:
                 "accepted_path_shape": [batch_size, 16],
                 "accepted_lens_shape": [batch_size],
                 "last_row_shape": [batch_size],
+                "fused_partial_shape": [batch_size, 2, 64],
+                "fused_current_shape": [batch_size],
+                "fused_alive_shape": [batch_size],
             }
             for name, expected in expected_layout_values.items():
                 if work["taw"][name] != expected:

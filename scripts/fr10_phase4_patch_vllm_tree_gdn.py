@@ -4981,7 +4981,7 @@ def _fr13_fixed32_observed_build_record(
         )
     valid_mask = int(taw_payload["valid_mask"])
     record = {
-        "schema": "fr13-fixed32-work-census-v9",
+        "schema": "fr13-fixed32-work-census-v10",
         "event_id": (
             str(identity[0]) + ":" + str(pid) + ":" + str(index)
         ),
