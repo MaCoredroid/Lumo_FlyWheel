@@ -1,5 +1,5 @@
 {
-  "schema": "fr13-fixed32-depth-acceptance-comparison-v1",
+  "schema": "fr13-fixed32-depth-acceptance-comparison-v2",
   "created_at_utc": "2026-07-31T13:44:00Z",
   "position_semantics": "For zero-based position p, count is the number of exact forward events accepting at least p+1 draft tokens; survival_rate=count/forward_events.",
   "positions": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
@@ -18,7 +18,62 @@
     "tail6_counts": [6773, 5858, 5000, 4194, 3622, 2485, 2152, 1941, 1773, 1635, 1529],
     "hydra27_survival_percent": [93.465415, 81.299965, 67.639903, 56.41293, 47.080292, 29.127563, 23.44456, 20.14251, 17.761557, 15.91936, 14.511644],
     "tail6_survival_percent": [93.718002, 81.057147, 69.185001, 58.032379, 50.117615, 34.384945, 29.777224, 26.857617, 24.533001, 22.623495, 21.156773],
-    "hydra27_minus_tail6_percentage_points": [-0.252587, 0.242818, -1.545098, -1.619448, -3.037323, -5.257382, -6.332664, -6.715108, -6.771444, -6.704135, -6.645129]
+    "hydra27_minus_tail6_percentage_points": [-0.252587, 0.242818, -1.545098, -1.619448, -3.037323, -5.257382, -6.332664, -6.715108, -6.771444, -6.704135, -6.645129],
+    "hydra27_accepted_drafts_per_event": 4.668057003823,
+    "tail6_accepted_drafts_per_event": 5.114431991144,
+    "hydra27_minus_tail6_accepted_drafts_per_event": -0.446374987321,
+    "hydra27_relative_delta_percent": -8.727752917505,
+    "per_position_contribution_to_accepted_drafts_per_event_delta": [-0.00252586574, 0.00242818431, -0.015450980155, -0.016194484448, -0.030373225304, -0.052573819097, -0.063326639919, -0.0671510771, -0.067714440677, -0.067041347813, -0.066451291379],
+    "positions_0_through_4_contribution": -0.062116371335,
+    "positions_5_through_10_contribution": -0.384258615985,
+    "positions_5_through_10_share_of_net_drop_percent": 86.084262537
+  },
+  "symmetric_task_decomposition": {
+    "method": "For each task i: within_i=((hydra_weight_i+tail_weight_i)/2)*(hydra_rate_i-tail_rate_i); composition_i=((hydra_rate_i+tail_rate_i)/2)*(hydra_weight_i-tail_weight_i). The two components sum exactly to the aggregate accepted-drafts/event delta.",
+    "units": "accepted_drafts_per_event",
+    "within_task_rate_component": -0.385734420099,
+    "task_composition_component": -0.060640567222,
+    "reconstructed_total_delta": -0.446374987321,
+    "within_task_rate_share_of_net_drop_percent": 86.414882342,
+    "task_composition_share_of_net_drop_percent": 13.585117658,
+    "tasks": [
+      {
+        "instance_id": "astropy__astropy-12907",
+        "hydra27_event_weight": 0.086374695864,
+        "tail6_event_weight": 0.071260550713,
+        "hydra27_minus_tail6_rate": 0.49992772167,
+        "within_task_rate_component": 0.039403114838,
+        "task_composition_component": 0.073860667009,
+        "total_component": 0.113263781847
+      },
+      {
+        "instance_id": "astropy__astropy-13033",
+        "hydra27_event_weight": 0.190823774765,
+        "tail6_event_weight": 0.065587380656,
+        "hydra27_minus_tail6_rate": -0.137903207212,
+        "within_task_rate_component": -0.017679960349,
+        "task_composition_component": 0.574480196631,
+        "total_component": 0.556800236282
+      },
+      {
+        "instance_id": "astropy__astropy-13236",
+        "hydra27_event_weight": 0.232012513034,
+        "tail6_event_weight": 0.196208661962,
+        "hydra27_minus_tail6_rate": -0.137275162042,
+        "within_task_rate_component": -0.029392065594,
+        "task_composition_component": 0.168683908415,
+        "total_component": 0.139291842821
+      },
+      {
+        "instance_id": "astropy__astropy-13398",
+        "hydra27_event_weight": 0.490789016336,
+        "tail6_event_weight": 0.666943406669,
+        "hydra27_minus_tail6_rate": -0.653113796387,
+        "within_task_rate_component": -0.378065508995,
+        "task_composition_component": -0.877665339277,
+        "total_component": -1.255730848272
+      }
+    ]
   },
   "tasks": [
     {
@@ -57,7 +112,9 @@
   "interpretation": {
     "observed_campaign_delta": "Aggregate Hydra27 late-depth survival is lower, with the gap widening after position 4; accepted drafts/event is 8.73 percent below Tail6.",
     "counterevidence_to_uniform_regression": "Hydra27 is better at every measured depth on task 1, better through position 4 on task 2, and better through position 2 on task 3.",
-    "trajectory_confound": "The arms are free-running sampled agents. Task lengths and generated contexts differ materially, so aggregate and per-task deltas do not isolate topology causally.",
+    "task_mix_result": "The symmetric decomposition attributes 13.59 percent of the aggregate net drop to changed task/event composition and 86.41 percent to within-task rate differences. Within-task differences still include unpaired generated-context and turn-length trajectory effects and therefore are not a topology estimate.",
+    "task_and_depth_concentration": "Task astropy__astropy-13398 contributes 0.378066 accepted drafts/event of within-task loss, while task 1 improves and tasks 2-3 have small rate losses. Positions 5-10 contribute 0.384259 accepted drafts/event, or 86.08 percent of the aggregate net drop.",
+    "trajectory_confound": "The arms are free-running sampled agents. Task lengths, verdicts, turn counts, and generated contexts differ materially, so aggregate and per-task deltas do not isolate topology causally.",
     "branch_selection_visibility": "Canonical FR13_BRANCH_ACCEPT_DIAG=0 provides no accepted-branch ID trace. Drafter hit logs prove branch materialization and cache engagement but cannot identify which added branch was accepted.",
     "kernel_separation": "Hydra27 GPU components are only 1.05 percent slower than Tail6 while accepted drafts/event is 8.73 percent lower. The full-step TPS difference in this campaign is therefore dominated by trajectory acceptance, not a large kernel-time regression.",
     "next_proof": "A causal topology claim requires paired same-trajectory teacher forcing or canonical accepted-path logging; neither was enabled here, and no synthetic probe is substituted."
