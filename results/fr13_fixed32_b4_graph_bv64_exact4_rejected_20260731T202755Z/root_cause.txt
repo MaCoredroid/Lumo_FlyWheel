@@ -1,0 +1,20 @@
+Failure stage:
+  descending FULL CUDA graph capture, before server health and before tasks
+
+Observed transition:
+  B4 FULL capture completed
+  B3 pre-capture lease check:
+    pregather_bank_aliases actual=false expected=true
+
+Source cause:
+  SD-layout GDN creates conv_state with self.kv_cache[0].transpose(-1, -2)
+  on every forward. This yields a fresh Tensor wrapper over the same exact
+  persistent cache view. The final-preseed check compared wrappers with
+  Python `is`, although the in-capture guard validates data pointer, shape,
+  stride, storage offset, dtype, and device.
+
+Repair:
+  f230f87f6 fix(fixed32): accept exact conv cache view aliases
+
+The repair still rejects different storage, data pointer, storage offset,
+shape, stride, dtype, device, or layout.

@@ -1,0 +1,50 @@
+{
+  "schema": "fr13.fixed32.batch_gdn.b4_graph_rejection.v1",
+  "status": "rejected_zero_task_graph_capture",
+  "suite": "SWE-Verified",
+  "subset": "config/fr13_fixed32/subset_b4_four.json",
+  "subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+  "batch": 4,
+  "concurrency": 4,
+  "tasks_completed": 0,
+  "source_commit": "131a592201201f4c65c4fc7221e9ef6fa7fdb8a9",
+  "runner_sha256": "05349068af244eee8b5b6f0018fde2c800c05606b2428ed9dcd4290d9489331a",
+  "fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+  "reference_bv": 8,
+  "candidate_bv": 64,
+  "serve_rc": 2,
+  "started_utc": "2026-07-31T20:27:55Z",
+  "ended_utc": "2026-07-31T20:37:03Z",
+  "failure_stage": "final_full_graph_capture_before_health",
+  "completed_full_graph_batches": [
+    4
+  ],
+  "failed_precheck_batch": 3,
+  "root_error": "FR13 fixed32 final FULL eager preseed did not publish lease",
+  "root_mismatch": {
+    "field": "pregather_bank_aliases",
+    "actual": false,
+    "expected": true
+  },
+  "real_event_marker_present": false,
+  "engine_ingress_ledger_present": false,
+  "health_present": false,
+  "byte_gate_pass_present": false,
+  "byte_gate_records": 0,
+  "timing_eligible": false,
+  "floor_acceptance_eligible": false,
+  "performance_claim": false,
+  "repair_commit": "f230f87f6",
+  "repair_validation": {
+    "focused_passed": 26,
+    "fixed32_passed": 647,
+    "fixed32_skipped": 7
+  },
+  "runtime_manifest_sha256": "99b26fa5e7a53d8b126d51a61453dfa9d37499a6676a3e85108f530ef2ddd637",
+  "runtime_manifests_equal": true,
+  "external_manifest_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+  "external_manifests_equal": true,
+  "manual_cleanup_verified": true,
+  "containers_after_cleanup": 0,
+  "gpu_compute_processes_after_cleanup": 0
+}
