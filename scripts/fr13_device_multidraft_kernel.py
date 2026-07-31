@@ -1052,7 +1052,7 @@ _FR13_FIXED32_BATCHES = (1, 2, 3, 4)
 _FR13_FIXED32_INTEGER_DTYPES = None
 _FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-exact-commit-v2"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "df7411d51607ab66d46e9c991247f6472168ef8739a7466bbf2b1b00e1975924"
+    "65ba197b27bd80841e3bf4f871c9ee2b0b377365e009047f28c1436d49957cec"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
@@ -1191,6 +1191,8 @@ def _fr13_fixed32_expected_active(topology, mode: str) -> int:
         return int(topology.TAIL6_ACTIVE_DRAFTS)
     if mode == "hydra27_fixed32":
         return int(topology.HYDRA27_ACTIVE_DRAFTS)
+    if mode == "hydra31_fixed32":
+        return int(topology.HYDRA31_ACTIVE_DRAFTS)
     raise RuntimeError(f"unknown FR13_FIXED32_MODE {mode!r}")
 
 
@@ -4286,7 +4288,7 @@ def _fr13_fixed32_test_mode_switch_batches(topology) -> None:
         "exact_alive_shape",
     }
     fr13_fixed32_taw_set_work_callback(callback_rows.append)
-    for mode in ("tail6_fixed32", "hydra27_fixed32"):
+    for mode in ("tail6_fixed32", "hydra27_fixed32", "hydra31_fixed32"):
         _fr13_fixed32_test_set_env(topology, mode)
         mask = int(topology.VALID_MASK_BY_MODE[mode])
         keys = fr13_fixed32_taw_preseed(
@@ -4681,7 +4683,7 @@ def fr13_fixed32_taw_self_test() -> None:
             else:
                 os.environ[name] = value
     print(
-        f"PASS fr13_fixed32_taw groups={len(tests)} modes=2 batches=1..4 walk=12",
+        f"PASS fr13_fixed32_taw groups={len(tests)} modes=3 batches=1..4 walk=12",
         flush=True,
     )
 

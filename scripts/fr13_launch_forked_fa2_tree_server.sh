@@ -265,6 +265,8 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   FR13_FIXED32_ACTIVE_NODES="${FR13_FIXED32_ACTIVE_NODES:-}" \
   FR13_FIXED32_PHYSICAL_DRAFTS="${FR13_FIXED32_PHYSICAL_DRAFTS:-}" \
   FR13_FIXED32_TAW_WALK_CAP="${FR13_FIXED32_TAW_WALK_CAP:-}" \
+  FR13_HYDRA31_ENABLE="${FR13_HYDRA31_ENABLE:-0}" \
+  FR13_HYDRA31_GATE_SIDECAR="${FR13_HYDRA31_GATE_SIDECAR:-}" \
   NUM_SPECULATIVE_TOKENS="$NUM_SPECULATIVE_TOKENS" \
     .venv/bin/python - <<'PY'
 import ast
@@ -286,9 +288,23 @@ expected = {
         topology.HYDRA27_VALID_MASK,
         topology.HYDRA27_ACTIVE_DRAFTS,
     ),
+    "hydra31_fixed32": (
+        topology.HYDRA31_VALID_MASK,
+        topology.HYDRA31_ACTIVE_DRAFTS,
+    ),
 }
 if mode not in expected:
     raise SystemExit(f"unsupported fixed32 mode: {mode!r}")
+hydra31_enable = os.environ["FR13_HYDRA31_ENABLE"]
+hydra31_sidecar = os.environ["FR13_HYDRA31_GATE_SIDECAR"]
+if mode == topology.HYDRA31_MODE:
+    if hydra31_enable != "1":
+        raise SystemExit("hydra31_fixed32 requires FR13_HYDRA31_ENABLE=1")
+else:
+    if hydra31_enable not in ("", "0"):
+        raise SystemExit("FR13_HYDRA31_ENABLE is forbidden outside hydra31_fixed32")
+if hydra31_sidecar:
+    raise SystemExit("FR13_HYDRA31_GATE_SIDECAR is launcher-owned")
 tree = tuple(tuple(path) for path in ast.literal_eval(os.environ["TREE"]))
 if tree != topology.FIXED32_CHOICES:
     raise SystemExit("fixed32 TREE differs from FIXED32_CHOICES")
@@ -789,8 +805,42 @@ PY
     "$LOG_DIR/fr13_fixed32_ingress_secret_identity.json" \
     "$LOG_DIR/fr13_fixed32_runtime_attestation.json" \
     "$LOG_DIR"/fr13_fixed32_boundary_snapshot.*.json \
-    "$LOG_DIR/fr13_fixed32_mode.flag"
+    "$LOG_DIR/fr13_fixed32_mode.flag" \
+    "$LOG_DIR/fr13_fixed32_hydra31_runtime_gate.json"
   printf '%s\n' "$FR13_FIXED32_MODE" > "$LOG_DIR/fr13_fixed32_mode.flag"
+  if [[ "$FR13_FIXED32_MODE" == "hydra31_fixed32" ]]; then
+    [[ "${FR13_HYDRA31_ENABLE:-0}" == "1" ]] \
+      || { echo "hydra31_fixed32 requires FR13_HYDRA31_ENABLE=1" >&2; exit 2; }
+    python3 - "$LOG_DIR/fr13_fixed32_hydra31_runtime_gate.json" <<'PY'
+import os
+import sys
+
+sys.path.insert(0, "scripts")
+from fr13_fixed32_topology import hydra31_runtime_gate_json
+
+path = os.fspath(sys.argv[1])
+descriptor = os.open(
+    path,
+    os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+    0o400,
+)
+try:
+    os.fchmod(descriptor, 0o400)
+    payload = (hydra31_runtime_gate_json() + "\n").encode("ascii")
+    written = os.write(descriptor, payload)
+    if written != len(payload):
+        raise RuntimeError("short Hydra31 runtime-gate sidecar write")
+    os.fsync(descriptor)
+finally:
+    os.close(descriptor)
+PY
+    FR13_HYDRA31_GATE_SIDECAR=/logs/fr13_fixed32_hydra31_runtime_gate.json
+    export FR13_HYDRA31_GATE_SIDECAR
+  else
+    [[ "${FR13_HYDRA31_ENABLE:-0}" == "0" ]] \
+      || { echo "FR13_HYDRA31_ENABLE is forbidden outside hydra31_fixed32" >&2; exit 2; }
+    unset FR13_HYDRA31_GATE_SIDECAR
+  fi
   printf '%s\n' \
     "mode=$FR13_FIXED32_MODE" \
     "pid=$FR13_FIXED32_ENGINE_PID_FILE" \

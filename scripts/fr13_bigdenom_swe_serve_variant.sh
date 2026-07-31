@@ -59,14 +59,22 @@ OFFLOAD_PROXY_PORT=${LUMO_OFFLOAD_PROXY_PORT:-8023}
 GB10_TS_IP=${GB10_TS_IP:-100.103.10.122}
 OFFLOAD_HELPER=scripts/swe_x86_helpers/offload_codex_proxy.sh
 OFFLOAD_LINK_DOWN_MAX_S=${OFFLOAD_LINK_DOWN_MAX_S:-300}
-if [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" ]]; then
+if [[ "$KIND" == "hydra31_fixed32" ]]; then
+  [[ "${FR13_HYDRA31_ENABLE:-0}" == "1" ]] \
+    || { echo "FAIL: hydra31_fixed32 is default-off; set FR13_HYDRA31_ENABLE=1"; exit 2; }
+  [[ -z "${FR13_HYDRA31_GATE_SIDECAR:-}" ]] \
+    || { echo "FAIL: FR13_HYDRA31_GATE_SIDECAR is launcher-owned"; exit 2; }
+fi
+if [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" \
+   || "$KIND" == "hydra31_fixed32" ]]; then
   [[ "$OFFLOAD_AGENT" == "1" ]] \
     || { echo "FAIL: fixed32 requires OFFLOAD_AGENT=1"; exit 2; }
   [[ ! -e "$ARMDIR" ]] \
     || { echo "FAIL: fixed32 arm directory already exists: $ARMDIR"; exit 2; }
 fi
 mkdir -p "$ARMDIR/logs"
-if [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" ]]; then
+if [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" \
+   || "$KIND" == "hydra31_fixed32" ]]; then
   chmod 700 "$ARMDIR" "$ARMDIR/logs" \
     || { echo "FAIL: fixed32 arm directories could not be made private"; exit 2; }
 fi
@@ -126,17 +134,21 @@ t.validate_contract()
 print(repr(list(t.FIXED32_CHOICES)))
 print(f"{t.TAIL6_VALID_MASK:#x}")
 print(f"{t.HYDRA27_VALID_MASK:#x}")
+print(f"{t.HYDRA31_VALID_MASK:#x}")
 print(t.TAIL6_ACTIVE_DRAFTS)
 print(t.HYDRA27_ACTIVE_DRAFTS)
+print(t.HYDRA31_ACTIVE_DRAFTS)
 PY
 )
-(( ${#_FIXED32_CONTRACT[@]} == 5 )) \
-  || { echo "FAIL: fixed32 topology authority did not emit five fields"; exit 2; }
+(( ${#_FIXED32_CONTRACT[@]} == 7 )) \
+  || { echo "FAIL: fixed32 topology authority did not emit seven fields"; exit 2; }
 FIXED32_TREE=${_FIXED32_CONTRACT[0]}
 FIXED32_TAIL_MASK=${_FIXED32_CONTRACT[1]}
 FIXED32_HYDRA_MASK=${_FIXED32_CONTRACT[2]}
-FIXED32_TAIL_ACTIVE=${_FIXED32_CONTRACT[3]}
-FIXED32_HYDRA_ACTIVE=${_FIXED32_CONTRACT[4]}
+FIXED32_HYDRA31_MASK=${_FIXED32_CONTRACT[3]}
+FIXED32_TAIL_ACTIVE=${_FIXED32_CONTRACT[4]}
+FIXED32_HYDRA_ACTIVE=${_FIXED32_CONTRACT[5]}
+FIXED32_HYDRA31_ACTIVE=${_FIXED32_CONTRACT[6]}
 unset _FIXED32_CONTRACT
 # 333 = widths [3,3,3]: depth-3 spine (spine_steps=2) + 2 branches/depth (9 choices). SAME width
 # as t33333, differs ONLY in depth -> dfwd(t33333)-dfwd(t333) = 2 spine-steps' drafter cost.
@@ -251,6 +263,7 @@ case "$KIND" in
     declare -a XFLAGS=(
       FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged
       FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0
+      FR13_HYDRA31_ENABLE=0
       FR13_FIXED32_MODE=tail6_fixed32
       "FR13_FIXED32_VALID_MASK=$FIXED32_TAIL_MASK"
       "FR13_FIXED32_ACTIVE_NODES=$FIXED32_TAIL_ACTIVE"
@@ -265,9 +278,29 @@ case "$KIND" in
     declare -a XFLAGS=(
       FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged
       FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0
+      FR13_HYDRA31_ENABLE=0
       FR13_FIXED32_MODE=hydra27_fixed32
       "FR13_FIXED32_VALID_MASK=$FIXED32_HYDRA_MASK"
       "FR13_FIXED32_ACTIVE_NODES=$FIXED32_HYDRA_ACTIVE"
+      FR13_FIXED32_PHYSICAL_DRAFTS=31
+    )
+    ;;
+  hydra31_fixed32)
+    [[ "${FR13_HYDRA31_ENABLE:-0}" == "1" ]] \
+      || { echo "FAIL: hydra31_fixed32 is default-off; set FR13_HYDRA31_ENABLE=1"; exit 2; }
+    [[ -z "${FR13_HYDRA31_GATE_SIDECAR:-}" ]] \
+      || { echo "FAIL: FR13_HYDRA31_GATE_SIDECAR is launcher-owned"; exit 2; }
+    LAUNCHER=forked
+    TREEARG="$FIXED32_TREE"
+    EXPECT_RATIO=31
+    FIXED32_MODE=hydra31_fixed32
+    declare -a XFLAGS=(
+      FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged
+      FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0
+      FR13_HYDRA31_ENABLE=1
+      FR13_FIXED32_MODE=hydra31_fixed32
+      "FR13_FIXED32_VALID_MASK=$FIXED32_HYDRA31_MASK"
+      "FR13_FIXED32_ACTIVE_NODES=$FIXED32_HYDRA31_ACTIVE"
       FR13_FIXED32_PHYSICAL_DRAFTS=31
     )
     ;;

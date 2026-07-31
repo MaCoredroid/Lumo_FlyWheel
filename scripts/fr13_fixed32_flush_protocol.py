@@ -54,7 +54,9 @@ SELF_TEST_SCHEMA: Final = "fr13-fixed32-flush-self-test-v1"
 READY_ACTION: Final = "ready"
 READY_NONCE: Final = "0" * 64
 FLUSH_ACTIONS: Final = frozenset({"snapshot", "final"})
-FIXED32_MODES: Final = frozenset({"tail6_fixed32", "hydra27_fixed32"})
+FIXED32_MODES: Final = frozenset(
+    {"tail6_fixed32", "hydra27_fixed32", "hydra31_fixed32"}
+)
 
 REQUEST_KEYS: Final = frozenset(
     {

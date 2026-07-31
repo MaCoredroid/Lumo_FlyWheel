@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ast
 import os
+import stat
 from pathlib import Path
 
 
@@ -147,8 +148,12 @@ _FR13_FIXED32_PARENT = (
 _FR13_FIXED32_MODES = {
     "tail6_fixed32": (0x7A9CE73F, 21),
     "hydra27_fixed32": (0x7ABDFFFF, 27),
+    "hydra31_fixed32": (0x7FFFFFFF, 31),
 }
 _FR13_FIXED32_MODE = os.environ.get("FR13_FIXED32_MODE", "").strip()
+_FR13_HYDRA31_GATE_SIDECAR = Path(
+    "/logs/fr13_fixed32_hydra31_runtime_gate.json"
+)
 _FR13_FIXED32_TREE_SOURCE = repr(list(_FR13_FIXED32_CHOICES))
 _FR13_FIXED32_SLOT_PI = tuple(
     [0]
@@ -387,6 +392,7 @@ def _fr13_fixed32_topology_needle():
     expected_masks = {
         "tail6_fixed32": 0x7A9CE73F,
         "hydra27_fixed32": 0x7ABDFFFF,
+        "hydra31_fixed32": 0x7FFFFFFF,
     }
     if expected_masks.get(_FR13_FIXED32_MODE) != mask:
         raise RuntimeError(
@@ -5123,6 +5129,51 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
     )
 
 
+def _fr13_fixed32_validate_hydra31_gate(mode: str) -> None:
+    """Require both explicit opt-in and the canonical Hydra31 sidecar."""
+    enabled = os.environ.get("FR13_HYDRA31_ENABLE", "0")
+    configured_path = os.environ.get("FR13_HYDRA31_GATE_SIDECAR", "")
+    if mode != "hydra31_fixed32":
+        if enabled not in ("", "0") or configured_path:
+            raise RuntimeError(
+                "Hydra31 gate variables are forbidden outside hydra31_fixed32"
+            )
+        return
+    if enabled != "1":
+        raise RuntimeError("hydra31_fixed32 requires FR13_HYDRA31_ENABLE=1")
+    expected_path = os.fspath(_FR13_HYDRA31_GATE_SIDECAR)
+    if configured_path != expected_path:
+        raise RuntimeError(
+            "hydra31_fixed32 gate sidecar path mismatch: "
+            f"{configured_path!r} != {expected_path!r}"
+        )
+    try:
+        descriptor = os.open(
+            _FR13_HYDRA31_GATE_SIDECAR,
+            os.O_RDONLY | os.O_NOFOLLOW,
+        )
+    except OSError as exc:
+        raise RuntimeError("hydra31_fixed32 gate sidecar is unavailable") from exc
+    try:
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or stat.S_IMODE(metadata.st_mode) != 0o400
+        ):
+            raise RuntimeError(
+                "hydra31_fixed32 gate sidecar must be a mode-400 regular file"
+            )
+        with os.fdopen(descriptor, "rb", closefd=False) as handle:
+            payload = handle.read()
+    finally:
+        os.close(descriptor)
+    from fr13_fixed32_topology import hydra31_runtime_gate_json
+
+    expected_payload = (hydra31_runtime_gate_json() + "\n").encode("ascii")
+    if payload != expected_payload:
+        raise RuntimeError("hydra31_fixed32 gate sidecar content mismatch")
+
+
 def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     """Validate the fixed-work campaign before emitting any runtime source."""
     mode = _FR13_FIXED32_MODE
@@ -5130,6 +5181,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         return None
     if mode not in _FR13_FIXED32_MODES:
         raise RuntimeError(f"unsupported FR13_FIXED32_MODE={mode!r}")
+    _fr13_fixed32_validate_hydra31_gate(mode)
     expected_mask, expected_active = _FR13_FIXED32_MODES[mode]
     try:
         configured_mask = int(

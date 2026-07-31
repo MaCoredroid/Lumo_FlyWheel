@@ -1,0 +1,44 @@
+{
+  "activation_contract": {
+    "caller_environment": "FR13_HYDRA31_ENABLE=1",
+    "launcher_owned_sidecar": "/logs/fr13_fixed32_hydra31_runtime_gate.json",
+    "sidecar_mode": "0400",
+    "sidecar_schema": "fr13.fixed32.hydra31_runtime_gate.v1",
+    "validation": "exact canonical bytes; regular non-symlink file; no alternate path"
+  },
+  "active_drafts": 31,
+  "base_commit": "7d9df7edfe439d37ad707ea8c6a96034bef9009d",
+  "branch": "agent/fixed32-hydra31-runtime",
+  "claims": {
+    "acceptance": false,
+    "performance": false,
+    "production_ready": false
+  },
+  "fixed_execution_signature_sha256": "a4e142c31849f1ccd0e11bd7e856c420a789683b361acd4243e24895c8c2c021",
+  "generated_at_utc": "2026-07-31T13:01:42Z",
+  "measurement": {
+    "gpu_run": false,
+    "real_swe_verified_tasks": 0,
+    "status": "unmeasured"
+  },
+  "mode": "hydra31_fixed32",
+  "next_required_gate": "real SWE-Verified exact4 acceptance and full-wall measurement",
+  "physical_drafts": 31,
+  "physical_rows_including_root": 32,
+  "schema": "fr13.fixed32.hydra31_runtime_source.v1",
+  "status": "source_only_default_off",
+  "valid_mask": "0x7fffffff",
+  "validation": {
+    "cpu_only": true,
+    "fixed32_ingress_tests": "47 passed",
+    "focused_and_runtime_contract_tests": "64 passed",
+    "self_tests": [
+      "fixed32 topology",
+      "three-mode exact TAW",
+      "fixed32 work census",
+      "fixed32 flush protocol"
+    ],
+    "shell_syntax": "passed",
+    "source_compile": "passed"
+  }
+}

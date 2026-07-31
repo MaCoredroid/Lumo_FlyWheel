@@ -6078,7 +6078,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fixed32-producer-pid", type=int)
     parser.add_argument(
         "--fixed32-mode",
-        choices=("tail6_fixed32", "hydra27_fixed32"),
+        choices=("tail6_fixed32", "hydra27_fixed32", "hydra31_fixed32"),
     )
     parser.add_argument("--fixed32-flush-request", type=Path)
     parser.add_argument("--fixed32-flush-ack", type=Path)

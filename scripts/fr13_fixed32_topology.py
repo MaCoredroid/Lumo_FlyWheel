@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""Pure topology contract for the fixed-32 Tail6/Hydra27 execution bucket.
+"""Pure topology contract for the fixed-32 Tail6/Hydra execution bucket.
 
 Both logical arms use the same 31 physical draft nodes plus the implicit root.
 The arm changes only the validity mask applied before the sampler builds its
 child tables. Invalid nodes must never enter TAW source/q_mix/rejection math.
 
-Hydra31 is staged here as a default-off contract only. It activates four
-already-generated physical suffix nodes; it is intentionally absent from the
-deployed mode registry and from the work-census mode registry until a real
-SWE-Verified campaign promotes it.
+Hydra31 activates four already-generated physical suffix nodes. It is a
+registered runtime identity, but the launch path keeps it default-off behind
+an explicit environment gate and a canonical sidecar.
 """
 
 from __future__ import annotations
@@ -220,15 +219,19 @@ HYDRA31_ACTIVATED_PATHS: tuple[Path, ...] = tuple(
     FIXED32_CHOICES[node] for node in HYDRA31_ACTIVATED_DRAFT_IDS
 )
 
+HYDRA31_MODE = "hydra31_fixed32"
+
 VALID_BY_MODE: dict[Mode, tuple[bool, ...]] = {
     "tail6_fixed32": TAIL6_VALID,
     "hydra27_fixed32": HYDRA27_VALID,
+    HYDRA31_MODE: HYDRA31_VALID,
 }
 VALID_MASK_BY_MODE: dict[Mode, int] = {
     "tail6_fixed32": TAIL6_VALID_MASK,
     "hydra27_fixed32": HYDRA27_VALID_MASK,
+    HYDRA31_MODE: HYDRA31_VALID_MASK,
 }
-HYDRA31_STAGED_MODE = "hydra31_fixed32"
+HYDRA31_STAGED_MODE = HYDRA31_MODE
 STAGED_VALID_BY_MODE: dict[Mode, tuple[bool, ...]] = {
     HYDRA31_STAGED_MODE: HYDRA31_VALID,
 }
@@ -391,6 +394,26 @@ HYDRA31_STAGED_MANIFEST = {
     "fixed_execution_signature": dict(FIXED_EXECUTION_SIGNATURE),
     "fixed_execution_signature_sha256": FIXED_EXECUTION_SIGNATURE_SHA256,
 }
+HYDRA31_RUNTIME_GATE_MANIFEST = {
+    "schema": "fr13.fixed32.hydra31_runtime_gate.v1",
+    "mode": HYDRA31_MODE,
+    "enabled": True,
+    "valid_mask": f"{HYDRA31_VALID_MASK:#010x}",
+    "active_drafts": HYDRA31_ACTIVE_DRAFTS,
+    "physical_drafts": PHYSICAL_DRAFTS,
+    "physical_rows_including_root": PHYSICAL_ROWS,
+    "fixed_execution_signature_sha256": FIXED_EXECUTION_SIGNATURE_SHA256,
+}
+
+
+def hydra31_runtime_gate_json() -> str:
+    """Return the only accepted Hydra31 runtime-gate sidecar body."""
+    return json.dumps(
+        HYDRA31_RUNTIME_GATE_MANIFEST,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
 
 
 def valid_for_mode(mode: Mode) -> tuple[bool, ...]:
@@ -512,13 +535,13 @@ def validate_contract() -> None:
     if sum(HYDRA27_VALID) != HYDRA27_ACTIVE_DRAFTS:
         raise AssertionError("Hydra27 validity count drifted")
     if sum(HYDRA31_VALID) != HYDRA31_ACTIVE_DRAFTS:
-        raise AssertionError("staged Hydra31 validity count drifted")
+        raise AssertionError("Hydra31 validity count drifted")
     if set(active_choices("tail6_fixed32")) != set(TAIL6_CHOICES):
         raise AssertionError("Tail6 mask does not recover the Tail6 topology")
     if set(active_choices("hydra27_fixed32")) != set(HYDRA27_CHOICES):
         raise AssertionError("Hydra27 mask does not recover the logical topology")
-    if set(staged_active_choices(HYDRA31_STAGED_MODE)) != set(FIXED32_CHOICES):
-        raise AssertionError("staged Hydra31 must activate every physical draft")
+    if set(active_choices(HYDRA31_MODE)) != set(FIXED32_CHOICES):
+        raise AssertionError("Hydra31 must activate every physical draft")
     if not set(TAIL6_CHOICES) < set(HYDRA27_CHOICES):
         raise AssertionError("Hydra27 must be a strict candidate superset of Tail6")
     if TAIL6_VALID_MASK != 0x7A9CE73F:
@@ -526,7 +549,7 @@ def validate_contract() -> None:
     if HYDRA27_VALID_MASK != 0x7ABDFFFF:
         raise AssertionError("Hydra27 validity mask drifted")
     if HYDRA31_VALID_MASK != 0x7FFFFFFF:
-        raise AssertionError("staged Hydra31 validity mask drifted")
+        raise AssertionError("Hydra31 validity mask drifted")
     if TAIL6_VALID_MASK & ~HYDRA27_VALID_MASK:
         raise AssertionError("Tail6 validity must be a subset of Hydra27 validity")
     if tuple(node for node, valid in enumerate(TAIL6_VALID) if not valid) != (
@@ -540,7 +563,7 @@ def validate_contract() -> None:
     if tuple(node for node, valid in enumerate(HYDRA31_VALID) if not valid) != (
         HYDRA31_INACTIVE_DRAFT_IDS
     ):
-        raise AssertionError("staged Hydra31 inactive draft ids drifted")
+        raise AssertionError("Hydra31 inactive draft ids drifted")
     if tuple(
         node
         for node, (old, new) in enumerate(
@@ -548,9 +571,7 @@ def validate_contract() -> None:
         )
         if old != new
     ) != HYDRA31_ACTIVATED_DRAFT_IDS:
-        raise AssertionError("staged Hydra31 activation delta drifted")
-    if HYDRA31_STAGED_MODE in VALID_BY_MODE:
-        raise AssertionError("staged Hydra31 must remain absent from deployed modes")
+        raise AssertionError("Hydra31 activation delta drifted")
     if WALK_CAP > COMMIT_PATH_CAP:
         raise AssertionError("walk can overflow the fixed committer path capacity")
 
@@ -582,6 +603,17 @@ def validate_contract() -> None:
         FIXED_EXECUTION_SIGNATURE_SHA256
     ):
         raise AssertionError("staged Hydra31 fixed execution signature drifted")
+    if HYDRA31_RUNTIME_GATE_MANIFEST != {
+        "schema": "fr13.fixed32.hydra31_runtime_gate.v1",
+        "mode": HYDRA31_MODE,
+        "enabled": True,
+        "valid_mask": "0x7fffffff",
+        "active_drafts": 31,
+        "physical_drafts": 31,
+        "physical_rows_including_root": 32,
+        "fixed_execution_signature_sha256": FIXED_EXECUTION_SIGNATURE_SHA256,
+    }:
+        raise AssertionError("Hydra31 runtime gate contract drifted")
 
     seen: set[int] = set()
     earlier: set[int] = set()
@@ -783,8 +815,8 @@ def validate_contract() -> None:
 if __name__ == "__main__":
     validate_contract()
     print(
-        "PASS fixed32 topology: physical=31/32 active=21/27 "
+        "PASS fixed32 topology: physical=31/32 active=21/27/31 "
         f"masks={TAIL6_VALID_MASK:#x}/{HYDRA27_VALID_MASK:#x} "
-        "staged_hydra31=default-off/0x7fffffff "
+        "hydra31=registered-default-off/0x7fffffff "
         "schedule=[1,11]/[5,7] walk_cap=12"
     )

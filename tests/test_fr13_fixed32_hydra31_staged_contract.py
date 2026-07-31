@@ -72,15 +72,17 @@ def test_hydra31_keeps_fixed32_launch_and_capacity_geometry() -> None:
     assert signature["rescue_carry_slots_per_request"] == 4
 
 
-def test_hydra31_is_default_off_in_runtime_and_census_registries() -> None:
+def test_staged_manifest_remains_historical_after_runtime_registration() -> None:
     mode = topology.HYDRA31_STAGED_MODE
 
     assert topology.HYDRA31_STAGED_MANIFEST["default_enabled"] is False
-    assert mode not in topology.VALID_BY_MODE
-    assert mode not in topology.VALID_MASK_BY_MODE
-    assert mode not in census.MODE_SEMANTICS
-    with pytest.raises(KeyError):
-        census.reference_event(mode, 1, "must-remain-default-off")
+    assert topology.HYDRA31_STAGED_MANIFEST["deployed_mode_registered"] is False
+    assert mode in topology.VALID_BY_MODE
+    assert mode in topology.VALID_MASK_BY_MODE
+    assert mode in census.MODE_SEMANTICS
+    assert census.reference_event(mode, 1, "registered-default-off")[
+        "valid_mask"
+    ] == 0x7FFFFFFF
 
 
 @pytest.mark.parametrize("batch_size", (1, 4))

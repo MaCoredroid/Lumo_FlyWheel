@@ -62,6 +62,8 @@ from fr13_fixed32_topology import (
     GDN_PATH_PROGRAMS,
     HYDRA27_ACTIVE_DRAFTS,
     HYDRA27_VALID_MASK,
+    HYDRA31_ACTIVE_DRAFTS,
+    HYDRA31_VALID_MASK,
     KV_REMAP_CACHE_TENSORS,
     KV_REMAP_DRAFTER_APPLY_CACHE_CALLS,
     KV_REMAP_DRAFTER_CACHE_TENSORS,
@@ -102,6 +104,7 @@ SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v9"
 
 TAIL_MODE = "tail6_fixed32"
 HYDRA_MODE = "hydra27_fixed32"
+HYDRA31_MODE = "hydra31_fixed32"
 MODE_SEMANTICS = {
     TAIL_MODE: {
         "active_nodes": TAIL6_ACTIVE_DRAFTS,
@@ -110,6 +113,10 @@ MODE_SEMANTICS = {
     HYDRA_MODE: {
         "active_nodes": HYDRA27_ACTIVE_DRAFTS,
         "valid_mask": HYDRA27_VALID_MASK,
+    },
+    HYDRA31_MODE: {
+        "active_nodes": HYDRA31_ACTIVE_DRAFTS,
+        "valid_mask": HYDRA31_VALID_MASK,
     },
 }
 SUPPORTED_BATCH_SIZES = (1, 2, 3, 4)
@@ -139,7 +146,7 @@ TAW_EXACT_COMMIT_LAUNCHES = WALK_CAP
 TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST = WALK_CAP
 TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-exact-commit-v2"
 TAW_SOURCE_CONTRACT_SHA256 = (
-    "df7411d51607ab66d46e9c991247f6472168ef8739a7466bbf2b1b00e1975924"
+    "65ba197b27bd80841e3bf4f871c9ee2b0b377365e009047f28c1436d49957cec"
 )
 TAW_TENSOR_CALL_CENSUS = {
     "walk_levels": 12,
@@ -2938,7 +2945,11 @@ def reference_event(
         "event_id": event_id,
         "event_index": event_index,
         "forward_step_index": forward_step_index,
-        "producer_pid": 4242 if mode == TAIL_MODE else 4343,
+        "producer_pid": {
+            TAIL_MODE: 4242,
+            HYDRA_MODE: 4343,
+            HYDRA31_MODE: 4444,
+        }[mode],
         "event_complete": True,
         "mode": mode,
         "batch_size": batch_size,
