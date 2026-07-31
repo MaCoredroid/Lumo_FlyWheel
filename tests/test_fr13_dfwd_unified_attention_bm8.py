@@ -179,7 +179,26 @@ def test_drafter_replay_hook_and_launcher_are_fail_closed() -> None:
     assert 'FR13_GATE_BM8=${FR13_GATE_BM8:-0}' in runner
     assert "FR13_GATE_BM8 must be the only enabled kernel candidate" in runner
     assert "fr13_dfwd_unified_bm8_gate.py verify" in runner
-    assert "FR13_DFWD_UNIFIED_BM8_PRODUCTION" not in launcher
+    assert (
+        "FR13_DFWD_UNIFIED_BM8_PRODUCTION="
+        "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}"
+    ) in launcher
+
+
+def test_bm8_production_reproduces_qualified_emitted_source_byte(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("FR13_DFWD_UNIFIED_BM8_PRODUCTION", "1")
+    module = _load_patcher(monkeypatch)
+    target = tmp_path / "triton_unified_attention.py"
+    target.write_text(_minimal_unified_source(), encoding="utf-8")
+    module.TRITON_UNIFIED_ATTN_PATH = target
+
+    assert module._patch_triton_unified_attention_fr13() is True
+    emitted = target.read_text(encoding="utf-8")
+    compile(emitted, str(target), "exec")
+    assert "_stat.S_IMODE(metadata.st_mode) != 0o400" in emitted
+    assert "_stat.S_IMODE(metadata.st_mode) != 0o444" not in emitted
 
 
 def _identity(source_commit: str) -> dict:
