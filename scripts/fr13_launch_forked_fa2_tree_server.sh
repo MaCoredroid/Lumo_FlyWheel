@@ -1198,12 +1198,15 @@ if [[ "$_fr13_batch_gdn_byte_ab" == "1" ]]; then
   rm -f \
     "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json"
+  FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH=/logs/fr13_fixed32_batch_gdn_byte_ab.real_event.arm
 else
   rm -f \
     "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.enabled" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.real_event.arm" \
     2>/dev/null || true
+  FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH=
 fi
+export FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH
 if [[ "$_fr13_batch_gdn_production" == "1" ]]; then
   [[ -n "${FR13_FIXED32_MODE:-}" ]] \
     || { echo "FR13_FIXED32_BATCH_GDN_PRODUCTION requires FR13_FIXED32_MODE" >&2; exit 2; }
@@ -1451,7 +1454,8 @@ fi
 FR13_ENV_FORWARD_ARGS=()
 while IFS= read -r _v; do
   [[ "$_v" == "FR13_FIXED32_INGRESS_SECRET_FILE" \
-     || "$_v" == "FR13_FIXED32_MIDDLEWARE_FLAGS" ]] && continue
+     || "$_v" == "FR13_FIXED32_MIDDLEWARE_FLAGS" \
+     || "$_v" == "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH" ]] && continue
   if [[ -n "${FR13_FIXED32_MODE:-}" \
      && "$_v" == "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION" ]]; then
     continue
@@ -1582,6 +1586,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_GDN_PATH_BV_LIVE_JSON=/logs/fr13_fixed32_gdn_path_bv.live_pass.json \
   -e FR13_FIXED32_BATCH_GDN_BV_CANDIDATE="${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
   -e FR13_FIXED32_BATCH_GDN_BV_PRODUCTION="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" \
+  -e FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH="${FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH:-}" \
   -e FR13_APC_COMMIT_TO_RUNNING_ROW="${FR13_APC_COMMIT_TO_RUNNING_ROW:-1}" \
   -e FR13_TREE_RUNROW_INIT="${FR13_TREE_RUNROW_INIT:-1}" \
   -e FR13_COMMITTER_GRAPH="${FR13_COMMITTER_GRAPH:-1}" \

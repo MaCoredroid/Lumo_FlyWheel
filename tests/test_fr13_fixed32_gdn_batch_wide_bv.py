@@ -192,8 +192,7 @@ def test_combined_candidate_requires_diagnostic_and_selects_all_b2_b4(
         kernel, "_fr13_fixed32_batch_gdn_byte_ab_control", lambda: (True, None)
     )
     assert kernel.fixed32_batch_gdn_selector(batch) == "diagnostic"
-    with pytest.raises(RuntimeError, match="B2-B4"):
-        kernel.fixed32_batch_gdn_selector(1)
+    assert kernel.fixed32_batch_gdn_selector(1) is None
 
 
 def test_wide_live_pass_is_source_bound_and_production_validates_it(
@@ -210,6 +209,15 @@ def test_wide_live_pass_is_source_bound_and_production_validates_it(
     monkeypatch.setattr(
         kernel, "_fr13_fixed32_batch_gdn_source_sha256", lambda: source_sha
     )
+
+    kernel._fr13_fixed32_batch_gdn_live_pass_emit(
+        task_marker="swe_verified:astropy__astropy-12907",
+        batch=3,
+        layer_keys=set(range(48)),
+        reference_bv=8,
+        candidate_bv=64,
+    )
+    assert not pass_path.exists()
 
     kernel._fr13_fixed32_batch_gdn_live_pass_emit(
         task_marker="swe_verified:astropy__astropy-12907",
@@ -252,3 +260,31 @@ def test_launcher_wires_fail_closed_combined_bv_sidecars() -> None:
     assert "_fixed32_expected_metrics=1" in launcher
     assert "_fixed32_expected_eager=1" in launcher
     assert "requires MAX_NUM_SEQS=2, 3, or 4" in launcher
+
+
+def test_exact4_b4_live_gate_runner_is_non_timing_and_fail_closed() -> None:
+    runner = (
+        ROOT / "scripts" / "fr13_run_b4_gdn_wide_live_gate.sh"
+    ).read_text(encoding="utf-8")
+    assert "config/fr13_fixed32/subset_b4_four.json" in runner
+    assert (
+        "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+        in runner
+    )
+    assert "export BSIZE=4" in runner
+    assert "export CONC=4" in runner
+    assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in runner
+    assert "FR10_METRICS=1 ENFORCE_EAGER=1" in runner
+    assert "FR13_FIXED32_BATCH_GDN_BYTE_AB=1" in runner
+    assert "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE=" in runner
+    assert "FR13_FIXED32_BATCH_GDN_PRODUCTION=0" in runner
+    assert "FR13_DFWD_UNIFIED_BM8_LIVE_AB=0" in runner
+    assert "FR13_FIXED32_B1_DIAGNOSTIC=0" in runner
+    assert "FR13_SFWD_GPU_TIMER=0" in runner
+    assert "runner_sha256=" in runner
+    assert "B4 diagnostic runner changed during execution" in runner
+    assert 'record.get("batch") == 4' in runner
+    assert 'record.get("carrier_nonzero") is not True' in runner
+    assert 'record.get("status") == "mismatch_reference_served"' in runner
+    assert '"floor_acceptance_eligible": False' in runner
+    assert '"production_default_enabled": False' in runner
