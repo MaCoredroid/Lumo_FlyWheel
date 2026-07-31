@@ -374,7 +374,7 @@ def test_real_event_gate_restores_and_serves_reference(
     else:
         assert record["first_nonzero"] is None
         assert kernel._FR13_FIXED32_BATCH_GDN_BYTE_AB_STATE["passed"] == {
-            int(a_log.data_ptr())
+            (batch, int(a_log.data_ptr()))
         }
 
 
@@ -390,11 +390,16 @@ def test_launcher_requires_eager_real_task_gate() -> None:
     )
     assert "fr13_fixed32_batch_gdn_byte_ab.enabled" in launcher
     assert "fr13_fixed32_batch_gdn_byte_ab.real_event.arm" in launcher
+    assert "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH=/logs/" in launcher
     assert "FR13_FIXED32_BATCH_GDN_PRODUCTION:-0" in launcher
     assert "diagnostic and production are mutually exclusive" in launcher
     assert "path-BV selectors are mutually exclusive" in launcher
     assert "requires a regular live-gate PASS record" in launcher
     assert "fr13_fixed32_batch_gdn_production.arm" in launcher
+    variant = (
+        ROOT / "scripts" / "fr13_bigdenom_swe_serve_variant.sh"
+    ).read_text(encoding="utf-8")
+    assert 'FR10_METRICS="${FR10_METRICS:-0}"' in variant
 
 
 def test_passed_diagnostic_layers_still_serve_reference() -> None:
@@ -404,7 +409,9 @@ def test_passed_diagnostic_layers_still_serve_reference() -> None:
         / "lumo_flywheel_serving"
         / "fr10_gdn_tree_kernel.py"
     ).read_text(encoding="utf-8")
-    passed = source.index('if layer_key in gate_state["passed"]:')
+    batch_key = source.index("batch_layer_key = (batch, layer_key)")
+    passed = source.index('if batch_layer_key in gate_state["passed"]:')
+    assert batch_key < passed
     next_branch = source.index("elif real_event_marker is None:", passed)
     branch = source[passed:next_branch]
     assert "_launch_reference(collect_export=False)" in branch

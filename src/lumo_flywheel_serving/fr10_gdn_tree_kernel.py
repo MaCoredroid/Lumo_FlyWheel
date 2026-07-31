@@ -1196,10 +1196,11 @@ def _fr13_fixed32_batch_gdn_source_sha256() -> str:
 def _fr13_fixed32_batch_gdn_byte_ab_control() -> tuple[bool, str | None]:
     """Resolve the eager real-event byte gate without worker-env assumptions.
 
-    The launcher creates the enabled sidecar before boot, then the real-task
-    driver creates the event arm only after readiness and immediately before a
-    SWE-Verified request. This prevents graph warmup or a synthetic probe from
-    satisfying the gate. The event marker is included in every gate record.
+    The launcher creates the enabled sidecar before boot, then authenticated
+    engine ingress creates the event arm after admitting the first canonical
+    SWE-Verified request and before executing it. This prevents graph warmup or
+    a synthetic probe from satisfying the gate. The event marker is included
+    in every gate record.
     """
     raw = os.environ.get("FR13_FIXED32_BATCH_GDN_BYTE_AB", "")
     if raw not in ("", "0", "1"):
@@ -1342,14 +1343,8 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
     """Resolve the B2-B4 diagnostic/production route; default is legacy."""
     batch = int(batch_size)
     if batch <= 1:
-        if (
-            _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE is not None
-            or _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None
-        ):
-            raise RuntimeError(
-                "FR13 fixed32 batched wide-BV requires B2-B4; B1 remains on "
-                "the stock path"
-            )
+        # A MAX_NUM_SEQS=4 lifecycle can still drain or start at B1. Keep that
+        # request on the established per-request BV8 route.
         return None
     if batch > _FR13_FIXED32_MAX_BATCH:
         raise RuntimeError(
@@ -1494,6 +1489,11 @@ def _fr13_fixed32_batch_gdn_live_pass_emit(
         and candidate_bv is not None
         and int(reference_bv) != int(candidate_bv)
     )
+    # The combined wide-BV gate is formally authorized only by the exact4 B4
+    # lifecycle. B2/B3 are still byte-compared and logged, but cannot publish
+    # the production prerequisite.
+    if wide_bv and int(batch) != 4:
+        return
     payload = {
         "schema": (
             "fr13.fixed32.batch_gdn.live_pass.v2"
@@ -10533,6 +10533,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 "FR13 fixed32 batched GDN diagnostic selector drifted"
             )
     layer_key = int(A_log.data_ptr())
+    batch_layer_key = (batch, layer_key)
     gate_state = _FR13_FIXED32_BATCH_GDN_BYTE_AB_STATE
     if byte_ab_enabled:
         if torch.cuda.is_current_stream_capturing():
@@ -10545,16 +10546,17 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 "FR13_FIXED32_BATCH_GDN_BYTE_AB requires K/V/A/B ring export, "
                 "in-kernel flags, and the invocation counter"
             )
-        if layer_key in gate_state["passed"]:
+        if batch_layer_key in gate_state["passed"]:
             _launch_reference(collect_export=False)
             return out, None
         elif real_event_marker is None:
             _launch_reference(collect_export=False)
-            if layer_key not in gate_state["waiting_announced"]:
-                gate_state["waiting_announced"].add(layer_key)
+            if batch_layer_key not in gate_state["waiting_announced"]:
+                gate_state["waiting_announced"].add(batch_layer_key)
                 print(
                     "[FR13_FIXED32_BATCH_GDN_BYTE_AB WAITING] "
-                    f"layer_key=0x{layer_key:x} reference_served=1",
+                    f"batch={batch} layer_key=0x{layer_key:x} "
+                    "reference_served=1",
                     flush=True,
                 )
             return out, None
@@ -10577,25 +10579,21 @@ def launch_tree_gdn_prepared_fixed32_batch(
             return out, None
         else:
             bound_marker = gate_state.get("task_marker")
-            bound_batch = gate_state.get("batch")
             bound_candidate_bv = gate_state.get("candidate_bv")
             if bound_marker is None:
                 gate_state["task_marker"] = real_event_marker
-                gate_state["batch"] = batch
                 gate_state["candidate_bv"] = int(candidate_block_v)
             elif (
                 bound_marker != real_event_marker
-                or type(bound_batch) is not int
-                or int(bound_batch) != batch
                 or type(bound_candidate_bv) is not int
                 or int(bound_candidate_bv) != int(candidate_block_v)
             ):
                 raise RuntimeError(
-                    "FR13 fixed32 batched GDN live gate cannot combine tasks, "
-                    "batch sizes, or BV candidates in one PASS record"
+                    "FR13 fixed32 batched GDN live gate cannot combine task "
+                    "markers or BV candidates in one process"
                 )
-            attempt = int(gate_state["attempts"].get(layer_key, 0)) + 1
-            gate_state["attempts"][layer_key] = attempt
+            attempt = int(gate_state["attempts"].get(batch_layer_key, 0)) + 1
+            gate_state["attempts"][batch_layer_key] = attempt
             before = _snapshot_external()
             reference_export = _launch_reference(collect_export=True)
             assert reference_export is not None
@@ -10664,11 +10662,16 @@ def launch_tree_gdn_prepared_fixed32_batch(
             }
             _fr13_fixed32_batch_gdn_byte_ab_emit(record)
             if zero_diff:
-                gate_state["passed"].add(layer_key)
+                gate_state["passed"].add(batch_layer_key)
+                batch_layer_keys = {
+                    passed_layer_key
+                    for passed_batch, passed_layer_key in gate_state["passed"]
+                    if passed_batch == batch
+                }
                 _fr13_fixed32_batch_gdn_live_pass_emit(
                     task_marker=real_event_marker,
                     batch=batch,
-                    layer_keys=gate_state["passed"],
+                    layer_keys=batch_layer_keys,
                     reference_bv=block_v,
                     candidate_bv=candidate_block_v,
                 )

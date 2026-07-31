@@ -44,6 +44,9 @@ FIXED32_ENGINE_TASK_IDS_ENV = "FR13_FIXED32_INGRESS_TASK_IDS"
 FIXED32_ENGINE_LEDGER_PATH_ENV = "FR13_FIXED32_ENGINE_INGRESS_LEDGER_PATH"
 FIXED32_ENGINE_MAX_BODY_BYTES_ENV = "FR13_FIXED32_INGRESS_MAX_BODY_BYTES"
 FIXED32_VLLM_REQUEST_ID_BINDING_ENV = "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION"
+FIXED32_BATCH_GDN_REAL_EVENT_ARM_ENV = (
+    "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH"
+)
 
 FIXED32_INGRESS_SECRETS_SCHEMA = "fr13-fixed32-ingress-secrets-v1"
 FIXED32_INGRESS_LEDGER_SCHEMA = "fr13.fixed32.ingress-ledger-record.v1"
@@ -61,6 +64,16 @@ _FIXED32_ZERO_DIGEST = "0" * 64
 _FIXED32_HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
 _FIXED32_TASK_BEARER_RE = re.compile(r"^fr13t1\.([0-9a-f]{64})\.([0-9a-f]{64})$")
 _FIXED32_WIRE_RE = re.compile(r"^fr13-(chat|responses)-[0-9a-f]{32}$")
+_FIXED32_BATCH_GDN_REAL_EVENT_ARM_NAME = (
+    "fr13_fixed32_batch_gdn_byte_ab.real_event.arm"
+)
+_FIXED32_BATCH_GDN_ENABLED_NAME = "fr13_fixed32_batch_gdn_byte_ab.enabled"
+_FIXED32_BATCH_GDN_EXACT4_TASK_IDS = (
+    "astropy__astropy-12907",
+    "astropy__astropy-13033",
+    "astropy__astropy-13236",
+    "astropy__astropy-13398",
+)
 _FIXED32_LEDGER_KEYS = frozenset(
     {
         "schema",
@@ -1242,15 +1255,17 @@ class Fixed32EngineIngress:
         secret_file: str | Path,
         canonical_task_ids: str | list[str] | tuple[str, ...],
         ledger_path: str | Path,
+        batch_gdn_real_event_arm: str | Path | None = None,
     ) -> None:
         self.secrets = load_fixed32_ingress_secrets(secret_file)
         self.task_ids = parse_fixed32_task_ids(canonical_task_ids)
         self.canonical_task_set_sha256 = fixed32_canonical_task_set_sha256(
             self.task_ids
         )
-        self.task_key_ids = frozenset(
-            fixed32_task_key_id(task_id) for task_id in self.task_ids
-        )
+        self.task_id_by_key = {
+            fixed32_task_key_id(task_id): task_id for task_id in self.task_ids
+        }
+        self.task_key_ids = frozenset(self.task_id_by_key)
         if any(
             hmac.compare_digest(
                 _derive_fixed32_task_bearer_from_secrets(
@@ -1271,6 +1286,185 @@ class Fixed32EngineIngress:
         }
         self.preflight_rejected_requests = 0
         self.campaign_rejected_requests = 0
+        self._batch_gdn_published_marker: bytes | None = None
+        self.batch_gdn_real_event_arm = self._validate_batch_gdn_real_event_arm(
+            batch_gdn_real_event_arm
+        )
+
+    @staticmethod
+    def _read_batch_gdn_sidecar(
+        path: Path,
+        *,
+        label: str,
+        max_bytes: int,
+        required_mode: int | None = None,
+    ) -> bytes:
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
+        try:
+            descriptor = os.open(path, flags)
+        except OSError as exc:
+            raise Fixed32IngressError(
+                f"fixed32 batched GDN {label} is unavailable"
+            ) from exc
+        try:
+            info = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_nlink != 1
+                or info.st_size <= 0
+                or info.st_size > max_bytes
+                or (
+                    required_mode is not None
+                    and stat.S_IMODE(info.st_mode) != required_mode
+                )
+            ):
+                raise Fixed32IngressError(
+                    f"fixed32 batched GDN {label} identity is invalid"
+                )
+            chunks: list[bytes] = []
+            remaining = info.st_size
+            while remaining:
+                chunk = os.read(descriptor, remaining)
+                if not chunk:
+                    raise Fixed32IngressError(
+                        f"fixed32 batched GDN {label} was truncated"
+                    )
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            if os.read(descriptor, 1):
+                raise Fixed32IngressError(
+                    f"fixed32 batched GDN {label} changed while reading"
+                )
+            return b"".join(chunks)
+        finally:
+            os.close(descriptor)
+
+    def _validate_batch_gdn_enabled_sidecar(self, path: Path) -> None:
+        enabled = path.with_name(_FIXED32_BATCH_GDN_ENABLED_NAME)
+        if self._read_batch_gdn_sidecar(
+            enabled,
+            label="enabled sidecar",
+            max_bytes=2,
+        ) != b"1\n":
+            raise Fixed32IngressError(
+                "fixed32 batched GDN enabled sidecar is invalid"
+            )
+
+    def _validate_batch_gdn_real_event_arm(
+        self, raw_path: str | Path | None
+    ) -> Path | None:
+        if raw_path is None or not os.fspath(raw_path):
+            return None
+        if self.task_ids != _FIXED32_BATCH_GDN_EXACT4_TASK_IDS:
+            raise Fixed32IngressError(
+                "fixed32 batched GDN real-event arm requires canonical exact4 tasks"
+            )
+        path = Path(raw_path)
+        if not path.is_absolute() or path.name != _FIXED32_BATCH_GDN_REAL_EVENT_ARM_NAME:
+            raise Fixed32IngressError(
+                "fixed32 batched GDN real-event arm path is invalid"
+            )
+        try:
+            parent_info = os.lstat(path.parent)
+        except OSError as exc:
+            raise Fixed32IngressError(
+                "fixed32 batched GDN real-event arm parent is unavailable"
+            ) from exc
+        if not stat.S_ISDIR(parent_info.st_mode) or stat.S_ISLNK(parent_info.st_mode):
+            raise Fixed32IngressError(
+                "fixed32 batched GDN real-event arm parent must be a directory"
+            )
+        self._validate_batch_gdn_enabled_sidecar(path)
+        try:
+            os.lstat(path)
+        except FileNotFoundError:
+            return path
+        except OSError as exc:
+            raise Fixed32IngressError(
+                "fixed32 batched GDN real-event arm cannot be inspected"
+            ) from exc
+        raise Fixed32IngressError(
+            "fixed32 batched GDN real-event arm must be new at engine boot"
+        )
+
+    def _arm_batch_gdn_real_event(self, task_key_id: str) -> None:
+        path = self.batch_gdn_real_event_arm
+        if path is None:
+            return
+        task_id = self.task_id_by_key[task_key_id]
+        marker = f"swe_verified:{task_id}\n".encode("ascii")
+        self._validate_batch_gdn_enabled_sidecar(path)
+        if self._batch_gdn_published_marker is not None:
+            published = self._read_batch_gdn_sidecar(
+                path,
+                label="real-event arm",
+                max_bytes=256,
+                required_mode=0o400,
+            )
+            if published != self._batch_gdn_published_marker:
+                raise Fixed32IngressError(
+                    "fixed32 batched GDN real-event arm changed after publication"
+                )
+            return
+        temporary = path.with_name(
+            f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+        )
+        flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
+        flags |= getattr(os, "O_CLOEXEC", 0)
+        try:
+            descriptor = os.open(temporary, flags, 0o400)
+            try:
+                view = memoryview(marker)
+                while view:
+                    written = os.write(descriptor, view)
+                    if written <= 0:
+                        raise OSError("short write")
+                    view = view[written:]
+                os.fchmod(descriptor, 0o400)
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            try:
+                os.link(temporary, path, follow_symlinks=False)
+            except FileExistsError as exc:
+                raise Fixed32IngressError(
+                    "fixed32 batched GDN real-event arm existed before first publication"
+                ) from exc
+        except Fixed32IngressError:
+            raise
+        except OSError as exc:
+            raise Fixed32IngressError(
+                "fixed32 batched GDN real-event arm publication failed"
+            ) from exc
+        finally:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                raise Fixed32IngressError(
+                    "fixed32 batched GDN real-event temporary cleanup failed"
+                ) from exc
+        published = self._read_batch_gdn_sidecar(
+            path,
+            label="real-event arm",
+            max_bytes=256,
+            required_mode=0o400,
+        )
+        if published != marker:
+            raise Fixed32IngressError(
+                "fixed32 batched GDN real-event arm publication is invalid"
+            )
+        self._batch_gdn_published_marker = marker
 
     def is_engine_bearer(self, bearer: str | None) -> bool:
         return isinstance(bearer, str) and hmac.compare_digest(
@@ -1361,6 +1555,9 @@ class Fixed32EngineIngress:
             )
             if engine_digest in self._active:
                 raise Fixed32IngressAdmissionError(409, "duplicate_engine_request_id")
+            # Publish only after the complete authenticated request identity has
+            # passed admission, and before vLLM can execute that request.
+            self._arm_batch_gdn_real_event(task_key_id)
             self.ledger.append(
                 phase="campaign",
                 event="request_accepted",
@@ -1461,6 +1658,7 @@ class Fixed32EngineIngressMiddleware:
         secret_file: str | Path | None = None,
         canonical_task_ids: str | list[str] | tuple[str, ...] | None = None,
         ledger_path: str | Path | None = None,
+        batch_gdn_real_event_arm: str | Path | None = None,
         max_body_bytes: int | None = None,
     ) -> None:
         self.app = app
@@ -1469,6 +1667,10 @@ class Fixed32EngineIngressMiddleware:
             FIXED32_ENGINE_TASK_IDS_ENV
         )
         ledger_path = ledger_path or os.environ.get(FIXED32_ENGINE_LEDGER_PATH_ENV)
+        if batch_gdn_real_event_arm is None:
+            batch_gdn_real_event_arm = os.environ.get(
+                FIXED32_BATCH_GDN_REAL_EVENT_ARM_ENV
+            )
         if not secret_file or not canonical_task_ids or not ledger_path:
             raise Fixed32IngressError("fixed32 engine ingress configuration is incomplete")
         if os.environ.get(FIXED32_VLLM_REQUEST_ID_BINDING_ENV) != "1":
@@ -1486,6 +1688,7 @@ class Fixed32EngineIngressMiddleware:
             secret_file=secret_file,
             canonical_task_ids=canonical_task_ids,
             ledger_path=ledger_path,
+            batch_gdn_real_event_arm=batch_gdn_real_event_arm,
         )
 
     @staticmethod
