@@ -234,6 +234,25 @@ case "$FR13_FIXED32_CUTLASS_WAVE" in
     exit 2
     ;;
 esac
+case "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" in
+  0|1) ;;
+  *) echo "FR13_DFWD_UNIFIED_BM8_LIVE_AB must be 0 or 1" >&2; exit 2 ;;
+esac
+case "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" in
+  0|1) ;;
+  *) echo "FR13_DFWD_UNIFIED_BM8_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" \
+      && "$FR13_FIXED32_CUTLASS_WAVE" != "stock" ]]; then
+  echo "FR13 DFWD unified BM8 production requires the stock CUTLASS wave" >&2
+  exit 2
+fi
+if [[ "$FR13_FIXED32_CUTLASS_WAVE" != "stock" \
+      && ( "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" != "0" \
+           || "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" != "0" ) ]]; then
+  echo "nonstock CUTLASS wave requires both BM8 selectors to be 0" >&2
+  exit 2
+fi
 FR13_CUTLASS_WAVE_DOCKER_ARGS=()
 if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" ]]; then
   [[ -z "$FR13_FIXED32_CUTLASS_WAVE_SO" ]] || {
@@ -268,14 +287,6 @@ else
     }
   fi
 fi
-case "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" in
-  0|1) ;;
-  *) echo "FR13_DFWD_UNIFIED_BM8_LIVE_AB must be 0 or 1" >&2; exit 2 ;;
-esac
-case "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" in
-  0|1) ;;
-  *) echo "FR13_DFWD_UNIFIED_BM8_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
-esac
 if [[ -n "${FR13_DFWD_UNIFIED_BM8_INTERNAL:-}" ]]; then
   echo "FR13 DFWD unified BM8 internal selector is launcher-private" >&2
   exit 2
