@@ -635,10 +635,23 @@ def expected_process_pid1_argv(
     concurrency: int,
     *,
     attribution_only: bool,
+    eager_diagnostic: bool = False,
 ) -> list[str]:
     if type(attribution_only) is not bool:
         raise ContractError("fixed32 attribution-only selector must be boolean")
+    if type(eager_diagnostic) is not bool:
+        raise ContractError("fixed32 eager-diagnostic selector must be boolean")
+    if attribution_only and eager_diagnostic:
+        raise ContractError(
+            "fixed32 eager diagnostic cannot be attribution-only"
+        )
+    if eager_diagnostic and concurrency != 4:
+        raise ContractError(
+            "fixed32 eager diagnostic requires concurrency 4"
+        )
     vllm_argv = expected_pid1_argv(concurrency)
+    if eager_diagnostic:
+        vllm_argv = [*vllm_argv, "--enforce-eager"]
     if not attribution_only:
         return vllm_argv
     return [*NSYS_PROFILE_PREFIX, "vllm", *vllm_argv[2:]]
@@ -649,10 +662,12 @@ def validate_process_pid1_argv(
     concurrency: int,
     *,
     attribution_only: bool,
+    eager_diagnostic: bool = False,
 ) -> list[str]:
     expected = expected_process_pid1_argv(
         concurrency,
         attribution_only=attribution_only,
+        eager_diagnostic=eager_diagnostic,
     )
     if argv != expected:
         raise ContractError(f"fixed32 PID1 argv mismatch: {argv!r}")

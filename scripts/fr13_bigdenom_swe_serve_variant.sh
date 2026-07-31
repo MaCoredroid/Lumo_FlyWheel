@@ -1593,7 +1593,8 @@ PY
     "$CONTAINER_RUNTIME_REF" \
     "$CONTAINER" \
     "$ARMDIR/fixed32_container_identity.json" \
-    "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" <<'PY'
+    "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" \
+    "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" <<'PY'
 import json
 import subprocess
 import sys
@@ -1609,6 +1610,7 @@ container_ref = sys.argv[4]
 container_name = sys.argv[5]
 container_identity_path = Path(sys.argv[6])
 attribution_only_text = sys.argv[7]
+batch_gdn_byte_ab_text = sys.argv[8]
 runtime = contract.validate_runtime_attestation(
     json.loads(runtime_path.read_text(encoding="utf-8"))
 )
@@ -1623,11 +1625,16 @@ if attribution_only_text not in {"0", "1"}:
     raise SystemExit(
         "fixed32 attribution-only selector must be exactly 0 or 1"
     )
+if batch_gdn_byte_ab_text not in {"0", "1"}:
+    raise SystemExit(
+        "fixed32 batch-GDN byte diagnostic selector must be exactly 0 or 1"
+    )
 try:
     contract.validate_process_pid1_argv(
         pid1.get("argv"),
         concurrency,
         attribution_only=attribution_only_text == "1",
+        eager_diagnostic=batch_gdn_byte_ab_text == "1",
     )
 except contract.ContractError as error:
     raise SystemExit(str(error)) from error
