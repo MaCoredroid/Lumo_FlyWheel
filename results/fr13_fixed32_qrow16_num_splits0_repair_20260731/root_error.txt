@@ -1,0 +1,13 @@
+Source: failed_real_b1/docker_after_tasks.log, lines 354-366.
+
+File "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/tree_attn.py", line 1265, in _fr13_fa2_qrow16_live_ab_replay
+    candidate_out, candidate_lse = _fr13_fa2_qrow16_live_ab_call(
+File "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/tree_attn.py", line 1164, in _fr13_fa2_qrow16_live_ab_call
+    return bundle["flash_fn"](
+File "/usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/flash_attn_interface.py", line 306, in flash_attn_varlen_func
+    out, softmax_lse = _fr13_fa2_op(
+File "/usr/local/lib/python3.12/dist-packages/torch/_ops.py", line 1269, in __call__
+    return self._op(*args, **kwargs)
+RuntimeError: FR13 qrow16 internal dispatch reached non-production geometry
+
+No fr13_fa2_qrow16_live_paged_ab.json was produced.

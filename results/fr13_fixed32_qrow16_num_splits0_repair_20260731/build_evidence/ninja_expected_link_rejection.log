@@ -1,0 +1,110 @@
+ninja: Entering directory `build/lumo_cutlass_research'
+[1/2] Building CXX object vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/flash_api.cpp.o
+In file included from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include/cutlass/integer_subbyte.h:47,
+                 from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include/cutlass/numeric_types.h:40,
+                 from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/flash_attn/flash_api.cpp:12:
+/opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include/cutlass/platform/platform.h:599:21: warning: 'long4' is deprecated: use long4_16a or long4_32a [-Wdeprecated-declarations]
+  599 | struct alignment_of<long4> {
+      |                     ^~~~~
+In file included from /usr/local/cuda/include/driver_types.h:61,
+                 from /usr/local/cuda/include/builtin_types.h:59,
+                 from /usr/local/cuda/include/cuda_runtime.h:90,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAMiscFunctions.h:7,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAException.h:6,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAAllocatorConfig.h:5,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDACachingAllocator.h:6,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/impl/CUDAGuardImpl.h:9,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAGuard.h:8,
+                 from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/flash_attn/flash_api.cpp:7:
+/usr/local/cuda/include/vector_types.h:532:98: note: declared here
+  532 | typedef __device_builtin__ struct long4 __VECTOR_TYPE_DEPRECATED__("use long4_16a or long4_32a") long4;
+      |                                                                                                  ^~~~~
+In file included from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include/cutlass/integer_subbyte.h:47,
+                 from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include/cutlass/numeric_types.h:40,
+                 from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/flash_attn/flash_api.cpp:12:
+/opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include/cutlass/platform/platform.h:603:21: warning: 'ulong4' is deprecated: use ulong4_16a or ulong4_32a [-Wdeprecated-declarations]
+  603 | struct alignment_of<ulong4> {
+      |                     ^~~~~~
+In file included from /usr/local/cuda/include/driver_types.h:61,
+                 from /usr/local/cuda/include/builtin_types.h:59,
+                 from /usr/local/cuda/include/cuda_runtime.h:90,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAMiscFunctions.h:7,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAException.h:6,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAAllocatorConfig.h:5,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDACachingAllocator.h:6,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/impl/CUDAGuardImpl.h:9,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAGuard.h:8,
+                 from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/flash_attn/flash_api.cpp:7:
+/usr/local/cuda/include/vector_types.h:533:101: note: declared here
+  533 | typedef __device_builtin__ struct ulong4 __VECTOR_TYPE_DEPRECATED__("use ulong4_16a or ulong4_32a") ulong4;
+      |                                                                                                     ^~~~~~
+In file included from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include/cutlass/integer_subbyte.h:47,
+                 from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include/cutlass/numeric_types.h:40,
+                 from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/flash_attn/flash_api.cpp:12:
+/opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include/cutlass/platform/platform.h:619:21: warning: 'longlong4' is deprecated: use longlong4_16a or longlong4_32a [-Wdeprecated-declarations]
+  619 | struct alignment_of<longlong4> {
+      |                     ^~~~~~~~~
+In file included from /usr/local/cuda/include/driver_types.h:61,
+                 from /usr/local/cuda/include/builtin_types.h:59,
+                 from /usr/local/cuda/include/cuda_runtime.h:90,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAMiscFunctions.h:7,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAException.h:6,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAAllocatorConfig.h:5,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDACachingAllocator.h:6,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/impl/CUDAGuardImpl.h:9,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAGuard.h:8,
+                 from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/flash_attn/flash_api.cpp:7:
+/usr/local/cuda/include/vector_types.h:550:110: note: declared here
+  550 | typedef __device_builtin__ struct longlong4 __VECTOR_TYPE_DEPRECATED__("use longlong4_16a or longlong4_32a") longlong4;
+      |                                                                                                              ^~~~~~~~~
+In file included from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include/cutlass/integer_subbyte.h:47,
+                 from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include/cutlass/numeric_types.h:40,
+                 from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/flash_attn/flash_api.cpp:12:
+/opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include/cutlass/platform/platform.h:623:21: warning: 'ulonglong4' is deprecated: use ulonglong4_16a or ulonglong4_32a [-Wdeprecated-declarations]
+  623 | struct alignment_of<ulonglong4> {
+      |                     ^~~~~~~~~~
+In file included from /usr/local/cuda/include/driver_types.h:61,
+                 from /usr/local/cuda/include/builtin_types.h:59,
+                 from /usr/local/cuda/include/cuda_runtime.h:90,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAMiscFunctions.h:7,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAException.h:6,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAAllocatorConfig.h:5,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDACachingAllocator.h:6,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/impl/CUDAGuardImpl.h:9,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAGuard.h:8,
+                 from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/flash_attn/flash_api.cpp:7:
+/usr/local/cuda/include/vector_types.h:551:113: note: declared here
+  551 | typedef __device_builtin__ struct ulonglong4 __VECTOR_TYPE_DEPRECATED__("use ulonglong4_16a or ulonglong4_32a") ulonglong4;
+      |                                                                                                                 ^~~~~~~~~~
+In file included from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include/cutlass/integer_subbyte.h:47,
+                 from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include/cutlass/numeric_types.h:40,
+                 from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/flash_attn/flash_api.cpp:12:
+/opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include/cutlass/platform/platform.h:627:21: warning: 'double4' is deprecated: use double4_16a or double4_32a [-Wdeprecated-declarations]
+  627 | struct alignment_of<double4> {
+      |                     ^~~~~~~
+In file included from /usr/local/cuda/include/driver_types.h:61,
+                 from /usr/local/cuda/include/builtin_types.h:59,
+                 from /usr/local/cuda/include/cuda_runtime.h:90,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAMiscFunctions.h:7,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAException.h:6,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAAllocatorConfig.h:5,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDACachingAllocator.h:6,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/impl/CUDAGuardImpl.h:9,
+                 from /usr/local/lib/python3.12/dist-packages/torch/include/c10/cuda/CUDAGuard.h:8,
+                 from /opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/flash_attn/flash_api.cpp:7:
+/usr/local/cuda/include/vector_types.h:561:104: note: declared here
+  561 | typedef __device_builtin__ struct double4 __VECTOR_TYPE_DEPRECATED__("use double4_16a or double4_32a") double4;
+      |                                                                                                        ^~~~~~~
+[2/2] Linking CXX shared module vllm-flash-attn/_vllm_fa2_C.abi3.so
+FAILED: [code=1] vllm-flash-attn/_vllm_fa2_C.abi3.so 
+: && /usr/bin/c++ -fPIC -I/usr/local/cuda/include -I/usr/local/cuda/include/cccl -O2 -g -DNDEBUG  -shared  -o vllm-flash-attn/_vllm_fa2_C.abi3.so vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/flash_api.cpp.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/flash_api_sparse.cpp.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/flash_api_torch_lib.cpp.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim128_bf16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim128_bf16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim128_fp16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim128_fp16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim192_bf16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim192_bf16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim192_fp16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim192_fp16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim256_bf16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim256_bf16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim256_fp16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim256_fp16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim32_bf16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim32_bf16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim32_fp16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim32_fp16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim64_bf16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim64_bf16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim64_fp16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim64_fp16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim96_bf16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim96_bf16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim96_fp16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_hdim96_fp16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_sparse_hdim128_bf16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_sparse_hdim128_bf16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_sparse_hdim128_fp16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_sparse_hdim128_fp16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim128_bf16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim128_bf16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim128_fp16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim128_fp16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim192_bf16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim192_bf16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim192_fp16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim192_fp16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim256_bf16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim256_bf16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim256_fp16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim256_fp16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim32_bf16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim32_bf16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim32_fp16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim32_fp16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim64_bf16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim64_bf16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim64_fp16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim64_fp16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim96_bf16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim96_bf16_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim96_fp16_causal_sm80.cu.o vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_split_hdim96_fp16_sm80.cu.o -L/usr/local/cuda/targets/sbsa-linux/lib/stubs   -L/usr/local/cuda/targets/sbsa-linux/lib -Wl,-rpath,/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64:  /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch.so  /usr/local/cuda/lib64/libcudart.so  /usr/lib/aarch64-linux-gnu/libcuda.so  -Wl,--no-as-needed,"/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so" -Wl,--as-needed  -Wl,--no-as-needed,"/usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so" -Wl,--as-needed  /usr/local/lib/python3.12/dist-packages/torch/lib/libc10_cuda.so  /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so  /usr/local/cuda/lib64/libcudart.so  -lcudadevrt  -lcudart_static  -lrt  -lpthread  -ldl && :
+/usr/bin/ld: vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/flash_api.cpp.o: in function `flash::run_mha_fwd(flash::Flash_fwd_params&, CUstream_st*, bool)':
+/opt/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/flash_attn/flash_api.cpp:281: undefined reference to `flash::fr13_run_mha_fwd_fixed32_qrow16(flash::Flash_fwd_params&, CUstream_st*)'
+/usr/bin/ld: vllm-flash-attn/_vllm_fa2_C.abi3.so: hidden symbol `_ZN5flash31fr13_run_mha_fwd_fixed32_qrow16ERNS_16Flash_fwd_paramsEP11CUstream_st' isn't defined
+/usr/bin/ld: final link failed: bad value
+collect2: error: ld returned 1 exit status
+ninja: build stopped: subcommand failed.
+
+real	0m7.811s
+user	0m6.610s
+sys	0m0.813s

@@ -1,0 +1,10 @@
+Focused command:
+python3 -m pytest -q tests/test_fr13_fa2_tree_kernel_candidates.py tests/test_fr13_qrow16_production_sidecar.py tests/test_fr13_fixed32_fa2_identity.py
+
+Result: 17 passed, 1 skipped, 0 failed in 0.10s.
+
+Broader fixed32 contract/provenance result: 202 passed, 2 skipped, 3 failed.
+All three failures are isolated-worktree fixture absences, not assertion drift
+from this change: two require .venv/bin/python, and one requires the runtime
+.cache SWE-Verified blob. The focused source, candidate-identity, old-candidate
+rejection, and exact source/destination tests all pass.

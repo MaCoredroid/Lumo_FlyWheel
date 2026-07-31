@@ -1,0 +1,96 @@
+{
+  "schema": "fr13.fixed32.qrow16_num_splits0_repair.v1",
+  "status": "BUILD_ABI_PASS_REAL_B1_RETRY_REQUIRED",
+  "production_eligible": false,
+  "byte_parity_claim": false,
+  "performance_claim": false,
+  "floor_acceptance_claim": false,
+  "gpu_used_for_repair_build": false,
+  "source_base_commit": "e2a3e6b4ca5faa8d61b0d1018a519c035036ff1b",
+  "guard_fix_commit": "340e82e7c8358d0dad6015d4063bae6f9e5f0e90",
+  "failed_real_b1_gate": {
+    "suite": "SWE-Verified",
+    "instance_id": "astropy__astropy-12907",
+    "batch": 1,
+    "concurrency": 1,
+    "source_commit": "e2a3e6b4ca5faa8d61b0d1018a519c035036ff1b",
+    "candidate_so_sha256": "35ba18c9bab4b37362aa3b26441e8a58edfcd3d0a75692fda90fc131a0b3307c",
+    "candidate_so_size_bytes": 299554080,
+    "root_error": "FR13 qrow16 internal dispatch reached non-production geometry",
+    "live_result_present": false,
+    "completed_tasks": 0,
+    "orchestrator_rc": 15,
+    "failed_window_wall_seconds": 49,
+    "valid_timing": false,
+    "automatic_container_cleanup": false,
+    "manual_container_removal_verified": true,
+    "post_cleanup_observed_at_utc": "2026-07-31T17:03:44Z",
+    "post_cleanup_matching_containers": 0,
+    "post_cleanup_gpu_compute_processes": 0
+  },
+  "root_cause": {
+    "set_params_fprop_zero_initializes_params": true,
+    "fixed32_max_seqlen_q": 32,
+    "seqlenq_ngroups_swapped": false,
+    "set_params_splitkv_called": false,
+    "deployed_num_splits": 0,
+    "paged_force_split_kernel": true,
+    "candidate_split_template_boolean": false,
+    "candidate_combine_kernel": false
+  },
+  "fix": {
+    "old_guard": "params.num_splits == 1",
+    "new_guard": "params.num_splits == 0",
+    "production_default_off": true,
+    "superseded_candidate_rejected": true,
+    "exact_new_source_destination_required": true
+  },
+  "build": {
+    "candidate_path": "/home/mark/shared/lumoFlyWheel-qrow16-thin/output/fr13_fa2_qrow16_num_splits0_build_20260731/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so",
+    "candidate_so_sha256": "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86",
+    "candidate_so_size_bytes": 299507792,
+    "exact_safe_so_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+    "flash_api_cpp_sha256": "4af413a54eb6ebce88fa2bbe94de9d82b5cca48a3af10fae2333b42567c5b37b",
+    "flash_api_object_sha256": "bae69994aec1f8947f46dd78e30861490d18e51bec196b71f34e36ce31a08de8",
+    "qrow_translation_unit_sha256": "fe8ce262afad6fdb9a5d14739519340ae4d6140dd1e48d3a83283fa59f3573a4",
+    "qrow_object_sha256": "87cb69fbbf25a7044ebc9dba9a02374a869755ebf2d49d20dd554dca2af72fe7",
+    "qrow_object_unchanged_from_rejected_candidate": true,
+    "patcher_reproduction_byte_identical": true
+  },
+  "abi_gate": {
+    "defined_dynamic_records": 687,
+    "defined_dynamic_diff_bytes": 0,
+    "defined_dynamic_normalized_sha256": "698681ac955deeefc4f4a9ad3c427d24b103159b00dc9ec373e5a9dfc79c5277",
+    "undefined_dynamic_records": 169,
+    "undefined_dynamic_diff_bytes": 0,
+    "undefined_dynamic_normalized_sha256": "58184e3d673efb19d8cf812e0ca74d4088b309d78e62e5727db77f5b4ae21db3",
+    "dt_needed_records": 10,
+    "dt_needed_diff_bytes": 0,
+    "dt_needed_normalized_sha256": "8657168f24fe6365d30c87c1698fb27e601fd20c3944d9358d471f1bd7d767e7",
+    "nm_defined_names": 685,
+    "nm_undefined_names": 168,
+    "stock_dispatch_binding": "WEAK DEFAULT",
+    "qrow_host_launcher": "LOCAL; absent from dynsym"
+  },
+  "cuda_gate": {
+    "main_kernel_count": 1,
+    "combine_kernel_count": 0,
+    "traits": "256x16x64",
+    "warps": 1,
+    "split": false,
+    "append_kv": false
+  },
+  "tests": {
+    "focused": {
+      "passed": 17,
+      "skipped": 1,
+      "failed": 0
+    },
+    "broader_fixed32": {
+      "passed": 202,
+      "skipped": 2,
+      "failed_environment_fixture": 3
+    }
+  },
+  "required_next_gate": "one real SWE-Verified B1 live-paged stock/qrow raw-byte A/B with rebuilt candidate"
+}

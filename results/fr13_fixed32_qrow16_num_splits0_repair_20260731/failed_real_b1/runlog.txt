@@ -1,0 +1,111 @@
+fixed32 SWE-Verified subset OK: tasks=1 diagnostic=1
+=== BIGDENOM-VARIANT SWEServe ARM hydra27_fixed32_kernel_live_qrow16_current_b1_20260731T165000Z kind=hydra27_fixed32 launcher=forked expect=31 xflags=[FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0 FR13_FIXED32_MODE=hydra27_fixed32 FR13_FIXED32_VALID_MASK=0x7abdffff FR13_FIXED32_ACTIVE_NODES=27 FR13_FIXED32_PHYSICAL_DRAFTS=31] subset=config/fr13_fixed32/subset_b1_diagnostic_one.json ===
+2026-07-31T16:48:20Z
+e2a3e6b4ca5faa8d61b0d1018a519c035036ff1b
+[hygiene] recover_host_memory + assert free
+[hygiene] MemAvailable=104.0GiB swap_used=0 OK
+               total        used        free      shared  buff/cache   available
+Mem:             117          13         104           0           0         104
+Swap:             15           0          15
+fixed32 container identity promoted: id=c53c9506028688a804d01f7f50a87d9d3b811a8aaae143b3ebdade79d9ae2d2e name=fr13-bigdenom-hydra27_fixed32_kernel_live_qrow16_current_b1_20260731T165000Z started_at=2026-07-31T16:48:27.095589008Z pid=1900941 restart_count=0
+healthy after 417s
+fixed32 runtime identity OK: runtime=58e047e69a195ed52e452064e48dc558d5edb3b3ff699290c78578a33c877138 pid1_args=47
+fixed32 runtime ready: mode=hydra27_fixed32 producer_pid=257
+container env OK (hydra27_fixed32)
+PID 1 cmd=[/usr/bin/python3 /usr/local/bin/vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b --host 0.0.0.0 --port 9950 --max-num-seqs 1 --gpu-memory-utilization 0.70 --max-model-len 131072 --seed 0 --attention-backend TREE_ATTN --gdn-prefill-backend triton --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 --speculative-config {"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"} --enable-prefix-caching --enable-chunked-prefill --mamba-block-size 1024 --mamba-ssm-cache-dtype float32 --max-num-batched-tokens 4096 --block-size 1024 --long-prefill-token-threshold 1024 --compilation-config {"cudagraph_mode":"FULL_AND_PIECEWISE"} --middleware lumo_flywheel_serving.inference_proxy.Fixed32EngineIngressMiddleware ]
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"}
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 256 cmd=[/usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(51) ]
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"}
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 257 cmd=[VLLM::EngineCore                                                                                                                   ]
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 673 cmd=[bash -lc 
+hit=""; pids=""
+for p in $(ls /proc | grep -E "^[0-9]+$"); do
+  e="/proc/$p/environ"; [ -r "$e" ] || continue
+  cmd="$(tr "\0" " " < /proc/$p/cmdline 2>/dev/null || true)"
+  case "$cmd" in *vllm*|*VllmWorker*|*EngineCore*|*python*) ;; *) continue ;; esac
+  dm="$(tr "\0" "\n" < "$e" | grep -E "^FR10_DECODE_MODE_DEFAULT=" || true)"
+  if [ -n "$dm" ]; then
+    pids="$pids $p"
+    echo "PID $p cmd=[$cmd]"
+    tr "\0" "\n" < "$e" | grep -E "^(FR10_DECODE_MODE_DEFAULT|LUMO_FB_KERNEL_ROWS|FR13_GB10_FP8_GEMV_CFG|FR13_GPU_COMMITTER|FR13_COMMITTER_SYNCKILL|SPEC_CONFIG|FR13_REPLAY_ROUTE)=" | sed "s/^/   /"
+    hit="1"
+  fi
+done
+echo "SUMMARY worker_env_seen=[$hit] pids=[$pids]"
+ ]
+   LUMO_FB_KERNEL_ROWS=1
+   FR13_GB10_FP8_GEMV_CFG=0
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"}
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+SUMMARY worker_env_seen=[1] pids=[ 1 256 257 673]
+worker environ needle OK (hydra27_fixed32)
+(EngineCore pid=257) INFO 07-31 16:55:14 [gpu_model_runner.py:9444] Graph capturing finished in 7 secs, took 2.55 GiB
+fixed32 pretask generation warmup SKIPPED: canonical SWE traffic only
+fixed32 pretask prefix-cache reset SKIPPED: fresh container
+[offload] OFFLOAD_AGENT=1 — proxy+agent on alienware, GB10 stays vLLM-only
+[offload] alienware -> GB10 vLLM 100.103.10.122:9950/health OK
+OFFLOAD_PROXY_OK host=alienware upstream=http://100.103.10.122:9950 (forced temp 0.6, raw_dumps_disabled=1, NUDGE OFF)
+proxy OK (OFFLOADED to alienware:8023)
+fixed32 ingress auth preflight OK: engine=4 rejects proxy=4 rejects
+eval offload: configured evaluator reachable
+[offload] link watchdog pid=1912528 (threshold 300s)
+fixed32 pretask zero-traffic baseline OK
+fixed32 ingress campaign begun after zero-work baseline
+curl: (7) Failed to connect to 127.0.0.1 port 9950 after 0 ms: Couldn't connect to server
+swe orchestrator rc=1 wall=49s
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/scripts/run_swe_bench_q36_a.py", line 6308, in _job
+    fixed32_bracket.post(
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/scripts/run_swe_bench_q36_a.py", line 4112, in post
+    raise Fixed32BoundaryError("fixed32 post bracket already failed")
+Fixed32BoundaryError: fixed32 post bracket already failed
+FAIL: fixed32 engine ingress campaign finalize
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<stdin>", line 158, in <module>
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/.venv/lib/python3.12/site-packages/requests/api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/.venv/lib/python3.12/site-packages/requests/api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/.venv/lib/python3.12/site-packages/requests/sessions.py", line 592, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/.venv/lib/python3.12/site-packages/requests/sessions.py", line 706, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/.venv/lib/python3.12/site-packages/requests/adapters.py", line 678, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPConnectionPool(host='127.0.0.1', port=9950): Max retries exceeded with url: /fr13/fixed32/ingress/finalize (Caused by NewConnectionError("HTTPConnection(host='127.0.0.1', port=9950): Failed to establish a new connection: [Errno 111] Connection refused"))
+OFFLOAD_FETCH_OK host=alienware raw_dumps=disabled
+output/fr13_b1_kernel_live_gate_qrow16_current_20260731T165000Z/hydra27_fixed32_kernel_live_qrow16_current_b1_20260731T165000Z/metrics_after_swe.txt: expected one metric vllm:spec_decode_num_drafts_total, got 0
+FAIL: fixed32 canonical-task spec engagement
+FAIL: fixed32 canonical tasks emitted no work needle
+{
+  "swe_orchestrator_rc": 15,
+  "swe_window_wall_s": 49,
+  "tasks": []
+}
+raw proxy dumps: disabled
+ARM_DONE hydra27_fixed32_kernel_live_qrow16_current_b1_20260731T165000Z kind=hydra27_fixed32 swerc=15
+[teardown] kill proxy + attest/remove run container + recover_host_memory
+FAIL: fixed32 terminal flush rc=1
+fixed32 container incarnation drifted after engine-ledger materialization failure: c53c9506028688a804d01f7f50a87d9d3b811a8aaae143b3ebdade79d9ae2d2e
+               total        used        free      shared  buff/cache   available
+Mem:             117          12         101           0           4         105
+Swap:             15           0          15
+2026-07-31T16:57:21Z

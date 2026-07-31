@@ -73,9 +73,9 @@ FA2_REPO_RELATIVE = (
 FA2_SHA256 = "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d"
 FA2_SIZE = 299_183_936
 QROW16_FA2_SHA256 = (
-    "35ba18c9bab4b37362aa3b26441e8a58edfcd3d0a75692fda90fc131a0b3307c"
+    "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
 )
-QROW16_FA2_SIZE = 299_554_080
+QROW16_FA2_SIZE = 299_507_792
 CONTAINER_FA2_SOURCE = Path("/tmp/fr13_fork_fa2.so")
 CONTAINER_FA2_DESTINATION = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so"

@@ -1,0 +1,12 @@
+manual_link_qrow_object=vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_fr13_qrow16_hdim256_bf16_sm80.cu.o
+/usr/bin/ld: cannot find /usr/lib/aarch64-linux-gnu/libcuda.so: No such file or directory
+collect2: error: ld returned 1 exit status
+
+real	0m0.080s
+user	0m0.042s
+sys	0m0.037s
+manual_link_qrow_object=vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir/csrc/flash_attn/src/flash_fwd_fr13_qrow16_hdim256_bf16_sm80.cu.o
+
+real	0m0.960s
+user	0m0.627s
+sys	0m0.333s
