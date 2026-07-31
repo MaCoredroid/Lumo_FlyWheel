@@ -1,0 +1,94 @@
+{
+  "schema": "fr13.fixed32.fa2_suffix_only_build.v1",
+  "created_at_utc": "2026-07-31T10:26:58Z",
+  "status": "cpu_only_build_complete",
+  "application": {
+    "branch": "agent/fixed32-fa2-suffix-only",
+    "base_commit": "53256ac84d2a7e22c037ebac3261e0f01f50cce0",
+    "provenance_commit": "c8a908596795bd3330a28a62a3dbcade02ad364e",
+    "source_commit": "fc855e594d5246a2a66a6a3615b289b7a95f54c8",
+    "plan_commit": "8519c999261295f170ef4285aea0bac4d2766d00"
+  },
+  "toolchain": {
+    "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+    "image_repo_digest": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "architecture": "arm64",
+    "cuda": "13.0",
+    "gcc": "11.4.0",
+    "torch": "2.11.0+cu130",
+    "fa2_upstream_commit": "29210221863736a08f71a866459e368ad1ac4a95"
+  },
+  "build_graph": {
+    "ninja_sha256": "e01ef0b3551e9dc46fdc54d4f241241f9ef5332cc81b911bcbfc23c9ea1c9121",
+    "rules_sha256": "48682694f3e80b4bd4fee4e60fc81ecfb26c69b1c401f3fa33875f453a95c488",
+    "final_dry_run_actions": [
+      "compile_flash_api_cpp",
+      "link_vllm_fa2_C"
+    ],
+    "compile_actions": 1,
+    "link_actions": 1,
+    "cuda_compile_actions": 0,
+    "container_rm": true,
+    "gpu_devices_exposed": false,
+    "warnings": "CUDA 13 deprecated vector type warnings only"
+  },
+  "preparation": {
+    "root_owned_hardlink_fallback": "non-clobbering physical object copies",
+    "all_55_prebuild_object_hashes_matched_split4": true,
+    "reused_object_mtimes_restored_from_split4": true,
+    "compilation_started_before_exact_two_action_dry_run": false
+  },
+  "source_sha256": {
+    "flash_api.cpp": "20c6c6e22121c1c621c569ef02fac0fe1a736ff131d469a4d6de21ab5b2dde71",
+    "flash_api_torch_lib.cpp": "c575d9f02ba44bf7022c77b80fdf12173da0ecae8a4d7599934c2cc9fa52e121",
+    "src/flash.h": "e4c7875a72c0bc5f8ed3e0661ef956ca24b38c8f4758ae2a89f5e58b88671c5a",
+    "src/flash_fwd_kernel.h": "934e8c6c2e72c667f3cb0a8dc53b11c16a4eba8e3ac2b5811c882eff399ac3de"
+  },
+  "object_provenance": {
+    "target_object_count": 55,
+    "reused_object_count": 54,
+    "reused_sha256_manifest_aggregate_before": "410173bdd9cf29c22c97db059606da9ed18c09cb6bb40de656c7e0a185215b89",
+    "reused_sha256_manifest_aggregate_after": "410173bdd9cf29c22c97db059606da9ed18c09cb6bb40de656c7e0a185215b89",
+    "prior_flash_api_object_sha256": "74d9a779a5e9c20e3aa479844886e09dc8c065a5d7e4b25ad82692cbeecbf0c2",
+    "candidate_flash_api_object_sha256": "0fc1be5062cadb66a7ec5dafaeefb88b0f571ddaa8cbffa4da88a43c590398c9"
+  },
+  "candidate_binary": {
+    "repo_relative_path": "output/fr13_fa2_suffix_fc855e59_build/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so",
+    "tracked": false,
+    "sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+    "size_bytes": 299183936,
+    "elf_machine": "AArch64",
+    "build_id": "d8e53bb5c9a90d623cf5f62d653037e853004dc1",
+    "nv_fatbin_present": true
+  },
+  "preserved_binaries": {
+    "split4_sha256": "744819aaa230b3c9f2610f27c9d8c603461917163d364d99d65ffdcd158bea8d",
+    "split4_size_bytes": 299181128,
+    "canonical_baseline_sha256": "97fa2519739b3f976debb8377f8829cf3a167b410d1770bb42db390f8c5c0ae1",
+    "canonical_baseline_size_bytes": 301219928,
+    "canonical_copies_checked": 2
+  },
+  "abi_gate": {
+    "defined_export_count": 685,
+    "defined_export_delta_vs_split4": 0,
+    "defined_export_delta_vs_baseline": 0,
+    "strong_export_delta_vs_split4": 0,
+    "strong_export_delta_vs_baseline": 0,
+    "undefined_symbol_delta_vs_split4": 0,
+    "undefined_symbol_delta_vs_baseline": 0,
+    "dynamic_dependency_delta_vs_split4": 0,
+    "dynamic_dependency_delta_vs_baseline": 0,
+    "required_symbols_present": true,
+    "cpu_load_registration_passed": true,
+    "post_build_ninja_no_work": true
+  },
+  "static_tests": {
+    "command": "pytest -q tests/test_fr13_fa2_tree_kernel_candidates.py tests/test_fr13_fa2_no_bias_pristine_compare.py",
+    "passed": 3,
+    "failed": 0
+  },
+  "remaining_gates": [
+    "CUDA byte equivalence",
+    "canonical real SWE-Verified acceptance and timing"
+  ]
+}

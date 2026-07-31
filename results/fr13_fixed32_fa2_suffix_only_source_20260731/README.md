@@ -1,7 +1,8 @@
 # FR13 fixed32 FA2 suffix-only candidate
 
-Status: source-only. No production build, container, GPU test, or real-task run
-was started while the active exact4 campaign was running.
+Status: CPU-only production-toolchain build complete. The build ran only after
+the active exact4 campaign released the measurement slot. No GPU test or
+real-task run has been performed. See `build_manifest.json` for the result.
 
 ## Provenance
 
