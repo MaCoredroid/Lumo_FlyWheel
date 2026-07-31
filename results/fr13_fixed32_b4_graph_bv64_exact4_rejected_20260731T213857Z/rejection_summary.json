@@ -24,7 +24,9 @@
     "reason": "B4 manual KV-cache argv pair absent from expected PID1 contract",
     "tasks_started": 0,
     "real_task_replays": 0,
-    "graph_live_pass": false
+    "graph_live_pass": false,
+    "terminal_flush_status": "error:RuntimeError",
+    "terminal_flush_work_census_events": 0
   },
   "claim_boundary": {
     "boot_and_graph_capture": true,
@@ -36,6 +38,10 @@
   "integrity": {
     "runtime_manifest_equal": true,
     "external_manifest_equal": true,
+    "free_after_teardown_predates_container_removal": true,
+    "cleanup_recaptured_at_utc": "2026-07-31T21:57:40Z",
+    "docker_cleanup_evidence": "docker_after_cleanup.txt",
+    "gpu_cleanup_evidence": "gpu_compute_after_cleanup.txt",
     "docker_containers_after_cleanup": 0,
     "compute_processes_after_cleanup": 0
   }

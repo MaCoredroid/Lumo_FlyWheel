@@ -20,6 +20,13 @@ timing, throughput, or floor-acceptance evidence.
 The run was rejected because the exact PID1 argv allowlist still described the
 pre-correction B4 command and therefore rejected the new pinned
 `--kv-cache-memory-bytes` pair. The guard failed closed before task launch.
+The terminal flush consequently returned `error:RuntimeError` with an empty
+work census; this is rejection lifecycle evidence, not task or timing evidence.
+
+The preserved `free_after_teardown.txt` snapshot was taken before the rejected
+container was manually removed, so it is not final cleanup proof. The separately
+timestamped Docker and GPU recaptures record the final zero-container,
+zero-compute-process state.
 
 ## Correction
 
