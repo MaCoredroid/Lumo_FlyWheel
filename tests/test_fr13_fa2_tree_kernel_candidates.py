@@ -104,43 +104,22 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
         translation_unit,
         fixed32_query_tile16=True,
     )
-    candidate = translation_unit.read_text()
-    assert module.FIXED32_QUERY_TILE16_SPECIALIZATION in candidate
+    qrow_translation_unit = translation_unit.with_name(
+        "flash_fwd_fr13_qrow16_hdim256_bf16_sm80.cu"
+    )
+    candidate = qrow_translation_unit.read_text()
+    assert translation_unit.read_text() == stock
+    assert candidate == module.FIXED32_QUERY_TILE16_TRANSLATION_UNIT
     assert module.STOCK_FIXED32_QUERY_INSTANTIATION not in candidate
     assert not module._patch_fixed32_query_translation_unit(
         translation_unit,
         fixed32_query_tile16=True,
     )
 
-    assert "#include <cstdlib>" in candidate
-    assert (
-        "run_mha_fwd_splitkv_dispatch<cutlass::bfloat16_t, 256, false>"
-        in candidate
-    )
-    assert 'std::getenv("FR13_FA2_QROW16_INTERNAL_DISPATCH")' in candidate
-    assert "fr13_qrow16_requested" in candidate
-    assert "TORCH_CHECK(" in candidate
-    assert "internal dispatch reached non-production geometry" in candidate
-    assert "params.tree_bias_ptr != nullptr" in candidate
-    assert "params.b == 1" in candidate
-    assert "params.d == 256" in candidate
-    assert "params.d_rounded == 256" in candidate
-    assert "params.h == 24" in candidate
-    assert "params.h_k == 4" in candidate
-    assert "params.h_h_k_ratio == 6" in candidate
-    assert "params.seqlen_q == 32" in candidate
-    assert "params.tree_bias_q_offset == 0" in candidate
-    assert "params.tree_bias_k_offset == 0" in candidate
-    assert "params.cu_seqlens_q != nullptr" in candidate
-    assert "!params.seqlenq_ngroups_swapped" in candidate
-    assert "params.block_table != nullptr" in candidate
-    assert "params.page_block_size == 1024" in candidate
-    assert "params.window_size_left < 0" in candidate
-    assert "params.window_size_right < 0" in candidate
-    assert "params.alibi_slopes_ptr == nullptr" in candidate
-    assert "params.knew_ptr == nullptr" in candidate
-    assert "params.softcap == 0.0f" in candidate
-    assert "params.num_splits == 1" in candidate
+    assert "#include <cstdlib>" not in candidate
+    assert "std::getenv" not in candidate
+    assert '__attribute__((visibility("hidden")))' in candidate
+    assert "fr13_run_mha_fwd_fixed32_qrow16" in candidate
     assert "constexpr size_t smem_size = TreeKernelTraits::kSmemSize" in candidate
     assert "dim3 grid(num_m_block, params.b, params.h)" in candidate
     assert "auto kernel = &flash_fwd_splitkv_kernel<" in candidate
@@ -155,7 +134,7 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
     assert "false   // Append_KV" in candidate
     assert "kernel<<<grid, TreeKernelTraits::kNThreads, smem_size, stream>>>" in candidate
     assert "C10_CUDA_KERNEL_LAUNCH_CHECK();" in candidate
-    assert "run_flash_splitkv_fwd<StockKernelTraits, false>" in candidate
+    assert "run_flash_splitkv_fwd<StockKernelTraits, false>" not in candidate
     assert "AllowSplit" not in candidate
     assert "FR13_ALLOW_SPLIT_SWITCH" not in candidate
     assert "kTreeBlockM = 16" in candidate
@@ -168,6 +147,41 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
     assert "public FA2 API requires paged-KV blocks divisible by 16" in candidate
     assert "flash_fwd_splitkv_combine_kernel" not in candidate
     assert "params.num_splits = " not in candidate
+
+    api = module.FIXED32_QUERY_TILE16_API_DISPATCH
+    stock_body = module.STOCK_RUN_MHA_FWD[
+        module.STOCK_RUN_MHA_FWD.index("    FP16_SWITCH") : -1
+    ]
+    assert stock_body in api
+    assert '__attribute__((visibility("hidden")))' in api
+    assert "kFr13Qrow16BatchStrideSentinel" in api
+    assert str(module.FIXED32_QUERY_TILE16_BATCH_STRIDE_SENTINEL) in api
+    assert "TORCH_CHECK(" in api
+    assert "internal dispatch reached non-production geometry" in api
+    assert "params.tree_bias_ptr != nullptr" in api
+    assert "params.is_bf16" in api
+    assert "!params.is_causal" in api
+    assert "params.b == 1" in api
+    assert "params.d == 256" in api
+    assert "params.d_rounded == 256" in api
+    assert "params.h == 24" in api
+    assert "params.h_k == 4" in api
+    assert "params.h_h_k_ratio == 6" in api
+    assert "params.seqlen_q == 32" in api
+    assert "params.tree_bias_q_offset == 0" in api
+    assert "params.tree_bias_k_offset == 0" in api
+    assert "params.cu_seqlens_q != nullptr" in api
+    assert "params.seqused_k != nullptr" in api
+    assert "!params.seqlenq_ngroups_swapped" in api
+    assert "params.block_table != nullptr" in api
+    assert "params.page_block_size == 1024" in api
+    assert "params.window_size_left < 0" in api
+    assert "params.window_size_right < 0" in api
+    assert "params.alibi_slopes_ptr == nullptr" in api
+    assert "params.knew_ptr == nullptr" in api
+    assert "params.softcap == 0.0f" in api
+    assert "params.num_splits == 1" in api
+    assert "force_split_kernel" in api
 
     # The CTA id changes for rows 16..31, but the warp-local query-row/lane
     # coordinate is identical to the stock 64-row, four-warp tile.
@@ -210,7 +224,9 @@ def test_qrow16_capture_checker_is_compile_preflight_only() -> None:
     assert "return_softmax_lse=True" in text
     assert "num_splits=1" in text
     assert "block_table=block_table" in text
-    assert 'os.environ["FR13_FA2_QROW16_INTERNAL_DISPATCH"] = "1"' in text
+    assert "QROW16_BATCH_STRIDE_SENTINEL = 0x46523133" in text
+    assert "torch.as_strided(" in text
+    assert "FR13_FA2_QROW16_INTERNAL_DISPATCH" not in text
     assert "candidate=True" in text
 
 
