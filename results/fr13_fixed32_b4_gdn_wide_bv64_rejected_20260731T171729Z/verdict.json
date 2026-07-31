@@ -1,0 +1,82 @@
+{
+  "schema": "fr13.fixed32.b4_gdn_wide_bv64_rejected.v1",
+  "created_utc": "2026-07-31T17:30:56Z",
+  "status": "REJECTED_PRE_TASK_PROCESS_CONTRACT",
+  "source_commit": "86de4d8337f1ddb591de35d55ee95e1d5f15a45c",
+  "branch": "agent/fixed32-b4-livegate-ready",
+  "runroot": "output/fr13_b4_gdn_wide_live_gate_20260731T171729Z",
+  "arm": "tail6_fixed32_gdn_wide_bv64_exact4_20260731T171729Z",
+  "serve_rc": 3,
+  "classification": "exact4_b4_byte_diagnostic",
+  "candidate": {
+    "name": "fixed32_batched_gdn_wide_bv",
+    "bv": 64,
+    "production_enabled": false,
+    "byte_gate_classified": false
+  },
+  "task_contract": {
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "split": "test",
+    "subset_path": "config/fr13_fixed32/subset_b4_four.json",
+    "subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "task_count": 4,
+    "tasks": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033",
+      "astropy__astropy-13236",
+      "astropy__astropy-13398"
+    ],
+    "batch_size": 4,
+    "concurrency": 4,
+    "real_task_requests_admitted": 0,
+    "complete_work_census_events": 0,
+    "pure_decode_forward_steps": 0
+  },
+  "primary_failure": {
+    "stage": "post_health_pre_ready_process_attestation",
+    "error": "fixed32 PID1 argv mismatch",
+    "root_cause": "diagnostic runner pins ENFORCE_EAGER=1 and launcher appends --enforce-eager, while canonical process attestation expected only the default graph-mode argv",
+    "actual_argv_count": 48,
+    "expected_default_argv_count": 47,
+    "only_argv_delta": "--enforce-eager",
+    "actual_argv_canonical_sha256": "b1c6e4b6f446bf0775976b6b24f088e21c762134965c00f45368a4009c301911",
+    "expected_default_argv_canonical_sha256": "f98c89cdfdf722fdb2a6653aac491c9036ae004c894a0e1036a38d06b1d2528d",
+    "candidate_byte_mismatch_observed": false
+  },
+  "secondary_failure": {
+    "stage": "terminal_flush_after_early_exit",
+    "status": "error:RuntimeError",
+    "error": "fixed32 boot-warm evidence is missing",
+    "causal_role": "downstream_teardown_fallout"
+  },
+  "identities": {
+    "runner_sha256": "141177a7207ee78f2548416a698e38dc537381deb965e392b508630a37e0e1e2",
+    "stock_fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+    "runtime_manifest_overall_canonical_sha256": "20ff2087c88c86ed85b138271d4954194b1fdfd485253f08a0711c944b800405",
+    "external_manifest_overall_canonical_sha256": "c42fb16d2ea932f0e819c81172c49b69b312b75dd446146b6d7b6ef78af00a9e",
+    "runtime_launch_end_byte_identical": true,
+    "external_launch_end_byte_identical": true
+  },
+  "raw_evidence_sha256": {
+    "container_log": "ebedbe7bdcda2b1ebf89e53bee533f848a4b407540c53f6a89c592b75301ca5e",
+    "container_inspect": "c1cd143dd8946ca1b6c86ff8a5b02668c9ff862d4b1de5005c8265634965beb5",
+    "process_identity": "0bf05a972cdc026d4d79d59da0570077bd028c59f28dec4bae8cf7ad9f9cb6dc",
+    "runlog": "0740efb1d326abe5ec35069d4fa4ae1dc1e00d2105dc78eb9e7bff6a7e7ca903",
+    "flush_ack": "b2b844839e4c7d8cc09e1437419a2107a69a566a1b2614fa28b84f6edb602e49"
+  },
+  "cleanup": {
+    "named_container_stopped": true,
+    "named_container_removed": true,
+    "immediate_post_removal_gpu_compute_processes": 0
+  },
+  "claims": {
+    "real_swe_verified_tasks_executed": false,
+    "b4_byte_parity": false,
+    "candidate_correctness": false,
+    "timing": false,
+    "tps": false,
+    "acceptance": false,
+    "hardware_floor": false,
+    "floor_acceptance_eligible": false
+  }
+}

@@ -1,0 +1,12 @@
+2026-07-31T17:23:11.348315438Z (EngineCore pid=257) [FR13_SUBTREE_PARALLEL] preseeded: n=32 schedule=fixed32 levels=[1, 11] lens=[5, 7] critical=12 (monolith 32) route_armed=1 selfcheck_armed=0
+2026-07-31T17:23:11.352264233Z (EngineCore pid=257) [FR13_CONV_WB_BATCHED] preseeded 16 stagings: rows_cap=268 c=10240 dtype=torch.bfloat16
+2026-07-31T17:23:11.352284265Z (EngineCore pid=257) INFO 07-31 17:23:11 [gdn_attn.py:971] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=1 owner=language_model.model.layers.0.linear_attn b_max=4 path_cols=32
+2026-07-31T17:23:11.355760787Z (EngineCore pid=257) INFO 07-31 17:23:11 [gdn_attn.py:597] FR13_EAGER_PACK stacked rings rebuilt at metadata-builder init: union 32 layers (group adds 16)
+2026-07-31T17:23:11.357855769Z (EngineCore pid=257) [FR13_CONV_WB_BATCHED] preseeded 16 stagings: rows_cap=268 c=10240 dtype=torch.bfloat16
+2026-07-31T17:23:11.357874057Z (EngineCore pid=257) INFO 07-31 17:23:11 [gdn_attn.py:971] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=2 owner=language_model.model.layers.1.linear_attn b_max=4 path_cols=32
+2026-07-31T17:23:11.361051346Z (EngineCore pid=257) INFO 07-31 17:23:11 [gdn_attn.py:597] FR13_EAGER_PACK stacked rings rebuilt at metadata-builder init: union 48 layers (group adds 16)
+2026-07-31T17:23:11.362831880Z (EngineCore pid=257) [FR13_CONV_WB_BATCHED] preseeded 16 stagings: rows_cap=268 c=10240 dtype=torch.bfloat16
+2026-07-31T17:23:11.362855672Z (EngineCore pid=257) INFO 07-31 17:23:11 [gdn_attn.py:971] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=3 owner=language_model.model.layers.2.linear_attn b_max=4 path_cols=32
+2026-07-31T17:25:34.552888153Z (APIServer pid=1) INFO:     Application startup complete.
+2026-07-31T17:25:38.042678980Z (APIServer pid=1) INFO:     172.17.0.1:35956 - "GET /health HTTP/1.1" 200 OK
+2026-07-31T17:25:38.998659702Z (EngineCore pid=257) [FR13_FIXED32_FLUSH] failed generation 1: RuntimeError('fixed32 boot-warm evidence is missing')
