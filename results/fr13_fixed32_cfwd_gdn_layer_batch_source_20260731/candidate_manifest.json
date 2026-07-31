@@ -1,0 +1,51 @@
+{
+  "arm": {
+    "env": "FR13_FIXED32_COMMITTER_LAYER_BATCH=1",
+    "sidecars": [
+      "/logs/fr13_fixed32_committer_layer_batch.arm",
+      "/tmp/fr13_fixed32_committer_layer_batch.arm"
+    ],
+    "default": "off",
+    "sampled": "at fixed32 graph preseed"
+  },
+  "candidate": {
+    "graph_replays_per_event": 1,
+    "native_reference_physical_recurrence_launches": 48,
+    "candidate_physical_recurrence_launches": 1,
+    "layers": 48,
+    "path_cap": 16,
+    "padded_rows": 32,
+    "geometry": {
+      "block_k": 128,
+      "block_v": 32,
+      "num_stages": 3,
+      "num_warps": 4
+    },
+    "status": "source_only_gpu_gate_pending"
+  },
+  "byte_gate": {
+    "basis": "first_real_nonzero_accepted_path_per_batch_occupancy",
+    "comparison": "torch_uint8_exact_equality_of_all_touched_running_state_rows",
+    "failure": "restore_initial_state_and_raise",
+    "zero_accept_behavior": "replay_native_reference_graph"
+  },
+  "measured_attribution": {
+    "artifact": "results/fr13_fixed32_b1_nsys_20260731T013952Z_curated/nsys_attribution.json",
+    "complete_ranges": 881,
+    "kernel_instances": 42288,
+    "kernel_instances_per_event": 48.0,
+    "kernel_total_time_ns": 3596371408,
+    "kernel_ms_per_event": 4.082146887627696,
+    "artifact_cfwd_ms_per_event": 22.755077,
+    "newer_handoff_cfwd_ms_per_event_approx": 20.05,
+    "attribution_only": true
+  },
+  "hardware_floor_relevance": {
+    "tail_cap_overrun_ms": 98.638,
+    "impossible_full_elimination_remaining_overrun_ms": 94.5558531123723,
+    "maximum_fraction_of_overrun_closed": 0.04138513440689891,
+    "verdict": "secondary_only"
+  },
+  "schema": "fr13.fixed32.cfwd_gdn_layer_batch_source.v1"
+}
+
