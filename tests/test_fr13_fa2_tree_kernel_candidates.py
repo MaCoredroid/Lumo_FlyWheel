@@ -180,7 +180,10 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
     assert "params.alibi_slopes_ptr == nullptr" in api
     assert "params.knew_ptr == nullptr" in api
     assert "params.softcap == 0.0f" in api
-    assert "params.num_splits == 1" in api
+    assert "params.num_splits == 0" in api
+    assert "params.num_splits == 1" not in api
+    assert "set_params_fprop zero-initializes this field" in api
+    assert "max_seqlen_q==1 q-group split-K setup" in api
     assert "force_split_kernel" in api
 
     # The CTA id changes for rows 16..31, but the warp-local query-row/lane

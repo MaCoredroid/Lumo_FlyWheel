@@ -202,7 +202,9 @@ void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split
             && params.alibi_slopes_ptr == nullptr
             && params.knew_ptr == nullptr
             && params.softcap == 0.0f
-            && params.num_splits == 1
+            // set_params_fprop zero-initializes this field. Varlen q=32 does
+            // not enter the max_seqlen_q==1 q-group split-K setup.
+            && params.num_splits == 0
             && force_split_kernel,
             "FR13 qrow16 internal dispatch reached non-production geometry");
         fr13_run_mha_fwd_fixed32_qrow16(params, stream);
