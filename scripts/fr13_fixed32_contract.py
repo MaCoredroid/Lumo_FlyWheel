@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import uuid
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,12 @@ EXTERNAL_SCHEMA = "fr13-fixed32-external-manifest-v1"
 RUNTIME_SCHEMA = "fr13-fixed32-runtime-attestation-v1"
 CANONICAL_FORMAT = "utf8-json-sort-keys-compact-v1"
 RUNTIME_ATTESTATION_MODE = 0o644
+
+QWEN_VISIBLE_MAX_OUTPUT_TOKENS = 32_768
+QWEN_COMPACTION_MAX_OUTPUT_TOKENS = 20_000
+QWEN_COMPACTION_METRIC_SCHEMA = (
+    "fr13-fixed32-qwen-compaction-metrics-v1"
+)
 
 IMAGE_REFERENCE = (
     "vllm/vllm-openai@"
@@ -736,6 +743,307 @@ def _fixed32_qwen_hidden_compaction_request_id(
     )
 
 
+def _fixed32_qwen_hidden_failed_compaction_request_id(
+    *,
+    result_event_id: str,
+    trace_event_ids_sha256: str,
+    metric_evidence_sha256: str,
+    ordinal: int,
+) -> str:
+    payload = json.dumps(
+        {
+            "metric_evidence_sha256": metric_evidence_sha256,
+            "ordinal": ordinal,
+            "result_event_id": result_event_id,
+            "trace_event_ids_sha256": trace_event_ids_sha256,
+        },
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return (
+        "qwen-hidden-failed-compaction-sha256:"
+        f"{hashlib.sha256(payload).hexdigest()}"
+    )
+
+
+def _fixed32_qwen_metric_labels(
+    *,
+    finished_reason: str | None = None,
+    le: str | None = None,
+) -> str:
+    fields = ['engine="0"']
+    if finished_reason is not None:
+        fields.append(f'finished_reason="{finished_reason}"')
+    if le is not None:
+        fields.append(f'le="{le}"')
+    fields.append('model_name="qwen3.6-27b"')
+    return ",".join(fields)
+
+
+def _fixed32_qwen_metric_snapshot(
+    raw: bytes,
+    *,
+    label: str,
+) -> dict[str, int]:
+    if not isinstance(raw, bytes) or not raw:
+        raise ContractError(
+            f"fixed32 qwen {label} metrics must be nonempty bytes"
+        )
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ContractError(
+            f"fixed32 qwen {label} metrics are not UTF-8"
+        ) from error
+
+    expected: dict[tuple[str, str], str] = {
+        (
+            "vllm:prompt_tokens_total",
+            _fixed32_qwen_metric_labels(),
+        ): "prompt_tokens",
+        (
+            "vllm:generation_tokens_total",
+            _fixed32_qwen_metric_labels(),
+        ): "generation_tokens",
+        (
+            "vllm:request_params_max_tokens_count",
+            _fixed32_qwen_metric_labels(),
+        ): "max_tokens_count",
+        (
+            "vllm:request_params_max_tokens_sum",
+            _fixed32_qwen_metric_labels(),
+        ): "max_tokens_sum",
+    }
+    for reason in ("stop", "length", "abort", "error", "repetition"):
+        expected[
+            (
+                "vllm:request_success_total",
+                _fixed32_qwen_metric_labels(finished_reason=reason),
+            )
+        ] = f"request_success_{reason}"
+    for le, key in (
+        ("10000.0", "max_tokens_le_10000"),
+        ("20000.0", "max_tokens_le_20000"),
+        ("50000.0", "max_tokens_le_50000"),
+        ("+Inf", "max_tokens_le_inf"),
+    ):
+        expected[
+            (
+                "vllm:request_params_max_tokens_bucket",
+                _fixed32_qwen_metric_labels(le=le),
+            )
+        ] = key
+
+    target_names = {name for name, _labels in expected}
+    values: dict[str, int] = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        try:
+            series, value_text = stripped.rsplit(None, 1)
+        except ValueError:
+            series = stripped
+            value_text = ""
+        if "{" in series and series.endswith("}"):
+            name, labels = series[:-1].split("{", 1)
+        else:
+            name, labels = series, ""
+        if name not in target_names:
+            continue
+        key = expected.get((name, labels))
+        if key is None:
+            if (
+                name == "vllm:request_params_max_tokens_bucket"
+                and labels.startswith('engine="0",le="')
+                and labels.endswith('",model_name="qwen3.6-27b"')
+            ):
+                continue
+            raise ContractError(
+                f"fixed32 qwen {label} metric {name} labels differ"
+            )
+        if key in values:
+            raise ContractError(
+                f"fixed32 qwen {label} metric {name} is duplicated"
+            )
+        try:
+            value = Decimal(value_text)
+        except InvalidOperation as error:
+            raise ContractError(
+                f"fixed32 qwen {label} metric {name} is malformed"
+            ) from error
+        if not value.is_finite() or value < 0 or value != value.to_integral_value():
+            raise ContractError(
+                f"fixed32 qwen {label} metric {name} is not a "
+                "nonnegative integer"
+            )
+        values[key] = int(value)
+    missing = sorted(set(expected.values()) - set(values))
+    if missing:
+        raise ContractError(
+            f"fixed32 qwen {label} metrics are missing {missing}"
+        )
+    return values
+
+
+def _fixed32_qwen_compaction_metric_evidence(
+    *,
+    events: list[dict[str, Any]],
+    result: dict[str, Any],
+    normal_request_count: int,
+    successful_compaction_count: int,
+    expected_completed_logical_model_requests: int,
+    metrics_pre: bytes,
+    metrics_post: bytes,
+) -> tuple[dict[str, Any], int]:
+    if (
+        type(expected_completed_logical_model_requests) is not int
+        or expected_completed_logical_model_requests <= 0
+    ):
+        raise ContractError(
+            "fixed32 qwen expected completed request count is invalid"
+        )
+    before = _fixed32_qwen_metric_snapshot(metrics_pre, label="pre")
+    after = _fixed32_qwen_metric_snapshot(metrics_post, label="post")
+    deltas: dict[str, int] = {}
+    for key in sorted(before):
+        if after[key] < before[key]:
+            raise ContractError(
+                f"fixed32 qwen metric {key} decreased across task"
+            )
+        deltas[key] = after[key] - before[key]
+
+    completed = expected_completed_logical_model_requests
+    if (
+        deltas["max_tokens_count"] != completed
+        or deltas["max_tokens_le_inf"] != completed
+        or deltas["max_tokens_le_50000"] != completed
+        or deltas["request_success_stop"] != completed
+        or any(
+            deltas[f"request_success_{reason}"] != 0
+            for reason in ("length", "abort", "error", "repetition")
+        )
+    ):
+        raise ContractError(
+            "fixed32 qwen engine completion metrics do not reconcile"
+        )
+    if deltas["max_tokens_le_10000"] != 0:
+        raise ContractError(
+            "fixed32 qwen max-token histogram has an unpinned low request"
+        )
+
+    total_compactions = deltas["max_tokens_le_20000"]
+    if (
+        total_compactions < successful_compaction_count
+        or normal_request_count + total_compactions != completed
+        or deltas["max_tokens_sum"]
+        != (
+            normal_request_count * QWEN_VISIBLE_MAX_OUTPUT_TOKENS
+            + total_compactions * QWEN_COMPACTION_MAX_OUTPUT_TOKENS
+        )
+    ):
+        raise ContractError(
+            "fixed32 qwen 32768/20000 max-token algebra does not reconcile"
+        )
+
+    result_usage = result.get("usage")
+    if not isinstance(result_usage, dict):
+        raise ContractError("fixed32 qwen result usage is missing")
+    aggregate_input = result_usage.get("input_tokens")
+    aggregate_output = result_usage.get("output_tokens")
+    aggregate_total = result_usage.get("total_tokens")
+    if (
+        type(aggregate_input) is not int
+        or aggregate_input < 0
+        or type(aggregate_output) is not int
+        or aggregate_output < 0
+        or type(aggregate_total) is not int
+        or aggregate_total != aggregate_input + aggregate_output
+        or aggregate_input != deltas["prompt_tokens"]
+        or aggregate_output != deltas["generation_tokens"]
+    ):
+        raise ContractError(
+            "fixed32 qwen aggregate and vLLM token usage do not reconcile"
+        )
+
+    visible_input = 0
+    visible_output = 0
+    for event in events:
+        message = _fixed32_trace_message(event)
+        if message is None:
+            continue
+        usage = message.get("usage")
+        if not isinstance(usage, dict):
+            raise ContractError(
+                "fixed32 qwen assistant usage is missing"
+            )
+        input_tokens = usage.get("input_tokens")
+        output_tokens = usage.get("output_tokens")
+        if (
+            type(input_tokens) is not int
+            or input_tokens < 0
+            or type(output_tokens) is not int
+            or output_tokens < 0
+        ):
+            raise ContractError(
+                "fixed32 qwen assistant token usage is invalid"
+            )
+        visible_input += input_tokens
+        visible_output += output_tokens
+    hidden_input = aggregate_input - visible_input
+    hidden_output = aggregate_output - visible_output
+    if (
+        hidden_input < 0
+        or hidden_output < 0
+        or (total_compactions > 0 and (hidden_input <= 0 or hidden_output <= 0))
+    ):
+        raise ContractError(
+            "fixed32 qwen hidden compaction token usage is invalid"
+        )
+
+    failed_compactions = total_compactions - successful_compaction_count
+    if failed_compactions > 0 and successful_compaction_count <= 0:
+        raise ContractError(
+            "fixed32 qwen failed compactions lack a trace-visible "
+            "successful compaction"
+        )
+    evidence = {
+        "schema": QWEN_COMPACTION_METRIC_SCHEMA,
+        "metrics_pre_sha256": hashlib.sha256(metrics_pre).hexdigest(),
+        "metrics_post_sha256": hashlib.sha256(metrics_post).hexdigest(),
+        "completed_engine_requests": completed,
+        "normal_visible_max_output_tokens": (
+            QWEN_VISIBLE_MAX_OUTPUT_TOKENS
+        ),
+        "compaction_max_output_tokens": (
+            QWEN_COMPACTION_MAX_OUTPUT_TOKENS
+        ),
+        "normal_requests": normal_request_count,
+        "successful_compaction_requests": successful_compaction_count,
+        "failed_compaction_requests": failed_compactions,
+        "total_compaction_requests": total_compactions,
+        "max_tokens_count": deltas["max_tokens_count"],
+        "max_tokens_sum": deltas["max_tokens_sum"],
+        "max_tokens_le_10000": deltas["max_tokens_le_10000"],
+        "max_tokens_le_20000": deltas["max_tokens_le_20000"],
+        "max_tokens_le_50000": deltas["max_tokens_le_50000"],
+        "max_tokens_le_inf": deltas["max_tokens_le_inf"],
+        "request_success_stop": deltas["request_success_stop"],
+        "request_success_non_stop": sum(
+            deltas[f"request_success_{reason}"]
+            for reason in ("length", "abort", "error", "repetition")
+        ),
+        "prompt_tokens": deltas["prompt_tokens"],
+        "generation_tokens": deltas["generation_tokens"],
+        "visible_prompt_tokens": visible_input,
+        "visible_generation_tokens": visible_output,
+        "hidden_prompt_tokens": hidden_input,
+        "hidden_generation_tokens": hidden_output,
+    }
+    return evidence, failed_compactions
+
+
 def _fixed32_qwen_user_tool_result(
     event: dict[str, Any],
 ) -> tuple[str, bool] | None:
@@ -1371,10 +1679,24 @@ def validate_fixed32_trace_model_requests(
     events: list[dict[str, Any]],
     *,
     expected_session_id: str | None = None,
+    expected_completed_logical_model_requests: int | None = None,
+    metrics_pre: bytes | None = None,
+    metrics_post: bytes | None = None,
 ) -> dict[str, Any]:
     """Reconcile legacy terminals or pinned Qwen assistant response groups."""
     if not events or any(not isinstance(event, dict) for event in events):
         raise ContractError("fixed32 trace events must be nonempty objects")
+    metric_arguments = (
+        expected_completed_logical_model_requests,
+        metrics_pre,
+        metrics_post,
+    )
+    if any(value is not None for value in metric_arguments) and any(
+        value is None for value in metric_arguments
+    ):
+        raise ContractError(
+            "fixed32 qwen compaction metrics require count, pre, and post"
+        )
 
     terminal_records: list[
         tuple[int, dict[str, Any], dict[str, Any], str]
@@ -1398,6 +1720,10 @@ def validate_fixed32_trace_model_requests(
         terminal_records.append((index, event, message, response_id))
 
     if not result_records:
+        if metrics_pre is not None:
+            raise ContractError(
+                "fixed32 compaction metric evidence requires a Qwen result"
+            )
         response_ids = [record[3] for record in terminal_records]
         if not response_ids or len(response_ids) != len(set(response_ids)):
             raise ContractError(
@@ -1655,6 +1981,62 @@ def validate_fixed32_trace_model_requests(
         top_level_groups=top_level_groups,
     )
     request_records.extend(hidden_compaction_requests)
+    failed_compaction_requests: list[tuple[int, str]] = []
+    compaction_metric_evidence: dict[str, Any] | None = None
+    if metrics_pre is not None:
+        normal_request_count = (
+            len(request_records) - len(hidden_compaction_requests)
+        )
+        (
+            compaction_metric_evidence,
+            failed_compaction_count,
+        ) = _fixed32_qwen_compaction_metric_evidence(
+            events=events,
+            result=result,
+            normal_request_count=normal_request_count,
+            successful_compaction_count=len(hidden_compaction_requests),
+            expected_completed_logical_model_requests=(
+                expected_completed_logical_model_requests
+            ),
+            metrics_pre=metrics_pre,
+            metrics_post=metrics_post,
+        )
+        existing_request_count = len(request_records)
+        if (
+            existing_request_count + failed_compaction_count
+            != expected_completed_logical_model_requests
+        ):
+            raise ContractError(
+                "fixed32 qwen metric-proven request count does not reconcile"
+            )
+        evidence_sha256 = hashlib.sha256(
+            json.dumps(
+                compaction_metric_evidence,
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        event_ids_sha256 = hashlib.sha256(
+            json.dumps(
+                qwen_event_ids,
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        failed_compaction_requests = [
+            (
+                len(events) - 1,
+                _fixed32_qwen_hidden_failed_compaction_request_id(
+                    result_event_id=result["uuid"],
+                    trace_event_ids_sha256=event_ids_sha256,
+                    metric_evidence_sha256=evidence_sha256,
+                    ordinal=ordinal,
+                ),
+            )
+            for ordinal in range(failed_compaction_count)
+        ]
+        request_records.extend(failed_compaction_requests)
     request_records.sort(key=lambda record: record[0])
     response_ids = [record[1] for record in request_records]
     if len(response_ids) != len(set(response_ids)):
@@ -1666,9 +2048,17 @@ def validate_fixed32_trace_model_requests(
         "completed_logical_model_requests": len(response_ids),
         "model_request_ids": response_ids,
         "hidden_terminal_model_requests": len(hidden_requests),
-        "hidden_compaction_model_requests": len(
+        "hidden_compaction_model_requests": (
+            len(hidden_compaction_requests)
+            + len(failed_compaction_requests)
+        ),
+        "hidden_successful_compaction_model_requests": len(
             hidden_compaction_requests
         ),
+        "hidden_failed_compaction_model_requests": len(
+            failed_compaction_requests
+        ),
+        "qwen_compaction_metric_evidence": compaction_metric_evidence,
         "engine_id_joinable": False,
     }
 
