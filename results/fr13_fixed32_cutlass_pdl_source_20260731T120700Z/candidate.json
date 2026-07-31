@@ -1,0 +1,74 @@
+{
+  "schema": "fr13.fixed32.cutlass_pdl_source_candidate.v1",
+  "created_at_utc": "2026-07-31T12:07:00Z",
+  "status": "source_only_default_off",
+  "performance_claim": false,
+  "acceptance_valid": false,
+  "candidate": {
+    "environment_variable": "FR13_FIXED32_CUTLASS_PDL",
+    "enabled_value": "1",
+    "default_enabled": false,
+    "problem_shape_gate": "M == 32",
+    "target_relative_path": "csrc/quantization/w8a8/cutlass/c3x/cutlass_gemm_caller.cuh",
+    "mechanism": "CUTLASS GemmUniversalAdapter launch_with_pdl",
+    "changes_gemm_arguments": false,
+    "changes_math": false,
+    "changes_weight_or_activation_bytes": false
+  },
+  "pinned_source": {
+    "vllm_version": "0.19.2rc1.dev134+gfe9c3d6c5",
+    "vllm_image_digest": "sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "cutlass_revision": "v4.2.1",
+    "unpatched_caller_sha256": "9c53d17d8590786c995bf3d01dabccf323d7882daa708b0dab4fa0471e665ec5",
+    "model_config_sha256": "f78c412bfdec65a88c8aa2a031d39c2fda32e3377ae48a77f971bc40a4f095df"
+  },
+  "real_swe_verified_b1_attribution": {
+    "source": "results/fr13_fixed32_b1_nsys_20260731T013952Z_curated/nsys_attribution.json",
+    "sfwd_events": 882,
+    "sfwd_envelope_ms_per_event": 174.81367329818593,
+    "fp8_cutlass_gemm_ms_per_event": 112.31295398412699,
+    "fp8_cutlass_gemm_launches_per_event": 255.79024943310658,
+    "standalone_group_quant_ms_per_event": 0.3512186575963719,
+    "standalone_group_quant_launches_per_event": 191.84353741496597,
+    "fused_silu_quant_ms_per_event": 0.8199349512471655,
+    "fused_silu_quant_launches_per_event": 63.94671201814059,
+    "fused_producer_quant_ms_per_event": 0.15238656462585032,
+    "fused_producer_quant_launches_per_event": 47.96145124716553,
+    "named_producer_quant_ms_per_event": 1.3235401734693877,
+    "published_top20_ms_per_event": 173.37258670975055,
+    "envelope_minus_published_top20_ms_per_event": 1.4410865884353825,
+    "pre_final_kernel_stack": true,
+    "attribution_only": true
+  },
+  "activation_quant_bytes_per_event": {
+    "nominal_standalone_calls": 192,
+    "bf16_input_reads": 67108864,
+    "fp8_output_writes": 33554432,
+    "fp32_scale_writes": 1048576,
+    "total": 101711872,
+    "traffic_floor_ms_at_273_gb_s": 0.3725709597069597,
+    "fused_silu_quant_total": 179372032,
+    "fused_silu_saved_intermediate_write_reread": 142606336
+  },
+  "floor_separation": {
+    "target_verifier_mandatory_weight_bytes": 26925196288,
+    "target_verifier_mandatory_weight_floor_ms": 98.62709263,
+    "corrected_full_hardware_floor_ms": 119.658,
+    "acceptance_cap_ms": 137.607,
+    "changed_by_candidate": false
+  },
+  "bound": {
+    "launch_idle_only_ceiling_ms_per_event": 1.4410865884353825,
+    "ceiling_is_strict_for_all_pdl_overlap": false,
+    "reason": "PDL may also overlap internal consumer preamble with predecessor tail; aggregate Nsight kernel totals do not expose those synchronization points",
+    "floor_closing_claim": false
+  },
+  "required_gates": [
+    "pinned source build",
+    "fixed32 CUDA graph capture and replay",
+    "byte-equal state and full logits",
+    "bounded real SWE-Verified B1 Nsight",
+    "standing-rule 4-task or 16-task acceptance campaign",
+    "separate B4 measurement"
+  ]
+}
