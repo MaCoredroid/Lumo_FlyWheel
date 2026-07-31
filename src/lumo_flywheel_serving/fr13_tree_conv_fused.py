@@ -744,6 +744,7 @@ except Exception:  # pragma: no cover - CPU-only host env
 
 
 _FR13_CONV_WB_STAGING: dict = {}
+_FR13_CONV_WB_STAGING_LEASES: dict = {}
 
 
 def conv_wb_staging_get(layer_key, rows_needed: int, c: int, dtype, device):
@@ -760,6 +761,12 @@ def conv_wb_staging_get(layer_key, rows_needed: int, c: int, dtype, device):
     key = (layer_key, int(c), str(dtype))
     st = _FR13_CONV_WB_STAGING.get(key)
     if st is None or st.shape[0] < int(rows_needed):
+        if key in _FR13_CONV_WB_STAGING_LEASES:
+            raise RuntimeError(
+                "FR13_CONV_WB_BATCHED: leased source staging cannot be "
+                f"reallocated (layer={layer_key}, rows_needed={rows_needed}, "
+                f"have={0 if st is None else int(st.shape[0])})"
+            )
         if _t.cuda.is_available() and _t.cuda.is_current_stream_capturing():
             raise RuntimeError(
                 "FR13_CONV_WB_BATCHED: staging (re)allocation inside graph "
@@ -770,6 +777,58 @@ def conv_wb_staging_get(layer_key, rows_needed: int, c: int, dtype, device):
         st = _t.zeros(int(rows_needed), int(c), dtype=dtype, device=device)
         _FR13_CONV_WB_STAGING[key] = st
     return st
+
+
+def freeze_conv_wb_staging_sources(
+    layer_keys,
+    rows_needed: int,
+    c: int,
+    dtype,
+    device,
+) -> tuple[torch.Tensor, ...]:
+    """Freeze and return the fixed32 source stages in canonical layer order."""
+    import torch as _t
+
+    if _t.cuda.is_available() and _t.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_DIRECT source freeze called inside capture"
+        )
+    if isinstance(dtype, str):
+        dtype = getattr(_t, dtype)
+    keys = tuple((str(k), int(c), str(dtype)) for k in layer_keys)
+    if len(keys) != 48 or len(set(keys)) != 48:
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_DIRECT requires 48 distinct ordered layer keys"
+        )
+    refs = []
+    for key in keys:
+        source = _FR13_CONV_WB_STAGING.get(key)
+        if (
+            not _t.is_tensor(source)
+            or source.device != _t.device(device)
+            or source.dtype != dtype
+            or source.ndim != 2
+            or int(source.shape[0]) < int(rows_needed)
+            or int(source.shape[1]) != int(c)
+            or not source.is_contiguous()
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_CONV_DIRECT source staging is missing or "
+                f"undersized for key={key!r}"
+            )
+        prior = _FR13_CONV_WB_STAGING_LEASES.get(key)
+        identity = (id(source), int(source.data_ptr()))
+        if prior is not None and prior != identity:
+            raise RuntimeError(
+                "FR13_FIXED32_CONV_DIRECT source staging identity drift"
+            )
+        _FR13_CONV_WB_STAGING_LEASES[key] = identity
+        refs.append(source)
+    if len({int(source.data_ptr()) for source in refs}) != 48:
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_DIRECT source stages must not alias"
+        )
+    return tuple(refs)
 
 
 def conv_wb_staging_preseed(layer_keys, rows_cap: int, c: int,

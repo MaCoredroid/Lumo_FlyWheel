@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import math
+import sys
+from pathlib import Path
 
 import pytest
 import torch
 
 pytest.importorskip("triton")
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
 from lumo_flywheel_serving import fr10_gdn_tree_kernel as kernel
+from lumo_flywheel_serving.fr13_tree_conv_fused import (
+    build_tree_conv_state_src_indices,
+)
+from fr13_fixed32_topology import PHYSICAL_PARENT
 
 pytestmark = pytest.mark.skipif(
     not torch.cuda.is_available(), reason="requires CUDA and Triton"
@@ -119,6 +127,41 @@ def _install_preseed(
         (4, 16), dtype=torch.int32, device="cuda"
     )
     accepted_lens = torch.zeros((4,), dtype=torch.int32, device="cuda")
+    source_rows = 36
+    source_stagings = tuple(
+        torch.empty(
+            (4 * source_rows, DEPLOYED_CONV_SHAPE[0]),
+            dtype=torch.bfloat16,
+            device="cuda",
+        )
+        for _ in range(48)
+    )
+    channel_values = (
+        torch.arange(
+            DEPLOYED_CONV_SHAPE[0], dtype=torch.int32, device="cuda"
+        )
+        .remainder_(251)
+        .to(torch.bfloat16)
+    )
+    row_values = (
+        torch.arange(
+            4 * source_rows, dtype=torch.int32, device="cuda"
+        )
+        .mul_(256)
+        .to(torch.bfloat16)
+    )
+    for layer, source in enumerate(source_stagings):
+        source.copy_(
+            channel_values.view(1, -1)
+            + row_values.view(-1, 1)
+            + layer * 8192
+        )
+    state_src = build_tree_conv_state_src_indices(
+        parent=list(PHYSICAL_PARENT),
+        width=4,
+        state_len=DEPLOYED_CONV_SHAPE[1],
+        device="cuda",
+    )
     before_preseed = tuple(raw.clone() for raw in raws)
     contract = kernel.preseed_fixed32_conv_col0_pregather(
         conv_banks=bank_tuple,
@@ -128,8 +171,12 @@ def _install_preseed(
         commit_spec_state_indices=commit_ssi,
         accepted_paths=accepted_paths,
         accepted_lens=accepted_lens,
+        commit_source_stagings=source_stagings,
+        commit_state_src=state_src,
+        source_rows_per_batch=source_rows,
     )
-    assert contract["commit_route"] == "fixed32_two_launch_col0"
+    assert contract["commit_route"] == "fixed32_direct_source_col0"
+    assert contract["commit_launches_per_event"] == 1
     assert contract["commit_bank_overlap_policy"] == "exact_alias_only_16x3"
     assert contract["commit_bank_partial_overlap"] is False
     assert contract["commit_bank_alias_groups"] == 16
@@ -199,6 +246,38 @@ def _legacy_commit_reference(
         banks, destinations, snapshots, strict=True
     ):
         bank.index_copy_(0, dst, snapshot)
+
+
+def _direct_commit_reference(
+    *,
+    banks: tuple[torch.Tensor, ...],
+    sources: tuple[torch.Tensor, ...],
+    state_src: torch.Tensor,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    accepted_lens: torch.Tensor,
+    batch: int,
+) -> None:
+    state_length = int(banks[0].shape[2])
+    source_rows = 36
+    for layer, (bank, source) in enumerate(
+        zip(banks, sources, strict=True)
+    ):
+        for request in range(batch):
+            accepted_len = int(accepted_lens[request].item())
+            leaf = (
+                int(accepted_paths[request, accepted_len - 1].item())
+                if accepted_len > 0
+                else 0
+            )
+            source_indices = (
+                state_src.view(32, state_length)[leaf]
+                + request * source_rows
+            )
+            destination = int(spec_state_indices[layer, request, 0].item())
+            bank[destination].copy_(
+                source.index_select(0, source_indices).transpose(0, 1)
+            )
 
 
 def _exact_deployed_page_bank(
@@ -374,7 +453,7 @@ def test_exact_outer_stride_high_row_and_page_gaps_are_kernel_exact() -> None:
     (False, True),
     ids=("last-dimension-contiguous", "canonical-channel-contiguous"),
 )
-def test_deployed_layout_pregather_and_two_launch_commit_are_page_exact(
+def test_deployed_layout_pregather_and_direct_commit_are_page_exact(
     monkeypatch: pytest.MonkeyPatch,
     channel_contiguous: bool,
 ) -> None:
@@ -383,6 +462,8 @@ def test_deployed_layout_pregather_and_two_launch_commit_are_page_exact(
     )
 
     state = kernel._FR13_FIXED32_CONV_PREGATHER["state"]
+    direct_sources = state["source_stagings"]
+    state_src = state["state_src"]
     seen_sources: set[int] = set()
     for source in state["ssi_sources"]:
         if id(source) in seen_sources:
@@ -411,8 +492,10 @@ def test_deployed_layout_pregather_and_two_launch_commit_are_page_exact(
     paths.fill_(31)
     lens.zero_()
     zero_expected = tuple(raw.clone() for raw in raws)
-    _legacy_commit_reference(
+    _direct_commit_reference(
         banks=_bank_views_for_raw_clones(zero_expected, banks),
+        sources=direct_sources,
+        state_src=state_src,
         spec_state_indices=commit_ssi,
         accepted_paths=paths,
         accepted_lens=lens,
@@ -430,15 +513,16 @@ def test_deployed_layout_pregather_and_two_launch_commit_are_page_exact(
         for raw, expected in zip(raws, zero_expected, strict=True)
     )
 
-    # Max supported accepted length with src==dst remains byte-neutral.
-    commit_ssi[:, 0, 2] = commit_ssi[:, 0, 0]
+    # Max supported accepted length selects the same source-stage leaf bytes.
     paths.zero_()
     paths[0, 14] = 2
     lens.zero_()
     lens[0] = 15
     max_len_expected = tuple(raw.clone() for raw in raws)
-    _legacy_commit_reference(
+    _direct_commit_reference(
         banks=_bank_views_for_raw_clones(max_len_expected, banks),
+        sources=direct_sources,
+        state_src=state_src,
         spec_state_indices=commit_ssi,
         accepted_paths=paths,
         accepted_lens=lens,
@@ -469,8 +553,10 @@ def test_deployed_layout_pregather_and_two_launch_commit_are_page_exact(
     paths[:, 0] = 1
     lens.fill_(1)
     expected_raws = tuple(raw.clone() for raw in raws)
-    _legacy_commit_reference(
+    _direct_commit_reference(
         banks=_bank_views_for_raw_clones(expected_raws, banks),
+        sources=direct_sources,
+        state_src=state_src,
         spec_state_indices=commit_ssi,
         accepted_paths=paths,
         accepted_lens=lens,
@@ -488,10 +574,10 @@ def test_deployed_layout_pregather_and_two_launch_commit_are_page_exact(
         for raw, expected in zip(raws, expected_raws, strict=True)
     )
     counters = kernel.fixed32_conv_col0_commit_counters()
-    assert counters["gather_launches_by_batch"][1] == 2
-    assert counters["scatter_launches_by_batch"][1] == 2
-    assert counters["gather_launches_by_batch"][4] == 1
-    assert counters["scatter_launches_by_batch"][4] == 1
+    assert counters["direct_launches_by_batch"][1] == 2
+    assert counters["direct_launches_by_batch"][4] == 1
+    assert counters["gather_launches"] == 0
+    assert counters["scatter_launches"] == 0
 
 
 @pytest.mark.parametrize(
@@ -570,4 +656,9 @@ def test_preseed_rejects_unsafe_alias_topologies(
             accepted_lens=torch.zeros(
                 (4,), dtype=torch.int32, device="cuda"
             ),
+            commit_source_stagings=(),
+            commit_state_src=torch.empty(
+                (0,), dtype=torch.int64, device="cuda"
+            ),
+            source_rows_per_batch=36,
         )

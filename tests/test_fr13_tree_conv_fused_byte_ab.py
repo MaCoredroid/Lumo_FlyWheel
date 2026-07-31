@@ -41,6 +41,7 @@ import torch
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "scripts"))
 
 from lumo_flywheel_serving.fr13_replay_conv_remap import (
     replay_conv_state_linear_remap,
@@ -62,6 +63,7 @@ from lumo_flywheel_serving.fr13_tree_conv_fused import (
     replay_conv_state_linear_remap_prepared,
     tree_paths_from_parent,
 )
+from fr13_fixed32_topology import PHYSICAL_PARENT
 
 try:  # pragma: no cover - host venv has no triton
     import triton  # noqa: F401
@@ -305,6 +307,45 @@ def test_t2_writeback_rows_byte_identical(topo: str, width: int, seed: int) -> N
             assert torch.equal(
                 _bits16(pad), torch.zeros_like(pad).view(torch.int16)
             )
+
+
+@pytest.mark.parametrize("batch", (1, 4))
+def test_fixed32_direct_leaf_matches_full_writeback_commit(batch: int) -> None:
+    parent = list(PHYSICAL_PARENT)
+    tree_n = len(parent)
+    width = 4
+    state_len = 34
+    source_rows = width - 1 + tree_n + 1
+    state_src = build_tree_conv_state_src_indices(
+        parent=parent,
+        width=width,
+        state_len=state_len,
+        device="cpu",
+    )
+    paths = tree_paths_from_parent(parent)
+
+    for request, leaf in enumerate((0, 8, 20, 31)[:batch]):
+        generator = torch.Generator().manual_seed(8100 + request)
+        source = torch.randn(
+            (source_rows, DIM),
+            generator=generator,
+            dtype=torch.bfloat16,
+        )
+        full_rows = fused_tree_conv_state_rows(
+            source_z=source,
+            state_src=state_src,
+            tree_n=tree_n,
+            state_len=state_len,
+        )
+        accepted = paths[leaf]
+        accepted_leaf = accepted[-1] if accepted else 0
+        direct = source.index_select(
+            0, state_src.view(tree_n, state_len)[accepted_leaf]
+        ).transpose(0, 1)
+
+        assert torch.equal(
+            _bits16(direct), _bits16(full_rows[accepted_leaf])
+        )
 
 
 # ---------------------------------------------------------------------------

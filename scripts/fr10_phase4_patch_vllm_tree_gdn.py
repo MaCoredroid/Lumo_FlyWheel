@@ -967,10 +967,10 @@ def _fr13_fixed32_warm_final_full_postprocess(vocab_size):
         or committer.get("bank_state_restored") is not True
         or committer.get("input_state_restored") is not True
         or committer.get("measured_state_restored") is not True
-        or int(committer.get("conv_commit_gather_launches", -1))
+        or int(committer.get("conv_commit_direct_launches", -1))
         != capacity
-        or int(committer.get("conv_commit_scatter_launches", -1))
-        != capacity
+        or int(committer.get("conv_commit_gather_launches", -1)) != 0
+        or int(committer.get("conv_commit_scatter_launches", -1)) != 0
         or committer.get("conv_bank_state_restored") is not True
         or committer.get("conv_staging_state_restored") is not True
         or committer.get("alias_destination_contract")
@@ -1000,8 +1000,9 @@ def _fr13_fixed32_warm_final_full_postprocess(vocab_size):
         "flags_zero_fills": 1,
         "persistent_copy_state_restored": True,
         "flags_state_restored": True,
-        "conv_commit_gather_launches": capacity,
-        "conv_commit_scatter_launches": capacity,
+        "conv_commit_direct_launches": capacity,
+        "conv_commit_gather_launches": 0,
+        "conv_commit_scatter_launches": 0,
         "committer_replays": capacity,
         "observed_event_absent": observed_absent,
         "pending_event_absent": pending_absent,
@@ -1283,6 +1284,9 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
         "boot_warm_flags_state_restored": boot_warm.get(
             "flags_state_restored"
         ),
+        "boot_warm_conv_direct": boot_warm.get(
+            "conv_commit_direct_launches"
+        ),
         "boot_warm_conv_gathers": boot_warm.get(
             "conv_commit_gather_launches"
         ),
@@ -1326,6 +1330,9 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
             committer_warm.get("batches", ())
         ),
         "committer_warm_replays": committer_warm.get("replays"),
+        "committer_warm_conv_direct": committer_warm.get(
+            "conv_commit_direct_launches"
+        ),
         "committer_warm_conv_gathers": committer_warm.get(
             "conv_commit_gather_launches"
         ),
@@ -1382,7 +1389,7 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
         "commit_ssi_alias": True,
         "commit_paths_alias": True,
         "commit_lens_alias": True,
-        "commit_route": "fixed32_two_launch_col0",
+        "commit_route": "fixed32_direct_source_col0",
         "commit_bank_overlap_policy": "exact_alias_only_16x3",
         "commit_bank_partial_overlap": False,
         "commit_bank_alias_groups": 16,
@@ -1414,8 +1421,9 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
         "boot_warm_flags_zero_fills": 1,
         "boot_warm_copy_state_restored": True,
         "boot_warm_flags_state_restored": True,
-        "boot_warm_conv_gathers": capacity,
-        "boot_warm_conv_scatters": capacity,
+        "boot_warm_conv_direct": capacity,
+        "boot_warm_conv_gathers": 0,
+        "boot_warm_conv_scatters": 0,
         "boot_warm_committer_replays": capacity,
         "boot_warm_observed_absent": True,
         "boot_warm_pending_absent": True,
@@ -1433,8 +1441,9 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
         "committer_warm_classification": "unmeasured_boot",
         "committer_warm_batches": tuple(range(1, capacity + 1)),
         "committer_warm_replays": capacity,
-        "committer_warm_conv_gathers": capacity,
-        "committer_warm_conv_scatters": capacity,
+        "committer_warm_conv_direct": capacity,
+        "committer_warm_conv_gathers": 0,
+        "committer_warm_conv_scatters": 0,
         "committer_warm_route_lease_current": True,
         "committer_warm_bank_restored": True,
         "committer_warm_conv_bank_restored": True,
@@ -2020,6 +2029,12 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
     commit_spec_state_indices = state.get("commit_spec_state_indices")
     accepted_paths = state.get("accepted_paths")
     accepted_lens = state.get("accepted_lens")
+    direct_sources = state.get("source_stagings")
+    source_offsets = state.get("source_off16")
+    direct_state_src = state.get("state_src")
+    source_rows = state.get("source_rows_per_batch")
+    conv_c = state.get("conv_c")
+    conv_l = state.get("conv_l")
     staging = state.get("staging")
     row_elems = state.get("row_elems")
     block = state.get("block")
@@ -2054,6 +2069,11 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         or int(contract.get("commit_bank_alias_width", -1)) != 3
         or contract.get("commit_bank_destination_guard") != "alias_row_unique"
         or contract.get("commit_null_row_rejected") is not True
+        or contract.get("commit_route") != "fixed32_direct_source_col0"
+        or int(contract.get("commit_launches_per_event", -1)) != 1
+        or int(contract.get("commit_direct_launches_per_event", -1)) != 1
+        or int(contract.get("commit_full_node_writebacks", -1)) != 0
+        or int(contract.get("commit_conv_remaps", -1)) != 0
         or type(row_elems) is not int
         or row_elems <= 0
         or type(block) is not int
@@ -2136,6 +2156,38 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         or accepted_lens.ndim != 1
         or int(accepted_lens.shape[0]) < capacity
         or not accepted_lens.is_contiguous()
+        or type(source_rows) is not int
+        or source_rows != 36
+        or type(conv_c) is not int
+        or conv_c != 10240
+        or type(conv_l) is not int
+        or conv_l != 34
+        or not isinstance(direct_sources, tuple)
+        or len(direct_sources) != 48
+        or any(not torch.is_tensor(source) for source in direct_sources)
+        or len({int(source.data_ptr()) for source in direct_sources}) != 48
+        or any(
+            source.device != staging.device
+            or source.dtype != staging.dtype
+            or source.ndim != 2
+            or int(source.shape[0]) < capacity * int(source_rows)
+            or int(source.shape[1]) != int(conv_c)
+            or tuple(int(value) for value in source.stride())
+            != (int(conv_c), 1)
+            or not source.is_contiguous()
+            for source in direct_sources
+        )
+        or not torch.is_tensor(source_offsets)
+        or source_offsets.device != staging.device
+        or str(source_offsets.dtype) != "torch.int64"
+        or tuple(int(value) for value in source_offsets.shape) != (48,)
+        or not source_offsets.is_contiguous()
+        or not torch.is_tensor(direct_state_src)
+        or direct_state_src.device != staging.device
+        or str(direct_state_src.dtype) != "torch.int64"
+        or tuple(int(value) for value in direct_state_src.shape)
+        != (32 * int(conv_l),)
+        or not direct_state_src.is_contiguous()
         or offsets.device != staging.device
         or bank_alias_ids_device.device != staging.device
         or ssi_ptrs.device != staging.device
@@ -2154,6 +2206,9 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         id(commit_spec_state_indices),
         id(accepted_paths),
         id(accepted_lens),
+        tuple(id(source) for source in direct_sources),
+        id(source_offsets),
+        id(direct_state_src),
         id(staging),
     )
     source_data_ptrs = (
@@ -2170,6 +2225,9 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         int(commit_spec_state_indices.data_ptr()),
         int(accepted_paths.data_ptr()),
         int(accepted_lens.data_ptr()),
+        tuple(int(source.data_ptr()) for source in direct_sources),
+        int(source_offsets.data_ptr()),
+        int(direct_state_src.data_ptr()),
         int(staging.data_ptr()),
     )
     if (
@@ -2312,6 +2370,22 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         ],
         "ssi_data_alias_groups": ssi_data_groups,
         "ssi_storage_alias_groups": ssi_storage_groups,
+        "direct_source_shapes": [
+            [int(value) for value in source.shape]
+            for source in direct_sources
+        ],
+        "direct_source_strides": [
+            [int(value) for value in source.stride()]
+            for source in direct_sources
+        ],
+        "direct_source_rows_per_batch": source_rows,
+        "direct_source_pointer_entries": 48,
+        "direct_state_src_shape": [32, conv_l],
+        "direct_commit_grid": [
+            48,
+            batch,
+            (conv_c + block - 1) // block,
+        ],
         "ordered_source_consume_mapping": [
             {
                 "index": index,
@@ -4091,11 +4165,20 @@ def _fr13_fixed32_observed_commit(
             "FR13 fixed32 committer graph contract drift: "
             + repr(normalized_committer)
         )
+    direct_delta = _fr13_fixed32_counter_delta(
+        conv_commit_after, conv_commit_before, "direct_launches"
+    )
     gather_delta = _fr13_fixed32_counter_delta(
         conv_commit_after, conv_commit_before, "gather_launches"
     )
     scatter_delta = _fr13_fixed32_counter_delta(
         conv_commit_after, conv_commit_before, "scatter_launches"
+    )
+    direct_batch_delta = _fr13_fixed32_batch_counter_delta(
+        conv_commit_after,
+        conv_commit_before,
+        "direct_launches_by_batch",
+        batch,
     )
     gather_batch_delta = _fr13_fixed32_batch_counter_delta(
         conv_commit_after,
@@ -4114,6 +4197,12 @@ def _fr13_fixed32_observed_commit(
             _fr13_fixed32_batch_counter_delta(
                 conv_commit_after,
                 conv_commit_before,
+                "direct_launches_by_batch",
+                other,
+            ),
+            _fr13_fixed32_batch_counter_delta(
+                conv_commit_after,
+                conv_commit_before,
                 "gather_launches_by_batch",
                 other,
             ),
@@ -4128,16 +4217,29 @@ def _fr13_fixed32_observed_commit(
         if other != batch
     }
     conv_row_elems = int(conv_commit_contract.get("row_elems", -1))
+    conv_channels = int(conv_commit_contract.get("channels", -1))
+    conv_state_length = int(conv_commit_contract.get("state_length", -1))
+    conv_source_rows = int(
+        conv_commit_contract.get("source_rows_per_batch", -1)
+    )
     conv_block = int(conv_commit_contract.get("block", -1))
     if (
         conv_commit_before.get("preseeded") is not True
         or conv_commit_after.get("preseeded") is not True
-        or conv_commit_after.get("route") != "fixed32_two_launch_col0"
-        or conv_commit_contract.get("route") != "fixed32_two_launch_col0"
+        or conv_commit_after.get("route") != "fixed32_direct_source_col0"
+        or conv_commit_contract.get("route")
+        != "fixed32_direct_source_col0"
         or int(conv_commit_contract.get("layers", -1)) != 48
         or conv_row_elems <= 0
+        or conv_channels != 10240
+        or conv_state_length != 34
+        or conv_source_rows != 36
         or conv_block <= 0
-        or conv_commit_contract.get("staging_reused") is not True
+        or conv_commit_contract.get("staging_reused") is not False
+        or conv_commit_contract.get("source_staging_reused") is not True
+        or int(conv_commit_contract.get("source_pointer_entries", -1)) != 48
+        or int(conv_commit_contract.get("full_node_writebacks", -1)) != 0
+        or int(conv_commit_contract.get("conv_remaps", -1)) != 0
         or conv_commit_contract.get("commit_bank_overlap_policy")
         != "exact_alias_only_16x3"
         or conv_commit_contract.get("commit_bank_partial_overlap") is not False
@@ -4148,20 +4250,24 @@ def _fr13_fixed32_observed_commit(
         or conv_commit_contract.get("commit_null_row_rejected") is not True
         or conv_commit_contract.get("ssi_bound") is not True
         or conv_commit_contract.get("paths_bound") is not True
-        or gather_delta != 1
-        or scatter_delta != 1
-        or gather_batch_delta != 1
-        or scatter_batch_delta != 1
+        or direct_delta != 1
+        or gather_delta != 0
+        or scatter_delta != 0
+        or direct_batch_delta != 1
+        or gather_batch_delta != 0
+        or scatter_batch_delta != 0
         or any(
-            delta != (0, 0) for delta in other_commit_deltas.values()
+            delta != (0, 0, 0) for delta in other_commit_deltas.values()
         )
     ):
         raise RuntimeError(
-            "FR13 fixed32 two-launch conv commit drift: "
+            "FR13 fixed32 direct conv commit drift: "
             + repr(
                 (
+                    direct_delta,
                     gather_delta,
                     scatter_delta,
+                    direct_batch_delta,
                     gather_batch_delta,
                     scatter_batch_delta,
                     other_commit_deltas,
@@ -4238,21 +4344,26 @@ def _fr13_fixed32_observed_commit(
     conv_programs = (
         int(layer_count)
         * batch
-        * ((conv_row_elems + conv_block - 1) // conv_block)
+        * ((conv_channels + conv_block - 1) // conv_block)
     )
     event["conv_commit"] = {
-        "route": "fixed32_two_launch_col0",
+        "route": "fixed32_direct_source_col0",
         "layers": int(layer_count),
         "requests": batch,
         "row_elems": conv_row_elems,
+        "channels": conv_channels,
+        "state_length": conv_state_length,
+        "source_rows_per_batch": conv_source_rows,
         "block": conv_block,
+        "direct_launches": direct_delta,
         "gather_launches": gather_delta,
         "scatter_launches": scatter_delta,
-        "gather_programs": conv_programs,
-        "scatter_programs": conv_programs,
-        "staged_rows": conv_rows,
-        "scattered_rows": conv_rows,
-        "staging_reused": True,
+        "direct_programs": conv_programs,
+        "committed_rows": conv_rows,
+        "source_staging_reused": True,
+        "source_pointer_entries": 48,
+        "full_node_writebacks": 0,
+        "conv_remaps": 0,
         "host_syncs": 0,
         "skips": 0,
         "fallback": 0,
@@ -4524,7 +4635,7 @@ def _fr13_fixed32_observed_take(mode, batch_size, forward_step_index):
                 "full_graph_replay_enqueue",
                 "conv_pregather_freshness_token",
                 "committer_replay_delta",
-                "conv_commit_two_launch_delta",
+                "conv_commit_direct_launch_delta",
                 "conv_pregather_stage_delta",
                 "taw_payload",
                 "preforward_pack_call_boundaries",
@@ -4708,7 +4819,7 @@ def _fr13_fixed32_failure_counts(observed, taw):
                 "kv_remap",
                 "syncfree_target16_postsample_drafter1_postforward",
             ),
-            ("conv_commit", "fixed32_two_launch_col0"),
+            ("conv_commit", "fixed32_direct_source_col0"),
             ("conv_pregather", "in_graph_preconsume"),
             ("committer", "fixed16_device_fill_graph"),
         )
@@ -4870,7 +4981,7 @@ def _fr13_fixed32_observed_build_record(
         )
     valid_mask = int(taw_payload["valid_mask"])
     record = {
-        "schema": "fr13-fixed32-work-census-v8",
+        "schema": "fr13-fixed32-work-census-v9",
         "event_id": (
             str(identity[0]) + ":" + str(pid) + ":" + str(index)
         ),
@@ -6014,7 +6125,7 @@ def _patch_gdn_linear() -> bool:
             "from lumo_flywheel_serving.fr10_gdn_tree_kernel import gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_state_linear_remap, subtree_get\n"
             "from lumo_flywheel_serving.fr13_replay_conv_remap import replay_conv_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
-            "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, conv_wb_staging_get, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, launch_conv_state_writeback, launch_conv_state_writeback_batched, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
+            "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, conv_wb_staging_get, freeze_conv_wb_staging_sources, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, launch_conv_state_writeback, launch_conv_state_writeback_batched, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
             "\n"
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
             f"{_fr13_fixed32_runtime_bindings()}"
@@ -9178,6 +9289,7 @@ def _fr13_conv_subop_mab(
                     # deposits at forward start).
                     if (
                         _FR13_CONV_WB_BATCHED
+                        and not _FR13_FIXED32_MODE
                         and _fr13_wbb_stage is not None
                         and _fr13_conv_wb_fused_now
                         and int(attn_metadata.num_spec_decodes) > 0
@@ -10288,6 +10400,22 @@ def _fr13_conv_subop_mab(
                                             ),
                                             accepted_lens=(
                                                 _fr10_accepted_lens_tensor
+                                            ),
+                                            commit_source_stagings=(
+                                                freeze_conv_wb_staging_sources(
+                                                    _fr13_f32_order,
+                                                    _fr13_f32_cap
+                                                    * _fr13_wbb_srows,
+                                                    int(conv_state.size(1)),
+                                                    conv_state.dtype,
+                                                    conv_state.device,
+                                                )
+                                            ),
+                                            commit_state_src=(
+                                                _fr13_tcf_state_src
+                                            ),
+                                            source_rows_per_batch=(
+                                                _fr13_wbb_srows
                                             ),
                                         )
                                         _fr13_f32_pregather_selfcheck(
@@ -13415,9 +13543,26 @@ def _fr13_fixed32_device_commit_route(
             _fixed_pregather_route.get("contract", {}).get("layers", -1)
         ),
         "row_elems": int(_fixed_pregather_route.get("row_elems", -1)),
+        "channels": int(_fixed_pregather_route.get("conv_c", -1)),
+        "state_length": int(_fixed_pregather_route.get("conv_l", -1)),
+        "source_rows_per_batch": int(
+            _fixed_pregather_route.get("source_rows_per_batch", -1)
+        ),
         "block": int(_fixed_pregather_route.get("block", -1)),
         "staging_reused": _fixed_pregather_route.get("contract", {}).get(
             "commit_staging_reused"
+        ),
+        "source_staging_reused": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_source_staging_reused"),
+        "source_pointer_entries": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_source_pointer_entries"),
+        "full_node_writebacks": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_full_node_writebacks"),
+        "conv_remaps": _fixed_pregather_route.get("contract", {}).get(
+            "commit_conv_remaps"
         ),
         "commit_bank_overlap_policy": _fixed_pregather_route.get(
             "contract", {}
@@ -27233,10 +27378,10 @@ def _fr13_f32_flush_boot_warm_metrics(gdn):
         or int(evidence.get("flags_zero_fills", -1)) != 1
         or evidence.get("persistent_copy_state_restored") is not True
         or evidence.get("flags_state_restored") is not True
-        or int(evidence.get("conv_commit_gather_launches", -1))
+        or int(evidence.get("conv_commit_direct_launches", -1))
         != capacity
-        or int(evidence.get("conv_commit_scatter_launches", -1))
-        != capacity
+        or int(evidence.get("conv_commit_gather_launches", -1)) != 0
+        or int(evidence.get("conv_commit_scatter_launches", -1)) != 0
         or int(evidence.get("committer_replays", -1)) != capacity
         or evidence.get("observed_event_absent") is not True
         or evidence.get("pending_event_absent") is not True
@@ -27252,10 +27397,10 @@ def _fr13_f32_flush_boot_warm_metrics(gdn):
         or committer.get("classification") != "unmeasured_boot"
         or tuple(committer.get("batches", ())) != batches
         or int(committer.get("replays", -1)) != capacity
-        or int(committer.get("conv_commit_gather_launches", -1))
+        or int(committer.get("conv_commit_direct_launches", -1))
         != capacity
-        or int(committer.get("conv_commit_scatter_launches", -1))
-        != capacity
+        or int(committer.get("conv_commit_gather_launches", -1)) != 0
+        or int(committer.get("conv_commit_scatter_launches", -1)) != 0
         or committer.get("route_lease_current") is not True
         or committer.get("bank_state_restored") is not True
         or committer.get("conv_bank_state_restored") is not True
@@ -27272,7 +27417,7 @@ def _fr13_f32_flush_boot_warm_metrics(gdn):
             "fixed32 boot-warm evidence no longer owns restored runtime state"
         )
     return {
-        "schema": "fr13-fixed32-boot-warm-v2",
+        "schema": "fr13-fixed32-boot-warm-v3",
         "classification": "unmeasured_boot",
         "hardware_scope": "device_postprocess_kernels",
         "wrapper_bookkeeping_warmed": False,
@@ -27289,8 +27434,9 @@ def _fr13_f32_flush_boot_warm_metrics(gdn):
         "flags_zero_fills": 1,
         "persistent_copy_state_restored": True,
         "flags_state_restored": True,
-        "conv_commit_gather_launches": capacity,
-        "conv_commit_scatter_launches": capacity,
+        "conv_commit_direct_launches": capacity,
+        "conv_commit_gather_launches": 0,
+        "conv_commit_scatter_launches": 0,
         "committer_replays": capacity,
         "observed_event_absent": True,
         "pending_event_absent": True,
@@ -29523,9 +29669,13 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
         )
         conv_commit_before = {
             "preseeded": True,
-            "route": "fixed32_two_launch_col0",
+            "route": "fixed32_direct_source_col0",
+            "direct_launches": 0,
             "gather_launches": 0,
             "scatter_launches": 0,
+            "direct_launches_by_batch": {
+                value: 0 for value in (1, 2, 3, 4)
+            },
             "gather_launches_by_batch": {
                 value: 0 for value in (1, 2, 3, 4)
             },
@@ -29534,10 +29684,8 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
             },
         }
         conv_commit_after = copy.deepcopy(conv_commit_before)
-        conv_commit_after["gather_launches"] = 1
-        conv_commit_after["scatter_launches"] = 1
-        conv_commit_after["gather_launches_by_batch"][batch] = 1
-        conv_commit_after["scatter_launches_by_batch"][batch] = 1
+        conv_commit_after["direct_launches"] = 1
+        conv_commit_after["direct_launches_by_batch"][batch] = 1
         namespace["_fr13_fixed32_observed_commit"](
             mode,
             batch,
@@ -29558,11 +29706,18 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
             conv_commit_before,
             conv_commit_after,
             {
-                "route": "fixed32_two_launch_col0",
+                "route": "fixed32_direct_source_col0",
                 "layers": 48,
                 "row_elems": reference["conv_commit"]["row_elems"],
+                "channels": 10240,
+                "state_length": 34,
+                "source_rows_per_batch": 36,
                 "block": reference["conv_commit"]["block"],
-                "staging_reused": True,
+                "staging_reused": False,
+                "source_staging_reused": True,
+                "source_pointer_entries": 48,
+                "full_node_writebacks": 0,
+                "conv_remaps": 0,
                 "commit_bank_overlap_policy": "exact_alias_only_16x3",
                 "commit_bank_partial_overlap": False,
                 "commit_bank_alias_groups": 16,

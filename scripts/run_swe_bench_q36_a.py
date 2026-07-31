@@ -3575,6 +3575,7 @@ def _load_fixed32_boundary_snapshot(
             "flags_zero_fills",
             "persistent_copy_state_restored",
             "flags_state_restored",
+            "conv_commit_direct_launches",
             "conv_commit_gather_launches",
             "conv_commit_scatter_launches",
             "committer_replays",
@@ -3631,6 +3632,10 @@ def _load_fixed32_boundary_snapshot(
         boot_warm["flags_zero_fills"],
         f"{path}:boot_warm.flags_zero_fills",
     )
+    conv_direct = _fixed32_nonnegative_int(
+        boot_warm["conv_commit_direct_launches"],
+        f"{path}:boot_warm.conv_commit_direct_launches",
+    )
     conv_gathers = _fixed32_nonnegative_int(
         boot_warm["conv_commit_gather_launches"],
         f"{path}:boot_warm.conv_commit_gather_launches",
@@ -3661,7 +3666,7 @@ def _load_fixed32_boundary_snapshot(
         "committer_scratch_overwrite_proven",
     )
     if (
-        boot_warm["schema"] != "fr13-fixed32-boot-warm-v2"
+        boot_warm["schema"] != "fr13-fixed32-boot-warm-v3"
         or boot_warm["classification"] != "unmeasured_boot"
         or boot_warm["hardware_scope"] != "device_postprocess_kernels"
         or boot_warm["wrapper_bookkeeping_warmed"] is not False
@@ -3676,8 +3681,9 @@ def _load_fixed32_boundary_snapshot(
         or slot_copy_pairs != server_capacity * (server_capacity + 1) // 2
         or spec_copy_pairs != server_capacity
         or flags_zero_fills != 1
-        or conv_gathers != server_capacity
-        or conv_scatters != server_capacity
+        or conv_direct != server_capacity
+        or conv_gathers != 0
+        or conv_scatters != 0
         or committer_replays != server_capacity
         or boot_warm["committer_alias_destination_contract"]
         != "exact_alias_only_16x3"

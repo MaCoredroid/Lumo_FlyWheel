@@ -1404,11 +1404,93 @@ def _fr13_fixed32_conv_commit_scatter_kernel(
     )
 
 
+@triton.jit
+def _fr13_fixed32_conv_direct_col0_kernel(
+    anchor_ptr,
+    bank_off16,
+    source_anchor,
+    source_off16,
+    state_src,
+    spec_state_indices,
+    accepted_paths,
+    accepted_lens,
+    ssi_stride_l,
+    ssi_stride_b,
+    ssi_stride_s,
+    path_stride_b,
+    path_stride_s,
+    lens_stride_b,
+    bank_row_stride,
+    bank_c_stride,
+    bank_l_stride,
+    source_row_stride,
+    source_c_stride,
+    CONV_C: tl.constexpr,
+    CONV_L: tl.constexpr,
+    SOURCE_ROWS: tl.constexpr,
+    ELEM_BYTES: tl.constexpr,
+    SPEC_COLS: tl.constexpr,
+    PATH_COLS: tl.constexpr,
+    B: tl.constexpr,
+    BLOCK_C: tl.constexpr,
+):
+    """Publish the accepted source-stage leaf directly to the running row."""
+    pid_l = tl.program_id(0)
+    pid_b = tl.program_id(1)
+    pid_c = tl.program_id(2)
+    if pid_b >= B:
+        return
+
+    accepted_len = tl.load(accepted_lens + pid_b * lens_stride_b)
+    leaf_pos = tl.maximum(accepted_len - 1, 0)
+    leaf_pos = tl.minimum(leaf_pos, PATH_COLS - 1)
+    leaf_node = tl.load(
+        accepted_paths
+        + pid_b * path_stride_b
+        + leaf_pos * path_stride_s
+    )
+    leaf_node = tl.where(accepted_len > 0, leaf_node, 0)
+    leaf_node = tl.maximum(0, tl.minimum(leaf_node, SPEC_COLS - 1))
+
+    spec_layer = (
+        spec_state_indices
+        + pid_l * ssi_stride_l
+        + pid_b * ssi_stride_b
+    )
+    dst_row = tl.load(spec_layer + 0 * ssi_stride_s)
+    bank = anchor_ptr + tl.load(bank_off16 + pid_l) * (16 // ELEM_BYTES)
+    source = (
+        source_anchor
+        + tl.load(source_off16 + pid_l) * (16 // ELEM_BYTES)
+    )
+    offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)
+    c_mask = offs_c < CONV_C
+    source_batch = pid_b.to(tl.int64) * SOURCE_ROWS
+    for state_col in tl.static_range(0, CONV_L):
+        source_row = tl.load(
+            state_src + leaf_node * CONV_L + state_col
+        ).to(tl.int64)
+        values = tl.load(
+            source
+            + (source_batch + source_row) * source_row_stride
+            + offs_c * source_c_stride,
+            mask=c_mask,
+        )
+        tl.store(
+            bank
+            + dst_row.to(tl.int64) * bank_row_stride
+            + offs_c * bank_c_stride
+            + state_col * bank_l_stride,
+            values,
+            mask=c_mask,
+        )
+
+
 _FR13_CONV_PREGATHER: dict = {}
 _FR13_FIXED32_CONV_PREGATHER: dict = {}
 _FR13_FIXED32_CONV_SSI_GROUPS: dict[tuple[str, ...], dict[str, object]] = {}
 _FR13_FIXED32_BATCHES = (1, 2, 3, 4)
-_FR13_FIXED32_CONV_COMMIT_ROUTE = "fixed32_two_launch_col0"
+_FR13_FIXED32_CONV_COMMIT_ROUTE = "fixed32_direct_source_col0"
 
 
 def _fixed32_conv_page_safe_row_span(
@@ -1747,6 +1829,9 @@ def preseed_fixed32_conv_col0_pregather(
     commit_spec_state_indices: torch.Tensor,
     accepted_paths: torch.Tensor,
     accepted_lens: torch.Tensor,
+    commit_source_stagings,
+    commit_state_src: torch.Tensor,
+    source_rows_per_batch: int,
 ) -> dict[str, object]:
     """Build the pointer table and warm B1 through the server capacity.
 
@@ -1779,6 +1864,51 @@ def preseed_fixed32_conv_col0_pregather(
     existing = _FR13_FIXED32_CONV_PREGATHER.get("state")
     bank_refs = tuple(conv_banks)
     ssm_bank_refs = tuple(ssm_banks)
+    source_refs = tuple(commit_source_stagings)
+    source_rows = int(source_rows_per_batch)
+    conv_c = int(anchor.shape[1])
+    if (
+        len(source_refs) != 48
+        or len({id(source) for source in source_refs}) != 48
+        or len({int(source.data_ptr()) for source in source_refs}) != 48
+        or source_rows <= 0
+        or not torch.is_tensor(commit_state_src)
+        or commit_state_src.device != anchor.device
+        or commit_state_src.dtype != torch.int64
+        or commit_state_src.ndim != 1
+        or int(commit_state_src.numel()) != 32 * conv_l
+        or not commit_state_src.is_contiguous()
+    ):
+        raise ValueError(
+            "FR13_FIXED32_CONV_DIRECT invalid source/state-src geometry"
+        )
+    for index, source in enumerate(source_refs):
+        if (
+            not torch.is_tensor(source)
+            or source.device != anchor.device
+            or source.dtype != anchor.dtype
+            or source.ndim != 2
+            or int(source.shape[0]) < capacity * source_rows
+            or int(source.shape[1]) != conv_c
+            or tuple(int(value) for value in source.stride()) != (conv_c, 1)
+            or not source.is_contiguous()
+            or int(source.data_ptr()) % 16
+        ):
+            raise ValueError(
+                "FR13_FIXED32_CONV_DIRECT source contract mismatch at "
+                f"index {index}"
+            )
+    state_src_values = tuple(
+        int(value) for value in commit_state_src.detach().cpu().tolist()
+    )
+    if (
+        min(state_src_values) < 0
+        or max(state_src_values) >= source_rows
+        or max(state_src_values) != source_rows - 1
+    ):
+        raise ValueError(
+            "FR13_FIXED32_CONV_DIRECT state-src range does not match source rows"
+        )
     if (
         not torch.is_tensor(commit_spec_state_indices)
         or commit_spec_state_indices.device != anchor.device
@@ -1829,6 +1959,15 @@ def preseed_fixed32_conv_col0_pregather(
             is not commit_spec_state_indices
             or existing.get("accepted_paths") is not accepted_paths
             or existing.get("accepted_lens") is not accepted_lens
+            or len(existing.get("source_stagings", ())) != 48
+            or any(
+                old is not new
+                for old, new in zip(
+                    existing["source_stagings"], source_refs, strict=True
+                )
+            )
+            or existing.get("source_rows_per_batch") != source_rows
+            or existing.get("state_src_values") != state_src_values
         ):
             raise RuntimeError(
                 "FR13_FIXED32_CONV_PREGATHER was already preseeded with "
@@ -1841,6 +1980,16 @@ def preseed_fixed32_conv_col0_pregather(
         dtype=torch.int64,
         device=anchor.device,
     )
+    source_pointers = tuple(int(source.data_ptr()) for source in source_refs)
+    source_offsets = torch.tensor(
+        [
+            (pointer - source_pointers[0]) // 16
+            for pointer in source_pointers
+        ],
+        dtype=torch.int64,
+        device=anchor.device,
+    )
+    direct_state_src = commit_state_src.detach().clone().contiguous()
     alias_ids_device = torch.tensor(
         alias_ids,
         dtype=torch.int64,
@@ -1916,8 +2065,30 @@ def preseed_fixed32_conv_col0_pregather(
         "commit_spec_state_indices": commit_spec_state_indices,
         "accepted_paths": accepted_paths,
         "accepted_lens": accepted_lens,
+        "source_stagings": source_refs,
+        "source_anchor": source_refs[0],
+        "source_off16": source_offsets,
+        "direct_source_data_ptrs": source_pointers,
+        "direct_source_storage_ptrs": tuple(
+            int(source.untyped_storage().data_ptr()) for source in source_refs
+        ),
+        "source_shapes": tuple(
+            tuple(int(value) for value in source.shape)
+            for source in source_refs
+        ),
+        "source_strides": tuple(
+            tuple(int(value) for value in source.stride())
+            for source in source_refs
+        ),
+        "source_rows_per_batch": source_rows,
+        "state_src": direct_state_src,
+        "state_src_values": state_src_values,
+        "state_src_digest": hashlib.sha256(
+            json.dumps(state_src_values).encode("ascii")
+        ).hexdigest(),
         "staging": staging,
         "row_elems": row_elems,
+        "conv_c": conv_c,
         "conv_l": conv_l,
         "element_bytes": element_bytes,
         "block": block,
@@ -1933,10 +2104,14 @@ def preseed_fixed32_conv_col0_pregather(
         "aux_capture_stages": 0,
         "commit_gather_launches": 0,
         "commit_scatter_launches": 0,
+        "commit_direct_launches": 0,
         "commit_gather_launches_by_batch": {
             batch: 0 for batch in batches
         },
         "commit_scatter_launches_by_batch": {
+            batch: 0 for batch in batches
+        },
+        "commit_direct_launches_by_batch": {
             batch: 0 for batch in batches
         },
         "live_selfchecked_batches": set(),
@@ -1951,6 +2126,9 @@ def preseed_fixed32_conv_col0_pregather(
             id(commit_spec_state_indices),
             id(accepted_paths),
             id(accepted_lens),
+            tuple(id(source) for source in source_refs),
+            id(source_offsets),
+            id(direct_state_src),
             id(staging),
         ),
         "source_data_ptrs": (
@@ -1968,6 +2146,9 @@ def preseed_fixed32_conv_col0_pregather(
             int(commit_spec_state_indices.data_ptr()),
             int(accepted_paths.data_ptr()),
             int(accepted_lens.data_ptr()),
+            source_pointers,
+            int(source_offsets.data_ptr()),
+            int(direct_state_src.data_ptr()),
             int(staging.data_ptr()),
         ),
         "commit_operand_meta": (
@@ -1997,10 +2178,17 @@ def preseed_fixed32_conv_col0_pregather(
             "row_elems": row_elems,
             "staging_bank_nonalias": True,
             "commit_route": _FR13_FIXED32_CONV_COMMIT_ROUTE,
-            "commit_launches_per_event": 2,
-            "commit_gather_launches_per_event": 1,
-            "commit_scatter_launches_per_event": 1,
-            "commit_staging_reused": True,
+            "commit_launches_per_event": 1,
+            "commit_direct_launches_per_event": 1,
+            "commit_gather_launches_per_event": 0,
+            "commit_scatter_launches_per_event": 0,
+            "commit_staging_reused": False,
+            "commit_source_staging_reused": True,
+            "commit_source_pointer_entries": 48,
+            "commit_source_rows_per_batch": source_rows,
+            "commit_state_src_shape": (32, conv_l),
+            "commit_full_node_writebacks": 0,
+            "commit_conv_remaps": 0,
             "commit_bank_overlap_policy": "exact_alias_only_16x3",
             "commit_bank_partial_overlap": False,
             "commit_bank_alias_groups": 16,
@@ -2060,64 +2248,67 @@ def preseed_fixed32_conv_col0_pregather(
         safe_paths,
         safe_lens,
     )
-    for batch in batches:
-        grid = (48, batch, triton.cdiv(row_elems, block))
-        _fr13_conv_col0_pregather_kernel[grid](
-            anchor,
-            offsets,
-            safe_ptrs,
-            safe_strides,
-            staging,
-            staging.stride(0),
-            staging.stride(1),
-            int(anchor.stride(0)),
-            int(anchor.stride(1)),
-            int(anchor.stride(2)),
-            ROW_ELEMS=row_elems,
-            CONV_L=conv_l,
-            ELEM_BYTES=element_bytes,
-            B=batch,
-            BLOCK=block,
-        )
-        _fr13_fixed32_conv_commit_gather_kernel[grid](
-            anchor,
-            offsets,
-            safe_commit_ssi,
-            safe_paths,
-            safe_lens,
-            staging,
-            staging.stride(0),
-            staging.stride(1),
-            safe_commit_ssi.stride(0),
-            safe_commit_ssi.stride(1),
-            safe_commit_ssi.stride(2),
-            safe_paths.stride(0),
-            safe_paths.stride(1),
-            safe_lens.stride(0),
-            int(anchor.stride(0)),
-            ROW_ELEMS=row_elems,
-            ELEM_BYTES=element_bytes,
-            SPEC_COLS=int(safe_commit_ssi.shape[2]),
-            PATH_COLS=int(safe_paths.shape[1]),
-            B=batch,
-            BLOCK=block,
-        )
-        _fr13_fixed32_conv_commit_scatter_kernel[grid](
-            anchor,
-            offsets,
-            safe_commit_ssi,
-            staging,
-            staging.stride(0),
-            staging.stride(1),
-            safe_commit_ssi.stride(0),
-            safe_commit_ssi.stride(1),
-            safe_commit_ssi.stride(2),
-            int(anchor.stride(0)),
-            ROW_ELEMS=row_elems,
-            ELEM_BYTES=element_bytes,
-            B=batch,
-            BLOCK=block,
-        )
+    safe_rows_long = safe_commit_rows.to(torch.long)
+    saved_warm_rows = tuple(
+        bank.index_select(0, safe_rows_long[layer]).clone()
+        for layer, bank in enumerate(bank_refs)
+    )
+    try:
+        for batch in batches:
+            pregather_grid = (48, batch, triton.cdiv(row_elems, block))
+            _fr13_conv_col0_pregather_kernel[pregather_grid](
+                anchor,
+                offsets,
+                safe_ptrs,
+                safe_strides,
+                staging,
+                staging.stride(0),
+                staging.stride(1),
+                int(anchor.stride(0)),
+                int(anchor.stride(1)),
+                int(anchor.stride(2)),
+                ROW_ELEMS=row_elems,
+                CONV_L=conv_l,
+                ELEM_BYTES=element_bytes,
+                B=batch,
+                BLOCK=block,
+            )
+            direct_grid = (48, batch, triton.cdiv(conv_c, block))
+            _fr13_fixed32_conv_direct_col0_kernel[direct_grid](
+                anchor,
+                offsets,
+                source_refs[0],
+                source_offsets,
+                direct_state_src,
+                safe_commit_ssi,
+                safe_paths,
+                safe_lens,
+                safe_commit_ssi.stride(0),
+                safe_commit_ssi.stride(1),
+                safe_commit_ssi.stride(2),
+                safe_paths.stride(0),
+                safe_paths.stride(1),
+                safe_lens.stride(0),
+                int(anchor.stride(0)),
+                int(anchor.stride(1)),
+                int(anchor.stride(2)),
+                int(source_refs[0].stride(0)),
+                int(source_refs[0].stride(1)),
+                CONV_C=conv_c,
+                CONV_L=conv_l,
+                SOURCE_ROWS=source_rows,
+                ELEM_BYTES=element_bytes,
+                SPEC_COLS=int(safe_commit_ssi.shape[2]),
+                PATH_COLS=int(safe_paths.shape[1]),
+                B=batch,
+                BLOCK_C=block,
+                num_warps=4,
+            )
+    finally:
+        for layer, (bank, saved) in enumerate(
+            zip(bank_refs, saved_warm_rows, strict=True)
+        ):
+            bank.index_copy_(0, safe_rows_long[layer], saved)
     _FR13_FIXED32_CONV_PREGATHER["state"] = state
     _FR13_FIXED32_CONV_PREGATHER["commit_lease_token"] = commit_lease_token
     print(
@@ -2280,6 +2471,9 @@ def launch_fixed32_conv_col0_pregather(
             id(state["commit_spec_state_indices"]),
             id(state["accepted_paths"]),
             id(state["accepted_lens"]),
+            tuple(id(source) for source in state["source_stagings"]),
+            id(state["source_off16"]),
+            id(state["state_src"]),
             id(state["staging"]),
         )
         or state.get("source_data_ptrs")
@@ -2298,6 +2492,12 @@ def launch_fixed32_conv_col0_pregather(
             int(state["commit_spec_state_indices"].data_ptr()),
             int(state["accepted_paths"].data_ptr()),
             int(state["accepted_lens"].data_ptr()),
+            tuple(
+                int(source.data_ptr())
+                for source in state["source_stagings"]
+            ),
+            int(state["source_off16"].data_ptr()),
+            int(state["state_src"].data_ptr()),
             int(state["staging"].data_ptr()),
         )
         or not state["staging"].is_contiguous()
@@ -2392,6 +2592,37 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
         and pointer < staging_hi
         for pointer, bank in zip(pointers, state["banks"], strict=True)
     )
+    direct_sources = state.get("source_stagings", ())
+    direct_state_src = state.get("state_src")
+    direct_source_pointers = tuple(
+        int(source.data_ptr()) for source in direct_sources
+    )
+    direct_source_storage_pointers = tuple(
+        int(source.untyped_storage().data_ptr()) for source in direct_sources
+    )
+    direct_source_valid = (
+        len(direct_sources) == 48
+        and len(set(direct_source_pointers)) == 48
+        and all(
+            torch.is_tensor(source)
+            and source.device == anchor.device
+            and source.dtype == anchor.dtype
+            and source.ndim == 2
+            and int(source.shape[0])
+            >= int(state["max_batch_size"])
+            * int(state["source_rows_per_batch"])
+            and int(source.shape[1]) == int(state["conv_c"])
+            and tuple(int(value) for value in source.stride())
+            == (int(state["conv_c"]), 1)
+            and source.is_contiguous()
+            for source in direct_sources
+        )
+        and torch.is_tensor(direct_state_src)
+        and direct_state_src.device == anchor.device
+        and direct_state_src.dtype == torch.int64
+        and tuple(direct_state_src.shape) == (32 * int(state["conv_l"]),)
+        and direct_state_src.is_contiguous()
+    )
     if (
         _FR13_FIXED32_CONV_PREGATHER.get("commit_lease_token")
         is not state.get("commit_lease_token")
@@ -2424,6 +2655,28 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
         or int(element_bytes) != int(state["element_bytes"])
         or operand_meta != state.get("commit_operand_meta")
         or operand_data_ptrs != state.get("commit_operand_data_ptrs")
+        or not direct_source_valid
+        or direct_sources[0] is not state.get("source_anchor")
+        or direct_source_pointers != state.get("direct_source_data_ptrs")
+        or direct_source_storage_pointers
+        != state.get("direct_source_storage_ptrs")
+        or tuple(
+            tuple(int(value) for value in source.shape)
+            for source in direct_sources
+        )
+        != state.get("source_shapes")
+        or tuple(
+            tuple(int(value) for value in source.stride())
+            for source in direct_sources
+        )
+        != state.get("source_strides")
+        or tuple(int(value) for value in direct_state_src.cpu().tolist())
+        != state.get("state_src_values")
+        or tuple(int(value) for value in state["source_off16"].cpu().tolist())
+        != tuple(
+            (pointer - direct_source_pointers[0]) // 16
+            for pointer in direct_source_pointers
+        )
         or tuple(int(value) for value in staging.shape)
         != (
             48,
@@ -2453,6 +2706,9 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
         "bank_destination_guard": "alias_row_unique",
         "null_row_rejected": True,
         "staging_bank_nonalias": True,
+        "source_staging_reused": True,
+        "source_pointer_entries": 48,
+        "state_src_shape": (32, int(state["conv_l"])),
     }
 
 
@@ -2464,7 +2720,7 @@ def launch_fixed32_conv_commit_to_col0(
     accepted_lens: torch.Tensor,
     num_spec_decodes: int,
 ) -> None:
-    """Commit all fixed32 conv leaf rows with one gather and one scatter."""
+    """Commit fixed32 accepted source-stage leaves directly to running rows."""
     state = _FR13_FIXED32_CONV_PREGATHER.get("state")
     if state is None:
         raise RuntimeError(
@@ -2510,6 +2766,9 @@ def launch_fixed32_conv_commit_to_col0(
         or spec_state_indices.dtype != torch.int32
         or accepted_paths.dtype != torch.int32
         or accepted_lens.dtype != torch.int32
+        or state.get("source_anchor") is not state["source_stagings"][0]
+        or state["source_anchor"].device != state["anchor"].device
+        or state["source_anchor"].dtype != state["anchor"].dtype
     ):
         raise RuntimeError(
             "FR13_FIXED32_CONV_COMMIT persistent identity/geometry drift"
@@ -2522,18 +2781,18 @@ def launch_fixed32_conv_commit_to_col0(
         batch=batch,
         bank_rows=int(state["anchor"].shape[0]),
     )
-    row_elems = int(state["row_elems"])
+    conv_c = int(state["conv_c"])
     block = int(state["block"])
-    grid = (48, batch, triton.cdiv(row_elems, block))
-    _fr13_fixed32_conv_commit_gather_kernel[grid](
+    grid = (48, batch, triton.cdiv(conv_c, block))
+    _fr13_fixed32_conv_direct_col0_kernel[grid](
         state["anchor"],
         state["off16"],
+        state["source_anchor"],
+        state["source_off16"],
+        state["state_src"],
         spec_state_indices,
         accepted_paths,
         accepted_lens,
-        state["staging"],
-        state["staging"].stride(0),
-        state["staging"].stride(1),
         spec_state_indices.stride(0),
         spec_state_indices.stride(1),
         spec_state_indices.stride(2),
@@ -2541,44 +2800,37 @@ def launch_fixed32_conv_commit_to_col0(
         accepted_paths.stride(1),
         accepted_lens.stride(0),
         int(state["anchor"].stride(0)),
-        ROW_ELEMS=row_elems,
+        int(state["anchor"].stride(1)),
+        int(state["anchor"].stride(2)),
+        int(state["source_anchor"].stride(0)),
+        int(state["source_anchor"].stride(1)),
+        CONV_C=conv_c,
+        CONV_L=int(state["conv_l"]),
+        SOURCE_ROWS=int(state["source_rows_per_batch"]),
         ELEM_BYTES=int(state["element_bytes"]),
         SPEC_COLS=int(spec_state_indices.shape[2]),
         PATH_COLS=int(accepted_paths.shape[1]),
         B=batch,
-        BLOCK=block,
+        BLOCK_C=block,
+        num_warps=4,
     )
-    _fr13_fixed32_conv_commit_scatter_kernel[grid](
-        state["anchor"],
-        state["off16"],
-        spec_state_indices,
-        state["staging"],
-        state["staging"].stride(0),
-        state["staging"].stride(1),
-        spec_state_indices.stride(0),
-        spec_state_indices.stride(1),
-        spec_state_indices.stride(2),
-        int(state["anchor"].stride(0)),
-        ROW_ELEMS=row_elems,
-        ELEM_BYTES=int(state["element_bytes"]),
-        B=batch,
-        BLOCK=block,
-    )
-    state["commit_gather_launches"] += 1
-    state["commit_scatter_launches"] += 1
-    state["commit_gather_launches_by_batch"][batch] += 1
-    state["commit_scatter_launches_by_batch"][batch] += 1
+    state["commit_direct_launches"] += 1
+    state["commit_direct_launches_by_batch"][batch] += 1
 
 
 def fixed32_conv_col0_commit_counters() -> dict[str, object]:
-    """Return actual fixed32 two-launch conv commit facts."""
+    """Return actual fixed32 direct conv commit facts."""
     state = _FR13_FIXED32_CONV_PREGATHER.get("state")
     if state is None:
         return {
             "preseeded": False,
             "route": _FR13_FIXED32_CONV_COMMIT_ROUTE,
+            "direct_launches": 0,
             "gather_launches": 0,
             "scatter_launches": 0,
+            "direct_launches_by_batch": {
+                batch: 0 for batch in _FR13_FIXED32_BATCHES
+            },
             "gather_launches_by_batch": {
                 batch: 0 for batch in _FR13_FIXED32_BATCHES
             },
@@ -2589,8 +2841,15 @@ def fixed32_conv_col0_commit_counters() -> dict[str, object]:
     return {
         "preseeded": True,
         "route": state["contract"]["commit_route"],
+        "direct_launches": int(state["commit_direct_launches"]),
         "gather_launches": int(state["commit_gather_launches"]),
         "scatter_launches": int(state["commit_scatter_launches"]),
+        "direct_launches_by_batch": {
+            batch: int(
+                state["commit_direct_launches_by_batch"].get(batch, 0)
+            )
+            for batch in _FR13_FIXED32_BATCHES
+        },
         "gather_launches_by_batch": {
             batch: int(
                 state["commit_gather_launches_by_batch"].get(batch, 0)
@@ -5480,6 +5739,7 @@ def fixed32_committer_warmup_counters() -> dict[str, object]:
             "max_batch_size": _FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY,
             "batches": (),
             "replays": 0,
+            "conv_commit_direct_launches": 0,
             "conv_commit_gather_launches": 0,
             "conv_commit_scatter_launches": 0,
             "route_lease_current": False,
@@ -5511,10 +5771,10 @@ def fixed32_committer_warmup_counters() -> dict[str, object]:
         )
         and int(result.get("replays", -1))
         == int(_FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY or 0)
-        and int(result.get("conv_commit_gather_launches", -1))
+        and int(result.get("conv_commit_direct_launches", -1))
         == int(_FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY or 0)
-        and int(result.get("conv_commit_scatter_launches", -1))
-        == int(_FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY or 0)
+        and int(result.get("conv_commit_gather_launches", -1)) == 0
+        and int(result.get("conv_commit_scatter_launches", -1)) == 0
         and result["route_lease_current"]
         and result.get("bank_state_restored") is True
         and result.get("conv_bank_state_restored") is True
@@ -6579,8 +6839,15 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
         or len(conv_state["banks"]) != 48
         or not torch.is_tensor(conv_state.get("accepted_paths"))
         or not torch.is_tensor(conv_state.get("accepted_lens"))
+        or int(conv_state.get("commit_direct_launches", -1)) != 0
         or int(conv_state.get("commit_gather_launches", -1)) != 0
         or int(conv_state.get("commit_scatter_launches", -1)) != 0
+        or any(
+            int(value) != 0
+            for value in conv_state.get(
+                "commit_direct_launches_by_batch", {}
+            ).values()
+        )
         or any(
             int(value) != 0
             for value in conv_state.get(
@@ -6658,11 +6925,15 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
     }
     saved_conv_gathers = int(conv_state["commit_gather_launches"])
     saved_conv_scatters = int(conv_state["commit_scatter_launches"])
+    saved_conv_direct = int(conv_state["commit_direct_launches"])
     saved_conv_gathers_by_batch = dict(
         conv_state["commit_gather_launches_by_batch"]
     )
     saved_conv_scatters_by_batch = dict(
         conv_state["commit_scatter_launches_by_batch"]
+    )
+    saved_conv_direct_by_batch = dict(
+        conv_state["commit_direct_launches_by_batch"]
     )
     saved_actual = int(counters["actual_replays_enqueued"])
     saved_by_batch = dict(counters["actual_replays_by_batch"])
@@ -6674,6 +6945,7 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
     replays = 0
     conv_gathers = 0
     conv_scatters = 0
+    conv_direct = 0
     try:
         spec_state_indices[:, :capacity, :].copy_(
             safe_rows.view(48, capacity, 1).expand(
@@ -6692,8 +6964,7 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
                 accepted_lens=accepted_lens,
                 num_spec_decodes=batch,
             )
-            conv_gathers += 1
-            conv_scatters += 1
+            conv_direct += 1
             _fr13_fixed32_committer_replay(
                 banks_list=banks,
                 spec_state_indices=spec_state_indices,
@@ -6746,6 +7017,7 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
         finally:
             conv_state["commit_gather_launches"] = saved_conv_gathers
             conv_state["commit_scatter_launches"] = saved_conv_scatters
+            conv_state["commit_direct_launches"] = saved_conv_direct
             conv_state["commit_gather_launches_by_batch"].clear()
             conv_state["commit_gather_launches_by_batch"].update(
                 saved_conv_gathers_by_batch
@@ -6753,6 +7025,10 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
             conv_state["commit_scatter_launches_by_batch"].clear()
             conv_state["commit_scatter_launches_by_batch"].update(
                 saved_conv_scatters_by_batch
+            )
+            conv_state["commit_direct_launches_by_batch"].clear()
+            conv_state["commit_direct_launches_by_batch"].update(
+                saved_conv_direct_by_batch
             )
             counters["actual_replays_enqueued"] = saved_actual
             counters["actual_replays_by_batch"].clear()
@@ -6817,17 +7093,22 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
         == saved_conv_gathers
         and int(conv_state["commit_scatter_launches"])
         == saved_conv_scatters
+        and int(conv_state["commit_direct_launches"])
+        == saved_conv_direct
         and dict(conv_state["commit_gather_launches_by_batch"])
         == saved_conv_gathers_by_batch
         and dict(conv_state["commit_scatter_launches_by_batch"])
         == saved_conv_scatters_by_batch
+        and dict(conv_state["commit_direct_launches_by_batch"])
+        == saved_conv_direct_by_batch
         and tuple(_FR13_FIXED32_COMMITTER_CALLBACKS) == saved_callbacks
         and _FR13_FIXED32_COMMITTER_ANNOUNCED is saved_announced
     )
     if (
         replays != capacity
-        or conv_gathers != capacity
-        or conv_scatters != capacity
+        or conv_direct != capacity
+        or conv_gathers != 0
+        or conv_scatters != 0
         or not bank_state_restored
         or not conv_bank_state_restored
         or not conv_staging_state_restored
@@ -6846,6 +7127,7 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
         "max_batch_size": capacity,
         "batches": batches,
         "replays": replays,
+        "conv_commit_direct_launches": conv_direct,
         "conv_commit_gather_launches": conv_gathers,
         "conv_commit_scatter_launches": conv_scatters,
         "route_lease_current": True,

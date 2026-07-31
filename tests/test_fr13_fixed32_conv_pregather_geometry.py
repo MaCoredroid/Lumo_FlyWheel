@@ -86,9 +86,9 @@ def test_pregather_grid_is_fixed_for_physical_31(
 
 @pytest.mark.parametrize(
     ("batch_size", "expected_programs"),
-    ((1, 16320), (4, 65280)),
+    ((1, 480), (4, 1920)),
 )
-def test_conv_commit_is_two_fixed_grids_for_physical_31(
+def test_conv_commit_is_one_direct_grid_for_physical_31(
     batch_size: int,
     expected_programs: int,
 ) -> None:
@@ -96,16 +96,21 @@ def test_conv_commit_is_two_fixed_grids_for_physical_31(
     hydra = census.reference_event("hydra27_fixed32", batch_size, "hydra")
     commit = tail["conv_commit"]
 
-    assert commit["route"] == "fixed32_two_launch_col0"
+    assert commit["route"] == "fixed32_direct_source_col0"
     assert commit["row_elems"] == 348160
+    assert commit["channels"] == 10240
+    assert commit["state_length"] == 34
+    assert commit["source_rows_per_batch"] == 36
     assert commit["block"] == 1024
-    assert commit["gather_launches"] == 1
-    assert commit["scatter_launches"] == 1
-    assert commit["gather_programs"] == expected_programs
-    assert commit["scatter_programs"] == expected_programs
-    assert commit["staged_rows"] == 48 * batch_size
-    assert commit["scattered_rows"] == 48 * batch_size
-    assert commit["staging_reused"] is True
+    assert commit["direct_launches"] == 1
+    assert commit["gather_launches"] == 0
+    assert commit["scatter_launches"] == 0
+    assert commit["direct_programs"] == expected_programs
+    assert commit["committed_rows"] == 48 * batch_size
+    assert commit["source_staging_reused"] is True
+    assert commit["source_pointer_entries"] == 48
+    assert commit["full_node_writebacks"] == 0
+    assert commit["conv_remaps"] == 0
     assert commit["host_syncs"] == 0
     assert tail["conv_commit"] == hydra["conv_commit"]
 

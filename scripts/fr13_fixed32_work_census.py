@@ -51,6 +51,9 @@ from fr13_fixed32_topology import (
     CONV_PREGATHER_BLOCK,
     CONV_PREGATHER_LAYERS,
     CONV_PREGATHER_ROW_ELEMS,
+    GDN_CONV_CHANNELS,
+    GDN_CONV_KERNEL_SIZE,
+    GDN_CONV_STATE_LENGTH,
     GDN_LAUNCHES,
     GDN_LAYERS,
     GDN_LEVEL_MAX_LENGTHS,
@@ -92,10 +95,10 @@ from fr13_fixed32_topology import (
     WALK_CAP,
 )
 
-SCHEMA = "fr13-fixed32-work-census-v8"
-TERMINAL_SCHEMA = "fr13-fixed32-work-census-terminal-v8"
-REPORT_SCHEMA = "fr13-fixed32-work-census-report-v8"
-SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v8"
+SCHEMA = "fr13-fixed32-work-census-v9"
+TERMINAL_SCHEMA = "fr13-fixed32-work-census-terminal-v9"
+REPORT_SCHEMA = "fr13-fixed32-work-census-report-v9"
+SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v9"
 
 TAIL_MODE = "tail6_fixed32"
 HYDRA_MODE = "hydra27_fixed32"
@@ -165,7 +168,8 @@ OUTPUT_PUBLISH_ROUTE = "device_fixed32"
 ACCEPTED_PATH_PACK_ROUTE = "device_fixed16"
 REQUEST_KEY_PACK_ROUTE = "device_rowmap"
 KV_REMAP_ROUTE = "syncfree_target16_postsample_drafter1_postforward"
-CONV_COMMIT_ROUTE = "fixed32_two_launch_col0"
+CONV_COMMIT_ROUTE = "fixed32_direct_source_col0"
+CONV_COMMIT_SOURCE_ROWS = PHYSICAL_ROWS + GDN_CONV_KERNEL_SIZE
 CONV_PREGATHER_ROUTE = "in_graph_preconsume"
 COMMITTER_ROUTE = "fixed16_device_fill_graph"
 if TREE_ATTENTION_LAYERS + GDN_LAYERS != MODEL_LAYERS:
@@ -419,14 +423,19 @@ CONV_COMMIT_KEYS = frozenset(
         "layers",
         "requests",
         "row_elems",
+        "channels",
+        "state_length",
+        "source_rows_per_batch",
         "block",
+        "direct_launches",
         "gather_launches",
         "scatter_launches",
-        "gather_programs",
-        "scatter_programs",
-        "staged_rows",
-        "scattered_rows",
-        "staging_reused",
+        "direct_programs",
+        "committed_rows",
+        "source_staging_reused",
+        "source_pointer_entries",
+        "full_node_writebacks",
+        "conv_remaps",
         "host_syncs",
         "skips",
         "fallback",
@@ -566,7 +575,7 @@ FIXED_WORK_SCOPE = {
         "preforward_request_key_tensor_ops",
         "post_taw_output_path_request_key_tensor_ops",
         "committer_replay_delta",
-        "conv_commit_two_launch_delta",
+        "conv_commit_direct_launch_delta",
         "conv_pregather_capture_manifest_bound_replay",
         "kv_fixed16_geometry",
         "taw_live_layout_and_route",
@@ -794,7 +803,7 @@ def forward_graph_structural_manifest(batch_size: int) -> dict[str, Any]:
         raise ValueError(
             f"forward graph batch_size must be in {SUPPORTED_BATCH_SIZES}"
         )
-    conv_programs = (
+    conv_pregather_programs = (
         CONV_PREGATHER_LAYERS
         * batch_size
         * (
@@ -852,7 +861,7 @@ def forward_graph_structural_manifest(batch_size: int) -> dict[str, Any]:
                 )
                 // CONV_PREGATHER_BLOCK,
             ],
-            "programs": conv_programs,
+            "programs": conv_pregather_programs,
             "ssi_pointer_entries": CONV_PREGATHER_LAYERS,
             "ssi_groups": 3,
             "source_validations": CONV_PREGATHER_LAYERS,
@@ -1621,7 +1630,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         * batch_size
         * (
             (
-                CONV_PREGATHER_ROW_ELEMS
+                GDN_CONV_CHANNELS
                 + CONV_PREGATHER_BLOCK
                 - 1
             )
@@ -1636,14 +1645,19 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "layers": CONV_COMMIT_LAYERS,
             "requests": batch_size,
             "row_elems": CONV_PREGATHER_ROW_ELEMS,
+            "channels": GDN_CONV_CHANNELS,
+            "state_length": GDN_CONV_STATE_LENGTH,
+            "source_rows_per_batch": CONV_COMMIT_SOURCE_ROWS,
             "block": CONV_PREGATHER_BLOCK,
-            "gather_launches": 1,
-            "scatter_launches": 1,
-            "gather_programs": conv_commit_programs,
-            "scatter_programs": conv_commit_programs,
-            "staged_rows": conv_rows,
-            "scattered_rows": conv_rows,
-            "staging_reused": True,
+            "direct_launches": 1,
+            "gather_launches": 0,
+            "scatter_launches": 0,
+            "direct_programs": conv_commit_programs,
+            "committed_rows": conv_rows,
+            "source_staging_reused": True,
+            "source_pointer_entries": 48,
+            "full_node_writebacks": 0,
+            "conv_remaps": 0,
             "host_syncs": 0,
             "skips": 0,
             "fallback": 0,
@@ -1670,7 +1684,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         CONV_PREGATHER_ROW_ELEMS,
         f"{source}.conv_pregather.row_elems",
     )
-    conv_programs = (
+    conv_pregather_programs = (
         CONV_PREGATHER_LAYERS
         * batch_size
         * ((conv_row_elems + CONV_PREGATHER_BLOCK - 1) // CONV_PREGATHER_BLOCK)
@@ -1686,7 +1700,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "layers": CONV_PREGATHER_LAYERS,
             "requests": batch_size,
             "row_elems": conv_row_elems,
-            "programs": conv_programs,
+            "programs": conv_pregather_programs,
             "staged_rows": CONV_PREGATHER_LAYERS * batch_size,
             "consume_calls": CONV_PREGATHER_LAYERS,
             "consume_hits": CONV_PREGATHER_LAYERS,
@@ -1991,24 +2005,27 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "route": conv_commit["route"],
             "layers": conv_commit["layers"],
             "row_elems": conv_commit["row_elems"],
+            "channels": conv_commit["channels"],
+            "state_length": conv_commit["state_length"],
+            "source_rows_per_batch": conv_commit[
+                "source_rows_per_batch"
+            ],
             "block": conv_commit["block"],
+            "direct_launches_per_event": conv_commit["direct_launches"],
             "gather_launches_per_event": conv_commit["gather_launches"],
             "scatter_launches_per_event": conv_commit[
                 "scatter_launches"
             ],
-            "gather_programs_per_request": (
-                int(conv_commit["gather_programs"]) // batch_size
+            "direct_programs_per_request": (
+                int(conv_commit["direct_programs"]) // batch_size
             ),
-            "scatter_programs_per_request": (
-                int(conv_commit["scatter_programs"]) // batch_size
+            "committed_rows_per_request": (
+                int(conv_commit["committed_rows"]) // batch_size
             ),
-            "staged_rows_per_request": (
-                int(conv_commit["staged_rows"]) // batch_size
-            ),
-            "scattered_rows_per_request": (
-                int(conv_commit["scattered_rows"]) // batch_size
-            ),
-            "staging_reused": conv_commit["staging_reused"],
+            "source_staging_reused": conv_commit["source_staging_reused"],
+            "source_pointer_entries": conv_commit["source_pointer_entries"],
+            "full_node_writebacks": conv_commit["full_node_writebacks"],
+            "conv_remaps": conv_commit["conv_remaps"],
             "host_syncs": conv_commit["host_syncs"],
             "skips": conv_commit["skips"],
             "fallback": conv_commit["fallback"],
@@ -2845,11 +2862,19 @@ def reference_event(
     if drafter_runtime is not None:
         default_drafter_runtime = dict(drafter_runtime)
     default_taw = _reference_taw(batch_size) if taw is None else dict(taw)
-    conv_programs = (
+    conv_pregather_programs = (
         CONV_PREGATHER_LAYERS
         * batch_size
         * (
             (CONV_PREGATHER_ROW_ELEMS + CONV_PREGATHER_BLOCK - 1)
+            // CONV_PREGATHER_BLOCK
+        )
+    )
+    conv_direct_programs = (
+        CONV_COMMIT_LAYERS
+        * batch_size
+        * (
+            (GDN_CONV_CHANNELS + CONV_PREGATHER_BLOCK - 1)
             // CONV_PREGATHER_BLOCK
         )
     )
@@ -2981,14 +3006,19 @@ def reference_event(
             "layers": CONV_COMMIT_LAYERS,
             "requests": batch_size,
             "row_elems": CONV_PREGATHER_ROW_ELEMS,
+            "channels": GDN_CONV_CHANNELS,
+            "state_length": GDN_CONV_STATE_LENGTH,
+            "source_rows_per_batch": CONV_COMMIT_SOURCE_ROWS,
             "block": CONV_PREGATHER_BLOCK,
-            "gather_launches": 1,
-            "scatter_launches": 1,
-            "gather_programs": conv_programs,
-            "scatter_programs": conv_programs,
-            "staged_rows": CONV_COMMIT_LAYERS * batch_size,
-            "scattered_rows": CONV_COMMIT_LAYERS * batch_size,
-            "staging_reused": True,
+            "direct_launches": 1,
+            "gather_launches": 0,
+            "scatter_launches": 0,
+            "direct_programs": conv_direct_programs,
+            "committed_rows": CONV_COMMIT_LAYERS * batch_size,
+            "source_staging_reused": True,
+            "source_pointer_entries": 48,
+            "full_node_writebacks": 0,
+            "conv_remaps": 0,
             "host_syncs": 0,
             "skips": 0,
             "fallback": 0,
@@ -3001,7 +3031,7 @@ def reference_event(
             "layers": CONV_PREGATHER_LAYERS,
             "requests": batch_size,
             "row_elems": CONV_PREGATHER_ROW_ELEMS,
-            "programs": conv_programs,
+            "programs": conv_pregather_programs,
             "staged_rows": CONV_PREGATHER_LAYERS * batch_size,
             "consume_calls": CONV_PREGATHER_LAYERS,
             "consume_hits": CONV_PREGATHER_LAYERS,
@@ -3671,19 +3701,24 @@ def run_self_test() -> dict[str, Any]:
     )
     event_tamper("kv-remap-skip", ("kv_remap", "skips"), 1)
     event_tamper(
-        "conv-commit-gather-launches",
-        ("conv_commit", "gather_launches"),
-        48,
+        "conv-commit-direct-launches",
+        ("conv_commit", "direct_launches"),
+        0,
     )
     event_tamper(
-        "conv-commit-scatter-programs",
-        ("conv_commit", "scatter_programs"),
+        "conv-commit-direct-programs",
+        ("conv_commit", "direct_programs"),
         47,
     )
     event_tamper(
-        "conv-commit-staging",
-        ("conv_commit", "staging_reused"),
+        "conv-commit-source-staging",
+        ("conv_commit", "source_staging_reused"),
         False,
+    )
+    event_tamper(
+        "conv-commit-full-writeback",
+        ("conv_commit", "full_node_writebacks"),
+        1,
     )
     event_tamper(
         "conv-commit-host-sync",
