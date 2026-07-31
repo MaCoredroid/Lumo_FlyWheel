@@ -4,7 +4,11 @@
 Both logical arms use the same 31 physical draft nodes plus the implicit root.
 The arm changes only the validity mask applied before the sampler builds its
 child tables. Invalid nodes must never enter TAW source/q_mix/rejection math.
-No serving path imports this module until the fixed-32 integration lands.
+
+Hydra31 is staged here as a default-off contract only. It activates four
+already-generated physical suffix nodes; it is intentionally absent from the
+deployed mode registry and from the work-census mode registry until a real
+SWE-Verified campaign promotes it.
 """
 
 from __future__ import annotations
@@ -75,6 +79,7 @@ FIXED32_CHOICES: tuple[Path, ...] = tuple(
 HYDRA27_CHOICES = frozenset(TAIL6_CHOICES) | frozenset(
     branch_paths(HYDRA27_BRANCH_CHAINS)
 )
+HYDRA31_CHOICES = frozenset(FIXED32_CHOICES)
 
 
 def _draft_parents(choices: tuple[Path, ...]) -> tuple[int, ...]:
@@ -194,6 +199,9 @@ TAIL6_VALID: tuple[bool, ...] = tuple(
 HYDRA27_VALID: tuple[bool, ...] = tuple(
     path in HYDRA27_CHOICES for path in FIXED32_CHOICES
 )
+HYDRA31_VALID: tuple[bool, ...] = tuple(
+    path in HYDRA31_CHOICES for path in FIXED32_CHOICES
+)
 
 
 def bit_mask(valid: Iterable[bool]) -> int:
@@ -203,8 +211,14 @@ def bit_mask(valid: Iterable[bool]) -> int:
 # Mask bit n is draft-local choice n; its root-inclusive physical row is n+1.
 TAIL6_VALID_MASK = bit_mask(TAIL6_VALID)
 HYDRA27_VALID_MASK = bit_mask(HYDRA27_VALID)
+HYDRA31_VALID_MASK = bit_mask(HYDRA31_VALID)
 TAIL6_INACTIVE_DRAFT_IDS = (6, 7, 11, 12, 16, 17, 21, 22, 24, 26)
 HYDRA27_INACTIVE_DRAFT_IDS = (17, 22, 24, 26)
+HYDRA31_INACTIVE_DRAFT_IDS: tuple[int, ...] = ()
+HYDRA31_ACTIVATED_DRAFT_IDS = HYDRA27_INACTIVE_DRAFT_IDS
+HYDRA31_ACTIVATED_PATHS: tuple[Path, ...] = tuple(
+    FIXED32_CHOICES[node] for node in HYDRA31_ACTIVATED_DRAFT_IDS
+)
 
 VALID_BY_MODE: dict[Mode, tuple[bool, ...]] = {
     "tail6_fixed32": TAIL6_VALID,
@@ -213,6 +227,13 @@ VALID_BY_MODE: dict[Mode, tuple[bool, ...]] = {
 VALID_MASK_BY_MODE: dict[Mode, int] = {
     "tail6_fixed32": TAIL6_VALID_MASK,
     "hydra27_fixed32": HYDRA27_VALID_MASK,
+}
+HYDRA31_STAGED_MODE = "hydra31_fixed32"
+STAGED_VALID_BY_MODE: dict[Mode, tuple[bool, ...]] = {
+    HYDRA31_STAGED_MODE: HYDRA31_VALID,
+}
+STAGED_VALID_MASK_BY_MODE: dict[Mode, int] = {
+    HYDRA31_STAGED_MODE: HYDRA31_VALID_MASK,
 }
 
 # Node ids here include the implicit root at physical row zero.
@@ -237,6 +258,7 @@ PHYSICAL_DRAFTS = 31
 PHYSICAL_ROWS = 32
 TAIL6_ACTIVE_DRAFTS = 21
 HYDRA27_ACTIVE_DRAFTS = 27
+HYDRA31_ACTIVE_DRAFTS = 31
 MODEL_LAYERS = 64
 TREE_ATTENTION_LAYERS = 16
 GDN_LAYERS = 48
@@ -351,6 +373,24 @@ FIXED_EXECUTION_SIGNATURE = {
     "arctic_lookup_chains": ARCTIC_LOOKUP_CHAINS,
     "physical_pack_width": PHYSICAL_DRAFTS,
 }
+FIXED_EXECUTION_SIGNATURE_SHA256 = _canonical_sha256(FIXED_EXECUTION_SIGNATURE)
+HYDRA31_STAGED_MANIFEST = {
+    "schema": "fr13.fixed32.hydra31_staged_topology.v1",
+    "mode": HYDRA31_STAGED_MODE,
+    "status": "default_off_contract_only",
+    "default_enabled": False,
+    "deployed_mode_registered": False,
+    "work_census_mode_registered": False,
+    "baseline_mode": "hydra27_fixed32",
+    "physical_drafts": PHYSICAL_DRAFTS,
+    "physical_rows_including_root": PHYSICAL_ROWS,
+    "active_drafts": HYDRA31_ACTIVE_DRAFTS,
+    "valid_mask": f"{HYDRA31_VALID_MASK:#010x}",
+    "activated_draft_ids": list(HYDRA31_ACTIVATED_DRAFT_IDS),
+    "activated_paths": [list(path) for path in HYDRA31_ACTIVATED_PATHS],
+    "fixed_execution_signature": dict(FIXED_EXECUTION_SIGNATURE),
+    "fixed_execution_signature_sha256": FIXED_EXECUTION_SIGNATURE_SHA256,
+}
 
 
 def valid_for_mode(mode: Mode) -> tuple[bool, ...]:
@@ -368,10 +408,22 @@ def active_choices(mode: Mode) -> tuple[Path, ...]:
     )
 
 
-def active_child_lists(mode: Mode) -> dict[int, tuple[int, ...]]:
-    """Return draft-local sampler children after validity filtering."""
+def staged_active_choices(mode: Mode) -> tuple[Path, ...]:
+    try:
+        valid = STAGED_VALID_BY_MODE[mode]
+    except KeyError as exc:
+        raise ValueError(f"unknown staged fixed-32 mode {mode!r}") from exc
+    return tuple(
+        path
+        for path, enabled in zip(FIXED32_CHOICES, valid, strict=True)
+        if enabled
+    )
+
+
+def _active_child_lists(
+    mode: Mode, valid: tuple[bool, ...]
+) -> dict[int, tuple[int, ...]]:
     children: dict[int, list[int]] = {}
-    valid = valid_for_mode(mode)
     for node, (parent, enabled) in enumerate(zip(DRAFT_PARENT, valid, strict=True)):
         if not enabled:
             continue
@@ -381,6 +433,20 @@ def active_child_lists(mode: Mode) -> dict[int, tuple[int, ...]]:
     return {parent: tuple(nodes) for parent, nodes in children.items()}
 
 
+def active_child_lists(mode: Mode) -> dict[int, tuple[int, ...]]:
+    """Return deployed draft-local sampler children after validity filtering."""
+    return _active_child_lists(mode, valid_for_mode(mode))
+
+
+def staged_active_child_lists(mode: Mode) -> dict[int, tuple[int, ...]]:
+    """Return child lists for a default-off staged topology contract."""
+    try:
+        valid = STAGED_VALID_BY_MODE[mode]
+    except KeyError as exc:
+        raise ValueError(f"unknown staged fixed-32 mode {mode!r}") from exc
+    return _active_child_lists(mode, valid)
+
+
 def sampler_child_table(
     mode: Mode,
 ) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...]]:
@@ -388,6 +454,21 @@ def sampler_child_table(
     table = [[-1] * SAMPLER_MAX_FANOUT for _ in range(PHYSICAL_ROWS)]
     counts = [0] * PHYSICAL_ROWS
     for parent, children in active_child_lists(mode).items():
+        slot = parent + 1
+        if len(children) > SAMPLER_MAX_FANOUT:
+            raise ValueError(f"{mode}: parent {parent} exceeds fixed sampler fanout")
+        table[slot][: len(children)] = children
+        counts[slot] = len(children)
+    return tuple(tuple(row) for row in table), tuple(counts)
+
+
+def staged_sampler_child_table(
+    mode: Mode,
+) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...]]:
+    """Build a fixed-shape child table without registering a serving mode."""
+    table = [[-1] * SAMPLER_MAX_FANOUT for _ in range(PHYSICAL_ROWS)]
+    counts = [0] * PHYSICAL_ROWS
+    for parent, children in staged_active_child_lists(mode).items():
         slot = parent + 1
         if len(children) > SAMPLER_MAX_FANOUT:
             raise ValueError(f"{mode}: parent {parent} exceeds fixed sampler fanout")
@@ -430,16 +511,22 @@ def validate_contract() -> None:
         raise AssertionError("Tail6 validity count drifted")
     if sum(HYDRA27_VALID) != HYDRA27_ACTIVE_DRAFTS:
         raise AssertionError("Hydra27 validity count drifted")
+    if sum(HYDRA31_VALID) != HYDRA31_ACTIVE_DRAFTS:
+        raise AssertionError("staged Hydra31 validity count drifted")
     if set(active_choices("tail6_fixed32")) != set(TAIL6_CHOICES):
         raise AssertionError("Tail6 mask does not recover the Tail6 topology")
     if set(active_choices("hydra27_fixed32")) != set(HYDRA27_CHOICES):
         raise AssertionError("Hydra27 mask does not recover the logical topology")
+    if set(staged_active_choices(HYDRA31_STAGED_MODE)) != set(FIXED32_CHOICES):
+        raise AssertionError("staged Hydra31 must activate every physical draft")
     if not set(TAIL6_CHOICES) < set(HYDRA27_CHOICES):
         raise AssertionError("Hydra27 must be a strict candidate superset of Tail6")
     if TAIL6_VALID_MASK != 0x7A9CE73F:
         raise AssertionError("Tail6 validity mask drifted")
     if HYDRA27_VALID_MASK != 0x7ABDFFFF:
         raise AssertionError("Hydra27 validity mask drifted")
+    if HYDRA31_VALID_MASK != 0x7FFFFFFF:
+        raise AssertionError("staged Hydra31 validity mask drifted")
     if TAIL6_VALID_MASK & ~HYDRA27_VALID_MASK:
         raise AssertionError("Tail6 validity must be a subset of Hydra27 validity")
     if tuple(node for node, valid in enumerate(TAIL6_VALID) if not valid) != (
@@ -450,6 +537,20 @@ def validate_contract() -> None:
         HYDRA27_INACTIVE_DRAFT_IDS
     ):
         raise AssertionError("Hydra27 inactive draft ids drifted")
+    if tuple(node for node, valid in enumerate(HYDRA31_VALID) if not valid) != (
+        HYDRA31_INACTIVE_DRAFT_IDS
+    ):
+        raise AssertionError("staged Hydra31 inactive draft ids drifted")
+    if tuple(
+        node
+        for node, (old, new) in enumerate(
+            zip(HYDRA27_VALID, HYDRA31_VALID, strict=True)
+        )
+        if old != new
+    ) != HYDRA31_ACTIVATED_DRAFT_IDS:
+        raise AssertionError("staged Hydra31 activation delta drifted")
+    if HYDRA31_STAGED_MODE in VALID_BY_MODE:
+        raise AssertionError("staged Hydra31 must remain absent from deployed modes")
     if WALK_CAP > COMMIT_PATH_CAP:
         raise AssertionError("walk can overflow the fixed committer path capacity")
 
@@ -471,6 +572,16 @@ def validate_contract() -> None:
         }
         if inactive.intersection(node for row in table for node in row if node >= 0):
             raise AssertionError(f"{mode}: inactive sampler child leaked into a table")
+
+    staged_table, staged_counts = staged_sampler_child_table(HYDRA31_STAGED_MODE)
+    if (len(staged_table), len(staged_table[0])) != SAMPLER_TABLE_SHAPE:
+        raise AssertionError("staged Hydra31 sampler child-table shape drifted")
+    if len(staged_counts) != PHYSICAL_ROWS or sum(staged_counts) != PHYSICAL_DRAFTS:
+        raise AssertionError("staged Hydra31 sampler child counts drifted")
+    if HYDRA31_STAGED_MANIFEST["fixed_execution_signature_sha256"] != (
+        FIXED_EXECUTION_SIGNATURE_SHA256
+    ):
+        raise AssertionError("staged Hydra31 fixed execution signature drifted")
 
     seen: set[int] = set()
     earlier: set[int] = set()
@@ -674,5 +785,6 @@ if __name__ == "__main__":
     print(
         "PASS fixed32 topology: physical=31/32 active=21/27 "
         f"masks={TAIL6_VALID_MASK:#x}/{HYDRA27_VALID_MASK:#x} "
+        "staged_hydra31=default-off/0x7fffffff "
         "schedule=[1,11]/[5,7] walk_cap=12"
     )

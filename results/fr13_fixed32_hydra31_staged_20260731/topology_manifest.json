@@ -1,0 +1,125 @@
+{
+  "activated_draft_ids": [
+    17,
+    22,
+    24,
+    26
+  ],
+  "activated_paths": [
+    [
+      2,
+      0,
+      0,
+      0
+    ],
+    [
+      2,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      2,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "active_drafts": 31,
+  "baseline_mode": "hydra27_fixed32",
+  "default_enabled": false,
+  "deployed_mode_registered": false,
+  "fixed_execution_signature": {
+    "accepted_path_capacity": 16,
+    "arctic_lookup_calls_per_request": 3,
+    "arctic_lookup_chains": [
+      [
+        1,
+        4
+      ],
+      [
+        2,
+        2
+      ]
+    ],
+    "arctic_lookup_tokens_per_request": 12,
+    "arctic_main_tail_length": 6,
+    "committer_neutralize_ops": 5,
+    "committer_path_capacity": 16,
+    "committer_ring_gathers": 4,
+    "committer_ring_layer_path_rows": 3072,
+    "conv_commit_layers": 48,
+    "conv_pregather_block": 1024,
+    "conv_pregather_layers": 48,
+    "conv_pregather_row_elems": 348160,
+    "gdn_launches": 2,
+    "gdn_layers": 48,
+    "gdn_level_max_lengths": [
+      5,
+      7
+    ],
+    "gdn_level_path_counts": [
+      1,
+      11
+    ],
+    "gdn_padded_slots": 82,
+    "gdn_path_programs": 12,
+    "gdn_rows": 32,
+    "kv_remap_cache_tensors": 17,
+    "kv_remap_drafter_apply_cache_calls": 1,
+    "kv_remap_drafter_cache_tensors": 1,
+    "kv_remap_drafter_pair_slots": 16,
+    "kv_remap_drafter_prepare_calls": 1,
+    "kv_remap_groups": 1,
+    "kv_remap_pair_slots": 32,
+    "kv_remap_path_capacity": 16,
+    "kv_remap_planes": 2,
+    "kv_remap_target_apply_cache_calls": 16,
+    "kv_remap_target_cache_tensors": 16,
+    "kv_remap_target_pair_slots": 16,
+    "kv_remap_target_prepare_calls": 1,
+    "model_layers": 64,
+    "mtp_forward_calls": 4,
+    "output_publish_capacity": 32,
+    "physical_drafts": 31,
+    "physical_pack_width": 31,
+    "physical_parent_sha256": "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd",
+    "request_key_path_capacity": 16,
+    "rescue_carry_slots_per_request": 4,
+    "sampler_child_lanes": 36,
+    "sampler_parent_scans": 31,
+    "sampler_path_scatter_slots": 12,
+    "sampler_row_scatter_slots": 24,
+    "sampler_table_init_slots": 96,
+    "sampler_table_shape": [
+      32,
+      3
+    ],
+    "sampler_uniform_slots": 36,
+    "sampler_walk_iterations": 12,
+    "target_rows": 32,
+    "tree_ancestry_sha256": "90873d81e83ce1644ee4701e043b7e9d26e83b7a7ca752d538a0e6eed1946dad",
+    "tree_attention_layers": 16,
+    "tree_attention_rows": 32
+  },
+  "fixed_execution_signature_sha256": "a4e142c31849f1ccd0e11bd7e856c420a789683b361acd4243e24895c8c2c021",
+  "mode": "hydra31_fixed32",
+  "physical_drafts": 31,
+  "physical_rows_including_root": 32,
+  "schema": "fr13.fixed32.hydra31_staged_topology.v1",
+  "status": "default_off_contract_only",
+  "valid_mask": "0x7fffffff",
+  "work_census_mode_registered": false
+}
