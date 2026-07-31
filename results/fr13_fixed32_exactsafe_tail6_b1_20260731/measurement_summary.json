@@ -1,0 +1,133 @@
+{
+  "schema": "fr13-fixed32-exact4-arm-measurement-v1",
+  "created_at_utc": "2026-07-31T12:57:00Z",
+  "arm_measurement_valid": true,
+  "formal_two_arm_gate_eligible": false,
+  "formal_two_arm_gate_note": "Tail6 completed the canonical exact4 contract, but the contemporaneous Hydra exact4 attempt was invalid. This artifact is a valid single-arm measurement and is not a fabricated paired gate.",
+  "campaign": {
+    "arm": "tail6_fixed32",
+    "batch_size": 1,
+    "concurrency": 1,
+    "task_set": "config/fr13_fixed32/subset_b4_four.json",
+    "task_ids": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033",
+      "astropy__astropy-13236",
+      "astropy__astropy-13398"
+    ],
+    "source_commit": "e5a4029249e5b9483919056bae6542e47bbce75b",
+    "task_verdicts": [
+      "resolved",
+      "failed",
+      "resolved",
+      "failed"
+    ]
+  },
+  "canonical_validation": {
+    "audit_schema": "fr13-fixed32-chat-task-provenance-audit-v2",
+    "all_checks_passed": true,
+    "all_canonical_tasks_validated": true,
+    "all_task_agent_and_eval_terminal": true,
+    "all_task_identity_and_dataset_hashes_exact": true,
+    "all_successful_engine_requests_match_census": true,
+    "all_census_requests_inside_task_brackets": true,
+    "no_fixed32_traffic_outside_task_brackets": true,
+    "no_campaign_rejections_or_aborted_requests": true,
+    "raw_proxy_request_and_response_dumps_disabled": true
+  },
+  "identity": {
+    "runtime_manifest_launch_sha256": "f81b9ae2ba0f7b5e8d8974d2f98f780762dddfda411a163c66b7f85b786da4df",
+    "runtime_manifest_end_sha256": "f81b9ae2ba0f7b5e8d8974d2f98f780762dddfda411a163c66b7f85b786da4df",
+    "external_manifest_launch_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "external_manifest_end_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "manifests_byte_equal_at_end": true
+  },
+  "corrected_hardware_floor": {
+    "scenario": "root_64k_five_64k_draft_heads",
+    "mandatory_weight_bytes": 32666638208,
+    "bandwidth_bytes_per_second": 273000000000,
+    "floor_ms_per_event": 119.658015414,
+    "acceptance_multiplier": 1.15,
+    "acceptance_cap_ms_per_event": 137.6067177261,
+    "includes_nonweight_costs": false,
+    "legacy_98_6_ms_floor_used": false
+  },
+  "aggregate": {
+    "forward_events": 7227,
+    "accepted_draft_tokens": 36962,
+    "accepted_drafts_per_event": 5.11443199114432,
+    "committed_tokens_per_event": 6.11443199114432,
+    "sfwd_gpu_ms_per_event": 161.4615870721612,
+    "dfwd_gpu_ms_per_event": 38.285616047702014,
+    "cfwd_gpu_ms_per_event": 20.490163846119547,
+    "gpu_component_ms_per_event": 220.23736696598276,
+    "wall_ms_per_event": 236.24493679034745,
+    "gpu_component_full_step_tps": 27.762918143172033,
+    "wall_full_step_tps": 25.881748299945556,
+    "gpu_component_floor_ratio": 1.840556741677,
+    "wall_floor_ratio": 1.97433440604,
+    "gpu_component_gap_to_1_15x_cap_ms": 82.630649239883,
+    "wall_gap_to_1_15x_cap_ms": 98.638219064247,
+    "gpu_component_reduction_required_percent": 37.518905342092,
+    "wall_reduction_required_percent": 41.752521939458,
+    "hardware_floor_acceptance_pass": false,
+    "acceptance_note": "The point estimate already exceeds the 1.15x cap, so a one-sided upper confidence bound cannot pass. No stale 98.6 ms floor is used."
+  },
+  "tasks": [
+    {
+      "instance_id": "astropy__astropy-12907",
+      "verdict": "resolved",
+      "forward_events": 515,
+      "accepted_draft_tokens": 2388,
+      "accepted_drafts_per_event": 4.636893203883496,
+      "sfwd_gpu_ms_per_event": 152.22894047116775,
+      "dfwd_gpu_ms_per_event": 34.95169,
+      "cfwd_gpu_ms_per_event": 26.47269,
+      "gpu_component_ms_per_event": 213.65332,
+      "wall_ms_per_event": 222.91092
+    },
+    {
+      "instance_id": "astropy__astropy-13033",
+      "verdict": "failed",
+      "forward_events": 474,
+      "accepted_draft_tokens": 2207,
+      "accepted_drafts_per_event": 4.656118143459915,
+      "sfwd_gpu_ms_per_event": 151.53731527207773,
+      "dfwd_gpu_ms_per_event": 34.15762,
+      "cfwd_gpu_ms_per_event": 19.86968,
+      "gpu_component_ms_per_event": 205.56461,
+      "wall_ms_per_event": 222.36411
+    },
+    {
+      "instance_id": "astropy__astropy-13236",
+      "verdict": "resolved",
+      "forward_events": 1418,
+      "accepted_draft_tokens": 6778,
+      "accepted_drafts_per_event": 4.7799717912552895,
+      "sfwd_gpu_ms_per_event": 157.09835273086295,
+      "dfwd_gpu_ms_per_event": 36.41222,
+      "cfwd_gpu_ms_per_event": 19.93597,
+      "gpu_component_ms_per_event": 213.44654,
+      "wall_ms_per_event": 230.01571
+    },
+    {
+      "instance_id": "astropy__astropy-13398",
+      "verdict": "failed",
+      "forward_events": 4820,
+      "accepted_draft_tokens": 25589,
+      "accepted_drafts_per_event": 5.308921161825726,
+      "sfwd_gpu_ms_per_event": 164.70764187064924,
+      "dfwd_gpu_ms_per_event": 39.59892,
+      "cfwd_gpu_ms_per_event": 20.07501,
+      "gpu_component_ms_per_event": 224.38157,
+      "wall_ms_per_event": 240.82372
+    }
+  ],
+  "evidence_sha256": {
+    "deploy_speed": "ea3da44411dbe1ad441b169e47f1906b9b0c53e4cbe5009a64e84f22b9f5a422",
+    "canonical_chat_traffic_audit": "661103795833a75f6badace278b61c18e3b2f03b86745bb7a68bcece89b10004",
+    "final_flush": "2e845168c16528e8684f2ae21d93f53b898682dba9c3623469625f44d9f5f468",
+    "corrected_floor_ledger": "1ae91dec2c31ba33c8d9d4fb78958a903e096d8892a0e3c9792e2eba24d97453",
+    "corrected_floor_manifest": "8f0477e155346b28e56a146a047db06c0a2b0a3d7a25b4104fac0396f2fa49fb"
+  }
+}
