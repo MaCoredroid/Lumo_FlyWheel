@@ -187,16 +187,17 @@ def test_real_event_gate_restores_and_serves_reference(
     batch = 2
     n_actual = n_pad = 32
     rows = batch * n_actual
+    dim_v = 64
     q = torch.empty((rows, 1, 1), dtype=torch.float32)
     q[:n_actual].fill_(1.0)
     q[n_actual:].fill_(2.0)
     k = q.clone().add_(10.0)
-    v = q.clone().add_(20.0)
+    v = q.expand(rows, 1, dim_v).clone().add_(20.0)
     g = q.reshape(rows, 1).clone().add_(30.0)
     beta = g.clone().add_(10.0)
     raw_a = g.clone().add_(20.0)
     raw_b = g.clone().add_(30.0)
-    out = torch.full_like(q, -1.0)
+    out = torch.full_like(v, -1.0)
     ring_k = torch.full_like(k, -2.0)
     ring_v = torch.full_like(v, -3.0)
     ring_a = torch.full_like(raw_a, -4.0)
@@ -205,12 +206,14 @@ def test_real_event_gate_restores_and_serves_reference(
     counter = torch.tensor(11, dtype=torch.int32)
     strict = torch.zeros((n_pad, n_pad), dtype=torch.int32)
     visible = torch.zeros_like(strict)
-    h0 = torch.zeros((4, 1, 1, 1), dtype=torch.float32)
+    h0 = torch.zeros((4, 1, dim_v, 1), dtype=torch.float32)
     h0_indices = torch.zeros((batch, 1), dtype=torch.int64)
     accepted = torch.zeros((batch,), dtype=torch.int32)
     a_log = torch.zeros((1,), dtype=torch.float32)
     dt_bias = torch.zeros((1,), dtype=torch.float32)
-    export = torch.arange(32, dtype=torch.float32).reshape(32, 1, 1, 1)
+    export = torch.arange(32 * dim_v, dtype=torch.float32).reshape(
+        32, 1, dim_v, 1
+    )
     export_before = export.clone()
     level = (
         torch.zeros((1, 1), dtype=torch.int32),
@@ -233,6 +236,7 @@ def test_real_event_gate_restores_and_serves_reference(
         "batch_engaged_announced": False,
     }
     calls = {"legacy": 0, "candidate": 0}
+    candidate_block_vs: list[int] = []
     records: list[dict[str, object]] = []
 
     def fake_legacy(**kwargs) -> tuple[torch.Tensor, None]:
@@ -252,9 +256,10 @@ def test_real_event_gate_restores_and_serves_reference(
 
     def fake_candidate(*_args, **kwargs) -> None:
         calls["candidate"] += 1
+        candidate_block_vs.append(int(kwargs["BLOCK_V"]))
         if kwargs["STATE_SOURCE"] != 1:
             return
-        out.copy_(q + 100.0)
+        out.copy_((q + 100.0).expand_as(out))
         if candidate_mismatch:
             out[0, 0, 0] += 1.0
         ring_k.copy_(k)
@@ -271,11 +276,17 @@ def test_real_event_gate_restores_and_serves_reference(
                 )
 
     monkeypatch.setattr(kernel, "_FR13_FIXED32_MODE", "tail6_fixed32")
+    monkeypatch.setattr(
+        kernel, "_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE", 64
+    )
+    monkeypatch.setattr(
+        kernel, "_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", None
+    )
     monkeypatch.setattr(kernel, "subtree_get", lambda *_args: subtree_state)
     monkeypatch.setattr(
         kernel,
         "_read_tree_gdn_geom_override",
-        lambda: {"BV": 1, "num_warps": 1},
+        lambda: {"BV": 8},
     )
     monkeypatch.setattr(
         kernel.torch.cuda, "is_current_stream_capturing", lambda: False
@@ -333,7 +344,8 @@ def test_real_event_gate_restores_and_serves_reference(
     )
 
     assert calls == {"legacy": batch, "candidate": 2}
-    assert torch.equal(out, q + 100.0)
+    assert candidate_block_vs == [64, 64]
+    assert torch.equal(out, (q + 100.0).expand_as(out))
     assert torch.equal(ring_k, k)
     assert torch.equal(ring_v, v)
     assert torch.equal(ring_a, raw_a)
@@ -348,8 +360,13 @@ def test_real_event_gate_restores_and_serves_reference(
     assert len(records) == 1
     record = records[0]
     assert record["reference_restored_and_served"] is True
+    assert record["reference_bv"] == 8
+    assert record["candidate_bv"] == 64
     assert record["candidate_physical_launches"] == 2
     assert record["legacy_physical_launches"] == 2 * batch
+    assert tuple(item["name"] for item in record["comparisons"]) == (
+        kernel._FR13_FIXED32_BATCH_GDN_BV_BYTE_SURFACES
+    )
     assert record["zero_diff"] is (not candidate_mismatch)
     if candidate_mismatch:
         assert record["first_nonzero"]["name"] == "out"

@@ -1055,6 +1055,26 @@ _FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS = (
 _FR13_FIXED32_BATCH_GDN_PRODUCTION_ARM = (
     "/logs/fr13_fixed32_batch_gdn_production.arm"
 )
+_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_SIDECARS = (
+    "/logs/fr13_fixed32_batch_gdn_bv_candidate.flag",
+    "/tmp/fr13_fixed32_batch_gdn_bv_candidate.flag",
+)
+_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION_SIDECARS = (
+    "/logs/fr13_fixed32_batch_gdn_bv_production.flag",
+    "/tmp/fr13_fixed32_batch_gdn_bv_production.flag",
+)
+_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_ID = "fixed32_batch_gdn_bv_v2"
+_FR13_FIXED32_BATCH_GDN_BV_BYTE_SURFACES = (
+    "out",
+    "ring_k",
+    "ring_v",
+    "ring_a",
+    "ring_b",
+    "state_export_compact",
+    "state_export_untouched_tail",
+    "flags",
+    "invocation_counter",
+)
 _FR13_FIXED32_PARENT_SHA256 = (
     "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd"
 )
@@ -1067,6 +1087,103 @@ _FR13_FIXED32_LEVELS_SHA256 = (
 _FR13_FIXED32_COVERAGE_SHA256 = (
     "23b22df6bf551a4e788327db3b3d3d96e1eca49078d2c6bd0049da2d390eca8b"
 )
+
+
+def _fr13_resolve_fixed32_batch_gdn_bv(
+    fixed32_mode: str | None,
+    *,
+    env_name: str,
+    sidecars,
+    environ=None,
+    geom_override=None,
+) -> int | None:
+    """Resolve one explicit wide-BV selector for the two-launch B2-B4 route."""
+    env = os.environ if environ is None else environ
+    sources: list[tuple[str, str]] = []
+    raw_env = env.get(env_name)
+    if raw_env is not None and str(raw_env).strip():
+        sources.append((f"env:{env_name}", str(raw_env).strip()))
+    for path in tuple(sidecars):
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="ascii") as handle:
+                value = handle.read(16)
+        except (OSError, UnicodeError) as error:
+            raise RuntimeError(
+                f"{env_name}: cannot read sidecar {path}: {error}"
+            ) from error
+        if len(value) >= 16:
+            raise RuntimeError(f"{env_name}: sidecar exceeds 15 bytes: {path}")
+        sources.append((f"sidecar:{path}", value.strip()))
+    if not sources:
+        return None
+    invalid = [
+        (source, value)
+        for source, value in sources
+        if value not in ("16", "32", "64", "128")
+    ]
+    values = {value for _source, value in sources}
+    if invalid or len(values) != 1:
+        raise RuntimeError(
+            f"{env_name} requires one of 16, 32, 64, or 128 from agreeing "
+            f"sources: {sources!r}"
+        )
+    if fixed32_mode not in _FR13_FIXED32_MODES:
+        raise RuntimeError(f"{env_name} requires an exact fixed32 mode")
+    if geom_override != {"BV": 8}:
+        raise RuntimeError(
+            f"{env_name} requires the B1/served reference geometry pinned "
+            "exactly to BV=8"
+        )
+    return int(values.pop())
+
+
+_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE = (
+    _fr13_resolve_fixed32_batch_gdn_bv(
+        _FR13_FIXED32_MODE,
+        env_name="FR13_FIXED32_BATCH_GDN_BV_CANDIDATE",
+        sidecars=_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_SIDECARS,
+        geom_override=_read_tree_gdn_geom_override(),
+    )
+)
+_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION = (
+    _fr13_resolve_fixed32_batch_gdn_bv(
+        _FR13_FIXED32_MODE,
+        env_name="FR13_FIXED32_BATCH_GDN_BV_PRODUCTION",
+        sidecars=_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION_SIDECARS,
+        geom_override=_read_tree_gdn_geom_override(),
+    )
+)
+if (
+    _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE is not None
+    and _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None
+):
+    raise RuntimeError(
+        "FR13 fixed32 batched GDN wide-BV diagnostic and production "
+        "selectors are mutually exclusive"
+    )
+if (
+    _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE is not None
+    or _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None
+) and (
+    _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+    or _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None
+):
+    raise RuntimeError(
+        "FR13 fixed32 B1 path-BV and B2-B4 batched wide-BV selectors are "
+        "mutually exclusive"
+    )
+
+
+def _fr13_fixed32_batch_gdn_source_sha256() -> str:
+    try:
+        payload = Path(__file__).resolve().read_bytes()
+    except OSError as error:
+        raise RuntimeError(
+            f"FR13 fixed32 batched GDN cannot hash its source: {error}"
+        ) from error
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _fr13_fixed32_batch_gdn_byte_ab_control() -> tuple[bool, str | None]:
@@ -1137,6 +1254,11 @@ def _fr13_fixed32_batch_gdn_production_control() -> dict[str, object] | None:
         "FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS_PATH",
         _FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS,
     )
+    if os.path.islink(pass_path) or not os.path.isfile(pass_path):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION requires a readable live-gate "
+            f"PASS record (regular file) at {pass_path}"
+        )
     try:
         with open(pass_path, encoding="ascii") as handle:
             payload = json.load(handle)
@@ -1151,9 +1273,17 @@ def _fr13_fixed32_batch_gdn_production_control() -> dict[str, object] | None:
         )
     layer_keys = payload.get("layer_keys")
     task_marker = payload.get("task_marker")
-    if (
-        payload.get("schema") != "fr13.fixed32.batch_gdn.live_pass.v1"
-        or payload.get("status") != "pass"
+    valid_layer_keys = (
+        isinstance(layer_keys, list)
+        and len(layer_keys) == 48
+        and all(
+            isinstance(key, str) and key.startswith("0x")
+            for key in layer_keys
+        )
+        and len(set(layer_keys)) == 48
+    )
+    common_invalid = (
+        payload.get("status") != "pass"
         or payload.get("reference_always_served") is not True
         or not isinstance(task_marker, str)
         or not task_marker.startswith("swe_verified:")
@@ -1161,11 +1291,40 @@ def _fr13_fixed32_batch_gdn_production_control() -> dict[str, object] | None:
         or type(payload.get("batch")) is not int
         or not 2 <= payload["batch"] <= _FR13_FIXED32_MAX_BATCH
         or payload.get("layer_count") != 48
-        or not isinstance(layer_keys, list)
-        or len(layer_keys) != 48
-        or len(set(layer_keys)) != 48
-        or not all(isinstance(key, str) and key.startswith("0x") for key in layer_keys)
-    ):
+        or not valid_layer_keys
+    )
+    production_bv = _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION
+    if production_bv is None:
+        schema_invalid = (
+            payload.get("schema") != "fr13.fixed32.batch_gdn.live_pass.v1"
+        )
+        wide_invalid = False
+    else:
+        payload_batch = payload.get("batch")
+        reference_launches = (
+            2 * payload_batch if type(payload_batch) is int else -1
+        )
+        schema_invalid = (
+            payload.get("schema") != "fr13.fixed32.batch_gdn.live_pass.v2"
+        )
+        wide_invalid = (
+            payload.get("candidate")
+            != _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_ID
+            or payload.get("source_sha256")
+            != _fr13_fixed32_batch_gdn_source_sha256()
+            or payload.get("mode") != _FR13_FIXED32_MODE
+            or payload.get("physical_rows_per_request") != 32
+            or payload.get("reference_bv") != 8
+            or payload.get("candidate_bv") != production_bv
+            or payload.get("reference_physical_launches_per_layer")
+            != reference_launches
+            or payload.get("candidate_physical_launches_per_layer") != 2
+            or payload.get("compared_byte_surfaces")
+            != list(_FR13_FIXED32_BATCH_GDN_BV_BYTE_SURFACES)
+            or payload.get("raw_byte_equal") is not True
+            or payload.get("state_restored") is not True
+        )
+    if common_invalid or schema_invalid or wide_invalid:
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_PRODUCTION live-gate PASS record is invalid"
         )
@@ -1176,6 +1335,14 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
     """Resolve the B2-B4 diagnostic/production route; default is legacy."""
     batch = int(batch_size)
     if batch <= 1:
+        if (
+            _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE is not None
+            or _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 batched wide-BV requires B2-B4; B1 remains on "
+                "the stock path"
+            )
         return None
     if batch > _FR13_FIXED32_MAX_BATCH:
         raise RuntimeError(
@@ -1186,6 +1353,32 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
     if diagnostic and production is not None:
         raise RuntimeError(
             "FR13 fixed32 batched GDN diagnostic and production selectors "
+            "are mutually exclusive"
+        )
+    if (
+        _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE is not None
+        and not diagnostic
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE requires the batched GDN "
+            "diagnostic selector"
+        )
+    if (
+        _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None
+        and production is None
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BV_PRODUCTION requires the batched GDN "
+            "production selector and its live PASS"
+        )
+    if diagnostic and _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None:
+        raise RuntimeError(
+            "FR13 fixed32 batched wide-BV diagnostic and production selectors "
+            "are mutually exclusive"
+        )
+    if production is not None and _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE is not None:
+        raise RuntimeError(
+            "FR13 fixed32 batched wide-BV diagnostic and production selectors "
             "are mutually exclusive"
         )
     if (
@@ -1272,7 +1465,12 @@ def _fr13_fixed32_batch_gdn_byte_ab_emit(record: dict[str, object]) -> None:
 
 
 def _fr13_fixed32_batch_gdn_live_pass_emit(
-    *, task_marker: str, batch: int, layer_keys: set[int],
+    *,
+    task_marker: str,
+    batch: int,
+    layer_keys: set[int],
+    reference_bv: int | None = None,
+    candidate_bv: int | None = None,
 ) -> None:
     """Publish the non-cryptographic production prerequisite after 48 passes."""
     if len(layer_keys) != 48:
@@ -1284,8 +1482,17 @@ def _fr13_fixed32_batch_gdn_live_pass_emit(
     parent = os.path.dirname(path)
     if parent:
         os.makedirs(parent, exist_ok=True)
+    wide_bv = (
+        reference_bv is not None
+        and candidate_bv is not None
+        and int(reference_bv) != int(candidate_bv)
+    )
     payload = {
-        "schema": "fr13.fixed32.batch_gdn.live_pass.v1",
+        "schema": (
+            "fr13.fixed32.batch_gdn.live_pass.v2"
+            if wide_bv
+            else "fr13.fixed32.batch_gdn.live_pass.v1"
+        ),
         "status": "pass",
         "task_marker": task_marker,
         "batch": int(batch),
@@ -1293,6 +1500,22 @@ def _fr13_fixed32_batch_gdn_live_pass_emit(
         "layer_keys": [f"0x{key:x}" for key in sorted(layer_keys)],
         "reference_always_served": True,
     }
+    if wide_bv:
+        payload.update(
+            candidate=_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_ID,
+            source_sha256=_fr13_fixed32_batch_gdn_source_sha256(),
+            mode=_FR13_FIXED32_MODE,
+            physical_rows_per_request=32,
+            reference_bv=int(reference_bv),
+            candidate_bv=int(candidate_bv),
+            reference_physical_launches_per_layer=2 * int(batch),
+            candidate_physical_launches_per_layer=2,
+            compared_byte_surfaces=list(
+                _FR13_FIXED32_BATCH_GDN_BV_BYTE_SURFACES
+            ),
+            raw_byte_equal=True,
+            state_restored=True,
+        )
     temporary = f"{path}.tmp.{os.getpid()}"
     with open(temporary, "w", encoding="ascii") as handle:
         json.dump(payload, handle, sort_keys=True)
@@ -9828,6 +10051,50 @@ def launch_tree_gdn_prepared(
     return out, None
 
 
+def fixed32_batch_gdn_launch_contract(
+    batch_size: int,
+    *,
+    n_actual: int,
+    n_pad: int,
+    block_v: int,
+    dim_v: int,
+) -> dict[str, object]:
+    """Validate the closed fixed32 geometry and expose its launch invariant."""
+    batch = int(batch_size)
+    rows = int(n_actual)
+    padded_rows = int(n_pad)
+    bv = int(block_v)
+    width = int(dim_v)
+    if batch < 2 or batch > _FR13_FIXED32_MAX_BATCH:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: batch_size must be in [2, 4]; "
+            f"got {batch}"
+        )
+    if rows != len(_FR13_FIXED32_PARENT) or padded_rows != 32:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN requires the exact 32-row physical tree, "
+            f"got n_actual={rows} n_pad={padded_rows}"
+        )
+    if bv not in (1, 2, 4, 8, 16, 32, 64, 128):
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: BLOCK_V must be a supported power of two "
+            f"through 128, got {bv}"
+        )
+    if width <= 0 or bv > width or width % bv != 0:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: BLOCK_V must divide DIM_V without "
+            f"exceeding it, got BLOCK_V={bv} DIM_V={width}"
+        )
+    return {
+        "batch_size": batch,
+        "physical_rows_per_request": padded_rows,
+        "block_v": bv,
+        "physical_launches_per_layer": 2,
+        "level_grid_z": (batch, 11 * batch),
+        "path_programs": 12 * batch,
+    }
+
+
 def launch_tree_gdn_prepared_fixed32_batch(
     q: torch.Tensor,
     k: torch.Tensor,
@@ -9890,9 +10157,12 @@ def launch_tree_gdn_prepared_fixed32_batch(
             "FR13_FIXED32_BATCH_GDN requires an armed fixed32 runtime"
         )
     if int(n_actual) != len(_FR13_FIXED32_PARENT) or int(n_pad) != 32:
-        raise ValueError(
-            "FR13_FIXED32_BATCH_GDN requires the exact 32-row physical tree, "
-            f"got n_actual={n_actual} n_pad={n_pad}"
+        fixed32_batch_gdn_launch_contract(
+            batch,
+            n_actual=n_actual,
+            n_pad=n_pad,
+            block_v=8,
+            dim_v=128,
         )
     for name, mask in (("strict_mask", strict_mask), ("visible_mask", visible_mask)):
         if mask.ndim != 2 or mask.shape[0] < n_pad or mask.shape[1] < n_pad:
@@ -10052,11 +10322,31 @@ def launch_tree_gdn_prepared_fixed32_batch(
         num_warps = int(geom.get("num_warps", num_warps))
         if "num_stages" in geom:
             extra_launch_kwargs["num_stages"] = int(geom["num_stages"])
-    if block_v > 8:
-        raise ValueError(
-            "FR13_FIXED32_BATCH_GDN: fixed32 requires BLOCK_V<=8, "
-            f"got {block_v}"
+    configured_wide_bv = None
+    if selector == "diagnostic":
+        configured_wide_bv = _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE
+    elif selector == "production":
+        configured_wide_bv = _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION
+    candidate_block_v = configured_wide_bv or block_v
+    if configured_wide_bv is None and block_v > 8:
+        raise RuntimeError(
+            "FR13 fixed32 batched GDN refuses BLOCK_V>8 without an explicit "
+            "combined wide-BV selector and live gate"
         )
+    if configured_wide_bv is not None and (
+        block_v != 8 or geom != {"BV": 8}
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 batched wide-BV requires the served/reference route "
+            "pinned exactly to BV=8"
+        )
+    launch_contract = fixed32_batch_gdn_launch_contract(
+        batch,
+        n_actual=n_actual,
+        n_pad=n_pad,
+        block_v=candidate_block_v,
+        dim_v=dim_v,
+    )
 
     count_invocation = invocation_counter is not None
     if invocation_counter is None:
@@ -10070,7 +10360,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
             f"got {flags_rows}/{batch}"
         )
 
-    def _launch_batched() -> None:
+    def _launch_batched(_block_v: int) -> None:
         for level_index, (
             nodes,
             _parents,
@@ -10081,7 +10371,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
             state_source = 1 if level_index == 0 else 2
             export_mode = 1 if level_index == 0 else 2
             _tree_gdn_path_kernel_fixed32_batch[
-                (num_vh, triton.cdiv(dim_v, block_v), batch * num_paths)
+                (num_vh, triton.cdiv(dim_v, _block_v), batch * num_paths)
             ](
                 q,
                 k,
@@ -10111,7 +10401,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 NUM_VH=num_vh,
                 DIM_K=dim_k,
                 DIM_V=dim_v,
-                BLOCK_V=block_v,
+                BLOCK_V=_block_v,
                 OUTPUT_SCALE=output_scale,
                 USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
                 H0_INDEX_ROW=int(h0_index_row),
@@ -10271,6 +10561,9 @@ def launch_tree_gdn_prepared_fixed32_batch(
                     "task_marker": real_event_marker,
                     "layer_key": f"0x{layer_key:x}",
                     "batch": batch,
+                    "physical_rows_per_request": int(n_pad),
+                    "reference_bv": int(block_v),
+                    "candidate_bv": int(candidate_block_v),
                     "carrier_nonzero": False,
                     "zero_diff": None,
                     "reference_restored_and_served": True,
@@ -10281,13 +10574,21 @@ def launch_tree_gdn_prepared_fixed32_batch(
         else:
             bound_marker = gate_state.get("task_marker")
             bound_batch = gate_state.get("batch")
+            bound_candidate_bv = gate_state.get("candidate_bv")
             if bound_marker is None:
                 gate_state["task_marker"] = real_event_marker
                 gate_state["batch"] = batch
-            elif bound_marker != real_event_marker or int(bound_batch) != batch:
+                gate_state["candidate_bv"] = int(candidate_block_v)
+            elif (
+                bound_marker != real_event_marker
+                or type(bound_batch) is not int
+                or int(bound_batch) != batch
+                or type(bound_candidate_bv) is not int
+                or int(bound_candidate_bv) != int(candidate_block_v)
+            ):
                 raise RuntimeError(
-                    "FR13 fixed32 batched GDN live gate cannot combine tasks "
-                    "or batch sizes in one PASS record"
+                    "FR13 fixed32 batched GDN live gate cannot combine tasks, "
+                    "batch sizes, or BV candidates in one PASS record"
                 )
             attempt = int(gate_state["attempts"].get(layer_key, 0)) + 1
             gate_state["attempts"][layer_key] = attempt
@@ -10298,7 +10599,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
             candidate = None
             try:
                 _restore_external(before)
-                _launch_batched()
+                _launch_batched(candidate_block_v)
                 candidate = _snapshot_external()
                 comparison_inputs = [
                     ("out", reference["out"], candidate["out"]),
@@ -10307,12 +10608,12 @@ def launch_tree_gdn_prepared_fixed32_batch(
                     ("ring_a", reference["ring_a"], candidate["ring_a"]),
                     ("ring_b", reference["ring_b"], candidate["ring_b"]),
                     (
-                        "export_compact",
+                        "state_export_compact",
                         reference_export,
                         candidate["export"][:needed_export_rows],
                     ),
                     (
-                        "export_untouched_tail",
+                        "state_export_untouched_tail",
                         before["export"][needed_export_rows:],
                         candidate["export"][needed_export_rows:],
                     ),
@@ -10343,9 +10644,14 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 "layer_key": f"0x{layer_key:x}",
                 "batch": batch,
                 "attempt": attempt,
+                "physical_rows_per_request": int(n_pad),
+                "reference_bv": int(block_v),
+                "candidate_bv": int(candidate_block_v),
                 "carrier_nonzero": True,
                 "legacy_physical_launches": 2 * batch,
-                "candidate_physical_launches": 2,
+                "candidate_physical_launches": int(
+                    launch_contract["physical_launches_per_layer"]
+                ),
                 "comparisons": comparisons,
                 "first_nonzero": first_nonzero,
                 "zero_diff": zero_diff,
@@ -10359,18 +10665,21 @@ def launch_tree_gdn_prepared_fixed32_batch(
                     task_marker=real_event_marker,
                     batch=batch,
                     layer_keys=gate_state["passed"],
+                    reference_bv=block_v,
+                    candidate_bv=candidate_block_v,
                 )
             print(
                 "[FR13_FIXED32_BATCH_GDN_BYTE_AB "
                 f"{'PASS' if zero_diff else 'MISMATCH'}] "
                 f"task={real_event_marker} layer_key=0x{layer_key:x} "
-                f"attempt={attempt} reference_served=1 "
+                f"attempt={attempt} reference_bv={block_v} "
+                f"candidate_bv={candidate_block_v} reference_served=1 "
                 f"first_nonzero={first_nonzero}",
                 flush=True,
             )
             return out, None
     elif selector == "production":
-        _launch_batched()
+        _launch_batched(candidate_block_v)
     else:
         raise RuntimeError(
             f"FR13 fixed32 batched GDN selector is invalid: {selector!r}"
@@ -10380,7 +10689,8 @@ def launch_tree_gdn_prepared_fixed32_batch(
         print(
             "[FR13_FIXED32_BATCH_GDN ENGAGED] "
             f"batch={batch} launches=2 path_grids=({batch},{11 * batch}) "
-            f"export_rows={needed_export_rows}",
+            f"block_v={candidate_block_v} export_rows={needed_export_rows} "
+            "fallback=0",
             flush=True,
         )
     return out, None
