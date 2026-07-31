@@ -1,0 +1,64 @@
+{
+  "schema": "fr13.fixed32.dfwd_unified_bm8.livegate_readiness.v1",
+  "created_at_utc": "2026-07-31T17:41:01Z",
+  "status": "SOURCE_READY_GPU_GATE_NOT_RUN",
+  "branch": "agent/fixed32-bm8-livegate-ready",
+  "integrated_base_commit": "2675cdf3bdde282f533b29c8954bd90dd7a2a76b",
+  "source_commit": "a52de453c17ee75c922bed13d6f911acf3820e36",
+  "original_bm8_commit": "a477684375fce02ecbe0b0563600042943609900",
+  "candidate": {
+    "kernel": "kernel_unified_attention_2d",
+    "scope": "fixed32 real SWE-Verified B1 four-call MTP drafter replay",
+    "stock_block_m": 16,
+    "stock_block_q": 2,
+    "candidate_block_m": 8,
+    "candidate_block_q": 1,
+    "valid_query_heads_per_kv": 6,
+    "selector": "FR13_DFWD_UNIFIED_BM8_LIVE_AB",
+    "selector_default": 0,
+    "production_selector": null,
+    "production_enabled": false
+  },
+  "live_gate": {
+    "suite": "SWE-Verified",
+    "instance_id": "astropy__astropy-12907",
+    "batch_size": 1,
+    "concurrency": 1,
+    "task_marker": "atomic mode-0400 marker between task pre/post flush boundaries",
+    "required_calls": 4,
+    "required_candidate_dispatches": 4,
+    "comparison": "raw output bytes for private stock BM16 and private candidate BM8",
+    "served_return": "stock captured drafter graph unchanged",
+    "exact_candidate_identity": [
+      "repository source commit",
+      "patcher SHA-256",
+      "emitted unified-attention source SHA-256",
+      "patched Eagle replay-hook SHA-256"
+    ],
+    "host_validator": "scripts/fr13_dfwd_unified_bm8_gate.py",
+    "run_completed": false,
+    "performance_measurement": false
+  },
+  "floor_accounting": {
+    "mandatory_weight_floor_ms_per_event": 119.658015414,
+    "acceptance_multiplier": 1.15,
+    "acceptance_cap_ms_per_event": 137.606717726,
+    "stale_floor_values_in_changed_active_paths": false
+  },
+  "verification": {
+    "python_compile": "PASS",
+    "shell_syntax": "PASS",
+    "ruff": "PASS",
+    "focused_tests_passed": 119,
+    "focused_tests_skipped": 1,
+    "gpu_used": false,
+    "docker_launched": false
+  },
+  "claims": {
+    "byte_parity": false,
+    "speed": false,
+    "hardware_floor": false,
+    "quality": false,
+    "acceptance": false
+  }
+}
