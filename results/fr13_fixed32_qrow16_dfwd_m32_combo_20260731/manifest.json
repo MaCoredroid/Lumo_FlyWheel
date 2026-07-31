@@ -1,0 +1,47 @@
+{
+  "schema": "fr13.fixed32.qrow16_dfwd_m32_combo.v1",
+  "status": "SOURCE_ONLY_DEFAULT_OFF_NONDEPLOY",
+  "branch": "agent/fixed32-qrow-dfwd-gates",
+  "base_git_sha": "47de87295387cf25e900c566bfd3c8002df4d264",
+  "source_commits": {
+    "dfwd_m32_original": "b2d63c74f",
+    "dfwd_m32_combo": "e0d4297fc",
+    "fa2_qrow16_original_head": "60f23a58f5e6fbcb2296b66197d890c666082fbc",
+    "fa2_qrow16_combo_head": "aaf4c045d"
+  },
+  "default_state": {
+    "fa2_qrow16_source_build_flag": "--fixed32-query-tile16 is absent",
+    "dfwd_candidate_env": "FR13_DRAFT_HEAD_M32=0",
+    "dfwd_byte_ab_env": "FR13_DRAFT_HEAD_M32_BYTE_AB=0",
+    "reference_outputs_preserved": true
+  },
+  "single_real_task_gate": {
+    "suite": "SWE-Verified",
+    "instance_id": "astropy__astropy-12907",
+    "concurrency": 1,
+    "physical_nodes": 32,
+    "reason": "prior Tail exact run completed 515 events with approximately 180.8 seconds agent wall, shortest task in exact4",
+    "traffic": "real task only; no synthetic or probe request",
+    "dfwd_mode": "FR13_DRAFT_HEAD_M32=0 and FR13_DRAFT_HEAD_M32_BYTE_AB=1; candidate and reference full logits are compared, reference logits are returned",
+    "fa2_mode": "capture the real paged fixed32 B1 operands while serving the pinned exact-safe FA2 output; run scripts/fr13_fa2_qrow16_byte_ab.py on that capture with the qrow16-built SO, which compares qrow B1 against stock B2 and B4 in one CUDA process",
+    "acceptance_use": false
+  },
+  "pinned_fa2": {
+    "exact_safe_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+    "qrow16_launch_header_sha256": "59a4bcb49c77a255f155286e77379c3e3eaea908e44f38b501632cd7d1565053"
+  },
+  "source_verification": {
+    "command": "pytest -q tests/test_fr13_draft_head_m32.py tests/test_fr13_fa2_tree_kernel_candidates.py tests/test_fr13_fa2_no_bias_pristine_compare.py",
+    "passed": 11,
+    "failed": 0,
+    "py_compile_passed": true,
+    "json_validation_passed": true,
+    "gpu_used": false,
+    "candidate_fa2_built": false
+  },
+  "remaining_before_real_gate": [
+    "build and ABI-gate qrow16 FA2 after the active campaign releases the machine",
+    "produce the real paged-KV qrow capture with complete SWE-Verified provenance",
+    "run both byte gates and commit their raw and reduced results"
+  ]
+}
