@@ -1,0 +1,42 @@
+{
+  "schema": "fr13.fixed32.batch_gdn.graph_source_readiness.v1",
+  "status": "source_ready",
+  "branch": "agent/fixed32-b4-livegate-ready",
+  "base_commit": "dfc783bc9b98db471a3a1a29386ac5539e0cc0ff",
+  "source_commit": "374aed180b6b7474770eb485f2b55ca38c6b18e4",
+  "created_utc": "2026-07-31T18:55:04Z",
+  "gpu_launched": false,
+  "container_launched": false,
+  "timing_eligible": false,
+  "floor_acceptance_eligible": false,
+  "production_eligible": false,
+  "real_task_gate_required": true,
+  "canonical_exact4_required": true,
+  "batch": 4,
+  "capture_records": 48,
+  "reference_bv": 8,
+  "candidate_bv": 64,
+  "served_route": "legacy_per_request_bv8_graph",
+  "candidate_route": "post_replay_shadow_only",
+  "pid1_argv_count": 47,
+  "eager_selector_default": 0,
+  "graph_selector_default": 0,
+  "fixed32_tests": {
+    "passed": 633,
+    "skipped": 7,
+    "failed": 0
+  },
+  "focused_tests": {
+    "passed": 119,
+    "failed": 0
+  },
+  "source_sha256": {
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "87a8e01711de9d22ea8124ce2ec001a66ccd7b8d773da60963f3befa07628541",
+    "src/lumo_flywheel_serving/inference_proxy.py": "d853ef31357d0672777900d4204ba284bd7e2a34aa3410be1983f74fce6af77c",
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "762e4485972561992c925951208f31df4be090b78ddd575c6d473b5c73b518d9",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh": "4ca0a0985a77839e6ccb331839a77a62691e43ab739d9df4c249ba53cf27c6fe",
+    "scripts/fr13_run_b4_gdn_wide_live_gate.sh": "675510f075b7ae0b034022ab8d8da2393efe86b09f45e044ea085c7e2c497b66",
+    "scripts/fr13_fixed32_contract.py": "e1d03009131f418aabcc4bfd4e1f674e12e49ab1767ff7e0aa81fcb4f101101f"
+  }
+}
+
