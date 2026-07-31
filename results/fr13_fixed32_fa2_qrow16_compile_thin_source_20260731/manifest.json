@@ -1,0 +1,55 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow16_compile_thin_source.v1",
+  "status": "SOURCE_COMPLETE_BUILD_AND_GPU_GATE_PENDING",
+  "base_commit": "97f50f08e0c18a42048fd452a83c37666969bf4a",
+  "gpu_used": false,
+  "production_compile_run": false,
+  "performance_claim": false,
+  "byte_parity_claim": false,
+  "exact_safe_launch_header_sha256": "d9e9f4b92cb731d7955b514449e59b8e411bf7a0c929aafb454f2402d41fe976",
+  "exact_safe_target_tu_sha256": "53ac045b6b8a960a3134b4538cbde7cdca07fd8e454a39348a7b3da91f4207e0",
+  "compile_thin_target_tu_sha256": "a5dbcf70f5d9f85e6003684bcd377c3bf2e747d28d93de19b33b8384814c3ae3",
+  "target_translation_unit": "csrc/flash_attn/src/flash_fwd_split_hdim256_bf16_sm80.cu",
+  "stock_kernel": {
+    "traits": "256x64x64",
+    "warps": 4,
+    "nsight_symbol_observed": true
+  },
+  "candidate_kernel": {
+    "traits": "256x16x64",
+    "warps": 1,
+    "specializations": 1,
+    "booleans": {
+      "is_causal": false,
+      "is_local": false,
+      "has_alibi": false,
+      "is_even_mn": false,
+      "is_even_k": true,
+      "is_softcap": false,
+      "split": false,
+      "append_kv": false
+    }
+  },
+  "unthinned_observation": {
+    "ptx_bytes": 291529691,
+    "ptx_lines": 10276672,
+    "entries": 86,
+    "candidate_variants": 24,
+    "ptxas_cpu_percent": 99.9,
+    "ptxas_rss_bytes_approx": 5435355136
+  },
+  "exact_safe_observation": {
+    "embedded_ptx_bytes": 22640506,
+    "embedded_ptx_lines": 789129,
+    "entries": 62,
+    "target_tu_ninja_seconds": 168.493
+  },
+  "expected_thin": {
+    "entries": 63,
+    "candidate_variants": 1,
+    "ninja_cuda_objects": 1,
+    "linear_ptx_bytes_estimate": 33844222,
+    "linear_ptx_reduction_percent_estimate": 88.390815
+  },
+  "required_next_gate": "production compile, symbol-count audit, then one real SWE-Verified B1 live-paged same-SO raw-byte A/B"
+}

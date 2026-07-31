@@ -86,41 +86,41 @@ def _row_mapping(row: int, *, block_m: int, warps: int) -> tuple[int, int, int]:
 
 def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -> None:
     module = _module()
-    launch = tmp_path / "flash_fwd_launch_template.h"
+    translation_unit = tmp_path / "flash_fwd_split_hdim256_bf16_sm80.cu"
     stock = "\n".join(
         (
             '#include "namespace_config.h"',
-            module.STOCK_SPLITKV_LAUNCH_SIGNATURE,
-            module.STOCK_SPLITKV_COMBINE_GUARD,
-            module.STOCK_SPLITKV_RUNTIME_SWITCH,
-            module.STOCK_SPLITKV_DISPATCH,
+            '#include "flash_fwd_launch_template.h"',
+            "namespace FLASH_NAMESPACE {",
+            module.STOCK_FIXED32_QUERY_INSTANTIATION,
+            "} // namespace FLASH_NAMESPACE",
         )
     )
-    launch.write_text(stock)
+    translation_unit.write_text(stock)
 
-    assert not module._patch_flash_fwd_launch_template(launch)
-    assert launch.read_text() == stock
-    assert module._patch_flash_fwd_launch_template(
-        launch,
+    assert not module._patch_fixed32_query_translation_unit(translation_unit)
+    assert translation_unit.read_text() == stock
+    assert module._patch_fixed32_query_translation_unit(
+        translation_unit,
         fixed32_query_tile16=True,
     )
-    candidate = launch.read_text()
-    assert module.NO_COMBINE_SPLITKV_LAUNCH_SIGNATURE in candidate
-    assert module.NO_COMBINE_SPLITKV_COMBINE_GUARD in candidate
-    assert module.NO_SPLITKV_RUNTIME_SWITCH in candidate
-    assert module.FIXED32_QUERY_TILE16_DISPATCH in candidate
-    assert not module._patch_flash_fwd_launch_template(
-        launch,
+    candidate = translation_unit.read_text()
+    assert module.FIXED32_QUERY_TILE16_SPECIALIZATION in candidate
+    assert module.STOCK_FIXED32_QUERY_INSTANTIATION not in candidate
+    assert not module._patch_fixed32_query_translation_unit(
+        translation_unit,
         fixed32_query_tile16=True,
     )
 
-    assert "std::is_same_v<T, cutlass::bfloat16_t>" in candidate
     assert "#include <cstdlib>" in candidate
+    assert (
+        "run_mha_fwd_splitkv_dispatch<cutlass::bfloat16_t, 256, false>"
+        in candidate
+    )
     assert 'std::getenv("FR13_FA2_QROW16_INTERNAL_DISPATCH")' in candidate
     assert "fr13_qrow16_requested" in candidate
     assert "TORCH_CHECK(" in candidate
     assert "internal dispatch reached non-production geometry" in candidate
-    assert "Headdim == 256 && !Is_causal" in candidate
     assert "params.tree_bias_ptr != nullptr" in candidate
     assert "params.b == 1" in candidate
     assert "params.d == 256" in candidate
@@ -139,19 +139,34 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
     assert "params.window_size_right < 0" in candidate
     assert "params.alibi_slopes_ptr == nullptr" in candidate
     assert "params.knew_ptr == nullptr" in candidate
+    assert "params.softcap == 0.0f" in candidate
     assert "params.num_splits == 1" in candidate
-    assert "run_flash_splitkv_fwd<TreeKernelTraits, Is_causal, false>" in candidate
-    assert "if constexpr (AllowSplit)" in candidate
-    assert "#undef FR13_ALLOW_SPLIT_SWITCH" in candidate
+    assert "constexpr size_t smem_size = TreeKernelTraits::kSmemSize" in candidate
+    assert "dim3 grid(num_m_block, params.b, params.h)" in candidate
+    assert "auto kernel = &flash_fwd_splitkv_kernel<" in candidate
+    assert candidate.count("auto kernel = &flash_fwd_splitkv_kernel<") == 1
+    assert "false,  // Is_causal" in candidate
+    assert "false,  // Is_local" in candidate
+    assert "false,  // Has_alibi" in candidate
+    assert "false,  // Is_even_MN: paged varlen Q has cu_seqlens_q" in candidate
+    assert "true,   // Is_even_K: d == kHeadDim == 256" in candidate
+    assert "false,  // Is_softcap" in candidate
+    assert "false,  // Split" in candidate
+    assert "false   // Append_KV" in candidate
+    assert "kernel<<<grid, TreeKernelTraits::kNThreads, smem_size, stream>>>" in candidate
+    assert "C10_CUDA_KERNEL_LAUNCH_CHECK();" in candidate
+    assert "run_flash_splitkv_fwd<StockKernelTraits, false>" in candidate
+    assert "AllowSplit" not in candidate
+    assert "FR13_ALLOW_SPLIT_SWITCH" not in candidate
     assert "kTreeBlockM = 16" in candidate
+    assert "kTreeBlockN = 64" in candidate
     assert "kTreeWarps = 1" in candidate
     assert "TreeKernelTraits::kNThreads == 32" in candidate
     assert "TreeKernelTraits::kGmemThreadsPerRow == 8" in candidate
     assert "TreeKernelTraits::kGmemRowsPerThread == 16" in candidate
     assert "1024 % TreeKernelTraits::kGmemRowsPerThread == 0" in candidate
     assert "public FA2 API requires paged-KV blocks divisible by 16" in candidate
-    assert "kBlockN" in candidate
-    assert "splitkv_combine" not in candidate
+    assert "flash_fwd_splitkv_combine_kernel" not in candidate
     assert "params.num_splits = " not in candidate
 
     # The CTA id changes for rows 16..31, but the warp-local query-row/lane
@@ -178,6 +193,8 @@ def test_source_build_candidates_are_independent_and_default_off() -> None:
     assert "tree_splitkv" not in text
     assert "tree-splitkv" not in text
     assert "FR13_FA2_TREE_SPLITKV" not in text
+    assert "AllowSplit" not in text
+    assert "FR13_ALLOW_SPLIT_SWITCH" not in text
     assert "params.o_batch_stride = max_seqlen_q * params.o_row_stride" not in text
 
 
