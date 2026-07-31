@@ -287,10 +287,13 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
                     cudaGetErrorString(status));
 
     size_t first_mismatch = output_bytes;
+    size_t mismatch_count = 0;
     for (size_t index = 0; index < output_bytes; ++index) {
       if (stock_host[index] != candidate_host[index]) {
-        first_mismatch = index;
-        break;
+        if (first_mismatch == output_bytes) {
+          first_mismatch = index;
+        }
+        ++mismatch_count;
       }
     }
     constexpr const char* log_path =
@@ -306,7 +309,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
           << "\\\"m\\\":" << M << ",\\\"n\\\":" << N
           << ",\\\"k\\\":" << K << ",\\\"bytes\\\":" << output_bytes
           << ",\\\"byte_equal\\\":"
-          << (first_mismatch == output_bytes ? "true" : "false")
+          << (mismatch_count == 0 ? "true" : "false")
+          << ",\\\"mismatch_count\\\":" << mismatch_count
           << ",\\\"first_mismatch\\\":";
       if (first_mismatch == output_bytes) {
         log << "null";

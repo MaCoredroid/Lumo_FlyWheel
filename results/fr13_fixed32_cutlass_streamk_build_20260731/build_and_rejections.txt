@@ -19,10 +19,10 @@ Final changed-TU compile facts from build.ninja:
 Pinned source checks:
   vLLM     fe9c3d6c5f66c873d196800384ed6880687b9e52
   CUTLASS  da5e086dab31d63815acafdac9a9c5893b1c69e2
-  dispatch b99dbcf14c7b07b9192405d52573a44503c076e3fd0dd451c82caf5c6523f2a0
+  dispatch 9de2ab8096df470d10a8838941f28c06831f481089bd5eaf98cfed90119fef65
 
-REJECTED BUILD ITERATIONS
-=========================
+REJECTED BUILD/GATE ITERATIONS
+==============================
 
 1. TORCH_CHECK was not declared in the stable-libtorch target.
    Correction: use STD_TORCH_CHECK.
@@ -34,5 +34,9 @@ REJECTED BUILD ITERATIONS
 3. CUTLASS rejected the cooperative 64x128x128 candidate with its static
    requirement that cooperative tile M be at least 128.
    Correction: remove streamk_coop64; retain legal streamk_coop128.
+
+4. Pre-GPU review rejected the first comparator because it broke on the first
+   differing byte instead of scanning the entire output.
+   Correction: scan all bytes, count differences, rebuild, and repin the SO.
 
 No rejected iteration is represented as a passing build or performance result.

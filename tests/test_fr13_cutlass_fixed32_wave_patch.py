@@ -160,6 +160,9 @@ def test_same_process_byte_ab_is_bounded_and_returns_stock() -> None:
     assert "run_stock(out);\n    run_stream_k(candidate);" in patched
     assert "cudaMemcpyDeviceToHost" in patched
     assert "cudaStreamSynchronize(stream)" in patched
+    assert "++mismatch_count" in patched
+    assert "break;" not in module.DISPATCH_REPLACEMENT
+    assert '\\"mismatch_count\\"' in module.DISPATCH_REPLACEMENT
     assert '"/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl"' in patched
     assert '\\"byte_equal\\"' in module.DISPATCH_REPLACEMENT
     assert "return run_stock(out);" in patched
