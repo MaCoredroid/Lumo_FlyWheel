@@ -248,6 +248,101 @@ def _task_evidence(task_key_id: str, logical: int, records: int) -> dict[str, An
     }
 
 
+def _qwen_compaction_metrics(
+    *,
+    completed: int,
+    compactions: int,
+    normal_requests: int,
+    prompt_tokens: int,
+    generation_tokens: int,
+    before_offset: int = 0,
+    overrides: dict[str, int] | None = None,
+) -> tuple[bytes, bytes]:
+    values = {
+        "prompt_tokens": prompt_tokens,
+        "generation_tokens": generation_tokens,
+        "max_tokens_count": completed,
+        "max_tokens_sum": (
+            normal_requests * contract.QWEN_VISIBLE_MAX_OUTPUT_TOKENS
+            + compactions * contract.QWEN_COMPACTION_MAX_OUTPUT_TOKENS
+        ),
+        "max_tokens_le_10000": 0,
+        "max_tokens_le_20000": compactions,
+        "max_tokens_le_50000": completed,
+        "max_tokens_le_inf": completed,
+        "request_success_stop": completed,
+        "request_success_length": 0,
+        "request_success_abort": 0,
+        "request_success_error": 0,
+        "request_success_repetition": 0,
+    }
+    values.update(overrides or {})
+
+    def render(deltas: dict[str, int], *, post: bool) -> bytes:
+        def value(key: str) -> int:
+            return before_offset + (deltas[key] if post else 0)
+
+        base_labels = 'engine="0",model_name="qwen3.6-27b"'
+        lines = [
+            (
+                f"vllm:prompt_tokens_total{{{base_labels}}} "
+                f"{value('prompt_tokens')}"
+            ),
+            (
+                f"vllm:generation_tokens_total{{{base_labels}}} "
+                f"{value('generation_tokens')}"
+            ),
+            (
+                "vllm:request_params_max_tokens_count"
+                f"{{{base_labels}}} {value('max_tokens_count')}"
+            ),
+            (
+                "vllm:request_params_max_tokens_sum"
+                f"{{{base_labels}}} {value('max_tokens_sum')}"
+            ),
+        ]
+        for reason in ("stop", "length", "abort", "error", "repetition"):
+            labels = (
+                f'engine="0",finished_reason="{reason}",'
+                'model_name="qwen3.6-27b"'
+            )
+            lines.append(
+                f"vllm:request_success_total{{{labels}}} "
+                f"{value(f'request_success_{reason}')}"
+            )
+        for le, key in (
+            ("10000.0", "max_tokens_le_10000"),
+            ("20000.0", "max_tokens_le_20000"),
+            ("50000.0", "max_tokens_le_50000"),
+            ("+Inf", "max_tokens_le_inf"),
+        ):
+            labels = (
+                f'engine="0",le="{le}",model_name="qwen3.6-27b"'
+            )
+            lines.append(
+                "vllm:request_params_max_tokens_bucket"
+                f"{{{labels}}} {value(key)}"
+            )
+        return ("\n".join(lines) + "\n").encode("ascii")
+
+    return render(values, post=False), render(values, post=True)
+
+
+def _qwen_failed_compaction_trace() -> list[dict[str, Any]]:
+    events = _qwen_result_trace()
+    _set_top_level_group_input_tokens(
+        events,
+        [100 * index for index in range(1, 13)] + [500],
+    )
+    _bind_top_level_tool_result(events, next_group_index=12)
+    events[-1]["usage"] = {
+        "input_tokens": 8_500,
+        "output_tokens": 100,
+        "total_tokens": 8_600,
+    }
+    return events
+
+
 def _fixed32_bundle_observation(runner: Any) -> dict[str, Any]:
     return {
         "qwen_code_version": runner._FIXED32_QWEN_CODE_VERSION,
@@ -511,6 +606,256 @@ def test_qwen_top_level_usage_drop_counts_hidden_compaction(
     )
     assert floor_trace["completed_logical_model_requests"] == 14
     assert len(floor_trace["model_request_id_sha256s"]) == 14
+
+
+def test_qwen_failed_compactions_reconcile_from_pinned_metrics(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    events = _qwen_failed_compaction_trace()
+    metrics_pre, metrics_post = _qwen_compaction_metrics(
+        completed=16,
+        compactions=3,
+        normal_requests=13,
+        prompt_tokens=8_500,
+        generation_tokens=100,
+        before_offset=17,
+    )
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        expected_completed_logical_model_requests=16,
+        metrics_pre=metrics_pre,
+        metrics_post=metrics_post,
+    )
+
+    assert trace_requests["completed_logical_model_requests"] == 16
+    assert trace_requests["hidden_compaction_model_requests"] == 3
+    assert trace_requests["hidden_successful_compaction_model_requests"] == 1
+    assert trace_requests["hidden_failed_compaction_model_requests"] == 2
+    failed_ids = [
+        request_id
+        for request_id in trace_requests["model_request_ids"]
+        if request_id.startswith(
+            "qwen-hidden-failed-compaction-sha256:"
+        )
+    ]
+    assert len(failed_ids) == 2
+    assert len(set(failed_ids)) == 2
+    assert trace_requests["model_request_ids"] == (
+        contract.validate_fixed32_trace_model_requests(
+            copy.deepcopy(events),
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+            expected_completed_logical_model_requests=16,
+            metrics_pre=metrics_pre,
+            metrics_post=metrics_post,
+        )["model_request_ids"]
+    )
+
+    trace_path = tmp_path / "qwen_trace.jsonl"
+    trace_path.write_text(
+        "".join(json.dumps(event) + "\n" for event in events),
+        encoding="utf-8",
+    )
+    metrics_pre_path = tmp_path / "vllm_metrics_pre.txt"
+    metrics_post_path = tmp_path / "vllm_metrics_post.txt"
+    metrics_pre_path.write_bytes(metrics_pre)
+    metrics_post_path.write_bytes(metrics_post)
+    task_key_id = "e" * 64
+    provenance = runner._fixed32_real_task_provenance(
+        instance_id=TASK_A,
+        trace_path=trace_path,
+        agent_meta=_fixed32_agent_meta(runner, tmp_path),
+        task_key_id=task_key_id,
+        task_auth_before=_task_evidence(task_key_id, 0, 1),
+        task_auth_after=_task_evidence(task_key_id, 16, 65),
+        metrics_pre_path=metrics_pre_path,
+        metrics_post_path=metrics_post_path,
+    )
+    assert provenance["trace_completed_logical_model_requests"] == 16
+    assert provenance["hidden_successful_compaction_model_requests"] == 1
+    assert provenance["hidden_failed_compaction_model_requests"] == 2
+    evidence = provenance["qwen_compaction_metric_evidence"]
+    assert evidence["normal_requests"] == 13
+    assert evidence["total_compaction_requests"] == 3
+    assert evidence["failed_compaction_requests"] == 2
+
+    floor_trace = floor_gate._fixed32_trace_model_requests(
+        trace_path,
+        provenance=provenance,
+    )
+    assert floor_trace["completed_logical_model_requests"] == 16
+    assert len(floor_trace["model_request_id_sha256s"]) == 16
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_completed", "message"),
+    (
+        ({"max_tokens_sum": 485_985}, 16, "32768/20000"),
+        ({"max_tokens_le_20000": 2}, 16, "32768/20000"),
+        ({"max_tokens_le_10000": 1}, 16, "unpinned low"),
+        ({"max_tokens_count": 15}, 16, "completion metrics"),
+        ({"request_success_stop": 15}, 16, "completion metrics"),
+        ({"request_success_error": 1}, 16, "completion metrics"),
+        ({"prompt_tokens": 8_499}, 16, "aggregate and vLLM"),
+        ({"generation_tokens": 99}, 16, "aggregate and vLLM"),
+        ({}, 15, "completion metrics"),
+    ),
+)
+def test_qwen_failed_compaction_metric_tamper_fails_closed(
+    overrides: dict[str, int],
+    expected_completed: int,
+    message: str,
+) -> None:
+    events = _qwen_failed_compaction_trace()
+    metrics_pre, metrics_post = _qwen_compaction_metrics(
+        completed=16,
+        compactions=3,
+        normal_requests=13,
+        prompt_tokens=8_500,
+        generation_tokens=100,
+        overrides=overrides,
+    )
+
+    with pytest.raises(contract.ContractError, match=message):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+            expected_completed_logical_model_requests=expected_completed,
+            metrics_pre=metrics_pre,
+            metrics_post=metrics_post,
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    (
+        (
+            lambda raw: b"\n".join(raw.splitlines()[1:]) + b"\n",
+            "missing",
+        ),
+        (
+            lambda raw: raw + raw.splitlines(keepends=True)[0],
+            "duplicated",
+        ),
+        (
+            lambda raw: raw.replace(
+                b'engine="0",model_name=',
+                b'engine="1",model_name=',
+                1,
+            ),
+            "labels differ",
+        ),
+        (
+            lambda raw: raw.replace(
+                b"vllm:prompt_tokens_total"
+                b'{engine="0",model_name="qwen3.6-27b"} 8500',
+                b"vllm:prompt_tokens_total"
+                b'{engine="0",model_name="qwen3.6-27b"} -1',
+            ),
+            "nonnegative integer",
+        ),
+    ),
+)
+def test_qwen_malformed_compaction_metrics_fail_closed(
+    mutate: Any,
+    message: str,
+) -> None:
+    events = _qwen_failed_compaction_trace()
+    metrics_pre, metrics_post = _qwen_compaction_metrics(
+        completed=16,
+        compactions=3,
+        normal_requests=13,
+        prompt_tokens=8_500,
+        generation_tokens=100,
+    )
+
+    with pytest.raises(contract.ContractError, match=message):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+            expected_completed_logical_model_requests=16,
+            metrics_pre=metrics_pre,
+            metrics_post=mutate(metrics_post),
+        )
+
+
+def test_qwen_raw_request_count_subtraction_cannot_create_compactions() -> None:
+    events = _qwen_result_trace()
+    events[-1]["usage"] = {
+        "input_tokens": 200,
+        "output_tokens": 40,
+        "total_tokens": 240,
+    }
+    metrics_pre, metrics_post = _qwen_compaction_metrics(
+        completed=15,
+        compactions=2,
+        normal_requests=13,
+        prompt_tokens=200,
+        generation_tokens=40,
+    )
+
+    with pytest.raises(
+        contract.ContractError,
+        match="lack a trace-visible successful compaction",
+    ):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+            expected_completed_logical_model_requests=15,
+            metrics_pre=metrics_pre,
+            metrics_post=metrics_post,
+        )
+
+
+def test_qwen_ordinary_request_mismatch_cannot_be_reclassified() -> None:
+    events = _qwen_result_trace()
+    events[-1]["usage"] = {
+        "input_tokens": 14,
+        "output_tokens": 14,
+        "total_tokens": 28,
+    }
+    metrics_pre, metrics_post = _qwen_compaction_metrics(
+        completed=14,
+        compactions=0,
+        normal_requests=14,
+        prompt_tokens=14,
+        generation_tokens=14,
+    )
+
+    with pytest.raises(contract.ContractError, match="32768/20000"):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+            expected_completed_logical_model_requests=14,
+            metrics_pre=metrics_pre,
+            metrics_post=metrics_post,
+        )
+
+
+def test_qwen_nonpinned_hidden_request_algebra_fails_closed() -> None:
+    events = _qwen_failed_compaction_trace()
+    metrics_pre, metrics_post = _qwen_compaction_metrics(
+        completed=16,
+        compactions=3,
+        normal_requests=13,
+        prompt_tokens=8_500,
+        generation_tokens=100,
+        overrides={
+            "max_tokens_sum": 16
+            * contract.QWEN_VISIBLE_MAX_OUTPUT_TOKENS,
+        },
+    )
+
+    with pytest.raises(contract.ContractError, match="32768/20000"):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+            expected_completed_logical_model_requests=16,
+            metrics_pre=metrics_pre,
+            metrics_post=metrics_post,
+        )
 
 
 def test_qwen_multiple_top_level_usage_drops_count_exactly() -> None:
