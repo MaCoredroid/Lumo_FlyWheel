@@ -738,6 +738,7 @@ fi
 if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
   _fr13_fixed32_batch_gdn_diagnostic=${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}
+  _fr13_fixed32_batch_gdn_graph_diagnostic=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
   case "$FR13_FIXED32_B1_DIAGNOSTIC" in
     0|1) ;;
     *) echo "FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1" >&2; exit 2 ;;
@@ -746,7 +747,17 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     0|1) ;;
     *) echo "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
   esac
+  case "$_fr13_fixed32_batch_gdn_graph_diagnostic" in
+    0|1) ;;
+    *) echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
   if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" \
+        && "$_fr13_fixed32_batch_gdn_graph_diagnostic" == "1" ]]; then
+    echo "fixed32 eager and graph batched GDN diagnostics are mutually exclusive" >&2
+    exit 2
+  fi
+  if [[ ( "$_fr13_fixed32_batch_gdn_diagnostic" == "1" \
+          || "$_fr13_fixed32_batch_gdn_graph_diagnostic" == "1" ) \
         && "$MAX_NUM_SEQS" != "4" ]]; then
     echo "fixed32 batched GDN byte diagnostic requires MAX_NUM_SEQS=4" >&2
     exit 2
@@ -759,10 +770,13 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   [[ "$MAX_NUM_SEQS" == "4" ]] && _fixed32_expected_mem=112g
   _fixed32_expected_metrics=0
   _fixed32_expected_eager=0
-  if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" ]]; then
+  if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" \
+        || "$_fr13_fixed32_batch_gdn_graph_diagnostic" == "1" ]]; then
     # This is a real exact4 byte diagnostic, never an acceptance/timing arm.
-    # Host byte comparison requires eager execution and the invocation counter.
+    # Both execution modes require the invocation counter for byte evidence.
     _fixed32_expected_metrics=1
+  fi
+  if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" ]]; then
     _fixed32_expected_eager=1
   fi
   [[ "$MAX_NUM_SEQS" == "1" || "$MAX_NUM_SEQS" == "4" ]] \
@@ -1116,16 +1130,21 @@ if [[ "${FR13_COMMITTER_GRAPH:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_committer_graph.arm" 2>/dev/null || true
 fi
-# The batched-GDN byte gate must stay eager and legacy-served until a real
-# SWE-Verified task is explicitly armed after readiness. The EngineCore worker
-# sees these /logs sidecars even when its curated environment drops FR13_*.
+# The batched-GDN byte gates stay reference-served until a real SWE-Verified
+# task is explicitly armed after readiness. The EngineCore worker sees these
+# /logs sidecars even when its curated environment drops FR13_*.
 _fr13_batch_gdn_byte_ab="${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}"
+_fr13_batch_gdn_graph_byte_ab="${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}"
 _fr13_batch_gdn_production="${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}"
 _fr13_batch_gdn_bv_candidate="${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}"
 _fr13_batch_gdn_bv_production="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}"
 case "$_fr13_batch_gdn_byte_ab" in
   0|1) ;;
   *) echo "FR13_FIXED32_BATCH_GDN_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
+esac
+case "$_fr13_batch_gdn_graph_byte_ab" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
 esac
 case "$_fr13_batch_gdn_production" in
   0|1) ;;
@@ -1138,12 +1157,20 @@ for _fr13_batch_gdn_bv_name in \
     *) echo "FR13 fixed32 batched GDN BV must be 16, 32, 64, or 128" >&2; exit 2 ;;
   esac
 done
+_fr13_batch_gdn_diagnostic_count=$((
+  10#$_fr13_batch_gdn_byte_ab + 10#$_fr13_batch_gdn_graph_byte_ab
+))
+if (( _fr13_batch_gdn_diagnostic_count > 1 )); then
+  echo "FR13 fixed32 eager and graph batched GDN diagnostics are mutually exclusive" >&2
+  exit 2
+fi
 if [[ -n "$_fr13_batch_gdn_bv_candidate" \
       && -n "$_fr13_batch_gdn_bv_production" ]]; then
   echo "FR13 fixed32 batched GDN wide-BV diagnostic and production selectors are mutually exclusive" >&2
   exit 2
 fi
-if [[ "$_fr13_batch_gdn_byte_ab" == "1" \
+if [[ ( "$_fr13_batch_gdn_byte_ab" == "1" \
+        || "$_fr13_batch_gdn_graph_byte_ab" == "1" ) \
       && "$_fr13_batch_gdn_production" == "1" ]]; then
   echo "FR13 fixed32 batched GDN diagnostic and production are mutually exclusive" >&2
   exit 2
@@ -1151,6 +1178,7 @@ fi
 if [[ ( -n "$_fr13_gdn_path_bv_candidate" \
         || -n "$_fr13_gdn_path_bv_production" ) \
       && ( "$_fr13_batch_gdn_byte_ab" == "1" \
+           || "$_fr13_batch_gdn_graph_byte_ab" == "1" \
            || "$_fr13_batch_gdn_production" == "1" ) ]]; then
   echo "FR13 fixed32 batched GDN and path-BV selectors are mutually exclusive" >&2
   exit 2
@@ -1162,9 +1190,9 @@ if [[ ( -n "$_fr13_gdn_path_bv_candidate" \
   echo "FR13 fixed32 B1 path-BV and B2-B4 batched wide-BV selectors are mutually exclusive" >&2
   exit 2
 fi
-if [[ -n "$_fr13_batch_gdn_bv_candidate" \
-      && "$_fr13_batch_gdn_byte_ab" != "1" ]]; then
-  echo "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE requires FR13_FIXED32_BATCH_GDN_BYTE_AB=1" >&2
+if [[ -n "$_fr13_batch_gdn_bv_candidate" ]] \
+    && (( _fr13_batch_gdn_diagnostic_count != 1 )); then
+  echo "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE requires exactly one eager or graph byte diagnostic" >&2
   exit 2
 fi
 if [[ -n "$_fr13_batch_gdn_bv_production" \
@@ -1189,21 +1217,41 @@ if [[ "$_fr13_batch_gdn_byte_ab" == "1" ]]; then
     || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires FR13_FLAGS_INKERNEL=1" >&2; exit 2; }
   [[ "$MAX_NUM_SEQS" =~ ^[234]$ ]] \
     || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires MAX_NUM_SEQS=2, 3, or 4" >&2; exit 2; }
+  echo "1" > "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.enabled"
+else
+  rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.enabled" 2>/dev/null || true
+fi
+if [[ "$_fr13_batch_gdn_graph_byte_ab" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires FR13_FIXED32_MODE" >&2; exit 2; }
+  [[ "${ENFORCE_EAGER:-0}" == "0" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires ENFORCE_EAGER=0" >&2; exit 2; }
+  [[ "${FR10_METRICS:-0}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires FR10_METRICS=1" >&2; exit 2; }
+  [[ "${FR13_RING_EXPORT:-1}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires FR13_RING_EXPORT=1" >&2; exit 2; }
+  [[ "${FR13_FLAGS_INKERNEL:-1}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires FR13_FLAGS_INKERNEL=1" >&2; exit 2; }
+  [[ "$MAX_NUM_SEQS" == "4" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires MAX_NUM_SEQS=4" >&2; exit 2; }
+  [[ "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB is incompatible with the B1 diagnostic" >&2; exit 2; }
+  echo "1" > "$LOG_DIR/fr13_fixed32_batch_gdn_graph_byte_ab.enabled"
+else
+  rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_graph_byte_ab.enabled" 2>/dev/null || true
+fi
+if (( _fr13_batch_gdn_diagnostic_count == 1 )); then
   if [[ -n "$_fr13_batch_gdn_bv_candidate" ]]; then
     printf '%s\n' "$_fr13_batch_gdn_bv_candidate" \
       > "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag"
     chmod 400 "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag"
   fi
-  echo "1" > "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.enabled"
   rm -f \
     "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json"
   FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH=/logs/fr13_fixed32_batch_gdn_byte_ab.real_event.arm
 else
-  rm -f \
-    "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.enabled" \
-    "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.real_event.arm" \
-    2>/dev/null || true
+  rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.real_event.arm" 2>/dev/null || true
   FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH=
 fi
 export FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH
@@ -1243,12 +1291,14 @@ if [[ "$_fr13_subtree_selfcheck" == "1" && "$_fr13_subtree_parallel" != "1" ]]; 
   exit 2
 fi
 if [[ ( "$_fr13_batch_gdn_byte_ab" == "1" \
+        || "$_fr13_batch_gdn_graph_byte_ab" == "1" \
         || "$_fr13_batch_gdn_production" == "1" ) \
       && "$_fr13_subtree_parallel" != "1" ]]; then
   echo "FR13 fixed32 batched GDN requires FR13_SUBTREE_PARALLEL=1" >&2
   exit 2
 fi
 if [[ ( "$_fr13_batch_gdn_byte_ab" == "1" \
+        || "$_fr13_batch_gdn_graph_byte_ab" == "1" \
         || "$_fr13_batch_gdn_production" == "1" ) \
       && "$_fr13_subtree_selfcheck" == "1" ]]; then
   echo "FR13 fixed32 batched GDN is incompatible with FR13_SUBTREE_PARALLEL_SELFCHECK=1" >&2

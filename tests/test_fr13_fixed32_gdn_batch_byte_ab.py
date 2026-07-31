@@ -45,6 +45,12 @@ def test_real_event_control_is_worker_safe_and_rejects_probe_markers(
     )
 
     assert kernel._fr13_fixed32_batch_gdn_byte_ab_control() == (False, None)
+    event.write_text("swe_verified:django__django-12345\n", encoding="ascii")
+    assert kernel._fr13_fixed32_batch_gdn_byte_ab_control() == (
+        False,
+        "swe_verified:django__django-12345",
+    )
+    event.unlink()
     enabled.write_text("1\n", encoding="ascii")
     assert kernel._fr13_fixed32_batch_gdn_byte_ab_control() == (True, None)
 
@@ -389,10 +395,12 @@ def test_launcher_requires_eager_real_task_gate() -> None:
         "FR13_FIXED32_BATCH_GDN_BYTE_AB requires FR10_METRICS=1" in launcher
     )
     assert "fr13_fixed32_batch_gdn_byte_ab.enabled" in launcher
+    assert "fr13_fixed32_batch_gdn_graph_byte_ab.enabled" in launcher
     assert "fr13_fixed32_batch_gdn_byte_ab.real_event.arm" in launcher
     assert "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH=/logs/" in launcher
     assert "FR13_FIXED32_BATCH_GDN_PRODUCTION:-0" in launcher
     assert "diagnostic and production are mutually exclusive" in launcher
+    assert "eager and graph batched GDN diagnostics are mutually exclusive" in launcher
     assert "path-BV selectors are mutually exclusive" in launcher
     assert "requires a regular live-gate PASS record" in launcher
     assert "fr13_fixed32_batch_gdn_production.arm" in launcher

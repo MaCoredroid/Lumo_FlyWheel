@@ -1053,6 +1053,9 @@ _FR13_FIXED32_BATCH_GDN_BYTE_AB_STATE = {
 _FR13_FIXED32_BATCH_GDN_BYTE_AB_ENABLED = (
     "/logs/fr13_fixed32_batch_gdn_byte_ab.enabled"
 )
+_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB_ENABLED = (
+    "/logs/fr13_fixed32_batch_gdn_graph_byte_ab.enabled"
+)
 _FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT = (
     "/logs/fr13_fixed32_batch_gdn_byte_ab.real_event.arm"
 )
@@ -1082,6 +1085,38 @@ _FR13_FIXED32_BATCH_GDN_BV_BYTE_SURFACES = (
     "flags",
     "invocation_counter",
 )
+_FR13_FIXED32_BATCH_GDN_GRAPH_SURFACES = (
+    "out",
+    "export",
+    "ring_k",
+    "ring_v",
+    "ring_a",
+    "ring_b",
+    "flags",
+    "invocation_counter",
+)
+# ``export`` is one device/shape cache shared by all 48 layers, so after a full
+# replay it contains only the final layer's bytes. It remains covered by the
+# reference/candidate compact+tail checks and the restore check, but cannot be
+# used as a per-layer graph-baseline oracle.
+_FR13_FIXED32_BATCH_GDN_GRAPH_STABLE_SURFACES = (
+    "out",
+    "ring_k",
+    "ring_v",
+    "ring_a",
+    "ring_b",
+    "flags",
+)
+_FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT = None
+_FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURES: dict[int, dict] = {}
+_FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_STATE = {
+    "status": "disabled",
+    "candidate_bv": None,
+    "graph_id": None,
+    "graph_signature": None,
+    "batch_size": None,
+    "records": 0,
+}
 _FR13_FIXED32_PARENT_SHA256 = (
     "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd"
 )
@@ -1215,17 +1250,32 @@ def _fr13_fixed32_batch_gdn_byte_ab_control() -> tuple[bool, str | None]:
         "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH",
         _FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT,
     )
-    event_exists = os.path.exists(event_path)
-    enabled = raw == "1" or os.path.exists(enabled_path) or event_exists
-    if not event_exists:
+    enabled = raw == "1" or os.path.exists(enabled_path)
+    if not os.path.exists(event_path):
         return enabled, None
+    return enabled, _fr13_fixed32_batch_gdn_real_event_marker(event_path)
+
+
+def _fr13_fixed32_batch_gdn_real_event_marker(
+    event_path: str | None = None,
+) -> str:
+    """Read the authenticated SWE-Verified event arm shared by both gates."""
+    path = event_path or os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH",
+        _FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT,
+    )
+    if not os.path.exists(path):
+        raise RuntimeError(
+            "FR13 fixed32 batched GDN graph byte gate requires an authenticated "
+            f"real-event arm at {path}"
+        )
     try:
-        with open(event_path, encoding="ascii") as handle:
+        with open(path, encoding="ascii") as handle:
             marker = handle.read(257)
     except (OSError, UnicodeError) as error:
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_BYTE_AB cannot read real-event arm "
-            f"{event_path}: {error}"
+            f"{path}: {error}"
         ) from error
     if len(marker) > 256:
         raise RuntimeError(
@@ -1242,7 +1292,21 @@ def _fr13_fixed32_batch_gdn_byte_ab_control() -> tuple[bool, str | None]:
             "FR13_FIXED32_BATCH_GDN_BYTE_AB real-event marker must be "
             "swe_verified:<task_id>"
         )
-    return enabled, marker
+    return marker
+
+
+def _fr13_fixed32_batch_gdn_graph_byte_ab_control() -> bool:
+    """Resolve the graph-replay B4 gate independently of the eager gate."""
+    raw = os.environ.get("FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB", "")
+    if raw not in ("", "0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
+        )
+    enabled_path = os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB_ENABLED_PATH",
+        _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB_ENABLED,
+    )
+    return raw == "1" or os.path.exists(enabled_path)
 
 
 def _fr13_fixed32_batch_gdn_production_control() -> dict[str, object] | None:
@@ -1312,9 +1376,28 @@ def _fr13_fixed32_batch_gdn_production_control() -> dict[str, object] | None:
         reference_launches = (
             2 * payload_batch if type(payload_batch) is int else -1
         )
-        schema_invalid = (
-            payload.get("schema") != "fr13.fixed32.batch_gdn.live_pass.v2"
+        schema = payload.get("schema")
+        graph_schema = schema == "fr13.fixed32.batch_gdn.graph_live_pass.v1"
+        schema_invalid = schema not in (
+            "fr13.fixed32.batch_gdn.live_pass.v2",
+            "fr13.fixed32.batch_gdn.graph_live_pass.v1",
         )
+        if graph_schema:
+            graph_signature = payload.get("graph_signature")
+            schema_invalid = schema_invalid or (
+                payload.get("gate_mode") != "post_replay_shadow"
+                or type(payload.get("graph_id")) is not int
+                or payload["graph_id"] <= 0
+                or not isinstance(graph_signature, str)
+                or len(graph_signature) != 64
+                or any(
+                    character not in "0123456789abcdef"
+                    for character in graph_signature
+                )
+                or payload.get("capture_records") != 48
+                or payload.get("real_task_authenticated") is not True
+                or payload.get("graph_baseline_byte_equal") is not True
+            )
         wide_invalid = (
             payload.get("candidate")
             != _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_ID
@@ -1351,15 +1434,21 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
             f"FR13 fixed32 batched GDN supports B2-B4, got B={batch}"
         )
     diagnostic, _marker = _fr13_fixed32_batch_gdn_byte_ab_control()
+    graph_diagnostic = _fr13_fixed32_batch_gdn_graph_byte_ab_control()
     production = _fr13_fixed32_batch_gdn_production_control()
-    if diagnostic and production is not None:
+    if diagnostic and graph_diagnostic:
+        raise RuntimeError(
+            "FR13 fixed32 eager and graph-replay batched GDN diagnostics are "
+            "mutually exclusive"
+        )
+    if (diagnostic or graph_diagnostic) and production is not None:
         raise RuntimeError(
             "FR13 fixed32 batched GDN diagnostic and production selectors "
             "are mutually exclusive"
         )
     if (
         _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE is not None
-        and not diagnostic
+        and not (diagnostic or graph_diagnostic)
     ):
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE requires the batched GDN "
@@ -1373,7 +1462,9 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
             "FR13_FIXED32_BATCH_GDN_BV_PRODUCTION requires the batched GDN "
             "production selector and its live PASS"
         )
-    if diagnostic and _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None:
+    if (
+        diagnostic or graph_diagnostic
+    ) and _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None:
         raise RuntimeError(
             "FR13 fixed32 batched wide-BV diagnostic and production selectors "
             "are mutually exclusive"
@@ -1384,7 +1475,7 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
             "are mutually exclusive"
         )
     if (
-        (diagnostic or production is not None)
+        (diagnostic or graph_diagnostic or production is not None)
         and (
             _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
             or _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None
@@ -1396,6 +1487,17 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
         )
     if diagnostic:
         return "diagnostic"
+    if graph_diagnostic:
+        context = _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT
+        if (
+            batch == 4
+            and isinstance(context, dict)
+            and int(context.get("batch_size", -1)) == 4
+        ):
+            return "graph_capture"
+        # B1-B3 and non-capture execution remain the established per-request
+        # BV8 path. Real serving replays the graph and never re-enters Python.
+        return None
     if production is not None:
         if int(production["batch"]) != batch:
             raise RuntimeError(
@@ -1404,6 +1506,149 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
             )
         return "production"
     return None
+
+
+def fixed32_batch_gdn_graph_live_capture_active(batch_size: int) -> bool:
+    """Whether the final exact-B4 FULL capture is collecting layer records."""
+    context = _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT
+    return bool(
+        _fr13_fixed32_batch_gdn_graph_byte_ab_control()
+        and int(batch_size) == 4
+        and isinstance(context, dict)
+        and int(context.get("batch_size", -1)) == 4
+    )
+
+
+def fixed32_batch_gdn_graph_live_capture_begin(
+    graph_id: int, batch_size: int
+) -> None:
+    """Open the graph-shadow byte gate only for the final exact-B4 graph."""
+    global _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT
+    if not _fr13_fixed32_batch_gdn_graph_byte_ab_control():
+        return
+    identity = int(graph_id)
+    batch = int(batch_size)
+    if batch != 4:
+        return
+    if (
+        _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES
+        or _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE is None
+        or identity <= 0
+        or _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT is not None
+        or identity in _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURES
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN byte-gate capture begin drift: "
+            + repr((identity, batch, _FR13_FIXED32_MODE))
+        )
+    _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT = {
+        "graph_id": identity,
+        "batch_size": batch,
+        "records": [],
+    }
+    _FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_STATE.update(
+        status="armed",
+        candidate_bv=int(_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE),
+        graph_id=None,
+        graph_signature=None,
+        batch_size=None,
+        records=0,
+    )
+
+
+def _fr13_fixed32_batch_gdn_graph_live_capture_register(record: dict) -> None:
+    """Retain persistent B4 operands while the legacy BV8 graph is captured."""
+    if not _fr13_fixed32_batch_gdn_graph_byte_ab_control():
+        return
+    context = _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT
+    required = {
+        "layer_key",
+        "snapshot",
+        "restore",
+        "run_reference",
+        "run_candidate",
+        "carrier_nonzero",
+        "byte_equal",
+        "surface_names",
+    }
+    if (
+        not isinstance(context, dict)
+        or set(context) != {"graph_id", "batch_size", "records"}
+        or int(context.get("batch_size", -1)) != 4
+        or not isinstance(record, dict)
+        or set(record) != required
+        or type(record.get("layer_key")) is not int
+        or int(record["layer_key"]) <= 0
+        or tuple(record.get("surface_names", ()))
+        != _FR13_FIXED32_BATCH_GDN_GRAPH_SURFACES
+        or not all(
+            callable(record[name])
+            for name in required - {"layer_key", "surface_names"}
+        )
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN byte-gate capture record drift"
+        )
+    if torch.cuda.is_available() and not torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN byte-gate record was not captured by CUDA"
+        )
+    context["records"].append(record)
+
+
+def fixed32_batch_gdn_graph_live_capture_end(
+    graph_id: int,
+    batch_size: int,
+    graph_signature: str,
+    expected_records: int = 48,
+) -> None:
+    """Freeze 48 unique layer records against one signed exact-B4 graph."""
+    global _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT
+    if not _fr13_fixed32_batch_gdn_graph_byte_ab_control():
+        return
+    identity = int(graph_id)
+    batch = int(batch_size)
+    if batch != 4:
+        return
+    context = _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT
+    records = context.get("records") if isinstance(context, dict) else None
+    layer_keys = (
+        [int(record.get("layer_key", -1)) for record in records]
+        if isinstance(records, list)
+        else []
+    )
+    signature = str(graph_signature)
+    if (
+        not isinstance(context, dict)
+        or int(context.get("graph_id", -1)) != identity
+        or int(context.get("batch_size", -1)) != 4
+        or int(expected_records) != 48
+        or not isinstance(records, list)
+        or len(records) != 48
+        or len(set(layer_keys)) != 48
+        or len(signature) != 64
+        or any(character not in "0123456789abcdef" for character in signature)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN byte-gate capture end drift: "
+            + repr(
+                (
+                    identity,
+                    batch,
+                    expected_records,
+                    len(records) if isinstance(records, list) else None,
+                    len(set(layer_keys)),
+                    signature,
+                )
+            )
+        )
+    _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURES[identity] = {
+        "batch_size": 4,
+        "graph_signature": signature,
+        "records": tuple(records),
+        "layer_keys": frozenset(layer_keys),
+    }
+    _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT = None
 
 
 def _fr13_fixed32_batch_gdn_byte_diff(
@@ -1473,6 +1718,9 @@ def _fr13_fixed32_batch_gdn_live_pass_emit(
     layer_keys: set[int],
     reference_bv: int | None = None,
     candidate_bv: int | None = None,
+    graph_id: int | None = None,
+    graph_signature: str | None = None,
+    capture_records: int | None = None,
 ) -> None:
     """Publish the non-cryptographic production prerequisite after 48 passes."""
     if len(layer_keys) != 48:
@@ -1494,9 +1742,27 @@ def _fr13_fixed32_batch_gdn_live_pass_emit(
     # the production prerequisite.
     if wide_bv and int(batch) != 4:
         return
+    graph_gate = graph_id is not None
+    if graph_gate and (
+        int(batch) != 4
+        or type(graph_id) is not int
+        or graph_id <= 0
+        or not isinstance(graph_signature, str)
+        or len(graph_signature) != 64
+        or any(
+            character not in "0123456789abcdef"
+            for character in graph_signature
+        )
+        or capture_records != 48
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN PASS identity contract drift"
+        )
     payload = {
         "schema": (
-            "fr13.fixed32.batch_gdn.live_pass.v2"
+            "fr13.fixed32.batch_gdn.graph_live_pass.v1"
+            if graph_gate
+            else "fr13.fixed32.batch_gdn.live_pass.v2"
             if wide_bv
             else "fr13.fixed32.batch_gdn.live_pass.v1"
         ),
@@ -1523,11 +1789,272 @@ def _fr13_fixed32_batch_gdn_live_pass_emit(
             raw_byte_equal=True,
             state_restored=True,
         )
+    if graph_gate:
+        payload.update(
+            gate_mode="post_replay_shadow",
+            graph_id=int(graph_id),
+            graph_signature=graph_signature,
+            capture_records=int(capture_records),
+            real_task_authenticated=True,
+            graph_baseline_byte_equal=True,
+        )
     temporary = f"{path}.tmp.{os.getpid()}"
     with open(temporary, "w", encoding="ascii") as handle:
         json.dump(payload, handle, sort_keys=True)
         handle.write("\n")
     os.replace(temporary, path)
+
+
+def _fr13_fixed32_batch_gdn_graph_compare_records(
+    records,
+    *,
+    candidate_bv: int,
+    graph_id: int,
+    graph_signature: str,
+    task_marker: str,
+) -> dict[str, object]:
+    """Shadow the replayed B4 BV8 graph, compare BV64, and restore it."""
+    candidate = int(candidate_bv)
+    if candidate not in (16, 32, 64, 128):
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN byte gate rejected candidate BV="
+            f"{candidate}"
+        )
+    checked = 0
+    layer_keys: set[int] = set()
+    for index, record in enumerate(records):
+        layer_key = int(record["layer_key"])
+        if layer_key in layer_keys:
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN byte gate reused layer key "
+                f"0x{layer_key:x}"
+            )
+        layer_keys.add(layer_key)
+        snapshot = record["snapshot"]
+        restore = record["restore"]
+        byte_equal = record["byte_equal"]
+        baseline = snapshot()
+        if tuple(baseline) != _FR13_FIXED32_BATCH_GDN_GRAPH_SURFACES:
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN baseline surface drift at record "
+                f"{index}: {tuple(baseline)!r}"
+            )
+        if not bool(record["carrier_nonzero"]()):
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN gate refused a zero real-task "
+                f"carrier at record {index}"
+            )
+        caught = None
+        graph_comparisons = []
+        comparisons = []
+        try:
+            reference_meta = record["run_reference"]()
+            reference = snapshot()
+            graph_comparisons = [
+                _fr13_fixed32_batch_gdn_byte_diff(
+                    "graph_baseline_" + name,
+                    baseline[name],
+                    reference[name],
+                )
+                for name in _FR13_FIXED32_BATCH_GDN_GRAPH_STABLE_SURFACES
+            ]
+            restore(baseline)
+            candidate_meta = record["run_candidate"](candidate)
+            candidate_surfaces = snapshot()
+            if (
+                set(reference_meta)
+                != {"block_v", "physical_launches", "compact_export"}
+                or set(candidate_meta)
+                != {"block_v", "physical_launches", "compact_export"}
+                or int(reference_meta["block_v"]) != 8
+                or int(reference_meta["physical_launches"]) != 8
+                or int(candidate_meta["block_v"]) != candidate
+                or int(candidate_meta["physical_launches"]) != 2
+            ):
+                raise RuntimeError(
+                    "FR13 fixed32 B4 graph GDN launch metadata drift at "
+                    f"record {index}: reference={reference_meta!r} "
+                    f"candidate={candidate_meta!r}"
+                )
+            compact_rows = 4 * _FR13_FIXED32_EXPORT_SLOTS
+            comparison_inputs = [
+                ("out", reference["out"], candidate_surfaces["out"]),
+                ("ring_k", reference["ring_k"], candidate_surfaces["ring_k"]),
+                ("ring_v", reference["ring_v"], candidate_surfaces["ring_v"]),
+                ("ring_a", reference["ring_a"], candidate_surfaces["ring_a"]),
+                ("ring_b", reference["ring_b"], candidate_surfaces["ring_b"]),
+                (
+                    "state_export_compact",
+                    reference_meta["compact_export"],
+                    candidate_meta["compact_export"],
+                ),
+                (
+                    "state_export_untouched_tail",
+                    baseline["export"][compact_rows:],
+                    candidate_surfaces["export"][compact_rows:],
+                ),
+                ("flags", reference["flags"], candidate_surfaces["flags"]),
+                (
+                    "invocation_counter",
+                    reference["invocation_counter"],
+                    candidate_surfaces["invocation_counter"],
+                ),
+            ]
+            comparisons = [
+                _fr13_fixed32_batch_gdn_byte_diff(name, left, right)
+                for name, left, right in comparison_inputs
+            ]
+        except Exception as error:
+            caught = error
+        finally:
+            restore(baseline)
+            restored = snapshot()
+            restore_bad = [
+                name
+                for name in _FR13_FIXED32_BATCH_GDN_GRAPH_SURFACES
+                if not byte_equal(restored[name], baseline[name])
+            ]
+            if restore_bad:
+                raise RuntimeError(
+                    "FR13 fixed32 B4 graph GDN byte gate failed to restore "
+                    f"graph-served bytes at record {index}: {restore_bad}"
+                )
+        if caught is not None:
+            raise caught
+        graph_bad = [
+            item["name"]
+            for item in graph_comparisons
+            if not bool(item["byte_equal"])
+        ]
+        arm_bad = [
+            item["name"]
+            for item in comparisons
+            if not bool(item["byte_equal"])
+        ]
+        zero_diff = not graph_bad and not arm_bad
+        _fr13_fixed32_batch_gdn_byte_ab_emit(
+            {
+                "gate_mode": "post_replay_shadow",
+                "task_marker": task_marker,
+                "graph_id": int(graph_id),
+                "graph_signature": graph_signature,
+                "layer_key": f"0x{layer_key:x}",
+                "batch": 4,
+                "attempt": 1,
+                "physical_rows_per_request": 32,
+                "reference_bv": 8,
+                "candidate_bv": candidate,
+                "carrier_nonzero": True,
+                "legacy_physical_launches": 8,
+                "candidate_physical_launches": 2,
+                "graph_comparisons": graph_comparisons,
+                "comparisons": comparisons,
+                "graph_baseline_byte_equal": not graph_bad,
+                "zero_diff": zero_diff,
+                "reference_restored_and_served": True,
+                "status": "pass" if zero_diff else "mismatch_reference_served",
+            }
+        )
+        if not zero_diff:
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN byte mismatch at record "
+                f"{index}: graph={graph_bad} candidate={arm_bad}"
+            )
+        checked += 1
+    return {
+        "records": checked,
+        "layer_keys": layer_keys,
+        "reference_bv": 8,
+        "candidate_bv": candidate,
+    }
+
+
+def fixed32_batch_gdn_graph_live_gate_on_replay(
+    graph_id: int,
+    graph_signature: str,
+    batch_size: int,
+    expected_records: int = 48,
+) -> dict[str, object]:
+    """Run the graph-shadow gate once after an authenticated real B4 replay."""
+    state = _FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_STATE
+    if not _fr13_fixed32_batch_gdn_graph_byte_ab_control():
+        return dict(state)
+    if int(batch_size) != 4:
+        return dict(state)
+    if state["status"] == "passed":
+        return dict(state)
+    if state["status"] != "armed":
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN byte gate is not runnable: " + repr(state)
+        )
+    if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN byte gate cannot run during capture"
+        )
+    identity = int(graph_id)
+    signature = str(graph_signature)
+    capture = _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURES.get(identity)
+    records = capture.get("records") if isinstance(capture, dict) else None
+    if (
+        not isinstance(capture, dict)
+        or int(capture.get("batch_size", -1)) != 4
+        or capture.get("graph_signature") != signature
+        or int(expected_records) != 48
+        or not isinstance(records, tuple)
+        or len(records) != 48
+        or len(capture.get("layer_keys", ())) != 48
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN replay/capture drift: "
+            + repr((identity, signature, expected_records, capture))
+        )
+    task_marker = _fr13_fixed32_batch_gdn_real_event_marker()
+    state["status"] = "running"
+    try:
+        result = _fr13_fixed32_batch_gdn_graph_compare_records(
+            records,
+            candidate_bv=int(_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE),
+            graph_id=identity,
+            graph_signature=signature,
+            task_marker=task_marker,
+        )
+    except Exception:
+        state["status"] = "failed"
+        raise
+    try:
+        _fr13_fixed32_batch_gdn_live_pass_emit(
+            task_marker=task_marker,
+            batch=4,
+            layer_keys=result["layer_keys"],
+            reference_bv=int(result["reference_bv"]),
+            candidate_bv=int(result["candidate_bv"]),
+            graph_id=identity,
+            graph_signature=signature,
+            capture_records=int(result["records"]),
+        )
+    except Exception:
+        state["status"] = "failed"
+        raise
+    state.update(
+        status="passed",
+        graph_id=identity,
+        graph_signature=signature,
+        batch_size=4,
+        records=int(result["records"]),
+    )
+    _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURES.clear()
+    print(
+        "[FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB PASS] "
+        f"task={task_marker} graph_id={identity} batch=4 records=48 "
+        f"reference_bv=8 candidate_bv={result['candidate_bv']} "
+        "graph_baseline_equal=1 state_restored=1 served_bv=8",
+        flush=True,
+    )
+    return dict(state)
+
+
+def fixed32_batch_gdn_graph_live_gate_report() -> dict[str, object]:
+    return dict(_FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_STATE)
 
 
 def _fr13_canonical_sha256(value) -> str:
@@ -10138,10 +10665,9 @@ def launch_tree_gdn_prepared_fixed32_batch(
     subtree export scratch is reused as ``[batch, 5]`` compact parent slots,
     so B4 consumes 20 rows and does not allocate inside graph capture.
 
-    The optional real-event byte gate is eager-only. It runs the legacy
-    per-request route and this route from identical snapshots, restores and
-    serves the legacy result, and only marks a layer eligible for direct batch
-    serving after every touched byte compares equal.
+    The eager diagnostic compares both arms inline. The graph diagnostic
+    captures the legacy per-request BV8 route, retains only persistent operand
+    closures, and performs the candidate comparison after a real B4 replay.
     """
     batch = int(batch_size)
     if batch < 2 or batch > _FR13_FIXED32_MAX_BATCH:
@@ -10327,7 +10853,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
         if "num_stages" in geom:
             extra_launch_kwargs["num_stages"] = int(geom["num_stages"])
     configured_wide_bv = None
-    if selector == "diagnostic":
+    if selector in ("diagnostic", "graph_capture"):
         configured_wide_bv = _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE
     elif selector == "production":
         configured_wide_bv = _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION
@@ -10523,6 +11049,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
             invocation_counter.copy_(snapshot["invocation_counter"])
 
     byte_ab_enabled = selector == "diagnostic"
+    graph_byte_ab_capture = selector == "graph_capture"
     real_event_marker = None
     if byte_ab_enabled:
         _enabled, real_event_marker = (
@@ -10535,6 +11062,64 @@ def launch_tree_gdn_prepared_fixed32_batch(
     layer_key = int(A_log.data_ptr())
     batch_layer_key = (batch, layer_key)
     gate_state = _FR13_FIXED32_BATCH_GDN_BYTE_AB_STATE
+    if graph_byte_ab_capture:
+        if batch != 4 or not fixed32_batch_gdn_graph_live_capture_active(batch):
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN capture selector drifted"
+            )
+        if torch.cuda.is_available() and not torch.cuda.is_current_stream_capturing():
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN gate requires final CUDA capture"
+            )
+        if not ring_export or not flags_export or not count_invocation:
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN byte gate requires K/V/A/B ring "
+                "export, in-kernel flags, and the invocation counter"
+            )
+
+        def _graph_gate_run_reference() -> dict[str, object]:
+            compact_export = _launch_reference(collect_export=True)
+            assert compact_export is not None
+            return {
+                "block_v": 8,
+                "physical_launches": 2 * batch,
+                "compact_export": compact_export,
+            }
+
+        def _graph_gate_run_candidate(_candidate_bv: int) -> dict[str, object]:
+            selected_bv = int(_candidate_bv)
+            if selected_bv != int(candidate_block_v):
+                raise RuntimeError(
+                    "FR13 fixed32 B4 graph GDN candidate selector drift: "
+                    f"{selected_bv} != {candidate_block_v}"
+                )
+            _launch_batched(selected_bv)
+            return {
+                "block_v": selected_bv,
+                "physical_launches": int(
+                    launch_contract["physical_launches_per_layer"]
+                ),
+                "compact_export": subtree_state["export"][
+                    :needed_export_rows
+                ].clone(),
+            }
+
+        _fr13_fixed32_batch_gdn_graph_live_capture_register(
+            {
+                "layer_key": layer_key,
+                "snapshot": _snapshot_external,
+                "restore": _restore_external,
+                "run_reference": _graph_gate_run_reference,
+                "run_candidate": _graph_gate_run_candidate,
+                "carrier_nonzero": lambda: bool(
+                    int(torch.count_nonzero(q[:rows]).item())
+                ),
+                "byte_equal": _fr13_tensor_byte_equal,
+                "surface_names": _FR13_FIXED32_BATCH_GDN_GRAPH_SURFACES,
+            }
+        )
+        _launch_reference(collect_export=False)
+        return out, None
     if byte_ab_enabled:
         if torch.cuda.is_current_stream_capturing():
             raise RuntimeError(
