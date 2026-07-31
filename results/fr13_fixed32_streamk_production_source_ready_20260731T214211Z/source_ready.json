@@ -1,0 +1,66 @@
+{
+  "schema": "fr13.fixed32.cutlass_streamk.production_source_ready.v1",
+  "status": "source_ready",
+  "created_at": "2026-07-31T21:42:11Z",
+  "branch": "agent/fixed32-streamk-production",
+  "base_commit": "6bbafd5caee2d95081ec049faeaa2a2d1b4743a5",
+  "source_commit": "c2c23fa8e847bb722afbe44d4ff65b192482493f",
+  "candidate": {
+    "path_at_build_host": "/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.streamk_coop128_allbytes_gate_ready.abi3.so",
+    "sha256": "fa9395754b13de26dbed38dfc551614dbb109058764426564dcbb3c77fdd6ea9",
+    "bytes": 111383840,
+    "elf_machine": "AArch64",
+    "build_id": "e126f10786f59ec890a79550d92b7a9132e007e2",
+    "production_selector": "streamk_coop128",
+    "diagnostic_selector": "streamk_coop128_byte_ab"
+  },
+  "source_binding": {
+    "patch_source": "scripts/fr13_patch_cutlass_fixed32_wave.py",
+    "patch_source_sha256": "d461d0783c292384229a117b4d7d4a13c5c883fbea9764968cbd8addbdafafc1",
+    "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "patched_dispatch_sha256": "9de2ab8096df470d10a8838941f28c06831f481089bd5eaf98cfed90119fef65"
+  },
+  "production_contract": {
+    "default_enabled": false,
+    "batch_size": 1,
+    "physical_rows": 32,
+    "timing_task_set": "canonical SWE-Verified exact4",
+    "timing_concurrency": 1,
+    "qualification_task_set": "one real SWE-Verified B1 byte diagnostic",
+    "qualification_serves_stock": true,
+    "qualification_requires_all_five_projection_shapes": true,
+    "qualification_requires_zero_differing_bytes": true,
+    "direct_install_requires_pinned_live_pass": true,
+    "host_validation_before_first_docker_query": true,
+    "container_revalidation_before_binary_install": true,
+    "formal_floor_acceptance_eligible": false
+  },
+  "verification": {
+    "focused_pytest": {
+      "passed": 69,
+      "failed": 0
+    },
+    "broad_fixed32_pytest": {
+      "passed": 717,
+      "skipped": 13,
+      "failed": 0
+    },
+    "ruff_check": "pass",
+    "ruff_format_check": "pass",
+    "bash_syntax": "pass",
+    "python_compile": "pass",
+    "git_diff_check": "pass"
+  },
+  "runtime_state": {
+    "gpu_or_docker_task_launched_by_this_work": false,
+    "fresh_live_gate_completed": false,
+    "exact4_timing_completed": false,
+    "performance_claim_available": false
+  },
+  "next_required_steps": [
+    "Run scripts/fr13_run_b1_cutlass_streamk_live_gate.sh on this production contract to issue a v2 live PASS.",
+    "Run scripts/fr13_run_b1_cutlass_streamk_timing.sh stock-first on the canonical exact4 B1 task set using that PASS.",
+    "Publish the raw run artifacts and full-wall timing summary without treating the pair as formal Tail/Hydra floor acceptance."
+  ]
+}
