@@ -11,6 +11,7 @@
   "default_behavior_changed": false,
   "default_state": {
     "qrow16_live_paged_ab": "FR13_FA2_QROW16_LIVE_PAGED_AB=0",
+    "qrow16_production": "FR13_FA2_QROW16_PRODUCTION=0",
     "taw_native_precompute": "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0",
     "dfwd_pad_rows": "FR13_DRAFT_HEAD_PAD_ROWS=0",
     "dfwd_all_row_byte_ab": "FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=0"
@@ -95,5 +96,12 @@
     "ready": true,
     "gpu_run_completed": false,
     "blocking_component": "candidate SO build and real B1 execution"
+  },
+  "qrow16_production": {
+    "ready": true,
+    "gpu_run_completed": false,
+    "selector": "FR13_FA2_QROW16_PRODUCTION=1",
+    "requires": "launcher-issued canonical sidecar from exact-build live PASS",
+    "scope": "final FULL fixed32 B1 graph capture"
   }
 }

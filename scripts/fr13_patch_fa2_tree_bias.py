@@ -803,6 +803,12 @@ def _fr13_fa2_qrow16_live_ab_replay(graph_id, runtime_mode, batch_size):
     instance_id = os.environ.get("FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID", "")
     if not instance_id:
         raise RuntimeError("FR13 qrow16 live gate has no SWE-Verified instance id")
+    candidate_so_sha256 = os.environ.get("FR13_FA2_QROW16_SO_SHA256", "")
+    if (
+        len(candidate_so_sha256) != 64
+        or any(char not in "0123456789abcdef" for char in candidate_so_sha256)
+    ):
+        raise RuntimeError("FR13 qrow16 live gate has no candidate SO digest")
     if torch.cuda.is_current_stream_capturing():
         raise RuntimeError("FR13 qrow16 live gate ran inside CUDA capture")
     if os.environ.get("FR13_FA2_QROW16_INTERNAL_DISPATCH") is not None:
@@ -863,6 +869,7 @@ def _fr13_fa2_qrow16_live_ab_replay(graph_id, runtime_mode, batch_size):
         "instance_id": instance_id,
         "concurrency": 1,
         "physical_rows": 32,
+        "candidate_so_sha256": candidate_so_sha256,
         "graph_id": int(graph_id),
         "runtime_mode": str(runtime_mode).upper(),
         "layer_name": bundle["layer_name"],
@@ -912,10 +919,161 @@ def _fr13_fa2_qrow16_live_ab_replay(graph_id, runtime_mode, batch_size):
 '''
 
 
+FIXED32_QUERY_TILE16_PRODUCTION_HELPERS = r'''# FR13_FA2_QROW16_PRODUCTION
+_FR13_FA2_QROW16_PRODUCTION_GRAPHS = {}
+
+
+def _fr13_fa2_qrow16_production_begin(
+    *,
+    layer,
+    query,
+    key_cache,
+    value_cache,
+    cu_seqlens_q,
+    max_seqlen_q,
+    seqused_k,
+    max_seqlen_k,
+    causal,
+    window_size,
+    block_table,
+    num_splits,
+    tree_bias,
+):
+    """Select qrow16 only while the final attested B1 graph is captured."""
+    if os.environ.get("FR13_FA2_QROW16_PRODUCTION", "0") != "1":
+        return False
+    if os.environ.get("FR13_FA2_QROW16_INTERNAL_PRODUCTION_ATTESTED") != "1":
+        raise RuntimeError("FR13 qrow16 production has no launcher attestation")
+    if not (
+        torch.cuda.is_available()
+        and torch.cuda.is_current_stream_capturing()
+    ):
+        # Profile/preseed/eager calls remain stock. Only the final FULL graph is
+        # a measurable production candidate.
+        return False
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_qrow_gdn
+
+    context = getattr(_fr13_qrow_gdn, "_FR13_FIXED32_CAPTURE_CONTEXT", None)
+    if not isinstance(context, dict):
+        # Throwaway memory-profile graphs deliberately have no final context.
+        return False
+    descriptor = context.get("descriptor")
+    if not isinstance(descriptor, dict) or int(descriptor.get("num_reqs", -1)) != 1:
+        raise RuntimeError("FR13 qrow16 production is not final fixed32 B1")
+    sidecar_digest = os.environ.get(
+        "FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256", ""
+    )
+    candidate_digest = os.environ.get("FR13_FA2_QROW16_SO_SHA256", "")
+    if (
+        len(sidecar_digest) != 64
+        or len(candidate_digest) != 64
+        or any(char not in "0123456789abcdef" for char in sidecar_digest)
+        or any(char not in "0123456789abcdef" for char in candidate_digest)
+    ):
+        raise RuntimeError("FR13 qrow16 production attestation digest drifted")
+    exact = (
+        query.dtype == torch.bfloat16
+        and tuple(query.shape) == (32, 24, 256)
+        and key_cache.dtype == torch.bfloat16
+        and value_cache.dtype == torch.bfloat16
+        and tuple(key_cache.shape[1:]) == (1024, 4, 256)
+        and tuple(value_cache.shape) == tuple(key_cache.shape)
+        and cu_seqlens_q.dtype == torch.int32
+        and tuple(cu_seqlens_q.shape) == (2,)
+        and seqused_k.dtype == torch.int32
+        and tuple(seqused_k.shape) == (1,)
+        and block_table.dtype == torch.int32
+        and block_table.ndim == 2
+        and int(block_table.shape[0]) == 1
+        and tree_bias.dtype == torch.float32
+        and tuple(tree_bias.shape) in ((32, 32), (1, 32, 32))
+        and int(max_seqlen_q) == 32
+        and int(max_seqlen_k) > 0
+        and not bool(causal)
+        and int(num_splits) in (0, 1)
+    )
+    if not exact:
+        raise RuntimeError("FR13 qrow16 production geometry drifted")
+    if window_size is not None and tuple(int(x) for x in window_size) != (-1, -1):
+        raise RuntimeError("FR13 qrow16 production requires a full window")
+    if os.environ.get("FR13_FA2_QROW16_INTERNAL_DISPATCH") is not None:
+        raise RuntimeError("FR13 qrow16 production selector scopes overlapped")
+    graph_id = int(context.get("graph_id", 0))
+    layer_name = str(getattr(layer, "layer_name", ""))
+    if graph_id <= 0 or not layer_name:
+        raise RuntimeError("FR13 qrow16 production graph/layer identity drifted")
+    graph = _FR13_FA2_QROW16_PRODUCTION_GRAPHS.setdefault(
+        graph_id, {"layers": set()}
+    )
+    if layer_name in graph["layers"]:
+        raise RuntimeError("FR13 qrow16 production layer executed twice in capture")
+    graph["layers"].add(layer_name)
+    os.environ["FR13_FA2_QROW16_INTERNAL_DISPATCH"] = "1"
+    return True
+
+
+def _fr13_fa2_qrow16_production_end(engaged):
+    if not engaged:
+        return
+    if os.environ.pop("FR13_FA2_QROW16_INTERNAL_DISPATCH", None) != "1":
+        raise RuntimeError("FR13 qrow16 production selector was not restored")
+
+
+def _fr13_fa2_qrow16_production_capture_end(
+    graph_id,
+    graph_signature,
+    runtime_mode,
+    batch_size,
+):
+    if os.environ.get("FR13_FA2_QROW16_PRODUCTION", "0") != "1":
+        return
+    if graph_signature is None:
+        # Throwaway profile graphs do not publish fixed32 graph signatures.
+        return
+    if str(runtime_mode).upper() != "FULL" or int(batch_size) != 1:
+        raise RuntimeError("FR13 qrow16 production captured outside FULL B1")
+    graph = _FR13_FA2_QROW16_PRODUCTION_GRAPHS.get(int(graph_id))
+    layers = [] if not isinstance(graph, dict) else sorted(graph.get("layers", ()))
+    if len(layers) != 16:
+        raise RuntimeError(
+            "FR13 qrow16 production did not capture all target tree layers: "
+            + repr(layers)
+        )
+    import json as _json
+    from pathlib import Path as _Path
+
+    record = {
+        "schema": "fr13.fixed32.fa2_qrow16_production_capture.v1",
+        "status": "ENGAGED",
+        "graph_id": int(graph_id),
+        "graph_signature": str(graph_signature),
+        "runtime_mode": "FULL",
+        "batch_size": 1,
+        "layers": layers,
+        "layer_count": 16,
+        "candidate_so_sha256": os.environ["FR13_FA2_QROW16_SO_SHA256"],
+        "pass_sidecar_sha256": os.environ[
+            "FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256"
+        ],
+        "dispatch": "qrow16 exact geometry; no fallback",
+    }
+    path = _Path("/logs/fr13_fa2_qrow16_production_capture.json")
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(
+        _json.dumps(record, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
+        encoding="ascii",
+    )
+    temporary.replace(path)
+
+
+'''
+
+
 def _patch_tree_attn(
     path: Path,
     *,
     fixed32_query_tile16_live_ab: bool = False,
+    fixed32_query_tile16_production: bool = False,
 ) -> bool:
     text = path.read_text()
     changed = False
@@ -1063,6 +1221,14 @@ def _fr13_sr_causal_flag():
             "def _get_depth_counts(",
             FIXED32_QUERY_TILE16_LIVE_AB_HELPERS,
             "qrow16 live paged A/B helpers",
+        )
+        changed = changed or did
+    if fixed32_query_tile16_production:
+        text, did = _insert_once(
+            text,
+            "def _get_depth_counts(",
+            FIXED32_QUERY_TILE16_PRODUCTION_HELPERS,
+            "qrow16 attested production helpers",
         )
         changed = changed or did
     if "import vllm.envs as envs\n" not in text:
@@ -1279,6 +1445,73 @@ def _fr13_sr_causal_flag():
             )
         text = text.replace(live_call_anchor, live_call_replacement, 1)
         changed = True
+    if fixed32_query_tile16_production and (
+        "_fr13_fa2_qrow16_production_begin(\n" not in text.split(
+            "class TreeAttentionImpl", 1
+        )[-1]
+    ):
+        production_call = """                    flash_attn_varlen_func(
+                        q=query[:num_decode_tokens],
+                        k=key_cache,
+                        v=value_cache,
+                        out=output[:num_decode_tokens],
+                        cu_seqlens_q=decode_meta.query_start_loc,
+                        max_seqlen_q=decode_meta.max_query_len,
+                        seqused_k=decode_meta.seq_lens,
+                        max_seqlen_k=decode_meta.max_seq_len,
+                        softmax_scale=self.scale,
+                        causal=_fr13_sr_causal_flag(),
+                        alibi_slopes=None,
+                        window_size=sliding_window_size,
+                        block_table=decode_meta.block_table,
+                        softcap=self.logits_soft_cap,
+                        fa_version=2,
+                        tree_bias=tree_bias,
+                    )
+"""
+        production_replacement = """                    _fr13_qrow16_production = _fr13_fa2_qrow16_production_begin(
+                        layer=layer,
+                        query=query[:num_decode_tokens],
+                        key_cache=key_cache,
+                        value_cache=value_cache,
+                        cu_seqlens_q=decode_meta.query_start_loc,
+                        max_seqlen_q=decode_meta.max_query_len,
+                        seqused_k=decode_meta.seq_lens,
+                        max_seqlen_k=decode_meta.max_seq_len,
+                        causal=_fr13_sr_causal_flag(),
+                        window_size=sliding_window_size,
+                        block_table=decode_meta.block_table,
+                        num_splits=1 if envs.VLLM_BATCH_INVARIANT else 0,
+                        tree_bias=tree_bias,
+                    )
+                    try:
+                        flash_attn_varlen_func(
+                            q=query[:num_decode_tokens],
+                            k=key_cache,
+                            v=value_cache,
+                            out=output[:num_decode_tokens],
+                            cu_seqlens_q=decode_meta.query_start_loc,
+                            max_seqlen_q=decode_meta.max_query_len,
+                            seqused_k=decode_meta.seq_lens,
+                            max_seqlen_k=decode_meta.max_seq_len,
+                            softmax_scale=self.scale,
+                            causal=_fr13_sr_causal_flag(),
+                            alibi_slopes=None,
+                            window_size=sliding_window_size,
+                            block_table=decode_meta.block_table,
+                            softcap=self.logits_soft_cap,
+                            fa_version=2,
+                            tree_bias=tree_bias,
+                        )
+                    finally:
+                        _fr13_fa2_qrow16_production_end(_fr13_qrow16_production)
+"""
+        if text.count(production_call) != 1:
+            raise RuntimeError(
+                "qrow16 attested production decode call is not unique"
+            )
+        text = text.replace(production_call, production_replacement, 1)
+        changed = True
     if changed:
         path.write_text(text)
         py_compile.compile(path, doraise=True)
@@ -1465,10 +1698,36 @@ def _patch_cuda_graph_qrow16_live_ab(path: Path) -> bool:
     return True
 
 
+def _patch_cuda_graph_qrow16_production(path: Path) -> bool:
+    text = path.read_text()
+    sentinel = "# FR13_FA2_QROW16_PRODUCTION_CAPTURE_END"
+    if sentinel in text:
+        return False
+    anchor = "            entry.cudagraph = cudagraph\n"
+    if text.count(anchor) != 1:
+        raise RuntimeError("qrow16 production capture-end anchor is not unique")
+    replacement = anchor + f'''            {sentinel}: fail unless every exact
+            # target tree layer captured qrow16 in the attested final B1 graph.
+            from vllm.v1.attention.backends.tree_attn import (
+                _fr13_fa2_qrow16_production_capture_end,
+            )
+            _fr13_fa2_qrow16_production_capture_end(
+                id(entry.cudagraph),
+                getattr(entry, "_fr13_fixed32_graph_signature", None),
+                self.runtime_mode.name,
+                entry.batch_descriptor.num_reqs,
+            )
+'''
+    path.write_text(text.replace(anchor, replacement, 1))
+    py_compile.compile(path, doraise=True)
+    return True
+
+
 def patch_installed_vllm(
     site_packages: Path,
     *,
     fixed32_query_tile16_live_ab: bool = False,
+    fixed32_query_tile16_production: bool = False,
 ) -> dict[str, bool]:
     result = {
         "flash_attn_interface.py": _patch_flash_attn_interface(
@@ -1477,6 +1736,7 @@ def patch_installed_vllm(
         "tree_attn.py": _patch_tree_attn(
             site_packages / "vllm/v1/attention/backends/tree_attn.py",
             fixed32_query_tile16_live_ab=fixed32_query_tile16_live_ab,
+            fixed32_query_tile16_production=fixed32_query_tile16_production,
         ),
         "flash_attn.py": _patch_flash_attn_backend(
             site_packages / "vllm/v1/attention/backends/flash_attn.py"
@@ -1487,6 +1747,10 @@ def patch_installed_vllm(
     }
     if fixed32_query_tile16_live_ab:
         result["cuda_graph.py"] = _patch_cuda_graph_qrow16_live_ab(
+            site_packages / "vllm/compilation/cuda_graph.py"
+        )
+    elif fixed32_query_tile16_production:
+        result["cuda_graph.py"] = _patch_cuda_graph_qrow16_production(
             site_packages / "vllm/compilation/cuda_graph.py"
         )
     return result
@@ -1531,12 +1795,23 @@ def main() -> int:
         action="store_true",
         help="install the one-shot live paged B1 stock/qrow16 byte gate",
     )
+    parser.add_argument(
+        "--fixed32-query-tile16-production",
+        action="store_true",
+        help="install the attested exact-B1 qrow16 production selector",
+    )
     args = parser.parse_args()
+    if (
+        args.fixed32_query_tile16_live_ab
+        and args.fixed32_query_tile16_production
+    ):
+        parser.error("qrow16 live A/B and production selectors are mutually exclusive")
 
     payload: dict[str, object] = {
         "tree_bias_tile_earlyout": args.tree_bias_tile_earlyout,
         "fixed32_query_tile16": args.fixed32_query_tile16,
         "fixed32_query_tile16_live_ab": args.fixed32_query_tile16_live_ab,
+        "fixed32_query_tile16_production": args.fixed32_query_tile16_production,
     }
     if not args.skip_source:
         fa2_src = find_fa2_source(str(args.fa2_src) if args.fa2_src else None)
@@ -1550,6 +1825,7 @@ def main() -> int:
         payload["python"] = patch_installed_vllm(
             args.site_packages,
             fixed32_query_tile16_live_ab=args.fixed32_query_tile16_live_ab,
+            fixed32_query_tile16_production=args.fixed32_query_tile16_production,
         )
     print(payload)
     return 0

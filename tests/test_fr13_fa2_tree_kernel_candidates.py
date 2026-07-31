@@ -222,12 +222,13 @@ def test_qrow16_live_gate_uses_retained_paged_operands_after_real_replay() -> No
     assert '"raw_byte_mismatches": output_mismatches' in patcher
     assert '"raw_byte_mismatches": lse_mismatches' in patcher
     assert '"served_return": "stock captured graph output unchanged"' in patcher
+    assert '"candidate_so_sha256": candidate_so_sha256' in patcher
     assert "entry.output" not in patcher[
         patcher.index("def _fr13_fa2_qrow16_live_ab_replay") :
         patcher.index("def _patch_tree_attn")
     ]
 
     assert "FR13_FA2_QROW16_LIVE_PAGED_AB=${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}" in launcher
-    assert "FR13_FA2_QROW16_INTERNAL_DISPATCH is private to the live gate" in launcher
+    assert "FR13 qrow16 internal selectors are launcher-private" in launcher
     assert "fixed32 qrow16 candidate FA2 sha256 mismatch" in launcher
     assert "--fixed32-query-tile16-live-ab" in launcher

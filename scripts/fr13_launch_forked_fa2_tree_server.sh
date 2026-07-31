@@ -115,6 +115,9 @@ FR13_FA2_QROW16_LIVE_PAGED_AB=${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}
 FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID=${FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID:-}
 FR13_FA2_QROW16_LIVE_PAGED_AB_JSON=${FR13_FA2_QROW16_LIVE_PAGED_AB_JSON:-/logs/fr13_fa2_qrow16_live_paged_ab.json}
 FR13_FA2_QROW16_SO_SHA256=${FR13_FA2_QROW16_SO_SHA256:-}
+FR13_FA2_QROW16_PRODUCTION=${FR13_FA2_QROW16_PRODUCTION:-0}
+FR13_FA2_QROW16_LIVE_PASS_JSON=${FR13_FA2_QROW16_LIVE_PASS_JSON:-}
+FR13_FA2_QROW16_LIVE_PASS_SHA256=${FR13_FA2_QROW16_LIVE_PASS_SHA256:-}
 case "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" in
   0|1) ;;
   *) echo "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE must be 0 or 1" >&2; exit 2 ;;
@@ -123,8 +126,18 @@ case "$FR13_FA2_QROW16_LIVE_PAGED_AB" in
   0|1) ;;
   *) echo "FR13_FA2_QROW16_LIVE_PAGED_AB must be 0 or 1" >&2; exit 2 ;;
 esac
-if [[ -n "${FR13_FA2_QROW16_INTERNAL_DISPATCH:-}" ]]; then
-  echo "FR13_FA2_QROW16_INTERNAL_DISPATCH is private to the live gate" >&2
+case "$FR13_FA2_QROW16_PRODUCTION" in
+  0|1) ;;
+  *) echo "FR13_FA2_QROW16_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ -n "${FR13_FA2_QROW16_INTERNAL_DISPATCH:-}" \
+      || -n "${FR13_FA2_QROW16_INTERNAL_PRODUCTION_ATTESTED:-}" ]]; then
+  echo "FR13 qrow16 internal selectors are launcher-private" >&2
+  exit 2
+fi
+if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" \
+      && "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
+  echo "FR13 qrow16 live A/B and production are mutually exclusive" >&2
   exit 2
 fi
 case "$FR13_DRAFT_HEAD_PAD_ROWS" in
@@ -150,12 +163,27 @@ if [[ "$FR13_DRAFT_HEAD_PAD_ROWS" != "0" \
     exit 2
   }
 fi
-if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" ]]; then
+_FR13_FA2_QROW16_CANDIDATE_MODE=0
+if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" \
+      || "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
+  _FR13_FA2_QROW16_CANDIDATE_MODE=1
   [[ -n "${FR13_FIXED32_MODE:-}" \
      && "$MAX_NUM_SEQS" == "1" \
-     && -n "$FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID" \
      && "$FR13_FA2_QROW16_SO_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
-    echo "FR13 qrow16 live paged A/B requires fixed32 B1, an instance id, and candidate SO SHA-256" >&2
+    echo "FR13 qrow16 candidate modes require fixed32 B1 and candidate SO SHA-256" >&2
+    exit 2
+  }
+fi
+if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" \
+      && -z "$FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID" ]]; then
+  echo "FR13 qrow16 live paged A/B requires an instance id" >&2
+  exit 2
+fi
+if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
+  [[ -f "$FR13_FA2_QROW16_LIVE_PASS_JSON" \
+     && ! -L "$FR13_FA2_QROW16_LIVE_PASS_JSON" \
+     && "$FR13_FA2_QROW16_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
+    echo "FR13 qrow16 production requires a regular live PASS JSON and its SHA-256" >&2
     exit 2
   }
 fi
@@ -685,20 +713,20 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     || { echo "fixed32 forbids FR13_SERVE_BATCH_FLAGS" >&2; exit 2; }
   PYTHONPATH="$REPO/scripts" .venv/bin/python - \
     "$REPO" "$IMAGE" "$FORKED_FA2_SO" "$TREE" "$SPEC_CONFIG" \
-    "$FR13_FA2_QROW16_LIVE_PAGED_AB" "$FR13_FA2_QROW16_SO_SHA256" <<'PY'
+    "$_FR13_FA2_QROW16_CANDIDATE_MODE" "$FR13_FA2_QROW16_SO_SHA256" <<'PY'
 import sys
 from pathlib import Path
 
 import fr13_fixed32_contract as contract
 
-repo, image, fa2_raw, tree, spec_config, qrow_live, qrow_sha256 = sys.argv[1:]
+repo, image, fa2_raw, tree, spec_config, qrow_candidate, qrow_sha256 = sys.argv[1:]
 fa2 = Path(fa2_raw).resolve(strict=True)
 expected_fa2 = Path(repo).resolve() / contract.FA2_REPO_RELATIVE
 if image != contract.IMAGE_REFERENCE:
     raise SystemExit(f"fixed32 image override is forbidden: {image!r}")
 contract._docker_image_record()
 actual_sha256 = contract.sha256_file(fa2)
-if qrow_live == "1":
+if qrow_candidate == "1":
     if actual_sha256 != qrow_sha256:
         raise SystemExit("fixed32 qrow16 candidate FA2 sha256 mismatch")
     if actual_sha256 == contract.FA2_SHA256:
@@ -721,6 +749,23 @@ fi
 
 mkdir -p "$LOG_DIR"
 LOG_DIR=$(realpath "$LOG_DIR")
+FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR=""
+FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256=""
+if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
+  FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_HOST="$LOG_DIR/fr13_fa2_qrow16_production_pass.json"
+  python3 scripts/fr13_qrow16_pass_sidecar.py issue \
+    --live-result "$FR13_FA2_QROW16_LIVE_PASS_JSON" \
+    --expected-live-sha256 "$FR13_FA2_QROW16_LIVE_PASS_SHA256" \
+    --candidate-so "$FORKED_FA2_SO" \
+    --expected-candidate-sha256 "$FR13_FA2_QROW16_SO_SHA256" \
+    --out "$FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_HOST"
+  FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR=/logs/fr13_fa2_qrow16_production_pass.json
+  FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256=$(
+    sha256sum "$FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_HOST" | cut -d' ' -f1
+  )
+  export FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR
+  export FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256
+fi
 FR13_FIXED32_DOCKER_ARGS=()
 FR13_FIXED32_MIDDLEWARE_FLAGS=""
 FR13_FIXED32_CIDFILE=""
@@ -1274,6 +1319,9 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID="$FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID" \
   -e FR13_FA2_QROW16_LIVE_PAGED_AB_JSON="$FR13_FA2_QROW16_LIVE_PAGED_AB_JSON" \
   -e FR13_FA2_QROW16_SO_SHA256="$FR13_FA2_QROW16_SO_SHA256" \
+  -e FR13_FA2_QROW16_PRODUCTION="$FR13_FA2_QROW16_PRODUCTION" \
+  -e FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR="$FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR" \
+  -e FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256="$FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256" \
   -e FR13_KVREMAP_TIMER="${FR13_KVREMAP_TIMER:-0}" \
   -e FR13_KVREMAP_TIMER_JSON="${FR13_KVREMAP_TIMER_JSON:-}" \
   -e FR13_STATEREMAP_TIMER="${FR13_STATEREMAP_TIMER:-0}" \
@@ -1503,9 +1551,17 @@ PY
 fi
 cp /tmp/fr13_fork_fa2.so /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so
 sha256sum /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so | tee /logs/fr13_forked_fa2.sha256
+if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
+  python3 /workspace/scripts/fr13_qrow16_pass_sidecar.py verify \
+    --sidecar "$FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR" \
+    --expected-sidecar-sha256 "$FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256" \
+    --candidate-so /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so \
+    --expected-candidate-sha256 "$FR13_FA2_QROW16_SO_SHA256"
+  export FR13_FA2_QROW16_INTERNAL_PRODUCTION_ATTESTED=1
+fi
 python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
 python3 /workspace/scripts/fr13_patch_fa2_tree_bias.py --skip-source \
-  $(if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" ]]; then printf '%s' '--fixed32-query-tile16-live-ab'; fi)
+  $(if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" ]]; then printf '%s' '--fixed32-query-tile16-live-ab'; elif [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then printf '%s' '--fixed32-query-tile16-production'; fi)
 python3 - <<'PY'
 import os
 from pathlib import Path
@@ -1522,6 +1578,14 @@ if os.environ.get('FR13_FA2_QROW16_LIVE_PAGED_AB', '0') == '1':
     graph_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/compilation/cuda_graph.py')
     if 'FR13_FA2_QROW16_LIVE_PAGED_AB_REPLAY' not in graph_path.read_text():
         raise SystemExit(f'qrow16 live replay patch missing in {graph_path}')
+if os.environ.get('FR13_FA2_QROW16_PRODUCTION', '0') == '1':
+    if os.environ.get('FR13_FA2_QROW16_INTERNAL_PRODUCTION_ATTESTED') != '1':
+        raise SystemExit('qrow16 production attestation missing')
+    if 'FR13_FA2_QROW16_PRODUCTION' not in text:
+        raise SystemExit(f'qrow16 production selector missing in {path}')
+    graph_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/compilation/cuda_graph.py')
+    if 'FR13_FA2_QROW16_PRODUCTION_CAPTURE_END' not in graph_path.read_text():
+        raise SystemExit(f'qrow16 production capture postcheck missing in {graph_path}')
 if os.environ.get('FR13_BI_TREE_ATTN', '0') == '1':
     bi_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/batch_invariant.py')
     bi_text = bi_path.read_text()

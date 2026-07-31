@@ -23,6 +23,7 @@
     "lse": "all raw FP32 bytes",
     "required_mismatches": 0
   },
+  "pass_record_binds_candidate_so_sha256": true,
   "served_return": "stock captured graph output unchanged",
   "false_pass_guard": "candidate dispatch throws unless exact qrow16 production geometry engages",
   "forbidden": [

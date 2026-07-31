@@ -73,6 +73,12 @@ offline replay inputs are not part of this gate.
 `scripts/fr13_fa2_qrow16_byte_ab.py` remains compile preflight only. The live
 JSON result is `/logs/fr13_fa2_qrow16_live_paged_ab.json` by default.
 
+After that JSON passes, a separate default-off production selector is available
+through `FR13_FA2_QROW16_PRODUCTION=1`. The launcher requires the live JSON and
+its raw SHA-256, issues a canonical pass sidecar bound to the exact candidate
+SO, and revalidates both inside the container before final B1 graph capture.
+See `results/fr13_fixed32_qrow16_attested_production_source_20260731`.
+
 ## Static verification
 
 ```bash
