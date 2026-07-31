@@ -1,0 +1,11 @@
+{
+ "dataset_name": "princeton-nlp/SWE-bench_Verified",
+ "split": "test",
+ "tier": "fr13_b1_kernel_gate_one",
+ "source_subset": "config/fr13_fixed32/subset_b4_four.json",
+ "generated_at": "2026-07-31T00:00:00Z",
+ "note": "real SWE-Verified B1 kernel byte-gate diagnostic; not formal exact4 acceptance",
+ "instance_ids": [
+  "astropy__astropy-12907"
+ ]
+}
