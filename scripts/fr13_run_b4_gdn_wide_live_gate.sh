@@ -167,7 +167,12 @@ prefix = "swe_verified:"
 if not task_marker.startswith(prefix) or task_marker[len(prefix) :] not in exact_tasks:
     raise SystemExit("real-event marker is not bound to the canonical exact4 set")
 
-payload = json.loads(pass_path.read_text(encoding="ascii"))
+pass_raw = pass_path.read_bytes()
+try:
+    payload = json.loads(pass_raw.decode("ascii"))
+except (UnicodeDecodeError, json.JSONDecodeError) as error:
+    raise SystemExit("B4 graph PASS is not ASCII JSON") from error
+pass_sha256 = hashlib.sha256(pass_raw).hexdigest()
 source_path = Path("src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py")
 source_sha256 = hashlib.sha256(source_path.read_bytes()).hexdigest()
 expected_pass = {
@@ -334,6 +339,8 @@ verdict = {
     "engine_ledger_chain_head_sha256": ledger_verification[
         "chain_head_sha256"
     ],
+    "graph_live_pass_sha256": pass_sha256,
+    "kernel_source_sha256": source_sha256,
     "raw_byte_equal": True,
     "reference_always_served": True,
     "production_default_enabled": False,
