@@ -161,6 +161,9 @@ _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = (
 _FR13_FIXED32_BATCH_GDN_BYTE_AB = os.environ.get(
     "FR13_FIXED32_BATCH_GDN_BYTE_AB", "0"
 ).strip()
+_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = os.environ.get(
+    "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB", "0"
+).strip()
 _FR13_FIXED32_TREE_SOURCE = repr(list(_FR13_FIXED32_CHOICES))
 _FR13_FIXED32_SLOT_PI = tuple(
     [0]
@@ -399,6 +402,10 @@ try:
     _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE
 except NameError:
     _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = False
+try:
+    _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
+except NameError:
+    _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = False
 _FR13_FIXED32_DRAFTER_TREE_LAYER = "mtp.layers.0.self_attn.attn"
 _FR13_FIXED32_TARGET_TREE_LAYERS = frozenset(
     "language_model.model.layers.%d.self_attn.attn" % layer
@@ -3139,6 +3146,20 @@ def _fr13_fixed32_capture_begin(
                 "tree kernel"
             )
         tree_kernel.fixed32_gdn_bv_live_capture_begin(identity, batch)
+    if _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB and batch == 4:
+        tree_kernel = __import__(
+            "lumo_flywheel_serving.fr10_gdn_tree_kernel",
+            fromlist=(
+                "_fr13_fixed32_batch_gdn_graph_byte_ab_control",
+                "fixed32_batch_gdn_graph_live_capture_begin",
+            ),
+        )
+        if not tree_kernel._fr13_fixed32_batch_gdn_graph_byte_ab_control():
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN selector drift between observer "
+                "and tree kernel"
+            )
+        tree_kernel.fixed32_batch_gdn_graph_live_capture_begin(identity, batch)
 
 
 def _fr13_fixed32_capture_end(
@@ -3294,6 +3315,25 @@ def _fr13_fixed32_capture_end(
             int(work["batch_size"]),
             int(work["gdn_scan_calls"]),
         )
+    if _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB and int(work["batch_size"]) == 4:
+        tree_kernel = __import__(
+            "lumo_flywheel_serving.fr10_gdn_tree_kernel",
+            fromlist=(
+                "_fr13_fixed32_batch_gdn_graph_byte_ab_control",
+                "fixed32_batch_gdn_graph_live_capture_end",
+            ),
+        )
+        if not tree_kernel._fr13_fixed32_batch_gdn_graph_byte_ab_control():
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN selector drift between observer "
+                "and tree kernel"
+            )
+        tree_kernel.fixed32_batch_gdn_graph_live_capture_end(
+            identity,
+            4,
+            signature,
+            48,
+        )
     _FR13_FIXED32_CAPTURE_MANIFESTS[identity] = (signature, canonical)
     _FR13_FIXED32_CAPTURE_CONTEXT = None
     return signature
@@ -3425,6 +3465,32 @@ def _fr13_fixed32_observed_graph_replay(
         )
     tree = manifest["tree_attn"]
     gdn = manifest["gdn"]
+    if (
+        _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
+        and int(event["batch_size"]) == 4
+    ):
+        if not tree_kernel._fr13_fixed32_batch_gdn_graph_byte_ab_control():
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN selector drift between observer "
+                "and tree kernel"
+            )
+        gate_report = tree_kernel.fixed32_batch_gdn_graph_live_gate_on_replay(
+            identity,
+            expected_signature,
+            4,
+            48,
+        )
+        if (
+            gate_report.get("status") != "passed"
+            or gate_report.get("graph_id") != identity
+            or gate_report.get("graph_signature") != expected_signature
+            or gate_report.get("batch_size") != 4
+            or gate_report.get("records") != 48
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN byte gate did not pass on the "
+                "authenticated full-graph replay: " + repr(gate_report)
+            )
     if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None:
         if getattr(
             tree_kernel, "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE", None
@@ -5224,6 +5290,12 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
     candidate_raw = _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
     production_raw = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
     taw_native_diagnostic = bool(_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE)
+    graph_batch_gdn_diagnostic_raw = _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
+    if graph_batch_gdn_diagnostic_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
+        )
+    graph_batch_gdn_diagnostic = graph_batch_gdn_diagnostic_raw == "1"
     if candidate_raw and candidate_raw not in ("16", "32", "64", "128"):
         raise RuntimeError(
             "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be one of "
@@ -5270,6 +5342,8 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         f"{production!r}\n"
         "_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = "
         f"{taw_native_diagnostic!r}\n"
+        "_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = "
+        f"{graph_batch_gdn_diagnostic!r}\n"
     )
 
 
@@ -5280,9 +5354,24 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     production = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
     taw_native_diagnostic = bool(_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE)
     batch_gdn_byte_diagnostic = _FR13_FIXED32_BATCH_GDN_BYTE_AB
+    graph_batch_gdn_byte_diagnostic = (
+        _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
+    )
     if batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1"
+        )
+    if graph_batch_gdn_byte_diagnostic not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
+        )
+    if (
+        batch_gdn_byte_diagnostic == "1"
+        and graph_batch_gdn_byte_diagnostic == "1"
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 eager and graph-replay batched GDN diagnostics are "
+            "mutually exclusive"
         )
     if batch_gdn_byte_diagnostic == "1":
         candidate_bv = os.environ.get(
@@ -5306,6 +5395,50 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             raise RuntimeError(
                 "FR13 fixed32 eager B4 byte diagnostic cannot arm a B1 or "
                 "production route"
+            )
+    if graph_batch_gdn_byte_diagnostic == "1":
+        candidate_bv = os.environ.get(
+            "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE", ""
+        ).strip()
+        if not mode:
+            raise RuntimeError(
+                "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires fixed32 mode"
+            )
+        if candidate_bv not in ("16", "32", "64", "128"):
+            raise RuntimeError(
+                "FR13 fixed32 graph B4 byte diagnostic requires an exact "
+                "batched GDN BV candidate"
+            )
+        incompatible = (
+            os.environ.get("FR13_FIXED32_B1_DIAGNOSTIC", "0") != "0"
+            or os.environ.get("FR13_FIXED32_BATCH_GDN_PRODUCTION", "0")
+            != "0"
+            or bool(
+                os.environ.get("FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", "")
+            )
+            or bool(candidate)
+            or bool(production)
+        )
+        if incompatible:
+            raise RuntimeError(
+                "FR13 fixed32 graph B4 byte diagnostic cannot arm a B1, "
+                "path-BV, or production route"
+            )
+        exact_runtime = {
+            "FR13_TREE_GDN_GEOM_OVERRIDE": "BV=8",
+            "FR13_RING_EXPORT": "1",
+            "FR13_FLAGS_INKERNEL": "1",
+            "FR10_METRICS": "1",
+        }
+        drift = {
+            name: (os.environ.get(name, ""), expected)
+            for name, expected in exact_runtime.items()
+            if os.environ.get(name, "") != expected
+        }
+        if drift:
+            raise RuntimeError(
+                "FR13 fixed32 graph B4 byte diagnostic runtime contract "
+                "drift: " + repr(drift)
             )
     if candidate:
         if candidate not in ("16", "32", "64", "128"):
@@ -30408,7 +30541,9 @@ def _patch_cudagraph_wrapper_subspan_mark() -> bool:
         "                pass\n"
         "        entry.cudagraph.replay()\n"
         + (
-            "        if getattr(torch, \"_fr13_sfwd_open\", False):\n"
+            "        if ("
+            + repr(_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB == "1")
+            + " or getattr(torch, \"_fr13_sfwd_open\", False)):\n"
             "            from vllm.model_executor.layers.mamba import (\n"
             "                gdn_linear_attn as _fr13_f32_replay_gdn,\n"
             "            )\n"
