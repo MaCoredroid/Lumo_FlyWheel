@@ -76,11 +76,82 @@ def test_tree_bias_tile_earlyout_is_independent_and_exact() -> None:
                     )
 
 
-def test_source_build_has_only_suffix_candidate_and_defaults_off() -> None:
+def _row_mapping(row: int, *, block_m: int, warps: int) -> tuple[int, int, int]:
+    assert block_m == 16 * warps
+    m_block = row // block_m
+    row_in_block = row % block_m
+    warp = row_in_block // 16
+    return m_block, warp, row_in_block % 16
+
+
+def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -> None:
+    module = _module()
+    launch = tmp_path / "flash_fwd_launch_template.h"
+    stock = "\n".join(
+        (
+            module.STOCK_SPLITKV_LAUNCH_SIGNATURE,
+            module.STOCK_SPLITKV_COMBINE_GUARD,
+            module.STOCK_SPLITKV_DISPATCH,
+        )
+    )
+    launch.write_text(stock)
+
+    assert not module._patch_flash_fwd_launch_template(launch)
+    assert launch.read_text() == stock
+    assert module._patch_flash_fwd_launch_template(
+        launch,
+        fixed32_query_tile16=True,
+    )
+    candidate = launch.read_text()
+    assert module.NO_COMBINE_SPLITKV_LAUNCH_SIGNATURE in candidate
+    assert module.NO_COMBINE_SPLITKV_COMBINE_GUARD in candidate
+    assert module.FIXED32_QUERY_TILE16_DISPATCH in candidate
+    assert not module._patch_flash_fwd_launch_template(
+        launch,
+        fixed32_query_tile16=True,
+    )
+
+    assert "Headdim == 256 && !Is_causal" in candidate
+    assert "params.tree_bias_ptr != nullptr" in candidate
+    assert "params.b == 1" in candidate
+    assert "params.d == 256" in candidate
+    assert "params.h == 24" in candidate
+    assert "params.seqlen_q == 32" in candidate
+    assert "params.window_size_left < 0" in candidate
+    assert "params.window_size_right < 0" in candidate
+    assert "params.alibi_slopes_ptr == nullptr" in candidate
+    assert "params.knew_ptr == nullptr" in candidate
+    assert "params.num_splits <= 1" in candidate
+    assert "run_flash_splitkv_fwd<TreeKernelTraits, Is_causal, false>" in candidate
+    assert "if constexpr (AllowSplit)" in candidate
+    assert "kTreeBlockM = 16" in candidate
+    assert "kTreeWarps = 1" in candidate
+    assert "TreeKernelTraits::kGmemRowsPerThread == 16" in candidate
+    assert "public FA2 API requires paged-KV blocks divisible by 16" in candidate
+    assert "kBlockN" in candidate
+    assert "splitkv_combine" not in candidate
+    assert "params.num_splits =" not in candidate
+
+    # The CTA id changes for rows 16..31, but the warp-local query-row/lane
+    # coordinate is identical to the stock 64-row, four-warp tile.
+    for row in range(32):
+        _, _, stock_warp_row = _row_mapping(row, block_m=64, warps=4)
+        _, candidate_warp, candidate_warp_row = _row_mapping(
+            row,
+            block_m=16,
+            warps=1,
+        )
+        assert candidate_warp == 0
+        assert candidate_warp_row == stock_warp_row
+
+
+def test_source_build_candidates_are_independent_and_default_off() -> None:
     text = Path("scripts/fr13_patch_fa2_tree_bias.py").read_text()
 
     assert 'parser.add_argument(\n        "--tree-bias-tile-earlyout",' in text
+    assert 'parser.add_argument(\n        "--fixed32-query-tile16",' in text
     assert "tree_bias_tile_earlyout: bool = False" in text
+    assert "fixed32_query_tile16: bool = False" in text
     assert "tree_splitkv" not in text
     assert "tree-splitkv" not in text
     assert "FR13_FA2_TREE_SPLITKV" not in text

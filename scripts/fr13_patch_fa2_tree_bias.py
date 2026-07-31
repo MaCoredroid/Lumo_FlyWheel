@@ -8,6 +8,12 @@ FA2 and adds it to score tiles after QK and before masking/softmax.
 The exact-safe ``--tree-bias-tile-earlyout`` source-build candidate skips the
 per-score bias walk on K tiles that cannot overlap the tree suffix. It does not
 change FA2 launch geometry, split-KV selection, or floating-point reductions.
+
+The independent ``--fixed32-query-tile16`` candidate replaces the underfilled
+64-row, four-warp query tile only for the fixed32 B1 tree call with two 16-row,
+one-warp query CTAs per head. Each CTA still traverses the complete K sequence;
+there is no split-K reduction or combine kernel. B4 keeps the stock geometry,
+which already supplies 96 CTAs per layer and does not have the B1 underfill.
 """
 
 from __future__ import annotations
@@ -94,6 +100,73 @@ __forceinline__ __device__ void apply_tree_bias(Tensor<Engine, Layout> &tensor_,
 
 
 TREE_BIAS_HELPER = _tree_bias_helper(tile_earlyout=False)
+
+
+STOCK_SPLITKV_LAUNCH_SIGNATURE = r'''template<typename Kernel_traits, bool Is_causal>
+void run_flash_splitkv_fwd(Flash_fwd_params &params, cudaStream_t stream) {'''
+
+
+NO_COMBINE_SPLITKV_LAUNCH_SIGNATURE = r'''template<typename Kernel_traits, bool Is_causal, bool AllowSplit = true>
+void run_flash_splitkv_fwd(Flash_fwd_params &params, cudaStream_t stream) {'''
+
+
+STOCK_SPLITKV_COMBINE_GUARD = r'''    if (params.num_splits > 1) {
+        // We want kBlockM to be as small as possible for more parallelism.'''
+
+
+NO_COMBINE_SPLITKV_COMBINE_GUARD = r'''    if constexpr (AllowSplit)
+        if (params.num_splits > 1) {
+        // We want kBlockM to be as small as possible for more parallelism.'''
+
+
+STOCK_SPLITKV_DISPATCH = r'''template<typename T, int Headdim, bool Is_causal>
+void run_mha_fwd_splitkv_dispatch(Flash_fwd_params &params, cudaStream_t stream) {
+    constexpr static int kBlockM = 64;  // Fixed for all head dimensions
+    // TD [2023-08-28]: nvcc segfaults for headdim 96 with block size 64 x 256,
+    // and for headdim 192 with block size 64 x 128.
+    constexpr static int kBlockN = Headdim <= 64 ? 256 : (Headdim <= 128 ? 128 : 64);
+    run_flash_splitkv_fwd<Flash_fwd_kernel_traits<Headdim, kBlockM, kBlockN, 4, false, false, T>, Is_causal>(params, stream);
+}
+'''
+
+
+FIXED32_QUERY_TILE16_DISPATCH = r'''template<typename T, int Headdim, bool Is_causal>
+void run_mha_fwd_splitkv_dispatch(Flash_fwd_params &params, cudaStream_t stream) {
+    // TD [2023-08-28]: nvcc segfaults for headdim 96 with block size 64 x 256,
+    // and for headdim 192 with block size 64 x 128.
+    constexpr static int kBlockN = Headdim <= 64 ? 256 : (Headdim <= 128 ? 128 : 64);
+    // FR13_FA2_FIXED32_QUERY_TILE16: two query CTAs fill all 48 GB10 SMs.
+    // This is query partitioning, not split-K: each real row keeps one warp's
+    // complete, ordered K-block loop and no combine kernel is launched.
+    if constexpr (Headdim == 256 && !Is_causal) {
+        if (params.tree_bias_ptr != nullptr
+            && params.b == 1
+            && params.d == 256
+            && params.h == 24
+            && params.seqlen_q == 32
+            && params.tree_bias_rows == 32
+            && params.tree_bias_cols == 32
+            && params.window_size_left < 0
+            && params.window_size_right < 0
+            && params.alibi_slopes_ptr == nullptr
+            && params.knew_ptr == nullptr
+            && params.num_splits <= 1) {
+            constexpr static int kTreeBlockM = 16;
+            constexpr static int kTreeWarps = 1;
+            static_assert(kTreeBlockM == 16 * kTreeWarps);
+            using TreeKernelTraits = Flash_fwd_kernel_traits<
+                Headdim, kTreeBlockM, kBlockN, kTreeWarps,
+                false, false, T>;
+            // The public FA2 API requires paged-KV blocks divisible by 16.
+            static_assert(TreeKernelTraits::kGmemRowsPerThread == 16);
+            run_flash_splitkv_fwd<TreeKernelTraits, Is_causal, false>(params, stream);
+            return;
+        }
+    }
+    constexpr static int kBlockM = 64;  // Fixed for all other calls
+    run_flash_splitkv_fwd<Flash_fwd_kernel_traits<Headdim, kBlockM, kBlockN, 4, false, false, T>, Is_causal>(params, stream);
+}
+'''
 
 
 def _replace_once(text: str, old: str, new: str, label: str) -> tuple[str, bool]:
@@ -189,6 +262,39 @@ def _patch_flash_fwd_kernel(path: Path, *, tile_earlyout: bool = False) -> bool:
             "expected tree bias calls in all four FA2 forward loops, found "
             f"{text.count('apply_tree_bias<Kernel_traits>')}"
         )
+    if changed:
+        path.write_text(text)
+    return changed
+
+
+def _patch_flash_fwd_launch_template(
+    path: Path,
+    *,
+    fixed32_query_tile16: bool = False,
+) -> bool:
+    if not fixed32_query_tile16:
+        return False
+    text = path.read_text()
+    changed = False
+    for old, new, label in (
+        (
+            STOCK_SPLITKV_LAUNCH_SIGNATURE,
+            NO_COMBINE_SPLITKV_LAUNCH_SIGNATURE,
+            "fixed32 FA2 compile-time split gate",
+        ),
+        (
+            STOCK_SPLITKV_COMBINE_GUARD,
+            NO_COMBINE_SPLITKV_COMBINE_GUARD,
+            "fixed32 FA2 combine instantiation gate",
+        ),
+        (
+            STOCK_SPLITKV_DISPATCH,
+            FIXED32_QUERY_TILE16_DISPATCH,
+            "fixed32 FA2 query tile16 dispatch",
+        ),
+    ):
+        text, replaced = _replace_once(text, old, new, label)
+        changed |= replaced
     if changed:
         path.write_text(text)
     return changed
@@ -409,10 +515,13 @@ def patch_fa2_source(
     fa2_src: Path,
     *,
     tree_bias_tile_earlyout: bool = False,
+    fixed32_query_tile16: bool = False,
 ) -> dict[str, bool]:
     files = {
         "flash.h": fa2_src / "csrc/flash_attn/src/flash.h",
         "flash_fwd_kernel.h": fa2_src / "csrc/flash_attn/src/flash_fwd_kernel.h",
+        "flash_fwd_launch_template.h": fa2_src
+        / "csrc/flash_attn/src/flash_fwd_launch_template.h",
         "flash_api.cpp": fa2_src / "csrc/flash_attn/flash_api.cpp",
         "flash_api_torch_lib.cpp": fa2_src / "csrc/flash_attn/flash_api_torch_lib.cpp",
     }
@@ -424,6 +533,10 @@ def patch_fa2_source(
         "flash_fwd_kernel.h": _patch_flash_fwd_kernel(
             files["flash_fwd_kernel.h"],
             tile_earlyout=tree_bias_tile_earlyout,
+        ),
+        "flash_fwd_launch_template.h": _patch_flash_fwd_launch_template(
+            files["flash_fwd_launch_template.h"],
+            fixed32_query_tile16=fixed32_query_tile16,
         ),
         "flash_api.cpp": _patch_flash_api_cpp(files["flash_api.cpp"]),
         "flash_api_torch_lib.cpp": _patch_torch_lib(files["flash_api_torch_lib.cpp"]),
@@ -980,10 +1093,16 @@ def main() -> int:
         action="store_true",
         help="build the exact tree-bias K-tile overlap early-out candidate",
     )
+    parser.add_argument(
+        "--fixed32-query-tile16",
+        action="store_true",
+        help="build the fixed32 B1 tree-only FA2 16-row query-tile candidate",
+    )
     args = parser.parse_args()
 
     payload: dict[str, object] = {
         "tree_bias_tile_earlyout": args.tree_bias_tile_earlyout,
+        "fixed32_query_tile16": args.fixed32_query_tile16,
     }
     if not args.skip_source:
         fa2_src = find_fa2_source(str(args.fa2_src) if args.fa2_src else None)
@@ -991,6 +1110,7 @@ def main() -> int:
         payload["source"] = patch_fa2_source(
             fa2_src,
             tree_bias_tile_earlyout=args.tree_bias_tile_earlyout,
+            fixed32_query_tile16=args.fixed32_query_tile16,
         )
     if not args.skip_python:
         payload["python"] = patch_installed_vllm(args.site_packages)
