@@ -287,6 +287,19 @@ _FR13_FIXED32_MODE_SIDECARS = (
     "/logs/fr13_fixed32_mode.flag",
     "/tmp/fr13_fixed32_mode.flag",
 )
+_FR13_FIXED32_GDN_PATH_BV_SIDECARS = (
+    "/logs/fr13_fixed32_gdn_path_bv_candidate.flag",
+    "/tmp/fr13_fixed32_gdn_path_bv_candidate.flag",
+)
+_FR13_FIXED32_GDN_BV_SURFACES = (
+    "export",
+    "ring_k",
+    "ring_v",
+    "ring_a",
+    "ring_b",
+    "flags",
+    "counter",
+)
 
 
 def _fr13_resolve_fixed32_mode() -> str | None:
@@ -358,6 +371,340 @@ def _fr13_resolve_fixed32_mode() -> str | None:
 
 
 _FR13_FIXED32_MODE = _fr13_resolve_fixed32_mode()
+
+
+def _fr13_resolve_fixed32_gdn_path_bv_candidate(
+    fixed32_mode: str | None,
+    *,
+    environ=None,
+    sidecars=None,
+    geom_override=None,
+) -> int | None:
+    """Resolve the non-serving fixed32 path-BV live-gate candidate."""
+    env = os.environ if environ is None else environ
+    paths = (
+        _FR13_FIXED32_GDN_PATH_BV_SIDECARS
+        if sidecars is None
+        else tuple(sidecars)
+    )
+    sources: list[tuple[str, str]] = []
+    raw_env = env.get("FR13_FIXED32_GDN_PATH_BV_CANDIDATE")
+    if raw_env is not None and str(raw_env).strip():
+        sources.append(
+            (
+                "env:FR13_FIXED32_GDN_PATH_BV_CANDIDATE",
+                str(raw_env).strip(),
+            )
+        )
+    for path in paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="ascii") as handle:
+                raw_sidecar = handle.read(16)
+        except (OSError, UnicodeError) as error:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PATH_BV_CANDIDATE: cannot read sidecar "
+                f"{path}: {error}"
+            ) from error
+        if len(raw_sidecar) >= 16:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PATH_BV_CANDIDATE: sidecar exceeds "
+                f"15 bytes: {path}"
+            )
+        sources.append((f"sidecar:{path}", raw_sidecar.strip()))
+    if not sources:
+        return None
+    invalid = [
+        (source, value)
+        for source, value in sources
+        if value not in ("16", "32", "64", "128")
+    ]
+    if invalid:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_CANDIDATE: expected one of "
+            "16, 32, 64, or 128, got "
+            + ", ".join(
+                f"{source}={value!r}" for source, value in invalid
+            )
+        )
+    values = {value for _source, value in sources}
+    if len(values) != 1:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_CANDIDATE: conflicting sources: "
+            + ", ".join(
+                f"{source}={value!r}" for source, value in sources
+            )
+        )
+    if fixed32_mode not in _FR13_FIXED32_MODES:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_CANDIDATE requires an exact "
+            f"fixed32 mode, got {fixed32_mode!r}"
+        )
+    if geom_override != {"BV": 8}:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_CANDIDATE requires the served graph "
+            "to be pinned exactly to FR13_TREE_GDN_GEOM_OVERRIDE=BV=8"
+        )
+    return int(values.pop())
+
+
+_FR13_FIXED32_GDN_PATH_BV_CANDIDATE = (
+    _fr13_resolve_fixed32_gdn_path_bv_candidate(
+        _FR13_FIXED32_MODE,
+        geom_override=_read_tree_gdn_geom_override(),
+    )
+)
+_FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT = None
+_FR13_FIXED32_GDN_BV_CAPTURES: dict[int, dict] = {}
+_FR13_FIXED32_GDN_BV_LIVE_STATE = {
+    "status": (
+        "armed"
+        if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+        else "disabled"
+    ),
+    "candidate_bv": _FR13_FIXED32_GDN_PATH_BV_CANDIDATE,
+    "graph_id": None,
+    "batch_size": None,
+    "records": 0,
+}
+
+
+def fixed32_gdn_bv_live_capture_begin(
+    graph_id: int, batch_size: int
+) -> None:
+    """Open record collection for one final FULL fixed32 graph capture."""
+    global _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT
+    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is None:
+        return
+    identity = int(graph_id)
+    batch = int(batch_size)
+    if (
+        _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES
+        or identity <= 0
+        or batch not in (1, 2, 3, 4)
+        or _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT is not None
+        or identity in _FR13_FIXED32_GDN_BV_CAPTURES
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live-gate capture begin drift: "
+            + repr((identity, batch, _FR13_FIXED32_MODE))
+        )
+    _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT = {
+        "graph_id": identity,
+        "batch_size": batch,
+        "records": [],
+    }
+
+
+def _fr13_fixed32_gdn_bv_live_capture_register(record: dict) -> None:
+    """Retain the persistent operands of one captured fixed32 GDN call."""
+    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is None:
+        return
+    context = _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT
+    # Eager warmups and profile-only CUDA captures deliberately have no live
+    # gate context. The final capture-end hook requires the exact record count,
+    # so a missing final begin cannot pass silently.
+    if context is None:
+        return
+    required = {
+        "snapshot",
+        "restore",
+        "run",
+        "byte_equal",
+        "surface_names",
+    }
+    if (
+        not isinstance(context, dict)
+        or set(context) != {"graph_id", "batch_size", "records"}
+        or not isinstance(record, dict)
+        or set(record) != required
+        or tuple(record["surface_names"]) != _FR13_FIXED32_GDN_BV_SURFACES
+        or not all(callable(record[name]) for name in required - {"surface_names"})
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live-gate capture record drift"
+        )
+    if torch.cuda.is_available() and not torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live-gate record was not captured by CUDA"
+        )
+    context["records"].append(record)
+
+
+def fixed32_gdn_bv_live_capture_end(
+    graph_id: int, batch_size: int, expected_records: int
+) -> None:
+    """Freeze the launch records and bind them to the signed graph identity."""
+    global _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT
+    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is None:
+        return
+    context = _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT
+    identity = int(graph_id)
+    batch = int(batch_size)
+    expected = int(expected_records)
+    records = context.get("records") if isinstance(context, dict) else None
+    if (
+        not isinstance(context, dict)
+        or int(context.get("graph_id", -1)) != identity
+        or int(context.get("batch_size", -1)) != batch
+        or expected != 48 * batch
+        or not isinstance(records, list)
+        or len(records) != expected
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live-gate capture end drift: "
+            + repr(
+                (
+                    identity,
+                    batch,
+                    expected,
+                    len(records) if isinstance(records, list) else None,
+                )
+            )
+        )
+    _FR13_FIXED32_GDN_BV_CAPTURES[identity] = {
+        "batch_size": batch,
+        "records": tuple(records),
+    }
+    _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT = None
+
+
+def _fr13_fixed32_gdn_bv_compare_records(
+    records, candidate_bv: int
+) -> dict[str, int]:
+    """Run BV8 then the selected candidate and restore served bytes."""
+    candidate = int(candidate_bv)
+    if candidate not in (16, 32, 64, 128) or candidate == 8:
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live gate refused stock-vs-stock: "
+            f"reference=8 candidate={candidate}"
+        )
+    checked = 0
+    for index, record in enumerate(records):
+        snapshot = record["snapshot"]
+        restore = record["restore"]
+        run = record["run"]
+        byte_equal = record["byte_equal"]
+        baseline = snapshot()
+        if tuple(baseline) != _FR13_FIXED32_GDN_BV_SURFACES:
+            raise RuntimeError(
+                "FR13 fixed32 GDN BV live-gate baseline surface drift at "
+                f"record {index}: {tuple(baseline)!r}"
+            )
+        try:
+            reference = run(8)
+            reference_surfaces = snapshot()
+            restore(baseline)
+            candidate_result = run(candidate)
+            candidate_surfaces = snapshot()
+            if (
+                set(reference) != {"block_v", "launch_key", "output"}
+                or set(candidate_result)
+                != {"block_v", "launch_key", "output"}
+                or int(reference["block_v"]) != 8
+                or int(candidate_result["block_v"]) != candidate
+                or reference["launch_key"] == candidate_result["launch_key"]
+            ):
+                raise RuntimeError(
+                    "FR13 fixed32 GDN BV live gate detected false "
+                    "stock-vs-stock launch metadata at record "
+                    f"{index}: reference={reference!r} "
+                    f"candidate={candidate_result!r}"
+                )
+            mismatches = []
+            if not byte_equal(reference["output"], candidate_result["output"]):
+                mismatches.append("output")
+            for name in _FR13_FIXED32_GDN_BV_SURFACES:
+                if not byte_equal(
+                    reference_surfaces[name], candidate_surfaces[name]
+                ):
+                    mismatches.append(name)
+            if mismatches:
+                raise RuntimeError(
+                    "FR13 fixed32 GDN BV live-gate byte mismatch at record "
+                    f"{index}: {mismatches}"
+                )
+            checked += 1
+        finally:
+            restore(baseline)
+            restored = snapshot()
+            restore_bad = [
+                name
+                for name in _FR13_FIXED32_GDN_BV_SURFACES
+                if not byte_equal(restored[name], baseline[name])
+            ]
+            if restore_bad:
+                raise RuntimeError(
+                    "FR13 fixed32 GDN BV live gate failed to restore served "
+                    f"BV8 bytes at record {index}: {restore_bad}"
+                )
+    return {"records": checked, "reference_bv": 8, "candidate_bv": candidate}
+
+
+def fixed32_gdn_bv_live_gate_on_replay(
+    graph_id: int, batch_size: int, expected_records: int
+) -> dict[str, object]:
+    """Execute the gate once, immediately after the first measured replay."""
+    state = _FR13_FIXED32_GDN_BV_LIVE_STATE
+    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is None:
+        return dict(state)
+    if state["status"] == "passed":
+        return dict(state)
+    if state["status"] != "armed":
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live gate is not runnable: " + repr(state)
+        )
+    if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live gate cannot execute during capture"
+        )
+    identity = int(graph_id)
+    batch = int(batch_size)
+    expected = int(expected_records)
+    capture = _FR13_FIXED32_GDN_BV_CAPTURES.get(identity)
+    records = capture.get("records") if isinstance(capture, dict) else None
+    if (
+        not isinstance(capture, dict)
+        or int(capture.get("batch_size", -1)) != batch
+        or expected != 48 * batch
+        or not isinstance(records, tuple)
+        or len(records) != expected
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live-gate replay/capture drift: "
+            + repr((identity, batch, expected, capture))
+        )
+    state["status"] = "running"
+    try:
+        result = _fr13_fixed32_gdn_bv_compare_records(
+            records, _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+        )
+    except Exception:
+        state["status"] = "failed"
+        raise
+    state.update(
+        status="passed",
+        graph_id=identity,
+        batch_size=batch,
+        records=int(result["records"]),
+    )
+    _FR13_FIXED32_GDN_BV_CAPTURES.clear()
+    print(
+        "[FR13_FIXED32_GDN_BV_LIVE_GATE PASS] "
+        f"graph_id={identity} batch={batch} records={result['records']} "
+        f"reference_bv=8 candidate_bv={result['candidate_bv']} "
+        "surfaces=output,export,ring_k,ring_v,ring_a,ring_b,flags,counter "
+        "served_bv=8 restored=1",
+        flush=True,
+    )
+    return dict(state)
+
+
+def fixed32_gdn_bv_live_gate_report() -> dict[str, object]:
+    return dict(_FR13_FIXED32_GDN_BV_LIVE_STATE)
+
+
 _FR13_SUBTREE_ROUTE_REQUESTED = (
     subtree_parallel_on() or _FR13_FIXED32_MODE is not None
 )
@@ -7896,7 +8243,13 @@ def launch_tree_gdn_prepared(
         and _subtree_state["selfcheck_armed"]
     )
 
-    def _launch_paths(_out, _count=count_invocation):
+    def _launch_paths(
+        _out,
+        _count=count_invocation,
+        *,
+        _path_block_v=_bv,
+        _counter_arg=invocation_counter,
+    ):
         # FR13_SUBTREE_PARALLEL route: one launch per path level; paths in a
         # level scan concurrently on grid axis 2. RING/RAW semantics match
         # the monolith per node; PIGGYBACK unsupported (asserted below).
@@ -7931,7 +8284,13 @@ def launch_tree_gdn_prepared(
             if _fixed32_io:
                 _state_source = 1 if _li == 0 else 2
                 _export_mode = 1 if _li == 0 else 2
-            _tree_gdn_path_kernel[(num_vh, triton.cdiv(dim_v, _bv), _npaths)](
+            _tree_gdn_path_kernel[
+                (
+                    num_vh,
+                    triton.cdiv(dim_v, _path_block_v),
+                    _npaths,
+                )
+            ](
                 q,
                 k,
                 v,
@@ -7944,7 +8303,7 @@ def launch_tree_gdn_prepared(
                 h0,
                 h0_indices,
                 h0_num_accepted_tokens,
-                invocation_counter,
+                _counter_arg,
                 _nodes,
                 _pars,
                 _lengths,
@@ -7961,7 +8320,7 @@ def launch_tree_gdn_prepared(
                 NUM_VH=num_vh,
                 DIM_K=dim_k,
                 DIM_V=dim_v,
-                BLOCK_V=_bv,
+                BLOCK_V=_path_block_v,
                 OUTPUT_SCALE=output_scale,
                 USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
                 H0_IS_BANK=h0_is_bank,
@@ -7989,6 +8348,16 @@ def launch_tree_gdn_prepared(
                 f"critical={st['critical']}",
                 flush=True,
             )
+        return {
+            "block_v": int(_path_block_v),
+            "launch_key": (
+                "tree_gdn_path",
+                int(_path_block_v),
+                int(triton.cdiv(dim_v, _path_block_v)),
+                int(_num_warps),
+                tuple(sorted(_extra_launch_kwargs.items())),
+            ),
+        }
 
     def _launch(
         _out,
@@ -8103,6 +8472,101 @@ def launch_tree_gdn_prepared(
                 f"{_label} SELFCHECK MISMATCH: invocation counter did not "
                 "advance exactly once"
             )
+
+    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None:
+        # The served FULL graph remains the exact BV8 launch above. Capture
+        # only persistent operand references; the first measured replay gate
+        # allocates private outputs, runs explicit BV8 then BV16/32/64/128, and
+        # restores all shared state before returning the graph's BV8 output.
+        if (
+            _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES
+            or not _subtree_route_armed
+            or _subtree_state is None
+            or _subtree_state.get("schedule") != "fixed32"
+            or _subtree_state.get("fixed32_contract") is None
+            or n_actual != 32
+            or n_pad != 32
+            or _bv != 8
+            or _geom != {"BV": 8}
+            or not _ring_export
+            or not _flags_export
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN BV live gate requires the exact fixed32 "
+                "BV8 served path with export/rings/flags/counter"
+            )
+
+        _gdn_bv_gate_counter_holder = {}
+
+        def _gdn_bv_gate_counter():
+            if count_invocation:
+                return invocation_counter
+            # Formal fixed32 pins FR10_METRICS=0, so the served graph has no
+            # counter store. Use one private scalar for both live-gate arms to
+            # exercise and byte-compare COUNT_INVOCATION without touching the
+            # strict-mask dummy pointer used by the served graph.
+            counter = _gdn_bv_gate_counter_holder.get("counter")
+            if counter is None:
+                counter = torch.zeros(
+                    (), dtype=torch.int32, device=q.device
+                )
+                _gdn_bv_gate_counter_holder["counter"] = counter
+            return counter
+
+        def _gdn_bv_gate_snapshot():
+            assert _subtree_state is not None
+            return {
+                "export": _subtree_state["export"].clone(),
+                "ring_k": ring_k.clone(),
+                "ring_v": ring_v.clone(),
+                "ring_a": ring_a.clone(),
+                "ring_b": ring_b.clone(),
+                "flags": _flags_arg.clone(),
+                "counter": _gdn_bv_gate_counter().clone(),
+            }
+
+        def _gdn_bv_gate_restore(_snapshot):
+            assert _subtree_state is not None
+            _subtree_state["export"].copy_(_snapshot["export"])
+            ring_k.copy_(_snapshot["ring_k"])
+            ring_v.copy_(_snapshot["ring_v"])
+            ring_a.copy_(_snapshot["ring_a"])
+            ring_b.copy_(_snapshot["ring_b"])
+            _flags_arg.copy_(_snapshot["flags"])
+            _gdn_bv_gate_counter().copy_(_snapshot["counter"])
+
+        def _gdn_bv_gate_run(_path_block_v):
+            _gate_bv = int(_path_block_v)
+            if (
+                _gate_bv not in (8, 16, 32, 64, 128)
+                or _gate_bv > dim_v
+                or dim_v % _gate_bv != 0
+            ):
+                raise RuntimeError(
+                    "FR13 fixed32 GDN BV live gate rejected path geometry: "
+                    f"BLOCK_V={_gate_bv} DIM_V={dim_v}"
+                )
+            _gate_out = torch.empty_like(out)
+            _launch_meta = _launch_paths(
+                _gate_out,
+                _count=True,
+                _path_block_v=_gate_bv,
+                _counter_arg=_gdn_bv_gate_counter(),
+            )
+            return {
+                **_launch_meta,
+                "output": _gate_out,
+            }
+
+        _fr13_fixed32_gdn_bv_live_capture_register(
+            {
+                "snapshot": _gdn_bv_gate_snapshot,
+                "restore": _gdn_bv_gate_restore,
+                "run": _gdn_bv_gate_run,
+                "byte_equal": _byte_equal,
+                "surface_names": _FR13_FIXED32_GDN_BV_SURFACES,
+            }
+        )
 
     if parent_gather_selfcheck_on():
         # In-process byte-identity gate: run BOTH scans on the SAME inputs and
