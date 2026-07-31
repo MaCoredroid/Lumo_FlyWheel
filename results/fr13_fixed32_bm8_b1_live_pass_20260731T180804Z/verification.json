@@ -1,0 +1,80 @@
+{
+  "checks": {
+    "candidate_dispatches": 4,
+    "candidate_identity_matches_live_result": true,
+    "candidate_stock_hashes_equal_each_call": true,
+    "complete_event_count": 817,
+    "complete_events_equal_pure_decode_steps": true,
+    "contiguous_forward_step_interval": [
+      0,
+      817
+    ],
+    "eval_harness_exit_code": 0,
+    "external_manifest_launch_end_byte_equal": true,
+    "final_flush_generation": 3,
+    "final_flush_pending": {
+      "cfwd": 0,
+      "dfwd": 0,
+      "sfwd": 0
+    },
+    "kernel_live_status": "PASS",
+    "raw_byte_mismatches": 0,
+    "real_swe_verified_task": true,
+    "resolved_task_count": 1,
+    "runtime_manifest_launch_end_byte_equal": true,
+    "stock_served": true,
+    "swe_orchestrator_rc": 0,
+    "traffic_audit_all_checks_true": true
+  },
+  "ingress": {
+    "engine": {
+      "accepted": 13,
+      "active": 0,
+      "campaign_rejected": 0,
+      "completed": 13
+    },
+    "proxy": {
+      "aborted": 0,
+      "accepted_attempts": 13,
+      "active": 0,
+      "campaign_rejected": 0,
+      "completed_attempts": 13,
+      "failed_attempts": 0
+    }
+  },
+  "launcher_terminal": {
+    "arm_serve_rc": 0,
+    "original_identity_mode": "0400",
+    "original_identity_owner": "root:root",
+    "post_validator_failure": "permission_denied_before_validation",
+    "post_validator_rc": 2,
+    "post_validator_source_sha256": "46b4506ad0bb55cbb16bf5dc0bface9e02f1b36e726ab2b8ef746545c1a93b69",
+    "same_raw_files_privileged_validation": "PASS",
+    "same_raw_files_validation_stdout_sha256": "e21571ab7a17f35e4c1ad253554e0b506acbe75d975365b7e454fc984b5b5e65",
+    "top_level_rc": 2
+  },
+  "manifests": {
+    "external_file_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "external_overall_canonical_sha256": "c42fb16d2ea932f0e819c81172c49b69b312b75dd446146b6d7b6ef78af00a9e",
+    "forked_fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+    "runtime_file_sha256": "19528c92bd2fc245e750f9f1f1bf329236b13f5322b04c562efc6763247d0b26",
+    "runtime_overall_canonical_sha256": "83325f5569e025dd4f5d9ac7426e8a8ee0cf38903efa985324d74a772d78cf67"
+  },
+  "schema": "fr13.fixed32.dfwd_unified_bm8.b1_live_verification.v1",
+  "source_identity": {
+    "candidate_identity_sha256": "d12e035acb459640b128a052cba606602d57b3dca898e81bcedbe7d9582d8058",
+    "eagle_replay_hook_sha256": "61470a82a0a4c8e450a04265d758fbd20ec429b2da394e2701cb5fc021365e52",
+    "emitted_unified_attention_sha256": "3baccaa1a83907e15561b1cf807f15a41bd4764513bb43c4046b434937c3274b",
+    "executed_source_commit": "d67e405b5f1c37a0f35f329c722af17edfe5fe4a",
+    "live_result_sha256": "570caf42e3e75ff0d3717042b0dfc58b23a90041e71103f70a07f6d7563445b5",
+    "patcher_sha256": "c921d40e090abf3b647b4c368821a1d7871bd530db3336884844cf0f22e09efb"
+  },
+  "scope": {
+    "b1_only": true,
+    "b4_measured": false,
+    "formal_acceptance": false,
+    "hardware_floor_claim": false,
+    "performance_measurement": false,
+    "production_enabled": false
+  }
+}

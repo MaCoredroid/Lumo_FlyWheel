@@ -1,0 +1,18 @@
+Classification: post-teardown wrapper defect after successful kernel gate and task
+Top-level runner exit code: 2
+Arm server exit code: 0
+Original candidate identity metadata: mode=0400 owner=root:root bytes=828
+Executed-commit validator SHA-256: 46b4506ad0bb55cbb16bf5dc0bface9e02f1b36e726ab2b8ef746545c1a93b69
+
+Nonprivileged validator stderr:
+usage: fr13_dfwd_unified_bm8_gate.py [-h] {verify} ...
+fr13_dfwd_unified_bm8_gate.py: error: candidate identity is unavailable: [Errno 13] Permission denied: 'output/fr13_b1_bm8_live_gate_20260731T175331Z/hydra27_fixed32_bm8_20260731T175331Z/logs/fr13_dfwd_unified_bm8.identity.json'
+
+The failure occurred before the validator could inspect the identity or live
+result. Running the exact same validator with permission to read the unchanged
+raw files returned PASS; see sudo_validation_stdout.jsonl.
+
+Future fix: fdb61d773131f703eb1a7390ccdaa5b4998d93a6
+The fix atomically writes the nonsecret identity at mode 0444, requires exact
+mode 0444 in both runtime and host validation, and rejects mode 0644 drift.
+It was CPU-tested but was not rerun on GPU solely for this wrapper defect.
