@@ -1,0 +1,69 @@
+{
+  "schema": "fr13-fixed32-phase-gap-analysis-v1",
+  "created_at_utc": "2026-07-31T13:05:30Z",
+  "measurement_source": "valid canonical SWE-Verified exact4 Tail6 B1",
+  "source_commit": "e5a4029249e5b9483919056bae6542e47bbce75b",
+  "method": {
+    "description": "Assign mandatory weight bytes from the corrected production ledger to the measured disjoint SFWD and DFWD GPU timers, then retain CFWD and outside-GPU wall time as nonweight work.",
+    "bandwidth_bytes_per_second": 273000000000,
+    "caution": "Effective mandatory-byte rates are lower-bound accounting rates, not hardware-counter DRAM throughput. They identify the gap to the weight floor but do not by themselves prove a full roofline compute-versus-memory classification."
+  },
+  "acceptance_target": {
+    "corrected_floor_ms_per_event": 119.658015414,
+    "multiplier": 1.15,
+    "cap_ms_per_event": 137.6067177261,
+    "measured_wall_ms_per_event": 236.24493679034745,
+    "wall_gap_ms_per_event": 98.63821906424745
+  },
+  "phases": {
+    "sfwd": {
+      "assigned_work": "target model plus full verifier head",
+      "mandatory_weight_bytes": 26925196288,
+      "weight_floor_ms_per_event": 98.627092630037,
+      "measured_gpu_ms_per_event": 161.4615870721612,
+      "excess_over_weight_floor_ms": 62.8344944421242,
+      "effective_mandatory_byte_rate_gb_per_second": 166.75914548,
+      "effective_fraction_of_floor_bandwidth": 0.61083936073,
+      "share_of_total_wall_gap": 0.63701975804,
+      "bound_assessment": "weight-bandwidth floor dominates the lower bound; kernel counters are still required to separate bandwidth loss, compute, and launch gaps"
+    },
+    "dfwd": {
+      "assigned_work": "five MTP passes plus five 64k draft heads",
+      "mandatory_weight_bytes": 5741441920,
+      "weight_floor_ms_per_event": 21.030922783883,
+      "measured_gpu_ms_per_event": 38.285616047702014,
+      "excess_over_weight_floor_ms": 17.254693263819014,
+      "effective_mandatory_byte_rate_gb_per_second": 149.963420018,
+      "effective_fraction_of_floor_bandwidth": 0.54931655684,
+      "share_of_total_wall_gap": 0.17492908355,
+      "bound_assessment": "weight-bandwidth floor dominates the lower bound; kernel counters are still required to separate head GEMM efficiency, MTP compute, and launch gaps"
+    },
+    "cfwd": {
+      "assigned_work": "tree acceptance, scan, and commit path",
+      "mandatory_weight_bytes": 0,
+      "measured_gpu_ms_per_event": 20.490163846119547,
+      "bound_assessment": "not classifiable as compute- or memory-bound from phase timers alone; requires counters collected during canonical real-task traffic"
+    },
+    "outside_gpu_components": {
+      "measured_wall_ms_per_event": 16.00756982436466,
+      "bound_assessment": "host launch, synchronization, and untimed runtime work"
+    }
+  },
+  "closure_math": {
+    "weight_floor_sum_ms_per_event": 119.65801541392,
+    "cap_budget_after_weight_floor_ms_per_event": 17.94870231218,
+    "current_cfwd_plus_outside_gpu_ms_per_event": 36.49773367048421,
+    "nonweight_reduction_required_after_perfect_weight_streaming_ms": 18.54903135830421,
+    "wall_gap_attribution": {
+      "sfwd_excess_fraction": 0.63701975804,
+      "dfwd_excess_fraction": 0.17492908355,
+      "nonweight_excess_fraction": 0.18805115841
+    },
+    "priority": [
+      "SFWD target and verifier weight path",
+      "DFWD MTP and draft-head path",
+      "CFWD plus host launch and synchronization path"
+    ],
+    "conclusion": "Perfect SFWD and DFWD weight streaming is insufficient by itself: CFWD plus outside-GPU work must also fall from 36.50 ms to at most 17.95 ms per event."
+  }
+}
