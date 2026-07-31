@@ -138,27 +138,41 @@ void run_mha_fwd_splitkv_dispatch(Flash_fwd_params &params, cudaStream_t stream)
     // FR13_FA2_FIXED32_QUERY_TILE16: two query CTAs fill all 48 GB10 SMs.
     // This is query partitioning, not split-K: each real row keeps one warp's
     // complete, ordered K-block loop and no combine kernel is launched.
-    if constexpr (Headdim == 256 && !Is_causal) {
+    if constexpr (std::is_same_v<T, cutlass::bfloat16_t>
+                  && Headdim == 256 && !Is_causal) {
         if (params.tree_bias_ptr != nullptr
             && params.b == 1
             && params.d == 256
+            && params.d_rounded == 256
             && params.h == 24
+            && params.h_k == 4
+            && params.h_h_k_ratio == 6
             && params.seqlen_q == 32
             && params.tree_bias_rows == 32
             && params.tree_bias_cols == 32
+            && params.tree_bias_q_offset == 0
+            && params.tree_bias_k_offset == 0
+            && params.cu_seqlens_q != nullptr
+            && !params.seqlenq_ngroups_swapped
+            && params.block_table != nullptr
+            && params.page_block_size == 1024
             && params.window_size_left < 0
             && params.window_size_right < 0
             && params.alibi_slopes_ptr == nullptr
             && params.knew_ptr == nullptr
-            && params.num_splits <= 1) {
+            && params.num_splits == 1) {
             constexpr static int kTreeBlockM = 16;
             constexpr static int kTreeWarps = 1;
             static_assert(kTreeBlockM == 16 * kTreeWarps);
             using TreeKernelTraits = Flash_fwd_kernel_traits<
                 Headdim, kTreeBlockM, kBlockN, kTreeWarps,
                 false, false, T>;
-            // The public FA2 API requires paged-KV blocks divisible by 16.
+            static_assert(TreeKernelTraits::kNThreads == 32);
+            static_assert(TreeKernelTraits::kGmemThreadsPerRow == 8);
+            // The public FA2 API requires paged-KV blocks divisible by 16;
+            // production fixes the physical page at 1024 rows.
             static_assert(TreeKernelTraits::kGmemRowsPerThread == 16);
+            static_assert(1024 % TreeKernelTraits::kGmemRowsPerThread == 0);
             run_flash_splitkv_fwd<TreeKernelTraits, Is_causal, false>(params, stream);
             return;
         }

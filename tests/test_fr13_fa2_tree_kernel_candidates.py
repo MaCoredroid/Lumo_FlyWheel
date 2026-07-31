@@ -111,26 +111,39 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
         fixed32_query_tile16=True,
     )
 
+    assert "std::is_same_v<T, cutlass::bfloat16_t>" in candidate
     assert "Headdim == 256 && !Is_causal" in candidate
     assert "params.tree_bias_ptr != nullptr" in candidate
     assert "params.b == 1" in candidate
     assert "params.d == 256" in candidate
+    assert "params.d_rounded == 256" in candidate
     assert "params.h == 24" in candidate
+    assert "params.h_k == 4" in candidate
+    assert "params.h_h_k_ratio == 6" in candidate
     assert "params.seqlen_q == 32" in candidate
+    assert "params.tree_bias_q_offset == 0" in candidate
+    assert "params.tree_bias_k_offset == 0" in candidate
+    assert "params.cu_seqlens_q != nullptr" in candidate
+    assert "!params.seqlenq_ngroups_swapped" in candidate
+    assert "params.block_table != nullptr" in candidate
+    assert "params.page_block_size == 1024" in candidate
     assert "params.window_size_left < 0" in candidate
     assert "params.window_size_right < 0" in candidate
     assert "params.alibi_slopes_ptr == nullptr" in candidate
     assert "params.knew_ptr == nullptr" in candidate
-    assert "params.num_splits <= 1" in candidate
+    assert "params.num_splits == 1" in candidate
     assert "run_flash_splitkv_fwd<TreeKernelTraits, Is_causal, false>" in candidate
     assert "if constexpr (AllowSplit)" in candidate
     assert "kTreeBlockM = 16" in candidate
     assert "kTreeWarps = 1" in candidate
+    assert "TreeKernelTraits::kNThreads == 32" in candidate
+    assert "TreeKernelTraits::kGmemThreadsPerRow == 8" in candidate
     assert "TreeKernelTraits::kGmemRowsPerThread == 16" in candidate
+    assert "1024 % TreeKernelTraits::kGmemRowsPerThread == 0" in candidate
     assert "public FA2 API requires paged-KV blocks divisible by 16" in candidate
     assert "kBlockN" in candidate
     assert "splitkv_combine" not in candidate
-    assert "params.num_splits =" not in candidate
+    assert "params.num_splits = " not in candidate
 
     # The CTA id changes for rows 16..31, but the warp-local query-row/lane
     # coordinate is identical to the stock 64-row, four-warp tile.
@@ -156,3 +169,17 @@ def test_source_build_candidates_are_independent_and_default_off() -> None:
     assert "tree-splitkv" not in text
     assert "FR13_FA2_TREE_SPLITKV" not in text
     assert "params.o_batch_stride = max_seqlen_q * params.o_row_stride" not in text
+
+
+def test_qrow16_same_boot_gate_uses_real_b1_and_stock_batch_fallbacks() -> None:
+    text = Path("scripts/fr13_fa2_qrow16_byte_ab.py").read_text()
+
+    assert 'provenance.get("suite") != "SWE-Verified"' in text
+    assert 'provenance.get("concurrency") != 1' in text
+    assert 'provenance.get("physical_nodes") != 32' in text
+    assert "for copies in (2, 4):" in text
+    assert '"output_byte_equal": out_equal' in text
+    assert '"lse_byte_equal": lse_equal' in text
+    assert "return_softmax_lse=True" in text
+    assert "num_splits=1" in text
+    assert "block_table=block_table" in text
