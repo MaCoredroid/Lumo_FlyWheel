@@ -158,6 +158,9 @@ _FR13_FIXED32_GDN_PATH_BV_PRODUCTION = os.environ.get(
 _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = (
     os.environ.get("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", "0").strip() == "1"
 )
+_FR13_FIXED32_BATCH_GDN_BYTE_AB = os.environ.get(
+    "FR13_FIXED32_BATCH_GDN_BYTE_AB", "0"
+).strip()
 _FR13_FIXED32_TREE_SOURCE = repr(list(_FR13_FIXED32_CHOICES))
 _FR13_FIXED32_SLOT_PI = tuple(
     [0]
@@ -5276,6 +5279,34 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     candidate = _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
     production = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
     taw_native_diagnostic = bool(_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE)
+    batch_gdn_byte_diagnostic = _FR13_FIXED32_BATCH_GDN_BYTE_AB
+    if batch_gdn_byte_diagnostic not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1"
+        )
+    if batch_gdn_byte_diagnostic == "1":
+        candidate_bv = os.environ.get(
+            "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE", ""
+        ).strip()
+        if not mode:
+            raise RuntimeError(
+                "FR13_FIXED32_BATCH_GDN_BYTE_AB requires fixed32 mode"
+            )
+        if candidate_bv not in ("16", "32", "64", "128"):
+            raise RuntimeError(
+                "FR13 fixed32 eager B4 byte diagnostic requires an exact "
+                "batched GDN BV candidate"
+            )
+        if (
+            os.environ.get("FR13_FIXED32_B1_DIAGNOSTIC", "0") != "0"
+            or os.environ.get("FR13_FIXED32_BATCH_GDN_PRODUCTION", "0")
+            != "0"
+            or os.environ.get("FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", "")
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 eager B4 byte diagnostic cannot arm a B1 or "
+                "production route"
+            )
     if candidate:
         if candidate not in ("16", "32", "64", "128"):
             raise RuntimeError(
@@ -17256,6 +17287,72 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
         "            cudagraph_runtime_mode=cudagraph_runtime_mode,\n"
     )
     text = text.replace(anchor, inject, 1)
+    if _FR13_FIXED32_BATCH_GDN_BYTE_AB == "1":
+        eager_anchor = (
+            "        if self.compilation_config.cudagraph_mode "
+            "== CUDAGraphMode.NONE:\n"
+            "            logger.warning(\n"
+            "                \"Skipping CUDA graph capture. To turn on CUDA "
+            "graph capture, \"\n"
+            "                \"ensure `cudagraph_mode` was not manually set "
+            "to `NONE`\"\n"
+            "            )\n"
+            "            return 0\n"
+        )
+        if text.count(eager_anchor) != 1:
+            raise RuntimeError(
+                "FR13 fixed32 eager B4 boot-warm anchor is not unique"
+            )
+        eager_inject = (
+            "        # FR13_FIXED32_EAGER_B4_BOOT_WARM: the eager-only byte "
+            "gate\n"
+            "        # has no final FULL capture callback. Reuse its "
+            "capture-shaped\n"
+            "        # producer and postprocess warm here, before serving, "
+            "without\n"
+            "        # creating an API request or an observed/work-census "
+            "event.\n"
+            "        if self.compilation_config.cudagraph_mode != "
+            "CUDAGraphMode.NONE:\n"
+            "            raise RuntimeError(\n"
+            "                \"FR13 fixed32 eager B4 byte diagnostic requires "
+            "CUDAGraphMode.NONE\"\n"
+            "            )\n"
+            "        if int(self.scheduler_config.max_num_seqs) != 4:\n"
+            "            raise RuntimeError(\n"
+            "                \"FR13 fixed32 eager B4 byte diagnostic requires "
+            "max_num_seqs=4\"\n"
+            "            )\n"
+            "        from vllm.model_executor.layers.mamba import (\n"
+            "            gdn_linear_attn as _fr13_f32_eager_boot_gdn,\n"
+            "        )\n"
+            "        if _fr13_f32_eager_boot_gdn."
+            "_fr13_fixed32_final_full_preseed_needed(\n"
+            "            \"FULL\", 128, 4, True, False, 0,\n"
+            "        ):\n"
+            "            self._dummy_run(\n"
+            "                128,\n"
+            "                cudagraph_runtime_mode=CUDAGraphMode.NONE,\n"
+            "                force_attention=True,\n"
+            "                uniform_decode=True,\n"
+            "                allow_microbatching=False,\n"
+            "                skip_eplb=True,\n"
+            "                remove_lora=False,\n"
+            "                is_graph_capturing=True,\n"
+            "                num_active_loras=0,\n"
+            "                profile_seq_lens=None,\n"
+            "            )\n"
+            "        _fr13_f32_eager_boot_gdn."
+            "_fr13_fixed32_warm_final_full_postprocess(\n"
+            "            int(self.input_batch.vocab_size),\n"
+            "        )\n"
+            "        _fr13_cfwd_timer()\n"
+            "        _fr13_dfwd_timer()\n"
+            "        _fr13_f32_eager_boot_gdn."
+            "_fr13_fixed32_assert_final_full_preseed_ready(4)\n"
+            + eager_anchor
+        )
+        text = text.replace(eager_anchor, eager_inject, 1)
     GPU_MODEL_RUNNER_PATH.write_text(text)
     return True
 

@@ -123,10 +123,17 @@ def test_final_full_preseed_requires_physical_32_row_descriptor(
 
 _GPU_RUNNER_FIXTURE = """\
 class Runner:
-    def __init__(self, num_warmups):
+    def __init__(
+        self,
+        num_warmups,
+        cudagraph_mode=CUDAGraphMode.NONE,
+        max_num_seqs=4,
+    ):
         self.compilation_config = SimpleNamespace(
-            cudagraph_num_of_warmups=num_warmups
+            cudagraph_num_of_warmups=num_warmups,
+            cudagraph_mode=cudagraph_mode,
         )
+        self.scheduler_config = SimpleNamespace(max_num_seqs=max_num_seqs)
         self.input_batch = SimpleNamespace(vocab_size=248320)
         self.calls = []
 
@@ -167,6 +174,15 @@ class Runner:
             is_graph_capturing=True,
             profile_seq_lens=profile_seq_lens,
         )
+
+    def capture_model(self):
+        if self.compilation_config.cudagraph_mode == CUDAGraphMode.NONE:
+            logger.warning(
+                "Skipping CUDA graph capture. To turn on CUDA graph capture, "
+                "ensure `cudagraph_mode` was not manually set to `NONE`"
+            )
+            return 0
+        return 1
 """
 
 
@@ -305,6 +321,162 @@ def test_ready_metadata_with_stale_lease_fails_before_full_capture(
         runner.calls[0][1]["cudagraph_runtime_mode"]
         is _CUDAGraphMode.NONE
     )
+
+
+def test_default_eager_runtime_has_no_b4_diagnostic_boot_hook(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "gpu_model_runner.py"
+    source.write_text(_GPU_RUNNER_FIXTURE)
+    monkeypatch.setattr(patcher, "GPU_MODEL_RUNNER_PATH", source)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "tail6_fixed32")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_BATCH_GDN_BYTE_AB",
+        "0",
+    )
+    assert patcher._patch_gpu_model_runner_fixed32_final_full_preseed()
+
+    text = source.read_text(encoding="utf-8")
+    assert "FR13_FIXED32_EAGER_B4_BOOT_WARM" not in text
+    namespace = {
+        "CUDAGraphMode": _CUDAGraphMode,
+        "SimpleNamespace": SimpleNamespace,
+        "logger": SimpleNamespace(warning=lambda *args: None),
+    }
+    exec(text, namespace)
+    runner = namespace["Runner"](1, max_num_seqs=1)
+    assert runner.capture_model() == 0
+    assert runner.calls == []
+
+
+def test_eager_b4_diagnostic_boot_is_zero_traffic_and_boundary_ready(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "gpu_model_runner.py"
+    source.write_text(_GPU_RUNNER_FIXTURE)
+    monkeypatch.setattr(patcher, "GPU_MODEL_RUNNER_PATH", source)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "tail6_fixed32")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_BATCH_GDN_BYTE_AB",
+        "1",
+    )
+    assert patcher._patch_gpu_model_runner_fixed32_final_full_preseed()
+
+    state: dict[str, object] = {
+        "observed": None,
+        "pending": None,
+        "work_census": [],
+        "api_requests": [],
+        "boot_warm": None,
+    }
+
+    def needed(*descriptor: object) -> bool:
+        state["descriptor"] = descriptor
+        return True
+
+    def warm(vocab_size: int) -> None:
+        assert state["observed"] is None
+        assert state["pending"] is None
+        state["boot_warm"] = {
+            "ready": True,
+            "capacity": 4,
+            "vocab_size": vocab_size,
+            "observed_event_absent": True,
+            "pending_event_absent": True,
+        }
+
+    def assert_ready(batch: int) -> None:
+        evidence = state["boot_warm"]
+        assert isinstance(evidence, dict)
+        assert evidence["ready"] is True
+        assert evidence["capacity"] == batch
+        assert state["work_census"] == []
+        assert state["api_requests"] == []
+        state["generation_1_boundary_ready"] = True
+
+    fake_gdn = SimpleNamespace(
+        _fr13_fixed32_final_full_preseed_needed=needed,
+        _fr13_fixed32_warm_final_full_postprocess=warm,
+        _fr13_fixed32_assert_final_full_preseed_ready=assert_ready,
+    )
+    _install_fake_gdn(monkeypatch, fake_gdn)
+    namespace = {
+        "CUDAGraphMode": _CUDAGraphMode,
+        "SimpleNamespace": SimpleNamespace,
+        "logger": SimpleNamespace(warning=lambda *args: None),
+        "_fr13_cfwd_timer": lambda: state.update(cfwd_ready=True),
+        "_fr13_dfwd_timer": lambda: state.update(dfwd_ready=True),
+    }
+    text = source.read_text(encoding="utf-8")
+    assert "FR13_FIXED32_EAGER_B4_BOOT_WARM" in text
+    exec(text, namespace)
+    runner = namespace["Runner"](1)
+    assert runner.capture_model() == 0
+
+    assert state["descriptor"] == ("FULL", 128, 4, True, False, 0)
+    assert len(runner.calls) == 1
+    num_tokens, kwargs = runner.calls[0]
+    assert num_tokens == 128
+    assert kwargs == {
+        "cudagraph_runtime_mode": _CUDAGraphMode.NONE,
+        "force_attention": True,
+        "uniform_decode": True,
+        "allow_microbatching": False,
+        "skip_eplb": True,
+        "remove_lora": False,
+        "is_graph_capturing": True,
+        "num_active_loras": 0,
+        "profile_seq_lens": None,
+    }
+    assert state["generation_1_boundary_ready"] is True
+    assert state["cfwd_ready"] is True
+    assert state["dfwd_ready"] is True
+    assert state["work_census"] == []
+    assert state["api_requests"] == []
+
+
+@pytest.mark.parametrize(
+    ("mode", "max_num_seqs", "error"),
+    (
+        (_CUDAGraphMode.FULL, 4, "requires CUDAGraphMode.NONE"),
+        (_CUDAGraphMode.NONE, 1, "requires max_num_seqs=4"),
+    ),
+)
+def test_eager_b4_diagnostic_boot_rejects_wrong_runtime_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: _CUDAGraphMode,
+    max_num_seqs: int,
+    error: str,
+) -> None:
+    source = tmp_path / "gpu_model_runner.py"
+    source.write_text(_GPU_RUNNER_FIXTURE)
+    monkeypatch.setattr(patcher, "GPU_MODEL_RUNNER_PATH", source)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "tail6_fixed32")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_BATCH_GDN_BYTE_AB",
+        "1",
+    )
+    assert patcher._patch_gpu_model_runner_fixed32_final_full_preseed()
+    namespace = {
+        "CUDAGraphMode": _CUDAGraphMode,
+        "SimpleNamespace": SimpleNamespace,
+        "logger": SimpleNamespace(warning=lambda *args: None),
+    }
+    exec(source.read_text(encoding="utf-8"), namespace)
+    runner = namespace["Runner"](
+        1,
+        cudagraph_mode=mode,
+        max_num_seqs=max_num_seqs,
+    )
+    with pytest.raises(RuntimeError, match=error):
+        runner.capture_model()
+    assert runner.calls == []
 
 
 def test_postprocess_boot_warm_is_unmeasured_and_idempotent(
