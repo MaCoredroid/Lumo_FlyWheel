@@ -43,14 +43,11 @@ def test_direct_pid1_is_required_for_acceptance() -> None:
         *direct[2:],
     ]
 
-    assert (
-        contract.validate_process_pid1_argv(
-            direct,
-            1,
-            attribution_only=False,
-        )
-        == direct
-    )
+    assert contract.validate_process_pid1_argv(
+        direct,
+        1,
+        attribution_only=False,
+    ) == direct
     with pytest.raises(contract.ContractError, match="PID1 argv mismatch"):
         contract.validate_process_pid1_argv(
             wrapped,
@@ -76,34 +73,23 @@ def test_default_graph_and_eager_pid1_are_exact_distinct_contracts() -> None:
     )
 
     assert default == contract.expected_pid1_argv(4)
-    kv_index = default.index("--kv-cache-memory-bytes")
-    assert default[kv_index : kv_index + 2] == [
-        "--kv-cache-memory-bytes",
-        str(contract.FIXED32_B4_KV_CACHE_MEMORY_BYTES),
-    ]
-    assert len(default) == 49
+    assert len(default) == 47
     assert graph == default
-    assert len(graph) == 49
+    assert len(graph) == 47
     assert eager == [*default, "--enforce-eager"]
-    assert len(eager) == 50
-    assert (
-        contract.validate_process_pid1_argv(
-            graph,
-            4,
-            attribution_only=False,
-            graph_diagnostic=True,
-        )
-        == graph
-    )
-    assert (
-        contract.validate_process_pid1_argv(
-            eager,
-            4,
-            attribution_only=False,
-            eager_diagnostic=True,
-        )
-        == eager
-    )
+    assert len(eager) == 48
+    assert contract.validate_process_pid1_argv(
+        graph,
+        4,
+        attribution_only=False,
+        graph_diagnostic=True,
+    ) == graph
+    assert contract.validate_process_pid1_argv(
+        eager,
+        4,
+        attribution_only=False,
+        eager_diagnostic=True,
+    ) == eager
     with pytest.raises(contract.ContractError, match="PID1 argv mismatch"):
         contract.validate_process_pid1_argv(
             eager,
@@ -120,22 +106,6 @@ def test_default_graph_and_eager_pid1_are_exact_distinct_contracts() -> None:
     with pytest.raises(contract.ContractError, match="PID1 argv mismatch"):
         contract.validate_process_pid1_argv(
             eager,
-            4,
-            attribution_only=False,
-            graph_diagnostic=True,
-        )
-
-
-def test_b1_omits_manual_kv_cache_and_b4_rejects_kv_tamper() -> None:
-    b1 = contract.expected_pid1_argv(1)
-    b4 = contract.expected_pid1_argv(4)
-
-    assert "--kv-cache-memory-bytes" not in b1
-    kv_index = b4.index("--kv-cache-memory-bytes")
-    b4[kv_index + 1] = str(contract.FIXED32_B4_KV_CACHE_MEMORY_BYTES - 1)
-    with pytest.raises(contract.ContractError, match="PID1 argv mismatch"):
-        contract.validate_process_pid1_argv(
-            b4,
             4,
             attribution_only=False,
             graph_diagnostic=True,
@@ -207,14 +177,11 @@ def test_exact_nsys_pid1_is_required_for_attribution() -> None:
         *contract.expected_pid1_argv(1)[2:],
     ]
 
-    assert (
-        contract.validate_process_pid1_argv(
-            expected,
-            1,
-            attribution_only=True,
-        )
-        == expected
-    )
+    assert contract.validate_process_pid1_argv(
+        expected,
+        1,
+        attribution_only=True,
+    ) == expected
     with pytest.raises(contract.ContractError, match="PID1 argv mismatch"):
         contract.validate_process_pid1_argv(
             contract.expected_pid1_argv(1),
@@ -273,18 +240,23 @@ def test_nsys_pid1_wrapped_vllm_tamper_fails() -> None:
 
 
 def test_live_attestation_receives_the_selector_explicitly() -> None:
-    serve = (REPO / "scripts" / "fr13_bigdenom_swe_serve_variant.sh").read_text(
-        encoding="utf-8"
-    )
+    serve = (
+        REPO / "scripts" / "fr13_bigdenom_swe_serve_variant.sh"
+    ).read_text(encoding="utf-8")
 
     assert '"${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" \\' in serve
     assert '"${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" \\' in serve
-    assert "\"${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}\" <<'PY'" in serve
+    assert (
+        '"${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" <<\'PY\''
+        in serve
+    )
     assert "attribution_only_text = sys.argv[7]" in serve
     assert "batch_gdn_byte_ab_text = sys.argv[8]" in serve
     assert "batch_gdn_graph_byte_ab_text = sys.argv[9]" in serve
     assert "attribution_only_text = os.environ" not in serve
     assert "batch_gdn_byte_ab_text = os.environ" not in serve
     assert "batch_gdn_graph_byte_ab_text = os.environ" not in serve
-    assert 'eager_diagnostic=batch_gdn_byte_ab_text == "1"' in serve
-    assert 'graph_diagnostic=batch_gdn_graph_byte_ab_text == "1"' in serve
+    assert "eager_diagnostic=batch_gdn_byte_ab_text == \"1\"" in serve
+    assert (
+        "graph_diagnostic=batch_gdn_graph_byte_ab_text == \"1\"" in serve
+    )

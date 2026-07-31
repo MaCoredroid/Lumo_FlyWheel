@@ -27,7 +27,9 @@ RUNTIME_ATTESTATION_MODE = 0o644
 
 QWEN_VISIBLE_MAX_OUTPUT_TOKENS = 32_768
 QWEN_COMPACTION_MAX_OUTPUT_TOKENS = 20_000
-QWEN_COMPACTION_METRIC_SCHEMA = "fr13-fixed32-qwen-compaction-metrics-v1"
+QWEN_COMPACTION_METRIC_SCHEMA = (
+    "fr13-fixed32-qwen-compaction-metrics-v1"
+)
 
 IMAGE_REFERENCE = (
     "vllm/vllm-openai@"
@@ -38,7 +40,9 @@ IMAGE_OS = "linux"
 IMAGE_ARCHITECTURE = "arm64"
 VLLM_VERSION = "0.19.2rc1.dev134+gfe9c3d6c5"
 
-NSYS_PROFILE_BINARY = Path("/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys")
+NSYS_PROFILE_BINARY = Path(
+    "/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys"
+)
 NSYS_PROFILE_OUTPUT = Path("/logs/fr13_fixed32_b1_real_swe")
 NSYS_PROFILE_PREFIX = (
     str(NSYS_PROFILE_BINARY),
@@ -68,7 +72,9 @@ FA2_REPO_RELATIVE = (
 )
 FA2_SHA256 = "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d"
 FA2_SIZE = 299_183_936
-QROW16_FA2_SHA256 = "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
+QROW16_FA2_SHA256 = (
+    "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
+)
 QROW16_FA2_SIZE = 299_507_792
 CONTAINER_FA2_SOURCE = Path("/tmp/fr13_fork_fa2.so")
 CONTAINER_FA2_DESTINATION = Path(
@@ -76,7 +82,6 @@ CONTAINER_FA2_DESTINATION = Path(
 )
 
 MODEL_ROOT = Path("/models/qwen3.6-27b-fp8")
-FIXED32_B4_KV_CACHE_MEMORY_BYTES = 20 * 1024**3
 MODEL_AUXILIARY_FILES = (
     ".gitattributes",
     "LICENSE",
@@ -575,7 +580,7 @@ def speculative_config_text() -> str:
 def expected_pid1_argv(concurrency: int) -> list[str]:
     if concurrency not in (1, 4):
         raise ContractError(f"fixed32 concurrency must be 1 or 4, got {concurrency}")
-    argv = [
+    return [
         "/usr/bin/python3",
         "/usr/local/bin/vllm",
         "serve",
@@ -594,48 +599,36 @@ def expected_pid1_argv(concurrency: int) -> list[str]:
         "131072",
         "--seed",
         "0",
+        "--attention-backend",
+        "TREE_ATTN",
+        "--gdn-prefill-backend",
+        "triton",
+        "--chat-template",
+        "/workspace/docker/chat_templates/qwen3-openai-codex.jinja",
+        "--enable-auto-tool-choice",
+        "--tool-call-parser",
+        "qwen3_xml",
+        "--reasoning-parser",
+        "qwen3",
+        "--speculative-config",
+        speculative_config_text(),
+        "--enable-prefix-caching",
+        "--enable-chunked-prefill",
+        "--mamba-block-size",
+        "1024",
+        "--mamba-ssm-cache-dtype",
+        "float32",
+        "--max-num-batched-tokens",
+        "4096",
+        "--block-size",
+        "1024",
+        "--long-prefill-token-threshold",
+        "1024",
+        "--compilation-config",
+        '{"cudagraph_mode":"FULL_AND_PIECEWISE"}',
+        "--middleware",
+        "lumo_flywheel_serving.inference_proxy.Fixed32EngineIngressMiddleware",
     ]
-    if concurrency == 4:
-        argv.extend(
-            [
-                "--kv-cache-memory-bytes",
-                str(FIXED32_B4_KV_CACHE_MEMORY_BYTES),
-            ]
-        )
-    argv.extend(
-        [
-            "--attention-backend",
-            "TREE_ATTN",
-            "--gdn-prefill-backend",
-            "triton",
-            "--chat-template",
-            "/workspace/docker/chat_templates/qwen3-openai-codex.jinja",
-            "--enable-auto-tool-choice",
-            "--tool-call-parser",
-            "qwen3_xml",
-            "--reasoning-parser",
-            "qwen3",
-            "--speculative-config",
-            speculative_config_text(),
-            "--enable-prefix-caching",
-            "--enable-chunked-prefill",
-            "--mamba-block-size",
-            "1024",
-            "--mamba-ssm-cache-dtype",
-            "float32",
-            "--max-num-batched-tokens",
-            "4096",
-            "--block-size",
-            "1024",
-            "--long-prefill-token-threshold",
-            "1024",
-            "--compilation-config",
-            '{"cudagraph_mode":"FULL_AND_PIECEWISE"}',
-            "--middleware",
-            "lumo_flywheel_serving.inference_proxy.Fixed32EngineIngressMiddleware",
-        ]
-    )
-    return argv
 
 
 def expected_process_pid1_argv(
@@ -656,13 +649,21 @@ def expected_process_pid1_argv(
             "fixed32 eager and graph diagnostics are mutually exclusive"
         )
     if attribution_only and eager_diagnostic:
-        raise ContractError("fixed32 eager diagnostic cannot be attribution-only")
+        raise ContractError(
+            "fixed32 eager diagnostic cannot be attribution-only"
+        )
     if attribution_only and graph_diagnostic:
-        raise ContractError("fixed32 graph diagnostic cannot be attribution-only")
+        raise ContractError(
+            "fixed32 graph diagnostic cannot be attribution-only"
+        )
     if eager_diagnostic and concurrency != 4:
-        raise ContractError("fixed32 eager diagnostic requires concurrency 4")
+        raise ContractError(
+            "fixed32 eager diagnostic requires concurrency 4"
+        )
     if graph_diagnostic and concurrency != 4:
-        raise ContractError("fixed32 graph diagnostic requires concurrency 4")
+        raise ContractError(
+            "fixed32 graph diagnostic requires concurrency 4"
+        )
     vllm_argv = expected_pid1_argv(concurrency)
     if eager_diagnostic:
         vllm_argv = [*vllm_argv, "--enforce-eager"]
@@ -747,7 +748,10 @@ def _fixed32_qwen_hidden_agent_terminal_request_id(
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    return f"qwen-hidden-agent-terminal-sha256:{hashlib.sha256(payload).hexdigest()}"
+    return (
+        "qwen-hidden-agent-terminal-sha256:"
+        f"{hashlib.sha256(payload).hexdigest()}"
+    )
 
 
 def _fixed32_qwen_hidden_compaction_request_id(
@@ -770,7 +774,10 @@ def _fixed32_qwen_hidden_compaction_request_id(
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    return f"qwen-hidden-compaction-sha256:{hashlib.sha256(payload).hexdigest()}"
+    return (
+        "qwen-hidden-compaction-sha256:"
+        f"{hashlib.sha256(payload).hexdigest()}"
+    )
 
 
 def _fixed32_qwen_hidden_failed_compaction_request_id(
@@ -791,7 +798,10 @@ def _fixed32_qwen_hidden_failed_compaction_request_id(
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    return f"qwen-hidden-failed-compaction-sha256:{hashlib.sha256(payload).hexdigest()}"
+    return (
+        "qwen-hidden-failed-compaction-sha256:"
+        f"{hashlib.sha256(payload).hexdigest()}"
+    )
 
 
 def _fixed32_qwen_metric_labels(
@@ -814,11 +824,15 @@ def _fixed32_qwen_metric_snapshot(
     label: str,
 ) -> dict[str, int]:
     if not isinstance(raw, bytes) or not raw:
-        raise ContractError(f"fixed32 qwen {label} metrics must be nonempty bytes")
+        raise ContractError(
+            f"fixed32 qwen {label} metrics must be nonempty bytes"
+        )
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as error:
-        raise ContractError(f"fixed32 qwen {label} metrics are not UTF-8") from error
+        raise ContractError(
+            f"fixed32 qwen {label} metrics are not UTF-8"
+        ) from error
 
     expected: dict[tuple[str, str], str] = {
         (
@@ -883,9 +897,13 @@ def _fixed32_qwen_metric_snapshot(
                 and labels.endswith('",model_name="qwen3.6-27b"')
             ):
                 continue
-            raise ContractError(f"fixed32 qwen {label} metric {name} labels differ")
+            raise ContractError(
+                f"fixed32 qwen {label} metric {name} labels differ"
+            )
         if key in values:
-            raise ContractError(f"fixed32 qwen {label} metric {name} is duplicated")
+            raise ContractError(
+                f"fixed32 qwen {label} metric {name} is duplicated"
+            )
         try:
             value = Decimal(value_text)
         except InvalidOperation as error:
@@ -894,12 +912,15 @@ def _fixed32_qwen_metric_snapshot(
             ) from error
         if not value.is_finite() or value < 0 or value != value.to_integral_value():
             raise ContractError(
-                f"fixed32 qwen {label} metric {name} is not a nonnegative integer"
+                f"fixed32 qwen {label} metric {name} is not a "
+                "nonnegative integer"
             )
         values[key] = int(value)
     missing = sorted(set(expected.values()) - set(values))
     if missing:
-        raise ContractError(f"fixed32 qwen {label} metrics are missing {missing}")
+        raise ContractError(
+            f"fixed32 qwen {label} metrics are missing {missing}"
+        )
     return values
 
 
@@ -917,13 +938,17 @@ def _fixed32_qwen_compaction_metric_evidence(
         type(expected_completed_logical_model_requests) is not int
         or expected_completed_logical_model_requests <= 0
     ):
-        raise ContractError("fixed32 qwen expected completed request count is invalid")
+        raise ContractError(
+            "fixed32 qwen expected completed request count is invalid"
+        )
     before = _fixed32_qwen_metric_snapshot(metrics_pre, label="pre")
     after = _fixed32_qwen_metric_snapshot(metrics_post, label="post")
     deltas: dict[str, int] = {}
     for key in sorted(before):
         if after[key] < before[key]:
-            raise ContractError(f"fixed32 qwen metric {key} decreased across task")
+            raise ContractError(
+                f"fixed32 qwen metric {key} decreased across task"
+            )
         deltas[key] = after[key] - before[key]
 
     completed = expected_completed_logical_model_requests
@@ -937,7 +962,9 @@ def _fixed32_qwen_compaction_metric_evidence(
             for reason in ("length", "abort", "error", "repetition")
         )
     ):
-        raise ContractError("fixed32 qwen engine completion metrics do not reconcile")
+        raise ContractError(
+            "fixed32 qwen engine completion metrics do not reconcile"
+        )
     if deltas["max_tokens_le_10000"] != 0:
         raise ContractError(
             "fixed32 qwen max-token histogram has an unpinned low request"
@@ -985,7 +1012,9 @@ def _fixed32_qwen_compaction_metric_evidence(
             continue
         usage = message.get("usage")
         if not isinstance(usage, dict):
-            raise ContractError("fixed32 qwen assistant usage is missing")
+            raise ContractError(
+                "fixed32 qwen assistant usage is missing"
+            )
         input_tokens = usage.get("input_tokens")
         output_tokens = usage.get("output_tokens")
         if (
@@ -994,7 +1023,9 @@ def _fixed32_qwen_compaction_metric_evidence(
             or type(output_tokens) is not int
             or output_tokens < 0
         ):
-            raise ContractError("fixed32 qwen assistant token usage is invalid")
+            raise ContractError(
+                "fixed32 qwen assistant token usage is invalid"
+            )
         visible_input += input_tokens
         visible_output += output_tokens
     hidden_input = aggregate_input - visible_input
@@ -1004,20 +1035,27 @@ def _fixed32_qwen_compaction_metric_evidence(
         or hidden_output < 0
         or (total_compactions > 0 and (hidden_input <= 0 or hidden_output <= 0))
     ):
-        raise ContractError("fixed32 qwen hidden compaction token usage is invalid")
+        raise ContractError(
+            "fixed32 qwen hidden compaction token usage is invalid"
+        )
 
     failed_compactions = total_compactions - successful_compaction_count
     if failed_compactions > 0 and successful_compaction_count <= 0:
         raise ContractError(
-            "fixed32 qwen failed compactions lack a trace-visible successful compaction"
+            "fixed32 qwen failed compactions lack a trace-visible "
+            "successful compaction"
         )
     evidence = {
         "schema": QWEN_COMPACTION_METRIC_SCHEMA,
         "metrics_pre_sha256": hashlib.sha256(metrics_pre).hexdigest(),
         "metrics_post_sha256": hashlib.sha256(metrics_post).hexdigest(),
         "completed_engine_requests": completed,
-        "normal_visible_max_output_tokens": (QWEN_VISIBLE_MAX_OUTPUT_TOKENS),
-        "compaction_max_output_tokens": (QWEN_COMPACTION_MAX_OUTPUT_TOKENS),
+        "normal_visible_max_output_tokens": (
+            QWEN_VISIBLE_MAX_OUTPUT_TOKENS
+        ),
+        "compaction_max_output_tokens": (
+            QWEN_COMPACTION_MAX_OUTPUT_TOKENS
+        ),
         "normal_requests": normal_request_count,
         "successful_compaction_requests": successful_compaction_count,
         "failed_compaction_requests": failed_compactions,
@@ -1075,25 +1113,33 @@ def _fixed32_qwen_group_input_tokens(
     for _event, message, _event_id, _event_index in group:
         value = message["usage"].get("input_tokens")
         if type(value) is not int or value < 0:
-            raise ContractError("fixed32 qwen assistant input-token usage is invalid")
+            raise ContractError(
+                "fixed32 qwen assistant input-token usage is invalid"
+            )
         if value > 0:
             positive_values.add(value)
     if len(positive_values) > 1:
-        raise ContractError("fixed32 qwen assistant group input-token usage differs")
+        raise ContractError(
+            "fixed32 qwen assistant group input-token usage differs"
+        )
     return next(iter(positive_values), None)
 
 
 def _fixed32_qwen_hidden_compaction_requests(
     events: list[dict[str, Any]],
     *,
-    top_level_groups: list[list[tuple[dict[str, Any], dict[str, Any], str, int]]],
+    top_level_groups: list[
+        list[tuple[dict[str, Any], dict[str, Any], str, int]]
+    ],
 ) -> list[tuple[int, str]]:
     hidden_requests: list[tuple[int, str]] = []
     for previous_group, next_group in zip(
         top_level_groups,
         top_level_groups[1:],
     ):
-        previous_input_tokens = _fixed32_qwen_group_input_tokens(previous_group)
+        previous_input_tokens = _fixed32_qwen_group_input_tokens(
+            previous_group
+        )
         next_input_tokens = _fixed32_qwen_group_input_tokens(next_group)
         if (
             previous_input_tokens is None
@@ -1114,13 +1160,19 @@ def _fixed32_qwen_hidden_compaction_requests(
         observed_tool_ids: list[str] = []
         for event in intervening_events:
             tool_result = _fixed32_qwen_user_tool_result(event)
-            if event.get("parent_tool_use_id") is not None or tool_result is None:
+            if (
+                event.get("parent_tool_use_id") is not None
+                or tool_result is None
+            ):
                 raise ContractError(
                     "fixed32 qwen input-usage drop is not bounded by "
                     "top-level tool results"
                 )
             observed_tool_ids.append(tool_result[0])
-        if not expected_tool_ids or observed_tool_ids != expected_tool_ids:
+        if (
+            not expected_tool_ids
+            or observed_tool_ids != expected_tool_ids
+        ):
             raise ContractError(
                 "fixed32 qwen input-usage drop tool results do not reconcile"
             )
@@ -1129,11 +1181,15 @@ def _fixed32_qwen_hidden_compaction_requests(
             (
                 boundary_end - 1,
                 _fixed32_qwen_hidden_compaction_request_id(
-                    previous_group_event_ids=[record[2] for record in previous_group],
+                    previous_group_event_ids=[
+                        record[2] for record in previous_group
+                    ],
                     intervening_event_ids=[
                         event["uuid"] for event in intervening_events
                     ],
-                    next_group_event_ids=[record[2] for record in next_group],
+                    next_group_event_ids=[
+                        record[2] for record in next_group
+                    ],
                     previous_input_tokens=previous_input_tokens,
                     next_input_tokens=next_input_tokens,
                 ),
@@ -1217,14 +1273,18 @@ def _fixed32_qwen_agent_outer_result_is_failure(
         result_content.startswith("Failed to run subagent:")
         or result_content.startswith("Subagent execution failed.")
         or result_content.startswith("Agent was cancelled by the user.")
-        or result_content.startswith("(subagent produced no model-visible output)")
+        or result_content.startswith(
+            "(subagent produced no model-visible output)"
+        )
     )
 
 
 def _fixed32_qwen_hidden_agent_terminal_requests(
     events: list[dict[str, Any]],
     *,
-    assistant_groups: list[list[tuple[dict[str, Any], dict[str, Any], str, int]]],
+    assistant_groups: list[
+        list[tuple[dict[str, Any], dict[str, Any], str, int]]
+    ],
     tool_use_records: dict[str, dict[str, Any]],
     nested_error_index: int | None,
     nested_error_parent_tool_use_id: str | None,
@@ -1240,7 +1300,9 @@ def _fixed32_qwen_hidden_agent_terminal_requests(
     for parent_tool_use_id in groups_by_parent:
         origin = tool_use_records.get(parent_tool_use_id)
         if origin is None or origin["name"] != "agent":
-            raise ContractError("fixed32 qwen nested response has a non-agent parent")
+            raise ContractError(
+                "fixed32 qwen nested response has a non-agent parent"
+            )
 
     agent_sessions: dict[str, dict[str, Any]] = {}
     for agent_tool_use_id, origin in tool_use_records.items():
@@ -1253,18 +1315,26 @@ def _fixed32_qwen_hidden_agent_terminal_requests(
         outer_result_indices: list[int] = []
         for event_index, event in enumerate(events[:-1]):
             tool_result = _fixed32_qwen_user_tool_result(event)
-            if tool_result is not None and tool_result[0] == agent_tool_use_id:
+            if (
+                tool_result is not None
+                and tool_result[0] == agent_tool_use_id
+            ):
                 outer_result_indices.append(event_index)
         if len(outer_result_indices) != 1:
-            raise ContractError("fixed32 qwen agent has no unique owner tool result")
+            raise ContractError(
+                "fixed32 qwen agent has no unique owner tool result"
+            )
         outer_result_index = outer_result_indices[0]
         outer_result_event = events[outer_result_index]
         if (
             "parent_tool_use_id" not in outer_result_event
-            or outer_result_event["parent_tool_use_id"] != origin["parent_tool_use_id"]
+            or outer_result_event["parent_tool_use_id"]
+            != origin["parent_tool_use_id"]
             or outer_result_index <= origin["event_index"]
         ):
-            raise ContractError("fixed32 qwen agent owner tool result is invalid")
+            raise ContractError(
+                "fixed32 qwen agent owner tool result is invalid"
+            )
         outer_result = _fixed32_qwen_user_tool_result(outer_result_event)
         if outer_result is None:
             raise ContractError("fixed32 qwen agent tool result is malformed")
@@ -1275,7 +1345,9 @@ def _fixed32_qwen_hidden_agent_terminal_requests(
             not isinstance(outer_result_content, str)
             or not outer_result_content.strip()
         ):
-            raise ContractError("fixed32 qwen agent tool result content is empty")
+            raise ContractError(
+                "fixed32 qwen agent tool result content is empty"
+            )
 
         prompt_indices = [
             event_index
@@ -1314,31 +1386,52 @@ def _fixed32_qwen_hidden_agent_terminal_requests(
             "subagent_type",
         }
         if not set(params) <= allowed_fields:
-            raise ContractError("fixed32 qwen agent input contains unknown fields")
+            raise ContractError(
+                "fixed32 qwen agent input contains unknown fields"
+            )
         for field in ("description", "prompt"):
-            if not isinstance(params.get(field), str) or not params[field].strip():
-                raise ContractError(f"fixed32 qwen agent {field} is empty or invalid")
+            if (
+                not isinstance(params.get(field), str)
+                or not params[field].strip()
+            ):
+                raise ContractError(
+                    f"fixed32 qwen agent {field} is empty or invalid"
+                )
         if (
             "run_in_background" in params
             and type(params["run_in_background"]) is not bool
         ):
-            raise ContractError("fixed32 qwen agent background selector is invalid")
+            raise ContractError(
+                "fixed32 qwen agent background selector is invalid"
+            )
         for field in ("isolation", "name", "subagent_type"):
             if field in params and not isinstance(params[field], str):
-                raise ContractError(f"fixed32 qwen agent {field} selector is invalid")
-        if "subagent_type" in params and not params["subagent_type"].strip():
-            raise ContractError("fixed32 qwen agent subagent_type selector is invalid")
+                raise ContractError(
+                    f"fixed32 qwen agent {field} selector is invalid"
+                )
+        if (
+            "subagent_type" in params
+            and not params["subagent_type"].strip()
+        ):
+            raise ContractError(
+                "fixed32 qwen agent subagent_type selector is invalid"
+            )
         subagent_type = params.get("subagent_type")
         if params.get("run_in_background") is True or (
-            isinstance(subagent_type, str) and subagent_type.strip().lower() == "fork"
+            isinstance(subagent_type, str)
+            and subagent_type.strip().lower() == "fork"
         ):
             raise ContractError(
                 "fixed32 qwen asynchronous agent invocation is unsupported"
             )
         if "isolation" in params:
-            raise ContractError("fixed32 qwen isolated agent invocation is unsupported")
+            raise ContractError(
+                "fixed32 qwen isolated agent invocation is unsupported"
+            )
         if isinstance(params.get("name"), str) and params["name"]:
-            raise ContractError("fixed32 qwen teammate agent invocation is unsupported")
+            raise ContractError(
+                "fixed32 qwen teammate agent invocation is unsupported"
+            )
         if len(prompt_indices) != 1:
             raise ContractError(
                 "fixed32 qwen agent initial prompt is missing or duplicated"
@@ -1358,11 +1451,15 @@ def _fixed32_qwen_hidden_agent_terminal_requests(
             or prompt_text != params["prompt"]
             or _fixed32_qwen_agent_outer_result_is_async(outer_result_event)
             or (
-                _fixed32_qwen_agent_outer_result_is_failure(outer_result_event)
+                _fixed32_qwen_agent_outer_result_is_failure(
+                    outer_result_event
+                )
                 and not error_boundary
             )
         ):
-            raise ContractError("fixed32 qwen foreground agent closure is invalid")
+            raise ContractError(
+                "fixed32 qwen foreground agent closure is invalid"
+            )
 
         if any(
             origin["event_index"] < event_index < prompt_index
@@ -1372,9 +1469,12 @@ def _fixed32_qwen_hidden_agent_terminal_requests(
                 "fixed32 qwen agent activity precedes its initial prompt"
             )
         if any(
-            event_index > outer_result_index for event_index in descendant_event_indices
+            event_index > outer_result_index
+            for event_index in descendant_event_indices
         ):
-            raise ContractError("fixed32 qwen agent continues after its owner result")
+            raise ContractError(
+                "fixed32 qwen agent continues after its owner result"
+            )
 
         for event_index in range(prompt_index, outer_result_index):
             if event_index == nested_error_index:
@@ -1391,18 +1491,22 @@ def _fixed32_qwen_hidden_agent_terminal_requests(
                     )
                 continue
             event_parent = events[event_index].get("parent_tool_use_id")
-            if not isinstance(
-                event_parent, str
-            ) or not _fixed32_qwen_tool_descends_from(
-                tool_use_records,
-                event_parent,
-                agent_tool_use_id,
+            if (
+                not isinstance(event_parent, str)
+                or not _fixed32_qwen_tool_descends_from(
+                    tool_use_records,
+                    event_parent,
+                    agent_tool_use_id,
+                )
             ):
                 raise ContractError(
                     "fixed32 qwen agent session is not a serial subtree"
                 )
 
-        if error_boundary and nested_error_parent_tool_use_id != agent_tool_use_id:
+        if (
+            error_boundary
+            and nested_error_parent_tool_use_id != agent_tool_use_id
+        ):
             raise ContractError(
                 "fixed32 qwen agent error boundary belongs to another tool"
             )
@@ -1416,10 +1520,14 @@ def _fixed32_qwen_hidden_agent_terminal_requests(
         }
 
     if nested_error_index is not None:
-        boundary_origin = tool_use_records.get(nested_error_parent_tool_use_id or "")
-        if (boundary_origin is None or boundary_origin["name"] != "agent") and events[
-            nested_error_index + 1
-        ].get("parent_tool_use_id") is not None:
+        boundary_origin = tool_use_records.get(
+            nested_error_parent_tool_use_id or ""
+        )
+        if (
+            (boundary_origin is None or boundary_origin["name"] != "agent")
+            and events[nested_error_index + 1].get("parent_tool_use_id")
+            is not None
+        ):
             raise ContractError(
                 "fixed32 qwen nested error boundary transition is invalid"
             )
@@ -1464,11 +1572,16 @@ def _fixed32_qwen_hidden_agent_terminal_requests(
                     cursor = child_session["outer_result_index"] + 1
                     continue
                 if cursor >= outer_result_index:
-                    raise ContractError("fixed32 qwen agent tool result is missing")
+                    raise ContractError(
+                        "fixed32 qwen agent tool result is missing"
+                    )
                 tool_result_event = events[cursor]
-                tool_result = _fixed32_qwen_user_tool_result(tool_result_event)
+                tool_result = _fixed32_qwen_user_tool_result(
+                    tool_result_event
+                )
                 if (
-                    tool_result_event.get("parent_tool_use_id") != agent_tool_use_id
+                    tool_result_event.get("parent_tool_use_id")
+                    != agent_tool_use_id
                     or tool_result is None
                     or tool_result[0] != expected_tool_id
                 ):
@@ -1479,10 +1592,14 @@ def _fixed32_qwen_hidden_agent_terminal_requests(
 
         if session["error_boundary"]:
             if cursor != nested_error_index:
-                raise ContractError("fixed32 qwen agent error transition is invalid")
+                raise ContractError(
+                    "fixed32 qwen agent error transition is invalid"
+                )
             cursor += 1
         if cursor != outer_result_index:
-            raise ContractError("fixed32 qwen agent terminal transition is invalid")
+            raise ContractError(
+                "fixed32 qwen agent terminal transition is invalid"
+            )
 
     hidden_requests: list[tuple[int, str]] = []
     for agent_tool_use_id, session in agent_sessions.items():
@@ -1506,7 +1623,9 @@ def _fixed32_qwen_hidden_agent_terminal_requests(
                             outer_result_index,
                         )
                     ],
-                    outer_tool_result_event_id=events[outer_result_index]["uuid"],
+                    outer_tool_result_event_id=events[outer_result_index][
+                        "uuid"
+                    ],
                 ),
             )
         )
@@ -1537,7 +1656,9 @@ def _validate_fixed32_qwen_nested_error_boundary(
         or "result" in result
         or "parent_tool_use_id" in result
     ):
-        raise ContractError("fixed32 qwen nested error boundary state is invalid")
+        raise ContractError(
+            "fixed32 qwen nested error boundary state is invalid"
+        )
     if (
         not isinstance(usage, dict)
         or set(usage) != {"input_tokens", "output_tokens"}
@@ -1546,23 +1667,31 @@ def _validate_fixed32_qwen_nested_error_boundary(
         or type(usage["output_tokens"]) is not int
         or usage["output_tokens"] != 0
     ):
-        raise ContractError("fixed32 qwen nested error boundary usage is not zero")
+        raise ContractError(
+            "fixed32 qwen nested error boundary usage is not zero"
+        )
     if (
         not isinstance(error, dict)
         or set(error) != {"message"}
         or not isinstance(error["message"], str)
         or not error["message"].strip()
     ):
-        raise ContractError("fixed32 qwen nested error boundary message is invalid")
+        raise ContractError(
+            "fixed32 qwen nested error boundary message is invalid"
+        )
     result_uuid = result.get("uuid")
     if (
         not isinstance(result_uuid, str)
         or not result_uuid
         or result_uuid == final_result_uuid
     ):
-        raise ContractError("fixed32 qwen nested/final result identities are invalid")
+        raise ContractError(
+            "fixed32 qwen nested/final result identities are invalid"
+        )
     if result_index == 0 or result_index + 1 >= len(events) - 1:
-        raise ContractError("fixed32 qwen nested error boundary position is invalid")
+        raise ContractError(
+            "fixed32 qwen nested error boundary position is invalid"
+        )
     nested_user = events[result_index - 1]
     top_level_user = events[result_index + 1]
     next_parent = top_level_user.get("parent_tool_use_id")
@@ -1577,7 +1706,9 @@ def _validate_fixed32_qwen_nested_error_boundary(
             and (not isinstance(next_parent, str) or not next_parent)
         )
     ):
-        raise ContractError("fixed32 qwen nested error boundary transition is invalid")
+        raise ContractError(
+            "fixed32 qwen nested error boundary transition is invalid"
+        )
     return nested_user["parent_tool_use_id"]
 
 
@@ -1604,7 +1735,9 @@ def validate_fixed32_trace_model_requests(
             "fixed32 qwen compaction metrics require count, pre, and post"
         )
 
-    terminal_records: list[tuple[int, dict[str, Any], dict[str, Any], str]] = []
+    terminal_records: list[
+        tuple[int, dict[str, Any], dict[str, Any], str]
+    ] = []
     result_records: list[tuple[int, dict[str, Any]]] = []
     for index, event in enumerate(events):
         if event.get("type") == "result":
@@ -1642,7 +1775,10 @@ def validate_fixed32_trace_model_requests(
             "engine_id_joinable": True,
         }
 
-    if len(result_records) > 2 or result_records[-1][0] != len(events) - 1:
+    if (
+        len(result_records) > 2
+        or result_records[-1][0] != len(events) - 1
+    ):
         raise ContractError(
             "fixed32 qwen trace requires one final result and at most one "
             "nested error boundary"
@@ -1670,36 +1806,52 @@ def validate_fixed32_trace_model_requests(
         raise ContractError("fixed32 qwen result evidence is incomplete")
 
     result_session_id = result["session_id"]
-    if expected_session_id is not None and result_session_id != expected_session_id:
-        raise ContractError("fixed32 qwen result session does not bind to the task")
+    if (
+        expected_session_id is not None
+        and result_session_id != expected_session_id
+    ):
+        raise ContractError(
+            "fixed32 qwen result session does not bind to the task"
+        )
 
     nested_error_index: int | None = None
     nested_error_parent_tool_use_id: str | None = None
     if len(result_records) == 2:
         nested_error_index = result_records[0][0]
-        nested_error_parent_tool_use_id = _validate_fixed32_qwen_nested_error_boundary(
-            events,
-            result_index=nested_error_index,
-            session_id=result_session_id,
-            final_result_uuid=result["uuid"],
+        nested_error_parent_tool_use_id = (
+            _validate_fixed32_qwen_nested_error_boundary(
+                events,
+                result_index=nested_error_index,
+                session_id=result_session_id,
+                final_result_uuid=result["uuid"],
+            )
         )
 
     qwen_event_ids = [event.get("uuid") for event in events]
-    if any(
-        not isinstance(event_id, str) or not event_id for event_id in qwen_event_ids
-    ) or len(qwen_event_ids) != len(set(qwen_event_ids)):
-        raise ContractError("fixed32 qwen event identities are empty or duplicated")
+    if (
+        any(not isinstance(event_id, str) or not event_id for event_id in qwen_event_ids)
+        or len(qwen_event_ids) != len(set(qwen_event_ids))
+    ):
+        raise ContractError(
+            "fixed32 qwen event identities are empty or duplicated"
+        )
 
     tool_use_ids: set[str] = set()
-    assistant_groups: list[list[tuple[dict[str, Any], dict[str, Any], str, int]]] = []
+    assistant_groups: list[
+        list[tuple[dict[str, Any], dict[str, Any], str, int]]
+    ] = []
     tool_use_records: dict[str, dict[str, Any]] = {}
     previous_was_assistant = False
     for event_index, event in enumerate(events[:-1]):
         event_type = event.get("type")
         if event_type not in {"system", "user", "assistant", "result"}:
-            raise ContractError("fixed32 qwen pre-result event type is invalid")
+            raise ContractError(
+                "fixed32 qwen pre-result event type is invalid"
+            )
         if event.get("session_id") != result_session_id:
-            raise ContractError("fixed32 qwen pre-result session identity differs")
+            raise ContractError(
+                "fixed32 qwen pre-result session identity differs"
+            )
 
         if event_type == "result":
             if event_index != nested_error_index:
@@ -1711,8 +1863,13 @@ def validate_fixed32_trace_model_requests(
 
         parent_tool_use_id = event.get("parent_tool_use_id")
         if parent_tool_use_id is not None:
-            if not isinstance(parent_tool_use_id, str) or not parent_tool_use_id:
-                raise ContractError("fixed32 qwen parent tool identity is invalid")
+            if (
+                not isinstance(parent_tool_use_id, str)
+                or not parent_tool_use_id
+            ):
+                raise ContractError(
+                    "fixed32 qwen parent tool identity is invalid"
+                )
             if parent_tool_use_id not in tool_use_ids:
                 raise ContractError(
                     "fixed32 qwen event has an unknown or non-ancestral parent tool"
@@ -1736,12 +1893,16 @@ def validate_fixed32_trace_model_requests(
             )
         content = message.get("content")
         if not isinstance(content, list) or not content:
-            raise ContractError("fixed32 qwen assistant content is empty or invalid")
+            raise ContractError(
+                "fixed32 qwen assistant content is empty or invalid"
+            )
         event_tool_ids: list[str] = []
         event_tool_id_set: set[str] = set()
         for item in content:
             if not isinstance(item, dict):
-                raise ContractError("fixed32 qwen assistant content item is invalid")
+                raise ContractError(
+                    "fixed32 qwen assistant content item is invalid"
+                )
             if item.get("type") != "tool_use":
                 continue
             tool_id = item.get("id")
@@ -1764,7 +1925,9 @@ def validate_fixed32_trace_model_requests(
             }
         stop_reason = message.get("stop_reason")
         if stop_reason not in {None, "tool_use"}:
-            raise ContractError("fixed32 qwen assistant stop reason is invalid")
+            raise ContractError(
+                "fixed32 qwen assistant stop reason is invalid"
+            )
         if (stop_reason == "tool_use") != bool(event_tool_ids):
             raise ContractError(
                 "fixed32 qwen tool-use terminal/content evidence differs"
@@ -1779,9 +1942,13 @@ def validate_fixed32_trace_model_requests(
         previous_was_assistant = True
 
     if not assistant_groups or events[-2].get("type") != "assistant":
-        raise ContractError("fixed32 qwen trace has no final assistant response group")
+        raise ContractError(
+            "fixed32 qwen trace has no final assistant response group"
+        )
 
-    top_level_groups: list[list[tuple[dict[str, Any], dict[str, Any], str, int]]] = []
+    top_level_groups: list[
+        list[tuple[dict[str, Any], dict[str, Any], str, int]]
+    ] = []
     request_records: list[tuple[int, str]] = []
     for group_index, group in enumerate(assistant_groups):
         parent_ids = {record[0].get("parent_tool_use_id") for record in group}
@@ -1825,7 +1992,9 @@ def validate_fixed32_trace_model_requests(
         request_records.append(
             (
                 group[0][3],
-                _fixed32_qwen_group_request_id([record[2] for record in group]),
+                _fixed32_qwen_group_request_id(
+                    [record[2] for record in group]
+                ),
             )
         )
 
@@ -1839,7 +2008,9 @@ def validate_fixed32_trace_model_requests(
         assistant_groups=assistant_groups,
         tool_use_records=tool_use_records,
         nested_error_index=nested_error_index,
-        nested_error_parent_tool_use_id=(nested_error_parent_tool_use_id),
+        nested_error_parent_tool_use_id=(
+            nested_error_parent_tool_use_id
+        ),
     )
     request_records.extend(hidden_requests)
     hidden_compaction_requests = _fixed32_qwen_hidden_compaction_requests(
@@ -1850,7 +2021,9 @@ def validate_fixed32_trace_model_requests(
     failed_compaction_requests: list[tuple[int, str]] = []
     compaction_metric_evidence: dict[str, Any] | None = None
     if metrics_pre is not None:
-        normal_request_count = len(request_records) - len(hidden_compaction_requests)
+        normal_request_count = (
+            len(request_records) - len(hidden_compaction_requests)
+        )
         (
             compaction_metric_evidence,
             failed_compaction_count,
@@ -1904,17 +2077,24 @@ def validate_fixed32_trace_model_requests(
     request_records.sort(key=lambda record: record[0])
     response_ids = [record[1] for record in request_records]
     if len(response_ids) != len(set(response_ids)):
-        raise ContractError("fixed32 qwen response group identities are duplicated")
+        raise ContractError(
+            "fixed32 qwen response group identities are duplicated"
+        )
     return {
         "trace_format": "qwen_result",
         "completed_logical_model_requests": len(response_ids),
         "model_request_ids": response_ids,
         "hidden_terminal_model_requests": len(hidden_requests),
         "hidden_compaction_model_requests": (
-            len(hidden_compaction_requests) + len(failed_compaction_requests)
+            len(hidden_compaction_requests)
+            + len(failed_compaction_requests)
         ),
-        "hidden_successful_compaction_model_requests": len(hidden_compaction_requests),
-        "hidden_failed_compaction_model_requests": len(failed_compaction_requests),
+        "hidden_successful_compaction_model_requests": len(
+            hidden_compaction_requests
+        ),
+        "hidden_failed_compaction_model_requests": len(
+            failed_compaction_requests
+        ),
         "qwen_compaction_metric_evidence": compaction_metric_evidence,
         "engine_id_joinable": False,
     }
@@ -2185,9 +2365,7 @@ def _expected_runtime_fa2_identity(
         if value not in {"0", "1"}:
             raise ContractError(f"{name} must be exactly 0 or 1")
     if live == "1" and production == "1":
-        raise ContractError(
-            "qrow16 live and production selectors are mutually exclusive"
-        )
+        raise ContractError("qrow16 live and production selectors are mutually exclusive")
     if live == "1" or production == "1":
         declared_sha256 = env.get("FR13_FA2_QROW16_SO_SHA256", "")
         if declared_sha256 != QROW16_FA2_SHA256:
@@ -2302,9 +2480,10 @@ def validate_runtime_attestation(payload: object) -> dict[str, Any]:
             or (record.get("size"), record.get("sha256")) not in known_identities
         ):
             raise ContractError(f"runtime attestation {key} FA2 mismatch")
-    if source.get("size") != destination.get("size") or source.get(
-        "sha256"
-    ) != destination.get("sha256"):
+    if (
+        source.get("size") != destination.get("size")
+        or source.get("sha256") != destination.get("sha256")
+    ):
         raise ContractError("runtime attestation FA2 source/destination mismatch")
     arctic = payload.get("arctic")
     if (
