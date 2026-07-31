@@ -1,0 +1,60 @@
+{
+  "schema": "fr13.fixed32.b4_graph_bv64.rejection.v1",
+  "status": "rejected",
+  "classification": "physical_b4_blocked_by_kv_capacity",
+  "source_commit": "c22d23c9c04993fc9891e640c6e7a15fc9dce9c6",
+  "repair_commit": "be2aa3032",
+  "workload": {
+    "suite": "SWE-Verified",
+    "task_set": "canonical_exact4",
+    "requested_batch_size": 4,
+    "concurrency": 4,
+    "max_model_len": 131072,
+    "tasks_started": 4,
+    "tasks_completed": 0
+  },
+  "boot": {
+    "kv_cache_memory_bytes": 21474836480,
+    "kv_cache_tokens": 76800,
+    "piecewise_graphs_completed": 8,
+    "full_graphs_completed": 4,
+    "full_graph_memory_gib": 5.55,
+    "process_runtime_attestation_passed": true,
+    "zero_traffic_baseline_passed": true
+  },
+  "capacity_observation": {
+    "first_sample_utc": "2026-07-31T22:07:20Z",
+    "last_sample_utc": "2026-07-31T22:16:50Z",
+    "maximum_running_requests": 2,
+    "waiting_requests": 2,
+    "maximum_kv_cache_usage_percent": 86.3,
+    "complete_work_census_events_at_abort": 434,
+    "pure_decode_forward_steps_at_abort": 435,
+    "physical_b4_replays": 0,
+    "graph_byte_records": 0,
+    "graph_live_pass": false
+  },
+  "correction": {
+    "kv_cache_memory_bytes": 42949672960,
+    "modeled_kv_cache_tokens": 153600,
+    "b1_unchanged": true,
+    "task_set_unchanged": true,
+    "concurrency_unchanged": true
+  },
+  "lifecycle": {
+    "operator_terminated_after_capacity_diagnosis": true,
+    "terminal_flush_status": "error:RuntimeError",
+    "terminal_flush_ack_action": "snapshot",
+    "ingress_ledger_finalized": false,
+    "container_manually_removed": true,
+    "host_memory_recovered": true
+  },
+  "claim_boundary": {
+    "boot_and_graph_capture": true,
+    "task_campaign_complete": false,
+    "task_level_kernel_correctness": false,
+    "timing": false,
+    "throughput": false,
+    "floor_acceptance": false
+  }
+}

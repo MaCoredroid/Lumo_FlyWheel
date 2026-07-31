@@ -1,0 +1,24 @@
+[eval-offload] eval step -> alienware (native x86_64)
+[codex-offload] codex docker -> alienware (x86); endpoint=http://127.0.0.1:8023/v1 (GB10 stays vLLM-only — uncontended deploy-speed)
+=== [2026-07-31T22:06:11Z] dataset=princeton-nlp/SWE-bench_Verified tag=verified n=4 concurrency=4 ===
+[2026-07-31T22:06:11Z] -> astropy__astropy-12907
+[2026-07-31T22:06:11Z] -> astropy__astropy-13033
+[2026-07-31T22:06:11Z] -> astropy__astropy-13398
+[2026-07-31T22:06:11Z] -> astropy__astropy-13236
+Traceback (most recent call last):
+  File "/home/mark/lumoFlyWheel-kernel-integrated/scripts/run_swe_bench_q36_a.py", line 6922, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/mark/lumoFlyWheel-kernel-integrated/scripts/run_swe_bench_q36_a.py", line 6893, in main
+    for res in ex.map(_job, instance_ids):
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 619, in result_iterator
+    yield _result_or_cancel(fs.pop())
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 317, in _result_or_cancel
+    return fut.result(timeout)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 451, in result
+    self._condition.wait(timeout)
+  File "/usr/lib/python3.12/threading.py", line 355, in wait
+    waiter.acquire()
+KeyboardInterrupt

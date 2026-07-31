@@ -1,0 +1,6 @@
+source_kind=verbatim Codex tool output captured before container removal
+source_session=019facd0-eda0-7781-96dc-f699dfc7a870
+scheduler_metrics_source_line=64076
+prompt_metrics_source_line=64063
+scheduler_command=docker logs plus fixed capacity-pattern filter
+prompt_command=vLLM metrics endpoint plus prompt-token filter
