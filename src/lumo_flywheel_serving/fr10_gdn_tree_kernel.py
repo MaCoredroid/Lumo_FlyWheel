@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 import torch
 import triton
@@ -309,6 +310,20 @@ _FR13_FIXED32_GDN_PATH_BV_SIDECARS = (
     "/logs/fr13_fixed32_gdn_path_bv_candidate.flag",
     "/tmp/fr13_fixed32_gdn_path_bv_candidate.flag",
 )
+_FR13_FIXED32_GDN_PATH_BV_PRODUCTION_SIDECARS = (
+    "/logs/fr13_fixed32_gdn_path_bv_production.flag",
+    "/tmp/fr13_fixed32_gdn_path_bv_production.flag",
+)
+_FR13_FIXED32_GDN_PATH_BV_REAL_EVENT = (
+    "/logs/fr13_fixed32_gdn_path_bv.real_event.arm"
+)
+_FR13_FIXED32_GDN_PATH_BV_LIVE_PASS = (
+    "/logs/fr13_fixed32_gdn_path_bv.live_pass.json"
+)
+_FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS = (
+    "/logs/fr13_fixed32_gdn_path_bv.production_pass.json"
+)
+_FR13_FIXED32_GDN_PATH_BV_CANDIDATE_ID = "fixed32_gdn_path_bv_v1"
 _FR13_FIXED32_GDN_BV_SURFACES = (
     "export",
     "ring_k",
@@ -467,12 +482,225 @@ def _fr13_resolve_fixed32_gdn_path_bv_candidate(
     return int(values.pop())
 
 
+def _fr13_fixed32_gdn_path_bv_source_sha256() -> str:
+    try:
+        payload = Path(__file__).resolve().read_bytes()
+    except OSError as error:
+        raise RuntimeError(
+            f"FR13 fixed32 GDN BV cannot hash its source: {error}"
+        ) from error
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _fr13_resolve_fixed32_gdn_path_bv_production(
+    fixed32_mode: str | None,
+    *,
+    environ=None,
+    sidecars=None,
+    geom_override=None,
+    pass_path: str | None = None,
+    source_sha256: str | None = None,
+) -> dict[str, object] | None:
+    """Resolve a source-bound, prior-live-gated BV production route."""
+    env = os.environ if environ is None else environ
+    paths = (
+        _FR13_FIXED32_GDN_PATH_BV_PRODUCTION_SIDECARS
+        if sidecars is None
+        else tuple(sidecars)
+    )
+    sources: list[tuple[str, str]] = []
+    raw_env = env.get("FR13_FIXED32_GDN_PATH_BV_PRODUCTION")
+    if raw_env is not None and str(raw_env).strip():
+        sources.append(
+            (
+                "env:FR13_FIXED32_GDN_PATH_BV_PRODUCTION",
+                str(raw_env).strip(),
+            )
+        )
+    for path in paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="ascii") as handle:
+                value = handle.read(16)
+        except (OSError, UnicodeError) as error:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PATH_BV_PRODUCTION cannot read sidecar "
+                f"{path}: {error}"
+            ) from error
+        if len(value) >= 16:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PATH_BV_PRODUCTION sidecar exceeds "
+                f"15 bytes: {path}"
+            )
+        sources.append((f"sidecar:{path}", value.strip()))
+    if not sources:
+        return None
+    invalid = [
+        (source, value)
+        for source, value in sources
+        if value not in ("16", "32", "64", "128")
+    ]
+    values = {value for _source, value in sources}
+    if invalid or len(values) != 1:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_PRODUCTION requires one of 16, 32, "
+            "64, or 128 from agreeing sources: "
+            + repr(sources)
+        )
+    candidate = int(values.pop())
+    if fixed32_mode not in _FR13_FIXED32_MODES:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_PRODUCTION requires an exact fixed32 mode"
+        )
+    if geom_override != {"BV": candidate}:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_PRODUCTION requires geometry pinned "
+            f"exactly to BV={candidate}"
+        )
+    resolved_pass_path = pass_path or env.get(
+        "FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS_PATH",
+        _FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS,
+    )
+    if os.path.islink(resolved_pass_path) or not os.path.isfile(
+        resolved_pass_path
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_PRODUCTION requires a regular live "
+            f"PASS JSON: {resolved_pass_path}"
+        )
+    try:
+        with open(resolved_pass_path, encoding="ascii") as handle:
+            payload = json.load(handle)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            f"FR13 fixed32 GDN BV production PASS JSON is unreadable: {error}"
+        ) from error
+    current_sha = source_sha256 or _fr13_fixed32_gdn_path_bv_source_sha256()
+    task_marker = payload.get("task_marker") if isinstance(payload, dict) else None
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != "fr13.fixed32.gdn_path_bv.live_pass.v1"
+        or payload.get("status") != "pass"
+        or payload.get("candidate") != _FR13_FIXED32_GDN_PATH_BV_CANDIDATE_ID
+        or payload.get("source_sha256") != current_sha
+        or payload.get("mode") != fixed32_mode
+        or payload.get("reference_bv") != 8
+        or payload.get("candidate_bv") != candidate
+        or payload.get("raw_byte_equal") is not True
+        or payload.get("reference_served") is not True
+        or payload.get("state_restored") is not True
+        or type(payload.get("batch_size")) is not int
+        or payload.get("batch_size") not in (1, 2, 3, 4)
+        or payload.get("covered_batches")
+        != list(range(1, payload.get("batch_size", 0) + 1))
+        or payload.get("records") != 48 * payload.get("batch_size", 0)
+        or payload.get("physical_rows") != 32
+        or not isinstance(task_marker, str)
+        or not task_marker.startswith("swe_verified:")
+        or len(task_marker) == len("swe_verified:")
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV production PASS JSON is invalid or belongs "
+            "to a different candidate/source"
+        )
+    return payload
+
+
+def _fr13_fixed32_gdn_bv_real_event_marker() -> str:
+    path = os.environ.get(
+        "FR13_FIXED32_GDN_PATH_BV_REAL_EVENT_PATH",
+        _FR13_FIXED32_GDN_PATH_BV_REAL_EVENT,
+    )
+    if not os.path.isfile(path):
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live gate requires a real SWE-Verified event arm"
+        )
+    try:
+        with open(path, encoding="ascii") as handle:
+            marker = handle.read(257)
+    except (OSError, UnicodeError) as error:
+        raise RuntimeError(
+            f"FR13 fixed32 GDN BV cannot read real-event marker: {error}"
+        ) from error
+    marker = marker.strip()
+    prefix = "swe_verified:"
+    task_id = marker[len(prefix):] if marker.startswith(prefix) else ""
+    if (
+        len(marker) > 256
+        or not task_id
+        or any(
+            character
+            not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+            for character in task_id
+        )
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV real-event marker must be "
+            "swe_verified:<task_id>"
+        )
+    return marker
+
+
+def _fr13_fixed32_gdn_bv_live_pass_emit(
+    *, task_marker: str, batch_size: int, result: dict[str, int],
+) -> None:
+    path = os.environ.get(
+        "FR13_FIXED32_GDN_PATH_BV_LIVE_JSON",
+        _FR13_FIXED32_GDN_PATH_BV_LIVE_PASS,
+    )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    payload = {
+        "schema": "fr13.fixed32.gdn_path_bv.live_pass.v1",
+        "status": "pass",
+        "candidate": _FR13_FIXED32_GDN_PATH_BV_CANDIDATE_ID,
+        "source_sha256": _fr13_fixed32_gdn_path_bv_source_sha256(),
+        "task_marker": task_marker,
+        "mode": _FR13_FIXED32_MODE,
+        "batch_size": int(batch_size),
+        "covered_batches": list(range(1, int(batch_size) + 1)),
+        "records": int(result["records"]),
+        "physical_rows": 32,
+        "reference_bv": int(result["reference_bv"]),
+        "candidate_bv": int(result["candidate_bv"]),
+        "raw_byte_equal": True,
+        "reference_served": True,
+        "state_restored": True,
+    }
+    temporary = f"{path}.tmp.{os.getpid()}"
+    with open(temporary, "w", encoding="ascii") as handle:
+        json.dump(payload, handle, sort_keys=True)
+        handle.write("\n")
+    os.replace(temporary, path)
+
+
 _FR13_FIXED32_GDN_PATH_BV_CANDIDATE = (
     _fr13_resolve_fixed32_gdn_path_bv_candidate(
         _FR13_FIXED32_MODE,
         geom_override=_read_tree_gdn_geom_override(),
     )
 )
+_FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS = (
+    _fr13_resolve_fixed32_gdn_path_bv_production(
+        _FR13_FIXED32_MODE,
+        geom_override=_read_tree_gdn_geom_override(),
+    )
+)
+_FR13_FIXED32_GDN_PATH_BV_PRODUCTION = (
+    int(_FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS["candidate_bv"])
+    if _FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS is not None
+    else None
+)
+if (
+    _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+    and _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None
+):
+    raise RuntimeError(
+        "FR13 fixed32 GDN path-BV diagnostic and production selectors are "
+        "mutually exclusive"
+    )
 _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT = None
 _FR13_FIXED32_GDN_BV_CAPTURES: dict[int, dict] = {}
 _FR13_FIXED32_GDN_BV_LIVE_STATE = {
@@ -700,6 +928,7 @@ def fixed32_gdn_bv_live_gate_on_replay(
             "FR13 fixed32 GDN BV live-gate replay/capture drift: "
             + repr((identity, batch, expected, capture))
         )
+    task_marker = _fr13_fixed32_gdn_bv_real_event_marker()
     state["status"] = "running"
     try:
         result = _fr13_fixed32_gdn_bv_compare_records(
@@ -713,6 +942,11 @@ def fixed32_gdn_bv_live_gate_on_replay(
         graph_id=identity,
         batch_size=batch,
         records=int(result["records"]),
+    )
+    _fr13_fixed32_gdn_bv_live_pass_emit(
+        task_marker=task_marker,
+        batch_size=batch,
+        result=result,
     )
     _FR13_FIXED32_GDN_BV_CAPTURES.clear()
     print(
@@ -963,10 +1197,13 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
         )
     if (
         (diagnostic or production is not None)
-        and _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+        and (
+            _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+            or _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None
+        )
     ):
         raise RuntimeError(
-            "FR13 fixed32 batched GDN and path-BV live diagnostics are "
+            "FR13 fixed32 batched GDN and path-BV selectors are "
             "mutually exclusive"
         )
     if diagnostic:
@@ -8919,15 +9156,16 @@ def launch_tree_gdn_prepared(
     """
     if n_actual <= 0 or n_actual > n_pad:
         raise ValueError(f"invalid tree node counts n_actual={n_actual}, n_pad={n_pad}")
-    # n_pad=32 (accept>5 32-node horizon) is register-safe ONLY with the shrink-BV
-    # geometry: the forward _tree_gdn_kernel carries h_cache=[N_PAD,BV,DIM_K]fp32, so
-    # [32,8,128] == [16,16,128] byte-for-byte (131072 B/CTA) at BV<=8, but [32,16,128]
-    # (256 KiB) spills at the deployed BV=16. Gate the lift on the effective BV (the
-    # FR13_TREE_GDN_GEOM_OVERRIDE this route applies below) so an accidental n_pad=32
-    # without BV<=8 fails loud instead of silently spilling to HBM.
+    # The monolithic scan needs BV<=8 at n_pad=32 to bound h_cache residency.
+    # Source-gated fixed32 BV production uses the path scan, which has no h_cache;
+    # let that exact route reach the stronger production checks below.
     _ov_cap = _read_tree_gdn_geom_override()
     _bv_cap = int(_ov_cap.get("BV", BV)) if _ov_cap else BV
-    _npad_cap = 32 if _bv_cap <= 8 else 16
+    _fixed32_path_bv_production = (
+        _FR13_FIXED32_MODE in _FR13_FIXED32_MODES
+        and _FR13_FIXED32_GDN_PATH_BV_PRODUCTION == _bv_cap
+    )
+    _npad_cap = 32 if _bv_cap <= 8 or _fixed32_path_bv_production else 16
     if n_pad > _npad_cap or n_pad & (n_pad - 1):
         raise ValueError(
             f"n_pad must be a power of two <={_npad_cap} (effective BV={_bv_cap}; "
@@ -9374,6 +9612,40 @@ def launch_tree_gdn_prepared(
             raise RuntimeError(
                 f"{_label} SELFCHECK MISMATCH: invocation counter did not "
                 "advance exactly once"
+            )
+
+    if _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None:
+        production_pass = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS
+        if (
+            not isinstance(production_pass, dict)
+            or _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES
+            or not _subtree_route_armed
+            or _subtree_selfcheck_armed
+            or _subtree_state is None
+            or _subtree_state.get("schedule") != "fixed32"
+            or _subtree_state.get("fixed32_contract") is None
+            or n_actual != 32
+            or n_pad != 32
+            or _bv != _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
+            or _geom != {"BV": _FR13_FIXED32_GDN_PATH_BV_PRODUCTION}
+            or _FR13_FIXED32_GDN_PATH_BV_PRODUCTION > dim_v
+            or dim_v % _FR13_FIXED32_GDN_PATH_BV_PRODUCTION != 0
+            or not _ring_export
+            or not _flags_export
+            or int(staging_rows) not in production_pass["covered_batches"]
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN BV production geometry/PASS contract drift; "
+                "no fallback is permitted"
+            )
+        if not _subtree_state.get("production_bv_announced", False):
+            _subtree_state["production_bv_announced"] = True
+            print(
+                "[FR13_FIXED32_GDN_PATH_BV_PRODUCTION ENGAGED] "
+                f"mode={_FR13_FIXED32_MODE} batch={staging_rows} "
+                f"block_v={_FR13_FIXED32_GDN_PATH_BV_PRODUCTION} "
+                "source_bound_pass=1 fallback=0",
+                flush=True,
             )
 
     if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None:

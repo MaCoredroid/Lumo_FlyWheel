@@ -111,6 +111,9 @@ fi
 FR13_DRAFT_HEAD_PAD_ROWS=${FR13_DRAFT_HEAD_PAD_ROWS:-0}
 FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=${FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB:-0}
 FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}
+FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}
+FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON:-}
+FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON:-/logs/fr13_fixed32_taw_native_precompute.live_pass.json}
 FR13_FA2_QROW16_LIVE_PAGED_AB=${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}
 FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID=${FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID:-}
 FR13_FA2_QROW16_LIVE_PAGED_AB_JSON=${FR13_FA2_QROW16_LIVE_PAGED_AB_JSON:-/logs/fr13_fa2_qrow16_live_paged_ab.json}
@@ -122,6 +125,29 @@ case "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" in
   0|1) ;;
   *) echo "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE must be 0 or 1" >&2; exit 2 ;;
 esac
+case "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "1" \
+      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1" ]]; then
+  echo "FR13 fixed32 TAW native diagnostic and production are mutually exclusive" >&2
+  exit 2
+fi
+if [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" ]] || {
+    echo "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE requires fixed32" >&2
+    exit 2
+  }
+fi
+if [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && -f "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON" \
+     && ! -L "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON" ]] || {
+    echo "FR13 TAW native production requires fixed32 and a regular live PASS JSON" >&2
+    exit 2
+  }
+fi
 case "$FR13_FA2_QROW16_LIVE_PAGED_AB" in
   0|1) ;;
   *) echo "FR13_FA2_QROW16_LIVE_PAGED_AB must be 0 or 1" >&2; exit 2 ;;
@@ -332,6 +358,8 @@ PY
 SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$NUM_SPECULATIVE_TOKENS,\"speculative_token_tree\":\"$TREE\"}"}
 
 _fr13_gdn_path_bv_candidate=${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}
+_fr13_gdn_path_bv_production=${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}
+_fr13_gdn_path_bv_pass_json=${FR13_FIXED32_GDN_PATH_BV_PASS_JSON:-}
 if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
   [[ -n "${FR13_FIXED32_MODE:-}" ]] || {
     echo "FR13_FIXED32_GDN_PATH_BV_CANDIDATE requires FR13_FIXED32_MODE" >&2
@@ -344,6 +372,33 @@ if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
     echo "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be exactly 16, 32, 64, or 128" >&2
     exit 2
   }
+fi
+if [[ -n "$_fr13_gdn_path_bv_production" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" ]] || {
+    echo "FR13_FIXED32_GDN_PATH_BV_PRODUCTION requires FR13_FIXED32_MODE" >&2
+    exit 2
+  }
+  [[ "$_fr13_gdn_path_bv_production" == "16" \
+     || "$_fr13_gdn_path_bv_production" == "32" \
+     || "$_fr13_gdn_path_bv_production" == "64" \
+     || "$_fr13_gdn_path_bv_production" == "128" ]] || {
+    echo "FR13_FIXED32_GDN_PATH_BV_PRODUCTION must be exactly 16, 32, 64, or 128" >&2
+    exit 2
+  }
+  [[ -f "$_fr13_gdn_path_bv_pass_json" \
+     && ! -L "$_fr13_gdn_path_bv_pass_json" ]] || {
+    echo "FR13 GDN path-BV production requires a regular live PASS JSON" >&2
+    exit 2
+  }
+fi
+if [[ -n "$_fr13_gdn_path_bv_candidate" \
+      && -n "$_fr13_gdn_path_bv_production" ]]; then
+  echo "FR13 fixed32 GDN path-BV diagnostic and production selectors are mutually exclusive" >&2
+  exit 2
+fi
+_fr13_fixed32_expected_gdn_geom="BV=8"
+if [[ -n "$_fr13_gdn_path_bv_production" ]]; then
+  _fr13_fixed32_expected_gdn_geom="BV=$_fr13_gdn_path_bv_production"
 fi
 
 # Fixed-32 is a closed execution bucket, not a generic <=32-node tree. Validate
@@ -685,7 +740,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     "BATCH_INVARIANT|$BATCH_INVARIANT|0"
     "FR13_TAIL_MODE|${FR13_TAIL_MODE:-0}|1"
     "FR13_DRAFT_SOURCE|${FR13_DRAFT_SOURCE:-mtp}|merged"
-    "FR13_TREE_GDN_GEOM_OVERRIDE|${FR13_TREE_GDN_GEOM_OVERRIDE:-}|BV=8"
+    "FR13_TREE_GDN_GEOM_OVERRIDE|${FR13_TREE_GDN_GEOM_OVERRIDE:-}|$_fr13_fixed32_expected_gdn_geom"
     "FR13_HYDRA23|${FR13_HYDRA23:-0}|0"
     "FR13_TAIL_BRANCHES|${FR13_TAIL_BRANCHES:-0}|0"
     "FR13_TAIL_BRANCH_DEPTHS|${FR13_TAIL_BRANCH_DEPTHS:-0}|0"
@@ -789,6 +844,26 @@ if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
   )
   export FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR
   export FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256
+fi
+if [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "1" ]]; then
+  echo "1" > "$LOG_DIR/fr13_fixed32_taw_native_precompute_diagnostic.arm"
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute_production.arm" \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute.live_pass.json"
+elif [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1" ]]; then
+  cp -- "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON" \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute.production_pass.json"
+  echo "1" > "$LOG_DIR/fr13_fixed32_taw_native_precompute_production.arm"
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute_diagnostic.arm" \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute.real_event.arm"
+else
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute_diagnostic.arm" \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute_production.arm" \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute.real_event.arm" \
+    2>/dev/null || true
 fi
 FR13_FIXED32_DOCKER_ARGS=()
 FR13_FIXED32_MIDDLEWARE_FLAGS=""
@@ -924,12 +999,22 @@ PY
     "$LOG_DIR/fr13_fixed32_runtime_attestation.json" \
     "$LOG_DIR"/fr13_fixed32_boundary_snapshot.*.json \
     "$LOG_DIR/fr13_fixed32_mode.flag" \
-    "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag"
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv.production_pass.json" \
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv.real_event.arm"
   printf '%s\n' "$FR13_FIXED32_MODE" > "$LOG_DIR/fr13_fixed32_mode.flag"
   if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
     printf '%s\n' "$_fr13_gdn_path_bv_candidate" \
       > "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag"
     chmod 400 "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag"
+    rm -f "$LOG_DIR/fr13_fixed32_gdn_path_bv.live_pass.json"
+  elif [[ -n "$_fr13_gdn_path_bv_production" ]]; then
+    cp -- "$_fr13_gdn_path_bv_pass_json" \
+      "$LOG_DIR/fr13_fixed32_gdn_path_bv.production_pass.json"
+    printf '%s\n' "$_fr13_gdn_path_bv_production" \
+      > "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag"
+    chmod 400 "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag"
   fi
   printf '%s\n' \
     "mode=$FR13_FIXED32_MODE" \
@@ -944,6 +1029,9 @@ else
   rm -f \
     "$LOG_DIR/fr13_fixed32_mode.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv.production_pass.json" \
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv.real_event.arm" \
     2>/dev/null || true
 fi
 # FR13_COMMITTER_NATIVE sidecar (worker-env-drop-proof): the EngineCore worker drops FR13_* env vars, so
@@ -1004,10 +1092,11 @@ if [[ "$_fr13_batch_gdn_byte_ab" == "1" \
   echo "FR13 fixed32 batched GDN diagnostic and production are mutually exclusive" >&2
   exit 2
 fi
-if [[ -n "$_fr13_gdn_path_bv_candidate" \
+if [[ ( -n "$_fr13_gdn_path_bv_candidate" \
+        || -n "$_fr13_gdn_path_bv_production" ) \
       && ( "$_fr13_batch_gdn_byte_ab" == "1" \
            || "$_fr13_batch_gdn_production" == "1" ) ]]; then
-  echo "FR13 fixed32 batched GDN and path-BV live diagnostics are mutually exclusive" >&2
+  echo "FR13 fixed32 batched GDN and path-BV selectors are mutually exclusive" >&2
   exit 2
 fi
 if [[ "$_fr13_batch_gdn_byte_ab" == "1" ]]; then
@@ -1399,6 +1488,9 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_NPAD_INVARIANT="${FR13_NPAD_INVARIANT:-0}" \
   -e FR13_TREE_GDN_GEOM_OVERRIDE="${FR13_TREE_GDN_GEOM_OVERRIDE:-}" \
   -e FR13_FIXED32_GDN_PATH_BV_CANDIDATE="${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
+  -e FR13_FIXED32_GDN_PATH_BV_PRODUCTION="${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}" \
+  -e FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS_PATH=/logs/fr13_fixed32_gdn_path_bv.production_pass.json \
+  -e FR13_FIXED32_GDN_PATH_BV_LIVE_JSON=/logs/fr13_fixed32_gdn_path_bv.live_pass.json \
   -e FR13_APC_COMMIT_TO_RUNNING_ROW="${FR13_APC_COMMIT_TO_RUNNING_ROW:-1}" \
   -e FR13_TREE_RUNROW_INIT="${FR13_TREE_RUNROW_INIT:-1}" \
   -e FR13_COMMITTER_GRAPH="${FR13_COMMITTER_GRAPH:-1}" \
@@ -1424,6 +1516,9 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DRAFT_HEAD_PAD_ROWS="$FR13_DRAFT_HEAD_PAD_ROWS" \
   -e FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB="$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" \
   -e FR13_FIXED32_TAW_NATIVE_PRECOMPUTE="$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" \
+  -e FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION="$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" \
+  -e FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_PATH=/logs/fr13_fixed32_taw_native_precompute.production_pass.json \
+  -e FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON="$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON" \
   -e FR13_FA2_QROW16_LIVE_PAGED_AB="$FR13_FA2_QROW16_LIVE_PAGED_AB" \
   -e FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID="$FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID" \
   -e FR13_FA2_QROW16_LIVE_PAGED_AB_JSON="$FR13_FA2_QROW16_LIVE_PAGED_AB_JSON" \

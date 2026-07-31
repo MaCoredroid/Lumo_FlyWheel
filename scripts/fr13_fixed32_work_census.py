@@ -138,11 +138,14 @@ TAW_ROUTE = "fixed32_pytorch_exact_float_triton_integer_commit"
 TAW_NATIVE_PRECOMPUTE_ROUTE = (
     "fixed32_native_precompute_byte_ab_reference_return"
 )
+TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE = (
+    "fixed32_native_precompute_production_candidate_return"
+)
 TAW_EXACT_COMMIT_LAUNCHES = WALK_CAP
 TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST = WALK_CAP
 TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-exact-commit-v3"
 TAW_SOURCE_CONTRACT_SHA256 = (
-    "fe73ad35a916e41532575e29a5f9f6442d1081d0d1c0d0fc18210fdc8f0f56f8"
+    "42b92d872d2324bf618b35fdd71c22d0e68e5c00e25ad2a43ae553c8ab1f92da"
 )
 TAW_TENSOR_CALL_CENSUS = {
     "walk_levels": 12,
@@ -179,6 +182,12 @@ TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS = {
     "residual_where_calls": 48,
     "exact_commit_launches": 24,
     "exact_commit_programs_per_request": 24,
+}
+TAW_NATIVE_PRECOMPUTE_PRODUCTION_TENSOR_CALL_CENSUS = {
+    **TAW_TENSOR_CALL_CENSUS,
+    "full_vocab_row_gathers": 50,
+    "full_vocab_fp32_casts": 2,
+    "full_vocab_softmax_calls": 2,
 }
 TAW_COUNT_ROUTE = "preseeded_cuda_fixed31"
 TAW_RNG_ROUTE = "bulk_device_generator"
@@ -1388,7 +1397,11 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         taw["path_scatter_slots"], f"{source}.taw.path_scatter_slots"
     )
     taw_route = _string(taw["route"], f"{source}.taw.route")
-    if taw_route not in (TAW_ROUTE, TAW_NATIVE_PRECOMPUTE_ROUTE):
+    if taw_route not in (
+        TAW_ROUTE,
+        TAW_NATIVE_PRECOMPUTE_ROUTE,
+        TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+    ):
         raise CensusError(
             f"{source}.taw.route: expected a pinned fixed32 TAW route, "
             f"got {taw_route!r}"
@@ -1510,11 +1523,14 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             taw_tensor_calls[name] = False
         else:
             taw_tensor_calls[name] = _integer(raw_tensor_calls[name], label)
-    expected_tensor_calls = (
-        TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS
-        if taw_route == TAW_NATIVE_PRECOMPUTE_ROUTE
-        else TAW_TENSOR_CALL_CENSUS
-    )
+    if taw_route == TAW_NATIVE_PRECOMPUTE_ROUTE:
+        expected_tensor_calls = TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS
+    elif taw_route == TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE:
+        expected_tensor_calls = (
+            TAW_NATIVE_PRECOMPUTE_PRODUCTION_TENSOR_CALL_CENSUS
+        )
+    else:
+        expected_tensor_calls = TAW_TENSOR_CALL_CENSUS
     _expect(
         taw_tensor_calls,
         {
