@@ -1,0 +1,91 @@
+fixed32 SWE-Verified subset OK: tasks=4 diagnostic=0
+=== BIGDENOM-VARIANT SWEServe ARM tail6_fixed32_gdn_wide_bv64_exact4_20260731T180941Z kind=tail6_fixed32 launcher=forked expect=31 xflags=[FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0 FR13_FIXED32_MODE=tail6_fixed32 FR13_FIXED32_VALID_MASK=0x7a9ce73f FR13_FIXED32_ACTIVE_NODES=21 FR13_FIXED32_PHYSICAL_DRAFTS=31] subset=config/fr13_fixed32/subset_b4_four.json ===
+2026-07-31T18:09:57Z
+cd377b687d67e95688b904cd89900032fcb2d6ba
+[hygiene] recover_host_memory + assert free
+[hygiene] MemAvailable=102.2GiB swap_used=0 OK
+               total        used        free      shared  buff/cache   available
+Mem:             117          15         102           0           0         102
+Swap:             15           0          15
+fixed32 container identity promoted: id=a0a31c87f035258a89ab141c2e1b11ad543eecda06e05a8fe6a1b603e498e1e2 name=fr13-bigdenom-tail6_fixed32_gdn_wide_bv64_exact4_20260731T180941Z started_at=2026-07-31T18:10:03.979289166Z pid=2004013 restart_count=0
+healthy after 434s
+fixed32 runtime identity OK: runtime=7a167058b7f4d3c3fbffcfaee4b14b613c591e0259de08e3510ee9559955dd5d pid1_args=48
+fixed32 runtime ready: mode=tail6_fixed32 producer_pid=257
+container env OK (tail6_fixed32)
+PID 1 cmd=[/usr/bin/python3 /usr/local/bin/vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b --host 0.0.0.0 --port 9950 --max-num-seqs 4 --gpu-memory-utilization 0.70 --max-model-len 131072 --seed 0 --attention-backend TREE_ATTN --gdn-prefill-backend triton --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 --speculative-config {"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"} --enable-prefix-caching --enable-chunked-prefill --mamba-block-size 1024 --mamba-ssm-cache-dtype float32 --max-num-batched-tokens 4096 --block-size 1024 --long-prefill-token-threshold 1024 --compilation-config {"cudagraph_mode":"FULL_AND_PIECEWISE"} --middleware lumo_flywheel_serving.inference_proxy.Fixed32EngineIngressMiddleware --enforce-eager ]
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"}
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 256 cmd=[/usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(51) ]
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"}
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 257 cmd=[VLLM::EngineCore                                                                                                                   ]
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 628 cmd=[bash -lc 
+hit=""; pids=""
+for p in $(ls /proc | grep -E "^[0-9]+$"); do
+  e="/proc/$p/environ"; [ -r "$e" ] || continue
+  cmd="$(tr "\0" " " < /proc/$p/cmdline 2>/dev/null || true)"
+  case "$cmd" in *vllm*|*VllmWorker*|*EngineCore*|*python*) ;; *) continue ;; esac
+  dm="$(tr "\0" "\n" < "$e" | grep -E "^FR10_DECODE_MODE_DEFAULT=" || true)"
+  if [ -n "$dm" ]; then
+    pids="$pids $p"
+    echo "PID $p cmd=[$cmd]"
+    tr "\0" "\n" < "$e" | grep -E "^(FR10_DECODE_MODE_DEFAULT|LUMO_FB_KERNEL_ROWS|FR13_GB10_FP8_GEMV_CFG|FR13_GPU_COMMITTER|FR13_COMMITTER_SYNCKILL|SPEC_CONFIG|FR13_REPLAY_ROUTE)=" | sed "s/^/   /"
+    hit="1"
+  fi
+done
+echo "SUMMARY worker_env_seen=[$hit] pids=[$pids]"
+ ]
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"}
+   FR13_REPLAY_ROUTE=1
+SUMMARY worker_env_seen=[1] pids=[ 1 256 257 628]
+worker environ needle OK (tail6_fixed32)
+[capture needle] SKIPPED (ENFORCE_EAGER=1: eager mode has no CUDA graph capture)
+fixed32 pretask generation warmup SKIPPED: canonical SWE traffic only
+fixed32 pretask prefix-cache reset SKIPPED: fresh container
+[offload] OFFLOAD_AGENT=1 — proxy+agent on alienware, GB10 stays vLLM-only
+[offload] alienware -> GB10 vLLM 100.103.10.122:9950/health OK
+OFFLOAD_PROXY_OK host=alienware upstream=http://100.103.10.122:9950 (forced temp 0.6, raw_dumps_disabled=1, NUDGE OFF)
+proxy OK (OFFLOADED to alienware:8023)
+fixed32 ingress auth preflight OK: engine=4 rejects proxy=4 rejects
+eval offload: configured evaluator reachable
+[offload] link watchdog pid=2013502 (threshold 300s)
+fixed32 pretask zero-traffic baseline OK
+fixed32 ingress campaign begun after zero-work baseline
+swe orchestrator rc=1 wall=1s
+  File "/home/mark/shared/lumoFlyWheel-b4-livegate-ready/scripts/run_swe_bench_q36_a.py", line 5683, in _process_one
+    fixed32_bracket.pre(metrics_pre)
+  File "/home/mark/shared/lumoFlyWheel-b4-livegate-ready/scripts/run_swe_bench_q36_a.py", line 4093, in pre
+    raise Fixed32BoundaryError(
+Fixed32BoundaryError: fixed32 pre bracket failed: FlushStateError: flush endpoint is poisoned: generation 1 outcome is ambiguous after FlushRuntimeError: runtime returned non-ok flush status 'error:RuntimeError' for generation 1
+OFFLOAD_FETCH_OK host=alienware raw_dumps=disabled
+canonical-task spec engagement is empty: drafts=0.0
+FAIL: fixed32 canonical-task spec engagement
+FAIL: fixed32 canonical tasks emitted no subtree runtime needle
+FAIL: fixed32 canonical tasks emitted no topology needle
+FAIL: fixed32 canonical tasks emitted no work needle
+{
+  "swe_orchestrator_rc": 15,
+  "swe_window_wall_s": 1,
+  "tasks": []
+}
+raw proxy dumps: disabled
+ARM_DONE tail6_fixed32_gdn_wide_bv64_exact4_20260731T180941Z kind=tail6_fixed32 swerc=15
+[teardown] kill proxy + attest/remove run container + recover_host_memory
+FAIL: fixed32 terminal flush rc=2
+fixed32 exact container preserved after engine-ledger materialization failure: a0a31c87f035258a89ab141c2e1b11ad543eecda06e05a8fe6a1b603e498e1e2
+               total        used        free      shared  buff/cache   available
+Mem:             117          98          19           0           0          19
+Swap:             15           0          15
+2026-07-31T18:17:56Z
