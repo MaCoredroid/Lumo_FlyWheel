@@ -82,6 +82,7 @@ CONTAINER_FA2_DESTINATION = Path(
 )
 
 MODEL_ROOT = Path("/models/qwen3.6-27b-fp8")
+FIXED32_B4_KV_CACHE_MEMORY_BYTES = 20 * 1024**3
 MODEL_AUXILIARY_FILES = (
     ".gitattributes",
     "LICENSE",
@@ -580,7 +581,7 @@ def speculative_config_text() -> str:
 def expected_pid1_argv(concurrency: int) -> list[str]:
     if concurrency not in (1, 4):
         raise ContractError(f"fixed32 concurrency must be 1 or 4, got {concurrency}")
-    return [
+    argv = [
         "/usr/bin/python3",
         "/usr/local/bin/vllm",
         "serve",
@@ -599,6 +600,16 @@ def expected_pid1_argv(concurrency: int) -> list[str]:
         "131072",
         "--seed",
         "0",
+    ]
+    if concurrency == 4:
+        argv.extend(
+            [
+                "--kv-cache-memory-bytes",
+                str(FIXED32_B4_KV_CACHE_MEMORY_BYTES),
+            ]
+        )
+    argv.extend(
+        [
         "--attention-backend",
         "TREE_ATTN",
         "--gdn-prefill-backend",
@@ -628,7 +639,9 @@ def expected_pid1_argv(concurrency: int) -> list[str]:
         '{"cudagraph_mode":"FULL_AND_PIECEWISE"}',
         "--middleware",
         "lumo_flywheel_serving.inference_proxy.Fixed32EngineIngressMiddleware",
-    ]
+        ]
+    )
+    return argv
 
 
 def expected_process_pid1_argv(

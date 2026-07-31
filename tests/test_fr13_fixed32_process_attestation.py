@@ -73,11 +73,16 @@ def test_default_graph_and_eager_pid1_are_exact_distinct_contracts() -> None:
     )
 
     assert default == contract.expected_pid1_argv(4)
-    assert len(default) == 47
+    kv_index = default.index("--kv-cache-memory-bytes")
+    assert default[kv_index : kv_index + 2] == [
+        "--kv-cache-memory-bytes",
+        str(contract.FIXED32_B4_KV_CACHE_MEMORY_BYTES),
+    ]
+    assert len(default) == 49
     assert graph == default
-    assert len(graph) == 47
+    assert len(graph) == 49
     assert eager == [*default, "--enforce-eager"]
-    assert len(eager) == 48
+    assert len(eager) == 50
     assert contract.validate_process_pid1_argv(
         graph,
         4,
@@ -106,6 +111,22 @@ def test_default_graph_and_eager_pid1_are_exact_distinct_contracts() -> None:
     with pytest.raises(contract.ContractError, match="PID1 argv mismatch"):
         contract.validate_process_pid1_argv(
             eager,
+            4,
+            attribution_only=False,
+            graph_diagnostic=True,
+        )
+
+
+def test_b1_omits_manual_kv_cache_and_b4_rejects_kv_tamper() -> None:
+    b1 = contract.expected_pid1_argv(1)
+    b4 = contract.expected_pid1_argv(4)
+
+    assert "--kv-cache-memory-bytes" not in b1
+    kv_index = b4.index("--kv-cache-memory-bytes")
+    b4[kv_index + 1] = str(contract.FIXED32_B4_KV_CACHE_MEMORY_BYTES - 1)
+    with pytest.raises(contract.ContractError, match="PID1 argv mismatch"):
+        contract.validate_process_pid1_argv(
+            b4,
             4,
             attribution_only=False,
             graph_diagnostic=True,
