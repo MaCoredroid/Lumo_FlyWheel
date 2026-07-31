@@ -121,6 +121,9 @@ FR13_FA2_QROW16_SO_SHA256=${FR13_FA2_QROW16_SO_SHA256:-}
 FR13_FA2_QROW16_PRODUCTION=${FR13_FA2_QROW16_PRODUCTION:-0}
 FR13_FA2_QROW16_LIVE_PASS_JSON=${FR13_FA2_QROW16_LIVE_PASS_JSON:-}
 FR13_FA2_QROW16_LIVE_PASS_SHA256=${FR13_FA2_QROW16_LIVE_PASS_SHA256:-}
+FR13_DFWD_UNIFIED_BM8_LIVE_AB=${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}
+FR13_DFWD_UNIFIED_BM8_INSTANCE_ID=${FR13_DFWD_UNIFIED_BM8_INSTANCE_ID:-}
+FR13_DFWD_UNIFIED_BM8_LIVE_JSON=${FR13_DFWD_UNIFIED_BM8_LIVE_JSON:-/logs/fr13_dfwd_unified_bm8.live.json}
 case "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" in
   0|1) ;;
   *) echo "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE must be 0 or 1" >&2; exit 2 ;;
@@ -210,6 +213,22 @@ if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
      && ! -L "$FR13_FA2_QROW16_LIVE_PASS_JSON" \
      && "$FR13_FA2_QROW16_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
     echo "FR13 qrow16 production requires a regular live PASS JSON and its SHA-256" >&2
+    exit 2
+  }
+fi
+case "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" in
+  0|1) ;;
+  *) echo "FR13_DFWD_UNIFIED_BM8_LIVE_AB must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ -n "${FR13_DFWD_UNIFIED_BM8_INTERNAL:-}" ]]; then
+  echo "FR13 DFWD unified BM8 internal selector is launcher-private" >&2
+  exit 2
+fi
+if [[ "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && -n "$FR13_DFWD_UNIFIED_BM8_INSTANCE_ID" ]] || {
+    echo "FR13 DFWD unified BM8 live gate requires fixed32 B1 and an instance id" >&2
     exit 2
   }
 fi
@@ -1526,6 +1545,9 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FA2_QROW16_PRODUCTION="$FR13_FA2_QROW16_PRODUCTION" \
   -e FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR="$FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR" \
   -e FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256="$FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256" \
+  -e FR13_DFWD_UNIFIED_BM8_LIVE_AB="$FR13_DFWD_UNIFIED_BM8_LIVE_AB" \
+  -e FR13_DFWD_UNIFIED_BM8_INSTANCE_ID="$FR13_DFWD_UNIFIED_BM8_INSTANCE_ID" \
+  -e FR13_DFWD_UNIFIED_BM8_LIVE_JSON="$FR13_DFWD_UNIFIED_BM8_LIVE_JSON" \
   -e FR13_KVREMAP_TIMER="${FR13_KVREMAP_TIMER:-0}" \
   -e FR13_KVREMAP_TIMER_JSON="${FR13_KVREMAP_TIMER_JSON:-}" \
   -e FR13_STATEREMAP_TIMER="${FR13_STATEREMAP_TIMER:-0}" \
@@ -1790,6 +1812,18 @@ if os.environ.get('FR13_FA2_QROW16_PRODUCTION', '0') == '1':
     graph_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/compilation/cuda_graph.py')
     if 'FR13_FA2_QROW16_PRODUCTION_CAPTURE_END' not in graph_path.read_text():
         raise SystemExit(f'qrow16 production capture postcheck missing in {graph_path}')
+if os.environ.get('FR13_DFWD_UNIFIED_BM8_LIVE_AB', '0') == '1':
+    unified_path = Path(
+        '/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/ops/'
+        'triton_unified_attention.py'
+    )
+    if 'FR13_DFWD_UNIFIED_BM8_LIVE_GATE' not in unified_path.read_text():
+        raise SystemExit(f'DFWD unified BM8 patch missing in {unified_path}')
+    eagle_path = Path(
+        '/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/eagle.py'
+    )
+    if '_fr13_dfwd_unified_bm8_live_replay' not in eagle_path.read_text():
+        raise SystemExit(f'DFWD unified BM8 replay hook missing in {eagle_path}')
 if os.environ.get('FR13_BI_TREE_ATTN', '0') == '1':
     bi_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/batch_invariant.py')
     bi_text = bi_path.read_text()
