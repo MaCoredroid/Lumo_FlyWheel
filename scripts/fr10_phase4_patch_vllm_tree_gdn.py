@@ -20264,6 +20264,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _dg.get("fixed32_signature"),
                         _fr13_dg_key,
                     )
+                    from vllm.v1.attention.ops.triton_unified_attention import (
+                        _fr13_dfwd_unified_bm8_live_replay,
+                    )
+                    _fr13_dfwd_unified_bm8_live_replay(
+                        id(_dg["graph"]),
+                        _fr13_dg_key,
+                    )
                 for _dg_i in range(4):
                     _fr10_spine_tokens.append(_dg["spine"][_dg_i])
                     if (_dg_i + 1) in _fr10_leaf_steps:
@@ -20585,6 +20592,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_f32_dg_gdn._fr13_fixed32_drafter_graph_replay(
                         id(_fr13_dg_g),
                         _dg["fixed32_signature"],
+                        _fr13_dg_key,
+                    )
+                    from vllm.v1.attention.ops.triton_unified_attention import (
+                        _fr13_dfwd_unified_bm8_live_replay,
+                    )
+                    _fr13_dfwd_unified_bm8_live_replay(
+                        id(_fr13_dg_g),
                         _fr13_dg_key,
                     )
                 _dg["graph"] = _fr13_dg_g
@@ -22228,6 +22242,332 @@ def _patch_tree_attn_spec_config_override() -> bool:
     return did_patch
 
 
+_FR13_DFWD_UNIFIED_BM8_HELPERS = r'''
+# FR13_DFWD_UNIFIED_BM8_LIVE_GATE: diagnostic-only B1 MTP attention gate.
+_FR13_DFWD_UNIFIED_BM8_GRAPHS = {}
+_FR13_DFWD_UNIFIED_BM8_ATTEMPTED = False
+_FR13_DFWD_UNIFIED_BM8_PASSED = False
+_FR13_DFWD_UNIFIED_BM8_DISPATCHES = 0
+
+
+def _fr13_dfwd_unified_bm8_capture(
+    *,
+    q,
+    k,
+    v,
+    out,
+    cu_seqlens_q,
+    max_seqlen_q,
+    seqused_k,
+    max_seqlen_k,
+    softmax_scale,
+    causal,
+    window_size,
+    block_table,
+    softcap,
+    q_descale,
+    k_descale,
+    v_descale,
+    seq_threshold_3D,
+    num_par_softmax_segments,
+    softmax_segm_output,
+    softmax_segm_max,
+    softmax_segm_expsum,
+    alibi_slopes,
+    output_scale,
+    qq_bias,
+    sinks,
+    mm_prefix_range,
+    use_alibi_sqrt,
+):
+    if os.environ.get("FR13_DFWD_UNIFIED_BM8_LIVE_AB", "0") != "1":
+        return
+    if not (
+        torch.cuda.is_available()
+        and torch.cuda.is_current_stream_capturing()
+    ):
+        return
+    if os.environ.get("FR13_DFWD_UNIFIED_BM8_INTERNAL") is not None:
+        raise RuntimeError("FR13 DFWD unified BM8 internal selector leaked")
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_gdn
+
+    context = getattr(
+        _fr13_gdn, "_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT", None
+    )
+    if not isinstance(context, dict):
+        return
+    graph_id = int(context.get("graph_id", 0))
+    batch_size = int(context.get("batch_size", -1))
+    exact = (
+        graph_id > 0
+        and batch_size == 1
+        and q.dtype == torch.bfloat16
+        and tuple(q.shape) == (1, 24, 256)
+        and k.dtype == torch.bfloat16
+        and v.dtype == torch.bfloat16
+        and k.ndim == 4
+        and tuple(k.shape[1:]) == (1024, 4, 256)
+        and tuple(v.shape) == tuple(k.shape)
+        and out.dtype == torch.bfloat16
+        and tuple(out.shape) == tuple(q.shape)
+        and cu_seqlens_q.dtype == torch.int32
+        and tuple(cu_seqlens_q.shape) == (2,)
+        and seqused_k.dtype == torch.int32
+        and tuple(seqused_k.shape) == (1,)
+        and block_table.dtype == torch.int32
+        and block_table.ndim == 2
+        and int(block_table.shape[0]) == 1
+        and int(max_seqlen_q) == 1
+        and int(max_seqlen_k) > 0
+        and bool(causal)
+        and qq_bias is not None
+        and qq_bias.dtype == torch.float32
+        and tuple(qq_bias.shape) in ((1, 1), (1, 1, 1))
+        and alibi_slopes is None
+        and output_scale is None
+        and mm_prefix_range is None
+        and not bool(use_alibi_sqrt)
+    )
+    if not exact:
+        raise RuntimeError("FR13 DFWD unified BM8 saw non-production B1 geometry")
+    if window_size is not None and tuple(int(x) for x in window_size) != (-1, -1):
+        raise RuntimeError("FR13 DFWD unified BM8 requires a full window")
+
+    bundles = _FR13_DFWD_UNIFIED_BM8_GRAPHS.setdefault(graph_id, [])
+    if len(bundles) >= 4:
+        raise RuntimeError("FR13 DFWD unified BM8 captured more than four calls")
+    # The drafter reuses intermediate buffers across its four graph-recorded
+    # forwards. These copies are graph nodes, so every bundle retains the
+    # exact query and sequence length consumed by its own live MTP call.
+    query_snapshot = torch.empty_like(q)
+    seq_lens_snapshot = torch.empty_like(seqused_k)
+    query_snapshot.copy_(q)
+    seq_lens_snapshot.copy_(seqused_k)
+    bundles.append(
+        {
+            "q": query_snapshot,
+            "k": k,
+            "v": v,
+            "out_template": out,
+            "cu_seqlens_q": cu_seqlens_q,
+            "max_seqlen_q": int(max_seqlen_q),
+            "seqused_k": seq_lens_snapshot,
+            "max_seqlen_k": int(max_seqlen_k),
+            "softmax_scale": float(softmax_scale),
+            "causal": bool(causal),
+            "window_size": window_size,
+            "block_table": block_table,
+            "softcap": float(softcap),
+            "q_descale": q_descale,
+            "k_descale": k_descale,
+            "v_descale": v_descale,
+            "seq_threshold_3D": seq_threshold_3D,
+            "num_par_softmax_segments": num_par_softmax_segments,
+            "softmax_segm_output": softmax_segm_output,
+            "softmax_segm_max": softmax_segm_max,
+            "softmax_segm_expsum": softmax_segm_expsum,
+            "alibi_slopes": alibi_slopes,
+            "output_scale": output_scale,
+            "qq_bias": qq_bias,
+            "sinks": sinks,
+            "mm_prefix_range": mm_prefix_range,
+            "use_alibi_sqrt": bool(use_alibi_sqrt),
+        }
+    )
+
+
+def _fr13_dfwd_unified_bm8_call(bundle, out):
+    unified_attention(
+        q=bundle["q"],
+        k=bundle["k"],
+        v=bundle["v"],
+        out=out,
+        cu_seqlens_q=bundle["cu_seqlens_q"],
+        max_seqlen_q=bundle["max_seqlen_q"],
+        seqused_k=bundle["seqused_k"],
+        max_seqlen_k=bundle["max_seqlen_k"],
+        softmax_scale=bundle["softmax_scale"],
+        causal=bundle["causal"],
+        window_size=bundle["window_size"],
+        block_table=bundle["block_table"],
+        softcap=bundle["softcap"],
+        q_descale=bundle["q_descale"],
+        k_descale=bundle["k_descale"],
+        v_descale=bundle["v_descale"],
+        seq_threshold_3D=bundle["seq_threshold_3D"],
+        num_par_softmax_segments=bundle["num_par_softmax_segments"],
+        softmax_segm_output=bundle["softmax_segm_output"],
+        softmax_segm_max=bundle["softmax_segm_max"],
+        softmax_segm_expsum=bundle["softmax_segm_expsum"],
+        alibi_slopes=bundle["alibi_slopes"],
+        output_scale=bundle["output_scale"],
+        qq_bias=bundle["qq_bias"],
+        sinks=bundle["sinks"],
+        mm_prefix_range=bundle["mm_prefix_range"],
+        use_alibi_sqrt=bundle["use_alibi_sqrt"],
+    )
+
+
+def _fr13_dfwd_unified_bm8_bytes(tensor):
+    return (
+        tensor.detach()
+        .contiguous()
+        .view(torch.uint8)
+        .cpu()
+        .numpy()
+        .tobytes()
+    )
+
+
+def _fr13_dfwd_unified_bm8_write(record):
+    import json as _json
+    from pathlib import Path as _Path
+
+    path = _Path(
+        os.environ.get(
+            "FR13_DFWD_UNIFIED_BM8_LIVE_JSON",
+            "/logs/fr13_dfwd_unified_bm8.live.json",
+        )
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(
+        _json.dumps(record, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
+        encoding="ascii",
+    )
+    temporary.replace(path)
+
+
+def _fr13_dfwd_unified_bm8_live_replay(graph_id, batch_size):
+    global _FR13_DFWD_UNIFIED_BM8_ATTEMPTED
+    global _FR13_DFWD_UNIFIED_BM8_PASSED
+
+    if os.environ.get("FR13_DFWD_UNIFIED_BM8_LIVE_AB", "0") != "1":
+        return
+    if _FR13_DFWD_UNIFIED_BM8_ATTEMPTED:
+        return
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_gdn
+
+    proposal = getattr(_fr13_gdn, "_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT", None)
+    if not isinstance(proposal, dict) or proposal.get("measured") is not True:
+        return
+    if int(batch_size) != 1 or int(proposal.get("batch_size", -1)) != 1:
+        raise RuntimeError("FR13 DFWD unified BM8 live gate requires B1")
+    bundles = _FR13_DFWD_UNIFIED_BM8_GRAPHS.get(int(graph_id))
+    if not isinstance(bundles, list) or len(bundles) != 4:
+        raise RuntimeError("FR13 DFWD unified BM8 requires four captured MTP calls")
+    instance_id = os.environ.get("FR13_DFWD_UNIFIED_BM8_INSTANCE_ID", "")
+    if not instance_id:
+        raise RuntimeError("FR13 DFWD unified BM8 has no SWE-Verified instance id")
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError("FR13 DFWD unified BM8 ran inside CUDA capture")
+    if os.environ.get("FR13_DFWD_UNIFIED_BM8_INTERNAL") is not None:
+        raise RuntimeError("FR13 DFWD unified BM8 selector was externally populated")
+
+    _FR13_DFWD_UNIFIED_BM8_ATTEMPTED = True
+    torch.cuda.synchronize()
+    import hashlib as _hashlib
+
+    rows = []
+    dispatches_before = _FR13_DFWD_UNIFIED_BM8_DISPATCHES
+    try:
+        for call_index, bundle in enumerate(bundles):
+            query_start = [int(x) for x in bundle["cu_seqlens_q"].cpu().tolist()]
+            seq_lens = [int(x) for x in bundle["seqused_k"].cpu().tolist()]
+            if query_start != [0, 1] or len(seq_lens) != 1 or seq_lens[0] <= 0:
+                raise RuntimeError("FR13 DFWD unified BM8 live metadata drifted")
+            stock = torch.empty_like(bundle["out_template"])
+            candidate = torch.empty_like(bundle["out_template"])
+            os.environ.pop("FR13_DFWD_UNIFIED_BM8_INTERNAL", None)
+            _fr13_dfwd_unified_bm8_call(bundle, stock)
+            os.environ["FR13_DFWD_UNIFIED_BM8_INTERNAL"] = "1"
+            _fr13_dfwd_unified_bm8_call(bundle, candidate)
+            os.environ.pop("FR13_DFWD_UNIFIED_BM8_INTERNAL", None)
+            torch.cuda.synchronize()
+            stock_bytes = _fr13_dfwd_unified_bm8_bytes(stock)
+            candidate_bytes = _fr13_dfwd_unified_bm8_bytes(candidate)
+            mismatches = abs(len(stock_bytes) - len(candidate_bytes)) + sum(
+                left != right
+                for left, right in zip(stock_bytes, candidate_bytes)
+            )
+            rows.append(
+                {
+                    "call_index": call_index,
+                    "seq_len": seq_lens[0],
+                    "bytes": len(stock_bytes),
+                    "raw_byte_mismatches": mismatches,
+                    "stock_sha256": _hashlib.sha256(stock_bytes).hexdigest(),
+                    "candidate_sha256": _hashlib.sha256(
+                        candidate_bytes
+                    ).hexdigest(),
+                }
+            )
+    except Exception as exc:
+        os.environ.pop("FR13_DFWD_UNIFIED_BM8_INTERNAL", None)
+        _fr13_dfwd_unified_bm8_write(
+            {
+                "schema": "fr13.fixed32.dfwd_unified_bm8_live_ab.v1",
+                "status": "ERROR",
+                "suite": "SWE-Verified",
+                "instance_id": instance_id,
+                "graph_id": int(graph_id),
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "completed_calls": rows,
+                "served_return": "stock captured drafter graph unchanged",
+                "performance_measurement": False,
+            }
+        )
+        raise RuntimeError("FR13 DFWD unified BM8 live gate failed") from exc
+    finally:
+        os.environ.pop("FR13_DFWD_UNIFIED_BM8_INTERNAL", None)
+
+    candidate_dispatches = (
+        _FR13_DFWD_UNIFIED_BM8_DISPATCHES - dispatches_before
+    )
+    dispatch_ok = candidate_dispatches == 4
+    passed = dispatch_ok and all(
+        row["raw_byte_mismatches"] == 0 for row in rows
+    )
+    record = {
+        "schema": "fr13.fixed32.dfwd_unified_bm8_live_ab.v1",
+        "status": "PASS" if passed else "FAIL",
+        "suite": "SWE-Verified",
+        "instance_id": instance_id,
+        "concurrency": 1,
+        "batch_size": 1,
+        "graph_id": int(graph_id),
+        "calls": rows,
+        "geometry": {
+            "query_shape": [1, 24, 256],
+            "kv_heads": 4,
+            "stock_block_m": 16,
+            "stock_block_q": 2,
+            "candidate_block_m": 8,
+            "candidate_block_q": 1,
+            "valid_query_heads_per_kv": 6,
+        },
+        "candidate_dispatch": "launcher-private BM8 exact B1 selector",
+        "candidate_dispatches": candidate_dispatches,
+        "served_return": "stock captured drafter graph unchanged",
+        "performance_measurement": False,
+    }
+    _fr13_dfwd_unified_bm8_write(record)
+    if not dispatch_ok:
+        raise RuntimeError(
+            "FR13 DFWD unified BM8 refused false stock-vs-stock dispatch"
+        )
+    if not passed:
+        raise RuntimeError("FR13 DFWD unified BM8 raw-byte mismatch")
+    _FR13_DFWD_UNIFIED_BM8_PASSED = True
+    logger.warning(
+        "[FR13_DFWD_UNIFIED_BM8_LIVE_AB] PASS instance=%s "
+        "calls=4 raw_byte_mismatches=0 stock_served=1",
+        instance_id,
+    )
+'''
+
+
 def _patch_triton_unified_attention_fr13() -> bool:
     """FR13 tree-attn numerics/launch patch for the live vLLM image.
 
@@ -22238,6 +22578,108 @@ def _patch_triton_unified_attention_fr13() -> bool:
 
     text = TRITON_UNIFIED_ATTN_PATH.read_text()
     did_patch = False
+
+    bm8_sentinel = "# FR13_DFWD_UNIFIED_BM8_LIVE_GATE"
+    if bm8_sentinel not in text:
+        if "import os\n" not in text:
+            text = text.replace("import torch\n", "import os\n\nimport torch\n", 1)
+        helper_anchor = "float8_info = torch.finfo(current_platform.fp8_dtype())\n"
+        if helper_anchor not in text:
+            raise RuntimeError("FR13 DFWD unified BM8 helper anchor not found")
+        text = text.replace(
+            helper_anchor,
+            helper_anchor + _FR13_DFWD_UNIFIED_BM8_HELPERS + "\n",
+            1,
+        )
+        geometry_anchor = """    head_size = q.shape[2]
+
+    BLOCK_M = (
+        16 if num_queries_per_kv <= 16 else triton.next_power_of_2(num_queries_per_kv)
+    )
+    BLOCK_Q = BLOCK_M // num_queries_per_kv
+"""
+        geometry_replacement = """    head_size = q.shape[2]
+
+    global _FR13_DFWD_UNIFIED_BM8_DISPATCHES
+    _fr13_dfwd_bm8 = (
+        os.environ.get("FR13_DFWD_UNIFIED_BM8_INTERNAL") == "1"
+    )
+    if _fr13_dfwd_bm8:
+        if not (
+            q.dtype == torch.bfloat16
+            and tuple(q.shape) == (1, 24, 256)
+            and k.dtype == torch.bfloat16
+            and v.dtype == torch.bfloat16
+            and tuple(k.shape[1:]) == (1024, 4, 256)
+            and tuple(v.shape) == tuple(k.shape)
+            and out.dtype == torch.bfloat16
+            and tuple(out.shape) == tuple(q.shape)
+            and num_seqs == 1
+            and num_query_heads == 24
+            and num_kv_heads == 4
+            and num_queries_per_kv == 6
+            and head_size == 256
+            and int(max_seqlen_q) == 1
+            and use_qq_bias
+            and tuple(qq_bias.shape) in ((1, 1), (1, 1, 1))
+        ):
+            raise RuntimeError("FR13 DFWD unified BM8 dispatch geometry drifted")
+        BLOCK_M = 8
+        _FR13_DFWD_UNIFIED_BM8_DISPATCHES += 1
+    else:
+        BLOCK_M = (
+            16
+            if num_queries_per_kv <= 16
+            else triton.next_power_of_2(num_queries_per_kv)
+        )
+    BLOCK_Q = BLOCK_M // num_queries_per_kv
+
+    _fr13_dfwd_unified_bm8_capture(
+        q=q,
+        k=k,
+        v=v,
+        out=out,
+        cu_seqlens_q=cu_seqlens_q,
+        max_seqlen_q=max_seqlen_q,
+        seqused_k=seqused_k,
+        max_seqlen_k=max_seqlen_k,
+        softmax_scale=softmax_scale,
+        causal=causal,
+        window_size=window_size,
+        block_table=block_table,
+        softcap=softcap,
+        q_descale=q_descale,
+        k_descale=k_descale,
+        v_descale=v_descale,
+        seq_threshold_3D=seq_threshold_3D,
+        num_par_softmax_segments=num_par_softmax_segments,
+        softmax_segm_output=softmax_segm_output,
+        softmax_segm_max=softmax_segm_max,
+        softmax_segm_expsum=softmax_segm_expsum,
+        alibi_slopes=alibi_slopes,
+        output_scale=output_scale,
+        qq_bias=qq_bias,
+        sinks=sinks,
+        mm_prefix_range=mm_prefix_range,
+        use_alibi_sqrt=use_alibi_sqrt,
+    )
+"""
+        if geometry_anchor not in text:
+            raise RuntimeError("FR13 DFWD unified BM8 geometry anchor not found")
+        text = text.replace(geometry_anchor, geometry_replacement, 1)
+        qblocks_anchor = (
+            "    total_num_q_blocks = q.shape[0] // BLOCK_Q + num_seqs\n"
+        )
+        qblocks_replacement = """    total_num_q_blocks = (
+        1
+        if _fr13_dfwd_bm8
+        else q.shape[0] // BLOCK_Q + num_seqs
+    )
+"""
+        if qblocks_anchor not in text:
+            raise RuntimeError("FR13 DFWD unified BM8 q-block anchor not found")
+        text = text.replace(qblocks_anchor, qblocks_replacement, 1)
+        did_patch = True
 
     pin_sentinel = "# FR13_TREE_ATTN_PIN_TRITON_META"
     if pin_sentinel not in text:
