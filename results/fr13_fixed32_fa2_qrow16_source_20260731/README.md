@@ -13,10 +13,9 @@ cross-CTA floating-point reduction or combine kernel.
 The one-warp traits cannot instantiate FA2's split-K combine kernel, which is
 hard-coded for 128 threads. The candidate therefore calls the launcher with a
 compile-time `AllowSplit=false`; the runtime dispatch also requires
-`num_splits <= 1`. This compile-time flag discards the combine block; FA2's
-`BOOL_SWITCH` still compiles a `Split=true` main-kernel variant, but the runtime
-predicate prevents it from executing. Stock four-warp calls retain the default
-split-capable path.
+`num_splits == 1`. This compile-time flag discards both the combine block and
+the `Split=true` main-kernel specialization for one-warp traits. Stock four-warp
+calls retain the default split-capable path and both main-kernel variants.
 
 The runtime guard requires the exact production BF16 paged-KV signature:
 `params.b == 1`, 24 Q heads, four KV heads, `d=d_rounded=256`, 32 query

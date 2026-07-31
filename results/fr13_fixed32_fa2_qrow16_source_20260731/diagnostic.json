@@ -29,7 +29,7 @@
       "warps": 1,
       "ctas_per_b1_layer": 48
     },
-    "numerical_mechanism": "Each CTA owns complete query rows and traverses the full ordered K-block loop. There is no executed KV split, output combine, or changed num_splits value. Warp-local row and lane coordinates match the stock tile for all 32 real rows. AllowSplit=false discards the combine block for the one-warp traits; BOOL_SWITCH still compiles the Split=true main-kernel variant, while the exact runtime num_splits=1 predicate prevents its execution. Static assertions fix 32 threads, eight KV-copy threads per row, and 16 rows per thread; the runtime selector requires the production 1024-row paged-KV block.",
+    "numerical_mechanism": "Each CTA owns complete query rows and traverses the full ordered K-block loop. There is no executed KV split, output combine, or changed num_splits value. Warp-local row and lane coordinates match the stock tile for all 32 real rows. AllowSplit=false discards both the combine block and the Split=true main-kernel specialization for one-warp traits; stock traits retain their prior split switch. Static assertions fix 32 threads, eight KV-copy threads per row, and 16 rows per thread; the runtime selector requires the production 1024-row paged-KV block.",
     "performance_risk": "Each head rereads K/V in two query CTAs. The doubled KV traffic can offset the occupancy and masked-row gains at long contexts.",
     "estimated_saving_ms_per_event": {
       "low": 6.0,
@@ -42,7 +42,7 @@
     "fa2_upstream_commit": "29210221863736a08f71a866459e368ad1ac4a95",
     "exact_safe_fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
     "exact_safe_launch_header_sha256": "d9e9f4b92cb731d7955b514449e59b8e411bf7a0c929aafb454f2402d41fe976",
-    "candidate_launch_header_sha256": "40a8f29600aa0c237404ca208a78c5ea3e1ccf10c61046b80fbc4852d9dbd225",
+    "candidate_launch_header_sha256": "59a4bcb49c77a255f155286e77379c3e3eaea908e44f38b501632cd7d1565053",
     "unchanged_earlyout_kernel_header_sha256": "934e8c6c2e72c667f3cb0a8dc53b11c16a4eba8e3ac2b5811c882eff399ac3de",
     "idempotent_application_passed": true,
     "gpu_used": false,
