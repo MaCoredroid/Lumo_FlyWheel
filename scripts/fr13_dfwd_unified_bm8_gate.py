@@ -119,7 +119,7 @@ def verify(
     identity = _load(
         identity_path,
         label="candidate identity",
-        required_mode=0o400,
+        required_mode=0o444,
     )
     _validate_identity(identity, expected_source_commit=expected_source_commit)
     live = _load(live_result, label="live result")

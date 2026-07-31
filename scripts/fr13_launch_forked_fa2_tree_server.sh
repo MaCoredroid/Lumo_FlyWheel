@@ -1966,7 +1966,7 @@ if os.environ.get('FR13_DFWD_UNIFIED_BM8_LIVE_AB', '0') == '1':
         + '\n',
         encoding='ascii',
     )
-    temporary.chmod(0o400)
+    temporary.chmod(0o444)
     temporary.replace(identity_path)
 if os.environ.get('FR13_BI_TREE_ATTN', '0') == '1':
     bi_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/batch_invariant.py')
