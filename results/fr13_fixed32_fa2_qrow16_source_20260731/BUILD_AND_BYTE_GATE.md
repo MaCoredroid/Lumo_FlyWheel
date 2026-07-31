@@ -10,7 +10,7 @@ releases the machine. This procedure does not authorize deployment or timing.
   299,183,936 bytes
 - Exact-safe launch header: `d9e9f4b92cb731d7955b514449e59b8e411bf7a0c929aafb454f2402d41fe976`
 - Qrow16 launch header after idempotent source application:
-  `40a8f29600aa0c237404ca208a78c5ea3e1ccf10c61046b80fbc4852d9dbd225`
+  `59a4bcb49c77a255f155286e77379c3e3eaea908e44f38b501632cd7d1565053`
 - Unchanged suffix-early-out kernel header:
   `934e8c6c2e72c667f3cb0a8dc53b11c16a4eba8e3ac2b5811c882eff399ac3de`
 - Production image:
@@ -46,7 +46,7 @@ python3 "$REPO/scripts/fr13_patch_fa2_tree_bias.py" \
   --fa2-src "$CAND_FA2" --skip-python \
   --tree-bias-tile-earlyout --fixed32-query-tile16
 test "$(sha256sum "$CAND_FA2/csrc/flash_attn/src/flash_fwd_launch_template.h" | cut -d' ' -f1)" = \
-  40a8f29600aa0c237404ca208a78c5ea3e1ccf10c61046b80fbc4852d9dbd225
+  59a4bcb49c77a255f155286e77379c3e3eaea908e44f38b501632cd7d1565053
 test "$(sha256sum "$CAND_FA2/csrc/flash_attn/src/flash_fwd_kernel.h" | cut -d' ' -f1)" = \
   934e8c6c2e72c667f3cb0a8dc53b11c16a4eba8e3ac2b5811c882eff399ac3de
 rm -f "$CAND_SO"

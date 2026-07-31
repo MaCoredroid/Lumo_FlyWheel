@@ -91,6 +91,7 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
         (
             module.STOCK_SPLITKV_LAUNCH_SIGNATURE,
             module.STOCK_SPLITKV_COMBINE_GUARD,
+            module.STOCK_SPLITKV_RUNTIME_SWITCH,
             module.STOCK_SPLITKV_DISPATCH,
         )
     )
@@ -105,6 +106,7 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
     candidate = launch.read_text()
     assert module.NO_COMBINE_SPLITKV_LAUNCH_SIGNATURE in candidate
     assert module.NO_COMBINE_SPLITKV_COMBINE_GUARD in candidate
+    assert module.NO_SPLITKV_RUNTIME_SWITCH in candidate
     assert module.FIXED32_QUERY_TILE16_DISPATCH in candidate
     assert not module._patch_flash_fwd_launch_template(
         launch,
@@ -134,6 +136,7 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
     assert "params.num_splits == 1" in candidate
     assert "run_flash_splitkv_fwd<TreeKernelTraits, Is_causal, false>" in candidate
     assert "if constexpr (AllowSplit)" in candidate
+    assert "#undef FR13_ALLOW_SPLIT_SWITCH" in candidate
     assert "kTreeBlockM = 16" in candidate
     assert "kTreeWarps = 1" in candidate
     assert "TreeKernelTraits::kNThreads == 32" in candidate

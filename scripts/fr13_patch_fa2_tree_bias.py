@@ -106,7 +106,17 @@ STOCK_SPLITKV_LAUNCH_SIGNATURE = r'''template<typename Kernel_traits, bool Is_ca
 void run_flash_splitkv_fwd(Flash_fwd_params &params, cudaStream_t stream) {'''
 
 
-NO_COMBINE_SPLITKV_LAUNCH_SIGNATURE = r'''template<typename Kernel_traits, bool Is_causal, bool AllowSplit = true>
+NO_COMBINE_SPLITKV_LAUNCH_SIGNATURE = r'''#define FR13_ALLOW_SPLIT_SWITCH(COND, CONST_NAME, ...) \
+    [&] { \
+        if constexpr (AllowSplit) { \
+            BOOL_SWITCH(COND, CONST_NAME, __VA_ARGS__); \
+        } else { \
+            constexpr static bool CONST_NAME = false; \
+            __VA_ARGS__(); \
+        } \
+    }()
+
+template<typename Kernel_traits, bool Is_causal, bool AllowSplit = true>
 void run_flash_splitkv_fwd(Flash_fwd_params &params, cudaStream_t stream) {'''
 
 
@@ -117,6 +127,12 @@ STOCK_SPLITKV_COMBINE_GUARD = r'''    if (params.num_splits > 1) {
 NO_COMBINE_SPLITKV_COMBINE_GUARD = r'''    if constexpr (AllowSplit)
         if (params.num_splits > 1) {
         // We want kBlockM to be as small as possible for more parallelism.'''
+
+
+STOCK_SPLITKV_RUNTIME_SWITCH = r'''                BOOL_SWITCH(params.num_splits > 1, Split, [&] {'''
+
+
+NO_SPLITKV_RUNTIME_SWITCH = r'''                FR13_ALLOW_SPLIT_SWITCH(params.num_splits > 1, Split, [&] {'''
 
 
 STOCK_SPLITKV_DISPATCH = r'''template<typename T, int Headdim, bool Is_causal>
@@ -130,7 +146,9 @@ void run_mha_fwd_splitkv_dispatch(Flash_fwd_params &params, cudaStream_t stream)
 '''
 
 
-FIXED32_QUERY_TILE16_DISPATCH = r'''template<typename T, int Headdim, bool Is_causal>
+FIXED32_QUERY_TILE16_DISPATCH = r'''#undef FR13_ALLOW_SPLIT_SWITCH
+
+template<typename T, int Headdim, bool Is_causal>
 void run_mha_fwd_splitkv_dispatch(Flash_fwd_params &params, cudaStream_t stream) {
     // TD [2023-08-28]: nvcc segfaults for headdim 96 with block size 64 x 256,
     // and for headdim 192 with block size 64 x 128.
@@ -300,6 +318,11 @@ def _patch_flash_fwd_launch_template(
             STOCK_SPLITKV_COMBINE_GUARD,
             NO_COMBINE_SPLITKV_COMBINE_GUARD,
             "fixed32 FA2 combine instantiation gate",
+        ),
+        (
+            STOCK_SPLITKV_RUNTIME_SWITCH,
+            NO_SPLITKV_RUNTIME_SWITCH,
+            "fixed32 FA2 main-kernel split instantiation gate",
         ),
         (
             STOCK_SPLITKV_DISPATCH,
