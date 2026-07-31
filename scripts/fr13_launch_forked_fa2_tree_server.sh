@@ -989,6 +989,12 @@ if [[ "$_fr13_batch_gdn_byte_ab" == "1" \
   echo "FR13 fixed32 batched GDN diagnostic and production are mutually exclusive" >&2
   exit 2
 fi
+if [[ -n "$_fr13_gdn_path_bv_candidate" \
+      && ( "$_fr13_batch_gdn_byte_ab" == "1" \
+           || "$_fr13_batch_gdn_production" == "1" ) ]]; then
+  echo "FR13 fixed32 batched GDN and path-BV live diagnostics are mutually exclusive" >&2
+  exit 2
+fi
 if [[ "$_fr13_batch_gdn_byte_ab" == "1" ]]; then
   [[ -n "${FR13_FIXED32_MODE:-}" ]] \
     || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires FR13_FIXED32_MODE" >&2; exit 2; }

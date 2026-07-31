@@ -91,6 +91,12 @@ def test_selector_is_default_off_and_production_requires_live_pass(
     diagnostic.write_text("1\n", encoding="ascii")
     assert kernel.fixed32_batch_gdn_selector(4) == "diagnostic"
 
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE", 64)
+    with pytest.raises(RuntimeError, match="path-BV live diagnostics"):
+        kernel.fixed32_batch_gdn_selector(4)
+    assert kernel.fixed32_batch_gdn_selector(1) is None
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE", None)
+
     production.write_text("1\n", encoding="ascii")
     with pytest.raises(RuntimeError, match="requires a readable live-gate PASS"):
         kernel.fixed32_batch_gdn_selector(4)
@@ -369,6 +375,7 @@ def test_launcher_requires_eager_real_task_gate() -> None:
     assert "fr13_fixed32_batch_gdn_byte_ab.real_event.arm" in launcher
     assert "FR13_FIXED32_BATCH_GDN_PRODUCTION:-0" in launcher
     assert "diagnostic and production are mutually exclusive" in launcher
+    assert "path-BV live diagnostics are mutually exclusive" in launcher
     assert "requires a regular live-gate PASS record" in launcher
     assert "fr13_fixed32_batch_gdn_production.arm" in launcher
 

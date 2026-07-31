@@ -954,6 +954,14 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
             "FR13 fixed32 batched GDN diagnostic and production selectors "
             "are mutually exclusive"
         )
+    if (
+        (diagnostic or production is not None)
+        and _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 batched GDN and path-BV live diagnostics are "
+            "mutually exclusive"
+        )
     if diagnostic:
         return "diagnostic"
     if production is not None:
