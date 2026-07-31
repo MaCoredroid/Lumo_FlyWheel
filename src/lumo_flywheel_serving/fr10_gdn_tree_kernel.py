@@ -588,6 +588,13 @@ def fixed32_gdn_bv_live_capture_end(
     _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT = None
 
 
+def _fr13_tensor_byte_equal(left, right) -> bool:
+    return torch.equal(
+        left.contiguous().reshape(-1).view(torch.uint8),
+        right.contiguous().reshape(-1).view(torch.uint8),
+    )
+
+
 def _fr13_fixed32_gdn_bv_compare_records(
     records, candidate_bv: int
 ) -> dict[str, int]:
@@ -9321,10 +9328,7 @@ def launch_tree_gdn_prepared(
         )
 
     def _byte_equal(_left, _right):
-        return torch.equal(
-            _left.contiguous().view(torch.uint8),
-            _right.contiguous().view(torch.uint8),
-        )
+        return _fr13_tensor_byte_equal(_left, _right)
 
     def _snapshot_external():
         _snapshot = {}

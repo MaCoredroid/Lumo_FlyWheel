@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import torch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,6 +36,7 @@ def _kernel_gate_namespace() -> dict[str, object]:
     ]
     wanted = {
         "_fr13_resolve_fixed32_gdn_path_bv_candidate",
+        "_fr13_tensor_byte_equal",
         "_fr13_fixed32_gdn_bv_compare_records",
         "fixed32_gdn_bv_live_gate_on_replay",
     }
@@ -44,7 +46,7 @@ def _kernel_gate_namespace() -> dict[str, object]:
         if isinstance(node, ast.FunctionDef) and node.name in wanted
     ]
     assert {node.name for node in definitions} == wanted
-    namespace: dict[str, object] = {"os": os}
+    namespace: dict[str, object] = {"os": os, "torch": torch}
     exec(
         compile(
             ast.Module(body=[*assignments, *definitions], type_ignores=[]),
@@ -54,6 +56,20 @@ def _kernel_gate_namespace() -> dict[str, object]:
         namespace,
     )
     return namespace
+
+
+def test_byte_comparator_handles_scalar_integer_surfaces() -> None:
+    namespace = _kernel_gate_namespace()
+    byte_equal = namespace["_fr13_tensor_byte_equal"]
+
+    assert byte_equal(
+        torch.tensor(7, dtype=torch.int32),
+        torch.tensor(7, dtype=torch.int32),
+    )
+    assert not byte_equal(
+        torch.tensor(7, dtype=torch.int32),
+        torch.tensor(8, dtype=torch.int32),
+    )
 
 
 @pytest.mark.parametrize("candidate", (16, 32, 64, 128))
