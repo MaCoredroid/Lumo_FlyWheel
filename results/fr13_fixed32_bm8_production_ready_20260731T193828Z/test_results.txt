@@ -1,0 +1,27 @@
+Source commit: 08a5fde9cbc548be6f7b00477e1bc695e4879c02
+
+PYTHONPATH=. .venv/bin/pytest -q \
+  tests/test_fr13_bm8_production_sidecar.py \
+  tests/test_fr13_dfwd_unified_attention_bm8.py \
+  tests/test_fr13_fixed32_drafter_tree_ownership.py \
+  tests/test_fr13_qrow16_production_sidecar.py \
+  tests/test_fr13_fa2_tree_kernel_candidates.py \
+  tests/test_fr13_fixed32_floor_propagation.py \
+  tests/test_fr13_fixed32_b1_diagnostic.py \
+  tests/test_fr13_fixed32_ingress_wiring.py \
+  tests/test_fr13_b1_gate_bundle.py \
+  tests/test_fr13_nsys_launcher_wiring.py \
+  tests/test_fr13_fixed32_campaign_publication.py
+
+Result: 90 passed in 2.05s
+
+Python byte-compilation: PASS
+Launcher bash syntax: PASS
+git diff --check: PASS
+Independent emitted-code review: NO BLOCKING FINDINGS
+
+GPU used: no
+Docker used: no
+Performance measurement: not run
+B4 measurement: not run
+Formal exact4/exact16 acceptance: not run
