@@ -1,0 +1,10 @@
+Future permission-fix commit: fdb61d773131f703eb1a7390ccdaa5b4998d93a6
+
+python byte-compilation: PASS
+bash syntax validation: PASS
+Ruff: PASS
+focused BM8/fixed32 pytest suite: 120 passed in 2.60s
+
+GPU rerun of future fix: NOT RUN by decision; the fix only addresses the
+post-teardown host readability contract. The live GPU result remains bound to
+executed commit d67e405b5f1c37a0f35f329c722af17edfe5fe4a.

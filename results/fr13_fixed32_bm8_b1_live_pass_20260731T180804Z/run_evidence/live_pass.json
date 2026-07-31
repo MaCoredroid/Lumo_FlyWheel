@@ -1,0 +1,88 @@
+{
+  "batch_size": 1,
+  "calls": [
+    {
+      "bytes": 12288,
+      "call_index": 0,
+      "candidate_sha256": "adf5c8f7e60a52c47f7853b145448588a32888dce23147f0c61500768c121be1",
+      "raw_byte_mismatches": 0,
+      "seq_len": 22872,
+      "stock_sha256": "adf5c8f7e60a52c47f7853b145448588a32888dce23147f0c61500768c121be1"
+    },
+    {
+      "bytes": 12288,
+      "call_index": 1,
+      "candidate_sha256": "b28c8b08998d8bbe3235edd5865b1204b15b050760d2f86f367fc7e007536b27",
+      "raw_byte_mismatches": 0,
+      "seq_len": 22873,
+      "stock_sha256": "b28c8b08998d8bbe3235edd5865b1204b15b050760d2f86f367fc7e007536b27"
+    },
+    {
+      "bytes": 12288,
+      "call_index": 2,
+      "candidate_sha256": "8490dd85ad6fc1a0ba124d0b5709f5e978c955c727ed085d81dd80d010080e52",
+      "raw_byte_mismatches": 0,
+      "seq_len": 22874,
+      "stock_sha256": "8490dd85ad6fc1a0ba124d0b5709f5e978c955c727ed085d81dd80d010080e52"
+    },
+    {
+      "bytes": 12288,
+      "call_index": 3,
+      "candidate_sha256": "450b289f6e10c4bba269772e55dcee24d2a7cccc5663dc7ce1f9cec8ba0259ae",
+      "raw_byte_mismatches": 0,
+      "seq_len": 22875,
+      "stock_sha256": "450b289f6e10c4bba269772e55dcee24d2a7cccc5663dc7ce1f9cec8ba0259ae"
+    }
+  ],
+  "candidate_dispatch": "launcher-private BM8 exact B1 selector",
+  "candidate_dispatches": 4,
+  "candidate_identity": {
+    "candidate": {
+      "candidate_block_m": 8,
+      "candidate_block_q": 1,
+      "kernel": "kernel_unified_attention_2d",
+      "required_calls": 4,
+      "stock_block_m": 16,
+      "stock_block_q": 2
+    },
+    "files": {
+      "eagle_replay_hook": {
+        "path": "/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/eagle.py",
+        "sha256": "61470a82a0a4c8e450a04265d758fbd20ec429b2da394e2701cb5fc021365e52"
+      },
+      "patcher": {
+        "path": "/workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+        "sha256": "c921d40e090abf3b647b4c368821a1d7871bd530db3336884844cf0f22e09efb"
+      },
+      "unified_attention": {
+        "path": "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/ops/triton_unified_attention.py",
+        "sha256": "3baccaa1a83907e15561b1cf807f15a41bd4764513bb43c4046b434937c3274b"
+      }
+    },
+    "production_enabled": false,
+    "schema": "fr13.fixed32.dfwd_unified_bm8.identity.v1",
+    "source_commit": "d67e405b5f1c37a0f35f329c722af17edfe5fe4a"
+  },
+  "concurrency": 1,
+  "geometry": {
+    "candidate_block_m": 8,
+    "candidate_block_q": 1,
+    "kv_heads": 4,
+    "query_shape": [
+      1,
+      24,
+      256
+    ],
+    "stock_block_m": 16,
+    "stock_block_q": 2,
+    "valid_query_heads_per_kv": 6
+  },
+  "graph_id": 278509196735792,
+  "instance_id": "astropy__astropy-12907",
+  "performance_measurement": false,
+  "schema": "fr13.fixed32.dfwd_unified_bm8_live_ab.v1",
+  "served_return": "stock captured drafter graph unchanged",
+  "status": "PASS",
+  "suite": "SWE-Verified",
+  "task_marker": "swe_verified:astropy__astropy-12907"
+}

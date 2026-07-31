@@ -1,0 +1,8 @@
+launcher_pid=1982773
+runroot=output/fr13_b1_bm8_live_gate_20260731T175331Z
+arm=hydra27_fixed32_bm8_20260731T175331Z
+source=d67e405b5f1c37a0f35f329c722af17edfe5fe4a
+fa2_sha256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
+bm8_gate=1
+started=2026-07-31T17:53:31Z
+serve_rc=0 ended=2026-07-31T18:07:27Z
