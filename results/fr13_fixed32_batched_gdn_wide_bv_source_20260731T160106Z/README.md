@@ -64,6 +64,11 @@ gate reported a raw-byte mismatch on its first record's `export` surface. That
 gate restored and served stock bytes and did not produce a PASS. This is
 material evidence against assuming that BV64 is generally bit-exact.
 
+- Evidence commit: `850355982`
+- Evidence path:
+  `results/fr13_fixed32_b1_gdn_bv64_byte_rejection_20260731/`
+- Verdict: real SWE B1; GDN BV64 rejected; TAW remains unclassified.
+
 It is not a result for this combined kernel: the B1 gate exercises the
 per-request path kernel, while this candidate also changes request batching.
 The B1 result therefore neither proves nor disproves B4 combined parity. It

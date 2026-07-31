@@ -44,11 +44,15 @@
   },
   "external_live_risk": {
     "route": "separate_b1_path_bv64_gate",
+    "evidence_commit": "850355982",
+    "evidence_path": "results/fr13_fixed32_b1_gdn_bv64_byte_rejection_20260731/",
+    "real_swe_b1": true,
     "status": "mismatch_reference_restored",
     "first_record": 0,
     "mismatched_surface": "export",
     "combined_b4_inference_permitted": false,
-    "combined_production_remains_unarmed": true
+    "combined_production_remains_unarmed": true,
+    "taw_status": "unclassified"
   },
   "verification": {
     "launcher_bash_syntax": "pass",
