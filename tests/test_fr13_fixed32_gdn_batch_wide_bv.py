@@ -48,6 +48,27 @@ def test_combined_bv_resolver_accepts_only_explicit_wide_candidates(
     )
 
 
+def test_combined_bv_resolver_allows_explicit_bv8_diagnostic_only() -> None:
+    name = "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE"
+    assert kernel._fr13_resolve_fixed32_batch_gdn_bv(
+        "tail6_fixed32",
+        env_name=name,
+        sidecars=(),
+        environ={name: "8"},
+        geom_override={"BV": 8},
+        allow_reference_bv=True,
+    ) == 8
+    with pytest.raises(RuntimeError, match="16, 32, 64, or 128"):
+        kernel._fr13_resolve_fixed32_batch_gdn_bv(
+            "tail6_fixed32",
+            env_name="FR13_FIXED32_BATCH_GDN_BV_PRODUCTION",
+            sidecars=(),
+            environ={"FR13_FIXED32_BATCH_GDN_BV_PRODUCTION": "8"},
+            geom_override={"BV": 8},
+            allow_reference_bv=False,
+        )
+
+
 @pytest.mark.parametrize("candidate", ("", "8", "15", "24", "256", "x"))
 def test_combined_bv_resolver_rejects_invalid_candidates(candidate: str) -> None:
     environ = {"FR13_FIXED32_BATCH_GDN_BV_CANDIDATE": candidate} if candidate else {}
@@ -197,6 +218,33 @@ def test_combined_candidate_requires_diagnostic_and_selects_all_b2_b4(
     assert kernel.fixed32_batch_gdn_selector(1) is None
 
 
+def test_bv8_structure_candidate_requires_exact_b4_graph_diagnostic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eager = tmp_path / "eager.enabled"
+    graph = tmp_path / "graph.enabled"
+    monkeypatch.setenv("FR13_FIXED32_BATCH_GDN_BYTE_AB_ENABLED_PATH", str(eager))
+    monkeypatch.setenv(
+        "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB_ENABLED_PATH", str(graph)
+    )
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE", 8)
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", None)
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_MODE", "tail6_fixed32")
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE", None)
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_GDN_PATH_BV_PRODUCTION", None)
+    monkeypatch.setattr(
+        kernel, "_FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT", None
+    )
+
+    eager.write_text("1\n", encoding="ascii")
+    with pytest.raises(RuntimeError, match="BV8 structure candidate requires"):
+        kernel.fixed32_batch_gdn_selector(4)
+    eager.unlink()
+    graph.write_text("1\n", encoding="ascii")
+    kernel.fixed32_batch_gdn_graph_live_capture_begin(411, 4)
+    assert kernel.fixed32_batch_gdn_selector(4) == "graph_capture"
+
+
 def test_wide_graph_pass_is_source_bound_and_production_is_exact_b4(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -288,6 +336,9 @@ def test_launcher_wires_fail_closed_combined_bv_sidecars() -> None:
     assert "_fixed32_expected_metrics=1" in launcher
     assert "_fixed32_expected_eager=1" in launcher
     assert "requires MAX_NUM_SEQS=2, 3, or 4" in launcher
+    assert "diagnostic BV must be 8, 16, 32, 64, or 128" in launcher
+    assert "production BV must be 16, 32, 64, or 128" in launcher
+    assert "batched BV8 structure candidate requires the exact-B4 graph diagnostic" in launcher
 
 
 def test_graph_byte_diagnostic_launcher_contract_is_fail_closed() -> None:
@@ -324,6 +375,17 @@ def test_graph_byte_diagnostic_launcher_contract_is_fail_closed() -> None:
         "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires MAX_NUM_SEQS=4"
         in launcher
     )
+    patcher = (
+        ROOT / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
+    ).read_text(encoding="utf-8")
+    eager_start = patcher.index('if batch_gdn_byte_diagnostic == "1":')
+    graph_start = patcher.index(
+        'if graph_batch_gdn_byte_diagnostic == "1":', eager_start
+    )
+    eager_contract = patcher[eager_start:graph_start]
+    graph_contract = patcher[graph_start:]
+    assert 'candidate_bv not in ("16", "32", "64", "128")' in eager_contract
+    assert 'candidate_bv not in ("8", "16", "32", "64", "128")' in graph_contract
     assert "is incompatible with the B1 diagnostic" in launcher
     assert "fr13_fixed32_batch_gdn_graph_byte_ab.enabled" in launcher
     graph_branch_start = launcher.index(
@@ -406,6 +468,12 @@ def test_exact4_b4_live_gate_runner_is_non_timing_and_fail_closed() -> None:
     assert "FR13_FIXED32_BATCH_GDN_BYTE_AB=0" in runner
     assert "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=1" in runner
     assert "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE=" in runner
+    assert "FR13_GATE_BATCH_GDN_BV=${FR13_GATE_BATCH_GDN_BV:-8}" in runner
+    assert "reference_kernel_structure=per_request_tree_gdn_path" in runner
+    assert "candidate_kernel_structure=fixed32_batch_tree_gdn_path" in runner
+    assert "reference_physical_launches_per_layer=8" in runner
+    assert "candidate_physical_launches_per_layer=2" in runner
+    assert '"fixed32_batch_gdn_bv8_v1"' in runner
     assert "FR13_FIXED32_BATCH_GDN_PRODUCTION=0" in runner
     assert "FR13_DFWD_UNIFIED_BM8_LIVE_AB=0" in runner
     assert "FR13_FIXED32_B1_DIAGNOSTIC=0" in runner

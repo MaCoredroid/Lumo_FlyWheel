@@ -1074,6 +1074,9 @@ _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION_SIDECARS = (
     "/tmp/fr13_fixed32_batch_gdn_bv_production.flag",
 )
 _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_ID = "fixed32_batch_gdn_bv_v2"
+_FR13_FIXED32_BATCH_GDN_BV8_CANDIDATE_ID = "fixed32_batch_gdn_bv8_v1"
+_FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL = "per_request_tree_gdn_path"
+_FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL = "fixed32_batch_tree_gdn_path"
 _FR13_FIXED32_BATCH_GDN_BV_BYTE_SURFACES = (
     "out",
     "ring_k",
@@ -1144,8 +1147,9 @@ def _fr13_resolve_fixed32_batch_gdn_bv(
     sidecars,
     environ=None,
     geom_override=None,
+    allow_reference_bv: bool = False,
 ) -> int | None:
-    """Resolve one explicit wide-BV selector for the two-launch B2-B4 route."""
+    """Resolve one explicit BV selector for the two-launch B2-B4 route."""
     env = os.environ if environ is None else environ
     sources: list[tuple[str, str]] = []
     raw_env = env.get(env_name)
@@ -1166,15 +1170,22 @@ def _fr13_resolve_fixed32_batch_gdn_bv(
         sources.append((f"sidecar:{path}", value.strip()))
     if not sources:
         return None
+    allowed = ("8", "16", "32", "64", "128") if allow_reference_bv else (
+        "16",
+        "32",
+        "64",
+        "128",
+    )
     invalid = [
         (source, value)
         for source, value in sources
-        if value not in ("16", "32", "64", "128")
+        if value not in allowed
     ]
     values = {value for _source, value in sources}
     if invalid or len(values) != 1:
+        allowed_text = ", ".join(allowed[:-1]) + ", or " + allowed[-1]
         raise RuntimeError(
-            f"{env_name} requires one of 16, 32, 64, or 128 from agreeing "
+            f"{env_name} requires one of {allowed_text} from agreeing "
             f"sources: {sources!r}"
         )
     if fixed32_mode not in _FR13_FIXED32_MODES:
@@ -1193,6 +1204,7 @@ _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE = (
         env_name="FR13_FIXED32_BATCH_GDN_BV_CANDIDATE",
         sidecars=_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_SIDECARS,
         geom_override=_read_tree_gdn_geom_override(),
+        allow_reference_bv=True,
     )
 )
 _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION = (
@@ -1201,6 +1213,7 @@ _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION = (
         env_name="FR13_FIXED32_BATCH_GDN_BV_PRODUCTION",
         sidecars=_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION_SIDECARS,
         geom_override=_read_tree_gdn_geom_override(),
+        allow_reference_bv=False,
     )
 )
 if (
@@ -1453,6 +1466,11 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE requires the batched GDN "
             "diagnostic selector"
+        )
+    if _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE == 8 and not graph_diagnostic:
+        raise RuntimeError(
+            "FR13 fixed32 batched BV8 structure candidate requires the exact-B4 "
+            "graph diagnostic"
         )
     if (
         _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None
@@ -1982,9 +2000,9 @@ def _fr13_fixed32_batch_gdn_live_pass_emit(
     parent = os.path.dirname(path)
     if parent:
         os.makedirs(parent, exist_ok=True)
+    structured_candidate = reference_bv is not None and candidate_bv is not None
     wide_bv = (
-        reference_bv is not None
-        and candidate_bv is not None
+        structured_candidate
         and int(reference_bv) != int(candidate_bv)
     )
     # The combined wide-BV gate is formally authorized only by the exact4 B4
@@ -2023,14 +2041,19 @@ def _fr13_fixed32_batch_gdn_live_pass_emit(
         "layer_keys": [f"0x{key:x}" for key in sorted(layer_keys)],
         "reference_always_served": True,
     }
-    if wide_bv:
+    if structured_candidate:
+        selected_candidate = int(candidate_bv)
         payload.update(
-            candidate=_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_ID,
+            candidate=(
+                _FR13_FIXED32_BATCH_GDN_BV8_CANDIDATE_ID
+                if selected_candidate == 8
+                else _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_ID
+            ),
             source_sha256=_fr13_fixed32_batch_gdn_source_sha256(),
             mode=_FR13_FIXED32_MODE,
             physical_rows_per_request=32,
             reference_bv=int(reference_bv),
-            candidate_bv=int(candidate_bv),
+            candidate_bv=selected_candidate,
             reference_physical_launches_per_layer=2 * int(batch),
             candidate_physical_launches_per_layer=2,
             compared_byte_surfaces=list(
@@ -2039,6 +2062,12 @@ def _fr13_fixed32_batch_gdn_live_pass_emit(
             raw_byte_equal=True,
             state_restored=True,
         )
+        if selected_candidate == 8:
+            payload.update(
+                reference_kernel_structure=_FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL,
+                candidate_kernel_structure=_FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL,
+                production_eligible=False,
+            )
     if graph_gate:
         payload.update(
             gate_mode="post_replay_shadow",
@@ -2063,9 +2092,9 @@ def _fr13_fixed32_batch_gdn_graph_compare_records(
     graph_signature: str,
     task_marker: str,
 ) -> dict[str, object]:
-    """Shadow the replayed B4 BV8 graph, compare BV64, and restore it."""
+    """Shadow the replayed per-request BV8 graph with one batched candidate."""
     candidate = int(candidate_bv)
-    if candidate not in (16, 32, 64, 128):
+    if candidate not in (8, 16, 32, 64, 128):
         raise RuntimeError(
             "FR13 fixed32 B4 graph GDN byte gate rejected candidate BV="
             f"{candidate}"
@@ -2113,13 +2142,29 @@ def _fr13_fixed32_batch_gdn_graph_compare_records(
             candidate_surfaces = snapshot()
             if (
                 set(reference_meta)
-                != {"block_v", "physical_launches", "compact_export"}
+                != {
+                    "block_v",
+                    "physical_launches",
+                    "kernel_structure",
+                    "compact_export",
+                }
                 or set(candidate_meta)
-                != {"block_v", "physical_launches", "compact_export"}
+                != {
+                    "block_v",
+                    "physical_launches",
+                    "kernel_structure",
+                    "compact_export",
+                }
                 or int(reference_meta["block_v"]) != 8
                 or int(reference_meta["physical_launches"]) != 8
+                or reference_meta["kernel_structure"]
+                != _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL
                 or int(candidate_meta["block_v"]) != candidate
                 or int(candidate_meta["physical_launches"]) != 2
+                or candidate_meta["kernel_structure"]
+                != _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL
+                or reference_meta["kernel_structure"]
+                == candidate_meta["kernel_structure"]
             ):
                 raise RuntimeError(
                     "FR13 fixed32 B4 graph GDN launch metadata drift at "
@@ -2194,6 +2239,12 @@ def _fr13_fixed32_batch_gdn_graph_compare_records(
                 "physical_rows_per_request": 32,
                 "reference_bv": 8,
                 "candidate_bv": candidate,
+                "reference_kernel_structure": (
+                    _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL
+                ),
+                "candidate_kernel_structure": (
+                    _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL
+                ),
                 "carrier_nonzero": True,
                 "legacy_physical_launches": 8,
                 "candidate_physical_launches": 2,
@@ -2216,6 +2267,8 @@ def _fr13_fixed32_batch_gdn_graph_compare_records(
         "layer_keys": layer_keys,
         "reference_bv": 8,
         "candidate_bv": candidate,
+        "reference_kernel_structure": _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL,
+        "candidate_kernel_structure": _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL,
     }
 
 
@@ -11333,6 +11386,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
             return {
                 "block_v": 8,
                 "physical_launches": 2 * batch,
+                "kernel_structure": _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL,
                 "compact_export": compact_export,
             }
 
@@ -11349,6 +11403,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 "physical_launches": int(
                     launch_contract["physical_launches_per_layer"]
                 ),
+                "kernel_structure": _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL,
                 "compact_export": subtree_state["export"][
                     :needed_export_rows
                 ].clone(),

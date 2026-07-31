@@ -5694,7 +5694,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             raise RuntimeError(
                 "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires fixed32 mode"
             )
-        if candidate_bv not in ("16", "32", "64", "128"):
+        if candidate_bv not in ("8", "16", "32", "64", "128"):
             raise RuntimeError(
                 "FR13 fixed32 graph B4 byte diagnostic requires an exact "
                 "batched GDN BV candidate"

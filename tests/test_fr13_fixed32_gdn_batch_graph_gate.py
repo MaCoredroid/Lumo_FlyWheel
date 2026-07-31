@@ -36,6 +36,7 @@ def _graph_record(
     *,
     mismatch: bool = False,
     shared_export: torch.Tensor | None = None,
+    candidate_structure: str = "fixed32_batch_tree_gdn_path",
 ):
     surfaces = kernel._FR13_FIXED32_BATCH_GDN_GRAPH_SURFACES
     state = {
@@ -68,6 +69,7 @@ def _graph_record(
         return {
             "block_v": 8,
             "physical_launches": 8,
+            "kernel_structure": "per_request_tree_gdn_path",
             "compact_export": compact.clone(),
         }
 
@@ -79,6 +81,7 @@ def _graph_record(
         return {
             "block_v": block_v,
             "physical_launches": 2,
+            "kernel_structure": candidate_structure,
             "compact_export": compact.clone(),
         }
 
@@ -189,6 +192,47 @@ def test_graph_shadow_compare_always_restores_graph_served_bytes(
     assert emitted[0]["status"] == ("mismatch_reference_served" if mismatch else "pass")
 
 
+def test_graph_shadow_bv8_requires_distinct_batched_kernel_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    record, state, served = _graph_record(1)
+    emitted = []
+    monkeypatch.setattr(
+        kernel,
+        "_fr13_fixed32_batch_gdn_byte_ab_emit",
+        lambda payload: emitted.append(payload),
+    )
+
+    result = kernel._fr13_fixed32_batch_gdn_graph_compare_records(
+        (record,),
+        candidate_bv=8,
+        graph_id=408,
+        graph_signature="2" * 64,
+        task_marker="swe_verified:astropy__astropy-12907",
+    )
+    assert result["reference_bv"] == result["candidate_bv"] == 8
+    assert result["reference_kernel_structure"] == "per_request_tree_gdn_path"
+    assert result["candidate_kernel_structure"] == "fixed32_batch_tree_gdn_path"
+    assert emitted[0]["legacy_physical_launches"] == 8
+    assert emitted[0]["candidate_physical_launches"] == 2
+    assert emitted[0]["reference_kernel_structure"] != emitted[0][
+        "candidate_kernel_structure"
+    ]
+    assert all(torch.equal(state[name], served[name]) for name in served)
+
+    invalid, _invalid_state, _invalid_served = _graph_record(
+        2, candidate_structure="per_request_tree_gdn_path"
+    )
+    with pytest.raises(RuntimeError, match="launch metadata drift"):
+        kernel._fr13_fixed32_batch_gdn_graph_compare_records(
+            (invalid,),
+            candidate_bv=8,
+            graph_id=409,
+            graph_signature="3" * 64,
+            task_marker="swe_verified:astropy__astropy-12907",
+        )
+
+
 def test_graph_shadow_does_not_treat_shared_export_as_layer_local(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -249,6 +293,41 @@ def test_graph_live_pass_is_graph_task_and_capture_bound(
     assert payload["real_task_authenticated"] is True
     assert payload["graph_baseline_byte_equal"] is True
     assert payload["state_restored"] is True
+
+
+def test_graph_bv8_live_pass_is_explicit_and_not_production_eligible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "pass.json"
+    monkeypatch.setenv("FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS_PATH", str(path))
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_MODE", "tail6_fixed32")
+    kernel._fr13_fixed32_batch_gdn_live_pass_emit(
+        task_marker="swe_verified:astropy__astropy-12907",
+        batch=4,
+        layer_keys=set(range(1, 49)),
+        reference_bv=8,
+        candidate_bv=8,
+        graph_id=410,
+        graph_signature="4" * 64,
+        capture_records=48,
+    )
+    payload = json.loads(path.read_text(encoding="ascii"))
+    assert payload["schema"] == "fr13.fixed32.batch_gdn.graph_live_pass.v1"
+    assert payload["candidate"] == "fixed32_batch_gdn_bv8_v1"
+    assert payload["reference_bv"] == payload["candidate_bv"] == 8
+    assert payload["reference_kernel_structure"] == "per_request_tree_gdn_path"
+    assert payload["candidate_kernel_structure"] == "fixed32_batch_tree_gdn_path"
+    assert payload["reference_physical_launches_per_layer"] == 8
+    assert payload["candidate_physical_launches_per_layer"] == 2
+    assert payload["production_eligible"] is False
+
+    monkeypatch.setenv("FR13_FIXED32_BATCH_GDN_PRODUCTION", "1")
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", None)
+    with pytest.raises(RuntimeError, match="PASS record is invalid"):
+        kernel._fr13_fixed32_batch_gdn_production_control()
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", 8)
+    with pytest.raises(RuntimeError, match="PASS record is invalid"):
+        kernel._fr13_fixed32_batch_gdn_production_control()
 
 
 def test_graph_gate_runs_once_and_requires_the_captured_signature(

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Real SWE-Verified exact4 B4 graph byte diagnostic for the batched wide-BV GDN.
+# Real SWE-Verified exact4 B4 graph byte diagnostic for the batched GDN kernel.
 # This runner is deliberately non-timing and cannot produce floor acceptance.
 set -euo pipefail
 
@@ -13,10 +13,10 @@ RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 : "${TAG:?set TAG to a unique run tag}"
 : "${FORKED_FA2_SO:?set FORKED_FA2_SO to the pinned FA2 shared object}"
 
-FR13_GATE_BATCH_GDN_BV=${FR13_GATE_BATCH_GDN_BV:-64}
+FR13_GATE_BATCH_GDN_BV=${FR13_GATE_BATCH_GDN_BV:-8}
 case "$FR13_GATE_BATCH_GDN_BV" in
-  16|32|64|128) ;;
-  *) echo "FR13_GATE_BATCH_GDN_BV must be 16, 32, 64, or 128" >&2; exit 2 ;;
+  8|16|32|64|128) ;;
+  *) echo "FR13_GATE_BATCH_GDN_BV must be 8, 16, 32, 64, or 128" >&2; exit 2 ;;
 esac
 
 ARM="tail6_fixed32_${TAG}"
@@ -46,7 +46,7 @@ run_variant() { :; }
 source scripts/fr13_fixed32_floor_timers_seq.sh
 
 mkdir -p "$RUNROOT"
-printf 'classification=exact4_b4_graph_byte_diagnostic\ntiming_eligible=0\nfloor_acceptance_eligible=0\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nfa2_sha256=%s\ncandidate_bv=%s\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+printf 'classification=exact4_b4_graph_byte_diagnostic\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_eligible=0\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nfa2_sha256=%s\nreference_bv=8\ncandidate_bv=%s\nreference_kernel_structure=per_request_tree_gdn_path\ncandidate_kernel_structure=fixed32_batch_tree_gdn_path\nreference_physical_launches_per_layer=8\ncandidate_physical_launches_per_layer=2\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
   "$$" "$RUNROOT" "$ARM" "$(git rev-parse HEAD)" "$RUNNER_SHA256" \
   "$SUBSET_SHA256" "$FA2_SHA256" "$FR13_GATE_BATCH_GDN_BV" \
   "$B4_KV_CACHE_MEMORY_BYTES" \
@@ -188,7 +188,11 @@ expected_pass = {
     "capture_records": 48,
     "real_task_authenticated": True,
     "reference_always_served": True,
-    "candidate": "fixed32_batch_gdn_bv_v2",
+    "candidate": (
+        "fixed32_batch_gdn_bv8_v1"
+        if candidate_bv == 8
+        else "fixed32_batch_gdn_bv_v2"
+    ),
     "source_sha256": source_sha256,
     "mode": "tail6_fixed32",
     "physical_rows_per_request": 32,
@@ -201,6 +205,12 @@ expected_pass = {
     "raw_byte_equal": True,
     "state_restored": True,
 }
+if candidate_bv == 8:
+    expected_pass.update(
+        reference_kernel_structure="per_request_tree_gdn_path",
+        candidate_kernel_structure="fixed32_batch_tree_gdn_path",
+        production_eligible=False,
+    )
 for key, expected in expected_pass.items():
     if payload.get(key) != expected:
         raise SystemExit(f"B4 PASS field mismatch: {key}")
@@ -253,6 +263,12 @@ for record in b4:
         or record.get("physical_rows_per_request") != 32
         or record.get("reference_bv") != 8
         or record.get("candidate_bv") != candidate_bv
+        or record.get("reference_kernel_structure")
+        != "per_request_tree_gdn_path"
+        or record.get("candidate_kernel_structure")
+        != "fixed32_batch_tree_gdn_path"
+        or record.get("reference_kernel_structure")
+        == record.get("candidate_kernel_structure")
         or record.get("legacy_physical_launches") != 8
         or record.get("candidate_physical_launches") != 2
         or record.get("carrier_nonzero") is not True
@@ -348,6 +364,16 @@ verdict = {
     "reference_always_served": True,
     "production_default_enabled": False,
 }
+if candidate_bv == 8:
+    verdict.update(
+        candidate="fixed32_batch_gdn_bv8_v1",
+        reference_bv=8,
+        reference_kernel_structure="per_request_tree_gdn_path",
+        candidate_kernel_structure="fixed32_batch_tree_gdn_path",
+        reference_physical_launches_per_layer=8,
+        candidate_physical_launches_per_layer=2,
+        production_eligible=False,
+    )
 temporary = verdict_path.with_name(verdict_path.name + ".tmp")
 temporary.write_text(
     json.dumps(verdict, ensure_ascii=True, separators=(",", ":"), sort_keys=True)

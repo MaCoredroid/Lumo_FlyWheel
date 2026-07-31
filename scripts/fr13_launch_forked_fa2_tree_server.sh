@@ -1365,13 +1365,14 @@ case "$_fr13_batch_gdn_production" in
   0|1) ;;
   *) echo "FR13_FIXED32_BATCH_GDN_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
 esac
-for _fr13_batch_gdn_bv_name in \
-  "$_fr13_batch_gdn_bv_candidate" "$_fr13_batch_gdn_bv_production"; do
-  case "$_fr13_batch_gdn_bv_name" in
-    ""|16|32|64|128) ;;
-    *) echo "FR13 fixed32 batched GDN BV must be 16, 32, 64, or 128" >&2; exit 2 ;;
-  esac
-done
+case "$_fr13_batch_gdn_bv_candidate" in
+  ""|8|16|32|64|128) ;;
+  *) echo "FR13 fixed32 batched GDN diagnostic BV must be 8, 16, 32, 64, or 128" >&2; exit 2 ;;
+esac
+case "$_fr13_batch_gdn_bv_production" in
+  ""|16|32|64|128) ;;
+  *) echo "FR13 fixed32 batched GDN production BV must be 16, 32, 64, or 128" >&2; exit 2 ;;
+esac
 _fr13_batch_gdn_diagnostic_count=$((
   10#$_fr13_batch_gdn_byte_ab + 10#$_fr13_batch_gdn_graph_byte_ab
 ))
@@ -1408,6 +1409,11 @@ fi
 if [[ -n "$_fr13_batch_gdn_bv_candidate" ]] \
     && (( _fr13_batch_gdn_diagnostic_count != 1 )); then
   echo "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE requires exactly one eager or graph byte diagnostic" >&2
+  exit 2
+fi
+if [[ "$_fr13_batch_gdn_bv_candidate" == "8" \
+      && "$_fr13_batch_gdn_graph_byte_ab" != "1" ]]; then
+  echo "FR13 fixed32 batched BV8 structure candidate requires the exact-B4 graph diagnostic" >&2
   exit 2
 fi
 if [[ -n "$_fr13_batch_gdn_bv_production" \
