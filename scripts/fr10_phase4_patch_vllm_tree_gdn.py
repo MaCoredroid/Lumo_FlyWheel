@@ -7761,30 +7761,34 @@ def _fr13_conv_subop_mab(
                                 _fr13_tcf_prep["bank_rows"][
                                     :_fr13_tcf_b
                                 ].copy_(_fr13_tcf_new_rows)
-                                (
-                                    _fr13_tcf_new_src,
-                                    _fr13_tcf_new_dst,
-                                ) = prepare_replay_conv_remap_rows(
-                                    spec_state_indices=spec_state_indices_tensor,
-                                    accepted_paths=_fr10_accepted_paths_tensor,
-                                    num_accepted_tokens=_fr10_accepted_lens_tensor,
-                                    num_spec_decodes=_fr13_tcf_b,
-                                    max_path_len=int(
-                                        spec_state_indices_tensor.size(-1)
-                                    ),
-                                )
-                                if int(_fr13_tcf_new_src.numel()) != _fr13_tcf_rows_n:
-                                    raise RuntimeError(
-                                        "FR13_TREE_CONV_FUSED prepared remap "
-                                        "rows disagree with the static "
-                                        "path-cols geometry (fail-loud)"
+                                if not _FR13_FIXED32_MODE:
+                                    (
+                                        _fr13_tcf_new_src,
+                                        _fr13_tcf_new_dst,
+                                    ) = prepare_replay_conv_remap_rows(
+                                        spec_state_indices=spec_state_indices_tensor,
+                                        accepted_paths=_fr10_accepted_paths_tensor,
+                                        num_accepted_tokens=_fr10_accepted_lens_tensor,
+                                        num_spec_decodes=_fr13_tcf_b,
+                                        max_path_len=int(
+                                            spec_state_indices_tensor.size(-1)
+                                        ),
                                     )
-                                _fr13_tcf_prep["src_rows"][
-                                    :_fr13_tcf_rows_n
-                                ].copy_(_fr13_tcf_new_src)
-                                _fr13_tcf_prep["dst_rows"][
-                                    :_fr13_tcf_rows_n
-                                ].copy_(_fr13_tcf_new_dst)
+                                    if (
+                                        int(_fr13_tcf_new_src.numel())
+                                        != _fr13_tcf_rows_n
+                                    ):
+                                        raise RuntimeError(
+                                            "FR13_TREE_CONV_FUSED prepared remap "
+                                            "rows disagree with the static "
+                                            "path-cols geometry (fail-loud)"
+                                        )
+                                    _fr13_tcf_prep["src_rows"][
+                                        :_fr13_tcf_rows_n
+                                    ].copy_(_fr13_tcf_new_src)
+                                    _fr13_tcf_prep["dst_rows"][
+                                        :_fr13_tcf_rows_n
+                                    ].copy_(_fr13_tcf_new_dst)
                             _fr13_committed_read_cols = _fr13_tcf_prep[
                                 "read_cols"
                             ][:_fr13_tcf_b]
@@ -8170,7 +8174,12 @@ def _fr13_conv_subop_mab(
                     # all-rows ssm publish refreshes every window column each
                     # event, making the page-wide copy semantically identical
                     # to the intended ssm remap there.
-                    if True:  # FR13_REPLAY_ROUTE baked ON
+                    if _FR13_FIXED32_MODE:
+                        # The committed col0 prior was snapshotted above and the
+                        # fixed32 full-node writeback below replaces every one
+                        # of these remap destinations before post-accept.
+                        pass
+                    elif True:  # FR13_REPLAY_ROUTE baked ON
                         if _FR13_TREE_CONV_FUSED:
                             # FR13_TREE_CONV_FUSED (FIX-3): identical
                             # permutation, identical materialize-before-

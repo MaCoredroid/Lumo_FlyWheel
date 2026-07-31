@@ -207,6 +207,33 @@ def test_fused_arm_calls_the_importable_library() -> None:
     )
 
 
+def test_fixed32_skips_the_overwritten_conv_remap() -> None:
+    tree = ast.parse(textwrap.dedent(CONV))
+    skip_branches = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.If)
+        and isinstance(node.test, ast.Name)
+        and node.test.id == "_FR13_FIXED32_MODE"
+        and len(node.body) == 1
+        and isinstance(node.body[0], ast.Pass)
+        and len(node.orelse) == 1
+        and isinstance(node.orelse[0], ast.If)
+    ]
+
+    assert len(skip_branches) == 1
+    nonfixed_source = ast.unparse(skip_branches[0].orelse[0])
+    assert "replay_conv_state_linear_remap_prepared" in nonfixed_source
+    assert "replay_conv_state_linear_remap" in nonfixed_source
+    assert "launch_tree_state_linear_remap" in nonfixed_source
+    assert (
+        "if not _FR13_FIXED32_MODE:\n"
+        "                                    (\n"
+        "                                        _fr13_tcf_new_src,"
+        in CONV
+    )
+
+
 def test_reduction_ops_banned_in_fused_module() -> None:
     # Bit-exactness rests on EXPLICIT ordered adds: any reduction op has
     # unspecified order. Pin the textual ban (risk 1 in the FIX-3 design).
