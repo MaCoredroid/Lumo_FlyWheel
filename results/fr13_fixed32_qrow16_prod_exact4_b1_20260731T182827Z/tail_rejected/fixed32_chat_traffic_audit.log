@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "<stdin>", line 26, in <module>
+  File "/home/mark/lumoFlyWheel-kernel-integrated/scripts/fr13_floor_gate.py", line 3066, in build_fixed32_chat_traffic_audit
+    task_dirs = task_directories(
+                ^^^^^^^^^^^^^^^^^
+  File "/home/mark/lumoFlyWheel-kernel-integrated/scripts/fr13_floor_gate.py", line 1664, in task_directories
+    metadata = exact_json(metadata_path, label=str(metadata_path))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/lumoFlyWheel-kernel-integrated/scripts/fr13_floor_gate.py", line 604, in exact_json
+    _raw, text = strict_utf8_artifact(path, label=label)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/lumoFlyWheel-kernel-integrated/scripts/fr13_floor_gate.py", line 569, in strict_utf8_artifact
+    raise GateError(f"missing required artifact: {path}")
+fr13_floor_gate.GateError: missing required artifact: /home/mark/lumoFlyWheel-kernel-integrated/output/fr13_fixed32_qrow16_prod_exact4_b1_20260731T182827Z/tail6_fixed32_qrow16_prod_exact4_b1_20260731T182827Z/swe_out/verified/per_task/astropy__astropy-13398/runner_metadata.json

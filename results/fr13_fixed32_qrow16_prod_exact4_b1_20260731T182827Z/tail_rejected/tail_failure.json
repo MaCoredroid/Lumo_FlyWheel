@@ -1,0 +1,25 @@
+{
+  "schema": "fr13.fixed32.qrow16_tail_agent_failure.v1",
+  "task": "astropy__astropy-13398",
+  "failure_class": "agent_terminal_integrity",
+  "agent_exit_code": 1,
+  "timed_out": false,
+  "qwen_result_subtype": "error_during_execution",
+  "qwen_duration_ms": 2194229,
+  "qwen_api_duration_ms": 1981385,
+  "qwen_turns": 96,
+  "qwen_error": "Loop detection halted the run (turn_tool_call_cap: the model exceeded the maximum number of tool calls allowed in a single turn).",
+  "provenance_rejection": "agent terminal state is incomplete: exit_code=1 timed_out=False",
+  "missing_required_artifact": "runner_metadata.json",
+  "kernel_mismatch_observed": false,
+  "qrow16_capture_status": "ENGAGED",
+  "qrow16_dispatch": "qrow16 exact geometry; no fallback",
+  "final_flush_status": "ok",
+  "final_flushed_forward_events": 10209,
+  "pending_sfwd_dfwd_cfwd": [
+    0,
+    0,
+    0
+  ],
+  "acceptance_or_tuning_eligible": false
+}

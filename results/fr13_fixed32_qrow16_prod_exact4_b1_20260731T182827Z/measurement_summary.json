@@ -1,0 +1,129 @@
+{
+  "schema": "fr13.fixed32.qrow16_exact4_b1_campaign_closeout.v1",
+  "created_at_utc": "2026-07-31T20:16:52Z",
+  "campaign_status": "REJECTED_INCOMPLETE_TAIL_TASK",
+  "formal_two_arm_floor_gate_produced": false,
+  "formal_two_arm_acceptance_eligible": false,
+  "campaign": {
+    "source_commit": "04c98057fa9d9e658282cf0b32422716660e1210",
+    "order": "hydra_then_tail",
+    "batch_size": 1,
+    "concurrency": 1,
+    "task_set": "config/fr13_fixed32/subset_b4_four.json",
+    "task_ids": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033",
+      "astropy__astropy-13236",
+      "astropy__astropy-13398"
+    ],
+    "qrow16_candidate_sha256": "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86",
+    "qrow16_live_result_sha256": "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77",
+    "started_at_utc": "2026-07-31T18:28:27Z",
+    "ended_at_utc": "2026-07-31T20:08:28Z",
+    "driver_exit_code": 1
+  },
+  "corrected_hardware_floor": {
+    "scenario": "root_64k_five_64k_draft_heads",
+    "mandatory_weight_bytes": 32666638208,
+    "bandwidth_bytes_per_second": 273000000000,
+    "floor_ms_per_event": 119.658015414,
+    "acceptance_multiplier": 1.15,
+    "acceptance_cap_ms_per_event": 137.6067177261,
+    "includes_nonweight_costs": false,
+    "legacy_98_6_ms_floor_used": false
+  },
+  "hydra27_valid_exact4_arm": {
+    "acceptance_eligible_arm": true,
+    "canonical_provenance_checks_passed": true,
+    "all_four_tasks_agent_and_eval_terminal": true,
+    "task_verdicts": [
+      "resolved",
+      "failed",
+      "resolved",
+      "failed"
+    ],
+    "forward_events": 5148,
+    "accepted_draft_tokens": 24473,
+    "accepted_drafts_per_event": 4.753885003885004,
+    "committed_tokens_per_event": 5.753885003885004,
+    "request_decode_ms_per_forward": 227.91112274149136,
+    "sfwd_gpu_ms_per_event": 159.61926324365674,
+    "dfwd_gpu_ms_per_event": 36.813368133731736,
+    "cfwd_gpu_ms_per_event": 20.677390556513288,
+    "gpu_component_ms_per_event": 217.11002193390177,
+    "full_step_wall_ms_per_event": 232.77979007137355,
+    "full_wall_tps": 24.71814671763722,
+    "wall_floor_ratio": 1.9453756546603922,
+    "wall_gap_to_1_15x_cap_ms": 95.17307234527357,
+    "wall_reduction_required_percent": 40.885453293042396,
+    "hardware_floor_point_pass": false,
+    "one_sided_u95_produced": false
+  },
+  "hydra27_valid_baseline_comparison": {
+    "baseline_artifact": "results/fr13_fixed32_exactsafe_hydra27_b1_20260731",
+    "baseline_full_step_wall_ms_per_event": 239.02663423872843,
+    "qrow16_minus_baseline_wall_ms": -6.24684416735488,
+    "qrow16_minus_baseline_wall_percent": -2.613451085587315,
+    "baseline_gpu_component_ms_per_event": 222.55840833774676,
+    "qrow16_minus_baseline_gpu_ms": -5.448386403844978,
+    "qrow16_minus_baseline_gpu_percent": -2.4480703490549316,
+    "baseline_accepted_drafts_per_event": 4.668057003823427,
+    "qrow16_minus_baseline_accepted_drafts_per_event": 0.08582800006157676,
+    "trajectory_note": "The observed speed delta is valid arm evidence. Acceptance and task-path differences are free-running trajectory observations, not isolated causal effects."
+  },
+  "tail6_rejected_arm": {
+    "acceptance_eligible_arm": false,
+    "rejection_stage": "real_task_provenance",
+    "failure_task": "astropy__astropy-13398",
+    "agent_exit_code": 1,
+    "timed_out": false,
+    "failure_reason": "Qwen loop detection halted the agent at the turn_tool_call_cap.",
+    "missing_required_artifact": "runner_metadata.json",
+    "all_four_task_brackets_closed": true,
+    "qrow16_capture_status": "ENGAGED",
+    "forward_events_flushed": 10209,
+    "all_timing_pending_counts_zero": true,
+    "forensic_only_performance_aggregate": {
+      "accepted_drafts_per_event": 4.444999510236066,
+      "full_step_wall_ms_per_event": 238.24229384983659,
+      "full_wall_tps": 22.85488198694071,
+      "wall_floor_ratio": 1.9910266188650343
+    },
+    "performance_aggregate_eligible_for_acceptance_or_tuning": false
+  },
+  "fixed_work_capture": {
+    "tail_and_hydra_physical_rows": 32,
+    "tail_and_hydra_scan_schedule": "fixed32 levels=[1,11] lens=[5,7] critical=12",
+    "qrow16_target_attention_layers_per_graph": 16,
+    "committer_graph_replays_per_event": 1,
+    "committer_fused_layer_calls_per_replay": 48,
+    "note": "The captured topology is fixed across Tail and Hydra; validity masks and accepted paths differ."
+  },
+  "lifecycle": {
+    "hydra_final_flush_status": "ok",
+    "tail_final_flush_status": "ok",
+    "hydra_pending_sfwd_dfwd_cfwd": [
+      0,
+      0,
+      0
+    ],
+    "tail_pending_sfwd_dfwd_cfwd": [
+      0,
+      0,
+      0
+    ],
+    "docker_empty_after_campaign": true,
+    "gpu_compute_processes_after_campaign": 0,
+    "runtime_manifest_launch_end_byte_equal": true,
+    "external_manifest_launch_end_byte_equal": true,
+    "runtime_manifest_sha256": "d145d8d344fffff0178209e4565082267897b901768632e762a82b4d906d83a6",
+    "external_manifest_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f"
+  },
+  "decision": {
+    "qrow16_observed_valid_hydra_wall_win": true,
+    "qrow16_hardware_floor_accepted": false,
+    "paired_exact4_rerun_deferred": true,
+    "paired_rerun_note": "The valid Hydra point is already 95.173 ms above the cap, so a paired U95 cannot close the goal. Work proceeds to larger kernel candidates instead of rerunning an acceptance-impossible pair.",
+    "exact16_authorized": false
+  }
+}

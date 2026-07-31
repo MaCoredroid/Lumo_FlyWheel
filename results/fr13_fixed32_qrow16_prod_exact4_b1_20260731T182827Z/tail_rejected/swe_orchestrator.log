@@ -1,0 +1,25 @@
+[eval-offload] eval step -> alienware (native x86_64)
+[codex-offload] codex docker -> alienware (x86); endpoint=http://127.0.0.1:8023/v1 (GB10 stays vLLM-only — uncontended deploy-speed)
+=== [2026-07-31T19:14:21Z] dataset=princeton-nlp/SWE-bench_Verified tag=verified n=4 concurrency=1 ===
+[2026-07-31T19:14:21Z] -> astropy__astropy-12907
+[2026-07-31T19:18:28Z] <- astropy__astropy-12907 verdict=resolved elapsed_total=246.6s
+[2026-07-31T19:18:28Z] -> astropy__astropy-13033
+[2026-07-31T19:24:27Z] <- astropy__astropy-13033 verdict=failed elapsed_total=358.8s
+[2026-07-31T19:24:27Z] -> astropy__astropy-13236
+[2026-07-31T19:31:11Z] <- astropy__astropy-13236 verdict=resolved elapsed_total=404.3s
+[2026-07-31T19:31:11Z] -> astropy__astropy-13398
+Traceback (most recent call last):
+  File "/home/mark/lumoFlyWheel-kernel-integrated/scripts/run_swe_bench_q36_a.py", line 6922, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/mark/lumoFlyWheel-kernel-integrated/scripts/run_swe_bench_q36_a.py", line 6890, in main
+    summaries.append(_job(iid))
+                     ^^^^^^^^^
+  File "/home/mark/lumoFlyWheel-kernel-integrated/scripts/run_swe_bench_q36_a.py", line 6814, in _job
+    res = _process_one(
+          ^^^^^^^^^^^^^
+  File "/home/mark/lumoFlyWheel-kernel-integrated/scripts/run_swe_bench_q36_a.py", line 6324, in _process_one
+    _fixed32_real_task_provenance(
+  File "/home/mark/lumoFlyWheel-kernel-integrated/scripts/run_swe_bench_q36_a.py", line 3054, in _fixed32_real_task_provenance
+    raise Fixed32BoundaryError(
+Fixed32BoundaryError: fixed32 real-task provenance astropy__astropy-13398: agent terminal state is incomplete: exit_code=1 timed_out=False

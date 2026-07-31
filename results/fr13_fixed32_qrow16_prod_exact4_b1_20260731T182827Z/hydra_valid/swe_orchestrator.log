@@ -1,0 +1,12 @@
+[eval-offload] eval step -> alienware (native x86_64)
+[codex-offload] codex docker -> alienware (x86); endpoint=http://127.0.0.1:8023/v1 (GB10 stays vLLM-only — uncontended deploy-speed)
+=== [2026-07-31T18:36:17Z] dataset=princeton-nlp/SWE-bench_Verified tag=verified n=4 concurrency=1 ===
+[2026-07-31T18:36:18Z] -> astropy__astropy-12907
+[2026-07-31T18:40:38Z] <- astropy__astropy-12907 verdict=resolved elapsed_total=260.3s
+[2026-07-31T18:40:38Z] -> astropy__astropy-13033
+[2026-07-31T18:43:48Z] <- astropy__astropy-13033 verdict=failed elapsed_total=189.8s
+[2026-07-31T18:43:48Z] -> astropy__astropy-13236
+[2026-07-31T18:53:23Z] <- astropy__astropy-13236 verdict=resolved elapsed_total=575.4s
+[2026-07-31T18:53:23Z] -> astropy__astropy-13398
+[2026-07-31T19:06:40Z] <- astropy__astropy-13398 verdict=failed elapsed_total=796.4s
+=== [2026-07-31T19:06:40Z] DONE n=4 resolved_rate=0.5 verdicts={'resolved': 2, 'failed': 2} ===
