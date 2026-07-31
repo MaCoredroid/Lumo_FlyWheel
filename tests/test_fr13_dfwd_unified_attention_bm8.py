@@ -128,6 +128,7 @@ def test_bm8_patcher_emits_compilable_default_stock_live_gate(
     assert '"performance_measurement": False' in emitted
     assert "_fr13_dfwd_unified_bm8_real_task_marker" in emitted
     assert "_fr13_dfwd_unified_bm8_candidate_identity" in emitted
+    assert "_stat.S_IMODE(metadata.st_mode) != 0o444" in emitted
     assert '"candidate_identity": candidate_identity' in emitted
     assert '"task_marker": task_marker' in emitted
 
@@ -171,6 +172,7 @@ def test_drafter_replay_hook_and_launcher_are_fail_closed() -> None:
     assert "FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH" in launcher
     assert "FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON" in launcher
     assert "FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT" in launcher
+    assert "temporary.chmod(0o444)" in launcher
     assert "fixed32-bm8-real-event-arm" in (
         ROOT / "scripts/run_swe_bench_q36_a.py"
     ).read_text(encoding="utf-8")
@@ -261,7 +263,7 @@ def test_live_validator_requires_task_and_exact_candidate_identity(
     identity = _identity(source_commit)
     identity_path = tmp_path / "identity.json"
     identity_path.write_text(json.dumps(identity) + "\n", encoding="ascii")
-    identity_path.chmod(0o400)
+    identity_path.chmod(0o444)
     live_path = tmp_path / "live.json"
     live_path.write_text(json.dumps(_live(identity, instance_id)) + "\n", encoding="ascii")
 
@@ -277,6 +279,16 @@ def test_live_validator_requires_task_and_exact_candidate_identity(
     assert result["raw_byte_mismatches"] == 0
     assert result["performance_measurement"] is False
     assert result["production_enabled"] is False
+
+    identity_path.chmod(0o644)
+    with pytest.raises(module.GateError, match="mode is not 0444"):
+        module.verify(
+            live_result=live_path,
+            identity_path=identity_path,
+            expected_source_commit=source_commit,
+            expected_instance_id=instance_id,
+        )
+    identity_path.chmod(0o444)
 
     tampered = _live(identity, instance_id)
     tampered["task_marker"] = "swe_verified:django__django-10000"

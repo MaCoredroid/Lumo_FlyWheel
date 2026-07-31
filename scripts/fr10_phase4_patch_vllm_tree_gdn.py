@@ -22642,7 +22642,7 @@ def _fr13_dfwd_unified_bm8_candidate_identity():
     if (
         not _stat.S_ISREG(metadata.st_mode)
         or metadata.st_nlink != 1
-        or _stat.S_IMODE(metadata.st_mode) != 0o400
+        or _stat.S_IMODE(metadata.st_mode) != 0o444
         or metadata.st_size != len(raw.encode("ascii"))
     ):
         raise RuntimeError(
