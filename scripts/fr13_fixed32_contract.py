@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import uuid
+from collections.abc import Mapping
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -71,6 +72,10 @@ FA2_REPO_RELATIVE = (
 )
 FA2_SHA256 = "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d"
 FA2_SIZE = 299_183_936
+QROW16_FA2_SHA256 = (
+    "35ba18c9bab4b37362aa3b26441e8a58edfcd3d0a75692fda90fc131a0b3307c"
+)
+QROW16_FA2_SIZE = 299_554_080
 CONTAINER_FA2_SOURCE = Path("/tmp/fr13_fork_fa2.so")
 CONTAINER_FA2_DESTINATION = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so"
@@ -2315,6 +2320,49 @@ def _distribution_files_record(distribution_name: str) -> dict[str, Any]:
     }
 
 
+def _expected_runtime_fa2_identity(
+    env: Mapping[str, str] | None = None,
+) -> tuple[int, str]:
+    env = os.environ if env is None else env
+    live = env.get("FR13_FA2_QROW16_LIVE_PAGED_AB", "0")
+    production = env.get("FR13_FA2_QROW16_PRODUCTION", "0")
+    for name, value in (
+        ("FR13_FA2_QROW16_LIVE_PAGED_AB", live),
+        ("FR13_FA2_QROW16_PRODUCTION", production),
+    ):
+        if value not in {"0", "1"}:
+            raise ContractError(f"{name} must be exactly 0 or 1")
+    if live == "1" and production == "1":
+        raise ContractError("qrow16 live and production selectors are mutually exclusive")
+    if live == "1" or production == "1":
+        declared_sha256 = env.get("FR13_FA2_QROW16_SO_SHA256", "")
+        if declared_sha256 != QROW16_FA2_SHA256:
+            raise ContractError(
+                "qrow16 runtime FA2 declaration is not the pinned candidate"
+            )
+        return QROW16_FA2_SIZE, QROW16_FA2_SHA256
+    return FA2_SIZE, FA2_SHA256
+
+
+def _require_built_runtime_fa2_identity(
+    source: dict[str, Any],
+    destination: dict[str, Any],
+    *,
+    env: Mapping[str, str] | None = None,
+) -> None:
+    expected_size, expected_sha256 = _expected_runtime_fa2_identity(env)
+    for record, expected_path in (
+        (source, str(CONTAINER_FA2_SOURCE)),
+        (destination, str(CONTAINER_FA2_DESTINATION)),
+    ):
+        if record != {
+            "path": expected_path,
+            "size": expected_size,
+            "sha256": expected_sha256,
+        }:
+            raise ContractError(f"container FA2 identity mismatch: {record}")
+
+
 def build_runtime_attestation() -> dict[str, Any]:
     from arctic_inference.suffix_decoding import SuffixDecodingCache
 
@@ -2326,9 +2374,7 @@ def build_runtime_attestation() -> dict[str, Any]:
     destination = _exact_file_record(
         CONTAINER_FA2_DESTINATION, display_path=str(CONTAINER_FA2_DESTINATION)
     )
-    for record in (source, destination):
-        if record["size"] != FA2_SIZE or record["sha256"] != FA2_SHA256:
-            raise ContractError(f"container FA2 identity mismatch: {record}")
+    _require_built_runtime_fa2_identity(source, destination)
     if source["sha256"] != destination["sha256"]:
         raise ContractError("mounted and installed FA2 binaries differ")
     arctic = _distribution_files_record("arctic-inference")
@@ -2386,14 +2432,27 @@ def validate_runtime_attestation(payload: object) -> dict[str, Any]:
     fa2 = payload.get("forked_fa2")
     if not isinstance(fa2, dict) or fa2.get("byte_identical") is not True:
         raise ContractError("runtime attestation does not prove FA2 byte identity")
-    for key in ("source", "destination"):
-        record = fa2.get(key)
+    source = fa2.get("source")
+    destination = fa2.get("destination")
+    known_identities = {
+        (FA2_SIZE, FA2_SHA256),
+        (QROW16_FA2_SIZE, QROW16_FA2_SHA256),
+    }
+    for key, record, expected_path in (
+        ("source", source, str(CONTAINER_FA2_SOURCE)),
+        ("destination", destination, str(CONTAINER_FA2_DESTINATION)),
+    ):
         if (
             not isinstance(record, dict)
-            or record.get("size") != FA2_SIZE
-            or record.get("sha256") != FA2_SHA256
+            or record.get("path") != expected_path
+            or (record.get("size"), record.get("sha256")) not in known_identities
         ):
             raise ContractError(f"runtime attestation {key} FA2 mismatch")
+    if (
+        source.get("size") != destination.get("size")
+        or source.get("sha256") != destination.get("sha256")
+    ):
+        raise ContractError("runtime attestation FA2 source/destination mismatch")
     arctic = payload.get("arctic")
     if (
         not isinstance(arctic, dict)
