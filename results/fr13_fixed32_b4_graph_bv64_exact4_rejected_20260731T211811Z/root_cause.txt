@@ -1,0 +1,17 @@
+classification: zero-task boot-capacity rejection
+source_commit: 6bbafd5caee2d95081ec049faeaa2a2d1b4743a5
+repair_commit: d46b40dac
+
+Observed sequence:
+1. The exact4 B4 engine loaded the target and MTP weights.
+2. vLLM profiled PIECEWISE=8 and FULL=4 CUDA-graph memory.
+3. vLLM reported 6.45 GiB available for KV cache.
+4. The 131072-token model contract required at least 15.07 GiB.
+5. EngineCore rejected startup before health, graph capture, or any task.
+
+The failure does not establish a BV64 byte mismatch or performance result.
+There were no real-task events and no graph PASS.
+
+The recovery keeps MAX_MODEL_LEN=131072 and exact4 B4 unchanged. Fixed32 B4
+now supplies --kv-cache-memory-bytes 21474836480, matching both graph-gate and
+paired timing arms. B1 retains the existing automatic memory profile.

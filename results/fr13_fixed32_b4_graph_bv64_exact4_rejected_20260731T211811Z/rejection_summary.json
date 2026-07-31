@@ -1,0 +1,47 @@
+{
+  "schema": "fr13.fixed32.b4_graph_bv64.rejection.v1",
+  "status": "rejected",
+  "classification": "zero_task_boot_capacity",
+  "source_commit": "6bbafd5caee2d95081ec049faeaa2a2d1b4743a5",
+  "repair_commit": "d46b40dac",
+  "workload": {
+    "suite": "SWE-Verified",
+    "task_set": "canonical_exact4",
+    "batch_size": 4,
+    "concurrency": 4,
+    "max_model_len": 131072
+  },
+  "candidate": {
+    "kernel": "fixed32_batch_gdn_bv_v2",
+    "reference_bv": 8,
+    "candidate_bv": 64,
+    "reference_served": true
+  },
+  "failure": {
+    "stage": "engine_boot_before_health",
+    "serve_rc": 2,
+    "available_kv_cache_gib": 6.45,
+    "required_kv_cache_gib": 15.07,
+    "tasks_started": 0,
+    "graph_captures_completed": 0,
+    "candidate_records": 0
+  },
+  "claim_boundary": {
+    "kernel_correctness": false,
+    "timing": false,
+    "throughput": false,
+    "floor_acceptance": false
+  },
+  "integrity": {
+    "runtime_manifest_equal": true,
+    "external_manifest_equal": true,
+    "docker_containers_after_manual_cleanup": 0,
+    "compute_processes_after_manual_cleanup": 0
+  },
+  "recovery": {
+    "kv_cache_memory_bytes": 21474836480,
+    "max_model_len_unchanged": true,
+    "task_set_unchanged": true,
+    "batch_and_concurrency_unchanged": true
+  }
+}
