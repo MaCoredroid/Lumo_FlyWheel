@@ -1,0 +1,72 @@
+{
+  "schema": "fr13.fixed32.b4_gdn_livegate_readiness.v1",
+  "created_utc": "2026-07-31T16:50:46Z",
+  "status": "SOURCE_READY_GPU_NOT_RUN",
+  "branch": "agent/fixed32-b4-livegate-ready",
+  "base_commit": "e2a3e6b4ca5faa8d61b0d1018a519c035036ff1b",
+  "code_commit": "35758a4a6a2c6a83e1d9232edd08519e53961f40",
+  "canonical_exact4_subset": {
+    "path": "config/fr13_fixed32/subset_b4_four.json",
+    "sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "task_count": 4,
+    "required_concurrency": 4,
+    "required_max_num_seqs": 4
+  },
+  "diagnostic_runner": "scripts/fr13_run_b4_gdn_wide_live_gate.sh",
+  "default_off": true,
+  "reference_always_served": true,
+  "b1_route": "stock_per_request_bv8",
+  "candidate_batches": [2, 3, 4],
+  "formal_pass_batch": 4,
+  "candidate_bv": [16, 32, 64, 128],
+  "reference_bv": 8,
+  "physical_rows_per_request": 32,
+  "b4_launch_contract": {
+    "reference_launches_per_layer": 8,
+    "candidate_launches_per_layer": 2,
+    "layers": 48,
+    "reference_launches_per_event": 384,
+    "candidate_launches_per_event": 96,
+    "launches_removed_per_event": 288,
+    "latency_inference_permitted": false
+  },
+  "gate": {
+    "authenticated_ingress_marker": true,
+    "first_publisher_owned": true,
+    "engine_ledger_cross_bound": true,
+    "batch_layer_state_isolated": true,
+    "all_48_b4_layers_required": true,
+    "raw_byte_comparison_relaxed": false,
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false
+  },
+  "production": {
+    "enabled": false,
+    "deploy_ready": false,
+    "blocker": "B4 PASS is batch-bound; mixed B2/B3 production routing is not authorized"
+  },
+  "verification": {
+    "targeted_and_integration": {
+      "passed": 113,
+      "failed": 0
+    },
+    "full_fixed32_cuda_disabled": {
+      "passed": 609,
+      "skipped": 8,
+      "deselected": 1,
+      "failed": 0
+    },
+    "python_compile": "pass",
+    "ruff_relevant_checks": "pass",
+    "shell_syntax": "pass",
+    "git_show_check": "pass"
+  },
+  "gpu_used": false,
+  "docker_used": false,
+  "real_swe_verified_run": false,
+  "b4_byte_parity_claim": false,
+  "b4_performance_claim": false,
+  "acceptance_claim": false,
+  "hardware_floor_claim": false
+}
+
