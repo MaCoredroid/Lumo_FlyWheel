@@ -1,0 +1,32 @@
+{
+  "schema": "fr13.fixed32.batched_gdn_wide_bv.verification.v1",
+  "code_commit": "df7494658ce160411ab7dfadffd6394895e0c61a",
+  "commands": [
+    {
+      "command": "bash -n scripts/fr13_launch_forked_fa2_tree_server.sh",
+      "result": "pass"
+    },
+    {
+      "command": "python -m py_compile src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py tests/test_fr13_fixed32_gdn_batch_wide_bv.py",
+      "result": "pass"
+    },
+    {
+      "command": "python -m ruff check src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py tests/test_fr13_fixed32_gdn_batch_wide_bv.py",
+      "result": "pass"
+    },
+    {
+      "command": "python -m pytest -q tests/test_fr13_fixed32_gdn_batch_launch.py tests/test_fr13_fixed32_gdn_batch_byte_ab.py tests/test_fr13_fixed32_gdn_batch_wide_bv.py tests/test_fr13_fixed32_gdn_path_bv_live_gate.py",
+      "result": "63 passed"
+    },
+    {
+      "command": "python -m pytest -q tests/test_fr13_fixed32*.py -k 'not terminal_engine_ledger_snapshot_is_private_fresh_and_attested and not fixed32_runtime_manifest_includes_qwen_settings'",
+      "result": "589 passed, 8 skipped, 10 deselected"
+    }
+  ],
+  "known_environment_deselections": [
+    "terminal_engine_ledger_snapshot_is_private_fresh_and_attested",
+    "fixed32_runtime_manifest_includes_qwen_settings"
+  ],
+  "gpu_used": false,
+  "docker_used": false
+}

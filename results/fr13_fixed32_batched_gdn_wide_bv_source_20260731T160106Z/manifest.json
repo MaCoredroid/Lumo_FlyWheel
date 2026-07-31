@@ -1,0 +1,75 @@
+{
+  "schema": "fr13.fixed32.batched_gdn_wide_bv.source.v1",
+  "created_utc": "2026-07-31T16:01:06Z",
+  "status": "SOURCE_READY_GPU_NOT_RUN",
+  "branch": "agent/fixed32-b4-wide-bv",
+  "base_commit": "43d0398e513b6a1ffbf134dddc5dde0253e19995",
+  "code_commit": "df7494658ce160411ab7dfadffd6394895e0c61a",
+  "default_off": true,
+  "b1_behavior_changed": false,
+  "fixed32_contract": {
+    "batch_sizes": [2, 3, 4],
+    "physical_rows_per_request": 32,
+    "schedule_levels": 2,
+    "physical_launches_per_layer": 2,
+    "level_grid_z": ["B", "11*B"],
+    "candidate_bv": [16, 32, 64, 128],
+    "reference_bv": 8,
+    "b1_served_bv": 8
+  },
+  "diagnostic": {
+    "real_swe_verified_event_required": true,
+    "formal_b4_exact4_only": true,
+    "eager_only": true,
+    "reference_restored_and_served": true,
+    "all_48_layers_required_for_pass": true,
+    "compared_byte_surfaces": [
+      "out",
+      "ring_k",
+      "ring_v",
+      "ring_a",
+      "ring_b",
+      "state_export_compact",
+      "state_export_untouched_tail",
+      "flags",
+      "invocation_counter"
+    ]
+  },
+  "production": {
+    "source_bound_pass_required": true,
+    "candidate_bv_bound": true,
+    "batch_bound": true,
+    "physical_rows_bound": true,
+    "fallback_permitted": false
+  },
+  "external_live_risk": {
+    "route": "separate_b1_path_bv64_gate",
+    "status": "mismatch_reference_restored",
+    "first_record": 0,
+    "mismatched_surface": "export",
+    "combined_b4_inference_permitted": false,
+    "combined_production_remains_unarmed": true
+  },
+  "verification": {
+    "launcher_bash_syntax": "pass",
+    "python_compile": "pass",
+    "ruff_changed_source": "pass",
+    "focused": {
+      "passed": 63,
+      "failed": 0
+    },
+    "broad_source_relevant": {
+      "passed": 589,
+      "skipped": 8,
+      "deselected_known_environment_prerequisites": 10,
+      "failed": 0
+    }
+  },
+  "gpu_used": false,
+  "docker_used": false,
+  "real_swe_verified_run": false,
+  "byte_parity_claim": false,
+  "performance_claim": false,
+  "acceptance_claim": false,
+  "hardware_floor_claim": false
+}
