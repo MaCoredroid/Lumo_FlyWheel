@@ -1,0 +1,4 @@
+1fa84cebb3a94d8908f48c57277a27b2e53de935d9879219e61d4db5c107025e  README.md
+d2b22434346022d24c35980f554fb90af2d2910a8ca79d722a21589ac489995d  candidate.json
+1fd5e5979a0cdecacc5959d20cd55e0f0a518025e34258a9e557fe3632cd7f34  ../../scripts/fr13_patch_cutlass_fixed32_wave.py
+ed61d84d56498469307017842c666f8429131238fdff2a20f5f62126cabfd1d3  ../../tests/test_fr13_cutlass_fixed32_wave_patch.py

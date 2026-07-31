@@ -1,0 +1,282 @@
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+from pathlib import Path
+
+import pytest
+
+
+def _module():
+    path = Path("scripts/fr13_patch_cutlass_fixed32_wave.py")
+    spec = importlib.util.spec_from_file_location("fr13_cutlass_wave_patch", path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _source_fixture(module) -> str:
+    return f"""{module.INCLUDE_ANCHOR}
+namespace vllm {{
+using namespace cute;
+
+template <class OutType, int ScaleGranularityM,
+          int ScaleGranularityN, int ScaleGranularityK,
+          class MmaTileShape, class ClusterShape,
+{module.TEMPLATE_ANCHOR}  static constexpr bool swap_ab = swap_ab_;
+  using CollectiveEpilogue = FakeEpilogue;
+  using StageCountType = cutlass::gemm::collective::StageCountAuto;
+  using CollectiveMainloop = conditional_t<swap_ab,
+      FakeBuilder<
+          cutlass::gemm::collective::StageCountAutoCarveout<0>,
+          MainloopScheduler
+      >::CollectiveOp,
+      FakeBuilder<
+          cutlass::gemm::collective::StageCountAutoCarveout<0>,
+          MainloopScheduler
+      >::CollectiveOp>;
+{module.KERNEL_ANCHOR}
+  struct GemmKernel : public KernelType {{}};
+}};
+
+template <typename OutType>
+struct sm120_blockwise_fp8_config_swapab {{}};
+
+{module.CONFIG_ANCHOR}                                   torch::stable::Tensor const& b,
+                                   torch::stable::Tensor const& a_scales,
+                                   torch::stable::Tensor const& b_scales) {{
+  using GemmKernel = typename Gemm::GemmKernel;
+  auto prob_shape = FakeProblemShape{{}};
+  auto mainloop_args = FakeMainloopArguments{{}};
+  auto epilogue_args = FakeEpilogueArguments{{}};
+{module.CALLER_ANCHOR}}}
+
+template <typename OutType>
+void cutlass_gemm_blockwise_sm120_fp8_dispatch(
+    torch::stable::Tensor& out, torch::stable::Tensor const& a,
+    torch::stable::Tensor const& b, torch::stable::Tensor const& a_scales,
+    torch::stable::Tensor const& b_scales) {{
+{module.DISPATCH_ANCHOR}}}
+
+}}  // namespace vllm
+"""
+
+
+def test_patch_targets_exact_libtorch_stable_dispatch() -> None:
+    module = _module()
+
+    assert module.TARGET_RELATIVE_PATH == Path(
+        "csrc/libtorch_stable/quantization/w8a8/cutlass/c3x/"
+        "scaled_mm_blockwise_sm120_fp8_dispatch.cuh"
+    )
+    assert module.EXPECTED_UNPATCHED_SHA256 == (
+        "6e1df3f4701f58f233b3831b848c7bbf7936e6cb34b3bc28ded208fd66c48a7f"
+    )
+    assert module.EXPECTED_CMAKE_SHA256 == (
+        "b12cd47f5761442551d6e1966e8a37ad94175382c1b014d2b65f67b74fbb6e3b"
+    )
+    assert module.CUTLASS_TAG_COMMIT == (
+        "da5e086dab31d63815acafdac9a9c5893b1c69e2"
+    )
+
+
+def test_patch_is_default_off_and_shape_gated() -> None:
+    module = _module()
+    patched, changed = module.patch_text(_source_fixture(module))
+
+    assert changed
+    assert 'std::getenv("FR13_FIXED32_CUTLASS_WAVE")' in patched
+    assert 'std::strcmp(value, "streamk_coop64") == 0' in patched
+    assert 'std::strcmp(value, "streamk_coop128") == 0' in patched
+    assert "return fixed32_cutlass_wave_variant::stock;" in patched
+    for rows in (32, 64, 96, 128):
+        assert f"m == {rows}" in patched
+    for n, k in (
+        (34816, 5120),
+        (5120, 17408),
+        (5120, 6144),
+        (16384, 5120),
+        (8192, 5120),
+    ):
+        assert f"n == {n} && k == {k}" in patched
+
+
+def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    assert patched.count("cutlass::gemm::StreamKScheduler") == 3
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 3
+    assert "PingpongSm120" not in module.CONFIG_REPLACEMENT
+    assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
+    assert "using TileShape = Shape<_128, _32, _128>;" in patched
+    assert "OutType, 1, 128, 128, TileShape, ClusterShape" in patched
+    assert "using TileShape = Shape<_128, _128, _128>;" in patched
+    assert "using TileShape = Shape<_64, _128, _128>;" in patched
+    assert "StageCount<2>" not in patched
+    assert "StageCountAutoCarveout<0>" in patched
+    assert "ElementAccumulator = float" not in module.CONFIG_REPLACEMENT
+    assert "ElementD" not in module.CONFIG_REPLACEMENT
+
+
+def test_streamk_is_the_only_kernel_template_change() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    assert "class TileScheduler = void" in patched
+    assert "static constexpr bool use_stream_k" in patched
+    assert "CollectiveMainloop, CollectiveEpilogue,\n      TileScheduler>>" in patched
+    assert "typename GemmKernel::TileSchedulerArguments scheduler{}" in patched
+    assert "query_device_multiprocessor_count" in patched
+    assert "Deterministic" in patched
+    assert "DecompositionMode::Heuristic" not in patched
+    assert "decltype(scheduler.decomposition_mode)::Heuristic" in patched
+
+
+def test_stock_dispatch_text_is_retained() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    assert "bool swap_ab = (M <= 64) || (M % 4 != 0);" in patched
+    assert "sm120_blockwise_fp8_config_pingpong<OutType>::Gemm" in patched
+    assert "sm120_blockwise_fp8_config_default<OutType>::Gemm" in patched
+    assert "sm120_blockwise_fp8_config_swapab<OutType>::Gemm" in patched
+
+
+def test_patch_is_idempotent() -> None:
+    module = _module()
+    first, changed = module.patch_text(_source_fixture(module))
+    second, changed_again = module.patch_text(first)
+
+    assert changed
+    assert not changed_again
+    assert second == first
+    assert first.count(module.MARKER) == 1
+
+
+def test_patch_fails_closed_on_anchor_drift() -> None:
+    module = _module()
+    source = _source_fixture(module).replace(
+        module.DISPATCH_ANCHOR, "  stock_dispatch_changed();\n"
+    )
+    with pytest.raises(RuntimeError, match="dispatch anchor"):
+        module.patch_text(source)
+
+
+def test_source_root_fails_closed_on_pinned_digest_drift(tmp_path: Path) -> None:
+    module = _module()
+    target = tmp_path / module.TARGET_RELATIVE_PATH
+    target.parent.mkdir(parents=True)
+    target.write_text(_source_fixture(module), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="dispatch SHA256 mismatch"):
+        module.patch_source_root(tmp_path)
+
+
+def _write_pinned_cmake(module, root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cmake_source = f"project(vllm)\n{module.EXPECTED_CUTLASS_REVISION_LINE}\n"
+    (root / module.CMAKE_RELATIVE_PATH).write_text(cmake_source, encoding="utf-8")
+    monkeypatch.setattr(
+        module,
+        "EXPECTED_CMAKE_SHA256",
+        hashlib.sha256(cmake_source.encode("utf-8")).hexdigest(),
+    )
+
+
+def test_source_root_applies_exact_pinned_digest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    source = _source_fixture(module)
+    target = tmp_path / module.TARGET_RELATIVE_PATH
+    target.parent.mkdir(parents=True)
+    target.write_text(source, encoding="utf-8")
+    monkeypatch.setattr(
+        module,
+        "EXPECTED_UNPATCHED_SHA256",
+        hashlib.sha256(source.encode("utf-8")).hexdigest(),
+    )
+    _write_pinned_cmake(module, tmp_path, monkeypatch)
+
+    assert module.patch_source_root(tmp_path)
+    assert module.MARKER in target.read_text(encoding="utf-8")
+    assert not module.patch_source_root(tmp_path)
+
+
+def test_source_root_fails_closed_on_cutlass_pin_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    source = _source_fixture(module)
+    target = tmp_path / module.TARGET_RELATIVE_PATH
+    target.parent.mkdir(parents=True)
+    target.write_text(source, encoding="utf-8")
+    monkeypatch.setattr(
+        module,
+        "EXPECTED_UNPATCHED_SHA256",
+        hashlib.sha256(source.encode("utf-8")).hexdigest(),
+    )
+    (tmp_path / module.CMAKE_RELATIVE_PATH).write_text(
+        'project(vllm)\nset(CUTLASS_REVISION "v4.4.1")\n', encoding="utf-8"
+    )
+
+    with pytest.raises(RuntimeError, match="CMakeLists SHA256 mismatch"):
+        module.patch_source_root(tmp_path)
+
+
+def test_cutlass_root_validates_headers_and_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    relative_path = Path("include/cutlass/pinned.hpp")
+    content = b"pinned CUTLASS header\n"
+    target = tmp_path / relative_path
+    target.parent.mkdir(parents=True)
+    target.write_bytes(content)
+    monkeypatch.setattr(
+        module,
+        "CUTLASS_REQUIRED_SHA256",
+        {relative_path: hashlib.sha256(content).hexdigest()},
+    )
+    monkeypatch.setattr(
+        module.subprocess,
+        "check_output",
+        lambda *args, **kwargs: module.CUTLASS_TAG_COMMIT + "\n",
+    )
+
+    module.validate_cutlass_root(tmp_path)
+
+
+def test_cutlass_root_fails_closed_on_header_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    relative_path = Path("include/cutlass/pinned.hpp")
+    target = tmp_path / relative_path
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"modified\n")
+    monkeypatch.setattr(
+        module,
+        "CUTLASS_REQUIRED_SHA256",
+        {relative_path: hashlib.sha256(b"expected\n").hexdigest()},
+    )
+
+    with pytest.raises(RuntimeError, match="CUTLASS SHA256 mismatch"):
+        module.validate_cutlass_root(tmp_path)
+
+
+def test_cutlass_root_fails_closed_on_commit_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    monkeypatch.setattr(module, "CUTLASS_REQUIRED_SHA256", {})
+    monkeypatch.setattr(
+        module.subprocess,
+        "check_output",
+        lambda *args, **kwargs: "0" * 40 + "\n",
+    )
+
+    with pytest.raises(RuntimeError, match="CUTLASS commit mismatch"):
+        module.validate_cutlass_root(tmp_path)
