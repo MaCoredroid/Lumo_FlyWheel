@@ -7,7 +7,13 @@ cd "$REPO"
 
 : "${RUNROOT:?set RUNROOT to a new output directory}"
 : "${TAG:?set TAG to a unique run tag}"
-: "${FORKED_FA2_SO:?set FORKED_FA2_SO to the qrow16 candidate}"
+: "${FORKED_FA2_SO:?set FORKED_FA2_SO to the exact FA2 shared object}"
+
+FR13_GATE_QROW16=${FR13_GATE_QROW16:-1}
+case "$FR13_GATE_QROW16" in
+  0|1) ;;
+  *) echo "FR13_GATE_QROW16 must be 0 or 1" >&2; exit 2 ;;
+esac
 
 ARM="hydra27_fixed32_${TAG}"
 SUBSET=config/fr13_fixed32/subset_b1_kernel_gate_one.json
@@ -54,7 +60,7 @@ OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
   FR13_FIXED32_GDN_PATH_BV_CANDIDATE=64 \
   FORKED_FA2_SO="$FORKED_FA2_SO" \
   FR13_FA2_QROW16_SO_SHA256="$FA2_SHA" \
-  FR13_FA2_QROW16_LIVE_PAGED_AB=1 \
+  FR13_FA2_QROW16_LIVE_PAGED_AB="$FR13_GATE_QROW16" \
   FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID=astropy__astropy-12907 \
   bash scripts/fr13_bigdenom_swe_serve_variant.sh \
     "$ARM" hydra27_fixed32 "$SUBSET" \
