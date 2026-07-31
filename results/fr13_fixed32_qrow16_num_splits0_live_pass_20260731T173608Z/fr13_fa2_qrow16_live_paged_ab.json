@@ -1,0 +1,64 @@
+{
+  "candidate_dispatch": "qrow16 internal exact-geometry require",
+  "candidate_so_sha256": "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86",
+  "concurrency": 1,
+  "graph_id": 274035584346128,
+  "instance_id": "astropy__astropy-12907",
+  "layer_name": "language_model.model.layers.3.self_attn.attn",
+  "lse": {
+    "bytes": 3072,
+    "candidate_sha256": "2adbdcffb3aa7d67ebe4327e14801b94ed9f4276bc6a40af9ec3347af4d02068",
+    "dtype": "torch.float32",
+    "raw_byte_mismatches": 0,
+    "stock_sha256": "2adbdcffb3aa7d67ebe4327e14801b94ed9f4276bc6a40af9ec3347af4d02068"
+  },
+  "operands": {
+    "block_table_shape": [
+      1,
+      128
+    ],
+    "key_cache_shape": [
+      639,
+      1024,
+      4,
+      256
+    ],
+    "max_seqlen_k": 131072,
+    "query_shape": [
+      32,
+      24,
+      256
+    ],
+    "query_start_loc": [
+      0,
+      32
+    ],
+    "seq_lens": [
+      22901
+    ],
+    "tree_bias_shape": [
+      32,
+      32
+    ],
+    "value_cache_shape": [
+      639,
+      1024,
+      4,
+      256
+    ]
+  },
+  "output": {
+    "bytes": 393216,
+    "candidate_sha256": "058930e0f5b77695f3f37ef53540dee09bf36996f32143074c5c1e14011f04f4",
+    "dtype": "torch.bfloat16",
+    "raw_byte_mismatches": 0,
+    "stock_sha256": "058930e0f5b77695f3f37ef53540dee09bf36996f32143074c5c1e14011f04f4"
+  },
+  "performance_measurement": false,
+  "physical_rows": 32,
+  "runtime_mode": "FULL",
+  "schema": "fr13.fixed32.fa2_qrow16_live_paged_ab.v1",
+  "served_return": "stock captured graph output unchanged",
+  "status": "PASS",
+  "suite": "SWE-Verified"
+}
