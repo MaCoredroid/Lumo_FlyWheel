@@ -29,6 +29,13 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import fr13_fixed32_contract as fixed32_contract  # noqa: E402
+from fr13_hardware_floor_ledger import (  # noqa: E402
+    BANDWIDTH_BYTES_PER_S,
+    FIXED32_MANDATORY_WEIGHT_BYTES,
+    FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
+    FIXED32_SLO_CAP_MS,
+    FIXED32_SLO_MULTIPLIER,
+)
 from fr13_fixed32_contract import (  # noqa: E402
     CONTAINER_FA2_DESTINATION,
     ContractError as Fixed32ContractError,
@@ -219,9 +226,9 @@ FIXED32_MODE_SPECS = {
     },
 }
 
-WEIGHT_STREAM_LOWER_BOUND_MS = 98.6
+WEIGHT_STREAM_LOWER_BOUND_MS = FIXED32_MANDATORY_WEIGHT_FLOOR_MS
 COMPUTE_MS_PER_ROW = 0.54
-SLO_MULTIPLIER = 1.15
+SLO_MULTIPLIER = float(FIXED32_SLO_MULTIPLIER)
 REQUIRED_COVERAGE = 1.0
 MIN_RETAINED_WALL_FRACTION = 0.99
 MIN_FULL_GRAPH_FRACTION = 0.99
@@ -3890,7 +3897,9 @@ def fixed32_required_env(
             "FR13_SFWD_GPU_TIMER_DUMP_S": "0",
             "FR13_SFWD_SAMPLES_DUMP_S": "30",
             "FR13_SPAN_GPU_TIMER_DUMP_S": "0",
-            "FR13_WEIGHT_FLOOR_MS": "98.6",
+            "FR13_WEIGHT_FLOOR_MS": (
+                f"{FIXED32_MANDATORY_WEIGHT_FLOOR_MS:.9f}"
+            ),
             "FR13_COMPUTE_MS_PER_ROW": "0.54",
             "FR13_APC_CONV_FIX": "1",
             "FR13_APC_CONV_SNAPSHOT": "1",
@@ -5518,11 +5527,10 @@ def reconcile_counter_interval(
 
 
 def legacy_slo(rows_per_step: float) -> tuple[float, float]:
-    reference = max(
-        WEIGHT_STREAM_LOWER_BOUND_MS,
-        COMPUTE_MS_PER_ROW * rows_per_step,
-    )
-    return reference, SLO_MULTIPLIER * reference
+    compute_reference = COMPUTE_MS_PER_ROW * rows_per_step
+    if compute_reference <= WEIGHT_STREAM_LOWER_BOUND_MS:
+        return WEIGHT_STREAM_LOWER_BOUND_MS, FIXED32_SLO_CAP_MS
+    return compute_reference, SLO_MULTIPLIER * compute_reference
 
 
 def cluster_summary(values: list[float]) -> dict[str, Any]:
@@ -5835,11 +5843,15 @@ def b4_arm_statistics(
             WEIGHT_STREAM_LOWER_BOUND_MS,
             COMPUTE_MS_PER_ROW * rows_boot,
         )
-        bootstrap_excess = wall_boot - SLO_MULTIPLIER * bootstrap_reference
-        sample_excess = float(wall_ms.mean()) - SLO_MULTIPLIER * max(
-            WEIGHT_STREAM_LOWER_BOUND_MS,
-            COMPUTE_MS_PER_ROW * float(wall_rows.mean()),
+        bootstrap_limit = np.where(
+            COMPUTE_MS_PER_ROW * rows_boot <= WEIGHT_STREAM_LOWER_BOUND_MS,
+            FIXED32_SLO_CAP_MS,
+            SLO_MULTIPLIER * bootstrap_reference,
         )
+        bootstrap_excess = wall_boot - bootstrap_limit
+        sample_excess = float(wall_ms.mean()) - legacy_slo(
+            float(wall_rows.mean())
+        )[1]
         sensitivity.append(
             {
                 "block_steps": block,
@@ -7171,13 +7183,23 @@ def reduce_campaign(
         "fixed32_work_census": work_census,
         "slo_definition": {
             "name": "legacy_aggressive_weight_stream_slo",
-            "formula": ("wall_ms_per_step <= 1.15 * max(98.6, 0.54 * rows_per_step)"),
+            "formula": (
+                "wall_ms_per_step <= 1.15 * max("
+                f"{FIXED32_MANDATORY_WEIGHT_FLOOR_MS:.9f}, "
+                "0.54 * rows_per_step)"
+            ),
+            "mandatory_weight_bytes": FIXED32_MANDATORY_WEIGHT_BYTES,
+            "bandwidth_bytes_per_s": BANDWIDTH_BYTES_PER_S,
             "weight_stream_lower_bound_ms": WEIGHT_STREAM_LOWER_BOUND_MS,
             "compute_ms_per_row": COMPUTE_MS_PER_ROW,
             "multiplier": SLO_MULTIPLIER,
+            "weight_bound_one_sided_u95_cap_ms": FIXED32_SLO_CAP_MS,
             "interpretation": (
-                "98.6 ms is a weight-stream lower bound used by an aggressive "
-                "legacy SLO; it is not a measured full physical hardware floor"
+                "The weight term is the optimistic mandatory-weight-read-only "
+                "lower bound for one fixed32 event: target, verifier head, five "
+                "MTP forwards, and five 64K drafter-head reads. It excludes "
+                "nonweight traffic and execution costs, so it is not a measured "
+                "full physical hardware floor."
             ),
         },
         "uncertainty_model": (

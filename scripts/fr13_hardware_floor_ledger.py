@@ -22,6 +22,7 @@ POST_ROOT_GRAPH_MTP_FORWARD_PASSES = 4
 MTP_FORWARD_PASSES = (
     INITIAL_MTP_FORWARD_PASSES + POST_ROOT_GRAPH_MTP_FORWARD_PASSES
 )
+FIXED32_SLO_MULTIPLIER = Decimal("1.15")
 
 
 def _floor_ms(byte_count: int) -> float:
@@ -33,28 +34,37 @@ def _floor_ms(byte_count: int) -> float:
     return float(value.quantize(Decimal("0.000000001")))
 
 
+FULL_HEAD_BYTES = FULL_VOCAB_ROWS * DRAFTER_HIDDEN_SIZE * HEAD_ELEMENT_BYTES
+SUBSET_HEAD_BYTES = DRAFT_VOCAB_ROWS * DRAFTER_HIDDEN_SIZE * HEAD_ELEMENT_BYTES
+MTP_FORWARD_BYTES = MTP_FORWARD_BYTES_PER_PASS * MTP_FORWARD_PASSES
+CURRENT_DRAFTER_HEAD_BYTES = (
+    FULL_HEAD_BYTES
+    + POST_ROOT_GRAPH_MTP_FORWARD_PASSES * SUBSET_HEAD_BYTES
+)
+ROOT_64K_DRAFTER_HEAD_BYTES = MTP_FORWARD_PASSES * SUBSET_HEAD_BYTES
+LEGACY_MANDATORY_WEIGHT_BYTES = TARGET_MODEL_BYTES + FULL_HEAD_BYTES
+CURRENT_MANDATORY_WEIGHT_BYTES = (
+    LEGACY_MANDATORY_WEIGHT_BYTES
+    + MTP_FORWARD_BYTES
+    + CURRENT_DRAFTER_HEAD_BYTES
+)
+FIXED32_MANDATORY_WEIGHT_BYTES = (
+    LEGACY_MANDATORY_WEIGHT_BYTES
+    + MTP_FORWARD_BYTES
+    + ROOT_64K_DRAFTER_HEAD_BYTES
+)
+FIXED32_MANDATORY_WEIGHT_FLOOR_MS = _floor_ms(FIXED32_MANDATORY_WEIGHT_BYTES)
+FIXED32_SLO_CAP_MS = float(
+    (
+        Decimal(FIXED32_MANDATORY_WEIGHT_BYTES)
+        * Decimal(1_000)
+        / Decimal(BANDWIDTH_BYTES_PER_S)
+        * FIXED32_SLO_MULTIPLIER
+    ).quantize(Decimal("0.000000001"))
+)
+
+
 def build_ledger() -> dict[str, Any]:
-    full_head_bytes = (
-        FULL_VOCAB_ROWS * DRAFTER_HIDDEN_SIZE * HEAD_ELEMENT_BYTES
-    )
-    subset_head_bytes = (
-        DRAFT_VOCAB_ROWS * DRAFTER_HIDDEN_SIZE * HEAD_ELEMENT_BYTES
-    )
-    mtp_forward_bytes = MTP_FORWARD_BYTES_PER_PASS * MTP_FORWARD_PASSES
-    current_drafter_head_bytes = (
-        full_head_bytes
-        + POST_ROOT_GRAPH_MTP_FORWARD_PASSES * subset_head_bytes
-    )
-    root_64k_drafter_head_bytes = MTP_FORWARD_PASSES * subset_head_bytes
-
-    legacy_bytes = TARGET_MODEL_BYTES + full_head_bytes
-    current_bytes = (
-        legacy_bytes + mtp_forward_bytes + current_drafter_head_bytes
-    )
-    root_64k_bytes = (
-        legacy_bytes + mtp_forward_bytes + root_64k_drafter_head_bytes
-    )
-
     return {
         "schema": "fr13.speculative_step_weight_ledger.v2",
         "bandwidth_bytes_per_s": BANDWIDTH_BYTES_PER_S,
@@ -75,19 +85,19 @@ def build_ledger() -> dict[str, Any]:
                 "source": "logical target-model weight tensor byte ledger",
             },
             "full_bf16_head": {
-                "bytes": full_head_bytes,
+                "bytes": FULL_HEAD_BYTES,
                 "element_bytes": HEAD_ELEMENT_BYTES,
                 "hidden_size": DRAFTER_HIDDEN_SIZE,
                 "rows": FULL_VOCAB_ROWS,
             },
             "draft_64k_bf16_head": {
-                "bytes": subset_head_bytes,
+                "bytes": SUBSET_HEAD_BYTES,
                 "element_bytes": HEAD_ELEMENT_BYTES,
                 "hidden_size": DRAFTER_HIDDEN_SIZE,
                 "rows": DRAFT_VOCAB_ROWS,
             },
             "mtp_forward": {
-                "bytes": mtp_forward_bytes,
+                "bytes": MTP_FORWARD_BYTES,
                 "bytes_per_pass": MTP_FORWARD_BYTES_PER_PASS,
                 "initial_passes": INITIAL_MTP_FORWARD_PASSES,
                 "passes": MTP_FORWARD_PASSES,
@@ -100,8 +110,10 @@ def build_ledger() -> dict[str, Any]:
         "scenarios": {
             "legacy_target_plus_verifier_head": {
                 "component_formula": "target_model + full_bf16_head",
-                "mandatory_weight_bytes": legacy_bytes,
-                "mandatory_weight_floor_ms": _floor_ms(legacy_bytes),
+                "mandatory_weight_bytes": LEGACY_MANDATORY_WEIGHT_BYTES,
+                "mandatory_weight_floor_ms": _floor_ms(
+                    LEGACY_MANDATORY_WEIGHT_BYTES
+                ),
                 "is_full_speculative_step_floor": False,
             },
             "current_one_full_plus_four_64k_draft_heads": {
@@ -109,9 +121,11 @@ def build_ledger() -> dict[str, Any]:
                     "target_model + full_bf16_head + mtp_forward + "
                     "full_bf16_head + 4 * draft_64k_bf16_head"
                 ),
-                "drafter_head_bytes": current_drafter_head_bytes,
-                "mandatory_weight_bytes": current_bytes,
-                "mandatory_weight_floor_ms": _floor_ms(current_bytes),
+                "drafter_head_bytes": CURRENT_DRAFTER_HEAD_BYTES,
+                "mandatory_weight_bytes": CURRENT_MANDATORY_WEIGHT_BYTES,
+                "mandatory_weight_floor_ms": _floor_ms(
+                    CURRENT_MANDATORY_WEIGHT_BYTES
+                ),
                 "nonweight_costs_included": False,
             },
             "root_64k_five_64k_draft_heads": {
@@ -119,9 +133,11 @@ def build_ledger() -> dict[str, Any]:
                     "target_model + full_bf16_head + mtp_forward + "
                     "5 * draft_64k_bf16_head"
                 ),
-                "drafter_head_bytes": root_64k_drafter_head_bytes,
-                "mandatory_weight_bytes": root_64k_bytes,
-                "mandatory_weight_floor_ms": _floor_ms(root_64k_bytes),
+                "drafter_head_bytes": ROOT_64K_DRAFTER_HEAD_BYTES,
+                "mandatory_weight_bytes": FIXED32_MANDATORY_WEIGHT_BYTES,
+                "mandatory_weight_floor_ms": (
+                    FIXED32_MANDATORY_WEIGHT_FLOOR_MS
+                ),
                 "nonweight_costs_included": False,
             },
         },

@@ -149,11 +149,22 @@ import json
 import math
 import os
 import statistics
+import sys
 import time
 import urllib.request
 from itertools import combinations
 from pathlib import Path
 from typing import Any
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from fr13_hardware_floor_ledger import (  # noqa: E402
+    BANDWIDTH_BYTES_PER_S,
+    FIXED32_MANDATORY_WEIGHT_BYTES,
+    FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
+)
 
 REPO = Path(__file__).resolve().parent.parent
 DEFAULT_ENDPOINT = "http://127.0.0.1:9950"
@@ -1625,10 +1636,15 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         (committed_per_event / wall_s_per_event)
         if (wall_s_per_event and committed_per_event) else None
     )
-    # Legacy FR13 lower-bound accounting: distance to one target weight stream.
-    # This reference excludes drafter/head weight reads, KV/state traffic, and
-    # auxiliary phases, so it is not a full speculative-step hardware floor.
-    _weight_floor_ms = float(os.environ.get("FR13_WEIGHT_FLOOR_MS", "98.6"))
+    # Corrected fixed32 lower-bound accounting includes every mandatory target,
+    # verifier-head, MTP, and drafter-head weight stream in one event. It remains
+    # optimistic because nonweight traffic and execution costs are excluded.
+    _weight_floor_ms = float(
+        os.environ.get(
+            "FR13_WEIGHT_FLOOR_MS",
+            f"{FIXED32_MANDATORY_WEIGHT_FLOOR_MS:.9f}",
+        )
+    )
     _events_per_step_f = events_per_step if events_per_step else None
     step_wall_ms = (
         wall_s_per_event * 1000.0 * _events_per_step_f
@@ -1638,10 +1654,10 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     # max(weight-read, GEMM-compute x token-rows). Weight read is B-invariant
     # (shared); compute = 2*params*rows / peak ~ 0.54 ms/row on GB10 (override
     # FR13_COMPUTE_MS_PER_ROW). rows/step = events_per_step x (tok_per_draft
-    # + 1 committed/bonus row). The tree (22 rows/event) crosses into
-    # compute-bound near B_eff~8; native (6 rows/event) stays weight-bound.
+    # + 1 committed/bonus row). Fixed32 is 32 rows/event: B1 is 17.28 ms and
+    # B4 is 69.12 ms, both below the corrected 119.658015414 ms weight term.
     # KV/state reads (context-dependent, cache-ON keeps contexts long) are
-    # NOT modeled — they live in the measured step wall.
+    # NOT modeled - they live in the measured step wall.
     _compute_ms_row = float(os.environ.get("FR13_COMPUTE_MS_PER_ROW", "0.54"))
     _tok_per_draft = (
         (agg[M_DRAFT_TOK] / agg[M_DRAFTS])
@@ -1821,26 +1837,27 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "measured_tps_fullstep_wall": measured_tps_fullstep_wall,
         "step_wall_ms": step_wall_ms,
         "weight_floor_ms": _weight_floor_ms,
+        "mandatory_weight_bytes": FIXED32_MANDATORY_WEIGHT_BYTES,
+        "weight_floor_bandwidth_bytes_per_s": BANDWIDTH_BYTES_PER_S,
         "compute_floor_ms": _compute_floor_ms,
         "rows_per_step": _rows_per_step,
         "floor_ms": _floor_ms,
         "floor_ratio": floor_ratio,
         "floor_reference_scope": (
-            "legacy_target_weight_stream_or_row_compute_lower_bound"
+            "fixed32_mandatory_weight_read_or_row_compute_lower_bound"
         ),
         "floor_is_full_step_hardware_floor": False,
         "floor_ratio_note": (
             "step_wall_ms / floor(B), where floor(B) = max(weight-read "
-            "98.6ms [FR13_WEIGHT_FLOOR_MS], compute 0.54ms/row x rows_per_step "
-            "[FR13_COMPUTE_MS_PER_ROW]) — DECODE-ONLY, B-aware (B-sweep "
-            "2026-07-25). rows_per_step = events_per_step x (tok_per_draft+1). "
-            "Weight read is co-residency-INVARIANT (shared); the tree "
-            "(22 rows/event) crosses to compute-bound near B_eff~8, native "
-            "(6 rows/event) stays weight-bound. KV/state reads are unmodeled "
-            "(context-dependent; cache-ON keeps contexts long), as are drafter "
-            "and auxiliary weight reads. Those costs live in the measured wall. "
-            "A ratio of 1.0 is only equality with this incomplete legacy lower "
-            "bound; it is not a physically complete hardware-floor step."
+            f"{_weight_floor_ms:.9f}ms [FR13_WEIGHT_FLOOR_MS], compute "
+            "0.54ms/row x rows_per_step [FR13_COMPUTE_MS_PER_ROW]). The "
+            f"weight term is {FIXED32_MANDATORY_WEIGHT_BYTES:,} mandatory bytes "
+            f"/ {BANDWIDTH_BYTES_PER_S:,} bytes/s and includes target, verifier "
+            "head, five MTP forwards, and five 64K drafter-head reads. It is an "
+            "optimistic weight-read-only lower bound: KV/state/activation traffic, "
+            "attention, scan, sampling, committer work, launches, synchronization, "
+            "and host gaps are excluded. A ratio of 1.0 is equality with that "
+            "lower bound, not a physically complete hardware-floor step."
         ),
         "measured_tps_fullstep_wall_note": (
             "committed_per_event / MEASURED wall per event (start-to-start deltas "

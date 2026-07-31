@@ -42,6 +42,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_fixed32_flush_protocol.py",
     "scripts/fr13_fixed32_contract.py",
     "scripts/fr13_fixed32_topology.py",
+    "scripts/fr13_hardware_floor_ledger.py",
     "scripts/fr13_launch_forked_fa2_tree_server.sh",
     "scripts/fr13_measure.py",
     "scripts/fr13_merged_drafter.py",

@@ -85,7 +85,10 @@ export FR13_CONV_COMMITTED_PATH=1
 export FR13_APC_COMMIT_TO_RUNNING_ROW=1
 export FR13_TREE_RUNROW_INIT=1
 export FR13_FLAGS_INKERNEL=1
-export FR13_WEIGHT_FLOOR_MS=98.6
+# Optimistic mandatory-weight-read floor only: 32,666,638,208 bytes / 273 GB/s.
+# The launcher contract pins this value, so an inherited legacy floor cannot
+# weaken a new fixed32 acceptance run.
+export FR13_WEIGHT_FLOOR_MS=119.658015414
 export FR13_COMPUTE_MS_PER_ROW=0.54
 export MAX_MODEL_LEN=131072
 export FR13_ENABLE_APC=1
