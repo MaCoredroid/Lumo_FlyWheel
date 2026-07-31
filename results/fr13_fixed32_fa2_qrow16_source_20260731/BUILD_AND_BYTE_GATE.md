@@ -10,7 +10,7 @@ releases the machine. This procedure does not authorize deployment or timing.
   299,183,936 bytes
 - Exact-safe launch header: `d9e9f4b92cb731d7955b514449e59b8e411bf7a0c929aafb454f2402d41fe976`
 - Qrow16 launch header after idempotent source application:
-  `59a4bcb49c77a255f155286e77379c3e3eaea908e44f38b501632cd7d1565053`
+  `88bfcc5b1c4bbe9b95e8747b0efd58f0938b67ebfcf64f7c7a517489f09961e2`
 - Unchanged suffix-early-out kernel header:
   `934e8c6c2e72c667f3cb0a8dc53b11c16a4eba8e3ac2b5811c882eff399ac3de`
 - Production image:
@@ -27,7 +27,7 @@ Run only after Hydra and any other measurement process has exited:
 ```bash
 set -euo pipefail
 
-REPO=/home/mark/shared/lumoFlyWheel-fa2-qrow16
+REPO=/home/mark/shared/lumoFlyWheel-b1-gate-bundle
 BASE_ROOT=/home/mark/shared/lumoFlyWheel-fa2-suffix-only/output/fr13_fa2_suffix_fc855e59_build/vllm-source
 OUT=$REPO/output/fr13_fa2_qrow16_build
 CAND_ROOT=$OUT/vllm-source
@@ -46,7 +46,7 @@ python3 "$REPO/scripts/fr13_patch_fa2_tree_bias.py" \
   --fa2-src "$CAND_FA2" --skip-python \
   --tree-bias-tile-earlyout --fixed32-query-tile16
 test "$(sha256sum "$CAND_FA2/csrc/flash_attn/src/flash_fwd_launch_template.h" | cut -d' ' -f1)" = \
-  59a4bcb49c77a255f155286e77379c3e3eaea908e44f38b501632cd7d1565053
+  88bfcc5b1c4bbe9b95e8747b0efd58f0938b67ebfcf64f7c7a517489f09961e2
 test "$(sha256sum "$CAND_FA2/csrc/flash_attn/src/flash_fwd_kernel.h" | cut -d' ' -f1)" = \
   934e8c6c2e72c667f3cb0a8dc53b11c16a4eba8e3ac2b5811c882eff399ac3de
 rm -f "$CAND_SO"
@@ -79,45 +79,31 @@ exports, undefined dynamic symbols, and `DT_NEEDED`. The CUDA symbol dump must
 contain the `256x16x64, 1 warp, Split=false` main kernel and no qrow16 combine
 specialization. The final Ninja dry run must report no work.
 
-## Real same-boot byte A/B
+## Real same-boot live-paged A/B
 
-The capture must come from one real SWE-Verified fixed32 B1 event on the pinned
-exact-safe SO. It must store compacted paged `key_cache`/`value_cache` (with its
-`block_table` remapped), `query`, `seq_lens`, `max_seq_len`, fp32 `tree_bias`,
-`scale`, optional `softcap`, and provenance. Provenance must name the
-SWE-Verified instance, concurrency 1, physical node count 32, and the pinned
-source SO hash. This is a correctness gate, not a performance probe.
-
-The gate calls the candidate at B1, then duplicates that exact request to B2
-and B4. `params.b != 1` forces both duplicate calls through the stock geometry
-inside the same loaded binary and CUDA process. The first request's output and
-fp32 LSE, plus all duplicate replicas, must be byte-identical:
+Run the bundle launcher with the exact candidate SO hash and exactly one real
+SWE-Verified task at B1. Do not use a capture file, dense/repacked KV, a probe,
+or a second process:
 
 ```bash
 set -euo pipefail
 
-REPO=/home/mark/shared/lumoFlyWheel-fa2-qrow16
-OUT=$REPO/output/fr13_fa2_qrow16_build
-CAND_SO=$OUT/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so
-CAPTURE=/absolute/path/to/real_swe_verified_fixed32_b1_paged_capture.pt
-RESULT=$OUT/qrow16_same_boot_byte_ab.json
-IMAGE=sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc
+export FORKED_FA2_SO=/absolute/path/to/qrow16/_vllm_fa2_C.abi3.so
+export FR13_FA2_QROW16_SO_SHA256=$(sha256sum "$FORKED_FA2_SO" | cut -d' ' -f1)
+export FR13_FA2_QROW16_LIVE_PAGED_AB=1
+export FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID=astropy__astropy-12907
 
-docker run --rm --gpus all \
-  -v "$REPO:/workspace:ro" \
-  -v "$CAND_SO:/tmp/qrow16.so:ro" \
-  -v "$CAPTURE:/tmp/capture.pt:ro" \
-  -v "$OUT:/results" \
-  --entrypoint bash "$IMAGE" -lc \
-  'set -euo pipefail; cp /tmp/qrow16.so /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so; python3 /workspace/scripts/fr13_patch_fa2_tree_bias.py --skip-source; python3 /workspace/scripts/fr13_fa2_qrow16_byte_ab.py --capture /tmp/capture.pt --out /results/qrow16_same_boot_byte_ab.json'
-
-python3 - "$RESULT" <<'PY'
-import json, pathlib, sys
-row = json.loads(pathlib.Path(sys.argv[1]).read_text())
-assert row["passed"] is True, row
-assert all(v["output_byte_equal"] and v["lse_byte_equal"] and v["stock_replicas_byte_equal"] for v in row["comparisons"].values())
-PY
+# Launch the fixed32 B1 server, then send only that normal SWE-Verified task.
+# Require /logs/fr13_fa2_qrow16_live_paged_ab.json to report PASS and zero
+# output/LSE raw-byte mismatches.
 ```
 
-Only after the byte gate passes may the candidate run the canonical real
-SWE-Verified exact4 B1 campaign, followed by B4 and exact16 acceptance.
+The stock FULL graph produces and serves the request output. Immediately after
+its first real observed replay, the same EngineCore process recalls stock and
+qrow16 using retained live paged operands and compares BF16 output plus FP32
+LSE raw bytes. The candidate dispatch throws on any non-production geometry,
+so a stock-vs-stock false pass is not possible.
+
+`scripts/fr13_fa2_qrow16_byte_ab.py` is compile preflight only. Only after the
+live-paged gate passes may the candidate run canonical real SWE-Verified exact4
+B1, followed by B4 and exact16 acceptance.

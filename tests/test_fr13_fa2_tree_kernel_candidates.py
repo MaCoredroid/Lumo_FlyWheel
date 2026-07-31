@@ -89,6 +89,7 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
     launch = tmp_path / "flash_fwd_launch_template.h"
     stock = "\n".join(
         (
+            '#include "namespace_config.h"',
             module.STOCK_SPLITKV_LAUNCH_SIGNATURE,
             module.STOCK_SPLITKV_COMBINE_GUARD,
             module.STOCK_SPLITKV_RUNTIME_SWITCH,
@@ -114,6 +115,11 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
     )
 
     assert "std::is_same_v<T, cutlass::bfloat16_t>" in candidate
+    assert "#include <cstdlib>" in candidate
+    assert 'std::getenv("FR13_FA2_QROW16_INTERNAL_DISPATCH")' in candidate
+    assert "fr13_qrow16_requested" in candidate
+    assert "TORCH_CHECK(" in candidate
+    assert "internal dispatch reached non-production geometry" in candidate
     assert "Headdim == 256 && !Is_causal" in candidate
     assert "params.tree_bias_ptr != nullptr" in candidate
     assert "params.b == 1" in candidate
@@ -166,6 +172,7 @@ def test_source_build_candidates_are_independent_and_default_off() -> None:
 
     assert 'parser.add_argument(\n        "--tree-bias-tile-earlyout",' in text
     assert 'parser.add_argument(\n        "--fixed32-query-tile16",' in text
+    assert 'parser.add_argument(\n        "--fixed32-query-tile16-live-ab",' in text
     assert "tree_bias_tile_earlyout: bool = False" in text
     assert "fixed32_query_tile16: bool = False" in text
     assert "tree_splitkv" not in text
@@ -174,7 +181,7 @@ def test_source_build_candidates_are_independent_and_default_off() -> None:
     assert "params.o_batch_stride = max_seqlen_q * params.o_row_stride" not in text
 
 
-def test_qrow16_same_boot_gate_uses_real_b1_and_stock_batch_fallbacks() -> None:
+def test_qrow16_capture_checker_is_compile_preflight_only() -> None:
     text = Path("scripts/fr13_fa2_qrow16_byte_ab.py").read_text()
 
     assert 'provenance.get("suite") != "SWE-Verified"' in text
@@ -186,3 +193,41 @@ def test_qrow16_same_boot_gate_uses_real_b1_and_stock_batch_fallbacks() -> None:
     assert "return_softmax_lse=True" in text
     assert "num_splits=1" in text
     assert "block_table=block_table" in text
+    assert 'os.environ["FR13_FA2_QROW16_INTERNAL_DISPATCH"] = "1"' in text
+    assert "candidate=True" in text
+
+
+def test_qrow16_live_gate_uses_retained_paged_operands_after_real_replay() -> None:
+    patcher = Path("scripts/fr13_patch_fa2_tree_bias.py").read_text()
+    launcher = Path("scripts/fr13_launch_forked_fa2_tree_server.sh").read_text()
+
+    assert "FR13_FA2_QROW16_LIVE_PAGED_AB_REPLAY" in patcher
+    replay = patcher.index('anchor = "        entry.cudagraph.replay()\\n"')
+    gate = patcher.index("_fr13_fa2_qrow16_live_ab_replay(", replay)
+    assert replay < gate
+    assert '_FR13_FIXED32_CAPTURE_CONTEXT' in patcher
+    assert 'int(descriptor.get("num_reqs", -1)) != 1' in patcher
+    assert 'tuple(query.shape) == (32, 24, 256)' in patcher
+    assert 'tuple(key_cache.shape[1:]) == (1024, 4, 256)' in patcher
+    assert '"key_cache": key_cache' in patcher
+    assert '"value_cache": value_cache' in patcher
+    assert '"block_table": block_table' in patcher
+    assert '"seqused_k": seqused_k' in patcher
+    assert '"tree_bias": tree_bias' in patcher
+    assert "torch.load" not in patcher[patcher.index("FIXED32_QUERY_TILE16_LIVE_AB_HELPERS") :]
+    assert "dense_k" not in patcher[patcher.index("FIXED32_QUERY_TILE16_LIVE_AB_HELPERS") :]
+    assert 'return_softmax_lse=True' in patcher
+    assert 'stock_lse.dtype != torch.float32' in patcher
+    assert 'view(torch.uint8)' in patcher
+    assert '"raw_byte_mismatches": output_mismatches' in patcher
+    assert '"raw_byte_mismatches": lse_mismatches' in patcher
+    assert '"served_return": "stock captured graph output unchanged"' in patcher
+    assert "entry.output" not in patcher[
+        patcher.index("def _fr13_fa2_qrow16_live_ab_replay") :
+        patcher.index("def _patch_tree_attn")
+    ]
+
+    assert "FR13_FA2_QROW16_LIVE_PAGED_AB=${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}" in launcher
+    assert "FR13_FA2_QROW16_INTERNAL_DISPATCH is private to the live gate" in launcher
+    assert "fixed32 qrow16 candidate FA2 sha256 mismatch" in launcher
+    assert "--fixed32-query-tile16-live-ab" in launcher

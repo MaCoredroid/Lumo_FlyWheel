@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -90,7 +91,13 @@ def _validate(capture: dict[str, Any]) -> None:
         raise ValueError("max_seq_len is smaller than seq_lens")
 
 
-def _call(flash_attn_varlen_func: Any, capture: dict[str, Any], copies: int) -> tuple[torch.Tensor, torch.Tensor]:
+def _call(
+    flash_attn_varlen_func: Any,
+    capture: dict[str, Any],
+    copies: int,
+    *,
+    candidate: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
     device = torch.device("cuda")
     query = capture["query"].to(device).repeat((copies, 1, 1)).contiguous()
     key_cache = capture["key_cache"].to(device).contiguous()
@@ -108,24 +115,31 @@ def _call(flash_attn_varlen_func: Any, capture: dict[str, Any], copies: int) -> 
         dtype=torch.int32,
         device=device,
     )
-    out, lse = flash_attn_varlen_func(
-        q=query,
-        k=key_cache,
-        v=value_cache,
-        cu_seqlens_q=cu_q,
-        max_seqlen_q=Q_ROWS,
-        seqused_k=seq_lens,
-        max_seqlen_k=int(capture["max_seq_len"]),
-        softmax_scale=float(capture["scale"]),
-        causal=False,
-        window_size=[-1, -1],
-        softcap=float(capture.get("softcap", 0.0)),
-        block_table=block_table,
-        num_splits=1,
-        return_softmax_lse=True,
-        fa_version=2,
-        tree_bias=bias,
-    )
+    if os.environ.get("FR13_FA2_QROW16_INTERNAL_DISPATCH") is not None:
+        raise RuntimeError("internal qrow16 dispatch must not be inherited")
+    try:
+        if candidate:
+            os.environ["FR13_FA2_QROW16_INTERNAL_DISPATCH"] = "1"
+        out, lse = flash_attn_varlen_func(
+            q=query,
+            k=key_cache,
+            v=value_cache,
+            cu_seqlens_q=cu_q,
+            max_seqlen_q=Q_ROWS,
+            seqused_k=seq_lens,
+            max_seqlen_k=int(capture["max_seq_len"]),
+            softmax_scale=float(capture["scale"]),
+            causal=False,
+            window_size=[-1, -1],
+            softcap=float(capture.get("softcap", 0.0)),
+            block_table=block_table,
+            num_splits=1,
+            return_softmax_lse=True,
+            fa_version=2,
+            tree_bias=bias,
+        )
+    finally:
+        os.environ.pop("FR13_FA2_QROW16_INTERNAL_DISPATCH", None)
     torch.cuda.synchronize()
     return out.detach().cpu(), lse.detach().cpu()
 
@@ -145,7 +159,9 @@ def main() -> int:
     _validate(capture)
     from vllm.v1.attention.backends.fa_utils import flash_attn_varlen_func
 
-    b1_out, b1_lse = _call(flash_attn_varlen_func, capture, 1)
+    b1_out, b1_lse = _call(
+        flash_attn_varlen_func, capture, 1, candidate=True
+    )
     rows: dict[str, Any] = {}
     passed = True
     for copies in (2, 4):

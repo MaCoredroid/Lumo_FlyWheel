@@ -9,11 +9,11 @@ The exact-safe ``--tree-bias-tile-earlyout`` source-build candidate skips the
 per-score bias walk on K tiles that cannot overlap the tree suffix. It does not
 change FA2 launch geometry, split-KV selection, or floating-point reductions.
 
-The independent ``--fixed32-query-tile16`` candidate replaces the underfilled
-64-row, four-warp query tile only for the fixed32 B1 tree call with two 16-row,
-one-warp query CTAs per head. Each CTA still traverses the complete K sequence;
-there is no split-K reduction or combine kernel. B4 keeps the stock geometry,
-which already supplies 96 CTAs per layer and does not have the B1 underfill.
+The independent ``--fixed32-query-tile16`` build includes an underfilled-B1
+alternative with two 16-row, one-warp query CTAs per head. It is default-off:
+only the private live-gate dispatch selects it. Each CTA still traverses the
+complete K sequence; there is no split-K reduction or combine kernel. B4 keeps
+the stock geometry, which already supplies 96 CTAs per layer.
 """
 
 from __future__ import annotations
@@ -156,29 +156,38 @@ void run_mha_fwd_splitkv_dispatch(Flash_fwd_params &params, cudaStream_t stream)
     // FR13_FA2_FIXED32_QUERY_TILE16: two query CTAs fill all 48 GB10 SMs.
     // This is query partitioning, not split-K: each real row keeps one warp's
     // complete, ordered K-block loop and no combine kernel is launched.
-    if constexpr (std::is_same_v<T, cutlass::bfloat16_t>
-                  && Headdim == 256 && !Is_causal) {
-        if (params.tree_bias_ptr != nullptr
-            && params.b == 1
-            && params.d == 256
-            && params.d_rounded == 256
-            && params.h == 24
-            && params.h_k == 4
-            && params.h_h_k_ratio == 6
-            && params.seqlen_q == 32
-            && params.tree_bias_rows == 32
-            && params.tree_bias_cols == 32
-            && params.tree_bias_q_offset == 0
-            && params.tree_bias_k_offset == 0
-            && params.cu_seqlens_q != nullptr
-            && !params.seqlenq_ngroups_swapped
-            && params.block_table != nullptr
-            && params.page_block_size == 1024
-            && params.window_size_left < 0
-            && params.window_size_right < 0
-            && params.alibi_slopes_ptr == nullptr
-            && params.knew_ptr == nullptr
-            && params.num_splits == 1) {
+    const char *fr13_qrow16_dispatch =
+        std::getenv("FR13_FA2_QROW16_INTERNAL_DISPATCH");
+    const bool fr13_qrow16_requested =
+        fr13_qrow16_dispatch != nullptr
+        && fr13_qrow16_dispatch[0] == '1'
+        && fr13_qrow16_dispatch[1] == '\0';
+    if (fr13_qrow16_requested) {
+        if constexpr (std::is_same_v<T, cutlass::bfloat16_t>
+                      && Headdim == 256 && !Is_causal) {
+            TORCH_CHECK(
+                params.tree_bias_ptr != nullptr
+                && params.b == 1
+                && params.d == 256
+                && params.d_rounded == 256
+                && params.h == 24
+                && params.h_k == 4
+                && params.h_h_k_ratio == 6
+                && params.seqlen_q == 32
+                && params.tree_bias_rows == 32
+                && params.tree_bias_cols == 32
+                && params.tree_bias_q_offset == 0
+                && params.tree_bias_k_offset == 0
+                && params.cu_seqlens_q != nullptr
+                && !params.seqlenq_ngroups_swapped
+                && params.block_table != nullptr
+                && params.page_block_size == 1024
+                && params.window_size_left < 0
+                && params.window_size_right < 0
+                && params.alibi_slopes_ptr == nullptr
+                && params.knew_ptr == nullptr
+                && params.num_splits == 1,
+                "FR13 qrow16 internal dispatch reached non-production geometry");
             constexpr static int kTreeBlockM = 16;
             constexpr static int kTreeWarps = 1;
             static_assert(kTreeBlockM == 16 * kTreeWarps);
@@ -193,6 +202,10 @@ void run_mha_fwd_splitkv_dispatch(Flash_fwd_params &params, cudaStream_t stream)
             static_assert(1024 % TreeKernelTraits::kGmemRowsPerThread == 0);
             run_flash_splitkv_fwd<TreeKernelTraits, Is_causal, false>(params, stream);
             return;
+        } else {
+            TORCH_CHECK(
+                false,
+                "FR13 qrow16 internal dispatch reached wrong specialization");
         }
     }
     constexpr static int kBlockM = 64;  // Fixed for all other calls
@@ -308,6 +321,14 @@ def _patch_flash_fwd_launch_template(
         return False
     text = path.read_text()
     changed = False
+    if "#include <cstdlib>\n" not in text:
+        text, replaced = _replace_once(
+            text,
+            '#include "namespace_config.h"\n',
+            '#include "namespace_config.h"\n#include <cstdlib>\n',
+            "fixed32 FA2 process-local dispatch include",
+        )
+        changed |= replaced
     for old, new, label in (
         (
             STOCK_SPLITKV_LAUNCH_SIGNATURE,
@@ -604,7 +625,298 @@ def _patch_flash_attn_interface(path: Path) -> bool:
     return changed
 
 
-def _patch_tree_attn(path: Path) -> bool:
+FIXED32_QUERY_TILE16_LIVE_AB_HELPERS = r'''# FR13_FA2_QROW16_LIVE_PAGED_AB
+_FR13_FA2_QROW16_LIVE_AB_GRAPHS = {}
+_FR13_FA2_QROW16_LIVE_AB_ATTEMPTED = False
+_FR13_FA2_QROW16_LIVE_AB_PASSED = False
+
+
+def _fr13_fa2_qrow16_live_ab_register(
+    *,
+    layer,
+    flash_fn,
+    query,
+    key_cache,
+    value_cache,
+    cu_seqlens_q,
+    max_seqlen_q,
+    seqused_k,
+    max_seqlen_k,
+    softmax_scale,
+    causal,
+    window_size,
+    block_table,
+    softcap,
+    num_splits,
+    tree_bias,
+):
+    """Retain the first final B1 graph's exact live paged operands."""
+    if os.environ.get("FR13_FA2_QROW16_LIVE_PAGED_AB", "0") != "1":
+        return
+    if os.environ.get("FR13_FA2_QROW16_INTERNAL_DISPATCH") is not None:
+        raise RuntimeError("FR13 qrow16 internal dispatch leaked into graph capture")
+    if not (
+        torch.cuda.is_available()
+        and torch.cuda.is_current_stream_capturing()
+    ):
+        return
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_qrow_gdn
+
+    context = getattr(_fr13_qrow_gdn, "_FR13_FIXED32_CAPTURE_CONTEXT", None)
+    if not isinstance(context, dict):
+        # Memory-profile graphs deliberately have no final capture context.
+        return
+    descriptor = context.get("descriptor")
+    if not isinstance(descriptor, dict) or int(descriptor.get("num_reqs", -1)) != 1:
+        return
+    graph_id = int(context.get("graph_id", 0))
+    if graph_id <= 0 or graph_id in _FR13_FA2_QROW16_LIVE_AB_GRAPHS:
+        return
+
+    exact = (
+        query.dtype == torch.bfloat16
+        and tuple(query.shape) == (32, 24, 256)
+        and key_cache.dtype == torch.bfloat16
+        and value_cache.dtype == torch.bfloat16
+        and tuple(key_cache.shape[1:]) == (1024, 4, 256)
+        and tuple(value_cache.shape) == tuple(key_cache.shape)
+        and cu_seqlens_q.dtype == torch.int32
+        and tuple(cu_seqlens_q.shape) == (2,)
+        and seqused_k.dtype == torch.int32
+        and tuple(seqused_k.shape) == (1,)
+        and block_table.dtype == torch.int32
+        and block_table.ndim == 2
+        and int(block_table.shape[0]) == 1
+        and tree_bias.dtype == torch.float32
+        and tuple(tree_bias.shape) in ((32, 32), (1, 32, 32))
+        and int(max_seqlen_q) == 32
+        and int(max_seqlen_k) > 0
+        and not bool(causal)
+        and int(num_splits) in (0, 1)
+    )
+    if not exact:
+        raise RuntimeError("FR13 qrow16 live gate saw non-production B1 geometry")
+    if window_size is not None and tuple(int(x) for x in window_size) != (-1, -1):
+        raise RuntimeError("FR13 qrow16 live gate requires a full attention window")
+
+    _FR13_FA2_QROW16_LIVE_AB_GRAPHS[graph_id] = {
+        "layer_name": str(getattr(layer, "layer_name", "")),
+        "flash_fn": flash_fn,
+        "query": query,
+        "key_cache": key_cache,
+        "value_cache": value_cache,
+        "cu_seqlens_q": cu_seqlens_q,
+        "max_seqlen_q": int(max_seqlen_q),
+        "seqused_k": seqused_k,
+        "max_seqlen_k": int(max_seqlen_k),
+        "softmax_scale": float(softmax_scale),
+        "causal": bool(causal),
+        "window_size": None if window_size is None else list(window_size),
+        "block_table": block_table,
+        "softcap": float(softcap),
+        "num_splits": int(num_splits),
+        "tree_bias": tree_bias,
+    }
+    logger.info(
+        "FR13 qrow16 live paged A/B registered graph=%d layer=%s",
+        graph_id,
+        _FR13_FA2_QROW16_LIVE_AB_GRAPHS[graph_id]["layer_name"],
+    )
+
+
+def _fr13_fa2_qrow16_live_ab_call(bundle, out):
+    return bundle["flash_fn"](
+        q=bundle["query"],
+        k=bundle["key_cache"],
+        v=bundle["value_cache"],
+        out=out,
+        cu_seqlens_q=bundle["cu_seqlens_q"],
+        max_seqlen_q=bundle["max_seqlen_q"],
+        seqused_k=bundle["seqused_k"],
+        max_seqlen_k=bundle["max_seqlen_k"],
+        softmax_scale=bundle["softmax_scale"],
+        causal=bundle["causal"],
+        alibi_slopes=None,
+        window_size=bundle["window_size"],
+        block_table=bundle["block_table"],
+        softcap=bundle["softcap"],
+        scheduler_metadata=None,
+        fa_version=2,
+        num_splits=bundle["num_splits"],
+        s_aux=None,
+        tree_bias=bundle["tree_bias"],
+        return_softmax_lse=True,
+    )
+
+
+def _fr13_fa2_qrow16_raw_bytes(tensor):
+    return (
+        tensor.detach()
+        .contiguous()
+        .view(torch.uint8)
+        .cpu()
+        .numpy()
+        .tobytes()
+    )
+
+
+def _fr13_fa2_qrow16_live_ab_write(record):
+    import json as _json
+    from pathlib import Path as _Path
+
+    path = _Path(
+        os.environ.get(
+            "FR13_FA2_QROW16_LIVE_PAGED_AB_JSON",
+            "/logs/fr13_fa2_qrow16_live_paged_ab.json",
+        )
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(
+        _json.dumps(record, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
+        encoding="ascii",
+    )
+    temporary.replace(path)
+
+
+def _fr13_fa2_qrow16_live_ab_replay(graph_id, runtime_mode, batch_size):
+    """Run the one-shot byte gate after the first real stock B1 replay."""
+    global _FR13_FA2_QROW16_LIVE_AB_ATTEMPTED
+    global _FR13_FA2_QROW16_LIVE_AB_PASSED
+
+    if os.environ.get("FR13_FA2_QROW16_LIVE_PAGED_AB", "0") != "1":
+        return
+    if _FR13_FA2_QROW16_LIVE_AB_ATTEMPTED:
+        return
+    if str(runtime_mode).upper() != "FULL" or int(batch_size) != 1:
+        return
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_qrow_gdn
+
+    if not _fr13_qrow_gdn._fr13_fixed32_observed_event_active():
+        return
+    event = getattr(_fr13_qrow_gdn, "_FR13_FIXED32_OBSERVED_CURRENT", None)
+    if not isinstance(event, dict) or int(event.get("batch_size", -1)) != 1:
+        raise RuntimeError("FR13 qrow16 live gate has no exact B1 observed event")
+    bundle = _FR13_FA2_QROW16_LIVE_AB_GRAPHS.get(int(graph_id))
+    if not isinstance(bundle, dict):
+        raise RuntimeError("FR13 qrow16 live gate has no operands for replayed graph")
+    instance_id = os.environ.get("FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID", "")
+    if not instance_id:
+        raise RuntimeError("FR13 qrow16 live gate has no SWE-Verified instance id")
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError("FR13 qrow16 live gate ran inside CUDA capture")
+    if os.environ.get("FR13_FA2_QROW16_INTERNAL_DISPATCH") is not None:
+        raise RuntimeError("FR13 qrow16 internal dispatch was externally populated")
+
+    _FR13_FA2_QROW16_LIVE_AB_ATTEMPTED = True
+    # The retained query is produced inside the replay. Synchronizing here
+    # makes its current real-task bytes, plus the live cache metadata, stable
+    # before the two diagnostic recalls.
+    torch.cuda.synchronize()
+    q_start = [int(x) for x in bundle["cu_seqlens_q"].cpu().tolist()]
+    seq_lens = [int(x) for x in bundle["seqused_k"].cpu().tolist()]
+    if q_start != [0, 32] or len(seq_lens) != 1 or seq_lens[0] <= 0:
+        raise RuntimeError("FR13 qrow16 live sequence metadata drifted")
+    if seq_lens[0] > bundle["max_seqlen_k"]:
+        raise RuntimeError("FR13 qrow16 live sequence exceeds max_seqlen_k")
+
+    stock_buf = torch.empty_like(bundle["query"])
+    candidate_buf = torch.empty_like(bundle["query"])
+    try:
+        os.environ.pop("FR13_FA2_QROW16_INTERNAL_DISPATCH", None)
+        stock_out, stock_lse = _fr13_fa2_qrow16_live_ab_call(bundle, stock_buf)
+        os.environ["FR13_FA2_QROW16_INTERNAL_DISPATCH"] = "1"
+        candidate_out, candidate_lse = _fr13_fa2_qrow16_live_ab_call(
+            bundle, candidate_buf
+        )
+    finally:
+        os.environ.pop("FR13_FA2_QROW16_INTERNAL_DISPATCH", None)
+    torch.cuda.synchronize()
+    if stock_lse.dtype != torch.float32 or candidate_lse.dtype != torch.float32:
+        raise RuntimeError("FR13 qrow16 live gate LSE is not FP32")
+
+    stock_output_bytes = _fr13_fa2_qrow16_raw_bytes(stock_out)
+    candidate_output_bytes = _fr13_fa2_qrow16_raw_bytes(candidate_out)
+    stock_lse_bytes = _fr13_fa2_qrow16_raw_bytes(stock_lse)
+    candidate_lse_bytes = _fr13_fa2_qrow16_raw_bytes(candidate_lse)
+    output_mismatches = (
+        abs(len(stock_output_bytes) - len(candidate_output_bytes))
+        + sum(
+            left != right
+            for left, right in zip(stock_output_bytes, candidate_output_bytes)
+        )
+    )
+    lse_mismatches = (
+        abs(len(stock_lse_bytes) - len(candidate_lse_bytes))
+        + sum(
+            left != right
+            for left, right in zip(stock_lse_bytes, candidate_lse_bytes)
+        )
+    )
+    passed = output_mismatches == 0 and lse_mismatches == 0
+    import hashlib as _hashlib
+
+    record = {
+        "schema": "fr13.fixed32.fa2_qrow16_live_paged_ab.v1",
+        "status": "PASS" if passed else "FAIL",
+        "suite": "SWE-Verified",
+        "instance_id": instance_id,
+        "concurrency": 1,
+        "physical_rows": 32,
+        "graph_id": int(graph_id),
+        "runtime_mode": str(runtime_mode).upper(),
+        "layer_name": bundle["layer_name"],
+        "operands": {
+            "query_shape": list(bundle["query"].shape),
+            "key_cache_shape": list(bundle["key_cache"].shape),
+            "value_cache_shape": list(bundle["value_cache"].shape),
+            "block_table_shape": list(bundle["block_table"].shape),
+            "query_start_loc": q_start,
+            "seq_lens": seq_lens,
+            "max_seqlen_k": bundle["max_seqlen_k"],
+            "tree_bias_shape": list(bundle["tree_bias"].shape),
+        },
+        "output": {
+            "dtype": str(stock_out.dtype),
+            "bytes": len(stock_output_bytes),
+            "raw_byte_mismatches": output_mismatches,
+            "stock_sha256": _hashlib.sha256(stock_output_bytes).hexdigest(),
+            "candidate_sha256": _hashlib.sha256(candidate_output_bytes).hexdigest(),
+        },
+        "lse": {
+            "dtype": str(stock_lse.dtype),
+            "bytes": len(stock_lse_bytes),
+            "raw_byte_mismatches": lse_mismatches,
+            "stock_sha256": _hashlib.sha256(stock_lse_bytes).hexdigest(),
+            "candidate_sha256": _hashlib.sha256(candidate_lse_bytes).hexdigest(),
+        },
+        "candidate_dispatch": "qrow16 internal exact-geometry require",
+        "served_return": "stock captured graph output unchanged",
+        "performance_measurement": False,
+    }
+    _fr13_fa2_qrow16_live_ab_write(record)
+    if not passed:
+        raise RuntimeError(
+            "FR13 qrow16 live paged byte A/B mismatch: "
+            f"output_bytes={output_mismatches} lse_bytes={lse_mismatches}"
+        )
+    _FR13_FA2_QROW16_LIVE_AB_PASSED = True
+    logger.warning(
+        "[FR13_FA2_QROW16_LIVE_PAGED_AB] PASS instance=%s layer=%s "
+        "output_byte_mismatches=0 lse_byte_mismatches=0 stock_served=1",
+        instance_id,
+        bundle["layer_name"],
+    )
+
+
+'''
+
+
+def _patch_tree_attn(
+    path: Path,
+    *,
+    fixed32_query_tile16_live_ab: bool = False,
+) -> bool:
     text = path.read_text()
     changed = False
     old_filter = (
@@ -745,6 +1057,14 @@ def _fr13_sr_causal_flag():
         "tree_attn slot-reorder helpers",
     )
     changed = changed or did
+    if fixed32_query_tile16_live_ab:
+        text, did = _insert_once(
+            text,
+            "def _get_depth_counts(",
+            FIXED32_QUERY_TILE16_LIVE_AB_HELPERS,
+            "qrow16 live paged A/B helpers",
+        )
+        changed = changed or did
     if "import vllm.envs as envs\n" not in text:
         text = text.replace(
             "from vllm.v1.attention.ops.triton_unified_attention import unified_attention\n",
@@ -923,6 +1243,42 @@ def _fr13_sr_causal_flag():
     if old_call_tail in text:
         text = text.replace(old_call_tail, new_call_tail, 1)
         changed = True
+    if fixed32_query_tile16_live_ab and (
+        "_fr13_fa2_qrow16_live_ab_register(\n" not in text.split(
+            "class TreeAttentionImpl", 1
+        )[-1]
+    ):
+        live_call_anchor = (
+            "                if not _fr13_reordered:\n"
+            "                    flash_attn_varlen_func(\n"
+        )
+        live_call_replacement = """                if not _fr13_reordered:
+                    _fr13_fa2_qrow16_live_ab_register(
+                        layer=layer,
+                        flash_fn=flash_attn_varlen_func,
+                        query=query[:num_decode_tokens],
+                        key_cache=key_cache,
+                        value_cache=value_cache,
+                        cu_seqlens_q=decode_meta.query_start_loc,
+                        max_seqlen_q=decode_meta.max_query_len,
+                        seqused_k=decode_meta.seq_lens,
+                        max_seqlen_k=decode_meta.max_seq_len,
+                        softmax_scale=self.scale,
+                        causal=_fr13_sr_causal_flag(),
+                        window_size=sliding_window_size,
+                        block_table=decode_meta.block_table,
+                        softcap=self.logits_soft_cap,
+                        num_splits=1 if envs.VLLM_BATCH_INVARIANT else 0,
+                        tree_bias=tree_bias,
+                    )
+                    flash_attn_varlen_func(
+"""
+        if text.count(live_call_anchor) != 1:
+            raise RuntimeError(
+                "qrow16 live paged A/B decode-call anchor is not unique"
+            )
+        text = text.replace(live_call_anchor, live_call_replacement, 1)
+        changed = True
     if changed:
         path.write_text(text)
         py_compile.compile(path, doraise=True)
@@ -1084,13 +1440,43 @@ def _patch_batch_invariant_guard(path: Path) -> bool:
     return True
 
 
-def patch_installed_vllm(site_packages: Path) -> dict[str, bool]:
-    return {
+def _patch_cuda_graph_qrow16_live_ab(path: Path) -> bool:
+    text = path.read_text()
+    sentinel = "# FR13_FA2_QROW16_LIVE_PAGED_AB_REPLAY"
+    if sentinel in text:
+        return False
+    anchor = "        entry.cudagraph.replay()\n"
+    if text.count(anchor) != 1:
+        raise RuntimeError("qrow16 live paged A/B replay anchor is not unique")
+    replacement = anchor + f'''        {sentinel}: the stock graph has now
+        # produced the first real event's retained query. Diagnostic recalls
+        # are ordered after it and never replace entry.output.
+        from vllm.v1.attention.backends.tree_attn import (
+            _fr13_fa2_qrow16_live_ab_replay,
+        )
+        _fr13_fa2_qrow16_live_ab_replay(
+            id(entry.cudagraph),
+            self.runtime_mode.name,
+            entry.batch_descriptor.num_reqs,
+        )
+'''
+    path.write_text(text.replace(anchor, replacement, 1))
+    py_compile.compile(path, doraise=True)
+    return True
+
+
+def patch_installed_vllm(
+    site_packages: Path,
+    *,
+    fixed32_query_tile16_live_ab: bool = False,
+) -> dict[str, bool]:
+    result = {
         "flash_attn_interface.py": _patch_flash_attn_interface(
             site_packages / "vllm/vllm_flash_attn/flash_attn_interface.py"
         ),
         "tree_attn.py": _patch_tree_attn(
-            site_packages / "vllm/v1/attention/backends/tree_attn.py"
+            site_packages / "vllm/v1/attention/backends/tree_attn.py",
+            fixed32_query_tile16_live_ab=fixed32_query_tile16_live_ab,
         ),
         "flash_attn.py": _patch_flash_attn_backend(
             site_packages / "vllm/v1/attention/backends/flash_attn.py"
@@ -1099,6 +1485,11 @@ def patch_installed_vllm(site_packages: Path) -> dict[str, bool]:
             site_packages / "vllm/model_executor/layers/batch_invariant.py"
         ),
     }
+    if fixed32_query_tile16_live_ab:
+        result["cuda_graph.py"] = _patch_cuda_graph_qrow16_live_ab(
+            site_packages / "vllm/compilation/cuda_graph.py"
+        )
+    return result
 
 
 def find_fa2_source(value: str | None) -> Path:
@@ -1135,11 +1526,17 @@ def main() -> int:
         action="store_true",
         help="build the fixed32 B1 tree-only FA2 16-row query-tile candidate",
     )
+    parser.add_argument(
+        "--fixed32-query-tile16-live-ab",
+        action="store_true",
+        help="install the one-shot live paged B1 stock/qrow16 byte gate",
+    )
     args = parser.parse_args()
 
     payload: dict[str, object] = {
         "tree_bias_tile_earlyout": args.tree_bias_tile_earlyout,
         "fixed32_query_tile16": args.fixed32_query_tile16,
+        "fixed32_query_tile16_live_ab": args.fixed32_query_tile16_live_ab,
     }
     if not args.skip_source:
         fa2_src = find_fa2_source(str(args.fa2_src) if args.fa2_src else None)
@@ -1150,7 +1547,10 @@ def main() -> int:
             fixed32_query_tile16=args.fixed32_query_tile16,
         )
     if not args.skip_python:
-        payload["python"] = patch_installed_vllm(args.site_packages)
+        payload["python"] = patch_installed_vllm(
+            args.site_packages,
+            fixed32_query_tile16_live_ab=args.fixed32_query_tile16_live_ab,
+        )
     print(payload)
     return 0
 

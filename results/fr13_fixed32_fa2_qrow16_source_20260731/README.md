@@ -1,6 +1,6 @@
 # Fixed32 FA2 query-row tile candidate
 
-This experimental, default-off and not-deploy-ready branch adds a build-time opt-in FA2
+This experimental, default-off and not-deploy-ready branch adds a compiled FA2
 geometry for the fixed32 B1 tree call:
 `kBlockM=16, kNWarps=1` instead of `kBlockM=64, kNWarps=4`.
 
@@ -17,10 +17,11 @@ compile-time `AllowSplit=false`; the runtime dispatch also requires
 the `Split=true` main-kernel specialization for one-warp traits. Stock four-warp
 calls retain the default split-capable path and both main-kernel variants.
 
-The runtime guard requires the exact production BF16 paged-KV signature:
+The private live-gate selector requires the exact production BF16 paged-KV signature:
 `params.b == 1`, 24 Q heads, four KV heads, `d=d_rounded=256`, 32 query
 rows, a 32x32 zero-offset tree bias, a 1024-row page, full-window noncausal
-attention, no ALiBi or appended KV, and `num_splits == 1`. At B4, the stock geometry already
+attention, no ALiBi or appended KV, and `num_splits == 1`. Without that private
+selector, the same binary dispatches stock. At B4, the stock geometry already
 launches 96 CTAs per layer across 48 SMs; query splitting would only raise that
 to 192 CTAs while rereading K/V. B4 therefore stays on the stock path.
 
@@ -49,5 +50,5 @@ The remaining conv source-stage copy is not competitive: the real trace shows
 
 No GPU, synthetic performance probe, or acceptance run was used to create this
 candidate. The source was applied idempotently to the pinned exact-safe FA2
-snapshot. See `diagnostic.json` and `BUILD_AND_BYTE_GATE.md` for provenance and
-the post-Hydra production compile and real-capture same-boot byte gates.
+snapshot. See `diagnostic.json`, `BUILD_AND_BYTE_GATE.md`, and the live-paged
+source artifact for the post-baseline compile and same-EngineCore real-task gate.

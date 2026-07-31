@@ -48,7 +48,7 @@ def test_live_dfwd_and_taw_diagnostics_return_reference_values() -> None:
     assert ") = reference\n    else:" in taw
 
 
-def test_manifest_does_not_promote_replay_to_a_live_qrow_gate() -> None:
+def test_manifest_binds_the_live_paged_qrow_gate_without_a_gpu_claim() -> None:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
 
     assert manifest["default_behavior_changed"] is False
@@ -60,14 +60,21 @@ def test_manifest_does_not_promote_replay_to_a_live_qrow_gate() -> None:
     assert manifest["live_reference_gate"]["positive_token_traffic"] == (
         "one real task only"
     )
-    assert manifest["qrow_live_gate"]["ready"] is False
+    assert manifest["qrow_live_gate"]["ready"] is True
+    assert manifest["qrow_live_gate"]["status"] == (
+        "SOURCE_IMPLEMENTED_GPU_NOT_RUN"
+    )
     assert manifest["qrow_live_gate"]["required_process_scope"] == (
         "same EngineCore process and CUDA boot"
     )
     assert "dense-to-paged repacking" in manifest["qrow_live_gate"][
         "forbidden_substitutes"
     ]
-    assert manifest["combined_three_gate_live_run"] == {
-        "ready": False,
-        "blocking_component": "qrow_live_gate",
-    }
+    assert manifest["qrow_live_gate"]["intercept"] == (
+        "post-first-real-B1-FULL-graph-replay"
+    )
+    assert manifest["qrow_live_gate"]["served_return"] == (
+        "stock captured graph output unchanged"
+    )
+    assert manifest["combined_three_gate_live_run"]["ready"] is True
+    assert manifest["combined_three_gate_live_run"]["gpu_run_completed"] is False

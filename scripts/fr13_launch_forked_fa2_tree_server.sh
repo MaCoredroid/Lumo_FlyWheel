@@ -111,10 +111,22 @@ fi
 FR13_DRAFT_HEAD_PAD_ROWS=${FR13_DRAFT_HEAD_PAD_ROWS:-0}
 FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=${FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB:-0}
 FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}
+FR13_FA2_QROW16_LIVE_PAGED_AB=${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}
+FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID=${FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID:-}
+FR13_FA2_QROW16_LIVE_PAGED_AB_JSON=${FR13_FA2_QROW16_LIVE_PAGED_AB_JSON:-/logs/fr13_fa2_qrow16_live_paged_ab.json}
+FR13_FA2_QROW16_SO_SHA256=${FR13_FA2_QROW16_SO_SHA256:-}
 case "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" in
   0|1) ;;
   *) echo "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE must be 0 or 1" >&2; exit 2 ;;
 esac
+case "$FR13_FA2_QROW16_LIVE_PAGED_AB" in
+  0|1) ;;
+  *) echo "FR13_FA2_QROW16_LIVE_PAGED_AB must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ -n "${FR13_FA2_QROW16_INTERNAL_DISPATCH:-}" ]]; then
+  echo "FR13_FA2_QROW16_INTERNAL_DISPATCH is private to the live gate" >&2
+  exit 2
+fi
 case "$FR13_DRAFT_HEAD_PAD_ROWS" in
   0|32|64|128) ;;
   *) echo "FR13_DRAFT_HEAD_PAD_ROWS must be 0, 32, 64, or 128" >&2; exit 2 ;;
@@ -135,6 +147,15 @@ if [[ "$FR13_DRAFT_HEAD_PAD_ROWS" != "0" \
      && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
      && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" ]] || {
     echo "FR13 draft-head padding requires fixed32 B1 root64" >&2
+    exit 2
+  }
+fi
+if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && -n "$FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID" \
+     && "$FR13_FA2_QROW16_SO_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
+    echo "FR13 qrow16 live paged A/B requires fixed32 B1, an instance id, and candidate SO SHA-256" >&2
     exit 2
   }
 fi
@@ -663,24 +684,32 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   [[ -z "$FR13_SERVE_BATCH_FLAGS" ]] \
     || { echo "fixed32 forbids FR13_SERVE_BATCH_FLAGS" >&2; exit 2; }
   PYTHONPATH="$REPO/scripts" .venv/bin/python - \
-    "$REPO" "$IMAGE" "$FORKED_FA2_SO" "$TREE" "$SPEC_CONFIG" <<'PY'
+    "$REPO" "$IMAGE" "$FORKED_FA2_SO" "$TREE" "$SPEC_CONFIG" \
+    "$FR13_FA2_QROW16_LIVE_PAGED_AB" "$FR13_FA2_QROW16_SO_SHA256" <<'PY'
 import sys
 from pathlib import Path
 
 import fr13_fixed32_contract as contract
 
-repo, image, fa2_raw, tree, spec_config = sys.argv[1:]
+repo, image, fa2_raw, tree, spec_config, qrow_live, qrow_sha256 = sys.argv[1:]
 fa2 = Path(fa2_raw).resolve(strict=True)
 expected_fa2 = Path(repo).resolve() / contract.FA2_REPO_RELATIVE
 if image != contract.IMAGE_REFERENCE:
     raise SystemExit(f"fixed32 image override is forbidden: {image!r}")
 contract._docker_image_record()
-if fa2 != expected_fa2:
-    raise SystemExit(f"fixed32 FA2 realpath mismatch: {fa2} != {expected_fa2}")
-if fa2.stat().st_size != contract.FA2_SIZE:
-    raise SystemExit("fixed32 FA2 size mismatch")
-if contract.sha256_file(fa2) != contract.FA2_SHA256:
-    raise SystemExit("fixed32 FA2 sha256 mismatch")
+actual_sha256 = contract.sha256_file(fa2)
+if qrow_live == "1":
+    if actual_sha256 != qrow_sha256:
+        raise SystemExit("fixed32 qrow16 candidate FA2 sha256 mismatch")
+    if actual_sha256 == contract.FA2_SHA256:
+        raise SystemExit("fixed32 qrow16 live gate received the stock FA2 binary")
+else:
+    if fa2 != expected_fa2:
+        raise SystemExit(f"fixed32 FA2 realpath mismatch: {fa2} != {expected_fa2}")
+    if fa2.stat().st_size != contract.FA2_SIZE:
+        raise SystemExit("fixed32 FA2 size mismatch")
+    if actual_sha256 != contract.FA2_SHA256:
+        raise SystemExit("fixed32 FA2 sha256 mismatch")
 if tree != contract.fixed32_tree_text():
     raise SystemExit("fixed32 TREE text differs from canonical contract")
 if spec_config != contract.speculative_config_text():
@@ -1241,6 +1270,10 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DRAFT_HEAD_PAD_ROWS="$FR13_DRAFT_HEAD_PAD_ROWS" \
   -e FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB="$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" \
   -e FR13_FIXED32_TAW_NATIVE_PRECOMPUTE="$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" \
+  -e FR13_FA2_QROW16_LIVE_PAGED_AB="$FR13_FA2_QROW16_LIVE_PAGED_AB" \
+  -e FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID="$FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID" \
+  -e FR13_FA2_QROW16_LIVE_PAGED_AB_JSON="$FR13_FA2_QROW16_LIVE_PAGED_AB_JSON" \
+  -e FR13_FA2_QROW16_SO_SHA256="$FR13_FA2_QROW16_SO_SHA256" \
   -e FR13_KVREMAP_TIMER="${FR13_KVREMAP_TIMER:-0}" \
   -e FR13_KVREMAP_TIMER_JSON="${FR13_KVREMAP_TIMER_JSON:-}" \
   -e FR13_STATEREMAP_TIMER="${FR13_STATEREMAP_TIMER:-0}" \
@@ -1471,7 +1504,8 @@ fi
 cp /tmp/fr13_fork_fa2.so /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so
 sha256sum /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so | tee /logs/fr13_forked_fa2.sha256
 python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
-python3 /workspace/scripts/fr13_patch_fa2_tree_bias.py --skip-source
+python3 /workspace/scripts/fr13_patch_fa2_tree_bias.py --skip-source \
+  $(if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" ]]; then printf '%s' '--fixed32-query-tile16-live-ab'; fi)
 python3 - <<'PY'
 import os
 from pathlib import Path
@@ -1481,6 +1515,13 @@ text = path.read_text()
 needle = 'FR13_FA2_PREFILL_NATIVE'
 if needle not in text:
     raise SystemExit(f'{needle} patch missing in {path}')
+if os.environ.get('FR13_FA2_QROW16_LIVE_PAGED_AB', '0') == '1':
+    live_needle = 'FR13_FA2_QROW16_LIVE_PAGED_AB'
+    if live_needle not in text:
+        raise SystemExit(f'{live_needle} patch missing in {path}')
+    graph_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/compilation/cuda_graph.py')
+    if 'FR13_FA2_QROW16_LIVE_PAGED_AB_REPLAY' not in graph_path.read_text():
+        raise SystemExit(f'qrow16 live replay patch missing in {graph_path}')
 if os.environ.get('FR13_BI_TREE_ATTN', '0') == '1':
     bi_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/batch_invariant.py')
     bi_text = bi_path.read_text()

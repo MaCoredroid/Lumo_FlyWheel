@@ -1,7 +1,7 @@
 # Fixed32 B1 real-task gate bundle
 
-Status: **source-only, default off, and not deployable**. No GPU was used and
-the qrow16 FA2 candidate was not built on this branch.
+Status: **source-ready, default off, and not yet GPU-validated**. No GPU was
+used and the qrow16 FA2 candidate was not built on this branch.
 
 This branch integrates the qrow16 source, native-precompute TAW byte gate, and
 strict DFWD padded-row selector on top of `e8739aa8b`. The older M32-only DFWD
@@ -10,20 +10,22 @@ flags are superseded by:
 - `FR13_DRAFT_HEAD_PAD_ROWS=0|32|64|128`;
 - `FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=0|1`.
 
-The launcher now also validates and forwards
-`FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0|1`. All three selectors default to zero.
+The launcher validates and forwards the TAW, DFWD, and qrow live-gate selectors.
+All candidate selectors default to zero.
 
-## Executable live gate
+## Real B1 live gate
 
-The currently executable one-task live gate covers TAW and all three DFWD row
-shapes. Apply this overlay to the existing held fixed32 B1 diagnostic lifecycle
-and send exactly the real SWE-Verified task `astropy__astropy-12907` at
-concurrency one:
+After building the qrow16 SO, apply this overlay to the fixed32 B1 lifecycle
+and send exactly one real SWE-Verified task at concurrency one:
 
 ```bash
 export FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=1
 export FR13_DRAFT_HEAD_PAD_ROWS=0
 export FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=1
+export FORKED_FA2_SO=/absolute/path/to/qrow16/_vllm_fa2_C.abi3.so
+export FR13_FA2_QROW16_SO_SHA256=<sha256-of-that-exact-so>
+export FR13_FA2_QROW16_LIVE_PAGED_AB=1
+export FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID=astropy__astropy-12907
 
 .venv/bin/python scripts/run_swe_bench_q36_a.py \
   --subset "$ONE_REAL_ASTROPY_12907_SUBSET" \
@@ -39,12 +41,12 @@ export FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=1
 only `astropy__astropy-12907`. This is a B1 diagnostic, not exact4 or exact16
 acceptance. Do not send warmup, synthetic, replay, or probe requests.
 
-Require the container environment to contain the three values above. At an
-uncaptured root boundary, require:
+Require all three live PASS records:
 
 ```text
 [FR13_FIXED32_TAW_NATIVE_PRECOMPUTE] PASS ... probability_mismatches=0 product_mismatches=0 reference_returned=1
 [FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB] PASS ... full_logit_bit_mismatches=0
+[FR13_FA2_QROW16_LIVE_PAGED_AB] PASS ... output_byte_mismatches=0 lse_byte_mismatches=0 stock_served=1
 ```
 
 The TAW gate always returns the existing exact products. The DFWD gate compares
@@ -52,22 +54,24 @@ M32, M64, and M128 complete BF16 logit rows with the existing `gemvx` result and
 always returns that reference result. Diagnostic wall time is not a candidate
 performance measurement.
 
-## Qrow boundary
+## Qrow live boundary
 
-The three-gate live claim is **blocked**. The existing
-`scripts/fr13_fa2_qrow16_byte_ab.py` checker is a useful compile/preflight tool,
-but it is not the required live gate. A dense-KV capture, dense-to-paged
-repacking, a synthetic request, or a later replay process is not acceptance
-evidence.
+The final B1 FULL graph is captured with stock FA2. During capture, the first
+tree-attention layer retains references to its exact query, paged K/V cache,
+block table, sequence tensors, and FP32 tree bias, keyed by CUDA graph identity.
+Immediately after the first real fixed32 observed B1 replay, the same EngineCore
+process recalls stock and qrow16 on those live tensors and compares raw BF16
+output bytes and raw FP32 LSE bytes.
 
-Before qrow16 can join the one-task bundle, its output and FP32 LSE must be
-compared bitwise against the stock geometry in the same EngineCore process and
-CUDA boot, using the actual paged `key_cache`, `value_cache`, `block_table`,
-query, sequence lengths, and tree bias from the live
-`astropy__astropy-12907` dispatch. The served output must remain the stock
-reference output. That runtime gate is not implemented here because adding it
-would expand this CPU-only integration task into a serving/capture harness
-change.
+The graph's `entry.output` is never replaced, so the request serves the stock
+result. The private qrow selector is absent during capture, set only around the
+candidate recall, and restored in `finally`. Its C++ dispatch raises unless all
+production geometry predicates match, preventing a stock-vs-stock false pass.
+Any byte mismatch raises after writing the FAIL artifact. Dense, repacked, and
+offline replay inputs are not part of this gate.
+
+`scripts/fr13_fa2_qrow16_byte_ab.py` remains compile preflight only. The live
+JSON result is `/logs/fr13_fa2_qrow16_live_paged_ab.json` by default.
 
 ## Static verification
 
@@ -83,4 +87,3 @@ python3 -m py_compile \
   scripts/fr13_fa2_qrow16_byte_ab.py
 bash -n scripts/fr13_launch_forked_fa2_tree_server.sh
 ```
-

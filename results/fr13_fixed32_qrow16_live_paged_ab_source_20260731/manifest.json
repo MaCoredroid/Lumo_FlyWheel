@@ -1,0 +1,36 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow16_live_paged_ab_source.v1",
+  "status": "SOURCE_COMPLETE_GPU_BUILD_PENDING",
+  "branch": "agent/fixed32-b1-gate-bundle",
+  "gpu_used": false,
+  "candidate_so_built": false,
+  "performance_claim": false,
+  "default_behavior_changed": false,
+  "default_selector": "FR13_FA2_QROW16_LIVE_PAGED_AB=0",
+  "intercept": "after first real observed fixed32 B1 FULL graph replay",
+  "process_scope": "same EngineCore process and CUDA boot",
+  "operands": [
+    "query",
+    "paged key_cache",
+    "paged value_cache",
+    "block_table",
+    "query_start_loc",
+    "seq_lens",
+    "tree_bias"
+  ],
+  "comparison": {
+    "output": "all raw BF16 bytes",
+    "lse": "all raw FP32 bytes",
+    "required_mismatches": 0
+  },
+  "served_return": "stock captured graph output unchanged",
+  "false_pass_guard": "candidate dispatch throws unless exact qrow16 production geometry engages",
+  "forbidden": [
+    "synthetic input",
+    "dense KV",
+    "repacked KV",
+    "offline replay",
+    "cross-process replay"
+  ],
+  "next_gate": "build candidate SO, pin its SHA-256, run one real SWE-Verified B1 task"
+}
