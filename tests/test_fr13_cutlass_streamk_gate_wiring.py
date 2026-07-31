@@ -35,7 +35,13 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
         assert assignment in gate
     assert "streamk_coop128_byte_ab" in gate
     assert "scripts/fr13_run_b1_kernel_live_gate.sh" in gate
+    assert "CUTLASS Stream-K gate requires a fresh RUNROOT" in gate
     assert "one real SWE-Verified B1 diagnostic task" in gate
     assert "not all five real projection shapes were exercised" in gate
+    assert "invalid differing-byte count" in gate
+    assert "byte equality and differing-byte count disagree" in gate
+    assert "installed binary attestation schema mismatch" in gate
+    assert "binary.CONTAINER_SOURCE" in gate
+    assert "binary.CONTAINER_DESTINATION" in gate
     assert '"served_result": "stock"' in gate
     assert '"acceptance_valid": False' in gate

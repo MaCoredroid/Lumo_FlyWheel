@@ -19,8 +19,8 @@ or acceptance claim. No GPU or Docker command was used for this work.
 - Candidate selector: `streamk_coop128`.
 - Diagnostic selector: `streamk_coop128_byte_ab`.
 - Deployment binary SHA-256:
-  `d5e33e9c42dff57f4864e4d0244436efce625a38a1712732c3589115c4802e2e`.
-- Deployment binary size: `111382632` bytes.
+  `fa9395754b13de26dbed38dfc551614dbb109058764426564dcbb3c77fdd6ea9`.
+- Deployment binary size: `111383840` bytes.
 
 The binary itself is intentionally not committed. The launcher accepts only
 that exact digest and size. Its RUNPATH was normalized after linking to
@@ -29,8 +29,8 @@ pinned image layout.
 
 ## Source corrections
 
-The first source-only version was not buildable as written. The CPU build
-audit found and corrected three issues:
+The first source-only version was not buildable as written. The CPU build and
+pre-GPU gate reviews found and corrected four issues:
 
 1. Stable-libtorch code cannot use `TORCH_CHECK`; it now uses
    `STD_TORCH_CHECK`.
@@ -39,6 +39,9 @@ audit found and corrected three issues:
 3. CUTLASS rejects cooperative `64x128x128` on SM120 because cooperative tile
    M must be at least 128. `streamk_coop64` was removed. The legal retained
    path uses `128x32x128` for swapped B1 rows and `128x128x128` otherwise.
+4. The first byte comparator stopped after the first mismatch. The corrected
+   comparator scans every output byte, records the total differing-byte count,
+   and was rebuilt and repinned before any GPU gate.
 
 The modeled B1 maximum recovery remains `10.923627 ms/event`; that is a model,
 not measured speed. It does not by itself close the end-to-end floor gap.
@@ -74,13 +77,14 @@ for up to 256 real projection calls, copies both outputs after the kernels,
 compares every BF16 byte, records JSONL, and returns the stock output. The gate
 requires all five real projection `(N,K)` shapes, contiguous nonzero calls, and
 zero differing bytes. Unrelated qrow, TAW, draft-head-pad, and GDN candidates
-are forced off.
+are forced off. The wrapper rejects an existing `RUNROOT`, preventing stale
+JSONL or attestation reuse from turning a vacuous run into a pass.
 
 ```bash
 RUNROOT=output/fr13_cutlass_streamk_b1_$(date -u +%Y%m%dT%H%M%SZ) \
 TAG=cutlass_streamk_b1_$(date -u +%Y%m%dT%H%M%SZ) \
 FORKED_FA2_SO=/absolute/path/to/pinned_fa2.so \
-CUTLASS_STREAMK_SO=/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.streamk_coop128_gate_ready.abi3.so \
+CUTLASS_STREAMK_SO=/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.streamk_coop128_allbytes_gate_ready.abi3.so \
 bash scripts/fr13_run_b1_cutlass_streamk_live_gate.sh
 ```
 

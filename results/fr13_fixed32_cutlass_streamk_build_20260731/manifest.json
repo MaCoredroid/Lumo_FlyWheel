@@ -1,6 +1,7 @@
 {
   "schema": "fr13.fixed32.cutlass_streamk_build.v1",
   "created_at_utc": "2026-07-31T18:42:46Z",
+  "review_corrected_at_utc": "2026-07-31T19:03:15Z",
   "status": "BUILD_PASS_ABI_ADDITIVE_GATE_READY_GPU_NOT_RUN",
   "performance_claim": false,
   "correctness_claim": false,
@@ -20,7 +21,7 @@
     "cutlass_tag": "v4.4.2",
     "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
     "dispatch_unpatched_sha256": "6e1df3f4701f58f233b3831b848c7bbf7936e6cb34b3bc28ded208fd66c48a7f",
-    "dispatch_patched_sha256": "b99dbcf14c7b07b9192405d52573a44503c076e3fd0dd451c82caf5c6523f2a0"
+    "dispatch_patched_sha256": "9de2ab8096df470d10a8838941f28c06831f481089bd5eaf98cfed90119fef65"
   },
   "toolchain": {
     "torch": "2.10.0+cu130",
@@ -35,7 +36,8 @@
   "source_corrections": [
     "TORCH_CHECK replaced by stable-ABI STD_TORCH_CHECK",
     "Stream-K-only scheduler code placed in the if-constexpr else branch",
-    "illegal cooperative 64x128x128 candidate removed after CUTLASS static assertion"
+    "illegal cooperative 64x128x128 candidate removed after CUTLASS static assertion",
+    "byte comparator scans and counts every output byte after pre-GPU review"
   ],
   "candidate": {
     "direct_selector": "streamk_coop128",
@@ -55,12 +57,12 @@
       "bytes": 110176808
     },
     "candidate_raw_link": {
-      "sha256": "09ac1553014888c6f2271f485a3a2c2e8fae921555b59582941a41bca9ee22d6",
-      "bytes": 111382632
+      "sha256": "09216b50ba6eb3591c9e2e3312d527fd0c259fca35ca7665c919655f1c1fef48",
+      "bytes": 111383840
     },
     "candidate_deployment": {
-      "sha256": "d5e33e9c42dff57f4864e4d0244436efce625a38a1712732c3589115c4802e2e",
-      "bytes": 111382632,
+      "sha256": "fa9395754b13de26dbed38dfc551614dbb109058764426564dcbb3c77fdd6ea9",
+      "bytes": 111383840,
       "runpath": "/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64",
       "committed_as_blob": false
     }
