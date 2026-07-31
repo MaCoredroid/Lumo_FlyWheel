@@ -1,0 +1,87 @@
+{
+  "schema": "fr13.fixed32.b1_gate_bundle_source.v1",
+  "status": "SOURCE_ONLY_DEFAULT_OFF_THREE_GATE_BLOCKED_ON_LIVE_QROW_GATE",
+  "branch": "agent/fixed32-b1-gate-bundle",
+  "integration_base_git_sha": "e8739aa8b6af878738157323172ce63bfee36e57",
+  "dfwd_selector_source_git_sha": "09cde18412c4cac278921b1b3300f11acb280544",
+  "dfwd_selector_artifact_git_sha": "4c54a59147ee054314caec51037a8b569e5a89ea",
+  "gpu_used": false,
+  "fa2_candidate_built": false,
+  "performance_claim": false,
+  "default_behavior_changed": false,
+  "default_state": {
+    "qrow16_build_flag": "absent",
+    "taw_native_precompute": "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0",
+    "dfwd_pad_rows": "FR13_DRAFT_HEAD_PAD_ROWS=0",
+    "dfwd_all_row_byte_ab": "FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=0"
+  },
+  "live_reference_gate": {
+    "ready": true,
+    "suite": "SWE-Verified",
+    "instance_id": "astropy__astropy-12907",
+    "concurrency": 1,
+    "physical_rows": 32,
+    "formal_acceptance_use": false,
+    "positive_token_traffic": "one real task only",
+    "forbidden_traffic": [
+      "synthetic",
+      "probe",
+      "replay",
+      "warmup generation"
+    ],
+    "environment": {
+      "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE": "1",
+      "FR13_DRAFT_HEAD_PAD_ROWS": "0",
+      "FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB": "1"
+    },
+    "gates": {
+      "taw": {
+        "scope": "all causally consumed probability rows and five integer products",
+        "required_probability_mismatches": 0,
+        "required_product_mismatches": 0,
+        "returns": "reference products"
+      },
+      "dfwd": {
+        "rows_compared": [
+          32,
+          64,
+          128
+        ],
+        "scope": "all 65536 BF16 logits at every draft-head call",
+        "required_bit_mismatches": 0,
+        "returns": "reference gemvx logits"
+      }
+    }
+  },
+  "qrow_live_gate": {
+    "ready": false,
+    "status": "BLOCKED_NOT_IMPLEMENTED",
+    "required_workload": "live SWE-Verified astropy__astropy-12907 B1 dispatch",
+    "required_process_scope": "same EngineCore process and CUDA boot",
+    "required_operands": [
+      "query",
+      "key_cache",
+      "value_cache",
+      "block_table",
+      "seq_lens",
+      "tree_bias"
+    ],
+    "required_comparisons": [
+      "complete BF16 output bits",
+      "complete FP32 LSE bits"
+    ],
+    "served_return": "stock reference output",
+    "forbidden_substitutes": [
+      "synthetic request",
+      "dense KV replay",
+      "dense-to-paged repacking",
+      "later-process capture replay"
+    ],
+    "existing_checker_classification": "NON_ACCEPTANCE_COMPILE_PREFLIGHT_ONLY"
+  },
+  "combined_three_gate_live_run": {
+    "ready": false,
+    "blocking_component": "qrow_live_gate"
+  }
+}
+
