@@ -1,0 +1,25 @@
+{
+  "artifact_schema": "fr13-fixed32-b1-gdn-bv64-byte-rejection-v1",
+  "acceptance_eligible": false,
+  "batch_size": 1,
+  "candidate_verdicts": {
+    "gdn_bv64": "REJECTED_BYTE_MISMATCH",
+    "taw_native_precompute": "UNCLASSIFIED"
+  },
+  "concurrency": 1,
+  "draft_events_completed": 0,
+  "fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+  "gdn_mismatch": {
+    "record": 0,
+    "surfaces": [
+      "export"
+    ]
+  },
+  "instance_ids": [
+    "astropy__astropy-12907"
+  ],
+  "measurements_valid": false,
+  "runroot": "output/fr13_b1_kernel_live_gate_taw_gdn_scalarfix_20260731T155216Z",
+  "source_commit": "cc4f420bdcf37aca39c063ec684ef739208fa92c",
+  "stock_restored": true
+}
