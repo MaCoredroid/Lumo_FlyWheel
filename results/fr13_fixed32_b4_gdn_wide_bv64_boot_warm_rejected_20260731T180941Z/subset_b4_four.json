@@ -1,0 +1,14 @@
+{
+ "dataset_name": "princeton-nlp/SWE-bench_Verified",
+ "split": "test",
+ "tier": "fr13_b4_four",
+ "source_subset": "fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z (the native MTP-5 B=4 decode_tps=39.9 baseline task set; user 2026-06-16: match fr9 for apples-to-apple aggregate)",
+ "generated_at": "2026-06-16T00:00:00Z",
+ "note": "first-4 slice of subset_b4_sixteen (rebuilt 2026-07-24 after generator clobber)",
+ "instance_ids": [
+  "astropy__astropy-12907",
+  "astropy__astropy-13033",
+  "astropy__astropy-13236",
+  "astropy__astropy-13398"
+ ]
+}

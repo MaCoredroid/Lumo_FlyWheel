@@ -1,0 +1,15 @@
+(EngineCore pid=257) INFO 07-31 18:17:11 [core.py:305] init engine (profile, create kv cache, warmup model) took 167.01 s
+(EngineCore pid=257) INFO 07-31 18:17:11 [vllm.py:840] Asynchronous scheduling is enabled.
+(EngineCore pid=257) WARNING 07-31 18:17:11 [vllm.py:896] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+(EngineCore pid=257) WARNING 07-31 18:17:11 [vllm.py:907] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(APIServer pid=1) INFO:     Started server process [1]
+(APIServer pid=1) INFO:     Waiting for application startup.
+(APIServer pid=1) INFO:     Application startup complete.
+(APIServer pid=1) INFO:     172.17.0.1:48378 - "POST /fr13/fixed32/ingress/begin HTTP/1.1" 200 OK
+(EngineCore pid=257) [FR13_FIXED32_FLUSH] failed generation 1: RuntimeError('fixed32 boot-warm evidence is missing')
+(APIServer pid=1) INFO:     172.17.0.1:48392 - "POST /fr13/fixed32/ingress/finalize HTTP/1.1" 200 OK
+
+Full-log negative evidence:
+- `Skipping CUDA graph capture` occurrences: 0
+- `FR13_FIXED32_BATCH_GDN_BYTE_AB PASS` occurrences: 0
+- `FR13_FIXED32_BATCH_GDN_BYTE_AB MISMATCH` occurrences: 0

@@ -1,0 +1,100 @@
+{
+  "schema": "fr13.fixed32.b4_gdn_wide_bv64_boot_warm_rejected.v2",
+  "created_utc": "2026-07-31T18:21:50Z",
+  "status": "REJECTED_PRETASK_EAGER_HOOK_NOT_EXECUTED",
+  "source_commit": "cd377b687d67e95688b904cd89900032fcb2d6ba",
+  "branch": "agent/fixed32-b4-livegate-ready",
+  "runroot": "output/fr13_b4_gdn_wide_live_gate_20260731T180941Z",
+  "arm": "tail6_fixed32_gdn_wide_bv64_exact4_20260731T180941Z",
+  "serve_rc": 15,
+  "classification": "exact4_b4_byte_diagnostic",
+  "candidate": {
+    "name": "fixed32_batched_gdn_wide_bv",
+    "bv": 64,
+    "production_enabled": false,
+    "byte_gate_classified": false
+  },
+  "task_contract": {
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "split": "test",
+    "subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "task_count": 4,
+    "batch_size": 4,
+    "concurrency": 4,
+    "tasks_scheduled_by_orchestrator": 4,
+    "executed_task_model_requests": 0,
+    "accepted_proxy_requests": 0,
+    "accepted_engine_requests": 0,
+    "completed_engine_requests": 0,
+    "task_results": 0,
+    "complete_work_census_events": 0,
+    "pure_decode_forward_steps": 0
+  },
+  "process_and_ready_contract": {
+    "process_attestation_passed": true,
+    "pid1_argv_count": 48,
+    "pid1_argv_canonical_sha256": "b1c6e4b6f446bf0775976b6b24f088e21c762134965c00f45368a4009c301911",
+    "trailing_argument": "--enforce-eager",
+    "runtime_cudagraph_mode": "NONE",
+    "ready_ack_generation": 0,
+    "ready_ack_status": "ok"
+  },
+  "proposed_eager_boot_hook": {
+    "source_fix_commit": "cd377b687d67e95688b904cd89900032fcb2d6ba",
+    "owner": "GPUModelRunner.capture_model",
+    "executed_in_real_startup": false,
+    "stock_eager_skip_warning_observed": false,
+    "boot_warm_evidence_published": false
+  },
+  "primary_failure": {
+    "stage": "first_task_pre_boundary_snapshot",
+    "flush_generation": 1,
+    "flush_action": "snapshot",
+    "flush_status": "error:RuntimeError",
+    "error": "fixed32 boot-warm evidence is missing",
+    "model_request_sent": false,
+    "candidate_byte_mismatch_observed": false
+  },
+  "zero_traffic_proof": {
+    "generation_probe_commands_executed": 0,
+    "no_positive_probe": true,
+    "spec_drafts": 0,
+    "spec_tokens": 0,
+    "work_census_exists": false,
+    "work_census_bytes": 0,
+    "real_event_arm_exists": false,
+    "b4_live_pass_exists": false
+  },
+  "identities": {
+    "runner_sha256": "141177a7207ee78f2548416a698e38dc537381deb965e392b508630a37e0e1e2",
+    "stock_fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+    "runtime_manifest_overall_canonical_sha256": "8fa708037f108987390854f566ef0d86a127182432a8813a5655932a21b46efd",
+    "external_manifest_overall_canonical_sha256": "c42fb16d2ea932f0e819c81172c49b69b312b75dd446146b6d7b6ef78af00a9e",
+    "runtime_launch_end_byte_identical": true,
+    "external_launch_end_byte_identical": true
+  },
+  "raw_evidence_sha256": {
+    "container_log": "5638d5cdbe35083439b622c8c8483753d9315d7a4abe5531fa4e17ceb8c94d05",
+    "process_identity": "e0386366dd1890b26bb673bf518204c15d5bbc3ba9a0735a2997d4aaf0f20d93",
+    "runlog": "815f07400497113c1003d7c1af3adf4a819ac5ec5e491365bdaa0bec401bd034",
+    "failed_snapshot_ack": "1c5ce4bd22ae894b8fd8271831c2d59a120dcd67f77e0d01b7ee2480a147250c"
+  },
+  "cleanup": {
+    "verified_utc": "2026-07-31T18:21:03Z",
+    "named_container_stopped": true,
+    "named_container_removed": true,
+    "post_removal_matching_containers": 0,
+    "post_removal_gpu_compute_processes": 0
+  },
+  "claims": {
+    "real_swe_verified_task_set_bound": true,
+    "real_swe_verified_model_requests_executed": false,
+    "b4_byte_parity": false,
+    "candidate_correctness": false,
+    "timing": false,
+    "tps": false,
+    "acceptance": false,
+    "hardware_floor": false,
+    "floor_acceptance_eligible": false
+  }
+}
