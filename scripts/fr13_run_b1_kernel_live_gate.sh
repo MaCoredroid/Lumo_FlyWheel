@@ -16,7 +16,7 @@ case "$FR13_GATE_QROW16" in
 esac
 
 ARM="hydra27_fixed32_${TAG}"
-SUBSET=config/fr13_fixed32/subset_b1_kernel_gate_one.json
+SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
 FA2_SHA=$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')
 
 [[ "$FA2_SHA" =~ ^[0-9a-f]{64}$ ]]
@@ -46,6 +46,7 @@ printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nstarted=%
   --repo "$PWD" --output "$RUNROOT/external_manifest.at_launch.json"
 
 OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
+  FR13_FIXED32_B1_DIAGNOSTIC=1 \
   FR13_DEVICE_MULTIDRAFT=1 \
   FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
   FR13_SFWD_GPU_TIMER=1 \
