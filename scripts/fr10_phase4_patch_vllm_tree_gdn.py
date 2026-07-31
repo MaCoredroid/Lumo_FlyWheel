@@ -1045,6 +1045,25 @@ def _fr13_fixed32_warm_final_full_postprocess(vocab_size):
 
 def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
     """Fail before CUDA capture unless the eager producer published its lease."""
+    def _same_tensor_view(left, right):
+        # SD-layout conv cache access transposes the persistent cache on every
+        # forward, producing a new Tensor wrapper for the same exact view.
+        return bool(
+            torch.is_tensor(left)
+            and torch.is_tensor(right)
+            and left.device == right.device
+            and left.dtype == right.dtype
+            and left.layout == right.layout
+            and tuple(int(value) for value in left.shape)
+            == tuple(int(value) for value in right.shape)
+            and tuple(int(value) for value in left.stride())
+            == tuple(int(value) for value in right.stride())
+            and int(left.storage_offset()) == int(right.storage_offset())
+            and int(left.data_ptr()) == int(right.data_ptr())
+            and int(left.untyped_storage().data_ptr())
+            == int(right.untyped_storage().data_ptr())
+        )
+
     batch = int(num_reqs)
     capacity = int(globals().get("_FR13_FIXED32_PRESEED_CAP", 0))
     done = globals().get("_FR13_FIXED32_PRESEEDED_BATCHES")
@@ -1180,7 +1199,7 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
             len(pregather_banks) == 48
             and len(current_conv) == 48
             and all(
-                bank is current
+                _same_tensor_view(bank, current)
                 for bank, current in zip(
                     pregather_banks, current_conv, strict=True
                 )

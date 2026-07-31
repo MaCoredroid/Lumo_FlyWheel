@@ -812,11 +812,15 @@ def test_preseed_postcondition_binds_all_current_bank_aliases(
     )
     order = tuple(f"gdn.{index}" for index in range(48))
     ssm_banks = tuple(object() for _ in order)
-    conv_banks = tuple(object() for _ in order)
+    conv_storage = tuple(torch.empty((8, 3, 4)) for _ in order)
+    conv_banks = tuple(
+        storage.transpose(-1, -2) for storage in conv_storage
+    )
     layers = {
         name: SimpleNamespace(
             _fr13_replay_ssm_state=ssm_banks[index],
-            _fr13_replay_conv_state=conv_banks[index],
+            # A fresh transpose wrapper is the deployed SD-layout behavior.
+            _fr13_replay_conv_state=conv_storage[index].transpose(-1, -2),
         )
         for index, name in enumerate(order)
     }
@@ -959,6 +963,15 @@ def test_preseed_postcondition_binds_all_current_bank_aliases(
         "_fr13_fixed32_assert_final_full_preseed_ready"
     ]
     assert_ready(batch)
+    if capacity == 4:
+        # FULL graphs capture in descending B order. Each SD-layout forward
+        # creates a fresh transpose wrapper over the same persistent cache.
+        for next_batch in (3, 2, 1):
+            for index, name in enumerate(order):
+                layers[name]._fr13_replay_conv_state = (
+                    conv_storage[index].transpose(-1, -2)
+                )
+            assert_ready(next_batch)
 
     namespace["_FR13_EAGER_PACK_STACKS"]["spec_idx"] = object()
     with pytest.raises(RuntimeError, match="did not publish lease"):
@@ -980,9 +993,18 @@ def test_preseed_postcondition_binds_all_current_bank_aliases(
         assert_ready(batch)
     pregather_state["ssm_banks"] = ssm_banks
 
-    layers[order[-1]]._fr13_replay_conv_state = object()
-    with pytest.raises(
-        RuntimeError,
-        match="did not publish lease",
-    ):
-        assert_ready(batch)
+    invalid_conv_views = (
+        conv_banks[-1].clone(),
+        torch.empty((9, 3, 4))[1:].transpose(-1, -2),
+        conv_storage[-1].transpose(-1, -2)[..., :-1],
+    )
+    for invalid in invalid_conv_views:
+        layers[order[-1]]._fr13_replay_conv_state = invalid
+        with pytest.raises(
+            RuntimeError,
+            match="did not publish lease",
+        ):
+            assert_ready(batch)
+    layers[order[-1]]._fr13_replay_conv_state = (
+        conv_storage[-1].transpose(-1, -2)
+    )
