@@ -1,0 +1,107 @@
+{
+  "schema": "fr13.fixed32.draft_head_m32_deployed_contract.v1",
+  "status": "SOURCE_READY_DEFAULT_OFF_UNMEASURED",
+  "gpu_used": false,
+  "docker_used": true,
+  "docker_use_scope": "an unrelated broad pytest invoked an existing Docker-based test; it was terminated immediately after detection, cleanup was verified empty, and no candidate, live, B4, or measurement workload ran",
+  "performance_claim": false,
+  "byte_equality_claim": false,
+  "floor_acceptance_claim": false,
+  "integrated_base_commit": "6bbafd5caee2d95081ec049faeaa2a2d1b4743a5",
+  "deployed_vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+  "model": {
+    "path": "/models/qwen3.6-27b-fp8",
+    "config_sha256": "f78c412bfdec65a88c8aa2a031d39c2fda32e3377ae48a77f971bc40a4f095df",
+    "index_sha256": "6d19a4e607604c1ac631f810a56e6084c892b4cb0251c530c6a24fc877f9fb4b",
+    "checkpoint_lm_head_shape": [248320, 5120],
+    "checkpoint_lm_head_dtype": "BF16",
+    "module": "ParallelLMHead",
+    "method": "UnquantizedEmbeddingMethod"
+  },
+  "live_b1_reference_contract": {
+    "gemm_mnk": [1, 65536, 5120],
+    "input_shape": [1, 5120],
+    "input_stride": [5120, 1],
+    "weight_shape": [65536, 5120],
+    "weight_stride": [5120, 1],
+    "weight_transpose_stride": [1, 5120],
+    "output_shape": [1, 65536],
+    "output_stride": [65536, 1],
+    "dtype": "bfloat16",
+    "calls_per_event": 5,
+    "call_sites": ["root", "post_root_mtp_1", "post_root_mtp_2", "post_root_mtp_3", "post_root_mtp_4"]
+  },
+  "old_candidate_rejection": {
+    "required_method": "UnquantizedLinearMethod",
+    "actual_method": "UnquantizedEmbeddingMethod",
+    "draft_events_completed": 0,
+    "performance_measurement_valid": false,
+    "root_cause": "wrong vLLM LM-head method-class guard"
+  },
+  "replacement": {
+    "candidate_source": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+    "candidate_source_sha256": "0ecd359c7ffb211f0212db3a83baabfff327c07286fd808ea99ac68d536798e2",
+    "candidate_gemm_mnk": [32, 65536, 5120],
+    "candidate_input_stride": [5120, 1],
+    "candidate_weight_transpose_stride": [1, 5120],
+    "candidate_output_stride": [65536, 1],
+    "served_rows": 1,
+    "live_flag": "FR13_DRAFT_HEAD_M32_LIVE_AB=1",
+    "production_flag": "FR13_DRAFT_HEAD_M32_PRODUCTION=1",
+    "silent_fallback": false,
+    "credential": "real SWE-Verified B1 full-logit byte PASS bound to candidate source SHA-256, exact terminal fixed32 flush evidence, and a canonically rebuilt authenticated chat-traffic audit",
+    "live_finalization": "authoritative final fixed32 flush after synchronization and complete-event reconciliation",
+    "production_sidecar_requires": [
+      "live PASS JSON and raw SHA-256",
+      "matching final-flush ACK",
+      "matching immutable boundary snapshot",
+      "matching canonical real SWE-Verified B1 fixed32_chat_traffic_audit.json"
+    ],
+    "production_engagement": {
+      "execution_basis": "measured cudagraph replay",
+      "selected_root_calls": 1,
+      "captured_loop_calls": 4,
+      "fallback_calls": 0,
+      "capture_origin": "measured or unmeasured warmup, followed by a measured replay on the same graph",
+      "drafter_graph_signature": "d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c"
+    },
+    "timing_candidate_contract": {
+      "task_set": "canonical SWE-Verified exact4",
+      "batch_size": 1,
+      "measurement": "full-wall TPS plus SFWD/DFWD/CFWD component telemetry",
+      "minimum_pure_decode_steps_per_task": 64,
+      "minimum_retained_wall_fraction": 0.99,
+      "formal_floor_acceptance_eligible": false
+    }
+  },
+  "historical_real_nsys": {
+    "artifact": "results/fr13_fixed32_b1_nsys_20260731T013952Z_curated/nsys_attribution.json",
+    "complete_events": 881,
+    "reference_gemvx_instances": 4405,
+    "reference_heads_ms_per_event": 26.227316013620886
+  },
+  "modeled_hypothesis": {
+    "candidate_ms_per_event": 16.03817962886598,
+    "recovery_ms_per_event": 10.189136384754906,
+    "measurement": false,
+    "evidence_limit": "projection from a different M32 verifier-head shape and private cuBLAS dispatch"
+  },
+  "roofline": {
+    "bandwidth_bytes_per_second": 273000000000,
+    "weight_bytes_per_event": 3355443200,
+    "weight_only_floor_ms_per_event": 12.291000732600732,
+    "candidate_minimum_traffic_floor_ms_per_event": 12.373820952380953
+  },
+  "current_floor_gap_context": {
+    "valid_qrow_hydra_wall_ms": 232.7797900714,
+    "hardware_floor_ms": 119.658015414,
+    "acceptance_cap_ms": 137.6067177261,
+    "gap_to_cap_ms": 95.1730723453,
+    "modeled_recovery_fraction_of_gap": 0.1070590255591143
+  },
+  "next_steps": [
+    "real SWE-Verified B1 live byte gate on astropy__astropy-12907",
+    "canonical real SWE-Verified exact4 B1 stock/candidate full-wall timing",
+    "compose only after exact production engagement and positive wall delta"
+  ]
+}
