@@ -9,7 +9,7 @@ cd "$REPO"
 : "${TAG:?set TAG to a unique run tag}"
 : "${FORKED_FA2_SO:?set FORKED_FA2_SO to the exact FA2 shared object}"
 
-FR13_GATE_QROW16=${FR13_GATE_QROW16:-1}
+FR13_GATE_QROW16=${FR13_GATE_QROW16:-0}
 case "$FR13_GATE_QROW16" in
   0|1) ;;
   *) echo "FR13_GATE_QROW16 must be 0 or 1" >&2; exit 2 ;;
