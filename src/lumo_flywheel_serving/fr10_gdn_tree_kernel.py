@@ -4159,6 +4159,8 @@ def _tree_gdn_path_kernel(
     COUNT_INVOCATION: tl.constexpr,
     SCAN_ALIGN: tl.constexpr,
     MAX_PATH_LEN: tl.constexpr,
+    STATE_SOURCE: tl.constexpr = 0,
+    EXPORT_MODE: tl.constexpr = 0,
     RING_EXPORT: tl.constexpr = False,
     FLAGS_EXPORT: tl.constexpr = False,
     FLAGS_ROWS: tl.constexpr = 0,
@@ -4185,32 +4187,44 @@ def _tree_gdn_path_kernel(
     offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
     v_mask = offs_v < DIM_V
 
-    par = tl.load(path_parent + pid_path)
-    # h0 source (identical addressing to the monolith)
-    h0_base = h0
-    if H0_IS_BANK:
-        h0_column = 0
-        if H0_USE_ACCEPTED_COLUMN:
-            h0_column = tl.maximum(
-                tl.load(h0_num_accepted_tokens + H0_BATCH_INDEX).to(tl.int64) - 1,
-                0,
-            )
-        h0_index = tl.load(h0_indices + H0_INDEX_ROW + h0_column)
-        h0_base = h0 + h0_index * H0_BANK_STRIDE
-    b_h0 = tl.load(
-        h0_base + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
-        mask=v_mask[:, None],
-        other=0.0,
-    ).to(tl.float32)
-    par_state = tl.load(
-        state_export
-        + ((tl.maximum(par, 0).to(tl.int64) * NUM_VH + pid_vh) * DIM_V
-           + offs_v[:, None]) * DIM_K
-        + offs_k[None, :],
-        mask=(par >= 0) & v_mask[:, None],
-        other=0.0,
-    )
-    state_i = tl.where(par >= 0, par_state, b_h0)
+    # STATE_SOURCE is dynamic for the generic route. The exact fixed32
+    # schedule specializes root level to h0 and level 1 to the exported
+    # parent. This removes eleven dead h0 tile reads per (VH, V-block) without
+    # changing the state bytes entering _gdn_node_step.
+    if STATE_SOURCE != 2:
+        h0_base = h0
+        if H0_IS_BANK:
+            h0_column = 0
+            if H0_USE_ACCEPTED_COLUMN:
+                h0_column = tl.maximum(
+                    tl.load(h0_num_accepted_tokens + H0_BATCH_INDEX).to(tl.int64) - 1,
+                    0,
+                )
+            h0_index = tl.load(h0_indices + H0_INDEX_ROW + h0_column)
+            h0_base = h0 + h0_index * H0_BANK_STRIDE
+        b_h0 = tl.load(
+            h0_base
+            + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K
+            + offs_k[None, :],
+            mask=v_mask[:, None],
+            other=0.0,
+        ).to(tl.float32)
+    if STATE_SOURCE != 1:
+        par = tl.load(path_parent + pid_path)
+        par_state = tl.load(
+            state_export
+            + ((tl.maximum(par, 0).to(tl.int64) * NUM_VH + pid_vh) * DIM_V
+               + offs_v[:, None]) * DIM_K
+            + offs_k[None, :],
+            mask=(par >= 0) & v_mask[:, None],
+            other=0.0,
+        )
+    if STATE_SOURCE == 1:
+        state_i = b_h0
+    elif STATE_SOURCE == 2:
+        state_i = par_state
+    else:
+        state_i = tl.where(par >= 0, par_state, b_h0)
 
     path_len = tl.load(path_lengths + pid_path)
     for i in tl.range(0, path_len):
@@ -4303,15 +4317,19 @@ def _tree_gdn_path_kernel(
             out_i,
             mask=n_ok & v_mask,
         )
-        do_exp = tl.load(export_mask + node_c)
-        tl.store(
-            state_export
-            + ((node_c.to(tl.int64) * NUM_VH + pid_vh) * DIM_V
-               + offs_v[:, None]) * DIM_K
-            + offs_k[None, :],
-            state_i,
-            mask=n_ok & (do_exp != 0) & v_mask[:, None],
-        )
+        if EXPORT_MODE != 2:
+            if EXPORT_MODE == 0:
+                do_exp = n_ok & (tl.load(export_mask + node_c) != 0)
+            else:
+                do_exp = n_ok
+            tl.store(
+                state_export
+                + ((node_c.to(tl.int64) * NUM_VH + pid_vh) * DIM_V
+                   + offs_v[:, None]) * DIM_K
+                + offs_k[None, :],
+                state_i,
+                mask=do_exp & v_mask[:, None],
+            )
     if FLAGS_EXPORT:
         # FR13_FLAGS_INKERNEL under the subtree route: same staging-freshness
         # store as the monolith tail (values identical: flags[0]=1 staged,
@@ -7887,6 +7905,16 @@ def launch_tree_gdn_prepared(
             raise RuntimeError(
                 f"FR13_SUBTREE_PARALLEL: no preseed for n_actual={n_actual}"
             )
+        _fixed32_io = (
+            _FR13_FIXED32_MODE is not None
+            and st.get("schedule") == "fixed32"
+            and st.get("fixed32_contract") is not None
+        )
+        if _FR13_FIXED32_MODE is not None and not _fixed32_io:
+            raise RuntimeError(
+                "FR13_FIXED32: exact path I/O specialization requires the "
+                "validated fixed32 schedule"
+            )
         for _li, (
             _nodes,
             _pars,
@@ -7894,6 +7922,15 @@ def launch_tree_gdn_prepared(
             _npaths,
             _lengths,
         ) in enumerate(st["levels"]):
+            # Generic schedules retain the original dynamic source/export
+            # decisions. The validated two-level fixed32 schedule has exactly
+            # one h0-rooted path whose five nodes are all handoff parents, then
+            # eleven export-rooted terminal paths.
+            _state_source = 0
+            _export_mode = 0
+            if _fixed32_io:
+                _state_source = 1 if _li == 0 else 2
+                _export_mode = 1 if _li == 0 else 2
             _tree_gdn_path_kernel[(num_vh, triton.cdiv(dim_v, _bv), _npaths)](
                 q,
                 k,
@@ -7936,6 +7973,8 @@ def launch_tree_gdn_prepared(
                 COUNT_INVOCATION=_count and (_li == 0),
                 SCAN_ALIGN=_scan_align,
                 MAX_PATH_LEN=_mlen,
+                STATE_SOURCE=_state_source,
+                EXPORT_MODE=_export_mode,
                 RING_EXPORT=_ring_export,
                 FLAGS_EXPORT=_flags_export and (_li == 0),
                 FLAGS_ROWS=_flags_rows,
