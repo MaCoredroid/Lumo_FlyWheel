@@ -1,0 +1,28 @@
+Pinned built source:
+output/fr13_fa2_qrow16_num_splits0_build_20260731/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/flash_attn/flash_api.cpp
+sha256=4af413a54eb6ebce88fa2bbe94de9d82b5cca48a3af10fae2333b42567c5b37b
+
+54:     // Reset the parameters
+55:     params = {};
+
+672:    const int seqlenq_ngroups_swapped = max_seqlen_q == 1 && ...;
+674:    if (seqlenq_ngroups_swapped) {
+
+784:    if (seqlenq_ngroups_swapped) {
+785:        // Only apply split-k for decoding
+786:        std::tie(softmax_lse_accum, out_accum) =
+787:            set_params_splitkv(...);
+
+822:    if (max_seqlen_k > 0) {
+824:        run_mha_fwd(params, stream, paged_KV);
+
+Fixed32 inputs are max_seqlen_q=32 and paged_KV=true. Therefore the struct is
+zero-initialized, the split-parameter setup is skipped, params.num_splits is
+exactly zero, and force_split_kernel is true at run_mha_fwd.
+
+The qrow private dispatch now requires:
+278:            && params.num_splits == 0
+279:            && force_split_kernel,
+
+The dedicated qrow launcher directly instantiates Split=false and never reads
+num_splits for its custom grid. It launches no split combine kernel.

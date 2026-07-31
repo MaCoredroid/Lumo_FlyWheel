@@ -1,0 +1,7 @@
+observed_at_utc=2026-07-31T17:03:44Z
+container_filter=fr13-bigdenom-hydra27_fixed32_kernel_live_qrow16_current_b1_20260731T165000Z
+matching_containers=0
+nvidia_compute_processes=0
+
+The run's authenticated automatic cleanup failed closed after EngineCore death.
+This later observation records the state after manual container removal.

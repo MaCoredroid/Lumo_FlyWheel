@@ -14,9 +14,13 @@ import fr13_fixed32_contract as contract  # noqa: E402
 EXPECTED_SHA256 = "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d"
 EXPECTED_SIZE = 299_183_936
 QROW16_EXPECTED_SHA256 = (
+    "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
+)
+QROW16_EXPECTED_SIZE = 299_507_792
+QROW16_REJECTED_SHA256 = (
     "35ba18c9bab4b37362aa3b26441e8a58edfcd3d0a75692fda90fc131a0b3307c"
 )
-QROW16_EXPECTED_SIZE = 299_554_080
+QROW16_REJECTED_SIZE = 299_554_080
 FA2_PATH = REPO / contract.FA2_REPO_RELATIVE
 
 
@@ -127,6 +131,40 @@ def test_runtime_identity_rejects_arbitrary_qrow_declaration() -> None:
     with pytest.raises(contract.ContractError, match="source FA2 mismatch"):
         contract.validate_runtime_attestation(
             _runtime_payload(size=QROW16_EXPECTED_SIZE, sha256="0" * 64)
+        )
+
+
+def test_runtime_identity_accepts_exact_qrow_source_and_destination() -> None:
+    env = {
+        "FR13_FA2_QROW16_LIVE_PAGED_AB": "1",
+        "FR13_FA2_QROW16_PRODUCTION": "0",
+        "FR13_FA2_QROW16_SO_SHA256": QROW16_EXPECTED_SHA256,
+    }
+    payload = _runtime_payload(
+        size=QROW16_EXPECTED_SIZE,
+        sha256=QROW16_EXPECTED_SHA256,
+    )
+    contract._require_built_runtime_fa2_identity(
+        payload["forked_fa2"]["source"],
+        payload["forked_fa2"]["destination"],
+        env=env,
+    )
+
+
+def test_runtime_identity_rejects_superseded_qrow_candidate() -> None:
+    env = {
+        "FR13_FA2_QROW16_LIVE_PAGED_AB": "1",
+        "FR13_FA2_QROW16_PRODUCTION": "0",
+        "FR13_FA2_QROW16_SO_SHA256": QROW16_REJECTED_SHA256,
+    }
+    with pytest.raises(contract.ContractError, match="not the pinned candidate"):
+        contract._expected_runtime_fa2_identity(env)
+    with pytest.raises(contract.ContractError, match="source FA2 mismatch"):
+        contract.validate_runtime_attestation(
+            _runtime_payload(
+                size=QROW16_REJECTED_SIZE,
+                sha256=QROW16_REJECTED_SHA256,
+            )
         )
 
 

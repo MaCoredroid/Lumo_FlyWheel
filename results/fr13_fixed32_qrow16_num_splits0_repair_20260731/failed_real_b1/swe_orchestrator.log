@@ -1,0 +1,44 @@
+[eval-offload] eval step -> alienware (native x86_64)
+[codex-offload] codex docker -> alienware (x86); endpoint=http://127.0.0.1:8023/v1 (GB10 stays vLLM-only — uncontended deploy-speed)
+=== [2026-07-31T16:55:32Z] dataset=princeton-nlp/SWE-bench_Verified tag=verified n=1 concurrency=1 ===
+[2026-07-31T16:55:33Z] -> astropy__astropy-12907
+Traceback (most recent call last):
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/scripts/run_swe_bench_q36_a.py", line 4115, in post
+    ack = self.client.snapshot()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/scripts/fr13_fixed32_flush_protocol.py", line 890, in snapshot
+    return self.flush("snapshot")
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/scripts/fr13_fixed32_flush_protocol.py", line 841, in flush
+    self._check_liveness(deadline=deadline)
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/scripts/fr13_fixed32_flush_protocol.py", line 580, in _check_liveness
+    raise FlushLivenessError(
+fr13_fixed32_flush_protocol.FlushLivenessError: container 'c53c9506028688a804d01f7f50a87d9d3b811a8aaae143b3ebdade79d9ae2d2e' is not running: false
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/scripts/run_swe_bench_q36_a.py", line 6268, in _job
+    res = _process_one(
+          ^^^^^^^^^^^^^
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/scripts/run_swe_bench_q36_a.py", line 5885, in _process_one
+    summary["fixed32_task_boundary"] = fixed32_bracket.post(metrics_post)
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/scripts/run_swe_bench_q36_a.py", line 4143, in post
+    raise Fixed32BoundaryError(
+Fixed32BoundaryError: fixed32 post bracket failed: FlushLivenessError: container 'c53c9506028688a804d01f7f50a87d9d3b811a8aaae143b3ebdade79d9ae2d2e' is not running: false
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/scripts/run_swe_bench_q36_a.py", line 6375, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/scripts/run_swe_bench_q36_a.py", line 6343, in main
+    summaries.append(_job(iid))
+                     ^^^^^^^^^
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/scripts/run_swe_bench_q36_a.py", line 6308, in _job
+    fixed32_bracket.post(
+  File "/home/mark/shared/lumoFlyWheel-kernel-next-stack/scripts/run_swe_bench_q36_a.py", line 4112, in post
+    raise Fixed32BoundaryError("fixed32 post bracket already failed")
+Fixed32BoundaryError: fixed32 post bracket already failed
