@@ -1,0 +1,108 @@
+{
+  "schema": "fr13-fixed32-invalid-attempt-v1",
+  "created_at_utc": "2026-07-31T12:53:06Z",
+  "classification": "invalid_exact4_agent_terminal_incomplete",
+  "acceptance_gate_eligible": false,
+  "performance_aggregation_included": false,
+  "reason": "The fourth canonical task's Qwen process exited 1 after the always-on loop detector stopped it at the 101-tool-call cap. Canonical real-task provenance rejected the incomplete terminal state before runner_metadata and evaluation artifacts were written.",
+  "campaign": {
+    "arm": "hydra27_fixed32",
+    "batch_size": 1,
+    "concurrency": 1,
+    "task_set": "config/fr13_fixed32/subset_b4_four.json",
+    "task_ids": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033",
+      "astropy__astropy-13236",
+      "astropy__astropy-13398"
+    ],
+    "source_commit": "e5a4029249e5b9483919056bae6542e47bbce75b",
+    "started_at_utc": "2026-07-31T11:53:34Z",
+    "swe_started_at_utc": "2026-07-31T12:02:01Z",
+    "ended_at_utc": "2026-07-31T12:50:06Z",
+    "orchestrator_exit_code": 1
+  },
+  "failure": {
+    "instance_id": "astropy__astropy-13398",
+    "agent_exit_code": 1,
+    "agent_timed_out": false,
+    "agent_turns": 101,
+    "agent_total_tokens": 5091396,
+    "agent_result_subtype": "error_during_execution",
+    "guard": "turn_tool_call_cap",
+    "canonical_error": "Fixed32BoundaryError: agent terminal state is incomplete: exit_code=1 timed_out=False",
+    "runner_metadata_present": false,
+    "evaluation_present": false
+  },
+  "teardown": {
+    "final_flush_status": "ok",
+    "final_flush_generation": 9,
+    "pure_decode_forward_steps": 8654,
+    "complete_work_census_events": 8654,
+    "sfwd_pending": 0,
+    "dfwd_pending": 0,
+    "cfwd_pending": 0,
+    "container_removed": true,
+    "gpu_compute_processes_after_teardown": 0
+  },
+  "identity": {
+    "runtime_manifest_launch_sha256": "f81b9ae2ba0f7b5e8d8974d2f98f780762dddfda411a163c66b7f85b786da4df",
+    "runtime_manifest_end_sha256": "f81b9ae2ba0f7b5e8d8974d2f98f780762dddfda411a163c66b7f85b786da4df",
+    "external_manifest_launch_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "external_manifest_end_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "manifests_byte_equal_at_end": true
+  },
+  "diagnostic_only_telemetry": {
+    "warning": "These counters describe generated traffic but MUST NOT be used as an exact4 acceptance result.",
+    "forward_events": 8654,
+    "accepted_draft_tokens": 38432,
+    "accepted_drafts_per_event": 4.440952160850474,
+    "sfwd_gpu_ms_per_event": 160.64591928847494,
+    "dfwd_gpu_ms_per_event": 38.12759394344847,
+    "cfwd_gpu_ms_per_event": 20.427846176177482,
+    "gpu_component_ms_per_event": 219.2013594081009,
+    "wall_ms_per_event": 235.4053716675186,
+    "tasks": [
+      {
+        "instance_id": "astropy__astropy-12907",
+        "terminal_provenance": "complete",
+        "verdict": "resolved",
+        "forward_events": 462,
+        "accepted_draft_tokens": 2092,
+        "accepted_drafts_per_event": 4.528138528138528
+      },
+      {
+        "instance_id": "astropy__astropy-13033",
+        "terminal_provenance": "complete",
+        "verdict": "failed",
+        "forward_events": 1263,
+        "accepted_draft_tokens": 5687,
+        "accepted_drafts_per_event": 4.5027711797308
+      },
+      {
+        "instance_id": "astropy__astropy-13236",
+        "terminal_provenance": "complete",
+        "verdict": "resolved",
+        "forward_events": 1491,
+        "accepted_draft_tokens": 7169,
+        "accepted_drafts_per_event": 4.8081824279007375
+      },
+      {
+        "instance_id": "astropy__astropy-13398",
+        "terminal_provenance": "incomplete",
+        "verdict": null,
+        "forward_events": 5438,
+        "accepted_draft_tokens": 23484,
+        "accepted_drafts_per_event": 4.318499448326591
+      }
+    ]
+  },
+  "evidence_sha256": {
+    "swe_orchestrator_log": "773acaa7d754fb17bb4ea07da9ca1f92911353867b66b0d5238257393fa53d8c",
+    "task4_qwen_trace": "181f608a66f4023b9bb788423077f877b7afd7b6d49b85c587b6766df99c9ba3",
+    "task4_qwen_stderr": "1b07e81e433d6818ba717c8c82342fe055fd839f4f428ece4f60efd9b1a55ef3",
+    "task4_boundary": "351c93682da48c6478ff3efddfcc04c8d03b388a893c9b636f3cee82156c6cea",
+    "final_flush": "1e9c360e31bcd657756ed696ed78f0ee83a1f3245d4ee2ba4c9fa99a58e6c40f",
+    "diagnostic_reducer": "808a771e39d1bacf024fb983964dc1bee322fad55ea40762bde82a4dcd446519"
+  }
+}
