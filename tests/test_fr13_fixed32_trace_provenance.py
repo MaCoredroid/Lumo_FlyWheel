@@ -165,6 +165,74 @@ def _qwen_result_trace(
     return events
 
 
+def _top_level_assistant_groups(
+    events: list[dict[str, Any]],
+) -> list[list[dict[str, Any]]]:
+    groups: list[list[dict[str, Any]]] = []
+    previous_was_top_level_assistant = False
+    for event in events:
+        is_top_level_assistant = (
+            event.get("type") == "assistant"
+            and event.get("parent_tool_use_id") is None
+        )
+        if not is_top_level_assistant:
+            previous_was_top_level_assistant = False
+            continue
+        if previous_was_top_level_assistant:
+            groups[-1].append(event)
+        else:
+            groups.append([event])
+        previous_was_top_level_assistant = True
+    return groups
+
+
+def _set_top_level_group_input_tokens(
+    events: list[dict[str, Any]],
+    values: list[int],
+) -> list[list[dict[str, Any]]]:
+    groups = _top_level_assistant_groups(events)
+    assert len(groups) == len(values)
+    for group, value in zip(groups, values, strict=True):
+        for event in group:
+            event["message"]["usage"]["input_tokens"] = 0
+        group[-1]["message"]["usage"]["input_tokens"] = value
+    return groups
+
+
+def _bind_top_level_tool_result(
+    events: list[dict[str, Any]],
+    *,
+    next_group_index: int,
+) -> None:
+    groups = _top_level_assistant_groups(events)
+    previous_group = groups[next_group_index - 1]
+    next_group = groups[next_group_index]
+    previous_index = events.index(previous_group[-1])
+    next_index = events.index(next_group[0])
+    assert next_index == previous_index + 2
+    tool_uses = [
+        item
+        for event in previous_group
+        for item in event["message"]["content"]
+        if item.get("type") == "tool_use"
+    ]
+    assert len(tool_uses) == 1
+    boundary = events[previous_index + 1]
+    events[previous_index + 1] = _user_event(
+        event_id=boundary["uuid"],
+        session_id=boundary["session_id"],
+        content=[
+            {
+                "type": "tool_result",
+                "tool_use_id": tool_uses[0]["id"],
+                "content": "tool result",
+                "is_error": False,
+            }
+        ],
+        parent_tool_use_id=None,
+    )
+
+
 def _task_evidence(task_key_id: str, logical: int, records: int) -> dict[str, Any]:
     return {
         "schema": "fr13-fixed32-task-auth-evidence-v1",
@@ -332,6 +400,7 @@ def test_legacy_terminal_records_return_without_a_result_event() -> None:
         "completed_logical_model_requests": 1,
         "model_request_ids": ["legacy-response"],
         "hidden_terminal_model_requests": 0,
+        "hidden_compaction_model_requests": 0,
         "engine_id_joinable": True,
     }
 
@@ -354,6 +423,7 @@ def test_qwen_result_trace_counts_the_final_null_stop_turn(
     )
     assert trace_requests["trace_format"] == "qwen_result"
     assert trace_requests["completed_logical_model_requests"] == 13
+    assert trace_requests["hidden_compaction_model_requests"] == 0
     assert trace_requests["engine_id_joinable"] is False
     assert len(trace_requests["model_request_ids"]) == 13
     assert len(set(trace_requests["model_request_ids"])) == 13
@@ -386,6 +456,133 @@ def test_qwen_result_trace_counts_the_final_null_stop_turn(
     assert floor_trace["completed_logical_model_requests"] == 13
     assert len(floor_trace["model_request_id_sha256s"]) == 13
     assert floor_trace["engine_id_joinable"] is False
+
+
+def test_qwen_top_level_usage_drop_counts_hidden_compaction(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    events = _qwen_result_trace()
+    _set_top_level_group_input_tokens(
+        events,
+        [100 * index for index in range(1, 13)] + [500],
+    )
+    _bind_top_level_tool_result(events, next_group_index=12)
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+    )
+
+    assert trace_requests["completed_logical_model_requests"] == 14
+    assert trace_requests["hidden_compaction_model_requests"] == 1
+    compaction_ids = [
+        request_id
+        for request_id in trace_requests["model_request_ids"]
+        if request_id.startswith("qwen-hidden-compaction-sha256:")
+    ]
+    assert len(compaction_ids) == 1
+    assert trace_requests["model_request_ids"] == (
+        contract.validate_fixed32_trace_model_requests(
+            copy.deepcopy(events),
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )["model_request_ids"]
+    )
+
+    trace_path = tmp_path / "qwen_compaction_trace.jsonl"
+    trace_path.write_text(
+        "".join(json.dumps(event) + "\n" for event in events),
+        encoding="utf-8",
+    )
+    task_key_id = "d" * 64
+    provenance = runner._fixed32_real_task_provenance(
+        instance_id=TASK_A,
+        trace_path=trace_path,
+        agent_meta=_fixed32_agent_meta(runner, tmp_path),
+        task_key_id=task_key_id,
+        task_auth_before=_task_evidence(task_key_id, 0, 1),
+        task_auth_after=_task_evidence(task_key_id, 14, 57),
+    )
+    assert provenance["trace_completed_logical_model_requests"] == 14
+    assert provenance["completed_logical_model_requests"] == 14
+    floor_trace = floor_gate._fixed32_trace_model_requests(
+        trace_path,
+        provenance=provenance,
+    )
+    assert floor_trace["completed_logical_model_requests"] == 14
+    assert len(floor_trace["model_request_id_sha256s"]) == 14
+
+
+def test_qwen_multiple_top_level_usage_drops_count_exactly() -> None:
+    events = _qwen_result_trace()
+    _set_top_level_group_input_tokens(
+        events,
+        [100, 200, 50, 100, 200, 60, 100, 200, 300, 400, 500, 600, 700],
+    )
+    _bind_top_level_tool_result(events, next_group_index=2)
+    _bind_top_level_tool_result(events, next_group_index=5)
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+    )
+
+    assert trace_requests["completed_logical_model_requests"] == 15
+    assert trace_requests["hidden_compaction_model_requests"] == 2
+
+
+@pytest.mark.parametrize(
+    ("previous_input_tokens", "next_input_tokens"),
+    ((0, 1), (1, 0), (0, 0)),
+)
+def test_qwen_zero_usage_cannot_infer_hidden_compaction(
+    previous_input_tokens: int,
+    next_input_tokens: int,
+) -> None:
+    events = _qwen_result_trace()
+    values = [0] * 11 + [previous_input_tokens, next_input_tokens]
+    _set_top_level_group_input_tokens(events, values)
+    _bind_top_level_tool_result(events, next_group_index=12)
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+    )
+
+    assert trace_requests["hidden_compaction_model_requests"] == 0
+
+
+@pytest.mark.parametrize("value", (True, -1, "100", None))
+def test_qwen_malformed_usage_cannot_infer_hidden_compaction(
+    value: Any,
+) -> None:
+    events = _qwen_result_trace()
+    groups = _set_top_level_group_input_tokens(
+        events,
+        [100 * index for index in range(1, 13)] + [500],
+    )
+    _bind_top_level_tool_result(events, next_group_index=12)
+    groups[-2][-1]["message"]["usage"]["input_tokens"] = value
+
+    with pytest.raises(contract.ContractError, match="input-token usage"):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )
+
+
+def test_qwen_usage_drop_requires_exact_top_level_tool_results() -> None:
+    events = _qwen_result_trace()
+    _set_top_level_group_input_tokens(
+        events,
+        [100 * index for index in range(1, 13)] + [500],
+    )
+
+    with pytest.raises(contract.ContractError, match="top-level tool results"):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )
 
 
 def _move_result_before_final_text(events: list[dict[str, Any]]) -> None:
@@ -816,6 +1013,7 @@ def test_closed_nested_agent_counts_one_hidden_terminal_request(
 
     assert trace_requests["completed_logical_model_requests"] == 5
     assert trace_requests["hidden_terminal_model_requests"] == 1
+    assert trace_requests["hidden_compaction_model_requests"] == 0
     assert len(trace_requests["model_request_ids"]) == 5
     hidden_ids = [
         request_id
@@ -852,6 +1050,44 @@ def test_closed_nested_agent_counts_one_hidden_terminal_request(
     )["completed_logical_model_requests"] == 5
 
 
+def test_nested_to_top_level_usage_drop_is_not_compaction() -> None:
+    events = _nested_agent_qwen_result_trace()
+    _set_top_level_group_input_tokens(events, [100, 200])
+    nested_groups: list[list[dict[str, Any]]] = []
+    previous_was_nested_assistant = False
+    for event in events:
+        is_nested_assistant = (
+            event.get("type") == "assistant"
+            and event.get("parent_tool_use_id") == "nested-agent-tool"
+        )
+        if not is_nested_assistant:
+            previous_was_nested_assistant = False
+            continue
+        if previous_was_nested_assistant:
+            nested_groups[-1].append(event)
+        else:
+            nested_groups.append([event])
+        previous_was_nested_assistant = True
+    assert len(nested_groups) == 2
+    for group, input_tokens in zip(
+        nested_groups,
+        (500, 1000),
+        strict=True,
+    ):
+        for event in group:
+            event["message"]["usage"]["input_tokens"] = 0
+        group[-1]["message"]["usage"]["input_tokens"] = input_tokens
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+    )
+
+    assert trace_requests["completed_logical_model_requests"] == 5
+    assert trace_requests["hidden_terminal_model_requests"] == 1
+    assert trace_requests["hidden_compaction_model_requests"] == 0
+
+
 def test_nested_non_agent_parent_fails_closed() -> None:
     events = _nested_agent_qwen_result_trace()
     _event_by_uuid(events, "nested-top-agent")["message"]["content"][0][
@@ -876,6 +1112,7 @@ def test_prompt_only_agent_counts_hidden_terminal_request() -> None:
 
     assert trace_requests["completed_logical_model_requests"] == 3
     assert trace_requests["hidden_terminal_model_requests"] == 1
+    assert trace_requests["hidden_compaction_model_requests"] == 0
 
 
 def test_agent_setup_error_without_a_child_prompt_adds_no_request() -> None:

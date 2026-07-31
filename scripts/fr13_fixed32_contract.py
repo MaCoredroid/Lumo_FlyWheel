@@ -710,6 +710,32 @@ def _fixed32_qwen_hidden_agent_terminal_request_id(
     )
 
 
+def _fixed32_qwen_hidden_compaction_request_id(
+    *,
+    previous_group_event_ids: list[str],
+    intervening_event_ids: list[str],
+    next_group_event_ids: list[str],
+    previous_input_tokens: int,
+    next_input_tokens: int,
+) -> str:
+    payload = json.dumps(
+        {
+            "previous_group_event_ids": previous_group_event_ids,
+            "intervening_event_ids": intervening_event_ids,
+            "next_group_event_ids": next_group_event_ids,
+            "previous_input_tokens": previous_input_tokens,
+            "next_input_tokens": next_input_tokens,
+        },
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return (
+        "qwen-hidden-compaction-sha256:"
+        f"{hashlib.sha256(payload).hexdigest()}"
+    )
+
+
 def _fixed32_qwen_user_tool_result(
     event: dict[str, Any],
 ) -> tuple[str, bool] | None:
@@ -733,6 +759,98 @@ def _fixed32_qwen_user_tool_result(
     ):
         return None
     return tool_use_id, is_error
+
+
+def _fixed32_qwen_group_input_tokens(
+    group: list[tuple[dict[str, Any], dict[str, Any], str, int]],
+) -> int | None:
+    positive_values: set[int] = set()
+    for _event, message, _event_id, _event_index in group:
+        value = message["usage"].get("input_tokens")
+        if type(value) is not int or value < 0:
+            raise ContractError(
+                "fixed32 qwen assistant input-token usage is invalid"
+            )
+        if value > 0:
+            positive_values.add(value)
+    if len(positive_values) > 1:
+        raise ContractError(
+            "fixed32 qwen assistant group input-token usage differs"
+        )
+    return next(iter(positive_values), None)
+
+
+def _fixed32_qwen_hidden_compaction_requests(
+    events: list[dict[str, Any]],
+    *,
+    top_level_groups: list[
+        list[tuple[dict[str, Any], dict[str, Any], str, int]]
+    ],
+) -> list[tuple[int, str]]:
+    hidden_requests: list[tuple[int, str]] = []
+    for previous_group, next_group in zip(
+        top_level_groups,
+        top_level_groups[1:],
+    ):
+        previous_input_tokens = _fixed32_qwen_group_input_tokens(
+            previous_group
+        )
+        next_input_tokens = _fixed32_qwen_group_input_tokens(next_group)
+        if (
+            previous_input_tokens is None
+            or next_input_tokens is None
+            or next_input_tokens >= previous_input_tokens
+        ):
+            continue
+
+        expected_tool_ids = [
+            item["id"]
+            for _event, message, _event_id, _event_index in previous_group
+            for item in message["content"]
+            if item.get("type") == "tool_use"
+        ]
+        boundary_start = previous_group[-1][3] + 1
+        boundary_end = next_group[0][3]
+        intervening_events = events[boundary_start:boundary_end]
+        observed_tool_ids: list[str] = []
+        for event in intervening_events:
+            tool_result = _fixed32_qwen_user_tool_result(event)
+            if (
+                event.get("parent_tool_use_id") is not None
+                or tool_result is None
+            ):
+                raise ContractError(
+                    "fixed32 qwen input-usage drop is not bounded by "
+                    "top-level tool results"
+                )
+            observed_tool_ids.append(tool_result[0])
+        if (
+            not expected_tool_ids
+            or observed_tool_ids != expected_tool_ids
+        ):
+            raise ContractError(
+                "fixed32 qwen input-usage drop tool results do not reconcile"
+            )
+
+        hidden_requests.append(
+            (
+                boundary_end - 1,
+                _fixed32_qwen_hidden_compaction_request_id(
+                    previous_group_event_ids=[
+                        record[2] for record in previous_group
+                    ],
+                    intervening_event_ids=[
+                        event["uuid"] for event in intervening_events
+                    ],
+                    next_group_event_ids=[
+                        record[2] for record in next_group
+                    ],
+                    previous_input_tokens=previous_input_tokens,
+                    next_input_tokens=next_input_tokens,
+                ),
+            )
+        )
+    return hidden_requests
 
 
 def _fixed32_qwen_user_text(event: dict[str, Any]) -> bool:
@@ -1290,6 +1408,7 @@ def validate_fixed32_trace_model_requests(
             "completed_logical_model_requests": len(response_ids),
             "model_request_ids": response_ids,
             "hidden_terminal_model_requests": 0,
+            "hidden_compaction_model_requests": 0,
             "engine_id_joinable": True,
         }
 
@@ -1464,7 +1583,9 @@ def validate_fixed32_trace_model_requests(
             "fixed32 qwen trace has no final assistant response group"
         )
 
-    top_level_groups = 0
+    top_level_groups: list[
+        list[tuple[dict[str, Any], dict[str, Any], str, int]]
+    ] = []
     request_records: list[tuple[int, str]] = []
     for group_index, group in enumerate(assistant_groups):
         parent_ids = {record[0].get("parent_tool_use_id") for record in group}
@@ -1474,7 +1595,7 @@ def validate_fixed32_trace_model_requests(
             )
         parent_tool_use_id = next(iter(parent_ids))
         if parent_tool_use_id is None:
-            top_level_groups += 1
+            top_level_groups.append(group)
 
         terminal_seen = False
         terminal_count = 0
@@ -1514,7 +1635,7 @@ def validate_fixed32_trace_model_requests(
             )
         )
 
-    if top_level_groups != num_turns:
+    if len(top_level_groups) != num_turns:
         raise ContractError(
             "fixed32 qwen result turn count and top-level response groups "
             "do not reconcile"
@@ -1529,6 +1650,11 @@ def validate_fixed32_trace_model_requests(
         ),
     )
     request_records.extend(hidden_requests)
+    hidden_compaction_requests = _fixed32_qwen_hidden_compaction_requests(
+        events,
+        top_level_groups=top_level_groups,
+    )
+    request_records.extend(hidden_compaction_requests)
     request_records.sort(key=lambda record: record[0])
     response_ids = [record[1] for record in request_records]
     if len(response_ids) != len(set(response_ids)):
@@ -1540,6 +1666,9 @@ def validate_fixed32_trace_model_requests(
         "completed_logical_model_requests": len(response_ids),
         "model_request_ids": response_ids,
         "hidden_terminal_model_requests": len(hidden_requests),
+        "hidden_compaction_model_requests": len(
+            hidden_compaction_requests
+        ),
         "engine_id_joinable": False,
     }
 
