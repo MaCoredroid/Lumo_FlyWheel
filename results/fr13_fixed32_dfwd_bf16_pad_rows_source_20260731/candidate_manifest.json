@@ -1,0 +1,68 @@
+{
+  "schema": "fr13.fixed32.dfwd_bf16_pad_rows_source_candidate.v1",
+  "status": "SOURCE_ONLY_DEFAULT_OFF_NONDEPLOY",
+  "branch": "agent/fixed32-dfwd-pad-rows",
+  "base_m32_git_sha": "b2d63c74ff753119bf5435a9f7ec9a3135559e7f",
+  "selector_source_git_sha": "09cde1841",
+  "gpu_used_for_this_candidate": false,
+  "performance_claim": false,
+  "candidate": {
+    "flag": "FR13_DRAFT_HEAD_PAD_ROWS=32|64|128",
+    "default": "FR13_DRAFT_HEAD_PAD_ROWS=0",
+    "byte_ab_flag": "FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=1",
+    "byte_ab_rows": [32, 64, 128],
+    "byte_ab_returns": "reference full logits",
+    "weight_quantization_changed": false,
+    "weight_shape_changed": false,
+    "silent_fallback": false,
+    "strict_eligibility": "exact fixed32 B1, root subset, single logits, 65536 draft rows, contiguous BF16 UnquantizedLinearMethod weight[65536,5120]"
+  },
+  "pinned_dispatch": {
+    "image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "torch_version": "2.11.0+cu130",
+    "torch_git_sha": "70d99e998b4955e0049d13a98d77ae1b14db1f45",
+    "cuda_version": "13.0",
+    "preferred_blas_backend": "Cublas",
+    "torch_mm_out_route": "mm_out_cuda -> addmm_out_cuda_impl(beta=0) -> launchGemmCublas -> cublasGemmEx",
+    "cublaslt_excluded_because": "isInputCompliesAddmmCudaLt requires beta == 1",
+    "bf16_types": "A/B/C CUDA_R_16BF with CUDA_R_32F compute",
+    "algorithm": "CUBLAS_GEMM_DEFAULT_TENSOR_OP; internal kernel remains shape-selected and opaque",
+    "primary_source_blas": "https://github.com/pytorch/pytorch/blob/70d99e998b4955e0049d13a98d77ae1b14db1f45/aten/src/ATen/native/cuda/Blas.cpp",
+    "primary_source_cublas": "https://github.com/pytorch/pytorch/blob/70d99e998b4955e0049d13a98d77ae1b14db1f45/aten/src/ATen/cuda/CUDABlas.cpp"
+  },
+  "real_nsys_evidence": {
+    "artifact": "results/fr13_fixed32_b1_nsys_20260731T013952Z_curated/nsys_attribution.json",
+    "workload": "real SWE-Verified exact4 B1 attribution",
+    "complete_events": 881,
+    "draft_gemvx_instances": 4405,
+    "draft_gemvx_ms_per_event": 26.227316013620886,
+    "draft_weight_bytes_per_event": 3355443200,
+    "draft_gemvx_effective_gb_per_s": 127.93696465166319,
+    "m32_verifier_kernel": "nvjet_sm121_tst_mma_128x208x64_2_32x104x64_tmaAB_bz_TNNN",
+    "m32_verifier_kernel_instances": 881,
+    "m32_verifier_kernel_ms_per_event": 12.152306946651533,
+    "m32_verifier_postprocess_ms_per_event": 12.153933,
+    "m32_verifier_weight_bytes": 2542796800,
+    "m32_verifier_phase_effective_gb_per_s": 209.21596326061695,
+    "projected_m32_draft_ms_per_event": 16.03817962886598,
+    "projected_m32_savings_vs_gemvx_ms_per_event": 10.189136384754906,
+    "projection_only": true
+  },
+  "static_verification": {
+    "command": "/home/mark/shared/lumoFlyWheel-exact-safe-combo/.venv/bin/pytest -q tests/test_fr13_draft_head_pad_rows.py tests/test_fr13_draft_vocab_root_wiring.py tests/test_fr13_drafter_single_logits_wiring.py",
+    "passed": 18,
+    "failed": 0,
+    "python_compile_passed": true,
+    "launcher_bash_syntax_passed": true,
+    "git_diff_check_passed": true
+  },
+  "next_gate": {
+    "suite": "SWE-Verified",
+    "instance_id": "astropy__astropy-12907",
+    "concurrency": 1,
+    "byte_ab_mode": "FR13_DRAFT_HEAD_PAD_ROWS=0 FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=1",
+    "candidate_timing_rows": [32, 64, 128],
+    "synthetic_traffic_allowed": false,
+    "formal_acceptance_use": false
+  }
+}
