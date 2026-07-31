@@ -1,0 +1,45 @@
+{
+  "schema": "fr13.fixed32.kernel_unified_bm8_integration.source.v1",
+  "created_utc": "2026-07-31T15:15:46Z",
+  "branch": "agent/fixed32-kernel-unified-bm8",
+  "production_selector_base": "7a0072f8b86bf25daf4ba3ca69e937d08a7049e4",
+  "bm8_source_commit": "d4f1780b3530107d2349d9f4f2a66912f20cad06",
+  "integrated_code_commit": "a477684375fce02ecbe0b0563600042943609900",
+  "status": "SOURCE_INTEGRATED_GPU_GATE_NOT_RUN",
+  "selectors_default_off": true,
+  "bm8_live_gate": {
+    "batch_size": 1,
+    "diagnostic_only": true,
+    "internal_selector_launcher_private": true,
+    "stock_served": true,
+    "candidate_private_output_only": true,
+    "required_candidate_dispatches": 4,
+    "raw_byte_compare_required": true,
+    "run_completed": false
+  },
+  "preserved_selectors": [
+    "fa2_qrow16",
+    "dfwd_five_head_padding",
+    "taw_native_precompute",
+    "gdn_path_bv",
+    "cfwd_committer_layer_batch",
+    "b2_b4_two_launch_gdn"
+  ],
+  "verification": {
+    "gpu_visible": false,
+    "python_compile": "pass",
+    "launcher_bash_syntax": "pass",
+    "focused_tests": {
+      "passed": 63,
+      "failed": 0,
+      "skipped": 0,
+      "elapsed_seconds": 2.07
+    }
+  },
+  "gpu_used": false,
+  "shared_object_built": false,
+  "real_swe_verified_campaign_run": false,
+  "performance_claim": false,
+  "hardware_floor_claim": false,
+  "acceptance_claim": false
+}
