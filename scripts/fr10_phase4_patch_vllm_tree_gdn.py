@@ -6122,7 +6122,7 @@ def _patch_gdn_linear() -> bool:
         "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n",
         (
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
-            "from lumo_flywheel_serving.fr10_gdn_tree_kernel import gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_gdn_prepared_fixed32_batch, launch_tree_state_linear_remap, subtree_get\n"
+            "from lumo_flywheel_serving.fr10_gdn_tree_kernel import fixed32_batch_gdn_selector, gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_gdn_prepared_fixed32_batch, launch_tree_state_linear_remap, subtree_get\n"
             "from lumo_flywheel_serving.fr13_replay_conv_remap import replay_conv_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
             "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, conv_wb_staging_get, freeze_conv_wb_staging_sources, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, launch_conv_state_writeback, launch_conv_state_writeback_batched, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
@@ -10450,9 +10450,15 @@ def _fr13_conv_subop_mab(
                             self._fr13_replay_ring_b[fr10_b, :tree_n].copy_(
                                 b[start:end]
                             )
+                    _fr13_fixed32_batch_gdn_selector = (
+                        fixed32_batch_gdn_selector(
+                            int(attn_metadata.num_spec_decodes)
+                        )
+                        if _FR13_FIXED32_MODE
+                        else None
+                    )
                     _fr13_fixed32_batch_gdn = bool(
-                        _FR13_FIXED32_MODE
-                        and int(attn_metadata.num_spec_decodes) > 1
+                        _fr13_fixed32_batch_gdn_selector is not None
                     )
                     if _fr13_fixed32_batch_gdn:
                         if fr10_b == 0:

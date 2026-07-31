@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import types
 from pathlib import Path
@@ -15,7 +16,10 @@ try:
     import triton  # noqa: F401
 except ModuleNotFoundError:
     triton_stub = types.ModuleType("triton")
-    triton_stub.jit = lambda function: function
+    def _jit(function=None, **_kwargs):
+        return (lambda decorated: decorated) if function is None else function
+
+    triton_stub.jit = _jit
     triton_stub.cdiv = lambda left, right: (left + right - 1) // right
     triton_stub.next_power_of_2 = lambda value: 1 << (value - 1).bit_length()
     language_stub = types.ModuleType("triton.language")
@@ -53,6 +57,90 @@ def test_real_event_control_is_worker_safe_and_rejects_probe_markers(
         True,
         "swe_verified:django__django-12345",
     )
+
+
+def test_selector_is_default_off_and_production_requires_live_pass(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    diagnostic = tmp_path / "diagnostic.enabled"
+    event = tmp_path / "real_event.arm"
+    production = tmp_path / "production.arm"
+    live_pass = tmp_path / "pass.json"
+    for name in (
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB",
+        "FR13_FIXED32_BATCH_GDN_PRODUCTION",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_ENABLED_PATH", str(diagnostic)
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH", str(event)
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_BATCH_GDN_PRODUCTION_ARM_PATH", str(production)
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS_PATH", str(live_pass)
+    )
+
+    assert kernel.fixed32_batch_gdn_selector(1) is None
+    assert kernel.fixed32_batch_gdn_selector(4) is None
+
+    diagnostic.write_text("1\n", encoding="ascii")
+    assert kernel.fixed32_batch_gdn_selector(4) == "diagnostic"
+
+    production.write_text("1\n", encoding="ascii")
+    with pytest.raises(RuntimeError, match="requires a readable live-gate PASS"):
+        kernel.fixed32_batch_gdn_selector(4)
+
+    live_pass.write_text(
+        json.dumps(
+            {
+                "schema": "fr13.fixed32.batch_gdn.live_pass.v1",
+                "status": "pass",
+                "task_marker": "swe_verified:django__django-12345",
+                "batch": 4,
+                "layer_count": 48,
+                "layer_keys": [f"0x{index:x}" for index in range(48)],
+                "reference_always_served": True,
+            }
+        ),
+        encoding="ascii",
+    )
+    with pytest.raises(RuntimeError, match="mutually exclusive"):
+        kernel.fixed32_batch_gdn_selector(4)
+
+    diagnostic.unlink()
+    assert kernel.fixed32_batch_gdn_selector(4) == "production"
+    with pytest.raises(RuntimeError, match="batch does not match"):
+        kernel.fixed32_batch_gdn_selector(3)
+
+
+def test_live_pass_emits_only_after_all_48_layers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "pass.json"
+    monkeypatch.setenv(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS_PATH", str(path)
+    )
+    kernel._fr13_fixed32_batch_gdn_live_pass_emit(
+        task_marker="swe_verified:django__django-12345",
+        batch=4,
+        layer_keys=set(range(47)),
+    )
+    assert not path.exists()
+    kernel._fr13_fixed32_batch_gdn_live_pass_emit(
+        task_marker="swe_verified:django__django-12345",
+        batch=4,
+        layer_keys=set(range(48)),
+    )
+    payload = json.loads(path.read_text(encoding="ascii"))
+    assert payload["status"] == "pass"
+    assert payload["layer_count"] == 48
+    assert payload["reference_always_served"] is True
 
 
 def test_byte_diff_reports_first_nonzero_byte() -> None:
@@ -279,3 +367,22 @@ def test_launcher_requires_eager_real_task_gate() -> None:
     )
     assert "fr13_fixed32_batch_gdn_byte_ab.enabled" in launcher
     assert "fr13_fixed32_batch_gdn_byte_ab.real_event.arm" in launcher
+    assert "FR13_FIXED32_BATCH_GDN_PRODUCTION:-0" in launcher
+    assert "diagnostic and production are mutually exclusive" in launcher
+    assert "requires a regular live-gate PASS record" in launcher
+    assert "fr13_fixed32_batch_gdn_production.arm" in launcher
+
+
+def test_passed_diagnostic_layers_still_serve_reference() -> None:
+    source = (
+        ROOT
+        / "src"
+        / "lumo_flywheel_serving"
+        / "fr10_gdn_tree_kernel.py"
+    ).read_text(encoding="utf-8")
+    passed = source.index('if layer_key in gate_state["passed"]:')
+    next_branch = source.index("elif real_event_marker is None:", passed)
+    branch = source[passed:next_branch]
+    assert "_launch_reference(collect_export=False)" in branch
+    assert "_launch_batched()" not in branch
+    assert "return out, None" in branch

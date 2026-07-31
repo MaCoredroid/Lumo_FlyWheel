@@ -468,6 +468,12 @@ _FR13_FIXED32_BATCH_GDN_BYTE_AB_ENABLED = (
 _FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT = (
     "/logs/fr13_fixed32_batch_gdn_byte_ab.real_event.arm"
 )
+_FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS = (
+    "/logs/fr13_fixed32_batch_gdn_byte_ab.pass.json"
+)
+_FR13_FIXED32_BATCH_GDN_PRODUCTION_ARM = (
+    "/logs/fr13_fixed32_batch_gdn_production.arm"
+)
 _FR13_FIXED32_PARENT_SHA256 = (
     "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd"
 )
@@ -533,6 +539,86 @@ def _fr13_fixed32_batch_gdn_byte_ab_control() -> tuple[bool, str | None]:
     return enabled, marker
 
 
+def _fr13_fixed32_batch_gdn_production_control() -> dict[str, object] | None:
+    """Validate the explicit post-gate production arm and PASS record."""
+    raw = os.environ.get("FR13_FIXED32_BATCH_GDN_PRODUCTION", "")
+    if raw not in ("", "0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION must be exactly 0 or 1"
+        )
+    arm_path = os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_PRODUCTION_ARM_PATH",
+        _FR13_FIXED32_BATCH_GDN_PRODUCTION_ARM,
+    )
+    if raw != "1" and not os.path.exists(arm_path):
+        return None
+    pass_path = os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS_PATH",
+        _FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS,
+    )
+    try:
+        with open(pass_path, encoding="ascii") as handle:
+            payload = json.load(handle)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION requires a readable live-gate "
+            f"PASS record at {pass_path}: {error}"
+        ) from error
+    if not isinstance(payload, dict):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION live-gate PASS record is invalid"
+        )
+    layer_keys = payload.get("layer_keys")
+    task_marker = payload.get("task_marker")
+    if (
+        payload.get("schema") != "fr13.fixed32.batch_gdn.live_pass.v1"
+        or payload.get("status") != "pass"
+        or payload.get("reference_always_served") is not True
+        or not isinstance(task_marker, str)
+        or not task_marker.startswith("swe_verified:")
+        or len(task_marker) == len("swe_verified:")
+        or type(payload.get("batch")) is not int
+        or not 2 <= payload["batch"] <= _FR13_FIXED32_MAX_BATCH
+        or payload.get("layer_count") != 48
+        or not isinstance(layer_keys, list)
+        or len(layer_keys) != 48
+        or len(set(layer_keys)) != 48
+        or not all(isinstance(key, str) and key.startswith("0x") for key in layer_keys)
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION live-gate PASS record is invalid"
+        )
+    return payload
+
+
+def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
+    """Resolve the B2-B4 diagnostic/production route; default is legacy."""
+    batch = int(batch_size)
+    if batch <= 1:
+        return None
+    if batch > _FR13_FIXED32_MAX_BATCH:
+        raise RuntimeError(
+            f"FR13 fixed32 batched GDN supports B2-B4, got B={batch}"
+        )
+    diagnostic, _marker = _fr13_fixed32_batch_gdn_byte_ab_control()
+    production = _fr13_fixed32_batch_gdn_production_control()
+    if diagnostic and production is not None:
+        raise RuntimeError(
+            "FR13 fixed32 batched GDN diagnostic and production selectors "
+            "are mutually exclusive"
+        )
+    if diagnostic:
+        return "diagnostic"
+    if production is not None:
+        if int(production["batch"]) != batch:
+            raise RuntimeError(
+                "FR13_FIXED32_BATCH_GDN_PRODUCTION batch does not match its "
+                f"live-gate PASS record: {batch} != {production['batch']}"
+            )
+        return "production"
+    return None
+
+
 def _fr13_fixed32_batch_gdn_byte_diff(
     name: str,
     reference: torch.Tensor,
@@ -591,6 +677,35 @@ def _fr13_fixed32_batch_gdn_byte_ab_emit(record: dict[str, object]) -> None:
     payload["schema"] = "fr13.fixed32.batch_gdn.byte_ab.v1"
     with open(path, "a", encoding="ascii") as handle:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def _fr13_fixed32_batch_gdn_live_pass_emit(
+    *, task_marker: str, batch: int, layer_keys: set[int],
+) -> None:
+    """Publish the non-cryptographic production prerequisite after 48 passes."""
+    if len(layer_keys) != 48:
+        return
+    path = os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS_PATH",
+        _FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS,
+    )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    payload = {
+        "schema": "fr13.fixed32.batch_gdn.live_pass.v1",
+        "status": "pass",
+        "task_marker": task_marker,
+        "batch": int(batch),
+        "layer_count": 48,
+        "layer_keys": [f"0x{key:x}" for key in sorted(layer_keys)],
+        "reference_always_served": True,
+    }
+    temporary = f"{path}.tmp.{os.getpid()}"
+    with open(temporary, "w", encoding="ascii") as handle:
+        json.dump(payload, handle, sort_keys=True)
+        handle.write("\n")
+    os.replace(temporary, path)
 
 
 def _fr13_canonical_sha256(value) -> str:
@@ -9020,6 +9135,12 @@ def launch_tree_gdn_prepared_fixed32_batch(
             "use the legacy per-request route, "
             f"got {batch}"
         )
+    selector = fixed32_batch_gdn_selector(batch)
+    if selector is None:
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN is default-off; arm either its diagnostic "
+            "or post-gate production selector"
+        )
     if _FR13_FIXED32_MODE is None:
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN requires an armed fixed32 runtime"
@@ -9363,9 +9484,16 @@ def launch_tree_gdn_prepared_fixed32_batch(
         if count_invocation:
             invocation_counter.copy_(snapshot["invocation_counter"])
 
-    byte_ab_enabled, real_event_marker = (
-        _fr13_fixed32_batch_gdn_byte_ab_control()
-    )
+    byte_ab_enabled = selector == "diagnostic"
+    real_event_marker = None
+    if byte_ab_enabled:
+        _enabled, real_event_marker = (
+            _fr13_fixed32_batch_gdn_byte_ab_control()
+        )
+        if not _enabled:
+            raise RuntimeError(
+                "FR13 fixed32 batched GDN diagnostic selector drifted"
+            )
     layer_key = int(A_log.data_ptr())
     gate_state = _FR13_FIXED32_BATCH_GDN_BYTE_AB_STATE
     if byte_ab_enabled:
@@ -9380,7 +9508,8 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 "in-kernel flags, and the invocation counter"
             )
         if layer_key in gate_state["passed"]:
-            _launch_batched()
+            _launch_reference(collect_export=False)
+            return out, None
         elif real_event_marker is None:
             _launch_reference(collect_export=False)
             if layer_key not in gate_state["waiting_announced"]:
@@ -9406,6 +9535,16 @@ def launch_tree_gdn_prepared_fixed32_batch(
             )
             return out, None
         else:
+            bound_marker = gate_state.get("task_marker")
+            bound_batch = gate_state.get("batch")
+            if bound_marker is None:
+                gate_state["task_marker"] = real_event_marker
+                gate_state["batch"] = batch
+            elif bound_marker != real_event_marker or int(bound_batch) != batch:
+                raise RuntimeError(
+                    "FR13 fixed32 batched GDN live gate cannot combine tasks "
+                    "or batch sizes in one PASS record"
+                )
             attempt = int(gate_state["attempts"].get(layer_key, 0)) + 1
             gate_state["attempts"][layer_key] = attempt
             before = _snapshot_external()
@@ -9472,6 +9611,11 @@ def launch_tree_gdn_prepared_fixed32_batch(
             _fr13_fixed32_batch_gdn_byte_ab_emit(record)
             if zero_diff:
                 gate_state["passed"].add(layer_key)
+                _fr13_fixed32_batch_gdn_live_pass_emit(
+                    task_marker=real_event_marker,
+                    batch=batch,
+                    layer_keys=gate_state["passed"],
+                )
             print(
                 "[FR13_FIXED32_BATCH_GDN_BYTE_AB "
                 f"{'PASS' if zero_diff else 'MISMATCH'}] "
@@ -9481,8 +9625,12 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 flush=True,
             )
             return out, None
-    else:
+    elif selector == "production":
         _launch_batched()
+    else:
+        raise RuntimeError(
+            f"FR13 fixed32 batched GDN selector is invalid: {selector!r}"
+        )
     if not subtree_state.get("batch_engaged_announced", False):
         subtree_state["batch_engaged_announced"] = True
         print(

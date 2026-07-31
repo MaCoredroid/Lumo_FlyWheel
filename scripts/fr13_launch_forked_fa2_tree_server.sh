@@ -951,10 +951,20 @@ fi
 # SWE-Verified task is explicitly armed after readiness. The EngineCore worker
 # sees these /logs sidecars even when its curated environment drops FR13_*.
 _fr13_batch_gdn_byte_ab="${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}"
+_fr13_batch_gdn_production="${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}"
 case "$_fr13_batch_gdn_byte_ab" in
   0|1) ;;
   *) echo "FR13_FIXED32_BATCH_GDN_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
 esac
+case "$_fr13_batch_gdn_production" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_BATCH_GDN_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "$_fr13_batch_gdn_byte_ab" == "1" \
+      && "$_fr13_batch_gdn_production" == "1" ]]; then
+  echo "FR13 fixed32 batched GDN diagnostic and production are mutually exclusive" >&2
+  exit 2
+fi
 if [[ "$_fr13_batch_gdn_byte_ab" == "1" ]]; then
   [[ -n "${FR13_FIXED32_MODE:-}" ]] \
     || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires FR13_FIXED32_MODE" >&2; exit 2; }
@@ -967,12 +977,26 @@ if [[ "$_fr13_batch_gdn_byte_ab" == "1" ]]; then
   [[ "${FR13_FLAGS_INKERNEL:-1}" == "1" ]] \
     || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires FR13_FLAGS_INKERNEL=1" >&2; exit 2; }
   echo "1" > "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.enabled"
-  rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.real_event.arm"
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json"
 else
   rm -f \
     "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.enabled" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.real_event.arm" \
     2>/dev/null || true
+fi
+if [[ "$_fr13_batch_gdn_production" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_PRODUCTION requires FR13_FIXED32_MODE" >&2; exit 2; }
+  [[ "$MAX_NUM_SEQS" =~ ^[234]$ ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_PRODUCTION requires MAX_NUM_SEQS=2, 3, or 4" >&2; exit 2; }
+  [[ -f "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json" \
+     && ! -L "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_PRODUCTION requires a regular live-gate PASS record" >&2; exit 2; }
+  echo "1" > "$LOG_DIR/fr13_fixed32_batch_gdn_production.arm"
+else
+  rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_production.arm" 2>/dev/null || true
 fi
 # FR13_SUBTREE_PARALLEL sidecars. EngineCore receives a curated environment
 # that drops these FR13_* gates, so env-only reads silently select the
@@ -992,12 +1016,16 @@ if [[ "$_fr13_subtree_selfcheck" == "1" && "$_fr13_subtree_parallel" != "1" ]]; 
   echo "FR13_SUBTREE_PARALLEL_SELFCHECK=1 requires FR13_SUBTREE_PARALLEL=1" >&2
   exit 2
 fi
-if [[ "$_fr13_batch_gdn_byte_ab" == "1" && "$_fr13_subtree_parallel" != "1" ]]; then
-  echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires FR13_SUBTREE_PARALLEL=1" >&2
+if [[ ( "$_fr13_batch_gdn_byte_ab" == "1" \
+        || "$_fr13_batch_gdn_production" == "1" ) \
+      && "$_fr13_subtree_parallel" != "1" ]]; then
+  echo "FR13 fixed32 batched GDN requires FR13_SUBTREE_PARALLEL=1" >&2
   exit 2
 fi
-if [[ "$_fr13_batch_gdn_byte_ab" == "1" && "$_fr13_subtree_selfcheck" == "1" ]]; then
-  echo "FR13_FIXED32_BATCH_GDN_BYTE_AB is incompatible with FR13_SUBTREE_PARALLEL_SELFCHECK=1" >&2
+if [[ ( "$_fr13_batch_gdn_byte_ab" == "1" \
+        || "$_fr13_batch_gdn_production" == "1" ) \
+      && "$_fr13_subtree_selfcheck" == "1" ]]; then
+  echo "FR13 fixed32 batched GDN is incompatible with FR13_SUBTREE_PARALLEL_SELFCHECK=1" >&2
   exit 2
 fi
 if [[ "$_fr13_subtree_selfcheck" == "1" && "${ENFORCE_EAGER:-0}" != "1" ]]; then

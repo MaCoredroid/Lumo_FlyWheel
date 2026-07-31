@@ -134,8 +134,10 @@ def test_batched_kernel_keeps_two_launches_and_b1_legacy_route() -> None:
     assert "global_node = pid_batch * N_ACTUAL + node_c" in batched_kernel
     assert "pid_batch.to(tl.int64) * EXPORT_SLOTS + i" in batched_kernel
     assert "launch_tree_gdn_prepared_fixed32_batch" in patcher
-    assert "int(attn_metadata.num_spec_decodes) > 1" in patcher
+    assert "fixed32_batch_gdn_selector(" in patcher
+    assert "_fr13_fixed32_batch_gdn_selector is not None" in patcher
     assert "else:\n                        tree_out, _ = launch_tree_gdn_prepared(" in patcher
+    assert "FR13_FIXED32_BATCH_GDN is default-off" in launcher
 
     patcher_tree = ast.parse(patcher)
     generated_fragments = [
