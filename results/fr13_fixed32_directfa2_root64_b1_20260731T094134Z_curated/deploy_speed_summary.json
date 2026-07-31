@@ -1,0 +1,105 @@
+{
+  "aggregate": {
+    "accept_per_event": 4.597488921713442,
+    "accepted_tokens": 24900,
+    "aggregate_decode_tps_idle_and_prefill_inclusive": 17.11473308266872,
+    "aggregate_window_wall_s": 1767.599871635437,
+    "batch_size": 1,
+    "committed_per_event": 5.597488921713442,
+    "committed_tokens": 30316,
+    "effective_concurrency": 0.6693847544625507,
+    "events": 5416,
+    "events_per_step": 1,
+    "fullstep_alignment_ratio": 1.0767302114362203,
+    "n_tasks": 4,
+    "prefill_fraction": 0.28299669698299024,
+    "spec_draft_tokens": 167896,
+    "tokens_per_draft": 31
+  },
+  "per_task": [
+    {
+      "accept_per_event": 4.5311004784688995,
+      "accepted_tokens": 1894,
+      "canonical_task_index": 1,
+      "committed_tokens": 2312,
+      "events": 418,
+      "full_wall_tps": 26.274741235855434,
+      "sfwd_gpu_ms_per_event": 143.5498887203527,
+      "swe_result": "resolved",
+      "wall_ms_per_step": 210.5101789136163,
+      "wall_seconds": 87.99325478589162
+    },
+    {
+      "accept_per_event": 4.535974130962005,
+      "accepted_tokens": 5611,
+      "canonical_task_index": 2,
+      "committed_tokens": 6848,
+      "events": 1237,
+      "full_wall_tps": 26.01914926779408,
+      "sfwd_gpu_ms_per_event": 144.95670937219743,
+      "swe_result": "failed",
+      "wall_ms_per_step": 212.7653780676953,
+      "wall_seconds": 263.1907726697391
+    },
+    {
+      "accept_per_event": 4.248151191454396,
+      "accepted_tokens": 5170,
+      "canonical_task_index": 3,
+      "committed_tokens": 6387,
+      "events": 1217,
+      "full_wall_tps": 24.397029850734008,
+      "sfwd_gpu_ms_per_event": 146.68648411822086,
+      "swe_result": "failed",
+      "wall_ms_per_step": 215.1143489008151,
+      "wall_seconds": 261.794162612292
+    },
+    {
+      "accept_per_event": 4.805424528301887,
+      "accepted_tokens": 12225,
+      "canonical_task_index": 4,
+      "committed_tokens": 14769,
+      "events": 2544,
+      "full_wall_tps": 25.900247280343685,
+      "sfwd_gpu_ms_per_event": 151.87338299421335,
+      "swe_result": "failed",
+      "wall_ms_per_step": 224.14552515518885,
+      "wall_seconds": 570.2262159948004
+    }
+  ],
+  "reconciliation": {
+    "acceptance_from_raw_counter": 4.597488921713442,
+    "aggregate_events": 5416,
+    "per_task_accepted_tokens_sum": 24900,
+    "per_task_committed_tokens_sum": 30316,
+    "per_task_events_sum": 5416,
+    "per_task_wall_seconds_sum": 1183.2044060627231,
+    "raw_request_decode_wall_seconds": 1183.2044060627231,
+    "weighted_per_task_acceptance": 4.597488921713442,
+    "weighted_per_task_wall_ms": 218.46462445766676
+  },
+  "schema": "fr13.measure.deploy_speed.curated.v1",
+  "secondary_wall_telemetry": {
+    "note": "A separate step-wall series covers 5313 aligned steps. It is retained for denominator transparency and is not used for the requested full-wall TPS.",
+    "wall_ms_per_aligned_step": 222.6638870703173,
+    "wall_seconds": 1183.013232004596,
+    "wall_steps": 5313
+  },
+  "source": {
+    "deploy_speed_sha256": "09ec352be913c06c0b8235858f331f84a2904602e754139885a219660390c9e5",
+    "schema": "fr13.measure.deploy_speed.v1",
+    "source_commit": "e484294dad7e15f31326791fd003243dea672d85"
+  },
+  "throughput": {
+    "derived_fullstep_gpu_tps": 27.067637727374677,
+    "full_wall_tps": 25.621946507857164,
+    "gpu_component_ms_per_event": 206.79635873995974,
+    "request_decode_wall_ms_per_event": 218.46462445766676
+  },
+  "validity": {
+    "b4_measured": false,
+    "exact4_provenance_valid": true,
+    "hydra23_measured": false,
+    "measurement_valid": true,
+    "status": "VALID_TAIL_EXACT4_REJECTED_CANDIDATE"
+  }
+}

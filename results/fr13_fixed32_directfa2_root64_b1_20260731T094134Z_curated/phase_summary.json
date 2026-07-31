@@ -1,0 +1,80 @@
+{
+  "acceptance_target": {
+    "cap_ms": 135.5965356546,
+    "floor_ms": 117.910031004,
+    "gpu_component_budget_ms_if_residual_unchanged": 123.92826993689297,
+    "gpu_component_gap_ms_if_residual_zero": 71.19982308535975,
+    "gpu_component_reduction_fraction_if_residual_unchanged": 0.4007231525158087,
+    "gpu_component_reduction_fraction_if_residual_zero": 0.3442992106785179,
+    "wall_gap_ms": 82.86808880306677
+  },
+  "basis": {
+    "component_complete_events": 5416,
+    "component_span_basis": {
+      "cfwd": 5416,
+      "dfwd": 5416,
+      "sfwd": 5416
+    },
+    "request_decode_wall_events": 5416,
+    "secondary_aligned_wall_steps": 5313,
+    "warning": "Primary full-wall and all GPU-component means use 5416 exact4 events. The secondary aligned step-wall series has 5313 steps and is not substituted into the primary denominator."
+  },
+  "breakdown": {
+    "cfwd": {
+      "gpu_ms_per_event": 21.40324633230671,
+      "gpu_seconds": 115.91998213577315,
+      "share_of_wall": 0.09797122250542742
+    },
+    "dfwd": {
+      "gpu_ms_per_event": 36.9073959217466,
+      "gpu_seconds": 199.8904563121796,
+      "share_of_wall": 0.16893991882378362
+    },
+    "gpu_component_sum_ms_per_event": 206.79635873995974,
+    "gpu_component_sum_share_of_wall": 0.9465896790078796,
+    "other_residual_ms_per_event": 11.668265717707015,
+    "other_residual_share_of_wall": 0.05341032099212038,
+    "sfwd": {
+      "gpu_ms_per_event": 148.4857164859064,
+      "gpu_seconds": 804.1986404876692,
+      "share_of_wall": 0.6796785376786685
+    },
+    "wall_ms_per_step": 218.46462445766676
+  },
+  "comparison_to_directleaf_baseline": {
+    "baseline_ms": {
+      "cfwd": 21.417012811138857,
+      "dfwd": 38.30415895894231,
+      "gpu_component_sum": 228.40920848200142,
+      "other_residual": 16.127468151234808,
+      "sfwd": 168.68803671192026,
+      "wall": 244.53667663323623
+    },
+    "candidate_minus_baseline_ms": {
+      "cfwd": -0.013766478832145879,
+      "dfwd": -1.3967630371957114,
+      "gpu_component_sum": -21.612849742041675,
+      "other_residual": -4.459202433527793,
+      "sfwd": -20.202320226013853,
+      "wall": -26.072052175569468
+    },
+    "speedup": {
+      "cfwd": 1.000643195831997,
+      "dfwd": 1.0378450714907446,
+      "sfwd": 1.136055646995052,
+      "wall": 1.119342214970926
+    }
+  },
+  "diagnostic": {
+    "gpu_component_sum_floor_ratio": 1.7538487351677852,
+    "kernel_priority": "SFWD remains 67.97% of full wall and the GPU-component sum alone remains 71.20 ms above the 1.15x cap even if residual work were eliminated.",
+    "sfwd_floor_ratio": 1.2593136921562607
+  },
+  "schema": "fr13.fixed32.phase_summary.curated.v1",
+  "validity": {
+    "b4_measured": false,
+    "exact4_provenance_valid": true,
+    "hydra23_measured": false,
+    "use": "VALID_TAIL_KERNEL_DIAGNOSTIC_REJECTED_CANDIDATE"
+  }
+}

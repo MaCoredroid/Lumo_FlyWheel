@@ -1,0 +1,156 @@
+{
+  "acceptance": {
+    "accepted": false,
+    "cap_ms": 135.5965356546,
+    "floor": {
+      "bandwidth_bytes_per_s": 273000000000,
+      "component_formula": "target_model + full_bf16_head + mtp_forward + 5 * draft_64k_bf16_head",
+      "mandatory_weight_bytes": 32189438464,
+      "mandatory_weight_floor_ms": 117.910031004,
+      "nonweight_costs_included": false,
+      "scenario": "root_64k_five_64k_draft_heads"
+    },
+    "gap_to_cap_ms": 82.86808880306677,
+    "measured_floor_ratio": 1.8528077941922985,
+    "measured_wall_ms_per_step": 218.46462445766676,
+    "one_sided_u95_floor_ratio": null,
+    "point_estimate_alone_exceeds_cap": true,
+    "reason_u95_not_computed": "The point estimate is already above the 1.15x cap, so an upper confidence bound cannot make this candidate pass.",
+    "required_one_sided_u95_floor_ratio_lte": 1.15,
+    "required_further_speedup": 1.6111372123411292,
+    "required_wall_reduction_fraction": 0.3793204003109649,
+    "status": "REJECTED"
+  },
+  "baseline_comparison": {
+    "baseline": {
+      "accepted_drafts_per_event": 4.850362131401966,
+      "full_wall_tps": 23.924272677413224,
+      "source_commit": "cebb4362141694fba0d2289bda44f4dc73962d60",
+      "wall_ms_per_step": 244.53667663323623
+    },
+    "candidate": {
+      "accepted_drafts_per_event": 4.597488921713442,
+      "full_wall_tps": 25.621946507857164,
+      "source_commit": "e484294dad7e15f31326791fd003243dea672d85",
+      "wall_ms_per_step": 218.46462445766676
+    },
+    "delta": {
+      "accepted_drafts_per_event": -0.25287320968852445,
+      "acceptance_fraction": -0.05213491340190579,
+      "full_wall_tps": 1.6976738304439394,
+      "full_wall_tps_fraction": 0.07096031103368516,
+      "wall_ms_per_step": -26.072052175569468,
+      "wall_reduction_fraction": 0.10661816679006053,
+      "wall_speedup": 1.119342214970926
+    },
+    "quality_regression": {
+      "baseline_task_3_accepted_drafts_per_event": 4.983333333333333,
+      "baseline_task_3_verdict": "resolved",
+      "candidate_task_3_accepted_drafts_per_event": 4.248151191454396,
+      "candidate_task_3_verdict": "failed",
+      "task_3_acceptance_delta": -0.735182141878937
+    }
+  },
+  "campaign": {
+    "arm": "tail6_fixed32",
+    "batch_size": 1,
+    "concurrency": 1,
+    "draft_vocab_root": 1,
+    "ended_at": "2026-07-31T10:19:47Z",
+    "fixed_geometry": {
+      "physical_draft_rows_per_event": 31,
+      "root_rows_per_event": 1,
+      "total_rows_per_event": 32
+    },
+    "floor_order": "TH",
+    "source_commit": "e484294dad7e15f31326791fd003243dea672d85",
+    "started_at": "2026-07-31T09:41:50Z",
+    "tag": "directfa2_root64_b1_20260731T094134Z",
+    "task_count": 4,
+    "workload": "canonical_swe_bench_verified_exact4"
+  },
+  "curation": {
+    "raw_bodies_inspected": false,
+    "raw_outputs_published": false,
+    "source_basis": "Aggregate reducer counters, task-boundary deltas, strict real-task provenance summaries, immutable manifests, artifact digests, and terminal work-census totals.",
+    "task_labels": "Canonical subset ordinals only.",
+    "withheld": [
+      "prompts",
+      "raw traces",
+      "raw logs",
+      "request and response bodies",
+      "task patches and outputs",
+      "task, process, container, and host identities",
+      "environment dumps",
+      "absolute paths"
+    ]
+  },
+  "outcome": {
+    "b4_status": "NOT_MEASURED",
+    "formal_sequence_status": "TAIL_EXACT4_COMPLETE_HYDRA_UNMEASURED",
+    "hydra23_b1_status": "NOT_MEASURED",
+    "resolved_rate": 0.25,
+    "status": "REJECTED",
+    "tail6_b1_status": "EXACT4_COMPLETE_VALID_MEASUREMENT_REJECTED",
+    "task_results": [
+      {
+        "accepted_drafts_per_event": 4.5311004784688995,
+        "canonical_task_index": 1,
+        "event_interval": [0, 418],
+        "events": 418,
+        "full_wall_tps": 26.274741235855434,
+        "logical_model_requests": 7,
+        "swe_result": "resolved",
+        "wall_ms_per_step": 210.5101789136163
+      },
+      {
+        "accepted_drafts_per_event": 4.535974130962005,
+        "canonical_task_index": 2,
+        "event_interval": [418, 1655],
+        "events": 1237,
+        "full_wall_tps": 26.01914926779408,
+        "logical_model_requests": 21,
+        "swe_result": "failed",
+        "wall_ms_per_step": 212.7653780676953
+      },
+      {
+        "accepted_drafts_per_event": 4.248151191454396,
+        "canonical_task_index": 3,
+        "event_interval": [1655, 2872],
+        "events": 1217,
+        "full_wall_tps": 24.397029850734008,
+        "logical_model_requests": 24,
+        "swe_result": "failed",
+        "wall_ms_per_step": 215.1143489008151
+      },
+      {
+        "accepted_drafts_per_event": 4.805424528301887,
+        "canonical_task_index": 4,
+        "event_interval": [2872, 5416],
+        "events": 2544,
+        "full_wall_tps": 25.900247280343685,
+        "logical_model_requests": 50,
+        "swe_result": "failed",
+        "wall_ms_per_step": 224.14552515518885
+      }
+    ]
+  },
+  "privacy": {
+    "contains_absolute_paths": false,
+    "contains_environment": false,
+    "contains_host_or_process_identity": false,
+    "contains_prompts": false,
+    "contains_raw_logs": false,
+    "contains_raw_request_or_response_bodies": false,
+    "contains_raw_traces": false,
+    "contains_source_and_binary_identities": true,
+    "contains_task_identity_or_patch_content": false
+  },
+  "rejection_reasons": [
+    "Measured wall is 1.8528x the corrected root64 hardware floor, above the 1.15x acceptance cap.",
+    "The candidate resolves only one of four real SWE-Verified tasks.",
+    "Canonical task 3 regresses from resolved on the direct-leaf baseline to failed on split-K FA2.",
+    "Hydra23 B1 and all B4 arms remain unmeasured."
+  ],
+  "schema": "fr13.fixed32.directfa2_split4.rejected_campaign.v1"
+}

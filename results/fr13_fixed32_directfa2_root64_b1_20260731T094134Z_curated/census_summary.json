@@ -1,0 +1,76 @@
+{
+  "aggregate": {
+    "bad_events": 0,
+    "batch_histogram": {
+      "1": 5416,
+      "2": 0,
+      "3": 0,
+      "4": 0
+    },
+    "event_count": 5416,
+    "first_event_index": 0,
+    "first_forward_step_index": 0,
+    "last_event_index": 5415,
+    "last_forward_step_index": 5415,
+    "mode": "tail6_fixed32"
+  },
+  "committer_and_graphs": {
+    "committer_actual_replays": 5416,
+    "committer_nonpure_replays": 0,
+    "conv_pregather_graph_replays": 5416,
+    "conv_pregather_host_actual_stages": 0,
+    "drafter_graph_measured_replays": 5416,
+    "forward_graph_measured_replays": 5416,
+    "measured_replays_per_event": 1
+  },
+  "conv_commit": {
+    "committed_rows": 259968,
+    "committed_rows_per_event": 48,
+    "conv_remaps": 0,
+    "direct_launches": 5416,
+    "direct_launches_per_event": 1,
+    "direct_programs": 2599680,
+    "direct_programs_per_event": 480,
+    "fallback": 0,
+    "full_node_writebacks": 0,
+    "gather_launches": 0,
+    "host_syncs": 0,
+    "route": "fixed32_direct_source_col0",
+    "scatter_launches": 0,
+    "source_staging_reused_all": true
+  },
+  "fixed_work_per_event": {
+    "active_nodes": 21,
+    "gdn_launches": 96,
+    "gdn_scan_calls": 48,
+    "physical_drafts": 31,
+    "taw_walk_levels": 12,
+    "tree_attention_calls": 16,
+    "verify_rows": 32
+  },
+  "integrity": {
+    "events_sha256": "d0781026aee75e55c94b6fd5f114192ad6837eb23f59a6912c43b3109150603f",
+    "final": true,
+    "final_boundary_generation": 9,
+    "final_flush_status": "ok",
+    "pending": {
+      "cfwd": 0,
+      "dfwd": 0,
+      "sfwd": 0
+    },
+    "raw_census_file_sha256": "8df9d516a0a8fa61cbdc9bfa0a3ba0d1973f28e492cb90569f5061e7631682a8",
+    "terminal_event_count": 5416,
+    "terminal_schema": "fr13-fixed32-work-census-terminal-v9"
+  },
+  "schema": "fr13.fixed32.work_census.curated.v1",
+  "scope": {
+    "contains_raw_event_records": false,
+    "event_schema": "fr13-fixed32-work-census-v9",
+    "summary_only": true
+  },
+  "validity": {
+    "bad_events": 0,
+    "complete_terminal_stream": true,
+    "note": "All 5416 exact4 Tail events satisfy fixed32 geometry, graph, direct conv-commit, and zero-fallback checks. Hydra23 and B4 have no census measurement."
+  }
+}
