@@ -5,6 +5,18 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO=${REPO:-$(cd "$SCRIPT_DIR/.." && pwd)}
 REPO=$(cd "$REPO" && pwd)
 cd "$REPO"
+_FR13_CALLER_BATCH_GDN_PRODUCTION="${FR13_FIXED32_BATCH_GDN_PRODUCTION+set}:${FR13_FIXED32_BATCH_GDN_PRODUCTION-}"
+_FR13_CALLER_BATCH_GDN_BV_PRODUCTION="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION+set}:${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION-}"
+_FR13_CALLER_BATCH_GDN_GRAPH_PASS_JSON="${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON-}"
+_FR13_CALLER_BATCH_GDN_GRAPH_PASS_SHA="${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256-}"
+_FR13_CALLER_BATCH_GDN_GATE_VERDICT_JSON="${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON-}"
+_FR13_CALLER_BATCH_GDN_GATE_VERDICT_SHA="${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256-}"
+_FR13_CALLER_FIXED32_MODE="${FR13_FIXED32_MODE+set}:${FR13_FIXED32_MODE-}"
+_FR13_CALLER_MAX_NUM_SEQS="${MAX_NUM_SEQS+set}:${MAX_NUM_SEQS-}"
+_FR13_CALLER_MAX_NUM_SEQS_OVR="${MAX_NUM_SEQS_OVR+set}:${MAX_NUM_SEQS_OVR-}"
+_FR13_CALLER_SWE_CONCURRENCY="${SWE_CONCURRENCY+set}:${SWE_CONCURRENCY-}"
+_FR13_CALLER_ENFORCE_EAGER="${ENFORCE_EAGER+set}:${ENFORCE_EAGER-}"
+_FR13_CALLER_CUDAGRAPH_MODE="${CUDAGRAPH_MODE+set}:${CUDAGRAPH_MODE-}"
 _FR13_LOCAL_ENV_SOURCED=0
 if [[ -n "${FR13_FIXED32_MODE:-}" && -f "$REPO/.lumo.local.env" ]]; then
   set -a
@@ -12,6 +24,39 @@ if [[ -n "${FR13_FIXED32_MODE:-}" && -f "$REPO/.lumo.local.env" ]]; then
   set +a
   _FR13_LOCAL_ENV_SOURCED=1
 fi
+if [[ "$_FR13_CALLER_BATCH_GDN_PRODUCTION" == set:* \
+      || "$_FR13_CALLER_BATCH_GDN_BV_PRODUCTION" == set:* \
+      || "$_FR13_CALLER_BATCH_GDN_GRAPH_PASS_JSON" == set:* \
+      || "$_FR13_CALLER_BATCH_GDN_GATE_VERDICT_JSON" == set:* ]]; then
+  if [[ "${FR13_FIXED32_BATCH_GDN_PRODUCTION+set}:${FR13_FIXED32_BATCH_GDN_PRODUCTION-}" != "$_FR13_CALLER_BATCH_GDN_PRODUCTION" \
+      || "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION+set}:${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION-}" != "$_FR13_CALLER_BATCH_GDN_BV_PRODUCTION" \
+      || "${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON-}" != "$_FR13_CALLER_BATCH_GDN_GRAPH_PASS_JSON" \
+      || "${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256-}" != "$_FR13_CALLER_BATCH_GDN_GRAPH_PASS_SHA" \
+      || "${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON-}" != "$_FR13_CALLER_BATCH_GDN_GATE_VERDICT_JSON" \
+      || "${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256-}" != "$_FR13_CALLER_BATCH_GDN_GATE_VERDICT_SHA" \
+      || "${FR13_FIXED32_MODE+set}:${FR13_FIXED32_MODE-}" != "$_FR13_CALLER_FIXED32_MODE" \
+      || "${MAX_NUM_SEQS+set}:${MAX_NUM_SEQS-}" != "$_FR13_CALLER_MAX_NUM_SEQS" \
+      || "${MAX_NUM_SEQS_OVR+set}:${MAX_NUM_SEQS_OVR-}" != "$_FR13_CALLER_MAX_NUM_SEQS_OVR" \
+      || "${SWE_CONCURRENCY+set}:${SWE_CONCURRENCY-}" != "$_FR13_CALLER_SWE_CONCURRENCY" \
+      || "${ENFORCE_EAGER+set}:${ENFORCE_EAGER-}" != "$_FR13_CALLER_ENFORCE_EAGER" \
+      || "${CUDAGRAPH_MODE+set}:${CUDAGRAPH_MODE-}" != "$_FR13_CALLER_CUDAGRAPH_MODE" ]]; then
+    echo ".lumo.local.env must not override B4 GDN production credentials, selectors, or runtime geometry" >&2
+    exit 2
+  fi
+fi
+unset \
+  _FR13_CALLER_BATCH_GDN_PRODUCTION \
+  _FR13_CALLER_BATCH_GDN_BV_PRODUCTION \
+  _FR13_CALLER_BATCH_GDN_GRAPH_PASS_JSON \
+  _FR13_CALLER_BATCH_GDN_GRAPH_PASS_SHA \
+  _FR13_CALLER_BATCH_GDN_GATE_VERDICT_JSON \
+  _FR13_CALLER_BATCH_GDN_GATE_VERDICT_SHA \
+  _FR13_CALLER_FIXED32_MODE \
+  _FR13_CALLER_MAX_NUM_SEQS \
+  _FR13_CALLER_MAX_NUM_SEQS_OVR \
+  _FR13_CALLER_SWE_CONCURRENCY \
+  _FR13_CALLER_ENFORCE_EAGER \
+  _FR13_CALLER_CUDAGRAPH_MODE
 # shellcheck source=fr13_required_tree_flags.sh
 source "$SCRIPT_DIR/fr13_required_tree_flags.sh"
 for _fr13_req in "${FR13_REQUIRED_TREE_FLAGS[@]}"; do
@@ -1209,7 +1254,9 @@ PY
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.production_pass.json" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag" \
-    "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag"
+    "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag" \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_bv64.production_engagement.json" \
+    "$LOG_DIR"/fr13_fixed32_batch_gdn_bv64.production_engagement.json.tmp.*
   printf '%s\n' "$FR13_FIXED32_MODE" > "$LOG_DIR/fr13_fixed32_mode.flag"
   if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
     printf '%s\n' "$_fr13_gdn_path_bv_candidate" \
@@ -1241,6 +1288,8 @@ else
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag" \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_bv64.production_engagement.json" \
+    "$LOG_DIR"/fr13_fixed32_batch_gdn_bv64.production_engagement.json.tmp.* \
     2>/dev/null || true
 fi
 # FR13_COMMITTER_NATIVE sidecar (worker-env-drop-proof): the EngineCore worker drops FR13_* env vars, so

@@ -192,6 +192,15 @@ run_arm "$STOCK_ARM" 0
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "Docker state was not clean after the stock reference" >&2; exit 2; }
 run_arm "$CANDIDATE_ARM" 1
+STOCK_ENGAGEMENT="$RUNROOT_ABS/$STOCK_ARM/logs/fr13_fixed32_batch_gdn_bv64.production_engagement.json"
+CANDIDATE_ENGAGEMENT="$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_batch_gdn_bv64.production_engagement.json"
+[[ ! -e "$STOCK_ENGAGEMENT" && ! -L "$STOCK_ENGAGEMENT" ]] \
+  || { echo "stock BV8 arm emitted a BV64 production engagement artifact" >&2; exit 4; }
+"$PYTHON_BIN" scripts/fr13_b4_gdn_bv64_pass.py engagement \
+  --engagement "$CANDIDATE_ENGAGEMENT" \
+  --expected-live-sha256 "$GRAPH_PASS_SHA256" \
+  --kernel-source "$KERNEL_SOURCE" \
+  > "$RUNROOT_ABS/$CANDIDATE_ARM/bv64_engagement_validation.json"
 finalize_manifests
 
 "$PYTHON_BIN" - \
@@ -199,8 +208,11 @@ finalize_manifests
   "$RUNROOT_ABS/$STOCK_ARM/deploy_speed_fullwall.json" \
   "$RUNROOT_ABS/$CANDIDATE_ARM/deploy_speed_fullwall.json" \
   "$RUNROOT_ABS/timing_summary.json" \
+  "$CANDIDATE_ENGAGEMENT" \
+  "$RUNROOT_ABS/$CANDIDATE_ARM/bv64_engagement_validation.json" \
   "$GRAPH_PASS_SHA256" "$GRAPH_GATE_VERDICT_SHA256" \
   "$STOCK_FA2_SHA256" <<'PY'
+import hashlib
 import json
 import math
 import os
@@ -209,10 +221,16 @@ from pathlib import Path
 
 
 subset_path, stock_path, candidate_path, out_path = map(Path, sys.argv[1:5])
-graph_pass_sha256, gate_verdict_sha256, stock_fa2_sha256 = sys.argv[5:8]
+engagement_path, engagement_validation_path = map(Path, sys.argv[5:7])
+graph_pass_sha256, gate_verdict_sha256, stock_fa2_sha256 = sys.argv[7:10]
 task_ids = sorted(json.loads(subset_path.read_text(encoding="ascii"))["instance_ids"])
 stock = json.loads(stock_path.read_text(encoding="utf-8"))
 candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+engagement_raw = engagement_path.read_bytes()
+engagement = json.loads(engagement_raw.decode("ascii"))
+engagement_validation = json.loads(
+    engagement_validation_path.read_text(encoding="ascii")
+)
 
 
 def finite_positive(record, key):
@@ -254,6 +272,29 @@ def validate(record, label):
 
 validate(stock, "stock")
 validate(candidate, "candidate")
+if (
+    engagement.get("schema")
+    != "fr13.fixed32.batch_gdn.bv64.production_engagement.v1"
+    or engagement.get("status") != "ENGAGED"
+    or engagement.get("batch_size") != 4
+    or engagement.get("candidate_bv") != 64
+    or engagement.get("layer_count") != 48
+    or engagement.get("wide_route_capture_layers_by_batch")
+    != {"1": 0, "2": 0, "3": 0, "4": 48}
+    or engagement.get("graph_pass_sha256") != graph_pass_sha256
+    or engagement.get("observed_full_graph_replays_at_least") != 1
+    or engagement.get("fallback") != 0
+    or engagement_validation.get("status") != "ENGAGED"
+    or engagement_validation.get("graph_pass_sha256") != graph_pass_sha256
+    or engagement_validation.get("graph_id") != engagement.get("graph_id")
+    or engagement_validation.get("graph_signature")
+    != engagement.get("graph_signature")
+    or engagement_validation.get("kernel_source_sha256")
+    != engagement.get("kernel_source_sha256")
+    or engagement_validation.get("b4_replays_at_least") != 1
+    or engagement_validation.get("lower_batch_wide_capture_layers") != 0
+):
+    raise SystemExit("candidate lacks exact B4 BV64 production engagement")
 stock_wall = finite_positive(stock, "step_wall_ms")
 candidate_wall = finite_positive(candidate, "step_wall_ms")
 stock_tps = finite_positive(stock, "measured_tps_fullstep_wall")
@@ -283,6 +324,14 @@ summary = {
         "selector": "fixed32_batched_gdn_bv64_b4",
         "graph_pass_sha256": graph_pass_sha256,
         "graph_gate_verdict_sha256": gate_verdict_sha256,
+        "production_engagement_sha256": hashlib.sha256(engagement_raw).hexdigest(),
+        "production_graph_id": int(engagement["graph_id"]),
+        "production_graph_signature": engagement["graph_signature"],
+        "production_kernel_source_sha256": engagement[
+            "kernel_source_sha256"
+        ],
+        "observed_full_graph_replays_at_least": 1,
+        "lower_batch_wide_capture_layers": 0,
         "step_wall_ms": candidate_wall,
         "measured_tps_fullstep_wall": candidate_tps,
         "accepted_drafts_per_event": float(candidate["accept_per_event"]),

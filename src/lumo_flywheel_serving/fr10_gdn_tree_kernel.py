@@ -1117,6 +1117,12 @@ _FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_STATE = {
     "batch_size": None,
     "records": 0,
 }
+_FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_ENGAGEMENT = (
+    "/logs/fr13_fixed32_batch_gdn_bv64.production_engagement.json"
+)
+_FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT = None
+_FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURES: dict[int, dict] = {}
+_FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_PUBLISHED = False
 _FR13_FIXED32_PARENT_SHA256 = (
     "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd"
 )
@@ -1505,6 +1511,251 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
             )
         return "production"
     return None
+
+
+def fixed32_batch_gdn_bv64_production_capture_begin(
+    graph_id: int, batch_size: int
+) -> None:
+    """Open one FULL capture record for source-qualified BV64 production."""
+    global _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT
+    if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is None:
+        return
+    payload = _fr13_fixed32_batch_gdn_production_control()
+    identity = int(graph_id)
+    batch = int(batch_size)
+    pass_path = Path(
+        os.environ.get(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS_PATH",
+            _FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS,
+        )
+    )
+    try:
+        pass_sha256 = hashlib.sha256(pass_path.read_bytes()).hexdigest()
+    except OSError as error:
+        raise RuntimeError(
+            "FR13 fixed32 BV64 production cannot hash its installed PASS"
+        ) from error
+    if (
+        payload is None
+        or _FR13_FIXED32_MODE != "tail6_fixed32"
+        or _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION != 64
+        or identity <= 0
+        or batch not in (1, 2, 3, 4)
+        or _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT is not None
+        or batch in _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURES
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 BV64 production capture begin drift: "
+            + repr((identity, batch, _FR13_FIXED32_MODE))
+        )
+    prior_passes = {
+        record["graph_pass_sha256"]
+        for record in _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURES.values()
+    }
+    if prior_passes and prior_passes != {pass_sha256}:
+        raise RuntimeError("FR13 fixed32 BV64 production PASS changed during capture")
+    _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT = {
+        "graph_id": identity,
+        "batch_size": batch,
+        "graph_pass_sha256": pass_sha256,
+        "kernel_source_sha256": payload["source_sha256"],
+        "layer_keys": [],
+        "candidate_bvs": [],
+    }
+
+
+def _fr13_fixed32_batch_gdn_bv64_production_capture_register(
+    *, batch_size: int, layer_key: int, candidate_bv: int
+) -> None:
+    """Record each actual wide production launch while its B4 graph captures."""
+    if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is None:
+        return
+    context = _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT
+    batch = int(batch_size)
+    key = int(layer_key)
+    selected_bv = int(candidate_bv)
+    if (
+        not isinstance(context, dict)
+        or set(context)
+        != {
+            "graph_id",
+            "batch_size",
+            "graph_pass_sha256",
+            "kernel_source_sha256",
+            "layer_keys",
+            "candidate_bvs",
+        }
+        or batch != 4
+        or int(context.get("batch_size", -1)) != 4
+        or key <= 0
+        or selected_bv != 64
+    ):
+        raise RuntimeError("FR13 fixed32 BV64 production launch scope drifted")
+    if torch.cuda.is_available() and not torch.cuda.is_current_stream_capturing():
+        raise RuntimeError("FR13 fixed32 BV64 production launch was not captured")
+    context["layer_keys"].append(key)
+    context["candidate_bvs"].append(selected_bv)
+
+
+def fixed32_batch_gdn_bv64_production_capture_end(
+    graph_id: int,
+    batch_size: int,
+    graph_signature: str,
+    expected_scan_calls: int,
+) -> None:
+    """Bind the actual B4 BV64 launches, and B1-B3 absence, to each graph."""
+    global _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT
+    if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is None:
+        return
+    context = _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT
+    identity = int(graph_id)
+    batch = int(batch_size)
+    signature = str(graph_signature)
+    layer_keys = context.get("layer_keys") if isinstance(context, dict) else None
+    candidate_bvs = (
+        context.get("candidate_bvs") if isinstance(context, dict) else None
+    )
+    expected_layers = 48 if batch == 4 else 0
+    if (
+        not isinstance(context, dict)
+        or int(context.get("graph_id", -1)) != identity
+        or int(context.get("batch_size", -1)) != batch
+        or batch not in (1, 2, 3, 4)
+        or int(expected_scan_calls) != 48 * batch
+        or not isinstance(layer_keys, list)
+        or len(layer_keys) != expected_layers
+        or len(set(layer_keys)) != expected_layers
+        or not isinstance(candidate_bvs, list)
+        or candidate_bvs != ([64] * expected_layers)
+        or len(signature) != 64
+        or any(character not in "0123456789abcdef" for character in signature)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 BV64 production capture end drift: "
+            + repr((identity, batch, expected_layers, layer_keys, candidate_bvs))
+        )
+    _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURES[batch] = {
+        "graph_id": identity,
+        "graph_signature": signature,
+        "graph_pass_sha256": context["graph_pass_sha256"],
+        "kernel_source_sha256": context["kernel_source_sha256"],
+        "layer_keys": tuple(sorted(layer_keys)),
+    }
+    _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT = None
+
+
+def fixed32_batch_gdn_bv64_production_replay_engaged(
+    graph_id: int,
+    batch_size: int,
+    graph_signature: str,
+    expected_scan_calls: int,
+) -> dict[str, object]:
+    """Publish once only after a measured replay of the captured B4 BV64 graph."""
+    global _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_PUBLISHED
+    if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is None:
+        return {"status": "disabled"}
+    identity = int(graph_id)
+    batch = int(batch_size)
+    signature = str(graph_signature)
+    captures = _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURES
+    expected_layer_counts = {1: 0, 2: 0, 3: 0, 4: 48}
+    actual_layer_counts = {
+        captured_batch: len(record.get("layer_keys", ()))
+        for captured_batch, record in captures.items()
+    }
+    record = captures.get(batch)
+    if (
+        set(captures) != {1, 2, 3, 4}
+        or actual_layer_counts != expected_layer_counts
+        or not isinstance(record, dict)
+        or record.get("graph_id") != identity
+        or record.get("graph_signature") != signature
+        or int(expected_scan_calls) != 48 * batch
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 BV64 production replay provenance drift: "
+            + repr((identity, batch, actual_layer_counts))
+        )
+    if batch != 4:
+        return {
+            "status": "legacy_lower_batch",
+            "batch_size": batch,
+            "wide_route_capture_layers": 0,
+        }
+    if _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_PUBLISHED:
+        return {
+            "status": "ENGAGED",
+            "batch_size": 4,
+            "observed_full_graph_replays_at_least": 1,
+        }
+    layer_keys = [f"0x{key:x}" for key in record["layer_keys"]]
+    engagement = {
+        "schema": "fr13.fixed32.batch_gdn.bv64.production_engagement.v1",
+        "status": "ENGAGED",
+        "mode": "tail6_fixed32",
+        "runtime_mode": "FULL",
+        "selector": "production",
+        "batch_size": 4,
+        "candidate": _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_ID,
+        "candidate_bv": 64,
+        "physical_rows_per_request": 32,
+        "physical_launches_per_layer": 2,
+        "layer_count": 48,
+        "layer_keys": layer_keys,
+        "wide_route_capture_layers_by_batch": {
+            str(key): value for key, value in expected_layer_counts.items()
+        },
+        "graph_id": identity,
+        "graph_signature": signature,
+        "graph_pass_sha256": record["graph_pass_sha256"],
+        "kernel_source_sha256": record["kernel_source_sha256"],
+        "observed_full_graph_replays_at_least": 1,
+        "fallback": 0,
+        "production_default_enabled": False,
+    }
+    path = Path(_FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_ENGAGEMENT)
+    if path.exists() or path.is_symlink():
+        raise RuntimeError(
+            "FR13 fixed32 BV64 production engagement path already exists"
+        )
+    raw = (
+        json.dumps(
+            engagement,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode("ascii")
+    temporary = path.with_name(path.name + f".tmp.{os.getpid()}")
+    descriptor = None
+    try:
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
+            0o600,
+        )
+        offset = 0
+        while offset < len(raw):
+            written = os.write(descriptor, raw[offset:])
+            if written <= 0:
+                raise OSError("short BV64 engagement write")
+            offset += written
+        os.fchmod(descriptor, 0o400)
+        os.fsync(descriptor)
+        os.close(descriptor)
+        descriptor = None
+        os.replace(temporary, path)
+    except Exception:
+        if descriptor is not None:
+            os.close(descriptor)
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+    _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_PUBLISHED = True
+    return dict(engagement)
 
 
 def fixed32_batch_gdn_graph_live_capture_active(batch_size: int) -> bool:
@@ -11270,6 +11521,12 @@ def launch_tree_gdn_prepared_fixed32_batch(
             )
             return out, None
     elif selector == "production":
+        if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None:
+            _fr13_fixed32_batch_gdn_bv64_production_capture_register(
+                batch_size=batch,
+                layer_key=layer_key,
+                candidate_bv=candidate_block_v,
+            )
         _launch_batched(candidate_block_v)
     else:
         raise RuntimeError(
