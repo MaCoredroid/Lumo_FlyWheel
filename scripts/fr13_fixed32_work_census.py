@@ -134,9 +134,12 @@ TAW_LOOP_ITERATIONS = WALK_CAP
 TAW_CHILD_LANES_PER_REQUEST = TAW_CHILD_LANES
 TAW_ROWS_PER_REQUEST = WALK_CAP
 TAW_BUFFER_CAPACITY = OUTPUT_PUBLISH_CAPACITY
-TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-source-v1"
+TAW_ROUTE = "fixed32_pytorch_exact_float_triton_integer_commit"
+TAW_EXACT_COMMIT_LAUNCHES = WALK_CAP
+TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST = WALK_CAP
+TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-exact-commit-v2"
 TAW_SOURCE_CONTRACT_SHA256 = (
-    "ff9fdeb6529876732cc949ab4f2636a7cee04edaec2524c39657a34d3d8b3250"
+    "df7411d51607ab66d46e9c991247f6472168ef8739a7466bbf2b1b00e1975924"
 )
 TAW_TENSOR_CALL_CENSUS = {
     "walk_levels": 12,
@@ -151,8 +154,11 @@ TAW_TENSOR_CALL_CENSUS = {
     "residual_subtract_calls": 12,
     "residual_clamp_calls": 12,
     "residual_where_calls": 24,
-    "output_scatter_calls": 24,
-    "path_scatter_calls": 12,
+    "output_scatter_calls": 0,
+    "path_scatter_calls": 0,
+    "exact_commit_launches": 12,
+    "exact_commit_programs_per_request": 12,
+    "floating_sampling_reimplementation": False,
 }
 TAW_COUNT_ROUTE = "preseeded_cuda_fixed31"
 TAW_RNG_ROUTE = "bulk_device_generator"
@@ -285,6 +291,7 @@ GDN_KEYS = frozenset(
 )
 TAW_KEYS = frozenset(
     {
+        "route",
         "preseeded_batches",
         "topology_cache_hit",
         "cache_misses",
@@ -302,6 +309,9 @@ TAW_KEYS = frozenset(
         "residual_rows",
         "row_scatter_slots",
         "path_scatter_slots",
+        "exact_commit_launches",
+        "exact_commit_programs",
+        "floating_sampling_reimplementation",
         "source_contract_schema",
         "source_contract_sha256",
         "tensor_call_census",
@@ -343,6 +353,8 @@ TAW_KEYS = frozenset(
         "accepted_path_shape",
         "accepted_lens_shape",
         "last_row_shape",
+        "exact_current_shape",
+        "exact_alive_shape",
     }
 )
 TAW_TENSOR_CALL_CENSUS_KEYS = frozenset(TAW_TENSOR_CALL_CENSUS)
@@ -1355,6 +1367,20 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     taw_path_scatter_slots = _integer(
         taw["path_scatter_slots"], f"{source}.taw.path_scatter_slots"
     )
+    taw_route = _string(taw["route"], f"{source}.taw.route")
+    taw_exact_commit_launches = _integer(
+        taw["exact_commit_launches"],
+        f"{source}.taw.exact_commit_launches",
+    )
+    taw_exact_commit_programs = _integer(
+        taw["exact_commit_programs"],
+        f"{source}.taw.exact_commit_programs",
+    )
+    if taw["floating_sampling_reimplementation"] is not False:
+        raise CensusError(
+            f"{source}.taw.floating_sampling_reimplementation: "
+            "expected literal false"
+        )
     _expect(
         taw_preseeded_batches,
         SUPPORTED_BATCH_SIZES,
@@ -1410,6 +1436,17 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         TAW_PATH_SCATTER_SLOTS * batch_size,
         f"{source}.taw.path_scatter_slots",
     )
+    _expect(taw_route, TAW_ROUTE, f"{source}.taw.route")
+    _expect(
+        taw_exact_commit_launches,
+        TAW_EXACT_COMMIT_LAUNCHES,
+        f"{source}.taw.exact_commit_launches",
+    )
+    _expect(
+        taw_exact_commit_programs,
+        TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST * batch_size,
+        f"{source}.taw.exact_commit_programs",
+    )
     taw_source_schema = _string(
         taw["source_contract_schema"],
         f"{source}.taw.source_contract_schema",
@@ -1437,13 +1474,15 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         TAW_TENSOR_CALL_CENSUS_KEYS,
         f"{source}.taw.tensor_call_census",
     )
-    taw_tensor_calls = {
-        name: _integer(
-            raw_tensor_calls[name],
-            f"{source}.taw.tensor_call_census.{name}",
-        )
-        for name in sorted(TAW_TENSOR_CALL_CENSUS_KEYS)
-    }
+    taw_tensor_calls = {}
+    for name in sorted(TAW_TENSOR_CALL_CENSUS_KEYS):
+        label = f"{source}.taw.tensor_call_census.{name}"
+        if name == "floating_sampling_reimplementation":
+            if raw_tensor_calls[name] is not False:
+                raise CensusError(f"{label}: expected literal false")
+            taw_tensor_calls[name] = False
+        else:
+            taw_tensor_calls[name] = _integer(raw_tensor_calls[name], label)
     _expect(
         taw_tensor_calls,
         {name: TAW_TENSOR_CALL_CENSUS[name] for name in sorted(TAW_TENSOR_CALL_CENSUS)},
@@ -1526,6 +1565,8 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         "accepted_path_shape": (batch_size, ACCEPTED_PATH_CAPACITY),
         "accepted_lens_shape": (batch_size,),
         "last_row_shape": (batch_size,),
+        "exact_current_shape": (batch_size,),
+        "exact_alive_shape": (batch_size,),
     }
     taw_cache_shapes: dict[str, list[int]] = {}
     for field_name, expected_shape in expected_taw_cache_shapes.items():
@@ -1868,6 +1909,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "export_or_mask": gdn_export_or_mask,
         },
         "taw": {
+            "route": taw_route,
             "preseeded_batches": list(taw_preseeded_batches),
             "topology_cache_hit": True,
             "cache_misses": taw_cache_misses,
@@ -1886,6 +1928,11 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "residual_rows_per_request": taw_residual_rows // batch_size,
             "row_scatter_slots_per_request": taw_row_scatter_slots // batch_size,
             "path_scatter_slots_per_request": taw_path_scatter_slots // batch_size,
+            "exact_commit_launches": taw_exact_commit_launches,
+            "exact_commit_programs_per_request": (
+                taw_exact_commit_programs // batch_size
+            ),
+            "floating_sampling_reimplementation": False,
             "source_contract_schema": taw_source_schema,
             "source_contract_sha256": taw_source_sha256,
             "tensor_call_census": taw_tensor_calls,
@@ -2731,6 +2778,7 @@ def validate_campaign(
 def _reference_taw(batch_size: int) -> dict[str, Any]:
     rows = batch_size * PHYSICAL_DRAFTS
     return {
+        "route": TAW_ROUTE,
         "preseeded_batches": list(SUPPORTED_BATCH_SIZES),
         "topology_cache_hit": True,
         "cache_misses": 0,
@@ -2748,6 +2796,11 @@ def _reference_taw(batch_size: int) -> dict[str, Any]:
         "residual_rows": TAW_ROWS_PER_REQUEST * batch_size,
         "row_scatter_slots": TAW_ROW_SCATTER_SLOTS * batch_size,
         "path_scatter_slots": TAW_PATH_SCATTER_SLOTS * batch_size,
+        "exact_commit_launches": TAW_EXACT_COMMIT_LAUNCHES,
+        "exact_commit_programs": (
+            TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST * batch_size
+        ),
+        "floating_sampling_reimplementation": False,
         "source_contract_schema": TAW_SOURCE_CONTRACT_SCHEMA,
         "source_contract_sha256": TAW_SOURCE_CONTRACT_SHA256,
         "tensor_call_census": dict(TAW_TENSOR_CALL_CENSUS),
@@ -2793,6 +2846,8 @@ def _reference_taw(batch_size: int) -> dict[str, Any]:
         "accepted_path_shape": [batch_size, ACCEPTED_PATH_CAPACITY],
         "accepted_lens_shape": [batch_size],
         "last_row_shape": [batch_size],
+        "exact_current_shape": [batch_size],
+        "exact_alive_shape": [batch_size],
     }
 
 
@@ -3538,6 +3593,22 @@ def run_self_test() -> dict[str, Any]:
     event_tamper("taw-child-lanes", ("taw", "child_lanes"), 63)
     event_tamper("taw-target-rows", ("taw", "target_rows"), 21)
     event_tamper("taw-source-cdf", ("taw", "source_cdf_rows"), 11)
+    event_tamper("taw-route", ("taw", "route"), "pytorch_float_and_integer")
+    event_tamper(
+        "taw-exact-commit-launches",
+        ("taw", "exact_commit_launches"),
+        TAW_EXACT_COMMIT_LAUNCHES - 1,
+    )
+    event_tamper(
+        "taw-exact-commit-programs",
+        ("taw", "exact_commit_programs"),
+        TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST - 1,
+    )
+    event_tamper(
+        "taw-floating-reimplementation",
+        ("taw", "floating_sampling_reimplementation"),
+        True,
+    )
     event_tamper(
         "taw-source-schema",
         ("taw", "source_contract_schema"),
@@ -3630,6 +3701,8 @@ def run_self_test() -> dict[str, Any]:
         [2],
     )
     event_tamper("taw-last-row-shape", ("taw", "last_row_shape"), [2])
+    event_tamper("taw-exact-current-shape", ("taw", "exact_current_shape"), [2])
+    event_tamper("taw-exact-alive-shape", ("taw", "exact_alive_shape"), [2])
     event_tamper("output-slots", ("output_publish", "slots_written"), 31)
     event_tamper(
         "output-copy-calls",

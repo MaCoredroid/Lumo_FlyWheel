@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import inspect
+import sys
 from pathlib import Path
 
 
@@ -14,6 +15,17 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC is not None and SPEC.loader is not None
 taw = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(taw)
+
+CENSUS_PATH = Path("scripts/fr13_fixed32_work_census.py")
+sys.path.insert(0, str(CENSUS_PATH.parent.resolve()))
+CENSUS_SPEC = importlib.util.spec_from_file_location(
+    "fr13_fixed32_taw_exact_commit_census",
+    CENSUS_PATH,
+)
+assert CENSUS_SPEC is not None and CENSUS_SPEC.loader is not None
+census_validator = importlib.util.module_from_spec(CENSUS_SPEC)
+sys.modules[CENSUS_SPEC.name] = census_validator
+CENSUS_SPEC.loader.exec_module(census_validator)
 
 
 def _function(name: str) -> ast.FunctionDef:
@@ -170,3 +182,33 @@ def test_exact_commit_dispatch_and_census_are_fail_closed() -> None:
     assert census["floating_sampling_reimplementation"] is False
     assert census["output_scatter_calls"] == 0
     assert census["path_scatter_calls"] == 0
+
+
+def test_work_census_validator_pins_exact_commit_contract() -> None:
+    assert (
+        census_validator.TAW_SOURCE_CONTRACT_SCHEMA
+        == taw._FR13_FIXED32_TAW_SOURCE_SCHEMA
+    )
+    assert (
+        census_validator.TAW_SOURCE_CONTRACT_SHA256
+        == taw._FR13_FIXED32_TAW_SOURCE_SHA256
+    )
+    assert (
+        census_validator.TAW_TENSOR_CALL_CENSUS
+        == taw._FR13_FIXED32_TAW_TENSOR_CALL_CENSUS
+    )
+    event = census_validator.reference_event(
+        "tail6_fixed32",
+        1,
+        "exact-commit-contract",
+    )
+    validated = census_validator.validate_event(event, source="exact-commit-contract")
+    assert validated.normalized_work["taw"]["route"] == (
+        "fixed32_pytorch_exact_float_triton_integer_commit"
+    )
+    assert validated.normalized_work["taw"]["exact_commit_launches"] == 12
+    assert validated.normalized_work["taw"]["exact_commit_programs_per_request"] == 12
+    assert (
+        validated.normalized_work["taw"]["floating_sampling_reimplementation"]
+        is False
+    )
