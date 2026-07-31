@@ -5574,6 +5574,7 @@ def _process_one(
     eval_timeout_s: int,
     skip_existing: bool,
     fixed32_bracket: _Fixed32TaskBracket | None = None,
+    fixed32_b1_diagnostic: bool = False,
 ) -> dict[str, Any]:
     # Use absolute paths everywhere so docker volume mounts and git
     # worktree add (which resolves relative to -C cache) both work.
@@ -5618,6 +5619,12 @@ def _process_one(
                 separators=(",", ":"),
             ).encode("utf-8")
         ).hexdigest()
+        if fixed32_b1_diagnostic:
+            summary["fixed32_run_classification"] = {
+                "run_classification": "b1_diagnostic",
+                "gate_eligible": False,
+                "floor_acceptance_eligible": False,
+            }
 
     cache_path = None
     try:
@@ -6096,6 +6103,12 @@ def main(argv: list[str] | None = None) -> int:
     fixed32_enabled = any(value is not None for value in fixed32_values)
     if fixed32_enabled and any(value is None for value in fixed32_values):
         parser.error("all six --fixed32-* runtime binding options are required together")
+    diagnostic_text = os.environ.get("FR13_FIXED32_B1_DIAGNOSTIC", "0")
+    if diagnostic_text not in {"0", "1"}:
+        parser.error("FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1")
+    fixed32_b1_diagnostic = diagnostic_text == "1"
+    if fixed32_b1_diagnostic and not fixed32_enabled:
+        parser.error("FR13_FIXED32_B1_DIAGNOSTIC=1 requires fixed32 runtime binding")
     fixed32_client = None
     fixed32_subset = None
     if fixed32_enabled:
@@ -6111,17 +6124,25 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(str(error))
         sys.path.insert(0, str(REPO_ROOT / "scripts"))
         from fr13_floor_gate import GateError as FloorGateError
-        from fr13_floor_gate import validate_canonical_subset
+        from fr13_floor_gate import validate_fixed32_run_subset
 
         try:
-            fixed32_subset = validate_canonical_subset(args.subset)
+            fixed32_subset = validate_fixed32_run_subset(
+                args.subset,
+                b1_diagnostic=fixed32_b1_diagnostic,
+            )
         except FloorGateError as error:
-            parser.error(f"fixed32 canonical subset validation failed: {error}")
+            parser.error(f"fixed32 run subset validation failed: {error}")
         try:
             serving_batch = int(os.environ["MAX_NUM_SEQS_OVR"])
         except (KeyError, ValueError):
             parser.error("fixed32 requires integer MAX_NUM_SEQS_OVR in the runner environment")
-        if serving_batch not in (1, 4) or args.concurrency != serving_batch:
+        if fixed32_b1_diagnostic:
+            if serving_batch != 1 or args.concurrency != 1:
+                parser.error(
+                    "fixed32 B1 diagnostic requires concurrency and serving batch exactly 1"
+                )
+        elif serving_batch not in (1, 4) or args.concurrency != serving_batch:
             parser.error(
                 "fixed32 requires concurrency to equal the serving batch (exactly B1 or B4)"
             )
@@ -6257,6 +6278,7 @@ def main(argv: list[str] | None = None) -> int:
                     eval_timeout_s=args.eval_timeout_s,
                     skip_existing=args.skip_existing,
                     fixed32_bracket=fixed32_bracket,
+                    fixed32_b1_diagnostic=fixed32_b1_diagnostic,
                 )
             except Fixed32BoundaryError:
                 raise
@@ -6333,6 +6355,16 @@ def main(argv: list[str] | None = None) -> int:
         ended_at=ended_at,
         model_name=args.model_name,
     )
+    if fixed32_b1_diagnostic:
+        summary["fixed32_run_classification"] = {
+            "run_classification": "b1_diagnostic",
+            "gate_eligible": False,
+            "floor_acceptance_eligible": False,
+        }
+        (dataset_out / "campaign_summary.json").write_text(
+            json.dumps(summary, indent=2),
+            encoding="utf-8",
+        )
     print(f"=== [{ended_at}] DONE n={summary['instances_total']} "
           f"resolved_rate={summary.get('resolved_rate')} "
           f"verdicts={summary['verdict_counts']} ===", flush=True)

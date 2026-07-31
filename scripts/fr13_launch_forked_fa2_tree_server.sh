@@ -662,6 +662,15 @@ if [[ ! -f "$FORKED_FA2_SO" ]]; then
   exit 2
 fi
 if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
+  FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
+  case "$FR13_FIXED32_B1_DIAGNOSTIC" in
+    0|1) ;;
+    *) echo "FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
+  if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" && "$MAX_NUM_SEQS" != "1" ]]; then
+    echo "fixed32 B1 diagnostic requires MAX_NUM_SEQS=1" >&2
+    exit 2
+  fi
   _fixed32_expected_mem=105g
   [[ "$MAX_NUM_SEQS" == "4" ]] && _fixed32_expected_mem=112g
   [[ "$MAX_NUM_SEQS" == "1" || "$MAX_NUM_SEQS" == "4" ]] \
@@ -847,8 +856,14 @@ if (
 PY
   (( $? == 0 )) || exit 2
   IFS=',' read -r -a _fixed32_task_ids <<< "$FR13_FIXED32_INGRESS_TASK_IDS"
-  [[ ${#_fixed32_task_ids[@]} == 4 || ${#_fixed32_task_ids[@]} == 16 ]] \
-    || { echo "fixed32 ingress task list must contain exactly 4 or 16 IDs" >&2; exit 2; }
+  if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
+    [[ ${#_fixed32_task_ids[@]} == 1 \
+       && "${_fixed32_task_ids[0]}" == "astropy__astropy-12907" ]] \
+      || { echo "fixed32 B1 diagnostic ingress task ID is not pinned" >&2; exit 2; }
+  else
+    [[ ${#_fixed32_task_ids[@]} == 4 || ${#_fixed32_task_ids[@]} == 16 ]] \
+      || { echo "fixed32 ingress task list must contain exactly 4 or 16 IDs" >&2; exit 2; }
+  fi
   for _fixed32_task_id in "${_fixed32_task_ids[@]}"; do
     [[ "$_fixed32_task_id" =~ ^[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+$ ]] \
       || { echo "fixed32 ingress task ID is malformed" >&2; exit 2; }
