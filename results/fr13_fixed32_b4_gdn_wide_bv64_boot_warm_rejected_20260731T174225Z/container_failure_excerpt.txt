@@ -1,0 +1,22 @@
+2026-07-31T17:48:48.504856012Z (EngineCore pid=257) [FR13_CONV_WB_BATCHED] preseeded 16 stagings: rows_cap=268 c=10240 dtype=torch.bfloat16
+2026-07-31T17:48:48.504887788Z (EngineCore pid=257) INFO 07-31 17:48:48 [gdn_attn.py:971] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=3 owner=language_model.model.layers.2.linear_attn b_max=4 path_cols=32
+2026-07-31T17:49:53.344166002Z (EngineCore pid=257) 2026-07-31 17:49:53,335 - INFO - autotuner.py:457 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
+2026-07-31T17:50:02.798109137Z (EngineCore pid=257) 2026-07-31 17:50:02,790 - INFO - autotuner.py:466 - flashinfer.jit: [Autotuner]: Autotuning process ends
+2026-07-31T17:50:03.968259225Z (EngineCore pid=257) INFO 07-31 17:50:03 [core.py:305] init engine (profile, create kv cache, warmup model) took 136.40 s
+2026-07-31T17:50:03.996710851Z (EngineCore pid=257) FR13_APC_ZERO_MAMBA boot needle: single_type_kv_cache_manager mamba fresh-alloc recording ACTIVE (flag ON at patch time)
+2026-07-31T17:50:04.172820891Z (EngineCore pid=257) INFO 07-31 17:50:04 [vllm.py:840] Asynchronous scheduling is enabled.
+2026-07-31T17:50:04.172837563Z (EngineCore pid=257) WARNING 07-31 17:50:04 [vllm.py:896] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+2026-07-31T17:50:04.172839243Z (EngineCore pid=257) WARNING 07-31 17:50:04 [vllm.py:907] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+2026-07-31T17:50:18.245061810Z (APIServer pid=1) INFO:     172.17.0.1:44724 - "POST /v1/responses HTTP/1.1" 401 Unauthorized
+2026-07-31T17:50:18.246583462Z (APIServer pid=1) INFO:     172.17.0.1:44730 - "POST /v1/responses HTTP/1.1" 401 Unauthorized
+2026-07-31T17:50:18.247148647Z (APIServer pid=1) INFO:     172.17.0.1:44744 - "POST /v1/completions HTTP/1.1" 403 Forbidden
+2026-07-31T17:50:18.247955961Z (APIServer pid=1) INFO:     172.17.0.1:44760 - "POST /reset_prefix_cache HTTP/1.1" 403 Forbidden
+2026-07-31T17:50:18.248476347Z (APIServer pid=1) INFO:     172.17.0.1:44774 - "GET /health HTTP/1.1" 200 OK
+2026-07-31T17:50:18.264114387Z (APIServer pid=1) INFO:     172.17.0.1:44778 - "GET /metrics HTTP/1.1" 200 OK
+2026-07-31T17:50:18.265567079Z (APIServer pid=1) INFO:     172.17.0.1:44786 - "GET /v1/models HTTP/1.1" 200 OK
+2026-07-31T17:50:18.599988649Z (APIServer pid=1) INFO:     172.17.0.1:44800 - "GET /metrics HTTP/1.1" 200 OK
+2026-07-31T17:50:18.688362174Z (APIServer pid=1) INFO:     172.17.0.1:44802 - "POST /fr13/fixed32/ingress/begin HTTP/1.1" 200 OK
+2026-07-31T17:50:18.693187355Z (APIServer pid=1) INFO:     172.17.0.1:57868 - "GET /health HTTP/1.1" 200 OK
+2026-07-31T17:50:20.053810351Z (EngineCore pid=257) [FR13_FIXED32_FLUSH] failed generation 1: RuntimeError('fixed32 boot-warm evidence is missing')
+2026-07-31T17:50:20.182599725Z (APIServer pid=1) INFO:     172.17.0.1:44814 - "GET /metrics HTTP/1.1" 200 OK
+2026-07-31T17:50:20.438610612Z (APIServer pid=1) INFO:     172.17.0.1:44828 - "POST /fr13/fixed32/ingress/finalize HTTP/1.1" 200 OK
