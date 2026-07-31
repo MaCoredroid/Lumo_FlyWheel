@@ -4,6 +4,10 @@
 The patch intentionally leaves the stock ``varlen_fwd`` op unchanged and adds
 ``varlen_fwd_tree_bias``.  The new op carries a dense ancestry-bias matrix into
 FA2 and adds it to score tiles after QK and before masking/softmax.
+
+The exact-safe ``--tree-bias-tile-earlyout`` source-build candidate skips the
+per-score bias walk on K tiles that cannot overlap the tree suffix. It does not
+change FA2 launch geometry, split-KV selection, or floating-point reductions.
 """
 
 from __future__ import annotations
@@ -23,7 +27,20 @@ DEFAULT_FA2_CANDIDATES = [
 ]
 
 
-TREE_BIAS_HELPER = r'''
+TREE_BIAS_TILE_OVERLAP_GUARD = r'''    // FR13_FA2_TREE_BIAS_TILE_EARLYOUT: only the suffix tiles carry bias.
+    const int bias_col_begin = context_len + params.tree_bias_k_offset;
+    const int bias_col_end = bias_col_begin + params.tree_bias_cols;
+    const int block_col_begin = n_block * Kernel_traits::kBlockN;
+    const int block_col_end = block_col_begin + Kernel_traits::kBlockN;
+    if (block_col_end <= bias_col_begin || block_col_begin >= bias_col_end) {
+        return;
+    }
+'''
+
+
+def _tree_bias_helper(tile_earlyout: bool) -> str:
+    overlap_guard = TREE_BIAS_TILE_OVERLAP_GUARD if tile_earlyout else ""
+    return r'''
 // FR13_FA2_TREE_BIAS: add a dense query-suffix ancestry bias after QK.
 template <typename Kernel_traits, typename Engine, typename Layout, typename Params, typename BlockInfoT>
 __forceinline__ __device__ void apply_tree_bias(Tensor<Engine, Layout> &tensor_,
@@ -40,7 +57,7 @@ __forceinline__ __device__ void apply_tree_bias(Tensor<Engine, Layout> &tensor_,
     const float *tree_bias = reinterpret_cast<const float *>(params.tree_bias_ptr)
         + bidb * params.tree_bias_batch_stride;
     const int context_len = binfo.actual_seqlen_k - binfo.actual_seqlen_q;
-    const int lane_id = threadIdx.x % 32;
+''' + overlap_guard + r'''    const int lane_id = threadIdx.x % 32;
     const int col_idx_offset = n_block * Kernel_traits::kBlockN + (lane_id % 4) * 2;
     #pragma unroll
     for (int mi = 0; mi < size<0, 1>(tensor); ++mi) {
@@ -74,6 +91,9 @@ __forceinline__ __device__ void apply_tree_bias(Tensor<Engine, Layout> &tensor_,
 }
 
 '''
+
+
+TREE_BIAS_HELPER = _tree_bias_helper(tile_earlyout=False)
 
 
 def _replace_once(text: str, old: str, new: str, label: str) -> tuple[str, bool]:
@@ -114,22 +134,23 @@ def _patch_flash_h(path: Path) -> bool:
     return changed
 
 
-def _patch_flash_fwd_kernel(path: Path) -> bool:
+def _patch_flash_fwd_kernel(path: Path, *, tile_earlyout: bool = False) -> bool:
     text = path.read_text()
     changed = False
+    tree_bias_helper = _tree_bias_helper(tile_earlyout)
     helper_marker = "// FR13_FA2_TREE_BIAS: add a dense query-suffix ancestry bias after QK."
     helper_end_marker = "template<typename Kernel_traits, bool Is_dropout"
     if helper_marker in text:
         start = text.index(helper_marker)
         end = text.index(helper_end_marker, start)
-        if text[start:end] != TREE_BIAS_HELPER.lstrip():
-            text = text[:start] + TREE_BIAS_HELPER.lstrip() + text[end:]
+        if text[start:end] != tree_bias_helper.lstrip():
+            text = text[:start] + tree_bias_helper.lstrip() + text[end:]
             changed = True
     else:
         text, did = _insert_once(
             text,
             helper_end_marker,
-            TREE_BIAS_HELPER,
+            tree_bias_helper,
             "tree bias helper",
         )
         changed = changed or did
@@ -384,7 +405,11 @@ mha_varlen_fwd_tree_bias(at::Tensor &q,
     return changed
 
 
-def patch_fa2_source(fa2_src: Path) -> dict[str, bool]:
+def patch_fa2_source(
+    fa2_src: Path,
+    *,
+    tree_bias_tile_earlyout: bool = False,
+) -> dict[str, bool]:
     files = {
         "flash.h": fa2_src / "csrc/flash_attn/src/flash.h",
         "flash_fwd_kernel.h": fa2_src / "csrc/flash_attn/src/flash_fwd_kernel.h",
@@ -396,7 +421,10 @@ def patch_fa2_source(fa2_src: Path) -> dict[str, bool]:
         raise FileNotFoundError("missing FA2 source files: " + ", ".join(missing))
     return {
         "flash.h": _patch_flash_h(files["flash.h"]),
-        "flash_fwd_kernel.h": _patch_flash_fwd_kernel(files["flash_fwd_kernel.h"]),
+        "flash_fwd_kernel.h": _patch_flash_fwd_kernel(
+            files["flash_fwd_kernel.h"],
+            tile_earlyout=tree_bias_tile_earlyout,
+        ),
         "flash_api.cpp": _patch_flash_api_cpp(files["flash_api.cpp"]),
         "flash_api_torch_lib.cpp": _patch_torch_lib(files["flash_api_torch_lib.cpp"]),
     }
@@ -947,13 +975,23 @@ def main() -> int:
     )
     parser.add_argument("--skip-source", action="store_true")
     parser.add_argument("--skip-python", action="store_true")
+    parser.add_argument(
+        "--tree-bias-tile-earlyout",
+        action="store_true",
+        help="build the exact tree-bias K-tile overlap early-out candidate",
+    )
     args = parser.parse_args()
 
-    payload: dict[str, object] = {}
+    payload: dict[str, object] = {
+        "tree_bias_tile_earlyout": args.tree_bias_tile_earlyout,
+    }
     if not args.skip_source:
         fa2_src = find_fa2_source(str(args.fa2_src) if args.fa2_src else None)
         payload["fa2_src"] = str(fa2_src)
-        payload["source"] = patch_fa2_source(fa2_src)
+        payload["source"] = patch_fa2_source(
+            fa2_src,
+            tree_bias_tile_earlyout=args.tree_bias_tile_earlyout,
+        )
     if not args.skip_python:
         payload["python"] = patch_installed_vllm(args.site_packages)
     print(payload)
