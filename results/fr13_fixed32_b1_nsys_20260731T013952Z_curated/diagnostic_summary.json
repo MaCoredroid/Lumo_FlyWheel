@@ -1,0 +1,114 @@
+{
+  "campaign": {
+    "batch_size": 1,
+    "capture_duration_s": 300,
+    "capture_mode": "tail6_fixed32",
+    "concurrency": 1,
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "declared_task_count": 4,
+    "fully_evaluated_tasks_before_capture_stop": 2,
+    "fixed_physical_draft_rows_per_event": 31,
+    "nsight_version": "2026.2.1",
+    "task_keys_with_matched_requests": 3,
+    "workload": "canonical_real_swe_verified_exact4"
+  },
+  "floor_accounting": {
+    "bandwidth_bytes_per_s": 273000000000,
+    "derivation_artifact": "floor_ledger.json",
+    "derivation_schema": "fr13.speculative_step_weight_ledger.v1",
+    "current_algorithm": {
+      "drafter_head_bytes": 5227151360,
+      "four_mtp_forward_bytes": 1908798976,
+      "mandatory_weight_bytes_per_step": 34061146624,
+      "mandatory_weight_floor_ms": 124.76610485,
+      "nonweight_costs_included": false,
+      "target_model_bytes": 24382399488,
+      "verifier_head_bytes": 2542796800
+    },
+    "legacy_acceptance_requirement": {
+      "cap_ms": 113.39,
+      "multiplier": 1.15,
+      "required_statistic": "one_sided_u95_wall_ms_per_step",
+      "weight_stream_floor_ms": 98.6
+    },
+    "legacy_exact_tensor_ledger": {
+      "bytes": 26925196288,
+      "components": [
+        "target_model_weights",
+        "verifier_head_weights"
+      ],
+      "floor_ms": 98.62709263,
+      "is_full_speculative_step_floor": false
+    },
+    "root_64k_projection": {
+      "mandatory_weight_bytes_per_step": 32189438464,
+      "mandatory_weight_floor_ms": 117.910031004,
+      "nonweight_costs_included": false
+    },
+    "verdict": "The 113.39 ms legacy cap is below the current algorithm's mandatory weight-read floor. Reaching it requires eliminating weight reads and additional nonweight work; kernel retuning alone cannot satisfy it."
+  },
+  "measurement": {
+    "basis": "nsight_projected_gpu_operation_envelope",
+    "complete_step_ranges": 881,
+    "phase_ms_per_step": {
+      "cfwd": 22.755077,
+      "dfwd": 47.435717,
+      "postprocess": 12.153933,
+      "residual_envelope": 13.661328,
+      "sfwd_capture_boundary_adjusted": 174.813673,
+      "step_envelope": 271.018155
+    },
+    "sfwd_top_kernel_groups_ms_per_step": {
+      "conv_index_copy": 4.591679,
+      "conv_index_select": 5.938124,
+      "conv_writeback": 4.484287,
+      "target_fp8_cutlass": 112.312954,
+      "tree_attention_fa2": 24.708601,
+      "tree_gdn": 14.01952
+    },
+    "dfwd_top_kernel_groups_ms_per_step": {
+      "bf16_vocab_heads": 26.227316,
+      "mtp_fp8_cutlass": 8.514285,
+      "unified_attention": 6.967564
+    },
+    "cfwd_top_kernel_groups_ms_per_step": {
+      "elementwise_float_add": 1.600615,
+      "gdn_replay": 4.082147,
+      "softmax": 2.304176,
+      "topk_topp": 1.107767
+    },
+    "interpretation": "This is attribution-only GPU timing under Nsight, not a wall-TPS or acceptance measurement. It must not be compared as a regression against an unprofiled wall point."
+  },
+  "measurement_gaps": {
+    "b4": "UNMEASURED",
+    "compute_vs_memory_ncu": "UNMEASURED",
+    "formal_exact4_acceptance": "NOT_PRODUCED_BY_ATTRIBUTION_RUN",
+    "formal_exact16_acceptance": "UNMEASURED"
+  },
+  "provenance": {
+    "attribution_json_sha256": "685c410a0ba09d00c8b244bfa06809530337cea383b88fa92a5da1013eadf2d0",
+    "exact4_subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "measured_git_sha": "1a7a765447c8ce6068e0dd5d3a344d58ace85f2b",
+    "measured_profiler_script_sha256": "896006757ab7a324654d9d84a5debf08e5183ec9bb83918bfc9cbb876e129112",
+    "provenance_bound": true,
+    "raw_nsys_report_bytes": 199035074,
+    "raw_nsys_report_published": false,
+    "raw_nsys_report_sha256": "466734531838879104dedfd7041271379e115c84b5cca7061d4480b6b4209e2f",
+    "reducer_script_sha256": "e88355df638f700f110efb57901925a3f926d4c3b4754cabf70d31979595ba61",
+    "runtime_manifest_launch_end_byte_equal": true,
+    "runtime_manifest_overall_canonical_sha256": "c8def29c3703f1ab877105b139629acf2f7ba6ad7ed5fe7104540e2101c34341",
+    "runtime_manifest_sha256": "73bb515812e463a678a22e8c31e34f29ff8e0473a683674969e5aa570a3c6d17"
+  },
+  "publication": {
+    "acceptance_valid": false,
+    "artifact_type": "privacy_safe_attribution_diagnostic",
+    "capture_exercised_terminal_ledger_snapshot_fix": false,
+    "capture_end_intentionally_terminates_server": true,
+    "lifecycle_version_note": "This capture predates the terminal docker-cp ledger snapshot hardening. It validates the prior-run attribution only; the new lifecycle is test-validated pending a future real capture.",
+    "curated_publishable": true,
+    "post_capture_teardown_note": "After the report was terminal, stable, and hash-latched, the exact run-owned in-flight task container was stopped to end an otherwise unbounded agent wait. This occurred after the captured report closed and cannot affect its GPU ranges.",
+    "raw_request_or_response_bodies_included": false,
+    "raw_swe_outputs_included": false
+  },
+  "schema": "fr13.fixed32.nsys_curated_diagnostic.v1"
+}

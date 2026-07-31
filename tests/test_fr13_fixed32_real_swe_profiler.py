@@ -96,6 +96,44 @@ def test_fixed32_profiler_binds_proven_capture_and_real_swe_evidence() -> None:
     assert "--nsys-discard-environment true" in text
 
 
+def test_fixed32_profiler_snapshots_terminal_engine_ledger_before_thaw() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    wait_index = text.index("if ! wait_for_fresh_stable_report")
+    snapshot_index = text.index(
+        'snapshot_terminal_engine_ledger "$ENGINE_LEDGER_SNAPSHOT"'
+    )
+    thaw_index = text.index("thaw_exact_control_ancestors", snapshot_index)
+    assert wait_index < snapshot_index < thaw_index
+    assert '"${PROFILE_CONTAINER_ID}:${source_path}" "$snapshot_tmp"' in text
+    assert "docker cp" in text
+    assert "NSYS_CONTAINER_TERMINAL_OK != 1" in text
+    assert "PROFILE_CONTAINER_RUNNING != 0" in text
+    assert '[[ ! -f "$snapshot_tmp" || -L "$snapshot_tmp"' in text
+    assert "--engine-ledger \"$ENGINE_LEDGER_SNAPSHOT\"" in text
+    assert (
+        '--engine-ledger "$RUNROOT/$ARM/logs/fr13_fixed32_engine_ingress.jsonl"'
+        not in text
+    )
+    assert "sudo" not in text
+
+
+def test_fixed32_profiler_scopes_bounded_swe_wall_to_driver() -> None:
+    text = SCRIPT.read_text(encoding="utf-8")
+
+    assert (
+        "LUMO_NSYS_SWE_AGENT_WALL_S="
+        "${LUMO_NSYS_SWE_AGENT_WALL_S:-900}"
+        in text
+    )
+    assert "validate_nsys_attribution_task_wall || exit 2" in text
+    assert (
+        'WALL=0 \\\nSWE_AGENT_WALL_S="$LUMO_NSYS_SWE_AGENT_WALL_S" \\\n'
+        in text
+    )
+    assert "export SWE_AGENT_WALL_S" not in text
+
+
 def test_fixed32_profiler_reaches_runtime_preflight(
     tmp_path: Path,
 ) -> None:

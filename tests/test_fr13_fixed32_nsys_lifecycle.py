@@ -146,6 +146,36 @@ exit 1
     )
 
 
+def _write_engine_snapshot_docker(path: Path) -> None:
+    _write_executable(
+        path,
+        """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$DOCKER_CALLS"
+if [[ "$1" == "inspect" && "$2" == "--format" ]]; then
+  [[ "$4" == "$CONTAINER_ID" ]] || exit 1
+  [[ "$3" == "{{.Id}} {{.Name}} {{.State.Status}} {{.State.Running}} {{.State.StartedAt}} {{.State.Pid}} {{.RestartCount}} {{.State.ExitCode}}" ]] \
+    || exit 1
+  restart_count=$CONTAINER_RESTART_COUNT
+  [[ ! -e "$IDENTITY_DRIFT_FILE" ]] || restart_count=1
+  printf '%s /%s exited false %s 0 %s 0\\n' \
+    "$CONTAINER_ID" "$CONTAINER_NAME" "$CONTAINER_STARTED_AT" "$restart_count"
+  exit 0
+fi
+if [[ "$1" == "cp" ]]; then
+  [[ "$2" == "$CONTAINER_ID:/logs/fr13_fixed32_engine_ingress.jsonl" ]] \
+    || exit 1
+  [[ "$CP_MODE" != "cp_failure" ]] || exit 42
+  /bin/cp -- "$ENGINE_LEDGER_SOURCE" "$3" || exit 1
+  if [[ "$CP_MODE" == "identity_drift" ]]; then
+    : > "$IDENTITY_DRIFT_FILE"
+  fi
+  exit 0
+fi
+exit 1
+""",
+    )
+
+
 def _fake_control_processes(tmp_path: Path) -> tuple[Path, Path, Path]:
     driver = tmp_path / "driver.sh"
     variant = tmp_path / "variant.sh"
@@ -261,21 +291,23 @@ def test_profile_lifecycle_contract_is_async_exact_and_recoverable() -> None:
         "session_state",
         "session_present",
         "post_collection",
+        "terminal_ok",
         "control_frozen",
         "expected_eligible",
     ),
     (
-        ("Waiting", "1", "0", "1", "0"),
-        ("", "0", "0", "1", "0"),
-        ("ContainerExited", "0", "1", "0", "0"),
-        ("ContainerExited", "0", "1", "1", "1"),
-        ("", "0", "1", "1", "1"),
+        ("Waiting", "1", "0", "0", "1", "0"),
+        ("", "0", "0", "0", "1", "0"),
+        ("", "0", "1", "0", "1", "0"),
+        ("ContainerExited", "0", "1", "1", "0", "0"),
+        ("ContainerExited", "0", "1", "1", "1", "1"),
     ),
 )
 def test_report_stability_requires_proven_guarded_terminal_transition(
     session_state: str,
     session_present: str,
     post_collection: str,
+    terminal_ok: str,
     control_frozen: str,
     expected_eligible: str,
 ) -> None:
@@ -286,6 +318,7 @@ NSYS_SESSION_ID=$EXPECTED_SESSION_ID
 NSYS_SESSION_STATE=$SESSION_STATE
 NSYS_SESSION_PRESENT=$SESSION_PRESENT
 NSYS_POST_COLLECTION_OBSERVED=$POST_COLLECTION
+NSYS_CONTAINER_TERMINAL_OK=$TERMINAL_OK
 if report_stability_is_eligible "$CONTROL_FROZEN"; then
   actual=1
 else
@@ -302,6 +335,7 @@ fi
             "SESSION_STATE": session_state,
             "SESSION_PRESENT": session_present,
             "POST_COLLECTION": post_collection,
+            "TERMINAL_OK": terminal_ok,
             "CONTROL_FROZEN": control_frozen,
             "EXPECTED_ELIGIBLE": expected_eligible,
         },
@@ -383,6 +417,149 @@ validate_nsys_delayed_collection_timeouts
         assert expected_error in completed.stderr
 
 
+@pytest.mark.parametrize(
+    ("task_wall_s", "duration_s", "expected_error"),
+    (
+        ("900", "300", None),
+        ("300", "300", None),
+        ("299", "300", "must cover the Nsight capture duration"),
+        ("0", "300", "must be a strict positive integer"),
+        ("-1", "300", "must be a strict positive integer"),
+        ("invalid", "300", "must be a strict positive integer"),
+    ),
+)
+def test_profile_task_wall_is_positive_and_covers_capture(
+    task_wall_s: str,
+    duration_s: str,
+    expected_error: str | None,
+) -> None:
+    script = r"""
+source "$1"
+LUMO_NSYS_SWE_AGENT_WALL_S=$2
+LUMO_NSYS_DURATION_S=$3
+validate_nsys_attribution_task_wall
+"""
+    completed = subprocess.run(
+        [
+            "bash",
+            "-c",
+            script,
+            "--",
+            os.fspath(PROFILE),
+            task_wall_s,
+            duration_s,
+        ],
+        cwd=REPO,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    if expected_error is None:
+        assert completed.returncode == 0, completed.stderr
+    else:
+        assert completed.returncode == 1
+        assert expected_error in completed.stderr
+
+
+@pytest.mark.parametrize("cp_mode", ("success", "cp_failure", "identity_drift"))
+def test_terminal_engine_ledger_snapshot_is_exact_fresh_and_host_owned(
+    tmp_path: Path,
+    cp_mode: str,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_docker = fake_bin / "docker"
+    docker_calls = tmp_path / "docker.calls"
+    lifecycle_log = tmp_path / "lifecycle.log"
+    engine_ledger = tmp_path / "engine-ledger.source.jsonl"
+    snapshot = tmp_path / "engine-ledger.snapshot.jsonl"
+    identity_drift_file = tmp_path / "identity.drift"
+    engine_ledger.write_text('{"kind":"engine_ingress"}\n', encoding="ascii")
+    engine_ledger.chmod(0o600)
+    _write_engine_snapshot_docker(fake_docker)
+    script = r"""
+source "$1"
+NSYS_LIFECYCLE_LOG=$2
+CONTAINER=$CONTAINER_NAME
+PROFILE_CONTAINER_ID=$CONTAINER_ID
+PROFILE_CONTAINER_STARTED_AT=$CONTAINER_STARTED_AT
+PROFILE_CONTAINER_INIT_PID=$CONTAINER_INIT_PID
+PROFILE_CONTAINER_RESTART_COUNT=$CONTAINER_RESTART_COUNT
+PROFILE_CONTAINER_RUNNING=0
+PROFILE_CONTAINER_STATUS=exited
+PROFILE_CONTAINER_EXIT_CODE=0
+NSYS_CONTAINER_TERMINAL_OK=1
+NSYS_PROVEN_REPORT_IDENTITY=1:2:1:3:4:5
+NSYS_PROVEN_REPORT_SHA256=$(printf 'a%.0s' {1..64})
+if snapshot_terminal_engine_ledger "$3"; then
+  snapshot_rc=0
+else
+  snapshot_rc=$?
+fi
+printf '%s\n' "$NSYS_LIFECYCLE_ERROR" > "$4"
+if [[ "$CP_MODE" == "success" ]]; then
+  [[ "$snapshot_rc" == 0 ]]
+  [[ "$ENGINE_LEDGER_SNAPSHOT" == "$3" ]]
+else
+  [[ "$snapshot_rc" == 1 ]]
+fi
+"""
+    error_file = tmp_path / "snapshot.error"
+    completed = subprocess.run(
+        [
+            "bash",
+            "-c",
+            script,
+            "--",
+            os.fspath(PROFILE),
+            os.fspath(lifecycle_log),
+            os.fspath(snapshot),
+            os.fspath(error_file),
+        ],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+            "CONTAINER_ID": CONTAINER_ID,
+            "CONTAINER_NAME": "profile-test-container",
+            "CONTAINER_STARTED_AT": CONTAINER_STARTED_AT,
+            "CONTAINER_INIT_PID": CONTAINER_INIT_PID,
+            "CONTAINER_RESTART_COUNT": CONTAINER_RESTART_COUNT,
+            "DOCKER_CALLS": os.fspath(docker_calls),
+            "ENGINE_LEDGER_SOURCE": os.fspath(engine_ledger),
+            "IDENTITY_DRIFT_FILE": os.fspath(identity_drift_file),
+            "CP_MODE": cp_mode,
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    calls = docker_calls.read_text(encoding="utf-8").splitlines()
+    assert calls[0] == _incarnation_attestation()
+    assert calls[1].startswith(
+        f"cp {CONTAINER_ID}:/logs/fr13_fixed32_engine_ingress.jsonl "
+    )
+    assert not list(tmp_path.glob("engine-ledger.snapshot.jsonl.tmp.*"))
+    if cp_mode == "success":
+        assert calls[2] == _incarnation_attestation()
+        assert snapshot.read_bytes() == engine_ledger.read_bytes()
+        assert snapshot.is_file() and not snapshot.is_symlink()
+        assert snapshot.stat().st_uid == os.getuid()
+        assert os.access(snapshot, os.R_OK)
+        assert error_file.read_text(encoding="utf-8") == "\n"
+    else:
+        assert not snapshot.exists()
+        expected_error = {
+            "cp_failure": "docker cp failed",
+            "identity_drift": "identity drifted during",
+        }[cp_mode]
+        assert expected_error in error_file.read_text(encoding="utf-8")
+
+
 def test_delayed_session_deadlines_start_after_engine_identity(
     tmp_path: Path,
 ) -> None:
@@ -435,10 +612,11 @@ refresh_run_nsys_session() {
       NSYS_SESSION_QUERY_OK=1
       ;;
     *)
-      NSYS_SESSION_STATE=Waiting
-      NSYS_SESSION_PRESENT=1
+      NSYS_SESSION_STATE=ContainerExited
+      NSYS_SESSION_PRESENT=0
       NSYS_SESSION_QUERY_OK=1
       NSYS_POST_COLLECTION_OBSERVED=1
+      NSYS_CONTAINER_TERMINAL_OK=1
       ;;
   esac
   return 0

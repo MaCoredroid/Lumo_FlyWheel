@@ -36,6 +36,7 @@ NSYS_EXACT_STOP_COMPLETED=0
 NSYS_CONTAINER_TERMINAL_OK=0
 NSYS_PROVEN_REPORT_IDENTITY=""
 NSYS_PROVEN_REPORT_SHA256=""
+ENGINE_LEDGER_SNAPSHOT=""
 PRESERVE_RECOVERABLE_STATE=0
 PRESERVED_CONTAINER=""
 NSYS_EXPECTED_DRIVER_SCRIPT=scripts/fr13_b4_campaign_driver.sh
@@ -586,6 +587,96 @@ accept_terminal_profile_container() {
   NSYS_SESSION_STATE="ContainerExited"
 }
 
+snapshot_terminal_engine_ledger() {
+  local destination=$1
+  local source_path=/logs/fr13_fixed32_engine_ingress.jsonl
+  local snapshot_tmp="${destination}.tmp.$$"
+  local expected_owner=""
+  local snapshot_identity=""
+
+  if (( NSYS_CONTAINER_TERMINAL_OK != 1 )); then
+    NSYS_LIFECYCLE_ERROR=\
+"refusing engine-ledger snapshot without exited0 container terminal proof"
+    return 1
+  fi
+  if [[ ! "$NSYS_PROVEN_REPORT_IDENTITY" =~ \
+      ^[0-9]+:[0-9]+:[0-9]+:[0-9]+:[0-9]+:[0-9]+$ ]] \
+      || [[ ! "$NSYS_PROVEN_REPORT_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+    NSYS_LIFECYCLE_ERROR=\
+"refusing engine-ledger snapshot without the latched report proof"
+    return 1
+  fi
+  if [[ -e "$destination" || -L "$destination" \
+     || -e "$snapshot_tmp" || -L "$snapshot_tmp" ]]; then
+    NSYS_LIFECYCLE_ERROR=\
+"fresh host engine-ledger snapshot path already exists"
+    return 1
+  fi
+  expected_owner=$(id -u) || {
+    NSYS_LIFECYCLE_ERROR="unable to identify the host snapshot owner"
+    return 1
+  }
+  if ! _reattest_profile_container "$CONTAINER" \
+      || (( PROFILE_CONTAINER_RUNNING != 0 )) \
+      || [[ "$PROFILE_CONTAINER_STATUS" != "exited" ]] \
+      || [[ "$PROFILE_CONTAINER_EXIT_CODE" != "0" ]]; then
+    NSYS_LIFECYCLE_ERROR=\
+"exact exited0 container identity drifted before engine-ledger snapshot"
+    return 1
+  fi
+  if ! docker cp \
+      "${PROFILE_CONTAINER_ID}:${source_path}" "$snapshot_tmp" \
+      >> "$NSYS_LIFECYCLE_LOG" 2>&1; then
+    NSYS_LIFECYCLE_ERROR=\
+"docker cp failed for the exact terminal container engine ledger"
+    if [[ -f "$snapshot_tmp" && ! -L "$snapshot_tmp" \
+       && "$(stat -c '%u' "$snapshot_tmp" 2>/dev/null)" == "$expected_owner" ]]; then
+      rm -f -- "$snapshot_tmp"
+    fi
+    return 1
+  fi
+  if ! _reattest_profile_container "$CONTAINER" \
+      || (( PROFILE_CONTAINER_RUNNING != 0 )) \
+      || [[ "$PROFILE_CONTAINER_STATUS" != "exited" ]] \
+      || [[ "$PROFILE_CONTAINER_EXIT_CODE" != "0" ]]; then
+    NSYS_LIFECYCLE_ERROR=\
+"exact exited0 container identity drifted during engine-ledger snapshot"
+    if [[ -f "$snapshot_tmp" && ! -L "$snapshot_tmp" \
+       && "$(stat -c '%u' "$snapshot_tmp" 2>/dev/null)" == "$expected_owner" ]]; then
+      rm -f -- "$snapshot_tmp"
+    fi
+    return 1
+  fi
+  if [[ ! -f "$snapshot_tmp" || -L "$snapshot_tmp" \
+     || ! -s "$snapshot_tmp" || ! -r "$snapshot_tmp" ]] \
+      || [[ "$(stat -c '%u' "$snapshot_tmp" 2>/dev/null)" != "$expected_owner" ]]; then
+    NSYS_LIFECYCLE_ERROR=\
+"copied engine ledger is not a host-owned readable nonempty regular file"
+    if [[ -f "$snapshot_tmp" && ! -L "$snapshot_tmp" \
+       && "$(stat -c '%u' "$snapshot_tmp" 2>/dev/null)" == "$expected_owner" ]]; then
+      rm -f -- "$snapshot_tmp"
+    fi
+    return 1
+  fi
+  snapshot_identity=$(stat -c '%d:%i:%h:%s' "$snapshot_tmp") || {
+    NSYS_LIFECYCLE_ERROR="unable to stat copied engine-ledger snapshot"
+    return 1
+  }
+  if ! mv -Tn -- "$snapshot_tmp" "$destination" \
+      || [[ ! -f "$destination" || -L "$destination" \
+         || ! -s "$destination" || ! -r "$destination" ]] \
+      || [[ "$(stat -c '%u' "$destination" 2>/dev/null)" != "$expected_owner" ]] \
+      || [[ "$(stat -c '%d:%i:%h:%s' "$destination" 2>/dev/null)" \
+        != "$snapshot_identity" ]]; then
+    NSYS_LIFECYCLE_ERROR=\
+"unable to publish a stable host-owned engine-ledger snapshot"
+    return 1
+  fi
+  ENGINE_LEDGER_SNAPSHOT=$destination
+  _lifecycle_log \
+    "snapshotted exact terminal container engine ledger to $ENGINE_LEDGER_SNAPSHOT"
+}
+
 validate_engine_core_liveness_after_session_query() {
   if (( PROFILE_CONTAINER_RUNNING == 1 \
       && ENGINE_CORE_LIVENESS_OK == 0 \
@@ -942,6 +1033,7 @@ report_stability_is_eligible() {
   (( NSYS_SESSION_QUERY_OK == 1 )) \
     && [[ -n "$NSYS_SESSION_ID" ]] \
     && (( NSYS_POST_COLLECTION_OBSERVED == 1 )) \
+    && (( NSYS_CONTAINER_TERMINAL_OK == 1 )) \
     && (( control_frozen == 1 )) \
     && [[ "$NSYS_SESSION_STATE" != "Collection" ]] \
     && [[ "$NSYS_SESSION_STATE" != "Generation" ]]
@@ -1173,6 +1265,25 @@ validate_nsys_delayed_collection_timeouts() {
   }
 }
 
+validate_nsys_attribution_task_wall() {
+  [[ "$LUMO_NSYS_SWE_AGENT_WALL_S" =~ ^[1-9][0-9]*$ ]] || {
+    echo \
+      "FAIL: attribution SWE task wall must be a strict positive integer" \
+      >&2
+    return 1
+  }
+  [[ "$LUMO_NSYS_DURATION_S" =~ ^[1-9][0-9]*$ ]] || {
+    echo "FAIL: Nsight duration must be a strict positive integer" >&2
+    return 1
+  }
+  (( 10#$LUMO_NSYS_SWE_AGENT_WALL_S >= 10#$LUMO_NSYS_DURATION_S )) || {
+    echo \
+      "FAIL: attribution SWE task wall must cover the Nsight capture duration" \
+      >&2
+    return 1
+  }
+}
+
 profile_cleanup() {
   local rc=$?
   trap - EXIT INT TERM
@@ -1270,10 +1381,13 @@ LUMO_NSYS_HASH_TIMEOUT_S=${LUMO_NSYS_HASH_TIMEOUT_S:-300}
 LUMO_NSYS_HASH_KILL_AFTER_S=${LUMO_NSYS_HASH_KILL_AFTER_S:-5}
 LUMO_NSYS_REPORT_STABLE_POLLS=${LUMO_NSYS_REPORT_STABLE_POLLS:-3}
 LUMO_NSYS_POLL_S=${LUMO_NSYS_POLL_S:-2}
+LUMO_NSYS_SWE_AGENT_WALL_S=${LUMO_NSYS_SWE_AGENT_WALL_S:-900}
 JQ_BIN=${JQ_BIN:-$(command -v jq)}
 
 OUTPUT_ROOT=$(realpath -m "$REPO/output")
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
+ENGINE_LEDGER_SNAPSHOT=\
+"$RUNROOT_ABS/fr13_fixed32_engine_ingress.container_snapshot.jsonl"
 PROFILE_CONTAINER_CIDFILE=\
 "$RUNROOT_ABS/$ARM/logs/fr13_fixed32_container.cid"
 PROCESS_IDENTITY="$RUNROOT_ABS/$ARM/fixed32_process_identity.json"
@@ -1379,6 +1493,7 @@ unset _positive_lifecycle_value
   exit 2
 }
 validate_nsys_delayed_collection_timeouts || exit 2
+validate_nsys_attribution_task_wall || exit 2
 [[ "$LUMO_NSYS_REPORT_STABLE_POLLS" =~ ^[1-9][0-9]*$ ]] \
   && (( LUMO_NSYS_REPORT_STABLE_POLLS >= 3 )) || {
   echo "FAIL: Nsight report stability requires at least three polls" >&2
@@ -1403,6 +1518,7 @@ SUBSET="$SUBSET" \
 BSIZE=1 \
 CONC=1 \
 WALL=0 \
+SWE_AGENT_WALL_S="$LUMO_NSYS_SWE_AGENT_WALL_S" \
 DEPLOY_FORCE_TEMP=0.6 \
 SEQUENCE_FILE=scripts/fr13_fixed32_floor_timers_seq.sh \
   bash scripts/fr13_b4_campaign_driver.sh \
@@ -1424,11 +1540,6 @@ if ! wait_for_fresh_stable_report \
     && echo "RECOVERY: container preserved as $PRESERVED_CONTAINER" >&2
   exit 3
 fi
-thaw_exact_control_ancestors
-wait "$DRIVER_PID"
-driver_rc=$?
-set -e
-
 if [[ ! -s "$REPORT" ]]; then
   echo "FAIL: bounded real-SWE Nsight report was not produced" >&2
   exit 3
@@ -1439,6 +1550,18 @@ if [[ ! "$NSYS_PROVEN_REPORT_IDENTITY" =~ \
   echo "FAIL: lifecycle-proven report identity was not retained" >&2
   exit 3
 fi
+if ! snapshot_terminal_engine_ledger "$ENGINE_LEDGER_SNAPSHOT"; then
+  snapshot_error=$NSYS_LIFECYCLE_ERROR
+  fail_nsys_lifecycle "$snapshot_error" || true
+  echo "FAIL: $snapshot_error" >&2
+  [[ -n "$PRESERVED_CONTAINER" ]] \
+    && echo "RECOVERY: container preserved as $PRESERVED_CONTAINER" >&2
+  exit 3
+fi
+thaw_exact_control_ancestors
+wait "$DRIVER_PID"
+driver_rc=$?
+set -e
 
 if ! find "$RUNROOT/$ARM/swe_out/verified/per_task" -mindepth 1 -maxdepth 1 \
   -type d -name 'astropy__astropy-*' -print -quit 2>/dev/null \
@@ -1464,7 +1587,7 @@ if ! .venv/bin/python scripts/fr13_fixed32_nsys_reduce.py \
     "$RUNROOT/$ARM/logs/fr13_fixed32_runtime_attestation.json" \
   --pretask-zero-traffic "$RUNROOT/$ARM/fixed32_pretask_zero_traffic.json" \
   --proxy-ledger "$RUNROOT/$ARM/logs/fr13_fixed32_proxy_ingress.jsonl" \
-  --engine-ledger "$RUNROOT/$ARM/logs/fr13_fixed32_engine_ingress.jsonl" \
+  --engine-ledger "$ENGINE_LEDGER_SNAPSHOT" \
   --mode tail6_fixed32 \
   --batch-size 1 \
   --concurrency 1 \

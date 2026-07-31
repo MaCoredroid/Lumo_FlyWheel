@@ -1625,9 +1625,9 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         (committed_per_event / wall_s_per_event)
         if (wall_s_per_event and committed_per_event) else None
     )
-    # FR13 hardware-floor accounting (task #63): distance to the GB10
-    # weight-read floor. One decode step >= one full weight read regardless
-    # of co-residency; everything above it is overhead or extra reads.
+    # Legacy FR13 lower-bound accounting: distance to one target weight stream.
+    # This reference excludes drafter/head weight reads, KV/state traffic, and
+    # auxiliary phases, so it is not a full speculative-step hardware floor.
     _weight_floor_ms = float(os.environ.get("FR13_WEIGHT_FLOOR_MS", "98.6"))
     _events_per_step_f = events_per_step if events_per_step else None
     step_wall_ms = (
@@ -1825,6 +1825,10 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "rows_per_step": _rows_per_step,
         "floor_ms": _floor_ms,
         "floor_ratio": floor_ratio,
+        "floor_reference_scope": (
+            "legacy_target_weight_stream_or_row_compute_lower_bound"
+        ),
+        "floor_is_full_step_hardware_floor": False,
         "floor_ratio_note": (
             "step_wall_ms / floor(B), where floor(B) = max(weight-read "
             "98.6ms [FR13_WEIGHT_FLOOR_MS], compute 0.54ms/row x rows_per_step "
@@ -1833,10 +1837,10 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
             "Weight read is co-residency-INVARIANT (shared); the tree "
             "(22 rows/event) crosses to compute-bound near B_eff~8, native "
             "(6 rows/event) stays weight-bound. KV/state reads are unmodeled "
-            "(context-dependent; cache-ON keeps contexts long) — they live in "
-            "the measured wall. 1.0 = hardware-perfect step; marginal HW cost "
-            "per extra event ~= 0.54 x rows_per_event ms (~12 tree, ~3 native) "
-            "vs measured marginal ~140ms tree — THAT slope is the target."
+            "(context-dependent; cache-ON keeps contexts long), as are drafter "
+            "and auxiliary weight reads. Those costs live in the measured wall. "
+            "A ratio of 1.0 is only equality with this incomplete legacy lower "
+            "bound; it is not a physically complete hardware-floor step."
         ),
         "measured_tps_fullstep_wall_note": (
             "committed_per_event / MEASURED wall per event (start-to-start deltas "
