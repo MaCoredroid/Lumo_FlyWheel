@@ -1,0 +1,44 @@
+{
+  "schema": "fr13.fixed32.taw_native_precompute.production_requirement.v1",
+  "validator_source": "scripts/fr13_device_multidraft_kernel.py:_fr13_fixed32_taw_native_production_pass",
+  "validator_tree_commit": "3f31d56dc0ceadc97edd54f6d087ab3fd2ba1195",
+  "required_payload": {
+    "schema": "fr13.fixed32.taw_native_precompute.live_pass.v1",
+    "status": "pass",
+    "candidate": "fixed32_native_precompute_v1",
+    "source_contract_schema": "fr13-fixed32-taw-exact-commit-v3",
+    "source_contract_sha256": "42b92d872d2324bf618b35fdd71c22d0e68e5c00e25ad2a43ae553c8ab1f92da",
+    "reference_returned": true,
+    "candidate_returned": false,
+    "probability_mismatches": 0,
+    "product_mismatches": 0,
+    "allowed_evidence_routes": [
+      "full_graph_replay",
+      "uncaptured_root_check"
+    ],
+    "task_marker_prefix": "swe_verified:",
+    "allowed_modes": [
+      "tail6_fixed32",
+      "hydra27_fixed32"
+    ],
+    "allowed_batches": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "covered_batches_rule": "[1, ..., batch_size]",
+    "geometry": {
+      "physical_drafts": 31,
+      "physical_rows": 32,
+      "walk_cap": 12,
+      "fanout": 3,
+      "output_capacity": 32,
+      "accepted_path_capacity": 16
+    }
+  },
+  "diagnostic_payload_source_contract_sha256": "fe73ad35a916e41532575e29a5f9f6442d1081d0d1c0d0fc18210fdc8f0f56f8",
+  "source_hash_matches": false,
+  "production_eligible": false,
+  "current_source_real_gate_required": true
+}

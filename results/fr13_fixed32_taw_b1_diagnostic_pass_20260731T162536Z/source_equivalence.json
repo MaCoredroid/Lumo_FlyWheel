@@ -1,0 +1,72 @@
+{
+  "schema": "fr13.fixed32.taw_native_precompute.source_equivalence.v1",
+  "method": "sha256 of canonical JSON containing normalized Python AST dumps with annotate_fields=true and include_attributes=false",
+  "run_source": {
+    "commit": "850355982cf747d2a960e7dae5f769edb660d772",
+    "file_sha256": "8a870b9f432074cbf851a1d457de5fa6e0987e56190b972931d9cda2694fdb73",
+    "source_contract_sha256": "fe73ad35a916e41532575e29a5f9f6442d1081d0d1c0d0fc18210fdc8f0f56f8"
+  },
+  "current_source": {
+    "branch_base_commit": "3f31d56dc0ceadc97edd54f6d087ab3fd2ba1195",
+    "integrated_source_tip": "1f5b63c162b82f7aca29b09a1af28fd71b2ba32d",
+    "file_sha256": "da2ce3bd73f5de6d5c2a12ba83830bc4f03ecd4f2023bfbc581696f5a61b9d3a",
+    "source_contract_sha256": "42b92d872d2324bf618b35fdd71c22d0e68e5c00e25ad2a43ae553c8ab1f92da"
+  },
+  "candidate_math_projection": {
+    "run_sha256": "56c51ada155df8bea5d67a2af4d4a9744b999068f15bb27e0ca0c81327993763",
+    "current_sha256": "56c51ada155df8bea5d67a2af4d4a9744b999068f15bb27e0ca0c81327993763",
+    "equal": true,
+    "constant_ast_sha256": {
+      "_FR13_FIXED32_TAW_GEOMETRY": "d05a8f0107b08f9657cc5b1a10c0af879bf098014b1717827c017f9540cd90fb",
+      "_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS": "94b112a29da5b5958e2e812817fae9d1f6a4a1571d6e45405ecb8ed29078ce43",
+      "_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS": "42613686e08bdd13b68457f9d87053b03e84d44480c43d851306ec3407ccd0ce"
+    },
+    "function_ast_sha256": {
+      "_fr13_fixed32_topology": "0db5b47047837c27c5a8668234be93a67d290d6d4cc2360f198d6d99c4098338",
+      "_fr13_fixed32_device_key": "50c40008c4103a4bc25067b7cceccd18b3be3cd745ad5b394674d6338edecbdf",
+      "_fr13_fixed32_expected_active": "fc8d408dea86aef5f23d51951790f665fe093f761fa8365b81d4f8c6b6ff523f",
+      "_fr13_fixed32_parse_int": "b7d2b043ad7a735efafa2206d0f572949461564c9fb3c0907d640e5dbdb5a5da",
+      "_fr13_fixed32_integer_dtypes": "8da207ec223fa63d730dd48138570ef1598601c01edbaebbc0441aebf37f57eb",
+      "_fr13_fixed32_require_tensor": "59e520c176a43305df7012b2f54bfba3ca71668d41ae8dbdf55a08367983dcc4",
+      "_fr13_fixed32_device_assert": "7b2721b3342c7c0af23ed121da5e56a6771966deec6208ee5185e263853ea8f8",
+      "_fr13_pin_uniforms": "7c10b0103026ab45bf23cb7dbec572f3cce0c3b9530a57a265e4aeb1f412d694",
+      "_fr13_bulk_gen": "cf6170b15d0b7f421d6bce01c2af4841c4a48f92368300abac89ffc6fc7513e5",
+      "_fr13_fixed32_fill_uniforms": "9aa1f47a6cba72911e84110790289ffcf74d73e7360421f95c12dac9c8929171",
+      "_fr13_fixed32_validate_inputs": "2d1605a8ef6aee20ade69272a87f9d3d68acc783ee3533bdbc0bea93e4ade041",
+      "_fr13_fixed32_tensor_layout": "051fe067cee6a841f40f0733a89aecbe576104203899fc873eafb0a10c902c79",
+      "_fr13_fixed32_layout_contract": "73fd80a033aaf3c6355a210c671ea105e0069b96ffe28256da8955c14b42929c",
+      "_fr13_fixed32_taw_probability_caches": "5fb3bd07bec82f329133da4ec2fab44d303a1edbc4f5bbe8e5cc547f99658d4c",
+      "_fr13_fixed32_taw_execute_torch": "01881816c8d27964a0f326db71895aab14adfb5117650f3ef59a6769a67fae8b",
+      "_fr13_fixed32_taw_execute_exact_cuda": "fafd4119f2a8c573e7f780bfaa0a1995a8ebe4d660dbf4086d32a27a64b5c251",
+      "_fr13_fixed32_taw_execute": "07f2f2249368fdb62a874cd6e38bc9dce3253009a5f9164ef2957b3680bc2837",
+      "_fr13_taw_inv_cdf": "ffd1ec89e7e1308c85d2be79d22d60b4c5beef17b0eb66b147a5e51f32bd8cd4",
+      "_fr13_fixed32_taw_exact_commit_kernel": "7fff3fe7aab076d72075b7fac1a49a93fdbda6acab8cd2073bc1a460b8e80fac"
+    }
+  },
+  "changed_control_functions": {
+    "_fr13_fixed32_publish_work": {
+      "run_ast_sha256": "4dfb18b40e0ada57f5b2b73b4eb848f50be8b878eb0cdf24c0e4b2bdede6f5fb",
+      "current_ast_sha256": "24131c761a25ee575ff99e06a30aae72dff58bf4aac0f1d38b14f2da61f4549d"
+    },
+    "fr13_fixed32_taw_commit": {
+      "run_ast_sha256": "e0268d3bd897ff987e6e49b06d3942820c0c56d2c25f2d793ab98af782abc6e9",
+      "current_ast_sha256": "4638769e088642754c3803b32de59375287faacc38ad10dc878b1dee7a8dc35f"
+    }
+  },
+  "control_delta": [
+    "diagnostic and production selector resolution",
+    "real SWE task marker validation",
+    "atomic live PASS emission",
+    "graph replay gate begin and completion",
+    "production candidate return routing",
+    "production work-census routing"
+  ],
+  "conclusion": {
+    "candidate_math_equivalent": true,
+    "full_source_contract_equivalent": false,
+    "diagnostic_evidence_informative_for_current_candidate": true,
+    "production_eligible": false,
+    "current_source_real_gate_required": true,
+    "validator_relaxation_permitted": false
+  }
+}
