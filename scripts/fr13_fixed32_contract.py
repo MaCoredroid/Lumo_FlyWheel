@@ -69,8 +69,8 @@ FA2_REPO_RELATIVE = (
     "20260504T053925Z/cutlass_source_workspace/vllm-source/build/"
     "lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so"
 )
-FA2_SHA256 = "97fa2519739b3f976debb8377f8829cf3a167b410d1770bb42db390f8c5c0ae1"
-FA2_SIZE = 301_219_928
+FA2_SHA256 = "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d"
+FA2_SIZE = 299_183_936
 CONTAINER_FA2_SOURCE = Path("/tmp/fr13_fork_fa2.so")
 CONTAINER_FA2_DESTINATION = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so"
