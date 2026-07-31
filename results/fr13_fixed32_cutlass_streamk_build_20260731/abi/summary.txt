@@ -1,0 +1,20 @@
+Stock deployment-pair binary:
+  sha256 5907843cfdfcf9ae4e6b2ec0505ef325317140294d6e5b8180e74cc50ec6aff3
+  bytes  110176808
+
+Candidate deployment binary:
+  sha256 d5e33e9c42dff57f4864e4d0244436efce625a38a1712732c3589115c4802e2e
+  bytes  111382632
+
+Dynamic defined names/types:
+  stock=1278 candidate=1288 removed=0 added=10
+
+Dynamic undefined names/types:
+  stock=154 candidate=179 removed=0 added=25
+
+DT_NEEDED diff bytes: 0
+RUNPATH diff bytes: 0
+Cubins: stock=17 candidate=17
+
+Classification: additive, no exported symbol removal. This is not a runtime
+import, GPU correctness, or performance result.

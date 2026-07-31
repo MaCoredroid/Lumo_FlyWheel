@@ -46,8 +46,13 @@ MARKER = "// FR13_FIXED32_CUTLASS_WAVE:"
 INCLUDE_ANCHOR = "#pragma once\n\n#include <torch/headeronly/util/shim_utils.h>\n"
 INCLUDE_REPLACEMENT = """#pragma once
 
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <mutex>
+#include <string>
+#include <vector>
 
 #include <torch/headeronly/util/shim_utils.h>
 """
@@ -89,20 +94,6 @@ struct sm120_blockwise_fp8_config_cooperative_streamk {
 };
 
 template <typename OutType>
-struct sm120_blockwise_fp8_config_cooperative64_streamk {
-  using KernelSchedule =
-      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
-  using EpilogueSchedule =
-      cutlass::epilogue::collective::EpilogueScheduleAuto;
-  using TileShape = Shape<_64, _128, _128>;
-  using ClusterShape = Shape<_1, _1, _1>;
-  using Gemm = cutlass_3x_gemm_fp8_blockwise<
-      OutType, 1, 128, 128, TileShape, ClusterShape,
-      EpilogueSchedule, KernelSchedule, false,
-      cutlass::gemm::StreamKScheduler>;
-};
-
-template <typename OutType>
 struct sm120_blockwise_fp8_config_swapab_streamk {
   using KernelSchedule =
       cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
@@ -118,18 +109,26 @@ struct sm120_blockwise_fp8_config_swapab_streamk {
 
 enum class fixed32_cutlass_wave_variant {
   stock,
-  stream_k_cooperative_64,
   stream_k_cooperative_128,
+  stream_k_cooperative_128_byte_ab,
 };
 
 static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
   static const fixed32_cutlass_wave_variant selection = [] {
-    const char* value = std::getenv("FR13_FIXED32_CUTLASS_WAVE");
-    if (value != nullptr && std::strcmp(value, "streamk_coop64") == 0) {
-      return fixed32_cutlass_wave_variant::stream_k_cooperative_64;
+    const char* environment = std::getenv("FR13_FIXED32_CUTLASS_WAVE");
+    std::string value = environment == nullptr ? "" : environment;
+    if (value.empty()) {
+      std::ifstream selector_file(
+          "/logs/fr13_fixed32_cutlass_wave.selector");
+      if (selector_file.good()) {
+        std::getline(selector_file, value);
+      }
     }
-    if (value != nullptr && std::strcmp(value, "streamk_coop128") == 0) {
+    if (value == "streamk_coop128") {
       return fixed32_cutlass_wave_variant::stream_k_cooperative_128;
+    }
+    if (value == "streamk_coop128_byte_ab") {
+      return fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab;
     }
     return fixed32_cutlass_wave_variant::stock;
   }();
@@ -157,13 +156,14 @@ CALLER_ANCHOR = """  c3x::cutlass_gemm_caller<GemmKernel>(a.device(), prob_shape
 CALLER_REPLACEMENT = """  if constexpr (!Gemm::use_stream_k) {
     return c3x::cutlass_gemm_caller<GemmKernel>(
         a.device(), prob_shape, mainloop_args, epilogue_args);
-  }
+  } else {
 
   // Stream-K needs a real SM count to choose the tail decomposition. Cache the
   // device query outside the measured steady state for each candidate kernel.
   static const int sm_count =
       cutlass::KernelHardwareInfo::query_device_multiprocessor_count();
-  TORCH_CHECK(sm_count > 0, "FR13 Stream-K could not query the CUDA SM count");
+  STD_TORCH_CHECK(sm_count > 0,
+                  "FR13 Stream-K could not query the CUDA SM count");
   cutlass::KernelHardwareInfo hw_info;
   hw_info.device_id = a.device().index();
   hw_info.sm_count = sm_count;
@@ -187,6 +187,7 @@ CALLER_REPLACEMENT = """  if constexpr (!Gemm::use_stream_k) {
       a.device());
   auto stream = get_current_cuda_stream(a.device().index());
   CUTLASS_CHECK(gemm_op.run(args, workspace.data_ptr(), stream));
+  }
 """
 
 DISPATCH_ANCHOR = """  int M = a.size(0);
@@ -217,41 +218,116 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
           ? fixed32_cutlass_wave_selection()
           : fixed32_cutlass_wave_variant::stock;
 
-  if (wave_variant != fixed32_cutlass_wave_variant::stock) {
+  auto run_stream_k = [&](torch::stable::Tensor& destination) {
     if (M <= 64) {
       using Gemm =
           typename sm120_blockwise_fp8_config_swapab_streamk<OutType>::Gemm;
       return cutlass_gemm_caller_blockwise<Gemm>(
-          out, a, b, a_scales, b_scales);
+          destination, a, b, a_scales, b_scales);
     }
-    if (wave_variant ==
-        fixed32_cutlass_wave_variant::stream_k_cooperative_128) {
-      using Gemm = typename
-          sm120_blockwise_fp8_config_cooperative_streamk<OutType>::Gemm;
-      return cutlass_gemm_caller_blockwise<Gemm>(
-          out, a, b, a_scales, b_scales);
-    }
-    using Gemm =
-        typename sm120_blockwise_fp8_config_cooperative64_streamk<OutType>::Gemm;
+    using Gemm = typename
+        sm120_blockwise_fp8_config_cooperative_streamk<OutType>::Gemm;
     return cutlass_gemm_caller_blockwise<Gemm>(
-        out, a, b, a_scales, b_scales);
+        destination, a, b, a_scales, b_scales);
+  };
+
+  auto run_stock = [&](torch::stable::Tensor& destination) {
+    bool swap_ab = (M <= 64) || (M % 4 != 0);
+    if (!swap_ab) {
+      if (M <= 256) {
+        using Gemm =
+            typename sm120_blockwise_fp8_config_pingpong<OutType>::Gemm;
+        return cutlass_gemm_caller_blockwise<Gemm>(
+            destination, a, b, a_scales, b_scales);
+      }
+      using Gemm = typename sm120_blockwise_fp8_config_default<OutType>::Gemm;
+      return cutlass_gemm_caller_blockwise<Gemm>(
+          destination, a, b, a_scales, b_scales);
+    }
+    using Gemm = typename sm120_blockwise_fp8_config_swapab<OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
+  if (wave_variant ==
+      fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab) {
+    // Diagnostic only: compare the first bounded set of real projection calls
+    // in one process and CUDA stream, then always serve the stock result.
+    static std::atomic<int64_t> next_invocation{0};
+    constexpr int64_t byte_ab_limit = 256;
+    int64_t invocation = next_invocation.fetch_add(1);
+    if (invocation >= byte_ab_limit) {
+      return run_stock(out);
+    }
+
+    torch::stable::Tensor candidate = torch::stable::empty_like(out);
+    run_stock(out);
+    run_stream_k(candidate);
+
+    const size_t output_bytes =
+        static_cast<size_t>(out.numel()) * out.element_size();
+    std::vector<unsigned char> stock_host(output_bytes);
+    std::vector<unsigned char> candidate_host(output_bytes);
+    auto stream = get_current_cuda_stream(a.device().index());
+    cudaError_t status = cudaMemcpyAsync(
+        stock_host.data(), out.const_data_ptr(), output_bytes,
+        cudaMemcpyDeviceToHost, stream);
+    STD_TORCH_CHECK(status == cudaSuccess,
+                    "FR13 Stream-K stock D2H failed: ",
+                    cudaGetErrorString(status));
+    status = cudaMemcpyAsync(
+        candidate_host.data(), candidate.const_data_ptr(), output_bytes,
+        cudaMemcpyDeviceToHost, stream);
+    STD_TORCH_CHECK(status == cudaSuccess,
+                    "FR13 Stream-K candidate D2H failed: ",
+                    cudaGetErrorString(status));
+    status = cudaStreamSynchronize(stream);
+    STD_TORCH_CHECK(status == cudaSuccess,
+                    "FR13 Stream-K byte A/B synchronize failed: ",
+                    cudaGetErrorString(status));
+
+    size_t first_mismatch = output_bytes;
+    for (size_t index = 0; index < output_bytes; ++index) {
+      if (stock_host[index] != candidate_host[index]) {
+        first_mismatch = index;
+        break;
+      }
+    }
+    constexpr const char* log_path =
+        "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl";
+    static std::mutex log_mutex;
+    {
+      std::lock_guard<std::mutex> lock(log_mutex);
+      std::ofstream log(log_path, std::ios::app);
+      STD_TORCH_CHECK(log.good(),
+                      "FR13 Stream-K byte A/B could not open JSONL");
+      log << "{\\\"schema\\\":\\\"fr13.fixed32.cutlass_streamk_byte_ab.v1\\\","
+          << "\\\"invocation\\\":" << invocation << ","
+          << "\\\"m\\\":" << M << ",\\\"n\\\":" << N
+          << ",\\\"k\\\":" << K << ",\\\"bytes\\\":" << output_bytes
+          << ",\\\"byte_equal\\\":"
+          << (first_mismatch == output_bytes ? "true" : "false")
+          << ",\\\"first_mismatch\\\":";
+      if (first_mismatch == output_bytes) {
+        log << "null";
+      } else {
+        log << first_mismatch;
+      }
+      log << "}\\n";
+      log.flush();
+      STD_TORCH_CHECK(log.good(),
+                      "FR13 Stream-K byte A/B JSONL write failed");
+    }
+    return;
   }
 
-  // Stock dispatch remains byte-for-byte equivalent when the selector is off.
-  bool swap_ab = (M <= 64) || (M % 4 != 0);
-  if (!swap_ab) {
-    if (M <= 256) {
-      using Gemm = typename sm120_blockwise_fp8_config_pingpong<OutType>::Gemm;
-      return cutlass_gemm_caller_blockwise<Gemm>(
-          out, a, b, a_scales, b_scales);
-    }
-    using Gemm = typename sm120_blockwise_fp8_config_default<OutType>::Gemm;
-    return cutlass_gemm_caller_blockwise<Gemm>(
-        out, a, b, a_scales, b_scales);
+  if (wave_variant ==
+      fixed32_cutlass_wave_variant::stream_k_cooperative_128) {
+    return run_stream_k(out);
   }
-  using Gemm = typename sm120_blockwise_fp8_config_swapab<OutType>::Gemm;
-  return cutlass_gemm_caller_blockwise<Gemm>(
-      out, a, b, a_scales, b_scales);
+
+  // Unset/unknown selectors retain the stock kernel and numeric result.
+  return run_stock(out);
 """
 
 

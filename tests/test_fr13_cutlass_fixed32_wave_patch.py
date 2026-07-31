@@ -88,8 +88,10 @@ def test_patch_is_default_off_and_shape_gated() -> None:
 
     assert changed
     assert 'std::getenv("FR13_FIXED32_CUTLASS_WAVE")' in patched
-    assert 'std::strcmp(value, "streamk_coop64") == 0' in patched
-    assert 'std::strcmp(value, "streamk_coop128") == 0' in patched
+    assert '"/logs/fr13_fixed32_cutlass_wave.selector"' in patched
+    assert 'std::strcmp(value, "streamk_coop64") == 0' not in patched
+    assert 'value == "streamk_coop128"' in patched
+    assert 'value == "streamk_coop128_byte_ab"' in patched
     assert "return fixed32_cutlass_wave_variant::stock;" in patched
     for rows in (32, 64, 96, 128):
         assert f"m == {rows}" in patched
@@ -107,14 +109,14 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     module = _module()
     patched, _ = module.patch_text(_source_fixture(module))
 
-    assert patched.count("cutlass::gemm::StreamKScheduler") == 3
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 3
+    assert patched.count("cutlass::gemm::StreamKScheduler") == 2
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 2
     assert "PingpongSm120" not in module.CONFIG_REPLACEMENT
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
     assert "OutType, 1, 128, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _128, _128>;" in patched
-    assert "using TileShape = Shape<_64, _128, _128>;" in patched
+    assert "using TileShape = Shape<_64, _128, _128>;" not in patched
     assert "StageCount<2>" not in patched
     assert "StageCountAutoCarveout<0>" in patched
     assert "ElementAccumulator = float" not in module.CONFIG_REPLACEMENT
@@ -129,7 +131,11 @@ def test_streamk_is_the_only_kernel_template_change() -> None:
     assert "static constexpr bool use_stream_k" in patched
     assert "CollectiveMainloop, CollectiveEpilogue,\n      TileScheduler>>" in patched
     assert "typename GemmKernel::TileSchedulerArguments scheduler{}" in patched
+    assert "if constexpr (!Gemm::use_stream_k)" in patched
+    assert "} else {" in module.CALLER_REPLACEMENT
     assert "query_device_multiprocessor_count" in patched
+    assert "STD_TORCH_CHECK(sm_count > 0" in patched
+    assert "\n  TORCH_CHECK(sm_count > 0" not in patched
     assert "Deterministic" in patched
     assert "DecompositionMode::Heuristic" not in patched
     assert "decltype(scheduler.decomposition_mode)::Heuristic" in patched
@@ -143,6 +149,20 @@ def test_stock_dispatch_text_is_retained() -> None:
     assert "sm120_blockwise_fp8_config_pingpong<OutType>::Gemm" in patched
     assert "sm120_blockwise_fp8_config_default<OutType>::Gemm" in patched
     assert "sm120_blockwise_fp8_config_swapab<OutType>::Gemm" in patched
+
+
+def test_same_process_byte_ab_is_bounded_and_returns_stock() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    assert "constexpr int64_t byte_ab_limit = 256" in patched
+    assert "torch::stable::empty_like(out)" in patched
+    assert "run_stock(out);\n    run_stream_k(candidate);" in patched
+    assert "cudaMemcpyDeviceToHost" in patched
+    assert "cudaStreamSynchronize(stream)" in patched
+    assert '"/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl"' in patched
+    assert '\\"byte_equal\\"' in module.DISPATCH_REPLACEMENT
+    assert "return run_stock(out);" in patched
 
 
 def test_patch_is_idempotent() -> None:
