@@ -262,6 +262,37 @@ def test_launcher_wires_fail_closed_combined_bv_sidecars() -> None:
     assert "requires MAX_NUM_SEQS=2, 3, or 4" in launcher
 
 
+def test_eager_gate_refreshes_a_stable_nonzero_ssi_registration() -> None:
+    patcher = (
+        ROOT / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
+    ).read_text(encoding="utf-8")
+
+    assert (
+        "self.fr13_fixed32_spec_state_indices_tensor = ("
+        in patcher
+    )
+    assert (
+        "int(self.spec_state_indices_tensor.shape[0]) < ("
+        in patcher
+    )
+    assert '"                spec_state_indices=(\\n"' in patcher
+    assert (
+        '"                    self.fr13_fixed32_spec_state_indices_tensor\\n"'
+        in patcher
+    )
+    assert "max_batch_size=_fr13_fixed32_ssi_capacity" in patcher
+    assert "and not self.use_full_cuda_graph" in patcher
+    assert (
+        "].copy_(spec_state_indices_tensor, non_blocking=True)"
+        in patcher
+    )
+    assert "].fill_(PAD_SLOT_ID)" in patcher
+    assert (
+        "max_batch_size=min(4, int(self.decode_cudagraph_max_bs))"
+        not in patcher
+    )
+
+
 def test_exact4_b4_live_gate_runner_is_non_timing_and_fail_closed() -> None:
     runner = (
         ROOT / "scripts" / "fr13_run_b4_gdn_wide_live_gate.sh"
