@@ -921,19 +921,20 @@ def _fr13_fixed32_warm_final_full_postprocess(vocab_size):
             "FR13 fixed32 postprocess warm is missing the TAW module"
         )
     device = stacks["spec_idx"].device
-    taw = taw_module.fr13_fixed32_taw_warm_execute(
-        device,
-        mode=_FR13_FIXED32_MODE,
-        valid_mask=int(_FR13_FIXED32_VALID_MASK),
-        max_batch_size=capacity,
-        vocab_size=vocab,
-    )
-    tail, committer = _fr13_fixed32_warm_device_postprocess_tail(
-        taw_module,
-        device,
-        capacity,
-        vocab,
-    )
+    with torch.inference_mode():
+        taw = taw_module.fr13_fixed32_taw_warm_execute(
+            device,
+            mode=_FR13_FIXED32_MODE,
+            valid_mask=int(_FR13_FIXED32_VALID_MASK),
+            max_batch_size=capacity,
+            vocab_size=vocab,
+        )
+        tail, committer = _fr13_fixed32_warm_device_postprocess_tail(
+            taw_module,
+            device,
+            capacity,
+            vocab,
+        )
     expected_batches = tuple(range(1, capacity + 1))
     if (
         taw.get("ready") is not True

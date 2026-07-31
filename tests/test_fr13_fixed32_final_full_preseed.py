@@ -316,6 +316,9 @@ def test_postprocess_boot_warm_is_unmeasured_and_idempotent(
     )
     capacity = 4
     calls: list[tuple[str, int]] = []
+    with torch.inference_mode():
+        taw_state = torch.zeros(1)
+        tail_state = torch.zeros(1)
     namespace.update(
         {
             "_FR13_FIXED32_BOOT_WARM_EVIDENCE": None,
@@ -327,21 +330,23 @@ def test_postprocess_boot_warm_is_unmeasured_and_idempotent(
             "_fr13_fixed32_boot_preseed_allowed": lambda: True,
         }
     )
-    taw = SimpleNamespace(
-        fr13_fixed32_taw_warm_execute=lambda *args, **kwargs: (
-            calls.append(("taw", int(kwargs["max_batch_size"])))
-            or {
-                "ready": True,
-                "classification": "unmeasured_boot",
-                "batches": (1, 2, 3, 4),
-                "executions": 4,
-                "cache_lease_current": True,
-                "rng_state_restored": True,
-                "staging_state_restored": True,
-                "measured_state_restored": True,
-            }
-        )
-    )
+    def taw_warm(*_args: object, **kwargs: object) -> dict[str, object]:
+        assert torch.is_inference_mode_enabled()
+        taw_state.add_(1)
+        taw_state.zero_()
+        calls.append(("taw", int(kwargs["max_batch_size"])))
+        return {
+            "ready": True,
+            "classification": "unmeasured_boot",
+            "batches": (1, 2, 3, 4),
+            "executions": 4,
+            "cache_lease_current": True,
+            "rng_state_restored": True,
+            "staging_state_restored": True,
+            "measured_state_restored": True,
+        }
+
+    taw = SimpleNamespace(fr13_fixed32_taw_warm_execute=taw_warm)
     tail_evidence = {
         "ready": True,
         "classification": "unmeasured_boot",
@@ -373,16 +378,22 @@ def test_postprocess_boot_warm_is_unmeasured_and_idempotent(
             "measured_state_restored": True,
             "scratch_overwrite_proven": True,
     }
-    namespace["_fr13_fixed32_warm_device_postprocess_tail"] = (
-        lambda *_args: (
-            calls.append(("tail", capacity))
-            or (dict(tail_evidence), dict(committer_evidence))
-        )
-    )
+    def tail_warm(*_args: object) -> tuple[dict[str, object], dict[str, object]]:
+        assert torch.is_inference_mode_enabled()
+        tail_state.add_(1)
+        tail_state.zero_()
+        calls.append(("tail", capacity))
+        return dict(tail_evidence), dict(committer_evidence)
+
+    namespace["_fr13_fixed32_warm_device_postprocess_tail"] = tail_warm
     monkeypatch.setitem(sys.modules, "_fr13_device_multidraft_kernel", taw)
 
     warm = namespace["_fr13_fixed32_warm_final_full_postprocess"]
+    assert not torch.is_inference_mode_enabled()
     evidence = warm(248320)
+    assert not torch.is_inference_mode_enabled()
+    assert taw_state.item() == 0
+    assert tail_state.item() == 0
     assert evidence == {
         "ready": True,
         "classification": "unmeasured_boot",
