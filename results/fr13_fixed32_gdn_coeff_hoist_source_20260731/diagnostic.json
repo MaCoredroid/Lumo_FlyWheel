@@ -1,0 +1,61 @@
+{
+  "schema": "fr13.fixed32.gdn_coeff_hoist_source_candidate.v1",
+  "status": "experimental_source_candidate_cpu_static_only_not_deploy_ready",
+  "base_commit": "e45a7e7355b9ba9fea3ee6c30afbf7d8e85b1cdd",
+  "measurement_basis": {
+    "workload": "real SWE-Verified fixed32 Tail6 B1 Nsight attribution",
+    "measured_commit": "1a7a765447c8ce6068e0dd5d3a344d58ace85f2b",
+    "attribution_sha256": "685c410a0ba09d00c8b244bfa06809530337cea383b88fa92a5da1013eadf2d0",
+    "sfwd_events": 882,
+    "sfwd_ms_per_event": 174.81367329818593,
+    "gdn_path_ms_per_event": 14.019520105442178,
+    "gdn_path_launches_per_event": 95.92290249433107,
+    "note": "The trace predates current conv-remap eliminations, but the fixed32 two-level GDN path geometry remains the same."
+  },
+  "candidate": {
+    "activation": "FR13_FIXED32_GDN_COEFF_HOIST=1",
+    "scope": "exact fixed32 schedule, N=32, KH=16, VH=48, DK=DV=128, BV=8, raw gating, q/k L2 norm, SCAN_ALIGN=0",
+    "path_node_programs_per_layer": 24576,
+    "precompute_programs_per_layer": 1536,
+    "qk_norm_duplicate_factor_removed": 48,
+    "decay_beta_duplicate_factor_removed": 16,
+    "gdn_launches_per_event_before": 96,
+    "gdn_launches_per_event_after": 144,
+    "added_launches_per_event": 48,
+    "batch_ownership": "current sequential B1-B4 request loop only; compact batch2launch kernel needs batch-indexed scratch port before branch combination",
+    "scratch": {
+      "backing": "unexported state_export row for terminal node 31",
+      "payload_fp32_elements": 134144,
+      "payload_bytes": 536576,
+      "row_capacity_fp32_elements": 786432,
+      "row_capacity_bytes": 3145728,
+      "capture_time_allocation_added": false,
+      "export_or_mask": 16915
+    },
+    "numerical_mechanism": "Precompute uses the same fp32 rsqrt reductions, q scaling, softplus, exp, and sigmoid expressions. The path kernel reloads fp32 values and preserves recurrent update order. Raw bf16 k/a/b replay-ring values are still copied from original inputs by their single owner programs.",
+    "estimated_saving_ms_per_event": {
+      "low": 2.0,
+      "high": 5.0,
+      "hard_upper_bound": 14.019520105442178,
+      "classification": "estimate, not measured"
+    },
+    "performance_risks": [
+      "48 additional precompute launches per event",
+      "fp32 coefficient scratch loads can add cache traffic",
+      "separate Triton codegen may change reduction or transcendental bits",
+      "the GDN slice may be dominated by recurrent state math rather than the hoisted work"
+    ]
+  },
+  "required_gates": [
+    "production SM121 Triton/CUDA compile and candidate codegen inspection",
+    "same-process bytewise stock-versus-hoist output/ring/flags/counter gates on captured fixed32 inputs",
+    "B1 and B4 CUDA graph capture/replay ownership gate",
+    "canonical real SWE-Verified exact4 screening then exact16 acceptance"
+  ],
+  "tests_run": {
+    "cpu_static": "2 passed",
+    "existing_fixed32_gdn_cpu": "2 passed",
+    "cuda_byte_gate": "skipped because source host has no CUDA or Triton"
+  },
+  "gpu_used_for_this_candidate": false
+}

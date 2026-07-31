@@ -124,6 +124,18 @@ def parent_gather_selfcheck_on() -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def fixed32_gdn_coeff_hoist_on() -> bool:
+    """Enable the fixed32 path-kernel coefficient-hoist candidate."""
+    raw = os.environ.get("FR13_FIXED32_GDN_COEFF_HOIST", "")
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def fixed32_gdn_coeff_selfcheck_on() -> bool:
+    """Run stock and coefficient-hoisted fixed32 paths on the same inputs."""
+    raw = os.environ.get("FR13_FIXED32_GDN_COEFF_SELFCHECK", "")
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 
 
 
@@ -418,6 +430,7 @@ _FR13_FIXED32_PARENT = (
     -1, 0, 0, 0, 1, 1, 1, 2, 3, 4, 4, 4, 7, 8, 9, 9,
     9, 12, 13, 14, 14, 14, 17, 18, 19, 23, 24, 25, 26, 28, 29, 30,
 )
+_FR13_FIXED32_COEFF_SCRATCH_NODE = 31
 _FR13_FIXED32_SUBTREE_LEVELS = (
     (
         ((0, 1, 4, 9, 14), -1),
@@ -529,6 +542,60 @@ def _fr13_fixed32_schedule_contract(levels) -> dict[str, object]:
             f"actual={contract!r} coverage={coverage!r}"
         )
     return contract
+
+
+def _fr13_fixed32_coeff_scratch_layout(
+    *,
+    n_actual: int,
+    num_kh: int,
+    num_vh: int,
+    dim_v: int,
+    dim_k: int,
+    export_or_mask: int,
+) -> dict[str, int]:
+    """Lay out graph-stable coefficient scratch in an unexported state row.
+
+    The exact fixed32 schedule exports only root-prefix nodes
+    ``{0, 1, 4, 9, 14}``. Node 31 is terminal, so its state-export row is never
+    read or written by either path level. The row is much larger than the q/k
+    and scalar coefficient payload and already has the required fp32 lifetime.
+    """
+    expected = (32, QK_HEADS, V_HEADS, V, K)
+    actual = (n_actual, num_kh, num_vh, dim_v, dim_k)
+    if actual != expected:
+        raise ValueError(
+            "FR13_FIXED32_GDN_COEFF_HOIST requires production geometry "
+            f"{expected}, got {actual}"
+        )
+    scratch_node = _FR13_FIXED32_COEFF_SCRATCH_NODE
+    if export_or_mask & (1 << scratch_node):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_COEFF_HOIST scratch node is an exported parent"
+        )
+    row_elems = num_vh * dim_v * dim_k
+    base = scratch_node * row_elems
+    q_elems = n_actual * num_kh * dim_k
+    k_elems = q_elems
+    scalar_elems = n_actual * num_vh
+    q_offset = base
+    k_offset = q_offset + q_elems
+    decay_offset = k_offset + k_elems
+    beta_offset = decay_offset + scalar_elems
+    end = beta_offset + scalar_elems
+    if end > base + row_elems:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_COEFF_HOIST coefficient scratch exceeds row"
+        )
+    return {
+        "scratch_node": scratch_node,
+        "row_elems": row_elems,
+        "q_offset": q_offset,
+        "k_offset": k_offset,
+        "decay_offset": decay_offset,
+        "beta_offset": beta_offset,
+        "payload_elems": end - base,
+        "capacity_elems": row_elems,
+    }
 
 
 def _subtree_decompose(parent) -> list:
@@ -687,10 +754,29 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
     if parent_tuple == _FR13_FIXED32_PARENT:
         fixed_contract = _fr13_fixed32_schedule_contract(levels)
         schedule = "fixed32"
+        if (int(n_actual), QK_HEADS, int(vh), int(dv), int(dk)) == (
+            32,
+            QK_HEADS,
+            V_HEADS,
+            V,
+            K,
+        ):
+            fixed32_coeff_layout = _fr13_fixed32_coeff_scratch_layout(
+                n_actual=int(n_actual),
+                num_kh=QK_HEADS,
+                num_vh=int(vh),
+                dim_v=int(dv),
+                dim_k=int(dk),
+                export_or_mask=int(fixed_contract["export_or_mask"]),
+            )
+        else:
+            fixed32_coeff_layout = None
     elif parent_tuple == _FR13_HYDRA23_PARENT:
         schedule = "hydra23_floor"
+        fixed32_coeff_layout = None
     else:
         schedule = "heavy_path"
+        fixed32_coeff_layout = None
     route_armed = _FR13_SUBTREE_ROUTE_REQUESTED
     selfcheck_armed = _FR13_SUBTREE_SELFCHECK_REQUESTED
     dev_levels = []
@@ -733,10 +819,12 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
         "parent": parent_tuple,
         "schedule": schedule,
         "fixed32_contract": fixed_contract,
+        "fixed32_coeff_layout": fixed32_coeff_layout,
         "route_armed": route_armed,
         "selfcheck_armed": selfcheck_armed,
         "engaged_announced": False,
         "selfcheck_pass_announced": False,
+        "coeff_selfcheck_pass_announced": False,
     }
     print(
         f"[FR13_SUBTREE_PARALLEL] preseeded: n={n_actual} "
@@ -3671,6 +3759,89 @@ def gather_committed_path_conv_prior(
 
 
 @triton.jit
+def _tree_gdn_coeff_precompute_kernel(
+    q,
+    k,
+    raw_a,
+    raw_b,
+    A_log,
+    dt_bias,
+    scratch,
+    N_ACTUAL: tl.constexpr,
+    NUM_KH: tl.constexpr,
+    NUM_VH: tl.constexpr,
+    DIM_K: tl.constexpr,
+    OUTPUT_SCALE: tl.constexpr,
+    Q_OFFSET: tl.constexpr,
+    K_OFFSET: tl.constexpr,
+    DECAY_OFFSET: tl.constexpr,
+    BETA_OFFSET: tl.constexpr,
+):
+    """Compute node/head coefficients once instead of once per V tile.
+
+    The fixed32 path grid repeats q/k normalization for each of 3 value heads
+    and 16 BV8 tiles (48 copies), and repeats raw-gating transcendental work
+    for all 16 V tiles. This kernel materializes the identical fp32 values once
+    into an unused state-export row. Store/reload is exact at fp32 precision.
+    """
+    pid_n = tl.program_id(0)
+    pid_h = tl.program_id(1)
+    offs_k = tl.arange(0, DIM_K)
+    qk_active = (pid_n < N_ACTUAL) & (pid_h < NUM_KH)
+    b_q = tl.load(
+        q + (pid_n * NUM_KH + pid_h) * DIM_K + offs_k,
+        mask=qk_active,
+        other=0.0,
+    ).to(tl.float32)
+    b_k = tl.load(
+        k + (pid_n * NUM_KH + pid_h) * DIM_K + offs_k,
+        mask=qk_active,
+        other=0.0,
+    ).to(tl.float32)
+    b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
+    b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
+    b_q = b_q * OUTPUT_SCALE
+    tl.store(
+        scratch + Q_OFFSET + (pid_n * NUM_KH + pid_h) * DIM_K + offs_k,
+        b_q,
+        mask=qk_active,
+    )
+    tl.store(
+        scratch + K_OFFSET + (pid_n * NUM_KH + pid_h) * DIM_K + offs_k,
+        b_k,
+        mask=qk_active,
+    )
+
+    scalar_active = (pid_n < N_ACTUAL) & (pid_h < NUM_VH)
+    b_raw_a = tl.load(
+        raw_a + pid_n * NUM_VH + pid_h, mask=scalar_active, other=0.0
+    ).to(tl.float32)
+    b_raw_b = tl.load(
+        raw_b + pid_n * NUM_VH + pid_h, mask=scalar_active, other=0.0
+    ).to(tl.float32)
+    b_a_log = tl.load(A_log + pid_h, mask=scalar_active, other=0.0).to(
+        tl.float32
+    )
+    b_dt_bias = tl.load(
+        dt_bias + pid_h, mask=scalar_active, other=0.0
+    ).to(tl.float32)
+    x = b_raw_a + b_dt_bias
+    softplus_x = tl.where(x <= 20.0, tl.log(1.0 + tl.exp(x)), x)
+    decay = tl.exp(-tl.exp(b_a_log) * softplus_x)
+    b_beta = tl.sigmoid(b_raw_b)
+    tl.store(
+        scratch + DECAY_OFFSET + pid_n * NUM_VH + pid_h,
+        decay,
+        mask=scalar_active,
+    )
+    tl.store(
+        scratch + BETA_OFFSET + pid_n * NUM_VH + pid_h,
+        b_beta,
+        mask=scalar_active,
+    )
+
+
+@triton.jit
 def _gdn_node_step(
     state_i,
     b_q,
@@ -3686,6 +3857,7 @@ def _gdn_node_step(
     USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
     RAW_GATING: tl.constexpr,
     SCAN_ALIGN: tl.constexpr = False,
+    COEFFICIENTS_PRECOMPUTED: tl.constexpr = False,
 ):
     # FR13_REPLAY_ROUTE shared per-node update body. This is the SINGLE
     # source of the GDN rank-1 node update used by BOTH the tree scan kernel
@@ -3699,7 +3871,7 @@ def _gdn_node_step(
     # spec-guaranteed: it is gated by the one-time byte A/B on captured
     # payloads (GPU-gated obligation; see FR13_REPLAY_ROUTE_BUILD.md).
     b_beta = b_b
-    if RAW_GATING:
+    if RAW_GATING and not COEFFICIENTS_PRECOMPUTED:
         x = b_raw_a + b_dt_bias
         softplus_x = tl.where(
             x <= 20.0,
@@ -3730,8 +3902,11 @@ def _gdn_node_step(
         else:
             b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
             b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
-    b_q = b_q * OUTPUT_SCALE
-    state_i *= tl.exp(b_g)
+    if not COEFFICIENTS_PRECOMPUTED:
+        b_q = b_q * OUTPUT_SCALE
+        state_i *= tl.exp(b_g)
+    else:
+        state_i *= b_g
     b_v -= tl.sum(state_i * b_k[None, :], axis=1)
     b_v *= b_beta
     state_i += b_v[:, None] * b_k[None, :]
@@ -4135,6 +4310,7 @@ def _tree_gdn_path_kernel(
     path_parent,    # [n_paths] int32 parent NODE id of the path root (-1 => h0)
     path_lengths,   # [n_paths] int32 active nodes; device-loaded graph-stable bound
     state_export,   # [N_TOTAL, NUM_VH, DIM_V, DIM_K] fp32 handoff buffer
+    coeff_scratch,  # alias of state_export; exact fixed32 terminal row is scratch
     export_mask,    # [N_TOTAL] int32 1 => export this node's post-state
     out,
     ring_k,
@@ -4159,6 +4335,11 @@ def _tree_gdn_path_kernel(
     COUNT_INVOCATION: tl.constexpr,
     SCAN_ALIGN: tl.constexpr,
     MAX_PATH_LEN: tl.constexpr,
+    COEFFICIENTS_PRECOMPUTED: tl.constexpr = False,
+    Q_OFFSET: tl.constexpr = 0,
+    K_OFFSET: tl.constexpr = 0,
+    DECAY_OFFSET: tl.constexpr = 0,
+    BETA_OFFSET: tl.constexpr = 0,
     STATE_SOURCE: tl.constexpr = 0,
     EXPORT_MODE: tl.constexpr = 0,
     RING_EXPORT: tl.constexpr = False,
@@ -4231,17 +4412,35 @@ def _tree_gdn_path_kernel(
         node = tl.load(path_nodes + pid_path * MAX_PATH_LEN + i)
         n_ok = (node >= 0) & (node < N_ACTUAL)
         node_c = tl.maximum(node, 0)
-        b_q = tl.load(
-            q + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
-            mask=n_ok,
-            other=0.0,
-        ).to(tl.float32)
-        b_k_raw = tl.load(
-            k + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
-            mask=n_ok,
-            other=0.0,
-        )
-        b_k = b_k_raw.to(tl.float32)
+        if COEFFICIENTS_PRECOMPUTED:
+            b_q = tl.load(
+                coeff_scratch
+                + Q_OFFSET
+                + (node_c * NUM_KH + pid_kh) * DIM_K
+                + offs_k,
+                mask=n_ok,
+                other=0.0,
+            )
+            b_k = tl.load(
+                coeff_scratch
+                + K_OFFSET
+                + (node_c * NUM_KH + pid_kh) * DIM_K
+                + offs_k,
+                mask=n_ok,
+                other=0.0,
+            )
+        else:
+            b_q = tl.load(
+                q + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
+                mask=n_ok,
+                other=0.0,
+            ).to(tl.float32)
+            b_k_raw = tl.load(
+                k + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
+                mask=n_ok,
+                other=0.0,
+            )
+            b_k = b_k_raw.to(tl.float32)
         b_v_raw = tl.load(
             v + (node_c * NUM_VH + pid_vh) * DIM_V + offs_v,
             mask=n_ok & v_mask,
@@ -4249,6 +4448,13 @@ def _tree_gdn_path_kernel(
         )
         b_v = b_v_raw.to(tl.float32)
         if RING_EXPORT:
+            if COEFFICIENTS_PRECOMPUTED:
+                ring_k_owner = (pid_v == 0) & (pid_vh % head_group == 0)
+                b_k_raw = tl.load(
+                    k + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
+                    mask=n_ok & ring_k_owner,
+                    other=0.0,
+                )
             tl.store(
                 ring_k + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
                 b_k_raw,
@@ -4261,38 +4467,76 @@ def _tree_gdn_path_kernel(
                 b_v_raw,
                 mask=n_ok & v_mask,
             )
-        b_b = tl.load(
-            beta + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
-        ).to(tl.float32)
-        b_g = tl.load(
-            g + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
-        ).to(tl.float32)
-        b_raw_a = b_g
-        b_raw_b = b_b
-        b_a_log = b_g
-        b_dt_bias = b_b
-        if RAW_GATING:
-            b_raw_b_in = tl.load(
-                raw_b + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+        if COEFFICIENTS_PRECOMPUTED:
+            b_b = tl.load(
+                coeff_scratch + BETA_OFFSET + node_c * NUM_VH + pid_vh,
+                mask=n_ok,
+                other=0.0,
             )
-            b_raw_b = b_raw_b_in.to(tl.float32)
-            b_raw_a_in = tl.load(
-                raw_a + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+            b_g = tl.load(
+                coeff_scratch + DECAY_OFFSET + node_c * NUM_VH + pid_vh,
+                mask=n_ok,
+                other=0.0,
             )
-            b_raw_a = b_raw_a_in.to(tl.float32)
+            b_raw_a = b_g
+            b_raw_b = b_b
+            b_a_log = b_g
+            b_dt_bias = b_b
             if RING_EXPORT:
+                ring_scalar_owner = pid_v == 0
+                b_raw_a_in = tl.load(
+                    raw_a + node_c * NUM_VH + pid_vh,
+                    mask=n_ok & ring_scalar_owner,
+                    other=0.0,
+                )
+                b_raw_b_in = tl.load(
+                    raw_b + node_c * NUM_VH + pid_vh,
+                    mask=n_ok & ring_scalar_owner,
+                    other=0.0,
+                )
                 tl.store(
                     ring_a + node_c * NUM_VH + pid_vh,
                     b_raw_a_in,
-                    mask=n_ok & (pid_v == 0),
+                    mask=n_ok & ring_scalar_owner,
                 )
                 tl.store(
                     ring_b + node_c * NUM_VH + pid_vh,
                     b_raw_b_in,
-                    mask=n_ok & (pid_v == 0),
+                    mask=n_ok & ring_scalar_owner,
                 )
-            b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
-            b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
+        else:
+            b_b = tl.load(
+                beta + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+            ).to(tl.float32)
+            b_g = tl.load(
+                g + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+            ).to(tl.float32)
+            b_raw_a = b_g
+            b_raw_b = b_b
+            b_a_log = b_g
+            b_dt_bias = b_b
+            if RAW_GATING:
+                b_raw_b_in = tl.load(
+                    raw_b + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+                )
+                b_raw_b = b_raw_b_in.to(tl.float32)
+                b_raw_a_in = tl.load(
+                    raw_a + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+                )
+                b_raw_a = b_raw_a_in.to(tl.float32)
+                if RING_EXPORT:
+                    tl.store(
+                        ring_a + node_c * NUM_VH + pid_vh,
+                        b_raw_a_in,
+                        mask=n_ok & (pid_v == 0),
+                    )
+                    tl.store(
+                        ring_b + node_c * NUM_VH + pid_vh,
+                        b_raw_b_in,
+                        mask=n_ok & (pid_v == 0),
+                    )
+                b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
+                b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
         new_state, out_i = _gdn_node_step(
             state_i,
             b_q,
@@ -4308,6 +4552,7 @@ def _tree_gdn_path_kernel(
             USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
             RAW_GATING=RAW_GATING,
             SCAN_ALIGN=SCAN_ALIGN,
+            COEFFICIENTS_PRECOMPUTED=COEFFICIENTS_PRECOMPUTED,
         )
         # Keep the descriptor guard value-neutral if a corrupt node slips past
         # preseed validation; valid dynamic-loop iterations always have n_ok.
@@ -7895,8 +8140,66 @@ def launch_tree_gdn_prepared(
         _subtree_state is not None
         and _subtree_state["selfcheck_armed"]
     )
+    _coeff_hoist = fixed32_gdn_coeff_hoist_on()
+    _coeff_selfcheck = fixed32_gdn_coeff_selfcheck_on()
+    if _coeff_selfcheck and not _coeff_hoist:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_COEFF_SELFCHECK requires coefficient hoist"
+        )
+    if _coeff_hoist:
+        _coeff_export = (
+            _subtree_state.get("export")
+            if _subtree_state is not None
+            else None
+        )
+        if (
+            _FR13_FIXED32_MODE is None
+            or not _subtree_route_armed
+            or _subtree_state is None
+            or _subtree_state.get("schedule") != "fixed32"
+            or _subtree_state.get("fixed32_contract") is None
+            or _subtree_state.get("fixed32_coeff_layout") is None
+            or not use_qk_l2norm_in_kernel
+            or not raw_gating
+            or _scan_align
+            or not 0 <= int(h0_batch_index) < 4
+            or not torch.is_tensor(_coeff_export)
+            or _coeff_export.dtype != torch.float32
+            or tuple(int(value) for value in _coeff_export.shape)
+            != (32, V_HEADS, V, K)
+            or not _coeff_export.is_contiguous()
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_COEFF_HOIST requires exact fixed32 path, "
+                "B1-B4 slot ownership, contiguous fp32 state_export, raw "
+                "gating, q/k L2 norm, and SCAN_ALIGN=0"
+            )
+        if _subtree_selfcheck_armed or parent_gather_selfcheck_on():
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_COEFF_HOIST selfcheck cannot be combined "
+                "with another scan selfcheck"
+            )
+        _coeff_layout = _subtree_state["fixed32_coeff_layout"]
+        if (
+            int(_coeff_layout["scratch_node"])
+            != _FR13_FIXED32_COEFF_SCRATCH_NODE
+            or int(_subtree_state["fixed32_contract"]["export_or_mask"])
+            & (1 << int(_coeff_layout["scratch_node"]))
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_COEFF_HOIST scratch ownership drift"
+            )
+    else:
+        _coeff_layout = {
+            "q_offset": 0,
+            "k_offset": 0,
+            "decay_offset": 0,
+            "beta_offset": 0,
+        }
 
-    def _launch_paths(_out, _count=count_invocation):
+    def _launch_paths(
+        _out, _count=count_invocation, _use_coeff=_coeff_hoist
+    ):
         # FR13_SUBTREE_PARALLEL route: one launch per path level; paths in a
         # level scan concurrently on grid axis 2. RING/RAW semantics match
         # the monolith per node; PIGGYBACK unsupported (asserted below).
@@ -7914,6 +8217,27 @@ def launch_tree_gdn_prepared(
             raise RuntimeError(
                 "FR13_FIXED32: exact path I/O specialization requires the "
                 "validated fixed32 schedule"
+            )
+        if _use_coeff:
+            _tree_gdn_coeff_precompute_kernel[(n_actual, num_vh)](
+                q,
+                k,
+                raw_a,
+                raw_b,
+                A_log,
+                dt_bias,
+                st["export"],
+                N_ACTUAL=n_actual,
+                NUM_KH=num_kh,
+                NUM_VH=num_vh,
+                DIM_K=dim_k,
+                OUTPUT_SCALE=output_scale,
+                Q_OFFSET=_coeff_layout["q_offset"],
+                K_OFFSET=_coeff_layout["k_offset"],
+                DECAY_OFFSET=_coeff_layout["decay_offset"],
+                BETA_OFFSET=_coeff_layout["beta_offset"],
+                num_warps=_num_warps,
+                **_extra_launch_kwargs,
             )
         for _li, (
             _nodes,
@@ -7949,6 +8273,7 @@ def launch_tree_gdn_prepared(
                 _pars,
                 _lengths,
                 st["export"],
+                st["export"],
                 st["emask"],
                 _out,
                 ring_k,
@@ -7963,7 +8288,9 @@ def launch_tree_gdn_prepared(
                 DIM_V=dim_v,
                 BLOCK_V=_bv,
                 OUTPUT_SCALE=output_scale,
-                USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+                USE_QK_L2NORM_IN_KERNEL=(
+                    use_qk_l2norm_in_kernel and not _use_coeff
+                ),
                 H0_IS_BANK=h0_is_bank,
                 H0_INDEX_ROW=h0_index_row,
                 H0_BATCH_INDEX=h0_batch_index,
@@ -7973,6 +8300,11 @@ def launch_tree_gdn_prepared(
                 COUNT_INVOCATION=_count and (_li == 0),
                 SCAN_ALIGN=_scan_align,
                 MAX_PATH_LEN=_mlen,
+                COEFFICIENTS_PRECOMPUTED=_use_coeff,
+                Q_OFFSET=_coeff_layout["q_offset"],
+                K_OFFSET=_coeff_layout["k_offset"],
+                DECAY_OFFSET=_coeff_layout["decay_offset"],
+                BETA_OFFSET=_coeff_layout["beta_offset"],
                 STATE_SOURCE=_state_source,
                 EXPORT_MODE=_export_mode,
                 RING_EXPORT=_ring_export,
@@ -8129,7 +8461,44 @@ def launch_tree_gdn_prepared(
             raise ValueError(
                 "FR13_SUBTREE_PARALLEL does not support PIGGYBACK_EXPORT"
             )
-        if _subtree_selfcheck_armed:
+        if _coeff_selfcheck:
+            # Same-input, same-process byte gate. The reference uses the exact
+            # path schedule and differs only in where q/k/scalars are computed.
+            out_ref = torch.empty_like(out)
+            _external_before = _snapshot_external()
+            _counter_before = _counter_before_selfcheck()
+            _launch_paths(out_ref, _count=False, _use_coeff=False)
+            _external_ref = _snapshot_external()
+            _restore_external(_external_before)
+            _launch_paths(out, _use_coeff=True)
+            _n = int(n_actual)
+            _external_bad = _external_mismatches(_external_ref)
+            if not _byte_equal(out_ref[:_n], out[:_n]) or _external_bad:
+                _diff = (
+                    (out_ref[:_n].float() - out[:_n].float())
+                    .abs()
+                    .max()
+                    .item()
+                )
+                raise RuntimeError(
+                    "FR13_FIXED32_GDN_COEFF_SELFCHECK MISMATCH: hoisted "
+                    f"coefficients are not byte-identical (max_abs={_diff:.3e}, "
+                    f"n_actual={_n}, external={_external_bad})"
+                )
+            _assert_counter_once(
+                _counter_before, "FR13_FIXED32_GDN_COEFF"
+            )
+            _st = _subtree_state
+            assert _st is not None
+            if not _st["coeff_selfcheck_pass_announced"]:
+                _st["coeff_selfcheck_pass_announced"] = True
+                print(
+                    "[FR13_FIXED32_GDN_COEFF_SELFCHECK PASS] "
+                    f"byte_equal=1 external_state_equal=1 counter_once=1 "
+                    f"n_actual={_n}",
+                    flush=True,
+                )
+        elif _subtree_selfcheck_armed:
             # In-process byte gate: monolith -> reference, restore every
             # externally visible buffer, then path route -> candidate.
             out_ref = torch.empty_like(out)
