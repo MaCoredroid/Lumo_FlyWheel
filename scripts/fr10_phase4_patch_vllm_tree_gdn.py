@@ -149,6 +149,9 @@ _FR13_FIXED32_MODES = {
     "hydra27_fixed32": (0x7ABDFFFF, 27),
 }
 _FR13_FIXED32_MODE = os.environ.get("FR13_FIXED32_MODE", "").strip()
+_FR13_FIXED32_GDN_PATH_BV_CANDIDATE = os.environ.get(
+    "FR13_FIXED32_GDN_PATH_BV_CANDIDATE", ""
+).strip()
 _FR13_FIXED32_TREE_SOURCE = repr(list(_FR13_FIXED32_CHOICES))
 _FR13_FIXED32_SLOT_PI = tuple(
     [0]
@@ -375,6 +378,10 @@ _FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE = []
 _FR13_FIXED32_ACCEPTED_OUTPUT_CURRENT = None
 _FR13_FIXED32_BOOT_WARM_EVIDENCE = None
 _FR13_FIXED32_TOPOLOGY_NEEDLE_EMITTED = False
+try:
+    _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+except NameError:
+    _FR13_FIXED32_GDN_PATH_BV_CANDIDATE = None
 _FR13_FIXED32_DRAFTER_TREE_LAYER = "mtp.layers.0.self_attn.attn"
 _FR13_FIXED32_TARGET_TREE_LAYERS = frozenset(
     "language_model.model.layers.%d.self_attn.attn" % layer
@@ -3082,6 +3089,22 @@ def _fr13_fixed32_capture_begin(
             _FR13_FIXED32_MODE, batch, -1, "capture_manifest"
         ),
     }
+    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None:
+        tree_kernel = __import__(
+            "lumo_flywheel_serving.fr10_gdn_tree_kernel",
+            fromlist=(
+                "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE",
+                "fixed32_gdn_bv_live_capture_begin",
+            ),
+        )
+        if getattr(
+            tree_kernel, "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE", None
+        ) != _FR13_FIXED32_GDN_PATH_BV_CANDIDATE:
+            raise RuntimeError(
+                "FR13 fixed32 GDN BV selector drift between observer and "
+                "tree kernel"
+            )
+        tree_kernel.fixed32_gdn_bv_live_capture_begin(identity, batch)
 
 
 def _fr13_fixed32_capture_end(
@@ -3217,6 +3240,26 @@ def _fr13_fixed32_capture_end(
     signature = __import__("hashlib").sha256(
         canonical.encode("ascii")
     ).hexdigest()
+    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None:
+        tree_kernel = __import__(
+            "lumo_flywheel_serving.fr10_gdn_tree_kernel",
+            fromlist=(
+                "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE",
+                "fixed32_gdn_bv_live_capture_end",
+            ),
+        )
+        if getattr(
+            tree_kernel, "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE", None
+        ) != _FR13_FIXED32_GDN_PATH_BV_CANDIDATE:
+            raise RuntimeError(
+                "FR13 fixed32 GDN BV selector drift between observer and "
+                "tree kernel"
+            )
+        tree_kernel.fixed32_gdn_bv_live_capture_end(
+            identity,
+            int(work["batch_size"]),
+            int(work["gdn_scan_calls"]),
+        )
     _FR13_FIXED32_CAPTURE_MANIFESTS[identity] = (signature, canonical)
     _FR13_FIXED32_CAPTURE_CONTEXT = None
     return signature
@@ -3348,6 +3391,24 @@ def _fr13_fixed32_observed_graph_replay(
         )
     tree = manifest["tree_attn"]
     gdn = manifest["gdn"]
+    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None:
+        if getattr(
+            tree_kernel, "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE", None
+        ) != _FR13_FIXED32_GDN_PATH_BV_CANDIDATE:
+            raise RuntimeError(
+                "FR13 fixed32 GDN BV selector drift between observer and "
+                "tree kernel"
+            )
+        gate_report = tree_kernel.fixed32_gdn_bv_live_gate_on_replay(
+            identity,
+            int(event["batch_size"]),
+            int(gdn["scan_calls"]),
+        )
+        if gate_report.get("status") != "passed":
+            raise RuntimeError(
+                "FR13 fixed32 GDN BV live gate did not pass on the first "
+                "measured full-graph replay: " + repr(gate_report)
+            )
     event["tree_layers"] = set(tree["layers"])
     event["tree_calls"] = int(tree["calls"])
     event["tree_q_rows"] = int(tree["q_rows"])
@@ -5109,6 +5170,17 @@ def _fr13_fixed32_complete_pending_event():
 def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
     """Bake fixed32 identity into generated runtime modules."""
     resolved_mode = _FR13_FIXED32_MODE if mode is None else mode
+    candidate_raw = _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+    if candidate_raw and candidate_raw not in ("16", "32", "64", "128"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be one of "
+            "16, 32, 64, or 128"
+        )
+    candidate = int(candidate_raw) if candidate_raw else None
+    if candidate is not None and not resolved_mode:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_CANDIDATE requires fixed32 mode"
+        )
     if not resolved_mode:
         valid_mask = 0
     elif resolved_mode in _FR13_FIXED32_MODES:
@@ -5120,12 +5192,30 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
     return (
         f"_FR13_FIXED32_MODE = {resolved_mode!r}\n"
         f"_FR13_FIXED32_VALID_MASK = {valid_mask!r}\n"
+        "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE = "
+        f"{candidate!r}\n"
     )
 
 
 def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     """Validate the fixed-work campaign before emitting any runtime source."""
     mode = _FR13_FIXED32_MODE
+    candidate = _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+    if candidate:
+        if candidate not in ("16", "32", "64", "128"):
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be one of "
+                "16, 32, 64, or 128"
+            )
+        if not mode:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PATH_BV_CANDIDATE requires fixed32 mode"
+            )
+        if os.environ.get("FR13_TREE_GDN_GEOM_OVERRIDE", "") != "BV=8":
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PATH_BV_CANDIDATE requires the served "
+                "graph pinned exactly to BV=8"
+            )
     if not mode:
         return None
     if mode not in _FR13_FIXED32_MODES:

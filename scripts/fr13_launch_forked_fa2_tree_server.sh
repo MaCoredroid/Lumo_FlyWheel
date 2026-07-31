@@ -331,6 +331,21 @@ PY
 )}
 SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$NUM_SPECULATIVE_TOKENS,\"speculative_token_tree\":\"$TREE\"}"}
 
+_fr13_gdn_path_bv_candidate=${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}
+if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" ]] || {
+    echo "FR13_FIXED32_GDN_PATH_BV_CANDIDATE requires FR13_FIXED32_MODE" >&2
+    exit 2
+  }
+  [[ "$_fr13_gdn_path_bv_candidate" == "16" \
+     || "$_fr13_gdn_path_bv_candidate" == "32" \
+     || "$_fr13_gdn_path_bv_candidate" == "64" \
+     || "$_fr13_gdn_path_bv_candidate" == "128" ]] || {
+    echo "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be exactly 16, 32, 64, or 128" >&2
+    exit 2
+  }
+fi
+
 # Fixed-32 is a closed execution bucket, not a generic <=32-node tree. Validate
 # the topology/mask tuple and all route pins before patching or allocating GPU
 # memory so an inherited legacy/fallback flag cannot produce evidence.
@@ -893,8 +908,14 @@ PY
     "$LOG_DIR/fr13_fixed32_ingress_secret_identity.json" \
     "$LOG_DIR/fr13_fixed32_runtime_attestation.json" \
     "$LOG_DIR"/fr13_fixed32_boundary_snapshot.*.json \
-    "$LOG_DIR/fr13_fixed32_mode.flag"
+    "$LOG_DIR/fr13_fixed32_mode.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag"
   printf '%s\n' "$FR13_FIXED32_MODE" > "$LOG_DIR/fr13_fixed32_mode.flag"
+  if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
+    printf '%s\n' "$_fr13_gdn_path_bv_candidate" \
+      > "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag"
+    chmod 400 "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag"
+  fi
   printf '%s\n' \
     "mode=$FR13_FIXED32_MODE" \
     "pid=$FR13_FIXED32_ENGINE_PID_FILE" \
@@ -905,7 +926,10 @@ PY
     "boundary=$FR13_FIXED32_BOUNDARY_SNAPSHOT_PATH" \
     > "$LOG_DIR/fr13_fixed32_runtime_paths.txt"
 else
-  rm -f "$LOG_DIR/fr13_fixed32_mode.flag" 2>/dev/null || true
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_mode.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag" \
+    2>/dev/null || true
 fi
 # FR13_COMMITTER_NATIVE sidecar (worker-env-drop-proof): the EngineCore worker drops FR13_* env vars, so
 # fr10_gdn_tree_kernel reads this sidecar (written here in pid-1 where the env IS present). See its
@@ -1353,6 +1377,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_SCAN_ALIGN="${FR13_SCAN_ALIGN:-0}" \
   -e FR13_NPAD_INVARIANT="${FR13_NPAD_INVARIANT:-0}" \
   -e FR13_TREE_GDN_GEOM_OVERRIDE="${FR13_TREE_GDN_GEOM_OVERRIDE:-}" \
+  -e FR13_FIXED32_GDN_PATH_BV_CANDIDATE="${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
   -e FR13_APC_COMMIT_TO_RUNNING_ROW="${FR13_APC_COMMIT_TO_RUNNING_ROW:-1}" \
   -e FR13_TREE_RUNROW_INIT="${FR13_TREE_RUNROW_INIT:-1}" \
   -e FR13_COMMITTER_GRAPH="${FR13_COMMITTER_GRAPH:-1}" \
