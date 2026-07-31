@@ -37,6 +37,7 @@ import os
 import secrets
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import threading
@@ -2559,6 +2560,340 @@ class Fixed32BoundaryError(RuntimeError):
     """A fixed32 task lacks a valid runtime interval or real-task provenance."""
 
 
+_FIXED32_TAW_REAL_TASK_ARM_NAME = (
+    "fr13_fixed32_taw_native_precompute.real_event.arm"
+)
+_FIXED32_TAW_REAL_TASK_MARKER_PREFIX = "swe_verified:"
+_FIXED32_TAW_REAL_TASK_ID_CHARACTERS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+)
+
+
+def _fixed32_taw_file_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_nlink,
+        metadata.st_uid,
+        metadata.st_gid,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def _fixed32_taw_directory_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_uid,
+        metadata.st_gid,
+    )
+
+
+class _Fixed32TawRealTaskArm:
+    """Atomically bind one diagnostic TAW run to one pinned SWE task."""
+
+    def __init__(self, *, path: Path, instance_id: str) -> None:
+        if (
+            not instance_id
+            or any(
+                character not in _FIXED32_TAW_REAL_TASK_ID_CHARACTERS
+                for character in instance_id
+            )
+        ):
+            raise Fixed32BoundaryError(
+                "fixed32 TAW real-task arm instance ID is not kernel-canonical"
+            )
+        marker = f"{_FIXED32_TAW_REAL_TASK_MARKER_PREFIX}{instance_id}"
+        marker_bytes = (marker + "\n").encode("ascii")
+        if len(marker) > 256:
+            raise Fixed32BoundaryError(
+                "fixed32 TAW real-task arm marker exceeds 256 bytes"
+            )
+        if not path.is_absolute() or path.name != _FIXED32_TAW_REAL_TASK_ARM_NAME:
+            raise Fixed32BoundaryError(
+                "fixed32 TAW real-task arm requires the absolute canonical filename"
+            )
+        try:
+            canonical_parent = path.parent.resolve(strict=True)
+        except OSError as error:
+            raise Fixed32BoundaryError(
+                f"fixed32 TAW real-task arm parent is unavailable: {error}"
+            ) from error
+        if canonical_parent != path.parent:
+            raise Fixed32BoundaryError(
+                "fixed32 TAW real-task arm parent must not traverse symlinks"
+            )
+
+        self.path = path
+        self.instance_id = instance_id
+        self.marker = marker
+        self.marker_bytes = marker_bytes
+        self.marker_sha256 = hashlib.sha256(marker_bytes).hexdigest()
+        self.rotated_path = path.with_name(
+            path.name.removesuffix(".arm")
+            + f".ended.{self.marker_sha256}.arm"
+        )
+        self.state = "planned"
+        self.started_at: str | None = None
+        self.ended_at: str | None = None
+        self._live_identity: tuple[int, ...] | None = None
+        self._rotated_identity: tuple[int, ...] | None = None
+
+    @property
+    def active(self) -> bool:
+        return self.state in {"published", "active", "rotation_linked"}
+
+    def _open_parent(self) -> int:
+        try:
+            before = self.path.parent.lstat()
+        except OSError as error:
+            raise Fixed32BoundaryError(
+                f"fixed32 TAW real-task arm cannot inspect its parent: {error}"
+            ) from error
+        if (
+            not stat.S_ISDIR(before.st_mode)
+            or stat.S_IMODE(before.st_mode) != 0o700
+            or before.st_uid != os.geteuid()
+        ):
+            raise Fixed32BoundaryError(
+                "fixed32 TAW real-task arm parent must be an owned mode-0700 directory"
+            )
+        try:
+            descriptor = os.open(
+                self.path.parent,
+                os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY | os.O_NOFOLLOW,
+            )
+        except OSError as error:
+            raise Fixed32BoundaryError(
+                f"fixed32 TAW real-task arm cannot open its parent: {error}"
+            ) from error
+        opened = os.fstat(descriptor)
+        if (
+            _fixed32_taw_directory_identity(opened)
+            != _fixed32_taw_directory_identity(before)
+        ):
+            os.close(descriptor)
+            raise Fixed32BoundaryError(
+                "fixed32 TAW real-task arm parent changed while opening"
+            )
+        return descriptor
+
+    @staticmethod
+    def _name_exists(parent_descriptor: int, name: str) -> bool:
+        try:
+            os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+        except FileNotFoundError:
+            return False
+        return True
+
+    def _read_exact(self, parent_descriptor: int, name: str) -> os.stat_result:
+        try:
+            before = os.stat(
+                name,
+                dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+        except OSError as error:
+            raise Fixed32BoundaryError(
+                f"fixed32 TAW real-task marker is unavailable: {error}"
+            ) from error
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_nlink != 1
+            or stat.S_IMODE(before.st_mode) != 0o400
+            or before.st_uid != os.geteuid()
+            or before.st_size != len(self.marker_bytes)
+        ):
+            raise Fixed32BoundaryError(
+                "fixed32 TAW real-task marker metadata is noncanonical"
+            )
+        try:
+            descriptor = os.open(
+                name,
+                os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+                dir_fd=parent_descriptor,
+            )
+        except OSError as error:
+            raise Fixed32BoundaryError(
+                f"fixed32 TAW real-task marker cannot be opened exactly: {error}"
+            ) from error
+        try:
+            opened = os.fstat(descriptor)
+            if _fixed32_taw_file_identity(opened) != _fixed32_taw_file_identity(before):
+                raise Fixed32BoundaryError(
+                    "fixed32 TAW real-task marker changed before exact read"
+                )
+            chunks: list[bytes] = []
+            while True:
+                chunk = os.read(descriptor, 4096)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+            after_read = os.fstat(descriptor)
+            if (
+                _fixed32_taw_file_identity(after_read)
+                != _fixed32_taw_file_identity(opened)
+            ):
+                raise Fixed32BoundaryError(
+                    "fixed32 TAW real-task marker changed during exact read"
+                )
+        finally:
+            os.close(descriptor)
+        after = os.stat(
+            name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        if _fixed32_taw_file_identity(after) != _fixed32_taw_file_identity(before):
+            raise Fixed32BoundaryError(
+                "fixed32 TAW real-task marker changed after exact read"
+            )
+        if b"".join(chunks) != self.marker_bytes:
+            raise Fixed32BoundaryError(
+                "fixed32 TAW real-task marker bytes are noncanonical"
+            )
+        return before
+
+    def start(self) -> None:
+        if self.state != "planned":
+            raise Fixed32BoundaryError(
+                "fixed32 TAW real-task arm start was invoked twice"
+            )
+        parent_descriptor = self._open_parent()
+        temporary_name: str | None = None
+        try:
+            if self._name_exists(parent_descriptor, self.path.name):
+                raise Fixed32BoundaryError(
+                    "fixed32 TAW real-task arm destination is not fresh"
+                )
+            if self._name_exists(parent_descriptor, self.rotated_path.name):
+                raise Fixed32BoundaryError(
+                    "fixed32 TAW real-task arm rotation destination is not fresh"
+                )
+            temporary_name = (
+                f".{self.path.name}.tmp.{os.getpid()}.{secrets.token_hex(16)}"
+            )
+            descriptor = os.open(
+                temporary_name,
+                os.O_WRONLY
+                | os.O_CREAT
+                | os.O_EXCL
+                | os.O_CLOEXEC
+                | os.O_NOFOLLOW,
+                0o600,
+                dir_fd=parent_descriptor,
+            )
+            try:
+                view = memoryview(self.marker_bytes)
+                while view:
+                    written = os.write(descriptor, view)
+                    if written <= 0:
+                        raise Fixed32BoundaryError(
+                            "fixed32 TAW real-task marker write made no progress"
+                        )
+                    view = view[written:]
+                os.fchmod(descriptor, 0o400)
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            os.link(
+                temporary_name,
+                self.path.name,
+                src_dir_fd=parent_descriptor,
+                dst_dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+            self.state = "published"
+            os.unlink(temporary_name, dir_fd=parent_descriptor)
+            temporary_name = None
+            os.fsync(parent_descriptor)
+            metadata = self._read_exact(parent_descriptor, self.path.name)
+            self._live_identity = _fixed32_taw_file_identity(metadata)
+            self.started_at = _iso_now()
+            self.state = "active"
+        except Fixed32BoundaryError:
+            raise
+        except Exception as error:
+            raise Fixed32BoundaryError(
+                f"fixed32 TAW real-task arm creation failed: "
+                f"{type(error).__name__}: {error}"
+            ) from error
+        finally:
+            if temporary_name is not None:
+                try:
+                    os.unlink(temporary_name, dir_fd=parent_descriptor)
+                except FileNotFoundError:
+                    pass
+            os.close(parent_descriptor)
+
+    def finish(self) -> None:
+        if not self.active:
+            if self.state == "ended":
+                return
+            raise Fixed32BoundaryError(
+                "fixed32 TAW real-task arm end has no active task"
+            )
+        parent_descriptor = self._open_parent()
+        try:
+            metadata = self._read_exact(parent_descriptor, self.path.name)
+            identity = _fixed32_taw_file_identity(metadata)
+            if self._live_identity is not None and identity != self._live_identity:
+                raise Fixed32BoundaryError(
+                    "fixed32 TAW real-task marker identity changed during the task"
+                )
+            if self._name_exists(parent_descriptor, self.rotated_path.name):
+                raise Fixed32BoundaryError(
+                    "fixed32 TAW real-task arm rotation destination is not fresh"
+                )
+            os.link(
+                self.path.name,
+                self.rotated_path.name,
+                src_dir_fd=parent_descriptor,
+                dst_dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+            self.state = "rotation_linked"
+            os.unlink(self.path.name, dir_fd=parent_descriptor)
+            os.fsync(parent_descriptor)
+            rotated = self._read_exact(
+                parent_descriptor,
+                self.rotated_path.name,
+            )
+            self._rotated_identity = _fixed32_taw_file_identity(rotated)
+            self.ended_at = _iso_now()
+            self.state = "ended"
+        except Fixed32BoundaryError:
+            raise
+        except Exception as error:
+            raise Fixed32BoundaryError(
+                f"fixed32 TAW real-task arm rotation failed: "
+                f"{type(error).__name__}: {error}"
+            ) from error
+        finally:
+            os.close(parent_descriptor)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "schema": "fr13-fixed32-taw-real-task-arm-v1",
+            "run_classification": "b1_diagnostic",
+            "gate_eligible": False,
+            "floor_acceptance_eligible": False,
+            "instance_id": self.instance_id,
+            "marker": self.marker,
+            "marker_bytes": len(self.marker_bytes),
+            "marker_sha256": self.marker_sha256,
+            "live_path": str(self.path),
+            "rotated_path": str(self.rotated_path),
+            "state": self.state,
+            "started_at": self.started_at,
+            "ended_at": self.ended_at,
+        }
+
+
 _FIXED32_TOKEN_USAGE_FIELDS = frozenset(
     {
         "input_tokens",
@@ -4020,18 +4355,23 @@ class _Fixed32TaskBracket:
         instance_id: str,
         boundary_snapshot_base: Path,
         server_capacity: int,
+        taw_real_task_arm: _Fixed32TawRealTaskArm | None = None,
     ) -> None:
         self.client = client
         self.task_dir = task_dir
         self.instance_id = instance_id
         self.boundary_snapshot_base = boundary_snapshot_base
         self.server_capacity = server_capacity
+        self.taw_real_task_arm = taw_real_task_arm
         self.pre_ack = None
         self.post_ack = None
         self.pre_snapshot_ref = None
         self.post_snapshot_ref = None
         self.post_attempted = False
         self.artifact_path = task_dir / "fixed32_task_boundary.json"
+        self.taw_arm_artifact_path = (
+            task_dir / "fixed32_taw_real_task_arm.json"
+        )
 
     @property
     def started(self) -> bool:
@@ -4072,6 +4412,22 @@ class _Fixed32TaskBracket:
         )
         os.replace(temporary, self.artifact_path)
 
+    def _write_taw_arm_artifact(self) -> None:
+        if self.taw_real_task_arm is None:
+            return
+        temporary = self.taw_arm_artifact_path.with_suffix(".json.tmp")
+        temporary.write_text(
+            json.dumps(
+                self.taw_real_task_arm.as_dict(),
+                ensure_ascii=True,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, self.taw_arm_artifact_path)
+
     def pre(self, metrics_path: Path) -> None:
         if self.started or self.post_attempted:
             raise Fixed32BoundaryError("fixed32 task pre bracket was invoked twice")
@@ -4100,8 +4456,34 @@ class _Fixed32TaskBracket:
             "path": str(snapshot_path),
             "sha256": snapshot_sha,
         }
-        metrics_path.write_text(metrics, encoding="utf-8")
-        self._write_artifact()
+        try:
+            metrics_path.write_text(metrics, encoding="utf-8")
+            if self.taw_real_task_arm is not None:
+                self.taw_real_task_arm.start()
+                self._write_taw_arm_artifact()
+            self._write_artifact()
+        except Exception as exc:
+            cleanup_error = None
+            if (
+                self.taw_real_task_arm is not None
+                and self.taw_real_task_arm.active
+            ):
+                try:
+                    self.taw_real_task_arm.finish()
+                    self._write_taw_arm_artifact()
+                except Exception as error:  # noqa: BLE001
+                    cleanup_error = error
+            self.pre_ack = None
+            self.pre_snapshot_ref = None
+            detail = f"{type(exc).__name__}: {exc}"
+            if cleanup_error is not None:
+                detail += (
+                    "; arm cleanup failed: "
+                    f"{type(cleanup_error).__name__}: {cleanup_error}"
+                )
+            raise Fixed32BoundaryError(
+                f"fixed32 pre bracket publication failed: {detail}"
+            ) from exc
 
     def post(self, metrics_path: Path) -> dict[str, Any]:
         if not self.started:
@@ -4111,6 +4493,7 @@ class _Fixed32TaskBracket:
                 return json.loads(self.artifact_path.read_text(encoding="utf-8"))
             raise Fixed32BoundaryError("fixed32 post bracket already failed")
         self.post_attempted = True
+        snapshot_error = None
         try:
             ack = self.client.snapshot()
             counters = _validate_fixed32_ack(ack, label="post")
@@ -4140,9 +4523,30 @@ class _Fixed32TaskBracket:
                 snapshot=snapshot,
             )
         except Exception as exc:
+            snapshot_error = exc
+        arm_error = None
+        if self.taw_real_task_arm is not None:
+            try:
+                self.taw_real_task_arm.finish()
+                self._write_taw_arm_artifact()
+            except Exception as exc:  # noqa: BLE001
+                arm_error = exc
+        if snapshot_error is not None or arm_error is not None:
+            try:
+                self._write_artifact()
+            except Exception:
+                pass
+            details = []
+            if snapshot_error is not None:
+                details.append(
+                    f"snapshot={type(snapshot_error).__name__}: {snapshot_error}"
+                )
+            if arm_error is not None:
+                details.append(f"arm={type(arm_error).__name__}: {arm_error}")
+            cause = snapshot_error if snapshot_error is not None else arm_error
             raise Fixed32BoundaryError(
-                f"fixed32 post bracket failed: {type(exc).__name__}: {exc}"
-            ) from exc
+                "fixed32 post bracket failed: " + "; ".join(details)
+            ) from cause
         self.post_ack = ack
         self.post_snapshot_ref = {
             "schema": snapshot["schema"],
@@ -4150,8 +4554,20 @@ class _Fixed32TaskBracket:
             "path": str(snapshot_path),
             "sha256": snapshot_sha,
         }
-        metrics_path.write_text(metrics, encoding="utf-8")
-        self._write_artifact()
+        try:
+            metrics_path.write_text(metrics, encoding="utf-8")
+            self._write_artifact()
+        except Exception as exc:
+            self.post_ack = None
+            self.post_snapshot_ref = None
+            try:
+                self._write_artifact()
+            except Exception:
+                pass
+            raise Fixed32BoundaryError(
+                "fixed32 post bracket artifact failed: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
         return json.loads(self.artifact_path.read_text(encoding="utf-8"))
 
 
@@ -6090,6 +6506,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fixed32-flush-request", type=Path)
     parser.add_argument("--fixed32-flush-ack", type=Path)
     parser.add_argument("--fixed32-boundary-snapshot", type=Path)
+    parser.add_argument(
+        "--fixed32-taw-real-event-arm",
+        type=Path,
+        help=(
+            "Host path mounted at the diagnostic kernel's exact /logs "
+            "real-event marker path. B1 diagnostic only."
+        ),
+    )
     args = parser.parse_args(argv)
 
     fixed32_values = (
@@ -6109,6 +6533,43 @@ def main(argv: list[str] | None = None) -> int:
     fixed32_b1_diagnostic = diagnostic_text == "1"
     if fixed32_b1_diagnostic and not fixed32_enabled:
         parser.error("FR13_FIXED32_B1_DIAGNOSTIC=1 requires fixed32 runtime binding")
+    taw_diagnostic_text = os.environ.get(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE",
+        "0",
+    )
+    if taw_diagnostic_text not in {"0", "1"}:
+        parser.error(
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE must be exactly 0 or 1"
+        )
+    fixed32_taw_diagnostic = taw_diagnostic_text == "1"
+    if fixed32_taw_diagnostic:
+        if not fixed32_enabled:
+            parser.error(
+                "fixed32 TAW native real-task arm requires fixed32 runtime binding"
+            )
+        if not fixed32_b1_diagnostic:
+            parser.error(
+                "fixed32 TAW native real-task arm requires B1 diagnostic mode"
+            )
+        if args.fixed32_taw_real_event_arm is None:
+            parser.error(
+                "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=1 requires "
+                "--fixed32-taw-real-event-arm"
+            )
+        if (
+            args.fixed32_flush_request is not None
+            and args.fixed32_taw_real_event_arm.parent
+            != args.fixed32_flush_request.parent
+        ):
+            parser.error(
+                "--fixed32-taw-real-event-arm must share the mounted fixed32 "
+                "logs directory"
+            )
+    elif args.fixed32_taw_real_event_arm is not None:
+        parser.error(
+            "--fixed32-taw-real-event-arm requires "
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=1"
+        )
     fixed32_client = None
     fixed32_subset = None
     if fixed32_enabled:
@@ -6252,6 +6713,22 @@ def main(argv: list[str] | None = None) -> int:
     def _job(iid: str) -> dict[str, Any]:
         t0 = time.time()
         print(f"[{_iso_now()}] -> {iid}", flush=True)
+        taw_real_task_arm = None
+        if args.fixed32_taw_real_event_arm is not None:
+            pinned_task_ids = (
+                fixed32_subset.get("task_ids")
+                if isinstance(fixed32_subset, dict)
+                else None
+            )
+            if pinned_task_ids != [iid]:
+                raise Fixed32BoundaryError(
+                    "fixed32 TAW real-task arm task differs from the pinned "
+                    "single-task SWE-Verified binding"
+                )
+            taw_real_task_arm = _Fixed32TawRealTaskArm(
+                path=args.fixed32_taw_real_event_arm,
+                instance_id=iid,
+            )
         fixed32_bracket = (
             _Fixed32TaskBracket(
                 client=fixed32_client,
@@ -6259,6 +6736,7 @@ def main(argv: list[str] | None = None) -> int:
                 instance_id=iid,
                 boundary_snapshot_base=args.fixed32_boundary_snapshot,
                 server_capacity=serving_batch,
+                taw_real_task_arm=taw_real_task_arm,
             )
             if fixed32_client is not None
             else None
@@ -6304,6 +6782,7 @@ def main(argv: list[str] | None = None) -> int:
                 fixed32_bracket is not None
                 and fixed32_bracket.started
                 and not fixed32_bracket.complete
+                and not fixed32_bracket.post_attempted
             ):
                 fixed32_bracket.post(
                     fixed32_bracket.task_dir / "vllm_metrics_post.txt"
