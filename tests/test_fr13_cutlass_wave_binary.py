@@ -51,10 +51,58 @@ def test_install_is_exact_attested_and_production_off(
     assert destination.read_bytes() == payload
     assert destination.stat().st_mode & 0o777 == 0o555
     assert record["production_enabled"] is False
+    assert record["schema"] == "fr13.fixed32.cutlass_streamk_binary.v2"
     assert json.loads(attestation.read_text(encoding="ascii")) == record
 
 
-def test_verify_rejects_symlink(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_direct_selector_requires_and_binds_production_qualification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    payload = b"candidate-extension\n"
+    digest = hashlib.sha256(payload).hexdigest()
+    monkeypatch.setattr(module, "CANDIDATE_SIZE", len(payload))
+    monkeypatch.setattr(module, "CANDIDATE_SHA256", digest)
+    source = tmp_path / "candidate.so"
+    destination = tmp_path / "installed.so"
+    attestation = tmp_path / "attestation.json"
+    source.write_bytes(payload)
+    destination.write_bytes(b"stock-extension\n")
+
+    with pytest.raises(ValueError, match="requires a pinned production sidecar"):
+        module.install_candidate(source, destination, attestation, "streamk_coop128")
+    assert destination.read_bytes() == b"stock-extension\n"
+
+    qualification = {
+        "live_result_sha256": "a" * 64,
+        "candidate_sha256": digest,
+        "patch_source_sha256": "b" * 64,
+        "qualification_source_commit": "c" * 40,
+    }
+    monkeypatch.setattr(
+        module,
+        "_verify_production_qualification",
+        lambda *args: qualification,
+    )
+    record = module.install_candidate(
+        source,
+        destination,
+        attestation,
+        "streamk_coop128",
+        production_sidecar=tmp_path / "pass.json",
+        expected_production_sidecar_sha256="d" * 64,
+    )
+
+    assert record["production_enabled"] is True
+    assert record["qualification"] == {
+        "sidecar_sha256": "d" * 64,
+        **qualification,
+    }
+
+
+def test_verify_rejects_symlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     module = _module()
     target = tmp_path / "candidate.so"
     target.write_bytes(b"x")
