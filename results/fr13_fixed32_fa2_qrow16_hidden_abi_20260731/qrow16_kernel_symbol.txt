@@ -1,0 +1,1 @@
+STT_FUNC STB_GLOBAL STO_ENTRY void flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<256, 16, 64, 1, false, false, cutlass::bfloat16_t, Flash_kernel_traits<256, 16, 64, 1, cutlass::bfloat16_t> >, false, false, false, false, true, false, false, false>(flash::Flash_fwd_params)
