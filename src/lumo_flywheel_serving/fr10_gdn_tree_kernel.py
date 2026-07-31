@@ -32,6 +32,10 @@ H = V_HEADS
 K = 128
 V = 128
 BV = 16
+# The fixed32 path kernel carries one [BLOCK_V, DIM_K] state tile, not the
+# monolith's [N_PAD, BLOCK_V, DIM_K] h_cache. Keep its V tiling independent
+# from the fixed32 monolith's required BV=8 spill guard.
+PATH_BLOCK_V = 32
 # Deployed launch geometry for the served tree-scan: num_warps=8, num_stages
 # = Triton default (left unset). These are the locked cat9 serving values.
 _DEPLOYED_NUM_WARPS = 8
@@ -7790,11 +7794,11 @@ def launch_tree_gdn_prepared(
     else:
         # dummy pointers; RING_EXPORT=False makes every ring store dead code
         ring_k = ring_v = ring_a = ring_b = strict_mask
-    # Resolve launch geometry. The deployed/served path uses BLOCK_V=BV and
-    # num_warps=8 with the Triton default num_stages (unset). The TEST-ONLY
-    # override (FR13_TREE_GDN_GEOM_OVERRIDE) lets the BV/warps A/B arms run; it
-    # is value-neutral (only tiling/warps/stages change). When unset, _geom is
-    # None and the launch below is byte-identical to the prior locked path.
+    # Resolve monolith launch geometry. The deployed monolith uses BLOCK_V=BV
+    # and num_warps=8 with Triton's default num_stages (unset). The TEST-ONLY
+    # override (FR13_TREE_GDN_GEOM_OVERRIDE) lets the BV/warps A/B arms run and
+    # remains the n_pad=32 spill guard above. Fixed32's register-only path
+    # kernel selects PATH_BLOCK_V separately after its schedule is validated.
     _geom = _read_tree_gdn_geom_override()
     _bv = BV
     _num_warps = _DEPLOYED_NUM_WARPS
@@ -7877,11 +7881,25 @@ def launch_tree_gdn_prepared(
         _subtree_state is not None
         and _subtree_state["selfcheck_armed"]
     )
+    _path_bv = _bv
+    if _FR13_FIXED32_MODE is not None:
+        if (
+            _subtree_state is None
+            or _subtree_state.get("schedule") != "fixed32"
+            or _subtree_state.get("fixed32_contract") is None
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32: PATH_BLOCK_V requires the exact fixed32 "
+                "subtree schedule"
+            )
+        _path_bv = PATH_BLOCK_V
 
     def _launch_paths(_out, _count=count_invocation):
         # FR13_SUBTREE_PARALLEL route: one launch per path level; paths in a
-        # level scan concurrently on grid axis 2. RING/RAW semantics match
-        # the monolith per node; PIGGYBACK unsupported (asserted below).
+        # level scan concurrently on grid axis 2. Fixed32 uses an independent
+        # V tile because this kernel carries no N_PAD-sized h_cache; generic
+        # subtree diagnostics retain the monolith's geometry. RING/RAW
+        # semantics match the monolith per node; PIGGYBACK is unsupported.
         st = _subtree_state
         if st is None:
             raise RuntimeError(
@@ -7894,7 +7912,9 @@ def launch_tree_gdn_prepared(
             _npaths,
             _lengths,
         ) in enumerate(st["levels"]):
-            _tree_gdn_path_kernel[(num_vh, triton.cdiv(dim_v, _bv), _npaths)](
+            _tree_gdn_path_kernel[
+                (num_vh, triton.cdiv(dim_v, _path_bv), _npaths)
+            ](
                 q,
                 k,
                 v,
@@ -7924,7 +7944,7 @@ def launch_tree_gdn_prepared(
                 NUM_VH=num_vh,
                 DIM_K=dim_k,
                 DIM_V=dim_v,
-                BLOCK_V=_bv,
+                BLOCK_V=_path_bv,
                 OUTPUT_SCALE=output_scale,
                 USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
                 H0_IS_BANK=h0_is_bank,
