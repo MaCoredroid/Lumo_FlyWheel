@@ -126,6 +126,11 @@ EVIDENCE_SETS = {
         "task_ids": CANONICAL_TASK_IDS,
     },
 }
+B1_DIAGNOSTIC_SUBSET = {
+    "relative_path": "config/fr13_fixed32/subset_b1_diagnostic_one.json",
+    "sha256": "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb",
+    "task_ids": CANONICAL_TASK_IDS[:1],
+}
 
 METRICS = {
     "fwd_s": "vllm:fr13_decode_forward_gpu_seconds_total",
@@ -1547,6 +1552,46 @@ def validate_canonical_subset(path: Path) -> dict[str, Any]:
     return {"task_count": task_count, **binding}
 
 
+def validate_fixed32_run_subset(
+    path: Path,
+    *,
+    b1_diagnostic: bool,
+) -> dict[str, Any]:
+    """Validate either a formal exact4/16 subset or the pinned B1 diagnostic."""
+    if type(b1_diagnostic) is not bool:
+        raise GateError("fixed32 B1 diagnostic selector must be boolean")
+    if not b1_diagnostic:
+        return validate_canonical_subset(path)
+
+    expected = B1_DIAGNOSTIC_SUBSET
+    actual_hash = sha256_file(path)
+    if actual_hash != expected["sha256"]:
+        raise GateError(
+            f"{path}: fixed32 B1 diagnostic subset SHA-256 mismatch; "
+            f"expected {expected['sha256']}, got {actual_hash}"
+        )
+    payload = exact_json(path, label=f"{path}: fixed32 B1 diagnostic subset")
+    if payload.get("dataset_name") != "princeton-nlp/SWE-bench_Verified":
+        raise GateError(f"{path}: B1 diagnostic subset is not SWE-bench_Verified")
+    if payload.get("split") != "test":
+        raise GateError(f"{path}: B1 diagnostic subset split is not test")
+    task_ids = payload.get("instance_ids")
+    if task_ids != list(expected["task_ids"]):
+        raise GateError(
+            f"{path}: B1 diagnostic subset must contain only the pinned "
+            "canonical exact4 task"
+        )
+    return {
+        "task_count": 1,
+        "path": str(path),
+        "sha256": actual_hash,
+        "task_ids": list(expected["task_ids"]),
+        "run_classification": "b1_diagnostic",
+        "gate_eligible": False,
+        "floor_acceptance_eligible": False,
+    }
+
+
 def parse_orchestrator(arm_dir: Path, task_count: int) -> dict[str, Any]:
     path = arm_dir / "swe_orchestrator.log"
     lines = read_text(path).splitlines()
@@ -1585,12 +1630,24 @@ def parse_orchestrator(arm_dir: Path, task_count: int) -> dict[str, Any]:
     }
 
 
-def task_directories(arm_dir: Path, task_count: int) -> list[Path]:
+def task_directories(
+    arm_dir: Path,
+    task_count: int,
+    *,
+    expected_task_ids: list[str] | None = None,
+) -> list[Path]:
     root = arm_dir / "swe_out" / "verified" / "per_task"
     if not root.is_dir():
         raise GateError(f"missing task artifact directory: {root}")
     directories = sorted(path for path in root.iterdir() if path.is_dir())
-    expected_ids = sorted(EVIDENCE_SETS[task_count]["task_ids"])
+    if expected_task_ids is None:
+        expected_ids = sorted(EVIDENCE_SETS[task_count]["task_ids"])
+    else:
+        if len(expected_task_ids) != task_count:
+            raise GateError(
+                f"{root}: expected task ID count differs from requested task count"
+            )
+        expected_ids = sorted(expected_task_ids)
     if [path.name for path in directories] != expected_ids:
         raise GateError(
             f"{root}: task directories are not the exact canonical completed set"
@@ -2999,7 +3056,11 @@ def build_fixed32_chat_traffic_audit(
     dataset_record_digests: dict[str, str],
 ) -> dict[str, Any]:
     task_ids = list(subset["task_ids"])
-    task_dirs = task_directories(arm_dir, len(task_ids))
+    task_dirs = task_directories(
+        arm_dir,
+        len(task_ids),
+        expected_task_ids=task_ids,
+    )
     task_bindings: dict[str, dict[str, Any]] = {}
     audit_tasks: dict[str, dict[str, Any]] = {}
     for task_dir in task_dirs:

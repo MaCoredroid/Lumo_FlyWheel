@@ -34,6 +34,12 @@ ARM=${1:?usage: fr13_bigdenom_swe_serve_variant.sh <arm> [KIND=tail6] [subset.js
 # FR13_CLEANUP_BAKE_PLAN.md): cat33333 head + 6-node Arctic tail, 21 nodes, BV=8.
 KIND=${2:-tail6}
 SUBSET=${3:?subset json}
+FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
+case "$FR13_FIXED32_B1_DIAGNOSTIC" in
+  0|1) ;;
+  *) echo "FAIL: FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1"; exit 2 ;;
+esac
+export FR13_FIXED32_B1_DIAGNOSTIC
 
 RUNROOT=${RUNROOT:-output/fr13_bigdenom_swe}
 ARMDIR="$RUNROOT/$ARM"
@@ -335,6 +341,11 @@ case "$KIND" in
   *) echo "FAIL: unknown KIND=$KIND"; exit 2 ;;
 esac
 
+if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" && -z "$FIXED32_MODE" ]]; then
+  echo "FAIL: FR13_FIXED32_B1_DIAGNOSTIC=1 requires a fixed32 arm"
+  exit 2
+fi
+
 if [[ -n "$FIXED32_MODE" ]]; then
   # Fixed32 must never operate on a reusable Docker name. The launcher-created
   # cidfile promotes this to the immutable container ID after a successful run.
@@ -387,29 +398,74 @@ if [[ -n "$FIXED32_MODE" ]]; then
     }
   [[ "$SWE_CONCURRENCY" == "1" || "$SWE_CONCURRENCY" == "4" ]] \
     || { echo "FAIL: fixed32 concurrency must be exactly 1 or 4"; exit 2; }
+  if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
+    [[ "$MAX_NUM_SEQS_OVR" == "1" && "$SWE_CONCURRENCY" == "1" ]] \
+      || {
+        echo "FAIL: fixed32 B1 diagnostic requires MAX_NUM_SEQS_OVR=1 and SWE_CONCURRENCY=1"
+        exit 2
+      }
+  fi
   mapfile -t _fixed32_subset_binding < <(
-    .venv/bin/python - "$SUBSET" <<'PY'
+    .venv/bin/python - \
+      "$SUBSET" \
+      "$FR13_FIXED32_B1_DIAGNOSTIC" \
+      "$ARMDIR" \
+      "$MAX_NUM_SEQS_OVR" \
+      "$SWE_CONCURRENCY" <<'PY'
+import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, "scripts")
-from fr13_floor_gate import validate_canonical_subset
+from fr13_floor_gate import validate_fixed32_run_subset
 
 
 subset_path = Path(sys.argv[1]).resolve()
-binding = validate_canonical_subset(subset_path)
+diagnostic = sys.argv[2] == "1"
+arm_dir = Path(sys.argv[3]).resolve()
+max_num_seqs = int(sys.argv[4])
+concurrency = int(sys.argv[5])
+binding = validate_fixed32_run_subset(
+    subset_path,
+    b1_diagnostic=diagnostic,
+)
+if diagnostic:
+    output_path = arm_dir / "fixed32_b1_diagnostic.json"
+    payload = {
+        "schema": "fr13-fixed32-b1-diagnostic-v1",
+        "run_classification": "b1_diagnostic",
+        "gate_eligible": False,
+        "floor_acceptance_eligible": False,
+        "max_num_seqs": max_num_seqs,
+        "swe_concurrency": concurrency,
+        "subset_path": str(subset_path),
+        "subset_sha256": binding["sha256"],
+        "task_ids": binding["task_ids"],
+    }
+    temporary = output_path.with_name(output_path.name + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+        + "\n",
+        encoding="ascii",
+    )
+    temporary.replace(output_path)
 print(binding["task_count"])
 print(",".join(binding["task_ids"]))
 PY
   )
   (( $? == 0 && ${#_fixed32_subset_binding[@]} == 2 )) \
     || { echo "FAIL: fixed32 canonical task-set binding"; exit 2; }
-  [[ "${_fixed32_subset_binding[0]}" == "4" \
-     || "${_fixed32_subset_binding[0]}" == "16" ]] \
-    || { echo "FAIL: fixed32 canonical task count is invalid"; exit 2; }
+  if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
+    [[ "${_fixed32_subset_binding[0]}" == "1" ]] \
+      || { echo "FAIL: fixed32 B1 diagnostic task count is invalid"; exit 2; }
+  else
+    [[ "${_fixed32_subset_binding[0]}" == "4" \
+       || "${_fixed32_subset_binding[0]}" == "16" ]] \
+      || { echo "FAIL: fixed32 canonical task count is invalid"; exit 2; }
+  fi
   FR13_FIXED32_INGRESS_TASK_IDS=${_fixed32_subset_binding[1]}
   export FR13_FIXED32_INGRESS_TASK_IDS
-  echo "fixed32 canonical SWE-Verified subset OK: tasks=${_fixed32_subset_binding[0]}"
+  echo "fixed32 SWE-Verified subset OK: tasks=${_fixed32_subset_binding[0]} diagnostic=$FR13_FIXED32_B1_DIAGNOSTIC"
   unset _fixed32_subset_binding
 fi
 
@@ -431,7 +487,8 @@ fixed32_engine_ingress_control(){
     "$FR13_FIXED32_INGRESS_TASK_IDS" \
     "$PORT" \
     "$action" \
-    "$output_path" <<'PY'
+    "$output_path" \
+    "$FR13_FIXED32_B1_DIAGNOSTIC" <<'PY'
 import hashlib
 import json
 import os
@@ -462,6 +519,10 @@ task_ids = sys.argv[2].split(",")
 port = int(sys.argv[3])
 action = sys.argv[4]
 output_path = Path(sys.argv[5])
+diagnostic_text = sys.argv[6]
+if diagnostic_text not in {"0", "1"}:
+    raise SystemExit("fixed32 B1 diagnostic selector is invalid")
+diagnostic = diagnostic_text == "1"
 secret_info = os.lstat(secret_path)
 if (
     not stat.S_ISREG(secret_info.st_mode)
@@ -486,14 +547,17 @@ if (
 ):
     raise SystemExit("fixed32 engine secret contract mismatch")
 if (
-    len(task_ids) not in (4, 16)
+    len(task_ids) not in ((1,) if diagnostic else (4, 16))
     or len(set(task_ids)) != len(task_ids)
+    or (diagnostic and task_ids != ["astropy__astropy-12907"])
     or any(
         re.fullmatch(r"[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+", task_id) is None
         for task_id in task_ids
     )
 ):
-    raise SystemExit("fixed32 engine task set must be canonical exact4/exact16")
+    raise SystemExit(
+        "fixed32 engine task set does not match its formal/diagnostic run class"
+    )
 canonical_task_set_sha256 = hashlib.sha256(
     json.dumps(
         sorted(task_ids),
@@ -621,7 +685,8 @@ write_fixed32_chat_traffic_audit(){
     "$SUBSET" \
     "$ARMDIR" \
     "$FIXED32_MODE" \
-    "$ARMDIR/fixed32_chat_traffic_audit.json" <<'PY'
+    "$ARMDIR/fixed32_chat_traffic_audit.json" \
+    "$FR13_FIXED32_B1_DIAGNOSTIC" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -632,14 +697,20 @@ sys.path.insert(0, str(repo / "scripts"))
 from fr13_floor_gate import (  # noqa: E402
     build_fixed32_chat_traffic_audit,
     pinned_dataset_record_digests,
-    validate_canonical_subset,
+    validate_fixed32_run_subset,
 )
 
 subset_path = Path(sys.argv[1]).resolve()
 arm_dir = Path(sys.argv[2]).resolve()
 mode = sys.argv[3]
 output_path = Path(sys.argv[4]).resolve()
-subset = validate_canonical_subset(subset_path)
+diagnostic_text = sys.argv[5]
+if diagnostic_text not in {"0", "1"}:
+    raise SystemExit("fixed32 B1 diagnostic selector is invalid")
+subset = validate_fixed32_run_subset(
+    subset_path,
+    b1_diagnostic=diagnostic_text == "1",
+)
 task_ids = subset["task_ids"]
 audit = build_fixed32_chat_traffic_audit(
     arm_dir,
@@ -981,7 +1052,7 @@ _fixed32_snapshot_engine_ingress_ledger() {
   fi
   if ! .venv/bin/python - \
       "$snapshot_tmp" "$destination" "$SUBSET" "$ARMDIR_ABS" \
-      "$expected_owner" <<'PY'
+      "$expected_owner" "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" <<'PY'
 import hashlib
 import os
 import stat
@@ -997,7 +1068,7 @@ from fr13_floor_gate import (  # noqa: E402
     fixed32_canonical_task_set_sha256,
     fixed32_task_key_id,
     load_fixed32_ingress_ledger,
-    validate_canonical_subset,
+    validate_fixed32_run_subset,
 )
 
 snapshot_path = Path(sys.argv[1])
@@ -1005,6 +1076,9 @@ destination = Path(sys.argv[2])
 subset_path = Path(sys.argv[3]).resolve()
 arm_dir = Path(sys.argv[4]).resolve()
 expected_owner = int(sys.argv[5])
+diagnostic_text = sys.argv[6]
+if diagnostic_text not in {"0", "1"}:
+    raise SystemExit("fixed32 B1 diagnostic selector is invalid")
 if destination.parent != arm_dir / "logs":
     raise SystemExit("fixed32 engine-ledger destination escaped the arm logs directory")
 
@@ -1074,7 +1148,10 @@ def validate_ledger_bytes(raw, label):
     return hashlib.sha256(raw).hexdigest()
 
 
-subset = validate_canonical_subset(subset_path)
+subset = validate_fixed32_run_subset(
+    subset_path,
+    b1_diagnostic=diagnostic_text == "1",
+)
 task_ids = subset["task_ids"]
 canonical_task_keys = {fixed32_task_key_id(task_id) for task_id in task_ids}
 canonical_task_set_sha256 = fixed32_canonical_task_set_sha256(task_ids)
