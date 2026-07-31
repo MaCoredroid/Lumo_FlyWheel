@@ -1,0 +1,5 @@
+docker_full.log:328:(EngineCore pid=257) [FR13_FIXED32_TAW_NATIVE_PRECOMPUTE] PASS root_checks=128 probability_mismatches=0 product_mismatches=0 reference_returned=1
+docker_full.log:341:(EngineCore pid=257) [FR13_FIXED32_TAW_NATIVE_PRECOMPUTE] PASS root_checks=256 probability_mismatches=0 product_mismatches=0 reference_returned=1
+docker_full.log:354:(EngineCore pid=257) [FR13_FIXED32_TAW_NATIVE_PRECOMPUTE] PASS root_checks=384 probability_mismatches=0 product_mismatches=0 reference_returned=1
+docker_full.log:369:(EngineCore pid=257) [FR13_FIXED32_TAW_NATIVE_PRECOMPUTE] PASS root_checks=512 probability_mismatches=0 product_mismatches=0 reference_returned=1
+docker_full.log:394:(EngineCore pid=257) [FR13_FIXED32_TAW_NATIVE_PRECOMPUTE] PASS root_checks=640 probability_mismatches=0 product_mismatches=0 reference_returned=1
