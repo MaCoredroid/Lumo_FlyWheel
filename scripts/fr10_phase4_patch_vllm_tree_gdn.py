@@ -19428,38 +19428,39 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     "FR13_DRAFT_VOCAB_ROOT=1 requires "
                     "FR13_DRAFT_VOCAB_K>=128"
                 )
-            _fr13_dh_m32_raw = os.environ.get(
-                "FR13_DRAFT_HEAD_M32", "0"
+            _fr13_dh_rows_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_PAD_ROWS", "0"
             )
             _fr13_dh_ab_raw = os.environ.get(
-                "FR13_DRAFT_HEAD_M32_BYTE_AB", "0"
+                "FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB", "0"
             )
-            if _fr13_dh_m32_raw not in ("0", "1"):
+            if _fr13_dh_rows_raw not in ("0", "32", "64", "128"):
                 raise RuntimeError(
-                    "FR13_DRAFT_HEAD_M32 must be exactly 0 or 1"
+                    "FR13_DRAFT_HEAD_PAD_ROWS must be exactly one of "
+                    "0, 32, 64, or 128"
                 )
             if _fr13_dh_ab_raw not in ("0", "1"):
                 raise RuntimeError(
-                    "FR13_DRAFT_HEAD_M32_BYTE_AB must be exactly 0 or 1"
+                    "FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB must be exactly 0 or 1"
                 )
-            _fr13_dh_m32 = _fr13_dh_m32_raw == "1"
+            _fr13_dh_rows = int(_fr13_dh_rows_raw)
             _fr13_dh_ab = _fr13_dh_ab_raw == "1"
-            if _fr13_dh_m32 and _fr13_dh_ab:
+            if _fr13_dh_rows and _fr13_dh_ab:
                 raise RuntimeError(
-                    "FR13 draft-head M32 candidate and byte-A/B modes are "
-                    "mutually exclusive"
+                    "FR13 draft-head padded candidate and all-row byte-A/B "
+                    "modes are mutually exclusive"
                 )
-            if (_fr13_dh_m32 or _fr13_dh_ab) and (
+            if (_fr13_dh_rows or _fr13_dh_ab) and (
                 not _fr13_is_fixed32
                 or not _fr13_dvk_root
                 or not _fr13_single_logits
                 or _fr13_dvk_configured != 65536
             ):
                 raise RuntimeError(
-                    "FR13 draft-head M32 requires exact fixed32, root subset, "
-                    "single-logits, and FR13_DRAFT_VOCAB_K=65536"
+                    "FR13 draft-head padding requires exact fixed32, root "
+                    "subset, single-logits, and FR13_DRAFT_VOCAB_K=65536"
                 )
-            self._fr13_dh_m32_active = _fr13_dh_m32
+            self._fr13_dh_pad_rows = _fr13_dh_rows
             self._fr13_dh_ab_active = _fr13_dh_ab
 
             def _fr13_dvk_prepare():
@@ -19552,8 +19553,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             flush=True,
                         )
                 if (
-                    (_fr13_dh_m32 or _fr13_dh_ab)
-                    and not getattr(self, "_fr13_dh_m32_ready", False)
+                    (_fr13_dh_rows or _fr13_dh_ab)
+                    and not getattr(self, "_fr13_dh_pad_ready", False)
                 ):
                     _fr13_dh_sh = self._fr13_dvk_shim
                     _fr13_dh_w = _fr13_dh_sh.weight
@@ -19565,46 +19566,62 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         or not _fr13_dh_w.is_contiguous()
                     ):
                         raise RuntimeError(
-                            "FR13 draft-head M32 requires contiguous BF16 "
+                            "FR13 draft-head padding requires contiguous BF16 "
                             "UnquantizedLinearMethod weight[65536,5120]"
                         )
-                    self._fr13_dh_m32_input = torch.empty(
-                        (32, 5120),
-                        dtype=torch.bfloat16,
-                        device=_fr13_dh_w.device,
+                    _fr13_dh_active_rows = (
+                        (32, 64, 128)
+                        if _fr13_dh_ab
+                        else (_fr13_dh_rows,)
                     )
-                    self._fr13_dh_m32_output = torch.empty(
-                        (32, 65536),
-                        dtype=torch.bfloat16,
-                        device=_fr13_dh_w.device,
-                    )
+                    self._fr13_dh_pad_inputs = {
+                        _fr13_dh_r: torch.empty(
+                            (_fr13_dh_r, 5120),
+                            dtype=torch.bfloat16,
+                            device=_fr13_dh_w.device,
+                        )
+                        for _fr13_dh_r in _fr13_dh_active_rows
+                    }
+                    self._fr13_dh_pad_outputs = {
+                        _fr13_dh_r: torch.empty(
+                            (_fr13_dh_r, 65536),
+                            dtype=torch.bfloat16,
+                            device=_fr13_dh_w.device,
+                        )
+                        for _fr13_dh_r in _fr13_dh_active_rows
+                    }
                     self._fr13_dh_ab_mismatches = torch.zeros(
-                        (), dtype=torch.int64, device=_fr13_dh_w.device
+                        (3,), dtype=torch.int64, device=_fr13_dh_w.device
+                    )
+                    self._fr13_dh_ab_compares = torch.zeros(
+                        (3,), dtype=torch.int64, device=_fr13_dh_w.device
                     )
                     self._fr13_dh_ab_root_checks = 0
-                    self._fr13_dh_m32_ready = True
+                    self._fr13_dh_pad_ready = True
                     print(
-                        "[FR13_DRAFT_HEAD_M32] static buffers ready "
-                        f"candidate={int(_fr13_dh_m32)} "
-                        f"byte_ab={int(_fr13_dh_ab)} rows=32 "
+                        "[FR13_DRAFT_HEAD_PAD] static buffers ready "
+                        f"candidate_rows={_fr13_dh_rows} "
+                        f"all_row_byte_ab={int(_fr13_dh_ab)} "
+                        f"allocated_rows={_fr13_dh_active_rows} "
                         "vocab=65536 hidden=5120",
                         flush=True,
                     )
                 return _fr13_dvk_configured, _fr13_dvk_full
 
-            def _fr13_dh_m32_logits(_sh, _h):
+            def _fr13_dh_pad_logits(_sh, _h, _rows):
                 if (
-                    not getattr(self, "_fr13_dh_m32_ready", False)
+                    not getattr(self, "_fr13_dh_pad_ready", False)
+                    or _rows not in (32, 64, 128)
                     or tuple(_h.shape) != (1, 5120)
                     or _h.dtype != torch.bfloat16
                     or _h.device != _sh.weight.device
                 ):
                     raise RuntimeError(
-                        "FR13 draft-head M32 engaged outside exact B1 "
+                        "FR13 draft-head padding engaged outside exact B1 "
                         "BF16 hidden[1,5120] contract"
                     )
-                _fr13_dh_in = self._fr13_dh_m32_input
-                _fr13_dh_out = self._fr13_dh_m32_output
+                _fr13_dh_in = self._fr13_dh_pad_inputs[_rows]
+                _fr13_dh_out = self._fr13_dh_pad_outputs[_rows]
                 _fr13_dh_in.copy_(_h.expand_as(_fr13_dh_in))
                 torch.mm(_fr13_dh_in, _sh.weight.t(), out=_fr13_dh_out)
                 return _fr13_dh_out[:1]
@@ -19614,50 +19631,65 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 # A full-head fallback always returns map=None.
                 try:
                     _sh = self._fr13_dvk_shim
-                    _fr13_dh_m32_on = getattr(
-                        self, "_fr13_dh_m32_active", False
+                    _fr13_dh_rows_on = int(
+                        getattr(self, "_fr13_dh_pad_rows", 0)
                     )
                     _fr13_dh_ab_on = getattr(
                         self, "_fr13_dh_ab_active", False
                     )
-                    if _fr13_dh_m32_on or _fr13_dh_ab_on:
+                    if _fr13_dh_rows_on or _fr13_dh_ab_on:
                         if _fr13_dh_ab_on and not torch.cuda.is_current_stream_capturing():
                             _fr13_dh_checks = int(
                                 self._fr13_dh_ab_root_checks
                             )
                             if _fr13_dh_checks:
-                                _fr13_dh_bad = int(
-                                    self._fr13_dh_ab_mismatches.item()
+                                _fr13_dh_bad = tuple(
+                                    int(_fr13_dh_v)
+                                    for _fr13_dh_v in self._fr13_dh_ab_mismatches.tolist()
                                 )
-                                if _fr13_dh_bad:
+                                if any(_fr13_dh_bad):
                                     raise AssertionError(
-                                        "FR13_DRAFT_HEAD_M32_BYTE_AB full-logit "
-                                        f"mismatch count={_fr13_dh_bad}"
+                                        "FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB "
+                                        "full-logit mismatch counts "
+                                        f"rows32_64_128={_fr13_dh_bad}"
                                     )
                                 if _fr13_dh_checks % 128 == 0:
+                                    _fr13_dh_done = tuple(
+                                        int(_fr13_dh_v)
+                                        for _fr13_dh_v in self._fr13_dh_ab_compares.tolist()
+                                    )
                                     print(
-                                        "[FR13_DRAFT_HEAD_M32_BYTE_AB] "
+                                        "[FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB] "
                                         f"PASS root_checks={_fr13_dh_checks} "
+                                        f"compares32_64_128={_fr13_dh_done} "
                                         "full_logit_bit_mismatches=0",
                                         flush=True,
                                     )
                             self._fr13_dh_ab_root_checks = (
                                 _fr13_dh_checks + 1
                             )
-                        _fr13_dh_candidate = _fr13_dh_m32_logits(_sh, _h)
                         if _fr13_dh_ab_on:
                             _fr13_dh_reference = _sh.quant_method.apply(
                                 _sh, _h, bias=None
                             )
-                            self._fr13_dh_ab_mismatches.add_(
-                                torch.count_nonzero(
-                                    _fr13_dh_candidate.view(torch.int16)
-                                    != _fr13_dh_reference.view(torch.int16)
+                            for _fr13_dh_i, _fr13_dh_r in enumerate(
+                                (32, 64, 128)
+                            ):
+                                _fr13_dh_candidate = _fr13_dh_pad_logits(
+                                    _sh, _h, _fr13_dh_r
                                 )
-                            )
+                                self._fr13_dh_ab_mismatches[_fr13_dh_i].add_(
+                                    torch.count_nonzero(
+                                        _fr13_dh_candidate.view(torch.int16)
+                                        != _fr13_dh_reference.view(torch.int16)
+                                    )
+                                )
+                                self._fr13_dh_ab_compares[_fr13_dh_i].add_(1)
                             _logits = _fr13_dh_reference
                         else:
-                            _logits = _fr13_dh_candidate
+                            _logits = _fr13_dh_pad_logits(
+                                _sh, _h, _fr13_dh_rows_on
+                            )
                     else:
                         _logits = _sh.quant_method.apply(
                             _sh, _h, bias=None
@@ -19667,11 +19699,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
                 except Exception as _e:
                     if (
-                        getattr(self, "_fr13_dh_m32_active", False)
+                        getattr(self, "_fr13_dh_pad_rows", 0)
                         or getattr(self, "_fr13_dh_ab_active", False)
                     ):
                         raise RuntimeError(
-                            "FR13 draft-head M32 failed its strict runtime "
+                            "FR13 draft-head padding failed its strict runtime "
                             "contract"
                         ) from _e
                     self._fr13_dvk_dead = True
