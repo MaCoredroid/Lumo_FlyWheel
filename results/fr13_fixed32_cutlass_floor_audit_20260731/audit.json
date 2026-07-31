@@ -1,0 +1,137 @@
+{
+  "schema": "fr13.fixed32.cutlass_floor_audit.v1",
+  "created_at_utc": "2026-07-31T13:49:31Z",
+  "status": "source_only_default_off",
+  "performance_claim": false,
+  "acceptance_valid": false,
+  "gpu_used_for_this_artifact": false,
+  "pinned_source": {
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "vllm_version": "0.19.2rc1.dev134+gfe9c3d6c5",
+    "vllm_image_digest": "sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "live_caller": "csrc/libtorch_stable/quantization/w8a8/cutlass/c3x/cutlass_gemm_caller.cuh",
+    "live_caller_sha256": "c3c606d787502fc7cebadd288f386e3913f5ed5539df12236e9bf0bd9d49fb8d",
+    "target_extension": "_C_stable_libtorch",
+    "blockwise_dispatch": "csrc/libtorch_stable/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh",
+    "blockwise_dispatch_sha256": "6e1df3f4701f58f233b3831b848c7bbf7936e6cb34b3bc28ded208fd66c48a7f",
+    "b1_kernel": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+    "b1_tile_mnk": [128, 32, 128],
+    "cluster_mnk": [1, 1, 1],
+    "small_m_swaps_ab": true
+  },
+  "real_swe_verified_b1_attribution": {
+    "source": "results/fr13_fixed32_b1_nsys_20260731T013952Z_curated/nsys_attribution.json",
+    "pre_final_kernel_stack": true,
+    "attribution_only": true,
+    "sfwd_events": 882,
+    "cutlass_instances": 225607,
+    "observed_cutlass_launches_per_event": 255.79024943310658,
+    "nominal_cutlass_launches_per_event": 256,
+    "cutlass_ms_per_event": 112.31295398412699,
+    "sfwd_envelope_ms_per_event": 174.81367329818593,
+    "sfwd_top20_ms_per_event": 173.37258670975055,
+    "envelope_minus_top20_ms_per_event": 1.4410865884353825
+  },
+  "cutlass_tensor_traffic_b1": {
+    "fp8_weight_bytes": 23823646720,
+    "fp32_weight_scale_bytes": 5816320,
+    "fp8_activation_read_bytes": 69206016,
+    "fp32_activation_scale_read_bytes": 2162688,
+    "bf16_output_write_bytes": 243269632,
+    "minimum_explicit_bytes": 24144101376,
+    "floor_ms_at_273_gb_s": 88.43993178021978,
+    "observed_effective_gb_s": 214.97165304201906,
+    "residual_ms_above_traffic_floor": 23.87302220390721,
+    "flops": 1524713390080,
+    "arithmetic_intensity_flop_per_byte": 63.150554511654484,
+    "memory_roofline_compute_threshold_tflop_s": 17.240098153579844
+  },
+  "floor_separation": {
+    "target_plus_verifier_weight_bytes": 26925196288,
+    "target_plus_verifier_floor_ms": 98.62709263,
+    "naive_cross_slice_difference_ms": 13.685861354126992,
+    "cross_slice_difference_is_cutlass_gap": false,
+    "reason": "the floor includes the separate BF16 verifier head and non-CUTLASS target weights"
+  },
+  "projection_classes": [
+    {
+      "name": "gate_up",
+      "calls": 64,
+      "n": 34816,
+      "k": 5120,
+      "fp8_weight_bytes_per_event": 11408506880,
+      "ctas_per_call_b1": 272,
+      "waves_on_48_sms": 6,
+      "whole_launch_slot_utilization": 0.9444444444444444
+    },
+    {
+      "name": "down",
+      "calls": 64,
+      "n": 5120,
+      "k": 17408,
+      "fp8_weight_bytes_per_event": 5704253440,
+      "ctas_per_call_b1": 40,
+      "waves_on_48_sms": 1,
+      "whole_launch_slot_utilization": 0.8333333333333334
+    },
+    {
+      "name": "attention_out",
+      "calls": 64,
+      "n": 5120,
+      "k": 6144,
+      "fp8_weight_bytes_per_event": 2013265920,
+      "ctas_per_call_b1": 40,
+      "waves_on_48_sms": 1,
+      "whole_launch_slot_utilization": 0.8333333333333334
+    },
+    {
+      "name": "gdn_qkvz",
+      "calls": 48,
+      "n": 16384,
+      "k": 5120,
+      "fp8_weight_bytes_per_event": 4026531840,
+      "ctas_per_call_b1": 128,
+      "waves_on_48_sms": 3,
+      "whole_launch_slot_utilization": 0.8888888888888888
+    },
+    {
+      "name": "full_attention_qkv",
+      "calls": 16,
+      "n": 8192,
+      "k": 5120,
+      "fp8_weight_bytes_per_event": 671088640,
+      "ctas_per_call_b1": 64,
+      "waves_on_48_sms": 2,
+      "whole_launch_slot_utilization": 0.6666666666666666
+    }
+  ],
+  "wave_tail_model": {
+    "full_wave_equivalent_weight_bytes": 26877100032,
+    "weight_bytes_above_compulsory": 3053453312,
+    "equivalent_ms_at_273_gb_s": 11.184810666666666,
+    "measured": false,
+    "interpretation": "geometry-only upper-bound model; NCU is required to separate DRAM traffic, L2 reuse, and residency"
+  },
+  "candidate": {
+    "name": "fixed32_cutlass_programmatic_dependent_launch",
+    "environment_variable": "FR13_FIXED32_CUTLASS_PDL",
+    "enabled_value": "1",
+    "default_enabled": false,
+    "row_gate": [32, 64, 96, 128],
+    "minimum_k": 5120,
+    "handles_swapped_problem_shape": true,
+    "changes_math": false,
+    "changes_tensor_bytes": false,
+    "changes_kernel_selection": false,
+    "launch_idle_ceiling_ms_per_b1_event": 1.4410865884353825,
+    "built": false,
+    "byte_gate_passed": false,
+    "b1_real_swe_measured": false,
+    "b4_real_swe_measured": false
+  },
+  "parked_without_live_counters": [
+    "K tile or stage-count changes",
+    "cluster shape changes",
+    "new Stream-K scheduler instantiation"
+  ]
+}
