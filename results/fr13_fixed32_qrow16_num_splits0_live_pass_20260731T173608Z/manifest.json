@@ -1,0 +1,93 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow16_num_splits0_live_pass.v1",
+  "status": "PASS",
+  "branch": "agent/fixed32-qrow16-num-splits-fix",
+  "source_commit": "f5c4d0b2d841328f010dbfc652f1708955756d45",
+  "run_root": "output/fr13_b1_qrow16_num_splits0_live_gate_20260731T172755Z",
+  "arm": "hydra27_fixed32_qrow16_num_splits0_20260731T172755Z",
+  "started_at": "2026-07-31T17:28:23Z",
+  "ended_at": "2026-07-31T17:41:20Z",
+  "run_classification": {
+    "name": "b1_diagnostic",
+    "gate_eligible": false,
+    "floor_acceptance_eligible": false,
+    "swe_concurrency": 1,
+    "max_num_seqs": 1
+  },
+  "candidate": {
+    "sha256": "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86",
+    "size": 299507792,
+    "runtime_source_destination_byte_identical": true,
+    "num_splits": 0,
+    "dispatch": "qrow16 internal exact-geometry require"
+  },
+  "live_gate": {
+    "schema": "fr13.fixed32.fa2_qrow16_live_paged_ab.v1",
+    "status": "PASS",
+    "raw_sha256": "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77",
+    "canonical_sha256": "2306deb1f36854a9a6419eb1506fe4969cf20c62f9e9bafb5abe13b4e35ac78e",
+    "performance_measurement": false,
+    "served_return": "stock captured graph output unchanged",
+    "runtime_mode": "FULL",
+    "physical_rows": 32,
+    "graph_id": 274035584346128,
+    "layer_name": "language_model.model.layers.3.self_attn.attn",
+    "output": {
+      "dtype": "torch.bfloat16",
+      "bytes": 393216,
+      "raw_byte_mismatches": 0,
+      "sha256": "058930e0f5b77695f3f37ef53540dee09bf36996f32143074c5c1e14011f04f4"
+    },
+    "lse": {
+      "dtype": "torch.float32",
+      "bytes": 3072,
+      "raw_byte_mismatches": 0,
+      "sha256": "2adbdcffb3aa7d67ebe4327e14801b94ed9f4276bc6a40af9ec3347af4d02068"
+    }
+  },
+  "production_sidecar": {
+    "schema": "fr13.fixed32.fa2_qrow16_production_pass.v1",
+    "raw_sha256": "9d2d59f4bb2b6d9a202a60f41c71ff69f7e7c60b24dade34932b3c1ceb6e407f",
+    "canonical_sha256": "d97abcbf9c9031744c01cf635605b035ada229bdbed20077f2ac8947872e1bdf",
+    "required_runtime": "fixed32 B1 FULL",
+    "scope": "qrow16 exact target tree attention only"
+  },
+  "real_workload": {
+    "suite": "SWE-Verified",
+    "task_ids": [
+      "astropy__astropy-12907"
+    ],
+    "verdict": "resolved",
+    "failure_mode": "tests_passed",
+    "harness_exit_code": 0,
+    "orchestrator_exit_code": 0,
+    "patch_bytes": 504
+  },
+  "lifecycle": {
+    "complete_work_census_events": 810,
+    "first_forward_step": 0,
+    "last_forward_step": 809,
+    "dfwd_pending": 0,
+    "cfwd_pending": 0,
+    "sfwd_pending": 0,
+    "engine_requests_accepted_completed": 13,
+    "proxy_requests_accepted_completed": 13,
+    "proxy_failed_attempts": 0,
+    "work_census_raw_sha256": "2650d8be7adcebf83580f7d487d977d105483b0d8d346b43798f23ec3f396054",
+    "work_census_gzip_sha256": "84c28253bbee42f758afa8469a85e6a28162261346fed56608e2e4dbff4904be",
+    "arm_done_swerc": 0,
+    "container_absent_after_teardown": true,
+    "gpu_compute_apps_empty_after_teardown": true
+  },
+  "claims": {
+    "real_swe_verified_task": true,
+    "qrow16_live_correctness_gate_passed": true,
+    "production_sidecar_issued": true,
+    "candidate_served_to_task": false,
+    "performance_claim": false,
+    "tps_claim": false,
+    "hardware_floor_claim": false,
+    "acceptance_claim": false
+  },
+  "next_gate": "real fixed32 B1 run with attested qrow16 production selector serving this exact candidate"
+}

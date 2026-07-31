@@ -1,0 +1,5 @@
+observed_at=2026-07-31T17:41:20Z
+container_filter=fr13-bigdenom-hydra27_fixed32_qrow16_num_splits0_20260731T172755Z
+matching_containers=0
+nvidia_compute_apps=0
+launcher_arm_done_swerc=0
