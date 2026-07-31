@@ -2632,6 +2632,8 @@ def _fixed32_real_task_provenance(
     task_key_id: str,
     task_auth_before: dict[str, Any],
     task_auth_after: dict[str, Any],
+    metrics_pre_path: Path | None = None,
+    metrics_post_path: Path | None = None,
 ) -> dict[str, Any]:
     """Validate and describe the real offloaded model run for one fixed32 task.
 
@@ -3038,12 +3040,52 @@ def _fixed32_real_task_provenance(
             f"fixed32 real-task provenance {instance_id}: "
             "trace contains no nonempty assistant/model output"
         )
+    metric_paths = (metrics_pre_path, metrics_post_path)
+    if any(path is not None for path in metric_paths) and any(
+        path is None for path in metric_paths
+    ):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            "pre/post vLLM metrics must be supplied together"
+        )
+    metrics_pre_raw: bytes | None = None
+    metrics_post_raw: bytes | None = None
+    if metrics_pre_path is not None and metrics_post_path is not None:
+        for label, path in (
+            ("pre", metrics_pre_path),
+            ("post", metrics_post_path),
+        ):
+            if not path.is_file() or path.is_symlink():
+                raise Fixed32BoundaryError(
+                    f"fixed32 real-task provenance {instance_id}: "
+                    f"{label} vLLM metrics are missing or symlinked"
+                )
+        try:
+            metrics_pre_raw = metrics_pre_path.read_bytes()
+            metrics_post_raw = metrics_post_path.read_bytes()
+        except OSError as exc:
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                f"cannot read vLLM metrics: {type(exc).__name__}: {exc}"
+            ) from exc
+        if not metrics_pre_raw or not metrics_post_raw:
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                "pre/post vLLM metrics are empty"
+            )
     try:
         trace_requests = fixed32_contract.validate_fixed32_trace_model_requests(
             events,
             expected_session_id=fixed32_contract.fixed32_trace_session_id(
                 instance_id
             ),
+            expected_completed_logical_model_requests=(
+                task_auth_deltas["completed_logical_model_requests"]
+                if metrics_pre_raw is not None
+                else None
+            ),
+            metrics_pre=metrics_pre_raw,
+            metrics_post=metrics_post_raw,
         )
     except fixed32_contract.ContractError as exc:
         raise Fixed32BoundaryError(
@@ -3125,6 +3167,17 @@ def _fixed32_real_task_provenance(
             attestation_artifacts["qwen_runtime_attestation_post.json"]
         ).hexdigest(),
         "trace_completed_logical_model_requests": len(qwen_model_request_ids),
+        "hidden_successful_compaction_model_requests": trace_requests.get(
+            "hidden_successful_compaction_model_requests",
+            trace_requests.get("hidden_compaction_model_requests", 0),
+        ),
+        "hidden_failed_compaction_model_requests": trace_requests.get(
+            "hidden_failed_compaction_model_requests",
+            0,
+        ),
+        "qwen_compaction_metric_evidence": trace_requests.get(
+            "qwen_compaction_metric_evidence"
+        ),
         "trace_model_request_ids_sha256": hashlib.sha256(
             json.dumps(
                 request_id_digests,
@@ -5554,6 +5607,7 @@ def _process_one(
     }
     task_bearer: str | None = None
     task_key_id: str | None = None
+    fixed32_initial_provenance_args: dict[str, Any] | None = None
     if fixed32_bracket is not None:
         task_bearer, task_key_id = _fixed32_task_auth(instance_id)
         summary["fixed32_dataset_record_sha256"] = hashlib.sha256(
@@ -5664,14 +5718,14 @@ def _process_one(
                 task_bearer=task_bearer,
                 task_key_id=task_key_id,
             )
-            summary["fixed32_real_task_provenance"] = _fixed32_real_task_provenance(
-                instance_id=instance_id,
-                trace_path=qwen_trace,
-                agent_meta=codex_meta,
-                task_key_id=task_key_id,
-                task_auth_before=task_auth_before,
-                task_auth_after=task_auth_after,
-            )
+            fixed32_initial_provenance_args = {
+                "instance_id": instance_id,
+                "trace_path": qwen_trace,
+                "agent_meta": codex_meta,
+                "task_key_id": task_key_id,
+                "task_auth_before": task_auth_before,
+                "task_auth_after": task_auth_after,
+            }
         summary["agent"] = codex_meta
         # Backward-compat: keep the legacy "codex" key so existing reducers
         # (meta.get("codex") in fr13_bigdenom_swe_serve.sh, fr13_standard_metrics.py)
@@ -5822,6 +5876,17 @@ def _process_one(
 
     if fixed32_bracket is not None:
         summary["fixed32_task_boundary"] = fixed32_bracket.post(metrics_post)
+        if fixed32_initial_provenance_args is None:
+            raise Fixed32BoundaryError(
+                "fixed32 initial task provenance inputs are unavailable"
+            )
+        summary["fixed32_real_task_provenance"] = (
+            _fixed32_real_task_provenance(
+                **fixed32_initial_provenance_args,
+                metrics_pre_path=metrics_pre,
+                metrics_post_path=metrics_post,
+            )
+        )
     else:
         metrics_post.write_text(_metrics_snapshot(DEFAULT_METRICS_URL), encoding="utf-8")
 
