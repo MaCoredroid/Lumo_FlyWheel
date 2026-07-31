@@ -1,0 +1,118 @@
+{
+  "schema": "fr13.fixed32.cutlass_wave_candidate.v2",
+  "created_at_utc": "2026-07-31T14:31:58Z",
+  "status": "source_only_default_off",
+  "performance_claim": false,
+  "acceptance_valid": false,
+  "gpu_used_for_this_artifact": false,
+  "pinned_source": {
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "vllm_version": "0.19.2rc1.dev134+gfe9c3d6c5",
+    "vllm_cmake_sha256": "b12cd47f5761442551d6e1966e8a37ad94175382c1b014d2b65f67b74fbb6e3b",
+    "cutlass_tag": "v4.4.2",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "dispatch": "csrc/libtorch_stable/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh",
+    "dispatch_unpatched_sha256": "6e1df3f4701f58f233b3831b848c7bbf7936e6cb34b3bc28ded208fd66c48a7f",
+    "dispatch_patched_sha256": "3eb3a2e1bc59cbc16c8304cdc5e2853b1601e6c4b27df76a0c958fa3d89f82b4",
+    "target_extension": "_C_stable_libtorch",
+    "only_direct_including_translation_unit": "csrc/libtorch_stable/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8.cu"
+  },
+  "cutlass_evidence": {
+    "blockwise_builder_sha256": "40409c39fbbc5f023e8030472efab2a7b94baf41109eaa59fb009e52ce0d6509",
+    "tile_scheduler_selector_sha256": "acc90548b9e2b19f944764ced57e1459d5c2ed7e118d6a1af476add26c3d5e73",
+    "persistent_scheduler_sha256": "54ebcaee08d4fc0663169f97c7fa665cec90d29ce5d01336c2c714f2a911b010",
+    "streamk_scheduler_sha256": "f9baf471896f03c530344a489942758f48c63acd6f31f5d6a41b3e0da0f8eee4",
+    "scheduler_params_sha256": "ef48a12e8920183e88259d0b685279c2232fc2fb12c4fb4db7e8d0fbfdc019e9",
+    "pingpong_kernel_sha256": "41f0cc048be7a70c6dbd72afb5509b71991b54bd4e01dfa40702a1e2dffc3781",
+    "default_sm120_scheduler": "PersistentTileSchedulerSm100",
+    "streamk_sm120_scheduler": "PersistentTileSchedulerSm100StreamK",
+    "streamk_default_reduction": "deterministic",
+    "streamk_default_decomposition": "heuristic",
+    "pingpong_streamk_legal": false,
+    "swapped_tile_m64_legal": false,
+    "minimum_legal_swapped_tile_m": 128,
+    "reason": "the live swapped scale granularity M is 128, and CUTLASS requires TileM modulo ScaleGranularityM to equal zero"
+  },
+  "selector": {
+    "environment_variable": "FR13_FIXED32_CUTLASS_WAVE",
+    "default": "stock",
+    "unknown_value": "stock",
+    "values": [
+      "streamk_coop64",
+      "streamk_coop128"
+    ],
+    "row_gate": [32, 64, 96, 128],
+    "projection_gate_nk": [
+      [34816, 5120],
+      [5120, 17408],
+      [5120, 6144],
+      [16384, 5120],
+      [8192, 5120]
+    ]
+  },
+  "invariants": {
+    "input_dtype": "fp8_e4m3",
+    "scale_dtype": "fp32",
+    "accumulator_dtype": "fp32",
+    "output_dtype": "unchanged_bf16_or_fp16",
+    "k_tile": 128,
+    "cluster_mnk": [1, 1, 1],
+    "split_k": false,
+    "stream_k": true,
+    "stream_k_reduction": "deterministic",
+    "scale_indexing_changed": false,
+    "fp32_addition_order_may_change": true,
+    "byte_equality_required": true
+  },
+  "candidates": {
+    "streamk_coop64": {
+      "b1_tile_mnk": [128, 32, 128],
+      "b1_swap_ab": true,
+      "b1_schedule": "cooperative_streamk",
+      "b4_full_tile_mnk": [64, 128, 128],
+      "b4_full_swap_ab": false,
+      "b4_full_schedule": "cooperative_streamk",
+      "mainloop_stages": "auto"
+    },
+    "streamk_coop128": {
+      "b1_tile_mnk": [128, 32, 128],
+      "b1_swap_ab": true,
+      "b1_schedule": "cooperative_streamk",
+      "b4_full_tile_mnk": [128, 128, 128],
+      "b4_full_swap_ab": false,
+      "b4_full_schedule": "cooperative_streamk",
+      "mainloop_stages": "auto"
+    }
+  },
+  "b1_model": {
+    "measured_cutlass_ms_per_event": 112.312954,
+    "explicit_traffic_floor_ms_per_event_at_273_gbps": 88.439932,
+    "measured_residual_ms_per_event": 23.873022,
+    "compulsory_weight_bytes_per_event": 23823646720,
+    "full_tile_equivalent_bytes_per_event": 26877100032,
+    "ideal_streamk_equivalent_bytes_per_event": 23894949888,
+    "modeled_streamk_recovery_bytes_per_event": 2982150144,
+    "modeled_streamk_recovery_ms_per_event_at_273_gbps": 10.923627,
+    "modeled_residual_after_ideal_streamk_ms_per_event": 12.949395,
+    "timing_claim": false
+  },
+  "b4_row_model": {
+    "physical_rows": 128,
+    "coop64_logical_output_tiles_per_event": 59392,
+    "coop128_logical_output_tiles_per_event": 29696,
+    "logical_tile_reduction_fraction": 0.5,
+    "dram_traffic_reduction_claim": false
+  },
+  "required_gates": {
+    "build_completed": false,
+    "streamk_kernel_identity_captured": false,
+    "nonzero_streamk_workspace_captured": false,
+    "b1_real_swe_full_logits_state_byte_equal": false,
+    "b4_exact4_full_logits_state_byte_equal": false,
+    "canonical_exact4_b1_real_swe_measured": false,
+    "canonical_exact4_b4_real_swe_measured": false,
+    "canonical_exact16_winner_measured": false,
+    "synthetic_timing_allowed": false,
+    "one_task_acceptance_allowed": false
+  }
+}
