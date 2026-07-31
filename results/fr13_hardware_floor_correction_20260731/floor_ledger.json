@@ -1,0 +1,59 @@
+{
+  "bandwidth_bytes_per_s": 273000000000,
+  "components": {
+    "draft_64k_bf16_head": {
+      "bytes": 671088640,
+      "element_bytes": 2,
+      "hidden_size": 5120,
+      "rows": 65536
+    },
+    "full_bf16_head": {
+      "bytes": 2542796800,
+      "element_bytes": 2,
+      "hidden_size": 5120,
+      "rows": 248320
+    },
+    "mtp_forward": {
+      "bytes": 2385998720,
+      "bytes_per_pass": 477199744,
+      "initial_passes": 1,
+      "passes": 5,
+      "post_root_graph_passes": 4,
+      "source": "logical MTP forward tensor byte ledger"
+    },
+    "target_model": {
+      "bytes": 24382399488,
+      "source": "logical target-model weight tensor byte ledger"
+    }
+  },
+  "formula": "floor_ms = mandatory_weight_bytes * 1000 / bandwidth_bytes_per_s",
+  "production_invariants": {
+    "drafter_head_passes_per_event": 5,
+    "initial_mtp_forward_passes_per_event": 1,
+    "post_root_graph_mtp_forward_passes_per_event": 4,
+    "total_mtp_forward_passes_per_event": 5
+  },
+  "scenarios": {
+    "current_one_full_plus_four_64k_draft_heads": {
+      "component_formula": "target_model + full_bf16_head + mtp_forward + full_bf16_head + 4 * draft_64k_bf16_head",
+      "drafter_head_bytes": 5227151360,
+      "mandatory_weight_bytes": 34538346368,
+      "mandatory_weight_floor_ms": 126.51408926,
+      "nonweight_costs_included": false
+    },
+    "legacy_target_plus_verifier_head": {
+      "component_formula": "target_model + full_bf16_head",
+      "is_full_speculative_step_floor": false,
+      "mandatory_weight_bytes": 26925196288,
+      "mandatory_weight_floor_ms": 98.62709263
+    },
+    "root_64k_five_64k_draft_heads": {
+      "component_formula": "target_model + full_bf16_head + mtp_forward + 5 * draft_64k_bf16_head",
+      "drafter_head_bytes": 3355443200,
+      "mandatory_weight_bytes": 32666638208,
+      "mandatory_weight_floor_ms": 119.658015414,
+      "nonweight_costs_included": false
+    }
+  },
+  "schema": "fr13.speculative_step_weight_ledger.v2"
+}

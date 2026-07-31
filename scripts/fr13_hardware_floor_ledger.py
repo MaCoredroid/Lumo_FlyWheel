@@ -17,7 +17,11 @@ FULL_VOCAB_ROWS = 248_320
 DRAFTER_HIDDEN_SIZE = 5_120
 HEAD_ELEMENT_BYTES = 2
 MTP_FORWARD_BYTES_PER_PASS = 477_199_744
-MTP_FORWARD_PASSES = 4
+INITIAL_MTP_FORWARD_PASSES = 1
+POST_ROOT_GRAPH_MTP_FORWARD_PASSES = 4
+MTP_FORWARD_PASSES = (
+    INITIAL_MTP_FORWARD_PASSES + POST_ROOT_GRAPH_MTP_FORWARD_PASSES
+)
 
 
 def _floor_ms(byte_count: int) -> float:
@@ -37,8 +41,11 @@ def build_ledger() -> dict[str, Any]:
         DRAFT_VOCAB_ROWS * DRAFTER_HIDDEN_SIZE * HEAD_ELEMENT_BYTES
     )
     mtp_forward_bytes = MTP_FORWARD_BYTES_PER_PASS * MTP_FORWARD_PASSES
-    current_drafter_head_bytes = full_head_bytes + 4 * subset_head_bytes
-    root_64k_drafter_head_bytes = 5 * subset_head_bytes
+    current_drafter_head_bytes = (
+        full_head_bytes
+        + POST_ROOT_GRAPH_MTP_FORWARD_PASSES * subset_head_bytes
+    )
+    root_64k_drafter_head_bytes = MTP_FORWARD_PASSES * subset_head_bytes
 
     legacy_bytes = TARGET_MODEL_BYTES + full_head_bytes
     current_bytes = (
@@ -49,9 +56,19 @@ def build_ledger() -> dict[str, Any]:
     )
 
     return {
-        "schema": "fr13.speculative_step_weight_ledger.v1",
+        "schema": "fr13.speculative_step_weight_ledger.v2",
         "bandwidth_bytes_per_s": BANDWIDTH_BYTES_PER_S,
         "formula": "floor_ms = mandatory_weight_bytes * 1000 / bandwidth_bytes_per_s",
+        "production_invariants": {
+            "initial_mtp_forward_passes_per_event": (
+                INITIAL_MTP_FORWARD_PASSES
+            ),
+            "post_root_graph_mtp_forward_passes_per_event": (
+                POST_ROOT_GRAPH_MTP_FORWARD_PASSES
+            ),
+            "total_mtp_forward_passes_per_event": MTP_FORWARD_PASSES,
+            "drafter_head_passes_per_event": MTP_FORWARD_PASSES,
+        },
         "components": {
             "target_model": {
                 "bytes": TARGET_MODEL_BYTES,
@@ -72,7 +89,11 @@ def build_ledger() -> dict[str, Any]:
             "mtp_forward": {
                 "bytes": mtp_forward_bytes,
                 "bytes_per_pass": MTP_FORWARD_BYTES_PER_PASS,
+                "initial_passes": INITIAL_MTP_FORWARD_PASSES,
                 "passes": MTP_FORWARD_PASSES,
+                "post_root_graph_passes": (
+                    POST_ROOT_GRAPH_MTP_FORWARD_PASSES
+                ),
                 "source": "logical MTP forward tensor byte ledger",
             },
         },
