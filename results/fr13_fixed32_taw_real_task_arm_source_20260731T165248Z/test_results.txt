@@ -23,4 +23,3 @@ PASS
 
 git diff --check
 PASS
-

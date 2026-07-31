@@ -19,4 +19,3 @@ existing campaign metadata retain `gate_eligible=false` and
 This artifact contains no GPU execution, Docker execution, performance result,
 hardware-floor result, or new SWE-Verified result. A real current-source B1
 diagnostic run is still required to exercise the kernel live gate.
-

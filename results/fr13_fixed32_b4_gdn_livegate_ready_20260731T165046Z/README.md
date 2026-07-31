@@ -58,9 +58,10 @@ actual B2 or B3 production step in the same capacity-4 lifecycle. Production
 stays off until a B2-B4 evidence schema and mixed-batch routing rule are
 defined and gated.
 
-There is still no B4 timing. The hardware floor remains 98.6 ms/step and the
-stated one-sided U95 acceptance cap remains 113.39 ms/step, but this artifact
-does not move either comparison.
+There is still no B4 timing. The corrected hardware floor is
+119.658015414 ms/step and the one-sided U95 acceptance cap is
+137.606717726 ms/step (1.15x floor), but this artifact does not move either
+comparison.
 
 ## Verification
 
