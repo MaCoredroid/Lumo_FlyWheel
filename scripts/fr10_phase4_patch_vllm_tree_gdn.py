@@ -10495,6 +10495,9 @@ def _fr13_conv_subop_mab(
                                 strict_mask=(
                                     attn_metadata.fr10_tree_strict_mask
                                 ),
+                                visible_mask=(
+                                    attn_metadata.fr10_tree_visible_mask
+                                ),
                                 out=core_attn_out_spec[
                                     0, :_fr13_gdn_rows
                                 ],
