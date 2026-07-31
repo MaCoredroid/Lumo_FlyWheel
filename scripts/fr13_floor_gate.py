@@ -198,6 +198,9 @@ HYDRA27_TOPOLOGY = (
     "[FR13_FIXED32] topology engaged: mode=hydra27_fixed32 active_drafts=27 "
     "valid_mask=0x7abdffff"
 )
+DRAFT_VOCAB_SHIM_ENGAGED = "[FR13_DRAFT_VOCAB] shim built K=65536 "
+DRAFT_VOCAB_ROOT_ENGAGED = "[FR13_DRAFT_VOCAB_ROOT] engaged K=65536 "
+DRAFT_VOCAB_DISABLED = "[FR13_DRAFT_VOCAB] DISABLED"
 FIXED32_MODE_SPECS = {
     "tail6_fixed32": {
         "active_drafts": TAIL6_ACTIVE_DRAFTS,
@@ -3527,6 +3530,7 @@ def fixed32_required_env(
     *,
     mode: str,
     task_ids: list[str],
+    draft_vocab_root: int = 0,
 ) -> dict[str, str]:
     try:
         mode_spec = FIXED32_MODE_SPECS[mode]
@@ -3534,6 +3538,10 @@ def fixed32_required_env(
         raise GateError(f"{arm_dir}: unsupported fixed-32 mode {mode!r}") from error
     if tuple(task_ids) != EVIDENCE_SETS.get(len(task_ids), {}).get("task_ids"):
         raise GateError(f"{arm_dir}: ingress task IDs are not canonical exact4/16")
+    if type(draft_vocab_root) is not int or draft_vocab_root not in (0, 1):
+        raise GateError(
+            f"{arm_dir}: draft_vocab_root must be exactly integer 0 or 1"
+        )
     required_env = {
         "FR13_HYDRA23": "0",
         "FR13_TAIL_MODE": "1",
@@ -3625,6 +3633,7 @@ def fixed32_required_env(
             "FR13_DRAFT_VOCAB_BLOCKS": (
                 "/workspace/scripts/fr13_dvk_subset_blocks.json"
             ),
+            "FR13_DRAFT_VOCAB_ROOT": str(draft_vocab_root),
             "FR13_DEVICE_MULTIDRAFT": "1",
             "FR13_DFWD_GPU_TIMER": "1",
             "FR13_DFWD_GPU_TIMER_JSON": (
@@ -3834,6 +3843,7 @@ def validate_runtime_needles(
     mode: str,
     expected_tokens: int,
     task_ids: list[str],
+    draft_vocab_root: int = 0,
 ) -> dict[str, Any]:
     env_path = arm_dir / "container_env.txt"
     env_lines = read_text(env_path).splitlines()
@@ -3845,6 +3855,7 @@ def validate_runtime_needles(
         arm_dir,
         mode=mode,
         task_ids=task_ids,
+        draft_vocab_root=draft_vocab_root,
     )
     for key, expected in required_env.items():
         values = [
@@ -3981,6 +3992,22 @@ def validate_runtime_needles(
             raise GateError(
                 f"{log_path}: expected exactly one current runtime needle {needle!r}"
             )
+    if log.count(DRAFT_VOCAB_SHIM_ENGAGED) != 1:
+        raise GateError(
+            f"{log_path}: expected exactly one current runtime needle "
+            f"{DRAFT_VOCAB_SHIM_ENGAGED!r}"
+        )
+    if DRAFT_VOCAB_DISABLED in log:
+        raise GateError(
+            f"{log_path}: draft-vocabulary runtime fallback was engaged"
+        )
+    expected_root_needles = draft_vocab_root
+    actual_root_needles = log.count(DRAFT_VOCAB_ROOT_ENGAGED)
+    if actual_root_needles != expected_root_needles:
+        raise GateError(
+            f"{log_path}: expected {expected_root_needles} root draft-vocabulary "
+            f"engagement needles, got {actual_root_needles}"
+        )
     other_mode = "hydra27_fixed32" if mode == "tail6_fixed32" else "tail6_fixed32"
     other_needle = FIXED32_MODE_SPECS[other_mode]["topology_needle"]
     if other_needle in log:
@@ -3992,6 +4019,7 @@ def validate_runtime_needles(
         "active_drafts": mode_spec["active_drafts"],
         "valid_mask": f"{mode_spec['valid_mask']:#010x}",
         "draft_tokens_per_event": expected_tokens,
+        "draft_vocab_root": draft_vocab_root,
         "required_container_env": required_env,
         "pid1_required_env_exact": True,
         "pretask_zero_traffic": pretask_zero_traffic,
@@ -5744,6 +5772,7 @@ def reduce_arm(
     expected_concurrency: int | None,
     reps: int,
     seed: int,
+    draft_vocab_root: int = 0,
 ) -> tuple[dict[str, Any], dict[str, dict[str, float]]]:
     arm_dir = runroot / arm
     try:
@@ -5774,6 +5803,7 @@ def reduce_arm(
         mode=mode,
         expected_tokens=expected_tokens,
         task_ids=launch["subset"]["task_ids"],
+        draft_vocab_root=draft_vocab_root,
     )
     windows = load_windows(arm_dir, task_dirs, expected_tokens, concurrency)
     _, arrays, sidecar = unique_sidecar(
@@ -6552,6 +6582,8 @@ def reduce_campaign(
     sidecar_dir: Path,
     reps: int,
     seed: int,
+    *,
+    draft_vocab_root: int = 0,
 ) -> dict[str, Any]:
     if task_count not in EVIDENCE_SETS:
         raise GateError("task count must be exactly 4 or 16")
@@ -6574,6 +6606,7 @@ def reduce_campaign(
         expected_concurrency=expected_concurrency,
         reps=reps,
         seed=seed + 100_000,
+        draft_vocab_root=draft_vocab_root,
     )
     hydra, hydra_points = reduce_arm(
         repo,
@@ -6585,6 +6618,7 @@ def reduce_campaign(
         expected_concurrency=expected_concurrency,
         reps=reps,
         seed=seed + 200_000,
+        draft_vocab_root=draft_vocab_root,
     )
     if tail["inferred_concurrency"] != hydra["inferred_concurrency"]:
         raise GateError("Tail6-fixed32/Hydra27-fixed32 inferred concurrency differs")
@@ -6886,6 +6920,7 @@ def reduce_campaign(
         "runroot": str(runroot),
         "tag": tag,
         "task_count": task_count,
+        "draft_vocab_root": draft_vocab_root,
         "inferred_concurrency": concurrency,
         "source_runtime_fingerprint": source_fingerprint,
         "external_artifact_fingerprint": external_fingerprint,
@@ -7157,6 +7192,7 @@ def write_fixture_arm(
     *,
     hydra: bool,
     concurrency: int,
+    draft_vocab_root: int = 0,
 ) -> None:
     kind = "hydra27_fixed32" if hydra else "tail6_fixed32"
     arm = f"{kind}_{tag}"
@@ -7183,6 +7219,7 @@ def write_fixture_arm(
         arm_dir,
         mode=kind,
         task_ids=list(EVIDENCE_SETS[4]["task_ids"]),
+        draft_vocab_root=draft_vocab_root,
     )
     (arm_dir / "container_env.txt").write_text(
         "".join(f"{key}={value}\n" for key, value in required_env.items()),
@@ -7265,12 +7302,15 @@ def write_fixture_arm(
         + "\n",
         encoding="ascii",
     )
-    needles = (
+    needles = [
         FIXED32_PRESEED,
         FIXED32_ENGAGED,
         FIXED32_WORK_ENGAGED,
         mode_spec["topology_needle"],
-    )
+        DRAFT_VOCAB_SHIM_ENGAGED + "fixture",
+    ]
+    if draft_vocab_root:
+        needles.append(DRAFT_VOCAB_ROOT_ENGAGED + "fixture")
     (arm_dir / "docker_full.log").write_text(
         "\n".join(needles) + "\n", encoding="utf-8"
     )
@@ -8426,7 +8466,11 @@ def write_fixture_arm(
 
 
 def write_fixture_campaign(
-    repo: Path, base: Path, *, concurrency: int
+    repo: Path,
+    base: Path,
+    *,
+    concurrency: int,
+    draft_vocab_root: int = 0,
 ) -> tuple[Path, Path, str]:
     tag = f"fixture_b{concurrency}"
     runroot = base / f"campaign_b{concurrency}"
@@ -8460,6 +8504,7 @@ def write_fixture_campaign(
         tag,
         hydra=False,
         concurrency=concurrency,
+        draft_vocab_root=draft_vocab_root,
     )
     write_fixture_arm(
         repo,
@@ -8468,6 +8513,7 @@ def write_fixture_campaign(
         tag,
         hydra=True,
         concurrency=concurrency,
+        draft_vocab_root=draft_vocab_root,
     )
     return runroot, sidecar_dir, tag
 
@@ -8558,6 +8604,21 @@ def self_test(repo: Path) -> None:
         assert b1["analysis_valid"]
         assert b1["schema"] == "fr13.canonical_swe_verified_fixed32_floor_gate.v11"
         assert b1["inferred_concurrency"] == 1
+        assert b1["draft_vocab_root"] == 0
+        expect_gate_error(
+            lambda: reduce_campaign(
+                repo,
+                b1_root,
+                b1_tag,
+                4,
+                1,
+                b1_sidecars,
+                BOOTSTRAP_REPS,
+                BOOTSTRAP_SEED,
+                draft_vocab_root=1,
+            ),
+            "expected exactly FR13_DRAFT_VOCAB_ROOT=1",
+        )
         assert b1["gates"]["fixed32_flush_generation_chain_exact"]
         assert b1["gates"]["fixed32_task_boundaries_exact"]
         assert b1["gates"]["external_artifact_fingerprint_equal"]
@@ -10726,6 +10787,13 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="defaults to REPO/output/fr13_sfwd_sidecar",
     )
+    parser.add_argument(
+        "--draft-vocab-root",
+        type=int,
+        choices=(0, 1),
+        default=0,
+        help="independent expected state for FR13_DRAFT_VOCAB_ROOT",
+    )
     parser.add_argument("--bootstrap-reps", type=int, default=BOOTSTRAP_REPS)
     parser.add_argument("--seed", type=int, default=BOOTSTRAP_SEED)
     parser.add_argument("--self-test", action="store_true")
@@ -10769,6 +10837,7 @@ def main() -> int:
             sidecar_dir,
             args.bootstrap_reps,
             args.seed,
+            draft_vocab_root=args.draft_vocab_root,
         )
     except GateError as error:
         report = {
@@ -10779,6 +10848,7 @@ def main() -> int:
             "runroot": str(runroot),
             "tag": args.tag,
             "task_count": args.task_count,
+            "draft_vocab_root": args.draft_vocab_root,
             "error": str(error),
         }
         print(json.dumps(report, indent=2, sort_keys=True, allow_nan=False))

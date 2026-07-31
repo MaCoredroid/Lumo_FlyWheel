@@ -12,6 +12,14 @@ esac
   echo "fixed32 floor sequence requires CONC=BSIZE, got CONC=${CONC:-unset} BSIZE=$BSIZE" >&2
   exit 2
 }
+FR13_DRAFT_VOCAB_ROOT=${FR13_DRAFT_VOCAB_ROOT:-0}
+case "$FR13_DRAFT_VOCAB_ROOT" in
+  0|1) export FR13_DRAFT_VOCAB_ROOT ;;
+  *)
+    echo "FR13_DRAFT_VOCAB_ROOT must be 0 or 1" >&2
+    exit 2
+    ;;
+esac
 
 export GPU_UTIL=0.70
 unset FR13_PREWARM_TRIE

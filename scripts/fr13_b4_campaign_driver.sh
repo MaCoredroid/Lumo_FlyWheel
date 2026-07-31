@@ -220,6 +220,7 @@ if (( FIXED32_MANIFEST_ACTIVE == 1 )); then
     --tag "$TAG" \
     --task-count "$FIXED32_TASK_COUNT" \
     --expect-concurrency "$CONC" \
+    --draft-vocab-root "$FR13_DRAFT_VOCAB_ROOT" \
     > "$RUNROOT/fixed32_floor_gate.json" \
     || {
       rc=$?

@@ -92,6 +92,22 @@ FR13_FORCE_SPINE_COMMIT=${FR13_FORCE_SPINE_COMMIT:-0}
 # lm-head read per drafter step, FR13_B1_SPEED_ATTRIBUTION_BIND.md). =0 is
 # the exact legacy double-logits path (the A/B instrument).
 FR13_DRAFTER_SINGLE_LOGITS=${FR13_DRAFTER_SINGLE_LOGITS:-1}
+# FR13_DRAFT_VOCAB_ROOT (default OFF): exact fixed32-only candidate that
+# scores the root token/top-k through the configured block-aligned draft
+# vocabulary. The patcher rejects non-fixed32 use and pairs every subset
+# logits tensor with its own real-vocab id map.
+FR13_DRAFT_VOCAB_ROOT=${FR13_DRAFT_VOCAB_ROOT:-0}
+case "$FR13_DRAFT_VOCAB_ROOT" in
+  0|1) ;;
+  *)
+    echo "FR13_DRAFT_VOCAB_ROOT must be 0 or 1" >&2
+    exit 2
+    ;;
+esac
+if [[ "$FR13_DRAFT_VOCAB_ROOT" == "1" && -z "${FR13_FIXED32_MODE:-}" ]]; then
+  echo "FR13_DRAFT_VOCAB_ROOT=1 requires FR13_FIXED32_MODE" >&2
+  exit 2
+fi
 # FR13_EAGER_PACK (FIX-2, default OFF until the lossless gate passes): pack
 # the committer's eager DtoH/HtoD storm and batch the 48 per-layer replay
 # launches into one (FR13_B1_SPEED_ATTRIBUTION_BIND.md). SEMANTICS-PRESERVING
@@ -1167,6 +1183,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_TEMP_LEGACY_DOUBLE="${FR13_TEMP_LEGACY_DOUBLE:-0}" \
   -e FR13_DRAFT_VOCAB_K="${FR13_DRAFT_VOCAB_K:-65536}" \
   -e FR13_DRAFT_VOCAB_BLOCKS="${FR13_DRAFT_VOCAB_BLOCKS:-/workspace/scripts/fr13_dvk_subset_blocks.json}" \
+  -e FR13_DRAFT_VOCAB_ROOT="$FR13_DRAFT_VOCAB_ROOT" \
   -e FR13_KVREMAP_TIMER="${FR13_KVREMAP_TIMER:-0}" \
   -e FR13_KVREMAP_TIMER_JSON="${FR13_KVREMAP_TIMER_JSON:-}" \
   -e FR13_STATEREMAP_TIMER="${FR13_STATEREMAP_TIMER:-0}" \

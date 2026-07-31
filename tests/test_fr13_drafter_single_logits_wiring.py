@@ -55,11 +55,10 @@ def _eagle_consumption_new_snippet() -> str:
 def test_flag_default_on_and_branch_guarded_in_patch() -> None:
     snippet = _eagle_consumption_new_snippet()
 
-    # Default ON; OFF only via explicit env or use_local_argmax_reduction
-    # (get_top_tokens has different selection semantics -> exact legacy).
-    assert (
-        'os.environ.get("FR13_DRAFTER_SINGLE_LOGITS", "1") == "1"' in snippet
-    )
+    # The accepted path is baked ON. use_local_argmax_reduction still selects
+    # the legacy double-logits branch because get_top_tokens has different
+    # selection semantics.
+    assert "True  # FR13_DRAFTER_SINGLE_LOGITS baked ON" in snippet
     assert (
         'and not getattr(self, "use_local_argmax_reduction", False)' in snippet
     )
@@ -68,8 +67,8 @@ def test_flag_default_on_and_branch_guarded_in_patch() -> None:
     assert "draft_token_ids = _fr10_logits.argmax(dim=-1)" in snippet
     assert "draft_token_ids = _fr10_step_logits.argmax(dim=-1)" in snippet
 
-    # Loop topk skipped ONLY in spine-only mode (cat9 keeps top-2 packing).
-    assert "if not _fr10_is_spine_only:" in snippet
+    # Loop topk is emitted only at depths whose topology consumes a leaf.
+    assert "if (token_index + 1) in _fr10_leaf_steps:" in snippet
 
     # Engagement needle (class 9): boot log records which path engaged.
     assert "FR13_DRAFTER_SINGLE_LOGITS drafter path engaged" in snippet
@@ -80,24 +79,32 @@ def test_flag_default_on_and_branch_guarded_in_patch() -> None:
 def test_legacy_double_logits_path_preserved_verbatim_under_off() -> None:
     snippet = _eagle_consumption_new_snippet()
 
-    # The A/B instrument: flag OFF must take the EXACT legacy statements.
+    # The fallback branch still performs a full root head plus
+    # _greedy_sample's second head evaluation.
     legacy_root = (
         "                _fr10_logits = self.model.compute_logits(sample_hidden_states)\n"
-        "                _fr10_top2 = torch.topk(_fr10_logits, 2, dim=-1).indices\n"
+        "                _fr10_top2 = torch.topk(\n"
+        "                    _fr10_logits, _fr10_root_topk_k, dim=-1\n"
+        "                ).indices\n"
         "                draft_token_ids = self._greedy_sample(sample_hidden_states)\n"
     )
     assert legacy_root in snippet
 
-    legacy_loop = (
-        "                    _fr10_step_logits = self.model.compute_logits(\n"
-        "                        last_hidden_states[:batch_size]\n"
-        "                    )\n"
-        "                    _fr10_step_top2 = torch.topk(_fr10_step_logits, 2, dim=-1).indices\n"
-        "                    draft_token_ids = self._greedy_sample(last_hidden_states[:batch_size])\n"
-        "                    _fr10_spine_tokens.append(draft_token_ids)\n"
-        "                    _fr10_leaf_tokens.append(_fr10_step_top2[:, 1])\n"
+    legacy_loop_start = snippet.index(
+        "                else:\n"
+        "                    if _fr13_dvk > 0"
     )
-    assert legacy_loop in snippet
+    legacy_loop_end = snippet.index(
+        "                # FR13_RESHAPE_WIDE:", legacy_loop_start
+    )
+    legacy_loop = snippet[legacy_loop_start:legacy_loop_end]
+    assert "_fr10_step_logits = self.model.compute_logits(" in legacy_loop
+    assert "_fr10_step_top2 = torch.topk(" in legacy_loop
+    assert (
+        "draft_token_ids = self._greedy_sample("
+        "last_hidden_states[:batch_size])"
+    ) in legacy_loop
+    assert "_fr10_spine_tokens.append(draft_token_ids)" in legacy_loop
 
     # _greedy_sample call sites: exactly the two legacy (else) branches plus
     # the two FR13_FIX1_SELFCHECK diagnostic sites (default OFF, gated on
