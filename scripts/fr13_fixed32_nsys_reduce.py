@@ -10,8 +10,13 @@ import io
 import json
 import os
 import re
+import secrets
+import signal
+import stat
 import subprocess
 import sys
+import threading
+import time
 from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from math import ceil
@@ -25,6 +30,16 @@ import fr13_fixed32_contract as fixed32_contract  # noqa: E402
 
 
 DEFAULT_NSYS_BIN = Path("/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys")
+DEFAULT_VERSION_TIMEOUT_S = 30.0
+DEFAULT_STATS_TIMEOUT_S = 300.0
+DEFAULT_STATS_KILL_AFTER_S = 5.0
+PROCESS_TOKEN_ENV = "LUMO_NSYS_REDUCER_PROCESS_TOKEN"
+UNBLOCK_AND_EXEC = (
+    "import os,signal,sys;"
+    "signal.pthread_sigmask("
+    "signal.SIG_UNBLOCK,(signal.SIGINT,signal.SIGTERM));"
+    "os.execvpe(sys.argv[1],sys.argv[1:],os.environ)"
+)
 REPORT_NAMES = (
     "nvtx_gpu_proj_sum",
     "nvtx_kern_sum",
@@ -39,6 +54,7 @@ PHASE_RANGES = {
 }
 ATTRIBUTION_RANGES = {"step": STEP_RANGE, **PHASE_RANGES}
 FIXED32_RANGE_PREFIX = "fr13.fixed32."
+MAX_CAPTURE_BOUNDARY_RANGE_DELTA = 2
 EXACT4_SUBSET_SHA256 = (
     "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
 )
@@ -53,6 +69,11 @@ EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 
 class ReductionError(RuntimeError):
     """The report cannot produce complete fixed32 attribution."""
+
+
+class _CommandSignal(BaseException):
+    def __init__(self, signum: int) -> None:
+        self.signum = signum
 
 
 def _normalize_header(value: str) -> str:
@@ -125,6 +146,14 @@ def _optional_field(row: Mapping[str, str], column: str) -> str | None:
     return value or None
 
 
+def _nvtx_range_field(row: Mapping[str, str], column: str) -> str | None:
+    value = _optional_field(row, column)
+    if value is not None and value.startswith(":"):
+        # Nsight 2026.2 prefixes ranges in the default NVTX domain with ":".
+        return value[1:]
+    return value
+
+
 def _field(row: Mapping[str, str], column: str) -> str:
     value = _optional_field(row, column)
     if value is None:
@@ -153,7 +182,7 @@ def _require_exact_phase_ranges(
     observed = {
         value
         for row in rows
-        if (value := _optional_field(row, range_column)) is not None
+        if (value := _nvtx_range_field(row, range_column)) is not None
         and value.startswith(FIXED32_RANGE_PREFIX)
     }
     if observed != expected:
@@ -175,7 +204,9 @@ def _projection_by_range(
     )
     result: dict[str, dict[str, int | str]] = {}
     for phase, nvtx_range in ATTRIBUTION_RANGES.items():
-        matches = [row for row in rows if _optional_field(row, "Range") == nvtx_range]
+        matches = [
+            row for row in rows if _nvtx_range_field(row, "Range") == nvtx_range
+        ]
         if len(matches) != 1:
             raise ReductionError(
                 "nvtx_gpu_proj_sum must contain exactly one row for "
@@ -205,7 +236,7 @@ def _range_top_kernels(
     for phase, nvtx_range in ATTRIBUTION_RANGES.items():
         aggregate: dict[str, dict[str, int | str]] = {}
         for row in rows:
-            if _optional_field(row, "NVTX Range") != nvtx_range:
+            if _nvtx_range_field(row, "NVTX Range") != nvtx_range:
                 continue
             name = _field(row, "Kernel Name")
             kernel = aggregate.setdefault(
@@ -322,18 +353,22 @@ def _build_summary(
         phase: int(values["range_instances"]) - step_instances
         for phase, values in phases.items()
     }
-    if any(abs(delta) > 1 for delta in child_instance_deltas.values()):
+    if any(
+        abs(delta) > MAX_CAPTURE_BOUNDARY_RANGE_DELTA
+        for delta in child_instance_deltas.values()
+    ):
         raise ReductionError(
-            "fixed32 child/step NVTX instance counts differ by more than "
-            f"one capture boundary: {child_instance_deltas}"
+            "fixed32 child/step NVTX instance counts exceed the two "
+            f"capture boundaries: {child_instance_deltas}"
         )
     boundary_allowance_ns = sum(
-        ceil(
+        delta
+        * ceil(
             int(phases[phase]["projected_gpu_time_ns"])
             / int(phases[phase]["range_instances"])
         )
         for phase, delta in child_instance_deltas.items()
-        if delta == 1 and int(phases[phase]["range_instances"]) > 0
+        if delta > 0 and int(phases[phase]["range_instances"]) > 0
     )
     signed_residual_ns = step_projected_ns - child_projected_ns
     reconciliation_tolerance_ns = max(1_000, step_projected_ns // 10_000)
@@ -381,6 +416,90 @@ def _sha256_file(path: Path) -> tuple[str, int]:
             digest.update(block)
             size += len(block)
     return digest.hexdigest(), size
+
+
+def _report_identity(path: Path) -> tuple[int, int, int, int, int, int]:
+    metadata = os.lstat(path)
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ReductionError("Nsight report must be a regular non-symlink file")
+    if metadata.st_nlink != 1:
+        raise ReductionError("Nsight report must have exactly one hard link")
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_nlink,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def _attest_report(path: Path) -> tuple[tuple[int, int, int, int, int, int], str, int]:
+    identity_before = _report_identity(path)
+    digest, size = _sha256_file(path)
+    identity_after = _report_identity(path)
+    if identity_before != identity_after or size != identity_after[3]:
+        raise ReductionError("Nsight report changed while it was being hashed")
+    return identity_after, digest, size
+
+
+def _shell_report_identity(
+    identity: tuple[int, int, int, int, int, int],
+) -> str:
+    device, inode, links, size, mtime_ns, ctime_ns = identity
+    return ":".join(
+        str(value)
+        for value in (
+            device,
+            inode,
+            links,
+            size,
+            mtime_ns // 1_000_000_000,
+            ctime_ns // 1_000_000_000,
+        )
+    )
+
+
+def _parse_shell_report_identity(raw: str) -> str:
+    values = raw.split(":")
+    if len(values) != 6 or any(re.fullmatch(r"[0-9]+", value) is None for value in values):
+        raise ReductionError("lifecycle report identity is malformed")
+    return ":".join(str(int(value)) for value in values)
+
+
+def _require_report_attestation(
+    path: Path,
+    *,
+    expected_identity: tuple[int, int, int, int, int, int],
+    expected_sha256: str,
+    expected_bytes: int,
+    lifecycle_identity: str | None,
+    lifecycle_sha256: str | None,
+) -> None:
+    current_identity, current_sha256, current_bytes = _attest_report(path)
+    if (
+        current_identity != expected_identity
+        or current_sha256 != expected_sha256
+        or current_bytes != expected_bytes
+    ):
+        raise ReductionError("Nsight report changed during reduction")
+    if lifecycle_identity is not None and (
+        _shell_report_identity(current_identity) != lifecycle_identity
+        or current_sha256 != lifecycle_sha256
+    ):
+        raise ReductionError("Nsight report does not match the lifecycle-proven report")
+
+
+def _validate_output_path(report: Path, output: Path) -> None:
+    if output.exists() or output.is_symlink():
+        try:
+            if os.path.samefile(report, output):
+                raise ReductionError("reduced output must not alias the Nsight report")
+        except FileNotFoundError:
+            pass
+        raise ReductionError("reduced output path must not already exist")
+    if output.resolve() == report.resolve():
+        raise ReductionError("reduced output must not alias the Nsight report")
 
 
 def _reject_duplicate_keys(
@@ -932,13 +1051,415 @@ def _validate_ingress_ledgers(
     }
 
 
-def _nsys_version(nsys_bin: Path) -> str:
-    completed = subprocess.run(
+def _process_start_ticks(pid: int) -> int | None:
+    try:
+        raw = Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
+    except (FileNotFoundError, OSError, UnicodeDecodeError):
+        return None
+    marker = raw.rfind(") ")
+    if marker < 0:
+        return None
+    fields = raw[marker + 2 :].split()
+    if len(fields) < 20 or fields[0] == "Z":
+        return None
+    try:
+        return int(fields[19])
+    except ValueError:
+        return None
+
+
+def _process_has_token(pid: int, marker: bytes) -> bool:
+    try:
+        return marker in Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+    except (FileNotFoundError, OSError):
+        return False
+
+
+def _open_process_token_pidfds(token: str) -> tuple[list[int], bool]:
+    marker = f"{PROCESS_TOKEN_ENV}={token}".encode("ascii")
+    pidfds: list[int] = []
+    acquisition_failed = False
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        pid = int(entry.name)
+        if pid == os.getpid():
+            continue
+        if not _process_has_token(pid, marker):
+            continue
+        start_ticks_before = _process_start_ticks(pid)
+        if start_ticks_before is None:
+            continue
+        try:
+            pidfd = os.pidfd_open(pid)
+        except (ProcessLookupError, PermissionError, OSError):
+            if (
+                _process_start_ticks(pid) == start_ticks_before
+                and _process_has_token(pid, marker)
+            ):
+                acquisition_failed = True
+            continue
+        if (
+            _process_start_ticks(pid) != start_ticks_before
+            or not _process_has_token(pid, marker)
+        ):
+            os.close(pidfd)
+            continue
+        pidfds.append(pidfd)
+    return pidfds, acquisition_failed
+
+
+def _close_pidfds(pidfds: Sequence[int]) -> None:
+    for pidfd in pidfds:
+        try:
+            os.close(pidfd)
+        except OSError:
+            pass
+
+
+def _signal_pidfd(pidfd: int, signum: int) -> None:
+    try:
+        signal.pidfd_send_signal(pidfd, signum)
+    except (ProcessLookupError, PermissionError, OSError):
+        pass
+
+
+def _signal_token_processes(token: str, signum: int) -> tuple[int, bool]:
+    pidfds, acquisition_failed = _open_process_token_pidfds(token)
+    try:
+        for pidfd in pidfds:
+            _signal_pidfd(pidfd, signum)
+        return len(pidfds), acquisition_failed
+    finally:
+        _close_pidfds(pidfds)
+
+
+def _kill_tracked_processes(token: str, *, timeout_s: float) -> bool:
+    deadline = time.monotonic() + timeout_s
+    while True:
+        pidfds, acquisition_failed = _open_process_token_pidfds(token)
+        if not pidfds and not acquisition_failed:
+            return True
+        try:
+            for pidfd in pidfds:
+                _signal_pidfd(pidfd, signal.SIGKILL)
+        finally:
+            _close_pidfds(pidfds)
+        if time.monotonic() >= deadline:
+            remaining, final_acquisition_failed = _open_process_token_pidfds(token)
+            _close_pidfds(remaining)
+            return not remaining and not final_acquisition_failed
+        time.sleep(min(0.01, max(0.0, deadline - time.monotonic())))
+
+
+def _terminate_process_group(
+    process: subprocess.Popen[str],
+    *,
+    direct_pidfd: int,
+    process_token: str,
+    kill_after_s: float,
+) -> bool:
+    _signal_pidfd(direct_pidfd, signal.SIGTERM)
+    _signal_token_processes(process_token, signal.SIGTERM)
+    try:
+        process.communicate(timeout=kill_after_s)
+    except subprocess.TimeoutExpired:
+        _signal_pidfd(direct_pidfd, signal.SIGKILL)
+        _signal_token_processes(process_token, signal.SIGKILL)
+        try:
+            process.communicate(timeout=kill_after_s)
+        except subprocess.TimeoutExpired:
+            # A daemonized descendant can escape the original process group
+            # while retaining these pipe descriptors. Closing our ends keeps
+            # the evidence reducer bounded even in that hostile topology.
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stderr is not None:
+                process.stderr.close()
+            try:
+                process.wait(timeout=kill_after_s)
+            except subprocess.TimeoutExpired:
+                pass
+    else:
+        # The group leader can exit while a descendant survives without holding
+        # the captured pipes. No descendant of an offline evidence read may leak.
+        _signal_pidfd(direct_pidfd, signal.SIGKILL)
+        _signal_token_processes(process_token, signal.SIGKILL)
+    return _kill_tracked_processes(process_token, timeout_s=kill_after_s)
+
+
+def _terminate_unbound_direct_process(
+    process: subprocess.Popen[str],
+    *,
+    process_token: str,
+    timeout_s: float,
+) -> bool:
+    # Before the direct child is reaped, its PID and session-leader PGID cannot
+    # be reused. This emergency path is only for failure to acquire its pidfd.
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    try:
+        process.communicate(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        if process.stdout is not None:
+            process.stdout.close()
+        if process.stderr is not None:
+            process.stderr.close()
+        try:
+            process.wait(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            pass
+    return _kill_tracked_processes(process_token, timeout_s=timeout_s)
+
+
+def _terminate_token_tracked_processes(
+    process: subprocess.Popen[str],
+    *,
+    process_token: str,
+    timeout_s: float,
+) -> bool:
+    """Fallback after numeric PGID cleanup may already have reaped the leader."""
+
+    try:
+        token_cleanup_complete = _kill_tracked_processes(
+            process_token,
+            timeout_s=timeout_s,
+        )
+    except Exception:
+        token_cleanup_complete = False
+
+    try:
+        process.communicate(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        for pipe in (process.stdout, process.stderr):
+            if pipe is None:
+                continue
+            try:
+                pipe.close()
+            except (OSError, ValueError):
+                pass
+        try:
+            process.wait(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            pass
+    except (OSError, ValueError):
+        try:
+            process.wait(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            pass
+
+    return token_cleanup_complete and process.poll() is not None
+
+
+def _run_bounded_command(
+    command: Sequence[str],
+    *,
+    label: str,
+    timeout_s: float,
+    kill_after_s: float,
+    env: Mapping[str, str],
+) -> subprocess.CompletedProcess[str]:
+    if timeout_s <= 0 or kill_after_s <= 0:
+        raise ValueError("subprocess timeout bounds must be positive")
+    if threading.current_thread() is not threading.main_thread():
+        raise ReductionError("bounded Nsight commands must run on the main thread")
+
+    process_token = secrets.token_hex(32)
+    command_env = dict(env)
+    command_env[PROCESS_TOKEN_ENV] = process_token
+    guarded_signals = {signal.SIGINT, signal.SIGTERM}
+    previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, guarded_signals)
+    if previous_mask & guarded_signals:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        raise ReductionError("SIGINT and SIGTERM must be unblocked before reduction")
+
+    old_handlers: dict[int, Any] = {
+        signum: signal.getsignal(signum) for signum in guarded_signals
+    }
+    signals_blocked = True
+    process: subprocess.Popen[str] | None = None
+    reserve_pidfd: int | None = None
+    direct_pidfd: int | None = None
+    stdout = ""
+    stderr = ""
+    caught: BaseException | None = None
+    cleanup_complete = True
+    unbound_cleanup_state = "not_started"
+
+    def command_signal(signum: int, _frame: Any) -> None:
+        raise _CommandSignal(signum)
+
+    for signum in guarded_signals:
+        signal.signal(signum, command_signal)
+
+    def block_guarded_signals() -> None:
+        nonlocal signals_blocked
+        if signals_blocked:
+            return
+        signal.pthread_sigmask(signal.SIG_BLOCK, guarded_signals)
+        signals_blocked = True
+
+    try:
+        try:
+            reserve_pidfd = os.pidfd_open(os.getpid())
+        except (PermissionError, OSError) as exc:
+            raise ReductionError("pidfds are unavailable for Nsight cleanup") from exc
+
+        try:
+            process = subprocess.Popen(
+                [sys.executable, "-c", UNBLOCK_AND_EXEC, *command],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                encoding="utf-8",
+                errors="replace",
+                env=command_env,
+                start_new_session=True,
+            )
+        finally:
+            os.close(reserve_pidfd)
+            reserve_pidfd = None
+
+        try:
+            direct_pidfd = os.pidfd_open(process.pid)
+        except (PermissionError, OSError) as exc:
+            unbound_cleanup_state = "started"
+            try:
+                cleanup_complete = _terminate_unbound_direct_process(
+                    process,
+                    process_token=process_token,
+                    timeout_s=kill_after_s,
+                )
+            except BaseException as cleanup_exc:
+                raise ReductionError(
+                    "direct pidfd binding failed during emergency cleanup"
+                ) from cleanup_exc
+            unbound_cleanup_state = "completed"
+            if not cleanup_complete:
+                raise ReductionError(
+                    "direct pidfd binding failed and descendant cleanup did not complete"
+                ) from exc
+            raise ReductionError(
+                "could not bind a pidfd for the Nsight command"
+            ) from exc
+
+        signals_blocked = False
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        try:
+            stdout, stderr = process.communicate(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            caught = ReductionError(
+                f"{label} timed out after {timeout_s:g} seconds"
+            )
+        except BaseException as exc:
+            caught = exc
+
+        if caught is not None:
+            block_guarded_signals()
+            cleanup_complete = _terminate_process_group(
+                process,
+                direct_pidfd=direct_pidfd,
+                process_token=process_token,
+                kill_after_s=kill_after_s,
+            )
+        else:
+            try:
+                remaining, acquisition_failed = _open_process_token_pidfds(
+                    process_token
+                )
+                _close_pidfds(remaining)
+                if remaining or acquisition_failed:
+                    cleanup_complete = _kill_tracked_processes(
+                        process_token,
+                        timeout_s=kill_after_s,
+                    )
+                    if cleanup_complete:
+                        caught = ReductionError(
+                            f"{label} left descendant processes after exit"
+                        )
+                    else:
+                        caught = ReductionError(
+                            f"{label} leaked descendant processes"
+                        )
+            except BaseException as exc:
+                caught = exc
+                block_guarded_signals()
+                cleanup_complete = _kill_tracked_processes(
+                    process_token,
+                    timeout_s=kill_after_s,
+                )
+    except BaseException as exc:
+        caught = exc
+        block_guarded_signals()
+        if process is not None and direct_pidfd is not None:
+            cleanup_complete = _terminate_process_group(
+                process,
+                direct_pidfd=direct_pidfd,
+                process_token=process_token,
+                kill_after_s=kill_after_s,
+            )
+        elif process is not None and unbound_cleanup_state == "not_started":
+            cleanup_complete = _terminate_unbound_direct_process(
+                process,
+                process_token=process_token,
+                timeout_s=kill_after_s,
+            )
+        elif process is not None and unbound_cleanup_state == "started":
+            cleanup_complete = _terminate_token_tracked_processes(
+                process,
+                process_token=process_token,
+                timeout_s=kill_after_s,
+            )
+    finally:
+        block_guarded_signals()
+        if reserve_pidfd is not None:
+            os.close(reserve_pidfd)
+        if direct_pidfd is not None:
+            os.close(direct_pidfd)
+
+        pending = signal.sigpending() & guarded_signals
+        while pending:
+            signum = signal.sigwait(pending)
+            if not isinstance(caught, _CommandSignal):
+                caught = _CommandSignal(signum)
+            pending = signal.sigpending() & guarded_signals
+
+        for signum, handler in old_handlers.items():
+            signal.signal(signum, handler)
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+
+    if not cleanup_complete:
+        raise ReductionError(
+            f"{label} descendant cleanup did not complete"
+        ) from None
+    if isinstance(caught, _CommandSignal):
+        if caught.signum == signal.SIGINT:
+            raise KeyboardInterrupt from None
+        raise SystemExit(128 + caught.signum) from None
+    if caught is not None:
+        raise caught
+
+    assert process is not None
+    return subprocess.CompletedProcess(
+        args=list(command),
+        returncode=process.returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
+def _nsys_version(
+    nsys_bin: Path,
+    *,
+    timeout_s: float = DEFAULT_VERSION_TIMEOUT_S,
+    kill_after_s: float = DEFAULT_STATS_KILL_AFTER_S,
+) -> str:
+    completed = _run_bounded_command(
         [os.fspath(nsys_bin), "--version"],
-        check=False,
-        capture_output=True,
-        encoding="utf-8",
-        errors="replace",
+        label="nsys --version",
+        timeout_s=timeout_s,
+        kill_after_s=kill_after_s,
         env={**os.environ, "LC_ALL": "C"},
     )
     lines = [
@@ -958,6 +1479,7 @@ def _nsys_version(nsys_bin: Path) -> str:
 
 def _build_attribution_provenance(
     *,
+    report: Path,
     subset: Path,
     runtime_manifest_launch: Path,
     runtime_manifest_end: Path,
@@ -1008,6 +1530,12 @@ def _build_attribution_provenance(
         mode=mode,
     )
     arm_dir = pretask_zero_traffic.parent.resolve()
+    expected_report = arm_dir / "logs" / "fr13_fixed32_b1_real_swe.nsys-rep"
+    _report_identity(report)
+    if report.resolve() != expected_report.resolve():
+        raise ReductionError(
+            "Nsight report is not the canonical report inside the provenance arm"
+        )
     return {
         "batch_size": 1,
         "bounded_capture": True,
@@ -1060,27 +1588,29 @@ def _run_stats(
     nsys_bin: Path,
     report_path: Path,
     report_name: str,
+    timeout_s: float = DEFAULT_STATS_TIMEOUT_S,
+    kill_after_s: float = DEFAULT_STATS_KILL_AFTER_S,
 ) -> str:
     env = os.environ.copy()
     env["LC_ALL"] = "C"
-    completed = subprocess.run(
-        [
-            os.fspath(nsys_bin),
-            "stats",
-            "--report",
-            report_name,
-            "--format",
-            "csv",
-            "--output",
-            "-",
-            "--timeunit",
-            "nsec",
-            os.fspath(report_path),
-        ],
-        check=False,
-        capture_output=True,
-        encoding="utf-8",
-        errors="replace",
+    command = [
+        os.fspath(nsys_bin),
+        "stats",
+        "--report",
+        report_name,
+        "--format",
+        "csv",
+        "--output",
+        "-",
+        "--timeunit",
+        "nsec",
+        os.fspath(report_path),
+    ]
+    completed = _run_bounded_command(
+        command,
+        label=f"nsys stats {report_name}",
+        timeout_s=timeout_s,
+        kill_after_s=kill_after_s,
         env=env,
     )
     if completed.returncode != 0:
@@ -1132,6 +1662,8 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         default=20,
         help="number of kernels retained per ranking (default: 20)",
     )
+    parser.add_argument("--expected-report-identity")
+    parser.add_argument("--expected-report-sha256")
     parser.add_argument("--subset", type=Path)
     parser.add_argument("--runtime-manifest-launch", type=Path)
     parser.add_argument("--runtime-manifest-end", type=Path)
@@ -1164,7 +1696,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not args.nsys_bin.is_file() or not os.access(args.nsys_bin, os.X_OK):
             raise ReductionError("nsys executable is missing or not executable")
 
-        report_sha256, report_bytes = _sha256_file(args.report)
+        if (args.expected_report_identity is None) != (
+            args.expected_report_sha256 is None
+        ):
+            raise ReductionError(
+                "lifecycle report identity and SHA-256 must be supplied together"
+            )
+        lifecycle_report_identity = (
+            _parse_shell_report_identity(args.expected_report_identity)
+            if args.expected_report_identity is not None
+            else None
+        )
+        lifecycle_report_sha256 = args.expected_report_sha256
+        if lifecycle_report_sha256 is not None and re.fullmatch(
+            r"[0-9a-f]{64}", lifecycle_report_sha256
+        ) is None:
+            raise ReductionError("lifecycle report SHA-256 is malformed")
+
+        report_identity, report_sha256, report_bytes = _attest_report(args.report)
+        _require_report_attestation(
+            args.report,
+            expected_identity=report_identity,
+            expected_sha256=report_sha256,
+            expected_bytes=report_bytes,
+            lifecycle_identity=lifecycle_report_identity,
+            lifecycle_sha256=lifecycle_report_sha256,
+        )
         stats_csv = {
             report_name: _run_stats(
                 nsys_bin=args.nsys_bin,
@@ -1173,6 +1730,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             for report_name in REPORT_NAMES
         }
+        _require_report_attestation(
+            args.report,
+            expected_identity=report_identity,
+            expected_sha256=report_sha256,
+            expected_bytes=report_bytes,
+            lifecycle_identity=lifecycle_report_identity,
+            lifecycle_sha256=lifecycle_report_sha256,
+        )
         summary = _build_summary(
             report_sha256=report_sha256,
             report_bytes=report_bytes,
@@ -1191,6 +1756,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "pretask_zero_traffic",
             "proxy_ledger",
             "engine_ledger",
+            "expected_report_identity",
+            "expected_report_sha256",
             "mode",
             "batch_size",
             "concurrency",
@@ -1209,6 +1776,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 + ", ".join("--" + field.replace("_", "-") for field in missing)
             )
         summary["provenance"] = _build_attribution_provenance(
+            report=args.report,
             subset=args.subset,
             runtime_manifest_launch=args.runtime_manifest_launch,
             runtime_manifest_end=args.runtime_manifest_end,
@@ -1244,11 +1812,44 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             + "\n"
         )
+        _require_report_attestation(
+            args.report,
+            expected_identity=report_identity,
+            expected_sha256=report_sha256,
+            expected_bytes=report_bytes,
+            lifecycle_identity=lifecycle_report_identity,
+            lifecycle_sha256=lifecycle_report_sha256,
+        )
         if args.output is None:
             sys.stdout.write(rendered)
+            _require_report_attestation(
+                args.report,
+                expected_identity=report_identity,
+                expected_sha256=report_sha256,
+                expected_bytes=report_bytes,
+                lifecycle_identity=lifecycle_report_identity,
+                lifecycle_sha256=lifecycle_report_sha256,
+            )
         else:
             args.output.parent.mkdir(parents=True, exist_ok=True)
-            args.output.write_text(rendered, encoding="utf-8")
+            _validate_output_path(args.report, args.output)
+            output_created = False
+            try:
+                with args.output.open("x", encoding="utf-8") as target:
+                    output_created = True
+                    target.write(rendered)
+                _require_report_attestation(
+                    args.report,
+                    expected_identity=report_identity,
+                    expected_sha256=report_sha256,
+                    expected_bytes=report_bytes,
+                    lifecycle_identity=lifecycle_report_identity,
+                    lifecycle_sha256=lifecycle_report_sha256,
+                )
+            except BaseException:
+                if output_created:
+                    args.output.unlink(missing_ok=True)
+                raise
     except (KeyError, OSError, ReductionError) as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
         return 2

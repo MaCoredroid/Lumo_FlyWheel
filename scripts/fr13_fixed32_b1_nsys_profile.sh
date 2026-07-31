@@ -10,7 +10,18 @@ DRIVER_PID=""
 DRIVER_START_TICKS=""
 PROFILE_CONTAINER_ID=""
 PROFILE_CONTAINER_CIDFILE=""
+PROFILE_CONTAINER_STARTED_AT=""
+PROFILE_CONTAINER_INIT_PID=""
+PROFILE_CONTAINER_RESTART_COUNT=""
+PROFILE_CONTAINER_RUNNING=0
+PROFILE_CONTAINER_STATUS=""
+PROFILE_CONTAINER_EXIT_CODE=""
 PROCESS_IDENTITY=""
+PROCESS_IDENTITY_STAT=""
+ENGINE_CORE_PID=""
+ENGINE_CORE_START_TICKS=""
+ENGINE_CORE_CURRENT_START_TICKS=""
+ENGINE_CORE_LIVENESS_OK=0
 NSYS_SESSION_ID=""
 NSYS_SESSION_NAME=""
 NSYS_SESSION_STATE=""
@@ -19,11 +30,32 @@ NSYS_SESSION_QUERY_OK=0
 NSYS_INJECTED_SESSION_ID=""
 NSYS_EXPECTED_SESSION_NAME=""
 NSYS_LIFECYCLE_ERROR=""
+NSYS_COLLECTION_OBSERVED=0
+NSYS_POST_COLLECTION_OBSERVED=0
+NSYS_EXACT_STOP_COMPLETED=0
+NSYS_CONTAINER_TERMINAL_OK=0
+NSYS_PROVEN_REPORT_IDENTITY=""
+NSYS_PROVEN_REPORT_SHA256=""
 PRESERVE_RECOVERABLE_STATE=0
 PRESERVED_CONTAINER=""
 NSYS_EXPECTED_DRIVER_SCRIPT=scripts/fr13_b4_campaign_driver.sh
 NSYS_EXPECTED_VARIANT_SCRIPT=scripts/fr13_bigdenom_swe_serve_variant.sh
 NSYS_EXPECTED_VARIANT_KIND=tail6_fixed32
+NSYS_CONTAINER_BIN=/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys
+NSYS_CONTAINER_TIMEOUT_BIN=/usr/bin/timeout
+NSYS_CONTAINER_BASH_BIN=/bin/bash
+LUMO_NSYS_QUERY_TIMEOUT_S=${LUMO_NSYS_QUERY_TIMEOUT_S:-10}
+LUMO_NSYS_QUERY_KILL_AFTER_S=${LUMO_NSYS_QUERY_KILL_AFTER_S:-2}
+LUMO_NSYS_QUERY_OUTER_TIMEOUT_S=${LUMO_NSYS_QUERY_OUTER_TIMEOUT_S:-15}
+LUMO_NSYS_QUERY_OUTER_KILL_AFTER_S=${LUMO_NSYS_QUERY_OUTER_KILL_AFTER_S:-2}
+LUMO_NSYS_STOP_TIMEOUT_S=${LUMO_NSYS_STOP_TIMEOUT_S:-60}
+LUMO_NSYS_STOP_KILL_AFTER_S=${LUMO_NSYS_STOP_KILL_AFTER_S:-5}
+LUMO_NSYS_STOP_OUTER_TIMEOUT_S=${LUMO_NSYS_STOP_OUTER_TIMEOUT_S:-70}
+LUMO_NSYS_STOP_OUTER_KILL_AFTER_S=${LUMO_NSYS_STOP_OUTER_KILL_AFTER_S:-5}
+LUMO_NSYS_EXPORT_TIMEOUT_S=${LUMO_NSYS_EXPORT_TIMEOUT_S:-300}
+LUMO_NSYS_EXPORT_KILL_AFTER_S=${LUMO_NSYS_EXPORT_KILL_AFTER_S:-5}
+LUMO_NSYS_HASH_TIMEOUT_S=${LUMO_NSYS_HASH_TIMEOUT_S:-300}
+LUMO_NSYS_HASH_KILL_AFTER_S=${LUMO_NSYS_HASH_KILL_AFTER_S:-5}
 
 _lifecycle_log() {
   local message=$1
@@ -210,30 +242,146 @@ thaw_exact_control_ancestors() {
   NSYS_STOPPED_START_TICKS=()
 }
 
+_pin_running_profile_container() {
+  local candidate_id=$1
+  local expected_name=$2
+  local identity=""
+  local actual_id=""
+  local actual_name=""
+  local actual_status=""
+  local actual_running=""
+  local actual_started_at=""
+  local actual_pid=""
+  local actual_restart_count=""
+  local actual_exit_code=""
+  local extra=""
+
+  [[ "$candidate_id" =~ ^[0-9a-f]{64}$ ]] || return 1
+  [[ -n "$expected_name" ]] || return 1
+  identity=$(
+    docker inspect --format \
+      '{{.Id}} {{.Name}} {{.State.Status}} {{.State.Running}} {{.State.StartedAt}} {{.State.Pid}} {{.RestartCount}} {{.State.ExitCode}}' \
+      "$candidate_id" \
+      2>> "$NSYS_LIFECYCLE_LOG"
+  ) || return 1
+  read -r \
+    actual_id actual_name actual_status actual_running actual_started_at \
+    actual_pid actual_restart_count actual_exit_code extra <<< "$identity"
+  [[ -z "$extra" ]] \
+    && [[ "$actual_id" == "$candidate_id" ]] \
+    && [[ "$actual_name" == "/$expected_name" ]] \
+    && [[ "$actual_status" == "running" ]] \
+    && [[ "$actual_running" == "true" ]] \
+    && [[ "$actual_started_at" != 0001-01-01T00:00:00* ]] \
+    && [[ "$actual_pid" =~ ^[1-9][0-9]*$ ]] \
+    && [[ "$actual_restart_count" =~ ^[0-9]+$ ]] \
+    && [[ "$actual_exit_code" =~ ^-?[0-9]+$ ]] || return 1
+
+  PROFILE_CONTAINER_ID=$actual_id
+  PROFILE_CONTAINER_STARTED_AT=$actual_started_at
+  PROFILE_CONTAINER_INIT_PID=$actual_pid
+  PROFILE_CONTAINER_RESTART_COUNT=$actual_restart_count
+  PROFILE_CONTAINER_RUNNING=1
+  PROFILE_CONTAINER_STATUS=$actual_status
+  PROFILE_CONTAINER_EXIT_CODE=$actual_exit_code
+}
+
 _reattest_profile_container() {
   local expected_name=${1:-${CONTAINER:-}}
   local identity=""
   local actual_id=""
   local actual_name=""
+  local actual_status=""
+  local actual_running=""
+  local actual_started_at=""
+  local actual_pid=""
+  local actual_restart_count=""
+  local actual_exit_code=""
   local extra=""
 
   [[ "$PROFILE_CONTAINER_ID" =~ ^[0-9a-f]{64}$ ]] || return 1
   [[ -n "$expected_name" ]] || return 1
+  [[ -n "$PROFILE_CONTAINER_STARTED_AT" ]] || return 1
+  [[ "$PROFILE_CONTAINER_INIT_PID" =~ ^[1-9][0-9]*$ ]] || return 1
+  [[ "$PROFILE_CONTAINER_RESTART_COUNT" =~ ^[0-9]+$ ]] || return 1
   identity=$(
-    docker inspect --format '{{.Id}} {{.Name}}' "$PROFILE_CONTAINER_ID" \
+    docker inspect --format \
+      '{{.Id}} {{.Name}} {{.State.Status}} {{.State.Running}} {{.State.StartedAt}} {{.State.Pid}} {{.RestartCount}} {{.State.ExitCode}}' \
+      "$PROFILE_CONTAINER_ID" \
       2>> "$NSYS_LIFECYCLE_LOG"
   ) || return 1
-  read -r actual_id actual_name extra <<< "$identity"
+  read -r \
+    actual_id actual_name actual_status actual_running actual_started_at \
+    actual_pid actual_restart_count actual_exit_code extra <<< "$identity"
   [[ -z "$extra" ]] \
     && [[ "$actual_id" == "$PROFILE_CONTAINER_ID" ]] \
-    && [[ "$actual_name" == "/$expected_name" ]]
+    && [[ "$actual_name" == "/$expected_name" ]] \
+    && [[ "$actual_started_at" == "$PROFILE_CONTAINER_STARTED_AT" ]] \
+    && [[ "$actual_restart_count" == "$PROFILE_CONTAINER_RESTART_COUNT" ]] \
+    && [[ "$actual_exit_code" =~ ^-?[0-9]+$ ]] || return 1
+
+  case "$actual_status:$actual_running" in
+    running:true)
+      [[ "$actual_pid" == "$PROFILE_CONTAINER_INIT_PID" ]] || return 1
+      PROFILE_CONTAINER_RUNNING=1
+      ;;
+    exited:false)
+      [[ "$actual_pid" == "0" ]] || return 1
+      PROFILE_CONTAINER_RUNNING=0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  PROFILE_CONTAINER_STATUS=$actual_status
+  PROFILE_CONTAINER_EXIT_CODE=$actual_exit_code
+}
+
+_reattest_running_profile_container() {
+  local expected_name=${1:-${CONTAINER:-}}
+  _reattest_profile_container "$expected_name" \
+    && (( PROFILE_CONTAINER_RUNNING == 1 ))
+}
+
+refresh_engine_core_start_ticks() {
+  local query_rc=0
+
+  ENGINE_CORE_CURRENT_START_TICKS=""
+  [[ "$ENGINE_CORE_PID" =~ ^[1-9][0-9]*$ ]] || return 1
+  _reattest_profile_container "$CONTAINER" || return 2
+  (( PROFILE_CONTAINER_RUNNING == 1 )) || return 1
+  ENGINE_CORE_CURRENT_START_TICKS=$(
+    timeout --signal=TERM \
+      --kill-after="${LUMO_NSYS_QUERY_OUTER_KILL_AFTER_S}s" \
+      "${LUMO_NSYS_QUERY_OUTER_TIMEOUT_S}s" \
+      docker exec "$PROFILE_CONTAINER_ID" \
+      "$NSYS_CONTAINER_TIMEOUT_BIN" --signal=TERM \
+      --kill-after="${LUMO_NSYS_QUERY_KILL_AFTER_S}s" \
+      "${LUMO_NSYS_QUERY_TIMEOUT_S}s" \
+      "$NSYS_CONTAINER_BASH_BIN" -c '
+        pid=$1
+        [[ -r "/proc/$pid/stat" ]] || exit 1
+        IFS= read -r stat_line < "/proc/$pid/stat" || exit 1
+        stat_tail=${stat_line##*) }
+        set -- $stat_tail
+        (( $# >= 20 )) || exit 1
+        printf "%s\n" "${20}"
+      ' bash "$ENGINE_CORE_PID" \
+      2>> "$NSYS_LIFECYCLE_LOG"
+  )
+  query_rc=$?
+  _reattest_profile_container "$CONTAINER" || return 2
+  (( query_rc == 0 )) \
+    && [[ "$ENGINE_CORE_CURRENT_START_TICKS" =~ ^[1-9][0-9]*$ ]]
 }
 
 refresh_run_identity_evidence() {
   local -a container_ids=()
+  local engine_core_pid=""
   local process_identity_before=""
   local process_identity_after=""
   local injected_session_id=""
+  local liveness_rc=0
 
   if [[ -z "$PROFILE_CONTAINER_ID" ]]; then
     if [[ ! -e "$PROFILE_CONTAINER_CIDFILE" \
@@ -254,22 +402,57 @@ refresh_run_identity_evidence() {
 "run-bound fixed32 Docker cidfile does not contain one full container ID"
       return 2
     fi
-    PROFILE_CONTAINER_ID=${container_ids[0]}
-    if ! _reattest_profile_container "$CONTAINER"; then
-      PROFILE_CONTAINER_ID=""
+    if ! _pin_running_profile_container "${container_ids[0]}" "$CONTAINER"; then
       NSYS_LIFECYCLE_ERROR=\
-"fixed32 Docker cidfile does not attest the expected run container"
+"fixed32 Docker cidfile does not attest the expected running container incarnation"
       return 2
     fi
     _lifecycle_log \
-      "attested run container id=$PROFILE_CONTAINER_ID name=$CONTAINER"
+      "attested run container id=$PROFILE_CONTAINER_ID name=$CONTAINER started_at=$PROFILE_CONTAINER_STARTED_AT init_pid=$PROFILE_CONTAINER_INIT_PID restart_count=$PROFILE_CONTAINER_RESTART_COUNT"
   elif ! _reattest_profile_container "$CONTAINER"; then
     NSYS_LIFECYCLE_ERROR=\
-"run container immutable ID/name attestation no longer matches"
+"run container immutable identity/incarnation attestation no longer matches"
     return 2
   fi
 
-  [[ -z "$NSYS_INJECTED_SESSION_ID" ]] || return 0
+  if [[ -n "$NSYS_INJECTED_SESSION_ID" ]]; then
+    if [[ ! -f "$PROCESS_IDENTITY" \
+       || -L "$PROCESS_IDENTITY" \
+       || ! -s "$PROCESS_IDENTITY" \
+       || ! "$PROCESS_IDENTITY" -nt "$RUN_BOUNDARY" ]]; then
+      NSYS_LIFECYCLE_ERROR=\
+"pinned fixed32 process identity became malformed, aliased, empty, or stale"
+      return 2
+    fi
+    process_identity_before=$(stat -c '%d:%i:%h:%s:%Y:%Z' "$PROCESS_IDENTITY") \
+      || {
+        NSYS_LIFECYCLE_ERROR="unable to restat pinned fixed32 process identity"
+        return 2
+      }
+    if [[ "$process_identity_before" != "$PROCESS_IDENTITY_STAT" ]]; then
+      NSYS_LIFECYCLE_ERROR=\
+"run-bound fixed32 process identity changed after session binding"
+      return 2
+    fi
+    if (( PROFILE_CONTAINER_RUNNING == 1 )); then
+      refresh_engine_core_start_ticks
+      liveness_rc=$?
+      if (( liveness_rc == 2 )); then
+        NSYS_LIFECYCLE_ERROR=\
+"run container identity or incarnation changed during EngineCore liveness validation"
+        return 2
+      fi
+      ENGINE_CORE_LIVENESS_OK=0
+      if (( PROFILE_CONTAINER_RUNNING == 1 && liveness_rc == 0 )) \
+          && [[ "$ENGINE_CORE_CURRENT_START_TICKS" \
+            == "$ENGINE_CORE_START_TICKS" ]]; then
+        ENGINE_CORE_LIVENESS_OK=1
+      fi
+    else
+      ENGINE_CORE_LIVENESS_OK=0
+    fi
+    return 0
+  fi
   if [[ ! -e "$PROCESS_IDENTITY" && ! -L "$PROCESS_IDENTITY" ]]; then
     return 0
   fi
@@ -325,6 +508,13 @@ refresh_run_identity_evidence() {
 "EngineCore process identity has no unique numeric Nsight session ID"
     return 2
   }
+  engine_core_pid=$(
+    "$JQ_BIN" -er '.engine_core.pid' "$PROCESS_IDENTITY" \
+      2>> "$NSYS_LIFECYCLE_LOG"
+  ) || {
+    NSYS_LIFECYCLE_ERROR="unable to read EngineCore PID from process identity"
+    return 2
+  }
   process_identity_after=$(stat -c '%d:%i:%h:%s:%Y:%Z' "$PROCESS_IDENTITY") \
     || {
       NSYS_LIFECYCLE_ERROR="unable to restat run-bound fixed32 process identity"
@@ -336,20 +526,134 @@ refresh_run_identity_evidence() {
 "process or container identity changed during Nsight identity validation"
     return 2
   fi
+  if (( PROFILE_CONTAINER_RUNNING == 0 )); then
+    NSYS_LIFECYCLE_ERROR=\
+"exact run container exited during initial EngineCore identity validation"
+    return 2
+  fi
+  ENGINE_CORE_PID=$engine_core_pid
+  refresh_engine_core_start_ticks
+  liveness_rc=$?
+  if (( liveness_rc != 0 || PROFILE_CONTAINER_RUNNING == 0 )); then
+    ENGINE_CORE_PID=""
+    NSYS_LIFECYCLE_ERROR=\
+"unable to pin a live EngineCore PID/start identity"
+    return 2
+  fi
+  PROCESS_IDENTITY_STAT=$process_identity_after
+  ENGINE_CORE_START_TICKS=$ENGINE_CORE_CURRENT_START_TICKS
+  ENGINE_CORE_LIVENESS_OK=1
   NSYS_INJECTED_SESSION_ID=$injected_session_id
   _lifecycle_log \
-    "attested EngineCore-injected Nsight session id=$NSYS_INJECTED_SESSION_ID container_id=$PROFILE_CONTAINER_ID"
+    "attested EngineCore-injected Nsight session id=$NSYS_INJECTED_SESSION_ID engine_pid=$ENGINE_CORE_PID engine_start_ticks=$ENGINE_CORE_START_TICKS container_id=$PROFILE_CONTAINER_ID"
 }
 
-capture_nsys_session_baseline() {
+accept_terminal_profile_container() {
+  (( PROFILE_CONTAINER_RUNNING == 0 )) || return 1
+  if [[ "$PROFILE_CONTAINER_STATUS" != "exited" ]]; then
+    NSYS_LIFECYCLE_ERROR=\
+"run container entered an unsupported non-running state"
+    return 2
+  fi
+  if [[ "$PROFILE_CONTAINER_EXIT_CODE" != "0" ]]; then
+    NSYS_LIFECYCLE_ERROR=\
+"exact run container exited nonzero with code $PROFILE_CONTAINER_EXIT_CODE"
+    return 2
+  fi
+  if [[ -z "$NSYS_SESSION_ID" ]]; then
+    NSYS_LIFECYCLE_ERROR=\
+"exact run container exited before Nsight session binding"
+    return 2
+  fi
+  if (( NSYS_POST_COLLECTION_OBSERVED == 0 \
+      && NSYS_EXACT_STOP_COMPLETED == 0 )); then
+    if [[ "$NSYS_SESSION_STATE" == "Collection" ]]; then
+      NSYS_LIFECYCLE_ERROR=\
+"exact run container exited during Nsight Collection"
+    else
+      NSYS_LIFECYCLE_ERROR=\
+"exact run container exited before a proven post-Collection transition"
+    fi
+    return 2
+  fi
+  if (( NSYS_CONTAINER_TERMINAL_OK == 0 )); then
+    _lifecycle_log \
+      "accepted exact exited0 container incarnation after proven Nsight terminal transition"
+  fi
+  NSYS_CONTAINER_TERMINAL_OK=1
+  NSYS_SESSION_QUERY_OK=1
+  NSYS_SESSION_PRESENT=0
+  NSYS_SESSION_STATE="ContainerExited"
+}
+
+validate_engine_core_liveness_after_session_query() {
+  if (( PROFILE_CONTAINER_RUNNING == 1 \
+      && ENGINE_CORE_LIVENESS_OK == 0 \
+      && NSYS_POST_COLLECTION_OBSERVED == 0 )); then
+    NSYS_LIFECYCLE_ERROR=\
+"pinned EngineCore process identity is no longer live before the proven Nsight terminal transition"
+    return 2
+  fi
+}
+
+refresh_run_nsys_session() {
   local snapshot
+  local row=""
+  local row_count=0
+  local name_row_count=0
+  local previous_session_state=$NSYS_SESSION_STATE
+  local query_rc=0
+
+  NSYS_SESSION_QUERY_OK=0
+  NSYS_SESSION_PRESENT=0
+  refresh_run_identity_evidence
+  case $? in
+    0) ;;
+    2) return 2 ;;
+    *) return 1 ;;
+  esac
+  [[ -n "$PROFILE_CONTAINER_ID" ]] \
+    && [[ -n "$NSYS_INJECTED_SESSION_ID" ]] || return 0
+  if (( PROFILE_CONTAINER_RUNNING == 0 )); then
+    accept_terminal_profile_container
+    return $?
+  fi
+  NSYS_SESSION_STATE=""
+  if ! _reattest_profile_container "$CONTAINER"; then
+    NSYS_LIFECYCLE_ERROR=\
+"run container identity or incarnation changed before Nsight session query"
+    return 2
+  fi
+  if (( PROFILE_CONTAINER_RUNNING == 0 )); then
+    accept_terminal_profile_container
+    return $?
+  fi
   snapshot=$(
-    "$LUMO_NSYS_BIN" sessions list --output-format=json \
+    timeout --signal=TERM \
+      --kill-after="${LUMO_NSYS_QUERY_OUTER_KILL_AFTER_S}s" \
+      "${LUMO_NSYS_QUERY_OUTER_TIMEOUT_S}s" \
+      docker exec "$PROFILE_CONTAINER_ID" \
+      "$NSYS_CONTAINER_TIMEOUT_BIN" --signal=TERM \
+      --kill-after="${LUMO_NSYS_QUERY_KILL_AFTER_S}s" \
+      "${LUMO_NSYS_QUERY_TIMEOUT_S}s" \
+      "$NSYS_CONTAINER_BIN" sessions list --output-format=json \
       2>> "$NSYS_LIFECYCLE_LOG"
-  ) || {
-    _lifecycle_log "FAIL: unable to capture pre-launch Nsight session baseline"
-    return 1
-  }
+  )
+  query_rc=$?
+  if ! _reattest_profile_container "$CONTAINER"; then
+    NSYS_LIFECYCLE_ERROR=\
+"run container identity or incarnation changed during Nsight session query"
+    return 2
+  fi
+  if (( query_rc != 0 )); then
+    if (( PROFILE_CONTAINER_RUNNING == 0 )); then
+      accept_terminal_profile_container
+      return $?
+    fi
+    NSYS_LIFECYCLE_ERROR=\
+"container-scoped Nsight session query failed for the exact run container"
+    return 2
+  fi
   "$JQ_BIN" -e '
     type == "array"
     and all(.[];
@@ -359,72 +663,61 @@ capture_nsys_session_baseline() {
       and (.accessible | type == "boolean")
     )
   ' <<< "$snapshot" >/dev/null || {
-    _lifecycle_log "FAIL: malformed pre-launch Nsight session JSON"
-    return 1
+    NSYS_LIFECYCLE_ERROR=\
+"container-scoped Nsight session query returned malformed JSON"
+    return 2
   }
-  if [[ -n "$NSYS_EXPECTED_SESSION_NAME" ]] \
-      && "$JQ_BIN" -e --arg name "$NSYS_EXPECTED_SESSION_NAME" \
-        'any(.[]; .name == $name)' <<< "$snapshot" >/dev/null; then
-    _lifecycle_log \
-      "FAIL: pinned run Nsight session name already exists in baseline"
-    return 1
-  fi
-  NSYS_BASELINE_JSON=$snapshot
-  _lifecycle_log \
-    "captured Nsight session baseline count=$("$JQ_BIN" 'length' <<< "$snapshot")"
-}
-
-refresh_run_nsys_session() {
-  local snapshot
-  local row=""
-  local row_count=0
-
-  NSYS_SESSION_QUERY_OK=0
-  NSYS_SESSION_PRESENT=0
-  NSYS_SESSION_STATE=""
-  refresh_run_identity_evidence
-  case $? in
-    0) ;;
-    2) return 2 ;;
-    *) return 1 ;;
-  esac
-  snapshot=$(
-    "$LUMO_NSYS_BIN" sessions list --output-format=json \
-      2>> "$NSYS_LIFECYCLE_LOG"
-  ) || return 1
-  "$JQ_BIN" -e '
-    type == "array"
-    and all(.[];
-      (.id | type == "string")
-      and (.name | type == "string")
-      and (.state | type == "string")
-      and (.accessible | type == "boolean")
-    )
-  ' <<< "$snapshot" >/dev/null || return 1
   NSYS_SESSION_QUERY_OK=1
+  name_row_count=$(
+    "$JQ_BIN" -r --arg name "$NSYS_EXPECTED_SESSION_NAME" \
+      '[.[] | select(.name == $name)] | length' <<< "$snapshot"
+  ) || {
+    NSYS_LIFECYCLE_ERROR=\
+"unable to validate the run-unique Nsight session name"
+    return 2
+  }
+  if (( name_row_count > 1 )); then
+    NSYS_LIFECYCLE_ERROR=\
+"container Nsight namespace has duplicate rows for the run-unique session name"
+    return 2
+  fi
 
   if [[ -z "$NSYS_SESSION_ID" ]]; then
     [[ -n "$NSYS_INJECTED_SESSION_ID" ]] || return 0
-    if "$JQ_BIN" -e --arg id "$NSYS_INJECTED_SESSION_ID" \
-        'any(.[]; .id == $id)' <<< "$NSYS_BASELINE_JSON" >/dev/null; then
-      NSYS_LIFECYCLE_ERROR=\
-"EngineCore-injected Nsight session ID was already present at baseline"
-      return 2
-    fi
     row_count=$(
       "$JQ_BIN" -r --arg id "$NSYS_INJECTED_SESSION_ID" \
         '[.[] | select(.id == $id)] | length' <<< "$snapshot"
-    ) || return 1
+    ) || {
+      NSYS_LIFECYCLE_ERROR=\
+"unable to validate the EngineCore-injected Nsight session ID"
+      return 2
+    }
     if (( row_count > 1 )); then
       NSYS_LIFECYCLE_ERROR=\
 "Nsight sessions list has duplicate rows for the injected session ID"
       return 2
     fi
-    (( row_count == 1 )) || return 0
+    if (( row_count == 0 )); then
+      if (( name_row_count == 1 )); then
+        NSYS_LIFECYCLE_ERROR=\
+"run-unique Nsight session name is attached to a different session ID"
+        return 2
+      fi
+      if (( PROFILE_CONTAINER_RUNNING == 0 )); then
+        accept_terminal_profile_container
+        return $?
+      fi
+      validate_engine_core_liveness_after_session_query || return 2
+      return 0
+    fi
     row=$(
       "$JQ_BIN" -c --arg id "$NSYS_INJECTED_SESSION_ID" \
         '.[] | select(.id == $id)' <<< "$snapshot"
-    ) || return 1
+    ) || {
+      NSYS_LIFECYCLE_ERROR=\
+"unable to read the EngineCore-injected Nsight session row"
+      return 2
+    }
     if [[ ! "$NSYS_INJECTED_SESSION_ID" =~ ^[1-9][0-9]*$ ]] \
         || [[ "$("$JQ_BIN" -r '.name' <<< "$row")" \
           != "$NSYS_EXPECTED_SESSION_NAME" ]] \
@@ -450,17 +743,40 @@ refresh_run_nsys_session() {
   row_count=$(
     "$JQ_BIN" -r --arg id "$NSYS_SESSION_ID" \
       '[.[] | select(.id == $id)] | length' <<< "$snapshot"
-  ) || return 1
+  ) || {
+    NSYS_LIFECYCLE_ERROR="unable to revalidate the bound Nsight session ID"
+    return 2
+  }
   if (( row_count > 1 )); then
     NSYS_LIFECYCLE_ERROR=\
 "Nsight sessions list has duplicate rows for the bound session ID"
     return 2
   fi
-  (( row_count == 1 )) || return 0
+  if (( row_count == 0 )); then
+    if (( name_row_count == 1 )); then
+      NSYS_LIFECYCLE_ERROR=\
+"bound Nsight session name moved to a different session ID"
+      return 2
+    fi
+    if [[ "$previous_session_state" == "Collection" \
+       || "$previous_session_state" == "Generation" ]] \
+        || (( NSYS_COLLECTION_OBSERVED == 1 )); then
+      NSYS_POST_COLLECTION_OBSERVED=1
+    fi
+    if (( PROFILE_CONTAINER_RUNNING == 0 )); then
+      accept_terminal_profile_container
+      return $?
+    fi
+    validate_engine_core_liveness_after_session_query || return 2
+    return 0
+  fi
   row=$(
     "$JQ_BIN" -c --arg id "$NSYS_SESSION_ID" \
       '.[] | select(.id == $id)' <<< "$snapshot"
-  ) || return 1
+  ) || {
+    NSYS_LIFECYCLE_ERROR="unable to read the bound Nsight session row"
+    return 2
+  }
   if [[ "$("$JQ_BIN" -r '.name' <<< "$row")" \
         != "$NSYS_EXPECTED_SESSION_NAME" ]] \
       || [[ "$("$JQ_BIN" -r '.accessible' <<< "$row")" != "true" ]]; then
@@ -470,12 +786,38 @@ refresh_run_nsys_session() {
   fi
   NSYS_SESSION_PRESENT=1
   NSYS_SESSION_STATE=$("$JQ_BIN" -r '.state' <<< "$row")
+  case "$NSYS_SESSION_STATE" in
+    Collection)
+      if (( NSYS_POST_COLLECTION_OBSERVED == 1 )); then
+        NSYS_LIFECYCLE_ERROR=\
+"exact Nsight session regressed to Collection after its terminal transition"
+        return 2
+      fi
+      NSYS_COLLECTION_OBSERVED=1
+      ;;
+    Generation)
+      NSYS_POST_COLLECTION_OBSERVED=1
+      ;;
+    *)
+      if (( NSYS_COLLECTION_OBSERVED == 1 )); then
+        NSYS_POST_COLLECTION_OBSERVED=1
+      fi
+      ;;
+  esac
+  if (( PROFILE_CONTAINER_RUNNING == 0 )); then
+    accept_terminal_profile_container
+    return $?
+  fi
+  validate_engine_core_liveness_after_session_query || return 2
 }
 
 verify_report_readable() {
   local report=$1
   local readability_output=$2
-  "$LUMO_NSYS_BIN" export \
+  timeout --signal=TERM \
+    --kill-after="${LUMO_NSYS_EXPORT_KILL_AFTER_S}s" \
+    "${LUMO_NSYS_EXPORT_TIMEOUT_S}s" \
+    "$LUMO_NSYS_BIN" export \
     --type=info \
     --force-overwrite=true \
     --output="$readability_output" \
@@ -486,10 +828,10 @@ verify_report_readable() {
 
 stop_exact_nsys_session() {
   local refresh_rc=0
+  local stop_rc=0
   [[ "$NSYS_SESSION_ID" =~ ^[1-9][0-9]*$ ]] \
     && [[ "$NSYS_SESSION_ID" == "$NSYS_INJECTED_SESSION_ID" ]] \
     && [[ "$NSYS_SESSION_NAME" == "$NSYS_EXPECTED_SESSION_NAME" ]] \
-    && _reattest_profile_container "$CONTAINER" \
     || return 1
   refresh_run_nsys_session
   refresh_rc=$?
@@ -504,12 +846,47 @@ stop_exact_nsys_session() {
         "WARN: refusing Nsight stop without a fresh exact Collection row"
       return 1
     }
+  refresh_engine_core_start_ticks
+  refresh_rc=$?
+  if (( refresh_rc != 0 || PROFILE_CONTAINER_RUNNING == 0 )) \
+      || [[ "$ENGINE_CORE_CURRENT_START_TICKS" \
+        != "$ENGINE_CORE_START_TICKS" ]]; then
+    NSYS_LIFECYCLE_ERROR=\
+"refusing Nsight stop without a fresh live EngineCore PID/start identity"
+    return 1
+  fi
+  if ! _reattest_running_profile_container "$CONTAINER"; then
+    NSYS_LIFECYCLE_ERROR=\
+"run container is not the exact attested running target before Nsight stop"
+    return 1
+  fi
   _lifecycle_log "requesting stop for exact Nsight session id=$NSYS_SESSION_ID"
   timeout --signal=TERM \
-    --kill-after="${LUMO_NSYS_STOP_KILL_AFTER_S}s" \
-    "${LUMO_NSYS_STOP_TIMEOUT_S}s" \
-    "$LUMO_NSYS_BIN" stop --session="$NSYS_SESSION_ID" \
+    --kill-after="${LUMO_NSYS_STOP_OUTER_KILL_AFTER_S}s" \
+    "${LUMO_NSYS_STOP_OUTER_TIMEOUT_S}s" \
+    docker exec "$PROFILE_CONTAINER_ID" \
+      "$NSYS_CONTAINER_TIMEOUT_BIN" --signal=TERM \
+      --kill-after="${LUMO_NSYS_STOP_KILL_AFTER_S}s" \
+      "${LUMO_NSYS_STOP_TIMEOUT_S}s" \
+      "$NSYS_CONTAINER_BIN" stop --session="$NSYS_SESSION_ID" \
     >> "$NSYS_LIFECYCLE_LOG" 2>&1
+  stop_rc=$?
+  if ! _reattest_profile_container "$CONTAINER"; then
+    NSYS_LIFECYCLE_ERROR=\
+"run container identity or incarnation changed during Nsight stop"
+    return 1
+  fi
+  if (( stop_rc != 0 )); then
+    NSYS_LIFECYCLE_ERROR=\
+"container-scoped Nsight stop failed for the exact run session"
+    return 1
+  fi
+  NSYS_EXACT_STOP_COMPLETED=1
+  NSYS_POST_COLLECTION_OBSERVED=1
+  if (( PROFILE_CONTAINER_RUNNING == 0 )); then
+    accept_terminal_profile_container
+    return $?
+  fi
 }
 
 preserve_recoverable_container() {
@@ -560,13 +937,24 @@ fail_nsys_lifecycle() {
   return 1
 }
 
+report_stability_is_eligible() {
+  local control_frozen=$1
+  (( NSYS_SESSION_QUERY_OK == 1 )) \
+    && [[ -n "$NSYS_SESSION_ID" ]] \
+    && (( NSYS_POST_COLLECTION_OBSERVED == 1 )) \
+    && (( control_frozen == 1 )) \
+    && [[ "$NSYS_SESSION_STATE" != "Collection" ]] \
+    && [[ "$NSYS_SESSION_STATE" != "Generation" ]]
+}
+
 wait_for_fresh_stable_report() {
   local driver_pid=$1
   local driver_start=$2
   local report=$3
   local readability_output=$4
   local run_boundary=$5
-  local session_started_at=$SECONDS
+  local identity_wait_started_at=$SECONDS
+  local session_started_at=-1
   local collection_started_at=-1
   local generation_started_at=-1
   local forced_stop=0
@@ -574,6 +962,7 @@ wait_for_fresh_stable_report() {
   local stable_polls=0
   local report_tuple=""
   local previous_tuple=""
+  local report_sha256=""
   local refresh_after_stop_rc=0
 
   while true; do
@@ -588,6 +977,13 @@ wait_for_fresh_stable_report() {
         return 1
         ;;
     esac
+
+    if (( session_started_at < 0 )) \
+        && [[ -n "$NSYS_INJECTED_SESSION_ID" ]]; then
+      session_started_at=$SECONDS
+      _lifecycle_log \
+        "starting delayed-session deadlines from pinned EngineCore identity"
+    fi
 
     if (( NSYS_SESSION_QUERY_OK == 1 )) \
         && [[ "$NSYS_SESSION_STATE" == "Collection" ]] \
@@ -630,12 +1026,11 @@ wait_for_fresh_stable_report() {
       _lifecycle_log "Nsight report generation began"
     fi
 
-    if (( NSYS_SESSION_QUERY_OK == 1 )) \
-        && [[ -n "$NSYS_SESSION_ID" ]] \
-        && [[ "$NSYS_SESSION_STATE" != "Collection" ]] \
-        && [[ "$NSYS_SESSION_STATE" != "Generation" ]]; then
-      if [[ -s "$report" && "$report" -nt "$run_boundary" ]]; then
-        report_tuple=$(stat -c '%s:%Y:%Z' "$report") || report_tuple=""
+    if report_stability_is_eligible "$control_frozen"; then
+      if [[ -f "$report" && ! -L "$report" \
+         && -s "$report" && "$report" -nt "$run_boundary" ]]; then
+        report_tuple=$(stat -c '%d:%i:%h:%s:%Y:%Z' "$report") \
+          || report_tuple=""
         if [[ -n "$report_tuple" && "$report_tuple" == "$previous_tuple" ]]; then
           (( stable_polls += 1 ))
         else
@@ -652,9 +1047,31 @@ wait_for_fresh_stable_report() {
     fi
 
     if (( stable_polls >= LUMO_NSYS_REPORT_STABLE_POLLS )); then
-      if verify_report_readable "$report" "$readability_output"; then
+      if verify_report_readable "$report" "$readability_output" \
+          && [[ -f "$report" && ! -L "$report" ]] \
+          && [[ "$(stat -c '%d:%i:%h:%s:%Y:%Z' "$report" 2>/dev/null)" \
+            == "$report_tuple" ]]; then
+        report_sha256=$(
+          timeout --signal=TERM \
+            --kill-after="${LUMO_NSYS_HASH_KILL_AFTER_S}s" \
+            "${LUMO_NSYS_HASH_TIMEOUT_S}s" \
+            sha256sum -- "$report" \
+            | awk 'NR == 1 {print $1}'
+        ) || report_sha256=""
+        if [[ "$report_sha256" =~ ^[0-9a-f]{64}$ ]] \
+            && [[ "$(stat -c '%d:%i:%h:%s:%Y:%Z' "$report" 2>/dev/null)" \
+              == "$report_tuple" ]]; then
+          NSYS_PROVEN_REPORT_IDENTITY=$report_tuple
+          NSYS_PROVEN_REPORT_SHA256=$report_sha256
+        else
+          _lifecycle_log \
+            "WARN: stable report changed or could not be hashed after readability proof"
+          stable_polls=0
+          previous_tuple=""
+          continue
+        fi
         _lifecycle_log \
-          "fresh report is stable across $stable_polls polls and readable via pinned nsys"
+          "fresh report is stable, readable, and cryptographically latched"
         return 0
       fi
       _lifecycle_log "WARN: stable report is not yet readable via pinned nsys"
@@ -662,12 +1079,21 @@ wait_for_fresh_stable_report() {
       previous_tuple=""
     fi
 
-    if [[ -z "$NSYS_SESSION_ID" ]] \
+    if (( session_started_at < 0 )) \
+        && (( SECONDS - identity_wait_started_at \
+          >= LUMO_NSYS_BOOT_TIMEOUT_S )); then
+      fail_nsys_lifecycle \
+        "timed out waiting for the run-bound EngineCore Nsight identity"
+      return 1
+    fi
+    if (( session_started_at >= 0 )) \
+        && [[ -z "$NSYS_SESSION_ID" ]] \
         && (( SECONDS - session_started_at >= LUMO_NSYS_SESSION_TIMEOUT_S )); then
       fail_nsys_lifecycle "timed out waiting for the fresh run Nsight session"
       return 1
     fi
-    if [[ -n "$NSYS_SESSION_ID" ]] \
+    if (( session_started_at >= 0 )) \
+        && [[ -n "$NSYS_SESSION_ID" ]] \
         && (( control_frozen == 0 )) \
         && (( SECONDS - session_started_at >= LUMO_NSYS_COLLECTION_TIMEOUT_S )); then
       fail_nsys_lifecycle "timed out waiting for Nsight Collection entry"
@@ -727,6 +1153,12 @@ wait_for_fresh_stable_report() {
 validate_nsys_delayed_collection_timeouts() {
   local minimum_timeout_s=$((LUMO_NSYS_DELAY_S + LUMO_NSYS_DURATION_S))
 
+  (( LUMO_NSYS_BOOT_TIMEOUT_S >= ${HEALTH_TIMEOUT_S:-1200} )) || {
+    echo \
+      "FAIL: EngineCore identity timeout must cover the server health timeout" \
+      >&2
+    return 1
+  }
   (( LUMO_NSYS_SESSION_TIMEOUT_S >= minimum_timeout_s )) || {
     echo \
       "FAIL: Nsight session discovery timeout must cover delay plus capture duration" \
@@ -818,12 +1250,24 @@ export LUMO_NSYS_DURATION_S=${LUMO_NSYS_DURATION_S:-300}
 export LUMO_NSYS_FLUSH_MS=${LUMO_NSYS_FLUSH_MS:-100}
 export LUMO_NSYS_CONFIG_DIRECTIVES="${LUMO_NSYS_CONFIG_DIRECTIVES:-CuptiUseRawGpuTimestamps=false}"
 export LUMO_NSYS_OUTPUT=/logs/fr13_fixed32_b1_real_swe
+export HEALTH_TIMEOUT_S=${HEALTH_TIMEOUT_S:-1200}
+LUMO_NSYS_BOOT_TIMEOUT_S=${LUMO_NSYS_BOOT_TIMEOUT_S:-1800}
 LUMO_NSYS_SESSION_TIMEOUT_S=${LUMO_NSYS_SESSION_TIMEOUT_S:-1500}
 LUMO_NSYS_COLLECTION_TIMEOUT_S=${LUMO_NSYS_COLLECTION_TIMEOUT_S:-1500}
 LUMO_NSYS_COLLECTION_MAX_S=${LUMO_NSYS_COLLECTION_MAX_S:-420}
 LUMO_NSYS_REPORT_TIMEOUT_S=${LUMO_NSYS_REPORT_TIMEOUT_S:-900}
+LUMO_NSYS_QUERY_TIMEOUT_S=${LUMO_NSYS_QUERY_TIMEOUT_S:-10}
+LUMO_NSYS_QUERY_KILL_AFTER_S=${LUMO_NSYS_QUERY_KILL_AFTER_S:-2}
+LUMO_NSYS_QUERY_OUTER_TIMEOUT_S=${LUMO_NSYS_QUERY_OUTER_TIMEOUT_S:-15}
+LUMO_NSYS_QUERY_OUTER_KILL_AFTER_S=${LUMO_NSYS_QUERY_OUTER_KILL_AFTER_S:-2}
 LUMO_NSYS_STOP_TIMEOUT_S=${LUMO_NSYS_STOP_TIMEOUT_S:-60}
 LUMO_NSYS_STOP_KILL_AFTER_S=${LUMO_NSYS_STOP_KILL_AFTER_S:-5}
+LUMO_NSYS_STOP_OUTER_TIMEOUT_S=${LUMO_NSYS_STOP_OUTER_TIMEOUT_S:-70}
+LUMO_NSYS_STOP_OUTER_KILL_AFTER_S=${LUMO_NSYS_STOP_OUTER_KILL_AFTER_S:-5}
+LUMO_NSYS_EXPORT_TIMEOUT_S=${LUMO_NSYS_EXPORT_TIMEOUT_S:-300}
+LUMO_NSYS_EXPORT_KILL_AFTER_S=${LUMO_NSYS_EXPORT_KILL_AFTER_S:-5}
+LUMO_NSYS_HASH_TIMEOUT_S=${LUMO_NSYS_HASH_TIMEOUT_S:-300}
+LUMO_NSYS_HASH_KILL_AFTER_S=${LUMO_NSYS_HASH_KILL_AFTER_S:-5}
 LUMO_NSYS_REPORT_STABLE_POLLS=${LUMO_NSYS_REPORT_STABLE_POLLS:-3}
 LUMO_NSYS_POLL_S=${LUMO_NSYS_POLL_S:-2}
 JQ_BIN=${JQ_BIN:-$(command -v jq)}
@@ -899,12 +1343,24 @@ command -v timeout >/dev/null || {
   exit 2
 }
 for _positive_lifecycle_value in \
+  "$HEALTH_TIMEOUT_S" \
+  "$LUMO_NSYS_BOOT_TIMEOUT_S" \
   "$LUMO_NSYS_SESSION_TIMEOUT_S" \
   "$LUMO_NSYS_COLLECTION_TIMEOUT_S" \
   "$LUMO_NSYS_COLLECTION_MAX_S" \
   "$LUMO_NSYS_REPORT_TIMEOUT_S" \
+  "$LUMO_NSYS_QUERY_TIMEOUT_S" \
+  "$LUMO_NSYS_QUERY_KILL_AFTER_S" \
+  "$LUMO_NSYS_QUERY_OUTER_TIMEOUT_S" \
+  "$LUMO_NSYS_QUERY_OUTER_KILL_AFTER_S" \
   "$LUMO_NSYS_STOP_TIMEOUT_S" \
   "$LUMO_NSYS_STOP_KILL_AFTER_S" \
+  "$LUMO_NSYS_STOP_OUTER_TIMEOUT_S" \
+  "$LUMO_NSYS_STOP_OUTER_KILL_AFTER_S" \
+  "$LUMO_NSYS_EXPORT_TIMEOUT_S" \
+  "$LUMO_NSYS_EXPORT_KILL_AFTER_S" \
+  "$LUMO_NSYS_HASH_TIMEOUT_S" \
+  "$LUMO_NSYS_HASH_KILL_AFTER_S" \
   "$LUMO_NSYS_POLL_S"; do
   [[ "$_positive_lifecycle_value" =~ ^[1-9][0-9]*$ ]] || {
     echo "FAIL: Nsight lifecycle timeouts and poll interval must be positive integers" >&2
@@ -912,6 +1368,16 @@ for _positive_lifecycle_value in \
   }
 done
 unset _positive_lifecycle_value
+(( LUMO_NSYS_QUERY_OUTER_TIMEOUT_S \
+    > LUMO_NSYS_QUERY_TIMEOUT_S + LUMO_NSYS_QUERY_KILL_AFTER_S )) || {
+  echo "FAIL: host Nsight query bound must outlive its in-container bound" >&2
+  exit 2
+}
+(( LUMO_NSYS_STOP_OUTER_TIMEOUT_S \
+    > LUMO_NSYS_STOP_TIMEOUT_S + LUMO_NSYS_STOP_KILL_AFTER_S )) || {
+  echo "FAIL: host Nsight stop bound must outlive its in-container bound" >&2
+  exit 2
+}
 validate_nsys_delayed_collection_timeouts || exit 2
 [[ "$LUMO_NSYS_REPORT_STABLE_POLLS" =~ ^[1-9][0-9]*$ ]] \
   && (( LUMO_NSYS_REPORT_STABLE_POLLS >= 3 )) || {
@@ -924,10 +1390,6 @@ RUN_BOUNDARY="$RUNROOT_ABS/.nsys_report_run_boundary"
 touch "$RUN_BOUNDARY"
 [[ ! -e "$REPORT" && ! -e "$READABILITY" ]] || {
   echo "FAIL: fresh run-bound profiler outputs already exist" >&2
-  exit 2
-}
-capture_nsys_session_baseline || {
-  echo "FAIL: unable to establish fresh Nsight session baseline" >&2
   exit 2
 }
 trap profile_cleanup EXIT
@@ -971,6 +1433,12 @@ if [[ ! -s "$REPORT" ]]; then
   echo "FAIL: bounded real-SWE Nsight report was not produced" >&2
   exit 3
 fi
+if [[ ! "$NSYS_PROVEN_REPORT_IDENTITY" =~ \
+    ^[0-9]+:[0-9]+:[0-9]+:[0-9]+:[0-9]+:[0-9]+$ ]] \
+    || [[ ! "$NSYS_PROVEN_REPORT_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+  echo "FAIL: lifecycle-proven report identity was not retained" >&2
+  exit 3
+fi
 
 if ! find "$RUNROOT/$ARM/swe_out/verified/per_task" -mindepth 1 -maxdepth 1 \
   -type d -name 'astropy__astropy-*' -print -quit 2>/dev/null \
@@ -983,6 +1451,8 @@ if ! .venv/bin/python scripts/fr13_fixed32_nsys_reduce.py \
   "$REPORT" \
   --output "$REDUCED" \
   --nsys-bin "$LUMO_NSYS_BIN" \
+  --expected-report-identity "$NSYS_PROVEN_REPORT_IDENTITY" \
+  --expected-report-sha256 "$NSYS_PROVEN_REPORT_SHA256" \
   --subset "$SUBSET" \
   --runtime-manifest-launch "$RUNROOT/runtime_manifest.at_launch.json" \
   --runtime-manifest-end "$RUNROOT/runtime_manifest.at_end.json" \

@@ -16,8 +16,14 @@ VARIANT = REPO / "scripts" / "fr13_bigdenom_swe_serve_variant.sh"
 GUARD = REPO / "scripts" / "gpu_oom_guard.sh"
 CONTAINER_ID = "a" * 64
 FOREIGN_CONTAINER_ID = "b" * 64
+CONTAINER_STARTED_AT = "2026-07-30T12:00:00.123456789Z"
+CONTAINER_INIT_PID = "4242"
+CONTAINER_RESTART_COUNT = "0"
 SESSION_ID = "10206"
 SESSION_NAME = "fr13-fixed32-20260730T120000Z-p4242"
+CONTAINER_NSYS_BIN = "/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys"
+CONTAINER_TIMEOUT_BIN = "/usr/bin/timeout"
+CONTAINER_BASH_BIN = "/bin/bash"
 
 
 def _write_executable(path: Path, text: str) -> None:
@@ -32,6 +38,28 @@ def _shell_function(path: Path, name: str) -> str:
         if lines[end] == "}":
             return "\n".join(lines[start : end + 1])
     raise AssertionError(f"unterminated shell function: {name}")
+
+
+def _container_nsys_exec(
+    command: str,
+    *,
+    timeout_s: str = "10",
+    kill_after_s: str = "2",
+) -> str:
+    return (
+        f"exec {CONTAINER_ID} {CONTAINER_TIMEOUT_BIN} --signal=TERM "
+        f"--kill-after={kill_after_s}s {timeout_s}s "
+        f"{CONTAINER_NSYS_BIN} {command}"
+    )
+
+
+def _incarnation_attestation() -> str:
+    return (
+        "inspect --format "
+        "{{.Id}} {{.Name}} {{.State.Status}} {{.State.Running}} "
+        "{{.State.StartedAt}} {{.State.Pid}} {{.RestartCount}} "
+        f"{{{{.State.ExitCode}}}} {CONTAINER_ID}"
+    )
 
 
 def _write_process_identity(path: Path, session_id: str = SESSION_ID) -> None:
@@ -74,7 +102,43 @@ printf '%s\\n' "$*" >> "$DOCKER_CALLS"
 if [[ "$1" == "inspect" && "$2" == "--format" ]]; then
   [[ "$4" == "$CONTAINER_ID" ]] || exit 1
   [[ ! -e "${{CONTAINER_MISSING_FILE:-/nonexistent}}" ]] || exit 1
-  printf '%s /%s\\n' "$CONTAINER_ID" "{name_source}"
+  if [[ "$3" == "{{{{.Id}}}} {{{{.Name}}}} {{{{.State.Status}}}} {{{{.State.Running}}}} {{{{.State.StartedAt}}}} {{{{.State.Pid}}}} {{{{.RestartCount}}}} {{{{.State.ExitCode}}}}" ]]; then
+    if [[ -n "${{CONTAINER_STATE_FILE:-}}" ]]; then
+      read -r state_status state_running state_started_at state_pid \
+        state_restart_count state_exit_code < "$CONTAINER_STATE_FILE"
+    else
+      state_status=${{CONTAINER_STATUS:-running}}
+      state_running=${{CONTAINER_RUNNING:-true}}
+      state_started_at=${{CONTAINER_STARTED_AT:-{CONTAINER_STARTED_AT}}}
+      state_pid=${{CONTAINER_STATE_PID:-{CONTAINER_INIT_PID}}}
+      state_restart_count=${{CONTAINER_RESTART_COUNT:-{CONTAINER_RESTART_COUNT}}}
+      state_exit_code=${{CONTAINER_EXIT_CODE:-0}}
+    fi
+    printf '%s /%s %s %s %s %s %s %s\\n' \
+      "$CONTAINER_ID" "{name_source}" \
+      "$state_status" "$state_running" "$state_started_at" "$state_pid" \
+      "$state_restart_count" "$state_exit_code"
+  elif [[ "$3" == "{{{{.Id}}}} {{{{.Name}}}}" ]]; then
+    printf '%s /%s\\n' "$CONTAINER_ID" "{name_source}"
+  else
+    exit 1
+  fi
+  exit 0
+fi
+if [[ "$1" == "exec" ]]; then
+  [[ "$2" == "$CONTAINER_ID" ]] || exit 1
+  [[ "$3" == "{CONTAINER_TIMEOUT_BIN}" ]] || exit 1
+  [[ "$4" == "--signal=TERM" && "$5" == --kill-after=* ]] || exit 1
+  if [[ "$7" == "{CONTAINER_NSYS_BIN}" ]]; then
+    FAKE_NSYS_CONTAINER_CONTEXT=1 exec /usr/bin/timeout \
+      "$4" "$5" "$6" "$CONTAINER_NSYS" "${{@:8}}"
+  fi
+  if [[ "$7" == "{CONTAINER_BASH_BIN}" ]]; then
+    [[ ! -e "${{ENGINE_CORE_DEAD_FILE:-/nonexistent}}" ]] || exit 1
+    printf '%s\\n' "${{ENGINE_CORE_START_TICKS:-9001}}"
+    exit 0
+  fi
+  exit 1
   exit 0
 fi
 exit 1
@@ -151,9 +215,25 @@ def test_profile_lifecycle_contract_is_async_exact_and_recoverable() -> None:
     assert "NSYS_INJECTED_SESSION_ID" in text
     assert "NSYS_EXPECTED_SESSION_NAME" in text
     assert "PROFILE_CONTAINER_CIDFILE" in text
+    assert "capture_nsys_session_baseline" not in text
+    assert (
+        'docker exec "$PROFILE_CONTAINER_ID" \\\n'
+        '      "$NSYS_CONTAINER_TIMEOUT_BIN" --signal=TERM'
+        in text
+    )
+    assert '"$NSYS_CONTAINER_BIN" sessions list --output-format=json' in text
+    assert '"$NSYS_CONTAINER_BIN" stop --session="$NSYS_SESSION_ID"' in text
+    assert f"NSYS_CONTAINER_BIN={CONTAINER_NSYS_BIN}" in text
+    assert f"NSYS_CONTAINER_TIMEOUT_BIN={CONTAINER_TIMEOUT_BIN}" in text
+    assert f"NSYS_CONTAINER_BASH_BIN={CONTAINER_BASH_BIN}" in text
+    assert "PROFILE_CONTAINER_STARTED_AT" in text
+    assert "PROFILE_CONTAINER_INIT_PID" in text
+    assert "PROFILE_CONTAINER_RESTART_COUNT" in text
     assert "NSYS_STOPPED_START_TICKS" in text
     assert "thaw_exact_control_ancestors" in text
     assert "--type=info" in text
+    assert "--expected-report-identity" in text
+    assert "--expected-report-sha256" in text
     assert "--kill-after=" in text
     assert "LUMO_NSYS_REPORT_STABLE_POLLS" in text
     assert 'docker rename "$PROFILE_CONTAINER_ID" "$PRESERVED_CONTAINER"' in text
@@ -177,15 +257,86 @@ def test_profile_lifecycle_contract_is_async_exact_and_recoverable() -> None:
 
 
 @pytest.mark.parametrize(
-    ("session_timeout_s", "collection_timeout_s", "expected_error"),
     (
-        ("1500", "1500", None),
+        "session_state",
+        "session_present",
+        "post_collection",
+        "control_frozen",
+        "expected_eligible",
+    ),
+    (
+        ("Waiting", "1", "0", "1", "0"),
+        ("", "0", "0", "1", "0"),
+        ("ContainerExited", "0", "1", "0", "0"),
+        ("ContainerExited", "0", "1", "1", "1"),
+        ("", "0", "1", "1", "1"),
+    ),
+)
+def test_report_stability_requires_proven_guarded_terminal_transition(
+    session_state: str,
+    session_present: str,
+    post_collection: str,
+    control_frozen: str,
+    expected_eligible: str,
+) -> None:
+    script = r"""
+source "$1"
+NSYS_SESSION_QUERY_OK=1
+NSYS_SESSION_ID=$EXPECTED_SESSION_ID
+NSYS_SESSION_STATE=$SESSION_STATE
+NSYS_SESSION_PRESENT=$SESSION_PRESENT
+NSYS_POST_COLLECTION_OBSERVED=$POST_COLLECTION
+if report_stability_is_eligible "$CONTROL_FROZEN"; then
+  actual=1
+else
+  actual=0
+fi
+[[ "$actual" == "$EXPECTED_ELIGIBLE" ]]
+"""
+    completed = subprocess.run(
+        ["bash", "-c", script, "--", os.fspath(PROFILE)],
+        cwd=REPO,
+        env={
+            **os.environ,
+            "EXPECTED_SESSION_ID": SESSION_ID,
+            "SESSION_STATE": session_state,
+            "SESSION_PRESENT": session_present,
+            "POST_COLLECTION": post_collection,
+            "CONTROL_FROZEN": control_frozen,
+            "EXPECTED_ELIGIBLE": expected_eligible,
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
+@pytest.mark.parametrize(
+    (
+        "boot_timeout_s",
+        "session_timeout_s",
+        "collection_timeout_s",
+        "expected_error",
+    ),
+    (
+        ("1200", "1500", "1500", None),
         (
+            "1199",
+            "1500",
+            "1500",
+            "EngineCore identity timeout must cover the server health timeout",
+        ),
+        (
+            "1200",
             "1499",
             "1500",
             "session discovery timeout must cover delay plus capture duration",
         ),
         (
+            "1200",
             "1500",
             "1499",
             "Collection-entry timeout must cover delay plus capture duration",
@@ -193,6 +344,7 @@ def test_profile_lifecycle_contract_is_async_exact_and_recoverable() -> None:
     ),
 )
 def test_profile_timeouts_cover_canonical_delayed_collection(
+    boot_timeout_s: str,
     session_timeout_s: str,
     collection_timeout_s: str,
     expected_error: str | None,
@@ -201,8 +353,10 @@ def test_profile_timeouts_cover_canonical_delayed_collection(
 source "$1"
 LUMO_NSYS_DELAY_S=1200
 LUMO_NSYS_DURATION_S=300
-LUMO_NSYS_SESSION_TIMEOUT_S=$2
-LUMO_NSYS_COLLECTION_TIMEOUT_S=$3
+HEALTH_TIMEOUT_S=1200
+LUMO_NSYS_BOOT_TIMEOUT_S=$2
+LUMO_NSYS_SESSION_TIMEOUT_S=$3
+LUMO_NSYS_COLLECTION_TIMEOUT_S=$4
 validate_nsys_delayed_collection_timeouts
 """
     completed = subprocess.run(
@@ -212,6 +366,7 @@ validate_nsys_delayed_collection_timeouts
             script,
             "--",
             os.fspath(PROFILE),
+            boot_timeout_s,
             session_timeout_s,
             collection_timeout_s,
         ],
@@ -226,6 +381,105 @@ validate_nsys_delayed_collection_timeouts
     else:
         assert completed.returncode == 1
         assert expected_error in completed.stderr
+
+
+def test_delayed_session_deadlines_start_after_engine_identity(
+    tmp_path: Path,
+) -> None:
+    lifecycle_log = tmp_path / "lifecycle.log"
+    readability = tmp_path / "readability.json"
+    boundary = tmp_path / "boundary"
+    report = tmp_path / "capture.nsys-rep"
+    boundary.touch()
+    time.sleep(0.01)
+    report.write_bytes(b"report")
+    script = r"""
+source "$1"
+NSYS_LIFECYCLE_LOG=$2
+NSYS_SESSION_ID=''
+NSYS_SESSION_STATE=''
+NSYS_SESSION_PRESENT=0
+NSYS_SESSION_QUERY_OK=0
+NSYS_INJECTED_SESSION_ID=''
+NSYS_POST_COLLECTION_OBSERVED=0
+NSYS_PROVEN_REPORT_IDENTITY=''
+NSYS_PROVEN_REPORT_SHA256=''
+LUMO_NSYS_BOOT_TIMEOUT_S=10
+LUMO_NSYS_SESSION_TIMEOUT_S=1
+LUMO_NSYS_COLLECTION_TIMEOUT_S=1
+LUMO_NSYS_COLLECTION_MAX_S=10
+LUMO_NSYS_REPORT_TIMEOUT_S=10
+LUMO_NSYS_HASH_TIMEOUT_S=2
+LUMO_NSYS_HASH_KILL_AFTER_S=1
+LUMO_NSYS_REPORT_STABLE_POLLS=1
+LUMO_NSYS_POLL_S=1
+ARM=tail6_fixture
+SUBSET=subset_fixture
+NSYS_EXPECTED_DRIVER_SCRIPT=driver_fixture
+NSYS_EXPECTED_VARIANT_SCRIPT=variant_fixture
+NSYS_EXPECTED_VARIANT_KIND=tail6_fixed32
+refresh_count=0
+
+refresh_run_nsys_session() {
+  (( refresh_count += 1 ))
+  case "$refresh_count" in
+    1)
+      SECONDS=5
+      NSYS_SESSION_QUERY_OK=0
+      ;;
+    2)
+      NSYS_INJECTED_SESSION_ID=42
+      NSYS_SESSION_ID=42
+      NSYS_SESSION_STATE=Collection
+      NSYS_SESSION_PRESENT=1
+      NSYS_SESSION_QUERY_OK=1
+      ;;
+    *)
+      NSYS_SESSION_STATE=Waiting
+      NSYS_SESSION_PRESENT=1
+      NSYS_SESSION_QUERY_OK=1
+      NSYS_POST_COLLECTION_OBSERVED=1
+      ;;
+  esac
+  return 0
+}
+freeze_exact_control_ancestors() { return 0; }
+_process_identity_is_live() { return 0; }
+verify_report_readable() {
+  printf '{"readable":true}\n' > "$2"
+}
+fail_nsys_lifecycle() {
+  NSYS_LIFECYCLE_ERROR=$1
+  return 1
+}
+sleep() { :; }
+
+SECONDS=0
+wait_for_fresh_stable_report 123 456 "$3" "$4" "$5"
+"""
+    completed = subprocess.run(
+        [
+            "bash",
+            "-c",
+            script,
+            "--",
+            os.fspath(PROFILE),
+            os.fspath(lifecycle_log),
+            os.fspath(report),
+            os.fspath(readability),
+            os.fspath(boundary),
+        ],
+        cwd=REPO,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "starting delayed-session deadlines" in lifecycle_log.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_attribution_sequence_is_tail_only_and_acceptance_orders_are_unchanged() -> None:
@@ -357,6 +611,7 @@ def test_wait_requires_fresh_stable_report_and_pinned_nsys_readability(
     boundary = tmp_path / "run.boundary"
     cidfile = tmp_path / "container.cid"
     process_identity = tmp_path / "process_identity.json"
+    container_state = tmp_path / "container.state"
     nsys_calls = tmp_path / "nsys.calls"
     docker_calls = tmp_path / "docker.calls"
     lifecycle_log = tmp_path / "lifecycle.log"
@@ -364,26 +619,39 @@ def test_wait_requires_fresh_stable_report_and_pinned_nsys_readability(
     os.utime(boundary, (time.time() - 10, time.time() - 10))
     cidfile.write_text(f"{CONTAINER_ID}\n", encoding="ascii")
     _write_process_identity(process_identity)
+    container_state.write_text(
+        (
+            f"running true {CONTAINER_STARTED_AT} {CONTAINER_INIT_PID} "
+            f"{CONTAINER_RESTART_COUNT} 0\n"
+        ),
+        encoding="ascii",
+    )
     _write_identity_docker(fake_docker)
     _write_executable(
         fake_nsys,
         """#!/usr/bin/env bash
 if [[ "$1 $2" == "sessions list" ]]; then
+  [[ "${FAKE_NSYS_CONTAINER_CONTEXT:-0}" == "1" ]] || exit 18
   if [[ -e "$SESSION_DONE" ]]; then
     phase=done
-    printf '[{"id":"7777","state":"Collection","name":"%s","accessible":true}]\\n' "$EXPECTED_SESSION_NAME"
+    printf '[{"id":"7777","state":"Collection","name":"unrelated-session","accessible":true}]\\n'
   elif [[ -e "$SESSION_GENERATION" ]]; then
     phase=generation
-    printf '[{"id":"7777","state":"Collection","name":"%s","accessible":true},{"id":"10206","state":"Generation","name":"%s","accessible":true}]\\n' "$EXPECTED_SESSION_NAME" "$EXPECTED_SESSION_NAME"
+    printf '[{"id":"7777","state":"Collection","name":"unrelated-session","accessible":true},{"id":"10206","state":"Generation","name":"%s","accessible":true}]\\n' "$EXPECTED_SESSION_NAME"
   else
     phase=collection
-    printf '[{"id":"7777","state":"Collection","name":"%s","accessible":true},{"id":"10206","state":"Collection","name":"%s","accessible":true}]\\n' "$EXPECTED_SESSION_NAME" "$EXPECTED_SESSION_NAME"
+    printf '[{"id":"7777","state":"Collection","name":"unrelated-session","accessible":true},{"id":"10206","state":"Collection","name":"%s","accessible":true}]\\n' "$EXPECTED_SESSION_NAME"
   fi
   printf 'sessions list phase=%s\\n' "$phase" >> "$NSYS_CALLS"
   exit 0
 fi
 printf '%s\\n' "$*" >> "$NSYS_CALLS"
 if [[ "$1" == "export" ]]; then
+  [[ "${FAKE_NSYS_CONTAINER_CONTEXT:-0}" == "0" ]] || exit 19
+  if [[ -L "$REPORT_PATH" ]]; then
+    printf 'export_symlink\\n' >> "$NSYS_CALLS"
+    exit 20
+  fi
   output=""
   for arg in "$@"; do
     case "$arg" in
@@ -395,6 +663,7 @@ if [[ "$1" == "export" ]]; then
   exit 0
 fi
 if [[ "$1" == "stop" ]]; then
+  [[ "${FAKE_NSYS_CONTAINER_CONTEXT:-0}" == "1" ]] || exit 18
   : > "$SESSION_GENERATION"
   exit 0
 fi
@@ -412,6 +681,16 @@ printf 'complete\\n' > "$REPORT_PATH"
 # exact session remains in Generation. Those polls must not count as stable.
 sleep 0.25
 : > "$SESSION_DONE"
+printf 'complete\\n' > "$REPORT_PATH.target"
+rm -f "$REPORT_PATH"
+ln -s "$REPORT_PATH.target" "$REPORT_PATH"
+printf 'exited false %s 0 %s 0\\n' \
+  "$CONTAINER_STARTED_AT" "$CONTAINER_RESTART_COUNT" \
+  > "$CONTAINER_STATE_FILE.tmp"
+mv -T "$CONTAINER_STATE_FILE.tmp" "$CONTAINER_STATE_FILE"
+sleep 0.25
+printf 'complete\\n' > "$REPORT_PATH.tmp"
+mv -T "$REPORT_PATH.tmp" "$REPORT_PATH"
 printf 'runner_done\\n' >> "$EVENTS"
 """,
     )
@@ -426,6 +705,10 @@ printf 'runner_done\\n' >> "$EVENTS"
         "CONTAINER_ID": CONTAINER_ID,
         "CONTAINER_NAME": "profile-test-container",
         "DOCKER_CALLS": os.fspath(docker_calls),
+        "CONTAINER_NSYS": os.fspath(fake_nsys),
+        "CONTAINER_STATE_FILE": os.fspath(container_state),
+        "CONTAINER_STARTED_AT": CONTAINER_STARTED_AT,
+        "CONTAINER_RESTART_COUNT": CONTAINER_RESTART_COUNT,
         "EXPECTED_SESSION_NAME": SESSION_NAME,
         "NSYS_CALLS": os.fspath(nsys_calls),
         "SESSION_GENERATION": os.fspath(session_generation),
@@ -437,7 +720,6 @@ source "$1"
 NSYS_LIFECYCLE_LOG=$2
 LUMO_NSYS_BIN=$3
 JQ_BIN=$(command -v jq)
-NSYS_BASELINE_JSON='[{"id":"9000","state":"Collection","name":"old-session","accessible":true}]'
 NSYS_SESSION_ID=''
 NSYS_SESSION_NAME=''
 NSYS_SESSION_STATE=''
@@ -466,13 +748,22 @@ DRIVER_PID=$!
 DRIVER_START_TICKS=$(_process_start_ticks "$DRIVER_PID")
 ARM=$ARM_VALUE
 SUBSET=$SUBSET_VALUE
-wait_for_fresh_stable_report \
-  "$DRIVER_PID" "$DRIVER_START_TICKS" "$5" "$6" "$7"
-grep -q '^runner_done$' "$EVENTS"
-! grep -q '^variant_done$' "$EVENTS"
-[[ ${#NSYS_STOPPED_PIDS[@]} == 2 ]]
+if ! wait_for_fresh_stable_report \
+    "$DRIVER_PID" "$DRIVER_START_TICKS" "$5" "$6" "$7"; then
+  printf 'lifecycle failure: %s\n' "$NSYS_LIFECYCLE_ERROR" >&2
+  thaw_exact_control_ancestors
+  wait "$DRIVER_PID" || true
+  exit 30
+fi
+[[ "$NSYS_PROVEN_REPORT_IDENTITY" == \
+  "$(stat -c '%d:%i:%h:%s:%Y:%Z' "$5")" ]] || exit 35
+[[ "$NSYS_PROVEN_REPORT_SHA256" == \
+  "$(sha256sum "$5" | awk '{print $1}')" ]] || exit 36
+grep -q '^runner_done$' "$EVENTS" || exit 31
+! grep -q '^variant_done$' "$EVENTS" || exit 32
+[[ ${#NSYS_STOPPED_PIDS[@]} == 2 ]] || exit 33
 thaw_exact_control_ancestors
-wait "$DRIVER_PID"
+wait "$DRIVER_PID" || exit 34
 """
     completed = subprocess.run(
         [
@@ -505,10 +796,10 @@ wait "$DRIVER_PID"
     export_index = next(
         index for index, call in enumerate(calls) if call.startswith("export ")
     )
-    done_polls = [
-        call for call in calls[:export_index] if call == "sessions list phase=done"
-    ]
-    assert len(done_polls) >= 3
+    assert "sessions list phase=generation" in calls[:export_index]
+    if "sessions list phase=done" in calls:
+        assert calls.index("sessions list phase=done") < export_index
+    assert "export_symlink" not in calls
     lifecycle = lifecycle_log.read_text(encoding="utf-8")
     assert f"attested run container id={CONTAINER_ID}" in lifecycle
     assert f"attested EngineCore-injected Nsight session id={SESSION_ID}" in lifecycle
@@ -516,10 +807,134 @@ wait "$DRIVER_PID"
     assert "bound exact run Nsight session id=7777" not in lifecycle
     assert "Nsight collection window opened with teardown control frozen" in lifecycle
     assert "Nsight report generation began" in lifecycle
-    assert "stable across 3 polls and readable via pinned nsys" in lifecycle
+    assert "accepted exact exited0 container incarnation" in lifecycle
+    assert "stable, readable, and cryptographically latched" in lifecycle
+    assert lifecycle.index("accepted exact exited0 container incarnation") < (
+        lifecycle.index("stable, readable, and cryptographically latched")
+    )
+    docker_execs = [
+        call
+        for call in docker_calls.read_text(encoding="utf-8").splitlines()
+        if call.startswith("exec ") and f" {CONTAINER_NSYS_BIN} " in call
+    ]
+    assert docker_execs
+    assert all(
+        call.startswith(f"exec {CONTAINER_ID} {CONTAINER_TIMEOUT_BIN} ")
+        and f" {CONTAINER_NSYS_BIN} " in call
+        for call in docker_execs
+    )
 
 
-def test_session_binding_ignores_unrelated_fresh_same_name_and_stops_only_exact(
+@pytest.mark.parametrize("terminal_at_inspect", (3, 4))
+def test_generation_accepts_terminal_transition_around_engine_liveness(
+    tmp_path: Path,
+    terminal_at_inspect: int,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_docker = fake_bin / "docker"
+    inspect_count = tmp_path / "inspect.count"
+    docker_calls = tmp_path / "docker.calls"
+    process_identity = tmp_path / "process_identity.json"
+    boundary = tmp_path / "run.boundary"
+    boundary.touch()
+    os.utime(boundary, (time.time() - 10, time.time() - 10))
+    _write_process_identity(process_identity)
+    _write_executable(
+        fake_docker,
+        f"""#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$DOCKER_CALLS"
+if [[ "$1" == "inspect" && "$2" == "--format" ]]; then
+  count=$(cat "$INSPECT_COUNT" 2>/dev/null || printf '0')
+  count=$((count + 1))
+  printf '%s\\n' "$count" > "$INSPECT_COUNT"
+  if (( count >= TERMINAL_AT_INSPECT )); then
+    printf '%s /%s exited false %s 0 %s 0\\n' \
+      "$CONTAINER_ID" "$CONTAINER_NAME" "$CONTAINER_STARTED_AT" \
+      "$CONTAINER_RESTART_COUNT"
+  else
+    printf '%s /%s running true %s %s %s 0\\n' \
+      "$CONTAINER_ID" "$CONTAINER_NAME" "$CONTAINER_STARTED_AT" \
+      "$CONTAINER_INIT_PID" "$CONTAINER_RESTART_COUNT"
+  fi
+  exit 0
+fi
+if [[ "$1" == "exec" && "$7" == "{CONTAINER_BASH_BIN}" ]]; then
+  printf '9001\\n'
+  exit 0
+fi
+exit 91
+""",
+    )
+    script = r"""
+source "$1"
+NSYS_LIFECYCLE_LOG=$2
+JQ_BIN=$(command -v jq)
+RUN_BOUNDARY=$3
+PROCESS_IDENTITY=$4
+PROCESS_IDENTITY_STAT=$(stat -c '%d:%i:%h:%s:%Y:%Z' "$PROCESS_IDENTITY")
+CONTAINER=$CONTAINER_NAME
+PROFILE_CONTAINER_ID=$CONTAINER_ID
+PROFILE_CONTAINER_STARTED_AT=$CONTAINER_STARTED_AT
+PROFILE_CONTAINER_INIT_PID=$CONTAINER_INIT_PID
+PROFILE_CONTAINER_RESTART_COUNT=$CONTAINER_RESTART_COUNT
+PROFILE_CONTAINER_RUNNING=1
+PROFILE_CONTAINER_STATUS=running
+PROFILE_CONTAINER_EXIT_CODE=0
+ENGINE_CORE_PID=321
+ENGINE_CORE_START_TICKS=9001
+ENGINE_CORE_LIVENESS_OK=1
+NSYS_INJECTED_SESSION_ID=$EXPECTED_SESSION_ID
+NSYS_SESSION_ID=$EXPECTED_SESSION_ID
+NSYS_EXPECTED_SESSION_NAME=$EXPECTED_SESSION_NAME
+NSYS_SESSION_NAME=$EXPECTED_SESSION_NAME
+NSYS_SESSION_STATE=Generation
+NSYS_COLLECTION_OBSERVED=1
+NSYS_POST_COLLECTION_OBSERVED=1
+refresh_run_nsys_session
+[[ $? == 0 ]]
+[[ "$PROFILE_CONTAINER_RUNNING" == 0 ]]
+[[ "$NSYS_CONTAINER_TERMINAL_OK" == 1 ]]
+[[ "$NSYS_SESSION_STATE" == "ContainerExited" ]]
+"""
+    completed = subprocess.run(
+        [
+            "bash",
+            "-c",
+            script,
+            "--",
+            os.fspath(PROFILE),
+            os.fspath(tmp_path / "lifecycle.log"),
+            os.fspath(boundary),
+            os.fspath(process_identity),
+        ],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+            "CONTAINER_ID": CONTAINER_ID,
+            "CONTAINER_NAME": "profile-test-container",
+            "CONTAINER_STARTED_AT": CONTAINER_STARTED_AT,
+            "CONTAINER_INIT_PID": CONTAINER_INIT_PID,
+            "CONTAINER_RESTART_COUNT": CONTAINER_RESTART_COUNT,
+            "DOCKER_CALLS": os.fspath(docker_calls),
+            "INSPECT_COUNT": os.fspath(inspect_count),
+            "TERMINAL_AT_INSPECT": str(terminal_at_inspect),
+            "EXPECTED_SESSION_ID": SESSION_ID,
+            "EXPECTED_SESSION_NAME": SESSION_NAME,
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    calls = docker_calls.read_text(encoding="utf-8")
+    assert f" {CONTAINER_NSYS_BIN} sessions list " not in calls
+
+
+def test_session_binding_ignores_unrelated_name_and_stops_only_exact_in_container(
     tmp_path: Path,
 ) -> None:
     fake_bin = tmp_path / "bin"
@@ -543,10 +958,12 @@ def test_session_binding_ignores_unrelated_fresh_same_name_and_stops_only_exact(
         """#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$NSYS_CALLS"
 if [[ "$1 $2" == "sessions list" ]]; then
+  [[ "${FAKE_NSYS_CONTAINER_CONTEXT:-0}" == "1" ]] || exit 18
   cat "$SESSION_SNAPSHOT"
   exit 0
 fi
 if [[ "$1" == "stop" ]]; then
+  [[ "${FAKE_NSYS_CONTAINER_CONTEXT:-0}" == "1" ]] || exit 18
   exit 0
 fi
 exit 9
@@ -556,7 +973,7 @@ exit 9
         {
             "id": "7777",
             "state": "Collection",
-            "name": SESSION_NAME,
+            "name": "unrelated-session",
             "accessible": True,
         }
     ]
@@ -576,6 +993,7 @@ exit 9
         "CONTAINER_ID": CONTAINER_ID,
         "CONTAINER_NAME": "profile-test-container",
         "DOCKER_CALLS": os.fspath(docker_calls),
+        "CONTAINER_NSYS": os.fspath(fake_nsys),
         "NSYS_CALLS": os.fspath(nsys_calls),
         "SESSION_SNAPSHOT": os.fspath(snapshot),
         "EXACT_SNAPSHOT": json.dumps(exact, separators=(",", ":")),
@@ -590,7 +1008,6 @@ PROFILE_CONTAINER_CIDFILE=$5
 PROCESS_IDENTITY=$6
 CONTAINER=$CONTAINER_NAME
 NSYS_EXPECTED_SESSION_NAME=$7
-NSYS_BASELINE_JSON='[{"id":"9000","state":"Collection","name":"old","accessible":true}]'
 LUMO_NSYS_STOP_TIMEOUT_S=1
 LUMO_NSYS_STOP_KILL_AFTER_S=1
 refresh_run_nsys_session
@@ -632,13 +1049,57 @@ stop_exact_nsys_session
         if line.startswith("stop ")
     ]
     assert stop_calls == [f"stop --session={SESSION_ID}"]
+    docker_execs = [
+        line
+        for line in docker_calls.read_text(encoding="utf-8").splitlines()
+        if line.startswith("exec ") and f" {CONTAINER_NSYS_BIN} " in line
+    ]
+    assert docker_execs[-1] == _container_nsys_exec(
+        f"stop --session={SESSION_ID}",
+        timeout_s="1",
+        kill_after_s="1",
+    )
+    assert all(
+        line.startswith(f"exec {CONTAINER_ID} {CONTAINER_TIMEOUT_BIN} ")
+        and f" {CONTAINER_NSYS_BIN} " in line
+        for line in docker_execs
+    )
     lifecycle = lifecycle_log.read_text(encoding="utf-8")
     assert f"bound exact run Nsight session id={SESSION_ID}" in lifecycle
     assert "bound exact run Nsight session id=7777" not in lifecycle
 
 
-def test_exact_injected_session_with_wrong_name_fails_closed(
+@pytest.mark.parametrize(
+    ("session_snapshot", "expected_error"),
+    (
+        (
+            [
+                {
+                    "id": SESSION_ID,
+                    "state": "Collection",
+                    "name": "other-run",
+                    "accessible": True,
+                }
+            ],
+            "does not match",
+        ),
+        (
+            [
+                {
+                    "id": "7777",
+                    "state": "Collection",
+                    "name": SESSION_NAME,
+                    "accessible": True,
+                }
+            ],
+            "different session ID",
+        ),
+    ),
+)
+def test_session_identity_mismatch_fails_closed(
     tmp_path: Path,
+    session_snapshot: list[dict[str, object]],
+    expected_error: str,
 ) -> None:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
@@ -656,7 +1117,7 @@ def test_exact_injected_session_with_wrong_name_fails_closed(
         fake_nsys,
         """#!/usr/bin/env bash
 if [[ "$1 $2" == "sessions list" ]]; then
-  printf '[{"id":"10206","state":"Collection","name":"other-run","accessible":true}]\\n'
+  printf '%s\\n' "$SESSION_SNAPSHOT"
   exit 0
 fi
 exit 9
@@ -668,6 +1129,9 @@ exit 9
         "CONTAINER_ID": CONTAINER_ID,
         "CONTAINER_NAME": "profile-test-container",
         "DOCKER_CALLS": os.fspath(tmp_path / "docker.calls"),
+        "CONTAINER_NSYS": os.fspath(fake_nsys),
+        "SESSION_SNAPSHOT": json.dumps(session_snapshot, separators=(",", ":")),
+        "EXPECTED_ERROR": expected_error,
     }
     script = r"""
 source "$1"
@@ -679,11 +1143,10 @@ PROFILE_CONTAINER_CIDFILE=$5
 PROCESS_IDENTITY=$6
 CONTAINER=$CONTAINER_NAME
 NSYS_EXPECTED_SESSION_NAME=$7
-NSYS_BASELINE_JSON='[]'
 refresh_run_nsys_session
 [[ $? == 2 ]]
 [[ -z "$NSYS_SESSION_ID" ]]
-[[ "$NSYS_LIFECYCLE_ERROR" == *"does not match"* ]]
+[[ "$NSYS_LIFECYCLE_ERROR" == *"$EXPECTED_ERROR"* ]]
 """
     completed = subprocess.run(
         [
@@ -710,6 +1173,423 @@ refresh_run_nsys_session
     assert completed.returncode == 0, completed.stderr
 
 
+def test_session_query_fails_closed_on_post_exec_container_name_drift(
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_docker = fake_bin / "docker"
+    fake_nsys = tmp_path / "nsys"
+    boundary = tmp_path / "run.boundary"
+    cidfile = tmp_path / "container.cid"
+    process_identity = tmp_path / "process_identity.json"
+    container_name_file = tmp_path / "container.name"
+    docker_calls = tmp_path / "docker.calls"
+    expected_container_name = "profile-test-container"
+    boundary.touch()
+    os.utime(boundary, (time.time() - 10, time.time() - 10))
+    cidfile.write_text(f"{CONTAINER_ID}\n", encoding="ascii")
+    _write_process_identity(process_identity)
+    container_name_file.write_text(f"{expected_container_name}\n", encoding="ascii")
+    _write_identity_docker(fake_docker, mutable_name_file=True)
+    _write_executable(
+        fake_nsys,
+        """#!/usr/bin/env bash
+if [[ "$1 $2" == "sessions list" ]]; then
+  printf 'foreign-container\\n' > "$CONTAINER_NAME_FILE"
+  printf '[{"id":"10206","state":"Collection","name":"%s","accessible":true}]\\n' "$EXPECTED_SESSION_NAME"
+  exit 0
+fi
+exit 9
+""",
+    )
+    script = r"""
+source "$1"
+NSYS_LIFECYCLE_LOG=$2
+JQ_BIN=$(command -v jq)
+RUN_BOUNDARY=$3
+PROFILE_CONTAINER_CIDFILE=$4
+PROCESS_IDENTITY=$5
+CONTAINER=$6
+NSYS_EXPECTED_SESSION_NAME=$7
+refresh_run_nsys_session
+[[ $? == 2 ]]
+[[ -z "$NSYS_SESSION_ID" ]]
+[[ "$NSYS_LIFECYCLE_ERROR" == *"changed during Nsight session query"* ]]
+"""
+    completed = subprocess.run(
+        [
+            "bash",
+            "-c",
+            script,
+            "--",
+            os.fspath(PROFILE),
+            os.fspath(tmp_path / "lifecycle.log"),
+            os.fspath(boundary),
+            os.fspath(cidfile),
+            os.fspath(process_identity),
+            expected_container_name,
+            SESSION_NAME,
+        ],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+            "CONTAINER_ID": CONTAINER_ID,
+            "CONTAINER_NAME_FILE": os.fspath(container_name_file),
+            "CONTAINER_NSYS": os.fspath(fake_nsys),
+            "DOCKER_CALLS": os.fspath(docker_calls),
+            "EXPECTED_SESSION_NAME": SESSION_NAME,
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    calls = docker_calls.read_text(encoding="utf-8").splitlines()
+    exact_exec = _container_nsys_exec("sessions list --output-format=json")
+    running_attestation = _incarnation_attestation()
+    exec_index = calls.index(exact_exec)
+    assert calls[exec_index - 1 : exec_index + 2] == [
+        running_attestation,
+        exact_exec,
+        running_attestation,
+    ]
+
+
+def test_same_id_container_restart_fails_incarnation_reattestation(
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_docker = fake_bin / "docker"
+    fake_nsys = tmp_path / "nsys"
+    boundary = tmp_path / "run.boundary"
+    cidfile = tmp_path / "container.cid"
+    process_identity = tmp_path / "process_identity.json"
+    container_state = tmp_path / "container.state"
+    docker_calls = tmp_path / "docker.calls"
+    boundary.touch()
+    os.utime(boundary, (time.time() - 10, time.time() - 10))
+    cidfile.write_text(f"{CONTAINER_ID}\n", encoding="ascii")
+    _write_process_identity(process_identity)
+    container_state.write_text(
+        (
+            f"running true {CONTAINER_STARTED_AT} {CONTAINER_INIT_PID} "
+            f"{CONTAINER_RESTART_COUNT} 0\n"
+        ),
+        encoding="ascii",
+    )
+    _write_identity_docker(fake_docker)
+    _write_executable(
+        fake_nsys,
+        """#!/usr/bin/env bash
+if [[ "$1 $2" == "sessions list" ]]; then
+  printf '[{"id":"10206","state":"Collection","name":"%s","accessible":true}]\\n' "$EXPECTED_SESSION_NAME"
+  exit 0
+fi
+exit 9
+""",
+    )
+    script = r"""
+source "$1"
+NSYS_LIFECYCLE_LOG=$2
+JQ_BIN=$(command -v jq)
+RUN_BOUNDARY=$3
+PROFILE_CONTAINER_CIDFILE=$4
+PROCESS_IDENTITY=$5
+CONTAINER=$CONTAINER_NAME
+NSYS_EXPECTED_SESSION_NAME=$EXPECTED_SESSION_NAME
+refresh_run_nsys_session
+[[ "$NSYS_SESSION_ID" == "10206" ]]
+printf 'running true 2026-07-30T12:05:00.000000000Z 5252 1 0\n' \
+  > "$CONTAINER_STATE_FILE.tmp"
+mv -T "$CONTAINER_STATE_FILE.tmp" "$CONTAINER_STATE_FILE"
+refresh_run_nsys_session
+[[ $? == 2 ]]
+[[ "$NSYS_LIFECYCLE_ERROR" == *"identity/incarnation"* ]]
+"""
+    completed = subprocess.run(
+        [
+            "bash",
+            "-c",
+            script,
+            "--",
+            os.fspath(PROFILE),
+            os.fspath(tmp_path / "lifecycle.log"),
+            os.fspath(boundary),
+            os.fspath(cidfile),
+            os.fspath(process_identity),
+        ],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+            "CONTAINER_ID": CONTAINER_ID,
+            "CONTAINER_NAME": "profile-test-container",
+            "CONTAINER_NSYS": os.fspath(fake_nsys),
+            "CONTAINER_STATE_FILE": os.fspath(container_state),
+            "DOCKER_CALLS": os.fspath(docker_calls),
+            "EXPECTED_SESSION_NAME": SESSION_NAME,
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    exec_calls = [
+        call
+        for call in docker_calls.read_text(encoding="utf-8").splitlines()
+        if call.startswith("exec ") and f" {CONTAINER_NSYS_BIN} " in call
+    ]
+    assert exec_calls == [
+        _container_nsys_exec("sessions list --output-format=json")
+    ]
+
+
+@pytest.mark.parametrize(
+    ("failure_mode", "expected_error", "expected_success"),
+    (
+        ("identity_mutation", "process identity changed", False),
+        (
+            "engine_death_collection",
+            "EngineCore process identity is no longer live",
+            False,
+        ),
+        ("engine_death_generation", "", True),
+    ),
+)
+def test_bound_session_revalidates_process_file_and_engine_start_identity(
+    tmp_path: Path,
+    failure_mode: str,
+    expected_error: str,
+    expected_success: bool,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_docker = fake_bin / "docker"
+    fake_nsys = tmp_path / "nsys"
+    boundary = tmp_path / "run.boundary"
+    cidfile = tmp_path / "container.cid"
+    process_identity = tmp_path / "process_identity.json"
+    engine_dead = tmp_path / "engine.dead"
+    session_snapshot = tmp_path / "sessions.json"
+    docker_calls = tmp_path / "docker.calls"
+    boundary.touch()
+    os.utime(boundary, (time.time() - 10, time.time() - 10))
+    cidfile.write_text(f"{CONTAINER_ID}\n", encoding="ascii")
+    _write_process_identity(process_identity)
+    session_snapshot.write_text(
+        json.dumps(
+            [
+                {
+                    "id": SESSION_ID,
+                    "state": "Collection",
+                    "name": SESSION_NAME,
+                    "accessible": True,
+                }
+            ],
+            separators=(",", ":"),
+        ),
+        encoding="ascii",
+    )
+    _write_identity_docker(fake_docker)
+    _write_executable(
+        fake_nsys,
+        """#!/usr/bin/env bash
+if [[ "$1 $2" == "sessions list" ]]; then
+  cat "$SESSION_SNAPSHOT"
+  exit 0
+fi
+exit 9
+""",
+    )
+    script = r"""
+source "$1"
+NSYS_LIFECYCLE_LOG=$2
+JQ_BIN=$(command -v jq)
+RUN_BOUNDARY=$3
+PROFILE_CONTAINER_CIDFILE=$4
+PROCESS_IDENTITY=$5
+CONTAINER=$CONTAINER_NAME
+NSYS_EXPECTED_SESSION_NAME=$EXPECTED_SESSION_NAME
+refresh_run_nsys_session
+[[ "$NSYS_SESSION_ID" == "10206" ]]
+case "$FAILURE_MODE" in
+  identity_mutation) printf ' ' >> "$PROCESS_IDENTITY" ;;
+  engine_death_collection) : > "$ENGINE_CORE_DEAD_FILE" ;;
+  engine_death_generation)
+    : > "$ENGINE_CORE_DEAD_FILE"
+    printf '%s\n' "$GENERATION_SNAPSHOT" > "$SESSION_SNAPSHOT"
+    ;;
+esac
+refresh_run_nsys_session
+refresh_rc=$?
+if [[ "$EXPECTED_SUCCESS" == "1" ]]; then
+  [[ "$refresh_rc" == 0 ]]
+  [[ "$NSYS_SESSION_STATE" == "Generation" ]]
+  [[ "$NSYS_POST_COLLECTION_OBSERVED" == 1 ]]
+  [[ "$ENGINE_CORE_LIVENESS_OK" == 0 ]]
+else
+  [[ "$refresh_rc" == 2 ]]
+  [[ "$NSYS_LIFECYCLE_ERROR" == *"$EXPECTED_ERROR"* ]]
+fi
+"""
+    completed = subprocess.run(
+        [
+            "bash",
+            "-c",
+            script,
+            "--",
+            os.fspath(PROFILE),
+            os.fspath(tmp_path / "lifecycle.log"),
+            os.fspath(boundary),
+            os.fspath(cidfile),
+            os.fspath(process_identity),
+        ],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+            "CONTAINER_ID": CONTAINER_ID,
+            "CONTAINER_NAME": "profile-test-container",
+            "CONTAINER_NSYS": os.fspath(fake_nsys),
+            "DOCKER_CALLS": os.fspath(docker_calls),
+            "ENGINE_CORE_DEAD_FILE": os.fspath(engine_dead),
+            "SESSION_SNAPSHOT": os.fspath(session_snapshot),
+            "GENERATION_SNAPSHOT": json.dumps(
+                [
+                    {
+                        "id": SESSION_ID,
+                        "state": "Generation",
+                        "name": SESSION_NAME,
+                        "accessible": True,
+                    }
+                ],
+                separators=(",", ":"),
+            ),
+            "EXPECTED_SESSION_NAME": SESSION_NAME,
+            "FAILURE_MODE": failure_mode,
+            "EXPECTED_ERROR": expected_error,
+            "EXPECTED_SUCCESS": "1" if expected_success else "0",
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    nsys_execs = [
+        call
+        for call in docker_calls.read_text(encoding="utf-8").splitlines()
+        if call.startswith("exec ") and f" {CONTAINER_NSYS_BIN} " in call
+    ]
+    expected_query_count = 1 if failure_mode == "identity_mutation" else 2
+    assert nsys_execs == [
+        _container_nsys_exec("sessions list --output-format=json")
+    ] * expected_query_count
+
+
+@pytest.mark.parametrize(
+    ("bound", "session_state", "post_collection", "exit_code", "expected_error"),
+    (
+        (False, "", False, "0", "before Nsight session binding"),
+        (True, "Collection", False, "0", "during Nsight Collection"),
+        (True, "Generation", True, "7", "exited nonzero"),
+    ),
+)
+def test_terminal_container_exit_fails_without_a_safe_success_transition(
+    tmp_path: Path,
+    bound: bool,
+    session_state: str,
+    post_collection: bool,
+    exit_code: str,
+    expected_error: str,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_docker = fake_bin / "docker"
+    boundary = tmp_path / "run.boundary"
+    process_identity = tmp_path / "process_identity.json"
+    docker_calls = tmp_path / "docker.calls"
+    boundary.touch()
+    os.utime(boundary, (time.time() - 10, time.time() - 10))
+    _write_process_identity(process_identity)
+    _write_identity_docker(fake_docker)
+    script = r"""
+source "$1"
+NSYS_LIFECYCLE_LOG=$2
+RUN_BOUNDARY=$3
+PROCESS_IDENTITY=$4
+PROCESS_IDENTITY_STAT=$(stat -c '%d:%i:%h:%s:%Y:%Z' "$PROCESS_IDENTITY")
+CONTAINER=$CONTAINER_NAME
+PROFILE_CONTAINER_ID=$CONTAINER_ID
+PROFILE_CONTAINER_STARTED_AT=$CONTAINER_STARTED_AT
+PROFILE_CONTAINER_INIT_PID=$CONTAINER_INIT_PID
+PROFILE_CONTAINER_RESTART_COUNT=$CONTAINER_RESTART_COUNT
+NSYS_INJECTED_SESSION_ID=10206
+ENGINE_CORE_PID=321
+ENGINE_CORE_START_TICKS=9001
+if [[ "$BOUND" == "1" ]]; then
+  NSYS_SESSION_ID=10206
+  NSYS_SESSION_NAME=$EXPECTED_SESSION_NAME
+fi
+NSYS_EXPECTED_SESSION_NAME=$EXPECTED_SESSION_NAME
+NSYS_SESSION_STATE=$SESSION_STATE
+NSYS_POST_COLLECTION_OBSERVED=$POST_COLLECTION
+refresh_run_nsys_session
+[[ $? == 2 ]]
+[[ "$NSYS_LIFECYCLE_ERROR" == *"$EXPECTED_ERROR"* ]]
+"""
+    completed = subprocess.run(
+        [
+            "bash",
+            "-c",
+            script,
+            "--",
+            os.fspath(PROFILE),
+            os.fspath(tmp_path / "lifecycle.log"),
+            os.fspath(boundary),
+            os.fspath(process_identity),
+        ],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+            "BOUND": "1" if bound else "0",
+            "CONTAINER_ID": CONTAINER_ID,
+            "CONTAINER_NAME": "profile-test-container",
+            "CONTAINER_STARTED_AT": CONTAINER_STARTED_AT,
+            "CONTAINER_INIT_PID": CONTAINER_INIT_PID,
+            "CONTAINER_RESTART_COUNT": CONTAINER_RESTART_COUNT,
+            "CONTAINER_STATUS": "exited",
+            "CONTAINER_RUNNING": "false",
+            "CONTAINER_STATE_PID": "0",
+            "CONTAINER_EXIT_CODE": exit_code,
+            "DOCKER_CALLS": os.fspath(docker_calls),
+            "EXPECTED_SESSION_NAME": SESSION_NAME,
+            "SESSION_STATE": session_state,
+            "POST_COLLECTION": "1" if post_collection else "0",
+            "EXPECTED_ERROR": expected_error,
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert not any(
+        call.startswith("exec ")
+        for call in docker_calls.read_text(encoding="utf-8").splitlines()
+    )
+
+
 @pytest.mark.parametrize("second_query", ("absent", "failure"))
 def test_stop_refuses_when_exact_session_cannot_be_freshly_revalidated(
     tmp_path: Path,
@@ -734,6 +1614,7 @@ def test_stop_refuses_when_exact_session_cannot_be_freshly_revalidated(
         """#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$NSYS_CALLS"
 if [[ "$1 $2" == "sessions list" ]]; then
+  [[ "${FAKE_NSYS_CONTAINER_CONTEXT:-0}" == "1" ]] || exit 18
   count=$(cat "$QUERY_COUNT" 2>/dev/null || printf '0')
   count=$((count + 1))
   printf '%s\\n' "$count" > "$QUERY_COUNT"
@@ -758,6 +1639,7 @@ exit 9
         "CONTAINER_ID": CONTAINER_ID,
         "CONTAINER_NAME": "profile-test-container",
         "DOCKER_CALLS": os.fspath(tmp_path / "docker.calls"),
+        "CONTAINER_NSYS": os.fspath(fake_nsys),
         "NSYS_CALLS": os.fspath(nsys_calls),
         "QUERY_COUNT": os.fspath(query_count),
         "EXPECTED_SESSION_NAME": SESSION_NAME,
@@ -773,13 +1655,15 @@ PROFILE_CONTAINER_CIDFILE=$5
 PROCESS_IDENTITY=$6
 CONTAINER=$CONTAINER_NAME
 NSYS_EXPECTED_SESSION_NAME=$EXPECTED_SESSION_NAME
-NSYS_BASELINE_JSON='[]'
 LUMO_NSYS_STOP_TIMEOUT_S=1
 LUMO_NSYS_STOP_KILL_AFTER_S=1
 refresh_run_nsys_session
 [[ "$NSYS_SESSION_ID" == "10206" ]]
 if stop_exact_nsys_session; then
   exit 20
+fi
+if [[ "$SECOND_QUERY" == "failure" ]]; then
+  [[ "$NSYS_LIFECYCLE_ERROR" == *"container-scoped Nsight session query failed"* ]]
 fi
 """
     completed = subprocess.run(
@@ -807,6 +1691,23 @@ fi
     calls = nsys_calls.read_text(encoding="utf-8").splitlines()
     assert calls.count("sessions list --output-format=json") == 2
     assert not any(call.startswith("stop ") for call in calls)
+    docker_calls = (tmp_path / "docker.calls").read_text(encoding="utf-8").splitlines()
+    exec_calls = [
+        call
+        for call in docker_calls
+        if call.startswith("exec ") and f" {CONTAINER_NSYS_BIN} " in call
+    ]
+    assert exec_calls == [
+        _container_nsys_exec("sessions list --output-format=json"),
+        _container_nsys_exec("sessions list --output-format=json"),
+    ]
+    if second_query == "failure":
+        running_attestation = _incarnation_attestation()
+        assert docker_calls[-3:] == [
+            running_attestation,
+            exec_calls[-1],
+            running_attestation,
+        ]
 
 
 def test_timeout_preserves_exact_container_then_exit_trap_thaws(
@@ -824,7 +1725,9 @@ def test_timeout_preserves_exact_container_then_exit_trap_thaws(
 printf '%s\\n' "$*" >> "$DOCKER_CALLS"
 if [[ "$1" == "inspect" && "$2" == "--format" ]]; then
   [[ "$4" == "$CONTAINER_ID" ]] || exit 1
-  printf '%s /%s\\n' "$CONTAINER_ID" "$(<"$CONTAINER_NAME_FILE")"
+  printf '%s /%s running true %s %s %s 0\\n' \
+    "$CONTAINER_ID" "$(<"$CONTAINER_NAME_FILE")" \
+    "$CONTAINER_STARTED_AT" "$CONTAINER_INIT_PID" "$CONTAINER_RESTART_COUNT"
   exit 0
 fi
 case "$1" in
@@ -860,6 +1763,9 @@ exit 98
         "CONTAINER_ID": CONTAINER_ID,
         "CONTAINER_NAME_FILE": os.fspath(container_name_file),
         "PRESERVED_CONTAINER_NAME": preserved_name,
+        "CONTAINER_STARTED_AT": CONTAINER_STARTED_AT,
+        "CONTAINER_INIT_PID": CONTAINER_INIT_PID,
+        "CONTAINER_RESTART_COUNT": CONTAINER_RESTART_COUNT,
     }
     script = r"""
 source "$1"
@@ -870,6 +1776,9 @@ REPORT=$3/fresh.nsys-rep
 STAMP=$4
 CONTAINER=$5
 PROFILE_CONTAINER_ID=$CONTAINER_ID
+PROFILE_CONTAINER_STARTED_AT=$CONTAINER_STARTED_AT
+PROFILE_CONTAINER_INIT_PID=$CONTAINER_INIT_PID
+PROFILE_CONTAINER_RESTART_COUNT=$CONTAINER_RESTART_COUNT
 bash "$6" >/dev/null 2>&1 &
 DRIVER_PID=$!
 DRIVER_START_TICKS=$(_process_start_ticks "$DRIVER_PID")
@@ -962,6 +1871,9 @@ exit 1
         "ORIGINAL_ID": CONTAINER_ID,
         "FOREIGN_ID": FOREIGN_CONTAINER_ID,
         "ORIGINAL_NAME": original_name,
+        "CONTAINER_STARTED_AT": CONTAINER_STARTED_AT,
+        "CONTAINER_INIT_PID": CONTAINER_INIT_PID,
+        "CONTAINER_RESTART_COUNT": CONTAINER_RESTART_COUNT,
     }
     script = r"""
 source "$1"
@@ -971,6 +1883,9 @@ REPORT=$3/report.nsys-rep
 STAMP=teststamp
 CONTAINER=$4
 PROFILE_CONTAINER_ID=$5
+PROFILE_CONTAINER_STARTED_AT=$CONTAINER_STARTED_AT
+PROFILE_CONTAINER_INIT_PID=$CONTAINER_INIT_PID
+PROFILE_CONTAINER_RESTART_COUNT=$CONTAINER_RESTART_COUNT
 if preserve_recoverable_container "identity disappeared"; then
   exit 20
 fi
@@ -1000,7 +1915,7 @@ exit 0
 
     assert completed.returncode == 0, completed.stderr
     calls = docker_calls.read_text(encoding="utf-8")
-    assert f"inspect --format {{{{.Id}}}} {{{{.Name}}}} {CONTAINER_ID}" in calls
+    assert _incarnation_attestation() in calls
     assert original_name not in calls
     assert FOREIGN_CONTAINER_ID not in calls
     assert "\nrm " not in f"\n{calls}"
@@ -1076,6 +1991,11 @@ def test_stop_timeout_kills_a_term_ignoring_nsys_process(
     fake_docker = fake_bin / "docker"
     fake_nsys = tmp_path / "nsys"
     nsys_calls = tmp_path / "nsys.calls"
+    boundary = tmp_path / "run.boundary"
+    process_identity = tmp_path / "process_identity.json"
+    boundary.touch()
+    os.utime(boundary, (time.time() - 10, time.time() - 10))
+    _write_process_identity(process_identity)
     _write_identity_docker(fake_docker)
     _write_executable(
         fake_nsys,
@@ -1100,8 +2020,15 @@ NSYS_SESSION_ID=10206
 NSYS_INJECTED_SESSION_ID=10206
 NSYS_SESSION_NAME=$4
 NSYS_EXPECTED_SESSION_NAME=$4
-NSYS_BASELINE_JSON='[]'
+PROCESS_IDENTITY=$5
+RUN_BOUNDARY=$6
+PROCESS_IDENTITY_STAT=$(stat -c '%d:%i:%h:%s:%Y:%Z' "$PROCESS_IDENTITY")
+ENGINE_CORE_PID=321
+ENGINE_CORE_START_TICKS=9001
 PROFILE_CONTAINER_ID=$CONTAINER_ID
+PROFILE_CONTAINER_STARTED_AT=$CONTAINER_STARTED_AT
+PROFILE_CONTAINER_INIT_PID=$CONTAINER_INIT_PID
+PROFILE_CONTAINER_RESTART_COUNT=$CONTAINER_RESTART_COUNT
 CONTAINER=$CONTAINER_NAME
 JQ_BIN=$(command -v jq)
 LUMO_NSYS_STOP_TIMEOUT_S=0.1
@@ -1121,6 +2048,8 @@ fi
             os.fspath(tmp_path / "lifecycle.log"),
             os.fspath(fake_nsys),
             SESSION_NAME,
+            os.fspath(process_identity),
+            os.fspath(boundary),
         ],
         cwd=tmp_path,
         env={
@@ -1131,6 +2060,10 @@ fi
             "CONTAINER_ID": CONTAINER_ID,
             "CONTAINER_NAME": "profile-test-container",
             "DOCKER_CALLS": os.fspath(tmp_path / "docker.calls"),
+            "CONTAINER_NSYS": os.fspath(fake_nsys),
+            "CONTAINER_STARTED_AT": CONTAINER_STARTED_AT,
+            "CONTAINER_INIT_PID": CONTAINER_INIT_PID,
+            "CONTAINER_RESTART_COUNT": CONTAINER_RESTART_COUNT,
         },
         check=False,
         capture_output=True,
@@ -1145,6 +2078,80 @@ fi
         "sessions list --output-format=json",
         f"stop --session={SESSION_ID}",
     ]
+    docker_calls = (tmp_path / "docker.calls").read_text(
+        encoding="utf-8"
+    ).splitlines()
+    assert _container_nsys_exec(
+        f"stop --session={SESSION_ID}",
+        timeout_s="0.1",
+        kill_after_s="0.2",
+    ) in docker_calls
+
+
+def test_export_timeout_kills_a_term_ignoring_nsys_process_group(
+    tmp_path: Path,
+) -> None:
+    fake_nsys = tmp_path / "nsys"
+    parent_pid_path = tmp_path / "parent.pid"
+    child_pid_path = tmp_path / "child.pid"
+    report = tmp_path / "capture.nsys-rep"
+    report.write_bytes(b"report")
+    _write_executable(
+        fake_nsys,
+        """#!/usr/bin/env bash
+printf '%s\n' "$$" > "$PARENT_PID_PATH"
+trap '' TERM
+bash -c 'trap "" TERM; printf "%s\\n" "$$" > "$CHILD_PID_PATH"; while :; do :; done' &
+while :; do :; done
+""",
+    )
+    script = r"""
+source "$1"
+NSYS_LIFECYCLE_LOG=$2
+LUMO_NSYS_BIN=$3
+LUMO_NSYS_EXPORT_TIMEOUT_S=0.1
+LUMO_NSYS_EXPORT_KILL_AFTER_S=0.2
+if verify_report_readable "$4" "$5"; then
+  exit 20
+fi
+"""
+    started = time.monotonic()
+    completed = subprocess.run(
+        [
+            "bash",
+            "-c",
+            script,
+            "--",
+            os.fspath(PROFILE),
+            os.fspath(tmp_path / "lifecycle.log"),
+            os.fspath(fake_nsys),
+            os.fspath(report),
+            os.fspath(tmp_path / "readability.json"),
+        ],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PARENT_PID_PATH": os.fspath(parent_pid_path),
+            "CHILD_PID_PATH": os.fspath(child_pid_path),
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=3,
+    )
+    elapsed = time.monotonic() - started
+
+    assert completed.returncode == 0, completed.stderr
+    assert elapsed < 2
+    for pid_path in (parent_pid_path, child_pid_path):
+        pid = int(pid_path.read_text(encoding="ascii"))
+        for _ in range(100):
+            stat_path = Path(f"/proc/{pid}/stat")
+            if not stat_path.exists() or stat_path.read_text().split()[2] == "Z":
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail(f"timed-out nsys export process remains live: {pid}")
 
 
 def test_profiler_preflight_rejects_a_stopped_exact_name_without_removing_it(

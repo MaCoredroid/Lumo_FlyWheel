@@ -3,6 +3,10 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -127,6 +131,63 @@ def test_build_summary_is_complete_deterministic_and_path_free() -> None:
     assert "/home/" not in rendered
     assert ".nsys-rep" not in rendered
     assert "astropy__astropy" not in rendered
+
+
+def test_build_summary_accepts_nsys_default_domain_range_prefix() -> None:
+    stats = _stats_csv()
+    stats["nvtx_gpu_proj_sum"] = stats["nvtx_gpu_proj_sum"].replace(
+        "\nfr13.fixed32.", "\n:fr13.fixed32."
+    )
+    stats["nvtx_kern_sum"] = stats["nvtx_kern_sum"].replace(
+        "\nfr13.fixed32.", "\n:fr13.fixed32."
+    )
+
+    summary = reducer._build_summary(
+        report_sha256="d" * 64,
+        report_bytes=12345,
+        stats_csv=stats,
+        top=1,
+    )
+
+    assert summary["step_envelope"]["range_instances"] == 3
+    assert summary["phases"]["cfwd"]["nvtx_range"] == "fr13.fixed32.cfwd"
+
+
+def test_build_summary_allows_both_partial_capture_boundary_steps() -> None:
+    stats = _stats_csv()
+    stats["nvtx_gpu_proj_sum"] = stats["nvtx_gpu_proj_sum"].replace(
+        "fr13.fixed32.dfwd,Push/Pop,300,3,6",
+        "fr13.fixed32.dfwd,Push/Pop,300,5,6",
+    )
+
+    summary = reducer._build_summary(
+        report_sha256="e" * 64,
+        report_bytes=12345,
+        stats_csv=stats,
+        top=1,
+    )
+
+    assert summary["step_envelope"]["child_instance_delta_from_step"]["dfwd"] == 2
+    assert summary["step_envelope"]["capture_boundary_allowance_ns"] == 120
+
+
+def test_build_summary_rejects_more_than_two_boundary_range_instances() -> None:
+    stats = _stats_csv()
+    stats["nvtx_gpu_proj_sum"] = stats["nvtx_gpu_proj_sum"].replace(
+        "fr13.fixed32.dfwd,Push/Pop,300,3,6",
+        "fr13.fixed32.dfwd,Push/Pop,300,6,6",
+    )
+
+    with pytest.raises(
+        reducer.ReductionError,
+        match="exceed the two capture boundaries",
+    ):
+        reducer._build_summary(
+            report_sha256="f" * 64,
+            report_bytes=12345,
+            stats_csv=stats,
+            top=1,
+        )
 
 
 def test_build_summary_rejects_missing_or_unexpected_fixed32_range() -> None:
@@ -328,6 +389,8 @@ def _provenance_fixture(tmp_path: Path) -> dict[str, object]:
         encoding="utf-8",
     )
     runtime_attestation = _write_runtime_attestation(logs)
+    report = logs / "fr13_fixed32_b1_real_swe.nsys-rep"
+    report.write_bytes(b"fixture report")
 
     task_key = fixed32_task_key_id(reducer.EXACT4_TASK_IDS[0])
     task_set = fixed32_canonical_task_set_sha256(reducer.EXACT4_TASK_IDS)
@@ -440,6 +503,7 @@ def _provenance_fixture(tmp_path: Path) -> dict[str, object]:
         "pretask_zero_traffic": marker,
         "process_identity": process_identity,
         "proxy_ledger": proxy_path,
+        "report": report,
         "runtime_attestation": runtime_attestation,
         "runtime_manifest_end": manifest,
         "runtime_manifest_launch": manifest,
@@ -485,6 +549,22 @@ def test_provenance_rejects_tampered_process_identity(tmp_path: Path) -> None:
     with pytest.raises(
         reducer.ReductionError,
         match="PID1 argv is not the exact attribution contract",
+    ):
+        reducer._build_attribution_provenance(**fixture)
+
+
+def test_provenance_rejects_report_outside_attested_arm(tmp_path: Path) -> None:
+    fixture = _provenance_fixture(tmp_path)
+    foreign_report = tmp_path / "other-run" / "logs" / (
+        "fr13_fixed32_b1_real_swe.nsys-rep"
+    )
+    foreign_report.parent.mkdir(parents=True)
+    foreign_report.write_bytes(b"foreign report")
+    fixture["report"] = foreign_report
+
+    with pytest.raises(
+        reducer.ReductionError,
+        match="not the canonical report inside the provenance arm",
     ):
         reducer._build_attribution_provenance(**fixture)
 
@@ -611,6 +691,72 @@ def test_provenance_rejects_larger_noncanonical_capture_timing(
         reducer._build_attribution_provenance(**fixture)
 
 
+def _publish_main_args(
+    *,
+    report: Path,
+    output: Path,
+    nsys_bin: Path,
+    evidence: str,
+    expected_report_identity: str,
+    expected_report_sha256: str,
+) -> list[str]:
+    return [
+        str(report),
+        "--output",
+        str(output),
+        "--nsys-bin",
+        str(nsys_bin),
+        "--expected-report-identity",
+        expected_report_identity,
+        "--expected-report-sha256",
+        expected_report_sha256,
+        "--top",
+        "2",
+        "--subset",
+        evidence,
+        "--runtime-manifest-launch",
+        evidence,
+        "--runtime-manifest-end",
+        evidence,
+        "--external-manifest-launch",
+        evidence,
+        "--external-manifest-end",
+        evidence,
+        "--process-identity",
+        evidence,
+        "--container-identity",
+        evidence,
+        "--runtime-attestation",
+        evidence,
+        "--pretask-zero-traffic",
+        evidence,
+        "--proxy-ledger",
+        evidence,
+        "--engine-ledger",
+        evidence,
+        "--mode",
+        "tail6_fixed32",
+        "--batch-size",
+        "1",
+        "--concurrency",
+        "1",
+        "--driver-rc",
+        "86",
+        "--nsys-delay-s",
+        "1200",
+        "--nsys-duration-s",
+        "300",
+        "--nsys-flush-ms",
+        "100",
+        "--nsys-trace",
+        "cuda,cuda-sw,nvtx",
+        "--nsys-config-directives",
+        "CuptiUseRawGpuTimestamps=false",
+        "--nsys-discard-environment",
+        "true",
+    ]
+
+
 def test_main_runs_three_reports_separately_and_writes_canonical_json(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -624,6 +770,10 @@ def test_main_runs_three_reports_separately_and_writes_canonical_json(
     output = tmp_path / "attribution.json"
     calls: list[str] = []
     fixtures = _stats_csv()
+    expected_report_identity = reducer._shell_report_identity(
+        reducer._report_identity(report)
+    )
+    expected_report_sha256 = hashlib.sha256(report_content).hexdigest()
 
     def fake_run_stats(
         *,
@@ -667,57 +817,14 @@ def test_main_runs_three_reports_separately_and_writes_canonical_json(
     evidence = str(tmp_path / "evidence")
     assert (
         reducer.main(
-            [
-                str(report),
-                "--output",
-                str(output),
-                "--nsys-bin",
-                str(nsys_bin),
-                "--top",
-                "2",
-                "--subset",
-                evidence,
-                "--runtime-manifest-launch",
-                evidence,
-                "--runtime-manifest-end",
-                evidence,
-                "--external-manifest-launch",
-                evidence,
-                "--external-manifest-end",
-                evidence,
-                "--process-identity",
-                evidence,
-                "--container-identity",
-                evidence,
-                "--runtime-attestation",
-                evidence,
-                "--pretask-zero-traffic",
-                evidence,
-                "--proxy-ledger",
-                evidence,
-                "--engine-ledger",
-                evidence,
-                "--mode",
-                "tail6_fixed32",
-                "--batch-size",
-                "1",
-                "--concurrency",
-                "1",
-                "--driver-rc",
-                "86",
-                "--nsys-delay-s",
-                "1200",
-                "--nsys-duration-s",
-                "300",
-                "--nsys-flush-ms",
-                "100",
-                "--nsys-trace",
-                "cuda,cuda-sw,nvtx",
-                "--nsys-config-directives",
-                "CuptiUseRawGpuTimestamps=false",
-                "--nsys-discard-environment",
-                "true",
-            ]
+            _publish_main_args(
+                report=report,
+                output=output,
+                nsys_bin=nsys_bin,
+                evidence=evidence,
+                expected_report_identity=expected_report_identity,
+                expected_report_sha256=expected_report_sha256,
+            )
         )
         == 0
     )
@@ -742,3 +849,734 @@ def test_main_runs_three_reports_separately_and_writes_canonical_json(
     assert json.loads(rendered)["provenance"]["real_swe_verified"] is True
     assert json.loads(rendered)["provenance_bound"] is True
     assert json.loads(rendered)["curated_publishable"] is True
+
+
+def test_main_rejects_report_mutation_during_provenance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    report = tmp_path / "capture.nsys-rep"
+    report.write_bytes(b"original report")
+    nsys_bin = tmp_path / "nsys"
+    nsys_bin.write_text("#!/bin/sh\n", encoding="utf-8")
+    nsys_bin.chmod(0o755)
+    output = tmp_path / "attribution.json"
+    expected_identity = reducer._shell_report_identity(
+        reducer._report_identity(report)
+    )
+    expected_sha256 = hashlib.sha256(report.read_bytes()).hexdigest()
+
+    monkeypatch.setattr(
+        reducer,
+        "_run_stats",
+        lambda **kwargs: _stats_csv()[str(kwargs["report_name"])],
+    )
+
+    def mutating_provenance(**_kwargs: object) -> dict[str, object]:
+        report.write_bytes(b"mutated during provenance")
+        return {"real_swe_verified": True, "schema": "fixture"}
+
+    monkeypatch.setattr(
+        reducer,
+        "_build_attribution_provenance",
+        mutating_provenance,
+    )
+
+    assert (
+        reducer.main(
+            _publish_main_args(
+                report=report,
+                output=output,
+                nsys_bin=nsys_bin,
+                evidence=str(tmp_path / "evidence"),
+                expected_report_identity=expected_identity,
+                expected_report_sha256=expected_sha256,
+            )
+        )
+        == 2
+    )
+    assert not output.exists()
+    assert "Nsight report changed during reduction" in capsys.readouterr().err
+
+
+def test_main_rejects_replacement_after_lifecycle_attestation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    report = tmp_path / "capture.nsys-rep"
+    report.write_bytes(b"same bytes")
+    expected_identity = reducer._shell_report_identity(
+        reducer._report_identity(report)
+    )
+    expected_sha256 = hashlib.sha256(report.read_bytes()).hexdigest()
+    replacement = tmp_path / "replacement.nsys-rep"
+    replacement.write_bytes(report.read_bytes())
+    os.replace(replacement, report)
+    nsys_bin = tmp_path / "nsys"
+    nsys_bin.write_text("#!/bin/sh\n", encoding="utf-8")
+    nsys_bin.chmod(0o755)
+
+    def unexpected_stats(**_kwargs: object) -> str:
+        pytest.fail("stats must not run on a report that failed lifecycle binding")
+
+    monkeypatch.setattr(reducer, "_run_stats", unexpected_stats)
+
+    assert (
+        reducer.main(
+            [
+                str(report),
+                "--nsys-bin",
+                str(nsys_bin),
+                "--expected-report-identity",
+                expected_identity,
+                "--expected-report-sha256",
+                expected_sha256,
+            ]
+        )
+        == 2
+    )
+    assert "does not match the lifecycle-proven report" in capsys.readouterr().err
+
+
+def test_main_rejects_report_mutation_between_stats_reads(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    report = tmp_path / "capture.nsys-rep"
+    report.write_bytes(b"original report")
+    nsys_bin = tmp_path / "nsys"
+    nsys_bin.write_text("#!/bin/sh\n", encoding="utf-8")
+    nsys_bin.chmod(0o755)
+    calls = 0
+
+    def fake_run_stats(
+        *,
+        nsys_bin: Path,
+        report_path: Path,
+        report_name: str,
+    ) -> str:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            report_path.write_bytes(b"mutated report with a different size")
+        return _stats_csv()[report_name]
+
+    monkeypatch.setattr(reducer, "_run_stats", fake_run_stats)
+
+    assert (
+        reducer.main(
+            [
+                str(report),
+                "--nsys-bin",
+                str(nsys_bin),
+            ]
+        )
+        == 2
+    )
+    assert calls == len(reducer.REPORT_NAMES)
+    assert "Nsight report changed during reduction" in capsys.readouterr().err
+
+
+def _write_hanging_nsys(
+    nsys_bin: Path,
+    *,
+    parent_pid_path: Path,
+    child_pid_path: Path,
+) -> None:
+    nsys_bin.write_text(
+        """#!/usr/bin/env bash
+printf '%s\n' "$$" > "$PARENT_PID_PATH"
+trap '' TERM
+bash -c 'trap "" TERM; printf "%s\\n" "$$" > "$CHILD_PID_PATH"; while :; do :; done' &
+while :; do :; done
+""",
+        encoding="utf-8",
+    )
+    nsys_bin.chmod(0o755)
+
+
+def _assert_no_live_processes(*pid_paths: Path) -> None:
+    for pid_path in pid_paths:
+        pid = int(pid_path.read_text(encoding="ascii"))
+        for _ in range(100):
+            stat_path = Path(f"/proc/{pid}/stat")
+            if not stat_path.exists() or stat_path.read_text().split()[2] == "Z":
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail(f"timed-out nsys process remains live: {pid}")
+
+
+def test_bounded_command_unblocks_guarded_signals_in_child() -> None:
+    completed = reducer._run_bounded_command(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import signal;"
+                "blocked=signal.pthread_sigmask(signal.SIG_BLOCK,set());"
+                "print(int(signal.SIGINT in blocked or signal.SIGTERM in blocked))"
+            ),
+        ],
+        label="signal-mask fixture",
+        timeout_s=1,
+        kill_after_s=0.2,
+        env=os.environ,
+    )
+
+    assert completed.returncode == 0
+    assert completed.stdout == "0\n"
+
+
+def test_run_stats_timeout_kills_term_ignoring_process_group(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nsys_bin = tmp_path / "nsys"
+    parent_pid_path = tmp_path / "parent.pid"
+    child_pid_path = tmp_path / "child.pid"
+    _write_hanging_nsys(
+        nsys_bin,
+        parent_pid_path=parent_pid_path,
+        child_pid_path=child_pid_path,
+    )
+    report = tmp_path / "capture.nsys-rep"
+    report.write_bytes(b"report")
+    monkeypatch.setenv("PARENT_PID_PATH", str(parent_pid_path))
+    monkeypatch.setenv("CHILD_PID_PATH", str(child_pid_path))
+
+    def reject_numeric_signal(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("cleanup must signal through pidfds, not numeric PIDs or PGIDs")
+
+    monkeypatch.setattr(reducer.os, "kill", reject_numeric_signal)
+    monkeypatch.setattr(reducer.os, "killpg", reject_numeric_signal)
+
+    started = time.monotonic()
+    with pytest.raises(reducer.ReductionError, match="timed out"):
+        reducer._run_stats(
+            nsys_bin=nsys_bin,
+            report_path=report,
+            report_name="nvtx_gpu_proj_sum",
+            timeout_s=0.1,
+            kill_after_s=0.2,
+        )
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 2
+    _assert_no_live_processes(parent_pid_path, child_pid_path)
+
+
+def test_nsys_version_timeout_kills_term_ignoring_process_group(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nsys_bin = tmp_path / "nsys"
+    parent_pid_path = tmp_path / "parent.pid"
+    child_pid_path = tmp_path / "child.pid"
+    _write_hanging_nsys(
+        nsys_bin,
+        parent_pid_path=parent_pid_path,
+        child_pid_path=child_pid_path,
+    )
+    monkeypatch.setenv("PARENT_PID_PATH", str(parent_pid_path))
+    monkeypatch.setenv("CHILD_PID_PATH", str(child_pid_path))
+
+    with pytest.raises(reducer.ReductionError, match="nsys --version timed out"):
+        reducer._nsys_version(nsys_bin, timeout_s=0.1, kill_after_s=0.2)
+
+    _assert_no_live_processes(parent_pid_path, child_pid_path)
+
+
+def test_direct_pidfd_failure_kills_unreaped_process_group(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nsys_bin = tmp_path / "nsys"
+    parent_pid_path = tmp_path / "parent.pid"
+    escaped_pid_path = tmp_path / "escaped.pid"
+    escaped_script = tmp_path / "escaped.py"
+    report = tmp_path / "capture.nsys-rep"
+    report.write_bytes(b"report")
+    escaped_script.write_text(
+        """import os
+import signal
+
+if os.fork() != 0:
+    os._exit(0)
+os.setsid()
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+with open(os.environ["ESCAPED_PID_PATH"], "w", encoding="ascii") as target:
+    target.write(str(os.getpid()))
+while True:
+    pass
+""",
+        encoding="utf-8",
+    )
+    nsys_bin.write_text(
+        """#!/usr/bin/env bash
+printf '%s\n' "$$" > "$PARENT_PID_PATH"
+"$PYTHON_BIN" "$ESCAPED_SCRIPT" &
+trap '' TERM
+while :; do :; done
+""",
+        encoding="utf-8",
+    )
+    nsys_bin.chmod(0o755)
+    monkeypatch.setenv("PARENT_PID_PATH", str(parent_pid_path))
+    monkeypatch.setenv("ESCAPED_PID_PATH", str(escaped_pid_path))
+    monkeypatch.setenv("ESCAPED_SCRIPT", str(escaped_script))
+    monkeypatch.setenv("PYTHON_BIN", sys.executable)
+    real_pidfd_open = reducer.os.pidfd_open
+    real_unbound_cleanup = reducer._terminate_unbound_direct_process
+    calls = 0
+    cleanup_calls = 0
+
+    def fail_direct_pidfd(pid: int) -> int:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            for _ in range(100):
+                if escaped_pid_path.exists():
+                    break
+                time.sleep(0.01)
+            raise PermissionError("injected direct pidfd failure")
+        return real_pidfd_open(pid)
+
+    def track_unbound_cleanup(
+        process: subprocess.Popen[str],
+        *,
+        process_token: str,
+        timeout_s: float,
+    ) -> bool:
+        nonlocal cleanup_calls
+        cleanup_calls += 1
+        return real_unbound_cleanup(
+            process,
+            process_token=process_token,
+            timeout_s=timeout_s,
+        )
+
+    monkeypatch.setattr(reducer.os, "pidfd_open", fail_direct_pidfd)
+    monkeypatch.setattr(
+        reducer,
+        "_terminate_unbound_direct_process",
+        track_unbound_cleanup,
+    )
+
+    with pytest.raises(reducer.ReductionError, match="could not bind a pidfd"):
+        reducer._run_stats(
+            nsys_bin=nsys_bin,
+            report_path=report,
+            report_name="nvtx_gpu_proj_sum",
+            timeout_s=30,
+            kill_after_s=0.2,
+        )
+
+    assert cleanup_calls == 1
+    _assert_no_live_processes(parent_pid_path, escaped_pid_path)
+
+
+def test_direct_pidfd_cleanup_exception_uses_token_only_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nsys_bin = tmp_path / "nsys"
+    parent_pid_path = tmp_path / "parent.pid"
+    child_pid_path = tmp_path / "child.pid"
+    report = tmp_path / "capture.nsys-rep"
+    report.write_bytes(b"report")
+    _write_hanging_nsys(
+        nsys_bin,
+        parent_pid_path=parent_pid_path,
+        child_pid_path=child_pid_path,
+    )
+    monkeypatch.setenv("PARENT_PID_PATH", str(parent_pid_path))
+    monkeypatch.setenv("CHILD_PID_PATH", str(child_pid_path))
+    real_pidfd_open = reducer.os.pidfd_open
+    calls = 0
+    emergency_calls = 0
+
+    def fail_direct_pidfd(pid: int) -> int:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            for _ in range(100):
+                if parent_pid_path.exists() and child_pid_path.exists():
+                    break
+                time.sleep(0.01)
+            raise PermissionError("injected direct pidfd failure")
+        return real_pidfd_open(pid)
+
+    def fail_emergency_cleanup(
+        _process: subprocess.Popen[str],
+        *,
+        process_token: str,
+        timeout_s: float,
+    ) -> bool:
+        del process_token, timeout_s
+        nonlocal emergency_calls
+        emergency_calls += 1
+        raise RuntimeError("injected emergency cleanup failure")
+
+    monkeypatch.setattr(reducer.os, "pidfd_open", fail_direct_pidfd)
+    monkeypatch.setattr(
+        reducer,
+        "_terminate_unbound_direct_process",
+        fail_emergency_cleanup,
+    )
+
+    with pytest.raises(
+        reducer.ReductionError,
+        match="direct pidfd binding failed during emergency cleanup",
+    ):
+        reducer._run_stats(
+            nsys_bin=nsys_bin,
+            report_path=report,
+            report_name="nvtx_gpu_proj_sum",
+            timeout_s=30,
+            kill_after_s=0.2,
+        )
+
+    assert emergency_calls == 1
+    _assert_no_live_processes(parent_pid_path, child_pid_path)
+
+
+def test_pidfd_acquisition_failure_is_not_reported_as_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        reducer,
+        "_open_process_token_pidfds",
+        lambda _token: ([], True),
+    )
+
+    assert reducer._kill_tracked_processes("fixture", timeout_s=0.01) is False
+
+
+def test_run_stats_sigterm_kills_detached_process_group(tmp_path: Path) -> None:
+    nsys_bin = tmp_path / "nsys"
+    parent_pid_path = tmp_path / "parent.pid"
+    child_pid_path = tmp_path / "child.pid"
+    report = tmp_path / "capture.nsys-rep"
+    report.write_bytes(b"report")
+    _write_hanging_nsys(
+        nsys_bin,
+        parent_pid_path=parent_pid_path,
+        child_pid_path=child_pid_path,
+    )
+    harness = """
+import runpy
+import sys
+from pathlib import Path
+
+reducer = runpy.run_path(sys.argv[1])
+reducer["_run_stats"](
+    nsys_bin=Path(sys.argv[2]),
+    report_path=Path(sys.argv[3]),
+    report_name="nvtx_gpu_proj_sum",
+    timeout_s=30,
+    kill_after_s=0.2,
+)
+"""
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            harness,
+            str(REPO / "scripts" / "fr13_fixed32_nsys_reduce.py"),
+            str(nsys_bin),
+            str(report),
+        ],
+        cwd=REPO,
+        env={
+            **os.environ,
+            "PARENT_PID_PATH": str(parent_pid_path),
+            "CHILD_PID_PATH": str(child_pid_path),
+        },
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    for _ in range(200):
+        if parent_pid_path.exists() and child_pid_path.exists():
+            break
+        time.sleep(0.01)
+    else:
+        process.kill()
+        pytest.fail("hanging nsys process group did not start")
+
+    process.terminate()
+    process.communicate(timeout=3)
+
+    assert process.returncode == 143
+    _assert_no_live_processes(parent_pid_path, child_pid_path)
+
+
+def test_sigterm_during_direct_pidfd_bind_is_cleanup_safe(tmp_path: Path) -> None:
+    nsys_bin = tmp_path / "nsys"
+    parent_pid_path = tmp_path / "parent.pid"
+    child_pid_path = tmp_path / "child.pid"
+    cleanup_mask_path = tmp_path / "cleanup-mask.txt"
+    report = tmp_path / "capture.nsys-rep"
+    report.write_bytes(b"report")
+    _write_hanging_nsys(
+        nsys_bin,
+        parent_pid_path=parent_pid_path,
+        child_pid_path=child_pid_path,
+    )
+    harness = """
+import importlib.util
+import os
+import signal
+import sys
+import time
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location("reducer_under_test", sys.argv[1])
+assert spec is not None and spec.loader is not None
+reducer = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(reducer)
+real_pidfd_open = reducer.os.pidfd_open
+real_terminate = reducer._terminate_process_group
+calls = 0
+
+def injected_pidfd_open(pid):
+    global calls
+    calls += 1
+    pidfd = real_pidfd_open(pid)
+    if calls == 2:
+        for _ in range(200):
+            if Path(os.environ["PARENT_PID_PATH"]).exists() and Path(
+                os.environ["CHILD_PID_PATH"]
+            ).exists():
+                break
+            time.sleep(0.01)
+        else:
+            raise RuntimeError("fixture process group did not start")
+        signal.raise_signal(signal.SIGTERM)
+    return pidfd
+
+def tracked_terminate(process, *, direct_pidfd, process_token, kill_after_s):
+    blocked = signal.pthread_sigmask(signal.SIG_BLOCK, set())
+    Path(os.environ["CLEANUP_MASK_PATH"]).write_text(
+        str(int(signal.SIGINT in blocked and signal.SIGTERM in blocked)),
+        encoding="ascii",
+    )
+    return real_terminate(
+        process,
+        direct_pidfd=direct_pidfd,
+        process_token=process_token,
+        kill_after_s=kill_after_s,
+    )
+
+reducer.os.pidfd_open = injected_pidfd_open
+reducer._terminate_process_group = tracked_terminate
+reducer._run_stats(
+    nsys_bin=Path(sys.argv[2]),
+    report_path=Path(sys.argv[3]),
+    report_name="nvtx_gpu_proj_sum",
+    timeout_s=30,
+    kill_after_s=0.2,
+)
+"""
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            harness,
+            str(REPO / "scripts" / "fr13_fixed32_nsys_reduce.py"),
+            str(nsys_bin),
+            str(report),
+        ],
+        cwd=REPO,
+        env={
+            **os.environ,
+            "PARENT_PID_PATH": str(parent_pid_path),
+            "CHILD_PID_PATH": str(child_pid_path),
+            "CLEANUP_MASK_PATH": str(cleanup_mask_path),
+        },
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    stdout, stderr = process.communicate(timeout=5)
+
+    assert (stdout, stderr) == ("", "")
+    assert process.returncode == 143
+    assert cleanup_mask_path.read_text(encoding="ascii") == "1"
+    _assert_no_live_processes(parent_pid_path, child_pid_path)
+
+
+def test_sigterm_during_post_success_descendant_sweep_retries_cleanup(
+    tmp_path: Path,
+) -> None:
+    nsys_bin = tmp_path / "nsys"
+    escaped_script = tmp_path / "escaped.py"
+    escaped_pid_path = tmp_path / "escaped.pid"
+    sweep_calls_path = tmp_path / "sweep-calls.txt"
+    cleanup_mask_path = tmp_path / "cleanup-mask.txt"
+    report = tmp_path / "capture.nsys-rep"
+    report.write_bytes(b"report")
+    escaped_script.write_text(
+        """import os
+import signal
+
+if os.fork() != 0:
+    os._exit(0)
+os.setsid()
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+devnull = os.open(os.devnull, os.O_RDWR)
+for fd in (0, 1, 2):
+    os.dup2(devnull, fd)
+if devnull > 2:
+    os.close(devnull)
+with open(os.environ["ESCAPED_PID_PATH"], "w", encoding="ascii") as target:
+    target.write(str(os.getpid()))
+while True:
+    pass
+""",
+        encoding="utf-8",
+    )
+    nsys_bin.write_text(
+        """#!/usr/bin/env bash
+"$PYTHON_BIN" "$ESCAPED_SCRIPT" &
+for _ in $(seq 1 200); do
+  test -s "$ESCAPED_PID_PATH" && exit 0
+  sleep 0.01
+done
+exit 2
+""",
+        encoding="utf-8",
+    )
+    nsys_bin.chmod(0o755)
+    harness = """
+import importlib.util
+import os
+import signal
+import sys
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location("reducer_under_test", sys.argv[1])
+assert spec is not None and spec.loader is not None
+reducer = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(reducer)
+real_kill = reducer._kill_tracked_processes
+calls = 0
+
+def injected_kill(token, *, timeout_s):
+    global calls
+    calls += 1
+    Path(os.environ["SWEEP_CALLS_PATH"]).write_text(str(calls), encoding="ascii")
+    if calls == 1:
+        signal.raise_signal(signal.SIGTERM)
+    blocked = signal.pthread_sigmask(signal.SIG_BLOCK, set())
+    Path(os.environ["CLEANUP_MASK_PATH"]).write_text(
+        str(int(signal.SIGINT in blocked and signal.SIGTERM in blocked)),
+        encoding="ascii",
+    )
+    return real_kill(token, timeout_s=timeout_s)
+
+reducer._kill_tracked_processes = injected_kill
+reducer._run_stats(
+    nsys_bin=Path(sys.argv[2]),
+    report_path=Path(sys.argv[3]),
+    report_name="nvtx_gpu_proj_sum",
+    timeout_s=30,
+    kill_after_s=0.2,
+)
+"""
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            harness,
+            str(REPO / "scripts" / "fr13_fixed32_nsys_reduce.py"),
+            str(nsys_bin),
+            str(report),
+        ],
+        cwd=REPO,
+        env={
+            **os.environ,
+            "PYTHON_BIN": sys.executable,
+            "ESCAPED_SCRIPT": str(escaped_script),
+            "ESCAPED_PID_PATH": str(escaped_pid_path),
+            "SWEEP_CALLS_PATH": str(sweep_calls_path),
+            "CLEANUP_MASK_PATH": str(cleanup_mask_path),
+        },
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    stdout, stderr = process.communicate(timeout=5)
+
+    assert (stdout, stderr) == ("", "")
+    assert process.returncode == 143
+    assert sweep_calls_path.read_text(encoding="ascii") == "2"
+    assert cleanup_mask_path.read_text(encoding="ascii") == "1"
+    _assert_no_live_processes(escaped_pid_path)
+
+
+def test_post_kill_cleanup_is_bounded_when_escaped_process_holds_pipes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    escaped_script = tmp_path / "escaped.py"
+    escaped_pid_path = tmp_path / "escaped.pid"
+    parent_pid_path = tmp_path / "parent.pid"
+    nsys_bin = tmp_path / "nsys"
+    report = tmp_path / "capture.nsys-rep"
+    report.write_bytes(b"report")
+    escaped_script.write_text(
+        """import os
+import signal
+
+if os.fork() != 0:
+    os._exit(0)
+os.setsid()
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+with open(os.environ["ESCAPED_PID_PATH"], "w", encoding="ascii") as target:
+    target.write(str(os.getpid()))
+while True:
+    pass
+""",
+        encoding="utf-8",
+    )
+    nsys_bin.write_text(
+        """#!/usr/bin/env bash
+printf '%s\n' "$$" > "$PARENT_PID_PATH"
+"$PYTHON_BIN" "$ESCAPED_SCRIPT" &
+trap '' TERM
+while :; do :; done
+""",
+        encoding="utf-8",
+    )
+    nsys_bin.chmod(0o755)
+    monkeypatch.setenv("PARENT_PID_PATH", str(parent_pid_path))
+    monkeypatch.setenv("ESCAPED_PID_PATH", str(escaped_pid_path))
+    monkeypatch.setenv("ESCAPED_SCRIPT", str(escaped_script))
+    monkeypatch.setenv("PYTHON_BIN", sys.executable)
+
+    started = time.monotonic()
+    with pytest.raises(reducer.ReductionError, match="timed out"):
+        reducer._run_stats(
+            nsys_bin=nsys_bin,
+            report_path=report,
+            report_name="nvtx_gpu_proj_sum",
+            timeout_s=0.2,
+            kill_after_s=0.2,
+        )
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 1.5
+    _assert_no_live_processes(parent_pid_path, escaped_pid_path)
+
+
+def test_reduced_output_must_not_alias_report(tmp_path: Path) -> None:
+    report = tmp_path / "capture.nsys-rep"
+    report.write_bytes(b"report")
+
+    with pytest.raises(reducer.ReductionError, match="must not alias"):
+        reducer._validate_output_path(report, report)
