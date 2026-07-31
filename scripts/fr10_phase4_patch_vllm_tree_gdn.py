@@ -22494,6 +22494,161 @@ def _fr13_dfwd_unified_bm8_write(record):
     temporary.replace(path)
 
 
+def _fr13_dfwd_unified_bm8_strict_json(raw, label):
+    import json as _json
+
+    def _object(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError("duplicate key " + repr(key))
+            value[key] = item
+        return value
+
+    try:
+        value = _json.loads(
+            raw,
+            object_pairs_hook=_object,
+            parse_constant=lambda item: (_ for _ in ()).throw(
+                ValueError("nonfinite value " + item)
+            ),
+        )
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(
+            "FR13 DFWD unified BM8 " + label + " is not strict JSON"
+        ) from exc
+    if not isinstance(value, dict):
+        raise RuntimeError(
+            "FR13 DFWD unified BM8 " + label + " is not a JSON object"
+        )
+    return value
+
+
+def _fr13_dfwd_unified_bm8_candidate_identity():
+    import hashlib as _hashlib
+    import stat as _stat
+    from pathlib import Path as _Path
+
+    path = _Path(
+        os.environ.get(
+            "FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON",
+            "/logs/fr13_dfwd_unified_bm8.identity.json",
+        )
+    )
+    try:
+        metadata = path.lstat()
+        raw = path.read_text(encoding="ascii")
+    except (OSError, UnicodeError) as exc:
+        raise RuntimeError(
+            "FR13 DFWD unified BM8 candidate identity is unavailable"
+        ) from exc
+    if (
+        not _stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or _stat.S_IMODE(metadata.st_mode) != 0o400
+        or metadata.st_size != len(raw.encode("ascii"))
+    ):
+        raise RuntimeError(
+            "FR13 DFWD unified BM8 candidate identity metadata drifted"
+        )
+    payload = _fr13_dfwd_unified_bm8_strict_json(raw, "candidate identity")
+    expected_commit = os.environ.get(
+        "FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT", ""
+    )
+    expected_files = {
+        "patcher": _Path(
+            "/workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py"
+        ),
+        "unified_attention": _Path(__file__).resolve(),
+        "eagle_replay_hook": _Path(
+            "/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/eagle.py"
+        ),
+    }
+    files = payload.get("files")
+    candidate = payload.get("candidate")
+    valid = (
+        payload.get("schema")
+        == "fr13.fixed32.dfwd_unified_bm8.identity.v1"
+        and len(expected_commit) == 40
+        and all(character in "0123456789abcdef" for character in expected_commit)
+        and payload.get("source_commit") == expected_commit
+        and payload.get("production_enabled") is False
+        and candidate
+        == {
+            "kernel": "kernel_unified_attention_2d",
+            "stock_block_m": 16,
+            "stock_block_q": 2,
+            "candidate_block_m": 8,
+            "candidate_block_q": 1,
+            "required_calls": 4,
+        }
+        and isinstance(files, dict)
+        and set(files) == set(expected_files)
+    )
+    if not valid:
+        raise RuntimeError(
+            "FR13 DFWD unified BM8 candidate identity fields drifted"
+        )
+    for label, expected_path in expected_files.items():
+        row = files.get(label)
+        actual_sha256 = _hashlib.sha256(expected_path.read_bytes()).hexdigest()
+        if (
+            not isinstance(row, dict)
+            or row.get("path") != str(expected_path)
+            or row.get("sha256") != actual_sha256
+        ):
+            raise RuntimeError(
+                "FR13 DFWD unified BM8 candidate source drifted: " + label
+            )
+    return payload
+
+
+def _fr13_dfwd_unified_bm8_real_task_marker():
+    import stat as _stat
+    from pathlib import Path as _Path
+
+    path = _Path(
+        os.environ.get(
+            "FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH",
+            "/logs/fr13_dfwd_unified_bm8.real_event.arm",
+        )
+    )
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise RuntimeError(
+            "FR13 DFWD unified BM8 cannot inspect real-task marker"
+        ) from exc
+    instance_id = os.environ.get("FR13_DFWD_UNIFIED_BM8_INSTANCE_ID", "")
+    expected = ("swe_verified:" + instance_id + "\n").encode("ascii")
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise RuntimeError(
+            "FR13 DFWD unified BM8 cannot read real-task marker"
+        ) from exc
+    if (
+        not instance_id
+        or len(instance_id) > 240
+        or any(
+            character
+            not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+            for character in instance_id
+        )
+        or not _stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or _stat.S_IMODE(metadata.st_mode) != 0o400
+        or metadata.st_size != len(expected)
+        or raw != expected
+    ):
+        raise RuntimeError(
+            "FR13 DFWD unified BM8 real-task marker is noncanonical"
+        )
+    return raw.decode("ascii").strip()
+
+
 def _fr13_dfwd_unified_bm8_live_replay(graph_id, batch_size):
     global _FR13_DFWD_UNIFIED_BM8_ATTEMPTED
     global _FR13_DFWD_UNIFIED_BM8_PASSED
@@ -22520,13 +22675,28 @@ def _fr13_dfwd_unified_bm8_live_replay(graph_id, batch_size):
     if os.environ.get("FR13_DFWD_UNIFIED_BM8_INTERNAL") is not None:
         raise RuntimeError("FR13 DFWD unified BM8 selector was externally populated")
 
+    marker_path = os.environ.get(
+        "FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH",
+        "/logs/fr13_dfwd_unified_bm8.real_event.arm",
+    )
+    if not os.path.exists(marker_path):
+        return
+
     _FR13_DFWD_UNIFIED_BM8_ATTEMPTED = True
-    torch.cuda.synchronize()
     import hashlib as _hashlib
 
     rows = []
+    task_marker = None
+    candidate_identity = None
     dispatches_before = _FR13_DFWD_UNIFIED_BM8_DISPATCHES
     try:
+        task_marker = _fr13_dfwd_unified_bm8_real_task_marker()
+        if task_marker is None:
+            raise RuntimeError(
+                "FR13 DFWD unified BM8 real-task marker disappeared"
+            )
+        candidate_identity = _fr13_dfwd_unified_bm8_candidate_identity()
+        torch.cuda.synchronize()
         for call_index, bundle in enumerate(bundles):
             query_start = [int(x) for x in bundle["cu_seqlens_q"].cpu().tolist()]
             seq_lens = [int(x) for x in bundle["seqused_k"].cpu().tolist()]
@@ -22570,6 +22740,8 @@ def _fr13_dfwd_unified_bm8_live_replay(graph_id, batch_size):
                 "error_type": type(exc).__name__,
                 "error": str(exc),
                 "completed_calls": rows,
+                "task_marker": task_marker,
+                "candidate_identity": candidate_identity,
                 "served_return": "stock captured drafter graph unchanged",
                 "performance_measurement": False,
             }
@@ -22593,6 +22765,8 @@ def _fr13_dfwd_unified_bm8_live_replay(graph_id, batch_size):
         "concurrency": 1,
         "batch_size": 1,
         "graph_id": int(graph_id),
+        "task_marker": task_marker,
+        "candidate_identity": candidate_identity,
         "calls": rows,
         "geometry": {
             "query_shape": [1, 24, 256],
