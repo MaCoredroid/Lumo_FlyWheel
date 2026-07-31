@@ -2833,6 +2833,31 @@ def _fixed32_trace_model_requests(
             f"{trace_path}: trace does not start with the pinned Qwen "
             f"{FIXED32_QWEN_CODE_VERSION} init record"
         )
+    compaction_metric_evidence = provenance.get(
+        "qwen_compaction_metric_evidence"
+    )
+    metrics_pre_raw: bytes | None = None
+    metrics_post_raw: bytes | None = None
+    expected_completed_requests: int | None = None
+    if compaction_metric_evidence is not None:
+        if not isinstance(compaction_metric_evidence, dict):
+            raise GateError(
+                f"{trace_path}: Qwen compaction metric evidence is malformed"
+            )
+        metrics_pre_raw, _metrics_pre_text = strict_utf8_artifact(
+            trace_path.parent / "vllm_metrics_pre.txt",
+            label=str(trace_path.parent / "vllm_metrics_pre.txt"),
+        )
+        metrics_post_raw, _metrics_post_text = strict_utf8_artifact(
+            trace_path.parent / "vllm_metrics_post.txt",
+            label=str(trace_path.parent / "vllm_metrics_post.txt"),
+        )
+        expected_completed_requests = strict_positive_int(
+            provenance.get("completed_logical_model_requests"),
+            label=(
+                f"{trace_path}:provenance completed logical model requests"
+            ),
+        )
     try:
         trace_requests = (
             fixed32_contract.validate_fixed32_trace_model_requests(
@@ -2840,6 +2865,11 @@ def _fixed32_trace_model_requests(
                 expected_session_id=fixed32_contract.fixed32_trace_session_id(
                     provenance.get("instance_id")
                 ),
+                expected_completed_logical_model_requests=(
+                    expected_completed_requests
+                ),
+                metrics_pre=metrics_pre_raw,
+                metrics_post=metrics_post_raw,
             )
         )
     except Fixed32ContractError as error:
@@ -2866,6 +2896,15 @@ def _fixed32_trace_model_requests(
         != completed_requests
         or provenance.get("trace_model_request_ids_sha256")
         != response_ids_sha256
+        or provenance.get("qwen_compaction_metric_evidence")
+        != trace_requests.get("qwen_compaction_metric_evidence")
+        or provenance.get("hidden_successful_compaction_model_requests")
+        != trace_requests.get(
+            "hidden_successful_compaction_model_requests",
+            trace_requests.get("hidden_compaction_model_requests", 0),
+        )
+        or provenance.get("hidden_failed_compaction_model_requests")
+        != trace_requests.get("hidden_failed_compaction_model_requests", 0)
     ):
         raise GateError(
             f"{trace_path}: v3 provenance does not match strict trace request "
