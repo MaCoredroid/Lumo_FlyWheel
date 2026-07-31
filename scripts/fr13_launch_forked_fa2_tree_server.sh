@@ -927,7 +927,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   _fixed32_expected_kv_cache_memory_bytes=
   if [[ "$MAX_NUM_SEQS" == "4" ]]; then
     _fixed32_expected_mem=112g
-    _fixed32_expected_kv_cache_memory_bytes=21474836480
+    _fixed32_expected_kv_cache_memory_bytes=42949672960
     KV_CACHE_MEMORY_BYTES=${KV_CACHE_MEMORY_BYTES:-$_fixed32_expected_kv_cache_memory_bytes}
   fi
   _fixed32_expected_metrics=0
