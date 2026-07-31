@@ -843,6 +843,33 @@ if [[ "${FR13_COMMITTER_GRAPH:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_committer_graph.arm" 2>/dev/null || true
 fi
+# The batched-GDN byte gate must stay eager and legacy-served until a real
+# SWE-Verified task is explicitly armed after readiness. The EngineCore worker
+# sees these /logs sidecars even when its curated environment drops FR13_*.
+_fr13_batch_gdn_byte_ab="${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}"
+case "$_fr13_batch_gdn_byte_ab" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_BATCH_GDN_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "$_fr13_batch_gdn_byte_ab" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires FR13_FIXED32_MODE" >&2; exit 2; }
+  [[ "${ENFORCE_EAGER:-0}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires ENFORCE_EAGER=1" >&2; exit 2; }
+  [[ "${FR10_METRICS:-0}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires FR10_METRICS=1" >&2; exit 2; }
+  [[ "${FR13_RING_EXPORT:-1}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires FR13_RING_EXPORT=1" >&2; exit 2; }
+  [[ "${FR13_FLAGS_INKERNEL:-1}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires FR13_FLAGS_INKERNEL=1" >&2; exit 2; }
+  echo "1" > "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.enabled"
+  rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.real_event.arm"
+else
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.enabled" \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.real_event.arm" \
+    2>/dev/null || true
+fi
 # FR13_SUBTREE_PARALLEL sidecars. EngineCore receives a curated environment
 # that drops these FR13_* gates, so env-only reads silently select the
 # monolithic scan. The worker-visible /logs arms are the serving authority;
@@ -859,6 +886,14 @@ case "$_fr13_subtree_selfcheck" in
 esac
 if [[ "$_fr13_subtree_selfcheck" == "1" && "$_fr13_subtree_parallel" != "1" ]]; then
   echo "FR13_SUBTREE_PARALLEL_SELFCHECK=1 requires FR13_SUBTREE_PARALLEL=1" >&2
+  exit 2
+fi
+if [[ "$_fr13_batch_gdn_byte_ab" == "1" && "$_fr13_subtree_parallel" != "1" ]]; then
+  echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires FR13_SUBTREE_PARALLEL=1" >&2
+  exit 2
+fi
+if [[ "$_fr13_batch_gdn_byte_ab" == "1" && "$_fr13_subtree_selfcheck" == "1" ]]; then
+  echo "FR13_FIXED32_BATCH_GDN_BYTE_AB is incompatible with FR13_SUBTREE_PARALLEL_SELFCHECK=1" >&2
   exit 2
 fi
 if [[ "$_fr13_subtree_selfcheck" == "1" && "${ENFORCE_EAGER:-0}" != "1" ]]; then

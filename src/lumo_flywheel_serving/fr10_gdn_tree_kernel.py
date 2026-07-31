@@ -439,6 +439,17 @@ _FR13_FIXED32_SUBTREE_LEVELS = (
 _FR13_FIXED32_EXPORT_NODES = (0, 1, 4, 9, 14)
 _FR13_FIXED32_EXPORT_SLOTS = len(_FR13_FIXED32_EXPORT_NODES)
 _FR13_FIXED32_MAX_BATCH = 4
+_FR13_FIXED32_BATCH_GDN_BYTE_AB_STATE = {
+    "passed": set(),
+    "attempts": {},
+    "waiting_announced": set(),
+}
+_FR13_FIXED32_BATCH_GDN_BYTE_AB_ENABLED = (
+    "/logs/fr13_fixed32_batch_gdn_byte_ab.enabled"
+)
+_FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT = (
+    "/logs/fr13_fixed32_batch_gdn_byte_ab.real_event.arm"
+)
 _FR13_FIXED32_PARENT_SHA256 = (
     "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd"
 )
@@ -451,6 +462,117 @@ _FR13_FIXED32_LEVELS_SHA256 = (
 _FR13_FIXED32_COVERAGE_SHA256 = (
     "23b22df6bf551a4e788327db3b3d3d96e1eca49078d2c6bd0049da2d390eca8b"
 )
+
+
+def _fr13_fixed32_batch_gdn_byte_ab_control() -> tuple[bool, str | None]:
+    """Resolve the eager real-event byte gate without worker-env assumptions.
+
+    The launcher creates the enabled sidecar before boot, then the real-task
+    driver creates the event arm only after readiness and immediately before a
+    SWE-Verified request. This prevents graph warmup or a synthetic probe from
+    satisfying the gate. The event marker is included in every gate record.
+    """
+    raw = os.environ.get("FR13_FIXED32_BATCH_GDN_BYTE_AB", "")
+    if raw not in ("", "0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1"
+        )
+    enabled_path = os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_ENABLED_PATH",
+        _FR13_FIXED32_BATCH_GDN_BYTE_AB_ENABLED,
+    )
+    event_path = os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH",
+        _FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT,
+    )
+    event_exists = os.path.exists(event_path)
+    enabled = raw == "1" or os.path.exists(enabled_path) or event_exists
+    if not event_exists:
+        return enabled, None
+    try:
+        with open(event_path, encoding="ascii") as handle:
+            marker = handle.read(257)
+    except (OSError, UnicodeError) as error:
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB cannot read real-event arm "
+            f"{event_path}: {error}"
+        ) from error
+    if len(marker) > 256:
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB real-event marker exceeds 256 bytes"
+        )
+    marker = marker.strip()
+    prefix = "swe_verified:"
+    task_id = marker[len(prefix):] if marker.startswith(prefix) else ""
+    if not task_id or any(
+        character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+        for character in task_id
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB real-event marker must be "
+            "swe_verified:<task_id>"
+        )
+    return enabled, marker
+
+
+def _fr13_fixed32_batch_gdn_byte_diff(
+    name: str,
+    reference: torch.Tensor,
+    candidate: torch.Tensor,
+) -> dict[str, object]:
+    """Return strict byte-diff evidence including the first differing byte."""
+    if reference.shape != candidate.shape or reference.dtype != candidate.dtype:
+        return {
+            "name": name,
+            "byte_equal": False,
+            "shape_or_dtype_mismatch": True,
+            "reference_shape": tuple(int(value) for value in reference.shape),
+            "candidate_shape": tuple(int(value) for value in candidate.shape),
+            "reference_dtype": str(reference.dtype),
+            "candidate_dtype": str(candidate.dtype),
+            "differing_bytes": None,
+            "first_nonzero_byte": None,
+        }
+    reference_bytes = reference.contiguous().reshape(-1).view(torch.uint8)
+    candidate_bytes = candidate.contiguous().reshape(-1).view(torch.uint8)
+    difference = reference_bytes != candidate_bytes
+    differing_bytes = int(difference.sum().item())
+    if differing_bytes == 0:
+        first_nonzero = None
+        reference_byte = None
+        candidate_byte = None
+    else:
+        first_nonzero = int(
+            torch.nonzero(difference, as_tuple=False)[0, 0].item()
+        )
+        reference_byte = int(reference_bytes[first_nonzero].item())
+        candidate_byte = int(candidate_bytes[first_nonzero].item())
+    return {
+        "name": name,
+        "byte_equal": differing_bytes == 0,
+        "shape_or_dtype_mismatch": False,
+        "shape": tuple(int(value) for value in reference.shape),
+        "dtype": str(reference.dtype),
+        "bytes": int(reference_bytes.numel()),
+        "differing_bytes": differing_bytes,
+        "first_nonzero_byte": first_nonzero,
+        "reference_byte": reference_byte,
+        "candidate_byte": candidate_byte,
+    }
+
+
+def _fr13_fixed32_batch_gdn_byte_ab_emit(record: dict[str, object]) -> None:
+    path = os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_PATH",
+        "/logs/fr13_fixed32_batch_gdn_byte_ab.jsonl",
+    )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    payload = dict(record)
+    payload["schema"] = "fr13.fixed32.batch_gdn.byte_ab.v1"
+    with open(path, "a", encoding="ascii") as handle:
+        handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
 def _fr13_canonical_sha256(value) -> str:
@@ -8474,6 +8596,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
     n_actual: int,
     n_pad: int,
     strict_mask: torch.Tensor,
+    visible_mask: torch.Tensor,
     out: torch.Tensor,
     h0_indices: torch.Tensor,
     h0_num_accepted_tokens: torch.Tensor,
@@ -8494,16 +8617,22 @@ def launch_tree_gdn_prepared_fixed32_batch(
     staging_flags: torch.Tensor | None = None,
     staging_rows: int = 0,
 ) -> tuple[torch.Tensor, None]:
-    """Launch the exact fixed32 path scan in two kernels for B1-B4.
+    """Launch the exact fixed32 path scan in two kernels for B2-B4.
 
     Request programs are folded into path-grid axis 2. The existing 32-row
     subtree export scratch is reused as ``[batch, 5]`` compact parent slots,
     so B4 consumes 20 rows and does not allocate inside graph capture.
+
+    The optional real-event byte gate is eager-only. It runs the legacy
+    per-request route and this route from identical snapshots, restores and
+    serves the legacy result, and only marks a layer eligible for direct batch
+    serving after every touched byte compares equal.
     """
     batch = int(batch_size)
-    if batch < 1 or batch > _FR13_FIXED32_MAX_BATCH:
+    if batch < 2 or batch > _FR13_FIXED32_MAX_BATCH:
         raise ValueError(
-            "FR13_FIXED32_BATCH_GDN: batch_size must be in [1, 4], "
+            "FR13_FIXED32_BATCH_GDN: batch_size must be in [2, 4]; B1 must "
+            "use the legacy per-request route, "
             f"got {batch}"
         )
     if _FR13_FIXED32_MODE is None:
@@ -8515,6 +8644,12 @@ def launch_tree_gdn_prepared_fixed32_batch(
             "FR13_FIXED32_BATCH_GDN requires the exact 32-row physical tree, "
             f"got n_actual={n_actual} n_pad={n_pad}"
         )
+    for name, mask in (("strict_mask", strict_mask), ("visible_mask", visible_mask)):
+        if mask.ndim != 2 or mask.shape[0] < n_pad or mask.shape[1] < n_pad:
+            raise ValueError(
+                f"FR13_FIXED32_BATCH_GDN: {name} must cover "
+                f"{n_pad}x{n_pad}, got {tuple(mask.shape)}"
+            )
     rows = batch * int(n_actual)
     tensors_with_rows = {
         "q": q,
@@ -8644,9 +8779,12 @@ def launch_tree_gdn_prepared_fixed32_batch(
         or int(contract.get("launches", -1)) != 2
         or parent_slots is None
         or len(parent_slots) != 2
+        or not bool(subtree_state.get("route_armed"))
+        or bool(subtree_state.get("selfcheck_armed"))
     ):
         raise RuntimeError(
-            "FR13_FIXED32_BATCH_GDN: exact two-level preseed contract missing"
+            "FR13_FIXED32_BATCH_GDN: exact two-level armed preseed contract "
+            "missing or legacy subtree selfcheck is still armed"
         )
     needed_export_rows = batch * _FR13_FIXED32_EXPORT_SLOTS
     if int(subtree_state["export"].shape[0]) < needed_export_rows:
@@ -8682,72 +8820,284 @@ def launch_tree_gdn_prepared_fixed32_batch(
             f"got {flags_rows}/{batch}"
         )
 
-    for level_index, (
-        nodes,
-        _parents,
-        max_path_len,
-        num_paths,
-        path_lengths,
-    ) in enumerate(subtree_state["levels"]):
-        state_source = 1 if level_index == 0 else 2
-        export_mode = 1 if level_index == 0 else 2
-        _tree_gdn_path_kernel_fixed32_batch[
-            (num_vh, triton.cdiv(dim_v, block_v), batch * num_paths)
-        ](
-            q,
-            k,
-            v,
-            g,
-            beta,
-            raw_a,
-            raw_b,
-            A_log,
-            dt_bias,
-            h0,
-            h0_indices,
-            h0_num_accepted_tokens,
-            invocation_counter,
+    def _launch_batched() -> None:
+        for level_index, (
             nodes,
-            parent_slots[level_index],
+            _parents,
+            max_path_len,
+            num_paths,
             path_lengths,
-            subtree_state["export"],
-            out,
-            ring_k,
-            ring_v,
-            ring_a,
-            ring_b,
-            flags_arg,
-            N_ACTUAL=n_actual,
-            NUM_KH=num_kh,
-            NUM_VH=num_vh,
-            DIM_K=dim_k,
-            DIM_V=dim_v,
-            BLOCK_V=block_v,
-            OUTPUT_SCALE=output_scale,
-            USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
-            H0_INDEX_ROW=int(h0_index_row),
-            H0_INDEX_BATCH_STRIDE=int(h0_indices.stride(0)),
-            H0_BATCH_INDEX=int(h0_batch_index),
-            H0_ACCEPTED_BATCH_STRIDE=int(
-                h0_num_accepted_tokens.stride(0)
-            ),
-            H0_BANK_STRIDE=int(h0.stride(0)),
-            H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
-            RAW_GATING=True,
-            COUNT_INVOCATION=count_invocation and level_index == 0,
-            SCAN_ALIGN=scan_align_on(),
-            MAX_PATH_LEN=max_path_len,
-            NUM_PATHS=num_paths,
-            BATCH_SIZE=batch,
-            EXPORT_SLOTS=_FR13_FIXED32_EXPORT_SLOTS,
-            STATE_SOURCE=state_source,
-            EXPORT_MODE=export_mode,
-            RING_EXPORT=ring_export,
-            FLAGS_EXPORT=flags_export and level_index == 0,
-            FLAGS_ROWS=flags_rows,
-            num_warps=num_warps,
-            **extra_launch_kwargs,
-        )
+        ) in enumerate(subtree_state["levels"]):
+            state_source = 1 if level_index == 0 else 2
+            export_mode = 1 if level_index == 0 else 2
+            _tree_gdn_path_kernel_fixed32_batch[
+                (num_vh, triton.cdiv(dim_v, block_v), batch * num_paths)
+            ](
+                q,
+                k,
+                v,
+                g,
+                beta,
+                raw_a,
+                raw_b,
+                A_log,
+                dt_bias,
+                h0,
+                h0_indices,
+                h0_num_accepted_tokens,
+                invocation_counter,
+                nodes,
+                parent_slots[level_index],
+                path_lengths,
+                subtree_state["export"],
+                out,
+                ring_k,
+                ring_v,
+                ring_a,
+                ring_b,
+                flags_arg,
+                N_ACTUAL=n_actual,
+                NUM_KH=num_kh,
+                NUM_VH=num_vh,
+                DIM_K=dim_k,
+                DIM_V=dim_v,
+                BLOCK_V=block_v,
+                OUTPUT_SCALE=output_scale,
+                USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+                H0_INDEX_ROW=int(h0_index_row),
+                H0_INDEX_BATCH_STRIDE=int(h0_indices.stride(0)),
+                H0_BATCH_INDEX=int(h0_batch_index),
+                H0_ACCEPTED_BATCH_STRIDE=int(
+                    h0_num_accepted_tokens.stride(0)
+                ),
+                H0_BANK_STRIDE=int(h0.stride(0)),
+                H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
+                RAW_GATING=True,
+                COUNT_INVOCATION=count_invocation and level_index == 0,
+                SCAN_ALIGN=scan_align_on(),
+                MAX_PATH_LEN=max_path_len,
+                NUM_PATHS=num_paths,
+                BATCH_SIZE=batch,
+                EXPORT_SLOTS=_FR13_FIXED32_EXPORT_SLOTS,
+                STATE_SOURCE=state_source,
+                EXPORT_MODE=export_mode,
+                RING_EXPORT=ring_export,
+                FLAGS_EXPORT=flags_export and level_index == 0,
+                FLAGS_ROWS=flags_rows,
+                num_warps=num_warps,
+                **extra_launch_kwargs,
+            )
+
+    def _launch_reference(*, collect_export: bool) -> torch.Tensor | None:
+        reference_exports = []
+        for request in range(batch):
+            start = request * int(n_actual)
+            end = start + int(n_actual)
+            launch_tree_gdn_prepared(
+                q=q[start:end],
+                k=k[start:end],
+                v=v[start:end],
+                g=g[start:end],
+                beta=beta[start:end],
+                raw_a=raw_a[start:end],
+                raw_b=raw_b[start:end],
+                A_log=A_log,
+                dt_bias=dt_bias,
+                h0=h0,
+                h0_indices=h0_indices,
+                h0_num_accepted_tokens=h0_num_accepted_tokens,
+                h0_is_bank=True,
+                h0_index_row=(
+                    int(h0_index_row)
+                    + request * int(h0_indices.stride(0))
+                ),
+                h0_batch_index=(
+                    int(h0_batch_index)
+                    + request * int(h0_num_accepted_tokens.stride(0))
+                ),
+                h0_use_accepted_column=h0_use_accepted_column,
+                n_actual=n_actual,
+                n_pad=n_pad,
+                strict_mask=strict_mask,
+                visible_mask=visible_mask,
+                out=out[start:end],
+                output_scale=output_scale,
+                use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+                invocation_counter=(
+                    invocation_counter if count_invocation else None
+                ),
+                ring_k=ring_k[start:end] if ring_export else None,
+                ring_v=ring_v[start:end] if ring_export else None,
+                ring_a=ring_a[start:end] if ring_export else None,
+                ring_b=ring_b[start:end] if ring_export else None,
+                staging_flags=flags_arg if flags_export else None,
+                staging_rows=flags_rows,
+            )
+            if collect_export:
+                reference_exports.append(
+                    torch.stack(
+                        tuple(
+                            subtree_state["export"][node]
+                            for node in _FR13_FIXED32_EXPORT_NODES
+                        ),
+                        dim=0,
+                    )
+                )
+        if not collect_export:
+            return None
+        return torch.cat(reference_exports, dim=0)
+
+    def _snapshot_external() -> dict[str, torch.Tensor]:
+        snapshot = {
+            "out": out[:rows].clone(),
+            "export": subtree_state["export"].clone(),
+        }
+        if ring_export:
+            snapshot.update(
+                ring_k=ring_k[:rows].clone(),
+                ring_v=ring_v[:rows].clone(),
+                ring_a=ring_a[:rows].clone(),
+                ring_b=ring_b[:rows].clone(),
+            )
+        if flags_export:
+            snapshot["flags"] = flags_arg.clone()
+        if count_invocation:
+            snapshot["invocation_counter"] = invocation_counter.clone()
+        return snapshot
+
+    def _restore_external(snapshot: dict[str, torch.Tensor]) -> None:
+        out[:rows].copy_(snapshot["out"])
+        subtree_state["export"].copy_(snapshot["export"])
+        if ring_export:
+            ring_k[:rows].copy_(snapshot["ring_k"])
+            ring_v[:rows].copy_(snapshot["ring_v"])
+            ring_a[:rows].copy_(snapshot["ring_a"])
+            ring_b[:rows].copy_(snapshot["ring_b"])
+        if flags_export:
+            flags_arg.copy_(snapshot["flags"])
+        if count_invocation:
+            invocation_counter.copy_(snapshot["invocation_counter"])
+
+    byte_ab_enabled, real_event_marker = (
+        _fr13_fixed32_batch_gdn_byte_ab_control()
+    )
+    layer_key = int(A_log.data_ptr())
+    gate_state = _FR13_FIXED32_BATCH_GDN_BYTE_AB_STATE
+    if byte_ab_enabled:
+        if torch.cuda.is_current_stream_capturing():
+            raise RuntimeError(
+                "FR13_FIXED32_BATCH_GDN_BYTE_AB is eager-only; boot with "
+                "ENFORCE_EAGER=1"
+            )
+        if not ring_export or not flags_export or not count_invocation:
+            raise RuntimeError(
+                "FR13_FIXED32_BATCH_GDN_BYTE_AB requires K/V/A/B ring export, "
+                "in-kernel flags, and the invocation counter"
+            )
+        if layer_key in gate_state["passed"]:
+            _launch_batched()
+        elif real_event_marker is None:
+            _launch_reference(collect_export=False)
+            if layer_key not in gate_state["waiting_announced"]:
+                gate_state["waiting_announced"].add(layer_key)
+                print(
+                    "[FR13_FIXED32_BATCH_GDN_BYTE_AB WAITING] "
+                    f"layer_key=0x{layer_key:x} reference_served=1",
+                    flush=True,
+                )
+            return out, None
+        elif int(torch.count_nonzero(q[:rows]).item()) == 0:
+            _launch_reference(collect_export=False)
+            _fr13_fixed32_batch_gdn_byte_ab_emit(
+                {
+                    "task_marker": real_event_marker,
+                    "layer_key": f"0x{layer_key:x}",
+                    "batch": batch,
+                    "carrier_nonzero": False,
+                    "zero_diff": None,
+                    "reference_restored_and_served": True,
+                    "status": "zero_carrier_reference_served",
+                }
+            )
+            return out, None
+        else:
+            attempt = int(gate_state["attempts"].get(layer_key, 0)) + 1
+            gate_state["attempts"][layer_key] = attempt
+            before = _snapshot_external()
+            reference_export = _launch_reference(collect_export=True)
+            assert reference_export is not None
+            reference = _snapshot_external()
+            candidate = None
+            try:
+                _restore_external(before)
+                _launch_batched()
+                candidate = _snapshot_external()
+                comparison_inputs = [
+                    ("out", reference["out"], candidate["out"]),
+                    ("ring_k", reference["ring_k"], candidate["ring_k"]),
+                    ("ring_v", reference["ring_v"], candidate["ring_v"]),
+                    ("ring_a", reference["ring_a"], candidate["ring_a"]),
+                    ("ring_b", reference["ring_b"], candidate["ring_b"]),
+                    (
+                        "export_compact",
+                        reference_export,
+                        candidate["export"][:needed_export_rows],
+                    ),
+                    (
+                        "export_untouched_tail",
+                        before["export"][needed_export_rows:],
+                        candidate["export"][needed_export_rows:],
+                    ),
+                    ("flags", reference["flags"], candidate["flags"]),
+                    (
+                        "invocation_counter",
+                        reference["invocation_counter"],
+                        candidate["invocation_counter"],
+                    ),
+                ]
+                comparisons = [
+                    _fr13_fixed32_batch_gdn_byte_diff(name, left, right)
+                    for name, left, right in comparison_inputs
+                ]
+            finally:
+                _restore_external(reference)
+            first_nonzero = next(
+                (
+                    item
+                    for item in comparisons
+                    if not bool(item["byte_equal"])
+                ),
+                None,
+            )
+            zero_diff = first_nonzero is None
+            record = {
+                "task_marker": real_event_marker,
+                "layer_key": f"0x{layer_key:x}",
+                "batch": batch,
+                "attempt": attempt,
+                "carrier_nonzero": True,
+                "legacy_physical_launches": 2 * batch,
+                "candidate_physical_launches": 2,
+                "comparisons": comparisons,
+                "first_nonzero": first_nonzero,
+                "zero_diff": zero_diff,
+                "reference_restored_and_served": True,
+                "status": "pass" if zero_diff else "mismatch_reference_served",
+            }
+            _fr13_fixed32_batch_gdn_byte_ab_emit(record)
+            if zero_diff:
+                gate_state["passed"].add(layer_key)
+            print(
+                "[FR13_FIXED32_BATCH_GDN_BYTE_AB "
+                f"{'PASS' if zero_diff else 'MISMATCH'}] "
+                f"task={real_event_marker} layer_key=0x{layer_key:x} "
+                f"attempt={attempt} reference_served=1 "
+                f"first_nonzero={first_nonzero}",
+                flush=True,
+            )
+            return out, None
+    else:
+        _launch_batched()
     if not subtree_state.get("batch_engaged_announced", False):
         subtree_state["batch_engaged_announced"] = True
         print(
