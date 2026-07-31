@@ -1,0 +1,11 @@
+container_id=07bfe63cc7a5d5fe941e25bb46781dd69bc5ce5481e90328c71da353f93d3ca6
+container_name=fr13-bigdenom-tail6_fixed32_b4_graph_bv64_exact4_b4_20260731T222750Z
+pre_removal_state=exited
+pre_removal_exit_code=0
+immutable_identity_verified=1
+container_removed=1
+recover_host_memory_rc=0
+docker_containers_after_cleanup=0
+gpu_compute_processes_after_cleanup=0
+host_memory_available_gib_after_cleanup=105
+swap_used_gib_after_cleanup=0
