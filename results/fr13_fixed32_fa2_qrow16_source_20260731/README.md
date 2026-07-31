@@ -11,19 +11,27 @@ tile in the existing order, and writes its final rows directly. There is no
 cross-CTA floating-point reduction or combine kernel.
 
 The one-warp traits cannot instantiate FA2's split-K combine kernel, which is
-hard-coded for 128 threads. The candidate therefore calls the launcher with a
-compile-time `AllowSplit=false`; the runtime dispatch also requires
-`num_splits == 1`. This compile-time flag discards both the combine block and
-the `Split=true` main-kernel specialization for one-warp traits. Stock four-warp
-calls retain the default split-capable path and both main-kernel variants.
+hard-coded for 128 threads. The candidate therefore directly launches the one
+observed fixed32 specialization: noncausal, nonlocal, no ALiBi, uneven MN,
+even K, no softcap, no split, and no appended KV. The runtime dispatch requires
+that exact geometry, including `softcap == 0` and `num_splits == 1`. Stock
+`run_flash_splitkv_fwd` remains source-identical and retains its existing
+split-capable path and all stock specializations.
+
+The private dispatch is an explicit specialization in only
+`flash_fwd_split_hdim256_bf16_sm80.cu`. The shared launch header remains
+byte-identical to the exact-safe base, so Ninja rebuilds one CUDA object rather
+than all 52 forward objects. The target object adds one qrow kernel symbol,
+not the 24 runtime-switch variants emitted by the earlier shared-header form.
 
 The private live-gate selector requires the exact production BF16 paged-KV signature:
 `params.b == 1`, 24 Q heads, four KV heads, `d=d_rounded=256`, 32 query
 rows, a 32x32 zero-offset tree bias, a 1024-row page, full-window noncausal
-attention, no ALiBi or appended KV, and `num_splits == 1`. Without that private
-selector, the same binary dispatches stock. At B4, the stock geometry already
-launches 96 CTAs per layer across 48 SMs; query splitting would only raise that
-to 192 CTAs while rereading K/V. B4 therefore stays on the stock path.
+attention, no ALiBi, no softcap or appended KV, and `num_splits == 1`. Without
+that private selector, the same binary dispatches stock. At B4, the stock
+geometry already launches 96 CTAs per layer across 48 SMs; query splitting
+would only raise that to 192 CTAs while rereading K/V. B4 therefore stays on
+the stock path.
 
 The candidate is further restricted to the observed production signature:
 `d=256`, 24 heads, full-window attention, no ALiBi, and no appended KV. Rounded

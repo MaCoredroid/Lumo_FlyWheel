@@ -8,9 +8,10 @@ releases the machine. This procedure does not authorize deployment or timing.
 - FA2 upstream: `29210221863736a08f71a866459e368ad1ac4a95`
 - Exact-safe base SO: `f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d`,
   299,183,936 bytes
-- Exact-safe launch header: `d9e9f4b92cb731d7955b514449e59b8e411bf7a0c929aafb454f2402d41fe976`
-- Qrow16 launch header after idempotent source application:
-  `88bfcc5b1c4bbe9b95e8747b0efd58f0938b67ebfcf64f7c7a517489f09961e2`
+- Exact-safe and unchanged launch header:
+  `d9e9f4b92cb731d7955b514449e59b8e411bf7a0c929aafb454f2402d41fe976`
+- Qrow16 BF16/HD256/noncausal translation unit after idempotent application:
+  `a5dbcf70f5d9f85e6003684bcd377c3bf2e747d28d93de19b33b8384814c3ae3`
 - Unchanged suffix-early-out kernel header:
   `934e8c6c2e72c667f3cb0a8dc53b11c16a4eba8e3ac2b5811c882eff399ac3de`
 - Production image:
@@ -46,7 +47,9 @@ python3 "$REPO/scripts/fr13_patch_fa2_tree_bias.py" \
   --fa2-src "$CAND_FA2" --skip-python \
   --tree-bias-tile-earlyout --fixed32-query-tile16
 test "$(sha256sum "$CAND_FA2/csrc/flash_attn/src/flash_fwd_launch_template.h" | cut -d' ' -f1)" = \
-  88bfcc5b1c4bbe9b95e8747b0efd58f0938b67ebfcf64f7c7a517489f09961e2
+  d9e9f4b92cb731d7955b514449e59b8e411bf7a0c929aafb454f2402d41fe976
+test "$(sha256sum "$CAND_FA2/csrc/flash_attn/src/flash_fwd_split_hdim256_bf16_sm80.cu" | cut -d' ' -f1)" = \
+  a5dbcf70f5d9f85e6003684bcd377c3bf2e747d28d93de19b33b8384814c3ae3
 test "$(sha256sum "$CAND_FA2/csrc/flash_attn/src/flash_fwd_kernel.h" | cut -d' ' -f1)" = \
   934e8c6c2e72c667f3cb0a8dc53b11c16a4eba8e3ac2b5811c882eff399ac3de
 rm -f "$CAND_SO"
@@ -58,7 +61,7 @@ docker run --rm \
   'set -euo pipefail; ln -s /usr/bin/env /usr/local/bin/ccache; ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/lib/aarch64-linux-gnu/libcuda.so; ninja -C build/lumo_cutlass_research -f build.no-reconfigure.ninja -n _vllm_fa2_C' \
   | tee "$OUT/ninja_dry_run.txt"
 
-test "$(rg -c 'Building CUDA object' "$OUT/ninja_dry_run.txt")" -eq 48
+test "$(rg -c 'Building CUDA object' "$OUT/ninja_dry_run.txt")" -eq 1
 test "$(rg -c 'Linking CXX shared library.*_vllm_fa2_C' "$OUT/ninja_dry_run.txt")" -eq 1
 
 docker run --rm \

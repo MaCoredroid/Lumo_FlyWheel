@@ -13,7 +13,9 @@ The independent ``--fixed32-query-tile16`` build includes an underfilled-B1
 alternative with two 16-row, one-warp query CTAs per head. It is default-off:
 only the private live-gate dispatch selects it. Each CTA still traverses the
 complete K sequence; there is no split-K reduction or combine kernel. B4 keeps
-the stock geometry, which already supplies 96 CTAs per layer.
+the stock geometry, which already supplies 96 CTAs per layer. The candidate is
+an explicit specialization in the one production translation unit, so the
+shared stock launcher and every unrelated CUDA object remain untouched.
 """
 
 from __future__ import annotations
@@ -102,57 +104,12 @@ __forceinline__ __device__ void apply_tree_bias(Tensor<Engine, Layout> &tensor_,
 TREE_BIAS_HELPER = _tree_bias_helper(tile_earlyout=False)
 
 
-STOCK_SPLITKV_LAUNCH_SIGNATURE = r'''template<typename Kernel_traits, bool Is_causal>
-void run_flash_splitkv_fwd(Flash_fwd_params &params, cudaStream_t stream) {'''
+STOCK_FIXED32_QUERY_INSTANTIATION = r'''template void run_mha_fwd_splitkv_dispatch<cutlass::bfloat16_t, 256, false>(Flash_fwd_params &params, cudaStream_t stream);'''
 
 
-NO_COMBINE_SPLITKV_LAUNCH_SIGNATURE = r'''#define FR13_ALLOW_SPLIT_SWITCH(COND, CONST_NAME, ...) \
-    [&] { \
-        if constexpr (AllowSplit) { \
-            BOOL_SWITCH(COND, CONST_NAME, __VA_ARGS__); \
-        } else { \
-            constexpr static bool CONST_NAME = false; \
-            __VA_ARGS__(); \
-        } \
-    }()
-
-template<typename Kernel_traits, bool Is_causal, bool AllowSplit = true>
-void run_flash_splitkv_fwd(Flash_fwd_params &params, cudaStream_t stream) {'''
-
-
-STOCK_SPLITKV_COMBINE_GUARD = r'''    if (params.num_splits > 1) {
-        // We want kBlockM to be as small as possible for more parallelism.'''
-
-
-NO_COMBINE_SPLITKV_COMBINE_GUARD = r'''    if constexpr (AllowSplit)
-        if (params.num_splits > 1) {
-        // We want kBlockM to be as small as possible for more parallelism.'''
-
-
-STOCK_SPLITKV_RUNTIME_SWITCH = r'''                BOOL_SWITCH(params.num_splits > 1, Split, [&] {'''
-
-
-NO_SPLITKV_RUNTIME_SWITCH = r'''                FR13_ALLOW_SPLIT_SWITCH(params.num_splits > 1, Split, [&] {'''
-
-
-STOCK_SPLITKV_DISPATCH = r'''template<typename T, int Headdim, bool Is_causal>
-void run_mha_fwd_splitkv_dispatch(Flash_fwd_params &params, cudaStream_t stream) {
-    constexpr static int kBlockM = 64;  // Fixed for all head dimensions
-    // TD [2023-08-28]: nvcc segfaults for headdim 96 with block size 64 x 256,
-    // and for headdim 192 with block size 64 x 128.
-    constexpr static int kBlockN = Headdim <= 64 ? 256 : (Headdim <= 128 ? 128 : 64);
-    run_flash_splitkv_fwd<Flash_fwd_kernel_traits<Headdim, kBlockM, kBlockN, 4, false, false, T>, Is_causal>(params, stream);
-}
-'''
-
-
-FIXED32_QUERY_TILE16_DISPATCH = r'''#undef FR13_ALLOW_SPLIT_SWITCH
-
-template<typename T, int Headdim, bool Is_causal>
-void run_mha_fwd_splitkv_dispatch(Flash_fwd_params &params, cudaStream_t stream) {
-    // TD [2023-08-28]: nvcc segfaults for headdim 96 with block size 64 x 256,
-    // and for headdim 192 with block size 64 x 128.
-    constexpr static int kBlockN = Headdim <= 64 ? 256 : (Headdim <= 128 ? 128 : 64);
+FIXED32_QUERY_TILE16_SPECIALIZATION = r'''template <>
+void run_mha_fwd_splitkv_dispatch<cutlass::bfloat16_t, 256, false>(
+        Flash_fwd_params &params, cudaStream_t stream) {
     // FR13_FA2_FIXED32_QUERY_TILE16: two query CTAs fill all 48 GB10 SMs.
     // This is query partitioning, not split-K: each real row keeps one warp's
     // complete, ordered K-block loop and no combine kernel is launched.
@@ -163,53 +120,73 @@ void run_mha_fwd_splitkv_dispatch(Flash_fwd_params &params, cudaStream_t stream)
         && fr13_qrow16_dispatch[0] == '1'
         && fr13_qrow16_dispatch[1] == '\0';
     if (fr13_qrow16_requested) {
-        if constexpr (std::is_same_v<T, cutlass::bfloat16_t>
-                      && Headdim == 256 && !Is_causal) {
-            TORCH_CHECK(
-                params.tree_bias_ptr != nullptr
-                && params.b == 1
-                && params.d == 256
-                && params.d_rounded == 256
-                && params.h == 24
-                && params.h_k == 4
-                && params.h_h_k_ratio == 6
-                && params.seqlen_q == 32
-                && params.tree_bias_rows == 32
-                && params.tree_bias_cols == 32
-                && params.tree_bias_q_offset == 0
-                && params.tree_bias_k_offset == 0
-                && params.cu_seqlens_q != nullptr
-                && !params.seqlenq_ngroups_swapped
-                && params.block_table != nullptr
-                && params.page_block_size == 1024
-                && params.window_size_left < 0
-                && params.window_size_right < 0
-                && params.alibi_slopes_ptr == nullptr
-                && params.knew_ptr == nullptr
-                && params.num_splits == 1,
-                "FR13 qrow16 internal dispatch reached non-production geometry");
-            constexpr static int kTreeBlockM = 16;
-            constexpr static int kTreeWarps = 1;
-            static_assert(kTreeBlockM == 16 * kTreeWarps);
-            using TreeKernelTraits = Flash_fwd_kernel_traits<
-                Headdim, kTreeBlockM, kBlockN, kTreeWarps,
-                false, false, T>;
-            static_assert(TreeKernelTraits::kNThreads == 32);
-            static_assert(TreeKernelTraits::kGmemThreadsPerRow == 8);
-            // The public FA2 API requires paged-KV blocks divisible by 16;
-            // production fixes the physical page at 1024 rows.
-            static_assert(TreeKernelTraits::kGmemRowsPerThread == 16);
-            static_assert(1024 % TreeKernelTraits::kGmemRowsPerThread == 0);
-            run_flash_splitkv_fwd<TreeKernelTraits, Is_causal, false>(params, stream);
-            return;
-        } else {
-            TORCH_CHECK(
-                false,
-                "FR13 qrow16 internal dispatch reached wrong specialization");
+        TORCH_CHECK(
+            params.tree_bias_ptr != nullptr
+            && params.b == 1
+            && params.d == 256
+            && params.d_rounded == 256
+            && params.h == 24
+            && params.h_k == 4
+            && params.h_h_k_ratio == 6
+            && params.seqlen_q == 32
+            && params.tree_bias_rows == 32
+            && params.tree_bias_cols == 32
+            && params.tree_bias_q_offset == 0
+            && params.tree_bias_k_offset == 0
+            && params.cu_seqlens_q != nullptr
+            && !params.seqlenq_ngroups_swapped
+            && params.block_table != nullptr
+            && params.page_block_size == 1024
+            && params.window_size_left < 0
+            && params.window_size_right < 0
+            && params.alibi_slopes_ptr == nullptr
+            && params.knew_ptr == nullptr
+            && params.softcap == 0.0f
+            && params.num_splits == 1,
+            "FR13 qrow16 internal dispatch reached non-production geometry");
+        constexpr static int kTreeBlockM = 16;
+        constexpr static int kTreeBlockN = 64;
+        constexpr static int kTreeWarps = 1;
+        static_assert(kTreeBlockM == 16 * kTreeWarps);
+        using TreeKernelTraits = Flash_fwd_kernel_traits<
+            256, kTreeBlockM, kTreeBlockN, kTreeWarps,
+            false, false, cutlass::bfloat16_t>;
+        static_assert(TreeKernelTraits::kNThreads == 32);
+        static_assert(TreeKernelTraits::kGmemThreadsPerRow == 8);
+        // The public FA2 API requires paged-KV blocks divisible by 16;
+        // production fixes the physical page at 1024 rows.
+        static_assert(TreeKernelTraits::kGmemRowsPerThread == 16);
+        static_assert(1024 % TreeKernelTraits::kGmemRowsPerThread == 0);
+        constexpr size_t smem_size = TreeKernelTraits::kSmemSize;
+        const int num_m_block =
+            (params.seqlen_q + TreeKernelTraits::kBlockM - 1)
+            / TreeKernelTraits::kBlockM;
+        dim3 grid(num_m_block, params.b, params.h);
+        auto kernel = &flash_fwd_splitkv_kernel<
+            TreeKernelTraits,
+            false,  // Is_causal
+            false,  // Is_local
+            false,  // Has_alibi
+            false,  // Is_even_MN: paged varlen Q has cu_seqlens_q
+            true,   // Is_even_K: d == kHeadDim == 256
+            false,  // Is_softcap
+            false,  // Split
+            false   // Append_KV
+        >;
+        if (smem_size >= 48 * 1024) {
+            C10_CUDA_CHECK(cudaFuncSetAttribute(
+                kernel,
+                cudaFuncAttributeMaxDynamicSharedMemorySize,
+                smem_size));
         }
+        kernel<<<grid, TreeKernelTraits::kNThreads, smem_size, stream>>>(
+            params);
+        C10_CUDA_KERNEL_LAUNCH_CHECK();
+        return;
     }
-    constexpr static int kBlockM = 64;  // Fixed for all other calls
-    run_flash_splitkv_fwd<Flash_fwd_kernel_traits<Headdim, kBlockM, kBlockN, 4, false, false, T>, Is_causal>(params, stream);
+    using StockKernelTraits = Flash_fwd_kernel_traits<
+        256, 64, 64, 4, false, false, cutlass::bfloat16_t>;
+    run_flash_splitkv_fwd<StockKernelTraits, false>(params, stream);
 }
 '''
 
@@ -312,7 +289,7 @@ def _patch_flash_fwd_kernel(path: Path, *, tile_earlyout: bool = False) -> bool:
     return changed
 
 
-def _patch_flash_fwd_launch_template(
+def _patch_fixed32_query_translation_unit(
     path: Path,
     *,
     fixed32_query_tile16: bool = False,
@@ -324,35 +301,18 @@ def _patch_flash_fwd_launch_template(
     if "#include <cstdlib>\n" not in text:
         text, replaced = _replace_once(
             text,
-            '#include "namespace_config.h"\n',
-            '#include "namespace_config.h"\n#include <cstdlib>\n',
+            '#include "flash_fwd_launch_template.h"\n',
+            '#include "flash_fwd_launch_template.h"\n#include <cstdlib>\n',
             "fixed32 FA2 process-local dispatch include",
         )
         changed |= replaced
-    for old, new, label in (
-        (
-            STOCK_SPLITKV_LAUNCH_SIGNATURE,
-            NO_COMBINE_SPLITKV_LAUNCH_SIGNATURE,
-            "fixed32 FA2 compile-time split gate",
-        ),
-        (
-            STOCK_SPLITKV_COMBINE_GUARD,
-            NO_COMBINE_SPLITKV_COMBINE_GUARD,
-            "fixed32 FA2 combine instantiation gate",
-        ),
-        (
-            STOCK_SPLITKV_RUNTIME_SWITCH,
-            NO_SPLITKV_RUNTIME_SWITCH,
-            "fixed32 FA2 main-kernel split instantiation gate",
-        ),
-        (
-            STOCK_SPLITKV_DISPATCH,
-            FIXED32_QUERY_TILE16_DISPATCH,
-            "fixed32 FA2 query tile16 dispatch",
-        ),
-    ):
-        text, replaced = _replace_once(text, old, new, label)
-        changed |= replaced
+    text, replaced = _replace_once(
+        text,
+        STOCK_FIXED32_QUERY_INSTANTIATION,
+        FIXED32_QUERY_TILE16_SPECIALIZATION,
+        "fixed32 FA2 query tile16 translation-unit specialization",
+    )
+    changed |= replaced
     if changed:
         path.write_text(text)
     return changed
@@ -578,8 +538,8 @@ def patch_fa2_source(
     files = {
         "flash.h": fa2_src / "csrc/flash_attn/src/flash.h",
         "flash_fwd_kernel.h": fa2_src / "csrc/flash_attn/src/flash_fwd_kernel.h",
-        "flash_fwd_launch_template.h": fa2_src
-        / "csrc/flash_attn/src/flash_fwd_launch_template.h",
+        "flash_fwd_split_hdim256_bf16_sm80.cu": fa2_src
+        / "csrc/flash_attn/src/flash_fwd_split_hdim256_bf16_sm80.cu",
         "flash_api.cpp": fa2_src / "csrc/flash_attn/flash_api.cpp",
         "flash_api_torch_lib.cpp": fa2_src / "csrc/flash_attn/flash_api_torch_lib.cpp",
     }
@@ -592,8 +552,8 @@ def patch_fa2_source(
             files["flash_fwd_kernel.h"],
             tile_earlyout=tree_bias_tile_earlyout,
         ),
-        "flash_fwd_launch_template.h": _patch_flash_fwd_launch_template(
-            files["flash_fwd_launch_template.h"],
+        "flash_fwd_split_hdim256_bf16_sm80.cu": _patch_fixed32_query_translation_unit(
+            files["flash_fwd_split_hdim256_bf16_sm80.cu"],
             fixed32_query_tile16=fixed32_query_tile16,
         ),
         "flash_api.cpp": _patch_flash_api_cpp(files["flash_api.cpp"]),
