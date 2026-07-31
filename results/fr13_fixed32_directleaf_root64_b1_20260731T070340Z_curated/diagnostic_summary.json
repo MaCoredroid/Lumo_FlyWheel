@@ -1,0 +1,169 @@
+{
+  "acceptance": {
+    "acceptance_valid": false,
+    "cap_ms": 135.5965356546,
+    "diagnostic_floor_ratio": 2.073925980266603,
+    "diagnostic_point_estimate_only": true,
+    "floor": {
+      "bandwidth_bytes_per_s": 273000000000,
+      "component_formula": "target_model + full_bf16_head + mtp_forward + 5 * draft_64k_bf16_head",
+      "mandatory_weight_bytes": 32189438464,
+      "mandatory_weight_floor_ms": 117.910031004,
+      "nonweight_costs_included": false,
+      "scenario": "root_64k_five_64k_draft_heads"
+    },
+    "gap_to_cap_ms": 108.94014097863623,
+    "measured_wall_ms_per_step": 244.53667663323623,
+    "one_sided_u95_floor_ratio": null,
+    "required_one_sided_u95_floor_ratio_lte": 1.15,
+    "required_speedup": 1.8034138958840024,
+    "required_wall_reduction_fraction": 0.4454961213937984,
+    "status": "INVALID_PROVENANCE_REJECTED",
+    "why_invalid": "The fourth exact4 task failed the mandatory real-task provenance reconciliation, so no acceptance confidence bound may be computed. Hydra23 and B4 were not measured."
+  },
+  "artifacts": {
+    "canonical_exact4_subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "deploy_speed_aggregate_sha256": "e31e9cceb967f4a593aa0e5b0405d417ffa2310f47ca3cd0fbf5865d135c716e",
+    "external_manifest": {
+      "end_sha256": "a422f6f0cb3ffbf4c3e0a6953ba2766f197933db8ba3712af7648953049f5c6d",
+      "launch_end_byte_equal": true,
+      "launch_sha256": "a422f6f0cb3ffbf4c3e0a6953ba2766f197933db8ba3712af7648953049f5c6d",
+      "overall_canonical_sha256": "2b68022a4660245ceba01a0b4d41eb552f1bd647031a9d430526e66be1c2a6a0"
+    },
+    "final_boundary_snapshot": {
+      "final_flush_status": "ok",
+      "generation": 9,
+      "sha256": "5d7bea04dc78cca77497a776367e2d2526db3019471250edb9b156c57bad4dbb"
+    },
+    "root64_floor_ledger_sha256": "3507bc71b5b7cf72d090de00d45b03a736493121be0a1680e4db19519714c8b4",
+    "runtime_manifest": {
+      "end_sha256": "42ccd73d1aea53a4b6a03569d6f3274791e08f29324e427095805b54c39eaebf",
+      "launch_end_byte_equal": true,
+      "launch_sha256": "42ccd73d1aea53a4b6a03569d6f3274791e08f29324e427095805b54c39eaebf",
+      "overall_canonical_sha256": "55423e392877f8ed820d57ee46d91652ef1827fffc26212db095df5f21c5d540"
+    },
+    "work_census_file_sha256": "6b80d84b88e841bb0ede1a7d25e6786da89064684b2a3d2fd424e163f0592281",
+    "work_census_semantic_events_sha256": "6482d7214e3f90f99cea82531bfbf007103e50213bbbe03a3a151206838694a0"
+  },
+  "campaign": {
+    "arm": "tail6_fixed32",
+    "batch_size": 1,
+    "concurrency": 1,
+    "draft_vocab_root": 1,
+    "ended_at": "2026-07-31T07:55:34Z",
+    "fixed_geometry": {
+      "physical_draft_rows_per_event": 31,
+      "root_rows_per_event": 1,
+      "total_rows_per_event": 32
+    },
+    "floor_order": "TH",
+    "source_commit": "cebb4362141694fba0d2289bda44f4dc73962d60",
+    "started_at": "2026-07-31T07:04:04Z",
+    "tag": "directleaf_root64_b1_20260731T070340Z",
+    "task_count_declared": 4,
+    "workload": "canonical_swe_bench_verified_exact4"
+  },
+  "curation": {
+    "raw_bodies_inspected": false,
+    "raw_trace_content_published": false,
+    "source_basis": "Aggregate reducer metrics, task-boundary counters, strict trace request-count output, authenticated ingress counts, immutable manifest comparisons, artifact digests, and final work-census totals.",
+    "withheld": [
+      "prompts",
+      "raw traces",
+      "raw logs",
+      "request and response bodies",
+      "task patches and task outputs",
+      "process and host identities",
+      "environment dumps",
+      "absolute source paths"
+    ]
+  },
+  "outcome": {
+    "b4_status": "NOT_RUN",
+    "driver_return_code": 1,
+    "formal_sequence_status": "STOPPED_AFTER_TAIL6_PROVENANCE_GATE",
+    "hydra23_b1_status": "NOT_RUN",
+    "orchestrator_return_code": 1,
+    "status": "INVALID_DIAGNOSTIC_ONLY",
+    "tail6_b1_status": "FOUR_TASKS_DECODED_FOURTH_TASK_PROVENANCE_REJECTED",
+    "task_results": [
+      {
+        "accepted_drafts_per_event": 4.554730983302412,
+        "event_interval": [
+          0,
+          539
+        ],
+        "events": 539,
+        "instance_id": "astropy__astropy-12907",
+        "logical_model_requests": 12,
+        "swe_result": "resolved"
+      },
+      {
+        "accepted_drafts_per_event": 4.906762295081967,
+        "event_interval": [
+          539,
+          1515
+        ],
+        "events": 976,
+        "instance_id": "astropy__astropy-13033",
+        "logical_model_requests": 22,
+        "swe_result": "failed"
+      },
+      {
+        "accepted_drafts_per_event": 4.983333333333333,
+        "event_interval": [
+          1515,
+          3075
+        ],
+        "events": 1560,
+        "instance_id": "astropy__astropy-13236",
+        "logical_model_requests": 43,
+        "swe_result": "resolved"
+      },
+      {
+        "accepted_drafts_per_event": 4.828215589435259,
+        "event_interval": [
+          3075,
+          7732
+        ],
+        "events": 4657,
+        "instance_id": "astropy__astropy-13398",
+        "logical_model_requests": null,
+        "swe_result": "NOT_EVALUATED_PROVENANCE_REJECTED"
+      }
+    ]
+  },
+  "privacy": {
+    "contains_environment": false,
+    "contains_process_identity": false,
+    "contains_prompts": false,
+    "contains_public_benchmark_instance_ids": true,
+    "contains_raw_logs": false,
+    "contains_raw_request_or_response_bodies": false,
+    "contains_raw_traces": false,
+    "contains_source_commit_ids": true,
+    "contains_task_patch_content": false,
+    "public_identity_scope": "Canonical public SWE-bench Verified instance identifiers and immutable source commit only."
+  },
+  "provenance_failure": {
+    "aborted_logical_requests": 0,
+    "accepted_attempts": 87,
+    "completed_attempts": 87,
+    "exception": "Fixed32BoundaryError",
+    "failed_attempts": 0,
+    "hidden_compaction_model_requests_in_trace_count": 1,
+    "instance_id": "astropy__astropy-13398",
+    "message": "fixed32 real-task provenance astropy__astropy-13398: trace and task-auth request counts do not reconcile",
+    "missing_runner_metadata_consequence": "The later chat-traffic audit also failed because the provenance exception prevented creation of task 4 runner_metadata.json.",
+    "request_count_delta": 2,
+    "strict_trace_completed_logical_model_requests": 85,
+    "task_auth_completed_logical_model_requests": 87
+  },
+  "publication": {
+    "acceptance_artifacts_published": false,
+    "curated_aggregate_only": true,
+    "hydra_measurement_published": false,
+    "raw_outputs_published": false
+  },
+  "schema": "fr13.fixed32.directleaf.invalid_campaign_diagnostic.v1"
+}

@@ -1,0 +1,67 @@
+{
+  "aggregate": {
+    "bad_events": 0,
+    "batch_histogram": {
+      "1": 7732,
+      "2": 0,
+      "3": 0,
+      "4": 0
+    },
+    "event_count": 7732,
+    "first_event_index": 0,
+    "first_forward_step_index": 0,
+    "last_event_index": 7731,
+    "last_forward_step_index": 7731,
+    "mode": "tail6_fixed32",
+    "source_pointer_entries": [
+      48
+    ],
+    "source_staging_reused_all": true
+  },
+  "committer_and_graphs": {
+    "committer_actual_replays": 7732,
+    "committer_nonpure_replays": 0,
+    "conv_pregather_graph_replays": 7732,
+    "conv_pregather_host_actual_stages": 0,
+    "forward_graph_measured_replays": 7732,
+    "measured_replays_per_event": 1
+  },
+  "conv_commit": {
+    "committed_rows": 371136,
+    "committed_rows_per_event": 48,
+    "conv_remaps": 0,
+    "direct_launches": 7732,
+    "direct_launches_per_event": 1,
+    "direct_programs": 3711360,
+    "direct_programs_per_event": 480,
+    "fallback": 0,
+    "full_node_writebacks": 0,
+    "gather_launches": 0,
+    "host_syncs": 0,
+    "route": "fixed32_direct_source_col0",
+    "scatter_launches": 0
+  },
+  "integrity": {
+    "events_sha256": "6482d7214e3f90f99cea82531bfbf007103e50213bbbe03a3a151206838694a0",
+    "final": true,
+    "final_boundary_generation": 9,
+    "final_flush_status": "ok",
+    "pending": {
+      "cfwd": 0,
+      "dfwd": 0,
+      "sfwd": 0
+    },
+    "raw_census_file_sha256": "6b80d84b88e841bb0ede1a7d25e6786da89064684b2a3d2fd424e163f0592281",
+    "terminal_schema": "fr13-fixed32-work-census-terminal-v9"
+  },
+  "schema": "fr13.fixed32.work_census.curated.v1",
+  "scope": {
+    "contains_raw_event_records": false,
+    "event_schema": "fr13-fixed32-work-census-v9",
+    "summary_only": true
+  },
+  "validity": {
+    "acceptance_valid": false,
+    "note": "The complete census validates the measured Tail decode work and direct conv-commit route; it does not repair the independent task-provenance failure or supply a Hydra measurement."
+  }
+}

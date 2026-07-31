@@ -1,0 +1,83 @@
+{
+  "aggregate": {
+    "accept_per_event": 4.850362131401966,
+    "aggregate_decode_tps_idle_and_prefill_inclusive": 17.25930395892014,
+    "aggregate_window_wall_s": 2613.0254213809967,
+    "batch_size": 1,
+    "committed_per_event": 5.850362131401966,
+    "effective_concurrency": 0.7082184290083419,
+    "events_per_step": 1,
+    "fullstep_alignment_ratio": 1.0706077844164748,
+    "generation_tokens": 45099,
+    "n_tasks": 4,
+    "prefill_fraction": 0.2639630117229111,
+    "spec_accepted_tokens": 37503,
+    "spec_draft_tokens": 239692,
+    "spec_drafts": 7732,
+    "tokens_per_draft": 31
+  },
+  "floor_correction": {
+    "correct_root64_floor_ms": 117.910031004,
+    "correct_root64_floor_ratio": 2.073925980266603,
+    "legacy_reducer_floor_is_full_step_hardware_floor": false,
+    "legacy_reducer_floor_ms": 98.6,
+    "legacy_reducer_floor_ratio": 2.480087998308684,
+    "legacy_values_superseded_for_acceptance": true,
+    "reason": "The embedded reducer reference is the legacy target-weight-stream lower bound. This root64 run requires the five-64k-draft-head mandatory-weight ledger."
+  },
+  "per_task": [
+    {
+      "accept_per_event": 4.554730983302412,
+      "events": 539,
+      "instance_id": "astropy__astropy-12907",
+      "per_request_decode_tps": 27.178398299909443,
+      "request_decode_wall_ms_per_event": 221.9356906525566,
+      "sfwd_gpu_ms_per_event": 155.7191727732019
+    },
+    {
+      "accept_per_event": 4.906762295081967,
+      "events": 976,
+      "instance_id": "astropy__astropy-13033",
+      "per_request_decode_tps": 27.15482264081508,
+      "request_decode_wall_ms_per_event": 225.95879732887356,
+      "sfwd_gpu_ms_per_event": 158.73638356318245
+    },
+    {
+      "accept_per_event": 4.983333333333333,
+      "events": 1560,
+      "instance_id": "astropy__astropy-13236",
+      "per_request_decode_tps": 25.144095222667044,
+      "request_decode_wall_ms_per_event": 233.96259286218526,
+      "sfwd_gpu_ms_per_event": 165.648351728
+    },
+    {
+      "accept_per_event": 4.828215589435259,
+      "events": 4657,
+      "instance_id": "astropy__astropy-13398",
+      "per_request_decode_tps": 23.115149862378207,
+      "request_decode_wall_ms_per_event": 245.96349378775875,
+      "sfwd_gpu_ms_per_event": 173.2929196217448
+    }
+  ],
+  "schema": "fr13.measure.deploy_speed.curated.v1",
+  "source": {
+    "schema": "fr13.measure.deploy_speed.v1",
+    "sha256": "e31e9cceb967f4a593aa0e5b0405d417ffa2310f47ca3cd0fbf5865d135c716e",
+    "source_commit": "cebb4362141694fba0d2289bda44f4dc73962d60"
+  },
+  "throughput": {
+    "derived_fullstep_gpu_tps": 25.613512564940976,
+    "derived_request_decode_tps": 24.443519398157147,
+    "derived_sfwd_verify_tps_gpu": 34.681547342880144,
+    "measured_fullstep_wall_tps": 23.924272677413224,
+    "per_request_decode_tps": 24.384424512498423,
+    "request_decode_wall_s_per_event": 0.23934205365873126,
+    "sfwd_gpu_s_per_event": 0.16868803671192026
+  },
+  "validity": {
+    "acceptance_valid": false,
+    "hydra23_measured": false,
+    "reason": "Tail task 4 was rejected by exact request-count provenance before runner metadata and evaluation; the sequence stopped before Hydra23.",
+    "use": "DIAGNOSTIC_ONLY"
+  }
+}

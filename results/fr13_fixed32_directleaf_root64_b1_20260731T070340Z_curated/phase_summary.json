@@ -1,0 +1,54 @@
+{
+  "acceptance_target": {
+    "cap_ms": 135.5965356546,
+    "floor_ms": 117.910031004,
+    "gpu_component_budget_ms_if_residual_unchanged": 119.46906750336519,
+    "gpu_component_gap_ms_if_residual_zero": 92.81267282740143,
+    "gpu_component_reduction_fraction_if_residual_unchanged": 0.4769516154915474,
+    "gpu_component_reduction_fraction_if_residual_zero": 0.4063438310750726,
+    "wall_gap_ms": 108.94014097863623
+  },
+  "basis": {
+    "component_complete_events": 7732,
+    "component_span_basis": {
+      "cfwd": 7732,
+      "dfwd": 7732,
+      "sfwd": 7732
+    },
+    "wall_steps": 7567,
+    "warning": "GPU-component means use 7732 complete-event spans, while the Prometheus wall mean uses 7567 wall steps. The reducer's diagnostic decomposition is preserved; the denominators are not silently substituted."
+  },
+  "breakdown": {
+    "cfwd": {
+      "gpu_ms_per_event": 21.417012811138857,
+      "gpu_seconds": 165.59634305572564,
+      "share_of_wall": 0.08758200653581615
+    },
+    "dfwd": {
+      "gpu_ms_per_event": 38.30415895894231,
+      "gpu_seconds": 296.16775707054194,
+      "share_of_wall": 0.15663972982012873
+    },
+    "gpu_component_sum_ms_per_event": 228.40920848200142,
+    "gpu_component_sum_share_of_wall": 0.9340488781753451,
+    "other_residual_ms_per_event": 16.127468151234808,
+    "other_residual_share_of_wall": 0.06595112182465492,
+    "sfwd": {
+      "gpu_ms_per_event": 168.68803671192026,
+      "gpu_seconds": 1304.2958998565675,
+      "share_of_wall": 0.6898271418194002
+    },
+    "wall_ms_per_step": 244.53667663323623
+  },
+  "diagnostic": {
+    "gpu_component_sum_floor_ratio": 1.9371482352867233,
+    "kernel_priority": "SFWD is 68.98% of measured wall and the GPU-component sum alone remains 92.81 ms above the 1.15x cap even if the measured residual were eliminated.",
+    "sfwd_floor_ratio": 1.4306504313123084
+  },
+  "schema": "fr13.fixed32.phase_summary.curated.v1",
+  "validity": {
+    "acceptance_valid": false,
+    "hydra23_measured": false,
+    "use": "KERNEL_DIAGNOSTIC_ONLY"
+  }
+}
