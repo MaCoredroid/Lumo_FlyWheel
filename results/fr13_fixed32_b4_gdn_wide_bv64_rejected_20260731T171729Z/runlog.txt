@@ -1,0 +1,20 @@
+fixed32 SWE-Verified subset OK: tasks=4 diagnostic=0
+=== BIGDENOM-VARIANT SWEServe ARM tail6_fixed32_gdn_wide_bv64_exact4_20260731T171729Z kind=tail6_fixed32 launcher=forked expect=31 xflags=[FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0 FR13_FIXED32_MODE=tail6_fixed32 FR13_FIXED32_VALID_MASK=0x7a9ce73f FR13_FIXED32_ACTIVE_NODES=21 FR13_FIXED32_PHYSICAL_DRAFTS=31] subset=config/fr13_fixed32/subset_b4_four.json ===
+2026-07-31T17:17:44Z
+86de4d8337f1ddb591de35d55ee95e1d5f15a45c
+[hygiene] recover_host_memory + assert free
+[hygiene] MemAvailable=106.9GiB swap_used=0 OK
+               total        used        free      shared  buff/cache   available
+Mem:             117          10         107           0           0         106
+Swap:             15           0          15
+fixed32 container identity promoted: id=eabe02c89d16f07cfc9bd9b4c7d335d37161d295cfd5c242aad96abd818a80bf name=fr13-bigdenom-tail6_fixed32_gdn_wide_bv64_exact4_20260731T171729Z started_at=2026-07-31T17:17:53.750938719Z pid=1939105 restart_count=0
+healthy after 464s
+fixed32 PID1 argv mismatch: ['/usr/bin/python3', '/usr/local/bin/vllm', 'serve', '/models/qwen3.6-27b-fp8', '--served-model-name', 'qwen3.6-27b', '--host', '0.0.0.0', '--port', '9950', '--max-num-seqs', '4', '--gpu-memory-utilization', '0.70', '--max-model-len', '131072', '--seed', '0', '--attention-backend', 'TREE_ATTN', '--gdn-prefill-backend', 'triton', '--chat-template', '/workspace/docker/chat_templates/qwen3-openai-codex.jinja', '--enable-auto-tool-choice', '--tool-call-parser', 'qwen3_xml', '--reasoning-parser', 'qwen3', '--speculative-config', '{"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"}', '--enable-prefix-caching', '--enable-chunked-prefill', '--mamba-block-size', '1024', '--mamba-ssm-cache-dtype', 'float32', '--max-num-batched-tokens', '4096', '--block-size', '1024', '--long-prefill-token-threshold', '1024', '--compilation-config', '{"cudagraph_mode":"FULL_AND_PIECEWISE"}', '--middleware', 'lumo_flywheel_serving.inference_proxy.Fixed32EngineIngressMiddleware', '--enforce-eager']
+FAIL: fixed32 runtime/process attestation
+[teardown] kill proxy + attest/remove run container + recover_host_memory
+FAIL: fixed32 terminal flush rc=2
+fixed32 exact container preserved after engine-ledger materialization failure: eabe02c89d16f07cfc9bd9b4c7d335d37161d295cfd5c242aad96abd818a80bf
+               total        used        free      shared  buff/cache   available
+Mem:             117          90          27           0           0          26
+Swap:             15           0          15
+2026-07-31T17:26:02Z
