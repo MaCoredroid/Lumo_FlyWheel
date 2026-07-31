@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import stat
 import sys
 import types
 from pathlib import Path
@@ -426,3 +428,81 @@ def test_exact4_b4_live_gate_runner_is_non_timing_and_fail_closed() -> None:
     assert '"floor_acceptance_eligible": False' in runner
     assert '"production_default_enabled": False' in runner
     assert "exact4_b4_graph_byte_diagnostic" in runner
+
+
+def test_bv64_production_engagement_publishes_only_after_b4_replay(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    installed_pass = tmp_path / "installed.pass.json"
+    installed_pass.write_text('{"status":"pass"}\n', encoding="ascii")
+    engagement = tmp_path / "production_engagement.json"
+    monkeypatch.setenv(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS_PATH", str(installed_pass)
+    )
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_MODE", "tail6_fixed32")
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", 64)
+    monkeypatch.setattr(
+        kernel,
+        "_fr13_fixed32_batch_gdn_production_control",
+        lambda: {"batch": 4, "source_sha256": "a" * 64},
+    )
+    monkeypatch.setattr(
+        kernel, "_FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT", None
+    )
+    monkeypatch.setattr(
+        kernel, "_FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURES", {}
+    )
+    monkeypatch.setattr(
+        kernel, "_FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_PUBLISHED", False
+    )
+    monkeypatch.setattr(
+        kernel,
+        "_FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_ENGAGEMENT",
+        str(engagement),
+    )
+    monkeypatch.setattr(kernel.torch.cuda, "is_available", lambda: False)
+
+    for batch in (4, 3, 2, 1):
+        graph_id = 100 + batch
+        signature = str(batch) * 64
+        kernel.fixed32_batch_gdn_bv64_production_capture_begin(graph_id, batch)
+        if batch == 4:
+            for layer_key in range(1, 49):
+                kernel._fr13_fixed32_batch_gdn_bv64_production_capture_register(
+                    batch_size=4,
+                    layer_key=layer_key,
+                    candidate_bv=64,
+                )
+        kernel.fixed32_batch_gdn_bv64_production_capture_end(
+            graph_id, batch, signature, 48 * batch
+        )
+
+    assert not engagement.exists()
+    assert kernel.fixed32_batch_gdn_bv64_production_replay_engaged(
+        102, 2, "2" * 64, 96
+    ) == {
+        "status": "legacy_lower_batch",
+        "batch_size": 2,
+        "wide_route_capture_layers": 0,
+    }
+    assert not engagement.exists()
+
+    report = kernel.fixed32_batch_gdn_bv64_production_replay_engaged(
+        104, 4, "4" * 64, 192
+    )
+    payload = json.loads(engagement.read_text(encoding="ascii"))
+    assert report == payload
+    assert payload["status"] == "ENGAGED"
+    assert payload["candidate_bv"] == 64
+    assert payload["layer_count"] == 48
+    assert payload["observed_full_graph_replays_at_least"] == 1
+    assert payload["wide_route_capture_layers_by_batch"] == {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 48,
+    }
+    assert payload["graph_pass_sha256"] == hashlib.sha256(
+        installed_pass.read_bytes()
+    ).hexdigest()
+    assert stat.S_IMODE(engagement.stat().st_mode) == 0o400

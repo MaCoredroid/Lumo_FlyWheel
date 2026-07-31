@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import stat
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -15,6 +17,7 @@ KERNEL_SOURCE = ROOT / "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
 LAUNCHER = ROOT / "scripts/fr13_launch_forked_fa2_tree_server.sh"
 RUNNER = ROOT / "scripts/fr13_run_b4_gdn_bv64_timing.sh"
 GATE_RUNNER = ROOT / "scripts/fr13_run_b4_gdn_wide_live_gate.sh"
+PATCHER = ROOT / "scripts/fr10_phase4_patch_vllm_tree_gdn.py"
 
 
 def _module():
@@ -104,6 +107,31 @@ def _valid_verdict(
         "kernel_source_sha256": live_payload["source_sha256"],
         "raw_byte_equal": True,
         "reference_always_served": True,
+        "production_default_enabled": False,
+    }
+
+
+def _valid_engagement(graph_pass_sha256: str) -> dict[str, object]:
+    return {
+        "schema": "fr13.fixed32.batch_gdn.bv64.production_engagement.v1",
+        "status": "ENGAGED",
+        "mode": "tail6_fixed32",
+        "runtime_mode": "FULL",
+        "selector": "production",
+        "batch_size": 4,
+        "candidate": "fixed32_batch_gdn_bv_v2",
+        "candidate_bv": 64,
+        "physical_rows_per_request": 32,
+        "physical_launches_per_layer": 2,
+        "layer_count": 48,
+        "layer_keys": [f"0x{index:x}" for index in range(1, 49)],
+        "wide_route_capture_layers_by_batch": {"1": 0, "2": 0, "3": 0, "4": 48},
+        "graph_id": 901,
+        "graph_signature": "e" * 64,
+        "graph_pass_sha256": graph_pass_sha256,
+        "kernel_source_sha256": hashlib.sha256(KERNEL_SOURCE.read_bytes()).hexdigest(),
+        "observed_full_graph_replays_at_least": 1,
+        "fallback": 0,
         "production_default_enabled": False,
     }
 
@@ -255,6 +283,55 @@ def test_graph_gate_verdict_must_prove_completed_exact4(
         )
 
 
+def test_bv64_engagement_is_source_and_pass_bound(tmp_path: Path) -> None:
+    module = _module()
+    graph_pass_sha256 = "a" * 64
+    engagement = tmp_path / "engagement.json"
+    _write_payload(engagement, _valid_engagement(graph_pass_sha256))
+
+    summary, _raw = module.validate_engagement_file(
+        engagement=engagement,
+        expected_live_sha256=graph_pass_sha256,
+        kernel_source=KERNEL_SOURCE,
+    )
+
+    assert summary["status"] == "ENGAGED"
+    assert summary["b4_replays_at_least"] == 1
+    assert summary["lower_batch_wide_capture_layers"] == 0
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "message"),
+    (
+        ("status", "CAPTURED_PENDING_REPLAY", "status"),
+        ("candidate_bv", 8, "candidate_bv"),
+        ("graph_pass_sha256", "b" * 64, "graph_pass_sha256"),
+        (
+            "wide_route_capture_layers_by_batch",
+            {"1": 0, "2": 1, "3": 0, "4": 48},
+            "wide_route_capture_layers_by_batch",
+        ),
+        ("observed_full_graph_replays_at_least", 0, "replays"),
+    ),
+)
+def test_bv64_engagement_rejects_vacuous_or_drifted_route(
+    tmp_path: Path, key: str, value: object, message: str
+) -> None:
+    module = _module()
+    graph_pass_sha256 = "a" * 64
+    payload = _valid_engagement(graph_pass_sha256)
+    payload[key] = value
+    engagement = tmp_path / "engagement.json"
+    _write_payload(engagement, payload)
+
+    with pytest.raises(ValueError, match=message):
+        module.validate_engagement_file(
+            engagement=engagement,
+            expected_live_sha256=graph_pass_sha256,
+            kernel_source=KERNEL_SOURCE,
+        )
+
+
 def test_launcher_restricts_wide_production_to_exact_b4_bv64_graph_pass() -> None:
     launcher = LAUNCHER.read_text(encoding="utf-8")
 
@@ -270,6 +347,8 @@ def test_launcher_restricts_wide_production_to_exact_b4_bv64_graph_pass() -> Non
         "FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256",
         "scripts/fr13_b4_gdn_bv64_pass.py install",
         "fr13_fixed32_batch_gdn_production.arm",
+        "fr13_fixed32_batch_gdn_bv64.production_engagement.json",
+        ".lumo.local.env must not override B4 GDN production credentials, selectors, or runtime geometry",
     ):
         assert needle in launcher
     assert launcher.index("scripts/fr13_b4_gdn_bv64_pass.py install") < launcher.index(
@@ -281,6 +360,66 @@ def test_launcher_restricts_wide_production_to_exact_b4_bv64_graph_pass() -> Non
     assert (
         'if [[ "$_fr13_batch_gdn_production" != "1"' in launcher
     )
+
+
+@pytest.mark.parametrize(
+    ("name", "override"),
+    (
+        ("FR13_FIXED32_BATCH_GDN_PRODUCTION", "0"),
+        ("FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", "32"),
+        ("FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON", "/tmp/other-pass"),
+        ("FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256", "b" * 64),
+        ("FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON", "/tmp/other-verdict"),
+        ("FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256", "c" * 64),
+        ("FR13_FIXED32_MODE", "hydra27_fixed32"),
+        ("MAX_NUM_SEQS", "3"),
+        ("MAX_NUM_SEQS_OVR", "3"),
+        ("SWE_CONCURRENCY", "3"),
+        ("ENFORCE_EAGER", "1"),
+        ("CUDAGRAPH_MODE", "FULL"),
+    ),
+)
+def test_launcher_rejects_local_env_production_binding_override(
+    tmp_path: Path, name: str, override: str
+) -> None:
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+    start = launcher.index("_FR13_CALLER_BATCH_GDN_PRODUCTION=")
+    end = launcher.index("# shellcheck source=fr13_required_tree_flags.sh")
+    fragment = launcher[start:end]
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".lumo.local.env").write_text(
+        f"{name}={override}\n", encoding="ascii"
+    )
+    harness = "\n".join(
+        (
+            "set -euo pipefail",
+            "REPO=$1",
+            "FR13_FIXED32_MODE=tail6_fixed32",
+            "MAX_NUM_SEQS=4",
+            "MAX_NUM_SEQS_OVR=4",
+            "SWE_CONCURRENCY=4",
+            "ENFORCE_EAGER=0",
+            "CUDAGRAPH_MODE=FULL_AND_PIECEWISE",
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION=1",
+            "FR13_FIXED32_BATCH_GDN_BV_PRODUCTION=64",
+            "FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON=/tmp/pass",
+            f"FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256={'a' * 64}",
+            "FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON=/tmp/verdict",
+            f"FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256={'d' * 64}",
+            fragment,
+        )
+    )
+    result = subprocess.run(
+        ["bash", "-c", harness, "--", os.fspath(repo)],
+        env={"PATH": os.environ["PATH"]},
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 2
+    assert ".lumo.local.env must not override B4 GDN" in result.stderr
 
 
 def test_timing_runner_is_exact4_full_wall_stock_first_and_floor_ineligible() -> None:
@@ -306,6 +445,11 @@ def test_timing_runner_is_exact4_full_wall_stock_first_and_floor_ineligible() ->
         '"step_wall_to_optimistic_floor_ratio"',
         '"optimistic_floor_is_full_step_hardware_floor": False',
         '"formal_floor_acceptance_eligible": False',
+        "fr13_fixed32_batch_gdn_bv64.production_engagement.json",
+        "scripts/fr13_b4_gdn_bv64_pass.py engagement",
+        '"production_engagement_sha256"',
+        '"observed_full_graph_replays_at_least"',
+        '"lower_batch_wide_capture_layers"',
         "timing_eligible=0",
         "production_default_enabled=0",
     ):
@@ -324,6 +468,20 @@ def test_graph_gate_verdict_is_exact4_and_binds_the_live_pass() -> None:
     assert '"run_classification": "exact4_b4_graph_byte_diagnostic"' in gate_runner
     assert '"graph_live_pass_sha256": pass_sha256' in gate_runner
     assert '"kernel_source_sha256": source_sha256' in gate_runner
+
+
+def test_patcher_publishes_bv64_engagement_only_from_validated_replay() -> None:
+    patcher = PATCHER.read_text(encoding="utf-8")
+    capture_end = patcher.index(
+        "fixed32_batch_gdn_bv64_production_capture_end"
+    )
+    replay = patcher.index(
+        "fixed32_batch_gdn_bv64_production_replay_engaged"
+    )
+    replay_validation = patcher.index(
+        'expected_status = (\n            "ENGAGED"', replay
+    )
+    assert capture_end < replay < replay_validation
 
 
 def test_pass_attestor_is_in_the_fixed32_runtime_manifest() -> None:

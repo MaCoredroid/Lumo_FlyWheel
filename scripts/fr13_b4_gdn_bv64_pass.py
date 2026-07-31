@@ -16,6 +16,7 @@ from typing import Any
 
 LIVE_SCHEMA = "fr13.fixed32.batch_gdn.graph_live_pass.v1"
 GATE_VERDICT_SCHEMA = "fr13.fixed32.batch_gdn.b4_diagnostic.v1"
+ENGAGEMENT_SCHEMA = "fr13.fixed32.batch_gdn.bv64.production_engagement.v1"
 EXPECTED_CANDIDATE = "fixed32_batch_gdn_bv_v2"
 EXPECTED_MODE = "tail6_fixed32"
 EXPECTED_SUBSET_SHA256 = (
@@ -84,6 +85,28 @@ EXPECTED_VERDICT_KEYS = {
     "kernel_source_sha256",
     "raw_byte_equal",
     "reference_always_served",
+    "production_default_enabled",
+}
+EXPECTED_ENGAGEMENT_KEYS = {
+    "schema",
+    "status",
+    "mode",
+    "runtime_mode",
+    "selector",
+    "batch_size",
+    "candidate",
+    "candidate_bv",
+    "physical_rows_per_request",
+    "physical_launches_per_layer",
+    "layer_count",
+    "layer_keys",
+    "wide_route_capture_layers_by_batch",
+    "graph_id",
+    "graph_signature",
+    "graph_pass_sha256",
+    "kernel_source_sha256",
+    "observed_full_graph_replays_at_least",
+    "fallback",
     "production_default_enabled",
 }
 HEX = frozenset("0123456789abcdef")
@@ -349,6 +372,81 @@ def validate_file(
     return summary, raw
 
 
+def validate_engagement_file(
+    *,
+    engagement: Path,
+    expected_live_sha256: str,
+    kernel_source: Path,
+) -> tuple[dict[str, Any], bytes]:
+    expected_live_sha256 = _require_sha256(
+        expected_live_sha256, "graph PASS artifact"
+    )
+    payload, raw = _load_json_line(engagement, "BV64 production engagement")
+    if set(payload) != EXPECTED_ENGAGEMENT_KEYS:
+        missing = sorted(EXPECTED_ENGAGEMENT_KEYS - set(payload))
+        extra = sorted(set(payload) - EXPECTED_ENGAGEMENT_KEYS)
+        raise ValueError(
+            f"BV64 engagement key set drifted: missing={missing!r} extra={extra!r}"
+        )
+    kernel_source_sha256 = hashlib.sha256(
+        _read_regular(kernel_source)
+    ).hexdigest()
+    expected = {
+        "schema": ENGAGEMENT_SCHEMA,
+        "status": "ENGAGED",
+        "mode": EXPECTED_MODE,
+        "runtime_mode": "FULL",
+        "selector": "production",
+        "batch_size": 4,
+        "candidate": EXPECTED_CANDIDATE,
+        "candidate_bv": 64,
+        "physical_rows_per_request": 32,
+        "physical_launches_per_layer": 2,
+        "layer_count": 48,
+        "wide_route_capture_layers_by_batch": {"1": 0, "2": 0, "3": 0, "4": 48},
+        "graph_pass_sha256": expected_live_sha256,
+        "kernel_source_sha256": kernel_source_sha256,
+        "observed_full_graph_replays_at_least": 1,
+        "fallback": 0,
+        "production_default_enabled": False,
+    }
+    for key, value in expected.items():
+        if payload.get(key) != value:
+            raise ValueError(f"BV64 engagement field drifted: {key}")
+    graph_id = payload.get("graph_id")
+    if type(graph_id) is not int or graph_id <= 0:
+        raise ValueError("BV64 engagement graph_id is invalid")
+    graph_signature = _require_sha256(
+        payload.get("graph_signature"), "BV64 engagement graph signature"
+    )
+    layer_keys = payload.get("layer_keys")
+    if not isinstance(layer_keys, list) or len(layer_keys) != 48:
+        raise ValueError("BV64 engagement must cover exactly 48 layers")
+    try:
+        numeric_keys = [int(key, 16) for key in layer_keys]
+    except (TypeError, ValueError) as error:
+        raise ValueError("BV64 engagement layer keys are not hexadecimal") from error
+    if (
+        any(key <= 0 for key in numeric_keys)
+        or len(set(numeric_keys)) != 48
+        or numeric_keys != sorted(numeric_keys)
+        or layer_keys != [f"0x{key:x}" for key in numeric_keys]
+    ):
+        raise ValueError(
+            "BV64 engagement layer keys are not distinct positive canonical hex"
+        )
+    return {
+        "schema": ENGAGEMENT_SCHEMA,
+        "status": "ENGAGED",
+        "graph_id": graph_id,
+        "graph_signature": graph_signature,
+        "graph_pass_sha256": expected_live_sha256,
+        "kernel_source_sha256": kernel_source_sha256,
+        "b4_replays_at_least": 1,
+        "lower_batch_wide_capture_layers": 0,
+    }, raw
+
+
 def _install_bytes(raw: bytes, out: Path) -> None:
     parent = out.parent
     parent_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
@@ -440,13 +538,23 @@ def _parser() -> argparse.ArgumentParser:
         child.add_argument("--kernel-source", required=True, type=Path)
         if command == "install":
             child.add_argument("--out", required=True, type=Path)
+    engagement = subparsers.add_parser("engagement")
+    engagement.add_argument("--engagement", required=True, type=Path)
+    engagement.add_argument("--expected-live-sha256", required=True)
+    engagement.add_argument("--kernel-source", required=True, type=Path)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        if args.command == "install":
+        if args.command == "engagement":
+            summary, _raw = validate_engagement_file(
+                engagement=args.engagement,
+                expected_live_sha256=args.expected_live_sha256,
+                kernel_source=args.kernel_source,
+            )
+        elif args.command == "install":
             summary = install_pass(
                 live_result=args.live_result,
                 expected_live_sha256=args.expected_live_sha256,
