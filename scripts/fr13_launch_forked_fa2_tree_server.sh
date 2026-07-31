@@ -124,6 +124,9 @@ FR13_FA2_QROW16_LIVE_PASS_SHA256=${FR13_FA2_QROW16_LIVE_PASS_SHA256:-}
 FR13_DFWD_UNIFIED_BM8_LIVE_AB=${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}
 FR13_DFWD_UNIFIED_BM8_INSTANCE_ID=${FR13_DFWD_UNIFIED_BM8_INSTANCE_ID:-}
 FR13_DFWD_UNIFIED_BM8_LIVE_JSON=${FR13_DFWD_UNIFIED_BM8_LIVE_JSON:-/logs/fr13_dfwd_unified_bm8.live.json}
+FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH=${FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH:-/logs/fr13_dfwd_unified_bm8.real_event.arm}
+FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON=${FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON:-/logs/fr13_dfwd_unified_bm8.identity.json}
+FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT=${FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT:-}
 case "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" in
   0|1) ;;
   *) echo "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE must be 0 or 1" >&2; exit 2 ;;
@@ -227,8 +230,19 @@ fi
 if [[ "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "1" ]]; then
   [[ -n "${FR13_FIXED32_MODE:-}" \
      && "$MAX_NUM_SEQS" == "1" \
-     && -n "$FR13_DFWD_UNIFIED_BM8_INSTANCE_ID" ]] || {
-    echo "FR13 DFWD unified BM8 live gate requires fixed32 B1 and an instance id" >&2
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
+     && "$FR13_DFWD_UNIFIED_BM8_INSTANCE_ID" == "astropy__astropy-12907" \
+     && "$FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ \
+     && "$FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH" == "/logs/fr13_dfwd_unified_bm8.real_event.arm" \
+     && "$FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON" == "/logs/fr13_dfwd_unified_bm8.identity.json" ]] || {
+    echo "FR13 DFWD unified BM8 live gate requires the pinned real SWE B1 diagnostic and exact source identity" >&2
+    exit 2
+  }
+  [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+     && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+     && "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" ]] || {
+    echo "FR13 DFWD unified BM8 live gate must be the only diagnostic kernel candidate" >&2
     exit 2
   }
 fi
@@ -902,6 +916,14 @@ else
     "$LOG_DIR/fr13_fixed32_taw_native_precompute_production.arm" \
     "$LOG_DIR/fr13_fixed32_taw_native_precompute.real_event.arm" \
     2>/dev/null || true
+fi
+if [[ "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "1" ]]; then
+  rm -f \
+    "$LOG_DIR/fr13_dfwd_unified_bm8.real_event.arm" \
+    "$LOG_DIR/fr13_dfwd_unified_bm8.identity.json" \
+    "$LOG_DIR/fr13_dfwd_unified_bm8.live.json"
+else
+  rm -f "$LOG_DIR/fr13_dfwd_unified_bm8.real_event.arm" 2>/dev/null || true
 fi
 FR13_FIXED32_DOCKER_ARGS=()
 FR13_FIXED32_MIDDLEWARE_FLAGS=""
@@ -1625,6 +1647,9 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DFWD_UNIFIED_BM8_LIVE_AB="$FR13_DFWD_UNIFIED_BM8_LIVE_AB" \
   -e FR13_DFWD_UNIFIED_BM8_INSTANCE_ID="$FR13_DFWD_UNIFIED_BM8_INSTANCE_ID" \
   -e FR13_DFWD_UNIFIED_BM8_LIVE_JSON="$FR13_DFWD_UNIFIED_BM8_LIVE_JSON" \
+  -e FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH="$FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH" \
+  -e FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON="$FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON" \
+  -e FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT="$FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT" \
   -e FR13_KVREMAP_TIMER="${FR13_KVREMAP_TIMER:-0}" \
   -e FR13_KVREMAP_TIMER_JSON="${FR13_KVREMAP_TIMER_JSON:-}" \
   -e FR13_STATEREMAP_TIMER="${FR13_STATEREMAP_TIMER:-0}" \
@@ -1866,7 +1891,10 @@ python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
 python3 /workspace/scripts/fr13_patch_fa2_tree_bias.py --skip-source \
   $(if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" ]]; then printf '%s' '--fixed32-query-tile16-live-ab'; elif [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then printf '%s' '--fixed32-query-tile16-production'; fi)
 python3 - <<'PY'
+import hashlib
+import json
 import os
+import re
 from pathlib import Path
 
 path = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/tree_attn.py')
@@ -1901,6 +1929,45 @@ if os.environ.get('FR13_DFWD_UNIFIED_BM8_LIVE_AB', '0') == '1':
     )
     if '_fr13_dfwd_unified_bm8_live_replay' not in eagle_path.read_text():
         raise SystemExit(f'DFWD unified BM8 replay hook missing in {eagle_path}')
+    source_commit = os.environ.get('FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT', '')
+    if re.fullmatch(r'[0-9a-f]{40}', source_commit) is None:
+        raise SystemExit('DFWD unified BM8 source commit identity is invalid')
+    patcher_path = Path('/workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py')
+    identity = {
+        'schema': 'fr13.fixed32.dfwd_unified_bm8.identity.v1',
+        'source_commit': source_commit,
+        'production_enabled': False,
+        'candidate': {
+            'kernel': 'kernel_unified_attention_2d',
+            'stock_block_m': 16,
+            'stock_block_q': 2,
+            'candidate_block_m': 8,
+            'candidate_block_q': 1,
+            'required_calls': 4,
+        },
+        'files': {
+            label: {
+                'path': str(source_path.resolve()),
+                'sha256': hashlib.sha256(source_path.read_bytes()).hexdigest(),
+            }
+            for label, source_path in {
+                'patcher': patcher_path,
+                'unified_attention': unified_path,
+                'eagle_replay_hook': eagle_path,
+            }.items()
+        },
+    }
+    identity_path = Path(
+        os.environ['FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON']
+    )
+    temporary = identity_path.with_name(identity_path.name + '.tmp')
+    temporary.write_text(
+        json.dumps(identity, ensure_ascii=True, separators=(',', ':'), sort_keys=True)
+        + '\n',
+        encoding='ascii',
+    )
+    temporary.chmod(0o400)
+    temporary.replace(identity_path)
 if os.environ.get('FR13_BI_TREE_ATTN', '0') == '1':
     bi_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/batch_invariant.py')
     bi_text = bi_path.read_text()

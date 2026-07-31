@@ -16,7 +16,8 @@ case "$FR13_GATE_QROW16" in
 esac
 FR13_GATE_TAW_NATIVE=${FR13_GATE_TAW_NATIVE:-1}
 FR13_GATE_DRAFT_HEAD_PAD=${FR13_GATE_DRAFT_HEAD_PAD:-0}
-for gate in FR13_GATE_TAW_NATIVE FR13_GATE_DRAFT_HEAD_PAD; do
+FR13_GATE_BM8=${FR13_GATE_BM8:-0}
+for gate in FR13_GATE_TAW_NATIVE FR13_GATE_DRAFT_HEAD_PAD FR13_GATE_BM8; do
   case "${!gate}" in
     0|1) ;;
     *) echo "$gate must be 0 or 1" >&2; exit 2 ;;
@@ -28,12 +29,22 @@ case "$FR13_GATE_GDN_BV" in
   16|32|64|128) FR13_GATE_GDN_BV_CANDIDATE=$FR13_GATE_GDN_BV ;;
   *) echo "FR13_GATE_GDN_BV must be 0, 16, 32, 64, or 128" >&2; exit 2 ;;
 esac
+if [[ "$FR13_GATE_BM8" == "1" \
+      && ( "$FR13_GATE_QROW16" != "0" \
+           || "$FR13_GATE_TAW_NATIVE" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
+           || "$FR13_GATE_GDN_BV" != "0" ) ]]; then
+  echo "FR13_GATE_BM8 must be the only enabled kernel candidate" >&2
+  exit 2
+fi
 
 ARM="hydra27_fixed32_${TAG}"
 SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
 FA2_SHA=$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')
+SOURCE_COMMIT=$(git rev-parse HEAD)
 
 [[ "$FA2_SHA" =~ ^[0-9a-f]{64}$ ]]
+[[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]]
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]]
 
@@ -48,8 +59,8 @@ run_variant() { :; }
 source scripts/fr13_fixed32_floor_timers_seq.sh
 
 mkdir -p "$RUNROOT"
-printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nstarted=%s\n' \
-  "$$" "$RUNROOT" "$ARM" "$(git rev-parse HEAD)" "$FA2_SHA" \
+printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\nstarted=%s\n' \
+  "$$" "$RUNROOT" "$ARM" "$SOURCE_COMMIT" "$FA2_SHA" "$FR13_GATE_BM8" \
   "$(date -u +%FT%TZ)" > "$RUNROOT/launcher_meta.txt"
 
 .venv/bin/python scripts/fr13_runtime_manifest.py \
@@ -77,6 +88,12 @@ OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
   FR13_FA2_QROW16_SO_SHA256="$FA2_SHA" \
   FR13_FA2_QROW16_LIVE_PAGED_AB="$FR13_GATE_QROW16" \
   FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID=astropy__astropy-12907 \
+  FR13_DFWD_UNIFIED_BM8_LIVE_AB="$FR13_GATE_BM8" \
+  FR13_DFWD_UNIFIED_BM8_INSTANCE_ID=astropy__astropy-12907 \
+  FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH=/logs/fr13_dfwd_unified_bm8.real_event.arm \
+  FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON=/logs/fr13_dfwd_unified_bm8.identity.json \
+  FR13_DFWD_UNIFIED_BM8_LIVE_JSON=/logs/fr13_dfwd_unified_bm8.live.json \
+  FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT="$SOURCE_COMMIT" \
   bash scripts/fr13_bigdenom_swe_serve_variant.sh \
     "$ARM" hydra27_fixed32 "$SUBSET" \
     > "$RUNROOT/$ARM.runlog" 2>&1
@@ -90,5 +107,13 @@ printf 'serve_rc=%s ended=%s\n' "$serve_rc" "$(date -u +%FT%TZ)" \
   --output "$RUNROOT/runtime_manifest.at_end.json"
 .venv/bin/python scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT/external_manifest.at_end.json"
+
+if [[ "$serve_rc" == "0" && "$FR13_GATE_BM8" == "1" ]]; then
+  .venv/bin/python scripts/fr13_dfwd_unified_bm8_gate.py verify \
+    --live-result "$RUNROOT/$ARM/logs/fr13_dfwd_unified_bm8.live.json" \
+    --identity "$RUNROOT/$ARM/logs/fr13_dfwd_unified_bm8.identity.json" \
+    --expected-source-commit "$SOURCE_COMMIT" \
+    --expected-instance-id astropy__astropy-12907
+fi
 
 exit "$serve_rc"
