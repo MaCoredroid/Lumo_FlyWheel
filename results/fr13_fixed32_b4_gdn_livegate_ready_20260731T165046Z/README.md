@@ -74,4 +74,3 @@ does not move either comparison.
 - GPU used: no
 - Docker used: no
 - Real SWE-Verified task run: no
-
