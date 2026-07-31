@@ -280,7 +280,11 @@ def test_exact4_b4_live_gate_runner_is_non_timing_and_fail_closed() -> None:
     assert "FR13_FIXED32_BATCH_GDN_PRODUCTION=0" in runner
     assert "FR13_DFWD_UNIFIED_BM8_LIVE_AB=0" in runner
     assert "FR13_FIXED32_B1_DIAGNOSTIC=0" in runner
-    assert "FR13_SFWD_GPU_TIMER=0" in runner
+    assert (
+        "FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 "
+        "FR13_CFWD_GPU_TIMER=1"
+        in runner
+    )
     assert "runner_sha256=" in runner
     assert "B4 diagnostic runner changed during execution" in runner
     assert 'record.get("batch") == 4' in runner
