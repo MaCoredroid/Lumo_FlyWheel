@@ -1,0 +1,54 @@
+{
+  "schema": "fr13.fixed32.dfwd_bf16_pad_rows_roofline.v1",
+  "bandwidth_bytes_per_s": 273000000000,
+  "dense_bf16_planning_flops_per_s": 125000000000000,
+  "shape": {
+    "vocab_rows": 65536,
+    "hidden_size": 5120,
+    "dtype_bytes": 2,
+    "passes_per_event": 5
+  },
+  "invariant_work": {
+    "weight_bytes_per_pass": 671088640,
+    "weight_bytes_per_event": 3355443200,
+    "mandatory_weight_floor_ms_per_pass": 2.4582001465201464,
+    "mandatory_weight_floor_ms_per_event": 12.291000732600732
+  },
+  "rows": {
+    "32": {
+      "flops_per_pass": 21474836480,
+      "flops_per_event": 107374182400,
+      "input_bytes": 327680,
+      "output_bytes": 4194304,
+      "persistent_input_output_bytes": 4521984,
+      "arithmetic_intensity_flops_per_minimum_byte": 31.78581821709186,
+      "tflops_required_at_weight_floor": 8.736,
+      "compute_floor_ms_per_event_at_125tflops": 0.8589934592,
+      "minimum_traffic_floor_ms_per_event": 12.373820952380953
+    },
+    "64": {
+      "flops_per_pass": 42949672960,
+      "flops_per_event": 214748364800,
+      "input_bytes": 655360,
+      "output_bytes": 8388608,
+      "persistent_input_output_bytes": 9043968,
+      "arithmetic_intensity_flops_per_minimum_byte": 63.148968972827134,
+      "tflops_required_at_weight_floor": 17.472,
+      "compute_floor_ms_per_event_at_125tflops": 1.7179869184,
+      "minimum_traffic_floor_ms_per_event": 12.456641172161172
+    },
+    "128": {
+      "flops_per_pass": 85899345920,
+      "flops_per_event": 429496729600,
+      "input_bytes": 1310720,
+      "output_bytes": 16777216,
+      "persistent_input_output_bytes": 18087936,
+      "arithmetic_intensity_flops_per_minimum_byte": 124.64054773678204,
+      "tflops_required_at_weight_floor": 34.944,
+      "compute_floor_ms_per_event_at_125tflops": 3.4359738368,
+      "minimum_traffic_floor_ms_per_event": 12.622281611721611
+    }
+  },
+  "all_row_byte_ab_persistent_input_output_bytes": 31653888
+}
+
