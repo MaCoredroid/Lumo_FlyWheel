@@ -124,6 +124,9 @@ FR13_FA2_QROW16_LIVE_PASS_SHA256=${FR13_FA2_QROW16_LIVE_PASS_SHA256:-}
 FR13_DFWD_UNIFIED_BM8_LIVE_AB=${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}
 FR13_DFWD_UNIFIED_BM8_INSTANCE_ID=${FR13_DFWD_UNIFIED_BM8_INSTANCE_ID:-}
 FR13_DFWD_UNIFIED_BM8_LIVE_JSON=${FR13_DFWD_UNIFIED_BM8_LIVE_JSON:-/logs/fr13_dfwd_unified_bm8.live.json}
+FR13_FIXED32_CUTLASS_WAVE=${FR13_FIXED32_CUTLASS_WAVE:-stock}
+FR13_FIXED32_CUTLASS_WAVE_SO=${FR13_FIXED32_CUTLASS_WAVE_SO:-}
+FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL=${FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL:-/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl}
 case "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" in
   0|1) ;;
   *) echo "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE must be 0 or 1" >&2; exit 2 ;;
@@ -215,6 +218,47 @@ if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
     echo "FR13 qrow16 production requires a regular live PASS JSON and its SHA-256" >&2
     exit 2
   }
+fi
+case "$FR13_FIXED32_CUTLASS_WAVE" in
+  stock|streamk_coop128|streamk_coop128_byte_ab) ;;
+  *)
+    echo "FR13_FIXED32_CUTLASS_WAVE must be stock, streamk_coop128, or streamk_coop128_byte_ab" >&2
+    exit 2
+    ;;
+esac
+FR13_CUTLASS_WAVE_DOCKER_ARGS=()
+if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" ]]; then
+  [[ -z "$FR13_FIXED32_CUTLASS_WAVE_SO" ]] || {
+    echo "stock CUTLASS wave selector forbids a candidate SO" >&2
+    exit 2
+  }
+else
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" ]] || {
+    echo "CUTLASS Stream-K candidate is restricted to the fixed32 B1 diagnostic" >&2
+    exit 2
+  }
+  [[ "$FR13_FIXED32_CUTLASS_WAVE_SO" == /* \
+     && "$FR13_FIXED32_CUTLASS_WAVE_SO" != *:* \
+     && -f "$FR13_FIXED32_CUTLASS_WAVE_SO" \
+     && ! -L "$FR13_FIXED32_CUTLASS_WAVE_SO" ]] || {
+    echo "CUTLASS Stream-K candidate requires an absolute regular non-symlink SO path" >&2
+    exit 2
+  }
+  .venv/bin/python scripts/fr13_cutlass_wave_binary.py verify \
+    "$FR13_FIXED32_CUTLASS_WAVE_SO" >/dev/null
+  FR13_FIXED32_CUTLASS_WAVE_SO=$(realpath "$FR13_FIXED32_CUTLASS_WAVE_SO")
+  FR13_CUTLASS_WAVE_DOCKER_ARGS=(
+    -v "$FR13_FIXED32_CUTLASS_WAVE_SO:/tmp/fr13_cutlass_wave.abi3.so:ro"
+  )
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" ]]; then
+    [[ "${ENFORCE_EAGER:-0}" == "1" \
+       && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl" ]] || {
+      echo "CUTLASS Stream-K byte A/B requires ENFORCE_EAGER=1 and the canonical JSONL path" >&2
+      exit 2
+    }
+  fi
 fi
 case "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" in
   0|1) ;;
@@ -765,6 +809,9 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     _fixed32_expected_metrics=1
     _fixed32_expected_eager=1
   fi
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" ]]; then
+    _fixed32_expected_eager=1
+  fi
   [[ "$MAX_NUM_SEQS" == "1" || "$MAX_NUM_SEQS" == "4" ]] \
     || { echo "fixed32 requires MAX_NUM_SEQS=1 or 4" >&2; exit 2; }
   _fixed32_exact_pairs=(
@@ -866,6 +913,13 @@ fi
 
 mkdir -p "$LOG_DIR"
 LOG_DIR=$(realpath "$LOG_DIR")
+if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" ]]; then
+  rm -f "$LOG_DIR/fr13_fixed32_cutlass_wave.selector"
+else
+  printf '%s\n' "$FR13_FIXED32_CUTLASS_WAVE" \
+    > "$LOG_DIR/fr13_fixed32_cutlass_wave.selector"
+  chmod 0444 "$LOG_DIR/fr13_fixed32_cutlass_wave.selector"
+fi
 FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR=""
 FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256=""
 if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
@@ -1455,6 +1509,7 @@ FR13_ENV_FORWARD_ARGS=()
 while IFS= read -r _v; do
   [[ "$_v" == "FR13_FIXED32_INGRESS_SECRET_FILE" \
      || "$_v" == "FR13_FIXED32_MIDDLEWARE_FLAGS" \
+     || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_SO" \
      || "$_v" == "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH" ]] && continue
   if [[ -n "${FR13_FIXED32_MODE:-}" \
      && "$_v" == "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION" ]]; then
@@ -1481,6 +1536,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
   -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
   -v "$FORKED_FA2_SO:/tmp/fr13_fork_fa2.so:ro" \
+  "${FR13_CUTLASS_WAVE_DOCKER_ARGS[@]}" \
   -v "${FR13_COMPILE_CACHE_DIR:-$HOME/.cache/fr13_vllm_container_cache}:/root/.cache" \
   "${NSYS_DOCKER_ARGS[@]}" \
   "${FR13_FIXED32_DOCKER_ARGS[@]}" \
@@ -1625,6 +1681,8 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DFWD_UNIFIED_BM8_LIVE_AB="$FR13_DFWD_UNIFIED_BM8_LIVE_AB" \
   -e FR13_DFWD_UNIFIED_BM8_INSTANCE_ID="$FR13_DFWD_UNIFIED_BM8_INSTANCE_ID" \
   -e FR13_DFWD_UNIFIED_BM8_LIVE_JSON="$FR13_DFWD_UNIFIED_BM8_LIVE_JSON" \
+  -e FR13_FIXED32_CUTLASS_WAVE="$FR13_FIXED32_CUTLASS_WAVE" \
+  -e FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL="$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" \
   -e FR13_KVREMAP_TIMER="${FR13_KVREMAP_TIMER:-0}" \
   -e FR13_KVREMAP_TIMER_JSON="${FR13_KVREMAP_TIMER_JSON:-}" \
   -e FR13_STATEREMAP_TIMER="${FR13_STATEREMAP_TIMER:-0}" \
@@ -1851,6 +1909,13 @@ temporary.write_text(
 )
 temporary.replace(identity_path)
 PY
+fi
+if [[ "\${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ]]; then
+  python3 /workspace/scripts/fr13_cutlass_wave_binary.py install \
+    --source /tmp/fr13_cutlass_wave.abi3.so \
+    --destination /usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so \
+    --attestation /logs/fr13_fixed32_cutlass_streamk_binary.json \
+    --selector "\$FR13_FIXED32_CUTLASS_WAVE"
 fi
 cp /tmp/fr13_fork_fa2.so /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so
 sha256sum /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so | tee /logs/fr13_forked_fa2.sha256
