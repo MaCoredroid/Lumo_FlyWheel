@@ -92,6 +92,126 @@ except Exception:  # pragma: no cover - torch always present in the vLLM image
 import numpy as np
 
 
+try:  # Triton is present in the serving image, not on CPU-only audit hosts.
+    import triton
+    import triton.language as tl
+except Exception:  # pragma: no cover - exercised by CPU-only source gates
+    triton = None
+    tl = None
+
+
+if triton is not None:
+
+    @triton.jit
+    def _fr13_fixed32_taw_exact_commit_kernel(
+        child_table,
+        child_counts,
+        current_input,
+        alive_input,
+        self_token,
+        bonus_token,
+        source,
+        selected_token,
+        rejected_token,
+        accepted,
+        current_state,
+        alive_state,
+        output_tokens,
+        output_lens,
+        accepted_path_rows,
+        accepted_lens,
+        last_row,
+        LEVEL: tl.constexpr,
+        PHYSICAL_DRAFTS: tl.constexpr,
+        PHYSICAL_ROWS: tl.constexpr,
+        FANOUT: tl.constexpr,
+        OUTPUT_CAPACITY: tl.constexpr,
+        PATH_CAPACITY: tl.constexpr,
+    ):
+        """Commit already-decided tokens using integer and boolean operations only."""
+        request = tl.program_id(0)
+        current = tl.load(current_input + request).to(tl.int64)
+        alive = tl.load(alive_input + request) != 0
+
+        if LEVEL == 0:
+            output_columns = tl.arange(0, OUTPUT_CAPACITY)
+            path_columns = tl.arange(0, PATH_CAPACITY)
+            tl.store(
+                output_tokens + request * OUTPUT_CAPACITY + output_columns,
+                -1,
+            )
+            tl.store(
+                accepted_path_rows + request * PATH_CAPACITY + path_columns,
+                0,
+            )
+            output_len = 0
+            path_len = 0
+            prior_last_row = 0
+        else:
+            output_len = tl.load(output_lens + request).to(tl.int64)
+            path_len = tl.load(accepted_lens + request).to(tl.int64)
+            prior_last_row = tl.load(last_row + request).to(tl.int64)
+
+        parent_slot = tl.maximum(
+            0,
+            tl.minimum(current + 1, PHYSICAL_ROWS - 1),
+        )
+        child_count = tl.load(
+            child_counts + request * PHYSICAL_ROWS + parent_slot
+        ).to(tl.int64)
+        has_kids = alive & (child_count > 0)
+        leaf = alive & (child_count == 0)
+        current_valid = (current >= 0) & (current < PHYSICAL_DRAFTS)
+
+        sampled_self = tl.load(self_token + request).to(tl.int64)
+        sampled_bonus = tl.load(bonus_token + request).to(tl.int64)
+        leaf_token = tl.where(current_valid, sampled_self, sampled_bonus)
+        tl.store(
+            output_tokens + request * OUTPUT_CAPACITY + output_len,
+            leaf_token,
+            mask=leaf,
+        )
+
+        is_accepted = tl.load(accepted + request) != 0
+        sampled_selected = tl.load(selected_token + request).to(tl.int64)
+        sampled_rejected = tl.load(rejected_token + request).to(tl.int64)
+        emitted_token = tl.where(
+            is_accepted,
+            sampled_selected,
+            sampled_rejected,
+        )
+        tl.store(
+            output_tokens + request * OUTPUT_CAPACITY + output_len,
+            emitted_token,
+            mask=has_kids,
+        )
+        output_len_new = output_len + leaf.to(tl.int64) + has_kids.to(tl.int64)
+
+        selected_source = tl.load(source + request).to(tl.int64)
+        accepted_node = tl.load(
+            child_table
+            + request * PHYSICAL_ROWS * FANOUT
+            + parent_slot * FANOUT
+            + selected_source
+        ).to(tl.int64)
+        accepted_row = accepted_node + 1
+        tl.store(
+            accepted_path_rows + request * PATH_CAPACITY + path_len,
+            accepted_row,
+            mask=is_accepted,
+        )
+        path_len_new = path_len + is_accepted.to(tl.int64)
+        current_new = tl.where(is_accepted, accepted_node, current)
+        alive_new = (alive & (~leaf)) & is_accepted
+        last_row_new = tl.where(is_accepted, accepted_row, prior_last_row)
+
+        tl.store(current_state + request, current_new)
+        tl.store(alive_state + request, alive_new)
+        tl.store(output_lens + request, output_len_new)
+        tl.store(accepted_lens + request, path_len_new)
+        tl.store(last_row + request, last_row_new)
+
+
 # ---------------------------------------------------------------------------
 # MEASUREMENT-ONLY commit trace (FR13 garble mechanism binding, 2026-07-10).
 # Gated on LUMO_TREE_SAMPLER_DEBUG_LOG (the ONE diagnostic flag proven to reach
@@ -930,9 +1050,9 @@ _FR13_FIXED32_TAW_WARMUPS: dict[tuple[Any, ...], dict[str, Any]] = {}
 _FR13_FIXED32_WORK_ANNOUNCED = False
 _FR13_FIXED32_BATCHES = (1, 2, 3, 4)
 _FR13_FIXED32_INTEGER_DTYPES = None
-_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-source-v1"
+_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-exact-commit-v2"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "ff9fdeb6529876732cc949ab4f2636a7cee04edaec2524c39657a34d3d8b3250"
+    "df7411d51607ab66d46e9c991247f6472168ef8739a7466bbf2b1b00e1975924"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
@@ -955,10 +1075,15 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_validate_inputs",
     "_fr13_fixed32_tensor_layout",
     "_fr13_fixed32_layout_contract",
+    "_fr13_fixed32_taw_execute_torch",
+    "_fr13_fixed32_taw_execute_exact_cuda",
     "_fr13_fixed32_taw_execute",
     "_fr13_fixed32_publish_work",
     "fr13_fixed32_taw_commit",
     "_fr13_taw_inv_cdf",
+)
+_FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (
+    "_fr13_fixed32_taw_exact_commit_kernel",
 )
 _FR13_FIXED32_TAW_GEOMETRY = {
     "physical_drafts": 31,
@@ -981,8 +1106,11 @@ _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS = {
     "residual_subtract_calls": 12,
     "residual_clamp_calls": 12,
     "residual_where_calls": 24,
-    "output_scatter_calls": 24,
-    "path_scatter_calls": 12,
+    "output_scatter_calls": 0,
+    "path_scatter_calls": 0,
+    "exact_commit_launches": 12,
+    "exact_commit_programs_per_request": 12,
+    "floating_sampling_reimplementation": False,
 }
 
 
@@ -1142,10 +1270,34 @@ def _fr13_fixed32_taw_source_contract(topology) -> dict[str, Any]:
             include_attributes=False,
         )
 
+    try:
+        module_tree = ast.parse(
+            Path(__file__).resolve().read_text(encoding="utf-8")
+        )
+    except (OSError, SyntaxError) as error:
+        raise RuntimeError("FR13 fixed32 cannot inspect exact commit kernel") from error
+    kernel_definitions = {
+        node.name: node
+        for node in ast.walk(module_tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in _FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS
+    }
+    if set(kernel_definitions) != set(_FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS):
+        raise RuntimeError("FR13 fixed32 exact commit kernel source is incomplete")
+    normalized_kernels = {
+        name: ast.dump(
+            kernel_definitions[name],
+            annotate_fields=True,
+            include_attributes=False,
+        )
+        for name in _FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS
+    }
+
     canonical = json.dumps(
         {
             "schema": _FR13_FIXED32_TAW_SOURCE_SCHEMA,
             "functions": normalized_sources,
+            "kernels": normalized_kernels,
             "geometry": geometry,
             "tensor_call_census": _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS,
         },
@@ -1339,6 +1491,32 @@ def fr13_fixed32_taw_preseed(
                 )
                 * int(topology.PHYSICAL_DRAFTS)
             ),
+            "request_rows": torch.arange(
+                batch_size,
+                dtype=torch.long,
+                device=normalized_device,
+            ),
+            "exact_initial_current": torch.full(
+                (batch_size,),
+                -1,
+                dtype=torch.long,
+                device=normalized_device,
+            ),
+            "exact_initial_alive": torch.ones(
+                batch_size,
+                dtype=torch.bool,
+                device=normalized_device,
+            ),
+            "exact_current": torch.empty(
+                batch_size,
+                dtype=torch.long,
+                device=normalized_device,
+            ),
+            "exact_alive": torch.empty(
+                batch_size,
+                dtype=torch.bool,
+                device=normalized_device,
+            ),
             "uniforms": torch.empty(
                 (
                     batch_size,
@@ -1461,6 +1639,11 @@ def _fr13_fixed32_taw_cache_lease(entry: dict[str, Any]) -> tuple[Any, ...]:
         "child_counts",
         "expected_parent",
         "starts",
+        "request_rows",
+        "exact_initial_current",
+        "exact_initial_alive",
+        "exact_current",
+        "exact_alive",
         "uniforms",
         "draft_tokens",
         "bonus_tokens",
@@ -1695,6 +1878,8 @@ def fr13_fixed32_taw_warm_execute(
         "accepted_path_rows",
         "accepted_lens",
         "last_row",
+        "exact_current",
+        "exact_alive",
     )
     saved_cache = tuple(
         {
@@ -2113,6 +2298,11 @@ def _fr13_fixed32_layout_contract(
         "child_counts": ([batch, 32], "torch.int64", [32, 1]),
         "expected_parent": ([batch, 31], "torch.int64", [31, 1]),
         "starts": ([batch], "torch.int64", [1]),
+        "request_rows": ([batch], "torch.int64", [1]),
+        "exact_initial_current": ([batch], "torch.int64", [1]),
+        "exact_initial_alive": ([batch], "torch.bool", [1]),
+        "exact_current": ([batch], "torch.int64", [1]),
+        "exact_alive": ([batch], "torch.bool", [1]),
         "uniforms": ([batch, 12, 3], "torch.float32", [36, 3, 1]),
         "draft_tokens": ([batch, 31], "torch.int64", [31, 1]),
         "bonus_tokens": ([batch], "torch.int64", [1]),
@@ -2252,10 +2442,12 @@ def _fr13_fixed32_layout_contract(
         ),
         "accepted_lens_shape": list(expected_cache_layouts["accepted_lens"][0]),
         "last_row_shape": list(expected_cache_layouts["last_row"][0]),
+        "exact_current_shape": list(expected_cache_layouts["exact_current"][0]),
+        "exact_alive_shape": list(expected_cache_layouts["exact_alive"][0]),
     }
 
 
-def _fr13_fixed32_taw_execute(
+def _fr13_fixed32_taw_execute_torch(
     topology,
     entry: dict[str, Any],
     drafts,
@@ -2266,7 +2458,7 @@ def _fr13_fixed32_taw_execute(
     *,
     walk_cap: int,
 ) -> tuple[Any, Any, Any, Any, Any, int]:
-    """Run the fixed device core; every loop body has the same B/V shapes."""
+    """Run the exact PyTorch oracle; every loop body has the same B/V shapes."""
     batch_size = entry["batch_size"]
     physical_drafts = int(topology.PHYSICAL_DRAFTS)
     output_capacity = int(topology.OUTPUT_PUBLISH_CAPACITY)
@@ -2500,6 +2692,234 @@ def _fr13_fixed32_taw_execute(
     )
 
 
+def _fr13_fixed32_taw_execute_exact_cuda(
+    topology,
+    entry: dict[str, Any],
+    drafts,
+    target_logits,
+    tree_self_logits,
+    bonus_flat,
+    uniforms,
+    *,
+    walk_cap: int,
+) -> tuple[Any, Any, Any, Any, Any, int]:
+    """Preserve PyTorch sampling math and fuse only integer product commits."""
+    if triton is None or tl is None:
+        raise RuntimeError("FR13 fixed32 exact commit requires Triton")
+    if not target_logits.is_cuda:
+        raise RuntimeError("FR13 fixed32 exact commit requires CUDA tensors")
+
+    batch_size = int(entry["batch_size"])
+    physical_drafts = int(topology.PHYSICAL_DRAFTS)
+    physical_rows = int(topology.PHYSICAL_ROWS)
+    output_capacity = int(topology.OUTPUT_PUBLISH_CAPACITY)
+    path_capacity = int(topology.ACCEPTED_PATH_CAPACITY)
+    fanout = int(topology.SAMPLER_MAX_FANOUT)
+    if walk_cap != int(topology.WALK_CAP):
+        raise RuntimeError(f"FR13 fixed32 core walk {walk_cap} != {topology.WALK_CAP}")
+    if walk_cap > path_capacity or walk_cap > output_capacity:
+        raise RuntimeError("FR13 fixed32 walk can overflow fixed products")
+
+    child_table = entry["child_table"]
+    child_counts = entry["child_counts"]
+    if tuple(child_table.shape) != (batch_size, physical_rows, fanout):
+        raise RuntimeError(
+            f"FR13 fixed32 child-table shape drifted: {tuple(child_table.shape)}"
+        )
+    if tuple(child_counts.shape) != (batch_size, physical_rows):
+        raise RuntimeError(
+            f"FR13 fixed32 child-count shape drifted: {tuple(child_counts.shape)}"
+        )
+    _fr13_fixed32_device_assert(
+        torch.all((child_counts >= 0) & (child_counts <= fanout)),
+        "FR13 fixed32 sampler fanout overflow",
+    )
+
+    expected_state = {
+        "request_rows": ((batch_size,), torch.long),
+        "exact_initial_current": ((batch_size,), torch.long),
+        "exact_initial_alive": ((batch_size,), torch.bool),
+        "exact_current": ((batch_size,), torch.long),
+        "exact_alive": ((batch_size,), torch.bool),
+    }
+    for name, (shape, dtype) in expected_state.items():
+        value = entry.get(name)
+        if (
+            not isinstance(value, torch.Tensor)
+            or tuple(value.shape) != shape
+            or value.dtype != dtype
+            or value.device != target_logits.device
+            or not value.is_contiguous()
+        ):
+            raise RuntimeError(f"FR13 fixed32 exact commit state drift: {name}")
+
+    starts = entry["starts"]
+    request_rows = entry["request_rows"]
+    initial_current = entry["exact_initial_current"]
+    initial_alive = entry["exact_initial_alive"]
+    current_state = entry["exact_current"]
+    alive_state = entry["exact_alive"]
+    output_tokens = entry["output_tokens"]
+    output_lens = entry["output_lens"]
+    accepted_path_rows = entry["accepted_path_rows"]
+    accepted_lens = entry["accepted_lens"]
+    last_row = entry["last_row"]
+
+    for level in range(walk_cap):
+        current = initial_current if level == 0 else current_state
+        alive = initial_alive if level == 0 else alive_state
+        parent_slots = current + 1
+        kids = child_table[request_rows, parent_slots]
+        child_count = child_counts[request_rows, parent_slots]
+        has_kids = alive & (child_count > 0)
+
+        # This floating path is intentionally identical to the PyTorch oracle.
+        self_indices = starts + current.clamp(min=0, max=physical_drafts - 1)
+        self_prob = torch.softmax(
+            tree_self_logits[self_indices].to(torch.float32),
+            dim=-1,
+        )
+        self_prob = self_prob / self_prob.sum(dim=-1, keepdim=True)
+        self_token = _fr13_taw_inv_cdf(
+            self_prob,
+            uniforms[:, level, 2],
+        )
+
+        first_child = kids[:, 0].clamp(min=0)
+        target_indices = starts + first_child
+        target_prob = torch.softmax(
+            target_logits[target_indices].to(torch.float32),
+            dim=-1,
+        )
+        target_prob = target_prob / target_prob.sum(dim=-1, keepdim=True)
+        kid_tokens = drafts.gather(1, kids.clamp(min=0))
+        kid_mask = kids >= 0
+        overlaps = torch.gather(target_prob, 1, kid_tokens.clamp(min=0)) * kid_mask
+        overlap_mass = overlaps.sum(dim=-1)
+        zero_mass = has_kids & (overlap_mass <= 0)
+        source = _fr13_taw_inv_cdf(
+            overlaps,
+            uniforms[:, level, 0],
+        )
+        selected_token = kid_tokens[request_rows, source]
+        same_token = (kid_tokens == selected_token.unsqueeze(1)) & kid_mask
+        q_mix_token = (overlaps * same_token).sum(dim=-1) / overlap_mass.clamp(
+            min=1e-30
+        )
+        target_at_token = torch.gather(
+            target_prob,
+            1,
+            selected_token.unsqueeze(1),
+        ).squeeze(1)
+        accept_probability = (target_at_token / q_mix_token.clamp(min=1e-30)).clamp(
+            max=1.0
+        )
+        accepted = has_kids & ~zero_mass & (uniforms[:, level, 1] < accept_probability)
+
+        weights = overlaps / overlap_mass.clamp(min=1e-30).unsqueeze(1)
+        q_mix_vocab = torch.zeros_like(target_prob)
+        q_mix_vocab.scatter_add_(
+            1,
+            kid_tokens.clamp(min=0),
+            weights * kid_mask,
+        )
+        residual = (target_prob - q_mix_vocab).clamp(min=0)
+        residual_mass = residual.sum(dim=-1, keepdim=True)
+        residual = torch.where(
+            residual_mass > 0,
+            residual / residual_mass.clamp(min=1e-30),
+            target_prob,
+        )
+        residual = torch.where(
+            zero_mass.unsqueeze(1),
+            target_prob,
+            residual,
+        )
+        rejected_token = _fr13_taw_inv_cdf(
+            residual,
+            uniforms[:, level, 2],
+        )
+
+        _fr13_fixed32_taw_exact_commit_kernel[(batch_size,)](
+            child_table,
+            child_counts,
+            current,
+            alive,
+            self_token,
+            bonus_flat,
+            source,
+            selected_token,
+            rejected_token,
+            accepted,
+            current_state,
+            alive_state,
+            output_tokens,
+            output_lens,
+            accepted_path_rows,
+            accepted_lens,
+            last_row,
+            LEVEL=level,
+            PHYSICAL_DRAFTS=physical_drafts,
+            PHYSICAL_ROWS=physical_rows,
+            FANOUT=fanout,
+            OUTPUT_CAPACITY=output_capacity,
+            PATH_CAPACITY=path_capacity,
+            num_warps=1,
+        )
+
+    _fr13_fixed32_device_assert(
+        torch.all(output_lens <= output_capacity),
+        "FR13 fixed32 output overflow",
+    )
+    _fr13_fixed32_device_assert(
+        torch.all(accepted_lens <= path_capacity),
+        "FR13 fixed32 accepted-path overflow",
+    )
+    return (
+        output_tokens,
+        output_lens,
+        accepted_path_rows,
+        accepted_lens,
+        last_row,
+        walk_cap,
+    )
+
+
+def _fr13_fixed32_taw_execute(
+    topology,
+    entry: dict[str, Any],
+    drafts,
+    target_logits,
+    tree_self_logits,
+    bonus_flat,
+    uniforms,
+    *,
+    walk_cap: int,
+) -> tuple[Any, Any, Any, Any, Any, int]:
+    """Dispatch CUDA to exact integer commit fusion and retain the CPU oracle."""
+    if target_logits.is_cuda:
+        return _fr13_fixed32_taw_execute_exact_cuda(
+            topology,
+            entry,
+            drafts,
+            target_logits,
+            tree_self_logits,
+            bonus_flat,
+            uniforms,
+            walk_cap=walk_cap,
+        )
+    return _fr13_fixed32_taw_execute_torch(
+        topology,
+        entry,
+        drafts,
+        target_logits,
+        tree_self_logits,
+        bonus_flat,
+        uniforms,
+        walk_cap=walk_cap,
+    )
+
+
 def _fr13_fixed32_publish_work(
     topology,
     *,
@@ -2511,6 +2931,7 @@ def _fr13_fixed32_publish_work(
     layout_contract: dict[str, Any],
 ) -> None:
     taw = {
+        "route": "fixed32_pytorch_exact_float_triton_integer_commit",
         "preseeded_batches": list(_FR13_FIXED32_BATCHES),
         "topology_cache_hit": True,
         "cache_misses": 0,
@@ -2532,6 +2953,9 @@ def _fr13_fixed32_publish_work(
         "residual_rows": int(topology.WALK_CAP) * batch_size,
         "row_scatter_slots": int(topology.TAW_ROW_SCATTER_SLOTS) * batch_size,
         "path_scatter_slots": int(topology.TAW_PATH_SCATTER_SLOTS) * batch_size,
+        "exact_commit_launches": int(topology.WALK_CAP),
+        "exact_commit_programs": int(topology.WALK_CAP) * batch_size,
+        "floating_sampling_reimplementation": False,
     }
     if (
         set(source_contract)
@@ -3666,6 +4090,8 @@ def _fr13_fixed32_test_boot_warm_state(topology) -> None:
         "accepted_path_rows",
         "accepted_lens",
         "last_row",
+        "exact_current",
+        "exact_alive",
     )
     saved_tensors = tuple(
         {
@@ -3794,6 +4220,7 @@ def _fr13_fixed32_test_mode_switch_batches(topology) -> None:
     callback_rows = []
     taw_by_batch = {}
     expected_taw_keys = {
+        "route",
         "preseeded_batches",
         "topology_cache_hit",
         "cache_misses",
@@ -3811,6 +4238,9 @@ def _fr13_fixed32_test_mode_switch_batches(topology) -> None:
         "residual_rows",
         "row_scatter_slots",
         "path_scatter_slots",
+        "exact_commit_launches",
+        "exact_commit_programs",
+        "floating_sampling_reimplementation",
         "source_contract_schema",
         "source_contract_sha256",
         "tensor_call_census",
@@ -3852,6 +4282,8 @@ def _fr13_fixed32_test_mode_switch_batches(topology) -> None:
         "accepted_path_shape",
         "accepted_lens_shape",
         "last_row_shape",
+        "exact_current_shape",
+        "exact_alive_shape",
     }
     fr13_fixed32_taw_set_work_callback(callback_rows.append)
     for mode in ("tail6_fixed32", "hydra27_fixed32"):
@@ -3967,6 +4399,8 @@ def _fr13_fixed32_test_mode_switch_batches(topology) -> None:
                 "accepted_path_shape": [batch_size, 16],
                 "accepted_lens_shape": [batch_size],
                 "last_row_shape": [batch_size],
+                "exact_current_shape": [batch_size],
+                "exact_alive_shape": [batch_size],
             }
             for name, expected in expected_layout_values.items():
                 if work["taw"][name] != expected:
