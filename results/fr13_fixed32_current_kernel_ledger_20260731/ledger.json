@@ -1,0 +1,294 @@
+{
+  "schema": "fr13.fixed32.current_kernel_time_ledger.v1",
+  "created_at_utc": "2026-07-31T21:34:40Z",
+  "source_cutoff_commit": "6bbafd5caee2d95081ec049faeaa2a2d1b4743a5",
+  "status": "CURRENT_PHASE_TIMING_VALID_SYMBOL_TIMING_STALE",
+  "new_measurement_performed": false,
+  "gpu_used": false,
+  "docker_used": false,
+  "standing_contract": {
+    "workload": "princeton-nlp/SWE-bench_Verified",
+    "formal_measurement_task_set": "config/fr13_fixed32/subset_b4_four.json",
+    "formal_acceptance_requires": "paired exact4 or exact16 full-wall measurement and one-sided U95",
+    "b1_diagnostic_may_use_one_real_task": true,
+    "synthetic_or_probe_timing_allowed": false
+  },
+  "evidence": {
+    "current_qrow_exact4_summary": {
+      "path": "results/fr13_fixed32_qrow16_prod_exact4_b1_20260731T182827Z/measurement_summary.json",
+      "sha256": "e776b3a977f00652f0917866911dfdb3252fda9e41f2e1538251ce303c581c73",
+      "measured_source_commit": "04c98057fa9d9e658282cf0b32422716660e1210"
+    },
+    "current_qrow_phase_source": {
+      "path": "results/fr13_fixed32_qrow16_prod_exact4_b1_20260731T182827Z/hydra_valid/deploy_speed_qrow16_prod_exact4_b1_20260731T182827Z.json",
+      "sha256": "0350e791bc825083bfc3635e11c875617fa1d3823eba5f93ebd7f392c50f18d0"
+    },
+    "current_qrow_raw_work_census": {
+      "path": "output/fr13_fixed32_qrow16_prod_exact4_b1_20260731T182827Z/hydra27_fixed32_qrow16_prod_exact4_b1_20260731T182827Z/logs/fr13_fixed32_work_census.jsonl",
+      "sha256": "d1ace7b95781133219b707107598c2e19c6fbcde7377e477ab2c4cd8574ba2ae",
+      "bytes": 33547563,
+      "lines": 5149,
+      "published_in_this_artifact": false
+    },
+    "historical_nsys": {
+      "path": "results/fr13_fixed32_b1_nsys_20260731T013952Z_curated/nsys_attribution.json",
+      "sha256": "685c410a0ba09d00c8b244bfa06809530337cea383b88fa92a5da1013eadf2d0",
+      "measured_source_commit": "1a7a765447c8ce6068e0dd5d3a344d58ace85f2b"
+    },
+    "corrected_floor": {
+      "path": "results/fr13_hardware_floor_correction_20260731/floor_ledger.json",
+      "sha256": "1ae91dec2c31ba33c8d9d4fb78958a903e096d8892a0e3c9792e2eba24d97453"
+    },
+    "streamk_build": {
+      "path": "results/fr13_fixed32_cutlass_streamk_build_20260731/manifest.json",
+      "sha256": "4ab1a14502f4eb61b3ebabaf4bcc7b91edf681c3e3bd694c80140b733394ce5a"
+    }
+  },
+  "corrected_floor": {
+    "mandatory_weight_bytes": 32666638208,
+    "bandwidth_bytes_per_second": 273000000000,
+    "floor_ms_per_event": 119.658015414,
+    "acceptance_cap_ms_per_event": 137.6067177261,
+    "component_lower_bounds_ms": {
+      "target_model": 89.31281863736264,
+      "verifier_head": 9.314273992673993,
+      "five_mtp_forwards": 8.73992205128205,
+      "five_64k_draft_heads": 12.291000732600732
+    },
+    "nonweight_costs_included": false
+  },
+  "current_measured_qrow_exact4_b1_hydra": {
+    "measurement_class": "valid_single_exact4_arm_for_tuning_not_formal_paired_acceptance",
+    "tasks": 4,
+    "forward_events": 5148,
+    "accepted_drafts_per_event": 4.753885003885004,
+    "committed_tokens_per_event": 5.753885003885004,
+    "full_wall_tps": 24.71814671763722,
+    "phase_ms_per_event": {
+      "sfwd_gpu": 159.61926324365674,
+      "dfwd_gpu": 36.813368133731736,
+      "cfwd_gpu": 20.677390556513288,
+      "gpu_components": 217.11002193390177,
+      "noncomponent_wall_residual": 15.669768137471785,
+      "full_step_wall": 232.77979007137355
+    },
+    "floor_result": {
+      "wall_floor_ratio": 1.9453756546603922,
+      "gap_to_1_15x_cap_ms": 95.17307234527357,
+      "required_wall_reduction_percent": 40.885453293042396,
+      "one_sided_u95_produced": false
+    },
+    "phase_excess_accounting": {
+      "classification": "accounting_inference_not_symbol_timing",
+      "sfwd_minus_target_weight_floor_ms": 70.30644460629411,
+      "dfwd_minus_mtp_and_draft_head_weight_floors_ms": 15.782445349848953,
+      "cfwd_with_no_assigned_weight_floor_ms": 20.677390556513288,
+      "wall_residual_minus_verifier_head_weight_floor_ms": 6.355494144797792,
+      "total_wall_minus_weight_floor_ms": 113.12177465737355
+    },
+    "current_work_counts_without_duration": {
+      "events_with_identical_count_tuple": 5148,
+      "qrow16_target_attention_layers": 16,
+      "tree_attention_calls_per_event": 16,
+      "tree_attention_q_rows_per_event": 512,
+      "tree_gdn_launches_per_event": 96,
+      "tree_gdn_nodes_per_event": 1536,
+      "committer_graph_replays_per_event": 1,
+      "committer_fused_layer_calls_per_event": 48,
+      "conv_commit_direct_launches_per_event": 1,
+      "taw_full_vocab_softmax_calls_per_event": 24,
+      "taw_exact_commit_launches_per_event": 12
+    },
+    "symbol_duration_coverage": {
+      "post_qrow_nsys": false,
+      "post_qrow_kineto": false,
+      "current_individual_kernel_ms_available": false
+    },
+    "observed_vs_valid_hydra_baseline": {
+      "wall_delta_ms": -6.24684416735488,
+      "wall_delta_percent": -2.613451085587315,
+      "gpu_component_delta_ms": -5.448386403844978,
+      "classification": "valid_arm_observation_not_isolated_qrow_kernel_causality"
+    }
+  },
+  "historical_nsys_symbol_attribution": {
+    "classification": "real_workload_attribution_only_stale_for_current_stack",
+    "reasons_stale": [
+      "measured before Qrow16 production",
+      "measured source commit differs from current Qrow exact4 source",
+      "Tail6 profile versus current Hydra27 phase point",
+      "capture completed only two tasks before its bounded stop",
+      "not a wall-TPS or acceptance measurement"
+    ],
+    "complete_step_ranges": 881,
+    "phase_envelope_ms_per_event": {
+      "sfwd_capture_boundary_adjusted": 174.813673,
+      "dfwd": 47.435717,
+      "cfwd": 22.755077,
+      "postprocess": 12.153933,
+      "residual_envelope": 13.661328,
+      "step_envelope": 271.018155
+    },
+    "symbols": {
+      "sfwd": [
+        {
+          "symbol_key": "cutlass_fp8_blockwise_target_gemm",
+          "symbol_fragment": "cutlass_3x_gemm_fp8_blockwise...KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+          "historical_ms_per_event": 112.31295398412699
+        },
+        {
+          "symbol_key": "fa2_splitkv_tree_attention",
+          "symbol_fragment": "flash_fwd_splitkv_kernel...causal=false",
+          "historical_ms_per_event": 24.708600648526076
+        },
+        {
+          "symbol_key": "tree_gdn_path",
+          "symbol_fragment": "_tree_gdn_path_kernel",
+          "historical_ms_per_event": 14.019520105442178
+        },
+        {
+          "symbol_key": "conv_index_select",
+          "symbol_fragment": "indexSelectSmallIndex<c10::BFloat16,long,unsigned int,-1,-1,-1>",
+          "historical_ms_per_event": 5.938123764172335
+        },
+        {
+          "symbol_key": "conv_index_copy",
+          "symbol_fragment": "index_copy_kernel_impl<OpaqueType<2>>",
+          "historical_ms_per_event": 4.591678766439909
+        },
+        {
+          "symbol_key": "conv_writeback",
+          "symbol_fragment": "_fr13_conv_wb_fused_batched_kernel",
+          "historical_ms_per_event": 4.48428672335601
+        }
+      ],
+      "dfwd": [
+        {
+          "symbol_key": "bf16_draft_heads",
+          "symbol_fragment": "internal::gemvx::kernel...cublasGemvParamsEx",
+          "historical_ms_per_event": 26.227316013620886
+        },
+        {
+          "symbol_key": "cutlass_fp8_blockwise_mtp_gemm",
+          "symbol_fragment": "cutlass_3x_gemm_fp8_blockwise...KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+          "historical_ms_per_event": 8.514284570942111
+        },
+        {
+          "symbol_key": "unified_attention",
+          "symbol_fragment": "kernel_unified_attention_2d",
+          "historical_ms_per_event": 6.967564062429058
+        },
+        {
+          "symbol_key": "nvjet_64x112",
+          "symbol_fragment": "nvjet_sm121_tst_mma_64x112x64_4_16x112x64_tmaAB_bz_TNNN",
+          "historical_ms_per_event": 2.556116263337117
+        },
+        {
+          "symbol_key": "fa2_causal_splitkv",
+          "symbol_fragment": "flash_fwd_splitkv_kernel...causal=true",
+          "historical_ms_per_event": 1.2495999625425653
+        }
+      ],
+      "cfwd": [
+        {
+          "symbol_key": "gdn_state_commit",
+          "symbol_fragment": "fused_sigmoid_gating_delta_rule_update_kernel",
+          "historical_ms_per_event": 4.082146887627696
+        },
+        {
+          "symbol_key": "float_softmax",
+          "symbol_fragment": "cunn_SoftMaxForward<4,float,float,float>",
+          "historical_ms_per_event": 2.304176125993189
+        },
+        {
+          "symbol_key": "float_add",
+          "symbol_fragment": "vectorized_elementwise_kernel<4,CUDAFunctor_add<float>>",
+          "historical_ms_per_event": 1.6006146095346199
+        },
+        {
+          "symbol_key": "scalar_compare",
+          "symbol_fragment": "compare_scalar_kernel<long>",
+          "historical_ms_per_event": 1.3556764824063563
+        },
+        {
+          "symbol_key": "long_fill",
+          "symbol_fragment": "vectorized_elementwise_kernel<2,FillFunctor<long>>",
+          "historical_ms_per_event": 1.2528780976163452
+        },
+        {
+          "symbol_key": "float_multiply",
+          "symbol_fragment": "BinaryFunctor<float,float,float,MulFunctor<float>>",
+          "historical_ms_per_event": 1.1766779557321225
+        },
+        {
+          "symbol_key": "topk_topp",
+          "symbol_fragment": "_topk_topp_kernel",
+          "historical_ms_per_event": 1.1077673473325764
+        }
+      ]
+    },
+    "listed_symbol_coverage_ms": {
+      "sfwd": 166.0551639920635,
+      "sfwd_unlisted_envelope_remainder": 8.758509007936482,
+      "dfwd": 45.514880872871736,
+      "dfwd_unlisted_envelope_remainder": 1.9208361271282612,
+      "cfwd": 12.879937506242905,
+      "cfwd_unlisted_envelope_remainder": 9.875139493757095
+    },
+    "comparison_rule": "Do not subtract historical symbol or phase times from current Qrow timers to claim causal speedups."
+  },
+  "candidate_evidence_state": {
+    "qrow16": {
+      "real_b1_production_engaged": true,
+      "valid_exact4_phase_and_wall_timing": true,
+      "current_symbol_timing": false
+    },
+    "bm8": {
+      "real_b1_stock_served_byte_pass": true,
+      "production_source_ready": true,
+      "exact4_speed_timing": false,
+      "historical_full_group_ceiling_ms": 6.967564062429058
+    },
+    "b4_bv64": {
+      "source_and_gate_wiring_ready_at_cutoff": true,
+      "correctness_result_included": false,
+      "timing_result_included": false
+    },
+    "draft_head_m32": {
+      "source_only": true,
+      "modeled_recovery_ms": 10.1891,
+      "real_byte_gate_pass": false,
+      "built_deployment_candidate": false
+    },
+    "cfwd_gdn_layer_batch": {
+      "source_only": true,
+      "historical_impossible_group_deletion_ceiling_ms": 4.082146887627696,
+      "real_byte_gate_pass": false
+    }
+  },
+  "next_runnable_kernel": {
+    "name": "CUTLASS fixed32 streamk_coop128 target GEMM",
+    "selection_reason": "largest quantified candidate with a built deployment binary and exhaustive real-B1 same-process byte gate already wired",
+    "deployment_binary_sha256": "fa9395754b13de26dbed38dfc551614dbb109058764426564dcbb3c77fdd6ea9",
+    "deployment_binary_bytes": 111383840,
+    "build_and_additive_abi_audit_passed": true,
+    "gpu_correctness_run": false,
+    "timing_run": false,
+    "model": {
+      "basis": "historical pre-Qrow target-CUTLASS attribution plus ideal equivalent-byte tail balance",
+      "modeled_max_recovery_ms_per_event": 10.923627,
+      "model_is_timing_evidence": false,
+      "modeled_wall_if_fully_realized_ms": 221.85616307137354,
+      "modeled_floor_ratio_if_fully_realized": 1.8540852637726126,
+      "modeled_residual_gap_to_cap_ms": 84.24944534527356,
+      "fraction_of_current_cap_gap_modeled": 0.11477644601374984
+    },
+    "required_run_order": [
+      "Run the existing same-process all-byte gate on an allowed real SWE-Verified B1 task; serve stock output.",
+      "Reject on any differing byte, missing real projection shape, missing Stream-K identity, or vacuous capture.",
+      "Only after a byte-clean result, run matched control and candidate on the standing exact4 B1 task set with full wall TPS and phase timers.",
+      "Collect a fresh post-Qrow symbol profile during real exact4 traffic before claiming which kernel supplied any observed wall delta.",
+      "Do not run exact16 until a meaningful floor-ratio breakthrough exists."
+    ]
+  }
+}
