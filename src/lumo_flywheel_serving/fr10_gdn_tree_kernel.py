@@ -454,6 +454,9 @@ _FR13_FIXED32_SUBTREE_LEVELS = (
         ((21,), 14),
     ),
 )
+_FR13_FIXED32_EXPORT_NODES = (0, 1, 4, 9, 14)
+_FR13_FIXED32_EXPORT_SLOTS = len(_FR13_FIXED32_EXPORT_NODES)
+_FR13_FIXED32_MAX_BATCH = 4
 _FR13_FIXED32_PARENT_SHA256 = (
     "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd"
 )
@@ -702,9 +705,36 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
     levels = _subtree_decompose(parent_tuple)
     _validate_subtree_decomposition(parent_tuple, levels)
     fixed_contract = None
+    fixed32_parent_slots = None
     if parent_tuple == _FR13_FIXED32_PARENT:
         fixed_contract = _fr13_fixed32_schedule_contract(levels)
         schedule = "fixed32"
+        root_path = tuple(int(node) for node in levels[0][0][0])
+        if root_path != _FR13_FIXED32_EXPORT_NODES:
+            raise RuntimeError(
+                "FR13_FIXED32: root path no longer matches compact export slots "
+                f"root_path={root_path!r} "
+                f"export_nodes={_FR13_FIXED32_EXPORT_NODES!r}"
+            )
+        export_slot = {
+            node: slot for slot, node in enumerate(_FR13_FIXED32_EXPORT_NODES)
+        }
+        fixed32_parent_slots = []
+        for level in levels:
+            slots = []
+            for _path, parent_node in level:
+                if int(parent_node) < 0:
+                    slots.append(-1)
+                elif int(parent_node) in export_slot:
+                    slots.append(export_slot[int(parent_node)])
+                else:
+                    raise RuntimeError(
+                        "FR13_FIXED32: path parent has no compact export slot "
+                        f"parent={int(parent_node)}"
+                    )
+            fixed32_parent_slots.append(
+                torch.tensor(slots, dtype=torch.int32, device=device)
+            )
     elif parent_tuple == _FR13_HYDRA23_PARENT:
         schedule = "hydra23_floor"
     else:
@@ -751,6 +781,7 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
         "parent": parent_tuple,
         "schedule": schedule,
         "fixed32_contract": fixed_contract,
+        "fixed32_parent_slots": fixed32_parent_slots,
         "route_armed": route_armed,
         "selfcheck_armed": selfcheck_armed,
         "engaged_announced": False,
@@ -4357,6 +4388,244 @@ def _tree_gdn_path_kernel(
         _fl_mask = (pid_vh == 0) & (pid_v == 0) & (pid_path == 0)
         tl.store(flags_ptr + 0, 1, mask=_fl_mask)
         tl.store(flags_ptr + 1, FLAGS_ROWS, mask=_fl_mask)
+
+
+@triton.jit
+def _tree_gdn_path_kernel_fixed32_batch(
+    q,
+    k,
+    v,
+    g,
+    beta,
+    raw_a,
+    raw_b,
+    A_log,
+    dt_bias,
+    h0,
+    h0_indices,
+    h0_num_accepted_tokens,
+    invocation_counter,
+    path_nodes,
+    path_parent_slots,
+    path_lengths,
+    state_export,
+    out,
+    ring_k,
+    ring_v,
+    ring_a,
+    ring_b,
+    flags_ptr,
+    N_ACTUAL: tl.constexpr,
+    NUM_KH: tl.constexpr,
+    NUM_VH: tl.constexpr,
+    DIM_K: tl.constexpr,
+    DIM_V: tl.constexpr,
+    BLOCK_V: tl.constexpr,
+    OUTPUT_SCALE: tl.constexpr,
+    USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
+    H0_INDEX_ROW: tl.constexpr,
+    H0_INDEX_BATCH_STRIDE: tl.constexpr,
+    H0_BATCH_INDEX: tl.constexpr,
+    H0_ACCEPTED_BATCH_STRIDE: tl.constexpr,
+    H0_BANK_STRIDE: tl.constexpr,
+    H0_USE_ACCEPTED_COLUMN: tl.constexpr,
+    RAW_GATING: tl.constexpr,
+    COUNT_INVOCATION: tl.constexpr,
+    SCAN_ALIGN: tl.constexpr,
+    MAX_PATH_LEN: tl.constexpr,
+    NUM_PATHS: tl.constexpr,
+    BATCH_SIZE: tl.constexpr,
+    EXPORT_SLOTS: tl.constexpr,
+    STATE_SOURCE: tl.constexpr,
+    EXPORT_MODE: tl.constexpr,
+    RING_EXPORT: tl.constexpr = False,
+    FLAGS_EXPORT: tl.constexpr = False,
+    FLAGS_ROWS: tl.constexpr = 0,
+):
+    """Fixed32 path scan with request folded into path-grid axis 2.
+
+    This is separate from ``_tree_gdn_path_kernel`` so the deployed B1 and
+    generic Triton source/codegen stay untouched. Each request still executes
+    the same path-local ``_gdn_node_step`` sequence; only independent request
+    programs share the two level launches.
+    """
+    pid_vh = tl.program_id(0)
+    pid_v = tl.program_id(1)
+    pid_global_path = tl.program_id(2)
+    pid_batch = pid_global_path // NUM_PATHS
+    pid_path = pid_global_path - pid_batch * NUM_PATHS
+    if COUNT_INVOCATION:
+        tl.atomic_add(
+            invocation_counter,
+            1,
+            sem="relaxed",
+            mask=(pid_vh == 0) & (pid_v == 0) & (pid_path == 0),
+        )
+    head_group = NUM_VH // NUM_KH
+    pid_kh = pid_vh // head_group
+    offs_k = tl.arange(0, DIM_K)
+    offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
+    v_mask = offs_v < DIM_V
+
+    if STATE_SOURCE != 2:
+        h0_column = 0
+        if H0_USE_ACCEPTED_COLUMN:
+            accepted_index = (
+                H0_BATCH_INDEX + pid_batch * H0_ACCEPTED_BATCH_STRIDE
+            )
+            h0_column = tl.maximum(
+                tl.load(h0_num_accepted_tokens + accepted_index).to(tl.int64)
+                - 1,
+                0,
+            )
+        h0_index_row = H0_INDEX_ROW + pid_batch * H0_INDEX_BATCH_STRIDE
+        h0_index = tl.load(h0_indices + h0_index_row + h0_column)
+        h0_base = h0 + h0_index * H0_BANK_STRIDE
+        b_h0 = tl.load(
+            h0_base
+            + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K
+            + offs_k[None, :],
+            mask=v_mask[:, None],
+            other=0.0,
+        ).to(tl.float32)
+    if STATE_SOURCE != 1:
+        parent_slot = tl.load(path_parent_slots + pid_path)
+        export_row = (
+            pid_batch.to(tl.int64) * EXPORT_SLOTS
+            + tl.maximum(parent_slot, 0).to(tl.int64)
+        )
+        par_state = tl.load(
+            state_export
+            + ((export_row * NUM_VH + pid_vh) * DIM_V
+               + offs_v[:, None]) * DIM_K
+            + offs_k[None, :],
+            mask=(parent_slot >= 0) & v_mask[:, None],
+            other=0.0,
+        )
+    if STATE_SOURCE == 1:
+        state_i = b_h0
+    elif STATE_SOURCE == 2:
+        state_i = par_state
+    else:
+        state_i = tl.where(parent_slot >= 0, par_state, b_h0)
+
+    path_len = tl.load(path_lengths + pid_path)
+    for i in tl.range(0, path_len):
+        node = tl.load(path_nodes + pid_path * MAX_PATH_LEN + i)
+        n_ok = (node >= 0) & (node < N_ACTUAL) & (pid_batch < BATCH_SIZE)
+        node_c = tl.maximum(node, 0)
+        global_node = pid_batch * N_ACTUAL + node_c
+        b_q = tl.load(
+            q + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
+            mask=n_ok,
+            other=0.0,
+        ).to(tl.float32)
+        b_k_raw = tl.load(
+            k + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
+            mask=n_ok,
+            other=0.0,
+        )
+        b_k = b_k_raw.to(tl.float32)
+        b_v_raw = tl.load(
+            v + (global_node * NUM_VH + pid_vh) * DIM_V + offs_v,
+            mask=n_ok & v_mask,
+            other=0.0,
+        )
+        b_v = b_v_raw.to(tl.float32)
+        if RING_EXPORT:
+            tl.store(
+                ring_k + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
+                b_k_raw,
+                mask=n_ok
+                & (pid_v == 0)
+                & (pid_vh % head_group == 0),
+            )
+            tl.store(
+                ring_v
+                + (global_node * NUM_VH + pid_vh) * DIM_V
+                + offs_v,
+                b_v_raw,
+                mask=n_ok & v_mask,
+            )
+        b_b = tl.load(
+            beta + global_node * NUM_VH + pid_vh, mask=n_ok, other=0.0
+        ).to(tl.float32)
+        b_g = tl.load(
+            g + global_node * NUM_VH + pid_vh, mask=n_ok, other=0.0
+        ).to(tl.float32)
+        b_raw_a = b_g
+        b_raw_b = b_b
+        b_a_log = b_g
+        b_dt_bias = b_b
+        if RAW_GATING:
+            b_raw_b_in = tl.load(
+                raw_b + global_node * NUM_VH + pid_vh,
+                mask=n_ok,
+                other=0.0,
+            )
+            b_raw_b = b_raw_b_in.to(tl.float32)
+            b_raw_a_in = tl.load(
+                raw_a + global_node * NUM_VH + pid_vh,
+                mask=n_ok,
+                other=0.0,
+            )
+            b_raw_a = b_raw_a_in.to(tl.float32)
+            if RING_EXPORT:
+                tl.store(
+                    ring_a + global_node * NUM_VH + pid_vh,
+                    b_raw_a_in,
+                    mask=n_ok & (pid_v == 0),
+                )
+                tl.store(
+                    ring_b + global_node * NUM_VH + pid_vh,
+                    b_raw_b_in,
+                    mask=n_ok & (pid_v == 0),
+                )
+            b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
+            b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
+        new_state, out_i = _gdn_node_step(
+            state_i,
+            b_q,
+            b_k,
+            b_v,
+            b_b,
+            b_g,
+            b_raw_a,
+            b_raw_b,
+            b_a_log,
+            b_dt_bias,
+            OUTPUT_SCALE=OUTPUT_SCALE,
+            USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
+            RAW_GATING=RAW_GATING,
+            SCAN_ALIGN=SCAN_ALIGN,
+        )
+        state_i = tl.where(n_ok, new_state, state_i)
+        tl.store(
+            out + (global_node * NUM_VH + pid_vh) * DIM_V + offs_v,
+            out_i,
+            mask=n_ok & v_mask,
+        )
+        if EXPORT_MODE == 1:
+            compact_export_row = (
+                pid_batch.to(tl.int64) * EXPORT_SLOTS + i
+            )
+            tl.store(
+                state_export
+                + ((compact_export_row * NUM_VH + pid_vh) * DIM_V
+                   + offs_v[:, None]) * DIM_K
+                + offs_k[None, :],
+                state_i,
+                mask=n_ok & v_mask[:, None],
+            )
+    if FLAGS_EXPORT:
+        flag_writer = (
+            (pid_vh == 0)
+            & (pid_v == 0)
+            & (pid_batch == 0)
+            & (pid_path == 0)
+        )
+        tl.store(flags_ptr + 0, 1, mask=flag_writer)
+        tl.store(flags_ptr + 1, FLAGS_ROWS, mask=flag_writer)
 
 
 @triton.jit
@@ -8575,4 +8844,301 @@ def launch_tree_gdn_prepared(
         _assert_counter_once(_counter_before, "FR13_HC_INTERNAL")
     else:
         _launch(out, _parent_gather)
+    return out, None
+
+
+def launch_tree_gdn_prepared_fixed32_batch(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    g: torch.Tensor,
+    beta: torch.Tensor,
+    h0: torch.Tensor,
+    *,
+    batch_size: int,
+    n_actual: int,
+    n_pad: int,
+    strict_mask: torch.Tensor,
+    out: torch.Tensor,
+    h0_indices: torch.Tensor,
+    h0_num_accepted_tokens: torch.Tensor,
+    raw_a: torch.Tensor,
+    raw_b: torch.Tensor,
+    A_log: torch.Tensor,
+    dt_bias: torch.Tensor,
+    output_scale: float = 1.0,
+    use_qk_l2norm_in_kernel: bool = False,
+    h0_index_row: int = 0,
+    h0_batch_index: int = 0,
+    h0_use_accepted_column: bool = False,
+    invocation_counter: torch.Tensor | None = None,
+    ring_k: torch.Tensor | None = None,
+    ring_v: torch.Tensor | None = None,
+    ring_a: torch.Tensor | None = None,
+    ring_b: torch.Tensor | None = None,
+    staging_flags: torch.Tensor | None = None,
+    staging_rows: int = 0,
+) -> tuple[torch.Tensor, None]:
+    """Launch the exact fixed32 path scan in two kernels for B1-B4.
+
+    Request programs are folded into path-grid axis 2. The existing 32-row
+    subtree export scratch is reused as ``[batch, 5]`` compact parent slots,
+    so B4 consumes 20 rows and does not allocate inside graph capture.
+    """
+    batch = int(batch_size)
+    if batch < 1 or batch > _FR13_FIXED32_MAX_BATCH:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: batch_size must be in [1, 4], "
+            f"got {batch}"
+        )
+    if _FR13_FIXED32_MODE is None:
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN requires an armed fixed32 runtime"
+        )
+    if int(n_actual) != len(_FR13_FIXED32_PARENT) or int(n_pad) != 32:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN requires the exact 32-row physical tree, "
+            f"got n_actual={n_actual} n_pad={n_pad}"
+        )
+    rows = batch * int(n_actual)
+    tensors_with_rows = {
+        "q": q,
+        "k": k,
+        "v": v,
+        "g": g,
+        "beta": beta,
+        "raw_a": raw_a,
+        "raw_b": raw_b,
+        "out": out,
+    }
+    for name, tensor in tensors_with_rows.items():
+        if tensor.shape[0] < rows:
+            raise ValueError(
+                f"FR13_FIXED32_BATCH_GDN: {name} has {tensor.shape[0]} rows, "
+                f"needs {rows}"
+            )
+        if not tensor.is_contiguous():
+            raise ValueError(
+                f"FR13_FIXED32_BATCH_GDN: {name} must be contiguous"
+            )
+
+    if q.ndim != 3 or k.shape != q.shape:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: q/k must have equal [B*32, KH, DK] "
+            f"shapes, got q={tuple(q.shape)} k={tuple(k.shape)}"
+        )
+    if v.ndim != 3:
+        raise ValueError(
+            f"FR13_FIXED32_BATCH_GDN: v must be rank 3, got {tuple(v.shape)}"
+        )
+    num_kh = int(q.shape[1])
+    num_vh = int(v.shape[1])
+    dim_k = int(q.shape[2])
+    dim_v = int(v.shape[2])
+    if num_vh % num_kh != 0:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: value heads must be a multiple of "
+            f"q/k heads, got {num_vh}/{num_kh}"
+        )
+    if v.shape[2] != dim_v or out.shape[1:] != (num_vh, dim_v):
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: v/out shape mismatch "
+            f"v={tuple(v.shape)} out={tuple(out.shape)}"
+        )
+    gate_shape = (num_vh,)
+    for name, tensor in (
+        ("g", g),
+        ("beta", beta),
+        ("raw_a", raw_a),
+        ("raw_b", raw_b),
+    ):
+        if tensor.shape[1:] != gate_shape:
+            raise ValueError(
+                f"FR13_FIXED32_BATCH_GDN: {name} trailing shape must be "
+                f"{gate_shape}, got {tuple(tensor.shape)}"
+            )
+    if A_log.numel() < num_vh or dt_bias.numel() < num_vh:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: A_log/dt_bias do not cover all value "
+            f"heads ({A_log.numel()}/{dt_bias.numel()} < {num_vh})"
+        )
+    if h0.ndim != 4 or h0.shape[1:] != (num_vh, dim_v, dim_k):
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: h0 bank shape must be "
+            f"(*, {num_vh}, {dim_v}, {dim_k}), got {tuple(h0.shape)}"
+        )
+    if h0_indices.ndim != 2 or h0_indices.shape[0] < batch:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: h0_indices must cover [B, SPEC_COLS], "
+            f"got {tuple(h0_indices.shape)} for B={batch}"
+        )
+    if h0_num_accepted_tokens.ndim != 1:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: accepted-token counts must be rank 1"
+        )
+    last_accepted_index = (
+        int(h0_batch_index) + (batch - 1) * int(h0_num_accepted_tokens.stride(0))
+    )
+    if last_accepted_index >= h0_num_accepted_tokens.numel():
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: accepted-token counts do not cover "
+            f"batch index {last_accepted_index}"
+        )
+    last_h0_row = int(h0_index_row) + (batch - 1) * int(h0_indices.stride(0))
+    if last_h0_row < 0 or last_h0_row >= h0_indices.numel():
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: h0 index rows do not cover flattened "
+            f"row {last_h0_row}"
+        )
+
+    ring_export = ring_k is not None
+    if ring_export:
+        if ring_v is None or ring_a is None or ring_b is None:
+            raise ValueError(
+                "FR13_FIXED32_BATCH_GDN: ring export requires all four rings"
+            )
+        expected_ring_shapes = (
+            ("ring_k", ring_k, (num_kh, dim_k), k.dtype),
+            ("ring_v", ring_v, (num_vh, dim_v), v.dtype),
+            ("ring_a", ring_a, (num_vh,), raw_a.dtype),
+            ("ring_b", ring_b, (num_vh,), raw_b.dtype),
+        )
+        for name, tensor, trailing_shape, dtype in expected_ring_shapes:
+            assert tensor is not None
+            if (
+                tensor.shape[0] < rows
+                or tensor.shape[1:] != trailing_shape
+                or tensor.dtype != dtype
+                or not tensor.is_contiguous()
+            ):
+                raise ValueError(
+                    f"FR13_FIXED32_BATCH_GDN: invalid {name} shape/dtype/layout "
+                    f"{tuple(tensor.shape)}/{tensor.dtype}"
+                )
+    else:
+        ring_k = ring_v = ring_a = ring_b = strict_mask
+
+    subtree_state = subtree_get(
+        n_actual, num_vh, dim_v, dim_k, q.device
+    )
+    contract = subtree_state.get("fixed32_contract")
+    parent_slots = subtree_state.get("fixed32_parent_slots")
+    if (
+        subtree_state.get("schedule") != "fixed32"
+        or contract is None
+        or int(contract.get("launches", -1)) != 2
+        or parent_slots is None
+        or len(parent_slots) != 2
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN: exact two-level preseed contract missing"
+        )
+    needed_export_rows = batch * _FR13_FIXED32_EXPORT_SLOTS
+    if int(subtree_state["export"].shape[0]) < needed_export_rows:
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN: compact export scratch capacity "
+            f"{subtree_state['export'].shape[0]} < {needed_export_rows}"
+        )
+
+    geom = _read_tree_gdn_geom_override()
+    block_v = BV
+    num_warps = _DEPLOYED_NUM_WARPS
+    extra_launch_kwargs: dict = {}
+    if geom is not None:
+        block_v = int(geom.get("BV", block_v))
+        num_warps = int(geom.get("num_warps", num_warps))
+        if "num_stages" in geom:
+            extra_launch_kwargs["num_stages"] = int(geom["num_stages"])
+    if block_v > 8:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: fixed32 requires BLOCK_V<=8, "
+            f"got {block_v}"
+        )
+
+    count_invocation = invocation_counter is not None
+    if invocation_counter is None:
+        invocation_counter = strict_mask
+    flags_export = staging_flags is not None
+    flags_arg = staging_flags if flags_export else strict_mask
+    flags_rows = int(staging_rows) if flags_export else 0
+    if flags_export and flags_rows != batch:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: staging_rows must equal batch_size, "
+            f"got {flags_rows}/{batch}"
+        )
+
+    for level_index, (
+        nodes,
+        _parents,
+        max_path_len,
+        num_paths,
+        path_lengths,
+    ) in enumerate(subtree_state["levels"]):
+        state_source = 1 if level_index == 0 else 2
+        export_mode = 1 if level_index == 0 else 2
+        _tree_gdn_path_kernel_fixed32_batch[
+            (num_vh, triton.cdiv(dim_v, block_v), batch * num_paths)
+        ](
+            q,
+            k,
+            v,
+            g,
+            beta,
+            raw_a,
+            raw_b,
+            A_log,
+            dt_bias,
+            h0,
+            h0_indices,
+            h0_num_accepted_tokens,
+            invocation_counter,
+            nodes,
+            parent_slots[level_index],
+            path_lengths,
+            subtree_state["export"],
+            out,
+            ring_k,
+            ring_v,
+            ring_a,
+            ring_b,
+            flags_arg,
+            N_ACTUAL=n_actual,
+            NUM_KH=num_kh,
+            NUM_VH=num_vh,
+            DIM_K=dim_k,
+            DIM_V=dim_v,
+            BLOCK_V=block_v,
+            OUTPUT_SCALE=output_scale,
+            USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+            H0_INDEX_ROW=int(h0_index_row),
+            H0_INDEX_BATCH_STRIDE=int(h0_indices.stride(0)),
+            H0_BATCH_INDEX=int(h0_batch_index),
+            H0_ACCEPTED_BATCH_STRIDE=int(
+                h0_num_accepted_tokens.stride(0)
+            ),
+            H0_BANK_STRIDE=int(h0.stride(0)),
+            H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
+            RAW_GATING=True,
+            COUNT_INVOCATION=count_invocation and level_index == 0,
+            SCAN_ALIGN=scan_align_on(),
+            MAX_PATH_LEN=max_path_len,
+            NUM_PATHS=num_paths,
+            BATCH_SIZE=batch,
+            EXPORT_SLOTS=_FR13_FIXED32_EXPORT_SLOTS,
+            STATE_SOURCE=state_source,
+            EXPORT_MODE=export_mode,
+            RING_EXPORT=ring_export,
+            FLAGS_EXPORT=flags_export and level_index == 0,
+            FLAGS_ROWS=flags_rows,
+            num_warps=num_warps,
+            **extra_launch_kwargs,
+        )
+    if not subtree_state.get("batch_engaged_announced", False):
+        subtree_state["batch_engaged_announced"] = True
+        print(
+            "[FR13_FIXED32_BATCH_GDN ENGAGED] "
+            f"batch={batch} launches=2 path_grids=({batch},{11 * batch}) "
+            f"export_rows={needed_export_rows}",
+            flush=True,
+        )
     return out, None

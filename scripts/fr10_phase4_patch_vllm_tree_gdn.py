@@ -6122,7 +6122,7 @@ def _patch_gdn_linear() -> bool:
         "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n",
         (
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
-            "from lumo_flywheel_serving.fr10_gdn_tree_kernel import gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_state_linear_remap, subtree_get\n"
+            "from lumo_flywheel_serving.fr10_gdn_tree_kernel import gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_gdn_prepared_fixed32_batch, launch_tree_state_linear_remap, subtree_get\n"
             "from lumo_flywheel_serving.fr13_replay_conv_remap import replay_conv_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
             "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, conv_wb_staging_get, freeze_conv_wb_staging_sources, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, launch_conv_state_writeback, launch_conv_state_writeback_batched, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
@@ -10450,74 +10450,170 @@ def _fr13_conv_subop_mab(
                             self._fr13_replay_ring_b[fr10_b, :tree_n].copy_(
                                 b[start:end]
                             )
-                    tree_out, _ = launch_tree_gdn_prepared(
-                        staging_flags=(
-                            self._fr13_replay_flags
-                            if _FR13_FLAGS_INKERNEL else None
-                        ),
-                        staging_rows=int(attn_metadata.num_spec_decodes),
-                        q=query_spec[0, start:end].contiguous(),
-                        k=key_spec[0, start:end].contiguous(),
-                        v=value_tree[start:end].contiguous(),
-                        g=g_tree[start:end].contiguous(),
-                        beta=beta_tree[start:end].contiguous(),
-                        raw_a=a[start:end].contiguous(),
-                        raw_b=b[start:end].contiguous(),
-                        A_log=self.A_log,
-                        dt_bias=self.dt_bias,
-                        h0=ssm_state,
-                        h0_indices=spec_state_indices_tensor,
-                        h0_num_accepted_tokens=_fr10_accepted_lens_tensor,
-                        h0_is_bank=True,
-                        h0_index_row=fr10_b * spec_state_indices_tensor.size(-1),
-                        h0_batch_index=fr10_b,
-                        # STATELESS-TREE: FR13_TREE_RUNROW_INIT -> seed the scan h0
-                        # from col 0 (running row) instead of accepted col nacc-1.
-                        h0_use_accepted_column=(
-                            os.environ.get("FR13_TREE_RUNROW_INIT", "1") != "1"
-                        ),
-                        n_actual=tree_n,
-                        n_pad=tree_n_pad,
-                        strict_mask=attn_metadata.fr10_tree_strict_mask,
-                        visible_mask=attn_metadata.fr10_tree_visible_mask,
-                        out=core_attn_out_spec[0, start:end],
-                        state=tree_state,
-                        output_scale=self.head_k_dim**-0.5,
-                        use_qk_l2norm_in_kernel=True,
-                        # FR13_RING_EXPORT: in-kernel ring staging (see the
-                        # gated aten-copy block above). Self-contained gate:
-                        # replay route must be on (rings exist) AND the flag
-                        # armed; None => RING_EXPORT constexpr-dead in-kernel.
-                        ring_k=(
-                            self._fr13_replay_ring_k[fr10_b]
-                            if _fr13_replay_route_on
-                            and os.environ.get("FR13_RING_EXPORT", "1") == "1"
-                            else None
-                        ),
-                        ring_v=(
-                            self._fr13_replay_ring_v[fr10_b]
-                            if _fr13_replay_route_on
-                            and os.environ.get("FR13_RING_EXPORT", "1") == "1"
-                            else None
-                        ),
-                        ring_a=(
-                            self._fr13_replay_ring_a[fr10_b]
-                            if _fr13_replay_route_on
-                            and os.environ.get("FR13_RING_EXPORT", "1") == "1"
-                            else None
-                        ),
-                        ring_b=(
-                            self._fr13_replay_ring_b[fr10_b]
-                            if _fr13_replay_route_on
-                            and os.environ.get("FR13_RING_EXPORT", "1") == "1"
-                            else None
-                        ),
-                        invocation_counter=(
-                            attn_metadata.fr10_tree_invocation_counter
-                            if os.environ.get("FR10_METRICS", "0") == "1"
-                            else None
-                        ),
+                    _fr13_fixed32_batch_gdn = bool(
+                        _FR13_FIXED32_MODE
+                        and int(attn_metadata.num_spec_decodes) > 1
                     )
+                    if _fr13_fixed32_batch_gdn:
+                        if fr10_b == 0:
+                            _fr13_gdn_batch = int(
+                                attn_metadata.num_spec_decodes
+                            )
+                            _fr13_gdn_rows = _fr13_gdn_batch * tree_n
+                            launch_tree_gdn_prepared_fixed32_batch(
+                                staging_flags=(
+                                    self._fr13_replay_flags
+                                    if _FR13_FLAGS_INKERNEL else None
+                                ),
+                                staging_rows=_fr13_gdn_batch,
+                                batch_size=_fr13_gdn_batch,
+                                q=query_spec[
+                                    0, :_fr13_gdn_rows
+                                ].contiguous(),
+                                k=key_spec[
+                                    0, :_fr13_gdn_rows
+                                ].contiguous(),
+                                v=value_tree[:_fr13_gdn_rows].contiguous(),
+                                g=g_tree[:_fr13_gdn_rows].contiguous(),
+                                beta=beta_tree[:_fr13_gdn_rows].contiguous(),
+                                raw_a=a[:_fr13_gdn_rows].contiguous(),
+                                raw_b=b[:_fr13_gdn_rows].contiguous(),
+                                A_log=self.A_log,
+                                dt_bias=self.dt_bias,
+                                h0=ssm_state,
+                                h0_indices=spec_state_indices_tensor,
+                                h0_num_accepted_tokens=(
+                                    _fr10_accepted_lens_tensor
+                                ),
+                                h0_use_accepted_column=(
+                                    os.environ.get(
+                                        "FR13_TREE_RUNROW_INIT", "1"
+                                    ) != "1"
+                                ),
+                                n_actual=tree_n,
+                                n_pad=tree_n_pad,
+                                strict_mask=(
+                                    attn_metadata.fr10_tree_strict_mask
+                                ),
+                                out=core_attn_out_spec[
+                                    0, :_fr13_gdn_rows
+                                ],
+                                output_scale=self.head_k_dim**-0.5,
+                                use_qk_l2norm_in_kernel=True,
+                                ring_k=(
+                                    self._fr13_replay_ring_k[
+                                        :_fr13_gdn_batch, :tree_n
+                                    ].flatten(0, 1)
+                                    if _fr13_replay_route_on
+                                    and os.environ.get(
+                                        "FR13_RING_EXPORT", "1"
+                                    ) == "1"
+                                    else None
+                                ),
+                                ring_v=(
+                                    self._fr13_replay_ring_v[
+                                        :_fr13_gdn_batch, :tree_n
+                                    ].flatten(0, 1)
+                                    if _fr13_replay_route_on
+                                    and os.environ.get(
+                                        "FR13_RING_EXPORT", "1"
+                                    ) == "1"
+                                    else None
+                                ),
+                                ring_a=(
+                                    self._fr13_replay_ring_a[
+                                        :_fr13_gdn_batch, :tree_n
+                                    ].flatten(0, 1)
+                                    if _fr13_replay_route_on
+                                    and os.environ.get(
+                                        "FR13_RING_EXPORT", "1"
+                                    ) == "1"
+                                    else None
+                                ),
+                                ring_b=(
+                                    self._fr13_replay_ring_b[
+                                        :_fr13_gdn_batch, :tree_n
+                                    ].flatten(0, 1)
+                                    if _fr13_replay_route_on
+                                    and os.environ.get(
+                                        "FR13_RING_EXPORT", "1"
+                                    ) == "1"
+                                    else None
+                                ),
+                                invocation_counter=(
+                                    attn_metadata.fr10_tree_invocation_counter
+                                    if os.environ.get(
+                                        "FR10_METRICS", "0"
+                                    ) == "1"
+                                    else None
+                                ),
+                            )
+                        tree_out = core_attn_out_spec[0, start:end]
+                    else:
+                        tree_out, _ = launch_tree_gdn_prepared(
+                            staging_flags=(
+                                self._fr13_replay_flags
+                                if _FR13_FLAGS_INKERNEL else None
+                            ),
+                            staging_rows=int(attn_metadata.num_spec_decodes),
+                            q=query_spec[0, start:end].contiguous(),
+                            k=key_spec[0, start:end].contiguous(),
+                            v=value_tree[start:end].contiguous(),
+                            g=g_tree[start:end].contiguous(),
+                            beta=beta_tree[start:end].contiguous(),
+                            raw_a=a[start:end].contiguous(),
+                            raw_b=b[start:end].contiguous(),
+                            A_log=self.A_log,
+                            dt_bias=self.dt_bias,
+                            h0=ssm_state,
+                            h0_indices=spec_state_indices_tensor,
+                            h0_num_accepted_tokens=_fr10_accepted_lens_tensor,
+                            h0_is_bank=True,
+                            h0_index_row=fr10_b * spec_state_indices_tensor.size(-1),
+                            h0_batch_index=fr10_b,
+                            # STATELESS-TREE: FR13_TREE_RUNROW_INIT -> seed the scan h0
+                            # from col 0 (running row) instead of accepted col nacc-1.
+                            h0_use_accepted_column=(
+                                os.environ.get("FR13_TREE_RUNROW_INIT", "1") != "1"
+                            ),
+                            n_actual=tree_n,
+                            n_pad=tree_n_pad,
+                            strict_mask=attn_metadata.fr10_tree_strict_mask,
+                            visible_mask=attn_metadata.fr10_tree_visible_mask,
+                            out=core_attn_out_spec[0, start:end],
+                            state=tree_state,
+                            output_scale=self.head_k_dim**-0.5,
+                            use_qk_l2norm_in_kernel=True,
+                            ring_k=(
+                                self._fr13_replay_ring_k[fr10_b]
+                                if _fr13_replay_route_on
+                                and os.environ.get("FR13_RING_EXPORT", "1") == "1"
+                                else None
+                            ),
+                            ring_v=(
+                                self._fr13_replay_ring_v[fr10_b]
+                                if _fr13_replay_route_on
+                                and os.environ.get("FR13_RING_EXPORT", "1") == "1"
+                                else None
+                            ),
+                            ring_a=(
+                                self._fr13_replay_ring_a[fr10_b]
+                                if _fr13_replay_route_on
+                                and os.environ.get("FR13_RING_EXPORT", "1") == "1"
+                                else None
+                            ),
+                            ring_b=(
+                                self._fr13_replay_ring_b[fr10_b]
+                                if _fr13_replay_route_on
+                                and os.environ.get("FR13_RING_EXPORT", "1") == "1"
+                                else None
+                            ),
+                            invocation_counter=(
+                                attn_metadata.fr10_tree_invocation_counter
+                                if os.environ.get("FR10_METRICS", "0") == "1"
+                                else None
+                            ),
+                        )
                     if (
                         _FR13_FIXED32_MODE
                         and (
