@@ -233,6 +233,7 @@ def test_qrow16_capture_checker_is_compile_preflight_only() -> None:
 def test_qrow16_live_gate_uses_retained_paged_operands_after_real_replay() -> None:
     patcher = Path("scripts/fr13_patch_fa2_tree_bias.py").read_text()
     launcher = Path("scripts/fr13_launch_forked_fa2_tree_server.sh").read_text()
+    gate_launcher = Path("scripts/fr13_run_b1_kernel_live_gate.sh").read_text()
 
     assert "FR13_FA2_QROW16_LIVE_PAGED_AB_REPLAY" in patcher
     replay = patcher.index('anchor = "        entry.cudagraph.replay()\\n"')
@@ -265,3 +266,5 @@ def test_qrow16_live_gate_uses_retained_paged_operands_after_real_replay() -> No
     assert "FR13 qrow16 internal selectors are launcher-private" in launcher
     assert "fixed32 qrow16 candidate FA2 sha256 mismatch" in launcher
     assert "--fixed32-query-tile16-live-ab" in launcher
+    assert "FR13_GATE_QROW16=${FR13_GATE_QROW16:-0}" in gate_launcher
+    assert 'FR13_FA2_QROW16_LIVE_PAGED_AB="$FR13_GATE_QROW16"' in gate_launcher
