@@ -1,0 +1,20 @@
+classification: zero-task process-attestation rejection
+source_commit: 04cd4d39b4741f0637db5613d6b5fcb86f364605
+repair_commit: 6c44fa780
+
+The B4 memory correction succeeded:
+- manual KV cache reserved: 20.0 GiB
+- KV cache size: 76,800 tokens
+- PIECEWISE graphs: 8/8
+- FULL graphs: 4/4
+- FULL graph memory: 6.93 GiB
+- health: passed
+
+The launcher then compared PID1 argv against the exact fixed32 contract. The
+observed command correctly contained:
+  --kv-cache-memory-bytes 21474836480
+The contract had not yet been updated with that new B4-only pair, so runtime
+attestation rejected the arm before offload or any SWE-Verified task.
+
+No real-task replay occurred, so this run does not produce a graph byte PASS,
+kernel timing, throughput, or floor evidence.

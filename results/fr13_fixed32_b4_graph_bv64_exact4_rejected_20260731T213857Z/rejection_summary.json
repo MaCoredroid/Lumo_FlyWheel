@@ -1,0 +1,42 @@
+{
+  "schema": "fr13.fixed32.b4_graph_bv64.rejection.v1",
+  "status": "rejected",
+  "classification": "zero_task_process_attestation",
+  "source_commit": "04cd4d39b4741f0637db5613d6b5fcb86f364605",
+  "repair_commit": "6c44fa780",
+  "workload": {
+    "suite": "SWE-Verified",
+    "task_set": "canonical_exact4",
+    "batch_size": 4,
+    "concurrency": 4,
+    "max_model_len": 131072
+  },
+  "boot": {
+    "kv_cache_memory_bytes": 21474836480,
+    "kv_cache_tokens": 76800,
+    "piecewise_graphs_completed": 8,
+    "full_graphs_completed": 4,
+    "full_graph_memory_gib": 6.93,
+    "health_passed": true
+  },
+  "failure": {
+    "stage": "exact_process_attestation_before_task_offload",
+    "reason": "B4 manual KV-cache argv pair absent from expected PID1 contract",
+    "tasks_started": 0,
+    "real_task_replays": 0,
+    "graph_live_pass": false
+  },
+  "claim_boundary": {
+    "boot_and_graph_capture": true,
+    "task_level_kernel_correctness": false,
+    "timing": false,
+    "throughput": false,
+    "floor_acceptance": false
+  },
+  "integrity": {
+    "runtime_manifest_equal": true,
+    "external_manifest_equal": true,
+    "docker_containers_after_cleanup": 0,
+    "compute_processes_after_cleanup": 0
+  }
+}
