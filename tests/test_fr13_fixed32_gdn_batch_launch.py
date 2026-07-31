@@ -145,7 +145,7 @@ def test_batched_kernel_keeps_two_launches_and_b1_legacy_route() -> None:
         for node in ast.walk(patcher_tree)
         if isinstance(node, ast.Constant)
         and isinstance(node.value, str)
-        and "_fr13_fixed32_batch_gdn" in node.value
+        and "_fr13_fixed32_batch_gdn_selector = (" in node.value
     ]
     assert len(generated_fragments) == 1
     ast.parse(textwrap.dedent(generated_fragments[0]))

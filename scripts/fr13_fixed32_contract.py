@@ -636,18 +636,33 @@ def expected_process_pid1_argv(
     *,
     attribution_only: bool,
     eager_diagnostic: bool = False,
+    graph_diagnostic: bool = False,
 ) -> list[str]:
     if type(attribution_only) is not bool:
         raise ContractError("fixed32 attribution-only selector must be boolean")
     if type(eager_diagnostic) is not bool:
         raise ContractError("fixed32 eager-diagnostic selector must be boolean")
+    if type(graph_diagnostic) is not bool:
+        raise ContractError("fixed32 graph-diagnostic selector must be boolean")
+    if eager_diagnostic and graph_diagnostic:
+        raise ContractError(
+            "fixed32 eager and graph diagnostics are mutually exclusive"
+        )
     if attribution_only and eager_diagnostic:
         raise ContractError(
             "fixed32 eager diagnostic cannot be attribution-only"
         )
+    if attribution_only and graph_diagnostic:
+        raise ContractError(
+            "fixed32 graph diagnostic cannot be attribution-only"
+        )
     if eager_diagnostic and concurrency != 4:
         raise ContractError(
             "fixed32 eager diagnostic requires concurrency 4"
+        )
+    if graph_diagnostic and concurrency != 4:
+        raise ContractError(
+            "fixed32 graph diagnostic requires concurrency 4"
         )
     vllm_argv = expected_pid1_argv(concurrency)
     if eager_diagnostic:
@@ -663,11 +678,13 @@ def validate_process_pid1_argv(
     *,
     attribution_only: bool,
     eager_diagnostic: bool = False,
+    graph_diagnostic: bool = False,
 ) -> list[str]:
     expected = expected_process_pid1_argv(
         concurrency,
         attribution_only=attribution_only,
         eager_diagnostic=eager_diagnostic,
+        graph_diagnostic=graph_diagnostic,
     )
     if argv != expected:
         raise ContractError(f"fixed32 PID1 argv mismatch: {argv!r}")

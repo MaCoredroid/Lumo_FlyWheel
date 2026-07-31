@@ -161,6 +161,9 @@ _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = (
 _FR13_FIXED32_BATCH_GDN_BYTE_AB = os.environ.get(
     "FR13_FIXED32_BATCH_GDN_BYTE_AB", "0"
 ).strip()
+_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = os.environ.get(
+    "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB", "0"
+).strip()
 _FR13_FIXED32_TREE_SOURCE = repr(list(_FR13_FIXED32_CHOICES))
 _FR13_FIXED32_SLOT_PI = tuple(
     [0]
@@ -382,6 +385,7 @@ _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT = None
 _FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS = {}
 _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH = {}
 _FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE = {}
+_FR13_DFWD_UNIFIED_BM8_PRODUCTION_PENDING = {}
 _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT = None
 _FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE = []
 _FR13_FIXED32_ACCEPTED_OUTPUT_CURRENT = None
@@ -399,6 +403,10 @@ try:
     _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE
 except NameError:
     _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = False
+try:
+    _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
+except NameError:
+    _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = False
 _FR13_FIXED32_DRAFTER_TREE_LAYER = "mtp.layers.0.self_attn.attn"
 _FR13_FIXED32_TARGET_TREE_LAYERS = frozenset(
     "language_model.model.layers.%d.self_attn.attn" % layer
@@ -3139,6 +3147,20 @@ def _fr13_fixed32_capture_begin(
                 "tree kernel"
             )
         tree_kernel.fixed32_gdn_bv_live_capture_begin(identity, batch)
+    if _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB and batch == 4:
+        tree_kernel = __import__(
+            "lumo_flywheel_serving.fr10_gdn_tree_kernel",
+            fromlist=(
+                "_fr13_fixed32_batch_gdn_graph_byte_ab_control",
+                "fixed32_batch_gdn_graph_live_capture_begin",
+            ),
+        )
+        if not tree_kernel._fr13_fixed32_batch_gdn_graph_byte_ab_control():
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN selector drift between observer "
+                "and tree kernel"
+            )
+        tree_kernel.fixed32_batch_gdn_graph_live_capture_begin(identity, batch)
 
 
 def _fr13_fixed32_capture_end(
@@ -3294,6 +3316,25 @@ def _fr13_fixed32_capture_end(
             int(work["batch_size"]),
             int(work["gdn_scan_calls"]),
         )
+    if _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB and int(work["batch_size"]) == 4:
+        tree_kernel = __import__(
+            "lumo_flywheel_serving.fr10_gdn_tree_kernel",
+            fromlist=(
+                "_fr13_fixed32_batch_gdn_graph_byte_ab_control",
+                "fixed32_batch_gdn_graph_live_capture_end",
+            ),
+        )
+        if not tree_kernel._fr13_fixed32_batch_gdn_graph_byte_ab_control():
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN selector drift between observer "
+                "and tree kernel"
+            )
+        tree_kernel.fixed32_batch_gdn_graph_live_capture_end(
+            identity,
+            4,
+            signature,
+            48,
+        )
     _FR13_FIXED32_CAPTURE_MANIFESTS[identity] = (signature, canonical)
     _FR13_FIXED32_CAPTURE_CONTEXT = None
     return signature
@@ -3425,6 +3466,32 @@ def _fr13_fixed32_observed_graph_replay(
         )
     tree = manifest["tree_attn"]
     gdn = manifest["gdn"]
+    if (
+        _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
+        and int(event["batch_size"]) == 4
+    ):
+        if not tree_kernel._fr13_fixed32_batch_gdn_graph_byte_ab_control():
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN selector drift between observer "
+                "and tree kernel"
+            )
+        gate_report = tree_kernel.fixed32_batch_gdn_graph_live_gate_on_replay(
+            identity,
+            expected_signature,
+            4,
+            48,
+        )
+        if (
+            gate_report.get("status") != "passed"
+            or gate_report.get("graph_id") != identity
+            or gate_report.get("graph_signature") != expected_signature
+            or gate_report.get("batch_size") != 4
+            or gate_report.get("records") != 48
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN byte gate did not pass on the "
+                "authenticated full-graph replay: " + repr(gate_report)
+            )
     if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None:
         if getattr(
             tree_kernel, "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE", None
@@ -3628,6 +3695,221 @@ def _fr13_fixed32_drafter_proposal_begin(
     return measured
 
 
+def _fr13_dfwd_unified_bm8_production_begin(graph_id, batch_size):
+    """Arm BM8 only for the attested final fixed32 B1 drafter capture."""
+    _os = __import__("os")
+    if _os.environ.get("FR13_DFWD_UNIFIED_BM8_PRODUCTION", "0") != "1":
+        return
+    if _os.environ.get("FR13_DFWD_UNIFIED_BM8_LIVE_AB", "0") != "0":
+        raise RuntimeError("FR13 DFWD unified BM8 live A/B leaked into production")
+    if (
+        _os.environ.get(
+            "FR13_DFWD_UNIFIED_BM8_INTERNAL_PRODUCTION_ATTESTED"
+        )
+        != "1"
+    ):
+        raise RuntimeError("FR13 DFWD unified BM8 production is not attested")
+    if _os.environ.get("FR13_DFWD_UNIFIED_BM8_INTERNAL") is not None:
+        raise RuntimeError("FR13 DFWD unified BM8 internal selector leaked")
+    context = _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT
+    proposal = _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT
+    identity = int(graph_id)
+    batch = int(batch_size)
+    if (
+        batch != 1
+        or not isinstance(context, dict)
+        or int(context.get("graph_id", 0)) != identity
+        or int(context.get("batch_size", -1)) != 1
+        or context.get("mode") != _FR13_FIXED32_MODE
+        or not isinstance(proposal, dict)
+        or proposal.get("measured") is not True
+        or int(proposal.get("batch_size", -1)) != 1
+        or proposal.get("mode") != _FR13_FIXED32_MODE
+        or _FR13_FIXED32_CAPTURE_FROZEN is not True
+    ):
+        raise RuntimeError("FR13 DFWD unified BM8 production is not final B1")
+
+    full_b1 = []
+    for target_graph_id, entry in _FR13_FIXED32_CAPTURE_MANIFESTS.items():
+        signature, canonical = _fr13_fixed32_manifest_entry(
+            entry, "BM8 target graph " + str(target_graph_id)
+        )
+        manifest = __import__("json").loads(canonical)
+        descriptor = manifest.get("descriptor")
+        if (
+            manifest.get("schema") == "fr13-fixed32-forward-graph-manifest-v2"
+            and manifest.get("mode") == _FR13_FIXED32_MODE
+            and int(manifest.get("batch_size", -1)) == 1
+            and int(manifest.get("physical_rows_per_request", -1)) == 32
+            and isinstance(descriptor, dict)
+            and descriptor.get("runtime_mode") == "FULL"
+            and int(descriptor.get("num_tokens", -1)) == 32
+            and int(descriptor.get("num_reqs", -1)) == 1
+            and descriptor.get("uniform") is True
+            and descriptor.get("has_lora") is False
+            and int(descriptor.get("num_active_loras", -1)) == 0
+        ):
+            full_b1.append((int(target_graph_id), signature))
+    if len(full_b1) != 1:
+        raise RuntimeError(
+            "FR13 DFWD unified BM8 requires one final FULL fixed32 B1 graph"
+        )
+
+    sidecar_sha256 = _os.environ.get(
+        "FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256", ""
+    )
+    source_sha256 = _os.environ.get(
+        "FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256", ""
+    )
+    if any(
+        len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+        for value in (sidecar_sha256, source_sha256)
+    ):
+        raise RuntimeError("FR13 DFWD unified BM8 attestation digest drifted")
+    unified = __import__(
+        "vllm.v1.attention.ops.triton_unified_attention",
+        fromlist=("_FR13_DFWD_UNIFIED_BM8_DISPATCHES",),
+    )
+    source_path = __import__("pathlib").Path(unified.__file__).resolve()
+    actual_source_sha256 = __import__("hashlib").sha256(
+        source_path.read_bytes()
+    ).hexdigest()
+    if actual_source_sha256 != source_sha256:
+        raise RuntimeError("FR13 DFWD unified BM8 qualified source drifted")
+    dispatches = getattr(unified, "_FR13_DFWD_UNIFIED_BM8_DISPATCHES", None)
+    if type(dispatches) is not int or dispatches < 0:
+        raise RuntimeError("FR13 DFWD unified BM8 dispatch counter drifted")
+    context["bm8_production"] = {
+        "dispatches_before": dispatches,
+        "guarded_calls": 0,
+        "qualified_source_sha256": source_sha256,
+        "pass_sidecar_sha256": sidecar_sha256,
+        "target_graph_id": full_b1[0][0],
+        "target_graph_signature": full_b1[0][1],
+    }
+
+
+def _fr13_dfwd_unified_bm8_production_end(
+    graph_id, batch_size, graph_signature
+):
+    _os = __import__("os")
+    if _os.environ.get("FR13_DFWD_UNIFIED_BM8_PRODUCTION", "0") != "1":
+        return
+    context = _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT
+    identity = int(graph_id)
+    batch = int(batch_size)
+    production = (
+        context.get("bm8_production") if isinstance(context, dict) else None
+    )
+    try:
+        if (
+            batch != 1
+            or not isinstance(context, dict)
+            or int(context.get("graph_id", 0)) != identity
+            or not isinstance(production, dict)
+            or _os.environ.get("FR13_DFWD_UNIFIED_BM8_INTERNAL") is not None
+        ):
+            raise RuntimeError(
+                "FR13 DFWD unified BM8 production capture scope drifted"
+            )
+        unified = __import__(
+            "vllm.v1.attention.ops.triton_unified_attention",
+            fromlist=("_FR13_DFWD_UNIFIED_BM8_DISPATCHES",),
+        )
+        dispatches = getattr(
+            unified, "_FR13_DFWD_UNIFIED_BM8_DISPATCHES", None
+        )
+        dispatches_before = production.get("dispatches_before")
+        if (
+            type(dispatches) is not int
+            or type(dispatches_before) is not int
+            or dispatches - dispatches_before != 4
+            or int(production.get("guarded_calls", -1)) != 4
+        ):
+            raise RuntimeError(
+                "FR13 DFWD unified BM8 production did not capture four calls"
+            )
+        record = {
+            "schema": "fr13.fixed32.dfwd_unified_bm8_production_capture.v1",
+            "status": "CAPTURED_PENDING_REPLAY",
+            "runtime_mode": "FULL",
+            "batch_size": 1,
+            "physical_rows_per_request": 32,
+            "candidate": {
+                "kernel": "kernel_unified_attention_2d",
+                "block_m": 8,
+                "block_q": 1,
+                "calls": 4,
+            },
+            "dispatch": "BM8 exact B1 geometry; no fallback",
+            "drafter_graph_id": identity,
+            "drafter_graph_signature": str(graph_signature),
+            "target_graph_id": production["target_graph_id"],
+            "target_graph_signature": production["target_graph_signature"],
+            "qualified_source_sha256": production[
+                "qualified_source_sha256"
+            ],
+            "pass_sidecar_sha256": production["pass_sidecar_sha256"],
+        }
+        if identity in _FR13_DFWD_UNIFIED_BM8_PRODUCTION_PENDING:
+            raise RuntimeError(
+                "FR13 DFWD unified BM8 production capture duplicated"
+            )
+        _FR13_DFWD_UNIFIED_BM8_PRODUCTION_PENDING[identity] = record
+    finally:
+        _os.environ.pop("FR13_DFWD_UNIFIED_BM8_INTERNAL", None)
+
+
+def _fr13_dfwd_unified_bm8_production_replay_installed(
+    graph_id, batch_size, graph_signature
+):
+    _os = __import__("os")
+    if _os.environ.get("FR13_DFWD_UNIFIED_BM8_PRODUCTION", "0") != "1":
+        return
+    identity = int(graph_id)
+    batch = int(batch_size)
+    record = _FR13_DFWD_UNIFIED_BM8_PRODUCTION_PENDING.get(identity)
+    lifecycle = _FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE.get(identity)
+    proposal = _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT
+    if (
+        batch != 1
+        or not isinstance(record, dict)
+        or record.get("status") != "CAPTURED_PENDING_REPLAY"
+        or record.get("drafter_graph_signature") != str(graph_signature)
+        or not isinstance(lifecycle, dict)
+        or int(lifecycle.get("captures", -1)) != 1
+        or int(lifecycle.get("measured_replays", -1)) != 1
+        or int(lifecycle.get("unmeasured_replays", -1)) != 0
+        or not isinstance(proposal, dict)
+        or proposal.get("measured") is not True
+        or int(proposal.get("graph_id", 0)) != identity
+        or proposal.get("graph_signature") != graph_signature
+        or int(proposal.get("graph_replays", -1)) != 1
+    ):
+        raise RuntimeError(
+            "FR13 DFWD unified BM8 production replay/install drifted"
+        )
+    path = __import__("pathlib").Path(
+        _os.environ.get(
+            "FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON",
+            "/logs/fr13_dfwd_unified_bm8.production_capture.json",
+        )
+    )
+    temporary = path.with_name(path.name + ".tmp")
+    published = dict(record)
+    published["status"] = "ENGAGED"
+    temporary.write_text(
+        __import__("json").dumps(
+            published, ensure_ascii=True, indent=2, sort_keys=True
+        )
+        + "\n",
+        encoding="ascii",
+    )
+    temporary.replace(path)
+    del _FR13_DFWD_UNIFIED_BM8_PRODUCTION_PENDING[identity]
+
+
 def _fr13_fixed32_drafter_graph_capture_begin(graph_id, batch_size):
     global _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT
     if not _FR13_FIXED32_MODE:
@@ -3671,6 +3953,7 @@ def _fr13_fixed32_drafter_graph_capture_begin(graph_id, batch_size):
         "tree_attn_bias_shape": None,
     }
     proposal["graph_captures"] = 1
+    _fr13_dfwd_unified_bm8_production_begin(identity, batch)
 
 
 def _fr13_fixed32_drafter_mtp_forward(batch_size, capturing):
@@ -3767,6 +4050,7 @@ def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
         "measured_replays": 0,
         "unmeasured_replays": 0,
     }
+    _fr13_dfwd_unified_bm8_production_end(identity, batch, signature)
     _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT = None
     proposal["captured_graph_id"] = identity
     proposal["captured_graph_signature"] = signature
@@ -5224,6 +5508,12 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
     candidate_raw = _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
     production_raw = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
     taw_native_diagnostic = bool(_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE)
+    graph_batch_gdn_diagnostic_raw = _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
+    if graph_batch_gdn_diagnostic_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
+        )
+    graph_batch_gdn_diagnostic = graph_batch_gdn_diagnostic_raw == "1"
     if candidate_raw and candidate_raw not in ("16", "32", "64", "128"):
         raise RuntimeError(
             "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be one of "
@@ -5270,6 +5560,8 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         f"{production!r}\n"
         "_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = "
         f"{taw_native_diagnostic!r}\n"
+        "_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = "
+        f"{graph_batch_gdn_diagnostic!r}\n"
     )
 
 
@@ -5280,9 +5572,24 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     production = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
     taw_native_diagnostic = bool(_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE)
     batch_gdn_byte_diagnostic = _FR13_FIXED32_BATCH_GDN_BYTE_AB
+    graph_batch_gdn_byte_diagnostic = (
+        _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
+    )
     if batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1"
+        )
+    if graph_batch_gdn_byte_diagnostic not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
+        )
+    if (
+        batch_gdn_byte_diagnostic == "1"
+        and graph_batch_gdn_byte_diagnostic == "1"
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 eager and graph-replay batched GDN diagnostics are "
+            "mutually exclusive"
         )
     if batch_gdn_byte_diagnostic == "1":
         candidate_bv = os.environ.get(
@@ -5306,6 +5613,50 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             raise RuntimeError(
                 "FR13 fixed32 eager B4 byte diagnostic cannot arm a B1 or "
                 "production route"
+            )
+    if graph_batch_gdn_byte_diagnostic == "1":
+        candidate_bv = os.environ.get(
+            "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE", ""
+        ).strip()
+        if not mode:
+            raise RuntimeError(
+                "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires fixed32 mode"
+            )
+        if candidate_bv not in ("16", "32", "64", "128"):
+            raise RuntimeError(
+                "FR13 fixed32 graph B4 byte diagnostic requires an exact "
+                "batched GDN BV candidate"
+            )
+        incompatible = (
+            os.environ.get("FR13_FIXED32_B1_DIAGNOSTIC", "0") != "0"
+            or os.environ.get("FR13_FIXED32_BATCH_GDN_PRODUCTION", "0")
+            != "0"
+            or bool(
+                os.environ.get("FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", "")
+            )
+            or bool(candidate)
+            or bool(production)
+        )
+        if incompatible:
+            raise RuntimeError(
+                "FR13 fixed32 graph B4 byte diagnostic cannot arm a B1, "
+                "path-BV, or production route"
+            )
+        exact_runtime = {
+            "FR13_TREE_GDN_GEOM_OVERRIDE": "BV=8",
+            "FR13_RING_EXPORT": "1",
+            "FR13_FLAGS_INKERNEL": "1",
+            "FR10_METRICS": "1",
+        }
+        drift = {
+            name: (os.environ.get(name, ""), expected)
+            for name, expected in exact_runtime.items()
+            if os.environ.get(name, "") != expected
+        }
+        if drift:
+            raise RuntimeError(
+                "FR13 fixed32 graph B4 byte diagnostic runtime contract "
+                "drift: " + repr(drift)
             )
     if candidate:
         if candidate not in ("16", "32", "64", "128"):
@@ -20756,6 +21107,17 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
                 _dg["graph"] = _fr13_dg_g
                 _fr13_dg_all[_fr13_dg_key] = _dg
+                if _fr13_is_fixed32:
+                    try:
+                        _fr13_f32_dg_gdn._fr13_dfwd_unified_bm8_production_replay_installed(
+                            id(_fr13_dg_g),
+                            _fr13_dg_key,
+                            _dg["fixed32_signature"],
+                        )
+                    except Exception:
+                        _fr13_dg_all.pop(_fr13_dg_key, None)
+                        _dg["graph"] = None
+                        raise
                 print(
                     f"[FR13_DRAFTER_GRAPH] captured bs={_fr13_dg_key} "
                     "(full 4-iter spine loop, inner model flat-recorded)",
@@ -23123,6 +23485,27 @@ def _patch_triton_unified_attention_fr13() -> bool:
         text = text.replace(old_mask, new_mask)
         did_patch = True
 
+    if os.environ.get("FR13_DFWD_UNIFIED_BM8_PRODUCTION", "0") == "1":
+        # The real B1 PASS qualified the emitted Triton module before the
+        # host-read permission correction. Production does not consume the
+        # diagnostic identity file, so retain that exact qualified module byte
+        # here and verify its full SHA-256 before the selector can be armed.
+        current_identity_mode = (
+            "_stat.S_IMODE(metadata.st_mode) != 0o444"
+        )
+        qualified_identity_mode = (
+            "_stat.S_IMODE(metadata.st_mode) != 0o400"
+        )
+        if current_identity_mode in text:
+            text = text.replace(
+                current_identity_mode, qualified_identity_mode, 1
+            )
+            did_patch = True
+        elif qualified_identity_mode not in text:
+            raise RuntimeError(
+                "FR13 DFWD unified BM8 qualified source anchor drifted"
+            )
+
     TRITON_UNIFIED_ATTN_PATH.write_text(text)
     return did_patch
 
@@ -23820,6 +24203,189 @@ def _fr13_tree_attn_op_capture(
         if helper_anchor not in text:
             raise RuntimeError("tree_attn logger anchor not found")
         text = text.replace(helper_anchor, helper, 1)
+        did_patch = True
+
+    production_sentinel = "# FR13_DFWD_UNIFIED_BM8_PRODUCTION_CALL"
+    production_enabled = (
+        os.environ.get("FR13_DFWD_UNIFIED_BM8_PRODUCTION", "0") == "1"
+    )
+    if production_enabled and production_sentinel not in text:
+        helper_anchor = "logger = init_logger(__name__)\n"
+        production_helper = r'''
+
+
+# FR13_DFWD_UNIFIED_BM8_PRODUCTION_CALL: exact per-call selector scope.
+def _fr13_dfwd_unified_bm8_production_call(
+    *,
+    layer,
+    q,
+    k,
+    v,
+    out,
+    cu_seqlens_q,
+    max_seqlen_q,
+    seqused_k,
+    max_seqlen_k,
+    softmax_scale,
+    causal,
+    window_size,
+    block_table,
+    softcap,
+    q_descale,
+    k_descale,
+    v_descale,
+    seq_threshold_3D=None,
+    num_par_softmax_segments=None,
+    softmax_segm_output=None,
+    softmax_segm_max=None,
+    softmax_segm_expsum=None,
+    alibi_slopes=None,
+    output_scale=None,
+    qq_bias=None,
+    sinks=None,
+    mm_prefix_range=None,
+    use_alibi_sqrt=False,
+):
+    def _stock():
+        return unified_attention(
+            q=q,
+            k=k,
+            v=v,
+            out=out,
+            cu_seqlens_q=cu_seqlens_q,
+            max_seqlen_q=max_seqlen_q,
+            seqused_k=seqused_k,
+            max_seqlen_k=max_seqlen_k,
+            softmax_scale=softmax_scale,
+            causal=causal,
+            window_size=window_size,
+            block_table=block_table,
+            softcap=softcap,
+            q_descale=q_descale,
+            k_descale=k_descale,
+            v_descale=v_descale,
+            seq_threshold_3D=seq_threshold_3D,
+            num_par_softmax_segments=num_par_softmax_segments,
+            softmax_segm_output=softmax_segm_output,
+            softmax_segm_max=softmax_segm_max,
+            softmax_segm_expsum=softmax_segm_expsum,
+            alibi_slopes=alibi_slopes,
+            output_scale=output_scale,
+            qq_bias=qq_bias,
+            sinks=sinks,
+            mm_prefix_range=mm_prefix_range,
+            use_alibi_sqrt=use_alibi_sqrt,
+        )
+    if os.environ.get("FR13_DFWD_UNIFIED_BM8_PRODUCTION", "0") != "1":
+        return _stock()
+    if (
+        os.environ.get(
+            "FR13_DFWD_UNIFIED_BM8_INTERNAL_PRODUCTION_ATTESTED"
+        )
+        != "1"
+        or os.environ.get("FR13_DFWD_UNIFIED_BM8_LIVE_AB", "0") != "0"
+    ):
+        raise RuntimeError("FR13 DFWD unified BM8 production is not attested")
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_gdn
+
+    context = getattr(
+        _fr13_gdn, "_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT", None
+    )
+    production = (
+        context.get("bm8_production") if isinstance(context, dict) else None
+    )
+    if not isinstance(production, dict):
+        return _stock()
+    if not (
+        torch.cuda.is_available()
+        and torch.cuda.is_current_stream_capturing()
+    ):
+        raise RuntimeError("FR13 DFWD unified BM8 ran outside CUDA capture")
+    exact = (
+        isinstance(context, dict)
+        and int(context.get("graph_id", 0)) > 0
+        and int(context.get("batch_size", -1)) == 1
+        and context.get("capturing") is True
+        and isinstance(production, dict)
+        and str(getattr(layer, "layer_name", ""))
+        == "mtp.layers.0.self_attn.attn"
+        and q.dtype == torch.bfloat16
+        and tuple(q.shape) == (1, 24, 256)
+        and k.dtype == torch.bfloat16
+        and v.dtype == torch.bfloat16
+        and k.ndim == 4
+        and tuple(k.shape[1:]) == (1024, 4, 256)
+        and tuple(v.shape) == tuple(k.shape)
+        and out.dtype == torch.bfloat16
+        and tuple(out.shape) == tuple(q.shape)
+        and cu_seqlens_q.dtype == torch.int32
+        and tuple(cu_seqlens_q.shape) == (2,)
+        and seqused_k.dtype == torch.int32
+        and tuple(seqused_k.shape) == (1,)
+        and block_table.dtype == torch.int32
+        and block_table.ndim == 2
+        and int(block_table.shape[0]) == 1
+        and int(max_seqlen_q) == 1
+        and int(max_seqlen_k) > 0
+        and bool(causal)
+        and qq_bias is not None
+        and qq_bias.dtype == torch.float32
+        and tuple(qq_bias.shape) in ((1, 1), (1, 1, 1))
+        and alibi_slopes is None
+        and output_scale is None
+        and mm_prefix_range is None
+        and not bool(use_alibi_sqrt)
+    )
+    if not exact:
+        raise RuntimeError("FR13 DFWD unified BM8 production geometry drifted")
+    if window_size is not None and tuple(int(x) for x in window_size) != (-1, -1):
+        raise RuntimeError("FR13 DFWD unified BM8 requires a full window")
+    call_index = int(production.get("guarded_calls", -1))
+    if call_index not in range(4):
+        raise RuntimeError("FR13 DFWD unified BM8 production call count drifted")
+    if os.environ.get("FR13_DFWD_UNIFIED_BM8_INTERNAL") is not None:
+        raise RuntimeError("FR13 DFWD unified BM8 internal selector leaked")
+    os.environ["FR13_DFWD_UNIFIED_BM8_INTERNAL"] = "1"
+    try:
+        result = unified_attention(
+            q=q,
+            k=k,
+            v=v,
+            out=out,
+            cu_seqlens_q=cu_seqlens_q,
+            max_seqlen_q=max_seqlen_q,
+            seqused_k=seqused_k,
+            max_seqlen_k=max_seqlen_k,
+            softmax_scale=softmax_scale,
+            causal=causal,
+            window_size=window_size,
+            block_table=block_table,
+            softcap=softcap,
+            q_descale=q_descale,
+            k_descale=k_descale,
+            v_descale=v_descale,
+            seq_threshold_3D=seq_threshold_3D,
+            num_par_softmax_segments=num_par_softmax_segments,
+            softmax_segm_output=softmax_segm_output,
+            softmax_segm_max=softmax_segm_max,
+            softmax_segm_expsum=softmax_segm_expsum,
+            alibi_slopes=alibi_slopes,
+            output_scale=output_scale,
+            qq_bias=qq_bias,
+            sinks=sinks,
+            mm_prefix_range=mm_prefix_range,
+            use_alibi_sqrt=use_alibi_sqrt,
+        )
+    finally:
+        os.environ.pop("FR13_DFWD_UNIFIED_BM8_INTERNAL", None)
+    production["guarded_calls"] = call_index + 1
+    return result
+'''
+        if helper_anchor not in text:
+            raise RuntimeError("FR13 DFWD unified BM8 tree helper anchor missing")
+        text = text.replace(
+            helper_anchor, helper_anchor + production_helper, 1
+        )
         did_patch = True
 
     capture_anchor = """            unified_attention(
@@ -30408,7 +30974,9 @@ def _patch_cudagraph_wrapper_subspan_mark() -> bool:
         "                pass\n"
         "        entry.cudagraph.replay()\n"
         + (
-            "        if getattr(torch, \"_fr13_sfwd_open\", False):\n"
+            "        if ("
+            + repr(_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB == "1")
+            + " or getattr(torch, \"_fr13_sfwd_open\", False)):\n"
             "            from vllm.model_executor.layers.mamba import (\n"
             "                gdn_linear_attn as _fr13_f32_replay_gdn,\n"
             "            )\n"

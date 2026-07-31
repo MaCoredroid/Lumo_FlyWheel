@@ -56,7 +56,7 @@ def test_direct_pid1_is_required_for_acceptance() -> None:
         )
 
 
-def test_default_and_eager_diagnostic_pid1_are_distinct_exact_contracts() -> None:
+def test_default_graph_and_eager_pid1_are_exact_distinct_contracts() -> None:
     default = contract.expected_process_pid1_argv(
         4,
         attribution_only=False,
@@ -66,11 +66,24 @@ def test_default_and_eager_diagnostic_pid1_are_distinct_exact_contracts() -> Non
         attribution_only=False,
         eager_diagnostic=True,
     )
+    graph = contract.expected_process_pid1_argv(
+        4,
+        attribution_only=False,
+        graph_diagnostic=True,
+    )
 
     assert default == contract.expected_pid1_argv(4)
     assert len(default) == 47
+    assert graph == default
+    assert len(graph) == 47
     assert eager == [*default, "--enforce-eager"]
     assert len(eager) == 48
+    assert contract.validate_process_pid1_argv(
+        graph,
+        4,
+        attribution_only=False,
+        graph_diagnostic=True,
+    ) == graph
     assert contract.validate_process_pid1_argv(
         eager,
         4,
@@ -89,6 +102,13 @@ def test_default_and_eager_diagnostic_pid1_are_distinct_exact_contracts() -> Non
             4,
             attribution_only=False,
             eager_diagnostic=True,
+        )
+    with pytest.raises(contract.ContractError, match="PID1 argv mismatch"):
+        contract.validate_process_pid1_argv(
+            eager,
+            4,
+            attribution_only=False,
+            graph_diagnostic=True,
         )
 
 
@@ -113,6 +133,40 @@ def test_eager_diagnostic_is_b4_only() -> None:
             1,
             attribution_only=False,
             eager_diagnostic=True,
+        )
+
+
+def test_graph_diagnostic_is_b4_only_and_not_attribution() -> None:
+    with pytest.raises(
+        contract.ContractError,
+        match="graph diagnostic requires concurrency 4",
+    ):
+        contract.expected_process_pid1_argv(
+            1,
+            attribution_only=False,
+            graph_diagnostic=True,
+        )
+    with pytest.raises(
+        contract.ContractError,
+        match="graph diagnostic cannot be attribution-only",
+    ):
+        contract.expected_process_pid1_argv(
+            4,
+            attribution_only=True,
+            graph_diagnostic=True,
+        )
+
+
+def test_eager_and_graph_diagnostics_are_mutually_exclusive() -> None:
+    with pytest.raises(
+        contract.ContractError,
+        match="eager and graph diagnostics are mutually exclusive",
+    ):
+        contract.expected_process_pid1_argv(
+            4,
+            attribution_only=False,
+            eager_diagnostic=True,
+            graph_diagnostic=True,
         )
 
 
@@ -191,9 +245,18 @@ def test_live_attestation_receives_the_selector_explicitly() -> None:
     ).read_text(encoding="utf-8")
 
     assert '"${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" \\' in serve
-    assert '"${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" <<\'PY\'' in serve
+    assert '"${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" \\' in serve
+    assert (
+        '"${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" <<\'PY\''
+        in serve
+    )
     assert "attribution_only_text = sys.argv[7]" in serve
     assert "batch_gdn_byte_ab_text = sys.argv[8]" in serve
+    assert "batch_gdn_graph_byte_ab_text = sys.argv[9]" in serve
     assert "attribution_only_text = os.environ" not in serve
     assert "batch_gdn_byte_ab_text = os.environ" not in serve
+    assert "batch_gdn_graph_byte_ab_text = os.environ" not in serve
     assert "eager_diagnostic=batch_gdn_byte_ab_text == \"1\"" in serve
+    assert (
+        "graph_diagnostic=batch_gdn_graph_byte_ab_text == \"1\"" in serve
+    )

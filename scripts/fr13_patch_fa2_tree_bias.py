@@ -1122,11 +1122,93 @@ def _fr13_fa2_qrow16_production_capture_end(
 '''
 
 
+_DFWD_UNIFIED_BM8_FALLBACK = """                unified_attention(
+                    q=query[:num_decode_tokens],
+                    k=key_cache,
+                    v=value_cache,
+                    out=output[:num_decode_tokens],
+                    cu_seqlens_q=decode_meta.query_start_loc,
+                    max_seqlen_q=decode_meta.max_query_len,
+                    seqused_k=decode_meta.seq_lens,
+                    max_seqlen_k=decode_meta.max_seq_len,
+                    softmax_scale=self.scale,
+                    causal=True,
+                    alibi_slopes=self.alibi_slopes,
+                    qq_bias=decode_meta.tree_attn_bias,
+                    window_size=self.sliding_window,
+                    block_table=decode_meta.block_table,
+                    softcap=self.logits_soft_cap,
+                    q_descale=None,  # Not supported
+                    k_descale=layer._k_scale.expand(descale_shape),
+                    v_descale=layer._v_scale.expand(descale_shape),
+                )
+"""
+
+_DFWD_UNIFIED_BM8_GUARDED_FALLBACK = """                _fr13_dfwd_unified_bm8_production_call(
+                    layer=layer,
+                    q=query[:num_decode_tokens],
+                    k=key_cache,
+                    v=value_cache,
+                    out=output[:num_decode_tokens],
+                    cu_seqlens_q=decode_meta.query_start_loc,
+                    max_seqlen_q=decode_meta.max_query_len,
+                    seqused_k=decode_meta.seq_lens,
+                    max_seqlen_k=decode_meta.max_seq_len,
+                    softmax_scale=self.scale,
+                    causal=True,
+                    alibi_slopes=self.alibi_slopes,
+                    qq_bias=decode_meta.tree_attn_bias,
+                    window_size=self.sliding_window,
+                    block_table=decode_meta.block_table,
+                    softcap=self.logits_soft_cap,
+                    q_descale=None,  # Not supported
+                    k_descale=layer._k_scale.expand(descale_shape),
+                    v_descale=layer._v_scale.expand(descale_shape),
+                )
+"""
+
+
+def _patch_dfwd_unified_bm8_production_call(text: str) -> tuple[str, bool]:
+    sentinel = "# FR13_DFWD_UNIFIED_BM8_PRODUCTION_CALL"
+    if sentinel not in text:
+        raise RuntimeError("BM8 production helper was not installed before FA2")
+    try:
+        tree_impl = text.split("class TreeAttentionImpl", 1)[1]
+    except IndexError as exc:
+        raise RuntimeError("BM8 production TreeAttentionImpl is missing") from exc
+    fa2_route = (
+        'if os.environ.get("FR13_FA2_TREE_BIAS", "0") == "1" '
+        "and use_tree_bias:"
+    )
+    if fa2_route not in tree_impl or "flash_attn_varlen_func(" not in tree_impl:
+        raise RuntimeError("BM8 production target FA2 decode route is missing")
+    guarded_calls = tree_impl.count(
+        "_fr13_dfwd_unified_bm8_production_call("
+    )
+    if guarded_calls:
+        if guarded_calls != 1:
+            raise RuntimeError("BM8 production guarded fallback is not unique")
+        if _DFWD_UNIFIED_BM8_FALLBACK in tree_impl:
+            raise RuntimeError("BM8 production stock fallback was retained")
+        return text, False
+    if text.count(_DFWD_UNIFIED_BM8_FALLBACK) != 1:
+        raise RuntimeError("BM8 production unified fallback is not unique")
+    return (
+        text.replace(
+            _DFWD_UNIFIED_BM8_FALLBACK,
+            _DFWD_UNIFIED_BM8_GUARDED_FALLBACK,
+            1,
+        ),
+        True,
+    )
+
+
 def _patch_tree_attn(
     path: Path,
     *,
     fixed32_query_tile16_live_ab: bool = False,
     fixed32_query_tile16_production: bool = False,
+    dfwd_unified_bm8_production: bool = False,
 ) -> bool:
     text = path.read_text()
     changed = False
@@ -1571,6 +1653,9 @@ def _fr13_sr_causal_flag():
             )
         text = text.replace(production_call, production_replacement, 1)
         changed = True
+    if dfwd_unified_bm8_production:
+        text, did = _patch_dfwd_unified_bm8_production_call(text)
+        changed = changed or did
     if changed:
         path.write_text(text)
         py_compile.compile(path, doraise=True)
@@ -1787,6 +1872,7 @@ def patch_installed_vllm(
     *,
     fixed32_query_tile16_live_ab: bool = False,
     fixed32_query_tile16_production: bool = False,
+    dfwd_unified_bm8_production: bool = False,
 ) -> dict[str, bool]:
     result = {
         "flash_attn_interface.py": _patch_flash_attn_interface(
@@ -1796,6 +1882,7 @@ def patch_installed_vllm(
             site_packages / "vllm/v1/attention/backends/tree_attn.py",
             fixed32_query_tile16_live_ab=fixed32_query_tile16_live_ab,
             fixed32_query_tile16_production=fixed32_query_tile16_production,
+            dfwd_unified_bm8_production=dfwd_unified_bm8_production,
         ),
         "flash_attn.py": _patch_flash_attn_backend(
             site_packages / "vllm/v1/attention/backends/flash_attn.py"
@@ -1859,6 +1946,11 @@ def main() -> int:
         action="store_true",
         help="install the attested exact-B1 qrow16 production selector",
     )
+    parser.add_argument(
+        "--dfwd-unified-bm8-production",
+        action="store_true",
+        help="install the attested exact-B1 BM8 drafter fallback selector",
+    )
     args = parser.parse_args()
     if (
         args.fixed32_query_tile16_live_ab
@@ -1871,6 +1963,7 @@ def main() -> int:
         "fixed32_query_tile16": args.fixed32_query_tile16,
         "fixed32_query_tile16_live_ab": args.fixed32_query_tile16_live_ab,
         "fixed32_query_tile16_production": args.fixed32_query_tile16_production,
+        "dfwd_unified_bm8_production": args.dfwd_unified_bm8_production,
     }
     if not args.skip_source:
         fa2_src = find_fa2_source(str(args.fa2_src) if args.fa2_src else None)
@@ -1885,6 +1978,7 @@ def main() -> int:
             args.site_packages,
             fixed32_query_tile16_live_ab=args.fixed32_query_tile16_live_ab,
             fixed32_query_tile16_production=args.fixed32_query_tile16_production,
+            dfwd_unified_bm8_production=args.dfwd_unified_bm8_production,
         )
     print(payload)
     return 0

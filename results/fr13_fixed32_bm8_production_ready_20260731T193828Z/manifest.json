@@ -1,0 +1,67 @@
+{
+  "branch": "agent/fixed32-bm8-production-ready",
+  "created_at_utc": "2026-07-31T19:38:28Z",
+  "default_behavior_changed": false,
+  "performance": {
+    "b4_measured": false,
+    "formal_exact16_measured": false,
+    "formal_exact4_measured": false,
+    "historical_real_swe_exact4": {
+      "acceptance_cap_ms_per_event": 137.6067177261,
+      "artifact": "results/fr13_fixed32_dfwd_unified_bm8_source_20260731/kernel_matrix.json",
+      "arm": "hydra27_fixed32",
+      "corrected_floor_ms_per_event": 119.658015414,
+      "dfwd_gpu_ms_per_event": 38.129275628250134,
+      "gpu_component_ms_per_event": 222.55840833774676,
+      "source_commit": "e5a4029249e5b9483919056bae6542e47bbce75b",
+      "tasks": 4,
+      "wall_ms_per_event": 239.02663423872843
+    },
+    "new_gpu_measurement": false,
+    "new_wall_tps_measurement": false,
+    "real_swe_nsight_unified_attention_group_ms_per_event": 6.967564,
+    "warning": "The Nsight group value is a historical prioritization ceiling, not a measured BM8 speedup."
+  },
+  "qualification": {
+    "candidate_artifact_kind": "triton_jit_source",
+    "candidate_block_m": 8,
+    "candidate_block_q": 1,
+    "candidate_kernel": "kernel_unified_attention_2d",
+    "candidate_source_sha256": "3baccaa1a83907e15561b1cf807f15a41bd4764513bb43c4046b434937c3274b",
+    "instance_id": "astropy__astropy-12907",
+    "live_pass_path": "results/fr13_fixed32_bm8_b1_live_pass_20260731T180804Z/run_evidence/live_pass.json",
+    "live_pass_sha256": "570caf42e3e75ff0d3717042b0dfc58b23a90041e71103f70a07f6d7563445b5",
+    "production_pass_path": "production_pass.json",
+    "production_pass_sha256": "d958c8b08a62d13e2dac9abbb214817748c15c12be212196f2d4b615390c641a",
+    "qualified_source_commit": "d67e405b5f1c37a0f35f329c722af17edfe5fe4a",
+    "raw_byte_mismatches": 0,
+    "real_swe_candidate_dispatches": 4,
+    "required_runtime": "fixed32 B1 FULL",
+    "served_return_in_qualification": "stock captured drafter graph unchanged",
+    "stock_block_m": 16,
+    "stock_block_q": 2
+  },
+  "runtime_contract": {
+    "candidate_calls_per_capture": 4,
+    "candidate_route": "single unified drafter fallback after target FA2 routing",
+    "capture_publication": "ENGAGED only after first measured replay installation",
+    "failure_policy": "fail closed and evict failed graph installation",
+    "production_env": "FR13_DFWD_UNIFIED_BM8_PRODUCTION=1",
+    "production_scope": "four exact B1 MTP unified-attention calls",
+    "selector_visibility": "launcher-private",
+    "target_route": "FA2 tree-bias decode retained"
+  },
+  "schema": "fr13.fixed32.dfwd_unified_bm8.production_ready.v1",
+  "source_commit": "08a5fde9cbc548be6f7b00477e1bc695e4879c02",
+  "status": "SOURCE_READY_ONLY",
+  "verification": {
+    "bash_syntax": "PASS",
+    "docker_used": false,
+    "focused_tests": 90,
+    "focused_tests_status": "PASS",
+    "gpu_used": false,
+    "independent_review": "NO_BLOCKING_FINDINGS",
+    "python_byte_compile": "PASS",
+    "whitespace_check": "PASS"
+  }
+}

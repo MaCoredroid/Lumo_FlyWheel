@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO=$(cd "$SCRIPT_DIR/.." && pwd)
+cd "$REPO"
+
+: "${RUNROOT:?set RUNROOT to a new output directory}"
+: "${TAG:?set TAG to a unique run tag}"
+: "${FORKED_FA2_SO:?set FORKED_FA2_SO to the pinned FA2 shared object}"
+: "${CUTLASS_STREAMK_SO:?set CUTLASS_STREAMK_SO to the pinned Stream-K shared object}"
+
+if [[ -e "$RUNROOT" || -L "$RUNROOT" ]]; then
+  echo "CUTLASS Stream-K gate requires a fresh RUNROOT: $RUNROOT" >&2
+  exit 2
+fi
+
+.venv/bin/python scripts/fr13_cutlass_wave_binary.py verify \
+  "$CUTLASS_STREAMK_SO" >/dev/null
+
+export FR13_GATE_QROW16=0
+export FR13_GATE_TAW_NATIVE=0
+export FR13_GATE_DRAFT_HEAD_PAD=0
+export FR13_GATE_GDN_BV=0
+export FR13_DFWD_UNIFIED_BM8_LIVE_AB=0
+export FR13_DFWD_UNIFIED_BM8_PRODUCTION=0
+export ENFORCE_EAGER=1
+export FR13_FIXED32_CUTLASS_WAVE=streamk_coop128_byte_ab
+export FR13_FIXED32_CUTLASS_WAVE_SO="$CUTLASS_STREAMK_SO"
+export FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL=/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl
+
+bash scripts/fr13_run_b1_kernel_live_gate.sh
+
+ARM="hydra27_fixed32_${TAG}"
+ARMDIR="$RUNROOT/$ARM"
+.venv/bin/python - \
+  "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl" \
+  "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_binary.json" \
+  "$ARMDIR/cutlass_streamk_byte_gate.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "scripts")
+import fr13_cutlass_wave_binary as binary
+
+jsonl_path, binary_path, output_path = map(Path, sys.argv[1:])
+lines = jsonl_path.read_text(encoding="utf-8").splitlines()
+if not lines:
+    raise SystemExit("CUTLASS Stream-K byte gate was vacuous")
+records = [json.loads(line) for line in lines]
+expected_record_schema = "fr13.fixed32.cutlass_streamk_byte_ab.v1"
+expected_shapes = {
+    (34816, 5120),
+    (5120, 17408),
+    (5120, 6144),
+    (16384, 5120),
+    (8192, 5120),
+}
+observed_shapes = {(record["n"], record["k"]) for record in records}
+invocations = [record["invocation"] for record in records]
+binary_record = json.loads(binary_path.read_text(encoding="ascii"))
+errors = []
+if len(records) > 256:
+    errors.append("diagnostic exceeded its 256-call bound")
+if any(record.get("schema") != expected_record_schema for record in records):
+    errors.append("comparison record schema mismatch")
+if invocations != list(range(len(records))):
+    errors.append("invocations are not contiguous from zero")
+if not expected_shapes.issubset(observed_shapes):
+    errors.append("not all five real projection shapes were exercised")
+if any(record.get("m") != 32 for record in records):
+    errors.append("a comparison did not use the fixed32 B1 row count")
+if any(record.get("bytes") != 2 * record["m"] * record["n"] for record in records):
+    errors.append("a comparison reported an invalid BF16 byte count")
+if any(
+    not isinstance(record.get("mismatch_count"), int)
+    or isinstance(record.get("mismatch_count"), bool)
+    or record["mismatch_count"] < 0
+    or record["mismatch_count"] > record["bytes"]
+    for record in records
+):
+    errors.append("a comparison reported an invalid differing-byte count")
+if any(record.get("byte_equal") is not True for record in records):
+    errors.append("at least one stock/Stream-K output differed")
+if any(
+    record.get("byte_equal") is not (record.get("mismatch_count") == 0)
+    for record in records
+):
+    errors.append("byte equality and differing-byte count disagree")
+if any(
+    (record.get("first_mismatch") is None) is not (record.get("mismatch_count") == 0)
+    or (
+        record.get("first_mismatch") is not None
+        and (
+            not isinstance(record.get("first_mismatch"), int)
+            or isinstance(record.get("first_mismatch"), bool)
+            or record["first_mismatch"] < 0
+            or record["first_mismatch"] >= record["bytes"]
+        )
+    )
+    for record in records
+):
+    errors.append("first mismatch and differing-byte count disagree")
+if binary_record.get("schema") != "fr13.fixed32.cutlass_streamk_binary.v1":
+    errors.append("installed binary attestation schema mismatch")
+if binary_record.get("selector") != "streamk_coop128_byte_ab":
+    errors.append("installed binary selector attestation mismatch")
+if binary_record.get("production_enabled") is not False:
+    errors.append("binary attestation did not remain production-off")
+destination = binary_record.get("destination") or {}
+source = binary_record.get("source") or {}
+if binary_record.get("installed_mode") != "0555":
+    errors.append("installed binary mode attestation mismatch")
+for label, identity, expected_path in (
+    ("source", source, str(binary.CONTAINER_SOURCE)),
+    ("destination", destination, str(binary.CONTAINER_DESTINATION)),
+):
+    if identity.get("path") != expected_path:
+        errors.append(f"installed binary {label} path mismatch")
+    if identity.get("regular") is not True or identity.get("symlink") is not False:
+        errors.append(f"installed binary {label} file identity mismatch")
+    if identity.get("sha256") != binary.CANDIDATE_SHA256:
+        errors.append(f"installed binary {label} SHA-256 mismatch")
+    if identity.get("bytes") != binary.CANDIDATE_SIZE:
+        errors.append(f"installed binary {label} size mismatch")
+
+payload = {
+    "schema": "fr13.fixed32.cutlass_streamk_live_gate.v1",
+    "status": "pass" if not errors else "fail",
+    "acceptance_valid": False,
+    "task_set": "one real SWE-Verified B1 diagnostic task",
+    "candidate": "streamk_coop128",
+    "served_result": "stock",
+    "production_enabled": False,
+    "comparisons": len(records),
+    "observed_m_values": sorted({record["m"] for record in records}),
+    "observed_projection_nk": sorted([list(shape) for shape in observed_shapes]),
+    "mismatching_comparisons": sum(
+        record.get("byte_equal") is not True for record in records
+    ),
+    "differing_bytes": sum(record.get("mismatch_count", 0) for record in records),
+    "candidate_sha256": binary.CANDIDATE_SHA256,
+    "candidate_bytes": binary.CANDIDATE_SIZE,
+    "errors": errors,
+}
+output_path.write_text(
+    json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
+    encoding="ascii",
+)
+print(json.dumps(payload, ensure_ascii=True, sort_keys=True))
+if errors:
+    raise SystemExit(4)
+PY

@@ -253,13 +253,76 @@ def test_launcher_wires_fail_closed_combined_bv_sidecars() -> None:
     assert "fr13_fixed32_batch_gdn_bv_production.flag" in launcher
     assert "B1 path-BV and B2-B4 batched wide-BV selectors" in launcher
     assert (
-        "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE requires "
-        "FR13_FIXED32_BATCH_GDN_BYTE_AB=1" in launcher
+        "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE requires exactly one "
+        "eager or graph byte diagnostic" in launcher
     )
     assert "byte diagnostic requires MAX_NUM_SEQS=4" in launcher
     assert "_fixed32_expected_metrics=1" in launcher
     assert "_fixed32_expected_eager=1" in launcher
     assert "requires MAX_NUM_SEQS=2, 3, or 4" in launcher
+
+
+def test_graph_byte_diagnostic_launcher_contract_is_fail_closed() -> None:
+    launcher = (
+        ROOT / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
+    ).read_text(encoding="utf-8")
+
+    assert "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0" in launcher
+    assert (
+        "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
+        in launcher
+    )
+    assert (
+        "fixed32 eager and graph batched GDN diagnostics are mutually exclusive"
+        in launcher
+    )
+    assert (
+        "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires ENFORCE_EAGER=0"
+        in launcher
+    )
+    assert (
+        "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires FR10_METRICS=1"
+        in launcher
+    )
+    assert (
+        "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires FR13_RING_EXPORT=1"
+        in launcher
+    )
+    assert (
+        "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires FR13_FLAGS_INKERNEL=1"
+        in launcher
+    )
+    assert (
+        "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires MAX_NUM_SEQS=4"
+        in launcher
+    )
+    assert "is incompatible with the B1 diagnostic" in launcher
+    assert "fr13_fixed32_batch_gdn_graph_byte_ab.enabled" in launcher
+    graph_branch_start = launcher.index(
+        'if [[ "$_fr13_batch_gdn_graph_byte_ab" == "1" ]]'
+    )
+    graph_branch_end = launcher.index(
+        "if (( _fr13_batch_gdn_diagnostic_count == 1 ))",
+        graph_branch_start,
+    )
+    graph_branch = launcher[graph_branch_start:graph_branch_end]
+    assert "fr13_fixed32_batch_gdn_graph_byte_ab.enabled" in graph_branch
+    assert "fr13_fixed32_batch_gdn_byte_ab.enabled" not in graph_branch
+    assert (
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH=/logs/"
+        "fr13_fixed32_batch_gdn_byte_ab.real_event.arm" in launcher
+    )
+    serve = (
+        ROOT / "scripts" / "fr13_bigdenom_swe_serve_variant.sh"
+    ).read_text(encoding="utf-8")
+    assert (
+        "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=1 requires a fixed32 arm"
+        in serve
+    )
+    assert (
+        "fixed32 graph byte diagnostic requires MAX_NUM_SEQS_OVR=4 and "
+        "SWE_CONCURRENCY=4" in serve
+    )
 
 
 def test_eager_gate_refreshes_a_stable_nonzero_ssi_registration() -> None:
@@ -305,8 +368,12 @@ def test_exact4_b4_live_gate_runner_is_non_timing_and_fail_closed() -> None:
     assert "export BSIZE=4" in runner
     assert "export CONC=4" in runner
     assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in runner
-    assert "FR10_METRICS=1 ENFORCE_EAGER=1" in runner
-    assert "FR13_FIXED32_BATCH_GDN_BYTE_AB=1" in runner
+    assert (
+        "FR10_METRICS=1 ENFORCE_EAGER=0 "
+        "CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in runner
+    )
+    assert "FR13_FIXED32_BATCH_GDN_BYTE_AB=0" in runner
+    assert "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=1" in runner
     assert "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE=" in runner
     assert "FR13_FIXED32_BATCH_GDN_PRODUCTION=0" in runner
     assert "FR13_DFWD_UNIFIED_BM8_LIVE_AB=0" in runner
@@ -321,5 +388,15 @@ def test_exact4_b4_live_gate_runner_is_non_timing_and_fail_closed() -> None:
     assert 'record.get("batch") == 4' in runner
     assert 'record.get("carrier_nonzero") is not True' in runner
     assert 'record.get("status") == "mismatch_reference_served"' in runner
+    assert "fr13.fixed32.batch_gdn.graph_live_pass.v1" in runner
+    assert '"gate_mode": "post_replay_shadow"' in runner
+    assert '"capture_records": 48' in runner
+    assert '"real_task_authenticated": True' in runner
+    assert 'record.get("graph_id") != graph_id' in runner
+    assert 'record.get("graph_signature") != graph_signature' in runner
+    assert 'record.get("graph_baseline_byte_equal") is not True' in runner
+    assert 'record.get("graph_comparisons")' in runner
+    assert '"graph_baseline_out"' in runner
     assert '"floor_acceptance_eligible": False' in runner
     assert '"production_default_enabled": False' in runner
+    assert "exact4_b4_graph_byte_diagnostic" in runner

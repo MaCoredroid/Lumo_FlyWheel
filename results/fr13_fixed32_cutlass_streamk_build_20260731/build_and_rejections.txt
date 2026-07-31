@@ -1,0 +1,42 @@
+BUILD RESULT
+============
+
+PASS: cmake --build /home/mark/fr13_streamk_build/vllm-build \
+        --target _C_stable_libtorch -j1
+
+The final rebuild compiled only:
+  csrc/libtorch_stable/quantization/w8a8/cutlass/c3x/
+  scaled_mm_blockwise_sm120_fp8.cu.o
+and then relinked _C_stable_libtorch.abi3.so.
+
+Final changed-TU compile facts from build.ninja:
+  -DTORCH_TARGET_VERSION=0x020A000000000000ULL
+  -DENABLE_SCALED_MM_SM120=1
+  -gencode arch=compute_121a,code=sm_121a
+  -std=c++17
+  RelWithDebInfo (-O2 -g -DNDEBUG)
+
+Pinned source checks:
+  vLLM     fe9c3d6c5f66c873d196800384ed6880687b9e52
+  CUTLASS  da5e086dab31d63815acafdac9a9c5893b1c69e2
+  dispatch 9de2ab8096df470d10a8838941f28c06831f481089bd5eaf98cfed90119fef65
+
+REJECTED BUILD/GATE ITERATIONS
+==============================
+
+1. TORCH_CHECK was not declared in the stable-libtorch target.
+   Correction: use STD_TORCH_CHECK.
+
+2. Stream-K TileSchedulerArguments fields instantiated for stock scheduler
+   types because the if constexpr branch was followed by unconditional code.
+   Correction: place candidate-only code in the else branch.
+
+3. CUTLASS rejected the cooperative 64x128x128 candidate with its static
+   requirement that cooperative tile M be at least 128.
+   Correction: remove streamk_coop64; retain legal streamk_coop128.
+
+4. Pre-GPU review rejected the first comparator because it broke on the first
+   differing byte instead of scanning the entire output.
+   Correction: scan all bytes, count differences, rebuild, and repin the SO.
+
+No rejected iteration is represented as a passing build or performance result.

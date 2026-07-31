@@ -127,6 +127,14 @@ FR13_DFWD_UNIFIED_BM8_LIVE_JSON=${FR13_DFWD_UNIFIED_BM8_LIVE_JSON:-/logs/fr13_df
 FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH=${FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH:-/logs/fr13_dfwd_unified_bm8.real_event.arm}
 FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON=${FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON:-/logs/fr13_dfwd_unified_bm8.identity.json}
 FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT=${FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT:-}
+FR13_DFWD_UNIFIED_BM8_PRODUCTION=${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}
+FR13_DFWD_UNIFIED_BM8_LIVE_PASS_JSON=${FR13_DFWD_UNIFIED_BM8_LIVE_PASS_JSON:-$REPO/results/fr13_fixed32_bm8_b1_live_pass_20260731T180804Z/run_evidence/live_pass.json}
+FR13_DFWD_UNIFIED_BM8_LIVE_PASS_SHA256=${FR13_DFWD_UNIFIED_BM8_LIVE_PASS_SHA256:-570caf42e3e75ff0d3717042b0dfc58b23a90041e71103f70a07f6d7563445b5}
+FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256=3baccaa1a83907e15561b1cf807f15a41bd4764513bb43c4046b434937c3274b
+FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON=${FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON:-/logs/fr13_dfwd_unified_bm8.production_capture.json}
+FR13_FIXED32_CUTLASS_WAVE=${FR13_FIXED32_CUTLASS_WAVE:-stock}
+FR13_FIXED32_CUTLASS_WAVE_SO=${FR13_FIXED32_CUTLASS_WAVE_SO:-}
+FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL=${FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL:-/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl}
 case "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" in
   0|1) ;;
   *) echo "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE must be 0 or 1" >&2; exit 2 ;;
@@ -219,12 +227,77 @@ if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
     exit 2
   }
 fi
+case "$FR13_FIXED32_CUTLASS_WAVE" in
+  stock|streamk_coop128|streamk_coop128_byte_ab) ;;
+  *)
+    echo "FR13_FIXED32_CUTLASS_WAVE must be stock, streamk_coop128, or streamk_coop128_byte_ab" >&2
+    exit 2
+    ;;
+esac
 case "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" in
   0|1) ;;
   *) echo "FR13_DFWD_UNIFIED_BM8_LIVE_AB must be 0 or 1" >&2; exit 2 ;;
 esac
+case "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" in
+  0|1) ;;
+  *) echo "FR13_DFWD_UNIFIED_BM8_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" \
+      && "$FR13_FIXED32_CUTLASS_WAVE" != "stock" ]]; then
+  echo "FR13 DFWD unified BM8 production requires the stock CUTLASS wave" >&2
+  exit 2
+fi
+if [[ "$FR13_FIXED32_CUTLASS_WAVE" != "stock" \
+      && ( "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" != "0" \
+           || "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" != "0" ) ]]; then
+  echo "nonstock CUTLASS wave requires both BM8 selectors to be 0" >&2
+  exit 2
+fi
+FR13_CUTLASS_WAVE_DOCKER_ARGS=()
+if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" ]]; then
+  [[ -z "$FR13_FIXED32_CUTLASS_WAVE_SO" ]] || {
+    echo "stock CUTLASS wave selector forbids a candidate SO" >&2
+    exit 2
+  }
+else
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" ]] || {
+    echo "CUTLASS Stream-K candidate is restricted to the fixed32 B1 diagnostic" >&2
+    exit 2
+  }
+  [[ "$FR13_FIXED32_CUTLASS_WAVE_SO" == /* \
+     && "$FR13_FIXED32_CUTLASS_WAVE_SO" != *:* \
+     && -f "$FR13_FIXED32_CUTLASS_WAVE_SO" \
+     && ! -L "$FR13_FIXED32_CUTLASS_WAVE_SO" ]] || {
+    echo "CUTLASS Stream-K candidate requires an absolute regular non-symlink SO path" >&2
+    exit 2
+  }
+  .venv/bin/python scripts/fr13_cutlass_wave_binary.py verify \
+    "$FR13_FIXED32_CUTLASS_WAVE_SO" >/dev/null
+  FR13_FIXED32_CUTLASS_WAVE_SO=$(realpath "$FR13_FIXED32_CUTLASS_WAVE_SO")
+  FR13_CUTLASS_WAVE_DOCKER_ARGS=(
+    -v "$FR13_FIXED32_CUTLASS_WAVE_SO:/tmp/fr13_cutlass_wave.abi3.so:ro"
+  )
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" ]]; then
+    [[ "${ENFORCE_EAGER:-0}" == "1" \
+       && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl" ]] || {
+      echo "CUTLASS Stream-K byte A/B requires ENFORCE_EAGER=1 and the canonical JSONL path" >&2
+      exit 2
+    }
+  fi
+fi
 if [[ -n "${FR13_DFWD_UNIFIED_BM8_INTERNAL:-}" ]]; then
   echo "FR13 DFWD unified BM8 internal selector is launcher-private" >&2
+  exit 2
+fi
+if [[ -n "${FR13_DFWD_UNIFIED_BM8_INTERNAL_PRODUCTION_ATTESTED:-}" ]]; then
+  echo "FR13 DFWD unified BM8 production attestation is launcher-private" >&2
+  exit 2
+fi
+if [[ "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "1" \
+      && "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
+  echo "FR13 DFWD unified BM8 live A/B and production are mutually exclusive" >&2
   exit 2
 fi
 if [[ "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "1" ]]; then
@@ -240,9 +313,29 @@ if [[ "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "1" ]]; then
   }
   [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
      && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+     && "$FR13_DRAFT_HEAD_PAD_ROWS" == "0" \
      && "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" \
      && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" ]] || {
     echo "FR13 DFWD unified BM8 live gate must be the only diagnostic kernel candidate" >&2
+    exit 2
+  }
+fi
+if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && -f "$FR13_DFWD_UNIFIED_BM8_LIVE_PASS_JSON" \
+     && ! -L "$FR13_DFWD_UNIFIED_BM8_LIVE_PASS_JSON" \
+     && "$FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON" == "/logs/fr13_dfwd_unified_bm8.production_capture.json" \
+     && "$FR13_DFWD_UNIFIED_BM8_LIVE_PASS_SHA256" == "570caf42e3e75ff0d3717042b0dfc58b23a90041e71103f70a07f6d7563445b5" ]] || {
+    echo "FR13 DFWD unified BM8 production requires the pinned real-SWE B1 PASS" >&2
+    exit 2
+  }
+  [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+     && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+     && "$FR13_DRAFT_HEAD_PAD_ROWS" == "0" \
+     && "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" ]] || {
+    echo "FR13 DFWD unified BM8 production cannot overlap diagnostic kernel candidates" >&2
     exit 2
   }
 fi
@@ -752,6 +845,7 @@ fi
 if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
   _fr13_fixed32_batch_gdn_diagnostic=${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}
+  _fr13_fixed32_batch_gdn_graph_diagnostic=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
   case "$FR13_FIXED32_B1_DIAGNOSTIC" in
     0|1) ;;
     *) echo "FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1" >&2; exit 2 ;;
@@ -760,7 +854,17 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     0|1) ;;
     *) echo "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
   esac
+  case "$_fr13_fixed32_batch_gdn_graph_diagnostic" in
+    0|1) ;;
+    *) echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
   if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" \
+        && "$_fr13_fixed32_batch_gdn_graph_diagnostic" == "1" ]]; then
+    echo "fixed32 eager and graph batched GDN diagnostics are mutually exclusive" >&2
+    exit 2
+  fi
+  if [[ ( "$_fr13_fixed32_batch_gdn_diagnostic" == "1" \
+          || "$_fr13_fixed32_batch_gdn_graph_diagnostic" == "1" ) \
         && "$MAX_NUM_SEQS" != "4" ]]; then
     echo "fixed32 batched GDN byte diagnostic requires MAX_NUM_SEQS=4" >&2
     exit 2
@@ -773,10 +877,16 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   [[ "$MAX_NUM_SEQS" == "4" ]] && _fixed32_expected_mem=112g
   _fixed32_expected_metrics=0
   _fixed32_expected_eager=0
-  if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" ]]; then
+  if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" \
+        || "$_fr13_fixed32_batch_gdn_graph_diagnostic" == "1" ]]; then
     # This is a real exact4 byte diagnostic, never an acceptance/timing arm.
-    # Host byte comparison requires eager execution and the invocation counter.
+    # Both execution modes require the invocation counter for byte evidence.
     _fixed32_expected_metrics=1
+  fi
+  if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" ]]; then
+    _fixed32_expected_eager=1
+  fi
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" ]]; then
     _fixed32_expected_eager=1
   fi
   [[ "$MAX_NUM_SEQS" == "1" || "$MAX_NUM_SEQS" == "4" ]] \
@@ -880,6 +990,13 @@ fi
 
 mkdir -p "$LOG_DIR"
 LOG_DIR=$(realpath "$LOG_DIR")
+if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" ]]; then
+  rm -f "$LOG_DIR/fr13_fixed32_cutlass_wave.selector"
+else
+  printf '%s\n' "$FR13_FIXED32_CUTLASS_WAVE" \
+    > "$LOG_DIR/fr13_fixed32_cutlass_wave.selector"
+  chmod 0444 "$LOG_DIR/fr13_fixed32_cutlass_wave.selector"
+fi
 FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR=""
 FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256=""
 if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
@@ -896,6 +1013,23 @@ if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
   )
   export FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR
   export FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256
+fi
+FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR=""
+FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256=""
+if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
+  FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_HOST="$LOG_DIR/fr13_dfwd_unified_bm8.production_pass.json"
+  rm -f -- "$FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_HOST"
+  python3 scripts/fr13_bm8_pass_sidecar.py issue \
+    --live-result "$FR13_DFWD_UNIFIED_BM8_LIVE_PASS_JSON" \
+    --expected-live-sha256 "$FR13_DFWD_UNIFIED_BM8_LIVE_PASS_SHA256" \
+    --expected-candidate-source-sha256 "$FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256" \
+    --out "$FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_HOST"
+  FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR=/logs/fr13_dfwd_unified_bm8.production_pass.json
+  FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256=$(
+    sha256sum "$FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_HOST" | cut -d' ' -f1
+  )
+  export FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR
+  export FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256
 fi
 if [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "1" ]]; then
   echo "1" > "$LOG_DIR/fr13_fixed32_taw_native_precompute_diagnostic.arm"
@@ -922,6 +1056,13 @@ if [[ "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "1" ]]; then
     "$LOG_DIR/fr13_dfwd_unified_bm8.real_event.arm" \
     "$LOG_DIR/fr13_dfwd_unified_bm8.identity.json" \
     "$LOG_DIR/fr13_dfwd_unified_bm8.live.json"
+elif [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
+  rm -f \
+    "$LOG_DIR/fr13_dfwd_unified_bm8.real_event.arm" \
+    "$LOG_DIR/fr13_dfwd_unified_bm8.identity.json" \
+    "$LOG_DIR/fr13_dfwd_unified_bm8.live.json" \
+    "$LOG_DIR/fr13_dfwd_unified_bm8.production_capture.json" \
+    2>/dev/null || true
 else
   rm -f "$LOG_DIR/fr13_dfwd_unified_bm8.real_event.arm" 2>/dev/null || true
 fi
@@ -1138,16 +1279,21 @@ if [[ "${FR13_COMMITTER_GRAPH:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_committer_graph.arm" 2>/dev/null || true
 fi
-# The batched-GDN byte gate must stay eager and legacy-served until a real
-# SWE-Verified task is explicitly armed after readiness. The EngineCore worker
-# sees these /logs sidecars even when its curated environment drops FR13_*.
+# The batched-GDN byte gates stay reference-served until a real SWE-Verified
+# task is explicitly armed after readiness. The EngineCore worker sees these
+# /logs sidecars even when its curated environment drops FR13_*.
 _fr13_batch_gdn_byte_ab="${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}"
+_fr13_batch_gdn_graph_byte_ab="${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}"
 _fr13_batch_gdn_production="${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}"
 _fr13_batch_gdn_bv_candidate="${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}"
 _fr13_batch_gdn_bv_production="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}"
 case "$_fr13_batch_gdn_byte_ab" in
   0|1) ;;
   *) echo "FR13_FIXED32_BATCH_GDN_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
+esac
+case "$_fr13_batch_gdn_graph_byte_ab" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
 esac
 case "$_fr13_batch_gdn_production" in
   0|1) ;;
@@ -1160,12 +1306,20 @@ for _fr13_batch_gdn_bv_name in \
     *) echo "FR13 fixed32 batched GDN BV must be 16, 32, 64, or 128" >&2; exit 2 ;;
   esac
 done
+_fr13_batch_gdn_diagnostic_count=$((
+  10#$_fr13_batch_gdn_byte_ab + 10#$_fr13_batch_gdn_graph_byte_ab
+))
+if (( _fr13_batch_gdn_diagnostic_count > 1 )); then
+  echo "FR13 fixed32 eager and graph batched GDN diagnostics are mutually exclusive" >&2
+  exit 2
+fi
 if [[ -n "$_fr13_batch_gdn_bv_candidate" \
       && -n "$_fr13_batch_gdn_bv_production" ]]; then
   echo "FR13 fixed32 batched GDN wide-BV diagnostic and production selectors are mutually exclusive" >&2
   exit 2
 fi
-if [[ "$_fr13_batch_gdn_byte_ab" == "1" \
+if [[ ( "$_fr13_batch_gdn_byte_ab" == "1" \
+        || "$_fr13_batch_gdn_graph_byte_ab" == "1" ) \
       && "$_fr13_batch_gdn_production" == "1" ]]; then
   echo "FR13 fixed32 batched GDN diagnostic and production are mutually exclusive" >&2
   exit 2
@@ -1173,6 +1327,7 @@ fi
 if [[ ( -n "$_fr13_gdn_path_bv_candidate" \
         || -n "$_fr13_gdn_path_bv_production" ) \
       && ( "$_fr13_batch_gdn_byte_ab" == "1" \
+           || "$_fr13_batch_gdn_graph_byte_ab" == "1" \
            || "$_fr13_batch_gdn_production" == "1" ) ]]; then
   echo "FR13 fixed32 batched GDN and path-BV selectors are mutually exclusive" >&2
   exit 2
@@ -1184,9 +1339,9 @@ if [[ ( -n "$_fr13_gdn_path_bv_candidate" \
   echo "FR13 fixed32 B1 path-BV and B2-B4 batched wide-BV selectors are mutually exclusive" >&2
   exit 2
 fi
-if [[ -n "$_fr13_batch_gdn_bv_candidate" \
-      && "$_fr13_batch_gdn_byte_ab" != "1" ]]; then
-  echo "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE requires FR13_FIXED32_BATCH_GDN_BYTE_AB=1" >&2
+if [[ -n "$_fr13_batch_gdn_bv_candidate" ]] \
+    && (( _fr13_batch_gdn_diagnostic_count != 1 )); then
+  echo "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE requires exactly one eager or graph byte diagnostic" >&2
   exit 2
 fi
 if [[ -n "$_fr13_batch_gdn_bv_production" \
@@ -1211,21 +1366,41 @@ if [[ "$_fr13_batch_gdn_byte_ab" == "1" ]]; then
     || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires FR13_FLAGS_INKERNEL=1" >&2; exit 2; }
   [[ "$MAX_NUM_SEQS" =~ ^[234]$ ]] \
     || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires MAX_NUM_SEQS=2, 3, or 4" >&2; exit 2; }
+  echo "1" > "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.enabled"
+else
+  rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.enabled" 2>/dev/null || true
+fi
+if [[ "$_fr13_batch_gdn_graph_byte_ab" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires FR13_FIXED32_MODE" >&2; exit 2; }
+  [[ "${ENFORCE_EAGER:-0}" == "0" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires ENFORCE_EAGER=0" >&2; exit 2; }
+  [[ "${FR10_METRICS:-0}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires FR10_METRICS=1" >&2; exit 2; }
+  [[ "${FR13_RING_EXPORT:-1}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires FR13_RING_EXPORT=1" >&2; exit 2; }
+  [[ "${FR13_FLAGS_INKERNEL:-1}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires FR13_FLAGS_INKERNEL=1" >&2; exit 2; }
+  [[ "$MAX_NUM_SEQS" == "4" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires MAX_NUM_SEQS=4" >&2; exit 2; }
+  [[ "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB is incompatible with the B1 diagnostic" >&2; exit 2; }
+  echo "1" > "$LOG_DIR/fr13_fixed32_batch_gdn_graph_byte_ab.enabled"
+else
+  rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_graph_byte_ab.enabled" 2>/dev/null || true
+fi
+if (( _fr13_batch_gdn_diagnostic_count == 1 )); then
   if [[ -n "$_fr13_batch_gdn_bv_candidate" ]]; then
     printf '%s\n' "$_fr13_batch_gdn_bv_candidate" \
       > "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag"
     chmod 400 "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag"
   fi
-  echo "1" > "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.enabled"
   rm -f \
     "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json"
   FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH=/logs/fr13_fixed32_batch_gdn_byte_ab.real_event.arm
 else
-  rm -f \
-    "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.enabled" \
-    "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.real_event.arm" \
-    2>/dev/null || true
+  rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.real_event.arm" 2>/dev/null || true
   FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH=
 fi
 export FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH
@@ -1265,12 +1440,14 @@ if [[ "$_fr13_subtree_selfcheck" == "1" && "$_fr13_subtree_parallel" != "1" ]]; 
   exit 2
 fi
 if [[ ( "$_fr13_batch_gdn_byte_ab" == "1" \
+        || "$_fr13_batch_gdn_graph_byte_ab" == "1" \
         || "$_fr13_batch_gdn_production" == "1" ) \
       && "$_fr13_subtree_parallel" != "1" ]]; then
   echo "FR13 fixed32 batched GDN requires FR13_SUBTREE_PARALLEL=1" >&2
   exit 2
 fi
 if [[ ( "$_fr13_batch_gdn_byte_ab" == "1" \
+        || "$_fr13_batch_gdn_graph_byte_ab" == "1" \
         || "$_fr13_batch_gdn_production" == "1" ) \
       && "$_fr13_subtree_selfcheck" == "1" ]]; then
   echo "FR13 fixed32 batched GDN is incompatible with FR13_SUBTREE_PARALLEL_SELFCHECK=1" >&2
@@ -1477,6 +1654,7 @@ FR13_ENV_FORWARD_ARGS=()
 while IFS= read -r _v; do
   [[ "$_v" == "FR13_FIXED32_INGRESS_SECRET_FILE" \
      || "$_v" == "FR13_FIXED32_MIDDLEWARE_FLAGS" \
+     || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_SO" \
      || "$_v" == "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH" ]] && continue
   if [[ -n "${FR13_FIXED32_MODE:-}" \
      && "$_v" == "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION" ]]; then
@@ -1503,6 +1681,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
   -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
   -v "$FORKED_FA2_SO:/tmp/fr13_fork_fa2.so:ro" \
+  "${FR13_CUTLASS_WAVE_DOCKER_ARGS[@]}" \
   -v "${FR13_COMPILE_CACHE_DIR:-$HOME/.cache/fr13_vllm_container_cache}:/root/.cache" \
   "${NSYS_DOCKER_ARGS[@]}" \
   "${FR13_FIXED32_DOCKER_ARGS[@]}" \
@@ -1650,6 +1829,13 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH="$FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH" \
   -e FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON="$FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON" \
   -e FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT="$FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT" \
+  -e FR13_DFWD_UNIFIED_BM8_PRODUCTION="$FR13_DFWD_UNIFIED_BM8_PRODUCTION" \
+  -e FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR="$FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR" \
+  -e FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256="$FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256" \
+  -e FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256="$FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256" \
+  -e FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON="$FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON" \
+  -e FR13_FIXED32_CUTLASS_WAVE="$FR13_FIXED32_CUTLASS_WAVE" \
+  -e FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL="$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" \
   -e FR13_KVREMAP_TIMER="${FR13_KVREMAP_TIMER:-0}" \
   -e FR13_KVREMAP_TIMER_JSON="${FR13_KVREMAP_TIMER_JSON:-}" \
   -e FR13_STATEREMAP_TIMER="${FR13_STATEREMAP_TIMER:-0}" \
@@ -1877,6 +2063,13 @@ temporary.write_text(
 temporary.replace(identity_path)
 PY
 fi
+if [[ "\${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ]]; then
+  python3 /workspace/scripts/fr13_cutlass_wave_binary.py install \
+    --source /tmp/fr13_cutlass_wave.abi3.so \
+    --destination /usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so \
+    --attestation /logs/fr13_fixed32_cutlass_streamk_binary.json \
+    --selector "\$FR13_FIXED32_CUTLASS_WAVE"
+fi
 cp /tmp/fr13_fork_fa2.so /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so
 sha256sum /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so | tee /logs/fr13_forked_fa2.sha256
 if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
@@ -1888,8 +2081,17 @@ if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
   export FR13_FA2_QROW16_INTERNAL_PRODUCTION_ATTESTED=1
 fi
 python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
+if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
+  python3 /workspace/scripts/fr13_bm8_pass_sidecar.py verify \
+    --sidecar "$FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR" \
+    --expected-sidecar-sha256 "$FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256" \
+    --candidate-source /usr/local/lib/python3.12/dist-packages/vllm/v1/attention/ops/triton_unified_attention.py \
+    --expected-candidate-source-sha256 "$FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256"
+  export FR13_DFWD_UNIFIED_BM8_INTERNAL_PRODUCTION_ATTESTED=1
+fi
 python3 /workspace/scripts/fr13_patch_fa2_tree_bias.py --skip-source \
-  $(if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" ]]; then printf '%s' '--fixed32-query-tile16-live-ab'; elif [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then printf '%s' '--fixed32-query-tile16-production'; fi)
+  $(if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" ]]; then printf '%s' '--fixed32-query-tile16-live-ab'; elif [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then printf '%s' '--fixed32-query-tile16-production'; fi) \
+  $(if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then printf '%s' '--dfwd-unified-bm8-production'; fi)
 python3 - <<'PY'
 import hashlib
 import json
@@ -1968,6 +2170,46 @@ if os.environ.get('FR13_DFWD_UNIFIED_BM8_LIVE_AB', '0') == '1':
     )
     temporary.chmod(0o444)
     temporary.replace(identity_path)
+if os.environ.get('FR13_DFWD_UNIFIED_BM8_PRODUCTION', '0') == '1':
+    if (
+        os.environ.get(
+            'FR13_DFWD_UNIFIED_BM8_INTERNAL_PRODUCTION_ATTESTED', '0'
+        )
+        != '1'
+    ):
+        raise SystemExit('DFWD unified BM8 production attestation missing')
+    if os.environ.get('FR13_DFWD_UNIFIED_BM8_INTERNAL') is not None:
+        raise SystemExit('DFWD unified BM8 internal selector leaked before capture')
+    unified_path = Path(
+        '/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/ops/'
+        'triton_unified_attention.py'
+    )
+    expected_source = os.environ.get(
+        'FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256', ''
+    )
+    if hashlib.sha256(unified_path.read_bytes()).hexdigest() != expected_source:
+        raise SystemExit('DFWD unified BM8 qualified source drifted')
+    tree_impl = text.split('class TreeAttentionImpl', 1)[-1]
+    guarded_call = '_fr13_dfwd_unified_bm8_production_call('
+    if tree_impl.count(guarded_call) != 1:
+        raise SystemExit(f'DFWD unified BM8 guarded fallback is not unique in {path}')
+    fa2_route = (
+        'if os.environ.get("FR13_FA2_TREE_BIAS", "0") == "1" '
+        'and use_tree_bias:'
+    )
+    if fa2_route not in tree_impl or 'flash_attn_varlen_func(' not in tree_impl:
+        raise SystemExit(f'DFWD unified BM8 target FA2 route missing in {path}')
+    gdn_path = Path(
+        '/usr/local/lib/python3.12/dist-packages/vllm/model_executor/'
+        'layers/mamba/gdn_linear_attn.py'
+    )
+    gdn_text = gdn_path.read_text()
+    if (
+        '_fr13_dfwd_unified_bm8_production_begin' not in gdn_text
+        or '_fr13_dfwd_unified_bm8_production_end' not in gdn_text
+        or '_fr13_dfwd_unified_bm8_production_replay_installed' not in gdn_text
+    ):
+        raise SystemExit(f'DFWD unified BM8 production scope missing in {gdn_path}')
 if os.environ.get('FR13_BI_TREE_ATTN', '0') == '1':
     bi_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/batch_invariant.py')
     bi_text = bi_path.read_text()

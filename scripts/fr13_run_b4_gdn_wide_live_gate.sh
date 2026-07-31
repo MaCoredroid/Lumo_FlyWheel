@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Real SWE-Verified exact4 B4 byte diagnostic for the batched wide-BV GDN.
+# Real SWE-Verified exact4 B4 graph byte diagnostic for the batched wide-BV GDN.
 # This runner is deliberately non-timing and cannot produce floor acceptance.
 set -euo pipefail
 
@@ -45,7 +45,7 @@ run_variant() { :; }
 source scripts/fr13_fixed32_floor_timers_seq.sh
 
 mkdir -p "$RUNROOT"
-printf 'classification=exact4_b4_byte_diagnostic\ntiming_eligible=0\nfloor_acceptance_eligible=0\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nfa2_sha256=%s\ncandidate_bv=%s\nstarted=%s\n' \
+printf 'classification=exact4_b4_graph_byte_diagnostic\ntiming_eligible=0\nfloor_acceptance_eligible=0\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nfa2_sha256=%s\ncandidate_bv=%s\nstarted=%s\n' \
   "$$" "$RUNROOT" "$ARM" "$(git rev-parse HEAD)" "$RUNNER_SHA256" \
   "$SUBSET_SHA256" "$FA2_SHA256" "$FR13_GATE_BATCH_GDN_BV" \
   "$(date -u +%FT%TZ)" \
@@ -60,17 +60,20 @@ printf 'classification=exact4_b4_byte_diagnostic\ntiming_eligible=0\nfloor_accep
 
 if OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4 AGENT_WALL_S= \
     FR13_FIXED32_B1_DIAGNOSTIC=0 \
-    FR10_METRICS=1 ENFORCE_EAGER=1 \
+    FR10_METRICS=1 ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
     FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1 \
-    FR13_FIXED32_BATCH_GDN_BYTE_AB=1 \
+    FR13_FIXED32_BATCH_GDN_BYTE_AB=0 \
+    FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=1 \
     FR13_FIXED32_BATCH_GDN_BV_CANDIDATE="$FR13_GATE_BATCH_GDN_BV" \
     FR13_FIXED32_BATCH_GDN_PRODUCTION=0 \
     FR13_FIXED32_BATCH_GDN_BV_PRODUCTION= \
     FR13_FIXED32_GDN_PATH_BV_CANDIDATE= \
     FR13_FIXED32_GDN_PATH_BV_PRODUCTION= \
+    FR13_FIXED32_CUTLASS_WAVE=stock FR13_FIXED32_CUTLASS_WAVE_SO= \
     FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
     FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0 \
-    FR13_DFWD_UNIFIED_BM8_LIVE_AB=0 FR13_DFWD_UNIFIED_BM8_INSTANCE_ID= \
+    FR13_DFWD_UNIFIED_BM8_LIVE_AB=0 FR13_DFWD_UNIFIED_BM8_PRODUCTION=0 \
+    FR13_DFWD_UNIFIED_BM8_INSTANCE_ID= \
     FR13_DRAFT_HEAD_PAD_ROWS=0 FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=0 \
     FR13_FA2_QROW16_LIVE_PAGED_AB=0 FR13_FA2_QROW16_PRODUCTION=0 \
     FR13_FIXED32_ATTRIBUTION_ONLY=0 \
@@ -168,11 +171,14 @@ payload = json.loads(pass_path.read_text(encoding="ascii"))
 source_path = Path("src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py")
 source_sha256 = hashlib.sha256(source_path.read_bytes()).hexdigest()
 expected_pass = {
-    "schema": "fr13.fixed32.batch_gdn.live_pass.v2",
+    "schema": "fr13.fixed32.batch_gdn.graph_live_pass.v1",
     "status": "pass",
+    "gate_mode": "post_replay_shadow",
     "task_marker": task_marker,
     "batch": 4,
     "layer_count": 48,
+    "capture_records": 48,
+    "real_task_authenticated": True,
     "reference_always_served": True,
     "candidate": "fixed32_batch_gdn_bv_v2",
     "source_sha256": source_sha256,
@@ -183,12 +189,23 @@ expected_pass = {
     "reference_physical_launches_per_layer": 8,
     "candidate_physical_launches_per_layer": 2,
     "compared_byte_surfaces": surfaces,
+    "graph_baseline_byte_equal": True,
     "raw_byte_equal": True,
     "state_restored": True,
 }
 for key, expected in expected_pass.items():
     if payload.get(key) != expected:
         raise SystemExit(f"B4 PASS field mismatch: {key}")
+graph_id = payload.get("graph_id")
+graph_signature = payload.get("graph_signature")
+if not isinstance(graph_id, int) or isinstance(graph_id, bool) or graph_id <= 0:
+    raise SystemExit("B4 graph PASS graph_id is invalid")
+if (
+    not isinstance(graph_signature, str)
+    or len(graph_signature) != 64
+    or any(character not in "0123456789abcdef" for character in graph_signature)
+):
+    raise SystemExit("B4 graph PASS graph_signature is invalid")
 layer_keys = payload.get("layer_keys")
 if (
     not isinstance(layer_keys, list)
@@ -218,17 +235,36 @@ if len(b4) != 48 or {record.get("layer_key") for record in b4} != set(layer_keys
     raise SystemExit("B4 JSONL does not contain exactly 48 distinct PASS records")
 for record in b4:
     comparisons = record.get("comparisons")
+    graph_comparisons = record.get("graph_comparisons")
     if (
         record.get("schema") != "fr13.fixed32.batch_gdn.byte_ab.v1"
+        or record.get("gate_mode") != "post_replay_shadow"
         or record.get("task_marker") != task_marker
+        or record.get("graph_id") != graph_id
+        or record.get("graph_signature") != graph_signature
         or record.get("physical_rows_per_request") != 32
         or record.get("reference_bv") != 8
         or record.get("candidate_bv") != candidate_bv
         or record.get("legacy_physical_launches") != 8
         or record.get("candidate_physical_launches") != 2
         or record.get("carrier_nonzero") is not True
+        or record.get("graph_baseline_byte_equal") is not True
         or record.get("zero_diff") is not True
         or record.get("reference_restored_and_served") is not True
+        or not isinstance(graph_comparisons, list)
+        or [comparison.get("name") for comparison in graph_comparisons]
+        != [
+            "graph_baseline_out",
+            "graph_baseline_ring_k",
+            "graph_baseline_ring_v",
+            "graph_baseline_ring_a",
+            "graph_baseline_ring_b",
+            "graph_baseline_flags",
+        ]
+        or any(
+            comparison.get("byte_equal") is not True
+            for comparison in graph_comparisons
+        )
         or not isinstance(comparisons, list)
         or [comparison.get("name") for comparison in comparisons] != surfaces
         or any(comparison.get("byte_equal") is not True for comparison in comparisons)
@@ -283,12 +319,15 @@ observed_pass_layers = {
 verdict = {
     "schema": "fr13.fixed32.batch_gdn.b4_diagnostic.v1",
     "status": "pass",
-    "run_classification": "exact4_b4_byte_diagnostic",
+    "run_classification": "exact4_b4_graph_byte_diagnostic",
     "timing_eligible": False,
     "floor_acceptance_eligible": False,
     "subset_sha256": subset_sha256,
     "task_ids": sorted(exact_tasks),
     "task_marker": task_marker,
+    "gate_mode": "post_replay_shadow",
+    "graph_id": graph_id,
+    "graph_signature": graph_signature,
     "candidate_bv": candidate_bv,
     "b4_layer_passes": 48,
     "observed_pass_layers_by_batch": observed_pass_layers,

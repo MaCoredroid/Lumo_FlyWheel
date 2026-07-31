@@ -68,6 +68,9 @@ _FIXED32_BATCH_GDN_REAL_EVENT_ARM_NAME = (
     "fr13_fixed32_batch_gdn_byte_ab.real_event.arm"
 )
 _FIXED32_BATCH_GDN_ENABLED_NAME = "fr13_fixed32_batch_gdn_byte_ab.enabled"
+_FIXED32_BATCH_GDN_GRAPH_ENABLED_NAME = (
+    "fr13_fixed32_batch_gdn_graph_byte_ab.enabled"
+)
 _FIXED32_BATCH_GDN_EXACT4_TASK_IDS = (
     "astropy__astropy-12907",
     "astropy__astropy-13033",
@@ -1344,10 +1347,23 @@ class Fixed32EngineIngress:
             os.close(descriptor)
 
     def _validate_batch_gdn_enabled_sidecar(self, path: Path) -> None:
-        enabled = path.with_name(_FIXED32_BATCH_GDN_ENABLED_NAME)
+        enabled_paths = tuple(
+            path.with_name(name)
+            for name in (
+                _FIXED32_BATCH_GDN_ENABLED_NAME,
+                _FIXED32_BATCH_GDN_GRAPH_ENABLED_NAME,
+            )
+            if os.path.lexists(path.with_name(name))
+        )
+        if len(enabled_paths) != 1:
+            raise Fixed32IngressError(
+                "fixed32 batched GDN requires exactly one eager or graph "
+                "enabled sidecar"
+            )
+        enabled = enabled_paths[0]
         if self._read_batch_gdn_sidecar(
             enabled,
-            label="enabled sidecar",
+            label=f"enabled sidecar {enabled.name}",
             max_bytes=2,
         ) != b"1\n":
             raise Fixed32IngressError(

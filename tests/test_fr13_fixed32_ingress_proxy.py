@@ -469,15 +469,23 @@ def test_engine_middleware_rejects_before_generation_and_replays_exact_body(
     )
 
 
+@pytest.mark.parametrize(
+    "enabled_name",
+    (
+        "fr13_fixed32_batch_gdn_byte_ab.enabled",
+        "fr13_fixed32_batch_gdn_graph_byte_ab.enabled",
+    ),
+)
 def test_engine_middleware_arms_batch_gdn_from_authenticated_exact4_request(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    enabled_name: str,
 ) -> None:
     secret_path = tmp_path / "secret.json"
     _task_seed, engine_bearer = _write_secret(secret_path)
     logs = tmp_path / "logs"
     logs.mkdir()
-    enabled = logs / "fr13_fixed32_batch_gdn_byte_ab.enabled"
+    enabled = logs / enabled_name
     enabled.write_bytes(b"1\n")
     marker = logs / "fr13_fixed32_batch_gdn_byte_ab.real_event.arm"
     monkeypatch.setenv(
@@ -636,6 +644,30 @@ def test_engine_middleware_rejects_inexact_batch_gdn_arm_configuration(
             secret_file=secret_path,
             canonical_task_ids=EXACT4_TASK_IDS,
             ledger_path=tmp_path / "engine-prearmed.jsonl",
+            batch_gdn_real_event_arm=marker,
+        )
+
+
+def test_engine_middleware_rejects_both_batch_gdn_gate_sidecars(
+    tmp_path: Path,
+) -> None:
+    secret_path = tmp_path / "secret.json"
+    _write_secret(secret_path)
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    for name in (
+        "fr13_fixed32_batch_gdn_byte_ab.enabled",
+        "fr13_fixed32_batch_gdn_graph_byte_ab.enabled",
+    ):
+        (logs / name).write_bytes(b"1\n")
+    marker = logs / "fr13_fixed32_batch_gdn_byte_ab.real_event.arm"
+
+    with pytest.raises(Fixed32IngressError, match="exactly one eager or graph"):
+        Fixed32EngineIngressMiddleware(
+            object(),
+            secret_file=secret_path,
+            canonical_task_ids=EXACT4_TASK_IDS,
+            ledger_path=tmp_path / "engine.jsonl",
             batch_gdn_real_event_arm=marker,
         )
 

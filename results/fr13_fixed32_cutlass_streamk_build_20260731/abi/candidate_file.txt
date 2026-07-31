@@ -1,0 +1,1 @@
+/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.streamk_coop128_allbytes_gate_ready.abi3.so: ELF 64-bit LSB shared object, ARM aarch64, version 1 (GNU/Linux), dynamically linked, BuildID[sha1]=e126f10786f59ec890a79550d92b7a9132e007e2, with debug_info, not stripped
