@@ -1,0 +1,163 @@
+{
+  "schema": "fr13-fixed32-exact4-arm-measurement-v1",
+  "created_at_utc": "2026-07-31T13:44:00Z",
+  "arm_measurement_valid": true,
+  "formal_two_arm_gate_eligible": false,
+  "formal_two_arm_gate_note": "This is a valid canonical Hydra27 exact4 arm. Tail6 used the same source, runtime identities, task set, batch, and concurrency in a separately tagged campaign, so cross-arm values are diagnostic rather than a fabricated single-driver gate.",
+  "campaign": {
+    "arm": "hydra27_fixed32",
+    "batch_size": 1,
+    "concurrency": 1,
+    "task_set": "config/fr13_fixed32/subset_b4_four.json",
+    "task_ids": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033",
+      "astropy__astropy-13236",
+      "astropy__astropy-13398"
+    ],
+    "source_commit": "e5a4029249e5b9483919056bae6542e47bbce75b",
+    "swe_started_at_utc": "2026-07-31T13:05:55Z",
+    "swe_ended_at_utc": "2026-07-31T13:41:16Z",
+    "orchestrator_exit_code": 0,
+    "task_verdicts": [
+      "resolved",
+      "failed",
+      "failed",
+      "failed"
+    ]
+  },
+  "canonical_validation": {
+    "audit_schema": "fr13-fixed32-chat-task-provenance-audit-v2",
+    "all_checks_passed": true,
+    "all_canonical_tasks_validated": true,
+    "all_task_agent_and_eval_terminal": true,
+    "all_task_identity_and_dataset_hashes_exact": true,
+    "all_successful_engine_requests_match_census": true,
+    "all_census_requests_inside_task_brackets": true,
+    "no_fixed32_traffic_outside_task_brackets": true,
+    "no_campaign_rejections_or_aborted_requests": true,
+    "raw_proxy_request_and_response_dumps_disabled": true,
+    "complete_work_census_events": 5754,
+    "pure_decode_forward_steps": 5754,
+    "final_pending_samples": {
+      "sfwd": 0,
+      "dfwd": 0,
+      "cfwd": 0
+    },
+    "postrun_note": "The source-pinned in-run validator predated the emitted exact TAW schema and returned 16 after task completion. The current exact-schema validator regenerated this audit from immutable raw artifacts and passed every check; no task or performance data was repaired or synthesized."
+  },
+  "identity": {
+    "runtime_manifest_launch_sha256": "f81b9ae2ba0f7b5e8d8974d2f98f780762dddfda411a163c66b7f85b786da4df",
+    "runtime_manifest_end_sha256": "f81b9ae2ba0f7b5e8d8974d2f98f780762dddfda411a163c66b7f85b786da4df",
+    "external_manifest_launch_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "external_manifest_end_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "manifests_byte_equal_at_end": true
+  },
+  "corrected_hardware_floor": {
+    "scenario": "root_64k_five_64k_draft_heads",
+    "mandatory_weight_bytes": 32666638208,
+    "bandwidth_bytes_per_second": 273000000000,
+    "floor_ms_per_event": 119.658015414,
+    "acceptance_multiplier": 1.15,
+    "acceptance_cap_ms_per_event": 137.6067177261,
+    "includes_nonweight_costs": false,
+    "legacy_98_6_ms_floor_used": false
+  },
+  "aggregate": {
+    "forward_events": 5754,
+    "accepted_draft_tokens": 26860,
+    "accepted_drafts_per_event": 4.668057003823427,
+    "committed_tokens_per_event": 5.668057003823427,
+    "sfwd_gpu_ms_per_event": 163.74254950243944,
+    "dfwd_gpu_ms_per_event": 38.129275628250134,
+    "cfwd_gpu_ms_per_event": 20.686583207057186,
+    "gpu_component_ms_per_event": 222.55840833774676,
+    "wall_ms_per_event": 239.02663423872843,
+    "gpu_component_full_step_tps": 25.467727982767492,
+    "wall_full_step_tps": 23.713077088147596,
+    "gpu_component_floor_ratio": 1.859954032897,
+    "wall_floor_ratio": 1.997581469254,
+    "gpu_component_gap_to_1_15x_cap_ms": 84.951690611647,
+    "wall_gap_to_1_15x_cap_ms": 101.419916512628,
+    "gpu_component_reduction_required_percent": 38.170514988015,
+    "wall_reduction_required_percent": 42.430383055695,
+    "hardware_floor_acceptance_pass": false,
+    "acceptance_note": "The point estimate already exceeds the 1.15x cap, so a one-sided upper confidence bound cannot pass. No stale 98.6 ms floor is used."
+  },
+  "tasks": [
+    {
+      "instance_id": "astropy__astropy-12907",
+      "verdict": "resolved",
+      "agent_exit_code": 0,
+      "forward_events": 497,
+      "accepted_draft_tokens": 2553,
+      "accepted_drafts_per_event": 5.1368209255533195,
+      "sfwd_gpu_ms_per_event": 156.01542313573836,
+      "dfwd_gpu_ms_per_event": 35.59689263510753,
+      "cfwd_gpu_ms_per_event": 26.81902558462961,
+      "gpu_component_ms_per_event": 218.43134135547547,
+      "wall_ms_per_retained_step": 228.35137439249007
+    },
+    {
+      "instance_id": "astropy__astropy-13033",
+      "verdict": "failed",
+      "agent_exit_code": 0,
+      "forward_events": 1098,
+      "accepted_draft_tokens": 4961,
+      "accepted_drafts_per_event": 4.518214936247723,
+      "sfwd_gpu_ms_per_event": 155.10259427485826,
+      "dfwd_gpu_ms_per_event": 34.6146383685058,
+      "cfwd_gpu_ms_per_event": 19.885837692163474,
+      "gpu_component_ms_per_event": 209.60307033552758,
+      "wall_ms_per_retained_step": 226.56785580459066
+    },
+    {
+      "instance_id": "astropy__astropy-13236",
+      "verdict": "failed",
+      "agent_exit_code": 0,
+      "forward_events": 1335,
+      "accepted_draft_tokens": 6198,
+      "accepted_drafts_per_event": 4.642696629213483,
+      "sfwd_gpu_ms_per_event": 159.7040709763431,
+      "dfwd_gpu_ms_per_event": 36.520044993997125,
+      "cfwd_gpu_ms_per_event": 20.023204319128812,
+      "gpu_component_ms_per_event": 216.24732028946903,
+      "wall_ms_per_retained_step": 233.4385901372894
+    },
+    {
+      "instance_id": "astropy__astropy-13398",
+      "verdict": "failed",
+      "agent_exit_code": 0,
+      "agent_tool_calls": 75,
+      "agent_tool_call_cap": 100,
+      "forward_events": 2824,
+      "accepted_draft_tokens": 13148,
+      "accepted_drafts_per_event": 4.6558073654390935,
+      "sfwd_gpu_ms_per_event": 170.37088571932088,
+      "dfwd_gpu_ms_per_event": 40.7022178929523,
+      "cfwd_gpu_ms_per_event": 20.232265051633735,
+      "gpu_component_ms_per_event": 231.30536866390688,
+      "wall_ms_per_retained_step": 248.38034419544417
+    }
+  ],
+  "tail6_diagnostic_comparison": {
+    "same_source_runtime_task_set_and_b1_shape": true,
+    "tail6_accepted_drafts_per_event": 5.11443199114432,
+    "hydra27_minus_tail6_accepted_drafts_per_event": -0.446374987321,
+    "accepted_drafts_relative_change_percent": -8.727752917505,
+    "tail6_gpu_component_ms_per_event": 220.23736696598276,
+    "hydra27_minus_tail6_gpu_component_ms": 2.321041371764,
+    "gpu_component_relative_change_percent": 1.053881729399,
+    "tail6_wall_ms_per_event": 236.24493679034745,
+    "hydra27_minus_tail6_wall_ms": 2.781697448381,
+    "wall_relative_change_percent": 1.177463308282,
+    "causality_note": "Free-running sampled trajectories and per-task event weights differ. These values establish the observed campaign delta but do not isolate topology as its cause."
+  },
+  "evidence_sha256": {
+    "deploy_speed": "fd3d51dd379e249e22a7c068b85db821c303695e5165bb7d02b2e38be85ee5a5",
+    "canonical_chat_traffic_audit": "f27f559b2a489de02ee2d9f48e7ccfc3827e0b3909db94401dc3e9f57c05acba",
+    "final_flush": "39e9429c68a60f48dce295d7f3285f53c99d3eba1684dd7fc782ee5177995880",
+    "corrected_floor_ledger": "1ae91dec2c31ba33c8d9d4fb78958a903e096d8892a0e3c9792e2eba24d97453",
+    "corrected_floor_manifest": "8f0477e155346b28e56a146a047db06c0a2b0a3d7a25b4104fac0396f2fa49fb"
+  }
+}

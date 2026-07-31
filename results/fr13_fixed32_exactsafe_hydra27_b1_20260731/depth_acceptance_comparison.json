@@ -1,0 +1,65 @@
+{
+  "schema": "fr13-fixed32-depth-acceptance-comparison-v1",
+  "created_at_utc": "2026-07-31T13:44:00Z",
+  "position_semantics": "For zero-based position p, count is the number of exact forward events accepting at least p+1 draft tokens; survival_rate=count/forward_events.",
+  "positions": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  "source_identity": {
+    "hydra27_source_commit": "e5a4029249e5b9483919056bae6542e47bbce75b",
+    "tail6_source_commit": "e5a4029249e5b9483919056bae6542e47bbce75b",
+    "same_runtime_manifest": true,
+    "same_external_manifest": true,
+    "batch_size": 1,
+    "concurrency": 1
+  },
+  "aggregate": {
+    "hydra27_forward_events": 5754,
+    "tail6_forward_events": 7227,
+    "hydra27_counts": [5378, 4678, 3892, 3246, 2709, 1676, 1349, 1159, 1022, 916, 835],
+    "tail6_counts": [6773, 5858, 5000, 4194, 3622, 2485, 2152, 1941, 1773, 1635, 1529],
+    "hydra27_survival_percent": [93.465415, 81.299965, 67.639903, 56.41293, 47.080292, 29.127563, 23.44456, 20.14251, 17.761557, 15.91936, 14.511644],
+    "tail6_survival_percent": [93.718002, 81.057147, 69.185001, 58.032379, 50.117615, 34.384945, 29.777224, 26.857617, 24.533001, 22.623495, 21.156773],
+    "hydra27_minus_tail6_percentage_points": [-0.252587, 0.242818, -1.545098, -1.619448, -3.037323, -5.257382, -6.332664, -6.715108, -6.771444, -6.704135, -6.645129]
+  },
+  "tasks": [
+    {
+      "instance_id": "astropy__astropy-12907",
+      "hydra27_forward_events": 497,
+      "tail6_forward_events": 515,
+      "hydra27_counts": [470, 425, 362, 304, 250, 167, 142, 124, 113, 102, 94],
+      "tail6_counts": [484, 411, 351, 282, 241, 142, 118, 104, 91, 85, 79],
+      "hydra27_minus_tail6_percentage_points": [0.5868, 5.7073, 4.6817, 6.4097, 3.5057, 6.0288, 5.6588, 4.7555, 5.0665, 4.0183, 3.5737]
+    },
+    {
+      "instance_id": "astropy__astropy-13033",
+      "hydra27_forward_events": 1098,
+      "tail6_forward_events": 474,
+      "hydra27_counts": [1042, 904, 744, 625, 517, 284, 223, 188, 164, 143, 127],
+      "tail6_counts": [444, 378, 314, 258, 217, 131, 114, 98, 89, 84, 80],
+      "hydra27_minus_tail6_percentage_points": [1.2289, 2.5847, 1.5148, 2.4913, 1.305, -1.7719, -3.741, -3.5531, -3.8401, -4.6978, -5.3112]
+    },
+    {
+      "instance_id": "astropy__astropy-13236",
+      "hydra27_forward_events": 1335,
+      "tail6_forward_events": 1418,
+      "hydra27_counts": [1228, 1061, 881, 722, 607, 398, 319, 282, 255, 232, 213],
+      "tail6_counts": [1301, 1097, 929, 773, 664, 455, 379, 335, 311, 279, 255],
+      "hydra27_minus_tail6_percentage_points": [0.2361, 2.1132, 0.4777, -0.431, -1.3584, -2.2747, -2.8327, -2.5012, -2.8312, -2.2973, -2.028]
+    },
+    {
+      "instance_id": "astropy__astropy-13398",
+      "hydra27_forward_events": 2824,
+      "tail6_forward_events": 4820,
+      "hydra27_counts": [2638, 2288, 1905, 1595, 1335, 827, 665, 565, 490, 439, 401],
+      "tail6_counts": [4544, 3972, 3406, 2881, 2500, 1757, 1541, 1404, 1282, 1187, 1115],
+      "hydra27_minus_tail6_percentage_points": [-0.860261, -1.386809, -3.206393, -3.291614, -4.593849, -7.16758, -8.422796, -9.121549, -9.246236, -9.08123, -8.933063]
+    }
+  ],
+  "interpretation": {
+    "observed_campaign_delta": "Aggregate Hydra27 late-depth survival is lower, with the gap widening after position 4; accepted drafts/event is 8.73 percent below Tail6.",
+    "counterevidence_to_uniform_regression": "Hydra27 is better at every measured depth on task 1, better through position 4 on task 2, and better through position 2 on task 3.",
+    "trajectory_confound": "The arms are free-running sampled agents. Task lengths and generated contexts differ materially, so aggregate and per-task deltas do not isolate topology causally.",
+    "branch_selection_visibility": "Canonical FR13_BRANCH_ACCEPT_DIAG=0 provides no accepted-branch ID trace. Drafter hit logs prove branch materialization and cache engagement but cannot identify which added branch was accepted.",
+    "kernel_separation": "Hydra27 GPU components are only 1.05 percent slower than Tail6 while accepted drafts/event is 8.73 percent lower. The full-step TPS difference in this campaign is therefore dominated by trajectory acceptance, not a large kernel-time regression.",
+    "next_proof": "A causal topology claim requires paired same-trajectory teacher forcing or canonical accepted-path logging; neither was enabled here, and no synthetic probe is substituted."
+  }
+}
