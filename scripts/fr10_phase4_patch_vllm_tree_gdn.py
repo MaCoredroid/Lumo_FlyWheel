@@ -152,6 +152,12 @@ _FR13_FIXED32_MODE = os.environ.get("FR13_FIXED32_MODE", "").strip()
 _FR13_FIXED32_GDN_PATH_BV_CANDIDATE = os.environ.get(
     "FR13_FIXED32_GDN_PATH_BV_CANDIDATE", ""
 ).strip()
+_FR13_FIXED32_GDN_PATH_BV_PRODUCTION = os.environ.get(
+    "FR13_FIXED32_GDN_PATH_BV_PRODUCTION", ""
+).strip()
+_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = (
+    os.environ.get("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", "0").strip() == "1"
+)
 _FR13_FIXED32_TREE_SOURCE = repr(list(_FR13_FIXED32_CHOICES))
 _FR13_FIXED32_SLOT_PI = tuple(
     [0]
@@ -382,6 +388,14 @@ try:
     _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
 except NameError:
     _FR13_FIXED32_GDN_PATH_BV_CANDIDATE = None
+try:
+    _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
+except NameError:
+    _FR13_FIXED32_GDN_PATH_BV_PRODUCTION = None
+try:
+    _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE
+except NameError:
+    _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = False
 _FR13_FIXED32_DRAFTER_TREE_LAYER = "mtp.layers.0.self_attn.attn"
 _FR13_FIXED32_TARGET_TREE_LAYERS = frozenset(
     "language_model.model.layers.%d.self_attn.attn" % layer
@@ -1709,6 +1723,23 @@ def _fr13_fixed32_observed_begin(
     if not _FR13_FIXED32_TOPOLOGY_NEEDLE_EMITTED:
         print(_fr13_fixed32_topology_needle(), flush=True)
         _FR13_FIXED32_TOPOLOGY_NEEDLE_EMITTED = True
+    if _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:
+        taw_module = __import__("sys").modules.get(
+            "_fr13_device_multidraft_kernel"
+        )
+        if taw_module is None:
+            raise RuntimeError(
+                "FR13 fixed32 TAW native live gate is missing its module"
+            )
+        gate_report = taw_module.fr13_fixed32_taw_native_live_gate_begin(
+            mode=mode,
+            batch_size=batch,
+        )
+        if gate_report.get("status") not in ("armed", "passed"):
+            raise RuntimeError(
+                "FR13 fixed32 TAW native live gate did not arm: "
+                + repr(gate_report)
+            )
     _FR13_FIXED32_CAPTURE_FROZEN = True
     globals()["_FR13_FIXED32_CURRENT_FORWARD_STEP"] = forward
     _FR13_FIXED32_OBSERVED_CURRENT = _fr13_fixed32_observed_new_state(
@@ -3407,6 +3438,23 @@ def _fr13_fixed32_observed_graph_replay(
         if gate_report.get("status") != "passed":
             raise RuntimeError(
                 "FR13 fixed32 GDN BV live gate did not pass on the first "
+                "measured full-graph replay: " + repr(gate_report)
+            )
+    if _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:
+        taw_module = __import__("sys").modules.get(
+            "_fr13_device_multidraft_kernel"
+        )
+        if taw_module is None:
+            raise RuntimeError(
+                "FR13 fixed32 TAW native replay gate is missing its module"
+            )
+        gate_report = taw_module.fr13_fixed32_taw_native_live_gate_on_replay(
+            mode=event["mode"],
+            batch_size=int(event["batch_size"]),
+        )
+        if gate_report.get("status") != "passed":
+            raise RuntimeError(
+                "FR13 fixed32 TAW native live gate did not pass on the first "
                 "measured full-graph replay: " + repr(gate_report)
             )
     event["tree_layers"] = set(tree["layers"])
@@ -5171,15 +5219,36 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
     """Bake fixed32 identity into generated runtime modules."""
     resolved_mode = _FR13_FIXED32_MODE if mode is None else mode
     candidate_raw = _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+    production_raw = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
+    taw_native_diagnostic = bool(_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE)
     if candidate_raw and candidate_raw not in ("16", "32", "64", "128"):
         raise RuntimeError(
             "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be one of "
             "16, 32, 64, or 128"
         )
     candidate = int(candidate_raw) if candidate_raw else None
+    if production_raw and production_raw not in ("16", "32", "64", "128"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_PRODUCTION must be one of "
+            "16, 32, 64, or 128"
+        )
+    production = int(production_raw) if production_raw else None
+    if candidate is not None and production is not None:
+        raise RuntimeError(
+            "FR13 fixed32 GDN path-BV diagnostic and production selectors "
+            "are mutually exclusive"
+        )
     if candidate is not None and not resolved_mode:
         raise RuntimeError(
             "FR13_FIXED32_GDN_PATH_BV_CANDIDATE requires fixed32 mode"
+        )
+    if production is not None and not resolved_mode:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_PRODUCTION requires fixed32 mode"
+        )
+    if taw_native_diagnostic and not resolved_mode:
+        raise RuntimeError(
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE requires fixed32 mode"
         )
     if not resolved_mode:
         valid_mask = 0
@@ -5194,6 +5263,10 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         f"_FR13_FIXED32_VALID_MASK = {valid_mask!r}\n"
         "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE = "
         f"{candidate!r}\n"
+        "_FR13_FIXED32_GDN_PATH_BV_PRODUCTION = "
+        f"{production!r}\n"
+        "_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = "
+        f"{taw_native_diagnostic!r}\n"
     )
 
 
@@ -5201,6 +5274,8 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     """Validate the fixed-work campaign before emitting any runtime source."""
     mode = _FR13_FIXED32_MODE
     candidate = _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+    production = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
+    taw_native_diagnostic = bool(_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE)
     if candidate:
         if candidate not in ("16", "32", "64", "128"):
             raise RuntimeError(
@@ -5211,10 +5286,40 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             raise RuntimeError(
                 "FR13_FIXED32_GDN_PATH_BV_CANDIDATE requires fixed32 mode"
             )
+    if production:
+        if production not in ("16", "32", "64", "128"):
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PATH_BV_PRODUCTION must be one of "
+                "16, 32, 64, or 128"
+            )
+        if not mode:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PATH_BV_PRODUCTION requires fixed32 mode"
+            )
+    if taw_native_diagnostic and not mode:
+        raise RuntimeError(
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE requires fixed32 mode"
+        )
+    if candidate and production:
+        raise RuntimeError(
+            "FR13 fixed32 GDN path-BV diagnostic and production selectors "
+            "are mutually exclusive"
+        )
+    if candidate:
         if os.environ.get("FR13_TREE_GDN_GEOM_OVERRIDE", "") != "BV=8":
             raise RuntimeError(
                 "FR13_FIXED32_GDN_PATH_BV_CANDIDATE requires the served "
                 "graph pinned exactly to BV=8"
+            )
+    if production:
+        expected_geometry = f"BV={production}"
+        if (
+            os.environ.get("FR13_TREE_GDN_GEOM_OVERRIDE", "")
+            != expected_geometry
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PATH_BV_PRODUCTION requires the served "
+                f"graph pinned exactly to {expected_geometry}"
             )
     if not mode:
         return None

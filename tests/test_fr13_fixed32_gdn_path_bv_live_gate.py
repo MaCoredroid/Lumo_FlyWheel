@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -28,13 +29,16 @@ def _kernel_gate_namespace() -> dict[str, object]:
             in {
                 "_FR13_FIXED32_MODES",
                 "_FR13_FIXED32_GDN_PATH_BV_SIDECARS",
+                "_FR13_FIXED32_GDN_PATH_BV_PRODUCTION_SIDECARS",
                 "_FR13_FIXED32_GDN_BV_SURFACES",
+                "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE_ID",
             }
             for target in node.targets
         )
     ]
     wanted = {
         "_fr13_resolve_fixed32_gdn_path_bv_candidate",
+        "_fr13_resolve_fixed32_gdn_path_bv_production",
         "_fr13_fixed32_gdn_bv_compare_records",
         "fixed32_gdn_bv_live_gate_on_replay",
     }
@@ -44,7 +48,7 @@ def _kernel_gate_namespace() -> dict[str, object]:
         if isinstance(node, ast.FunctionDef) and node.name in wanted
     ]
     assert {node.name for node in definitions} == wanted
-    namespace: dict[str, object] = {"os": os}
+    namespace: dict[str, object] = {"json": json, "os": os}
     exec(
         compile(
             ast.Module(body=[*assignments, *definitions], type_ignores=[]),
@@ -197,12 +201,30 @@ def test_live_gate_executes_only_on_first_measured_graph_replay() -> None:
         }
 
     namespace["_fr13_fixed32_gdn_bv_compare_records"] = compare
+    namespace["_fr13_fixed32_gdn_bv_real_event_marker"] = (
+        lambda: "swe_verified:django__django-12345"
+    )
+    emitted = []
+    namespace["_fr13_fixed32_gdn_bv_live_pass_emit"] = (
+        lambda **payload: emitted.append(payload)
+    )
     gate = namespace["fixed32_gdn_bv_live_gate_on_replay"]
 
     first = gate(101, 1, 48)
     second = gate(101, 1, 48)
 
     assert calls == [(48, 64)]
+    assert emitted == [
+        {
+            "task_marker": "swe_verified:django__django-12345",
+            "batch_size": 1,
+            "result": {
+                "records": 48,
+                "reference_bv": 8,
+                "candidate_bv": 64,
+            },
+        }
+    ]
     assert first == second == {
         "status": "passed",
         "candidate_bv": 64,
@@ -261,6 +283,81 @@ def test_candidate_resolver_is_exact_fixed32_bv8_only(tmp_path: Path) -> None:
         )
 
 
+@pytest.mark.parametrize("candidate", (16, 32, 64, 128))
+def test_production_resolver_requires_same_candidate_source_and_geometry(
+    tmp_path: Path,
+    candidate: int,
+) -> None:
+    namespace = _kernel_gate_namespace()
+    resolve = namespace["_fr13_resolve_fixed32_gdn_path_bv_production"]
+    live_pass = tmp_path / "pass.json"
+    live_pass.write_text(
+        json.dumps(
+            {
+                "schema": "fr13.fixed32.gdn_path_bv.live_pass.v1",
+                "status": "pass",
+                "candidate": "fixed32_gdn_path_bv_v1",
+                "source_sha256": "a" * 64,
+                "task_marker": "swe_verified:django__django-12345",
+                "mode": "tail6_fixed32",
+                "batch_size": 4,
+                "covered_batches": [1, 2, 3, 4],
+                "records": 192,
+                "physical_rows": 32,
+                "reference_bv": 8,
+                "candidate_bv": candidate,
+                "raw_byte_equal": True,
+                "reference_served": True,
+                "state_restored": True,
+            }
+        ),
+        encoding="ascii",
+    )
+    payload = resolve(
+        "tail6_fixed32",
+        environ={"FR13_FIXED32_GDN_PATH_BV_PRODUCTION": str(candidate)},
+        sidecars=(),
+        geom_override={"BV": candidate},
+        pass_path=str(live_pass),
+        source_sha256="a" * 64,
+    )
+    assert payload is not None
+    assert payload["candidate_bv"] == candidate
+    assert payload["covered_batches"] == [1, 2, 3, 4]
+
+    with pytest.raises(RuntimeError, match="geometry pinned exactly"):
+        resolve(
+            "tail6_fixed32",
+            environ={"FR13_FIXED32_GDN_PATH_BV_PRODUCTION": str(candidate)},
+            sidecars=(),
+            geom_override={"BV": 8},
+            pass_path=str(live_pass),
+            source_sha256="a" * 64,
+        )
+    with pytest.raises(RuntimeError, match="different candidate/source"):
+        resolve(
+            "tail6_fixed32",
+            environ={"FR13_FIXED32_GDN_PATH_BV_PRODUCTION": str(candidate)},
+            sidecars=(),
+            geom_override={"BV": candidate},
+            pass_path=str(live_pass),
+            source_sha256="b" * 64,
+        )
+
+    invalid = json.loads(live_pass.read_text(encoding="ascii"))
+    invalid["covered_batches"] = [4]
+    live_pass.write_text(json.dumps(invalid), encoding="ascii")
+    with pytest.raises(RuntimeError, match="different candidate/source"):
+        resolve(
+            "tail6_fixed32",
+            environ={"FR13_FIXED32_GDN_PATH_BV_PRODUCTION": str(candidate)},
+            sidecars=(),
+            geom_override={"BV": candidate},
+            pass_path=str(live_pass),
+            source_sha256="a" * 64,
+        )
+
+
 def test_served_launch_stays_bv8_and_live_gate_is_first_replay_hooked() -> None:
     kernel = KERNEL_PATH.read_text(encoding="utf-8")
     patcher = PATCHER_PATH.read_text(encoding="utf-8")
@@ -286,7 +383,15 @@ def test_served_launch_stays_bv8_and_live_gate_is_first_replay_hooked() -> None:
     assert "must be exactly 16, 32, 64, or 128" in launcher
     assert "requires FR13_FIXED32_MODE" in launcher
     assert "fr13_fixed32_gdn_path_bv_candidate.flag" in launcher
+    assert "_fr13_fixed32_expected_gdn_geom" in launcher
+    assert "FR13_FIXED32_GDN_PATH_BV_PRODUCTION" in launcher
+    assert "requires a regular live PASS JSON" in launcher
+    assert "path-BV diagnostic and production selectors" in launcher
+    assert "FR13 fixed32 GDN BV production geometry/PASS contract drift" in kernel
+    assert "no fallback is permitted" in kernel
+    assert "_fixed32_path_bv_production" in launch
     assert (
-        'FR13_TREE_GDN_GEOM_OVERRIDE|${FR13_TREE_GDN_GEOM_OVERRIDE:-}|BV=8'
-        in launcher
+        "_bv_cap <= 8 or _fixed32_path_bv_production" in launch
     )
+    assert 'int(staging_rows) not in production_pass["covered_batches"]' in kernel
+    assert "_launch_paths(out)" in launch

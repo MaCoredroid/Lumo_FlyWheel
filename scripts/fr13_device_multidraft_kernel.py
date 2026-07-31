@@ -1050,9 +1050,27 @@ _FR13_FIXED32_TAW_WARMUPS: dict[tuple[Any, ...], dict[str, Any]] = {}
 _FR13_FIXED32_WORK_ANNOUNCED = False
 _FR13_FIXED32_BATCHES = (1, 2, 3, 4)
 _FR13_FIXED32_INTEGER_DTYPES = None
+_FR13_FIXED32_TAW_NATIVE_CANDIDATE = "fixed32_native_precompute_v1"
+_FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_SIDECARS = (
+    "/logs/fr13_fixed32_taw_native_precompute_diagnostic.arm",
+    "/tmp/fr13_fixed32_taw_native_precompute_diagnostic.arm",
+)
+_FR13_FIXED32_TAW_NATIVE_PRODUCTION_SIDECARS = (
+    "/logs/fr13_fixed32_taw_native_precompute_production.arm",
+    "/tmp/fr13_fixed32_taw_native_precompute_production.arm",
+)
+_FR13_FIXED32_TAW_NATIVE_REAL_EVENT = (
+    "/logs/fr13_fixed32_taw_native_precompute.real_event.arm"
+)
+_FR13_FIXED32_TAW_NATIVE_LIVE_PASS = (
+    "/logs/fr13_fixed32_taw_native_precompute.live_pass.json"
+)
+_FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS = (
+    "/logs/fr13_fixed32_taw_native_precompute.production_pass.json"
+)
 _FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-exact-commit-v3"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "fe73ad35a916e41532575e29a5f9f6442d1081d0d1c0d0fc18210fdc8f0f56f8"
+    "42b92d872d2324bf618b35fdd71c22d0e68e5c00e25ad2a43ae553c8ab1f92da"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
@@ -1061,7 +1079,15 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_device_key",
     "_fr13_fixed32_expected_active",
     "_fr13_fixed32_parse_int",
+    "_fr13_fixed32_taw_native_arm_sources",
+    "_fr13_fixed32_taw_native_production_pass",
+    "_fr13_fixed32_taw_native_selector",
     "_fr13_fixed32_taw_native_precompute_enabled",
+    "_fr13_fixed32_taw_native_real_event_marker",
+    "_fr13_fixed32_taw_native_live_pass_emit",
+    "_fr13_fixed32_taw_native_live_entry",
+    "fr13_fixed32_taw_native_live_gate_begin",
+    "fr13_fixed32_taw_native_live_gate_on_replay",
     "_fr13_fixed32_taw_tensor_call_census",
     "_fr13_fixed32_taw_source_contract",
     "_fr13_fixed32_runtime_contract",
@@ -1131,6 +1157,12 @@ _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS = {
     "residual_where_calls": 48,
     "exact_commit_launches": 24,
     "exact_commit_programs_per_request": 24,
+}
+_FR13_FIXED32_TAW_NATIVE_PRODUCTION_TENSOR_CALL_CENSUS = {
+    **_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS,
+    "full_vocab_row_gathers": 50,
+    "full_vocab_fp32_casts": 2,
+    "full_vocab_softmax_calls": 2,
 }
 
 
@@ -1221,23 +1253,323 @@ def _fr13_fixed32_parse_int(raw: str, *, name: str) -> int:
         raise RuntimeError(f"{name} must be an integer, got {raw!r}") from error
 
 
-def _fr13_fixed32_taw_native_precompute_enabled() -> bool:
-    raw = os.environ.get("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", "")
-    if raw in ("", "0"):
-        return False
-    if raw == "1":
-        return True
-    raise RuntimeError(
-        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE must be unset, 0, or 1"
+def _fr13_fixed32_taw_native_arm_sources(
+    *, environ, name: str, sidecars,
+) -> list[str]:
+    raw = environ.get(name, "")
+    if raw not in ("", "0", "1"):
+        raise RuntimeError(f"{name} must be unset, 0, or 1")
+    sources = [f"env:{name}"] if raw == "1" else []
+    for path in sidecars:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="ascii") as handle:
+                value = handle.read(16)
+        except (OSError, UnicodeError) as error:
+            raise RuntimeError(f"{name} cannot read sidecar {path}: {error}") from error
+        if len(value) >= 16 or value.strip() != "1":
+            raise RuntimeError(f"{name} sidecar must contain exactly 1: {path}")
+        sources.append(f"sidecar:{path}")
+    return sources
+
+
+def _fr13_fixed32_taw_native_production_pass(
+    *,
+    environ=None,
+    path: str | None = None,
+    expected_mode: str | None = None,
+    expected_batch: int | None = None,
+) -> dict[str, Any]:
+    """Validate the narrow source-bound PASS record for native production."""
+    env = os.environ if environ is None else environ
+    resolved_path = path or env.get(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_PATH",
+        _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS,
     )
+    if os.path.islink(resolved_path) or not os.path.isfile(resolved_path):
+        raise RuntimeError(
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION requires a regular "
+            f"live PASS JSON: {resolved_path}"
+        )
+    try:
+        with open(resolved_path, encoding="ascii") as handle:
+            payload = json.load(handle)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native production PASS JSON is unreadable: "
+            f"{error}"
+        ) from error
+    task_marker = payload.get("task_marker") if isinstance(payload, dict) else None
+    geometry = payload.get("geometry") if isinstance(payload, dict) else None
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema")
+        != "fr13.fixed32.taw_native_precompute.live_pass.v1"
+        or payload.get("status") != "pass"
+        or payload.get("candidate") != _FR13_FIXED32_TAW_NATIVE_CANDIDATE
+        or payload.get("source_contract_schema")
+        != _FR13_FIXED32_TAW_SOURCE_SCHEMA
+        or payload.get("source_contract_sha256")
+        != _FR13_FIXED32_TAW_SOURCE_SHA256
+        or payload.get("reference_returned") is not True
+        or payload.get("candidate_returned") is not False
+        or payload.get("probability_mismatches") != 0
+        or payload.get("product_mismatches") != 0
+        or payload.get("evidence_route")
+        not in ("full_graph_replay", "uncaptured_root_check")
+        or not isinstance(task_marker, str)
+        or not task_marker.startswith("swe_verified:")
+        or len(task_marker) == len("swe_verified:")
+        or payload.get("mode") not in ("tail6_fixed32", "hydra27_fixed32")
+        or type(payload.get("batch_size")) is not int
+        or payload.get("batch_size") not in _FR13_FIXED32_BATCHES
+        or payload.get("covered_batches")
+        != list(range(1, payload.get("batch_size", 0) + 1))
+        or geometry != _FR13_FIXED32_TAW_GEOMETRY
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 TAW native production PASS JSON is invalid or "
+            "belongs to a different candidate/source"
+        )
+    if expected_mode is not None and payload["mode"] != expected_mode:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native production mode does not match PASS: "
+            f"{expected_mode!r} != {payload['mode']!r}"
+        )
+    if (
+        expected_batch is not None
+        and expected_batch not in payload["covered_batches"]
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 TAW native production batch is not covered by PASS: "
+            f"B{expected_batch} not in {payload['covered_batches']}"
+        )
+    return payload
+
+
+def _fr13_fixed32_taw_native_selector(
+    *, environ=None, diagnostic_sidecars=None, production_sidecars=None,
+) -> str:
+    """Resolve reference, diagnostic, or source-gated production."""
+    env = os.environ if environ is None else environ
+    diagnostic = _fr13_fixed32_taw_native_arm_sources(
+        environ=env,
+        name="FR13_FIXED32_TAW_NATIVE_PRECOMPUTE",
+        sidecars=(
+            _FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_SIDECARS
+            if diagnostic_sidecars is None
+            else tuple(diagnostic_sidecars)
+        ),
+    )
+    production = _fr13_fixed32_taw_native_arm_sources(
+        environ=env,
+        name="FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION",
+        sidecars=(
+            _FR13_FIXED32_TAW_NATIVE_PRODUCTION_SIDECARS
+            if production_sidecars is None
+            else tuple(production_sidecars)
+        ),
+    )
+    if diagnostic and production:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native diagnostic and production selectors "
+            "are mutually exclusive"
+        )
+    if production:
+        mode = env.get("FR13_FIXED32_MODE", "")
+        if mode not in ("tail6_fixed32", "hydra27_fixed32"):
+            raise RuntimeError(
+                "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION requires an "
+                "exact fixed32 mode"
+            )
+        _fr13_fixed32_taw_native_production_pass(
+            environ=env,
+            expected_mode=mode,
+        )
+        return "production"
+    if diagnostic:
+        return "diagnostic"
+    return "reference"
+
+
+def _fr13_fixed32_taw_native_precompute_enabled() -> bool:
+    return _fr13_fixed32_taw_native_selector() != "reference"
+
+
+def _fr13_fixed32_taw_native_real_event_marker() -> str | None:
+    path = os.environ.get(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_REAL_EVENT_PATH",
+        _FR13_FIXED32_TAW_NATIVE_REAL_EVENT,
+    )
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, encoding="ascii") as handle:
+            marker = handle.read(257)
+    except (OSError, UnicodeError) as error:
+        raise RuntimeError(
+            f"FR13 fixed32 TAW native cannot read real-event marker: {error}"
+        ) from error
+    marker = marker.strip()
+    prefix = "swe_verified:"
+    task_id = marker[len(prefix):] if marker.startswith(prefix) else ""
+    if (
+        len(marker) > 256
+        or not task_id
+        or any(
+            character
+            not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+            for character in task_id
+        )
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 TAW native real-event marker must be "
+            "swe_verified:<task_id>"
+        )
+    return marker
+
+
+def _fr13_fixed32_taw_native_live_pass_emit(
+    *, mode: str, batch_size: int, task_marker: str, evidence_route: str,
+) -> None:
+    path = os.environ.get(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON",
+        _FR13_FIXED32_TAW_NATIVE_LIVE_PASS,
+    )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    payload = {
+        "schema": "fr13.fixed32.taw_native_precompute.live_pass.v1",
+        "status": "pass",
+        "candidate": _FR13_FIXED32_TAW_NATIVE_CANDIDATE,
+        "source_contract_schema": _FR13_FIXED32_TAW_SOURCE_SCHEMA,
+        "source_contract_sha256": _FR13_FIXED32_TAW_SOURCE_SHA256,
+        "task_marker": task_marker,
+        "mode": mode,
+        "batch_size": int(batch_size),
+        "covered_batches": list(range(1, int(batch_size) + 1)),
+        "geometry": dict(_FR13_FIXED32_TAW_GEOMETRY),
+        "probability_mismatches": 0,
+        "product_mismatches": 0,
+        "evidence_route": evidence_route,
+        "reference_returned": True,
+        "candidate_returned": False,
+    }
+    temporary = f"{path}.tmp.{os.getpid()}"
+    with open(temporary, "w", encoding="ascii") as handle:
+        json.dump(payload, handle, sort_keys=True)
+        handle.write("\n")
+    os.replace(temporary, path)
+
+
+def _fr13_fixed32_taw_native_live_entry(
+    *, mode: str, batch_size: int,
+) -> dict[str, Any]:
+    topology, valid_mask = _fr13_fixed32_runtime_contract(mode)
+    del topology
+    matches = [
+        entry
+        for key, entry in _FR13_FIXED32_TAW_CACHE.items()
+        if (
+            len(key) == 4
+            and key[0] == mode
+            and int(key[1]) == valid_mask
+            and int(key[2]) == int(batch_size)
+            and key[3][0] == "cuda"
+        )
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native live gate requires one exact CUDA "
+            f"cache entry, found {len(matches)} for {mode} B{batch_size}"
+        )
+    return matches[0]
+
+
+def fr13_fixed32_taw_native_live_gate_begin(
+    *, mode: str, batch_size: int,
+) -> dict[str, Any]:
+    """Reset diagnostic counters immediately before a real graph replay."""
+    if _fr13_fixed32_taw_native_selector() != "diagnostic":
+        raise RuntimeError(
+            "FR13 fixed32 TAW native live gate begin requires diagnostic mode"
+        )
+    entry = _fr13_fixed32_taw_native_live_entry(
+        mode=mode, batch_size=batch_size
+    )
+    if entry.get("native_ab_live_pass_emitted", False):
+        return {"status": "passed", "batch_size": int(batch_size)}
+    task_marker = _fr13_fixed32_taw_native_real_event_marker()
+    if task_marker is None:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native live gate requires a real "
+            "SWE-Verified event arm"
+        )
+    bound_marker = entry.get("native_ab_live_marker")
+    if bound_marker is not None and bound_marker != task_marker:
+        raise RuntimeError("FR13 fixed32 TAW native live gate cannot combine tasks")
+    entry["native_ab_probability_mismatches"].zero_()
+    entry["native_ab_product_mismatches"].zero_()
+    entry["native_ab_live_marker"] = task_marker
+    entry["native_ab_live_gate_pending"] = True
+    return {"status": "armed", "batch_size": int(batch_size)}
+
+
+def fr13_fixed32_taw_native_live_gate_on_replay(
+    *, mode: str, batch_size: int,
+) -> dict[str, Any]:
+    """Read the captured A/B counters after the first real graph replay."""
+    if _fr13_fixed32_taw_native_selector() != "diagnostic":
+        raise RuntimeError(
+            "FR13 fixed32 TAW native replay gate requires diagnostic mode"
+        )
+    entry = _fr13_fixed32_taw_native_live_entry(
+        mode=mode, batch_size=batch_size
+    )
+    if entry.get("native_ab_live_pass_emitted", False):
+        return {"status": "passed", "batch_size": int(batch_size)}
+    if entry.get("native_ab_live_gate_pending") is not True:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native replay gate has no armed real event"
+        )
+    probability_bad = int(entry["native_ab_probability_mismatches"].item())
+    product_bad = int(entry["native_ab_product_mismatches"].item())
+    if probability_bad or product_bad:
+        entry["native_ab_live_gate_pending"] = False
+        raise AssertionError(
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE graph-replay byte mismatch: "
+            f"probabilities={probability_bad} products={product_bad}"
+        )
+    task_marker = entry.get("native_ab_live_marker")
+    if not isinstance(task_marker, str):
+        raise RuntimeError("FR13 fixed32 TAW native replay gate lost task binding")
+    _fr13_fixed32_taw_native_live_pass_emit(
+        mode=mode,
+        batch_size=batch_size,
+        task_marker=task_marker,
+        evidence_route="full_graph_replay",
+    )
+    entry["native_ab_live_gate_pending"] = False
+    entry["native_ab_live_pass_emitted"] = True
+    print(
+        "[FR13_FIXED32_TAW_NATIVE_PRECOMPUTE LIVE PASS] "
+        f"mode={mode} batch={batch_size} graph_replays=1 "
+        "probability_mismatches=0 product_mismatches=0 reference_returned=1",
+        flush=True,
+    )
+    return {"status": "passed", "batch_size": int(batch_size)}
 
 
 def _fr13_fixed32_taw_tensor_call_census() -> dict[str, Any]:
-    census = (
-        _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS
-        if _fr13_fixed32_taw_native_precompute_enabled()
-        else _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS
-    )
+    selector = _fr13_fixed32_taw_native_selector()
+    if selector == "diagnostic":
+        census = _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS
+    elif selector == "production":
+        census = _FR13_FIXED32_TAW_NATIVE_PRODUCTION_TENSOR_CALL_CENSUS
+    else:
+        census = _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS
     return dict(census)
 
 
@@ -1339,6 +1671,9 @@ def _fr13_fixed32_taw_source_contract(topology) -> dict[str, Any]:
                 "default": _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS,
                 "native_precompute": (
                     _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS
+                ),
+                "native_precompute_production": (
+                    _FR13_FIXED32_TAW_NATIVE_PRODUCTION_TENSOR_CALL_CENSUS
                 ),
             },
         },
@@ -1750,6 +2085,9 @@ def fr13_fixed32_taw_preseed(
             device=normalized_device,
         )
         entry["native_ab_root_checks"] = 0
+        entry["native_ab_live_marker"] = None
+        entry["native_ab_live_gate_pending"] = False
+        entry["native_ab_live_pass_emitted"] = False
         _FR13_FIXED32_TAW_CACHE[key] = entry
         keys.append(key)
     return tuple(keys)
@@ -2059,13 +2397,16 @@ def fr13_fixed32_taw_warm_execute(
         "exact_current",
         "exact_alive",
     )
-    saved_cache = tuple(
-        {
-            name: entry[name].clone()
-            for name in mutable_names
-        }
-        for entry in entries
-    )
+    mutable_tensors = []
+    seen_tensors = set()
+    for entry in entries:
+        for owner in (entry, entry["native_ab_entry"]):
+            for name in mutable_names:
+                tensor = owner[name]
+                identity = id(tensor)
+                if identity not in seen_tensors:
+                    seen_tensors.add(identity)
+                    mutable_tensors.append((tensor, tensor.clone()))
     generator = _fr13_bulk_gen(normalized_device)
     saved_generator_state = generator.get_state().clone()
     global _FR13_FIXED32_TAW_WORK_CALLBACK
@@ -2119,13 +2460,18 @@ def fr13_fixed32_taw_warm_execute(
                 all_greedy=False,
                 mode=str(mode),
             )
+            expected_owner = (
+                entry["native_ab_entry"]
+                if _fr13_fixed32_taw_native_selector() == "production"
+                else entry
+            )
             if (
                 len(products) != 5
-                or products[0] is not entry["output_tokens"]
-                or products[1] is not entry["output_lens"]
-                or products[2] is not entry["accepted_path_rows"]
-                or products[3] is not entry["accepted_lens"]
-                or products[4] is not entry["last_row"]
+                or products[0] is not expected_owner["output_tokens"]
+                or products[1] is not expected_owner["output_lens"]
+                or products[2] is not expected_owner["accepted_path_rows"]
+                or products[3] is not expected_owner["accepted_lens"]
+                or products[4] is not expected_owner["last_row"]
             ):
                 raise RuntimeError(
                     "FR13 fixed32 TAW boot warm returned non-cache products"
@@ -2138,9 +2484,8 @@ def fr13_fixed32_taw_warm_execute(
             generator.set_state(saved_generator_state)
         finally:
             try:
-                for entry, saved in zip(entries, saved_cache, strict=True):
-                    for name in mutable_names:
-                        entry[name].copy_(saved[name])
+                for tensor, saved in mutable_tensors:
+                    tensor.copy_(saved)
             finally:
                 _FR13_FIXED32_TAW_WORK_CALLBACK = saved_callback
                 _FR13_FIXED32_TAW_LAST_WORK = saved_last_work
@@ -2150,9 +2495,8 @@ def fr13_fixed32_taw_warm_execute(
         del logits
 
     staging_state_restored = all(
-        _fr13_fixed32_tensor_bits_equal(entry[name], saved[name])
-        for entry, saved in zip(entries, saved_cache, strict=True)
-        for name in mutable_names
+        _fr13_fixed32_tensor_bits_equal(tensor, saved)
+        for tensor, saved in mutable_tensors
     )
     rng_state_restored = _fr13_fixed32_tensor_bits_equal(
         generator.get_state(),
@@ -3307,13 +3651,17 @@ def _fr13_fixed32_publish_work(
     source_contract: dict[str, Any],
     layout_contract: dict[str, Any],
 ) -> None:
-    native_precompute = _fr13_fixed32_taw_native_precompute_enabled()
-    work_multiplier = 2 if native_precompute else 1
+    native_selector = _fr13_fixed32_taw_native_selector()
+    work_multiplier = 2 if native_selector == "diagnostic" else 1
     taw = {
         "route": (
             "fixed32_native_precompute_byte_ab_reference_return"
-            if native_precompute
-            else "fixed32_pytorch_exact_float_triton_integer_commit"
+            if native_selector == "diagnostic"
+            else (
+                "fixed32_native_precompute_production_candidate_return"
+                if native_selector == "production"
+                else "fixed32_pytorch_exact_float_triton_integer_commit"
+            )
         ),
         "preseeded_batches": list(_FR13_FIXED32_BATCHES),
         "topology_cache_hit": True,
@@ -3494,11 +3842,28 @@ def fr13_fixed32_taw_commit(
         fixed_uniforms,
         rng_route=rng_route,
     )
-    native_precompute = _fr13_fixed32_taw_native_precompute_enabled()
-    if native_precompute:
+    native_selector = _fr13_fixed32_taw_native_selector()
+    if native_selector == "diagnostic":
         probability_mismatches = entry["native_ab_probability_mismatches"]
         product_mismatches = entry["native_ab_product_mismatches"]
         if target_logits.is_cuda and not torch.cuda.is_current_stream_capturing():
+            task_marker = _fr13_fixed32_taw_native_real_event_marker()
+            bound_marker = entry.get("native_ab_live_marker")
+            if task_marker is not None and bound_marker is None:
+                probability_mismatches.zero_()
+                product_mismatches.zero_()
+                entry["native_ab_root_checks"] = 0
+                entry["native_ab_live_marker"] = task_marker
+                entry["native_ab_live_pass_emitted"] = False
+                bound_marker = task_marker
+            elif (
+                task_marker is not None
+                and bound_marker is not None
+                and task_marker != bound_marker
+            ):
+                raise RuntimeError(
+                    "FR13 fixed32 TAW native live gate cannot combine tasks"
+                )
             root_checks = int(entry["native_ab_root_checks"])
             if root_checks:
                 probability_bad = int(probability_mismatches.item())
@@ -3508,7 +3873,19 @@ def fr13_fixed32_taw_commit(
                         "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE byte mismatch: "
                         f"probabilities={probability_bad} products={product_bad}"
                     )
-                if root_checks % 128 == 0:
+                if (
+                    task_marker is not None
+                    and task_marker == bound_marker
+                    and not entry.get("native_ab_live_pass_emitted", False)
+                ):
+                    _fr13_fixed32_taw_native_live_pass_emit(
+                        mode=mode,
+                        batch_size=batch_size,
+                        task_marker=task_marker,
+                        evidence_route="uncaptured_root_check",
+                    )
+                    entry["native_ab_live_pass_emitted"] = True
+                if root_checks % 128 == 0 or task_marker is not None:
                     print(
                         "[FR13_FIXED32_TAW_NATIVE_PRECOMPUTE] PASS "
                         f"root_checks={root_checks} probability_mismatches=0 "
@@ -3563,6 +3940,36 @@ def fr13_fixed32_taw_commit(
             last_row,
             loop_iterations,
         ) = reference
+    elif native_selector == "production":
+        _fr13_fixed32_taw_native_production_pass(
+            expected_mode=mode,
+            expected_batch=batch_size,
+        )
+        probability_caches = _fr13_fixed32_taw_probability_caches(
+            entry,
+            target_logits,
+            tree_self_logits,
+            native_precompute=True,
+        )
+        (
+            output_tokens,
+            output_lens,
+            accepted_path_rows,
+            accepted_lens,
+            last_row,
+            loop_iterations,
+        ) = _fr13_fixed32_taw_execute(
+            topology,
+            entry["native_ab_entry"],
+            drafts,
+            target_logits,
+            tree_self_logits,
+            bonus_flat,
+            fixed_uniforms,
+            walk_cap=int(topology.WALK_CAP),
+            native_precompute=True,
+            probability_caches=probability_caches,
+        )
     else:
         (
             output_tokens,

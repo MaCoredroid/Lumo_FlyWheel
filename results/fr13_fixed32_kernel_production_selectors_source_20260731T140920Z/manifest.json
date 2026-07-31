@@ -1,0 +1,53 @@
+{
+  "schema": "fr13.fixed32.kernel_production_selectors.source.v1",
+  "created_utc": "2026-07-31T14:09:20Z",
+  "branch": "agent/fixed32-kernel-production-selectors",
+  "base_commit": "9b6c3ea219fbc8bcf9712253784d88d5e2b49b77",
+  "status": "SOURCE_IMPLEMENTED_GPU_NOT_RUN",
+  "selectors_default_off": true,
+  "diagnostic_and_production_mutually_exclusive": true,
+  "exact_fixed32_only": true,
+  "gpu_used": false,
+  "real_swe_verified_campaign_run": false,
+  "performance_claim": false,
+  "hardware_floor_claim": false,
+  "taw_native_precompute": {
+    "candidate": "fixed32_native_precompute_v1",
+    "source_contract_schema": "fr13-fixed32-taw-exact-commit-v3",
+    "source_contract_sha256": "42b92d872d2324bf618b35fdd71c22d0e68e5c00e25ad2a43ae553c8ab1f92da",
+    "diagnostic_returns_reference": true,
+    "production_returns_candidate": true,
+    "live_gate_route": "first_real_full_graph_replay",
+    "production_full_vocab_softmax_calls": 2,
+    "reference_full_vocab_softmax_calls": 24
+  },
+  "gdn_path_bv": {
+    "candidate": "fixed32_gdn_path_bv_v1",
+    "source_sha256": "d37113b72cf0e20034f4822b18647f9370a9f8bf9f3b931f65130a624c865882",
+    "reference_bv": 8,
+    "production_candidates": [16, 32, 64, 128],
+    "diagnostic_restores_and_serves_reference": true,
+    "production_serves_selected_candidate_only": true,
+    "fallback_permitted": false,
+    "physical_rows": 32
+  },
+  "batch_evidence": {
+    "b1_pass_covered_batches": [1],
+    "b4_pass_covered_batches": [1, 2, 3, 4],
+    "above_b4_permitted": false
+  },
+  "tests": {
+    "focused": {
+      "passed": 55,
+      "skipped": 0,
+      "failed": 0
+    },
+    "broader_fixed32": {
+      "passed": 394,
+      "skipped": 4,
+      "failed": 0
+    },
+    "python_compile": "pass",
+    "launcher_bash_syntax": "pass"
+  }
+}

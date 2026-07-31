@@ -30,7 +30,9 @@ def test_taw_gate_is_strict_default_off_and_forwarded_by_launcher() -> None:
         '-e FR13_FIXED32_TAW_NATIVE_PRECOMPUTE='
         '"$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" \\'
     ) in launcher
-    assert 'os.environ.get("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", "")' in taw
+    assert 'name="FR13_FIXED32_TAW_NATIVE_PRECOMPUTE"' in taw
+    assert 'name="FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION"' in taw
+    assert 'return "reference"' in taw
     assert "probability_mismatches=0" in taw
     assert "product_mismatches=0 reference_returned=1" in taw
 
@@ -45,7 +47,9 @@ def test_live_dfwd_and_taw_diagnostics_return_reference_values() -> None:
     assert "(32, 64, 128)" in patcher
     assert "_logits = _fr13_dh_reference" in patcher
     assert "comparison_probability_caches=probability_caches" in taw
-    assert ") = reference\n    else:" in taw
+    assert 'native_selector == "diagnostic"' in taw
+    assert ") = reference\n    elif native_selector == \"production\":" in taw
+    assert 'entry["native_ab_entry"]' in taw
 
 
 def test_manifest_binds_the_live_paged_qrow_gate_without_a_gpu_claim() -> None:
