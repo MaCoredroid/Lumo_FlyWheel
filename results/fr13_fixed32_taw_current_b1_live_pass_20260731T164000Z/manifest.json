@@ -1,0 +1,48 @@
+{
+  "artifact_base_commit": "d8f25f10032d7769ff024cc1d9cbe5e5e7fdccc4",
+  "classification": {
+    "floor_acceptance_eligible": false,
+    "gate_eligible": false,
+    "performance_evidence": false,
+    "run_classification": "b1_diagnostic"
+  },
+  "coverage": {
+    "batches": [
+      1
+    ],
+    "complete_events": 968,
+    "first_forward_step": 0,
+    "last_forward_step": 967,
+    "mode": "hydra27_fixed32",
+    "physical_drafts": 31,
+    "physical_rows": 32,
+    "root_checks": 968
+  },
+  "executed_source_commit": "c8d8bda914af632741d3f2bd9ff0980256b3e897",
+  "live_pass": {
+    "candidate": "fixed32_native_precompute_v1",
+    "evidence_route": "full_graph_replay",
+    "path": "live_pass.json",
+    "sha256": "4bfb971f4e9808069d67c4896d9664ecee19542767867157a21f66b0c22f79e5",
+    "source_contract_schema": "fr13-fixed32-taw-exact-commit-v3",
+    "source_contract_sha256": "42b92d872d2324bf618b35fdd71c22d0e68e5c00e25ad2a43ae553c8ab1f92da",
+    "status": "pass"
+  },
+  "production_contract": {
+    "b1_selector_validation": "accepted",
+    "b4_selector_validation": "rejected_not_covered",
+    "credential_kind": "exact_live_pass_json",
+    "separate_sidecar_issued": false,
+    "separate_sidecar_supported": false
+  },
+  "runroot": "output/fr13_b1_kernel_live_gate_taw_current_20260731T164000Z",
+  "schema": "fr13.fixed32.taw_native_precompute.current_b1_artifact.v1",
+  "status": "pass",
+  "task": {
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "failure_mode": "tests_passed",
+    "harness_exit_code": 0,
+    "instance_id": "astropy__astropy-12907",
+    "verdict": "resolved"
+  }
+}
