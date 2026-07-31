@@ -82,6 +82,7 @@ FIXED32_REQUEST_PATH="$ARMDIR_ABS/logs/fr13_fixed32_flush_request.json"
 FIXED32_ACK_PATH="$ARMDIR_ABS/logs/fr13_fixed32_flush_ack.json"
 FIXED32_PID_PATH="$ARMDIR_ABS/logs/fr13_fixed32_engine_pid"
 FIXED32_BOUNDARY_SNAPSHOT_PATH="$ARMDIR_ABS/logs/fr13_fixed32_boundary_snapshot"
+FIXED32_TAW_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_fixed32_taw_native_precompute.real_event.arm"
 FIXED32_INGRESS_SECRET_FILE=""
 FR13_FIXED32_INGRESS_TASK_IDS=""
 
@@ -1429,6 +1430,20 @@ fi
 # ---- boot server (class 11: everything pinned except the arm lever/shape) ----
 # extra flags exported into THIS shell so the launcher's docker -e picks them up.
 for kv in "${XFLAGS[@]:-}"; do [[ -n "$kv" ]] && export "$kv"; done
+case "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" in
+  0) ;;
+  1)
+    [[ -n "$FIXED32_MODE" && "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]] \
+      || {
+        echo "FAIL: fixed32 TAW native real-task arm is B1 diagnostic only"
+        exit 2
+      }
+    ;;
+  *)
+    echo "FAIL: FR13_FIXED32_TAW_NATIVE_PRECOMPUTE must be exactly 0 or 1"
+    exit 2
+    ;;
+esac
 if [[ "$LAUNCHER" == "locked" ]]; then
   CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.78}" MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
   FR13_RUN_DIR="$ARMDIR_ABS" LOG_DIR="$ARMDIR_ABS/logs" \
@@ -2103,6 +2118,11 @@ if [[ -n "$FIXED32_MODE" ]]; then
     --fixed32-flush-ack "$FIXED32_ACK_PATH"
     --fixed32-boundary-snapshot "$FIXED32_BOUNDARY_SNAPSHOT_PATH"
   )
+  if [[ "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "1" ]]; then
+    FIXED32_RUNNER_ARGS+=(
+      --fixed32-taw-real-event-arm "$FIXED32_TAW_REAL_EVENT_ARM_PATH"
+    )
+  fi
 fi
 
 # NETWORK-LINK WATCHDOG (OFFLOAD only; req #4/#5) — see fr13_bigdenom_swe_serve.sh

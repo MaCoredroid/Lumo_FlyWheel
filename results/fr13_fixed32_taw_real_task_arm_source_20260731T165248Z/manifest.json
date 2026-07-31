@@ -1,0 +1,31 @@
+{
+  "schema": "fr13.fixed32.taw_real_task_arm.source_gate.v1",
+  "created_utc": "2026-07-31T16:52:48Z",
+  "base_commit": "c8d8bda914af632741d3f2bd9ff0980256b3e897",
+  "branch": "agent/fixed32-taw-task-arm",
+  "status": "SOURCE_GATE_PASS",
+  "scope": {
+    "atomic_no_overwrite_publish": true,
+    "exact_swe_verified_task_marker": true,
+    "pre_flush_before_arm": true,
+    "post_flush_before_rotation": true,
+    "failure_cleanup": true,
+    "stale_or_tampered_marker_fails_closed": true,
+    "explicit_launcher_runner_hook": true,
+    "polling_used": false,
+    "b1_diagnostic_only": true,
+    "gate_eligible": false,
+    "floor_acceptance_eligible": false
+  },
+  "verification": {
+    "targeted_pytest": "56 passed",
+    "py_compile": "pass",
+    "ruff": "pass",
+    "bash_syntax": "pass",
+    "git_diff_check": "pass",
+    "gpu_used": false,
+    "docker_used": false,
+    "new_real_swe_verified_run": false
+  }
+}
+

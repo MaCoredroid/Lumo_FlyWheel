@@ -1,0 +1,26 @@
+CUDA_VISIBLE_DEVICES='' python -m pytest -q \
+  tests/test_fr13_fixed32_taw_real_task_arm.py \
+  tests/test_fr13_fixed32_b1_diagnostic.py \
+  tests/test_fr13_fixed32_task_boundary_snapshot.py \
+  tests/test_fr13_fixed32_taw_native_precompute.py
+........................................................                 [100%]
+56 passed in 1.01s
+
+CUDA_VISIBLE_DEVICES='' python -m py_compile \
+  scripts/run_swe_bench_q36_a.py \
+  tests/test_fr13_fixed32_taw_real_task_arm.py \
+  tests/test_fr13_fixed32_b1_diagnostic.py
+PASS
+
+CUDA_VISIBLE_DEVICES='' python -m ruff check \
+  scripts/run_swe_bench_q36_a.py \
+  tests/test_fr13_fixed32_taw_real_task_arm.py \
+  tests/test_fr13_fixed32_b1_diagnostic.py
+All checks passed!
+
+bash -n scripts/fr13_bigdenom_swe_serve_variant.sh
+PASS
+
+git diff --check
+PASS
+
