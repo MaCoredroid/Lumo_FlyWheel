@@ -432,6 +432,9 @@ def test_timing_runner_is_exact4_full_wall_stock_first_and_floor_ineligible() ->
         "export BSIZE=4",
         "export CONC=4",
         "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4",
+        "B4_KV_CACHE_MEMORY_BYTES=21474836480",
+        'KV_CACHE_MEMORY_BYTES="$B4_KV_CACHE_MEMORY_BYTES"',
+        "kv_cache_memory_bytes=%s",
         "FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1",
         "FR13_FIXED32_BATCH_GDN_BYTE_AB=0",
         "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=0",
@@ -461,6 +464,20 @@ def test_timing_runner_is_exact4_full_wall_stock_first_and_floor_ineligible() ->
         'run_arm "$CANDIDATE_ARM" 1'
     )
     assert "scripts/fr13_floor_gate.py" not in runner
+
+
+def test_b4_uses_a_pinned_manual_kv_cache_without_changing_context_length() -> None:
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+
+    assert "_fixed32_expected_kv_cache_memory_bytes=21474836480" in launcher
+    assert (
+        '"KV_CACHE_MEMORY_BYTES|$KV_CACHE_MEMORY_BYTES|'
+        '$_fixed32_expected_kv_cache_memory_bytes"' in launcher
+    )
+    assert (
+        "'--kv-cache-memory-bytes' \"$KV_CACHE_MEMORY_BYTES\"" in launcher
+    )
+    assert '"MAX_MODEL_LEN|$MAX_MODEL_LEN|131072"' in launcher
 
 
 def test_graph_gate_verdict_is_exact4_and_binds_the_live_pass() -> None:

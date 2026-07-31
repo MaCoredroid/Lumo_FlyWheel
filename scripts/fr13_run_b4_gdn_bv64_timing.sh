@@ -23,6 +23,7 @@ STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19
 KERNEL_SOURCE=src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
+B4_KV_CACHE_MEMORY_BYTES=21474836480
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 STOCK_ARM="tail6_fixed32_stock_${TAG}"
 CANDIDATE_ARM="tail6_fixed32_gdn_bv64_${TAG}"
@@ -70,11 +71,12 @@ source "$SEQUENCE"
 unset -f run_variant
 
 mkdir -p "$RUNROOT_ABS"
-printf 'classification=real_swe_verified_exact4_b4_timing_candidate\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\ngraph_pass_sha256=%s\ngraph_gate_verdict_sha256=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_exact4_b4_timing_candidate\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\ngraph_pass_sha256=%s\ngraph_gate_verdict_sha256=%s\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
   "$$" "$RUNROOT_ABS" "$STOCK_ARM" "$CANDIDATE_ARM" \
   "$(git rev-parse HEAD)" "$RUNNER_SHA256" "$SUBSET_SHA256" \
   "$STOCK_FA2_SHA256" "$GRAPH_PASS_SHA256" \
-  "$GRAPH_GATE_VERDICT_SHA256" "$(date -u +%FT%TZ)" \
+  "$GRAPH_GATE_VERDICT_SHA256" "$B4_KV_CACHE_MEMORY_BYTES" \
+  "$(date -u +%FT%TZ)" \
   > "$RUNROOT_ABS/launcher_meta.txt"
 
 "$PYTHON_BIN" scripts/fr13_runtime_manifest.py \
@@ -139,6 +141,7 @@ run_arm() {
   echo "===== $arm: exact4 B4 production=$production ====="
   if env \
       OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4 AGENT_WALL_S= \
+      KV_CACHE_MEMORY_BYTES="$B4_KV_CACHE_MEMORY_BYTES" \
       FR13_FIXED32_B1_DIAGNOSTIC=0 \
       FR10_METRICS=0 ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
       FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1 \

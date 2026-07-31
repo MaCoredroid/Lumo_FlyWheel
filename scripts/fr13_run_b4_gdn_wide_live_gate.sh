@@ -23,6 +23,7 @@ ARM="tail6_fixed32_${TAG}"
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
 FA2_SHA256=$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')
+B4_KV_CACHE_MEMORY_BYTES=21474836480
 
 [[ "$FA2_SHA256" =~ ^[0-9a-f]{64}$ ]]
 [[ "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" ]] \
@@ -45,9 +46,10 @@ run_variant() { :; }
 source scripts/fr13_fixed32_floor_timers_seq.sh
 
 mkdir -p "$RUNROOT"
-printf 'classification=exact4_b4_graph_byte_diagnostic\ntiming_eligible=0\nfloor_acceptance_eligible=0\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nfa2_sha256=%s\ncandidate_bv=%s\nstarted=%s\n' \
+printf 'classification=exact4_b4_graph_byte_diagnostic\ntiming_eligible=0\nfloor_acceptance_eligible=0\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nfa2_sha256=%s\ncandidate_bv=%s\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
   "$$" "$RUNROOT" "$ARM" "$(git rev-parse HEAD)" "$RUNNER_SHA256" \
   "$SUBSET_SHA256" "$FA2_SHA256" "$FR13_GATE_BATCH_GDN_BV" \
+  "$B4_KV_CACHE_MEMORY_BYTES" \
   "$(date -u +%FT%TZ)" \
   > "$RUNROOT/launcher_meta.txt"
 
@@ -59,6 +61,7 @@ printf 'classification=exact4_b4_graph_byte_diagnostic\ntiming_eligible=0\nfloor
   --repo "$PWD" --output "$RUNROOT/external_manifest.at_launch.json"
 
 if OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4 AGENT_WALL_S= \
+    KV_CACHE_MEMORY_BYTES="$B4_KV_CACHE_MEMORY_BYTES" \
     FR13_FIXED32_B1_DIAGNOSTIC=0 \
     FR10_METRICS=1 ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
     FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1 \

@@ -90,6 +90,7 @@ PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 GPU_OOM_GUARD=${GPU_OOM_GUARD:-1}
 MAX_MODEL_LEN=${MAX_MODEL_LEN:-131072}
 MAX_NUM_SEQS=${MAX_NUM_SEQS:-4}
+KV_CACHE_MEMORY_BYTES=${KV_CACHE_MEMORY_BYTES:-}
 # BATCH-AWARE MEMORY (user 2026-07-06): B>=4 co-residency needs more room for KV
 # (4 concurrent contexts). B=1-tuned defaults (105g cap, 0.78 util) wedged the container
 # at B=4 (§76-77: exited container held ~100G unified mem). Agents are OFFLOADED to
@@ -923,7 +924,12 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     exit 2
   fi
   _fixed32_expected_mem=105g
-  [[ "$MAX_NUM_SEQS" == "4" ]] && _fixed32_expected_mem=112g
+  _fixed32_expected_kv_cache_memory_bytes=
+  if [[ "$MAX_NUM_SEQS" == "4" ]]; then
+    _fixed32_expected_mem=112g
+    _fixed32_expected_kv_cache_memory_bytes=21474836480
+    KV_CACHE_MEMORY_BYTES=${KV_CACHE_MEMORY_BYTES:-$_fixed32_expected_kv_cache_memory_bytes}
+  fi
   _fixed32_expected_metrics=0
   _fixed32_expected_eager=0
   if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" \
@@ -943,6 +949,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   _fixed32_exact_pairs=(
     "GPU_UTIL|$GPU_UTIL|0.70"
     "MAX_MODEL_LEN|$MAX_MODEL_LEN|131072"
+    "KV_CACHE_MEMORY_BYTES|$KV_CACHE_MEMORY_BYTES|$_fixed32_expected_kv_cache_memory_bytes"
     "DOCKER_MEM_CAP|$DOCKER_MEM_CAP|$_fixed32_expected_mem"
     "ATTENTION_BACKEND|$ATTENTION_BACKEND|TREE_ATTN"
     "FR10_DECODE_MODE_DEFAULT|$FR10_DECODE_MODE_DEFAULT|tree_mtp"
@@ -1033,8 +1040,14 @@ if spec_config != contract.speculative_config_text():
     raise SystemExit("fixed32 SPEC_CONFIG differs from canonical contract")
 PY
   unset _fixed32_actual _fixed32_exact_pairs _fixed32_expected
-  unset _fixed32_expected_eager _fixed32_expected_mem _fixed32_expected_metrics
+  unset _fixed32_expected_eager _fixed32_expected_mem
+  unset _fixed32_expected_kv_cache_memory_bytes _fixed32_expected_metrics
   unset _fixed32_name _fixed32_pair _fr13_fixed32_batch_gdn_diagnostic
+fi
+if [[ -n "$KV_CACHE_MEMORY_BYTES" \
+      && ! "$KV_CACHE_MEMORY_BYTES" =~ ^[1-9][0-9]*$ ]]; then
+  echo "KV_CACHE_MEMORY_BYTES must be a positive integer byte count" >&2
+  exit 2
 fi
 
 mkdir -p "$LOG_DIR"
@@ -2399,6 +2412,7 @@ esac
 exec \"\${NSYS_PREFIX[@]}\" vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b \
   --host 0.0.0.0 --port 9950 --max-num-seqs '$MAX_NUM_SEQS' \
   --gpu-memory-utilization '$GPU_UTIL' --max-model-len '$MAX_MODEL_LEN' --seed '${SEED:-0}' \
+  $(if [[ -n "$KV_CACHE_MEMORY_BYTES" ]]; then printf '%s %s' '--kv-cache-memory-bytes' "$KV_CACHE_MEMORY_BYTES"; fi) \
   --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
   --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
   --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \

@@ -396,6 +396,9 @@ def test_exact4_b4_live_gate_runner_is_non_timing_and_fail_closed() -> None:
     assert "export BSIZE=4" in runner
     assert "export CONC=4" in runner
     assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in runner
+    assert "B4_KV_CACHE_MEMORY_BYTES=21474836480" in runner
+    assert 'KV_CACHE_MEMORY_BYTES="$B4_KV_CACHE_MEMORY_BYTES"' in runner
+    assert "kv_cache_memory_bytes=%s" in runner
     assert (
         "FR10_METRICS=1 ENFORCE_EAGER=0 "
         "CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in runner
