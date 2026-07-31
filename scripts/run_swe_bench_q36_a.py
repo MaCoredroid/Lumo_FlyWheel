@@ -3192,7 +3192,7 @@ _FIXED32_COUNTER_KEYS = frozenset(
         "cfwd_pending",
     }
 )
-_FIXED32_BOUNDARY_SNAPSHOT_SCHEMA = "fr13-fixed32-boundary-snapshot-v3"
+_FIXED32_BOUNDARY_SNAPSHOT_SCHEMA = "fr13-fixed32-boundary-snapshot-v4"
 _FIXED32_BOUNDARY_TOP_KEYS = frozenset(
     {
         "schema",
@@ -3206,7 +3206,15 @@ _FIXED32_BOUNDARY_TOP_KEYS = frozenset(
     }
 )
 _FIXED32_BOUNDARY_METRIC_KEYS = frozenset(
-    {"fixed32", "sfwd", "dfwd", "cfwd", "committer", "conv_pregather"}
+    {
+        "fixed32",
+        "sfwd",
+        "dfwd",
+        "cfwd",
+        "boot_warm",
+        "committer",
+        "conv_pregather",
+    }
 )
 _FIXED32_REQUIRED_METRICS = {
     "vllm:fr13_decode_forward_gpu_seconds_total",
@@ -3546,6 +3554,138 @@ def _load_fixed32_boundary_snapshot(
         )
         if _fixed32_nonnegative_int(span["spans"], f"{path}:{label}.spans") != events:
             raise Fixed32BoundaryError(f"{path}: {label} spans do not reconcile")
+
+    boot_warm = metrics["boot_warm"]
+    boot_warm_keys = frozenset(
+        {
+            "schema",
+            "classification",
+            "hardware_scope",
+            "wrapper_bookkeeping_warmed",
+            "copy_source_dtype",
+            "copy_destination_dtype",
+            "mode",
+            "capacity",
+            "vocab_size",
+            "batches",
+            "taw_executions",
+            "output_copy_pairs",
+            "slot_copy_pairs",
+            "spec_copy_pairs",
+            "flags_zero_fills",
+            "persistent_copy_state_restored",
+            "flags_state_restored",
+            "conv_commit_gather_launches",
+            "conv_commit_scatter_launches",
+            "committer_replays",
+            "observed_event_absent",
+            "pending_event_absent",
+            "taw_cache_lease_current",
+            "taw_rng_state_restored",
+            "taw_staging_state_restored",
+            "taw_measured_state_restored",
+            "committer_route_lease_current",
+            "committer_bank_state_restored",
+            "committer_conv_bank_state_restored",
+            "committer_conv_staging_state_restored",
+            "committer_alias_destination_contract",
+            "committer_input_state_restored",
+            "committer_measured_state_restored",
+            "committer_scratch_overwrite_proven",
+        }
+    )
+    _fixed32_exact_keys(
+        boot_warm,
+        boot_warm_keys,
+        f"{path}:boot_warm",
+    )
+    boot_capacity = _fixed32_nonnegative_int(
+        boot_warm["capacity"],
+        f"{path}:boot_warm.capacity",
+    )
+    boot_vocab = _fixed32_nonnegative_int(
+        boot_warm["vocab_size"],
+        f"{path}:boot_warm.vocab_size",
+    )
+    boot_batches = _fixed32_nonnegative_int_list(
+        boot_warm["batches"],
+        label=f"{path}:boot_warm.batches",
+    )
+    taw_executions = _fixed32_nonnegative_int(
+        boot_warm["taw_executions"],
+        f"{path}:boot_warm.taw_executions",
+    )
+    output_copy_pairs = _fixed32_nonnegative_int(
+        boot_warm["output_copy_pairs"],
+        f"{path}:boot_warm.output_copy_pairs",
+    )
+    slot_copy_pairs = _fixed32_nonnegative_int(
+        boot_warm["slot_copy_pairs"],
+        f"{path}:boot_warm.slot_copy_pairs",
+    )
+    spec_copy_pairs = _fixed32_nonnegative_int(
+        boot_warm["spec_copy_pairs"],
+        f"{path}:boot_warm.spec_copy_pairs",
+    )
+    flags_zero_fills = _fixed32_nonnegative_int(
+        boot_warm["flags_zero_fills"],
+        f"{path}:boot_warm.flags_zero_fills",
+    )
+    conv_gathers = _fixed32_nonnegative_int(
+        boot_warm["conv_commit_gather_launches"],
+        f"{path}:boot_warm.conv_commit_gather_launches",
+    )
+    conv_scatters = _fixed32_nonnegative_int(
+        boot_warm["conv_commit_scatter_launches"],
+        f"{path}:boot_warm.conv_commit_scatter_launches",
+    )
+    committer_replays = _fixed32_nonnegative_int(
+        boot_warm["committer_replays"],
+        f"{path}:boot_warm.committer_replays",
+    )
+    boot_true_fields = (
+        "observed_event_absent",
+        "pending_event_absent",
+        "persistent_copy_state_restored",
+        "flags_state_restored",
+        "taw_cache_lease_current",
+        "taw_rng_state_restored",
+        "taw_staging_state_restored",
+        "taw_measured_state_restored",
+        "committer_route_lease_current",
+        "committer_bank_state_restored",
+        "committer_conv_bank_state_restored",
+        "committer_conv_staging_state_restored",
+        "committer_input_state_restored",
+        "committer_measured_state_restored",
+        "committer_scratch_overwrite_proven",
+    )
+    if (
+        boot_warm["schema"] != "fr13-fixed32-boot-warm-v2"
+        or boot_warm["classification"] != "unmeasured_boot"
+        or boot_warm["hardware_scope"] != "device_postprocess_kernels"
+        or boot_warm["wrapper_bookkeeping_warmed"] is not False
+        or boot_warm["copy_source_dtype"] != "torch.int64"
+        or boot_warm["copy_destination_dtype"] != "torch.int32"
+        or boot_warm["mode"] != ack.mode
+        or boot_capacity != server_capacity
+        or boot_vocab <= 0
+        or boot_batches != list(range(1, server_capacity + 1))
+        or taw_executions != server_capacity
+        or output_copy_pairs != server_capacity
+        or slot_copy_pairs != server_capacity * (server_capacity + 1) // 2
+        or spec_copy_pairs != server_capacity
+        or flags_zero_fills != 1
+        or conv_gathers != server_capacity
+        or conv_scatters != server_capacity
+        or committer_replays != server_capacity
+        or boot_warm["committer_alias_destination_contract"]
+        != "exact_alias_only_16x3"
+        or any(boot_warm[key] is not True for key in boot_true_fields)
+    ):
+        raise Fixed32BoundaryError(
+            f"{path}: boot-warm evidence does not prove unmeasured readiness"
+        )
 
     committer = metrics["committer"]
     conv = metrics["conv_pregather"]

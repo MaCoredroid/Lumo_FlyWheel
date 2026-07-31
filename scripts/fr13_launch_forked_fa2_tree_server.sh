@@ -667,6 +667,15 @@ FR13_FIXED32_MIDDLEWARE_FLAGS=""
 FR13_FIXED32_CIDFILE=""
 FR13_FIXED32_CONTAINER_ID=""
 if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
+  # Pinned vLLM otherwise appends a random suffix before EngineCore, so the
+  # authenticated external ID cannot equal the model-runner census ID.
+  [[ "${VLLM_DISABLE_REQUEST_ID_RANDOMIZATION:-1}" == "1" ]] \
+    || {
+      echo "fixed32 requires VLLM_DISABLE_REQUEST_ID_RANDOMIZATION=1 for exact scheduler request-ID binding" >&2
+      exit 2
+    }
+  VLLM_DISABLE_REQUEST_ID_RANDOMIZATION=1
+  export VLLM_DISABLE_REQUEST_ID_RANDOMIZATION
   : "${FR13_FIXED32_INGRESS_SECRET_FILE:?fixed32 ingress secret file is required}"
   : "${FR13_FIXED32_INGRESS_TASK_IDS:?fixed32 canonical task ID list is required}"
   [[ -f "$FR13_FIXED32_INGRESS_SECRET_FILE" \
@@ -767,6 +776,8 @@ PY
     "$FR13_FIXED32_INGRESS_SECRET_FILE:$FR13_FIXED32_CONTAINER_INGRESS_SECRET_SOURCE:ro"
     -e
     "FR13_FIXED32_INGRESS_SECRET_FILE=$FR13_FIXED32_CONTAINER_INGRESS_SECRET_FILE"
+    -e
+    "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION=1"
   )
   FR13_FIXED32_MIDDLEWARE_FLAGS="--middleware lumo_flywheel_serving.inference_proxy.Fixed32EngineIngressMiddleware"
   rm -f \
@@ -941,6 +952,15 @@ if (( _FR13_LOCAL_ENV_SOURCED == 0 )) && [[ -f "$REPO/.lumo.local.env" ]]; then
   source "$REPO/.lumo.local.env"
 fi
 set +a
+if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
+  [[ "${VLLM_DISABLE_REQUEST_ID_RANDOMIZATION:-1}" == "1" ]] \
+    || {
+      echo "fixed32 request-ID binding changed after local environment loading" >&2
+      exit 2
+    }
+  VLLM_DISABLE_REQUEST_ID_RANDOMIZATION=1
+  export VLLM_DISABLE_REQUEST_ID_RANDOMIZATION
+fi
 
 _lumo_truthy() {
   case "${1,,}" in
@@ -1042,6 +1062,10 @@ FR13_ENV_FORWARD_ARGS=()
 while IFS= read -r _v; do
   [[ "$_v" == "FR13_FIXED32_INGRESS_SECRET_FILE" \
      || "$_v" == "FR13_FIXED32_MIDDLEWARE_FLAGS" ]] && continue
+  if [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "$_v" == "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION" ]]; then
+    continue
+  fi
   case "$(declare -p "$_v" 2>/dev/null)" in declare\ -a*|declare\ -A*) continue;; esac
   [[ "${!_v}" == *$'\n'* ]] && continue
   FR13_ENV_FORWARD_ARGS+=( -e "${_v}=${!_v}" )

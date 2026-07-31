@@ -93,7 +93,7 @@ def _snapshot(
     }
     zero_by_batch = {str(batch): 0 for batch in range(1, 5)}
     payload: dict[str, object] = {
-        "schema": "fr13-fixed32-boundary-snapshot-v3",
+        "schema": "fr13-fixed32-boundary-snapshot-v4",
         "mode": "tail6_fixed32",
         "producer_pid": 123,
         "generation": 7,
@@ -123,6 +123,46 @@ def _snapshot(
             },
             "dfwd": {"gpu_seconds": 0.5, "spans": events},
             "cfwd": {"gpu_seconds": 0.25, "spans": events},
+            "boot_warm": {
+                "schema": "fr13-fixed32-boot-warm-v2",
+                "classification": "unmeasured_boot",
+                "hardware_scope": "device_postprocess_kernels",
+                "wrapper_bookkeeping_warmed": False,
+                "copy_source_dtype": "torch.int64",
+                "copy_destination_dtype": "torch.int32",
+                "mode": "tail6_fixed32",
+                "capacity": server_capacity,
+                "vocab_size": 248320,
+                "batches": list(range(1, server_capacity + 1)),
+                "taw_executions": server_capacity,
+                "output_copy_pairs": server_capacity,
+                "slot_copy_pairs": (
+                    server_capacity * (server_capacity + 1) // 2
+                ),
+                "spec_copy_pairs": server_capacity,
+                "flags_zero_fills": 1,
+                "persistent_copy_state_restored": True,
+                "flags_state_restored": True,
+                "conv_commit_gather_launches": server_capacity,
+                "conv_commit_scatter_launches": server_capacity,
+                "committer_replays": server_capacity,
+                "observed_event_absent": True,
+                "pending_event_absent": True,
+                "taw_cache_lease_current": True,
+                "taw_rng_state_restored": True,
+                "taw_staging_state_restored": True,
+                "taw_measured_state_restored": True,
+                "committer_route_lease_current": True,
+                "committer_bank_state_restored": True,
+                "committer_conv_bank_state_restored": True,
+                "committer_conv_staging_state_restored": True,
+                "committer_alias_destination_contract": (
+                    "exact_alias_only_16x3"
+                ),
+                "committer_input_state_restored": True,
+                "committer_measured_state_restored": True,
+                "committer_scratch_overwrite_proven": True,
+            },
             "committer": {
                 "actual_replays_by_batch": raw_by_batch,
                 "actual_replays_enqueued": events + nonpure_replays,
@@ -280,6 +320,35 @@ def test_task_boundary_accepts_in_graph_pregather_counts(
     assert floor_report["committer"][
         "nonpure_committer_replays_enqueued"
     ] == (0 if server_capacity == 1 else 1)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("classification", "measured"),
+        ("wrapper_bookkeeping_warmed", True),
+        ("copy_destination_dtype", "torch.int64"),
+        ("taw_executions", 0),
+        ("conv_commit_gather_launches", 0),
+        ("committer_replays", 0),
+        ("observed_event_absent", False),
+        ("committer_alias_destination_contract", "partial_overlap"),
+        ("committer_scratch_overwrite_proven", False),
+    ),
+)
+def test_task_boundary_rejects_invalid_boot_warm_evidence(
+    tmp_path: Path,
+    field: str,
+    value: object,
+) -> None:
+    payload, ack = _snapshot(server_capacity=4)
+    payload["metrics"]["boot_warm"][field] = value
+    _assert_both_validators_reject(
+        tmp_path,
+        payload,
+        ack,
+        server_capacity=4,
+    )
 
 
 @pytest.mark.parametrize(
@@ -638,7 +707,7 @@ def test_both_validators_reject_malformed_ack_counter(
         )
 
 
-def test_runtime_writer_serializes_mixed_b4_v3_for_both_validators(
+def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -691,6 +760,9 @@ def test_runtime_writer_serializes_mixed_b4_v3_for_both_validators(
         _n_spans=1,
     )
     raw_by_batch = {1: 0, 2: 1, 3: 0, 4: 1}
+    boot_warm_metrics = copy.deepcopy(
+        _snapshot(server_capacity=4)[0]["metrics"]["boot_warm"]
+    )
     commit_counters = {
         "actual_replays_by_batch": raw_by_batch,
         "actual_replays_enqueued": 2,
@@ -746,6 +818,9 @@ def test_runtime_writer_serializes_mixed_b4_v3_for_both_validators(
             timer,
             timer,
         ),
+        "_fr13_f32_flush_boot_warm_metrics": (
+            lambda _gdn: copy.deepcopy(boot_warm_metrics)
+        ),
         "_fr13_f32_flush_json": json,
         "_fr13_f32_flush_hashlib": hashlib,
         "_FR13_FIXED32_FLUSH_MODE": "tail6_fixed32",
@@ -785,7 +860,7 @@ def test_runtime_writer_serializes_mixed_b4_v3_for_both_validators(
     assert snapshot_path == Path(f"{base_path}.7.json")
     snapshot_path.write_text(body, encoding="ascii")
     snapshot = json.loads(body)
-    assert snapshot["schema"] == "fr13-fixed32-boundary-snapshot-v3"
+    assert snapshot["schema"] == "fr13-fixed32-boundary-snapshot-v4"
     assert snapshot["metrics"]["fixed32"]["batch_histogram"] == {
         "1": 0,
         "2": 0,

@@ -2112,6 +2112,10 @@ def test_variant_teardown_skips_a_profiler_preserved_container(
         """#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$DOCKER_CALLS"
 if [[ "$1" == "inspect" && "$2" == "--format" && "$4" == "$CONTAINER_ID" ]]; then
+  if [[ "$3" == "{{.Id}}" ]]; then
+    printf '%s\\n' "$CONTAINER_ID"
+    exit 0
+  fi
   printf '%s /%s-preserved-run\\n' "$CONTAINER_ID" "$ORIGINAL_NAME"
   exit 0
 fi
@@ -2126,8 +2130,13 @@ exit 99
                 "#!/usr/bin/env bash",
                 "set -uo pipefail",
                 _shell_function(VARIANT, "_fixed32_container_identity_matches"),
+                _shell_function(VARIANT, "_fixed32_container_incarnation_matches"),
+                _shell_function(VARIANT, "_fixed32_classify_container_state"),
                 _shell_function(VARIANT, "_fixed32_remove_attested_container"),
                 "CONTAINER=$ORIGINAL_NAME",
+                "FIXED32_CONTAINER_STARTED_AT=$CONTAINER_STARTED_AT",
+                "FIXED32_CONTAINER_INIT_PID=$CONTAINER_INIT_PID",
+                "FIXED32_CONTAINER_RESTART_COUNT=$CONTAINER_RESTART_COUNT",
                 (
                     'if _fixed32_remove_attested_container "$CONTAINER_ID" '
                     '"$LOG_OUTPUT"; then exit 20; fi'
@@ -2146,6 +2155,9 @@ exit 99
             "CONTAINER_ID": CONTAINER_ID,
             "ORIGINAL_NAME": "fr13-bigdenom-run",
             "LOG_OUTPUT": os.fspath(tmp_path / "docker.log"),
+            "CONTAINER_STARTED_AT": CONTAINER_STARTED_AT,
+            "CONTAINER_INIT_PID": CONTAINER_INIT_PID,
+            "CONTAINER_RESTART_COUNT": CONTAINER_RESTART_COUNT,
         },
         check=False,
         capture_output=True,
@@ -2156,9 +2168,284 @@ exit 99
     assert completed.returncode == 0, completed.stderr
     calls = docker_calls.read_text(encoding="utf-8").splitlines()
     assert calls == [
-        f"inspect --format {{{{.Id}}}} {{{{.Name}}}} {CONTAINER_ID}"
+        (
+            "inspect --format {{.Id}} {{.Name}} {{.State.Status}} "
+            "{{.State.Running}} {{.State.Paused}} {{.State.StartedAt}} "
+            "{{.State.Pid}} {{.RestartCount}} "
+            f"{CONTAINER_ID}"
+        ),
+        (
+            "inspect --format {{.Id}} {{.Name}} {{.State.Status}} "
+            "{{.State.Running}} {{.State.Paused}} {{.State.StartedAt}} "
+            "{{.State.Pid}} {{.RestartCount}} "
+            f"{CONTAINER_ID}"
+        ),
     ]
-    assert "logs/removal skipped without exact re-attestation" in completed.stderr
+    assert (
+        "logs/removal skipped without exact incarnation re-attestation"
+        in completed.stderr
+    )
+
+
+@pytest.mark.parametrize(
+    ("drift_mode", "expected_error"),
+    (
+        (
+            "restart_before_logs",
+            "logs/removal skipped without exact incarnation re-attestation",
+        ),
+        (
+            "started_at_after_logs",
+            "container removal skipped after incarnation drift",
+        ),
+    ),
+)
+def test_variant_teardown_preserves_container_after_incarnation_drift(
+    tmp_path: Path,
+    drift_mode: str,
+    expected_error: str,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_docker = fake_bin / "docker"
+    docker_calls = tmp_path / "docker.calls"
+    after_logs = tmp_path / "after.logs"
+    _write_executable(
+        fake_docker,
+        """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$DOCKER_CALLS"
+if [[ "$1" == "inspect" && "$2" == "--format" && "$4" == "$CONTAINER_ID" ]]; then
+  if [[ "$3" == "{{.Id}}" ]]; then
+    printf '%s\\n' "$CONTAINER_ID"
+    exit 0
+  fi
+  started_at=$CONTAINER_STARTED_AT
+  restart_count=$CONTAINER_RESTART_COUNT
+  if [[ "$DRIFT_MODE" == "restart_before_logs" ]]; then
+    restart_count=1
+  elif [[ "$DRIFT_MODE" == "started_at_after_logs" && -e "$AFTER_LOGS" ]]; then
+    started_at=2026-07-31T00:00:00.000000000Z
+  fi
+  printf '%s /%s running true false %s %s %s\\n' \
+    "$CONTAINER_ID" "$CONTAINER_NAME" "$started_at" \
+    "$CONTAINER_INIT_PID" "$restart_count"
+  exit 0
+fi
+if [[ "$1" == "logs" && "$2" == "$CONTAINER_ID" ]]; then
+  : > "$AFTER_LOGS"
+  printf 'exact container log\\n'
+  exit 0
+fi
+if [[ "$1" == "rm" ]]; then
+  exit 99
+fi
+exit 1
+""",
+    )
+    harness = tmp_path / "variant_incarnation_cleanup_harness.sh"
+    _write_executable(
+        harness,
+        "\n".join(
+            (
+                "#!/usr/bin/env bash",
+                "set -uo pipefail",
+                _shell_function(VARIANT, "_fixed32_container_incarnation_matches"),
+                _shell_function(VARIANT, "_fixed32_classify_container_state"),
+                _shell_function(VARIANT, "_fixed32_remove_attested_container"),
+                "CONTAINER=$CONTAINER_NAME",
+                "FIXED32_CONTAINER_STARTED_AT=$CONTAINER_STARTED_AT",
+                "FIXED32_CONTAINER_INIT_PID=$CONTAINER_INIT_PID",
+                "FIXED32_CONTAINER_RESTART_COUNT=$CONTAINER_RESTART_COUNT",
+                (
+                    'if _fixed32_remove_attested_container "$CONTAINER_ID" '
+                    '"$LOG_OUTPUT"; then exit 20; fi'
+                ),
+            )
+        )
+        + "\n",
+    )
+    completed = subprocess.run(
+        ["bash", os.fspath(harness)],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+            "DOCKER_CALLS": os.fspath(docker_calls),
+            "CONTAINER_ID": CONTAINER_ID,
+            "CONTAINER_NAME": "fr13-bigdenom-run",
+            "CONTAINER_STARTED_AT": CONTAINER_STARTED_AT,
+            "CONTAINER_INIT_PID": CONTAINER_INIT_PID,
+            "CONTAINER_RESTART_COUNT": CONTAINER_RESTART_COUNT,
+            "DRIFT_MODE": drift_mode,
+            "AFTER_LOGS": os.fspath(after_logs),
+            "LOG_OUTPUT": os.fspath(tmp_path / "docker.log"),
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    calls = docker_calls.read_text(encoding="utf-8").splitlines()
+    assert not any(call.startswith("rm ") for call in calls)
+    if drift_mode == "restart_before_logs":
+        assert len(calls) == 2
+        assert not after_logs.exists()
+    else:
+        assert len(calls) == 4
+        assert calls[1] == f"logs {CONTAINER_ID}"
+        assert after_logs.exists()
+    assert expected_error in completed.stderr
+
+
+@pytest.mark.parametrize(
+    ("post_rm_state", "expected_outcome", "expected_text"),
+    (
+        (
+            "exact",
+            "exact_preserved",
+            "fixed32 exact container preserved after cleanup",
+        ),
+        (
+            "absent",
+            "absent",
+            "fixed32 container absent after cleanup",
+        ),
+        (
+            "drifted",
+            "drifted",
+            "fixed32 container incarnation drifted after cleanup",
+        ),
+        (
+            "unproven",
+            "removal_unproven",
+            "fixed32 container removal/preservation unproven after cleanup",
+        ),
+    ),
+)
+def test_variant_teardown_classifies_failed_container_removal(
+    tmp_path: Path,
+    post_rm_state: str,
+    expected_outcome: str,
+    expected_text: str,
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_docker = fake_bin / "docker"
+    docker_calls = tmp_path / "docker.calls"
+    after_rm = tmp_path / "after.rm"
+    _write_executable(
+        fake_docker,
+        """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$DOCKER_CALLS"
+if [[ "$1" == "inspect" && "$2" == "--format" && "$4" == "$CONTAINER_ID" ]]; then
+  if [[ -e "$AFTER_RM" ]]; then
+    case "$POST_RM_STATE" in
+      absent|unproven) exit 1 ;;
+      drifted) restart_count=1 ;;
+      exact) restart_count=$CONTAINER_RESTART_COUNT ;;
+      *) exit 98 ;;
+    esac
+  else
+    restart_count=$CONTAINER_RESTART_COUNT
+  fi
+  if [[ "$3" == "{{.Id}}" ]]; then
+    printf '%s\\n' "$CONTAINER_ID"
+  else
+    printf '%s /%s running true false %s %s %s\\n' \
+      "$CONTAINER_ID" "$CONTAINER_NAME" "$CONTAINER_STARTED_AT" \
+      "$CONTAINER_INIT_PID" "$restart_count"
+  fi
+  exit 0
+fi
+if [[ "$1" == "logs" && "$2" == "$CONTAINER_ID" ]]; then
+  printf 'exact container log\\n'
+  exit 0
+fi
+if [[ "$1" == "rm" && "$2" == "-f" && "$3" == "$CONTAINER_ID" ]]; then
+  : > "$AFTER_RM"
+  exit 99
+fi
+if [[ "$1" == "ps" && "$2" == "-aq" && "$3" == "--no-trunc" ]]; then
+  [[ "$POST_RM_STATE" != "unproven" ]] || exit 97
+  exit 0
+fi
+exit 96
+""",
+    )
+    harness = tmp_path / "variant_failed_removal_harness.sh"
+    _write_executable(
+        harness,
+        "\n".join(
+            (
+                "#!/usr/bin/env bash",
+                "set -uo pipefail",
+                _shell_function(VARIANT, "_fixed32_container_incarnation_matches"),
+                _shell_function(VARIANT, "_fixed32_classify_container_state"),
+                _shell_function(
+                    VARIANT,
+                    "_fixed32_record_container_cleanup_failure",
+                ),
+                _shell_function(VARIANT, "_fixed32_remove_attested_container"),
+                "CONTAINER=$CONTAINER_NAME",
+                "FIXED32_CONTAINER_STARTED_AT=$CONTAINER_STARTED_AT",
+                "FIXED32_CONTAINER_INIT_PID=$CONTAINER_INIT_PID",
+                "FIXED32_CONTAINER_RESTART_COUNT=$CONTAINER_RESTART_COUNT",
+                "FIXED32_CONTAINER_CLEANUP_OUTCOME=",
+                (
+                    'if _fixed32_remove_attested_container "$CONTAINER_ID" '
+                    '"$LOG_OUTPUT"; then exit 20; fi'
+                ),
+                (
+                    '_fixed32_record_container_cleanup_failure "$CONTAINER_ID" '
+                    '"cleanup attestation/removal failure"'
+                ),
+                'printf "%s\\n" "$FIXED32_CONTAINER_CLEANUP_OUTCOME" > "$OUTCOME"',
+            )
+        )
+        + "\n",
+    )
+    arm_dir = tmp_path / "arm"
+    arm_dir.mkdir()
+    outcome = tmp_path / "outcome"
+    completed = subprocess.run(
+        ["bash", os.fspath(harness)],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+            "DOCKER_CALLS": os.fspath(docker_calls),
+            "CONTAINER_ID": CONTAINER_ID,
+            "CONTAINER_NAME": "fr13-bigdenom-run",
+            "CONTAINER_STARTED_AT": CONTAINER_STARTED_AT,
+            "CONTAINER_INIT_PID": CONTAINER_INIT_PID,
+            "CONTAINER_RESTART_COUNT": CONTAINER_RESTART_COUNT,
+            "POST_RM_STATE": post_rm_state,
+            "AFTER_RM": os.fspath(after_rm),
+            "LOG_OUTPUT": os.fspath(tmp_path / "docker.log"),
+            "ARMDIR": os.fspath(arm_dir),
+            "OUTCOME": os.fspath(outcome),
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert outcome.read_text(encoding="ascii") == f"{expected_outcome}\n"
+    assert expected_text in completed.stderr
+    calls = docker_calls.read_text(encoding="ascii").splitlines()
+    assert calls.count(f"rm -f {CONTAINER_ID}") == 1
+    preserved = arm_dir / "fixed32_container_preserved.txt"
+    cleanup_failure = arm_dir / "fixed32_container_cleanup_failure.txt"
+    if expected_outcome == "exact_preserved":
+        assert expected_text in preserved.read_text(encoding="ascii")
+        assert not cleanup_failure.exists()
+    else:
+        assert not preserved.exists()
+        assert expected_text in cleanup_failure.read_text(encoding="ascii")
 
 
 def test_stop_timeout_kills_a_term_ignoring_nsys_process(

@@ -926,6 +926,7 @@ _FR13_FIXED32_TOPOLOGY = None
 _FR13_FIXED32_TAW_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
 _FR13_FIXED32_TAW_WORK_CALLBACK: Callable[[dict[str, Any]], None] | None = None
 _FR13_FIXED32_TAW_LAST_WORK: dict[str, Any] | None = None
+_FR13_FIXED32_TAW_WARMUPS: dict[tuple[Any, ...], dict[str, Any]] = {}
 _FR13_FIXED32_WORK_ANNOUNCED = False
 _FR13_FIXED32_BATCHES = (1, 2, 3, 4)
 _FR13_FIXED32_INTEGER_DTYPES = None
@@ -1450,6 +1451,400 @@ def fr13_fixed32_taw_last_work() -> dict[str, Any] | None:
     result = dict(_FR13_FIXED32_TAW_LAST_WORK)
     result["taw"] = dict(_FR13_FIXED32_TAW_LAST_WORK["taw"])
     return result
+
+
+def _fr13_fixed32_taw_cache_lease(entry: dict[str, Any]) -> tuple[Any, ...]:
+    """Bind every cache tensor object, storage, pointer, dtype, and layout."""
+    tensor_names = (
+        "draft_counts",
+        "child_table",
+        "child_counts",
+        "expected_parent",
+        "starts",
+        "uniforms",
+        "draft_tokens",
+        "bonus_tokens",
+        "output_tokens",
+        "output_lens",
+        "accepted_path_rows",
+        "accepted_lens",
+        "last_row",
+    )
+    lease = []
+    for name in tensor_names:
+        value = entry.get(name)
+        if not isinstance(value, torch.Tensor):
+            raise RuntimeError(
+                f"FR13 fixed32 TAW cache lease is missing tensor {name}"
+            )
+        lease.append(
+            (
+                name,
+                id(value),
+                int(value.data_ptr()),
+                int(value.untyped_storage().data_ptr()),
+                tuple(int(dimension) for dimension in value.shape),
+                tuple(int(stride) for stride in value.stride()),
+                str(value.dtype),
+                str(value.device),
+            )
+        )
+    return tuple(lease)
+
+
+def fr13_fixed32_taw_warmup_counters(
+    device,
+    *,
+    mode: str,
+    valid_mask: int,
+    max_batch_size: int,
+    vocab_size: int,
+) -> dict[str, Any]:
+    """Return boot-warm evidence only while it still owns the live cache."""
+    capacity = int(max_batch_size)
+    key = (
+        str(mode),
+        int(valid_mask),
+        capacity,
+        int(vocab_size),
+        _fr13_fixed32_device_key(device),
+    )
+    record = _FR13_FIXED32_TAW_WARMUPS.get(key)
+    if record is None:
+        return {
+            "ready": False,
+            "classification": "unmeasured_boot",
+            "mode": str(mode),
+            "valid_mask": int(valid_mask),
+            "max_batch_size": capacity,
+            "vocab_size": int(vocab_size),
+            "batches": (),
+            "executions": 0,
+            "cache_lease_current": False,
+            "rng_state_restored": False,
+            "staging_state_restored": False,
+            "measured_state_restored": False,
+        }
+    cache_entries = tuple(
+        _FR13_FIXED32_TAW_CACHE.get(
+            fr13_fixed32_taw_cache_key(
+                str(mode),
+                int(valid_mask),
+                batch,
+                device,
+            )
+        )
+        for batch in range(1, capacity + 1)
+    )
+    cache_leases = tuple(
+        _fr13_fixed32_taw_cache_lease(entry)
+        for entry in cache_entries
+        if entry is not None
+    )
+    result = {
+        name: value
+        for name, value in record.items()
+        if name != "_cache_leases"
+    }
+    result["cache_lease_current"] = (
+        len(cache_leases) == capacity
+        and cache_leases == tuple(record["_cache_leases"])
+    )
+    result["ready"] = bool(
+        result.get("ready")
+        and result.get("classification") == "unmeasured_boot"
+        and result.get("mode") == str(mode)
+        and int(result.get("valid_mask", -1)) == int(valid_mask)
+        and int(result.get("max_batch_size", -1)) == capacity
+        and int(result.get("vocab_size", -1)) == int(vocab_size)
+        and tuple(result.get("batches", ()))
+        == tuple(range(1, capacity + 1))
+        and int(result.get("executions", -1)) == capacity
+        and result["cache_lease_current"]
+        and result.get("rng_state_restored") is True
+        and result.get("staging_state_restored") is True
+        and result.get("measured_state_restored") is True
+    )
+    return result
+
+
+def fr13_fixed32_taw_warm_products(
+    device,
+    *,
+    mode: str,
+    valid_mask: int,
+    max_batch_size: int,
+    vocab_size: int,
+    batch_size: int,
+) -> tuple[Any, Any, Any, Any, Any]:
+    """Return cache-owned boot products only under a current warm lease."""
+    evidence = fr13_fixed32_taw_warmup_counters(
+        device,
+        mode=mode,
+        valid_mask=valid_mask,
+        max_batch_size=max_batch_size,
+        vocab_size=vocab_size,
+    )
+    if evidence.get("ready") is not True:
+        raise RuntimeError(
+            "FR13 fixed32 TAW warm products require a current boot lease"
+        )
+    batch = int(batch_size)
+    if not 1 <= batch <= int(max_batch_size):
+        raise ValueError(
+            "FR13 fixed32 TAW warm-product batch exceeds boot capacity"
+        )
+    entry = _FR13_FIXED32_TAW_CACHE[
+        fr13_fixed32_taw_cache_key(
+            mode,
+            int(valid_mask),
+            batch,
+            device,
+        )
+    ]
+    return (
+        entry["output_tokens"],
+        entry["output_lens"],
+        entry["accepted_path_rows"],
+        entry["accepted_lens"],
+        entry["last_row"],
+    )
+
+
+def _fr13_fixed32_tensor_bits_equal(left, right) -> bool:
+    return bool(
+        torch.equal(
+            left.contiguous().view(torch.uint8),
+            right.contiguous().view(torch.uint8),
+        )
+    )
+
+
+def fr13_fixed32_taw_warm_execute(
+    device,
+    *,
+    mode: str,
+    valid_mask: int,
+    max_batch_size: int,
+    vocab_size: int,
+) -> dict[str, Any]:
+    """Execute the production fixed TAW call graph outside measured events.
+
+    All cache-owned tensors, RNG position, work callbacks, last-work evidence,
+    and announcement state are restored exactly. The initialized bulk
+    generator object and backend kernels remain available for serving.
+    """
+    if torch is None:
+        raise RuntimeError("FR13 fixed32 TAW boot warm requires torch")
+    topology, runtime_mask = _fr13_fixed32_runtime_contract(str(mode))
+    capacity = int(max_batch_size)
+    vocab = int(vocab_size)
+    if int(valid_mask) != runtime_mask:
+        raise RuntimeError(
+            "FR13 fixed32 TAW boot-warm mask drift: "
+            f"{int(valid_mask):#x} != {runtime_mask:#x}"
+        )
+    if capacity not in _FR13_FIXED32_BATCHES:
+        raise ValueError(
+            "FR13 fixed32 TAW boot-warm capacity must be 1..4, "
+            f"got {capacity}"
+        )
+    if vocab <= 0:
+        raise ValueError(
+            f"FR13 fixed32 TAW boot-warm vocabulary must be positive, got {vocab}"
+        )
+    normalized_device = torch.device(device)
+    if (
+        normalized_device.type == "cuda"
+        and torch.cuda.is_current_stream_capturing()
+    ):
+        raise RuntimeError("FR13 fixed32 TAW boot warm is forbidden during capture")
+
+    prior = fr13_fixed32_taw_warmup_counters(
+        normalized_device,
+        mode=str(mode),
+        valid_mask=runtime_mask,
+        max_batch_size=capacity,
+        vocab_size=vocab,
+    )
+    if prior["ready"]:
+        return prior
+
+    entries = []
+    for batch in range(1, capacity + 1):
+        cache_key = fr13_fixed32_taw_cache_key(
+            str(mode),
+            runtime_mask,
+            batch,
+            normalized_device,
+        )
+        entry = _FR13_FIXED32_TAW_CACHE.get(cache_key)
+        if entry is None:
+            raise RuntimeError(
+                "FR13 fixed32 TAW boot warm requires every preseeded "
+                f"occupancy through B={capacity}; missing B={batch}"
+            )
+        entries.append(entry)
+
+    mutable_names = (
+        "uniforms",
+        "draft_tokens",
+        "bonus_tokens",
+        "output_tokens",
+        "output_lens",
+        "accepted_path_rows",
+        "accepted_lens",
+        "last_row",
+    )
+    saved_cache = tuple(
+        {
+            name: entry[name].clone()
+            for name in mutable_names
+        }
+        for entry in entries
+    )
+    generator = _fr13_bulk_gen(normalized_device)
+    saved_generator_state = generator.get_state().clone()
+    global _FR13_FIXED32_TAW_WORK_CALLBACK
+    global _FR13_FIXED32_TAW_LAST_WORK
+    global _FR13_FIXED32_WORK_ANNOUNCED
+    saved_callback = _FR13_FIXED32_TAW_WORK_CALLBACK
+    saved_last_work = _FR13_FIXED32_TAW_LAST_WORK
+    saved_announced = _FR13_FIXED32_WORK_ANNOUNCED
+
+    def discard_warm_work(_payload):
+        return None
+
+    _FR13_FIXED32_TAW_WORK_CALLBACK = discard_warm_work
+    _FR13_FIXED32_WORK_ANNOUNCED = True
+    executions = 0
+    logits = None
+    try:
+        max_rows = capacity * int(topology.PHYSICAL_DRAFTS)
+        logits = torch.zeros(
+            (max_rows, vocab),
+            dtype=torch.float32,
+            device=normalized_device,
+        )
+        for batch, entry in enumerate(entries, start=1):
+            rows = batch * int(topology.PHYSICAL_DRAFTS)
+            draft_ids = (
+                torch.arange(
+                    int(topology.PHYSICAL_DRAFTS),
+                    dtype=torch.int32,
+                    device=normalized_device,
+                )
+                .remainder(vocab)
+                .repeat(batch)
+            )
+            parents = entry["expected_parent"].to(torch.int32).reshape(-1)
+            bonus = torch.zeros(
+                (batch, 1),
+                dtype=torch.int32,
+                device=normalized_device,
+            )
+            products = fr13_fixed32_taw_commit(
+                entry["draft_counts"],
+                draft_ids,
+                parents,
+                logits[:rows],
+                logits[:rows],
+                bonus,
+                int(topology.PHYSICAL_DRAFTS),
+                generators=None,
+                uniforms=None,
+                all_greedy=False,
+                mode=str(mode),
+            )
+            if (
+                len(products) != 5
+                or products[0] is not entry["output_tokens"]
+                or products[1] is not entry["output_lens"]
+                or products[2] is not entry["accepted_path_rows"]
+                or products[3] is not entry["accepted_lens"]
+                or products[4] is not entry["last_row"]
+            ):
+                raise RuntimeError(
+                    "FR13 fixed32 TAW boot warm returned non-cache products"
+                )
+            executions += 1
+        if normalized_device.type == "cuda":
+            torch.cuda.synchronize(normalized_device)
+    finally:
+        try:
+            generator.set_state(saved_generator_state)
+        finally:
+            try:
+                for entry, saved in zip(entries, saved_cache, strict=True):
+                    for name in mutable_names:
+                        entry[name].copy_(saved[name])
+            finally:
+                _FR13_FIXED32_TAW_WORK_CALLBACK = saved_callback
+                _FR13_FIXED32_TAW_LAST_WORK = saved_last_work
+                _FR13_FIXED32_WORK_ANNOUNCED = saved_announced
+                if normalized_device.type == "cuda":
+                    torch.cuda.synchronize(normalized_device)
+        del logits
+
+    staging_state_restored = all(
+        _fr13_fixed32_tensor_bits_equal(entry[name], saved[name])
+        for entry, saved in zip(entries, saved_cache, strict=True)
+        for name in mutable_names
+    )
+    rng_state_restored = _fr13_fixed32_tensor_bits_equal(
+        generator.get_state(),
+        saved_generator_state,
+    )
+    measured_state_restored = (
+        _FR13_FIXED32_TAW_WORK_CALLBACK is saved_callback
+        and _FR13_FIXED32_TAW_LAST_WORK is saved_last_work
+        and _FR13_FIXED32_WORK_ANNOUNCED is saved_announced
+    )
+    if executions != capacity:
+        raise RuntimeError(
+            "FR13 fixed32 TAW boot warm did not execute every occupancy"
+        )
+    if (
+        not staging_state_restored
+        or not rng_state_restored
+        or not measured_state_restored
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 TAW boot warm did not restore serving state"
+        )
+    record = {
+        "ready": True,
+        "classification": "unmeasured_boot",
+        "mode": str(mode),
+        "valid_mask": runtime_mask,
+        "max_batch_size": capacity,
+        "vocab_size": vocab,
+        "batches": tuple(range(1, capacity + 1)),
+        "executions": executions,
+        "cache_lease_current": True,
+        "rng_state_restored": rng_state_restored,
+        "staging_state_restored": staging_state_restored,
+        "measured_state_restored": measured_state_restored,
+        "_cache_leases": tuple(
+            _fr13_fixed32_taw_cache_lease(entry)
+            for entry in entries
+        ),
+    }
+    warm_key = (
+        str(mode),
+        runtime_mask,
+        capacity,
+        vocab,
+        _fr13_fixed32_device_key(normalized_device),
+    )
+    _FR13_FIXED32_TAW_WARMUPS[warm_key] = record
+    return fr13_fixed32_taw_warmup_counters(
+        normalized_device,
+        mode=str(mode),
+        valid_mask=runtime_mask,
+        max_batch_size=capacity,
+        vocab_size=vocab,
+    )
 
 
 def _fr13_fixed32_integer_dtypes():
@@ -3251,6 +3646,104 @@ def _fr13_fixed32_test_inactive_poison(topology) -> None:
         raise AssertionError("inactive-node poison changed fixed32 results")
 
 
+def _fr13_fixed32_test_boot_warm_state(topology) -> None:
+    mode = "tail6_fixed32"
+    _fr13_fixed32_test_set_env(topology, mode)
+    valid_mask = int(topology.VALID_MASK_BY_MODE[mode])
+    fr13_fixed32_taw_preseed("cpu", mode=mode, valid_mask=valid_mask)
+    entries = [
+        _FR13_FIXED32_TAW_CACHE[
+            fr13_fixed32_taw_cache_key(mode, valid_mask, batch, "cpu")
+        ]
+        for batch in _FR13_FIXED32_BATCHES
+    ]
+    mutable_names = (
+        "uniforms",
+        "draft_tokens",
+        "bonus_tokens",
+        "output_tokens",
+        "output_lens",
+        "accepted_path_rows",
+        "accepted_lens",
+        "last_row",
+    )
+    saved_tensors = tuple(
+        {
+            name: entry[name].clone()
+            for name in mutable_names
+        }
+        for entry in entries
+    )
+    generator = _fr13_bulk_gen(torch.device("cpu"))
+    saved_generator_state = generator.get_state().clone()
+    saved_last_work = _FR13_FIXED32_TAW_LAST_WORK
+    saved_announced = _FR13_FIXED32_WORK_ANNOUNCED
+    callback_calls = []
+
+    def callback(payload):
+        callback_calls.append(payload)
+
+    saved_callback = _FR13_FIXED32_TAW_WORK_CALLBACK
+    fr13_fixed32_taw_set_work_callback(callback)
+    try:
+        result = fr13_fixed32_taw_warm_execute(
+            "cpu",
+            mode=mode,
+            valid_mask=valid_mask,
+            max_batch_size=4,
+            vocab_size=97,
+        )
+        if (
+            result.get("ready") is not True
+            or result.get("classification") != "unmeasured_boot"
+            or tuple(result.get("batches", ())) != (1, 2, 3, 4)
+            or result.get("executions") != 4
+            or callback_calls
+            or _FR13_FIXED32_TAW_WORK_CALLBACK is not callback
+            or _FR13_FIXED32_TAW_LAST_WORK is not saved_last_work
+            or _FR13_FIXED32_WORK_ANNOUNCED is not saved_announced
+            or not torch.equal(generator.get_state(), saved_generator_state)
+        ):
+            raise AssertionError("fixed32 TAW boot warm polluted measured state")
+        for entry, saved in zip(entries, saved_tensors, strict=True):
+            if any(
+                not _fr13_fixed32_tensor_bits_equal(
+                    entry[name], saved[name]
+                )
+                for name in mutable_names
+            ):
+                raise AssertionError(
+                    "fixed32 TAW boot warm did not restore cache staging"
+                )
+        repeated = fr13_fixed32_taw_warm_execute(
+            "cpu",
+            mode=mode,
+            valid_mask=valid_mask,
+            max_batch_size=4,
+            vocab_size=97,
+        )
+        if repeated != result or callback_calls:
+            raise AssertionError("fixed32 TAW boot warm is not idempotent")
+        saved_output = entries[-1]["output_tokens"]
+        entries[-1]["output_tokens"] = saved_output.clone()
+        try:
+            stale = fr13_fixed32_taw_warmup_counters(
+                "cpu",
+                mode=mode,
+                valid_mask=valid_mask,
+                max_batch_size=4,
+                vocab_size=97,
+            )
+            if stale.get("ready") is not False:
+                raise AssertionError(
+                    "fixed32 TAW warm lease ignored tensor rebinding"
+                )
+        finally:
+            entries[-1]["output_tokens"] = saved_output
+    finally:
+        fr13_fixed32_taw_set_work_callback(saved_callback)
+
+
 def _fr13_fixed32_test_bonus_core(topology) -> None:
     mode = "tail6_fixed32"
     _fr13_fixed32_test_set_env(topology, mode)
@@ -3737,6 +4230,7 @@ def fr13_fixed32_taw_self_test() -> None:
         _fr13_fixed32_test_reject_residual_zero_mass,
         _fr13_fixed32_test_duplicate_semantics,
         _fr13_fixed32_test_inactive_poison,
+        _fr13_fixed32_test_boot_warm_state,
         _fr13_fixed32_test_bonus_core,
         _fr13_fixed32_test_fail_loud,
         _fr13_fixed32_test_adversarial_contract,

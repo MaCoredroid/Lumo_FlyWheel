@@ -43,6 +43,10 @@ ARMDIR_ABS=$(realpath -m "$ARMDIR")
 CONTAINER="fr13-bigdenom-$ARM"
 CONTAINER_RUNTIME_REF="$CONTAINER"
 FIXED32_CIDFILE=""
+FIXED32_CONTAINER_STARTED_AT=""
+FIXED32_CONTAINER_INIT_PID=""
+FIXED32_CONTAINER_RESTART_COUNT=""
+FIXED32_CONTAINER_CLEANUP_OUTCOME=""
 PORT=9950
 PROXY_PORT=8022
 EVAL_HOST=${EVAL_HOST:-alienware}
@@ -62,6 +66,10 @@ if [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" ]]; then
     || { echo "FAIL: fixed32 arm directory already exists: $ARMDIR"; exit 2; }
 fi
 mkdir -p "$ARMDIR/logs"
+if [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" ]]; then
+  chmod 700 "$ARMDIR" "$ARMDIR/logs" \
+    || { echo "FAIL: fixed32 arm directories could not be made private"; exit 2; }
+fi
 FIXED32_MODE=""
 FIXED32_PRODUCER_PID=""
 FIXED32_REQUEST_PATH="$ARMDIR_ABS/logs/fr13_fixed32_flush_request.json"
@@ -697,6 +705,79 @@ _fixed32_container_identity_matches() {
     && [[ "$actual_name" == "/$CONTAINER" ]]
 }
 
+_capture_fixed32_container_incarnation() {
+  local container_ref=$1
+  local identity=""
+  local actual_id=""
+  local actual_name=""
+  local actual_status=""
+  local actual_running=""
+  local actual_paused=""
+  local actual_started_at=""
+  local actual_pid=""
+  local actual_restart_count=""
+  local extra=""
+
+  [[ "$container_ref" =~ ^[0-9a-f]{64}$ ]] || return 1
+  identity=$(
+    docker inspect --format \
+      '{{.Id}} {{.Name}} {{.State.Status}} {{.State.Running}} {{.State.Paused}} {{.State.StartedAt}} {{.State.Pid}} {{.RestartCount}}' \
+      "$container_ref" 2>/dev/null
+  ) || return 1
+  read -r actual_id actual_name actual_status actual_running actual_paused \
+    actual_started_at actual_pid actual_restart_count extra <<< "$identity"
+  [[ -z "$extra" ]] \
+    && [[ "$actual_id" == "$container_ref" ]] \
+    && [[ "$actual_name" == "/$CONTAINER" ]] \
+    && [[ "$actual_status" == "running" ]] \
+    && [[ "$actual_running" == "true" ]] \
+    && [[ "$actual_paused" == "false" ]] \
+    && [[ "$actual_started_at" != "0001-01-01T00:00:00Z" ]] \
+    && [[ "$actual_started_at" =~ ^[^[:space:]]+$ ]] \
+    && [[ "$actual_pid" =~ ^[1-9][0-9]*$ ]] \
+    && [[ "$actual_restart_count" == "0" ]] \
+    || return 1
+  FIXED32_CONTAINER_STARTED_AT=$actual_started_at
+  FIXED32_CONTAINER_INIT_PID=$actual_pid
+  FIXED32_CONTAINER_RESTART_COUNT=$actual_restart_count
+}
+
+_fixed32_container_incarnation_matches() {
+  local container_ref=$1
+  local identity=""
+  local actual_id=""
+  local actual_name=""
+  local actual_status=""
+  local actual_running=""
+  local actual_paused=""
+  local actual_started_at=""
+  local actual_pid=""
+  local actual_restart_count=""
+  local extra=""
+
+  [[ "$container_ref" =~ ^[0-9a-f]{64}$ ]] || return 1
+  [[ -n "$FIXED32_CONTAINER_STARTED_AT" ]] \
+    && [[ "$FIXED32_CONTAINER_INIT_PID" =~ ^[1-9][0-9]*$ ]] \
+    && [[ "$FIXED32_CONTAINER_RESTART_COUNT" == "0" ]] \
+    || return 1
+  identity=$(
+    docker inspect --format \
+      '{{.Id}} {{.Name}} {{.State.Status}} {{.State.Running}} {{.State.Paused}} {{.State.StartedAt}} {{.State.Pid}} {{.RestartCount}}' \
+      "$container_ref" 2>/dev/null
+  ) || return 1
+  read -r actual_id actual_name actual_status actual_running actual_paused \
+    actual_started_at actual_pid actual_restart_count extra <<< "$identity"
+  [[ -z "$extra" ]] \
+    && [[ "$actual_id" == "$container_ref" ]] \
+    && [[ "$actual_name" == "/$CONTAINER" ]] \
+    && [[ "$actual_status" == "running" ]] \
+    && [[ "$actual_running" == "true" ]] \
+    && [[ "$actual_paused" == "false" ]] \
+    && [[ "$actual_started_at" == "$FIXED32_CONTAINER_STARTED_AT" ]] \
+    && [[ "$actual_pid" == "$FIXED32_CONTAINER_INIT_PID" ]] \
+    && [[ "$actual_restart_count" == "$FIXED32_CONTAINER_RESTART_COUNT" ]]
+}
+
 _promote_fixed32_container_from_cidfile() {
   local -a container_ids=()
   local candidate=""
@@ -706,29 +787,430 @@ _promote_fixed32_container_from_cidfile() {
     && [[ "${container_ids[0]}" =~ ^[0-9a-f]{64}$ ]] || return 1
   candidate=${container_ids[0]}
   _fixed32_container_identity_matches "$candidate" || return 1
+  _capture_fixed32_container_incarnation "$candidate" || return 1
   CONTAINER_RUNTIME_REF=$candidate
-  echo "fixed32 container identity promoted: id=$CONTAINER_RUNTIME_REF name=$CONTAINER"
+  echo \
+    "fixed32 container identity promoted: id=$CONTAINER_RUNTIME_REF name=$CONTAINER started_at=$FIXED32_CONTAINER_STARTED_AT pid=$FIXED32_CONTAINER_INIT_PID restart_count=$FIXED32_CONTAINER_RESTART_COUNT"
+}
+
+_fixed32_classify_container_state() {
+  local container_ref=$1
+  local identity=""
+  local actual_id=""
+  local actual_name=""
+  local actual_status=""
+  local actual_running=""
+  local actual_paused=""
+  local actual_started_at=""
+  local actual_pid=""
+  local actual_restart_count=""
+  local extra=""
+  local container_list=""
+  local -a container_ids=()
+
+  FIXED32_CONTAINER_CLEANUP_OUTCOME="removal_unproven"
+  identity=$(
+    docker inspect --format \
+      '{{.Id}} {{.Name}} {{.State.Status}} {{.State.Running}} {{.State.Paused}} {{.State.StartedAt}} {{.State.Pid}} {{.RestartCount}}' \
+      "$container_ref" 2>/dev/null
+  )
+  if (( $? == 0 )); then
+    read -r actual_id actual_name actual_status actual_running actual_paused \
+      actual_started_at actual_pid actual_restart_count extra <<< "$identity"
+    if [[ -z "$extra" \
+       && "$actual_id" == "$container_ref" \
+       && "$actual_name" =~ ^/[^[:space:]]+$ \
+       && "$actual_status" =~ ^[a-z]+$ \
+       && "$actual_running" =~ ^(true|false)$ \
+       && "$actual_paused" =~ ^(true|false)$ \
+       && "$actual_started_at" =~ ^[^[:space:]]+$ \
+       && "$actual_pid" =~ ^[0-9]+$ \
+       && "$actual_restart_count" =~ ^[0-9]+$ ]]; then
+      FIXED32_CONTAINER_CLEANUP_OUTCOME="drifted"
+      if [[ "$actual_name" == "/$CONTAINER" \
+         && "$actual_status" == "running" \
+         && "$actual_running" == "true" \
+         && "$actual_paused" == "false" \
+         && "$actual_started_at" == "$FIXED32_CONTAINER_STARTED_AT" \
+         && "$actual_pid" == "$FIXED32_CONTAINER_INIT_PID" \
+         && "$actual_restart_count" == "$FIXED32_CONTAINER_RESTART_COUNT" ]]; then
+        FIXED32_CONTAINER_CLEANUP_OUTCOME="exact_preserved"
+      fi
+    fi
+    return 0
+  fi
+  container_list=$(docker ps -aq --no-trunc 2>/dev/null)
+  if (( $? != 0 )); then
+    return 0
+  fi
+  [[ -n "$container_list" ]] && mapfile -t container_ids <<< "$container_list"
+  for actual_id in "${container_ids[@]}"; do
+    [[ "$actual_id" =~ ^[0-9a-f]{64}$ ]] || return 0
+  done
+  if printf '%s\n' "${container_ids[@]}" | grep -Fxq "$container_ref"; then
+    FIXED32_CONTAINER_CLEANUP_OUTCOME="removal_unproven"
+  else
+    FIXED32_CONTAINER_CLEANUP_OUTCOME="absent"
+  fi
+}
+
+_fixed32_record_container_cleanup_failure() {
+  local container_ref=$1
+  local context=$2
+  local message=""
+
+  case "$FIXED32_CONTAINER_CLEANUP_OUTCOME" in
+    exact_preserved)
+      message="fixed32 exact container preserved after $context: $container_ref"
+      printf '%s\n' "$message" \
+        | tee "$ARMDIR/fixed32_container_preserved.txt" >&2
+      ;;
+    absent)
+      message="fixed32 container absent after $context: $container_ref"
+      printf '%s\n' "$message" \
+        | tee "$ARMDIR/fixed32_container_cleanup_failure.txt" >&2
+      ;;
+    drifted)
+      message="fixed32 container incarnation drifted after $context: $container_ref"
+      printf '%s\n' "$message" \
+        | tee "$ARMDIR/fixed32_container_cleanup_failure.txt" >&2
+      ;;
+    *)
+      FIXED32_CONTAINER_CLEANUP_OUTCOME="removal_unproven"
+      message="fixed32 container removal/preservation unproven after $context: $container_ref"
+      printf '%s\n' "$message" \
+        | tee "$ARMDIR/fixed32_container_cleanup_failure.txt" >&2
+      ;;
+  esac
 }
 
 _fixed32_remove_attested_container() {
   local container_ref=$1
   local log_output=$2
-  if ! _fixed32_container_identity_matches "$container_ref"; then
-    echo "fixed32 container logs/removal skipped without exact re-attestation" >&2
+  FIXED32_CONTAINER_CLEANUP_OUTCOME="removal_unproven"
+  if ! _fixed32_container_incarnation_matches "$container_ref"; then
+    echo "fixed32 container logs/removal skipped without exact incarnation re-attestation" >&2
+    _fixed32_classify_container_state "$container_ref"
     return 1
   fi
   docker logs "$container_ref" > "$log_output" 2>&1 || true
-  if ! _fixed32_container_identity_matches "$container_ref"; then
-    echo "fixed32 container removal skipped after identity/name drift" >&2
+  if ! _fixed32_container_incarnation_matches "$container_ref"; then
+    echo "fixed32 container removal skipped after incarnation drift" >&2
+    _fixed32_classify_container_state "$container_ref"
     return 1
   fi
-  docker rm -f "$container_ref" >/dev/null 2>&1
+  if docker rm -f "$container_ref" >/dev/null 2>&1; then
+    FIXED32_CONTAINER_CLEANUP_OUTCOME="removed"
+    return 0
+  fi
+  _fixed32_classify_container_state "$container_ref"
+  echo \
+    "fixed32 container removal failed: outcome=$FIXED32_CONTAINER_CLEANUP_OUTCOME" \
+    >&2
+  return 1
+}
+
+_fixed32_snapshot_engine_ingress_ledger() {
+  local container_ref=$1
+  local destination="$ARMDIR_ABS/logs/fr13_fixed32_engine_ingress.jsonl"
+  local snapshot_dir=""
+  local snapshot_tmp=""
+  local expected_owner=""
+
+  if ! _fixed32_container_incarnation_matches "$container_ref"; then
+    echo "fixed32 engine-ledger snapshot refused without exact incarnation re-attestation" >&2
+    return 1
+  fi
+  if [[ ! -d "$ARMDIR_ABS" || -L "$ARMDIR_ABS" \
+     || ! -d "$ARMDIR_ABS/logs" || -L "$ARMDIR_ABS/logs" \
+     || ! -f "$destination" || -L "$destination" \
+     || ! -s "$ARMDIR_ABS/fixed32_engine_ingress_begin.json" \
+     || -L "$ARMDIR_ABS/fixed32_engine_ingress_begin.json" \
+     || ! -s "$ARMDIR_ABS/fixed32_engine_ingress_finalize.json" \
+     || -L "$ARMDIR_ABS/fixed32_engine_ingress_finalize.json" ]]; then
+    echo "fixed32 engine-ledger snapshot destination is not a regular run artifact" >&2
+    return 1
+  fi
+  expected_owner=$(id -u) || {
+    echo "fixed32 engine-ledger snapshot could not identify the host owner" >&2
+    return 1
+  }
+  snapshot_dir=$(
+    umask 077
+    mktemp -d "$ARMDIR_ABS/.fixed32_engine_ingress_snapshot.XXXXXXXX"
+  ) || {
+    echo "fixed32 engine-ledger private snapshot directory could not be created" >&2
+    return 1
+  }
+  if [[ ! -d "$snapshot_dir" || -L "$snapshot_dir" ]] \
+      || [[ "$(stat -c '%u:%a' "$snapshot_dir" 2>/dev/null)" \
+        != "$expected_owner:700" ]]; then
+    echo "fixed32 engine-ledger snapshot directory is not private and host-owned" >&2
+    [[ -d "$snapshot_dir" && ! -L "$snapshot_dir" ]] && rmdir -- "$snapshot_dir"
+    return 1
+  fi
+  snapshot_tmp="$snapshot_dir/fr13_fixed32_engine_ingress.jsonl"
+  if ! docker cp \
+      "${container_ref}:/logs/fr13_fixed32_engine_ingress.jsonl" \
+      "$snapshot_tmp"; then
+    echo "fixed32 engine-ledger snapshot docker cp failed" >&2
+    rm -f -- "$snapshot_tmp" 2>/dev/null || true
+    rmdir -- "$snapshot_dir" 2>/dev/null || true
+    return 1
+  fi
+  if ! _fixed32_container_incarnation_matches "$container_ref"; then
+    echo "fixed32 engine-ledger container incarnation drifted during snapshot" >&2
+    rm -f -- "$snapshot_tmp" 2>/dev/null || true
+    rmdir -- "$snapshot_dir" 2>/dev/null || true
+    return 1
+  fi
+  if [[ ! -f "$snapshot_tmp" || -L "$snapshot_tmp" \
+     || ! -s "$snapshot_tmp" || ! -r "$snapshot_tmp" ]] \
+      || [[ "$(stat -c '%u:%h' "$snapshot_tmp" 2>/dev/null)" \
+        != "$expected_owner:1" ]]; then
+    echo "fixed32 copied engine ledger is not a host-owned readable nonempty regular file" >&2
+    rm -f -- "$snapshot_tmp" 2>/dev/null || true
+    rmdir -- "$snapshot_dir" 2>/dev/null || true
+    return 1
+  fi
+  if ! chmod 600 "$snapshot_tmp"; then
+    echo "fixed32 engine-ledger snapshot privacy mode could not be locked" >&2
+    rm -f -- "$snapshot_tmp"
+    rmdir -- "$snapshot_dir" 2>/dev/null || true
+    return 1
+  fi
+  if ! .venv/bin/python - \
+      "$snapshot_tmp" "$destination" "$SUBSET" "$ARMDIR_ABS" \
+      "$expected_owner" <<'PY'
+import hashlib
+import os
+import stat
+import sys
+from pathlib import Path
+
+
+repo = Path.cwd().resolve()
+sys.path.insert(0, str(repo / "scripts"))
+from fr13_floor_gate import (  # noqa: E402
+    _fixed32_ingress_task_counts,
+    _validate_fixed32_ingress_reports,
+    fixed32_canonical_task_set_sha256,
+    fixed32_task_key_id,
+    load_fixed32_ingress_ledger,
+    validate_canonical_subset,
+)
+
+snapshot_path = Path(sys.argv[1])
+destination = Path(sys.argv[2])
+subset_path = Path(sys.argv[3]).resolve()
+arm_dir = Path(sys.argv[4]).resolve()
+expected_owner = int(sys.argv[5])
+if destination.parent != arm_dir / "logs":
+    raise SystemExit("fixed32 engine-ledger destination escaped the arm logs directory")
+
+
+class ImmutableLedgerPath:
+    def __init__(self, raw, label):
+        self._raw = raw
+        self._label = label
+
+    def is_file(self):
+        return True
+
+    def is_symlink(self):
+        return False
+
+    def read_bytes(self):
+        return self._raw
+
+    def __str__(self):
+        return self._label
+
+
+def read_fd(fd):
+    chunks = []
+    offset = 0
+    while True:
+        chunk = os.pread(fd, 1024 * 1024, offset)
+        if not chunk:
+            return b"".join(chunks)
+        chunks.append(chunk)
+        offset += len(chunk)
+
+
+def file_identity(info):
+    return (
+        info.st_dev,
+        info.st_ino,
+        info.st_nlink,
+        info.st_size,
+        info.st_uid,
+        stat.S_IMODE(info.st_mode),
+    )
+
+
+def validate_ledger_bytes(raw, label):
+    immutable_path = ImmutableLedgerPath(raw, label)
+    rows, ledger_identity = load_fixed32_ingress_ledger(
+        immutable_path,
+        role="engine",
+        canonical_task_keys=canonical_task_keys,
+        canonical_task_set_sha256=canonical_task_set_sha256,
+    )
+    task_counts = _fixed32_ingress_task_counts(
+        rows,
+        role="engine",
+        canonical_task_keys=canonical_task_keys,
+    )
+    _validate_fixed32_ingress_reports(
+        arm_dir,
+        role="engine",
+        task_ids=task_ids,
+        task_counts=task_counts,
+        rows=rows,
+        ledger_identity=ledger_identity,
+        canonical_task_set_sha256=canonical_task_set_sha256,
+    )
+    return hashlib.sha256(raw).hexdigest()
+
+
+subset = validate_canonical_subset(subset_path)
+task_ids = subset["task_ids"]
+canonical_task_keys = {fixed32_task_key_id(task_id) for task_id in task_ids}
+canonical_task_set_sha256 = fixed32_canonical_task_set_sha256(task_ids)
+snapshot_parent_fd = os.open(
+    snapshot_path.parent,
+    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+)
+logs_fd = os.open(
+    destination.parent,
+    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+)
+try:
+    parent_info = os.fstat(snapshot_parent_fd)
+    logs_info = os.fstat(logs_fd)
+    if (
+        not stat.S_ISDIR(parent_info.st_mode)
+        or stat.S_IMODE(parent_info.st_mode) != 0o700
+        or parent_info.st_uid != expected_owner
+        or not stat.S_ISDIR(logs_info.st_mode)
+        or logs_info.st_uid != expected_owner
+        or stat.S_IMODE(logs_info.st_mode) & 0o022
+    ):
+        raise SystemExit("fixed32 engine-ledger publication directories are unsafe")
+    snapshot_fd = os.open(
+        snapshot_path.name,
+        os.O_RDONLY | os.O_NOFOLLOW,
+        dir_fd=snapshot_parent_fd,
+    )
+    try:
+        snapshot_info = os.fstat(snapshot_fd)
+        if (
+            not stat.S_ISREG(snapshot_info.st_mode)
+            or stat.S_IMODE(snapshot_info.st_mode) != 0o600
+            or snapshot_info.st_uid != expected_owner
+            or snapshot_info.st_nlink != 1
+            or snapshot_info.st_size <= 0
+        ):
+            raise SystemExit("fixed32 copied engine ledger identity is unsafe")
+        source_identity = file_identity(snapshot_info)
+        validated_raw = read_fd(snapshot_fd)
+        if (
+            len(validated_raw) != snapshot_info.st_size
+            or file_identity(os.fstat(snapshot_fd)) != source_identity
+        ):
+            raise SystemExit("fixed32 copied engine ledger changed during capture")
+        validated_sha256 = validate_ledger_bytes(
+            validated_raw,
+            str(snapshot_path),
+        )
+
+        destination_info = os.stat(
+            destination.name,
+            dir_fd=logs_fd,
+            follow_symlinks=False,
+        )
+        if (
+            not stat.S_ISREG(destination_info.st_mode)
+            or destination_info.st_nlink != 1
+            or destination_info.st_size <= 0
+        ):
+            raise SystemExit("fixed32 original engine ledger identity is unsafe")
+
+        source_before_publish = os.fstat(snapshot_fd)
+        if (
+            file_identity(source_before_publish) != source_identity
+            or hashlib.sha256(read_fd(snapshot_fd)).hexdigest()
+            != validated_sha256
+        ):
+            raise SystemExit(
+                "fixed32 validated engine ledger bytes changed before publication"
+            )
+        os.replace(
+            snapshot_path.name,
+            destination.name,
+            src_dir_fd=snapshot_parent_fd,
+            dst_dir_fd=logs_fd,
+        )
+        os.fsync(logs_fd)
+        published_fd = os.open(
+            destination.name,
+            os.O_RDONLY | os.O_NOFOLLOW,
+            dir_fd=logs_fd,
+        )
+        try:
+            published_info = os.fstat(published_fd)
+            if file_identity(published_info) != source_identity:
+                raise SystemExit("fixed32 published engine ledger identity changed")
+            published_raw = read_fd(published_fd)
+            if hashlib.sha256(published_raw).hexdigest() != validated_sha256:
+                raise SystemExit("fixed32 published engine ledger digest changed")
+            published_sha256 = validate_ledger_bytes(
+                published_raw,
+                str(destination),
+            )
+            if (
+                published_sha256 != validated_sha256
+                or hashlib.sha256(read_fd(published_fd)).hexdigest()
+                != validated_sha256
+            ):
+                raise SystemExit(
+                    "fixed32 published engine ledger changed during revalidation"
+                )
+            os.fsync(published_fd)
+        finally:
+            os.close(published_fd)
+    finally:
+        os.close(snapshot_fd)
+finally:
+    os.close(logs_fd)
+    os.close(snapshot_parent_fd)
+PY
+  then
+    echo "fixed32 finalized engine-ledger validation/publication failed" >&2
+    rm -f -- "$snapshot_tmp" 2>/dev/null || true
+    rmdir -- "$snapshot_dir" 2>/dev/null || true
+    return 1
+  fi
+  if ! rmdir -- "$snapshot_dir"; then
+    echo "fixed32 engine-ledger private snapshot directory did not empty" >&2
+    rm -f -- "$snapshot_tmp"
+    rmdir -- "$snapshot_dir" 2>/dev/null || true
+    return 1
+  fi
+  if ! _fixed32_container_incarnation_matches "$container_ref"; then
+    echo "fixed32 engine-ledger container incarnation drifted during publication" >&2
+    return 1
+  fi
+  echo "fixed32 terminal engine ledger snapshotted from immutable container"
 }
 
 teardown(){
   local rc=$?
   local flush_rc=0
+  local ledger_snapshot_rc=0
   local audit_rc=0
+  local container_cleanup_rc=0
   local fixed32_container_attested=1
   trap - EXIT
   set +e
@@ -745,9 +1227,10 @@ teardown(){
     if [[ -z "$CONTAINER_RUNTIME_REF" ]]; then
       _promote_fixed32_container_from_cidfile >/dev/null 2>&1 || true
     fi
-    if ! _fixed32_container_identity_matches "$CONTAINER_RUNTIME_REF"; then
+    if ! _fixed32_container_identity_matches "$CONTAINER_RUNTIME_REF" \
+        || ! _fixed32_container_incarnation_matches "$CONTAINER_RUNTIME_REF"; then
       fixed32_container_attested=0
-      echo "fixed32 teardown skipped container operations: immutable ID/name attestation failed" \
+      echo "fixed32 teardown skipped container operations: immutable incarnation attestation failed" \
         > "$ARMDIR/fixed32_final_flush.stderr"
     elif [[ -n "$FIXED32_PRODUCER_PID" && -f "$FIXED32_ACK_PATH" ]]; then
       .venv/bin/python scripts/fr13_fixed32_flush_protocol.py \
@@ -766,9 +1249,20 @@ teardown(){
       flush_rc=1
     fi
     (( fixed32_container_attested == 1 )) || flush_rc=1
+    if (( flush_rc == 0 && fixed32_container_attested == 1 )); then
+      _fixed32_snapshot_engine_ingress_ledger "$CONTAINER_RUNTIME_REF" \
+        > "$ARMDIR/fixed32_engine_ingress_snapshot.log" 2>&1
+      ledger_snapshot_rc=$?
+    else
+      ledger_snapshot_rc=1
+    fi
     if (( flush_rc != 0 )); then
       echo "FAIL: fixed32 terminal flush rc=$flush_rc" >&2
       (( rc == 0 )) && rc=13
+    elif (( ledger_snapshot_rc != 0 )); then
+      echo "FAIL: fixed32 terminal engine-ledger snapshot rc=$ledger_snapshot_rc" >&2
+      tail -20 "$ARMDIR/fixed32_engine_ingress_snapshot.log" >&2 || true
+      (( rc == 0 )) && rc=16
     else
       write_fixed32_chat_traffic_audit \
         > "$ARMDIR/fixed32_chat_traffic_audit.log" 2>&1
@@ -781,9 +1275,30 @@ teardown(){
     fi
   fi
   if [[ -n "$FIXED32_MODE" ]]; then
-    [[ -n "$CONTAINER_RUNTIME_REF" ]] \
-      && _fixed32_remove_attested_container \
-        "$CONTAINER_RUNTIME_REF" "$ARMDIR/docker_full.log" || true
+    if (( ledger_snapshot_rc == 0 )); then
+      if [[ -n "$CONTAINER_RUNTIME_REF" ]]; then
+        _fixed32_remove_attested_container \
+          "$CONTAINER_RUNTIME_REF" "$ARMDIR/docker_full.log"
+        container_cleanup_rc=$?
+      else
+        container_cleanup_rc=1
+      fi
+      if (( container_cleanup_rc != 0 )); then
+        _fixed32_record_container_cleanup_failure \
+          "${CONTAINER_RUNTIME_REF:-unavailable}" \
+          "cleanup attestation/removal failure"
+        (( rc == 0 )) && rc=17
+      fi
+    else
+      if [[ -n "$CONTAINER_RUNTIME_REF" ]]; then
+        _fixed32_classify_container_state "$CONTAINER_RUNTIME_REF"
+      else
+        FIXED32_CONTAINER_CLEANUP_OUTCOME="removal_unproven"
+      fi
+      _fixed32_record_container_cleanup_failure \
+        "${CONTAINER_RUNTIME_REF:-unavailable}" \
+        "engine-ledger materialization failure"
+    fi
   elif [[ -n "$CONTAINER_RUNTIME_REF" ]]; then
     docker logs "$CONTAINER_RUNTIME_REF" > "$ARMDIR/docker_full.log" 2>&1 || true
     docker rm -f "$CONTAINER_RUNTIME_REF" >/dev/null 2>&1 || true

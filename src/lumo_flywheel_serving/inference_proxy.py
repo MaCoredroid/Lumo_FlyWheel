@@ -43,6 +43,7 @@ FIXED32_ENGINE_SECRET_FILE_ENV = "FR13_FIXED32_INGRESS_SECRET_FILE"
 FIXED32_ENGINE_TASK_IDS_ENV = "FR13_FIXED32_INGRESS_TASK_IDS"
 FIXED32_ENGINE_LEDGER_PATH_ENV = "FR13_FIXED32_ENGINE_INGRESS_LEDGER_PATH"
 FIXED32_ENGINE_MAX_BODY_BYTES_ENV = "FR13_FIXED32_INGRESS_MAX_BODY_BYTES"
+FIXED32_VLLM_REQUEST_ID_BINDING_ENV = "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION"
 
 FIXED32_INGRESS_SECRETS_SCHEMA = "fr13-fixed32-ingress-secrets-v1"
 FIXED32_INGRESS_LEDGER_SCHEMA = "fr13.fixed32.ingress-ledger-record.v1"
@@ -1470,6 +1471,10 @@ class Fixed32EngineIngressMiddleware:
         ledger_path = ledger_path or os.environ.get(FIXED32_ENGINE_LEDGER_PATH_ENV)
         if not secret_file or not canonical_task_ids or not ledger_path:
             raise Fixed32IngressError("fixed32 engine ingress configuration is incomplete")
+        if os.environ.get(FIXED32_VLLM_REQUEST_ID_BINDING_ENV) != "1":
+            raise Fixed32IngressError(
+                "fixed32 engine ingress requires exact vLLM request ID binding"
+            )
         if max_body_bytes is None:
             max_body_bytes = int(
                 os.environ.get(FIXED32_ENGINE_MAX_BODY_BYTES_ENV, str(64 * 1024 * 1024))

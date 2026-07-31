@@ -373,6 +373,7 @@ _FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE = {}
 _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT = None
 _FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE = []
 _FR13_FIXED32_ACCEPTED_OUTPUT_CURRENT = None
+_FR13_FIXED32_BOOT_WARM_EVIDENCE = None
 _FR13_FIXED32_TOPOLOGY_NEEDLE_EMITTED = False
 _FR13_FIXED32_DRAFTER_TREE_LAYER = "mtp.layers.0.self_attn.attn"
 _FR13_FIXED32_TARGET_TREE_LAYERS = frozenset(
@@ -738,6 +739,276 @@ def _fr13_fixed32_final_full_preseed_needed(
     return False
 
 
+def _fr13_fixed32_warm_device_postprocess_tail(
+    taw_module,
+    device,
+    capacity,
+    vocab_size,
+):
+    """Warm device copies, conv commit, committer replay, and flag clear."""
+    slot_paths = globals().get("_LUMO_FA_FIXED32_SLOT_PATHS")
+    slot_lens = globals().get("_LUMO_FA_FIXED32_SLOT_LENS")
+    spec_paths = globals().get("_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR")
+    spec_lens = globals().get("_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR")
+    stacks = globals().get("_FR13_EAGER_PACK_STACKS")
+    flags = None if not isinstance(stacks, dict) else stacks.get("flags")
+    if (
+        not torch.is_tensor(slot_paths)
+        or not torch.is_tensor(slot_lens)
+        or not torch.is_tensor(spec_paths)
+        or not torch.is_tensor(spec_lens)
+        or not torch.is_tensor(flags)
+        or int(slot_paths.shape[0]) < capacity
+        or int(slot_lens.shape[0]) < capacity
+        or int(spec_paths.shape[0]) < capacity
+        or int(spec_lens.shape[0]) < capacity
+        or int(slot_paths.shape[1]) != 16
+        or int(spec_paths.shape[1]) != 16
+        or int(flags.ndim) != 2
+        or int(flags.shape[1]) < 1
+        or slot_paths.dtype != torch.int32
+        or slot_lens.dtype != torch.int32
+        or spec_paths.dtype != torch.int32
+        or spec_lens.dtype != torch.int32
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 boot warm is missing persistent postprocess buffers"
+        )
+    saved_slot_paths = slot_paths[:capacity].clone()
+    saved_slot_lens = slot_lens[:capacity].clone()
+    saved_spec_paths = spec_paths[:capacity].clone()
+    saved_spec_lens = spec_lens[:capacity].clone()
+    saved_flags = flags.clone()
+    batches = tuple(range(1, capacity + 1))
+    output_copy_pairs = 0
+    slot_copy_pairs = 0
+    spec_copy_pairs = 0
+    flags_zero_fills = 0
+    committer = None
+    try:
+        for batch in batches:
+            (
+                device_output,
+                _device_output_lens,
+                device_paths,
+                device_lens,
+                device_last_rows,
+            ) = taw_module.fr13_fixed32_taw_warm_products(
+                device,
+                mode=_FR13_FIXED32_MODE,
+                valid_mask=int(_FR13_FIXED32_VALID_MASK),
+                max_batch_size=capacity,
+                vocab_size=int(vocab_size),
+                batch_size=batch,
+            )
+            if (
+                device_output.dtype != torch.int64
+                or device_paths.dtype != torch.int64
+                or device_lens.dtype != torch.int64
+                or device_last_rows.dtype != torch.int64
+            ):
+                raise RuntimeError(
+                    "FR13 fixed32 boot warm TAW product dtype drift"
+                )
+            output_destination = torch.empty(
+                tuple(device_output.shape),
+                dtype=torch.int32,
+                device=device_output.device,
+            )
+            accepted_destination = torch.empty(
+                tuple(device_last_rows.shape),
+                dtype=torch.int32,
+                device=device_last_rows.device,
+            )
+            output_destination.copy_(device_output)
+            accepted_destination.copy_(device_last_rows)
+            output_copy_pairs += 1
+            for row in range(batch):
+                slot_paths[row].copy_(device_paths[row])
+                slot_lens[row].copy_(device_lens[row])
+                slot_copy_pairs += 1
+            spec_paths[:batch].copy_(device_paths)
+            spec_lens[:batch].copy_(device_lens)
+            spec_copy_pairs += 1
+        from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+            warm_fixed32_committer_graphs_all_batches as _warm_committer,
+        )
+        committer = _warm_committer()
+        flags[:, 0].zero_()
+        flags_zero_fills += 1
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+    finally:
+        try:
+            slot_paths[:capacity].copy_(saved_slot_paths)
+            slot_lens[:capacity].copy_(saved_slot_lens)
+            spec_paths[:capacity].copy_(saved_spec_paths)
+            spec_lens[:capacity].copy_(saved_spec_lens)
+            flags.copy_(saved_flags)
+        finally:
+            if device.type == "cuda":
+                torch.cuda.synchronize(device)
+    persistent_copy_state_restored = (
+        torch.equal(slot_paths[:capacity], saved_slot_paths)
+        and torch.equal(slot_lens[:capacity], saved_slot_lens)
+        and torch.equal(spec_paths[:capacity], saved_spec_paths)
+        and torch.equal(spec_lens[:capacity], saved_spec_lens)
+    )
+    flags_state_restored = torch.equal(flags, saved_flags)
+    if not persistent_copy_state_restored or not flags_state_restored:
+        raise RuntimeError(
+            "FR13 fixed32 postprocess-tail warm did not restore buffers"
+        )
+    return {
+        "ready": True,
+        "classification": "unmeasured_boot",
+        "hardware_scope": "device_postprocess_kernels",
+        "wrapper_bookkeeping_warmed": False,
+        "copy_source_dtype": "torch.int64",
+        "copy_destination_dtype": "torch.int32",
+        "batches": batches,
+        "output_copy_pairs": output_copy_pairs,
+        "slot_copy_pairs": slot_copy_pairs,
+        "spec_copy_pairs": spec_copy_pairs,
+        "flags_zero_fills": flags_zero_fills,
+        "persistent_copy_state_restored": persistent_copy_state_restored,
+        "flags_state_restored": flags_state_restored,
+    }, committer
+
+
+def _fr13_fixed32_warm_final_full_postprocess(vocab_size):
+    """Warm final TAW/committer paths before any measured fixed32 event."""
+    vocab = int(vocab_size)
+    existing = globals().get("_FR13_FIXED32_BOOT_WARM_EVIDENCE")
+    if isinstance(existing, dict) and existing.get("ready") is True:
+        if int(existing.get("vocab_size", -1)) != vocab:
+            raise RuntimeError(
+                "FR13 fixed32 boot-warm vocabulary changed after readiness"
+            )
+        return dict(existing)
+    observed_absent = _FR13_FIXED32_OBSERVED_CURRENT is None
+    pending_absent = globals().get("_FR13_FIXED32_PENDING_EVENT") is None
+    if (
+        vocab <= 0
+        or not observed_absent
+        or not pending_absent
+        or not _fr13_fixed32_boot_preseed_allowed()
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 postprocess warm entered measured/capture state"
+        )
+    capacity = int(globals().get("_FR13_FIXED32_PRESEED_CAP", 0))
+    done = globals().get("_FR13_FIXED32_PRESEEDED_BATCHES")
+    if (
+        capacity not in (1, 2, 3, 4)
+        or set(done or ()) != set(range(1, capacity + 1))
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 postprocess warm requires complete preseed"
+        )
+    stacks = globals().get("_FR13_EAGER_PACK_STACKS")
+    if not isinstance(stacks, dict) or not torch.is_tensor(
+        stacks.get("spec_idx")
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 postprocess warm is missing persistent device state"
+        )
+    taw_module = __import__("sys").modules.get(
+        "_fr13_device_multidraft_kernel"
+    )
+    if taw_module is None:
+        raise RuntimeError(
+            "FR13 fixed32 postprocess warm is missing the TAW module"
+        )
+    device = stacks["spec_idx"].device
+    taw = taw_module.fr13_fixed32_taw_warm_execute(
+        device,
+        mode=_FR13_FIXED32_MODE,
+        valid_mask=int(_FR13_FIXED32_VALID_MASK),
+        max_batch_size=capacity,
+        vocab_size=vocab,
+    )
+    tail, committer = _fr13_fixed32_warm_device_postprocess_tail(
+        taw_module,
+        device,
+        capacity,
+        vocab,
+    )
+    expected_batches = tuple(range(1, capacity + 1))
+    if (
+        taw.get("ready") is not True
+        or taw.get("classification") != "unmeasured_boot"
+        or tuple(taw.get("batches", ())) != expected_batches
+        or int(taw.get("executions", -1)) != capacity
+        or taw.get("cache_lease_current") is not True
+        or taw.get("rng_state_restored") is not True
+        or taw.get("staging_state_restored") is not True
+        or taw.get("measured_state_restored") is not True
+        or tail.get("ready") is not True
+        or tail.get("classification") != "unmeasured_boot"
+        or tail.get("hardware_scope") != "device_postprocess_kernels"
+        or tail.get("wrapper_bookkeeping_warmed") is not False
+        or tail.get("copy_source_dtype") != "torch.int64"
+        or tail.get("copy_destination_dtype") != "torch.int32"
+        or tuple(tail.get("batches", ())) != expected_batches
+        or int(tail.get("output_copy_pairs", -1)) != capacity
+        or int(tail.get("slot_copy_pairs", -1))
+        != capacity * (capacity + 1) // 2
+        or int(tail.get("spec_copy_pairs", -1)) != capacity
+        or int(tail.get("flags_zero_fills", -1)) != 1
+        or tail.get("persistent_copy_state_restored") is not True
+        or tail.get("flags_state_restored") is not True
+        or committer.get("ready") is not True
+        or committer.get("classification") != "unmeasured_boot"
+        or tuple(committer.get("batches", ())) != expected_batches
+        or int(committer.get("replays", -1)) != capacity
+        or committer.get("route_lease_current") is not True
+        or committer.get("bank_state_restored") is not True
+        or committer.get("input_state_restored") is not True
+        or committer.get("measured_state_restored") is not True
+        or int(committer.get("conv_commit_gather_launches", -1))
+        != capacity
+        or int(committer.get("conv_commit_scatter_launches", -1))
+        != capacity
+        or committer.get("conv_bank_state_restored") is not True
+        or committer.get("conv_staging_state_restored") is not True
+        or committer.get("alias_destination_contract")
+        != "exact_alias_only_16x3"
+        or committer.get("scratch_overwrite_proven") is not True
+        or _FR13_FIXED32_OBSERVED_CURRENT is not None
+        or globals().get("_FR13_FIXED32_PENDING_EVENT") is not None
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 postprocess boot warm did not restore state"
+        )
+    evidence = {
+        "ready": True,
+        "classification": "unmeasured_boot",
+        "mode": _FR13_FIXED32_MODE,
+        "capacity": capacity,
+        "vocab_size": vocab,
+        "batches": expected_batches,
+        "taw_executions": capacity,
+        "hardware_scope": "device_postprocess_kernels",
+        "wrapper_bookkeeping_warmed": False,
+        "copy_source_dtype": "torch.int64",
+        "copy_destination_dtype": "torch.int32",
+        "output_copy_pairs": capacity,
+        "slot_copy_pairs": capacity * (capacity + 1) // 2,
+        "spec_copy_pairs": capacity,
+        "flags_zero_fills": 1,
+        "persistent_copy_state_restored": True,
+        "flags_state_restored": True,
+        "conv_commit_gather_launches": capacity,
+        "conv_commit_scatter_launches": capacity,
+        "committer_replays": capacity,
+        "observed_event_absent": observed_absent,
+        "pending_event_absent": pending_absent,
+    }
+    globals()["_FR13_FIXED32_BOOT_WARM_EVIDENCE"] = evidence
+    return dict(evidence)
+
+
 def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
     """Fail before CUDA capture unless the eager producer published its lease."""
     batch = int(num_reqs)
@@ -747,11 +1018,17 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
     from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
         audit_fixed32_conv_commit_lease as _fr13_f32_ca,
         fixed32_committer_counters as _fr13_f32_cc,
+        fixed32_committer_warmup_counters as _fr13_f32_cwc,
         fixed32_conv_col0_pregather_counters as _fr13_f32_pc,
     )
     commit_audit = _fr13_f32_ca()
     pregather = _fr13_f32_pc()
     committer = _fr13_f32_cc()
+    committer_warm = _fr13_f32_cwc()
+    boot_warm = globals().get("_FR13_FIXED32_BOOT_WARM_EVIDENCE")
+    if not isinstance(boot_warm, dict):
+        boot_warm = {}
+    warm_vocab = int(boot_warm.get("vocab_size", 0))
     pregather_state = getattr(
         _fr13_f32_kernel, "_FR13_FIXED32_CONV_PREGATHER", {}
     ).get("state")
@@ -811,6 +1088,7 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
         "_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR"
     )
     taw_batches = []
+    taw_warm = {}
     taw_module = __import__("sys").modules.get(
         "_fr13_device_multidraft_kernel"
     )
@@ -827,6 +1105,14 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
                 batch_size=taw_batch,
             )
             taw_batches.append(taw_batch)
+        if warm_vocab > 0:
+            taw_warm = taw_module.fr13_fixed32_taw_warmup_counters(
+                pregather_state["anchor"].device,
+                mode=_FR13_FIXED32_MODE,
+                valid_mask=int(_FR13_FIXED32_VALID_MASK),
+                max_batch_size=capacity,
+                vocab_size=warm_vocab,
+            )
     actual = {
         "batch": batch,
         "capacity": capacity,
@@ -966,6 +1252,109 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
             "all_batches_ready"
         ),
         "taw_batches": tuple(taw_batches),
+        "boot_warm_ready": boot_warm.get("ready"),
+        "boot_warm_classification": boot_warm.get("classification"),
+        "boot_warm_mode": boot_warm.get("mode"),
+        "boot_warm_capacity": boot_warm.get("capacity"),
+        "boot_warm_batches": tuple(boot_warm.get("batches", ())),
+        "boot_warm_taw_executions": boot_warm.get("taw_executions"),
+        "boot_warm_hardware_scope": boot_warm.get("hardware_scope"),
+        "boot_warm_wrapper_bookkeeping_warmed": boot_warm.get(
+            "wrapper_bookkeeping_warmed"
+        ),
+        "boot_warm_copy_source_dtype": boot_warm.get(
+            "copy_source_dtype"
+        ),
+        "boot_warm_copy_destination_dtype": boot_warm.get(
+            "copy_destination_dtype"
+        ),
+        "boot_warm_output_copy_pairs": boot_warm.get(
+            "output_copy_pairs"
+        ),
+        "boot_warm_slot_copy_pairs": boot_warm.get("slot_copy_pairs"),
+        "boot_warm_spec_copy_pairs": boot_warm.get("spec_copy_pairs"),
+        "boot_warm_flags_zero_fills": boot_warm.get(
+            "flags_zero_fills"
+        ),
+        "boot_warm_copy_state_restored": boot_warm.get(
+            "persistent_copy_state_restored"
+        ),
+        "boot_warm_flags_state_restored": boot_warm.get(
+            "flags_state_restored"
+        ),
+        "boot_warm_conv_gathers": boot_warm.get(
+            "conv_commit_gather_launches"
+        ),
+        "boot_warm_conv_scatters": boot_warm.get(
+            "conv_commit_scatter_launches"
+        ),
+        "boot_warm_committer_replays": boot_warm.get(
+            "committer_replays"
+        ),
+        "boot_warm_observed_absent": boot_warm.get(
+            "observed_event_absent"
+        ),
+        "boot_warm_pending_absent": boot_warm.get(
+            "pending_event_absent"
+        ),
+        "current_observed_absent": (
+            globals().get("_FR13_FIXED32_OBSERVED_CURRENT") is None
+        ),
+        "current_pending_absent": (
+            globals().get("_FR13_FIXED32_PENDING_EVENT") is None
+        ),
+        "taw_warm_ready": taw_warm.get("ready"),
+        "taw_warm_classification": taw_warm.get("classification"),
+        "taw_warm_batches": tuple(taw_warm.get("batches", ())),
+        "taw_warm_executions": taw_warm.get("executions"),
+        "taw_warm_cache_lease_current": taw_warm.get(
+            "cache_lease_current"
+        ),
+        "taw_warm_rng_restored": taw_warm.get("rng_state_restored"),
+        "taw_warm_staging_restored": taw_warm.get(
+            "staging_state_restored"
+        ),
+        "taw_warm_measured_restored": taw_warm.get(
+            "measured_state_restored"
+        ),
+        "committer_warm_ready": committer_warm.get("ready"),
+        "committer_warm_classification": committer_warm.get(
+            "classification"
+        ),
+        "committer_warm_batches": tuple(
+            committer_warm.get("batches", ())
+        ),
+        "committer_warm_replays": committer_warm.get("replays"),
+        "committer_warm_conv_gathers": committer_warm.get(
+            "conv_commit_gather_launches"
+        ),
+        "committer_warm_conv_scatters": committer_warm.get(
+            "conv_commit_scatter_launches"
+        ),
+        "committer_warm_route_lease_current": committer_warm.get(
+            "route_lease_current"
+        ),
+        "committer_warm_bank_restored": committer_warm.get(
+            "bank_state_restored"
+        ),
+        "committer_warm_conv_bank_restored": committer_warm.get(
+            "conv_bank_state_restored"
+        ),
+        "committer_warm_conv_staging_restored": committer_warm.get(
+            "conv_staging_state_restored"
+        ),
+        "committer_warm_alias_contract": committer_warm.get(
+            "alias_destination_contract"
+        ),
+        "committer_warm_input_restored": committer_warm.get(
+            "input_state_restored"
+        ),
+        "committer_warm_measured_restored": committer_warm.get(
+            "measured_state_restored"
+        ),
+        "committer_warm_scratch_overwrite_proven": committer_warm.get(
+            "scratch_overwrite_proven"
+        ),
     }
     row_elems = (
         -1
@@ -1008,6 +1397,51 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
         "committer_required_capacity": capacity,
         "committer_all_batches_ready": True,
         "taw_batches": tuple(range(1, capacity + 1)),
+        "boot_warm_ready": True,
+        "boot_warm_classification": "unmeasured_boot",
+        "boot_warm_mode": _FR13_FIXED32_MODE,
+        "boot_warm_capacity": capacity,
+        "boot_warm_batches": tuple(range(1, capacity + 1)),
+        "boot_warm_taw_executions": capacity,
+        "boot_warm_hardware_scope": "device_postprocess_kernels",
+        "boot_warm_wrapper_bookkeeping_warmed": False,
+        "boot_warm_copy_source_dtype": "torch.int64",
+        "boot_warm_copy_destination_dtype": "torch.int32",
+        "boot_warm_output_copy_pairs": capacity,
+        "boot_warm_slot_copy_pairs": capacity * (capacity + 1) // 2,
+        "boot_warm_spec_copy_pairs": capacity,
+        "boot_warm_flags_zero_fills": 1,
+        "boot_warm_copy_state_restored": True,
+        "boot_warm_flags_state_restored": True,
+        "boot_warm_conv_gathers": capacity,
+        "boot_warm_conv_scatters": capacity,
+        "boot_warm_committer_replays": capacity,
+        "boot_warm_observed_absent": True,
+        "boot_warm_pending_absent": True,
+        "current_observed_absent": True,
+        "current_pending_absent": True,
+        "taw_warm_ready": True,
+        "taw_warm_classification": "unmeasured_boot",
+        "taw_warm_batches": tuple(range(1, capacity + 1)),
+        "taw_warm_executions": capacity,
+        "taw_warm_cache_lease_current": True,
+        "taw_warm_rng_restored": True,
+        "taw_warm_staging_restored": True,
+        "taw_warm_measured_restored": True,
+        "committer_warm_ready": True,
+        "committer_warm_classification": "unmeasured_boot",
+        "committer_warm_batches": tuple(range(1, capacity + 1)),
+        "committer_warm_replays": capacity,
+        "committer_warm_conv_gathers": capacity,
+        "committer_warm_conv_scatters": capacity,
+        "committer_warm_route_lease_current": True,
+        "committer_warm_bank_restored": True,
+        "committer_warm_conv_bank_restored": True,
+        "committer_warm_conv_staging_restored": True,
+        "committer_warm_alias_contract": "exact_alias_only_16x3",
+        "committer_warm_input_restored": True,
+        "committer_warm_measured_restored": True,
+        "committer_warm_scratch_overwrite_proven": True,
     }
     if (
         capacity not in (1, 2, 3, 4)
@@ -12718,8 +13152,14 @@ def _fr13_fixed32_device_commit_route(
         int(output_token_ids.shape[0]) != batch
         or int(output_token_ids.shape[1]) != 32
         or int(accepted_tree_rows.shape[0]) != batch
+        or output_token_ids.dtype != torch.int32
+        or accepted_tree_rows.dtype != torch.int32
+        or output_token_ids.device != device_output.device
+        or accepted_tree_rows.device != device_output.device
     ):
-        raise RuntimeError("FR13 fixed32 caller output geometry drift")
+        raise RuntimeError(
+            "FR13 fixed32 caller output geometry/dtype/device drift"
+        )
     _fixed_batch_rows = int(
         getattr(_g, "_FR13_FIXED32_BATCH_ROWS", -1)
     )
@@ -12769,6 +13209,14 @@ def _fr13_fixed32_device_commit_route(
         or int(spec_paths.shape[1]) != 16
         or int(slot_paths.shape[0]) < batch
         or int(spec_paths.shape[0]) < batch
+        or slot_paths.dtype != torch.int32
+        or slot_lens.dtype != torch.int32
+        or spec_paths.dtype != torch.int32
+        or spec_lens.dtype != torch.int32
+        or any(
+            tensor.device != device_output.device
+            for tensor in (slot_paths, slot_lens, spec_paths, spec_lens)
+        )
     ):
         raise RuntimeError("FR13 fixed32 persistent path buffers are missing")
     sampler_req_ids = tuple(
@@ -16282,6 +16730,12 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
         "                    num_active_loras=desc.num_active_loras,\n"
         "                    profile_seq_lens=profile_seq_lens,\n"
         "                )\n"
+        "            _fr13_f32_preseed_gdn."
+        "_fr13_fixed32_warm_final_full_postprocess(\n"
+        "                int(self.input_batch.vocab_size),\n"
+        "            )\n"
+        "            _fr13_cfwd_timer()\n"
+        "            _fr13_dfwd_timer()\n"
         "            _fr13_f32_preseed_gdn."
         "_fr13_fixed32_assert_final_full_preseed_ready(\n"
         "                desc.num_reqs,\n"
@@ -26720,6 +27174,131 @@ def _fr13_f32_flush_runtime_state():
     return gdn, events, forward_steps, first, last, sfwd, dfwd, cfwd
 
 
+def _fr13_f32_flush_boot_warm_metrics(gdn):
+    if gdn is None:
+        raise RuntimeError("fixed32 boot-warm evidence has no GDN runtime")
+    evidence = getattr(gdn, "_FR13_FIXED32_BOOT_WARM_EVIDENCE", None)
+    if not isinstance(evidence, dict):
+        raise RuntimeError("fixed32 boot-warm evidence is missing")
+    capacity = int(evidence.get("capacity", 0))
+    vocab_size = int(evidence.get("vocab_size", 0))
+    batches = tuple(range(1, capacity + 1))
+    stacks = getattr(gdn, "_FR13_EAGER_PACK_STACKS", None)
+    taw_module = _fr13_f32_flush_sys.modules.get(
+        "_fr13_device_multidraft_kernel"
+    )
+    if (
+        capacity not in (1, 2, 3, 4)
+        or vocab_size <= 0
+        or not isinstance(stacks, dict)
+        or not torch.is_tensor(stacks.get("spec_idx"))
+        or taw_module is None
+    ):
+        raise RuntimeError("fixed32 boot-warm lease is incomplete")
+    taw = taw_module.fr13_fixed32_taw_warmup_counters(
+        stacks["spec_idx"].device,
+        mode=_FR13_FIXED32_FLUSH_MODE,
+        valid_mask=int(gdn._FR13_FIXED32_VALID_MASK),
+        max_batch_size=capacity,
+        vocab_size=vocab_size,
+    )
+    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+        fixed32_committer_warmup_counters as committer_warmup_counters,
+    )
+    committer = committer_warmup_counters()
+    if (
+        evidence.get("ready") is not True
+        or evidence.get("classification") != "unmeasured_boot"
+        or evidence.get("mode") != _FR13_FIXED32_FLUSH_MODE
+        or tuple(evidence.get("batches", ())) != batches
+        or int(evidence.get("taw_executions", -1)) != capacity
+        or evidence.get("hardware_scope") != "device_postprocess_kernels"
+        or evidence.get("wrapper_bookkeeping_warmed") is not False
+        or evidence.get("copy_source_dtype") != "torch.int64"
+        or evidence.get("copy_destination_dtype") != "torch.int32"
+        or int(evidence.get("output_copy_pairs", -1)) != capacity
+        or int(evidence.get("slot_copy_pairs", -1))
+        != capacity * (capacity + 1) // 2
+        or int(evidence.get("spec_copy_pairs", -1)) != capacity
+        or int(evidence.get("flags_zero_fills", -1)) != 1
+        or evidence.get("persistent_copy_state_restored") is not True
+        or evidence.get("flags_state_restored") is not True
+        or int(evidence.get("conv_commit_gather_launches", -1))
+        != capacity
+        or int(evidence.get("conv_commit_scatter_launches", -1))
+        != capacity
+        or int(evidence.get("committer_replays", -1)) != capacity
+        or evidence.get("observed_event_absent") is not True
+        or evidence.get("pending_event_absent") is not True
+        or taw.get("ready") is not True
+        or taw.get("classification") != "unmeasured_boot"
+        or tuple(taw.get("batches", ())) != batches
+        or int(taw.get("executions", -1)) != capacity
+        or taw.get("cache_lease_current") is not True
+        or taw.get("rng_state_restored") is not True
+        or taw.get("staging_state_restored") is not True
+        or taw.get("measured_state_restored") is not True
+        or committer.get("ready") is not True
+        or committer.get("classification") != "unmeasured_boot"
+        or tuple(committer.get("batches", ())) != batches
+        or int(committer.get("replays", -1)) != capacity
+        or int(committer.get("conv_commit_gather_launches", -1))
+        != capacity
+        or int(committer.get("conv_commit_scatter_launches", -1))
+        != capacity
+        or committer.get("route_lease_current") is not True
+        or committer.get("bank_state_restored") is not True
+        or committer.get("conv_bank_state_restored") is not True
+        or committer.get("conv_staging_state_restored") is not True
+        or committer.get("alias_destination_contract")
+        != "exact_alias_only_16x3"
+        or committer.get("input_state_restored") is not True
+        or committer.get("measured_state_restored") is not True
+        or committer.get("scratch_overwrite_proven") is not True
+        or getattr(gdn, "_FR13_FIXED32_OBSERVED_CURRENT", None) is not None
+        or getattr(gdn, "_FR13_FIXED32_PENDING_EVENT", None) is not None
+    ):
+        raise RuntimeError(
+            "fixed32 boot-warm evidence no longer owns restored runtime state"
+        )
+    return {
+        "schema": "fr13-fixed32-boot-warm-v2",
+        "classification": "unmeasured_boot",
+        "hardware_scope": "device_postprocess_kernels",
+        "wrapper_bookkeeping_warmed": False,
+        "copy_source_dtype": "torch.int64",
+        "copy_destination_dtype": "torch.int32",
+        "mode": _FR13_FIXED32_FLUSH_MODE,
+        "capacity": capacity,
+        "vocab_size": vocab_size,
+        "batches": list(batches),
+        "taw_executions": capacity,
+        "output_copy_pairs": capacity,
+        "slot_copy_pairs": capacity * (capacity + 1) // 2,
+        "spec_copy_pairs": capacity,
+        "flags_zero_fills": 1,
+        "persistent_copy_state_restored": True,
+        "flags_state_restored": True,
+        "conv_commit_gather_launches": capacity,
+        "conv_commit_scatter_launches": capacity,
+        "committer_replays": capacity,
+        "observed_event_absent": True,
+        "pending_event_absent": True,
+        "taw_cache_lease_current": True,
+        "taw_rng_state_restored": True,
+        "taw_staging_state_restored": True,
+        "taw_measured_state_restored": True,
+        "committer_route_lease_current": True,
+        "committer_bank_state_restored": True,
+        "committer_conv_bank_state_restored": True,
+        "committer_conv_staging_state_restored": True,
+        "committer_alias_destination_contract": "exact_alias_only_16x3",
+        "committer_input_state_restored": True,
+        "committer_measured_state_restored": True,
+        "committer_scratch_overwrite_proven": True,
+    }
+
+
 def _fr13_f32_flush_counters(*, require_drained):
     (
         gdn, events, forward_steps, first, last, sfwd, dfwd, cfwd,
@@ -26769,6 +27348,7 @@ def _fr13_f32_flush_reconcile():
         gdn, "_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT", None
     ) is not None:
         raise RuntimeError("fixed32 flush saw an incomplete drafter graph capture")
+    _fr13_f32_flush_boot_warm_metrics(gdn)
     if len(events) != forward_steps:
         raise RuntimeError(
             "fixed32 complete events != pure forward steps: "
@@ -27119,12 +27699,13 @@ def _fr13_f32_flush_write_boundary(request, counters):
         nonpure_replays_by_batch
     )
     committer_metrics["nonpure_dispatch"] = nonpure_dispatch
+    boot_warm_metrics = _fr13_f32_flush_boot_warm_metrics(gdn)
     canonical_events = _fr13_f32_flush_json.dumps(
         events, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
     spec_drafts = sum(int(event["batch_size"]) for event in events)
     snapshot = {
-        "schema": "fr13-fixed32-boundary-snapshot-v3",
+        "schema": "fr13-fixed32-boundary-snapshot-v4",
         "mode": _FR13_FIXED32_FLUSH_MODE,
         "producer_pid": _FR13_FIXED32_FLUSH_PID,
         "generation": request["generation"],
@@ -27184,6 +27765,7 @@ def _fr13_f32_flush_write_boundary(request, counters):
                 ),
                 "spans": int(cfwd._n_spans) if cfwd is not None else 0,
             },
+            "boot_warm": boot_warm_metrics,
             "committer": committer_metrics,
             "conv_pregather": pregather_metrics,
         },

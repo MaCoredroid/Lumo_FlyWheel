@@ -5403,6 +5403,18 @@ _FR13_FIXED32_COMMITTER_COUNTERS = {
 }
 _FR13_FIXED32_COMMITTER_ANNOUNCED = False
 _FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY = None
+_FR13_FIXED32_COMMITTER_WARMUP: dict[str, object] = {}
+
+
+def _fr13_fixed32_tensor_bits_equal(
+    left: torch.Tensor, right: torch.Tensor
+) -> bool:
+    return bool(
+        torch.equal(
+            left.contiguous().view(torch.uint8),
+            right.contiguous().view(torch.uint8),
+        )
+    )
 
 
 def fixed32_committer_counters() -> dict[str, object]:
@@ -5453,6 +5465,73 @@ def fixed32_committer_counters() -> dict[str, object]:
             )
         ),
     }
+
+
+def fixed32_committer_warmup_counters() -> dict[str, object]:
+    """Return unmeasured boot-replay evidence for the current fast route."""
+    route = _FR13_FIXED32_COMMITTER_FAST_ROUTE.get("state")
+    conv_state = _FR13_FIXED32_CONV_PREGATHER.get("state")
+    evidence = _FR13_FIXED32_COMMITTER_WARMUP.get("evidence")
+    if not isinstance(evidence, dict):
+        return {
+            "ready": False,
+            "classification": "unmeasured_boot",
+            "mode": _FR13_FIXED32_MODE,
+            "max_batch_size": _FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY,
+            "batches": (),
+            "replays": 0,
+            "conv_commit_gather_launches": 0,
+            "conv_commit_scatter_launches": 0,
+            "route_lease_current": False,
+            "bank_state_restored": False,
+            "conv_bank_state_restored": False,
+            "conv_staging_state_restored": False,
+            "alias_destination_contract": None,
+            "input_state_restored": False,
+            "measured_state_restored": False,
+        }
+    result = dict(evidence)
+    result["route_lease_current"] = (
+        route is not None
+        and route is _FR13_FIXED32_COMMITTER_WARMUP.get("route")
+        and conv_state is _FR13_FIXED32_COMMITTER_WARMUP.get("conv_state")
+    )
+    result["ready"] = bool(
+        result.get("ready")
+        and result.get("classification") == "unmeasured_boot"
+        and result.get("mode") == _FR13_FIXED32_MODE
+        and int(result.get("max_batch_size", -1))
+        == int(_FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY or 0)
+        and tuple(result.get("batches", ()))
+        == tuple(
+            range(
+                1,
+                int(_FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY or 0) + 1,
+            )
+        )
+        and int(result.get("replays", -1))
+        == int(_FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY or 0)
+        and int(result.get("conv_commit_gather_launches", -1))
+        == int(_FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY or 0)
+        and int(result.get("conv_commit_scatter_launches", -1))
+        == int(_FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY or 0)
+        and result["route_lease_current"]
+        and result.get("bank_state_restored") is True
+        and result.get("conv_bank_state_restored") is True
+        and result.get("conv_staging_state_restored") is True
+        and result.get("alias_destination_contract")
+        == "exact_alias_only_16x3"
+        and result.get("input_state_restored") is True
+        and result.get("measured_state_restored") is True
+        and result.get("scratch_overwrite_proven") is True
+        and tuple(result.get("scratch_restored", ()))
+        == ("accepted_paths", "accepted_lens", "node_mat", "qbuf")
+        and tuple(result.get("scratch_fully_overwritten", ()))
+        == ("abuf", "bbuf", "kbuf", "vbuf", "ssi")
+        and tuple(result.get("scratch_immutable", ()))
+        == ("cu", "path_offsets", "batch_offsets", "graph", "scratch")
+    )
+    return result
 
 
 def register_fixed32_committer_replay_callback(callback) -> None:
@@ -6448,6 +6527,369 @@ def preseed_fixed32_committer_graphs_all_batches(
         },
         "all_batches_ready": True,
     }
+
+
+def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
+    """Replay every preseeded occupancy once without changing serving state."""
+    route = _FR13_FIXED32_COMMITTER_FAST_ROUTE.get("state")
+    if route is None:
+        raise RuntimeError(
+            "FR13 fixed32 committer boot warm requires all-B preseed"
+        )
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 fixed32 committer boot warm is forbidden during capture"
+        )
+    prior = fixed32_committer_warmup_counters()
+    if prior["ready"]:
+        return prior
+
+    capacity = int(route["capacity"])
+    batches = tuple(range(1, capacity + 1))
+    if (
+        capacity not in _FR13_FIXED32_BATCHES
+        or _FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY != capacity
+        or tuple(sorted(route["states_by_batch"])) != batches
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 committer boot-warm route is incomplete"
+        )
+    counters = _FR13_FIXED32_COMMITTER_COUNTERS
+    if (
+        int(counters["actual_replays_enqueued"]) != 0
+        or any(
+            int(value) != 0
+            for value in counters["actual_replays_by_batch"].values()
+        )
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 committer boot warm started after a measured replay"
+        )
+
+    banks = route["banks"]
+    spec_state_indices = route["spec_state_indices"]
+    conv_state = _FR13_FIXED32_CONV_PREGATHER.get("state")
+    if (
+        not isinstance(conv_state, dict)
+        or int(conv_state.get("max_batch_size", 0)) != capacity
+        or conv_state.get("ssm_banks") is not banks
+        or conv_state.get("commit_spec_state_indices")
+        is not spec_state_indices
+        or not isinstance(conv_state.get("banks"), tuple)
+        or len(conv_state["banks"]) != 48
+        or not torch.is_tensor(conv_state.get("accepted_paths"))
+        or not torch.is_tensor(conv_state.get("accepted_lens"))
+        or int(conv_state.get("commit_gather_launches", -1)) != 0
+        or int(conv_state.get("commit_scatter_launches", -1)) != 0
+        or any(
+            int(value) != 0
+            for value in conv_state.get(
+                "commit_gather_launches_by_batch", {}
+            ).values()
+        )
+        or any(
+            int(value) != 0
+            for value in conv_state.get(
+                "commit_scatter_launches_by_batch", {}
+            ).values()
+        )
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 postprocess boot warm has no clean conv lease"
+        )
+    conv_banks = conv_state["banks"]
+    accepted_paths = conv_state["accepted_paths"]
+    accepted_lens = conv_state["accepted_lens"]
+    alias_ranks = tuple(int(value) for value in conv_state["bank_alias_ranks"])
+    if (
+        len(alias_ranks) != 48
+        or min(alias_ranks) != 0
+        or max(alias_ranks) != 2
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 postprocess warm alias-rank contract drift"
+        )
+    safe_rows = (
+        torch.tensor(
+            alias_ranks,
+            dtype=spec_state_indices.dtype,
+            device=spec_state_indices.device,
+        ).view(48, 1)
+        * capacity
+        + torch.arange(
+            capacity,
+            dtype=spec_state_indices.dtype,
+            device=spec_state_indices.device,
+        ).view(1, capacity)
+        + 1
+    )
+    safe_rows_long = safe_rows.to(torch.long)
+    maximum_safe_row = 3 * capacity
+    if any(
+        int(bank.shape[0]) <= maximum_safe_row
+        for bank in (*banks, *conv_banks)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 postprocess warm has no isolated alias rows"
+        )
+    saved_spec_state_indices = spec_state_indices[
+        :, :capacity, :
+    ].clone()
+    saved_accepted_paths = accepted_paths.clone()
+    saved_accepted_lens = accepted_lens.clone()
+    saved_staging = conv_state["staging"].clone()
+    saved_bank_rows = tuple(
+        bank.index_select(0, safe_rows_long[layer]).clone()
+        for layer, bank in enumerate(banks)
+    )
+    saved_conv_rows = tuple(
+        bank.index_select(0, safe_rows_long[layer]).clone()
+        for layer, bank in enumerate(conv_banks)
+    )
+    states = route["states_by_batch"]
+    saved_state_inputs = {
+        batch: (
+            states[batch]["accepted_paths"].clone(),
+            states[batch]["accepted_lens"].clone(),
+            states[batch]["node_mat"].clone(),
+            states[batch]["qbuf"].clone(),
+        )
+        for batch in batches
+    }
+    saved_conv_gathers = int(conv_state["commit_gather_launches"])
+    saved_conv_scatters = int(conv_state["commit_scatter_launches"])
+    saved_conv_gathers_by_batch = dict(
+        conv_state["commit_gather_launches_by_batch"]
+    )
+    saved_conv_scatters_by_batch = dict(
+        conv_state["commit_scatter_launches_by_batch"]
+    )
+    saved_actual = int(counters["actual_replays_enqueued"])
+    saved_by_batch = dict(counters["actual_replays_by_batch"])
+    saved_callbacks = tuple(_FR13_FIXED32_COMMITTER_CALLBACKS)
+    global _FR13_FIXED32_COMMITTER_ANNOUNCED
+    saved_announced = _FR13_FIXED32_COMMITTER_ANNOUNCED
+    _FR13_FIXED32_COMMITTER_CALLBACKS.clear()
+    _FR13_FIXED32_COMMITTER_ANNOUNCED = True
+    replays = 0
+    conv_gathers = 0
+    conv_scatters = 0
+    try:
+        spec_state_indices[:, :capacity, :].copy_(
+            safe_rows.view(48, capacity, 1).expand(
+                48,
+                capacity,
+                int(spec_state_indices.shape[2]),
+            )
+        )
+        accepted_paths.zero_()
+        accepted_lens.zero_()
+        for batch in batches:
+            launch_fixed32_conv_commit_to_col0(
+                conv_banks=conv_banks,
+                spec_state_indices=spec_state_indices,
+                accepted_paths=accepted_paths,
+                accepted_lens=accepted_lens,
+                num_spec_decodes=batch,
+            )
+            conv_gathers += 1
+            conv_scatters += 1
+            _fr13_fixed32_committer_replay(
+                banks_list=banks,
+                spec_state_indices=spec_state_indices,
+                accepted_paths=accepted_paths[:batch],
+                accepted_lens=accepted_lens[:batch],
+                k_rings=route["k_rings"],
+                v_rings=route["v_rings"],
+                a_rings=route["a_rings"],
+                b_rings=route["b_rings"],
+                A_logs=route["A_logs"],
+                dt_biases=route["dt_biases"],
+                num_layers=48,
+                num_spec_decodes=batch,
+                output_scale=route["output_scale"],
+                use_qk_l2norm_in_kernel=route[
+                    "use_qk_l2norm_in_kernel"
+                ],
+                runrow_init=True,
+                burn_node_bank=False,
+            )
+            replays += 1
+        torch.cuda.synchronize(route["device"])
+    finally:
+        try:
+            spec_state_indices[:, :capacity, :].copy_(
+                saved_spec_state_indices
+            )
+            accepted_paths.copy_(saved_accepted_paths)
+            accepted_lens.copy_(saved_accepted_lens)
+            conv_state["staging"].copy_(saved_staging)
+            for layer, (bank, saved) in enumerate(
+                zip(banks, saved_bank_rows, strict=True)
+            ):
+                bank.index_copy_(0, safe_rows_long[layer], saved)
+            for layer, (bank, saved) in enumerate(
+                zip(conv_banks, saved_conv_rows, strict=True)
+            ):
+                bank.index_copy_(0, safe_rows_long[layer], saved)
+            for batch in batches:
+                (
+                    saved_state_paths,
+                    saved_state_lens,
+                    saved_node_mat,
+                    saved_qbuf,
+                ) = saved_state_inputs[batch]
+                states[batch]["accepted_paths"].copy_(saved_state_paths)
+                states[batch]["accepted_lens"].copy_(saved_state_lens)
+                states[batch]["node_mat"].copy_(saved_node_mat)
+                states[batch]["qbuf"].copy_(saved_qbuf)
+        finally:
+            conv_state["commit_gather_launches"] = saved_conv_gathers
+            conv_state["commit_scatter_launches"] = saved_conv_scatters
+            conv_state["commit_gather_launches_by_batch"].clear()
+            conv_state["commit_gather_launches_by_batch"].update(
+                saved_conv_gathers_by_batch
+            )
+            conv_state["commit_scatter_launches_by_batch"].clear()
+            conv_state["commit_scatter_launches_by_batch"].update(
+                saved_conv_scatters_by_batch
+            )
+            counters["actual_replays_enqueued"] = saved_actual
+            counters["actual_replays_by_batch"].clear()
+            counters["actual_replays_by_batch"].update(saved_by_batch)
+            _FR13_FIXED32_COMMITTER_CALLBACKS[:] = saved_callbacks
+            _FR13_FIXED32_COMMITTER_ANNOUNCED = saved_announced
+            torch.cuda.synchronize(route["device"])
+
+    bank_state_restored = all(
+        _fr13_fixed32_tensor_bits_equal(
+            bank.index_select(0, safe_rows_long[layer]),
+            saved,
+        )
+        for layer, (bank, saved) in enumerate(
+            zip(banks, saved_bank_rows, strict=True)
+        )
+    )
+    conv_bank_state_restored = all(
+        _fr13_fixed32_tensor_bits_equal(
+            bank.index_select(0, safe_rows_long[layer]),
+            saved,
+        )
+        for layer, (bank, saved) in enumerate(
+            zip(conv_banks, saved_conv_rows, strict=True)
+        )
+    )
+    conv_staging_state_restored = _fr13_fixed32_tensor_bits_equal(
+        conv_state["staging"],
+        saved_staging,
+    )
+    persistent_inputs_restored = (
+        _fr13_fixed32_tensor_bits_equal(
+            spec_state_indices[:, :capacity, :],
+            saved_spec_state_indices,
+        )
+        and _fr13_fixed32_tensor_bits_equal(
+            accepted_paths, saved_accepted_paths
+        )
+        and _fr13_fixed32_tensor_bits_equal(
+            accepted_lens, saved_accepted_lens
+        )
+    )
+    graph_inputs_restored = all(
+        _fr13_fixed32_tensor_bits_equal(
+            states[batch]["accepted_paths"], saved_state_inputs[batch][0]
+        )
+        and _fr13_fixed32_tensor_bits_equal(
+            states[batch]["accepted_lens"], saved_state_inputs[batch][1]
+        )
+        and _fr13_fixed32_tensor_bits_equal(
+            states[batch]["node_mat"], saved_state_inputs[batch][2]
+        )
+        and _fr13_fixed32_tensor_bits_equal(
+            states[batch]["qbuf"], saved_state_inputs[batch][3]
+        )
+        for batch in batches
+    )
+    measured_state_restored = (
+        int(counters["actual_replays_enqueued"]) == saved_actual
+        and dict(counters["actual_replays_by_batch"]) == saved_by_batch
+        and int(conv_state["commit_gather_launches"])
+        == saved_conv_gathers
+        and int(conv_state["commit_scatter_launches"])
+        == saved_conv_scatters
+        and dict(conv_state["commit_gather_launches_by_batch"])
+        == saved_conv_gathers_by_batch
+        and dict(conv_state["commit_scatter_launches_by_batch"])
+        == saved_conv_scatters_by_batch
+        and tuple(_FR13_FIXED32_COMMITTER_CALLBACKS) == saved_callbacks
+        and _FR13_FIXED32_COMMITTER_ANNOUNCED is saved_announced
+    )
+    if (
+        replays != capacity
+        or conv_gathers != capacity
+        or conv_scatters != capacity
+        or not bank_state_restored
+        or not conv_bank_state_restored
+        or not conv_staging_state_restored
+        or not persistent_inputs_restored
+        or not graph_inputs_restored
+        or not measured_state_restored
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 postprocess warm missed a specialization or "
+            "failed state restoration"
+        )
+    evidence = {
+        "ready": True,
+        "classification": "unmeasured_boot",
+        "mode": _FR13_FIXED32_MODE,
+        "max_batch_size": capacity,
+        "batches": batches,
+        "replays": replays,
+        "conv_commit_gather_launches": conv_gathers,
+        "conv_commit_scatter_launches": conv_scatters,
+        "route_lease_current": True,
+        "bank_state_restored": bank_state_restored,
+        "conv_bank_state_restored": conv_bank_state_restored,
+        "conv_staging_state_restored": conv_staging_state_restored,
+        "alias_destination_contract": "exact_alias_only_16x3",
+        "input_state_restored": (
+            persistent_inputs_restored and graph_inputs_restored
+        ),
+        "measured_state_restored": measured_state_restored,
+        # Every other mutable graph scratch is fully overwritten at the top
+        # of graph_body before any live value is consumed.
+        "scratch_overwrite_proven": True,
+        "scratch_restored": (
+            "accepted_paths",
+            "accepted_lens",
+            "node_mat",
+            "qbuf",
+        ),
+        "scratch_fully_overwritten": (
+            "abuf",
+            "bbuf",
+            "kbuf",
+            "vbuf",
+            "ssi",
+        ),
+        "scratch_immutable": (
+            "cu",
+            "path_offsets",
+            "batch_offsets",
+            "graph",
+            "scratch",
+        ),
+    }
+    _FR13_FIXED32_COMMITTER_WARMUP.clear()
+    _FR13_FIXED32_COMMITTER_WARMUP.update(
+        {
+            "route": route,
+            "conv_state": conv_state,
+            "evidence": evidence,
+        }
+    )
+    return fixed32_committer_warmup_counters()
 
 
 def _fr13_fixed32_committer_replay(

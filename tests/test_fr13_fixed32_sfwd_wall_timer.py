@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import contextlib
+import importlib.util
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -23,6 +24,18 @@ LAUNCHER = (
     / "scripts"
     / "fr13_launch_forked_fa2_tree_server.sh"
 )
+FLOOR_GATE = Path(__file__).resolve().parents[1] / "scripts" / "fr13_floor_gate.py"
+
+
+def _load_floor_gate() -> Any:
+    spec = importlib.util.spec_from_file_location(
+        "fr13_floor_gate_timer_contract",
+        FLOOR_GATE,
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _timer_namespace() -> dict[str, object]:
@@ -352,9 +365,16 @@ def test_nonpositive_span_period_disables_live_rewrites(
     assert dumps == []
 
 
-def test_formal_sequence_disables_periodic_timer_sidecars() -> None:
+def test_formal_sequence_disables_periodic_timer_sidecars(tmp_path: Path) -> None:
     source = FORMAL_SEQUENCE.read_text(encoding="utf-8")
     launcher = LAUNCHER.read_text(encoding="utf-8")
+    floor_gate = _load_floor_gate()
+    task_ids = list(floor_gate.EVIDENCE_SETS[4]["task_ids"])
+    required_env = floor_gate.fixed32_required_env(
+        tmp_path,
+        mode="tail6_fixed32",
+        task_ids=task_ids,
+    )
 
     assert "export FR13_SFWD_GPU_TIMER_DUMP_S=0\n" in source
     assert "export FR13_SPAN_GPU_TIMER_DUMP_S=0\n" in source
@@ -365,6 +385,8 @@ def test_formal_sequence_disables_periodic_timer_sidecars() -> None:
     assert (
         '"FR13_SPAN_GPU_TIMER_DUMP_S|${FR13_SPAN_GPU_TIMER_DUMP_S:-}|0"'
     ) in launcher
+    assert required_env["FR13_SFWD_GPU_TIMER_DUMP_S"] == "0"
+    assert required_env["FR13_SPAN_GPU_TIMER_DUMP_S"] == "0"
 
 
 def test_flush_boundaries_break_wall_chain_after_snapshot() -> None:

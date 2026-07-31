@@ -4,6 +4,7 @@ import asyncio
 import importlib.util
 import json
 import os
+import sys
 import threading
 from email.message import Message
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -13,7 +14,10 @@ from typing import Any
 import pytest
 import requests
 
-from lumo_flywheel_serving.inference_proxy import (
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "src"))
+
+from lumo_flywheel_serving.inference_proxy import (  # noqa: E402
     FIXED32_ENGINE_BEGIN_PATH,
     FIXED32_ENGINE_FINALIZE_PATH,
     FIXED32_INGRESS_BEGIN_SCHEMA,
@@ -35,6 +39,11 @@ from lumo_flywheel_serving.inference_proxy import (
 
 
 TASK_IDS = ("astropy__astropy-12907", "astropy__astropy-13033")
+
+
+@pytest.fixture(autouse=True)
+def _exact_vllm_request_id_binding(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VLLM_DISABLE_REQUEST_ID_RANDOMIZATION", "1")
 
 
 def _write_secret(path: Path) -> tuple[str, str]:
@@ -451,6 +460,36 @@ def test_engine_middleware_rejects_before_generation_and_replays_exact_body(
     verify_fixed32_ingress_ledger(
         ledger_path, expected_role="engine", require_finalized=True
     )
+
+
+@pytest.mark.parametrize("binding_value", (None, "0", "true"))
+def test_engine_middleware_requires_exact_vllm_request_id_binding(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    binding_value: str | None,
+) -> None:
+    secret_path = tmp_path / "secret.json"
+    _write_secret(secret_path)
+    ledger_path = tmp_path / "engine.jsonl"
+    if binding_value is None:
+        monkeypatch.delenv("VLLM_DISABLE_REQUEST_ID_RANDOMIZATION")
+    else:
+        monkeypatch.setenv(
+            "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION",
+            binding_value,
+        )
+
+    with pytest.raises(
+        Fixed32IngressError,
+        match="requires exact vLLM request ID binding",
+    ):
+        Fixed32EngineIngressMiddleware(
+            object(),
+            secret_file=secret_path,
+            canonical_task_ids=TASK_IDS,
+            ledger_path=ledger_path,
+        )
+    assert not ledger_path.exists()
 
 
 def test_engine_responses_requires_matching_body_and_header_request_id(

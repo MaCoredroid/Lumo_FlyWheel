@@ -12,6 +12,9 @@ import torch
 
 
 PATCHER_PATH = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py")
+KERNEL_PATH = Path(
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
+)
 PATCHER_SPEC = importlib.util.spec_from_file_location(
     "fr13_final_full_preseed_patcher",
     PATCHER_PATH,
@@ -36,6 +39,29 @@ def _runtime_functions(*names: str, mode: str) -> dict[str, object]:
         compile(
             ast.Module(body=definitions, type_ignores=[]),
             "<fixed32-observed-runtime>",
+            "exec",
+        ),
+        namespace,
+    )
+    return namespace
+
+
+def _kernel_functions(
+    *names: str,
+    namespace: dict[str, object],
+) -> dict[str, object]:
+    tree = ast.parse(KERNEL_PATH.read_text(encoding="utf-8"))
+    wanted = set(names)
+    definitions = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name in wanted
+    ]
+    assert {node.name for node in definitions} == wanted
+    exec(
+        compile(
+            ast.Module(body=definitions, type_ignores=[]),
+            "<fixed32-kernel-runtime>",
             "exec",
         ),
         namespace,
@@ -101,6 +127,7 @@ class Runner:
         self.compilation_config = SimpleNamespace(
             cudagraph_num_of_warmups=num_warmups
         )
+        self.input_batch = SimpleNamespace(vocab_size=248320)
         self.calls = []
 
     def _dummy_run(self, num_tokens, **kwargs):
@@ -197,12 +224,17 @@ def test_normalized_one_warmup_gets_explicit_capture_shaped_producer(
             lambda mode: mode == "FULL"
         ),
         _fr13_fixed32_final_full_preseed_needed=needed,
+        _fr13_fixed32_warm_final_full_postprocess=lambda vocab: holder.update(
+            warm_vocab=vocab
+        ),
         _fr13_fixed32_assert_final_full_preseed_ready=assert_ready,
     )
     _install_fake_gdn(monkeypatch, fake_gdn)
     namespace = {
         "CUDAGraphMode": _CUDAGraphMode,
         "SimpleNamespace": SimpleNamespace,
+        "_fr13_cfwd_timer": lambda: holder.update(cfwd_ready=True),
+        "_fr13_dfwd_timer": lambda: holder.update(dfwd_ready=True),
     }
     exec(source.read_text(), namespace)
     runner = namespace["Runner"](1)
@@ -226,6 +258,9 @@ def test_normalized_one_warmup_gets_explicit_capture_shaped_producer(
     assert capture[1]["is_graph_capturing"] is True
     assert holder["ready"] == 1
     assert holder["needed"] == ("FULL", 32, 1, True, False, 0)
+    assert holder["warm_vocab"] == 248320
+    assert holder["cfwd_ready"] is True
+    assert holder["dfwd_ready"] is True
 
 
 def test_ready_metadata_with_stale_lease_fails_before_full_capture(
@@ -241,6 +276,7 @@ def test_ready_metadata_with_stale_lease_fails_before_full_capture(
     fake_gdn = SimpleNamespace(
         _fr13_fixed32_final_full_preseed_postcheck_required=lambda mode: True,
         _fr13_fixed32_final_full_preseed_needed=lambda *args: False,
+        _fr13_fixed32_warm_final_full_postprocess=lambda vocab: None,
         _fr13_fixed32_assert_final_full_preseed_ready=lambda batch: (
             (_ for _ in ()).throw(RuntimeError("stale fixed32 lease"))
         ),
@@ -249,6 +285,8 @@ def test_ready_metadata_with_stale_lease_fails_before_full_capture(
     namespace = {
         "CUDAGraphMode": _CUDAGraphMode,
         "SimpleNamespace": SimpleNamespace,
+        "_fr13_cfwd_timer": lambda: None,
+        "_fr13_dfwd_timer": lambda: None,
     }
     exec(source.read_text(), namespace)
     runner = namespace["Runner"](1)
@@ -267,6 +305,311 @@ def test_ready_metadata_with_stale_lease_fails_before_full_capture(
         runner.calls[0][1]["cudagraph_runtime_mode"]
         is _CUDAGraphMode.NONE
     )
+
+
+def test_postprocess_boot_warm_is_unmeasured_and_idempotent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    namespace = _runtime_functions(
+        "_fr13_fixed32_warm_final_full_postprocess",
+        mode="tail6_fixed32",
+    )
+    capacity = 4
+    calls: list[tuple[str, int]] = []
+    namespace.update(
+        {
+            "_FR13_FIXED32_BOOT_WARM_EVIDENCE": None,
+            "_FR13_FIXED32_OBSERVED_CURRENT": None,
+            "_FR13_FIXED32_PENDING_EVENT": None,
+            "_FR13_FIXED32_PRESEED_CAP": capacity,
+            "_FR13_FIXED32_PRESEEDED_BATCHES": {1, 2, 3, 4},
+            "_FR13_EAGER_PACK_STACKS": {"spec_idx": torch.empty(1)},
+            "_fr13_fixed32_boot_preseed_allowed": lambda: True,
+        }
+    )
+    taw = SimpleNamespace(
+        fr13_fixed32_taw_warm_execute=lambda *args, **kwargs: (
+            calls.append(("taw", int(kwargs["max_batch_size"])))
+            or {
+                "ready": True,
+                "classification": "unmeasured_boot",
+                "batches": (1, 2, 3, 4),
+                "executions": 4,
+                "cache_lease_current": True,
+                "rng_state_restored": True,
+                "staging_state_restored": True,
+                "measured_state_restored": True,
+            }
+        )
+    )
+    tail_evidence = {
+        "ready": True,
+        "classification": "unmeasured_boot",
+        "hardware_scope": "device_postprocess_kernels",
+        "wrapper_bookkeeping_warmed": False,
+        "copy_source_dtype": "torch.int64",
+        "copy_destination_dtype": "torch.int32",
+        "batches": (1, 2, 3, 4),
+        "output_copy_pairs": 4,
+        "slot_copy_pairs": 10,
+        "spec_copy_pairs": 4,
+        "flags_zero_fills": 1,
+        "persistent_copy_state_restored": True,
+        "flags_state_restored": True,
+    }
+    committer_evidence = {
+            "ready": True,
+            "classification": "unmeasured_boot",
+            "batches": (1, 2, 3, 4),
+            "replays": 4,
+            "conv_commit_gather_launches": 4,
+            "conv_commit_scatter_launches": 4,
+            "route_lease_current": True,
+            "bank_state_restored": True,
+            "conv_bank_state_restored": True,
+            "conv_staging_state_restored": True,
+            "alias_destination_contract": "exact_alias_only_16x3",
+            "input_state_restored": True,
+            "measured_state_restored": True,
+            "scratch_overwrite_proven": True,
+    }
+    namespace["_fr13_fixed32_warm_device_postprocess_tail"] = (
+        lambda *_args: (
+            calls.append(("tail", capacity))
+            or (dict(tail_evidence), dict(committer_evidence))
+        )
+    )
+    monkeypatch.setitem(sys.modules, "_fr13_device_multidraft_kernel", taw)
+
+    warm = namespace["_fr13_fixed32_warm_final_full_postprocess"]
+    evidence = warm(248320)
+    assert evidence == {
+        "ready": True,
+        "classification": "unmeasured_boot",
+        "mode": "tail6_fixed32",
+        "capacity": 4,
+        "vocab_size": 248320,
+        "batches": (1, 2, 3, 4),
+        "taw_executions": 4,
+        "hardware_scope": "device_postprocess_kernels",
+        "wrapper_bookkeeping_warmed": False,
+        "copy_source_dtype": "torch.int64",
+        "copy_destination_dtype": "torch.int32",
+        "output_copy_pairs": 4,
+        "slot_copy_pairs": 10,
+        "spec_copy_pairs": 4,
+        "flags_zero_fills": 1,
+        "persistent_copy_state_restored": True,
+        "flags_state_restored": True,
+        "conv_commit_gather_launches": 4,
+        "conv_commit_scatter_launches": 4,
+        "committer_replays": 4,
+        "observed_event_absent": True,
+        "pending_event_absent": True,
+    }
+    assert calls == [("taw", 4), ("tail", 4)]
+    assert warm(248320) == evidence
+    assert calls == [("taw", 4), ("tail", 4)]
+
+    namespace["_FR13_FIXED32_BOOT_WARM_EVIDENCE"] = None
+    namespace["_FR13_FIXED32_OBSERVED_CURRENT"] = object()
+    with pytest.raises(RuntimeError, match="measured/capture state"):
+        warm(248320)
+
+
+@pytest.mark.parametrize("committer_fails", (False, True))
+def test_postprocess_tail_uses_int32_destinations_and_restores_state(
+    monkeypatch: pytest.MonkeyPatch,
+    committer_fails: bool,
+) -> None:
+    namespace = _runtime_functions(
+        "_fr13_fixed32_warm_device_postprocess_tail",
+        mode="tail6_fixed32",
+    )
+    capacity = 4
+    slot_paths = torch.arange(64, dtype=torch.int32).view(4, 16)
+    slot_lens = torch.arange(4, dtype=torch.int32)
+    spec_paths = (slot_paths + 100).clone()
+    spec_lens = (slot_lens + 100).clone()
+    flags = torch.arange(8, dtype=torch.int32).view(4, 2)
+    saved = tuple(
+        tensor.clone()
+        for tensor in (
+            slot_paths,
+            slot_lens,
+            spec_paths,
+            spec_lens,
+            flags,
+        )
+    )
+    namespace.update(
+        {
+            "_LUMO_FA_FIXED32_SLOT_PATHS": slot_paths,
+            "_LUMO_FA_FIXED32_SLOT_LENS": slot_lens,
+            "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR": spec_paths,
+            "_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR": spec_lens,
+            "_FR13_EAGER_PACK_STACKS": {"flags": flags},
+        }
+    )
+    allocation_dtypes: list[torch.dtype] = []
+
+    class _TorchProxy:
+        int32 = torch.int32
+        int64 = torch.int64
+        cuda = torch.cuda
+
+        @staticmethod
+        def is_tensor(value: object) -> bool:
+            return torch.is_tensor(value)
+
+        @staticmethod
+        def equal(left: torch.Tensor, right: torch.Tensor) -> bool:
+            return torch.equal(left, right)
+
+        @staticmethod
+        def empty(*args: object, **kwargs: object) -> torch.Tensor:
+            allocation_dtypes.append(kwargs["dtype"])  # type: ignore[arg-type]
+            return torch.empty(*args, **kwargs)
+
+    namespace["torch"] = _TorchProxy
+    taw = SimpleNamespace(
+        fr13_fixed32_taw_warm_products=lambda *args, **kwargs: (
+            torch.arange(
+                int(kwargs["batch_size"]) * 32,
+                dtype=torch.int64,
+            ).view(int(kwargs["batch_size"]), 32),
+            torch.ones(int(kwargs["batch_size"]), dtype=torch.int64),
+            torch.arange(
+                int(kwargs["batch_size"]) * 16,
+                dtype=torch.int64,
+            ).view(int(kwargs["batch_size"]), 16),
+            torch.ones(int(kwargs["batch_size"]), dtype=torch.int64),
+            torch.arange(
+                int(kwargs["batch_size"]), dtype=torch.int64
+            ),
+        )
+    )
+    kernel = ModuleType("lumo_flywheel_serving.fr10_gdn_tree_kernel")
+
+    def _warm_committer() -> dict[str, object]:
+        if committer_fails:
+            raise RuntimeError("injected committer failure")
+        return {"ready": True}
+
+    kernel.warm_fixed32_committer_graphs_all_batches = _warm_committer
+    package = ModuleType("lumo_flywheel_serving")
+    package.__path__ = []
+    monkeypatch.setitem(sys.modules, "lumo_flywheel_serving", package)
+    monkeypatch.setitem(
+        sys.modules,
+        "lumo_flywheel_serving.fr10_gdn_tree_kernel",
+        kernel,
+    )
+
+    warm_tail = namespace["_fr13_fixed32_warm_device_postprocess_tail"]
+    if committer_fails:
+        with pytest.raises(RuntimeError, match="injected committer failure"):
+            warm_tail(taw, torch.device("cpu"), capacity, 248320)
+    else:
+        evidence, committer = warm_tail(
+            taw, torch.device("cpu"), capacity, 248320
+        )
+        assert evidence["copy_source_dtype"] == "torch.int64"
+        assert evidence["copy_destination_dtype"] == "torch.int32"
+        assert evidence["output_copy_pairs"] == capacity
+        assert committer == {"ready": True}
+
+    assert allocation_dtypes == [torch.int32] * (2 * capacity)
+    for current, original in zip(
+        (slot_paths, slot_lens, spec_paths, spec_lens, flags),
+        saved,
+        strict=True,
+    ):
+        assert torch.equal(current, original)
+
+
+def test_committer_warmup_readiness_binds_full_restore_contract() -> None:
+    route = object()
+    conv_state = object()
+    evidence = {
+        "ready": True,
+        "classification": "unmeasured_boot",
+        "mode": "tail6_fixed32",
+        "max_batch_size": 4,
+        "batches": (1, 2, 3, 4),
+        "replays": 4,
+        "conv_commit_gather_launches": 4,
+        "conv_commit_scatter_launches": 4,
+        "route_lease_current": True,
+        "bank_state_restored": True,
+        "conv_bank_state_restored": True,
+        "conv_staging_state_restored": True,
+        "alias_destination_contract": "exact_alias_only_16x3",
+        "input_state_restored": True,
+        "measured_state_restored": True,
+        "scratch_overwrite_proven": True,
+        "scratch_restored": (
+            "accepted_paths",
+            "accepted_lens",
+            "node_mat",
+            "qbuf",
+        ),
+        "scratch_fully_overwritten": (
+            "abuf",
+            "bbuf",
+            "kbuf",
+            "vbuf",
+            "ssi",
+        ),
+        "scratch_immutable": (
+            "cu",
+            "path_offsets",
+            "batch_offsets",
+            "graph",
+            "scratch",
+        ),
+    }
+    namespace = _kernel_functions(
+        "fixed32_committer_warmup_counters",
+        namespace={
+            "_FR13_FIXED32_MODE": "tail6_fixed32",
+            "_FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY": 4,
+            "_FR13_FIXED32_COMMITTER_FAST_ROUTE": {"state": route},
+            "_FR13_FIXED32_CONV_PREGATHER": {"state": conv_state},
+            "_FR13_FIXED32_COMMITTER_WARMUP": {
+                "route": route,
+                "conv_state": conv_state,
+                "evidence": evidence,
+            },
+        },
+    )
+    counters = namespace["fixed32_committer_warmup_counters"]
+    assert counters()["ready"] is True
+    evidence["scratch_overwrite_proven"] = False
+    assert counters()["ready"] is False
+
+
+def test_committer_graph_body_fully_overwrites_declared_scratch() -> None:
+    source = KERNEL_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    graph_body = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_fixed32_committer_graph_body"
+    )
+    body_source = ast.get_source_segment(source, graph_body)
+    assert body_source is not None
+    for statement in (
+        'state["abuf"].fill_(-1e4)',
+        'state["bbuf"].zero_()',
+        'state["kbuf"].zero_()',
+        'state["vbuf"].zero_()',
+        'state["ssi"].fill_(state["scratch"])',
+        "node_mat[:, 0] = 0",
+        "node_mat[:, 1:] = (",
+    ):
+        assert statement in body_source
 
 
 @pytest.mark.parametrize("mode", ("tail6_fixed32", "hydra27_fixed32"))
@@ -339,6 +682,24 @@ def test_preseed_postcondition_binds_all_current_bank_aliases(
         "required_capacity": capacity,
         "all_batches_ready": True,
     }
+    kernel.fixed32_committer_warmup_counters = lambda: {
+        "ready": True,
+        "classification": "unmeasured_boot",
+        "mode": mode,
+        "max_batch_size": capacity,
+        "batches": tuple(range(1, capacity + 1)),
+        "replays": capacity,
+        "conv_commit_gather_launches": capacity,
+        "conv_commit_scatter_launches": capacity,
+        "route_lease_current": True,
+        "bank_state_restored": True,
+        "conv_bank_state_restored": True,
+        "conv_staging_state_restored": True,
+        "alias_destination_contract": "exact_alias_only_16x3",
+        "input_state_restored": True,
+        "measured_state_restored": True,
+        "scratch_overwrite_proven": True,
+    }
     package = ModuleType("lumo_flywheel_serving")
     package.__path__ = []
     monkeypatch.setitem(sys.modules, "lumo_flywheel_serving", package)
@@ -350,7 +711,21 @@ def test_preseed_postcondition_binds_all_current_bank_aliases(
     taw = SimpleNamespace(
         fr13_fixed32_taw_preseeded_counts=lambda *args, **kwargs: (
             torch.full((int(kwargs["batch_size"]),), 31, dtype=torch.int32)
-        )
+        ),
+        fr13_fixed32_taw_warmup_counters=lambda *args, **kwargs: {
+            "ready": True,
+            "classification": "unmeasured_boot",
+            "mode": mode,
+            "valid_mask": namespace["_FR13_FIXED32_VALID_MASK"],
+            "max_batch_size": capacity,
+            "vocab_size": int(kwargs["vocab_size"]),
+            "batches": tuple(range(1, capacity + 1)),
+            "executions": capacity,
+            "cache_lease_current": True,
+            "rng_state_restored": True,
+            "staging_state_restored": True,
+            "measured_state_restored": True,
+        },
     )
     monkeypatch.setitem(sys.modules, "_fr13_device_multidraft_kernel", taw)
     namespace.update(
@@ -366,6 +741,30 @@ def test_preseed_postcondition_binds_all_current_bank_aliases(
             "_FR13_REPLAY_LAYERS": layers,
             "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR": accepted_paths,
             "_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR": accepted_lens,
+            "_FR13_FIXED32_BOOT_WARM_EVIDENCE": {
+                "ready": True,
+                "classification": "unmeasured_boot",
+                "mode": mode,
+                "capacity": capacity,
+                "vocab_size": 248320,
+                "batches": tuple(range(1, capacity + 1)),
+                "taw_executions": capacity,
+                "hardware_scope": "device_postprocess_kernels",
+                "wrapper_bookkeeping_warmed": False,
+                "copy_source_dtype": "torch.int64",
+                "copy_destination_dtype": "torch.int32",
+                "output_copy_pairs": capacity,
+                "slot_copy_pairs": capacity * (capacity + 1) // 2,
+                "spec_copy_pairs": capacity,
+                "flags_zero_fills": 1,
+                "persistent_copy_state_restored": True,
+                "flags_state_restored": True,
+                "conv_commit_gather_launches": capacity,
+                "conv_commit_scatter_launches": capacity,
+                "committer_replays": capacity,
+                "observed_event_absent": True,
+                "pending_event_absent": True,
+            },
         }
     )
     assert_ready = namespace[
