@@ -14,8 +14,9 @@ alternative with two 16-row, one-warp query CTAs per head. It is default-off:
 only the private live-gate dispatch selects it. Each CTA still traverses the
 complete K sequence; there is no split-K reduction or combine kernel. B4 keeps
 the stock geometry, which already supplies 96 CTAs per layer. The candidate is
-an explicit specialization in the one production translation unit, so the
-shared stock launcher and every unrelated CUDA object remain untouched.
+a hidden launcher in one dedicated production translation unit; the stock
+explicit instantiation, shared launcher, and every unrelated CUDA object
+remain untouched.
 """
 
 from __future__ import annotations
@@ -107,21 +108,79 @@ TREE_BIAS_HELPER = _tree_bias_helper(tile_earlyout=False)
 STOCK_FIXED32_QUERY_INSTANTIATION = r'''template void run_mha_fwd_splitkv_dispatch<cutlass::bfloat16_t, 256, false>(Flash_fwd_params &params, cudaStream_t stream);'''
 
 
-FIXED32_QUERY_TILE16_SPECIALIZATION = r'''template <>
-void run_mha_fwd_splitkv_dispatch<cutlass::bfloat16_t, 256, false>(
+FIXED32_QUERY_TILE16_BATCH_STRIDE_SENTINEL = 0x46523133
+
+
+FIXED32_QUERY_TILE16_TRANSLATION_UNIT = r'''// FR13 fixed32 B1 qrow16 internal kernel.
+#include "namespace_config.h"
+#include "flash_fwd_launch_template.h"
+
+namespace FLASH_NAMESPACE {
+
+// Internal caller-only entry point. This separate TU keeps the stock HD256
+// BF16 explicit-instantiation object byte-for-byte unchanged.
+__attribute__((visibility("hidden")))
+void fr13_run_mha_fwd_fixed32_qrow16(
         Flash_fwd_params &params, cudaStream_t stream) {
     // FR13_FA2_FIXED32_QUERY_TILE16: two query CTAs fill all 48 GB10 SMs.
     // This is query partitioning, not split-K: each real row keeps one warp's
     // complete, ordered K-block loop and no combine kernel is launched.
-    const char *fr13_qrow16_dispatch =
-        std::getenv("FR13_FA2_QROW16_INTERNAL_DISPATCH");
-    const bool fr13_qrow16_requested =
-        fr13_qrow16_dispatch != nullptr
-        && fr13_qrow16_dispatch[0] == '1'
-        && fr13_qrow16_dispatch[1] == '\0';
-    if (fr13_qrow16_requested) {
+    constexpr static int kTreeBlockM = 16;
+    constexpr static int kTreeBlockN = 64;
+    constexpr static int kTreeWarps = 1;
+    static_assert(kTreeBlockM == 16 * kTreeWarps);
+    using TreeKernelTraits = Flash_fwd_kernel_traits<
+        256, kTreeBlockM, kTreeBlockN, kTreeWarps,
+        false, false, cutlass::bfloat16_t>;
+    static_assert(TreeKernelTraits::kNThreads == 32);
+    static_assert(TreeKernelTraits::kGmemThreadsPerRow == 8);
+    // The public FA2 API requires paged-KV blocks divisible by 16;
+    // production fixes the physical page at 1024 rows.
+    static_assert(TreeKernelTraits::kGmemRowsPerThread == 16);
+    static_assert(1024 % TreeKernelTraits::kGmemRowsPerThread == 0);
+    constexpr size_t smem_size = TreeKernelTraits::kSmemSize;
+    const int num_m_block =
+        (params.seqlen_q + TreeKernelTraits::kBlockM - 1)
+        / TreeKernelTraits::kBlockM;
+    dim3 grid(num_m_block, params.b, params.h);
+    auto kernel = &flash_fwd_splitkv_kernel<
+        TreeKernelTraits,
+        false,  // Is_causal
+        false,  // Is_local
+        false,  // Has_alibi
+        false,  // Is_even_MN: paged varlen Q has cu_seqlens_q
+        true,   // Is_even_K: d == kHeadDim == 256
+        false,  // Is_softcap
+        false,  // Split
+        false   // Append_KV
+    >;
+    if (smem_size >= 48 * 1024) {
+        C10_CUDA_CHECK(cudaFuncSetAttribute(
+            kernel,
+            cudaFuncAttributeMaxDynamicSharedMemorySize,
+            smem_size));
+    }
+    kernel<<<grid, TreeKernelTraits::kNThreads, smem_size, stream>>>(params);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+} // namespace FLASH_NAMESPACE
+'''
+
+
+FIXED32_QUERY_TILE16_API_DISPATCH = rf'''constexpr int64_t kFr13Qrow16BatchStrideSentinel =
+    {FIXED32_QUERY_TILE16_BATCH_STRIDE_SENTINEL};
+
+__attribute__((visibility("hidden")))
+void fr13_run_mha_fwd_fixed32_qrow16(
+    Flash_fwd_params &params, cudaStream_t stream);
+
+void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split_kernel=false) {{
+    if (params.tree_bias_batch_stride == kFr13Qrow16BatchStrideSentinel) {{
         TORCH_CHECK(
             params.tree_bias_ptr != nullptr
+            && params.is_bf16
+            && !params.is_causal
             && params.b == 1
             && params.d == 256
             && params.d_rounded == 256
@@ -134,6 +193,7 @@ void run_mha_fwd_splitkv_dispatch<cutlass::bfloat16_t, 256, false>(
             && params.tree_bias_q_offset == 0
             && params.tree_bias_k_offset == 0
             && params.cu_seqlens_q != nullptr
+            && params.seqused_k != nullptr
             && !params.seqlenq_ngroups_swapped
             && params.block_table != nullptr
             && params.page_block_size == 1024
@@ -142,53 +202,40 @@ void run_mha_fwd_splitkv_dispatch<cutlass::bfloat16_t, 256, false>(
             && params.alibi_slopes_ptr == nullptr
             && params.knew_ptr == nullptr
             && params.softcap == 0.0f
-            && params.num_splits == 1,
+            && params.num_splits == 1
+            && force_split_kernel,
             "FR13 qrow16 internal dispatch reached non-production geometry");
-        constexpr static int kTreeBlockM = 16;
-        constexpr static int kTreeBlockN = 64;
-        constexpr static int kTreeWarps = 1;
-        static_assert(kTreeBlockM == 16 * kTreeWarps);
-        using TreeKernelTraits = Flash_fwd_kernel_traits<
-            256, kTreeBlockM, kTreeBlockN, kTreeWarps,
-            false, false, cutlass::bfloat16_t>;
-        static_assert(TreeKernelTraits::kNThreads == 32);
-        static_assert(TreeKernelTraits::kGmemThreadsPerRow == 8);
-        // The public FA2 API requires paged-KV blocks divisible by 16;
-        // production fixes the physical page at 1024 rows.
-        static_assert(TreeKernelTraits::kGmemRowsPerThread == 16);
-        static_assert(1024 % TreeKernelTraits::kGmemRowsPerThread == 0);
-        constexpr size_t smem_size = TreeKernelTraits::kSmemSize;
-        const int num_m_block =
-            (params.seqlen_q + TreeKernelTraits::kBlockM - 1)
-            / TreeKernelTraits::kBlockM;
-        dim3 grid(num_m_block, params.b, params.h);
-        auto kernel = &flash_fwd_splitkv_kernel<
-            TreeKernelTraits,
-            false,  // Is_causal
-            false,  // Is_local
-            false,  // Has_alibi
-            false,  // Is_even_MN: paged varlen Q has cu_seqlens_q
-            true,   // Is_even_K: d == kHeadDim == 256
-            false,  // Is_softcap
-            false,  // Split
-            false   // Append_KV
-        >;
-        if (smem_size >= 48 * 1024) {
-            C10_CUDA_CHECK(cudaFuncSetAttribute(
-                kernel,
-                cudaFuncAttributeMaxDynamicSharedMemorySize,
-                smem_size));
-        }
-        kernel<<<grid, TreeKernelTraits::kNThreads, smem_size, stream>>>(
-            params);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
+        fr13_run_mha_fwd_fixed32_qrow16(params, stream);
         return;
-    }
-    using StockKernelTraits = Flash_fwd_kernel_traits<
-        256, 64, 64, 4, false, false, cutlass::bfloat16_t>;
-    run_flash_splitkv_fwd<StockKernelTraits, false>(params, stream);
-}
+    }}
+    FP16_SWITCH(!params.is_bf16, [&] {{
+        HEADDIM_SWITCH(params.d, [&] {{
+            BOOL_SWITCH(params.is_causal, Is_causal, [&] {{
+                if (params.num_splits <= 1 && !force_split_kernel) {{  // If we don't set it num_splits == 0
+                    run_mha_fwd_<elem_type, kHeadDim, Is_causal>(params, stream);
+                }} else {{
+                    run_mha_fwd_splitkv_dispatch<elem_type, kHeadDim, Is_causal>(params, stream);
+                }}
+            }});
+        }});
+    }});
+}}
 '''
+
+
+STOCK_RUN_MHA_FWD = r'''void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split_kernel=false) {
+    FP16_SWITCH(!params.is_bf16, [&] {
+        HEADDIM_SWITCH(params.d, [&] {
+            BOOL_SWITCH(params.is_causal, Is_causal, [&] {
+                if (params.num_splits <= 1 && !force_split_kernel) {  // If we don't set it num_splits == 0
+                    run_mha_fwd_<elem_type, kHeadDim, Is_causal>(params, stream);
+                } else {
+                    run_mha_fwd_splitkv_dispatch<elem_type, kHeadDim, Is_causal>(params, stream);
+                }
+            });
+        });
+    });
+}'''
 
 
 def _replace_once(text: str, old: str, new: str, label: str) -> tuple[str, bool]:
@@ -296,29 +343,25 @@ def _patch_fixed32_query_translation_unit(
 ) -> bool:
     if not fixed32_query_tile16:
         return False
-    text = path.read_text()
-    changed = False
-    if "#include <cstdlib>\n" not in text:
-        text, replaced = _replace_once(
-            text,
-            '#include "flash_fwd_launch_template.h"\n',
-            '#include "flash_fwd_launch_template.h"\n#include <cstdlib>\n',
-            "fixed32 FA2 process-local dispatch include",
-        )
-        changed |= replaced
-    text, replaced = _replace_once(
-        text,
-        STOCK_FIXED32_QUERY_INSTANTIATION,
-        FIXED32_QUERY_TILE16_SPECIALIZATION,
-        "fixed32 FA2 query tile16 translation-unit specialization",
-    )
-    changed |= replaced
-    if changed:
-        path.write_text(text)
-    return changed
+    stock_text = path.read_text()
+    if STOCK_FIXED32_QUERY_INSTANTIATION not in stock_text:
+        raise RuntimeError("stock fixed32 FA2 explicit instantiation drifted")
+    if "FR13_FA2_FIXED32_QUERY_TILE16" in stock_text:
+        raise RuntimeError("qrow16 must not share the stock instantiation TU")
+    qrow_path = path.with_name("flash_fwd_fr13_qrow16_hdim256_bf16_sm80.cu")
+    if qrow_path.exists():
+        if qrow_path.read_text() != FIXED32_QUERY_TILE16_TRANSLATION_UNIT:
+            raise RuntimeError("existing qrow16 translation unit drifted")
+        return False
+    qrow_path.write_text(FIXED32_QUERY_TILE16_TRANSLATION_UNIT)
+    return True
 
 
-def _patch_flash_api_cpp(path: Path) -> bool:
+def _patch_flash_api_cpp(
+    path: Path,
+    *,
+    fixed32_query_tile16: bool = False,
+) -> bool:
     text = path.read_text()
     changed = False
     helper = r'''
@@ -466,6 +509,14 @@ mha_varlen_fwd_tree_bias(at::Tensor &q,
         "varlen wrappers",
     )
     changed = changed or did
+    if fixed32_query_tile16:
+        text, did = _replace_once(
+            text,
+            STOCK_RUN_MHA_FWD,
+            FIXED32_QUERY_TILE16_API_DISPATCH,
+            "fixed32 FA2 query tile16 hidden API dispatch",
+        )
+        changed = changed or did
     if changed:
         path.write_text(text)
     return changed
@@ -552,11 +603,14 @@ def patch_fa2_source(
             files["flash_fwd_kernel.h"],
             tile_earlyout=tree_bias_tile_earlyout,
         ),
-        "flash_fwd_split_hdim256_bf16_sm80.cu": _patch_fixed32_query_translation_unit(
+        "flash_fwd_fr13_qrow16_hdim256_bf16_sm80.cu": _patch_fixed32_query_translation_unit(
             files["flash_fwd_split_hdim256_bf16_sm80.cu"],
             fixed32_query_tile16=fixed32_query_tile16,
         ),
-        "flash_api.cpp": _patch_flash_api_cpp(files["flash_api.cpp"]),
+        "flash_api.cpp": _patch_flash_api_cpp(
+            files["flash_api.cpp"],
+            fixed32_query_tile16=fixed32_query_tile16,
+        ),
         "flash_api_torch_lib.cpp": _patch_torch_lib(files["flash_api_torch_lib.cpp"]),
     }
 
@@ -589,6 +643,27 @@ FIXED32_QUERY_TILE16_LIVE_AB_HELPERS = r'''# FR13_FA2_QROW16_LIVE_PAGED_AB
 _FR13_FA2_QROW16_LIVE_AB_GRAPHS = {}
 _FR13_FA2_QROW16_LIVE_AB_ATTEMPTED = False
 _FR13_FA2_QROW16_LIVE_AB_PASSED = False
+_FR13_FA2_QROW16_BATCH_STRIDE_SENTINEL = 1179791667
+
+
+def _fr13_fa2_qrow16_candidate_tree_bias(tree_bias):
+    """Tag an exact B1 bias using its semantically inert batch stride."""
+    if tree_bias.dtype != torch.float32:
+        raise RuntimeError("FR13 qrow16 tree bias is not FP32")
+    if tuple(tree_bias.shape) not in ((32, 32), (1, 32, 32)):
+        raise RuntimeError("FR13 qrow16 tree bias shape drifted")
+    base = tree_bias[0] if tree_bias.ndim == 3 else tree_bias
+    if int(base.stride(-1)) != 1:
+        raise RuntimeError("FR13 qrow16 tree bias columns are not contiguous")
+    return torch.as_strided(
+        base,
+        size=(1, 32, 32),
+        stride=(
+            _FR13_FA2_QROW16_BATCH_STRIDE_SENTINEL,
+            int(base.stride(-2)),
+            1,
+        ),
+    )
 
 
 def _fr13_fa2_qrow16_live_ab_register(
@@ -613,8 +688,6 @@ def _fr13_fa2_qrow16_live_ab_register(
     """Retain the first final B1 graph's exact live paged operands."""
     if os.environ.get("FR13_FA2_QROW16_LIVE_PAGED_AB", "0") != "1":
         return
-    if os.environ.get("FR13_FA2_QROW16_INTERNAL_DISPATCH") is not None:
-        raise RuntimeError("FR13 qrow16 internal dispatch leaked into graph capture")
     if not (
         torch.cuda.is_available()
         and torch.cuda.is_current_stream_capturing()
@@ -684,7 +757,10 @@ def _fr13_fa2_qrow16_live_ab_register(
     )
 
 
-def _fr13_fa2_qrow16_live_ab_call(bundle, out):
+def _fr13_fa2_qrow16_live_ab_call(bundle, out, *, candidate=False):
+    tree_bias = bundle["tree_bias"]
+    if candidate:
+        tree_bias = _fr13_fa2_qrow16_candidate_tree_bias(tree_bias)
     return bundle["flash_fn"](
         q=bundle["query"],
         k=bundle["key_cache"],
@@ -704,7 +780,7 @@ def _fr13_fa2_qrow16_live_ab_call(bundle, out):
         fa_version=2,
         num_splits=bundle["num_splits"],
         s_aux=None,
-        tree_bias=bundle["tree_bias"],
+        tree_bias=tree_bias,
         return_softmax_lse=True,
     )
 
@@ -771,9 +847,6 @@ def _fr13_fa2_qrow16_live_ab_replay(graph_id, runtime_mode, batch_size):
         raise RuntimeError("FR13 qrow16 live gate has no candidate SO digest")
     if torch.cuda.is_current_stream_capturing():
         raise RuntimeError("FR13 qrow16 live gate ran inside CUDA capture")
-    if os.environ.get("FR13_FA2_QROW16_INTERNAL_DISPATCH") is not None:
-        raise RuntimeError("FR13 qrow16 internal dispatch was externally populated")
-
     _FR13_FA2_QROW16_LIVE_AB_ATTEMPTED = True
     # The retained query is produced inside the replay. Synchronizing here
     # makes its current real-task bytes, plus the live cache metadata, stable
@@ -788,15 +861,10 @@ def _fr13_fa2_qrow16_live_ab_replay(graph_id, runtime_mode, batch_size):
 
     stock_buf = torch.empty_like(bundle["query"])
     candidate_buf = torch.empty_like(bundle["query"])
-    try:
-        os.environ.pop("FR13_FA2_QROW16_INTERNAL_DISPATCH", None)
-        stock_out, stock_lse = _fr13_fa2_qrow16_live_ab_call(bundle, stock_buf)
-        os.environ["FR13_FA2_QROW16_INTERNAL_DISPATCH"] = "1"
-        candidate_out, candidate_lse = _fr13_fa2_qrow16_live_ab_call(
-            bundle, candidate_buf
-        )
-    finally:
-        os.environ.pop("FR13_FA2_QROW16_INTERNAL_DISPATCH", None)
+    stock_out, stock_lse = _fr13_fa2_qrow16_live_ab_call(bundle, stock_buf)
+    candidate_out, candidate_lse = _fr13_fa2_qrow16_live_ab_call(
+        bundle, candidate_buf, candidate=True
+    )
     torch.cuda.synchronize()
     if stock_lse.dtype != torch.float32 or candidate_lse.dtype != torch.float32:
         raise RuntimeError("FR13 qrow16 live gate LSE is not FP32")
@@ -881,6 +949,27 @@ def _fr13_fa2_qrow16_live_ab_replay(graph_id, runtime_mode, batch_size):
 
 FIXED32_QUERY_TILE16_PRODUCTION_HELPERS = r'''# FR13_FA2_QROW16_PRODUCTION
 _FR13_FA2_QROW16_PRODUCTION_GRAPHS = {}
+_FR13_FA2_QROW16_BATCH_STRIDE_SENTINEL = 1179791667
+
+
+def _fr13_fa2_qrow16_candidate_tree_bias(tree_bias):
+    """Tag an exact B1 bias using its semantically inert batch stride."""
+    if tree_bias.dtype != torch.float32:
+        raise RuntimeError("FR13 qrow16 tree bias is not FP32")
+    if tuple(tree_bias.shape) not in ((32, 32), (1, 32, 32)):
+        raise RuntimeError("FR13 qrow16 tree bias shape drifted")
+    base = tree_bias[0] if tree_bias.ndim == 3 else tree_bias
+    if int(base.stride(-1)) != 1:
+        raise RuntimeError("FR13 qrow16 tree bias columns are not contiguous")
+    return torch.as_strided(
+        base,
+        size=(1, 32, 32),
+        stride=(
+            _FR13_FA2_QROW16_BATCH_STRIDE_SENTINEL,
+            int(base.stride(-2)),
+            1,
+        ),
+    )
 
 
 def _fr13_fa2_qrow16_production_begin(
@@ -901,7 +990,7 @@ def _fr13_fa2_qrow16_production_begin(
 ):
     """Select qrow16 only while the final attested B1 graph is captured."""
     if os.environ.get("FR13_FA2_QROW16_PRODUCTION", "0") != "1":
-        return False
+        return None
     if os.environ.get("FR13_FA2_QROW16_INTERNAL_PRODUCTION_ATTESTED") != "1":
         raise RuntimeError("FR13 qrow16 production has no launcher attestation")
     if not (
@@ -910,13 +999,13 @@ def _fr13_fa2_qrow16_production_begin(
     ):
         # Profile/preseed/eager calls remain stock. Only the final FULL graph is
         # a measurable production candidate.
-        return False
+        return None
     from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_qrow_gdn
 
     context = getattr(_fr13_qrow_gdn, "_FR13_FIXED32_CAPTURE_CONTEXT", None)
     if not isinstance(context, dict):
         # Throwaway memory-profile graphs deliberately have no final context.
-        return False
+        return None
     descriptor = context.get("descriptor")
     if not isinstance(descriptor, dict) or int(descriptor.get("num_reqs", -1)) != 1:
         raise RuntimeError("FR13 qrow16 production is not final fixed32 B1")
@@ -956,8 +1045,6 @@ def _fr13_fa2_qrow16_production_begin(
         raise RuntimeError("FR13 qrow16 production geometry drifted")
     if window_size is not None and tuple(int(x) for x in window_size) != (-1, -1):
         raise RuntimeError("FR13 qrow16 production requires a full window")
-    if os.environ.get("FR13_FA2_QROW16_INTERNAL_DISPATCH") is not None:
-        raise RuntimeError("FR13 qrow16 production selector scopes overlapped")
     graph_id = int(context.get("graph_id", 0))
     layer_name = str(getattr(layer, "layer_name", ""))
     if graph_id <= 0 or not layer_name:
@@ -968,15 +1055,19 @@ def _fr13_fa2_qrow16_production_begin(
     if layer_name in graph["layers"]:
         raise RuntimeError("FR13 qrow16 production layer executed twice in capture")
     graph["layers"].add(layer_name)
-    os.environ["FR13_FA2_QROW16_INTERNAL_DISPATCH"] = "1"
-    return True
+    return _fr13_fa2_qrow16_candidate_tree_bias(tree_bias)
 
 
-def _fr13_fa2_qrow16_production_end(engaged):
-    if not engaged:
+def _fr13_fa2_qrow16_production_end(candidate_tree_bias):
+    if candidate_tree_bias is None:
         return
-    if os.environ.pop("FR13_FA2_QROW16_INTERNAL_DISPATCH", None) != "1":
-        raise RuntimeError("FR13 qrow16 production selector was not restored")
+    if (
+        candidate_tree_bias.ndim != 3
+        or int(candidate_tree_bias.shape[0]) != 1
+        or int(candidate_tree_bias.stride(0))
+        != _FR13_FA2_QROW16_BATCH_STRIDE_SENTINEL
+    ):
+        raise RuntimeError("FR13 qrow16 production selector was not preserved")
 
 
 def _fr13_fa2_qrow16_production_capture_end(
@@ -1429,7 +1520,7 @@ def _fr13_sr_causal_flag():
                         tree_bias=tree_bias,
                     )
 """
-        production_replacement = """                    _fr13_qrow16_production = _fr13_fa2_qrow16_production_begin(
+        production_replacement = """                    _fr13_qrow16_production_bias = _fr13_fa2_qrow16_production_begin(
                         layer=layer,
                         query=query[:num_decode_tokens],
                         key_cache=key_cache,
@@ -1461,10 +1552,16 @@ def _fr13_sr_causal_flag():
                             block_table=decode_meta.block_table,
                             softcap=self.logits_soft_cap,
                             fa_version=2,
-                            tree_bias=tree_bias,
+                            tree_bias=(
+                                _fr13_qrow16_production_bias
+                                if _fr13_qrow16_production_bias is not None
+                                else tree_bias
+                            ),
                         )
                     finally:
-                        _fr13_fa2_qrow16_production_end(_fr13_qrow16_production)
+                        _fr13_fa2_qrow16_production_end(
+                            _fr13_qrow16_production_bias
+                        )
 """
         if text.count(production_call) != 1:
             raise RuntimeError(

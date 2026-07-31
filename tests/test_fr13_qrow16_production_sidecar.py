@@ -155,7 +155,10 @@ def test_production_selector_is_default_off_attested_and_fail_closed() -> None:
     assert "FR13 qrow16 production did not capture all target tree layers" in patcher
     assert "len(layers) != 16" in patcher
     assert "FR13_FA2_QROW16_PRODUCTION_CAPTURE_END" in patcher
-    assert 'os.environ["FR13_FA2_QROW16_INTERNAL_DISPATCH"] = "1"' in patcher
+    assert "_FR13_FA2_QROW16_BATCH_STRIDE_SENTINEL = 1179791667" in patcher
+    assert "torch.as_strided(" in patcher
+    assert "FR13_FA2_QROW16_INTERNAL_DISPATCH" not in patcher
+    assert "_fr13_qrow16_production_bias" in patcher
     assert "_fr13_fa2_qrow16_production_end" in patcher
     assert '"--fixed32-query-tile16-production"' in patcher
 

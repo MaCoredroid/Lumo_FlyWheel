@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +21,7 @@ Q_HEADS = 24
 KV_HEADS = 4
 HEAD_DIM = 256
 PAGE_ROWS = 1024
+QROW16_BATCH_STRIDE_SENTINEL = 0x46523133
 EXACT_SAFE_FA2_SHA256 = "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d"
 
 
@@ -115,31 +115,31 @@ def _call(
         dtype=torch.int32,
         device=device,
     )
-    if os.environ.get("FR13_FA2_QROW16_INTERNAL_DISPATCH") is not None:
-        raise RuntimeError("internal qrow16 dispatch must not be inherited")
-    try:
-        if candidate:
-            os.environ["FR13_FA2_QROW16_INTERNAL_DISPATCH"] = "1"
-        out, lse = flash_attn_varlen_func(
-            q=query,
-            k=key_cache,
-            v=value_cache,
-            cu_seqlens_q=cu_q,
-            max_seqlen_q=Q_ROWS,
-            seqused_k=seq_lens,
-            max_seqlen_k=int(capture["max_seq_len"]),
-            softmax_scale=float(capture["scale"]),
-            causal=False,
-            window_size=[-1, -1],
-            softcap=float(capture.get("softcap", 0.0)),
-            block_table=block_table,
-            num_splits=1,
-            return_softmax_lse=True,
-            fa_version=2,
-            tree_bias=bias,
+    if candidate:
+        base = bias[0]
+        bias = torch.as_strided(
+            base,
+            size=(1, Q_ROWS, Q_ROWS),
+            stride=(QROW16_BATCH_STRIDE_SENTINEL, int(base.stride(-2)), 1),
         )
-    finally:
-        os.environ.pop("FR13_FA2_QROW16_INTERNAL_DISPATCH", None)
+    out, lse = flash_attn_varlen_func(
+        q=query,
+        k=key_cache,
+        v=value_cache,
+        cu_seqlens_q=cu_q,
+        max_seqlen_q=Q_ROWS,
+        seqused_k=seq_lens,
+        max_seqlen_k=int(capture["max_seq_len"]),
+        softmax_scale=float(capture["scale"]),
+        causal=False,
+        window_size=[-1, -1],
+        softcap=float(capture.get("softcap", 0.0)),
+        block_table=block_table,
+        num_splits=1,
+        return_softmax_lse=True,
+        fa_version=2,
+        tree_bias=bias,
+    )
     torch.cuda.synchronize()
     return out.detach().cpu(), lse.detach().cpu()
 
