@@ -337,7 +337,7 @@ def test_launcher_wires_fail_closed_combined_bv_sidecars() -> None:
     assert "_fixed32_expected_eager=1" in launcher
     assert "requires MAX_NUM_SEQS=2, 3, or 4" in launcher
     assert "diagnostic BV must be 8, 16, 32, 64, or 128" in launcher
-    assert "production BV must be 16, 32, 64, or 128" in launcher
+    assert "production BV must be 8 or 64" in launcher
     assert "batched BV8 structure candidate requires the exact-B4 graph diagnostic" in launcher
 
 

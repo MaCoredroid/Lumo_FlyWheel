@@ -11,6 +11,15 @@ _FR13_CALLER_BATCH_GDN_GRAPH_PASS_JSON="${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS
 _FR13_CALLER_BATCH_GDN_GRAPH_PASS_SHA="${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256-}"
 _FR13_CALLER_BATCH_GDN_GATE_VERDICT_JSON="${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON-}"
 _FR13_CALLER_BATCH_GDN_GATE_VERDICT_SHA="${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256-}"
+_FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST="${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON+set}:${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON-}"
+_FR13_CALLER_BATCH_GDN_GATE_RUNNER="${FR13_FIXED32_BATCH_GDN_GATE_RUNNER+set}:${FR13_FIXED32_BATCH_GDN_GATE_RUNNER-}"
+_FR13_CALLER_BATCH_GDN_BV8_TIMING="${FR13_FIXED32_BATCH_GDN_BV8_TIMING+set}:${FR13_FIXED32_BATCH_GDN_BV8_TIMING-}"
+_FR13_CALLER_FR10_METRICS="${FR10_METRICS+set}:${FR10_METRICS-}"
+_FR13_CALLER_RING_EXPORT="${FR13_RING_EXPORT+set}:${FR13_RING_EXPORT-}"
+_FR13_CALLER_FLAGS_INKERNEL="${FR13_FLAGS_INKERNEL+set}:${FR13_FLAGS_INKERNEL-}"
+_FR13_CALLER_SCAN_ALIGN="${FR13_SCAN_ALIGN+set}:${FR13_SCAN_ALIGN-}"
+_FR13_CALLER_NPAD_INVARIANT="${FR13_NPAD_INVARIANT+set}:${FR13_NPAD_INVARIANT-}"
+_FR13_CALLER_GDN_GEOM="${FR13_TREE_GDN_GEOM_OVERRIDE+set}:${FR13_TREE_GDN_GEOM_OVERRIDE-}"
 _FR13_CALLER_FIXED32_MODE="${FR13_FIXED32_MODE+set}:${FR13_FIXED32_MODE-}"
 _FR13_CALLER_MAX_NUM_SEQS="${MAX_NUM_SEQS+set}:${MAX_NUM_SEQS-}"
 _FR13_CALLER_MAX_NUM_SEQS_OVR="${MAX_NUM_SEQS_OVR+set}:${MAX_NUM_SEQS_OVR-}"
@@ -27,13 +36,25 @@ fi
 if [[ "$_FR13_CALLER_BATCH_GDN_PRODUCTION" == set:* \
       || "$_FR13_CALLER_BATCH_GDN_BV_PRODUCTION" == set:* \
       || "$_FR13_CALLER_BATCH_GDN_GRAPH_PASS_JSON" == set:* \
-      || "$_FR13_CALLER_BATCH_GDN_GATE_VERDICT_JSON" == set:* ]]; then
+      || "$_FR13_CALLER_BATCH_GDN_GATE_VERDICT_JSON" == set:* \
+      || "$_FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST" == set:* \
+      || "$_FR13_CALLER_BATCH_GDN_GATE_RUNNER" == set:* \
+      || "$_FR13_CALLER_BATCH_GDN_BV8_TIMING" == set:* ]]; then
   if [[ "${FR13_FIXED32_BATCH_GDN_PRODUCTION+set}:${FR13_FIXED32_BATCH_GDN_PRODUCTION-}" != "$_FR13_CALLER_BATCH_GDN_PRODUCTION" \
       || "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION+set}:${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION-}" != "$_FR13_CALLER_BATCH_GDN_BV_PRODUCTION" \
       || "${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON-}" != "$_FR13_CALLER_BATCH_GDN_GRAPH_PASS_JSON" \
       || "${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256-}" != "$_FR13_CALLER_BATCH_GDN_GRAPH_PASS_SHA" \
       || "${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON-}" != "$_FR13_CALLER_BATCH_GDN_GATE_VERDICT_JSON" \
       || "${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256-}" != "$_FR13_CALLER_BATCH_GDN_GATE_VERDICT_SHA" \
+      || "${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON+set}:${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON-}" != "$_FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST" \
+      || "${FR13_FIXED32_BATCH_GDN_GATE_RUNNER+set}:${FR13_FIXED32_BATCH_GDN_GATE_RUNNER-}" != "$_FR13_CALLER_BATCH_GDN_GATE_RUNNER" \
+      || "${FR13_FIXED32_BATCH_GDN_BV8_TIMING+set}:${FR13_FIXED32_BATCH_GDN_BV8_TIMING-}" != "$_FR13_CALLER_BATCH_GDN_BV8_TIMING" \
+      || "${FR10_METRICS+set}:${FR10_METRICS-}" != "$_FR13_CALLER_FR10_METRICS" \
+      || "${FR13_RING_EXPORT+set}:${FR13_RING_EXPORT-}" != "$_FR13_CALLER_RING_EXPORT" \
+      || "${FR13_FLAGS_INKERNEL+set}:${FR13_FLAGS_INKERNEL-}" != "$_FR13_CALLER_FLAGS_INKERNEL" \
+      || "${FR13_SCAN_ALIGN+set}:${FR13_SCAN_ALIGN-}" != "$_FR13_CALLER_SCAN_ALIGN" \
+      || "${FR13_NPAD_INVARIANT+set}:${FR13_NPAD_INVARIANT-}" != "$_FR13_CALLER_NPAD_INVARIANT" \
+      || "${FR13_TREE_GDN_GEOM_OVERRIDE+set}:${FR13_TREE_GDN_GEOM_OVERRIDE-}" != "$_FR13_CALLER_GDN_GEOM" \
       || "${FR13_FIXED32_MODE+set}:${FR13_FIXED32_MODE-}" != "$_FR13_CALLER_FIXED32_MODE" \
       || "${MAX_NUM_SEQS+set}:${MAX_NUM_SEQS-}" != "$_FR13_CALLER_MAX_NUM_SEQS" \
       || "${MAX_NUM_SEQS_OVR+set}:${MAX_NUM_SEQS_OVR-}" != "$_FR13_CALLER_MAX_NUM_SEQS_OVR" \
@@ -51,6 +72,15 @@ unset \
   _FR13_CALLER_BATCH_GDN_GRAPH_PASS_SHA \
   _FR13_CALLER_BATCH_GDN_GATE_VERDICT_JSON \
   _FR13_CALLER_BATCH_GDN_GATE_VERDICT_SHA \
+  _FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST \
+  _FR13_CALLER_BATCH_GDN_GATE_RUNNER \
+  _FR13_CALLER_BATCH_GDN_BV8_TIMING \
+  _FR13_CALLER_FR10_METRICS \
+  _FR13_CALLER_RING_EXPORT \
+  _FR13_CALLER_FLAGS_INKERNEL \
+  _FR13_CALLER_SCAN_ALIGN \
+  _FR13_CALLER_NPAD_INVARIANT \
+  _FR13_CALLER_GDN_GEOM \
   _FR13_CALLER_FIXED32_MODE \
   _FR13_CALLER_MAX_NUM_SEQS \
   _FR13_CALLER_MAX_NUM_SEQS_OVR \
@@ -182,6 +212,8 @@ FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON=${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_
 FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256=${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256:-}
 FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON=${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON:-}
 FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256=${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256:-}
+FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON=${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON:-}
+FR13_FIXED32_BATCH_GDN_GATE_RUNNER=${FR13_FIXED32_BATCH_GDN_GATE_RUNNER:-}
 FR13_FIXED32_CUTLASS_WAVE=${FR13_FIXED32_CUTLASS_WAVE:-stock}
 FR13_FIXED32_CUTLASS_WAVE_SO=${FR13_FIXED32_CUTLASS_WAVE_SO:-}
 FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL=${FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL:-/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl}
@@ -908,6 +940,11 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     0|1) ;;
     *) echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
   esac
+  _fr13_fixed32_batch_gdn_bv8_timing="${FR13_FIXED32_BATCH_GDN_BV8_TIMING:-0}"
+  case "$_fr13_fixed32_batch_gdn_bv8_timing" in
+    0|1) ;;
+    *) echo "FR13_FIXED32_BATCH_GDN_BV8_TIMING must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
   if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" \
         && "$_fr13_fixed32_batch_gdn_graph_diagnostic" == "1" ]]; then
     echo "fixed32 eager and graph batched GDN diagnostics are mutually exclusive" >&2
@@ -933,7 +970,10 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   _fixed32_expected_metrics=0
   _fixed32_expected_eager=0
   if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" \
-        || "$_fr13_fixed32_batch_gdn_graph_diagnostic" == "1" ]]; then
+        || "$_fr13_fixed32_batch_gdn_graph_diagnostic" == "1" \
+        || "$_fr13_fixed32_batch_gdn_bv8_timing" == "1" \
+        || ( "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "1" \
+             && "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" == "8" ) ]]; then
     # This is a real exact4 byte diagnostic, never an acceptance/timing arm.
     # Both execution modes require the invocation counter for byte evidence.
     _fixed32_expected_metrics=1
@@ -954,6 +994,10 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     "ATTENTION_BACKEND|$ATTENTION_BACKEND|TREE_ATTN"
     "FR10_DECODE_MODE_DEFAULT|$FR10_DECODE_MODE_DEFAULT|tree_mtp"
     "FR10_METRICS|$FR10_METRICS|$_fixed32_expected_metrics"
+    "FR13_RING_EXPORT|${FR13_RING_EXPORT:-1}|1"
+    "FR13_FLAGS_INKERNEL|${FR13_FLAGS_INKERNEL:-1}|1"
+    "FR13_SCAN_ALIGN|${FR13_SCAN_ALIGN:-0}|0"
+    "FR13_NPAD_INVARIANT|${FR13_NPAD_INVARIANT:-0}|0"
     "BATCH_INVARIANT|$BATCH_INVARIANT|0"
     "FR13_TAIL_MODE|${FR13_TAIL_MODE:-0}|1"
     "FR13_DRAFT_SOURCE|${FR13_DRAFT_SOURCE:-mtp}|merged"
@@ -1043,6 +1087,7 @@ PY
   unset _fixed32_expected_eager _fixed32_expected_mem
   unset _fixed32_expected_kv_cache_memory_bytes _fixed32_expected_metrics
   unset _fixed32_name _fixed32_pair _fr13_fixed32_batch_gdn_diagnostic
+  unset _fr13_fixed32_batch_gdn_bv8_timing
 fi
 if [[ -n "$KV_CACHE_MEMORY_BYTES" \
       && ! "$KV_CACHE_MEMORY_BYTES" =~ ^[1-9][0-9]*$ ]]; then
@@ -1268,6 +1313,8 @@ PY
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag" \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_bv8.production_engagement.json" \
+    "$LOG_DIR"/fr13_fixed32_batch_gdn_bv8.production_engagement.json.tmp.* \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv64.production_engagement.json" \
     "$LOG_DIR"/fr13_fixed32_batch_gdn_bv64.production_engagement.json.tmp.*
   printf '%s\n' "$FR13_FIXED32_MODE" > "$LOG_DIR/fr13_fixed32_mode.flag"
@@ -1301,6 +1348,8 @@ else
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag" \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_bv8.production_engagement.json" \
+    "$LOG_DIR"/fr13_fixed32_batch_gdn_bv8.production_engagement.json.tmp.* \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv64.production_engagement.json" \
     "$LOG_DIR"/fr13_fixed32_batch_gdn_bv64.production_engagement.json.tmp.* \
     2>/dev/null || true
@@ -1353,6 +1402,7 @@ _fr13_batch_gdn_graph_byte_ab="${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}"
 _fr13_batch_gdn_production="${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}"
 _fr13_batch_gdn_bv_candidate="${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}"
 _fr13_batch_gdn_bv_production="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}"
+_fr13_batch_gdn_bv8_timing="${FR13_FIXED32_BATCH_GDN_BV8_TIMING:-0}"
 case "$_fr13_batch_gdn_byte_ab" in
   0|1) ;;
   *) echo "FR13_FIXED32_BATCH_GDN_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
@@ -1370,9 +1420,25 @@ case "$_fr13_batch_gdn_bv_candidate" in
   *) echo "FR13 fixed32 batched GDN diagnostic BV must be 8, 16, 32, 64, or 128" >&2; exit 2 ;;
 esac
 case "$_fr13_batch_gdn_bv_production" in
-  ""|16|32|64|128) ;;
-  *) echo "FR13 fixed32 batched GDN production BV must be 16, 32, 64, or 128" >&2; exit 2 ;;
+  ""|8|64) ;;
+  *) echo "FR13 fixed32 batched GDN production BV must be 8 or 64" >&2; exit 2 ;;
 esac
+if [[ "$_fr13_batch_gdn_bv8_timing" == "1" ]]; then
+  if [[ "$MAX_NUM_SEQS" != "4" \
+        || "${FR13_FIXED32_MODE:-}" != "hydra27_fixed32" \
+        || "${ENFORCE_EAGER:-0}" != "0" \
+        || "${CUDAGRAPH_MODE:-}" != "FULL_AND_PIECEWISE" \
+        || "$_fr13_batch_gdn_byte_ab" != "0" \
+        || "$_fr13_batch_gdn_graph_byte_ab" != "0" \
+        || -n "$_fr13_batch_gdn_bv_candidate" \
+        || ! ( ( "$_fr13_batch_gdn_production" == "0" \
+                 && -z "$_fr13_batch_gdn_bv_production" ) \
+                || ( "$_fr13_batch_gdn_production" == "1" \
+                     && "$_fr13_batch_gdn_bv_production" == "8" ) ) ]]; then
+    echo "FR13_FIXED32_BATCH_GDN_BV8_TIMING requires exact B4 Hydra fixed32 FULL-graph stock or qualified BV8 production" >&2
+    exit 2
+  fi
+fi
 _fr13_batch_gdn_diagnostic_count=$((
   10#$_fr13_batch_gdn_byte_ab + 10#$_fr13_batch_gdn_graph_byte_ab
 ))
@@ -1425,7 +1491,9 @@ if [[ "$_fr13_batch_gdn_production" != "1" \
       && ( -n "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
            || -n "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256" \
            || -n "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
-           || -n "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" ) ]]; then
+           || -n "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" \
+           || -n "$FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON" \
+           || -n "$FR13_FIXED32_BATCH_GDN_GATE_RUNNER" ) ]]; then
   echo "FR13 fixed32 B4 GDN graph PASS inputs require the production selector" >&2
   exit 2
 fi
@@ -1490,31 +1558,57 @@ if [[ "$_fr13_batch_gdn_production" == "1" ]]; then
   [[ "$MAX_NUM_SEQS" =~ ^[234]$ ]] \
     || { echo "FR13_FIXED32_BATCH_GDN_PRODUCTION requires MAX_NUM_SEQS=2, 3, or 4" >&2; exit 2; }
   if [[ -n "$_fr13_batch_gdn_bv_production" ]]; then
-    [[ "$_fr13_batch_gdn_bv_production" == "64" ]] \
-      || { echo "FR13 fixed32 batched wide-BV production is restricted to BV64" >&2; exit 2; }
     [[ "$MAX_NUM_SEQS" == "4" ]] \
-      || { echo "FR13 fixed32 BV64 production requires MAX_NUM_SEQS=4" >&2; exit 2; }
-    [[ "${FR13_FIXED32_MODE:-}" == "tail6_fixed32" ]] \
-      || { echo "FR13 fixed32 BV64 production requires tail6_fixed32" >&2; exit 2; }
+      || { echo "FR13 fixed32 batched B4 GDN production requires MAX_NUM_SEQS=4" >&2; exit 2; }
+    if [[ "$_fr13_batch_gdn_bv_production" == "8" ]]; then
+      [[ "${FR13_FIXED32_MODE:-}" == "tail6_fixed32" \
+         || "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" ]] \
+        || { echo "FR13 fixed32 batched BV8 production requires a qualified fixed32 mode" >&2; exit 2; }
+    else
+      [[ "${FR13_FIXED32_MODE:-}" == "tail6_fixed32" ]] \
+        || { echo "FR13 fixed32 batched BV64 production requires tail6_fixed32" >&2; exit 2; }
+    fi
     [[ "${ENFORCE_EAGER:-0}" == "0" \
        && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" ]] \
-      || { echo "FR13 fixed32 BV64 production requires the FULL graph runtime" >&2; exit 2; }
+      || { echo "FR13 fixed32 batched B4 GDN production requires the FULL graph runtime" >&2; exit 2; }
+    if [[ "$_fr13_batch_gdn_bv_production" == "8" ]]; then
+      [[ "${FR10_METRICS:-0}" == "1" ]] \
+        || { echo "FR13 fixed32 batched BV8 production requires FR10_METRICS=1" >&2; exit 2; }
+      [[ -f "$FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON" \
+         && ! -L "$FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON" \
+         && -f "$FR13_FIXED32_BATCH_GDN_GATE_RUNNER" \
+         && ! -L "$FR13_FIXED32_BATCH_GDN_GATE_RUNNER" ]] \
+        || { echo "FR13 fixed32 batched BV8 production requires the pinned gate runtime closure" >&2; exit 2; }
+    fi
     [[ -f "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
        && ! -L "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
        && "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
        && -f "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
        && ! -L "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
        && "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" =~ ^[0-9a-f]{64}$ ]] \
-      || { echo "FR13 fixed32 BV64 production requires a pinned completed exact4 graph gate" >&2; exit 2; }
+      || { echo "FR13 fixed32 batched B4 GDN production requires a pinned completed exact4 graph gate" >&2; exit 2; }
     rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json"
-    python3 scripts/fr13_b4_gdn_bv64_pass.py install \
-      --live-result "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
-      --expected-live-sha256 "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256" \
-      --gate-verdict "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
-      --expected-gate-verdict-sha256 "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" \
-      --kernel-source src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py \
-      --out "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json" \
-      || { echo "FR13 fixed32 BV64 graph PASS attestation failed" >&2; exit 2; }
+    if [[ "$_fr13_batch_gdn_bv_production" == "8" ]]; then
+      python3 scripts/fr13_b4_gdn_bv8_pass.py install \
+        --live-result "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
+        --expected-live-sha256 "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256" \
+        --gate-verdict "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
+        --expected-gate-verdict-sha256 "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" \
+        --kernel-source src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py \
+        --runtime-manifest "$FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON" \
+        --gate-runner "$FR13_FIXED32_BATCH_GDN_GATE_RUNNER" \
+        --out "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json" \
+        || { echo "FR13 fixed32 batched BV8 graph PASS attestation failed" >&2; exit 2; }
+    else
+      python3 scripts/fr13_b4_gdn_bv64_pass.py install \
+        --live-result "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
+        --expected-live-sha256 "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256" \
+        --gate-verdict "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
+        --expected-gate-verdict-sha256 "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" \
+        --kernel-source src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py \
+        --out "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json" \
+        || { echo "FR13 fixed32 BV64 graph PASS attestation failed" >&2; exit 2; }
+    fi
     printf '%s\n' "$_fr13_batch_gdn_bv_production" \
       > "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag"
     chmod 400 "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag"
@@ -1522,8 +1616,10 @@ if [[ "$_fr13_batch_gdn_production" == "1" ]]; then
     [[ -z "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
        && -z "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256" \
        && -z "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
-       && -z "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" ]] \
-      || { echo "FR13 graph PASS inputs are BV64 B4 production only" >&2; exit 2; }
+       && -z "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" \
+       && -z "$FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON" \
+       && -z "$FR13_FIXED32_BATCH_GDN_GATE_RUNNER" ]] \
+      || { echo "FR13 graph PASS inputs are exact B4 production only" >&2; exit 2; }
     [[ -f "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json" \
        && ! -L "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json" ]] \
       || { echo "FR13_FIXED32_BATCH_GDN_PRODUCTION requires a regular live-gate PASS record" >&2; exit 2; }

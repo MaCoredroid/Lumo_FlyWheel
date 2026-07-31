@@ -3184,12 +3184,18 @@ def _fr13_fixed32_capture_begin(
         "lumo_flywheel_serving.fr10_gdn_tree_kernel",
         fromlist=(
             "_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION",
+            "fixed32_batch_gdn_bv8_production_capture_begin",
             "fixed32_batch_gdn_bv64_production_capture_begin",
         ),
     )
-    if getattr(
+    production_bv = getattr(
         tree_kernel, "_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", None
-    ) is not None:
+    )
+    if production_bv == 8:
+        tree_kernel.fixed32_batch_gdn_bv8_production_capture_begin(
+            identity, batch
+        )
+    elif production_bv is not None:
         tree_kernel.fixed32_batch_gdn_bv64_production_capture_begin(
             identity, batch
         )
@@ -3371,12 +3377,21 @@ def _fr13_fixed32_capture_end(
         "lumo_flywheel_serving.fr10_gdn_tree_kernel",
         fromlist=(
             "_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION",
+            "fixed32_batch_gdn_bv8_production_capture_end",
             "fixed32_batch_gdn_bv64_production_capture_end",
         ),
     )
-    if getattr(
+    production_bv = getattr(
         tree_kernel, "_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", None
-    ) is not None:
+    )
+    if production_bv == 8:
+        tree_kernel.fixed32_batch_gdn_bv8_production_capture_end(
+            identity,
+            int(work["batch_size"]),
+            signature,
+            int(work["gdn_scan_calls"]),
+        )
+    elif production_bv is not None:
         tree_kernel.fixed32_batch_gdn_bv64_production_capture_end(
             identity,
             int(work["batch_size"]),
@@ -3558,20 +3573,35 @@ def _fr13_fixed32_observed_graph_replay(
                 "FR13 fixed32 GDN BV live gate did not pass on the first "
                 "measured full-graph replay: " + repr(gate_report)
             )
-    if getattr(
+    production_bv = getattr(
         tree_kernel, "_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", None
-    ) is not None and not getattr(
-        tree_kernel,
-        "_FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_PUBLISHED",
-        False,
-    ):
-        production_report = (
-            tree_kernel.fixed32_batch_gdn_bv64_production_replay_engaged(
-                identity,
-                int(event["batch_size"]),
-                expected_signature,
-                int(gdn["scan_calls"]),
-            )
+    )
+    if production_bv == 8:
+        production_published = getattr(
+            tree_kernel,
+            "_FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_PUBLISHED",
+            False,
+        )
+        production_replay = (
+            tree_kernel.fixed32_batch_gdn_bv8_production_replay_engaged
+        )
+        production_label = "batched BV8"
+    else:
+        production_published = getattr(
+            tree_kernel,
+            "_FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_PUBLISHED",
+            False,
+        )
+        production_replay = (
+            tree_kernel.fixed32_batch_gdn_bv64_production_replay_engaged
+        )
+        production_label = "BV64"
+    if production_bv is not None and not production_published:
+        production_report = production_replay(
+            identity,
+            int(event["batch_size"]),
+            expected_signature,
+            int(gdn["scan_calls"]),
         )
         expected_status = (
             "ENGAGED" if int(event["batch_size"]) == 4
@@ -3579,7 +3609,8 @@ def _fr13_fixed32_observed_graph_replay(
         )
         if production_report.get("status") != expected_status:
             raise RuntimeError(
-                "FR13 fixed32 BV64 production replay did not engage its "
+                f"FR13 fixed32 {production_label} production replay did not "
+                "engage its "
                 "batch-qualified graph: " + repr(production_report)
             )
     if _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:

@@ -295,7 +295,7 @@ def test_graph_live_pass_is_graph_task_and_capture_bound(
     assert payload["state_restored"] is True
 
 
-def test_graph_bv8_live_pass_is_explicit_and_not_production_eligible(
+def test_graph_bv8_live_pass_is_explicit_and_requires_credential_to_produce(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = tmp_path / "pass.json"
@@ -319,14 +319,14 @@ def test_graph_bv8_live_pass_is_explicit_and_not_production_eligible(
     assert payload["candidate_kernel_structure"] == "fixed32_batch_tree_gdn_path"
     assert payload["reference_physical_launches_per_layer"] == 8
     assert payload["candidate_physical_launches_per_layer"] == 2
-    assert payload["production_eligible"] is False
+    assert payload["production_eligible"] is True
 
     monkeypatch.setenv("FR13_FIXED32_BATCH_GDN_PRODUCTION", "1")
     monkeypatch.setattr(kernel, "_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", None)
     with pytest.raises(RuntimeError, match="PASS record is invalid"):
         kernel._fr13_fixed32_batch_gdn_production_control()
     monkeypatch.setattr(kernel, "_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", 8)
-    with pytest.raises(RuntimeError, match="PASS record is invalid"):
+    with pytest.raises(RuntimeError, match="production credential is invalid"):
         kernel._fr13_fixed32_batch_gdn_production_control()
 
 

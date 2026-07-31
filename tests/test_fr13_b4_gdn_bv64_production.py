@@ -336,7 +336,7 @@ def test_launcher_restricts_wide_production_to_exact_b4_bv64_graph_pass() -> Non
     launcher = LAUNCHER.read_text(encoding="utf-8")
 
     for needle in (
-        '"$_fr13_batch_gdn_bv_production" == "64"',
+        '""|8|64)',
         '"$MAX_NUM_SEQS" == "4"',
         '"${FR13_FIXED32_MODE:-}" == "tail6_fixed32"',
         '"${ENFORCE_EAGER:-0}" == "0"',

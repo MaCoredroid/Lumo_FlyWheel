@@ -18,6 +18,8 @@ case "$FR13_GATE_BATCH_GDN_BV" in
   8|16|32|64|128) ;;
   *) echo "FR13_GATE_BATCH_GDN_BV must be 8, 16, 32, 64, or 128" >&2; exit 2 ;;
 esac
+GATE_PRODUCTION_ELIGIBLE=0
+[[ "$FR13_GATE_BATCH_GDN_BV" != "8" ]] || GATE_PRODUCTION_ELIGIBLE=1
 
 ARM="tail6_fixed32_${TAG}"
 SUBSET=config/fr13_fixed32/subset_b4_four.json
@@ -46,8 +48,8 @@ run_variant() { :; }
 source scripts/fr13_fixed32_floor_timers_seq.sh
 
 mkdir -p "$RUNROOT"
-printf 'classification=exact4_b4_graph_byte_diagnostic\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_eligible=0\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nfa2_sha256=%s\nreference_bv=8\ncandidate_bv=%s\nreference_kernel_structure=per_request_tree_gdn_path\ncandidate_kernel_structure=fixed32_batch_tree_gdn_path\nreference_physical_launches_per_layer=8\ncandidate_physical_launches_per_layer=2\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
-  "$$" "$RUNROOT" "$ARM" "$(git rev-parse HEAD)" "$RUNNER_SHA256" \
+printf 'classification=exact4_b4_graph_byte_diagnostic\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_eligible=%s\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nfa2_sha256=%s\nreference_bv=8\ncandidate_bv=%s\nreference_kernel_structure=per_request_tree_gdn_path\ncandidate_kernel_structure=fixed32_batch_tree_gdn_path\nreference_physical_launches_per_layer=8\ncandidate_physical_launches_per_layer=2\nfr10_metrics=1\nring_export=1\nflags_inkernel=1\ntree_gdn_geom_override=BV=8\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+  "$GATE_PRODUCTION_ELIGIBLE" "$$" "$RUNROOT" "$ARM" "$(git rev-parse HEAD)" "$RUNNER_SHA256" \
   "$SUBSET_SHA256" "$FA2_SHA256" "$FR13_GATE_BATCH_GDN_BV" \
   "$B4_KV_CACHE_MEMORY_BYTES" \
   "$(date -u +%FT%TZ)" \
@@ -64,6 +66,9 @@ if OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4 AGENT_WALL_S= \
     KV_CACHE_MEMORY_BYTES="$B4_KV_CACHE_MEMORY_BYTES" \
     FR13_FIXED32_B1_DIAGNOSTIC=0 \
     FR10_METRICS=1 ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
+    FR13_RING_EXPORT=1 FR13_FLAGS_INKERNEL=1 \
+    FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 \
+    FR13_SCAN_ALIGN=0 FR13_NPAD_INVARIANT=0 \
     FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1 \
     FR13_FIXED32_BATCH_GDN_BYTE_AB=0 \
     FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=1 \
@@ -107,7 +112,9 @@ cmp -s "$RUNROOT/external_manifest.at_launch.json" "$RUNROOT/external_manifest.a
 (( serve_rc == 0 )) || exit "$serve_rc"
 
 .venv/bin/python - \
-  "$RUNROOT/$ARM" "$FR13_GATE_BATCH_GDN_BV" "$SUBSET_SHA256" <<'PY'
+  "$RUNROOT/$ARM" "$FR13_GATE_BATCH_GDN_BV" "$SUBSET_SHA256" \
+  "$RUNROOT/runtime_manifest.at_end.json" "$RUNNER_PATH" \
+  "$RUNNER_SHA256" <<'PY'
 import hashlib
 import json
 import os
@@ -126,6 +133,9 @@ from lumo_flywheel_serving.inference_proxy import (  # noqa: E402
 arm = Path(sys.argv[1]).resolve()
 candidate_bv = int(sys.argv[2])
 subset_sha256 = sys.argv[3]
+runtime_manifest_path = Path(sys.argv[4])
+gate_runner_path = Path(sys.argv[5])
+expected_gate_runner_sha256 = sys.argv[6]
 logs = arm / "logs"
 record_path = logs / "fr13_fixed32_batch_gdn_byte_ab.jsonl"
 pass_path = logs / "fr13_fixed32_batch_gdn_byte_ab.pass.json"
@@ -149,6 +159,61 @@ surfaces = [
     "flags",
     "invocation_counter",
 ]
+
+try:
+    runtime_manifest = json.loads(
+        runtime_manifest_path.read_text(encoding="utf-8")
+    )
+except (OSError, UnicodeError, json.JSONDecodeError) as error:
+    raise SystemExit("runtime manifest is not readable JSON") from error
+if not isinstance(runtime_manifest, dict):
+    raise SystemExit("runtime manifest root is not an object")
+runtime_manifest_sha256 = runtime_manifest.get("overall_canonical_sha256")
+unsigned_manifest = {
+    key: value
+    for key, value in runtime_manifest.items()
+    if key != "overall_canonical_sha256"
+}
+computed_manifest_sha256 = hashlib.sha256(
+    json.dumps(
+        unsigned_manifest,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+).hexdigest()
+if (
+    runtime_manifest.get("schema") != "fr13-runtime-manifest-v1"
+    or runtime_manifest.get("profile") != "fixed32"
+    or runtime_manifest.get("sequence")
+    != "scripts/fr13_fixed32_floor_timers_seq.sh"
+    or runtime_manifest_sha256 != computed_manifest_sha256
+):
+    raise SystemExit("runtime manifest identity or canonical digest drifted")
+gate_runner_sha256 = hashlib.sha256(gate_runner_path.read_bytes()).hexdigest()
+if gate_runner_sha256 != expected_gate_runner_sha256:
+    raise SystemExit("gate runner changed before verdict creation")
+closures = runtime_manifest.get("closures")
+host_records = (
+    closures.get("host_script_source")
+    if isinstance(closures, dict)
+    else None
+)
+if not isinstance(host_records, list):
+    raise SystemExit("runtime manifest host-script closure is missing")
+host_by_path = {
+    record.get("path"): record
+    for record in host_records
+    if isinstance(record, dict) and isinstance(record.get("path"), str)
+}
+gate_record = host_by_path.get("scripts/fr13_run_b4_gdn_wide_live_gate.sh")
+if (
+    not isinstance(gate_record, dict)
+    or gate_record.get("sha256") != gate_runner_sha256
+    or gate_record.get("size") != len(gate_runner_path.read_bytes())
+    or "scripts/fr13_run_b4_gdn_bv8_timing.sh" not in host_by_path
+):
+    raise SystemExit("runtime manifest does not close over both BV8 runners")
 
 marker_info = os.lstat(marker_path)
 if (
@@ -209,7 +274,12 @@ if candidate_bv == 8:
     expected_pass.update(
         reference_kernel_structure="per_request_tree_gdn_path",
         candidate_kernel_structure="fixed32_batch_tree_gdn_path",
-        production_eligible=False,
+        count_invocation=True,
+        ring_export=True,
+        flags_inkernel=True,
+        scan_align=False,
+        npad_invariant=False,
+        production_eligible=True,
     )
 for key, expected in expected_pass.items():
     if payload.get(key) != expected:
@@ -360,6 +430,8 @@ verdict = {
     ],
     "graph_live_pass_sha256": pass_sha256,
     "kernel_source_sha256": source_sha256,
+    "runtime_manifest_sha256": runtime_manifest_sha256,
+    "gate_runner_sha256": gate_runner_sha256,
     "raw_byte_equal": True,
     "reference_always_served": True,
     "production_default_enabled": False,
@@ -372,7 +444,15 @@ if candidate_bv == 8:
         candidate_kernel_structure="fixed32_batch_tree_gdn_path",
         reference_physical_launches_per_layer=8,
         candidate_physical_launches_per_layer=2,
-        production_eligible=False,
+        count_invocation=True,
+        ring_export=True,
+        flags_inkernel=True,
+        scan_align=False,
+        npad_invariant=False,
+        tree_gdn_geom_override="BV=8",
+        enforce_eager=0,
+        cudagraph_mode="FULL_AND_PIECEWISE",
+        production_eligible=True,
     )
 temporary = verdict_path.with_name(verdict_path.name + ".tmp")
 temporary.write_text(
