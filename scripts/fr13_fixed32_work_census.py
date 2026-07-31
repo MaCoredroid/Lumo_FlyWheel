@@ -135,11 +135,14 @@ TAW_CHILD_LANES_PER_REQUEST = TAW_CHILD_LANES
 TAW_ROWS_PER_REQUEST = WALK_CAP
 TAW_BUFFER_CAPACITY = OUTPUT_PUBLISH_CAPACITY
 TAW_ROUTE = "fixed32_pytorch_exact_float_triton_integer_commit"
+TAW_NATIVE_PRECOMPUTE_ROUTE = (
+    "fixed32_native_precompute_byte_ab_reference_return"
+)
 TAW_EXACT_COMMIT_LAUNCHES = WALK_CAP
 TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST = WALK_CAP
-TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-exact-commit-v2"
+TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-exact-commit-v3"
 TAW_SOURCE_CONTRACT_SHA256 = (
-    "df7411d51607ab66d46e9c991247f6472168ef8739a7466bbf2b1b00e1975924"
+    "fe73ad35a916e41532575e29a5f9f6442d1081d0d1c0d0fc18210fdc8f0f56f8"
 )
 TAW_TENSOR_CALL_CENSUS = {
     "walk_levels": 12,
@@ -159,6 +162,23 @@ TAW_TENSOR_CALL_CENSUS = {
     "exact_commit_launches": 12,
     "exact_commit_programs_per_request": 12,
     "floating_sampling_reimplementation": False,
+}
+TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS = {
+    **TAW_TENSOR_CALL_CENSUS,
+    "walk_levels": 24,
+    "full_vocab_row_gathers": 74,
+    "full_vocab_fp32_casts": 26,
+    "full_vocab_softmax_calls": 26,
+    "full_vocab_normalizations": 72,
+    "full_vocab_cdf_calls": 48,
+    "source_cdf_calls": 24,
+    "qmix_zero_fills": 24,
+    "qmix_scatter_add_calls": 24,
+    "residual_subtract_calls": 24,
+    "residual_clamp_calls": 24,
+    "residual_where_calls": 48,
+    "exact_commit_launches": 24,
+    "exact_commit_programs_per_request": 24,
 }
 TAW_COUNT_ROUTE = "preseeded_cuda_fixed31"
 TAW_RNG_ROUTE = "bulk_device_generator"
@@ -1368,6 +1388,12 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         taw["path_scatter_slots"], f"{source}.taw.path_scatter_slots"
     )
     taw_route = _string(taw["route"], f"{source}.taw.route")
+    if taw_route not in (TAW_ROUTE, TAW_NATIVE_PRECOMPUTE_ROUTE):
+        raise CensusError(
+            f"{source}.taw.route: expected a pinned fixed32 TAW route, "
+            f"got {taw_route!r}"
+        )
+    taw_work_multiplier = 2 if taw_route == TAW_NATIVE_PRECOMPUTE_ROUTE else 1
     taw_exact_commit_launches = _integer(
         taw["exact_commit_launches"],
         f"{source}.taw.exact_commit_launches",
@@ -1409,7 +1435,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     )
     _expect(
         taw_child_lanes,
-        TAW_CHILD_LANES_PER_REQUEST * batch_size,
+        TAW_CHILD_LANES_PER_REQUEST * batch_size * taw_work_multiplier,
         f"{source}.taw.child_lanes",
     )
     for field_name, field_value in (
@@ -1423,28 +1449,29 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     ):
         _expect(
             field_value,
-            TAW_ROWS_PER_REQUEST * batch_size,
+            TAW_ROWS_PER_REQUEST * batch_size * taw_work_multiplier,
             f"{source}.taw.{field_name}",
         )
     _expect(
         taw_row_scatter_slots,
-        TAW_ROW_SCATTER_SLOTS * batch_size,
+        TAW_ROW_SCATTER_SLOTS * batch_size * taw_work_multiplier,
         f"{source}.taw.row_scatter_slots",
     )
     _expect(
         taw_path_scatter_slots,
-        TAW_PATH_SCATTER_SLOTS * batch_size,
+        TAW_PATH_SCATTER_SLOTS * batch_size * taw_work_multiplier,
         f"{source}.taw.path_scatter_slots",
     )
-    _expect(taw_route, TAW_ROUTE, f"{source}.taw.route")
     _expect(
         taw_exact_commit_launches,
-        TAW_EXACT_COMMIT_LAUNCHES,
+        TAW_EXACT_COMMIT_LAUNCHES * taw_work_multiplier,
         f"{source}.taw.exact_commit_launches",
     )
     _expect(
         taw_exact_commit_programs,
-        TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST * batch_size,
+        TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST
+        * batch_size
+        * taw_work_multiplier,
         f"{source}.taw.exact_commit_programs",
     )
     taw_source_schema = _string(
@@ -1483,9 +1510,17 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             taw_tensor_calls[name] = False
         else:
             taw_tensor_calls[name] = _integer(raw_tensor_calls[name], label)
+    expected_tensor_calls = (
+        TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS
+        if taw_route == TAW_NATIVE_PRECOMPUTE_ROUTE
+        else TAW_TENSOR_CALL_CENSUS
+    )
     _expect(
         taw_tensor_calls,
-        {name: TAW_TENSOR_CALL_CENSUS[name] for name in sorted(TAW_TENSOR_CALL_CENSUS)},
+        {
+            name: expected_tensor_calls[name]
+            for name in sorted(expected_tensor_calls)
+        },
         f"{source}.taw.tensor_call_census",
     )
     taw_count_route = _string(taw["count_route"], f"{source}.taw.count_route")
