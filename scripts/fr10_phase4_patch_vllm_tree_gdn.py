@@ -19428,6 +19428,39 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     "FR13_DRAFT_VOCAB_ROOT=1 requires "
                     "FR13_DRAFT_VOCAB_K>=128"
                 )
+            _fr13_dh_m32_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_M32", "0"
+            )
+            _fr13_dh_ab_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_M32_BYTE_AB", "0"
+            )
+            if _fr13_dh_m32_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_M32 must be exactly 0 or 1"
+                )
+            if _fr13_dh_ab_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_M32_BYTE_AB must be exactly 0 or 1"
+                )
+            _fr13_dh_m32 = _fr13_dh_m32_raw == "1"
+            _fr13_dh_ab = _fr13_dh_ab_raw == "1"
+            if _fr13_dh_m32 and _fr13_dh_ab:
+                raise RuntimeError(
+                    "FR13 draft-head M32 candidate and byte-A/B modes are "
+                    "mutually exclusive"
+                )
+            if (_fr13_dh_m32 or _fr13_dh_ab) and (
+                not _fr13_is_fixed32
+                or not _fr13_dvk_root
+                or not _fr13_single_logits
+                or _fr13_dvk_configured != 65536
+            ):
+                raise RuntimeError(
+                    "FR13 draft-head M32 requires exact fixed32, root subset, "
+                    "single-logits, and FR13_DRAFT_VOCAB_K=65536"
+                )
+            self._fr13_dh_m32_active = _fr13_dh_m32
+            self._fr13_dh_ab_active = _fr13_dh_ab
 
             def _fr13_dvk_prepare():
                 if (
@@ -19518,18 +19551,129 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             f"[FR13_DRAFT_VOCAB] DISABLED (shim build failed): {_fr13_dvk_e!r}",
                             flush=True,
                         )
+                if (
+                    (_fr13_dh_m32 or _fr13_dh_ab)
+                    and not getattr(self, "_fr13_dh_m32_ready", False)
+                ):
+                    _fr13_dh_sh = self._fr13_dvk_shim
+                    _fr13_dh_w = _fr13_dh_sh.weight
+                    if (
+                        type(_fr13_dh_sh.quant_method).__name__
+                        != "UnquantizedLinearMethod"
+                        or tuple(_fr13_dh_w.shape) != (65536, 5120)
+                        or _fr13_dh_w.dtype != torch.bfloat16
+                        or not _fr13_dh_w.is_contiguous()
+                    ):
+                        raise RuntimeError(
+                            "FR13 draft-head M32 requires contiguous BF16 "
+                            "UnquantizedLinearMethod weight[65536,5120]"
+                        )
+                    self._fr13_dh_m32_input = torch.empty(
+                        (32, 5120),
+                        dtype=torch.bfloat16,
+                        device=_fr13_dh_w.device,
+                    )
+                    self._fr13_dh_m32_output = torch.empty(
+                        (32, 65536),
+                        dtype=torch.bfloat16,
+                        device=_fr13_dh_w.device,
+                    )
+                    self._fr13_dh_ab_mismatches = torch.zeros(
+                        (), dtype=torch.int64, device=_fr13_dh_w.device
+                    )
+                    self._fr13_dh_ab_root_checks = 0
+                    self._fr13_dh_m32_ready = True
+                    print(
+                        "[FR13_DRAFT_HEAD_M32] static buffers ready "
+                        f"candidate={int(_fr13_dh_m32)} "
+                        f"byte_ab={int(_fr13_dh_ab)} rows=32 "
+                        "vocab=65536 hidden=5120",
+                        flush=True,
+                    )
                 return _fr13_dvk_configured, _fr13_dvk_full
+
+            def _fr13_dh_m32_logits(_sh, _h):
+                if (
+                    not getattr(self, "_fr13_dh_m32_ready", False)
+                    or tuple(_h.shape) != (1, 5120)
+                    or _h.dtype != torch.bfloat16
+                    or _h.device != _sh.weight.device
+                ):
+                    raise RuntimeError(
+                        "FR13 draft-head M32 engaged outside exact B1 "
+                        "BF16 hidden[1,5120] contract"
+                    )
+                _fr13_dh_in = self._fr13_dh_m32_input
+                _fr13_dh_out = self._fr13_dh_m32_output
+                _fr13_dh_in.copy_(_h.expand_as(_fr13_dh_in))
+                torch.mm(_fr13_dh_in, _sh.weight.t(), out=_fr13_dh_out)
+                return _fr13_dh_out[:1]
 
             def _fr13_dvk_logits(_h):
                 # Pair the logits with the only map valid for those rows.
                 # A full-head fallback always returns map=None.
                 try:
                     _sh = self._fr13_dvk_shim
-                    _logits = _sh.quant_method.apply(_sh, _h, bias=None)
+                    _fr13_dh_m32_on = getattr(
+                        self, "_fr13_dh_m32_active", False
+                    )
+                    _fr13_dh_ab_on = getattr(
+                        self, "_fr13_dh_ab_active", False
+                    )
+                    if _fr13_dh_m32_on or _fr13_dh_ab_on:
+                        if _fr13_dh_ab_on and not torch.cuda.is_current_stream_capturing():
+                            _fr13_dh_checks = int(
+                                self._fr13_dh_ab_root_checks
+                            )
+                            if _fr13_dh_checks:
+                                _fr13_dh_bad = int(
+                                    self._fr13_dh_ab_mismatches.item()
+                                )
+                                if _fr13_dh_bad:
+                                    raise AssertionError(
+                                        "FR13_DRAFT_HEAD_M32_BYTE_AB full-logit "
+                                        f"mismatch count={_fr13_dh_bad}"
+                                    )
+                                if _fr13_dh_checks % 128 == 0:
+                                    print(
+                                        "[FR13_DRAFT_HEAD_M32_BYTE_AB] "
+                                        f"PASS root_checks={_fr13_dh_checks} "
+                                        "full_logit_bit_mismatches=0",
+                                        flush=True,
+                                    )
+                            self._fr13_dh_ab_root_checks = (
+                                _fr13_dh_checks + 1
+                            )
+                        _fr13_dh_candidate = _fr13_dh_m32_logits(_sh, _h)
+                        if _fr13_dh_ab_on:
+                            _fr13_dh_reference = _sh.quant_method.apply(
+                                _sh, _h, bias=None
+                            )
+                            self._fr13_dh_ab_mismatches.add_(
+                                torch.count_nonzero(
+                                    _fr13_dh_candidate.view(torch.int16)
+                                    != _fr13_dh_reference.view(torch.int16)
+                                )
+                            )
+                            _logits = _fr13_dh_reference
+                        else:
+                            _logits = _fr13_dh_candidate
+                    else:
+                        _logits = _sh.quant_method.apply(
+                            _sh, _h, bias=None
+                        )
                     return _logits, getattr(
                         self, "_fr13_dvk_map_t", None
                     )
                 except Exception as _e:
+                    if (
+                        getattr(self, "_fr13_dh_m32_active", False)
+                        or getattr(self, "_fr13_dh_ab_active", False)
+                    ):
+                        raise RuntimeError(
+                            "FR13 draft-head M32 failed its strict runtime "
+                            "contract"
+                        ) from _e
                     self._fr13_dvk_dead = True
                     print(
                         f"[FR13_DRAFT_VOCAB] DISABLED (apply failed): {_e!r}",

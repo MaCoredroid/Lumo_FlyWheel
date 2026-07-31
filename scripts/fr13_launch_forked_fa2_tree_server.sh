@@ -108,6 +108,31 @@ if [[ "$FR13_DRAFT_VOCAB_ROOT" == "1" && -z "${FR13_FIXED32_MODE:-}" ]]; then
   echo "FR13_DRAFT_VOCAB_ROOT=1 requires FR13_FIXED32_MODE" >&2
   exit 2
 fi
+FR13_DRAFT_HEAD_M32=${FR13_DRAFT_HEAD_M32:-0}
+FR13_DRAFT_HEAD_M32_BYTE_AB=${FR13_DRAFT_HEAD_M32_BYTE_AB:-0}
+case "$FR13_DRAFT_HEAD_M32" in
+  0|1) ;;
+  *) echo "FR13_DRAFT_HEAD_M32 must be 0 or 1" >&2; exit 2 ;;
+esac
+case "$FR13_DRAFT_HEAD_M32_BYTE_AB" in
+  0|1) ;;
+  *) echo "FR13_DRAFT_HEAD_M32_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "$FR13_DRAFT_HEAD_M32" == "1" \
+      && "$FR13_DRAFT_HEAD_M32_BYTE_AB" == "1" ]]; then
+  echo "FR13 draft-head M32 candidate and byte-A/B are mutually exclusive" >&2
+  exit 2
+fi
+if [[ "$FR13_DRAFT_HEAD_M32" == "1" \
+      || "$FR13_DRAFT_HEAD_M32_BYTE_AB" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" ]] || {
+    echo "FR13 draft-head M32 requires fixed32 B1 root64" >&2
+    exit 2
+  }
+fi
 # FR13_EAGER_PACK (FIX-2, default OFF until the lossless gate passes): pack
 # the committer's eager DtoH/HtoD storm and batch the 48 per-layer replay
 # launches into one (FR13_B1_SPEED_ATTRIBUTION_BIND.md). SEMANTICS-PRESERVING
@@ -1208,6 +1233,8 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DRAFT_VOCAB_K="${FR13_DRAFT_VOCAB_K:-65536}" \
   -e FR13_DRAFT_VOCAB_BLOCKS="${FR13_DRAFT_VOCAB_BLOCKS:-/workspace/scripts/fr13_dvk_subset_blocks.json}" \
   -e FR13_DRAFT_VOCAB_ROOT="$FR13_DRAFT_VOCAB_ROOT" \
+  -e FR13_DRAFT_HEAD_M32="$FR13_DRAFT_HEAD_M32" \
+  -e FR13_DRAFT_HEAD_M32_BYTE_AB="$FR13_DRAFT_HEAD_M32_BYTE_AB" \
   -e FR13_KVREMAP_TIMER="${FR13_KVREMAP_TIMER:-0}" \
   -e FR13_KVREMAP_TIMER_JSON="${FR13_KVREMAP_TIMER_JSON:-}" \
   -e FR13_STATEREMAP_TIMER="${FR13_STATEREMAP_TIMER:-0}" \
