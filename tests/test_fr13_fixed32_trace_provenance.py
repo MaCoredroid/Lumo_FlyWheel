@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib.util
 import json
 import os
@@ -551,6 +552,64 @@ def test_qwen_result_trace_counts_the_final_null_stop_turn(
     assert floor_trace["completed_logical_model_requests"] == 13
     assert len(floor_trace["model_request_id_sha256s"]) == 13
     assert floor_trace["engine_id_joinable"] is False
+
+
+def test_real_task_provenance_binds_prevalidated_campaign_requests(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    events = _qwen_result_trace()
+    base = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+    )
+    campaign_digest = "a" * 64
+    base_ids_digest = hashlib.sha256(
+        json.dumps(
+            base["model_request_ids"],
+            ensure_ascii=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    campaign_requests = {
+        **base,
+        "qwen_campaign_metric_evidence_sha256": campaign_digest,
+        "qwen_compaction_metric_evidence": {
+            "schema": contract.QWEN_CAMPAIGN_TASK_METRIC_SCHEMA,
+            "campaign_metric_evidence_sha256": campaign_digest,
+            "base_model_request_ids_sha256": base_ids_digest,
+            "trace_completed_requests_before_failed_compactions": 13,
+        },
+    }
+    trace_path = tmp_path / "qwen_trace.jsonl"
+    trace_path.write_text(
+        "".join(json.dumps(event) + "\n" for event in events),
+        encoding="utf-8",
+    )
+    task_key_id = "f" * 64
+    proof = {
+        "path": str((tmp_path / "campaign.json").resolve()),
+        "sha256": "b" * 64,
+        "bytes": 100,
+    }
+
+    provenance = runner._fixed32_real_task_provenance(
+        instance_id=TASK_A,
+        trace_path=trace_path,
+        agent_meta=_fixed32_agent_meta(runner, tmp_path),
+        task_key_id=task_key_id,
+        task_auth_before=_task_evidence(task_key_id, 0, 1),
+        task_auth_after=_task_evidence(task_key_id, 13, 53),
+        campaign_trace_requests=campaign_requests,
+        campaign_metric_binding={
+            "artifact": proof,
+            "metric_evidence_sha256": campaign_digest,
+        },
+    )
+
+    assert provenance["qwen_metric_scope"] == "campaign"
+    assert provenance["qwen_campaign_metric_proof"] == proof
+    assert provenance["qwen_campaign_metric_evidence_sha256"] == campaign_digest
 
 
 def test_qwen_top_level_usage_drop_counts_hidden_compaction(

@@ -13,9 +13,8 @@ import re
 import tempfile
 from typing import Any
 
-from fr13_fixed32_contract import ContractError as Fixed32ContractError
-from fr13_fixed32_contract import fixed32_trace_session_id
-from fr13_fixed32_contract import validate_fixed32_trace_model_requests
+from fr13_floor_gate import GateError as Fixed32FloorGateError
+from fr13_floor_gate import _fixed32_trace_model_requests
 from fr13_fixed32_work_census import CensusError as WorkCensusError
 from fr13_fixed32_work_census import CONV_PREGATHER_BLOCK
 from fr13_fixed32_work_census import CONV_PREGATHER_LAYERS
@@ -1771,8 +1770,11 @@ def validate_real_task_artifacts(
     expected_ids: list[str],
     *,
     mode: str,
+    concurrency: int,
     metric_bindings: dict[str, dict],
 ) -> tuple[int, dict[str, object]]:
+    if concurrency not in (1, 4):
+        raise ValueError(f"unsupported real-task concurrency {concurrency}")
     real_tasks = require_exact_keys(
         real_tasks,
         frozenset(
@@ -2026,26 +2028,33 @@ def validate_real_task_artifacts(
             if not isinstance(event, dict):
                 raise ValueError(f"{trace_path}:{line_number}: non-object record")
             trace_events.append(event)
+        metadata_path = task_dir / "runner_metadata.json"
         try:
-            trace_requests = validate_fixed32_trace_model_requests(
-                trace_events,
-                expected_session_id=fixed32_trace_session_id(task_id),
+            metadata = strict_json_text(
+                metadata_path.read_text(encoding="utf-8"),
+                label=str(metadata_path),
             )
-        except Fixed32ContractError as error:
+            task_provenance = metadata["fixed32_real_task_provenance"]
+            replayed_trace = _fixed32_trace_model_requests(
+                trace_path,
+                provenance=task_provenance,
+                require_campaign_scope=concurrency == 4,
+                expected_campaign_task_ids=(
+                    expected_ids if concurrency == 4 else None
+                ),
+            )
+        except (
+            OSError,
+            UnicodeDecodeError,
+            KeyError,
+            Fixed32FloorGateError,
+        ) as error:
             raise ValueError(f"{trace_path}: {error}") from error
-        response_ids = trace_requests["model_request_ids"]
-        completed_requests = trace_requests["completed_logical_model_requests"]
-        response_digests = sorted(
-            hashlib.sha256(value.encode("utf-8")).hexdigest()
-            for value in response_ids
-        )
-        response_set_sha256 = hashlib.sha256(
-            json.dumps(
-                response_digests,
-                ensure_ascii=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()
+        completed_requests = replayed_trace[
+            "completed_logical_model_requests"
+        ]
+        response_digests = replayed_trace["model_request_id_sha256s"]
+        response_set_sha256 = replayed_trace["model_request_ids_sha256"]
         if (
             type(trace["event_count"]) is not int
             or trace["event_count"] != len(trace_events)
@@ -2244,7 +2253,9 @@ def validate_real_task_artifacts(
         task_bindings[task_id] = {
             "task_key_id": expected_task_key,
             "trace_count": completed_requests,
-            "trace_engine_id_joinable": trace_requests["engine_id_joinable"],
+            "trace_engine_id_joinable": replayed_trace[
+                "engine_id_joinable"
+            ],
             "trace_request_id_sha256s": response_digests,
             "task_auth": task_auth,
             "interval": interval,
@@ -3023,6 +3034,7 @@ def validate_floor_gate_binding(
             provenance.get("real_tasks"),
             expected_ids,
             mode=mode,
+            concurrency=concurrency,
             metric_bindings=normalized_brackets,
         )
         artifact_count += real_task_artifact_count
