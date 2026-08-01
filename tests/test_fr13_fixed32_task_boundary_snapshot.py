@@ -553,6 +553,54 @@ def test_both_validators_reject_incomplete_layer_batch_length_coverage(
     )
 
 
+def test_qualification_snapshot_policy_accepts_only_reachable_incomplete_coverage(
+    tmp_path: Path,
+) -> None:
+    payload, ack = _snapshot(server_capacity=1)
+    payload["metrics"]["committer"][
+        "layer_batch_gate_coverage_mask_by_batch"
+    ]["1"] = 0b1011
+    payload["metrics"]["committer"][
+        "layer_batch_gate_passed_by_batch"
+    ]["1"] = 0
+    base_path = _write_snapshot(tmp_path, payload)
+
+    loaded, _, _ = orchestrator._load_fixed32_boundary_snapshot(
+        base_path=base_path,
+        ack=ack,
+        server_capacity=1,
+        allow_incomplete_layer_batch_coverage=True,
+    )
+    assert loaded["metrics"]["committer"][
+        "layer_batch_gate_coverage_mask_by_batch"
+    ] == {"1": 0b1011}
+
+    with pytest.raises(
+        orchestrator.Fixed32BoundaryError,
+        match="incomplete before measurement",
+    ):
+        orchestrator._load_fixed32_boundary_snapshot(
+            base_path=base_path,
+            ack=ack,
+            server_capacity=1,
+        )
+
+    payload["metrics"]["committer"][
+        "layer_batch_gate_coverage_mask_by_batch"
+    ]["1"] = 0x1000
+    _write_snapshot(tmp_path, payload)
+    with pytest.raises(
+        orchestrator.Fixed32BoundaryError,
+        match="unreachable depths",
+    ):
+        orchestrator._load_fixed32_boundary_snapshot(
+            base_path=base_path,
+            ack=ack,
+            server_capacity=1,
+            allow_incomplete_layer_batch_coverage=True,
+        )
+
+
 def test_both_validators_reject_nonpure_reconciliation_tampers(
     tmp_path: Path,
 ) -> None:

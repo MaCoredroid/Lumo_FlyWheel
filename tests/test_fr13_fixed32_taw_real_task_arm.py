@@ -200,6 +200,40 @@ def test_cutlass_real_task_arm_uses_canonical_marker_and_artifact_contract(
     assert arm.artifact_name == "fixed32_cutlass_streamk_real_task_arm.json"
 
 
+def test_cfwd_qualification_arm_is_task_bound_and_process_local(
+    tmp_path: Path,
+) -> None:
+    logs = tmp_path / "logs"
+    logs.mkdir(mode=0o700)
+    path = (
+        logs / orchestrator._FIXED32_COMMITTER_LAYER_BATCH_REAL_TASK_ARM_NAME
+    ).resolve()
+    arm = orchestrator._Fixed32CommitterLayerBatchRealTaskArm(
+        path=path,
+        instance_id=INSTANCE_ID,
+    )
+
+    arm.start()
+    assert path.read_text(encoding="ascii") == f"swe_verified:{INSTANCE_ID}\n"
+    assert stat.S_IMODE(path.stat().st_mode) == 0o400
+    arm.finish()
+
+    payload = arm.as_dict()
+    assert payload["run_classification"] == (
+        "cfwd_layer_batch_real_swe_qualification"
+    )
+    assert payload["performance_measurement"] is False
+    assert payload["timing_eligible"] is False
+    assert payload["process_local_qualification_only"] is True
+    assert payload["durable_production_pass"] is False
+    assert payload["timing_requires_same_server_process"] is True
+    assert payload["same_process_timing_handoff_implemented"] is False
+    assert payload["state"] == "ended"
+    assert arm.artifact_name == (
+        "fixed32_committer_layer_batch_real_task_arm.json"
+    )
+
+
 def test_real_task_arm_rejects_stale_or_symlink_destination(
     tmp_path: Path,
 ) -> None:
@@ -395,6 +429,217 @@ def test_task_bracket_arms_after_pre_flush_and_rotates_after_post_flush(
         (task_dir / "fixed32_task_boundary.json").read_text(encoding="utf-8")
     )
     assert persisted == payload
+
+
+def test_cfwd_qualification_bracket_removes_arm_before_post_flush_and_records_coverage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    logs = tmp_path / "logs"
+    logs.mkdir(mode=0o700)
+    path = (
+        logs / orchestrator._FIXED32_COMMITTER_LAYER_BATCH_REAL_TASK_ARM_NAME
+    ).resolve()
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+    snapshots_with_live_arm: list[bool] = []
+    acks = [
+        _Ack(
+            mode="hydra27_fixed32",
+            producer_pid=123,
+            generation=1,
+            counters={
+                "pure_decode_forward_steps": 0,
+                "complete_work_census_events": 0,
+            },
+        ),
+        _Ack(
+            mode="hydra27_fixed32",
+            producer_pid=123,
+            generation=2,
+            counters={
+                "pure_decode_forward_steps": 3,
+                "complete_work_census_events": 3,
+            },
+        ),
+    ]
+
+    class _Client:
+        mode = "hydra27_fixed32"
+        producer_pid = 123
+
+        def snapshot(self) -> _Ack:
+            snapshots_with_live_arm.append(path.exists())
+            return acks.pop(0)
+
+    monkeypatch.setattr(
+        orchestrator,
+        "_validate_fixed32_ack",
+        lambda ack, label: ack.counters,
+    )
+
+    def _snapshot(**kwargs: object) -> tuple[dict[str, object], Path, str]:
+        assert kwargs["allow_incomplete_layer_batch_coverage"] is True
+        ack = kwargs["ack"]
+        assert isinstance(ack, _Ack)
+        post = ack.generation == 2
+        return (
+            {
+                "schema": "fr13-fixed32-boundary-snapshot-v4",
+                "metrics": {
+                    "committer": {
+                        "layer_batch_gate_attempts_by_batch": {
+                            "1": 3 if post else 2,
+                        },
+                        "layer_batch_gate_coverage_mask_by_batch": {
+                            "1": 0b1011 if post else 0b0011,
+                        },
+                    }
+                },
+            },
+            tmp_path / f"snapshot.{ack.generation}.json",
+            str(ack.generation) * 64,
+        )
+
+    monkeypatch.setattr(
+        orchestrator,
+        "_load_fixed32_boundary_snapshot",
+        _snapshot,
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "_fixed32_metrics_snapshot",
+        lambda **kwargs: "qualification metrics\n",
+    )
+    arm = orchestrator._Fixed32CommitterLayerBatchRealTaskArm(
+        path=path,
+        instance_id=INSTANCE_ID,
+    )
+    bracket = orchestrator._Fixed32CfwdQualificationTaskBracket(
+        client=_Client(),
+        task_dir=task_dir,
+        instance_id=INSTANCE_ID,
+        boundary_snapshot_base=tmp_path / "snapshot",
+        server_capacity=1,
+        taw_real_task_arm=arm,
+    )
+
+    bracket.pre(task_dir / "metrics_pre.txt")
+    assert snapshots_with_live_arm == [False]
+    assert path.is_file()
+    payload = bracket.post(task_dir / "metrics_post.txt")
+
+    assert snapshots_with_live_arm == [False, False]
+    assert not path.exists()
+    assert arm.rotated_path.is_file()
+    assert payload["run_classification"] == (
+        "cfwd_layer_batch_real_swe_qualification"
+    )
+    assert payload["timing_eligible"] is False
+    assert payload["durable_production_pass"] is False
+    coverage = payload["qualification_coverage"]
+    assert coverage["pre_coverage_mask_by_batch"] == {"1": 0b0011}
+    assert coverage["post_coverage_mask_by_batch"] == {"1": 0b1011}
+    assert coverage["attempt_delta_by_batch"] == {"1": 1}
+    assert coverage["new_coverage_mask_by_batch"] == {"1": 0b1000}
+    assert coverage["newly_covered_lengths_by_batch"] == {"1": [3]}
+    assert coverage["remaining_coverage_mask_by_batch"] == {"1": 0x0FF4}
+    assert coverage["coverage_complete"] is False
+    assert coverage["shadow_reference_replays"] == 1
+    assert coverage["shadow_candidate_replays"] == 1
+    assert coverage["new_depth_reference_served_replays"] == 1
+    assert coverage["formal_work_census_eligible"] is False
+    arm_payload = json.loads(
+        (
+            task_dir / "fixed32_committer_layer_batch_real_task_arm.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert arm_payload["state"] == "ended"
+
+
+def test_cfwd_qualification_does_not_post_flush_when_arm_removal_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    logs = tmp_path / "logs"
+    logs.mkdir(mode=0o700)
+    path = (
+        logs / orchestrator._FIXED32_COMMITTER_LAYER_BATCH_REAL_TASK_ARM_NAME
+    ).resolve()
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+    ack = _Ack(
+        mode="tail6_fixed32",
+        producer_pid=123,
+        generation=1,
+        counters={
+            "pure_decode_forward_steps": 0,
+            "complete_work_census_events": 0,
+        },
+    )
+
+    class _Client:
+        mode = "tail6_fixed32"
+        producer_pid = 123
+        calls = 0
+
+        def snapshot(self) -> _Ack:
+            self.calls += 1
+            return ack
+
+    client = _Client()
+    monkeypatch.setattr(
+        orchestrator,
+        "_validate_fixed32_ack",
+        lambda current_ack, label: current_ack.counters,
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "_load_fixed32_boundary_snapshot",
+        lambda **kwargs: (
+            {
+                "schema": "fr13-fixed32-boundary-snapshot-v4",
+                "metrics": {
+                    "committer": {
+                        "layer_batch_gate_attempts_by_batch": {"1": 0},
+                        "layer_batch_gate_coverage_mask_by_batch": {"1": 0},
+                    }
+                },
+            },
+            tmp_path / "snapshot.1.json",
+            "1" * 64,
+        ),
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "_fixed32_metrics_snapshot",
+        lambda **kwargs: "qualification metrics\n",
+    )
+    arm = orchestrator._Fixed32CommitterLayerBatchRealTaskArm(
+        path=path,
+        instance_id=INSTANCE_ID,
+    )
+    bracket = orchestrator._Fixed32CfwdQualificationTaskBracket(
+        client=client,
+        task_dir=task_dir,
+        instance_id=INSTANCE_ID,
+        boundary_snapshot_base=tmp_path / "snapshot",
+        server_capacity=1,
+        taw_real_task_arm=arm,
+    )
+    bracket.pre(task_dir / "metrics_pre.txt")
+    monkeypatch.setattr(arm, "finish", lambda: (_ for _ in ()).throw(
+        RuntimeError("cannot remove arm")
+    ))
+
+    with pytest.raises(
+        orchestrator.Fixed32BoundaryError,
+        match="cannot remove arm",
+    ):
+        bracket.post(task_dir / "metrics_post.txt")
+
+    assert client.calls == 1
+    assert path.is_file()
 
 
 @pytest.mark.parametrize(
