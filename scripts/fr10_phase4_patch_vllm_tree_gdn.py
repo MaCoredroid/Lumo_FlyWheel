@@ -28,6 +28,9 @@ REJECTION_SAMPLER_PATH = Path(
 GPU_MODEL_RUNNER_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py"
 )
+GPU_WORKER_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_worker.py"
+)
 REQUEST_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/request.py"
 )
@@ -18067,6 +18070,48 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
     return True
 
 
+def _patch_gpu_worker_fixed32_eager_boot_warm() -> bool:
+    """Reach the fixed32 byte-gate boot producer under enforce-eager.
+
+    vLLM normally skips ``GPUModelRunner.capture_model`` when enforce-eager is
+    set. The fixed32 byte gates install their zero-traffic producer at the
+    start of that method, so bridge to it from the worker warmup lifecycle only
+    for those diagnostic selectors.
+    """
+    if not _FR13_FIXED32_MODE:
+        return False
+    eager_boot_warm_contract = _fr13_fixed32_eager_boot_warm_contract()
+    if eager_boot_warm_contract is None:
+        return False
+    eager_name, _eager_capacity, _eager_sentinel = eager_boot_warm_contract
+    text = GPU_WORKER_PATH.read_text()
+    sentinel = "# FR13_FIXED32_EAGER_BOOT_WARM_LIFECYCLE"
+    if sentinel in text:
+        return False
+    anchor = (
+        "        cuda_graph_memory_bytes = 0\n"
+        "        if not self.model_config.enforce_eager:\n"
+        "            cuda_graph_memory_bytes = self.model_runner.capture_model()\n"
+    )
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            f"FR13 fixed32 {eager_name} worker lifecycle anchor is not unique"
+        )
+    inject = (
+        "        " + sentinel + ": byte-gate capture_model starts with\n"
+        "        # a zero-traffic eager producer and returns before graph "
+        "capture.\n"
+        "        if not self.model_config.enforce_eager:\n"
+        "            raise RuntimeError(\n"
+        f"                \"FR13 fixed32 {eager_name} requires enforce_eager\"\n"
+        "            )\n"
+        "        cuda_graph_memory_bytes = self.model_runner.capture_model()\n"
+    )
+    text = text.replace(anchor, inject, 1)
+    GPU_WORKER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_model_runner_tree_reqkey() -> bool:
     """FR13_TREE_REQKEY: re-key the tree accepted-path/lens buffers by request.
 
@@ -34025,6 +34070,10 @@ def main() -> int:
         (
             GPU_MODEL_RUNNER_PATH,
             _patch_gpu_model_runner_fixed32_final_full_preseed(),
+        ),
+        (
+            GPU_WORKER_PATH,
+            _patch_gpu_worker_fixed32_eager_boot_warm(),
         ),
         (
             GPU_MODEL_RUNNER_PATH,
