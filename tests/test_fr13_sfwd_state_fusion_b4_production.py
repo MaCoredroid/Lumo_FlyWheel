@@ -19,6 +19,7 @@ SERVE_VARIANT_PATH = ROOT / "scripts" / "fr13_bigdenom_swe_serve_variant.sh"
 PATCHER_PATH = ROOT / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
 KERNEL_PATH = ROOT / "src" / "lumo_flywheel_serving" / "fr10_gdn_tree_kernel.py"
 CUTLASS_PASS_PATH = ROOT / "scripts" / "fr13_cutlass_b4_pass.py"
+ORCHESTRATOR_PATH = ROOT / "scripts" / "run_swe_bench_q36_a.py"
 
 spec = importlib.util.spec_from_file_location("sfwd_b4_pass", PASS_PATH)
 assert spec is not None and spec.loader is not None
@@ -202,6 +203,7 @@ def test_runner_and_launcher_are_exact4_b4_shadow_only() -> None:
     runner = RUNNER_PATH.read_text(encoding="utf-8")
     launcher = LAUNCHER_PATH.read_text(encoding="utf-8")
     serve_variant = SERVE_VARIANT_PATH.read_text(encoding="utf-8")
+    orchestrator = ORCHESTRATOR_PATH.read_text(encoding="utf-8")
     pass_source = PASS_PATH.read_text(encoding="utf-8")
 
     assert "subset_b4_four.json" in runner
@@ -237,6 +239,8 @@ def test_runner_and_launcher_are_exact4_b4_shadow_only() -> None:
     assert "must be the only kernel candidate" in launcher
     assert "requires exact4 B4 full-vocabulary eager fixed32" in launcher
     assert '-e ENFORCE_EAGER="${ENFORCE_EAGER:-0}"' in launcher
+    assert "_Fixed32EagerKernelDiagnosticTaskBracket" in orchestrator
+    assert 'or sfwd_state_fusion_eager_diagnostic == "1"' in orchestrator
     assert "authenticated B1 and exact4 B4 byte prerequisites" in launcher
     assert "bind-prerequisites" in pass_source
     assert '"candidate_serving_permitted": False' in pass_source

@@ -6809,10 +6809,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     if batch_gdn_eager_diagnostic not in {"0", "1"}:
         parser.error("FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1")
+    sfwd_state_fusion_eager_diagnostic = os.environ.get(
+        "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB", "0"
+    )
+    if sfwd_state_fusion_eager_diagnostic not in {"0", "1"}:
+        parser.error(
+            "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"
+        )
     fixed32_eager_kernel_diagnostic = (
         fixed32_cutlass_diagnostic
         or fixed32_cutlass_b4_diagnostic
         or batch_gdn_eager_diagnostic == "1"
+        or sfwd_state_fusion_eager_diagnostic == "1"
     )
     if (
         fixed32_eager_kernel_diagnostic
