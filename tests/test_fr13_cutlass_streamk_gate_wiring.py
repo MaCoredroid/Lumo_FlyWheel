@@ -11,6 +11,7 @@ REPO = Path(__file__).resolve().parents[1]
 LAUNCHER = REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 GATE = REPO / "scripts" / "fr13_run_b1_cutlass_streamk_live_gate.sh"
 TIMING = REPO / "scripts" / "fr13_run_b1_cutlass_streamk_timing.sh"
+SWE_RUNNER = REPO / "scripts" / "run_swe_bench_q36_a.py"
 B1_KERNEL_GATE = REPO / "scripts" / "fr13_run_b1_kernel_live_gate.sh"
 B4_GRAPH_GATE = REPO / "scripts" / "fr13_run_b4_gdn_wide_live_gate.sh"
 
@@ -20,7 +21,7 @@ def test_launcher_is_digest_pinned_diagnostic_only_and_worker_visible() -> None:
 
     assert "FR13_FIXED32_CUTLASS_WAVE=${FR13_FIXED32_CUTLASS_WAVE:-stock}" in launcher
     assert (
-        "CUTLASS Stream-K candidate is restricted to the fixed32 B1 diagnostic"
+        "CUTLASS Stream-K candidate requires fixed32 B1"
         in launcher
     )
     assert "scripts/fr13_cutlass_wave_binary.py verify" in launcher
@@ -40,7 +41,7 @@ def test_launcher_is_digest_pinned_diagnostic_only_and_worker_visible() -> None:
         in launcher
     )
     assert (
-        "CUTLASS Stream-K production requires fixed32 exact4/16 B1 and a pinned live PASS"
+        "CUTLASS Stream-K production requires fixed32 B1 and a pinned live PASS"
         in launcher
     )
     assert "scripts/fr13_cutlass_streamk_pass.py validate" in launcher
@@ -196,7 +197,10 @@ def test_exact4_timing_is_real_full_wall_full_vocab_and_source_bound() -> None:
         "real_swe_verified_exact4_b1_hydra27_qrow16_streamk_timing_candidate" in timing
     )
     assert 'STOCK_ARM="hydra27_fixed32_qrow16_cutlass_stock_${TAG}"' in timing
-    assert 'CANDIDATE_ARM="hydra27_fixed32_qrow16_cutlass_streamk_${TAG}"' in timing
+    assert (
+        'CANDIDATE_ARM="hydra27_fixed32_qrow16_${CANDIDATE_ARM_LABEL}_${TAG}"'
+        in timing
+    )
     assert '"$arm" hydra27_fixed32 "$SUBSET"' in timing
     assert "tail6_fixed32" not in timing
     assert "scripts/fr13_bigdenom_swe_serve_variant.sh" in timing
@@ -215,6 +219,11 @@ def test_exact4_timing_is_real_full_wall_full_vocab_and_source_bound() -> None:
     assert (
         "STREAMK_SHA256="
         "f9bbbb8dc4ffc2227a71d2bc7b260e586ffbdc0fd946749e4f69e322c46a362d" in timing
+    )
+    assert (
+        "STREAMK_SHA256="
+        "f682560caad085cfdc0c44eec5252352a8bc4861dc634a55e0dccbab261b7892"
+        in timing
     )
     assert (
         "QROW16_FA2_SHA256="
@@ -237,8 +246,19 @@ def test_exact4_timing_is_real_full_wall_full_vocab_and_source_bound() -> None:
     assert '--candidate-qrow16-capture "$CANDIDATE_QROW16_CAPTURE"' in timing
     assert '--expected-source-commit "$SOURCE_COMMIT"' in timing
     assert "comparator_gate_timing_eligible=0" in timing
+    assert "TIMING_CANDIDATE=${FR13_STREAMK_TIMING_CANDIDATE:-streamk_coop128}" in timing
+    assert "TIMING_TASK_SET=${FR13_STREAMK_TIMING_TASK_SET:-exact4}" in timing
+    assert "subset_b1_diagnostic_one.json" in timing
+    assert "FR13_FIXED32_B1_DIAGNOSTIC=\"$B1_DIAGNOSTIC\"" in timing
+    assert '--candidate-selector "$TIMING_CANDIDATE"' in timing
+    assert '--task-set "$TIMING_TASK_SET"' in timing
+    assert "floor_acceptance_eligible=0" in timing
     assert "quick_decode_tps_probe" not in timing
     assert "/v1/responses" not in timing
+
+    swe_runner = SWE_RUNNER.read_text(encoding="utf-8")
+    assert '"streamk_force_wide256"' in swe_runner
+    assert '"streamk_force_wide256_byte_ab"' in swe_runner
 
 
 def test_b4_graph_gate_pins_cutlass_stock_and_bm8_off() -> None:

@@ -483,6 +483,10 @@ case "$FR13_FIXED32_CUTLASS_WAVE" in
     exit 2
     ;;
 esac
+case "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1" >&2; exit 2 ;;
+esac
 case "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" in
   0|1) ;;
   *) echo "FR13_FIXED32_CUTLASS_WAVE_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
@@ -523,7 +527,7 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" ]]; then
 else
   [[ -n "${FR13_FIXED32_MODE:-}" \
      && "$MAX_NUM_SEQS" == "1" ]] || {
-    echo "CUTLASS Stream-K candidate is restricted to the fixed32 B1 diagnostic or qualified exact4/16 B1 production" >&2
+    echo "CUTLASS Stream-K candidate requires fixed32 B1" >&2
     exit 2
   }
   [[ "$FR13_FIXED32_CUTLASS_WAVE_SO" == /* \
@@ -556,11 +560,10 @@ else
     }
   else
     [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" \
-       && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
        && -f "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
        && ! -L "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
        && "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
-      echo "CUTLASS Stream-K production requires fixed32 exact4/16 B1 and a pinned live PASS" >&2
+      echo "CUTLASS Stream-K production requires fixed32 B1 and a pinned live PASS" >&2
       exit 2
     }
     _fr13_cutlass_streamk_source_commit=$(git rev-parse HEAD)
