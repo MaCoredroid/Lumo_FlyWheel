@@ -52,6 +52,11 @@ this host environment. Runtime-manifest generation reached its fail-closed
 dataset check and stopped because the pinned SWE-Verified cache blob is absent.
 See `source_validation.json` for exact commands and identities.
 
+The integrated provenance and head-readiness CPU suites passed with `222
+passed, 1 skipped`; the single runtime-manifest test was deselected because the
+same pinned dataset blob is absent. The two integrated patches have the same
+stable patch IDs as source commits `ce2af77d0` and `0f2a31ed2`.
+
 ## Exact next commands
 
 Build in the pinned Torch/CUDA environment:
@@ -61,9 +66,9 @@ PYTHON_BIN=/path/to/torch-2.10.0-cu130/bin/python \
   bash results/fr13_fixed32_bf16_gemvx_b1_b4_source_ready_20260801/prepared_build.sh
 ```
 
-After integrating commit `0f2a31ed2` (runner-owned concurrent B4 endpoint
-metrics), restoring the pinned SWE-Verified cache, and obtaining the build
-outputs, run the real exact4 shadow gate:
+From integrated provenance commit `1add76690`, after restoring the pinned
+SWE-Verified cache and obtaining the build outputs, run the real exact4 shadow
+gate:
 
 ```bash
 PYTHON_BIN=/path/to/torch-2.10.0-cu130/bin/python \

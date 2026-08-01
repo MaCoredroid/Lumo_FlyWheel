@@ -1,5 +1,5 @@
 {
-  "schema": "fr13.fixed32.bf16_gemvx_b1_b4.source_readiness.v2",
+  "schema": "fr13.fixed32.bf16_gemvx_b1_b4.source_readiness.v3",
   "status": "SOURCE_AND_EXACT4_SHADOW_ROUTE_READY_BUILD_UNAVAILABLE",
   "classification": "offline_source_readiness_only",
   "performance_measurement": false,
@@ -7,8 +7,9 @@
   "production_eligible": false,
   "floor_acceptance_eligible": false,
   "gpu_or_container_used": false,
-  "branch": "agent/fixed32-fullhead-m1-b4",
+  "branch": "agent/fixed32-fullhead-m1-b4-campaignfix",
   "source_commit": "6ca0e1428144b8756722861149d5e97bea7f8b37",
+  "integration_commit": "1add76690849bc18f67af59c332b9e808bcc7c0a",
   "qualified_b1_credential": {
     "source_path": "csrc/fr13_bf16_gemvx_m1.cu",
     "source_sha256": "26ea8aad9f891b5e758a39464209d6f82008a10fac8da4c02ee052e839218a54",
@@ -70,7 +71,8 @@
     "comparison": "raw torch.int16 over every BF16 logit for root plus four MTP heads",
     "reference_always_served": true,
     "timing_eligible": false,
-    "runner_owned_endpoint_fix_commit": "0f2a31ed2"
+    "runner_owned_endpoint_fix_source_commit": "0f2a31ed298758cba72fad7e77fc3e13e27d545a",
+    "runner_owned_endpoint_fix_integration_commit": "1add76690849bc18f67af59c332b9e808bcc7c0a"
   },
   "hardware_floor_contract": {
     "mandatory_weight_bytes": 42025179008,
@@ -82,7 +84,6 @@
     "host Torch is 2.4.1+cpu instead of pinned 2.10.0+cu130; binary not built",
     "pinned SWE-Verified dataset cache blob is absent on the preparation host",
     "real exact4 B4 raw-BF16 gate has not run",
-    "runner-owned endpoint-metrics fix commit 0f2a31ed2 must be integrated before the gate",
     "candidate-only B4 timing and production remain forbidden"
   ]
 }

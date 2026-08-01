@@ -1,7 +1,9 @@
 {
-  "schema": "fr13.fixed32.bf16_gemvx_b1_b4.source_validation.v2",
+  "schema": "fr13.fixed32.bf16_gemvx_b1_b4.source_validation.v3",
   "status": "PASS_WITH_ENVIRONMENT_BLOCKERS",
   "source_commit": "6ca0e1428144b8756722861149d5e97bea7f8b37",
+  "integration_commit": "1add76690849bc18f67af59c332b9e808bcc7c0a",
+  "integration_branch": "agent/fixed32-fullhead-m1-b4-campaignfix",
   "qualified_b1_source_sha256": "26ea8aad9f891b5e758a39464209d6f82008a10fac8da4c02ee052e839218a54",
   "qualified_b1_patcher_sha256": "c4b5550cac2bbb5b213d76de3551e3ea61c1a0b5e5db93064404711f6313332d",
   "candidate_source_sha256": "b1e9c5ce798f6b16b652be86b9a5c38b4e0f8040d881401e853705200a4638f1",
@@ -23,6 +25,18 @@
     {
       "command": "git diff --check",
       "result": "PASS"
+    },
+    {
+      "command": "pytest -q campaign provenance and trace provenance tests, excluding the runtime-manifest cache test",
+      "result": "158 passed, 1 skipped, 1 deselected"
+    },
+    {
+      "command": "pytest -q separate-TU B4 source/runtime, qualified M1 source/runtime, and M32 production tests",
+      "result": "36 passed"
+    },
+    {
+      "command": "pytest -q campaign publication, floor propagation, floor semantics, hardware ledger, and ingress wiring tests",
+      "result": "28 passed"
     },
     {
       "command": "python3 scripts/fr13_runtime_manifest.py --profile fixed32",
