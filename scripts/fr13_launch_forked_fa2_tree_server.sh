@@ -812,6 +812,49 @@ SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens
 _fr13_gdn_path_bv_candidate=${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}
 _fr13_gdn_path_bv_production=${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}
 _fr13_gdn_path_bv_pass_json=${FR13_FIXED32_GDN_PATH_BV_PASS_JSON:-}
+_fr13_gdn_level0_coeff_byte_ab=${FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB:-0}
+_fr13_gdn_level0_coeff_production=${FR13_FIXED32_GDN_LEVEL0_COEFF:-0}
+_fr13_gdn_level0_coeff_pass_json=${FR13_FIXED32_GDN_LEVEL0_COEFF_PASS_JSON:-}
+_fr13_gdn_level0_coeff_pass_sha256=${FR13_FIXED32_GDN_LEVEL0_COEFF_PASS_SHA256:-}
+_fr13_gdn_level0_coeff_pass_task_id=${FR13_FIXED32_GDN_LEVEL0_COEFF_PASS_TASK_ID:-}
+case "$_fr13_gdn_level0_coeff_byte_ab" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
+esac
+case "$_fr13_gdn_level0_coeff_production" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_GDN_LEVEL0_COEFF must be exactly 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "$_fr13_gdn_level0_coeff_byte_ab" == "1" \
+      && -z "${FR13_FIXED32_MODE:-}" ]]; then
+  echo "FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB requires FR13_FIXED32_MODE" >&2
+  exit 2
+fi
+if [[ "$_fr13_gdn_level0_coeff_production" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" ]] || {
+    echo "FR13_FIXED32_GDN_LEVEL0_COEFF requires FR13_FIXED32_MODE" >&2
+    exit 2
+  }
+  [[ -f "$_fr13_gdn_level0_coeff_pass_json" \
+     && ! -L "$_fr13_gdn_level0_coeff_pass_json" \
+     && "$_fr13_gdn_level0_coeff_pass_sha256" =~ ^[0-9a-f]{64}$ \
+     && -n "$_fr13_gdn_level0_coeff_pass_task_id" ]] || {
+    echo "FR13 GDN coefficient production requires a pinned regular live PASS and task id" >&2
+    exit 2
+  }
+  [[ "$(sha256sum "$_fr13_gdn_level0_coeff_pass_json" | awk '{print $1}')" == \
+      "$_fr13_gdn_level0_coeff_pass_sha256" ]] || {
+    echo "FR13 GDN coefficient production PASS SHA-256 mismatch" >&2
+    exit 2
+  }
+  .venv/bin/python scripts/fr13_gdn_level0_coeff_pass.py \
+    --live-result "$_fr13_gdn_level0_coeff_pass_json" \
+    --kernel-source src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py \
+    --expected-task-id "$_fr13_gdn_level0_coeff_pass_task_id" \
+    --expected-mode "$FR13_FIXED32_MODE" \
+    --expected-live-sha256 "$_fr13_gdn_level0_coeff_pass_sha256" \
+    >/dev/null
+fi
 if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
   [[ -n "${FR13_FIXED32_MODE:-}" ]] || {
     echo "FR13_FIXED32_GDN_PATH_BV_CANDIDATE requires FR13_FIXED32_MODE" >&2
@@ -843,9 +886,11 @@ if [[ -n "$_fr13_gdn_path_bv_production" ]]; then
     exit 2
   }
 fi
-if [[ -n "$_fr13_gdn_path_bv_candidate" \
-      && -n "$_fr13_gdn_path_bv_production" ]]; then
-  echo "FR13 fixed32 GDN path-BV diagnostic and production selectors are mutually exclusive" >&2
+if (( ( ${#_fr13_gdn_path_bv_candidate} > 0 ) \
+       + ( ${#_fr13_gdn_path_bv_production} > 0 ) \
+       + 10#$_fr13_gdn_level0_coeff_byte_ab \
+       + 10#$_fr13_gdn_level0_coeff_production > 1 )); then
+  echo "FR13 fixed32 GDN path-BV diagnostic and production selectors, and coefficient-staging diagnostic/production selectors, are mutually exclusive" >&2
   exit 2
 fi
 if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" \
@@ -1682,6 +1727,13 @@ PY
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.production_pass.json" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_gdn_level0_coeff_byte_ab.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_level0_coeff.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_level0_coeff.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_gdn_level0_coeff.live_pass.json" \
+    "$LOG_DIR/fr13_fixed32_gdn_level0_coeff.production_pass.json" \
+    "$LOG_DIR/fr13_fixed32_gdn_level0_coeff.production_engagement.json" \
+    "$LOG_DIR"/fr13_fixed32_gdn_level0_coeff.production_engagement.json.tmp.* \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv8.production_engagement.json" \
@@ -1701,6 +1753,17 @@ PY
       > "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag"
     chmod 400 "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag"
   fi
+  if [[ "$_fr13_gdn_level0_coeff_byte_ab" == "1" ]]; then
+    printf '1\n' > "$LOG_DIR/fr13_fixed32_gdn_level0_coeff_byte_ab.flag"
+    chmod 400 "$LOG_DIR/fr13_fixed32_gdn_level0_coeff_byte_ab.flag"
+  elif [[ "$_fr13_gdn_level0_coeff_production" == "1" ]]; then
+    cp -- "$_fr13_gdn_level0_coeff_pass_json" \
+      "$LOG_DIR/fr13_fixed32_gdn_level0_coeff.production_pass.json"
+    printf '1\n' > "$LOG_DIR/fr13_fixed32_gdn_level0_coeff.flag"
+    chmod 400 \
+      "$LOG_DIR/fr13_fixed32_gdn_level0_coeff.production_pass.json" \
+      "$LOG_DIR/fr13_fixed32_gdn_level0_coeff.flag"
+  fi
   printf '%s\n' \
     "mode=$FR13_FIXED32_MODE" \
     "pid=$FR13_FIXED32_ENGINE_PID_FILE" \
@@ -1717,6 +1780,13 @@ else
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.production_pass.json" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_gdn_level0_coeff_byte_ab.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_level0_coeff.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_level0_coeff.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_gdn_level0_coeff.live_pass.json" \
+    "$LOG_DIR/fr13_fixed32_gdn_level0_coeff.production_pass.json" \
+    "$LOG_DIR/fr13_fixed32_gdn_level0_coeff.production_engagement.json" \
+    "$LOG_DIR"/fr13_fixed32_gdn_level0_coeff.production_engagement.json.tmp.* \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv8.production_engagement.json" \
@@ -1842,6 +1912,63 @@ if [[ ( -n "$_fr13_gdn_path_bv_candidate" \
            || -n "$_fr13_batch_gdn_bv_production" ) ]]; then
   echo "FR13 fixed32 B1 path-BV and B2-B4 batched wide-BV selectors are mutually exclusive" >&2
   exit 2
+fi
+if [[ "$_fr13_gdn_level0_coeff_byte_ab" == "1" ]]; then
+  if [[ "$MAX_NUM_SEQS" != "1" \
+        || "${SWE_CONCURRENCY:-}" != "1" \
+        || "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" != "1" \
+        || "${ENFORCE_EAGER:-0}" != "0" \
+        || "${CUDAGRAPH_MODE:-}" != "FULL_AND_PIECEWISE" \
+        || "${FR13_TREE_GDN_GEOM_OVERRIDE:-}" != "BV=8" \
+        || "${FR13_RING_EXPORT:-1}" != "1" \
+        || "${FR13_FLAGS_INKERNEL:-1}" != "1" \
+        || "${FR13_FIXED32_GDN_LEVEL0_COEFF:-0}" != "0" \
+        || "$_fr13_batch_gdn_diagnostic_count" != "0" \
+        || "$_fr13_batch_gdn_production" != "0" \
+        || -n "$_fr13_batch_gdn_bv_candidate" \
+        || -n "$_fr13_batch_gdn_bv_production" \
+        || -n "$_fr13_gdn_path_bv_candidate" \
+        || -n "$_fr13_gdn_path_bv_production" \
+        || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" != "0" \
+        || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" != "0" \
+        || "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" != "0" \
+        || "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" != "0" \
+        || "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" != "0" \
+        || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" != "0" \
+        || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" != "0" \
+        || "${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}" != "0" \
+        || "${FR13_FA2_QROW16_PRODUCTION:-0}" != "0" \
+        || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" != "0" \
+        || "${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}" != "0" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" \
+        || "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" != "0" ]]; then
+    echo "GDN level-0 coefficient byte gate requires the exclusive B1 FULL-graph stock-serving route" >&2
+    exit 2
+  fi
+fi
+if [[ "$_fr13_gdn_level0_coeff_production" == "1" ]]; then
+  if [[ "${FR13_TREE_GDN_GEOM_OVERRIDE:-}" != "BV=8" \
+        || "$_fr13_gdn_level0_coeff_byte_ab" != "0" \
+        || "$_fr13_batch_gdn_diagnostic_count" != "0" \
+        || -n "$_fr13_batch_gdn_bv_candidate" \
+        || -n "$_fr13_gdn_path_bv_candidate" \
+        || -n "$_fr13_gdn_path_bv_production" \
+        || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" != "0" \
+        || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" != "0" \
+        || "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" != "0" \
+        || "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" != "0" \
+        || "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" != "0" \
+        || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" != "0" \
+        || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" != "0" \
+        || "${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}" != "0" \
+        || "${FR13_FA2_QROW16_PRODUCTION:-0}" != "0" \
+        || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" != "0" \
+        || "${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}" != "0" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" \
+        || "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" != "0" ]]; then
+    echo "GDN level-0 coefficient production requires the exclusive BV8 fixed32 kernel route" >&2
+    exit 2
+  fi
 fi
 if [[ -n "$_fr13_batch_gdn_bv_candidate" ]] \
     && (( _fr13_batch_gdn_diagnostic_count != 1 )); then
@@ -2453,6 +2580,12 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_GDN_PATH_BV_PRODUCTION="${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}" \
   -e FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS_PATH=/logs/fr13_fixed32_gdn_path_bv.production_pass.json \
   -e FR13_FIXED32_GDN_PATH_BV_LIVE_JSON=/logs/fr13_fixed32_gdn_path_bv.live_pass.json \
+  -e FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB="$_fr13_gdn_level0_coeff_byte_ab" \
+  -e FR13_FIXED32_GDN_LEVEL0_COEFF="$_fr13_gdn_level0_coeff_production" \
+  -e FR13_FIXED32_GDN_LEVEL0_COEFF_REAL_EVENT_PATH=/logs/fr13_fixed32_gdn_level0_coeff.real_event.arm \
+  -e FR13_FIXED32_GDN_LEVEL0_COEFF_LIVE_JSON=/logs/fr13_fixed32_gdn_level0_coeff.live_pass.json \
+  -e FR13_FIXED32_GDN_LEVEL0_COEFF_PRODUCTION_PASS_PATH=/logs/fr13_fixed32_gdn_level0_coeff.production_pass.json \
+  -e FR13_FIXED32_GDN_LEVEL0_COEFF_PRODUCTION_ENGAGEMENT_PATH=/logs/fr13_fixed32_gdn_level0_coeff.production_engagement.json \
   -e FR13_FIXED32_BATCH_GDN_BV_CANDIDATE="${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
   -e FR13_FIXED32_BATCH_GDN_BV_PRODUCTION="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" \
   -e FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH="${FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH:-}" \

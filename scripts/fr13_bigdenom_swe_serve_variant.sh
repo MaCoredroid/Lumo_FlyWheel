@@ -118,6 +118,7 @@ FIXED32_BOUNDARY_SNAPSHOT_PATH="$ARMDIR_ABS/logs/fr13_fixed32_boundary_snapshot"
 FIXED32_TAW_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_fixed32_taw_native_precompute.real_event.arm"
 FIXED32_BM8_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_dfwd_unified_bm8.real_event.arm"
 FIXED32_CUTLASS_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_fixed32_cutlass_streamk.real_event.arm"
+FIXED32_GDN_COEFF_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_fixed32_gdn_level0_coeff.real_event.arm"
 FIXED32_INGRESS_SECRET_FILE=""
 FR13_FIXED32_INGRESS_TASK_IDS=""
 
@@ -2314,6 +2315,11 @@ if [[ -n "$FIXED32_MODE" ]]; then
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" ]]; then
     FIXED32_RUNNER_ARGS+=(
       --fixed32-cutlass-real-event-arm "$FIXED32_CUTLASS_REAL_EVENT_ARM_PATH"
+    )
+  fi
+  if [[ "${FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB:-0}" == "1" ]]; then
+    FIXED32_RUNNER_ARGS+=(
+      --fixed32-gdn-coeff-real-event-arm "$FIXED32_GDN_COEFF_REAL_EVENT_ARM_PATH"
     )
   fi
 fi
