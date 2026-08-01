@@ -466,6 +466,10 @@ def test_b1_full_vocab_runner_is_reference_returning_and_nonacceptance() -> None
     assert "reference_returned=true" in runner
     assert "physical_rows_per_request=32" in runner
     assert "gdn_level_path_programs=1,11" in runner
+    assert 'process_identity_path = arm_dir / "fixed32_process_identity.json"' in runner
+    assert 'pid1_argv.count("--max-num-seqs") != 1' in runner
+    assert 'pid1_argv[max_num_seqs_index + 1] != "1"' in runner
+    assert '"MAX_NUM_SEQS=1",' not in runner
     assert "PROBE_ONLY" not in runner
     assert "ACCEPT_SPEED_PROBE" not in runner
 

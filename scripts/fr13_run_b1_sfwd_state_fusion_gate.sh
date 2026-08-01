@@ -108,6 +108,7 @@ pass_path = logs / "fr13_fixed32_sfwd_state_fusion.live_pass.json"
 marker_path = logs / "fr13_fixed32_sfwd_state_fusion.real_event.arm"
 diagnostic_path = arm_dir / "fixed32_b1_diagnostic.json"
 container_env_path = arm_dir / "container_env.txt"
+process_identity_path = arm_dir / "fixed32_process_identity.json"
 engine_ledger_path = logs / "fr13_fixed32_engine_ingress.jsonl"
 terminal_path = arm_dir / "fixed32_final_flush_skipped.json"
 traffic_path = arm_dir / "fixed32_chat_traffic_audit_skipped.json"
@@ -126,15 +127,25 @@ def regular(path: Path, *, nonempty: bool = True) -> bytes:
 
 records_raw = regular(records_path)
 pass_raw = regular(pass_path)
+marker_info = os.lstat(marker_path)
+if (
+    not stat.S_ISREG(marker_info.st_mode)
+    or stat.S_ISLNK(marker_info.st_mode)
+    or marker_info.st_nlink != 1
+    or stat.S_IMODE(marker_info.st_mode) != 0o444
+):
+    raise SystemExit("authenticated real-event marker metadata mismatch")
 marker_raw = regular(marker_path)
 diagnostic_raw = regular(diagnostic_path)
 container_env_raw = regular(container_env_path)
+process_identity_raw = regular(process_identity_path)
 engine_ledger_raw = regular(engine_ledger_path)
 terminal_raw = regular(terminal_path)
 traffic_raw = regular(traffic_path)
 records = [json.loads(line) for line in records_raw.decode("ascii").splitlines()]
 live_pass = json.loads(pass_raw.decode("ascii"))
 diagnostic = json.loads(diagnostic_raw.decode("ascii"))
+process_identity = json.loads(process_identity_raw.decode("ascii"))
 terminal = json.loads(terminal_raw.decode("ascii"))
 traffic = json.loads(traffic_raw.decode("ascii"))
 marker = f"swe_verified:{task_id}"
@@ -248,10 +259,25 @@ for expected in (
     "FR13_TREE_CONV_FUSED=1",
     "FR13_FIXED32_CUTLASS_WAVE=stock",
     "ENFORCE_EAGER=1",
-    "MAX_NUM_SEQS=1",
 ):
     if container_env.count(expected) != 1:
         errors.append(f"container environment mismatch: {expected}")
+
+pid1 = process_identity.get("pid1")
+pid1_argv = pid1.get("argv") if isinstance(pid1, dict) else None
+if (
+    not isinstance(pid1_argv, list)
+    or not all(isinstance(argument, str) for argument in pid1_argv)
+    or pid1_argv.count("--max-num-seqs") != 1
+):
+    errors.append("captured PID 1 argv has invalid --max-num-seqs cardinality")
+else:
+    max_num_seqs_index = pid1_argv.index("--max-num-seqs")
+    if (
+        max_num_seqs_index + 1 >= len(pid1_argv)
+        or pid1_argv[max_num_seqs_index + 1] != "1"
+    ):
+        errors.append("captured PID 1 argv did not use --max-num-seqs 1")
 
 payload = {
     "schema": "fr13.fixed32.sfwd_state_fusion.b1_gate.v1",
@@ -291,6 +317,7 @@ payload = {
     "terminal_skip_sha256": hashlib.sha256(terminal_raw).hexdigest(),
     "traffic_skip_sha256": hashlib.sha256(traffic_raw).hexdigest(),
     "container_env_sha256": hashlib.sha256(container_env_raw).hexdigest(),
+    "process_identity_sha256": hashlib.sha256(process_identity_raw).hexdigest(),
     "errors": errors,
 }
 output_path.write_text(
