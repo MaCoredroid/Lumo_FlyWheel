@@ -1,12 +1,13 @@
 {
-  "schema": "fr13.fixed32.tail23_all_parent_integration.v1",
+  "schema": "fr13.fixed32.tail23_all_parent_integration.v2",
   "status": "source_static_only_live_b1_b4_gate_pending",
-  "head_commit": "5131273d0eadee290a83aebf93446a5efd06ea85",
+  "head_commit": "c2f791961fe76a69d4a91c80ebc9ae1666c50618",
   "branch": "agent/fixed32-node32-nonscaling-0f2",
   "commits": {
     "tail23_rescue": "db93e1969",
     "all_parent_commit": "72e87b6dc",
-    "uniform_schedule_binding": "5131273d0"
+    "uniform_schedule_binding": "5131273d0",
+    "exact_qualification_binding": "c2f791961"
   },
   "logical_topology": {
     "tail_mode_name": "tail6_fixed32",
@@ -49,8 +50,17 @@
   "all_parent_candidate": {
     "name": "fixed32_all_parent_commit_v2",
     "default_enabled": false,
-    "source_contract_schema": "fr13-fixed32-taw-all-parent-v4",
-    "source_contract_sha256": "51541928c3a758fdac34a70fe46b97753ffc1b6e9f3e5fe470c4b34a96515dc4",
+    "source_contract_schema": "fr13-fixed32-taw-all-parent-v5",
+    "source_contract_sha256": "4ab3d740c7ebe20fbddefd4f9cbb735f3c58e1b8907376d83ce9f39c24f2ae7e",
+    "live_pass_schema": "fr13.fixed32.taw_native_precompute.live_pass.v2",
+    "topology_sha256": "99b1255b1c1ffeda8bbbd7800e777cfa7184f48c1f13494537a01bc70bc9bf79",
+    "tail_valid_mask_bound": "0x7a9ce7ff",
+    "all_mode_valid_masks_bound": true,
+    "physical_topology_digests_bound": true,
+    "source_row_identities_bound": true,
+    "uniform_levels_bound": true,
+    "qualified_batches_per_replay": 1,
+    "b4_replay_qualifies_b1": false,
     "self_rows_per_request": 13,
     "target_rows_per_request": 17,
     "full_vocab_softmax_calls": 2,
@@ -60,17 +70,19 @@
     "floating_sampling_reimplementation": false
   },
   "source_sha256": {
-    "scripts/fr13_fixed32_topology.py": "a5e7d615656b2f433f799cb9a1fe7e1e431816b9c14960ffe13795a6266d1634",
-    "scripts/fr13_device_multidraft_kernel.py": "8402e027b6dea8d902f86810b9e5a0fa0a01dda61e74b0f517987d2cf4c95f9a",
-    "scripts/fr13_fixed32_work_census.py": "97c14a33a3c475f170b6f80e003c59afecce523a200878fe72b6337f74363cba",
-    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "3d61e8242ec1fd6496154b16fcb91a52aa382d324b873f7d65f7bd0f9a3c5ea1"
+    "scripts/fr13_fixed32_topology.py": "146bdeace494f79cf15ef4fe54ee6c71d38cf086b5f2acfbf5149b46d102e311",
+    "scripts/fr13_device_multidraft_kernel.py": "6148f6790041cbb655d27125335530e4baa19491bb2ef535433f2046607d591b",
+    "scripts/fr13_fixed32_work_census.py": "ac2bc2606bd6d14d9efce500a5dbaf000ac4e9dffc6601e91129238fc5311f0e",
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "3d61e8242ec1fd6496154b16fcb91a52aa382d324b873f7d65f7bd0f9a3c5ea1",
+    "scripts/fr13_depth_acceptance.py": "e21220f7f340f93522168a6d9aebd735bc9a306baaa98f93ef5a80b25f203c07"
   },
   "verification": {
     "fixed32_semantics": "7 passed",
-    "all_parent_focused": "34 passed, 1 skipped (CUDA unavailable)",
-    "geometry_ledger_floor_pretask": "29 passed",
-    "mask_ownership_selection": "4 passed",
-    "final_preseed": "54 passed",
+    "all_parent_focused": "43 passed, 1 skipped (CUDA unavailable)",
+    "fixed_work_preseed_ownership": "109 passed, 8 deselected",
+    "work_census_self_test": "PASS, 162 tamper tests",
+    "tail23_depth_contract": "passed",
+    "depth_full_self_test": "blocked by pre-existing synthetic runner_metadata fixture gap after Tail23 checks",
     "python_compile": "passed",
     "git_diff_check": "passed"
   },

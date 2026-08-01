@@ -19,6 +19,12 @@ union of 13 self rows and 17 target-parent rows, uses two full-vocabulary
 softmax calls, and performs one integer-only exact commit launch per request.
 The candidate is default off and requires a new live byte-equivalence gate.
 
+The production gate is now fail-closed to this exact Tail23 source. PASS v2
+records bind both valid masks, the physical topology digest, the 13/17 source
+row identities, target parent slots, and both uniform-level schedules. A
+pre-Tail23 PASS is rejected. Each real replay qualifies only its exact batch;
+a B4 replay cannot qualify B1.
+
 ## Non-scaling contract
 
 Changing the logical validity mask between Tail23 and Hydra27 does not change
@@ -41,17 +47,18 @@ scale with the logical active count while the fixed32 route is selected.
 ## Static verification
 
 - Fixed32 semantics: 7 tests passed across both modes.
-- All-parent focused suite: 34 passed, 1 CUDA test skipped on this CPU-only
+- All-parent focused suite: 43 passed, 1 CUDA test skipped on this CPU-only
   host.
-- Geometry, work-census ledger, floor propagation, and pretask metrics: 29
-  passed.
-- Mask ownership selection: 4 passed.
-- Final preseed suite: 54 passed.
+- Fixed-work, preseed, and ownership selection: 109 passed, 8 environment-only
+  tests deselected.
+- Work-census self-test: passed all 162 tamper cases.
+- Tail23 depth contract and fixed report schema: passed directly.
 - Python compilation and `git diff --check`: passed.
 
-The full ownership/preseed collection additionally reached 80 passing tests;
-8 CUDA/Triton collection cases cannot run because this host has no Triton
-installation. Those are environment skips, not real-task qualification.
+The full depth reducer self-test proceeds through the Tail23 checks, then hits
+an older synthetic floor-gate fixture that does not create the now-required
+`runner_metadata.json`. This is a fixture-provenance gap, not a kernel or
+Tail23 contract failure; the real-task gate remains fail-closed.
 
 ## Required live gates
 
@@ -59,8 +66,10 @@ No container, GPU, real SWE-Verified task, timing, TPS, acceptance, or hardware
 floor measurement was run for this integration artifact. The next gates are:
 
 1. Real SWE-Verified exact4 B1 reference-returning byte diagnostic for the
-   all-parent candidate and Tail23 acceptance diagnostic.
-2. Real SWE-Verified exact4 B4 byte-equivalence gate.
+   all-parent candidate and Tail23 acceptance diagnostic, producing a PASS v2
+   record whose `covered_batches` is exactly `[1]`.
+2. Real SWE-Verified exact4 B4 byte-equivalence gate producing a distinct PASS
+   v2 record whose `covered_batches` is exactly `[4]`.
 3. Source-bound production timing on the standing exact4 and exact16 task sets,
    reporting full-wall TPS and full-step GPU-component TPS for both B1 and B4.
 4. Nsight confirmation of the expected 24-to-2 softmax and 12-to-1 exact
