@@ -101,7 +101,7 @@ def test_launchers_fail_closed_around_the_integrated_stack() -> None:
     ):
         assert required in gdn
     assert "SFWD production requires exact K64 B1 eager fixed32" in launcher
-    assert "SFWD production permits only the qualified qrow16 co-candidate" in launcher
+    assert "SFWD production permits qrow16 and source-gated TAW production only" in launcher
     assert "SFWD production requires sequential real-task B1" in serve
     assert "_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC = False" in gdn
     assert "fixed32_sfwd_state_fusion_production_engagement(" in gdn

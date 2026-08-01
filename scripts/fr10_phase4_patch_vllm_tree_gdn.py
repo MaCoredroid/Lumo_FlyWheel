@@ -5992,7 +5992,6 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB": "0",
             "FR13_FIXED32_BATCH_GDN_PRODUCTION": "0",
             "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE": "0",
-            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION": "0",
             "FR13_DFWD_UNIFIED_BM8_LIVE_AB": "0",
             "FR13_DFWD_UNIFIED_BM8_PRODUCTION": "0",
             "FR13_DRAFT_HEAD_M32_LIVE_AB": "0",
@@ -6003,9 +6002,13 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             for name, expected in exact_runtime.items()
             if os.environ.get(name, "") != expected
         }
+        taw_production = os.environ.get(
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION", "0"
+        )
         if (
             mode not in _FR13_FIXED32_MODES
             or sfwd_b4_byte_diagnostic != "0"
+            or taw_production not in ("0", "1")
             or bool(candidate)
             or bool(production)
             or bool(
