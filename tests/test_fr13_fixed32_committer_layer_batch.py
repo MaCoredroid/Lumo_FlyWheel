@@ -1,5 +1,6 @@
 import ast
 import os
+import stat
 import sys
 from pathlib import Path
 
@@ -138,6 +139,7 @@ def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> No
     assert "reference_graph = capture_graph(use_layer_batch=False)" in preseed
     assert "graph = capture_graph(use_layer_batch=True)" in preseed
     assert '"layer_batch_byte_gate_passed": not layer_batch' in preseed
+    assert '"layer_batch_byte_gate_coverage_mask": (' in preseed
     assert '"fused_calls": 48' in preseed
     assert '"fused_calls": 1' in preseed
     assert '"state_only_output_elided": True' in preseed
@@ -145,22 +147,164 @@ def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> No
     assert '"final_state_store_once": True' in preseed
 
 
-def test_byte_gate_requires_real_nonzero_path_and_exact_state_bytes() -> None:
+def test_accepted_length_mask_covers_zero_through_fifteen() -> None:
+    node = _function("_fr13_fixed32_committer_accepted_length_mask")
+    namespace: dict[str, object] = {}
+    exec(
+        compile(ast.Module(body=[node], type_ignores=[]), str(KERNEL_PATH), "exec"),
+        namespace,
+    )
+    length_mask = namespace[node.name]
+
+    assert length_mask((0,), batch=1) == 0x0001
+    assert length_mask((15,), batch=1) == 0x8000
+    assert length_mask((0, 7, 15, 7), batch=4) == 0x8081
+    with pytest.raises(RuntimeError, match="qualification input drift"):
+        length_mask((0,), batch=4)
+    with pytest.raises(RuntimeError, match="qualification input drift"):
+        length_mask((16,), batch=1)
+
+
+def test_real_event_arm_requires_private_authenticated_swe_file(tmp_path: Path) -> None:
+    node = _function("_fr13_fixed32_committer_layer_batch_real_event_marker")
+    namespace = {
+        "os": os,
+        "stat": stat,
+        "_FR13_FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT": str(
+            tmp_path / "default.arm"
+        ),
+        "_FR13_FIXED32_COMMITTER_TASK_ID_CHARACTERS": frozenset(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+        ),
+    }
+    exec(
+        compile(ast.Module(body=[node], type_ignores=[]), str(KERNEL_PATH), "exec"),
+        namespace,
+    )
+    marker = namespace[node.name]
+    path = tmp_path / "qualification.arm"
+
+    assert marker(str(path)) is None
+    path.write_text("swe_verified:astropy__astropy-12907\n", encoding="ascii")
+    path.chmod(0o400)
+    assert marker(str(path)) == "swe_verified:astropy__astropy-12907"
+    path.chmod(0o600)
+    with pytest.raises(RuntimeError, match="private read-only regular file"):
+        marker(str(path))
+
+
+def test_byte_gate_covers_only_authenticated_real_event_depths() -> None:
     gate = _text("_fr13_fixed32_committer_layer_batch_byte_gate")
     replay = _text("_fr13_fixed32_committer_replay")
+    bit_compare = _text("_fr13_fixed32_tensor_bits_equal")
 
-    powered = 'if not bool((state["accepted_lens"] > 0).any().item()):'
+    authenticated = (
+        "if _fr13_fixed32_committer_layer_batch_real_event_marker() is None:"
+    )
+    length_mask = "_fr13_fixed32_committer_accepted_length_mask("
     reference = "reference_graph.replay()"
     candidate = "candidate_graph.replay()"
     compare = "_fr13_fixed32_tensor_bits_equal("
-    assert powered in gate
-    assert gate.index(powered) < gate.index(reference) < gate.index(candidate)
+    assert authenticated in gate
+    assert gate.index(authenticated) < gate.index(length_mask)
+    assert gate.index(length_mask) < gate.index(reference) < gate.index(candidate)
     assert compare in gate
+    assert "torch.equal(" in bit_compare
+    assert bit_compare.count(".view(torch.uint8)") == 2
+    assert 'coverage_mask |= event_mask' in gate
+    assert 'state["layer_batch_byte_gate_coverage_mask"] = coverage_mask' in gate
+    assert "coverage_mask == full_mask" in gate
+    assert gate.rstrip().endswith("return False")
     assert "finally:\n        restore()" in gate
     assert "graph = state[\"reference_graph\"]" in replay
     assert replay.index("_fr13_fixed32_committer_layer_batch_byte_gate(") < replay.index(
         "graph.replay()"
     )
+
+
+def test_byte_gate_serves_reference_once_then_allows_covered_depth() -> None:
+    nodes = [
+        _function("_fr13_fixed32_committer_accepted_length_mask"),
+        _function("_fr13_fixed32_committer_layer_batch_byte_gate"),
+    ]
+    replay_order: list[str] = []
+
+    class _Rows:
+        def clone(self):
+            return self
+
+    class _Bank:
+        def index_select(self, _dimension, _rows):
+            return _Rows()
+
+        def index_copy_(self, _dimension, _rows, _saved):
+            return None
+
+    class _Graph:
+        def __init__(self, label: str) -> None:
+            self.label = label
+
+        def replay(self) -> None:
+            replay_order.append(self.label)
+
+    class _Lens:
+        device = "cuda:0"
+
+        def __init__(self, values: list[int]) -> None:
+            self.values = values
+
+        def tolist(self) -> list[int]:
+            return list(self.values)
+
+    class _Cuda:
+        @staticmethod
+        def synchronize(_device) -> None:
+            return None
+
+    namespace = {
+        "_FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK": 0xFFFF,
+        "_fr13_fixed32_committer_layer_batch_real_event_marker": (
+            lambda: "swe_verified:astropy__astropy-12907"
+        ),
+        "_fr13_fixed32_validate_running_rows": (
+            lambda **_kwargs: [object() for _ in range(48)]
+        ),
+        "_fr13_fixed32_tensor_bits_equal": lambda _left, _right: True,
+        "torch": type("_Torch", (), {"cuda": _Cuda}),
+    }
+    exec(
+        compile(ast.Module(body=nodes, type_ignores=[]), str(KERNEL_PATH), "exec"),
+        namespace,
+    )
+    gate = namespace["_fr13_fixed32_committer_layer_batch_byte_gate"]
+    state = {
+        "batch": 1,
+        "bank_rows": 8,
+        "layer_batch": True,
+        "layer_batch_byte_gate_passed": False,
+        "layer_batch_byte_gate_attempts": 0,
+        "layer_batch_byte_gate_coverage_mask": 0,
+        "accepted_lens": _Lens([0]),
+        "reference_graph": _Graph("reference"),
+        "graph": _Graph("candidate"),
+    }
+    banks = [_Bank() for _ in range(48)]
+
+    assert gate(state=state, banks_list=banks, spec_state_indices=object()) is False
+    assert replay_order == ["reference", "candidate"]
+    assert state["layer_batch_byte_gate_coverage_mask"] == 0x0001
+    assert state["layer_batch_byte_gate_attempts"] == 1
+    assert state["layer_batch_byte_gate_passed"] is False
+
+    assert gate(state=state, banks_list=banks, spec_state_indices=object()) is True
+    assert replay_order == ["reference", "candidate"]
+    assert state["layer_batch_byte_gate_attempts"] == 1
+
+    state["layer_batch_byte_gate_coverage_mask"] = 0x7FFF
+    state["accepted_lens"].values = [15]
+    assert gate(state=state, banks_list=banks, spec_state_indices=object()) is False
+    assert state["layer_batch_byte_gate_coverage_mask"] == 0xFFFF
+    assert state["layer_batch_byte_gate_passed"] is True
 
 
 def test_counters_expose_per_batch_gate_state_for_timing_boundaries() -> None:
@@ -169,8 +313,10 @@ def test_counters_expose_per_batch_gate_state_for_timing_boundaries() -> None:
     assert 'fast_route.get("states_by_batch", {})' in counters
     assert '"layer_batch_gate_passed_by_batch"' in counters
     assert '"layer_batch_gate_attempts_by_batch"' in counters
+    assert '"layer_batch_gate_coverage_mask_by_batch"' in counters
     assert 'state.get("layer_batch_byte_gate_passed", False)' in counters
     assert 'state.get("layer_batch_byte_gate_attempts", -1)' in counters
+    assert 'state.get("layer_batch_byte_gate_coverage_mask", -1)' in counters
 
 
 def test_layer_programs_have_disjoint_layer_state_and_shared_read_only_paths() -> None:
@@ -183,6 +329,23 @@ def test_layer_programs_have_disjoint_layer_state_and_shared_read_only_paths() -
     assert "i_l * V_L_STRIDE" in kernel
     assert "accepted_paths" not in kernel
     assert "accepted_lens" in kernel
+
+
+def test_candidate_binds_physical_alias_row_uniqueness_guard() -> None:
+    preseed = _text("preseed_fixed32_committer_graph")
+    guard = _text("validate_fixed32_conv_commit_rows")
+    conv_commit = _text("launch_fixed32_conv_commit_to_col0")
+
+    assert '"physical_alias_row_uniqueness_guard": (' in preseed
+    assert '"validate_fixed32_conv_commit_rows"' in preseed
+    assert "bank_alias_ids.view(48, 1) * bank_rows + running_rows" in guard
+    assert "distinct_destinations" in guard
+    assert conv_commit.index("validate_fixed32_conv_commit_rows(") < conv_commit.index(
+        "_fr13_fixed32_conv_direct_col0_kernel[grid]("
+    )
+    assert "disjoint physical ``(alias, row)`` destinations" in _text(
+        "_fr13_fixed32_committer_native_layer_batch_kernel"
+    )
 
 
 def test_launcher_materializes_worker_visible_arm_only_when_requested() -> None:
@@ -204,6 +367,11 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
     assert 'committer_contract.get("active_length_recurrence") is not True' in patcher
     assert 'committer_contract.get("final_state_store_once") is not True' in patcher
     assert 'committer_contract.get("direct_masked_gather_writes") is not True' in patcher
+    assert '"physical_alias_row_uniqueness_guard"' in patcher
+    assert '!= "validate_fixed32_conv_commit_rows"' in patcher
+    assert '!= "real_swe_all_accepted_lengths_0_15"' in patcher
+    assert '!= "torch_equal_uint8"' in patcher
+    assert '!= "shadow_then_reference"' in patcher
     assert "expected_neutralizations = 0 if layer_batch is True else 5" in patcher
     assert '"layers": int(layer_count)' in patcher
     assert "ring_gathers * int(layer_count) * path_cap * batch" in patcher

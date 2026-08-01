@@ -13,6 +13,13 @@ import triton.language as tl
 
 
 _FR13_COMMITTER_NATIVE_ANNOUNCED = False
+_FR13_FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT = (
+    "/logs/fr13_fixed32_committer_layer_batch.real_event.arm"
+)
+_FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK = (1 << 16) - 1
+_FR13_FIXED32_COMMITTER_TASK_ID_CHARACTERS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+)
 
 
 def _fr13_fixed32_committer_layer_batch_requested() -> bool:
@@ -31,6 +38,74 @@ def _fr13_fixed32_committer_layer_batch_requested() -> bool:
             "/tmp/fr13_fixed32_committer_layer_batch.arm",
         )
     )
+
+
+def _fr13_fixed32_committer_layer_batch_real_event_marker(
+    path: str = _FR13_FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT,
+) -> str | None:
+    """Read the active authenticated SWE-Verified qualification arm."""
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        raise RuntimeError(
+            "FR13 fixed32 committer cannot open its real-event arm"
+        ) from error
+    try:
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o400
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 committer real-event arm must be a private "
+                "read-only regular file"
+            )
+        with os.fdopen(descriptor, encoding="ascii", closefd=False) as handle:
+            marker = handle.read(257)
+    except (OSError, UnicodeError) as error:
+        raise RuntimeError(
+            "FR13 fixed32 committer cannot read its real-event arm"
+        ) from error
+    finally:
+        os.close(descriptor)
+    if len(marker) > 256:
+        raise RuntimeError(
+            "FR13 fixed32 committer real-event arm exceeds 256 bytes"
+        )
+    marker = marker.strip()
+    prefix = "swe_verified:"
+    task_id = marker[len(prefix):] if marker.startswith(prefix) else ""
+    if not task_id or any(
+        character not in _FR13_FIXED32_COMMITTER_TASK_ID_CHARACTERS
+        for character in task_id
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 committer real-event arm must be "
+            "swe_verified:<task_id>"
+        )
+    return marker
+
+
+def _fr13_fixed32_committer_accepted_length_mask(
+    accepted_lengths, *, batch: int,
+) -> int:
+    """Encode one B-row event's accepted draft lengths as a 16-bit mask."""
+    lengths = tuple(int(value) for value in accepted_lengths)
+    if len(lengths) != batch or any(
+        length < 0 or length > 15 for length in lengths
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 committer accepted-length qualification input drift"
+        )
+    mask = 0
+    for length in lengths:
+        mask |= 1 << length
+    return mask
 
 
 def _fr13_committer_native_on() -> bool:
@@ -9089,6 +9164,10 @@ def fixed32_committer_counters() -> dict[str, object]:
         int(batch): int(state.get("layer_batch_byte_gate_attempts", -1))
         for batch, state in states_by_batch.items()
     }
+    layer_batch_gate_coverage_mask_by_batch = {
+        int(batch): int(state.get("layer_batch_byte_gate_coverage_mask", -1))
+        for batch, state in states_by_batch.items()
+    }
     fast_route_ready = (
         fast_route is not None
         and fast_route["mode"] == _FR13_FIXED32_MODE
@@ -9107,6 +9186,9 @@ def fixed32_committer_counters() -> dict[str, object]:
         ),
         "layer_batch_gate_attempts_by_batch": (
             layer_batch_gate_attempts_by_batch
+        ),
+        "layer_batch_gate_coverage_mask_by_batch": (
+            layer_batch_gate_coverage_mask_by_batch
         ),
         "preseeded_graphs": len(_FR13_FIXED32_COMMITTER),
         "preseeded_batches": preseeded_batches,
@@ -9640,7 +9722,7 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     accepted drafts. The fixed suffix is fully neutral, so it is omitted. The
     caller discards the operator output, so this commit-only realization also
     omits the independent q projection and output store. Layers share read-only
-    path metadata and write disjoint recurrent-state banks.
+    path metadata and write disjoint physical ``(alias, row)`` destinations.
     """
     i_k = tl.program_id(0)
     i_v = tl.program_id(1)
@@ -10138,6 +10220,11 @@ def preseed_fixed32_committer_graph(
         "layer_batch": layer_batch,
         "layer_batch_byte_gate_passed": not layer_batch,
         "layer_batch_byte_gate_attempts": 0,
+        "layer_batch_byte_gate_coverage_mask": (
+            0
+            if layer_batch
+            else _FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+        ),
         "reference_graph": None,
         "graph": None,
         "preseed_capacity": 0,
@@ -10163,7 +10250,15 @@ def preseed_fixed32_committer_graph(
                 "active_length_recurrence": True,
                 "final_state_store_once": True,
                 "direct_masked_gather_writes": True,
-                "byte_gate": "required_on_first_real_nonzero_accept",
+                "physical_alias_row_uniqueness_guard": (
+                    "validate_fixed32_conv_commit_rows"
+                ),
+                "byte_gate": "real_swe_all_accepted_lengths_0_15",
+                "byte_gate_raw_compare": "torch_equal_uint8",
+                "unseen_length_route": "shadow_then_reference",
+                "accepted_length_full_mask": (
+                    _FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+                ),
             }
         )
 
@@ -10234,19 +10329,35 @@ def preseed_fixed32_committer_graph(
 def _fr13_fixed32_committer_layer_batch_byte_gate(
     *, state, banks_list, spec_state_indices,
 ) -> bool:
-    """Gate the candidate against the native graph on one real accepted path.
+    """Qualify accepted depths using authenticated, unmeasured real events.
 
-    Zero-accept boot warmups are intentionally unpowered and keep using the
-    reference graph.  On the first event with an accepted draft, both captured
-    graphs run from identical state and inputs.  Every touched fp32 state byte,
-    including signed zero, must match before the candidate may serve.
+    Each previously unseen accepted length shadows the native and candidate
+    graphs from identical state. Every touched fp32 state byte, including signed
+    zero and NaN payloads, must match. The qualifying event is always served by
+    the native graph; the candidate can serve only depths covered earlier.
     """
     if not state.get("layer_batch", False):
         return True
-    if state.get("layer_batch_byte_gate_passed", False):
+    full_mask = _FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+    coverage_mask = int(
+        state.get("layer_batch_byte_gate_coverage_mask", -1)
+    )
+    if not 0 <= coverage_mask <= full_mask:
+        raise RuntimeError(
+            "FR13 fixed32 committer layer-batch coverage mask is invalid"
+        )
+    if coverage_mask == full_mask:
+        state["layer_batch_byte_gate_passed"] = True
         return True
-    if not bool((state["accepted_lens"] > 0).any().item()):
+    if _fr13_fixed32_committer_layer_batch_real_event_marker() is None:
         return False
+    event_mask = _fr13_fixed32_committer_accepted_length_mask(
+        state["accepted_lens"].tolist(),
+        batch=int(state["batch"]),
+    )
+    unseen_mask = event_mask & ~coverage_mask
+    if unseen_mask == 0:
+        return True
     reference_graph = state.get("reference_graph")
     candidate_graph = state.get("graph")
     if reference_graph is None or candidate_graph is None:
@@ -10294,17 +10405,21 @@ def _fr13_fixed32_committer_layer_batch_byte_gate(
                 "FR13 fixed32 committer layer-batch byte gate failed: "
                 f"B={batch} mismatched_layers={mismatched_layers}"
             )
-        state["layer_batch_byte_gate_passed"] = True
+        coverage_mask |= event_mask
+        state["layer_batch_byte_gate_coverage_mask"] = coverage_mask
+        state["layer_batch_byte_gate_passed"] = coverage_mask == full_mask
     finally:
         restore()
         torch.cuda.synchronize(state["accepted_lens"].device)
 
     print(
-        "[FR13_FIXED32_COMMITTER_LAYER_BATCH BYTE-GATE PASS] "
-        f"B={batch} layers=48 state_bytes=exact",
+        "[FR13_FIXED32_COMMITTER_LAYER_BATCH BYTE-GATE COVERAGE] "
+        f"B={batch} new_mask={unseen_mask:#06x} "
+        f"coverage={coverage_mask:#06x} complete={int(coverage_mask == full_mask)} "
+        "layers=48 state_bytes=exact reference_served=1",
         flush=True,
     )
-    return True
+    return False
 
 
 def preseed_fixed32_committer_graphs_all_batches(
@@ -10979,9 +11094,8 @@ def _fr13_fixed32_committer_replay(
             spec_state_indices=spec_state_indices,
         )
         if not gate_passed:
-            # Boot warmups carry zero accepted drafts and cannot power a
-            # recurrence A/B.  Keep serving the incumbent graph until a real
-            # nonzero accepted path is available.
+            # Boot/probe traffic cannot power qualification. A real event that
+            # introduces a depth also stays on the incumbent after its shadow.
             graph = state["reference_graph"]
     graph.replay()
 
