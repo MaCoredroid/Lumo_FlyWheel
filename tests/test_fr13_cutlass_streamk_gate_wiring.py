@@ -160,6 +160,11 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "fr13-fixed32-cutlass-streamk-real-task-arm-v1" in gate
     assert '"task_marker": expected_task_marker' in gate
     assert '"real_task_arm_sha256": hashlib.sha256(arm_raw).hexdigest()' in gate
+    assert "verify_fixed32_ingress_ledger" in gate
+    assert "require_finalized=True" in gate
+    assert "fixed32_canonical_task_set_sha256" in gate
+    assert "real-task arm has no matching accepted engine request" in gate
+    assert '"engine_ledger_chain_head_sha256"' in gate
     assert "export FR13_DRAFT_VOCAB_ROOT=0" in gate
     assert "export FR13_DRAFT_VOCAB_K=0" in gate
     assert "export FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'" in gate

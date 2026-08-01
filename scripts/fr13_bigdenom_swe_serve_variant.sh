@@ -1390,6 +1390,16 @@ teardown(){
       echo "FAIL: fixed32 terminal engine-ledger snapshot rc=$ledger_snapshot_rc" >&2
       tail -20 "$ARMDIR/fixed32_engine_ingress_snapshot.log" >&2 || true
       (( rc == 0 )) && rc=16
+    elif [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then
+      printf '%s\n' \
+        '{"acceptance_valid":false,"authenticated_engine_ledger_snapshotted":true,"graph_census_audit_used":false,"reason":"eager_mode_has_no_cuda_graph_census","run_classification":"eager_kernel_byte_diagnostic","schema":"fr13-fixed32-eager-kernel-traffic-audit-skip-v1"}' \
+        > "$ARMDIR/fixed32_chat_traffic_audit_skipped.json" \
+        2> "$ARMDIR/fixed32_chat_traffic_audit.log"
+      audit_rc=$?
+      if (( audit_rc != 0 )); then
+        echo "FAIL: fixed32 eager diagnostic audit marker rc=$audit_rc" >&2
+        (( rc == 0 )) && rc=16
+      fi
     else
       write_fixed32_chat_traffic_audit \
         > "$ARMDIR/fixed32_chat_traffic_audit.log" 2>&1
