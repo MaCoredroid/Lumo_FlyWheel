@@ -148,7 +148,7 @@ _FR13_FIXED32_PARENT = (
     30,
 )
 _FR13_FIXED32_MODES = {
-    "tail6_fixed32": (0x7A9CE73F, 21),
+    "tail6_fixed32": (0x7A9CE7FF, 23),
     "hydra27_fixed32": (0x7ABDFFFF, 27),
 }
 _FR13_FIXED32_MODE = os.environ.get("FR13_FIXED32_MODE", "").strip()
@@ -588,7 +588,7 @@ def _fr13_fixed32_unmeasured_full_row_map_valid(batch_rows, compact_batch):
 def _fr13_fixed32_topology_needle():
     mask = int(_FR13_FIXED32_VALID_MASK)
     expected_masks = {
-        "tail6_fixed32": 0x7A9CE73F,
+        "tail6_fixed32": 0x7A9CE7FF,
         "hydra27_fixed32": 0x7ABDFFFF,
     }
     if expected_masks.get(_FR13_FIXED32_MODE) != mask:
@@ -32300,7 +32300,7 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
             "_FR13_FIXED32_MODE": mode,
             "_FR13_FIXED32_PRESEED_CAP": capacity,
             "_FR13_FIXED32_VALID_MASK": (
-                0x7A9CE73F if mode == "tail6_fixed32" else 0x7ABDFFFF
+                0x7A9CE7FF if mode == "tail6_fixed32" else 0x7ABDFFFF
             ),
             "torch": torch,
         }

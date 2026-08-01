@@ -182,7 +182,7 @@ def _fixed_children(
 
 def _logical_choices(mode: topology.Mode) -> tuple[Path, ...]:
     if mode == "tail6_fixed32":
-        choices = topology.TAIL6_CHOICES
+        choices = topology.TAIL6_FIXED32_CHOICES
     elif mode == "hydra27_fixed32":
         choices = topology.HYDRA27_CHOICES
     else:
@@ -421,7 +421,7 @@ def test_exact_physical_shape() -> None:
 def test_compact_logical_reference_equivalence() -> None:
     draft_tokens, target_rows, self_rows = _fixture()
     expected_active = {
-        "tail6_fixed32": 21,
+        "tail6_fixed32": 23,
         "hydra27_fixed32": 27,
     }
     for mode, expected_count in expected_active.items():
@@ -609,12 +609,22 @@ def test_mask_is_sampler_only_boundary() -> None:
     )
     assert projections["hydra27_fixed32"]["sampled_nodes"] - projections[
         "tail6_fixed32"
-    ]["sampled_nodes"] == {6, 7, 11, 12, 16, 21}
+    ]["sampled_nodes"] == {11, 12, 16, 21}
+    rescue_nodes = tuple(
+        topology.FIXED32_CHOICES.index(path)
+        for path in topology.TAIL6_FIXED32_RESCUE_CHOICES
+    )
+    assert rescue_nodes == (6, 7)
+    assert all(topology.TAIL6_VALID[node] for node in rescue_nodes)
+    assert all(topology.HYDRA27_VALID[node] for node in rescue_nodes)
     signature = topology.FIXED_EXECUTION_SIGNATURE
     assert signature["physical_pack_width"] == 31
     assert signature["target_rows"] == 32
     assert signature["tree_attention_rows"] == 32
     assert signature["gdn_rows"] == 32
+    assert signature["gdn_launches"] == 2
+    assert signature["sampler_walk_iterations"] == 12
+    assert signature["committer_path_capacity"] == 16
 
 
 def test_fail_loud_parent_closure_and_fanout() -> None:
