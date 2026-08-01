@@ -10,6 +10,13 @@ trace-provenance, floor-ledger, Qwen, and timing-math suite:
 Post-capture integration suite on code commit 4d0c57617:
   322 passed, 1 skipped in 4.15s
 
+Post-census integration suite on code commit 9f30d84dc:
+  322 passed, 1 skipped in 4.79s
+
+Strict work-census self-test:
+  PASS, 167 tamper cases
+  normalized signature ecda43b5d25a22911ba7a009f2901cd02ce75f4f871ab16eb2a804f6758d4660
+
 Static checks:
   bash syntax: PASS
   embedded Python compilation: PASS (4 blocks across 2 runners)

@@ -1,0 +1,8 @@
+Source fix verification:
+  work-census self-test: PASS, 167 tamper cases
+  focused K64 profile: 16 passed
+  B4 integration suite: 322 passed, 1 skipped
+  Ruff, Python compilation, Bash parsing, and git diff check: PASS
+
+No synthetic probe, timing arm, TPS measurement, acceptance gate, or formal
+hardware-floor test was run for this reduced abort artifact.

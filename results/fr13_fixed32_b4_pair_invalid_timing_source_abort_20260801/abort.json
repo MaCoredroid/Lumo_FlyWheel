@@ -1,0 +1,62 @@
+{
+  "schema": "fr13.fixed32.b4_pair.invalid_timing_source_abort.v1",
+  "status": "aborted_known_invalid_source",
+  "source_commit": "68336f72ada43aa1e9681329e58dc031d2a69491",
+  "fix_commit": "9f30d84dc68f97bfd871862db829b7048e921847",
+  "campaign_root_name": "fr13_b4_tail23_hydra27_k64_m128_stack_20260801T200823Z",
+  "abort_reason": "The timing reducer treated the mandatory v9 terminal census record as an event and would reject every valid arm.",
+  "operator_interrupted": true,
+  "stages": {
+    "tail23_all_parent_launched": true,
+    "tail23_m128_launched": false,
+    "tail23_timing_launched": false,
+    "hydra27_all_parent_launched": false,
+    "hydra27_m128_launched": false,
+    "hydra27_timing_launched": false
+  },
+  "formal_artifacts": {
+    "all_parent_production_pass": false,
+    "all_parent_byte_verdict": false,
+    "m128_byte_gate": false,
+    "timing_summary": false,
+    "paired_summary": false
+  },
+  "trace_capture": {
+    "all_final_newline": true,
+    "all_postrun_attested": true,
+    "tasks": [
+      {
+        "task_id": "astropy__astropy-12907",
+        "bytes": 45889,
+        "records": 49,
+        "sha256": "ea0e15a69dcdac2534b2c0394fd2c1f65bc520537677702d3945cfaff9282348"
+      },
+      {
+        "task_id": "astropy__astropy-13033",
+        "bytes": 69479,
+        "records": 66,
+        "sha256": "c94338285ef8a20e264d270ea60133d3c35deba588d500a845e0db5e5af589df"
+      },
+      {
+        "task_id": "astropy__astropy-13236",
+        "bytes": 54865,
+        "records": 71,
+        "sha256": "4f5fa995b127fb4e95f72e4f1eef41e8a04143dc5ad09ff926cd725284de1ec7"
+      },
+      {
+        "task_id": "astropy__astropy-13398",
+        "bytes": 101296,
+        "records": 79,
+        "sha256": "e013c2f75725e3a1d9e5727fa87c070e07713270ba3406e789244937f89d4106"
+      }
+    ]
+  },
+  "cleanup": {
+    "docker_empty": true,
+    "gpu_idle": true
+  },
+  "timing_evidence": false,
+  "tps_evidence": false,
+  "acceptance_evidence": false,
+  "hardware_floor_evidence": false
+}

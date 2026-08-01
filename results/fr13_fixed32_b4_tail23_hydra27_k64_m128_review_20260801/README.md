@@ -10,7 +10,7 @@ The original tip `aac82d0b19ffce16a1d69490147c2fa8697be02e` was not safe to
 launch because its B4 phase summary mixed per-event and per-step units. The
 corrected route is on branch
 `agent/fixed32-b4-tail23-hydra27-k64-m128-review` at code commit
-`4d0c57617e6a3675dddf8f76ecbee376b710220e`.
+`9f30d84dc68f97bfd871862db829b7048e921847`.
 
 Launch only the review branch:
 
@@ -67,6 +67,19 @@ and after transfer, and exact local bytes are installed before strict JSONL
 validation. Malformed evidence remains intact and non-fixed32 launch behavior
 is unchanged.
 
+### F4 - High: B4 timing rejected the mandatory terminal census record
+
+The old timing parser treated every v9 work-census record as an event and
+required a TAW route on each one. A valid final flush always appends one
+terminal record without a TAW section, so every otherwise valid timing arm
+would have been rejected.
+
+The timing route now revalidates events and the mandatory terminal from the raw
+census bytes, rederives and exact-compares the persisted arm report, binds raw
+SHA-256 and byte counts, and requires one mode-neutral physical-work signature
+across Tail23/Hydra27 and stock/M128. The invalid launch source was stopped
+before any timing arm and is documented by a reduced abort artifact.
+
 ## Reviewed contracts
 
 - Tail23: `tail6_fixed32`, mask `0x7a9ce7ff`, 23 active draft rows.
@@ -97,10 +110,11 @@ acceptance, and this artifact contains no new performance number.
 - broader provenance, ingress, floor, exact-commit, Qwen, CUTLASS, and
   all-parent suite: `313 passed, 1 skipped`
 - post-capture integration suite: `322 passed, 1 skipped`
+- post-census integration suite: `322 passed, 1 skipped`
 - B4 timing-math regression tests: pass
 - Bash syntax and four embedded Python blocks: pass
 - Ruff, Python byte compilation, and `git diff --check`: pass
-- fixed32 work-census self-test: pass, 162 tamper tests
+- fixed32 work-census self-test: pass, 167 tamper tests
 - depth-acceptance self-test: pass
 - runtime-manifest canonical SHA-256:
   `8996529e514caf31584c0701a8661c0cb4d3fece6666352e0c09d3a85ea40b2c`

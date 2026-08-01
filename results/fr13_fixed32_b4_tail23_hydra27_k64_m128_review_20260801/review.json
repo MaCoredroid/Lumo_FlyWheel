@@ -3,7 +3,7 @@
   "status": "launch_ready_after_fixes",
   "reviewed_tip": "aac82d0b19ffce16a1d69490147c2fa8697be02e",
   "review_branch": "agent/fixed32-b4-tail23-hydra27-k64-m128-review",
-  "code_commit": "4d0c57617e6a3675dddf8f76ecbee376b710220e",
+  "code_commit": "9f30d84dc68f97bfd871862db829b7048e921847",
   "gpu_executed": false,
   "docker_executed": false,
   "swe_verified_tasks_executed": false,
@@ -28,6 +28,12 @@
       "severity": "high",
       "title": "Remote Qwen stdout could be truncated before pipe drain",
       "resolution": "Write Qwen stdout inside the container to a private regular file, attest it before and after exact transfer, then validate JSONL"
+    },
+    {
+      "id": "F4",
+      "severity": "high",
+      "title": "B4 timing rejected the mandatory terminal census record",
+      "resolution": "Strictly rederive event and terminal reports from raw census bytes and require one physical-work signature across both modes and timing arms"
     }
   ],
   "topologies": {
@@ -64,7 +70,10 @@
     "broader_skipped": 1,
     "post_capture_integration_passed": 322,
     "post_capture_integration_skipped": 1,
-    "work_census_tamper_tests_passed": 162,
+    "post_census_integration_passed": 322,
+    "post_census_integration_skipped": 1,
+    "work_census_tamper_tests_passed": 167,
+    "work_census_normalized_signature_sha256": "ecda43b5d25a22911ba7a009f2901cd02ce75f4f871ab16eb2a804f6758d4660",
     "runtime_manifest_sha256": "8996529e514caf31584c0701a8661c0cb4d3fece6666352e0c09d3a85ea40b2c",
     "external_manifest_sha256": "c42fb16d2ea932f0e819c81172c49b69b312b75dd446146b6d7b6ef78af00a9e"
   }
