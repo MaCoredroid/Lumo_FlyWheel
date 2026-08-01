@@ -7055,7 +7055,7 @@ def _patch_gdn_attn() -> bool:
             "            ].copy_(spec_state_indices_tensor, non_blocking=True)\n"
             "            self.fr13_fixed32_spec_state_indices_tensor[\n"
             "                _fr13_fixed32_ssi_batch:\n"
-            "            ].fill_(PAD_SLOT_ID)\n"
+            "            ].fill_(NULL_BLOCK_ID)\n"
             "\n"
             "        # Prepare tensors for cudagraph\n"
         ),

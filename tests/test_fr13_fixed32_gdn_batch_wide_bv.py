@@ -439,7 +439,8 @@ def test_eager_gate_refreshes_a_stable_nonzero_ssi_registration() -> None:
         "].copy_(spec_state_indices_tensor, non_blocking=True)"
         in patcher
     )
-    assert "].fill_(PAD_SLOT_ID)" in patcher
+    assert "].fill_(NULL_BLOCK_ID)" in patcher
+    assert "].fill_(PAD_SLOT_ID)" not in patcher
     assert (
         "max_batch_size=min(4, int(self.decode_cudagraph_max_bs))"
         not in patcher
