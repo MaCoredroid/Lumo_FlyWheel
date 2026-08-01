@@ -1266,7 +1266,7 @@ def _fr13_fixed32_sfwd_state_fusion_exact4_markers(
         if (
             not stat.S_ISREG(info.st_mode)
             or info.st_nlink != 1
-            or stat.S_IMODE(info.st_mode) != 0o400
+            or stat.S_IMODE(info.st_mode) != 0o444
             or info.st_size <= 0
             or info.st_size > 1024
         ):

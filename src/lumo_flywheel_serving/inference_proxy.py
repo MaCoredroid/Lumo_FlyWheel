@@ -1776,7 +1776,7 @@ class Fixed32EngineIngress:
                 path,
                 label="real-event arm",
                 max_bytes=1024,
-                required_mode=0o400,
+                required_mode=0o444,
             )
             if published != self._sfwd_b4_published_marker:
                 raise Fixed32IngressError(
@@ -1794,7 +1794,7 @@ class Fixed32EngineIngress:
             | getattr(os, "O_CLOEXEC", 0)
         )
         try:
-            descriptor = os.open(temporary, flags, 0o400)
+            descriptor = os.open(temporary, flags, 0o444)
             try:
                 view = memoryview(marker)
                 while view:
@@ -1802,7 +1802,7 @@ class Fixed32EngineIngress:
                     if written <= 0:
                         raise OSError("short write")
                     view = view[written:]
-                os.fchmod(descriptor, 0o400)
+                os.fchmod(descriptor, 0o444)
                 os.fsync(descriptor)
             finally:
                 os.close(descriptor)
@@ -1831,7 +1831,7 @@ class Fixed32EngineIngress:
             path,
             label="real-event arm",
             max_bytes=1024,
-            required_mode=0o400,
+            required_mode=0o444,
         )
         if published != marker:
             raise Fixed32IngressError(

@@ -190,7 +190,7 @@ def test_gate_control_requires_an_authenticated_real_event(
     ) == (True, None)
 
     event.write_text("probe:synthetic\n", encoding="ascii")
-    event.chmod(0o400)
+    event.chmod(0o444)
     with pytest.raises(RuntimeError, match="canonical exact4"):
         kernel.fixed32_sfwd_state_fusion_gate_control(
             environ={}, enabled_path=str(enabled), event_path=str(event)
@@ -198,7 +198,7 @@ def test_gate_control_requires_an_authenticated_real_event(
     event.chmod(0o600)
     markers = kernel._FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_MARKERS
     event.write_text("\n".join(markers) + "\n", encoding="ascii")
-    event.chmod(0o400)
+    event.chmod(0o444)
     assert kernel.fixed32_sfwd_state_fusion_gate_control(
         environ={}, enabled_path=str(enabled), event_path=str(event)
     ) == (True, markers)

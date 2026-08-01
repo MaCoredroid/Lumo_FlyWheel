@@ -684,7 +684,7 @@ def test_engine_middleware_arms_sfwd_only_after_all_exact4_are_authenticated(
     info = os.lstat(marker)
     assert stat.S_ISREG(info.st_mode)
     assert info.st_nlink == 1
-    assert stat.S_IMODE(info.st_mode) == 0o400
+    assert stat.S_IMODE(info.st_mode) == 0o444
 
 
 def test_engine_middleware_rejects_inexact_or_ambiguous_cutlass_b4_arm(

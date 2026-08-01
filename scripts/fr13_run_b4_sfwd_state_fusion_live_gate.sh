@@ -196,7 +196,7 @@ if (
     not stat.S_ISREG(marker_info.st_mode)
     or stat.S_ISLNK(marker_info.st_mode)
     or marker_info.st_nlink != 1
-    or stat.S_IMODE(marker_info.st_mode) != 0o400
+    or stat.S_IMODE(marker_info.st_mode) != 0o444
 ):
     errors.append("SFWD exact4 marker identity or mode is invalid")
 marker_raw = marker_path.read_bytes()

@@ -214,6 +214,7 @@ def test_runner_and_launcher_are_exact4_b4_shadow_only() -> None:
     assert "reference_always_served=1" in runner
     assert "acceptance_valid=0" in runner
     assert "timing_eligible=0" in runner
+    assert "stat.S_IMODE(marker_info.st_mode) != 0o444" in runner
     assert "CAPTURE_ONLY" not in runner
     assert "PROBE_ONLY" not in runner
     assert "ACCEPT_SPEED_PROBE" not in runner
