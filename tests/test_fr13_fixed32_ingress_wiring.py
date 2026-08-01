@@ -190,6 +190,8 @@ def test_fixed32_campaign_closes_ingress_before_fetch_and_terminal_audit() -> No
     assert ".State.StartedAt" in serve
     assert ".RestartCount" in serve
     assert "build_fixed32_chat_traffic_audit" in serve
+    assert '"$FR13_FIXED32_B1_DIAGNOSTIC" \\\n    "$SWE_CONCURRENCY"' in serve
+    assert "concurrency=int(concurrency_text)" in serve
 
 
 @pytest.mark.parametrize(
@@ -443,7 +445,7 @@ def test_floor_and_depth_require_exact_ingress_and_trace_evidence() -> None:
     )
 
     assert "fr13.canonical_swe_verified_fixed32_floor_gate.v11" in floor
-    assert "fr13-fixed32-chat-task-provenance-audit-v2" in floor
+    assert "fr13-fixed32-chat-task-provenance-audit-v3" in floor
     assert "fr13.depth_acceptance.fixed32.v2" in depth
     for gate in required_gates:
         assert gate in floor
