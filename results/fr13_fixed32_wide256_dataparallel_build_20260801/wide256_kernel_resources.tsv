@@ -1,0 +1,3 @@
+type	output	tile_mnk	reg	stack	shared	constant0
+wide256_dataparallel	half	256x32x128	168	0	1024	2560
+wide256_dataparallel	bfloat16	256x32x128	168	0	1024	2560

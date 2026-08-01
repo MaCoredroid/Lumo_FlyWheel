@@ -94,6 +94,8 @@ def test_patch_is_default_off_and_shape_gated() -> None:
     assert 'value == "streamk_coop128_byte_ab"' in patched
     assert 'value == "streamk_force_wide256"' in patched
     assert 'value == "streamk_force_wide256_byte_ab"' in patched
+    assert 'value == "wide256_dataparallel"' in patched
+    assert 'value == "wide256_dataparallel_byte_ab"' in patched
     assert "return fixed32_cutlass_wave_variant::stock;" in patched
     for rows in (32, 64, 96, 128):
         assert f"m == {rows}" in patched
@@ -112,7 +114,7 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 3
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 3
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 4
     assert "PingpongSm120" not in module.CONFIG_REPLACEMENT
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
@@ -147,6 +149,35 @@ def test_wide256_is_b1_only_and_large_rows_fail_to_stock() -> None:
     assert "stream_k_force_wide256_byte_ab" in patched[selector_gate:stock_assignment]
     assert "sm120_blockwise_fp8_config_cooperative_streamk_wide256" not in patched
     assert "sm120_blockwise_fp8_config_swapab_streamk_wide256" in patched
+
+
+def test_wide256_dataparallel_keeps_full_k_in_stock_scheduler() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    config_start = patched.index(
+        "struct sm120_blockwise_fp8_config_swapab_wide256_dataparallel"
+    )
+    config_end = patched.index(
+        "enum class fixed32_cutlass_wave_variant", config_start
+    )
+    config = patched[config_start:config_end]
+
+    assert "using TileShape = Shape<_256, _32, _128>;" in config
+    assert "cutlass_3x_gemm_fp8_blockwise<" in config
+    assert "cutlass_3x_gemm_fp8_blockwise_streamk" not in config
+    assert "StreamKScheduler" not in config
+    assert "StageCount<2>" not in config
+    assert "run_data_parallel_wide256" in patched
+    assert (
+        "fixed32_cutlass_wave_variant::wide256_data_parallel)"
+        in patched
+    )
+    assert (
+        '"/logs/fr13_fixed32_cutlass_wide256_dataparallel_byte_ab.jsonl"'
+        in patched
+    )
+    assert "fr13.fixed32.cutlass_wide256_dataparallel_byte_ab.v1" in patched
 
 
 def test_streamk_uses_a_separate_candidate_template() -> None:
