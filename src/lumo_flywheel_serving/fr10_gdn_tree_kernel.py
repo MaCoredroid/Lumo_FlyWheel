@@ -9603,7 +9603,7 @@ def _fr13_fixed32_committer_fast_state(
     return state, batch
 
 
-@triton.jit(do_not_specialize=["T"])
+@triton.jit
 def _fr13_fixed32_committer_native_layer_batch_kernel(
     A_logs,
     a,
@@ -9613,10 +9613,10 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     v,
     bank_anchor,
     bank_off16,
-    cu_seqlens,
+    accepted_lens,
     ssm_state_indices,
-    T: tl.int64,
     B: tl.constexpr,
+    PATH_CAP: tl.constexpr,
     H: tl.constexpr,
     HV: tl.constexpr,
     K: tl.constexpr,
@@ -9636,10 +9636,11 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
 ):
     """Native fused-sigmoid state recurrence batched across all layers.
 
-    Each program retains the native kernel's complete ordered token loop.  The
-    caller discards the operator output, so this commit-only realization omits
-    the independent q projection and output store.  Layers share read-only path
-    metadata and write disjoint recurrent-state banks.
+    Each program retains the native kernel's ordered loop through the root and
+    accepted drafts. The fixed suffix is fully neutral, so it is omitted. The
+    caller discards the operator output, so this commit-only realization also
+    omits the independent q projection and output store. Layers share read-only
+    path metadata and write disjoint recurrent-state banks.
     """
     i_k = tl.program_id(0)
     i_v = tl.program_id(1)
@@ -9651,11 +9652,9 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     i_hv = i_nh % HV
     i_h = i_hv // (HV // H)
 
-    bos = tl.load(cu_seqlens + i_n).to(tl.int64)
-    eos = tl.load(cu_seqlens + i_n + 1).to(tl.int64)
-    T = eos - bos
-    if T == 0:
-        return
+    bos = i_n * PATH_CAP
+    accepted = tl.load(accepted_lens + i_n).to(tl.int64)
+    T = tl.minimum(tl.maximum(accepted, 0) + 1, PATH_CAP)
 
     o_k = i_k * BK + tl.arange(0, BK)
     o_v = i_v * BV + tl.arange(0, BV)
@@ -9737,7 +9736,6 @@ def _fr13_fixed32_committer_native_layer_batch(
     """Launch all 48 independent native-realization committer scans once."""
     layers = 48
     batch = int(state["batch"])
-    total = batch * 16
     num_kh = int(state["num_kh"])
     dim_k = int(state["dim_k"])
     num_vh = int(state["num_vh"])
@@ -9764,10 +9762,10 @@ def _fr13_fixed32_committer_native_layer_batch(
         state["vbuf"],
         banks_list[0],
         state["bank_off16"],
-        state["cu"],
+        state["accepted_lens"],
         state["ssi"],
-        T=total,
         B=batch,
+        PATH_CAP=16,
         H=num_kh,
         HV=num_vh,
         K=dim_k,
@@ -10153,6 +10151,7 @@ def preseed_fixed32_committer_graph(
                 "native_reference_fused_calls": 48,
                 "layer_batch": True,
                 "state_only_output_elided": True,
+                "active_length_recurrence": True,
                 "byte_gate": "required_on_first_real_nonzero_accept",
             }
         )

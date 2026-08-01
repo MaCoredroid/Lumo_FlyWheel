@@ -55,7 +55,7 @@ def test_layer_batch_kernel_keeps_native_recurrence_and_geometry() -> None:
     kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
     launch = _text("_fr13_fixed32_committer_native_layer_batch")
 
-    assert '@triton.jit(do_not_specialize=["T"])' in SOURCE
+    assert "@triton.jit" in SOURCE
     assert "for i_t in range(0, T):" in kernel
     assert "b_h *= tl.exp(b_g)" in kernel
     assert "b_v -= tl.sum(b_h * b_k[None, :], 1)" in kernel
@@ -71,6 +71,20 @@ def test_layer_batch_kernel_keeps_native_recurrence_and_geometry() -> None:
     assert "num_warps=4" in launch
     assert "num_stages=3" in launch
     assert "layers * batch * num_vh" in launch
+
+
+def test_layer_batch_recurrence_stops_after_root_plus_accepted_drafts() -> None:
+    kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
+    launch = _text("_fr13_fixed32_committer_native_layer_batch")
+
+    assert "accepted_lens," in kernel
+    assert "cu_seqlens," not in kernel
+    assert "bos = i_n * PATH_CAP" in kernel
+    assert "accepted = tl.load(accepted_lens + i_n).to(tl.int64)" in kernel
+    assert "T = tl.minimum(tl.maximum(accepted, 0) + 1, PATH_CAP)" in kernel
+    assert 'state["accepted_lens"]' in launch
+    assert 'state["cu"]' not in launch
+    assert "PATH_CAP=16" in launch
 
 
 def test_layer_batch_candidate_drops_only_dead_operator_output() -> None:
@@ -104,6 +118,7 @@ def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> No
     assert '"fused_calls": 48' in preseed
     assert '"fused_calls": 1' in preseed
     assert '"state_only_output_elided": True' in preseed
+    assert '"active_length_recurrence": True' in preseed
 
 
 def test_byte_gate_requires_real_nonzero_path_and_exact_state_bytes() -> None:
@@ -143,7 +158,7 @@ def test_layer_programs_have_disjoint_layer_state_and_shared_read_only_paths() -
     assert "i_l * K_L_STRIDE" in kernel
     assert "i_l * V_L_STRIDE" in kernel
     assert "accepted_paths" not in kernel
-    assert "accepted_lens" not in kernel
+    assert "accepted_lens" in kernel
 
 
 def test_launcher_materializes_worker_visible_arm_only_when_requested() -> None:
@@ -162,6 +177,7 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
     assert 'layer_batch = committer_contract.get("layer_batch", False)' in patcher
     assert "expected_fused_calls = 1 if layer_batch is True else 48" in patcher
     assert 'committer_contract.get("state_only_output_elided") is not True' in patcher
+    assert 'committer_contract.get("active_length_recurrence") is not True' in patcher
     assert '"layers": int(layer_count)' in patcher
     assert "ring_gathers * int(layer_count) * path_cap * batch" in patcher
     assert '"fused_layer_calls": fused_calls' in patcher
