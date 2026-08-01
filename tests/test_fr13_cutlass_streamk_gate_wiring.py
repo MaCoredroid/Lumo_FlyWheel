@@ -291,6 +291,26 @@ def test_exact4_timing_is_real_full_wall_full_vocab_and_source_bound() -> None:
     assert '"streamk_force_wide256_byte_ab"' in swe_runner
 
 
+def test_exact4_timing_accepts_pinned_static_persistent_candidate() -> None:
+    timing = TIMING.read_text(encoding="utf-8")
+
+    assert "static_persistent_stocktile)" in timing
+    assert (
+        "STREAMK_SHA256="
+        "66c37f2593cd38738ed2689e1cabdeaaf8383663597b4b29b46558bbf6bd2cfb"
+        in timing
+    )
+    assert "STREAMK_BYTES=113080920" in timing
+    assert "STREAMK_LIVE_SCHEMA=fr13.fixed32.cutlass_static_persistent_live_gate.v1" in timing
+    assert "CANDIDATE_ARM_LABEL=cutlass_static_persistent_stocktile" in timing
+    assert "TIMING_TASK_SET=${FR13_STREAMK_TIMING_TASK_SET:-exact4}" in timing
+    assert 'SOURCE_COMMIT=$(git rev-parse HEAD)' in timing
+    assert '--expected-source-commit "$SOURCE_COMMIT"' in timing
+    assert "FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0" in timing
+    assert "FULL_VOCAB_WEIGHT_BYTES=42025179008" in timing
+    assert "FR13_FA2_QROW16_PRODUCTION=1 \\" in timing
+
+
 def test_b4_graph_gate_pins_cutlass_stock_and_bm8_off() -> None:
     gate = B4_GRAPH_GATE.read_text(encoding="utf-8")
     launch_start = gate.index("if OFFLOAD_AGENT=1")

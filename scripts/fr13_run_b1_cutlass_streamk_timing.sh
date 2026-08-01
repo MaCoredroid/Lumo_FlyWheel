@@ -31,6 +31,12 @@ case "$TIMING_CANDIDATE" in
     STREAMK_LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_live_gate.v1
     CANDIDATE_ARM_LABEL=cutlass_streamk_force_wide256
     ;;
+  static_persistent_stocktile)
+    STREAMK_SHA256=66c37f2593cd38738ed2689e1cabdeaaf8383663597b4b29b46558bbf6bd2cfb
+    STREAMK_BYTES=113080920
+    STREAMK_LIVE_SCHEMA=fr13.fixed32.cutlass_static_persistent_live_gate.v1
+    CANDIDATE_ARM_LABEL=cutlass_static_persistent_stocktile
+    ;;
   *)
     echo "unsupported Stream-K timing candidate: $TIMING_CANDIDATE" >&2
     exit 2
