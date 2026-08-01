@@ -299,9 +299,14 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     assert "tl.sum" not in candidate
     assert "tl.dot" not in candidate
     assert "source_stage" in candidate
+    assert "x_stride_row" in candidate
+    assert "* x_stride_row" in candidate
     assert "FR13_FIXED32_SFWD_STATE_FUSION source candidate is eager" in launcher
     assert "actual_source_flat" in launcher
     assert "source_flat.detach().cpu().tolist()" in launcher
+    assert "int(x.stride(1)) != 1" in launcher
+    assert "int(x.stride(0)) < channels" in launcher
+    assert "not x.is_contiguous()" not in launcher
     assert "launch_fixed32_sfwd_state_fusion(" in patcher
     assert "fixed32_sfwd_state_fusion_byte_gate(" in patcher
     assert "task_markers=_fr13_sfwd_task_markers" in patcher

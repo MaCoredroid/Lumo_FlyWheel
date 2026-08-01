@@ -4334,6 +4334,7 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
     bias,
     out,
     source_stage,
+    x_stride_row,
     conv_stride_row,
     conv_stride_c,
     conv_stride_l,
@@ -4389,7 +4390,7 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
         x_node = source_row - (WIDTH - 1)
         x_value = tl.load(
             x
-            + (pid_b.to(tl.int64) * N + x_node) * C
+            + (pid_b.to(tl.int64) * N + x_node) * x_stride_row
             + offs_c,
             mask=c_mask & (~from_prior) & (x_node >= 0) & (x_node < N),
             other=0.0,
@@ -4417,7 +4418,7 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
 
     stage_base = pid_b.to(tl.int64) * SOURCE_ROWS
     current_x = tl.load(
-        x + (pid_b * N + pid_n) * C + offs_c,
+        x + (pid_b * N + pid_n) * x_stride_row + offs_c,
         mask=c_mask,
         other=0.0,
     )
@@ -5503,7 +5504,8 @@ def launch_fixed32_sfwd_state_fusion(
         or source_stage.ndim != 2
         or int(source_stage.shape[0]) < required_source_rows
         or int(source_stage.shape[1]) != channels
-        or not x.is_contiguous()
+        or int(x.stride(1)) != 1
+        or int(x.stride(0)) < channels
         or not out.is_contiguous()
         or not source_flat.is_contiguous()
         or not source_stage.is_contiguous()
@@ -5531,6 +5533,7 @@ def launch_fixed32_sfwd_state_fusion(
         bias_arg,
         out,
         source_stage,
+        int(x.stride(0)),
         int(conv_state.stride(0)),
         int(conv_state.stride(1)),
         int(conv_state.stride(2)),
