@@ -1563,6 +1563,11 @@ def _fr13_resolve_fixed32_batch_gdn_bv(
         sources.append((f"sidecar:{path}", value.strip()))
     if not sources:
         return None
+    if globals().get("_FR13_FIXED32_GDN_SINGLE_LAUNCH", False):
+        raise RuntimeError(
+            f"{env_name} is a legacy batched-GDN selector and cannot "
+            "authorize FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE"
+        )
     allowed = ("8", "16", "32", "64", "128") if allow_reference_bv else (
         "16",
         "32",
@@ -1677,6 +1682,11 @@ def _fr13_fixed32_batch_gdn_byte_ab_control() -> tuple[bool, str | None]:
         _FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT,
     )
     enabled = raw == "1" or os.path.exists(enabled_path)
+    if _FR13_FIXED32_GDN_SINGLE_LAUNCH and enabled:
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB is a legacy diagnostic and "
+            "cannot qualify FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE"
+        )
     if not os.path.exists(event_path):
         return enabled, None
     return enabled, _fr13_fixed32_batch_gdn_real_event_marker(event_path)
@@ -1732,7 +1742,13 @@ def _fr13_fixed32_batch_gdn_graph_byte_ab_control() -> bool:
         "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB_ENABLED_PATH",
         _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB_ENABLED,
     )
-    return raw == "1" or os.path.exists(enabled_path)
+    enabled = raw == "1" or os.path.exists(enabled_path)
+    if _FR13_FIXED32_GDN_SINGLE_LAUNCH and enabled:
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB is a legacy diagnostic "
+            "and cannot qualify FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE"
+        )
+    return enabled
 
 
 def _fr13_fixed32_batch_gdn_production_control() -> dict[str, object] | None:
@@ -1748,6 +1764,11 @@ def _fr13_fixed32_batch_gdn_production_control() -> dict[str, object] | None:
     )
     if raw != "1" and not os.path.exists(arm_path):
         return None
+    if _FR13_FIXED32_GDN_SINGLE_LAUNCH:
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION and its legacy credential "
+            "cannot authorize FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE"
+        )
     pass_path = os.environ.get(
         "FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS_PATH",
         _FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS,
@@ -2041,6 +2062,25 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
         raise RuntimeError(
             f"FR13 fixed32 batched GDN supports B2-B4, got B={batch}"
         )
+    if _FR13_FIXED32_GDN_SINGLE_LAUNCH:
+        # The structural candidate requires its own candidate identity and
+        # qualification lifecycle. Never inherit a legacy BV8 selector/pass.
+        for env_name in (
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB",
+            "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB",
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION",
+            "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE",
+            "FR13_FIXED32_BATCH_GDN_BV_PRODUCTION",
+        ):
+            if os.environ.get(env_name, "").strip() not in ("", "0"):
+                raise RuntimeError(
+                    f"{env_name} is a legacy selector and cannot authorize "
+                    "FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE"
+                )
+        _fr13_fixed32_batch_gdn_byte_ab_control()
+        _fr13_fixed32_batch_gdn_graph_byte_ab_control()
+        _fr13_fixed32_batch_gdn_production_control()
+        return None
     diagnostic, _marker = _fr13_fixed32_batch_gdn_byte_ab_control()
     graph_diagnostic = _fr13_fixed32_batch_gdn_graph_byte_ab_control()
     production = _fr13_fixed32_batch_gdn_production_control()
@@ -3740,6 +3780,8 @@ def _fr13_fixed32_gdn_single_launch_contract(
         "node_updates": len(execution),
         "critical_node_steps": len(execution),
         "live_state_tiles": 2,
+        "nominal_register_fp32_values_per_cta": 4096,
+        "nominal_register_fp32_values_per_thread": 16,
         "state_export_writes": 0,
         "state_parent_reads": 0,
         "single_writer_nodes": len(execution),
@@ -3759,6 +3801,8 @@ def _fr13_fixed32_gdn_single_launch_contract(
         "node_updates": 32,
         "critical_node_steps": 32,
         "live_state_tiles": 2,
+        "nominal_register_fp32_values_per_cta": 4096,
+        "nominal_register_fp32_values_per_thread": 16,
         "state_export_writes": 0,
         "state_parent_reads": 0,
         "single_writer_nodes": 32,
@@ -8421,8 +8465,8 @@ def _tree_gdn_fixed32_single_launch_node(
     beta,
     raw_a,
     raw_b,
-    b_a_log,
-    b_dt_bias,
+    global_a_log,
+    global_dt_bias,
     out,
     ring_k,
     ring_v,
@@ -8494,6 +8538,8 @@ def _tree_gdn_fixed32_single_launch_node(
     ).to(tl.float32)
     b_raw_a = b_g
     b_raw_b = b_b
+    b_a_log = b_g
+    b_dt_bias = b_b
     if RAW_GATING:
         b_raw_b_in = tl.load(
             raw_b + global_node * NUM_VH + pid_vh,
@@ -8507,6 +8553,8 @@ def _tree_gdn_fixed32_single_launch_node(
             other=0.0,
         )
         b_raw_a = b_raw_a_in.to(tl.float32)
+        b_a_log = global_a_log
+        b_dt_bias = global_dt_bias
         if RING_EXPORT:
             tl.store(
                 ring_a + global_node * NUM_VH + pid_vh,

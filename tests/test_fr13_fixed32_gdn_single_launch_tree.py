@@ -148,6 +148,8 @@ def test_depth_first_contract_covers_each_node_and_writer_once() -> None:
     assert contract["node_updates"] == 32
     assert contract["critical_node_steps"] == 32
     assert contract["live_state_tiles"] == 2
+    assert contract["nominal_register_fp32_values_per_cta"] == 4096
+    assert contract["nominal_register_fp32_values_per_thread"] == 16
     assert contract["state_export_writes"] == 0
     assert contract["state_parent_reads"] == 0
     assert contract["single_writer_nodes"] == 32
@@ -236,6 +238,88 @@ def test_single_launch_selector_is_default_off_and_fail_closed(tmp_path) -> None
     ) is True
 
 
+def test_legacy_batched_selectors_fail_closed_for_single_launch(
+    tmp_path: Path,
+) -> None:
+    constants = {
+        "_FR13_FIXED32_MODES",
+        "_FR13_FIXED32_BATCH_GDN_BYTE_AB_ENABLED",
+        "_FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT",
+        "_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB_ENABLED",
+        "_FR13_FIXED32_BATCH_GDN_PRODUCTION_ARM",
+    }
+    functions = {
+        "_fr13_resolve_fixed32_batch_gdn_bv",
+        "_fr13_fixed32_batch_gdn_byte_ab_control",
+        "_fr13_fixed32_batch_gdn_graph_byte_ab_control",
+        "_fr13_fixed32_batch_gdn_production_control",
+    }
+    tree, _source = _tree_and_source()
+    body = [
+        node
+        for node in tree.body
+        if (
+            isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id in constants
+                for target in node.targets
+            )
+        )
+        or (isinstance(node, ast.FunctionDef) and node.name in functions)
+    ]
+    namespace = {
+        "os": os,
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH": True,
+    }
+    exec(
+        compile(
+            ast.fix_missing_locations(ast.Module(body=body, type_ignores=[])),
+            KERNEL_PATH,
+            "exec",
+        ),
+        namespace,
+    )
+
+    with pytest.raises(RuntimeError, match="legacy batched-GDN selector"):
+        namespace["_fr13_resolve_fixed32_batch_gdn_bv"](
+            "hydra27_fixed32",
+            env_name="FR13_FIXED32_BATCH_GDN_BV_CANDIDATE",
+            sidecars=(),
+            environ={"FR13_FIXED32_BATCH_GDN_BV_CANDIDATE": "8"},
+            geom_override={"BV": 8},
+            allow_reference_bv=True,
+        )
+
+    enabled = tmp_path / "legacy-eager.enabled"
+    enabled.write_text("1\n", encoding="ascii")
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setenv(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB_ENABLED_PATH", str(enabled)
+        )
+        monkeypatch.setenv(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH",
+            str(tmp_path / "absent-event"),
+        )
+        with pytest.raises(RuntimeError, match="legacy diagnostic"):
+            namespace["_fr13_fixed32_batch_gdn_byte_ab_control"]()
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setenv("FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB", "1")
+        with pytest.raises(RuntimeError, match="legacy diagnostic"):
+            namespace["_fr13_fixed32_batch_gdn_graph_byte_ab_control"]()
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setenv("FR13_FIXED32_BATCH_GDN_PRODUCTION", "1")
+        with pytest.raises(RuntimeError, match="legacy credential"):
+            namespace["_fr13_fixed32_batch_gdn_production_control"]()
+
+    selector = _function_source("fixed32_batch_gdn_selector")
+    assert "if _FR13_FIXED32_GDN_SINGLE_LAUNCH:" in selector
+    assert "_fr13_fixed32_batch_gdn_byte_ab_control()" in selector
+    assert "_fr13_fixed32_batch_gdn_graph_byte_ab_control()" in selector
+    assert "_fr13_fixed32_batch_gdn_production_control()" in selector
+
+
 def test_kernel_interleaves_root_and_branch_with_two_state_tiles() -> None:
     helper = _function_source("_tree_gdn_fixed32_single_launch_node")
     kernel = _function_source("_tree_gdn_kernel_fixed32_single_launch")
@@ -244,6 +328,10 @@ def test_kernel_interleaves_root_and_branch_with_two_state_tiles() -> None:
     assert "tl.store(\n        out" in helper
     assert "state_export" not in helper
     assert "return tl.where(n_ok, new_state, state_i)" in helper
+    assert helper.index("b_a_log = b_g") < helper.index("if RAW_GATING:")
+    assert helper.index("b_dt_bias = b_b") < helper.index("if RAW_GATING:")
+    assert "b_a_log = global_a_log" in helper
+    assert "b_dt_bias = global_dt_bias" in helper
     assert "for root_index in tl.static_range(0, ROOT_STEPS):" in kernel
     assert kernel.index("root_state = _tree_gdn_fixed32_single_launch_node(") < (
         kernel.index("for member in tl.static_range")
@@ -297,8 +385,9 @@ def test_single_launch_static_traffic_and_parallelism(batch: int) -> None:
     single_launch_handoff = 0
 
     assert state_bytes == 3_145_728
-    assert 2 * block_v * dim_k * 4 == 8_192
-    assert 2 * block_v * dim_k // (8 * 32) == 8
+    nominal_register_fp32_values = 4_096
+    assert nominal_register_fp32_values * 4 == 16_384
+    assert nominal_register_fp32_values // (8 * 32) == 16
     assert single_launch_handoff == 0
     if batch == 1:
         assert (reference_ctas, parent_group_ctas, single_launch_ctas) == (
@@ -416,6 +505,8 @@ def test_observer_records_single_launch_physical_work() -> None:
             "node_updates": 32,
             "critical_node_steps": 32,
             "live_state_tiles": 2,
+            "nominal_register_fp32_values_per_cta": 4096,
+            "nominal_register_fp32_values_per_thread": 16,
             "state_export_writes": 0,
             "state_parent_reads": 0,
             "single_writer_nodes": 32,
