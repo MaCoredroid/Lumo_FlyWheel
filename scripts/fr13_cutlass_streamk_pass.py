@@ -21,10 +21,10 @@ LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_live_gate.v3"
 SIDECAR_SCHEMA = "fr13.fixed32.cutlass_streamk.production_pass.v2"
 ATTESTATION_SCHEMA = "fr13.fixed32.cutlass_streamk_binary.v2"
 PATCH_SOURCE = Path("scripts/fr13_patch_cutlass_fixed32_wave.py")
-PATCH_SOURCE_SHA256 = "9de6337e67a24940d5f3828f6dd5f893933210ad925e1f7aaf76f8507b3403a8"
+PATCH_SOURCE_SHA256 = "2b36f8db3835ce5bc37545f21ed77de9eee641c229f7892d64a769db18f513f4"
 VLLM_BASE_COMMIT = "fe9c3d6c5f66c873d196800384ed6880687b9e52"
 PATCHED_DISPATCH_SHA256 = (
-    "7601b65c78dcd2d20e5ab014af1256757ed9b0658ac4ac30bf0c606e5d0497d7"
+    "40377cc18ebef783a74be9d403c6dd3565fa17519aca65c7bf814e73181975f8"
 )
 WIDE256_LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_wide256_live_gate.v1"
 EXPECTED_TASK_IDS = ("astropy__astropy-12907",)
