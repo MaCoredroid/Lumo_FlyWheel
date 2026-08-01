@@ -20,8 +20,8 @@ SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
 STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
 STOCK_FA2_BYTES=299183936
-CANDIDATE_SHA256=1997fe0800ac4927690c021ddc2c0a3ccf763b36883c1b63f06310a0b02065d4
-CANDIDATE_BYTES=112697400
+CANDIDATE_SHA256=6988f6a994c29e9196b6addc039e1d63bf08c32f268f9be3d2f14c5d863be1de
+CANDIDATE_BYTES=112698512
 PATCH_SOURCE=scripts/fr13_patch_cutlass_fixed32_wave.py
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
 SOURCE_COMMIT=$(git rev-parse HEAD)
@@ -299,6 +299,8 @@ if (
     or binding.get("production_sidecar_sha256") != sidecar_sha256
     or binding.get("live_result_sha256") != live_sha256
     or binding.get("qualified_fixed_rows") != 128
+    or binding.get("qualified_topology") != "hydra27_fixed32"
+    or binding.get("qualified_comparison_call_limit") != 320
 ):
     raise SystemExit("candidate lacks persistent-M128 production binding")
 stock_wall = positive(stock, "step_wall_ms")

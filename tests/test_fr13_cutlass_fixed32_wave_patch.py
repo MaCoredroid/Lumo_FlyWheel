@@ -279,6 +279,11 @@ def test_same_process_byte_ab_is_bounded_and_returns_stock() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert "constexpr int64_t byte_ab_limit = 256" in patched
+    assert "constexpr int64_t b4_m128_byte_ab_limit = 320" in patched
+    assert (
+        "b4_m128_byte_ab ? b4_m128_byte_ab_limit : byte_ab_limit" in patched
+    )
+    assert "invocation >= selected_byte_ab_limit" in patched
     assert "torch::stable::empty_like(out)" in patched
     assert "run_stock(out);\n    run_candidate(candidate);" in patched
     assert "cudaMemcpyDeviceToHost" in patched

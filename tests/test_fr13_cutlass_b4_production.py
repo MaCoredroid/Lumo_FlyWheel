@@ -44,6 +44,7 @@ def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         "acceptance_valid": False,
         "task_count": 4,
         "task_ids": list(module.EXPECTED_TASK_IDS),
+        "topology": "hydra27_fixed32",
         "task_marker": task_marker,
         "draft_vocab_root": 0,
         "draft_vocab_k": 0,
@@ -59,6 +60,7 @@ def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         "diagnostic_selector": "persistent_b4_m128_byte_ab",
         "served_result": "stock",
         "production_enabled": False,
+        "comparison_call_limit": module.MAX_COMPARISONS,
         "comparisons": 5,
         "observed_m_values": [128],
         "observed_projection_nk": [
@@ -115,6 +117,8 @@ def test_exact4_b4_pass_issues_and_verifies_production_sidecar(
     assert issued["qualified_draft_vocab_root"] == 0
     assert issued["qualified_draft_vocab_k"] == 0
     assert issued["qualified_eager_builder_capacity"] == 128
+    assert issued["qualified_topology"] == "hydra27_fixed32"
+    assert issued["qualified_comparison_call_limit"] == 320
 
 
 def test_b4_production_attestation_preserves_exact4_binding(
@@ -146,6 +150,8 @@ def test_b4_production_attestation_preserves_exact4_binding(
         "qualified_draft_vocab_root",
         "qualified_draft_vocab_k",
         "qualified_eager_builder_capacity",
+        "qualified_topology",
+        "qualified_comparison_call_limit",
         "mandatory_weight_bytes",
         "mandatory_weight_floor_ms",
         "one_sided_u95_cap_ms",
@@ -177,6 +183,8 @@ def test_b4_production_attestation_preserves_exact4_binding(
     assert binding["qualification_task_ids"] == list(module.EXPECTED_TASK_IDS)
     assert binding["qualified_fixed_rows"] == 128
     assert binding["qualified_eager_builder_capacity"] == 128
+    assert binding["qualified_topology"] == "hydra27_fixed32"
+    assert binding["qualified_comparison_call_limit"] == 320
     assert (
         binding["mandatory_weight_floor_ms"]
         == module.EXPECTED_MANDATORY_WEIGHT_FLOOR_MS
@@ -192,6 +200,8 @@ def test_b4_production_attestation_preserves_exact4_binding(
         ("draft_vocab_root", 1),
         ("draft_vocab_k", 65_536),
         ("eager_builder_capacity", 32),
+        ("topology", "tail6_fixed32"),
+        ("comparison_call_limit", 256),
         ("task_marker", "swe_verified:django__django-10097"),
     ],
 )
@@ -242,6 +252,13 @@ def test_b4_gate_and_timing_are_closed_over_by_runtime_manifest() -> None:
     assert "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d" in gate
     assert "STOCK_FA2_BYTES=299183936" in gate
     assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in gate
+    assert '"$ARM" hydra27_fixed32 "$SUBSET"' in gate
+    assert "FR13_FIXED32_MODE=hydra27_fixed32" in gate
+    assert "tail6_fixed32" not in gate
+    assert "COMPARISON_CALL_LIMIT=320" in gate
+    assert "comparisons > MAX_COMPARISONS" in (
+        SCRIPTS / "fr13_cutlass_b4_pass.py"
+    ).read_text(encoding="utf-8")
     assert "persistent_b4_m128" in timing
     assert "--batch-size 4" in timing
     assert "FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0" in timing
@@ -252,6 +269,8 @@ def test_b4_gate_and_timing_are_closed_over_by_runtime_manifest() -> None:
     assert "STOCK_FA2_BYTES=299183936" in timing
     assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in timing
     assert "only_arm_delta=CUTLASS_stock_to_persistent_b4_m128" in timing
+    assert 'binding.get("qualified_topology") != "hydra27_fixed32"' in timing
+    assert 'binding.get("qualified_comparison_call_limit") != 320' in timing
     assert '"optimistic_floor_is_full_step_hardware_floor": False' in timing
     assert 'record.get("floor_is_full_step_hardware_floor") is not False' in timing
 
@@ -276,3 +295,21 @@ def test_b4_selector_reaches_eager_process_attestation() -> None:
     assert (
         "or fixed32_cutlass_b4_diagnostic" in orchestrator
     )
+
+
+def test_b4_pass_accepts_320_comparisons_and_rejects_321(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, candidate, patch_source, live, _, _ = _fixture(tmp_path, monkeypatch)
+    payload = json.loads(live.read_text(encoding="ascii"))
+    payload["comparisons"] = module.MAX_COMPARISONS
+    live.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
+    live_sha256 = hashlib.sha256(live.read_bytes()).hexdigest()
+
+    module.validate_live_result(live, live_sha256, candidate, patch_source)
+
+    payload["comparisons"] = module.MAX_COMPARISONS + 1
+    live.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
+    live_sha256 = hashlib.sha256(live.read_bytes()).hexdigest()
+    with pytest.raises(module.QualificationError, match="comparison count"):
+        module.validate_live_result(live, live_sha256, candidate, patch_source)

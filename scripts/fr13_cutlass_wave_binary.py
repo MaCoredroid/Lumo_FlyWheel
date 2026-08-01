@@ -19,9 +19,9 @@ WIDE256_CANDIDATE_SHA256 = (
 )
 WIDE256_CANDIDATE_SIZE = 112_481_752
 B4_M128_CANDIDATE_SHA256 = (
-    "1997fe0800ac4927690c021ddc2c0a3ccf763b36883c1b63f06310a0b02065d4"
+    "6988f6a994c29e9196b6addc039e1d63bf08c32f268f9be3d2f14c5d863be1de"
 )
-B4_M128_CANDIDATE_SIZE = 112_697_400
+B4_M128_CANDIDATE_SIZE = 112_698_512
 COOP128_SELECTORS = frozenset({"streamk_coop128", "streamk_coop128_byte_ab"})
 WIDE256_SELECTORS = frozenset(
     {"streamk_force_wide256", "streamk_force_wide256_byte_ab"}
@@ -187,10 +187,13 @@ def install_candidate(
                 "one_sided_u95_cap_ms"
             ],
         }
-        if "qualified_eager_builder_capacity" in qualification_record:
-            qualification["qualified_eager_builder_capacity"] = (
-                qualification_record["qualified_eager_builder_capacity"]
-            )
+        for key in (
+            "qualified_eager_builder_capacity",
+            "qualified_topology",
+            "qualified_comparison_call_limit",
+        ):
+            if key in qualification_record:
+                qualification[key] = qualification_record[key]
     elif (
         production_sidecar is not None or expected_production_sidecar_sha256 is not None
     ):

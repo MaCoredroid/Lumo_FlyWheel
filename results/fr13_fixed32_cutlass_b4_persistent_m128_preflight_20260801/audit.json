@@ -11,11 +11,12 @@
   },
   "candidate": {
     "binary": {
-      "bytes": 112697400,
+      "bytes": 112698512,
       "mode": "0555",
-      "path": "/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.persistent_b4_m128_stock_symbol_exact_gate_ready.abi3.so",
-      "sha256": "1997fe0800ac4927690c021ddc2c0a3ccf763b36883c1b63f06310a0b02065d4"
+      "path": "/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.persistent_b4_m128_stock_symbol_exact_compare320_gate_ready.abi3.so",
+      "sha256": "6988f6a994c29e9196b6addc039e1d63bf08c32f268f9be3d2f14c5d863be1de"
     },
+    "comparison_call_limit": 320,
     "diagnostic_selector": "persistent_b4_m128_byte_ab",
     "dispatch_m": 128,
     "kernel_schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
@@ -30,7 +31,7 @@
     "byte_gate_launched": false,
     "gpu_used": false,
     "performance_measured": false,
-    "reason": "B1 owns the GPU; this artifact is a no-launch preflight",
+    "reason": "this comparator and topology repair is a no-launch preflight",
     "timing_acceptance_valid": false
   },
   "kernel_audit": {
@@ -48,14 +49,14 @@
   "provenance": {
     "patched_dispatch": {
       "path": "/home/mark/fr13_streamk_build/vllm-build-source/csrc/libtorch_stable/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh",
-      "sha256": "d4e9a445c65be2c9991fba92d323e2cf2496061dc008f56c7a0bc7f122666b67"
+      "sha256": "44fb7a8d3cf6d8dc6b69d0acd3f5f1e533d7485f6c4d51e7e28c1a45c3fa9568"
     },
     "patch_source": {
       "path": "scripts/fr13_patch_cutlass_fixed32_wave.py",
-      "sha256": "aaeededb58a1eda26b1570d7816456fdbe0cfba713488e688905c4c933b1b143"
+      "sha256": "f3b70f541331d2fe4ea258297246dcfa854514addd163e6ccae4ff90d55f98db"
     },
-    "preflight_base_commit": "d30df00766074727a6475047f8c44780d41db464",
-    "prepared_at": "2026-08-01T08:44:25Z",
+    "preflight_base_commit": "85caf0502c5b01e47aae11c5762e9e472d921969",
+    "prepared_at": "2026-08-01T09:25:40Z",
     "stock_fa2": {
       "bytes": 299183936,
       "path": "/home/mark/shared/lumoFlyWheel-streamk-wide256/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so",
@@ -66,6 +67,7 @@
   "stock_byte_capability": {
     "candidate_output_destination": "temporary",
     "comparison": "every BF16 output byte",
+    "comparison_call_limit": 320,
     "live_byte_equality": "pending",
     "mismatch_is_fatal": true,
     "served_output": "stock",
@@ -80,7 +82,8 @@
       "astropy__astropy-13398"
     ],
     "path": "config/fr13_fixed32/subset_b4_four.json",
-    "sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+    "sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "topology": "hydra27_fixed32"
   },
   "verification": {
     "bash_syntax": "pass",
@@ -88,9 +91,9 @@
     "python_compile": "pass",
     "ruff": "pass",
     "targeted_tests": {
-      "passed": 193,
+      "passed": 196,
       "status": "pass",
-      "wall_seconds": 2.18
+      "wall_seconds": 3.43
     }
   }
 }

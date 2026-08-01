@@ -21,10 +21,10 @@ LIVE_SCHEMA = "fr13.fixed32.cutlass_persistent_b4_m128_live_gate.v1"
 SIDECAR_SCHEMA = "fr13.fixed32.cutlass_b4.production_pass.v1"
 ATTESTATION_SCHEMA = "fr13.fixed32.cutlass_streamk_binary.v2"
 PATCH_SOURCE = Path("scripts/fr13_patch_cutlass_fixed32_wave.py")
-PATCH_SOURCE_SHA256 = "aaeededb58a1eda26b1570d7816456fdbe0cfba713488e688905c4c933b1b143"
+PATCH_SOURCE_SHA256 = "f3b70f541331d2fe4ea258297246dcfa854514addd163e6ccae4ff90d55f98db"
 VLLM_BASE_COMMIT = "fe9c3d6c5f66c873d196800384ed6880687b9e52"
 PATCHED_DISPATCH_SHA256 = (
-    "d4e9a445c65be2c9991fba92d323e2cf2496061dc008f56c7a0bc7f122666b67"
+    "44fb7a8d3cf6d8dc6b69d0acd3f5f1e533d7485f6c4d51e7e28c1a45c3fa9568"
 )
 EXPECTED_TASK_IDS = (
     "astropy__astropy-12907",
@@ -42,6 +42,7 @@ EXPECTED_MANDATORY_WEIGHT_FLOOR_MS = (
     floor.FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS
 )
 EXPECTED_SLO_CAP_MS = floor.FULL_VOCAB_SLO_CAP_MS
+MAX_COMPARISONS = 320
 EXPECTED_PROJECTION_NK = (
     (5120, 6144),
     (5120, 17408),
@@ -188,6 +189,7 @@ def validate_live_result(
         "acceptance_valid": False,
         "task_count": 4,
         "task_ids": list(EXPECTED_TASK_IDS),
+        "topology": "hydra27_fixed32",
         "draft_vocab_root": EXPECTED_DRAFT_VOCAB_ROOT,
         "draft_vocab_k": EXPECTED_DRAFT_VOCAB_K,
         "mandatory_weight_bytes": EXPECTED_MANDATORY_WEIGHT_BYTES,
@@ -202,6 +204,7 @@ def validate_live_result(
         "diagnostic_selector": diagnostic_selector,
         "served_result": "stock",
         "production_enabled": False,
+        "comparison_call_limit": MAX_COMPARISONS,
         "observed_m_values": [128],
         "observed_projection_nk": [list(shape) for shape in EXPECTED_PROJECTION_NK],
         "mismatching_comparisons": 0,
@@ -229,7 +232,7 @@ def validate_live_result(
         isinstance(comparisons, bool)
         or not isinstance(comparisons, int)
         or comparisons < len(EXPECTED_PROJECTION_NK)
-        or comparisons > 256
+        or comparisons > MAX_COMPARISONS
     ):
         raise QualificationError("CUTLASS B4 live PASS comparison count is invalid")
     source_commit = payload.get("source_commit")
@@ -275,6 +278,8 @@ def validate_live_result(
         "container_env_sha256": container_env_sha256,
         "qualified_draft_vocab_root": EXPECTED_DRAFT_VOCAB_ROOT,
         "qualified_draft_vocab_k": EXPECTED_DRAFT_VOCAB_K,
+        "qualified_topology": "hydra27_fixed32",
+        "qualified_comparison_call_limit": MAX_COMPARISONS,
         "mandatory_weight_bytes": EXPECTED_MANDATORY_WEIGHT_BYTES,
         "mandatory_weight_floor_ms": EXPECTED_MANDATORY_WEIGHT_FLOOR_MS,
         "one_sided_u95_cap_ms": EXPECTED_SLO_CAP_MS,
@@ -348,6 +353,8 @@ def verify_sidecar(
         "qualification_task_ids": list(EXPECTED_TASK_IDS),
         "qualified_draft_vocab_root": EXPECTED_DRAFT_VOCAB_ROOT,
         "qualified_draft_vocab_k": EXPECTED_DRAFT_VOCAB_K,
+        "qualified_topology": "hydra27_fixed32",
+        "qualified_comparison_call_limit": MAX_COMPARISONS,
         "mandatory_weight_bytes": EXPECTED_MANDATORY_WEIGHT_BYTES,
         "mandatory_weight_floor_ms": EXPECTED_MANDATORY_WEIGHT_FLOOR_MS,
         "one_sided_u95_cap_ms": EXPECTED_SLO_CAP_MS,
@@ -451,6 +458,8 @@ def validate_production_attestation(
     for key, expected in (
         ("qualified_draft_vocab_root", EXPECTED_DRAFT_VOCAB_ROOT),
         ("qualified_draft_vocab_k", EXPECTED_DRAFT_VOCAB_K),
+        ("qualified_topology", "hydra27_fixed32"),
+        ("qualified_comparison_call_limit", MAX_COMPARISONS),
         ("qualified_eager_builder_capacity", 128),
         ("mandatory_weight_bytes", EXPECTED_MANDATORY_WEIGHT_BYTES),
         (
@@ -510,6 +519,8 @@ def validate_production_attestation(
         "container_env_sha256": container_env_sha256,
         "qualified_draft_vocab_root": EXPECTED_DRAFT_VOCAB_ROOT,
         "qualified_draft_vocab_k": EXPECTED_DRAFT_VOCAB_K,
+        "qualified_topology": "hydra27_fixed32",
+        "qualified_comparison_call_limit": MAX_COMPARISONS,
         "mandatory_weight_bytes": EXPECTED_MANDATORY_WEIGHT_BYTES,
         "mandatory_weight_floor_ms": EXPECTED_MANDATORY_WEIGHT_FLOOR_MS,
         "one_sided_u95_cap_ms": EXPECTED_SLO_CAP_MS,

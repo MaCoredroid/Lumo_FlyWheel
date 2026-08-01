@@ -3,9 +3,9 @@
 Status: static preflight PASS; canonical GPU byte gate not launched.
 
 This artifact prepares the persistent-M128 CUTLASS candidate for the real
-SWE-Verified exact4 B4 byte gate. B1 currently owns the GPU, so this preflight
-does not contain a byte-equality result, a throughput result, or a hardware-floor
-acceptance claim.
+SWE-Verified exact4 B4 byte gate. No GPU command was launched during this
+repair, so the preflight does not contain a byte-equality result, a throughput
+result, or a hardware-floor acceptance claim.
 
 ## Correct acceptance contract
 
@@ -13,6 +13,7 @@ acceptance claim.
 - One-sided U95 cap at 1.15x: `177.0291423413919 ms/step`
 - Mandatory weight bytes: `42025179008`
 - B4 shape: batch size 4, concurrency 4, physical rows 128
+- Target topology: `hydra27_fixed32` (27 active nodes)
 - Task set: the four pinned real SWE-Verified instances in
   `config/fr13_fixed32/subset_b4_four.json`
 - Draft vocabulary: full (`FR13_DRAFT_VOCAB_ROOT=0`, `FR13_DRAFT_VOCAB_K=0`)
@@ -43,6 +44,12 @@ served output, computes persistent-M128 into a temporary output, compares every
 BF16 byte, records mismatch details, and still serves stock. Eager diagnostic
 bracketing now records authenticated task boundaries without invoking graph-only
 census or flush requirements. Any comparison mismatch fails the gate.
+
+The B4 comparator and both credential reducers are bounded at 320 calls. This
+leaves the B1 Stream-K bound at 256 while covering the required MTP projection
+that follows 256 target-projection calls in a real B4 event. The reducer also
+requires `FR13_FIXED32_MODE=hydra27_fixed32`; legacy Tail6 execution cannot
+qualify this candidate.
 
 The exact command is in `prepared_command.txt`. It was prepared only and was not
 executed. After an authenticated byte PASS, run the paired stock/candidate B4

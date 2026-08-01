@@ -1,20 +1,21 @@
 {
   "binary": {
-    "bytes": 112697400,
+    "bytes": 112698512,
     "mode": "0555",
-    "path": "/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.persistent_b4_m128_stock_symbol_exact_gate_ready.abi3.so",
+    "path": "/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.persistent_b4_m128_stock_symbol_exact_compare320_gate_ready.abi3.so",
     "runpath": "/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64",
-    "sha256": "1997fe0800ac4927690c021ddc2c0a3ccf763b36883c1b63f06310a0b02065d4"
+    "sha256": "6988f6a994c29e9196b6addc039e1d63bf08c32f268f9be3d2f14c5d863be1de"
   },
   "build": {
     "cuda_arch": "12.1a",
     "cutlass_revision": "v4.4.2",
-    "patched_dispatch_sha256": "d4e9a445c65be2c9991fba92d323e2cf2496061dc008f56c7a0bc7f122666b67",
-    "patch_source_sha256": "aaeededb58a1eda26b1570d7816456fdbe0cfba713488e688905c4c933b1b143",
+    "patched_dispatch_sha256": "44fb7a8d3cf6d8dc6b69d0acd3f5f1e533d7485f6c4d51e7e28c1a45c3fa9568",
+    "patch_source_sha256": "f3b70f541331d2fe4ea258297246dcfa854514addd163e6ccae4ff90d55f98db",
     "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
   },
   "candidate": {
     "diagnostic_selector": "persistent_b4_m128_byte_ab",
+    "diagnostic_comparison_call_limit": 320,
     "dispatch_m": 128,
     "fallback": "stock",
     "kernel_schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
@@ -24,6 +25,7 @@
   "measurement": {
     "hardware_floor_claim": false,
     "status": "unmeasured",
+    "target_topology": "hydra27_fixed32",
     "task_set_required": "real SWE-Verified exact4 B4"
   },
   "schema": "fr13.fixed32.cutlass_b4_persistent_m128.build.v1",
@@ -36,6 +38,7 @@
       "stack_bytes": 0
     },
     "cuobjdump_sha256": "8dab744202393bdc26cc2d2aa622f6ac1eb492dd932861ff62f63daa1c6c9841",
+    "dynamic_defined_symbols_equal_prior_candidate": true,
     "stock_kernel_records_matched": 6,
     "stock_resource_equivalent": true
   }

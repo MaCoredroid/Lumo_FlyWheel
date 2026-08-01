@@ -23,12 +23,13 @@ RECORD_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_byte_ab.v1
 LIVE_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_live_gate.v1
 CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl
 B4_KV_CACHE_MEMORY_BYTES=42949672960
+COMPARISON_CALL_LIMIT=320
 STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
 STOCK_FA2_BYTES=299183936
 SOURCE_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
-ARM="tail6_fixed32_cutlass_b4_m128_gate_${TAG}"
+ARM="hydra27_fixed32_cutlass_b4_m128_gate_${TAG}"
 ARMDIR="$RUNROOT_ABS/$ARM"
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
@@ -73,8 +74,9 @@ unset -f run_variant
   || { echo "canonical B4 full-vocabulary floor contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS"
-printf 'classification=real_swe_verified_exact4_b4_byte_diagnostic\ntiming_eligible=0\nfloor_acceptance_eligible=0\nreference_always_served=1\nbatch_size=4\nconcurrency=4\nfixed_rows=128\neager_builder_capacity=128\ndraft_vocab_root=0\ndraft_vocab_k=0\nfr13_needs_allow=FR13_DRAFT_VOCAB_K=0\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=177.0291423413919\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_selector=persistent_b4_m128\ndiagnostic_selector=%s\nenforce_eager=1\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
-  "$FR13_MANDATORY_WEIGHT_BYTES" "$FR13_WEIGHT_FLOOR_MS" "$$" \
+printf 'classification=real_swe_verified_exact4_b4_byte_diagnostic\ntiming_eligible=0\nfloor_acceptance_eligible=0\nreference_always_served=1\ntopology=hydra27_fixed32\nbatch_size=4\nconcurrency=4\nfixed_rows=128\neager_builder_capacity=128\ncomparison_call_limit=%s\ndraft_vocab_root=0\ndraft_vocab_k=0\nfr13_needs_allow=FR13_DRAFT_VOCAB_K=0\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=177.0291423413919\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_selector=persistent_b4_m128\ndiagnostic_selector=%s\nenforce_eager=1\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+  "$COMPARISON_CALL_LIMIT" "$FR13_MANDATORY_WEIGHT_BYTES" \
+  "$FR13_WEIGHT_FLOOR_MS" "$$" \
   "$RUNROOT_ABS" "$ARM" "$SOURCE_COMMIT" "$RUNNER_SHA256" \
   "$SUBSET_SHA256" "$STOCK_FA2_SHA256" "$STOCK_FA2_BYTES" \
   "$DIAGNOSTIC_SELECTOR" "$B4_KV_CACHE_MEMORY_BYTES" \
@@ -121,7 +123,7 @@ if env \
     FR13_FIXED32_ATTRIBUTION_ONLY=0 \
     FORKED_FA2_SO="$FORKED_FA2_SO" \
     bash scripts/fr13_bigdenom_swe_serve_variant.sh \
-      "$ARM" tail6_fixed32 "$SUBSET" \
+      "$ARM" hydra27_fixed32 "$SUBSET" \
       > "$RUNROOT_ABS/$ARM.runlog" 2>&1; then
   serve_rc=0
 else
@@ -150,7 +152,8 @@ cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" \
   "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_binary.json" \
   "$ARMDIR/cutlass_b4_m128_byte_gate.json" "$PATCH_SOURCE" \
   "$SOURCE_COMMIT" "$SUBSET_SHA256" "$DIAGNOSTIC_SELECTOR" \
-  "$RECORD_SCHEMA" "$LIVE_SCHEMA" "$STOCK_FA2_SHA256" <<'PY'
+  "$RECORD_SCHEMA" "$LIVE_SCHEMA" "$STOCK_FA2_SHA256" \
+  "$COMPARISON_CALL_LIMIT" <<'PY'
 import hashlib
 import json
 import os
@@ -179,6 +182,9 @@ diagnostic_selector = sys.argv[8]
 record_schema = sys.argv[9]
 live_schema = sys.argv[10]
 stock_fa2_sha256 = sys.argv[11]
+comparison_call_limit = int(sys.argv[12])
+if comparison_call_limit != qualification.MAX_COMPARISONS:
+    raise SystemExit("CUTLASS B4 comparison-call limit contract drifted")
 logs = arm / "logs"
 marker_path = logs / "fr13_fixed32_cutlass_b4_byte_ab.real_event.arm"
 ledger_path = logs / "fr13_fixed32_engine_ingress.jsonl"
@@ -217,8 +223,10 @@ records = [json.loads(line) for line in lines]
 observed_shapes = {(record.get("n"), record.get("k")) for record in records}
 invocations = [record.get("invocation") for record in records]
 errors = []
-if len(records) > 256:
-    errors.append("diagnostic exceeded its 256-call bound")
+if len(records) > comparison_call_limit:
+    errors.append(
+        f"diagnostic exceeded its {comparison_call_limit}-call bound"
+    )
 if any(record.get("schema") != record_schema for record in records):
     errors.append("comparison record schema mismatch")
 if any(record.get("task_marker") != task_marker for record in records):
@@ -307,9 +315,13 @@ if (
 
 container_env_raw = container_env_path.read_bytes()
 container_env_lines = container_env_raw.decode("ascii").splitlines()
-for expected_env in ("FR13_DRAFT_VOCAB_ROOT=0", "FR13_DRAFT_VOCAB_K=0"):
+for expected_env in (
+    "FR13_FIXED32_MODE=hydra27_fixed32",
+    "FR13_DRAFT_VOCAB_ROOT=0",
+    "FR13_DRAFT_VOCAB_K=0",
+):
     if container_env_lines.count(expected_env) != 1:
-        errors.append(f"B4 draft-vocabulary environment mismatch: {expected_env}")
+        errors.append(f"B4 environment mismatch: {expected_env}")
 
 payload = {
     "schema": live_schema,
@@ -317,6 +329,7 @@ payload = {
     "run_classification": "real_swe_verified_exact4_b4_byte_diagnostic",
     "acceptance_valid": False,
     "task_set": "canonical real SWE-Verified exact4 B4",
+    "topology": "hydra27_fixed32",
     "task_count": 4,
     "task_ids": expected_tasks,
     "task_marker": task_marker,
@@ -338,6 +351,7 @@ payload = {
     "diagnostic_selector": diagnostic_selector,
     "served_result": "stock",
     "production_enabled": False,
+    "comparison_call_limit": comparison_call_limit,
     "comparisons": len(records),
     "observed_m_values": sorted({record["m"] for record in records}),
     "observed_projection_nk": [list(shape) for shape in sorted(observed_shapes)],

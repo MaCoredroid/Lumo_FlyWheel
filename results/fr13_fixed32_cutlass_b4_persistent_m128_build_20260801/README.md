@@ -11,8 +11,9 @@ It is build/static evidence only; no throughput or hardware-floor claim is made.
 - CUTLASS tile: `128x128x128`
 - Schedule: `KernelTmaWarpSpecializedBlockwiseCooperativeSm120`
 - Fallback: the stock dispatcher for every non-exact shape
-- Binary SHA-256: `1997fe0800ac4927690c021ddc2c0a3ccf763b36883c1b63f06310a0b02065d4`
-- Binary bytes: `112697400`
+- B4 diagnostic comparison-call limit: `320` (B1 remains `256`)
+- Binary SHA-256: `6988f6a994c29e9196b6addc039e1d63bf08c32f268f9be3d2f14c5d863be1de`
+- Binary bytes: `112698512`
 
 The stock B4 path uses a `64x128x128` ping-pong tile. At `M=128`, the candidate
 halves the M-axis output-tile count while keeping the N tile at 128. The new
@@ -26,6 +27,11 @@ not re-instantiated or replaced.
 kernel symbol/resource records match the prior exact-stock baseline after
 whitespace normalization. See `candidate_kernel_resources.tsv`,
 `stock_kernel_resources.tsv`, and `stock_kernel_resource_equivalence.txt`.
+The raw resource dump SHA-256 remains
+`8dab744202393bdc26cc2d2aa622f6ac1eb492dd932861ff62f63daa1c6c9841`,
+confirming that the host-side comparator-bound change did not alter cubins.
+The dynamic defined-symbol set also exactly matches the prior 256-call
+persistent-M128 candidate.
 
 The earlier `64x256x128` ping-pong experiment compiled with `STACK=488` for
 both output types and is rejected. Cooperative `64x256` is structurally invalid

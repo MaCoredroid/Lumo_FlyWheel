@@ -6,15 +6,16 @@ PASS scripts/fr13_run_b4_cutlass_persistent_m128_live_gate.sh
 PASS scripts/fr13_run_b4_cutlass_persistent_m128_timing.sh
 
 Python compile:
-PASS scripts/fr10_phase4_patch_vllm_tree_gdn.py
-PASS scripts/run_swe_bench_q36_a.py
+PASS scripts/fr13_cutlass_b4_pass.py
+PASS scripts/fr13_cutlass_wave_binary.py
+PASS scripts/fr13_patch_cutlass_fixed32_wave.py
+PASS three focused CUTLASS test modules
 
 Ruff:
-PASS scripts/run_swe_bench_q36_a.py and seven modified test modules
-PASS scripts/fr10_phase4_patch_vllm_tree_gdn.py with established F401/F841 ignores
+PASS three modified CUTLASS scripts and three focused CUTLASS test modules
 
 Pytest:
-193 passed in 2.18s
+196 passed in 3.43s
 
 Files:
 tests/test_fr13_cutlass_b4_production.py
@@ -29,7 +30,12 @@ tests/test_fr13_fixed32_floor_propagation.py
 tests/test_fr13_fixed32_conv_source_batch.py
 
 Artifact identities rechecked:
-candidate SO sha256 1997fe0800ac4927690c021ddc2c0a3ccf763b36883c1b63f06310a0b02065d4 bytes 112697400 mode 0555
-patched dispatch sha256 d4e9a445c65be2c9991fba92d323e2cf2496061dc008f56c7a0bc7f122666b67
-patch source sha256 aaeededb58a1eda26b1570d7816456fdbe0cfba713488e688905c4c933b1b143
+candidate SO sha256 6988f6a994c29e9196b6addc039e1d63bf08c32f268f9be3d2f14c5d863be1de bytes 112698512 mode 0555
+patched dispatch sha256 44fb7a8d3cf6d8dc6b69d0acd3f5f1e533d7485f6c4d51e7e28c1a45c3fa9568
+patch source sha256 f3b70f541331d2fe4ea258297246dcfa854514addd163e6ccae4ff90d55f98db
 stock FA2 sha256 f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d bytes 299183936
+
+Gate contract:
+B4 comparator/reducer maximum 320 calls; B1 maximum remains 256 calls
+target topology hydra27_fixed32; legacy tail6_fixed32 cannot qualify
+prepared exact4 command only; byte gate and timing were not launched

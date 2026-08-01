@@ -475,8 +475,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     // in one process and CUDA stream, then always serve the stock result.
     static std::atomic<int64_t> next_invocation{0};
     constexpr int64_t byte_ab_limit = 256;
+    constexpr int64_t b4_m128_byte_ab_limit = 320;
+    const int64_t selected_byte_ab_limit =
+        b4_m128_byte_ab ? b4_m128_byte_ab_limit : byte_ab_limit;
     int64_t invocation = next_invocation.fetch_add(1);
-    if (invocation >= byte_ab_limit) {
+    if (invocation >= selected_byte_ab_limit) {
       return run_stock(out);
     }
 
