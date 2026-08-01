@@ -229,6 +229,7 @@ def test_runner_and_launcher_are_exact4_b4_shadow_only() -> None:
     assert "ACCEPT_SPEED_PROBE" not in runner
     assert "must be the only kernel candidate" in launcher
     assert "requires exact4 B4 full-vocabulary eager fixed32" in launcher
+    assert '-e ENFORCE_EAGER="${ENFORCE_EAGER:-0}"' in launcher
     assert "authenticated B1 and exact4 B4 byte prerequisites" in launcher
     assert "bind-prerequisites" in pass_source
     assert '"candidate_serving_permitted": False' in pass_source
