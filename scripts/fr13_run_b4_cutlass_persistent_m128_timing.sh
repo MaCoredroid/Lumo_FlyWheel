@@ -16,6 +16,7 @@ cd "$REPO"
 : "${CUTLASS_B4_PASS_SHA256:?set CUTLASS_B4_PASS_SHA256 to its raw SHA-256}"
 
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
+QUALIFICATION_PROFILE=${CUTLASS_B4_QUALIFICATION_PROFILE:-full_vocab}
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
 STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
@@ -24,15 +25,52 @@ CANDIDATE_SHA256=895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64
 CANDIDATE_BYTES=112698512
 PATCH_SOURCE=scripts/fr13_patch_cutlass_fixed32_wave.py
 QUALIFIED_PATCH_SOURCE_SHA256=656c53b20497fc08cc7fdfb18256235b07cfad9868fde2faa70e6b0b9dfca41a
-QUALIFICATION_SOURCE_COMMIT=0f2a31ed298758cba72fad7e77fc3e13e27d545a
+DRAFT_VOCAB_BLOCKS_HOST=scripts/fr13_dvk_subset_blocks.json
+DRAFT_VOCAB_BLOCKS_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
+DRAFT_VOCAB_BLOCKS_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
+case "$QUALIFICATION_PROFILE" in
+  full_vocab)
+    QUALIFICATION_SOURCE_COMMIT=${CUTLASS_B4_QUALIFICATION_SOURCE_COMMIT:-0f2a31ed298758cba72fad7e77fc3e13e27d545a}
+    LAUNCH_CLASSIFICATION=real_swe_verified_exact4_b4_timing_candidate
+    RUN_CLASSIFICATION=real_swe_verified_exact4_b4_timing
+    SUMMARY_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128.full_wall_timing_pair.v1
+    BINDING_SCHEMA=fr13.fixed32.cutlass_b4.production_binding.v1
+    DRAFT_VOCAB_ROOT=0
+    DRAFT_VOCAB_K=0
+    NEEDS_ALLOW=FR13_DRAFT_VOCAB_K=0
+    MANDATORY_WEIGHT_BYTES=42025179008
+    MANDATORY_WEIGHT_FLOOR_MS=153.9383846446886
+    ONE_SIDED_U95_CAP_MS=177.0291423413919
+    ARM_PROFILE_SUFFIX=
+    ;;
+  k64_root)
+    : "${CUTLASS_B4_QUALIFICATION_SOURCE_COMMIT:?set it to the K64 live-gate source commit}"
+    QUALIFICATION_SOURCE_COMMIT=$CUTLASS_B4_QUALIFICATION_SOURCE_COMMIT
+    LAUNCH_CLASSIFICATION=real_swe_verified_exact4_b4_k64_root_timing_candidate
+    RUN_CLASSIFICATION=real_swe_verified_exact4_b4_k64_root_timing
+    SUMMARY_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128.k64_root.full_wall_timing_pair.v1
+    BINDING_SCHEMA=fr13.fixed32.cutlass_b4.k64_root.production_binding.v1
+    DRAFT_VOCAB_ROOT=1
+    DRAFT_VOCAB_K=65536
+    NEEDS_ALLOW=
+    MANDATORY_WEIGHT_BYTES=32666638208
+    MANDATORY_WEIGHT_FLOOR_MS=119.658015414
+    ONE_SIDED_U95_CAP_MS=137.6067177261
+    ARM_PROFILE_SUFFIX=_k64_root
+    ;;
+  *)
+    echo "CUTLASS_B4_QUALIFICATION_PROFILE must be full_vocab or k64_root" >&2
+    exit 2
+    ;;
+esac
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
 TIMING_HARNESS_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 B4_KV_CACHE_MEMORY_BYTES=42949672960
 TIMING_KIND=hydra27_fixed32
-STOCK_ARM="hydra27_fixed32_cutlass_stock_b4_${TAG}"
-CANDIDATE_ARM="hydra27_fixed32_cutlass_persistent_m128_${TAG}"
+STOCK_ARM="hydra27_fixed32_cutlass_stock_b4${ARM_PROFILE_SUFFIX}_${TAG}"
+CANDIDATE_ARM="hydra27_fixed32_cutlass_persistent_m128${ARM_PROFILE_SUFFIX}_${TAG}"
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
   || { echo "TAG contains unsafe characters" >&2; exit 2; }
@@ -52,6 +90,8 @@ done
 [[ "$(stat -c '%s' "$CUTLASS_B4_SO")" == "$CANDIDATE_BYTES" \
    && "$(sha256sum "$CUTLASS_B4_SO" | awk '{print $1}')" == "$CANDIDATE_SHA256" ]] \
   || { echo "CUTLASS_B4_SO is not the pinned persistent-M128 candidate" >&2; exit 2; }
+[[ "$QUALIFICATION_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] \
+  || { echo "CUTLASS B4 qualification source commit is invalid" >&2; exit 2; }
 CURRENT_PATCH_SOURCE_SHA256=$(sha256sum "$PATCH_SOURCE" | awk '{print $1}')
 QUALIFICATION_PATCH_SOURCE_SHA256=$(
   git show "${QUALIFICATION_SOURCE_COMMIT}:${PATCH_SOURCE}" | sha256sum | awk '{print $1}'
@@ -63,6 +103,11 @@ git merge-base --is-ancestor "$QUALIFICATION_SOURCE_COMMIT" "$TIMING_HARNESS_COM
   || { echo "timing harness does not descend from the qualification source" >&2; exit 2; }
 [[ "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" ]] \
   || { echo "canonical exact4 subset SHA-256 drift" >&2; exit 2; }
+if [[ "$QUALIFICATION_PROFILE" == "k64_root" ]]; then
+  [[ -f "$DRAFT_VOCAB_BLOCKS_HOST" && ! -L "$DRAFT_VOCAB_BLOCKS_HOST" \
+     && "$(sha256sum "$DRAFT_VOCAB_BLOCKS_HOST" | awk '{print $1}')" == "$DRAFT_VOCAB_BLOCKS_SHA256" ]] \
+    || { echo "pinned root-64K draft-vocabulary block map drifted" >&2; exit 2; }
+fi
 [[ "$CUTLASS_B4_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
    && "$(sha256sum "$CUTLASS_B4_PASS_JSON" | awk '{print $1}')" == "$CUTLASS_B4_PASS_SHA256" ]] \
   || { echo "CUTLASS B4 live PASS identity mismatch" >&2; exit 2; }
@@ -74,24 +119,26 @@ LIVE_PASS_BINDING_JSON=$("$PYTHON_BIN" scripts/fr13_cutlass_b4_pass.py validate 
   --expected-live-sha256 "$CUTLASS_B4_PASS_SHA256" \
   --candidate-so "$CUTLASS_B4_SO" --patch-source "$PATCH_SOURCE" \
   --expected-source-commit "$QUALIFICATION_SOURCE_COMMIT" \
-  --candidate-selector persistent_b4_m128)
+  --candidate-selector persistent_b4_m128 \
+  --qualification-profile "$QUALIFICATION_PROFILE")
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "all Docker containers must be absent before timing" >&2; exit 2; }
 
 export BSIZE=4
 export CONC=4
 export WALL=0
-export FR13_DRAFT_VOCAB_ROOT=0
-export FR13_DRAFT_VOCAB_K=0
-export FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'
+export FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT"
+export FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K"
+export FR13_DRAFT_VOCAB_BLOCKS="$DRAFT_VOCAB_BLOCKS_CONTAINER"
+export FR13_NEEDS_ALLOW="$NEEDS_ALLOW"
 export FR13_FLOOR_ORDER=TH
 source scripts/fr13_canonical_env.sh
 run_variant() { :; }
 source "$SEQUENCE"
 unset -f run_variant
-[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "42025179008" \
-   && "$FR13_WEIGHT_FLOOR_MS" == "153.9383846446886" ]] \
-  || { echo "canonical B4 full-vocabulary floor contract drifted" >&2; exit 2; }
+[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "$MANDATORY_WEIGHT_BYTES" \
+   && "$FR13_WEIGHT_FLOOR_MS" == "$MANDATORY_WEIGHT_FLOOR_MS" ]] \
+  || { echo "canonical B4 qualification floor contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS"
 printf '%s\n' "$LIVE_PASS_BINDING_JSON" \
@@ -105,8 +152,12 @@ LIVE_PASS_BINDING_SHA256=$(
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
 
-printf 'classification=real_swe_verified_exact4_b4_timing_candidate\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\nonly_arm_delta=CUTLASS_stock_to_persistent_b4_m128\nbatch_size=4\nconcurrency=4\nfixed_rows=128\ndraft_vocab_root=0\ndraft_vocab_k=0\nfr13_needs_allow=FR13_DRAFT_VOCAB_K=0\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=177.0291423413919\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nqualification_source_commit=%s\ntiming_harness_commit=%s\nqualified_patch_source_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_sha256=%s\ncandidate_bytes=%s\nlive_pass_sha256=%s\nlive_pass_binding_sha256=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
-  "$FR13_MANDATORY_WEIGHT_BYTES" "$FR13_WEIGHT_FLOOR_MS" "$$" \
+printf 'classification=%s\nqualification_profile=%s\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\nonly_arm_delta=CUTLASS_stock_to_persistent_b4_m128\nbatch_size=4\nconcurrency=4\nfixed_rows=128\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nqualification_source_commit=%s\ntiming_harness_commit=%s\nqualified_patch_source_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_sha256=%s\ncandidate_bytes=%s\nlive_pass_sha256=%s\nlive_pass_binding_sha256=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+  "$LAUNCH_CLASSIFICATION" "$QUALIFICATION_PROFILE" \
+  "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" "$NEEDS_ALLOW" \
+  "$DRAFT_VOCAB_BLOCKS_CONTAINER" "$DRAFT_VOCAB_BLOCKS_SHA256" \
+  "$FR13_MANDATORY_WEIGHT_BYTES" "$FR13_WEIGHT_FLOOR_MS" \
+  "$ONE_SIDED_U95_CAP_MS" "$$" \
   "$RUNROOT_ABS" "$STOCK_ARM" "$CANDIDATE_ARM" "$TIMING_HARNESS_COMMIT" \
   "$QUALIFICATION_SOURCE_COMMIT" "$TIMING_HARNESS_COMMIT" \
   "$QUALIFIED_PATCH_SOURCE_SHA256" "$RUNNER_SHA256" "$SUBSET_SHA256" \
@@ -170,8 +221,10 @@ run_arm() {
       OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4 AGENT_WALL_S= \
       KV_CACHE_MEMORY_BYTES="$B4_KV_CACHE_MEMORY_BYTES" \
       FR13_FIXED32_B1_DIAGNOSTIC=0 \
-      FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0 \
-      FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0' \
+      FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT" \
+      FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K" \
+      FR13_DRAFT_VOCAB_BLOCKS="$DRAFT_VOCAB_BLOCKS_CONTAINER" \
+      FR13_NEEDS_ALLOW="$NEEDS_ALLOW" \
       FR10_METRICS=0 ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
       FR13_RING_EXPORT=1 FR13_FLAGS_INKERNEL=1 \
       FR13_SCAN_ALIGN=0 FR13_NPAD_INVARIANT=0 \
@@ -185,6 +238,7 @@ run_arm() {
       FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON="$pass_json" \
       FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256="$pass_sha" \
       FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT="${qualification_source_commit:-}" \
+      FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="$QUALIFICATION_PROFILE" \
       FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
       FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0 \
       FR13_DFWD_UNIFIED_BM8_LIVE_AB=0 FR13_DFWD_UNIFIED_BM8_PRODUCTION=0 \
@@ -216,9 +270,14 @@ run_arm() {
   [[ -f "$container_env" && ! -L "$container_env" ]] \
     || { echo "$arm lacks a regular container environment artifact" >&2; return 4; }
   [[ "$(grep -Fxc 'FR13_FIXED32_MODE=hydra27_fixed32' "$container_env")" -eq 1 \
-     && "$(grep -Fxc 'FR13_DRAFT_VOCAB_ROOT=0' "$container_env")" -eq 1 \
-     && "$(grep -Fxc 'FR13_DRAFT_VOCAB_K=0' "$container_env")" -eq 1 ]] \
-    || { echo "$arm did not run the canonical B4 full-vocabulary contract" >&2; return 4; }
+     && "$(grep -Fxc "FR13_DRAFT_VOCAB_ROOT=$DRAFT_VOCAB_ROOT" "$container_env")" -eq 1 \
+     && "$(grep -Fxc "FR13_DRAFT_VOCAB_K=$DRAFT_VOCAB_K" "$container_env")" -eq 1 \
+     && "$(grep -Fxc "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=$QUALIFICATION_PROFILE" "$container_env")" -eq 1 ]] \
+    || { echo "$arm did not run the selected B4 qualification profile" >&2; return 4; }
+  if [[ "$QUALIFICATION_PROFILE" == "k64_root" ]]; then
+    [[ "$(grep -Fxc "FR13_DRAFT_VOCAB_BLOCKS=$DRAFT_VOCAB_BLOCKS_CONTAINER" "$container_env")" -eq 1 ]] \
+      || { echo "$arm did not run the pinned root-64K block map" >&2; return 4; }
+  fi
   "$PYTHON_BIN" scripts/fr13_measure.py deploy-speed \
     --arm "$arm" --out-root "$RUNROOT_ABS/$arm/swe_out" \
     --expected-tok-per-draft 31 --batch-size 4 \
@@ -249,10 +308,12 @@ CANDIDATE_SIDECAR_SHA256=$(sha256sum "$CANDIDATE_SIDECAR" | awk '{print $1}')
   --sidecar "$CANDIDATE_SIDECAR" \
   --expected-sidecar-sha256 "$CANDIDATE_SIDECAR_SHA256" \
   --candidate-so "$CUTLASS_B4_SO" --patch-source "$PATCH_SOURCE" \
-  --candidate-selector persistent_b4_m128 >/dev/null
+  --candidate-selector persistent_b4_m128 \
+  --qualification-profile "$QUALIFICATION_PROFILE" >/dev/null
 "$PYTHON_BIN" scripts/fr13_cutlass_b4_pass.py attestation \
   --attestation "$CANDIDATE_ATTESTATION" \
   --expected-sidecar-sha256 "$CANDIDATE_SIDECAR_SHA256" \
+  --qualification-profile "$QUALIFICATION_PROFILE" \
   > "$RUNROOT_ABS/$CANDIDATE_ARM/cutlass_b4_production_binding.json"
 
 finalize_manifests
@@ -264,7 +325,12 @@ finalize_manifests
   "$RUNROOT_ABS/timing_summary.json" "$CANDIDATE_SIDECAR_SHA256" \
   "$CUTLASS_B4_PASS_SHA256" "$CANDIDATE_SHA256" "$STOCK_FA2_SHA256" \
   "$QUALIFICATION_SOURCE_COMMIT" "$TIMING_HARNESS_COMMIT" \
-  "$QUALIFIED_PATCH_SOURCE_SHA256" "$LIVE_PASS_BINDING_SHA256" <<'PY'
+  "$QUALIFIED_PATCH_SOURCE_SHA256" "$LIVE_PASS_BINDING_SHA256" \
+  "$QUALIFICATION_PROFILE" "$SUMMARY_SCHEMA" "$RUN_CLASSIFICATION" \
+  "$BINDING_SCHEMA" "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" \
+  "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
+  "$ONE_SIDED_U95_CAP_MS" "$DRAFT_VOCAB_BLOCKS_CONTAINER" \
+  "$DRAFT_VOCAB_BLOCKS_SHA256" <<'PY'
 import json
 import math
 import sys
@@ -274,6 +340,12 @@ subset_path, stock_path, candidate_path, binding_path, out_path = map(Path, sys.
 sidecar_sha256, live_sha256, candidate_sha256, fa2_sha256 = sys.argv[6:10]
 qualification_source_commit, timing_harness_commit = sys.argv[10:12]
 patch_source_sha256, live_binding_sha256 = sys.argv[12:14]
+qualification_profile, summary_schema, run_classification = sys.argv[14:17]
+binding_schema = sys.argv[17]
+draft_vocab_root, draft_vocab_k, mandatory_weight_bytes = map(int, sys.argv[18:21])
+mandatory_weight_floor_ms = float(sys.argv[21])
+one_sided_u95_cap_ms = float(sys.argv[22])
+draft_vocab_blocks, draft_vocab_blocks_sha256 = sys.argv[23:25]
 task_ids = sorted(json.loads(subset_path.read_text(encoding="ascii"))["instance_ids"])
 stock = json.loads(stock_path.read_text(encoding="utf-8"))
 candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
@@ -296,12 +368,12 @@ def validate(record, label):
         or record.get("batch_size") != 4
         or record.get("n_tasks") != 4
         or sorted(record.get("task_instance_ids", [])) != task_ids
-        or record.get("draft_vocab_root") != 0
-        or record.get("draft_vocab_k") != 0
-        or record.get("mandatory_weight_bytes") != 42_025_179_008
+        or record.get("draft_vocab_root") != draft_vocab_root
+        or record.get("draft_vocab_k") != draft_vocab_k
+        or record.get("mandatory_weight_bytes") != mandatory_weight_bytes
         or not math.isclose(
             float(record.get("weight_floor_ms", math.nan)),
-            153.9383846446886,
+            mandatory_weight_floor_ms,
             rel_tol=0.0,
             abs_tol=1e-9,
         )
@@ -319,7 +391,7 @@ def validate(record, label):
 validate(stock, "stock")
 validate(candidate, "candidate")
 if (
-    binding.get("schema") != "fr13.fixed32.cutlass_b4.production_binding.v1"
+    binding.get("schema") != binding_schema
     or binding.get("status") != "BOUND"
     or binding.get("selector") != "persistent_b4_m128"
     or binding.get("candidate_sha256") != candidate_sha256
@@ -330,8 +402,24 @@ if (
     or binding.get("qualified_fixed_rows") != 128
     or binding.get("qualified_topology") != "hydra27_fixed32"
     or binding.get("qualified_comparison_call_limit") != 320
+    or binding.get("qualified_draft_vocab_root") != draft_vocab_root
+    or binding.get("qualified_draft_vocab_k") != draft_vocab_k
+    or binding.get("mandatory_weight_bytes") != mandatory_weight_bytes
+    or not math.isclose(
+        float(binding.get("mandatory_weight_floor_ms", math.nan)),
+        mandatory_weight_floor_ms,
+        rel_tol=0.0,
+        abs_tol=1e-9,
+    )
 ):
     raise SystemExit("candidate lacks persistent-M128 production binding")
+if qualification_profile == "k64_root" and (
+    binding.get("qualification_profile") != qualification_profile
+    or binding.get("qualified_draft_vocab_blocks") != draft_vocab_blocks
+    or binding.get("qualified_draft_vocab_blocks_sha256")
+    != draft_vocab_blocks_sha256
+):
+    raise SystemExit("candidate lacks the pinned root-64K block-map binding")
 stock_wall = positive(stock, "step_wall_ms")
 candidate_wall = positive(candidate, "step_wall_ms")
 stock_tps = positive(stock, "measured_tps_fullstep_wall")
@@ -341,15 +429,22 @@ candidate_floor = positive(candidate, "floor_ms")
 if not math.isclose(stock_floor, candidate_floor, rel_tol=0.0, abs_tol=1e-9):
     raise SystemExit("stock and candidate floor values differ")
 summary = {
-    "schema": "fr13.fixed32.cutlass_persistent_b4_m128.full_wall_timing_pair.v1",
+    "schema": summary_schema,
     "status": "complete",
-    "run_classification": "real_swe_verified_exact4_b4_timing",
+    "run_classification": run_classification,
+    "qualification_profile": qualification_profile,
     "task_count": 4,
     "batch_size": 4,
     "concurrency": 4,
     "arm": "hydra27_fixed32",
     "task_ids": task_ids,
     "decision_metric": "measured_tps_fullstep_wall",
+    "draft_vocab_root": draft_vocab_root,
+    "draft_vocab_k": draft_vocab_k,
+    "target_verifier_vocabulary": "full",
+    "mandatory_weight_bytes": mandatory_weight_bytes,
+    "mandatory_weight_floor_ms": mandatory_weight_floor_ms,
+    "one_sided_u95_cap_ms": one_sided_u95_cap_ms,
     "qualification_source_commit": qualification_source_commit,
     "timing_harness_commit": timing_harness_commit,
     "qualified_patch_source_sha256": patch_source_sha256,
@@ -360,6 +455,10 @@ summary = {
         "step_wall_ms": stock_wall,
         "measured_tps_fullstep_wall": stock_tps,
         "accepted_drafts_per_event": float(stock["accept_per_event"]),
+        "committed_tokens_per_event": float(stock["committed_per_event"]),
+        "sfwd_gpu_ms_per_step": float(stock["s_per_fwd_gpu"]),
+        "dfwd_gpu_ms_per_step": float(stock["drafter_gpu_ms_per_step"]),
+        "cfwd_gpu_ms_per_step": float(stock["committer_gpu_ms_per_step"]),
         "step_wall_to_optimistic_floor_ratio": float(stock["floor_ratio"]),
     },
     "candidate": {
@@ -370,6 +469,10 @@ summary = {
         "step_wall_ms": candidate_wall,
         "measured_tps_fullstep_wall": candidate_tps,
         "accepted_drafts_per_event": float(candidate["accept_per_event"]),
+        "committed_tokens_per_event": float(candidate["committed_per_event"]),
+        "sfwd_gpu_ms_per_step": float(candidate["s_per_fwd_gpu"]),
+        "dfwd_gpu_ms_per_step": float(candidate["drafter_gpu_ms_per_step"]),
+        "cfwd_gpu_ms_per_step": float(candidate["committer_gpu_ms_per_step"]),
         "step_wall_to_optimistic_floor_ratio": float(candidate["floor_ratio"]),
     },
     "optimistic_floor_ms": stock_floor,
@@ -383,6 +486,13 @@ summary = {
     ),
     "production_default_enabled": False,
 }
+if qualification_profile == "k64_root":
+    summary.update(
+        {
+            "draft_vocab_blocks": draft_vocab_blocks,
+            "draft_vocab_blocks_sha256": draft_vocab_blocks_sha256,
+        }
+    )
 temporary = out_path.with_name(out_path.name + ".tmp")
 temporary.write_text(
     json.dumps(summary, ensure_ascii=True, separators=(",", ":"), sort_keys=True) + "\n",

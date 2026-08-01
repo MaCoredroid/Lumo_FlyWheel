@@ -32,6 +32,7 @@ _FR13_CALLER_CUTLASS_WAVE_PRODUCTION="${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION+set
 _FR13_CALLER_CUTLASS_WAVE_PASS_JSON="${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON-}"
 _FR13_CALLER_CUTLASS_WAVE_PASS_SHA="${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256-}"
 _FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE="${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT+set}:${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT-}"
+_FR13_CALLER_CUTLASS_WAVE_QUAL_PROFILE="${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE+set}:${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE-}"
 _FR13_CALLER_SFWD_B4="${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB+set}:${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB-}"
 _FR13_M32_GUARD_NAMES=(
   FR13_DRAFT_HEAD_M32_LIVE_AB
@@ -126,7 +127,8 @@ if [[ "$_FR13_CALLER_BATCH_GDN_PRODUCTION" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_SO" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_PRODUCTION" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_PASS_JSON" == set:* \
-      || "$_FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE" == set:* ]]; then
+      || "$_FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE" == set:* \
+      || "$_FR13_CALLER_CUTLASS_WAVE_QUAL_PROFILE" == set:* ]]; then
   if [[ "${FR13_FIXED32_BATCH_GDN_PRODUCTION+set}:${FR13_FIXED32_BATCH_GDN_PRODUCTION-}" != "$_FR13_CALLER_BATCH_GDN_PRODUCTION" \
       || "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION+set}:${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION-}" != "$_FR13_CALLER_BATCH_GDN_BV_PRODUCTION" \
       || "${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON-}" != "$_FR13_CALLER_BATCH_GDN_GRAPH_PASS_JSON" \
@@ -153,7 +155,8 @@ if [[ "$_FR13_CALLER_BATCH_GDN_PRODUCTION" == set:* \
       || "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION+set}:${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION-}" != "$_FR13_CALLER_CUTLASS_WAVE_PRODUCTION" \
       || "${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON-}" != "$_FR13_CALLER_CUTLASS_WAVE_PASS_JSON" \
       || "${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256-}" != "$_FR13_CALLER_CUTLASS_WAVE_PASS_SHA" \
-      || "${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT+set}:${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT-}" != "$_FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE" ]]; then
+      || "${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT+set}:${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT-}" != "$_FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE" \
+      || "${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE+set}:${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE-}" != "$_FR13_CALLER_CUTLASS_WAVE_QUAL_PROFILE" ]]; then
     echo ".lumo.local.env must not override B4 GDN production credentials, selectors, or runtime geometry; the same guard covers CUTLASS production" >&2
     exit 2
   fi
@@ -186,6 +189,7 @@ unset \
   _FR13_CALLER_CUTLASS_WAVE_PASS_JSON \
   _FR13_CALLER_CUTLASS_WAVE_PASS_SHA \
   _FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE \
+  _FR13_CALLER_CUTLASS_WAVE_QUAL_PROFILE \
   _FR13_CALLER_M32_GUARD \
   _FR13_M32_GUARD_ACTIVE \
   _FR13_M32_GUARD_NAMES \
@@ -342,6 +346,23 @@ FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}
 FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON=${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON:-}
 FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256=${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256:-}
 FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT=${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT:-}
+FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE:-full_vocab}
+case "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" in
+  full_vocab) ;;
+  k64_root)
+    [[ "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+       && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+       && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
+       && "$(sha256sum scripts/fr13_dvk_subset_blocks.json | awk '{print $1}')" == "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff" ]] || {
+      echo "CUTLASS k64_root qualification requires the pinned root-64K block map" >&2
+      exit 2
+    }
+    ;;
+  *)
+    echo "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE is unsupported" >&2
+    exit 2
+    ;;
+esac
 case "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" in
   0|1) ;;
   *) echo "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE must be 0 or 1" >&2; exit 2 ;;
@@ -547,7 +568,27 @@ else
       echo "CUTLASS persistent M128 candidate requires fixed32 B4" >&2
       exit 2
     }
+    case "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" in
+      full_vocab)
+        [[ "$FR13_DRAFT_VOCAB_ROOT" == "0" \
+           && "${FR13_DRAFT_VOCAB_K:-65536}" == "0" \
+           && "${FR13_NEEDS_ALLOW:-}" == "FR13_DRAFT_VOCAB_K=0" ]] || {
+          echo "CUTLASS full_vocab B4 qualification requires the K0 workload" >&2
+          exit 2
+        }
+        ;;
+      k64_root)
+        [[ -z "${FR13_NEEDS_ALLOW:-}" ]] || {
+          echo "CUTLASS k64_root B4 qualification forbids a K0 override" >&2
+          exit 2
+        }
+        ;;
+    esac
   else
+    [[ "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" == "full_vocab" ]] || {
+      echo "CUTLASS B1 candidates do not accept a B4 qualification profile" >&2
+      exit 2
+    }
     [[ -n "${FR13_FIXED32_MODE:-}" && "$MAX_NUM_SEQS" == "1" ]] || {
       echo "CUTLASS Stream-K candidate requires fixed32 B1" >&2
       exit 2
@@ -614,8 +655,14 @@ else
       _fr13_cutlass_streamk_source_commit=$(git rev-parse HEAD)
     fi
     _fr13_cutlass_pass_script=scripts/fr13_cutlass_streamk_pass.py
+    _fr13_cutlass_pass_profile_args=()
     [[ "$_fr13_cutlass_b4" == "0" ]] \
-      || _fr13_cutlass_pass_script=scripts/fr13_cutlass_b4_pass.py
+      || {
+        _fr13_cutlass_pass_script=scripts/fr13_cutlass_b4_pass.py
+        _fr13_cutlass_pass_profile_args=(
+          --qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"
+        )
+      }
     # B1 executes scripts/fr13_cutlass_streamk_pass.py validate; B4 executes
     # the corresponding persistent-M128 credential validator selected above.
     .venv/bin/python "$_fr13_cutlass_pass_script" validate \
@@ -625,8 +672,10 @@ else
       --patch-source scripts/fr13_patch_cutlass_fixed32_wave.py \
       --expected-source-commit "$_fr13_cutlass_streamk_source_commit" \
       --candidate-selector "$FR13_FIXED32_CUTLASS_WAVE" \
+      "${_fr13_cutlass_pass_profile_args[@]}" \
       >/dev/null
     unset _fr13_cutlass_pass_script
+    unset _fr13_cutlass_pass_profile_args
   fi
   unset _fr13_cutlass_b4
 fi
@@ -1451,8 +1500,14 @@ fi
 if [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" ]]; then
   _fr13_cutlass_streamk_production_sidecar_host="$LOG_DIR/fr13_fixed32_cutlass_streamk.production_pass.json"
   _fr13_cutlass_pass_script=scripts/fr13_cutlass_streamk_pass.py
+  _fr13_cutlass_pass_profile_args=()
   [[ "$FR13_FIXED32_CUTLASS_WAVE" != "persistent_b4_m128" ]] \
-    || _fr13_cutlass_pass_script=scripts/fr13_cutlass_b4_pass.py
+    || {
+      _fr13_cutlass_pass_script=scripts/fr13_cutlass_b4_pass.py
+      _fr13_cutlass_pass_profile_args=(
+        --qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"
+      )
+    }
   # B1 executes scripts/fr13_cutlass_streamk_pass.py issue; B4 executes the
   # corresponding persistent-M128 issuer selected above.
   .venv/bin/python "$_fr13_cutlass_pass_script" issue \
@@ -1462,6 +1517,7 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" ]]; then
     --patch-source scripts/fr13_patch_cutlass_fixed32_wave.py \
     --expected-source-commit "$_fr13_cutlass_streamk_source_commit" \
     --candidate-selector "$FR13_FIXED32_CUTLASS_WAVE" \
+    "${_fr13_cutlass_pass_profile_args[@]}" \
     --out "$_fr13_cutlass_streamk_production_sidecar_host" \
     >/dev/null
   chmod 0400 "$_fr13_cutlass_streamk_production_sidecar_host"
@@ -1472,6 +1528,7 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" ]]; then
   unset _fr13_cutlass_streamk_production_sidecar_host
   unset _fr13_cutlass_streamk_source_commit
   unset _fr13_cutlass_pass_script
+  unset _fr13_cutlass_pass_profile_args
 fi
 FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR=""
 FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256=""
@@ -2505,6 +2562,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DRAFT_VOCAB_K="${FR13_DRAFT_VOCAB_K:-65536}" \
   -e FR13_DRAFT_VOCAB_BLOCKS="${FR13_DRAFT_VOCAB_BLOCKS:-/workspace/scripts/fr13_dvk_subset_blocks.json}" \
   -e FR13_DRAFT_VOCAB_ROOT="$FR13_DRAFT_VOCAB_ROOT" \
+  -e FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" \
   -e FR13_DRAFT_HEAD_PAD_ROWS="$FR13_DRAFT_HEAD_PAD_ROWS" \
   -e FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB="$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" \
   -e FR13_DRAFT_HEAD_M32_LIVE_AB="$FR13_DRAFT_HEAD_M32_LIVE_AB" \

@@ -1,0 +1,27 @@
+STATIC ONLY - no Docker/GPU campaign was launched from this worktree.
+
+Focused suite:
+.venv/bin/python -m pytest -q tests/test_fr13_cutlass_b4_k64_profile.py tests/test_fr13_cutlass_b4_production.py tests/test_fr13_cutlass_streamk_gate_wiring.py tests/test_fr13_cutlass_streamk_production.py tests/test_fr13_fixed32_ingress_wiring.py
+58 passed in 0.94s
+
+Broader route suite:
+.venv/bin/python -m pytest -q tests/test_fr13_cutlass_b4_k64_profile.py tests/test_fr13_cutlass_b4_production.py tests/test_fr13_cutlass_fixed32_wave_patch.py tests/test_fr13_cutlass_streamk_gate_wiring.py tests/test_fr13_cutlass_streamk_production.py tests/test_fr13_cutlass_wave_binary.py tests/test_fr13_fixed32_b4_campaign_provenance.py tests/test_fr13_fixed32_floor_propagation.py tests/test_fr13_fixed32_process_attestation.py tests/test_fr13_fixed32_subset_binding.py tests/test_fr13_hardware_floor_ledger.py tests/test_fr13_measure_floor_semantics.py tests/test_fr13_fixed32_ingress_wiring.py
+141 passed in 1.54s
+
+Static checks:
+.venv/bin/ruff check scripts/fr13_cutlass_b4_pass.py scripts/fr13_cutlass_wave_binary.py tests/test_fr13_cutlass_b4_production.py tests/test_fr13_cutlass_b4_k64_profile.py
+All checks passed!
+
+.venv/bin/ruff format --check scripts/fr13_cutlass_b4_pass.py scripts/fr13_cutlass_wave_binary.py tests/test_fr13_cutlass_b4_production.py tests/test_fr13_cutlass_b4_k64_profile.py
+4 files already formatted
+
+bash -n scripts/fr13_run_b4_cutlass_persistent_m128_live_gate.sh scripts/fr13_run_b4_cutlass_persistent_m128_timing.sh scripts/fr13_launch_forked_fa2_tree_server.sh results/fr13_fixed32_cutlass_b4_persistent_m128_k64_route_20260801/prepared_campaign.sh
+PASS
+
+.venv/bin/python -m py_compile scripts/fr13_cutlass_b4_pass.py scripts/fr13_cutlass_wave_binary.py
+PASS
+
+Runtime-manifest preflight: PASS
+External-manifest preflight: PASS
+External-manifest canonical SHA-256:
+c42fb16d2ea932f0e819c81172c49b69b312b75dd446146b6d7b6ef78af00a9e

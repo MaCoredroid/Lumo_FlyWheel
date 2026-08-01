@@ -14,22 +14,57 @@ cd "$REPO"
 : "${CUTLASS_B4_SO:?set CUTLASS_B4_SO to the pinned persistent-M128 shared object}"
 
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
+QUALIFICATION_PROFILE=${CUTLASS_B4_QUALIFICATION_PROFILE:-full_vocab}
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
 PATCH_SOURCE=scripts/fr13_patch_cutlass_fixed32_wave.py
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
 DIAGNOSTIC_SELECTOR=persistent_b4_m128_byte_ab
 RECORD_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_byte_ab.v1
-LIVE_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_live_gate.v1
 CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl
+DRAFT_VOCAB_BLOCKS_HOST=scripts/fr13_dvk_subset_blocks.json
+DRAFT_VOCAB_BLOCKS_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
+DRAFT_VOCAB_BLOCKS_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
 B4_KV_CACHE_MEMORY_BYTES=42949672960
 COMPARISON_CALL_LIMIT=320
 STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
 STOCK_FA2_BYTES=299183936
+case "$QUALIFICATION_PROFILE" in
+  full_vocab)
+    RUN_CLASSIFICATION=real_swe_verified_exact4_b4_byte_diagnostic
+    LIVE_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_live_gate.v1
+    DRAFT_VOCAB_ROOT=0
+    DRAFT_VOCAB_K=0
+    NEEDS_ALLOW=FR13_DRAFT_VOCAB_K=0
+    MANDATORY_WEIGHT_BYTES=42025179008
+    MANDATORY_WEIGHT_FLOOR_MS=153.9383846446886
+    ONE_SIDED_U95_CAP_MS=177.0291423413919
+    LIVE_RESULT_NAME=cutlass_b4_m128_byte_gate.json
+    PRODUCTION_PASS_NAME=cutlass_b4_m128.production_pass.json
+    ARM_PROFILE_SUFFIX=
+    ;;
+  k64_root)
+    RUN_CLASSIFICATION=real_swe_verified_exact4_b4_k64_root_byte_diagnostic
+    LIVE_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_k64_root_live_gate.v1
+    DRAFT_VOCAB_ROOT=1
+    DRAFT_VOCAB_K=65536
+    NEEDS_ALLOW=
+    MANDATORY_WEIGHT_BYTES=32666638208
+    MANDATORY_WEIGHT_FLOOR_MS=119.658015414
+    ONE_SIDED_U95_CAP_MS=137.6067177261
+    LIVE_RESULT_NAME=cutlass_b4_m128_k64_root_byte_gate.json
+    PRODUCTION_PASS_NAME=cutlass_b4_m128_k64_root.production_pass.json
+    ARM_PROFILE_SUFFIX=_k64_root
+    ;;
+  *)
+    echo "CUTLASS_B4_QUALIFICATION_PROFILE must be full_vocab or k64_root" >&2
+    exit 2
+    ;;
+esac
 SOURCE_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
-ARM="hydra27_fixed32_cutlass_b4_m128_gate_${TAG}"
+ARM="hydra27_fixed32_cutlass_b4_m128${ARM_PROFILE_SUFFIX}_gate_${TAG}"
 ARMDIR="$RUNROOT_ABS/$ARM"
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
@@ -49,6 +84,11 @@ done
   || { echo "FORKED_FA2_SO is not the exact-safe stock reference" >&2; exit 2; }
 [[ "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" ]] \
   || { echo "canonical exact4 subset SHA-256 drift" >&2; exit 2; }
+if [[ "$QUALIFICATION_PROFILE" == "k64_root" ]]; then
+  [[ -f "$DRAFT_VOCAB_BLOCKS_HOST" && ! -L "$DRAFT_VOCAB_BLOCKS_HOST" \
+     && "$(sha256sum "$DRAFT_VOCAB_BLOCKS_HOST" | awk '{print $1}')" == "$DRAFT_VOCAB_BLOCKS_SHA256" ]] \
+    || { echo "pinned root-64K draft-vocabulary block map drifted" >&2; exit 2; }
+fi
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean" >&2; exit 2; }
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
@@ -60,23 +100,27 @@ done
 export BSIZE=4
 export CONC=4
 export WALL=0
-export FR13_DRAFT_VOCAB_ROOT=0
-export FR13_DRAFT_VOCAB_K=0
-export FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'
+export FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT"
+export FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K"
+export FR13_DRAFT_VOCAB_BLOCKS="$DRAFT_VOCAB_BLOCKS_CONTAINER"
+export FR13_NEEDS_ALLOW="$NEEDS_ALLOW"
 export FR13_FLOOR_ORDER=TH
 source scripts/fr13_canonical_env.sh
 run_variant() { :; }
 source "$SEQUENCE"
 unset -f run_variant
 
-[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "42025179008" \
-   && "$FR13_WEIGHT_FLOOR_MS" == "153.9383846446886" ]] \
-  || { echo "canonical B4 full-vocabulary floor contract drifted" >&2; exit 2; }
+[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "$MANDATORY_WEIGHT_BYTES" \
+   && "$FR13_WEIGHT_FLOOR_MS" == "$MANDATORY_WEIGHT_FLOOR_MS" ]] \
+  || { echo "canonical B4 qualification floor contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS"
-printf 'classification=real_swe_verified_exact4_b4_byte_diagnostic\ntiming_eligible=0\nfloor_acceptance_eligible=0\nreference_always_served=1\ntopology=hydra27_fixed32\nbatch_size=4\nconcurrency=4\nfixed_rows=128\neager_builder_capacity=128\ncomparison_call_limit=%s\ndraft_vocab_root=0\ndraft_vocab_k=0\nfr13_needs_allow=FR13_DRAFT_VOCAB_K=0\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=177.0291423413919\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_selector=persistent_b4_m128\ndiagnostic_selector=%s\nenforce_eager=1\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
-  "$COMPARISON_CALL_LIMIT" "$FR13_MANDATORY_WEIGHT_BYTES" \
-  "$FR13_WEIGHT_FLOOR_MS" "$$" \
+printf 'classification=%s\nqualification_profile=%s\ntiming_eligible=0\nfloor_acceptance_eligible=0\nreference_always_served=1\ntopology=hydra27_fixed32\nbatch_size=4\nconcurrency=4\nfixed_rows=128\neager_builder_capacity=128\ncomparison_call_limit=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_selector=persistent_b4_m128\ndiagnostic_selector=%s\nenforce_eager=1\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+  "$RUN_CLASSIFICATION" "$QUALIFICATION_PROFILE" \
+  "$COMPARISON_CALL_LIMIT" "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" \
+  "$NEEDS_ALLOW" "$DRAFT_VOCAB_BLOCKS_CONTAINER" \
+  "$DRAFT_VOCAB_BLOCKS_SHA256" "$FR13_MANDATORY_WEIGHT_BYTES" \
+  "$FR13_WEIGHT_FLOOR_MS" "$ONE_SIDED_U95_CAP_MS" "$$" \
   "$RUNROOT_ABS" "$ARM" "$SOURCE_COMMIT" "$RUNNER_SHA256" \
   "$SUBSET_SHA256" "$STOCK_FA2_SHA256" "$STOCK_FA2_BYTES" \
   "$DIAGNOSTIC_SELECTOR" "$B4_KV_CACHE_MEMORY_BYTES" \
@@ -94,8 +138,10 @@ if env \
     KV_CACHE_MEMORY_BYTES="$B4_KV_CACHE_MEMORY_BYTES" \
     FR13_FIXED32_B1_DIAGNOSTIC=0 \
     FR10_METRICS=0 ENFORCE_EAGER=1 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
-    FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0 \
-    FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0' \
+    FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT" \
+    FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K" \
+    FR13_DRAFT_VOCAB_BLOCKS="$DRAFT_VOCAB_BLOCKS_CONTAINER" \
+    FR13_NEEDS_ALLOW="$NEEDS_ALLOW" \
     FR13_RING_EXPORT=1 FR13_FLAGS_INKERNEL=1 \
     FR13_SCAN_ALIGN=0 FR13_NPAD_INVARIANT=0 \
     FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1 \
@@ -112,6 +158,7 @@ if env \
     FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=0 \
     FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON= \
     FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256= \
+    FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="$QUALIFICATION_PROFILE" \
     FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
     FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0 \
     FR13_DFWD_UNIFIED_BM8_LIVE_AB=0 \
@@ -150,10 +197,11 @@ cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" \
 "$PYTHON_BIN" - \
   "$ARMDIR" "$ARMDIR$CONTAINER_JSONL" \
   "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_binary.json" \
-  "$ARMDIR/cutlass_b4_m128_byte_gate.json" "$PATCH_SOURCE" \
+  "$ARMDIR/$LIVE_RESULT_NAME" "$PATCH_SOURCE" \
   "$SOURCE_COMMIT" "$SUBSET_SHA256" "$DIAGNOSTIC_SELECTOR" \
   "$RECORD_SCHEMA" "$LIVE_SCHEMA" "$STOCK_FA2_SHA256" \
-  "$COMPARISON_CALL_LIMIT" <<'PY'
+  "$COMPARISON_CALL_LIMIT" "$QUALIFICATION_PROFILE" \
+  "$DRAFT_VOCAB_BLOCKS_SHA256" <<'PY'
 import hashlib
 import json
 import os
@@ -183,8 +231,21 @@ record_schema = sys.argv[9]
 live_schema = sys.argv[10]
 stock_fa2_sha256 = sys.argv[11]
 comparison_call_limit = int(sys.argv[12])
+qualification_profile = sys.argv[13]
+draft_vocab_blocks_sha256 = sys.argv[14]
 if comparison_call_limit != qualification.MAX_COMPARISONS:
     raise SystemExit("CUTLASS B4 comparison-call limit contract drifted")
+try:
+    profile = qualification.QUALIFICATION_PROFILES[qualification_profile]
+except KeyError as error:
+    raise SystemExit("CUTLASS B4 qualification profile is invalid") from error
+if live_schema != profile["live_schema"]:
+    raise SystemExit("CUTLASS B4 live schema/profile contract drifted")
+if (
+    qualification_profile == "k64_root"
+    and draft_vocab_blocks_sha256 != qualification.DRAFT_VOCAB_BLOCKS_SHA256
+):
+    raise SystemExit("CUTLASS B4 root-64K block-map contract drifted")
 logs = arm / "logs"
 marker_path = logs / "fr13_fixed32_cutlass_b4_byte_ab.real_event.arm"
 ledger_path = logs / "fr13_fixed32_engine_ingress.jsonl"
@@ -317,8 +378,12 @@ container_env_raw = container_env_path.read_bytes()
 container_env_lines = container_env_raw.decode("ascii").splitlines()
 for expected_env in (
     "FR13_FIXED32_MODE=hydra27_fixed32",
-    "FR13_DRAFT_VOCAB_ROOT=0",
-    "FR13_DRAFT_VOCAB_K=0",
+    f"FR13_DRAFT_VOCAB_ROOT={profile['draft_vocab_root']}",
+    f"FR13_DRAFT_VOCAB_K={profile['draft_vocab_k']}",
+    (
+        "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="
+        f"{qualification_profile}"
+    ),
 ):
     if container_env_lines.count(expected_env) != 1:
         errors.append(f"B4 environment mismatch: {expected_env}")
@@ -326,7 +391,7 @@ for expected_env in (
 payload = {
     "schema": live_schema,
     "status": "pass" if not errors else "fail",
-    "run_classification": "real_swe_verified_exact4_b4_byte_diagnostic",
+    "run_classification": profile["run_classification"],
     "acceptance_valid": False,
     "task_set": "canonical real SWE-Verified exact4 B4",
     "topology": "hydra27_fixed32",
@@ -337,11 +402,11 @@ payload = {
     "real_task_arm_sha256": hashlib.sha256(marker_raw).hexdigest(),
     "container_env_sha256": hashlib.sha256(container_env_raw).hexdigest(),
     "engine_ledger_chain_head_sha256": ledger_verification["chain_head_sha256"],
-    "draft_vocab_root": qualification.EXPECTED_DRAFT_VOCAB_ROOT,
-    "draft_vocab_k": qualification.EXPECTED_DRAFT_VOCAB_K,
-    "mandatory_weight_bytes": qualification.EXPECTED_MANDATORY_WEIGHT_BYTES,
-    "mandatory_weight_floor_ms": qualification.EXPECTED_MANDATORY_WEIGHT_FLOOR_MS,
-    "one_sided_u95_cap_ms": qualification.EXPECTED_SLO_CAP_MS,
+    "draft_vocab_root": profile["draft_vocab_root"],
+    "draft_vocab_k": profile["draft_vocab_k"],
+    "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
+    "mandatory_weight_floor_ms": profile["mandatory_weight_floor_ms"],
+    "one_sided_u95_cap_ms": profile["one_sided_u95_cap_ms"],
     "comparator_timing_eligible": False,
     "batch_size": 4,
     "concurrency": 4,
@@ -368,6 +433,23 @@ payload = {
     "binary_attestation_sha256": hashlib.sha256(binary_raw).hexdigest(),
     "errors": errors,
 }
+if qualification_profile == "k64_root":
+    expected_blocks_env = (
+        "FR13_DRAFT_VOCAB_BLOCKS="
+        f"{qualification.DRAFT_VOCAB_BLOCKS_CONTAINER_PATH}"
+    )
+    if container_env_lines.count(expected_blocks_env) != 1:
+        errors.append(f"B4 environment mismatch: {expected_blocks_env}")
+    payload.update(
+        {
+            "qualification_profile": qualification_profile,
+            "draft_vocab_blocks": (
+                qualification.DRAFT_VOCAB_BLOCKS_CONTAINER_PATH
+            ),
+            "draft_vocab_blocks_sha256": draft_vocab_blocks_sha256,
+        }
+    )
+    payload["status"] = "pass" if not errors else "fail"
 output_path.write_text(
     json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
     encoding="ascii",
@@ -377,16 +459,17 @@ if errors:
     raise SystemExit(4)
 PY
 
-LIVE_RESULT="$ARMDIR/cutlass_b4_m128_byte_gate.json"
+LIVE_RESULT="$ARMDIR/$LIVE_RESULT_NAME"
 LIVE_SHA256=$(sha256sum "$LIVE_RESULT" | awk '{print $1}')
 "$PYTHON_BIN" scripts/fr13_cutlass_b4_pass.py issue \
   --live-result "$LIVE_RESULT" --expected-live-sha256 "$LIVE_SHA256" \
   --candidate-so "$CUTLASS_B4_SO" --patch-source "$PATCH_SOURCE" \
   --expected-source-commit "$SOURCE_COMMIT" \
   --candidate-selector persistent_b4_m128 \
-  --out "$ARMDIR/cutlass_b4_m128.production_pass.json"
+  --qualification-profile "$QUALIFICATION_PROFILE" \
+  --out "$ARMDIR/$PRODUCTION_PASS_NAME"
 
 printf 'live_result=%s\nlive_sha256=%s\nproduction_pass=%s\nproduction_pass_sha256=%s\n' \
   "$LIVE_RESULT" "$LIVE_SHA256" \
-  "$ARMDIR/cutlass_b4_m128.production_pass.json" \
-  "$(sha256sum "$ARMDIR/cutlass_b4_m128.production_pass.json" | awk '{print $1}')"
+  "$ARMDIR/$PRODUCTION_PASS_NAME" \
+  "$(sha256sum "$ARMDIR/$PRODUCTION_PASS_NAME" | awk '{print $1}')"

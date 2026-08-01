@@ -26,9 +26,7 @@ COOP128_SELECTORS = frozenset({"streamk_coop128", "streamk_coop128_byte_ab"})
 WIDE256_SELECTORS = frozenset(
     {"streamk_force_wide256", "streamk_force_wide256_byte_ab"}
 )
-B4_M128_SELECTORS = frozenset(
-    {"persistent_b4_m128", "persistent_b4_m128_byte_ab"}
-)
+B4_M128_SELECTORS = frozenset({"persistent_b4_m128", "persistent_b4_m128_byte_ab"})
 CANDIDATE_SELECTORS = COOP128_SELECTORS | WIDE256_SELECTORS | B4_M128_SELECTORS
 CONTAINER_SOURCE = Path("/tmp/fr13_cutlass_wave.abi3.so")
 CONTAINER_DESTINATION = Path(
@@ -165,27 +163,17 @@ def install_candidate(
             "qualification_task_marker": qualification_record[
                 "qualification_task_marker"
             ],
-            "real_task_arm_sha256": qualification_record[
-                "real_task_arm_sha256"
-            ],
-            "container_env_sha256": qualification_record[
-                "container_env_sha256"
-            ],
+            "real_task_arm_sha256": qualification_record["real_task_arm_sha256"],
+            "container_env_sha256": qualification_record["container_env_sha256"],
             "qualified_draft_vocab_root": qualification_record[
                 "qualified_draft_vocab_root"
             ],
-            "qualified_draft_vocab_k": qualification_record[
-                "qualified_draft_vocab_k"
-            ],
-            "mandatory_weight_bytes": qualification_record[
-                "mandatory_weight_bytes"
-            ],
+            "qualified_draft_vocab_k": qualification_record["qualified_draft_vocab_k"],
+            "mandatory_weight_bytes": qualification_record["mandatory_weight_bytes"],
             "mandatory_weight_floor_ms": qualification_record[
                 "mandatory_weight_floor_ms"
             ],
-            "one_sided_u95_cap_ms": qualification_record[
-                "one_sided_u95_cap_ms"
-            ],
+            "one_sided_u95_cap_ms": qualification_record["one_sided_u95_cap_ms"],
         }
         for key in (
             "qualified_eager_builder_capacity",
@@ -193,6 +181,15 @@ def install_candidate(
             "qualified_comparison_call_limit",
         ):
             if key in qualification_record:
+                qualification[key] = qualification_record[key]
+        if qualification_record.get("qualification_profile") == "k64_root":
+            for key in (
+                "qualification_profile",
+                "qualified_draft_vocab_blocks",
+                "qualified_draft_vocab_blocks_sha256",
+                "qualified_fixed_rows",
+                "qualified_projection_nk",
+            ):
                 qualification[key] = qualification_record[key]
     elif (
         production_sidecar is not None or expected_production_sidecar_sha256 is not None

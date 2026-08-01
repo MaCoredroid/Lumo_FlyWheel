@@ -120,6 +120,9 @@ def test_exact4_b4_pass_issues_and_verifies_production_sidecar(
     )
 
     assert issued == verified
+    assert issued["schema"] == module.SIDECAR_SCHEMA
+    assert "qualification_profile" not in issued
+    assert "qualified_draft_vocab_blocks" not in issued
     assert issued["qualification_task_marker"] == task_marker
     assert issued["qualified_fixed_rows"] == 128
     assert issued["qualified_draft_vocab_root"] == 0
@@ -136,9 +139,7 @@ def test_b4_production_attestation_preserves_exact4_binding(
         tmp_path, monkeypatch
     )
     sidecar = tmp_path / "sidecar.json"
-    issued = module.issue_sidecar(
-        live, live_sha256, candidate, sidecar, patch_source
-    )
+    issued = module.issue_sidecar(live, live_sha256, candidate, sidecar, patch_source)
     sidecar_sha256 = hashlib.sha256(sidecar.read_bytes()).hexdigest()
     candidate_sha256 = hashlib.sha256(candidate.read_bytes()).hexdigest()
     identity = {
@@ -252,8 +253,12 @@ def test_b4_gate_and_timing_are_closed_over_by_runtime_manifest() -> None:
     assert '"task_count": 4' in gate
     assert '"fixed_rows": 128' in gate
     assert '"eager_builder_capacity": 128' in gate
-    assert "FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0" in gate
-    assert "FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'" in gate
+    assert (
+        "QUALIFICATION_PROFILE=${CUTLASS_B4_QUALIFICATION_PROFILE:-full_vocab}" in gate
+    )
+    assert "DRAFT_VOCAB_ROOT=0" in gate
+    assert "DRAFT_VOCAB_K=0" in gate
+    assert "NEEDS_ALLOW=FR13_DRAFT_VOCAB_K=0" in gate
     assert "42025179008" in gate
     assert "153.9383846446886" in gate
     assert "177.0291423413919" in gate
@@ -269,8 +274,13 @@ def test_b4_gate_and_timing_are_closed_over_by_runtime_manifest() -> None:
     ).read_text(encoding="utf-8")
     assert "persistent_b4_m128" in timing
     assert "--batch-size 4" in timing
-    assert "FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0" in timing
-    assert "FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'" in timing
+    assert (
+        "QUALIFICATION_PROFILE=${CUTLASS_B4_QUALIFICATION_PROFILE:-full_vocab}"
+        in timing
+    )
+    assert "DRAFT_VOCAB_ROOT=0" in timing
+    assert "DRAFT_VOCAB_K=0" in timing
+    assert "NEEDS_ALLOW=FR13_DRAFT_VOCAB_K=0" in timing
     assert "42025179008" in timing
     assert "153.9383846446886" in timing
     assert "177.0291423413919" in timing
@@ -284,16 +294,20 @@ def test_b4_gate_and_timing_are_closed_over_by_runtime_manifest() -> None:
 
 
 def test_b4_timing_keeps_live_qualification_separate_from_harness_commit() -> None:
-    timing = (
-        SCRIPTS / "fr13_run_b4_cutlass_persistent_m128_timing.sh"
-    ).read_text(encoding="utf-8")
+    timing = (SCRIPTS / "fr13_run_b4_cutlass_persistent_m128_timing.sh").read_text(
+        encoding="utf-8"
+    )
     launcher = (SCRIPTS / "fr13_launch_forked_fa2_tree_server.sh").read_text(
         encoding="utf-8"
     )
     qualification_commit = "0f2a31ed298758cba72fad7e77fc3e13e27d545a"
     patch_sha256 = "656c53b20497fc08cc7fdfb18256235b07cfad9868fde2faa70e6b0b9dfca41a"
 
-    assert f"QUALIFICATION_SOURCE_COMMIT={qualification_commit}" in timing
+    assert (
+        "QUALIFICATION_SOURCE_COMMIT="
+        "${CUTLASS_B4_QUALIFICATION_SOURCE_COMMIT:-"
+        f"{qualification_commit}}}"
+    ) in timing
     assert "TIMING_HARNESS_COMMIT=$(git rev-parse HEAD)" in timing
     assert f"QUALIFIED_PATCH_SOURCE_SHA256={patch_sha256}" in timing
     assert 'git show "${QUALIFICATION_SOURCE_COMMIT}:${PATCH_SOURCE}"' in timing
@@ -317,7 +331,7 @@ def test_b4_timing_keeps_live_qualification_separate_from_harness_commit() -> No
         in launcher
     )
     assert (
-        '_fr13_cutlass_streamk_source_commit=$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT'
+        "_fr13_cutlass_streamk_source_commit=$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT"
         in launcher
     )
     assert (
@@ -330,29 +344,25 @@ def test_b4_timing_keeps_live_qualification_separate_from_harness_commit() -> No
         "CUTLASS persistent M128 production requires a pinned qualification source commit"
         in launcher
     )
-    assert "CUTLASS B1 production forbids a B4 qualification source override" in launcher
+    assert (
+        "CUTLASS B1 production forbids a B4 qualification source override" in launcher
+    )
 
 
 def test_b4_selector_reaches_eager_process_attestation() -> None:
-    serve = (SCRIPTS / "fr13_bigdenom_swe_serve_variant.sh").read_text(
-        encoding="utf-8"
-    )
-    orchestrator = (SCRIPTS / "run_swe_bench_q36_a.py").read_text(
-        encoding="utf-8"
-    )
+    serve = (SCRIPTS / "fr13_bigdenom_swe_serve_variant.sh").read_text(encoding="utf-8")
+    orchestrator = (SCRIPTS / "run_swe_bench_q36_a.py").read_text(encoding="utf-8")
 
     assert 'cutlass_wave == "persistent_b4_m128_byte_ab"' in serve
     assert '"persistent_b4_m128"' in serve
     assert '"persistent_b4_m128_byte_ab"' in serve
-    assert "batch_gdn_byte_ab_text == \"1\"\n            or cutlass_wave" in serve
+    assert 'batch_gdn_byte_ab_text == "1"\n            or cutlass_wave' in serve
     assert '== "persistent_b4_m128_byte_ab" ]]; then' in serve
     assert "fr13-fixed32-eager-kernel-terminal-v1" in serve
     assert "fr13-fixed32-eager-kernel-traffic-audit-skip-v1" in serve
     assert "fixed32 eager kernel diagnostic: graph-census needles" in serve
     assert "_Fixed32EagerKernelDiagnosticTaskBracket" in orchestrator
-    assert (
-        "or fixed32_cutlass_b4_diagnostic" in orchestrator
-    )
+    assert "or fixed32_cutlass_b4_diagnostic" in orchestrator
 
 
 def test_b4_pass_accepts_320_comparisons_and_rejects_321(
