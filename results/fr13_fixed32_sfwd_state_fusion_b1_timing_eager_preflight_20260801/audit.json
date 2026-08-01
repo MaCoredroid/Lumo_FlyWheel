@@ -1,0 +1,40 @@
+{
+  "schema": "fr13.fixed32.sfwd_state_fusion.b1_timing_eager_preflight.v1",
+  "status": "ready_waiting_for_live_byte_pass",
+  "code_commit": "b234e66cf3e81c5e4b5d45f62119e6bbad9c642a",
+  "batch_size": 1,
+  "task_count": 1,
+  "task_ids": [
+    "astropy__astropy-12907"
+  ],
+  "run_classification": "one_real_swe_verified_full_vocab_b1_sfwd_state_fusion_timing_diagnostic",
+  "eager_lifecycle_classification": "eager_kernel_timing_diagnostic",
+  "timing_eligible": false,
+  "floor_acceptance_eligible": false,
+  "production_eligible": false,
+  "physical_rows_per_request": 32,
+  "full_vocab_weight_bytes": 42025179008,
+  "full_vocab_floor_ms": 153.9383846446886,
+  "one_sided_u95_cap_ms": 177.0291423413919,
+  "subset_sha256": "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb",
+  "forked_fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+  "forked_fa2_bytes": 299183936,
+  "source_sha256": {
+    "scripts/fr13_run_b1_sfwd_state_fusion_timing.sh": "17f8701cd06169bf88be3a828d78ef7db994c5789fd8855f1f7948d320f436d4",
+    "scripts/fr13_bigdenom_swe_serve_variant.sh": "35a67e11cce61927c1d2c01a4c4d3bc4f33bbba0c77881344394a504e49fc5a2",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh": "d0b4c47a45e4a2c814acf38ba536dce7cd890f545d609fe395cfc1ce3f61cba3",
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "c0de3767454a3bfb5e4c27019ecdd5ca55d36867723bc572e4612768b7905b2f",
+    "scripts/run_swe_bench_q36_a.py": "d58150619a3610bfc1d81a5b659d64c90ebdcd0ae5f395c124c2b68dd16e5b98"
+  },
+  "verification": {
+    "focused_cpu_source_tests": "249 passed in 3.82s",
+    "shell_syntax": "pass",
+    "python_compile": "pass",
+    "targeted_ruff": "pass",
+    "git_diff_check": "pass"
+  },
+  "gpu_launched": false,
+  "docker_launched": false,
+  "live_timing_launched": false
+}
+
