@@ -283,6 +283,56 @@ def test_b4_gate_and_timing_are_closed_over_by_runtime_manifest() -> None:
     assert 'record.get("floor_is_full_step_hardware_floor") is not False' in timing
 
 
+def test_b4_timing_keeps_live_qualification_separate_from_harness_commit() -> None:
+    timing = (
+        SCRIPTS / "fr13_run_b4_cutlass_persistent_m128_timing.sh"
+    ).read_text(encoding="utf-8")
+    launcher = (SCRIPTS / "fr13_launch_forked_fa2_tree_server.sh").read_text(
+        encoding="utf-8"
+    )
+    qualification_commit = "0f2a31ed298758cba72fad7e77fc3e13e27d545a"
+    patch_sha256 = "656c53b20497fc08cc7fdfb18256235b07cfad9868fde2faa70e6b0b9dfca41a"
+
+    assert f"QUALIFICATION_SOURCE_COMMIT={qualification_commit}" in timing
+    assert "TIMING_HARNESS_COMMIT=$(git rev-parse HEAD)" in timing
+    assert f"QUALIFIED_PATCH_SOURCE_SHA256={patch_sha256}" in timing
+    assert 'git show "${QUALIFICATION_SOURCE_COMMIT}:${PATCH_SOURCE}"' in timing
+    assert '--expected-source-commit "$QUALIFICATION_SOURCE_COMMIT"' in timing
+    assert "cutlass_b4_live_pass_binding.at_launch.json" in timing
+    assert "qualification_source_commit=%s" in timing
+    assert "timing_harness_commit=%s" in timing
+    assert "qualified_patch_source_sha256=%s" in timing
+    assert (
+        'FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT="${qualification_source_commit:-}"'
+        in timing
+    )
+    assert (
+        'binding.get("qualification_source_commit") != qualification_source_commit'
+        in timing
+    )
+    assert 'binding.get("patch_source_sha256") != patch_source_sha256' in timing
+
+    assert (
+        "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT=${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT:-}"
+        in launcher
+    )
+    assert (
+        '_fr13_cutlass_streamk_source_commit=$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT'
+        in launcher
+    )
+    assert (
+        launcher.count(
+            '--expected-source-commit "$_fr13_cutlass_streamk_source_commit"'
+        )
+        == 2
+    )
+    assert (
+        "CUTLASS persistent M128 production requires a pinned qualification source commit"
+        in launcher
+    )
+    assert "CUTLASS B1 production forbids a B4 qualification source override" in launcher
+
+
 def test_b4_selector_reaches_eager_process_attestation() -> None:
     serve = (SCRIPTS / "fr13_bigdenom_swe_serve_variant.sh").read_text(
         encoding="utf-8"

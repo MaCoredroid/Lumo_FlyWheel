@@ -193,8 +193,22 @@ def test_fixed32_campaign_closes_ingress_before_fetch_and_terminal_audit() -> No
     assert "fr13-fixed32-eager-kernel-traffic-audit-skip-v1" in teardown
     assert '"authenticated_engine_ledger_snapshotted":true' in teardown
     assert '"graph_census_audit_used":false' in teardown
-    assert '"$FR13_FIXED32_B1_DIAGNOSTIC" <<\'PY\'' in serve
-    assert "concurrency=int(concurrency_text)" not in serve
+
+
+def test_fixed32_chat_traffic_audit_passes_validated_concurrency() -> None:
+    serve = source(SERVE)
+    writer_start = serve.index("write_fixed32_chat_traffic_audit(){")
+    writer_end = serve.index(
+        '\n}\n\necho "[hygiene] recover_host_memory + assert free"',
+        writer_start,
+    )
+    writer = serve[writer_start:writer_end]
+
+    assert '"$FR13_FIXED32_B1_DIAGNOSTIC" \\\n    "$SWE_CONCURRENCY" <<\'PY\'' in writer
+    assert "concurrency_text = sys.argv[6]" in writer
+    assert 'if concurrency_text not in {"1", "4"}:' in writer
+    assert 'raise SystemExit("fixed32 chat-task audit concurrency is invalid")' in writer
+    assert "concurrency=int(concurrency_text)" in writer
 
 
 @pytest.mark.parametrize(

@@ -23,8 +23,10 @@ STOCK_FA2_BYTES=299183936
 CANDIDATE_SHA256=895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f
 CANDIDATE_BYTES=112698512
 PATCH_SOURCE=scripts/fr13_patch_cutlass_fixed32_wave.py
+QUALIFIED_PATCH_SOURCE_SHA256=656c53b20497fc08cc7fdfb18256235b07cfad9868fde2faa70e6b0b9dfca41a
+QUALIFICATION_SOURCE_COMMIT=0f2a31ed298758cba72fad7e77fc3e13e27d545a
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
-SOURCE_COMMIT=$(git rev-parse HEAD)
+TIMING_HARNESS_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 B4_KV_CACHE_MEMORY_BYTES=42949672960
@@ -50,6 +52,15 @@ done
 [[ "$(stat -c '%s' "$CUTLASS_B4_SO")" == "$CANDIDATE_BYTES" \
    && "$(sha256sum "$CUTLASS_B4_SO" | awk '{print $1}')" == "$CANDIDATE_SHA256" ]] \
   || { echo "CUTLASS_B4_SO is not the pinned persistent-M128 candidate" >&2; exit 2; }
+CURRENT_PATCH_SOURCE_SHA256=$(sha256sum "$PATCH_SOURCE" | awk '{print $1}')
+QUALIFICATION_PATCH_SOURCE_SHA256=$(
+  git show "${QUALIFICATION_SOURCE_COMMIT}:${PATCH_SOURCE}" | sha256sum | awk '{print $1}'
+)
+[[ "$CURRENT_PATCH_SOURCE_SHA256" == "$QUALIFIED_PATCH_SOURCE_SHA256" \
+   && "$QUALIFICATION_PATCH_SOURCE_SHA256" == "$QUALIFIED_PATCH_SOURCE_SHA256" ]] \
+  || { echo "qualified CUTLASS patch source changed after the live gate" >&2; exit 2; }
+git merge-base --is-ancestor "$QUALIFICATION_SOURCE_COMMIT" "$TIMING_HARNESS_COMMIT" \
+  || { echo "timing harness does not descend from the qualification source" >&2; exit 2; }
 [[ "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" ]] \
   || { echo "canonical exact4 subset SHA-256 drift" >&2; exit 2; }
 [[ "$CUTLASS_B4_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
@@ -58,12 +69,12 @@ done
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean" >&2; exit 2; }
 
-"$PYTHON_BIN" scripts/fr13_cutlass_b4_pass.py validate \
+LIVE_PASS_BINDING_JSON=$("$PYTHON_BIN" scripts/fr13_cutlass_b4_pass.py validate \
   --live-result "$CUTLASS_B4_PASS_JSON" \
   --expected-live-sha256 "$CUTLASS_B4_PASS_SHA256" \
   --candidate-so "$CUTLASS_B4_SO" --patch-source "$PATCH_SOURCE" \
-  --expected-source-commit "$SOURCE_COMMIT" \
-  --candidate-selector persistent_b4_m128 >/dev/null
+  --expected-source-commit "$QUALIFICATION_SOURCE_COMMIT" \
+  --candidate-selector persistent_b4_m128)
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "all Docker containers must be absent before timing" >&2; exit 2; }
 
@@ -83,18 +94,25 @@ unset -f run_variant
   || { echo "canonical B4 full-vocabulary floor contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS"
+printf '%s\n' "$LIVE_PASS_BINDING_JSON" \
+  > "$RUNROOT_ABS/cutlass_b4_live_pass_binding.at_launch.json"
+LIVE_PASS_BINDING_SHA256=$(
+  sha256sum "$RUNROOT_ABS/cutlass_b4_live_pass_binding.at_launch.json" | awk '{print $1}'
+)
 "$PYTHON_BIN" scripts/fr13_runtime_manifest.py \
   --repo "$PWD" --profile fixed32 --sequence "$SEQUENCE" \
   --output "$RUNROOT_ABS/runtime_manifest.at_launch.json"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
 
-printf 'classification=real_swe_verified_exact4_b4_timing_candidate\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\nonly_arm_delta=CUTLASS_stock_to_persistent_b4_m128\nbatch_size=4\nconcurrency=4\nfixed_rows=128\ndraft_vocab_root=0\ndraft_vocab_k=0\nfr13_needs_allow=FR13_DRAFT_VOCAB_K=0\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=177.0291423413919\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_sha256=%s\ncandidate_bytes=%s\nlive_pass_sha256=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_exact4_b4_timing_candidate\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\nonly_arm_delta=CUTLASS_stock_to_persistent_b4_m128\nbatch_size=4\nconcurrency=4\nfixed_rows=128\ndraft_vocab_root=0\ndraft_vocab_k=0\nfr13_needs_allow=FR13_DRAFT_VOCAB_K=0\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=177.0291423413919\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nqualification_source_commit=%s\ntiming_harness_commit=%s\nqualified_patch_source_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_sha256=%s\ncandidate_bytes=%s\nlive_pass_sha256=%s\nlive_pass_binding_sha256=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
   "$FR13_MANDATORY_WEIGHT_BYTES" "$FR13_WEIGHT_FLOOR_MS" "$$" \
-  "$RUNROOT_ABS" "$STOCK_ARM" "$CANDIDATE_ARM" "$SOURCE_COMMIT" \
-  "$RUNNER_SHA256" "$SUBSET_SHA256" "$STOCK_FA2_SHA256" "$STOCK_FA2_BYTES" \
+  "$RUNROOT_ABS" "$STOCK_ARM" "$CANDIDATE_ARM" "$TIMING_HARNESS_COMMIT" \
+  "$QUALIFICATION_SOURCE_COMMIT" "$TIMING_HARNESS_COMMIT" \
+  "$QUALIFIED_PATCH_SOURCE_SHA256" "$RUNNER_SHA256" "$SUBSET_SHA256" \
+  "$STOCK_FA2_SHA256" "$STOCK_FA2_BYTES" \
   "$CANDIDATE_SHA256" "$CANDIDATE_BYTES" "$CUTLASS_B4_PASS_SHA256" \
-  "$B4_KV_CACHE_MEMORY_BYTES" "$(date -u +%FT%TZ)" \
+  "$LIVE_PASS_BINDING_SHA256" "$B4_KV_CACHE_MEMORY_BYTES" "$(date -u +%FT%TZ)" \
   > "$RUNROOT_ABS/launcher_meta.txt"
 
 MANIFEST_FINALIZED=0
@@ -113,6 +131,8 @@ finalize_manifests() {
     || { echo "external manifest changed during timing" >&2; return 14; }
   [[ "$(sha256sum "$RUNNER_PATH" | awk '{print $1}')" == "$RUNNER_SHA256" ]] \
     || { echo "B4 CUTLASS timing runner changed during execution" >&2; return 14; }
+  [[ "$(sha256sum "$RUNROOT_ABS/cutlass_b4_live_pass_binding.at_launch.json" | awk '{print $1}')" == "$LIVE_PASS_BINDING_SHA256" ]] \
+    || { echo "B4 CUTLASS live-PASS binding changed during timing" >&2; return 14; }
   MANIFEST_FINALIZED=1
 }
 
@@ -136,11 +156,13 @@ run_arm() {
   local candidate_so=""
   local pass_json=""
   local pass_sha=""
+  local qualification_source_commit=""
   if [[ "$production" == "1" ]]; then
     selector=persistent_b4_m128
     candidate_so=$CUTLASS_B4_SO
     pass_json=$CUTLASS_B4_PASS_JSON
     pass_sha=$CUTLASS_B4_PASS_SHA256
+    qualification_source_commit=$QUALIFICATION_SOURCE_COMMIT
   fi
   echo "===== $arm: exact4 B4 CUTLASS production=$production ====="
   if env \
@@ -162,6 +184,7 @@ run_arm() {
       FR13_FIXED32_CUTLASS_WAVE_PRODUCTION="$production" \
       FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON="$pass_json" \
       FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256="$pass_sha" \
+      FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT="${qualification_source_commit:-}" \
       FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
       FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0 \
       FR13_DFWD_UNIFIED_BM8_LIVE_AB=0 FR13_DFWD_UNIFIED_BM8_PRODUCTION=0 \
@@ -239,7 +262,9 @@ finalize_manifests
   "$RUNROOT_ABS/$CANDIDATE_ARM/deploy_speed_fullwall.json" \
   "$RUNROOT_ABS/$CANDIDATE_ARM/cutlass_b4_production_binding.json" \
   "$RUNROOT_ABS/timing_summary.json" "$CANDIDATE_SIDECAR_SHA256" \
-  "$CUTLASS_B4_PASS_SHA256" "$CANDIDATE_SHA256" "$STOCK_FA2_SHA256" <<'PY'
+  "$CUTLASS_B4_PASS_SHA256" "$CANDIDATE_SHA256" "$STOCK_FA2_SHA256" \
+  "$QUALIFICATION_SOURCE_COMMIT" "$TIMING_HARNESS_COMMIT" \
+  "$QUALIFIED_PATCH_SOURCE_SHA256" "$LIVE_PASS_BINDING_SHA256" <<'PY'
 import json
 import math
 import sys
@@ -247,6 +272,8 @@ from pathlib import Path
 
 subset_path, stock_path, candidate_path, binding_path, out_path = map(Path, sys.argv[1:6])
 sidecar_sha256, live_sha256, candidate_sha256, fa2_sha256 = sys.argv[6:10]
+qualification_source_commit, timing_harness_commit = sys.argv[10:12]
+patch_source_sha256, live_binding_sha256 = sys.argv[12:14]
 task_ids = sorted(json.loads(subset_path.read_text(encoding="ascii"))["instance_ids"])
 stock = json.loads(stock_path.read_text(encoding="utf-8"))
 candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
@@ -296,8 +323,10 @@ if (
     or binding.get("status") != "BOUND"
     or binding.get("selector") != "persistent_b4_m128"
     or binding.get("candidate_sha256") != candidate_sha256
+    or binding.get("patch_source_sha256") != patch_source_sha256
     or binding.get("production_sidecar_sha256") != sidecar_sha256
     or binding.get("live_result_sha256") != live_sha256
+    or binding.get("qualification_source_commit") != qualification_source_commit
     or binding.get("qualified_fixed_rows") != 128
     or binding.get("qualified_topology") != "hydra27_fixed32"
     or binding.get("qualified_comparison_call_limit") != 320
@@ -321,6 +350,10 @@ summary = {
     "arm": "hydra27_fixed32",
     "task_ids": task_ids,
     "decision_metric": "measured_tps_fullstep_wall",
+    "qualification_source_commit": qualification_source_commit,
+    "timing_harness_commit": timing_harness_commit,
+    "qualified_patch_source_sha256": patch_source_sha256,
+    "live_pass_binding_sha256": live_binding_sha256,
     "stock_reference": {
         "selector": "stock",
         "fa2_sha256": fa2_sha256,
