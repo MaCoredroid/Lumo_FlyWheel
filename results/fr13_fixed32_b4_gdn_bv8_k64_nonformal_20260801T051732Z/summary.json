@@ -1,0 +1,177 @@
+{
+  "schema": "fr13.fixed32.b4_gdn_bv8.k64_nonformal_curated.v1",
+  "created_at_utc": "2026-08-01T05:28:39Z",
+  "status": "PASS_BYTE_GATE_NONFORMAL_K64_ROOT1",
+  "warning": {
+    "prominent": "NONFORMAL K64/ROOT1 EVIDENCE ONLY",
+    "draft_vocabulary_k": 65536,
+    "draft_vocabulary_root": 1,
+    "required_current_goal_draft_vocabulary_k": 0,
+    "required_current_goal_draft_vocabulary_root": 0,
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false,
+    "full_vocab_acceptance_evidence": false,
+    "reason": "This was a post-replay B4 byte diagnostic on the old 64K/root1 drafter workload. The reference was always served and no wall timing was collected."
+  },
+  "campaign": {
+    "classification": "exact4_b4_graph_byte_diagnostic",
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "mode": "tail6_fixed32",
+    "batch_size": 4,
+    "concurrency": 4,
+    "source_commit_during_inference": "cc91aa30410582659499883ca50215707a0012e5",
+    "started_at_utc": "2026-08-01T03:44:25Z",
+    "ended_at_utc": "2026-08-01T05:10:14Z",
+    "agent_campaign_started_at_utc": "2026-08-01T03:51:43Z",
+    "agent_campaign_ended_at_utc": "2026-08-01T05:09:23Z",
+    "runner_exit_code": 16,
+    "runner_exit_classification": "post_task_traffic_audit_call_signature_failure",
+    "inference_and_tasks_completed_before_runner_failure": true,
+    "model_name_or_path": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+    "configured_image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "container_image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+    "subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "runner_sha256": "3ecdad0ca9f4de4b2fb6404921aab86c946c04ea67f61a975dcd673eee921bb4",
+    "stock_fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d"
+  },
+  "task_outcomes": {
+    "task_count": 4,
+    "resolved": 1,
+    "failed": 3,
+    "resolved_rate": 0.25,
+    "all_agent_terminal": true,
+    "all_eval_terminal": true,
+    "tasks": [
+      {
+        "instance_id": "astropy__astropy-12907",
+        "agent_exit_code": 0,
+        "agent_timed_out": false,
+        "eval_harness_exit_code": 0,
+        "eval_verdict": "resolved",
+        "successful_engine_requests": 14,
+        "eval_report_sha256": "99307cccd04edf9fccdf64fb599465a40c1e77331c0e6757726c55779ff2e702"
+      },
+      {
+        "instance_id": "astropy__astropy-13033",
+        "agent_exit_code": 0,
+        "agent_timed_out": false,
+        "eval_harness_exit_code": 0,
+        "eval_verdict": "failed",
+        "successful_engine_requests": 25,
+        "eval_report_sha256": "c86628984f79f5de52e1b4a66da8f0797f1e518101fa1d4b658472876f935829"
+      },
+      {
+        "instance_id": "astropy__astropy-13236",
+        "agent_exit_code": 0,
+        "agent_timed_out": false,
+        "eval_harness_exit_code": 0,
+        "eval_verdict": "failed",
+        "successful_engine_requests": 25,
+        "eval_report_sha256": "b2f639214a0f1c6ca90da4e272fd0214c96aee6fb4d84e2bfc383e48f7fcdf22"
+      },
+      {
+        "instance_id": "astropy__astropy-13398",
+        "agent_exit_code": 0,
+        "agent_timed_out": false,
+        "eval_harness_exit_code": 0,
+        "eval_verdict": "failed",
+        "successful_engine_requests": 71,
+        "eval_report_sha256": "9b47d18e4877cf342f451d0b5d0ccc162c6f2caefb44922b45185c4b092c783f"
+      }
+    ]
+  },
+  "traffic_audit_v3": {
+    "schema": "fr13-fixed32-chat-task-provenance-audit-v3",
+    "complete_work_census_events": 3943,
+    "pure_decode_forward_steps": 3943,
+    "merged_forward_step_intervals": [
+      [
+        0,
+        3943
+      ]
+    ],
+    "successful_engine_requests": 135,
+    "successful_engine_requests_with_pure_decode": 127,
+    "successful_engine_requests_without_pure_decode": 8,
+    "successful_engine_requests_without_pure_decode_sha256": "a6f558dfa8ea66c36d032cc5ca51492308c2463ac936cd9a34df9191d8e122d1",
+    "all_successful_requests_present_in_pure_decode_census": false,
+    "nonpure_requests_are_authenticated_and_expected": true,
+    "proxy_accepted_attempts": 135,
+    "proxy_completed_attempts": 135,
+    "engine_accepted_requests": 135,
+    "engine_completed_requests": 135,
+    "failed_attempts": 0,
+    "aborted_logical_requests": 0,
+    "campaign_rejections": 0,
+    "all_checks_passed": true,
+    "raw_proxy_request_and_response_dumps_disabled": true,
+    "final_flush": {
+      "status": "ok",
+      "generation": 9,
+      "sfwd_pending": 0,
+      "dfwd_pending": 0,
+      "cfwd_pending": 0,
+      "first_forward_step": 0,
+      "last_forward_step": 3942
+    }
+  },
+  "graph_byte_gate": {
+    "status": "pass",
+    "candidate": "fixed32_batch_gdn_bv8_v1",
+    "batch_size": 4,
+    "physical_rows_per_request": 32,
+    "candidate_bv": 8,
+    "reference_bv": 8,
+    "layer_count": 48,
+    "capture_records": 48,
+    "passed_layers": 48,
+    "raw_byte_equal": true,
+    "graph_baseline_byte_equal": true,
+    "reference_always_served": true,
+    "candidate_production_eligible": true,
+    "candidate_production_default_enabled": false,
+    "reference_kernel_structure": "per_request_tree_gdn_path",
+    "candidate_kernel_structure": "fixed32_batch_tree_gdn_path",
+    "reference_physical_launches_per_layer": 8,
+    "candidate_physical_launches_per_layer": 2,
+    "reference_physical_launches_per_event": 384,
+    "candidate_physical_launches_per_event": 96,
+    "launch_reduction_factor": 4,
+    "launch_reduction_fraction": 0.75,
+    "compared_byte_surfaces": [
+      "out",
+      "ring_k",
+      "ring_v",
+      "ring_a",
+      "ring_b",
+      "state_export_compact",
+      "state_export_untouched_tail",
+      "flags",
+      "invocation_counter"
+    ],
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false
+  },
+  "floor_scope": {
+    "campaign_optimistic_k64_weight_floor_ms_per_event": 119.658015414,
+    "campaign_floor_is_full_physical_hardware_floor": false,
+    "current_full_vocab_weight_floor_ms_per_event": 153.938384645,
+    "current_full_vocab_acceptance_cap_ms_per_event": 177.029142341,
+    "comparable_to_current_full_vocab_goal": false
+  },
+  "raw_evidence_publication": {
+    "raw_per_task_files_committed": false,
+    "raw_files_deleted": false,
+    "policy": "Raw per-task evidence remains under ignored output; curated summaries retain only identities and exact checksums."
+  },
+  "raw_evidence_sha256": {
+    "graph_gate_verdict_json": "12ccb84b2be153610f9cc5cffa975d2d30852cd1bc83995d9da2fe26b8c5232b",
+    "graph_live_pass_json": "8d1c1fc419a5ae6c6884ac4e646b03596ac4f5d8d7f38836edf2616a4c5ddf5d",
+    "traffic_audit_v3_json": "948033df4e2cb0175f70f29fcff43fe907c85910fda93c352da5070846082ad9",
+    "campaign_provenance_json": "de31a52022f059c26cef3b3a1c9d9f67ca7d16b500cedc38d9f32890d9bcf830",
+    "campaign_summary_json": "c3861bd36a76ad2b02e151564c81081d717058401e84a1060fe5fbd25a40d0ad",
+    "final_flush_json": "10d738f892f4b21c90ee269d707b9a40ae0e6a4afdb5fafe098a9a2275602cab",
+    "runtime_manifest_at_launch_json": "e8a8e17f63271cf39680ab42a9e7bebacc5a0cede41d0f7c7a64f424fd57acb7",
+    "external_manifest_at_launch_json": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f"
+  }
+}

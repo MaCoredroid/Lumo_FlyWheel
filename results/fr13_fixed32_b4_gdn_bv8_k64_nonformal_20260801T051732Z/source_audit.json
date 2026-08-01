@@ -1,0 +1,68 @@
+{
+  "schema": "fr13.fixed32.b4_gdn_bv8.k64_nonformal_source_audit.v1",
+  "created_at_utc": "2026-08-01T05:28:39Z",
+  "execution_source": {
+    "commit": "cc91aa30410582659499883ca50215707a0012e5",
+    "kernel_source_path": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+    "kernel_source_sha256": "8d0b4c592921880a000c2a19ef37745310c90183b8d4c464f52befde53203886",
+    "gate_runner_path": "scripts/fr13_run_b4_gdn_wide_live_gate.sh",
+    "gate_runner_sha256": "3ecdad0ca9f4de4b2fb6404921aab86c946c04ea67f61a975dcd673eee921bb4",
+    "subset_path": "config/fr13_fixed32/subset_b4_four.json",
+    "subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "stock_fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+    "runtime_manifest_raw_sha256": "e8a8e17f63271cf39680ab42a9e7bebacc5a0cede41d0f7c7a64f424fd57acb7",
+    "runtime_manifest_overall_canonical_sha256": "ea0342d1594be2922f1a4c2c8a608f966ceb0b96e7d185fc5ea3809d90170b0a",
+    "runtime_manifest_launch_end_byte_equal": true,
+    "external_manifest_raw_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "external_manifest_launch_end_byte_equal": true
+  },
+  "post_run_finalization_source": {
+    "traffic_audit_and_nonpure_request_fix_commit": "a99d7f7ef7c24c2d01321921f003b21b8734f101",
+    "sparse_publication_fix_commit_before_this_audit": "42a126e6db08b2ce8cd56c9becd0db8432d4145b",
+    "execution_source_changed_by_finalization": false,
+    "classification": "Post-run code parsed already closed raw evidence; it did not execute model work or alter campaign outputs."
+  },
+  "raw_evidence": [
+    {
+      "kind": "graph_gate_verdict",
+      "repo_relative_path": "output/fr13_fixed32_b4_graph_batch_bv8_exact4_campaignfix_20260801T034401Z/b4_gdn_wide_gate_verdict.json",
+      "bytes": 1696,
+      "sha256": "12ccb84b2be153610f9cc5cffa975d2d30852cd1bc83995d9da2fe26b8c5232b"
+    },
+    {
+      "kind": "graph_live_pass",
+      "repo_relative_path": "output/fr13_fixed32_b4_graph_batch_bv8_exact4_campaignfix_20260801T034401Z/tail6_fixed32_b4_graph_batch_bv8_exact4_campaignfix_20260801T034401Z/logs/fr13_fixed32_batch_gdn_byte_ab.pass.json",
+      "bytes": 1955,
+      "sha256": "8d1c1fc419a5ae6c6884ac4e646b03596ac4f5d8d7f38836edf2616a4c5ddf5d"
+    },
+    {
+      "kind": "traffic_audit_v3",
+      "repo_relative_path": "output/fr13_fixed32_b4_graph_batch_bv8_exact4_campaignfix_20260801T034401Z/tail6_fixed32_b4_graph_batch_bv8_exact4_campaignfix_20260801T034401Z/fixed32_chat_traffic_audit.json",
+      "bytes": 26273,
+      "sha256": "948033df4e2cb0175f70f29fcff43fe907c85910fda93c352da5070846082ad9"
+    },
+    {
+      "kind": "campaign_provenance",
+      "repo_relative_path": "output/fr13_fixed32_b4_graph_batch_bv8_exact4_campaignfix_20260801T034401Z/tail6_fixed32_b4_graph_batch_bv8_exact4_campaignfix_20260801T034401Z/swe_out/verified/fixed32_qwen_campaign_provenance.json",
+      "bytes": 7176,
+      "sha256": "de31a52022f059c26cef3b3a1c9d9f67ca7d16b500cedc38d9f32890d9bcf830"
+    },
+    {
+      "kind": "campaign_summary",
+      "repo_relative_path": "output/fr13_fixed32_b4_graph_batch_bv8_exact4_campaignfix_20260801T034401Z/tail6_fixed32_b4_graph_batch_bv8_exact4_campaignfix_20260801T034401Z/swe_out/verified/campaign_summary.json",
+      "bytes": 699,
+      "sha256": "c3861bd36a76ad2b02e151564c81081d717058401e84a1060fe5fbd25a40d0ad"
+    },
+    {
+      "kind": "final_flush",
+      "repo_relative_path": "output/fr13_fixed32_b4_graph_batch_bv8_exact4_campaignfix_20260801T034401Z/tail6_fixed32_b4_graph_batch_bv8_exact4_campaignfix_20260801T034401Z/fixed32_final_flush.json",
+      "bytes": 492,
+      "sha256": "10d738f892f4b21c90ee269d707b9a40ae0e6a4afdb5fafe098a9a2275602cab"
+    }
+  ],
+  "publication_policy": {
+    "raw_per_task_data_tracked": false,
+    "raw_output_deleted": false,
+    "curated_results_only": true
+  }
+}
