@@ -10,6 +10,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 LAUNCHER = REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 GATE = REPO / "scripts" / "fr13_run_b1_cutlass_streamk_live_gate.sh"
+B1_KERNEL_GATE = REPO / "scripts" / "fr13_run_b1_kernel_live_gate.sh"
 B4_GRAPH_GATE = REPO / "scripts" / "fr13_run_b4_gdn_wide_live_gate.sh"
 
 
@@ -123,6 +124,7 @@ def test_launcher_cross_kernel_preflight_runs_before_sidecar_and_docker(
 
 def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> None:
     gate = GATE.read_text(encoding="utf-8")
+    kernel_gate = B1_KERNEL_GATE.read_text(encoding="utf-8")
 
     for assignment in (
         "FR13_GATE_QROW16=0",
@@ -152,6 +154,17 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert '"schema": "fr13.fixed32.cutlass_streamk_live_gate.v2"' in gate
     assert '"patch_source_sha256": patch_source_sha256' in gate
     assert '"binary_attestation_sha256"' in gate
+    sequence = kernel_gate.index(
+        "source scripts/fr13_fixed32_floor_timers_seq.sh"
+    )
+    eager_rearm = kernel_gate.index(
+        'FR13_FIXED32_CUTLASS_WAVE:-stock}" '
+        '== "streamk_coop128_byte_ab"'
+    )
+    launch = kernel_gate.index(
+        "bash scripts/fr13_bigdenom_swe_serve_variant.sh"
+    )
+    assert sequence < eager_rearm < launch
 
 
 def test_b4_graph_gate_pins_cutlass_stock_and_bm8_off() -> None:
