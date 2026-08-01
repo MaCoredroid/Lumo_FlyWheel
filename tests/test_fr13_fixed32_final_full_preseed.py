@@ -159,6 +159,78 @@ def test_final_full_preseed_requires_physical_32_row_descriptor(
     assert needed("FULL", 128, 4, True, False, 0) is False
 
 
+def test_sfwd_eager_kernel_diagnostic_bakes_graph_observer_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "1",
+    )
+    namespace = _runtime_functions(
+        "_fr13_fixed32_observed_current",
+        "_fr13_fixed32_observed_event_active",
+        "_fr13_fixed32_observed_nonpure_dispatch",
+        "_fr13_fixed32_observed_begin",
+        mode="hydra27_fixed32",
+    )
+
+    assert namespace["_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC"] is True
+    assert namespace["_fr13_fixed32_observed_current"]("test") is None
+    assert namespace["_fr13_fixed32_observed_event_active"]() is False
+    assert namespace["_fr13_fixed32_observed_nonpure_dispatch"]("FULL") is None
+    assert (
+        namespace["_fr13_fixed32_observed_begin"](
+            "invalid-mode",
+            99,
+            -1,
+            (),
+            0,
+            0,
+            (),
+        )
+        is None
+    )
+
+
+def test_sfwd_eager_diagnostic_allows_equal_full_and_compact_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "1",
+    )
+    eager = _runtime_functions(
+        "_fr13_fixed32_unmeasured_full_row_map_valid",
+        mode="hydra27_fixed32",
+    )
+    valid = eager["_fr13_fixed32_unmeasured_full_row_map_valid"]
+
+    assert eager["_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC"] is True
+    assert valid(1, 1) is True
+    assert valid(4, 4) is True
+    assert valid(4, 2) is True
+    assert valid(1, 2) is False
+
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "0",
+    )
+    normal = _runtime_functions(
+        "_fr13_fixed32_unmeasured_full_row_map_valid",
+        mode="hydra27_fixed32",
+    )
+    normal_valid = normal["_fr13_fixed32_unmeasured_full_row_map_valid"]
+    assert normal["_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC"] is False
+    assert normal_valid(1, 1) is False
+    assert normal_valid(4, 2) is True
+
+    source = PATCHER_PATH.read_text(encoding="utf-8")
+    assert source.count("_fr13_fixed32_unmeasured_full_row_map_valid") == 2
+
+
 _GPU_RUNNER_FIXTURE = """\
 class Runner:
     def __init__(
