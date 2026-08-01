@@ -110,7 +110,7 @@ def test_eager_kernel_diagnostic_bakes_graph_observer_off(
 @pytest.mark.parametrize(
     ("mode", "active_nodes", "valid_mask"),
     (
-        ("tail6_fixed32", 21, 0x7A9CE73F),
+        ("tail6_fixed32", 23, 0x7A9CE7FF),
         ("hydra27_fixed32", 27, 0x7ABDFFFF),
     ),
 )

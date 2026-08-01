@@ -37,7 +37,7 @@ TARGET_LAYERS = tuple(
 def _runtime() -> dict[str, object]:
     namespace: dict[str, object] = {
         "_FR13_FIXED32_MODE": "tail6_fixed32",
-        "_FR13_FIXED32_VALID_MASK": 0x7A9CE73F,
+        "_FR13_FIXED32_VALID_MASK": 0x7A9CE7FF,
     }
     exec(PATCHER._FR13_FIXED32_OBSERVED_RUNTIME_SOURCE, namespace)
     return namespace
@@ -48,9 +48,9 @@ def _runtime() -> dict[str, object]:
     (
         (
             "tail6_fixed32",
-            0x7A9CE73F,
+            0x7A9CE7FF,
             "[FR13_FIXED32] topology engaged: mode=tail6_fixed32 "
-            "active_drafts=21 valid_mask=0x7a9ce73f",
+            "active_drafts=23 valid_mask=0x7a9ce7ff",
         ),
         (
             "hydra27_fixed32",
@@ -135,7 +135,7 @@ def test_completed_event_cannot_bind_an_older_drafter_replay() -> None:
     ]
     taw_payload = {
         "mode": "tail6_fixed32",
-        "valid_mask": 0x7A9CE73F,
+        "valid_mask": 0x7A9CE7FF,
         "batch_size": 1,
         "taw": copy.deepcopy(observed["taw"]),
     }

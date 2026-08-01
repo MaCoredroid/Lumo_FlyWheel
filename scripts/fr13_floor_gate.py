@@ -203,8 +203,8 @@ FIXED32_WORK_ENGAGED = (
     "kv_slots=16 conv_layers=48 committer_slots=16"
 )
 TAIL6_TOPOLOGY = (
-    "[FR13_FIXED32] topology engaged: mode=tail6_fixed32 active_drafts=21 "
-    "valid_mask=0x7a9ce73f"
+    "[FR13_FIXED32] topology engaged: mode=tail6_fixed32 active_drafts=23 "
+    "valid_mask=0x7a9ce7ff"
 )
 HYDRA27_TOPOLOGY = (
     "[FR13_FIXED32] topology engaged: mode=hydra27_fixed32 active_drafts=27 "

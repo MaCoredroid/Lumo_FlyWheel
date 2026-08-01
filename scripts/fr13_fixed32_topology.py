@@ -41,6 +41,16 @@ TAIL6_CHOICES: tuple[Path, ...] = (
     (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
 )
 
+# The fixed-32 drafter already produces one Arctic continuation for each of
+# the two root runner-ups. Tail6 used to mask both rows out even though every
+# downstream kernel still executed the full 31-draft physical bucket. Keep
+# the legacy Tail6 shape above intact for historical tooling, but spend those
+# two otherwise-idle fixed slots as additive depth-1 rescue tails.
+TAIL6_FIXED32_RESCUE_CHOICES: tuple[Path, ...] = ((1, 0), (2, 0))
+TAIL6_FIXED32_CHOICES = frozenset(TAIL6_CHOICES) | frozenset(
+    TAIL6_FIXED32_RESCUE_CHOICES
+)
+
 # Hydra27 logically uses rank-1 length 4 and rank-2 length 2. The physical
 # rank-2 suffix continues to length 6 so every arm fills exactly 31 drafts.
 PHYSICAL_BRANCH_CHAINS: tuple[tuple[int, int], ...] = ((1, 4), (2, 6))
@@ -189,7 +199,7 @@ PHYSICAL_PARENT_SHA256 = _canonical_sha256(PHYSICAL_PARENT)
 TREE_ANCESTRY_SHA256 = _canonical_sha256(_ancestor_matrix(PHYSICAL_PARENT))
 
 TAIL6_VALID: tuple[bool, ...] = tuple(
-    path in frozenset(TAIL6_CHOICES) for path in FIXED32_CHOICES
+    path in TAIL6_FIXED32_CHOICES for path in FIXED32_CHOICES
 )
 HYDRA27_VALID: tuple[bool, ...] = tuple(
     path in HYDRA27_CHOICES for path in FIXED32_CHOICES
@@ -203,7 +213,7 @@ def bit_mask(valid: Iterable[bool]) -> int:
 # Mask bit n is draft-local choice n; its root-inclusive physical row is n+1.
 TAIL6_VALID_MASK = bit_mask(TAIL6_VALID)
 HYDRA27_VALID_MASK = bit_mask(HYDRA27_VALID)
-TAIL6_INACTIVE_DRAFT_IDS = (6, 7, 11, 12, 16, 17, 21, 22, 24, 26)
+TAIL6_INACTIVE_DRAFT_IDS = (11, 12, 16, 17, 21, 22, 24, 26)
 HYDRA27_INACTIVE_DRAFT_IDS = (17, 22, 24, 26)
 
 VALID_BY_MODE: dict[Mode, tuple[bool, ...]] = {
@@ -235,7 +245,7 @@ SUBTREE_LEVELS: tuple[tuple[tuple[tuple[int, ...], int], ...], ...] = (
 
 PHYSICAL_DRAFTS = 31
 PHYSICAL_ROWS = 32
-TAIL6_ACTIVE_DRAFTS = 21
+TAIL6_ACTIVE_DRAFTS = 23
 HYDRA27_ACTIVE_DRAFTS = 27
 MODEL_LAYERS = 64
 TREE_ATTENTION_LAYERS = 16
@@ -430,13 +440,13 @@ def validate_contract() -> None:
         raise AssertionError("Tail6 validity count drifted")
     if sum(HYDRA27_VALID) != HYDRA27_ACTIVE_DRAFTS:
         raise AssertionError("Hydra27 validity count drifted")
-    if set(active_choices("tail6_fixed32")) != set(TAIL6_CHOICES):
+    if set(active_choices("tail6_fixed32")) != set(TAIL6_FIXED32_CHOICES):
         raise AssertionError("Tail6 mask does not recover the Tail6 topology")
     if set(active_choices("hydra27_fixed32")) != set(HYDRA27_CHOICES):
         raise AssertionError("Hydra27 mask does not recover the logical topology")
-    if not set(TAIL6_CHOICES) < set(HYDRA27_CHOICES):
+    if not set(TAIL6_FIXED32_CHOICES) < set(HYDRA27_CHOICES):
         raise AssertionError("Hydra27 must be a strict candidate superset of Tail6")
-    if TAIL6_VALID_MASK != 0x7A9CE73F:
+    if TAIL6_VALID_MASK != 0x7A9CE7FF:
         raise AssertionError("Tail6 validity mask drifted")
     if HYDRA27_VALID_MASK != 0x7ABDFFFF:
         raise AssertionError("Hydra27 validity mask drifted")
