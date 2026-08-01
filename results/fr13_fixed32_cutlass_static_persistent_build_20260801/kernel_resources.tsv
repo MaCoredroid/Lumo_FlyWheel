@@ -1,0 +1,9 @@
+dtype	variant	layout	tile_m	tile_n	tile_k	registers	stack_bytes	shared_bytes	constant0_bytes
+bf16	stock	pingpong	64	128	128	168	0	1024	2560
+bf16	static_persistent	pingpong	64	128	128	168	8	1024	2688
+bf16	stock	swapab_cooperative	128	32	128	168	0	1024	2560
+bf16	static_persistent	swapab_cooperative	128	32	128	168	0	1024	2688
+fp16	stock	pingpong	64	128	128	168	0	1024	2560
+fp16	static_persistent	pingpong	64	128	128	168	8	1024	2688
+fp16	stock	swapab_cooperative	128	32	128	168	0	1024	2560
+fp16	static_persistent	swapab_cooperative	128	32	128	168	0	1024	2688

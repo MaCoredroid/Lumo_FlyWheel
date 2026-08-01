@@ -1,0 +1,18 @@
+unchanged properties:
+- one complete K reduction per output tile; no split-K or Stream-K workspace
+- B1 tile/mainloop: swapped A/B cooperative 128x32x128
+- B4 tile/mainloop: normal-layout pingpong 64x128x128
+- block scales: (128,1,128) swapped and (1,128,128) normal
+- cluster: 1x1x1
+- FP32 accumulator and stock BF16/FP16 linear-combination epilogue
+- stock dispatch remains the default for unset/unknown selectors
+- 880 strong dynamic extension symbols match the reference binary exactly
+
+changed property:
+- complete-output-tile allocation uses CUTLASS StaticPersistentTileScheduler100
+  instead of dynamic PersistentTileSchedulerSm100 CLC queries
+
+not established:
+- real-task raw-byte equality
+- B1 or B4 speedup
+- projection or full-step hardware-floor acceptance

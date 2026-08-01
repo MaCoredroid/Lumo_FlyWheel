@@ -1,0 +1,10 @@
+30 passed in 0.18s
+
+Command:
+/home/mark/shared/lumoFlyWheel-streamk-wide256/.venv/bin/python -m pytest -q tests/test_fr13_cutlass_fixed32_wave_patch.py tests/test_fr13_cutlass_streamk_production.py
+
+Additional checks:
+- pinned vLLM source patch: PASS
+- nvcc SM121 candidate translation unit compile: PASS
+- shared-object link and RUNPATH normalization: PASS
+- strong dynamic extension symbol comparison: PASS (880 exact)
