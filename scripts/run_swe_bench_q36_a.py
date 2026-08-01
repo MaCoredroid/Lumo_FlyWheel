@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import base64
 import concurrent.futures as _cf
+import contextlib
 import datetime as _dt
 import hashlib
 import json
@@ -727,6 +728,8 @@ _INSTANCE_CONTAINER_PATH = (
 # bind-mount (a fresh dir, NOT /testbed, so it never pollutes the diff; AGENTS.md
 # is untracked so `git diff <base_commit>` excludes it exactly as legacy does),
 # (4) preserves qwen's exit code.
+_REMOTE_AGENT_TRACE_FILENAME = "qwen_trace.jsonl"
+_INSTANCE_TRACE_OUTPUT_PATH = f"/out/{_REMOTE_AGENT_TRACE_FILENAME}"
 _INSTANCE_WRAPPER = (
     "printf %s \"$SWE_AGENTS_B64\" | base64 -d > /testbed/AGENTS.md; "
     "PROMPT=$(printf %s \"$SWE_PROMPT_B64\" | base64 -d); "
@@ -745,6 +748,33 @@ _INSTANCE_WRAPPER = (
     "git -C /testbed diff --no-color --binary HEAD > /out/patch.diff 2>/dev/null; "
     "exit $rc"
 )
+
+
+def _instance_wrapper(*, trace_output_path: str | None) -> str:
+    if trace_output_path is None:
+        return _INSTANCE_WRAPPER
+    if trace_output_path != _INSTANCE_TRACE_OUTPUT_PATH:
+        raise Fixed32BoundaryError("instance trace output path is not canonical")
+    qwen_start = "/opt/qwen/bin/qwen --yolo --output-format stream-json "
+    qwen_end = '-p "$PROMPT"; '
+    if (
+        _INSTANCE_WRAPPER.count(qwen_start) != 1
+        or _INSTANCE_WRAPPER.count(qwen_end) != 1
+    ):
+        raise Fixed32BoundaryError("instance Qwen wrapper shape is unexpected")
+    wrapper = _INSTANCE_WRAPPER.replace(
+        qwen_start,
+        (
+            f'test -f {trace_output_path} && test ! -L {trace_output_path} '
+            f"|| exit 89; {qwen_start}"
+        ),
+        1,
+    )
+    return wrapper.replace(
+        qwen_end,
+        f'-p "$PROMPT" > {trace_output_path}; ',
+        1,
+    )
 
 
 def _fixed32_canonical_json_sha256(value: Any) -> str:
@@ -2248,7 +2278,8 @@ def _instance_agent_command(*, container_name: str, image: str, endpoint: str,
                             agents_md_b64: str, prompt_b64: str,
                             base_commit: str, session_id: str,
                             system_settings_src: str | None = None,
-                            bundle_observation: dict[str, Any] | None = None) -> str:
+                            bundle_observation: dict[str, Any] | None = None,
+                            trace_output_path: str | None = None) -> str:
     """Render the instance_image docker command. Same qwen flags/env as the
     legacy qwen-code template, but the image is the per-instance eval image, the
     node+qwen runtime is bind-mounted read-only from the host bundle at
@@ -2276,6 +2307,7 @@ def _instance_agent_command(*, container_name: str, image: str, endpoint: str,
     cleared_environment_args = " ".join(
         f"-e {name}=" for name in _FIXED32_CLEARED_AGENT_ENV
     )
+    instance_wrapper = _instance_wrapper(trace_output_path=trace_output_path)
     return (
         f"docker run --rm --name {container_name} --network=host -u 0:0 "
         f"-e OPENAI_API_KEY -e OPENAI_BASE_URL={endpoint} "
@@ -2291,7 +2323,7 @@ def _instance_agent_command(*, container_name: str, image: str, endpoint: str,
         f"{system_settings_args}"
         f"-v {host_out_dir}:/out -v {bundle_src}:/opt/qwen:ro "
         f"-w /testbed {image} "
-        f"bash -c '{runtime_proof_wrapper}{_INSTANCE_WRAPPER}'"
+        f"bash -c '{runtime_proof_wrapper}{instance_wrapper}'"
     )
 
 # Default operator prompt (first attempt).
@@ -3271,6 +3303,15 @@ def _fixed32_load_trace_events(
     instance_id: str,
 ) -> tuple[bytes, list[dict[str, Any]]]:
     try:
+        trace_metadata = trace_path.lstat()
+        if (
+            not stat.S_ISREG(trace_metadata.st_mode)
+            or trace_metadata.st_nlink != 1
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                f"trace is not a single-link regular file: {trace_path}"
+            )
         raw_trace = trace_path.read_bytes()
     except OSError as exc:
         raise Fixed32BoundaryError(
@@ -3280,6 +3321,11 @@ def _fixed32_load_trace_events(
     if not raw_trace:
         raise Fixed32BoundaryError(
             f"fixed32 real-task provenance {instance_id}: trace is empty: {trace_path}"
+        )
+    if not raw_trace.endswith(b"\n"):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            f"trace is not newline-framed: {trace_path}"
         )
     try:
         trace_text = raw_trace.decode("utf-8")
@@ -5936,6 +5982,312 @@ def _run_agent_remote(
     return result
 
 
+_REMOTE_AGENT_TRACE_OBSERVATION_SCHEMA = (
+    "fr13-remote-qwen-trace-observation-v1"
+)
+_REMOTE_AGENT_TRACE_OBSERVATION_SCRIPT = r"""
+import hashlib
+import json
+import os
+import pathlib
+import stat
+import sys
+
+path = pathlib.Path(sys.argv[1]).expanduser()
+schema = sys.argv[2]
+parent = path.parent
+parent_metadata = parent.lstat()
+if not stat.S_ISDIR(parent_metadata.st_mode) or parent.is_symlink():
+    raise RuntimeError("trace parent is not a real directory")
+if (
+    stat.S_IMODE(parent_metadata.st_mode) != 0o700
+    or parent_metadata.st_uid != os.geteuid()
+):
+    raise RuntimeError("trace parent is not private or shell-owned")
+parent_fd = os.open(
+    parent,
+    os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY | os.O_NOFOLLOW,
+)
+
+
+def identity(metadata):
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_nlink,
+        metadata.st_uid,
+        metadata.st_gid,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+try:
+    before = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+    if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+        raise RuntimeError("trace is not a single-link regular file")
+    if (
+        stat.S_IMODE(before.st_mode) != 0o600
+        or before.st_uid != os.geteuid()
+    ):
+        raise RuntimeError("trace is not private or shell-owned")
+    if os.listxattr(path, follow_symlinks=False):
+        raise RuntimeError("trace has extended attributes")
+    descriptor = os.open(
+        path.name,
+        os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+        dir_fd=parent_fd,
+    )
+    try:
+        opened = os.fstat(descriptor)
+        if identity(opened) != identity(before):
+            raise RuntimeError("trace changed before exact read")
+        digest = hashlib.sha256()
+        byte_count = 0
+        final_byte = b""
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+            byte_count += len(chunk)
+            final_byte = chunk[-1:]
+        after_read = os.fstat(descriptor)
+        if identity(after_read) != identity(opened):
+            raise RuntimeError("trace changed during exact read")
+    finally:
+        os.close(descriptor)
+    after = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+    if identity(after) != identity(before):
+        raise RuntimeError("trace changed after exact read")
+    if os.listxattr(path, follow_symlinks=False):
+        raise RuntimeError("trace gained extended attributes")
+    print(
+        json.dumps(
+            {
+                "schema": schema,
+                "bytes": byte_count,
+                "sha256": digest.hexdigest(),
+                "newline_framed": byte_count > 0 and final_byte == b"\n",
+                "mode": f"{stat.S_IMODE(after.st_mode):04o}",
+                "uid": after.st_uid,
+                "gid": after.st_gid,
+                "nlink": after.st_nlink,
+                "xattrs": [],
+                "file_identity_sha256": hashlib.sha256(
+                    f"{after.st_dev}:{after.st_ino}".encode("ascii")
+                ).hexdigest(),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+finally:
+    os.close(parent_fd)
+"""
+
+
+def _remote_agent_trace_path(remote_out: str) -> str:
+    return f"{remote_out}/{_REMOTE_AGENT_TRACE_FILENAME}"
+
+
+def _remote_agent_trace_capture_command(
+    command: str,
+    *,
+    remote_trace_path: str,
+) -> str:
+    if remote_trace_path.startswith("~/"):
+        rendered_path = "$HOME/" + shlex.quote(remote_trace_path[2:])
+    elif remote_trace_path.startswith("/"):
+        rendered_path = shlex.quote(remote_trace_path)
+    else:
+        raise Fixed32BoundaryError("remote trace path is not absolute")
+    return (
+        "IFS= read -r OPENAI_API_KEY && export OPENAI_API_KEY && "
+        "umask 077 && "
+        f"trace_path={rendered_path} && "
+        'test -d "$(dirname -- "$trace_path")" && '
+        'test ! -L "$trace_path" && test ! -e "$trace_path" && '
+        '(set -C; : > "$trace_path") && '
+        'chmod 0600 -- "$trace_path" && '
+        "{ "
+        f"{command} > /dev/null; "
+        "qwen_rc=$?; "
+        'if [ ! -f "$trace_path" ] || [ -L "$trace_path" ]; then '
+        "exit 90; fi; "
+        'exit "$qwen_rc"; '
+        "}"
+    )
+
+
+def _validate_remote_agent_trace_observation(payload: Any) -> dict[str, Any]:
+    expected_keys = {
+        "schema",
+        "bytes",
+        "sha256",
+        "newline_framed",
+        "mode",
+        "uid",
+        "gid",
+        "nlink",
+        "xattrs",
+        "file_identity_sha256",
+    }
+    if not isinstance(payload, dict) or set(payload) != expected_keys:
+        raise Fixed32BoundaryError("remote Qwen trace observation is malformed")
+    for key in ("uid", "gid"):
+        value = payload[key]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise Fixed32BoundaryError(
+                "remote Qwen trace observation is malformed"
+            )
+    byte_count = payload["bytes"]
+    if (
+        payload["schema"] != _REMOTE_AGENT_TRACE_OBSERVATION_SCHEMA
+        or isinstance(byte_count, bool)
+        or not isinstance(byte_count, int)
+        or byte_count < 0
+        or not isinstance(payload["newline_framed"], bool)
+        or payload["mode"] != "0600"
+        or payload["nlink"] != 1
+        or payload["xattrs"] != []
+    ):
+        raise Fixed32BoundaryError("remote Qwen trace observation is malformed")
+    for key in ("sha256", "file_identity_sha256"):
+        digest = payload[key]
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
+            raise Fixed32BoundaryError(
+                "remote Qwen trace observation is malformed"
+            )
+    return payload
+
+
+def _observe_remote_agent_trace(
+    *,
+    host: str,
+    instance_id: str,
+    remote_trace_path: str,
+) -> dict[str, Any]:
+    command = " ".join(
+        (
+            "python3",
+            "-c",
+            shlex.quote(_REMOTE_AGENT_TRACE_OBSERVATION_SCRIPT),
+            shlex.quote(remote_trace_path),
+            shlex.quote(_REMOTE_AGENT_TRACE_OBSERVATION_SCHEMA),
+        )
+    )
+    observed = _net_retry(
+        ["ssh", *_EVAL_SSH_OPTS, host, command],
+        what=f"qwen_trace_observe:{instance_id}",
+        timeout=120,
+        max_attempts=3,
+    )
+    if observed.returncode != 0:
+        raise Fixed32BoundaryError(
+            "remote Qwen trace observation failed: "
+            f"host={host} instance={instance_id} rc={observed.returncode}"
+        )
+    return _validate_remote_agent_trace_observation(
+        _fixed32_load_json_object(
+            observed.stdout or "",
+            label=f"remote Qwen trace observation {instance_id}",
+        )
+    )
+
+
+def _pull_remote_agent_trace(
+    *,
+    host: str,
+    instance_id: str,
+    remote_trace_path: str,
+    trace_path: Path,
+) -> dict[str, Any]:
+    before = _observe_remote_agent_trace(
+        host=host,
+        instance_id=instance_id,
+        remote_trace_path=remote_trace_path,
+    )
+    pull_path = trace_path.with_name(
+        f".{trace_path.name}.{secrets.token_hex(8)}.pull"
+    )
+    if pull_path.exists() or pull_path.is_symlink():
+        raise Fixed32BoundaryError("local Qwen trace pull path is not fresh")
+    try:
+        pulled = _net_retry(
+            [
+                "scp",
+                *_EVAL_SSH_OPTS,
+                f"{host}:{remote_trace_path}",
+                str(pull_path),
+            ],
+            what=f"qwen_trace_down:{instance_id}",
+            timeout=120,
+            max_attempts=4,
+        )
+        if pulled.returncode != 0:
+            raise Fixed32BoundaryError(
+                "remote Qwen trace download failed: "
+                f"host={host} instance={instance_id} rc={pulled.returncode}"
+            )
+        after = _observe_remote_agent_trace(
+            host=host,
+            instance_id=instance_id,
+            remote_trace_path=remote_trace_path,
+        )
+        if after != before:
+            raise Fixed32BoundaryError(
+                "remote Qwen trace identity changed during download"
+            )
+        try:
+            local_metadata = pull_path.lstat()
+            if (
+                not stat.S_ISREG(local_metadata.st_mode)
+                or local_metadata.st_nlink != 1
+            ):
+                raise Fixed32BoundaryError(
+                    "downloaded Qwen trace is not a single-link regular file"
+                )
+            raw_trace = pull_path.read_bytes()
+        except OSError as exc:
+            raise Fixed32BoundaryError(
+                "downloaded Qwen trace cannot be read"
+            ) from exc
+        if (
+            len(raw_trace) != before["bytes"]
+            or hashlib.sha256(raw_trace).hexdigest() != before["sha256"]
+            or raw_trace.endswith(b"\n") != before["newline_framed"]
+        ):
+            raise Fixed32BoundaryError(
+                "downloaded Qwen trace identity differs from the remote capture"
+            )
+
+        # Install the exact pulled bytes before semantic validation. If the
+        # trace is malformed, the evidence remains intact at its canonical path.
+        os.replace(pull_path, trace_path)
+        _raw_trace, events = _fixed32_load_trace_events(
+            trace_path,
+            instance_id=instance_id,
+        )
+        return {
+            "schema": _REMOTE_AGENT_TRACE_OBSERVATION_SCHEMA,
+            "bytes": before["bytes"],
+            "sha256": before["sha256"],
+            "event_count": len(events),
+        }
+    finally:
+        try:
+            pull_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def _fixed32_remote_agent_paths(
     instance_id: str,
     *,
@@ -6023,6 +6375,36 @@ def _cleanup_remote_agent_task(
         raise Fixed32BoundaryError(
             "remote Qwen task cleanup failed: "
             f"host={host} instance={instance_id} rc={cleanup.returncode}"
+        )
+
+
+def _stop_remote_agent_container(
+    *,
+    host: str,
+    instance_id: str,
+    container_name: str,
+) -> None:
+    stopped = _net_retry(
+        [
+            "ssh",
+            *_EVAL_SSH_OPTS,
+            host,
+            (
+                "set -eu; "
+                f"ids=$(docker ps -aq --filter name=^/{container_name}$); "
+                'if [ -n "$ids" ]; then docker rm -f $ids >/dev/null; fi; '
+                f"test -z \"$(docker ps -aq --filter "
+                f"name=^/{container_name}$)\""
+            ),
+        ],
+        what=f"qwen_stop:{instance_id}",
+        timeout=60,
+        max_attempts=2,
+    )
+    if stopped.returncode != 0:
+        raise Fixed32BoundaryError(
+            "remote Qwen container did not stop before trace download: "
+            f"host={host} instance={instance_id} rc={stopped.returncode}"
         )
 
 
@@ -6204,6 +6586,22 @@ def _run_agent_instance(
                 session_id=trace_session_id,
                 system_settings_src=remote_system_settings,
                 bundle_observation=bundle_observation,
+                trace_output_path=(
+                    _INSTANCE_TRACE_OUTPUT_PATH if fixed32_launch else None
+                ),
+            )
+            remote_trace_path = (
+                _remote_agent_trace_path(remote_out)
+                if fixed32_launch
+                else None
+            )
+            remote_command = (
+                _remote_agent_trace_capture_command(
+                    cmd,
+                    remote_trace_path=remote_trace_path,
+                )
+                if remote_trace_path is not None
+                else _remote_agent_command(cmd)
             )
             ssh_cmd = [
                 "ssh",
@@ -6211,11 +6609,16 @@ def _run_agent_instance(
                 "-o",
                 "ConnectTimeout=20",
                 remote_host,
-                _remote_agent_command(cmd),
+                remote_command,
             ]
             try:
-                with trace_path.open("w", encoding="utf-8") as tf, (
-                    stderr_path.open("w", encoding="utf-8")
+                trace_output = (
+                    contextlib.nullcontext(subprocess.DEVNULL)
+                    if fixed32_launch
+                    else trace_path.open("w", encoding="utf-8")
+                )
+                with trace_output as tf, stderr_path.open(
+                    "w", encoding="utf-8"
                 ) as ef:
                     completed = subprocess.run(
                         ssh_cmd,
@@ -6242,23 +6645,44 @@ def _run_agent_instance(
                         f"QWEN_SSH_TRANSPORT_DROP {instance_id} rc=255 "
                         "(network-drop, not a fork)"
                     )
+                    if fixed32_launch:
+                        _stop_remote_agent_container(
+                            host=remote_host,
+                            instance_id=instance_id,
+                            container_name=container_name,
+                        )
             except subprocess.TimeoutExpired:
                 timed_out = True
-                _net_retry(
-                    [
-                        "ssh",
-                        *_EVAL_SSH_OPTS,
-                        remote_host,
-                        f"docker kill {container_name} 2>/dev/null; "
-                        f"docker wait {container_name} 2>/dev/null; "
-                        "echo killed",
-                    ],
-                    what=f"qwen_kill:{instance_id}",
-                    timeout=60,
-                    max_attempts=2,
-                )
+                if fixed32_launch:
+                    _stop_remote_agent_container(
+                        host=remote_host,
+                        instance_id=instance_id,
+                        container_name=container_name,
+                    )
+                else:
+                    _net_retry(
+                        [
+                            "ssh",
+                            *_EVAL_SSH_OPTS,
+                            remote_host,
+                            f"docker kill {container_name} 2>/dev/null; "
+                            f"docker wait {container_name} 2>/dev/null; "
+                            "echo killed",
+                        ],
+                        what=f"qwen_kill:{instance_id}",
+                        timeout=60,
+                        max_attempts=2,
+                    )
                 rc = -1
             elapsed = time.monotonic() - started
+            trace_capture: dict[str, Any] | None = None
+            if remote_trace_path is not None:
+                trace_capture = _pull_remote_agent_trace(
+                    host=remote_host,
+                    instance_id=instance_id,
+                    remote_trace_path=remote_trace_path,
+                    trace_path=trace_path,
+                )
             if fixed32_launch:
                 if bundle_observation is None:
                     raise Fixed32BoundaryError(
@@ -6389,6 +6813,11 @@ def _run_agent_instance(
                 "image_arch": sweb_arch,
             }
             if fixed32_launch:
+                if trace_capture is None:
+                    raise Fixed32BoundaryError(
+                        "fixed32 remote trace capture evidence is unavailable"
+                    )
+                result["qwen_trace_capture"] = trace_capture
                 if (
                     image_observation is None
                     or placement_observation is None
