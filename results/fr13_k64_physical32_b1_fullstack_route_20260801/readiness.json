@@ -1,8 +1,16 @@
 {
   "schema": "fr13.fixed32.k64_physical32_b1_fullstack.readiness.v1",
   "status": "prepared_not_measured",
-  "implementation_branch": "agent/fixed32-b1-fullstack-compose",
-  "implementation_commit": "ca9a606a7546629a3a4d9b064277fe9e650c0f81",
+  "implementation_branch": "agent/fixed32-gdn-b1-fullstack-integration-20260801",
+  "implementation_commit": "402481c24a8872f3ddc65859ca7da93f69b3eef9",
+  "integration_base_branch": "agent/fixed32-b1-fullstack-reviewed-b4",
+  "integration_base_commit": "c3ee2fece6daa17927ec216ff0135c5cf3ebb1e0",
+  "gdn_reviewed_implementation_commit": "1ca12bc2611d87432d36caa563efa5c8d795942b",
+  "gdn_reviewed_tip": "f5ccbdfdd1b7244cb551bca69d1ff099b9ab2c70",
+  "gdn_integration_commits": [
+    "8e4de57197cc8ad1b74e2e85c47a3ca8d7fe83dc",
+    "ed2fcf34982fa7663cf488f772fa571ef74b74a0"
+  ],
   "corrected_b4_review_branch": "agent/fixed32-b4-tail23-hydra27-k64-m128-review",
   "corrected_b4_review_tip": "e0ac403c22525265525957ff15e118ca291e68fa",
   "corrected_b4_code_fix": "6ed4a55df803c5a7b9190e9c0de0498085a9b9d0",
@@ -29,6 +37,44 @@
   },
   "qrow16_production": true,
   "sfwd_state_fusion_production": true,
+  "gdn_level0_coeff": {
+    "candidate": "fixed32_gdn_level0_coeff_v1",
+    "production_in_both_timing_arms": true,
+    "fullstack_selector": true,
+    "count_invocation": false,
+    "qualified_batches": [1],
+    "live_gate_required_before_timing_per_mode": true,
+    "live_gate_task_id": "astropy__astropy-12907",
+    "live_gate_records": 48,
+    "live_gate_compared_bytes": 4725178944,
+    "live_gate_surfaces": [
+      "output",
+      "export_non_scratch_rows",
+      "ring_k",
+      "ring_v",
+      "ring_a",
+      "ring_b",
+      "flags",
+      "counter"
+    ],
+    "live_gate_scratch_rows": [31],
+    "live_gate_requires_raw_byte_equal": true,
+    "live_gate_requires_state_restored": true,
+    "merged_kernel_source_sha256": "dbf260532a8758b679b5f20b14fb3fb391fb6c0224610507bb25e88b8ec35599",
+    "reviewed_static_sm121_build": {
+      "path": "results/fr13_fixed32_gdn_level0_coeff_sm121_build_review_20260801",
+      "kernel_source_sha256": "16fde18ebf4ace9893d2f8890294c894c71222b85d7c9cdc4bc7789cf5afff4e",
+      "production_count_invocation": false,
+      "specializations": 8,
+      "all_stack_bytes_zero": true,
+      "all_local_bytes_zero": true,
+      "all_spill_instruction_counts_zero": true,
+      "gpu_used": false,
+      "b4_evidence_classification": "static_only",
+      "b4_live_qualified": false,
+      "b4_deployable": false
+    }
+  },
   "only_timing_arm_delta": "source_v7_all_parent_committer_production_0_to_1",
   "mandatory_weight_bytes": 32666638208,
   "mandatory_weight_floor_ms": 119.658015414,
@@ -38,15 +84,20 @@
   "gpu_campaign_run": false,
   "measurements_present": false,
   "required_external_inputs": [
+    "project Python environment with campaign dependencies",
+    "GPU and Docker runtime with no pre-existing containers",
     "pinned stock FA2 shared object",
     "pinned qrow16 FA2 shared object",
     "corrected reviewed Tail23 B4 production pass and verdict",
     "corrected reviewed Hydra27 B4 production pass and verdict"
   ],
   "verification": {
-    "new_route_tests_passed": 11,
-    "focused_tests_passed": 159,
-    "ruff": "pass",
+    "focused_tests_passed": 24,
+    "focused_tests_skipped_cuda": 2,
+    "broad_tests_passed": 51,
+    "broad_tests_skipped_cuda": 2,
+    "ruff": "pass_with_preexisting_f841_excluded",
+    "preexisting_ruff_f841_findings": 3,
     "python_compile": "pass",
     "bash_parse": "pass"
   }

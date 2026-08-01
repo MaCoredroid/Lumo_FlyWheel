@@ -312,6 +312,17 @@ def test_prepared_campaign_requires_corrected_b4_inputs_and_claims_no_measuremen
     assert "4725178944" in source
     assert readiness["corrected_b4_review_tip"].startswith("e0ac403c2")
     assert readiness["pre_review_b4_artifacts_accepted"] is False
+    gdn = readiness["gdn_level0_coeff"]
+    assert gdn["production_in_both_timing_arms"] is True
+    assert gdn["count_invocation"] is False
+    assert gdn["live_gate_compared_bytes"] == 4_725_178_944
+    assert gdn["reviewed_static_sm121_build"]["all_stack_bytes_zero"] is True
+    assert gdn["reviewed_static_sm121_build"]["all_local_bytes_zero"] is True
+    assert (
+        gdn["reviewed_static_sm121_build"]["all_spill_instruction_counts_zero"]
+        is True
+    )
+    assert gdn["reviewed_static_sm121_build"]["b4_deployable"] is False
     assert readiness["gpu_campaign_run"] is False
     assert readiness["measurements_present"] is False
 

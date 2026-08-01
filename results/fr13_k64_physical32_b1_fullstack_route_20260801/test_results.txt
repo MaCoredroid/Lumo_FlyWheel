@@ -1,27 +1,22 @@
-Implementation commit: ca9a606a7546629a3a4d9b064277fe9e650c0f81
+Implementation commit: 402481c24a8872f3ddc65859ca7da93f69b3eef9
 Date: 2026-08-01 UTC
 
-PASS: 11 tests
-  .venv/bin/pytest -q tests/test_fr13_k64_physical32_fullstack_route.py
+PASS: 24 tests, 2 CUDA-dependent skips
+  python3 -m pytest -q tests/test_fr13_fixed32_gdn_level0_coeff.py tests/test_fr13_k64_physical32_fullstack_route.py
 
-PASS: 159 tests
-  Full-stack route, K64 qrow16+SFWD, TAW native and real-task arm,
-  SFWD state fusion, fixed32 ingress, Qwen cap, and floor propagation suites.
+PASS: 51 tests, 2 CUDA-dependent skips
+  python3 -m pytest -q tests/test_fr13_fixed32_gdn_level0_coeff.py tests/test_fr13_k64_physical32_fullstack_route.py tests/test_fr13_fixed32_gdn_batch_launch.py tests/test_fr13_fixed32_gdn_path_bv_live_gate.py tests/test_fr13_fixed32_sfwd_state_fusion.py
 
 PASS:
-  .venv/bin/ruff check scripts/fr13_taw_b1_credential.py tests/test_fr13_k64_physical32_fullstack_route.py
-  .venv/bin/python -m py_compile scripts/fr13_taw_b1_credential.py
-  bash -n scripts/fr13_run_b1_k64_taw_source_v7_gate.sh scripts/fr13_run_b1_k64_physical32_fullstack_pair.sh prepared_campaign.sh
+  /home/mark/shared/lumoFlyWheel/.venv/bin/ruff check --ignore F841 scripts/fr10_phase4_patch_vllm_tree_gdn.py scripts/fr13_taw_b1_credential.py tests/test_fr13_fixed32_gdn_level0_coeff.py tests/test_fr13_k64_physical32_fullstack_route.py
+  python3 -m py_compile scripts/fr10_phase4_patch_vllm_tree_gdn.py scripts/fr13_taw_b1_credential.py scripts/fr13_gdn_level0_coeff_pass.py scripts/fr13_runtime_manifest.py
+  bash -n scripts/fr13_launch_forked_fa2_tree_server.sh scripts/fr13_run_b1_gdn_level0_coeff_live_gate.sh scripts/fr13_run_b1_gdn_level0_coeff_timing.sh scripts/fr13_run_b1_k64_physical32_fullstack_pair.sh results/fr13_k64_physical32_b1_fullstack_route_20260801/prepared_campaign.sh
 
-ENVIRONMENT-ONLY FAILURES: 9 tests, with 159 other tests passing.
-  The reused worktree does not contain historical result payloads referenced by
-  three artifact-only suites: fr13_fixed32_taw_b1_diagnostic_pass,
-  fr13_fixed32_taw_current_b1_live_pass, and fr13_hardware_floor_ledger.
-  All nine failures were FileNotFoundError for those absent historical files.
+KNOWN LINT BASELINE:
+  A full Ruff invocation reports three pre-existing F841 findings in the large
+  vLLM patcher at lines 16812, 29168, and 31727. The scoped invocation above
+  ignores only F841 and passes; this route does not alter those assignments.
 
 NOT RUN:
-  No GPU campaign, B1 timing, B4 timing, acceptance reduction, or new hardware
-  floor measurement was performed from this branch.
-  Runtime-manifest staging could not complete in this reused worktree because
-  its external SWE-bench Verified dataset blob is absent; the campaign runner
-  regenerates and compares the manifest at launch and shutdown.
+  No GPU, Docker campaign, live GDN/TAW B1 gate, B1 timing, B4 timing,
+  acceptance reduction, or new hardware-floor measurement was performed.
