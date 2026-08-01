@@ -115,6 +115,12 @@ _FIXED32_QWEN_CAMPAIGN_PROOF_SCHEMA = (
 _FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME = (
     "fixed32_qwen_campaign_provenance.json"
 )
+_FIXED32_QWEN_CAMPAIGN_METRICS_PRE_FILENAME = (
+    "fixed32_qwen_campaign_metrics_pre.txt"
+)
+_FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME = (
+    "fixed32_qwen_campaign_metrics_post.txt"
+)
 _FIXED32_PENDING_RUNNER_METADATA_FILENAME = "runner_metadata.pending.json"
 _FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY = "_fixed32_campaign_runtime_args"
 _FIXED32_AGENT_PLACEMENT_SCHEMA = "fr13-fixed32-agent-placement-v1"
@@ -2465,6 +2471,8 @@ def _autocommit_fixed32_campaign_artifacts(
         return
     required = [
         dataset_out / _FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME,
+        dataset_out / _FIXED32_QWEN_CAMPAIGN_METRICS_PRE_FILENAME,
+        dataset_out / _FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME,
         *(
             per_task_root / instance_id / rel
             for instance_id in instance_ids
@@ -3176,6 +3184,19 @@ def _fixed32_artifact_identity(path: Path, raw: bytes) -> dict[str, Any]:
         "sha256": hashlib.sha256(raw).hexdigest(),
         "bytes": len(raw),
     }
+
+
+def _write_fixed32_campaign_metrics(path: Path) -> bytes:
+    raw = _metrics_snapshot(
+        DEFAULT_METRICS_URL,
+        strict=True,
+    ).encode("utf-8")
+    if not raw:
+        raise Fixed32BoundaryError("fixed32 B4 campaign metric snapshot is empty")
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_bytes(raw)
+    os.replace(temporary, path)
+    return raw
 
 
 def _fixed32_real_task_provenance(
@@ -6867,6 +6888,8 @@ def _finalize_fixed32_qwen_campaign_provenance(
     instance_ids: list[str],
     dataset_out: Path,
     per_task_root: Path,
+    campaign_metrics_pre_path: Path,
+    campaign_metrics_post_path: Path,
 ) -> dict[str, Any]:
     """Prove one B4 union window before publishing any task provenance."""
     if len(instance_ids) < 2 or len(summaries) != len(instance_ids):
@@ -6895,7 +6918,6 @@ def _finalize_fixed32_qwen_campaign_provenance(
         if (
             not isinstance(runtime_args, dict)
             or not isinstance(boundary, dict)
-            or boundary.get("schema") != "fr13-fixed32-task-boundary-v1"
             or boundary.get("instance_id") != instance_id
             or runner_path.exists()
             or not pending_path.is_file()
@@ -6920,41 +6942,6 @@ def _finalize_fixed32_qwen_campaign_provenance(
         if pending_summary != expected_pending:
             raise Fixed32BoundaryError(
                 f"fixed32 B4 pending metadata differs for {instance_id}"
-            )
-
-        pre = boundary.get("pre")
-        post = boundary.get("post")
-        interval = boundary.get("forward_step_interval")
-        if (
-            not isinstance(pre, dict)
-            or not isinstance(post, dict)
-            or not isinstance(interval, dict)
-            or type(pre.get("generation")) is not int
-            or type(post.get("generation")) is not int
-            or pre["generation"] < 1
-            or post["generation"] <= pre["generation"]
-            or not isinstance(pre.get("counters"), dict)
-            or not isinstance(post.get("counters"), dict)
-        ):
-            raise Fixed32BoundaryError(
-                f"fixed32 B4 boundary endpoints are invalid for {instance_id}"
-            )
-        start = pre["counters"].get("pure_decode_forward_steps")
-        end = post["counters"].get("pure_decode_forward_steps")
-        if (
-            type(start) is not int
-            or type(end) is not int
-            or start < 0
-            or end <= start
-            or interval
-            != {
-                "start_forward_step": start,
-                "end_forward_step": end,
-                "expected_complete_events": end - start,
-            }
-        ):
-            raise Fixed32BoundaryError(
-                f"fixed32 B4 forward interval is invalid for {instance_id}"
             )
 
         task_key_id = runtime_args.get("task_key_id")
@@ -6996,6 +6983,84 @@ def _finalize_fixed32_qwen_campaign_provenance(
             raise Fixed32BoundaryError(
                 f"fixed32 B4 task artifact paths differ for {instance_id}"
             )
+        boundary_schema = boundary.get("schema")
+        start: int | None = None
+        end: int | None = None
+        pre_generation: int | None = None
+        post_generation: int | None = None
+        if boundary_schema == "fr13-fixed32-task-boundary-v1":
+            pre = boundary.get("pre")
+            post = boundary.get("post")
+            interval = boundary.get("forward_step_interval")
+            if (
+                not isinstance(pre, dict)
+                or not isinstance(post, dict)
+                or not isinstance(interval, dict)
+                or type(pre.get("generation")) is not int
+                or type(post.get("generation")) is not int
+                or pre["generation"] < 1
+                or post["generation"] <= pre["generation"]
+                or not isinstance(pre.get("counters"), dict)
+                or not isinstance(post.get("counters"), dict)
+            ):
+                raise Fixed32BoundaryError(
+                    f"fixed32 B4 boundary endpoints are invalid for {instance_id}"
+                )
+            start = pre["counters"].get("pure_decode_forward_steps")
+            end = post["counters"].get("pure_decode_forward_steps")
+            if (
+                type(start) is not int
+                or type(end) is not int
+                or start < 0
+                or end <= start
+                or interval
+                != {
+                    "start_forward_step": start,
+                    "end_forward_step": end,
+                    "expected_complete_events": end - start,
+                }
+            ):
+                raise Fixed32BoundaryError(
+                    f"fixed32 B4 forward interval is invalid for {instance_id}"
+                )
+            pre_generation = pre["generation"]
+            post_generation = post["generation"]
+        elif (
+            boundary_schema
+            == "fr13-fixed32-eager-kernel-diagnostic-task-bracket-v1"
+        ):
+            pre_metrics = boundary.get("pre_metrics")
+            post_metrics = boundary.get("post_metrics")
+            if (
+                boundary.get("run_classification")
+                != "eager_kernel_byte_diagnostic"
+                or boundary.get("acceptance_valid") is not False
+                or boundary.get("flush_protocol_used") is not False
+                or not isinstance(pre_metrics, dict)
+                or not isinstance(post_metrics, dict)
+            ):
+                raise Fixed32BoundaryError(
+                    f"fixed32 B4 eager boundary is invalid for {instance_id}"
+                )
+            for label, path, reference in (
+                ("pre", metrics_pre_path, pre_metrics),
+                ("post", metrics_post_path, post_metrics),
+            ):
+                if not path.is_file() or path.is_symlink():
+                    raise Fixed32BoundaryError(
+                        f"fixed32 B4 eager {label} metrics are missing for "
+                        f"{instance_id}"
+                    )
+                raw = path.read_bytes()
+                if reference != _fixed32_artifact_identity(path, raw):
+                    raise Fixed32BoundaryError(
+                        f"fixed32 B4 eager {label} metric identity differs for "
+                        f"{instance_id}"
+                    )
+        else:
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 boundary schema is unsupported for {instance_id}"
+            )
         raw_trace, events = _fixed32_load_trace_events(
             trace_path,
             instance_id=instance_id,
@@ -7009,10 +7074,11 @@ def _finalize_fixed32_qwen_campaign_provenance(
                 "pending_path": pending_path,
                 "runner_path": runner_path,
                 "boundary": boundary,
+                "boundary_schema": boundary_schema,
                 "start": start,
                 "end": end,
-                "pre_generation": pre["generation"],
-                "post_generation": post["generation"],
+                "pre_generation": pre_generation,
+                "post_generation": post_generation,
                 "task_key_id": task_key_id,
                 "completed": completed_after - completed_before,
                 "trace_path": trace_path,
@@ -7023,46 +7089,48 @@ def _finalize_fixed32_qwen_campaign_provenance(
             }
         )
 
-    merged: list[list[int]] = []
-    for record in sorted(records, key=lambda item: (item["start"], item["end"])):
-        start = record["start"]
-        end = record["end"]
-        if not merged or start > merged[-1][1]:
-            merged.append([start, end])
-        else:
-            merged[-1][1] = max(merged[-1][1], end)
-    complete_stream_steps = max(record["end"] for record in records)
-    if merged != [[0, complete_stream_steps]]:
+    boundary_schemas = {record["boundary_schema"] for record in records}
+    if len(boundary_schemas) != 1:
         raise Fixed32BoundaryError(
-            "fixed32 B4 task intervals do not cover the complete campaign stream"
+            "fixed32 B4 campaign mixes task-boundary schemas"
         )
-    first = min(
-        records,
-        key=lambda item: (
-            item["start"],
-            item["pre_generation"],
-            item["instance_id"],
-        ),
-    )
-    last = max(
-        records,
-        key=lambda item: (
-            item["end"],
-            item["post_generation"],
-            item["instance_id"],
-        ),
-    )
+    boundary_schema = next(iter(boundary_schemas))
+    stream_coverage: dict[str, Any] | None = None
+    if boundary_schema == "fr13-fixed32-task-boundary-v1":
+        merged: list[list[int]] = []
+        graph_records = sorted(
+            records,
+            key=lambda item: (item["start"], item["end"]),
+        )
+        for record in graph_records:
+            start = record["start"]
+            end = record["end"]
+            if not merged or start > merged[-1][1]:
+                merged.append([start, end])
+            else:
+                merged[-1][1] = max(merged[-1][1], end)
+        complete_stream_steps = max(record["end"] for record in records)
+        if merged != [[0, complete_stream_steps]]:
+            raise Fixed32BoundaryError(
+                "fixed32 B4 task intervals do not cover the complete campaign "
+                "stream"
+            )
+        stream_coverage = {
+            "start_forward_step": 0,
+            "end_forward_step": complete_stream_steps,
+            "complete_stream_forward_steps": complete_stream_steps,
+        }
 
     for label, path in (
-        ("pre", first["metrics_pre_path"]),
-        ("post", last["metrics_post_path"]),
+        ("pre", campaign_metrics_pre_path),
+        ("post", campaign_metrics_post_path),
     ):
         if not path.is_file() or path.is_symlink():
             raise Fixed32BoundaryError(
                 f"fixed32 B4 campaign {label} metrics are missing or symlinked"
             )
-    metrics_pre_raw = first["metrics_pre_path"].read_bytes()
-    metrics_post_raw = last["metrics_post_path"].read_bytes()
+    metrics_pre_raw = campaign_metrics_pre_path.read_bytes()
+    metrics_post_raw = campaign_metrics_post_path.read_bytes()
     if not metrics_pre_raw or not metrics_post_raw:
         raise Fixed32BoundaryError(
             "fixed32 B4 campaign endpoint metrics are empty"
@@ -7100,21 +7168,16 @@ def _finalize_fixed32_qwen_campaign_provenance(
         "concurrency": 4,
         "task_ids": list(instance_ids),
         "selection": {
-            "basis": "validated_forward_counter_then_generation",
-            "pre_task_id": first["instance_id"],
-            "post_task_id": last["instance_id"],
-            "start_forward_step": first["start"],
-            "end_forward_step": last["end"],
-            "complete_stream_forward_steps": complete_stream_steps,
-            "pre_generation": first["pre_generation"],
-            "post_generation": last["post_generation"],
+            "basis": "runner_owned_campaign_endpoint_metrics",
+            "task_boundary_schema": boundary_schema,
+            "task_stream_coverage": stream_coverage,
         },
         "metrics_pre": _fixed32_artifact_identity(
-            first["metrics_pre_path"],
+            campaign_metrics_pre_path,
             metrics_pre_raw,
         ),
         "metrics_post": _fixed32_artifact_identity(
-            last["metrics_post_path"],
+            campaign_metrics_post_path,
             metrics_post_raw,
         ),
         "tasks": [
@@ -7644,6 +7707,16 @@ def main(argv: list[str] | None = None) -> int:
 
     started_at = _iso_now()
     summaries: list[dict[str, Any]] = []
+    campaign_metrics_pre_path: Path | None = None
+    campaign_metrics_post_path: Path | None = None
+    if fixed32_enabled and serving_batch == 4:
+        campaign_metrics_pre_path = (
+            dataset_out / _FIXED32_QWEN_CAMPAIGN_METRICS_PRE_FILENAME
+        ).resolve()
+        campaign_metrics_post_path = (
+            dataset_out / _FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME
+        ).resolve()
+        _write_fixed32_campaign_metrics(campaign_metrics_pre_path)
 
     def _job(iid: str) -> dict[str, Any]:
         t0 = time.time()
@@ -7782,11 +7855,16 @@ def main(argv: list[str] | None = None) -> int:
                 summaries.append(res)
 
     if fixed32_enabled and serving_batch == 4:
+        assert campaign_metrics_pre_path is not None
+        assert campaign_metrics_post_path is not None
+        _write_fixed32_campaign_metrics(campaign_metrics_post_path)
         _finalize_fixed32_qwen_campaign_provenance(
             summaries=summaries,
             instance_ids=instance_ids,
             dataset_out=dataset_out,
             per_task_root=per_task_root,
+            campaign_metrics_pre_path=campaign_metrics_pre_path,
+            campaign_metrics_post_path=campaign_metrics_post_path,
         )
         _autocommit_fixed32_campaign_artifacts(
             dataset_out=dataset_out,

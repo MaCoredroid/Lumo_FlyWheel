@@ -256,6 +256,12 @@ FIXED32_QWEN_CAMPAIGN_PROOF_SCHEMA = (
 FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME = (
     "fixed32_qwen_campaign_provenance.json"
 )
+FIXED32_QWEN_CAMPAIGN_METRICS_PRE_FILENAME = (
+    "fixed32_qwen_campaign_metrics_pre.txt"
+)
+FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME = (
+    "fixed32_qwen_campaign_metrics_post.txt"
+)
 FIXED32_QWEN_RUNTIME_ATTESTATION_SCHEMA = (
     "fr13-fixed32-qwen-runtime-attestation-v1"
 )
@@ -3122,7 +3128,7 @@ def _fixed32_replay_qwen_campaign_proof(
             item["instance_id"],
         ),
     )
-    expected_selection = {
+    legacy_selection = {
         "basis": "validated_forward_counter_then_generation",
         "pre_task_id": first["instance_id"],
         "post_task_id": last["instance_id"],
@@ -3132,10 +3138,27 @@ def _fixed32_replay_qwen_campaign_proof(
         "pre_generation": first["pre_generation"],
         "post_generation": last["post_generation"],
     }
-    if proof["selection"] != expected_selection:
+    runner_owned_selection = {
+        "basis": "runner_owned_campaign_endpoint_metrics",
+        "task_boundary_schema": FIXED32_BOUNDARY_SCHEMA,
+        "task_stream_coverage": {
+            "start_forward_step": 0,
+            "end_forward_step": complete_steps,
+            "complete_stream_forward_steps": complete_steps,
+        },
+    }
+    if proof["selection"] == legacy_selection:
+        metrics_pre_path = first["task_dir"] / "vllm_metrics_pre.txt"
+        metrics_post_path = last["task_dir"] / "vllm_metrics_post.txt"
+    elif proof["selection"] == runner_owned_selection:
+        metrics_pre_path = (
+            dataset_dir / FIXED32_QWEN_CAMPAIGN_METRICS_PRE_FILENAME
+        )
+        metrics_post_path = (
+            dataset_dir / FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME
+        )
+    else:
         raise GateError(f"{proof_path}: campaign endpoint selection differs")
-    metrics_pre_path = first["task_dir"] / "vllm_metrics_pre.txt"
-    metrics_post_path = last["task_dir"] / "vllm_metrics_post.txt"
     metrics_pre_raw, _metrics_pre_text = _fixed32_campaign_artifact(
         proof["metrics_pre"],
         expected_path=metrics_pre_path,

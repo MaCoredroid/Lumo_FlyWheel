@@ -255,7 +255,58 @@ def _campaign_fixture(
             encoding="utf-8",
         )
         summaries.append(summary)
+    (dataset_out / runner._FIXED32_QWEN_CAMPAIGN_METRICS_PRE_FILENAME).write_bytes(
+        _metrics(0)
+    )
+    (
+        dataset_out / runner._FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME
+    ).write_bytes(_metrics(7 if tamper_final_metrics else 8))
     return runner, summaries, dataset_out, per_task_root
+
+
+def _campaign_metric_paths(runner: Any, dataset_out: Path) -> tuple[Path, Path]:
+    return (
+        dataset_out / runner._FIXED32_QWEN_CAMPAIGN_METRICS_PRE_FILENAME,
+        dataset_out / runner._FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME,
+    )
+
+
+def _convert_fixture_to_eager_boundaries(
+    runner: Any,
+    summaries: list[dict[str, Any]],
+    per_task_root: Path,
+) -> None:
+    for summary in summaries:
+        instance_id = summary["instance_id"]
+        task_dir = per_task_root / instance_id
+        pre_path = task_dir / "vllm_metrics_pre.txt"
+        post_path = task_dir / "vllm_metrics_post.txt"
+        boundary = {
+            "schema": "fr13-fixed32-eager-kernel-diagnostic-task-bracket-v1",
+            "instance_id": instance_id,
+            "mode": "hybrid23",
+            "producer_pid": 1234,
+            "run_classification": "eager_kernel_byte_diagnostic",
+            "acceptance_valid": False,
+            "flush_protocol_used": False,
+            "pre_metrics": runner._fixed32_artifact_identity(
+                pre_path,
+                pre_path.read_bytes(),
+            ),
+            "post_metrics": runner._fixed32_artifact_identity(
+                post_path,
+                post_path.read_bytes(),
+            ),
+        }
+        summary["fixed32_task_boundary"] = boundary
+        pending = {
+            key: value
+            for key, value in summary.items()
+            if key != runner._FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY
+        }
+        (
+            task_dir / runner._FIXED32_PENDING_RUNNER_METADATA_FILENAME
+        ).write_text(json.dumps(pending, indent=2), encoding="utf-8")
 
 
 def _provenance_for_replay(
@@ -326,15 +377,27 @@ def test_b4_campaign_union_finalizes_only_after_global_proof(
             "instance_id": kwargs["instance_id"],
         },
     )
+    campaign_metrics_pre_path, campaign_metrics_post_path = (
+        _campaign_metric_paths(runner, dataset_out)
+    )
     proof = runner._finalize_fixed32_qwen_campaign_provenance(
         summaries=summaries,
         instance_ids=TASK_IDS,
         dataset_out=dataset_out,
         per_task_root=per_task_root,
+        campaign_metrics_pre_path=campaign_metrics_pre_path,
+        campaign_metrics_post_path=campaign_metrics_post_path,
     )
 
-    assert proof["selection"]["pre_task_id"] == TASK_IDS[0]
-    assert proof["selection"]["post_task_id"] == TASK_IDS[3]
+    assert proof["selection"] == {
+        "basis": "runner_owned_campaign_endpoint_metrics",
+        "task_boundary_schema": "fr13-fixed32-task-boundary-v1",
+        "task_stream_coverage": {
+            "start_forward_step": 0,
+            "end_forward_step": 9,
+            "complete_stream_forward_steps": 9,
+        },
+    }
     assert proof["metric_evidence"]["completed_engine_requests"] == 8
     for task_id in TASK_IDS:
         task_dir = per_task_root / task_id
@@ -425,6 +488,12 @@ def test_b4_campaign_metric_tamper_publishes_no_final_metadata(
             instance_ids=TASK_IDS,
             dataset_out=dataset_out,
             per_task_root=per_task_root,
+            campaign_metrics_pre_path=_campaign_metric_paths(
+                runner, dataset_out
+            )[0],
+            campaign_metrics_post_path=_campaign_metric_paths(
+                runner, dataset_out
+            )[1],
         )
 
     assert not (
@@ -456,6 +525,12 @@ def test_b4_autocommit_publishes_proof_and_all_tasks_as_one_unit(
         instance_ids=TASK_IDS,
         dataset_out=dataset_out,
         per_task_root=per_task_root,
+        campaign_metrics_pre_path=_campaign_metric_paths(
+            runner, dataset_out
+        )[0],
+        campaign_metrics_post_path=_campaign_metric_paths(
+            runner, dataset_out
+        )[1],
     )
 
     captured: list[tuple[list[str], str, bool]] = []
@@ -476,9 +551,11 @@ def test_b4_autocommit_publishes_proof_and_all_tasks_as_one_unit(
     assert len(captured) == 1
     committed_paths, message, strict_push = captured[0]
     assert strict_push is True
-    assert committed_paths[0] == str(
-        dataset_out / runner._FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME
-    )
+    assert committed_paths[:3] == [
+        str(dataset_out / runner._FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME),
+        str(dataset_out / runner._FIXED32_QWEN_CAMPAIGN_METRICS_PRE_FILENAME),
+        str(dataset_out / runner._FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME),
+    ]
     assert {
         str(per_task_root / task_id / "runner_metadata.json")
         for task_id in TASK_IDS
@@ -512,6 +589,12 @@ def test_b4_autocommit_fails_closed_on_missing_replay_artifact(
         instance_ids=TASK_IDS,
         dataset_out=dataset_out,
         per_task_root=per_task_root,
+        campaign_metrics_pre_path=_campaign_metric_paths(
+            runner, dataset_out
+        )[0],
+        campaign_metrics_post_path=_campaign_metric_paths(
+            runner, dataset_out
+        )[1],
     )
     (per_task_root / TASK_IDS[2] / "vllm_metrics_pre.txt").unlink()
     monkeypatch.setenv("LUMO_SWE_AUTOCOMMIT", "1")
@@ -525,6 +608,57 @@ def test_b4_autocommit_fails_closed_on_missing_replay_artifact(
             per_task_root=per_task_root,
             instance_ids=TASK_IDS,
         )
+
+
+def test_b4_eager_campaign_ignores_contaminated_per_task_metrics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner, summaries, dataset_out, per_task_root = _campaign_fixture(tmp_path)
+    _convert_fixture_to_eager_boundaries(
+        runner,
+        summaries,
+        per_task_root,
+    )
+    monkeypatch.setattr(
+        runner,
+        "_fixed32_real_task_provenance",
+        lambda **kwargs: {
+            "schema": "fr13-fixed32-real-task-provenance-v3",
+            "instance_id": kwargs["instance_id"],
+        },
+    )
+
+    second_runtime = summaries[1][runner._FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY]
+    with pytest.raises(contract.ContractError, match="completion metrics"):
+        contract.validate_fixed32_trace_model_requests(
+            _qwen_trace(TASK_IDS[1]),
+            expected_session_id=contract.fixed32_trace_session_id(TASK_IDS[1]),
+            expected_completed_logical_model_requests=2,
+            metrics_pre=second_runtime["metrics_pre_path"].read_bytes(),
+            metrics_post=second_runtime["metrics_post_path"].read_bytes(),
+        )
+
+    campaign_metrics_pre_path, campaign_metrics_post_path = (
+        _campaign_metric_paths(runner, dataset_out)
+    )
+    proof = runner._finalize_fixed32_qwen_campaign_provenance(
+        summaries=summaries,
+        instance_ids=TASK_IDS,
+        dataset_out=dataset_out,
+        per_task_root=per_task_root,
+        campaign_metrics_pre_path=campaign_metrics_pre_path,
+        campaign_metrics_post_path=campaign_metrics_post_path,
+    )
+
+    assert proof["selection"] == {
+        "basis": "runner_owned_campaign_endpoint_metrics",
+        "task_boundary_schema": (
+            "fr13-fixed32-eager-kernel-diagnostic-task-bracket-v1"
+        ),
+        "task_stream_coverage": None,
+    }
+    assert proof["metric_evidence"]["completed_engine_requests"] == 8
 
 
 def test_strict_artifact_push_retries_and_surfaces_failure(
