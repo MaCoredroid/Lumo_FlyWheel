@@ -6653,9 +6653,14 @@ def main(argv: list[str] | None = None) -> int:
         "stock",
         "streamk_coop128",
         "streamk_coop128_byte_ab",
+        "streamk_force_wide256",
+        "streamk_force_wide256_byte_ab",
     }:
         parser.error("FR13_FIXED32_CUTLASS_WAVE has an unsupported value")
-    fixed32_cutlass_diagnostic = cutlass_wave == "streamk_coop128_byte_ab"
+    fixed32_cutlass_diagnostic = cutlass_wave in {
+        "streamk_coop128_byte_ab",
+        "streamk_force_wide256_byte_ab",
+    }
     if fixed32_cutlass_diagnostic:
         if fixed32_taw_diagnostic or fixed32_bm8_diagnostic:
             parser.error(
@@ -6667,7 +6672,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.fixed32_cutlass_real_event_arm is None:
             parser.error(
-                "FR13_FIXED32_CUTLASS_WAVE=streamk_coop128_byte_ab requires "
+                "a CUTLASS Stream-K byte diagnostic requires "
                 "--fixed32-cutlass-real-event-arm"
             )
         if (
@@ -6682,7 +6687,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.fixed32_cutlass_real_event_arm is not None:
         parser.error(
             "--fixed32-cutlass-real-event-arm requires the "
-            "streamk_coop128_byte_ab selector"
+            "CUTLASS Stream-K byte-diagnostic selector"
         )
     fixed32_client = None
     fixed32_subset = None

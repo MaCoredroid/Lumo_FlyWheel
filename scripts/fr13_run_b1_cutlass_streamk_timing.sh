@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Exact4 real SWE-Verified Hydra27/Qrow16 B1 timing: stock CUTLASS vs Stream-K.
-# The one-task comparator gate only authorizes the candidate; it is not timing.
+# Real SWE-Verified Hydra27/Qrow16 B1 timing: stock CUTLASS vs Stream-K.
+# Exact4 is the default timing arm. The explicit one-task mode is diagnostic only.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -16,13 +16,52 @@ cd "$REPO"
 : "${STREAMK_PASS_SHA256:?set STREAMK_PASS_SHA256 to its raw SHA-256}"
 
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
-SUBSET=config/fr13_fixed32/subset_b4_four.json
-SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
+TIMING_CANDIDATE=${FR13_STREAMK_TIMING_CANDIDATE:-streamk_coop128}
+TIMING_TASK_SET=${FR13_STREAMK_TIMING_TASK_SET:-exact4}
+case "$TIMING_CANDIDATE" in
+  streamk_coop128)
+    STREAMK_SHA256=f9bbbb8dc4ffc2227a71d2bc7b260e586ffbdc0fd946749e4f69e322c46a362d
+    STREAMK_BYTES=111417328
+    STREAMK_LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_live_gate.v3
+    CANDIDATE_ARM_LABEL=cutlass_streamk
+    ;;
+  streamk_force_wide256)
+    STREAMK_SHA256=f682560caad085cfdc0c44eec5252352a8bc4861dc634a55e0dccbab261b7892
+    STREAMK_BYTES=112351640
+    STREAMK_LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_live_gate.v1
+    CANDIDATE_ARM_LABEL=cutlass_streamk_force_wide256
+    ;;
+  *)
+    echo "unsupported Stream-K timing candidate: $TIMING_CANDIDATE" >&2
+    exit 2
+    ;;
+esac
+case "$TIMING_TASK_SET" in
+  exact4)
+    SUBSET=config/fr13_fixed32/subset_b4_four.json
+    SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
+    TASK_COUNT=4
+    B1_DIAGNOSTIC=0
+    TIMING_ELIGIBLE=1
+    RUN_CLASSIFICATION=real_swe_verified_exact4_b1_hydra27_qrow16_streamk_timing_candidate
+    ;;
+  one)
+    SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
+    SUBSET_SHA256=cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb
+    TASK_COUNT=1
+    B1_DIAGNOSTIC=1
+    TIMING_ELIGIBLE=0
+    RUN_CLASSIFICATION=one_real_swe_verified_b1_hydra27_qrow16_streamk_timing_diagnostic_candidate
+    ;;
+  *)
+    echo "FR13_STREAMK_TIMING_TASK_SET must be exact4 or one" >&2
+    exit 2
+    ;;
+esac
 QROW16_FA2_SHA256=1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86
 QROW16_FA2_BYTES=299507792
 QROW16_LIVE_PASS_JSON="$REPO/results/fr13_fixed32_qrow16_num_splits0_live_pass_20260731T173608Z/fr13_fa2_qrow16_live_paged_ab.json"
 QROW16_LIVE_PASS_SHA256=36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77
-STREAMK_SHA256=f9bbbb8dc4ffc2227a71d2bc7b260e586ffbdc0fd946749e4f69e322c46a362d
 FULL_VOCAB_WEIGHT_BYTES=42025179008
 FULL_VOCAB_FLOOR_MS=153.9383846446886
 FULL_VOCAB_CAP_MS=177.0291423413919
@@ -32,7 +71,7 @@ SOURCE_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 STOCK_ARM="hydra27_fixed32_qrow16_cutlass_stock_${TAG}"
-CANDIDATE_ARM="hydra27_fixed32_qrow16_cutlass_streamk_${TAG}"
+CANDIDATE_ARM="hydra27_fixed32_qrow16_${CANDIDATE_ARM_LABEL}_${TAG}"
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
   || { echo "TAG contains unsafe characters" >&2; exit 2; }
@@ -56,10 +95,11 @@ unset _fr13_streamk_file
   || { echo "QROW16_FA2_SO is not the pinned production candidate" >&2; exit 2; }
 [[ "$(sha256sum "$QROW16_LIVE_PASS_JSON" | awk '{print $1}')" == "$QROW16_LIVE_PASS_SHA256" ]] \
   || { echo "canonical Qrow16 live PASS SHA-256 drift" >&2; exit 2; }
-[[ "$(sha256sum "$CUTLASS_STREAMK_SO" | awk '{print $1}')" == "$STREAMK_SHA256" ]] \
+[[ "$(stat -c '%s' "$CUTLASS_STREAMK_SO")" == "$STREAMK_BYTES" \
+   && "$(sha256sum "$CUTLASS_STREAMK_SO" | awk '{print $1}')" == "$STREAMK_SHA256" ]] \
   || { echo "CUTLASS_STREAMK_SO is not the pinned current candidate" >&2; exit 2; }
 [[ "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" ]] \
-  || { echo "canonical exact4 subset SHA-256 drift" >&2; exit 2; }
+  || { echo "canonical timing subset SHA-256 drift" >&2; exit 2; }
 [[ "$STREAMK_PASS_SHA256" =~ ^[0-9a-f]{64}$ ]] \
   || { echo "STREAMK_PASS_SHA256 must be lowercase SHA-256" >&2; exit 2; }
 [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] \
@@ -98,13 +138,14 @@ unset -f run_variant
 
 # Validate the authenticated real-task comparator credential, including exact
 # source identity, before the first Docker query. The comparator contributes no
-# timing samples; only the two exact4 arms below do.
+# timing samples; only the two paired timing arms below do.
 "$PYTHON_BIN" scripts/fr13_cutlass_streamk_pass.py validate \
   --live-result "$STREAMK_PASS_JSON" \
   --expected-live-sha256 "$STREAMK_PASS_SHA256" \
   --candidate-so "$CUTLASS_STREAMK_SO" \
   --patch-source "$PATCH_SOURCE" \
   --expected-source-commit "$SOURCE_COMMIT" \
+  --candidate-selector "$TIMING_CANDIDATE" \
   >/dev/null
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "all Docker containers must be absent before timing" >&2; exit 2; }
@@ -116,12 +157,14 @@ mkdir -p "$RUNROOT_ABS"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
 
-printf 'classification=real_swe_verified_exact4_b1_hydra27_qrow16_streamk_timing_candidate\ntiming_eligible=1\ncomparator_gate_timing_eligible=0\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\ntopology=hydra27_fixed32\nlineage=successor_to_legacy_hydra23_not_same_topology\ncommon_fa2_selector=qrow16_production\nonly_arm_delta=CUTLASS_stock_to_streamk_coop128\nphysical_rows=32\ndraft_vocab_root=0\ndraft_vocab_k=0\nfr13_needs_allow=FR13_DRAFT_VOCAB_K=0\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nqrow16_fa2_sha256=%s\nqrow16_fa2_bytes=%s\nqrow16_live_pass_sha256=%s\nstreamk_sha256=%s\nstreamk_pass_sha256=%s\nstarted=%s\n' \
+printf 'classification=%s\ntask_set=%s\ntask_count=%s\ntiming_eligible=%s\ncomparator_gate_timing_eligible=0\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\ntopology=hydra27_fixed32\nlineage=successor_to_legacy_hydra23_not_same_topology\ncommon_fa2_selector=qrow16_production\nonly_arm_delta=CUTLASS_stock_to_%s\ncandidate_selector=%s\ncandidate_live_pass_schema=%s\nphysical_rows=32\ndraft_vocab_root=0\ndraft_vocab_k=0\nfr13_needs_allow=FR13_DRAFT_VOCAB_K=0\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nqrow16_fa2_sha256=%s\nqrow16_fa2_bytes=%s\nqrow16_live_pass_sha256=%s\nstreamk_sha256=%s\nstreamk_bytes=%s\nstreamk_pass_sha256=%s\nstarted=%s\n' \
+  "$RUN_CLASSIFICATION" "$TIMING_TASK_SET" "$TASK_COUNT" "$TIMING_ELIGIBLE" \
+  "$TIMING_CANDIDATE" "$TIMING_CANDIDATE" "$STREAMK_LIVE_SCHEMA" \
   "$FULL_VOCAB_WEIGHT_BYTES" "$FULL_VOCAB_FLOOR_MS" "$FULL_VOCAB_CAP_MS" \
   "$$" "$RUNROOT_ABS" "$STOCK_ARM" "$CANDIDATE_ARM" \
   "$SOURCE_COMMIT" "$RUNNER_SHA256" "$SUBSET_SHA256" \
   "$QROW16_FA2_SHA256" "$QROW16_FA2_BYTES" "$QROW16_LIVE_PASS_SHA256" \
-  "$STREAMK_SHA256" "$STREAMK_PASS_SHA256" \
+  "$STREAMK_SHA256" "$STREAMK_BYTES" "$STREAMK_PASS_SHA256" \
   "$(date -u +%FT%TZ)" > "$RUNROOT_ABS/launcher_meta.txt"
 
 MANIFEST_FINALIZED=0
@@ -170,15 +213,15 @@ run_arm() {
   local pass_json=""
   local pass_sha=""
   if [[ "$production" == "1" ]]; then
-    selector=streamk_coop128
+    selector=$TIMING_CANDIDATE
     candidate_so=$CUTLASS_STREAMK_SO
     pass_json=$STREAMK_PASS_JSON
     pass_sha=$STREAMK_PASS_SHA256
   fi
-  echo "===== $arm: real exact4 B1 Hydra27/Qrow16 Stream-K production=$production ====="
+  echo "===== $arm: real $TIMING_TASK_SET B1 Hydra27/Qrow16 Stream-K production=$production ====="
   if env \
       OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
-      FR13_FIXED32_B1_DIAGNOSTIC=0 \
+      FR13_FIXED32_B1_DIAGNOSTIC="$B1_DIAGNOSTIC" \
       FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0 \
       FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0' \
       FR13_MANDATORY_WEIGHT_BYTES="$FULL_VOCAB_WEIGHT_BYTES" \
@@ -239,7 +282,7 @@ run_arm() {
      && "$(grep -Fxc 'FR13_FA2_QROW16_LIVE_PAGED_AB=0' "$container_env")" -eq 1 \
      && "$(grep -Fxc 'FR13_FA2_QROW16_PRODUCTION=1' "$container_env")" -eq 1 \
      && "$(grep -Fxc "FR13_FA2_QROW16_SO_SHA256=$QROW16_FA2_SHA256" "$container_env")" -eq 1 ]] \
-    || { echo "$arm did not run exact Hydra27/full-vocabulary/Qrow16 production" >&2; return 4; }
+    || { echo "$arm did not run Hydra27/full-vocabulary/Qrow16 production" >&2; return 4; }
   "$PYTHON_BIN" scripts/fr13_measure.py deploy-speed \
     --arm "$arm" \
     --out-root "$RUNROOT_ABS/$arm/swe_out" \
@@ -285,7 +328,7 @@ CANDIDATE_QROW16_CAPTURE="$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fa2_qrow16_produ
    && -f "$CANDIDATE_SIDECAR" && ! -L "$CANDIDATE_SIDECAR" \
    && -f "$CANDIDATE_SELECTOR" && ! -L "$CANDIDATE_SELECTOR" ]] \
   || { echo "candidate arm lacks regular Stream-K identity artifacts" >&2; exit 4; }
-[[ "$(<"$CANDIDATE_SELECTOR")" == "streamk_coop128" ]] \
+[[ "$(<"$CANDIDATE_SELECTOR")" == "$TIMING_CANDIDATE" ]] \
   || { echo "candidate selector sidecar is missing or wrong" >&2; exit 4; }
 CANDIDATE_SIDECAR_SHA256=$(sha256sum "$CANDIDATE_SIDECAR" | awk '{print $1}')
 "$PYTHON_BIN" scripts/fr13_cutlass_streamk_pass.py verify \
@@ -293,6 +336,7 @@ CANDIDATE_SIDECAR_SHA256=$(sha256sum "$CANDIDATE_SIDECAR" | awk '{print $1}')
   --expected-sidecar-sha256 "$CANDIDATE_SIDECAR_SHA256" \
   --candidate-so "$CUTLASS_STREAMK_SO" \
   --patch-source "$PATCH_SOURCE" \
+  --candidate-selector "$TIMING_CANDIDATE" \
   >/dev/null
 "$PYTHON_BIN" scripts/fr13_cutlass_streamk_pass.py attestation \
   --attestation "$CANDIDATE_ATTESTATION" \
@@ -315,6 +359,8 @@ finalize_manifests
   --production-binding "$RUNROOT_ABS/$CANDIDATE_ARM/streamk_production_binding.json" \
   --candidate-so "$CUTLASS_STREAMK_SO" \
   --source-commit "$SOURCE_COMMIT" \
+  --candidate-selector "$TIMING_CANDIDATE" \
+  --task-set "$TIMING_TASK_SET" \
   --out "$RUNROOT_ABS/timing_summary.json"
 
 printf 'timing_summary=%s completed=%s\n' \

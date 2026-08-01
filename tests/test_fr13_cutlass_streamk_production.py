@@ -247,15 +247,17 @@ def test_live_pass_rejects_stale_source_commit(
         )
 
 
-def _measure(module) -> dict[str, object]:
+def _measure(module, task_ids=None) -> dict[str, object]:
+    if task_ids is None:
+        task_ids = module.EXPECTED_TASK_IDS
     floor_ms = module.floor.FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS
     return {
         "schema": module.MEASURE_SCHEMA,
         "regime": "deployment",
         "instrument": "OFF",
         "batch_size": 1,
-        "n_tasks": 4,
-        "task_instance_ids": list(module.EXPECTED_TASK_IDS),
+        "n_tasks": len(task_ids),
+        "task_instance_ids": list(task_ids),
         "draft_vocab_k": 0,
         "draft_vocab_root": 0,
         "mandatory_weight_bytes": module.floor.FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
@@ -275,16 +277,36 @@ def _measure(module) -> dict[str, object]:
     }
 
 
-def test_timing_reducer_requires_exact4_full_vocab_and_current_binding(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("candidate_selector", "task_set"),
+    (
+        ("streamk_coop128", "exact4"),
+        ("streamk_force_wide256", "one"),
+    ),
+)
+def test_timing_reducer_requires_pinned_task_set_full_vocab_and_current_binding(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    candidate_selector: str,
+    task_set: str,
 ) -> None:
     module = _load("fr13_cutlass_streamk_timing_test", "fr13_cutlass_streamk_timing.py")
     candidate_bytes = b"candidate\n"
     candidate_sha256 = hashlib.sha256(candidate_bytes).hexdigest()
     candidate_so = tmp_path / "candidate.so"
     candidate_so.write_bytes(candidate_bytes)
-    monkeypatch.setattr(module.binary, "CANDIDATE_SIZE", len(candidate_bytes))
-    monkeypatch.setattr(module.binary, "CANDIDATE_SHA256", candidate_sha256)
+    if candidate_selector == "streamk_coop128":
+        monkeypatch.setattr(module.binary, "CANDIDATE_SIZE", len(candidate_bytes))
+        monkeypatch.setattr(module.binary, "CANDIDATE_SHA256", candidate_sha256)
+        diagnostic_selector = "streamk_coop128_byte_ab"
+    else:
+        monkeypatch.setattr(
+            module.binary, "WIDE256_CANDIDATE_SIZE", len(candidate_bytes)
+        )
+        monkeypatch.setattr(
+            module.binary, "WIDE256_CANDIDATE_SHA256", candidate_sha256
+        )
+        diagnostic_selector = "streamk_force_wide256_byte_ab"
     monkeypatch.setattr(module.qualification, "PATCH_SOURCE_SHA256", "e" * 64)
     qrow16_bytes = b"qrow16 candidate\n"
     qrow16_sha256 = hashlib.sha256(qrow16_bytes).hexdigest()
@@ -298,20 +320,23 @@ def test_timing_reducer_requires_exact4_full_vocab_and_current_binding(
         "verify_sidecar",
         lambda **_kwargs: {"live_result_sha256": "8" * 64},
     )
+    task_ids = tuple(module.TASK_SET_CONTRACTS[task_set]["task_ids"])
     subset = tmp_path / "subset.json"
     subset.write_text(
-        json.dumps({"instance_ids": list(module.EXPECTED_TASK_IDS)}) + "\n",
+        json.dumps({"instance_ids": list(task_ids)}) + "\n",
         encoding="ascii",
     )
-    monkeypatch.setattr(
-        module,
-        "EXPECTED_SUBSET_SHA256",
+    monkeypatch.setitem(
+        module.TASK_SET_CONTRACTS[task_set],
+        "subset_sha256",
         hashlib.sha256(subset.read_bytes()).hexdigest(),
     )
     stock = tmp_path / "stock.json"
     candidate = tmp_path / "candidate.json"
-    stock.write_text(json.dumps(_measure(module)) + "\n", encoding="ascii")
-    candidate_payload = _measure(module)
+    stock.write_text(
+        json.dumps(_measure(module, task_ids)) + "\n", encoding="ascii"
+    )
+    candidate_payload = _measure(module, task_ids)
     candidate_payload["step_wall_ms"] = 220.0
     candidate_payload["measured_tps_fullstep_wall"] = 26.0
     candidate_payload["floor_ratio"] = (
@@ -322,7 +347,7 @@ def test_timing_reducer_requires_exact4_full_vocab_and_current_binding(
     candidate_env = tmp_path / "candidate.env"
     for path, selector, production in (
         (stock_env, "stock", 0),
-        (candidate_env, "streamk_coop128", 1),
+        (candidate_env, candidate_selector, 1),
     ):
         path.write_text(
             "\n".join(
@@ -377,7 +402,9 @@ def test_timing_reducer_requires_exact4_full_vocab_and_current_binding(
             {
                 "schema": "fr13.fixed32.cutlass_streamk.production_binding.v1",
                 "status": "BOUND",
-                "selector": "streamk_coop128",
+                "selector": candidate_selector,
+                "diagnostic_selector": diagnostic_selector,
+                "candidate_family": candidate_selector,
                 "candidate_sha256": candidate_sha256,
                 "candidate_bytes": len(candidate_bytes),
                 "patch_source_sha256": "e" * 64,
@@ -420,25 +447,29 @@ def test_timing_reducer_requires_exact4_full_vocab_and_current_binding(
         binding,
         candidate_so,
         source_commit,
+        candidate_selector=candidate_selector,
+        task_set=task_set,
     )
 
-    assert result["run_classification"] == (
-        "real_swe_verified_exact4_b1_hydra27_qrow16_streamk_timing"
-    )
+    assert result["run_classification"] == module.TASK_SET_CONTRACTS[task_set][
+        "run_classification"
+    ]
     assert result["topology"] == "hydra27_fixed32"
     assert result["lineage"] == "successor_to_legacy_hydra23_not_same_topology"
-    assert result["only_arm_delta"] == "CUTLASS stock to streamk_coop128"
+    assert result["only_arm_delta"] == f"CUTLASS stock to {candidate_selector}"
     assert result["common_kernel_stack"]["identical_in_both_arms"] is True
     assert (
         result["common_kernel_stack"]["stock_arm"]["candidate_so_sha256"]
         == qrow16_sha256
     )
-    assert result["task_count"] == 4
+    assert result["task_count"] == len(task_ids)
     assert result["draft_vocab_k"] == 0
     assert result["mandatory_weight_bytes"] == 42_025_179_008
     assert result["mandatory_weight_floor_ms"] == 153.9383846446886
     assert result["one_sided_u95_cap_ms"] == 177.0291423413919
     assert result["comparator_gate_timing_eligible"] is False
+    assert result["timing_eligible"] is (task_set == "exact4")
+    assert result["floor_acceptance_eligible"] is False
     assert result["candidate_to_stock_full_wall_tps_ratio"] == pytest.approx(
         26.0 / 25.0
     )
@@ -463,6 +494,8 @@ def test_timing_reducer_requires_exact4_full_vocab_and_current_binding(
             binding,
             candidate_so,
             source_commit,
+            candidate_selector=candidate_selector,
+            task_set=task_set,
         )
     qrow16_capture(candidate_qrow16_capture)
 
@@ -484,4 +517,6 @@ def test_timing_reducer_requires_exact4_full_vocab_and_current_binding(
             binding,
             candidate_so,
             source_commit,
+            candidate_selector=candidate_selector,
+            task_set=task_set,
         )

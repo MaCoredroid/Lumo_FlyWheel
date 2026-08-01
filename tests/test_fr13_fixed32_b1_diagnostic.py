@@ -105,3 +105,18 @@ def test_b1_diagnostic_is_guarded_across_runtime_ingress() -> None:
     assert "--fixed32-taw-real-event-arm" in serve
     assert "fixed32 TAW native real-task arm is B1 diagnostic only" in serve
     assert '"gate_eligible": False' in runner
+
+
+def test_b1_diagnostic_can_time_an_authenticated_streamk_production_arm() -> None:
+    launcher = (
+        REPO / "scripts/fr13_launch_forked_fa2_tree_server.sh"
+    ).read_text(encoding="utf-8")
+    timing = (
+        REPO / "scripts/fr13_run_b1_cutlass_streamk_timing.sh"
+    ).read_text(encoding="utf-8")
+
+    assert "CUTLASS Stream-K production requires fixed32 B1 and a pinned live PASS" in launcher
+    assert 'case "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" in' in launcher
+    assert "B1_DIAGNOSTIC=1" in timing
+    assert "TIMING_ELIGIBLE=0" in timing
+    assert "floor_acceptance_eligible=0" in timing
