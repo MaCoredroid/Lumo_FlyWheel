@@ -282,6 +282,7 @@ def _measure(module, task_ids=None) -> dict[str, object]:
     (
         ("streamk_coop128", "exact4"),
         ("streamk_force_wide256", "one"),
+        ("wide256_dataparallel", "exact4"),
     ),
 )
 def test_timing_reducer_requires_pinned_task_set_full_vocab_and_current_binding(
@@ -299,7 +300,7 @@ def test_timing_reducer_requires_pinned_task_set_full_vocab_and_current_binding(
         monkeypatch.setattr(module.binary, "CANDIDATE_SIZE", len(candidate_bytes))
         monkeypatch.setattr(module.binary, "CANDIDATE_SHA256", candidate_sha256)
         diagnostic_selector = "streamk_coop128_byte_ab"
-    else:
+    elif candidate_selector == "streamk_force_wide256":
         monkeypatch.setattr(
             module.binary, "WIDE256_CANDIDATE_SIZE", len(candidate_bytes)
         )
@@ -307,6 +308,18 @@ def test_timing_reducer_requires_pinned_task_set_full_vocab_and_current_binding(
             module.binary, "WIDE256_CANDIDATE_SHA256", candidate_sha256
         )
         diagnostic_selector = "streamk_force_wide256_byte_ab"
+    else:
+        monkeypatch.setattr(
+            module.binary,
+            "WIDE256_DATAPARALLEL_CANDIDATE_SIZE",
+            len(candidate_bytes),
+        )
+        monkeypatch.setattr(
+            module.binary,
+            "WIDE256_DATAPARALLEL_CANDIDATE_SHA256",
+            candidate_sha256,
+        )
+        diagnostic_selector = "wide256_dataparallel_byte_ab"
     monkeypatch.setattr(module.qualification, "PATCH_SOURCE_SHA256", "e" * 64)
     qrow16_bytes = b"qrow16 candidate\n"
     qrow16_sha256 = hashlib.sha256(qrow16_bytes).hexdigest()

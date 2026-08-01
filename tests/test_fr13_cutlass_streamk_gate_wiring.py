@@ -266,6 +266,24 @@ def test_exact4_timing_is_real_full_wall_full_vocab_and_source_bound() -> None:
     assert '"streamk_force_wide256_byte_ab"' in swe_runner
 
 
+def test_exact4_timing_accepts_pinned_wide256_dataparallel_candidate() -> None:
+    timing = TIMING.read_text(encoding="utf-8")
+
+    assert "wide256_dataparallel)" in timing
+    assert (
+        "STREAMK_SHA256="
+        "5b921ab7b428f2c5cfeefc0daed0314ff903d73bb0d4f8a790b17234c9d60890"
+        in timing
+    )
+    assert "STREAMK_BYTES=112787936" in timing
+    assert (
+        "STREAMK_LIVE_SCHEMA="
+        "fr13.fixed32.cutlass_wide256_dataparallel_live_gate.v1" in timing
+    )
+    assert "CANDIDATE_ARM_LABEL=cutlass_wide256_dataparallel" in timing
+    assert "TIMING_TASK_SET=${FR13_STREAMK_TIMING_TASK_SET:-exact4}" in timing
+
+
 def test_b4_graph_gate_pins_cutlass_stock_and_bm8_off() -> None:
     gate = B4_GRAPH_GATE.read_text(encoding="utf-8")
     launch_start = gate.index("if OFFLOAD_AGENT=1")
