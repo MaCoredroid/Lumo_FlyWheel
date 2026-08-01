@@ -250,6 +250,12 @@ FIXED32_CHAT_TRAFFIC_AUDIT_SCHEMA = (
     "fr13-fixed32-chat-task-provenance-audit-v2"
 )
 FIXED32_REAL_TASK_PROVENANCE_SCHEMA = "fr13-fixed32-real-task-provenance-v3"
+FIXED32_QWEN_CAMPAIGN_PROOF_SCHEMA = (
+    "fr13-fixed32-qwen-campaign-provenance-v1"
+)
+FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME = (
+    "fixed32_qwen_campaign_provenance.json"
+)
 FIXED32_QWEN_RUNTIME_ATTESTATION_SCHEMA = (
     "fr13-fixed32-qwen-runtime-attestation-v1"
 )
@@ -2872,11 +2878,9 @@ def _fixed32_mounted_runtime_proof(
     return canonical_json_sha256(payload)
 
 
-def _fixed32_trace_model_requests(
+def _fixed32_qwen_trace_events(
     trace_path: Path,
-    *,
-    provenance: dict[str, Any],
-) -> dict[str, Any]:
+) -> tuple[bytes, list[dict[str, Any]]]:
     raw, text = strict_utf8_artifact(trace_path, label=str(trace_path))
     if not raw:
         raise GateError(f"{trace_path}: fixed32 trace is empty")
@@ -2886,6 +2890,265 @@ def _fixed32_trace_model_requests(
             raise GateError(f"{trace_path}:{line_number}: blank JSONL record")
         event = exact_json_text(line, label=f"{trace_path}:{line_number}")
         events.append(event)
+    return raw, events
+
+
+def _fixed32_campaign_artifact(
+    identity: object,
+    *,
+    expected_path: Path,
+    label: str,
+) -> tuple[bytes, str]:
+    if not isinstance(identity, dict):
+        raise GateError(f"{label}: artifact identity is malformed")
+    exact_keys(identity, {"path", "sha256", "bytes"}, label)
+    expected_path = expected_path.resolve()
+    raw, text = strict_utf8_artifact(expected_path, label=label)
+    if expected_path.is_symlink() or identity != {
+        "path": str(expected_path),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "bytes": len(raw),
+    }:
+        raise GateError(f"{label}: artifact identity differs")
+    return raw, text
+
+
+def _fixed32_replay_qwen_campaign_proof(
+    trace_path: Path,
+    *,
+    provenance: dict[str, Any],
+    expected_task_ids: list[str],
+) -> dict[str, Any]:
+    proof_identity = provenance.get("qwen_campaign_metric_proof")
+    dataset_dir = trace_path.parent.parent.parent.resolve()
+    proof_path = dataset_dir / FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME
+    proof_raw, proof_text = _fixed32_campaign_artifact(
+        proof_identity,
+        expected_path=proof_path,
+        label=str(proof_path),
+    )
+    proof = exact_json_text(proof_text, label=str(proof_path))
+    canonical_proof = (
+        json.dumps(
+            proof,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("ascii")
+    if canonical_proof != proof_raw:
+        raise GateError(f"{proof_path}: campaign proof is not canonical JSON")
+    exact_keys(
+        proof,
+        {
+            "schema",
+            "metric_scope",
+            "concurrency",
+            "task_ids",
+            "selection",
+            "metrics_pre",
+            "metrics_post",
+            "tasks",
+            "metric_evidence_sha256",
+            "metric_evidence",
+        },
+        str(proof_path),
+    )
+    if (
+        proof["schema"] != FIXED32_QWEN_CAMPAIGN_PROOF_SCHEMA
+        or proof["metric_scope"] != "concurrent_campaign_union"
+        or proof["concurrency"] != 4
+        or proof["task_ids"] != expected_task_ids
+        or provenance.get("qwen_campaign_metric_evidence_sha256")
+        != proof["metric_evidence_sha256"]
+    ):
+        raise GateError(f"{proof_path}: campaign proof identity differs")
+    _fixed32_digest(
+        proof["metric_evidence_sha256"],
+        label=f"{proof_path}:metric_evidence_sha256",
+    )
+    tasks = proof["tasks"]
+    if not isinstance(tasks, list) or len(tasks) != len(expected_task_ids):
+        raise GateError(f"{proof_path}: campaign task set is incomplete")
+
+    task_records: list[dict[str, Any]] = []
+    contract_tasks: list[dict[str, Any]] = []
+    for expected_task_id, task in zip(expected_task_ids, tasks, strict=True):
+        if not isinstance(task, dict):
+            raise GateError(f"{proof_path}: campaign task record is malformed")
+        exact_keys(
+            task,
+            {
+                "instance_id",
+                "task_key_id",
+                "expected_completed_logical_model_requests",
+                "trace",
+            },
+            f"{proof_path}:task {expected_task_id}",
+        )
+        completed = task["expected_completed_logical_model_requests"]
+        if (
+            task["instance_id"] != expected_task_id
+            or task["task_key_id"] != fixed32_task_key_id(expected_task_id)
+            or type(completed) is not int
+            or completed <= 0
+        ):
+            raise GateError(
+                f"{proof_path}: campaign task identity/count differs"
+            )
+        task_dir = dataset_dir / "per_task" / expected_task_id
+        task_trace_path = task_dir / "qwen_trace.jsonl"
+        trace_raw, trace_text = _fixed32_campaign_artifact(
+            task["trace"],
+            expected_path=task_trace_path,
+            label=str(task_trace_path),
+        )
+        trace_events: list[dict[str, Any]] = []
+        for line_number, line in enumerate(trace_text.splitlines(), start=1):
+            if not line.strip():
+                raise GateError(
+                    f"{task_trace_path}:{line_number}: blank JSONL record"
+                )
+            trace_events.append(
+                exact_json_text(
+                    line,
+                    label=f"{task_trace_path}:{line_number}",
+                )
+            )
+        if not trace_raw or not trace_events:
+            raise GateError(f"{task_trace_path}: campaign trace is empty")
+        boundary_path = task_dir / "fixed32_task_boundary.json"
+        boundary = exact_json(boundary_path, label=str(boundary_path))
+        pre = boundary.get("pre")
+        post = boundary.get("post")
+        if (
+            boundary.get("schema") != FIXED32_BOUNDARY_SCHEMA
+            or boundary.get("instance_id") != expected_task_id
+            or not isinstance(pre, dict)
+            or not isinstance(post, dict)
+            or not isinstance(pre.get("counters"), dict)
+            or not isinstance(post.get("counters"), dict)
+        ):
+            raise GateError(f"{boundary_path}: campaign boundary is malformed")
+        start = pre["counters"].get("pure_decode_forward_steps")
+        end = post["counters"].get("pure_decode_forward_steps")
+        pre_generation = pre.get("generation")
+        post_generation = post.get("generation")
+        if (
+            type(start) is not int
+            or type(end) is not int
+            or start < 0
+            or end <= start
+            or type(pre_generation) is not int
+            or type(post_generation) is not int
+            or pre_generation < 1
+            or post_generation <= pre_generation
+        ):
+            raise GateError(f"{boundary_path}: campaign endpoints are invalid")
+        task_records.append(
+            {
+                "instance_id": expected_task_id,
+                "task_dir": task_dir,
+                "start": start,
+                "end": end,
+                "pre_generation": pre_generation,
+                "post_generation": post_generation,
+            }
+        )
+        contract_tasks.append(
+            {
+                "instance_id": expected_task_id,
+                "expected_session_id": (
+                    fixed32_contract.fixed32_trace_session_id(
+                        expected_task_id
+                    )
+                ),
+                "expected_completed_logical_model_requests": completed,
+                "events": trace_events,
+            }
+        )
+
+    merged: list[list[int]] = []
+    for task in sorted(task_records, key=lambda item: (item["start"], item["end"])):
+        if not merged or task["start"] > merged[-1][1]:
+            merged.append([task["start"], task["end"]])
+        else:
+            merged[-1][1] = max(merged[-1][1], task["end"])
+    complete_steps = max(task["end"] for task in task_records)
+    if merged != [[0, complete_steps]]:
+        raise GateError(f"{proof_path}: campaign intervals do not cover the stream")
+    first = min(
+        task_records,
+        key=lambda item: (
+            item["start"],
+            item["pre_generation"],
+            item["instance_id"],
+        ),
+    )
+    last = max(
+        task_records,
+        key=lambda item: (
+            item["end"],
+            item["post_generation"],
+            item["instance_id"],
+        ),
+    )
+    expected_selection = {
+        "basis": "validated_forward_counter_then_generation",
+        "pre_task_id": first["instance_id"],
+        "post_task_id": last["instance_id"],
+        "start_forward_step": first["start"],
+        "end_forward_step": last["end"],
+        "complete_stream_forward_steps": complete_steps,
+        "pre_generation": first["pre_generation"],
+        "post_generation": last["post_generation"],
+    }
+    if proof["selection"] != expected_selection:
+        raise GateError(f"{proof_path}: campaign endpoint selection differs")
+    metrics_pre_path = first["task_dir"] / "vllm_metrics_pre.txt"
+    metrics_post_path = last["task_dir"] / "vllm_metrics_post.txt"
+    metrics_pre_raw, _metrics_pre_text = _fixed32_campaign_artifact(
+        proof["metrics_pre"],
+        expected_path=metrics_pre_path,
+        label=str(metrics_pre_path),
+    )
+    metrics_post_raw, _metrics_post_text = _fixed32_campaign_artifact(
+        proof["metrics_post"],
+        expected_path=metrics_post_path,
+        label=str(metrics_post_path),
+    )
+    try:
+        replay = fixed32_contract.validate_fixed32_qwen_campaign_metrics(
+            contract_tasks,
+            metrics_pre=metrics_pre_raw,
+            metrics_post=metrics_post_raw,
+        )
+    except Fixed32ContractError as error:
+        raise GateError(f"{proof_path}: {error}") from error
+    if (
+        proof["metric_evidence"] != replay["metric_evidence"]
+        or proof["metric_evidence_sha256"]
+        != replay["metric_evidence_sha256"]
+    ):
+        raise GateError(f"{proof_path}: campaign metric evidence differs")
+    instance_id = provenance.get("instance_id")
+    try:
+        return replay["tasks"][instance_id]
+    except (KeyError, TypeError) as error:
+        raise GateError(
+            f"{proof_path}: task provenance is outside the campaign proof"
+        ) from error
+
+
+def _fixed32_trace_model_requests(
+    trace_path: Path,
+    *,
+    provenance: dict[str, Any],
+    require_campaign_scope: bool = False,
+    expected_campaign_task_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    raw, events = _fixed32_qwen_trace_events(trace_path)
     init_event = events[0]
     if (
         init_event.get("type") != "system"
@@ -2900,10 +3163,43 @@ def _fixed32_trace_model_requests(
     compaction_metric_evidence = provenance.get(
         "qwen_compaction_metric_evidence"
     )
+    metric_scope = provenance.get("qwen_metric_scope")
+    if require_campaign_scope:
+        if (
+            metric_scope != "campaign"
+            or not isinstance(expected_campaign_task_ids, list)
+            or len(expected_campaign_task_ids) < 2
+        ):
+            raise GateError(
+                f"{trace_path}: B4 provenance lacks finalized campaign evidence"
+            )
+    elif metric_scope != "task":
+        raise GateError(
+            f"{trace_path}: B1 provenance metric scope is not task-local"
+        )
     metrics_pre_raw: bytes | None = None
     metrics_post_raw: bytes | None = None
     expected_completed_requests: int | None = None
-    if compaction_metric_evidence is not None:
+    if metric_scope == "campaign":
+        if not isinstance(compaction_metric_evidence, dict):
+            raise GateError(
+                f"{trace_path}: campaign compaction metric evidence is malformed"
+            )
+        trace_requests = _fixed32_replay_qwen_campaign_proof(
+            trace_path,
+            provenance=provenance,
+            expected_task_ids=expected_campaign_task_ids,
+        )
+    else:
+        if (
+            provenance.get("qwen_campaign_metric_proof") is not None
+            or provenance.get("qwen_campaign_metric_evidence_sha256")
+            is not None
+        ):
+            raise GateError(
+                f"{trace_path}: task-local provenance carries campaign evidence"
+            )
+    if metric_scope == "task" and compaction_metric_evidence is not None:
         if not isinstance(compaction_metric_evidence, dict):
             raise GateError(
                 f"{trace_path}: Qwen compaction metric evidence is malformed"
@@ -2922,22 +3218,25 @@ def _fixed32_trace_model_requests(
                 f"{trace_path}:provenance completed logical model requests"
             ),
         )
-    try:
-        trace_requests = (
-            fixed32_contract.validate_fixed32_trace_model_requests(
-                events,
-                expected_session_id=fixed32_contract.fixed32_trace_session_id(
-                    provenance.get("instance_id")
-                ),
-                expected_completed_logical_model_requests=(
-                    expected_completed_requests
-                ),
-                metrics_pre=metrics_pre_raw,
-                metrics_post=metrics_post_raw,
+    if metric_scope == "task":
+        try:
+            trace_requests = (
+                fixed32_contract.validate_fixed32_trace_model_requests(
+                    events,
+                    expected_session_id=(
+                        fixed32_contract.fixed32_trace_session_id(
+                            provenance.get("instance_id")
+                        )
+                    ),
+                    expected_completed_logical_model_requests=(
+                        expected_completed_requests
+                    ),
+                    metrics_pre=metrics_pre_raw,
+                    metrics_post=metrics_post_raw,
+                )
             )
-        )
-    except Fixed32ContractError as error:
-        raise GateError(f"{trace_path}: {error}") from error
+        except Fixed32ContractError as error:
+            raise GateError(f"{trace_path}: {error}") from error
     response_ids = trace_requests["model_request_ids"]
     completed_requests = trace_requests["completed_logical_model_requests"]
     response_id_digests = sorted(
@@ -2969,6 +3268,8 @@ def _fixed32_trace_model_requests(
         )
         or provenance.get("hidden_failed_compaction_model_requests")
         != trace_requests.get("hidden_failed_compaction_model_requests", 0)
+        or provenance.get("synthetic_compaction_failure_terminal")
+        != trace_requests.get("synthetic_compaction_failure_terminal", False)
     ):
         raise GateError(
             f"{trace_path}: v3 provenance does not match strict trace request "
@@ -3061,8 +3362,11 @@ def build_fixed32_chat_traffic_audit(
     mode: str,
     subset: dict[str, Any],
     dataset_record_digests: dict[str, str],
+    concurrency: int,
 ) -> dict[str, Any]:
     task_ids = list(subset["task_ids"])
+    if concurrency not in (1, 4):
+        raise GateError(f"{arm_dir}: fixed32 provenance concurrency is invalid")
     task_dirs = task_directories(
         arm_dir,
         len(task_ids),
@@ -3155,6 +3459,18 @@ def build_fixed32_chat_traffic_audit(
         ):
             raise GateError(
                 f"{metadata_path}: fixed32 task provenance v3 is not exact"
+            )
+        if concurrency == 4:
+            if (
+                metadata.get("fixed32_qwen_campaign_proof")
+                != provenance.get("qwen_campaign_metric_proof")
+            ):
+                raise GateError(
+                    f"{metadata_path}: finalized campaign proof binding differs"
+                )
+        elif "fixed32_qwen_campaign_proof" in metadata:
+            raise GateError(
+                f"{metadata_path}: B1 metadata carries a campaign proof"
             )
         expected_image = FIXED32_AGENT_IMAGE_IDENTITIES[task_id]
         image_identity = agent.get("instance_image_identity")
@@ -3373,6 +3689,10 @@ def build_fixed32_chat_traffic_audit(
         trace = _fixed32_trace_model_requests(
             task_dir / "qwen_trace.jsonl",
             provenance=provenance,
+            require_campaign_scope=concurrency == 4,
+            expected_campaign_task_ids=(
+                task_ids if concurrency == 4 else None
+            ),
         )
         evidence_keys = (
             "completed_logical_model_requests",
@@ -3594,6 +3914,7 @@ def validate_real_task_provenance(
     windows: list[dict[str, Any]],
     flush_chain: dict[str, Any],
     dataset_record_digests: dict[str, str],
+    concurrency: int,
 ) -> dict[str, Any]:
     task_ids = list(subset["task_ids"])
     if [task_dir.name for task_dir in task_dirs] != task_ids:
@@ -3609,6 +3930,7 @@ def validate_real_task_provenance(
         mode=mode,
         subset=subset,
         dataset_record_digests=dataset_record_digests,
+        concurrency=concurrency,
     )
     audit_path = arm_dir / "fixed32_chat_traffic_audit.json"
     audit = exact_json(audit_path, label=str(audit_path))
@@ -6091,6 +6413,7 @@ def reduce_arm(
         windows=windows,
         flush_chain=flush_chain,
         dataset_record_digests=pinned_dataset_record_digests(str(repo)),
+        concurrency=concurrency,
     )
     census_intervals, census_indices = selected_counter_indices(
         [tuple(window["fwd_span"]) for window in windows],
@@ -7874,6 +8197,52 @@ def write_fixture_arm(
         }
 
     boundary_points = []
+    def fixture_task_metrics(index: int) -> str:
+        text = fixture_metrics(fwd_ms, wall_ms, drafts, index, tokens)
+        if concurrency != 4:
+            return text
+        total_requests = sum(len(values) for values in engine_request_ids.values())
+        completed = total_requests * index // len(fwd_ms)
+        prompt_tokens = completed * 128
+        generation_tokens = completed * 32
+        base_labels = 'engine="0",model_name="qwen3.6-27b"'
+        lines = [
+            f"vllm:prompt_tokens_total{{{base_labels}}} {prompt_tokens}",
+            f"vllm:generation_tokens_total{{{base_labels}}} {generation_tokens}",
+            (
+                "vllm:request_params_max_tokens_count"
+                f"{{{base_labels}}} {completed}"
+            ),
+            (
+                "vllm:request_params_max_tokens_sum"
+                f"{{{base_labels}}} "
+                f"{completed * fixed32_contract.QWEN_VISIBLE_MAX_OUTPUT_TOKENS}"
+            ),
+        ]
+        for reason in ("stop", "length", "abort", "error", "repetition"):
+            labels = (
+                f'engine="0",finished_reason="{reason}",'
+                'model_name="qwen3.6-27b"'
+            )
+            value = completed if reason == "stop" else 0
+            lines.append(
+                f"vllm:request_success_total{{{labels}}} {value}"
+            )
+        for le, value in (
+            ("10000.0", 0),
+            ("20000.0", 0),
+            ("50000.0", completed),
+            ("+Inf", completed),
+        ):
+            labels = (
+                f'engine="0",le="{le}",model_name="qwen3.6-27b"'
+            )
+            lines.append(
+                "vllm:request_params_max_tokens_bucket"
+                f"{{{labels}}} {value}"
+            )
+        return text + "\n".join(lines) + "\n"
+
     for task_id, (start, end) in zip(task_ids, intervals, strict=True):
         boundary_points.extend(((start, "pre", task_id), (end, "post", task_id)))
     generation_by_boundary = {
@@ -8370,41 +8739,135 @@ def write_fixture_arm(
             json.dumps(boundary, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        model_trace_events = [
-            {
-                "type": "assistant",
-                "message": {
-                    "role": "assistant",
-                    "id": engine_request_id,
-                    "stop_reason": "end_turn",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": f"Implemented and verified {task_id}.",
-                        }
-                    ],
-                    "usage": {
-                        "input_tokens": 128,
-                        "output_tokens": 32,
-                        "total_tokens": 160,
+        session_id = fixed32_contract.fixed32_trace_session_id(task_id)
+        if concurrency == 4:
+            trace_events = [
+                {
+                    "type": "system",
+                    "subtype": "init",
+                    "qwen_code_version": FIXED32_QWEN_CODE_VERSION,
+                    "uuid": "system",
+                    "session_id": session_id,
+                    "parent_tool_use_id": None,
+                }
+            ]
+            model_trace_events = []
+            for request_index, response_id in enumerate(
+                engine_request_ids[task_id]
+            ):
+                is_final = request_index == requests_per_task - 1
+                tool_id = f"fixture-tool-{task_id}-{request_index}"
+                assistant = {
+                    "type": "assistant",
+                    "uuid": response_id,
+                    "session_id": session_id,
+                    "parent_tool_use_id": None,
+                    "message": {
+                        "id": response_id,
+                        "type": "message",
+                        "role": "assistant",
+                        "model": "qwen3.6-27b",
+                        "content": (
+                            [
+                                {
+                                    "type": "text",
+                                    "text": (
+                                        f"Implemented and verified {task_id}."
+                                    ),
+                                }
+                            ]
+                            if is_final
+                            else [
+                                {
+                                    "type": "tool_use",
+                                    "id": tool_id,
+                                    "name": "read_file",
+                                    "input": {},
+                                }
+                            ]
+                        ),
+                        "stop_reason": None if is_final else "tool_use",
+                        "usage": {
+                            "input_tokens": 128,
+                            "output_tokens": 32,
+                        },
                     },
+                }
+                trace_events.append(assistant)
+                model_trace_events.append(assistant)
+                if not is_final:
+                    trace_events.append(
+                        {
+                            "type": "user",
+                            "uuid": f"fixture-result-{task_id}-{request_index}",
+                            "session_id": session_id,
+                            "parent_tool_use_id": None,
+                            "message": {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "tool_result",
+                                        "tool_use_id": tool_id,
+                                        "content": "fixture result",
+                                        "is_error": False,
+                                    }
+                                ],
+                            },
+                        }
+                    )
+            trace_events.append(
+                {
+                    "type": "result",
+                    "subtype": "success",
+                    "uuid": f"fixture-final-result-{task_id}",
+                    "session_id": session_id,
+                    "is_error": False,
+                    "duration_ms": 100,
+                    "duration_api_ms": 90,
+                    "num_turns": requests_per_task,
+                    "result": f"Implemented and verified {task_id}.",
+                    "usage": {
+                        "input_tokens": requests_per_task * 128,
+                        "output_tokens": requests_per_task * 32,
+                        "total_tokens": requests_per_task * 160,
+                    },
+                    "permission_denials": [],
+                }
+            )
+        else:
+            model_trace_events = [
+                {
+                    "type": "assistant",
+                    "message": {
+                        "role": "assistant",
+                        "id": engine_request_id,
+                        "stop_reason": "end_turn",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"Implemented and verified {task_id}.",
+                            }
+                        ],
+                        "usage": {
+                            "input_tokens": 128,
+                            "output_tokens": 32,
+                            "total_tokens": 160,
+                        },
+                    },
+                }
+                for engine_request_id in engine_request_ids[task_id]
+            ]
+            trace_events = [
+                {
+                    "type": "system",
+                    "subtype": "init",
+                    "qwen_code_version": FIXED32_QWEN_CODE_VERSION,
+                    "uuid": "system",
+                    "session_id": session_id,
+                    "parent_tool_use_id": None,
                 },
-            }
-            for engine_request_id in engine_request_ids[task_id]
-        ]
-        trace_events = [
-            {
-                "type": "system",
-                "subtype": "init",
-                "qwen_code_version": FIXED32_QWEN_CODE_VERSION,
-                "uuid": "system",
-                "session_id": fixed32_contract.fixed32_trace_session_id(
-                    task_id
-                ),
-                "parent_tool_use_id": None,
-            },
-            *model_trace_events,
-        ]
+                *model_trace_events,
+            ]
         trace_path = task_dir / "qwen_trace.jsonl"
         trace_path.write_text(
             "\n".join(
@@ -8548,9 +9011,22 @@ def write_fixture_arm(
             json.dumps(eval_report, ensure_ascii=True, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+        fixture_trace_requests = (
+            fixed32_contract.validate_fixed32_trace_model_requests(
+                trace_events,
+                expected_session_id=session_id,
+            )
+            if concurrency == 4
+            else None
+        )
+        trace_request_ids = (
+            fixture_trace_requests["model_request_ids"]
+            if fixture_trace_requests is not None
+            else engine_request_ids[task_id]
+        )
         trace_request_digests = sorted(
             hashlib.sha256(request_id.encode("utf-8")).hexdigest()
-            for request_id in engine_request_ids[task_id]
+            for request_id in trace_request_ids
         )
         task_auth = proxy_task_snapshots[task_id]
         real_task_provenance = {
@@ -8607,7 +9083,14 @@ def write_fixture_arm(
                 "output_tokens": 32,
                 "total_tokens": 160,
             },
-            "trace_completed_logical_model_requests": len(model_trace_events),
+            "trace_completed_logical_model_requests": len(trace_request_ids),
+            "hidden_successful_compaction_model_requests": 0,
+            "hidden_failed_compaction_model_requests": 0,
+            "synthetic_compaction_failure_terminal": False,
+            "qwen_metric_scope": "task",
+            "qwen_campaign_metric_proof": None,
+            "qwen_campaign_metric_evidence_sha256": None,
+            "qwen_compaction_metric_evidence": None,
             "trace_model_request_ids_sha256": hashlib.sha256(
                 json.dumps(
                     trace_request_digests,
@@ -8642,13 +9125,186 @@ def write_fixture_arm(
         metrics_pre_path = task_dir / "vllm_metrics_pre.txt"
         metrics_post_path = task_dir / "vllm_metrics_post.txt"
         metrics_pre_path.write_text(
-            fixture_metrics(fwd_ms, wall_ms, drafts, start, tokens),
+            fixture_task_metrics(start),
             encoding="utf-8",
         )
         metrics_post_path.write_text(
-            fixture_metrics(fwd_ms, wall_ms, drafts, end, tokens),
+            fixture_task_metrics(end),
             encoding="utf-8",
         )
+
+    if concurrency == 4:
+        fixture_records = []
+        fixture_contract_tasks = []
+        for task_id, (start, end) in zip(task_ids, intervals, strict=True):
+            task_dir = task_root / task_id
+            trace_path = task_dir / "qwen_trace.jsonl"
+            _trace_raw, trace_events = _fixed32_qwen_trace_events(trace_path)
+            fixture_contract_tasks.append(
+                {
+                    "instance_id": task_id,
+                    "expected_session_id": (
+                        fixed32_contract.fixed32_trace_session_id(task_id)
+                    ),
+                    "expected_completed_logical_model_requests": (
+                        len(engine_request_ids[task_id])
+                    ),
+                    "events": trace_events,
+                }
+            )
+            fixture_records.append(
+                {
+                    "instance_id": task_id,
+                    "task_dir": task_dir,
+                    "start": start,
+                    "end": end,
+                    "pre_generation": generation_by_boundary[
+                        (task_id, "pre")
+                    ],
+                    "post_generation": generation_by_boundary[
+                        (task_id, "post")
+                    ],
+                }
+            )
+        first = min(
+            fixture_records,
+            key=lambda item: (
+                item["start"],
+                item["pre_generation"],
+                item["instance_id"],
+            ),
+        )
+        last = max(
+            fixture_records,
+            key=lambda item: (
+                item["end"],
+                item["post_generation"],
+                item["instance_id"],
+            ),
+        )
+        metrics_pre_path = first["task_dir"] / "vllm_metrics_pre.txt"
+        metrics_post_path = last["task_dir"] / "vllm_metrics_post.txt"
+        metrics_pre_raw = metrics_pre_path.read_bytes()
+        metrics_post_raw = metrics_post_path.read_bytes()
+        reconciliation = (
+            fixed32_contract.validate_fixed32_qwen_campaign_metrics(
+                fixture_contract_tasks,
+                metrics_pre=metrics_pre_raw,
+                metrics_post=metrics_post_raw,
+            )
+        )
+
+        def fixture_identity(path: Path) -> dict[str, Any]:
+            raw = path.read_bytes()
+            return {
+                "path": str(path.resolve()),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "bytes": len(raw),
+            }
+
+        proof_path = (
+            arm_dir
+            / "swe_out"
+            / "verified"
+            / FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME
+        )
+        proof = {
+            "schema": FIXED32_QWEN_CAMPAIGN_PROOF_SCHEMA,
+            "metric_scope": "concurrent_campaign_union",
+            "concurrency": 4,
+            "task_ids": list(task_ids),
+            "selection": {
+                "basis": "validated_forward_counter_then_generation",
+                "pre_task_id": first["instance_id"],
+                "post_task_id": last["instance_id"],
+                "start_forward_step": first["start"],
+                "end_forward_step": last["end"],
+                "complete_stream_forward_steps": len(fwd_ms),
+                "pre_generation": first["pre_generation"],
+                "post_generation": last["post_generation"],
+            },
+            "metrics_pre": fixture_identity(metrics_pre_path),
+            "metrics_post": fixture_identity(metrics_post_path),
+            "tasks": [
+                {
+                    "instance_id": record["instance_id"],
+                    "task_key_id": task_key_ids[record["instance_id"]],
+                    "expected_completed_logical_model_requests": len(
+                        engine_request_ids[record["instance_id"]]
+                    ),
+                    "trace": fixture_identity(
+                        record["task_dir"] / "qwen_trace.jsonl"
+                    ),
+                }
+                for record in fixture_records
+            ],
+            "metric_evidence_sha256": reconciliation[
+                "metric_evidence_sha256"
+            ],
+            "metric_evidence": reconciliation["metric_evidence"],
+        }
+        proof_path.write_text(
+            json.dumps(
+                proof,
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n",
+            encoding="ascii",
+        )
+        proof_identity = fixture_identity(proof_path)
+        for task_id in task_ids:
+            metadata_path = task_root / task_id / "runner_metadata.json"
+            metadata = exact_json(metadata_path, label=str(metadata_path))
+            trace_requests = reconciliation["tasks"][task_id]
+            request_digests = sorted(
+                hashlib.sha256(request_id.encode("utf-8")).hexdigest()
+                for request_id in trace_requests["model_request_ids"]
+            )
+            provenance = metadata["fixed32_real_task_provenance"]
+            provenance.update(
+                {
+                    "trace_completed_logical_model_requests": (
+                        trace_requests["completed_logical_model_requests"]
+                    ),
+                    "trace_model_request_ids_sha256": hashlib.sha256(
+                        json.dumps(
+                            request_digests,
+                            ensure_ascii=True,
+                            separators=(",", ":"),
+                        ).encode("utf-8")
+                    ).hexdigest(),
+                    "hidden_successful_compaction_model_requests": (
+                        trace_requests[
+                            "hidden_successful_compaction_model_requests"
+                        ]
+                    ),
+                    "hidden_failed_compaction_model_requests": (
+                        trace_requests[
+                            "hidden_failed_compaction_model_requests"
+                        ]
+                    ),
+                    "synthetic_compaction_failure_terminal": (
+                        trace_requests[
+                            "synthetic_compaction_failure_terminal"
+                        ]
+                    ),
+                    "qwen_metric_scope": "campaign",
+                    "qwen_campaign_metric_proof": proof_identity,
+                    "qwen_campaign_metric_evidence_sha256": reconciliation[
+                        "metric_evidence_sha256"
+                    ],
+                    "qwen_compaction_metric_evidence": trace_requests[
+                        "qwen_compaction_metric_evidence"
+                    ],
+                }
+            )
+            metadata["fixed32_qwen_campaign_proof"] = proof_identity
+            metadata_path.write_text(
+                json.dumps(metadata, ensure_ascii=True, sort_keys=True),
+                encoding="utf-8",
+            )
 
     (arm_dir / "metrics_after_swe.txt").write_text(
         fixture_metrics(fwd_ms, wall_ms, drafts, len(fwd_ms), tokens),
@@ -8756,6 +9412,7 @@ def write_fixture_arm(
         mode=kind,
         subset=validate_subset(subset, len(task_ids)),
         dataset_record_digests=dataset_record_digests,
+        concurrency=concurrency,
     )
     (arm_dir / "fixed32_chat_traffic_audit.json").write_text(
         json.dumps(
