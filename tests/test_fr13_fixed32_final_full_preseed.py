@@ -407,7 +407,9 @@ def test_ready_metadata_with_stale_lease_fails_before_full_capture(
     )
 
 
-@pytest.mark.parametrize("cutlass_wave", ("stock", "streamk_coop128"))
+@pytest.mark.parametrize(
+    "cutlass_wave", ("stock", "streamk_coop128", "persistent_b4_m128")
+)
 def test_non_diagnostic_eager_runtime_has_no_boot_hook(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -431,6 +433,7 @@ def test_non_diagnostic_eager_runtime_has_no_boot_hook(
 
     text = source.read_text(encoding="utf-8")
     assert "FR13_FIXED32_EAGER_B4_BOOT_WARM" not in text
+    assert "FR13_FIXED32_EAGER_CUTLASS_B4_BOOT_WARM" not in text
     assert "FR13_FIXED32_EAGER_STREAMK_B1_BOOT_WARM" not in text
     namespace = {
         "CUDAGraphMode": _CUDAGraphMode,
@@ -457,6 +460,12 @@ def test_non_diagnostic_eager_runtime_has_no_boot_hook(
             "streamk_coop128_byte_ab",
             1,
             "FR13_FIXED32_EAGER_STREAMK_B1_BOOT_WARM",
+        ),
+        (
+            "0",
+            "persistent_b4_m128_byte_ab",
+            4,
+            "FR13_FIXED32_EAGER_CUTLASS_B4_BOOT_WARM",
         ),
     ),
 )
