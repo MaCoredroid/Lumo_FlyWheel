@@ -570,6 +570,7 @@ def test_eager_diagnostic_boot_is_zero_traffic_and_boundary_ready(
     (
         ("1", "stock", 128),
         ("0", "streamk_force_wide256_byte_ab", 32),
+        ("0", "persistent_b4_m128_byte_ab", 128),
     ),
 )
 def test_eager_diagnostic_metadata_builders_observe_physical_capacity(
@@ -693,6 +694,7 @@ def test_eager_diagnostic_metadata_capacity_restores_after_builder_error(
     (
         ("1", "stock"),
         ("0", "streamk_force_wide256_byte_ab"),
+        ("0", "persistent_b4_m128_byte_ab"),
     ),
 )
 def test_eager_diagnostic_boot_is_reached_from_worker_lifecycle(
@@ -835,6 +837,20 @@ def test_non_diagnostic_worker_lifecycle_is_unchanged(
             4,
             "requires max_num_seqs=1",
         ),
+        (
+            "0",
+            "persistent_b4_m128_byte_ab",
+            _CUDAGraphMode.FULL,
+            4,
+            "requires CUDAGraphMode.NONE",
+        ),
+        (
+            "0",
+            "persistent_b4_m128_byte_ab",
+            _CUDAGraphMode.NONE,
+            1,
+            "requires max_num_seqs=4",
+        ),
     ),
 )
 def test_eager_diagnostic_boot_rejects_wrong_runtime_contract(
@@ -883,6 +899,11 @@ def test_eager_diagnostic_boot_rejects_wrong_runtime_contract(
         (
             "1",
             "streamk_coop128_byte_ab",
+            "mutually exclusive",
+        ),
+        (
+            "1",
+            "persistent_b4_m128_byte_ab",
             "mutually exclusive",
         ),
         ("0", "unknown", "FR13_FIXED32_CUTLASS_WAVE must be"),

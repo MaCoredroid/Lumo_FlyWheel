@@ -312,7 +312,9 @@ def test_live_attestation_receives_the_selector_explicitly() -> None:
     assert "attribution_only_text = os.environ" not in serve
     assert "batch_gdn_byte_ab_text = os.environ" not in serve
     assert "batch_gdn_graph_byte_ab_text = os.environ" not in serve
-    assert "eager_diagnostic=batch_gdn_byte_ab_text == \"1\"" in serve
+    assert "eager_diagnostic=(" in serve
+    assert "batch_gdn_byte_ab_text == \"1\"" in serve
+    assert 'or cutlass_wave == "persistent_b4_m128_byte_ab"' in serve
     assert (
         "graph_diagnostic=batch_gdn_graph_byte_ab_text == \"1\"" in serve
     )

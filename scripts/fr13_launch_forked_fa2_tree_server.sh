@@ -1249,9 +1249,9 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   fi
   case "${FR13_DRAFT_VOCAB_K:-65536}:$FR13_DRAFT_VOCAB_ROOT" in
     0:0)
-      [[ "$MAX_NUM_SEQS" == "1" \
+      [[ ( "$MAX_NUM_SEQS" == "1" || "$MAX_NUM_SEQS" == "4" ) \
          && "${FR13_NEEDS_ALLOW:-}" == "FR13_DRAFT_VOCAB_K=0" ]] || {
-        echo "fixed32 full-vocabulary mode requires B1 and its exact sanctioned override" >&2
+        echo "fixed32 full-vocabulary mode requires exact B1/B4 and its sanctioned override" >&2
         exit 2
       }
       _fixed32_expected_draft_vocab_k=0

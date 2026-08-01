@@ -19,6 +19,7 @@ PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
 STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
+STOCK_FA2_BYTES=299183936
 CANDIDATE_SHA256=1997fe0800ac4927690c021ddc2c0a3ccf763b36883c1b63f06310a0b02065d4
 CANDIDATE_BYTES=112697400
 PATCH_SOURCE=scripts/fr13_patch_cutlass_fixed32_wave.py
@@ -43,7 +44,8 @@ for input in "$STOCK_FA2_SO" "$CUTLASS_B4_SO" "$CUTLASS_B4_PASS_JSON"; do
   [[ "$input" == /* && -f "$input" && ! -L "$input" ]] \
     || { echo "timing input must be an absolute regular non-symlink file: $input" >&2; exit 2; }
 done
-[[ "$(sha256sum "$STOCK_FA2_SO" | awk '{print $1}')" == "$STOCK_FA2_SHA256" ]] \
+[[ "$(stat -c '%s' "$STOCK_FA2_SO")" == "$STOCK_FA2_BYTES" \
+   && "$(sha256sum "$STOCK_FA2_SO" | awk '{print $1}')" == "$STOCK_FA2_SHA256" ]] \
   || { echo "STOCK_FA2_SO is not the exact-safe stock reference" >&2; exit 2; }
 [[ "$(stat -c '%s' "$CUTLASS_B4_SO")" == "$CANDIDATE_BYTES" \
    && "$(sha256sum "$CUTLASS_B4_SO" | awk '{print $1}')" == "$CANDIDATE_SHA256" ]] \
@@ -68,16 +70,17 @@ done
 export BSIZE=4
 export CONC=4
 export WALL=0
-export FR13_DRAFT_VOCAB_ROOT=1
-export FR13_DRAFT_VOCAB_K=65536
+export FR13_DRAFT_VOCAB_ROOT=0
+export FR13_DRAFT_VOCAB_K=0
+export FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'
 export FR13_FLOOR_ORDER=TH
 source scripts/fr13_canonical_env.sh
 run_variant() { :; }
 source "$SEQUENCE"
 unset -f run_variant
-[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "32666638208" \
-   && "$FR13_WEIGHT_FLOOR_MS" == "119.658015414" ]] \
-  || { echo "canonical B4 root-64K floor contract drifted" >&2; exit 2; }
+[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "42025179008" \
+   && "$FR13_WEIGHT_FLOOR_MS" == "153.9383846446886" ]] \
+  || { echo "canonical B4 full-vocabulary floor contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS"
 "$PYTHON_BIN" scripts/fr13_runtime_manifest.py \
@@ -86,10 +89,10 @@ mkdir -p "$RUNROOT_ABS"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
 
-printf 'classification=real_swe_verified_exact4_b4_timing_candidate\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\nonly_arm_delta=CUTLASS_stock_to_persistent_b4_m128\nbatch_size=4\nconcurrency=4\nfixed_rows=128\ndraft_vocab_root=1\ndraft_vocab_k=65536\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=137.606717726\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\ncandidate_sha256=%s\ncandidate_bytes=%s\nlive_pass_sha256=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_exact4_b4_timing_candidate\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\nonly_arm_delta=CUTLASS_stock_to_persistent_b4_m128\nbatch_size=4\nconcurrency=4\nfixed_rows=128\ndraft_vocab_root=0\ndraft_vocab_k=0\nfr13_needs_allow=FR13_DRAFT_VOCAB_K=0\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=177.0291423413919\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_sha256=%s\ncandidate_bytes=%s\nlive_pass_sha256=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
   "$FR13_MANDATORY_WEIGHT_BYTES" "$FR13_WEIGHT_FLOOR_MS" "$$" \
   "$RUNROOT_ABS" "$STOCK_ARM" "$CANDIDATE_ARM" "$SOURCE_COMMIT" \
-  "$RUNNER_SHA256" "$SUBSET_SHA256" "$STOCK_FA2_SHA256" \
+  "$RUNNER_SHA256" "$SUBSET_SHA256" "$STOCK_FA2_SHA256" "$STOCK_FA2_BYTES" \
   "$CANDIDATE_SHA256" "$CANDIDATE_BYTES" "$CUTLASS_B4_PASS_SHA256" \
   "$B4_KV_CACHE_MEMORY_BYTES" "$(date -u +%FT%TZ)" \
   > "$RUNROOT_ABS/launcher_meta.txt"
@@ -145,7 +148,8 @@ run_arm() {
       OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4 AGENT_WALL_S= \
       KV_CACHE_MEMORY_BYTES="$B4_KV_CACHE_MEMORY_BYTES" \
       FR13_FIXED32_B1_DIAGNOSTIC=0 \
-      FR13_DRAFT_VOCAB_ROOT=1 FR13_DRAFT_VOCAB_K=65536 \
+      FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0 \
+      FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0' \
       FR10_METRICS=0 ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
       FR13_RING_EXPORT=1 FR13_FLAGS_INKERNEL=1 \
       FR13_SCAN_ALIGN=0 FR13_NPAD_INVARIANT=0 \
@@ -189,9 +193,9 @@ run_arm() {
   [[ -f "$container_env" && ! -L "$container_env" ]] \
     || { echo "$arm lacks a regular container environment artifact" >&2; return 4; }
   [[ "$(grep -Fxc 'FR13_FIXED32_MODE=hydra27_fixed32' "$container_env")" -eq 1 \
-     && "$(grep -Fxc 'FR13_DRAFT_VOCAB_ROOT=1' "$container_env")" -eq 1 \
-     && "$(grep -Fxc 'FR13_DRAFT_VOCAB_K=65536' "$container_env")" -eq 1 ]] \
-    || { echo "$arm did not run the canonical B4 root-64K contract" >&2; return 4; }
+     && "$(grep -Fxc 'FR13_DRAFT_VOCAB_ROOT=0' "$container_env")" -eq 1 \
+     && "$(grep -Fxc 'FR13_DRAFT_VOCAB_K=0' "$container_env")" -eq 1 ]] \
+    || { echo "$arm did not run the canonical B4 full-vocabulary contract" >&2; return 4; }
   "$PYTHON_BIN" scripts/fr13_measure.py deploy-speed \
     --arm "$arm" --out-root "$RUNROOT_ABS/$arm/swe_out" \
     --expected-tok-per-draft 31 --batch-size 4 \
@@ -265,6 +269,15 @@ def validate(record, label):
         or record.get("batch_size") != 4
         or record.get("n_tasks") != 4
         or sorted(record.get("task_instance_ids", [])) != task_ids
+        or record.get("draft_vocab_root") != 0
+        or record.get("draft_vocab_k") != 0
+        or record.get("mandatory_weight_bytes") != 42_025_179_008
+        or not math.isclose(
+            float(record.get("weight_floor_ms", math.nan)),
+            153.9383846446886,
+            rel_tol=0.0,
+            abs_tol=1e-9,
+        )
         or record.get("floor_is_full_step_hardware_floor") is not False
     ):
         raise SystemExit(f"{label} deploy-speed provenance is not exact4 B4")
@@ -272,7 +285,7 @@ def validate(record, label):
         "measured_tps_fullstep_wall", "step_wall_ms", "accept_per_event",
         "committed_per_event", "wall_steps_measured", "events_per_step",
         "s_per_fwd_gpu", "drafter_gpu_ms_per_step", "committer_gpu_ms_per_step",
-        "floor_ms", "floor_ratio",
+        "weight_floor_ms", "floor_ms", "floor_ratio",
     ):
         positive(record, key)
 

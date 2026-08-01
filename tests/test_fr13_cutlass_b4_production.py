@@ -45,15 +45,16 @@ def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         "task_count": 4,
         "task_ids": list(module.EXPECTED_TASK_IDS),
         "task_marker": task_marker,
-        "draft_vocab_root": 1,
-        "draft_vocab_k": 65_536,
-        "mandatory_weight_bytes": module.floor.FIXED32_MANDATORY_WEIGHT_BYTES,
-        "mandatory_weight_floor_ms": module.floor.FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
-        "one_sided_u95_cap_ms": module.floor.FIXED32_SLO_CAP_MS,
+        "draft_vocab_root": 0,
+        "draft_vocab_k": 0,
+        "mandatory_weight_bytes": module.EXPECTED_MANDATORY_WEIGHT_BYTES,
+        "mandatory_weight_floor_ms": module.EXPECTED_MANDATORY_WEIGHT_FLOOR_MS,
+        "one_sided_u95_cap_ms": module.EXPECTED_SLO_CAP_MS,
         "comparator_timing_eligible": False,
         "batch_size": 4,
         "concurrency": 4,
         "fixed_rows": 128,
+        "eager_builder_capacity": 128,
         "candidate": "persistent_b4_m128",
         "diagnostic_selector": "persistent_b4_m128_byte_ab",
         "served_result": "stock",
@@ -111,8 +112,9 @@ def test_exact4_b4_pass_issues_and_verifies_production_sidecar(
     assert issued == verified
     assert issued["qualification_task_marker"] == task_marker
     assert issued["qualified_fixed_rows"] == 128
-    assert issued["qualified_draft_vocab_root"] == 1
-    assert issued["qualified_draft_vocab_k"] == 65_536
+    assert issued["qualified_draft_vocab_root"] == 0
+    assert issued["qualified_draft_vocab_k"] == 0
+    assert issued["qualified_eager_builder_capacity"] == 128
 
 
 def test_b4_production_attestation_preserves_exact4_binding(
@@ -143,6 +145,7 @@ def test_b4_production_attestation_preserves_exact4_binding(
         "container_env_sha256",
         "qualified_draft_vocab_root",
         "qualified_draft_vocab_k",
+        "qualified_eager_builder_capacity",
         "mandatory_weight_bytes",
         "mandatory_weight_floor_ms",
         "one_sided_u95_cap_ms",
@@ -173,9 +176,10 @@ def test_b4_production_attestation_preserves_exact4_binding(
     assert binding["qualification_task_marker"] == task_marker
     assert binding["qualification_task_ids"] == list(module.EXPECTED_TASK_IDS)
     assert binding["qualified_fixed_rows"] == 128
+    assert binding["qualified_eager_builder_capacity"] == 128
     assert (
         binding["mandatory_weight_floor_ms"]
-        == module.floor.FIXED32_MANDATORY_WEIGHT_FLOOR_MS
+        == module.EXPECTED_MANDATORY_WEIGHT_FLOOR_MS
     )
 
 
@@ -185,8 +189,9 @@ def test_b4_production_attestation_preserves_exact4_binding(
         ("task_count", 1),
         ("batch_size", 1),
         ("fixed_rows", 32),
-        ("draft_vocab_root", 0),
-        ("draft_vocab_k", 0),
+        ("draft_vocab_root", 1),
+        ("draft_vocab_k", 65_536),
+        ("eager_builder_capacity", 32),
         ("task_marker", "swe_verified:django__django-10097"),
     ],
 )
@@ -228,8 +233,35 @@ def test_b4_gate_and_timing_are_closed_over_by_runtime_manifest() -> None:
     assert "fixed32_cutlass_b4_byte_ab.real_event.arm" in gate
     assert '"task_count": 4' in gate
     assert '"fixed_rows": 128' in gate
+    assert '"eager_builder_capacity": 128' in gate
+    assert "FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0" in gate
+    assert "FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'" in gate
+    assert "42025179008" in gate
+    assert "153.9383846446886" in gate
+    assert "177.0291423413919" in gate
+    assert "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d" in gate
+    assert "STOCK_FA2_BYTES=299183936" in gate
+    assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in gate
     assert "persistent_b4_m128" in timing
     assert "--batch-size 4" in timing
+    assert "FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0" in timing
+    assert "FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'" in timing
+    assert "42025179008" in timing
+    assert "153.9383846446886" in timing
+    assert "177.0291423413919" in timing
+    assert "STOCK_FA2_BYTES=299183936" in timing
+    assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in timing
     assert "only_arm_delta=CUTLASS_stock_to_persistent_b4_m128" in timing
     assert '"optimistic_floor_is_full_step_hardware_floor": False' in timing
     assert 'record.get("floor_is_full_step_hardware_floor") is not False' in timing
+
+
+def test_b4_selector_reaches_eager_process_attestation() -> None:
+    serve = (SCRIPTS / "fr13_bigdenom_swe_serve_variant.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'cutlass_wave == "persistent_b4_m128_byte_ab"' in serve
+    assert '"persistent_b4_m128"' in serve
+    assert '"persistent_b4_m128_byte_ab"' in serve
+    assert "batch_gdn_byte_ab_text == \"1\"\n            or cutlass_wave" in serve

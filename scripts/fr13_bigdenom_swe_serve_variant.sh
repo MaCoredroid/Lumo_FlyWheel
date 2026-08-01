@@ -1727,6 +1727,8 @@ if cutlass_wave not in {
     "streamk_coop128",
     "streamk_force_wide256_byte_ab",
     "streamk_force_wide256",
+    "persistent_b4_m128_byte_ab",
+    "persistent_b4_m128",
 }:
     raise SystemExit("fixed32 CUTLASS wave selector is invalid")
 try:
@@ -1734,7 +1736,10 @@ try:
         pid1.get("argv"),
         concurrency,
         attribution_only=attribution_only_text == "1",
-        eager_diagnostic=batch_gdn_byte_ab_text == "1",
+        eager_diagnostic=(
+            batch_gdn_byte_ab_text == "1"
+            or cutlass_wave == "persistent_b4_m128_byte_ab"
+        ),
         graph_diagnostic=batch_gdn_graph_byte_ab_text == "1",
         streamk_eager_diagnostic=(
             cutlass_wave

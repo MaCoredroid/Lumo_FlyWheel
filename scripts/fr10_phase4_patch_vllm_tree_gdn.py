@@ -5856,19 +5856,27 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
         "streamk_coop128_byte_ab",
         "streamk_force_wide256",
         "streamk_force_wide256_byte_ab",
+        "persistent_b4_m128",
+        "persistent_b4_m128_byte_ab",
     ):
         raise RuntimeError(
             "FR13_FIXED32_CUTLASS_WAVE must be stock, streamk_coop128, "
             "streamk_coop128_byte_ab, streamk_force_wide256, or "
-            "streamk_force_wide256_byte_ab"
+            "streamk_force_wide256_byte_ab, persistent_b4_m128, or "
+            "persistent_b4_m128_byte_ab"
         )
     streamk_byte_diagnostic = cutlass_wave in (
         "streamk_coop128_byte_ab",
         "streamk_force_wide256_byte_ab",
     )
-    if batch_gdn_byte_diagnostic == "1" and streamk_byte_diagnostic:
+    persistent_b4_byte_diagnostic = (
+        cutlass_wave == "persistent_b4_m128_byte_ab"
+    )
+    if batch_gdn_byte_diagnostic == "1" and (
+        streamk_byte_diagnostic or persistent_b4_byte_diagnostic
+    ):
         raise RuntimeError(
-            "FR13 fixed32 eager B4 and Stream-K B1 byte diagnostics are "
+            "FR13 fixed32 eager byte diagnostics are "
             "mutually exclusive"
         )
     if batch_gdn_byte_diagnostic == "1":
@@ -5876,6 +5884,12 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
             "eager B4 byte diagnostic",
             4,
             "FR13_FIXED32_EAGER_B4_BOOT_WARM",
+        )
+    if persistent_b4_byte_diagnostic:
+        return (
+            "CUTLASS B4 byte diagnostic",
+            4,
+            "FR13_FIXED32_EAGER_CUTLASS_B4_BOOT_WARM",
         )
     if streamk_byte_diagnostic:
         return (
@@ -5911,11 +5925,15 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         )
     if (
         _FR13_FIXED32_CUTLASS_WAVE
-        in ("streamk_coop128_byte_ab", "streamk_force_wide256_byte_ab")
+        in (
+            "streamk_coop128_byte_ab",
+            "streamk_force_wide256_byte_ab",
+            "persistent_b4_m128_byte_ab",
+        )
         and graph_batch_gdn_byte_diagnostic == "1"
     ):
         raise RuntimeError(
-            "FR13 fixed32 Stream-K B1 and graph-replay B4 byte diagnostics "
+            "FR13 fixed32 CUTLASS and graph-replay B4 byte diagnostics "
             "are mutually exclusive"
         )
     if batch_gdn_byte_diagnostic == "1":
@@ -5957,6 +5975,20 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             raise RuntimeError(
                 "FR13 fixed32 Stream-K B1 byte diagnostic requires the "
                 "diagnostic route without production"
+            )
+    if _FR13_FIXED32_CUTLASS_WAVE == "persistent_b4_m128_byte_ab":
+        if not mode:
+            raise RuntimeError(
+                "FR13 fixed32 CUTLASS B4 byte diagnostic requires fixed32 mode"
+            )
+        if (
+            os.environ.get("FR13_FIXED32_B1_DIAGNOSTIC", "0") != "0"
+            or os.environ.get("FR13_FIXED32_CUTLASS_WAVE_PRODUCTION", "0")
+            != "0"
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 CUTLASS B4 byte diagnostic requires the exact "
+                "B4 diagnostic route without production"
             )
     if graph_batch_gdn_byte_diagnostic == "1":
         candidate_bv = os.environ.get(

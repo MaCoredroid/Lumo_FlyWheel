@@ -35,8 +35,13 @@ EXPECTED_TASK_IDS = (
 EXPECTED_TASK_MARKERS = frozenset(
     f"swe_verified:{task_id}" for task_id in EXPECTED_TASK_IDS
 )
-EXPECTED_DRAFT_VOCAB_ROOT = 1
-EXPECTED_DRAFT_VOCAB_K = 65_536
+EXPECTED_DRAFT_VOCAB_ROOT = 0
+EXPECTED_DRAFT_VOCAB_K = 0
+EXPECTED_MANDATORY_WEIGHT_BYTES = floor.FULL_VOCAB_MANDATORY_WEIGHT_BYTES
+EXPECTED_MANDATORY_WEIGHT_FLOOR_MS = (
+    floor.FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS
+)
+EXPECTED_SLO_CAP_MS = floor.FULL_VOCAB_SLO_CAP_MS
 EXPECTED_PROJECTION_NK = (
     (5120, 6144),
     (5120, 17408),
@@ -185,13 +190,14 @@ def validate_live_result(
         "task_ids": list(EXPECTED_TASK_IDS),
         "draft_vocab_root": EXPECTED_DRAFT_VOCAB_ROOT,
         "draft_vocab_k": EXPECTED_DRAFT_VOCAB_K,
-        "mandatory_weight_bytes": floor.FIXED32_MANDATORY_WEIGHT_BYTES,
-        "mandatory_weight_floor_ms": floor.FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
-        "one_sided_u95_cap_ms": floor.FIXED32_SLO_CAP_MS,
+        "mandatory_weight_bytes": EXPECTED_MANDATORY_WEIGHT_BYTES,
+        "mandatory_weight_floor_ms": EXPECTED_MANDATORY_WEIGHT_FLOOR_MS,
+        "one_sided_u95_cap_ms": EXPECTED_SLO_CAP_MS,
         "comparator_timing_eligible": False,
         "batch_size": 4,
         "concurrency": 4,
         "fixed_rows": 128,
+        "eager_builder_capacity": 128,
         "candidate": candidate_selector,
         "diagnostic_selector": diagnostic_selector,
         "served_result": "stock",
@@ -269,11 +275,12 @@ def validate_live_result(
         "container_env_sha256": container_env_sha256,
         "qualified_draft_vocab_root": EXPECTED_DRAFT_VOCAB_ROOT,
         "qualified_draft_vocab_k": EXPECTED_DRAFT_VOCAB_K,
-        "mandatory_weight_bytes": floor.FIXED32_MANDATORY_WEIGHT_BYTES,
-        "mandatory_weight_floor_ms": floor.FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
-        "one_sided_u95_cap_ms": floor.FIXED32_SLO_CAP_MS,
+        "mandatory_weight_bytes": EXPECTED_MANDATORY_WEIGHT_BYTES,
+        "mandatory_weight_floor_ms": EXPECTED_MANDATORY_WEIGHT_FLOOR_MS,
+        "one_sided_u95_cap_ms": EXPECTED_SLO_CAP_MS,
         "qualified_projection_nk": [list(shape) for shape in EXPECTED_PROJECTION_NK],
         "qualified_fixed_rows": 128,
+        "qualified_eager_builder_capacity": 128,
         "served_result_during_qualification": "stock",
         "production_default_enabled": False,
     }
@@ -341,11 +348,12 @@ def verify_sidecar(
         "qualification_task_ids": list(EXPECTED_TASK_IDS),
         "qualified_draft_vocab_root": EXPECTED_DRAFT_VOCAB_ROOT,
         "qualified_draft_vocab_k": EXPECTED_DRAFT_VOCAB_K,
-        "mandatory_weight_bytes": floor.FIXED32_MANDATORY_WEIGHT_BYTES,
-        "mandatory_weight_floor_ms": floor.FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
-        "one_sided_u95_cap_ms": floor.FIXED32_SLO_CAP_MS,
+        "mandatory_weight_bytes": EXPECTED_MANDATORY_WEIGHT_BYTES,
+        "mandatory_weight_floor_ms": EXPECTED_MANDATORY_WEIGHT_FLOOR_MS,
+        "one_sided_u95_cap_ms": EXPECTED_SLO_CAP_MS,
         "qualified_projection_nk": [list(shape) for shape in EXPECTED_PROJECTION_NK],
         "qualified_fixed_rows": 128,
+        "qualified_eager_builder_capacity": 128,
         "served_result_during_qualification": "stock",
         "production_default_enabled": False,
     }
@@ -443,12 +451,13 @@ def validate_production_attestation(
     for key, expected in (
         ("qualified_draft_vocab_root", EXPECTED_DRAFT_VOCAB_ROOT),
         ("qualified_draft_vocab_k", EXPECTED_DRAFT_VOCAB_K),
-        ("mandatory_weight_bytes", floor.FIXED32_MANDATORY_WEIGHT_BYTES),
+        ("qualified_eager_builder_capacity", 128),
+        ("mandatory_weight_bytes", EXPECTED_MANDATORY_WEIGHT_BYTES),
         (
             "mandatory_weight_floor_ms",
-            floor.FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
+            EXPECTED_MANDATORY_WEIGHT_FLOOR_MS,
         ),
-        ("one_sided_u95_cap_ms", floor.FIXED32_SLO_CAP_MS),
+        ("one_sided_u95_cap_ms", EXPECTED_SLO_CAP_MS),
     ):
         if qualification.get(key) != expected:
             raise QualificationError(
@@ -501,11 +510,12 @@ def validate_production_attestation(
         "container_env_sha256": container_env_sha256,
         "qualified_draft_vocab_root": EXPECTED_DRAFT_VOCAB_ROOT,
         "qualified_draft_vocab_k": EXPECTED_DRAFT_VOCAB_K,
-        "mandatory_weight_bytes": floor.FIXED32_MANDATORY_WEIGHT_BYTES,
-        "mandatory_weight_floor_ms": floor.FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
-        "one_sided_u95_cap_ms": floor.FIXED32_SLO_CAP_MS,
+        "mandatory_weight_bytes": EXPECTED_MANDATORY_WEIGHT_BYTES,
+        "mandatory_weight_floor_ms": EXPECTED_MANDATORY_WEIGHT_FLOOR_MS,
+        "one_sided_u95_cap_ms": EXPECTED_SLO_CAP_MS,
         "qualified_projection_nk": [list(shape) for shape in EXPECTED_PROJECTION_NK],
         "qualified_fixed_rows": 128,
+        "qualified_eager_builder_capacity": 128,
         "installed_mode": "0555",
         "production_default_enabled": False,
     }

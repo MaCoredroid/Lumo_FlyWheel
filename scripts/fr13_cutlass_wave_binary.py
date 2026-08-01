@@ -187,6 +187,10 @@ def install_candidate(
                 "one_sided_u95_cap_ms"
             ],
         }
+        if "qualified_eager_builder_capacity" in qualification_record:
+            qualification["qualified_eager_builder_capacity"] = (
+                qualification_record["qualified_eager_builder_capacity"]
+            )
     elif (
         production_sidecar is not None or expected_production_sidecar_sha256 is not None
     ):

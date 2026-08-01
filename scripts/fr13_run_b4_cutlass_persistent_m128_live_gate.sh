@@ -23,6 +23,8 @@ RECORD_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_byte_ab.v1
 LIVE_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_live_gate.v1
 CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl
 B4_KV_CACHE_MEMORY_BYTES=42949672960
+STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
+STOCK_FA2_BYTES=299183936
 SOURCE_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
@@ -41,6 +43,9 @@ for input in "$FORKED_FA2_SO" "$CUTLASS_B4_SO"; do
   [[ "$input" == /* && -f "$input" && ! -L "$input" ]] \
     || { echo "gate input must be an absolute regular non-symlink file: $input" >&2; exit 2; }
 done
+[[ "$(stat -c '%s' "$FORKED_FA2_SO")" == "$STOCK_FA2_BYTES" \
+   && "$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')" == "$STOCK_FA2_SHA256" ]] \
+  || { echo "FORKED_FA2_SO is not the exact-safe stock reference" >&2; exit 2; }
 [[ "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" ]] \
   || { echo "canonical exact4 subset SHA-256 drift" >&2; exit 2; }
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
@@ -54,23 +59,25 @@ done
 export BSIZE=4
 export CONC=4
 export WALL=0
-export FR13_DRAFT_VOCAB_ROOT=1
-export FR13_DRAFT_VOCAB_K=65536
+export FR13_DRAFT_VOCAB_ROOT=0
+export FR13_DRAFT_VOCAB_K=0
+export FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'
 export FR13_FLOOR_ORDER=TH
 source scripts/fr13_canonical_env.sh
 run_variant() { :; }
 source "$SEQUENCE"
 unset -f run_variant
 
-[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "32666638208" \
-   && "$FR13_WEIGHT_FLOOR_MS" == "119.658015414" ]] \
-  || { echo "canonical B4 root-64K floor contract drifted" >&2; exit 2; }
+[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "42025179008" \
+   && "$FR13_WEIGHT_FLOOR_MS" == "153.9383846446886" ]] \
+  || { echo "canonical B4 full-vocabulary floor contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS"
-printf 'classification=real_swe_verified_exact4_b4_byte_diagnostic\ntiming_eligible=0\nfloor_acceptance_eligible=0\nreference_always_served=1\nbatch_size=4\nconcurrency=4\nfixed_rows=128\ndraft_vocab_root=1\ndraft_vocab_k=65536\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\ncandidate_selector=persistent_b4_m128\ndiagnostic_selector=%s\nenforce_eager=1\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_exact4_b4_byte_diagnostic\ntiming_eligible=0\nfloor_acceptance_eligible=0\nreference_always_served=1\nbatch_size=4\nconcurrency=4\nfixed_rows=128\neager_builder_capacity=128\ndraft_vocab_root=0\ndraft_vocab_k=0\nfr13_needs_allow=FR13_DRAFT_VOCAB_K=0\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=177.0291423413919\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_selector=persistent_b4_m128\ndiagnostic_selector=%s\nenforce_eager=1\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
   "$FR13_MANDATORY_WEIGHT_BYTES" "$FR13_WEIGHT_FLOOR_MS" "$$" \
   "$RUNROOT_ABS" "$ARM" "$SOURCE_COMMIT" "$RUNNER_SHA256" \
-  "$SUBSET_SHA256" "$DIAGNOSTIC_SELECTOR" "$B4_KV_CACHE_MEMORY_BYTES" \
+  "$SUBSET_SHA256" "$STOCK_FA2_SHA256" "$STOCK_FA2_BYTES" \
+  "$DIAGNOSTIC_SELECTOR" "$B4_KV_CACHE_MEMORY_BYTES" \
   "$(date -u +%FT%TZ)" > "$RUNROOT_ABS/launcher_meta.txt"
 
 "$PYTHON_BIN" scripts/fr13_runtime_manifest.py \
@@ -85,7 +92,8 @@ if env \
     KV_CACHE_MEMORY_BYTES="$B4_KV_CACHE_MEMORY_BYTES" \
     FR13_FIXED32_B1_DIAGNOSTIC=0 \
     FR10_METRICS=0 ENFORCE_EAGER=1 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
-    FR13_DRAFT_VOCAB_ROOT=1 FR13_DRAFT_VOCAB_K=65536 \
+    FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0 \
+    FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0' \
     FR13_RING_EXPORT=1 FR13_FLAGS_INKERNEL=1 \
     FR13_SCAN_ALIGN=0 FR13_NPAD_INVARIANT=0 \
     FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1 \
@@ -142,7 +150,7 @@ cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" \
   "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_binary.json" \
   "$ARMDIR/cutlass_b4_m128_byte_gate.json" "$PATCH_SOURCE" \
   "$SOURCE_COMMIT" "$SUBSET_SHA256" "$DIAGNOSTIC_SELECTOR" \
-  "$RECORD_SCHEMA" "$LIVE_SCHEMA" <<'PY'
+  "$RECORD_SCHEMA" "$LIVE_SCHEMA" "$STOCK_FA2_SHA256" <<'PY'
 import hashlib
 import json
 import os
@@ -170,6 +178,7 @@ subset_sha256 = sys.argv[7]
 diagnostic_selector = sys.argv[8]
 record_schema = sys.argv[9]
 live_schema = sys.argv[10]
+stock_fa2_sha256 = sys.argv[11]
 logs = arm / "logs"
 marker_path = logs / "fr13_fixed32_cutlass_b4_byte_ab.real_event.arm"
 ledger_path = logs / "fr13_fixed32_engine_ingress.jsonl"
@@ -298,7 +307,7 @@ if (
 
 container_env_raw = container_env_path.read_bytes()
 container_env_lines = container_env_raw.decode("ascii").splitlines()
-for expected_env in ("FR13_DRAFT_VOCAB_ROOT=1", "FR13_DRAFT_VOCAB_K=65536"):
+for expected_env in ("FR13_DRAFT_VOCAB_ROOT=0", "FR13_DRAFT_VOCAB_K=0"):
     if container_env_lines.count(expected_env) != 1:
         errors.append(f"B4 draft-vocabulary environment mismatch: {expected_env}")
 
@@ -317,13 +326,14 @@ payload = {
     "engine_ledger_chain_head_sha256": ledger_verification["chain_head_sha256"],
     "draft_vocab_root": qualification.EXPECTED_DRAFT_VOCAB_ROOT,
     "draft_vocab_k": qualification.EXPECTED_DRAFT_VOCAB_K,
-    "mandatory_weight_bytes": qualification.floor.FIXED32_MANDATORY_WEIGHT_BYTES,
-    "mandatory_weight_floor_ms": qualification.floor.FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
-    "one_sided_u95_cap_ms": qualification.floor.FIXED32_SLO_CAP_MS,
+    "mandatory_weight_bytes": qualification.EXPECTED_MANDATORY_WEIGHT_BYTES,
+    "mandatory_weight_floor_ms": qualification.EXPECTED_MANDATORY_WEIGHT_FLOOR_MS,
+    "one_sided_u95_cap_ms": qualification.EXPECTED_SLO_CAP_MS,
     "comparator_timing_eligible": False,
     "batch_size": 4,
     "concurrency": 4,
     "fixed_rows": 128,
+    "eager_builder_capacity": 128,
     "candidate": "persistent_b4_m128",
     "diagnostic_selector": diagnostic_selector,
     "served_result": "stock",
@@ -336,6 +346,7 @@ payload = {
     "candidate_family": expected_family,
     "candidate_sha256": expected_sha256,
     "candidate_bytes": expected_size,
+    "stock_fa2_sha256": stock_fa2_sha256,
     "patch_source_sha256": patch_sha256,
     "vllm_base_commit": qualification.VLLM_BASE_COMMIT,
     "patched_dispatch_sha256": qualification.PATCHED_DISPATCH_SHA256,

@@ -140,3 +140,6 @@ def test_launcher_whitelists_full_vocab_ledger_before_docker() -> None:
     assert "0:0)" in text[whitelist:mandatory]
     assert "_fixed32_expected_mandatory_weight_bytes=42025179008" in text
     assert "FR13_NEEDS_ALLOW:-}" in text[whitelist:mandatory]
+    assert '( "$MAX_NUM_SEQS" == "1" || "$MAX_NUM_SEQS" == "4" )' in text[
+        whitelist:mandatory
+    ]
