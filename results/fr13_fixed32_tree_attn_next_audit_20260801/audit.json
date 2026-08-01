@@ -1,0 +1,191 @@
+{
+  "schema": "fr13.fixed32.physical32_tree_attention_next_kernel_audit.v1",
+  "status": "no_eligible_new_candidate",
+  "created_at_utc": "2026-08-01T21:20:00Z",
+  "scope": {
+    "topologies": [
+      "Tail23",
+      "Hydra27"
+    ],
+    "batch_sizes": [
+      1,
+      4
+    ],
+    "gpu_used": false,
+    "docker_used": false,
+    "live_campaign_worktree_touched": false,
+    "base_commit": "c3ee2fece6daa17927ec216ff0135c5cf3ebb1e0"
+  },
+  "production_geometry": {
+    "target_attention_layers": 16,
+    "target_layer_indices": [
+      3,
+      7,
+      11,
+      15,
+      19,
+      23,
+      27,
+      31,
+      35,
+      39,
+      43,
+      47,
+      51,
+      55,
+      59,
+      63
+    ],
+    "physical_rows_root_inclusive_per_batch_slot": 32,
+    "query_heads": 24,
+    "kv_heads": 4,
+    "head_dim": 256,
+    "dtype": "bf16",
+    "tree_bias_dtype": "fp32",
+    "tree_bias_rows_per_batch_slot": 32,
+    "tree_bias_cols_per_batch_slot": 32,
+    "page_block_rows": 1024,
+    "causal": false,
+    "full_window": true,
+    "alibi": false,
+    "softcap": false,
+    "append_kv": false,
+    "num_splits": 1,
+    "separate_combine_kernel": false,
+    "separate_tree_bias_kernel": false,
+    "topology_changes_launch_geometry": false,
+    "b1": {
+      "route": "attested_qrow16",
+      "block_m": 16,
+      "block_n": 64,
+      "warps": 1,
+      "query_tiles_per_batch_head": 2,
+      "ctas_per_layer": 48,
+      "ctas_per_graph_replay": 768,
+      "threads_per_cta": 32
+    },
+    "b4": {
+      "route": "pinned_exact_safe_stock_fa2",
+      "block_m": 64,
+      "block_n": 64,
+      "warps": 4,
+      "query_tiles_per_batch_head": 1,
+      "ctas_per_layer": 96,
+      "ctas_per_graph_replay": 1536,
+      "threads_per_cta": 128,
+      "out_of_extent_query_rows_per_tile": 32,
+      "qrow16_disabled_reason": "would launch 192 CTAs per layer and reread K/V for two query tiles"
+    }
+  },
+  "existing_b1_qrow16_measurement": {
+    "workload": "canonical real SWE-Verified exact4 Hydra27 B1",
+    "valid_arm": true,
+    "full_step_wall_ms_per_event": 232.77979007137355,
+    "full_wall_tps": 24.71814671763722,
+    "wall_floor_ratio": 1.9453756546603922,
+    "wall_gap_to_1_15x_cap_ms": 95.17307234527357,
+    "qrow16_minus_baseline_wall_ms": -6.24684416735488,
+    "qrow16_minus_baseline_gpu_component_ms": -5.448386403844978,
+    "accepted_drafts_per_event": 4.753885003885004,
+    "source_sha256": "e776b3a977f00652f0917866911dfdb3252fda9e41f2e1538251ce303c581c73"
+  },
+  "b1_real_symbol_ceiling": {
+    "basis": "older real B1 Nsight kernel-symbol attribution",
+    "tree_attention_fa2_ms_per_event": 24.708601,
+    "classification": "absolute optimistic ceiling, not current residual attribution",
+    "source_sha256": "b5af7e857b6040850a2fc5853316c5d926e44885e0fab40821d6ac8ccc34cfe4",
+    "mandatory_weight_floor_ms_per_event": 119.658015414,
+    "one_sided_u95_cap_ms_per_event": 137.6067177261,
+    "impossible_zero_attention_wall_ms_per_event": 208.07118907137354,
+    "impossible_zero_attention_floor_ratio": 1.738882166,
+    "impossible_zero_attention_gap_to_cap_ms": 70.46447134527354
+  },
+  "b4_measurement_status": {
+    "real_symbol_attribution": "unmeasured",
+    "valid_k64_full_step_timing": "unmeasured",
+    "defensible_ms_ceiling": null
+  },
+  "compiled_resource_audit": {
+    "binary_sha256": "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86",
+    "binary_bytes": 299507792,
+    "qrow16_exact_symbol": {
+      "block_m": 16,
+      "block_n": 64,
+      "warps": 1,
+      "registers": 255,
+      "stack_bytes": 120,
+      "static_local_bytes": 0,
+      "sass_ldl_instructions": 31,
+      "sass_stl_instructions": 24,
+      "zero_spill_eligible": false
+    },
+    "stock_exact_symbol": {
+      "block_m": 64,
+      "block_n": 64,
+      "warps": 4,
+      "registers": 255,
+      "stack_bytes": 136,
+      "static_local_bytes": 0,
+      "zero_spill_eligible": false
+    },
+    "method": "offline cuobjdump resource and SASS inspection; no GPU execution"
+  },
+  "candidate_decision": {
+    "integrated": false,
+    "reason": "no already authenticated byte-exact zero-stack candidate exists",
+    "historical_split4_eligible": false,
+    "historical_split4_rejection": "real exact4 trajectory and task-result regression; numerical reduction order changed",
+    "bounded_next_candidate": {
+      "name": "fixed32_b4_qrow32",
+      "b1_route": "retain attested qrow16",
+      "b4_block_m": 32,
+      "b4_block_n": 64,
+      "b4_warps": 2,
+      "b4_ctas_per_layer": 96,
+      "b4_threads_per_cta": 64,
+      "split_k": false,
+      "combine_kernel": false,
+      "same_kv_pass_count_as_stock": true,
+      "topology_invariant_physical32": true,
+      "build_exists": false,
+      "byte_gate_exists": false,
+      "resource_gate_passed": false
+    }
+  },
+  "required_admission_gate": {
+    "abi_exports_imports_dt_needed_equal": true,
+    "target_symbol_stack_bytes": 0,
+    "target_symbol_static_local_bytes": 0,
+    "ptxas_spill_loads": 0,
+    "ptxas_spill_stores": 0,
+    "sass_ldl_instructions": 0,
+    "sass_stl_instructions": 0,
+    "workload": "canonical real SWE-Verified exact4 B4",
+    "topologies": [
+      "Tail23",
+      "Hydra27"
+    ],
+    "reference_output_always_served": true,
+    "same_engine_core_retained_live_paged_operands": true,
+    "compare_bf16_output_raw_bytes": true,
+    "compare_fp32_lse_raw_bytes": true,
+    "required_target_layers": 16,
+    "required_query_shape": [
+      128,
+      24,
+      256
+    ],
+    "required_physical_rows_per_batch_slot": 32,
+    "required_page_block_rows": 1024,
+    "require_observed_suffix_alignment_classes": true,
+    "allow_fallback": false,
+    "allow_synthetic_probe": false,
+    "allow_geometry_sweep": false
+  },
+  "evidence": {
+    "qrow16_source_diagnostic_sha256": "c800e119cf42adf129d8f2d537f6194785e4b3ead325e44af9c703bf3a3f7108",
+    "qrow16_production_capture_sha256": "09202ac63c274d73d145e595b040f81fcc5f95951a1957c6a793cbfb32e6869b",
+    "qrow16_production_pass_sha256": "9d2d59f4bb2b6d9a202a60f41c71ff69f7e7c60b24dade34932b3c1ceb6e407f",
+    "split4_rejected_diagnostic_sha256": "61366b01afb3cb3ed484cb7a4f9da483ed5c818b241e9ca29315617a24f51ee5"
+  }
+}
