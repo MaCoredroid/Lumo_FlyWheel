@@ -6863,7 +6863,7 @@ def _patch_gdn_linear() -> bool:
         "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n",
         (
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
-            "from lumo_flywheel_serving.fr10_gdn_tree_kernel import fixed32_batch_gdn_selector, gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_gdn_prepared_fixed32_batch, launch_tree_state_linear_remap, subtree_get\n"
+            "from lumo_flywheel_serving.fr10_gdn_tree_kernel import fixed32_batch_gdn_selector, fixed32_sfwd_state_fusion_byte_gate, fixed32_sfwd_state_fusion_gate_control, gather_committed_path_conv_prior, launch_fixed32_sfwd_state_fusion, launch_tree_gdn_prepared, launch_tree_gdn_prepared_fixed32_batch, launch_tree_state_linear_remap, subtree_get\n"
             "from lumo_flywheel_serving.fr13_replay_conv_remap import replay_conv_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
             "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, conv_wb_staging_get, freeze_conv_wb_staging_sources, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, launch_conv_state_writeback, launch_conv_state_writeback_batched, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
@@ -9394,6 +9394,78 @@ def _fr13_conv_subop_mab(
                         )
                     _fr13_wbb_stage = None
                     _fr13_wbb_srows = 0
+                    _fr13_sfwd_gate_enabled = False
+                    _fr13_sfwd_task_marker = None
+                    _fr13_sfwd_candidate_out = None
+                    _fr13_sfwd_candidate_stage = None
+                    if _FR13_FIXED32_MODE:
+                        (
+                            _fr13_sfwd_gate_enabled,
+                            _fr13_sfwd_task_marker,
+                        ) = fixed32_sfwd_state_fusion_gate_control()
+                    if (
+                        _fr13_sfwd_gate_enabled
+                        and _fr13_sfwd_task_marker is not None
+                    ):
+                        # Source-only/default-off qualification: run the fused
+                        # conv/state producer first on the authenticated real
+                        # event, then execute and serve the incumbent below.
+                        # No candidate bytes become model inputs in this arm.
+                        if (
+                            not _FR13_CONV_WB_BATCHED
+                            or not _FR13_TREE_CONV_FUSED
+                            or os.environ.get("FR13_RING_EXPORT", "1") != "1"
+                            or not _FR13_FLAGS_INKERNEL
+                            or os.environ.get("FR13_TREE_RUNROW_INIT", "1")
+                            != "1"
+                            or self.activation not in (True, "silu", "swish")
+                            or _fr12_native_spine_conv_out is not None
+                            or int(_fr10_tree_n) != 32
+                            or int(conv_state.size(2)) != 12
+                            or int(_fr10_width) != 4
+                        ):
+                            raise RuntimeError(
+                                "FR13_FIXED32_SFWD_STATE_FUSION dependency/"
+                                "geometry contract drifted"
+                            )
+                        from lumo_flywheel_serving.fr13_tree_conv_fused import (
+                            conv_wb_staging_get as _fr13_sfwd_stage_get,
+                        )
+                        _fr13_sfwd_b = int(
+                            attn_metadata.num_spec_decodes
+                        )
+                        _fr13_sfwd_srows = (
+                            int(_fr10_width) - 1 + int(_fr10_tree_n) + 1
+                        )
+                        _fr13_sfwd_reference_stage = (
+                            _fr13_sfwd_stage_get(
+                                str(self.prefix),
+                                _fr13_sfwd_b * _fr13_sfwd_srows,
+                                int(mixed_qkv_spec.size(1)),
+                                mixed_qkv_spec.dtype,
+                                mixed_qkv_spec.device,
+                            )
+                        )
+                        _fr13_sfwd_candidate_out = torch.empty_like(
+                            mixed_qkv_spec
+                        )
+                        _fr13_sfwd_candidate_stage = torch.empty_like(
+                            _fr13_sfwd_reference_stage[
+                                : _fr13_sfwd_b * _fr13_sfwd_srows
+                            ]
+                        )
+                        launch_fixed32_sfwd_state_fusion(
+                            x=mixed_qkv_spec,
+                            conv_state=conv_state,
+                            spec_state_indices=spec_state_indices_tensor,
+                            source_flat=_fr10_source_flat,
+                            conv_weights=conv_weights,
+                            bias=self.conv1d.bias,
+                            out=_fr13_sfwd_candidate_out,
+                            source_stage=_fr13_sfwd_candidate_stage,
+                            batch_size=_fr13_sfwd_b,
+                            tree_rows=int(_fr10_tree_n),
+                        )
                     for _fr10_b in range(attn_metadata.num_spec_decodes):
                         _fr10_start = _fr10_b * _fr10_tree_n
                         _fr10_end = _fr10_start + _fr10_tree_n
@@ -10019,6 +10091,39 @@ def _fr13_conv_subop_mab(
                             )
                             _fr10_conv_diag[11].add_(
                                 (_fr10_flat_sibling_path0_max != 0).to(dtype=torch.float32)
+                            )
+                    if _fr13_sfwd_candidate_out is not None:
+                        if (
+                            _fr13_wbb_stage is None
+                            or _fr13_sfwd_candidate_stage is None
+                            or _fr13_wbb_srows != _fr13_sfwd_srows
+                        ):
+                            raise RuntimeError(
+                                "FR13_FIXED32_SFWD_STATE_FUSION incumbent "
+                                "commit-source stage was not produced"
+                            )
+                        _fr13_sfwd_record = (
+                            fixed32_sfwd_state_fusion_byte_gate(
+                                task_marker=_fr13_sfwd_task_marker,
+                                layer_key=int(conv_weights.data_ptr()),
+                                batch_size=int(
+                                    attn_metadata.num_spec_decodes
+                                ),
+                                reference_out=_fr10_tree_conv_out,
+                                candidate_out=_fr13_sfwd_candidate_out,
+                                reference_source_stage=_fr13_wbb_stage[
+                                    : int(attn_metadata.num_spec_decodes)
+                                    * _fr13_wbb_srows
+                                ],
+                                candidate_source_stage=(
+                                    _fr13_sfwd_candidate_stage
+                                ),
+                            )
+                        )
+                        if not bool(_fr13_sfwd_record["zero_diff"]):
+                            logger.warning_once(
+                                "FR13 fixed32 SFWD state-fusion candidate "
+                                "mismatched; incumbent bytes remain served"
                             )
                     # FR13_CONV_WB_BATCHED (B2c): ONE batched writeback for all
                     # requests (replaces B per-request launches; same bytes,
