@@ -1,0 +1,119 @@
+{
+  "schema": "fr13.fixed32.projection_rowcover_pair.v1",
+  "status": "compiled_static_verified_requires_fresh_k64_gates",
+  "acceptance_valid": false,
+  "timing_eligible": false,
+  "performance_claim": false,
+  "gpu_used_for_this_artifact": false,
+  "docker_used_for_this_artifact": false,
+  "source": {
+    "repo_base_commit": "080c417ed627e155c98e715327e0fdeb48d542ab",
+    "branch": "agent/fixed32-projection-rowcover-audit-20260801",
+    "patch_path": "scripts/fr13_patch_cutlass_fixed32_wave.py",
+    "patch_sha256": "32ee5747eeff597f7eacec530f86658ba26b6fe8560591c21c305e594953935a",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_tag": "v4.4.2",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "patched_dispatch_sha256": "ba18f08dcbd17a52c1b7293be0cc6eb4ee57176388d4e2ccba9bfb62c9b31c45"
+  },
+  "build": {
+    "binary_path": "/home/mark/fr13_projection_rowcover_build/bin/_C_stable_libtorch.static_b1_m32_b4_m128.combined_compile_only.abi3.so",
+    "binary_sha256": "af48592c748ba80b1c614dc7a96c8250ae3bcca4c185c92939b4d308f8ef31f6",
+    "binary_bytes": 113078080,
+    "binary_mode": "0555",
+    "runpath": "/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64",
+    "object_sha256": "81921519d00433d74106cd02b1436be4f9aabb0f1f95af3ad328b4233b2a4612",
+    "object_bytes": 13145672
+  },
+  "candidates": {
+    "b1": {
+      "selector": "static_persistent_stocktile",
+      "diagnostic_selector": "static_persistent_stocktile_byte_ab",
+      "dispatch_m": 32,
+      "fallback": "stock",
+      "tile_mnk": [128, 32, 128],
+      "schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+      "tile_scheduler": "StaticPersistentTileScheduler100",
+      "full_k_reduction": true,
+      "prior_gate_profile": "root0_k0_full_vocab",
+      "current_k64_qualified": false
+    },
+    "b4": {
+      "selector": "persistent_b4_m128",
+      "diagnostic_selector": "persistent_b4_m128_byte_ab",
+      "dispatch_m": 128,
+      "fallback": "stock",
+      "tile_mnk": [128, 128, 128],
+      "schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+      "full_k_reduction": true,
+      "prior_k64_comparator_exact": true,
+      "prior_k64_credential_issued": false,
+      "prior_k64_rejection": "remote_trace_capture_truncated"
+    }
+  },
+  "static_evidence": {
+    "candidate_kernel_count": 4,
+    "candidate_zero_stack_count": 4,
+    "candidate_zero_local_count": 4,
+    "stock_kernel_records_matched": 6,
+    "stock_kernel_records_missing": 0,
+    "normalized_stock_records_sha256": "ba956f283616f6648a3915d1958a67b0d65d6e26783ce7fa43b189769fc42738",
+    "strong_dynamic_exports_candidate": 873,
+    "strong_dynamic_exports_reference": 873,
+    "strong_dynamic_exports_sha256": "50e9e70160e8b9336057400f47c5a0df0688d2535f26521e5cd3e9c03e61d503",
+    "strong_dynamic_exports_equal": true,
+    "full_dynamic_exports_equal": false,
+    "expected_added_weak_symbols": 2
+  },
+  "projection_roofline": {
+    "bandwidth_bytes_per_second": 273000000000,
+    "dense_flops_per_second": 125000000000000,
+    "weight_bytes": 23823646720,
+    "scale_bytes": 5816320,
+    "b1": {
+      "minimum_traffic_bytes": 24144101376,
+      "minimum_traffic_ms": 88.43993178021978,
+      "analytic_flops": 1524713390080,
+      "compute_ms": 12.19770712064,
+      "tflops_required_at_traffic_floor": 17.2401012112,
+      "historical_measured_group_ms": 112.312953984,
+      "historical_group_excess_ms": 23.873022204
+    },
+    "b4": {
+      "minimum_traffic_bytes": 25088016384,
+      "minimum_traffic_ms": 91.89749591208791,
+      "analytic_flops": 6098853560320,
+      "compute_ms": 48.79082848256,
+      "tflops_required_at_traffic_floor": 66.3658290084,
+      "possible_second_row_tile_weight_scale_bytes": 23829463040,
+      "possible_second_row_tile_upper_bound_ms": 87.2874104029304,
+      "cache_residency_measured": false,
+      "hard_savings_claim": false
+    }
+  },
+  "current_b1_k64_anchor": {
+    "task_set": "real_swe_verified_exact4",
+    "topology": "hydra27_fixed32",
+    "wall_ms_per_step": 232.77979007137355,
+    "full_wall_tps": 24.71814671763722,
+    "accepted_drafts_per_event": 4.753885003885004,
+    "floor_ms": 119.658015414,
+    "cap_ms": 137.6067177261,
+    "floor_ratio": 1.94537565466,
+    "gap_to_cap_ms": 95.17307234527355,
+    "sfwd_ms": 159.61926324365674,
+    "dfwd_ms": 36.813368,
+    "cfwd_ms": 20.677391,
+    "other_ms": 15.669768,
+    "optimistic_wall_after_all_historical_projection_excess_removed_ms": 208.90676786737355,
+    "optimistic_ratio_after_projection_ceiling": 1.74586522386,
+    "optimistic_gap_to_cap_after_projection_ceiling_ms": 71.30005014127355
+  },
+  "blockers": [
+    "combined binary identity is not bound in the installer",
+    "static selectors are not admitted by current runtime allowlists",
+    "qualification modules pin earlier per-candidate patch hashes",
+    "B1 static evidence is full-vocabulary rather than current K64",
+    "B4 exact4 comparator evidence has no credential because the trace capture was truncated"
+  ]
+}

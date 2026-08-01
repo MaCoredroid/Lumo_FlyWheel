@@ -19,7 +19,7 @@ def _module():
 
 def _source_fixture(module) -> str:
     return f"""{module.INCLUDE_ANCHOR}
-namespace vllm {{
+{module.SCHEDULER_SPECIALIZATION_ANCHOR}
 using namespace cute;
 
 template <class OutType, int ScaleGranularityM,
@@ -96,6 +96,8 @@ def test_patch_is_default_off_and_shape_gated() -> None:
     assert 'value == "streamk_force_wide256_byte_ab"' in patched
     assert 'value == "persistent_b4_m128"' in patched
     assert 'value == "persistent_b4_m128_byte_ab"' in patched
+    assert 'value == "static_persistent_stocktile"' in patched
+    assert 'value == "static_persistent_stocktile_byte_ab"' in patched
     assert "return fixed32_cutlass_wave_variant::stock;" in patched
     for rows in (32, 64, 96, 128):
         assert f"m == {rows}" in patched
@@ -115,7 +117,7 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 3
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 4
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 5
     assert "PingpongSm120" not in module.CONFIG_REPLACEMENT
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
@@ -134,6 +136,38 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     assert "cutlass::gemm::collective::StageCount<2>" in patched
     assert "ElementAccumulator = float" not in module.CONFIG_REPLACEMENT
     assert "ElementD" not in module.CONFIG_REPLACEMENT
+
+
+def test_static_persistent_b1_preserves_stock_math_and_is_exact_m32() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    assert "struct fr13_fixed32_static_persistent_scheduler {};" in patched
+    assert "using Scheduler = StaticPersistentTileScheduler100;" in patched
+    config_start = patched.index(
+        "struct sm120_blockwise_fp8_config_swapab_static_persistent"
+    )
+    config_end = patched.index("enum class fixed32_cutlass_wave_variant", config_start)
+    config = patched[config_start:config_end]
+    assert "using TileShape = Shape<_128, _32, _128>;" in config
+    assert "KernelTmaWarpSpecializedBlockwiseCooperativeSm120" in config
+    assert "OutType, 128, 1, 128, TileShape, ClusterShape" in config
+    assert "EpilogueSchedule, KernelSchedule, true>" in config
+    assert "PingpongSm120" not in config
+    assert "Shape<_64, _128, _128>" not in config
+
+    selector_gate = patched.index(
+        "if (M != 32 &&",
+        patched.index("if (M != 128 &&"),
+    )
+    stock_assignment = patched.index(
+        "wave_variant = fixed32_cutlass_wave_variant::stock;", selector_gate
+    )
+    candidate_dispatch = patched.index("auto run_static_persistent_stocktile")
+    gated = patched[selector_gate:stock_assignment]
+    assert selector_gate < stock_assignment < candidate_dispatch
+    assert "static_persistent_stocktile" in gated
+    assert "static_persistent_stocktile_byte_ab" in gated
 
 
 def test_b4_m128_preserves_stock_template_and_is_exactly_m128_gated() -> None:
@@ -281,9 +315,7 @@ def test_same_process_byte_ab_is_bounded_and_returns_stock() -> None:
 
     assert "constexpr int64_t byte_ab_limit = 256" in patched
     assert "constexpr int64_t b4_m128_byte_ab_limit = 320" in patched
-    assert (
-        "b4_m128_byte_ab ? b4_m128_byte_ab_limit : byte_ab_limit" in patched
-    )
+    assert "b4_m128_byte_ab || static_persistent_byte_ab" in patched
     assert "invocation >= selected_byte_ab_limit" in patched
     assert "torch::stable::empty_like(out)" in patched
     assert "run_stock(out);\n    run_candidate(candidate);" in patched
@@ -298,10 +330,15 @@ def test_same_process_byte_ab_is_bounded_and_returns_stock() -> None:
         '"/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl"'
         in patched
     )
+    assert (
+        '"/logs/fr13_fixed32_cutlass_static_persistent_byte_ab.jsonl"'
+        in patched
+    )
     assert '\\"byte_equal\\"' in module.DISPATCH_REPLACEMENT
     assert "return run_stock(out);" in patched
     assert "fr13.fixed32.cutlass_streamk_wide256_byte_ab.v1" in patched
     assert "fr13.fixed32.cutlass_persistent_b4_m128_byte_ab.v1" in patched
+    assert "fr13.fixed32.cutlass_static_persistent_byte_ab.v1" in patched
 
 
 def test_unarmed_boot_warm_cannot_dispatch_candidate_or_consume_gate() -> None:

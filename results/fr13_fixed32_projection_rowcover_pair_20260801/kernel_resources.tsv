@@ -1,0 +1,5 @@
+candidate	output_type	tile_m	tile_n	tile_k	schedule	registers	stack_bytes	local_bytes	shared_bytes	constant_0_bytes
+b1_static_persistent	fp16	128	32	128	cooperative_static_persistent	168	0	0	1024	2688
+b1_static_persistent	bf16	128	32	128	cooperative_static_persistent	168	0	0	1024	2688
+b4_persistent_m128	fp16	128	128	128	cooperative_persistent	168	0	0	1024	2560
+b4_persistent_m128	bf16	128	128	128	cooperative_persistent	168	0	0	1024	2560

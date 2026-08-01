@@ -1,0 +1,14 @@
+source_and_adjacent_contract_tests=pass
+command=python3 -m pytest -q tests/test_fr13_cutlass_fixed32_wave_patch.py tests/test_fr13_cutlass_wave_binary.py tests/test_fr13_cutlass_streamk_production.py tests/test_fr13_cutlass_b4_production.py tests/test_fr13_cutlass_streamk_gate_wiring.py tests/test_fr13_fixed32_process_attestation.py tests/test_fr13_fixed32_final_full_preseed.py
+result=141 passed in 1.68s
+python_byte_compile=pass
+git_diff_check=pass
+pinned_sm121_compile=pass
+link_and_runpath_rewrite=pass
+stock_resource_equivalence=pass_6_of_6
+strong_dynamic_export_equivalence=pass_873_of_873
+gpu_execution=not_run
+docker_execution=not_run
+real_swe_verified_gate=not_run_for_combined_binary
+timing=not_run
+acceptance=not_claimed
