@@ -212,6 +212,124 @@ if triton is not None:
         tl.store(last_row + request, last_row_new)
 
 
+    @triton.jit
+    def _fr13_fixed32_taw_all_parent_commit_kernel(
+        child_table,
+        child_counts,
+        self_slot_by_node,
+        target_slot_by_parent,
+        self_token,
+        source,
+        selected_token,
+        rejected_token,
+        accepted,
+        bonus_token,
+        output_tokens,
+        output_lens,
+        accepted_path_rows,
+        accepted_lens,
+        last_row,
+        PHYSICAL_DRAFTS: tl.constexpr,
+        PHYSICAL_ROWS: tl.constexpr,
+        FANOUT: tl.constexpr,
+        SELF_ROWS: tl.constexpr,
+        TARGET_ROWS: tl.constexpr,
+        WALK_CAP: tl.constexpr,
+        OUTPUT_CAPACITY: tl.constexpr,
+        PATH_CAPACITY: tl.constexpr,
+    ):
+        """Walk predecided fixed-tree parents in one integer-only program."""
+        request = tl.program_id(0)
+        output_columns = tl.arange(0, OUTPUT_CAPACITY)
+        path_columns = tl.arange(0, PATH_CAPACITY)
+        tl.store(
+            output_tokens + request * OUTPUT_CAPACITY + output_columns,
+            -1,
+        )
+        tl.store(
+            accepted_path_rows + request * PATH_CAPACITY + path_columns,
+            0,
+        )
+
+        current = -1
+        alive = True
+        output_len = 0
+        path_len = 0
+        final_row = 0
+        for _level in tl.static_range(0, WALK_CAP):
+            parent_slot = tl.maximum(
+                0,
+                tl.minimum(current + 1, PHYSICAL_ROWS - 1),
+            )
+            child_count = tl.load(
+                child_counts + request * PHYSICAL_ROWS + parent_slot
+            ).to(tl.int64)
+            has_kids = alive & (child_count > 0)
+            leaf = alive & (child_count == 0)
+            current_valid = (current >= 0) & (current < PHYSICAL_DRAFTS)
+
+            safe_current = tl.maximum(
+                0,
+                tl.minimum(current, PHYSICAL_DRAFTS - 1),
+            )
+            self_slot = tl.load(self_slot_by_node + safe_current).to(tl.int64)
+            sampled_self = tl.load(
+                self_token + request * SELF_ROWS + self_slot
+            ).to(tl.int64)
+            sampled_bonus = tl.load(bonus_token + request).to(tl.int64)
+            leaf_token = tl.where(current_valid, sampled_self, sampled_bonus)
+            tl.store(
+                output_tokens + request * OUTPUT_CAPACITY + output_len,
+                leaf_token,
+                mask=leaf,
+            )
+
+            target_slot = tl.load(
+                target_slot_by_parent + parent_slot
+            ).to(tl.int64)
+            decision_offset = request * TARGET_ROWS + target_slot
+            is_accepted = has_kids & (tl.load(accepted + decision_offset) != 0)
+            sampled_selected = tl.load(
+                selected_token + decision_offset
+            ).to(tl.int64)
+            sampled_rejected = tl.load(
+                rejected_token + decision_offset
+            ).to(tl.int64)
+            emitted_token = tl.where(
+                is_accepted,
+                sampled_selected,
+                sampled_rejected,
+            )
+            tl.store(
+                output_tokens + request * OUTPUT_CAPACITY + output_len,
+                emitted_token,
+                mask=has_kids,
+            )
+            output_len += leaf.to(tl.int64) + has_kids.to(tl.int64)
+
+            selected_source = tl.load(source + decision_offset).to(tl.int64)
+            accepted_node = tl.load(
+                child_table
+                + request * PHYSICAL_ROWS * FANOUT
+                + parent_slot * FANOUT
+                + selected_source
+            ).to(tl.int64)
+            accepted_row = accepted_node + 1
+            tl.store(
+                accepted_path_rows + request * PATH_CAPACITY + path_len,
+                accepted_row,
+                mask=is_accepted,
+            )
+            path_len += is_accepted.to(tl.int64)
+            current = tl.where(is_accepted, accepted_node, current)
+            alive = (alive & (~leaf)) & is_accepted
+            final_row = tl.where(is_accepted, accepted_row, final_row)
+
+        tl.store(output_lens + request, output_len)
+        tl.store(accepted_lens + request, path_len)
+        tl.store(last_row + request, final_row)
+
+
 # ---------------------------------------------------------------------------
 # MEASUREMENT-ONLY commit trace (FR13 garble mechanism binding, 2026-07-10).
 # Gated on LUMO_TREE_SAMPLER_DEBUG_LOG (the ONE diagnostic flag proven to reach
@@ -1050,7 +1168,7 @@ _FR13_FIXED32_TAW_WARMUPS: dict[tuple[Any, ...], dict[str, Any]] = {}
 _FR13_FIXED32_WORK_ANNOUNCED = False
 _FR13_FIXED32_BATCHES = (1, 2, 3, 4)
 _FR13_FIXED32_INTEGER_DTYPES = None
-_FR13_FIXED32_TAW_NATIVE_CANDIDATE = "fixed32_native_precompute_v1"
+_FR13_FIXED32_TAW_NATIVE_CANDIDATE = "fixed32_all_parent_commit_v2"
 _FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_SIDECARS = (
     "/logs/fr13_fixed32_taw_native_precompute_diagnostic.arm",
     "/tmp/fr13_fixed32_taw_native_precompute_diagnostic.arm",
@@ -1068,9 +1186,9 @@ _FR13_FIXED32_TAW_NATIVE_LIVE_PASS = (
 _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS = (
     "/logs/fr13_fixed32_taw_native_precompute.production_pass.json"
 )
-_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-exact-commit-v3"
+_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v4"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "42b92d872d2324bf618b35fdd71c22d0e68e5c00e25ad2a43ae553c8ab1f92da"
+    "51541928c3a758fdac34a70fe46b97753ffc1b6e9f3e5fe470c4b34a96515dc4"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
@@ -1104,6 +1222,11 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_tensor_layout",
     "_fr13_fixed32_layout_contract",
     "_fr13_fixed32_taw_probability_caches",
+    "_fr13_fixed32_taw_all_parent_decisions",
+    "_fr13_fixed32_taw_all_parent_walk_torch",
+    "_fr13_fixed32_taw_execute_all_parent_torch",
+    "_fr13_fixed32_taw_execute_all_parent_cuda",
+    "_fr13_fixed32_taw_execute_all_parent",
     "_fr13_fixed32_taw_execute_torch",
     "_fr13_fixed32_taw_execute_exact_cuda",
     "_fr13_fixed32_taw_execute",
@@ -1113,6 +1236,7 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
 )
 _FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_taw_exact_commit_kernel",
+    "_fr13_fixed32_taw_all_parent_commit_kernel",
 )
 _FR13_FIXED32_TAW_GEOMETRY = {
     "physical_drafts": 31,
@@ -1143,26 +1267,37 @@ _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS = {
 }
 _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS = {
     **_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS,
-    "walk_levels": 24,
-    "full_vocab_row_gathers": 74,
+    "walk_levels": 13,
+    "full_vocab_row_gathers": 54,
     "full_vocab_fp32_casts": 26,
     "full_vocab_softmax_calls": 26,
-    "full_vocab_normalizations": 72,
-    "full_vocab_cdf_calls": 48,
-    "source_cdf_calls": 24,
-    "qmix_zero_fills": 24,
-    "qmix_scatter_add_calls": 24,
-    "residual_subtract_calls": 24,
-    "residual_clamp_calls": 24,
-    "residual_where_calls": 48,
-    "exact_commit_launches": 24,
-    "exact_commit_programs_per_request": 24,
+    "full_vocab_normalizations": 83,
+    "full_vocab_cdf_calls": 54,
+    "source_cdf_calls": 29,
+    "qmix_zero_fills": 29,
+    "qmix_scatter_add_calls": 29,
+    "residual_subtract_calls": 29,
+    "residual_clamp_calls": 29,
+    "residual_where_calls": 58,
+    "exact_commit_launches": 13,
+    "exact_commit_programs_per_request": 13,
 }
 _FR13_FIXED32_TAW_NATIVE_PRODUCTION_TENSOR_CALL_CENSUS = {
     **_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS,
-    "full_vocab_row_gathers": 50,
+    "walk_levels": 1,
+    "full_vocab_row_gathers": 30,
     "full_vocab_fp32_casts": 2,
     "full_vocab_softmax_calls": 2,
+    "full_vocab_normalizations": 47,
+    "full_vocab_cdf_calls": 30,
+    "source_cdf_calls": 17,
+    "qmix_zero_fills": 17,
+    "qmix_scatter_add_calls": 17,
+    "residual_subtract_calls": 17,
+    "residual_clamp_calls": 17,
+    "residual_where_calls": 34,
+    "exact_commit_launches": 1,
+    "exact_commit_programs_per_request": 1,
 }
 
 
@@ -1865,6 +2000,33 @@ def fr13_fixed32_taw_preseed(
     target_source_slot = {
         source_node: slot for slot, source_node in enumerate(target_source_nodes)
     }
+    node_depths = []
+    for node, parent in enumerate(topology.DRAFT_PARENT):
+        if parent < 0:
+            node_depths.append(0)
+            continue
+        if parent >= node:
+            raise RuntimeError(
+                "FR13 fixed32 all-parent fusion requires topological parents"
+            )
+        node_depths.append(node_depths[parent] + 1)
+    self_uniform_levels = tuple(
+        node_depths[node] + 1 for node in self_source_nodes
+    )
+    target_parent_slots = tuple(
+        int(topology.DRAFT_PARENT[source_node]) + 1
+        for source_node in target_source_nodes
+    )
+    target_uniform_levels = tuple(
+        0 if parent_slot == 0 else node_depths[parent_slot - 1] + 1
+        for parent_slot in target_parent_slots
+    )
+    if (
+        len(set(target_parent_slots)) != len(target_parent_slots)
+        or max(self_uniform_levels + target_uniform_levels)
+        >= int(topology.WALK_CAP)
+    ):
+        raise RuntimeError("FR13 fixed32 all-parent depth schedule drifted")
     target_slot_by_parent = [0] * int(topology.PHYSICAL_ROWS)
     for parent, children in active_children.items():
         target_slot_by_parent[parent + 1] = target_source_slot[children[0]]
@@ -1885,6 +2047,21 @@ def fr13_fixed32_taw_preseed(
     )
     target_slot_base = torch.tensor(
         target_slot_by_parent,
+        dtype=torch.long,
+        device=normalized_device,
+    )
+    self_uniform_level_base = torch.tensor(
+        self_uniform_levels,
+        dtype=torch.long,
+        device=normalized_device,
+    )
+    target_parent_slot_base = torch.tensor(
+        target_parent_slots,
+        dtype=torch.long,
+        device=normalized_device,
+    )
+    target_uniform_level_base = torch.tensor(
+        target_uniform_levels,
         dtype=torch.long,
         device=normalized_device,
     )
@@ -1929,6 +2106,11 @@ def fr13_fixed32_taw_preseed(
             ).reshape(-1),
             "native_self_slot_by_node": self_slot_base.clone(),
             "native_target_slot_by_parent": target_slot_base.clone(),
+            "all_parent_self_uniform_levels": self_uniform_level_base.clone(),
+            "all_parent_target_parent_slots": target_parent_slot_base.clone(),
+            "all_parent_target_uniform_levels": (
+                target_uniform_level_base.clone()
+            ),
             "native_self_request_offsets": (
                 torch.arange(
                     batch_size,
@@ -2160,6 +2342,11 @@ def _fr13_fixed32_taw_cache_lease(entry: dict[str, Any]) -> tuple[Any, ...]:
         "exact_initial_alive",
         "exact_current",
         "exact_alive",
+        "native_self_slot_by_node",
+        "native_target_slot_by_parent",
+        "all_parent_self_uniform_levels",
+        "all_parent_target_parent_slots",
+        "all_parent_target_uniform_levels",
         "uniforms",
         "draft_tokens",
         "bonus_tokens",
@@ -2825,6 +3012,11 @@ def _fr13_fixed32_layout_contract(
         "exact_initial_alive": ([batch], "torch.bool", [1]),
         "exact_current": ([batch], "torch.int64", [1]),
         "exact_alive": ([batch], "torch.bool", [1]),
+        "native_self_slot_by_node": ([31], "torch.int64", [1]),
+        "native_target_slot_by_parent": ([32], "torch.int64", [1]),
+        "all_parent_self_uniform_levels": ([13], "torch.int64", [1]),
+        "all_parent_target_parent_slots": ([17], "torch.int64", [1]),
+        "all_parent_target_uniform_levels": ([17], "torch.int64", [1]),
         "uniforms": ([batch, 12, 3], "torch.float32", [36, 3, 1]),
         "draft_tokens": ([batch, 31], "torch.int64", [31, 1]),
         "bonus_tokens": ([batch], "torch.int64", [1]),
@@ -3013,6 +3205,417 @@ def _fr13_fixed32_taw_probability_caches(
         dim=-1,
     )
     return self_prob_cache, target_prob_cache
+
+
+def _fr13_fixed32_taw_all_parent_decisions(
+    topology,
+    entry: dict[str, Any],
+    drafts,
+    uniforms,
+    probability_caches: tuple[Any, Any],
+) -> tuple[Any, Any, Any, Any, Any]:
+    """Decide every fixed parent in parallel with native PyTorch math."""
+    batch_size = int(entry["batch_size"])
+    physical_drafts = int(topology.PHYSICAL_DRAFTS)
+    fanout = int(topology.SAMPLER_MAX_FANOUT)
+    self_rows = int(entry["native_self_rows_per_request"])
+    target_rows = int(entry["native_target_rows_per_request"])
+    self_prob_cache, target_prob_cache = probability_caches
+    vocab_size = int(target_prob_cache.shape[-1])
+    expected = {
+        "self_probability_cache": (
+            self_prob_cache,
+            (batch_size * self_rows, vocab_size),
+            torch.float32,
+        ),
+        "target_probability_cache": (
+            target_prob_cache,
+            (batch_size * target_rows, vocab_size),
+            torch.float32,
+        ),
+        "self_uniform_levels": (
+            entry["all_parent_self_uniform_levels"],
+            (self_rows,),
+            torch.long,
+        ),
+        "target_parent_slots": (
+            entry["all_parent_target_parent_slots"],
+            (target_rows,),
+            torch.long,
+        ),
+        "target_uniform_levels": (
+            entry["all_parent_target_uniform_levels"],
+            (target_rows,),
+            torch.long,
+        ),
+    }
+    for name, (value, shape, dtype) in expected.items():
+        if (
+            not isinstance(value, torch.Tensor)
+            or tuple(value.shape) != shape
+            or value.dtype != dtype
+            or value.device != drafts.device
+        ):
+            raise RuntimeError(
+                f"FR13 fixed32 all-parent decision layout drift: {name}"
+            )
+    if tuple(drafts.shape) != (batch_size, physical_drafts):
+        raise RuntimeError("FR13 fixed32 all-parent draft layout drift")
+
+    self_prob = self_prob_cache.reshape(batch_size, self_rows, vocab_size)
+    self_prob = self_prob / self_prob.sum(dim=-1, keepdim=True)
+    self_levels = entry["all_parent_self_uniform_levels"]
+    self_uniforms = uniforms[:, self_levels, 2]
+    self_token = _fr13_taw_inv_cdf(
+        self_prob.reshape(batch_size * self_rows, vocab_size),
+        self_uniforms.reshape(batch_size * self_rows),
+    ).reshape(batch_size, self_rows)
+
+    target_prob = target_prob_cache.reshape(
+        batch_size, target_rows, vocab_size
+    )
+    target_prob = target_prob / target_prob.sum(dim=-1, keepdim=True)
+    parent_slots = entry["all_parent_target_parent_slots"]
+    kids = entry["child_table"].index_select(1, parent_slots)
+    child_count = entry["child_counts"].index_select(1, parent_slots)
+    if tuple(kids.shape) != (batch_size, target_rows, fanout):
+        raise RuntimeError("FR13 fixed32 all-parent child table drift")
+    kid_tokens = torch.gather(
+        drafts.unsqueeze(1).expand(-1, target_rows, -1),
+        2,
+        kids.clamp(min=0),
+    )
+    kid_mask = kids >= 0
+    overlaps = torch.gather(
+        target_prob,
+        2,
+        kid_tokens.clamp(min=0),
+    ) * kid_mask
+    overlap_mass = overlaps.sum(dim=-1)
+    has_kids = child_count > 0
+    zero_mass = has_kids & (overlap_mass <= 0)
+    target_levels = entry["all_parent_target_uniform_levels"]
+    source = _fr13_taw_inv_cdf(
+        overlaps.reshape(batch_size * target_rows, fanout),
+        uniforms[:, target_levels, 0].reshape(batch_size * target_rows),
+    ).reshape(batch_size, target_rows)
+    selected_token = torch.gather(
+        kid_tokens,
+        2,
+        source.unsqueeze(2),
+    ).squeeze(2)
+    same_token = (kid_tokens == selected_token.unsqueeze(2)) & kid_mask
+    q_mix_token = (overlaps * same_token).sum(dim=-1) / overlap_mass.clamp(
+        min=1e-30
+    )
+    target_at_token = torch.gather(
+        target_prob,
+        2,
+        selected_token.unsqueeze(2),
+    ).squeeze(2)
+    accept_probability = (
+        target_at_token / q_mix_token.clamp(min=1e-30)
+    ).clamp(max=1.0)
+    accepted = (
+        has_kids
+        & ~zero_mass
+        & (uniforms[:, target_levels, 1] < accept_probability)
+    )
+
+    weights = overlaps / overlap_mass.clamp(min=1e-30).unsqueeze(2)
+    q_mix_vocab = torch.zeros_like(target_prob)
+    q_mix_vocab.scatter_add_(
+        2,
+        kid_tokens.clamp(min=0),
+        weights * kid_mask,
+    )
+    residual = (target_prob - q_mix_vocab).clamp(min=0)
+    residual_mass = residual.sum(dim=-1, keepdim=True)
+    residual = torch.where(
+        residual_mass > 0,
+        residual / residual_mass.clamp(min=1e-30),
+        target_prob,
+    )
+    residual = torch.where(
+        zero_mass.unsqueeze(2),
+        target_prob,
+        residual,
+    )
+    rejected_token = _fr13_taw_inv_cdf(
+        residual.reshape(batch_size * target_rows, vocab_size),
+        uniforms[:, target_levels, 2].reshape(batch_size * target_rows),
+    ).reshape(batch_size, target_rows)
+    return self_token, source, selected_token, rejected_token, accepted
+
+
+def _fr13_fixed32_taw_all_parent_walk_torch(
+    topology,
+    entry: dict[str, Any],
+    bonus_flat,
+    decisions: tuple[Any, Any, Any, Any, Any],
+    *,
+    walk_cap: int,
+) -> tuple[Any, Any, Any, Any, Any, int]:
+    """CPU oracle for the one-program all-parent integer walk."""
+    batch_size = int(entry["batch_size"])
+    physical_drafts = int(topology.PHYSICAL_DRAFTS)
+    output_capacity = int(topology.OUTPUT_PUBLISH_CAPACITY)
+    path_capacity = int(topology.ACCEPTED_PATH_CAPACITY)
+    self_token, source, selected_token, rejected_token, accepted = decisions
+    request_rows = entry["request_rows"]
+    output_tokens = entry["output_tokens"]
+    output_lens = entry["output_lens"]
+    accepted_path_rows = entry["accepted_path_rows"]
+    accepted_lens = entry["accepted_lens"]
+    last_row = entry["last_row"]
+    output_tokens.fill_(-1)
+    output_lens.zero_()
+    accepted_path_rows.zero_()
+    accepted_lens.zero_()
+    last_row.zero_()
+    current = torch.full(
+        (batch_size,), -1, dtype=torch.long, device=bonus_flat.device
+    )
+    alive = torch.ones(batch_size, dtype=torch.bool, device=bonus_flat.device)
+    output_trash = torch.full(
+        (batch_size,),
+        output_capacity - 1,
+        dtype=torch.long,
+        device=bonus_flat.device,
+    )
+    path_trash = torch.full(
+        (batch_size,),
+        path_capacity - 1,
+        dtype=torch.long,
+        device=bonus_flat.device,
+    )
+
+    for _level in range(walk_cap):
+        parent_slots = current + 1
+        kids = entry["child_table"][request_rows, parent_slots]
+        child_count = entry["child_counts"][request_rows, parent_slots]
+        has_kids = alive & (child_count > 0)
+        leaf = alive & (child_count == 0)
+        safe_current = current.clamp(min=0, max=physical_drafts - 1)
+        self_slots = entry["native_self_slot_by_node"][safe_current]
+        sampled_self = self_token[request_rows, self_slots]
+        leaf_token = torch.where(current >= 0, sampled_self, bonus_flat)
+        output_tokens.scatter_(
+            1,
+            torch.where(leaf, output_lens, output_trash).unsqueeze(1),
+            leaf_token.unsqueeze(1),
+        )
+
+        target_slots = entry["native_target_slot_by_parent"][parent_slots]
+        sampled_source = source[request_rows, target_slots]
+        sampled_selected = selected_token[request_rows, target_slots]
+        sampled_rejected = rejected_token[request_rows, target_slots]
+        is_accepted = has_kids & accepted[request_rows, target_slots]
+        emitted_token = torch.where(
+            is_accepted,
+            sampled_selected,
+            sampled_rejected,
+        )
+        output_tokens.scatter_(
+            1,
+            torch.where(has_kids, output_lens, output_trash).unsqueeze(1),
+            emitted_token.unsqueeze(1),
+        )
+        output_lens.add_(leaf.to(output_lens.dtype))
+        output_lens.add_(has_kids.to(output_lens.dtype))
+
+        accepted_node = kids[request_rows, sampled_source]
+        accepted_row = accepted_node + 1
+        accepted_path_rows.scatter_(
+            1,
+            torch.where(is_accepted, accepted_lens, path_trash).unsqueeze(1),
+            accepted_row.unsqueeze(1),
+        )
+        accepted_lens.add_(is_accepted.to(accepted_lens.dtype))
+        current = torch.where(is_accepted, accepted_node, current)
+        alive = (alive & ~leaf) & is_accepted
+        last_row.copy_(torch.where(is_accepted, accepted_row, last_row))
+
+    output_columns = torch.arange(
+        output_capacity, device=bonus_flat.device
+    ).unsqueeze(0)
+    output_tokens.copy_(
+        torch.where(
+            output_columns < output_lens.unsqueeze(1),
+            output_tokens,
+            torch.full_like(output_tokens, -1),
+        )
+    )
+    path_columns = torch.arange(
+        path_capacity, device=bonus_flat.device
+    ).unsqueeze(0)
+    accepted_path_rows.copy_(
+        torch.where(
+            path_columns < accepted_lens.unsqueeze(1),
+            accepted_path_rows,
+            torch.zeros_like(accepted_path_rows),
+        )
+    )
+    return (
+        output_tokens,
+        output_lens,
+        accepted_path_rows,
+        accepted_lens,
+        last_row,
+        walk_cap,
+    )
+
+
+def _fr13_fixed32_taw_execute_all_parent_torch(
+    topology,
+    entry: dict[str, Any],
+    drafts,
+    bonus_flat,
+    uniforms,
+    *,
+    walk_cap: int,
+    probability_caches: tuple[Any, Any],
+) -> tuple[Any, Any, Any, Any, Any, int]:
+    decisions = _fr13_fixed32_taw_all_parent_decisions(
+        topology,
+        entry,
+        drafts,
+        uniforms,
+        probability_caches,
+    )
+    return _fr13_fixed32_taw_all_parent_walk_torch(
+        topology,
+        entry,
+        bonus_flat,
+        decisions,
+        walk_cap=walk_cap,
+    )
+
+
+def _fr13_fixed32_taw_execute_all_parent_cuda(
+    topology,
+    entry: dict[str, Any],
+    drafts,
+    bonus_flat,
+    uniforms,
+    *,
+    walk_cap: int,
+    probability_caches: tuple[Any, Any],
+) -> tuple[Any, Any, Any, Any, Any, int]:
+    """Launch one integer walk after all fixed-parent float decisions."""
+    if triton is None or tl is None:
+        raise RuntimeError("FR13 fixed32 all-parent commit requires Triton")
+    batch_size = int(entry["batch_size"])
+    self_rows = int(entry["native_self_rows_per_request"])
+    target_rows = int(entry["native_target_rows_per_request"])
+    decisions = _fr13_fixed32_taw_all_parent_decisions(
+        topology,
+        entry,
+        drafts,
+        uniforms,
+        probability_caches,
+    )
+    self_token, source, selected_token, rejected_token, accepted = decisions
+    expected_decisions = (
+        ("self_token", self_token, (batch_size, self_rows), torch.long),
+        ("source", source, (batch_size, target_rows), torch.long),
+        (
+            "selected_token",
+            selected_token,
+            (batch_size, target_rows),
+            torch.long,
+        ),
+        (
+            "rejected_token",
+            rejected_token,
+            (batch_size, target_rows),
+            torch.long,
+        ),
+        ("accepted", accepted, (batch_size, target_rows), torch.bool),
+    )
+    for name, value, shape, dtype in expected_decisions:
+        if (
+            tuple(value.shape) != shape
+            or value.dtype != dtype
+            or value.device != drafts.device
+            or not value.is_contiguous()
+        ):
+            raise RuntimeError(
+                f"FR13 fixed32 all-parent product layout drift: {name}"
+            )
+    _fr13_fixed32_taw_all_parent_commit_kernel[(batch_size,)](
+        entry["child_table"],
+        entry["child_counts"],
+        entry["native_self_slot_by_node"],
+        entry["native_target_slot_by_parent"],
+        self_token,
+        source,
+        selected_token,
+        rejected_token,
+        accepted,
+        bonus_flat,
+        entry["output_tokens"],
+        entry["output_lens"],
+        entry["accepted_path_rows"],
+        entry["accepted_lens"],
+        entry["last_row"],
+        PHYSICAL_DRAFTS=int(topology.PHYSICAL_DRAFTS),
+        PHYSICAL_ROWS=int(topology.PHYSICAL_ROWS),
+        FANOUT=int(topology.SAMPLER_MAX_FANOUT),
+        SELF_ROWS=self_rows,
+        TARGET_ROWS=target_rows,
+        WALK_CAP=walk_cap,
+        OUTPUT_CAPACITY=int(topology.OUTPUT_PUBLISH_CAPACITY),
+        PATH_CAPACITY=int(topology.ACCEPTED_PATH_CAPACITY),
+        num_warps=1,
+    )
+    _fr13_fixed32_device_assert(
+        torch.all(entry["output_lens"] <= int(topology.OUTPUT_PUBLISH_CAPACITY)),
+        "FR13 fixed32 all-parent output overflow",
+    )
+    _fr13_fixed32_device_assert(
+        torch.all(entry["accepted_lens"] <= int(topology.ACCEPTED_PATH_CAPACITY)),
+        "FR13 fixed32 all-parent accepted-path overflow",
+    )
+    return (
+        entry["output_tokens"],
+        entry["output_lens"],
+        entry["accepted_path_rows"],
+        entry["accepted_lens"],
+        entry["last_row"],
+        walk_cap,
+    )
+
+
+def _fr13_fixed32_taw_execute_all_parent(
+    topology,
+    entry: dict[str, Any],
+    drafts,
+    bonus_flat,
+    uniforms,
+    *,
+    walk_cap: int,
+    probability_caches: tuple[Any, Any],
+) -> tuple[Any, Any, Any, Any, Any, int]:
+    if drafts.is_cuda:
+        return _fr13_fixed32_taw_execute_all_parent_cuda(
+            topology,
+            entry,
+            drafts,
+            bonus_flat,
+            uniforms,
+            walk_cap=walk_cap,
+            probability_caches=probability_caches,
+        )
+    return _fr13_fixed32_taw_execute_all_parent_torch(
+        topology,
+        entry,
+        drafts,
+        bonus_flat,
+        uniforms,
+        walk_cap=walk_cap,
+        probability_caches=probability_caches,
+    )
 
 
 def _fr13_fixed32_taw_execute_torch(
@@ -3652,7 +4255,28 @@ def _fr13_fixed32_publish_work(
     layout_contract: dict[str, Any],
 ) -> None:
     native_selector = _fr13_fixed32_taw_native_selector()
-    work_multiplier = 2 if native_selector == "diagnostic" else 1
+    base_target_rows = int(topology.WALK_CAP)
+    base_self_rows = int(topology.WALK_CAP)
+    candidate_target_rows = 17
+    candidate_self_rows = 13
+    if native_selector == "diagnostic":
+        target_rows = base_target_rows + candidate_target_rows
+        self_rows = base_self_rows + candidate_self_rows
+        exact_commit_launches = int(topology.WALK_CAP) + 1
+        exact_commit_programs_per_request = int(topology.WALK_CAP) + 1
+        product_write_multiplier = 2
+    elif native_selector == "production":
+        target_rows = candidate_target_rows
+        self_rows = candidate_self_rows
+        exact_commit_launches = 1
+        exact_commit_programs_per_request = 1
+        product_write_multiplier = 1
+    else:
+        target_rows = base_target_rows
+        self_rows = base_self_rows
+        exact_commit_launches = int(topology.WALK_CAP)
+        exact_commit_programs_per_request = int(topology.WALK_CAP)
+        product_write_multiplier = 1
     taw = {
         "route": (
             "fixed32_native_precompute_byte_ab_reference_return"
@@ -3675,25 +4299,27 @@ def _fr13_fixed32_publish_work(
         "loop_iterations": int(loop_iterations),
         "uniform_slots": int(topology.TAW_UNIFORM_SLOTS) * batch_size,
         "child_lanes": (
-            int(topology.TAW_CHILD_LANES) * batch_size * work_multiplier
+            target_rows * int(topology.SAMPLER_MAX_FANOUT) * batch_size
         ),
-        "target_rows": int(topology.WALK_CAP) * batch_size * work_multiplier,
-        "self_rows": int(topology.WALK_CAP) * batch_size * work_multiplier,
-        "self_cdf_rows": int(topology.WALK_CAP) * batch_size * work_multiplier,
-        "source_cdf_rows": int(topology.WALK_CAP) * batch_size * work_multiplier,
-        "residual_cdf_rows": int(topology.WALK_CAP) * batch_size * work_multiplier,
-        "qmix_rows": int(topology.WALK_CAP) * batch_size * work_multiplier,
-        "residual_rows": int(topology.WALK_CAP) * batch_size * work_multiplier,
+        "target_rows": target_rows * batch_size,
+        "self_rows": self_rows * batch_size,
+        "self_cdf_rows": self_rows * batch_size,
+        "source_cdf_rows": target_rows * batch_size,
+        "residual_cdf_rows": target_rows * batch_size,
+        "qmix_rows": target_rows * batch_size,
+        "residual_rows": target_rows * batch_size,
         "row_scatter_slots": (
-            int(topology.TAW_ROW_SCATTER_SLOTS) * batch_size * work_multiplier
+            int(topology.TAW_ROW_SCATTER_SLOTS)
+            * batch_size
+            * product_write_multiplier
         ),
         "path_scatter_slots": (
-            int(topology.TAW_PATH_SCATTER_SLOTS) * batch_size * work_multiplier
+            int(topology.TAW_PATH_SCATTER_SLOTS)
+            * batch_size
+            * product_write_multiplier
         ),
-        "exact_commit_launches": int(topology.WALK_CAP) * work_multiplier,
-        "exact_commit_programs": (
-            int(topology.WALK_CAP) * batch_size * work_multiplier
-        ),
+        "exact_commit_launches": exact_commit_launches,
+        "exact_commit_programs": exact_commit_programs_per_request * batch_size,
         "floating_sampling_reimplementation": False,
     }
     if (
@@ -3912,16 +4538,13 @@ def fr13_fixed32_taw_commit(
             comparison_probability_caches=probability_caches,
             probability_mismatches=probability_mismatches,
         )
-        candidate = _fr13_fixed32_taw_execute(
+        candidate = _fr13_fixed32_taw_execute_all_parent(
             topology,
             entry["native_ab_entry"],
             drafts,
-            target_logits,
-            tree_self_logits,
             bonus_flat,
             fixed_uniforms,
             walk_cap=int(topology.WALK_CAP),
-            native_precompute=True,
             probability_caches=probability_caches,
         )
         for reference_product, candidate_product in zip(
@@ -3958,16 +4581,13 @@ def fr13_fixed32_taw_commit(
             accepted_lens,
             last_row,
             loop_iterations,
-        ) = _fr13_fixed32_taw_execute(
+        ) = _fr13_fixed32_taw_execute_all_parent(
             topology,
             entry["native_ab_entry"],
             drafts,
-            target_logits,
-            tree_self_logits,
             bonus_flat,
             fixed_uniforms,
             walk_cap=int(topology.WALK_CAP),
-            native_precompute=True,
             probability_caches=probability_caches,
         )
     else:
