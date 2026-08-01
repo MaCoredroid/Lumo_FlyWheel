@@ -67,30 +67,61 @@ def _fixture(topology, mode: str, batch_size: int, seed: int):
     return fixture
 
 
-def _write_live_pass(path: Path, *, mode: str, batch_size: int) -> None:
+def _pass_record(*, mode: str, batch_size: int) -> dict:
     topology = taw._fr13_fixed32_topology()
+    return {
+        "schema": "fr13.fixed32.taw_native_precompute.live_pass.v2",
+        "status": "pass",
+        "candidate": taw._FR13_FIXED32_TAW_NATIVE_CANDIDATE,
+        "source_contract_schema": taw._FR13_FIXED32_TAW_SOURCE_SCHEMA,
+        "source_contract_sha256": taw._FR13_FIXED32_TAW_SOURCE_SHA256,
+        "task_marker": "swe_verified:django__django-12345",
+        "mode": mode,
+        "valid_mask": int(topology.VALID_MASK_BY_MODE[mode]),
+        "topology_binding": taw._fr13_fixed32_taw_topology_binding(topology),
+        "batch_size": batch_size,
+        "covered_batches": [batch_size],
+        "geometry": taw._FR13_FIXED32_TAW_GEOMETRY,
+        "probability_mismatches": 0,
+        "product_mismatches": 0,
+        "evidence_route": "full_graph_replay",
+        "reference_returned": True,
+        "candidate_returned": False,
+    }
+
+
+def _write_pass_bundle(
+    path: Path,
+    *,
+    mode: str,
+    batches: tuple[int, ...] = (1, 4),
+) -> None:
+    topology = taw._fr13_fixed32_topology()
+    qualified = sorted(set(batches))
+    records = {
+        str(batch): _pass_record(mode=mode, batch_size=batch)
+        for batch in qualified
+    }
     path.write_text(
         json.dumps(
             {
-                "schema": "fr13.fixed32.taw_native_precompute.live_pass.v2",
-                "status": "pass",
+                "schema": "fr13.fixed32.taw_native_precompute.pass_bundle.v1",
+                "status": (
+                    "production_ready"
+                    if {1, 4}.issubset(qualified)
+                    else "partial"
+                ),
                 "candidate": taw._FR13_FIXED32_TAW_NATIVE_CANDIDATE,
                 "source_contract_schema": taw._FR13_FIXED32_TAW_SOURCE_SCHEMA,
                 "source_contract_sha256": taw._FR13_FIXED32_TAW_SOURCE_SHA256,
-                "task_marker": "swe_verified:django__django-12345",
                 "mode": mode,
                 "valid_mask": int(topology.VALID_MASK_BY_MODE[mode]),
                 "topology_binding": taw._fr13_fixed32_taw_topology_binding(
                     topology
                 ),
-                "batch_size": batch_size,
-                "covered_batches": [batch_size],
-                "geometry": taw._FR13_FIXED32_TAW_GEOMETRY,
-                "probability_mismatches": 0,
-                "product_mismatches": 0,
-                "evidence_route": "full_graph_replay",
-                "reference_returned": True,
-                "candidate_returned": False,
+                "required_production_batches": [1, 4],
+                "qualified_batches": qualified,
+                "batch_passes": records,
             }
         ),
         encoding="ascii",
@@ -375,7 +406,7 @@ def test_native_production_is_default_off_source_bound_and_exclusive(
     with pytest.raises(RuntimeError, match="requires a regular live PASS"):
         taw._fr13_fixed32_taw_native_selector()
 
-    _write_live_pass(live_pass, mode="tail6_fixed32", batch_size=1)
+    _write_pass_bundle(live_pass, mode="tail6_fixed32")
     assert taw._fr13_fixed32_taw_native_selector() == "production"
 
     diagnostic.write_text("1\n", encoding="ascii")
@@ -390,13 +421,24 @@ def test_native_production_is_default_off_source_bound_and_exclusive(
         taw._fr13_fixed32_taw_native_selector()
 
 
-def test_native_production_returns_candidate_products(
+@pytest.mark.parametrize(
+    ("batch_size", "expected_route", "expected_softmax_calls"),
+    (
+        (1, "fixed32_native_precompute_production_candidate_return", 2),
+        (2, "fixed32_pytorch_exact_float_triton_integer_commit", 24),
+        (3, "fixed32_pytorch_exact_float_triton_integer_commit", 24),
+        (4, "fixed32_native_precompute_production_candidate_return", 2),
+    ),
+)
+def test_native_production_uses_candidate_or_exact_reference_fallback(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    batch_size: int,
+    expected_route: str,
+    expected_softmax_calls: int,
 ) -> None:
     topology = taw._fr13_fixed32_topology()
     mode = "tail6_fixed32"
-    batch_size = 1
     _set_fixed_env(monkeypatch, topology, mode)
     monkeypatch.delenv("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", raising=False)
     monkeypatch.delenv(
@@ -419,7 +461,7 @@ def test_native_production_returns_candidate_products(
     )
 
     live_pass = tmp_path / "pass.json"
-    _write_live_pass(live_pass, mode=mode, batch_size=batch_size)
+    _write_pass_bundle(live_pass, mode=mode)
     monkeypatch.setenv(
         "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION", "1"
     )
@@ -436,13 +478,13 @@ def test_native_production_returns_candidate_products(
     )
     work = taw.fr13_fixed32_taw_last_work()
     assert work is not None
-    assert work["taw"]["route"] == (
-        "fixed32_native_precompute_production_candidate_return"
+    assert work["taw"]["route"] == expected_route
+    assert work["taw"]["tensor_call_census"]["full_vocab_softmax_calls"] == (
+        expected_softmax_calls
     )
-    assert work["taw"]["tensor_call_census"]["full_vocab_softmax_calls"] == 2
 
 
-def test_native_production_pass_qualifies_only_its_exact_batch(
+def test_native_production_bundle_warms_all_batches_with_reference_fallback(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -456,22 +498,45 @@ def test_native_production_pass_qualifies_only_its_exact_batch(
         taw, "_FR13_FIXED32_TAW_NATIVE_PRODUCTION_SIDECARS", ()
     )
     live_pass = tmp_path / "pass.json"
-    _write_live_pass(live_pass, mode=mode, batch_size=4)
+    _write_pass_bundle(live_pass, mode=mode)
     payload = taw._fr13_fixed32_taw_native_production_pass(
         path=str(live_pass), expected_mode=mode, expected_batch=4
     )
-    assert payload["covered_batches"] == [4]
+    assert payload["qualified_batches"] == [1, 4]
+    monkeypatch.setenv(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION", "1"
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_PATH", str(live_pass)
+    )
+    assert taw._fr13_fixed32_taw_native_selector(batch_size=1) == "production"
+    assert taw._fr13_fixed32_taw_native_selector(batch_size=2) == "reference"
+    assert taw._fr13_fixed32_taw_native_selector(batch_size=3) == "reference"
+    assert taw._fr13_fixed32_taw_native_selector(batch_size=4) == "production"
     with pytest.raises(RuntimeError, match="batch is not covered by PASS"):
         taw._fr13_fixed32_taw_native_production_pass(
-            path=str(live_pass), expected_mode=mode, expected_batch=1
+            path=str(live_pass), expected_mode=mode, expected_batch=2
         )
 
-    _write_live_pass(live_pass, mode=mode, batch_size=1)
-    payload = taw._fr13_fixed32_taw_native_production_pass(
-        path=str(live_pass), expected_mode=mode, expected_batch=1
+    valid_mask = int(topology.VALID_MASK_BY_MODE[mode])
+    taw._FR13_FIXED32_TAW_WARMUPS.clear()
+    taw.fr13_fixed32_taw_preseed(
+        torch.device("cpu"), mode=mode, valid_mask=valid_mask
     )
-    assert payload["covered_batches"] == [1]
-    with pytest.raises(RuntimeError, match="batch is not covered by PASS"):
+    evidence = taw.fr13_fixed32_taw_warm_execute(
+        torch.device("cpu"),
+        mode=mode,
+        valid_mask=valid_mask,
+        max_batch_size=4,
+        vocab_size=101,
+    )
+    assert evidence["ready"] is True
+    assert evidence["batches"] == (1, 2, 3, 4)
+    assert evidence["executions"] == 4
+    assert evidence["staging_state_restored"] is True
+
+    _write_pass_bundle(live_pass, mode=mode, batches=(4,))
+    with pytest.raises(RuntimeError, match="PASS bundle is invalid"):
         taw._fr13_fixed32_taw_native_production_pass(
             path=str(live_pass), expected_mode=mode, expected_batch=4
         )
@@ -504,7 +569,7 @@ def test_native_production_rejects_tail21_or_derived_schedule_pass(
 ) -> None:
     path = tmp_path / "pass.json"
     mode = "hydra27_fixed32"
-    _write_live_pass(path, mode=mode, batch_size=1)
+    _write_pass_bundle(path, mode=mode)
     payload = json.loads(path.read_text(encoding="ascii"))
     mutate(payload)
     path.write_text(json.dumps(payload), encoding="ascii")
@@ -534,16 +599,27 @@ def test_native_live_pass_emitter_binds_source_and_real_task(
         taw._FR13_FIXED32_TAW_SOURCE_SHA256
     )
     assert payload["candidate"] == taw._FR13_FIXED32_TAW_NATIVE_CANDIDATE
-    assert payload["batch_size"] == 4
     assert payload["valid_mask"] == 0x7ABDFFFF
     assert payload["topology_binding"] == (
         taw._fr13_fixed32_taw_topology_binding(
             taw._fr13_fixed32_topology()
         )
     )
-    assert payload["covered_batches"] == [4]
-    assert payload["reference_returned"] is True
-    assert payload["candidate_returned"] is False
+    assert payload["status"] == "partial"
+    assert payload["qualified_batches"] == [4]
+    assert payload["batch_passes"]["4"]["covered_batches"] == [4]
+
+    taw._fr13_fixed32_taw_native_live_pass_emit(
+        mode="hydra27_fixed32",
+        batch_size=1,
+        task_marker="swe_verified:astropy__astropy-13033",
+        evidence_route="full_graph_replay",
+    )
+    payload = json.loads(path.read_text(encoding="ascii"))
+    assert payload["status"] == "production_ready"
+    assert payload["qualified_batches"] == [1, 4]
+    assert payload["batch_passes"]["1"]["covered_batches"] == [1]
+    assert payload["batch_passes"]["4"]["covered_batches"] == [4]
 
 
 def test_native_live_gate_binds_and_checks_one_graph_replay(
