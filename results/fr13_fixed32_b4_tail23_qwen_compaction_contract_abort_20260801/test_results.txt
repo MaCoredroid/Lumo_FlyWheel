@@ -1,0 +1,13 @@
+Source fix verification:
+  focused failed-compaction and publication tests: PASS, 18 passed
+  full trace and B4 campaign provenance suites: PASS, 170 passed, 1 skipped
+  real completed-campaign structural replay: PASS
+  replay reconciliation: 123 completed, 119 normal, 0 successful compactions, 4 failed compactions
+  Ruff checks, Python compilation, and git diff checks: PASS
+
+The skipped test is an existing optional environment-dependent case. No new
+skip was introduced.
+
+No synthetic performance probe, M128 arm, timing arm, TPS measurement,
+acceptance gate, or formal hardware-floor test was run for this reduced abort
+artifact.
