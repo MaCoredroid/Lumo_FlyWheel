@@ -21,6 +21,7 @@ PAIR = ROOT / "scripts" / "fr13_run_b1_k64_physical32_fullstack_pair.sh"
 LAUNCHER = ROOT / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 PATCHER = ROOT / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
 MANIFEST = ROOT / "scripts" / "fr13_runtime_manifest.py"
+ARTIFACT = ROOT / "results" / "fr13_k64_physical32_b1_fullstack_route_20260801"
 
 
 def _source_module():
@@ -260,6 +261,25 @@ def test_runtime_manifest_closes_new_gate_pair_and_b1_subset() -> None:
         "config/fr13_fixed32/subset_b1_diagnostic_one.json",
     ):
         assert f'"{required}"' in manifest
+
+
+def test_prepared_campaign_requires_corrected_b4_inputs_and_claims_no_measurement() -> None:
+    prepared = ARTIFACT / "prepared_campaign.sh"
+    source = prepared.read_text(encoding="ascii")
+    readiness = json.loads((ARTIFACT / "readiness.json").read_text(encoding="ascii"))
+    assert prepared.stat().st_mode & 0o111
+    for required in (
+        "TAIL23_REVIEWED_B4_TAW_PASS",
+        "TAIL23_REVIEWED_B4_TAW_VERDICT",
+        "HYDRA27_REVIEWED_B4_TAW_PASS",
+        "HYDRA27_REVIEWED_B4_TAW_VERDICT",
+    ):
+        assert required in source
+    assert source.index("validate-reviewed-b4") < source.index("run_mode()")
+    assert readiness["corrected_b4_review_tip"].startswith("e0ac403c2")
+    assert readiness["pre_review_b4_artifacts_accepted"] is False
+    assert readiness["gpu_campaign_run"] is False
+    assert readiness["measurements_present"] is False
 
 
 @pytest.mark.parametrize("mode", sorted(credential.MODE_CONTRACTS))

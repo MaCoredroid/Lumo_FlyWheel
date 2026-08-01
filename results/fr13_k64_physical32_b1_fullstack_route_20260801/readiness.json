@@ -1,0 +1,53 @@
+{
+  "schema": "fr13.fixed32.k64_physical32_b1_fullstack.readiness.v1",
+  "status": "prepared_not_measured",
+  "implementation_branch": "agent/fixed32-b1-fullstack-compose",
+  "implementation_commit": "ca9a606a7546629a3a4d9b064277fe9e650c0f81",
+  "corrected_b4_review_branch": "agent/fixed32-b4-tail23-hydra27-k64-m128-review",
+  "corrected_b4_review_tip": "e0ac403c22525265525957ff15e118ca291e68fa",
+  "corrected_b4_code_fix": "6ed4a55df803c5a7b9190e9c0de0498085a9b9d0",
+  "pre_review_b4_artifacts_accepted": false,
+  "source_contract_schema": "fr13-fixed32-taw-all-parent-v7",
+  "source_contract_sha256": "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290",
+  "source_file_sha256": "3f5a0246ccf429bb95de24a8dfff3a7fcb155a05ea92e9201acb1ed89d8f6fca",
+  "draft_vocab_root": 1,
+  "draft_vocab_k": 65536,
+  "physical_drafts": 31,
+  "physical_rows_root_inclusive": 32,
+  "batch_size": 1,
+  "concurrency": 1,
+  "task_count_per_timing_arm": 4,
+  "tail23": {
+    "mode": "tail6_fixed32",
+    "logical_drafts": 23,
+    "valid_mask": "0x7a9ce7ff"
+  },
+  "hydra27": {
+    "mode": "hydra27_fixed32",
+    "logical_drafts": 27,
+    "valid_mask": "0x7abdffff"
+  },
+  "qrow16_production": true,
+  "sfwd_state_fusion_production": true,
+  "only_timing_arm_delta": "source_v7_all_parent_committer_production_0_to_1",
+  "mandatory_weight_bytes": 32666638208,
+  "mandatory_weight_floor_ms": 119.658015414,
+  "one_sided_u95_cap_ms": 137.6067177261,
+  "formal_floor_acceptance_eligible": false,
+  "formal_floor_acceptance_reason": "exact4 screen only; canonical exact16 one-sided U95 remains required",
+  "gpu_campaign_run": false,
+  "measurements_present": false,
+  "required_external_inputs": [
+    "pinned stock FA2 shared object",
+    "pinned qrow16 FA2 shared object",
+    "corrected reviewed Tail23 B4 production pass and verdict",
+    "corrected reviewed Hydra27 B4 production pass and verdict"
+  ],
+  "verification": {
+    "new_route_tests_passed": 11,
+    "focused_tests_passed": 159,
+    "ruff": "pass",
+    "python_compile": "pass",
+    "bash_parse": "pass"
+  }
+}
