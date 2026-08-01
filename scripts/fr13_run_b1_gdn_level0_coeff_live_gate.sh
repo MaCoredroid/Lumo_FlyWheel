@@ -82,7 +82,7 @@ mkdir -p "$RUNROOT_ABS/sidecars"
   --output "$RUNROOT_ABS/runtime_manifest.at_launch.json"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
-printf 'classification=one_real_swe_verified_k64_b1_byte_diagnostic\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nreference_always_served=1\ncandidate_shadow_only=1\ncandidate=fixed32_gdn_level0_coeff_v1\ntopology=%s\nphysical_rows=32\nlogical_drafts=%s\nvalid_mask=%s\ntask_id=%s\ndraft_vocab_root=1\ndraft_vocab_k=65536\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nsource=%s\nsource_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\nfa2_sha256=%s\nstarted=%s\n' \
+printf 'classification=one_real_swe_verified_k64_b1_byte_diagnostic\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nreference_always_served=1\ncandidate_shadow_only=1\ncandidate=fixed32_gdn_level0_coeff_v1\ncount_invocation=0\ntopology=%s\nphysical_rows=32\nlogical_drafts=%s\nvalid_mask=%s\ntask_id=%s\ndraft_vocab_root=1\ndraft_vocab_k=65536\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nsource=%s\nsource_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\nfa2_sha256=%s\nstarted=%s\n' \
   "$TOPOLOGY" "$LOGICAL_DRAFTS" "$VALID_MASK" \
   "$TASK_ID" "$BLOCK_MAP_SHA256" "$MANDATORY_WEIGHT_BYTES" \
   "$MANDATORY_WEIGHT_FLOOR_MS" "$ONE_SIDED_U95_CAP_MS" \
@@ -110,7 +110,7 @@ if env \
     FR13_MANDATORY_WEIGHT_BYTES="$MANDATORY_WEIGHT_BYTES" \
     FR13_WEIGHT_FLOOR_MS="$MANDATORY_WEIGHT_FLOOR_MS" \
     ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
-    FR10_METRICS=1 FR13_RING_EXPORT=1 FR13_FLAGS_INKERNEL=1 \
+    FR10_METRICS=0 FR13_RING_EXPORT=1 FR13_FLAGS_INKERNEL=1 \
     FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 \
     FR13_FIXED32_GDN_LEVEL0_COEFF=0 \
     FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB=1 \
@@ -150,15 +150,34 @@ LIVE_PASS="$RUNROOT_ABS/$ARM/logs/fr13_fixed32_gdn_level0_coeff.live_pass.json"
   --expected-mode "$TOPOLOGY" \
   > "$RUNROOT_ABS/live_pass_validation.json"
 LIVE_PASS_SHA256=$(sha256sum "$LIVE_PASS" | awk '{print $1}')
+LIVE_PASS_VALIDATION_SHA256=$(sha256sum \
+  "$RUNROOT_ABS/live_pass_validation.json" | awk '{print $1}')
+RUNTIME_MANIFEST_SHA256=$(sha256sum \
+  "$RUNROOT_ABS/runtime_manifest.at_launch.json" | awk '{print $1}')
+EXTERNAL_MANIFEST_SHA256=$(sha256sum \
+  "$RUNROOT_ABS/external_manifest.at_launch.json" | awk '{print $1}')
 "$PYTHON_BIN" - "$LIVE_PASS" "$RUNROOT_ABS/gate_summary.json" \
-  "$SOURCE_COMMIT" "$RUNNER_SHA256" "$SUBSET_SHA256" \
-  "$BLOCK_MAP_SHA256" "$FA2_SHA256" "$LIVE_PASS_SHA256" <<'PY'
+  "$SOURCE_COMMIT" "$SOURCE_SHA256" "$RUNNER_SHA256" "$SUBSET_SHA256" \
+  "$BLOCK_MAP_SHA256" "$FA2_SHA256" "$LIVE_PASS_SHA256" \
+  "$LIVE_PASS_VALIDATION_SHA256" "$RUNTIME_MANIFEST_SHA256" \
+  "$EXTERNAL_MANIFEST_SHA256" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 live_path, out_path = map(Path, sys.argv[1:3])
-source, runner_sha, subset_sha, block_sha, fa2_sha, live_sha = sys.argv[3:]
+(
+    source,
+    source_sha,
+    runner_sha,
+    subset_sha,
+    block_sha,
+    fa2_sha,
+    live_sha,
+    validation_sha,
+    runtime_manifest_sha,
+    external_manifest_sha,
+) = sys.argv[3:]
 live = json.loads(live_path.read_text(encoding="ascii"))
 summary = {
     "schema": "fr13.fixed32.gdn_level0_coeff.b1_gate.v1",
@@ -175,15 +194,20 @@ summary = {
     "draft_vocab_root": 1,
     "draft_vocab_k": 65536,
     "source_commit": source,
+    "kernel_source_sha256": source_sha,
     "runner_sha256": runner_sha,
     "subset_sha256": subset_sha,
     "block_map_sha256": block_sha,
     "fa2_sha256": fa2_sha,
     "live_pass_sha256": live_sha,
+    "live_pass_validation_sha256": validation_sha,
+    "runtime_manifest_sha256": runtime_manifest_sha,
+    "external_manifest_sha256": external_manifest_sha,
     "records": live["records"],
     "compared_bytes": live["compared_bytes"],
     "surfaces": live["surfaces"],
     "scratch_rows": [live["scratch_row_start"]],
+    "count_invocation": live["count_invocation"],
     "raw_byte_equal": live["raw_byte_equal"],
     "state_restored": live["state_restored"],
 }

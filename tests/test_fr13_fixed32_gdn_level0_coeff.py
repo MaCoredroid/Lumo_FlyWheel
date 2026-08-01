@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import importlib.util
 import json
 import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -20,6 +23,13 @@ LAUNCHER_PATH = ROOT / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 BIGDENOM_PATH = ROOT / "scripts" / "fr13_bigdenom_swe_serve_variant.sh"
 RUNNER_PATH = ROOT / "scripts" / "run_swe_bench_q36_a.py"
 TIMING_PATH = ROOT / "scripts" / "fr13_run_b1_gdn_level0_coeff_timing.sh"
+BUILD_PATH = ROOT / "scripts" / "fr13_build_gdn_level0_coeff_sm121.py"
+MANIFEST_PATH = ROOT / "scripts" / "fr13_runtime_manifest.py"
+BUILD_ARTIFACT = (
+    ROOT
+    / "results"
+    / "fr13_fixed32_gdn_level0_coeff_sm121_build_review_20260801"
+)
 
 
 def _function(tree: ast.Module, name: str) -> ast.FunctionDef:
@@ -105,6 +115,43 @@ def _gate_namespace() -> dict[str, object]:
         namespace,
     )
     return namespace
+
+
+def _build_audit_namespace() -> dict[str, object]:
+    tree = ast.parse(BUILD_PATH.read_text(encoding="utf-8"))
+    names = {"_sass_spill_instructions", "_resource_bytes"}
+    functions = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name in names
+    ]
+    assert {node.name for node in functions} == names
+    namespace = {"re": re}
+    exec(
+        compile(
+            ast.Module(body=functions, type_ignores=[]),
+            BUILD_PATH,
+            "exec",
+        ),
+        namespace,
+    )
+    return namespace
+
+
+def _timing_closeout_source() -> str:
+    source = TIMING_PATH.read_text(encoding="utf-8")
+    code = source.split("<<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
+    compile(code, TIMING_PATH, "exec")
+    return code
+
+
+def _load_pass_module():
+    path = ROOT / "scripts" / "fr13_gdn_level0_coeff_pass.py"
+    spec = importlib.util.spec_from_file_location("fr13_gdn_level0_coeff_pass", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_level0_coefficient_scratch_is_disjoint_for_b1_and_b4() -> None:
@@ -224,6 +271,7 @@ def test_live_gate_compares_every_non_scratch_surface_and_restores() -> None:
             state[name].fill_(7)
         return {
             "block_v": 8,
+            "count_invocation": False,
             "launch_key": ("tree_gdn_path", 8, candidate),
             "output": torch.full((), 11, dtype=torch.int32),
         }
@@ -244,6 +292,7 @@ def test_live_gate_compares_every_non_scratch_surface_and_restores() -> None:
         "compared_bytes": 152,
         "scratch_row_start": 31,
         "scratch_rows": 1,
+        "count_invocation": False,
     }
     assert all(torch.equal(state[name], baseline[name]) for name in surfaces)
 
@@ -274,6 +323,7 @@ def test_live_gate_fails_non_scratch_mismatch_after_restore() -> None:
             state["export"][0].fill_(2)
         return {
             "block_v": 8,
+            "count_invocation": False,
             "launch_key": ("tree_gdn_path", 8, candidate),
             "output": torch.ones((), dtype=torch.int32),
         }
@@ -310,6 +360,7 @@ def test_production_resolver_is_source_mode_and_pass_bound(
         "launches_per_layer": 2,
         "scratch_row_start": 31,
         "scratch_rows": 1,
+        "count_invocation": False,
         "compared_bytes": 1234,
         "raw_byte_equal": True,
         "scratch_contained": True,
@@ -351,6 +402,48 @@ def test_production_resolver_is_source_mode_and_pass_bound(
         )
 
 
+def test_host_pass_requires_the_complete_b1_compared_byte_closure() -> None:
+    pass_module = _load_pass_module()
+    payload = {
+        "schema": pass_module.SCHEMA,
+        "status": "pass",
+        "candidate": pass_module.CANDIDATE,
+        "source_sha256": "a" * 64,
+        "task_marker": "swe_verified:astropy__astropy-12907",
+        "mode": "hydra27_fixed32",
+        "batch_size": 1,
+        "covered_batches": [1],
+        "records": 48,
+        "physical_rows": 32,
+        "path_lengths": [5, 7],
+        "launches_per_layer": 2,
+        "scratch_row_start": 31,
+        "scratch_rows": 1,
+        "count_invocation": False,
+        "non_scratch_export_rows_compared": 31,
+        "surfaces": pass_module.SURFACES,
+        "raw_byte_equal": True,
+        "scratch_contained": True,
+        "reference_served": True,
+        "state_restored": True,
+        "compared_bytes": pass_module.EXPECTED_COMPARED_BYTES,
+    }
+    assert pass_module.validate(
+        payload,
+        source_sha256="a" * 64,
+        expected_task_id="astropy__astropy-12907",
+        expected_mode="hydra27_fixed32",
+    ) is payload
+    payload["compared_bytes"] -= 4
+    with pytest.raises(pass_module.PassError, match="compared-byte closure drift"):
+        pass_module.validate(
+            payload,
+            source_sha256="a" * 64,
+            expected_task_id="astropy__astropy-12907",
+            expected_mode="hydra27_fixed32",
+        )
+
+
 def test_production_engagement_is_first_replay_source_bound(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -370,6 +463,7 @@ def test_production_engagement_is_first_replay_source_bound(
                 "task_marker": "swe_verified:astropy__astropy-12907",
                 "mode": "hydra27_fixed32",
                 "covered_batches": [1],
+                "count_invocation": False,
             },
             "_FR13_FIXED32_GDN_LEVEL0_COEFF_PRODUCTION_STATE": {
                 "status": "armed",
@@ -389,6 +483,7 @@ def test_production_engagement_is_first_replay_source_bound(
     artifact = json.loads(engagement_path.read_text(encoding="ascii"))
     assert artifact["status"] == "ENGAGED"
     assert artifact["production_pass_sha256"] == "b" * 64
+    assert artifact["count_invocation"] is False
     assert artifact["fallback"] == 0
 
 
@@ -399,9 +494,11 @@ def test_gate_and_timing_hooks_cross_the_real_swe_runner_boundary() -> None:
     bigdenom = BIGDENOM_PATH.read_text(encoding="utf-8")
     runner = RUNNER_PATH.read_text(encoding="utf-8")
     timing = TIMING_PATH.read_text(encoding="utf-8")
+    manifest = MANIFEST_PATH.read_text(encoding="utf-8")
 
     assert "reference = run(8, False)" in kernel
     assert "candidate = run(8, True)" in kernel
+    assert '"count_invocation": bool(_count)' in kernel
     assert "reference_export[:31]" in kernel
     assert "fixed32_gdn_level0_coeff_live_gate_on_replay(" in patcher
     assert "fixed32_gdn_level0_coeff_production_on_replay(" in patcher
@@ -416,6 +513,183 @@ def test_gate_and_timing_hooks_cross_the_real_swe_runner_boundary() -> None:
     assert "dfwd_gpu_ms_per_step" in timing
     assert "cfwd_gpu_ms_per_step" in timing
     assert "other_wall_ms_per_step" in timing
+    assert "tps_from_committed_tokens_and_wall" in timing
+    assert "runtime_manifest_sha256" in timing
+    assert "production_engagement_sha256" in timing
+    build = BUILD_PATH.read_text(encoding="utf-8")
+    assert '"builder_sha256"' in build
+    assert 'artifact_hashes["resources"]' in build
+    assert 'artifact_hashes["sass"]' in build
+    assert '"COUNT_INVOCATION": False' in build
+    for path in (
+        "scripts/fr13_gdn_level0_coeff_pass.py",
+        "scripts/fr13_run_b1_gdn_level0_coeff_live_gate.sh",
+        "scripts/fr13_run_b1_gdn_level0_coeff_timing.sh",
+    ):
+        assert repr(path) in manifest or f'"{path}"' in manifest
+
+
+def test_offline_resource_audit_parses_addressed_sass_and_stack() -> None:
+    namespace = _build_audit_namespace()
+    spill_lines = namespace["_sass_spill_instructions"]
+    resource_bytes = namespace["_resource_bytes"]
+    sample = """
+        /*0010*/                   LDL R3, [R2] ;
+        /*0020*/              @!P0 STL.64 [R4], R6 ;
+        /*0030*/                   LDG.E R7, desc[UR4][R8.64] ;
+    """
+    assert len(spill_lines(sample)) == 2
+    assert resource_bytes("REG:48 STACK:0 LOCAL:0", "STACK") == [0]
+    assert resource_bytes("REG:48 STACK:0 LOCAL:0", "LOCAL") == [0]
+
+    sass_paths = list(BUILD_ARTIFACT.glob("*.sass.txt"))
+    resource_paths = list(BUILD_ARTIFACT.glob("*.resources.txt"))
+    assert len(sass_paths) == 8
+    assert len(resource_paths) == 8
+    for sass_path in sass_paths:
+        assert not spill_lines(sass_path.read_text(encoding="ascii")), sass_path.name
+    for resource_path in resource_paths:
+        resources = resource_path.read_text(encoding="ascii")
+        assert not any(resource_bytes(resources, "STACK")), resource_path.name
+        assert not any(resource_bytes(resources, "LOCAL")), resource_path.name
+
+    manifest = json.loads(
+        (BUILD_ARTIFACT / "build_manifest.json").read_text(encoding="ascii")
+    )
+    assert manifest["status"] == "pass_zero_spill"
+    assert manifest["production_count_invocation"] is False
+    assert manifest["source_sha256"] == hashlib.sha256(
+        KERNEL_PATH.read_bytes()
+    ).hexdigest()
+    assert manifest["builder_sha256"] == hashlib.sha256(
+        BUILD_PATH.read_bytes()
+    ).hexdigest()
+    records = {record["name"]: record for record in manifest["specializations"]}
+    assert set(records) == {
+        f"b{batch}_{arm}_level{level}"
+        for batch in (1, 4)
+        for arm in ("stock", "candidate")
+        for level in (0, 1)
+    }
+    assert records["b1_stock_level0"]["artifact_sha256"]["cubin"] != records[
+        "b1_candidate_level0"
+    ]["artifact_sha256"]["cubin"]
+
+
+def test_timing_closeout_reconciles_units_phases_tps_and_provenance(
+    tmp_path: Path,
+) -> None:
+    task_ids = [
+        "astropy__astropy-12907",
+        "astropy__astropy-13033",
+        "astropy__astropy-13236",
+        "astropy__astropy-13398",
+    ]
+    subset = tmp_path / "subset.json"
+    stock_path = tmp_path / "stock.json"
+    candidate_path = tmp_path / "candidate.json"
+    engagement_path = tmp_path / "engagement.json"
+    out_path = tmp_path / "summary.json"
+    subset.write_text(json.dumps({"instance_ids": task_ids}), encoding="ascii")
+
+    def measurement(wall_ms: float, sfwd_seconds: float) -> dict[str, object]:
+        accepted = 3.0
+        return {
+            "schema": "fr13.measure.deploy_speed.v1",
+            "regime": "deployment",
+            "instrument": "OFF",
+            "batch_size": 1,
+            "n_tasks": 4,
+            "task_instance_ids": task_ids,
+            "step_wall_ms": wall_ms,
+            "wall_s_per_event": wall_ms / 1000.0,
+            "events_per_step": 1.0,
+            "rows_per_step": 32.0,
+            "s_per_fwd_gpu": sfwd_seconds,
+            "s_per_fwd_gpu_per_forward": sfwd_seconds,
+            "drafter_gpu_ms_per_step": 50.0,
+            "committer_gpu_ms_per_step": 20.0,
+            "accept_per_event": accepted,
+            "measured_tps_fullstep_wall": (accepted + 1.0) * 1000.0 / wall_ms,
+            "wall_steps_measured": 100.0,
+        }
+
+    stock = measurement(200.0, 0.1)
+    candidate = measurement(190.0, 0.09)
+    stock_path.write_text(json.dumps(stock), encoding="utf-8")
+    candidate_path.write_text(json.dumps(candidate), encoding="utf-8")
+    source_sha = "1" * 64
+    pass_sha = "2" * 64
+    engagement_path.write_text(
+        json.dumps(
+            {
+                "schema": "fr13.fixed32.gdn_level0_coeff.production_engagement.v1",
+                "status": "ENGAGED",
+                "candidate": "fixed32_gdn_level0_coeff_v1",
+                "source_sha256": source_sha,
+                "production_pass_sha256": pass_sha,
+                "task_marker": "swe_verified:astropy__astropy-12907",
+                "mode": "hydra27_fixed32",
+                "graph_signature": "3" * 64,
+                "batch_size": 1,
+                "records": 48,
+                "physical_rows": 32,
+                "path_lengths": [5, 7],
+                "launches_per_layer": 2,
+                "scratch_row_start": 31,
+                "count_invocation": False,
+                "fallback": 0,
+                "observed_full_graph_replays_at_least": 1,
+            }
+        ),
+        encoding="ascii",
+    )
+    arguments = [
+        str(subset),
+        str(stock_path),
+        str(candidate_path),
+        str(engagement_path),
+        str(out_path),
+        "hydra27_fixed32",
+        "a" * 40,
+        source_sha,
+        "4" * 64,
+        "5" * 64,
+        "6" * 64,
+        "7" * 64,
+        pass_sha,
+        "8" * 64,
+        "9" * 64,
+        "b" * 64,
+        "119.658015414",
+        "137.6067177261",
+    ]
+    completed = subprocess.run(
+        [sys.executable, "-", *arguments],
+        input=_timing_closeout_source(),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    summary = json.loads(out_path.read_text(encoding="ascii"))
+    assert summary["stock"]["phase_reconciliation_abs_error_ms"] == 0.0
+    assert summary["candidate"]["tps_reconciliation_abs_error"] == 0.0
+    assert summary["candidate"]["committed_tokens_per_event"] == 4.0
+    assert summary["candidate_id"] == "fixed32_gdn_level0_coeff_v1"
+    assert summary["runtime_manifest_sha256"] == "8" * 64
+
+    candidate["measured_tps_fullstep_wall"] += 1.0
+    candidate_path.write_text(json.dumps(candidate), encoding="utf-8")
+    failed = subprocess.run(
+        [sys.executable, "-", *arguments],
+        input=_timing_closeout_source(),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert failed.returncode != 0
+    assert "full-wall TPS does not reconcile" in failed.stderr
 
 
 try:
