@@ -1,0 +1,66 @@
+{
+  "schema": "fr13.fixed32.bf16_gemvx_m1.b1_readiness.v1",
+  "created_at_utc": "2026-08-01T12:14:02Z",
+  "status": "SOURCE_AND_BUILD_READY_GPU_GATE_NOT_RUN",
+  "branch": "agent/fixed32-fullhead-m1-gemvx",
+  "source_checkpoint": "531ac32c7fff4656e593af024dc13273b89ed3c1",
+  "candidate": {
+    "source": "csrc/fr13_bf16_gemvx_m1.cu",
+    "source_sha256": "26ea8aad9f891b5e758a39464209d6f82008a10fac8da4c02ee052e839218a54",
+    "binary": "fr13_bf16_gemvx_m1.abi3.so",
+    "binary_sha256": "7d6c549e741d8fbbc54732ba5873a8c01f7f089f15a8589ef51eb49a45f5e6d5",
+    "binary_bytes": 162160,
+    "build_attestation": "build_attestation.json",
+    "build_attestation_sha256": "0168d7e50f14b8b87ef279ba9c5760bd06fee5d9492e3f7c02ac0be0ad85f589",
+    "torch_version": "2.10.0+cu130",
+    "cuda_release": "13.0",
+    "cuda_arch": "12.1a",
+    "grid": [31040, 1, 1],
+    "block": [16, 8, 1],
+    "dynamic_shared_bytes": 544,
+    "registers_per_thread": 18,
+    "gemv_mnk": [1, 248320, 5120],
+    "selector": "FR13_DRAFT_HEAD_M1_LIVE_AB",
+    "selector_default": 0,
+    "production_enabled": false
+  },
+  "live_gate": {
+    "suite": "SWE-Verified",
+    "instance_id": "astropy__astropy-12907",
+    "batch_size": 1,
+    "concurrency": 1,
+    "head_positions": ["root", "mtp1", "mtp2", "mtp3", "mtp4"],
+    "comparison": "raw torch.int16 views over all 248320 BF16 logits",
+    "served_return": "stock reference BF16 logits computed first and unchanged",
+    "runner": "scripts/fr13_run_b1_draft_head_m1_live.sh",
+    "validator": "scripts/fr13_draft_head_m1_validate.py",
+    "run_completed": false,
+    "performance_measurement": false,
+    "acceptance_eligible": false
+  },
+  "floor_accounting": {
+    "mandatory_weight_bytes_per_event": 42025179008,
+    "mandatory_weight_floor_ms_per_event": 153.938384645,
+    "measured": false
+  },
+  "verification": {
+    "build_attestation_validation": "PASS",
+    "python_compile": "PASS",
+    "shell_syntax": "PASS",
+    "ruff": "PASS",
+    "focused_and_neighbor_tests_passed": 28,
+    "broad_fixed32_tests_passed": 667,
+    "broad_fixed32_tests_skipped": 8,
+    "gpu_used": false,
+    "docker_launched": false,
+    "real_swe_task_run": false
+  },
+  "claims": {
+    "byte_parity": false,
+    "speed": false,
+    "hardware_floor": false,
+    "quality": false,
+    "b4": false,
+    "acceptance": false
+  }
+}

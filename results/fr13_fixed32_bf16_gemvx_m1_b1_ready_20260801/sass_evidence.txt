@@ -1,0 +1,36 @@
+FR13 BF16 M1 candidate static SASS/resource evidence
+=====================================================
+
+Artifact SHA-256:
+7d6c549e741d8fbbc54732ba5873a8c01f7f089f15a8589ef51eb49a45f5e6d5
+
+cuobjdump identity:
+arch = sm_121a
+code version = [1,8]
+host = linux
+compile_size = 64bit
+
+Resource usage:
+GLOBAL:28 CONSTANT[4]:224
+REG:18 STACK:0 SHARED:1024 LOCAL:0 CONSTANT[0]:928
+
+The resource report rounds dynamic shared allocation to 1024 bytes. The
+kernel launch requests exactly 8 * 17 * sizeof(float) = 544 bytes.
+
+Selected instruction sequence from cuobjdump --dump-sass:
+
+/*00f0*/ LDG.E.U16.CONSTANT R12, desc[UR4][R4.64] ;
+/*0100*/ LDG.E.U16.CONSTANT R6, desc[UR4][R6.64] ;
+/*0170*/ FFMA R2, R13, R12, R2 ;
+
+/*0250*/ @!P1 FADD R4, R4, R7 ;
+/*02b0*/ @!P0 FADD R8, R7, R8 ;
+/*0310*/ @!P1 FADD R2, R2, R7 ;
+/*03a0*/ FADD R2, R2, R7 ;
+/*03b0*/ FFMA R2, R2, R8, R9 ;
+/*03c0*/ F2FP.BF16.F32.PACK_AB R0, RZ, R2 ;
+/*03e0*/ STG.E.U16 desc[UR4][R2.64], R0 ;
+
+This is static build evidence only. It is not runtime byte-equivalence or
+performance evidence.
+

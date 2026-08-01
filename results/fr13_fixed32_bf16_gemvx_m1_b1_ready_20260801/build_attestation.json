@@ -1,0 +1,52 @@
+{
+  "binary": {
+    "bytes": 162160,
+    "mode": "0555",
+    "path": "results/fr13_fixed32_bf16_gemvx_m1_b1_ready_20260801/fr13_bf16_gemvx_m1.abi3.so",
+    "sha256": "7d6c549e741d8fbbc54732ba5873a8c01f7f089f15a8589ef51eb49a45f5e6d5"
+  },
+  "byte_equality_claim": false,
+  "cuda_arch": "12.1a",
+  "cuda_release": "13.0",
+  "kernel_contract": {
+    "accumulator": "fp32 positive zero",
+    "block": [
+      16,
+      8,
+      1
+    ],
+    "dynamic_shared_bytes": 544,
+    "epilogue": "__fmaf_rn(1.0f, reduced_sum, 0.0f)",
+    "gemv_mnk": [
+      1,
+      248320,
+      5120
+    ],
+    "grid": [
+      31040,
+      1,
+      1
+    ],
+    "k_partition_lanes": 16,
+    "lane_k_iterations": 320,
+    "multiply_accumulate": "__fmaf_rn dependent scalar chain",
+    "output": "__float2bfloat16_rn",
+    "reduction": "__fadd_rn shared-memory tree",
+    "reduction_strides": [
+      8,
+      4,
+      2,
+      1
+    ],
+    "shared_row_stride_floats": 17
+  },
+  "performance_measurement": false,
+  "production_default_enabled": false,
+  "schema": "fr13.fixed32.bf16_gemvx_m1_build.v1",
+  "source": {
+    "path": "csrc/fr13_bf16_gemvx_m1.cu",
+    "sha256": "26ea8aad9f891b5e758a39464209d6f82008a10fac8da4c02ee052e839218a54"
+  },
+  "status": "BUILT_UNQUALIFIED",
+  "torch_version": "2.10.0+cu130"
+}
