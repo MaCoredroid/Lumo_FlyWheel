@@ -28974,6 +28974,8 @@ _FR13_FIXED32_SAMPLE_COND = _fr13_sg_threading.Condition(
 _FR13_FIXED32_SAMPLE_PENDING = {}
 _FR13_FIXED32_SAMPLE_GENERATION = 0
 _FR13_FIXED32_SAMPLE_FAILURE = None
+# A boundary flush claims the next closed interval before blocked executes wake.
+_FR13_FIXED32_FLUSH_QUIESCING = False
 _FR13_FIXED32_SAMPLE_TLS = _fr13_sg_threading.local()
 _fr13_sg_orig_execute_model = GPUModelRunner.execute_model
 _fr13_fixed32_orig_sample_tokens = GPUModelRunner.sample_tokens
@@ -29005,7 +29007,10 @@ def _fr13_sg_execute_model_locked(self, *a, **k):
     key = id(self)
     with _FR13_FIXED32_SAMPLE_COND:
         while (
-            key in _FR13_FIXED32_SAMPLE_PENDING
+            (
+                key in _FR13_FIXED32_SAMPLE_PENDING
+                or _FR13_FIXED32_FLUSH_QUIESCING
+            )
             and _FR13_FIXED32_SAMPLE_FAILURE is None
         ):
             _FR13_FIXED32_SAMPLE_COND.wait()
@@ -29897,42 +29902,67 @@ def _fr13_f32_flush_break_wall_chain():
 
 
 def _fr13_f32_flush_one(request):
-    global _FR13_FIXED32_FLUSH_GENERATION, _FR13_FIXED32_FLUSH_TERMINAL
+    global _FR13_FIXED32_FLUSH_GENERATION
+    global _FR13_FIXED32_FLUSH_QUIESCING
+    global _FR13_FIXED32_FLUSH_TERMINAL
     action = request["action"]
-    with _FR13_SG_EXEC_LOCK:
-        # The protocol permits exactly this one global CUDA synchronization.
-        torch.cuda.synchronize()
-        (
-            _gdn, events, _steps, _first, _last, sfwd, dfwd, cfwd,
-        ) = _fr13_f32_flush_runtime_state()
-        for timer in (sfwd, dfwd, cfwd):
-            if timer is not None:
-                timer._drain(False)
-        _fr13_f32_flush_reconcile()
-        counters = _fr13_f32_flush_counters(require_drained=True)
-        _fr13_f32_flush_write_boundary(request, counters)
-        # Counters/snapshot describe the closed interval ending here. Break
-        # only after persistence so the next wall sample cannot name a
-        # predecessor from before this task boundary.
-        _fr13_f32_flush_break_wall_chain()
-        if sfwd is not None:
-            sfwd._dump_json(final=(action == "final"), with_samples=True)
-        if dfwd is not None:
-            dfwd._dump()
-        if cfwd is not None:
-            cfwd._dump()
-        _fr13_f32_flush_write_census(events, final=(action == "final"))
-        _FR13_FIXED32_FLUSH_GENERATION = request["generation"]
-        if action == "final":
-            _FR13_FIXED32_FLUSH_TERMINAL = True
-        # Ack is the final filesystem replacement in a successful transaction.
-        _fr13_f32_flush_write_ack(
-            generation=request["generation"],
-            nonce=request["nonce"],
-            action=action,
-            status="ok",
-            counters=counters,
-        )
+    with _FR13_FIXED32_SAMPLE_COND:
+        if _FR13_FIXED32_FLUSH_QUIESCING:
+            raise RuntimeError("fixed32 flush quiescence is already active")
+        _FR13_FIXED32_FLUSH_QUIESCING = True
+        try:
+            while (
+                _FR13_FIXED32_SAMPLE_PENDING
+                and _FR13_FIXED32_SAMPLE_FAILURE is None
+            ):
+                _FR13_FIXED32_SAMPLE_COND.wait()
+            if _FR13_FIXED32_SAMPLE_FAILURE is not None:
+                failure_summary, failure_cause = (
+                    _FR13_FIXED32_SAMPLE_FAILURE
+                )
+                failure_error = RuntimeError(
+                    "FR13 fixed32 prior sample failed before flush: "
+                    + failure_summary
+                )
+                if failure_cause is not None:
+                    raise failure_error from failure_cause
+                raise failure_error
+            # The protocol permits exactly this one global CUDA synchronization.
+            torch.cuda.synchronize()
+            (
+                _gdn, events, _steps, _first, _last, sfwd, dfwd, cfwd,
+            ) = _fr13_f32_flush_runtime_state()
+            for timer in (sfwd, dfwd, cfwd):
+                if timer is not None:
+                    timer._drain(False)
+            _fr13_f32_flush_reconcile()
+            counters = _fr13_f32_flush_counters(require_drained=True)
+            _fr13_f32_flush_write_boundary(request, counters)
+            # Counters/snapshot describe the closed interval ending here. Break
+            # only after persistence so the next wall sample cannot name a
+            # predecessor from before this task boundary.
+            _fr13_f32_flush_break_wall_chain()
+            if sfwd is not None:
+                sfwd._dump_json(final=(action == "final"), with_samples=True)
+            if dfwd is not None:
+                dfwd._dump()
+            if cfwd is not None:
+                cfwd._dump()
+            _fr13_f32_flush_write_census(events, final=(action == "final"))
+            _FR13_FIXED32_FLUSH_GENERATION = request["generation"]
+            if action == "final":
+                _FR13_FIXED32_FLUSH_TERMINAL = True
+            # Ack is the final filesystem replacement in a successful transaction.
+            _fr13_f32_flush_write_ack(
+                generation=request["generation"],
+                nonce=request["nonce"],
+                action=action,
+                status="ok",
+                counters=counters,
+            )
+        finally:
+            _FR13_FIXED32_FLUSH_QUIESCING = False
+            _FR13_FIXED32_SAMPLE_COND.notify_all()
 
 
 def _fr13_f32_flush_worker():

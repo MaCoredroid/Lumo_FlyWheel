@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import ast
 import importlib.util
 import py_compile
 import sys
 import threading
+import time
 import types
 from pathlib import Path
 
@@ -28,6 +30,27 @@ def _load_fixed32_patcher(
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _fixed_flush_definition(name: str) -> ast.FunctionDef:
+    tree = ast.parse(PATCHER_PATH.read_text(encoding="utf-8"))
+    sources = [
+        ast.literal_eval(node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "fixed_flush"
+            for target in node.targets
+        )
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    ]
+    assert len(sources) == 1
+    return next(
+        node
+        for node in ast.parse(sources[0]).body
+        if isinstance(node, ast.FunctionDef) and node.name == name
+    )
 
 
 def _install_runtime_stubs(
@@ -441,6 +464,162 @@ def test_fixed32_async_gate_waits_through_drafter_proposal(
     assert runner.sample_tokens(None) == "sampled"
     assert pending == {}
     assert namespace["_FR13_FIXED32_SAMPLE_FAILURE"] is None
+
+
+def test_fixed32_flush_has_priority_after_inflight_proposal_seals(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    patcher = _load_fixed32_patcher(monkeypatch)
+    target = tmp_path / "gpu_model_runner.py"
+    target.write_text(
+        "import threading\n"
+        "sample_entered = threading.Event()\n"
+        "sample_continue = threading.Event()\n"
+        "proposal = type('Proposal', (), {'current': None})()\n"
+        "order = []\n"
+        "class GPUModelRunner:\n"
+        "    def __init__(self):\n"
+        "        self.execute_model_state = None\n"
+        "        self.execute_calls = 0\n"
+        "    def execute_model(self):\n"
+        "        self.execute_calls += 1\n"
+        "        if self.execute_calls == 1:\n"
+        "            self.execute_model_state = object()\n"
+        "            return None\n"
+        "        order.append('execute-2')\n"
+        "        self.execute_model_state = None\n"
+        "        return 'executed-2'\n"
+        "    def _copy_draft_token_ids_to_cpu(self, scheduler_output):\n"
+        "        return None\n"
+        "    def sample_tokens(self, grammar_output=None):\n"
+        "        self.execute_model_state = None\n"
+        "        proposal.current = object()\n"
+        "        sample_entered.set()\n"
+        "        assert sample_continue.wait(2)\n"
+        "        scheduler_output = object()\n"
+        "        if True:\n"
+        "            if True:\n"
+        "                self._copy_draft_token_ids_to_cpu(scheduler_output)\n"
+        "                proposal.current = None\n"
+        "                # FR13_FIXED32_DRAFTER_PROPOSAL_SEALED\n"
+        "        return 'sampled'\n"
+    )
+    patcher.GPU_MODEL_RUNNER_PATH = target
+    assert patcher._patch_gpu_model_runner_exec_lock() is True
+    gate_source = target.read_text().split(
+        "# FR13_FIXED32_FLUSH: queue-only SIGUSR2 control plane",
+        1,
+    )[0]
+    namespace: dict[str, object] = {}
+    exec(compile(gate_source, str(target), "exec"), namespace)
+    flush_definition = _fixed_flush_definition("_fr13_f32_flush_one")
+    exec(
+        compile(
+            ast.Module(body=[flush_definition], type_ignores=[]),
+            "<fixed32-flush-one>",
+            "exec",
+        ),
+        namespace,
+    )
+
+    order = namespace["order"]
+    proposal = namespace["proposal"]
+    namespace.update(
+        {
+            "_FR13_FIXED32_FLUSH_GENERATION": 0,
+            "_FR13_FIXED32_FLUSH_TERMINAL": False,
+            "torch": types.SimpleNamespace(
+                cuda=types.SimpleNamespace(
+                    synchronize=lambda: order.append("synchronize")
+                )
+            ),
+            "_fr13_f32_flush_runtime_state": lambda: (
+                None,
+                [],
+                0,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ),
+            "_fr13_f32_flush_reconcile": lambda: (
+                order.append("reconcile")
+                if proposal.current is None
+                else pytest.fail("flush reconciled an in-flight proposal")
+            ),
+            "_fr13_f32_flush_counters": (
+                lambda *, require_drained: {"drained": require_drained}
+            ),
+            "_fr13_f32_flush_write_boundary": (
+                lambda _request, _counters: order.append("flush-boundary")
+            ),
+            "_fr13_f32_flush_break_wall_chain": lambda: None,
+            "_fr13_f32_flush_write_census": (
+                lambda _events, *, final: None
+            ),
+            "_fr13_f32_flush_write_ack": lambda **_kwargs: order.append(
+                "flush-ack"
+            ),
+        }
+    )
+    runner = namespace["GPUModelRunner"]()
+    assert runner.execute_model() is None
+
+    sample_result: list[object] = []
+    sample_thread = threading.Thread(
+        target=lambda: sample_result.append(runner.sample_tokens(None))
+    )
+    sample_thread.start()
+    assert namespace["sample_entered"].wait(1)
+
+    flush_error: list[BaseException] = []
+
+    def flush() -> None:
+        try:
+            namespace["_fr13_f32_flush_one"](
+                {
+                    "action": "snapshot",
+                    "generation": 1,
+                    "nonce": "nonce-1",
+                }
+            )
+        except BaseException as exc:
+            flush_error.append(exc)
+
+    flush_thread = threading.Thread(target=flush)
+    flush_thread.start()
+    deadline = time.monotonic() + 1
+    while (
+        not namespace["_FR13_FIXED32_FLUSH_QUIESCING"]
+        and time.monotonic() < deadline
+    ):
+        time.sleep(0.001)
+    assert namespace["_FR13_FIXED32_FLUSH_QUIESCING"] is True
+    assert flush_thread.is_alive()
+
+    execute_result: list[object] = []
+    execute_thread = threading.Thread(
+        target=lambda: execute_result.append(runner.execute_model())
+    )
+    execute_thread.start()
+    time.sleep(0.05)
+    assert execute_thread.is_alive()
+
+    namespace["sample_continue"].set()
+    sample_thread.join(1)
+    flush_thread.join(1)
+    execute_thread.join(1)
+    assert not sample_thread.is_alive()
+    assert not flush_thread.is_alive()
+    assert not execute_thread.is_alive()
+    assert flush_error == []
+    assert sample_result == ["sampled"]
+    assert execute_result == ["executed-2"]
+    assert order.index("flush-boundary") < order.index("execute-2")
+    assert namespace["_FR13_FIXED32_SAMPLE_PENDING"] == {}
+    assert namespace["_FR13_FIXED32_FLUSH_QUIESCING"] is False
 
 
 def test_fixed32_async_gate_raises_on_a_completed_unsealed_sample(

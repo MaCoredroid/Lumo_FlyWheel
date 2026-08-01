@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import ast
-import contextlib
 import importlib.util
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -466,10 +466,14 @@ def test_explicit_flush_emits_complete_timer_sidecars(
     cfwd = _Timer("cfwd")
     counters = {"steps": 7}
     request = {"action": action, "generation": 4, "nonce": "nonce-4"}
+    sample_condition = threading.Condition(threading.RLock())
     namespace: dict[str, object] = {
         "_FR13_FIXED32_FLUSH_GENERATION": 3,
+        "_FR13_FIXED32_FLUSH_QUIESCING": False,
         "_FR13_FIXED32_FLUSH_TERMINAL": False,
-        "_FR13_SG_EXEC_LOCK": contextlib.nullcontext(),
+        "_FR13_FIXED32_SAMPLE_COND": sample_condition,
+        "_FR13_FIXED32_SAMPLE_PENDING": {},
+        "_FR13_FIXED32_SAMPLE_FAILURE": None,
         "torch": SimpleNamespace(
             cuda=SimpleNamespace(synchronize=lambda: calls.append("synchronize"))
         ),
@@ -532,4 +536,95 @@ def test_explicit_flush_emits_complete_timer_sidecars(
         ),
     ]
     assert namespace["_FR13_FIXED32_FLUSH_GENERATION"] == 4
+    assert namespace["_FR13_FIXED32_FLUSH_QUIESCING"] is False
     assert namespace["_FR13_FIXED32_FLUSH_TERMINAL"] is is_final
+
+
+def test_flush_fails_closed_on_prior_sample_failure() -> None:
+    source = _fixed_flush_source()
+    tree = ast.parse(source)
+    flush_definition = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_fr13_f32_flush_one"
+    )
+    cause = ValueError("sample failed")
+    calls: list[str] = []
+    namespace: dict[str, object] = {
+        "_FR13_FIXED32_FLUSH_GENERATION": 3,
+        "_FR13_FIXED32_FLUSH_QUIESCING": False,
+        "_FR13_FIXED32_FLUSH_TERMINAL": False,
+        "_FR13_FIXED32_SAMPLE_COND": threading.Condition(threading.RLock()),
+        "_FR13_FIXED32_SAMPLE_PENDING": {},
+        "_FR13_FIXED32_SAMPLE_FAILURE": ("sample failed", cause),
+        "torch": SimpleNamespace(
+            cuda=SimpleNamespace(synchronize=lambda: calls.append("synchronize"))
+        ),
+        "_fr13_f32_flush_write_boundary": (
+            lambda _request, _counters: calls.append("boundary")
+        ),
+        "_fr13_f32_flush_write_ack": lambda **_kwargs: calls.append("ack"),
+    }
+    exec(
+        compile(
+            ast.Module(body=[flush_definition], type_ignores=[]),
+            "<fixed32-flush-one>",
+            "exec",
+        ),
+        namespace,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="prior sample failed before flush: sample failed",
+    ) as flush_error:
+        namespace["_fr13_f32_flush_one"](
+            {
+                "action": "snapshot",
+                "generation": 4,
+                "nonce": "nonce-4",
+            }
+        )
+
+    assert flush_error.value.__cause__ is cause
+    assert calls == []
+    assert namespace["_FR13_FIXED32_FLUSH_GENERATION"] == 3
+    assert namespace["_FR13_FIXED32_FLUSH_QUIESCING"] is False
+
+
+def test_flush_reconcile_still_rejects_a_stranded_proposal() -> None:
+    source = _fixed_flush_source()
+    tree = ast.parse(source)
+    reconcile_definition = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_f32_flush_reconcile"
+    )
+    gdn = SimpleNamespace(_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT=object())
+    namespace: dict[str, object] = {
+        "_fr13_f32_flush_runtime_state": lambda: (
+            gdn,
+            [],
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+    }
+    exec(
+        compile(
+            ast.Module(body=[reconcile_definition], type_ignores=[]),
+            "<fixed32-flush-reconcile>",
+            "exec",
+        ),
+        namespace,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="fixed32 flush saw an incomplete drafter proposal",
+    ):
+        namespace["_fr13_f32_flush_reconcile"]()
