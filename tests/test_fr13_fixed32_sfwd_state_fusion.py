@@ -289,10 +289,15 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     assert "tl.sum" not in candidate
     assert "tl.dot" not in candidate
     assert "source_stage" in candidate
+    assert "x_stride_row" in candidate
+    assert "* x_stride_row" in candidate
     assert "FR13_FIXED32_SFWD_STATE_FUSION source candidate is eager" in launcher
     assert "actual_source_flat" in launcher
     assert "source_flat.detach().cpu().tolist()" in launcher
     assert 'geometry_failures.append("x_shape")' in launcher
+    assert 'geometry_failures.append("x_channel_stride")' in launcher
+    assert 'geometry_failures.append("x_row_stride")' in launcher
+    assert 'geometry_failures.append("x_contiguous")' not in launcher
     assert 'geometry_failures.append("source_stage_contiguous")' in launcher
     assert '"spec_state_indices": (' in launcher
     assert "observed={observed!r}" in launcher
