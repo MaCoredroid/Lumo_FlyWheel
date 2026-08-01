@@ -39,12 +39,14 @@ The immediate candidate is therefore a shape-gated wide-N implementation in
 * `StreamKScheduler`, forced `StreamK`, one split, deterministic reduction.
 * Exact fixed32 row set and exact five production projection shapes only.
 
-That implementation was compiling on the sibling branch when this audit
-closed. It is not integrated or timed here. The best defensible analytical
-recovery is only 10.923627 ms/event; the likely range remains 0 to 10.923627 ms
-until real exact4 timing. It can regress because of Stream-K fixups, workspace,
-and the compiled resource footprint. A rejected candidate has zero production
-saving.
+That implementation is committed and pushed as `7fa0ac0e4` on
+`agent/fixed32-streamk-wide256-f963`; 127 static tests passed and the built
+binary SHA-256 is
+`b957cf49da2977056661443192fc2725e153adba7f21fb522c07b439c04540ee`. It is
+not GPU-gated or timed. The best defensible analytical recovery is only
+10.923627 ms/event; the likely range remains 0 to 10.923627 ms until real
+exact4 timing. It can regress because of Stream-K fixups, workspace, and the
+compiled resource footprint. A rejected candidate has zero production saving.
 
 ## Why one kernel is insufficient
 

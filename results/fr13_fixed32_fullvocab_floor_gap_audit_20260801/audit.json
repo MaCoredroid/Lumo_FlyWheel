@@ -357,7 +357,12 @@
       "splits": 1,
       "reduction": "deterministic",
       "gates": "M in {32,64,96,128} and exact five production (N,K) shapes only",
-      "implementation_state": "implemented and compiling on sibling branch at audit close; not timed and not integrated by this artifact"
+      "implementation_state": "implemented, tested, committed, and pushed on sibling branch; not GPU-gated or timed",
+      "implementation_branch": "agent/fixed32-streamk-wide256-f963",
+      "implementation_commit": "7fa0ac0e4061f62bd3661ea1ae8f8af66c6dde66",
+      "implementation_base_commit": "c9c9354fb",
+      "static_tests_passed": 127,
+      "built_binary_sha256": "b957cf49da2977056661443192fc2725e153adba7f21fb522c07b439c04540ee"
     },
     "why_this_candidate": [
       "It targets the largest quantified kernel group: historical target CUTLASS attribution was 112.313 ms/event.",
@@ -443,6 +448,10 @@
     {
       "commit": "3fbcf9c95b76fbc943f92e740859921db6b5cf03",
       "use": "full-vocabulary fixed-M32 drafter-head source geometry"
+    },
+    {
+      "commit": "7fa0ac0e4061f62bd3661ea1ae8f8af66c6dde66",
+      "use": "forced wide256 deterministic Stream-K implementation and static verification"
     }
   ]
 }
