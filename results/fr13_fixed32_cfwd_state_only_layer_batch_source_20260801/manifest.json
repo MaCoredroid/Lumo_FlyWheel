@@ -1,0 +1,50 @@
+{
+  "base_commit": "080c417ed627e155c98e715327e0fdeb48d542ab",
+  "branch": "agent/fixed32-cfwd-layerbatch-b4-route-080c",
+  "candidate": {
+    "default_on": false,
+    "logical_layers": 48,
+    "native_reference_physical_recurrence_calls": 48,
+    "candidate_physical_recurrence_calls": 1,
+    "path_capacity": 16,
+    "state_only_output_elided": true
+  },
+  "geometry": {
+    "key_heads": 16,
+    "value_heads": 48,
+    "key_dim": 128,
+    "value_dim": 128,
+    "block_k": 128,
+    "block_v": 32,
+    "warps": 4,
+    "stages": 3
+  },
+  "removed_work": {
+    "formula_fp32_fmas_per_event": "48*B*16*48*128*128",
+    "b1": {
+      "fp32_fmas": 603979776,
+      "logical_q_load_bytes": 37748736,
+      "dead_bf16_output_store_bytes": 9437184
+    },
+    "b4": {
+      "fp32_fmas": 2415919104,
+      "logical_q_load_bytes": 150994944,
+      "dead_bf16_output_store_bytes": 37748736
+    }
+  },
+  "qualification": {
+    "gate_event_accounting": "blocked_pending_dynamic_last_event_guard",
+    "powered_gate_physical_recurrence_calls": 50,
+    "pregate_zero_accept_physical_recurrence_calls": 48,
+    "gpu_compile": "pending",
+    "real_swe_verified_byte_gate": "pending",
+    "real_swe_verified_timing": "pending",
+    "performance_claim": null
+  },
+  "schema": "fr13.fixed32.cfwd_state_only_layer_batch_source.v1",
+  "source_sha256": {
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "f58224ca701a5f57a2b4447fbfc50e4e4ce7545e9a42490ffb8eaa554fc2209c",
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "0db47085e359efda7ebd5f53d003e6e47539f1ba037772fb2cfec0d1c9d38050",
+    "tests/test_fr13_fixed32_committer_layer_batch.py": "3b8d0999703c8771f9fcd21802b19d4638477adba35c1c39ca38b5d172ac5e38"
+  }
+}

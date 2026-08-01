@@ -4854,6 +4854,7 @@ def _fr13_fixed32_observed_commit(
             and (
                 int(committer_contract.get("native_reference_fused_calls", -1))
                 != 48
+                or committer_contract.get("state_only_output_elided") is not True
                 or committer_contract.get("byte_gate")
                 != "required_on_first_real_nonzero_accept"
             )

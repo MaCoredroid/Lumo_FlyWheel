@@ -1,0 +1,22 @@
+Focused source tests:
+
+  80 passed in 2.69s
+
+Files:
+
+  tests/test_fr13_fixed32_committer_layer_batch.py
+  tests/test_fr13_fixed32_gdn_schedule.py
+  tests/test_fr13_fixed32_final_full_preseed.py
+  tests/test_fr13_fixed32_conv_commit_wiring.py
+  tests/test_fr13_fixed32_taw_exact_commit_kernel.py
+
+Additional checks:
+
+  Python compile: pass
+  Ruff changed kernel/test files: pass
+  git diff --check: pass
+
+Baseline note:
+
+  tests/test_fr10_phase4_sampled_committer_wiring.py has 12 passes and three
+  failures at both base 080c417ed and this candidate source.

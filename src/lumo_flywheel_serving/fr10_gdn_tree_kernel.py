@@ -9584,22 +9584,18 @@ def _fr13_fixed32_committer_fast_state(
     return state, batch
 
 
-@triton.jit(do_not_specialize=["N", "T"])
+@triton.jit(do_not_specialize=["T"])
 def _fr13_fixed32_committer_native_layer_batch_kernel(
     A_logs,
     a,
     b,
     dt_biases,
-    q,
     k,
     v,
-    o,
     bank_anchor,
     bank_off16,
     cu_seqlens,
     ssm_state_indices,
-    scale,
-    N: tl.int64,
     T: tl.int64,
     B: tl.constexpr,
     H: tl.constexpr,
@@ -9613,18 +9609,18 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     AB_L_STRIDE: tl.constexpr,
     K_L_STRIDE: tl.constexpr,
     V_L_STRIDE: tl.constexpr,
-    O_L_STRIDE: tl.constexpr,
     SSI_L_STRIDE: tl.constexpr,
     SSI_SEQ_STRIDE: tl.constexpr,
     BETA: tl.constexpr,
     THRESHOLD: tl.constexpr,
     USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
 ):
-    """Native fused-sigmoid recurrence with layer added to the program grid.
+    """Native fused-sigmoid state recurrence batched across all layers.
 
     Each program retains the native kernel's complete ordered token loop.  The
-    extra layer coordinate changes only base addresses; layers share read-only
-    path metadata and write disjoint recurrent-state banks.
+    caller discards the operator output, so this commit-only realization omits
+    the independent q projection and output store.  Layers share read-only path
+    metadata and write disjoint recurrent-state banks.
     """
     i_k = tl.program_id(0)
     i_v = tl.program_id(1)
@@ -9638,7 +9634,6 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
 
     bos = tl.load(cu_seqlens + i_n).to(tl.int64)
     eos = tl.load(cu_seqlens + i_n + 1).to(tl.int64)
-    all_tokens = T
     T = eos - bos
     if T == 0:
         return
@@ -9649,20 +9644,12 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     mask_v = o_v < V
     mask_h = mask_v[:, None] & mask_k[None, :]
 
-    p_q = q + (bos * H + i_h) * K + o_k
     p_k = k + i_l * K_L_STRIDE + (bos * H + i_h) * K + o_k
     p_v = v + i_l * V_L_STRIDE + (bos * HV + i_hv) * V + o_v
     p_a_log = A_logs + i_l * GATE_L_STRIDE + i_hv
     p_a = a + i_l * AB_L_STRIDE + bos * HV + i_hv
     p_dt_bias = dt_biases + i_l * GATE_L_STRIDE + i_hv
     p_b = b + i_l * AB_L_STRIDE + bos * HV + i_hv
-    p_o = (
-        o
-        + i_l * O_L_STRIDE
-        + ((i_k * all_tokens + bos) * HV + i_hv) * V
-        + o_v
-    )
-
     # Preserve the anchor+offset form used by the byte-gated all-layer replay.
     # A raw pointer-table load loses 16-byte AxisInfo and changes reductions.
     state_bank = bank_anchor + tl.load(bank_off16 + i_l) * 4
@@ -9681,7 +9668,6 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     b_h += tl.load(p_h0, mask=mask_h, other=0).to(tl.float32)
 
     for i_t in range(0, T):
-        b_q = tl.load(p_q, mask=mask_k, other=0).to(tl.float32)
         b_k = tl.load(p_k, mask=mask_k, other=0).to(tl.float32)
         b_v = tl.load(p_v, mask=mask_v, other=0).to(tl.float32)
         b_b = tl.load(p_b).to(tl.float32)
@@ -9696,15 +9682,11 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
         b_beta = tl.sigmoid(b_b.to(tl.float32))
 
         if USE_QK_L2NORM_IN_KERNEL:
-            b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
             b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
-        b_q = b_q * scale
         b_h *= tl.exp(b_g)
         b_v -= tl.sum(b_h * b_k[None, :], 1)
         b_v *= b_beta
         b_h += b_v[:, None] * b_k[None, :]
-        b_o = tl.sum(b_h * b_q[None, :], 1)
-        tl.store(p_o, b_o.to(p_o.dtype.element_ty), mask=mask_v)
 
         final_state_idx = tl.load(
             ssi + i_n * SSI_SEQ_STRIDE + i_t
@@ -9719,9 +9701,7 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
             )
             tl.store(p_ht, b_h.to(p_ht.dtype.element_ty), mask=mask_h)
 
-        p_q += H * K
         p_k += H * K
-        p_o += HV * V
         p_v += HV * V
         p_b += HV
         p_a += HV
@@ -9733,7 +9713,6 @@ def _fr13_fixed32_committer_native_layer_batch(
     banks_list,
     A_logs,
     dt_biases,
-    output_scale,
     use_qk_l2norm_in_kernel,
 ) -> None:
     """Launch all 48 independent native-realization committer scans once."""
@@ -9749,7 +9728,6 @@ def _fr13_fixed32_committer_native_layer_batch(
         or dim_k != 128
         or dim_v != 128
         or int(state["bank_off16"].numel()) != layers
-        or tuple(state["obuf"].shape) != (layers, total, num_vh, dim_v)
     ):
         raise RuntimeError(
             "FR13 fixed32 committer layer-batch requires the pinned "
@@ -9763,16 +9741,12 @@ def _fr13_fixed32_committer_native_layer_batch(
         state["abuf"],
         state["bbuf"],
         dt_biases,
-        state["qbuf"],
         state["kbuf"],
         state["vbuf"],
-        state["obuf"],
         banks_list[0],
         state["bank_off16"],
         state["cu"],
         state["ssi"],
-        float(output_scale),
-        N=batch,
         T=total,
         B=batch,
         H=num_kh,
@@ -9786,7 +9760,6 @@ def _fr13_fixed32_committer_native_layer_batch(
         AB_L_STRIDE=int(state["abuf"].stride(0)),
         K_L_STRIDE=int(state["kbuf"].stride(0)),
         V_L_STRIDE=int(state["vbuf"].stride(0)),
-        O_L_STRIDE=int(state["obuf"].stride(0)),
         SSI_L_STRIDE=int(state["ssi"].stride(0)),
         SSI_SEQ_STRIDE=int(state["ssi"].stride(1)),
         BETA=1.0,
@@ -9883,7 +9856,6 @@ def _fr13_fixed32_committer_graph_body(
             banks_list=banks_list,
             A_logs=A_logs,
             dt_biases=dt_biases,
-            output_scale=output_scale,
             use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
         )
     else:
@@ -10120,13 +10092,6 @@ def preseed_fixed32_committer_graph(
         "qbuf": torch.zeros(
             1, total, num_kh, dim_k, device=device, dtype=dtype
         ),
-        "obuf": (
-            torch.empty(
-                48, total, num_vh, dim_v, device=device, dtype=dtype
-            )
-            if layer_batch
-            else None
-        ),
         "cu": (
             torch.arange(batch + 1, device=device, dtype=torch.int64) * 16
         ).to(torch.int32),
@@ -10168,6 +10133,7 @@ def preseed_fixed32_committer_graph(
                 "fused_calls": 1,
                 "native_reference_fused_calls": 48,
                 "layer_batch": True,
+                "state_only_output_elided": True,
                 "byte_gate": "required_on_first_real_nonzero_accept",
             }
         )

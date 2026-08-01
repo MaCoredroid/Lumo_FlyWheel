@@ -55,18 +55,39 @@ def test_layer_batch_kernel_keeps_native_recurrence_and_geometry() -> None:
     kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
     launch = _text("_fr13_fixed32_committer_native_layer_batch")
 
-    assert '@triton.jit(do_not_specialize=["N", "T"])' in SOURCE
+    assert '@triton.jit(do_not_specialize=["T"])' in SOURCE
     assert "for i_t in range(0, T):" in kernel
     assert "b_h *= tl.exp(b_g)" in kernel
     assert "b_v -= tl.sum(b_h * b_k[None, :], 1)" in kernel
     assert "b_v *= b_beta" in kernel
     assert "b_h += b_v[:, None] * b_k[None, :]" in kernel
+    assert "b_o =" not in kernel
+    assert "p_q =" not in kernel
+    assert "p_o =" not in kernel
+    assert "tl.store(p_o" not in kernel
     assert "state_bank = bank_anchor + tl.load(bank_off16 + i_l) * 4" in kernel
     assert "_gdn_node_step" not in kernel
     assert "block_v = min(triton.next_power_of_2(dim_v), 32)" in launch
     assert "num_warps=4" in launch
     assert "num_stages=3" in launch
     assert "layers * batch * num_vh" in launch
+
+
+def test_layer_batch_candidate_drops_only_dead_operator_output() -> None:
+    kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
+    launch = _text("_fr13_fixed32_committer_native_layer_batch")
+    body = _text("_fr13_fixed32_committer_graph_body")
+    preseed = _text("preseed_fixed32_committer_graph")
+
+    assert "q," not in kernel
+    assert "o," not in kernel
+    assert "scale," not in kernel
+    assert 'state["qbuf"]' not in launch
+    assert 'state["obuf"]' not in launch
+    assert '"obuf":' not in preseed
+    assert "q=state[\"qbuf\"]" in body
+    assert "\n            _sg(" in body
+    assert "= _sg(" not in body
 
 
 def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> None:
@@ -82,6 +103,7 @@ def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> No
     assert '"layer_batch_byte_gate_passed": not layer_batch' in preseed
     assert '"fused_calls": 48' in preseed
     assert '"fused_calls": 1' in preseed
+    assert '"state_only_output_elided": True' in preseed
 
 
 def test_byte_gate_requires_real_nonzero_path_and_exact_state_bytes() -> None:
@@ -129,6 +151,7 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
 
     assert 'layer_batch = committer_contract.get("layer_batch", False)' in patcher
     assert "expected_fused_calls = 1 if layer_batch is True else 48" in patcher
+    assert 'committer_contract.get("state_only_output_elided") is not True' in patcher
     assert '"layers": int(layer_count)' in patcher
     assert "ring_gathers * int(layer_count) * path_cap * batch" in patcher
     assert '"fused_layer_calls": fused_calls' in patcher
