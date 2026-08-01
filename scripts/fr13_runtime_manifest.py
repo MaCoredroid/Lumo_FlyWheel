@@ -41,6 +41,8 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_bigdenom_swe_serve_variant.sh",
     "scripts/fr13_canonical_env.sh",
     "scripts/fr13_cutlass_b4_pass.py",
+    "scripts/fr13_projection_rowcover_b1_pass.py",
+    "scripts/fr13_projection_rowcover_static_qualify.py",
     "scripts/fr13_cutlass_streamk_pass.py",
     "scripts/fr13_cutlass_streamk_timing.py",
     "scripts/fr13_cutlass_wave_binary.py",

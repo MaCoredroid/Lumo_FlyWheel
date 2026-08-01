@@ -67,25 +67,55 @@ SOURCE_COMMIT=$(git rev-parse HEAD)
 export BSIZE=1
 export CONC=1
 export WALL=0
-export FR13_DRAFT_VOCAB_ROOT=0
-export FR13_DRAFT_VOCAB_K=0
-export FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'
+FR13_B1_QUALIFICATION_PROFILE=${FR13_B1_QUALIFICATION_PROFILE:-full_vocab}
+case "$FR13_B1_QUALIFICATION_PROFILE" in
+  full_vocab)
+    export FR13_DRAFT_VOCAB_ROOT=0
+    export FR13_DRAFT_VOCAB_K=0
+    export FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'
+    B1_MANDATORY_WEIGHT_BYTES=42025179008
+    B1_WEIGHT_FLOOR_MS=153.9383846446886
+    B1_ONE_SIDED_U95_CAP_MS=177.0291423413919
+    ;;
+  k64_root)
+    export FR13_DRAFT_VOCAB_ROOT=1
+    export FR13_DRAFT_VOCAB_K=65536
+    export FR13_NEEDS_ALLOW=
+    B1_MANDATORY_WEIGHT_BYTES=32666638208
+    B1_WEIGHT_FLOOR_MS=119.658015414
+    B1_ONE_SIDED_U95_CAP_MS=137.6067177261
+    ;;
+  *)
+    echo "FR13_B1_QUALIFICATION_PROFILE must be full_vocab or k64_root" >&2
+    exit 2
+    ;;
+esac
 export FR13_FLOOR_ORDER=TH
 
 source scripts/fr13_canonical_env.sh
 run_variant() { :; }
 source scripts/fr13_fixed32_floor_timers_seq.sh
-export FR13_MANDATORY_WEIGHT_BYTES=42025179008
-export FR13_WEIGHT_FLOOR_MS=153.9383846446886
+[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "$B1_MANDATORY_WEIGHT_BYTES" \
+   && "$FR13_WEIGHT_FLOOR_MS" == "$B1_WEIGHT_FLOOR_MS" ]] || {
+  echo "canonical B1 qualification floor contract drifted" >&2
+  exit 2
+}
+export FR13_MANDATORY_WEIGHT_BYTES="$B1_MANDATORY_WEIGHT_BYTES"
+export FR13_WEIGHT_FLOOR_MS="$B1_WEIGHT_FLOOR_MS"
 if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
-      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" ]]; then
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" ]]; then
   export ENFORCE_EAGER=1
 fi
 
 mkdir -p "$RUNROOT"
-printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_m32_gate=%s\ndraft_vocab_root=0\ndraft_vocab_k=0\nfr13_needs_allow=FR13_DRAFT_VOCAB_K=0\nmandatory_weight_bytes=42025179008\nmandatory_weight_floor_ms=153.9383846446886\none_sided_u95_cap_ms=177.0291423413919\nstarted=%s\n' \
+printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_m32_gate=%s\nqualification_profile=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nstarted=%s\n' \
   "$$" "$RUNROOT" "$ARM" "$SOURCE_COMMIT" "$FA2_SHA" "$FR13_GATE_BM8" \
-  "$FR13_GATE_DRAFT_HEAD_M32" "$(date -u +%FT%TZ)" > "$RUNROOT/launcher_meta.txt"
+  "$FR13_GATE_DRAFT_HEAD_M32" "$FR13_B1_QUALIFICATION_PROFILE" \
+  "$FR13_DRAFT_VOCAB_ROOT" "$FR13_DRAFT_VOCAB_K" "$FR13_NEEDS_ALLOW" \
+  "$B1_MANDATORY_WEIGHT_BYTES" "$B1_WEIGHT_FLOOR_MS" \
+  "$B1_ONE_SIDED_U95_CAP_MS" "$(date -u +%FT%TZ)" \
+  > "$RUNROOT/launcher_meta.txt"
 
 .venv/bin/python scripts/fr13_runtime_manifest.py \
   --repo "$PWD" --profile fixed32 \

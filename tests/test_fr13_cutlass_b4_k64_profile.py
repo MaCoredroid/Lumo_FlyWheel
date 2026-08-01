@@ -75,7 +75,7 @@ def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         ],
         "mismatching_comparisons": 0,
         "differing_bytes": 0,
-        "candidate_family": "persistent_b4_m128",
+        "candidate_family": "projection_rowcover_pair",
         "candidate_sha256": candidate_sha256,
         "candidate_bytes": len(candidate_bytes),
         "patch_source_sha256": patch_sha256,

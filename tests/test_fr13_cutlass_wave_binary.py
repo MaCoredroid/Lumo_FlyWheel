@@ -32,6 +32,8 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "streamk_force_wide256_byte_ab",
         "persistent_b4_m128",
         "persistent_b4_m128_byte_ab",
+        "static_persistent_stocktile",
+        "static_persistent_stocktile_byte_ab",
     }
     assert module.WIDE256_CANDIDATE_SHA256 == (
         "f7d5c01ca79829fbfff4c93949d057bd740905165b0b6793b3c0007629add962"
@@ -43,13 +45,18 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "streamk_force_wide256",
     )
     assert module.B4_M128_CANDIDATE_SHA256 == (
-        "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
+        "af48592c748ba80b1c614dc7a96c8250ae3bcca4c185c92939b4d308f8ef31f6"
     )
-    assert module.B4_M128_CANDIDATE_SIZE == 112_698_512
+    assert module.B4_M128_CANDIDATE_SIZE == 113_078_080
     assert module.candidate_identity("persistent_b4_m128_byte_ab") == (
         module.B4_M128_CANDIDATE_SHA256,
         module.B4_M128_CANDIDATE_SIZE,
-        "persistent_b4_m128",
+        "projection_rowcover_pair",
+    )
+    assert module.candidate_identity("static_persistent_stocktile_byte_ab") == (
+        module.STATIC_PERSISTENT_CANDIDATE_SHA256,
+        module.STATIC_PERSISTENT_CANDIDATE_SIZE,
+        "projection_rowcover_pair",
     )
 
 
@@ -78,6 +85,48 @@ def test_wide256_diagnostic_install_uses_its_own_pinned_identity(
     assert record["production_enabled"] is False
     assert record["candidate_family"] == "streamk_force_wide256"
     assert record["source"]["sha256"] == digest
+
+
+def test_projection_rowcover_diagnostic_install_uses_combined_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    payload = b"projection-rowcover-candidate-extension\n"
+    digest = hashlib.sha256(payload).hexdigest()
+    monkeypatch.setattr(module, "STATIC_PERSISTENT_CANDIDATE_SIZE", len(payload))
+    monkeypatch.setattr(module, "STATIC_PERSISTENT_CANDIDATE_SHA256", digest)
+    source = tmp_path / "projection-rowcover.so"
+    destination = tmp_path / "installed.so"
+    attestation = tmp_path / "attestation.json"
+    source.write_bytes(payload)
+    destination.write_bytes(b"stock-extension\n")
+
+    record = module.install_candidate(
+        source,
+        destination,
+        attestation,
+        "static_persistent_stocktile_byte_ab",
+    )
+
+    assert destination.read_bytes() == payload
+    assert record["production_enabled"] is False
+    assert record["candidate_family"] == "projection_rowcover_pair"
+    assert record["source"]["sha256"] == digest
+
+
+def test_projection_rowcover_production_rejects_non_k64_qualification() -> None:
+    module = _module()
+
+    with pytest.raises(ValueError, match="requires k64_root"):
+        module._verify_production_qualification(
+            Path("sidecar.json"),
+            "a" * 64,
+            Path("candidate.so"),
+            Path("patch.py"),
+            "static_persistent_stocktile",
+            "hydra27_fixed32",
+            "full_vocab",
+        )
 
 
 def test_install_is_exact_attested_and_production_off(

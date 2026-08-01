@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify and install the pinned fixed32 CUTLASS Stream-K extension."""
+"""Verify and install pinned fixed32 CUTLASS projection extensions."""
 
 from __future__ import annotations
 
@@ -18,16 +18,36 @@ WIDE256_CANDIDATE_SHA256 = (
     "f7d5c01ca79829fbfff4c93949d057bd740905165b0b6793b3c0007629add962"
 )
 WIDE256_CANDIDATE_SIZE = 112_481_752
-B4_M128_CANDIDATE_SHA256 = (
-    "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
+PROJECTION_ROWCOVER_CANDIDATE_SHA256 = (
+    "af48592c748ba80b1c614dc7a96c8250ae3bcca4c185c92939b4d308f8ef31f6"
 )
-B4_M128_CANDIDATE_SIZE = 112_698_512
+PROJECTION_ROWCOVER_CANDIDATE_SIZE = 113_078_080
+B4_M128_CANDIDATE_SHA256 = PROJECTION_ROWCOVER_CANDIDATE_SHA256
+B4_M128_CANDIDATE_SIZE = PROJECTION_ROWCOVER_CANDIDATE_SIZE
+STATIC_PERSISTENT_CANDIDATE_SHA256 = PROJECTION_ROWCOVER_CANDIDATE_SHA256
+STATIC_PERSISTENT_CANDIDATE_SIZE = PROJECTION_ROWCOVER_CANDIDATE_SIZE
 COOP128_SELECTORS = frozenset({"streamk_coop128", "streamk_coop128_byte_ab"})
 WIDE256_SELECTORS = frozenset(
     {"streamk_force_wide256", "streamk_force_wide256_byte_ab"}
 )
 B4_M128_SELECTORS = frozenset({"persistent_b4_m128", "persistent_b4_m128_byte_ab"})
-CANDIDATE_SELECTORS = COOP128_SELECTORS | WIDE256_SELECTORS | B4_M128_SELECTORS
+STATIC_PERSISTENT_SELECTORS = frozenset(
+    {"static_persistent_stocktile", "static_persistent_stocktile_byte_ab"}
+)
+CANDIDATE_SELECTORS = (
+    COOP128_SELECTORS
+    | WIDE256_SELECTORS
+    | B4_M128_SELECTORS
+    | STATIC_PERSISTENT_SELECTORS
+)
+PRODUCTION_SELECTORS = frozenset(
+    {
+        "streamk_coop128",
+        "streamk_force_wide256",
+        "persistent_b4_m128",
+        "static_persistent_stocktile",
+    }
+)
 CONTAINER_SOURCE = Path("/tmp/fr13_cutlass_wave.abi3.so")
 CONTAINER_DESTINATION = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so"
@@ -48,7 +68,17 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
     if selector in WIDE256_SELECTORS:
         return WIDE256_CANDIDATE_SHA256, WIDE256_CANDIDATE_SIZE, "streamk_force_wide256"
     if selector in B4_M128_SELECTORS:
-        return B4_M128_CANDIDATE_SHA256, B4_M128_CANDIDATE_SIZE, "persistent_b4_m128"
+        return (
+            B4_M128_CANDIDATE_SHA256,
+            B4_M128_CANDIDATE_SIZE,
+            "projection_rowcover_pair",
+        )
+    if selector in STATIC_PERSISTENT_SELECTORS:
+        return (
+            STATIC_PERSISTENT_CANDIDATE_SHA256,
+            STATIC_PERSISTENT_CANDIDATE_SIZE,
+            "projection_rowcover_pair",
+        )
     raise ValueError(f"unsupported candidate selector: {selector!r}")
 
 
@@ -101,19 +131,28 @@ def _verify_production_qualification(
     patch_source: Path,
     selector: str,
     fixed32_mode: str,
+    qualification_profile: str,
 ) -> dict[str, object]:
-    if selector not in {
-        "streamk_coop128",
-        "streamk_force_wide256",
-        "persistent_b4_m128",
-    }:
+    if selector not in PRODUCTION_SELECTORS:
         raise ValueError(f"unsupported production candidate selector: {selector!r}")
     if selector == "persistent_b4_m128":
         import fr13_cutlass_b4_pass as qualification
+        kwargs = {
+            "fixed32_mode": fixed32_mode,
+            "qualification_profile": qualification_profile,
+        }
+    elif selector == "static_persistent_stocktile":
+        if qualification_profile != "k64_root":
+            raise ValueError(
+                "static-persistent production requires k64_root qualification"
+            )
+        import fr13_projection_rowcover_b1_pass as qualification
+        kwargs = {}
     else:
+        if qualification_profile != "full_vocab":
+            raise ValueError("legacy Stream-K production requires full_vocab")
         import fr13_cutlass_streamk_pass as qualification
-
-    kwargs = {"fixed32_mode": fixed32_mode} if selector == "persistent_b4_m128" else {}
+        kwargs = {}
     return qualification.verify_sidecar(
         sidecar,
         expected_sidecar_sha256,
@@ -134,20 +173,17 @@ def install_candidate(
     expected_production_sidecar_sha256: str | None = None,
     patch_source: Path = Path("scripts/fr13_patch_cutlass_fixed32_wave.py"),
     fixed32_mode: str = "hydra27_fixed32",
+    qualification_profile: str = "full_vocab",
 ) -> dict[str, object]:
     if selector not in CANDIDATE_SELECTORS:
         raise ValueError(f"unsupported candidate selector: {selector!r}")
     source_identity = verify_candidate(source, selector)
-    production_enabled = selector in {
-        "streamk_coop128",
-        "streamk_force_wide256",
-        "persistent_b4_m128",
-    }
+    production_enabled = selector in PRODUCTION_SELECTORS
     qualification: dict[str, object] | None = None
     if production_enabled:
         if production_sidecar is None or expected_production_sidecar_sha256 is None:
             raise ValueError(
-                "Stream-K production install requires a pinned production sidecar"
+                "CUTLASS production install requires a pinned production sidecar"
             )
         qualification_record = _verify_production_qualification(
             production_sidecar,
@@ -156,6 +192,7 @@ def install_candidate(
             patch_source,
             selector,
             fixed32_mode,
+            qualification_profile,
         )
         qualification = {
             "sidecar_sha256": expected_production_sidecar_sha256,
@@ -199,7 +236,7 @@ def install_candidate(
     elif (
         production_sidecar is not None or expected_production_sidecar_sha256 is not None
     ):
-        raise ValueError("diagnostic Stream-K install forbids production credentials")
+        raise ValueError("diagnostic CUTLASS install forbids production credentials")
     destination_info = destination.lstat()
     if destination.is_symlink() or not stat.S_ISREG(destination_info.st_mode):
         raise ValueError(
@@ -259,6 +296,11 @@ def main() -> int:
         default="hydra27_fixed32",
     )
     install_parser.add_argument(
+        "--qualification-profile",
+        choices=("full_vocab", "k64_root"),
+        default="full_vocab",
+    )
+    install_parser.add_argument(
         "--patch-source",
         type=Path,
         default=Path("scripts/fr13_patch_cutlass_fixed32_wave.py"),
@@ -277,6 +319,7 @@ def main() -> int:
             expected_production_sidecar_sha256=(args.expected_production_pass_sha256),
             patch_source=args.patch_source,
             fixed32_mode=args.fixed32_mode,
+            qualification_profile=args.qualification_profile,
         )
     print(json.dumps(payload, ensure_ascii=True, sort_keys=True))
     return 0

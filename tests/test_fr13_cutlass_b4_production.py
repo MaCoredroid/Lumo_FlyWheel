@@ -68,7 +68,7 @@ def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         ],
         "mismatching_comparisons": 0,
         "differing_bytes": 0,
-        "candidate_family": "persistent_b4_m128",
+        "candidate_family": "projection_rowcover_pair",
         "candidate_sha256": candidate_sha256,
         "candidate_bytes": len(candidate_bytes),
         "patch_source_sha256": patch_sha256,
@@ -302,7 +302,7 @@ def test_b4_timing_keeps_live_qualification_separate_from_harness_commit() -> No
         encoding="utf-8"
     )
     qualification_commit = "0f2a31ed298758cba72fad7e77fc3e13e27d545a"
-    patch_sha256 = "656c53b20497fc08cc7fdfb18256235b07cfad9868fde2faa70e6b0b9dfca41a"
+    patch_sha256 = "32ee5747eeff597f7eacec530f86658ba26b6fe8560591c21c305e594953935a"
 
     assert (
         "QUALIFICATION_SOURCE_COMMIT="

@@ -12,6 +12,9 @@ cd "$REPO"
 PATCH_SOURCE=scripts/fr13_patch_cutlass_fixed32_wave.py
 SOURCE_COMMIT=$(git rev-parse HEAD)
 GATE_CANDIDATE=${FR13_STREAMK_GATE_CANDIDATE:-streamk_coop128}
+QUALIFICATION_PROFILE=${FR13_B1_CUTLASS_QUALIFICATION_PROFILE:-full_vocab}
+DRAFT_VOCAB_BLOCKS=scripts/fr13_dvk_subset_blocks.json
+DRAFT_VOCAB_BLOCKS_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
 case "$GATE_CANDIDATE" in
   streamk_coop128)
     DIAGNOSTIC_SELECTOR=streamk_coop128_byte_ab
@@ -25,8 +28,50 @@ case "$GATE_CANDIDATE" in
     LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_live_gate.v1
     CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl
     ;;
+  static_persistent_stocktile)
+    [[ "$QUALIFICATION_PROFILE" == "k64_root" ]] || {
+      echo "static-persistent B1 gate requires k64_root" >&2
+      exit 2
+    }
+    DIAGNOSTIC_SELECTOR=static_persistent_stocktile_byte_ab
+    RECORD_SCHEMA=fr13.fixed32.cutlass_static_persistent_byte_ab.v1
+    LIVE_SCHEMA=fr13.fixed32.cutlass_static_persistent_k64_root_live_gate.v1
+    CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_static_persistent_byte_ab.jsonl
+    ;;
   *)
     echo "unsupported Stream-K gate candidate: $GATE_CANDIDATE" >&2
+    exit 2
+    ;;
+esac
+if [[ "$GATE_CANDIDATE" != "static_persistent_stocktile" \
+      && "$QUALIFICATION_PROFILE" != "full_vocab" ]]; then
+  echo "legacy Stream-K B1 gates require full_vocab" >&2
+  exit 2
+fi
+case "$QUALIFICATION_PROFILE" in
+  full_vocab)
+    DRAFT_VOCAB_ROOT=0
+    DRAFT_VOCAB_K=0
+    NEEDS_ALLOW=FR13_DRAFT_VOCAB_K=0
+    MANDATORY_WEIGHT_BYTES=42025179008
+    MANDATORY_WEIGHT_FLOOR_MS=153.9383846446886
+    ONE_SIDED_U95_CAP_MS=177.0291423413919
+    ;;
+  k64_root)
+    DRAFT_VOCAB_ROOT=1
+    DRAFT_VOCAB_K=65536
+    NEEDS_ALLOW=
+    MANDATORY_WEIGHT_BYTES=32666638208
+    MANDATORY_WEIGHT_FLOOR_MS=119.658015414
+    ONE_SIDED_U95_CAP_MS=137.6067177261
+    [[ -f "$DRAFT_VOCAB_BLOCKS" && ! -L "$DRAFT_VOCAB_BLOCKS" \
+       && "$(sha256sum "$DRAFT_VOCAB_BLOCKS" | awk '{print $1}')" == "$DRAFT_VOCAB_BLOCKS_SHA256" ]] || {
+      echo "pinned root-64K draft-vocabulary block map drifted" >&2
+      exit 2
+    }
+    ;;
+  *)
+    echo "FR13_B1_CUTLASS_QUALIFICATION_PROFILE must be full_vocab or k64_root" >&2
     exit 2
     ;;
 esac
@@ -46,11 +91,14 @@ export FR13_GATE_GDN_BV=0
 export FR13_DFWD_UNIFIED_BM8_LIVE_AB=0
 export FR13_DFWD_UNIFIED_BM8_PRODUCTION=0
 export ENFORCE_EAGER=1
-export FR13_DRAFT_VOCAB_ROOT=0
-export FR13_DRAFT_VOCAB_K=0
-export FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'
-export FR13_MANDATORY_WEIGHT_BYTES=42025179008
-export FR13_WEIGHT_FLOOR_MS=153.9383846446886
+export FR13_B1_QUALIFICATION_PROFILE="$QUALIFICATION_PROFILE"
+export FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT"
+export FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K"
+export FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json
+export FR13_NEEDS_ALLOW="$NEEDS_ALLOW"
+export FR13_MANDATORY_WEIGHT_BYTES="$MANDATORY_WEIGHT_BYTES"
+export FR13_WEIGHT_FLOOR_MS="$MANDATORY_WEIGHT_FLOOR_MS"
+export FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="$QUALIFICATION_PROFILE"
 export FR13_FIXED32_CUTLASS_WAVE="$DIAGNOSTIC_SELECTOR"
 export FR13_FIXED32_CUTLASS_WAVE_SO="$CUTLASS_STREAMK_SO"
 export FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL="$CONTAINER_JSONL"
@@ -67,7 +115,10 @@ CUTLASS_ARM_ARTIFACT="$ARMDIR/swe_out/verified/per_task/$TASK_ID/fixed32_cutlass
   "$ARMDIR/cutlass_streamk_byte_gate.json" \
   "$PATCH_SOURCE" "$SOURCE_COMMIT" "$CUTLASS_ARM_ARTIFACT" \
   "$ARMDIR/container_env.txt" "$GATE_CANDIDATE" \
-  "$DIAGNOSTIC_SELECTOR" "$RECORD_SCHEMA" "$LIVE_SCHEMA" <<'PY'
+  "$DIAGNOSTIC_SELECTOR" "$RECORD_SCHEMA" "$LIVE_SCHEMA" \
+  "$QUALIFICATION_PROFILE" "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" \
+  "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
+  "$ONE_SIDED_U95_CAP_MS" "$DRAFT_VOCAB_BLOCKS_SHA256" <<'PY'
 import hashlib
 import json
 import sys
@@ -75,7 +126,8 @@ from pathlib import Path
 
 sys.path.insert(0, "scripts")
 import fr13_cutlass_wave_binary as binary
-import fr13_cutlass_streamk_pass as qualification
+import fr13_cutlass_streamk_pass as streamk_qualification
+import fr13_projection_rowcover_b1_pass as rowcover_qualification
 
 jsonl_path, binary_path, output_path, patch_source = map(Path, sys.argv[1:5])
 source_commit = sys.argv[5]
@@ -85,6 +137,21 @@ expected_candidate = sys.argv[8]
 expected_diagnostic_selector = sys.argv[9]
 expected_record_schema = sys.argv[10]
 expected_live_schema = sys.argv[11]
+qualification_profile = sys.argv[12]
+expected_draft_vocab_root = int(sys.argv[13])
+expected_draft_vocab_k = int(sys.argv[14])
+expected_mandatory_weight_bytes = int(sys.argv[15])
+expected_mandatory_weight_floor_ms = float(sys.argv[16])
+expected_one_sided_u95_cap_ms = float(sys.argv[17])
+expected_block_map_sha256 = sys.argv[18]
+qualification = (
+    rowcover_qualification
+    if expected_candidate == "static_persistent_stocktile"
+    else streamk_qualification
+)
+comparison_call_limit = (
+    320 if expected_candidate == "static_persistent_stocktile" else 256
+)
 expected_candidate_sha256, expected_candidate_size, expected_candidate_family = (
     binary.candidate_identity(expected_diagnostic_selector)
 )
@@ -113,8 +180,8 @@ if not container_env_path.is_file() or container_env_path.is_symlink():
 container_env_raw = container_env_path.read_bytes()
 container_env_lines = container_env_raw.decode("ascii").splitlines()
 errors = []
-if len(records) > 256:
-    errors.append("diagnostic exceeded its 256-call bound")
+if len(records) > comparison_call_limit:
+    errors.append(f"diagnostic exceeded its {comparison_call_limit}-call bound")
 if any(record.get("schema") != expected_record_schema for record in records):
     errors.append("comparison record schema mismatch")
 if any(record.get("task_marker") != expected_task_marker for record in records):
@@ -174,14 +241,19 @@ for key, expected in expected_arm.items():
     if arm_record.get(key) != expected:
         errors.append(f"CUTLASS real-task arm {key} mismatch")
 for expected_env in (
-    "FR13_DRAFT_VOCAB_ROOT=0",
-    "FR13_DRAFT_VOCAB_K=0",
+    f"FR13_DRAFT_VOCAB_ROOT={expected_draft_vocab_root}",
+    f"FR13_DRAFT_VOCAB_K={expected_draft_vocab_k}",
+    f"FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE={qualification_profile}",
 ):
     if container_env_lines.count(expected_env) != 1:
-        errors.append(f"full-vocabulary environment mismatch: {expected_env}")
-for prefix in ("FR13_DRAFT_VOCAB_ROOT=", "FR13_DRAFT_VOCAB_K="):
+        errors.append(f"qualification environment mismatch: {expected_env}")
+for prefix in (
+    "FR13_DRAFT_VOCAB_ROOT=",
+    "FR13_DRAFT_VOCAB_K=",
+    "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=",
+):
     if sum(line.startswith(prefix) for line in container_env_lines) != 1:
-        errors.append(f"full-vocabulary environment is ambiguous: {prefix}")
+        errors.append(f"qualification environment is ambiguous: {prefix}")
 destination = binary_record.get("destination") or {}
 source = binary_record.get("source") or {}
 if binary_record.get("installed_mode") != "0555":
@@ -207,7 +279,11 @@ if patch_source_sha256 != qualification.PATCH_SOURCE_SHA256:
 payload = {
     "schema": expected_live_schema,
     "status": "pass" if not errors else "fail",
-    "run_classification": "one_real_swe_verified_b1_byte_diagnostic",
+    "run_classification": (
+        "one_real_swe_verified_b1_k64_root_byte_diagnostic"
+        if qualification_profile == "k64_root"
+        else "one_real_swe_verified_b1_byte_diagnostic"
+    ),
     "acceptance_valid": False,
     "task_set": "one real SWE-Verified B1 diagnostic task",
     "task_count": 1,
@@ -215,11 +291,14 @@ payload = {
     "task_marker": expected_task_marker,
     "real_task_arm_sha256": hashlib.sha256(arm_raw).hexdigest(),
     "container_env_sha256": hashlib.sha256(container_env_raw).hexdigest(),
-    "draft_vocab_root": 0,
-    "draft_vocab_k": 0,
-    "mandatory_weight_bytes": 42025179008,
-    "mandatory_weight_floor_ms": 153.9383846446886,
-    "one_sided_u95_cap_ms": 177.0291423413919,
+    "qualification_profile": qualification_profile,
+    "draft_vocab_root": expected_draft_vocab_root,
+    "draft_vocab_k": expected_draft_vocab_k,
+    "draft_vocab_blocks": "/workspace/scripts/fr13_dvk_subset_blocks.json",
+    "draft_vocab_blocks_sha256": expected_block_map_sha256,
+    "mandatory_weight_bytes": expected_mandatory_weight_bytes,
+    "mandatory_weight_floor_ms": expected_mandatory_weight_floor_ms,
+    "one_sided_u95_cap_ms": expected_one_sided_u95_cap_ms,
     "comparator_timing_eligible": False,
     "batch_size": 1,
     "concurrency": 1,

@@ -509,7 +509,7 @@ if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
   }
 fi
 case "$FR13_FIXED32_CUTLASS_WAVE" in
-  stock|streamk_coop128|streamk_coop128_byte_ab|streamk_force_wide256|streamk_force_wide256_byte_ab|persistent_b4_m128|persistent_b4_m128_byte_ab) ;;
+  stock|streamk_coop128|streamk_coop128_byte_ab|streamk_force_wide256|streamk_force_wide256_byte_ab|persistent_b4_m128|persistent_b4_m128_byte_ab|static_persistent_stocktile|static_persistent_stocktile_byte_ab) ;;
   *)
     echo "FR13_FIXED32_CUTLASS_WAVE has an unsupported selector" >&2
     exit 2
@@ -559,9 +559,14 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" ]]; then
   }
 else
   _fr13_cutlass_b4=0
+  _fr13_cutlass_b1_static=0
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" ]]; then
     _fr13_cutlass_b4=1
+  fi
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "static_persistent_stocktile" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "static_persistent_stocktile_byte_ab" ]]; then
+    _fr13_cutlass_b1_static=1
   fi
   if [[ "$_fr13_cutlass_b4" == "1" ]]; then
     [[ -n "${FR13_FIXED32_MODE:-}" && "$MAX_NUM_SEQS" == "4" ]] || {
@@ -585,10 +590,21 @@ else
         ;;
     esac
   else
-    [[ "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" == "full_vocab" ]] || {
-      echo "CUTLASS B1 candidates do not accept a B4 qualification profile" >&2
-      exit 2
-    }
+    if [[ "$_fr13_cutlass_b1_static" == "1" ]]; then
+      [[ "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" == "k64_root" ]] || {
+        echo "CUTLASS static-persistent B1 requires the k64_root profile" >&2
+        exit 2
+      }
+      [[ -z "${FR13_NEEDS_ALLOW:-}" ]] || {
+        echo "CUTLASS static-persistent B1 k64_root forbids a K0 override" >&2
+        exit 2
+      }
+    else
+      [[ "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" == "full_vocab" ]] || {
+        echo "legacy CUTLASS B1 candidates require the full_vocab profile" >&2
+        exit 2
+      }
+    fi
     [[ -n "${FR13_FIXED32_MODE:-}" && "$MAX_NUM_SEQS" == "1" ]] || {
       echo "CUTLASS Stream-K candidate requires fixed32 B1" >&2
       exit 2
@@ -610,7 +626,8 @@ else
   )
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
-        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" ]]; then
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "static_persistent_stocktile_byte_ab" ]]; then
     [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "0" \
        && ( ( "$_fr13_cutlass_b4" == "0" \
               && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" ) \
@@ -625,7 +642,9 @@ else
             || ( "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
                  && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl" ) \
             || ( "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
-                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl" ) ) ]] || {
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "static_persistent_stocktile_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_static_persistent_byte_ab.jsonl" ) ) ]] || {
       echo "CUTLASS byte A/B requires its exact eager B1 or B4 diagnostic contract" >&2
       exit 2
     }
@@ -656,6 +675,8 @@ else
     fi
     _fr13_cutlass_pass_script=scripts/fr13_cutlass_streamk_pass.py
     _fr13_cutlass_pass_profile_args=()
+    [[ "$_fr13_cutlass_b1_static" == "0" ]] \
+      || _fr13_cutlass_pass_script=scripts/fr13_projection_rowcover_b1_pass.py
     [[ "$_fr13_cutlass_b4" == "0" ]] \
       || {
         _fr13_cutlass_pass_script=scripts/fr13_cutlass_b4_pass.py
@@ -679,6 +700,7 @@ else
     unset _fr13_cutlass_pass_profile_args
   fi
   unset _fr13_cutlass_b4
+  unset _fr13_cutlass_b1_static
 fi
 if [[ -n "${FR13_DFWD_UNIFIED_BM8_INTERNAL:-}" ]]; then
   echo "FR13 DFWD unified BM8 internal selector is launcher-private" >&2
@@ -1339,7 +1361,8 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   fi
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
-        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" ]]; then
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "static_persistent_stocktile_byte_ab" ]]; then
     _fixed32_expected_eager=1
   fi
   case "${FR13_DRAFT_VOCAB_K:-65536}:$FR13_DRAFT_VOCAB_ROOT" in
@@ -1502,6 +1525,8 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" ]]; then
   _fr13_cutlass_streamk_production_sidecar_host="$LOG_DIR/fr13_fixed32_cutlass_streamk.production_pass.json"
   _fr13_cutlass_pass_script=scripts/fr13_cutlass_streamk_pass.py
   _fr13_cutlass_pass_profile_args=()
+  [[ "$FR13_FIXED32_CUTLASS_WAVE" != "static_persistent_stocktile" ]] \
+    || _fr13_cutlass_pass_script=scripts/fr13_projection_rowcover_b1_pass.py
   [[ "$FR13_FIXED32_CUTLASS_WAVE" != "persistent_b4_m128" ]] \
     || {
       _fr13_cutlass_pass_script=scripts/fr13_cutlass_b4_pass.py
@@ -2840,6 +2865,7 @@ if [[ "\${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ]]; then
       --production-pass-sidecar "\$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR" \
       --expected-production-pass-sha256 "\$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256" \
       --fixed32-mode "\$FR13_FIXED32_MODE" \
+      --qualification-profile "\$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" \
       --patch-source /workspace/scripts/fr13_patch_cutlass_fixed32_wave.py
   else
     python3 /workspace/scripts/fr13_cutlass_wave_binary.py install \

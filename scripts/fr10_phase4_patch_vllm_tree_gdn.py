@@ -5889,12 +5889,15 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
         "streamk_force_wide256_byte_ab",
         "persistent_b4_m128",
         "persistent_b4_m128_byte_ab",
+        "static_persistent_stocktile",
+        "static_persistent_stocktile_byte_ab",
     ):
         raise RuntimeError(
             "FR13_FIXED32_CUTLASS_WAVE must be stock, streamk_coop128, "
             "streamk_coop128_byte_ab, streamk_force_wide256, or "
             "streamk_force_wide256_byte_ab, persistent_b4_m128, or "
-            "persistent_b4_m128_byte_ab"
+            "persistent_b4_m128_byte_ab, static_persistent_stocktile, or "
+            "static_persistent_stocktile_byte_ab"
         )
     if sfwd_b4_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
@@ -5903,6 +5906,7 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
     streamk_byte_diagnostic = cutlass_wave in (
         "streamk_coop128_byte_ab",
         "streamk_force_wide256_byte_ab",
+        "static_persistent_stocktile_byte_ab",
     )
     persistent_b4_byte_diagnostic = (
         cutlass_wave == "persistent_b4_m128_byte_ab"
@@ -5989,6 +5993,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
                 "streamk_coop128_byte_ab",
                 "streamk_force_wide256_byte_ab",
                 "persistent_b4_m128_byte_ab",
+                "static_persistent_stocktile_byte_ab",
             )
             or sfwd_b4_byte_diagnostic == "1"
         )
@@ -6024,6 +6029,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     if _FR13_FIXED32_CUTLASS_WAVE in (
         "streamk_coop128_byte_ab",
         "streamk_force_wide256_byte_ab",
+        "static_persistent_stocktile_byte_ab",
     ):
         if not mode:
             raise RuntimeError(

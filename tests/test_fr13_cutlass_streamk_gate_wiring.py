@@ -162,12 +162,12 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "fr13-fixed32-cutlass-streamk-real-task-arm-v1" in gate
     assert '"task_marker": expected_task_marker' in gate
     assert '"real_task_arm_sha256": hashlib.sha256(arm_raw).hexdigest()' in gate
-    assert "export FR13_DRAFT_VOCAB_ROOT=0" in gate
-    assert "export FR13_DRAFT_VOCAB_K=0" in gate
-    assert "export FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'" in gate
-    assert '"draft_vocab_root": 0' in gate
-    assert '"draft_vocab_k": 0' in gate
-    assert '"mandatory_weight_bytes": 42025179008' in gate
+    assert 'export FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT"' in gate
+    assert 'export FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K"' in gate
+    assert 'export FR13_NEEDS_ALLOW="$NEEDS_ALLOW"' in gate
+    assert '"draft_vocab_root": expected_draft_vocab_root' in gate
+    assert '"draft_vocab_k": expected_draft_vocab_k' in gate
+    assert '"mandatory_weight_bytes": expected_mandatory_weight_bytes' in gate
     assert '"comparator_timing_eligible": False' in gate
     assert '"patch_source_sha256": patch_source_sha256' in gate
     assert '"binary_attestation_sha256"' in gate
@@ -189,6 +189,36 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "streamk_eager_diagnostic=(" in serve
     assert "--fixed32-cutlass-real-event-arm" in serve
     assert "fr13_fixed32_cutlass_streamk.real_event.arm" in serve
+
+
+def test_projection_rowcover_b1_is_k64_only_and_fully_wired() -> None:
+    gate = GATE.read_text(encoding="utf-8")
+    kernel_gate = B1_KERNEL_GATE.read_text(encoding="utf-8")
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+    serve = (REPO / "scripts" / "fr13_bigdenom_swe_serve_variant.sh").read_text(
+        encoding="utf-8"
+    )
+    patcher = (REPO / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "static_persistent_stocktile)" in gate
+    assert "static-persistent B1 gate requires k64_root" in gate
+    assert "DIAGNOSTIC_SELECTOR=static_persistent_stocktile_byte_ab" in gate
+    assert "RECORD_SCHEMA=fr13.fixed32.cutlass_static_persistent_byte_ab.v1" in gate
+    assert (
+        "LIVE_SCHEMA=fr13.fixed32.cutlass_static_persistent_k64_root_live_gate.v1"
+        in gate
+    )
+    assert "DRAFT_VOCAB_ROOT=1" in gate
+    assert "DRAFT_VOCAB_K=65536" in gate
+    assert '320 if expected_candidate == "static_persistent_stocktile" else 256' in gate
+    assert 'diagnostic exceeded its {comparison_call_limit}-call bound' in gate
+    assert "static_persistent_stocktile_byte_ab" in kernel_gate
+    for source in (launcher, serve, SWE_RUNNER.read_text(), patcher):
+        assert "static_persistent_stocktile" in source
+        assert "static_persistent_stocktile_byte_ab" in source
+    assert "scripts/fr13_projection_rowcover_b1_pass.py" in launcher
 
 
 def test_exact4_timing_is_real_full_wall_full_vocab_and_source_bound() -> None:

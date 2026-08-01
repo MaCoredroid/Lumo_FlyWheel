@@ -23,7 +23,7 @@ K64_ROOT_LIVE_SCHEMA = "fr13.fixed32.cutlass_persistent_b4_m128_k64_root_live_ga
 K64_ROOT_SIDECAR_SCHEMA = "fr13.fixed32.cutlass_b4.k64_root.production_pass.v1"
 ATTESTATION_SCHEMA = "fr13.fixed32.cutlass_streamk_binary.v2"
 PATCH_SOURCE = Path("scripts/fr13_patch_cutlass_fixed32_wave.py")
-PATCH_SOURCE_SHA256 = "656c53b20497fc08cc7fdfb18256235b07cfad9868fde2faa70e6b0b9dfca41a"
+PATCH_SOURCE_SHA256 = "32ee5747eeff597f7eacec530f86658ba26b6fe8560591c21c305e594953935a"
 DRAFT_VOCAB_BLOCKS_SOURCE = Path("scripts/fr13_dvk_subset_blocks.json")
 DRAFT_VOCAB_BLOCKS_CONTAINER_PATH = "/workspace/scripts/fr13_dvk_subset_blocks.json"
 DRAFT_VOCAB_BLOCKS_SHA256 = (
@@ -31,7 +31,7 @@ DRAFT_VOCAB_BLOCKS_SHA256 = (
 )
 VLLM_BASE_COMMIT = "fe9c3d6c5f66c873d196800384ed6880687b9e52"
 PATCHED_DISPATCH_SHA256 = (
-    "13debfa754beeb4a6ae9818612b4bf729619f0be03637372626de3778b2b3780"
+    "ba18f08dcbd17a52c1b7293be0cc6eb4ee57176388d4e2ccba9bfb62c9b31c45"
 )
 EXPECTED_TASK_IDS = (
     "astropy__astropy-12907",

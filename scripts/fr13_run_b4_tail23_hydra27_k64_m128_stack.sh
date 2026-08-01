@@ -6,12 +6,12 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(cd "$SCRIPT_DIR/.." && pwd)
 cd "$REPO"
 
-EXPECTED_BRANCH=${EXPECTED_BRANCH:-agent/fixed32-b4-tail23-hydra27-k64-m128-review}
+EXPECTED_BRANCH=${EXPECTED_BRANCH:-agent/fixed32-projection-route-integration-20260801}
 STOCK_FA2_SOURCE=${STOCK_FA2_SOURCE:-/home/mark/lumoFlyWheel-b4-sfwd-campaignfix/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so}
 STOCK_FA2_SO=${STOCK_FA2_SO:-$REPO/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so}
-CUTLASS_B4_SO=${CUTLASS_B4_SO:-/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.persistent_b4_m128_stock_symbol_exact_compare320_gate_ready.abi3.so}
+CUTLASS_B4_SO=${CUTLASS_B4_SO:-/home/mark/fr13_projection_rowcover_build/bin/_C_stable_libtorch.static_b1_m32_b4_m128.combined_compile_only.abi3.so}
 EXPECTED_STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
-EXPECTED_CANDIDATE_SHA256=895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f
+EXPECTED_CANDIDATE_SHA256=af48592c748ba80b1c614dc7a96c8250ae3bcca4c185c92939b4d308f8ef31f6
 
 [[ "$(git branch --show-current)" == "$EXPECTED_BRANCH" ]] \
   || { echo "run from $EXPECTED_BRANCH" >&2; exit 2; }
