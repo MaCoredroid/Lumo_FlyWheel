@@ -1167,6 +1167,7 @@ _FR13_FIXED32_TAW_LAST_WORK: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_WARMUPS: dict[tuple[Any, ...], dict[str, Any]] = {}
 _FR13_FIXED32_WORK_ANNOUNCED = False
 _FR13_FIXED32_BATCHES = (1, 2, 3, 4)
+_FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES = (1, 4)
 _FR13_FIXED32_INTEGER_DTYPES = None
 _FR13_FIXED32_TAW_NATIVE_CANDIDATE = "fixed32_all_parent_commit_v2"
 _FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_SIDECARS = (
@@ -1186,9 +1187,9 @@ _FR13_FIXED32_TAW_NATIVE_LIVE_PASS = (
 _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS = (
     "/logs/fr13_fixed32_taw_native_precompute.production_pass.json"
 )
-_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v5"
+_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v6"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "4ab3d740c7ebe20fbddefd4f9cbb735f3c58e1b8907376d83ce9f39c24f2ae7e"
+    "af390b4ae49b93c9bb4cca79136127382ece92070f67714efe3c62fb678b6007"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
@@ -1199,6 +1200,7 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_parse_int",
     "_fr13_fixed32_taw_topology_binding",
     "_fr13_fixed32_taw_native_arm_sources",
+    "_fr13_fixed32_taw_validate_pass_record",
     "_fr13_fixed32_taw_native_production_pass",
     "_fr13_fixed32_taw_native_selector",
     "_fr13_fixed32_taw_native_precompute_enabled",
@@ -1503,36 +1505,36 @@ def _fr13_fixed32_taw_native_arm_sources(
     return sources
 
 
-def _fr13_fixed32_taw_native_production_pass(
+def _fr13_fixed32_taw_validate_pass_record(
+    payload: object,
+    topology,
     *,
-    environ=None,
-    path: str | None = None,
     expected_mode: str | None = None,
     expected_batch: int | None = None,
 ) -> dict[str, Any]:
-    """Validate the narrow source-bound PASS record for native production."""
-    env = os.environ if environ is None else environ
-    resolved_path = path or env.get(
-        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_PATH",
-        _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS,
-    )
-    if os.path.islink(resolved_path) or not os.path.isfile(resolved_path):
-        raise RuntimeError(
-            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION requires a regular "
-            f"live PASS JSON: {resolved_path}"
-        )
-    try:
-        with open(resolved_path, encoding="ascii") as handle:
-            payload = json.load(handle)
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise RuntimeError(
-            "FR13 fixed32 TAW native production PASS JSON is unreadable: "
-            f"{error}"
-        ) from error
+    """Validate one independently qualified real replay."""
+    expected_keys = {
+        "schema",
+        "status",
+        "candidate",
+        "source_contract_schema",
+        "source_contract_sha256",
+        "task_marker",
+        "mode",
+        "valid_mask",
+        "topology_binding",
+        "batch_size",
+        "covered_batches",
+        "geometry",
+        "probability_mismatches",
+        "product_mismatches",
+        "evidence_route",
+        "reference_returned",
+        "candidate_returned",
+    }
     task_marker = payload.get("task_marker") if isinstance(payload, dict) else None
     geometry = payload.get("geometry") if isinstance(payload, dict) else None
     payload_mode = payload.get("mode") if isinstance(payload, dict) else None
-    topology = _fr13_fixed32_topology()
     topology_binding = _fr13_fixed32_taw_topology_binding(topology)
     expected_valid_mask = (
         topology.VALID_MASK_BY_MODE.get(payload_mode)
@@ -1541,6 +1543,7 @@ def _fr13_fixed32_taw_native_production_pass(
     )
     if (
         not isinstance(payload, dict)
+        or set(payload) != expected_keys
         or payload.get("schema")
         != "fr13.fixed32.taw_native_precompute.live_pass.v2"
         or payload.get("status") != "pass"
@@ -1564,32 +1567,137 @@ def _fr13_fixed32_taw_native_production_pass(
         or payload.get("topology_binding") != topology_binding
         or type(payload.get("batch_size")) is not int
         or payload.get("batch_size") not in _FR13_FIXED32_BATCHES
-        or payload.get("covered_batches")
-        != [payload.get("batch_size")]
+        or payload.get("covered_batches") != [payload.get("batch_size")]
         or geometry != _FR13_FIXED32_TAW_GEOMETRY
     ):
         raise RuntimeError(
-            "FR13 fixed32 TAW native production PASS JSON is invalid or "
-            "belongs to a different candidate/source"
+            "FR13 fixed32 TAW native PASS record is invalid or belongs to a "
+            "different candidate/source"
         )
     if expected_mode is not None and payload["mode"] != expected_mode:
         raise RuntimeError(
             "FR13 fixed32 TAW native production mode does not match PASS: "
             f"{expected_mode!r} != {payload['mode']!r}"
         )
-    if (
-        expected_batch is not None
-        and expected_batch not in payload["covered_batches"]
-    ):
+    if expected_batch is not None and payload["batch_size"] != expected_batch:
         raise RuntimeError(
             "FR13 fixed32 TAW native production batch is not covered by PASS: "
-            f"B{expected_batch} not in {payload['covered_batches']}"
+            f"B{expected_batch} != B{payload['batch_size']}"
+        )
+    return payload
+
+
+def _fr13_fixed32_taw_native_production_pass(
+    *,
+    environ=None,
+    path: str | None = None,
+    expected_mode: str | None = None,
+    expected_batch: int | None = None,
+) -> dict[str, Any]:
+    """Validate a source-bound bundle of independently qualified batches."""
+    env = os.environ if environ is None else environ
+    resolved_path = path or env.get(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_PATH",
+        _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS,
+    )
+    if os.path.islink(resolved_path) or not os.path.isfile(resolved_path):
+        raise RuntimeError(
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION requires a regular "
+            f"live PASS JSON: {resolved_path}"
+        )
+    try:
+        with open(resolved_path, encoding="ascii") as handle:
+            payload = json.load(handle)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native production PASS JSON is unreadable: "
+            f"{error}"
+        ) from error
+    topology = _fr13_fixed32_topology()
+    topology_binding = _fr13_fixed32_taw_topology_binding(topology)
+    bundle_keys = {
+        "schema",
+        "status",
+        "candidate",
+        "source_contract_schema",
+        "source_contract_sha256",
+        "mode",
+        "valid_mask",
+        "topology_binding",
+        "required_production_batches",
+        "qualified_batches",
+        "batch_passes",
+    }
+    payload_mode = payload.get("mode") if isinstance(payload, dict) else None
+    expected_valid_mask = (
+        topology.VALID_MASK_BY_MODE.get(payload_mode)
+        if isinstance(payload_mode, str)
+        else None
+    )
+    qualified_batches = (
+        payload.get("qualified_batches") if isinstance(payload, dict) else None
+    )
+    batch_passes = payload.get("batch_passes") if isinstance(payload, dict) else None
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != bundle_keys
+        or payload.get("schema")
+        != "fr13.fixed32.taw_native_precompute.pass_bundle.v1"
+        or payload.get("status") != "production_ready"
+        or payload.get("candidate") != _FR13_FIXED32_TAW_NATIVE_CANDIDATE
+        or payload.get("source_contract_schema")
+        != _FR13_FIXED32_TAW_SOURCE_SCHEMA
+        or payload.get("source_contract_sha256")
+        != _FR13_FIXED32_TAW_SOURCE_SHA256
+        or payload_mode not in ("tail6_fixed32", "hydra27_fixed32")
+        or type(payload.get("valid_mask")) is not int
+        or payload.get("valid_mask") != expected_valid_mask
+        or payload.get("topology_binding") != topology_binding
+        or payload.get("required_production_batches")
+        != list(_FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES)
+        or not isinstance(qualified_batches, list)
+        or not qualified_batches
+        or any(
+            type(batch) is not int or batch not in _FR13_FIXED32_BATCHES
+            for batch in qualified_batches
+        )
+        or qualified_batches != sorted(set(qualified_batches))
+        or not set(_FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES).issubset(
+            qualified_batches
+        )
+        or not isinstance(batch_passes, dict)
+        or set(batch_passes) != {str(batch) for batch in qualified_batches}
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 TAW native production PASS bundle is invalid or "
+            "belongs to a different candidate/source"
+        )
+    for batch in qualified_batches:
+        _fr13_fixed32_taw_validate_pass_record(
+            batch_passes[str(batch)],
+            topology,
+            expected_mode=payload_mode,
+            expected_batch=batch,
+        )
+    if expected_mode is not None and payload_mode != expected_mode:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native production mode does not match PASS: "
+            f"{expected_mode!r} != {payload_mode!r}"
+        )
+    if expected_batch is not None and expected_batch not in qualified_batches:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native production batch is not covered by PASS: "
+            f"B{expected_batch} not in {qualified_batches}"
         )
     return payload
 
 
 def _fr13_fixed32_taw_native_selector(
-    *, environ=None, diagnostic_sidecars=None, production_sidecars=None,
+    *,
+    environ=None,
+    diagnostic_sidecars=None,
+    production_sidecars=None,
+    batch_size: int | None = None,
 ) -> str:
     """Resolve reference, diagnostic, or source-gated production."""
     env = os.environ if environ is None else environ
@@ -1623,10 +1731,17 @@ def _fr13_fixed32_taw_native_selector(
                 "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION requires an "
                 "exact fixed32 mode"
             )
-        _fr13_fixed32_taw_native_production_pass(
+        bundle = _fr13_fixed32_taw_native_production_pass(
             environ=env,
             expected_mode=mode,
         )
+        if batch_size is not None:
+            if batch_size not in _FR13_FIXED32_BATCHES:
+                raise RuntimeError(
+                    f"FR13 fixed32 batch must be 1..4, got {batch_size}"
+                )
+            if batch_size not in bundle["qualified_batches"]:
+                return "reference"
         return "production"
     if diagnostic:
         return "diagnostic"
@@ -1683,7 +1798,7 @@ def _fr13_fixed32_taw_native_live_pass_emit(
     topology = _fr13_fixed32_topology()
     if mode not in topology.VALID_MASK_BY_MODE:
         raise RuntimeError(f"unknown FR13_FIXED32_MODE {mode!r}")
-    payload = {
+    record = {
         "schema": "fr13.fixed32.taw_native_precompute.live_pass.v2",
         "status": "pass",
         "candidate": _FR13_FIXED32_TAW_NATIVE_CANDIDATE,
@@ -1701,6 +1816,105 @@ def _fr13_fixed32_taw_native_live_pass_emit(
         "evidence_route": evidence_route,
         "reference_returned": True,
         "candidate_returned": False,
+    }
+    _fr13_fixed32_taw_validate_pass_record(
+        record,
+        topology,
+        expected_mode=mode,
+        expected_batch=int(batch_size),
+    )
+    binding = _fr13_fixed32_taw_topology_binding(topology)
+    bundle_common = {
+        "schema": "fr13.fixed32.taw_native_precompute.pass_bundle.v1",
+        "candidate": _FR13_FIXED32_TAW_NATIVE_CANDIDATE,
+        "source_contract_schema": _FR13_FIXED32_TAW_SOURCE_SCHEMA,
+        "source_contract_sha256": _FR13_FIXED32_TAW_SOURCE_SHA256,
+        "mode": mode,
+        "valid_mask": int(topology.VALID_MASK_BY_MODE[mode]),
+        "topology_binding": binding,
+        "required_production_batches": list(
+            _FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES
+        ),
+    }
+    batch_passes = {}
+    if os.path.lexists(path):
+        if os.path.islink(path) or not os.path.isfile(path):
+            raise RuntimeError(
+                "FR13 fixed32 TAW native live PASS bundle path is not regular: "
+                f"{path}"
+            )
+        try:
+            with open(path, encoding="ascii") as handle:
+                previous = json.load(handle)
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise RuntimeError(
+                "FR13 fixed32 TAW native live PASS bundle is unreadable: "
+                f"{error}"
+            ) from error
+        previous_common = {
+            key: previous.get(key) if isinstance(previous, dict) else None
+            for key in bundle_common
+        }
+        previous_qualified = (
+            previous.get("qualified_batches")
+            if isinstance(previous, dict)
+            else None
+        )
+        previous_passes = (
+            previous.get("batch_passes") if isinstance(previous, dict) else None
+        )
+        expected_status = (
+            "production_ready"
+            if isinstance(previous_qualified, list)
+            and set(_FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES).issubset(
+                previous_qualified
+            )
+            else "partial"
+        )
+        if (
+            not isinstance(previous, dict)
+            or set(previous)
+            != set(bundle_common)
+            | {"status", "qualified_batches", "batch_passes"}
+            or previous_common != bundle_common
+            or previous.get("status") != expected_status
+            or not isinstance(previous_qualified, list)
+            or any(
+                type(batch) is not int or batch not in _FR13_FIXED32_BATCHES
+                for batch in previous_qualified
+            )
+            or previous_qualified != sorted(set(previous_qualified))
+            or not isinstance(previous_passes, dict)
+            or set(previous_passes)
+            != {str(batch) for batch in previous_qualified}
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 TAW native live PASS bundle cannot merge stale "
+                "or malformed evidence"
+            )
+        for previous_batch in previous_qualified:
+            _fr13_fixed32_taw_validate_pass_record(
+                previous_passes[str(previous_batch)],
+                topology,
+                expected_mode=mode,
+                expected_batch=previous_batch,
+            )
+        batch_passes.update(previous_passes)
+    batch_passes[str(int(batch_size))] = record
+    qualified_batches = sorted(int(batch) for batch in batch_passes)
+    payload = {
+        **bundle_common,
+        "status": (
+            "production_ready"
+            if set(_FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES).issubset(
+                qualified_batches
+            )
+            else "partial"
+        ),
+        "qualified_batches": qualified_batches,
+        "batch_passes": {
+            str(batch): batch_passes[str(batch)] for batch in qualified_batches
+        },
     }
     temporary = f"{path}.tmp.{os.getpid()}"
     with open(temporary, "w", encoding="ascii") as handle:
@@ -1807,8 +2021,10 @@ def fr13_fixed32_taw_native_live_gate_on_replay(
     return {"status": "passed", "batch_size": int(batch_size)}
 
 
-def _fr13_fixed32_taw_tensor_call_census() -> dict[str, Any]:
-    selector = _fr13_fixed32_taw_native_selector()
+def _fr13_fixed32_taw_tensor_call_census(
+    *, batch_size: int | None = None,
+) -> dict[str, Any]:
+    selector = _fr13_fixed32_taw_native_selector(batch_size=batch_size)
     if selector == "diagnostic":
         census = _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS
     elif selector == "production":
@@ -1818,7 +2034,11 @@ def _fr13_fixed32_taw_tensor_call_census() -> dict[str, Any]:
     return dict(census)
 
 
-def _fr13_fixed32_taw_source_contract(topology) -> dict[str, Any]:
+def _fr13_fixed32_taw_source_contract(
+    topology,
+    *,
+    batch_size: int | None = None,
+) -> dict[str, Any]:
     """Bind the audited fixed TAW source and geometry without tracing a live event."""
     global _FR13_FIXED32_TAW_SOURCE_CACHE
     global _FR13_FIXED32_TAW_SOURCE_CODES
@@ -1843,7 +2063,9 @@ def _fr13_fixed32_taw_source_contract(topology) -> dict[str, Any]:
             )
         return {
             **_FR13_FIXED32_TAW_SOURCE_CACHE,
-            "tensor_call_census": _fr13_fixed32_taw_tensor_call_census(),
+            "tensor_call_census": _fr13_fixed32_taw_tensor_call_census(
+                batch_size=batch_size
+            ),
         }
 
     geometry = {
@@ -1941,7 +2163,9 @@ def _fr13_fixed32_taw_source_contract(topology) -> dict[str, Any]:
     _FR13_FIXED32_TAW_SOURCE_CACHE = contract
     return {
         **contract,
-        "tensor_call_census": _fr13_fixed32_taw_tensor_call_census(),
+        "tensor_call_census": _fr13_fixed32_taw_tensor_call_census(
+            batch_size=batch_size
+        ),
     }
 
 
@@ -2727,7 +2951,8 @@ def fr13_fixed32_taw_warm_execute(
             )
             expected_owner = (
                 entry["native_ab_entry"]
-                if _fr13_fixed32_taw_native_selector() == "production"
+                if _fr13_fixed32_taw_native_selector(batch_size=batch)
+                == "production"
                 else entry
             )
             if (
@@ -4332,7 +4557,9 @@ def _fr13_fixed32_publish_work(
     source_contract: dict[str, Any],
     layout_contract: dict[str, Any],
 ) -> None:
-    native_selector = _fr13_fixed32_taw_native_selector()
+    native_selector = _fr13_fixed32_taw_native_selector(
+        batch_size=batch_size
+    )
     base_target_rows = int(topology.WALK_CAP)
     base_self_rows = int(topology.WALK_CAP)
     candidate_target_rows = 17
@@ -4412,7 +4639,7 @@ def _fr13_fixed32_publish_work(
         or source_contract["source_contract_sha256"]
         != _FR13_FIXED32_TAW_SOURCE_SHA256
         or source_contract["tensor_call_census"]
-        != _fr13_fixed32_taw_tensor_call_census()
+        != _fr13_fixed32_taw_tensor_call_census(batch_size=batch_size)
     ):
         raise RuntimeError("FR13 fixed32 TAW source contract drift at publish")
     overlap = (
@@ -4492,7 +4719,6 @@ def fr13_fixed32_taw_commit(
     if mode is None:
         mode = os.environ.get("FR13_FIXED32_MODE", "")
     topology, valid_mask = _fr13_fixed32_runtime_contract(mode)
-    source_contract = _fr13_fixed32_taw_source_contract(topology)
     if all_greedy:
         raise RuntimeError(
             "FR13 fixed32 acceptance route requires sampled temp>0 requests"
@@ -4506,6 +4732,10 @@ def fr13_fixed32_taw_commit(
     batch_size = int(num_draft_tokens.shape[0])
     if batch_size not in _FR13_FIXED32_BATCHES:
         raise RuntimeError(f"FR13 fixed32 batch must be 1..4, got {batch_size}")
+    source_contract = _fr13_fixed32_taw_source_contract(
+        topology,
+        batch_size=batch_size,
+    )
     key = fr13_fixed32_taw_cache_key(
         mode,
         valid_mask,
@@ -4546,7 +4776,9 @@ def fr13_fixed32_taw_commit(
         fixed_uniforms,
         rng_route=rng_route,
     )
-    native_selector = _fr13_fixed32_taw_native_selector()
+    native_selector = _fr13_fixed32_taw_native_selector(
+        batch_size=batch_size
+    )
     if native_selector == "diagnostic":
         probability_mismatches = entry["native_ab_probability_mismatches"]
         product_mismatches = entry["native_ab_product_mismatches"]
@@ -4642,10 +4874,6 @@ def fr13_fixed32_taw_commit(
             loop_iterations,
         ) = reference
     elif native_selector == "production":
-        _fr13_fixed32_taw_native_production_pass(
-            expected_mode=mode,
-            expected_batch=batch_size,
-        )
         probability_caches = _fr13_fixed32_taw_probability_caches(
             entry,
             target_logits,
