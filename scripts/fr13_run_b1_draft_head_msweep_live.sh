@@ -43,7 +43,7 @@ CANDIDATE_SOURCE_SHA256=$(sha256sum "$CANDIDATE_SOURCE" | cut -d' ' -f1)
 FA2_SHA256=$(sha256sum "$FORKED_FA2_SO" | cut -d' ' -f1)
 
 [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
-[[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
+[[ -z "$(git status --porcelain=v1)" ]] \
   || { echo "small-M sweep source checkout must be clean" >&2; exit 2; }
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "small-M sweep requires exclusive Docker/GPU ownership" >&2; exit 2; }
@@ -101,6 +101,7 @@ if OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
   FR13_CFWD_GPU_TIMER=1 \
   FR13_CFWD_GPU_TIMER_JSON="/workspace/$RUNROOT/sidecars/${ARM}_cfwd.json" \
   FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
+  FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0 \
   FR13_DRAFT_HEAD_PAD_ROWS=0 \
   FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=0 \
   FR13_DRAFT_HEAD_M32_LIVE_AB=0 \
@@ -111,10 +112,21 @@ if OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
   FR13_DRAFT_HEAD_MSWEEP_LIVE_JSON=/logs/fr13_draft_head_msweep.live.json \
   FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0" \
   FR13_FIXED32_GDN_PATH_BV_CANDIDATE= \
+  FR13_FIXED32_GDN_PATH_BV_PRODUCTION= \
   FR13_FIXED32_CUTLASS_WAVE=stock \
+  FR13_FIXED32_CUTLASS_WAVE_SO= \
+  FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=0 \
+  FR13_FIXED32_ATTRIBUTION_ONLY=0 \
+  FR13_FIXED32_BATCH_GDN_BYTE_AB=0 \
+  FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=0 \
+  FR13_FIXED32_BATCH_GDN_BV_CANDIDATE= \
+  FR13_FIXED32_BATCH_GDN_PRODUCTION=0 \
+  FR13_FIXED32_BATCH_GDN_BV_PRODUCTION= \
   FORKED_FA2_SO="$FORKED_FA2_SO" \
   FR13_FA2_QROW16_LIVE_PAGED_AB=0 \
+  FR13_FA2_QROW16_PRODUCTION=0 \
   FR13_DFWD_UNIFIED_BM8_LIVE_AB=0 \
+  FR13_DFWD_UNIFIED_BM8_PRODUCTION=0 \
   bash scripts/fr13_bigdenom_swe_serve_variant.sh \
     "$ARM" hydra27_fixed32 "$SUBSET" \
     > "$RUNROOT_ABS/$ARM.runlog" 2>&1; then
@@ -142,7 +154,7 @@ cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" \
    && "$(sha256sum "$CANDIDATE_SOURCE" | cut -d' ' -f1)" == "$CANDIDATE_SOURCE_SHA256" \
    && "$(sha256sum "$FORKED_FA2_SO" | cut -d' ' -f1)" == "$FA2_SHA256" \
    && "$(git rev-parse HEAD)" == "$SOURCE_COMMIT" \
-   && -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
+   && -z "$(git status --porcelain=v1)" ]] \
   || { echo "B1 sweep input identity changed during execution" >&2; exit 14; }
 (( serve_rc == 0 )) || exit "$serve_rc"
 

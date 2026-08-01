@@ -314,4 +314,21 @@ def test_launcher_and_runner_are_real_b1_reference_served_only() -> None:
     assert "FR13_DRAFT_HEAD_MSWEEP_LIVE_AB=1" in runner
     assert "scripts/fr13_draft_head_msweep_validate.py" in runner
     assert '[[ "$(docker ps -aq | wc -l)" -eq 0 ]]' in runner
+    assert "git status --porcelain=v1 --untracked-files=no" not in runner
+    assert runner.count("git status --porcelain=v1") == 2
+    for selector in (
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0",
+        "FR13_FA2_QROW16_PRODUCTION=0",
+        "FR13_DFWD_UNIFIED_BM8_PRODUCTION=0",
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB=0",
+        "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=0",
+        "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE=",
+        "FR13_FIXED32_BATCH_GDN_PRODUCTION=0",
+        "FR13_FIXED32_BATCH_GDN_BV_PRODUCTION=",
+        "FR13_FIXED32_GDN_PATH_BV_PRODUCTION=",
+        "FR13_FIXED32_CUTLASS_WAVE_SO=",
+        "FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=0",
+        "FR13_FIXED32_ATTRIBUTION_ONLY=0",
+    ):
+        assert selector in runner
     assert 'cmp -s "$RUNROOT_ABS/runtime_manifest.at_launch.json"' in runner
