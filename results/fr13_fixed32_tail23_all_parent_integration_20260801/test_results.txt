@@ -1,0 +1,45 @@
+Static verification (2026-08-01 UTC)
+
+1. Fixed32 semantics
+Command:
+python3 scripts/fr13_fixed32_semantics_test.py
+Result:
+PASS: 7 tests across tail6_fixed32 and hydra27_fixed32; physical 31/32.
+
+2. All-parent focused suite
+Command:
+CUDA_VISIBLE_DEVICES='' python3 -m pytest -q \
+  tests/test_fr13_fixed32_taw_exact_commit_kernel.py \
+  tests/test_fr13_fixed32_taw_native_precompute.py \
+  tests/test_fr13_fixed32_taw_real_task_arm.py \
+  tests/test_fr13_fixed32_taw_exact_commit_cuda.py
+Result:
+34 passed, 1 skipped (CUDA unavailable on this host).
+
+3. Fixed-work and floor-contract suite
+Command:
+python3 -m pytest -q \
+  tests/test_fr13_fixed32_conv_pregather_geometry.py \
+  tests/test_fr13_hardware_floor_ledger.py \
+  tests/test_fr13_fixed32_floor_propagation.py \
+  tests/test_fr13_fixed32_pretask_metrics.py
+Result:
+29 passed.
+
+4. Mask ownership selection
+Result:
+4 passed, 30 deselected.
+
+5. Final preseed suite
+Result:
+54 passed.
+
+6. Additional checks
+- python py_compile: passed
+- git diff --check: passed
+
+Environment limitation:
+The full ownership/preseed collection had 80 passes and 8 collection failures
+because this CPU-only host has no Triton installation. No GPU/container or real
+SWE-Verified task was run. These results make no timing, TPS, acceptance, or
+hardware-floor claim.
