@@ -1,0 +1,173 @@
+{
+  "schema": "fr13.fixed32.sfwd_post_state_fusion_kernel_audit.v1",
+  "created_at_utc": "2026-08-01T06:26:22Z",
+  "status": "SOURCE_BOUND_CPU_AUDIT_NO_NEW_GPU_MEASUREMENT",
+  "source": {
+    "commit": "5838534519f4f9e91e7fa9979e3dd868884d6cd6",
+    "parent_commit": "11cdeb7c0b5d1adbd9c908c1c8b7944942778912",
+    "state_fusion_commit": "5838534519f4f9e91e7fa9979e3dd868884d6cd6",
+    "files": {
+      "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "28c50192eb871d4bdc96f886d6817b88a9cd6ce19fc9846f0eeb966cabb05db7",
+      "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "9441e59cd00aed7fe770e99bf3c0ba2c03f2967d5fa861a035a60871b86c7f87",
+      "scripts/fr13_patch_fa2_tree_bias.py": "aa9149c62e46add4ed92ccd762b43584866543cbca6ffc42b1a1e4bffcb39fc5"
+    },
+    "model_config": {
+      "path": "/models/qwen3.6-27b-fp8/config.json",
+      "sha256": "f78c412bfdec65a88c8aa2a031d39c2fda32e3377ae48a77f971bc40a4f095df",
+      "num_hidden_layers": 64,
+      "full_attention_interval": 4,
+      "gdn_layers": 48,
+      "full_attention_layers": 16,
+      "linear_num_key_heads": 16,
+      "linear_num_value_heads": 48,
+      "linear_key_head_dim": 128,
+      "linear_value_head_dim": 128
+    }
+  },
+  "scope": {
+    "workload": "princeton-nlp/SWE-bench_Verified",
+    "tree_contract": "fixed32",
+    "batch_sizes": [
+      1,
+      4
+    ],
+    "draft_vocabulary_k": 0,
+    "draft_vocabulary_root": 0,
+    "excluded_concurrent_work": [
+      "target projection StreamK",
+      "CFWD all-parent"
+    ],
+    "gpu_used": false,
+    "container_used": false,
+    "probe_or_synthetic_timing": false,
+    "new_timing_performed": false
+  },
+  "evidence": {
+    "real_b1_nsight": {
+      "path": "results/fr13_fixed32_b1_nsys_20260731T013952Z_curated/nsys_attribution.json",
+      "sha256": "685c410a0ba09d00c8b244bfa06809530337cea383b88fa92a5da1013eadf2d0",
+      "diagnostic_summary_sha256": "b5af7e857b6040850a2fc5853316c5d926e44885e0fab40821d6ac8ccc34cfe4",
+      "measured_source_commit": "1a7a765447c8ce6068e0dd5d3a344d58ace85f2b",
+      "arm": "Tail6 B1",
+      "real_swe_verified": true,
+      "declared_tasks": 4,
+      "fully_evaluated_tasks_before_capture_stop": 2,
+      "sfwd_range_instances": 882,
+      "complete_step_ranges": 881,
+      "attribution_only": true,
+      "current_stack_timing": false
+    },
+    "qrow16_current_lineage": {
+      "path": "results/fr13_fixed32_qrow16_prod_exact4_b1_20260731T182827Z/measurement_summary.json",
+      "sha256": "e776b3a977f00652f0917866911dfdb3252fda9e41f2e1538251ce303c581c73",
+      "source_commit": "04c98057fa9d9e658282cf0b32422716660e1210",
+      "valid_hydra_exact4_wall_improvement_ms_per_event": 6.24684416735488,
+      "isolated_attention_saving": false,
+      "kernel_call_sites": [
+        "scripts/fr13_patch_fa2_tree_bias.py:123",
+        "scripts/fr13_patch_fa2_tree_bias.py:175",
+        "scripts/fr13_patch_fa2_tree_bias.py:210"
+      ]
+    },
+    "state_fusion_candidate": {
+      "path": "results/fr13_fixed32_sfwd_state_fusion_source_20260801/candidate.json",
+      "sha256": "8cd390c6a12a60ea5fdb97edad980ab60289eae5d32672034ed81fcaee7ce0e7",
+      "default_off": true,
+      "production_selector_present": false,
+      "real_timing_available": false
+    }
+  },
+  "historical_b1_sfwd_ranking_ms_per_event": [
+    {
+      "group": "target_fp8_projection",
+      "ms_per_event": 112.31295398412699,
+      "launches_per_event": 256,
+      "disposition": "excluded_streamk_projection_work"
+    },
+    {
+      "group": "tree_fa2_attention",
+      "ms_per_event": 24.708600648526076,
+      "launches_per_event": 16,
+      "disposition": "old_stock_symbol_replaced_by_qrow16_no_current_symbol_timing"
+    },
+    {
+      "group": "conv_state_motion",
+      "ms_per_event": 15.014089253968255,
+      "launches_per_event": 144,
+      "disposition": "addressed_by_default_off_one_launch_per_layer_state_fusion"
+    },
+    {
+      "group": "tree_gdn_path",
+      "ms_per_event": 14.019520105442178,
+      "launches_per_event": 96,
+      "disposition": "largest_remaining_unclaimed_launch_memory_group"
+    }
+  ],
+  "decision": {
+    "strict_current_duration_ranking_available": false,
+    "ranking_scope": "source_unchanged_groups_not_claimed_by_an_active_kernel_candidate",
+    "largest_remaining_unclaimed_group": "tree_gdn_path",
+    "kernel_symbols": {
+      "b1": "_tree_gdn_path_kernel",
+      "b2_to_b4": "_tree_gdn_path_kernel_fixed32_batch"
+    },
+    "call_sites": [
+      "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:7124",
+      "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:7349",
+      "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:11534",
+      "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:12262",
+      "scripts/fr10_phase4_patch_vllm_tree_gdn.py:11328",
+      "scripts/fr10_phase4_patch_vllm_tree_gdn.py:11421"
+    ],
+    "launch_contract": {
+      "layers_per_event": 48,
+      "levels": 2,
+      "path_counts_per_request": [
+        1,
+        11
+      ],
+      "max_path_lengths": [
+        5,
+        7
+      ],
+      "physical_launches_per_layer_b1": 2,
+      "physical_launches_per_layer_b4": 2,
+      "physical_launches_per_event_b1": 96,
+      "physical_launches_per_event_b4": 96,
+      "batch_folded_grid_b4": true
+    },
+    "cross_level_dependency": {
+      "fp32_state_bytes_per_node": 3145728,
+      "level0_export_states_per_request": 5,
+      "level1_parent_state_reads_per_request": 11,
+      "explicit_handoff_bytes_per_event_b1": 2415919104,
+      "explicit_handoff_bytes_per_event_b4": 9663676416,
+      "hbm_equivalent_ms_at_273_gb_s_b1": 8.849520527472528,
+      "hbm_equivalent_ms_at_273_gb_s_b4": 35.39808210989011,
+      "hbm_equivalent_is_savings_claim": false,
+      "cache_residency_measured": false
+    },
+    "bound_class": "state_memory_and_launch_bound_without_ncu_counters",
+    "ring_k_v_a_b_export_already_fused": true,
+    "freshness_flags_already_fused": true
+  },
+  "conservative_savings_ms_per_event": {
+    "b1": {
+      "claimable_before_matched_real_timing": 0.0,
+      "stale_historical_full_group_budget": 14.019520105442178,
+      "budget_is_forecast": false
+    },
+    "b4": {
+      "claimable_before_matched_real_timing": 0.0,
+      "real_nsight_group_duration": null,
+      "loose_four_x_b1_work_scaling_reference": 56.07808042176871,
+      "scaling_reference_is_bound_or_measurement": false
+    }
+  },
+  "implementation": {
+    "kernel_added": false,
+    "artifact_only": true,
+    "reason": "The second path level consumes FP32 parent state produced by the first. One ordinary Triton launch has no safe cross-program grid barrier. Spin synchronization risks residency deadlock, path recomputation adds 50 node updates per layer and duplicate writers, and serializing into one program removes deployed head/value parallelism.",
+    "narrow_semantics_preserving_fusion_identified": false
+  }
+}
