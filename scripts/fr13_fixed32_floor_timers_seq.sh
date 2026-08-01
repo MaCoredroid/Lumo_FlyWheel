@@ -1,4 +1,4 @@
-# Fixed-work floor campaign: Tail21 and Hydra27 use the same 31 physical
+# Fixed-work floor campaign: Tail23 and Hydra27 use the same 31 physical
 # drafts plus the implicit root. The arm kind changes only the sampler validity
 # mask; every launch must report draft_tokens/drafts=31.
 case "${BSIZE:-}" in

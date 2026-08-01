@@ -702,3 +702,39 @@ def test_launcher_keeps_taw_native_production_default_off_and_source_gated() -> 
     assert "fr13_fixed32_taw_native_precompute.production_pass.json" in launcher
     assert "fr13_fixed32_taw_native_live_gate_begin(" in patcher
     assert "fr13_fixed32_taw_native_live_gate_on_replay(" in patcher
+
+
+def test_tail23_exact4_b4_runner_pins_k64_and_requires_all_real_batches() -> None:
+    runner_path = Path(
+        "scripts/fr13_run_b4_tail23_all_parent_live_gate.sh"
+    )
+    runner = runner_path.read_text(encoding="utf-8")
+    manifest = Path("scripts/fr13_runtime_manifest.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert runner_path.stat().st_mode & 0o111
+    assert "SUBSET_SHA256=0e37b7137115332372" in runner
+    assert "BLOCK_MAP_SHA256=85dffa58703e42aa" in runner
+    assert "TAW_SOURCE_SCHEMA=fr13-fixed32-taw-all-parent-v7" in runner
+    assert "TAIL_VALID_MASK=0x7a9ce7ff" in runner
+    assert "TAIL_ACTIVE_DRAFTS=23" in runner
+    assert "FR13_DRAFT_VOCAB_K=65536 FR13_DRAFT_VOCAB_ROOT=1" in runner
+    assert (
+        "FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/"
+        "fr13_dvk_subset_blocks.json"
+    ) in runner
+    assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in runner
+    assert "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=1" in runner
+    assert "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0" in runner
+    assert '"$ARM" tail6_fixed32 "$SUBSET"' in runner
+    assert 'bundle.get("qualified_batches") != [1, 2, 3, 4]' in runner
+    assert 'record.get("covered_batches") != [batch]' in runner
+    assert 'record.get("reference_returned") is not True' in runner
+    assert 'record.get("candidate_returned") is not False' in runner
+    assert '"raw_prompt_response_published": False' in runner
+    assert "LUMO_SWE_AUTOCOMMIT=0" in runner
+    assert (
+        '"scripts/fr13_run_b4_tail23_all_parent_live_gate.sh"'
+        in manifest
+    )

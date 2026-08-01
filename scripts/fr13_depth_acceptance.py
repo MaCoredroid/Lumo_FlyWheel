@@ -6343,7 +6343,7 @@ def main() -> None:
         "--fixed32",
         action="store_true",
         help=(
-            "reduce Tail21/Hydra27 fixed-work arms and require 31 physical "
+            "reduce Tail23/Hydra27 fixed-work arms and require 31 physical "
             "draft tokens per event"
         ),
     )
