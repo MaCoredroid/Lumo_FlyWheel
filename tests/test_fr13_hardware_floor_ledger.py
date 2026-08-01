@@ -5,6 +5,10 @@ from hashlib import sha256
 from pathlib import Path
 
 from scripts.fr13_hardware_floor_ledger import (
+    FULL_VOCAB_DRAFTER_HEAD_BYTES,
+    FULL_VOCAB_M32_MANDATORY_WEIGHT_BYTES,
+    FULL_VOCAB_M32_MANDATORY_WEIGHT_FLOOR_MS,
+    FULL_VOCAB_M32_SLO_CAP_MS,
     INITIAL_MTP_FORWARD_PASSES,
     MTP_FORWARD_BYTES_PER_PASS,
     MTP_FORWARD_PASSES,
@@ -91,6 +95,13 @@ def test_weight_ledger_counts_initial_and_post_root_mtp_forwards() -> None:
     assert mtp["post_root_graph_passes"] == 4
     assert mtp["passes"] == 5
     assert mtp["bytes"] == 5 * MTP_FORWARD_BYTES_PER_PASS
+
+
+def test_full_vocabulary_m32_floor_math_is_explicit() -> None:
+    assert FULL_VOCAB_DRAFTER_HEAD_BYTES == 12_713_984_000
+    assert FULL_VOCAB_M32_MANDATORY_WEIGHT_BYTES == 42_025_179_008
+    assert FULL_VOCAB_M32_MANDATORY_WEIGHT_FLOOR_MS == 153.938384645
+    assert FULL_VOCAB_M32_SLO_CAP_MS == 177.029142341
 
 
 def test_corrected_weight_ledger_matches_new_published_artifact() -> None:

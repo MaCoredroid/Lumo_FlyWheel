@@ -67,17 +67,43 @@ SOURCE_COMMIT=$(git rev-parse HEAD)
 export BSIZE=1
 export CONC=1
 export WALL=0
-export FR13_DRAFT_VOCAB_ROOT=1
+if [[ "$FR13_GATE_DRAFT_HEAD_M32" == "1" ]]; then
+  export FR13_DRAFT_VOCAB_ROOT=0
+  export FR13_DRAFT_VOCAB_K=0
+  export FR13_DRAFT_VOCAB_BLOCKS=
+  export FR13_MANDATORY_WEIGHT_BYTES=42025179008
+  export FR13_WEIGHT_FLOOR_MS=153.938384645
+  export FR13_WEIGHT_FLOOR_SCOPE="five full-vocabulary drafter-head reads"
+else
+  export FR13_DRAFT_VOCAB_ROOT=1
+fi
 export FR13_FLOOR_ORDER=TH
 
 source scripts/fr13_canonical_env.sh
+if [[ "$FR13_GATE_DRAFT_HEAD_M32" == "1" ]]; then
+  # canonical_env supplies the normal 64K loop subset; the full-head gate
+  # intentionally removes that workload before launching either comparison.
+  export FR13_DRAFT_VOCAB_K=0
+  export FR13_DRAFT_VOCAB_BLOCKS=
+  export FR13_MANDATORY_WEIGHT_BYTES=42025179008
+  export FR13_WEIGHT_FLOOR_MS=153.938384645
+  export FR13_WEIGHT_FLOOR_SCOPE="five full-vocabulary drafter-head reads"
+fi
 run_variant() { :; }
 source scripts/fr13_fixed32_floor_timers_seq.sh
+if [[ "$FR13_GATE_DRAFT_HEAD_M32" == "1" ]]; then
+  export FR13_MANDATORY_WEIGHT_BYTES=42025179008
+  export FR13_WEIGHT_FLOOR_MS=153.938384645
+  export FR13_WEIGHT_FLOOR_SCOPE="five full-vocabulary drafter-head reads"
+fi
 if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" ]]; then
   export ENFORCE_EAGER=1
 fi
 
 mkdir -p "$RUNROOT"
+FR13_M32_NEEDS_ALLOW=
+[[ "$FR13_GATE_DRAFT_HEAD_M32" == "1" ]] \
+  && FR13_M32_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0"
 printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_m32_gate=%s\nstarted=%s\n' \
   "$$" "$RUNROOT" "$ARM" "$SOURCE_COMMIT" "$FA2_SHA" "$FR13_GATE_BM8" \
   "$FR13_GATE_DRAFT_HEAD_M32" "$(date -u +%FT%TZ)" > "$RUNROOT/launcher_meta.txt"
@@ -105,6 +131,7 @@ OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
   FR13_DRAFT_HEAD_M32_LIVE_AB="$FR13_GATE_DRAFT_HEAD_M32" \
   FR13_DRAFT_HEAD_M32_INSTANCE_ID=astropy__astropy-12907 \
   FR13_DRAFT_HEAD_M32_LIVE_JSON=/logs/fr13_draft_head_m32.live.json \
+  FR13_NEEDS_ALLOW="$FR13_M32_NEEDS_ALLOW" \
   FR13_FIXED32_GDN_PATH_BV_CANDIDATE="$FR13_GATE_GDN_BV_CANDIDATE" \
   FORKED_FA2_SO="$FORKED_FA2_SO" \
   FR13_FA2_QROW16_SO_SHA256="$FA2_SHA" \

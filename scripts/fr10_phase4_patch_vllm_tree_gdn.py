@@ -513,7 +513,7 @@ def _fr13_draft_head_m32_live_finalize(events, flush_binding):
     )
     instance_id = state["instance_id"]
     record = {
-        "schema": "fr13.fixed32.draft_head_m32_live_ab.v1",
+        "schema": "fr13.fixed32.draft_head_full_m32_live_ab.v2",
         "status": "PASS" if exact else "FAIL",
         "suite": "SWE-Verified",
         "instance_id": instance_id,
@@ -20638,7 +20638,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13 draft-head M32 production has no launcher attestation"
                 )
-            if (_fr13_dh_rows or _fr13_dh_ab or _fr13_dh_m32_live or _fr13_dh_m32_prod) and (
+            if (_fr13_dh_rows or _fr13_dh_ab) and (
                 not _fr13_is_fixed32
                 or not _fr13_dvk_root
                 or not _fr13_single_logits
@@ -20647,6 +20647,18 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13 draft-head padding requires exact fixed32, root "
                     "subset, single-logits, and FR13_DRAFT_VOCAB_K=65536"
+                )
+            if (_fr13_dh_m32_live or _fr13_dh_m32_prod) and (
+                not _fr13_is_fixed32
+                or _fr13_dvk_root
+                or not _fr13_single_logits
+                or _fr13_dvk_configured != 0
+                or os.environ.get("FR13_DRAFT_VOCAB_BLOCKS", "")
+            ):
+                raise RuntimeError(
+                    "FR13 full-head M32 requires exact fixed32, "
+                    "single-logits, FR13_DRAFT_VOCAB_ROOT=0, "
+                    "FR13_DRAFT_VOCAB_K=0, and no draft-vocab block map"
                 )
             _fr13_dh_source_sha = os.environ.get(
                 "FR13_DRAFT_HEAD_M32_QUALIFIED_SOURCE_SHA256", ""
@@ -20672,10 +20684,75 @@ def _patch_eagle_tree_consumption_verify() -> bool:
 
             def _fr13_dvk_prepare():
                 if (
+                    (_fr13_dh_m32_live or _fr13_dh_m32_prod)
+                    and not getattr(self, "_fr13_dh_m32_ready", False)
+                ):
+                    _fr13_dh_sh = self.model.lm_head
+                    _fr13_dh_w = _fr13_dh_sh.weight
+                    if (
+                        type(_fr13_dh_sh).__name__ != "ParallelLMHead"
+                        or type(_fr13_dh_sh.quant_method).__name__
+                        != "UnquantizedEmbeddingMethod"
+                        or tuple(_fr13_dh_w.shape) != (248320, 5120)
+                        or tuple(_fr13_dh_w.stride()) != (5120, 1)
+                        or _fr13_dh_w.dtype != torch.bfloat16
+                        or not _fr13_dh_w.is_contiguous()
+                    ):
+                        raise RuntimeError(
+                            "FR13 full-head M32 requires the actual contiguous "
+                            "BF16 ParallelLMHead weight[248320,5120] "
+                            "stride[5120,1] with UnquantizedEmbeddingMethod"
+                        )
+                    self._fr13_dh_m32_head = _fr13_dh_sh
+                    self._fr13_dh_m32_input = torch.empty(
+                        (32, 5120),
+                        dtype=torch.bfloat16,
+                        device=_fr13_dh_w.device,
+                    )
+                    self._fr13_dh_m32_output = torch.empty(
+                        (32, 248320),
+                        dtype=torch.bfloat16,
+                        device=_fr13_dh_w.device,
+                    )
+                    self._fr13_dh_ab_mismatches = torch.zeros(
+                        (3,), dtype=torch.int64, device=_fr13_dh_w.device
+                    )
+                    self._fr13_dh_ab_compares = torch.zeros(
+                        (3,), dtype=torch.int64, device=_fr13_dh_w.device
+                    )
+                    if _fr13_dh_m32_live:
+                        self._fr13_dh_m32_live_count_enable = torch.zeros(
+                            (), dtype=torch.int64, device=_fr13_dh_w.device
+                        )
+                        from vllm.model_executor.layers.mamba import (
+                            gdn_linear_attn as _fr13_dh_live_gdn,
+                        )
+
+                        _fr13_dh_contract = _fr13_dh_m32_contract(1)
+                        _fr13_dh_live_gdn._fr13_draft_head_m32_live_register(
+                            self._fr13_dh_ab_compares,
+                            self._fr13_dh_ab_mismatches,
+                            _fr13_dh_contract["geometry"],
+                            _fr13_dh_contract["candidate"],
+                        )
+                    self._fr13_dh_m32_ready = True
+                    print(
+                        "[FR13_DRAFT_HEAD_M32] persistent full-head buffers "
+                        "ready input=[32,5120] output=[32,248320] "
+                        "weight=[248320,5120] "
+                        "method=ParallelLMHead/UnquantizedEmbeddingMethod",
+                        flush=True,
+                    )
+                if (
                     _fr13_dvk_configured <= 0
                     or getattr(self, "_fr13_dvk_dead", False)
                 ):
-                    return 0, None
+                    return (
+                        0,
+                        int(self.model.lm_head.weight.shape[0])
+                        if (_fr13_dh_m32_live or _fr13_dh_m32_prod)
+                        else None,
+                    )
                 _fr13_dvk_full = int(self.model.lm_head.weight.shape[0])
                 if getattr(self, "_fr13_dvk_shim", None) is None:
                     try:
@@ -20763,8 +20840,6 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     (
                         _fr13_dh_rows
                         or _fr13_dh_ab
-                        or _fr13_dh_m32_live
-                        or _fr13_dh_m32_prod
                     )
                     and not getattr(self, "_fr13_dh_pad_ready", False)
                 ):
@@ -20787,11 +20862,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         sorted(
                             (32, 64, 128)
                             if _fr13_dh_ab
-                            else {
-                                32
-                                if (_fr13_dh_m32_live or _fr13_dh_m32_prod)
-                                else _fr13_dh_rows
-                            }
+                            else {_fr13_dh_rows}
                         )
                     )
                     self._fr13_dh_pad_inputs = {
@@ -20817,28 +20888,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         (3,), dtype=torch.int64, device=_fr13_dh_w.device
                     )
                     self._fr13_dh_ab_root_checks = 0
-                    if _fr13_dh_m32_live:
-                        self._fr13_dh_m32_live_count_enable = torch.zeros(
-                            (), dtype=torch.int64, device=_fr13_dh_w.device
-                        )
-                        from vllm.model_executor.layers.mamba import (
-                            gdn_linear_attn as _fr13_dh_live_gdn,
-                        )
-
-                        _fr13_dh_contract = _fr13_dh_m32_contract()
-                        _fr13_dh_live_gdn._fr13_draft_head_m32_live_register(
-                            self._fr13_dh_ab_compares,
-                            self._fr13_dh_ab_mismatches,
-                            _fr13_dh_contract["geometry"],
-                            _fr13_dh_contract["candidate"],
-                        )
                     self._fr13_dh_pad_ready = True
                     print(
                         "[FR13_DRAFT_HEAD_PAD] static buffers ready "
                         f"candidate_rows={_fr13_dh_rows} "
                         f"all_row_byte_ab={int(_fr13_dh_ab)} "
-                        f"m32_live_ab={int(_fr13_dh_m32_live)} "
-                        f"m32_production={int(_fr13_dh_m32_prod)} "
                         f"allocated_rows={_fr13_dh_active_rows} "
                         "vocab=65536 hidden=5120 "
                         "method=UnquantizedEmbeddingMethod",
@@ -20873,31 +20927,85 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
                 return _fr13_dh_out[:1]
 
-            def _fr13_dh_m32_contract():
+            def _fr13_dh_m32_logits(_h):
+                _fr13_dh_sh = getattr(self, "_fr13_dh_m32_head", None)
+                _fr13_dh_batch = int(_h.shape[0]) if _h.dim() == 2 else -1
+                if (
+                    not getattr(self, "_fr13_dh_m32_ready", False)
+                    or _fr13_dh_sh is not self.model.lm_head
+                    or type(_fr13_dh_sh).__name__ != "ParallelLMHead"
+                    or _fr13_dh_batch not in (1, 2, 3, 4)
+                    or tuple(_h.shape) != (_fr13_dh_batch, 5120)
+                    or tuple(_h.stride()) != (5120, 1)
+                    or _h.dtype != torch.bfloat16
+                    or _h.device != _fr13_dh_sh.weight.device
+                ):
+                    raise RuntimeError(
+                        "FR13 full-head M32 engaged outside the exact B1-B4 "
+                        "contiguous BF16 hidden[B,5120] contract"
+                    )
+                _fr13_dh_in = self._fr13_dh_m32_input
+                _fr13_dh_out = self._fr13_dh_m32_output
+                # GEMM rows are independent. Refresh exactly the served rows;
+                # unused persistent rows may remain stale and are never served.
+                _fr13_dh_in[:_fr13_dh_batch].copy_(_h)
+                torch.mm(
+                    _fr13_dh_in,
+                    _fr13_dh_sh.weight.t(),
+                    out=_fr13_dh_out,
+                )
+                if (
+                    tuple(_fr13_dh_in.shape) != (32, 5120)
+                    or tuple(_fr13_dh_in.stride()) != (5120, 1)
+                    or tuple(_fr13_dh_sh.weight.shape) != (248320, 5120)
+                    or tuple(_fr13_dh_sh.weight.t().stride()) != (1, 5120)
+                    or tuple(_fr13_dh_out.shape) != (32, 248320)
+                    or tuple(_fr13_dh_out.stride()) != (248320, 1)
+                ):
+                    raise RuntimeError(
+                        "FR13 full-head M32 operand geometry drifted"
+                    )
+                return _fr13_dh_out[:_fr13_dh_batch]
+
+            def _fr13_dh_m32_contract(_batch_size=1):
+                if int(_batch_size) not in (1, 2, 3, 4):
+                    raise RuntimeError(
+                        "FR13 full-head M32 contract requires B1-B4"
+                    )
+                _batch_size = int(_batch_size)
                 return {
                     "geometry": {
-                        "batch_size": 1,
+                        "batch_size": _batch_size,
+                        "supported_batch_sizes": [1, 2, 3, 4],
                         "calls_per_event": 5,
-                        "input_shape": [1, 5120],
+                        "input_shape": [_batch_size, 5120],
                         "input_stride": [5120, 1],
-                        "weight_shape": [65536, 5120],
+                        "weight_shape": [248320, 5120],
                         "weight_stride": [5120, 1],
                         "weight_transpose_stride": [1, 5120],
-                        "output_shape": [1, 65536],
-                        "output_stride": [65536, 1],
+                        "output_shape": [_batch_size, 248320],
+                        "output_stride": [248320, 1],
+                        "persistent_input_shape": [32, 5120],
+                        "persistent_input_stride": [5120, 1],
+                        "persistent_output_shape": [32, 248320],
+                        "persistent_output_stride": [248320, 1],
                         "dtype": "torch.bfloat16",
                     },
                     "candidate": {
+                        "module": "ParallelLMHead",
                         "method": "UnquantizedEmbeddingMethod",
                         "operation": (
-                            "replicate hidden row to M32 then torch.mm "
-                            "with weight.t"
+                            "copy exact served B rows into persistent M32 "
+                            "input then torch.mm with full weight.t"
                         ),
-                        "gemm_mnk": [32, 65536, 5120],
+                        "gemm_mnk": [32, 248320, 5120],
                         "candidate_input_stride": [5120, 1],
                         "candidate_weight_transpose_stride": [1, 5120],
-                        "candidate_output_stride": [65536, 1],
-                        "served_rows": 1,
+                        "candidate_output_stride": [248320, 1],
+                        "served_rows": _batch_size,
+                        "fixed_work_rows": 32,
+                        "gemm_launches_per_head": 1,
+                        "unused_rows_served": 0,
                     },
                 }
 
@@ -20924,7 +21032,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 )
                 _fr13_dh_temp.replace(_fr13_dh_out_path)
 
-            def _fr13_dh_m32_measured_proposal():
+            def _fr13_dh_m32_measured_proposal(_batch_size):
                 from vllm.model_executor.layers.mamba import (
                     gdn_linear_attn as _fr13_dh_gdn,
                 )
@@ -20938,12 +21046,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     not isinstance(_fr13_dh_proposal, dict)
                     or _fr13_dh_proposal.get("measured")
                     not in (True, False)
-                    or int(_fr13_dh_proposal.get("batch_size", -1)) != 1
+                    or int(_batch_size) not in (1, 2, 3, 4)
+                    or int(_fr13_dh_proposal.get("batch_size", -1))
+                    != int(_batch_size)
                     or _fr13_dh_proposal.get("mode")
                     != _fr13_dh_gdn._FR13_FIXED32_MODE
                 ):
                     raise RuntimeError(
-                        "FR13 draft-head M32 has no exact-B1 proposal"
+                        "FR13 full-head M32 has no exact B1-B4 proposal"
                     )
                 return _fr13_dh_proposal["measured"] is True
 
@@ -21067,7 +21177,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     {
                         "schema": (
                             "fr13.fixed32."
-                            "draft_head_m32_production_engagement.v1"
+                            "draft_head_full_m32_production_engagement.v2"
                         ),
                         "status": "ENGAGED",
                         "source_commit": os.environ.get(
@@ -21105,7 +21215,6 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 # Pair the logits with the only map valid for those rows.
                 # A full-head fallback always returns map=None.
                 try:
-                    _sh = self._fr13_dvk_shim
                     _fr13_dh_rows_on = int(
                         getattr(self, "_fr13_dh_pad_rows", 0)
                     )
@@ -21118,13 +21227,21 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_m32_prod_on = getattr(
                         self, "_fr13_dh_m32_production_active", False
                     )
+                    _fr13_dh_m32_on = (
+                        _fr13_dh_m32_live_on or _fr13_dh_m32_prod_on
+                    )
+                    _sh = (
+                        self._fr13_dh_m32_head
+                        if _fr13_dh_m32_on
+                        else self._fr13_dvk_shim
+                    )
                     _fr13_dh_capturing = False
-                    if _fr13_dh_m32_live_on or _fr13_dh_m32_prod_on:
+                    if _fr13_dh_m32_on:
                         _fr13_dh_capturing = (
                             torch.cuda.is_current_stream_capturing()
                         )
                         _fr13_dh_measured = (
-                            _fr13_dh_m32_measured_proposal()
+                            _fr13_dh_m32_measured_proposal(int(_h.shape[0]))
                         )
                         if (
                             _fr13_dh_m32_live_on
@@ -21133,9 +21250,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             self._fr13_dh_m32_live_count_enable.fill_(
                                 int(_fr13_dh_measured)
                             )
-                        _fr13_dh_candidate = _fr13_dh_pad_logits(
-                            _sh, _h, 32
-                        )
+                        _fr13_dh_candidate = _fr13_dh_m32_logits(_h)
                         if _fr13_dh_m32_live_on:
                             _fr13_dh_reference = (
                                 _sh.quant_method.apply(
@@ -21220,8 +21335,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _logits = _sh.quant_method.apply(
                             _sh, _h, bias=None
                         )
-                    return _logits, getattr(
-                        self, "_fr13_dvk_map_t", None
+                    return (
+                        _logits,
+                        None
+                        if _fr13_dh_m32_on
+                        else getattr(self, "_fr13_dvk_map_t", None),
                     )
                 except Exception as _e:
                     if getattr(
@@ -21256,7 +21374,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             def _fr13_dvk_real_ids(_ids, _id_map):
                 return _ids if _id_map is None else _id_map[_ids]
 
-            if _fr13_dvk_root:
+            if (
+                _fr13_dh_m32_live
+                or _fr13_dh_m32_prod
+                or _fr13_dvk_root
+            ):
                 _fr13_dvk, _fr13_full_vocab_size = _fr13_dvk_prepare()
             else:
                 _fr13_dvk = 0
@@ -21293,14 +21415,27 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 # 3-3-3 additionally reads rank-2 (index 2) from that topk.
                 _fr13_ds_lm = _FR13_DFWD_SPLIT.begin('lmhead')
                 if (
-                    _fr13_dvk_root
-                    and _fr13_dvk > 0
-                    and not getattr(self, "_fr13_dvk_dead", False)
+                    (_fr13_dh_m32_live or _fr13_dh_m32_prod)
+                    or (
+                        _fr13_dvk_root
+                        and _fr13_dvk > 0
+                        and not getattr(self, "_fr13_dvk_dead", False)
+                    )
                 ):
                     _fr10_logits, _fr10_root_map = _fr13_dvk_logits(
                         sample_hidden_states
                     )
-                    if not getattr(self, "_fr13_dvk_dead", False):
+                    if _fr13_dh_m32_live or _fr13_dh_m32_prod:
+                        if not getattr(
+                            self, "_fr13_dh_m32_route_engaged", False
+                        ):
+                            self._fr13_dh_m32_route_engaged = True
+                            print(
+                                "[FR13_DRAFT_HEAD_M32] root plus four loop "
+                                "full-vocabulary heads routed through fixed M32",
+                                flush=True,
+                            )
+                    elif not getattr(self, "_fr13_dvk_dead", False):
                         if not getattr(
                             self, "_fr13_dvk_root_engaged", False
                         ):
@@ -21445,9 +21580,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 and not _fr13_selfcheck
             )
             if not _fr13_dvk_root:
-                # Keep the accepted root-off execution order: build the loop
-                # subset only after the unchanged full root head.
-                _fr13_dvk, _ = _fr13_dvk_prepare()
+                if not (_fr13_dh_m32_live or _fr13_dh_m32_prod):
+                    # Keep the accepted root-off execution order: build the
+                    # loop subset only after the unchanged full root head.
+                    _fr13_dvk, _ = _fr13_dvk_prepare()
             _fr13_ds_on = (
                 os.environ.get("FR13_DFWD_SPLIT_NEEDLE", "0") == "1"
                 and not torch.cuda.is_current_stream_capturing()
@@ -21700,7 +21836,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     # slots; spine-only (chain5) never consumes the
                     # runner-up (packing and the FR10_METRICS log both emit
                     # no leaves in spine-only mode), so its topk is skipped.
-                    if _fr13_dvk > 0 and not getattr(self, "_fr13_dvk_dead", False):
+                    if (
+                        _fr13_dh_m32_live
+                        or _fr13_dh_m32_prod
+                        or (
+                            _fr13_dvk > 0
+                            and not getattr(self, "_fr13_dvk_dead", False)
+                        )
+                    ):
                         _fr10_step_logits, _fr10_step_map = _fr13_dvk_logits(
                             last_hidden_states[:batch_size]
                         )

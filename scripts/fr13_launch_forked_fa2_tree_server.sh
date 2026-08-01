@@ -47,6 +47,9 @@ _FR13_M32_GUARD_NAMES=(
   FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB
   FR13_DRAFT_VOCAB_ROOT
   FR13_DRAFT_VOCAB_K
+  FR13_MANDATORY_WEIGHT_BYTES
+  FR13_WEIGHT_FLOOR_MS
+  FR13_WEIGHT_FLOOR_SCOPE
   FR13_FIXED32_TAW_NATIVE_PRECOMPUTE
   FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION
   FR13_FA2_QROW16_LIVE_PAGED_AB
@@ -414,12 +417,35 @@ if (( _FR13_DRAFT_HEAD_MODES > 1 )); then
   echo "FR13 draft-head candidate, diagnostics, and production are mutually exclusive" >&2
   exit 2
 fi
-if (( _FR13_DRAFT_HEAD_MODES > 0 )); then
+_FR13_DRAFT_HEAD_PAD_MODE=0
+[[ "$FR13_DRAFT_HEAD_PAD_ROWS" == "0" \
+   && "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" ]] \
+  || _FR13_DRAFT_HEAD_PAD_MODE=1
+_FR13_DRAFT_HEAD_M32_MODE=0
+[[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "0" \
+   && "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "0" ]] \
+  || _FR13_DRAFT_HEAD_M32_MODE=1
+_FR13_DRAFT_HEAD_M32_WORKLOAD=$_FR13_DRAFT_HEAD_M32_MODE
+[[ "$FR13_DRAFT_HEAD_M32_TIMING_ARM" == "0" ]] \
+  || _FR13_DRAFT_HEAD_M32_WORKLOAD=1
+if (( _FR13_DRAFT_HEAD_PAD_MODE == 1 )); then
   [[ -n "${FR13_FIXED32_MODE:-}" \
      && "$MAX_NUM_SEQS" == "1" \
      && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
      && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" ]] || {
     echo "FR13 draft-head padding requires fixed32 B1 root64" >&2
+    exit 2
+  }
+fi
+if (( _FR13_DRAFT_HEAD_M32_WORKLOAD == 1 )); then
+  # The kernel contract is B1-B4, but this credential path remains B1-only.
+  # Widening MAX_NUM_SEQS requires a fresh exact4 B4 full-logit graph gate.
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && "$FR13_DRAFT_VOCAB_ROOT" == "0" \
+     && "${FR13_DRAFT_VOCAB_K:-}" == "0" \
+     && -z "${FR13_DRAFT_VOCAB_BLOCKS:-}" ]] || {
+    echo "FR13 full-head M32 requires fixed32 B1 with K=0/root=0 and no draft-vocab block map" >&2
     exit 2
   }
 fi
@@ -433,7 +459,9 @@ if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" ]]; then
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
      && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
      && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
-     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" ]] || {
+     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
+     && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+     && "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" == "0" ]] || {
     echo "FR13 draft-head M32 live A/B must be the only real-B1 diagnostic candidate" >&2
     exit 2
   }
@@ -449,6 +477,19 @@ if [[ "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "1" ]]; then
      && ! -L "$FR13_DRAFT_HEAD_M32_LIVE_CHAT_TRAFFIC_AUDIT_JSON" \
      && "$FR13_DRAFT_HEAD_M32_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
     echo "FR13 draft-head M32 production requires regular live PASS, final-flush, boundary, and authenticated traffic-audit evidence" >&2
+    exit 2
+  }
+  [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+     && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "0" \
+     && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+     && "$FR13_FA2_QROW16_PRODUCTION" == "0" \
+     && "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "0" \
+     && "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "0" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}" \
+     && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+     && "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" == "0" ]] || {
+    echo "FR13 full-head M32 production must remain isolated from Qrow, Stream-K, TAW, BM8, and GDN candidates" >&2
     exit 2
   }
 fi
@@ -1206,6 +1247,16 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" ]]; then
     _fixed32_expected_eager=1
   fi
+  _fixed32_expected_draft_vocab_k=65536
+  _fixed32_expected_draft_vocab_blocks=/workspace/scripts/fr13_dvk_subset_blocks.json
+  _fixed32_expected_weight_bytes=32666638208
+  _fixed32_expected_weight_floor_ms=119.658015414
+  if (( _FR13_DRAFT_HEAD_M32_WORKLOAD == 1 )); then
+    _fixed32_expected_draft_vocab_k=0
+    _fixed32_expected_draft_vocab_blocks=
+    _fixed32_expected_weight_bytes=42025179008
+    _fixed32_expected_weight_floor_ms=153.938384645
+  fi
   [[ "$MAX_NUM_SEQS" == "1" || "$MAX_NUM_SEQS" == "4" ]] \
     || { echo "fixed32 requires MAX_NUM_SEQS=1 or 4" >&2; exit 2; }
   _fixed32_exact_pairs=(
@@ -1246,8 +1297,8 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     "LUMO_FB_KERNEL_ROWS|$LUMO_FB_KERNEL_ROWS|1"
     "LUMO_FB_PROJ_PAD_ROWS|$LUMO_FB_PROJ_PAD_ROWS|16"
     "FR13_INPUTPREP_GUARD|${FR13_INPUTPREP_GUARD:-}|1"
-    "FR13_DRAFT_VOCAB_K|${FR13_DRAFT_VOCAB_K:-}|65536"
-    "FR13_DRAFT_VOCAB_BLOCKS|${FR13_DRAFT_VOCAB_BLOCKS:-}|/workspace/scripts/fr13_dvk_subset_blocks.json"
+    "FR13_DRAFT_VOCAB_K|${FR13_DRAFT_VOCAB_K:-}|$_fixed32_expected_draft_vocab_k"
+    "FR13_DRAFT_VOCAB_BLOCKS|${FR13_DRAFT_VOCAB_BLOCKS:-}|$_fixed32_expected_draft_vocab_blocks"
     "FR13_APC_CONV_FIX|${FR13_APC_CONV_FIX:-}|1"
     "FR13_APC_CONV_SNAPSHOT|${FR13_APC_CONV_SNAPSHOT:-}|1"
     "FR13_APC_ZERO_MAMBA_ON_ALLOC|${FR13_APC_ZERO_MAMBA_ON_ALLOC:-}|1"
@@ -1260,7 +1311,8 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     "FR13_SFWD_SAMPLES_DUMP_S|${FR13_SFWD_SAMPLES_DUMP_S:-}|30"
     "FR13_SPAN_GPU_TIMER_DUMP_S|${FR13_SPAN_GPU_TIMER_DUMP_S:-}|0"
     "FR13_STEP_WALL_CAP_S|${FR13_STEP_WALL_CAP_S:-}|1.5"
-    "FR13_WEIGHT_FLOOR_MS|${FR13_WEIGHT_FLOOR_MS:-}|119.658015414"
+    "FR13_MANDATORY_WEIGHT_BYTES|${FR13_MANDATORY_WEIGHT_BYTES:-32666638208}|$_fixed32_expected_weight_bytes"
+    "FR13_WEIGHT_FLOOR_MS|${FR13_WEIGHT_FLOOR_MS:-}|$_fixed32_expected_weight_floor_ms"
     "FR13_COMPUTE_MS_PER_ROW|${FR13_COMPUTE_MS_PER_ROW:-}|0.54"
   )
   for _fixed32_pair in "${_fixed32_exact_pairs[@]}"; do
@@ -2281,7 +2333,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_STEP_GRAPH="${FR13_STEP_GRAPH:-0}" \
   -e FR13_TEMP_LEGACY_DOUBLE="${FR13_TEMP_LEGACY_DOUBLE:-0}" \
   -e FR13_DRAFT_VOCAB_K="${FR13_DRAFT_VOCAB_K:-65536}" \
-  -e FR13_DRAFT_VOCAB_BLOCKS="${FR13_DRAFT_VOCAB_BLOCKS:-/workspace/scripts/fr13_dvk_subset_blocks.json}" \
+  -e FR13_DRAFT_VOCAB_BLOCKS="${FR13_DRAFT_VOCAB_BLOCKS-/workspace/scripts/fr13_dvk_subset_blocks.json}" \
   -e FR13_DRAFT_VOCAB_ROOT="$FR13_DRAFT_VOCAB_ROOT" \
   -e FR13_DRAFT_HEAD_PAD_ROWS="$FR13_DRAFT_HEAD_PAD_ROWS" \
   -e FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB="$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" \

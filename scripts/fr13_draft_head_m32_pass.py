@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Issue and verify the fixed32 deployed-format BF16 M32 head credential."""
+"""Issue and verify the fixed32 full-vocabulary BF16 M32 head credential."""
 
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Any
 
 
-LIVE_SCHEMA = "fr13.fixed32.draft_head_m32_live_ab.v1"
-SIDECAR_SCHEMA = "fr13.fixed32.draft_head_m32_production_pass.v2"
-ENGAGEMENT_SCHEMA = "fr13.fixed32.draft_head_m32_production_engagement.v1"
+LIVE_SCHEMA = "fr13.fixed32.draft_head_full_m32_live_ab.v2"
+SIDECAR_SCHEMA = "fr13.fixed32.draft_head_full_m32_production_pass.v3"
+ENGAGEMENT_SCHEMA = "fr13.fixed32.draft_head_full_m32_production_engagement.v2"
 EXPECTED_INSTANCE = "astropy__astropy-12907"
 EXPECTED_MODE = "hydra27_fixed32"
 EXPECTED_DATASET = "princeton-nlp/SWE-bench_Verified"
@@ -29,24 +29,36 @@ EXPECTED_DATASET_RECORD_SHA256 = (
 HEX = frozenset("0123456789abcdef")
 EXPECTED_GEOMETRY = {
     "batch_size": 1,
+    "supported_batch_sizes": [1, 2, 3, 4],
     "calls_per_event": 5,
     "input_shape": [1, 5120],
     "input_stride": [5120, 1],
-    "weight_shape": [65536, 5120],
+    "weight_shape": [248320, 5120],
     "weight_stride": [5120, 1],
     "weight_transpose_stride": [1, 5120],
-    "output_shape": [1, 65536],
-    "output_stride": [65536, 1],
+    "output_shape": [1, 248320],
+    "output_stride": [248320, 1],
+    "persistent_input_shape": [32, 5120],
+    "persistent_input_stride": [5120, 1],
+    "persistent_output_shape": [32, 248320],
+    "persistent_output_stride": [248320, 1],
     "dtype": "torch.bfloat16",
 }
 EXPECTED_CANDIDATE = {
+    "module": "ParallelLMHead",
     "method": "UnquantizedEmbeddingMethod",
-    "operation": "replicate hidden row to M32 then torch.mm with weight.t",
-    "gemm_mnk": [32, 65536, 5120],
+    "operation": (
+        "copy exact served B rows into persistent M32 input then torch.mm "
+        "with full weight.t"
+    ),
+    "gemm_mnk": [32, 248320, 5120],
     "candidate_input_stride": [5120, 1],
     "candidate_weight_transpose_stride": [1, 5120],
-    "candidate_output_stride": [65536, 1],
+    "candidate_output_stride": [248320, 1],
     "served_rows": 1,
+    "fixed_work_rows": 32,
+    "gemm_launches_per_head": 1,
+    "unused_rows_served": 0,
 }
 EXPECTED_GRAPH_SIGNATURE = "d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c"
 LIVE_KEYS = frozenset(
@@ -866,8 +878,10 @@ def issue_sidecar(
         ],
         "candidate": EXPECTED_CANDIDATE,
         "geometry": EXPECTED_GEOMETRY,
-        "required_runtime": "fixed32 B1 full drafter graph",
-        "production_scope": "five exact root64 BF16 draft heads per event",
+        "required_runtime": "fixed32 B1 full drafter graph, K0/root0",
+        "production_scope": (
+            "five exact full-vocabulary BF16 ParallelLMHead calls per event"
+        ),
     }
     sidecar = dict(body)
     sidecar["canonical_sha256"] = _digest_bytes(canonical_bytes(body))
@@ -948,9 +962,10 @@ def verify_sidecar(
         or payload["qualified_trace_completed_logical_model_requests"] < 1
         or payload.get("candidate") != EXPECTED_CANDIDATE
         or payload.get("geometry") != EXPECTED_GEOMETRY
-        or payload.get("required_runtime") != "fixed32 B1 full drafter graph"
+        or payload.get("required_runtime")
+        != "fixed32 B1 full drafter graph, K0/root0"
         or payload.get("production_scope")
-        != "five exact root64 BF16 draft heads per event"
+        != "five exact full-vocabulary BF16 ParallelLMHead calls per event"
     ):
         raise ValueError("pass sidecar contract drifted")
     _require_commit(payload.get("qualified_source_commit"), "qualified source")

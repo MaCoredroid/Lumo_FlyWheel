@@ -22,15 +22,6 @@ SIDECAR_SCRIPT = REPO / "scripts" / "fr13_draft_head_m32_pass.py"
 TIMING_RUNNER = REPO / "scripts" / "fr13_run_b1_draft_head_m32_timing.sh"
 LIVE_RUNNER = REPO / "scripts" / "fr13_run_b1_kernel_live_gate.sh"
 RUNTIME_MANIFEST = REPO / "scripts" / "fr13_runtime_manifest.py"
-CONTRACT = REPO / "results" / "fr13_fixed32_draft_head_m32_deployed_contract_20260731" / "contract.json"
-INTEGRATION_MANIFEST = (
-    REPO
-    / "results"
-    / "fr13_fixed32_kernel_candidates_integrated_20260801"
-    / "manifest.json"
-)
-
-
 def _module():
     spec = importlib.util.spec_from_file_location("draft_head_pass", SIDECAR_SCRIPT)
     assert spec is not None
@@ -304,16 +295,26 @@ def _traffic_audit(tmp_path: Path, events: int = 7) -> Path:
     return path
 
 
-def test_deployed_format_contract_and_production_are_fail_closed() -> None:
+def test_full_vocabulary_contract_and_production_are_fail_closed() -> None:
     snippet = _eagle_snippet()
     launcher = LAUNCHER.read_text(encoding="utf-8")
 
     assert 'type(_fr13_dh_sh.quant_method).__name__\n                        != "UnquantizedEmbeddingMethod"' in snippet
-    assert "tuple(_fr13_dh_w.shape) != (65536, 5120)" in snippet
+    assert 'type(_fr13_dh_sh).__name__ != "ParallelLMHead"' in snippet
+    assert "tuple(_fr13_dh_w.shape) != (248320, 5120)" in snippet
     assert "tuple(_fr13_dh_w.stride()) != (5120, 1)" in snippet
-    assert "tuple(_h.shape) != (1, 5120)" in snippet
+    assert "_fr13_dh_batch not in (1, 2, 3, 4)" in snippet
+    assert "tuple(_h.shape) != (_fr13_dh_batch, 5120)" in snippet
     assert "tuple(_h.stride()) != (5120, 1)" in snippet
-    assert "torch.mm(_fr13_dh_in, _sh.weight.t(), out=_fr13_dh_out)" in snippet
+    assert "self._fr13_dh_m32_input" in snippet
+    assert "self._fr13_dh_m32_output" in snippet
+    assert "_fr13_dh_in[:_fr13_dh_batch].copy_(_h)" in snippet
+    assert "_fr13_dh_sh.weight.t()" in snippet
+    assert "tuple(_fr13_dh_out.shape) != (32, 248320)" in snippet
+    assert "_fr13_dh_m32_live or _fr13_dh_m32_prod" in snippet
+    assert snippet.count("_fr13_dvk_logits(") >= 3
+    assert 'os.environ.get("FR13_DRAFT_VOCAB_BLOCKS", "")' in snippet
+    assert "_fr13_dvk_configured != 0" in snippet
     assert "FR13_DRAFT_HEAD_M32_INTERNAL_PRODUCTION_ATTESTED" in snippet
     assert "FR13 draft-head M32 production failed its strict " in snippet
     assert '"runtime contract"' in snippet
@@ -342,6 +343,8 @@ def test_deployed_format_contract_and_production_are_fail_closed() -> None:
     assert '--chat-traffic-audit "$FR13_DRAFT_HEAD_M32_LIVE_CHAT_TRAFFIC_AUDIT_JSON"' in launcher
     assert '${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}' in launcher
     assert '-e FR13_DRAFT_HEAD_M32_PRODUCTION="$FR13_DRAFT_HEAD_M32_PRODUCTION"' in launcher
+    assert "full-head M32 requires fixed32 B1 with K=0/root=0" in launcher
+    assert "must remain isolated from Qrow, Stream-K" in launcher
     assert '"scripts/fr13_draft_head_m32_pass.py"' in RUNTIME_MANIFEST.read_text(
         encoding="utf-8"
     )
@@ -395,6 +398,35 @@ def test_live_pass_sidecar_binds_exact_source_and_census(tmp_path: Path) -> None
     bad["full_logit_comparisons"] = 34
     with pytest.raises(ValueError, match="comparison census drifted"):
         module.validate_live_result(bad, expected_source_sha256=source_sha)
+
+
+def test_runtime_contract_keeps_one_m32_gemm_for_b1_through_b4() -> None:
+    namespace: dict[str, object] = {}
+    exec(
+        compile(
+            ast.Module(
+                body=_snippet_functions("_fr13_dh_m32_contract"),
+                type_ignores=[],
+            ),
+            "<full-head-m32-contract>",
+            "exec",
+        ),
+        namespace,
+    )
+    contract = namespace["_fr13_dh_m32_contract"]
+    assert callable(contract)
+    for batch_size in (1, 2, 3, 4):
+        payload = contract(batch_size)
+        assert payload["geometry"]["input_shape"] == [batch_size, 5120]
+        assert payload["geometry"]["output_shape"] == [batch_size, 248320]
+        assert payload["geometry"]["persistent_input_shape"] == [32, 5120]
+        assert payload["geometry"]["persistent_output_shape"] == [32, 248320]
+        assert payload["candidate"]["gemm_mnk"] == [32, 248320, 5120]
+        assert payload["candidate"]["served_rows"] == batch_size
+        assert payload["candidate"]["gemm_launches_per_head"] == 1
+        assert payload["candidate"]["unused_rows_served"] == 0
+    with pytest.raises(RuntimeError, match="requires B1-B4"):
+        contract(5)
 
 
 def test_production_engagement_requires_root_plus_four_captured_heads(tmp_path: Path) -> None:
@@ -561,6 +593,13 @@ def test_timing_runner_is_exact4_b1_full_wall_and_credentialed() -> None:
     assert "FR13_DRAFT_HEAD_M32_LIVE_BOUNDARY_SNAPSHOT_JSON" in text
     assert "FR13_DRAFT_HEAD_M32_LIVE_CHAT_TRAFFIC_AUDIT_JSON" in text
     assert "FR13_DRAFT_HEAD_M32_TIMING_ARM=1" in text
+    assert "export FR13_DRAFT_VOCAB_ROOT=0" in text
+    assert "export FR13_DRAFT_VOCAB_K=0" in text
+    assert "export FR13_DRAFT_VOCAB_BLOCKS=" in text
+    assert "FR13_MANDATORY_WEIGHT_BYTES=42025179008" in text
+    assert "FR13_WEIGHT_FLOOR_MS=153.938384645" in text
+    assert 'FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0"' in text
+    assert '"acceptance_cap_ms": 177.029142341' in text
     assert 'FR13_DRAFT_HEAD_M32_PRODUCTION="$production"' in text
     assert "scripts/fr13_measure.py deploy-speed" in text
     assert 'record.get("batch_size") != 1' in text
@@ -593,6 +632,10 @@ def test_live_gate_uses_real_swe_b1_and_serves_reference() -> None:
     assert "DRAFT_HEAD_FINAL_FLUSH" in text
     assert "DRAFT_HEAD_BOUNDARY" in text
     assert "DRAFT_HEAD_TRAFFIC_AUDIT" in text
+    assert 'if [[ "$FR13_GATE_DRAFT_HEAD_M32" == "1" ]]' in text
+    assert "export FR13_DRAFT_VOCAB_ROOT=0" in text
+    assert "export FR13_DRAFT_VOCAB_K=0" in text
+    assert 'FR13_M32_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0"' in text
 
 
 def test_live_pass_reconciles_terminal_flush_and_boundary(tmp_path: Path) -> None:
@@ -718,30 +761,26 @@ def test_runtime_live_result_is_written_only_from_exact_final_census(
     assert json.loads(out.read_text(encoding="ascii"))["status"] == "FAIL"
 
 
-def test_published_contract_matches_candidate_source_and_exact_math() -> None:
-    payload = json.loads(CONTRACT.read_text(encoding="ascii"))
-    integration = json.loads(INTEGRATION_MANIFEST.read_text(encoding="ascii"))
+def test_full_head_identity_and_exact_math_retire_root64_credentials() -> None:
+    module = _module()
 
-    assert payload["performance_claim"] is False
-    assert payload["byte_equality_claim"] is False
-    assert payload["live_b1_reference_contract"]["gemm_mnk"] == [1, 65536, 5120]
-    assert payload["live_b1_reference_contract"]["calls_per_event"] == 5
-    assert payload["replacement"]["candidate_gemm_mnk"] == [32, 65536, 5120]
-    assert integration["components"]["draft_head_m32"][
-        "candidate_source_sha256"
-    ] == hashlib.sha256(
-        PATCHER.read_bytes()
-    ).hexdigest()
-    assert integration["components"]["draft_head_m32"]["source_commit"] == (
-        "3b06acebbd673466703268bf0b3647f4bf4a3070"
-    )
-    assert payload["replacement"]["candidate_source_sha256"] == (
-        "0ecd359c7ffb211f0212db3a83baabfff327c07286fd808ea99ac68d536798e2"
-    )
-    assert payload["roofline"]["weight_bytes_per_event"] == 5 * 65536 * 5120 * 2
-    assert payload["modeled_hypothesis"]["measurement"] is False
-    assert payload["current_floor_gap_context"]["modeled_recovery_fraction_of_gap"] == pytest.approx(
-        payload["modeled_hypothesis"]["recovery_ms_per_event"]
-        / payload["current_floor_gap_context"]["gap_to_cap_ms"],
-        abs=1e-15,
-    )
+    assert module.LIVE_SCHEMA.endswith("draft_head_full_m32_live_ab.v2")
+    assert module.SIDECAR_SCHEMA.endswith("draft_head_full_m32_production_pass.v3")
+    assert module.EXPECTED_GEOMETRY["weight_shape"] == [248320, 5120]
+    assert module.EXPECTED_GEOMETRY["persistent_input_shape"] == [32, 5120]
+    assert module.EXPECTED_GEOMETRY["persistent_output_shape"] == [32, 248320]
+    assert module.EXPECTED_CANDIDATE["gemm_mnk"] == [32, 248320, 5120]
+    assert module.EXPECTED_CANDIDATE["fixed_work_rows"] == 32
+    assert module.EXPECTED_CANDIDATE["gemm_launches_per_head"] == 1
+    assert 5 * 248320 * 5120 * 2 == 12_713_984_000
+    assert 24_382_399_488 + 2_542_796_800 + 2_385_998_720 + 12_713_984_000 == 42_025_179_008
+
+    retired = _live(_sha(b"source"))
+    retired["schema"] = "fr13.fixed32.draft_head_m32_live_ab.v1"
+    retired["geometry"] = dict(module.EXPECTED_GEOMETRY)
+    retired["geometry"]["weight_shape"] = [65536, 5120]
+    with pytest.raises(ValueError, match="not a PASS record"):
+        module.validate_live_result(
+            retired,
+            expected_source_sha256=_sha(b"source"),
+        )

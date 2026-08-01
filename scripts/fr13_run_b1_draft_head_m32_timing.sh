@@ -72,12 +72,27 @@ LIVE_CHAT_TRAFFIC_AUDIT_SHA256=$(
 export BSIZE=1
 export CONC=1
 export WALL=0
-export FR13_DRAFT_VOCAB_ROOT=1
+export FR13_DRAFT_VOCAB_ROOT=0
+export FR13_DRAFT_VOCAB_K=0
+export FR13_DRAFT_VOCAB_BLOCKS=
+export FR13_MANDATORY_WEIGHT_BYTES=42025179008
+export FR13_WEIGHT_FLOOR_MS=153.938384645
+export FR13_WEIGHT_FLOOR_SCOPE="five full-vocabulary drafter-head reads"
 export FR13_FLOOR_ORDER=HT
 source scripts/fr13_canonical_env.sh
+# Remove the normal 64K loop subset from both arms. This pair compares stock
+# full-vocabulary BF16 heads with the same full-vocabulary fixed-M32 workload.
+export FR13_DRAFT_VOCAB_K=0
+export FR13_DRAFT_VOCAB_BLOCKS=
+export FR13_MANDATORY_WEIGHT_BYTES=42025179008
+export FR13_WEIGHT_FLOOR_MS=153.938384645
+export FR13_WEIGHT_FLOOR_SCOPE="five full-vocabulary drafter-head reads"
 run_variant() { :; }
 source "$SEQUENCE"
 unset -f run_variant
+export FR13_MANDATORY_WEIGHT_BYTES=42025179008
+export FR13_WEIGHT_FLOOR_MS=153.938384645
+export FR13_WEIGHT_FLOOR_SCOPE="five full-vocabulary drafter-head reads"
 
 mkdir -p "$RUNROOT_ABS"
 printf 'classification=real_swe_verified_exact4_b1_draft_head_timing_candidate\ntiming_eligible=1\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nlive_pass_sha256=%s\nlive_final_flush_sha256=%s\nlive_boundary_snapshot_sha256=%s\nlive_chat_traffic_audit_sha256=%s\ncandidate_source_sha256=%s\nstarted=%s\n' \
@@ -170,6 +185,10 @@ run_arm() {
       FR13_FIXED32_GDN_PATH_BV_PRODUCTION= \
       FR13_FIXED32_CUTLASS_WAVE=stock FR13_FIXED32_CUTLASS_WAVE_SO= \
       FR13_FIXED32_ATTRIBUTION_ONLY=0 \
+      FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0" \
+      FR13_MANDATORY_WEIGHT_BYTES=42025179008 \
+      FR13_WEIGHT_FLOOR_MS=153.938384645 \
+      FR13_WEIGHT_FLOOR_SCOPE="five full-vocabulary drafter-head reads" \
       FORKED_FA2_SO="$STOCK_FA2_SO" \
       bash scripts/fr13_bigdenom_swe_serve_variant.sh \
         "$arm" hydra27_fixed32 "$SUBSET" \
@@ -423,14 +442,14 @@ def validate(record, raw, label, expected_arm):
         )
     }
     if (
-        record.get("mandatory_weight_bytes") != 32666638208
+        record.get("mandatory_weight_bytes") != 42025179008
         or record.get("weight_floor_bandwidth_bytes_per_s") != 273000000000
     ):
         raise SystemExit(f"{label} corrected mandatory-weight floor identity drifted")
     close(values["events_per_step"], 1.0, f"{label} B1 events_per_step")
     close(values["rows_per_step"], 32.0, f"{label} fixed32 rows_per_step")
-    close(values["weight_floor_ms"], 119.658015414, f"{label} weight floor")
-    close(values["floor_ms"], 119.658015414, f"{label} active floor")
+    close(values["weight_floor_ms"], 153.938384645, f"{label} weight floor")
+    close(values["floor_ms"], 153.938384645, f"{label} active floor")
     close(values["compute_floor_ms"], 17.28, f"{label} compute floor")
     close(
         values["committed_per_event"],
@@ -585,10 +604,10 @@ summary = {
         "full_wall_tps": c["measured_tps_fullstep_wall"] - s["measured_tps_fullstep_wall"],
         "accept_per_event": c["accept_per_event"] - s["accept_per_event"],
     },
-    "mandatory_weight_floor_ms": 119.658015414,
-    "mandatory_weight_bytes": 32666638208,
+    "mandatory_weight_floor_ms": 153.938384645,
+    "mandatory_weight_bytes": 42025179008,
     "floor_bandwidth_bytes_per_s": 273000000000,
-    "acceptance_cap_ms": 137.6067177261,
+    "acceptance_cap_ms": 177.029142341,
     "note": "One topology timing pair; not the formal Tail/Hydra U95 gate.",
 }
 temporary = out_path.with_name(out_path.name + f".tmp.{os.getpid()}")

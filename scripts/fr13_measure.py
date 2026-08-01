@@ -1656,6 +1656,31 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
             f"{FIXED32_MANDATORY_WEIGHT_FLOOR_MS:.9f}",
         )
     )
+    _mandatory_weight_bytes = int(
+        os.environ.get(
+            "FR13_MANDATORY_WEIGHT_BYTES",
+            str(FIXED32_MANDATORY_WEIGHT_BYTES),
+        )
+    )
+    _weight_floor_scope = os.environ.get(
+        "FR13_WEIGHT_FLOOR_SCOPE",
+        "five 64K drafter-head reads",
+    )
+    _expected_weight_floor_ms = (
+        _mandatory_weight_bytes * 1_000.0 / BANDWIDTH_BYTES_PER_S
+    )
+    if not math.isclose(
+        _weight_floor_ms,
+        _expected_weight_floor_ms,
+        rel_tol=0.0,
+        abs_tol=5e-10,
+    ):
+        raise ValueError(
+            "FR13 mandatory-weight bytes/floor mismatch: "
+            f"{_mandatory_weight_bytes} bytes => "
+            f"{_expected_weight_floor_ms:.12f} ms, got "
+            f"{_weight_floor_ms:.12f} ms"
+        )
     _events_per_step_f = events_per_step if events_per_step else None
     step_wall_ms = (
         wall_s_per_event * 1000.0 * _events_per_step_f
@@ -1848,7 +1873,7 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "measured_tps_fullstep_wall": measured_tps_fullstep_wall,
         "step_wall_ms": step_wall_ms,
         "weight_floor_ms": _weight_floor_ms,
-        "mandatory_weight_bytes": FIXED32_MANDATORY_WEIGHT_BYTES,
+        "mandatory_weight_bytes": _mandatory_weight_bytes,
         "weight_floor_bandwidth_bytes_per_s": BANDWIDTH_BYTES_PER_S,
         "compute_floor_ms": _compute_floor_ms,
         "rows_per_step": _rows_per_step,
@@ -1862,9 +1887,9 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
             "step_wall_ms / floor(B), where floor(B) = max(weight-read "
             f"{_weight_floor_ms:.9f}ms [FR13_WEIGHT_FLOOR_MS], compute "
             "0.54ms/row x rows_per_step [FR13_COMPUTE_MS_PER_ROW]). The "
-            f"weight term is {FIXED32_MANDATORY_WEIGHT_BYTES:,} mandatory bytes "
+            f"weight term is {_mandatory_weight_bytes:,} mandatory bytes "
             f"/ {BANDWIDTH_BYTES_PER_S:,} bytes/s and includes target, verifier "
-            "head, five MTP forwards, and five 64K drafter-head reads. It is an "
+            f"head, five MTP forwards, and {_weight_floor_scope}. It is an "
             "optimistic weight-read-only lower bound: KV/state/activation traffic, "
             "attention, scan, sampling, committer work, launches, synchronization, "
             "and host gaps are excluded. A ratio of 1.0 is equality with that "
