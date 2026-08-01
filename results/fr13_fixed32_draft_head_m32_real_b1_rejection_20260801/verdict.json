@@ -1,0 +1,59 @@
+{
+  "schema": "fr13.fixed32.draft_head_full_m32.real_b1_rejection.v1",
+  "status": "REJECTED_BYTE_INEXACT",
+  "source_commit": "12fd8212733417894c1c7e6383f399ba888695e0",
+  "candidate_source_sha256": "6f1a70b1d0aa88005a0dac434f4f2a4196251db356041e940d0c2140444f84b1",
+  "runroot": "output/fr13_draft_head_m32_b1_20260801T104104Z",
+  "wrapper_rc": 13,
+  "workload": {
+    "suite": "SWE-Verified",
+    "task_ids": [
+      "astropy__astropy-12907"
+    ],
+    "task_count": 1,
+    "task_verdict": "resolved",
+    "batch_size": 1,
+    "concurrency": 1,
+    "physical_rows_per_request": 32,
+    "draft_vocab_root": 0,
+    "draft_vocab_k": 0
+  },
+  "candidate": {
+    "name": "draft_head_full_m32",
+    "gemm_mnk": [
+      32,
+      248320,
+      5120
+    ],
+    "calls_per_event": 5,
+    "served_rows": 1,
+    "reference_always_served": true
+  },
+  "comparison": {
+    "completed_events": 909,
+    "full_head_comparisons": 4545,
+    "bf16_elements_per_comparison": 248320,
+    "bf16_elements_compared": 1128614400,
+    "raw_bf16_element_mismatches": 3259820,
+    "mismatch_ppm": 2888.3381250496186,
+    "mismatch_percent": 0.2888338125049619,
+    "live_status": "FAIL"
+  },
+  "claims": {
+    "timing_valid": false,
+    "performance_measurement": false,
+    "floor_acceptance_eligible": false,
+    "production_eligible": false,
+    "measured_saving_ms": null
+  },
+  "evidence_sha256": {
+    "live_result": "e5827885778ee27bb63fe2a6fc1833307e04fc543b8b35a355d9b8d3fe1d3a5a",
+    "campaign_summary": "467d0d6c1d7f83c48dacb15746e0c7c989ccce0307d00d364428ec6e8dd8cfdf",
+    "work_census": "ee2f02307a37ead96075062b3a27dcb14ae6734ef282da1945bfa4234de96f7a",
+    "launcher_meta": "5f80647950840047ca0921741711ca047768cdf947cd7ed8078c3dc1060c6443",
+    "runlog": "116149bb71b6d564940b3fb5815b7c746d96a221ce9b1f10f4440333be92ade0",
+    "final_boundary_snapshot": "2d781f8cbee89ddd477877ee7b8ff047856ae0e54a90b2de2641e8adee28eb3c",
+    "final_flush_stderr": "f01f3a02555a926d20ed5520991de4a1647fdf5ac70c199010f0c83ef405787a"
+  },
+  "container_removed_after_evidence_capture": true
+}
