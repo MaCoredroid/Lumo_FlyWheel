@@ -25,6 +25,12 @@ case "$GATE_CANDIDATE" in
     LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_live_gate.v1
     CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl
     ;;
+  static_persistent_stocktile)
+    DIAGNOSTIC_SELECTOR=static_persistent_stocktile_byte_ab
+    RECORD_SCHEMA=fr13.fixed32.cutlass_static_persistent_byte_ab.v1
+    LIVE_SCHEMA=fr13.fixed32.cutlass_static_persistent_live_gate.v1
+    CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_static_persistent_byte_ab.jsonl
+    ;;
   *)
     echo "unsupported Stream-K gate candidate: $GATE_CANDIDATE" >&2
     exit 2
@@ -144,8 +150,8 @@ if not any(
     for row in ledger_rows
 ):
     errors.append("real-task arm has no matching accepted engine request")
-if len(records) > 256:
-    errors.append("diagnostic exceeded its 256-call bound")
+if len(records) > 320:
+    errors.append("diagnostic exceeded its 320-call bound")
 if any(record.get("schema") != expected_record_schema for record in records):
     errors.append("comparison record schema mismatch")
 if any(record.get("task_marker") != expected_task_marker for record in records):

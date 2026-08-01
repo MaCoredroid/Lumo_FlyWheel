@@ -505,7 +505,7 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     // Diagnostic only: compare the first bounded set of armed real-task calls
     // in one process and CUDA stream, then always serve the stock result.
     static std::atomic<int64_t> next_invocation{0};
-    constexpr int64_t byte_ab_limit = 256;
+    constexpr int64_t byte_ab_limit = 320;
     int64_t invocation = next_invocation.fetch_add(1);
     if (invocation >= byte_ab_limit) {
       return run_stock(out);

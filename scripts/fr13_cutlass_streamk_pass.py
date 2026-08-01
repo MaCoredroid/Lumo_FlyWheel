@@ -21,12 +21,15 @@ LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_live_gate.v3"
 SIDECAR_SCHEMA = "fr13.fixed32.cutlass_streamk.production_pass.v2"
 ATTESTATION_SCHEMA = "fr13.fixed32.cutlass_streamk_binary.v2"
 PATCH_SOURCE = Path("scripts/fr13_patch_cutlass_fixed32_wave.py")
-PATCH_SOURCE_SHA256 = "2b36f8db3835ce5bc37545f21ed77de9eee641c229f7892d64a769db18f513f4"
+PATCH_SOURCE_SHA256 = "35fda615dfeff85edc9347e1d016278323929fb0c8bb4f603374a1c475c2e898"
 VLLM_BASE_COMMIT = "fe9c3d6c5f66c873d196800384ed6880687b9e52"
 PATCHED_DISPATCH_SHA256 = (
-    "40377cc18ebef783a74be9d403c6dd3565fa17519aca65c7bf814e73181975f8"
+    "ed3c39b7f2899aa0fc3b28f24212a15bfb3ffa8635224ae25956e234453facdc"
 )
 WIDE256_LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_wide256_live_gate.v1"
+STATIC_PERSISTENT_LIVE_SCHEMA = (
+    "fr13.fixed32.cutlass_static_persistent_live_gate.v1"
+)
 EXPECTED_TASK_IDS = ("astropy__astropy-12907",)
 EXPECTED_TASK_MARKER = f"swe_verified:{EXPECTED_TASK_IDS[0]}"
 EXPECTED_DRAFT_VOCAB_ROOT = 0
@@ -46,6 +49,10 @@ CANDIDATE_CONTRACTS = {
     "streamk_force_wide256": {
         "live_schema": WIDE256_LIVE_SCHEMA,
         "diagnostic_selector": "streamk_force_wide256_byte_ab",
+    },
+    "static_persistent_stocktile": {
+        "live_schema": STATIC_PERSISTENT_LIVE_SCHEMA,
+        "diagnostic_selector": "static_persistent_stocktile_byte_ab",
     },
 }
 
@@ -206,7 +213,7 @@ def validate_live_result(
         "patched_dispatch_sha256": PATCHED_DISPATCH_SHA256,
         "errors": [],
     }
-    if candidate_selector == "streamk_force_wide256":
+    if candidate_selector != "streamk_coop128":
         expected_fields["candidate_family"] = candidate["candidate_family"]
     for key, expected in expected_fields.items():
         if payload.get(key) != expected:
@@ -218,7 +225,7 @@ def validate_live_result(
         isinstance(comparisons, bool)
         or not isinstance(comparisons, int)
         or comparisons < len(EXPECTED_PROJECTION_NK)
-        or comparisons > 256
+        or comparisons > 320
     ):
         raise QualificationError("Stream-K live PASS comparison count is invalid")
     source_commit = payload.get("source_commit")

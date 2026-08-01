@@ -477,7 +477,7 @@ if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
   }
 fi
 case "$FR13_FIXED32_CUTLASS_WAVE" in
-  stock|streamk_coop128|streamk_coop128_byte_ab|streamk_force_wide256|streamk_force_wide256_byte_ab) ;;
+  stock|streamk_coop128|streamk_coop128_byte_ab|streamk_force_wide256|streamk_force_wide256_byte_ab|static_persistent_stocktile|static_persistent_stocktile_byte_ab) ;;
   *)
     echo "FR13_FIXED32_CUTLASS_WAVE has an unsupported selector" >&2
     exit 2
@@ -545,7 +545,8 @@ else
     -v "$FR13_FIXED32_CUTLASS_WAVE_SO:/tmp/fr13_cutlass_wave.abi3.so:ro"
   )
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
-        || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" ]]; then
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "static_persistent_stocktile_byte_ab" ]]; then
     [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "0" \
        && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
        && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
@@ -554,7 +555,9 @@ else
        && ( ( "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
               && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl" ) \
             || ( "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
-                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl" ) ) ]] || {
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "static_persistent_stocktile_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_static_persistent_byte_ab.jsonl" ) ) ]] || {
       echo "CUTLASS Stream-K byte A/B requires diagnostic B1 eager mode without production credentials" >&2
       exit 2
     }
@@ -1215,7 +1218,8 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     _fixed32_expected_eager=1
   fi
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
-        || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" ]]; then
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "static_persistent_stocktile_byte_ab" ]]; then
     _fixed32_expected_eager=1
   fi
   case "${FR13_DRAFT_VOCAB_K:-65536}:$FR13_DRAFT_VOCAB_ROOT" in

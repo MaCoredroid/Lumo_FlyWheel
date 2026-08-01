@@ -18,11 +18,23 @@ WIDE256_CANDIDATE_SHA256 = (
     "f7d5c01ca79829fbfff4c93949d057bd740905165b0b6793b3c0007629add962"
 )
 WIDE256_CANDIDATE_SIZE = 112_481_752
+STATIC_PERSISTENT_CANDIDATE_SHA256 = (
+    "66c37f2593cd38738ed2689e1cabdeaaf8383663597b4b29b46558bbf6bd2cfb"
+)
+STATIC_PERSISTENT_CANDIDATE_SIZE = 113_080_920
 COOP128_SELECTORS = frozenset({"streamk_coop128", "streamk_coop128_byte_ab"})
 WIDE256_SELECTORS = frozenset(
     {"streamk_force_wide256", "streamk_force_wide256_byte_ab"}
 )
-CANDIDATE_SELECTORS = COOP128_SELECTORS | WIDE256_SELECTORS
+STATIC_PERSISTENT_SELECTORS = frozenset(
+    {"static_persistent_stocktile", "static_persistent_stocktile_byte_ab"}
+)
+CANDIDATE_SELECTORS = (
+    COOP128_SELECTORS | WIDE256_SELECTORS | STATIC_PERSISTENT_SELECTORS
+)
+PRODUCTION_SELECTORS = frozenset(
+    {"streamk_coop128", "streamk_force_wide256", "static_persistent_stocktile"}
+)
 CONTAINER_SOURCE = Path("/tmp/fr13_cutlass_wave.abi3.so")
 CONTAINER_DESTINATION = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so"
@@ -42,6 +54,12 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
         return CANDIDATE_SHA256, CANDIDATE_SIZE, "streamk_coop128"
     if selector in WIDE256_SELECTORS:
         return WIDE256_CANDIDATE_SHA256, WIDE256_CANDIDATE_SIZE, "streamk_force_wide256"
+    if selector in STATIC_PERSISTENT_SELECTORS:
+        return (
+            STATIC_PERSISTENT_CANDIDATE_SHA256,
+            STATIC_PERSISTENT_CANDIDATE_SIZE,
+            "static_persistent_stocktile",
+        )
     raise ValueError(f"unsupported candidate selector: {selector!r}")
 
 
@@ -94,7 +112,7 @@ def _verify_production_qualification(
     patch_source: Path,
     selector: str,
 ) -> dict[str, object]:
-    if selector not in {"streamk_coop128", "streamk_force_wide256"}:
+    if selector not in PRODUCTION_SELECTORS:
         raise ValueError(f"unsupported production candidate selector: {selector!r}")
     import fr13_cutlass_streamk_pass as qualification
 
@@ -120,7 +138,7 @@ def install_candidate(
     if selector not in CANDIDATE_SELECTORS:
         raise ValueError(f"unsupported candidate selector: {selector!r}")
     source_identity = verify_candidate(source, selector)
-    production_enabled = selector in {"streamk_coop128", "streamk_force_wide256"}
+    production_enabled = selector in PRODUCTION_SELECTORS
     qualification: dict[str, object] | None = None
     if production_enabled:
         if production_sidecar is None or expected_production_sidecar_sha256 is None:

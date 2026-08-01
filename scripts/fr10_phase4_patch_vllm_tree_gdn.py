@@ -414,11 +414,23 @@ try:
     _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
 except NameError:
     _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = False
+try:
+    _FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC
+except NameError:
+    _FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC = False
 _FR13_FIXED32_DRAFTER_TREE_LAYER = "mtp.layers.0.self_attn.attn"
 _FR13_FIXED32_TARGET_TREE_LAYERS = frozenset(
     "language_model.model.layers.%d.self_attn.attn" % layer
     for layer in range(3, 64, 4)
 )
+
+
+def _fr13_fixed32_unmeasured_full_row_map_valid(batch_rows, compact_batch):
+    """Admit equal full/compact rows only for isolated eager diagnostics."""
+    return batch_rows > compact_batch or (
+        _FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC
+        and batch_rows == compact_batch
+    )
 
 
 def _fr13_draft_head_m32_live_register(
@@ -5873,15 +5885,19 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
         "streamk_coop128_byte_ab",
         "streamk_force_wide256",
         "streamk_force_wide256_byte_ab",
+        "static_persistent_stocktile",
+        "static_persistent_stocktile_byte_ab",
     ):
         raise RuntimeError(
             "FR13_FIXED32_CUTLASS_WAVE must be stock, streamk_coop128, "
-            "streamk_coop128_byte_ab, streamk_force_wide256, or "
-            "streamk_force_wide256_byte_ab"
+            "streamk_coop128_byte_ab, streamk_force_wide256, "
+            "streamk_force_wide256_byte_ab, static_persistent_stocktile, or "
+            "static_persistent_stocktile_byte_ab"
         )
     streamk_byte_diagnostic = cutlass_wave in (
         "streamk_coop128_byte_ab",
         "streamk_force_wide256_byte_ab",
+        "static_persistent_stocktile_byte_ab",
     )
     if batch_gdn_byte_diagnostic == "1" and streamk_byte_diagnostic:
         raise RuntimeError(
@@ -5928,7 +5944,11 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         )
     if (
         _FR13_FIXED32_CUTLASS_WAVE
-        in ("streamk_coop128_byte_ab", "streamk_force_wide256_byte_ab")
+        in (
+            "streamk_coop128_byte_ab",
+            "streamk_force_wide256_byte_ab",
+            "static_persistent_stocktile_byte_ab",
+        )
         and graph_batch_gdn_byte_diagnostic == "1"
     ):
         raise RuntimeError(
@@ -5961,6 +5981,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     if _FR13_FIXED32_CUTLASS_WAVE in (
         "streamk_coop128_byte_ab",
         "streamk_force_wide256_byte_ab",
+        "static_persistent_stocktile_byte_ab",
     ):
         if not mode:
             raise RuntimeError(
@@ -31360,7 +31381,10 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                    )\n"
         "                    or (\n"
         "                        not _fr13_f32_measured\n"
-        "                        and _fr13_f32_batch_rows <= _fr13_f32_B\n"
+        "                        and not _fr13_f32_kv_gdn."
+        "_fr13_fixed32_unmeasured_full_row_map_valid(\n"
+        "                            _fr13_f32_batch_rows, _fr13_f32_B\n"
+        "                        )\n"
         "                    )\n"
         "                ):\n"
         "                    raise RuntimeError(\n"

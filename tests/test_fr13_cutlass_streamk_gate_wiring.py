@@ -194,6 +194,31 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "fr13_fixed32_cutlass_streamk.real_event.arm" in serve
 
 
+def test_static_persistent_candidate_is_fully_wired_to_b1_live_gate() -> None:
+    gate = GATE.read_text(encoding="utf-8")
+    kernel_gate = B1_KERNEL_GATE.read_text(encoding="utf-8")
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+    serve = (REPO / "scripts" / "fr13_bigdenom_swe_serve_variant.sh").read_text(
+        encoding="utf-8"
+    )
+    runner = SWE_RUNNER.read_text(encoding="utf-8")
+    patcher = (REPO / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "static_persistent_stocktile)" in gate
+    assert "DIAGNOSTIC_SELECTOR=static_persistent_stocktile_byte_ab" in gate
+    assert "RECORD_SCHEMA=fr13.fixed32.cutlass_static_persistent_byte_ab.v1" in gate
+    assert "LIVE_SCHEMA=fr13.fixed32.cutlass_static_persistent_live_gate.v1" in gate
+    assert "diagnostic exceeded its 320-call bound" in gate
+    assert "diagnostic exceeded its 256-call bound" not in gate
+    assert "static_persistent_stocktile_byte_ab" in kernel_gate
+    for source in (launcher, serve, runner, patcher):
+        assert "static_persistent_stocktile" in source
+        assert "static_persistent_stocktile_byte_ab" in source
+    assert "_fr13_fixed32_unmeasured_full_row_map_valid" in patcher
+
+
 def test_exact4_timing_is_real_full_wall_full_vocab_and_source_bound() -> None:
     timing = TIMING.read_text(encoding="utf-8")
 

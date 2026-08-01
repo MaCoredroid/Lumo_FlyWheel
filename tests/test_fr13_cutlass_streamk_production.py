@@ -154,6 +154,69 @@ def test_wide256_live_pass_is_bound_to_wide_binary_and_schema(
     assert issued["candidate_family"] == "streamk_force_wide256"
 
 
+def test_static_persistent_live_pass_is_bound_to_static_binary_and_schema(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, candidate, patch_source, live, _ = _qualified_fixture(
+        tmp_path, monkeypatch
+    )
+    candidate_bytes = candidate.read_bytes()
+    candidate_sha256 = hashlib.sha256(candidate_bytes).hexdigest()
+    monkeypatch.setattr(
+        module.binary, "STATIC_PERSISTENT_CANDIDATE_SIZE", len(candidate_bytes)
+    )
+    monkeypatch.setattr(
+        module.binary, "STATIC_PERSISTENT_CANDIDATE_SHA256", candidate_sha256
+    )
+    payload = json.loads(live.read_text(encoding="ascii"))
+    payload.update(
+        {
+            "schema": module.STATIC_PERSISTENT_LIVE_SCHEMA,
+            "candidate": "static_persistent_stocktile",
+            "candidate_family": "static_persistent_stocktile",
+            "diagnostic_selector": "static_persistent_stocktile_byte_ab",
+            "comparisons": 320,
+        }
+    )
+    live.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
+    live_sha256 = hashlib.sha256(live.read_bytes()).hexdigest()
+    sidecar = tmp_path / "static-persistent-sidecar.json"
+
+    issued = module.issue_sidecar(
+        live,
+        live_sha256,
+        candidate,
+        sidecar,
+        patch_source,
+        candidate_selector="static_persistent_stocktile",
+    )
+    sidecar_sha256 = hashlib.sha256(sidecar.read_bytes()).hexdigest()
+    verified = module.verify_sidecar(
+        sidecar,
+        sidecar_sha256,
+        candidate,
+        patch_source,
+        candidate_selector="static_persistent_stocktile",
+    )
+
+    assert verified == issued
+    assert issued["candidate_selector"] == "static_persistent_stocktile"
+    assert issued["diagnostic_selector"] == "static_persistent_stocktile_byte_ab"
+    assert issued["candidate_family"] == "static_persistent_stocktile"
+
+    payload["comparisons"] = 321
+    live.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
+    over_limit_sha256 = hashlib.sha256(live.read_bytes()).hexdigest()
+    with pytest.raises(module.QualificationError, match="comparison count"):
+        module.validate_live_result(
+            live,
+            over_limit_sha256,
+            candidate,
+            patch_source,
+            candidate_selector="static_persistent_stocktile",
+        )
+
+
 def test_live_pass_rejects_mismatch_and_symlink(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

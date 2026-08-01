@@ -30,6 +30,8 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "streamk_coop128_byte_ab",
         "streamk_force_wide256",
         "streamk_force_wide256_byte_ab",
+        "static_persistent_stocktile",
+        "static_persistent_stocktile_byte_ab",
     }
     assert module.WIDE256_CANDIDATE_SHA256 == (
         "f7d5c01ca79829fbfff4c93949d057bd740905165b0b6793b3c0007629add962"
@@ -39,6 +41,15 @@ def test_pinned_binary_identity_and_selectors() -> None:
         module.WIDE256_CANDIDATE_SHA256,
         module.WIDE256_CANDIDATE_SIZE,
         "streamk_force_wide256",
+    )
+    assert module.STATIC_PERSISTENT_CANDIDATE_SHA256 == (
+        "66c37f2593cd38738ed2689e1cabdeaaf8383663597b4b29b46558bbf6bd2cfb"
+    )
+    assert module.STATIC_PERSISTENT_CANDIDATE_SIZE == 113_080_920
+    assert module.candidate_identity("static_persistent_stocktile_byte_ab") == (
+        module.STATIC_PERSISTENT_CANDIDATE_SHA256,
+        module.STATIC_PERSISTENT_CANDIDATE_SIZE,
+        "static_persistent_stocktile",
     )
 
 
@@ -66,6 +77,33 @@ def test_wide256_diagnostic_install_uses_its_own_pinned_identity(
     assert destination.read_bytes() == payload
     assert record["production_enabled"] is False
     assert record["candidate_family"] == "streamk_force_wide256"
+    assert record["source"]["sha256"] == digest
+
+
+def test_static_persistent_diagnostic_install_uses_its_own_pinned_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    payload = b"static-persistent-candidate-extension\n"
+    digest = hashlib.sha256(payload).hexdigest()
+    monkeypatch.setattr(module, "STATIC_PERSISTENT_CANDIDATE_SIZE", len(payload))
+    monkeypatch.setattr(module, "STATIC_PERSISTENT_CANDIDATE_SHA256", digest)
+    source = tmp_path / "static-persistent.so"
+    destination = tmp_path / "installed.so"
+    attestation = tmp_path / "attestation.json"
+    source.write_bytes(payload)
+    destination.write_bytes(b"stock-extension\n")
+
+    record = module.install_candidate(
+        source,
+        destination,
+        attestation,
+        "static_persistent_stocktile_byte_ab",
+    )
+
+    assert destination.read_bytes() == payload
+    assert record["production_enabled"] is False
+    assert record["candidate_family"] == "static_persistent_stocktile"
     assert record["source"]["sha256"] == digest
 
 

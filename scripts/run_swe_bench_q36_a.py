@@ -6748,11 +6748,14 @@ def main(argv: list[str] | None = None) -> int:
         "streamk_coop128_byte_ab",
         "streamk_force_wide256",
         "streamk_force_wide256_byte_ab",
+        "static_persistent_stocktile",
+        "static_persistent_stocktile_byte_ab",
     }:
         parser.error("FR13_FIXED32_CUTLASS_WAVE has an unsupported value")
     fixed32_cutlass_diagnostic = cutlass_wave in {
         "streamk_coop128_byte_ab",
         "streamk_force_wide256_byte_ab",
+        "static_persistent_stocktile_byte_ab",
     }
     batch_gdn_eager_diagnostic = os.environ.get(
         "FR13_FIXED32_BATCH_GDN_BYTE_AB", "0"
