@@ -4,13 +4,13 @@
     "mode": "0555",
     "path": "/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.persistent_b4_m128_stock_symbol_exact_compare320_gate_ready.abi3.so",
     "runpath": "/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64",
-    "sha256": "6988f6a994c29e9196b6addc039e1d63bf08c32f268f9be3d2f14c5d863be1de"
+    "sha256": "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
   },
   "build": {
     "cuda_arch": "12.1a",
     "cutlass_revision": "v4.4.2",
-    "patched_dispatch_sha256": "44fb7a8d3cf6d8dc6b69d0acd3f5f1e533d7485f6c4d51e7e28c1a45c3fa9568",
-    "patch_source_sha256": "f3b70f541331d2fe4ea258297246dcfa854514addd163e6ccae4ff90d55f98db",
+    "patched_dispatch_sha256": "13debfa754beeb4a6ae9818612b4bf729619f0be03637372626de3778b2b3780",
+    "patch_source_sha256": "656c53b20497fc08cc7fdfb18256235b07cfad9868fde2faa70e6b0b9dfca41a",
     "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
   },
   "candidate": {
@@ -19,6 +19,28 @@
     "dispatch_m": 128,
     "fallback": "stock",
     "kernel_schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+    "projection_gate_nk": [
+      [
+        5120,
+        6144
+      ],
+      [
+        5120,
+        17408
+      ],
+      [
+        14336,
+        5120
+      ],
+      [
+        16384,
+        5120
+      ],
+      [
+        34816,
+        5120
+      ]
+    ],
     "selector": "persistent_b4_m128",
     "tile_mnk": [128, 128, 128]
   },

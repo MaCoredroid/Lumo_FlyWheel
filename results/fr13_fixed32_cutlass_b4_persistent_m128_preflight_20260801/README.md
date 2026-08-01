@@ -47,9 +47,9 @@ census or flush requirements. Any comparison mismatch fails the gate.
 
 The B4 comparator and both credential reducers are bounded at 320 calls. This
 leaves the B1 Stream-K bound at 256 while covering the required MTP projection
-that follows 256 target-projection calls in a real B4 event. The reducer also
-requires `FR13_FIXED32_MODE=hydra27_fixed32`; legacy Tail6 execution cannot
-qualify this candidate.
+`(14336,5120)` that follows 256 target-projection calls in a real B4 event. The
+reducer also requires `FR13_FIXED32_MODE=hydra27_fixed32`; legacy Tail6
+execution cannot qualify this candidate.
 
 The exact command is in `prepared_command.txt`. It was prepared only and was not
 executed. After an authenticated byte PASS, run the paired stock/candidate B4

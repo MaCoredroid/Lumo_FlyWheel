@@ -7,20 +7,22 @@ PASS scripts/fr13_run_b4_cutlass_persistent_m128_timing.sh
 
 Python compile:
 PASS scripts/fr13_cutlass_b4_pass.py
+PASS scripts/fr13_cutlass_streamk_pass.py
 PASS scripts/fr13_cutlass_wave_binary.py
 PASS scripts/fr13_patch_cutlass_fixed32_wave.py
-PASS three focused CUTLASS test modules
 
 Ruff:
-PASS three modified CUTLASS scripts and three focused CUTLASS test modules
+PASS four modified CUTLASS scripts and five focused CUTLASS test modules
 
 Pytest:
-196 passed in 3.43s
+211 passed in 2.88s
 
 Files:
 tests/test_fr13_cutlass_b4_production.py
 tests/test_fr13_cutlass_fixed32_wave_patch.py
 tests/test_fr13_cutlass_wave_binary.py
+tests/test_fr13_cutlass_streamk_gate_wiring.py
+tests/test_fr13_cutlass_streamk_production.py
 tests/test_fr13_fixed32_final_full_preseed.py
 tests/test_fr13_fixed32_ingress_proxy.py
 tests/test_fr13_fixed32_ingress_wiring.py
@@ -30,12 +32,15 @@ tests/test_fr13_fixed32_floor_propagation.py
 tests/test_fr13_fixed32_conv_source_batch.py
 
 Artifact identities rechecked:
-candidate SO sha256 6988f6a994c29e9196b6addc039e1d63bf08c32f268f9be3d2f14c5d863be1de bytes 112698512 mode 0555
-patched dispatch sha256 44fb7a8d3cf6d8dc6b69d0acd3f5f1e533d7485f6c4d51e7e28c1a45c3fa9568
-patch source sha256 f3b70f541331d2fe4ea258297246dcfa854514addd163e6ccae4ff90d55f98db
+candidate SO sha256 895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f bytes 112698512 mode 0555
+patched dispatch sha256 13debfa754beeb4a6ae9818612b4bf729619f0be03637372626de3778b2b3780
+patch source sha256 656c53b20497fc08cc7fdfb18256235b07cfad9868fde2faa70e6b0b9dfca41a
 stock FA2 sha256 f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d bytes 299183936
+cuobjdump raw sha256 8dab744202393bdc26cc2d2aa622f6ac1eb492dd932861ff62f63daa1c6c9841 unchanged
+dynamic defined symbol sets equal: 1295 prior, 1295 rebuilt
 
 Gate contract:
 B4 comparator/reducer maximum 320 calls; B1 maximum remains 256 calls
+packed full-attention QKV projection 14336x5120; stale 8192x5120 rejected
 target topology hydra27_fixed32; legacy tail6_fixed32 cannot qualify
 prepared exact4 command only; byte gate and timing were not launched

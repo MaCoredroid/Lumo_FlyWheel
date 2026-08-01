@@ -43,7 +43,7 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "streamk_force_wide256",
     )
     assert module.B4_M128_CANDIDATE_SHA256 == (
-        "6988f6a994c29e9196b6addc039e1d63bf08c32f268f9be3d2f14c5d863be1de"
+        "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
     )
     assert module.B4_M128_CANDIDATE_SIZE == 112_698_512
     assert module.candidate_identity("persistent_b4_m128_byte_ab") == (

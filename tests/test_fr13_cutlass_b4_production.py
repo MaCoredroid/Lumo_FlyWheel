@@ -86,6 +86,14 @@ def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return module, candidate, patch_source, live_path, live_sha256, task_marker
 
 
+def test_b4_projection_contract_uses_packed_full_attention_qkv() -> None:
+    module = _load()
+
+    assert (14336, 5120) in module.EXPECTED_PROJECTION_NK
+    assert (8192, 5120) not in module.EXPECTED_PROJECTION_NK
+    assert module.MAX_COMPARISONS == 320
+
+
 def test_exact4_b4_pass_issues_and_verifies_production_sidecar(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
