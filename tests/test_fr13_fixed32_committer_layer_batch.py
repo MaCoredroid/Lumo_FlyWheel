@@ -114,6 +114,19 @@ def test_layer_batch_candidate_drops_only_dead_operator_output() -> None:
     assert "= _sg(" not in body
 
 
+def test_layer_batch_candidate_writes_masked_gathers_directly() -> None:
+    body = _text("_fr13_fixed32_committer_graph_body")
+    preseed = _text("preseed_fixed32_committer_graph")
+
+    candidate = body[body.index("if use_layer_batch:") :]
+    assert "torch.where(mask4, k_selected, 0.0, out=k_destination)" in candidate
+    assert "torch.where(mask4, v_selected, 0.0, out=v_destination)" in candidate
+    assert "torch.where(mask3, a_selected, -1e4, out=a_destination)" in candidate
+    assert "torch.where(mask3, b_selected, 0.0, out=b_destination)" in candidate
+    assert '"neutralizations": 0' in preseed
+    assert '"direct_masked_gather_writes": True' in preseed
+
+
 def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> None:
     body = _text("_fr13_fixed32_committer_graph_body")
     preseed = _text("preseed_fixed32_committer_graph")
@@ -190,6 +203,8 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
     assert 'committer_contract.get("state_only_output_elided") is not True' in patcher
     assert 'committer_contract.get("active_length_recurrence") is not True' in patcher
     assert 'committer_contract.get("final_state_store_once") is not True' in patcher
+    assert 'committer_contract.get("direct_masked_gather_writes") is not True' in patcher
+    assert "expected_neutralizations = 0 if layer_batch is True else 5" in patcher
     assert '"layers": int(layer_count)' in patcher
     assert "ring_gathers * int(layer_count) * path_cap * batch" in patcher
     assert '"fused_layer_calls": fused_calls' in patcher
@@ -202,6 +217,7 @@ def test_work_census_accepts_only_reference_or_layer_batch_launch_count() -> Non
         "layer-batch-candidate",
     )
     event["committer"]["fused_layer_calls"] = 1
+    event["committer"]["neutralize_ops"] = 0
     validated = census.validate_event(event, source="layer-batch-candidate")
 
     assert validated.normalized_work["committer"]["layers"] == 48

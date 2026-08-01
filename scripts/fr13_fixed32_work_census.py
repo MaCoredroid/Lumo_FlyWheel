@@ -1852,6 +1852,9 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             f"{source}.committer.fused_layer_calls: expected 1 or "
             f"{GDN_LAYERS}, got {committer_fused_calls}"
         )
+    expected_committer_neutralizations = (
+        0 if committer_fused_calls == 1 else COMMITTER_NEUTRALIZE_OPS
+    )
     committer = _fixed_section(
         committer_raw,
         keys=COMMITTER_KEYS,
@@ -1865,7 +1868,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "ring_layer_path_rows": (
                 COMMITTER_RING_LAYER_PATH_ROWS_PER_REQUEST * batch_size
             ),
-            "neutralize_ops": COMMITTER_NEUTRALIZE_OPS,
+            "neutralize_ops": expected_committer_neutralizations,
             "fused_layer_calls": committer_fused_calls,
             "graph_replays": 1,
             "graph_captures": 0,

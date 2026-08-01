@@ -9807,12 +9807,18 @@ def _fr13_fixed32_committer_graph_body(
     num_vh = state["num_vh"]
     dim_v = state["dim_v"]
 
-    # Exactly five full neutralizations per replay.
-    state["abuf"].fill_(-1e4)
-    state["bbuf"].zero_()
-    state["kbuf"].zero_()
-    state["vbuf"].zero_()
-    state["ssi"].fill_(state["scratch"])
+    use_layer_batch = (
+        state.get("layer_batch", False)
+        if layer_batch is None
+        else bool(layer_batch)
+    )
+    if not use_layer_batch:
+        # Preserve the exact native-reference preprocessing graph.
+        state["abuf"].fill_(-1e4)
+        state["bbuf"].zero_()
+        state["kbuf"].zero_()
+        state["vbuf"].zero_()
+        state["ssi"].fill_(state["scratch"])
 
     accepted_lens = state["accepted_lens"].to(torch.long)
     node_mat = state["node_mat"]
@@ -9833,31 +9839,42 @@ def _fr13_fixed32_committer_graph_body(
     b_selected = b_rings[:, batch_index, safe_nodes]
     mask4 = valid.view(1, batch, path_cap, 1, 1)
     mask3 = valid.view(1, batch, path_cap, 1)
-    state["kbuf"].view(
+    k_destination = state["kbuf"].view(
         layers, batch, path_cap, num_kh, dim_k
-    ).copy_(torch.where(mask4, k_selected, torch.zeros_like(k_selected)))
-    state["vbuf"].view(
+    )
+    v_destination = state["vbuf"].view(
         layers, batch, path_cap, num_vh, dim_v
-    ).copy_(torch.where(mask4, v_selected, torch.zeros_like(v_selected)))
-    state["abuf"].view(
+    )
+    a_destination = state["abuf"].view(
         layers, batch, path_cap, num_vh
-    ).copy_(torch.where(
-        mask3, a_selected, torch.full_like(a_selected, -1e4)
-    ))
-    state["bbuf"].view(
+    )
+    b_destination = state["bbuf"].view(
         layers, batch, path_cap, num_vh
-    ).copy_(torch.where(mask3, b_selected, torch.zeros_like(b_selected)))
+    )
+    if use_layer_batch:
+        torch.where(mask4, k_selected, 0.0, out=k_destination)
+        torch.where(mask4, v_selected, 0.0, out=v_destination)
+        torch.where(mask3, a_selected, -1e4, out=a_destination)
+        torch.where(mask3, b_selected, 0.0, out=b_destination)
+    else:
+        k_destination.copy_(
+            torch.where(mask4, k_selected, torch.zeros_like(k_selected))
+        )
+        v_destination.copy_(
+            torch.where(mask4, v_selected, torch.zeros_like(v_selected))
+        )
+        a_destination.copy_(torch.where(
+            mask3, a_selected, torch.full_like(a_selected, -1e4)
+        ))
+        b_destination.copy_(
+            torch.where(mask3, b_selected, torch.zeros_like(b_selected))
+        )
     state["ssi"].copy_(
         spec_state_indices[:, :batch, 0:1]
         .to(torch.int32)
         .expand(layers, batch, path_cap)
     )
 
-    use_layer_batch = (
-        state.get("layer_batch", False)
-        if layer_batch is None
-        else bool(layer_batch)
-    )
     if use_layer_batch:
         _fr13_fixed32_committer_native_layer_batch(
             state=state,
@@ -10139,11 +10156,13 @@ def preseed_fixed32_committer_graph(
         state["contract"].update(
             {
                 "fused_calls": 1,
+                "neutralizations": 0,
                 "native_reference_fused_calls": 48,
                 "layer_batch": True,
                 "state_only_output_elided": True,
                 "active_length_recurrence": True,
                 "final_state_store_once": True,
+                "direct_masked_gather_writes": True,
                 "byte_gate": "required_on_first_real_nonzero_accept",
             }
         )

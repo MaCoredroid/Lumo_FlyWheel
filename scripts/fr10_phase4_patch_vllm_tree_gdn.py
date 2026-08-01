@@ -4840,11 +4840,12 @@ def _fr13_fixed32_observed_commit(
         ),
     }
     expected_fused_calls = 1 if layer_batch is True else 48
+    expected_neutralizations = 0 if layer_batch is True else 5
     committer_fallback = int(
         type(layer_batch) is not bool
         or normalized_committer["batch"] != batch
         or normalized_committer["path_cap"] != 16
-        or normalized_committer["neutralizations"] != 5
+        or normalized_committer["neutralizations"] != expected_neutralizations
         or normalized_committer["ring_gathers"] != 4
         or normalized_committer["fused_calls"] != expected_fused_calls
         or normalized_committer["graph_replays_per_event"] != 1
@@ -4857,6 +4858,7 @@ def _fr13_fixed32_observed_commit(
                 or committer_contract.get("state_only_output_elided") is not True
                 or committer_contract.get("active_length_recurrence") is not True
                 or committer_contract.get("final_state_store_once") is not True
+                or committer_contract.get("direct_masked_gather_writes") is not True
                 or committer_contract.get("byte_gate")
                 != "required_on_first_real_nonzero_accept"
             )
