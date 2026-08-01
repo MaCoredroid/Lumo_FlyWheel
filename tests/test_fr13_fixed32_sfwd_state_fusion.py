@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import sys
 import textwrap
@@ -296,6 +297,131 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
         and "launch_fixed32_sfwd_state_fusion(" in node.value
     )
     ast.parse(textwrap.dedent(fragment))
+
+
+def _production_live_pass(source_sha256: str) -> dict[str, object]:
+    return {
+        "schema": "fr13.fixed32.sfwd_state_fusion.live_pass.v1",
+        "status": "byte_pass_source_only",
+        "run_classification": (
+            "one_real_swe_verified_full_vocab_b1_byte_timing_diagnostic"
+        ),
+        "candidate": "fixed32_sfwd_state_fusion_v1",
+        "source_sha256": source_sha256,
+        "task_marker": "swe_verified:astropy__astropy-12907",
+        "batch": 1,
+        "layer_count": 48,
+        "layer_keys": [f"0x{index + 1:x}" for index in range(48)],
+        "physical_rows_per_request": 32,
+        "candidate_conv_launches_per_layer": 1,
+        "gdn_level_path_programs": [1, 11],
+        "gdn_physical_launches_per_layer": 2,
+        "gdn_ring_export_unchanged": True,
+        "gdn_flags_export_unchanged": True,
+        "compared_byte_surfaces": ["conv_out", "commit_source_stage"],
+        "real_task_authenticated": True,
+        "reference_always_served": True,
+        "timing_eligible": False,
+        "floor_acceptance_eligible": False,
+        "production_eligible": False,
+    }
+
+
+def test_production_control_is_default_off_and_source_bound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    arm = tmp_path / "production.arm"
+    live = tmp_path / "production_pass.json"
+    digest = tmp_path / "production_pass.sha256"
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_MODE", "hydra27_fixed32")
+    assert kernel.fixed32_sfwd_state_fusion_production_control(
+        environ={},
+        arm_path=str(arm),
+        pass_path=str(live),
+        pass_sha256_path=str(digest),
+    ) is None
+
+    arm.write_text("1\n", encoding="ascii")
+    payload = _production_live_pass(
+        hashlib.sha256(KERNEL_PATH.read_bytes()).hexdigest()
+    )
+    raw = json.dumps(payload, sort_keys=True).encode("ascii") + b"\n"
+    live.write_bytes(raw)
+    digest.write_text(hashlib.sha256(raw).hexdigest() + "\n", encoding="ascii")
+    credential = kernel.fixed32_sfwd_state_fusion_production_control(
+        environ={},
+        arm_path=str(arm),
+        pass_path=str(live),
+        pass_sha256_path=str(digest),
+    )
+    assert credential is not None
+    assert credential["live_pass_sha256"] == hashlib.sha256(raw).hexdigest()
+    assert id(credential) in (
+        kernel._FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_CREDENTIAL_IDS
+    )
+
+    payload["source_sha256"] = "0" * 64
+    bad_raw = json.dumps(payload, sort_keys=True).encode("ascii") + b"\n"
+    live.write_bytes(bad_raw)
+    digest.write_text(
+        hashlib.sha256(bad_raw).hexdigest() + "\n", encoding="ascii"
+    )
+    with pytest.raises(RuntimeError, match="source_sha256"):
+        kernel.fixed32_sfwd_state_fusion_production_control(
+            environ={},
+            arm_path=str(arm),
+            pass_path=str(live),
+            pass_sha256_path=str(digest),
+        )
+
+
+def test_production_engagement_and_served_wiring_cover_all_layers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engagement = tmp_path / "engagement.json"
+    credential = {
+        "live_pass_sha256": "1" * 64,
+        "runtime_source_sha256": "2" * 64,
+    }
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_MODE", "hydra27_fixed32")
+    monkeypatch.setattr(
+        kernel,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_CREDENTIAL_IDS",
+        {id(credential)},
+    )
+    monkeypatch.setattr(
+        kernel,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_STATE",
+        {
+            "live_pass_sha256": None,
+            "source_sha256": None,
+            "layers": set(),
+            "launches": 0,
+            "emitted": False,
+        },
+    )
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ENGAGEMENT_PATH",
+        str(engagement),
+    )
+    for layer in range(48):
+        kernel.fixed32_sfwd_state_fusion_production_engagement(
+            credential=credential, layer_key=layer + 1, batch_size=1
+        )
+    record = json.loads(engagement.read_text(encoding="ascii"))
+    assert record["candidate_served"] is True
+    assert record["layer_count"] == 48
+    assert record["incumbent_conv_launches_per_layer"] == 0
+    assert record["timing_eligible"] is False
+    assert record["floor_acceptance_eligible"] is False
+
+    patcher = PATCHER_PATH.read_text(encoding="utf-8")
+    assert "fixed32_sfwd_state_fusion_production_control()" in patcher
+    assert "out=_fr10_tree_conv_out" in patcher
+    assert "production_credential=_fr13_sfwd_production" in patcher
+    assert "if _fr13_sfwd_production is not None" in patcher
+    assert "else attn_metadata.num_spec_decodes" in patcher
 
 
 def test_b1_full_vocab_runner_is_reference_returning_and_nonacceptance() -> None:
