@@ -467,6 +467,9 @@ def test_b1_full_vocab_runner_is_reference_returning_and_nonacceptance() -> None
 
 def test_sfwd_gate_uses_eager_lifecycle_without_graph_acceptance() -> None:
     runner = RUNNER_PATH.read_text(encoding="utf-8")
+    kernel_gate = (
+        ROOT / "scripts" / "fr13_run_b1_kernel_live_gate.sh"
+    ).read_text(encoding="utf-8")
     serve = SERVE_PATH.read_text(encoding="utf-8")
     orchestrator = ORCHESTRATOR_PATH.read_text(encoding="utf-8")
 
@@ -488,6 +491,14 @@ def test_sfwd_gate_uses_eager_lifecycle_without_graph_acceptance() -> None:
     assert "fr13-fixed32-eager-kernel-terminal-v1" in serve
     assert "fr13-fixed32-eager-kernel-traffic-audit-skip-v1" in serve
     assert "fixed32 eager kernel diagnostic: graph-census needles are ineligible" in serve
+    eager_restore = (
+        'if [[ "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "1" ]]; then'
+    )
+    assert eager_restore in kernel_gate
+    assert kernel_gate.index("source scripts/fr13_fixed32_floor_timers_seq.sh") < (
+        kernel_gate.index(eager_restore)
+    )
+    assert kernel_gate.index(eager_restore) < kernel_gate.index('mkdir -p "$RUNROOT"')
 
     assert "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" in orchestrator
     assert "must be exactly 0 or 1" in orchestrator
