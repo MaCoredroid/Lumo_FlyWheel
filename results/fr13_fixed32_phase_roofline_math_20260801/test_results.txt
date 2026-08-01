@@ -1,0 +1,26 @@
+FR13 fixed32 phase roofline verification
+Date: 2026-08-01 UTC
+GPU used: no
+Docker used: no
+Synthetic or probe timing used: no
+
+JSON parse and arithmetic checks:
+  jq empty roofline.json: PASS
+  mandatory component bytes sum to 42,025,179,008: PASS
+  bytes / 273 GB/s recomputes 153.93838464468865 ms: PASS
+  cap minus floor recomputes 23.090757696703255 ms: PASS
+  transfer wall minus cap recomputes 90.03101696075088 ms: PASS
+
+Committed exact4 evidence cross-check:
+  SFWD, DFWD, CFWD, and full-wall values match
+  results/fr13_fixed32_qrow16_prod_exact4_b1_20260731T182827Z/
+  measurement_summary.json: PASS
+
+Focused source tests:
+  PYTHONPATH=. /home/mark/shared/lumoFlyWheel/.venv/bin/pytest -q \
+    tests/test_fr13_hardware_floor_ledger.py \
+    tests/test_fr13_fixed32_floor_propagation.py
+  12 passed in 0.26s
+
+Repository checks:
+  git diff --check: PASS
