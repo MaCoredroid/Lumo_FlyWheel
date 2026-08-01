@@ -167,6 +167,9 @@ _FR13_FIXED32_BATCH_GDN_BYTE_AB = os.environ.get(
 _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = os.environ.get(
     "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB", "0"
 ).strip()
+_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB = os.environ.get(
+    "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB", "0"
+).strip()
 _FR13_FIXED32_CUTLASS_WAVE = os.environ.get(
     "FR13_FIXED32_CUTLASS_WAVE", "stock"
 ).strip()
@@ -5862,6 +5865,7 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
 
 def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
     batch_gdn_byte_diagnostic = _FR13_FIXED32_BATCH_GDN_BYTE_AB
+    sfwd_b4_byte_diagnostic = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
     cutlass_wave = _FR13_FIXED32_CUTLASS_WAVE
     if batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
@@ -5882,6 +5886,10 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
             "streamk_force_wide256_byte_ab, persistent_b4_m128, or "
             "persistent_b4_m128_byte_ab"
         )
+    if sfwd_b4_byte_diagnostic not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"
+        )
     streamk_byte_diagnostic = cutlass_wave in (
         "streamk_coop128_byte_ab",
         "streamk_force_wide256_byte_ab",
@@ -5889,9 +5897,14 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
     persistent_b4_byte_diagnostic = (
         cutlass_wave == "persistent_b4_m128_byte_ab"
     )
-    if batch_gdn_byte_diagnostic == "1" and (
-        streamk_byte_diagnostic or persistent_b4_byte_diagnostic
-    ):
+    if sum(
+        (
+            batch_gdn_byte_diagnostic == "1",
+            streamk_byte_diagnostic,
+            persistent_b4_byte_diagnostic,
+            sfwd_b4_byte_diagnostic == "1",
+        )
+    ) > 1:
         raise RuntimeError(
             "FR13 fixed32 eager byte diagnostics are "
             "mutually exclusive"
@@ -5907,6 +5920,12 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
             "CUTLASS B4 byte diagnostic",
             4,
             "FR13_FIXED32_EAGER_CUTLASS_B4_BOOT_WARM",
+        )
+    if sfwd_b4_byte_diagnostic == "1":
+        return (
+            "SFWD B4 byte diagnostic",
+            4,
+            "FR13_FIXED32_EAGER_SFWD_B4_BOOT_WARM",
         )
     if streamk_byte_diagnostic:
         return (
@@ -5927,7 +5946,20 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     graph_batch_gdn_byte_diagnostic = (
         _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
     )
+    sfwd_b4_byte_diagnostic = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
+    sfwd_production = os.environ.get(
+        "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION", "0"
+    ).strip()
     _fr13_fixed32_eager_boot_warm_contract()
+    if sfwd_production not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION must be exactly 0 or 1"
+        )
+    if sfwd_production == "1":
+        raise RuntimeError(
+            "FR13 fixed32 SFWD production remains unavailable until "
+            "authenticated B1 and exact4 B4 byte prerequisites are bound"
+        )
     if graph_batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
@@ -5941,16 +5973,19 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             "mutually exclusive"
         )
     if (
-        _FR13_FIXED32_CUTLASS_WAVE
-        in (
-            "streamk_coop128_byte_ab",
-            "streamk_force_wide256_byte_ab",
-            "persistent_b4_m128_byte_ab",
+        (
+            _FR13_FIXED32_CUTLASS_WAVE
+            in (
+                "streamk_coop128_byte_ab",
+                "streamk_force_wide256_byte_ab",
+                "persistent_b4_m128_byte_ab",
+            )
+            or sfwd_b4_byte_diagnostic == "1"
         )
         and graph_batch_gdn_byte_diagnostic == "1"
     ):
         raise RuntimeError(
-            "FR13 fixed32 CUTLASS and graph-replay B4 byte diagnostics "
+            "FR13 fixed32 eager-kernel and graph-replay B4 byte diagnostics "
             "are mutually exclusive"
         )
     if batch_gdn_byte_diagnostic == "1":
@@ -6006,6 +6041,23 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             raise RuntimeError(
                 "FR13 fixed32 CUTLASS B4 byte diagnostic requires the exact "
                 "B4 diagnostic route without production"
+            )
+    if sfwd_b4_byte_diagnostic == "1":
+        if not mode:
+            raise RuntimeError(
+                "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB requires fixed32 mode"
+            )
+        incompatible = (
+            os.environ.get("FR13_FIXED32_B1_DIAGNOSTIC", "0") != "0"
+            or os.environ.get("ENFORCE_EAGER", "0") != "1"
+            or bool(candidate)
+            or bool(production)
+            or taw_native_diagnostic
+        )
+        if incompatible:
+            raise RuntimeError(
+                "FR13 fixed32 SFWD byte diagnostic requires the exclusive "
+                "eager exact B4 shadow route without B1 or production"
             )
     if graph_batch_gdn_byte_diagnostic == "1":
         candidate_bv = os.environ.get(

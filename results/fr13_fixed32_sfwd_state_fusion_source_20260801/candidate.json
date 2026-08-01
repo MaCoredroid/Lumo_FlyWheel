@@ -59,7 +59,8 @@
   },
   "qualification_boundary": {
     "default_off": true,
-    "production_selector_present": false,
+    "production_selector_present": true,
+    "production_selector_fail_closed": true,
     "cuda_graph_candidate_allowed": false,
     "real_event_marker_prefix": "swe_verified:",
     "candidate_runs_before_reference": true,
@@ -78,13 +79,13 @@
     "savings_claim_ms_per_event": null
   },
   "required_next_gates": [
-    "Run the same-process candidate-versus-incumbent byte hook on an authenticated real SWE-Verified event and require all 48 layers on both byte surfaces.",
-    "Add a graph-safe persistent candidate scratch and repeat the byte gate on the final FULL B4 graph before any production selector exists.",
-    "Run matched exact4 B1 and exact4 B4 full-vocabulary full-wall timing; reject on any wall regression or byte mismatch."
+    "Rerun the authenticated full-vocabulary B1 byte credential with the eager boot-warm lifecycle repair and require all 48 layers on both byte surfaces.",
+    "Run the same-process candidate-versus-incumbent hook on authenticated canonical SWE-Verified exact4 B4 and require B4/concurrency 4, 32 rows per request, root0/K0, all 48 layers, and reference serving.",
+    "Bind source-identical B1 and B4 byte prerequisites without enabling candidate serving; acceptance, timing, and production require separate future evidence and policy."
   ],
   "source_sha256": {
-    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "28c50192eb871d4bdc96f886d6817b88a9cd6ce19fc9846f0eeb966cabb05db7",
-    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "9441e59cd00aed7fe770e99bf3c0ba2c03f2967d5fa861a035a60871b86c7f87",
-    "tests/test_fr13_fixed32_sfwd_state_fusion.py": "bb764da8407f072981ca23f5be23766e2347264169fee2b7ff54bf019bf61d19"
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "1cdbff72a7188b5efd092a70a39731edc2699a512cc4aef10a1266a659fb6b3c",
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "92a611a4673fcb8678f5b37216ffd43ea26384a240ce2b00e9079aeedda071b8",
+    "tests/test_fr13_fixed32_sfwd_state_fusion.py": "3c5254c1dd139c57ace77be77cfe034d38bbd42884c3b909ffc00213e46f7ea9"
   }
 }

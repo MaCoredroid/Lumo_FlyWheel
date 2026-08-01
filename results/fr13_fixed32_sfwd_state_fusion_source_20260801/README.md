@@ -21,31 +21,32 @@ level without changing dtype, topology, or mandatory model-weight traffic.
 
 ## Safety boundary
 
-There is no production selector. The launch entrypoint refuses CUDA graph
-capture and only the authenticated real-event byte-gate wiring can call it.
-That wiring executes the candidate first, then executes and serves the complete
-incumbent path. It compares `conv_out` and `commit_source_stage` as raw bytes,
-records mismatches, and emits a 48-layer pass that remains explicitly
-`production_eligible=false`.
+No production path is enabled. The explicit production selector fails closed
+until future authenticated B1 and exact4 B4 byte prerequisites are bound, and
+even that binding does not permit candidate serving. The launch entrypoint
+refuses CUDA graph capture and only the authenticated exact4 real-event byte
+gate can call it. That wiring executes the candidate first, then executes and
+serves the complete incumbent path. It compares `conv_out` and
+`commit_source_stage` as raw bytes, records mismatches, and emits a 48-layer
+byte-only result that remains explicitly `production_eligible=false`.
 
 ## Verification
 
-Focused deterministic tests cover B1-B4 geometry, the exact fixed32 conv-window
-descriptor, CPU reference equivalence for direct indexing/source materializing,
-strict byte comparison, default-off real-event gating, and generated patch
-syntax. Existing fixed32 GDN schedule tests confirm the legacy path kernel AST
-is unchanged.
-
-The broader relevant run completed 472 tests with 22 skips; its 11 failures are
-unchanged on the base commit (six stale stateless-tree reference expectations
-and five stale fused-conv wiring expectations). The patcher's standalone
-`--self-test` also fails identically on the base at the older conv-pregather
-runtime fixture. These pre-existing harness failures were not modified.
+Focused deterministic tests cover B1-B4 kernel geometry, the exact fixed32
+conv-window descriptor, CPU reference equivalence for direct indexing/source
+materializing, strict byte comparison, authenticated exact4 marker handling,
+default-off reference serving, generated patch syntax, and the eager boot-warm
+lifecycle required before the fail-closed conv-pregather consumer. The composed
+SFWD, ingress, PAD-slot, preseed, process-attestation, and floor-propagation run
+completed 155 tests without failures. The broader fixed32 regression run
+completed 746 tests with 7 skips and no failures.
 
 ## Next qualification
 
-Run the byte hook only through authenticated SWE-Verified ingress, then add a
-persistent graph-safe scratch and repeat on the final FULL B4 graph. Production
-selection still requires byte-clean B1/B4 gates and matched exact4
-full-vocabulary full-wall timing. The historical 15.014 ms conv-state-motion
-attribution is stale and is motivation only, not a savings estimate.
+Run the prepared byte hook only through authenticated canonical SWE-Verified
+exact4 ingress and require B4/concurrency 4, 32 physical rows per request, full
+vocabulary root0/K0, both byte surfaces, and all 48 layers. The B1 credential
+must be rerun and pass with the boot-warm lifecycle repair before it can be
+bound to any B4 qualification. Production remains default-off and unavailable;
+this preflight makes no acceptance, timing, or savings claim. The historical
+15.014 ms conv-state-motion attribution is stale and is motivation only.

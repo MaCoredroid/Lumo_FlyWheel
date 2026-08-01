@@ -70,15 +70,25 @@ def _kernel_functions(
 
 
 @pytest.mark.parametrize(
-    "cutlass_wave",
-    ("streamk_force_wide256_byte_ab", "persistent_b4_m128_byte_ab"),
+    ("cutlass_wave", "sfwd_b4_byte_ab"),
+    (
+        ("streamk_force_wide256_byte_ab", "0"),
+        ("persistent_b4_m128_byte_ab", "0"),
+        ("stock", "1"),
+    ),
 )
 def test_eager_kernel_diagnostic_bakes_graph_observer_off(
     monkeypatch: pytest.MonkeyPatch,
     cutlass_wave: str,
+    sfwd_b4_byte_ab: str,
 ) -> None:
     monkeypatch.setattr(patcher, "_FR13_FIXED32_BATCH_GDN_BYTE_AB", "0")
     monkeypatch.setattr(patcher, "_FR13_FIXED32_CUTLASS_WAVE", cutlass_wave)
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        sfwd_b4_byte_ab,
+    )
     namespace = _runtime_functions(
         "_fr13_fixed32_observed_current",
         "_fr13_fixed32_observed_event_active",
@@ -454,6 +464,11 @@ def test_non_diagnostic_eager_runtime_has_no_boot_hook(
     )
     monkeypatch.setattr(
         patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "0",
+    )
+    monkeypatch.setattr(
+        patcher,
         "_FR13_FIXED32_CUTLASS_WAVE",
         cutlass_wave,
     )
@@ -462,6 +477,7 @@ def test_non_diagnostic_eager_runtime_has_no_boot_hook(
     text = source.read_text(encoding="utf-8")
     assert "FR13_FIXED32_EAGER_B4_BOOT_WARM" not in text
     assert "FR13_FIXED32_EAGER_CUTLASS_B4_BOOT_WARM" not in text
+    assert "FR13_FIXED32_EAGER_SFWD_B4_BOOT_WARM" not in text
     assert "FR13_FIXED32_EAGER_STREAMK_B1_BOOT_WARM" not in text
     namespace = {
         "CUDAGraphMode": _CUDAGraphMode,
@@ -495,6 +511,12 @@ def test_non_diagnostic_eager_runtime_has_no_boot_hook(
             4,
             "FR13_FIXED32_EAGER_CUTLASS_B4_BOOT_WARM",
         ),
+        (
+            "0",
+            "stock",
+            4,
+            "FR13_FIXED32_EAGER_SFWD_B4_BOOT_WARM",
+        ),
     ),
 )
 def test_eager_diagnostic_boot_is_zero_traffic_and_boundary_ready(
@@ -518,6 +540,11 @@ def test_eager_diagnostic_boot_is_zero_traffic_and_boundary_ready(
         patcher,
         "_FR13_FIXED32_CUTLASS_WAVE",
         cutlass_wave,
+    )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "1" if "SFWD" in sentinel else "0",
     )
     assert patcher._patch_gpu_model_runner_fixed32_final_full_preseed()
 
@@ -603,11 +630,17 @@ def test_eager_diagnostic_boot_is_zero_traffic_and_boundary_ready(
 
 
 @pytest.mark.parametrize(
-    ("batch_gdn_byte_ab", "cutlass_wave", "capture_size"),
     (
-        ("1", "stock", 128),
-        ("0", "streamk_force_wide256_byte_ab", 32),
-        ("0", "persistent_b4_m128_byte_ab", 128),
+        "batch_gdn_byte_ab",
+        "cutlass_wave",
+        "sfwd_b4_byte_ab",
+        "capture_size",
+    ),
+    (
+        ("1", "stock", "0", 128),
+        ("0", "streamk_force_wide256_byte_ab", "0", 32),
+        ("0", "persistent_b4_m128_byte_ab", "0", 128),
+        ("0", "stock", "1", 128),
     ),
 )
 def test_eager_diagnostic_metadata_builders_observe_physical_capacity(
@@ -615,6 +648,7 @@ def test_eager_diagnostic_metadata_builders_observe_physical_capacity(
     monkeypatch: pytest.MonkeyPatch,
     batch_gdn_byte_ab: str,
     cutlass_wave: str,
+    sfwd_b4_byte_ab: str,
     capture_size: int,
 ) -> None:
     source = tmp_path / "gpu_model_runner.py"
@@ -630,6 +664,11 @@ def test_eager_diagnostic_metadata_builders_observe_physical_capacity(
         patcher,
         "_FR13_FIXED32_CUTLASS_WAVE",
         cutlass_wave,
+    )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        sfwd_b4_byte_ab,
     )
     assert patcher._patch_gpu_model_runner_fixed32_eager_boot_capacity()
 
@@ -727,11 +766,12 @@ def test_eager_diagnostic_metadata_capacity_restores_after_builder_error(
 
 
 @pytest.mark.parametrize(
-    ("batch_gdn_byte_ab", "cutlass_wave"),
+    ("batch_gdn_byte_ab", "cutlass_wave", "sfwd_b4_byte_ab"),
     (
-        ("1", "stock"),
-        ("0", "streamk_force_wide256_byte_ab"),
-        ("0", "persistent_b4_m128_byte_ab"),
+        ("1", "stock", "0"),
+        ("0", "streamk_force_wide256_byte_ab", "0"),
+        ("0", "persistent_b4_m128_byte_ab", "0"),
+        ("0", "stock", "1"),
     ),
 )
 def test_eager_diagnostic_boot_is_reached_from_worker_lifecycle(
@@ -739,6 +779,7 @@ def test_eager_diagnostic_boot_is_reached_from_worker_lifecycle(
     monkeypatch: pytest.MonkeyPatch,
     batch_gdn_byte_ab: str,
     cutlass_wave: str,
+    sfwd_b4_byte_ab: str,
 ) -> None:
     source = tmp_path / "gpu_worker.py"
     source.write_text(_GPU_WORKER_FIXTURE)
@@ -753,6 +794,11 @@ def test_eager_diagnostic_boot_is_reached_from_worker_lifecycle(
         patcher,
         "_FR13_FIXED32_CUTLASS_WAVE",
         cutlass_wave,
+    )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        sfwd_b4_byte_ab,
     )
     assert patcher._patch_gpu_worker_fixed32_eager_boot_warm()
 
@@ -825,6 +871,11 @@ def test_non_diagnostic_worker_lifecycle_is_unchanged(
     )
     monkeypatch.setattr(
         patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "0",
+    )
+    monkeypatch.setattr(
+        patcher,
         "_FR13_FIXED32_CUTLASS_WAVE",
         "stock",
     )
@@ -888,6 +939,20 @@ def test_non_diagnostic_worker_lifecycle_is_unchanged(
             1,
             "requires max_num_seqs=4",
         ),
+        (
+            "0",
+            "stock",
+            _CUDAGraphMode.FULL,
+            4,
+            "requires CUDAGraphMode.NONE",
+        ),
+        (
+            "0",
+            "stock",
+            _CUDAGraphMode.NONE,
+            1,
+            "requires max_num_seqs=4",
+        ),
     ),
 )
 def test_eager_diagnostic_boot_rejects_wrong_runtime_contract(
@@ -912,6 +977,11 @@ def test_eager_diagnostic_boot_rejects_wrong_runtime_contract(
         patcher,
         "_FR13_FIXED32_CUTLASS_WAVE",
         cutlass_wave,
+    )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "1" if batch_gdn_byte_ab == "0" and cutlass_wave == "stock" else "0",
     )
     assert patcher._patch_gpu_model_runner_fixed32_final_full_preseed()
     namespace = {
@@ -965,6 +1035,118 @@ def test_eager_boot_warm_selector_contract_fails_closed(
 
     with pytest.raises(RuntimeError, match=message):
         patcher._fr13_fixed32_eager_boot_warm_contract()
+
+
+@pytest.mark.parametrize(
+    ("batch_gdn_byte_ab", "cutlass_wave"),
+    (
+        ("1", "stock"),
+        ("0", "streamk_coop128_byte_ab"),
+        ("0", "persistent_b4_m128_byte_ab"),
+    ),
+)
+def test_sfwd_b4_boot_warm_selector_is_exclusive(
+    monkeypatch: pytest.MonkeyPatch,
+    batch_gdn_byte_ab: str,
+    cutlass_wave: str,
+) -> None:
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_BATCH_GDN_BYTE_AB",
+        batch_gdn_byte_ab,
+    )
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_CUTLASS_WAVE", cutlass_wave)
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "1",
+    )
+
+    with pytest.raises(RuntimeError, match="mutually exclusive"):
+        patcher._fr13_fixed32_eager_boot_warm_contract()
+
+
+def test_sfwd_b4_boot_warm_selector_rejects_malformed_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_BATCH_GDN_BYTE_AB", "0")
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_CUTLASS_WAVE", "stock")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "invalid",
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly",
+    ):
+        patcher._fr13_fixed32_eager_boot_warm_contract()
+
+
+@pytest.mark.parametrize(
+    ("mode", "sfwd_b4_byte_ab", "b1_diagnostic", "production", "message"),
+    (
+        (
+            "",
+            "1",
+            "0",
+            "0",
+            "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB requires fixed32 mode",
+        ),
+        (
+            "tail6_fixed32",
+            "1",
+            "1",
+            "0",
+            "exclusive eager exact B4 shadow route",
+        ),
+        (
+            "tail6_fixed32",
+            "1",
+            "0",
+            "1",
+            "SFWD production remains unavailable",
+        ),
+        (
+            "tail6_fixed32",
+            "0",
+            "0",
+            "invalid",
+            "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION must be exactly",
+        ),
+    ),
+)
+def test_sfwd_b4_patch_environment_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    sfwd_b4_byte_ab: str,
+    b1_diagnostic: str,
+    production: str,
+    message: str,
+) -> None:
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", mode)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_BATCH_GDN_BYTE_AB", "0")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB",
+        "0",
+    )
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_CUTLASS_WAVE", "stock")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        sfwd_b4_byte_ab,
+    )
+    monkeypatch.setenv("FR13_FIXED32_B1_DIAGNOSTIC", b1_diagnostic)
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION",
+        production,
+    )
+    monkeypatch.setenv("ENFORCE_EAGER", "1")
+
+    with pytest.raises(RuntimeError, match=message):
+        patcher._fr13_fixed32_validate_patch_env()
 
 
 def test_postprocess_boot_warm_is_unmeasured_and_idempotent(
