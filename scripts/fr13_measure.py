@@ -1521,6 +1521,17 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         per_task.append({
             "instance_id": d.name,
             "drafts": drafts,
+            "fwd_gpu_seconds": fwd_gpu_d,
+            "fwd_gpu_steps": md.get(M_DECODE_FWD_GPU_STEPS, 0.0),
+            "fwd_gpu_drafts": fwd_gpu_drafts_d,
+            "wall_seconds": md.get(M_STEP_WALL_S, 0.0),
+            "wall_steps": md.get(M_STEP_WALL_STEPS, 0.0),
+            "wall_drafts": md.get(M_STEP_WALL_DRAFTS, 0.0),
+            "drafter_gpu_seconds": md.get(M_DRAFTER_GPU_S, 0.0),
+            "drafter_gpu_spans": md.get(M_DRAFTER_GPU_SPANS, 0.0),
+            "committer_gpu_seconds": md.get(M_COMMITTER_GPU_S, 0.0),
+            "committer_gpu_spans": md.get(M_COMMITTER_GPU_SPANS, 0.0),
+            "accepted_tokens": md.get(M_ACCEPTED, 0.0),
             "tok_per_draft": (md[M_DRAFT_TOK] / drafts) if drafts > 0 else None,
             "s_per_fwd": (md[M_DECODE_S] / drafts) if drafts > 0 else None,
             # FR13_SFWD_GPU_TIMER: prefill-INDEPENDENT decode-forward GPU time per

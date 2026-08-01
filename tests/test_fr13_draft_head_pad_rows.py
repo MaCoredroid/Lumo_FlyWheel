@@ -40,7 +40,7 @@ def test_candidate_is_default_off_strict_and_b1_root64_only() -> None:
     assert '"FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB", "0"' in snippet
     assert '_fr13_dh_rows_raw not in ("0", "32", "64", "128")' in snippet
     assert '_fr13_dh_ab_raw not in ("0", "1")' in snippet
-    assert "_fr13_dh_rows and _fr13_dh_ab" in snippet
+    assert "_fr13_dh_modes > 1" in snippet
     assert "not _fr13_is_fixed32" in snippet
     assert "not _fr13_dvk_root" in snippet
     assert "not _fr13_single_logits" in snippet
@@ -51,11 +51,13 @@ def test_candidate_is_default_off_strict_and_b1_root64_only() -> None:
 def test_static_buffers_and_gemm_use_only_selected_rows() -> None:
     snippet = _eagle_snippet()
 
-    assert '!= "UnquantizedLinearMethod"' in snippet
+    assert '!= "UnquantizedEmbeddingMethod"' in snippet
     assert "tuple(_fr13_dh_w.shape) != (65536, 5120)" in snippet
+    assert "tuple(_fr13_dh_w.stride()) != (5120, 1)" in snippet
     assert "_fr13_dh_w.dtype != torch.bfloat16" in snippet
     assert "not _fr13_dh_w.is_contiguous()" in snippet
-    assert "if _fr13_dh_ab\n                        else (_fr13_dh_rows,)" in snippet
+    assert "if _fr13_dh_ab" in snippet
+    assert "else {" in snippet
     assert "(_fr13_dh_r, 5120)" in snippet
     assert "(_fr13_dh_r, 65536)" in snippet
     assert "_fr13_dh_in.copy_(_h.expand_as(_fr13_dh_in))" in snippet
