@@ -12,34 +12,47 @@ CUDA_VISIBLE_DEVICES='' python3 -m pytest -q \
   tests/test_fr13_fixed32_taw_exact_commit_kernel.py \
   tests/test_fr13_fixed32_taw_native_precompute.py \
   tests/test_fr13_fixed32_taw_real_task_arm.py \
-  tests/test_fr13_fixed32_taw_exact_commit_cuda.py
+  tests/test_fr13_fixed32_taw_exact_commit_cuda.py \
+  tests/test_fr13_taw_current_b1_live_pass_artifact.py
 Result:
-34 passed, 1 skipped (CUDA unavailable on this host).
+43 passed, 1 skipped (CUDA unavailable on this host).
 
-3. Fixed-work and floor-contract suite
+Coverage includes rejection of the pre-Tail23 live PASS, Tail21 mask tampering,
+source-row identity drift, uniform-level drift, and B4-to-B1 overclaiming.
+
+3. Fixed-work, preseed, and ownership suite
 Command:
 python3 -m pytest -q \
   tests/test_fr13_fixed32_conv_pregather_geometry.py \
   tests/test_fr13_hardware_floor_ledger.py \
   tests/test_fr13_fixed32_floor_propagation.py \
-  tests/test_fr13_fixed32_pretask_metrics.py
+  tests/test_fr13_fixed32_pretask_metrics.py \
+  tests/test_fr13_fixed32_final_full_preseed.py \
+  tests/test_fr13_fixed32_drafter_tree_ownership.py \
+  -k 'not target_tree_attention_requires_exact_layer_set and not target_correct_geometry_wrong_layer_fails'
 Result:
-29 passed.
+109 passed, 8 deselected (optional package unavailable in this worktree).
 
-4. Mask ownership selection
+4. Work-census self-test
+Command:
+python3 scripts/fr13_fixed32_work_census.py --self-test
 Result:
-4 passed, 30 deselected.
+PASS; all 162 tamper tests passed.
 
-5. Final preseed suite
+5. Tail23 depth contract
 Result:
-54 passed.
+Topology CLI reports active=23/27. Direct reducer checks confirm the
+tail23_fixed32 arm, 23 active drafts, mask 0x7a9ce7ff, and fixed report schema
+fr13.depth_acceptance.fixed32.v3.
+
+The full depth self-test proceeds past these checks, then fails in an older
+synthetic floor-gate fixture because it does not create the now-required
+runner_metadata.json. Real artifact validation remains fail-closed.
 
 6. Additional checks
 - python py_compile: passed
 - git diff --check: passed
 
 Environment limitation:
-The full ownership/preseed collection had 80 passes and 8 collection failures
-because this CPU-only host has no Triton installation. No GPU/container or real
-SWE-Verified task was run. These results make no timing, TPS, acceptance, or
-hardware-floor claim.
+No GPU/container or real SWE-Verified task was run. These results make no
+timing, TPS, acceptance, or hardware-floor claim.
