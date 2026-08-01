@@ -1186,9 +1186,9 @@ _FR13_FIXED32_TAW_NATIVE_LIVE_PASS = (
 _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS = (
     "/logs/fr13_fixed32_taw_native_precompute.production_pass.json"
 )
-_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v4"
+_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v5"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "51541928c3a758fdac34a70fe46b97753ffc1b6e9f3e5fe470c4b34a96515dc4"
+    "4ab3d740c7ebe20fbddefd4f9cbb735f3c58e1b8907376d83ce9f39c24f2ae7e"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
@@ -1197,6 +1197,7 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_device_key",
     "_fr13_fixed32_expected_active",
     "_fr13_fixed32_parse_int",
+    "_fr13_fixed32_taw_topology_binding",
     "_fr13_fixed32_taw_native_arm_sources",
     "_fr13_fixed32_taw_native_production_pass",
     "_fr13_fixed32_taw_native_selector",
@@ -1388,6 +1389,99 @@ def _fr13_fixed32_parse_int(raw: str, *, name: str) -> int:
         raise RuntimeError(f"{name} must be an integer, got {raw!r}") from error
 
 
+def _fr13_fixed32_taw_topology_binding(topology) -> dict[str, Any]:
+    """Derive the exact logical topology and all-parent row schedule."""
+    modes = ("tail6_fixed32", "hydra27_fixed32")
+    if set(topology.VALID_BY_MODE) != set(modes):
+        raise RuntimeError("FR13 fixed32 TAW mode set drifted")
+
+    self_source_union = set()
+    target_source_union = set()
+    sampler_tables = {}
+    sampler_counts = {}
+    for fixed_mode in modes:
+        fixed_children = topology.active_child_lists(fixed_mode)
+        fixed_active = tuple(
+            node
+            for node, enabled in enumerate(topology.valid_for_mode(fixed_mode))
+            if enabled
+        )
+        self_source_union.update(
+            node for node in fixed_active if node not in fixed_children
+        )
+        target_source_union.update(
+            children[0] for children in fixed_children.values()
+        )
+        child_table, child_counts = topology.sampler_child_table(fixed_mode)
+        sampler_tables[fixed_mode] = [list(row) for row in child_table]
+        sampler_counts[fixed_mode] = list(child_counts)
+
+    self_source_nodes = tuple(sorted(self_source_union))
+    target_source_nodes = tuple(sorted(target_source_union))
+    node_depths = []
+    for node, parent in enumerate(topology.DRAFT_PARENT):
+        if parent < 0:
+            node_depths.append(0)
+            continue
+        if parent >= node:
+            raise RuntimeError(
+                "FR13 fixed32 all-parent fusion requires topological parents"
+            )
+        node_depths.append(node_depths[parent] + 1)
+    self_uniform_levels = tuple(
+        node_depths[node] + 1 for node in self_source_nodes
+    )
+    target_parent_slots = tuple(
+        int(topology.DRAFT_PARENT[source_node]) + 1
+        for source_node in target_source_nodes
+    )
+    target_uniform_levels = tuple(
+        0 if parent_slot == 0 else node_depths[parent_slot - 1] + 1
+        for parent_slot in target_parent_slots
+    )
+    if (
+        len(self_source_nodes) != 13
+        or len(target_source_nodes) != 17
+        or len(set(target_parent_slots)) != len(target_parent_slots)
+        or max(self_uniform_levels + target_uniform_levels)
+        >= int(topology.WALK_CAP)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 all-parent source-row or depth schedule drifted"
+        )
+
+    topology_payload = {
+        "fixed_choices": [list(path) for path in topology.FIXED32_CHOICES],
+        "draft_parent": list(topology.DRAFT_PARENT),
+        "valid_by_mode": {
+            mode: [bool(value) for value in topology.valid_for_mode(mode)]
+            for mode in modes
+        },
+        "sampler_child_tables": sampler_tables,
+        "sampler_child_counts": sampler_counts,
+    }
+    topology_sha256 = hashlib.sha256(
+        json.dumps(
+            topology_payload,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+    ).hexdigest()
+    return {
+        "tail_valid_mask": int(topology.TAIL6_VALID_MASK),
+        "hydra_valid_mask": int(topology.HYDRA27_VALID_MASK),
+        "physical_parent_sha256": str(topology.PHYSICAL_PARENT_SHA256),
+        "tree_ancestry_sha256": str(topology.TREE_ANCESTRY_SHA256),
+        "topology_sha256": topology_sha256,
+        "all_parent_self_source_nodes": list(self_source_nodes),
+        "all_parent_target_source_nodes": list(target_source_nodes),
+        "all_parent_self_uniform_levels": list(self_uniform_levels),
+        "all_parent_target_parent_slots": list(target_parent_slots),
+        "all_parent_target_uniform_levels": list(target_uniform_levels),
+    }
+
+
 def _fr13_fixed32_taw_native_arm_sources(
     *, environ, name: str, sidecars,
 ) -> list[str]:
@@ -1437,10 +1531,18 @@ def _fr13_fixed32_taw_native_production_pass(
         ) from error
     task_marker = payload.get("task_marker") if isinstance(payload, dict) else None
     geometry = payload.get("geometry") if isinstance(payload, dict) else None
+    payload_mode = payload.get("mode") if isinstance(payload, dict) else None
+    topology = _fr13_fixed32_topology()
+    topology_binding = _fr13_fixed32_taw_topology_binding(topology)
+    expected_valid_mask = (
+        topology.VALID_MASK_BY_MODE.get(payload_mode)
+        if isinstance(payload_mode, str)
+        else None
+    )
     if (
         not isinstance(payload, dict)
         or payload.get("schema")
-        != "fr13.fixed32.taw_native_precompute.live_pass.v1"
+        != "fr13.fixed32.taw_native_precompute.live_pass.v2"
         or payload.get("status") != "pass"
         or payload.get("candidate") != _FR13_FIXED32_TAW_NATIVE_CANDIDATE
         or payload.get("source_contract_schema")
@@ -1456,11 +1558,14 @@ def _fr13_fixed32_taw_native_production_pass(
         or not isinstance(task_marker, str)
         or not task_marker.startswith("swe_verified:")
         or len(task_marker) == len("swe_verified:")
-        or payload.get("mode") not in ("tail6_fixed32", "hydra27_fixed32")
+        or payload_mode not in ("tail6_fixed32", "hydra27_fixed32")
+        or type(payload.get("valid_mask")) is not int
+        or payload.get("valid_mask") != expected_valid_mask
+        or payload.get("topology_binding") != topology_binding
         or type(payload.get("batch_size")) is not int
         or payload.get("batch_size") not in _FR13_FIXED32_BATCHES
         or payload.get("covered_batches")
-        != list(range(1, payload.get("batch_size", 0) + 1))
+        != [payload.get("batch_size")]
         or geometry != _FR13_FIXED32_TAW_GEOMETRY
     ):
         raise RuntimeError(
@@ -1575,16 +1680,21 @@ def _fr13_fixed32_taw_native_live_pass_emit(
     parent = os.path.dirname(path)
     if parent:
         os.makedirs(parent, exist_ok=True)
+    topology = _fr13_fixed32_topology()
+    if mode not in topology.VALID_MASK_BY_MODE:
+        raise RuntimeError(f"unknown FR13_FIXED32_MODE {mode!r}")
     payload = {
-        "schema": "fr13.fixed32.taw_native_precompute.live_pass.v1",
+        "schema": "fr13.fixed32.taw_native_precompute.live_pass.v2",
         "status": "pass",
         "candidate": _FR13_FIXED32_TAW_NATIVE_CANDIDATE,
         "source_contract_schema": _FR13_FIXED32_TAW_SOURCE_SCHEMA,
         "source_contract_sha256": _FR13_FIXED32_TAW_SOURCE_SHA256,
         "task_marker": task_marker,
         "mode": mode,
+        "valid_mask": int(topology.VALID_MASK_BY_MODE[mode]),
+        "topology_binding": _fr13_fixed32_taw_topology_binding(topology),
         "batch_size": int(batch_size),
-        "covered_batches": list(range(1, int(batch_size) + 1)),
+        "covered_batches": [int(batch_size)],
         "geometry": dict(_FR13_FIXED32_TAW_GEOMETRY),
         "probability_mismatches": 0,
         "product_mismatches": 0,
@@ -1802,6 +1912,7 @@ def _fr13_fixed32_taw_source_contract(topology) -> dict[str, Any]:
             "functions": normalized_sources,
             "kernels": normalized_kernels,
             "geometry": geometry,
+            "topology_binding": _fr13_fixed32_taw_topology_binding(topology),
             "tensor_call_census_by_route": {
                 "default": _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS,
                 "native_precompute": (
@@ -1972,61 +2083,28 @@ def fr13_fixed32_taw_preseed(
         device=normalized_device,
     )
     active_children = topology.active_child_lists(mode)
-    self_source_union = set()
-    target_source_union = set()
-    for fixed_mode in topology.VALID_BY_MODE:
-        fixed_children = topology.active_child_lists(fixed_mode)
-        fixed_active = (
-            node
-            for node, enabled in enumerate(topology.valid_for_mode(fixed_mode))
-            if enabled
-        )
-        self_source_union.update(
-            node for node in fixed_active if node not in fixed_children
-        )
-        target_source_union.update(
-            children[0] for children in fixed_children.values()
-        )
-    self_source_nodes = tuple(sorted(self_source_union))
-    target_source_nodes = tuple(sorted(target_source_union))
-    if len(self_source_nodes) != 13 or len(target_source_nodes) != 17:
-        raise RuntimeError(
-            "FR13 native precompute fixed-row union drifted: "
-            f"self={len(self_source_nodes)} target={len(target_source_nodes)}"
-        )
+    topology_binding = _fr13_fixed32_taw_topology_binding(topology)
+    self_source_nodes = tuple(
+        topology_binding["all_parent_self_source_nodes"]
+    )
+    target_source_nodes = tuple(
+        topology_binding["all_parent_target_source_nodes"]
+    )
     self_slot_by_node = [0] * int(topology.PHYSICAL_DRAFTS)
     for slot, node in enumerate(self_source_nodes):
         self_slot_by_node[node] = slot
     target_source_slot = {
         source_node: slot for slot, source_node in enumerate(target_source_nodes)
     }
-    node_depths = []
-    for node, parent in enumerate(topology.DRAFT_PARENT):
-        if parent < 0:
-            node_depths.append(0)
-            continue
-        if parent >= node:
-            raise RuntimeError(
-                "FR13 fixed32 all-parent fusion requires topological parents"
-            )
-        node_depths.append(node_depths[parent] + 1)
     self_uniform_levels = tuple(
-        node_depths[node] + 1 for node in self_source_nodes
+        topology_binding["all_parent_self_uniform_levels"]
     )
     target_parent_slots = tuple(
-        int(topology.DRAFT_PARENT[source_node]) + 1
-        for source_node in target_source_nodes
+        topology_binding["all_parent_target_parent_slots"]
     )
     target_uniform_levels = tuple(
-        0 if parent_slot == 0 else node_depths[parent_slot - 1] + 1
-        for parent_slot in target_parent_slots
+        topology_binding["all_parent_target_uniform_levels"]
     )
-    if (
-        len(set(target_parent_slots)) != len(target_parent_slots)
-        or max(self_uniform_levels + target_uniform_levels)
-        >= int(topology.WALK_CAP)
-    ):
-        raise RuntimeError("FR13 fixed32 all-parent depth schedule drifted")
     target_slot_by_parent = [0] * int(topology.PHYSICAL_ROWS)
     for parent, children in active_children.items():
         target_slot_by_parent[parent + 1] = target_source_slot[children[0]]

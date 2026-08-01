@@ -577,9 +577,9 @@ def fixed32_arm_spec(expected_hydra: bool) -> dict:
         topology.TAIL6_ACTIVE_DRAFTS,
         topology.HYDRA27_ACTIVE_DRAFTS,
     )
-    if shape != (31, 21, 27):
+    if shape != (31, 23, 27):
         raise ValueError(
-            "fixed32 depth reducer requires physical/active drafts=(31, 21, 27), "
+            "fixed32 depth reducer requires physical/active drafts=(31, 23, 27), "
             f"got {shape!r}"
         )
     if expected_hydra:
@@ -591,7 +591,7 @@ def fixed32_arm_spec(expected_hydra: bool) -> dict:
             "physical_drafts": topology.PHYSICAL_DRAFTS,
         }
     return {
-        "arm": "tail21_fixed32",
+        "arm": "tail23_fixed32",
         "mode": "tail6_fixed32",
         "valid_mask": topology.TAIL6_VALID_MASK,
         "active_drafts": topology.TAIL6_ACTIVE_DRAFTS,
@@ -3265,10 +3265,10 @@ def build_report(
                 "scope": "self_test_fixture_only",
             }
         return {
-            "schema": "fr13.depth_acceptance.fixed32.v2",
+            "schema": "fr13.depth_acceptance.fixed32.v3",
             **common,
             "floor_gate_binding": floor_gate_binding,
-            "tail21_fixed32": tail,
+            "tail23_fixed32": tail,
             "hydra27_fixed32": hydra,
         }
     return {
@@ -4379,7 +4379,7 @@ def self_test() -> None:
         assert legacy_report["schema"] == "fr13.depth_acceptance.v2"
         assert legacy_report["tail6"] is tail
         assert legacy_report["hydra23"] is hydra
-        assert "tail21_fixed32" not in legacy_report
+        assert "tail23_fixed32" not in legacy_report
         assert tail["bracket_mode"] == "nonoverlapping_task_sum"
         assert tail["drafts"] == 40
         assert tail["accept_per_event"] == 1.4
@@ -4476,15 +4476,15 @@ def self_test() -> None:
             fixed32=True,
             self_test_fixture=True,
         )
-        assert fixed_report["schema"] == "fr13.depth_acceptance.fixed32.v2"
-        assert fixed_report["tail21_fixed32"] is fixed_tail
+        assert fixed_report["schema"] == "fr13.depth_acceptance.fixed32.v3"
+        assert fixed_report["tail23_fixed32"] is fixed_tail
         assert fixed_report["hydra27_fixed32"] is fixed_hydra
         assert "tail6" not in fixed_report
-        assert fixed_tail["arm"] == "tail21_fixed32"
+        assert fixed_tail["arm"] == "tail23_fixed32"
         assert fixed_hydra["arm"] == "hydra27_fixed32"
         assert fixed_tail["expected_tokens_per_draft"] == 31
         assert fixed_hydra["expected_tokens_per_draft"] == 31
-        assert fixed_tail["fixed32_contract"]["active_drafts"] == 21
+        assert fixed_tail["fixed32_contract"]["active_drafts"] == 23
         assert fixed_hydra["fixed32_contract"]["active_drafts"] == 27
         assert fixed_tail["bracket_mode"] == "nonoverlapping_task_sum"
         assert fixed_tail["drafts"] == 40

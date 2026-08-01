@@ -682,7 +682,7 @@ def validate_contract() -> None:
 if __name__ == "__main__":
     validate_contract()
     print(
-        "PASS fixed32 topology: physical=31/32 active=21/27 "
+        "PASS fixed32 topology: physical=31/32 active=23/27 "
         f"masks={TAIL6_VALID_MASK:#x}/{HYDRA27_VALID_MASK:#x} "
         "schedule=[1,11]/[5,7] walk_cap=12"
     )
