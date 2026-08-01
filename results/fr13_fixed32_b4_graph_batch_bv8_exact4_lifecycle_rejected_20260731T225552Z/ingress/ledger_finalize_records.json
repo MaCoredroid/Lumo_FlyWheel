@@ -1,0 +1,38 @@
+[
+  {
+    "engine_request_id_sha256": null,
+    "event": "campaign_finalize",
+    "evidence_sha256": "1566e411443ba35b7f77e12666bf03f5a69eae52280d1f686c44249174152398",
+    "logical_id_sha256": null,
+    "outcome": "finalized",
+    "phase": "campaign",
+    "prev_sha256": "7f26e3c383f011bfe155958327685471807d56f020d3ef6f1e5aa7bed0d383d9",
+    "reason": null,
+    "record_sha256": "0ecfea9a6951b7c67ded0fec3ff946487127299a25e05542bace6370e3b3c3c0",
+    "role": "engine",
+    "route": null,
+    "schema": "fr13.fixed32.ingress-ledger-record.v1",
+    "seq": 307,
+    "status_code": null,
+    "task_key_id": null,
+    "wire_id_sha256": null
+  },
+  {
+    "engine_request_id_sha256": null,
+    "event": "campaign_finalize",
+    "evidence_sha256": "1566e411443ba35b7f77e12666bf03f5a69eae52280d1f686c44249174152398",
+    "logical_id_sha256": null,
+    "outcome": "finalized",
+    "phase": "campaign",
+    "prev_sha256": "00d2c7292e92999435a8417a07bb9144e8fa057a20dff6d2a19e99738a5e3acb",
+    "reason": null,
+    "record_sha256": "d1a0ded31155370df359de6ab657ef4dc8f8aabaeb9c4f189f96c8159181c65f",
+    "role": "proxy",
+    "route": null,
+    "schema": "fr13.fixed32.ingress-ledger-record.v1",
+    "seq": 609,
+    "status_code": null,
+    "task_key_id": null,
+    "wire_id_sha256": null
+  }
+]

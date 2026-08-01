@@ -1,0 +1,23 @@
+Selected non-secret lines from container_preserved.log
+
+[physical B4 and kernel gate]
+(EngineCore pid=257) [FR13_FIXED32_WORK] engaged: physical_drafts=31 rows=32 gdn_launches=2 gdn_programs=12 gdn_slots=82 taw_walk=12 taw_buffer=32 output_slots=32 path_slots=16 reqkey_slots=16 kv_slots=16 conv_layers=48 committer_slots=16
+(APIServer pid=1) INFO 07-31 23:05:29 [loggers.py:271] Engine 000: Avg prompt throughput: 6711.8 tokens/s, Avg generation throughput: 0.3 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 79.4%, Prefix cache hit rate: 3.3%
+(EngineCore pid=257) [FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB PASS] task=swe_verified:astropy__astropy-13033 graph_id=259442768227472 batch=4 records=48 reference_bv=8 candidate_bv=8 graph_baseline_equal=1 state_restored=1 served_bv=8
+
+[generation-5 failure]
+(EngineCore pid=257) INFO 07-31 23:49:38 [fr13_merged_drafter.py:1262] [FR13_MERGED ENGAGED] TAIL[fired=5849 hit=5757 cold=1 br_real=0] HYDRA[fired=11698 hit=10073 rank2_hit=5141 rank3_hit=4932 real=30414] started=77 ingested=4638 retired=73 arctic_oob_dropped=0 last_oob=None
+(APIServer pid=1) INFO 07-31 23:49:39 [loggers.py:271] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 2.2 tokens/s, Running: 3 reqs, Waiting: 0 reqs, GPU KV cache usage: 59.9%, Prefix cache hit rate: 37.2%
+(EngineCore pid=257) [FR13_FIXED32_FLUSH] failed generation 5: RuntimeError('fixed32 flush saw an incomplete drafter proposal')
+
+[traffic continued after the transient]
+(EngineCore pid=257) FR13_APC_ZERO_MAMBA record engaged: events=4001 cumulative_block_ids=11162 last_batch=1
+(APIServer pid=1) INFO 07-31 23:50:09 [loggers.py:271] Engine 000: Avg prompt throughput: 3357.5 tokens/s, Avg generation throughput: 1.6 tokens/s, Running: 3 reqs, Waiting: 0 reqs, GPU KV cache usage: 64.6%, Prefix cache hit rate: 37.2%
+
+[idle finalization]
+(EngineCore pid=257) INFO 08-01 00:44:06 [fr13_merged_drafter.py:1262] [FR13_MERGED ENGAGED] TAIL[fired=12250 hit=12045 cold=103 br_real=0] HYDRA[fired=24500 hit=21304 rank2_hit=10851 rank3_hit=10453 real=64290] started=151 ingested=10675 retired=150 arctic_oob_dropped=0 last_oob=None
+(APIServer pid=1) INFO 08-01 00:44:19 [loggers.py:271] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 4.5 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 62.4%
+(APIServer pid=1) INFO: 172.17.0.1:51162 - "POST /fr13/fixed32/ingress/finalize HTTP/1.1" 200 OK
+
+Source full-log SHA-256:
+c90d42e7404f0152878f8cb1d2a3eeddf8eafff84964b02a75fadf33b1bd4d3f
