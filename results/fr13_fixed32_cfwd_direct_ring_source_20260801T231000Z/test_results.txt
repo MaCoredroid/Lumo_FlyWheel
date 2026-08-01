@@ -1,0 +1,23 @@
+Fixed32 CFWD direct-ring source verification (2026-08-01 UTC)
+
+Integration worktree checks:
+
+  CUDA_VISIBLE_DEVICES='' pytest -q \
+    tests/test_fr13_fixed32_taw_real_task_arm.py \
+    tests/test_fr13_fixed32_task_boundary_snapshot.py \
+    tests/test_fr13_fixed32_committer_layer_batch.py
+
+  76 passed in 0.47s
+
+  python3 -m py_compile scripts/run_swe_bench_q36_a.py: pass
+  bash -n scripts/fr13_bigdenom_swe_serve_variant.sh: pass
+  git diff --check: pass
+
+Qualification-lifecycle implementation worktree:
+
+  focused: 81 passed
+  broad fixed32: 783 passed, 8 skipped, 3 environment-only failures
+
+The three broad-suite failures require ignored local .venv/cache fixtures and
+were also classified as unrelated to the candidate. No GPU/Triton compile,
+real-event byte qualification, or performance measurement is represented here.
