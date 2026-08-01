@@ -1,0 +1,52 @@
+Fixed32 CFWD paired-ingress required test matrix
+
+Compatibility
+  - Default v1 proxy and engine begin/finalize behavior is unchanged.
+  - Paired phase fields and routes are rejected unless the opt-in is enabled.
+  - Non-CFWD and non-B4 runner paths are unchanged.
+
+Phase and ledger isolation
+  - exact4 qualification -> timing creates four distinct ledgers: engine/proxy
+    by qualification/timing.
+  - exact16 qualification -> timing creates the same four-ledger topology.
+  - Each timing ledger starts at sequence zero with a zero digest head and
+    zero counters before its authenticated begin row.
+  - Qualification ledgers are closed, immutable, and still independently
+    verifiable after rotation.
+  - Timing rows cannot appear in a qualification ledger or vice versa.
+  - Reusing a task ID across phase identities is accepted; repeating it within
+    one authenticated phase is rejected.
+
+Authentication and replay
+  - Reject a missing, skipped, unknown, or reversed campaign phase.
+  - Reject task-set digest, source commit, prior terminal head, transition
+    nonce, mode, or generation tampering.
+  - Reject replay of a successful transition and reuse of a consumed handoff.
+  - Reject a serialized or reconstructed handoff as a timing credential.
+
+Fail-closed lifecycle
+  - Reject rotation with active proxy logical requests or attempts.
+  - Reject rotation with active engine requests.
+  - A proxy-only or engine-only rotation/begin failure poisons the run and
+    prevents all timing task admission.
+  - Reject reboot, producer-PID drift, mode drift, source drift, task-set drift,
+    generation regression, live campaign marker, incomplete coverage, or a
+    qualification gate-attempt change.
+  - Reject timing finalization when either phase ledger pair disagrees.
+  - Confirm one final campaign teardown after a successful timing finalize.
+
+Runner and results
+  - One Python controller invocation retains and consumes the live handoff.
+  - Qualification and timing use distinct output roots and metric windows.
+  - Qualification remains performance_measurement=false.
+  - Timing eligibility requires full 0x0fff coverage for B1-B4, both terminal
+    timing ledgers, and zero timing post-boundary gate-attempt delta.
+  - Throughput, acceptance, and floor reducers ignore qualification samples.
+  - Generic B4 autocommit never includes raw task output or runtime identifiers.
+
+Static and regression gates
+  - Focused ingress, wiring, campaign-provenance, committer-layer-batch tests.
+  - Broad tests/test_fr13_fixed32_*.py suite.
+  - python3 -m py_compile, ruff check, bash -n, and git diff --check.
+
+No GPU or performance run is specified by this plan artifact.
