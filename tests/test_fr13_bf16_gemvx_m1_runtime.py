@@ -253,6 +253,9 @@ def test_real_b1_runner_is_pinned_nonprobe_and_manifested() -> None:
     assert "astropy__astropy-12907" in runner
     assert "CANONICAL_FA2_SHA256=f51e23c5" in runner
     assert "CANONICAL_FA2_SIZE=299183936" in runner
+    assert 'CANONICAL_FA2="$REPO/output/' not in runner
+    assert 'stat -c %s "$FORKED_FA2_SO"' in runner
+    assert 'sha256sum "$FORKED_FA2_SO"' in runner
     assert "FR13_DRAFT_HEAD_M1_EXPECTED_SOURCE_COMMIT" in runner
     assert "git status --porcelain=v1" in runner
     assert "--untracked-files=no" not in runner

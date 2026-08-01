@@ -17,7 +17,6 @@ PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
 SUBSET_SHA256=cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb
 INSTANCE_ID=astropy__astropy-12907
-CANONICAL_FA2="$REPO/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so"
 CANONICAL_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
 CANONICAL_FA2_SIZE=299183936
 CANDIDATE_SOURCE=csrc/fr13_bf16_gemvx_m1.cu
@@ -42,11 +41,10 @@ for path in \
   [[ -f "$path" && ! -L "$path" && "$path" == /* ]] \
     || { echo "binary must be an absolute regular non-symlink: $path" >&2; exit 2; }
 done
-[[ "$(realpath "$FORKED_FA2_SO")" == "$CANONICAL_FA2" \
-   && "$(stat -c %s "$FORKED_FA2_SO")" == "$CANONICAL_FA2_SIZE" \
+[[ "$(stat -c %s "$FORKED_FA2_SO")" == "$CANONICAL_FA2_SIZE" \
    && "$(sha256sum "$FORKED_FA2_SO" | cut -d' ' -f1)" \
       == "$CANONICAL_FA2_SHA256" ]] \
-  || { echo "real-B1 M1 gate requires the canonical FA2 binary" >&2; exit 2; }
+  || { echo "real-B1 M1 gate requires the canonical FA2 binary identity" >&2; exit 2; }
 
 ARM="hydra27_fixed32_${TAG}"
 SOURCE_COMMIT=$(git rev-parse HEAD)
