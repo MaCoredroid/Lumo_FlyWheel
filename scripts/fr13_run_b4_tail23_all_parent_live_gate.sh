@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Real SWE-Verified exact4 B4 byte qualification for source-v7 Tail23 all-parent TAW.
+# Real SWE-Verified exact4 B4 byte qualification for source-v7 fixed32 all-parent TAW.
 # The candidate is shadow-only; the exact reference is always returned.
 set -euo pipefail
 
@@ -23,6 +23,9 @@ TAW_SOURCE_SCHEMA=fr13-fixed32-taw-all-parent-v7
 TAW_SOURCE_SHA256=998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290
 TAIL_VALID_MASK=0x7a9ce7ff
 TAIL_ACTIVE_DRAFTS=23
+HYDRA_VALID_MASK=0x7abdffff
+HYDRA_ACTIVE_DRAFTS=27
+FIXED32_MODE=${FR13_FIXED32_ALL_PARENT_MODE:-tail6_fixed32}
 STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
 STOCK_FA2_BYTES=299183936
 B4_KV_CACHE_MEMORY_BYTES=42949672960
@@ -32,7 +35,27 @@ ONE_SIDED_U95_CAP_MS=137.60671772610
 SOURCE_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
-ARM="tail6_fixed32_tail23_all_parent_b4_gate_${TAG}"
+case "$FIXED32_MODE" in
+  tail6_fixed32)
+    LOGICAL_TOPOLOGY=Tail23
+    LOGICAL_SLUG=tail23
+    VALID_MASK=$TAIL_VALID_MASK
+    ACTIVE_DRAFTS=$TAIL_ACTIVE_DRAFTS
+    VERDICT_SCHEMA=fr13.fixed32.tail23_all_parent.exact4_b4_live_gate.v1
+    ;;
+  hydra27_fixed32)
+    LOGICAL_TOPOLOGY=Hydra27
+    LOGICAL_SLUG=hydra27
+    VALID_MASK=$HYDRA_VALID_MASK
+    ACTIVE_DRAFTS=$HYDRA_ACTIVE_DRAFTS
+    VERDICT_SCHEMA=fr13.fixed32.hydra27_all_parent.exact4_b4_live_gate.v1
+    ;;
+  *)
+    echo "FR13_FIXED32_ALL_PARENT_MODE must be tail6_fixed32 or hydra27_fixed32" >&2
+    exit 2
+    ;;
+esac
+ARM="${FIXED32_MODE}_${LOGICAL_SLUG}_all_parent_b4_gate_${TAG}"
 ARMDIR="$RUNROOT_ABS/$ARM"
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
@@ -58,8 +81,8 @@ ARMDIR="$RUNROOT_ABS/$ARM"
   || { echo "all Docker containers must be absent before the gate" >&2; exit 2; }
 
 "$PYTHON_BIN" - \
-  "$TAW_SOURCE_SCHEMA" "$TAW_SOURCE_SHA256" "$TAIL_VALID_MASK" \
-  "$TAIL_ACTIVE_DRAFTS" <<'PY'
+  "$TAW_SOURCE_SCHEMA" "$TAW_SOURCE_SHA256" "$FIXED32_MODE" \
+  "$VALID_MASK" "$ACTIVE_DRAFTS" <<'PY'
 import importlib.util
 import sys
 from pathlib import Path
@@ -72,16 +95,20 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 topology = module._fr13_fixed32_topology()
 source_contract = module._fr13_fixed32_taw_source_contract(topology, batch_size=4)
+mode = sys.argv[3]
+if mode not in topology.VALID_MASK_BY_MODE:
+    raise SystemExit("all-parent gate fixed32 mode is unsupported")
+expected_active = module._fr13_fixed32_expected_active(topology, mode)
 if (
     module._FR13_FIXED32_TAW_SOURCE_SCHEMA != sys.argv[1]
     or module._FR13_FIXED32_TAW_SOURCE_SHA256 != sys.argv[2]
     or source_contract.get("source_contract_sha256") != sys.argv[2]
-    or int(topology.TAIL6_VALID_MASK) != int(sys.argv[3], 0)
-    or int(topology.TAIL6_ACTIVE_DRAFTS) != int(sys.argv[4])
+    or int(topology.VALID_MASK_BY_MODE[mode]) != int(sys.argv[4], 0)
+    or expected_active != int(sys.argv[5])
     or int(topology.PHYSICAL_DRAFTS) != 31
     or int(topology.PHYSICAL_ROWS) != 32
 ):
-    raise SystemExit("Tail23 source-v7 preflight contract drifted")
+    raise SystemExit("fixed32 all-parent source-v7 preflight contract drifted")
 PY
 
 export BSIZE=4
@@ -102,12 +129,13 @@ unset -f run_variant
    && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
    && "$FR13_DRAFT_VOCAB_BLOCKS" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
    && "$LUMO_SWE_AUTOCOMMIT" == "0" ]] \
-  || { echo "Tail23 K64/ROOT=1 deployment contract drifted" >&2; exit 2; }
+  || { echo "fixed32 all-parent K64/ROOT=1 deployment contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS"
-printf 'classification=real_swe_verified_exact4_b4_byte_diagnostic\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_enabled=0\ncandidate_shadow_only=1\nreference_always_served=1\ncandidate=fixed32_all_parent_commit_v2\nsource_contract_schema=%s\nsource_contract_sha256=%s\ntopology=tail23_fixed32\nmode=tail6_fixed32\ntail_active_drafts=%s\ntail_valid_mask=%s\nphysical_drafts=31\nphysical_rows_root_inclusive=32\nrequired_observed_batches=1,2,3,4\ntask_count=4\nbatch_size=4\nconcurrency=4\ndraft_vocab_k=65536\ndraft_vocab_root=1\ndraft_vocab_blocks=/workspace/scripts/fr13_dvk_subset_blocks.json\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nraw_prompt_response_autocommit=0\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
-  "$TAW_SOURCE_SCHEMA" "$TAW_SOURCE_SHA256" "$TAIL_ACTIVE_DRAFTS" \
-  "$TAIL_VALID_MASK" "$BLOCK_MAP_SHA256" "$MANDATORY_WEIGHT_BYTES" \
+printf 'classification=real_swe_verified_exact4_b4_byte_diagnostic\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_enabled=0\ncandidate_shadow_only=1\nreference_always_served=1\ncandidate=fixed32_all_parent_commit_v2\nsource_contract_schema=%s\nsource_contract_sha256=%s\ntopology=%s\nmode=%s\nactive_drafts=%s\nvalid_mask=%s\nphysical_drafts=31\nphysical_rows_root_inclusive=32\nrequired_observed_batches=1,2,3,4\ntask_count=4\nbatch_size=4\nconcurrency=4\ndraft_vocab_k=65536\ndraft_vocab_root=1\ndraft_vocab_blocks=/workspace/scripts/fr13_dvk_subset_blocks.json\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nraw_prompt_response_autocommit=0\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+  "$TAW_SOURCE_SCHEMA" "$TAW_SOURCE_SHA256" "$LOGICAL_TOPOLOGY" \
+  "$FIXED32_MODE" "$ACTIVE_DRAFTS" "$VALID_MASK" \
+  "$BLOCK_MAP_SHA256" "$MANDATORY_WEIGHT_BYTES" \
   "$MANDATORY_WEIGHT_FLOOR_MS" "$ONE_SIDED_U95_CAP_MS" "$$" \
   "$RUNROOT_ABS" "$ARM" "$SOURCE_COMMIT" "$RUNNER_SHA256" \
   "$SUBSET_SHA256" "$STOCK_FA2_SHA256" "$STOCK_FA2_BYTES" \
@@ -153,7 +181,7 @@ if env \
     FR13_FIXED32_ATTRIBUTION_ONLY=0 \
     FORKED_FA2_SO="$FORKED_FA2_SO" \
     bash scripts/fr13_bigdenom_swe_serve_variant.sh \
-      "$ARM" tail6_fixed32 "$SUBSET" \
+      "$ARM" "$FIXED32_MODE" "$SUBSET" \
       > "$RUNROOT_ABS/$ARM.runlog" 2>&1; then
   serve_rc=0
 else
@@ -174,17 +202,19 @@ cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" \
   "$RUNROOT_ABS/external_manifest.at_end.json" \
   || { echo "external manifest changed during diagnostic" >&2; exit 14; }
 [[ "$(sha256sum "$RUNNER_PATH" | awk '{print $1}')" == "$RUNNER_SHA256" ]] \
-  || { echo "Tail23 all-parent gate runner changed during execution" >&2; exit 14; }
+  || { echo "fixed32 all-parent gate runner changed during execution" >&2; exit 14; }
 (( serve_rc == 0 )) || exit "$serve_rc"
 
 "$PYTHON_BIN" - \
   "$ARMDIR" "$ARMDIR/logs/fr13_fixed32_taw_native_precompute.live_pass.json" \
-  "$ARMDIR/tail23_all_parent_production_pass.json" \
-  "$ARMDIR/tail23_all_parent_b4_byte_gate.json" \
+  "$ARMDIR/${LOGICAL_SLUG}_all_parent_production_pass.json" \
+  "$ARMDIR/${LOGICAL_SLUG}_all_parent_b4_byte_gate.json" \
   "$TAW_SOURCE" "$TAW_SOURCE_SCHEMA" "$TAW_SOURCE_SHA256" \
   "$SOURCE_COMMIT" "$SUBSET" "$SUBSET_SHA256" "$BLOCK_MAP" \
   "$BLOCK_MAP_SHA256" "$RUNNER_PATH" "$RUNNER_SHA256" \
-  "$RUNROOT_ABS/runtime_manifest.at_end.json" "$STOCK_FA2_SHA256" <<'PY'
+  "$RUNROOT_ABS/runtime_manifest.at_end.json" "$STOCK_FA2_SHA256" \
+  "$FIXED32_MODE" "$LOGICAL_TOPOLOGY" "$ACTIVE_DRAFTS" "$VALID_MASK" \
+  "$VERDICT_SCHEMA" <<'PY'
 import hashlib
 import importlib.util
 import json
@@ -208,6 +238,11 @@ runner_path = Path(sys.argv[13])
 runner_sha256 = sys.argv[14]
 runtime_manifest_path = Path(sys.argv[15])
 stock_fa2_sha256 = sys.argv[16]
+fixed32_mode = sys.argv[17]
+logical_topology = sys.argv[18]
+active_drafts = int(sys.argv[19])
+valid_mask = int(sys.argv[20], 0)
+verdict_schema = sys.argv[21]
 dataset_out = arm / "swe_out" / "verified"
 campaign_arm_path = dataset_out / "fixed32_taw_campaign_arm.json"
 campaign_proof_path = dataset_out / "fixed32_qwen_campaign_provenance.json"
@@ -238,7 +273,7 @@ spec.loader.exec_module(module)
 topology = module._fr13_fixed32_topology()
 bundle = module._fr13_fixed32_taw_native_production_pass(
     path=str(live_path),
-    expected_mode="tail6_fixed32",
+    expected_mode=fixed32_mode,
 )
 if (
     bundle.get("status") != "production_ready"
@@ -246,12 +281,12 @@ if (
     or bundle.get("required_production_batches") != [1, 4]
     or bundle.get("source_contract_schema") != source_schema
     or bundle.get("source_contract_sha256") != source_contract_sha256
-    or bundle.get("valid_mask") != int(topology.TAIL6_VALID_MASK)
-    or int(topology.TAIL6_ACTIVE_DRAFTS) != 23
+    or bundle.get("valid_mask") != valid_mask
+    or module._fr13_fixed32_expected_active(topology, fixed32_mode) != active_drafts
     or int(topology.PHYSICAL_DRAFTS) != 31
     or int(topology.PHYSICAL_ROWS) != 32
 ):
-    raise SystemExit("Tail23 source-v7 production bundle is incomplete or drifted")
+    raise SystemExit("fixed32 all-parent source-v7 production bundle is incomplete or drifted")
 for batch in (1, 2, 3, 4):
     record = bundle["batch_passes"][str(batch)]
     if (
@@ -263,7 +298,7 @@ for batch in (1, 2, 3, 4):
         or record.get("reference_returned") is not True
         or record.get("candidate_returned") is not False
     ):
-        raise SystemExit(f"Tail23 all-parent B{batch} qualification is not independent and exact")
+        raise SystemExit(f"fixed32 all-parent B{batch} qualification is not independent and exact")
 
 campaign_arm = json.loads(campaign_arm_path.read_text(encoding="ascii"))
 if (
@@ -391,7 +426,7 @@ if production_raw != live_raw:
     raise SystemExit("published production bundle differs from validated live bundle")
 
 verdict = {
-    "schema": "fr13.fixed32.tail23_all_parent.exact4_b4_live_gate.v1",
+    "schema": verdict_schema,
     "status": "pass",
     "run_classification": "real_swe_verified_exact4_b4_byte_diagnostic",
     "acceptance_valid": False,
@@ -406,10 +441,10 @@ verdict = {
     "source_contract_schema": source_schema,
     "source_contract_sha256": source_contract_sha256,
     "source_file_sha256": hashlib.sha256(source_path.read_bytes()).hexdigest(),
-    "mode": "tail6_fixed32",
-    "logical_topology": "Tail23",
-    "tail_active_drafts": 23,
-    "tail_valid_mask": hex(int(topology.TAIL6_VALID_MASK)),
+    "mode": fixed32_mode,
+    "logical_topology": logical_topology,
+    "active_drafts": active_drafts,
+    "valid_mask": hex(valid_mask),
     "physical_drafts": 31,
     "physical_rows_root_inclusive": 32,
     "qualified_batches": [1, 2, 3, 4],

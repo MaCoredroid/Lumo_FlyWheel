@@ -727,7 +727,10 @@ def test_tail23_exact4_b4_runner_pins_k64_and_requires_all_real_batches() -> Non
     assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in runner
     assert "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=1" in runner
     assert "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0" in runner
-    assert '"$ARM" tail6_fixed32 "$SUBSET"' in runner
+    assert '"$ARM" "$FIXED32_MODE" "$SUBSET"' in runner
+    assert "FR13_FIXED32_ALL_PARENT_MODE" in runner
+    assert "HYDRA_VALID_MASK=0x7abdffff" in runner
+    assert "HYDRA_ACTIVE_DRAFTS=27" in runner
     assert 'bundle.get("qualified_batches") != [1, 2, 3, 4]' in runner
     assert 'record.get("covered_batches") != [batch]' in runner
     assert 'record.get("reference_returned") is not True' in runner

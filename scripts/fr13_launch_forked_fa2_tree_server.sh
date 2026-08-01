@@ -661,6 +661,7 @@ else
         _fr13_cutlass_pass_script=scripts/fr13_cutlass_b4_pass.py
         _fr13_cutlass_pass_profile_args=(
           --qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"
+          --fixed32-mode "$FR13_FIXED32_MODE"
         )
       }
     # B1 executes scripts/fr13_cutlass_streamk_pass.py validate; B4 executes
@@ -1506,6 +1507,7 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" ]]; then
       _fr13_cutlass_pass_script=scripts/fr13_cutlass_b4_pass.py
       _fr13_cutlass_pass_profile_args=(
         --qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"
+        --fixed32-mode "$FR13_FIXED32_MODE"
       )
     }
   # B1 executes scripts/fr13_cutlass_streamk_pass.py issue; B4 executes the
@@ -2837,6 +2839,7 @@ if [[ "\${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ]]; then
       --selector "\$FR13_FIXED32_CUTLASS_WAVE" \
       --production-pass-sidecar "\$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR" \
       --expected-production-pass-sha256 "\$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256" \
+      --fixed32-mode "\$FR13_FIXED32_MODE" \
       --patch-source /workspace/scripts/fr13_patch_cutlass_fixed32_wave.py
   else
     python3 /workspace/scripts/fr13_cutlass_wave_binary.py install \

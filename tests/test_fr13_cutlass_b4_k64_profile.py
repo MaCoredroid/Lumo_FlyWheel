@@ -301,7 +301,7 @@ def test_k64_root_profile_is_bound_through_gate_timing_and_launcher() -> None:
         assert "119.658015414" in source
         assert "137.6067177261" in source
         assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in source
-        assert '"$ARM" hydra27_fixed32 "$SUBSET"' in source or (
+        assert '"$ARM" "$FIXED32_MODE" "$SUBSET"' in source or (
             '"$arm" "$TIMING_KIND" "$SUBSET"' in source
         )
     assert '--qualification-profile "$QUALIFICATION_PROFILE"' in gate
@@ -321,6 +321,7 @@ def test_k64_root_profile_is_bound_through_gate_timing_and_launcher() -> None:
         "-e FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="
         '"$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"'
     ) in launcher
+    assert '--fixed32-mode "\\$FR13_FIXED32_MODE"' in launcher
 
 
 def test_prepared_campaign_runs_one_gate_and_one_paired_screen() -> None:
@@ -346,3 +347,79 @@ def test_prepared_campaign_runs_one_gate_and_one_paired_screen() -> None:
         "EXPECTED_CANDIDATE_SHA256="
         "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
     ) in prepared
+
+
+def test_k64_root_profile_binds_tail23_without_reusing_hydra_credential(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (
+        module,
+        candidate,
+        patch_source,
+        live,
+        _,
+    ) = _fixture(tmp_path, monkeypatch)
+    payload = json.loads(live.read_text(encoding="ascii"))
+    payload["topology"] = "tail6_fixed32"
+    live.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
+    live_sha256 = hashlib.sha256(live.read_bytes()).hexdigest()
+    sidecar = tmp_path / "tail23-sidecar.json"
+
+    issued = module.issue_sidecar(
+        live,
+        live_sha256,
+        candidate,
+        sidecar,
+        patch_source,
+        expected_source_commit="c" * 40,
+        qualification_profile="k64_root",
+        draft_vocab_blocks=BLOCK_MAP,
+        fixed32_mode="tail6_fixed32",
+    )
+    assert issued["qualified_topology"] == "tail6_fixed32"
+
+    sidecar_sha256 = hashlib.sha256(sidecar.read_bytes()).hexdigest()
+    with pytest.raises(module.QualificationError, match="qualified_topology"):
+        module.verify_sidecar(
+            sidecar,
+            sidecar_sha256,
+            candidate,
+            patch_source,
+            qualification_profile="k64_root",
+            draft_vocab_blocks=BLOCK_MAP,
+        )
+
+
+def test_tail23_hydra27_stack_route_is_real_exact4_and_fixed_k64() -> None:
+    route = (SCRIPTS / "fr13_run_b4_tail23_hydra27_k64_m128_stack.sh").read_text(
+        encoding="utf-8"
+    )
+    manifest = (SCRIPTS / "fr13_runtime_manifest.py").read_text(encoding="utf-8")
+
+    assert route.count("run_topology tail6_fixed32 tail23") == 1
+    assert route.count("run_topology hydra27_fixed32 hydra27") == 1
+    assert route.index("run_topology tail6_fixed32 tail23") < route.index(
+        "run_topology hydra27_fixed32 hydra27"
+    )
+    assert "CUTLASS_B4_QUALIFICATION_PROFILE=k64_root" in route
+    assert 'FR13_FIXED32_ALL_PARENT_PASS_JSON="$taw_pass"' in route
+    assert route.count("fr13_run_b4_tail23_all_parent_live_gate.sh") == 1
+    assert route.count("fr13_run_b4_cutlass_persistent_m128_live_gate.sh") == 1
+    assert route.count("fr13_run_b4_cutlass_persistent_m128_timing.sh") == 1
+    assert "subset_b4_four" not in route  # Canonical exact4 is owned by gate runners.
+    assert '"physical_rows_per_request": 32' in route
+    assert '"sfwd_projection_rows": 128' in route
+    assert '"draft_vocab_k": 65536' in route
+    assert '"target_verifier_vocabulary": "full"' in route
+    for field in (
+        "accepted_drafts_per_event",
+        "committed_tokens_per_event",
+        "measured_tps_fullstep_wall",
+        "sfwd_gpu_ms_per_step",
+        "dfwd_gpu_ms_per_step",
+        "cfwd_gpu_ms_per_step",
+        "other_wall_ms_per_step",
+        "step_wall_to_optimistic_floor_ratio",
+    ):
+        assert field in route
+    assert '"scripts/fr13_run_b4_tail23_hydra27_k64_m128_stack.sh"' in manifest

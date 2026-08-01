@@ -265,9 +265,10 @@ def test_b4_gate_and_timing_are_closed_over_by_runtime_manifest() -> None:
     assert "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d" in gate
     assert "STOCK_FA2_BYTES=299183936" in gate
     assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in gate
-    assert '"$ARM" hydra27_fixed32 "$SUBSET"' in gate
-    assert "FR13_FIXED32_MODE=hydra27_fixed32" in gate
-    assert "tail6_fixed32" not in gate
+    assert '"$ARM" "$FIXED32_MODE" "$SUBSET"' in gate
+    assert "CUTLASS_B4_FIXED32_MODE" in gate
+    assert 'f"FR13_FIXED32_MODE={fixed32_mode}"' in gate
+    assert "tail6_fixed32" in gate
     assert "COMPARISON_CALL_LIMIT=320" in gate
     assert "comparisons > MAX_COMPARISONS" in (
         SCRIPTS / "fr13_cutlass_b4_pass.py"
@@ -287,7 +288,7 @@ def test_b4_gate_and_timing_are_closed_over_by_runtime_manifest() -> None:
     assert "STOCK_FA2_BYTES=299183936" in timing
     assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in timing
     assert "only_arm_delta=CUTLASS_stock_to_persistent_b4_m128" in timing
-    assert 'binding.get("qualified_topology") != "hydra27_fixed32"' in timing
+    assert 'binding.get("qualified_topology") != fixed32_mode' in timing
     assert 'binding.get("qualified_comparison_call_limit") != 320' in timing
     assert '"optimistic_floor_is_full_step_hardware_floor": False' in timing
     assert 'record.get("floor_is_full_step_hardware_floor") is not False' in timing

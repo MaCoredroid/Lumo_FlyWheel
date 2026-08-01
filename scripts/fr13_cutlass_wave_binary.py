@@ -100,6 +100,7 @@ def _verify_production_qualification(
     candidate: Path,
     patch_source: Path,
     selector: str,
+    fixed32_mode: str,
 ) -> dict[str, object]:
     if selector not in {
         "streamk_coop128",
@@ -112,12 +113,14 @@ def _verify_production_qualification(
     else:
         import fr13_cutlass_streamk_pass as qualification
 
+    kwargs = {"fixed32_mode": fixed32_mode} if selector == "persistent_b4_m128" else {}
     return qualification.verify_sidecar(
         sidecar,
         expected_sidecar_sha256,
         candidate,
         patch_source,
         candidate_selector=selector,
+        **kwargs,
     )
 
 
@@ -130,6 +133,7 @@ def install_candidate(
     production_sidecar: Path | None = None,
     expected_production_sidecar_sha256: str | None = None,
     patch_source: Path = Path("scripts/fr13_patch_cutlass_fixed32_wave.py"),
+    fixed32_mode: str = "hydra27_fixed32",
 ) -> dict[str, object]:
     if selector not in CANDIDATE_SELECTORS:
         raise ValueError(f"unsupported candidate selector: {selector!r}")
@@ -151,6 +155,7 @@ def install_candidate(
             source,
             patch_source,
             selector,
+            fixed32_mode,
         )
         qualification = {
             "sidecar_sha256": expected_production_sidecar_sha256,
@@ -249,6 +254,11 @@ def main() -> int:
     install_parser.add_argument("--production-pass-sidecar", type=Path)
     install_parser.add_argument("--expected-production-pass-sha256")
     install_parser.add_argument(
+        "--fixed32-mode",
+        choices=("tail6_fixed32", "hydra27_fixed32"),
+        default="hydra27_fixed32",
+    )
+    install_parser.add_argument(
         "--patch-source",
         type=Path,
         default=Path("scripts/fr13_patch_cutlass_fixed32_wave.py"),
@@ -266,6 +276,7 @@ def main() -> int:
             production_sidecar=args.production_pass_sidecar,
             expected_production_sidecar_sha256=(args.expected_production_pass_sha256),
             patch_source=args.patch_source,
+            fixed32_mode=args.fixed32_mode,
         )
     print(json.dumps(payload, ensure_ascii=True, sort_keys=True))
     return 0

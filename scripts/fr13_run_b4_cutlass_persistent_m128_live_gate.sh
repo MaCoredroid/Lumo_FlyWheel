@@ -15,6 +15,7 @@ cd "$REPO"
 
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 QUALIFICATION_PROFILE=${CUTLASS_B4_QUALIFICATION_PROFILE:-full_vocab}
+FIXED32_MODE=${CUTLASS_B4_FIXED32_MODE:-hydra27_fixed32}
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
 PATCH_SOURCE=scripts/fr13_patch_cutlass_fixed32_wave.py
@@ -64,7 +65,23 @@ esac
 SOURCE_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
-ARM="hydra27_fixed32_cutlass_b4_m128${ARM_PROFILE_SUFFIX}_gate_${TAG}"
+case "$FIXED32_MODE" in
+  tail6_fixed32)
+    LOGICAL_TOPOLOGY=Tail23
+    ACTIVE_DRAFTS=23
+    VALID_MASK=0x7a9ce7ff
+    ;;
+  hydra27_fixed32)
+    LOGICAL_TOPOLOGY=Hydra27
+    ACTIVE_DRAFTS=27
+    VALID_MASK=0x7abdffff
+    ;;
+  *)
+    echo "CUTLASS_B4_FIXED32_MODE must be tail6_fixed32 or hydra27_fixed32" >&2
+    exit 2
+    ;;
+esac
+ARM="${FIXED32_MODE}_cutlass_b4_m128${ARM_PROFILE_SUFFIX}_gate_${TAG}"
 ARMDIR="$RUNROOT_ABS/$ARM"
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
@@ -115,8 +132,9 @@ unset -f run_variant
   || { echo "canonical B4 qualification floor contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS"
-printf 'classification=%s\nqualification_profile=%s\ntiming_eligible=0\nfloor_acceptance_eligible=0\nreference_always_served=1\ntopology=hydra27_fixed32\nbatch_size=4\nconcurrency=4\nfixed_rows=128\neager_builder_capacity=128\ncomparison_call_limit=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_selector=persistent_b4_m128\ndiagnostic_selector=%s\nenforce_eager=1\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+printf 'classification=%s\nqualification_profile=%s\ntiming_eligible=0\nfloor_acceptance_eligible=0\nreference_always_served=1\ntopology=%s\nlogical_topology=%s\nactive_drafts=%s\nvalid_mask=%s\nphysical_drafts=31\nphysical_rows_root_inclusive=32\nbatch_size=4\nconcurrency=4\nfixed_rows=128\neager_builder_capacity=128\ncomparison_call_limit=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_selector=persistent_b4_m128\ndiagnostic_selector=%s\nenforce_eager=1\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
   "$RUN_CLASSIFICATION" "$QUALIFICATION_PROFILE" \
+  "$FIXED32_MODE" "$LOGICAL_TOPOLOGY" "$ACTIVE_DRAFTS" "$VALID_MASK" \
   "$COMPARISON_CALL_LIMIT" "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" \
   "$NEEDS_ALLOW" "$DRAFT_VOCAB_BLOCKS_CONTAINER" \
   "$DRAFT_VOCAB_BLOCKS_SHA256" "$FR13_MANDATORY_WEIGHT_BYTES" \
@@ -170,7 +188,7 @@ if env \
     FR13_FIXED32_ATTRIBUTION_ONLY=0 \
     FORKED_FA2_SO="$FORKED_FA2_SO" \
     bash scripts/fr13_bigdenom_swe_serve_variant.sh \
-      "$ARM" hydra27_fixed32 "$SUBSET" \
+      "$ARM" "$FIXED32_MODE" "$SUBSET" \
       > "$RUNROOT_ABS/$ARM.runlog" 2>&1; then
   serve_rc=0
 else
@@ -201,7 +219,8 @@ cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" \
   "$SOURCE_COMMIT" "$SUBSET_SHA256" "$DIAGNOSTIC_SELECTOR" \
   "$RECORD_SCHEMA" "$LIVE_SCHEMA" "$STOCK_FA2_SHA256" \
   "$COMPARISON_CALL_LIMIT" "$QUALIFICATION_PROFILE" \
-  "$DRAFT_VOCAB_BLOCKS_SHA256" <<'PY'
+  "$DRAFT_VOCAB_BLOCKS_SHA256" "$FIXED32_MODE" "$LOGICAL_TOPOLOGY" \
+  "$ACTIVE_DRAFTS" "$VALID_MASK" <<'PY'
 import hashlib
 import json
 import os
@@ -233,6 +252,12 @@ stock_fa2_sha256 = sys.argv[11]
 comparison_call_limit = int(sys.argv[12])
 qualification_profile = sys.argv[13]
 draft_vocab_blocks_sha256 = sys.argv[14]
+fixed32_mode = sys.argv[15]
+logical_topology = sys.argv[16]
+active_drafts = int(sys.argv[17])
+valid_mask = int(sys.argv[18], 0)
+if fixed32_mode not in qualification.QUALIFIED_FIXED32_MODES:
+    raise SystemExit("CUTLASS B4 fixed32 topology is unsupported")
 if comparison_call_limit != qualification.MAX_COMPARISONS:
     raise SystemExit("CUTLASS B4 comparison-call limit contract drifted")
 try:
@@ -377,7 +402,7 @@ if (
 container_env_raw = container_env_path.read_bytes()
 container_env_lines = container_env_raw.decode("ascii").splitlines()
 for expected_env in (
-    "FR13_FIXED32_MODE=hydra27_fixed32",
+    f"FR13_FIXED32_MODE={fixed32_mode}",
     f"FR13_DRAFT_VOCAB_ROOT={profile['draft_vocab_root']}",
     f"FR13_DRAFT_VOCAB_K={profile['draft_vocab_k']}",
     (
@@ -394,7 +419,12 @@ payload = {
     "run_classification": profile["run_classification"],
     "acceptance_valid": False,
     "task_set": "canonical real SWE-Verified exact4 B4",
-    "topology": "hydra27_fixed32",
+    "topology": fixed32_mode,
+    "logical_topology": logical_topology,
+    "active_drafts": active_drafts,
+    "valid_mask": hex(valid_mask),
+    "physical_drafts": 31,
+    "physical_rows_root_inclusive": 32,
     "task_count": 4,
     "task_ids": expected_tasks,
     "task_marker": task_marker,
@@ -467,6 +497,7 @@ LIVE_SHA256=$(sha256sum "$LIVE_RESULT" | awk '{print $1}')
   --expected-source-commit "$SOURCE_COMMIT" \
   --candidate-selector persistent_b4_m128 \
   --qualification-profile "$QUALIFICATION_PROFILE" \
+  --fixed32-mode "$FIXED32_MODE" \
   --out "$ARMDIR/$PRODUCTION_PASS_NAME"
 
 printf 'live_result=%s\nlive_sha256=%s\nproduction_pass=%s\nproduction_pass_sha256=%s\n' \

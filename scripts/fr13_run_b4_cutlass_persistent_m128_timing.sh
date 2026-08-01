@@ -17,6 +17,8 @@ cd "$REPO"
 
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 QUALIFICATION_PROFILE=${CUTLASS_B4_QUALIFICATION_PROFILE:-full_vocab}
+FIXED32_MODE=${CUTLASS_B4_FIXED32_MODE:-hydra27_fixed32}
+ALL_PARENT_PASS_JSON=${FR13_FIXED32_ALL_PARENT_PASS_JSON:-}
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
 STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
@@ -68,9 +70,27 @@ TIMING_HARNESS_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 B4_KV_CACHE_MEMORY_BYTES=42949672960
-TIMING_KIND=hydra27_fixed32
-STOCK_ARM="hydra27_fixed32_cutlass_stock_b4${ARM_PROFILE_SUFFIX}_${TAG}"
-CANDIDATE_ARM="hydra27_fixed32_cutlass_persistent_m128${ARM_PROFILE_SUFFIX}_${TAG}"
+case "$FIXED32_MODE" in
+  tail6_fixed32)
+    LOGICAL_TOPOLOGY=Tail23
+    ACTIVE_DRAFTS=23
+    VALID_MASK=0x7a9ce7ff
+    ;;
+  hydra27_fixed32)
+    LOGICAL_TOPOLOGY=Hydra27
+    ACTIVE_DRAFTS=27
+    VALID_MASK=0x7abdffff
+    ;;
+  *)
+    echo "CUTLASS_B4_FIXED32_MODE must be tail6_fixed32 or hydra27_fixed32" >&2
+    exit 2
+    ;;
+esac
+TIMING_KIND=$FIXED32_MODE
+STOCK_ARM="${FIXED32_MODE}_cutlass_stock_b4${ARM_PROFILE_SUFFIX}_${TAG}"
+CANDIDATE_ARM="${FIXED32_MODE}_cutlass_persistent_m128${ARM_PROFILE_SUFFIX}_${TAG}"
+ALL_PARENT_PRODUCTION=0
+ALL_PARENT_PASS_SHA256=
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
   || { echo "TAG contains unsafe characters" >&2; exit 2; }
@@ -84,6 +104,30 @@ for input in "$STOCK_FA2_SO" "$CUTLASS_B4_SO" "$CUTLASS_B4_PASS_JSON"; do
   [[ "$input" == /* && -f "$input" && ! -L "$input" ]] \
     || { echo "timing input must be an absolute regular non-symlink file: $input" >&2; exit 2; }
 done
+if [[ -n "$ALL_PARENT_PASS_JSON" ]]; then
+  [[ "$ALL_PARENT_PASS_JSON" == /* && -f "$ALL_PARENT_PASS_JSON" \
+     && ! -L "$ALL_PARENT_PASS_JSON" ]] \
+    || { echo "all-parent pass must be an absolute regular non-symlink file" >&2; exit 2; }
+  "$PYTHON_BIN" - "$ALL_PARENT_PASS_JSON" "$FIXED32_MODE" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+source = Path("scripts/fr13_device_multidraft_kernel.py")
+spec = importlib.util.spec_from_file_location("fr13_b4_pair_taw_pass", source)
+if spec is None or spec.loader is None:
+    raise SystemExit("cannot import all-parent credential validator")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+bundle = module._fr13_fixed32_taw_native_production_pass(
+    path=sys.argv[1], expected_mode=sys.argv[2], expected_batch=4,
+)
+if bundle.get("qualified_batches") != [1, 2, 3, 4]:
+    raise SystemExit("all-parent credential lacks independent B1/B2/B3/B4 closure")
+PY
+  ALL_PARENT_PRODUCTION=1
+  ALL_PARENT_PASS_SHA256=$(sha256sum "$ALL_PARENT_PASS_JSON" | awk '{print $1}')
+fi
 [[ "$(stat -c '%s' "$STOCK_FA2_SO")" == "$STOCK_FA2_BYTES" \
    && "$(sha256sum "$STOCK_FA2_SO" | awk '{print $1}')" == "$STOCK_FA2_SHA256" ]] \
   || { echo "STOCK_FA2_SO is not the exact-safe stock reference" >&2; exit 2; }
@@ -120,7 +164,8 @@ LIVE_PASS_BINDING_JSON=$("$PYTHON_BIN" scripts/fr13_cutlass_b4_pass.py validate 
   --candidate-so "$CUTLASS_B4_SO" --patch-source "$PATCH_SOURCE" \
   --expected-source-commit "$QUALIFICATION_SOURCE_COMMIT" \
   --candidate-selector persistent_b4_m128 \
-  --qualification-profile "$QUALIFICATION_PROFILE")
+  --qualification-profile "$QUALIFICATION_PROFILE" \
+  --fixed32-mode "$FIXED32_MODE")
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "all Docker containers must be absent before timing" >&2; exit 2; }
 
@@ -152,8 +197,10 @@ LIVE_PASS_BINDING_SHA256=$(
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
 
-printf 'classification=%s\nqualification_profile=%s\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\nonly_arm_delta=CUTLASS_stock_to_persistent_b4_m128\nbatch_size=4\nconcurrency=4\nfixed_rows=128\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nqualification_source_commit=%s\ntiming_harness_commit=%s\nqualified_patch_source_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_sha256=%s\ncandidate_bytes=%s\nlive_pass_sha256=%s\nlive_pass_binding_sha256=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+printf 'classification=%s\nqualification_profile=%s\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\nonly_arm_delta=CUTLASS_stock_to_persistent_b4_m128\ntopology=%s\nlogical_topology=%s\nactive_drafts=%s\nvalid_mask=%s\nphysical_drafts=31\nphysical_rows_root_inclusive=32\nbatch_size=4\nconcurrency=4\nfixed_rows=128\nall_parent_production=%s\nall_parent_pass_sha256=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nqualification_source_commit=%s\ntiming_harness_commit=%s\nqualified_patch_source_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_sha256=%s\ncandidate_bytes=%s\nlive_pass_sha256=%s\nlive_pass_binding_sha256=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
   "$LAUNCH_CLASSIFICATION" "$QUALIFICATION_PROFILE" \
+  "$FIXED32_MODE" "$LOGICAL_TOPOLOGY" "$ACTIVE_DRAFTS" "$VALID_MASK" \
+  "$ALL_PARENT_PRODUCTION" "$ALL_PARENT_PASS_SHA256" \
   "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" "$NEEDS_ALLOW" \
   "$DRAFT_VOCAB_BLOCKS_CONTAINER" "$DRAFT_VOCAB_BLOCKS_SHA256" \
   "$FR13_MANDATORY_WEIGHT_BYTES" "$FR13_WEIGHT_FLOOR_MS" \
@@ -184,6 +231,10 @@ finalize_manifests() {
     || { echo "B4 CUTLASS timing runner changed during execution" >&2; return 14; }
   [[ "$(sha256sum "$RUNROOT_ABS/cutlass_b4_live_pass_binding.at_launch.json" | awk '{print $1}')" == "$LIVE_PASS_BINDING_SHA256" ]] \
     || { echo "B4 CUTLASS live-PASS binding changed during timing" >&2; return 14; }
+  if (( ALL_PARENT_PRODUCTION == 1 )); then
+    [[ "$(sha256sum "$ALL_PARENT_PASS_JSON" | awk '{print $1}')" == "$ALL_PARENT_PASS_SHA256" ]] \
+      || { echo "all-parent production PASS changed during timing" >&2; return 14; }
+  fi
   MANIFEST_FINALIZED=1
 }
 
@@ -240,7 +291,8 @@ run_arm() {
       FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT="${qualification_source_commit:-}" \
       FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="$QUALIFICATION_PROFILE" \
       FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
-      FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0 \
+      FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION="$ALL_PARENT_PRODUCTION" \
+      FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON="$ALL_PARENT_PASS_JSON" \
       FR13_DFWD_UNIFIED_BM8_LIVE_AB=0 FR13_DFWD_UNIFIED_BM8_PRODUCTION=0 \
       FR13_DFWD_UNIFIED_BM8_INSTANCE_ID= \
       FR13_DRAFT_HEAD_PAD_ROWS=0 FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=0 \
@@ -269,14 +321,21 @@ run_arm() {
   local container_env="$RUNROOT_ABS/$arm/container_env.txt"
   [[ -f "$container_env" && ! -L "$container_env" ]] \
     || { echo "$arm lacks a regular container environment artifact" >&2; return 4; }
-  [[ "$(grep -Fxc 'FR13_FIXED32_MODE=hydra27_fixed32' "$container_env")" -eq 1 \
+  [[ "$(grep -Fxc "FR13_FIXED32_MODE=$FIXED32_MODE" "$container_env")" -eq 1 \
      && "$(grep -Fxc "FR13_DRAFT_VOCAB_ROOT=$DRAFT_VOCAB_ROOT" "$container_env")" -eq 1 \
      && "$(grep -Fxc "FR13_DRAFT_VOCAB_K=$DRAFT_VOCAB_K" "$container_env")" -eq 1 \
+     && "$(grep -Fxc "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=$ALL_PARENT_PRODUCTION" "$container_env")" -eq 1 \
      && "$(grep -Fxc "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=$QUALIFICATION_PROFILE" "$container_env")" -eq 1 ]] \
     || { echo "$arm did not run the selected B4 qualification profile" >&2; return 4; }
   if [[ "$QUALIFICATION_PROFILE" == "k64_root" ]]; then
     [[ "$(grep -Fxc "FR13_DRAFT_VOCAB_BLOCKS=$DRAFT_VOCAB_BLOCKS_CONTAINER" "$container_env")" -eq 1 ]] \
       || { echo "$arm did not run the pinned root-64K block map" >&2; return 4; }
+  fi
+  if (( ALL_PARENT_PRODUCTION == 1 )); then
+    local all_parent_marker="$RUNROOT_ABS/$arm/logs/fr13_fixed32_taw_native_precompute_production.arm"
+    [[ -f "$all_parent_marker" && ! -L "$all_parent_marker" \
+       && "$(<"$all_parent_marker")" == "1" ]] \
+      || { echo "$arm lacks all-parent production engagement" >&2; return 4; }
   fi
   "$PYTHON_BIN" scripts/fr13_measure.py deploy-speed \
     --arm "$arm" --out-root "$RUNROOT_ABS/$arm/swe_out" \
@@ -309,11 +368,13 @@ CANDIDATE_SIDECAR_SHA256=$(sha256sum "$CANDIDATE_SIDECAR" | awk '{print $1}')
   --expected-sidecar-sha256 "$CANDIDATE_SIDECAR_SHA256" \
   --candidate-so "$CUTLASS_B4_SO" --patch-source "$PATCH_SOURCE" \
   --candidate-selector persistent_b4_m128 \
-  --qualification-profile "$QUALIFICATION_PROFILE" >/dev/null
+  --qualification-profile "$QUALIFICATION_PROFILE" \
+  --fixed32-mode "$FIXED32_MODE" >/dev/null
 "$PYTHON_BIN" scripts/fr13_cutlass_b4_pass.py attestation \
   --attestation "$CANDIDATE_ATTESTATION" \
   --expected-sidecar-sha256 "$CANDIDATE_SIDECAR_SHA256" \
   --qualification-profile "$QUALIFICATION_PROFILE" \
+  --fixed32-mode "$FIXED32_MODE" \
   > "$RUNROOT_ABS/$CANDIDATE_ARM/cutlass_b4_production_binding.json"
 
 finalize_manifests
@@ -330,7 +391,9 @@ finalize_manifests
   "$BINDING_SCHEMA" "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" \
   "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
   "$ONE_SIDED_U95_CAP_MS" "$DRAFT_VOCAB_BLOCKS_CONTAINER" \
-  "$DRAFT_VOCAB_BLOCKS_SHA256" <<'PY'
+  "$DRAFT_VOCAB_BLOCKS_SHA256" "$FIXED32_MODE" "$LOGICAL_TOPOLOGY" \
+  "$ACTIVE_DRAFTS" "$VALID_MASK" "$ALL_PARENT_PRODUCTION" \
+  "$ALL_PARENT_PASS_SHA256" <<'PY'
 import json
 import math
 import sys
@@ -346,6 +409,11 @@ draft_vocab_root, draft_vocab_k, mandatory_weight_bytes = map(int, sys.argv[18:2
 mandatory_weight_floor_ms = float(sys.argv[21])
 one_sided_u95_cap_ms = float(sys.argv[22])
 draft_vocab_blocks, draft_vocab_blocks_sha256 = sys.argv[23:25]
+fixed32_mode, logical_topology = sys.argv[25:27]
+active_drafts = int(sys.argv[27])
+valid_mask = int(sys.argv[28], 0)
+all_parent_production = bool(int(sys.argv[29]))
+all_parent_pass_sha256 = sys.argv[30]
 task_ids = sorted(json.loads(subset_path.read_text(encoding="ascii"))["instance_ids"])
 stock = json.loads(stock_path.read_text(encoding="utf-8"))
 candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
@@ -400,7 +468,7 @@ if (
     or binding.get("live_result_sha256") != live_sha256
     or binding.get("qualification_source_commit") != qualification_source_commit
     or binding.get("qualified_fixed_rows") != 128
-    or binding.get("qualified_topology") != "hydra27_fixed32"
+    or binding.get("qualified_topology") != fixed32_mode
     or binding.get("qualified_comparison_call_limit") != 320
     or binding.get("qualified_draft_vocab_root") != draft_vocab_root
     or binding.get("qualified_draft_vocab_k") != draft_vocab_k
@@ -463,7 +531,18 @@ summary = {
     "task_count": 4,
     "batch_size": 4,
     "concurrency": 4,
-    "arm": "hydra27_fixed32",
+    "arm": fixed32_mode,
+    "logical_topology": logical_topology,
+    "active_drafts": active_drafts,
+    "valid_mask": hex(valid_mask),
+    "physical_drafts": 31,
+    "physical_rows_root_inclusive": 32,
+    "sfwd_projection_rows": 128,
+    "all_parent_production": all_parent_production,
+    "all_parent_pass_sha256": all_parent_pass_sha256 or None,
+    "common_committer_selector": (
+        "fixed32_all_parent_commit_v2" if all_parent_production else "reference"
+    ),
     "task_ids": task_ids,
     "decision_metric": "measured_tps_fullstep_wall",
     "draft_vocab_root": draft_vocab_root,

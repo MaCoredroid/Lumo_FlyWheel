@@ -51,6 +51,7 @@ K64_ROOT_MANDATORY_WEIGHT_BYTES = floor.FIXED32_MANDATORY_WEIGHT_BYTES
 K64_ROOT_MANDATORY_WEIGHT_FLOOR_MS = floor.FIXED32_MANDATORY_WEIGHT_FLOOR_MS
 K64_ROOT_SLO_CAP_MS = 137.6067177261
 MAX_COMPARISONS = 320
+QUALIFIED_FIXED32_MODES = ("tail6_fixed32", "hydra27_fixed32")
 EXPECTED_PROJECTION_NK = (
     (5120, 6144),
     (5120, 17408),
@@ -230,7 +231,12 @@ def validate_live_result(
     candidate_selector: str = "persistent_b4_m128",
     qualification_profile: str = "full_vocab",
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
+    fixed32_mode: str = "hydra27_fixed32",
 ) -> dict[str, Any]:
+    if fixed32_mode not in QUALIFIED_FIXED32_MODES:
+        raise QualificationError(
+            f"unsupported CUTLASS B4 fixed32 mode: {fixed32_mode!r}"
+        )
     candidate_contract = _candidate_contract(candidate_selector)
     profile = _qualification_profile(qualification_profile)
     diagnostic_selector = candidate_contract["diagnostic_selector"]
@@ -258,7 +264,7 @@ def validate_live_result(
         "acceptance_valid": False,
         "task_count": 4,
         "task_ids": list(EXPECTED_TASK_IDS),
-        "topology": "hydra27_fixed32",
+        "topology": fixed32_mode,
         "draft_vocab_root": profile["draft_vocab_root"],
         "draft_vocab_k": profile["draft_vocab_k"],
         "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
@@ -356,7 +362,7 @@ def validate_live_result(
         "container_env_sha256": container_env_sha256,
         "qualified_draft_vocab_root": profile["draft_vocab_root"],
         "qualified_draft_vocab_k": profile["draft_vocab_k"],
-        "qualified_topology": "hydra27_fixed32",
+        "qualified_topology": fixed32_mode,
         "qualified_comparison_call_limit": MAX_COMPARISONS,
         "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
         "mandatory_weight_floor_ms": profile["mandatory_weight_floor_ms"],
@@ -389,6 +395,7 @@ def issue_sidecar(
     candidate_selector: str = "persistent_b4_m128",
     qualification_profile: str = "full_vocab",
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
+    fixed32_mode: str = "hydra27_fixed32",
 ) -> dict[str, Any]:
     payload = validate_live_result(
         live_result,
@@ -399,6 +406,7 @@ def issue_sidecar(
         candidate_selector,
         qualification_profile,
         draft_vocab_blocks,
+        fixed32_mode,
     )
     _write_json(output, payload)
     return payload
@@ -413,7 +421,12 @@ def verify_sidecar(
     candidate_selector: str | None = None,
     qualification_profile: str | None = None,
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
+    fixed32_mode: str = "hydra27_fixed32",
 ) -> dict[str, Any]:
+    if fixed32_mode not in QUALIFIED_FIXED32_MODES:
+        raise QualificationError(
+            f"unsupported CUTLASS B4 fixed32 mode: {fixed32_mode!r}"
+        )
     expected_sidecar_sha256 = _require_sha256(
         expected_sidecar_sha256, "expected production-sidecar SHA-256"
     )
@@ -464,7 +477,7 @@ def verify_sidecar(
         "qualification_task_ids": list(EXPECTED_TASK_IDS),
         "qualified_draft_vocab_root": profile["draft_vocab_root"],
         "qualified_draft_vocab_k": profile["draft_vocab_k"],
-        "qualified_topology": "hydra27_fixed32",
+        "qualified_topology": fixed32_mode,
         "qualified_comparison_call_limit": MAX_COMPARISONS,
         "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
         "mandatory_weight_floor_ms": profile["mandatory_weight_floor_ms"],
@@ -525,7 +538,12 @@ def validate_production_attestation(
     expected_sidecar_sha256: str,
     qualification_profile: str | None = None,
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
+    fixed32_mode: str = "hydra27_fixed32",
 ) -> dict[str, Any]:
+    if fixed32_mode not in QUALIFIED_FIXED32_MODES:
+        raise QualificationError(
+            f"unsupported CUTLASS B4 fixed32 mode: {fixed32_mode!r}"
+        )
     expected_sidecar_sha256 = _require_sha256(
         expected_sidecar_sha256, "expected production-sidecar SHA-256"
     )
@@ -595,7 +613,7 @@ def validate_production_attestation(
     for key, expected in (
         ("qualified_draft_vocab_root", profile["draft_vocab_root"]),
         ("qualified_draft_vocab_k", profile["draft_vocab_k"]),
-        ("qualified_topology", "hydra27_fixed32"),
+        ("qualified_topology", fixed32_mode),
         ("qualified_comparison_call_limit", MAX_COMPARISONS),
         ("qualified_eager_builder_capacity", 128),
         ("mandatory_weight_bytes", profile["mandatory_weight_bytes"]),
@@ -676,7 +694,7 @@ def validate_production_attestation(
         "container_env_sha256": container_env_sha256,
         "qualified_draft_vocab_root": profile["draft_vocab_root"],
         "qualified_draft_vocab_k": profile["draft_vocab_k"],
-        "qualified_topology": "hydra27_fixed32",
+        "qualified_topology": fixed32_mode,
         "qualified_comparison_call_limit": MAX_COMPARISONS,
         "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
         "mandatory_weight_floor_ms": profile["mandatory_weight_floor_ms"],
@@ -720,6 +738,11 @@ def main() -> int:
             type=Path,
             default=DRAFT_VOCAB_BLOCKS_SOURCE,
         )
+        subparser.add_argument(
+            "--fixed32-mode",
+            choices=QUALIFIED_FIXED32_MODES,
+            default="hydra27_fixed32",
+        )
         if command == "issue":
             subparser.add_argument("--out", type=Path, required=True)
     verify_parser = subparsers.add_parser("verify")
@@ -736,6 +759,11 @@ def main() -> int:
         type=Path,
         default=DRAFT_VOCAB_BLOCKS_SOURCE,
     )
+    verify_parser.add_argument(
+        "--fixed32-mode",
+        choices=QUALIFIED_FIXED32_MODES,
+        default="hydra27_fixed32",
+    )
     attestation_parser = subparsers.add_parser("attestation")
     attestation_parser.add_argument("--attestation", type=Path, required=True)
     attestation_parser.add_argument("--expected-sidecar-sha256", required=True)
@@ -746,6 +774,11 @@ def main() -> int:
         "--draft-vocab-blocks",
         type=Path,
         default=DRAFT_VOCAB_BLOCKS_SOURCE,
+    )
+    attestation_parser.add_argument(
+        "--fixed32-mode",
+        choices=QUALIFIED_FIXED32_MODES,
+        default="hydra27_fixed32",
     )
     args = parser.parse_args()
 
@@ -759,6 +792,7 @@ def main() -> int:
             args.candidate_selector,
             args.qualification_profile,
             args.draft_vocab_blocks,
+            args.fixed32_mode,
         )
     elif args.command == "issue":
         payload = issue_sidecar(
@@ -771,6 +805,7 @@ def main() -> int:
             args.candidate_selector,
             args.qualification_profile,
             args.draft_vocab_blocks,
+            args.fixed32_mode,
         )
     elif args.command == "verify":
         payload = verify_sidecar(
@@ -781,6 +816,7 @@ def main() -> int:
             candidate_selector=args.candidate_selector,
             qualification_profile=args.qualification_profile,
             draft_vocab_blocks=args.draft_vocab_blocks,
+            fixed32_mode=args.fixed32_mode,
         )
     else:
         payload = validate_production_attestation(
@@ -788,6 +824,7 @@ def main() -> int:
             args.expected_sidecar_sha256,
             args.qualification_profile,
             args.draft_vocab_blocks,
+            args.fixed32_mode,
         )
     print(json.dumps(payload, ensure_ascii=True, sort_keys=True))
     return 0
