@@ -392,6 +392,7 @@ _FR13_DFWD_UNIFIED_BM8_PRODUCTION_PENDING = {}
 _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT = None
 _FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE = []
 _FR13_DRAFT_HEAD_M32_LIVE_STATE = None
+_FR13_DRAFT_HEAD_MSWEEP_LIVE_STATE = None
 _FR13_FIXED32_ACCEPTED_OUTPUT_CURRENT = None
 _FR13_FIXED32_BOOT_WARM_EVIDENCE = None
 _FR13_FIXED32_TOPOLOGY_NEEDLE_EMITTED = False
@@ -566,6 +567,203 @@ def _fr13_draft_head_m32_live_finalize(events, flush_binding):
         raise RuntimeError(
             "FR13 draft-head M32 final comparison/event census mismatch: "
             + repr((compares, mismatches, event_count, draft_events))
+        )
+
+
+def _fr13_draft_head_msweep_live_register(
+    compares, mismatches, geometry, candidates, run_state
+):
+    global _FR13_DRAFT_HEAD_MSWEEP_LIVE_STATE
+    _os = __import__("os")
+    if _os.environ.get("FR13_DRAFT_HEAD_MSWEEP_LIVE_AB", "0") != "1":
+        raise RuntimeError("FR13 draft-head small-M sweep registered while off")
+    if (
+        _FR13_DRAFT_HEAD_MSWEEP_LIVE_STATE is not None
+        or tuple(compares.shape) != (4,)
+        or tuple(mismatches.shape) != (4,)
+        or str(compares.dtype) != "torch.int64"
+        or str(mismatches.dtype) != "torch.int64"
+        or compares.device.type != "cuda"
+        or mismatches.device != compares.device
+        or not isinstance(geometry, dict)
+        or not isinstance(candidates, list)
+        or tuple(row.get("m") for row in candidates) != (2, 4, 8, 16)
+        or not isinstance(run_state, dict)
+        or set(run_state) != {"completed", "event"}
+    ):
+        raise RuntimeError("FR13 draft-head small-M sweep registration drifted")
+    _FR13_DRAFT_HEAD_MSWEEP_LIVE_STATE = {
+        "compares": compares,
+        "mismatches": mismatches,
+        "geometry": geometry,
+        "candidates": candidates,
+        "run_state": run_state,
+        "source_commit": _os.environ.get(
+            "FR13_DRAFT_HEAD_MSWEEP_SOURCE_COMMIT", ""
+        ),
+        "candidate_source_sha256": _os.environ.get(
+            "FR13_DRAFT_HEAD_MSWEEP_SOURCE_SHA256", ""
+        ),
+        "instance_id": _os.environ.get(
+            "FR13_DRAFT_HEAD_MSWEEP_INSTANCE_ID", ""
+        ),
+    }
+
+
+def _fr13_draft_head_msweep_live_finalize(events, flush_binding):
+    _os = __import__("os")
+    if _os.environ.get("FR13_DRAFT_HEAD_MSWEEP_LIVE_AB", "0") != "1":
+        if _FR13_DRAFT_HEAD_MSWEEP_LIVE_STATE is not None:
+            raise RuntimeError("FR13 draft-head small-M sweep state leaked while off")
+        return
+    state = _FR13_DRAFT_HEAD_MSWEEP_LIVE_STATE
+    event_rows = list(events)
+    event_count = len(event_rows)
+    draft_events = sum(int(row.get("batch_size", -1)) for row in event_rows)
+    hex_chars = frozenset("0123456789abcdef")
+    valid_binding = (
+        isinstance(state, dict)
+        and isinstance(flush_binding, dict)
+        and set(flush_binding)
+        == {
+            "action",
+            "boundary_snapshot_sha256",
+            "complete_work_census_events",
+            "events_sha256",
+            "generation",
+            "nonce",
+            "producer_pid",
+        }
+        and flush_binding.get("action") == "final"
+        and type(flush_binding.get("generation")) is int
+        and int(flush_binding["generation"]) >= 1
+        and type(flush_binding.get("producer_pid")) is int
+        and int(flush_binding["producer_pid"]) >= 1
+        and all(
+            isinstance(flush_binding.get(key), str)
+            and len(flush_binding[key]) == 64
+            and all(value in hex_chars for value in flush_binding[key])
+            for key in (
+                "nonce",
+                "events_sha256",
+                "boundary_snapshot_sha256",
+            )
+        )
+        and event_count >= 1
+        and draft_events == event_count
+        and all(int(row.get("batch_size", -1)) == 1 for row in event_rows)
+        and int(flush_binding.get("complete_work_census_events", -1))
+        == event_count
+    )
+    compares = (
+        tuple(int(value) for value in state["compares"].tolist())
+        if isinstance(state, dict)
+        else ()
+    )
+    mismatches = (
+        tuple(int(value) for value in state["mismatches"].tolist())
+        if isinstance(state, dict)
+        else ()
+    )
+    run_state = state.get("run_state", {}) if isinstance(state, dict) else {}
+    complete = (
+        valid_binding
+        and compares == (5, 5, 5, 5)
+        and len(mismatches) == 4
+        and all(value >= 0 for value in mismatches)
+        and run_state.get("completed") is True
+        and isinstance(run_state.get("event"), dict)
+    )
+    candidates = []
+    if isinstance(state, dict):
+        for index, contract in enumerate(state["candidates"]):
+            bad = mismatches[index] if len(mismatches) == 4 else -1
+            candidates.append(
+                {
+                    **contract,
+                    "head_comparisons": compares[index]
+                    if len(compares) == 4
+                    else -1,
+                    "bf16_elements_compared": (
+                        compares[index] * 248320
+                        if len(compares) == 4
+                        else -1
+                    ),
+                    "raw_bf16_mismatches": bad,
+                    "byte_exact": bad == 0 and complete,
+                }
+            )
+    instance_id = state.get("instance_id", "") if isinstance(state, dict) else ""
+    record = {
+        "schema": "fr13.fixed32.draft_head_full_msweep_live_ab.v1",
+        "status": "COMPLETE" if complete else "FAIL",
+        "suite": "SWE-Verified",
+        "instance_id": instance_id,
+        "task_marker": "swe_verified:" + instance_id,
+        "concurrency": 1,
+        "batch_size": 1,
+        "source_commit": state.get("source_commit", "")
+        if isinstance(state, dict)
+        else "",
+        "candidate_source_sha256": state.get("candidate_source_sha256", "")
+        if isinstance(state, dict)
+        else "",
+        "geometry": state.get("geometry", {}) if isinstance(state, dict) else {},
+        "candidate_rows": [2, 4, 8, 16],
+        "candidates": candidates,
+        "diagnostic_event": run_state.get("event"),
+        "completed_events": draft_events,
+        "complete_work_census_events": event_count,
+        "work_census_last_event_index": event_count - 1,
+        "events_sha256": flush_binding.get("events_sha256", "")
+        if isinstance(flush_binding, dict)
+        else "",
+        "flush_generation": flush_binding.get("generation", -1)
+        if isinstance(flush_binding, dict)
+        else -1,
+        "flush_nonce": flush_binding.get("nonce", "")
+        if isinstance(flush_binding, dict)
+        else "",
+        "producer_pid": flush_binding.get("producer_pid", -1)
+        if isinstance(flush_binding, dict)
+        else -1,
+        "boundary_snapshot_sha256": flush_binding.get(
+            "boundary_snapshot_sha256", ""
+        )
+        if isinstance(flush_binding, dict)
+        else "",
+        "served_return": "reference BF16 logits unchanged",
+        "performance_measurement": False,
+        "acceptance_eligible": False,
+        "probe_eligible": False,
+        "finalized_by_fixed32_flush": True,
+        "flush_action": "final",
+    }
+    path = __import__("pathlib").Path(
+        _os.environ.get(
+            "FR13_DRAFT_HEAD_MSWEEP_LIVE_JSON",
+            "/logs/fr13_draft_head_msweep.live.json",
+        )
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp." + str(_os.getpid()))
+    with open(temporary, "w", encoding="ascii") as handle:
+        handle.write(
+            __import__("json").dumps(
+                record,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        handle.flush()
+        _os.fsync(handle.fileno())
+    _os.replace(temporary, path)
+    if not complete:
+        raise RuntimeError(
+            "FR13 draft-head small-M sweep comparison/event census drifted: "
+            + repr((compares, mismatches, event_count, draft_events, run_state))
         )
 
 
@@ -20593,6 +20791,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_m32_prod_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_M32_PRODUCTION", "0"
             )
+            _fr13_dh_msweep_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_MSWEEP_LIVE_AB", "0"
+            )
             if _fr13_dh_rows_raw not in ("0", "32", "64", "128"):
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_PAD_ROWS must be exactly one of "
@@ -20610,10 +20811,19 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_M32_PRODUCTION must be exactly 0 or 1"
                 )
+            if _fr13_dh_msweep_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_MSWEEP_LIVE_AB must be exactly 0 or 1"
+                )
+            if _fr13_dh_m32_live_raw != "0" or _fr13_dh_m32_prod_raw != "0":
+                raise RuntimeError(
+                    "FR13 draft-head M32 is retired after real-B1 byte rejection"
+                )
             _fr13_dh_rows = int(_fr13_dh_rows_raw)
             _fr13_dh_ab = _fr13_dh_ab_raw == "1"
             _fr13_dh_m32_live = _fr13_dh_m32_live_raw == "1"
             _fr13_dh_m32_prod = _fr13_dh_m32_prod_raw == "1"
+            _fr13_dh_msweep = _fr13_dh_msweep_raw == "1"
             _fr13_dh_modes = sum(
                 int(value)
                 for value in (
@@ -20621,6 +20831,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_ab,
                     _fr13_dh_m32_live,
                     _fr13_dh_m32_prod,
+                    _fr13_dh_msweep,
                 )
             )
             if _fr13_dh_modes > 1:
@@ -20660,6 +20871,18 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     "single-logits, FR13_DRAFT_VOCAB_ROOT=0, "
                     "FR13_DRAFT_VOCAB_K=0, and no draft-vocab block map"
                 )
+            if _fr13_dh_msweep and (
+                not _fr13_is_fixed32
+                or _fr13_dvk_root
+                or not _fr13_single_logits
+                or _fr13_dvk_configured != 0
+                or os.environ.get("FR13_DRAFT_VOCAB_BLOCKS", "")
+            ):
+                raise RuntimeError(
+                    "FR13 full-head small-M sweep requires exact fixed32, "
+                    "single-logits, FR13_DRAFT_VOCAB_ROOT=0, "
+                    "FR13_DRAFT_VOCAB_K=0, and no draft-vocab block map"
+                )
             _fr13_dh_source_sha = os.environ.get(
                 "FR13_DRAFT_HEAD_M32_QUALIFIED_SOURCE_SHA256", ""
             )
@@ -20673,6 +20896,19 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13 draft-head M32 requires its qualified source SHA-256"
                 )
+            _fr13_dh_msweep_source_sha = os.environ.get(
+                "FR13_DRAFT_HEAD_MSWEEP_SOURCE_SHA256", ""
+            )
+            if _fr13_dh_msweep and (
+                len(_fr13_dh_msweep_source_sha) != 64
+                or any(
+                    value not in "0123456789abcdef"
+                    for value in _fr13_dh_msweep_source_sha
+                )
+            ):
+                raise RuntimeError(
+                    "FR13 draft-head small-M sweep requires its source SHA-256"
+                )
             self._fr13_dh_pad_rows = _fr13_dh_rows
             self._fr13_dh_ab_active = _fr13_dh_ab
             self._fr13_dh_m32_live_active = _fr13_dh_m32_live
@@ -20681,8 +20917,84 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             self._fr13_dh_m32_selected_capture_calls = 0
             self._fr13_dh_m32_fallback_calls = 0
             self._fr13_dh_m32_graph_attestation = None
+            self._fr13_dh_msweep_live_active = _fr13_dh_msweep
 
             def _fr13_dvk_prepare():
+                if (
+                    _fr13_dh_msweep
+                    and not getattr(self, "_fr13_dh_msweep_ready", False)
+                ):
+                    _fr13_dh_sh = self.model.lm_head
+                    _fr13_dh_w = _fr13_dh_sh.weight
+                    if (
+                        type(_fr13_dh_sh).__name__ != "ParallelLMHead"
+                        or type(_fr13_dh_sh.quant_method).__name__
+                        != "UnquantizedEmbeddingMethod"
+                        or tuple(_fr13_dh_w.shape) != (248320, 5120)
+                        or tuple(_fr13_dh_w.stride()) != (5120, 1)
+                        or _fr13_dh_w.dtype != torch.bfloat16
+                        or not _fr13_dh_w.is_contiguous()
+                    ):
+                        raise RuntimeError(
+                            "FR13 full-head small-M sweep requires the actual "
+                            "contiguous BF16 ParallelLMHead weight[248320,5120] "
+                            "stride[5120,1] with UnquantizedEmbeddingMethod"
+                        )
+                    _fr13_dh_msweep_rows = (2, 4, 8, 16)
+                    self._fr13_dh_msweep_head = _fr13_dh_sh
+                    self._fr13_dh_msweep_inputs = {
+                        rows: torch.zeros(
+                            (rows, 5120),
+                            dtype=torch.bfloat16,
+                            device=_fr13_dh_w.device,
+                        )
+                        for rows in _fr13_dh_msweep_rows
+                    }
+                    self._fr13_dh_msweep_outputs = {
+                        rows: torch.empty(
+                            (rows, 248320),
+                            dtype=torch.bfloat16,
+                            device=_fr13_dh_w.device,
+                        )
+                        for rows in _fr13_dh_msweep_rows
+                    }
+                    self._fr13_dh_msweep_hidden = torch.empty(
+                        (5, 5120),
+                        dtype=torch.bfloat16,
+                        device=_fr13_dh_w.device,
+                    )
+                    self._fr13_dh_msweep_compares = torch.zeros(
+                        (4,), dtype=torch.int64, device=_fr13_dh_w.device
+                    )
+                    self._fr13_dh_msweep_mismatches = torch.zeros(
+                        (4,), dtype=torch.int64, device=_fr13_dh_w.device
+                    )
+                    self._fr13_dh_msweep_capture_calls = 0
+                    self._fr13_dh_msweep_run_state = {
+                        "completed": False,
+                        "event": None,
+                    }
+                    from vllm.model_executor.layers.mamba import (
+                        gdn_linear_attn as _fr13_dh_msweep_gdn,
+                    )
+
+                    _fr13_dh_msweep_contract_payload = (
+                        _fr13_dh_msweep_contract()
+                    )
+                    _fr13_dh_msweep_gdn._fr13_draft_head_msweep_live_register(
+                        self._fr13_dh_msweep_compares,
+                        self._fr13_dh_msweep_mismatches,
+                        _fr13_dh_msweep_contract_payload["geometry"],
+                        _fr13_dh_msweep_contract_payload["candidates"],
+                        self._fr13_dh_msweep_run_state,
+                    )
+                    self._fr13_dh_msweep_ready = True
+                    print(
+                        "[FR13_DRAFT_HEAD_MSWEEP] shadow buffers ready "
+                        "candidate_rows=(2,4,8,16) weight=[248320,5120] "
+                        "reference_served=1 diagnostic_events=1",
+                        flush=True,
+                    )
                 if (
                     (_fr13_dh_m32_live or _fr13_dh_m32_prod)
                     and not getattr(self, "_fr13_dh_m32_ready", False)
@@ -20750,7 +21062,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     return (
                         0,
                         int(self.model.lm_head.weight.shape[0])
-                        if (_fr13_dh_m32_live or _fr13_dh_m32_prod)
+                        if (
+                            _fr13_dh_m32_live
+                            or _fr13_dh_m32_prod
+                            or _fr13_dh_msweep
+                        )
                         else None,
                     )
                 _fr13_dvk_full = int(self.model.lm_head.weight.shape[0])
@@ -21009,6 +21325,200 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     },
                 }
 
+            def _fr13_dh_msweep_contract():
+                return {
+                    "geometry": {
+                        "batch_size": 1,
+                        "calls_per_diagnostic_event": 5,
+                        "head_positions": ["root", "mtp1", "mtp2", "mtp3", "mtp4"],
+                        "input_shape": [1, 5120],
+                        "input_stride": [5120, 1],
+                        "weight_shape": [248320, 5120],
+                        "weight_stride": [5120, 1],
+                        "weight_transpose_stride": [1, 5120],
+                        "reference_output_shape": [1, 248320],
+                        "reference_output_stride": [248320, 1],
+                        "hidden_snapshot_shape": [5, 5120],
+                        "hidden_snapshot_stride": [5120, 1],
+                        "dtype": "torch.bfloat16",
+                    },
+                    "candidates": [
+                        {
+                            "m": rows,
+                            "gemm_mnk": [rows, 248320, 5120],
+                            "input_shape": [rows, 5120],
+                            "input_stride": [5120, 1],
+                            "output_shape": [rows, 248320],
+                            "output_stride": [248320, 1],
+                            "served_rows": 0,
+                            "shadow_compared_rows": 1,
+                            "valid_live_batch_sizes": list(range(1, rows + 1)),
+                            "operation": (
+                                "copy live B1 hidden row into zero-initialized "
+                                "padded input then torch.mm with full weight.t"
+                            ),
+                        }
+                        for rows in (2, 4, 8, 16)
+                    ],
+                }
+
+            def _fr13_dh_msweep_logits(_h, _rows):
+                _fr13_dh_sh = getattr(self, "_fr13_dh_msweep_head", None)
+                _fr13_dh_batch = int(_h.shape[0]) if _h.dim() == 2 else -1
+                if (
+                    not getattr(self, "_fr13_dh_msweep_ready", False)
+                    or _fr13_dh_sh is not self.model.lm_head
+                    or _rows not in (2, 4, 8, 16)
+                    or _fr13_dh_batch != 1
+                    or _rows < _fr13_dh_batch
+                    or tuple(_h.shape) != (1, 5120)
+                    or tuple(_h.stride()) != (5120, 1)
+                    or _h.dtype != torch.bfloat16
+                    or _h.device != _fr13_dh_sh.weight.device
+                ):
+                    raise RuntimeError(
+                        "FR13 full-head small-M candidate left its valid live "
+                        "B1 contiguous BF16 hidden contract"
+                    )
+                _fr13_dh_in = self._fr13_dh_msweep_inputs[_rows]
+                _fr13_dh_out = self._fr13_dh_msweep_outputs[_rows]
+                _fr13_dh_in[:1].copy_(_h)
+                torch.mm(
+                    _fr13_dh_in,
+                    _fr13_dh_sh.weight.t(),
+                    out=_fr13_dh_out,
+                )
+                if (
+                    tuple(_fr13_dh_in.shape) != (_rows, 5120)
+                    or tuple(_fr13_dh_in.stride()) != (5120, 1)
+                    or tuple(_fr13_dh_sh.weight.shape) != (248320, 5120)
+                    or tuple(_fr13_dh_sh.weight.t().stride()) != (1, 5120)
+                    or tuple(_fr13_dh_out.shape) != (_rows, 248320)
+                    or tuple(_fr13_dh_out.stride()) != (248320, 1)
+                ):
+                    raise RuntimeError(
+                        "FR13 full-head small-M operand geometry drifted"
+                    )
+                return _fr13_dh_out[:1]
+
+            def _fr13_dh_msweep_reference(_h):
+                if (
+                    not getattr(self, "_fr13_dh_msweep_ready", False)
+                    or tuple(_h.shape) != (1, 5120)
+                    or tuple(_h.stride()) != (5120, 1)
+                    or _h.dtype != torch.bfloat16
+                ):
+                    raise RuntimeError(
+                        "FR13 full-head small-M reference geometry drifted"
+                    )
+                if torch.cuda.is_current_stream_capturing():
+                    _fr13_dh_slot = int(self._fr13_dh_msweep_capture_calls) + 1
+                    if _fr13_dh_slot not in (1, 2, 3, 4):
+                        raise RuntimeError(
+                            "FR13 full-head small-M captured head census drifted"
+                        )
+                    self._fr13_dh_msweep_capture_calls = _fr13_dh_slot
+                else:
+                    _fr13_dh_slot = 0
+                self._fr13_dh_msweep_hidden[_fr13_dh_slot : _fr13_dh_slot + 1].copy_(
+                    _h
+                )
+                _fr13_dh_sh = self._fr13_dh_msweep_head
+                return _fr13_dh_sh.quant_method.apply(_fr13_dh_sh, _h, bias=None)
+
+            def _fr13_dh_msweep_run_once(_graph_id, _graph_signature):
+                if not getattr(self, "_fr13_dh_msweep_live_active", False):
+                    return
+                _fr13_dh_run_state = self._fr13_dh_msweep_run_state
+                if _fr13_dh_run_state["completed"]:
+                    return
+                from vllm.model_executor.layers.mamba import (
+                    gdn_linear_attn as _fr13_dh_msweep_gdn,
+                )
+
+                _fr13_dh_proposal = getattr(
+                    _fr13_dh_msweep_gdn,
+                    "_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT",
+                    None,
+                )
+                if not isinstance(_fr13_dh_proposal, dict):
+                    raise RuntimeError(
+                        "FR13 full-head small-M sweep has no authenticated proposal"
+                    )
+                if _fr13_dh_proposal.get("measured") is not True:
+                    return
+                _fr13_dh_signature = str(_graph_signature)
+                if (
+                    int(_fr13_dh_proposal.get("batch_size", -1)) != 1
+                    or _fr13_dh_proposal.get("mode")
+                    != _fr13_dh_msweep_gdn._FR13_FIXED32_MODE
+                    or int(_graph_id) <= 0
+                    or int(_fr13_dh_proposal.get("graph_id", -1))
+                    != int(_graph_id)
+                    or _fr13_dh_proposal.get("graph_signature")
+                    != _fr13_dh_signature
+                    or _fr13_dh_signature
+                    != (
+                        "d9a4ddece41d146e9949b9f8ff7c2603"
+                        "b8948d157b28ef69244e44469b36150c"
+                    )
+                    or int(_fr13_dh_proposal.get("graph_replays", -1)) != 1
+                    or int(_fr13_dh_proposal.get("forward_step_index", -1)) != 0
+                    or int(self._fr13_dh_msweep_capture_calls) != 4
+                ):
+                    raise RuntimeError(
+                        "FR13 full-head small-M authenticated event contract drifted"
+                    )
+                _fr13_dh_sh = self._fr13_dh_msweep_head
+                for _fr13_dh_head_index in range(5):
+                    _fr13_dh_hidden = self._fr13_dh_msweep_hidden[
+                        _fr13_dh_head_index : _fr13_dh_head_index + 1
+                    ]
+                    _fr13_dh_reference = _fr13_dh_sh.quant_method.apply(
+                        _fr13_dh_sh, _fr13_dh_hidden, bias=None
+                    )
+                    if (
+                        tuple(_fr13_dh_reference.shape) != (1, 248320)
+                        or _fr13_dh_reference.dtype != torch.bfloat16
+                    ):
+                        raise RuntimeError(
+                            "FR13 full-head small-M reference output drifted"
+                        )
+                    for _fr13_dh_index, _fr13_dh_rows in enumerate(
+                        (2, 4, 8, 16)
+                    ):
+                        if _fr13_dh_rows < int(_fr13_dh_hidden.shape[0]):
+                            continue
+                        _fr13_dh_candidate = _fr13_dh_msweep_logits(
+                            _fr13_dh_hidden, _fr13_dh_rows
+                        )
+                        self._fr13_dh_msweep_mismatches[_fr13_dh_index].add_(
+                            torch.count_nonzero(
+                                _fr13_dh_candidate.view(torch.int16)
+                                != _fr13_dh_reference.view(torch.int16)
+                            )
+                        )
+                        self._fr13_dh_msweep_compares[_fr13_dh_index].add_(1)
+                _fr13_dh_run_state["event"] = {
+                    "batch_size": 1,
+                    "forward_step_index": int(
+                        _fr13_dh_proposal.get("forward_step_index", -1)
+                    ),
+                    "graph_id": int(_graph_id),
+                    "graph_signature": _fr13_dh_signature,
+                    "graph_replays": 1,
+                    "measured": True,
+                    "runtime_mode": "hydra27_fixed32",
+                    "head_positions_compared": 5,
+                }
+                _fr13_dh_run_state["completed"] = True
+                print(
+                    "[FR13_DRAFT_HEAD_MSWEEP] first authenticated real B1 "
+                    "event enqueued rows=(2,4,8,16) comparisons_per_m=5 "
+                    "reference_served=1 performance_measurement=0",
+                    flush=True,
+                )
+
             def _fr13_dh_m32_atomic_json(_path, _payload):
                 import json as _fr13_dh_json
                 import pathlib as _fr13_dh_pathlib
@@ -21227,16 +21737,23 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_m32_prod_on = getattr(
                         self, "_fr13_dh_m32_production_active", False
                     )
+                    _fr13_dh_msweep_on = getattr(
+                        self, "_fr13_dh_msweep_live_active", False
+                    )
                     _fr13_dh_m32_on = (
                         _fr13_dh_m32_live_on or _fr13_dh_m32_prod_on
                     )
                     _sh = (
-                        self._fr13_dh_m32_head
+                        self._fr13_dh_msweep_head
+                        if _fr13_dh_msweep_on
+                        else self._fr13_dh_m32_head
                         if _fr13_dh_m32_on
                         else self._fr13_dvk_shim
                     )
                     _fr13_dh_capturing = False
-                    if _fr13_dh_m32_on:
+                    if _fr13_dh_msweep_on:
+                        _logits = _fr13_dh_msweep_reference(_h)
+                    elif _fr13_dh_m32_on:
                         _fr13_dh_capturing = (
                             torch.cuda.is_current_stream_capturing()
                         )
@@ -21338,10 +21855,17 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     return (
                         _logits,
                         None
-                        if _fr13_dh_m32_on
+                        if (_fr13_dh_m32_on or _fr13_dh_msweep_on)
                         else getattr(self, "_fr13_dvk_map_t", None),
                     )
                 except Exception as _e:
+                    if getattr(
+                        self, "_fr13_dh_msweep_live_active", False
+                    ):
+                        raise RuntimeError(
+                            "FR13 draft-head small-M sweep failed its strict "
+                            "reference-serving runtime contract"
+                        ) from _e
                     if getattr(
                         self, "_fr13_dh_m32_production_active", False
                     ):
@@ -21375,7 +21899,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 return _ids if _id_map is None else _id_map[_ids]
 
             if (
-                _fr13_dh_m32_live
+                _fr13_dh_msweep
+                or _fr13_dh_m32_live
                 or _fr13_dh_m32_prod
                 or _fr13_dvk_root
             ):
@@ -21415,7 +21940,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 # 3-3-3 additionally reads rank-2 (index 2) from that topk.
                 _fr13_ds_lm = _FR13_DFWD_SPLIT.begin('lmhead')
                 if (
-                    (_fr13_dh_m32_live or _fr13_dh_m32_prod)
+                    (
+                        _fr13_dh_msweep
+                        or _fr13_dh_m32_live
+                        or _fr13_dh_m32_prod
+                    )
                     or (
                         _fr13_dvk_root
                         and _fr13_dvk > 0
@@ -21425,7 +21954,18 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr10_logits, _fr10_root_map = _fr13_dvk_logits(
                         sample_hidden_states
                     )
-                    if _fr13_dh_m32_live or _fr13_dh_m32_prod:
+                    if _fr13_dh_msweep:
+                        if not getattr(
+                            self, "_fr13_dh_msweep_route_engaged", False
+                        ):
+                            self._fr13_dh_msweep_route_engaged = True
+                            print(
+                                "[FR13_DRAFT_HEAD_MSWEEP] reference root plus "
+                                "four loop full-vocabulary heads routed for "
+                                "one authenticated shadow event",
+                                flush=True,
+                            )
+                    elif _fr13_dh_m32_live or _fr13_dh_m32_prod:
                         if not getattr(
                             self, "_fr13_dh_m32_route_engaged", False
                         ):
@@ -21580,7 +22120,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 and not _fr13_selfcheck
             )
             if not _fr13_dvk_root:
-                if not (_fr13_dh_m32_live or _fr13_dh_m32_prod):
+                if not (
+                    _fr13_dh_msweep
+                    or _fr13_dh_m32_live
+                    or _fr13_dh_m32_prod
+                ):
                     # Keep the accepted root-off execution order: build the
                     # loop subset only after the unchanged full root head.
                     _fr13_dvk, _ = _fr13_dvk_prepare()
@@ -21644,6 +22188,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         id(_dg["graph"]),
                         _dg.get("fixed32_signature"),
                         _fr13_dg_key,
+                    )
+                    _fr13_dh_msweep_run_once(
+                        id(_dg["graph"]),
+                        _dg.get("fixed32_signature"),
                     )
                     from vllm.v1.attention.ops.triton_unified_attention import (
                         _fr13_dfwd_unified_bm8_live_replay,
@@ -21837,7 +22385,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     # runner-up (packing and the FR10_METRICS log both emit
                     # no leaves in spine-only mode), so its topk is skipped.
                     if (
-                        _fr13_dh_m32_live
+                        _fr13_dh_msweep
+                        or _fr13_dh_m32_live
                         or _fr13_dh_m32_prod
                         or (
                             _fr13_dvk > 0
@@ -21986,6 +22535,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         id(_fr13_dg_g),
                         _dg["fixed32_signature"],
                         _fr13_dg_key,
+                    )
+                    _fr13_dh_msweep_run_once(
+                        id(_fr13_dg_g),
+                        _dg["fixed32_signature"],
                     )
                     from vllm.v1.attention.ops.triton_unified_attention import (
                         _fr13_dfwd_unified_bm8_live_replay,
@@ -30720,6 +31273,24 @@ def _fr13_f32_flush_one(request):
                     + "." + str(request["generation"]) + ".json"
                 )
                 _gdn._fr13_draft_head_m32_live_finalize(
+                    events,
+                    {
+                        "action": "final",
+                        "boundary_snapshot_sha256": (
+                            _fr13_f32_flush_hashlib.sha256(
+                                boundary_path.read_bytes()
+                            ).hexdigest()
+                        ),
+                        "complete_work_census_events": len(events),
+                        "events_sha256": _fr13_f32_flush_hashlib.sha256(
+                            canonical_events
+                        ).hexdigest(),
+                        "generation": request["generation"],
+                        "nonce": request["nonce"],
+                        "producer_pid": _FR13_FIXED32_FLUSH_PID,
+                    },
+                )
+                _gdn._fr13_draft_head_msweep_live_finalize(
                     events,
                     {
                         "action": "final",

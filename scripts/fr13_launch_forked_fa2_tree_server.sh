@@ -43,6 +43,9 @@ _FR13_M32_GUARD_NAMES=(
   FR13_DRAFT_HEAD_M32_LIVE_CHAT_TRAFFIC_AUDIT_JSON
   FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON
   FR13_DRAFT_HEAD_M32_TIMING_ARM
+  FR13_DRAFT_HEAD_MSWEEP_LIVE_AB
+  FR13_DRAFT_HEAD_MSWEEP_INSTANCE_ID
+  FR13_DRAFT_HEAD_MSWEEP_LIVE_JSON
   FR13_DRAFT_HEAD_PAD_ROWS
   FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB
   FR13_DRAFT_VOCAB_ROOT
@@ -86,7 +89,8 @@ done
 _FR13_M32_GUARD_ACTIVE=0
 [[ "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_LIVE_AB]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_PRODUCTION]}" == "set:1" \
-   || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_TIMING_ARM]}" == "set:1" ]] \
+   || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_TIMING_ARM]}" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_MSWEEP_LIVE_AB]}" == "set:1" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 _FR13_LOCAL_ENV_SOURCED=0
 if [[ -n "${FR13_FIXED32_MODE:-}" && -f "$REPO/.lumo.local.env" ]]; then
@@ -97,7 +101,8 @@ if [[ -n "${FR13_FIXED32_MODE:-}" && -f "$REPO/.lumo.local.env" ]]; then
 fi
 [[ "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" == "1" \
-   || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" ]] \
+   || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" \
+   || "${FR13_DRAFT_HEAD_MSWEEP_LIVE_AB:-0}" == "1" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 if (( _FR13_M32_GUARD_ACTIVE == 1 )); then
   for _fr13_guard_name in "${_FR13_M32_GUARD_NAMES[@]}"; do
@@ -300,6 +305,13 @@ FR13_DRAFT_HEAD_M32_QUALIFIED_SOURCE_SHA256=$(
   sha256sum scripts/fr10_phase4_patch_vllm_tree_gdn.py | cut -d' ' -f1
 )
 FR13_DRAFT_HEAD_M32_SOURCE_COMMIT=$(git rev-parse HEAD)
+FR13_DRAFT_HEAD_MSWEEP_LIVE_AB=${FR13_DRAFT_HEAD_MSWEEP_LIVE_AB:-0}
+FR13_DRAFT_HEAD_MSWEEP_INSTANCE_ID=${FR13_DRAFT_HEAD_MSWEEP_INSTANCE_ID:-}
+FR13_DRAFT_HEAD_MSWEEP_LIVE_JSON=${FR13_DRAFT_HEAD_MSWEEP_LIVE_JSON:-/logs/fr13_draft_head_msweep.live.json}
+FR13_DRAFT_HEAD_MSWEEP_SOURCE_SHA256=$(
+  sha256sum scripts/fr10_phase4_patch_vllm_tree_gdn.py | cut -d' ' -f1
+)
+FR13_DRAFT_HEAD_MSWEEP_SOURCE_COMMIT=$(git rev-parse HEAD)
 FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}
 FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}
 FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON:-}
@@ -399,6 +411,16 @@ case "$FR13_DRAFT_HEAD_M32_TIMING_ARM" in
   0|1) ;;
   *) echo "FR13_DRAFT_HEAD_M32_TIMING_ARM must be 0 or 1" >&2; exit 2 ;;
 esac
+if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" != "0" \
+      || "$FR13_DRAFT_HEAD_M32_PRODUCTION" != "0" \
+      || "$FR13_DRAFT_HEAD_M32_TIMING_ARM" != "0" ]]; then
+  echo "FR13 draft-head M32 is retired after real-B1 byte rejection" >&2
+  exit 2
+fi
+case "$FR13_DRAFT_HEAD_MSWEEP_LIVE_AB" in
+  0|1) ;;
+  *) echo "FR13_DRAFT_HEAD_MSWEEP_LIVE_AB must be 0 or 1" >&2; exit 2 ;;
+esac
 if [[ -n "${FR13_DRAFT_HEAD_M32_INTERNAL_PRODUCTION_ATTESTED:-}" ]]; then
   echo "FR13 draft-head M32 internal attestation is launcher-private" >&2
   exit 2
@@ -413,6 +435,7 @@ _FR13_DRAFT_HEAD_MODES=0
 [[ "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
 [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
 [[ "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
+[[ "$FR13_DRAFT_HEAD_MSWEEP_LIVE_AB" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
 if (( _FR13_DRAFT_HEAD_MODES > 1 )); then
   echo "FR13 draft-head candidate, diagnostics, and production are mutually exclusive" >&2
   exit 2
@@ -428,6 +451,9 @@ _FR13_DRAFT_HEAD_M32_MODE=0
 _FR13_DRAFT_HEAD_M32_WORKLOAD=$_FR13_DRAFT_HEAD_M32_MODE
 [[ "$FR13_DRAFT_HEAD_M32_TIMING_ARM" == "0" ]] \
   || _FR13_DRAFT_HEAD_M32_WORKLOAD=1
+_FR13_DRAFT_HEAD_FULL_WORKLOAD=$_FR13_DRAFT_HEAD_M32_WORKLOAD
+[[ "$FR13_DRAFT_HEAD_MSWEEP_LIVE_AB" == "0" ]] \
+  || _FR13_DRAFT_HEAD_FULL_WORKLOAD=1
 if (( _FR13_DRAFT_HEAD_PAD_MODE == 1 )); then
   [[ -n "${FR13_FIXED32_MODE:-}" \
      && "$MAX_NUM_SEQS" == "1" \
@@ -437,7 +463,7 @@ if (( _FR13_DRAFT_HEAD_PAD_MODE == 1 )); then
     exit 2
   }
 fi
-if (( _FR13_DRAFT_HEAD_M32_WORKLOAD == 1 )); then
+if (( _FR13_DRAFT_HEAD_FULL_WORKLOAD == 1 )); then
   # The kernel contract is B1-B4, but this credential path remains B1-only.
   # Widening MAX_NUM_SEQS requires a fresh exact4 B4 full-logit graph gate.
   [[ -n "${FR13_FIXED32_MODE:-}" \
@@ -445,7 +471,24 @@ if (( _FR13_DRAFT_HEAD_M32_WORKLOAD == 1 )); then
      && "$FR13_DRAFT_VOCAB_ROOT" == "0" \
      && "${FR13_DRAFT_VOCAB_K:-}" == "0" \
      && -z "${FR13_DRAFT_VOCAB_BLOCKS:-}" ]] || {
-    echo "FR13 full-head M32 requires fixed32 B1 with K=0/root=0 and no draft-vocab block map" >&2
+    echo "FR13 full-head M32 requires fixed32 B1 with K=0/root=0 and no draft-vocab block map; the same geometry is required by the small-M sweep" >&2
+    exit 2
+  }
+fi
+if [[ "$FR13_DRAFT_HEAD_MSWEEP_LIVE_AB" == "1" \
+      && "$FR13_DRAFT_HEAD_MSWEEP_INSTANCE_ID" != "astropy__astropy-12907" ]]; then
+  echo "FR13 draft-head small-M sweep requires the canonical real B1 task" >&2
+  exit 2
+fi
+if [[ "$FR13_DRAFT_HEAD_MSWEEP_LIVE_AB" == "1" ]]; then
+  [[ "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
+     && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+     && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+     && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
+     && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+     && "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" == "0" ]] || {
+    echo "FR13 draft-head small-M sweep must be the only real-B1 diagnostic candidate" >&2
     exit 2
   }
 fi
@@ -844,7 +887,8 @@ if [[ -n "$_fr13_gdn_path_bv_candidate" \
   echo "FR13 fixed32 GDN path-BV diagnostic and production selectors are mutually exclusive" >&2
   exit 2
 fi
-if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" \
+if [[ "$FR13_DRAFT_HEAD_MSWEEP_LIVE_AB" == "1" \
+      || "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" \
       || "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "1" \
       || "$FR13_DRAFT_HEAD_M32_TIMING_ARM" == "1" ]]; then
   [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
@@ -863,7 +907,7 @@ if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" \
      && "$FR13_FIXED32_CUTLASS_WAVE" == "stock" \
      && -z "$FR13_FIXED32_CUTLASS_WAVE_SO" \
      && "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" == "0" ]] || {
-    echo "FR13 draft-head M32 must be the only kernel candidate in its arm" >&2
+    echo "FR13 full-head diagnostic must be the only kernel candidate in its arm" >&2
     exit 2
   }
 fi
@@ -1251,7 +1295,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   _fixed32_expected_draft_vocab_blocks=/workspace/scripts/fr13_dvk_subset_blocks.json
   _fixed32_expected_weight_bytes=32666638208
   _fixed32_expected_weight_floor_ms=119.658015414
-  if (( _FR13_DRAFT_HEAD_M32_WORKLOAD == 1 )); then
+  if (( _FR13_DRAFT_HEAD_FULL_WORKLOAD == 1 )); then
     _fixed32_expected_draft_vocab_k=0
     _fixed32_expected_draft_vocab_blocks=
     _fixed32_expected_weight_bytes=42025179008
@@ -2346,6 +2390,11 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR="$FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR" \
   -e FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_SHA256="$FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_SHA256" \
   -e FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON="$FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON" \
+  -e FR13_DRAFT_HEAD_MSWEEP_LIVE_AB="$FR13_DRAFT_HEAD_MSWEEP_LIVE_AB" \
+  -e FR13_DRAFT_HEAD_MSWEEP_INSTANCE_ID="$FR13_DRAFT_HEAD_MSWEEP_INSTANCE_ID" \
+  -e FR13_DRAFT_HEAD_MSWEEP_LIVE_JSON="$FR13_DRAFT_HEAD_MSWEEP_LIVE_JSON" \
+  -e FR13_DRAFT_HEAD_MSWEEP_SOURCE_SHA256="$FR13_DRAFT_HEAD_MSWEEP_SOURCE_SHA256" \
+  -e FR13_DRAFT_HEAD_MSWEEP_SOURCE_COMMIT="$FR13_DRAFT_HEAD_MSWEEP_SOURCE_COMMIT" \
   -e FR13_FIXED32_TAW_NATIVE_PRECOMPUTE="$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" \
   -e FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION="$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" \
   -e FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_PATH=/logs/fr13_fixed32_taw_native_precompute.production_pass.json \

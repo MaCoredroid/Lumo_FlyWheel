@@ -1,0 +1,19 @@
+{
+  "acceptance_eligible": false,
+  "candidate_rows": [
+    2,
+    4,
+    8,
+    16
+  ],
+  "classification": "real_swe_verified_b1_full_vocab_small_m_byte_diagnostic",
+  "diagnostic_only": true,
+  "gpu_run_completed": false,
+  "performance_measurement": false,
+  "probe_eligible": false,
+  "reference_served": true,
+  "status": "PREPARED_NOT_RUN",
+  "task_ids": [
+    "astropy__astropy-12907"
+  ]
+}
