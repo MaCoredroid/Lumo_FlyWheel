@@ -1,0 +1,19 @@
+{
+  "acceptance_valid": false,
+  "flush_protocol_used": false,
+  "instance_id": "astropy__astropy-12907",
+  "mode": "hydra27_fixed32",
+  "post_metrics": {
+    "bytes": 61695,
+    "path": "/home/mark/lumoFlyWheel-sfwd-state-fusion-timing-b1/output/fr13_b1_sfwd_state_fusion_live_gate_20260801T120458Z/hydra27_fixed32_sfwd_state_fusion_fullvocab_b1_20260801T120458Z/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt",
+    "sha256": "54d65e4401cb080a36784d1cde3e401d465b2d6ae168b43a752962a0df7331df"
+  },
+  "pre_metrics": {
+    "bytes": 59953,
+    "path": "/home/mark/lumoFlyWheel-sfwd-state-fusion-timing-b1/output/fr13_b1_sfwd_state_fusion_live_gate_20260801T120458Z/hydra27_fixed32_sfwd_state_fusion_fullvocab_b1_20260801T120458Z/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt",
+    "sha256": "c8781f8963afafd1b72c75e634e3e8b9d6ad2591548a60084906c8a9c48ab4b8"
+  },
+  "producer_pid": 257,
+  "run_classification": "eager_kernel_byte_diagnostic",
+  "schema": "fr13-fixed32-eager-kernel-diagnostic-task-bracket-v1"
+}
