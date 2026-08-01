@@ -273,6 +273,9 @@ FIXED32_MOUNTED_RUNTIME_PROOF_FILENAME = (
 )
 FIXED32_AGENT_PLACEMENT_SCHEMA = "fr13-fixed32-agent-placement-v1"
 FIXED32_QWEN_CODE_VERSION = "0.19.4"
+FIXED32_QWEN_CAP_CHUNK_RELATIVE_PATH = (
+    "npm/lib/node_modules/@qwen-code/qwen-code/chunks/chunk-BFG6OZN7.js"
+)
 FIXED32_QWEN_SYSTEM_SETTINGS_SHA256 = (
     "8a872a4f6f257f6d7a45f24f42500964f56e1500c5342218b71d02afe4d31fb6"
 )
@@ -326,9 +329,18 @@ FIXED32_QWEN_BUNDLE_TREE = {
                 "98335eda2e0eaa737640cb5d43da032dee457ff7931c429f972ba3ff8a695d3a"
             ),
         },
+        FIXED32_QWEN_CAP_CHUNK_RELATIVE_PATH: {
+            "path": FIXED32_QWEN_CAP_CHUNK_RELATIVE_PATH,
+            "type": "file",
+            "mode": "0644",
+            "bytes": 5_451_144,
+            "sha256": (
+                "d61b71c03180822e875976a721a856144b70ae8b7ff687910021a5cb91a7db89"
+            ),
+        },
     },
     "manifest_sha256": (
-        "2643d1d64c03887654794d9bd00a88fbf9ced7362e034557cf196b8a37e744bc"
+        "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516"
     ),
 }
 FIXED32_CLEARED_AGENT_ENVIRONMENT = [

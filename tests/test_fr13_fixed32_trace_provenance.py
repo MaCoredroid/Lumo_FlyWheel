@@ -33,6 +33,9 @@ def _load_runner() -> Any:
 
 TASK_A = "astropy__astropy-12907"
 TASK_B = "astropy__astropy-13033"
+CAP_CHUNK_PATH = Path(
+    "npm/lib/node_modules/@qwen-code/qwen-code/chunks/chunk-BFG6OZN7.js"
+)
 
 
 def _assistant_event(
@@ -2293,11 +2296,17 @@ def test_fixed32_qwen_identity_pins_full_executable_tree() -> None:
     assert tree["summary"]["entry_count"] == 10_499
     assert tree["summary"]["regular_file_bytes"] == 327_941_291
     assert tree["manifest_sha256"] == (
-        "2643d1d64c03887654794d9bd00a88fb"
-        "f9ced7362e034557cf196b8a37e744bc"
+        "594cac41e2d5ed505e0646f318b263ff"
+        "70e200bcffe97326fe1c042fdc220516"
     )
     assert set(tree["entrypoints"]) == set(
         runner._FIXED32_QWEN_BUNDLE_TREE_REQUIRED_ENTRYPOINTS
+    )
+    assert tree["entrypoints"][
+        runner._FIXED32_QWEN_CAP_CHUNK_RELATIVE_PATH
+    ]["sha256"] == (
+        "d61b71c03180822e875976a721a85614"
+        "4b70ae8b7ff687910021a5cb91a7db89"
     )
 
 
@@ -2437,7 +2446,12 @@ def _write_minimal_qwen_bundle(root: Path) -> Path:
         '{"version":"0.19.4"}\n',
         encoding="ascii",
     )
-    (package_root / "chunks/unpinned.js").write_text(
+    (root / CAP_CHUNK_PATH).write_text(
+        "var TURN_TOOL_CALL_CAP = 256;\n",
+        encoding="ascii",
+    )
+    runtime_file = package_root / "chunks/unpinned.js"
+    runtime_file.write_text(
         "before\n",
         encoding="ascii",
     )
@@ -2450,7 +2464,7 @@ def _write_minimal_qwen_bundle(root: Path) -> Path:
         package_root / "cli-entry.js",
     ):
         executable.chmod(0o755)
-    return package_root / "chunks/unpinned.js"
+    return runtime_file
 
 
 def test_qwen_tree_manifest_covers_previously_unlisted_runtime_file(
@@ -2698,7 +2712,10 @@ def test_fixed32_snapshot_path_is_content_addressed_and_promoted_once(
         snapshot,
     ]
     assert observed == observation
-    assert "$HOME/qwen_agent_bundle" in calls[0][-1]
+    assert (
+        "$HOME/" + runner._FIXED32_QWEN_BUNDLE_REMOTE_BASENAME
+        in calls[0][-1]
+    )
     assert "mv --" in calls[1][-1]
 
 
