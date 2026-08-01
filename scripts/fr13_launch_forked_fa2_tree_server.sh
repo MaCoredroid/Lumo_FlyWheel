@@ -31,6 +31,7 @@ _FR13_CALLER_CUTLASS_WAVE_SO="${FR13_FIXED32_CUTLASS_WAVE_SO+set}:${FR13_FIXED32
 _FR13_CALLER_CUTLASS_WAVE_PRODUCTION="${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION+set}:${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION-}"
 _FR13_CALLER_CUTLASS_WAVE_PASS_JSON="${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON-}"
 _FR13_CALLER_CUTLASS_WAVE_PASS_SHA="${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256-}"
+_FR13_CALLER_SFWD_B4="${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB+set}:${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB-}"
 _FR13_M32_GUARD_NAMES=(
   FR13_DRAFT_HEAD_M32_LIVE_AB
   FR13_DRAFT_HEAD_M32_INSTANCE_ID
@@ -62,6 +63,7 @@ _FR13_M32_GUARD_NAMES=(
   FR13_FIXED32_BATCH_GDN_BV_CANDIDATE
   FR13_FIXED32_CUTLASS_WAVE
   FR13_FIXED32_CUTLASS_WAVE_SO
+  FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
   FR13_FIXED32_ATTRIBUTION_ONLY
   FR13_FIXED32_B1_DIAGNOSTIC
   FR13_FIXED32_MODE
@@ -83,7 +85,8 @@ done
 _FR13_M32_GUARD_ACTIVE=0
 [[ "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_LIVE_AB]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_PRODUCTION]}" == "set:1" \
-   || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_TIMING_ARM]}" == "set:1" ]] \
+   || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_TIMING_ARM]}" == "set:1" \
+   || "$_FR13_CALLER_SFWD_B4" == "set:1" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 _FR13_LOCAL_ENV_SOURCED=0
 if [[ -n "${FR13_FIXED32_MODE:-}" && -f "$REPO/.lumo.local.env" ]]; then
@@ -94,7 +97,8 @@ if [[ -n "${FR13_FIXED32_MODE:-}" && -f "$REPO/.lumo.local.env" ]]; then
 fi
 [[ "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" == "1" \
-   || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" ]] \
+   || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" \
+   || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "1" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 if (( _FR13_M32_GUARD_ACTIVE == 1 )); then
   for _fr13_guard_name in "${_FR13_M32_GUARD_NAMES[@]}"; do
@@ -105,7 +109,7 @@ if (( _FR13_M32_GUARD_ACTIVE == 1 )); then
     fi
     if [[ "$_fr13_guard_after" \
           != "${_FR13_CALLER_M32_GUARD[$_fr13_guard_name]}" ]]; then
-      echo ".lumo.local.env must not override draft-head M32 credentials, selectors, or runtime geometry: $_fr13_guard_name" >&2
+      echo ".lumo.local.env must not override credentialed kernel selectors or runtime geometry: $_fr13_guard_name" >&2
       exit 2
     fi
   done
@@ -1196,6 +1200,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
   _fr13_fixed32_batch_gdn_diagnostic=${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}
   _fr13_fixed32_batch_gdn_graph_diagnostic=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
+  _fr13_fixed32_sfwd_b4_diagnostic=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
   case "$FR13_FIXED32_B1_DIAGNOSTIC" in
     0|1) ;;
     *) echo "FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1" >&2; exit 2 ;;
@@ -1207,6 +1212,10 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   case "$_fr13_fixed32_batch_gdn_graph_diagnostic" in
     0|1) ;;
     *) echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
+  case "$_fr13_fixed32_sfwd_b4_diagnostic" in
+    0|1) ;;
+    *) echo "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
   esac
   _fr13_fixed32_batch_gdn_bv8_timing="${FR13_FIXED32_BATCH_GDN_BV8_TIMING:-0}"
   case "$_fr13_fixed32_batch_gdn_bv8_timing" in
@@ -1222,6 +1231,11 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
           || "$_fr13_fixed32_batch_gdn_graph_diagnostic" == "1" ) \
         && "$MAX_NUM_SEQS" != "4" ]]; then
     echo "fixed32 batched GDN byte diagnostic requires MAX_NUM_SEQS=4" >&2
+    exit 2
+  fi
+  if [[ "$_fr13_fixed32_sfwd_b4_diagnostic" == "1" \
+        && "$MAX_NUM_SEQS" != "4" ]]; then
+    echo "fixed32 SFWD state-fusion byte diagnostic requires MAX_NUM_SEQS=4" >&2
     exit 2
   fi
   if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" && "$MAX_NUM_SEQS" != "1" ]]; then
@@ -1247,6 +1261,9 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     _fixed32_expected_metrics=1
   fi
   if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" ]]; then
+    _fixed32_expected_eager=1
+  fi
+  if [[ "$_fr13_fixed32_sfwd_b4_diagnostic" == "1" ]]; then
     _fixed32_expected_eager=1
   fi
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
@@ -1927,6 +1944,69 @@ else
 fi
 export FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH
 unset _fr13_cutlass_b4_byte_ab
+_fr13_sfwd_b4_byte_ab=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
+_fr13_sfwd_production=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
+case "$_fr13_sfwd_b4_byte_ab:$_fr13_sfwd_production" in
+  0:0|1:0) ;;
+  0:1|1:1)
+    echo "SFWD production remains unavailable until authenticated B1 and exact4 B4 byte prerequisites are bound" >&2
+    exit 2
+    ;;
+  *)
+    echo "FR13 SFWD byte and production selectors must be exactly 0 or 1" >&2
+    exit 2
+    ;;
+esac
+if [[ "$_fr13_sfwd_b4_byte_ab" == "1" ]]; then
+  if [[ -z "${FR13_FIXED32_MODE:-}" \
+        || "$MAX_NUM_SEQS" != "4" \
+        || "${SWE_CONCURRENCY:-}" != "4" \
+        || "${ENFORCE_EAGER:-0}" != "1" \
+        || "${FR13_DRAFT_VOCAB_ROOT:-0}" != "0" \
+        || "${FR13_DRAFT_VOCAB_K:-65536}" != "0" \
+        || "${FR13_NEEDS_ALLOW:-}" != "FR13_DRAFT_VOCAB_K=0" \
+        || "${FR13_RING_EXPORT:-1}" != "1" \
+        || "${FR13_FLAGS_INKERNEL:-1}" != "1" \
+        || "${FR13_TREE_RUNROW_INIT:-1}" != "1" \
+        || "${FR13_TREE_CONV_FUSED:-1}" != "1" \
+        || "${FR13_CONV_WB_BATCHED:-0}" != "1" \
+        || "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" != "1" ]]; then
+    echo "SFWD state-fusion gate requires exact4 B4 full-vocabulary eager fixed32 source staging" >&2
+    exit 2
+  fi
+  if [[ "$_fr13_batch_gdn_diagnostic_count" != "0" \
+        || "$_fr13_batch_gdn_production" != "0" \
+        || -n "$_fr13_batch_gdn_bv_candidate" \
+        || -n "$_fr13_batch_gdn_bv_production" \
+        || -n "$_fr13_gdn_path_bv_candidate" \
+        || -n "$_fr13_gdn_path_bv_production" \
+        || -n "${FR13_FIXED32_CUTLASS_WAVE:-}" \
+        || "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" != "0" \
+        || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" != "0" \
+        || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" != "0" \
+        || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" != "0" \
+        || "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" != "0" \
+        || "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" != "0" ]]; then
+    echo "SFWD state-fusion byte gate must be the only kernel candidate" >&2
+    exit 2
+  fi
+  printf '1\n' > "$LOG_DIR/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
+  chmod 400 "$LOG_DIR/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.live_pass.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl"
+  FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm
+else
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.live_pass.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl" \
+    2>/dev/null || true
+  FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=
+fi
+export FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH
 if [[ "$_fr13_batch_gdn_production" == "1" ]]; then
   [[ -n "${FR13_FIXED32_MODE:-}" ]] \
     || { echo "FR13_FIXED32_BATCH_GDN_PRODUCTION requires FR13_FIXED32_MODE" >&2; exit 2; }
@@ -2239,7 +2319,8 @@ while IFS= read -r _v; do
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_SO" \
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
      || "$_v" == "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH" \
-     || "$_v" == "FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH" ]] && continue
+     || "$_v" == "FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH" \
+     || "$_v" == "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH" ]] && continue
   if [[ -n "${FR13_FIXED32_MODE:-}" \
      && "$_v" == "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION" ]]; then
     continue
@@ -2373,6 +2454,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_BATCH_GDN_BV_PRODUCTION="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" \
   -e FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH="${FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH:-}" \
   -e FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH="${FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH:-}" \
+  -e FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH="${FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH:-}" \
   -e FR13_APC_COMMIT_TO_RUNNING_ROW="${FR13_APC_COMMIT_TO_RUNNING_ROW:-1}" \
   -e FR13_TREE_RUNROW_INIT="${FR13_TREE_RUNROW_INIT:-1}" \
   -e FR13_COMMITTER_GRAPH="${FR13_COMMITTER_GRAPH:-1}" \

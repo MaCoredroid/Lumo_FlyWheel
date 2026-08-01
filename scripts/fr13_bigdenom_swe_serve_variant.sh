@@ -36,6 +36,7 @@ KIND=${2:-tail6}
 SUBSET=${3:?subset json}
 FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
 FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
+FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
 FR13_FIXED32_COMMITTER_LAYER_BATCH=${FR13_FIXED32_COMMITTER_LAYER_BATCH:-0}
 case "$FR13_FIXED32_B1_DIAGNOSTIC" in
   0|1) ;;
@@ -45,14 +46,19 @@ case "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"; exit 2 ;;
 esac
+case "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" in
+  0|1) ;;
+  *) echo "FAIL: FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"; exit 2 ;;
+esac
 case "$FR13_FIXED32_COMMITTER_LAYER_BATCH" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_COMMITTER_LAYER_BATCH must be exactly 0 or 1"; exit 2 ;;
 esac
 export FR13_FIXED32_B1_DIAGNOSTIC FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB \
-  FR13_FIXED32_COMMITTER_LAYER_BATCH
+  FR13_FIXED32_COMMITTER_LAYER_BATCH FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
 _fixed32_eager_kernel_diagnostic=0
 if [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "1" \
+      || "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_byte_ab" ]]; then
@@ -380,6 +386,11 @@ if [[ "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" == "1" \
   echo "FAIL: FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=1 requires a fixed32 arm"
   exit 2
 fi
+if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" \
+      && -z "$FIXED32_MODE" ]]; then
+  echo "FAIL: FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=1 requires a fixed32 arm"
+  exit 2
+fi
 
 if [[ -n "$FIXED32_MODE" ]]; then
   # Fixed32 must never operate on a reusable Docker name. The launcher-created
@@ -444,6 +455,14 @@ if [[ -n "$FIXED32_MODE" ]]; then
     [[ "$MAX_NUM_SEQS_OVR" == "4" && "$SWE_CONCURRENCY" == "4" ]] \
       || {
         echo "FAIL: fixed32 graph byte diagnostic requires MAX_NUM_SEQS_OVR=4 and SWE_CONCURRENCY=4"
+        exit 2
+      }
+  fi
+  if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" ]]; then
+    [[ "$MAX_NUM_SEQS_OVR" == "4" && "$SWE_CONCURRENCY" == "4" \
+       && "$FR13_FIXED32_B1_DIAGNOSTIC" == "0" ]] \
+      || {
+        echo "FAIL: SFWD state-fusion byte diagnostic requires exact B4 concurrency"
         exit 2
       }
   fi
@@ -1546,6 +1565,23 @@ elif [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_byte_ab" ]]
     exit 2
   }
 fi
+if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" ]]; then
+  [[ -n "$FIXED32_MODE" \
+     && "$FR13_FIXED32_B1_DIAGNOSTIC" == "0" \
+     && "$MAX_NUM_SEQS_OVR" == "4" \
+     && "$SWE_CONCURRENCY" == "4" ]] || {
+    echo "FAIL: fixed32 SFWD state-fusion byte diagnostic requires exact4 B4"
+    exit 2
+  }
+  [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
+     && "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" == "0" \
+     && "${FR13_FIXED32_CUTLASS_WAVE:-}" == "" \
+     && "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "0" \
+     && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" ]] || {
+    echo "FAIL: fixed32 SFWD state-fusion byte diagnostic must be exclusive"
+    exit 2
+  }
+fi
 if [[ "$LAUNCHER" == "locked" ]]; then
   CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.78}" MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
   FR13_RUN_DIR="$ARMDIR_ABS" LOG_DIR="$ARMDIR_ABS/logs" \
@@ -1698,7 +1734,8 @@ PY
     "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" \
     "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" \
     "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" \
-    "${FR13_FIXED32_CUTLASS_WAVE:-stock}" <<'PY'
+    "${FR13_FIXED32_CUTLASS_WAVE:-stock}" \
+    "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" <<'PY'
 import json
 import subprocess
 import sys
@@ -1717,6 +1754,7 @@ attribution_only_text = sys.argv[7]
 batch_gdn_byte_ab_text = sys.argv[8]
 batch_gdn_graph_byte_ab_text = sys.argv[9]
 cutlass_wave = sys.argv[10]
+sfwd_b4_byte_ab_text = sys.argv[11]
 runtime = contract.validate_runtime_attestation(
     json.loads(runtime_path.read_text(encoding="utf-8"))
 )
@@ -1739,6 +1777,10 @@ if batch_gdn_graph_byte_ab_text not in {"0", "1"}:
     raise SystemExit(
         "fixed32 batch-GDN graph byte diagnostic selector must be exactly 0 or 1"
     )
+if sfwd_b4_byte_ab_text not in {"0", "1"}:
+    raise SystemExit(
+        "fixed32 SFWD B4 byte diagnostic selector must be exactly 0 or 1"
+    )
 if cutlass_wave not in {
     "stock",
     "streamk_coop128_byte_ab",
@@ -1757,6 +1799,7 @@ try:
         eager_diagnostic=(
             batch_gdn_byte_ab_text == "1"
             or cutlass_wave == "persistent_b4_m128_byte_ab"
+            or sfwd_b4_byte_ab_text == "1"
         ),
         graph_diagnostic=batch_gdn_graph_byte_ab_text == "1",
         streamk_eager_diagnostic=(

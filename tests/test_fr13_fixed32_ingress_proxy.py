@@ -625,6 +625,68 @@ def test_engine_middleware_arms_cutlass_b4_from_authenticated_exact4_request(
     assert stat.S_IMODE(info.st_mode) == 0o400
 
 
+def test_engine_middleware_arms_sfwd_only_after_all_exact4_are_authenticated(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret_path = tmp_path / "secret.json"
+    _task_seed, engine_bearer = _write_secret(secret_path)
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    enabled = logs / "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
+    enabled.write_bytes(b"1\n")
+    enabled.chmod(0o400)
+    marker = logs / "fr13_fixed32_sfwd_state_fusion.real_event.arm"
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH", str(marker)
+    )
+    observed: list[bytes | None] = []
+
+    async def inner(scope: Any, receive: Any, send: Any) -> None:
+        observed.append(marker.read_bytes() if marker.exists() else None)
+        await receive()
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"{}", "more_body": False})
+
+    middleware = Fixed32EngineIngressMiddleware(
+        inner,
+        secret_file=secret_path,
+        canonical_task_ids=EXACT4_TASK_IDS,
+        ledger_path=tmp_path / "engine.jsonl",
+    )
+    middleware.ingress.begin(_begin_payload(EXACT4_TASK_IDS))
+    for index, task_id in enumerate(EXACT4_TASK_IDS):
+        wire_id = f"fr13-chat-{index + 1:032x}"
+        status, payload = asyncio.run(
+            _asgi_call(
+                middleware,
+                path="/v1/chat/completions",
+                body=b'{"messages":[]}',
+                headers=[
+                    (b"authorization", f"Bearer {engine_bearer}".encode()),
+                    (
+                        FIXED32_TASK_KEY_HEADER.lower().encode(),
+                        fixed32_task_key_id(task_id).encode(),
+                    ),
+                    (b"x-request-id", wire_id.encode()),
+                ],
+            )
+        )
+        assert status == 200
+        assert payload == {}
+
+    expected = (
+        "\n".join(f"swe_verified:{task_id}" for task_id in EXACT4_TASK_IDS)
+        + "\n"
+    ).encode("ascii")
+    assert observed == [None, None, None, expected]
+    assert marker.read_bytes() == expected
+    info = os.lstat(marker)
+    assert stat.S_ISREG(info.st_mode)
+    assert info.st_nlink == 1
+    assert stat.S_IMODE(info.st_mode) == 0o400
+
+
 def test_engine_middleware_rejects_inexact_or_ambiguous_cutlass_b4_arm(
     tmp_path: Path,
 ) -> None:

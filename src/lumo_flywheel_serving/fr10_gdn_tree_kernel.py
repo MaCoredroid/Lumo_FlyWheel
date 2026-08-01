@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -1057,11 +1058,25 @@ _FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT = (
 _FR13_FIXED32_SFWD_STATE_FUSION_PASS = (
     "/logs/fr13_fixed32_sfwd_state_fusion.live_pass.json"
 )
+_FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_IDS = (
+    "astropy__astropy-12907",
+    "astropy__astropy-13033",
+    "astropy__astropy-13236",
+    "astropy__astropy-13398",
+)
+_FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_MARKERS = tuple(
+    f"swe_verified:{task_id}"
+    for task_id in _FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_IDS
+)
+_FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_SUBSET_SHA256 = (
+    "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+)
 _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_STATE = {
-    "task_marker": None,
+    "task_markers": None,
     "batch": None,
     "passed": set(),
     "attempts": {},
+    "failed": False,
 }
 _FR13_FIXED32_BATCH_GDN_BYTE_AB_STATE = {
     "passed": set(),
@@ -1230,13 +1245,66 @@ def fixed32_sfwd_state_fusion_contract(
     }
 
 
+def _fr13_fixed32_sfwd_state_fusion_exact4_markers(
+    path: str,
+) -> tuple[str, ...]:
+    """Read the engine-published canonical exact4 marker set fail-closed."""
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(
+        os, "O_NOFOLLOW", 0
+    )
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as error:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION exact4 marker is unavailable"
+        ) from error
+    try:
+        info = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_nlink != 1
+            or stat.S_IMODE(info.st_mode) != 0o400
+            or info.st_size <= 0
+            or info.st_size > 1024
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_SFWD_STATE_FUSION exact4 marker identity is invalid"
+            )
+        chunks: list[bytes] = []
+        remaining = info.st_size
+        while remaining:
+            chunk = os.read(descriptor, remaining)
+            if not chunk:
+                raise RuntimeError(
+                    "FR13_FIXED32_SFWD_STATE_FUSION exact4 marker was truncated"
+                )
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            raise RuntimeError(
+                "FR13_FIXED32_SFWD_STATE_FUSION exact4 marker changed while reading"
+            )
+        raw = b"".join(chunks)
+    finally:
+        os.close(descriptor)
+    expected = (
+        "\n".join(_FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_MARKERS) + "\n"
+    ).encode("ascii")
+    if raw != expected:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION requires the canonical exact4 "
+            "authenticated task markers"
+        )
+    return _FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_MARKERS
+
+
 def fixed32_sfwd_state_fusion_gate_control(
     *,
     environ=None,
     enabled_path: str | None = None,
     event_path: str | None = None,
-) -> tuple[bool, str | None]:
-    """Resolve the default-off, authenticated real-event byte-gate arm."""
+) -> tuple[bool, tuple[str, ...] | None]:
+    """Resolve the default-off authenticated exact4 B4 byte-gate arm."""
     env = os.environ if environ is None else environ
     raw = str(env.get("FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB", ""))
     if raw not in ("", "0", "1"):
@@ -1256,14 +1324,23 @@ def fixed32_sfwd_state_fusion_gate_control(
         )
     )
     armed = raw == "1" or os.path.exists(enabled)
-    if not armed or not os.path.exists(event):
+    if not armed:
+        return False, None
+    state = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_STATE
+    if bool(state.get("failed")):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION byte gate previously mismatched"
+        )
+    if len(state.get("passed", ())) == 48:
+        return True, None
+    if not os.path.exists(event):
         return armed, None
     if _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES:
         raise RuntimeError(
             "FR13_FIXED32_SFWD_STATE_FUSION byte gate requires an exact "
             "fixed32 runtime"
         )
-    return True, _fr13_fixed32_batch_gdn_real_event_marker(event)
+    return True, _fr13_fixed32_sfwd_state_fusion_exact4_markers(event)
 
 
 def _fr13_resolve_fixed32_batch_gdn_bv(
@@ -2597,9 +2674,14 @@ def _fr13_fixed32_sfwd_state_fusion_emit(record: dict[str, object]) -> None:
 
 
 def _fr13_fixed32_sfwd_state_fusion_pass_emit(
-    *, task_marker: str, batch: int, layer_keys: set[int]
+    *, task_markers: tuple[str, ...], batch: int, layer_keys: set[int]
 ) -> None:
-    if len(layer_keys) != 48:
+    if (
+        len(layer_keys) != 48
+        or int(batch) != 4
+        or task_markers
+        != _FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_MARKERS
+    ):
         return
     path = os.environ.get(
         "FR13_FIXED32_SFWD_STATE_FUSION_PASS_PATH",
@@ -2609,26 +2691,52 @@ def _fr13_fixed32_sfwd_state_fusion_pass_emit(
     if parent:
         os.makedirs(parent, exist_ok=True)
     payload = {
-        "schema": "fr13.fixed32.sfwd_state_fusion.live_pass.v1",
+        "schema": "fr13.fixed32.sfwd_state_fusion.b4_source_pass.v1",
         "status": "byte_pass_source_only",
+        "run_classification": (
+            "real_swe_verified_exact4_b4_byte_diagnostic"
+        ),
         "candidate": _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID,
         "source_sha256": _fr13_fixed32_batch_gdn_source_sha256(),
-        "task_marker": task_marker,
+        "task_set": "canonical real SWE-Verified exact4 B4",
+        "task_count": 4,
+        "task_ids": list(
+            _FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_IDS
+        ),
+        "task_markers": list(task_markers),
+        "subset_sha256": (
+            _FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_SUBSET_SHA256
+        ),
+        "real_task_authenticated": True,
         "batch": int(batch),
+        "batch_size": 4,
+        "concurrency": 4,
         "layer_count": 48,
         "layer_keys": [f"0x{key:x}" for key in sorted(layer_keys)],
         "physical_rows_per_request": 32,
+        "physical_rows_total": 128,
+        "draft_vocab_root": 0,
+        "draft_vocab_k": 0,
         "candidate_conv_launches_per_layer": 1,
         "gdn_level_path_programs": [int(batch), 11 * int(batch)],
         "gdn_physical_launches_per_layer": 2,
         "gdn_ring_export_unchanged": True,
         "gdn_flags_export_unchanged": True,
         "compared_byte_surfaces": ["conv_out", "commit_source_stage"],
+        "comparison_records": 48,
+        "candidate_shadow_only": True,
+        "served_result": "reference",
         "reference_always_served": True,
+        "probe_inputs": False,
+        "synthetic_inputs": False,
+        "acceptance_valid": False,
+        "timing_eligible": False,
+        "floor_acceptance_eligible": False,
+        "production_enabled": False,
         "production_eligible": False,
         "production_blocker": (
-            "source-only candidate requires graph byte qualification and "
-            "matched exact4 full-wall timing"
+            "requires separately authenticated B1 and exact4 B4 byte PASS "
+            "artifacts bound to the same candidate kernel"
         ),
     }
     temporary = f"{path}.tmp.{os.getpid()}"
@@ -2640,7 +2748,7 @@ def _fr13_fixed32_sfwd_state_fusion_pass_emit(
 
 def fixed32_sfwd_state_fusion_byte_gate(
     *,
-    task_marker: str,
+    task_markers: tuple[str, ...],
     layer_key: int,
     batch_size: int,
     reference_out: torch.Tensor,
@@ -2658,35 +2766,37 @@ def fixed32_sfwd_state_fusion_byte_gate(
         raise RuntimeError(
             "FR13_FIXED32_SFWD_STATE_FUSION byte gate is eager-only"
         )
-    prefix = "swe_verified:"
-    task_id = (
-        task_marker[len(prefix):]
-        if isinstance(task_marker, str) and task_marker.startswith(prefix)
-        else ""
-    )
-    if not task_id or any(
-        character
-        not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
-        for character in task_id
-    ):
+    markers = tuple(task_markers) if isinstance(task_markers, tuple) else ()
+    if markers != _FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_MARKERS:
         raise RuntimeError(
             "FR13_FIXED32_SFWD_STATE_FUSION requires an authenticated "
-            "SWE-Verified task marker"
+            "canonical exact4 SWE-Verified marker set"
         )
     batch = int(batch_size)
+    if batch != 4:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION byte gate requires exact B4"
+        )
     fixed32_sfwd_state_fusion_contract(
         batch, tree_rows=32, conv_width=4, conv_state_len=12
     )
     state = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_STATE
-    if state["task_marker"] is None:
-        state["task_marker"] = task_marker
+    if state["task_markers"] is None:
+        state["task_markers"] = markers
         state["batch"] = batch
-    elif state["task_marker"] != task_marker or int(state["batch"]) != batch:
+    elif tuple(state["task_markers"]) != markers or int(state["batch"]) != batch:
         raise RuntimeError(
-            "FR13_FIXED32_SFWD_STATE_FUSION cannot combine task markers or "
-            "batch sizes in one process"
+            "FR13_FIXED32_SFWD_STATE_FUSION marker set or batch changed"
+        )
+    if bool(state.get("failed")):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION byte gate previously mismatched"
         )
     key = int(layer_key)
+    if key in state["passed"]:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION repeated a qualified layer"
+        )
     attempt = int(state["attempts"].get(key, 0)) + 1
     state["attempts"][key] = attempt
     comparisons = [
@@ -2706,7 +2816,8 @@ def fixed32_sfwd_state_fusion_byte_gate(
     record = {
         "status": "pass" if passed else "mismatch_reference_served",
         "candidate": _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID,
-        "task_marker": task_marker,
+        "task_markers": list(markers),
+        "real_task_authenticated": True,
         "batch": batch,
         "layer_key": f"0x{key:x}",
         "attempt": attempt,
@@ -2717,19 +2828,24 @@ def fixed32_sfwd_state_fusion_byte_gate(
         "comparisons": comparisons,
         "first_nonzero": first_nonzero,
         "zero_diff": passed,
+        "candidate_shadow_only": True,
+        "served_result": "reference",
         "reference_always_served": True,
+        "acceptance_valid": False,
+        "timing_eligible": False,
         "production_eligible": False,
     }
     _fr13_fixed32_sfwd_state_fusion_emit(record)
     if passed:
         state["passed"].add(key)
         _fr13_fixed32_sfwd_state_fusion_pass_emit(
-            task_marker=task_marker,
+            task_markers=markers,
             batch=batch,
             layer_keys=set(state["passed"]),
         )
     else:
         state["passed"].discard(key)
+        state["failed"] = True
     return record
 
 

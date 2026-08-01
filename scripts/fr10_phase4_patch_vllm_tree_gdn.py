@@ -9761,17 +9761,18 @@ def _fr13_conv_subop_mab(
                             tree_n=_fr10_tree_n,
                         )
                     _fr13_sfwd_gate_enabled = False
-                    _fr13_sfwd_task_marker = None
+                    _fr13_sfwd_task_markers = None
                     _fr13_sfwd_candidate_out = None
                     _fr13_sfwd_candidate_stage = None
                     if _FR13_FIXED32_MODE:
                         (
                             _fr13_sfwd_gate_enabled,
-                            _fr13_sfwd_task_marker,
+                            _fr13_sfwd_task_markers,
                         ) = fixed32_sfwd_state_fusion_gate_control()
                     if (
                         _fr13_sfwd_gate_enabled
-                        and _fr13_sfwd_task_marker is not None
+                        and _fr13_sfwd_task_markers is not None
+                        and int(attn_metadata.num_spec_decodes) == 4
                     ):
                         # Source-only/default-off qualification: run the fused
                         # conv/state producer first on the authenticated real
@@ -10491,7 +10492,7 @@ def _fr13_conv_subop_mab(
                             )
                         _fr13_sfwd_record = (
                             fixed32_sfwd_state_fusion_byte_gate(
-                                task_marker=_fr13_sfwd_task_marker,
+                                task_markers=_fr13_sfwd_task_markers,
                                 layer_key=int(conv_weights.data_ptr()),
                                 batch_size=int(
                                     attn_metadata.num_spec_decodes

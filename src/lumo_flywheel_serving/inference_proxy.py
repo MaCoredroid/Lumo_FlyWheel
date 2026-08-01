@@ -50,6 +50,9 @@ FIXED32_BATCH_GDN_REAL_EVENT_ARM_ENV = (
 FIXED32_CUTLASS_B4_REAL_EVENT_ARM_ENV = (
     "FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH"
 )
+FIXED32_SFWD_B4_REAL_EVENT_ARM_ENV = (
+    "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH"
+)
 
 FIXED32_INGRESS_SECRETS_SCHEMA = "fr13-fixed32-ingress-secrets-v1"
 FIXED32_INGRESS_LEDGER_SCHEMA = "fr13.fixed32.ingress-ledger-record.v1"
@@ -78,6 +81,12 @@ _FIXED32_CUTLASS_B4_REAL_EVENT_ARM_NAME = (
     "fr13_fixed32_cutlass_b4_byte_ab.real_event.arm"
 )
 _FIXED32_CUTLASS_B4_ENABLED_NAME = "fr13_fixed32_cutlass_b4_byte_ab.enabled"
+_FIXED32_SFWD_B4_REAL_EVENT_ARM_NAME = (
+    "fr13_fixed32_sfwd_state_fusion.real_event.arm"
+)
+_FIXED32_SFWD_B4_ENABLED_NAME = (
+    "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
+)
 _FIXED32_BATCH_GDN_EXACT4_TASK_IDS = (
     "astropy__astropy-12907",
     "astropy__astropy-13033",
@@ -1267,6 +1276,7 @@ class Fixed32EngineIngress:
         ledger_path: str | Path,
         batch_gdn_real_event_arm: str | Path | None = None,
         cutlass_b4_real_event_arm: str | Path | None = None,
+        sfwd_b4_real_event_arm: str | Path | None = None,
     ) -> None:
         self.secrets = load_fixed32_ingress_secrets(secret_file)
         self.task_ids = parse_fixed32_task_ids(canonical_task_ids)
@@ -1305,10 +1315,18 @@ class Fixed32EngineIngress:
         self.cutlass_b4_real_event_arm = self._validate_cutlass_b4_real_event_arm(
             cutlass_b4_real_event_arm
         )
-        if (
-            self.batch_gdn_real_event_arm is not None
-            and self.cutlass_b4_real_event_arm is not None
-        ):
+        self._sfwd_b4_published_marker: bytes | None = None
+        self.sfwd_b4_real_event_arm = self._validate_sfwd_b4_real_event_arm(
+            sfwd_b4_real_event_arm
+        )
+        if sum(
+            arm is not None
+            for arm in (
+                self.batch_gdn_real_event_arm,
+                self.cutlass_b4_real_event_arm,
+                self.sfwd_b4_real_event_arm,
+            )
+        ) > 1:
             raise Fixed32IngressError(
                 "fixed32 real-event arms are mutually exclusive"
             )
@@ -1400,6 +1418,23 @@ class Fixed32EngineIngress:
             required_mode=required_mode,
         )
 
+    @classmethod
+    def _read_sfwd_b4_sidecar(
+        cls,
+        path: Path,
+        *,
+        label: str,
+        max_bytes: int,
+        required_mode: int | None = None,
+    ) -> bytes:
+        return cls._read_real_event_sidecar(
+            path,
+            gate_label="SFWD B4",
+            label=label,
+            max_bytes=max_bytes,
+            required_mode=required_mode,
+        )
+
     def _validate_batch_gdn_enabled_sidecar(self, path: Path) -> None:
         enabled_paths = tuple(
             path.with_name(name)
@@ -1437,6 +1472,22 @@ class Fixed32EngineIngress:
         ) != b"1\n":
             raise Fixed32IngressError(
                 "fixed32 CUTLASS B4 enabled sidecar is invalid"
+            )
+
+    def _validate_sfwd_b4_enabled_sidecar(self, path: Path) -> None:
+        enabled = path.with_name(_FIXED32_SFWD_B4_ENABLED_NAME)
+        if not os.path.lexists(enabled):
+            raise Fixed32IngressError(
+                "fixed32 SFWD B4 requires its enabled sidecar"
+            )
+        if self._read_sfwd_b4_sidecar(
+            enabled,
+            label=f"enabled sidecar {enabled.name}",
+            max_bytes=2,
+            required_mode=0o400,
+        ) != b"1\n":
+            raise Fixed32IngressError(
+                "fixed32 SFWD B4 enabled sidecar is invalid"
             )
 
     def _validate_batch_gdn_real_event_arm(
@@ -1511,6 +1562,43 @@ class Fixed32EngineIngress:
             ) from exc
         raise Fixed32IngressError(
             "fixed32 CUTLASS B4 real-event arm must be new at engine boot"
+        )
+
+    def _validate_sfwd_b4_real_event_arm(
+        self, raw_path: str | Path | None
+    ) -> Path | None:
+        if raw_path is None or not os.fspath(raw_path):
+            return None
+        if self.task_ids != _FIXED32_BATCH_GDN_EXACT4_TASK_IDS:
+            raise Fixed32IngressError(
+                "fixed32 SFWD B4 real-event arm requires canonical exact4 tasks"
+            )
+        path = Path(raw_path)
+        if not path.is_absolute() or path.name != _FIXED32_SFWD_B4_REAL_EVENT_ARM_NAME:
+            raise Fixed32IngressError(
+                "fixed32 SFWD B4 real-event arm path is invalid"
+            )
+        try:
+            parent_info = os.lstat(path.parent)
+        except OSError as exc:
+            raise Fixed32IngressError(
+                "fixed32 SFWD B4 real-event arm parent is unavailable"
+            ) from exc
+        if not stat.S_ISDIR(parent_info.st_mode) or stat.S_ISLNK(parent_info.st_mode):
+            raise Fixed32IngressError(
+                "fixed32 SFWD B4 real-event arm parent must be a directory"
+            )
+        self._validate_sfwd_b4_enabled_sidecar(path)
+        try:
+            os.lstat(path)
+        except FileNotFoundError:
+            return path
+        except OSError as exc:
+            raise Fixed32IngressError(
+                "fixed32 SFWD B4 real-event arm cannot be inspected"
+            ) from exc
+        raise Fixed32IngressError(
+            "fixed32 SFWD B4 real-event arm must be new at engine boot"
         )
 
     def _arm_batch_gdn_real_event(self, task_key_id: str) -> None:
@@ -1663,6 +1751,94 @@ class Fixed32EngineIngress:
             )
         self._cutlass_b4_published_marker = marker
 
+    def _arm_sfwd_b4_real_event(self, task_key_id: str) -> None:
+        """Publish exact4 only after every task has an authenticated request."""
+        path = self.sfwd_b4_real_event_arm
+        if path is None:
+            return
+        self._validate_sfwd_b4_enabled_sidecar(path)
+        authenticated = {
+            key_id
+            for key_id, counts in self._task_counts.items()
+            if counts["accepted_engine_requests"] > 0
+        }
+        authenticated.add(task_key_id)
+        if authenticated != self.task_key_ids:
+            return
+        marker = (
+            "\n".join(
+                f"swe_verified:{task_id}" for task_id in self.task_ids
+            )
+            + "\n"
+        ).encode("ascii")
+        if self._sfwd_b4_published_marker is not None:
+            published = self._read_sfwd_b4_sidecar(
+                path,
+                label="real-event arm",
+                max_bytes=1024,
+                required_mode=0o400,
+            )
+            if published != self._sfwd_b4_published_marker:
+                raise Fixed32IngressError(
+                    "fixed32 SFWD B4 real-event arm changed after publication"
+                )
+            return
+        temporary = path.with_name(
+            f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+        )
+        flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        try:
+            descriptor = os.open(temporary, flags, 0o400)
+            try:
+                view = memoryview(marker)
+                while view:
+                    written = os.write(descriptor, view)
+                    if written <= 0:
+                        raise OSError("short write")
+                    view = view[written:]
+                os.fchmod(descriptor, 0o400)
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            try:
+                os.link(temporary, path, follow_symlinks=False)
+            except FileExistsError as exc:
+                raise Fixed32IngressError(
+                    "fixed32 SFWD B4 real-event arm existed before publication"
+                ) from exc
+        except Fixed32IngressError:
+            raise
+        except OSError as exc:
+            raise Fixed32IngressError(
+                "fixed32 SFWD B4 real-event arm publication failed"
+            ) from exc
+        finally:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                raise Fixed32IngressError(
+                    "fixed32 SFWD B4 real-event temporary cleanup failed"
+                ) from exc
+        published = self._read_sfwd_b4_sidecar(
+            path,
+            label="real-event arm",
+            max_bytes=1024,
+            required_mode=0o400,
+        )
+        if published != marker:
+            raise Fixed32IngressError(
+                "fixed32 SFWD B4 real-event arm publication is invalid"
+            )
+        self._sfwd_b4_published_marker = marker
+
     def is_engine_bearer(self, bearer: str | None) -> bool:
         return isinstance(bearer, str) and hmac.compare_digest(
             bearer, self.secrets.engine_bearer
@@ -1756,6 +1932,7 @@ class Fixed32EngineIngress:
             # passed admission, and before vLLM can execute that request.
             self._arm_batch_gdn_real_event(task_key_id)
             self._arm_cutlass_b4_real_event(task_key_id)
+            self._arm_sfwd_b4_real_event(task_key_id)
             self.ledger.append(
                 phase="campaign",
                 event="request_accepted",
@@ -1858,6 +2035,7 @@ class Fixed32EngineIngressMiddleware:
         ledger_path: str | Path | None = None,
         batch_gdn_real_event_arm: str | Path | None = None,
         cutlass_b4_real_event_arm: str | Path | None = None,
+        sfwd_b4_real_event_arm: str | Path | None = None,
         max_body_bytes: int | None = None,
     ) -> None:
         self.app = app
@@ -1873,6 +2051,10 @@ class Fixed32EngineIngressMiddleware:
         if cutlass_b4_real_event_arm is None:
             cutlass_b4_real_event_arm = os.environ.get(
                 FIXED32_CUTLASS_B4_REAL_EVENT_ARM_ENV
+            )
+        if sfwd_b4_real_event_arm is None:
+            sfwd_b4_real_event_arm = os.environ.get(
+                FIXED32_SFWD_B4_REAL_EVENT_ARM_ENV
             )
         if not secret_file or not canonical_task_ids or not ledger_path:
             raise Fixed32IngressError("fixed32 engine ingress configuration is incomplete")
@@ -1893,6 +2075,7 @@ class Fixed32EngineIngressMiddleware:
             ledger_path=ledger_path,
             batch_gdn_real_event_arm=batch_gdn_real_event_arm,
             cutlass_b4_real_event_arm=cutlass_b4_real_event_arm,
+            sfwd_b4_real_event_arm=sfwd_b4_real_event_arm,
         )
 
     @staticmethod

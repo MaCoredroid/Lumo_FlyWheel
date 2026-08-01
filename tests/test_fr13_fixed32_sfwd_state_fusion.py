@@ -188,14 +188,18 @@ def test_gate_control_requires_an_authenticated_real_event(
     ) == (True, None)
 
     event.write_text("probe:synthetic\n", encoding="ascii")
-    with pytest.raises(RuntimeError, match="swe_verified:<task_id>"):
+    event.chmod(0o400)
+    with pytest.raises(RuntimeError, match="canonical exact4"):
         kernel.fixed32_sfwd_state_fusion_gate_control(
             environ={}, enabled_path=str(enabled), event_path=str(event)
         )
-    event.write_text("swe_verified:astropy__astropy-12907\n", encoding="ascii")
+    event.chmod(0o600)
+    markers = kernel._FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_MARKERS
+    event.write_text("\n".join(markers) + "\n", encoding="ascii")
+    event.chmod(0o400)
     assert kernel.fixed32_sfwd_state_fusion_gate_control(
         environ={}, enabled_path=str(enabled), event_path=str(event)
-    ) == (True, "swe_verified:astropy__astropy-12907")
+    ) == (True, markers)
 
 
 def test_byte_gate_is_strict_and_never_marks_candidate_production(
@@ -208,16 +212,24 @@ def test_byte_gate_is_strict_and_never_marks_candidate_production(
     monkeypatch.setattr(
         kernel,
         "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_STATE",
-        {"task_marker": None, "batch": None, "passed": set(), "attempts": {}},
+        {
+            "task_markers": None,
+            "batch": None,
+            "passed": set(),
+            "attempts": {},
+            "failed": False,
+        },
     )
     monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
 
     reference_out = torch.tensor([[1.0, 2.0]], dtype=torch.bfloat16)
     reference_stage = torch.tensor([[3.0, 4.0]], dtype=torch.bfloat16)
     equal = kernel.fixed32_sfwd_state_fusion_byte_gate(
-        task_marker="swe_verified:astropy__astropy-12907",
+        task_markers=(
+            kernel._FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_MARKERS
+        ),
         layer_key=17,
-        batch_size=1,
+        batch_size=4,
         reference_out=reference_out,
         candidate_out=reference_out.clone(),
         reference_source_stage=reference_stage,
@@ -231,9 +243,11 @@ def test_byte_gate_is_strict_and_never_marks_candidate_production(
     mismatch_stage = reference_stage.clone()
     mismatch_stage[0, 0] = 5.0
     mismatch = kernel.fixed32_sfwd_state_fusion_byte_gate(
-        task_marker="swe_verified:astropy__astropy-12907",
+        task_markers=(
+            kernel._FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_MARKERS
+        ),
         layer_key=18,
-        batch_size=1,
+        batch_size=4,
         reference_out=reference_out,
         candidate_out=reference_out.clone(),
         reference_source_stage=reference_stage,
@@ -246,12 +260,22 @@ def test_byte_gate_is_strict_and_never_marks_candidate_production(
     assert 18 not in kernel._FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_STATE["passed"]
 
     kernel._fr13_fixed32_sfwd_state_fusion_pass_emit(
-        task_marker="swe_verified:astropy__astropy-12907",
-        batch=1,
+        task_markers=(
+            kernel._FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_MARKERS
+        ),
+        batch=4,
         layer_keys=set(range(48)),
     )
     payload = json.loads(pass_path.read_text(encoding="ascii"))
     assert payload["status"] == "byte_pass_source_only"
+    assert payload["run_classification"] == (
+        "real_swe_verified_exact4_b4_byte_diagnostic"
+    )
+    assert payload["task_markers"] == list(
+        kernel._FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_MARKERS
+    )
+    assert payload["batch_size"] == 4
+    assert payload["concurrency"] == 4
     assert payload["layer_count"] == 48
     assert payload["reference_always_served"] is True
     assert payload["production_eligible"] is False
@@ -278,6 +302,8 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     assert "source_flat.detach().cpu().tolist()" in launcher
     assert "launch_fixed32_sfwd_state_fusion(" in patcher
     assert "fixed32_sfwd_state_fusion_byte_gate(" in patcher
+    assert "task_markers=_fr13_sfwd_task_markers" in patcher
+    assert "int(attn_metadata.num_spec_decodes) == 4" in patcher
     assert "No candidate bytes become model inputs in this arm." in patcher
     assert "mixed_qkv_spec = _fr10_tree_conv_out" in patcher
     assert "mixed_qkv_spec = _fr13_sfwd_candidate_out" not in patcher
