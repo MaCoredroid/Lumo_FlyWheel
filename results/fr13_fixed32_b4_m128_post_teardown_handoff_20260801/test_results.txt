@@ -1,0 +1,5 @@
+bash -n scripts/fr13_run_b4_cutlass_persistent_m128_live_gate.sh
+PASS
+
+/home/mark/lumoFlyWheel-b4-compactionfix-rerun/.venv/bin/python -m pytest -q tests/test_fr13_cutlass_b4_production.py tests/test_fr13_cutlass_b4_k64_profile.py
+32 passed in 0.17s

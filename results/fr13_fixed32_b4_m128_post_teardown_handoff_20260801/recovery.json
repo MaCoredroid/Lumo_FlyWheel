@@ -1,0 +1,16 @@
+{
+  "comparison_count": 320,
+  "differing_bytes": 0,
+  "exact_real_swe_verified_task_count": 4,
+  "fixed_source_commit": "ef8397ae8a8e8b8dd7b75039a4451d5e1ed401c3",
+  "live_result_sha256": "58e8da4d84ffcc2934e8a5327b7c11e8431a9c44324ca177e6cfcdec2a343c9e",
+  "live_result_status": "pass",
+  "mismatching_comparisons": 0,
+  "projection_shape_count": 5,
+  "production_credential_sha256": "868b586fc6797c336294f507594cf9acd1f2653c213f587c079dec55549a78da",
+  "qualification_source_commit": "2f76c744510384b780899b7f3b5a1dda74efc903",
+  "reducer_replayed_as_root": true,
+  "reran_real_tasks": false,
+  "schema": "fr13.fixed32.cutlass_b4.post_teardown_recovery.v1",
+  "timing_eligible": false
+}
