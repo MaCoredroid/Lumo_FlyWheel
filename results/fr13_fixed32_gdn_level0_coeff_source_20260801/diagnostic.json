@@ -1,0 +1,60 @@
+{
+  "schema": "fr13.fixed32.gdn_level0_coeff_source_candidate.v1",
+  "status": "source_candidate_cpu_static_only_not_deploy_ready",
+  "base_commit": "aefe8b5ae95ca35987a9f8632b0c94b8c4b1af9b",
+  "candidate": {
+    "activation": "FR13_FIXED32_GDN_LEVEL0_COEFF=1",
+    "default_on": false,
+    "batch_scope": [1, 2, 3, 4],
+    "physical_rows_per_request": 32,
+    "path_counts": [1, 11],
+    "launches_per_layer_before": 2,
+    "launches_per_layer_after": 2,
+    "launches_per_event_before": 96,
+    "launches_per_event_after": 96,
+    "physical_node_visits_per_request_layer_before": 32,
+    "physical_node_visits_per_request_layer_after": 32,
+    "level0_programs_per_request": 768,
+    "qk_normalization_instances_per_layer_before": 24576,
+    "qk_normalization_instances_per_layer_after": 4352,
+    "qk_normalization_reduction_fraction": 0.8229166666666666,
+    "raw_gate_instances_per_layer_before": 24576,
+    "raw_gate_instances_per_layer_after": 5376,
+    "raw_gate_reduction_fraction": 0.78125,
+    "scratch": {
+      "fp32_elements_per_request": 134144,
+      "bytes_per_request": 536576,
+      "b1_rows": [31],
+      "b4_rows": [28, 29, 30, 31],
+      "b4_compact_served_rows": [0, 19],
+      "capture_time_allocation_added": false
+    }
+  },
+  "measurement_basis": {
+    "workload": "real SWE-Verified fixed32 Tail6 B1 Nsight attribution",
+    "gdn_path_ms_per_event": 14.019520105442178,
+    "gdn_path_launches_per_event": 95.92290249433107,
+    "estimated_saving_ms_per_event": {
+      "low": 1.5,
+      "high": 4.0,
+      "hard_upper_bound": 14.019520105442178,
+      "classification": "engineering estimate, not measured"
+    },
+    "nearest_valid_exact4_b1_full_step_wall_ms": 232.77979,
+    "projected_full_step_wall_ms": {
+      "low": 228.77979,
+      "high": 231.27979,
+      "classification": "planning subtraction only, not measured"
+    },
+    "hardware_floor_ms_per_step": 98.6,
+    "one_sided_u95_cap_ms_per_step": 113.39
+  },
+  "required_gates": [
+    "SM121 compile and resource/codegen inspection for B1 and B4",
+    "one authenticated real SWE-Verified B1 all-48-layer reference-served byte gate",
+    "canonical exact4 B1 same-source full-wall and kernel attribution timing",
+    "canonical exact4 B4 byte and full-wall timing with compact export ownership checks",
+    "exact16 acceptance and hardware-floor campaign only after a qualified B1/B4 win"
+  ],
+  "gpu_used": false
+}

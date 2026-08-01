@@ -157,10 +157,12 @@ def test_batched_kernel_keeps_two_launches_and_b1_legacy_route() -> None:
     ast.parse(textwrap.dedent(generated_fragments[0]))
 
 
-def test_legacy_path_kernel_ast_is_unchanged() -> None:
+def test_path_kernel_default_off_candidate_ast_is_pinned() -> None:
     source = _function_source("_tree_gdn_path_kernel")
+    assert "PRECOMPUTE_LEVEL1: tl.constexpr = False" in source
+    assert "LOAD_PRECOMPUTED: tl.constexpr = False" in source
     canonical = ast.dump(ast.parse(source), include_attributes=False)
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     assert digest == (
-        "b4659c625b1a1c75be0647990bfbcaea872ac307a5cc65c7dc269b3c99b9bcda"
+        "cca1ba84104f1bbe5a9c2d3f5469f0c3bfc4fda4c9c10d4eee795f50c2b669bc"
     )

@@ -143,6 +143,19 @@ def parent_gather_selfcheck_on() -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def fixed32_gdn_level0_coeff_on() -> bool:
+    """Enable the two-launch fixed32 GDN coefficient-staging candidate."""
+    if os.environ.get("FR13_FIXED32_GDN_LEVEL0_COEFF") == "1":
+        return True
+    return any(
+        os.path.exists(path)
+        for path in (
+            "/logs/fr13_fixed32_gdn_level0_coeff.flag",
+            "/tmp/fr13_fixed32_gdn_level0_coeff.flag",
+        )
+    )
+
+
 
 
 
@@ -1024,6 +1037,7 @@ _FR13_FIXED32_PARENT = (
     -1, 0, 0, 0, 1, 1, 1, 2, 3, 4, 4, 4, 7, 8, 9, 9,
     9, 12, 13, 14, 14, 14, 17, 18, 19, 23, 24, 25, 26, 28, 29, 30,
 )
+_FR13_FIXED32_COEFF_SCRATCH_ROWS = 32
 _FR13_FIXED32_SUBTREE_LEVELS = (
     (
         ((0, 1, 4, 9, 14), -1),
@@ -3228,6 +3242,65 @@ def _fr13_fixed32_schedule_contract(levels) -> dict[str, object]:
     return contract
 
 
+def _fr13_fixed32_level0_coeff_layout(
+    *,
+    batch_size: int,
+    n_actual: int,
+    num_kh: int,
+    num_vh: int,
+    dim_v: int,
+    dim_k: int,
+    export_or_mask: int,
+    compact_export: bool,
+) -> dict[str, int]:
+    """Reserve one existing fp32 export row per request for coefficients."""
+    expected = (32, QK_HEADS, V_HEADS, V, K)
+    actual = (n_actual, num_kh, num_vh, dim_v, dim_k)
+    batch = int(batch_size)
+    if actual != expected or batch not in (1, 2, 3, 4):
+        raise ValueError(
+            "FR13_FIXED32_GDN_LEVEL0_COEFF requires B1-B4 production "
+            f"geometry {expected}, got batch={batch} geometry={actual}"
+        )
+
+    scratch_row_start = _FR13_FIXED32_COEFF_SCRATCH_ROWS - batch
+    if compact_export:
+        compact_rows = batch * _FR13_FIXED32_EXPORT_SLOTS
+        if scratch_row_start < compact_rows:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_LEVEL0_COEFF compact scratch overlaps "
+                f"served export rows: start={scratch_row_start} rows={compact_rows}"
+            )
+    elif batch != 1 or export_or_mask & (1 << scratch_row_start):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_LEVEL0_COEFF sequential scratch is exported"
+        )
+
+    row_elems = num_vh * dim_v * dim_k
+    q_elems = n_actual * num_kh * dim_k
+    scalar_elems = n_actual * num_vh
+    q_offset = 0
+    k_offset = q_offset + q_elems
+    decay_offset = k_offset + q_elems
+    beta_offset = decay_offset + scalar_elems
+    payload_elems = beta_offset + scalar_elems
+    if payload_elems > row_elems:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_LEVEL0_COEFF payload exceeds one export row"
+        )
+    return {
+        "scratch_row_start": scratch_row_start,
+        "scratch_rows": batch,
+        "row_elems": row_elems,
+        "q_offset": q_offset,
+        "k_offset": k_offset,
+        "decay_offset": decay_offset,
+        "beta_offset": beta_offset,
+        "payload_elems": payload_elems,
+        "capacity_elems": row_elems,
+    }
+
+
 def _subtree_decompose(parent) -> list:
     """Heavy-path decomposition -> list of LEVELS; each level is a list of
     (path_nodes, parent_node) with parent_node = -1 for the root path.
@@ -3382,6 +3455,7 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
     _validate_subtree_decomposition(parent_tuple, levels)
     fixed_contract = None
     fixed32_parent_slots = None
+    fixed32_level0_coeff_layout = None
     if parent_tuple == _FR13_FIXED32_PARENT:
         fixed_contract = _fr13_fixed32_schedule_contract(levels)
         schedule = "fixed32"
@@ -3410,6 +3484,22 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
                     )
             fixed32_parent_slots.append(
                 torch.tensor(slots, dtype=torch.int32, device=device)
+            )
+        if (int(n_actual), int(vh), int(dv), int(dk)) == (
+            32,
+            V_HEADS,
+            V,
+            K,
+        ):
+            fixed32_level0_coeff_layout = _fr13_fixed32_level0_coeff_layout(
+                batch_size=1,
+                n_actual=int(n_actual),
+                num_kh=QK_HEADS,
+                num_vh=int(vh),
+                dim_v=int(dv),
+                dim_k=int(dk),
+                export_or_mask=int(fixed_contract["export_or_mask"]),
+                compact_export=False,
             )
     elif parent_tuple == _FR13_HYDRA23_PARENT:
         schedule = "hydra23_floor"
@@ -3458,6 +3548,7 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
         "schedule": schedule,
         "fixed32_contract": fixed_contract,
         "fixed32_parent_slots": fixed32_parent_slots,
+        "fixed32_level0_coeff_layout": fixed32_level0_coeff_layout,
         "route_armed": route_armed,
         "selfcheck_armed": selfcheck_armed,
         "engaged_announced": False,
@@ -6699,6 +6790,7 @@ def _gdn_node_step(
     USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
     RAW_GATING: tl.constexpr,
     SCAN_ALIGN: tl.constexpr = False,
+    COEFFICIENTS_PRECOMPUTED: tl.constexpr = False,
 ):
     # FR13_REPLAY_ROUTE shared per-node update body. This is the SINGLE
     # source of the GDN rank-1 node update used by BOTH the tree scan kernel
@@ -6712,7 +6804,7 @@ def _gdn_node_step(
     # spec-guaranteed: it is gated by the one-time byte A/B on captured
     # payloads (GPU-gated obligation; see FR13_REPLAY_ROUTE_BUILD.md).
     b_beta = b_b
-    if RAW_GATING:
+    if RAW_GATING and not COEFFICIENTS_PRECOMPUTED:
         x = b_raw_a + b_dt_bias
         softplus_x = tl.where(
             x <= 20.0,
@@ -6743,8 +6835,11 @@ def _gdn_node_step(
         else:
             b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
             b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
-    b_q = b_q * OUTPUT_SCALE
-    state_i *= tl.exp(b_g)
+    if not COEFFICIENTS_PRECOMPUTED:
+        b_q = b_q * OUTPUT_SCALE
+        state_i *= tl.exp(b_g)
+    else:
+        state_i *= b_g
     b_v -= tl.sum(state_i * b_k[None, :], axis=1)
     b_v *= b_beta
     state_i += b_v[:, None] * b_k[None, :]
@@ -7130,6 +7225,101 @@ def _tree_gdn_kernel(
 
 
 @triton.jit
+def _fixed32_gdn_stage_coefficients(
+    q,
+    k,
+    raw_a,
+    raw_b,
+    A_log,
+    dt_bias,
+    scratch,
+    pid_flat,
+    global_node_base,
+    N_ACTUAL: tl.constexpr,
+    NUM_KH: tl.constexpr,
+    NUM_VH: tl.constexpr,
+    DIM_K: tl.constexpr,
+    OUTPUT_SCALE: tl.constexpr,
+    PROGRAMS_PER_REQUEST: tl.constexpr,
+    SCALAR_ROUNDS: tl.constexpr,
+    Q_OFFSET: tl.constexpr,
+    K_OFFSET: tl.constexpr,
+    DECAY_OFFSET: tl.constexpr,
+    BETA_OFFSET: tl.constexpr,
+):
+    """Use level-0 programs to stage coefficients for the next launch."""
+    offs_k = tl.arange(0, DIM_K)
+    qk_index = pid_flat
+    qk_active = qk_index < N_ACTUAL * NUM_KH
+    qk_node = qk_index // NUM_KH
+    qk_head = qk_index - qk_node * NUM_KH
+    global_qk_node = global_node_base + qk_node
+    b_q = tl.load(
+        q + (global_qk_node * NUM_KH + qk_head) * DIM_K + offs_k,
+        mask=qk_active,
+        other=0.0,
+    ).to(tl.float32)
+    b_k = tl.load(
+        k + (global_qk_node * NUM_KH + qk_head) * DIM_K + offs_k,
+        mask=qk_active,
+        other=0.0,
+    ).to(tl.float32)
+    b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
+    b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
+    tl.store(
+        scratch + Q_OFFSET + qk_index * DIM_K + offs_k,
+        b_q * OUTPUT_SCALE,
+        mask=qk_active,
+    )
+    tl.store(
+        scratch + K_OFFSET + qk_index * DIM_K + offs_k,
+        b_k,
+        mask=qk_active,
+    )
+
+    for scalar_round in tl.static_range(0, SCALAR_ROUNDS):
+        scalar_index = pid_flat + scalar_round * PROGRAMS_PER_REQUEST
+        scalar_active = scalar_index < N_ACTUAL * NUM_VH
+        scalar_node = scalar_index // NUM_VH
+        scalar_head = scalar_index - scalar_node * NUM_VH
+        global_scalar_node = global_node_base + scalar_node
+        b_raw_a = tl.load(
+            raw_a + global_scalar_node * NUM_VH + scalar_head,
+            mask=scalar_active,
+            other=0.0,
+        ).to(tl.float32)
+        b_raw_b = tl.load(
+            raw_b + global_scalar_node * NUM_VH + scalar_head,
+            mask=scalar_active,
+            other=0.0,
+        ).to(tl.float32)
+        b_a_log = tl.load(
+            A_log + scalar_head, mask=scalar_active, other=0.0
+        ).to(tl.float32)
+        b_dt_bias = tl.load(
+            dt_bias + scalar_head, mask=scalar_active, other=0.0
+        ).to(tl.float32)
+        x = b_raw_a + b_dt_bias
+        softplus_x = tl.where(
+            x <= 20.0,
+            tl.log(1.0 + tl.exp(x)),
+            x,
+        )
+        decay = tl.exp(-tl.exp(b_a_log) * softplus_x)
+        b_beta = tl.sigmoid(b_raw_b)
+        tl.store(
+            scratch + DECAY_OFFSET + scalar_index,
+            decay,
+            mask=scalar_active,
+        )
+        tl.store(
+            scratch + BETA_OFFSET + scalar_index,
+            b_beta,
+            mask=scalar_active,
+        )
+
+
+@triton.jit
 def _tree_gdn_path_kernel(
     q,
     k,
@@ -7172,6 +7362,14 @@ def _tree_gdn_path_kernel(
     COUNT_INVOCATION: tl.constexpr,
     SCAN_ALIGN: tl.constexpr,
     MAX_PATH_LEN: tl.constexpr,
+    PRECOMPUTE_LEVEL1: tl.constexpr = False,
+    LOAD_PRECOMPUTED: tl.constexpr = False,
+    COEFF_ROW_START: tl.constexpr = 0,
+    COEFF_ROW_ELEMS: tl.constexpr = 0,
+    Q_OFFSET: tl.constexpr = 0,
+    K_OFFSET: tl.constexpr = 0,
+    DECAY_OFFSET: tl.constexpr = 0,
+    BETA_OFFSET: tl.constexpr = 0,
     STATE_SOURCE: tl.constexpr = 0,
     EXPORT_MODE: tl.constexpr = 0,
     RING_EXPORT: tl.constexpr = False,
@@ -7244,17 +7442,36 @@ def _tree_gdn_path_kernel(
         node = tl.load(path_nodes + pid_path * MAX_PATH_LEN + i)
         n_ok = (node >= 0) & (node < N_ACTUAL)
         node_c = tl.maximum(node, 0)
-        b_q = tl.load(
-            q + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
-            mask=n_ok,
-            other=0.0,
-        ).to(tl.float32)
-        b_k_raw = tl.load(
-            k + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
-            mask=n_ok,
-            other=0.0,
-        )
-        b_k = b_k_raw.to(tl.float32)
+        if LOAD_PRECOMPUTED:
+            coeff_scratch = state_export + COEFF_ROW_START * COEFF_ROW_ELEMS
+            b_q = tl.load(
+                coeff_scratch
+                + Q_OFFSET
+                + (node_c * NUM_KH + pid_kh) * DIM_K
+                + offs_k,
+                mask=n_ok,
+                other=0.0,
+            )
+            b_k = tl.load(
+                coeff_scratch
+                + K_OFFSET
+                + (node_c * NUM_KH + pid_kh) * DIM_K
+                + offs_k,
+                mask=n_ok,
+                other=0.0,
+            )
+        else:
+            b_q = tl.load(
+                q + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
+                mask=n_ok,
+                other=0.0,
+            ).to(tl.float32)
+            b_k_raw = tl.load(
+                k + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
+                mask=n_ok,
+                other=0.0,
+            )
+            b_k = b_k_raw.to(tl.float32)
         b_v_raw = tl.load(
             v + (node_c * NUM_VH + pid_vh) * DIM_V + offs_v,
             mask=n_ok & v_mask,
@@ -7262,6 +7479,13 @@ def _tree_gdn_path_kernel(
         )
         b_v = b_v_raw.to(tl.float32)
         if RING_EXPORT:
+            if LOAD_PRECOMPUTED:
+                ring_k_owner = (pid_v == 0) & (pid_vh % head_group == 0)
+                b_k_raw = tl.load(
+                    k + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
+                    mask=n_ok & ring_k_owner,
+                    other=0.0,
+                )
             tl.store(
                 ring_k + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
                 b_k_raw,
@@ -7274,38 +7498,76 @@ def _tree_gdn_path_kernel(
                 b_v_raw,
                 mask=n_ok & v_mask,
             )
-        b_b = tl.load(
-            beta + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
-        ).to(tl.float32)
-        b_g = tl.load(
-            g + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
-        ).to(tl.float32)
-        b_raw_a = b_g
-        b_raw_b = b_b
-        b_a_log = b_g
-        b_dt_bias = b_b
-        if RAW_GATING:
-            b_raw_b_in = tl.load(
-                raw_b + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+        if LOAD_PRECOMPUTED:
+            b_b = tl.load(
+                coeff_scratch + BETA_OFFSET + node_c * NUM_VH + pid_vh,
+                mask=n_ok,
+                other=0.0,
             )
-            b_raw_b = b_raw_b_in.to(tl.float32)
-            b_raw_a_in = tl.load(
-                raw_a + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+            b_g = tl.load(
+                coeff_scratch + DECAY_OFFSET + node_c * NUM_VH + pid_vh,
+                mask=n_ok,
+                other=0.0,
             )
-            b_raw_a = b_raw_a_in.to(tl.float32)
+            b_raw_a = b_g
+            b_raw_b = b_b
+            b_a_log = b_g
+            b_dt_bias = b_b
             if RING_EXPORT:
+                ring_scalar_owner = pid_v == 0
+                b_raw_a_in = tl.load(
+                    raw_a + node_c * NUM_VH + pid_vh,
+                    mask=n_ok & ring_scalar_owner,
+                    other=0.0,
+                )
+                b_raw_b_in = tl.load(
+                    raw_b + node_c * NUM_VH + pid_vh,
+                    mask=n_ok & ring_scalar_owner,
+                    other=0.0,
+                )
                 tl.store(
                     ring_a + node_c * NUM_VH + pid_vh,
                     b_raw_a_in,
-                    mask=n_ok & (pid_v == 0),
+                    mask=n_ok & ring_scalar_owner,
                 )
                 tl.store(
                     ring_b + node_c * NUM_VH + pid_vh,
                     b_raw_b_in,
-                    mask=n_ok & (pid_v == 0),
+                    mask=n_ok & ring_scalar_owner,
                 )
-            b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
-            b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
+        else:
+            b_b = tl.load(
+                beta + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+            ).to(tl.float32)
+            b_g = tl.load(
+                g + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+            ).to(tl.float32)
+            b_raw_a = b_g
+            b_raw_b = b_b
+            b_a_log = b_g
+            b_dt_bias = b_b
+            if RAW_GATING:
+                b_raw_b_in = tl.load(
+                    raw_b + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+                )
+                b_raw_b = b_raw_b_in.to(tl.float32)
+                b_raw_a_in = tl.load(
+                    raw_a + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+                )
+                b_raw_a = b_raw_a_in.to(tl.float32)
+                if RING_EXPORT:
+                    tl.store(
+                        ring_a + node_c * NUM_VH + pid_vh,
+                        b_raw_a_in,
+                        mask=n_ok & (pid_v == 0),
+                    )
+                    tl.store(
+                        ring_b + node_c * NUM_VH + pid_vh,
+                        b_raw_b_in,
+                        mask=n_ok & (pid_v == 0),
+                    )
+                b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
+                b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
         new_state, out_i = _gdn_node_step(
             state_i,
             b_q,
@@ -7321,6 +7583,7 @@ def _tree_gdn_path_kernel(
             USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
             RAW_GATING=RAW_GATING,
             SCAN_ALIGN=SCAN_ALIGN,
+            COEFFICIENTS_PRECOMPUTED=LOAD_PRECOMPUTED,
         )
         # Keep the descriptor guard value-neutral if a corrupt node slips past
         # preseed validation; valid dynamic-loop iterations always have n_ok.
@@ -7343,6 +7606,35 @@ def _tree_gdn_path_kernel(
                 state_i,
                 mask=do_exp & v_mask[:, None],
             )
+    if PRECOMPUTE_LEVEL1:
+        programs_per_request: tl.constexpr = NUM_VH * (DIM_V // BLOCK_V)
+        scalar_rounds: tl.constexpr = (
+            (N_ACTUAL * NUM_VH + programs_per_request - 1)
+            // programs_per_request
+        )
+        coeff_scratch = state_export + COEFF_ROW_START * COEFF_ROW_ELEMS
+        _fixed32_gdn_stage_coefficients(
+            q,
+            k,
+            raw_a,
+            raw_b,
+            A_log,
+            dt_bias,
+            coeff_scratch,
+            pid_vh * (DIM_V // BLOCK_V) + pid_v,
+            0,
+            N_ACTUAL=N_ACTUAL,
+            NUM_KH=NUM_KH,
+            NUM_VH=NUM_VH,
+            DIM_K=DIM_K,
+            OUTPUT_SCALE=OUTPUT_SCALE,
+            PROGRAMS_PER_REQUEST=programs_per_request,
+            SCALAR_ROUNDS=scalar_rounds,
+            Q_OFFSET=Q_OFFSET,
+            K_OFFSET=K_OFFSET,
+            DECAY_OFFSET=DECAY_OFFSET,
+            BETA_OFFSET=BETA_OFFSET,
+        )
     if FLAGS_EXPORT:
         # FR13_FLAGS_INKERNEL under the subtree route: same staging-freshness
         # store as the monolith tail (values identical: flags[0]=1 staged,
@@ -7402,6 +7694,14 @@ def _tree_gdn_path_kernel_fixed32_batch(
     EXPORT_SLOTS: tl.constexpr,
     STATE_SOURCE: tl.constexpr,
     EXPORT_MODE: tl.constexpr,
+    PRECOMPUTE_LEVEL1: tl.constexpr = False,
+    LOAD_PRECOMPUTED: tl.constexpr = False,
+    COEFF_ROW_START: tl.constexpr = 0,
+    COEFF_ROW_ELEMS: tl.constexpr = 0,
+    Q_OFFSET: tl.constexpr = 0,
+    K_OFFSET: tl.constexpr = 0,
+    DECAY_OFFSET: tl.constexpr = 0,
+    BETA_OFFSET: tl.constexpr = 0,
     RING_EXPORT: tl.constexpr = False,
     FLAGS_EXPORT: tl.constexpr = False,
     FLAGS_ROWS: tl.constexpr = 0,
@@ -7479,17 +7779,38 @@ def _tree_gdn_path_kernel_fixed32_batch(
         n_ok = (node >= 0) & (node < N_ACTUAL) & (pid_batch < BATCH_SIZE)
         node_c = tl.maximum(node, 0)
         global_node = pid_batch * N_ACTUAL + node_c
-        b_q = tl.load(
-            q + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
-            mask=n_ok,
-            other=0.0,
-        ).to(tl.float32)
-        b_k_raw = tl.load(
-            k + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
-            mask=n_ok,
-            other=0.0,
-        )
-        b_k = b_k_raw.to(tl.float32)
+        if LOAD_PRECOMPUTED:
+            coeff_scratch = state_export + (
+                COEFF_ROW_START + pid_batch
+            ) * COEFF_ROW_ELEMS
+            b_q = tl.load(
+                coeff_scratch
+                + Q_OFFSET
+                + (node_c * NUM_KH + pid_kh) * DIM_K
+                + offs_k,
+                mask=n_ok,
+                other=0.0,
+            )
+            b_k = tl.load(
+                coeff_scratch
+                + K_OFFSET
+                + (node_c * NUM_KH + pid_kh) * DIM_K
+                + offs_k,
+                mask=n_ok,
+                other=0.0,
+            )
+        else:
+            b_q = tl.load(
+                q + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
+                mask=n_ok,
+                other=0.0,
+            ).to(tl.float32)
+            b_k_raw = tl.load(
+                k + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
+                mask=n_ok,
+                other=0.0,
+            )
+            b_k = b_k_raw.to(tl.float32)
         b_v_raw = tl.load(
             v + (global_node * NUM_VH + pid_vh) * DIM_V + offs_v,
             mask=n_ok & v_mask,
@@ -7497,6 +7818,13 @@ def _tree_gdn_path_kernel_fixed32_batch(
         )
         b_v = b_v_raw.to(tl.float32)
         if RING_EXPORT:
+            if LOAD_PRECOMPUTED:
+                ring_k_owner = (pid_v == 0) & (pid_vh % head_group == 0)
+                b_k_raw = tl.load(
+                    k + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
+                    mask=n_ok & ring_k_owner,
+                    other=0.0,
+                )
             tl.store(
                 ring_k + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
                 b_k_raw,
@@ -7511,42 +7839,80 @@ def _tree_gdn_path_kernel_fixed32_batch(
                 b_v_raw,
                 mask=n_ok & v_mask,
             )
-        b_b = tl.load(
-            beta + global_node * NUM_VH + pid_vh, mask=n_ok, other=0.0
-        ).to(tl.float32)
-        b_g = tl.load(
-            g + global_node * NUM_VH + pid_vh, mask=n_ok, other=0.0
-        ).to(tl.float32)
-        b_raw_a = b_g
-        b_raw_b = b_b
-        b_a_log = b_g
-        b_dt_bias = b_b
-        if RAW_GATING:
-            b_raw_b_in = tl.load(
-                raw_b + global_node * NUM_VH + pid_vh,
+        if LOAD_PRECOMPUTED:
+            b_b = tl.load(
+                coeff_scratch + BETA_OFFSET + node_c * NUM_VH + pid_vh,
                 mask=n_ok,
                 other=0.0,
             )
-            b_raw_b = b_raw_b_in.to(tl.float32)
-            b_raw_a_in = tl.load(
-                raw_a + global_node * NUM_VH + pid_vh,
+            b_g = tl.load(
+                coeff_scratch + DECAY_OFFSET + node_c * NUM_VH + pid_vh,
                 mask=n_ok,
                 other=0.0,
             )
-            b_raw_a = b_raw_a_in.to(tl.float32)
+            b_raw_a = b_g
+            b_raw_b = b_b
+            b_a_log = b_g
+            b_dt_bias = b_b
             if RING_EXPORT:
+                ring_scalar_owner = pid_v == 0
+                b_raw_a_in = tl.load(
+                    raw_a + global_node * NUM_VH + pid_vh,
+                    mask=n_ok & ring_scalar_owner,
+                    other=0.0,
+                )
+                b_raw_b_in = tl.load(
+                    raw_b + global_node * NUM_VH + pid_vh,
+                    mask=n_ok & ring_scalar_owner,
+                    other=0.0,
+                )
                 tl.store(
                     ring_a + global_node * NUM_VH + pid_vh,
                     b_raw_a_in,
-                    mask=n_ok & (pid_v == 0),
+                    mask=n_ok & ring_scalar_owner,
                 )
                 tl.store(
                     ring_b + global_node * NUM_VH + pid_vh,
                     b_raw_b_in,
-                    mask=n_ok & (pid_v == 0),
+                    mask=n_ok & ring_scalar_owner,
                 )
-            b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
-            b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
+        else:
+            b_b = tl.load(
+                beta + global_node * NUM_VH + pid_vh, mask=n_ok, other=0.0
+            ).to(tl.float32)
+            b_g = tl.load(
+                g + global_node * NUM_VH + pid_vh, mask=n_ok, other=0.0
+            ).to(tl.float32)
+            b_raw_a = b_g
+            b_raw_b = b_b
+            b_a_log = b_g
+            b_dt_bias = b_b
+            if RAW_GATING:
+                b_raw_b_in = tl.load(
+                    raw_b + global_node * NUM_VH + pid_vh,
+                    mask=n_ok,
+                    other=0.0,
+                )
+                b_raw_b = b_raw_b_in.to(tl.float32)
+                b_raw_a_in = tl.load(
+                    raw_a + global_node * NUM_VH + pid_vh,
+                    mask=n_ok,
+                    other=0.0,
+                )
+                b_raw_a = b_raw_a_in.to(tl.float32)
+                if RING_EXPORT:
+                    tl.store(
+                        ring_a + global_node * NUM_VH + pid_vh,
+                        b_raw_a_in,
+                        mask=n_ok & (pid_v == 0),
+                    )
+                    tl.store(
+                        ring_b + global_node * NUM_VH + pid_vh,
+                        b_raw_b_in,
+                        mask=n_ok & (pid_v == 0),
+                    )
+                b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
+                b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
         new_state, out_i = _gdn_node_step(
             state_i,
             b_q,
@@ -7562,6 +7928,7 @@ def _tree_gdn_path_kernel_fixed32_batch(
             USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
             RAW_GATING=RAW_GATING,
             SCAN_ALIGN=SCAN_ALIGN,
+            COEFFICIENTS_PRECOMPUTED=LOAD_PRECOMPUTED,
         )
         state_i = tl.where(n_ok, new_state, state_i)
         tl.store(
@@ -7581,6 +7948,37 @@ def _tree_gdn_path_kernel_fixed32_batch(
                 state_i,
                 mask=n_ok & v_mask[:, None],
             )
+    if PRECOMPUTE_LEVEL1:
+        programs_per_request: tl.constexpr = NUM_VH * (DIM_V // BLOCK_V)
+        scalar_rounds: tl.constexpr = (
+            (N_ACTUAL * NUM_VH + programs_per_request - 1)
+            // programs_per_request
+        )
+        coeff_scratch = state_export + (
+            COEFF_ROW_START + pid_batch
+        ) * COEFF_ROW_ELEMS
+        _fixed32_gdn_stage_coefficients(
+            q,
+            k,
+            raw_a,
+            raw_b,
+            A_log,
+            dt_bias,
+            coeff_scratch,
+            pid_vh * (DIM_V // BLOCK_V) + pid_v,
+            pid_batch * N_ACTUAL,
+            N_ACTUAL=N_ACTUAL,
+            NUM_KH=NUM_KH,
+            NUM_VH=NUM_VH,
+            DIM_K=DIM_K,
+            OUTPUT_SCALE=OUTPUT_SCALE,
+            PROGRAMS_PER_REQUEST=programs_per_request,
+            SCALAR_ROUNDS=scalar_rounds,
+            Q_OFFSET=Q_OFFSET,
+            K_OFFSET=K_OFFSET,
+            DECAY_OFFSET=DECAY_OFFSET,
+            BETA_OFFSET=BETA_OFFSET,
+        )
     if FLAGS_EXPORT:
         flag_writer = (
             (pid_vh == 0)
@@ -11514,6 +11912,34 @@ def launch_tree_gdn_prepared(
         _subtree_state is not None
         and _subtree_state["selfcheck_armed"]
     )
+    _level0_coeff = fixed32_gdn_level0_coeff_on()
+    _level0_coeff_layout = (
+        _subtree_state.get("fixed32_level0_coeff_layout")
+        if _subtree_state is not None
+        else None
+    )
+    if _level0_coeff:
+        if (
+            _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES
+            or not _subtree_route_armed
+            or _subtree_selfcheck_armed
+            or _subtree_state is None
+            or _subtree_state.get("schedule") != "fixed32"
+            or _subtree_state.get("fixed32_contract") is None
+            or not isinstance(_level0_coeff_layout, dict)
+            or n_actual != 32
+            or n_pad != 32
+            or (num_kh, num_vh, dim_k, dim_v) != (16, 48, 128, 128)
+            or _bv != 8
+            or not use_qk_l2norm_in_kernel
+            or not raw_gating
+            or _scan_align
+            or _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_LEVEL0_COEFF requires exact fixed32 BV8 "
+                "two-level GDN, raw gating, in-kernel q/k norm, and SCAN_ALIGN=0"
+            )
 
     def _launch_paths(
         _out,
@@ -11521,6 +11947,7 @@ def launch_tree_gdn_prepared(
         *,
         _path_block_v=_bv,
         _counter_arg=invocation_counter,
+        _use_level0_coeff=_level0_coeff,
     ):
         # FR13_SUBTREE_PARALLEL route: one launch per path level; paths in a
         # level scan concurrently on grid axis 2. RING/RAW semantics match
@@ -11539,6 +11966,14 @@ def launch_tree_gdn_prepared(
             raise RuntimeError(
                 "FR13_FIXED32: exact path I/O specialization requires the "
                 "validated fixed32 schedule"
+            )
+        if _use_level0_coeff and (
+            not _fixed32_io
+            or _path_block_v != 8
+            or not isinstance(_level0_coeff_layout, dict)
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_LEVEL0_COEFF launch contract drift"
             )
         for _li, (
             _nodes,
@@ -11594,7 +12029,10 @@ def launch_tree_gdn_prepared(
                 DIM_V=dim_v,
                 BLOCK_V=_path_block_v,
                 OUTPUT_SCALE=output_scale,
-                USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+                USE_QK_L2NORM_IN_KERNEL=(
+                    use_qk_l2norm_in_kernel
+                    and not (_use_level0_coeff and _li == 1)
+                ),
                 H0_IS_BANK=h0_is_bank,
                 H0_INDEX_ROW=h0_index_row,
                 H0_BATCH_INDEX=h0_batch_index,
@@ -11604,6 +12042,32 @@ def launch_tree_gdn_prepared(
                 COUNT_INVOCATION=_count and (_li == 0),
                 SCAN_ALIGN=_scan_align,
                 MAX_PATH_LEN=_mlen,
+                PRECOMPUTE_LEVEL1=_use_level0_coeff and (_li == 0),
+                LOAD_PRECOMPUTED=_use_level0_coeff and (_li == 1),
+                COEFF_ROW_START=(
+                    _level0_coeff_layout["scratch_row_start"]
+                    if _use_level0_coeff else 0
+                ),
+                COEFF_ROW_ELEMS=(
+                    _level0_coeff_layout["row_elems"]
+                    if _use_level0_coeff else 0
+                ),
+                Q_OFFSET=(
+                    _level0_coeff_layout["q_offset"]
+                    if _use_level0_coeff else 0
+                ),
+                K_OFFSET=(
+                    _level0_coeff_layout["k_offset"]
+                    if _use_level0_coeff else 0
+                ),
+                DECAY_OFFSET=(
+                    _level0_coeff_layout["decay_offset"]
+                    if _use_level0_coeff else 0
+                ),
+                BETA_OFFSET=(
+                    _level0_coeff_layout["beta_offset"]
+                    if _use_level0_coeff else 0
+                ),
                 STATE_SOURCE=_state_source,
                 EXPORT_MODE=_export_mode,
                 RING_EXPORT=_ring_export,
@@ -11618,6 +12082,16 @@ def launch_tree_gdn_prepared(
                 "[FR13_SUBTREE_PARALLEL ENGAGED] "
                 f"n_actual={n_actual} schedule={st['schedule']} "
                 f"critical={st['critical']}",
+                flush=True,
+            )
+        if _use_level0_coeff and not st.get(
+            "level0_coeff_engaged_announced", False
+        ):
+            st["level0_coeff_engaged_announced"] = True
+            print(
+                "[FR13_FIXED32_GDN_LEVEL0_COEFF ENGAGED] "
+                "batch_route=sequential launches_per_layer=2 "
+                "physical_rows=32 fallback=0",
                 flush=True,
             )
         return {
@@ -12255,6 +12729,30 @@ def launch_tree_gdn_prepared_fixed32_batch(
         block_v=candidate_block_v,
         dim_v=dim_v,
     )
+    level0_coeff = fixed32_gdn_level0_coeff_on()
+    level0_coeff_layout = None
+    if level0_coeff:
+        if (
+            selector != "production"
+            or candidate_block_v != 8
+            or (num_kh, num_vh, dim_k, dim_v) != (16, 48, 128, 128)
+            or not use_qk_l2norm_in_kernel
+            or scan_align_on()
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_LEVEL0_COEFF batched route requires the "
+                "exact fixed32 BV8 production selector and SCAN_ALIGN=0"
+            )
+        level0_coeff_layout = _fr13_fixed32_level0_coeff_layout(
+            batch_size=batch,
+            n_actual=n_actual,
+            num_kh=num_kh,
+            num_vh=num_vh,
+            dim_v=dim_v,
+            dim_k=dim_k,
+            export_or_mask=int(contract["export_or_mask"]),
+            compact_export=True,
+        )
 
     count_invocation = invocation_counter is not None
     if invocation_counter is None:
@@ -12268,7 +12766,15 @@ def launch_tree_gdn_prepared_fixed32_batch(
             f"got {flags_rows}/{batch}"
         )
 
-    def _launch_batched(_block_v: int) -> None:
+    def _launch_batched(
+        _block_v: int, *, _use_level0_coeff=level0_coeff
+    ) -> None:
+        if _use_level0_coeff and (
+            _block_v != 8 or not isinstance(level0_coeff_layout, dict)
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_LEVEL0_COEFF batched launch contract drift"
+            )
         for level_index, (
             nodes,
             _parents,
@@ -12311,7 +12817,10 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 DIM_V=dim_v,
                 BLOCK_V=_block_v,
                 OUTPUT_SCALE=output_scale,
-                USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+                USE_QK_L2NORM_IN_KERNEL=(
+                    use_qk_l2norm_in_kernel
+                    and not (_use_level0_coeff and level_index == 1)
+                ),
                 H0_INDEX_ROW=int(h0_index_row),
                 H0_INDEX_BATCH_STRIDE=int(h0_indices.stride(0)),
                 H0_BATCH_INDEX=int(h0_batch_index),
@@ -12329,6 +12838,36 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 EXPORT_SLOTS=_FR13_FIXED32_EXPORT_SLOTS,
                 STATE_SOURCE=state_source,
                 EXPORT_MODE=export_mode,
+                PRECOMPUTE_LEVEL1=(
+                    _use_level0_coeff and level_index == 0
+                ),
+                LOAD_PRECOMPUTED=(
+                    _use_level0_coeff and level_index == 1
+                ),
+                COEFF_ROW_START=(
+                    level0_coeff_layout["scratch_row_start"]
+                    if _use_level0_coeff else 0
+                ),
+                COEFF_ROW_ELEMS=(
+                    level0_coeff_layout["row_elems"]
+                    if _use_level0_coeff else 0
+                ),
+                Q_OFFSET=(
+                    level0_coeff_layout["q_offset"]
+                    if _use_level0_coeff else 0
+                ),
+                K_OFFSET=(
+                    level0_coeff_layout["k_offset"]
+                    if _use_level0_coeff else 0
+                ),
+                DECAY_OFFSET=(
+                    level0_coeff_layout["decay_offset"]
+                    if _use_level0_coeff else 0
+                ),
+                BETA_OFFSET=(
+                    level0_coeff_layout["beta_offset"]
+                    if _use_level0_coeff else 0
+                ),
                 RING_EXPORT=ring_export,
                 FLAGS_EXPORT=flags_export and level_index == 0,
                 FLAGS_ROWS=flags_rows,
@@ -12686,6 +13225,16 @@ def launch_tree_gdn_prepared_fixed32_batch(
             f"batch={batch} launches=2 path_grids=({batch},{11 * batch}) "
             f"block_v={candidate_block_v} export_rows={needed_export_rows} "
             "fallback=0",
+            flush=True,
+        )
+    if level0_coeff and not subtree_state.get(
+        "batch_level0_coeff_engaged_announced", False
+    ):
+        subtree_state["batch_level0_coeff_engaged_announced"] = True
+        print(
+            "[FR13_FIXED32_GDN_LEVEL0_COEFF ENGAGED] "
+            f"batch_route=compact batch={batch} launches_per_layer=2 "
+            "physical_rows=32 fallback=0",
             flush=True,
         )
     return out, None

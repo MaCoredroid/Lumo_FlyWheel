@@ -1,0 +1,23 @@
+CPU/source verification on 2026-08-01 UTC
+
+Command:
+  pytest -q tests/test_fr13_fixed32_gdn_level0_coeff.py tests/test_fr13_fixed32_gdn_batch_launch.py tests/test_fr13_fixed32_gdn_batch_byte_ab.py tests/test_fr13_fixed32_gdn_batch_graph_gate.py tests/test_fr13_fixed32_gdn_batch_wide_bv.py tests/test_fr13_fixed32_gdn_exact_io.py tests/test_fr13_fixed32_gdn_schedule.py
+
+Result:
+  71 passed, 3 skipped in 1.47s
+
+Skipped tests:
+  CUDA/Triton byte gates on the CPU-only source host.
+
+Additional checks:
+  python3 -m py_compile src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py tests/test_fr13_fixed32_gdn_level0_coeff.py tests/test_fr13_fixed32_gdn_batch_launch.py
+  PASS
+
+  python3 -m json.tool results/fr13_fixed32_gdn_level0_coeff_source_20260801/diagnostic.json
+  PASS
+
+  git diff --check
+  PASS
+
+GPU used:
+  no
