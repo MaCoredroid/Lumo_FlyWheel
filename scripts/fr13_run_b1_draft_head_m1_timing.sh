@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Exact4 real SWE-Verified B1 full-wall timing pair: stock BF16 head vs M1.
-# This is a timing-candidate runner, not the formal Tail/Hydra floor gate.
+# With RECOVERED_STOCK_JSON+SHA256, validate prior exact4 stock evidence and
+# launch only M1; that cross-run comparison is diagnostic, not timing-eligible.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -19,6 +20,16 @@ cd "$REPO"
 : "${LIVE_BOUNDARY_SNAPSHOT_JSON:?set LIVE_BOUNDARY_SNAPSHOT_JSON to the gate final boundary snapshot}"
 : "${LIVE_CHAT_TRAFFIC_AUDIT_JSON:?set LIVE_CHAT_TRAFFIC_AUDIT_JSON to the gate authenticated traffic audit}"
 
+RECOVERED_STOCK_JSON=${RECOVERED_STOCK_JSON:-}
+RECOVERED_STOCK_SHA256=${RECOVERED_STOCK_SHA256:-}
+if [[ ( -n "$RECOVERED_STOCK_JSON" && -z "$RECOVERED_STOCK_SHA256" ) \
+      || ( -z "$RECOVERED_STOCK_JSON" && -n "$RECOVERED_STOCK_SHA256" ) ]]; then
+  echo "RECOVERED_STOCK_JSON and RECOVERED_STOCK_SHA256 must be set together" >&2
+  exit 2
+fi
+RECOVERED_STOCK_MODE=0
+[[ -z "$RECOVERED_STOCK_JSON" ]] || RECOVERED_STOCK_MODE=1
+
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
@@ -32,6 +43,9 @@ RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | cut -d' ' -f1)
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 STOCK_ARM="hydra27_fixed32_head_stock_${TAG}"
 CANDIDATE_ARM="hydra27_fixed32_head_m1_${TAG}"
+STOCK_TIMING_JSON="$RUNROOT_ABS/$STOCK_ARM/deploy_speed_fullwall.json"
+RECOVERED_STOCK_COPY=
+RECOVERED_STOCK_VALIDATION=
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
   || { echo "TAG contains unsafe characters" >&2; exit 2; }
@@ -62,8 +76,19 @@ BUILD_ATTESTATION_SHA256=$(
   || { echo "canonical exact4 subset SHA-256 drift" >&2; exit 2; }
 [[ "$LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ ]] \
   || { echo "LIVE_PASS_SHA256 must be lowercase SHA-256" >&2; exit 2; }
-[[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
-  || { echo "tracked worktree must be clean" >&2; exit 2; }
+if (( RECOVERED_STOCK_MODE == 1 )); then
+  [[ "$RECOVERED_STOCK_JSON" == /* \
+     && -f "$RECOVERED_STOCK_JSON" \
+     && ! -L "$RECOVERED_STOCK_JSON" ]] \
+    || { echo "RECOVERED_STOCK_JSON must be an absolute regular non-symlink" >&2; exit 2; }
+  [[ "$RECOVERED_STOCK_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+    || { echo "RECOVERED_STOCK_SHA256 must be lowercase SHA-256" >&2; exit 2; }
+  [[ "$(sha256sum "$RECOVERED_STOCK_JSON" | cut -d' ' -f1)" \
+        == "$RECOVERED_STOCK_SHA256" ]] \
+    || { echo "recovered stock deploy-speed SHA-256 drifted" >&2; exit 2; }
+fi
+[[ -z "$(git status --porcelain=v1)" ]] \
+  || { echo "worktree must be clean" >&2; exit 2; }
 
 # Credential validation is intentionally the first candidate-qualifying action.
 "$PYTHON_BIN" scripts/fr13_draft_head_m1_validate.py validate-live \
@@ -116,7 +141,34 @@ export FR13_WEIGHT_FLOOR_MS=153.938384645
 export FR13_WEIGHT_FLOOR_SCOPE="five full-vocabulary drafter-head reads"
 
 mkdir -p "$RUNROOT_ABS"
-printf 'classification=real_swe_verified_exact4_b1_draft_head_timing_candidate\ntiming_eligible=1\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nlive_pass_sha256=%s\nlive_final_flush_sha256=%s\nlive_boundary_snapshot_sha256=%s\nlive_chat_traffic_audit_sha256=%s\ncandidate_source_sha256=%s\npatcher_sha256=%s\nbuild_attestation_sha256=%s\ncandidate_so_sha256=%s\ncandidate_so_bytes=%s\nstarted=%s\n' \
+RUN_CLASSIFICATION=real_swe_verified_exact4_b1_draft_head_timing_candidate
+TIMING_ELIGIBLE=1
+if (( RECOVERED_STOCK_MODE == 1 )); then
+  RECOVERED_STOCK_COPY="$RUNROOT_ABS/recovered_stock_deploy_speed.json"
+  RECOVERED_STOCK_VALIDATION="$RUNROOT_ABS/recovered_stock_validation.json"
+  cp --reflink=auto -- "$RECOVERED_STOCK_JSON" "$RECOVERED_STOCK_COPY"
+  chmod 0444 "$RECOVERED_STOCK_COPY"
+  [[ "$(sha256sum "$RECOVERED_STOCK_COPY" | cut -d' ' -f1)" \
+        == "$RECOVERED_STOCK_SHA256" ]] \
+    || { echo "recovered stock snapshot SHA-256 drifted" >&2; exit 2; }
+  "$PYTHON_BIN" scripts/fr13_draft_head_m1_validate.py recovered-stock \
+    --deploy-speed "$RECOVERED_STOCK_COPY" \
+    --expected-deploy-speed-sha256 "$RECOVERED_STOCK_SHA256" \
+    --exact4-subset "$SUBSET" \
+    --expected-exact4-subset-sha256 "$SUBSET_SHA256" \
+    > "$RECOVERED_STOCK_VALIDATION"
+  STOCK_ARM=$(
+    "$PYTHON_BIN" -c \
+      'import json,sys; print(json.load(open(sys.argv[1]))["stock_arm"])' \
+      "$RECOVERED_STOCK_VALIDATION"
+  )
+  STOCK_TIMING_JSON="$RECOVERED_STOCK_COPY"
+  RUN_CLASSIFICATION=real_swe_verified_exact4_b1_recovered_cross_run_diagnostic
+  TIMING_ELIGIBLE=0
+fi
+printf 'classification=%s\ntiming_eligible=%s\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\nrecovered_cross_run=%s\nrecovered_stock_sha256=%s\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nlive_pass_sha256=%s\nlive_final_flush_sha256=%s\nlive_boundary_snapshot_sha256=%s\nlive_chat_traffic_audit_sha256=%s\ncandidate_source_sha256=%s\npatcher_sha256=%s\nbuild_attestation_sha256=%s\ncandidate_so_sha256=%s\ncandidate_so_bytes=%s\nstarted=%s\n' \
+  "$RUN_CLASSIFICATION" "$TIMING_ELIGIBLE" "$RECOVERED_STOCK_MODE" \
+  "$RECOVERED_STOCK_SHA256" \
   "$$" "$RUNROOT_ABS" "$STOCK_ARM" "$CANDIDATE_ARM" \
   "$(git rev-parse HEAD)" "$RUNNER_SHA256" "$SUBSET_SHA256" \
   "$STOCK_FA2_SHA256" "$LIVE_PASS_SHA256" \
@@ -152,6 +204,13 @@ finalize_manifests() {
   [[ "$(sha256sum "$LIVE_CHAT_TRAFFIC_AUDIT_JSON" | cut -d' ' -f1)" \
         == "$LIVE_CHAT_TRAFFIC_AUDIT_SHA256" ]] \
     || { echo "live authenticated traffic audit changed during timing" >&2; return 14; }
+  if (( RECOVERED_STOCK_MODE == 1 )); then
+    [[ "$(sha256sum "$RECOVERED_STOCK_JSON" | cut -d' ' -f1)" \
+          == "$RECOVERED_STOCK_SHA256" \
+       && "$(sha256sum "$RECOVERED_STOCK_COPY" | cut -d' ' -f1)" \
+          == "$RECOVERED_STOCK_SHA256" ]] \
+      || { echo "recovered stock input changed during candidate timing" >&2; return 14; }
+  fi
   [[ "$(sha256sum "$CANDIDATE_SOURCE" | cut -d' ' -f1)" \
         == "$CANDIDATE_SOURCE_SHA256" \
      && "$(sha256sum "$PATCHER" | cut -d' ' -f1)" == "$PATCHER_SHA256" \
@@ -263,19 +322,25 @@ run_arm() {
     "$arm" "$(date -u +%FT%TZ)" >> "$RUNROOT_ABS/launcher_meta.txt"
 }
 
-run_arm "$STOCK_ARM" 0
-[[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
-  || { echo "Docker state was not clean after the stock arm" >&2; exit 2; }
+if (( RECOVERED_STOCK_MODE == 0 )); then
+  run_arm "$STOCK_ARM" 0
+  [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
+    || { echo "Docker state was not clean after the stock arm" >&2; exit 2; }
+else
+  echo "===== recovered exact4 stock validated; launching candidate arm only ====="
+fi
 run_arm "$CANDIDATE_ARM" 1
 
-STOCK_ENGAGEMENT="$RUNROOT_ABS/$STOCK_ARM/logs/fr13_draft_head_m1.production_engagement.json"
-STOCK_SIDECAR="$RUNROOT_ABS/$STOCK_ARM/logs/fr13_draft_head_m1.production_pass.json"
 CANDIDATE_ENGAGEMENT="$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_draft_head_m1.production_engagement.json"
 CANDIDATE_SIDECAR="$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_draft_head_m1.production_pass.json"
-[[ ! -e "$STOCK_ENGAGEMENT" && ! -L "$STOCK_ENGAGEMENT" ]] \
-  || { echo "stock arm emitted M1 production engagement" >&2; exit 4; }
-[[ ! -e "$STOCK_SIDECAR" && ! -L "$STOCK_SIDECAR" ]] \
-  || { echo "stock arm emitted M1 production sidecar" >&2; exit 4; }
+if (( RECOVERED_STOCK_MODE == 0 )); then
+  STOCK_ENGAGEMENT="$RUNROOT_ABS/$STOCK_ARM/logs/fr13_draft_head_m1.production_engagement.json"
+  STOCK_SIDECAR="$RUNROOT_ABS/$STOCK_ARM/logs/fr13_draft_head_m1.production_pass.json"
+  [[ ! -e "$STOCK_ENGAGEMENT" && ! -L "$STOCK_ENGAGEMENT" ]] \
+    || { echo "stock arm emitted M1 production engagement" >&2; exit 4; }
+  [[ ! -e "$STOCK_SIDECAR" && ! -L "$STOCK_SIDECAR" ]] \
+    || { echo "stock arm emitted M1 production sidecar" >&2; exit 4; }
+fi
 [[ -f "$CANDIDATE_SIDECAR" && ! -L "$CANDIDATE_SIDECAR" ]] \
   || { echo "candidate production sidecar is missing" >&2; exit 4; }
 CANDIDATE_SIDECAR_SHA256=$(sha256sum "$CANDIDATE_SIDECAR" | cut -d' ' -f1)
@@ -292,7 +357,7 @@ finalize_manifests
 
 "$PYTHON_BIN" - \
   "$SUBSET" \
-  "$RUNROOT_ABS/$STOCK_ARM/deploy_speed_fullwall.json" \
+  "$STOCK_TIMING_JSON" \
   "$RUNROOT_ABS/$CANDIDATE_ARM/deploy_speed_fullwall.json" \
   "$RUNROOT_ABS/timing_summary.json" \
   "$CANDIDATE_ENGAGEMENT" "$CANDIDATE_ENGAGEMENT_VALIDATION" \
@@ -305,7 +370,8 @@ finalize_manifests
   "$CANDIDATE_SIDECAR_SHA256" "$STOCK_FA2_SHA256" \
   "$LIVE_FINAL_FLUSH_SHA256" "$LIVE_BOUNDARY_SNAPSHOT_SHA256" \
   "$LIVE_CHAT_TRAFFIC_AUDIT_SHA256" \
-  "$STOCK_ARM" "$CANDIDATE_ARM" <<'PY'
+  "$STOCK_ARM" "$CANDIDATE_ARM" \
+  "$RECOVERED_STOCK_MODE" "$RECOVERED_STOCK_SHA256" <<'PY'
 import hashlib
 import json
 import math
@@ -326,8 +392,18 @@ so_bytes = int(sys.argv[17])
 sidecar_sha, stock_fa2_sha = sys.argv[18:20]
 final_flush_sha, boundary_sha, traffic_audit_sha = sys.argv[20:23]
 stock_arm, candidate_arm = sys.argv[23:25]
+recovered_stock_mode = int(sys.argv[25])
+recovered_stock_sha = sys.argv[26]
+if recovered_stock_mode not in (0, 1):
+    raise SystemExit("recovered stock mode drifted")
+if recovered_stock_mode == 1 and (
+    len(recovered_stock_sha) != 64
+    or any(value not in "0123456789abcdef" for value in recovered_stock_sha)
+):
+    raise SystemExit("recovered stock SHA-256 drifted")
 task_ids = sorted(json.loads(subset_path.read_text(encoding="ascii"))["instance_ids"])
 MIN_RETAINED_WALL_FRACTION = 0.99
+MIN_RECOVERED_CROSS_RUN_RETAINED_WALL_FRACTION = 0.95
 MIN_TASK_COUNTER_STEPS = 64
 RAW = {
     "spec_drafts": "vllm:spec_decode_num_drafts_total",
@@ -399,7 +475,14 @@ def close(actual, expected, label, *, absolute=1e-9, relative=1e-9):
         raise SystemExit(f"{label} consistency check failed: {actual} != {expected}")
 
 
-def validate(record, raw, label, expected_arm):
+def validate(
+    record,
+    raw,
+    label,
+    expected_arm,
+    *,
+    minimum_retained_wall_fraction=MIN_RETAINED_WALL_FRACTION,
+):
     if (
         record.get("schema") != "fr13.measure.deploy_speed.v1"
         or record.get("regime") != "deployment"
@@ -457,7 +540,7 @@ def validate(record, raw, label, expected_arm):
             or fwd_drafts != fwd_steps
             or wall_drafts != wall_steps
             or wall_steps > fwd_steps
-            or wall_steps / fwd_steps < MIN_RETAINED_WALL_FRACTION
+            or wall_steps / fwd_steps < minimum_retained_wall_fraction
         ):
             raise SystemExit(f"{task_label} retained counter window is too small")
         retained_task_fractions[row["instance_id"]] = wall_steps / fwd_steps
@@ -480,7 +563,7 @@ def validate(record, raw, label, expected_arm):
         or agg_fwd_drafts != agg_fwd_steps
         or agg_wall_drafts != agg_wall_steps
         or agg_wall_steps > agg_fwd_steps
-        or agg_wall_steps / agg_fwd_steps < MIN_RETAINED_WALL_FRACTION
+        or agg_wall_steps / agg_fwd_steps < minimum_retained_wall_fraction
     ):
         raise SystemExit(f"{label} aggregate retained counter window is too small")
     values = {
@@ -637,9 +720,31 @@ if (
 ):
     raise SystemExit("candidate credential or replay engagement evidence drifted")
 
-s = validate(stock, stock_raw, "stock", stock_arm)
-c = validate(candidate, candidate_raw, "candidate", candidate_arm)
+s = validate(
+    stock,
+    stock_raw,
+    "stock",
+    stock_arm,
+    minimum_retained_wall_fraction=(
+        MIN_RECOVERED_CROSS_RUN_RETAINED_WALL_FRACTION
+        if recovered_stock_mode == 1
+        else MIN_RETAINED_WALL_FRACTION
+    ),
+)
+c = validate(
+    candidate,
+    candidate_raw,
+    "candidate",
+    candidate_arm,
+    minimum_retained_wall_fraction=(
+        MIN_RECOVERED_CROSS_RUN_RETAINED_WALL_FRACTION
+        if recovered_stock_mode == 1
+        else MIN_RETAINED_WALL_FRACTION
+    ),
+)
 close(s["floor_ms"], c["floor_ms"], "cross-arm floor identity")
+if recovered_stock_mode == 1 and digest(stock_raw) != recovered_stock_sha:
+    raise SystemExit("recovered stock comparison input SHA-256 drifted")
 summary = {
     "schema": "fr13.fixed32.draft_head_m1_exact4_b1_timing.v1",
     "status": "complete",
@@ -683,6 +788,30 @@ summary = {
     "acceptance_cap_ms": 177.029142341,
     "note": "One topology timing pair; not the formal Tail/Hydra U95 gate.",
 }
+if recovered_stock_mode == 1:
+    summary.update(
+        {
+            "schema": (
+                "fr13.fixed32.draft_head_m1_exact4_b1_"
+                "recovered_comparison.v1"
+            ),
+            "classification": (
+                "real_swe_verified_exact4_b1_"
+                "recovered_cross_run_diagnostic"
+            ),
+            "diagnostic_only": True,
+            "cross_run_comparison": True,
+            "timing_eligible": False,
+            "recovered_stock_deploy_speed_sha256": recovered_stock_sha,
+            "minimum_recovered_retained_wall_fraction": (
+                MIN_RECOVERED_CROSS_RUN_RETAINED_WALL_FRACTION
+            ),
+            "note": (
+                "Candidate-only continuation compared with a separately "
+                "recovered exact4 stock run; diagnostic cross-run delta only."
+            ),
+        }
+    )
 temporary = out_path.with_name(out_path.name + f".tmp.{os.getpid()}")
 temporary.write_text(
     json.dumps(summary, ensure_ascii=True, separators=(",", ":"), sort_keys=True)

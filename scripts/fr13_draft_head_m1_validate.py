@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
+import re
 import stat
 import sys
 from pathlib import Path
@@ -34,6 +36,19 @@ ENGAGEMENT_SCHEMA = (
 EXPECTED_GRAPH_SIGNATURE = (
     "d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c"
 )
+EXPECTED_EXACT4_SUBSET_SHA256 = (
+    "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+)
+EXPECTED_EXACT4_INSTANCE_IDS = (
+    "astropy__astropy-12907",
+    "astropy__astropy-13033",
+    "astropy__astropy-13236",
+    "astropy__astropy-13398",
+)
+RECOVERED_STOCK_SCHEMA = (
+    "fr13.fixed32.draft_head_m1_recovered_stock_validation.v1"
+)
+MIN_RECOVERED_STOCK_RETAINED_WALL_FRACTION = 0.95
 POSITIONS = ("root", "mtp1", "mtp2", "mtp3", "mtp4")
 VOCAB_SIZE = 248_320
 HEX = frozenset("0123456789abcdef")
@@ -215,6 +230,174 @@ def _require_regular(path: Path, label: str) -> None:
     info = path.lstat()
     if not stat.S_ISREG(info.st_mode) or path.is_symlink():
         raise ValueError(f"{label} must be a regular non-symlink file")
+
+
+def _finite_number(payload: dict[str, Any], key: str) -> float:
+    value = payload.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"recovered stock {key} is missing or nonnumeric")
+    result = float(value)
+    if not math.isfinite(result) or result <= 0:
+        raise ValueError(f"recovered stock {key} is not finite and positive")
+    return result
+
+
+def _nonnegative_integer(payload: dict[str, Any], key: str, label: str) -> int:
+    value = payload.get(key)
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+        or float(value) < 0
+        or float(value) != round(float(value))
+    ):
+        raise ValueError(f"{label} {key} is not a nonnegative integer")
+    return int(value)
+
+
+def validate_recovered_stock(
+    *,
+    deploy_speed: Path,
+    expected_deploy_speed_sha256: str,
+    exact4_subset: Path,
+    expected_exact4_subset_sha256: str,
+) -> dict[str, Any]:
+    """Validate a prior stock exact4 result before a candidate-only recovery."""
+    _require_regular(deploy_speed, "recovered stock deploy-speed")
+    _require_regular(exact4_subset, "exact4 subset")
+    expected_deploy_speed_sha256 = _require_sha256(
+        expected_deploy_speed_sha256, "recovered stock deploy-speed"
+    )
+    expected_exact4_subset_sha256 = _require_sha256(
+        expected_exact4_subset_sha256, "exact4 subset"
+    )
+    if expected_exact4_subset_sha256 != EXPECTED_EXACT4_SUBSET_SHA256:
+        raise ValueError("recovered stock exact4 subset credential is not canonical")
+    if sha256_file(exact4_subset) != expected_exact4_subset_sha256:
+        raise ValueError("recovered stock exact4 subset SHA-256 drifted")
+    if sha256_file(deploy_speed) != expected_deploy_speed_sha256:
+        raise ValueError("recovered stock deploy-speed SHA-256 drifted")
+
+    subset, _ = load_json(exact4_subset)
+    task_ids = tuple(sorted(subset.get("instance_ids", ())))
+    if task_ids != EXPECTED_EXACT4_INSTANCE_IDS:
+        raise ValueError("recovered stock exact4 task identity drifted")
+    payload, _ = load_json(deploy_speed)
+    arm = payload.get("arm")
+    if (
+        payload.get("schema") != "fr13.measure.deploy_speed.v1"
+        or payload.get("regime") != "deployment"
+        or payload.get("instrument") != "OFF"
+        or not isinstance(arm, str)
+        or re.fullmatch(r"hydra27_fixed32_head_stock_[A-Za-z0-9._-]+", arm)
+        is None
+        or payload.get("batch_size") != 1
+        or payload.get("n_tasks") != 4
+        or tuple(sorted(payload.get("task_instance_ids", ()))) != task_ids
+        or payload.get("floor_is_full_step_hardware_floor") is not False
+        or payload.get("floor_reference_scope")
+        != "fixed32_mandatory_weight_read_or_row_compute_lower_bound"
+        or payload.get("mandatory_weight_bytes") != 42_025_179_008
+        or payload.get("weight_floor_bandwidth_bytes_per_s") != 273_000_000_000
+    ):
+        raise ValueError("recovered stock deploy-speed is not canonical exact4 B1")
+
+    task_records = payload.get("per_task")
+    raw = payload.get("raw_counter_delta_aggregate")
+    if (
+        not isinstance(task_records, list)
+        or len(task_records) != 4
+        or any(not isinstance(row, dict) for row in task_records)
+        or not isinstance(raw, dict)
+        or tuple(sorted(row.get("instance_id") for row in task_records))
+        != task_ids
+    ):
+        raise ValueError("recovered stock exact4 counter census is missing")
+    fwd_metric = "vllm:fr13_decode_forward_gpu_steps_total"
+    wall_metric = "vllm:fr13_decode_step_wall_steps_total"
+    aggregate_fwd = _nonnegative_integer(raw, fwd_metric, "recovered stock")
+    aggregate_wall = _nonnegative_integer(raw, wall_metric, "recovered stock")
+    aggregate_fwd_drafts = _nonnegative_integer(
+        raw, "vllm:fr13_decode_forward_gpu_drafts_total", "recovered stock"
+    )
+    aggregate_wall_drafts = _nonnegative_integer(
+        raw, "vllm:fr13_decode_step_wall_drafts_total", "recovered stock"
+    )
+    task_fwd = 0
+    task_wall = 0
+    for row in task_records:
+        label = f"recovered stock {row['instance_id']}"
+        fwd_steps = _nonnegative_integer(row, "fwd_gpu_steps", label)
+        wall_steps = _nonnegative_integer(row, "wall_steps", label)
+        fwd_drafts = _nonnegative_integer(row, "fwd_gpu_drafts", label)
+        wall_drafts = _nonnegative_integer(row, "wall_drafts", label)
+        if (
+            fwd_steps < 64
+            or fwd_drafts != fwd_steps
+            or wall_drafts != wall_steps
+            or wall_steps > fwd_steps
+            or wall_steps / fwd_steps
+            < MIN_RECOVERED_STOCK_RETAINED_WALL_FRACTION
+        ):
+            raise ValueError(f"{label} retained counter window is too small")
+        task_fwd += fwd_steps
+        task_wall += wall_steps
+    if (
+        aggregate_fwd != task_fwd
+        or aggregate_wall != task_wall
+        or aggregate_fwd_drafts != aggregate_fwd
+        or aggregate_wall_drafts != aggregate_wall
+        or aggregate_fwd < 256
+        or aggregate_wall > aggregate_fwd
+        or aggregate_wall / aggregate_fwd
+        < MIN_RECOVERED_STOCK_RETAINED_WALL_FRACTION
+    ):
+        raise ValueError("recovered stock aggregate counter census drifted")
+
+    step_wall_ms = _finite_number(payload, "step_wall_ms")
+    measured_tps = _finite_number(payload, "measured_tps_fullstep_wall")
+    accept_per_event = _finite_number(payload, "accept_per_event")
+    if (
+        not math.isclose(
+            _finite_number(payload, "events_per_step"), 1.0, abs_tol=1e-9
+        )
+        or not math.isclose(
+            _finite_number(payload, "rows_per_step"), 32.0, abs_tol=1e-9
+        )
+        or not math.isclose(
+            _finite_number(payload, "weight_floor_ms"),
+            153.938384645,
+            abs_tol=1e-9,
+        )
+        or not math.isclose(
+            _finite_number(payload, "floor_ms"),
+            153.938384645,
+            abs_tol=1e-9,
+        )
+    ):
+        raise ValueError("recovered stock fixed32 floor identity drifted")
+    return {
+        "schema": RECOVERED_STOCK_SCHEMA,
+        "status": "PASS",
+        "classification": "recovered_exact4_stock_input",
+        "diagnostic_only": True,
+        "cross_run_diagnostic_eligible": True,
+        "timing_pair_eligible": False,
+        "floor_acceptance_eligible": False,
+        "stock_arm": arm,
+        "instance_ids": list(task_ids),
+        "deploy_speed_sha256": expected_deploy_speed_sha256,
+        "exact4_subset_sha256": expected_exact4_subset_sha256,
+        "step_wall_ms": step_wall_ms,
+        "measured_tps_fullstep_wall": measured_tps,
+        "accept_per_event": accept_per_event,
+        "forward_steps": aggregate_fwd,
+        "wall_steps": aggregate_wall,
+        "retained_wall_fraction": aggregate_wall / aggregate_fwd,
+        "minimum_retained_wall_fraction": (
+            MIN_RECOVERED_STOCK_RETAINED_WALL_FRACTION
+        ),
+    }
 
 
 def validate_build_attestation(
@@ -834,6 +1017,15 @@ def _parser() -> argparse.ArgumentParser:
     )
     engagement.add_argument("--expected-so-sha256", required=True)
     engagement.add_argument("--expected-sidecar-sha256", required=True)
+    recovered_stock = subparsers.add_parser("recovered-stock")
+    recovered_stock.add_argument("--deploy-speed", type=Path, required=True)
+    recovered_stock.add_argument(
+        "--expected-deploy-speed-sha256", required=True
+    )
+    recovered_stock.add_argument("--exact4-subset", type=Path, required=True)
+    recovered_stock.add_argument(
+        "--expected-exact4-subset-sha256", required=True
+    )
     return parser
 
 
@@ -920,7 +1112,7 @@ def main() -> int:
                     args.expected_build_attestation_sha256
                 ),
             )
-        else:
+        elif args.command == "engagement":
             result = validate_engagement(
                 engagement_path=args.engagement,
                 expected_source_sha256=args.expected_source_sha256,
@@ -930,6 +1122,17 @@ def main() -> int:
                 ),
                 expected_so_sha256=args.expected_so_sha256,
                 expected_sidecar_sha256=args.expected_sidecar_sha256,
+            )
+        else:
+            result = validate_recovered_stock(
+                deploy_speed=args.deploy_speed,
+                expected_deploy_speed_sha256=(
+                    args.expected_deploy_speed_sha256
+                ),
+                exact4_subset=args.exact4_subset,
+                expected_exact4_subset_sha256=(
+                    args.expected_exact4_subset_sha256
+                ),
             )
     except (OSError, ValueError) as error:
         print(f"ERROR: {error}", file=sys.stderr)

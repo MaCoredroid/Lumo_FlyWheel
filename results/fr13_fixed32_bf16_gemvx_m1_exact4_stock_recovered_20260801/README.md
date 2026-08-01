@@ -54,4 +54,10 @@ formal floor-acceptance result. The candidate arm did not start because the
 stock wrapper failed during teardown. A separately source-bound candidate-only
 continuation is required before drawing a kernel delta.
 
+`prepared_candidate_recovery.sh` supplies this artifact's exact deploy-speed
+path and SHA to the fail-closed recovery mode. It requires the completed M1
+live-gate runroot/arm and canonical FA2 path, launches only the exact4 M1 arm,
+and emits a recovered-cross-run diagnostic comparison. That comparison is not
+a same-run timing pair or floor-acceptance result.
+
 Measured source commit: `722e5bdb4ebb517d1f74cb44b5e2cbab78e363fe`.

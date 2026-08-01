@@ -19,6 +19,13 @@ LAUNCHER = REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 RUNNER = REPO / "scripts" / "fr13_run_b1_draft_head_m1_live.sh"
 TIMING_RUNNER = REPO / "scripts" / "fr13_run_b1_draft_head_m1_timing.sh"
 VALIDATOR = REPO / "scripts" / "fr13_draft_head_m1_validate.py"
+EXACT4_SUBSET = REPO / "config" / "fr13_fixed32" / "subset_b4_four.json"
+RECOVERED_STOCK = (
+    REPO
+    / "results"
+    / "fr13_fixed32_bf16_gemvx_m1_exact4_stock_recovered_20260801"
+    / "deploy_speed_fullwall.json"
+)
 MANIFEST = REPO / "scripts" / "fr13_runtime_manifest.py"
 PREPARED = (
     REPO
@@ -567,6 +574,54 @@ def test_m1_timing_runner_is_exact4_b1_full_wall_and_isolated() -> None:
     assert '"qualified_build_attestation_sha256"' in runner
     assert '"qualified_candidate_so_sha256"' in runner
     assert '"scripts/fr13_run_b1_draft_head_m1_timing.sh"' in manifest
+
+
+def test_m1_recovered_stock_route_is_exact4_candidate_only_and_fail_closed(
+    tmp_path: Path,
+) -> None:
+    runner = TIMING_RUNNER.read_text(encoding="utf-8")
+    validator = _validator_module()
+    stock_sha = validator.sha256_file(RECOVERED_STOCK)
+    result = validator.validate_recovered_stock(
+        deploy_speed=RECOVERED_STOCK,
+        expected_deploy_speed_sha256=stock_sha,
+        exact4_subset=EXACT4_SUBSET,
+        expected_exact4_subset_sha256=(
+            validator.EXPECTED_EXACT4_SUBSET_SHA256
+        ),
+    )
+
+    assert result["status"] == "PASS"
+    assert result["stock_arm"].startswith("hydra27_fixed32_head_stock_")
+    assert result["instance_ids"] == list(
+        validator.EXPECTED_EXACT4_INSTANCE_IDS
+    )
+    assert result["timing_pair_eligible"] is False
+    assert result["retained_wall_fraction"] >= 0.95
+    assert "RECOVERED_STOCK_JSON and RECOVERED_STOCK_SHA256 must be set together" in runner
+    assert "fr13_draft_head_m1_validate.py recovered-stock" in runner
+    assert "recovered exact4 stock validated; launching candidate arm only" in runner
+    assert "real_swe_verified_exact4_b1_recovered_cross_run_diagnostic" in runner
+    assert '"diagnostic_only": True' in runner
+    assert '"timing_eligible": False' in runner
+    assert '"candidate_source_sha256": source_sha' in runner
+    assert '"patcher_sha256": patcher_sha' in runner
+    assert "git status --porcelain=v1" in runner
+    assert "--untracked-files=no" not in runner
+
+    tampered = tmp_path / "candidate.json"
+    payload = json.loads(RECOVERED_STOCK.read_text(encoding="utf-8"))
+    payload["arm"] = payload["arm"].replace("head_stock", "head_m1")
+    tampered.write_text(json.dumps(payload) + "\n", encoding="ascii")
+    with pytest.raises(ValueError, match="not canonical exact4 B1"):
+        validator.validate_recovered_stock(
+            deploy_speed=tampered,
+            expected_deploy_speed_sha256=validator.sha256_file(tampered),
+            exact4_subset=EXACT4_SUBSET,
+            expected_exact4_subset_sha256=(
+                validator.EXPECTED_EXACT4_SUBSET_SHA256
+            ),
+        )
 
 
 def test_fixed32_flush_calls_m1_finalizer() -> None:
