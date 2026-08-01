@@ -54,6 +54,7 @@ _FR13_M32_GUARD_NAMES=(
   FR13_DRAFT_HEAD_M1_LIVE_CHAT_TRAFFIC_AUDIT_JSON
   FR13_DRAFT_HEAD_M1_PRODUCTION_ENGAGEMENT_JSON
   FR13_DRAFT_HEAD_M1_TIMING_ARM
+  FR13_DRAFT_HEAD_M1_MAX_BATCH
   FR13_DRAFT_HEAD_M1_SO
   FR13_DRAFT_HEAD_M1_SO_SHA256
   FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION
@@ -332,6 +333,7 @@ FR13_DRAFT_HEAD_M1_LIVE_BOUNDARY_SNAPSHOT_JSON=${FR13_DRAFT_HEAD_M1_LIVE_BOUNDAR
 FR13_DRAFT_HEAD_M1_LIVE_CHAT_TRAFFIC_AUDIT_JSON=${FR13_DRAFT_HEAD_M1_LIVE_CHAT_TRAFFIC_AUDIT_JSON:-}
 FR13_DRAFT_HEAD_M1_PRODUCTION_ENGAGEMENT_JSON=${FR13_DRAFT_HEAD_M1_PRODUCTION_ENGAGEMENT_JSON:-/logs/fr13_draft_head_m1.production_engagement.json}
 FR13_DRAFT_HEAD_M1_TIMING_ARM=${FR13_DRAFT_HEAD_M1_TIMING_ARM:-0}
+FR13_DRAFT_HEAD_M1_MAX_BATCH=${FR13_DRAFT_HEAD_M1_MAX_BATCH:-1}
 FR13_DRAFT_HEAD_M1_SO=${FR13_DRAFT_HEAD_M1_SO:-}
 FR13_DRAFT_HEAD_M1_SO_SHA256=${FR13_DRAFT_HEAD_M1_SO_SHA256:-}
 FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION=${FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION:-}
@@ -455,6 +457,15 @@ case "$FR13_DRAFT_HEAD_M1_TIMING_ARM" in
   0|1) ;;
   *) echo "FR13_DRAFT_HEAD_M1_TIMING_ARM must be 0 or 1" >&2; exit 2 ;;
 esac
+case "$FR13_DRAFT_HEAD_M1_MAX_BATCH" in
+  1|4) ;;
+  *) echo "FR13_DRAFT_HEAD_M1_MAX_BATCH must be exactly 1 or 4" >&2; exit 2 ;;
+esac
+if [[ "$FR13_DRAFT_HEAD_M1_MAX_BATCH" == "4" \
+      && "$FR13_DRAFT_HEAD_M1_LIVE_AB" != "1" ]]; then
+  echo "FR13 draft-head B1-B4 kernel is shadow-only until an exact4 byte gate passes" >&2
+  exit 2
+fi
 if [[ -n "${FR13_DRAFT_HEAD_M32_INTERNAL_PRODUCTION_ATTESTED:-}" ]]; then
   echo "FR13 draft-head M32 internal attestation is launcher-private" >&2
   exit 2
@@ -521,16 +532,24 @@ if (( _FR13_DRAFT_HEAD_PAD_MODE == 1 )); then
   }
 fi
 if (( _FR13_DRAFT_HEAD_M32_WORKLOAD == 1 )); then
-  # The kernel contract is B1-B4, but this credential path remains B1-only.
-  # Widening MAX_NUM_SEQS requires a fresh exact4 B4 full-logit graph gate.
+  _FR13_DRAFT_HEAD_EXPECTED_BATCH=1
+  if [[ "$FR13_DRAFT_HEAD_M1_LIVE_AB" == "1" \
+        && "$FR13_DRAFT_HEAD_M1_MAX_BATCH" == "4" ]]; then
+    _FR13_DRAFT_HEAD_EXPECTED_BATCH=4
+  fi
   [[ -n "${FR13_FIXED32_MODE:-}" \
-     && "$MAX_NUM_SEQS" == "1" \
+     && "$MAX_NUM_SEQS" == "$_FR13_DRAFT_HEAD_EXPECTED_BATCH" \
      && "$FR13_DRAFT_VOCAB_ROOT" == "0" \
      && "${FR13_DRAFT_VOCAB_K:-}" == "0" \
      && -z "${FR13_DRAFT_VOCAB_BLOCKS:-}" ]] || {
-    echo "FR13 full-head M32 requires fixed32 B1 with K=0/root=0 and no draft-vocab block map" >&2
+    if [[ "$_FR13_DRAFT_HEAD_EXPECTED_BATCH" == "1" ]]; then
+      echo "FR13 full-head M32 requires fixed32 B1 with K=0/root=0 and no draft-vocab block map" >&2
+    else
+      echo "FR13 full-head B1-B4 kernel requires exact B4 with K=0/root=0 and no draft-vocab block map" >&2
+    fi
     exit 2
   }
+  unset _FR13_DRAFT_HEAD_EXPECTED_BATCH
 fi
 if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" \
       && "$FR13_DRAFT_HEAD_M32_INSTANCE_ID" != "astropy__astropy-12907" ]]; then
@@ -538,8 +557,7 @@ if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" \
   exit 2
 fi
 if [[ "$FR13_DRAFT_HEAD_M1_LIVE_AB" == "1" ]]; then
-  [[ "$FR13_DRAFT_HEAD_M1_INSTANCE_ID" == "astropy__astropy-12907" \
-     && -f "$FR13_DRAFT_HEAD_M1_SO" \
+  [[ -f "$FR13_DRAFT_HEAD_M1_SO" \
      && ! -L "$FR13_DRAFT_HEAD_M1_SO" \
      && "$FR13_DRAFT_HEAD_M1_SO" == /* \
      && -f "$FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION" \
@@ -551,16 +569,35 @@ if [[ "$FR13_DRAFT_HEAD_M1_LIVE_AB" == "1" ]]; then
         == "$FR13_DRAFT_HEAD_M1_SO_SHA256" \
      && "$(sha256sum "$FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION" | cut -d' ' -f1)" \
         == "$FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION_SHA256" \
-     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
      && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
      && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
      && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
      && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
      && "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" == "0" ]] || {
-    echo "FR13 draft-head M1 live A/B requires its pinned SO and must be the only canonical real-B1 candidate" >&2
+    echo "FR13 draft-head M1/B4 live A/B requires its pinned SO and must be the only kernel candidate" >&2
     exit 2
   }
+  if [[ "$FR13_DRAFT_HEAD_M1_MAX_BATCH" == "1" ]]; then
+    [[ "$FR13_DRAFT_HEAD_M1_INSTANCE_ID" == "astropy__astropy-12907" \
+       && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" ]] || {
+      echo "FR13 draft-head M1 live A/B requires the canonical real B1 task" >&2
+      exit 2
+    }
+  else
+    [[ -z "$FR13_DRAFT_HEAD_M1_INSTANCE_ID" \
+       && "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" \
+       && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+       && "${MAX_NUM_SEQS_OVR:-}" == "4" \
+       && "${SWE_CONCURRENCY:-}" == "4" \
+       && "${ENFORCE_EAGER:-0}" == "0" \
+       && "${CUDAGRAPH_MODE:-FULL_AND_PIECEWISE}" == "FULL_AND_PIECEWISE" \
+       && "${FR13_FIXED32_INGRESS_TASK_IDS:-}" == \
+          "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398" ]] || {
+      echo "FR13 draft-head B1-B4 live A/B requires canonical exact4 B4 graph traffic" >&2
+      exit 2
+    }
+  fi
 fi
 if [[ "$FR13_DRAFT_HEAD_M1_PRODUCTION" == "1" ]]; then
   [[ -f "$FR13_DRAFT_HEAD_M1_LIVE_PASS_JSON" \
@@ -2543,6 +2580,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_SHA256="$FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_SHA256" \
   -e FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON="$FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON" \
   -e FR13_DRAFT_HEAD_M1_LIVE_AB="$FR13_DRAFT_HEAD_M1_LIVE_AB" \
+  -e FR13_DRAFT_HEAD_M1_MAX_BATCH="$FR13_DRAFT_HEAD_M1_MAX_BATCH" \
   -e FR13_DRAFT_HEAD_M1_PRODUCTION="$FR13_DRAFT_HEAD_M1_PRODUCTION" \
   -e FR13_DRAFT_HEAD_M1_SOURCE_SHA256="$FR13_DRAFT_HEAD_M1_SOURCE_SHA256" \
   -e FR13_DRAFT_HEAD_M1_PATCHER_SHA256="$FR13_DRAFT_HEAD_M1_PATCHER_SHA256" \

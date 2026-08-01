@@ -46,6 +46,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_device_multidraft_kernel.py",
     "scripts/fr13_draft_head_m32_pass.py",
     "scripts/fr13_build_bf16_gemvx_m1.py",
+    "scripts/fr13_build_bf16_gemvx_b1_b4.py",
     "scripts/fr13_draft_head_m1_validate.py",
     "scripts/fr13_fixed32_flush_protocol.py",
     "scripts/fr13_fixed32_contract.py",
