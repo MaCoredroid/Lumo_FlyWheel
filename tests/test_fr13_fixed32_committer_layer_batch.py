@@ -380,12 +380,24 @@ def test_candidate_binds_physical_alias_row_uniqueness_guard() -> None:
 
 def test_launcher_materializes_worker_visible_arm_only_when_requested() -> None:
     launcher = LAUNCHER_PATH.read_text()
+    server_launcher = (
+        ROOT / "scripts/fr13_launch_forked_fa2_tree_server.sh"
+    ).read_text()
 
     assert "FR13_FIXED32_COMMITTER_LAYER_BATCH=${" in launcher
     assert "FR13_FIXED32_COMMITTER_LAYER_BATCH must be exactly 0 or 1" in launcher
     assert 'if [[ "$FR13_FIXED32_COMMITTER_LAYER_BATCH" == "1" ]]' in launcher
     assert '"$ARMDIR/logs/fr13_fixed32_committer_layer_batch.arm"' in launcher
     assert "committer layer-batch arm requires a fixed32 kind" in launcher
+    assert "FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION=${" in launcher
+    assert "CFWD layer-batch qualification is fixed32 B1/sequential only" in launcher
+    assert "--fixed32-committer-layer-batch-real-event-arm" in launcher
+    assert "FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT_ARM_PATH" in launcher
+    assert (
+        'rm -f -- "$FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT_ARM_PATH"'
+        in launcher
+    )
+    assert "fr13_fixed32_committer_layer_batch.real_event.arm" in server_launcher
 
 
 def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> None:
