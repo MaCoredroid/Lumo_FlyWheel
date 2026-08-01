@@ -123,19 +123,35 @@ def _qwen_trace(instance_id: str) -> list[dict[str, Any]]:
     ]
 
 
-def _metrics(completed: int) -> bytes:
+def _metrics(
+    completed: int,
+    *,
+    compactions: int = 0,
+    normal_requests: int | None = None,
+    prompt_tokens: int | None = None,
+    generation_tokens: int | None = None,
+) -> bytes:
+    if normal_requests is None:
+        normal_requests = completed
+    if prompt_tokens is None:
+        prompt_tokens = completed * 32
+    if generation_tokens is None:
+        generation_tokens = completed * 8
+    max_tokens_sum = (
+        normal_requests * contract.QWEN_VISIBLE_MAX_OUTPUT_TOKENS
+        + compactions * contract.QWEN_COMPACTION_MAX_OUTPUT_TOKENS
+    )
     base_labels = 'engine="0",model_name="qwen3.6-27b"'
     lines = [
-        f"vllm:prompt_tokens_total{{{base_labels}}} {completed * 32}",
-        f"vllm:generation_tokens_total{{{base_labels}}} {completed * 8}",
+        f"vllm:prompt_tokens_total{{{base_labels}}} {prompt_tokens}",
+        f"vllm:generation_tokens_total{{{base_labels}}} {generation_tokens}",
         (
             "vllm:request_params_max_tokens_count"
             f"{{{base_labels}}} {completed}"
         ),
         (
             "vllm:request_params_max_tokens_sum"
-            f"{{{base_labels}}} "
-            f"{completed * contract.QWEN_VISIBLE_MAX_OUTPUT_TOKENS}"
+            f"{{{base_labels}}} {max_tokens_sum}"
         ),
     ]
     for reason in ("stop", "length", "abort", "error", "repetition"):
@@ -149,7 +165,7 @@ def _metrics(completed: int) -> bytes:
         )
     for le, value in (
         ("10000.0", 0),
-        ("20000.0", 0),
+        ("20000.0", compactions),
         ("50000.0", completed),
         ("+Inf", completed),
     ):
@@ -718,11 +734,41 @@ def _synthetic_compaction_failure_trace() -> list[dict[str, Any]]:
     }
     events[-1]["result"] = text
     events[-1]["usage"] = {
-        "input_tokens": 32,
-        "output_tokens": 8,
-        "total_tokens": 40,
+        "input_tokens": 64,
+        "output_tokens": 16,
+        "total_tokens": 80,
     }
     return events
+
+
+def _failed_only_campaign_fixture(
+    tmp_path: Path,
+) -> tuple[Any, list[dict[str, Any]], Path, Path]:
+    runner, summaries, dataset_out, per_task_root = _campaign_fixture(tmp_path)
+    first_task_id = TASK_IDS[0]
+    first_task_dir = per_task_root / first_task_id
+    first_task_dir.joinpath("qwen_trace.jsonl").write_text(
+        "".join(
+            json.dumps(event) + "\n"
+            for event in _synthetic_compaction_failure_trace()
+        ),
+        encoding="utf-8",
+    )
+    runtime_args = summaries[0][runner._FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY]
+    task_key_id = runtime_args["task_key_id"]
+    runtime_args["task_auth_after"] = _task_auth(task_key_id, 5)
+    dataset_out.joinpath(
+        runner._FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME
+    ).write_bytes(
+        _metrics(
+            11,
+            compactions=4,
+            normal_requests=7,
+            prompt_tokens=256,
+            generation_tokens=64,
+        )
+    )
+    return runner, summaries, dataset_out, per_task_root
 
 
 @pytest.mark.parametrize("tamper", ("usage_key", "result_text"))
@@ -745,3 +791,105 @@ def test_synthetic_compaction_failure_exclusion_is_exact(tamper: str) -> None:
     )
     assert near_miss["completed_logical_model_requests"] == 2
     assert near_miss["synthetic_compaction_failure_terminal"] is False
+
+
+def test_b4_failed_only_compactions_finalize_from_exact_terminal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner, summaries, dataset_out, per_task_root = (
+        _failed_only_campaign_fixture(tmp_path)
+    )
+    monkeypatch.setattr(
+        runner,
+        "_fixed32_real_task_provenance",
+        lambda **kwargs: {
+            "schema": "fr13-fixed32-real-task-provenance-v3",
+            "instance_id": kwargs["instance_id"],
+        },
+    )
+
+    proof = runner._finalize_fixed32_qwen_campaign_provenance(
+        summaries=summaries,
+        instance_ids=TASK_IDS,
+        dataset_out=dataset_out,
+        per_task_root=per_task_root,
+        campaign_metrics_pre_path=_campaign_metric_paths(
+            runner, dataset_out
+        )[0],
+        campaign_metrics_post_path=_campaign_metric_paths(
+            runner, dataset_out
+        )[1],
+    )
+
+    assert proof["metric_evidence"]["completed_engine_requests"] == 11
+    assert proof["metric_evidence"]["normal_requests"] == 7
+    assert proof["metric_evidence"]["successful_compaction_requests"] == 0
+    assert proof["metric_evidence"]["failed_compaction_requests"] == 4
+    first_task = proof["metric_evidence"]["tasks"][0]
+    assert first_task["synthetic_compaction_failure_terminal"] is True
+    for task_id in TASK_IDS:
+        task_dir = per_task_root / task_id
+        assert (task_dir / "runner_metadata.json").is_file()
+        assert not (
+            task_dir / runner._FIXED32_PENDING_RUNNER_METADATA_FILENAME
+        ).exists()
+
+
+@pytest.mark.parametrize("tamper", ("terminal", "compaction_metric"))
+def test_b4_failed_only_compaction_tamper_publishes_nothing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tamper: str,
+) -> None:
+    runner, summaries, dataset_out, per_task_root = (
+        _failed_only_campaign_fixture(tmp_path)
+    )
+    if tamper == "terminal":
+        trace_path = per_task_root / TASK_IDS[0] / "qwen_trace.jsonl"
+        events = [json.loads(line) for line in trace_path.read_text().splitlines()]
+        events[-1]["result"] += " "
+        trace_path.write_text(
+            "".join(json.dumps(event) + "\n" for event in events),
+            encoding="utf-8",
+        )
+    else:
+        dataset_out.joinpath(
+            runner._FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME
+        ).write_bytes(
+            _metrics(
+                11,
+                compactions=3,
+                normal_requests=8,
+                prompt_tokens=256,
+                generation_tokens=64,
+            )
+        )
+    monkeypatch.setattr(runner, "_fixed32_real_task_provenance", lambda **_: {})
+
+    with pytest.raises(
+        runner.Fixed32BoundaryError,
+        match="campaign metrics do not reconcile",
+    ):
+        runner._finalize_fixed32_qwen_campaign_provenance(
+            summaries=summaries,
+            instance_ids=TASK_IDS,
+            dataset_out=dataset_out,
+            per_task_root=per_task_root,
+            campaign_metrics_pre_path=_campaign_metric_paths(
+                runner, dataset_out
+            )[0],
+            campaign_metrics_post_path=_campaign_metric_paths(
+                runner, dataset_out
+            )[1],
+        )
+
+    assert not (
+        dataset_out / runner._FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME
+    ).exists()
+    for task_id in TASK_IDS:
+        task_dir = per_task_root / task_id
+        assert not (task_dir / "runner_metadata.json").exists()
+        assert (
+            task_dir / runner._FIXED32_PENDING_RUNNER_METADATA_FILENAME
+        ).is_file()

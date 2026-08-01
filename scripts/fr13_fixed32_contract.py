@@ -1026,6 +1026,7 @@ def _fixed32_qwen_compaction_metric_evidence(
     result: dict[str, Any],
     normal_request_count: int,
     successful_compaction_count: int,
+    synthetic_compaction_failure_terminal: bool,
     expected_completed_logical_model_requests: int,
     metrics_pre: bytes,
     metrics_post: bytes,
@@ -1136,10 +1137,14 @@ def _fixed32_qwen_compaction_metric_evidence(
         )
 
     failed_compactions = total_compactions - successful_compaction_count
-    if failed_compactions > 0 and successful_compaction_count <= 0:
+    if (
+        failed_compactions > 0
+        and successful_compaction_count <= 0
+        and synthetic_compaction_failure_terminal is not True
+    ):
         raise ContractError(
             "fixed32 qwen failed compactions lack a trace-visible "
-            "successful compaction"
+            "successful compaction or exact synthetic failure terminal"
         )
     evidence = {
         "schema": QWEN_COMPACTION_METRIC_SCHEMA,
@@ -2136,6 +2141,9 @@ def validate_fixed32_trace_model_requests(
             result=result,
             normal_request_count=normal_request_count,
             successful_compaction_count=len(hidden_compaction_requests),
+            synthetic_compaction_failure_terminal=(
+                synthetic_compaction_failure_terminal
+            ),
             expected_completed_logical_model_requests=(
                 expected_completed_logical_model_requests
             ),
@@ -2301,6 +2309,8 @@ def validate_fixed32_qwen_campaign_metrics(
             or (
                 failed_compactions > 0
                 and successful_compactions <= 0
+                and base.get("synthetic_compaction_failure_terminal")
+                is not True
             )
         ):
             raise ContractError(

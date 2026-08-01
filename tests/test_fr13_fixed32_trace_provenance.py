@@ -350,6 +350,42 @@ def _qwen_failed_compaction_trace() -> list[dict[str, Any]]:
     return events
 
 
+def _qwen_failed_only_compaction_trace() -> list[dict[str, Any]]:
+    events = _qwen_result_trace()
+    result = events[-1]
+    text = (
+        "[API Error: Context is too large to send safely after automatic "
+        "compression. Estimated prompt tokens: 78280; hard limit: 75304; "
+        "compression status: COMPRESSION_FAILED_EMPTY_SUMMARY. Start a new "
+        "session or reduce the resumed history before continuing.]"
+    )
+    synthetic_id = "synthetic-compaction-failure"
+    events[-3:-1] = [
+        {
+            "type": "assistant",
+            "uuid": synthetic_id,
+            "session_id": result["session_id"],
+            "parent_tool_use_id": None,
+            "message": {
+                "id": synthetic_id,
+                "type": "message",
+                "role": "assistant",
+                "model": "qwen3.6-27b",
+                "content": [{"type": "text", "text": text}],
+                "stop_reason": None,
+                "usage": {"input_tokens": 0, "output_tokens": 0},
+            },
+        }
+    ]
+    result["result"] = text
+    result["usage"] = {
+        "input_tokens": 52,
+        "output_tokens": 20,
+        "total_tokens": 72,
+    }
+    return events
+
+
 def _fixed32_bundle_observation(runner: Any) -> dict[str, Any]:
     return {
         "qwen_code_version": runner._FIXED32_QWEN_CODE_VERSION,
@@ -752,6 +788,60 @@ def test_qwen_failed_compactions_reconcile_from_pinned_metrics(
     )
     assert floor_trace["completed_logical_model_requests"] == 16
     assert len(floor_trace["model_request_id_sha256s"]) == 16
+
+
+def test_qwen_failed_only_compactions_require_exact_synthetic_terminal() -> None:
+    events = _qwen_failed_only_compaction_trace()
+    metrics_pre, metrics_post = _qwen_compaction_metrics(
+        completed=16,
+        compactions=4,
+        normal_requests=12,
+        prompt_tokens=52,
+        generation_tokens=20,
+    )
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        expected_completed_logical_model_requests=16,
+        metrics_pre=metrics_pre,
+        metrics_post=metrics_post,
+    )
+
+    assert trace_requests["completed_logical_model_requests"] == 16
+    assert trace_requests["hidden_successful_compaction_model_requests"] == 0
+    assert trace_requests["hidden_failed_compaction_model_requests"] == 4
+    assert trace_requests["synthetic_compaction_failure_terminal"] is True
+
+
+@pytest.mark.parametrize("tamper", ("usage_key", "result_text"))
+def test_qwen_failed_only_compaction_terminal_near_miss_fails_closed(
+    tamper: str,
+) -> None:
+    events = _qwen_failed_only_compaction_trace()
+    if tamper == "usage_key":
+        events[-2]["message"]["usage"]["total_tokens"] = 0
+    else:
+        events[-1]["result"] += " "
+    metrics_pre, metrics_post = _qwen_compaction_metrics(
+        completed=16,
+        compactions=3,
+        normal_requests=13,
+        prompt_tokens=52,
+        generation_tokens=20,
+    )
+
+    with pytest.raises(
+        contract.ContractError,
+        match="exact synthetic failure terminal",
+    ):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+            expected_completed_logical_model_requests=16,
+            metrics_pre=metrics_pre,
+            metrics_post=metrics_post,
+        )
 
 
 @pytest.mark.parametrize(
