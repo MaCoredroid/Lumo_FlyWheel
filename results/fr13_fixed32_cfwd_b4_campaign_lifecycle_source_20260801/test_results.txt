@@ -1,0 +1,18 @@
+Focused lifecycle and snapshot suite:
+  83 passed in 0.48s
+
+Broad fixed32 suite:
+  791 passed, 8 skipped, 3 failed in 18.30s
+
+The three broad failures are environment-only and pre-existing in isolated
+worktrees:
+  - two ingress-wiring cases require .venv/bin/python in the worktree
+  - one runtime-manifest case requires the untracked Hugging Face dataset cache
+
+Static checks:
+  python3 -m py_compile: pass
+  ruff check: pass
+  bash -n: pass
+  git diff --check: pass
+
+No GPU or performance campaign was run for this source artifact.
