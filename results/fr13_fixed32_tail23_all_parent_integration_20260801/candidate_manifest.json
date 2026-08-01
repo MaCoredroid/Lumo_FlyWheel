@@ -1,0 +1,94 @@
+{
+  "schema": "fr13.fixed32.tail23_all_parent_integration.v1",
+  "status": "source_static_only_live_b1_b4_gate_pending",
+  "head_commit": "5131273d0eadee290a83aebf93446a5efd06ea85",
+  "branch": "agent/fixed32-node32-nonscaling-0f2",
+  "commits": {
+    "tail23_rescue": "db93e1969",
+    "all_parent_commit": "72e87b6dc",
+    "uniform_schedule_binding": "5131273d0"
+  },
+  "logical_topology": {
+    "tail_mode_name": "tail6_fixed32",
+    "tail_active_drafts": 23,
+    "tail_valid_mask": "0x7a9ce7ff",
+    "tail_added_draft_local_nodes": [6, 7],
+    "tail_added_paths": [[1, 0], [2, 0]],
+    "hydra_active_drafts": 27,
+    "hydra_valid_mask": "0x7abdffff",
+    "hydra_only_paths_after_tail_rescue": [[1, 0, 0], [2, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0, 0]]
+  },
+  "physical_contract": {
+    "physical_drafts": 31,
+    "physical_rows_root_inclusive": 32,
+    "physical_parent_vector_same_between_modes": true,
+    "tree_attention_bias_same_between_modes": true,
+    "drafter_schedule_same_between_modes": true,
+    "gdn_schedule_same_between_modes": true,
+    "committer_capacity_same_between_modes": true
+  },
+  "b1_work_census_per_mode": {
+    "drafter_mtp_forward_calls": 4,
+    "drafter_arctic_lookup_calls": 3,
+    "drafter_arctic_requested_tokens": 12,
+    "drafter_pack_columns": 31,
+    "tree_attention_calls": 16,
+    "tree_attention_query_rows": 512,
+    "tree_attention_bias_shape": [32, 32],
+    "gdn_scan_calls": 48,
+    "gdn_launches": 96,
+    "gdn_path_programs": 576,
+    "gdn_padded_slots": 3936,
+    "gdn_critical_path": 12,
+    "committer_path_capacity": 16,
+    "committer_layer_calls": 48,
+    "committer_ring_gathers": 4,
+    "committer_neutralize_ops": 5,
+    "committer_host_readbacks": 0
+  },
+  "all_parent_candidate": {
+    "name": "fixed32_all_parent_commit_v2",
+    "default_enabled": false,
+    "source_contract_schema": "fr13-fixed32-taw-all-parent-v4",
+    "source_contract_sha256": "51541928c3a758fdac34a70fe46b97753ffc1b6e9f3e5fe470c4b34a96515dc4",
+    "self_rows_per_request": 13,
+    "target_rows_per_request": 17,
+    "full_vocab_softmax_calls": 2,
+    "exact_commit_launches_per_request": 1,
+    "reference_full_vocab_softmax_calls": 24,
+    "reference_exact_commit_launches_per_request": 12,
+    "floating_sampling_reimplementation": false
+  },
+  "source_sha256": {
+    "scripts/fr13_fixed32_topology.py": "a5e7d615656b2f433f799cb9a1fe7e1e431816b9c14960ffe13795a6266d1634",
+    "scripts/fr13_device_multidraft_kernel.py": "8402e027b6dea8d902f86810b9e5a0fa0a01dda61e74b0f517987d2cf4c95f9a",
+    "scripts/fr13_fixed32_work_census.py": "97c14a33a3c475f170b6f80e003c59afecce523a200878fe72b6337f74363cba",
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "3d61e8242ec1fd6496154b16fcb91a52aa382d324b873f7d65f7bd0f9a3c5ea1"
+  },
+  "verification": {
+    "fixed32_semantics": "7 passed",
+    "all_parent_focused": "34 passed, 1 skipped (CUDA unavailable)",
+    "geometry_ledger_floor_pretask": "29 passed",
+    "mask_ownership_selection": "4 passed",
+    "final_preseed": "54 passed",
+    "python_compile": "passed",
+    "git_diff_check": "passed"
+  },
+  "measurement": {
+    "gpu_or_container_run": false,
+    "real_swe_verified_run": false,
+    "timing_claim": false,
+    "acceptance_claim": false,
+    "hardware_floor_claim": false
+  },
+  "qualification": {
+    "traffic": "real_swe_verified_only",
+    "diagnostic_task_set": "exact4",
+    "formal_task_sets": ["exact4", "exact16"],
+    "batches": [1, 4],
+    "byte_equivalence_required": true,
+    "full_wall_tps_required": true,
+    "gpu_component_full_step_tps_required": true,
+    "nsight_launch_confirmation_required": true
+  }
+}
