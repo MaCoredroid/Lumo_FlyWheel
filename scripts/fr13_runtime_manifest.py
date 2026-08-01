@@ -43,6 +43,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_cutlass_streamk_pass.py",
     "scripts/fr13_cutlass_wave_binary.py",
     "scripts/fr13_device_multidraft_kernel.py",
+    "scripts/fr13_draft_head_m32_pass.py",
     "scripts/fr13_fixed32_flush_protocol.py",
     "scripts/fr13_fixed32_contract.py",
     "scripts/fr13_fixed32_topology.py",

@@ -21,6 +21,7 @@ LAUNCHER = REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 SIDECAR_SCRIPT = REPO / "scripts" / "fr13_draft_head_m32_pass.py"
 TIMING_RUNNER = REPO / "scripts" / "fr13_run_b1_draft_head_m32_timing.sh"
 LIVE_RUNNER = REPO / "scripts" / "fr13_run_b1_kernel_live_gate.sh"
+RUNTIME_MANIFEST = REPO / "scripts" / "fr13_runtime_manifest.py"
 CONTRACT = REPO / "results" / "fr13_fixed32_draft_head_m32_deployed_contract_20260731" / "contract.json"
 INTEGRATION_MANIFEST = (
     REPO
@@ -341,6 +342,9 @@ def test_deployed_format_contract_and_production_are_fail_closed() -> None:
     assert '--chat-traffic-audit "$FR13_DRAFT_HEAD_M32_LIVE_CHAT_TRAFFIC_AUDIT_JSON"' in launcher
     assert '${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}' in launcher
     assert '-e FR13_DRAFT_HEAD_M32_PRODUCTION="$FR13_DRAFT_HEAD_M32_PRODUCTION"' in launcher
+    assert '"scripts/fr13_draft_head_m32_pass.py"' in RUNTIME_MANIFEST.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_live_pass_sidecar_binds_exact_source_and_census(tmp_path: Path) -> None:
