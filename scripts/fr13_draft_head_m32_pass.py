@@ -196,12 +196,17 @@ TRAFFIC_CHECK_KEYS = frozenset(
         "all_task_agent_and_eval_terminal",
         "all_trace_request_counts_match_authenticated_proxy",
         "all_proxy_attempts_match_engine_requests",
-        "all_successful_engine_requests_match_census",
+        "all_census_requests_match_successful_engine_requests",
         "all_census_requests_inside_task_brackets",
         "no_campaign_rejections_or_aborted_requests",
         "no_fixed32_traffic_outside_task_brackets",
         "raw_proxy_request_and_response_dumps_disabled",
     }
+)
+LEGACY_TRAFFIC_CHECK_KEYS = (
+    TRAFFIC_CHECK_KEYS
+    - {"all_census_requests_match_successful_engine_requests"}
+    | {"all_successful_engine_requests_match_census"}
 )
 INGRESS_KEYS = frozenset(
     {
@@ -231,6 +236,11 @@ CENSUS_KEYS = frozenset(
         "terminal_schema",
     }
 )
+CURRENT_CENSUS_KEYS = CENSUS_KEYS | {
+    "successful_engine_requests_with_pure_decode",
+    "successful_engine_requests_without_pure_decode",
+    "successful_engine_requests_without_pure_decode_sha256",
+}
 
 
 def _digest_bytes(raw: bytes) -> str:
@@ -549,7 +559,19 @@ def validate_chat_traffic_audit(
     subset = _require_exact_keys(
         audit["subset"], frozenset({"sha256", "task_count", "task_ids"}), "audit subset"
     )
-    checks = _require_exact_keys(audit["checks"], TRAFFIC_CHECK_KEYS, "audit checks")
+    actual_check_keys = (
+        frozenset(audit["checks"])
+        if isinstance(audit["checks"], dict)
+        else frozenset()
+    )
+    expected_check_keys = (
+        LEGACY_TRAFFIC_CHECK_KEYS
+        if actual_check_keys == LEGACY_TRAFFIC_CHECK_KEYS
+        else TRAFFIC_CHECK_KEYS
+    )
+    checks = _require_exact_keys(
+        audit["checks"], expected_check_keys, "audit checks"
+    )
     stream = _require_exact_keys(
         audit["complete_stream"],
         frozenset(
@@ -609,7 +631,15 @@ def validate_chat_traffic_audit(
     _require_positive_int(proxy_runtime["bytes"], "audit proxy runtime bytes")
 
     ingress = _require_exact_keys(audit["ingress"], INGRESS_KEYS, "audit ingress")
-    census = _require_exact_keys(ingress["census"], CENSUS_KEYS, "audit census")
+    if audit["schema"] == "fr13-fixed32-chat-task-provenance-audit-v2":
+        expected_census_keys = CENSUS_KEYS
+    elif audit["schema"] == "fr13-fixed32-chat-task-provenance-audit-v3":
+        expected_census_keys = CURRENT_CENSUS_KEYS
+    else:
+        raise ValueError("chat traffic audit schema drifted")
+    census = _require_exact_keys(
+        ingress["census"], expected_census_keys, "audit census"
+    )
     for label in ("engine", "preflight", "proxy"):
         if not isinstance(ingress[label], dict) or not ingress[label]:
             raise ValueError(f"audit ingress {label} evidence is empty")
@@ -617,6 +647,16 @@ def validate_chat_traffic_audit(
     _require_sha256(census["sha256"], "audit census sha256")
     for key in ("bytes", "event_count", "request_step_memberships", "successful_engine_requests"):
         _require_positive_int(census[key], f"audit census {key}")
+    if audit["schema"].endswith("-v3"):
+        for key in (
+            "successful_engine_requests_with_pure_decode",
+            "successful_engine_requests_without_pure_decode",
+        ):
+            _require_nonnegative_int(census[key], f"audit census {key}")
+        _require_sha256(
+            census["successful_engine_requests_without_pure_decode_sha256"],
+            "audit census requests without pure decode",
+        )
     if not isinstance(census["path"], str) or not census["path"]:
         raise ValueError("audit census path is empty")
 
@@ -731,8 +771,7 @@ def validate_chat_traffic_audit(
 
     expected_interval = [0, expected_events]
     if (
-        audit["schema"] != "fr13-fixed32-chat-task-provenance-audit-v2"
-        or audit["mode"] != EXPECTED_MODE
+        audit["mode"] != EXPECTED_MODE
         or audit["dataset_name"] != EXPECTED_DATASET
         or subset
         != {
@@ -753,6 +792,19 @@ def validate_chat_traffic_audit(
         or census["all_census_requests_authenticated"] is not True
         or census["all_census_requests_inside_task_brackets"] is not True
         or census["all_successful_requests_present"] is not True
+        or (
+            audit["schema"].endswith("-v3")
+            and (
+                census["successful_engine_requests_with_pure_decode"]
+                != census["successful_engine_requests"]
+                or census["successful_engine_requests_without_pure_decode"]
+                != 0
+                or census[
+                    "successful_engine_requests_without_pure_decode_sha256"
+                ]
+                != _digest_bytes(b"[]")
+            )
+        )
         or census["event_count"] != expected_events
         or census["request_step_memberships"] != expected_events
         or census["per_task_request_step_memberships"]
