@@ -445,6 +445,7 @@ if [[ -n "$FIXED32_MODE" ]]; then
       "$ARMDIR" \
       "$MAX_NUM_SEQS_OVR" \
       "$SWE_CONCURRENCY" <<'PY'
+import inspect
 import json
 import sys
 from pathlib import Path
@@ -749,13 +750,20 @@ subset = validate_fixed32_run_subset(
     b1_diagnostic=diagnostic_text == "1",
 )
 task_ids = subset["task_ids"]
-audit = build_fixed32_chat_traffic_audit(
-    arm_dir,
-    mode=mode,
-    subset=subset,
-    dataset_record_digests=pinned_dataset_record_digests(str(repo)),
-    concurrency=int(concurrency_text),
-)
+audit_kwargs = {
+    "mode": mode,
+    "subset": subset,
+    "dataset_record_digests": pinned_dataset_record_digests(str(repo)),
+}
+if "concurrency" in inspect.signature(
+    build_fixed32_chat_traffic_audit
+).parameters:
+    audit_kwargs["concurrency"] = int(concurrency_text)
+elif concurrency_text != "1":
+    raise SystemExit(
+        "fixed32 B4 requires the concurrency-aware traffic-audit builder"
+    )
+audit = build_fixed32_chat_traffic_audit(arm_dir, **audit_kwargs)
 temporary = output_path.with_name(output_path.name + ".tmp")
 temporary.write_text(
     json.dumps(

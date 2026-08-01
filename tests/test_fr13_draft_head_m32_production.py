@@ -714,6 +714,48 @@ def test_live_pass_rejects_traffic_audit_stream_mismatch(tmp_path: Path) -> None
         )
 
 
+def test_live_pass_accepts_legacy_traffic_census_check_name(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    traffic_audit = _traffic_audit(tmp_path, events=6)
+    payload = json.loads(traffic_audit.read_text(encoding="ascii"))
+    payload["checks"]["all_successful_engine_requests_match_census"] = (
+        payload["checks"].pop(
+            "all_census_requests_match_successful_engine_requests"
+        )
+    )
+    traffic_audit.write_bytes(module.canonical_bytes(payload) + b"\n")
+
+    result = module.validate_chat_traffic_audit(
+        audit_path=traffic_audit,
+        expected_events=6,
+    )
+    assert result["completed_events"] == 6
+
+
+def test_live_pass_accepts_current_traffic_audit_schema(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    traffic_audit = _traffic_audit(tmp_path, events=6)
+    payload = json.loads(traffic_audit.read_text(encoding="ascii"))
+    payload["schema"] = "fr13-fixed32-chat-task-provenance-audit-v3"
+    census = payload["ingress"]["census"]
+    census["successful_engine_requests_with_pure_decode"] = 1
+    census["successful_engine_requests_without_pure_decode"] = 0
+    census["successful_engine_requests_without_pure_decode_sha256"] = (
+        module._digest_bytes(b"[]")
+    )
+    traffic_audit.write_bytes(module.canonical_bytes(payload) + b"\n")
+
+    result = module.validate_chat_traffic_audit(
+        audit_path=traffic_audit,
+        expected_events=6,
+    )
+    assert result["completed_events"] == 6
+
+
 def test_runtime_live_result_is_written_only_from_exact_final_census(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
