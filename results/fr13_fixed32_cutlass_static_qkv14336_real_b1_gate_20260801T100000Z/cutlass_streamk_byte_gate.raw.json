@@ -1,0 +1,65 @@
+{
+  "acceptance_valid": false,
+  "batch_size": 1,
+  "binary_attestation_sha256": "ac4342fc57300553eb91d1f30c1f36d25867fa69dd5e16a9424f09d2611e047d",
+  "candidate": "static_persistent_stocktile",
+  "candidate_bytes": 113081080,
+  "candidate_family": "static_persistent_stocktile",
+  "candidate_sha256": "c4b47fa82726ea93db8e7e4f1d08ce39eacaa6448bbc7c70b04c6e798c3c4d32",
+  "comparator_timing_eligible": false,
+  "comparisons": 320,
+  "concurrency": 1,
+  "container_env_sha256": "f06581c9a09fa226944c0e7d76808c732466023512aa9b3e4b504793c396781a",
+  "diagnostic_selector": "static_persistent_stocktile_byte_ab",
+  "differing_bytes": 0,
+  "draft_vocab_k": 0,
+  "draft_vocab_root": 0,
+  "engine_ledger_chain_head_sha256": "63fd28f54f92151cb3709b067d1bd55916ce4e1b514fadba4ebe5bb933d10f10",
+  "errors": [],
+  "fixed_rows": 32,
+  "mandatory_weight_bytes": 42025179008,
+  "mandatory_weight_floor_ms": 153.9383846446886,
+  "mismatching_comparisons": 0,
+  "observed_m_values": [
+    32
+  ],
+  "observed_projection_nk": [
+    [
+      5120,
+      6144
+    ],
+    [
+      5120,
+      17408
+    ],
+    [
+      14336,
+      5120
+    ],
+    [
+      16384,
+      5120
+    ],
+    [
+      34816,
+      5120
+    ]
+  ],
+  "one_sided_u95_cap_ms": 177.0291423413919,
+  "patch_source_sha256": "9b4fa368e74640ddfc2f38b65e18e83d703d76651c4c28745d528ea7e299061d",
+  "patched_dispatch_sha256": "e3e9c5e54dba7485c04db24a402c86c382f2550991fcff49f8e9fba48ecf8eaf",
+  "production_enabled": false,
+  "real_task_arm_sha256": "6e7c34a437850b99c5684a124bce25682a22e189336c571f3cea800a569ee7b6",
+  "run_classification": "one_real_swe_verified_b1_byte_diagnostic",
+  "schema": "fr13.fixed32.cutlass_static_persistent_live_gate.v1",
+  "served_result": "stock",
+  "source_commit": "f0f91bd531cbbbef10a6a0d07b1bc788b832cfca",
+  "status": "pass",
+  "task_count": 1,
+  "task_ids": [
+    "astropy__astropy-12907"
+  ],
+  "task_marker": "swe_verified:astropy__astropy-12907",
+  "task_set": "one real SWE-Verified B1 diagnostic task",
+  "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
+}

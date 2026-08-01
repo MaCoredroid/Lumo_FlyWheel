@@ -1,0 +1,54 @@
+{
+  "schema": "fr13.fixed32.cutlass_static_qkv14336_comparator_summary.v1",
+  "comparisons": 320,
+  "total_compared_bytes": 311951360,
+  "mismatching_comparisons": 0,
+  "differing_bytes": 0,
+  "invocation_min": 0,
+  "invocation_max": 319,
+  "task_markers": [
+    "swe_verified:astropy__astropy-12907"
+  ],
+  "shapes": [
+    {
+      "m": 32,
+      "n": 5120,
+      "k": 6144,
+      "count": 80,
+      "mismatches": 0,
+      "differing_bytes": 0
+    },
+    {
+      "m": 32,
+      "n": 5120,
+      "k": 17408,
+      "count": 80,
+      "mismatches": 0,
+      "differing_bytes": 0
+    },
+    {
+      "m": 32,
+      "n": 14336,
+      "k": 5120,
+      "count": 20,
+      "mismatches": 0,
+      "differing_bytes": 0
+    },
+    {
+      "m": 32,
+      "n": 16384,
+      "k": 5120,
+      "count": 60,
+      "mismatches": 0,
+      "differing_bytes": 0
+    },
+    {
+      "m": 32,
+      "n": 34816,
+      "k": 5120,
+      "count": 80,
+      "mismatches": 0,
+      "differing_bytes": 0
+    }
+  ]
+}

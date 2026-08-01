@@ -1,0 +1,15 @@
+launcher_pid=2950829
+runroot=/home/mark/lumoFlyWheel-static-qkv14336/output/fr13_b1_cutlass_static_qkv14336_live_gate_20260801T100000Z
+arm=hydra27_fixed32_cutlass_static_qkv14336_fullvocab_b1_20260801T100000Z
+source=f0f91bd531cbbbef10a6a0d07b1bc788b832cfca
+fa2_sha256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
+bm8_gate=0
+draft_head_m32_gate=0
+draft_vocab_root=0
+draft_vocab_k=0
+fr13_needs_allow=FR13_DRAFT_VOCAB_K=0
+mandatory_weight_bytes=42025179008
+mandatory_weight_floor_ms=153.9383846446886
+one_sided_u95_cap_ms=177.0291423413919
+started=2026-08-01T10:00:00Z
+serve_rc=0 ended=2026-08-01T10:15:43Z

@@ -1,0 +1,22 @@
+{
+  "schema": "fr13.fixed32.cutlass_static_qkv14336_permission_replay.v1",
+  "original_top_level_rc": 1,
+  "task_completed_before_failure": true,
+  "failure_stage": "post_task_gate_reducer_binary_attestation_read",
+  "failure_type": "PermissionError",
+  "artifact": "logs/fr13_fixed32_cutlass_streamk_binary.json",
+  "artifact_nonsecret": true,
+  "before_owner": "root:root",
+  "before_mode": "0600",
+  "before_sha256": "ac4342fc57300553eb91d1f30c1f36d25867fa69dd5e16a9424f09d2611e047d",
+  "repair": "ownership_only",
+  "after_owner": "mark:mark",
+  "after_mode": "0600",
+  "after_sha256": "ac4342fc57300553eb91d1f30c1f36d25867fa69dd5e16a9424f09d2611e047d",
+  "content_changed": false,
+  "reducer_source_commit": "f0f91bd531cbbbef10a6a0d07b1bc788b832cfca",
+  "reducer_replay_rc": 0,
+  "reducer_replay_status": "pass",
+  "reducer_output_sha256": "b1bd53e9567942a6475d4cdb38602b5647d71854559cd6f3eb70dc39fc2abb0b",
+  "lifecycle_fix": "publish_nonsecret_binary_attestation_mode_0644"
+}
