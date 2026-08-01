@@ -4611,6 +4611,8 @@ def _load_fixed32_boundary_snapshot(
                 "captures",
                 "fast_route_ready",
                 "maximum_ready_capacity",
+                "layer_batch_gate_attempts_by_batch",
+                "layer_batch_gate_passed_by_batch",
                 "nonpure_dispatch",
                 "nonpure_committer_replays_by_batch",
                 "nonpure_committer_replays_enqueued",
@@ -4666,6 +4668,26 @@ def _load_fixed32_boundary_snapshot(
         expected_keys=batch_keys,
         label=f"{path}:committer.actual_replays_by_batch",
     )
+    layer_batch_gate_passed_by_batch = _fixed32_nonnegative_int_map(
+        committer["layer_batch_gate_passed_by_batch"],
+        expected_keys=ready_capacity_keys,
+        label=f"{path}:committer.layer_batch_gate_passed_by_batch",
+    )
+    _fixed32_nonnegative_int_map(
+        committer["layer_batch_gate_attempts_by_batch"],
+        expected_keys=ready_capacity_keys,
+        label=f"{path}:committer.layer_batch_gate_attempts_by_batch",
+    )
+    if any(value not in (0, 1) for value in layer_batch_gate_passed_by_batch.values()):
+        raise Fixed32BoundaryError(
+            f"{path}: committer layer-batch gate pass state is not boolean"
+        )
+    if layer_batch_gate_passed_by_batch != {
+        key: 1 for key in ready_capacity_keys
+    }:
+        raise Fixed32BoundaryError(
+            f"{path}: committer layer-batch gate is not qualified before measurement"
+        )
     nonpure_replays_by_batch = _fixed32_nonnegative_int_map(
         committer["nonpure_committer_replays_by_batch"],
         expected_keys=batch_keys,
@@ -4873,6 +4895,7 @@ class _Fixed32TaskBracket:
         self.post_ack = None
         self.pre_snapshot_ref = None
         self.post_snapshot_ref = None
+        self.pre_layer_batch_gate_attempts_by_batch = None
         self.post_attempted = False
         self.artifact_path = task_dir / "fixed32_task_boundary.json"
         self.taw_arm_artifact_path = task_dir / (
@@ -4949,6 +4972,11 @@ class _Fixed32TaskBracket:
                     server_capacity=self.server_capacity,
                 )
             )
+            gate_attempts = dict(
+                snapshot["metrics"]["committer"][
+                    "layer_batch_gate_attempts_by_batch"
+                ]
+            )
             metrics = _fixed32_metrics_snapshot(
                 metrics_url=DEFAULT_METRICS_URL,
                 snapshot=snapshot,
@@ -4964,6 +4992,7 @@ class _Fixed32TaskBracket:
             "path": str(snapshot_path),
             "sha256": snapshot_sha,
         }
+        self.pre_layer_batch_gate_attempts_by_batch = gate_attempts
         try:
             metrics_path.write_text(metrics, encoding="utf-8")
             if self.taw_real_task_arm is not None:
@@ -4983,6 +5012,7 @@ class _Fixed32TaskBracket:
                     cleanup_error = error
             self.pre_ack = None
             self.pre_snapshot_ref = None
+            self.pre_layer_batch_gate_attempts_by_batch = None
             detail = f"{type(exc).__name__}: {exc}"
             if cleanup_error is not None:
                 detail += (
@@ -5026,6 +5056,13 @@ class _Fixed32TaskBracket:
                     server_capacity=self.server_capacity,
                 )
             )
+            post_gate_attempts = snapshot["metrics"]["committer"][
+                "layer_batch_gate_attempts_by_batch"
+            ]
+            if post_gate_attempts != self.pre_layer_batch_gate_attempts_by_batch:
+                raise Fixed32BoundaryError(
+                    "fixed32 task interval attempted a committer layer-batch byte gate"
+                )
             metrics = _fixed32_metrics_snapshot(
                 metrics_url=DEFAULT_METRICS_URL,
                 snapshot=snapshot,

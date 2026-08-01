@@ -1,6 +1,6 @@
 Focused source tests:
 
-  81 passed in 3.38s
+  149 passed in 2.22s
 
 Files:
 
@@ -9,11 +9,16 @@ Files:
   tests/test_fr13_fixed32_final_full_preseed.py
   tests/test_fr13_fixed32_conv_commit_wiring.py
   tests/test_fr13_fixed32_taw_exact_commit_kernel.py
+  tests/test_fr13_fixed32_task_boundary_snapshot.py
+  tests/test_fr13_fixed32_floor_propagation.py
+  tests/test_fr13_fixed32_b4_campaign_provenance.py
+  tests/test_fr13_fixed32_taw_real_task_arm.py
 
 Additional checks:
 
   Python compile: pass
-  Ruff changed kernel/test files: pass
+  Ruff before final boundary hardening: pass
+  Ruff final shell: unavailable
   git diff --check: pass
 
 Baseline note:

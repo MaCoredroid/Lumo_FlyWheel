@@ -338,7 +338,14 @@ def test_task_bracket_arms_after_pre_flush_and_rotates_after_post_flush(
         orchestrator,
         "_load_fixed32_boundary_snapshot",
         lambda **kwargs: (
-            {"schema": "fr13-fixed32-boundary-snapshot-v4"},
+            {
+                "schema": "fr13-fixed32-boundary-snapshot-v4",
+                "metrics": {
+                    "committer": {
+                        "layer_batch_gate_attempts_by_batch": {"1": 0},
+                    }
+                },
+            },
             tmp_path / f"snapshot.{kwargs['ack'].generation}.json",
             str(kwargs["ack"].generation) * 64,
         ),
@@ -385,6 +392,93 @@ def test_task_bracket_arms_after_pre_flush_and_rotates_after_post_flush(
         (task_dir / "fixed32_task_boundary.json").read_text(encoding="utf-8")
     )
     assert persisted == payload
+
+
+def test_task_bracket_rejects_layer_batch_gate_attempt_in_task_interval(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+    acks = [
+        _Ack(
+            mode="hydra27_fixed32",
+            producer_pid=123,
+            generation=1,
+            counters={
+                "pure_decode_forward_steps": 0,
+                "complete_work_census_events": 0,
+            },
+        ),
+        _Ack(
+            mode="hydra27_fixed32",
+            producer_pid=123,
+            generation=2,
+            counters={
+                "pure_decode_forward_steps": 1,
+                "complete_work_census_events": 1,
+            },
+        ),
+    ]
+
+    class _Client:
+        mode = "hydra27_fixed32"
+        producer_pid = 123
+
+        def snapshot(self) -> _Ack:
+            return acks.pop(0)
+
+    monkeypatch.setattr(
+        orchestrator,
+        "_validate_fixed32_ack",
+        lambda ack, label: ack.counters,
+    )
+
+    def _snapshot(**kwargs: object) -> tuple[dict[str, object], Path, str]:
+        ack = kwargs["ack"]
+        assert isinstance(ack, _Ack)
+        return (
+            {
+                "schema": "fr13-fixed32-boundary-snapshot-v4",
+                "metrics": {
+                    "committer": {
+                        "layer_batch_gate_attempts_by_batch": {
+                            "1": ack.generation - 1,
+                        },
+                    },
+                },
+            },
+            tmp_path / f"snapshot.{ack.generation}.json",
+            str(ack.generation) * 64,
+        )
+
+    monkeypatch.setattr(
+        orchestrator,
+        "_load_fixed32_boundary_snapshot",
+        _snapshot,
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "_fixed32_metrics_snapshot",
+        lambda **kwargs: "metrics\n",
+    )
+    bracket = orchestrator._Fixed32TaskBracket(
+        client=_Client(),
+        task_dir=task_dir,
+        instance_id=INSTANCE_ID,
+        boundary_snapshot_base=tmp_path / "snapshot",
+        server_capacity=1,
+    )
+
+    bracket.pre(task_dir / "metrics_pre.txt")
+    with pytest.raises(
+        orchestrator.Fixed32BoundaryError,
+        match="attempted a committer layer-batch byte gate",
+    ):
+        bracket.post(task_dir / "metrics_post.txt")
+
+    assert bracket.post_attempted is True
+    assert bracket.complete is False
 
 
 def test_eager_kernel_diagnostic_bracket_never_flushes(
@@ -568,7 +662,14 @@ def test_task_bracket_removes_arm_when_post_snapshot_fails(
         orchestrator,
         "_load_fixed32_boundary_snapshot",
         lambda **kwargs: (
-            {"schema": "fr13-fixed32-boundary-snapshot-v4"},
+            {
+                "schema": "fr13-fixed32-boundary-snapshot-v4",
+                "metrics": {
+                    "committer": {
+                        "layer_batch_gate_attempts_by_batch": {"1": 0},
+                    }
+                },
+            },
             tmp_path / "snapshot.1.json",
             "1" * 64,
         ),

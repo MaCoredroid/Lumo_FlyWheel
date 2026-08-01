@@ -46,7 +46,7 @@ throughput improvement is claimed before a real SWE-Verified timing pair.
 The FMA count covers only the removed output dot product; removed q
 normalization and scale operations are additional and are not folded into it.
 
-## Qualification-integrity blocker
+## Qualification boundary
 
 The inherited first-real byte gate is correct for state equality but is not a
 normal one-launch event. A powered gate executes the 48-call reference graph,
@@ -56,17 +56,24 @@ clone/compare/restore work. A zero-accept event before the gate passes serves
 the 48-call reference. The inherited static contract currently reports one
 candidate call for either case.
 
-Therefore this source must not be timed or accepted yet. The runtime counters
-now expose B-indexed byte-gate pass and attempt maps so a timing boundary can
-prove the gate was already passed and did not execute in a measured event.
-Before GPU qualification, wire that guard into the timing reducer. Any gate or
-pre-gate event must be rejected from the production work census.
+The runtime counters expose B-indexed byte-gate pass and attempt maps. Both
+runtime-snapshot validators now require every configured batch gate to have
+passed before a measurement boundary, and both the live task bracket and the
+independent floor reducer require the attempt map to remain unchanged across a
+measured task. Any gate or pre-gate event is therefore rejected from timing.
+The source still must not be timed until a real SWE-Verified qualification
+phase has powered every required B gate before the measured task set begins.
 
 ## Static verification
 
-- `81 passed` across the focused committer, GDN schedule, full-preseed,
-  conv-commit wiring, and exact-commit suites.
-- Python compile and Ruff passed for the changed kernel/test files; the patcher
+- `149 passed` across the focused committer, GDN schedule, full-preseed,
+  conv-commit wiring, exact-commit, boundary-snapshot, floor-propagation,
+  B4-provenance, and real-task-arm suites.
+- Both independent boundary validators reject non-boolean or unqualified gate
+  states. The live bracket and independent reducer reject a gate-attempt delta
+  inside a measured task.
+- Python compile passed for the changed files; Ruff passed before the final
+  boundary hardening but was unavailable in the final shell. The patcher
   compiled successfully.
 - `git diff --check` passed.
 - The broader sampled-committer test file retains three failures already

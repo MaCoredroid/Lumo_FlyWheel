@@ -33,7 +33,7 @@
     }
   },
   "qualification": {
-    "gate_event_accounting": "per_batch_counters_exposed_timing_guard_pending",
+    "gate_event_accounting": "per_batch_prequalified_and_zero_attempt_delta_required",
     "powered_gate_physical_recurrence_calls": 50,
     "pregate_zero_accept_physical_recurrence_calls": 48,
     "gpu_compile": "pending",
@@ -44,7 +44,11 @@
   "schema": "fr13.fixed32.cfwd_state_only_layer_batch_source.v1",
   "source_sha256": {
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "f58224ca701a5f57a2b4447fbfc50e4e4ce7545e9a42490ffb8eaa554fc2209c",
+    "scripts/fr13_floor_gate.py": "14cb8b80f471a806b498e4c11656aee592f849619bf8a492e8f43493b00c9a3d",
+    "scripts/run_swe_bench_q36_a.py": "47e67c76c4d51a9eb038de04c05ef10973d294115f51a9c0ddbc418ccc7fa23d",
     "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "16e0bbc2c489fd7614b67820c0d78fa3be904e5bc756e0cf826a7dd6a5828625",
-    "tests/test_fr13_fixed32_committer_layer_batch.py": "b4a6b4ce56d1a486a1ed388444047659a2c5b7741bd65a97de562046ae2e5e37"
+    "tests/test_fr13_fixed32_committer_layer_batch.py": "b4a6b4ce56d1a486a1ed388444047659a2c5b7741bd65a97de562046ae2e5e37",
+    "tests/test_fr13_fixed32_task_boundary_snapshot.py": "83a7f6ee16b05a318bc9123ea110888af070a50e40f44d55ffc84495631d1e39",
+    "tests/test_fr13_fixed32_taw_real_task_arm.py": "d9fb5140bb9baa7dd130906b8cdb474ffc598a7822b1aeacb0b74fceebdcd9b1"
   }
 }
