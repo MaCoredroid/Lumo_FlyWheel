@@ -4,12 +4,19 @@ Status: prepared and statically verified. No GPU campaign was run from this
 branch, so this directory contains no timing or acceptance measurements.
 
 The immutable implementation commit is
-`402481c24a8872f3ddc65859ca7da93f69b3eef9`. It is based on the reviewed B1
+`7064f094e43c6b1f14ac358f31bfc8858de3b136`. It is based on the reviewed B1
 full-stack route `c3ee2fece6daa17927ec216ff0135c5cf3ebb1e0`. The route consumes only the
 corrected TAW B4 review contract from
 `e0ac403c22525265525957ff15e118ca291e68fa` (code fix
 `6ed4a55df803c5a7b9190e9c0de0498085a9b9d0`). It rejects the pre-review B4
 bundle format.
+
+The fixed32 remote-agent trace route includes direct in-container Qwen capture
+from `31de2814e10c1097bb5e6c18a32378e27b14cd47`, integrated here as
+`8754b8c77db2872ab22b42c29de596ab9d1a3c10`. Qwen writes directly to the
+bind-mounted regular trace file; Docker stdout is not a second writer. The
+observer attests and strictly validates the exact pulled JSONL before a
+campaign can finalize, closing the prior 258048-byte pipe-drain cutoff.
 
 The GDN coefficient implementation/review lineage is
 `1ca12bc2611d87432d36caa563efa5c8d795942b` then
@@ -30,6 +37,10 @@ qualification and does not make the GDN candidate B4-deployable.
   timing arms.
 - GDN production uses `COUNT_INVOCATION=False` and the exact BV8 candidate in
   both arms.
+- Both arms must emit a source/PASS-bound
+  `fixed32_gdn_level0_coeff_production` engagement sidecar. The reducer validates
+  its route, candidate, mode, graph identity, physical geometry, and no-fallback
+  contract, then hash-binds the exact sidecar into the timing summary.
 - The only timing-arm delta is source-v7 all-parent committer production.
 
 ## Campaign sequence
@@ -45,7 +56,8 @@ qualification and does not make the GDN candidate B4-deployable.
    non-scratch export rows, K/V/A/B rings, flags, and counter; scratch row 31 is
    contained and the served state is restored.
 5. Run stock then candidate on the canonical exact4 set for each mode. Both
-   arms consume the same source-bound GDN PASS and enable the same GDN candidate.
+   arms consume the same source-bound GDN PASS, enable the same GDN candidate,
+   and must prove production engagement.
 6. Validate every work-census event and bind the census hash/count to the
    authenticated traffic audit before reducing the timing pair.
 

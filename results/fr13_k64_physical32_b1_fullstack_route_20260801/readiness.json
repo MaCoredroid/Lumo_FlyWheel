@@ -2,7 +2,7 @@
   "schema": "fr13.fixed32.k64_physical32_b1_fullstack.readiness.v1",
   "status": "prepared_not_measured",
   "implementation_branch": "agent/fixed32-gdn-b1-fullstack-integration-20260801",
-  "implementation_commit": "402481c24a8872f3ddc65859ca7da93f69b3eef9",
+  "implementation_commit": "7064f094e43c6b1f14ac358f31bfc8858de3b136",
   "integration_base_branch": "agent/fixed32-b1-fullstack-reviewed-b4",
   "integration_base_commit": "c3ee2fece6daa17927ec216ff0135c5cf3ebb1e0",
   "gdn_reviewed_implementation_commit": "1ca12bc2611d87432d36caa563efa5c8d795942b",
@@ -11,6 +11,15 @@
     "8e4de57197cc8ad1b74e2e85c47a3ca8d7fe83dc",
     "ed2fcf34982fa7663cf488f772fa571ef74b74a0"
   ],
+  "qwen_trace_capture_source_commit": "31de2814e10c1097bb5e6c18a32378e27b14cd47",
+  "qwen_trace_capture_integration_commit": "8754b8c77db2872ab22b42c29de596ab9d1a3c10",
+  "qwen_trace_capture": {
+    "direct_in_container_regular_file": true,
+    "docker_stdout_is_not_trace_writer": true,
+    "exact_pull_attested": true,
+    "strict_jsonl_validation": true,
+    "prior_258048_byte_cutoff_closed": true
+  },
   "corrected_b4_review_branch": "agent/fixed32-b4-tail23-hydra27-k64-m128-review",
   "corrected_b4_review_tip": "e0ac403c22525265525957ff15e118ca291e68fa",
   "corrected_b4_code_fix": "6ed4a55df803c5a7b9190e9c0de0498085a9b9d0",
@@ -40,6 +49,10 @@
   "gdn_level0_coeff": {
     "candidate": "fixed32_gdn_level0_coeff_v1",
     "production_in_both_timing_arms": true,
+    "production_engagement_required_in_both_timing_arms": true,
+    "production_engagement_route": "fixed32_gdn_level0_coeff_production",
+    "production_engagement_source_pass_mode_candidate_bound": true,
+    "production_engagement_hash_bound_in_pair_summary": true,
     "fullstack_selector": true,
     "count_invocation": false,
     "qualified_batches": [1],
@@ -60,7 +73,7 @@
     "live_gate_scratch_rows": [31],
     "live_gate_requires_raw_byte_equal": true,
     "live_gate_requires_state_restored": true,
-    "merged_kernel_source_sha256": "dbf260532a8758b679b5f20b14fb3fb391fb6c0224610507bb25e88b8ec35599",
+    "merged_kernel_source_sha256": "7d64628ce231638132ede16edcb9add6879afa96dafa339c3e527ba3a3781eff",
     "reviewed_static_sm121_build": {
       "path": "results/fr13_fixed32_gdn_level0_coeff_sm121_build_review_20260801",
       "kernel_source_sha256": "16fde18ebf4ace9893d2f8890294c894c71222b85d7c9cdc4bc7789cf5afff4e",
@@ -92,10 +105,12 @@
     "corrected reviewed Hydra27 B4 production pass and verdict"
   ],
   "verification": {
-    "focused_tests_passed": 24,
+    "focused_tests_passed": 26,
     "focused_tests_skipped_cuda": 2,
-    "broad_tests_passed": 51,
+    "broad_tests_passed": 53,
     "broad_tests_skipped_cuda": 2,
+    "trace_and_provenance_tests_passed": 164,
+    "trace_and_provenance_tests_skipped": 1,
     "ruff": "pass_with_preexisting_f841_excluded",
     "preexisting_ruff_f841_findings": 3,
     "python_compile": "pass",

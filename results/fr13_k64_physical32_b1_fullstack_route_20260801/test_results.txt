@@ -1,11 +1,15 @@
-Implementation commit: 402481c24a8872f3ddc65859ca7da93f69b3eef9
+Implementation commit: 7064f094e43c6b1f14ac358f31bfc8858de3b136
+Direct-file Qwen trace integration: 8754b8c77db2872ab22b42c29de596ab9d1a3c10
 Date: 2026-08-01 UTC
 
-PASS: 24 tests, 2 CUDA-dependent skips
+PASS: 26 tests, 2 CUDA-dependent skips
   python3 -m pytest -q tests/test_fr13_fixed32_gdn_level0_coeff.py tests/test_fr13_k64_physical32_fullstack_route.py
 
-PASS: 51 tests, 2 CUDA-dependent skips
+PASS: 53 tests, 2 CUDA-dependent skips
   python3 -m pytest -q tests/test_fr13_fixed32_gdn_level0_coeff.py tests/test_fr13_k64_physical32_fullstack_route.py tests/test_fr13_fixed32_gdn_batch_launch.py tests/test_fr13_fixed32_gdn_path_bv_live_gate.py tests/test_fr13_fixed32_sfwd_state_fusion.py
+
+PASS: 164 tests, 1 environment-dependent skip
+  python3 -m pytest -q tests/test_fr13_fixed32_trace_provenance.py tests/test_fr13_fixed32_b4_campaign_provenance.py
 
 PASS:
   /home/mark/shared/lumoFlyWheel/.venv/bin/ruff check --ignore F841 scripts/fr10_phase4_patch_vllm_tree_gdn.py scripts/fr13_taw_b1_credential.py tests/test_fr13_fixed32_gdn_level0_coeff.py tests/test_fr13_k64_physical32_fullstack_route.py
