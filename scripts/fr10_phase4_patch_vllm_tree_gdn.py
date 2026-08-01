@@ -416,11 +416,23 @@ try:
     _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
 except NameError:
     _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = False
+try:
+    _FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC
+except NameError:
+    _FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC = False
 _FR13_FIXED32_DRAFTER_TREE_LAYER = "mtp.layers.0.self_attn.attn"
 _FR13_FIXED32_TARGET_TREE_LAYERS = frozenset(
     "language_model.model.layers.%d.self_attn.attn" % layer
     for layer in range(3, 64, 4)
 )
+
+
+def _fr13_fixed32_unmeasured_full_row_map_valid(batch_rows, compact_batch):
+    """Admit equal full/compact rows only for isolated eager diagnostics."""
+    return batch_rows > compact_batch or (
+        _FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC
+        and batch_rows == compact_batch
+    )
 
 
 def _fr13_fixed32_topology_needle():
@@ -31045,7 +31057,10 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                    )\n"
         "                    or (\n"
         "                        not _fr13_f32_measured\n"
-        "                        and _fr13_f32_batch_rows <= _fr13_f32_B\n"
+        "                        and not _fr13_f32_kv_gdn."
+        "_fr13_fixed32_unmeasured_full_row_map_valid(\n"
+        "                            _fr13_f32_batch_rows, _fr13_f32_B\n"
+        "                        )\n"
         "                    )\n"
         "                ):\n"
         "                    raise RuntimeError(\n"
