@@ -34,6 +34,9 @@ def test_cuda_source_preserves_stock_scalar_arithmetic_order() -> None:
     for stride in (8, 4, 2):
         assert f"if (lane < {stride})" in source
     assert "if (lane == 0)" in source
+    assert "const float reduced_sum = __fadd_rn(" in source
+    assert "const float sum = __fmaf_rn(alpha, reduced_sum, beta);" in source
+    assert "1.0f, 0.0f);" in source
     assert "output[row] = __float2bfloat16_rn(sum);" in source
     assert "grid-stride" not in source.lower()
     assert "atomicAdd" not in source

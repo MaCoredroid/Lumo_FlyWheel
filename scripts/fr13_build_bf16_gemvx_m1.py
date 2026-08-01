@@ -38,6 +38,13 @@ def atomic_json(path: Path, payload: dict[str, object]) -> None:
     temporary.replace(path)
 
 
+def recorded_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(REPO))
+    except ValueError:
+        return str(path)
+
+
 def build(output: Path, build_dir: Path, attestation: Path) -> dict[str, object]:
     import torch
     from torch.utils.cpp_extension import load
@@ -103,7 +110,7 @@ def build(output: Path, build_dir: Path, attestation: Path) -> dict[str, object]
             "sha256": sha256_file(SOURCE),
         },
         "binary": {
-            "path": str(output),
+            "path": recorded_path(output),
             "sha256": sha256_file(output),
             "bytes": output.stat().st_size,
             "mode": "0555",
@@ -120,6 +127,7 @@ def build(output: Path, build_dir: Path, attestation: Path) -> dict[str, object]
             "accumulator": "fp32 positive zero",
             "multiply_accumulate": "__fmaf_rn dependent scalar chain",
             "reduction": "__fadd_rn shared-memory tree",
+            "epilogue": "__fmaf_rn(1.0f, reduced_sum, 0.0f)",
             "output": "__float2bfloat16_rn",
         },
     }

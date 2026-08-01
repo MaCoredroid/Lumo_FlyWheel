@@ -392,6 +392,7 @@ _FR13_DFWD_UNIFIED_BM8_PRODUCTION_PENDING = {}
 _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT = None
 _FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE = []
 _FR13_DRAFT_HEAD_M32_LIVE_STATE = None
+_FR13_DRAFT_HEAD_M1_LIVE_STATE = None
 _FR13_FIXED32_ACCEPTED_OUTPUT_CURRENT = None
 _FR13_FIXED32_BOOT_WARM_EVIDENCE = None
 _FR13_FIXED32_TOPOLOGY_NEEDLE_EMITTED = False
@@ -565,6 +566,179 @@ def _fr13_draft_head_m32_live_finalize(events, flush_binding):
     if not exact:
         raise RuntimeError(
             "FR13 draft-head M32 final comparison/event census mismatch: "
+            + repr((compares, mismatches, event_count, draft_events))
+        )
+
+
+def _fr13_draft_head_m1_live_register(
+    compares, mismatches, geometry, candidate, binary
+):
+    global _FR13_DRAFT_HEAD_M1_LIVE_STATE
+    _os = __import__("os")
+    if _os.environ.get("FR13_DRAFT_HEAD_M1_LIVE_AB", "0") != "1":
+        raise RuntimeError("FR13 draft-head M1 live state registered while off")
+    if (
+        _FR13_DRAFT_HEAD_M1_LIVE_STATE is not None
+        or tuple(compares.shape) != (5,)
+        or tuple(mismatches.shape) != (5,)
+        or str(compares.dtype) != "torch.int64"
+        or str(mismatches.dtype) != "torch.int64"
+        or compares.device.type != "cuda"
+        or mismatches.device != compares.device
+        or not isinstance(geometry, dict)
+        or not isinstance(candidate, dict)
+        or not isinstance(binary, dict)
+    ):
+        raise RuntimeError("FR13 draft-head M1 live registration drifted")
+    _FR13_DRAFT_HEAD_M1_LIVE_STATE = {
+        "compares": compares,
+        "mismatches": mismatches,
+        "geometry": geometry,
+        "candidate": candidate,
+        "binary": binary,
+        "source_commit": _os.environ.get(
+            "FR13_DRAFT_HEAD_M1_SOURCE_COMMIT", ""
+        ),
+        "candidate_source_sha256": _os.environ.get(
+            "FR13_DRAFT_HEAD_M1_SOURCE_SHA256", ""
+        ),
+        "patcher_sha256": _os.environ.get(
+            "FR13_DRAFT_HEAD_M1_PATCHER_SHA256", ""
+        ),
+        "build_attestation_sha256": _os.environ.get(
+            "FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION_SHA256", ""
+        ),
+        "instance_id": _os.environ.get(
+            "FR13_DRAFT_HEAD_M1_INSTANCE_ID", ""
+        ),
+    }
+
+
+def _fr13_draft_head_m1_live_finalize(events, flush_binding):
+    _os = __import__("os")
+    if _os.environ.get("FR13_DRAFT_HEAD_M1_LIVE_AB", "0") != "1":
+        if _FR13_DRAFT_HEAD_M1_LIVE_STATE is not None:
+            raise RuntimeError("FR13 draft-head M1 live state leaked while off")
+        return
+    state = _FR13_DRAFT_HEAD_M1_LIVE_STATE
+    event_rows = list(events)
+    event_count = len(event_rows)
+    draft_events = sum(int(row.get("batch_size", -1)) for row in event_rows)
+    hex_chars = frozenset("0123456789abcdef")
+    if (
+        not isinstance(state, dict)
+        or not isinstance(flush_binding, dict)
+        or set(flush_binding) != {
+            "action",
+            "boundary_snapshot_sha256",
+            "complete_work_census_events",
+            "events_sha256",
+            "generation",
+            "nonce",
+            "producer_pid",
+        }
+        or flush_binding.get("action") != "final"
+        or type(flush_binding.get("generation")) is not int
+        or int(flush_binding["generation"]) < 1
+        or type(flush_binding.get("producer_pid")) is not int
+        or int(flush_binding["producer_pid"]) < 1
+        or any(
+            not isinstance(flush_binding.get(key), str)
+            or len(flush_binding[key]) != 64
+            or any(value not in hex_chars for value in flush_binding[key])
+            for key in (
+                "nonce",
+                "events_sha256",
+                "boundary_snapshot_sha256",
+            )
+        )
+        or event_count < 1
+        or draft_events != event_count
+        or any(int(row.get("batch_size", -1)) != 1 for row in event_rows)
+        or int(flush_binding.get("complete_work_census_events", -1))
+        != event_count
+    ):
+        raise RuntimeError("FR13 draft-head M1 live finalization drifted")
+    compares = tuple(int(value) for value in state["compares"].tolist())
+    mismatches = tuple(
+        int(value) for value in state["mismatches"].tolist()
+    )
+    positions = ("root", "mtp1", "mtp2", "mtp3", "mtp4")
+    exact = (
+        compares == (draft_events,) * 5
+        and mismatches == (0,) * 5
+    )
+    instance_id = state["instance_id"]
+    record = {
+        "schema": "fr13.fixed32.draft_head_full_m1_live_ab.v1",
+        "status": "PASS" if exact else "FAIL",
+        "suite": "SWE-Verified",
+        "instance_id": instance_id,
+        "task_marker": "swe_verified:" + instance_id,
+        "concurrency": 1,
+        "batch_size": 1,
+        "source_commit": state["source_commit"],
+        "candidate_source_sha256": state["candidate_source_sha256"],
+        "patcher_sha256": state["patcher_sha256"],
+        "build_attestation_sha256": state["build_attestation_sha256"],
+        "geometry": state["geometry"],
+        "candidate": state["candidate"],
+        "binary": state["binary"],
+        "completed_events": draft_events,
+        "complete_work_census_events": event_count,
+        "work_census_last_event_index": event_count - 1,
+        "events_sha256": flush_binding["events_sha256"],
+        "flush_generation": flush_binding["generation"],
+        "flush_nonce": flush_binding["nonce"],
+        "producer_pid": flush_binding["producer_pid"],
+        "boundary_snapshot_sha256": flush_binding[
+            "boundary_snapshot_sha256"
+        ],
+        "head_positions": list(positions),
+        "per_head": [
+            {
+                "position": position,
+                "full_logit_comparisons": compares[index],
+                "bf16_elements_compared": compares[index] * 248320,
+                "raw_bf16_mismatches": mismatches[index],
+            }
+            for index, position in enumerate(positions)
+        ],
+        "full_logit_comparisons": sum(compares),
+        "bf16_elements_compared": sum(compares) * 248320,
+        "raw_bf16_mismatches": sum(mismatches),
+        "comparison_view": "raw torch.int16 over all BF16 logits",
+        "served_return": "stock reference BF16 logits computed first and unchanged",
+        "performance_measurement": False,
+        "acceptance_eligible": False,
+        "production_default_enabled": False,
+        "finalized_by_fixed32_flush": True,
+        "flush_action": "final",
+    }
+    path = __import__("pathlib").Path(
+        _os.environ.get(
+            "FR13_DRAFT_HEAD_M1_LIVE_JSON",
+            "/logs/fr13_draft_head_m1.live.json",
+        )
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp." + str(_os.getpid()))
+    with open(temporary, "w", encoding="ascii") as handle:
+        handle.write(
+            __import__("json").dumps(
+                record,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        handle.flush()
+        _os.fsync(handle.fileno())
+    _os.replace(temporary, path)
+    if not exact:
+        raise RuntimeError(
+            "FR13 draft-head M1 final comparison/event census mismatch: "
             + repr((compares, mismatches, event_count, draft_events))
         )
 
@@ -20593,6 +20767,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_m32_prod_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_M32_PRODUCTION", "0"
             )
+            _fr13_dh_m1_live_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_M1_LIVE_AB", "0"
+            )
             if _fr13_dh_rows_raw not in ("0", "32", "64", "128"):
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_PAD_ROWS must be exactly one of "
@@ -20610,10 +20787,15 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_M32_PRODUCTION must be exactly 0 or 1"
                 )
+            if _fr13_dh_m1_live_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_M1_LIVE_AB must be exactly 0 or 1"
+                )
             _fr13_dh_rows = int(_fr13_dh_rows_raw)
             _fr13_dh_ab = _fr13_dh_ab_raw == "1"
             _fr13_dh_m32_live = _fr13_dh_m32_live_raw == "1"
             _fr13_dh_m32_prod = _fr13_dh_m32_prod_raw == "1"
+            _fr13_dh_m1_live = _fr13_dh_m1_live_raw == "1"
             _fr13_dh_modes = sum(
                 int(value)
                 for value in (
@@ -20621,6 +20803,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_ab,
                     _fr13_dh_m32_live,
                     _fr13_dh_m32_prod,
+                    _fr13_dh_m1_live,
                 )
             )
             if _fr13_dh_modes > 1:
@@ -20660,6 +20843,18 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     "single-logits, FR13_DRAFT_VOCAB_ROOT=0, "
                     "FR13_DRAFT_VOCAB_K=0, and no draft-vocab block map"
                 )
+            if _fr13_dh_m1_live and (
+                not _fr13_is_fixed32
+                or _fr13_dvk_root
+                or not _fr13_single_logits
+                or _fr13_dvk_configured != 0
+                or os.environ.get("FR13_DRAFT_VOCAB_BLOCKS", "")
+            ):
+                raise RuntimeError(
+                    "FR13 full-head M1 live A/B requires exact fixed32 B1, "
+                    "single-logits, FR13_DRAFT_VOCAB_ROOT=0, "
+                    "FR13_DRAFT_VOCAB_K=0, and no draft-vocab block map"
+                )
             _fr13_dh_source_sha = os.environ.get(
                 "FR13_DRAFT_HEAD_M32_QUALIFIED_SOURCE_SHA256", ""
             )
@@ -20673,6 +20868,32 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13 draft-head M32 requires its qualified source SHA-256"
                 )
+            _fr13_dh_m1_source_sha = os.environ.get(
+                "FR13_DRAFT_HEAD_M1_SOURCE_SHA256", ""
+            )
+            _fr13_dh_m1_patcher_sha = os.environ.get(
+                "FR13_DRAFT_HEAD_M1_PATCHER_SHA256", ""
+            )
+            _fr13_dh_m1_build_attestation_sha = os.environ.get(
+                "FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION_SHA256", ""
+            )
+            _fr13_dh_m1_so_sha = os.environ.get(
+                "FR13_DRAFT_HEAD_M1_SO_SHA256", ""
+            )
+            if _fr13_dh_m1_live and any(
+                len(value) != 64
+                or any(char not in "0123456789abcdef" for char in value)
+                for value in (
+                    _fr13_dh_m1_source_sha,
+                    _fr13_dh_m1_patcher_sha,
+                    _fr13_dh_m1_build_attestation_sha,
+                    _fr13_dh_m1_so_sha,
+                )
+            ):
+                raise RuntimeError(
+                    "FR13 draft-head M1 requires source, patcher, build "
+                    "attestation, and SO SHA-256"
+                )
             self._fr13_dh_pad_rows = _fr13_dh_rows
             self._fr13_dh_ab_active = _fr13_dh_ab
             self._fr13_dh_m32_live_active = _fr13_dh_m32_live
@@ -20681,8 +20902,97 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             self._fr13_dh_m32_selected_capture_calls = 0
             self._fr13_dh_m32_fallback_calls = 0
             self._fr13_dh_m32_graph_attestation = None
+            self._fr13_dh_m1_live_active = _fr13_dh_m1_live
+            self._fr13_dh_m1_capture_position = 1
 
             def _fr13_dvk_prepare():
+                if (
+                    _fr13_dh_m1_live
+                    and not getattr(self, "_fr13_dh_m1_ready", False)
+                ):
+                    import hashlib as _fr13_dh_m1_hashlib
+                    import pathlib as _fr13_dh_m1_pathlib
+                    import stat as _fr13_dh_m1_stat
+
+                    _fr13_dh_sh = self.model.lm_head
+                    _fr13_dh_w = _fr13_dh_sh.weight
+                    if (
+                        type(_fr13_dh_sh).__name__ != "ParallelLMHead"
+                        or type(_fr13_dh_sh.quant_method).__name__
+                        != "UnquantizedEmbeddingMethod"
+                        or tuple(_fr13_dh_w.shape) != (248320, 5120)
+                        or tuple(_fr13_dh_w.stride()) != (5120, 1)
+                        or _fr13_dh_w.dtype != torch.bfloat16
+                        or not _fr13_dh_w.is_contiguous()
+                    ):
+                        raise RuntimeError(
+                            "FR13 full-head M1 requires the actual contiguous "
+                            "BF16 ParallelLMHead weight[248320,5120] "
+                            "stride[5120,1] with UnquantizedEmbeddingMethod"
+                        )
+                    _fr13_dh_m1_so = _fr13_dh_m1_pathlib.Path(
+                        os.environ.get("FR13_DRAFT_HEAD_M1_RUNTIME_SO", "")
+                    )
+                    _fr13_dh_m1_so_info = _fr13_dh_m1_so.lstat()
+                    if (
+                        not _fr13_dh_m1_stat.S_ISREG(
+                            _fr13_dh_m1_so_info.st_mode
+                        )
+                        or _fr13_dh_m1_so.is_symlink()
+                    ):
+                        raise RuntimeError(
+                            "FR13 full-head M1 SO must be a regular non-symlink file"
+                        )
+                    _fr13_dh_m1_observed_sha = _fr13_dh_m1_hashlib.sha256(
+                        _fr13_dh_m1_so.read_bytes()
+                    ).hexdigest()
+                    if _fr13_dh_m1_observed_sha != _fr13_dh_m1_so_sha:
+                        raise RuntimeError("FR13 full-head M1 SO SHA-256 drifted")
+                    torch.ops.load_library(str(_fr13_dh_m1_so))
+                    if not hasattr(
+                        torch.ops.fr13_bf16_head, "gemvx_m1_out"
+                    ):
+                        raise RuntimeError(
+                            "FR13 full-head M1 SO did not register its CUDA op"
+                        )
+                    self._fr13_dh_m1_head = _fr13_dh_sh
+                    self._fr13_dh_m1_output = torch.empty(
+                        (1, 248320),
+                        dtype=torch.bfloat16,
+                        device=_fr13_dh_w.device,
+                    )
+                    self._fr13_dh_m1_mismatches = torch.zeros(
+                        (5,), dtype=torch.int64, device=_fr13_dh_w.device
+                    )
+                    self._fr13_dh_m1_compares = torch.zeros(
+                        (5,), dtype=torch.int64, device=_fr13_dh_w.device
+                    )
+                    self._fr13_dh_m1_live_count_enable = torch.zeros(
+                        (), dtype=torch.int64, device=_fr13_dh_w.device
+                    )
+                    from vllm.model_executor.layers.mamba import (
+                        gdn_linear_attn as _fr13_dh_m1_gdn,
+                    )
+
+                    _fr13_dh_m1_contract_value = _fr13_dh_m1_contract()
+                    _fr13_dh_m1_gdn._fr13_draft_head_m1_live_register(
+                        self._fr13_dh_m1_compares,
+                        self._fr13_dh_m1_mismatches,
+                        _fr13_dh_m1_contract_value["geometry"],
+                        _fr13_dh_m1_contract_value["candidate"],
+                        {
+                            "path": str(_fr13_dh_m1_so),
+                            "sha256": _fr13_dh_m1_observed_sha,
+                            "bytes": int(_fr13_dh_m1_so_info.st_size),
+                        },
+                    )
+                    self._fr13_dh_m1_ready = True
+                    print(
+                        "[FR13_DRAFT_HEAD_M1] stock-order full-head CUDA op "
+                        "ready grid=[31040,1,1] block=[16,8,1] shared=544 "
+                        "output=[1,248320] weight=[248320,5120]",
+                        flush=True,
+                    )
                 if (
                     (_fr13_dh_m32_live or _fr13_dh_m32_prod)
                     and not getattr(self, "_fr13_dh_m32_ready", False)
@@ -20750,7 +21060,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     return (
                         0,
                         int(self.model.lm_head.weight.shape[0])
-                        if (_fr13_dh_m32_live or _fr13_dh_m32_prod)
+                        if (
+                            _fr13_dh_m1_live
+                            or _fr13_dh_m32_live
+                            or _fr13_dh_m32_prod
+                        )
                         else None,
                     )
                 _fr13_dvk_full = int(self.model.lm_head.weight.shape[0])
@@ -20926,6 +21240,100 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "FR13 draft-head M32 operand strides drifted"
                     )
                 return _fr13_dh_out[:1]
+
+            def _fr13_dh_m1_logits(_h):
+                _fr13_dh_sh = getattr(self, "_fr13_dh_m1_head", None)
+                _fr13_dh_out = getattr(self, "_fr13_dh_m1_output", None)
+                if (
+                    not getattr(self, "_fr13_dh_m1_ready", False)
+                    or _fr13_dh_sh is not self.model.lm_head
+                    or type(_fr13_dh_sh).__name__ != "ParallelLMHead"
+                    or tuple(_h.shape) != (1, 5120)
+                    or tuple(_h.stride()) != (5120, 1)
+                    or _h.dtype != torch.bfloat16
+                    or _h.device != _fr13_dh_sh.weight.device
+                    or not torch.is_tensor(_fr13_dh_out)
+                    or tuple(_fr13_dh_out.shape) != (1, 248320)
+                    or tuple(_fr13_dh_out.stride()) != (248320, 1)
+                    or _fr13_dh_out.dtype != torch.bfloat16
+                    or _fr13_dh_out.device != _h.device
+                ):
+                    raise RuntimeError(
+                        "FR13 full-head M1 engaged outside exact contiguous "
+                        "BF16 hidden[1,5120] -> logits[1,248320] contract"
+                    )
+                torch.ops.fr13_bf16_head.gemvx_m1_out(
+                    _fr13_dh_out, _h, _fr13_dh_sh.weight
+                )
+                return _fr13_dh_out
+
+            def _fr13_dh_m1_contract():
+                return {
+                    "geometry": {
+                        "batch_size": 1,
+                        "supported_batch_sizes": [1],
+                        "calls_per_event": 5,
+                        "head_positions": [
+                            "root", "mtp1", "mtp2", "mtp3", "mtp4"
+                        ],
+                        "input_shape": [1, 5120],
+                        "input_stride": [5120, 1],
+                        "weight_shape": [248320, 5120],
+                        "weight_stride": [5120, 1],
+                        "output_shape": [1, 248320],
+                        "output_stride": [248320, 1],
+                        "dtype": "torch.bfloat16",
+                    },
+                    "candidate": {
+                        "module": "ParallelLMHead",
+                        "method": "UnquantizedEmbeddingMethod",
+                        "operation": (
+                            "custom stock-order BF16 M1 GEMV shadow after "
+                            "stock reference"
+                        ),
+                        "gemv_mnk": [1, 248320, 5120],
+                        "grid": [31040, 1, 1],
+                        "block": [16, 8, 1],
+                        "dynamic_shared_bytes": 544,
+                        "shared_row_stride_floats": 17,
+                        "k_partition_lanes": 16,
+                        "lane_k_iterations": 320,
+                        "reduction_strides": [8, 4, 2, 1],
+                        "accumulator": "fp32 positive zero",
+                        "multiply_accumulate": "__fmaf_rn dependent chain",
+                        "reduction": "__fadd_rn shared-memory tree",
+                        "epilogue": (
+                            "__fmaf_rn(1.0f, reduced_sum, 0.0f)"
+                        ),
+                        "output_conversion": "__float2bfloat16_rn",
+                        "candidate_launches_per_head": 1,
+                        "served_rows": 0,
+                        "shadow_compared_rows": 1,
+                    },
+                }
+
+            def _fr13_dh_m1_measured_proposal():
+                from vllm.model_executor.layers.mamba import (
+                    gdn_linear_attn as _fr13_dh_m1_proposal_gdn,
+                )
+
+                _fr13_dh_m1_proposal = getattr(
+                    _fr13_dh_m1_proposal_gdn,
+                    "_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT",
+                    None,
+                )
+                if (
+                    not isinstance(_fr13_dh_m1_proposal, dict)
+                    or _fr13_dh_m1_proposal.get("measured")
+                    not in (True, False)
+                    or int(_fr13_dh_m1_proposal.get("batch_size", -1)) != 1
+                    or _fr13_dh_m1_proposal.get("mode")
+                    != _fr13_dh_m1_proposal_gdn._FR13_FIXED32_MODE
+                ):
+                    raise RuntimeError(
+                        "FR13 full-head M1 has no exact real-B1 proposal"
+                    )
+                return _fr13_dh_m1_proposal["measured"] is True
 
             def _fr13_dh_m32_logits(_h):
                 _fr13_dh_sh = getattr(self, "_fr13_dh_m32_head", None)
@@ -21227,16 +21635,66 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_m32_prod_on = getattr(
                         self, "_fr13_dh_m32_production_active", False
                     )
+                    _fr13_dh_m1_live_on = getattr(
+                        self, "_fr13_dh_m1_live_active", False
+                    )
                     _fr13_dh_m32_on = (
                         _fr13_dh_m32_live_on or _fr13_dh_m32_prod_on
                     )
                     _sh = (
-                        self._fr13_dh_m32_head
+                        self._fr13_dh_m1_head
+                        if _fr13_dh_m1_live_on
+                        else self._fr13_dh_m32_head
                         if _fr13_dh_m32_on
                         else self._fr13_dvk_shim
                     )
                     _fr13_dh_capturing = False
-                    if _fr13_dh_m32_on:
+                    if _fr13_dh_m1_live_on:
+                        _fr13_dh_capturing = (
+                            torch.cuda.is_current_stream_capturing()
+                        )
+                        _fr13_dh_measured = _fr13_dh_m1_measured_proposal()
+                        if _fr13_dh_capturing:
+                            _fr13_dh_position = int(
+                                self._fr13_dh_m1_capture_position
+                            )
+                            self._fr13_dh_m1_capture_position = (
+                                _fr13_dh_position + 1
+                            )
+                            if not 1 <= _fr13_dh_position <= 4:
+                                raise RuntimeError(
+                                    "FR13 full-head M1 capture exceeded four "
+                                    "MTP head positions"
+                                )
+                        else:
+                            _fr13_dh_position = 0
+                            self._fr13_dh_m1_capture_position = 1
+                            self._fr13_dh_m1_live_count_enable.fill_(
+                                int(_fr13_dh_measured)
+                            )
+                        # The incumbent is computed first and is always the
+                        # only served tensor. The candidate is shadow-only.
+                        _fr13_dh_reference = _sh.quant_method.apply(
+                            _sh, _h, bias=None
+                        )
+                        _fr13_dh_candidate = _fr13_dh_m1_logits(_h)
+                        _fr13_dh_count_enable = (
+                            self._fr13_dh_m1_live_count_enable
+                        )
+                        self._fr13_dh_m1_mismatches[
+                            _fr13_dh_position
+                        ].add_(
+                            torch.count_nonzero(
+                                _fr13_dh_candidate.view(torch.int16)
+                                != _fr13_dh_reference.view(torch.int16)
+                            )
+                            * _fr13_dh_count_enable
+                        )
+                        self._fr13_dh_m1_compares[
+                            _fr13_dh_position
+                        ].add_(_fr13_dh_count_enable)
+                        _logits = _fr13_dh_reference
+                    elif _fr13_dh_m32_on:
                         _fr13_dh_capturing = (
                             torch.cuda.is_current_stream_capturing()
                         )
@@ -21338,10 +21796,17 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     return (
                         _logits,
                         None
-                        if _fr13_dh_m32_on
+                        if (_fr13_dh_m1_live_on or _fr13_dh_m32_on)
                         else getattr(self, "_fr13_dvk_map_t", None),
                     )
                 except Exception as _e:
+                    if getattr(
+                        self, "_fr13_dh_m1_live_active", False
+                    ):
+                        raise RuntimeError(
+                            "FR13 draft-head M1 live A/B failed its strict "
+                            "reference-first runtime contract"
+                        ) from _e
                     if getattr(
                         self, "_fr13_dh_m32_production_active", False
                     ):
@@ -21375,7 +21840,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 return _ids if _id_map is None else _id_map[_ids]
 
             if (
-                _fr13_dh_m32_live
+                _fr13_dh_m1_live
+                or _fr13_dh_m32_live
                 or _fr13_dh_m32_prod
                 or _fr13_dvk_root
             ):
@@ -21415,7 +21881,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 # 3-3-3 additionally reads rank-2 (index 2) from that topk.
                 _fr13_ds_lm = _FR13_DFWD_SPLIT.begin('lmhead')
                 if (
-                    (_fr13_dh_m32_live or _fr13_dh_m32_prod)
+                    (
+                        _fr13_dh_m1_live
+                        or _fr13_dh_m32_live
+                        or _fr13_dh_m32_prod
+                    )
                     or (
                         _fr13_dvk_root
                         and _fr13_dvk > 0
@@ -21425,7 +21895,17 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr10_logits, _fr10_root_map = _fr13_dvk_logits(
                         sample_hidden_states
                     )
-                    if _fr13_dh_m32_live or _fr13_dh_m32_prod:
+                    if _fr13_dh_m1_live:
+                        if not getattr(
+                            self, "_fr13_dh_m1_route_engaged", False
+                        ):
+                            self._fr13_dh_m1_route_engaged = True
+                            print(
+                                "[FR13_DRAFT_HEAD_M1] root plus four MTP "
+                                "full-vocabulary heads reference-first/shadow-routed",
+                                flush=True,
+                            )
+                    elif _fr13_dh_m32_live or _fr13_dh_m32_prod:
                         if not getattr(
                             self, "_fr13_dh_m32_route_engaged", False
                         ):
@@ -21580,7 +22060,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 and not _fr13_selfcheck
             )
             if not _fr13_dvk_root:
-                if not (_fr13_dh_m32_live or _fr13_dh_m32_prod):
+                if not (
+                    _fr13_dh_m1_live
+                    or _fr13_dh_m32_live
+                    or _fr13_dh_m32_prod
+                ):
                     # Keep the accepted root-off execution order: build the
                     # loop subset only after the unchanged full root head.
                     _fr13_dvk, _ = _fr13_dvk_prepare()
@@ -21837,7 +22321,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     # runner-up (packing and the FR10_METRICS log both emit
                     # no leaves in spine-only mode), so its topk is skipped.
                     if (
-                        _fr13_dh_m32_live
+                        _fr13_dh_m1_live
+                        or _fr13_dh_m32_live
                         or _fr13_dh_m32_prod
                         or (
                             _fr13_dvk > 0
@@ -30720,6 +31205,24 @@ def _fr13_f32_flush_one(request):
                     + "." + str(request["generation"]) + ".json"
                 )
                 _gdn._fr13_draft_head_m32_live_finalize(
+                    events,
+                    {
+                        "action": "final",
+                        "boundary_snapshot_sha256": (
+                            _fr13_f32_flush_hashlib.sha256(
+                                boundary_path.read_bytes()
+                            ).hexdigest()
+                        ),
+                        "complete_work_census_events": len(events),
+                        "events_sha256": _fr13_f32_flush_hashlib.sha256(
+                            canonical_events
+                        ).hexdigest(),
+                        "generation": request["generation"],
+                        "nonce": request["nonce"],
+                        "producer_pid": _FR13_FIXED32_FLUSH_PID,
+                    },
+                )
+                _gdn._fr13_draft_head_m1_live_finalize(
                     events,
                     {
                         "action": "final",

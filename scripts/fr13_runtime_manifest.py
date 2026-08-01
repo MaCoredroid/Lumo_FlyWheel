@@ -32,6 +32,7 @@ class ProfileSpec:
 
 
 FIXED32_HOST_SCRIPT_SOURCE = (
+    "csrc/fr13_bf16_gemvx_m1.cu",
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
     "scripts/fr10_quick_decode_tps_probe.py",
     "scripts/fr13_arctic_suffix_adapter.py",
@@ -44,6 +45,8 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_cutlass_wave_binary.py",
     "scripts/fr13_device_multidraft_kernel.py",
     "scripts/fr13_draft_head_m32_pass.py",
+    "scripts/fr13_build_bf16_gemvx_m1.py",
+    "scripts/fr13_draft_head_m1_validate.py",
     "scripts/fr13_fixed32_flush_protocol.py",
     "scripts/fr13_fixed32_contract.py",
     "scripts/fr13_fixed32_topology.py",
@@ -57,6 +60,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_required_tree_flags.sh",
     "scripts/fr13_run_b4_gdn_bv8_timing.sh",
     "scripts/fr13_run_b4_gdn_wide_live_gate.sh",
+    "scripts/fr13_run_b1_draft_head_m1_live.sh",
     "scripts/fr13_sg_warmup_capture_inject.py",
     "scripts/gpu_oom_guard.sh",
     "scripts/run_swe_bench_q36_a.py",
@@ -105,6 +109,7 @@ FIXED32_RUNTIME_DATA_AND_CONFIG = (
     "model_registry.yaml",
     "output/fr13_acceptance_ladder/prompts_swe4.json",
     "config/fr13_fixed32/qwen_system_settings.json",
+    "config/fr13_fixed32/subset_b1_diagnostic_one.json",
     "config/fr13_fixed32/subset_b4_four.json",
     "config/fr13_fixed32/subset_b4_sixteen.json",
     "scripts/fr13_dvk_subset_blocks.json",

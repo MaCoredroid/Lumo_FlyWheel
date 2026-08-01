@@ -27,7 +27,8 @@ static_assert(sizeof(at::BFloat16) == sizeof(__nv_bfloat16));
 __global__ __launch_bounds__(kLanes * kRowsPerCta) void
 fr13_bf16_gemvx_m1_kernel(__nv_bfloat16* __restrict__ output,
                           const __nv_bfloat16* __restrict__ input,
-                          const __nv_bfloat16* __restrict__ weight) {
+                          const __nv_bfloat16* __restrict__ weight,
+                          const float alpha, const float beta) {
   const int lane = static_cast<int>(threadIdx.x);
   const int row_in_cta = static_cast<int>(threadIdx.y);
   const int row = static_cast<int>(blockIdx.x) * kRowsPerCta + row_in_cta;
@@ -61,7 +62,9 @@ fr13_bf16_gemvx_m1_kernel(__nv_bfloat16* __restrict__ output,
   }
   __syncthreads();
   if (lane == 0) {
-    const float sum = __fadd_rn(row_partials[0], row_partials[1]);
+    const float reduced_sum = __fadd_rn(row_partials[0], row_partials[1]);
+    // Match cuBLASLt's alpha=1, beta=0 epilogue before BF16 conversion.
+    const float sum = __fmaf_rn(alpha, reduced_sum, beta);
     output[row] = __float2bfloat16_rn(sum);
   }
 }
@@ -97,7 +100,8 @@ void fr13_bf16_gemvx_m1_out(at::Tensor output, const at::Tensor& input,
       reinterpret_cast<const __nv_bfloat16*>(
           input.data_ptr<at::BFloat16>()),
       reinterpret_cast<const __nv_bfloat16*>(
-          weight.data_ptr<at::BFloat16>()));
+          weight.data_ptr<at::BFloat16>()),
+      1.0f, 0.0f);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 

@@ -43,6 +43,12 @@ _FR13_M32_GUARD_NAMES=(
   FR13_DRAFT_HEAD_M32_LIVE_CHAT_TRAFFIC_AUDIT_JSON
   FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON
   FR13_DRAFT_HEAD_M32_TIMING_ARM
+  FR13_DRAFT_HEAD_M1_LIVE_AB
+  FR13_DRAFT_HEAD_M1_INSTANCE_ID
+  FR13_DRAFT_HEAD_M1_LIVE_JSON
+  FR13_DRAFT_HEAD_M1_SO
+  FR13_DRAFT_HEAD_M1_SO_SHA256
+  FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION_SHA256
   FR13_DRAFT_HEAD_PAD_ROWS
   FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB
   FR13_DRAFT_VOCAB_ROOT
@@ -86,7 +92,8 @@ done
 _FR13_M32_GUARD_ACTIVE=0
 [[ "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_LIVE_AB]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_PRODUCTION]}" == "set:1" \
-   || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_TIMING_ARM]}" == "set:1" ]] \
+   || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_TIMING_ARM]}" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M1_LIVE_AB]}" == "set:1" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 _FR13_LOCAL_ENV_SOURCED=0
 if [[ -n "${FR13_FIXED32_MODE:-}" && -f "$REPO/.lumo.local.env" ]]; then
@@ -97,7 +104,8 @@ if [[ -n "${FR13_FIXED32_MODE:-}" && -f "$REPO/.lumo.local.env" ]]; then
 fi
 [[ "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" == "1" \
-   || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" ]] \
+   || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" \
+   || "${FR13_DRAFT_HEAD_M1_LIVE_AB:-0}" == "1" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 if (( _FR13_M32_GUARD_ACTIVE == 1 )); then
   for _fr13_guard_name in "${_FR13_M32_GUARD_NAMES[@]}"; do
@@ -300,6 +308,20 @@ FR13_DRAFT_HEAD_M32_QUALIFIED_SOURCE_SHA256=$(
   sha256sum scripts/fr10_phase4_patch_vllm_tree_gdn.py | cut -d' ' -f1
 )
 FR13_DRAFT_HEAD_M32_SOURCE_COMMIT=$(git rev-parse HEAD)
+FR13_DRAFT_HEAD_M1_LIVE_AB=${FR13_DRAFT_HEAD_M1_LIVE_AB:-0}
+FR13_DRAFT_HEAD_M1_INSTANCE_ID=${FR13_DRAFT_HEAD_M1_INSTANCE_ID:-}
+FR13_DRAFT_HEAD_M1_LIVE_JSON=${FR13_DRAFT_HEAD_M1_LIVE_JSON:-/logs/fr13_draft_head_m1.live.json}
+FR13_DRAFT_HEAD_M1_SO=${FR13_DRAFT_HEAD_M1_SO:-}
+FR13_DRAFT_HEAD_M1_SO_SHA256=${FR13_DRAFT_HEAD_M1_SO_SHA256:-}
+FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION_SHA256=${FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION_SHA256:-}
+FR13_DRAFT_HEAD_M1_SOURCE_SHA256=$(
+  sha256sum csrc/fr13_bf16_gemvx_m1.cu | cut -d' ' -f1
+)
+FR13_DRAFT_HEAD_M1_PATCHER_SHA256=$(
+  sha256sum scripts/fr10_phase4_patch_vllm_tree_gdn.py | cut -d' ' -f1
+)
+FR13_DRAFT_HEAD_M1_SOURCE_COMMIT=$(git rev-parse HEAD)
+FR13_DRAFT_HEAD_M1_RUNTIME_SO=
 FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}
 FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}
 FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON:-}
@@ -399,6 +421,10 @@ case "$FR13_DRAFT_HEAD_M32_TIMING_ARM" in
   0|1) ;;
   *) echo "FR13_DRAFT_HEAD_M32_TIMING_ARM must be 0 or 1" >&2; exit 2 ;;
 esac
+case "$FR13_DRAFT_HEAD_M1_LIVE_AB" in
+  0|1) ;;
+  *) echo "FR13_DRAFT_HEAD_M1_LIVE_AB must be 0 or 1" >&2; exit 2 ;;
+esac
 if [[ -n "${FR13_DRAFT_HEAD_M32_INTERNAL_PRODUCTION_ATTESTED:-}" ]]; then
   echo "FR13 draft-head M32 internal attestation is launcher-private" >&2
   exit 2
@@ -413,6 +439,7 @@ _FR13_DRAFT_HEAD_MODES=0
 [[ "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
 [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
 [[ "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
+[[ "$FR13_DRAFT_HEAD_M1_LIVE_AB" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
 if (( _FR13_DRAFT_HEAD_MODES > 1 )); then
   echo "FR13 draft-head candidate, diagnostics, and production are mutually exclusive" >&2
   exit 2
@@ -427,6 +454,8 @@ _FR13_DRAFT_HEAD_M32_MODE=0
   || _FR13_DRAFT_HEAD_M32_MODE=1
 _FR13_DRAFT_HEAD_M32_WORKLOAD=$_FR13_DRAFT_HEAD_M32_MODE
 [[ "$FR13_DRAFT_HEAD_M32_TIMING_ARM" == "0" ]] \
+  || _FR13_DRAFT_HEAD_M32_WORKLOAD=1
+[[ "$FR13_DRAFT_HEAD_M1_LIVE_AB" == "0" ]] \
   || _FR13_DRAFT_HEAD_M32_WORKLOAD=1
 if (( _FR13_DRAFT_HEAD_PAD_MODE == 1 )); then
   [[ -n "${FR13_FIXED32_MODE:-}" \
@@ -453,6 +482,26 @@ if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" \
       && "$FR13_DRAFT_HEAD_M32_INSTANCE_ID" != "astropy__astropy-12907" ]]; then
   echo "FR13 draft-head M32 live A/B requires the canonical real B1 task" >&2
   exit 2
+fi
+if [[ "$FR13_DRAFT_HEAD_M1_LIVE_AB" == "1" ]]; then
+  [[ "$FR13_DRAFT_HEAD_M1_INSTANCE_ID" == "astropy__astropy-12907" \
+     && -f "$FR13_DRAFT_HEAD_M1_SO" \
+     && ! -L "$FR13_DRAFT_HEAD_M1_SO" \
+     && "$FR13_DRAFT_HEAD_M1_SO" == /* \
+     && "$FR13_DRAFT_HEAD_M1_SO_SHA256" =~ ^[0-9a-f]{64}$ \
+     && "$FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION_SHA256" =~ ^[0-9a-f]{64}$ \
+     && "$(sha256sum "$FR13_DRAFT_HEAD_M1_SO" | cut -d' ' -f1)" \
+        == "$FR13_DRAFT_HEAD_M1_SO_SHA256" \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
+     && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+     && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+     && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
+     && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+     && "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" == "0" ]] || {
+    echo "FR13 draft-head M1 live A/B requires its pinned SO and must be the only canonical real-B1 candidate" >&2
+    exit 2
+  }
 fi
 if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" ]]; then
   [[ "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
@@ -636,6 +685,7 @@ if [[ "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "1" ]]; then
      && "$FR13_DRAFT_HEAD_PAD_ROWS" == "0" \
      && "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" \
      && "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "0" \
+     && "$FR13_DRAFT_HEAD_M1_LIVE_AB" == "0" \
      && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" ]] || {
     echo "FR13 DFWD unified BM8 live gate must be the only diagnostic kernel candidate" >&2
     exit 2
@@ -656,6 +706,7 @@ if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
      && "$FR13_DRAFT_HEAD_PAD_ROWS" == "0" \
      && "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" \
      && "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "0" \
+     && "$FR13_DRAFT_HEAD_M1_LIVE_AB" == "0" \
      && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" ]] || {
     echo "FR13 DFWD unified BM8 production cannot overlap diagnostic kernel candidates" >&2
     exit 2
@@ -846,7 +897,8 @@ if [[ -n "$_fr13_gdn_path_bv_candidate" \
 fi
 if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" \
       || "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "1" \
-      || "$FR13_DRAFT_HEAD_M32_TIMING_ARM" == "1" ]]; then
+      || "$FR13_DRAFT_HEAD_M32_TIMING_ARM" == "1" \
+      || "$FR13_DRAFT_HEAD_M1_LIVE_AB" == "1" ]]; then
   [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "0" \
      && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
@@ -863,7 +915,7 @@ if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" \
      && "$FR13_FIXED32_CUTLASS_WAVE" == "stock" \
      && -z "$FR13_FIXED32_CUTLASS_WAVE_SO" \
      && "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" == "0" ]] || {
-    echo "FR13 draft-head M32 must be the only kernel candidate in its arm" >&2
+    echo "FR13 full-vocabulary draft-head mode must be the only kernel candidate in its arm" >&2
     exit 2
   }
 fi
@@ -1494,6 +1546,19 @@ FR13_FIXED32_DOCKER_ARGS=()
 FR13_FIXED32_MIDDLEWARE_FLAGS=""
 FR13_FIXED32_CIDFILE=""
 FR13_FIXED32_CONTAINER_ID=""
+if [[ "$FR13_DRAFT_HEAD_M1_LIVE_AB" == "1" ]]; then
+  [[ -f "$FR13_DRAFT_HEAD_M1_SO" \
+     && ! -L "$FR13_DRAFT_HEAD_M1_SO" \
+     && "$(sha256sum "$FR13_DRAFT_HEAD_M1_SO" | cut -d' ' -f1)" \
+        == "$FR13_DRAFT_HEAD_M1_SO_SHA256" ]] || {
+    echo "FR13 draft-head M1 SO changed before Docker mount" >&2
+    exit 2
+  }
+  FR13_DRAFT_HEAD_M1_RUNTIME_SO=/tmp/fr13_bf16_gemvx_m1.abi3.so
+  FR13_FIXED32_DOCKER_ARGS+=(
+    -v "$FR13_DRAFT_HEAD_M1_SO:$FR13_DRAFT_HEAD_M1_RUNTIME_SO:ro"
+  )
+fi
 if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   # Pinned vLLM otherwise appends a random suffix before EngineCore, so the
   # authenticated external ID cannot equal the model-runner census ID.
@@ -2179,6 +2244,7 @@ while IFS= read -r _v; do
   [[ "$_v" == "FR13_FIXED32_INGRESS_SECRET_FILE" \
      || "$_v" == "FR13_FIXED32_MIDDLEWARE_FLAGS" \
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_SO" \
+     || "$_v" == "FR13_DRAFT_HEAD_M1_SO" \
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
      || "$_v" == "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH" ]] && continue
   if [[ -n "${FR13_FIXED32_MODE:-}" \
