@@ -39,6 +39,9 @@ except ModuleNotFoundError:
     sys.modules["triton.language"] = language_stub
 
 from lumo_flywheel_serving import fr10_gdn_tree_kernel as kernel  # noqa: E402
+from lumo_flywheel_serving import (  # noqa: E402
+    fr13_sfwd_state_fusion_production as production,
+)
 
 
 def _function_source(name: str) -> str:
@@ -337,7 +340,7 @@ def test_production_control_is_default_off_and_source_bound(
     live = tmp_path / "production_pass.json"
     digest = tmp_path / "production_pass.sha256"
     monkeypatch.setattr(kernel, "_FR13_FIXED32_MODE", "hydra27_fixed32")
-    assert kernel.fixed32_sfwd_state_fusion_production_control(
+    assert production.fixed32_sfwd_state_fusion_production_control(
         environ={},
         arm_path=str(arm),
         pass_path=str(live),
@@ -351,7 +354,7 @@ def test_production_control_is_default_off_and_source_bound(
     raw = json.dumps(payload, sort_keys=True).encode("ascii") + b"\n"
     live.write_bytes(raw)
     digest.write_text(hashlib.sha256(raw).hexdigest() + "\n", encoding="ascii")
-    credential = kernel.fixed32_sfwd_state_fusion_production_control(
+    credential = production.fixed32_sfwd_state_fusion_production_control(
         environ={},
         arm_path=str(arm),
         pass_path=str(live),
@@ -360,7 +363,7 @@ def test_production_control_is_default_off_and_source_bound(
     assert credential is not None
     assert credential["live_pass_sha256"] == hashlib.sha256(raw).hexdigest()
     assert id(credential) in (
-        kernel._FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_CREDENTIAL_IDS
+        production._CREDENTIAL_IDS
     )
 
     payload["source_sha256"] = "0" * 64
@@ -370,7 +373,7 @@ def test_production_control_is_default_off_and_source_bound(
         hashlib.sha256(bad_raw).hexdigest() + "\n", encoding="ascii"
     )
     with pytest.raises(RuntimeError, match="source_sha256"):
-        kernel.fixed32_sfwd_state_fusion_production_control(
+        production.fixed32_sfwd_state_fusion_production_control(
             environ={},
             arm_path=str(arm),
             pass_path=str(live),
@@ -388,13 +391,13 @@ def test_production_engagement_and_served_wiring_cover_all_layers(
     }
     monkeypatch.setattr(kernel, "_FR13_FIXED32_MODE", "hydra27_fixed32")
     monkeypatch.setattr(
-        kernel,
-        "_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_CREDENTIAL_IDS",
+        production,
+        "_CREDENTIAL_IDS",
         {id(credential)},
     )
     monkeypatch.setattr(
-        kernel,
-        "_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_STATE",
+        production,
+        "_STATE",
         {
             "live_pass_sha256": None,
             "source_sha256": None,
@@ -409,7 +412,7 @@ def test_production_engagement_and_served_wiring_cover_all_layers(
         str(engagement),
     )
     for layer in range(48):
-        kernel.fixed32_sfwd_state_fusion_production_engagement(
+        production.fixed32_sfwd_state_fusion_production_engagement(
             credential=credential, layer_key=layer + 1, batch_size=1
         )
     record = json.loads(engagement.read_text(encoding="ascii"))
@@ -422,7 +425,7 @@ def test_production_engagement_and_served_wiring_cover_all_layers(
     patcher = PATCHER_PATH.read_text(encoding="utf-8")
     assert "fixed32_sfwd_state_fusion_production_control()" in patcher
     assert "out=_fr10_tree_conv_out" in patcher
-    assert "production_credential=_fr13_sfwd_production" in patcher
+    assert "fr13_sfwd_state_fusion_production import" in patcher
     assert "if _fr13_sfwd_production is not None" in patcher
     assert "else attn_metadata.num_spec_decodes" in patcher
 

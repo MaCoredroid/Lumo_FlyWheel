@@ -2,7 +2,7 @@
   "schema": "fr13.fixed32.sfwd_state_fusion.b1_timing_readiness.v1",
   "status": "source_ready_waiting_real_live_pass",
   "branch": "agent/fixed32-sfwd-state-fusion-timing-b1-49d",
-  "kernel_route_commit": "e56ce00eb",
+  "qualification_kernel_commit": "49d87716d018be6b946a51fc1a122e930c870785",
   "candidate": "fixed32_sfwd_state_fusion_v1",
   "task_ids": [
     "astropy__astropy-12907"
@@ -39,7 +39,8 @@
   "exact16_used": false,
   "focused_tests_passed": 10,
   "focused_tests_failed": 0,
-  "kernel_source_sha256": "56d7f66e9e6b611303366cd7955e910b95b0e95600e01941aa9f10bd33a3653e",
+  "kernel_source_sha256": "1cd112bc37f4e41237219e27fa261c902320c2204f84118e6d34862046ec5029",
+  "production_control_sha256": "19003a1e9d722f26fe348a4fb8f33319511a7fc6d507a8f9c066e36ae49b32a0",
   "runner_sha256": "ab569f3bc2220e4278f5b4a5caa5240205888369c1f4850b549e84e32562b312",
   "pass_validator_sha256": "7424d1e109466c66a88733cc09ab438a3a38e0ee50e6b6377eaefcc748160111"
 }
