@@ -66,7 +66,8 @@ CUTLASS_ARM_ARTIFACT="$ARMDIR/swe_out/verified/per_task/$TASK_ID/fixed32_cutlass
   "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_binary.json" \
   "$ARMDIR/cutlass_streamk_byte_gate.json" \
   "$PATCH_SOURCE" "$SOURCE_COMMIT" "$CUTLASS_ARM_ARTIFACT" \
-  "$ARMDIR/container_env.txt" "$GATE_CANDIDATE" \
+  "$ARMDIR/container_env.txt" \
+  "$ARMDIR/logs/fr13_fixed32_engine_ingress.jsonl" "$GATE_CANDIDATE" \
   "$DIAGNOSTIC_SELECTOR" "$RECORD_SCHEMA" "$LIVE_SCHEMA" <<'PY'
 import hashlib
 import json
@@ -76,15 +77,22 @@ from pathlib import Path
 sys.path.insert(0, "scripts")
 import fr13_cutlass_wave_binary as binary
 import fr13_cutlass_streamk_pass as qualification
+sys.path.insert(0, "src")
+from lumo_flywheel_serving.inference_proxy import (
+    fixed32_canonical_task_set_sha256,
+    fixed32_task_key_id,
+    verify_fixed32_ingress_ledger,
+)
 
 jsonl_path, binary_path, output_path, patch_source = map(Path, sys.argv[1:5])
 source_commit = sys.argv[5]
 arm_path = Path(sys.argv[6])
 container_env_path = Path(sys.argv[7])
-expected_candidate = sys.argv[8]
-expected_diagnostic_selector = sys.argv[9]
-expected_record_schema = sys.argv[10]
-expected_live_schema = sys.argv[11]
+engine_ledger_path = Path(sys.argv[8])
+expected_candidate = sys.argv[9]
+expected_diagnostic_selector = sys.argv[10]
+expected_record_schema = sys.argv[11]
+expected_live_schema = sys.argv[12]
 expected_candidate_sha256, expected_candidate_size, expected_candidate_family = (
     binary.candidate_identity(expected_diagnostic_selector)
 )
@@ -112,7 +120,30 @@ if not container_env_path.is_file() or container_env_path.is_symlink():
     raise SystemExit("CUTLASS container environment artifact is missing or symlinked")
 container_env_raw = container_env_path.read_bytes()
 container_env_lines = container_env_raw.decode("ascii").splitlines()
+ledger_verification = verify_fixed32_ingress_ledger(
+    engine_ledger_path,
+    expected_role="engine",
+    require_finalized=True,
+)
+ledger_rows = [
+    json.loads(line)
+    for line in engine_ledger_path.read_text(encoding="ascii").splitlines()
+]
 errors = []
+expected_task_key = fixed32_task_key_id(expected_task_id)
+expected_task_set_sha256 = fixed32_canonical_task_set_sha256((expected_task_id,))
+if not any(
+    row.get("event") == "campaign_begin"
+    and row.get("evidence_sha256") == expected_task_set_sha256
+    for row in ledger_rows
+):
+    errors.append("engine ledger is not bound to the canonical B1 task")
+if not any(
+    row.get("event") == "request_accepted"
+    and row.get("task_key_id") == expected_task_key
+    for row in ledger_rows
+):
+    errors.append("real-task arm has no matching accepted engine request")
 if len(records) > 256:
     errors.append("diagnostic exceeded its 256-call bound")
 if any(record.get("schema") != expected_record_schema for record in records):
@@ -214,6 +245,7 @@ payload = {
     "task_ids": [expected_task_id],
     "task_marker": expected_task_marker,
     "real_task_arm_sha256": hashlib.sha256(arm_raw).hexdigest(),
+    "engine_ledger_chain_head_sha256": ledger_verification["chain_head_sha256"],
     "container_env_sha256": hashlib.sha256(container_env_raw).hexdigest(),
     "draft_vocab_root": 0,
     "draft_vocab_k": 0,
