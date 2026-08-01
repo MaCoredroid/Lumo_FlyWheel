@@ -1,0 +1,53 @@
+{
+  "schema": "fr13.fixed32.cfwd_all_parent_b1_preflight_rejection.v1",
+  "classification": "rejected_pre_task_nonmeasurement",
+  "measurement_eligible": false,
+  "floor_acceptance_eligible": false,
+  "candidate_qualified": false,
+  "candidate": "fixed32_all_parent_commit_v2",
+  "candidate_source_contract_sha256": "51541928c3a758fdac34a70fe46b97753ffc1b6e9f3e5fe470c4b34a96515dc4",
+  "run_source_commit": "f637aeec60694e4113095a74bc05d631fbb691ff",
+  "remediation_commit": "1a82491f56cff5750706c6ab5239397c5124c8c7",
+  "runroot": "output/fr13_allparent_v2_b1_20260801T055437Z",
+  "arm": "hydra27_fixed32_allparent_v2_b1_20260801T055437Z",
+  "workload": {
+    "suite": "SWE-Verified",
+    "task_ids": [
+      "astropy__astropy-12907"
+    ],
+    "batch_size": 1,
+    "classification": "one_real_task_b1_diagnostic",
+    "tasks_submitted": 0,
+    "engine_ingress_records": 0
+  },
+  "floor_contract": {
+    "draft_vocab_k": 0,
+    "draft_vocab_root": 0,
+    "mandatory_weight_bytes": 42025179008,
+    "mandatory_weight_floor_ms_per_step": 153.938384645,
+    "one_sided_1_15x_cap_ms_per_step": 177.029142341
+  },
+  "lifecycle": {
+    "server_healthy": true,
+    "healthy_after_seconds": 697,
+    "runtime_identity_passed": true,
+    "ready_ack_pure_decode_forward_steps": 0,
+    "live_candidate_comparisons": 0,
+    "timing_samples": 0,
+    "failure": "FAIL: env pin missing: FR13_DRAFT_VOCAB_K=65536",
+    "failure_cause": "legacy_required_flags_registry_assertion",
+    "container_removed_after_preservation": true,
+    "host_memory_recovered": true
+  },
+  "raw_evidence": {
+    "runlog_sha256": "5333ae768f8a838e63163ffd9ae20bf643a533d09c5fb9a7b4db3e44f0ef0db9",
+    "runtime_manifest_at_launch_sha256": "587ac9e480240091ff82cfb3dcb386b456efbed61b9cbeb403d4385145a504ad",
+    "external_manifest_at_launch_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "container_env_sha256": "6f7bd0c1e90c92d85570e571e72788c1e5244e74a0c3ecd30990aae0053d658b",
+    "ready_ack_sha256": "4594259675eea451d964e716dd78b9aa9e4cb6445499a70f64afcb793d95de99",
+    "b1_diagnostic_sha256": "3b4663a9b0172e75c7ed27c4214b3d802f77baca596f193df1adaf7972cf57a0",
+    "container_identity_sha256": "b0442631699478e0545118349bda3df015efc1d29308d8b590887111797a20ec",
+    "runtime_attestation_sha256": "0abadf79158fb70e03feb2a00e6041f9f58cbd01e84c2bdcda88ab7db6c31c2f",
+    "engine_ingress_jsonl_bytes": 0
+  }
+}
