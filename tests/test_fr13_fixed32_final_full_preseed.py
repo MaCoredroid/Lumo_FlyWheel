@@ -185,6 +185,48 @@ class Runner:
         return 1
 """
 
+_GPU_MODEL_RUNNER_BUILDER_FIXTURE = """\
+from __future__ import annotations
+
+class GPUModelRunner:
+    def __init__(self, compilation_config, attn_groups, drafter):
+        self.compilation_config = compilation_config
+        self.vllm_config = SimpleNamespace(
+            compilation_config=compilation_config,
+        )
+        self.attn_groups = attn_groups
+        self.device = "cuda:0"
+        self.parallel_config = SimpleNamespace(use_ubatching=False)
+        self.speculative_config = SimpleNamespace()
+        self.drafter = drafter
+        self.reorder_threshold_calls = 0
+
+    def initialize_metadata_builders(
+        self, kv_cache_config: KVCacheConfig, kernel_block_sizes: list[int]
+    ) -> None:
+        \"\"\"
+        Create the metadata builders for all KV cache groups and attn groups.
+        \"\"\"
+        for kv_cache_group_id in range(len(kv_cache_config.kv_cache_groups)):
+            for attn_group in self.attn_groups[kv_cache_group_id]:
+                attn_group.create_metadata_builders(
+                    self.vllm_config,
+                    self.device,
+                    kernel_block_sizes[kv_cache_group_id],
+                    num_metadata_builders=1,
+                )
+        self.reorder_threshold_calls += 1
+        self.drafter.initialize_attn_backend(
+            kv_cache_config,
+            kernel_block_sizes,
+        )
+
+    def _check_and_update_cudagraph_mode(
+        self,
+    ) -> None:
+        return None
+"""
+
 _GPU_WORKER_FIXTURE = """\
 class Worker:
     def __init__(self, enforce_eager):
@@ -530,12 +572,134 @@ def test_eager_diagnostic_boot_is_zero_traffic_and_boundary_ready(
         ("0", "streamk_force_wide256_byte_ab", 32),
     ),
 )
-def test_eager_diagnostic_boot_is_reached_from_worker_lifecycle(
+def test_eager_diagnostic_metadata_builders_observe_physical_capacity(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     batch_gdn_byte_ab: str,
     cutlass_wave: str,
     capture_size: int,
+) -> None:
+    source = tmp_path / "gpu_model_runner.py"
+    source.write_text(_GPU_MODEL_RUNNER_BUILDER_FIXTURE)
+    monkeypatch.setattr(patcher, "GPU_MODEL_RUNNER_PATH", source)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "tail6_fixed32")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_BATCH_GDN_BYTE_AB",
+        batch_gdn_byte_ab,
+    )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_CUTLASS_WAVE",
+        cutlass_wave,
+    )
+    assert patcher._patch_gpu_model_runner_fixed32_eager_boot_capacity()
+
+    observed: list[tuple[str, int | None]] = []
+
+    class AttnGroup:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def create_metadata_builders(
+            self,
+            vllm_config: object,
+            *_args: object,
+            **_kwargs: object,
+        ) -> None:
+            observed.append(
+                (
+                    self.name,
+                    vllm_config.compilation_config.max_cudagraph_capture_size,
+                )
+            )
+
+    class Drafter:
+        def initialize_attn_backend(self, *_args: object) -> None:
+            observed.append(
+                ("drafter", config.max_cudagraph_capture_size)
+            )
+
+    namespace = {"SimpleNamespace": SimpleNamespace}
+    text = source.read_text(encoding="utf-8")
+    assert "FR13_FIXED32_EAGER_BOOT_WARM_BUILDER_CAPACITY" in text
+    exec(text, namespace)
+    config = SimpleNamespace(max_cudagraph_capture_size=0)
+    runner = namespace["GPUModelRunner"](
+        config,
+        [[AttnGroup("gdn"), AttnGroup("flash")]],
+        Drafter(),
+    )
+    kv_cache_config = SimpleNamespace(kv_cache_groups=[object()])
+    runner.initialize_metadata_builders(kv_cache_config, [16])
+
+    assert observed == [
+        ("gdn", capture_size),
+        ("flash", capture_size),
+        ("drafter", capture_size),
+    ]
+    assert config.max_cudagraph_capture_size == 0
+    assert runner.reorder_threshold_calls == 1
+
+
+def test_eager_diagnostic_metadata_capacity_restores_after_builder_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "gpu_model_runner.py"
+    source.write_text(_GPU_MODEL_RUNNER_BUILDER_FIXTURE)
+    monkeypatch.setattr(patcher, "GPU_MODEL_RUNNER_PATH", source)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "tail6_fixed32")
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_BATCH_GDN_BYTE_AB", "0")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_CUTLASS_WAVE",
+        "streamk_force_wide256_byte_ab",
+    )
+    assert patcher._patch_gpu_model_runner_fixed32_eager_boot_capacity()
+
+    config = SimpleNamespace(max_cudagraph_capture_size=0)
+
+    class FailingAttnGroup:
+        def create_metadata_builders(
+            self,
+            vllm_config: object,
+            *_args: object,
+            **_kwargs: object,
+        ) -> None:
+            assert (
+                vllm_config.compilation_config.max_cudagraph_capture_size
+                == 32
+            )
+            raise RuntimeError("builder failed")
+
+    namespace = {"SimpleNamespace": SimpleNamespace}
+    exec(source.read_text(encoding="utf-8"), namespace)
+    runner = namespace["GPUModelRunner"](
+        config,
+        [[FailingAttnGroup()]],
+        SimpleNamespace(initialize_attn_backend=lambda *_args: None),
+    )
+    with pytest.raises(RuntimeError, match="builder failed"):
+        runner.initialize_metadata_builders(
+            SimpleNamespace(kv_cache_groups=[object()]),
+            [16],
+        )
+    assert config.max_cudagraph_capture_size == 0
+
+
+@pytest.mark.parametrize(
+    ("batch_gdn_byte_ab", "cutlass_wave"),
+    (
+        ("1", "stock"),
+        ("0", "streamk_force_wide256_byte_ab"),
+    ),
+)
+def test_eager_diagnostic_boot_is_reached_from_worker_lifecycle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    batch_gdn_byte_ab: str,
+    cutlass_wave: str,
 ) -> None:
     source = tmp_path / "gpu_worker.py"
     source.write_text(_GPU_WORKER_FIXTURE)
@@ -586,11 +750,11 @@ def test_eager_diagnostic_boot_is_reached_from_worker_lifecycle(
     }
     text = source.read_text(encoding="utf-8")
     assert "FR13_FIXED32_EAGER_BOOT_WARM_LIFECYCLE" in text
-    assert "FR13_FIXED32_EAGER_BOOT_WARM_CAPACITY" in text
+    assert "FR13_FIXED32_EAGER_BOOT_WARM_CAPACITY" not in text
     exec(text, namespace)
     worker = namespace["Worker"](True)
     worker.init_device()
-    assert worker.model_runner.capture_size == capture_size
+    assert worker.model_runner.capture_size == 0
     assert (
         worker.vllm_config.compilation_config.max_cudagraph_capture_size
         == 0
@@ -599,17 +763,21 @@ def test_eager_diagnostic_boot_is_reached_from_worker_lifecycle(
     assert worker.model_runner.capture_calls == 1
 
     non_eager = namespace["Worker"](False)
+    non_eager.init_device()
     with pytest.raises(RuntimeError, match="requires enforce_eager"):
-        non_eager.init_device()
+        non_eager.compile_or_warm_up_model()
 
 
 def test_non_diagnostic_worker_lifecycle_is_unchanged(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    source = tmp_path / "gpu_worker.py"
-    source.write_text(_GPU_WORKER_FIXTURE)
-    monkeypatch.setattr(patcher, "GPU_WORKER_PATH", source)
+    worker_source = tmp_path / "gpu_worker.py"
+    runner_source = tmp_path / "gpu_model_runner.py"
+    worker_source.write_text(_GPU_WORKER_FIXTURE)
+    runner_source.write_text(_GPU_MODEL_RUNNER_BUILDER_FIXTURE)
+    monkeypatch.setattr(patcher, "GPU_WORKER_PATH", worker_source)
+    monkeypatch.setattr(patcher, "GPU_MODEL_RUNNER_PATH", runner_source)
     monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "tail6_fixed32")
     monkeypatch.setattr(
         patcher,
@@ -622,7 +790,12 @@ def test_non_diagnostic_worker_lifecycle_is_unchanged(
         "stock",
     )
     assert not patcher._patch_gpu_worker_fixed32_eager_boot_warm()
-    assert source.read_text(encoding="utf-8") == _GPU_WORKER_FIXTURE
+    assert not patcher._patch_gpu_model_runner_fixed32_eager_boot_capacity()
+    assert worker_source.read_text(encoding="utf-8") == _GPU_WORKER_FIXTURE
+    assert (
+        runner_source.read_text(encoding="utf-8")
+        == _GPU_MODEL_RUNNER_BUILDER_FIXTURE
+    )
 
 
 @pytest.mark.parametrize(
