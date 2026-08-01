@@ -1,0 +1,5 @@
+61fd1ec96404abba81bd41a8e8e2b8a7d652fa9ba057bcce21d5bd24ed4a9886  README.md
+8cd390c6a12a60ea5fdb97edad980ab60289eae5d32672034ed81fcaee7ce0e7  candidate.json
+28c50192eb871d4bdc96f886d6817b88a9cd6ce19fc9846f0eeb966cabb05db7  ../../src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py
+9441e59cd00aed7fe770e99bf3c0ba2c03f2967d5fa861a035a60871b86c7f87  ../../scripts/fr10_phase4_patch_vllm_tree_gdn.py
+bb764da8407f072981ca23f5be23766e2347264169fee2b7ff54bf019bf61d19  ../../tests/test_fr13_fixed32_sfwd_state_fusion.py

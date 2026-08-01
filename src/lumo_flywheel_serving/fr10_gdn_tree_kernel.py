@@ -1045,6 +1045,24 @@ _FR13_FIXED32_SUBTREE_LEVELS = (
 _FR13_FIXED32_EXPORT_NODES = (0, 1, 4, 9, 14)
 _FR13_FIXED32_EXPORT_SLOTS = len(_FR13_FIXED32_EXPORT_NODES)
 _FR13_FIXED32_MAX_BATCH = 4
+_FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID = (
+    "fixed32_sfwd_state_fusion_v1"
+)
+_FR13_FIXED32_SFWD_STATE_FUSION_ENABLED = (
+    "/logs/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
+)
+_FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT = (
+    "/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm"
+)
+_FR13_FIXED32_SFWD_STATE_FUSION_PASS = (
+    "/logs/fr13_fixed32_sfwd_state_fusion.live_pass.json"
+)
+_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_STATE = {
+    "task_marker": None,
+    "batch": None,
+    "passed": set(),
+    "attempts": {},
+}
 _FR13_FIXED32_BATCH_GDN_BYTE_AB_STATE = {
     "passed": set(),
     "attempts": {},
@@ -1156,6 +1174,96 @@ _FR13_FIXED32_LEVELS_SHA256 = (
 _FR13_FIXED32_COVERAGE_SHA256 = (
     "23b22df6bf551a4e788327db3b3d3d96e1eca49078d2c6bd0049da2d390eca8b"
 )
+
+
+def fixed32_sfwd_state_fusion_contract(
+    batch_size: int,
+    *,
+    tree_rows: int,
+    conv_width: int,
+    conv_state_len: int,
+) -> dict[str, object]:
+    """Validate the closed full-vocabulary SFWD state-fusion geometry.
+
+    The candidate is intentionally narrower than the generic tree-conv path:
+    exact fixed32 rows, the Qwen3-Next width-4 BF16 conv, and B1-B4 only.  It
+    replaces the per-layer prior gather, source construction/copy, four-tap
+    accumulation, activation, and persistent commit-source write with one
+    B-folded launch.  The existing two-level GDN scan remains physically
+    ``[1, 11]`` and continues to own byte-copy ring export and freshness flags.
+    """
+    batch = int(batch_size)
+    rows = int(tree_rows)
+    width = int(conv_width)
+    state_len = int(conv_state_len)
+    if batch not in (1, 2, 3, 4):
+        raise ValueError(
+            "FR13_FIXED32_SFWD_STATE_FUSION requires B1-B4, "
+            f"got B={batch}"
+        )
+    if rows != 32:
+        raise ValueError(
+            "FR13_FIXED32_SFWD_STATE_FUSION requires exactly 32 physical "
+            f"rows per request, got {rows}"
+        )
+    if width != 4 or state_len != 12:
+        raise ValueError(
+            "FR13_FIXED32_SFWD_STATE_FUSION requires the exact width/state "
+            f"geometry (4, 12), got ({width}, {state_len})"
+        )
+    source_rows = width - 1 + rows + 1
+    return {
+        "candidate": _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID,
+        "batch_size": batch,
+        "physical_rows_per_request": rows,
+        "logical_rows": batch * rows,
+        "conv_width": width,
+        "conv_state_len": state_len,
+        "source_rows_per_request": source_rows,
+        "source_rows": batch * source_rows,
+        "conv_state_launches_per_layer": 1,
+        "gdn_level_path_programs": (batch, 11 * batch),
+        "gdn_physical_launches_per_layer": 2,
+        "gdn_ring_export": True,
+        "gdn_flags_export": True,
+        "reference_always_served": True,
+    }
+
+
+def fixed32_sfwd_state_fusion_gate_control(
+    *,
+    environ=None,
+    enabled_path: str | None = None,
+    event_path: str | None = None,
+) -> tuple[bool, str | None]:
+    """Resolve the default-off, authenticated real-event byte-gate arm."""
+    env = os.environ if environ is None else environ
+    raw = str(env.get("FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB", ""))
+    if raw not in ("", "0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"
+        )
+    enabled = enabled_path or str(
+        env.get(
+            "FR13_FIXED32_SFWD_STATE_FUSION_ENABLED_PATH",
+            _FR13_FIXED32_SFWD_STATE_FUSION_ENABLED,
+        )
+    )
+    event = event_path or str(
+        env.get(
+            "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH",
+            _FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT,
+        )
+    )
+    armed = raw == "1" or os.path.exists(enabled)
+    if not armed or not os.path.exists(event):
+        return armed, None
+    if _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION byte gate requires an exact "
+            "fixed32 runtime"
+        )
+    return True, _fr13_fixed32_batch_gdn_real_event_marker(event)
 
 
 def _fr13_resolve_fixed32_batch_gdn_bv(
@@ -2472,6 +2580,157 @@ def _fr13_fixed32_batch_gdn_byte_diff(
         "reference_byte": reference_byte,
         "candidate_byte": candidate_byte,
     }
+
+
+def _fr13_fixed32_sfwd_state_fusion_emit(record: dict[str, object]) -> None:
+    path = os.environ.get(
+        "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_PATH",
+        "/logs/fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl",
+    )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    payload = dict(record)
+    payload["schema"] = "fr13.fixed32.sfwd_state_fusion.byte_ab.v1"
+    with open(path, "a", encoding="ascii") as handle:
+        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def _fr13_fixed32_sfwd_state_fusion_pass_emit(
+    *, task_marker: str, batch: int, layer_keys: set[int]
+) -> None:
+    if len(layer_keys) != 48:
+        return
+    path = os.environ.get(
+        "FR13_FIXED32_SFWD_STATE_FUSION_PASS_PATH",
+        _FR13_FIXED32_SFWD_STATE_FUSION_PASS,
+    )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    payload = {
+        "schema": "fr13.fixed32.sfwd_state_fusion.live_pass.v1",
+        "status": "byte_pass_source_only",
+        "candidate": _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID,
+        "source_sha256": _fr13_fixed32_batch_gdn_source_sha256(),
+        "task_marker": task_marker,
+        "batch": int(batch),
+        "layer_count": 48,
+        "layer_keys": [f"0x{key:x}" for key in sorted(layer_keys)],
+        "physical_rows_per_request": 32,
+        "candidate_conv_launches_per_layer": 1,
+        "gdn_level_path_programs": [int(batch), 11 * int(batch)],
+        "gdn_physical_launches_per_layer": 2,
+        "gdn_ring_export_unchanged": True,
+        "gdn_flags_export_unchanged": True,
+        "compared_byte_surfaces": ["conv_out", "commit_source_stage"],
+        "reference_always_served": True,
+        "production_eligible": False,
+        "production_blocker": (
+            "source-only candidate requires graph byte qualification and "
+            "matched exact4 full-wall timing"
+        ),
+    }
+    temporary = f"{path}.tmp.{os.getpid()}"
+    with open(temporary, "w", encoding="ascii") as handle:
+        json.dump(payload, handle, sort_keys=True)
+        handle.write("\n")
+    os.replace(temporary, path)
+
+
+def fixed32_sfwd_state_fusion_byte_gate(
+    *,
+    task_marker: str,
+    layer_key: int,
+    batch_size: int,
+    reference_out: torch.Tensor,
+    candidate_out: torch.Tensor,
+    reference_source_stage: torch.Tensor,
+    candidate_source_stage: torch.Tensor,
+) -> dict[str, object]:
+    """Compare candidate bytes on one authenticated real layer/event.
+
+    The caller has already computed both arms from the same inputs. This hook
+    only compares and records; it never replaces the reference tensors. A
+    mismatch therefore fails closed while incumbent bytes remain served.
+    """
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION byte gate is eager-only"
+        )
+    prefix = "swe_verified:"
+    task_id = (
+        task_marker[len(prefix):]
+        if isinstance(task_marker, str) and task_marker.startswith(prefix)
+        else ""
+    )
+    if not task_id or any(
+        character
+        not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+        for character in task_id
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION requires an authenticated "
+            "SWE-Verified task marker"
+        )
+    batch = int(batch_size)
+    fixed32_sfwd_state_fusion_contract(
+        batch, tree_rows=32, conv_width=4, conv_state_len=12
+    )
+    state = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_STATE
+    if state["task_marker"] is None:
+        state["task_marker"] = task_marker
+        state["batch"] = batch
+    elif state["task_marker"] != task_marker or int(state["batch"]) != batch:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION cannot combine task markers or "
+            "batch sizes in one process"
+        )
+    key = int(layer_key)
+    attempt = int(state["attempts"].get(key, 0)) + 1
+    state["attempts"][key] = attempt
+    comparisons = [
+        _fr13_fixed32_batch_gdn_byte_diff(
+            "conv_out", reference_out, candidate_out
+        ),
+        _fr13_fixed32_batch_gdn_byte_diff(
+            "commit_source_stage",
+            reference_source_stage,
+            candidate_source_stage,
+        ),
+    ]
+    first_nonzero = next(
+        (item for item in comparisons if not bool(item["byte_equal"])), None
+    )
+    passed = first_nonzero is None
+    record = {
+        "status": "pass" if passed else "mismatch_reference_served",
+        "candidate": _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID,
+        "task_marker": task_marker,
+        "batch": batch,
+        "layer_key": f"0x{key:x}",
+        "attempt": attempt,
+        "physical_rows_per_request": 32,
+        "candidate_conv_launches_per_layer": 1,
+        "gdn_level_path_programs": [batch, 11 * batch],
+        "gdn_physical_launches_per_layer": 2,
+        "comparisons": comparisons,
+        "first_nonzero": first_nonzero,
+        "zero_diff": passed,
+        "reference_always_served": True,
+        "production_eligible": False,
+    }
+    _fr13_fixed32_sfwd_state_fusion_emit(record)
+    if passed:
+        state["passed"].add(key)
+        _fr13_fixed32_sfwd_state_fusion_pass_emit(
+            task_marker=task_marker,
+            batch=batch,
+            layer_keys=set(state["passed"]),
+        )
+    else:
+        state["passed"].discard(key)
+    return record
 
 
 def _fr13_fixed32_batch_gdn_byte_ab_emit(record: dict[str, object]) -> None:
@@ -3943,6 +4202,136 @@ def _fr13_fixed32_conv_direct_col0_kernel(
         )
 
 
+@triton.jit
+def _fr13_fixed32_sfwd_state_fusion_kernel(
+    x,
+    conv_state,
+    spec_state_indices,
+    source_flat,
+    conv_weights,
+    bias,
+    out,
+    source_stage,
+    conv_stride_row,
+    conv_stride_c,
+    conv_stride_l,
+    ssi_stride_b,
+    ssi_stride_s,
+    weight_stride_c,
+    weight_stride_w,
+    B: tl.constexpr,
+    N: tl.constexpr,
+    C: tl.constexpr,
+    WIDTH: tl.constexpr,
+    STATE_LEN: tl.constexpr,
+    SOURCE_ROWS: tl.constexpr,
+    HAS_BIAS: tl.constexpr,
+    BLOCK_C: tl.constexpr,
+):
+    """Fuse exact fixed32 conv compute and both state-motion directions.
+
+    One program owns one physical tree row and one channel tile. It reads the
+    prior col-0 state directly (removing the all-layer pregather consumer),
+    executes the same four BF16 tap products and ordered FP32 adds as the
+    incumbent, writes the BF16 conv result, and materializes the persistent
+    ``prior ++ x ++ zero`` source used by the exact post-accept col-0 commit.
+
+    Ring K/V/A/B export and freshness flags remain fused into the following
+    fixed32 GDN path scan. Keeping those stores in their natural producer
+    avoids an extra state-motion launch and preserves stream ordering.
+    """
+    pid_row = tl.program_id(0)
+    pid_c = tl.program_id(1)
+    pid_b = pid_row // N
+    pid_n = pid_row - pid_b * N
+    offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)
+    c_mask = offs_c < C
+
+    bank_row = tl.load(
+        spec_state_indices + pid_b * ssi_stride_b + 0 * ssi_stride_s
+    ).to(tl.int64)
+    acc = tl.zeros((BLOCK_C,), dtype=tl.float32)
+    if HAS_BIAS:
+        acc = tl.load(bias + offs_c, mask=c_mask, other=0.0).to(tl.float32)
+    for tap in tl.static_range(0, WIDTH):
+        source_row = tl.load(source_flat + pid_n * WIDTH + tap).to(tl.int64)
+        from_prior = source_row < (WIDTH - 1)
+        prior_value = tl.load(
+            conv_state
+            + bank_row * conv_stride_row
+            + offs_c * conv_stride_c
+            + source_row * conv_stride_l,
+            mask=c_mask & from_prior,
+            other=0.0,
+        )
+        x_node = source_row - (WIDTH - 1)
+        x_value = tl.load(
+            x
+            + (pid_b.to(tl.int64) * N + x_node) * C
+            + offs_c,
+            mask=c_mask & (~from_prior) & (x_node >= 0) & (x_node < N),
+            other=0.0,
+        )
+        value = tl.where(from_prior, prior_value, x_value).to(tl.bfloat16)
+        weight = tl.load(
+            conv_weights
+            + offs_c * weight_stride_c
+            + tap * weight_stride_w,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.bfloat16)
+        # The incumbent rounds every tap product to BF16 before converting to
+        # FP32 and accumulating left-to-right. Keep both cast boundary and
+        # operand order explicit; reductions are deliberately absent.
+        product = (value * weight).to(tl.bfloat16).to(tl.float32)
+        acc = acc + product
+
+    activated = acc / (1.0 + tl.exp(0.0 - acc))
+    tl.store(
+        out + (pid_b * N + pid_n) * C + offs_c,
+        activated,
+        mask=c_mask,
+    )
+
+    stage_base = pid_b.to(tl.int64) * SOURCE_ROWS
+    current_x = tl.load(
+        x + (pid_b * N + pid_n) * C + offs_c,
+        mask=c_mask,
+        other=0.0,
+    )
+    tl.store(
+        source_stage
+        + (stage_base + (WIDTH - 1) + pid_n) * C
+        + offs_c,
+        current_x,
+        mask=c_mask,
+    )
+    source_edge_writer = pid_n == 0
+    for prior_col in tl.static_range(0, WIDTH - 1):
+        prior_value = tl.load(
+            conv_state
+            + bank_row * conv_stride_row
+            + offs_c * conv_stride_c
+            + prior_col * conv_stride_l,
+            mask=c_mask & source_edge_writer,
+            other=0.0,
+        )
+        tl.store(
+            source_stage
+            + (stage_base + prior_col) * C
+            + offs_c,
+            prior_value,
+            mask=c_mask & source_edge_writer,
+        )
+    tl.store(
+        source_stage
+        + (stage_base + SOURCE_ROWS - 1) * C
+        + offs_c,
+        0.0,
+        mask=c_mask & source_edge_writer,
+    )
+
+
 _FR13_CONV_PREGATHER: dict = {}
 _FR13_FIXED32_CONV_PREGATHER: dict = {}
 _FR13_FIXED32_CONV_SSI_GROUPS: dict[tuple[str, ...], dict[str, object]] = {}
@@ -4880,6 +5269,164 @@ def validate_fixed32_conv_col0_ssi_source(
             "FR13_FIXED32_CONV_PREGATHER live SSI source mapping drift: "
             f"layer={layer_name!r} index={index} B={batch}"
         )
+
+
+def _fr13_fixed32_conv_source_flat_expected(width: int = 4) -> tuple[int, ...]:
+    """Return the exact fixed32 window-gather descriptor in row-major order."""
+    parent = tuple(int(value) for value in _FR13_FIXED32_PARENT)
+    rows: list[int] = []
+    for node in range(len(parent)):
+        path = []
+        cursor = node
+        while cursor >= 0:
+            path.append(cursor)
+            cursor = parent[cursor]
+        path.reverse()
+        source = list(range(width - 1)) + [
+            width - 1 + path_node for path_node in path
+        ]
+        rows.extend(source[-width:])
+    return tuple(rows)
+
+
+def launch_fixed32_sfwd_state_fusion(
+    *,
+    x: torch.Tensor,
+    conv_state: torch.Tensor,
+    spec_state_indices: torch.Tensor,
+    source_flat: torch.Tensor,
+    conv_weights: torch.Tensor,
+    bias: torch.Tensor | None,
+    out: torch.Tensor,
+    source_stage: torch.Tensor,
+    batch_size: int,
+    tree_rows: int,
+) -> dict[str, object]:
+    """Launch the default-off one-kernel fixed32 conv/state candidate.
+
+    This entrypoint is deliberately byte-gate-only for the first source
+    revision. It refuses CUDA graph capture, validates the topology descriptor
+    on the host, and leaves selection/serving to the caller. A later production
+    selector must be bound to a real-task pass artifact rather than enabling
+    this function implicitly.
+    """
+    if _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION requires an exact fixed32 mode"
+        )
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION source candidate is eager "
+            "byte-gate-only; graph production is not qualified"
+        )
+    batch = int(batch_size)
+    rows = int(tree_rows)
+    if conv_state.ndim != 3:
+        raise ValueError(
+            "FR13_FIXED32_SFWD_STATE_FUSION conv_state must be [bank,C,L]"
+        )
+    channels = int(conv_state.shape[1])
+    state_len = int(conv_state.shape[2])
+    width = int(conv_weights.shape[1]) if conv_weights.ndim == 2 else -1
+    contract = fixed32_sfwd_state_fusion_contract(
+        batch,
+        tree_rows=rows,
+        conv_width=width,
+        conv_state_len=state_len,
+    )
+    required_rows = batch * rows
+    source_rows_per_batch = int(contract["source_rows_per_request"])
+    required_source_rows = batch * source_rows_per_batch
+    tensors = (x, conv_state, spec_state_indices, source_flat,
+               conv_weights, out, source_stage)
+    if any(not torch.is_tensor(tensor) for tensor in tensors):
+        raise TypeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION operands must all be tensors"
+        )
+    device = x.device
+    if device.type != "cuda" or any(tensor.device != device for tensor in tensors):
+        raise ValueError(
+            "FR13_FIXED32_SFWD_STATE_FUSION operands must share one CUDA device"
+        )
+    if x.dtype != torch.bfloat16 or any(
+        tensor.dtype != torch.bfloat16
+        for tensor in (conv_state, conv_weights, out, source_stage)
+    ):
+        raise ValueError(
+            "FR13_FIXED32_SFWD_STATE_FUSION preserves the exact BF16 conv "
+            "contract; dtype changes are forbidden"
+        )
+    if bias is not None and (
+        not torch.is_tensor(bias)
+        or bias.device != device
+        or bias.dtype not in (torch.bfloat16, torch.float32)
+        or bias.ndim != 1
+        or int(bias.numel()) != channels
+    ):
+        raise ValueError(
+            "FR13_FIXED32_SFWD_STATE_FUSION bias must be BF16/FP32 [C] or None"
+        )
+    if (
+        x.ndim != 2
+        or tuple(int(value) for value in x.shape) != (required_rows, channels)
+        or out.shape != x.shape
+        or conv_weights.shape != (channels, width)
+        or spec_state_indices.ndim != 2
+        or int(spec_state_indices.shape[0]) < batch
+        or int(spec_state_indices.shape[1]) < 1
+        or spec_state_indices.dtype != torch.int32
+        or source_flat.ndim != 1
+        or source_flat.numel() != rows * width
+        or source_flat.dtype not in (torch.int32, torch.int64)
+        or source_stage.ndim != 2
+        or int(source_stage.shape[0]) < required_source_rows
+        or int(source_stage.shape[1]) != channels
+        or not x.is_contiguous()
+        or not out.is_contiguous()
+        or not source_flat.is_contiguous()
+        or not source_stage.is_contiguous()
+    ):
+        raise ValueError(
+            "FR13_FIXED32_SFWD_STATE_FUSION operand geometry/layout drift"
+        )
+    actual_source_flat = tuple(
+        int(value) for value in source_flat.detach().cpu().tolist()
+    )
+    if actual_source_flat != _fr13_fixed32_conv_source_flat_expected(width):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION fixed32 source descriptor drift"
+        )
+
+    block_c = 256
+    grid = (required_rows, triton.cdiv(channels, block_c))
+    bias_arg = bias if bias is not None else x
+    _fr13_fixed32_sfwd_state_fusion_kernel[grid](
+        x,
+        conv_state,
+        spec_state_indices,
+        source_flat,
+        conv_weights,
+        bias_arg,
+        out,
+        source_stage,
+        int(conv_state.stride(0)),
+        int(conv_state.stride(1)),
+        int(conv_state.stride(2)),
+        int(spec_state_indices.stride(0)),
+        int(spec_state_indices.stride(1)),
+        int(conv_weights.stride(0)),
+        int(conv_weights.stride(1)),
+        B=batch,
+        N=rows,
+        C=channels,
+        WIDTH=width,
+        STATE_LEN=state_len,
+        SOURCE_ROWS=source_rows_per_batch,
+        HAS_BIAS=bias is not None,
+        BLOCK_C=block_c,
+        num_warps=4,
+    )
+    return contract
 
 
 def launch_fixed32_conv_col0_pregather(
