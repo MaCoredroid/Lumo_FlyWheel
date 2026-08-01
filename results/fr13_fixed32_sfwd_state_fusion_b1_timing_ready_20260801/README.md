@@ -11,8 +11,10 @@ SFWD, DFWD, and CFWD timers.
 
 The candidate arm cannot boot without a regular live PASS whose raw SHA-256 is
 provided by the caller and whose `source_sha256` equals the running
-`fr10_gdn_tree_kernel.py`. The runtime validates the installed PASS again. The
-candidate then reads the col-0 prior directly, writes the served conv output
+`fr10_gdn_tree_kernel.py`. That qualified kernel file remains byte-identical to
+the stable gate branch; production selection lives in a separate module. The
+runtime validates the installed PASS again. The candidate then reads the col-0
+prior directly, writes the served conv output
 and the persistent 36-row accepted-path commit source in one launch, and skips
 both the prior-window pregather and incumbent per-request SFWD loop. A separate
 attestation must observe 48 unique served layers before the pair can reduce.

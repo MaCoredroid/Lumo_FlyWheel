@@ -1,7 +1,7 @@
 Focused command:
   .venv/bin/python -m pytest -q tests/test_fr13_fixed32_sfwd_state_fusion.py
 Result:
-  10 passed in 0.81s
+  10 passed
 
 Syntax commands:
   bash -n scripts/fr13_run_b1_sfwd_state_fusion_timing.sh scripts/fr13_launch_forked_fa2_tree_server.sh
