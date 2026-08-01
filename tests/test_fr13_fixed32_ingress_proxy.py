@@ -570,6 +570,115 @@ def test_engine_middleware_arms_batch_gdn_from_authenticated_exact4_request(
     assert marker.read_bytes() == expected
 
 
+def test_engine_middleware_arms_sfwd_fusion_only_after_authenticated_b1_request(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret_path = tmp_path / "secret.json"
+    _task_seed, engine_bearer = _write_secret(secret_path)
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    enabled = logs / "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
+    enabled.write_bytes(b"1\n")
+    enabled.chmod(0o400)
+    marker = logs / "fr13_fixed32_sfwd_state_fusion.real_event.arm"
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH",
+        str(marker),
+    )
+    observed: list[bytes] = []
+
+    async def inner(scope: Any, receive: Any, send: Any) -> None:
+        observed.append(marker.read_bytes())
+        await receive()
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"{}", "more_body": False})
+
+    task_ids = ("astropy__astropy-12907",)
+    middleware = Fixed32EngineIngressMiddleware(
+        inner,
+        secret_file=secret_path,
+        canonical_task_ids=task_ids,
+        ledger_path=tmp_path / "engine.jsonl",
+    )
+    middleware.ingress.begin(_begin_payload(task_ids))
+    wire_id = "fr13-chat-" + "12" * 16
+    unauthorized_status, unauthorized_payload = asyncio.run(
+        _asgi_call(
+            middleware,
+            path="/v1/chat/completions",
+            body=b'{"messages":[]}',
+            headers=[
+                (b"authorization", f"Bearer {engine_bearer}".encode()),
+                (FIXED32_TASK_KEY_HEADER.lower().encode(), b"f" * 64),
+                (b"x-request-id", wire_id.encode()),
+            ],
+        )
+    )
+    assert unauthorized_status == 401
+    assert unauthorized_payload == {"error": {"code": "invalid_task_key"}}
+    assert not marker.exists()
+    assert observed == []
+
+    status, payload = asyncio.run(
+        _asgi_call(
+            middleware,
+            path="/v1/chat/completions",
+            body=b'{"messages":[]}',
+            headers=[
+                (b"authorization", f"Bearer {engine_bearer}".encode()),
+                (
+                    FIXED32_TASK_KEY_HEADER.lower().encode(),
+                    fixed32_task_key_id(task_ids[0]).encode(),
+                ),
+                (b"x-request-id", wire_id.encode()),
+            ],
+        )
+    )
+    expected = b"swe_verified:astropy__astropy-12907\n"
+    assert status == 200
+    assert payload == {}
+    assert observed == [expected]
+    assert marker.read_bytes() == expected
+    info = os.lstat(marker)
+    assert stat.S_ISREG(info.st_mode)
+    assert info.st_nlink == 1
+    assert stat.S_IMODE(info.st_mode) == 0o400
+
+
+def test_engine_middleware_rejects_inexact_sfwd_fusion_arm_configuration(
+    tmp_path: Path,
+) -> None:
+    secret_path = tmp_path / "secret.json"
+    _write_secret(secret_path)
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    enabled = logs / "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
+    enabled.write_bytes(b"1\n")
+    enabled.chmod(0o400)
+    marker = logs / "fr13_fixed32_sfwd_state_fusion.real_event.arm"
+
+    with pytest.raises(Fixed32IngressError, match="one-task B1 diagnostic"):
+        Fixed32EngineIngressMiddleware(
+            object(),
+            secret_file=secret_path,
+            canonical_task_ids=TASK_IDS,
+            ledger_path=tmp_path / "engine-inexact.jsonl",
+            sfwd_state_fusion_real_event_arm=marker,
+        )
+
+    marker.write_bytes(b"swe_verified:astropy__astropy-12907\n")
+    marker.chmod(0o400)
+    with pytest.raises(Fixed32IngressError, match="must be new at engine boot"):
+        Fixed32EngineIngressMiddleware(
+            object(),
+            secret_file=secret_path,
+            canonical_task_ids=("astropy__astropy-12907",),
+            ledger_path=tmp_path / "engine-prearmed.jsonl",
+            sfwd_state_fusion_real_event_arm=marker,
+        )
+
+
 def test_engine_middleware_rejects_batch_gdn_arm_injected_after_boot(
     tmp_path: Path,
 ) -> None:

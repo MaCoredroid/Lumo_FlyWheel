@@ -468,6 +468,7 @@ if diagnostic:
         "schema": "fr13-fixed32-b1-diagnostic-v1",
         "run_classification": "b1_diagnostic",
         "gate_eligible": False,
+        "timing_eligible": False,
         "floor_acceptance_eligible": False,
         "max_num_seqs": max_num_seqs,
         "swe_concurrency": concurrency,
