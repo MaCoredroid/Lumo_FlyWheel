@@ -77,7 +77,7 @@ CANONICAL_SUBSET_RELATIVE_BY_COUNT = {
 }
 FIXED32_RAW_ACCEPTANCE_POSITIONS = tuple(range(31))
 FIXED32_FLOOR_GATE_SCHEMA = "fr13.canonical_swe_verified_fixed32_floor_gate.v11"
-FIXED32_CHAT_AUDIT_SCHEMA = "fr13-fixed32-chat-task-provenance-audit-v2"
+FIXED32_CHAT_AUDIT_SCHEMA = "fr13-fixed32-chat-task-provenance-audit-v3"
 FIXED32_DATASET_NAME = "princeton-nlp/SWE-bench_Verified"
 FIXED32_FLOOR_METRICS = {
     "fwd_s": "vllm:fr13_decode_forward_gpu_seconds_total",
@@ -98,7 +98,7 @@ FIXED32_CHAT_AUDIT_CHECKS = frozenset(
         "all_task_agent_and_eval_terminal",
         "all_trace_request_counts_match_authenticated_proxy",
         "all_proxy_attempts_match_engine_requests",
-        "all_successful_engine_requests_match_census",
+        "all_census_requests_match_successful_engine_requests",
         "all_census_requests_inside_task_brackets",
         "no_campaign_rejections_or_aborted_requests",
         "no_fixed32_traffic_outside_task_brackets",
@@ -2793,6 +2793,9 @@ def validate_real_task_artifacts(
                 "successful_engine_requests",
                 "request_step_memberships",
                 "per_task_request_step_memberships",
+                "successful_engine_requests_with_pure_decode",
+                "successful_engine_requests_without_pure_decode",
+                "successful_engine_requests_without_pure_decode_sha256",
                 "all_successful_requests_present",
                 "all_census_requests_authenticated",
                 "all_census_requests_inside_task_brackets",
@@ -2848,8 +2851,8 @@ def validate_real_task_artifacts(
                 raise ValueError(f"{source}: census request is outside task bracket")
             membership[engine_id] += 1
             per_task_membership[task_id] += 1
-    if any(count <= 0 for count in membership.values()):
-        raise ValueError(f"{census_path}: successful request missing from census")
+    if any(count <= 0 for count in per_task_membership.values()):
+        raise ValueError(f"{census_path}: canonical task missing from census")
     successful_by_task = {
         task_id: sum(
             key == task_bindings[task_id]["task_key_id"]
@@ -2873,6 +2876,11 @@ def validate_real_task_artifacts(
         raise ValueError(
             f"{census_path}: task trace/engine request evidence differs"
         )
+    without_pure_decode = sorted(
+        engine_id
+        for engine_id, membership_count in membership.items()
+        if membership_count == 0
+    )
     expected_census_identity = {
         "event_schema": WORK_CENSUS_EVENT_SCHEMA,
         "terminal_schema": WORK_CENSUS_TERMINAL_SCHEMA,
@@ -2880,7 +2888,20 @@ def validate_real_task_artifacts(
         "successful_engine_requests": len(successful_engine_ids),
         "request_step_memberships": sum(membership.values()),
         "per_task_request_step_memberships": per_task_membership,
-        "all_successful_requests_present": True,
+        "successful_engine_requests_with_pure_decode": (
+            len(membership) - len(without_pure_decode)
+        ),
+        "successful_engine_requests_without_pure_decode": len(
+            without_pure_decode
+        ),
+        "successful_engine_requests_without_pure_decode_sha256": hashlib.sha256(
+            json.dumps(
+                without_pure_decode,
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ).encode("ascii")
+        ).hexdigest(),
+        "all_successful_requests_present": not without_pure_decode,
         "all_census_requests_authenticated": True,
         "all_census_requests_inside_task_brackets": True,
     }
@@ -3896,6 +3917,11 @@ def write_fixed32_ingress_fixture(
         "successful_engine_requests": len(membership),
         "request_step_memberships": sum(membership.values()),
         "per_task_request_step_memberships": per_task_membership,
+        "successful_engine_requests_with_pure_decode": len(membership),
+        "successful_engine_requests_without_pure_decode": 0,
+        "successful_engine_requests_without_pure_decode_sha256": hashlib.sha256(
+            b"[]"
+        ).hexdigest(),
         "all_successful_requests_present": True,
         "all_census_requests_authenticated": True,
         "all_census_requests_inside_task_brackets": True,

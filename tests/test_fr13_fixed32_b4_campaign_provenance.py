@@ -23,6 +23,21 @@ import fr13_floor_gate as floor_gate  # noqa: E402
 TASK_IDS = list(floor_gate.CANONICAL_TASK_IDS[:4])
 
 
+def test_pure_decode_census_coverage_binds_authenticated_zero_memberships() -> None:
+    coverage = floor_gate._fixed32_census_membership_coverage(
+        {"request-a": 7, "request-b": 0}
+    )
+
+    assert coverage == {
+        "successful_engine_requests_with_pure_decode": 1,
+        "successful_engine_requests_without_pure_decode": 1,
+        "successful_engine_requests_without_pure_decode_sha256": hashlib.sha256(
+            b'["request-b"]'
+        ).hexdigest(),
+        "all_successful_requests_present": False,
+    }
+
+
 def _load_runner() -> Any:
     path = SCRIPTS / "run_swe_bench_q36_a.py"
     spec = importlib.util.spec_from_file_location(

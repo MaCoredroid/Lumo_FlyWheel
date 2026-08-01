@@ -705,7 +705,8 @@ write_fixed32_chat_traffic_audit(){
     "$ARMDIR" \
     "$FIXED32_MODE" \
     "$ARMDIR/fixed32_chat_traffic_audit.json" \
-    "$FR13_FIXED32_B1_DIAGNOSTIC" <<'PY'
+    "$FR13_FIXED32_B1_DIAGNOSTIC" \
+    "$SWE_CONCURRENCY" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -724,8 +725,11 @@ arm_dir = Path(sys.argv[2]).resolve()
 mode = sys.argv[3]
 output_path = Path(sys.argv[4]).resolve()
 diagnostic_text = sys.argv[5]
+concurrency_text = sys.argv[6]
 if diagnostic_text not in {"0", "1"}:
     raise SystemExit("fixed32 B1 diagnostic selector is invalid")
+if concurrency_text not in {"1", "4"}:
+    raise SystemExit("fixed32 concurrency selector is invalid")
 subset = validate_fixed32_run_subset(
     subset_path,
     b1_diagnostic=diagnostic_text == "1",
@@ -736,6 +740,7 @@ audit = build_fixed32_chat_traffic_audit(
     mode=mode,
     subset=subset,
     dataset_record_digests=pinned_dataset_record_digests(str(repo)),
+    concurrency=int(concurrency_text),
 )
 temporary = output_path.with_name(output_path.name + ".tmp")
 temporary.write_text(
