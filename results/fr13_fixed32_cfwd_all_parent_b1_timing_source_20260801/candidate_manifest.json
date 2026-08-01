@@ -1,0 +1,53 @@
+{
+  "schema": "fr13.fixed32.cfwd_all_parent_b1_timing_source.v1",
+  "status": "ready_not_run",
+  "candidate": "fixed32_all_parent_commit_v2",
+  "candidate_base_commit": "f19e90053cfe414cafc76a2ffa3326a589da5e1e",
+  "source_contract": {
+    "schema": "fr13-fixed32-taw-all-parent-v4",
+    "sha256": "51541928c3a758fdac34a70fe46b97753ffc1b6e9f3e5fe470c4b34a96515dc4"
+  },
+  "credential": {
+    "path": "results/fr13_fixed32_cfwd_all_parent_b1_live_pass_20260801/live_pass.json",
+    "sha256": "b7c8f4e7f8cf3e2619d458b3ec3e5e1ffdcb5a15a2938aa18c6dda936b3c45e3",
+    "classification": "one_real_swe_verified_task_b1_byte_gate",
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false
+  },
+  "timing_contract": {
+    "suite": "SWE-Verified",
+    "task_ids": ["astropy__astropy-12907"],
+    "batch_size": 1,
+    "concurrency": 1,
+    "mode": "hydra27_fixed32",
+    "draft_vocab_k": 0,
+    "draft_vocab_root": 0,
+    "physical_drafts": 31,
+    "physical_rows": 32,
+    "stock_first": true,
+    "phase_timers": ["SFWD", "DFWD", "CFWD"],
+    "full_wall_source": "fr13.measure.deploy_speed.v1",
+    "only_arm_delta": "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0 to 1"
+  },
+  "required_outputs": [
+    "cfwd_gpu_ms_per_event",
+    "full_wall_ms_per_event",
+    "measured_tps_fullstep_wall",
+    "accepted_drafts_per_event"
+  ],
+  "floor_contract": {
+    "mandatory_weight_bytes": 42025179008,
+    "mandatory_weight_floor_ms_per_step": 153.938384645,
+    "one_sided_1_15x_cap_ms_per_step": 177.029142341,
+    "mandatory_weight_floor_is_complete_step_floor": false
+  },
+  "measurement": {
+    "stock": null,
+    "candidate": null,
+    "reason": "source-only artifact; GPU execution explicitly excluded"
+  },
+  "timing_eligible": false,
+  "floor_acceptance_eligible": false,
+  "formal_floor_acceptance_eligible": false,
+  "production_default_enabled": false
+}

@@ -1,0 +1,22 @@
+Focused verification (2026-08-01 UTC)
+
+Command:
+CUDA_VISIBLE_DEVICES='' /home/mark/shared/lumoFlyWheel/.venv/bin/python -m pytest -q \
+  tests/test_fr13_cfwd_all_parent_timing.py \
+  tests/test_fr13_fixed32_taw_exact_commit_kernel.py \
+  tests/test_fr13_fixed32_taw_native_precompute.py \
+  tests/test_fr13_fixed32_taw_real_task_arm.py \
+  tests/test_fr13_fixed32_taw_exact_commit_cuda.py \
+  tests/test_fr13_fixed32_b1_diagnostic.py
+
+Result:
+39 passed, 1 skipped in 1.85s
+
+Additional checks:
+- ruff check: passed
+- ruff format --check: passed
+- Python py_compile: passed
+- bash -n: passed
+- git diff --check: passed
+
+No GPU, Docker, server, or SWE-Verified timing run was started.
