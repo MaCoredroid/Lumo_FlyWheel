@@ -185,6 +185,26 @@ class Runner:
         return 1
 """
 
+_GPU_WORKER_FIXTURE = """\
+class Worker:
+    def __init__(self, enforce_eager):
+        self.model_config = SimpleNamespace(enforce_eager=enforce_eager)
+        self.model_runner = SimpleNamespace(capture_model=self._capture_model)
+        self.capture_calls = 0
+
+    def _capture_model(self):
+        self.capture_calls += 1
+        return 0
+
+    def compile_or_warm_up_model(self):
+        kernel_warmup(self)
+
+        cuda_graph_memory_bytes = 0
+        if not self.model_config.enforce_eager:
+            cuda_graph_memory_bytes = self.model_runner.capture_model()
+        return cuda_graph_memory_bytes
+"""
+
 
 class _CUDAGraphMode(Enum):
     NONE = 0
@@ -479,6 +499,74 @@ def test_eager_diagnostic_boot_is_zero_traffic_and_boundary_ready(
     assert state["dfwd_ready"] is True
     assert state["work_census"] == []
     assert state["api_requests"] == []
+
+
+@pytest.mark.parametrize(
+    ("batch_gdn_byte_ab", "cutlass_wave"),
+    (
+        ("1", "stock"),
+        ("0", "streamk_force_wide256_byte_ab"),
+    ),
+)
+def test_eager_diagnostic_boot_is_reached_from_worker_lifecycle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    batch_gdn_byte_ab: str,
+    cutlass_wave: str,
+) -> None:
+    source = tmp_path / "gpu_worker.py"
+    source.write_text(_GPU_WORKER_FIXTURE)
+    monkeypatch.setattr(patcher, "GPU_WORKER_PATH", source)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "tail6_fixed32")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_BATCH_GDN_BYTE_AB",
+        batch_gdn_byte_ab,
+    )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_CUTLASS_WAVE",
+        cutlass_wave,
+    )
+    assert patcher._patch_gpu_worker_fixed32_eager_boot_warm()
+
+    namespace = {
+        "SimpleNamespace": SimpleNamespace,
+        "kernel_warmup": lambda worker: None,
+    }
+    text = source.read_text(encoding="utf-8")
+    assert "FR13_FIXED32_EAGER_BOOT_WARM_LIFECYCLE" in text
+    exec(text, namespace)
+    worker = namespace["Worker"](True)
+    assert worker.compile_or_warm_up_model() == 0
+    assert worker.capture_calls == 1
+
+    non_eager = namespace["Worker"](False)
+    with pytest.raises(RuntimeError, match="requires enforce_eager"):
+        non_eager.compile_or_warm_up_model()
+    assert non_eager.capture_calls == 0
+
+
+def test_non_diagnostic_worker_lifecycle_is_unchanged(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "gpu_worker.py"
+    source.write_text(_GPU_WORKER_FIXTURE)
+    monkeypatch.setattr(patcher, "GPU_WORKER_PATH", source)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "tail6_fixed32")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_BATCH_GDN_BYTE_AB",
+        "0",
+    )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_CUTLASS_WAVE",
+        "stock",
+    )
+    assert not patcher._patch_gpu_worker_fixed32_eager_boot_warm()
+    assert source.read_text(encoding="utf-8") == _GPU_WORKER_FIXTURE
 
 
 @pytest.mark.parametrize(
