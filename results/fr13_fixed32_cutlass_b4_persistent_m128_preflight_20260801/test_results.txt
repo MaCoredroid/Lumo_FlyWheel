@@ -1,0 +1,35 @@
+Static verification completed 2026-08-01 UTC. No GPU command was launched.
+
+bash -n:
+PASS scripts/fr13_bigdenom_swe_serve_variant.sh
+PASS scripts/fr13_run_b4_cutlass_persistent_m128_live_gate.sh
+PASS scripts/fr13_run_b4_cutlass_persistent_m128_timing.sh
+
+Python compile:
+PASS scripts/fr10_phase4_patch_vllm_tree_gdn.py
+PASS scripts/run_swe_bench_q36_a.py
+
+Ruff:
+PASS scripts/run_swe_bench_q36_a.py and seven modified test modules
+PASS scripts/fr10_phase4_patch_vllm_tree_gdn.py with established F401/F841 ignores
+
+Pytest:
+193 passed in 2.18s
+
+Files:
+tests/test_fr13_cutlass_b4_production.py
+tests/test_fr13_cutlass_fixed32_wave_patch.py
+tests/test_fr13_cutlass_wave_binary.py
+tests/test_fr13_fixed32_final_full_preseed.py
+tests/test_fr13_fixed32_ingress_proxy.py
+tests/test_fr13_fixed32_ingress_wiring.py
+tests/test_fr13_fixed32_process_attestation.py
+tests/test_fr13_fixed32_taw_real_task_arm.py
+tests/test_fr13_fixed32_floor_propagation.py
+tests/test_fr13_fixed32_conv_source_batch.py
+
+Artifact identities rechecked:
+candidate SO sha256 1997fe0800ac4927690c021ddc2c0a3ccf763b36883c1b63f06310a0b02065d4 bytes 112697400 mode 0555
+patched dispatch sha256 d4e9a445c65be2c9991fba92d323e2cf2496061dc008f56c7a0bc7f122666b67
+patch source sha256 aaeededb58a1eda26b1570d7816456fdbe0cfba713488e688905c4c933b1b143
+stock FA2 sha256 f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d bytes 299183936

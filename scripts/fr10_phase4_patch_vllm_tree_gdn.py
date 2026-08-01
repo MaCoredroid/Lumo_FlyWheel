@@ -721,7 +721,10 @@ def _fr13_fixed32_manifest_entry(entry, label):
 
 
 def _fr13_fixed32_observed_current(stage):
-    if not _FR13_FIXED32_MODE:
+    if (
+        not _FR13_FIXED32_MODE
+        or globals().get("_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC", False)
+    ):
         return None
     event = globals().get("_FR13_FIXED32_OBSERVED_CURRENT")
     if not isinstance(event, dict):
@@ -732,7 +735,10 @@ def _fr13_fixed32_observed_current(stage):
 
 
 def _fr13_fixed32_observed_event_active():
-    if not _FR13_FIXED32_MODE:
+    if (
+        not _FR13_FIXED32_MODE
+        or globals().get("_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC", False)
+    ):
         return False
     event = globals().get("_FR13_FIXED32_OBSERVED_CURRENT")
     if event is None:
@@ -1725,7 +1731,10 @@ def _fr13_fixed32_boot_preseed_inputs():
 
 
 def _fr13_fixed32_observed_nonpure_dispatch(cudagraph_mode_name):
-    if not _FR13_FIXED32_MODE:
+    if (
+        not _FR13_FIXED32_MODE
+        or globals().get("_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC", False)
+    ):
         return
     counters = _FR13_FIXED32_NONPURE_DISPATCH
     name = str(cudagraph_mode_name).upper()
@@ -1792,7 +1801,10 @@ def _fr13_fixed32_observed_begin(
     global _FR13_FIXED32_CAPTURE_FROZEN
     global _FR13_FIXED32_OBSERVED_CURRENT
     global _FR13_FIXED32_TOPOLOGY_NEEDLE_EMITTED
-    if not _FR13_FIXED32_MODE:
+    if (
+        not _FR13_FIXED32_MODE
+        or globals().get("_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC", False)
+    ):
         return
     batch = int(batch_size)
     forward = int(forward_step_index)
@@ -5792,6 +5804,9 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
             "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
         )
     graph_batch_gdn_diagnostic = graph_batch_gdn_diagnostic_raw == "1"
+    eager_kernel_diagnostic = (
+        _fr13_fixed32_eager_boot_warm_contract() is not None
+    )
     if candidate_raw and candidate_raw not in ("16", "32", "64", "128"):
         raise RuntimeError(
             "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be one of "
@@ -5840,6 +5855,8 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         f"{taw_native_diagnostic!r}\n"
         "_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = "
         f"{graph_batch_gdn_diagnostic!r}\n"
+        "_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC = "
+        f"{eager_kernel_diagnostic!r}\n"
     )
 
 
@@ -14510,6 +14527,9 @@ def _fr13_fixed32_device_commit_route(
         or (
             not _fixed_pure_event
             and _fixed_batch_rows == batch
+            and not getattr(
+                _g, "_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC", False
+            )
         )
     ):
         raise RuntimeError(
@@ -14675,7 +14695,12 @@ def _fr13_fixed32_device_commit_route(
         burn_node_bank=False,
         banks_list=banks,
     )
-    if not _fixed_pure_event:
+    if (
+        not _fixed_pure_event
+        and not getattr(
+            _g, "_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC", False
+        )
+    ):
         _nonpure_replays = getattr(
             _g, "_FR13_FIXED32_NONPURE_COMMIT_REPLAYS_BY_BATCH", None
         )

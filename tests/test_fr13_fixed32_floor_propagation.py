@@ -143,3 +143,16 @@ def test_launcher_whitelists_full_vocab_ledger_before_docker() -> None:
     assert '( "$MAX_NUM_SEQS" == "1" || "$MAX_NUM_SEQS" == "4" )' in text[
         whitelist:mandatory
     ]
+
+
+def test_b4_workflows_use_full_vocab_floor_and_cap() -> None:
+    for name in (
+        "fr13_b4_clean_measure_workflow.js",
+        "fr13_b4_deployment_sweep_workflow.js",
+        "fr13_build_wide_shapes_b4_workflow.js",
+    ):
+        text = (REPO / "scripts" / name).read_text(encoding="utf-8")
+        assert "98.6ms weight-read floor" not in text
+        assert "113.39" not in text
+        assert "153.9383846446886ms" in text
+        assert "177.0291423413919ms" in text

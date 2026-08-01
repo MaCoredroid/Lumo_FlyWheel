@@ -148,8 +148,12 @@ def test_b4_m128_preserves_stock_template_and_is_exactly_m128_gated() -> None:
     assert "KernelTmaWarpSpecializedBlockwiseCooperativeSm120" in config
     assert "cutlass_3x_gemm_fp8_blockwise<" in config
     assert "cutlass_3x_gemm_fp8_blockwise_streamk" not in config
+    assert "StreamKScheduler" not in config
+    assert "use_stream_k" not in config
     assert "OutType, 1, 128, 128, TileShape, ClusterShape" in config
     assert "EpilogueSchedule, KernelSchedule, false>" in config
+    assert "ElementAccumulator" not in config
+    assert "ElementCompute" not in config
     assert "struct Gemm : BaseGemm" in config
     assert "struct GemmKernel : public KernelType" in config
     assert "if (M != 128 &&" in patched

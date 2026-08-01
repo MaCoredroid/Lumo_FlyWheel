@@ -267,6 +267,150 @@ def test_task_bracket_arms_after_pre_flush_and_rotates_after_post_flush(
     assert persisted == payload
 
 
+def test_eager_kernel_diagnostic_bracket_never_flushes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = _arm_path(tmp_path)
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+
+    class _Client:
+        mode = "tail6_fixed32"
+        producer_pid = 123
+
+        def snapshot(self) -> None:
+            raise AssertionError("eager diagnostic must not flush")
+
+    snapshots = iter(("pre metrics\n", "post metrics\n"))
+    monkeypatch.setattr(
+        orchestrator,
+        "_metrics_snapshot",
+        lambda _url: next(snapshots),
+    )
+    bracket = orchestrator._Fixed32EagerKernelDiagnosticTaskBracket(
+        client=_Client(),
+        task_dir=task_dir,
+        instance_id=INSTANCE_ID,
+        boundary_snapshot_base=tmp_path / "snapshot",
+        server_capacity=4,
+        taw_real_task_arm=orchestrator._Fixed32CutlassRealTaskArm(
+            path=(
+                path.parent
+                / orchestrator._FIXED32_CUTLASS_REAL_TASK_ARM_NAME
+            ),
+            instance_id=INSTANCE_ID,
+        ),
+    )
+
+    bracket.pre(task_dir / "metrics_pre.txt")
+    payload = bracket.post(task_dir / "metrics_post.txt")
+
+    assert payload["acceptance_valid"] is False
+    assert payload["flush_protocol_used"] is False
+    assert payload["pre_metrics"]["bytes"] > 0
+    assert payload["post_metrics"]["bytes"] > 0
+    assert not bracket.taw_real_task_arm.path.exists()
+    assert bracket.taw_real_task_arm.rotated_path.is_file()
+
+
+def test_eager_kernel_diagnostic_rotates_arm_after_post_metrics_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = _arm_path(tmp_path)
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+
+    class _Client:
+        mode = "tail6_fixed32"
+        producer_pid = 123
+
+    calls = 0
+
+    def _metrics(_url: str) -> str:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("metrics unavailable")
+        return "pre metrics\n"
+
+    monkeypatch.setattr(orchestrator, "_metrics_snapshot", _metrics)
+    bracket = orchestrator._Fixed32EagerKernelDiagnosticTaskBracket(
+        client=_Client(),
+        task_dir=task_dir,
+        instance_id=INSTANCE_ID,
+        boundary_snapshot_base=tmp_path / "snapshot",
+        server_capacity=1,
+        taw_real_task_arm=orchestrator._Fixed32CutlassRealTaskArm(
+            path=(
+                path.parent
+                / orchestrator._FIXED32_CUTLASS_REAL_TASK_ARM_NAME
+            ),
+            instance_id=INSTANCE_ID,
+        ),
+    )
+
+    bracket.pre(task_dir / "metrics_pre.txt")
+    with pytest.raises(
+        orchestrator.Fixed32BoundaryError,
+        match="metrics unavailable",
+    ):
+        bracket.post(task_dir / "metrics_post.txt")
+
+    assert not bracket.taw_real_task_arm.path.exists()
+    assert bracket.taw_real_task_arm.rotated_path.is_file()
+    assert bracket.post_attempted is True
+    assert bracket.complete is False
+
+
+def test_eager_kernel_diagnostic_rotates_arm_after_pre_publish_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = _arm_path(tmp_path)
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+
+    class _Client:
+        mode = "tail6_fixed32"
+        producer_pid = 123
+
+    monkeypatch.setattr(
+        orchestrator,
+        "_metrics_snapshot",
+        lambda _url: "pre metrics\n",
+    )
+    bracket = orchestrator._Fixed32EagerKernelDiagnosticTaskBracket(
+        client=_Client(),
+        task_dir=task_dir,
+        instance_id=INSTANCE_ID,
+        boundary_snapshot_base=tmp_path / "snapshot",
+        server_capacity=1,
+        taw_real_task_arm=orchestrator._Fixed32CutlassRealTaskArm(
+            path=(
+                path.parent
+                / orchestrator._FIXED32_CUTLASS_REAL_TASK_ARM_NAME
+            ),
+            instance_id=INSTANCE_ID,
+        ),
+    )
+
+    def _fail_publication() -> None:
+        raise OSError("artifact unavailable")
+
+    monkeypatch.setattr(bracket, "_write_artifact", _fail_publication)
+    with pytest.raises(
+        orchestrator.Fixed32BoundaryError,
+        match="artifact unavailable",
+    ):
+        bracket.pre(task_dir / "metrics_pre.txt")
+
+    assert not bracket.taw_real_task_arm.path.exists()
+    assert bracket.taw_real_task_arm.rotated_path.is_file()
+    assert bracket.started is False
+
+
 def test_task_bracket_removes_arm_when_post_snapshot_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
