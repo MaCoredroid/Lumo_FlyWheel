@@ -390,7 +390,8 @@ def test_launcher_materializes_worker_visible_arm_only_when_requested() -> None:
     assert '"$ARMDIR/logs/fr13_fixed32_committer_layer_batch.arm"' in launcher
     assert "committer layer-batch arm requires a fixed32 kind" in launcher
     assert "FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION=${" in launcher
-    assert "CFWD layer-batch qualification is fixed32 B1/sequential only" in launcher
+    assert "CFWD B1 qualification requires exact B1" in launcher
+    assert "CFWD campaign qualification requires exact B4" in launcher
     assert "--fixed32-committer-layer-batch-real-event-arm" in launcher
     assert "FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT_ARM_PATH" in launcher
     assert (

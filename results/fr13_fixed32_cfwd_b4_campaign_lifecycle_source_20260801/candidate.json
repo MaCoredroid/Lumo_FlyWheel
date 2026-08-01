@@ -1,0 +1,33 @@
+{
+  "schema": "fr13-fixed32-cfwd-b4-campaign-lifecycle-source-v1",
+  "base_commit": "0bbce5a9abd630af1fff7608a7b18be0d62c8ff7",
+  "branch": "agent/cfwd-b4-campaign-lifecycle-0801",
+  "run_classification": "source_only_qualification_lifecycle",
+  "performance_measurement": false,
+  "timing_eligible": false,
+  "gate_eligible": false,
+  "floor_acceptance_eligible": false,
+  "durable_production_pass": false,
+  "batch_size": 4,
+  "concurrency": 4,
+  "canonical_task_counts": [4, 16],
+  "accepted_length_min": 0,
+  "accepted_length_max": 11,
+  "accepted_length_full_mask": 4095,
+  "coverage_batches": [1, 2, 3, 4],
+  "campaign_marker_mode": "0400",
+  "campaign_marker_scope": "canonical_exact4_or_16",
+  "per_task_marker_for_b4": false,
+  "arm_removed_before_post_flush": true,
+  "same_process_timing_handoff_contract_implemented": true,
+  "same_process_timing_execution_implemented": false,
+  "handoff_artifact_replayable": false,
+  "generic_qualification_autocommit_enabled": false,
+  "next_required_lifecycle": "paired_authenticated_ingress_phases_before_timing",
+  "source_files": [
+    "scripts/fr13_bigdenom_swe_serve_variant.sh",
+    "scripts/run_swe_bench_q36_a.py",
+    "tests/test_fr13_fixed32_committer_layer_batch.py",
+    "tests/test_fr13_fixed32_taw_real_task_arm.py"
+  ]
+}

@@ -1608,13 +1608,21 @@ if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" ]]; then
 fi
 if [[ "$FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION" == "1" ]]; then
   [[ -n "$FIXED32_MODE" \
-     && "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" \
-     && "$MAX_NUM_SEQS_OVR" == "1" \
-     && "$SWE_CONCURRENCY" == "1" \
      && "$FR13_FIXED32_COMMITTER_LAYER_BATCH" == "1" ]] || {
-    echo "FAIL: CFWD layer-batch qualification is fixed32 B1/sequential only"
+    echo "FAIL: CFWD layer-batch qualification requires fixed32 layer-batch mode"
     exit 2
   }
+  if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
+    [[ "$MAX_NUM_SEQS_OVR" == "1" && "$SWE_CONCURRENCY" == "1" ]] || {
+      echo "FAIL: CFWD B1 qualification requires exact B1"
+      exit 2
+    }
+  else
+    [[ "$MAX_NUM_SEQS_OVR" == "4" && "$SWE_CONCURRENCY" == "4" ]] || {
+      echo "FAIL: CFWD campaign qualification requires exact B4"
+      exit 2
+    }
+  fi
   [[ "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "0" \
      && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
      && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
