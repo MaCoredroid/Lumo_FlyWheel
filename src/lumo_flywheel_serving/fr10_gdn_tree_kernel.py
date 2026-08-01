@@ -9706,23 +9706,14 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
         b_v *= b_beta
         b_h += b_v[:, None] * b_k[None, :]
 
-        final_state_idx = tl.load(
-            ssi + i_n * SSI_SEQ_STRIDE + i_t
-        ).to(tl.int64)
-        if final_state_idx > 0:
-            p_ht = (
-                state_bank
-                + final_state_idx * BANK_STRIDE
-                + i_hv * V * K
-                + o_v[:, None] * K
-                + o_k[None, :]
-            )
-            tl.store(p_ht, b_h.to(p_ht.dtype.element_ty), mask=mask_h)
-
         p_k += H * K
         p_v += HV * V
         p_b += HV
         p_a += HV
+
+    # Fixed32 expands one running-row index across every active path slot.
+    # Intermediate state stores are not observable; publish only the final row.
+    tl.store(p_h0, b_h.to(p_h0.dtype.element_ty), mask=mask_h)
 
 
 def _fr13_fixed32_committer_native_layer_batch(
@@ -10152,6 +10143,7 @@ def preseed_fixed32_committer_graph(
                 "layer_batch": True,
                 "state_only_output_elided": True,
                 "active_length_recurrence": True,
+                "final_state_store_once": True,
                 "byte_gate": "required_on_first_real_nonzero_accept",
             }
         )

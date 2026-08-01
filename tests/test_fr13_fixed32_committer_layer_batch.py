@@ -87,6 +87,16 @@ def test_layer_batch_recurrence_stops_after_root_plus_accepted_drafts() -> None:
     assert "PATH_CAP=16" in launch
 
 
+def test_layer_batch_publishes_only_the_final_running_state() -> None:
+    kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
+    loop = kernel[kernel.index("for i_t in range(0, T):") :]
+
+    assert "final_state_idx" not in kernel
+    assert "p_ht" not in kernel
+    assert loop.count("tl.store(") == 1
+    assert "tl.store(p_h0, b_h.to(p_h0.dtype.element_ty), mask=mask_h)" in kernel
+
+
 def test_layer_batch_candidate_drops_only_dead_operator_output() -> None:
     kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
     launch = _text("_fr13_fixed32_committer_native_layer_batch")
@@ -119,6 +129,7 @@ def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> No
     assert '"fused_calls": 1' in preseed
     assert '"state_only_output_elided": True' in preseed
     assert '"active_length_recurrence": True' in preseed
+    assert '"final_state_store_once": True' in preseed
 
 
 def test_byte_gate_requires_real_nonzero_path_and_exact_state_bytes() -> None:
@@ -178,6 +189,7 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
     assert "expected_fused_calls = 1 if layer_batch is True else 48" in patcher
     assert 'committer_contract.get("state_only_output_elided") is not True' in patcher
     assert 'committer_contract.get("active_length_recurrence") is not True' in patcher
+    assert 'committer_contract.get("final_state_store_once") is not True' in patcher
     assert '"layers": int(layer_count)' in patcher
     assert "ring_gathers * int(layer_count) * path_cap * batch" in patcher
     assert '"fused_layer_calls": fused_calls' in patcher
