@@ -951,6 +951,11 @@ def _fr13_fa2_qrow16_live_ab_replay(graph_id, runtime_mode, batch_size):
 
 FIXED32_QUERY_TILE16_PRODUCTION_HELPERS = r'''# FR13_FA2_QROW16_PRODUCTION
 _FR13_FA2_QROW16_PRODUCTION_GRAPHS = {}
+_FR13_FA2_QROW16_EAGER_STATE = {
+    "layers": set(),
+    "calls": 0,
+    "emitted": False,
+}
 _FR13_FA2_QROW16_BATCH_STRIDE_SENTINEL = 1179791667
 
 
@@ -990,27 +995,44 @@ def _fr13_fa2_qrow16_production_begin(
     num_splits,
     tree_bias,
 ):
-    """Select qrow16 only while the final attested B1 graph is captured."""
+    """Select qrow16 on the attested exact B1 graph or SFWD eager stack."""
     if os.environ.get("FR13_FA2_QROW16_PRODUCTION", "0") != "1":
         return None
     if os.environ.get("FR13_FA2_QROW16_INTERNAL_PRODUCTION_ATTESTED") != "1":
         raise RuntimeError("FR13 qrow16 production has no launcher attestation")
-    if not (
+    capturing = (
         torch.cuda.is_available()
         and torch.cuda.is_current_stream_capturing()
-    ):
-        # Profile/preseed/eager calls remain stock. Only the final FULL graph is
-        # a measurable production candidate.
+    )
+    eager_sfwd_stack = (
+        not capturing
+        and os.environ.get(
+            "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION", "0"
+        ) == "1"
+        and os.environ.get("ENFORCE_EAGER", "0") == "1"
+        and os.environ.get("FR13_DRAFT_VOCAB_ROOT", "0") == "1"
+        and os.environ.get("FR13_DRAFT_VOCAB_K", "") == "65536"
+    )
+    if not capturing and not eager_sfwd_stack:
         return None
-    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_qrow_gdn
+    context = None
+    if capturing:
+        from vllm.model_executor.layers.mamba import (
+            gdn_linear_attn as _fr13_qrow_gdn,
+        )
 
-    context = getattr(_fr13_qrow_gdn, "_FR13_FIXED32_CAPTURE_CONTEXT", None)
-    if not isinstance(context, dict):
-        # Throwaway memory-profile graphs deliberately have no final context.
-        return None
-    descriptor = context.get("descriptor")
-    if not isinstance(descriptor, dict) or int(descriptor.get("num_reqs", -1)) != 1:
-        raise RuntimeError("FR13 qrow16 production is not final fixed32 B1")
+        context = getattr(
+            _fr13_qrow_gdn, "_FR13_FIXED32_CAPTURE_CONTEXT", None
+        )
+        if not isinstance(context, dict):
+            # Throwaway memory-profile graphs deliberately have no final context.
+            return None
+        descriptor = context.get("descriptor")
+        if (
+            not isinstance(descriptor, dict)
+            or int(descriptor.get("num_reqs", -1)) != 1
+        ):
+            raise RuntimeError("FR13 qrow16 production is not final fixed32 B1")
     sidecar_digest = os.environ.get(
         "FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256", ""
     )
@@ -1047,16 +1069,61 @@ def _fr13_fa2_qrow16_production_begin(
         raise RuntimeError("FR13 qrow16 production geometry drifted")
     if window_size is not None and tuple(int(x) for x in window_size) != (-1, -1):
         raise RuntimeError("FR13 qrow16 production requires a full window")
-    graph_id = int(context.get("graph_id", 0))
     layer_name = str(getattr(layer, "layer_name", ""))
-    if graph_id <= 0 or not layer_name:
-        raise RuntimeError("FR13 qrow16 production graph/layer identity drifted")
-    graph = _FR13_FA2_QROW16_PRODUCTION_GRAPHS.setdefault(
-        graph_id, {"layers": set()}
-    )
-    if layer_name in graph["layers"]:
-        raise RuntimeError("FR13 qrow16 production layer executed twice in capture")
-    graph["layers"].add(layer_name)
+    if not layer_name:
+        raise RuntimeError("FR13 qrow16 production layer identity drifted")
+    if capturing:
+        graph_id = int(context.get("graph_id", 0))
+        if graph_id <= 0:
+            raise RuntimeError("FR13 qrow16 production graph identity drifted")
+        graph = _FR13_FA2_QROW16_PRODUCTION_GRAPHS.setdefault(
+            graph_id, {"layers": set()}
+        )
+        if layer_name in graph["layers"]:
+            raise RuntimeError(
+                "FR13 qrow16 production layer executed twice in capture"
+            )
+        graph["layers"].add(layer_name)
+    else:
+        state = _FR13_FA2_QROW16_EAGER_STATE
+        state["calls"] = int(state["calls"]) + 1
+        state["layers"].add(layer_name)
+        if len(state["layers"]) == 16 and not bool(state["emitted"]):
+            import json as _json
+            from pathlib import Path as _Path
+
+            record = {
+                "schema": (
+                    "fr13.fixed32.fa2_qrow16_eager_production_engagement.v1"
+                ),
+                "status": "ENGAGED",
+                "runtime_mode": "EAGER",
+                "batch_size": 1,
+                "layers": sorted(state["layers"]),
+                "layer_count": 16,
+                "calls_observed": int(state["calls"]),
+                "candidate_so_sha256": os.environ[
+                    "FR13_FA2_QROW16_SO_SHA256"
+                ],
+                "pass_sidecar_sha256": os.environ[
+                    "FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256"
+                ],
+                "sfwd_state_fusion_production": True,
+                "draft_vocab_root": 1,
+                "draft_vocab_k": 65536,
+                "dispatch": "qrow16 exact geometry; no fallback",
+            }
+            path = _Path("/logs/fr13_fa2_qrow16_production_capture.json")
+            temporary = path.with_name(path.name + ".tmp")
+            temporary.write_text(
+                _json.dumps(
+                    record, ensure_ascii=True, indent=2, sort_keys=True
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            temporary.replace(path)
+            state["emitted"] = True
     return _fr13_fa2_qrow16_candidate_tree_bias(tree_bias)
 
 

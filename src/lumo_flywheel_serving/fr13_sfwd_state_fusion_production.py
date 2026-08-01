@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import os
@@ -13,6 +14,22 @@ from lumo_flywheel_serving import fr10_gdn_tree_kernel as kernel
 
 
 CANDIDATE = "fixed32_sfwd_state_fusion_v1"
+QUALIFIED_KERNEL_SOURCE_SHA256 = (
+    "a9decdbe60db4227e4128ea05bfa405e09e284bfbc7c3ed216cd73d3f72d35ec"
+)
+QUALIFIED_CLOSURE_SHA256 = (
+    "792c14941d933e9978811cd7dba33e9c9877638ed7f8fca4aa2044643cfbf038"
+)
+_CLOSURE_NAMES = (
+    "_FR13_FIXED32_MODES",
+    "_FR13_FIXED32_PARENT",
+    "_FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID",
+    "_FR13_FIXED32_SFWD_CONV_STATE_LEN",
+    "fixed32_sfwd_state_fusion_contract",
+    "_fr13_fixed32_sfwd_state_fusion_kernel",
+    "_fr13_fixed32_conv_source_flat_expected",
+    "launch_fixed32_sfwd_state_fusion",
+)
 PRODUCTION_ARM = "/logs/fr13_fixed32_sfwd_state_fusion.production.arm"
 PRODUCTION_PASS = "/logs/fr13_fixed32_sfwd_state_fusion.production_pass.json"
 PRODUCTION_PASS_SHA256 = (
@@ -26,6 +43,7 @@ _CREDENTIAL_IDS: set[int] = set()
 _STATE = {
     "live_pass_sha256": None,
     "source_sha256": None,
+    "closure_sha256": None,
     "layers": set(),
     "launches": 0,
     "emitted": False,
@@ -57,6 +75,55 @@ def _kernel_source_sha256() -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def fixed32_sfwd_state_fusion_candidate_closure() -> dict[str, object]:
+    """Hash the executable candidate closure qualified by the live byte pass."""
+    path = Path(kernel.__file__).resolve()
+    try:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=os.fspath(path))
+    except (OSError, UnicodeDecodeError, SyntaxError) as error:
+        raise RuntimeError(
+            f"FR13 SFWD candidate closure cannot be parsed: {error}"
+        ) from error
+    members: dict[str, str] = {}
+    for node in tree.body:
+        names: list[str] = []
+        if isinstance(node, ast.Assign):
+            names = [
+                target.id
+                for target in node.targets
+                if isinstance(target, ast.Name)
+            ]
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names = [node.target.id]
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            names = [node.name]
+        for name in names:
+            if name in _CLOSURE_NAMES:
+                if name in members:
+                    raise RuntimeError(
+                        f"FR13 SFWD candidate closure duplicates {name}"
+                    )
+                members[name] = ast.dump(
+                    node, annotate_fields=True, include_attributes=False
+                )
+    if tuple(name for name in _CLOSURE_NAMES if name not in members):
+        missing = tuple(name for name in _CLOSURE_NAMES if name not in members)
+        raise RuntimeError(f"FR13 SFWD candidate closure is missing {missing!r}")
+    canonical = "".join(
+        f"{name}\0{members[name]}\0" for name in _CLOSURE_NAMES
+    ).encode("ascii")
+    digest = hashlib.sha256(canonical).hexdigest()
+    return {
+        "schema": "fr13.fixed32.sfwd_state_fusion.source_closure.v1",
+        "sha256": digest,
+        "members": {
+            name: hashlib.sha256(members[name].encode("ascii")).hexdigest()
+            for name in _CLOSURE_NAMES
+        },
+    }
+
+
 def fixed32_sfwd_state_fusion_production_control(
     *,
     environ=None,
@@ -80,6 +147,11 @@ def fixed32_sfwd_state_fusion_production_control(
         raise RuntimeError("FR13 SFWD production arm must contain exactly 1")
     if kernel._FR13_FIXED32_MODE not in kernel._FR13_FIXED32_MODES:
         raise RuntimeError("FR13 SFWD production timing requires fixed32")
+    if (
+        str(env.get("FR13_DRAFT_VOCAB_ROOT", "")) != "1"
+        or str(env.get("FR13_DRAFT_VOCAB_K", "")) != "65536"
+    ):
+        raise RuntimeError("FR13 SFWD production timing requires ROOT=1 K=65536")
     enabled = str(
         env.get("FR13_FIXED32_SFWD_STATE_FUSION_ENABLED_PATH", BYTE_ENABLED)
     )
@@ -126,7 +198,13 @@ def fixed32_sfwd_state_fusion_production_control(
         raise RuntimeError(f"FR13 SFWD live PASS is invalid JSON: {error}") from error
     if not isinstance(payload, dict):
         raise RuntimeError("FR13 SFWD live PASS must be an object")
-    source_digest = _kernel_source_sha256()
+    runtime_source_digest = _kernel_source_sha256()
+    closure = fixed32_sfwd_state_fusion_candidate_closure()
+    closure_digest = str(closure["sha256"])
+    if closure_digest != QUALIFIED_CLOSURE_SHA256:
+        raise RuntimeError(
+            "FR13 SFWD candidate closure drifted from the byte-qualified source"
+        )
     required = {
         "schema": "fr13.fixed32.sfwd_state_fusion.live_pass.v1",
         "status": "byte_pass_source_only",
@@ -134,7 +212,7 @@ def fixed32_sfwd_state_fusion_production_control(
             "one_real_swe_verified_full_vocab_b1_byte_timing_diagnostic"
         ),
         "candidate": CANDIDATE,
-        "source_sha256": source_digest,
+        "source_sha256": QUALIFIED_KERNEL_SOURCE_SHA256,
         "task_marker": "swe_verified:astropy__astropy-12907",
         "batch": 1,
         "layer_count": 48,
@@ -175,7 +253,9 @@ def fixed32_sfwd_state_fusion_production_control(
         )
     credential = dict(payload)
     credential["live_pass_sha256"] = actual_digest
-    credential["runtime_source_sha256"] = source_digest
+    credential["qualified_source_sha256"] = QUALIFIED_KERNEL_SOURCE_SHA256
+    credential["runtime_source_sha256"] = runtime_source_digest
+    credential["candidate_closure_sha256"] = closure_digest
     _CREDENTIAL_IDS.add(id(credential))
     return credential
 
@@ -199,12 +279,15 @@ def fixed32_sfwd_state_fusion_production_engagement(
         raise RuntimeError("FR13 SFWD production timing is B1-only")
     live_digest = str(credential.get("live_pass_sha256", ""))
     source_digest = str(credential.get("runtime_source_sha256", ""))
+    closure_digest = str(credential.get("candidate_closure_sha256", ""))
     if _STATE["live_pass_sha256"] is None:
         _STATE["live_pass_sha256"] = live_digest
         _STATE["source_sha256"] = source_digest
+        _STATE["closure_sha256"] = closure_digest
     elif (
         _STATE["live_pass_sha256"] != live_digest
         or _STATE["source_sha256"] != source_digest
+        or _STATE["closure_sha256"] != closure_digest
     ):
         raise RuntimeError("FR13 SFWD production identity changed")
     _STATE["launches"] = int(_STATE["launches"]) + 1
@@ -216,6 +299,8 @@ def fixed32_sfwd_state_fusion_production_engagement(
         "launches_observed": int(_STATE["launches"]),
         "live_pass_sha256": live_digest,
         "source_sha256": source_digest,
+        "qualified_source_sha256": QUALIFIED_KERNEL_SOURCE_SHA256,
+        "candidate_closure_sha256": closure_digest,
         "candidate_served": True,
     }
     if len(_STATE["layers"]) != 48 or bool(_STATE["emitted"]):
@@ -230,9 +315,7 @@ def fixed32_sfwd_state_fusion_production_engagement(
     payload = {
         "schema": "fr13.fixed32.sfwd_state_fusion.production_engagement.v1",
         "status": "engaged",
-        "run_classification": (
-            "one_real_swe_verified_full_vocab_b1_production_timing_diagnostic"
-        ),
+        "run_classification": "real_swe_verified_exact4_k64_b1_kernel_stack",
         **record,
         "layer_count": 48,
         "layer_keys": [f"0x{key:x}" for key in sorted(_STATE["layers"])],
@@ -245,7 +328,9 @@ def fixed32_sfwd_state_fusion_production_engagement(
         "gdn_ring_export_unchanged": True,
         "gdn_flags_export_unchanged": True,
         "real_task_pass_bound": True,
-        "timing_eligible": False,
+        "draft_vocab_root": 1,
+        "draft_vocab_k": 65536,
+        "timing_eligible": True,
         "floor_acceptance_eligible": False,
         "production_eligible": False,
     }

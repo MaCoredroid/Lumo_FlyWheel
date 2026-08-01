@@ -33,6 +33,18 @@ except ModuleNotFoundError:
     sys.modules["triton.language"] = language_stub
 
 from lumo_flywheel_serving import fr10_gdn_tree_kernel as kernel  # noqa: E402
+from lumo_flywheel_serving import (  # noqa: E402
+    fr13_sfwd_state_fusion_production as production,
+)
+
+
+LIVE_PASS_PATH = (
+    ROOT
+    / "results"
+    / "fr13_fixed32_sfwd_b1_real_task_byte_pass_20260801"
+    / "run_evidence"
+    / "fr13_fixed32_sfwd_state_fusion.live_pass.json"
+)
 
 
 def _function_source(name: str) -> str:
@@ -311,11 +323,14 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     assert "fixed32_sfwd_state_fusion_byte_gate(" in patcher
     assert "task_markers=_fr13_sfwd_task_markers" in patcher
     assert "int(attn_metadata.num_spec_decodes) == 4" in patcher
-    assert patcher.count("int(conv_state.size(2)) != 34") == 1
+    assert patcher.count("int(conv_state.size(2)) != 34") == 2
     assert "int(conv_state.size(2)) != 12" not in patcher
     assert "No candidate bytes become model inputs in this arm." in patcher
     assert "mixed_qkv_spec = _fr10_tree_conv_out" in patcher
     assert "mixed_qkv_spec = _fr13_sfwd_candidate_out" not in patcher
+    assert "fixed32_sfwd_state_fusion_production_control()" in patcher
+    assert "fixed32_sfwd_state_fusion_production_engagement(" in patcher
+    assert "0\n                        if _fr13_sfwd_production is not None" in patcher
 
     tree = ast.parse(patcher)
     fragment = next(
@@ -326,3 +341,116 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
         and "launch_fixed32_sfwd_state_fusion(" in node.value
     )
     ast.parse(textwrap.dedent(fragment))
+
+
+def _production_credential(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    mode: str,
+) -> dict[str, object]:
+    live = tmp_path / "live-pass.json"
+    live.write_bytes(LIVE_PASS_PATH.read_bytes())
+    digest = __import__("hashlib").sha256(live.read_bytes()).hexdigest()
+    digest_path = tmp_path / "live-pass.sha256"
+    digest_path.write_text(digest + "\n", encoding="ascii")
+    arm = tmp_path / "production.arm"
+    arm.write_text("1\n", encoding="ascii")
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_MODE", mode)
+    production._CREDENTIAL_IDS.clear()
+    monkeypatch.setattr(
+        production,
+        "_STATE",
+        {
+            "live_pass_sha256": None,
+            "source_sha256": None,
+            "closure_sha256": None,
+            "layers": set(),
+            "launches": 0,
+            "emitted": False,
+        },
+    )
+    credential = production.fixed32_sfwd_state_fusion_production_control(
+        environ={
+            "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION": "1",
+            "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB": "0",
+            "FR13_DRAFT_VOCAB_ROOT": "1",
+            "FR13_DRAFT_VOCAB_K": "65536",
+            "FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256": digest,
+            "FR13_FIXED32_SFWD_STATE_FUSION_ENABLED_PATH": str(
+                tmp_path / "absent-byte-gate"
+            ),
+        },
+        arm_path=str(arm),
+        pass_path=str(live),
+        pass_sha256_path=str(digest_path),
+    )
+    assert credential is not None
+    return credential
+
+
+def test_production_closure_matches_the_byte_qualified_candidate() -> None:
+    closure = production.fixed32_sfwd_state_fusion_candidate_closure()
+    assert closure["sha256"] == production.QUALIFIED_CLOSURE_SHA256
+    assert tuple(closure["members"]) == production._CLOSURE_NAMES
+    payload = json.loads(LIVE_PASS_PATH.read_text(encoding="ascii"))
+    assert payload["source_sha256"] == production.QUALIFIED_KERNEL_SOURCE_SHA256
+
+
+@pytest.mark.parametrize("mode", ("tail6_fixed32", "hydra27_fixed32"))
+def test_production_requires_k64_root1_and_attests_all_layers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    credential = _production_credential(tmp_path, monkeypatch, mode=mode)
+    assert credential["candidate_closure_sha256"] == (
+        production.QUALIFIED_CLOSURE_SHA256
+    )
+    assert credential["qualified_source_sha256"] == (
+        production.QUALIFIED_KERNEL_SOURCE_SHA256
+    )
+
+    engagement_path = tmp_path / "engagement.json"
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ENGAGEMENT_PATH",
+        str(engagement_path),
+    )
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    for layer_key in range(48):
+        record = production.fixed32_sfwd_state_fusion_production_engagement(
+            credential=credential,
+            layer_key=layer_key,
+            batch_size=1,
+        )
+    assert record["layer_count"] == 48
+    payload = json.loads(engagement_path.read_text(encoding="ascii"))
+    assert payload["status"] == "engaged"
+    assert payload["run_classification"] == (
+        "real_swe_verified_exact4_k64_b1_kernel_stack"
+    )
+    assert payload["physical_rows_per_request"] == 32
+    assert payload["draft_vocab_root"] == 1
+    assert payload["draft_vocab_k"] == 65536
+    assert payload["candidate_conv_launches_per_layer"] == 1
+    assert payload["incumbent_conv_launches_per_layer"] == 0
+    assert payload["timing_eligible"] is True
+    assert payload["floor_acceptance_eligible"] is False
+
+
+def test_production_rejects_non_k64_configuration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    arm = tmp_path / "production.arm"
+    arm.write_text("1\n", encoding="ascii")
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_MODE", "hydra27_fixed32")
+    with pytest.raises(RuntimeError, match="ROOT=1 K=65536"):
+        production.fixed32_sfwd_state_fusion_production_control(
+            environ={
+                "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION": "1",
+                "FR13_DRAFT_VOCAB_ROOT": "0",
+                "FR13_DRAFT_VOCAB_K": "65536",
+            },
+            arm_path=str(arm),
+        )

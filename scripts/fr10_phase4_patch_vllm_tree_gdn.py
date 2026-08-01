@@ -170,6 +170,9 @@ _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = os.environ.get(
 _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB = os.environ.get(
     "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB", "0"
 ).strip()
+_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION = os.environ.get(
+    "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION", "0"
+).strip()
 _FR13_FIXED32_CUTLASS_WAVE = os.environ.get(
     "FR13_FIXED32_CUTLASS_WAVE", "stock"
 ).strip()
@@ -5819,6 +5822,7 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
     graph_batch_gdn_diagnostic = graph_batch_gdn_diagnostic_raw == "1"
     eager_kernel_diagnostic = (
         _fr13_fixed32_eager_boot_warm_contract() is not None
+        and _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION != "1"
     )
     if candidate_raw and candidate_raw not in ("16", "32", "64", "128"):
         raise RuntimeError(
@@ -5876,6 +5880,7 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
 def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
     batch_gdn_byte_diagnostic = _FR13_FIXED32_BATCH_GDN_BYTE_AB
     sfwd_b4_byte_diagnostic = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
+    sfwd_production = _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
     cutlass_wave = _FR13_FIXED32_CUTLASS_WAVE
     if batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
@@ -5900,6 +5905,10 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
         raise RuntimeError(
             "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"
         )
+    if sfwd_production not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION must be exactly 0 or 1"
+        )
     streamk_byte_diagnostic = cutlass_wave in (
         "streamk_coop128_byte_ab",
         "streamk_force_wide256_byte_ab",
@@ -5913,6 +5922,7 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
             streamk_byte_diagnostic,
             persistent_b4_byte_diagnostic,
             sfwd_b4_byte_diagnostic == "1",
+            sfwd_production == "1",
         )
     ) > 1:
         raise RuntimeError(
@@ -5943,6 +5953,12 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
             1,
             "FR13_FIXED32_EAGER_STREAMK_B1_BOOT_WARM",
         )
+    if sfwd_production == "1":
+        return (
+            "SFWD K64 B1 production",
+            1,
+            "FR13_FIXED32_EAGER_SFWD_PRODUCTION_BOOT_WARM",
+        )
     return None
 
 
@@ -5957,19 +5973,53 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
     )
     sfwd_b4_byte_diagnostic = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
-    sfwd_production = os.environ.get(
-        "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION", "0"
-    ).strip()
+    sfwd_production = _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
     _fr13_fixed32_eager_boot_warm_contract()
     if sfwd_production not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION must be exactly 0 or 1"
         )
     if sfwd_production == "1":
-        raise RuntimeError(
-            "FR13 fixed32 SFWD production remains unavailable until "
-            "authenticated B1 and exact4 B4 byte prerequisites are bound"
-        )
+        exact_runtime = {
+            "FR13_FIXED32_B1_DIAGNOSTIC": "0",
+            "ENFORCE_EAGER": "1",
+            "FR13_DRAFT_VOCAB_ROOT": "1",
+            "FR13_DRAFT_VOCAB_K": "65536",
+            "FR13_FIXED32_CONV_SOURCE_BATCH": "0",
+            "FR13_FA2_QROW16_PRODUCTION": "1",
+            "FR13_FIXED32_CUTLASS_WAVE": "stock",
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB": "0",
+            "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB": "0",
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION": "0",
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE": "0",
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION": "0",
+            "FR13_DFWD_UNIFIED_BM8_LIVE_AB": "0",
+            "FR13_DFWD_UNIFIED_BM8_PRODUCTION": "0",
+            "FR13_DRAFT_HEAD_M32_LIVE_AB": "0",
+            "FR13_DRAFT_HEAD_M32_PRODUCTION": "0",
+        }
+        drift = {
+            name: (os.environ.get(name, ""), expected)
+            for name, expected in exact_runtime.items()
+            if os.environ.get(name, "") != expected
+        }
+        if (
+            mode not in _FR13_FIXED32_MODES
+            or sfwd_b4_byte_diagnostic != "0"
+            or bool(candidate)
+            or bool(production)
+            or bool(
+                os.environ.get("FR13_FIXED32_BATCH_GDN_BV_CANDIDATE", "")
+            )
+            or bool(
+                os.environ.get("FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", "")
+            )
+            or drift
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 SFWD production requires the exact K64 B1 "
+                "qrow16 eager stack: " + repr(drift)
+            )
     if graph_batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
@@ -7256,6 +7306,7 @@ def _patch_gdn_linear() -> bool:
         (
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
             "from lumo_flywheel_serving.fr10_gdn_tree_kernel import fixed32_batch_gdn_selector, fixed32_sfwd_state_fusion_byte_gate, fixed32_sfwd_state_fusion_gate_control, gather_committed_path_conv_prior, launch_fixed32_sfwd_state_fusion, launch_tree_gdn_prepared, launch_tree_gdn_prepared_fixed32_batch, launch_tree_state_linear_remap, subtree_get\n"
+            "from lumo_flywheel_serving.fr13_sfwd_state_fusion_production import fixed32_sfwd_state_fusion_production_control, fixed32_sfwd_state_fusion_production_engagement\n"
             "from lumo_flywheel_serving.fr13_replay_conv_remap import replay_conv_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
             "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, conv_wb_staging_get, freeze_conv_wb_staging_sources, fused_tree_conv_source, fused_tree_conv_sources_batched, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, launch_conv_state_writeback, launch_conv_state_writeback_batched, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
@@ -7277,6 +7328,7 @@ def _patch_gdn_linear() -> bool:
             "_FR13_FLAGS_INKERNEL = " + ("True" if os.environ.get("FR13_FLAGS_INKERNEL", "0") == "1" else "False") + "  # scan-kernel flag stores, PATCH-TIME env (default OFF); regate = queue 2c\n"
             "_FR13_CONV_WB_BATCHED = " + ("True" if os.environ.get("FR13_CONV_WB_BATCHED", "0") == "1" else "False") + "  # FR13_CONV_WB_BATCHED (B2c) baked from PATCH-TIME env: ONE batched conv writeback across requests replaces the per-b launch loop (committer host-gap slice)\n"
             "_FR13_FIXED32_CONV_SOURCE_BATCH = " + ("True" if os.environ.get("FR13_FIXED32_CONV_SOURCE_BATCH", "0") == "1" else "False") + "  # default-OFF: build all B fixed32 conv sources directly in persistent staging\n"
+            "_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION = fixed32_sfwd_state_fusion_production_control()\n"
             "# FR13_TREE_CONV_FUSED (FIX-3): read ONCE at module scope; default OFF\n"
             "# until the byte A/B + live gate pass. ON fuses the tree causal-conv\n"
             "# emulation's per-node state write-back loop / per-col tap loop /\n"
@@ -8922,7 +8974,15 @@ def _fr13_conv_subop_mab(
                                     + ":"
                                     + str(_fr10_len_exc)
                                 ) from _fr10_len_exc
-                    if _fr13_conv_committed_path:
+                    if (
+                        _fr13_conv_committed_path
+                        and _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
+                        is not None
+                    ):
+                        # The qualified fused producer reads accepted col-0
+                        # directly and publishes the commit-source stage.
+                        pass
+                    elif _fr13_conv_committed_path:
                         # FR13_CONV_COMMITTED_PATH (default ON): snapshot the
                         # committed-path prior conv window BEFORE the in-place
                         # remap below mutates the bank. The window is read
@@ -9499,7 +9559,12 @@ def _fr13_conv_subop_mab(
                             + ":"
                             + str(_fr10_seed_conv_exc)
                         ) from _fr10_seed_conv_exc
-                if (
+                if _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION is not None:
+                    _fr10_prior_read_mode = "sfwd_state_fusion_direct_col0"
+                    _fr10_conv_read_cols = None
+                    _fr10_prior_conv_bank_rows = None
+                    _fr10_prior_conv_state_bank = None
+                elif (
                     _fr13_conv_committed_path
                     and _fr13_committed_prior_bank is not None
                 ):
@@ -9734,7 +9799,8 @@ def _fr13_conv_subop_mab(
                         os.environ.get("FR10_METRICS", "0") == "1"
                         and _fr10_conv_diag is not None
                     )
-                    assert _fr10_prior_conv_state_bank is not None
+                    if _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION is None:
+                        assert _fr10_prior_conv_state_bank is not None
                     _fr12_native_spine_oracle_enabled = (
                         os.environ.get("FR12_NATIVE_SPINE_ORACLE", "0") == "1"
                     )
@@ -9826,12 +9892,66 @@ def _fr13_conv_subop_mab(
                     _fr13_sfwd_task_markers = None
                     _fr13_sfwd_candidate_out = None
                     _fr13_sfwd_candidate_stage = None
-                    if _FR13_FIXED32_MODE:
+                    _fr13_sfwd_production = (
+                        _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
+                    )
+                    if _FR13_FIXED32_MODE and _fr13_sfwd_production is None:
                         (
                             _fr13_sfwd_gate_enabled,
                             _fr13_sfwd_task_markers,
                         ) = fixed32_sfwd_state_fusion_gate_control()
-                    if (
+                    if _fr13_sfwd_production is not None:
+                        if (
+                            not _FR13_FIXED32_MODE
+                            or not _FR13_CONV_WB_BATCHED
+                            or not _FR13_TREE_CONV_FUSED
+                            or _FR13_FIXED32_CONV_SOURCE_BATCH
+                            or os.environ.get("FR13_RING_EXPORT", "1") != "1"
+                            or not _FR13_FLAGS_INKERNEL
+                            or os.environ.get("FR13_TREE_RUNROW_INIT", "1")
+                            != "1"
+                            or self.activation not in (True, "silu", "swish")
+                            or _fr12_native_spine_conv_out is not None
+                            or int(attn_metadata.num_spec_decodes) != 1
+                            or int(_fr10_tree_n) != 32
+                            or int(conv_state.size(2)) != 34
+                            or int(_fr10_width) != 4
+                        ):
+                            raise RuntimeError(
+                                "FR13_FIXED32_SFWD_STATE_FUSION production "
+                                "dependency/geometry contract drifted"
+                            )
+                        from lumo_flywheel_serving.fr13_tree_conv_fused import (
+                            conv_wb_staging_get as _fr13_sfwd_stage_get,
+                        )
+                        _fr13_wbb_srows = (
+                            int(_fr10_width) - 1 + int(_fr10_tree_n) + 1
+                        )
+                        _fr13_wbb_stage = _fr13_sfwd_stage_get(
+                            str(self.prefix),
+                            _fr13_wbb_srows,
+                            int(mixed_qkv_spec.size(1)),
+                            mixed_qkv_spec.dtype,
+                            mixed_qkv_spec.device,
+                        )
+                        launch_fixed32_sfwd_state_fusion(
+                            x=mixed_qkv_spec,
+                            conv_state=conv_state,
+                            spec_state_indices=spec_state_indices_tensor,
+                            source_flat=_fr10_source_flat,
+                            conv_weights=conv_weights,
+                            bias=self.conv1d.bias,
+                            out=_fr10_tree_conv_out,
+                            source_stage=_fr13_wbb_stage[:_fr13_wbb_srows],
+                            batch_size=1,
+                            tree_rows=int(_fr10_tree_n),
+                        )
+                        fixed32_sfwd_state_fusion_production_engagement(
+                            credential=_fr13_sfwd_production,
+                            layer_key=int(conv_weights.data_ptr()),
+                            batch_size=1,
+                        )
+                    elif (
                         _fr13_sfwd_gate_enabled
                         and _fr13_sfwd_task_markers is not None
                         and int(attn_metadata.num_spec_decodes) == 4
@@ -9895,7 +10015,11 @@ def _fr13_conv_subop_mab(
                             batch_size=_fr13_sfwd_b,
                             tree_rows=int(_fr10_tree_n),
                         )
-                    for _fr10_b in range(attn_metadata.num_spec_decodes):
+                    for _fr10_b in range(
+                        0
+                        if _fr13_sfwd_production is not None
+                        else attn_metadata.num_spec_decodes
+                    ):
                         _fr10_start = _fr10_b * _fr10_tree_n
                         _fr10_end = _fr10_start + _fr10_tree_n
                         _fr10_x = mixed_qkv_spec[_fr10_start:_fr10_end]

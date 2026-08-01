@@ -1175,10 +1175,10 @@ def test_sfwd_b4_boot_warm_selector_rejects_malformed_value(
         ),
         (
             "tail6_fixed32",
-            "1",
+            "0",
             "0",
             "1",
-            "SFWD production remains unavailable",
+            "exact K64 B1 qrow16 eager stack",
         ),
         (
             "tail6_fixed32",
@@ -1209,6 +1209,11 @@ def test_sfwd_b4_patch_environment_fails_closed(
         patcher,
         "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
         sfwd_b4_byte_ab,
+    )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION",
+        production,
     )
     monkeypatch.setenv("FR13_FIXED32_B1_DIAGNOSTIC", b1_diagnostic)
     monkeypatch.setenv(
