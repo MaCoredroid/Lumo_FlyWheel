@@ -2344,14 +2344,6 @@ def _iso_now() -> str:
 
 _GIT_LOCK = threading.Lock()  # serialize per-task git ops when --concurrency>1
 
-_AUTOCOMMIT_TASK_ARTIFACT_RELS = (
-    "runner_metadata.json",
-    "patch.diff",
-    "qwen_trace.jsonl",
-    "eval/predictions.jsonl",
-    "eval/eval_report.json",
-    "orchestrator_crash.json",
-)
 _AUTOCOMMIT_FIXED32_CAMPAIGN_RELS = (
     "runner_metadata.json",
     "patch.diff",
@@ -2367,6 +2359,29 @@ _AUTOCOMMIT_FIXED32_CAMPAIGN_RELS = (
 )
 
 
+def _repo_relative_git_path(path: str | Path) -> str:
+    """Return a normalized repo-relative Git pathspec or fail closed."""
+    root = REPO_ROOT.resolve()
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    try:
+        relative = candidate.resolve().relative_to(root)
+    except ValueError as exc:
+        raise Fixed32BoundaryError(
+            f"artifact path escapes repository root: {path}"
+        ) from exc
+    return relative.as_posix()
+
+
+def _is_raw_swe_per_task_path(path: str) -> bool:
+    return (
+        path.startswith("output/")
+        and "/swe_out/" in path
+        and "/per_task/" in path
+    )
+
+
 def _autocommit_paths(
     paths: list[str],
     message: str,
@@ -2378,6 +2393,17 @@ def _autocommit_paths(
         if strict_push:
             raise RuntimeError("artifact commit path set is empty")
         return
+    normalized_paths = list(
+        dict.fromkeys(_repo_relative_git_path(path) for path in paths)
+    )
+    raw_per_task_paths = [
+        path for path in normalized_paths if _is_raw_swe_per_task_path(path)
+    ]
+    if raw_per_task_paths:
+        raise Fixed32BoundaryError(
+            "raw SWE per-task artifacts must remain under ignored output; "
+            f"publish a curated summary instead: {raw_per_task_paths}"
+        )
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
 
     def _git(argv, timeout=120):
@@ -2392,12 +2418,16 @@ def _autocommit_paths(
         ).returncode
 
     with _GIT_LOCK:
-        add_rc = _git(["add", "-f", "--sparse", "--", *paths])
+        add_rc = _git(
+            ["add", "-f", "--sparse", "--", *normalized_paths]
+        )
         if add_rc != 0:
             if strict_push:
                 raise RuntimeError(f"git add failed with rc={add_rc}")
             return
-        staged_rc = _git(["diff", "--cached", "--quiet", "--", *paths])
+        staged_rc = _git(
+            ["diff", "--cached", "--quiet", "--", *normalized_paths]
+        )
         if staged_rc not in (0, 1):
             if strict_push:
                 raise RuntimeError(
@@ -2406,7 +2436,9 @@ def _autocommit_paths(
             return
         committed = False
         if staged_rc == 1:
-            commit_rc = _git(["commit", "-m", message, "--", *paths])
+            commit_rc = _git(
+                ["commit", "-m", message, "--", *normalized_paths]
+            )
             if commit_rc != 0:
                 if strict_push:
                     raise RuntimeError(f"git commit failed with rc={commit_rc}")
@@ -2425,28 +2457,11 @@ def _autocommit_paths(
 
 
 def _autocommit_task_artifacts(task_dir: Path, instance_id: str) -> None:
-    """Best-effort auto-commit+push of ONE task's curated trace artifacts to the
-    shared branch. NEVER raises (whole-body try/except = the `|| true` contract).
-    output/ is .gitignored so traces are force-added (git add -f), matching the
-    440k+ artifacts already tracked under output/. Commit uses an EXPLICIT pathspec
-    (git commit -- <paths>, NOT add-all) so it never sweeps another session's staged
-    work on the shared branch, and carries the repo Co-Authored-By trailer. _GIT_LOCK
-    serializes git so --concurrency>1 tasks don't race on index.lock.
-    LUMO_SWE_AUTOCOMMIT=0 disables it (e.g. a big campaign that doesn't want a push
-    per task)."""
-    try:
-        if os.environ.get("LUMO_SWE_AUTOCOMMIT", "1").strip().lower() in ("0", "off", "false", "no"):
-            return
-        paths = [
-            str(task_dir / rel)
-            for rel in _AUTOCOMMIT_TASK_ARTIFACT_RELS
-            if (task_dir / rel).is_file()
-        ]
-        msg = (f"FR13 SWE auto-commit: {instance_id} trace artifacts\n\n"
-               "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>")
-        _autocommit_paths(paths, msg)
-    except Exception:
-        pass  # auto-commit is observability; a git error must never fail the run
+    """Retain raw per-task artifacts under ignored output for local audit."""
+    # Repository policy permits curated summaries, not raw task traces, patches,
+    # metrics, or evaluator payloads. Campaign-level publication happens only
+    # after the complete evidence set has been validated below.
+    return
 
 
 def _autocommit_fixed32_campaign_artifacts(
@@ -2455,7 +2470,7 @@ def _autocommit_fixed32_campaign_artifacts(
     per_task_root: Path,
     instance_ids: list[str],
 ) -> None:
-    """Commit and push one replay-complete B4 artifact unit."""
+    """Validate complete raw B4 evidence and publish its top-level proof."""
     if os.environ.get("LUMO_SWE_AUTOCOMMIT", "1").strip().lower() in (
         "0",
         "off",
@@ -2482,11 +2497,12 @@ def _autocommit_fixed32_campaign_artifacts(
             f"{missing}"
         )
     msg = (
-        "FR13 SWE auto-commit: finalized B4 campaign artifacts\n\n"
+        "FR13 SWE auto-commit: finalized B4 campaign provenance\n\n"
         "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
     )
+    proof = dataset_out / _FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME
     _autocommit_paths(
-        [str(path) for path in required],
+        [_repo_relative_git_path(proof)],
         msg,
         strict_push=True,
     )

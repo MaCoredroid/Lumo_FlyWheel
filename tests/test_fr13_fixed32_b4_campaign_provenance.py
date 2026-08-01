@@ -453,7 +453,7 @@ def test_b4_campaign_metric_tamper_publishes_no_final_metadata(
         ).is_file()
 
 
-def test_b4_autocommit_publishes_proof_and_all_tasks_as_one_unit(
+def test_b4_autocommit_publishes_only_repo_relative_campaign_proof(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -472,6 +472,7 @@ def test_b4_autocommit_publishes_proof_and_all_tasks_as_one_unit(
         dataset_out=dataset_out,
         per_task_root=per_task_root,
     )
+    monkeypatch.setattr(runner, "REPO_ROOT", tmp_path)
 
     captured: list[tuple[list[str], str, bool]] = []
     monkeypatch.setattr(
@@ -491,22 +492,11 @@ def test_b4_autocommit_publishes_proof_and_all_tasks_as_one_unit(
     assert len(captured) == 1
     committed_paths, message, strict_push = captured[0]
     assert strict_push is True
-    assert committed_paths[0] == str(
-        dataset_out / runner._FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME
-    )
-    assert {
-        str(per_task_root / task_id / "runner_metadata.json")
-        for task_id in TASK_IDS
-    }.issubset(committed_paths)
-    for task_id in TASK_IDS:
-        task_dir = per_task_root / task_id
-        for relative_path in runner._AUTOCOMMIT_FIXED32_CAMPAIGN_RELS:
-            assert str(task_dir / relative_path) in committed_paths
-        assert str(task_dir / "fixed32_task_boundary.json") in committed_paths
-        assert str(task_dir / "vllm_metrics_pre.txt") in committed_paths
-        assert str(task_dir / "vllm_metrics_post.txt") in committed_paths
-    assert not any(path.endswith("runner_metadata.pending.json") for path in committed_paths)
-    assert "finalized B4 campaign artifacts" in message
+    assert committed_paths == [
+        "verified/" + runner._FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME
+    ]
+    assert not any("/per_task/" in path for path in committed_paths)
+    assert "finalized B4 campaign provenance" in message
 
 
 def test_b4_autocommit_fails_closed_on_missing_replay_artifact(
@@ -567,6 +557,85 @@ def test_strict_artifact_push_retries_and_surfaces_failure(
 
     assert sum(command[1] == "push" for command in commands) == 3
     assert ["git", "add", "-f", "--sparse", "--", "artifact.json"] in commands
+
+
+def test_artifact_publisher_normalizes_absolute_repo_pathspecs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    artifact = tmp_path / "results" / "campaign" / "summary.json"
+    artifact.parent.mkdir(parents=True)
+    artifact.write_text("{}\n", encoding="ascii")
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], **_kwargs: Any) -> subprocess.CompletedProcess:
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(runner, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    runner._autocommit_paths([str(artifact)], "campaign")
+
+    assert [
+        "git",
+        "add",
+        "-f",
+        "--sparse",
+        "--",
+        "results/campaign/summary.json",
+    ] in commands
+
+
+def test_artifact_publisher_rejects_raw_per_task_before_git(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    commands: list[list[str]] = []
+    monkeypatch.setattr(runner, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda command, **_kwargs: commands.append(command),
+    )
+
+    with pytest.raises(
+        runner.Fixed32BoundaryError,
+        match="raw SWE per-task artifacts",
+    ):
+        runner._autocommit_paths(
+            [
+                "output/run/swe_out/verified/per_task/task/runner_metadata.json"
+            ],
+            "forbidden",
+        )
+
+    assert commands == []
+
+
+def test_single_task_raw_artifacts_are_never_autocommitted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    task_dir = (
+        tmp_path
+        / "output"
+        / "run"
+        / "swe_out"
+        / "verified"
+        / "per_task"
+        / "task"
+    )
+    task_dir.mkdir(parents=True)
+    monkeypatch.setattr(
+        runner,
+        "_autocommit_paths",
+        lambda *_args, **_kwargs: pytest.fail("raw publisher was invoked"),
+    )
+
+    runner._autocommit_task_artifacts(task_dir, "task")
 
 
 def _synthetic_compaction_failure_trace() -> list[dict[str, Any]]:
