@@ -16,7 +16,13 @@ _FR13_COMMITTER_NATIVE_ANNOUNCED = False
 _FR13_FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT = (
     "/logs/fr13_fixed32_committer_layer_batch.real_event.arm"
 )
-_FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK = (1 << 16) - 1
+# Both fixed32 logical modes retain the full depth-11 Tail spine.  The
+# accepted_lens value counts accepted drafts only; the committer adds the root
+# internally, while columns 12..15 are storage padding and are unreachable.
+_FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH = 11
+_FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK = (
+    1 << (_FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH + 1)
+) - 1
 _FR13_FIXED32_COMMITTER_TASK_ID_CHARACTERS = frozenset(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
 )
@@ -94,10 +100,12 @@ def _fr13_fixed32_committer_layer_batch_real_event_marker(
 def _fr13_fixed32_committer_accepted_length_mask(
     accepted_lengths, *, batch: int,
 ) -> int:
-    """Encode one B-row event's accepted draft lengths as a 16-bit mask."""
+    """Encode one B-row event's reachable accepted draft lengths."""
     lengths = tuple(int(value) for value in accepted_lengths)
     if len(lengths) != batch or any(
-        length < 0 or length > 15 for length in lengths
+        length < 0
+        or length > _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH
+        for length in lengths
     ):
         raise RuntimeError(
             "FR13 fixed32 committer accepted-length qualification input drift"
@@ -10309,9 +10317,12 @@ def preseed_fixed32_committer_graph(
                 "physical_alias_row_uniqueness_guard": (
                     "validate_fixed32_conv_commit_rows"
                 ),
-                "byte_gate": "real_swe_all_accepted_lengths_0_15",
+                "byte_gate": "real_swe_all_reachable_accepted_lengths_0_11",
                 "byte_gate_raw_compare": "torch_equal_uint8",
                 "unseen_length_route": "shadow_then_reference",
+                "accepted_length_max": (
+                    _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH
+                ),
                 "accepted_length_full_mask": (
                     _FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
                 ),

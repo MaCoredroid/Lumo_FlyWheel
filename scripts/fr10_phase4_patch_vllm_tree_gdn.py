@@ -4868,14 +4868,15 @@ def _fr13_fixed32_observed_commit(
                     "physical_alias_row_uniqueness_guard"
                 ) != "validate_fixed32_conv_commit_rows"
                 or committer_contract.get("byte_gate")
-                != "real_swe_all_accepted_lengths_0_15"
+                != "real_swe_all_reachable_accepted_lengths_0_11"
                 or committer_contract.get("byte_gate_raw_compare")
                 != "torch_equal_uint8"
                 or committer_contract.get("unseen_length_route")
                 != "shadow_then_reference"
+                or int(committer_contract.get("accepted_length_max", -1)) != 11
                 or int(
                     committer_contract.get("accepted_length_full_mask", -1)
-                ) != 0xFFFF
+                ) != 0x0FFF
             )
         )
     )

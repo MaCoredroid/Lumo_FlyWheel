@@ -175,7 +175,7 @@ def _snapshot(
                     for batch in range(1, server_capacity + 1)
                 },
                 "layer_batch_gate_coverage_mask_by_batch": {
-                    str(batch): 0xFFFF
+                    str(batch): 0x0FFF
                     for batch in range(1, server_capacity + 1)
                 },
                 "layer_batch_gate_passed_by_batch": {
@@ -346,7 +346,7 @@ def test_task_boundary_accepts_in_graph_pregather_counts(
     assert floor_report["committer"][
         "layer_batch_gate_coverage_mask_by_batch"
     ] == {
-        str(batch): 0xFFFF for batch in range(1, server_capacity + 1)
+        str(batch): 0x0FFF for batch in range(1, server_capacity + 1)
     }
 
 
@@ -544,7 +544,7 @@ def test_both_validators_reject_incomplete_layer_batch_length_coverage(
     payload, ack = _snapshot(server_capacity=4)
     payload["metrics"]["committer"][
         "layer_batch_gate_coverage_mask_by_batch"
-    ]["4"] = 0xFFFE
+    ]["4"] = 0x0FFE
     _assert_both_validators_reject(
         tmp_path,
         payload,
@@ -851,10 +851,10 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
             4: 0,
         },
         "layer_batch_gate_coverage_mask_by_batch": {
-            1: 0xFFFF,
-            2: 0xFFFF,
-            3: 0xFFFF,
-            4: 0xFFFF,
+            1: 0x0FFF,
+            2: 0x0FFF,
+            3: 0x0FFF,
+            4: 0x0FFF,
         },
         "layer_batch_gate_passed_by_batch": {
             1: 1,

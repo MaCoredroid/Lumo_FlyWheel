@@ -344,7 +344,7 @@ def test_task_bracket_arms_after_pre_flush_and_rotates_after_post_flush(
                     "committer": {
                         "layer_batch_gate_attempts_by_batch": {"1": 0},
                         "layer_batch_gate_coverage_mask_by_batch": {
-                            "1": 0xFFFF,
+                            "1": 0x0FFF,
                         },
                     }
                 },
@@ -460,9 +460,9 @@ def test_task_bracket_rejects_layer_batch_qualification_in_task_interval(
                         },
                         "layer_batch_gate_coverage_mask_by_batch": {
                             "1": (
-                                0xFFFF - (ack.generation - 1)
+                                0x0FFF - (ack.generation - 1)
                                 if coverage_delta
-                                else 0xFFFF
+                                else 0x0FFF
                             ),
                         },
                     },
@@ -688,7 +688,7 @@ def test_task_bracket_removes_arm_when_post_snapshot_fails(
                     "committer": {
                         "layer_batch_gate_attempts_by_batch": {"1": 0},
                         "layer_batch_gate_coverage_mask_by_batch": {
-                            "1": 0xFFFF,
+                            "1": 0x0FFF,
                         },
                     }
                 },

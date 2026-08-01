@@ -127,6 +127,7 @@ _FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME = (
 )
 _FIXED32_PENDING_RUNNER_METADATA_FILENAME = "runner_metadata.pending.json"
 _FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY = "_fixed32_campaign_runtime_args"
+_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK = 0x0FFF
 _FIXED32_AGENT_PLACEMENT_SCHEMA = "fr13-fixed32-agent-placement-v1"
 _FIXED32_AGENT_HOST_ALIAS = "alienware"
 _FIXED32_MEASURED_HOST_IDENTITY = {
@@ -4688,14 +4689,20 @@ def _load_fixed32_boundary_snapshot(
         raise Fixed32BoundaryError(
             f"{path}: committer layer-batch gate pass state is not boolean"
         )
-    expected_full_coverage = {key: 0xFFFF for key in ready_capacity_keys}
+    expected_full_coverage = {
+        key: _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+        for key in ready_capacity_keys
+    }
     if layer_batch_gate_coverage_mask_by_batch != expected_full_coverage:
         raise Fixed32BoundaryError(
             f"{path}: committer layer-batch accepted-length coverage is "
             "incomplete before measurement"
         )
     if layer_batch_gate_passed_by_batch != {
-        key: int(layer_batch_gate_coverage_mask_by_batch[key] == 0xFFFF)
+        key: int(
+            layer_batch_gate_coverage_mask_by_batch[key]
+            == _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+        )
         for key in ready_capacity_keys
     }:
         raise Fixed32BoundaryError(

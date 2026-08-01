@@ -174,9 +174,11 @@ def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> No
     assert '"final_state_store_once": True' in preseed
 
 
-def test_accepted_length_mask_covers_zero_through_fifteen() -> None:
+def test_accepted_length_mask_covers_zero_through_eleven() -> None:
     node = _function("_fr13_fixed32_committer_accepted_length_mask")
-    namespace: dict[str, object] = {}
+    namespace: dict[str, object] = {
+        "_FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH": 11,
+    }
     exec(
         compile(ast.Module(body=[node], type_ignores=[]), str(KERNEL_PATH), "exec"),
         namespace,
@@ -184,12 +186,12 @@ def test_accepted_length_mask_covers_zero_through_fifteen() -> None:
     length_mask = namespace[node.name]
 
     assert length_mask((0,), batch=1) == 0x0001
-    assert length_mask((15,), batch=1) == 0x8000
-    assert length_mask((0, 7, 15, 7), batch=4) == 0x8081
+    assert length_mask((11,), batch=1) == 0x0800
+    assert length_mask((0, 7, 11, 7), batch=4) == 0x0881
     with pytest.raises(RuntimeError, match="qualification input drift"):
         length_mask((0,), batch=4)
     with pytest.raises(RuntimeError, match="qualification input drift"):
-        length_mask((16,), batch=1)
+        length_mask((12,), batch=1)
 
 
 def test_real_event_arm_requires_private_authenticated_swe_file(tmp_path: Path) -> None:
@@ -289,7 +291,8 @@ def test_byte_gate_serves_reference_once_then_allows_covered_depth() -> None:
             return None
 
     namespace = {
-        "_FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK": 0xFFFF,
+        "_FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH": 11,
+        "_FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK": 0x0FFF,
         "_fr13_fixed32_committer_layer_batch_real_event_marker": (
             lambda: "swe_verified:astropy__astropy-12907"
         ),
@@ -327,10 +330,10 @@ def test_byte_gate_serves_reference_once_then_allows_covered_depth() -> None:
     assert replay_order == ["reference", "candidate"]
     assert state["layer_batch_byte_gate_attempts"] == 1
 
-    state["layer_batch_byte_gate_coverage_mask"] = 0x7FFF
-    state["accepted_lens"].values = [15]
+    state["layer_batch_byte_gate_coverage_mask"] = 0x07FF
+    state["accepted_lens"].values = [11]
     assert gate(state=state, banks_list=banks, spec_state_indices=object()) is False
-    assert state["layer_batch_byte_gate_coverage_mask"] == 0xFFFF
+    assert state["layer_batch_byte_gate_coverage_mask"] == 0x0FFF
     assert state["layer_batch_byte_gate_passed"] is True
 
 
@@ -399,7 +402,9 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
     assert 'committer_contract.get("gate_coefficients_hoisted") is not True' in patcher
     assert '"physical_alias_row_uniqueness_guard"' in patcher
     assert '!= "validate_fixed32_conv_commit_rows"' in patcher
-    assert '!= "real_swe_all_accepted_lengths_0_15"' in patcher
+    assert '!= "real_swe_all_reachable_accepted_lengths_0_11"' in patcher
+    assert 'committer_contract.get("accepted_length_max", -1)' in patcher
+    assert ") != 0x0FFF" in patcher
     assert '!= "torch_equal_uint8"' in patcher
     assert '!= "shadow_then_reference"' in patcher
     assert "expected_neutralizations = 0 if layer_batch is True else 5" in patcher

@@ -95,6 +95,9 @@ class GateError(RuntimeError):
     """An input artifact failed a fail-closed gate."""
 
 
+FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK = 0x0FFF
+
+
 CANONICAL_TASK_IDS = (
     "astropy__astropy-12907",
     "astropy__astropy-13033",
@@ -1407,7 +1410,8 @@ def validate_runtime_boundary_snapshot(
             f"{path}: committer layer-batch gate pass state is not boolean"
         )
     expected_full_coverage = {
-        key: 0xFFFF for key in expected_ready_capacities
+        key: FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+        for key in expected_ready_capacities
     }
     if layer_batch_gate_coverage_mask_by_batch != expected_full_coverage:
         raise GateError(
@@ -1415,7 +1419,10 @@ def validate_runtime_boundary_snapshot(
             "incomplete before measurement"
         )
     if layer_batch_gate_passed_by_batch != {
-        key: int(layer_batch_gate_coverage_mask_by_batch[key] == 0xFFFF)
+        key: int(
+            layer_batch_gate_coverage_mask_by_batch[key]
+            == FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+        )
         for key in expected_ready_capacities
     }:
         raise GateError(
