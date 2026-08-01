@@ -88,6 +88,15 @@ def test_layer_batch_recurrence_stops_after_root_plus_accepted_drafts() -> None:
     assert "PATH_CAP=16" in launch
 
 
+def test_committer_guards_reject_unreachable_padding_lengths() -> None:
+    row_guard = _text("validate_fixed32_conv_commit_rows")
+    replay = _text("_fr13_fixed32_committer_replay")
+
+    bound = "lens <= _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH"
+    assert bound in row_guard
+    assert bound in replay
+
+
 def test_layer_batch_publishes_only_the_final_running_state() -> None:
     kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
     loop = kernel[kernel.index("for i_t in tl.range(0, T):") :]

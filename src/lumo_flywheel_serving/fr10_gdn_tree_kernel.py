@@ -10145,7 +10145,7 @@ def validate_fixed32_conv_commit_rows(
         & (bank_alias_ids < 16).all()
         & distinct_destinations
         & (lens >= 0).all()
-        & (lens <= 15).all()
+        & (lens <= _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH).all()
         & ((~active_paths) | ((paths >= 0) & (paths < 32))).all()
         & (selected_rows >= 0).all()
         & (selected_rows < bank_rows).all()
@@ -11148,7 +11148,7 @@ def _fr13_fixed32_committer_replay(
     paths = state["accepted_paths"].to(torch.long)
     dynamic_ok = (
         (lens >= 0).all()
-        & (lens <= 15).all()
+        & (lens <= _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH).all()
         & ((~active) | ((paths >= 0) & (paths < 32))).all()
     )
     _fr13_fixed32_device_assert(

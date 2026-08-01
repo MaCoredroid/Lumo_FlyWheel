@@ -37,6 +37,7 @@ def _load_guard(assert_fn):
     )
     namespace = {
         "torch": torch,
+        "_FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH": 11,
         "_fr13_fixed32_device_assert": assert_fn,
     }
     exec(compile(ast.fix_missing_locations(module), KERNEL_PATH, "exec"), namespace)
@@ -159,7 +160,7 @@ def test_precommit_guard_rejects_unsafe_dynamic_rows_and_paths(
     elif mutation == "invalid_active_path":
         accepted_paths[2, 0] = 32
     elif mutation == "invalid_accepted_length":
-        accepted_lens[2] = 16
+        accepted_lens[2] = 12
     elif mutation == "invalid_alias_id":
         bank_alias_ids[17] = 16
     else:
