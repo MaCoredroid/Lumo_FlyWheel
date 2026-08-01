@@ -1,0 +1,29 @@
+FR13 fixed32 B1-B4 launch-scaling candidate verification
+
+Candidate CPU byte/wiring gate:
+  14 passed in 0.66s
+
+Current fixed32 contract suites:
+  97 passed in 2.73s
+
+Covered current suites:
+  tests/test_fr13_fixed32_conv_source_batch.py
+  tests/test_fr13_fixed32_conv_commit_wiring.py
+  tests/test_fr13_fixed32_conv_pregather_geometry.py
+  tests/test_fr13_fixed32_final_full_preseed.py
+  tests/test_fr13_fixed32_floor_propagation.py
+  tests/test_fr13_b4_gdn_bv8_production.py
+
+Additional checks:
+  bash syntax: pass
+  Python compilation: pass
+  Ruff candidate files: pass
+  Ruff patcher with established F401/F841 ignored: pass
+  git diff --check: pass
+
+The monolithic patcher self-test stops at its established
+`FR13 fixed32 conv pregather runtime contract drift`; the same failure was
+reproduced from unmodified HEAD, so it is not a candidate regression.
+
+CUDA_VISIBLE_DEVICES was empty. No GPU, Docker, synthetic serving probe,
+SWE-Verified run, timing, TPS, or acceptance command was executed.

@@ -7134,7 +7134,7 @@ def _patch_gdn_linear() -> bool:
             "from lumo_flywheel_serving.fr10_gdn_tree_kernel import fixed32_batch_gdn_selector, gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_gdn_prepared_fixed32_batch, launch_tree_state_linear_remap, subtree_get\n"
             "from lumo_flywheel_serving.fr13_replay_conv_remap import replay_conv_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
-            "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, conv_wb_staging_get, freeze_conv_wb_staging_sources, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, launch_conv_state_writeback, launch_conv_state_writeback_batched, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
+            "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, conv_wb_staging_get, freeze_conv_wb_staging_sources, fused_tree_conv_source, fused_tree_conv_sources_batched, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, launch_conv_state_writeback, launch_conv_state_writeback_batched, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
             "\n"
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
             f"{_fr13_fixed32_runtime_bindings()}"
@@ -7152,6 +7152,7 @@ def _patch_gdn_linear() -> bool:
             "_FR13_EAGER_PACK = " + ("True" if os.environ.get("FR13_EAGER_PACK", "1") == "1" else "False") + "  # FR13_EAGER_PACK baked from PATCH-TIME env (worker-env drops it)\n"
             "_FR13_FLAGS_INKERNEL = " + ("True" if os.environ.get("FR13_FLAGS_INKERNEL", "0") == "1" else "False") + "  # scan-kernel flag stores, PATCH-TIME env (default OFF); regate = queue 2c\n"
             "_FR13_CONV_WB_BATCHED = " + ("True" if os.environ.get("FR13_CONV_WB_BATCHED", "0") == "1" else "False") + "  # FR13_CONV_WB_BATCHED (B2c) baked from PATCH-TIME env: ONE batched conv writeback across requests replaces the per-b launch loop (committer host-gap slice)\n"
+            "_FR13_FIXED32_CONV_SOURCE_BATCH = " + ("True" if os.environ.get("FR13_FIXED32_CONV_SOURCE_BATCH", "0") == "1" else "False") + "  # default-OFF: build all B fixed32 conv sources directly in persistent staging\n"
             "# FR13_TREE_CONV_FUSED (FIX-3): read ONCE at module scope; default OFF\n"
             "# until the byte A/B + live gate pass. ON fuses the tree causal-conv\n"
             "# emulation's per-node state write-back loop / per-col tap loop /\n"
@@ -9662,39 +9663,94 @@ def _fr13_conv_subop_mab(
                         )
                     _fr13_wbb_stage = None
                     _fr13_wbb_srows = 0
+                    _fr13_f32_source_batch = None
+                    _fr13_f32_prior_windows = None
+                    if _FR13_FIXED32_CONV_SOURCE_BATCH:
+                        if not _FR13_FIXED32_MODE or not _FR13_CONV_WB_BATCHED:
+                            raise RuntimeError(
+                                "FR13_FIXED32_CONV_SOURCE_BATCH requires the "
+                                "fixed32 batched-writeback staging route"
+                            )
+                        _fr13_f32_source_b = int(
+                            attn_metadata.num_spec_decodes
+                        )
+                        _fr13_wbb_srows = (
+                            int(_fr10_prior_col_base.numel())
+                            + int(_fr10_tree_n)
+                            + 1
+                        )
+                        _fr13_wbb_stage = conv_wb_staging_get(
+                            str(self.prefix),
+                            _fr13_f32_source_b * _fr13_wbb_srows,
+                            int(mixed_qkv_spec.size(1)),
+                            mixed_qkv_spec.dtype,
+                            mixed_qkv_spec.device,
+                        )
+                        (
+                            _fr13_f32_source_batch,
+                            _fr13_f32_prior_windows,
+                        ) = fused_tree_conv_sources_batched(
+                            prior_bank=_fr10_prior_conv_state_bank,
+                            prior_cols=_fr10_prior_col_base,
+                            x=mixed_qkv_spec,
+                            zero_row=_fr13_tcf_zero_row,
+                            staging=_fr13_wbb_stage,
+                            batch=_fr13_f32_source_b,
+                            tree_n=_fr10_tree_n,
+                        )
                     for _fr10_b in range(attn_metadata.num_spec_decodes):
                         _fr10_start = _fr10_b * _fr10_tree_n
                         _fr10_end = _fr10_start + _fr10_tree_n
                         _fr10_x = mixed_qkv_spec[_fr10_start:_fr10_end]
                         _fr10_prior_cols = _fr10_prior_col_base
-                        _fr10_prior_window = _fr10_prior_conv_state_bank[
-                            _fr10_b
-                        ].index_select(1, _fr10_prior_cols)
-                        if _FR13_TREE_CONV_FUSED:
-                            # FR13_TREE_CONV_FUSED (FIX-3): ONE shared source
-                            # with the zero row appended for the write-back
-                            # gather. Window/flat-source indices never
-                            # reference the appended row (all < width-1 +
-                            # tree_n; CPU-executed invariance check in the
-                            # byte A/B), so every downstream window
-                            # index_select output is byte-identical to the
-                            # legacy two-operand cat.
-                            _fr10_source = fused_tree_conv_source(
-                                prior_window=_fr10_prior_window,
-                                x=_fr10_x,
-                                zero_row=_fr13_tcf_zero_row,
-                            )
+                        if _FR13_FIXED32_CONV_SOURCE_BATCH:
+                            _fr10_prior_window = _fr13_f32_prior_windows[
+                                _fr10_b
+                            ]
+                            _fr10_source = _fr13_f32_source_batch[_fr10_b]
                         else:
-                            _fr10_source = torch.cat(
-                                (_fr10_prior_window.transpose(0, 1), _fr10_x),
-                                dim=0,
-                            )
+                            _fr10_prior_window = _fr10_prior_conv_state_bank[
+                                _fr10_b
+                            ].index_select(1, _fr10_prior_cols)
+                        if not _FR13_FIXED32_CONV_SOURCE_BATCH:
+                            if _FR13_TREE_CONV_FUSED:
+                                # FR13_TREE_CONV_FUSED (FIX-3): ONE shared
+                                # source with the zero row appended for the
+                                # write-back gather. Window/flat-source
+                                # indices never reference the appended row
+                                # (all < width-1 + tree_n; CPU-executed
+                                # invariance check in the byte A/B), so every
+                                # downstream window index_select output is
+                                # byte-identical to the legacy two-operand
+                                # cat.
+                                _fr10_source = fused_tree_conv_source(
+                                    prior_window=_fr10_prior_window,
+                                    x=_fr10_x,
+                                    zero_row=_fr13_tcf_zero_row,
+                                )
+                            else:
+                                _fr10_source = torch.cat(
+                                    (_fr10_prior_window.transpose(0, 1), _fr10_x),
+                                    dim=0,
+                                )
                         if _FR13_CONV_WB_BATCHED:
                             # B2c: stage this request's shared source for the
                             # ONE batched writeback after the loop. copy_
                             # preserves bytes; downstream window reads keep
                             # using _fr10_source unchanged.
-                            if _fr13_wbb_stage is None:
+                            if _FR13_FIXED32_CONV_SOURCE_BATCH:
+                                if (
+                                    _fr13_wbb_stage is None
+                                    or _fr10_source.data_ptr()
+                                    != _fr13_wbb_stage[
+                                        _fr10_b * _fr13_wbb_srows
+                                    ].data_ptr()
+                                ):
+                                    raise RuntimeError(
+                                        "FR13 fixed32 batched source staging "
+                                        "identity drift"
+                                    )
+                            elif _fr13_wbb_stage is None:
                                 from lumo_flywheel_serving.fr13_tree_conv_fused import (
                                     conv_wb_staging_get as _fr13_wbb_get,
                                 )
@@ -9711,10 +9767,11 @@ def _fr13_conv_subop_mab(
                                     _fr10_source.dtype,
                                     _fr10_source.device,
                                 )
-                            _fr13_wbb_stage[
-                                _fr10_b * _fr13_wbb_srows:
-                                (_fr10_b + 1) * _fr13_wbb_srows
-                            ].copy_(_fr10_source)
+                            if not _FR13_FIXED32_CONV_SOURCE_BATCH:
+                                _fr13_wbb_stage[
+                                    _fr10_b * _fr13_wbb_srows:
+                                    (_fr10_b + 1) * _fr13_wbb_srows
+                                ].copy_(_fr10_source)
                         _fr10_window = _fr10_source.index_select(
                             0, _fr10_source_flat
                         ).view(_fr10_tree_n, _fr10_width, _fr10_x.size(1))

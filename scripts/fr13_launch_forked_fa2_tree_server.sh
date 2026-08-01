@@ -965,6 +965,13 @@ PY
     [[ "${!_fixed32_pin:-}" == "1" ]] \
       || { echo "fixed32 requires $_fixed32_pin=1" >&2; exit 2; }
   done
+  case "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" in
+    0|1) ;;
+    *)
+      echo "FR13_FIXED32_CONV_SOURCE_BATCH must be exactly 0 or 1" >&2
+      exit 2
+      ;;
+  esac
   _fixed32_required_zero=(
     FR13_MULTIDRAFT_GPU_TIMER FR13_REPLAY_GPU_TIMER
     FR13_COMMIT_FULL_GPU_TIMER FR13_COMMITTER_SG_TIMER
@@ -2377,6 +2384,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FLAGS_INKERNEL="${FR13_FLAGS_INKERNEL:-1}" \
   -e FR13_CONV_NODEBANK="${FR13_CONV_NODEBANK:-0}" \
   -e FR13_CONV_WB_BATCHED="${FR13_CONV_WB_BATCHED:-0}" \
+  -e FR13_FIXED32_CONV_SOURCE_BATCH="${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" \
   -e FR13_SPEC_BLOCKS_CAP="${FR13_SPEC_BLOCKS_CAP:-0}" \
   -e FR13_SUBTREE_PARALLEL="${FR13_SUBTREE_PARALLEL:-1}" \
   -e FR13_SUBTREE_PARALLEL_SELFCHECK="${FR13_SUBTREE_PARALLEL_SELFCHECK:-0}" \
