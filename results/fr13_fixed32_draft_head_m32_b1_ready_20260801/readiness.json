@@ -1,0 +1,123 @@
+{
+  "schema": "fr13.fixed32.draft_head_full_m32_b1_readiness.v1",
+  "created_at_utc": "2026-08-01T10:35:41Z",
+  "status": "READY_FOR_REAL_B1_BYTE_GATE_NOT_EXECUTED",
+  "classification": "CPU_SOURCE_AND_RUNTIME_CLOSURE_READINESS_ONLY",
+  "claims": {
+    "live_gate_executed": false,
+    "gpu_measurement_performed": false,
+    "performance_measurement": false,
+    "probe_eligible": false,
+    "floor_acceptance_eligible": false,
+    "production_qualified": false
+  },
+  "source": {
+    "branch": "agent/fixed32-fullhead-m32-fe9b",
+    "audited_head_before_readiness_commit": "e4ddd6081b0af58ceb1fbae5192f23f075490645",
+    "runner": {
+      "path": "scripts/fr13_run_b1_kernel_live_gate.sh",
+      "sha256": "f79c22117f872f034fe3f851dc2fbf3e70b19564147d8db6148b47da86a1ddc3"
+    },
+    "candidate": {
+      "path": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+      "sha256": "6f1a70b1d0aa88005a0dac434f4f2a4196251db356041e940d0c2140444f84b1"
+    }
+  },
+  "real_workload": {
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "subset_path": "config/fr13_fixed32/subset_b1_diagnostic_one.json",
+    "subset_sha256": "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb",
+    "task_count": 1,
+    "task_ids": [
+      "astropy__astropy-12907"
+    ],
+    "concurrency": 1,
+    "batch_size": 1,
+    "diagnostic_only": true
+  },
+  "candidate_contract": {
+    "draft_vocabulary_root": 0,
+    "draft_vocabulary_k": 0,
+    "draft_vocabulary_block_map": null,
+    "calls_per_event": 5,
+    "call_sites": "root plus four loop heads",
+    "dtype": "BF16",
+    "input_shape": [
+      32,
+      5120
+    ],
+    "weight_shape": [
+      248320,
+      5120
+    ],
+    "output_shape": [
+      32,
+      248320
+    ],
+    "gemm_mnk": [
+      32,
+      248320,
+      5120
+    ],
+    "served_rows": 1,
+    "unused_rows_served": 0,
+    "comparison": "all served full-logit BF16 elements compared as raw int16 bits",
+    "served_return": "reference BF16 logits unchanged",
+    "mismatch_policy": "fail closed"
+  },
+  "runtime_closure": {
+    "fa2": {
+      "path": "output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so",
+      "size": 299183936,
+      "sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d"
+    },
+    "swe_verified_dataset_blob": {
+      "sha256": "a45b1fe4e2f0c8390b2b2938ac83e92ed5979000856808f3679c07812e9e6dcd"
+    },
+    "swe_verified_ref_main_sha256": "fcc83c1ac718625f8496c612986cc7a04420dcf4b4fb2c31259946f63e828c7d",
+    "prompt_sha256": "3e2b14ba90a999b08290d5be0e474aa7a73df5b98bb7ad2e5d58869b04e2839d",
+    "chat_template_sha256": "c166a05aaf5ad4b807a7c46497f92180e3df24e64d4b54d27fd26ec61bec38da",
+    "model_file_count": 81,
+    "model_canonical_sha256": "95f8bdf8693e2b7581a27dd05494e3016d5b7d2e150de4d4e9beaead6253fc3d",
+    "runtime_manifest_preflight_canonical_sha256": "4452bb53741145ec95945b5ce84cde7291e63a08d9da1b85502c4195a97ebaf0",
+    "external_manifest_preflight_canonical_sha256": "c42fb16d2ea932f0e819c81172c49b69b312b75dd446146b6d7b6ef78af00a9e"
+  },
+  "traffic": {
+    "bf16_bytes_per_element": 2,
+    "full_head_weight_bytes_per_call": 2542796800,
+    "head_calls_per_event": 5,
+    "full_head_weight_bytes_per_event": 12713984000,
+    "incumbent_full_vocab_b1_nominal_operand_bytes_per_event": 12716518400,
+    "candidate_full_vocab_m32_nominal_operand_bytes_per_event": 12795084800,
+    "candidate_minus_incumbent_nominal_operand_bytes_per_event": 78566400,
+    "candidate_minus_incumbent_nominal_operand_percent": 0.6178294838939564,
+    "live_ab_combined_nominal_operand_bytes_per_event": 25511603200,
+    "nominal_operand_bytes_exclude_copy_and_runtime_overhead": true,
+    "deployed_root64_head_weight_bytes_per_event": 3355443200,
+    "full_vocab_minus_root64_head_weight_bytes_per_event": 9358540800,
+    "full_vocab_head_weight_increase_percent": 278.90625,
+    "deployed_root64_total_mandatory_weight_bytes_per_event": 32666638208,
+    "full_vocab_total_mandatory_weight_bytes_per_event": 42025179008,
+    "full_vocab_total_mandatory_weight_increase_percent": 28.648619243923637,
+    "full_vocab_mandatory_weight_floor_ms_at_273_gb_s": 153.93838464468865
+  },
+  "savings": {
+    "mandatory_head_weight_bytes_saved_vs_full_vocab_incumbent": 0,
+    "estimated_timing_savings_ms_per_event": null,
+    "estimated_timing_note": "No positive estimate is defensible before a real matched timing run.",
+    "measured_timing_savings_ms_per_event": null,
+    "measured_timing_note": "The real B1 byte gate has not run and is not a timing result.",
+    "production_savings_if_rejected_ms_per_event": 0,
+    "sfwd_projection_double_count_prohibited": true,
+    "sfwd_projection_note": "The five full-head reads are DFWD traffic already included in the full-step floor."
+  },
+  "verification": {
+    "shell_syntax": "PASS",
+    "diff_check": "PASS",
+    "focused_pytest": {
+      "status": "PASS",
+      "passed": 27,
+      "command": ".venv/bin/python -m pytest -q tests/test_fr13_draft_head_m32_production.py tests/test_fr13_hardware_floor_ledger.py tests/test_fr13_fixed32_fa2_identity.py"
+    }
+  }
+}

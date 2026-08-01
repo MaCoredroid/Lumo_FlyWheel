@@ -626,6 +626,7 @@ def test_live_gate_uses_real_swe_b1_and_serves_reference() -> None:
 
     assert "FR13_GATE_DRAFT_HEAD_M32=${FR13_GATE_DRAFT_HEAD_M32:-0}" in text
     assert "config/fr13_fixed32/subset_b1_diagnostic_one.json" in text
+    assert "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb" in text
     assert "astropy__astropy-12907" in text
     assert 'FR13_DRAFT_HEAD_M32_LIVE_AB="$FR13_GATE_DRAFT_HEAD_M32"' in text
     assert "fr13_draft_head_m32_pass.py validate-live" in text
@@ -636,6 +637,22 @@ def test_live_gate_uses_real_swe_b1_and_serves_reference() -> None:
     assert "export FR13_DRAFT_VOCAB_ROOT=0" in text
     assert "export FR13_DRAFT_VOCAB_K=0" in text
     assert 'FR13_M32_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0"' in text
+    assert "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d" in text
+    assert "CANONICAL_FA2_SIZE=299183936" in text
+    assert '"$(realpath "$FORKED_FA2_SO")" == "$CANONICAL_FA2"' in text
+    assert '[[ "$RUNROOT" == output/*' in text
+    assert '[[ ! -e "$RUNROOT_ABS" && ! -L "$RUNROOT_ABS" ]]' in text
+    assert "classification=real_swe_verified_b1_kernel_byte_diagnostic" in text
+    assert "diagnostic_only=1" in text
+    assert "performance_measurement=0" in text
+    assert "probe_eligible=0" in text
+    assert "floor_acceptance_eligible=0" in text
+    assert 'cmp -s "$RUNROOT_ABS/runtime_manifest.at_launch.json"' in text
+    assert 'cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json"' in text
+    assert '"$(git rev-parse HEAD)" == "$SOURCE_COMMIT"' in text
+    assert 'git status --porcelain=v1 --untracked-files=no' in text
+    assert "if OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1" in text
+    assert "(( serve_rc == 0 )) || exit \"$serve_rc\"" in text
 
 
 def test_live_pass_reconciles_terminal_flush_and_boundary(tmp_path: Path) -> None:
