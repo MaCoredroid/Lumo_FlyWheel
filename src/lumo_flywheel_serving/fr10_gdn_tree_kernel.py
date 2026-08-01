@@ -10296,12 +10296,14 @@ def preseed_fixed32_committer_graph(
             {
                 "fused_calls": 1,
                 "neutralizations": 0,
+                "ring_gathers": 0,
                 "native_reference_fused_calls": 48,
                 "layer_batch": True,
                 "state_only_output_elided": True,
                 "active_length_recurrence": True,
                 "final_state_store_once": True,
                 "direct_ring_loads": True,
+                "direct_ring_inputs": 4,
                 "candidate_staging_launches": 0,
                 "gate_coefficients_hoisted": True,
                 "physical_alias_row_uniqueness_guard": (
@@ -10373,7 +10375,9 @@ def preseed_fixed32_committer_graph(
     print(
         "[FR13_FIXED32_COMMIT_DEVICE_FILL] preseeded: "
         f"mode={_FR13_FIXED32_MODE} B={batch} path_cap=16 "
-        f"neutralizations=5 gathers=4 fused_calls={state['contract']['fused_calls']} "
+        f"neutralizations={state['contract']['neutralizations']} "
+        f"gathers={state['contract']['ring_gathers']} "
+        f"fused_calls={state['contract']['fused_calls']} "
         f"layer_batch={int(layer_batch)} replays=1",
         flush=True,
     )

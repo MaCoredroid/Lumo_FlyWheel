@@ -148,7 +148,9 @@ def test_layer_batch_candidate_loads_live_ring_rows_without_staging() -> None:
     assert "k_selected" not in candidate
     assert "torch.where(" not in candidate
     assert '"neutralizations": 0' in preseed
+    assert '"ring_gathers": 0' in preseed
     assert '"direct_ring_loads": True' in preseed
+    assert '"direct_ring_inputs": 4' in preseed
     assert '"candidate_staging_launches": 0' in preseed
     assert '"gate_coefficients_hoisted": True' in preseed
 
@@ -392,6 +394,7 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
     assert 'committer_contract.get("active_length_recurrence") is not True' in patcher
     assert 'committer_contract.get("final_state_store_once") is not True' in patcher
     assert 'committer_contract.get("direct_ring_loads") is not True' in patcher
+    assert 'committer_contract.get("direct_ring_inputs", -1)' in patcher
     assert 'committer_contract.get("candidate_staging_launches", -1)' in patcher
     assert 'committer_contract.get("gate_coefficients_hoisted") is not True' in patcher
     assert '"physical_alias_row_uniqueness_guard"' in patcher
@@ -413,12 +416,21 @@ def test_work_census_accepts_only_reference_or_layer_batch_launch_count() -> Non
     )
     event["committer"]["fused_layer_calls"] = 1
     event["committer"]["neutralize_ops"] = 0
+    event["committer"]["ring_gather_ops"] = 0
+    event["committer"]["ring_layer_path_rows"] = 0
     validated = census.validate_event(event, source="layer-batch-candidate")
 
     assert validated.normalized_work["committer"]["layers"] == 48
     assert (
         validated.normalized_work["committer"]["fused_layer_calls_per_event"]
         == 1
+    )
+    assert validated.normalized_work["committer"]["ring_gather_ops"] == 0
+    assert (
+        validated.normalized_work["committer"][
+            "ring_layer_path_rows_per_request"
+        ]
+        == 0
     )
 
     event["committer"]["fused_layer_calls"] = 2

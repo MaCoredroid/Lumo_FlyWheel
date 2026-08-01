@@ -651,6 +651,7 @@ FIXED_WORK_SCOPE = {
         "taw.indexed_addresses_cache_atomic_contention_and_cycles",
         "tree_attn.kv_sequence_lengths_block_addresses_cache_and_cycles",
         "committer.accepted_path_gather_addresses_cache_and_cycles",
+        "committer.direct_ring_rows_root_plus_accepted_depth",
         "kv_remap.accepted_path_src_dst_addresses_cache_and_cycles",
     ],
 }
@@ -1855,6 +1856,14 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     expected_committer_neutralizations = (
         0 if committer_fused_calls == 1 else COMMITTER_NEUTRALIZE_OPS
     )
+    expected_committer_ring_gathers = (
+        0 if committer_fused_calls == 1 else COMMITTER_RING_GATHER_OPS
+    )
+    expected_committer_ring_rows = (
+        0
+        if committer_fused_calls == 1
+        else COMMITTER_RING_LAYER_PATH_ROWS_PER_REQUEST * batch_size
+    )
     committer = _fixed_section(
         committer_raw,
         keys=COMMITTER_KEYS,
@@ -1864,10 +1873,8 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "requests": batch_size,
             "path_capacity": COMMITTER_PATH_CAPACITY,
             "layout_slots": COMMITTER_PATH_CAPACITY * batch_size,
-            "ring_gather_ops": COMMITTER_RING_GATHER_OPS,
-            "ring_layer_path_rows": (
-                COMMITTER_RING_LAYER_PATH_ROWS_PER_REQUEST * batch_size
-            ),
+            "ring_gather_ops": expected_committer_ring_gathers,
+            "ring_layer_path_rows": expected_committer_ring_rows,
             "neutralize_ops": expected_committer_neutralizations,
             "fused_layer_calls": committer_fused_calls,
             "graph_replays": 1,
