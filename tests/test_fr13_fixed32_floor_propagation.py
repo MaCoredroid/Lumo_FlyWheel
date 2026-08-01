@@ -103,10 +103,15 @@ def test_active_fixed32_paths_cannot_fall_back_to_legacy_floor() -> None:
         assert "98.6" not in text, path
         assert "113.39" not in text, path
 
-    expected_contract = (
-        "FR13_WEIGHT_FLOOR_MS|${FR13_WEIGHT_FLOOR_MS:-}|119.658015414"
-    )
-    assert expected_contract in texts[LAUNCHER]
+    assert (
+        "FR13_WEIGHT_FLOOR_MS|${FR13_WEIGHT_FLOOR_MS:-}|"
+        "$_fixed32_expected_weight_floor_ms"
+    ) in texts[LAUNCHER]
+    assert (
+        "FR13_MANDATORY_WEIGHT_BYTES|${FR13_MANDATORY_WEIGHT_BYTES:-}|"
+        "$_fixed32_expected_mandatory_weight_bytes"
+    ) in texts[LAUNCHER]
+    assert "_fixed32_expected_weight_floor_ms=153.938384645" in texts[LAUNCHER]
     assert "FIXED32_MANDATORY_WEIGHT_FLOOR_MS" in texts[MEASURE]
     assert "FIXED32_MANDATORY_WEIGHT_FLOOR_MS" in texts[GATE]
 
