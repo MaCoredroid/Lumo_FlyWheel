@@ -1,0 +1,29 @@
+{
+  "schema": "fr13.fixed32.k64.commit_draft_overlap.source_manifest.v1",
+  "status": "source_ready_gpu_not_run",
+  "gpu_used": false,
+  "performance_claim": false,
+  "production_default_enabled": false,
+  "source_base": "d383ec46d03a08b5138b86471aecec1199a14ae3",
+  "source_commit": "ed157906617c664fa2ea69b4682da3f64ebe58e5",
+  "branch": "agent/fixed32-k64-dfwd-cfwd-overlap-20260801",
+  "arm_contract": "fr13.fixed32.k64.commit_draft_overlap.v1",
+  "physical_drafts": 31,
+  "physical_rows_root_inclusive": 32,
+  "draft_vocab_k": 65536,
+  "draft_vocab_root": 1,
+  "supported_batches": [1, 4],
+  "supported_modes": ["tail6_fixed32", "hydra27_fixed32"],
+  "source_sha256": {
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "013b664afa4810877b7a7956369611d16c37b0cc0f558cb3d418c1b52be876a7",
+    "scripts/fr13_bigdenom_swe_serve_variant.sh": "45fbad85e5a2de997db5647516a1045dd2aea7e671e48ab560a75bdd3c10f125",
+    "scripts/fr13_fixed32_commit_draft_overlap_gate.py": "25c68292a22e9efdae51261762970c6d1f1fac52ba7049dcd9979a2abf0ae0f8",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh": "05bce922ba49d1df157766c19e84635c902cd3414db7cb997afdf889321d2aae",
+    "scripts/fr13_runtime_manifest.py": "5fed447aab52bc9437cc07bada97a2819176e36cb27adba43677db61f1e24b4e",
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "6cbb8e7f969ecab9f58ade06e9ca9b7135cc1ae1f219c3e6f82d09bdf4530f98",
+    "tests/test_fr13_fixed32_commit_draft_overlap.py": "f407a16ed72fb1e70d6c9dae426c3b76e59d916aa26b5f0dd8efa41ee3a398fb"
+  },
+  "qualification": "real_swe_verified_exact4_then_exact16_u95",
+  "formal_floor_acceptance_eligible": false
+}
+

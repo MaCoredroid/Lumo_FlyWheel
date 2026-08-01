@@ -1,0 +1,24 @@
+FR13 fixed32 K64 commit-draft overlap source verification
+date_utc=2026-08-01
+gpu_used=false
+source_base=d383ec46d03a08b5138b86471aecec1199a14ae3
+source_commit=ed157906617c664fa2ea69b4682da3f64ebe58e5
+
+PASS python3 -m py_compile scripts/fr13_fixed32_commit_draft_overlap_gate.py scripts/fr10_phase4_patch_vllm_tree_gdn.py src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py
+PASS bash -n scripts/fr13_launch_forked_fa2_tree_server.sh scripts/fr13_bigdenom_swe_serve_variant.sh
+PASS pinned vLLM image patch application, hydra27_fixed32 route, no GPU attached
+PASS 137 focused fixed32 tests in 2.14s
+
+Focused pytest set:
+  tests/test_fr13_fixed32_commit_draft_overlap.py
+  tests/test_fr13_fixed32_final_full_preseed.py
+  tests/test_fr13_fixed32_committer_layer_batch.py
+  tests/test_fr13_fixed32_kv_remap.py
+  tests/test_fr13_fixed32_conv_commit_wiring.py
+  tests/test_fr13_fixed32_task_boundary_snapshot.py
+  tests/test_fr13_fixed32_b1_diagnostic.py
+  tests/test_fr13_fixed32_subset_binding.py
+  tests/test_fr13_fixed32_floor_propagation.py
+
+RESULT 137 passed
+GPU QUALIFICATION NOT RUN
