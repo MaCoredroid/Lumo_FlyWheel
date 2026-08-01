@@ -4600,6 +4600,99 @@ class _Fixed32TaskBracket:
         return json.loads(self.artifact_path.read_text(encoding="utf-8"))
 
 
+class _Fixed32EagerKernelDiagnosticTaskBracket(_Fixed32TaskBracket):
+    """Authenticate a real task without claiming graph-census evidence."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.pre_metrics_ref: dict[str, Any] | None = None
+        self.post_metrics_ref: dict[str, Any] | None = None
+
+    @property
+    def started(self) -> bool:
+        return self.pre_metrics_ref is not None
+
+    @property
+    def complete(self) -> bool:
+        return self.post_metrics_ref is not None
+
+    def _write_artifact(self) -> None:
+        payload = {
+            "schema": "fr13-fixed32-eager-kernel-diagnostic-task-bracket-v1",
+            "instance_id": self.instance_id,
+            "mode": self.client.mode,
+            "producer_pid": self.client.producer_pid,
+            "run_classification": "eager_kernel_byte_diagnostic",
+            "acceptance_valid": False,
+            "flush_protocol_used": False,
+            "pre_metrics": self.pre_metrics_ref,
+            "post_metrics": self.post_metrics_ref,
+        }
+        temporary = self.artifact_path.with_suffix(".json.tmp")
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, self.artifact_path)
+
+    @staticmethod
+    def _metrics_ref(path: Path, raw: bytes) -> dict[str, Any]:
+        return {
+            "path": str(path),
+            "bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }
+
+    def pre(self, metrics_path: Path) -> None:
+        if self.started or self.post_attempted:
+            raise Fixed32BoundaryError(
+                "fixed32 eager diagnostic task pre bracket was invoked twice"
+            )
+        try:
+            metrics = _metrics_snapshot(DEFAULT_METRICS_URL).encode("utf-8")
+            metrics_path.write_bytes(metrics)
+            self.pre_metrics_ref = self._metrics_ref(metrics_path, metrics)
+            if self.taw_real_task_arm is not None:
+                self.taw_real_task_arm.start()
+                self._write_taw_arm_artifact()
+            self._write_artifact()
+        except Exception as exc:
+            self.pre_metrics_ref = None
+            raise Fixed32BoundaryError(
+                "fixed32 eager diagnostic pre bracket failed: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+
+    def post(self, metrics_path: Path) -> dict[str, Any]:
+        if not self.started:
+            raise Fixed32BoundaryError(
+                "fixed32 eager diagnostic post bracket has no pre bracket"
+            )
+        if self.post_attempted:
+            if self.complete:
+                return json.loads(self.artifact_path.read_text(encoding="utf-8"))
+            raise Fixed32BoundaryError(
+                "fixed32 eager diagnostic post bracket already failed"
+            )
+        self.post_attempted = True
+        try:
+            metrics = _metrics_snapshot(DEFAULT_METRICS_URL).encode("utf-8")
+            metrics_path.write_bytes(metrics)
+            self.post_metrics_ref = self._metrics_ref(metrics_path, metrics)
+            if self.taw_real_task_arm is not None:
+                self.taw_real_task_arm.finish()
+                self._write_taw_arm_artifact()
+            self._write_artifact()
+        except Exception as exc:
+            self.post_metrics_ref = None
+            raise Fixed32BoundaryError(
+                "fixed32 eager diagnostic post bracket failed: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+        return json.loads(self.artifact_path.read_text(encoding="utf-8"))
+
+
 def _spawn_dcgm_sampler(out_path: Path, interval_s: float = DEFAULT_DCGM_INTERVAL_S
                        ) -> subprocess.Popen[bytes] | None:
     """Spawn the same DCGM/NVML sampler Track B uses, writing JSONL to out_path."""
@@ -6661,6 +6754,19 @@ def main(argv: list[str] | None = None) -> int:
         "streamk_coop128_byte_ab",
         "streamk_force_wide256_byte_ab",
     }
+    batch_gdn_eager_diagnostic = os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB", "0"
+    )
+    if batch_gdn_eager_diagnostic not in {"0", "1"}:
+        parser.error("FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1")
+    fixed32_eager_kernel_diagnostic = (
+        fixed32_cutlass_diagnostic or batch_gdn_eager_diagnostic == "1"
+    )
+    if (
+        fixed32_eager_kernel_diagnostic
+        and os.environ.get("ENFORCE_EAGER", "0") != "1"
+    ):
+        parser.error("fixed32 eager kernel diagnostic requires ENFORCE_EAGER=1")
     if fixed32_cutlass_diagnostic:
         if fixed32_taw_diagnostic or fixed32_bm8_diagnostic:
             parser.error(
@@ -6863,8 +6969,13 @@ def main(argv: list[str] | None = None) -> int:
                 path=arm_path,
                 instance_id=iid,
             )
+        fixed32_bracket_type = (
+            _Fixed32EagerKernelDiagnosticTaskBracket
+            if fixed32_eager_kernel_diagnostic
+            else _Fixed32TaskBracket
+        )
         fixed32_bracket = (
-            _Fixed32TaskBracket(
+            fixed32_bracket_type(
                 client=fixed32_client,
                 task_dir=(per_task_root / iid).resolve(),
                 instance_id=iid,
