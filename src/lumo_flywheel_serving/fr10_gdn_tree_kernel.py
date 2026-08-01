@@ -9672,6 +9672,8 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
 
     p_a_log = A_logs + i_l * GATE_L_STRIDE + i_hv
     p_dt_bias = dt_biases + i_l * GATE_L_STRIDE + i_hv
+    b_a_scale = -tl.exp(tl.load(p_a_log).to(tl.float32))
+    b_dt_bias = tl.load(p_dt_bias).to(tl.float32)
     # Preserve the anchor+offset form used by the byte-gated all-layer replay.
     # A raw pointer-table load loses 16-byte AxisInfo and changes reductions.
     state_bank = bank_anchor + tl.load(bank_off16 + i_l) * 4
@@ -9732,13 +9734,13 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
         b_v = tl.load(p_v, mask=mask_v, other=0).to(tl.float32)
         b_b = tl.load(p_b).to(tl.float32)
 
-        x = tl.load(p_a).to(tl.float32) + tl.load(p_dt_bias).to(tl.float32)
+        x = tl.load(p_a).to(tl.float32) + b_dt_bias
         softplus_x = tl.where(
             BETA * x <= THRESHOLD,
             (1 / BETA) * tl.log(1 + tl.exp(BETA * x)),
             x,
         )
-        b_g = -tl.exp(tl.load(p_a_log).to(tl.float32)) * softplus_x
+        b_g = b_a_scale * softplus_x
         b_beta = tl.sigmoid(b_b.to(tl.float32))
 
         if USE_QK_L2NORM_IN_KERNEL:
@@ -10213,6 +10215,7 @@ def preseed_fixed32_committer_graph(
                 "final_state_store_once": True,
                 "direct_ring_loads": True,
                 "candidate_staging_launches": 0,
+                "gate_coefficients_hoisted": True,
                 "byte_gate": "required_on_first_real_nonzero_accept",
             }
         )

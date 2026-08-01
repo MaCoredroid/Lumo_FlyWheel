@@ -97,6 +97,18 @@ def test_layer_batch_publishes_only_the_final_running_state() -> None:
     assert "tl.store(p_h0, b_h.to(p_h0.dtype.element_ty), mask=mask_h)" in kernel
 
 
+def test_layer_batch_hoists_constant_gate_coefficients() -> None:
+    kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
+    loop_at = kernel.index("for i_t in tl.range(0, T):")
+
+    assert kernel.index("b_a_scale = -tl.exp(") < loop_at
+    assert kernel.index("b_dt_bias = tl.load(p_dt_bias)") < loop_at
+    loop = kernel[loop_at:]
+    assert "tl.load(p_a_log)" not in loop
+    assert "tl.load(p_dt_bias)" not in loop
+    assert "b_g = b_a_scale * softplus_x" in loop
+
+
 def test_layer_batch_candidate_drops_only_dead_operator_output() -> None:
     kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
     launch = _text("_fr13_fixed32_committer_native_layer_batch")
@@ -137,6 +149,7 @@ def test_layer_batch_candidate_loads_live_ring_rows_without_staging() -> None:
     assert '"neutralizations": 0' in preseed
     assert '"direct_ring_loads": True' in preseed
     assert '"candidate_staging_launches": 0' in preseed
+    assert '"gate_coefficients_hoisted": True' in preseed
 
 
 def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> None:
@@ -217,6 +230,7 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
     assert 'committer_contract.get("final_state_store_once") is not True' in patcher
     assert 'committer_contract.get("direct_ring_loads") is not True' in patcher
     assert 'committer_contract.get("candidate_staging_launches", -1)' in patcher
+    assert 'committer_contract.get("gate_coefficients_hoisted") is not True' in patcher
     assert "expected_neutralizations = 0 if layer_batch is True else 5" in patcher
     assert '"layers": int(layer_count)' in patcher
     assert "ring_gathers * int(layer_count) * path_cap * batch" in patcher

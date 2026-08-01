@@ -4861,6 +4861,7 @@ def _fr13_fixed32_observed_commit(
                 or committer_contract.get("direct_ring_loads") is not True
                 or int(committer_contract.get("candidate_staging_launches", -1))
                 != 0
+                or committer_contract.get("gate_coefficients_hoisted") is not True
                 or committer_contract.get("byte_gate")
                 != "required_on_first_real_nonzero_accept"
             )
