@@ -117,6 +117,30 @@ def install_candidate(
             "qualification_source_commit": qualification_record[
                 "qualification_source_commit"
             ],
+            "qualification_task_marker": qualification_record[
+                "qualification_task_marker"
+            ],
+            "real_task_arm_sha256": qualification_record[
+                "real_task_arm_sha256"
+            ],
+            "container_env_sha256": qualification_record[
+                "container_env_sha256"
+            ],
+            "qualified_draft_vocab_root": qualification_record[
+                "qualified_draft_vocab_root"
+            ],
+            "qualified_draft_vocab_k": qualification_record[
+                "qualified_draft_vocab_k"
+            ],
+            "mandatory_weight_bytes": qualification_record[
+                "mandatory_weight_bytes"
+            ],
+            "mandatory_weight_floor_ms": qualification_record[
+                "mandatory_weight_floor_ms"
+            ],
+            "one_sided_u95_cap_ms": qualification_record[
+                "one_sided_u95_cap_ms"
+            ],
         }
     elif (
         production_sidecar is not None or expected_production_sidecar_sha256 is not None

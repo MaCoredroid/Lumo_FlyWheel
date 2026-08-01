@@ -78,6 +78,14 @@ def test_direct_selector_requires_and_binds_production_qualification(
         "candidate_sha256": digest,
         "patch_source_sha256": "b" * 64,
         "qualification_source_commit": "c" * 40,
+        "qualification_task_marker": "swe_verified:astropy__astropy-12907",
+        "real_task_arm_sha256": "e" * 64,
+        "container_env_sha256": "f" * 64,
+        "qualified_draft_vocab_root": 0,
+        "qualified_draft_vocab_k": 0,
+        "mandatory_weight_bytes": 42_025_179_008,
+        "mandatory_weight_floor_ms": 153.9383846446886,
+        "one_sided_u95_cap_ms": 177.0291423413919,
     }
     monkeypatch.setattr(
         module,

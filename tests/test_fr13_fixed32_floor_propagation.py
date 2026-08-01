@@ -13,6 +13,9 @@ from scripts.fr13_hardware_floor_ledger import (
     FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
     FIXED32_SLO_CAP_MS,
     FIXED32_SLO_MULTIPLIER,
+    FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
+    FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
+    FULL_VOCAB_SLO_CAP_MS,
     build_ledger,
 )
 
@@ -38,6 +41,9 @@ def test_canonical_fixed32_floor_math() -> None:
         == FIXED32_MANDATORY_WEIGHT_FLOOR_MS
     )
     assert scenario["nonweight_costs_included"] is False
+    assert FULL_VOCAB_MANDATORY_WEIGHT_BYTES == 42_025_179_008
+    assert FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS == 153.9383846446886
+    assert FULL_VOCAB_SLO_CAP_MS == 177.0291423413919
 
 
 def test_fixed32_gate_uses_corrected_weight_bound_and_exact_cap() -> None:
@@ -55,15 +61,30 @@ def test_fixed32_gate_uses_corrected_weight_bound_and_exact_cap() -> None:
     assert compute_cap == pytest.approx(186.3)
 
 
-def test_fixed32_sequence_exports_corrected_floor() -> None:
+@pytest.mark.parametrize(
+    ("draft_vocab_k", "draft_vocab_root", "expected_bytes", "expected_floor"),
+    (
+        ("0", "0", "42025179008", "153.9383846446886"),
+        ("65536", "0", "34538346368", "126.514089260"),
+        ("65536", "1", "32666638208", "119.658015414"),
+    ),
+)
+def test_fixed32_sequence_exports_exact_configured_floor(
+    draft_vocab_k: str,
+    draft_vocab_root: str,
+    expected_bytes: str,
+    expected_floor: str,
+) -> None:
     command = f"""
 set -euo pipefail
 run_variant() {{ :; }}
 export BSIZE=1
 export CONC=1
 export TAG=floor_test
+export FR13_DRAFT_VOCAB_K={draft_vocab_k}
+export FR13_DRAFT_VOCAB_ROOT={draft_vocab_root}
 source {SEQUENCE}
-printf '%s' "$FR13_WEIGHT_FLOOR_MS"
+printf '%s %s' "$FR13_MANDATORY_WEIGHT_BYTES" "$FR13_WEIGHT_FLOOR_MS"
 """
     result = subprocess.run(
         ["bash", "-c", command],
@@ -72,7 +93,7 @@ printf '%s' "$FR13_WEIGHT_FLOOR_MS"
         text=True,
         cwd=REPO,
     )
-    assert result.stdout == f"{FIXED32_MANDATORY_WEIGHT_FLOOR_MS:.9f}"
+    assert result.stdout == f"{expected_bytes} {expected_floor}"
 
 
 def test_active_fixed32_paths_cannot_fall_back_to_legacy_floor() -> None:
@@ -84,10 +105,15 @@ def test_active_fixed32_paths_cannot_fall_back_to_legacy_floor() -> None:
         assert "98.6" not in text, path
         assert "113.39" not in text, path
 
-    expected_contract = (
-        "FR13_WEIGHT_FLOOR_MS|${FR13_WEIGHT_FLOOR_MS:-}|119.658015414"
-    )
-    assert expected_contract in texts[LAUNCHER]
+    assert (
+        "FR13_WEIGHT_FLOOR_MS|${FR13_WEIGHT_FLOOR_MS:-}|"
+        "$_fixed32_expected_weight_floor_ms"
+    ) in texts[LAUNCHER]
+    assert (
+        "FR13_MANDATORY_WEIGHT_BYTES|${FR13_MANDATORY_WEIGHT_BYTES:-}|"
+        "$_fixed32_expected_mandatory_weight_bytes"
+    ) in texts[LAUNCHER]
+    assert "_fixed32_expected_weight_floor_ms=153.9383846446886" in texts[LAUNCHER]
     assert "FIXED32_MANDATORY_WEIGHT_FLOOR_MS" in texts[MEASURE]
     assert "FIXED32_MANDATORY_WEIGHT_FLOOR_MS" in texts[GATE]
 
@@ -97,3 +123,20 @@ def test_floor_ledger_is_bound_into_fixed32_runtime_manifest() -> None:
         "scripts/fr13_hardware_floor_ledger.py"
         in fr13_runtime_manifest.FIXED32_HOST_SCRIPT_SOURCE
     )
+
+
+def test_launcher_whitelists_full_vocab_ledger_before_docker() -> None:
+    text = LAUNCHER.read_text(encoding="utf-8")
+    whitelist = text.index(
+        'case "${FR13_DRAFT_VOCAB_K:-65536}:$FR13_DRAFT_VOCAB_ROOT" in'
+    )
+    mandatory = text.index(
+        '"FR13_MANDATORY_WEIGHT_BYTES|${FR13_MANDATORY_WEIGHT_BYTES:-}|'
+        '$_fixed32_expected_mandatory_weight_bytes"'
+    )
+    docker = text.index("docker run -d --pull=never")
+
+    assert whitelist < mandatory < docker
+    assert "0:0)" in text[whitelist:mandatory]
+    assert "_fixed32_expected_mandatory_weight_bytes=42025179008" in text
+    assert "FR13_NEEDS_ALLOW:-}" in text[whitelist:mandatory]

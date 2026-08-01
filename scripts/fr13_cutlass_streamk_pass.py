@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import fr13_cutlass_wave_binary as binary
+import fr13_hardware_floor_ledger as floor
 
 
 LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_live_gate.v3"
@@ -27,6 +28,8 @@ PATCHED_DISPATCH_SHA256 = (
 )
 EXPECTED_TASK_IDS = ("astropy__astropy-12907",)
 EXPECTED_TASK_MARKER = f"swe_verified:{EXPECTED_TASK_IDS[0]}"
+EXPECTED_DRAFT_VOCAB_ROOT = 0
+EXPECTED_DRAFT_VOCAB_K = 0
 EXPECTED_PROJECTION_NK = (
     (5120, 6144),
     (5120, 17408),
@@ -134,6 +137,7 @@ def validate_live_result(
     expected_live_sha256: str,
     candidate_so: Path,
     patch_source: Path = PATCH_SOURCE,
+    expected_source_commit: str | None = None,
 ) -> dict[str, Any]:
     expected_live_sha256 = _require_sha256(
         expected_live_sha256, "expected live-result SHA-256"
@@ -155,6 +159,12 @@ def validate_live_result(
         "task_count": 1,
         "task_ids": list(EXPECTED_TASK_IDS),
         "task_marker": EXPECTED_TASK_MARKER,
+        "draft_vocab_root": EXPECTED_DRAFT_VOCAB_ROOT,
+        "draft_vocab_k": EXPECTED_DRAFT_VOCAB_K,
+        "mandatory_weight_bytes": floor.FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
+        "mandatory_weight_floor_ms": floor.FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
+        "one_sided_u95_cap_ms": floor.FULL_VOCAB_SLO_CAP_MS,
+        "comparator_timing_eligible": False,
         "batch_size": 1,
         "concurrency": 1,
         "fixed_rows": 32,
@@ -192,11 +202,22 @@ def validate_live_result(
         or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None
     ):
         raise QualificationError("Stream-K live PASS source commit is invalid")
+    if expected_source_commit is not None:
+        if re.fullmatch(r"[0-9a-f]{40}", expected_source_commit) is None:
+            raise QualificationError("expected source commit is invalid")
+        if source_commit != expected_source_commit:
+            raise QualificationError(
+                "Stream-K live PASS source commit is stale: "
+                f"{source_commit} != {expected_source_commit}"
+            )
     attestation_sha256 = _require_sha256(
         payload.get("binary_attestation_sha256"), "binary attestation SHA-256"
     )
     real_task_arm_sha256 = _require_sha256(
         payload.get("real_task_arm_sha256"), "real-task arm SHA-256"
+    )
+    container_env_sha256 = _require_sha256(
+        payload.get("container_env_sha256"), "container environment SHA-256"
     )
     return {
         "schema": SIDECAR_SCHEMA,
@@ -213,6 +234,12 @@ def validate_live_result(
         "qualification_task_ids": list(EXPECTED_TASK_IDS),
         "qualification_task_marker": EXPECTED_TASK_MARKER,
         "real_task_arm_sha256": real_task_arm_sha256,
+        "container_env_sha256": container_env_sha256,
+        "qualified_draft_vocab_root": EXPECTED_DRAFT_VOCAB_ROOT,
+        "qualified_draft_vocab_k": EXPECTED_DRAFT_VOCAB_K,
+        "mandatory_weight_bytes": floor.FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
+        "mandatory_weight_floor_ms": floor.FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
+        "one_sided_u95_cap_ms": floor.FULL_VOCAB_SLO_CAP_MS,
         "qualified_projection_nk": [list(shape) for shape in EXPECTED_PROJECTION_NK],
         "qualified_fixed_rows": 32,
         "served_result_during_qualification": "stock",
@@ -226,9 +253,14 @@ def issue_sidecar(
     candidate_so: Path,
     output: Path,
     patch_source: Path = PATCH_SOURCE,
+    expected_source_commit: str | None = None,
 ) -> dict[str, Any]:
     payload = validate_live_result(
-        live_result, expected_live_sha256, candidate_so, patch_source
+        live_result,
+        expected_live_sha256,
+        candidate_so,
+        patch_source,
+        expected_source_commit,
     )
     _write_json(output, payload)
     return payload
@@ -263,6 +295,11 @@ def verify_sidecar(
         "patched_dispatch_sha256": PATCHED_DISPATCH_SHA256,
         "qualification_task_ids": list(EXPECTED_TASK_IDS),
         "qualification_task_marker": EXPECTED_TASK_MARKER,
+        "qualified_draft_vocab_root": EXPECTED_DRAFT_VOCAB_ROOT,
+        "qualified_draft_vocab_k": EXPECTED_DRAFT_VOCAB_K,
+        "mandatory_weight_bytes": floor.FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
+        "mandatory_weight_floor_ms": floor.FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
+        "one_sided_u95_cap_ms": floor.FULL_VOCAB_SLO_CAP_MS,
         "qualified_projection_nk": [list(shape) for shape in EXPECTED_PROJECTION_NK],
         "qualified_fixed_rows": 32,
         "served_result_during_qualification": "stock",
@@ -282,6 +319,10 @@ def verify_sidecar(
     _require_sha256(
         payload.get("real_task_arm_sha256"),
         "sidecar real-task arm SHA-256",
+    )
+    _require_sha256(
+        payload.get("container_env_sha256"),
+        "sidecar container environment SHA-256",
     )
     source_commit = payload.get("qualification_source_commit")
     if (
@@ -340,6 +381,37 @@ def validate_production_attestation(
         raise QualificationError("Stream-K attestation candidate binding mismatch")
     if qualification.get("patch_source_sha256") != PATCH_SOURCE_SHA256:
         raise QualificationError("Stream-K attestation patch-source binding mismatch")
+    for key, expected in (
+        ("qualification_task_marker", EXPECTED_TASK_MARKER),
+        ("qualified_draft_vocab_root", EXPECTED_DRAFT_VOCAB_ROOT),
+        ("qualified_draft_vocab_k", EXPECTED_DRAFT_VOCAB_K),
+        ("mandatory_weight_bytes", floor.FULL_VOCAB_MANDATORY_WEIGHT_BYTES),
+        (
+            "mandatory_weight_floor_ms",
+            floor.FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
+        ),
+        ("one_sided_u95_cap_ms", floor.FULL_VOCAB_SLO_CAP_MS),
+    ):
+        if qualification.get(key) != expected:
+            raise QualificationError(
+                f"Stream-K attestation {key} binding mismatch"
+            )
+    real_task_arm_sha256 = _require_sha256(
+        qualification.get("real_task_arm_sha256"),
+        "attestation real-task arm SHA-256",
+    )
+    container_env_sha256 = _require_sha256(
+        qualification.get("container_env_sha256"),
+        "attestation container environment SHA-256",
+    )
+    qualification_source_commit = qualification.get("qualification_source_commit")
+    if (
+        not isinstance(qualification_source_commit, str)
+        or re.fullmatch(r"[0-9a-f]{40}", qualification_source_commit) is None
+    ):
+        raise QualificationError(
+            "Stream-K attestation qualification source commit is invalid"
+        )
     _require_sha256(
         qualification.get("live_result_sha256"),
         "attestation live-result SHA-256",
@@ -354,6 +426,15 @@ def validate_production_attestation(
         "production_sidecar_sha256": expected_sidecar_sha256,
         "live_result_sha256": qualification["live_result_sha256"],
         "binary_attestation_sha256": hashlib.sha256(raw).hexdigest(),
+        "qualification_source_commit": qualification_source_commit,
+        "qualification_task_marker": EXPECTED_TASK_MARKER,
+        "real_task_arm_sha256": real_task_arm_sha256,
+        "container_env_sha256": container_env_sha256,
+        "qualified_draft_vocab_root": EXPECTED_DRAFT_VOCAB_ROOT,
+        "qualified_draft_vocab_k": EXPECTED_DRAFT_VOCAB_K,
+        "mandatory_weight_bytes": floor.FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
+        "mandatory_weight_floor_ms": floor.FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
+        "one_sided_u95_cap_ms": floor.FULL_VOCAB_SLO_CAP_MS,
         "installed_mode": "0555",
         "production_default_enabled": False,
     }
@@ -369,6 +450,7 @@ def main() -> int:
         subparser.add_argument("--expected-live-sha256", required=True)
         subparser.add_argument("--candidate-so", type=Path, required=True)
         subparser.add_argument("--patch-source", type=Path, default=PATCH_SOURCE)
+        subparser.add_argument("--expected-source-commit")
         if command == "issue":
             subparser.add_argument("--out", type=Path, required=True)
     verify_parser = subparsers.add_parser("verify")
@@ -387,6 +469,7 @@ def main() -> int:
             args.expected_live_sha256,
             args.candidate_so,
             args.patch_source,
+            args.expected_source_commit,
         )
     elif args.command == "issue":
         payload = issue_sidecar(
@@ -395,6 +478,7 @@ def main() -> int:
             args.candidate_so,
             args.out,
             args.patch_source,
+            args.expected_source_commit,
         )
     elif args.command == "verify":
         payload = verify_sidecar(

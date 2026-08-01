@@ -10,6 +10,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 LAUNCHER = REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 GATE = REPO / "scripts" / "fr13_run_b1_cutlass_streamk_live_gate.sh"
+TIMING = REPO / "scripts" / "fr13_run_b1_cutlass_streamk_timing.sh"
 B1_KERNEL_GATE = REPO / "scripts" / "fr13_run_b1_kernel_live_gate.sh"
 B4_GRAPH_GATE = REPO / "scripts" / "fr13_run_b4_gdn_wide_live_gate.sh"
 
@@ -156,6 +157,13 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "fr13-fixed32-cutlass-streamk-real-task-arm-v1" in gate
     assert '"task_marker": expected_task_marker' in gate
     assert '"real_task_arm_sha256": hashlib.sha256(arm_raw).hexdigest()' in gate
+    assert "export FR13_DRAFT_VOCAB_ROOT=0" in gate
+    assert "export FR13_DRAFT_VOCAB_K=0" in gate
+    assert "export FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'" in gate
+    assert '"draft_vocab_root": 0' in gate
+    assert '"draft_vocab_k": 0' in gate
+    assert '"mandatory_weight_bytes": 42025179008' in gate
+    assert '"comparator_timing_eligible": False' in gate
     assert '"patch_source_sha256": patch_source_sha256' in gate
     assert '"binary_attestation_sha256"' in gate
     sequence = kernel_gate.index(
@@ -176,6 +184,35 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "streamk_eager_diagnostic=(" in serve
     assert "--fixed32-cutlass-real-event-arm" in serve
     assert "fr13_fixed32_cutlass_streamk.real_event.arm" in serve
+
+
+def test_exact4_timing_is_real_full_wall_full_vocab_and_source_bound() -> None:
+    timing = TIMING.read_text(encoding="utf-8")
+
+    assert "subset_b4_four.json" in timing
+    assert "real_swe_verified_exact4_b1_timing_candidate" in timing
+    assert "scripts/fr13_bigdenom_swe_serve_variant.sh" in timing
+    assert "scripts/fr13_measure.py deploy-speed" in timing
+    assert "measured_tps_fullstep_wall" not in timing
+    assert "run_arm \"$STOCK_ARM\" 0" in timing
+    assert "run_arm \"$CANDIDATE_ARM\" 1" in timing
+    assert timing.index('run_arm "$STOCK_ARM" 0') < timing.index(
+        'run_arm "$CANDIDATE_ARM" 1'
+    )
+    assert "FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0" in timing
+    assert "FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'" in timing
+    assert "FULL_VOCAB_WEIGHT_BYTES=42025179008" in timing
+    assert "FULL_VOCAB_FLOOR_MS=153.9383846446886" in timing
+    assert "FULL_VOCAB_CAP_MS=177.0291423413919" in timing
+    assert (
+        "STREAMK_SHA256="
+        "f9bbbb8dc4ffc2227a71d2bc7b260e586ffbdc0fd946749e4f69e322c46a362d"
+        in timing
+    )
+    assert "--expected-source-commit \"$SOURCE_COMMIT\"" in timing
+    assert "comparator_gate_timing_eligible=0" in timing
+    assert "quick_decode_tps_probe" not in timing
+    assert "/v1/responses" not in timing
 
 
 def test_b4_graph_gate_pins_cutlass_stock_and_bm8_off() -> None:

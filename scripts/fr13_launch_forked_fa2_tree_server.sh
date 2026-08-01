@@ -558,11 +558,13 @@ else
       echo "CUTLASS Stream-K production requires fixed32 exact4/16 B1 and a pinned live PASS" >&2
       exit 2
     }
+    _fr13_cutlass_streamk_source_commit=$(git rev-parse HEAD)
     .venv/bin/python scripts/fr13_cutlass_streamk_pass.py validate \
       --live-result "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
       --expected-live-sha256 "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
       --candidate-so "$FR13_FIXED32_CUTLASS_WAVE_SO" \
       --patch-source scripts/fr13_patch_cutlass_fixed32_wave.py \
+      --expected-source-commit "$_fr13_cutlass_streamk_source_commit" \
       >/dev/null
   fi
 fi
@@ -1206,6 +1208,32 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" ]]; then
     _fixed32_expected_eager=1
   fi
+  case "${FR13_DRAFT_VOCAB_K:-65536}:$FR13_DRAFT_VOCAB_ROOT" in
+    0:0)
+      [[ "$MAX_NUM_SEQS" == "1" \
+         && "${FR13_NEEDS_ALLOW:-}" == "FR13_DRAFT_VOCAB_K=0" ]] || {
+        echo "fixed32 full-vocabulary mode requires B1 and its exact sanctioned override" >&2
+        exit 2
+      }
+      _fixed32_expected_draft_vocab_k=0
+      _fixed32_expected_mandatory_weight_bytes=42025179008
+      _fixed32_expected_weight_floor_ms=153.9383846446886
+      ;;
+    65536:0)
+      _fixed32_expected_draft_vocab_k=65536
+      _fixed32_expected_mandatory_weight_bytes=34538346368
+      _fixed32_expected_weight_floor_ms=126.514089260
+      ;;
+    65536:1)
+      _fixed32_expected_draft_vocab_k=65536
+      _fixed32_expected_mandatory_weight_bytes=32666638208
+      _fixed32_expected_weight_floor_ms=119.658015414
+      ;;
+    *)
+      echo "fixed32 draft-vocab floor configuration is unsupported: K=${FR13_DRAFT_VOCAB_K:-unset} ROOT=$FR13_DRAFT_VOCAB_ROOT" >&2
+      exit 2
+      ;;
+  esac
   [[ "$MAX_NUM_SEQS" == "1" || "$MAX_NUM_SEQS" == "4" ]] \
     || { echo "fixed32 requires MAX_NUM_SEQS=1 or 4" >&2; exit 2; }
   _fixed32_exact_pairs=(
@@ -1246,7 +1274,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     "LUMO_FB_KERNEL_ROWS|$LUMO_FB_KERNEL_ROWS|1"
     "LUMO_FB_PROJ_PAD_ROWS|$LUMO_FB_PROJ_PAD_ROWS|16"
     "FR13_INPUTPREP_GUARD|${FR13_INPUTPREP_GUARD:-}|1"
-    "FR13_DRAFT_VOCAB_K|${FR13_DRAFT_VOCAB_K:-}|65536"
+    "FR13_DRAFT_VOCAB_K|${FR13_DRAFT_VOCAB_K:-}|$_fixed32_expected_draft_vocab_k"
     "FR13_DRAFT_VOCAB_BLOCKS|${FR13_DRAFT_VOCAB_BLOCKS:-}|/workspace/scripts/fr13_dvk_subset_blocks.json"
     "FR13_APC_CONV_FIX|${FR13_APC_CONV_FIX:-}|1"
     "FR13_APC_CONV_SNAPSHOT|${FR13_APC_CONV_SNAPSHOT:-}|1"
@@ -1260,7 +1288,8 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     "FR13_SFWD_SAMPLES_DUMP_S|${FR13_SFWD_SAMPLES_DUMP_S:-}|30"
     "FR13_SPAN_GPU_TIMER_DUMP_S|${FR13_SPAN_GPU_TIMER_DUMP_S:-}|0"
     "FR13_STEP_WALL_CAP_S|${FR13_STEP_WALL_CAP_S:-}|1.5"
-    "FR13_WEIGHT_FLOOR_MS|${FR13_WEIGHT_FLOOR_MS:-}|119.658015414"
+    "FR13_MANDATORY_WEIGHT_BYTES|${FR13_MANDATORY_WEIGHT_BYTES:-}|$_fixed32_expected_mandatory_weight_bytes"
+    "FR13_WEIGHT_FLOOR_MS|${FR13_WEIGHT_FLOOR_MS:-}|$_fixed32_expected_weight_floor_ms"
     "FR13_COMPUTE_MS_PER_ROW|${FR13_COMPUTE_MS_PER_ROW:-}|0.54"
   )
   for _fixed32_pair in "${_fixed32_exact_pairs[@]}"; do
@@ -1307,7 +1336,10 @@ if spec_config != contract.speculative_config_text():
 PY
   unset _fixed32_actual _fixed32_exact_pairs _fixed32_expected
   unset _fixed32_expected_eager _fixed32_expected_mem
+  unset _fixed32_expected_draft_vocab_k
   unset _fixed32_expected_kv_cache_memory_bytes _fixed32_expected_metrics
+  unset _fixed32_expected_mandatory_weight_bytes
+  unset _fixed32_expected_weight_floor_ms
   unset _fixed32_name _fixed32_pair _fr13_fixed32_batch_gdn_diagnostic
   unset _fr13_fixed32_batch_gdn_bv8_timing
 fi
@@ -1339,6 +1371,7 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" ]]; then
     --expected-live-sha256 "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
     --candidate-so "$FR13_FIXED32_CUTLASS_WAVE_SO" \
     --patch-source scripts/fr13_patch_cutlass_fixed32_wave.py \
+    --expected-source-commit "$_fr13_cutlass_streamk_source_commit" \
     --out "$_fr13_cutlass_streamk_production_sidecar_host" \
     >/dev/null
   chmod 0400 "$_fr13_cutlass_streamk_production_sidecar_host"
@@ -1347,6 +1380,7 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" ]]; then
     sha256sum "$_fr13_cutlass_streamk_production_sidecar_host" | awk '{print $1}'
   )
   unset _fr13_cutlass_streamk_production_sidecar_host
+  unset _fr13_cutlass_streamk_source_commit
 fi
 FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR=""
 FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256=""

@@ -27,6 +27,11 @@ export FR13_GATE_GDN_BV=0
 export FR13_DFWD_UNIFIED_BM8_LIVE_AB=0
 export FR13_DFWD_UNIFIED_BM8_PRODUCTION=0
 export ENFORCE_EAGER=1
+export FR13_DRAFT_VOCAB_ROOT=0
+export FR13_DRAFT_VOCAB_K=0
+export FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'
+export FR13_MANDATORY_WEIGHT_BYTES=42025179008
+export FR13_WEIGHT_FLOOR_MS=153.9383846446886
 export FR13_FIXED32_CUTLASS_WAVE=streamk_coop128_byte_ab
 export FR13_FIXED32_CUTLASS_WAVE_SO="$CUTLASS_STREAMK_SO"
 export FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL=/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl
@@ -41,7 +46,8 @@ CUTLASS_ARM_ARTIFACT="$ARMDIR/swe_out/verified/per_task/$TASK_ID/fixed32_cutlass
   "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl" \
   "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_binary.json" \
   "$ARMDIR/cutlass_streamk_byte_gate.json" \
-  "$PATCH_SOURCE" "$SOURCE_COMMIT" "$CUTLASS_ARM_ARTIFACT" <<'PY'
+  "$PATCH_SOURCE" "$SOURCE_COMMIT" "$CUTLASS_ARM_ARTIFACT" \
+  "$ARMDIR/container_env.txt" <<'PY'
 import hashlib
 import json
 import sys
@@ -54,6 +60,7 @@ import fr13_cutlass_streamk_pass as qualification
 jsonl_path, binary_path, output_path, patch_source = map(Path, sys.argv[1:5])
 source_commit = sys.argv[5]
 arm_path = Path(sys.argv[6])
+container_env_path = Path(sys.argv[7])
 lines = jsonl_path.read_text(encoding="utf-8").splitlines()
 if not lines:
     raise SystemExit("CUTLASS Stream-K byte gate was vacuous")
@@ -75,6 +82,10 @@ if not arm_path.is_file() or arm_path.is_symlink():
     raise SystemExit("CUTLASS real-task arm artifact is missing or symlinked")
 arm_raw = arm_path.read_bytes()
 arm_record = json.loads(arm_raw.decode("ascii"))
+if not container_env_path.is_file() or container_env_path.is_symlink():
+    raise SystemExit("CUTLASS container environment artifact is missing or symlinked")
+container_env_raw = container_env_path.read_bytes()
+container_env_lines = container_env_raw.decode("ascii").splitlines()
 errors = []
 if len(records) > 256:
     errors.append("diagnostic exceeded its 256-call bound")
@@ -134,6 +145,15 @@ expected_arm = {
 for key, expected in expected_arm.items():
     if arm_record.get(key) != expected:
         errors.append(f"CUTLASS real-task arm {key} mismatch")
+for expected_env in (
+    "FR13_DRAFT_VOCAB_ROOT=0",
+    "FR13_DRAFT_VOCAB_K=0",
+):
+    if container_env_lines.count(expected_env) != 1:
+        errors.append(f"full-vocabulary environment mismatch: {expected_env}")
+for prefix in ("FR13_DRAFT_VOCAB_ROOT=", "FR13_DRAFT_VOCAB_K="):
+    if sum(line.startswith(prefix) for line in container_env_lines) != 1:
+        errors.append(f"full-vocabulary environment is ambiguous: {prefix}")
 destination = binary_record.get("destination") or {}
 source = binary_record.get("source") or {}
 if binary_record.get("installed_mode") != "0555":
@@ -164,6 +184,13 @@ payload = {
     "task_ids": [expected_task_id],
     "task_marker": expected_task_marker,
     "real_task_arm_sha256": hashlib.sha256(arm_raw).hexdigest(),
+    "container_env_sha256": hashlib.sha256(container_env_raw).hexdigest(),
+    "draft_vocab_root": 0,
+    "draft_vocab_k": 0,
+    "mandatory_weight_bytes": 42025179008,
+    "mandatory_weight_floor_ms": 153.9383846446886,
+    "one_sided_u95_cap_ms": 177.0291423413919,
+    "comparator_timing_eligible": False,
     "batch_size": 1,
     "concurrency": 1,
     "fixed_rows": 32,
