@@ -222,7 +222,7 @@ def test_exact4_timing_is_real_full_wall_full_vocab_and_source_bound() -> None:
     )
     assert (
         "STREAMK_SHA256="
-        "f682560caad085cfdc0c44eec5252352a8bc4861dc634a55e0dccbab261b7892"
+        "f7d5c01ca79829fbfff4c93949d057bd740905165b0b6793b3c0007629add962"
         in timing
     )
     assert (

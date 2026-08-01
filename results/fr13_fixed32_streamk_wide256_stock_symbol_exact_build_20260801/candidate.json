@@ -1,0 +1,40 @@
+{
+  "schema": "fr13.fixed32.streamk_force_wide256.stock_symbol_exact_build.v1",
+  "created_at_utc": "2026-08-01T06:13:05Z",
+  "status": "compiled_static_verified_not_live_qualified",
+  "acceptance_valid": false,
+  "performance_measurement": false,
+  "pinned_source": {
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "patch_source_sha256": "2b36f8db3835ce5bc37545f21ed77de9eee641c229f7892d64a769db18f513f4",
+    "patched_dispatch_sha256": "40377cc18ebef783a74be9d403c6dd3565fa17519aca65c7bf814e73181975f8"
+  },
+  "binary": {
+    "path": "/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.streamk_force_wide256_b1_stock_symbol_exact_gate_ready.abi3.so",
+    "sha256": "f7d5c01ca79829fbfff4c93949d057bd740905165b0b6793b3c0007629add962",
+    "bytes": 112481752,
+    "mode": "0555",
+    "runpath": "/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64"
+  },
+  "stock_equivalence": {
+    "baseline_binary_sha256": "5907843cfdfcf9ae4e6b2ec0505ef325317140294d6e5b8180e74cc50ec6aff3",
+    "baseline_kernel_records": 6,
+    "exact_symbol_and_resource_matches": 6,
+    "missing_or_changed_records": 0,
+    "registers": 168,
+    "stack_bytes": 0,
+    "shared_bytes": 1024,
+    "constant0_bytes": 2560
+  },
+  "candidate_kernels": {
+    "records": 6,
+    "separate_type_name": "cutlass_3x_gemm_fp8_blockwise_streamk",
+    "wide256_registers": 168,
+    "wide256_stack_bytes": 8,
+    "wide256_shared_bytes": 1024,
+    "wide256_constant0_bytes": 2944
+  },
+  "required_next_gate": "one_real_swe_verified_b1_byte_equal",
+  "b4_measured": false
+}
