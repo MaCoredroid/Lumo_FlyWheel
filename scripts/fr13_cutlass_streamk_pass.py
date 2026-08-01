@@ -21,10 +21,10 @@ LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_live_gate.v3"
 SIDECAR_SCHEMA = "fr13.fixed32.cutlass_streamk.production_pass.v2"
 ATTESTATION_SCHEMA = "fr13.fixed32.cutlass_streamk_binary.v2"
 PATCH_SOURCE = Path("scripts/fr13_patch_cutlass_fixed32_wave.py")
-PATCH_SOURCE_SHA256 = "35fda615dfeff85edc9347e1d016278323929fb0c8bb4f603374a1c475c2e898"
+PATCH_SOURCE_SHA256 = "9b4fa368e74640ddfc2f38b65e18e83d703d76651c4c28745d528ea7e299061d"
 VLLM_BASE_COMMIT = "fe9c3d6c5f66c873d196800384ed6880687b9e52"
 PATCHED_DISPATCH_SHA256 = (
-    "ed3c39b7f2899aa0fc3b28f24212a15bfb3ffa8635224ae25956e234453facdc"
+    "e3e9c5e54dba7485c04db24a402c86c382f2550991fcff49f8e9fba48ecf8eaf"
 )
 WIDE256_LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_wide256_live_gate.v1"
 STATIC_PERSISTENT_LIVE_SCHEMA = (
@@ -37,7 +37,7 @@ EXPECTED_DRAFT_VOCAB_K = 0
 EXPECTED_PROJECTION_NK = (
     (5120, 6144),
     (5120, 17408),
-    (8192, 5120),
+    (14336, 5120),
     (16384, 5120),
     (34816, 5120),
 )

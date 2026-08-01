@@ -146,6 +146,8 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "CUTLASS Stream-K gate requires a fresh RUNROOT" in gate
     assert "one real SWE-Verified B1 diagnostic task" in gate
     assert "not all five real projection shapes were exercised" in gate
+    assert "(14336, 5120)" in gate
+    assert "(8192, 5120)" not in gate
     assert "invalid differing-byte count" in gate
     assert "byte equality and differing-byte count disagree" in gate
     assert "installed binary attestation schema mismatch" in gate

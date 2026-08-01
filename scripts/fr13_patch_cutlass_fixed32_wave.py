@@ -336,7 +336,7 @@ static inline bool fixed32_cutlass_real_projection(int m, int n, int k) {
       (n == 5120 && k == 17408) ||
       (n == 5120 && k == 6144) ||
       (n == 16384 && k == 5120) ||
-      (n == 8192 && k == 5120);
+      (n == 14336 && k == 5120);
   return fixed32_rows && real_projection;
 }
 
