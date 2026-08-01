@@ -6,7 +6,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(cd "$SCRIPT_DIR/.." && pwd)
 cd "$REPO"
 
-EXPECTED_BRANCH=${EXPECTED_BRANCH:-agent/fixed32-b4-tail23-hydra27-k64-m128}
+EXPECTED_BRANCH=${EXPECTED_BRANCH:-agent/fixed32-b4-tail23-hydra27-k64-m128-review}
 STOCK_FA2_SOURCE=${STOCK_FA2_SOURCE:-/home/mark/lumoFlyWheel-b4-sfwd-campaignfix/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so}
 STOCK_FA2_SO=${STOCK_FA2_SO:-$REPO/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so}
 CUTLASS_B4_SO=${CUTLASS_B4_SO:-/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.persistent_b4_m128_stock_symbol_exact_compare320_gate_ready.abi3.so}
@@ -71,6 +71,7 @@ run_topology() {
   CUTLASS_B4_FIXED32_MODE="$mode" \
   CUTLASS_B4_QUALIFICATION_SOURCE_COMMIT="$source_commit" \
   FR13_FIXED32_ALL_PARENT_PASS_JSON="$taw_pass" \
+  FR13_FIXED32_ALL_PARENT_VERDICT_JSON="$taw_verdict" \
   RUNROOT="$timing_root" TAG="$timing_tag" STOCK_FA2_SO="$STOCK_FA2_SO" \
   CUTLASS_B4_SO="$CUTLASS_B4_SO" CUTLASS_B4_PASS_JSON="$m128_pass" \
   CUTLASS_B4_PASS_SHA256="$m128_sha256" \
@@ -97,6 +98,10 @@ import math
 import sys
 from pathlib import Path
 
+sys.path.insert(0, "scripts")
+import fr13_derive_qwen_agent_bundle_cap256 as qwen_derivation
+import fr13_floor_gate as floor_gate
+
 paths = list(map(Path, sys.argv[1:7]))
 out = Path(sys.argv[7])
 source_commit = sys.argv[8]
@@ -107,22 +112,54 @@ expected = (
 arms = {}
 for index, (mode, logical, active, mask) in enumerate(expected):
     taw_path, m128_path, timing_path = paths[index * 3:index * 3 + 3]
+    taw_sha256 = hashlib.sha256(taw_path.read_bytes()).hexdigest()
+    m128_sha256 = hashlib.sha256(m128_path.read_bytes()).hexdigest()
     taw = json.loads(taw_path.read_text(encoding="ascii"))
     m128 = json.loads(m128_path.read_text(encoding="ascii"))
     timing = json.loads(timing_path.read_text(encoding="ascii"))
+    expected_tasks = [
+        "astropy__astropy-12907",
+        "astropy__astropy-13033",
+        "astropy__astropy-13236",
+        "astropy__astropy-13398",
+    ]
     if (
         taw.get("status") != "pass"
+        or taw.get("source_commit") != source_commit
         or taw.get("mode") != mode
+        or taw.get("logical_topology") != logical
         or taw.get("active_drafts") != active
         or taw.get("valid_mask") != mask
+        or taw.get("physical_drafts") != 31
+        or taw.get("physical_rows_root_inclusive") != 32
+        or taw.get("qualified_batches") != [1, 2, 3, 4]
+        or taw.get("required_production_batches") != [1, 4]
+        or taw.get("draft_vocab_root") != 1
+        or taw.get("draft_vocab_k") != 65536
+        or taw.get("draft_vocab_blocks_sha256")
+        != "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
+        or taw.get("task_ids") != expected_tasks
         or taw.get("probability_mismatches") != 0
         or taw.get("product_mismatches") != 0
         or m128.get("status") != "pass"
+        or m128.get("source_commit") != source_commit
         or m128.get("topology") != mode
+        or m128.get("logical_topology") != logical
+        or m128.get("active_drafts") != active
+        or m128.get("valid_mask") != mask
+        or m128.get("physical_drafts") != 31
+        or m128.get("physical_rows_root_inclusive") != 32
+        or m128.get("task_ids") != expected_tasks
+        or m128.get("draft_vocab_root") != 1
+        or m128.get("draft_vocab_k") != 65536
+        or m128.get("draft_vocab_blocks_sha256")
+        != "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
         or m128.get("mismatching_comparisons") != 0
         or m128.get("differing_bytes") != 0
         or m128.get("observed_m_values") != [128]
         or timing.get("status") != "complete"
+        or timing.get("qualification_source_commit") != source_commit
+        or timing.get("timing_harness_commit") != source_commit
         or timing.get("arm") != mode
         or timing.get("logical_topology") != logical
         or timing.get("active_drafts") != active
@@ -130,30 +167,76 @@ for index, (mode, logical, active, mask) in enumerate(expected):
         or timing.get("physical_rows_root_inclusive") != 32
         or timing.get("sfwd_projection_rows") != 128
         or timing.get("all_parent_production") is not True
+        or timing.get("all_parent_verdict_sha256") != taw_sha256
+        or timing.get("all_parent_pass_sha256")
+        != taw.get("production_bundle_sha256")
+        or timing.get("task_ids") != expected_tasks
         or timing.get("draft_vocab_root") != 1
         or timing.get("draft_vocab_k") != 65536
+        or timing.get("draft_vocab_blocks_sha256")
+        != "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
         or timing.get("mandatory_weight_bytes") != 32666638208
         or not math.isclose(timing.get("mandatory_weight_floor_ms", math.nan), 119.658015414, abs_tol=1e-9)
         or not math.isclose(timing.get("one_sided_u95_cap_ms", math.nan), 137.6067177261, abs_tol=1e-9)
     ):
         raise SystemExit(f"{logical} B4 stack evidence is incomplete")
-    candidate = timing.get("candidate", {})
-    for key in (
-        "step_wall_ms", "measured_tps_fullstep_wall",
-        "accepted_drafts_per_event", "committed_tokens_per_event",
-        "sfwd_gpu_ms_per_step", "dfwd_gpu_ms_per_step",
-        "cfwd_gpu_ms_per_step", "other_wall_ms_per_step",
-        "step_wall_to_optimistic_floor_ratio",
-    ):
-        value = candidate.get(key)
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-            raise SystemExit(f"{logical} candidate lacks finite {key}")
+    if timing.get("candidate", {}).get("live_result_sha256") != m128_sha256:
+        raise SystemExit(f"{logical} M128 timing is not bound to its exact4 gate")
+    for arm_name in ("stock_reference", "candidate"):
+        record = timing.get(arm_name, {})
+        for key in (
+            "step_wall_ms", "measured_tps_fullstep_wall",
+            "accepted_drafts_per_event", "committed_tokens_per_event",
+            "events_per_step", "wall_ms_per_event", "sfwd_gpu_ms_per_event",
+            "sfwd_gpu_ms_per_step", "dfwd_gpu_ms_per_step",
+            "cfwd_gpu_ms_per_step", "gpu_component_ms_per_step",
+            "other_wall_ms_per_step", "step_wall_to_optimistic_floor_ratio",
+        ):
+            value = record.get(key)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or (value < 0 if key == "other_wall_ms_per_step" else value <= 0)
+            ):
+                raise SystemExit(f"{logical} {arm_name} lacks valid finite {key}")
+        if not math.isclose(
+            record["sfwd_gpu_ms_per_step"],
+            record["sfwd_gpu_ms_per_event"] * record["events_per_step"],
+            rel_tol=1e-9,
+            abs_tol=1e-9,
+        ):
+            raise SystemExit(f"{logical} {arm_name} SFWD units do not reconcile")
+        if not math.isclose(
+            record["step_wall_ms"],
+            record["wall_ms_per_event"] * record["events_per_step"],
+            rel_tol=1e-9,
+            abs_tol=1e-9,
+        ):
+            raise SystemExit(f"{logical} {arm_name} wall units do not reconcile")
+        if not math.isclose(
+            record["measured_tps_fullstep_wall"],
+            record["committed_tokens_per_event"] * 1000.0
+            / record["wall_ms_per_event"],
+            rel_tol=1e-9,
+            abs_tol=1e-9,
+        ):
+            raise SystemExit(f"{logical} {arm_name} TPS does not reconcile")
+        if not math.isclose(
+            record["gpu_component_ms_per_step"]
+            + record["other_wall_ms_per_step"],
+            record["step_wall_ms"],
+            rel_tol=0.0,
+            abs_tol=1e-9,
+        ):
+            raise SystemExit(f"{logical} {arm_name} phases do not reconcile")
+    candidate = timing["candidate"]
     arms[logical] = {
         "mode": mode,
         "active_drafts": active,
         "valid_mask": mask,
-        "all_parent_gate_sha256": hashlib.sha256(taw_path.read_bytes()).hexdigest(),
-        "m128_gate_sha256": hashlib.sha256(m128_path.read_bytes()).hexdigest(),
+        "all_parent_gate_sha256": taw_sha256,
+        "m128_gate_sha256": m128_sha256,
         "timing_summary_sha256": hashlib.sha256(timing_path.read_bytes()).hexdigest(),
         "stock_cutlass_with_all_parent": timing["stock_reference"],
         "persistent_m128_with_all_parent": candidate,
@@ -171,12 +254,23 @@ summary = {
     "draft_vocab_root": 1,
     "draft_vocab_k": 65536,
     "target_verifier_vocabulary": "full",
+    "qwen_code_version": "0.19.4",
+    "qwen_turn_tool_call_cap": qwen_derivation.DERIVED_CAP,
+    "qwen_bundle_tree_sha256": floor_gate.FIXED32_QWEN_BUNDLE_TREE[
+        "manifest_sha256"
+    ],
     "physical_rows_per_request": 32,
     "sfwd_projection_rows": 128,
     "mandatory_weight_floor_ms": 119.658015414,
     "one_sided_u95_cap_ms": 137.6067177261,
     "arms": arms,
 }
+if (
+    summary["qwen_turn_tool_call_cap"] != 256
+    or summary["qwen_bundle_tree_sha256"]
+    != "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516"
+):
+    raise SystemExit("pinned Qwen cap-256 bundle contract drifted")
 out.write_text(json.dumps(summary, ensure_ascii=True, separators=(",", ":"), sort_keys=True) + "\n", encoding="ascii")
 print(json.dumps(summary, sort_keys=True))
 PY

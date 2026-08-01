@@ -67,6 +67,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_run_b4_gdn_wide_live_gate.sh",
     "scripts/fr13_run_b4_tail23_all_parent_live_gate.sh",
     "scripts/fr13_run_b4_tail23_hydra27_k64_m128_stack.sh",
+    "scripts/fr13_b4_timing_math.py",
     "scripts/fr13_sg_warmup_capture_inject.py",
     "scripts/gpu_oom_guard.sh",
     "scripts/run_swe_bench_q36_a.py",

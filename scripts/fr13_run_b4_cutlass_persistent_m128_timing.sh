@@ -19,6 +19,7 @@ PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 QUALIFICATION_PROFILE=${CUTLASS_B4_QUALIFICATION_PROFILE:-full_vocab}
 FIXED32_MODE=${CUTLASS_B4_FIXED32_MODE:-hydra27_fixed32}
 ALL_PARENT_PASS_JSON=${FR13_FIXED32_ALL_PARENT_PASS_JSON:-}
+ALL_PARENT_VERDICT_JSON=${FR13_FIXED32_ALL_PARENT_VERDICT_JSON:-}
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
 STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
@@ -91,6 +92,7 @@ STOCK_ARM="${FIXED32_MODE}_cutlass_stock_b4${ARM_PROFILE_SUFFIX}_${TAG}"
 CANDIDATE_ARM="${FIXED32_MODE}_cutlass_persistent_m128${ARM_PROFILE_SUFFIX}_${TAG}"
 ALL_PARENT_PRODUCTION=0
 ALL_PARENT_PASS_SHA256=
+ALL_PARENT_VERDICT_SHA256=
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
   || { echo "TAG contains unsafe characters" >&2; exit 2; }
@@ -104,12 +106,24 @@ for input in "$STOCK_FA2_SO" "$CUTLASS_B4_SO" "$CUTLASS_B4_PASS_JSON"; do
   [[ "$input" == /* && -f "$input" && ! -L "$input" ]] \
     || { echo "timing input must be an absolute regular non-symlink file: $input" >&2; exit 2; }
 done
-if [[ -n "$ALL_PARENT_PASS_JSON" ]]; then
+if [[ -n "$ALL_PARENT_PASS_JSON" || -n "$ALL_PARENT_VERDICT_JSON" ]]; then
+  [[ "$QUALIFICATION_PROFILE" == "k64_root" ]] \
+    || { echo "all-parent exact4 credential is scoped to k64_root" >&2; exit 2; }
   [[ "$ALL_PARENT_PASS_JSON" == /* && -f "$ALL_PARENT_PASS_JSON" \
      && ! -L "$ALL_PARENT_PASS_JSON" ]] \
     || { echo "all-parent pass must be an absolute regular non-symlink file" >&2; exit 2; }
-  "$PYTHON_BIN" - "$ALL_PARENT_PASS_JSON" "$FIXED32_MODE" <<'PY'
+  [[ "$ALL_PARENT_VERDICT_JSON" == /* && -f "$ALL_PARENT_VERDICT_JSON" \
+     && ! -L "$ALL_PARENT_VERDICT_JSON" ]] \
+    || { echo "all-parent verdict must be an absolute regular non-symlink file" >&2; exit 2; }
+  "$PYTHON_BIN" - \
+    "$ALL_PARENT_PASS_JSON" "$ALL_PARENT_VERDICT_JSON" "$FIXED32_MODE" \
+    "$LOGICAL_TOPOLOGY" "$ACTIVE_DRAFTS" "$VALID_MASK" \
+    "$TIMING_HARNESS_COMMIT" "$SUBSET_SHA256" "$DRAFT_VOCAB_BLOCKS_SHA256" \
+    "$STOCK_FA2_SHA256" <<'PY'
+import hashlib
 import importlib.util
+import json
+import re
 import sys
 from pathlib import Path
 
@@ -120,13 +134,89 @@ if spec is None or spec.loader is None:
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 bundle = module._fr13_fixed32_taw_native_production_pass(
-    path=sys.argv[1], expected_mode=sys.argv[2], expected_batch=4,
+    path=sys.argv[1], expected_mode=sys.argv[3], expected_batch=4,
 )
 if bundle.get("qualified_batches") != [1, 2, 3, 4]:
     raise SystemExit("all-parent credential lacks independent B1/B2/B3/B4 closure")
+pass_sha256 = hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest()
+verdict = json.loads(Path(sys.argv[2]).read_text(encoding="ascii"))
+mode, logical_topology = sys.argv[3:5]
+active_drafts = int(sys.argv[5])
+valid_mask = int(sys.argv[6], 0)
+source_commit, subset_sha256, block_map_sha256, stock_fa2_sha256 = sys.argv[7:11]
+expected_tasks = [
+    "astropy__astropy-12907",
+    "astropy__astropy-13033",
+    "astropy__astropy-13236",
+    "astropy__astropy-13398",
+]
+expected_schema = {
+    "tail6_fixed32": "fr13.fixed32.tail23_all_parent.exact4_b4_live_gate.v1",
+    "hydra27_fixed32": "fr13.fixed32.hydra27_all_parent.exact4_b4_live_gate.v1",
+}[mode]
+sha_fields = (
+    "campaign_proof_sha256",
+    "runtime_manifest_sha256",
+    "gate_runner_sha256",
+)
+if (
+    verdict.get("schema") != expected_schema
+    or verdict.get("status") != "pass"
+    or verdict.get("run_classification")
+    != "real_swe_verified_exact4_b4_byte_diagnostic"
+    or verdict.get("acceptance_valid") is not False
+    or verdict.get("timing_eligible") is not False
+    or verdict.get("floor_acceptance_eligible") is not False
+    or verdict.get("reference_always_served") is not True
+    or verdict.get("candidate_returned") is not False
+    or verdict.get("production_default_enabled") is not False
+    or verdict.get("raw_prompt_response_published") is not False
+    or verdict.get("candidate") != "fixed32_all_parent_commit_v2"
+    or verdict.get("source_commit") != source_commit
+    or verdict.get("source_contract_schema")
+    != module._FR13_FIXED32_TAW_SOURCE_SCHEMA
+    or verdict.get("source_contract_sha256")
+    != module._FR13_FIXED32_TAW_SOURCE_SHA256
+    or verdict.get("source_file_sha256")
+    != hashlib.sha256(source.read_bytes()).hexdigest()
+    or verdict.get("mode") != mode
+    or verdict.get("logical_topology") != logical_topology
+    or verdict.get("active_drafts") != active_drafts
+    or verdict.get("valid_mask") != hex(valid_mask)
+    or verdict.get("physical_drafts") != 31
+    or verdict.get("physical_rows_root_inclusive") != 32
+    or verdict.get("qualified_batches") != [1, 2, 3, 4]
+    or verdict.get("required_production_batches") != [1, 4]
+    or verdict.get("independent_b1_record") is not True
+    or verdict.get("independent_b4_record") is not True
+    or verdict.get("draft_vocab_k") != 65536
+    or verdict.get("draft_vocab_root") != 1
+    or verdict.get("draft_vocab_blocks")
+    != "/workspace/scripts/fr13_dvk_subset_blocks.json"
+    or verdict.get("draft_vocab_blocks_sha256") != block_map_sha256
+    or verdict.get("mandatory_weight_bytes") != 32666638208
+    or verdict.get("mandatory_weight_floor_ms") != 119.658015414
+    or verdict.get("one_sided_u95_cap_ms") != 137.6067177261
+    or verdict.get("subset_sha256") != subset_sha256
+    or verdict.get("task_ids") != expected_tasks
+    or verdict.get("task_marker") != f"swe_verified:campaign4_{subset_sha256}"
+    or verdict.get("stock_fa2_sha256") != stock_fa2_sha256
+    or verdict.get("live_bundle_sha256") != pass_sha256
+    or verdict.get("production_bundle_sha256") != pass_sha256
+    or verdict.get("probability_mismatches") != 0
+    or verdict.get("product_mismatches") != 0
+    or any(
+        re.fullmatch(r"[0-9a-f]{64}", str(verdict.get(field, ""))) is None
+        for field in sha_fields
+    )
+):
+    raise SystemExit(
+        "all-parent credential is not bound to this source and canonical exact4 verdict"
+    )
 PY
   ALL_PARENT_PRODUCTION=1
   ALL_PARENT_PASS_SHA256=$(sha256sum "$ALL_PARENT_PASS_JSON" | awk '{print $1}')
+  ALL_PARENT_VERDICT_SHA256=$(sha256sum "$ALL_PARENT_VERDICT_JSON" | awk '{print $1}')
 fi
 [[ "$(stat -c '%s' "$STOCK_FA2_SO")" == "$STOCK_FA2_BYTES" \
    && "$(sha256sum "$STOCK_FA2_SO" | awk '{print $1}')" == "$STOCK_FA2_SHA256" ]] \
@@ -197,10 +287,11 @@ LIVE_PASS_BINDING_SHA256=$(
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
 
-printf 'classification=%s\nqualification_profile=%s\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\nonly_arm_delta=CUTLASS_stock_to_persistent_b4_m128\ntopology=%s\nlogical_topology=%s\nactive_drafts=%s\nvalid_mask=%s\nphysical_drafts=31\nphysical_rows_root_inclusive=32\nbatch_size=4\nconcurrency=4\nfixed_rows=128\nall_parent_production=%s\nall_parent_pass_sha256=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nqualification_source_commit=%s\ntiming_harness_commit=%s\nqualified_patch_source_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_sha256=%s\ncandidate_bytes=%s\nlive_pass_sha256=%s\nlive_pass_binding_sha256=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+printf 'classification=%s\nqualification_profile=%s\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\nonly_arm_delta=CUTLASS_stock_to_persistent_b4_m128\ntopology=%s\nlogical_topology=%s\nactive_drafts=%s\nvalid_mask=%s\nphysical_drafts=31\nphysical_rows_root_inclusive=32\nbatch_size=4\nconcurrency=4\nfixed_rows=128\nall_parent_production=%s\nall_parent_pass_sha256=%s\nall_parent_verdict_sha256=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nqualification_source_commit=%s\ntiming_harness_commit=%s\nqualified_patch_source_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_sha256=%s\ncandidate_bytes=%s\nlive_pass_sha256=%s\nlive_pass_binding_sha256=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
   "$LAUNCH_CLASSIFICATION" "$QUALIFICATION_PROFILE" \
   "$FIXED32_MODE" "$LOGICAL_TOPOLOGY" "$ACTIVE_DRAFTS" "$VALID_MASK" \
   "$ALL_PARENT_PRODUCTION" "$ALL_PARENT_PASS_SHA256" \
+  "$ALL_PARENT_VERDICT_SHA256" \
   "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" "$NEEDS_ALLOW" \
   "$DRAFT_VOCAB_BLOCKS_CONTAINER" "$DRAFT_VOCAB_BLOCKS_SHA256" \
   "$FR13_MANDATORY_WEIGHT_BYTES" "$FR13_WEIGHT_FLOOR_MS" \
@@ -234,6 +325,8 @@ finalize_manifests() {
   if (( ALL_PARENT_PRODUCTION == 1 )); then
     [[ "$(sha256sum "$ALL_PARENT_PASS_JSON" | awk '{print $1}')" == "$ALL_PARENT_PASS_SHA256" ]] \
       || { echo "all-parent production PASS changed during timing" >&2; return 14; }
+    [[ "$(sha256sum "$ALL_PARENT_VERDICT_JSON" | awk '{print $1}')" == "$ALL_PARENT_VERDICT_SHA256" ]] \
+      || { echo "all-parent exact4 verdict changed during timing" >&2; return 14; }
   fi
   MANIFEST_FINALIZED=1
 }
@@ -333,9 +426,36 @@ run_arm() {
   fi
   if (( ALL_PARENT_PRODUCTION == 1 )); then
     local all_parent_marker="$RUNROOT_ABS/$arm/logs/fr13_fixed32_taw_native_precompute_production.arm"
+    local all_parent_credential="$RUNROOT_ABS/$arm/logs/fr13_fixed32_taw_native_precompute.production_pass.json"
+    local work_census="$RUNROOT_ABS/$arm/logs/fr13_fixed32_work_census.jsonl"
     [[ -f "$all_parent_marker" && ! -L "$all_parent_marker" \
        && "$(<"$all_parent_marker")" == "1" ]] \
       || { echo "$arm lacks all-parent production engagement" >&2; return 4; }
+    [[ -f "$all_parent_credential" && ! -L "$all_parent_credential" \
+       && "$(sha256sum "$all_parent_credential" | awk '{print $1}')" == "$ALL_PARENT_PASS_SHA256" ]] \
+      || { echo "$arm used the wrong all-parent production credential" >&2; return 4; }
+    "$PYTHON_BIN" - "$work_census" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+if not path.is_file() or path.is_symlink():
+    raise SystemExit("all-parent production work census is missing")
+records = [
+    json.loads(line)
+    for line in path.read_text(encoding="ascii").splitlines()
+    if line.strip()
+]
+expected_route = "fixed32_native_precompute_production_candidate_return"
+if not records or any(
+    not isinstance(record, dict)
+    or not isinstance(record.get("taw"), dict)
+    or record["taw"].get("route") != expected_route
+    for record in records
+):
+    raise SystemExit("all-parent production did not engage on every measured event")
+PY
   fi
   "$PYTHON_BIN" scripts/fr13_measure.py deploy-speed \
     --arm "$arm" --out-root "$RUNROOT_ABS/$arm/swe_out" \
@@ -393,11 +513,14 @@ finalize_manifests
   "$ONE_SIDED_U95_CAP_MS" "$DRAFT_VOCAB_BLOCKS_CONTAINER" \
   "$DRAFT_VOCAB_BLOCKS_SHA256" "$FIXED32_MODE" "$LOGICAL_TOPOLOGY" \
   "$ACTIVE_DRAFTS" "$VALID_MASK" "$ALL_PARENT_PRODUCTION" \
-  "$ALL_PARENT_PASS_SHA256" <<'PY'
+  "$ALL_PARENT_PASS_SHA256" "$ALL_PARENT_VERDICT_SHA256" <<'PY'
 import json
 import math
 import sys
 from pathlib import Path
+
+sys.path.insert(0, "scripts")
+from fr13_b4_timing_math import phase_breakdown, positive
 
 subset_path, stock_path, candidate_path, binding_path, out_path = map(Path, sys.argv[1:6])
 sidecar_sha256, live_sha256, candidate_sha256, fa2_sha256 = sys.argv[6:10]
@@ -414,19 +537,11 @@ active_drafts = int(sys.argv[27])
 valid_mask = int(sys.argv[28], 0)
 all_parent_production = bool(int(sys.argv[29]))
 all_parent_pass_sha256 = sys.argv[30]
+all_parent_verdict_sha256 = sys.argv[31]
 task_ids = sorted(json.loads(subset_path.read_text(encoding="ascii"))["instance_ids"])
 stock = json.loads(stock_path.read_text(encoding="utf-8"))
 candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
 binding = json.loads(binding_path.read_text(encoding="ascii"))
-
-def positive(record, key):
-    value = record.get(key)
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise SystemExit(f"{key} is missing from full-wall timing evidence")
-    value = float(value)
-    if not math.isfinite(value) or value <= 0:
-        raise SystemExit(f"{key} is not finite and positive")
-    return value
 
 def validate(record, label):
     if (
@@ -451,7 +566,8 @@ def validate(record, label):
     for key in (
         "measured_tps_fullstep_wall", "step_wall_ms", "accept_per_event",
         "committed_per_event", "wall_steps_measured", "events_per_step",
-        "s_per_fwd_gpu", "drafter_gpu_ms_per_step", "committer_gpu_ms_per_step",
+        "s_per_fwd_gpu", "s_per_fwd_gpu_per_forward", "events_per_step",
+        "wall_s_per_event", "drafter_gpu_ms_per_step", "committer_gpu_ms_per_step",
         "weight_floor_ms", "floor_ms", "floor_ratio",
     ):
         positive(record, key)
@@ -497,32 +613,8 @@ candidate_floor = positive(candidate, "floor_ms")
 if not math.isclose(stock_floor, candidate_floor, rel_tol=0.0, abs_tol=1e-9):
     raise SystemExit("stock and candidate floor values differ")
 
-def phase_breakdown(record, label, wall_ms):
-    # fr13_measure stores SFWD in seconds/forward; DFWD and CFWD are already ms/step.
-    sfwd_ms = positive(record, "s_per_fwd_gpu") * 1000.0
-    dfwd_ms = positive(record, "drafter_gpu_ms_per_step")
-    cfwd_ms = positive(record, "committer_gpu_ms_per_step")
-    gpu_component_ms = sfwd_ms + dfwd_ms + cfwd_ms
-    other_wall_ms = wall_ms - gpu_component_ms
-    if not math.isfinite(other_wall_ms) or other_wall_ms < 0:
-        raise SystemExit(f"{label} phase components exceed full-step wall time")
-    if not math.isclose(
-        gpu_component_ms + other_wall_ms,
-        wall_ms,
-        rel_tol=0.0,
-        abs_tol=1e-9,
-    ):
-        raise SystemExit(f"{label} phase breakdown does not reconcile")
-    return {
-        "sfwd_gpu_ms_per_step": sfwd_ms,
-        "dfwd_gpu_ms_per_step": dfwd_ms,
-        "cfwd_gpu_ms_per_step": cfwd_ms,
-        "gpu_component_ms_per_step": gpu_component_ms,
-        "other_wall_ms_per_step": other_wall_ms,
-    }
-
-stock_phases = phase_breakdown(stock, "stock", stock_wall)
-candidate_phases = phase_breakdown(candidate, "candidate", candidate_wall)
+stock_phases = phase_breakdown(stock, "stock")
+candidate_phases = phase_breakdown(candidate, "candidate")
 summary = {
     "schema": summary_schema,
     "status": "complete",
@@ -540,6 +632,7 @@ summary = {
     "sfwd_projection_rows": 128,
     "all_parent_production": all_parent_production,
     "all_parent_pass_sha256": all_parent_pass_sha256 or None,
+    "all_parent_verdict_sha256": all_parent_verdict_sha256 or None,
     "common_committer_selector": (
         "fixed32_all_parent_commit_v2" if all_parent_production else "reference"
     ),

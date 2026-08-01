@@ -285,6 +285,7 @@ def test_k64_root_profile_is_bound_through_gate_timing_and_launcher() -> None:
     timing = (SCRIPTS / "fr13_run_b4_cutlass_persistent_m128_timing.sh").read_text(
         encoding="utf-8"
     )
+    timing_math = (SCRIPTS / "fr13_b4_timing_math.py").read_text(encoding="utf-8")
     launcher = (SCRIPTS / "fr13_launch_forked_fa2_tree_server.sh").read_text(
         encoding="utf-8"
     )
@@ -308,14 +309,15 @@ def test_k64_root_profile_is_bound_through_gate_timing_and_launcher() -> None:
     assert timing.count('FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT"') >= 2
     assert timing.count('FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K"') >= 2
     assert '"target_verifier_vocabulary": "full"' in timing
-    assert '"sfwd_gpu_ms_per_step"' in timing
-    assert '"dfwd_gpu_ms_per_step"' in timing
-    assert '"cfwd_gpu_ms_per_step"' in timing
-    assert 'positive(record, "s_per_fwd_gpu") * 1000.0' in timing
-    assert '"gpu_component_ms_per_step"' in timing
-    assert '"other_wall_ms_per_step"' in timing
-    assert "phase components exceed full-step wall time" in timing
-    assert "phase breakdown does not reconcile" in timing
+    assert '"sfwd_gpu_ms_per_step"' in timing_math
+    assert '"dfwd_gpu_ms_per_step"' in timing_math
+    assert '"cfwd_gpu_ms_per_step"' in timing_math
+    assert 'positive(record, "s_per_fwd_gpu_per_forward")' in timing_math
+    assert 'positive(record, "s_per_fwd_gpu") * 1000.0' not in timing
+    assert '"gpu_component_ms_per_step"' in timing_math
+    assert '"other_wall_ms_per_step"' in timing_math
+    assert "phase components exceed full-step wall time" in timing_math
+    assert "phase breakdown does not reconcile" in timing_math
     assert "qualified_draft_vocab_blocks_sha256" in binary
     assert (
         "-e FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="
@@ -403,6 +405,7 @@ def test_tail23_hydra27_stack_route_is_real_exact4_and_fixed_k64() -> None:
     )
     assert "CUTLASS_B4_QUALIFICATION_PROFILE=k64_root" in route
     assert 'FR13_FIXED32_ALL_PARENT_PASS_JSON="$taw_pass"' in route
+    assert 'FR13_FIXED32_ALL_PARENT_VERDICT_JSON="$taw_verdict"' in route
     assert route.count("fr13_run_b4_tail23_all_parent_live_gate.sh") == 1
     assert route.count("fr13_run_b4_cutlass_persistent_m128_live_gate.sh") == 1
     assert route.count("fr13_run_b4_cutlass_persistent_m128_timing.sh") == 1
@@ -411,6 +414,15 @@ def test_tail23_hydra27_stack_route_is_real_exact4_and_fixed_k64() -> None:
     assert '"sfwd_projection_rows": 128' in route
     assert '"draft_vocab_k": 65536' in route
     assert '"target_verifier_vocabulary": "full"' in route
+    assert '"qwen_turn_tool_call_cap": qwen_derivation.DERIVED_CAP' in route
+    assert (
+        'timing.get("all_parent_verdict_sha256") != taw_sha256'
+        in route
+    )
+    assert (
+        'timing.get("candidate", {}).get("live_result_sha256") != m128_sha256'
+        in route
+    )
     for field in (
         "accepted_drafts_per_event",
         "committed_tokens_per_event",
@@ -423,3 +435,24 @@ def test_tail23_hydra27_stack_route_is_real_exact4_and_fixed_k64() -> None:
     ):
         assert field in route
     assert '"scripts/fr13_run_b4_tail23_hydra27_k64_m128_stack.sh"' in manifest
+    assert '"scripts/fr13_b4_timing_math.py"' in manifest
+
+
+def test_b4_timing_binds_all_parent_verdict_and_uses_per_step_sfwd() -> None:
+    timing = (
+        SCRIPTS / "fr13_run_b4_cutlass_persistent_m128_timing.sh"
+    ).read_text(encoding="utf-8")
+
+    assert "FR13_FIXED32_ALL_PARENT_VERDICT_JSON" in timing
+    assert "all-parent exact4 credential is scoped to k64_root" in timing
+    assert 'verdict.get("production_bundle_sha256") != pass_sha256' in timing
+    assert 'verdict.get("source_commit") != source_commit' in timing
+    assert (
+        'verdict.get("task_marker") != f"swe_verified:campaign4_{subset_sha256}"'
+        in timing
+    )
+    assert '"$ALL_PARENT_VERDICT_SHA256"' in timing
+    assert "fixed32_native_precompute_production_candidate_return" in timing
+    assert "all-parent production did not engage on every measured event" in timing
+    assert "from fr13_b4_timing_math import phase_breakdown, positive" in timing
+    assert 'positive(record, "s_per_fwd_gpu_per_forward")' not in timing
