@@ -53,6 +53,9 @@ export CONC=1
 export WALL=0
 export FR13_DRAFT_VOCAB_K=${FR13_DRAFT_VOCAB_K:-65536}
 export FR13_DRAFT_VOCAB_ROOT=${FR13_DRAFT_VOCAB_ROOT:-1}
+if [[ "$FR13_DRAFT_VOCAB_K" == "0" ]]; then
+  export FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0"
+fi
 export FR13_FLOOR_ORDER=TH
 
 source scripts/fr13_canonical_env.sh
