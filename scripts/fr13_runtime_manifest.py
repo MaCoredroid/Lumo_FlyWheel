@@ -48,6 +48,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_draft_head_m32_pass.py",
     "scripts/fr13_fixed32_flush_protocol.py",
     "scripts/fr13_fixed32_contract.py",
+    "scripts/fr13_fixed32_commit_draft_overlap_gate.py",
     "scripts/fr13_fixed32_topology.py",
     "scripts/fr13_hardware_floor_ledger.py",
     "scripts/fr13_launch_forked_fa2_tree_server.sh",
@@ -122,6 +123,7 @@ FIXED32_REQUIRED_ABSENCE = ("output/fr13_prewarm/corpus_active.jsonl",)
 
 FIXED32_VERDICT_TOOLS = (
     "scripts/fr13_depth_acceptance.py",
+    "scripts/fr13_fixed32_commit_draft_overlap_gate.py",
     "scripts/fr13_fixed32_work_census.py",
     "scripts/fr13_floor_gate.py",
     "scripts/fr13_runtime_manifest.py",

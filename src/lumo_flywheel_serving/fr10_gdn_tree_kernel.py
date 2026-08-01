@@ -14,6 +14,303 @@ import triton.language as tl
 
 _FR13_COMMITTER_NATIVE_ANNOUNCED = False
 
+_FR13_FIXED32_COMMIT_DRAFT_OVERLAP_ARM = (
+    "fr13.fixed32.k64.commit_draft_overlap.v1"
+)
+_FR13_FIXED32_COMMIT_DRAFT_OVERLAP_PATHS = (
+    "/logs/fr13_fixed32_commit_draft_overlap.arm",
+    "/tmp/fr13_fixed32_commit_draft_overlap.arm",
+)
+_FR13_FIXED32_COMMIT_DRAFT_OVERLAP_STATE: dict[str, object] = {
+    "runtime": None,
+    "pending": None,
+    "begun": 0,
+    "sealed": 0,
+    "fenced": 0,
+    "flush_fenced": 0,
+    "timed_spans": 0,
+    "tail_gpu_ms": 0.0,
+    "by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
+}
+
+
+def fixed32_commit_draft_overlap_requested() -> bool:
+    """Return the launcher-attested fixed32 K64 overlap arm."""
+    for path in _FR13_FIXED32_COMMIT_DRAFT_OVERLAP_PATHS:
+        try:
+            if Path(path).read_text().strip() == (
+                _FR13_FIXED32_COMMIT_DRAFT_OVERLAP_ARM
+            ):
+                return True
+        except (FileNotFoundError, OSError):
+            continue
+    return False
+
+
+def _fr13_fixed32_commit_draft_overlap_drain() -> None:
+    runtime = _FR13_FIXED32_COMMIT_DRAFT_OVERLAP_STATE["runtime"]
+    if not isinstance(runtime, dict):
+        return
+    for slot in runtime["slots"]:
+        if not slot["retired"] or not slot["end"].query():
+            continue
+        elapsed_ms = float(slot["start"].elapsed_time(slot["end"]))
+        if elapsed_ms < 0.0:
+            raise RuntimeError(
+                "FR13 fixed32 commit/draft overlap produced negative GPU time"
+            )
+        state = _FR13_FIXED32_COMMIT_DRAFT_OVERLAP_STATE
+        state["tail_gpu_ms"] = float(state["tail_gpu_ms"]) + elapsed_ms
+        state["timed_spans"] = int(state["timed_spans"]) + 1
+        slot["retired"] = False
+        slot["identity"] = None
+
+
+def _fr13_fixed32_commit_draft_overlap_runtime() -> dict[str, object]:
+    state = _FR13_FIXED32_COMMIT_DRAFT_OVERLAP_STATE
+    runtime = state["runtime"]
+    if isinstance(runtime, dict):
+        return runtime
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "FR13 fixed32 commit/draft overlap requires CUDA"
+        )
+    stream = torch.cuda.Stream()
+    runtime = {
+        "stream": stream,
+        "next_slot": 0,
+        "slots": [
+            {
+                "ready": torch.cuda.Event(),
+                "start": torch.cuda.Event(enable_timing=True),
+                "end": torch.cuda.Event(enable_timing=True),
+                "retired": False,
+                "identity": None,
+            }
+            for _ in range(2)
+        ],
+    }
+    state["runtime"] = runtime
+    return runtime
+
+
+def fixed32_commit_draft_overlap_begin(
+    *, mode: str, batch: int, step_seq: int, request_ids: tuple[str, ...]
+):
+    """Start one post-acceptance tail on the persistent commit stream."""
+    if not fixed32_commit_draft_overlap_requested():
+        return None
+    if (
+        mode not in ("tail6_fixed32", "hydra27_fixed32")
+        or batch not in (1, 2, 3, 4)
+        or type(step_seq) is not int
+        or step_seq <= 0
+        or not isinstance(request_ids, tuple)
+        or len(request_ids) != batch
+        or any(not isinstance(value, str) or not value for value in request_ids)
+        or len(set(request_ids)) != batch
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 commit/draft overlap identity is malformed"
+        )
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 fixed32 commit/draft overlap cannot start during capture"
+        )
+    state = _FR13_FIXED32_COMMIT_DRAFT_OVERLAP_STATE
+    if state["pending"] is not None:
+        raise RuntimeError(
+            "FR13 fixed32 commit/draft overlap prior tail is still pending"
+        )
+    runtime = _fr13_fixed32_commit_draft_overlap_runtime()
+    _fr13_fixed32_commit_draft_overlap_drain()
+    slot_index = int(runtime["next_slot"])
+    slot = runtime["slots"][slot_index]
+    if slot["retired"]:
+        raise RuntimeError(
+            "FR13 fixed32 commit/draft overlap event slot reused before completion"
+        )
+    identity = (mode, batch, step_seq, request_ids)
+    current = torch.cuda.current_stream()
+    slot["ready"].record(current)
+    runtime["stream"].wait_event(slot["ready"])
+    with torch.cuda.stream(runtime["stream"]):
+        slot["start"].record(runtime["stream"])
+    slot["identity"] = identity
+    state["pending"] = {
+        "identity": identity,
+        "slot_index": slot_index,
+        "state_enqueued": False,
+        "kv_enqueued": False,
+        "sealed": False,
+    }
+    runtime["next_slot"] = (slot_index + 1) % 2
+    state["begun"] = int(state["begun"]) + 1
+    return runtime["stream"]
+
+
+def fixed32_commit_draft_overlap_state_enqueued(
+    *, mode: str, batch: int, step_seq: int, request_ids: tuple[str, ...]
+) -> None:
+    """Seal the conv/GDN half after it has been queued on the commit stream."""
+    if not fixed32_commit_draft_overlap_requested():
+        return
+    pending = _FR13_FIXED32_COMMIT_DRAFT_OVERLAP_STATE["pending"]
+    identity = (mode, batch, step_seq, request_ids)
+    if (
+        not isinstance(pending, dict)
+        or pending["identity"] != identity
+        or pending["state_enqueued"]
+        or pending["kv_enqueued"]
+        or pending["sealed"]
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 commit/draft overlap state enqueue order drift"
+        )
+    pending["state_enqueued"] = True
+
+
+def fixed32_commit_draft_overlap_stream(
+    *, mode: str, batch: int, step_seq: int, request_ids: tuple[str, ...]
+):
+    """Return the pending stream for the target-KV half."""
+    if not fixed32_commit_draft_overlap_requested():
+        return None
+    pending = _FR13_FIXED32_COMMIT_DRAFT_OVERLAP_STATE["pending"]
+    identity = (mode, batch, step_seq, request_ids)
+    if (
+        not isinstance(pending, dict)
+        or pending["identity"] != identity
+        or not pending["state_enqueued"]
+        or pending["kv_enqueued"]
+        or pending["sealed"]
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 commit/draft overlap KV enqueue order drift"
+        )
+    runtime = _FR13_FIXED32_COMMIT_DRAFT_OVERLAP_STATE["runtime"]
+    if not isinstance(runtime, dict):
+        raise RuntimeError(
+            "FR13 fixed32 commit/draft overlap runtime disappeared"
+        )
+    return runtime["stream"]
+
+
+def fixed32_commit_draft_overlap_seal(
+    *, mode: str, batch: int, step_seq: int, request_ids: tuple[str, ...]
+) -> None:
+    """Record the one completion event after target KV is queued."""
+    if not fixed32_commit_draft_overlap_requested():
+        return
+    state = _FR13_FIXED32_COMMIT_DRAFT_OVERLAP_STATE
+    pending = state["pending"]
+    identity = (mode, batch, step_seq, request_ids)
+    runtime = state["runtime"]
+    if (
+        not isinstance(pending, dict)
+        or not isinstance(runtime, dict)
+        or pending["identity"] != identity
+        or not pending["state_enqueued"]
+        or pending["kv_enqueued"]
+        or pending["sealed"]
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 commit/draft overlap completion order drift"
+        )
+    slot = runtime["slots"][pending["slot_index"]]
+    with torch.cuda.stream(runtime["stream"]):
+        slot["end"].record(runtime["stream"])
+    pending["kv_enqueued"] = True
+    pending["sealed"] = True
+    state["sealed"] = int(state["sealed"]) + 1
+
+
+def fixed32_commit_draft_overlap_fence(*, flush: bool = False) -> bool:
+    """Join a sealed tail after DFWD, without synchronizing the host."""
+    if not fixed32_commit_draft_overlap_requested():
+        return False
+    state = _FR13_FIXED32_COMMIT_DRAFT_OVERLAP_STATE
+    pending = state["pending"]
+    if pending is None:
+        _fr13_fixed32_commit_draft_overlap_drain()
+        return False
+    if not isinstance(pending, dict) or not pending["sealed"]:
+        raise RuntimeError(
+            "FR13 fixed32 commit/draft overlap fenced an unsealed tail"
+        )
+    runtime = state["runtime"]
+    slot = runtime["slots"][pending["slot_index"]]
+    if flush:
+        if not slot["end"].query():
+            raise RuntimeError(
+                "FR13 fixed32 overlap flush requires prior CUDA synchronization"
+            )
+        state["flush_fenced"] = int(state["flush_fenced"]) + 1
+    else:
+        torch.cuda.current_stream().wait_event(slot["end"])
+        state["fenced"] = int(state["fenced"]) + 1
+    slot["retired"] = True
+    state["by_batch"][pending["identity"][1]] += 1
+    state["pending"] = None
+    _fr13_fixed32_commit_draft_overlap_drain()
+    return True
+
+
+def fixed32_commit_draft_overlap_snapshot(
+    *, flush: bool = False
+) -> dict[str, object]:
+    """Return privacy-safe timing/order counters after an optional flush."""
+    if flush:
+        fixed32_commit_draft_overlap_fence(flush=True)
+    _fr13_fixed32_commit_draft_overlap_drain()
+    state = _FR13_FIXED32_COMMIT_DRAFT_OVERLAP_STATE
+    spans = int(state["timed_spans"])
+    total_ms = float(state["tail_gpu_ms"])
+    begun = int(state["begun"])
+    sealed = int(state["sealed"])
+    fences = int(state["fenced"]) + int(state["flush_fenced"])
+    reconciled = begun == sealed == fences == spans
+    if flush and not reconciled:
+        raise RuntimeError(
+            "FR13 fixed32 commit/draft overlap terminal census drift: "
+            f"begun={begun} sealed={sealed} fences={fences} spans={spans}"
+        )
+    return {
+        "schema": "fr13.fixed32.commit_draft_overlap.v1",
+        "armed": fixed32_commit_draft_overlap_requested(),
+        "arm_contract": _FR13_FIXED32_COMMIT_DRAFT_OVERLAP_ARM,
+        "begun": begun,
+        "sealed": sealed,
+        "fenced": int(state["fenced"]),
+        "flush_fenced": int(state["flush_fenced"]),
+        "timed_spans": spans,
+        "tail_gpu_ms_total": total_ms,
+        "tail_gpu_ms_per_span": total_ms / spans if spans else None,
+        "pending": state["pending"] is not None,
+        "order_reconciled": reconciled,
+        "by_batch": {
+            str(batch): int(count)
+            for batch, count in state["by_batch"].items()
+        },
+        "event_slots": 2,
+        "streams": 1,
+    }
+
+
+def write_fixed32_commit_draft_overlap_snapshot(
+    path: str = "/logs/fr13_fixed32_commit_draft_overlap.json",
+) -> dict[str, object]:
+    """Atomically persist the flushed overlap timing census."""
+    snapshot = fixed32_commit_draft_overlap_snapshot(flush=True)
+    if snapshot["armed"]:
+        output = Path(path)
+        temporary = output.with_name(output.name + ".tmp." + str(os.getpid()))
+        temporary.write_text(
+            json.dumps(snapshot, sort_keys=True, separators=(",", ":")) + "\n"
+        )
+        os.replace(temporary, output)
+    return snapshot
+
 
 def _fr13_fixed32_committer_layer_batch_requested() -> bool:
     """Return the boot-time arm for the experimental one-launch committer.

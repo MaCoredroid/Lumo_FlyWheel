@@ -14870,6 +14870,8 @@ def _fr13_fixed32_device_commit_route(
         fixed32_committer_counters as _fixed_commit_counters,
         fixed32_conv_col0_commit_counters as _fixed_conv_commit_counters,
         fixed32_conv_col0_pregather_counters as _fixed_pregather_counters,
+        fixed32_commit_draft_overlap_begin as _fixed_overlap_begin,
+        fixed32_commit_draft_overlap_state_enqueued as _fixed_overlap_state_done,
         launch_fixed32_conv_commit_to_col0 as _fixed_conv_commit,
         launch_tree_gdn_replay_all_layers as _fixed_replay,
     )
@@ -14877,37 +14879,57 @@ def _fr13_fixed32_device_commit_route(
     _fixed_conv_commit_before = _fixed_conv_commit_counters()
     _fixed_pregather_before = _fixed_pregather_counters()
 
-    _fixed_conv_commit(
-        conv_banks=conv_banks,
-        spec_state_indices=stacks["spec_idx"],
-        accepted_paths=spec_paths,
-        accepted_lens=spec_lens,
-        num_spec_decodes=batch,
+    _fixed_overlap_stream = _fixed_overlap_begin(
+        mode=_FR13_FIXED32_MODE,
+        batch=batch,
+        step_seq=step_seq,
+        request_ids=spec_req_ids,
     )
-    _fixed_replay(
-        bank_anchor=bank_anchor,
-        bank_off16=stacks["spec_idx"],
-        bank_shape=bank_shape,
-        bank_stride=bank_stride,
-        spec_state_indices=stacks["spec_idx"],
-        prev_lens=stacks["prev_lens"],
-        accepted_paths=spec_paths[:batch],
-        accepted_lens=spec_lens[:batch],
-        k_rings=stacks["ring_k"],
-        v_rings=stacks["ring_v"],
-        a_rings=stacks["ring_a"],
-        b_rings=stacks["ring_b"],
-        A_logs=stacks["A_log"],
-        dt_biases=stacks["dt_bias"],
-        num_layers=48,
-        num_spec_decodes=batch,
-        output_scale=output_scale,
-        use_qk_l2norm_in_kernel=qk_l2norm,
-        runrow_commit=True,
-        runrow_init=True,
-        burn_node_bank=False,
-        banks_list=banks,
+    _fixed_overlap_context = (
+        torch.cuda.stream(_fixed_overlap_stream)
+        if _fixed_overlap_stream is not None
+        else __import__("contextlib").nullcontext()
     )
+    with _fixed_overlap_context:
+        _fixed_conv_commit(
+            conv_banks=conv_banks,
+            spec_state_indices=stacks["spec_idx"],
+            accepted_paths=spec_paths,
+            accepted_lens=spec_lens,
+            num_spec_decodes=batch,
+        )
+        _fixed_replay(
+            bank_anchor=bank_anchor,
+            bank_off16=stacks["spec_idx"],
+            bank_shape=bank_shape,
+            bank_stride=bank_stride,
+            spec_state_indices=stacks["spec_idx"],
+            prev_lens=stacks["prev_lens"],
+            accepted_paths=spec_paths[:batch],
+            accepted_lens=spec_lens[:batch],
+            k_rings=stacks["ring_k"],
+            v_rings=stacks["ring_v"],
+            a_rings=stacks["ring_a"],
+            b_rings=stacks["ring_b"],
+            A_logs=stacks["A_log"],
+            dt_biases=stacks["dt_bias"],
+            num_layers=48,
+            num_spec_decodes=batch,
+            output_scale=output_scale,
+            use_qk_l2norm_in_kernel=qk_l2norm,
+            runrow_commit=True,
+            runrow_init=True,
+            burn_node_bank=False,
+            banks_list=banks,
+        )
+        stacks["flags"][:, 0].zero_()
+    if _fixed_overlap_stream is not None:
+        _fixed_overlap_state_done(
+            mode=_FR13_FIXED32_MODE,
+            batch=batch,
+            step_seq=step_seq,
+            request_ids=spec_req_ids,
+        )
     if (
         not _fixed_pure_event
         and not getattr(
@@ -14927,7 +14949,6 @@ def _fr13_fixed32_device_commit_route(
                 "FR13 fixed32 nonpure committer replay ledger drift"
             )
         _nonpure_replays[batch] += 1
-    stacks["flags"][:, 0].zero_()
     _fixed_commit_after = _fixed_commit_counters()
     _fixed_conv_commit_after = _fixed_conv_commit_counters()
     _fixed_pregather_after = _fixed_pregather_counters()
@@ -18972,6 +18993,11 @@ def _patch_gpu_model_runner_replay_draft_reqkey() -> bool:
         "                )\n"
         "                _fr13_fixed32_nvtx_end(_fr13_dfwd_nvtx)\n"
         "                _fr13_dfwd_end(_fr13_dfwd_ev)\n"
+        "                if _fr13_f32_draft_on:\n"
+        "                    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
+        "                        fixed32_commit_draft_overlap_fence as _fr13_f32_overlap_fence,\n"
+        "                    )\n"
+        "                    _fr13_f32_overlap_fence()\n"
         f"                # {sentinel}: remember the row owners for the GPU\n"
         "                # drafter tensor even when async scheduling skips the\n"
         "                # CPU DraftTokenIds handoff. First-spec rows after a\n"
@@ -19010,6 +19036,29 @@ def _patch_gpu_model_runner_replay_draft_reqkey() -> bool:
     if propose_anchor not in text:
         raise RuntimeError("FR13 replay draft reqkey propose anchor not found")
     text = text.replace(propose_anchor, propose_inject, 1)
+
+    connector_anchor = (
+        "        if spec_config is not None:\n"
+        "            self.finalize_kv_connector()\n"
+    )
+    connector_inject = (
+        f"        if {bool(_FR13_FIXED32_MODE)!r}:\n"
+        "            # FR13_FIXED32_COMMIT_DRAFT_OVERLAP: proposal-less and\n"
+        "            # max-length paths still must join before the connector\n"
+        "            # reads or publishes target KV state. The normal proposal\n"
+        "            # path already fenced, making this fallback a no-op.\n"
+        "            from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
+        "                fixed32_commit_draft_overlap_fence as _fr13_f32_overlap_fence,\n"
+        "            )\n"
+        "            _fr13_f32_overlap_fence()\n"
+        "        if spec_config is not None:\n"
+        "            self.finalize_kv_connector()\n"
+    )
+    if connector_anchor not in text:
+        raise RuntimeError(
+            "FR13 fixed32 overlap KV-connector finalization anchor not found"
+        )
+    text = text.replace(connector_anchor, connector_inject, 1)
 
     sampled_anchor = (
         "        self.input_batch.prev_sampled_token_ids = next_token_ids.unsqueeze(1)\n"
@@ -31018,6 +31067,32 @@ def _fr13_f32_flush_one(request):
                 raise failure_error
             # The protocol permits exactly this one global CUDA synchronization.
             torch.cuda.synchronize()
+            from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                fixed32_commit_draft_overlap_snapshot,
+            )
+            overlap = fixed32_commit_draft_overlap_snapshot(flush=True)
+            if overlap["armed"]:
+                overlap.update(
+                    generation=request["generation"],
+                    action=request["action"],
+                    producer_pid=_FR13_FIXED32_FLUSH_PID,
+                )
+                overlap_path = _Fr13F32FlushPath(
+                    "/logs/fr13_fixed32_commit_draft_overlap."
+                    + str(request["generation"])
+                    + ".json"
+                )
+                if overlap_path.exists():
+                    raise RuntimeError(
+                        "fixed32 overlap boundary snapshot already exists: "
+                        + str(overlap_path)
+                    )
+                _fr13_f32_flush_atomic_text(
+                    overlap_path,
+                    _fr13_f32_flush_json.dumps(
+                        overlap, sort_keys=True, separators=(",", ":")
+                    ) + "\n",
+                )
             (
                 _gdn, events, _steps, _first, _last, sfwd, dfwd, cfwd,
             ) = _fr13_f32_flush_runtime_state()
@@ -31566,6 +31641,8 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_f32_kv_gdn\n"
         "                from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
         "                    fixed32_committer_counters as _fr13_f32_commit_counts,\n"
+        "                    fixed32_commit_draft_overlap_seal as _fr13_f32_overlap_seal,\n"
+        "                    fixed32_commit_draft_overlap_stream as _fr13_f32_overlap_stream,\n"
         "                    launch_attn_kv_linear_remap_syncfree_fixed16 as _fr13_f32_kv16,\n"
         "                )\n"
         "                _fr13_f32_pending = getattr(\n"
@@ -31836,16 +31913,41 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                    raise RuntimeError(\n"
         "                        'FR13 fixed32 target KV stage began twice'\n"
         "                    )\n"
-        "                _fr13_f32_kv16(\n"
-        "                    kv_caches=_fr13_f32_kvs,\n"
-        "                    slot_mapping=_fr13_f32_sm,\n"
-        "                    query_start_loc=_fr13_f32_qsl,\n"
-        "                    accepted_paths=_fr13_f32_paths_view,\n"
-        "                    num_accepted_tokens=_fr13_f32_lens_view,\n"
-        "                    num_spec_decodes=_fr13_f32_B,\n"
-        "                    dst_pi=_fr13_f32_dstpi,\n"
-        "                    batch_indices=_fr13_f32_index_tensor,\n"
+        "                _fr13_f32_overlap_mode = getattr(\n"
+        "                    _fr13_f32_kv_gdn, '_FR13_FIXED32_MODE', None\n"
         "                )\n"
+        "                _fr13_f32_overlap_seq = int(getattr(\n"
+        "                    _fr13_f32_kv_gdn, '_LUMO_FA_STEP_SEQ', -1\n"
+        "                ))\n"
+        "                _fr13_f32_overlap = _fr13_f32_overlap_stream(\n"
+        "                    mode=_fr13_f32_overlap_mode,\n"
+        "                    batch=_fr13_f32_B,\n"
+        "                    step_seq=_fr13_f32_overlap_seq,\n"
+        "                    request_ids=_fr13_f32_spec_rids,\n"
+        "                )\n"
+        "                _fr13_f32_overlap_context = (\n"
+        "                    torch.cuda.stream(_fr13_f32_overlap)\n"
+        "                    if _fr13_f32_overlap is not None\n"
+        "                    else __import__('contextlib').nullcontext()\n"
+        "                )\n"
+        "                with _fr13_f32_overlap_context:\n"
+        "                    _fr13_f32_kv16(\n"
+        "                        kv_caches=_fr13_f32_kvs,\n"
+        "                        slot_mapping=_fr13_f32_sm,\n"
+        "                        query_start_loc=_fr13_f32_qsl,\n"
+        "                        accepted_paths=_fr13_f32_paths_view,\n"
+        "                        num_accepted_tokens=_fr13_f32_lens_view,\n"
+        "                        num_spec_decodes=_fr13_f32_B,\n"
+        "                        dst_pi=_fr13_f32_dstpi,\n"
+        "                        batch_indices=_fr13_f32_index_tensor,\n"
+        "                    )\n"
+        "                if _fr13_f32_overlap is not None:\n"
+        "                    _fr13_f32_overlap_seal(\n"
+        "                        mode=_fr13_f32_overlap_mode,\n"
+        "                        batch=_fr13_f32_B,\n"
+        "                        step_seq=_fr13_f32_overlap_seq,\n"
+        "                        request_ids=_fr13_f32_spec_rids,\n"
+        "                    )\n"
         "                if _fr13_f32_measured:\n"
         "                    _fr13_f32_events = getattr(\n"
         "                        _fr13_f32_kv_gdn,\n"

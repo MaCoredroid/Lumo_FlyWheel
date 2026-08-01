@@ -64,6 +64,7 @@ _FR13_M32_GUARD_NAMES=(
   FR13_FIXED32_CUTLASS_WAVE
   FR13_FIXED32_CUTLASS_WAVE_SO
   FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
+  FR13_FIXED32_COMMIT_DRAFT_OVERLAP
   FR13_FIXED32_ATTRIBUTION_ONLY
   FR13_FIXED32_B1_DIAGNOSTIC
   FR13_FIXED32_MODE
@@ -273,6 +274,7 @@ FR13_DRAFTER_SINGLE_LOGITS=${FR13_DRAFTER_SINGLE_LOGITS:-1}
 # vocabulary. The patcher rejects non-fixed32 use and pairs every subset
 # logits tensor with its own real-vocab id map.
 FR13_DRAFT_VOCAB_ROOT=${FR13_DRAFT_VOCAB_ROOT:-0}
+FR13_FIXED32_COMMIT_DRAFT_OVERLAP=${FR13_FIXED32_COMMIT_DRAFT_OVERLAP:-0}
 case "$FR13_DRAFT_VOCAB_ROOT" in
   0|1) ;;
   *)
@@ -283,6 +285,25 @@ esac
 if [[ "$FR13_DRAFT_VOCAB_ROOT" == "1" && -z "${FR13_FIXED32_MODE:-}" ]]; then
   echo "FR13_DRAFT_VOCAB_ROOT=1 requires FR13_FIXED32_MODE" >&2
   exit 2
+fi
+case "$FR13_FIXED32_COMMIT_DRAFT_OVERLAP" in
+  0|1) ;;
+  *)
+    echo "FR13_FIXED32_COMMIT_DRAFT_OVERLAP must be 0 or 1" >&2
+    exit 2
+    ;;
+esac
+if [[ "$FR13_FIXED32_COMMIT_DRAFT_OVERLAP" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && ( "$MAX_NUM_SEQS" == "1" || "$MAX_NUM_SEQS" == "4" ) \
+     && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+     && "${FR13_COMMIT_OVERLAP:-0}" == "0" \
+     && "${FR13_REPLAY_MULTISTREAM:-0}" == "0" \
+     && "${FR13_FIXED32_COMMITTER_LAYER_BATCH:-0}" == "0" ]] || {
+    echo "FR13 fixed32 commit/draft overlap requires fixed32 B1/B4 K64 root1 and the stock graph committer" >&2
+    exit 2
+  }
 fi
 FR13_DRAFT_HEAD_PAD_ROWS=${FR13_DRAFT_HEAD_PAD_ROWS:-0}
 FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=${FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB:-0}
@@ -1677,6 +1698,11 @@ PY
     "$LOG_DIR/fr13_fixed32_ingress_secret_identity.json" \
     "$LOG_DIR/fr13_fixed32_runtime_attestation.json" \
     "$LOG_DIR"/fr13_fixed32_boundary_snapshot.*.json \
+    "$LOG_DIR/fr13_fixed32_commit_draft_overlap.arm" \
+    "$LOG_DIR/fr13_fixed32_commit_draft_overlap.json" \
+    "$LOG_DIR"/fr13_fixed32_commit_draft_overlap.json.tmp.* \
+    "$LOG_DIR"/fr13_fixed32_commit_draft_overlap.*.json \
+    "$LOG_DIR"/fr13_fixed32_commit_draft_overlap.*.json.tmp.* \
     "$LOG_DIR/fr13_fixed32_mode.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag" \
@@ -1689,6 +1715,11 @@ PY
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv64.production_engagement.json" \
     "$LOG_DIR"/fr13_fixed32_batch_gdn_bv64.production_engagement.json.tmp.*
   printf '%s\n' "$FR13_FIXED32_MODE" > "$LOG_DIR/fr13_fixed32_mode.flag"
+  if [[ "$FR13_FIXED32_COMMIT_DRAFT_OVERLAP" == "1" ]]; then
+    printf '%s\n' 'fr13.fixed32.k64.commit_draft_overlap.v1' \
+      > "$LOG_DIR/fr13_fixed32_commit_draft_overlap.arm"
+    chmod 0400 "$LOG_DIR/fr13_fixed32_commit_draft_overlap.arm"
+  fi
   if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
     printf '%s\n' "$_fr13_gdn_path_bv_candidate" \
       > "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag"
@@ -1713,6 +1744,11 @@ PY
 else
   rm -f \
     "$LOG_DIR/fr13_fixed32_mode.flag" \
+    "$LOG_DIR/fr13_fixed32_commit_draft_overlap.arm" \
+    "$LOG_DIR/fr13_fixed32_commit_draft_overlap.json" \
+    "$LOG_DIR"/fr13_fixed32_commit_draft_overlap.json.tmp.* \
+    "$LOG_DIR"/fr13_fixed32_commit_draft_overlap.*.json \
+    "$LOG_DIR"/fr13_fixed32_commit_draft_overlap.*.json.tmp.* \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.production_pass.json" \
@@ -2425,6 +2461,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_SAMPLED_REPLAY_BATCHED="${FR13_SAMPLED_REPLAY_BATCHED:-0}" \
   -e FR13_REPLAY_MULTISTREAM="${FR13_REPLAY_MULTISTREAM:-0}" \
   -e FR13_REPLAY_MULTISTREAM_N="${FR13_REPLAY_MULTISTREAM_N:-4}" \
+  -e FR13_FIXED32_COMMIT_DRAFT_OVERLAP="$FR13_FIXED32_COMMIT_DRAFT_OVERLAP" \
   -e FR13_COMMIT_FULL_GPU_TIMER="${FR13_COMMIT_FULL_GPU_TIMER:-0}" \
   -e FR13_COMMIT_FULL_GPU_TIMER_JSON="${FR13_COMMIT_FULL_GPU_TIMER_JSON:-}" \
   -e FR13_COMMITTER_LAYOUT_ONCE="${FR13_COMMITTER_LAYOUT_ONCE:-0}" \
