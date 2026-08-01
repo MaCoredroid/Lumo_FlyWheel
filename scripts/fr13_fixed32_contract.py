@@ -9,6 +9,7 @@ import importlib.metadata
 import json
 import os
 import platform
+import re
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,20 @@ QWEN_VISIBLE_MAX_OUTPUT_TOKENS = 32_768
 QWEN_COMPACTION_MAX_OUTPUT_TOKENS = 20_000
 QWEN_COMPACTION_METRIC_SCHEMA = (
     "fr13-fixed32-qwen-compaction-metrics-v1"
+)
+QWEN_CAMPAIGN_METRIC_SCHEMA = (
+    "fr13-fixed32-qwen-campaign-metrics-v1"
+)
+QWEN_CAMPAIGN_TASK_METRIC_SCHEMA = (
+    "fr13-fixed32-qwen-campaign-task-metrics-v1"
+)
+
+_QWEN_COMPACTION_FAILURE_TEXT_RE = re.compile(
+    r"\[API Error: Context is too large to send safely after automatic "
+    r"compression\. Estimated prompt tokens: ([1-9][0-9]*); hard limit: "
+    r"([1-9][0-9]*); compression status: "
+    r"COMPRESSION_FAILED_EMPTY_SUMMARY\. Start a new session or reduce the "
+    r"resumed history before continuing\.\]"
 )
 
 IMAGE_REFERENCE = (
@@ -740,6 +755,57 @@ def _fixed32_nonempty_text_record(message: dict[str, Any]) -> bool:
         and bool(item["text"].strip())
         for item in content
     )
+
+
+def _fixed32_qwen_synthetic_compaction_failure(
+    group: list[tuple[dict[str, Any], dict[str, Any], str, int]],
+    *,
+    result: dict[str, Any],
+) -> bool:
+    """Recognize the exact local Qwen compression-failure terminal."""
+    if len(group) != 1:
+        return False
+    event, message, event_id, _event_index = group[0]
+    if set(event) != {
+        "type",
+        "uuid",
+        "session_id",
+        "parent_tool_use_id",
+        "message",
+    } or set(message) != {
+        "id",
+        "type",
+        "role",
+        "model",
+        "content",
+        "stop_reason",
+        "usage",
+    }:
+        return False
+    content = message.get("content")
+    usage = message.get("usage")
+    if (
+        event.get("type") != "assistant"
+        or event.get("parent_tool_use_id") is not None
+        or message.get("id") != event_id
+        or message.get("type") != "message"
+        or message.get("role") != "assistant"
+        or message.get("model") != "qwen3.6-27b"
+        or message.get("stop_reason") is not None
+        or usage != {"input_tokens": 0, "output_tokens": 0}
+        or not isinstance(content, list)
+        or len(content) != 1
+        or not isinstance(content[0], dict)
+        or set(content[0]) != {"type", "text"}
+        or content[0].get("type") != "text"
+        or not isinstance(content[0].get("text"), str)
+    ):
+        return False
+    text = content[0]["text"]
+    match = _QWEN_COMPACTION_FAILURE_TEXT_RE.fullmatch(text)
+    if match is None or int(match.group(1)) <= int(match.group(2)):
+        return False
+    return result.get("result") == text
 
 
 def fixed32_trace_session_id(instance_id: str) -> str:
@@ -1980,6 +2046,7 @@ def validate_fixed32_trace_model_requests(
         list[tuple[dict[str, Any], dict[str, Any], str, int]]
     ] = []
     request_records: list[tuple[int, str]] = []
+    synthetic_compaction_failure_terminal = False
     for group_index, group in enumerate(assistant_groups):
         parent_ids = {record[0].get("parent_tool_use_id") for record in group}
         if len(parent_ids) != 1:
@@ -2014,19 +2081,26 @@ def validate_fixed32_trace_model_requests(
                 raise ContractError(
                     "fixed32 qwen final assistant response group is invalid"
                 )
+            synthetic_compaction_failure_terminal = (
+                _fixed32_qwen_synthetic_compaction_failure(
+                    group,
+                    result=result,
+                )
+            )
         elif terminal_count == 0:
             raise ContractError(
                 "fixed32 qwen non-final assistant response group is incomplete"
             )
 
-        request_records.append(
-            (
-                group[0][3],
-                _fixed32_qwen_group_request_id(
-                    [record[2] for record in group]
-                ),
+        if not synthetic_compaction_failure_terminal:
+            request_records.append(
+                (
+                    group[0][3],
+                    _fixed32_qwen_group_request_id(
+                        [record[2] for record in group]
+                    ),
+                )
             )
-        )
 
     if len(top_level_groups) != num_turns:
         raise ContractError(
@@ -2125,8 +2199,364 @@ def validate_fixed32_trace_model_requests(
         "hidden_failed_compaction_model_requests": len(
             failed_compaction_requests
         ),
+        "synthetic_compaction_failure_terminal": (
+            synthetic_compaction_failure_terminal
+        ),
         "qwen_compaction_metric_evidence": compaction_metric_evidence,
         "engine_id_joinable": False,
+    }
+
+
+def validate_fixed32_qwen_campaign_metrics(
+    tasks: list[dict[str, Any]],
+    *,
+    metrics_pre: bytes,
+    metrics_post: bytes,
+) -> dict[str, Any]:
+    """Reconcile one global Prometheus window across concurrent Qwen tasks."""
+    if not isinstance(tasks, list) or len(tasks) < 2:
+        raise ContractError(
+            "fixed32 qwen campaign metrics require at least two tasks"
+        )
+    expected_task_keys = {
+        "instance_id",
+        "expected_session_id",
+        "expected_completed_logical_model_requests",
+        "events",
+    }
+    task_inputs: list[dict[str, Any]] = []
+    seen_instance_ids: set[str] = set()
+    for task in tasks:
+        if not isinstance(task, dict) or set(task) != expected_task_keys:
+            raise ContractError(
+                "fixed32 qwen campaign task input is not exact"
+            )
+        instance_id = task["instance_id"]
+        expected_session_id = task["expected_session_id"]
+        completed = task["expected_completed_logical_model_requests"]
+        events = task["events"]
+        if (
+            not isinstance(instance_id, str)
+            or not instance_id
+            or instance_id in seen_instance_ids
+            or expected_session_id != fixed32_trace_session_id(instance_id)
+            or type(completed) is not int
+            or completed <= 0
+            or not isinstance(events, list)
+        ):
+            raise ContractError(
+                "fixed32 qwen campaign task identity or count is invalid"
+            )
+        seen_instance_ids.add(instance_id)
+        task_inputs.append(task)
+    task_inputs.sort(key=lambda task: task["instance_id"])
+
+    before = _fixed32_qwen_metric_snapshot(metrics_pre, label="campaign pre")
+    after = _fixed32_qwen_metric_snapshot(metrics_post, label="campaign post")
+    deltas: dict[str, int] = {}
+    for key in sorted(before):
+        if after[key] < before[key]:
+            raise ContractError(
+                f"fixed32 qwen metric {key} decreased across campaign"
+            )
+        deltas[key] = after[key] - before[key]
+
+    analyses: dict[str, dict[str, Any]] = {}
+    task_rows: list[dict[str, Any]] = []
+    completed_total = 0
+    normal_total = 0
+    successful_compaction_total = 0
+    failed_compaction_total = 0
+    result_prompt_total = 0
+    result_generation_total = 0
+    visible_prompt_total = 0
+    visible_generation_total = 0
+    for task in task_inputs:
+        instance_id = task["instance_id"]
+        events = task["events"]
+        base = validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=task["expected_session_id"],
+        )
+        if base.get("trace_format") != "qwen_result":
+            raise ContractError(
+                "fixed32 qwen campaign task trace is not a Qwen result"
+            )
+        expected_completed = task[
+            "expected_completed_logical_model_requests"
+        ]
+        base_completed = base["completed_logical_model_requests"]
+        successful_compactions = base.get(
+            "hidden_successful_compaction_model_requests",
+            base.get("hidden_compaction_model_requests", 0),
+        )
+        failed_compactions = expected_completed - base_completed
+        normal_requests = base_completed - successful_compactions
+        if (
+            type(base_completed) is not int
+            or type(successful_compactions) is not int
+            or successful_compactions < 0
+            or normal_requests <= 0
+            or failed_compactions < 0
+            or (
+                failed_compactions > 0
+                and successful_compactions <= 0
+            )
+        ):
+            raise ContractError(
+                "fixed32 qwen campaign trace/task-auth counts do not reconcile"
+            )
+
+        result = events[-1]
+        result_usage = result.get("usage")
+        if not isinstance(result_usage, dict):
+            raise ContractError("fixed32 qwen campaign result usage is missing")
+        aggregate_input = result_usage.get("input_tokens")
+        aggregate_output = result_usage.get("output_tokens")
+        aggregate_total = result_usage.get("total_tokens")
+        if (
+            type(aggregate_input) is not int
+            or aggregate_input < 0
+            or type(aggregate_output) is not int
+            or aggregate_output < 0
+            or type(aggregate_total) is not int
+            or aggregate_total != aggregate_input + aggregate_output
+        ):
+            raise ContractError(
+                "fixed32 qwen campaign aggregate token usage is invalid"
+            )
+        visible_input = 0
+        visible_output = 0
+        for event in events:
+            message = _fixed32_trace_message(event)
+            if message is None:
+                continue
+            usage = message.get("usage")
+            if not isinstance(usage, dict):
+                raise ContractError(
+                    "fixed32 qwen campaign assistant usage is missing"
+                )
+            input_tokens = usage.get("input_tokens")
+            output_tokens = usage.get("output_tokens")
+            if (
+                type(input_tokens) is not int
+                or input_tokens < 0
+                or type(output_tokens) is not int
+                or output_tokens < 0
+            ):
+                raise ContractError(
+                    "fixed32 qwen campaign assistant token usage is invalid"
+                )
+            visible_input += input_tokens
+            visible_output += output_tokens
+        hidden_input = aggregate_input - visible_input
+        hidden_output = aggregate_output - visible_output
+        total_compactions = successful_compactions + failed_compactions
+        if (
+            hidden_input < 0
+            or hidden_output < 0
+            or (
+                total_compactions > 0
+                and (hidden_input <= 0 or hidden_output <= 0)
+            )
+        ):
+            raise ContractError(
+                "fixed32 qwen campaign hidden compaction token usage is invalid"
+            )
+
+        event_ids_sha256 = hashlib.sha256(
+            json.dumps(
+                [event["uuid"] for event in events],
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        base_request_ids_sha256 = hashlib.sha256(
+            json.dumps(
+                base["model_request_ids"],
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        row = {
+            "instance_id": instance_id,
+            "expected_completed_engine_requests": expected_completed,
+            "trace_completed_requests_before_failed_compactions": (
+                base_completed
+            ),
+            "normal_requests": normal_requests,
+            "successful_compaction_requests": successful_compactions,
+            "failed_compaction_requests": failed_compactions,
+            "total_compaction_requests": total_compactions,
+            "result_prompt_tokens": aggregate_input,
+            "result_generation_tokens": aggregate_output,
+            "visible_prompt_tokens": visible_input,
+            "visible_generation_tokens": visible_output,
+            "hidden_prompt_tokens": hidden_input,
+            "hidden_generation_tokens": hidden_output,
+            "trace_event_ids_sha256": event_ids_sha256,
+            "base_model_request_ids_sha256": base_request_ids_sha256,
+            "synthetic_compaction_failure_terminal": base.get(
+                "synthetic_compaction_failure_terminal",
+                False,
+            ),
+        }
+        task_rows.append(row)
+        analyses[instance_id] = {
+            "base": base,
+            "events": events,
+            "result": result,
+            "row": row,
+        }
+        completed_total += expected_completed
+        normal_total += normal_requests
+        successful_compaction_total += successful_compactions
+        failed_compaction_total += failed_compactions
+        result_prompt_total += aggregate_input
+        result_generation_total += aggregate_output
+        visible_prompt_total += visible_input
+        visible_generation_total += visible_output
+
+    total_compactions = (
+        successful_compaction_total + failed_compaction_total
+    )
+    if (
+        deltas["max_tokens_count"] != completed_total
+        or deltas["max_tokens_le_inf"] != completed_total
+        or deltas["max_tokens_le_50000"] != completed_total
+        or deltas["request_success_stop"] != completed_total
+        or any(
+            deltas[f"request_success_{reason}"] != 0
+            for reason in ("length", "abort", "error", "repetition")
+        )
+    ):
+        raise ContractError(
+            "fixed32 qwen campaign engine completion metrics do not reconcile"
+        )
+    if deltas["max_tokens_le_10000"] != 0:
+        raise ContractError(
+            "fixed32 qwen campaign max-token histogram has an unpinned low request"
+        )
+    if (
+        deltas["max_tokens_le_20000"] != total_compactions
+        or normal_total + total_compactions != completed_total
+        or deltas["max_tokens_sum"]
+        != (
+            normal_total * QWEN_VISIBLE_MAX_OUTPUT_TOKENS
+            + total_compactions * QWEN_COMPACTION_MAX_OUTPUT_TOKENS
+        )
+    ):
+        raise ContractError(
+            "fixed32 qwen campaign 32768/20000 max-token algebra does not reconcile"
+        )
+    if (
+        deltas["prompt_tokens"] != result_prompt_total
+        or deltas["generation_tokens"] != result_generation_total
+    ):
+        raise ContractError(
+            "fixed32 qwen campaign aggregate and vLLM token usage do not reconcile"
+        )
+
+    metric_evidence = {
+        "schema": QWEN_CAMPAIGN_METRIC_SCHEMA,
+        "metrics_pre_sha256": hashlib.sha256(metrics_pre).hexdigest(),
+        "metrics_post_sha256": hashlib.sha256(metrics_post).hexdigest(),
+        "task_count": len(task_rows),
+        "task_ids": [row["instance_id"] for row in task_rows],
+        "completed_engine_requests": completed_total,
+        "normal_visible_max_output_tokens": QWEN_VISIBLE_MAX_OUTPUT_TOKENS,
+        "compaction_max_output_tokens": QWEN_COMPACTION_MAX_OUTPUT_TOKENS,
+        "normal_requests": normal_total,
+        "successful_compaction_requests": successful_compaction_total,
+        "failed_compaction_requests": failed_compaction_total,
+        "total_compaction_requests": total_compactions,
+        "max_tokens_count": deltas["max_tokens_count"],
+        "max_tokens_sum": deltas["max_tokens_sum"],
+        "max_tokens_le_10000": deltas["max_tokens_le_10000"],
+        "max_tokens_le_20000": deltas["max_tokens_le_20000"],
+        "max_tokens_le_50000": deltas["max_tokens_le_50000"],
+        "max_tokens_le_inf": deltas["max_tokens_le_inf"],
+        "request_success_stop": deltas["request_success_stop"],
+        "request_success_non_stop": sum(
+            deltas[f"request_success_{reason}"]
+            for reason in ("length", "abort", "error", "repetition")
+        ),
+        "prompt_tokens": deltas["prompt_tokens"],
+        "generation_tokens": deltas["generation_tokens"],
+        "visible_prompt_tokens": visible_prompt_total,
+        "visible_generation_tokens": visible_generation_total,
+        "hidden_prompt_tokens": result_prompt_total - visible_prompt_total,
+        "hidden_generation_tokens": (
+            result_generation_total - visible_generation_total
+        ),
+        "tasks": task_rows,
+    }
+    metric_evidence_sha256 = hashlib.sha256(
+        json.dumps(
+            metric_evidence,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+
+    task_results: dict[str, dict[str, Any]] = {}
+    campaign_request_ids: set[str] = set()
+    for instance_id in metric_evidence["task_ids"]:
+        analysis = analyses[instance_id]
+        base = analysis["base"]
+        row = analysis["row"]
+        failed_request_ids = [
+            _fixed32_qwen_hidden_failed_compaction_request_id(
+                result_event_id=analysis["result"]["uuid"],
+                trace_event_ids_sha256=row["trace_event_ids_sha256"],
+                metric_evidence_sha256=metric_evidence_sha256,
+                ordinal=ordinal,
+            )
+            for ordinal in range(row["failed_compaction_requests"])
+        ]
+        request_ids = [*base["model_request_ids"], *failed_request_ids]
+        if (
+            len(request_ids) != row["expected_completed_engine_requests"]
+            or len(request_ids) != len(set(request_ids))
+            or campaign_request_ids.intersection(request_ids)
+        ):
+            raise ContractError(
+                "fixed32 qwen campaign request identities do not reconcile"
+            )
+        campaign_request_ids.update(request_ids)
+        task_metric_evidence = {
+            "schema": QWEN_CAMPAIGN_TASK_METRIC_SCHEMA,
+            "campaign_metric_evidence_sha256": metric_evidence_sha256,
+            **{
+                key: value
+                for key, value in row.items()
+                if key != "instance_id"
+            },
+        }
+        task_results[instance_id] = {
+            **base,
+            "completed_logical_model_requests": len(request_ids),
+            "model_request_ids": request_ids,
+            "hidden_compaction_model_requests": row[
+                "total_compaction_requests"
+            ],
+            "hidden_successful_compaction_model_requests": row[
+                "successful_compaction_requests"
+            ],
+            "hidden_failed_compaction_model_requests": row[
+                "failed_compaction_requests"
+            ],
+            "qwen_compaction_metric_evidence": task_metric_evidence,
+            "qwen_campaign_metric_evidence_sha256": (
+                metric_evidence_sha256
+            ),
+        }
+    return {
+        "schema": QWEN_CAMPAIGN_METRIC_SCHEMA,
+        "metric_evidence": metric_evidence,
+        "metric_evidence_sha256": metric_evidence_sha256,
+        "tasks": task_results,
     }
 
 
