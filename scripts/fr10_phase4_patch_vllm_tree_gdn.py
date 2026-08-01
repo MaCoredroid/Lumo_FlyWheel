@@ -2242,15 +2242,25 @@ def _fr13_fixed32_observed_gdn(
                 int(value)
                 for value in parent_group_contract.get("group_sizes", ())
             ),
-            "group_node_counts": tuple(
-                int(value)
-                for value in parent_group_contract.get(
-                    "group_node_counts", ()
-                )
-            ),
             "groups": int(parent_group_contract.get("groups", -1)),
             "max_group_paths": int(
                 parent_group_contract.get("max_group_paths", -1)
+            ),
+            "simd_width": int(
+                parent_group_contract.get("simd_width", -1)
+            ),
+            "member_execution": parent_group_contract.get(
+                "member_execution"
+            ),
+            "group_node_counts": tuple(
+                int(value)
+                for value in parent_group_contract.get("group_node_counts", ())
+            ),
+            "group_max_path_lengths": tuple(
+                int(value)
+                for value in parent_group_contract.get(
+                    "group_max_path_lengths", ()
+                )
             ),
             "logical_path_counts": tuple(
                 int(value)
@@ -2290,7 +2300,7 @@ def _fr13_fixed32_observed_gdn(
             ),
         }
         expected_parent_group = {
-            "candidate": "fixed32_gdn_parent_group_v1",
+            "candidate": "fixed32_gdn_parent_group_simd_v2",
             "parent_nodes": (14, 0, 1, 4, 9),
             "parent_slots": (4, 0, 1, 2, 3),
             "path_indices": (
@@ -2301,17 +2311,20 @@ def _fr13_fixed32_observed_gdn(
                 (7, 8),
             ),
             "group_sizes": (3, 2, 2, 2, 2),
-            "group_node_counts": (9, 12, 2, 2, 2),
             "groups": 5,
             "max_group_paths": 3,
+            "simd_width": 4,
+            "member_execution": "parallel_simd",
+            "group_node_counts": (9, 12, 2, 2, 2),
+            "group_max_path_lengths": (7, 7, 1, 1, 1),
             "logical_path_counts": (1, 11),
             "physical_grid_z": (1, 5),
             "logical_programs": 12,
             "physical_programs": 6,
             "level1_parent_loads": 5,
             "reference_level1_parent_loads": 11,
-            "physical_level_max_steps": (5, 12),
-            "physical_critical_path": 17,
+            "physical_level_max_steps": (5, 7),
+            "physical_critical_path": 12,
             "single_writer_nodes": 32,
         }
         if normalized_parent_group != expected_parent_group:
@@ -2377,14 +2390,14 @@ def _fr13_fixed32_observed_gdn(
         ),
     }
     physical_route = normalized_execution["route"]
-    if physical_route == "fixed32_parent_group":
+    if physical_route == "fixed32_parent_group_simd":
         if parent_group_contract is None:
             raise RuntimeError(
                 "FR13 fixed32 GDN grouped execution lacks its descriptor"
             )
         level1_programs = 5
-        physical_level_max_steps = (5, 12)
-        physical_critical_path = 17
+        physical_level_max_steps = (5, 7)
+        physical_critical_path = 12
         level1_parent_loads = 5
     elif physical_route == "fixed32_path":
         level1_programs = 11
@@ -3191,12 +3204,12 @@ def _fr13_fixed32_validate_forward_work(work, label):
     physical_batched = work["gdn_physical_batched"]
     if type(physical_batched) is not bool:
         raise RuntimeError("FR13 fixed32 GDN physical batched flag is invalid")
-    if physical_route == "fixed32_parent_group":
+    if physical_route == "fixed32_parent_group_simd":
         expected_physical_programs_per_scan = 6
         expected_physical_grid_z_per_request = (1, 5)
         expected_level1_parent_loads_per_scan = 5
-        expected_physical_level_max_steps = (5, 12)
-        expected_physical_critical_path = 17
+        expected_physical_level_max_steps = (5, 7)
+        expected_physical_critical_path = 12
     elif physical_route == "fixed32_path":
         expected_physical_programs_per_scan = 12
         expected_physical_grid_z_per_request = (1, 11)
@@ -4292,21 +4305,26 @@ def _fr13_fixed32_observed_graph_replay(
             48 * event["gdn_physical_launches_per_layer"],
         )
     )
+    grouped_replay = (
+        event["gdn_physical_route"] == "fixed32_parent_group_simd"
+    )
     event["gdn_level1_parent_loads"] = int(
-        gdn.get("level1_parent_loads", int(gdn["scan_calls"]) * 11)
+        gdn.get(
+            "level1_parent_loads",
+            int(gdn["scan_calls"]) * (5 if grouped_replay else 11),
+        )
     )
     event["gdn_single_writer_nodes"] = int(
         gdn.get("single_writer_nodes", gdn["nodes"])
     )
-    grouped_replay = event["gdn_physical_route"] == "fixed32_parent_group"
     event["gdn_physical_level_max_steps"] = tuple(
         gdn.get(
             "physical_level_max_steps",
-            (5, 12) if grouped_replay else (5, 7),
+            (5, 7),
         )
     )
     event["gdn_physical_critical_path"] = int(
-        gdn.get("physical_critical_path", 17 if grouped_replay else 12)
+        gdn.get("physical_critical_path", 12)
     )
     event["gdn_nodes"] = int(gdn["nodes"])
     event["gdn_critical_path"] = int(gdn["critical_path"])

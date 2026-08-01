@@ -1137,7 +1137,7 @@ _FR13_FIXED32_EXPORT_NODES = (0, 1, 4, 9, 14)
 _FR13_FIXED32_EXPORT_SLOTS = len(_FR13_FIXED32_EXPORT_NODES)
 _FR13_FIXED32_MAX_BATCH = 4
 _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID = (
-    "fixed32_gdn_parent_group_v1"
+    "fixed32_gdn_parent_group_simd_v2"
 )
 # Level-1 logical path indices grouped by their common exported parent. The
 # member order is the original schedule order for that parent.
@@ -3578,9 +3578,13 @@ def _fr13_fixed32_gdn_parent_group_contract(
         sum(len(level1[index][0]) for index in indices)
         for _parent, indices in normalized_groups
     )
+    group_max_path_lengths = tuple(
+        max(len(level1[index][0]) for index in indices)
+        for _parent, indices in normalized_groups
+    )
     physical_level_max_steps = (
         max(len(path) for path, _parent in normalized[0]),
-        max(group_node_counts),
+        max(group_max_path_lengths),
     )
     contract = {
         "candidate": _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID,
@@ -3590,9 +3594,12 @@ def _fr13_fixed32_gdn_parent_group_contract(
             indices for _parent, indices in normalized_groups
         ),
         "group_sizes": group_sizes,
-        "group_node_counts": group_node_counts,
         "groups": len(normalized_groups),
         "max_group_paths": max(group_sizes),
+        "simd_width": 4,
+        "member_execution": "parallel_simd",
+        "group_node_counts": group_node_counts,
+        "group_max_path_lengths": group_max_path_lengths,
         "logical_path_counts": tuple(len(level) for level in normalized),
         "physical_grid_z": (1, len(normalized_groups)),
         "logical_programs": sum(len(level) for level in normalized),
@@ -3605,22 +3612,25 @@ def _fr13_fixed32_gdn_parent_group_contract(
         "writer_sha256": _fr13_canonical_sha256(tuple(sorted(writer_nodes))),
     }
     expected = {
-        "candidate": "fixed32_gdn_parent_group_v1",
+        "candidate": "fixed32_gdn_parent_group_simd_v2",
         "parent_nodes": (14, 0, 1, 4, 9),
         "parent_slots": (4, 0, 1, 2, 3),
         "path_indices": ((0, 9, 10), (1, 2), (3, 4), (5, 6), (7, 8)),
         "group_sizes": (3, 2, 2, 2, 2),
-        "group_node_counts": (9, 12, 2, 2, 2),
         "groups": 5,
         "max_group_paths": 3,
+        "simd_width": 4,
+        "member_execution": "parallel_simd",
+        "group_node_counts": (9, 12, 2, 2, 2),
+        "group_max_path_lengths": (7, 7, 1, 1, 1),
         "logical_path_counts": (1, 11),
         "physical_grid_z": (1, 5),
         "logical_programs": 12,
         "physical_programs": 6,
         "level1_parent_loads": 5,
         "reference_level1_parent_loads": 11,
-        "physical_level_max_steps": (5, 12),
-        "physical_critical_path": 17,
+        "physical_level_max_steps": (5, 7),
+        "physical_critical_path": 12,
         "single_writer_nodes": 32,
         "writer_sha256": _FR13_FIXED32_COVERAGE_SHA256,
     }
@@ -3653,9 +3663,9 @@ def _fr13_fixed32_gdn_physical_execution(
         if folded
         else grid_z_per_request
     )
-    physical_level_max_steps = (5, 12) if grouped else (5, 7)
+    physical_level_max_steps = (5, 7)
     return {
-        "route": "fixed32_parent_group" if grouped else "fixed32_path",
+        "route": "fixed32_parent_group_simd" if grouped else "fixed32_path",
         "batched": folded,
         "batch_size": batch,
         "grid_z_per_request": grid_z_per_request,
@@ -8083,6 +8093,67 @@ def _tree_gdn_path_kernel_fixed32_batch(
 
 
 @triton.jit
+def _gdn_group_node_step(
+    state_i,
+    b_q,
+    b_k,
+    b_v,
+    b_b,
+    b_g,
+    b_raw_a,
+    b_raw_b,
+    b_a_log,
+    b_dt_bias,
+    OUTPUT_SCALE: tl.constexpr,
+    USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
+    RAW_GATING: tl.constexpr,
+    SCAN_ALIGN: tl.constexpr = False,
+):
+    """Apply the exact node update to independent member lanes in parallel."""
+    b_beta = b_b
+    if RAW_GATING:
+        x = b_raw_a + b_dt_bias
+        softplus_x = tl.where(
+            x <= 20.0,
+            tl.log(1.0 + tl.exp(x)),
+            x,
+        )
+        b_g = -tl.exp(b_a_log) * softplus_x
+        if SCAN_ALIGN:
+            b_beta = (
+                tl.sigmoid(b_raw_b.to(tl.float32))
+                .to(tl.bfloat16)
+                .to(tl.float32)
+            )
+        else:
+            b_beta = tl.sigmoid(b_raw_b.to(tl.float32))
+    if USE_QK_L2NORM_IN_KERNEL:
+        if SCAN_ALIGN:
+            b_q = b_q / tl.sqrt(
+                tl.sum(b_q * b_q, axis=1)[:, None] + 1e-6
+            )
+            b_k = b_k / tl.sqrt(
+                tl.sum(b_k * b_k, axis=1)[:, None] + 1e-6
+            )
+        else:
+            b_q = b_q * tl.rsqrt(
+                tl.sum(b_q * b_q, axis=1)[:, None] + 1e-6
+            )
+            b_k = b_k * tl.rsqrt(
+                tl.sum(b_k * b_k, axis=1)[:, None] + 1e-6
+            )
+    b_q = b_q * OUTPUT_SCALE
+    state_i *= tl.exp(b_g)[:, None]
+    b_v -= tl.sum(state_i * b_k[:, None, :], axis=2)
+    b_v *= b_beta
+    state_i += b_v[:, :, None] * b_k[:, None, :]
+    out_i = tl.sum(state_i * b_q[:, None, :], axis=2)
+    if SCAN_ALIGN:
+        state_i = state_i.to(tl.bfloat16).to(tl.float32)
+    return state_i, out_i
+
+
+@triton.jit
 def _tree_gdn_path_kernel_fixed32_parent_group(
     q,
     k,
@@ -8116,17 +8187,20 @@ def _tree_gdn_path_kernel_fixed32_parent_group(
     SCAN_ALIGN: tl.constexpr,
     MAX_PATH_LEN: tl.constexpr,
     MAX_GROUP_PATHS: tl.constexpr,
+    SIMD_WIDTH: tl.constexpr,
     NUM_GROUPS: tl.constexpr,
     BATCH_SIZE: tl.constexpr,
     EXPORT_SLOTS: tl.constexpr,
     COMPACT_EXPORT: tl.constexpr,
     RING_EXPORT: tl.constexpr = False,
 ):
-    """Exact fixed32 level-1 scan, one program per exported parent.
+    """Exact fixed32 level-1 scan, one SIMD program per exported parent.
 
     The parent fp32 tile is loaded once, then reused as the initial state for
-    each original child path in descriptor order. Level 0 remains on the
-    established path kernel and owns export, counter, and freshness writes.
+    every original child path. Member lanes advance in lockstep and retain
+    independent state, preserving the seven-step maximum branch depth instead
+    of serializing all paths in a group. Level 0 remains on the established
+    path kernel and owns export, counter, and freshness writes.
     """
     pid_vh = tl.program_id(0)
     pid_v = tl.program_id(1)
@@ -8138,6 +8212,7 @@ def _tree_gdn_path_kernel_fixed32_parent_group(
     pid_kh = pid_vh // head_group
     offs_k = tl.arange(0, DIM_K)
     offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
+    offs_member = tl.arange(0, SIMD_WIDTH)[:, None]
     v_mask = offs_v < DIM_V
 
     parent_ref = tl.load(group_parent_refs + pid_group)
@@ -8156,123 +8231,129 @@ def _tree_gdn_path_kernel_fixed32_parent_group(
         other=0.0,
     ).to(tl.float32)
     group_path_count = tl.load(group_path_counts + pid_group)
+    member_ok = batch_ok & (offs_member < group_path_count)
+    path_index = tl.load(
+        group_path_indices + pid_group * MAX_GROUP_PATHS + offs_member,
+        mask=member_ok,
+        other=0,
+    )
+    path_len = tl.load(
+        path_lengths + path_index,
+        mask=member_ok,
+        other=0,
+    )
+    state_i = parent_state[None, :, :] + tl.zeros(
+        (SIMD_WIDTH, 1, 1), dtype=tl.float32
+    )
 
-    for member in tl.static_range(0, MAX_GROUP_PATHS):
-        member_ok = batch_ok & (member < group_path_count)
-        path_index = tl.load(
-            group_path_indices + pid_group * MAX_GROUP_PATHS + member,
-            mask=member_ok,
-            other=0,
+    for i in tl.static_range(0, MAX_PATH_LEN):
+        step_ok = member_ok & (i < path_len)
+        node = tl.load(
+            path_nodes + path_index * MAX_PATH_LEN + i,
+            mask=step_ok,
+            other=-1,
         )
-        path_len = tl.load(
-            path_lengths + path_index,
-            mask=member_ok,
-            other=0,
+        n_ok = step_ok & (node >= 0) & (node < N_ACTUAL)
+        node_c = tl.maximum(node, 0)
+        global_node = pid_batch * N_ACTUAL + node_c
+        b_q = tl.load(
+            q + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k[None, :],
+            mask=n_ok,
+            other=0.0,
+        ).to(tl.float32)
+        b_k_raw = tl.load(
+            k + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k[None, :],
+            mask=n_ok,
+            other=0.0,
         )
-        state_i = parent_state
-        for i in tl.range(0, path_len):
-            node = tl.load(path_nodes + path_index * MAX_PATH_LEN + i)
-            n_ok = member_ok & (node >= 0) & (node < N_ACTUAL)
-            node_c = tl.maximum(node, 0)
-            global_node = pid_batch * N_ACTUAL + node_c
-            b_q = tl.load(
-                q + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
-                mask=n_ok,
-                other=0.0,
-            ).to(tl.float32)
-            b_k_raw = tl.load(
-                k + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
+        b_k = b_k_raw.to(tl.float32)
+        b_v_raw = tl.load(
+            v + (global_node * NUM_VH + pid_vh) * DIM_V + offs_v[None, :],
+            mask=n_ok & v_mask[None, :],
+            other=0.0,
+        )
+        b_v = b_v_raw.to(tl.float32)
+        if RING_EXPORT:
+            tl.store(
+                ring_k
+                + (global_node * NUM_KH + pid_kh) * DIM_K
+                + offs_k[None, :],
+                b_k_raw,
+                mask=n_ok
+                & (pid_v == 0)
+                & (pid_vh % head_group == 0),
+            )
+            tl.store(
+                ring_v
+                + (global_node * NUM_VH + pid_vh) * DIM_V
+                + offs_v[None, :],
+                b_v_raw,
+                mask=n_ok & v_mask[None, :],
+            )
+        b_b = tl.load(
+            beta + global_node * NUM_VH + pid_vh,
+            mask=n_ok,
+            other=0.0,
+        ).to(tl.float32)
+        b_g = tl.load(
+            g + global_node * NUM_VH + pid_vh,
+            mask=n_ok,
+            other=0.0,
+        ).to(tl.float32)
+        b_raw_a = b_g
+        b_raw_b = b_b
+        b_a_log = b_g
+        b_dt_bias = b_b
+        if RAW_GATING:
+            b_raw_b_in = tl.load(
+                raw_b + global_node * NUM_VH + pid_vh,
                 mask=n_ok,
                 other=0.0,
             )
-            b_k = b_k_raw.to(tl.float32)
-            b_v_raw = tl.load(
-                v + (global_node * NUM_VH + pid_vh) * DIM_V + offs_v,
-                mask=n_ok & v_mask,
+            b_raw_b = b_raw_b_in.to(tl.float32)
+            b_raw_a_in = tl.load(
+                raw_a + global_node * NUM_VH + pid_vh,
+                mask=n_ok,
                 other=0.0,
             )
-            b_v = b_v_raw.to(tl.float32)
+            b_raw_a = b_raw_a_in.to(tl.float32)
             if RING_EXPORT:
                 tl.store(
-                    ring_k
-                    + (global_node * NUM_KH + pid_kh) * DIM_K
-                    + offs_k,
-                    b_k_raw,
-                    mask=n_ok
-                    & (pid_v == 0)
-                    & (pid_vh % head_group == 0),
+                    ring_a + global_node * NUM_VH + pid_vh,
+                    b_raw_a_in,
+                    mask=n_ok & (pid_v == 0),
                 )
                 tl.store(
-                    ring_v
-                    + (global_node * NUM_VH + pid_vh) * DIM_V
-                    + offs_v,
-                    b_v_raw,
-                    mask=n_ok & v_mask,
+                    ring_b + global_node * NUM_VH + pid_vh,
+                    b_raw_b_in,
+                    mask=n_ok & (pid_v == 0),
                 )
-            b_b = tl.load(
-                beta + global_node * NUM_VH + pid_vh,
-                mask=n_ok,
-                other=0.0,
-            ).to(tl.float32)
-            b_g = tl.load(
-                g + global_node * NUM_VH + pid_vh,
-                mask=n_ok,
-                other=0.0,
-            ).to(tl.float32)
-            b_raw_a = b_g
-            b_raw_b = b_b
-            b_a_log = b_g
-            b_dt_bias = b_b
-            if RAW_GATING:
-                b_raw_b_in = tl.load(
-                    raw_b + global_node * NUM_VH + pid_vh,
-                    mask=n_ok,
-                    other=0.0,
-                )
-                b_raw_b = b_raw_b_in.to(tl.float32)
-                b_raw_a_in = tl.load(
-                    raw_a + global_node * NUM_VH + pid_vh,
-                    mask=n_ok,
-                    other=0.0,
-                )
-                b_raw_a = b_raw_a_in.to(tl.float32)
-                if RING_EXPORT:
-                    tl.store(
-                        ring_a + global_node * NUM_VH + pid_vh,
-                        b_raw_a_in,
-                        mask=n_ok & (pid_v == 0),
-                    )
-                    tl.store(
-                        ring_b + global_node * NUM_VH + pid_vh,
-                        b_raw_b_in,
-                        mask=n_ok & (pid_v == 0),
-                    )
-                b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
-                b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
-            new_state, out_i = _gdn_node_step(
-                state_i,
-                b_q,
-                b_k,
-                b_v,
-                b_b,
-                b_g,
-                b_raw_a,
-                b_raw_b,
-                b_a_log,
-                b_dt_bias,
-                OUTPUT_SCALE=OUTPUT_SCALE,
-                USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
-                RAW_GATING=RAW_GATING,
-                SCAN_ALIGN=SCAN_ALIGN,
-            )
-            state_i = tl.where(n_ok, new_state, state_i)
-            tl.store(
-                out
-                + (global_node * NUM_VH + pid_vh) * DIM_V
-                + offs_v,
-                out_i,
-                mask=n_ok & v_mask,
-            )
+            b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
+            b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
+        new_state, out_i = _gdn_group_node_step(
+            state_i,
+            b_q,
+            b_k,
+            b_v,
+            b_b,
+            b_g,
+            b_raw_a,
+            b_raw_b,
+            b_a_log,
+            b_dt_bias,
+            OUTPUT_SCALE=OUTPUT_SCALE,
+            USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
+            RAW_GATING=RAW_GATING,
+            SCAN_ALIGN=SCAN_ALIGN,
+        )
+        state_i = tl.where(n_ok[:, :, None], new_state, state_i)
+        tl.store(
+            out
+            + (global_node * NUM_VH + pid_vh) * DIM_V
+            + offs_v[None, :],
+            out_i,
+            mask=n_ok & v_mask[None, :],
+        )
 
 
 @triton.jit
@@ -12313,6 +12394,7 @@ def launch_tree_gdn_prepared(
                     MAX_GROUP_PATHS=int(
                         _group_contract["max_group_paths"]
                     ),
+                    SIMD_WIDTH=int(_group_contract["simd_width"]),
                     NUM_GROUPS=int(_group_contract["groups"]),
                     BATCH_SIZE=1,
                     EXPORT_SLOTS=_FR13_FIXED32_EXPORT_SLOTS,
@@ -13253,6 +13335,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                     MAX_GROUP_PATHS=int(
                         group_contract["max_group_paths"]
                     ),
+                    SIMD_WIDTH=int(group_contract["simd_width"]),
                     NUM_GROUPS=int(group_contract["groups"]),
                     BATCH_SIZE=batch,
                     EXPORT_SLOTS=_FR13_FIXED32_EXPORT_SLOTS,

@@ -140,14 +140,17 @@ def test_parent_group_descriptor_covers_paths_nodes_and_writers_once() -> None:
         (7, 8),
     )
     assert contract["group_sizes"] == (3, 2, 2, 2, 2)
+    assert contract["simd_width"] == 4
+    assert contract["member_execution"] == "parallel_simd"
     assert contract["group_node_counts"] == (9, 12, 2, 2, 2)
+    assert contract["group_max_path_lengths"] == (7, 7, 1, 1, 1)
+    assert contract["physical_level_max_steps"] == (5, 7)
+    assert contract["physical_critical_path"] == 12
     assert contract["physical_grid_z"] == (1, 5)
     assert contract["physical_programs"] == 6
     assert contract["logical_programs"] == 12
     assert contract["level1_parent_loads"] == 5
     assert contract["reference_level1_parent_loads"] == 11
-    assert contract["physical_level_max_steps"] == (5, 12)
-    assert contract["physical_critical_path"] == 17
 
     level1 = levels[1]
     covered_paths = [
@@ -235,17 +238,23 @@ def test_parent_group_selector_is_default_off_and_fail_closed(tmp_path) -> None:
 
 def test_parent_group_kernel_and_launchers_keep_single_writer_surfaces() -> None:
     kernel = _function_source("_tree_gdn_path_kernel_fixed32_parent_group")
+    group_step = _function_source("_gdn_group_node_step")
     b1_launcher = _function_source("launch_tree_gdn_prepared")
     batched_launcher = _function_source(
         "launch_tree_gdn_prepared_fixed32_batch"
     )
 
-    assert "for member in tl.static_range(0, MAX_GROUP_PATHS)" in kernel
+    assert "offs_member = tl.arange(0, SIMD_WIDTH)[:, None]" in kernel
+    assert "for member in tl.static_range" not in kernel
+    assert "for i in tl.static_range(0, MAX_PATH_LEN)" in kernel
     assert kernel.index("parent_state = tl.load(") < kernel.index(
-        "for member in tl.static_range"
+        "for i in tl.static_range"
     )
-    assert "state_i = parent_state" in kernel
-    assert "_gdn_node_step(" in kernel
+    assert "state_i = parent_state[None, :, :] + tl.zeros(" in kernel
+    assert "_gdn_group_node_step(" in kernel
+    assert "state_i * b_k[:, None, :]" in group_step
+    assert "axis=2" in group_step
+    assert "b_v[:, :, None] * b_k[:, None, :]" in group_step
     assert "invocation_counter" not in kernel
     assert "flags_ptr" not in kernel
     assert "tl.store(\n                state_export" not in kernel
@@ -255,12 +264,14 @@ def test_parent_group_kernel_and_launchers_keep_single_writer_surfaces() -> None
     assert "if _parent_group is not None and _li == 1:" in b1_launcher
     assert "COMPACT_EXPORT=False" in b1_launcher
     assert "BATCH_SIZE=1" in b1_launcher
+    assert 'SIMD_WIDTH=int(_group_contract["simd_width"])' in b1_launcher
     assert "COUNT_INVOCATION=_count and (_li == 0)" in b1_launcher
     assert "FLAGS_EXPORT=_flags_export and (_li == 0)" in b1_launcher
     assert "if parent_group is not None and level_index == 1:" in batched_launcher
     assert "batch * int(group_contract[\"groups\"])" in batched_launcher
     assert "COMPACT_EXPORT=True" in batched_launcher
     assert "force_incumbent_parent_group=True" in batched_launcher
+    assert 'SIMD_WIDTH=int(group_contract["simd_width"])' in batched_launcher
     assert "COUNT_INVOCATION=count_invocation and level_index == 0" in (
         batched_launcher
     )
@@ -275,7 +286,7 @@ def test_parent_group_physical_execution_distinguishes_b1_and_b4() -> None:
     assert b1["grid_z_per_request"] == (1, 5)
     assert b1["event_grid_z"] == (1, 5)
     assert b1["physical_launches_per_layer"] == 2
-    assert b1["physical_critical_path"] == 17
+    assert b1["physical_critical_path"] == 12
 
     b4 = describe(parent_group=True, batch_size=4, batched=True)
     assert b4["grid_z_per_request"] == (1, 5)
@@ -350,7 +361,8 @@ def test_parent_group_observer_preserves_logical_contract() -> None:
     )
     patcher = PATCHER_PATH.read_text(encoding="utf-8")
 
-    assert 'physical_route == "fixed32_parent_group"' in observer
+    assert 'physical_route == "fixed32_parent_group_simd"' in observer
+    assert '"physical_critical_path": int(' in observer
     assert '"physical_grid_z": (1, 5)' in observer
     assert 'normalized_contract["programs"]' in observer
     assert 'normalized_contract["padded_slots"]' in observer
@@ -358,7 +370,7 @@ def test_parent_group_observer_preserves_logical_contract() -> None:
     assert '"gdn_padded_slots": expected_gdn_calls * 82' in validator
     assert "expected_physical_programs_per_scan = 6" in validator
     assert "expected_level1_parent_loads_per_scan = 5" in validator
-    assert "expected_physical_critical_path = 17" in validator
+    assert "expected_physical_critical_path = 12" in validator
     assert "expected_physical_event_grid_z" in validator
     assert '"fixed32_parent_group_contract": (' in patcher
     assert '"physical_route": work["gdn_physical_route"]' in patcher
@@ -422,7 +434,7 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
             "ancestry_sha256": "b" * 64,
         },
         "fixed32_parent_group_contract": {
-            "candidate": "fixed32_gdn_parent_group_v1",
+            "candidate": "fixed32_gdn_parent_group_simd_v2",
             "parent_nodes": (14, 0, 1, 4, 9),
             "parent_slots": (4, 0, 1, 2, 3),
             "path_indices": (
@@ -433,21 +445,24 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
                 (7, 8),
             ),
             "group_sizes": (3, 2, 2, 2, 2),
-            "group_node_counts": (9, 12, 2, 2, 2),
             "groups": 5,
             "max_group_paths": 3,
+            "simd_width": 4,
+            "member_execution": "parallel_simd",
+            "group_node_counts": (9, 12, 2, 2, 2),
+            "group_max_path_lengths": (7, 7, 1, 1, 1),
+            "physical_level_max_steps": (5, 7),
+            "physical_critical_path": 12,
             "logical_path_counts": (1, 11),
             "physical_grid_z": (1, 5),
             "logical_programs": 12,
             "physical_programs": 6,
             "level1_parent_loads": 5,
             "reference_level1_parent_loads": 11,
-            "physical_level_max_steps": (5, 12),
-            "physical_critical_path": 17,
             "single_writer_nodes": 32,
         },
         "gdn_physical_execution": {
-            "route": "fixed32_parent_group",
+            "route": "fixed32_parent_group_simd",
             "batched": False,
             "batch_size": 1,
             "grid_z_per_request": (1, 5),
@@ -459,8 +474,8 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
             "level1_parent_loads_per_request": 5,
             "single_writer_nodes_per_request": 32,
             "logical_critical_path": 12,
-            "physical_level_max_steps": (5, 12),
-            "physical_critical_path": 17,
+            "physical_level_max_steps": (5, 7),
+            "physical_critical_path": 12,
         },
     }
 
@@ -481,13 +496,13 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
 
     assert event["gdn_path_programs"] == 12
     assert event["gdn_padded_slots"] == 82
-    assert event["gdn_physical_route"] == "fixed32_parent_group"
+    assert event["gdn_physical_route"] == "fixed32_parent_group_simd"
     assert event["gdn_physical_programs"] == 6
     assert event["gdn_physical_grid_z_per_request"] == (1, 5)
     assert event["gdn_physical_event_grid_z"] == (1, 5)
     assert event["gdn_physical_launches"] == 2
     assert event["gdn_level1_parent_loads"] == 5
     assert event["gdn_single_writer_nodes"] == 32
-    assert event["gdn_physical_level_max_steps"] == (5, 12)
-    assert event["gdn_physical_critical_path"] == 17
+    assert event["gdn_physical_level_max_steps"] == (5, 7)
+    assert event["gdn_physical_critical_path"] == 12
     assert event["gdn_critical_path"] == 12
