@@ -104,9 +104,10 @@ def test_patch_is_default_off_and_shape_gated() -> None:
         (5120, 17408),
         (5120, 6144),
         (16384, 5120),
-        (8192, 5120),
+        (14336, 5120),
     ):
         assert f"n == {n} && k == {k}" in patched
+    assert "n == 8192 && k == 5120" not in patched
 
 
 def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:

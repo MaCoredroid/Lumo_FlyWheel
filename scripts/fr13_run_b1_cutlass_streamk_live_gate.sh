@@ -99,7 +99,7 @@ expected_shapes = {
     (5120, 17408),
     (5120, 6144),
     (16384, 5120),
-    (8192, 5120),
+    (14336, 5120),
 }
 observed_shapes = {(record["n"], record["k"]) for record in records}
 invocations = [record["invocation"] for record in records]
