@@ -1,0 +1,20 @@
+Focused production and launcher suite:
+PYTHONPATH=$PWD/src .venv/bin/python -m pytest -q tests/test_fr13_fixed32_sfwd_state_fusion.py tests/test_fr13_sfwd_state_fusion_b4_production.py tests/test_fr13_k64_qrow16_sfwd_stack.py tests/test_fr13_fixed32_final_full_preseed.py
+86 passed in 1.68s
+
+Broader affected fixed32 suite:
+PYTHONPATH=$PWD/src .venv/bin/python -m pytest -q tests/test_fr13_fixed32_sfwd_state_fusion.py tests/test_fr13_fixed32_conv_source_batch.py tests/test_fr13_k64_qrow16_sfwd_stack.py tests/test_fr13_sfwd_state_fusion_b4_production.py tests/test_fr13_fixed32_final_full_preseed.py tests/test_fr13_qrow16_production_sidecar.py tests/test_fr13_fa2_tree_kernel_candidates.py tests/test_fr13_fixed32_conv_pregather_geometry.py tests/test_fr13_fixed32_conv_row_guard.py tests/test_fr13_fixed32_gdn_exact_io.py tests/test_fr13_fixed32_floor_propagation.py tests/test_fr13_fixed32_subset_binding.py tests/test_fr13_fixed32_b1_diagnostic.py tests/test_fr13_fixed32_taw_native_precompute.py tests/test_fr13_fixed32_ingress_wiring.py
+192 passed, 1 skipped in 3.73s
+
+SFWD binding validation:
+.venv/bin/python scripts/fr13_sfwd_state_fusion_pass.py validate --live-result results/fr13_fixed32_sfwd_b1_real_task_byte_pass_20260801/run_evidence/fr13_fixed32_sfwd_state_fusion.live_pass.json --expected-live-sha256 7ccfaf5cc907909b0646b752b94027e250b234a3b98bf461de61e6ae70f31782 --kernel-source src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py
+PASS: qualified source a9decdbe60db4227e4128ea05bfa405e09e284bfbc7c3ed216cd73d3f72d35ec; executable closure 792c14941d933e9978811cd7dba33e9c9877638ed7f8fca4aa2044643cfbf038.
+
+Static checks:
+python -m py_compile on all modified Python sources: PASS
+bash -n on launcher, serve variant, and exact4 timing runner: PASS
+git diff --check: PASS
+qrow16 live-pass validator: PASS
+
+Repository-wide collection note:
+The shared CPU virtualenv lacks Triton and its editable package points to a different worktree, so an unordered full repository collection cannot be used as a clean signal here. One pre-existing tree-conv wiring file also has six stale source-shape assertions. No GPU hardware was available or used for this preparation.
