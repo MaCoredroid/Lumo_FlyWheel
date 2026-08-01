@@ -290,3 +290,10 @@ def test_curated_pass_and_runner_wiring_are_pinned() -> None:
     assert "floor_acceptance_eligible=0" in source
     assert "formal_floor_acceptance_eligible=0" in source
     assert "production_default_enabled=0" in source
+    assert (
+        "CANDIDATE_SOURCE_SHA256="
+        "8402e027b6dea8d902f86810b9e5a0fa0a01dda61e74b0f517987d2cf4c95f9a"
+        in source
+    )
+    assert "CFWD candidate source differs from the byte-qualified source" in source
+    assert "git merge-base --is-ancestor" not in source

@@ -273,3 +273,22 @@ def test_b4_graph_gate_pins_cutlass_stock_and_bm8_off() -> None:
     assert "FR13_FIXED32_CUTLASS_WAVE_SO=" in launch_environment
     assert "FR13_DFWD_UNIFIED_BM8_LIVE_AB=0" in launch_environment
     assert "FR13_DFWD_UNIFIED_BM8_PRODUCTION=0" in launch_environment
+
+
+def test_integration_launcher_preserves_reviewed_streamk_source_binding() -> None:
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+    expected = "968f1150638a72938e86ade8f6ed1a173ba9e3e3"
+
+    assert (
+        f"_FR13_CUTLASS_STREAMK_QUALIFICATION_SOURCE_COMMIT={expected}"
+        in launcher
+    )
+    assert "git merge-base --is-ancestor" in launcher
+    assert (
+        '"$_FR13_CUTLASS_STREAMK_QUALIFICATION_SOURCE_COMMIT" HEAD'
+        in launcher
+    )
+    assert (
+        "_fr13_cutlass_streamk_source_commit="
+        "$_FR13_CUTLASS_STREAMK_QUALIFICATION_SOURCE_COMMIT"
+    ) in launcher

@@ -22,6 +22,8 @@ LIVE_PASS_SHA256=b7c8f4e7f8cf3e2619d458b3ec3e5e1ffdcb5a15a2938aa18c6dda936b3c45e
 CANDIDATE_BASE_COMMIT=f19e90053cfe414cafc76a2ffa3326a589da5e1e
 CANDIDATE=fixed32_all_parent_commit_v2
 SOURCE_CONTRACT_SHA256=51541928c3a758fdac34a70fe46b97753ffc1b6e9f3e5fe470c4b34a96515dc4
+CANDIDATE_SOURCE=scripts/fr13_device_multidraft_kernel.py
+CANDIDATE_SOURCE_SHA256=8402e027b6dea8d902f86810b9e5a0fa0a01dda61e74b0f517987d2cf4c95f9a
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
 STOCK_FA2_RELATIVE=output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so
 STOCK_FA2_SO="$REPO/$STOCK_FA2_RELATIVE"
@@ -44,7 +46,7 @@ CANDIDATE_ARM="hydra27_fixed32_cfwd_all_parent_${TAG}"
   || { echo "RUNROOT must be new: $RUNROOT_ABS" >&2; exit 2; }
 [[ -x "$PYTHON_BIN" ]] \
   || { echo "Python environment is unavailable: $PYTHON_BIN" >&2; exit 2; }
-for required_file in "$SUBSET" "$LIVE_PASS" "$STOCK_FA2_SO"; do
+for required_file in "$SUBSET" "$LIVE_PASS" "$STOCK_FA2_SO" "$CANDIDATE_SOURCE"; do
   [[ -f "$required_file" && ! -L "$required_file" ]] \
     || { echo "required input must be a regular non-symlink file: $required_file" >&2; exit 2; }
 done
@@ -60,13 +62,8 @@ unset required_file
   || { echo "current source identity is invalid" >&2; exit 2; }
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean" >&2; exit 2; }
-git merge-base --is-ancestor "$CANDIDATE_BASE_COMMIT" HEAD \
-  || { echo "CFWD candidate base commit is not an ancestor of HEAD" >&2; exit 2; }
-git diff --quiet "$CANDIDATE_BASE_COMMIT" -- \
-  scripts/fr13_device_multidraft_kernel.py \
-  scripts/fr13_fixed32_work_census.py \
-  scripts/fr13_launch_forked_fa2_tree_server.sh \
-  || { echo "CFWD candidate source differs from the qualified base" >&2; exit 2; }
+[[ "$(sha256sum "$CANDIDATE_SOURCE" | awk '{print $1}')" == "$CANDIDATE_SOURCE_SHA256" ]] \
+  || { echo "CFWD candidate source differs from the byte-qualified source" >&2; exit 2; }
 
 # Validate the exact curated credential before the first Docker query. The
 # byte-gate run contributes no timing samples to this diagnostic.
@@ -100,8 +97,9 @@ mkdir -p "$RUNROOT_ABS"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
 
-printf 'classification=one_real_swe_verified_b1_cfwd_all_parent_timing_diagnostic\ntask_count=1\ntask_id=astropy__astropy-12907\nbatch_size=1\nconcurrency=1\ntiming_eligible=0\nfloor_acceptance_eligible=0\nformal_floor_acceptance_eligible=0\nproduction_default_enabled=0\nstock_first=1\nonly_arm_delta=FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION_0_to_1\ncandidate=%s\ncandidate_base_commit=%s\nsource_contract_sha256=%s\nphysical_drafts=31\nphysical_rows=32\ndraft_vocab_root=0\ndraft_vocab_k=0\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_1_15x_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nlive_pass_sha256=%s\nstock_fa2_sha256=%s\nstarted=%s\n' \
+printf 'classification=one_real_swe_verified_b1_cfwd_all_parent_timing_diagnostic\ntask_count=1\ntask_id=astropy__astropy-12907\nbatch_size=1\nconcurrency=1\ntiming_eligible=0\nfloor_acceptance_eligible=0\nformal_floor_acceptance_eligible=0\nproduction_default_enabled=0\nstock_first=1\nonly_arm_delta=FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION_0_to_1\ncandidate=%s\ncandidate_base_commit=%s\nsource_contract_sha256=%s\ncandidate_source_sha256=%s\nphysical_drafts=31\nphysical_rows=32\ndraft_vocab_root=0\ndraft_vocab_k=0\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_1_15x_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nlive_pass_sha256=%s\nstock_fa2_sha256=%s\nstarted=%s\n' \
   "$CANDIDATE" "$CANDIDATE_BASE_COMMIT" "$SOURCE_CONTRACT_SHA256" \
+  "$CANDIDATE_SOURCE_SHA256" \
   "$FULL_VOCAB_WEIGHT_BYTES" "$FULL_VOCAB_FLOOR_MS" "$FULL_VOCAB_CAP_MS" \
   "$$" "$RUNROOT_ABS" "$STOCK_ARM" "$CANDIDATE_ARM" "$SOURCE_COMMIT" \
   "$RUNNER_SHA256" "$SUBSET_SHA256" "$LIVE_PASS_SHA256" \

@@ -482,3 +482,35 @@ def test_source_gated_timing_pair_is_stock_first_and_nonacceptance() -> None:
     assert runner.index("fr13_sfwd_state_fusion_pass.py validate") < runner.index(
         "docker ps -aq"
     )
+
+
+def test_production_route_admits_only_qualified_cfwd_streamk_companions() -> None:
+    launcher = LAUNCHER_PATH.read_text(encoding="utf-8")
+    start = launcher.index(
+        'if [[ "$_fr13_sfwd_state_fusion_byte_ab" == "1" \\\n'
+        '      || "$_fr13_sfwd_state_fusion_production" == "1" ]]; then'
+    )
+    end = launcher.index(
+        'if [[ "$_fr13_sfwd_state_fusion_byte_ab" == "1" ]]; then\n'
+        "  printf '1\\n'",
+        start,
+    )
+    contract = launcher[start:end]
+    production = contract[contract.index("\n  else\n") :]
+
+    assert (
+        "SFWD state-fusion byte gate must be the only kernel candidate"
+        in contract
+    )
+    assert (
+        "SFWD production may stack only with qualified CFWD and B1 Stream-K production"
+        in production
+    )
+    assert '"$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0"' in production
+    assert '"$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "0"' not in production
+    assert '"$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128"' in production
+    assert '"$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256"' in production
+    assert '"$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1"' in production
+    assert "streamk_force_wide256_byte_ab" not in production
+    assert "_FR13_CALLER_TAW_PRODUCTION" in launcher
+    assert "_FR13_CALLER_TAW_PASS_JSON" in launcher

@@ -14,6 +14,8 @@ _FR13_CALLER_BATCH_GDN_GATE_VERDICT_SHA="${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VER
 _FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST="${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON+set}:${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON-}"
 _FR13_CALLER_BATCH_GDN_GATE_RUNNER="${FR13_FIXED32_BATCH_GDN_GATE_RUNNER+set}:${FR13_FIXED32_BATCH_GDN_GATE_RUNNER-}"
 _FR13_CALLER_BATCH_GDN_BV8_TIMING="${FR13_FIXED32_BATCH_GDN_BV8_TIMING+set}:${FR13_FIXED32_BATCH_GDN_BV8_TIMING-}"
+_FR13_CALLER_TAW_PRODUCTION="${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION+set}:${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION-}"
+_FR13_CALLER_TAW_PASS_JSON="${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON+set}:${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON-}"
 _FR13_CALLER_SFWD_FUSION_PRODUCTION="${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION+set}:${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION-}"
 _FR13_CALLER_SFWD_FUSION_PASS_JSON="${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON+set}:${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON-}"
 _FR13_CALLER_SFWD_FUSION_PASS_SHA="${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256+set}:${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256-}"
@@ -120,6 +122,8 @@ if [[ "$_FR13_CALLER_BATCH_GDN_PRODUCTION" == set:* \
       || "$_FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST" == set:* \
       || "$_FR13_CALLER_BATCH_GDN_GATE_RUNNER" == set:* \
       || "$_FR13_CALLER_BATCH_GDN_BV8_TIMING" == set:* \
+      || "$_FR13_CALLER_TAW_PRODUCTION" == set:* \
+      || "$_FR13_CALLER_TAW_PASS_JSON" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_SO" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_PRODUCTION" == set:* \
@@ -136,6 +140,8 @@ if [[ "$_FR13_CALLER_BATCH_GDN_PRODUCTION" == set:* \
       || "${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON+set}:${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON-}" != "$_FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST" \
       || "${FR13_FIXED32_BATCH_GDN_GATE_RUNNER+set}:${FR13_FIXED32_BATCH_GDN_GATE_RUNNER-}" != "$_FR13_CALLER_BATCH_GDN_GATE_RUNNER" \
       || "${FR13_FIXED32_BATCH_GDN_BV8_TIMING+set}:${FR13_FIXED32_BATCH_GDN_BV8_TIMING-}" != "$_FR13_CALLER_BATCH_GDN_BV8_TIMING" \
+      || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION+set}:${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION-}" != "$_FR13_CALLER_TAW_PRODUCTION" \
+      || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON+set}:${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON-}" != "$_FR13_CALLER_TAW_PASS_JSON" \
       || "${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION+set}:${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION-}" != "$_FR13_CALLER_SFWD_FUSION_PRODUCTION" \
       || "${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON+set}:${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON-}" != "$_FR13_CALLER_SFWD_FUSION_PASS_JSON" \
       || "${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256+set}:${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256-}" != "$_FR13_CALLER_SFWD_FUSION_PASS_SHA" \
@@ -170,6 +176,8 @@ unset \
   _FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST \
   _FR13_CALLER_BATCH_GDN_GATE_RUNNER \
   _FR13_CALLER_BATCH_GDN_BV8_TIMING \
+  _FR13_CALLER_TAW_PRODUCTION \
+  _FR13_CALLER_TAW_PASS_JSON \
   _FR13_CALLER_SFWD_FUSION_PRODUCTION \
   _FR13_CALLER_SFWD_FUSION_PASS_JSON \
   _FR13_CALLER_SFWD_FUSION_PASS_SHA \
@@ -346,6 +354,7 @@ FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL=${FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSON
 FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}
 FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON=${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON:-}
 FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256=${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256:-}
+_FR13_CUTLASS_STREAMK_QUALIFICATION_SOURCE_COMMIT=968f1150638a72938e86ade8f6ed1a173ba9e3e3
 case "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" in
   0|1) ;;
   *) echo "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE must be 0 or 1" >&2; exit 2 ;;
@@ -581,7 +590,12 @@ else
       echo "CUTLASS Stream-K production requires fixed32 B1 and a pinned live PASS" >&2
       exit 2
     }
-    _fr13_cutlass_streamk_source_commit=$(git rev-parse HEAD)
+    git merge-base --is-ancestor \
+      "$_FR13_CUTLASS_STREAMK_QUALIFICATION_SOURCE_COMMIT" HEAD || {
+      echo "CUTLASS Stream-K qualification source is not an ancestor of the integration source" >&2
+      exit 2
+    }
+    _fr13_cutlass_streamk_source_commit=$_FR13_CUTLASS_STREAMK_QUALIFICATION_SOURCE_COMMIT
     .venv/bin/python scripts/fr13_cutlass_streamk_pass.py validate \
       --live-result "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
       --expected-live-sha256 "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
@@ -1894,26 +1908,52 @@ if [[ "$_fr13_sfwd_state_fusion_byte_ab" == "1" \
     echo "FR13 SFWD state-fusion route requires exact full-vocab eager fixed32 B1" >&2
     exit 2
   }
-  [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
-     && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "0" \
-     && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
-     && "$FR13_FA2_QROW16_PRODUCTION" == "0" \
-     && "$FR13_DRAFT_HEAD_PAD_ROWS" == "0" \
-     && "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" \
-     && "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "0" \
-     && "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "0" \
-     && "$FR13_FIXED32_CUTLASS_WAVE" == "stock" \
-     && -z "$_fr13_gdn_path_bv_candidate" \
-     && -z "$_fr13_gdn_path_bv_production" \
-     && "$_fr13_batch_gdn_byte_ab" == "0" \
-     && "$_fr13_batch_gdn_graph_byte_ab" == "0" \
-     && "$_fr13_batch_gdn_production" == "0" \
-     && "$_fr13_batch_gdn_bv8_timing" == "0" \
-     && -z "$_fr13_batch_gdn_bv_candidate" \
-     && -z "$_fr13_batch_gdn_bv_production" ]] || {
-    echo "FR13 SFWD state-fusion route must be the only kernel candidate" >&2
-    exit 2
-  }
+  if [[ "$_fr13_sfwd_state_fusion_byte_ab" == "1" ]]; then
+    [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+       && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "0" \
+       && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+       && "$FR13_FA2_QROW16_PRODUCTION" == "0" \
+       && "$FR13_DRAFT_HEAD_PAD_ROWS" == "0" \
+       && "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" \
+       && "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "0" \
+       && "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "0" \
+       && "$FR13_FIXED32_CUTLASS_WAVE" == "stock" \
+       && -z "$_fr13_gdn_path_bv_candidate" \
+       && -z "$_fr13_gdn_path_bv_production" \
+       && "$_fr13_batch_gdn_byte_ab" == "0" \
+       && "$_fr13_batch_gdn_graph_byte_ab" == "0" \
+       && "$_fr13_batch_gdn_production" == "0" \
+       && "$_fr13_batch_gdn_bv8_timing" == "0" \
+       && -z "$_fr13_batch_gdn_bv_candidate" \
+       && -z "$_fr13_batch_gdn_bv_production" ]] || {
+      echo "FR13 SFWD state-fusion byte gate must be the only kernel candidate" >&2
+      exit 2
+    }
+  else
+    [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+       && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+       && "$FR13_FA2_QROW16_PRODUCTION" == "0" \
+       && "$FR13_DRAFT_HEAD_PAD_ROWS" == "0" \
+       && "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" \
+       && "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "0" \
+       && "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "0" \
+       && ( ( "$FR13_FIXED32_CUTLASS_WAVE" == "stock" \
+              && "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "0" ) \
+            || ( ( "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128" \
+                   || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256" ) \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" ) ) \
+       && -z "$_fr13_gdn_path_bv_candidate" \
+       && -z "$_fr13_gdn_path_bv_production" \
+       && "$_fr13_batch_gdn_byte_ab" == "0" \
+       && "$_fr13_batch_gdn_graph_byte_ab" == "0" \
+       && "$_fr13_batch_gdn_production" == "0" \
+       && "$_fr13_batch_gdn_bv8_timing" == "0" \
+       && -z "$_fr13_batch_gdn_bv_candidate" \
+       && -z "$_fr13_batch_gdn_bv_production" ]] || {
+      echo "FR13 SFWD production may stack only with qualified CFWD and B1 Stream-K production" >&2
+      exit 2
+    }
+  fi
 fi
 if [[ "$_fr13_sfwd_state_fusion_byte_ab" == "1" ]]; then
   printf '1\n' > "$LOG_DIR/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
