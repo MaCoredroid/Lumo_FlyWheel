@@ -4640,6 +4640,7 @@ def _fr13_fixed32_observed_commit(
                 )
             )
         )
+    layer_batch = committer_contract.get("layer_batch", False)
     normalized_committer = {
         "batch": int(committer_contract.get("batch", -1)),
         "path_cap": int(committer_contract.get("path_cap", -1)),
@@ -4655,14 +4656,25 @@ def _fr13_fixed32_observed_commit(
             committer_contract.get("preseed_capacity", -1)
         ),
     }
+    expected_fused_calls = 1 if layer_batch is True else 48
     committer_fallback = int(
-        normalized_committer["batch"] != batch
+        type(layer_batch) is not bool
+        or normalized_committer["batch"] != batch
         or normalized_committer["path_cap"] != 16
         or normalized_committer["neutralizations"] != 5
         or normalized_committer["ring_gathers"] != 4
-        or normalized_committer["fused_calls"] != 48
+        or normalized_committer["fused_calls"] != expected_fused_calls
         or normalized_committer["graph_replays_per_event"] != 1
         or normalized_committer["preseed_capacity"] < batch
+        or (
+            layer_batch is True
+            and (
+                int(committer_contract.get("native_reference_fused_calls", -1))
+                != 48
+                or committer_contract.get("byte_gate")
+                != "required_on_first_real_nonzero_accept"
+            )
+        )
     )
     if committer_fallback:
         raise RuntimeError(
@@ -4895,13 +4907,13 @@ def _fr13_fixed32_observed_commit(
     ring_gathers = normalized_committer["ring_gathers"]
     event["committer"] = {
         "route": "fixed16_device_fill_graph",
-        "layers": fused_calls,
+        "layers": int(layer_count),
         "requests": batch,
         "path_capacity": path_cap,
         "layout_slots": path_cap * batch,
         "ring_gather_ops": ring_gathers,
         "ring_layer_path_rows": (
-            ring_gathers * fused_calls * path_cap * batch
+            ring_gathers * int(layer_count) * path_cap * batch
         ),
         "neutralize_ops": normalized_committer["neutralizations"],
         "fused_layer_calls": fused_calls,

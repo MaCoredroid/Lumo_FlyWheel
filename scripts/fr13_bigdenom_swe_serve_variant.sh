@@ -36,6 +36,7 @@ KIND=${2:-tail6}
 SUBSET=${3:?subset json}
 FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
 FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
+FR13_FIXED32_COMMITTER_LAYER_BATCH=${FR13_FIXED32_COMMITTER_LAYER_BATCH:-0}
 case "$FR13_FIXED32_B1_DIAGNOSTIC" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1"; exit 2 ;;
@@ -44,7 +45,12 @@ case "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"; exit 2 ;;
 esac
-export FR13_FIXED32_B1_DIAGNOSTIC FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
+case "$FR13_FIXED32_COMMITTER_LAYER_BATCH" in
+  0|1) ;;
+  *) echo "FAIL: FR13_FIXED32_COMMITTER_LAYER_BATCH must be exactly 0 or 1"; exit 2 ;;
+esac
+export FR13_FIXED32_B1_DIAGNOSTIC FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB \
+  FR13_FIXED32_COMMITTER_LAYER_BATCH
 
 RUNROOT=${RUNROOT:-output/fr13_bigdenom_swe}
 ARMDIR="$RUNROOT/$ARM"
@@ -80,6 +86,13 @@ mkdir -p "$ARMDIR/logs"
 if [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" ]]; then
   chmod 700 "$ARMDIR" "$ARMDIR/logs" \
     || { echo "FAIL: fixed32 arm directories could not be made private"; exit 2; }
+fi
+if [[ "$FR13_FIXED32_COMMITTER_LAYER_BATCH" == "1" ]]; then
+  [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" ]] \
+    || { echo "FAIL: committer layer-batch arm requires a fixed32 kind"; exit 2; }
+  install -m 600 /dev/null \
+    "$ARMDIR/logs/fr13_fixed32_committer_layer_batch.arm" \
+    || { echo "FAIL: could not create committer layer-batch arm sidecar"; exit 2; }
 fi
 FIXED32_MODE=""
 FIXED32_PRODUCER_PID=""

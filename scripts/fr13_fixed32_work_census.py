@@ -1801,8 +1801,20 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         },
         label=f"{source}.conv_pregather",
     )
+    committer_raw = _mapping(event["committer"], f"{source}.committer")
+    _exact_keys(committer_raw, COMMITTER_KEYS, f"{source}.committer")
+    committer_fused_calls = _integer(
+        committer_raw["fused_layer_calls"],
+        f"{source}.committer.fused_layer_calls",
+        minimum=1,
+    )
+    if committer_fused_calls not in (1, GDN_LAYERS):
+        raise CensusError(
+            f"{source}.committer.fused_layer_calls: expected 1 or "
+            f"{GDN_LAYERS}, got {committer_fused_calls}"
+        )
     committer = _fixed_section(
-        event["committer"],
+        committer_raw,
         keys=COMMITTER_KEYS,
         expected={
             "route": COMMITTER_ROUTE,
@@ -1815,7 +1827,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
                 COMMITTER_RING_LAYER_PATH_ROWS_PER_REQUEST * batch_size
             ),
             "neutralize_ops": COMMITTER_NEUTRALIZE_OPS,
-            "fused_layer_calls": GDN_LAYERS,
+            "fused_layer_calls": committer_fused_calls,
             "graph_replays": 1,
             "graph_captures": 0,
             "host_lens_readbacks": 0,
