@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PASS_PATH = ROOT / "scripts" / "fr13_sfwd_state_fusion_b4_pass.py"
 RUNNER_PATH = ROOT / "scripts" / "fr13_run_b4_sfwd_state_fusion_live_gate.sh"
 LAUNCHER_PATH = ROOT / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
+SERVE_VARIANT_PATH = ROOT / "scripts" / "fr13_bigdenom_swe_serve_variant.sh"
 PATCHER_PATH = ROOT / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
 KERNEL_PATH = ROOT / "src" / "lumo_flywheel_serving" / "fr10_gdn_tree_kernel.py"
 CUTLASS_PASS_PATH = ROOT / "scripts" / "fr13_cutlass_b4_pass.py"
@@ -200,6 +201,7 @@ def test_b1_b4_binding_is_a_prerequisite_not_a_serving_credential(
 def test_runner_and_launcher_are_exact4_b4_shadow_only() -> None:
     runner = RUNNER_PATH.read_text(encoding="utf-8")
     launcher = LAUNCHER_PATH.read_text(encoding="utf-8")
+    serve_variant = SERVE_VARIANT_PATH.read_text(encoding="utf-8")
     pass_source = PASS_PATH.read_text(encoding="utf-8")
 
     assert "subset_b4_four.json" in runner
@@ -209,6 +211,10 @@ def test_runner_and_launcher_are_exact4_b4_shadow_only() -> None:
     assert "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=1" in runner
     assert "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=0" in runner
     assert "FR13_FIXED32_CUTLASS_WAVE=stock" in runner
+    assert (
+        '"${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock"'
+        in serve_variant
+    )
     assert "FR13_CONV_WB_BATCHED=1" in runner
     assert "FR13_FIXED32_CONV_SOURCE_BATCH=1" in runner
     assert (

@@ -1575,7 +1575,7 @@ if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" ]]; then
   }
   [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
      && "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" == "0" \
-     && "${FR13_FIXED32_CUTLASS_WAVE:-}" == "" \
+     && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
      && "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "0" \
      && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" ]] || {
     echo "FAIL: fixed32 SFWD state-fusion byte diagnostic must be exclusive"
