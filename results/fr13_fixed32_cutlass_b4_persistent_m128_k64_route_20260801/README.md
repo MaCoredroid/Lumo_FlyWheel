@@ -4,6 +4,21 @@ This is a prepared route, not timing or acceptance evidence. It qualifies and
 screens the existing persistent-M128 CUTLASS SFWD binary on canonical real
 SWE-Verified exact4 B4 traffic under the deployment K64-root workload.
 
+## First live attempt
+
+The 2026-08-01 exact4 attempt is recorded in
+`rejected_live_gate_20260801.json`. The persistent-M128 comparator was exact on
+all 320 bounded real-event invocations and all five projection shapes, covering
+1,436,811,264 output bytes with zero differing bytes. The diagnostic continued
+to serve the stock result.
+
+The attempt is rejected. One completed remote Qwen trace was truncated at the
+SSH capture boundary: it ended without a newline and its final JSONL record was
+incomplete. Campaign provenance therefore remained unpublished, no live PASS
+or production credential was issued, and the timing stage did not start. The
+comparator result is kernel-equivalence evidence only; it is not performance or
+acceptance evidence.
+
 ## Bound workload
 
 - topology: `hydra27_fixed32`
