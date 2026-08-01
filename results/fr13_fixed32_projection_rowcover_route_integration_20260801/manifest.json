@@ -1,0 +1,71 @@
+{
+  "schema": "fr13.fixed32.projection_rowcover.route_integration.v1",
+  "status": "static_install_runtime_route_pass_requires_fresh_real_byte_gates",
+  "acceptance_valid": false,
+  "timing_eligible": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "agent/fixed32-projection-route-integration-20260801",
+    "commit": "d51e2b4dcf2c76d1cf8e957ddd06f61ba399c042",
+    "patch_source_sha256": "32ee5747eeff597f7eacec530f86658ba26b6fe8560591c21c305e594953935a",
+    "patched_dispatch_sha256": "ba18f08dcbd17a52c1b7293be0cc6eb4ee57176388d4e2ccba9bfb62c9b31c45",
+    "binary_route_sha256": "63fe4738a3cc13d94cc2a4fcd107be0cf90e3373b4120296467ee4edb3420ef8",
+    "b1_credential_reducer_sha256": "3f563888f7061087a55953d6717a8d783a23cee51cb738743cbaa309a5942c58",
+    "static_qualifier_sha256": "4eeb738dbda86f4b11e12df19355af85a089e4129fc95c8e427fb2ab89c709f8",
+    "launcher_sha256": "2d04e73ab0c0832a11fe2d556339eb382674ae9549c3a1bd7da3ab5d8c7476fb",
+    "b1_gate_sha256": "e305f057a66c8c6678ab482e971052c45e551acb392781ff3a458bdd7cb941d2",
+    "b4_credential_reducer_sha256": "8506d6074836a6cf3c141878d352a1a458c5a1eb8f1cba6a6e9f3e9d406f0169",
+    "qualification_test_sha256": "7b25fb7321f25df64386f7f59df706dc95284429d70c647166c319ca92971954"
+  },
+  "candidate": {
+    "family": "projection_rowcover_pair",
+    "binary_sha256": "af48592c748ba80b1c614dc7a96c8250ae3bcca4c185c92939b4d308f8ef31f6",
+    "binary_bytes": 113078080,
+    "b1": {
+      "production_selector": "static_persistent_stocktile",
+      "diagnostic_selector": "static_persistent_stocktile_byte_ab",
+      "dispatch_m": 32,
+      "qualification_profile": "k64_root",
+      "draft_vocab_k": 65536,
+      "root_depth": 1,
+      "full_verifier": true,
+      "fallback": "stock"
+    },
+    "b4": {
+      "production_selector": "persistent_b4_m128",
+      "diagnostic_selector": "persistent_b4_m128_byte_ab",
+      "dispatch_m": 128,
+      "qualification_profile": "k64_root",
+      "draft_vocab_k": 65536,
+      "root_depth": 1,
+      "full_verifier": true,
+      "fallback": "stock"
+    },
+    "draft_block_map_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
+  },
+  "static_qualification": {
+    "status": "pass",
+    "candidate_resource_records": 4,
+    "zero_stack_records": 4,
+    "zero_local_records": 4,
+    "stock_resource_records_matched": 6,
+    "strong_dynamic_exports_matched": 873,
+    "qualification_json_sha256": "0235886a64c166778b67da22e36f1711e7959e62502a0548ec09a8cf65aedeca"
+  },
+  "validation": {
+    "focused_tests_passed": 164,
+    "python_byte_compile": "pass",
+    "shell_syntax": "pass",
+    "git_diff_check": "pass",
+    "ruff": "not_run_unavailable",
+    "gpu": "not_run",
+    "docker": "not_run",
+    "byte_gate": "not_run",
+    "timing": "not_run"
+  },
+  "blockers": [
+    "fresh B1 one-task real SWE-Verified K64/root1 byte gate at exact M32",
+    "fresh B4 exact4 real SWE-Verified K64 byte gate at exact M128",
+    "runtime manifest regeneration requires private untracked campaign inputs absent from this isolated worktree"
+  ]
+}
