@@ -445,7 +445,6 @@ if [[ -n "$FIXED32_MODE" ]]; then
       "$ARMDIR" \
       "$MAX_NUM_SEQS_OVR" \
       "$SWE_CONCURRENCY" <<'PY'
-import inspect
 import json
 import sys
 from pathlib import Path
@@ -722,6 +721,7 @@ write_fixed32_chat_traffic_audit(){
     "$ARMDIR/fixed32_chat_traffic_audit.json" \
     "$FR13_FIXED32_B1_DIAGNOSTIC" \
     "$SWE_CONCURRENCY" <<'PY'
+import inspect
 import json
 import sys
 from pathlib import Path

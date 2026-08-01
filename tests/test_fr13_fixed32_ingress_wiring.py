@@ -191,9 +191,21 @@ def test_fixed32_campaign_closes_ingress_before_fetch_and_terminal_audit() -> No
     assert ".RestartCount" in serve
     assert "build_fixed32_chat_traffic_audit" in serve
     assert '"$FR13_FIXED32_B1_DIAGNOSTIC" \\\n    "$SWE_CONCURRENCY"' in serve
-    assert '"concurrency" in inspect.signature(' in serve
-    assert 'elif concurrency_text != "1":' in serve
-    assert "fixed32 B4 requires the concurrency-aware traffic-audit builder" in serve
+    audit_writer_start = serve.index("write_fixed32_chat_traffic_audit(){")
+    audit_writer_end = serve.index(
+        '\n}\n\necho "[hygiene] recover_host_memory + assert free"',
+        audit_writer_start,
+    )
+    audit_writer = serve[audit_writer_start:audit_writer_end]
+    assert "import inspect" in audit_writer
+    assert audit_writer.index("import inspect") < audit_writer.index(
+        "inspect.signature"
+    )
+    assert 'elif concurrency_text != "1":' in audit_writer
+    assert (
+        "fixed32 B4 requires the concurrency-aware traffic-audit builder"
+        in audit_writer
+    )
 
 
 @pytest.mark.parametrize(
