@@ -6200,10 +6200,55 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
 
 
 
+def _ensure_gdn_pad_slot_id_binding(text: str) -> str:
+    tree = ast.parse(text)
+    for node in tree.body:
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if node.module != "vllm.v1.attention.backends.utils":
+            continue
+        if any(
+            (alias.asname or alias.name) == "PAD_SLOT_ID"
+            for alias in node.names
+        ):
+            return text
+
+    import_anchor = (
+        "from vllm.v1.attention.backends.utils import (\n"
+        "    NULL_BLOCK_ID,\n"
+    )
+    if text.count(import_anchor) != 1:
+        raise RuntimeError(
+            "gdn_attn.py PAD_SLOT_ID import anchor not found exactly once"
+        )
+    patched = text.replace(
+        import_anchor,
+        import_anchor + "    PAD_SLOT_ID,\n",
+        1,
+    )
+    bound = any(
+        isinstance(node, ast.ImportFrom)
+        and node.module == "vllm.v1.attention.backends.utils"
+        and any(
+            (alias.asname or alias.name) == "PAD_SLOT_ID"
+            for alias in node.names
+        )
+        for node in ast.parse(patched).body
+    )
+    if not bound:
+        raise RuntimeError("generated gdn_attn.py has no PAD_SLOT_ID binding")
+    return patched
+
+
 def _patch_gdn_attn() -> bool:
     text = GDN_ATTN_PATH.read_text()
+    text_with_pad_slot = _ensure_gdn_pad_slot_id_binding(text)
     if "fr10_tree_parent" in text:
+        if text_with_pad_slot != text:
+            GDN_ATTN_PATH.write_text(text_with_pad_slot)
+            return True
         return False
+    text = text_with_pad_slot
     fixed32_mode = _FR13_FIXED32_MODE
     fixed32_path_cols = "16" if fixed32_mode else "self.num_spec + 1"
 
