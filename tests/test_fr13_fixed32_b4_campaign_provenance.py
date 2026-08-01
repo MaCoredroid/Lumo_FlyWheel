@@ -566,6 +566,7 @@ def test_strict_artifact_push_retries_and_surfaces_failure(
         )
 
     assert sum(command[1] == "push" for command in commands) == 3
+    assert ["git", "add", "-f", "--sparse", "--", "artifact.json"] in commands
 
 
 def _synthetic_compaction_failure_trace() -> list[dict[str, Any]]:

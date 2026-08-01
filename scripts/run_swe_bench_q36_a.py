@@ -2392,7 +2392,7 @@ def _autocommit_paths(
         ).returncode
 
     with _GIT_LOCK:
-        add_rc = _git(["add", "-f", "--", *paths])
+        add_rc = _git(["add", "-f", "--sparse", "--", *paths])
         if add_rc != 0:
             if strict_push:
                 raise RuntimeError(f"git add failed with rc={add_rc}")
