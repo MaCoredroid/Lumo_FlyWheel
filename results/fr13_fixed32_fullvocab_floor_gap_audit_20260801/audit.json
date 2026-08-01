@@ -1,0 +1,448 @@
+{
+  "schema": "fr13.fixed32.full_vocab_floor_gap_kernel_audit.v1",
+  "created_at_utc": "2026-08-01T05:20:56Z",
+  "source_commit": "c3720f2bab18c3bbb6b31f87e864af21a7a9fdf3",
+  "status": "SOURCE_AND_ARTIFACT_AUDIT_NO_NEW_GPU_MEASUREMENT",
+  "scope": {
+    "workload": "princeton-nlp/SWE-bench_Verified",
+    "modes": [
+      "B1",
+      "B4"
+    ],
+    "tree_contract": "fixed32",
+    "draft_vocabulary_k": 0,
+    "draft_vocabulary_root": 0,
+    "draft_head": "five full-vocabulary BF16 reads per event",
+    "forbidden_shortcuts": [
+      "dtype change",
+      "quantization",
+      "compression",
+      "synthetic or probe timing"
+    ],
+    "gpu_used": false,
+    "new_timing_performed": false
+  },
+  "measurement_state": {
+    "full_vocab_b1_wall_timing_available": false,
+    "full_vocab_b4_wall_timing_available": false,
+    "b4_phase_timing_available": false,
+    "nearest_valid_real_workload_phase_prior": {
+      "classification": "REAL_SWE_VERIFIED_B1_HYDRA27_EXACT4_K64_PRIOR_NOT_FULL_VOCAB_ACCEPTANCE",
+      "source_commit": "04c98057fa9d9e658282cf0b32422716660e1210",
+      "tasks": 4,
+      "forward_events": 5148,
+      "accepted_drafts_per_event": 4.753885003885004,
+      "full_step_wall_ms_per_event": 232.77979007137355,
+      "phase_ms_per_event": {
+        "sfwd_gpu": 159.61926324365674,
+        "dfwd_gpu": 36.813368133731736,
+        "cfwd_gpu": 20.677390556513288,
+        "noncomponent_wall_residual": 15.669768137471785
+      },
+      "formal_acceptance_eligible": false,
+      "why_not_current_full_vocab": [
+        "The measured drafter used the root-64K five-head scenario, not K=0/root=0 full-vocabulary heads.",
+        "Only the Hydra arm completed validly; no paired one-sided U95 was produced.",
+        "The measured source predates the final full-vocabulary head and current kernel candidates."
+      ]
+    },
+    "historical_symbol_profile": {
+      "classification": "REAL_SWE_VERIFIED_ATTRIBUTION_ONLY_STALE_FOR_CURRENT_STACK",
+      "source_commit": "1a7a765447c8ce6068e0dd5d3a344d58ace85f2b",
+      "capture_tasks_completed": 2,
+      "profiled_arm": "Tail6 B1",
+      "prohibitions": [
+        "Do not treat these symbol times as current full-vocabulary timing.",
+        "Do not subtract these symbol times from the current phase timers to claim causal savings."
+      ]
+    }
+  },
+  "full_vocab_floor": {
+    "bandwidth_bytes_per_second": 273000000000,
+    "acceptance_multiplier": 1.15,
+    "formula": "milliseconds = mandatory_weight_bytes * 1000 / 273000000000",
+    "components": [
+      {
+        "name": "target_model",
+        "phase": "sfwd",
+        "reads_per_event": 1,
+        "mandatory_bytes_per_event": 24382399488,
+        "floor_ms_per_event": 89.31281863736264
+      },
+      {
+        "name": "verifier_full_bf16_head",
+        "phase": "postprocess_or_wall_residual",
+        "reads_per_event": 1,
+        "mandatory_bytes_per_event": 2542796800,
+        "floor_ms_per_event": 9.314273992673993
+      },
+      {
+        "name": "mtp_forwards",
+        "phase": "dfwd",
+        "reads_per_event": 5,
+        "mandatory_bytes_per_event": 2385998720,
+        "floor_ms_per_event": 8.73992205128205
+      },
+      {
+        "name": "drafter_full_bf16_heads",
+        "phase": "dfwd",
+        "reads_per_event": 5,
+        "mandatory_bytes_per_event": 12713984000,
+        "floor_ms_per_event": 46.57136996336996
+      }
+    ],
+    "mandatory_weight_bytes_per_event": 42025179008,
+    "mandatory_weight_floor_ms_per_event": 153.93838464468865,
+    "acceptance_cap_ms_per_event": 177.02914234139195,
+    "all_nonweight_and_inefficiency_allowance_ms_per_event": 23.090757696703292,
+    "nonweight_costs_included_in_floor": false
+  },
+  "phase_audit": [
+    {
+      "phase": "sfwd_target_projection_gemms",
+      "mandatory_bytes_per_event": 23823646720,
+      "mandatory_floor_ms_per_event": 87.2661052014652,
+      "full_target_phase_weight_floor_ms_per_event": 89.31281863736264,
+      "b1": {
+        "physical_rows": 32,
+        "weight_only_arithmetic_intensity_flop_per_byte": 64,
+        "kernel_launches_per_event": 256,
+        "historical_symbol_ms_per_event": 112.31295398412699,
+        "timing_class": "stale real-workload symbol attribution"
+      },
+      "b4": {
+        "physical_rows": 128,
+        "weight_only_arithmetic_intensity_flop_per_byte": 256,
+        "kernel_launches_per_event": 256,
+        "measured_ms_per_event": null
+      },
+      "bound_class": "memory_bandwidth_and_wave_occupancy_bound",
+      "basis": "FP8 weight bytes dominate; FLOPs/weight-byte = 2*M. Activation, scale, and output traffic only reduce the effective intensity."
+    },
+    {
+      "phase": "sfwd_tree_attention",
+      "mandatory_bytes_per_event": null,
+      "b1": {
+        "kernel_launches_per_event": 16,
+        "query_rows_per_event": 512,
+        "historical_symbol_ms_per_event": 24.708600648526076,
+        "timing_class": "stale real-workload symbol attribution"
+      },
+      "b4": {
+        "kernel_launches_per_event": 16,
+        "query_rows_per_event": 2048,
+        "measured_ms_per_event": null
+      },
+      "bound_class": "short_sequence_memory_and_launch_bound",
+      "basis": "Sixteen fixed32 layer calls operate at small query length; no current counter capture supports a compute-bound claim."
+    },
+    {
+      "phase": "sfwd_tree_gdn",
+      "mandatory_bytes_per_event": null,
+      "b1": {
+        "kernel_launches_per_event": 96,
+        "nodes_per_event": 1536,
+        "historical_symbol_ms_per_event": 14.019520105442178,
+        "timing_class": "stale real-workload symbol attribution"
+      },
+      "b4": {
+        "kernel_launches_per_event": 96,
+        "nodes_per_event": 6144,
+        "measured_ms_per_event": null,
+        "source_contract": "48 layers * 2 path-level launches; request batch folds into grid z"
+      },
+      "bound_class": "state_traffic_and_launch_bound",
+      "basis": "B1-B4 launch count is source-invariant after b41720fcc; path programs and state traffic scale with B."
+    },
+    {
+      "phase": "sfwd_conv_state_motion",
+      "mandatory_bytes_per_event": null,
+      "b1": {
+        "index_select_launches_per_event": 48,
+        "index_copy_launches_per_event": 48,
+        "writeback_launches_per_event": 48,
+        "historical_listed_ms_per_event": 15.014089253968255,
+        "timing_class": "stale real-workload symbol attribution"
+      },
+      "b4": {
+        "structural_launch_count_expected_invariant": true,
+        "measured_ms_per_event": null
+      },
+      "bound_class": "memory_motion_and_launch_bound",
+      "basis": "Gather, copy, and writeback move state but do not perform enough arithmetic to be compute bound."
+    },
+    {
+      "phase": "dfwd_mtp",
+      "mandatory_bytes_per_event": 2385998720,
+      "mandatory_floor_ms_per_event": 8.73992205128205,
+      "b1": {
+        "logical_rows_per_pass": 1,
+        "forward_passes_per_event": 5,
+        "fp8_projection_launches_per_event": 20,
+        "approximate_weight_only_arithmetic_intensity_flop_per_byte": 2,
+        "historical_projection_ms_per_event": 8.514284570942111,
+        "timing_class": "stale real-workload symbol attribution"
+      },
+      "b4": {
+        "logical_rows_per_pass": 4,
+        "forward_passes_per_event": 5,
+        "fp8_projection_launches_per_event": 20,
+        "approximate_weight_only_arithmetic_intensity_flop_per_byte": 8,
+        "measured_ms_per_event": null
+      },
+      "bound_class": "weight_stream_memory_bound",
+      "basis": "The MTP forward receives B logical rows; even before extra traffic its projection intensity is low single digit at B1-B4."
+    },
+    {
+      "phase": "dfwd_full_vocab_drafter_heads",
+      "mandatory_bytes_per_event": 12713984000,
+      "mandatory_floor_ms_per_event": 46.57136996336996,
+      "b1": {
+        "served_rows_per_call": 1,
+        "candidate_physical_rows_per_call": 32,
+        "head_launches_per_event": 5,
+        "candidate_weight_only_arithmetic_intensity_flop_per_byte": 32,
+        "measured_ms_per_event": null
+      },
+      "b4": {
+        "served_rows_per_call": 4,
+        "candidate_physical_rows_per_call": 32,
+        "head_launches_per_event": 5,
+        "candidate_weight_only_arithmetic_intensity_flop_per_byte": 32,
+        "measured_ms_per_event": null
+      },
+      "candidate_geometry": {
+        "gemm_mnk": [
+          32,
+          248320,
+          5120
+        ],
+        "source_commit": "3fbcf9c95b76fbc943f92e740859921db6b5cf03",
+        "qualification_state": "source and static tests only; no real-task byte gate or timing included here"
+      },
+      "bound_class": "weight_stream_memory_bound",
+      "basis": "The fixed-M32 candidate raises useful concurrency without changing the five mandatory 2.543 GB head reads."
+    },
+    {
+      "phase": "dfwd_short_attention_and_selection",
+      "mandatory_bytes_per_event": null,
+      "b1": {
+        "unified_attention_launches_per_event": 4,
+        "nvjet_head_or_selection_launches_per_event": 5,
+        "causal_fa2_launches_per_event": 1,
+        "historical_listed_ms_per_event": 10.77328028830874,
+        "timing_class": "stale real-workload symbol attribution"
+      },
+      "b4": {
+        "launch_structure_expected_invariant": true,
+        "measured_ms_per_event": null
+      },
+      "bound_class": "short_work_memory_and_launch_bound",
+      "basis": "Small B1-B4 query counts and fixed per-event dispatches make launch/state traffic material."
+    },
+    {
+      "phase": "cfwd_commit_and_sampling",
+      "mandatory_bytes_per_event": 0,
+      "b1": {
+        "measured_phase_ms_per_event": 20.677390556513288,
+        "measurement_class": "real exact4 K64 prior",
+        "gdn_state_commit_launches_per_event": 48,
+        "committer_graph_replays_per_event": 1,
+        "committer_fused_layer_calls_per_event": 48,
+        "conv_commit_direct_launches_per_event": 1,
+        "taw_full_vocab_softmax_calls_per_event": 24,
+        "taw_exact_commit_launches_per_event": 12
+      },
+      "b4": {
+        "launch_structure_expected_invariant": true,
+        "measured_ms_per_event": null
+      },
+      "bound_class": "launch_and_state_memory_bound",
+      "basis": "The phase has no mandatory model-weight floor and historically contains many small elementwise, reduction, and state-update kernels."
+    },
+    {
+      "phase": "verifier_full_vocab_head_and_wall_residual",
+      "mandatory_bytes_per_event": 2542796800,
+      "mandatory_floor_ms_per_event": 9.314273992673993,
+      "b1": {
+        "physical_verifier_rows": 32,
+        "weight_only_arithmetic_intensity_flop_per_byte": 32,
+        "head_launches_per_event": 1,
+        "historical_head_proxy_ms_per_event": 12.153933,
+        "current_k64_noncomponent_wall_residual_ms_per_event": 15.669768137471785
+      },
+      "b4": {
+        "physical_verifier_rows": 128,
+        "weight_only_arithmetic_intensity_flop_per_byte": 128,
+        "head_launches_per_event": 1,
+        "measured_ms_per_event": null
+      },
+      "bound_class": "weight_stream_memory_bound_with_host_residual",
+      "basis": "Head GEMM remains below a modern tensor-core ridge; the wall residual also contains host and synchronization cost and is not a pure head timer."
+    }
+  ],
+  "target_projection_shape_audit": {
+    "source": "local Qwen3.6-27B FP8 safetensors headers",
+    "projection_histogram": [
+      {
+        "calls_per_event": 64,
+        "n": 34816,
+        "k": 5120
+      },
+      {
+        "calls_per_event": 64,
+        "n": 5120,
+        "k": 17408
+      },
+      {
+        "calls_per_event": 64,
+        "n": 5120,
+        "k": 6144
+      },
+      {
+        "calls_per_event": 48,
+        "n": 16384,
+        "k": 5120
+      },
+      {
+        "calls_per_event": 16,
+        "n": 8192,
+        "k": 5120
+      }
+    ],
+    "total_launches_per_event": 256,
+    "fp8_weight_bytes_per_event": 23823646720,
+    "scale_bytes_per_event": 5816320,
+    "coop128_output_tiles_per_event": 29696,
+    "wide256_output_tiles_per_event": 14848,
+    "current_coop128_streamk_selector_failure": {
+      "sm_count": 48,
+      "n_over_128_tiles_by_shape": [
+        272,
+        40,
+        40,
+        128,
+        64
+      ],
+      "tail_tiles_by_shape": [
+        32,
+        40,
+        40,
+        32,
+        16
+      ],
+      "cutlass_heuristic": "choose data parallel when the tail wave has at least half of 48 SMs",
+      "projection_families_selecting_data_parallel": 4,
+      "projection_families_selecting_streamk": 1,
+      "streamk_calls_per_event_under_heuristic": 16,
+      "data_parallel_calls_per_event_under_heuristic": 240
+    }
+  },
+  "optimization_decision": {
+    "single_highest_confidence_immediate_kernel_candidate": "forced wide-N Stream-K for all 256 target FP8 projection GEMMs",
+    "code_strategy": {
+      "file": "scripts/fr13_patch_cutlass_fixed32_wave.py",
+      "b1_swapped_tile_mnk": [
+        256,
+        32,
+        128
+      ],
+      "b4_tile_mnk": [
+        128,
+        256,
+        128
+      ],
+      "scheduler": "cutlass::gemm::StreamKScheduler",
+      "decomposition_mode": "StreamK forced, not Heuristic",
+      "splits": 1,
+      "reduction": "deterministic",
+      "gates": "M in {32,64,96,128} and exact five production (N,K) shapes only",
+      "implementation_state": "implemented and compiling on sibling branch at audit close; not timed and not integrated by this artifact"
+    },
+    "why_this_candidate": [
+      "It targets the largest quantified kernel group: historical target CUTLASS attribution was 112.313 ms/event.",
+      "It fixes a source-proven dispatch miss: coop128 Heuristic executes 240 of 256 calls as data parallel.",
+      "It preserves FP8/BF16 types, K=128 tiling, scale indexing, deterministic reduction, and full-vocabulary semantics."
+    ],
+    "savings_bounds_ms_per_event": {
+      "worst_production": 0,
+      "worst_note": "Reject on bytes, identity, or regression; raw candidate timing can regress by an unbounded amount before rejection.",
+      "likely": null,
+      "likely_range": [
+        0,
+        10.923627
+      ],
+      "likely_note": "No positive point estimate is defensible without real exact4 timing; wider tiles, Stream-K fixups, and workspace can erase the analytical recovery.",
+      "best_analytical": 10.923627,
+      "best_note": "Optimistic ideal tail-equivalent-byte recovery from the stale real-workload target group; not measured timing.",
+      "absolute_historical_group_residual_above_explicit_traffic_floor": 23.873022,
+      "absolute_residual_note": "This is not a wide256 savings claim and cannot be assigned to wave imbalance alone."
+    },
+    "resource_risk_from_compile": {
+      "normal_128x256x128": {
+        "registers": 168,
+        "stack_bytes": 552,
+        "shared_bytes": 1024
+      },
+      "swapped_256x32x128": {
+        "registers": 168,
+        "stack_bytes": 8,
+        "shared_bytes": 1024
+      }
+    },
+    "sufficient_alone_for_acceptance": false
+  },
+  "closure_math": {
+    "old_k64_sfwd_excess_above_target_weight_floor_ms": 70.30644460629411,
+    "full_vocab_total_allowance_above_all_weight_floors_ms": 23.090757696703292,
+    "minimum_sfwd_reduction_required_even_if_every_other_phase_hits_its_full_vocab_weight_floor_ms": 47.215686909590815,
+    "wide256_best_analytical_recovery_ms": 10.923627,
+    "minimum_additional_sfwd_recovery_after_wide256_best_ms": 36.292059909590816,
+    "interpretation": "The old SFWD envelope alone consumes too much overhead. A head-only or CFWD-only optimization cannot close the full-vocabulary cap."
+  },
+  "next_kernel_after_wide256": {
+    "requirement": "remove launch and repeated state traffic from the target decoder rather than changing mandatory weight bytes",
+    "concrete_files": [
+      "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+      "scripts/fr13_patch_fa2_tree_bias.py",
+      "scripts/fr10_phase4_patch_vllm_tree_gdn.py"
+    ],
+    "shape_strategy": "Preserve the fixed32 two-level [1,11] path schedule, keep B1-B4 folded into grid dimensions, and fuse per-layer GDN ring export, conv gather/writeback, flags, and compatible attention-side state movement so work scales in programs rather than launch count.",
+    "reason": "Even perfect wide256 tail recovery leaves at least 36.292 ms of SFWD reduction necessary under the old phase envelope. The remaining historical SFWD groups are tree attention, GDN, and conv/state motion, not additional mandatory model-weight reads.",
+    "implementation_warning": "A cross-layer persistent decoder is a larger byte-identity project; it is not implemented in this audit and must retain exact arithmetic order where output bytes are contract-sensitive."
+  },
+  "required_real_task_gate_order": [
+    "Compile and identity-audit the forced wide256 extension.",
+    "Run same-process all-byte stock-versus-candidate gating on an allowed real SWE-Verified B1 task; serve stock output.",
+    "Run a real SWE-Verified B4 byte gate before B4 timing.",
+    "Only after byte-clean gates, run matched exact4 B1 and exact4 B4 full-wall and phase timing on the standing four-task set.",
+    "Reject on any mismatch, missing kernel identity, unexpected data-parallel decomposition, or wall regression.",
+    "Collect a fresh current-stack symbol profile only after the candidate shows a real wall win."
+  ],
+  "evidence": [
+    {
+      "path": "results/fr13_hardware_floor_correction_20260731/floor_ledger.json",
+      "use": "base target, verifier, and MTP mandatory bytes"
+    },
+    {
+      "path": "results/fr13_fixed32_qrow16_prod_exact4_b1_20260731T182827Z/measurement_summary.json",
+      "use": "real exact4 K64 B1 phase prior and fixed-work counts"
+    },
+    {
+      "path": "results/fr13_fixed32_b1_nsys_20260731T013952Z_curated/nsys_attribution.json",
+      "use": "stale real-workload symbol attribution and historical launch census"
+    },
+    {
+      "path": "results/fr13_fixed32_cutlass_wave_20260731/candidate.json",
+      "use": "CUTLASS traffic model and candidate constraints"
+    },
+    {
+      "commit": "b41720fccd6a4f901d0d809751df826a0c87561d",
+      "use": "B1-B4 two-launch-per-layer GDN source invariant"
+    },
+    {
+      "commit": "3fbcf9c95b76fbc943f92e740859921db6b5cf03",
+      "use": "full-vocabulary fixed-M32 drafter-head source geometry"
+    }
+  ]
+}
