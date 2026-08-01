@@ -51,6 +51,15 @@ case "$FR13_FIXED32_COMMITTER_LAYER_BATCH" in
 esac
 export FR13_FIXED32_B1_DIAGNOSTIC FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB \
   FR13_FIXED32_COMMITTER_LAYER_BATCH
+_fixed32_eager_kernel_diagnostic=0
+if [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "1" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_byte_ab" ]]; then
+  _fixed32_eager_kernel_diagnostic=1
+  [[ "${ENFORCE_EAGER:-0}" == "1" ]] \
+    || { echo "FAIL: eager kernel diagnostic requires ENFORCE_EAGER=1"; exit 2; }
+fi
 
 RUNROOT=${RUNROOT:-output/fr13_bigdenom_swe}
 ARMDIR="$RUNROOT/$ARM"
@@ -1347,6 +1356,10 @@ teardown(){
       fixed32_container_attested=0
       echo "fixed32 teardown skipped container operations: immutable incarnation attestation failed" \
         > "$ARMDIR/fixed32_final_flush.stderr"
+    elif [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then
+      printf '{"acceptance_valid":false,"flush_protocol_used":false,"run_classification":"eager_kernel_byte_diagnostic","schema":"fr13-fixed32-eager-kernel-terminal-v1"}\n' \
+        > "$ARMDIR/fixed32_final_flush_skipped.json"
+      : > "$ARMDIR/fixed32_final_flush.stderr"
     elif [[ -n "$FIXED32_PRODUCER_PID" && -f "$FIXED32_ACK_PATH" ]]; then
       .venv/bin/python scripts/fr13_fixed32_flush_protocol.py \
         --container "$CONTAINER_RUNTIME_REF" \
@@ -2548,13 +2561,17 @@ PY
       "$ARMDIR/docker_after_tasks.log" >/dev/null \
       || { echo "FAIL: fixed32 canonical tasks emitted no subtree runtime needle"; SWERC=15; }
   fi
-  grep -F -m1 \
-    "[FR13_FIXED32] topology engaged: mode=$FIXED32_MODE" \
-    "$ARMDIR/docker_after_tasks.log" >/dev/null \
-    || { echo "FAIL: fixed32 canonical tasks emitted no topology needle"; SWERC=15; }
-  grep -F -m1 "[FR13_FIXED32_WORK] engaged:" \
-    "$ARMDIR/docker_after_tasks.log" >/dev/null \
-    || { echo "FAIL: fixed32 canonical tasks emitted no work needle"; SWERC=15; }
+  if [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then
+    echo "fixed32 eager kernel diagnostic: graph-census needles are ineligible"
+  else
+    grep -F -m1 \
+      "[FR13_FIXED32] topology engaged: mode=$FIXED32_MODE" \
+      "$ARMDIR/docker_after_tasks.log" >/dev/null \
+      || { echo "FAIL: fixed32 canonical tasks emitted no topology needle"; SWERC=15; }
+    grep -F -m1 "[FR13_FIXED32_WORK] engaged:" \
+      "$ARMDIR/docker_after_tasks.log" >/dev/null \
+      || { echo "FAIL: fixed32 canonical tasks emitted no work needle"; SWERC=15; }
+  fi
 fi
 
 # ---- OPT-1 post-run engagement needle ----

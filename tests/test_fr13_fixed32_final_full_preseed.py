@@ -69,6 +69,33 @@ def _kernel_functions(
     return namespace
 
 
+def test_eager_kernel_diagnostic_bakes_graph_observer_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_BATCH_GDN_BYTE_AB", "0")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_CUTLASS_WAVE",
+        "streamk_force_wide256_byte_ab",
+    )
+    namespace = _runtime_functions(
+        "_fr13_fixed32_observed_current",
+        "_fr13_fixed32_observed_event_active",
+        "_fr13_fixed32_observed_begin",
+        mode="hydra27_fixed32",
+    )
+
+    assert namespace["_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC"] is True
+    assert namespace["_fr13_fixed32_observed_current"]("test") is None
+    assert namespace["_fr13_fixed32_observed_event_active"]() is False
+    assert (
+        namespace["_fr13_fixed32_observed_begin"](
+            "invalid", 0, -1, (), 0, 0, ()
+        )
+        is None
+    )
+
+
 @pytest.mark.parametrize(
     ("mode", "active_nodes", "valid_mask"),
     (
