@@ -190,6 +190,9 @@ def test_fixed32_campaign_closes_ingress_before_fetch_and_terminal_audit() -> No
     assert ".State.StartedAt" in serve
     assert ".RestartCount" in serve
     assert "build_fixed32_chat_traffic_audit" in serve
+    assert '"$SWE_CONCURRENCY" <<\'PY\'' in serve
+    assert 'concurrency_text = sys.argv[6]' in serve
+    assert 'concurrency=int(concurrency_text)' in serve
 
 
 @pytest.mark.parametrize(
