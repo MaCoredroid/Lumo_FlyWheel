@@ -1,0 +1,100 @@
+fixed32 SWE-Verified subset OK: tasks=4 diagnostic=0
+=== BIGDENOM-VARIANT SWEServe ARM tail6_fixed32_b4_graph_batch_bv8_exact4_repaired_20260801T010452Z kind=tail6_fixed32 launcher=forked expect=31 xflags=[FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0 FR13_FIXED32_MODE=tail6_fixed32 FR13_FIXED32_VALID_MASK=0x7a9ce73f FR13_FIXED32_ACTIVE_NODES=21 FR13_FIXED32_PHYSICAL_DRAFTS=31] subset=config/fr13_fixed32/subset_b4_four.json ===
+2026-08-01T01:05:15Z
+92d705c31f375b8a8d42a911eaa73104c722b075
+[hygiene] recover_host_memory + assert free
+[hygiene] MemAvailable=105.6GiB swap_used=0 OK
+               total        used        free      shared  buff/cache   available
+Mem:             117          11         106           0           0         105
+Swap:             15           0          15
+fixed32 container identity promoted: id=1e490a1425c4f1a7f96378d9470423972ed523c21e39401bf846ca6338402f04 name=fr13-bigdenom-tail6_fixed32_b4_graph_batch_bv8_exact4_repaired_20260801T010452Z started_at=2026-08-01T01:05:20.305404757Z pid=2429737 restart_count=0
+healthy after 417s
+fixed32 runtime identity OK: runtime=7a167058b7f4d3c3fbffcfaee4b14b613c591e0259de08e3510ee9559955dd5d pid1_args=49
+fixed32 runtime ready: mode=tail6_fixed32 producer_pid=257
+container env OK (tail6_fixed32)
+PID 1 cmd=[/usr/bin/python3 /usr/local/bin/vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b --host 0.0.0.0 --port 9950 --max-num-seqs 4 --gpu-memory-utilization 0.70 --max-model-len 131072 --seed 0 --kv-cache-memory-bytes 42949672960 --attention-backend TREE_ATTN --gdn-prefill-backend triton --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 --speculative-config {"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"} --enable-prefix-caching --enable-chunked-prefill --mamba-block-size 1024 --mamba-ssm-cache-dtype float32 --max-num-batched-tokens 4096 --block-size 1024 --long-prefill-token-threshold 1024 --compilation-config {"cudagraph_mode":"FULL_AND_PIECEWISE"} --middleware lumo_flywheel_serving.inference_proxy.Fixed32EngineIngressMiddleware ]
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"}
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 256 cmd=[/usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(51) ]
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"}
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 257 cmd=[VLLM::EngineCore                                                                                                                   ]
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 714 cmd=[bash -lc
+hit=""; pids=""
+for p in $(ls /proc | grep -E "^[0-9]+$"); do
+  e="/proc/$p/environ"; [ -r "$e" ] || continue
+  cmd="$(tr "\0" " " < /proc/$p/cmdline 2>/dev/null || true)"
+  case "$cmd" in *vllm*|*VllmWorker*|*EngineCore*|*python*) ;; *) continue ;; esac
+  dm="$(tr "\0" "\n" < "$e" | grep -E "^FR10_DECODE_MODE_DEFAULT=" || true)"
+  if [ -n "$dm" ]; then
+    pids="$pids $p"
+    echo "PID $p cmd=[$cmd]"
+    tr "\0" "\n" < "$e" | grep -E "^(FR10_DECODE_MODE_DEFAULT|LUMO_FB_KERNEL_ROWS|FR13_GB10_FP8_GEMV_CFG|FR13_GPU_COMMITTER|FR13_COMMITTER_SYNCKILL|SPEC_CONFIG|FR13_REPLAY_ROUTE)=" | sed "s/^/   /"
+    hit="1"
+  fi
+done
+echo "SUMMARY worker_env_seen=[$hit] pids=[$pids]"
+ ]
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   LUMO_FB_KERNEL_ROWS=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"}
+   FR13_GB10_FP8_GEMV_CFG=0
+   FR13_REPLAY_ROUTE=1
+SUMMARY worker_env_seen=[1] pids=[ 1 256 257 714]
+worker environ needle OK (tail6_fixed32)
+(EngineCore pid=257) INFO 08-01 01:12:08 [gpu_model_runner.py:9444] Graph capturing finished in 58 secs, took 7.84 GiB
+fixed32 pretask generation warmup SKIPPED: canonical SWE traffic only
+fixed32 pretask prefix-cache reset SKIPPED: fresh container
+[offload] OFFLOAD_AGENT=1 — proxy+agent on alienware, GB10 stays vLLM-only
+[offload] alienware -> GB10 vLLM 100.103.10.122:9950/health OK
+OFFLOAD_PROXY_OK host=alienware upstream=http://100.103.10.122:9950 (forced temp 0.6, raw_dumps_disabled=1, NUDGE OFF)
+proxy OK (OFFLOADED to alienware:8023)
+fixed32 ingress auth preflight OK: engine=4 rejects proxy=4 rejects
+eval offload: configured evaluator reachable
+[offload] link watchdog pid=2437838 (threshold 300s)
+fixed32 pretask zero-traffic baseline OK
+fixed32 ingress campaign begun after zero-work baseline
+swe orchestrator rc=1 wall=5929s
+  File "/home/mark/lumoFlyWheel-batch-bv8-production/scripts/run_swe_bench_q36_a.py", line 6324, in _process_one
+    _fixed32_real_task_provenance(
+  File "/home/mark/lumoFlyWheel-batch-bv8-production/scripts/run_swe_bench_q36_a.py", line 3441, in _fixed32_real_task_provenance
+    raise Fixed32BoundaryError(
+Fixed32BoundaryError: fixed32 real-task provenance astropy__astropy-12907: trace cannot independently count completed model requests: fixed32 qwen engine completion metrics do not reconcile
+OFFLOAD_FETCH_OK host=alienware raw_dumps=disabled
+canonical-task spec engagement OK: drafts delta=9401.0 draft_tokens/drafts=31.0
+{
+  "swe_orchestrator_rc": 1,
+  "swe_window_wall_s": 5929,
+  "tasks": []
+}
+raw proxy dumps: disabled
+ARM_DONE tail6_fixed32_b4_graph_batch_bv8_exact4_repaired_20260801T010452Z kind=tail6_fixed32 swerc=1
+[teardown] kill proxy + attest/remove run container + recover_host_memory
+FAIL: fixed32 chat-task traffic audit rc=1
+Traceback (most recent call last):
+  File "<stdin>", line 26, in <module>
+  File "/home/mark/lumoFlyWheel-batch-bv8-production/scripts/fr13_floor_gate.py", line 3066, in build_fixed32_chat_traffic_audit
+    task_dirs = task_directories(
+                ^^^^^^^^^^^^^^^^^
+  File "/home/mark/lumoFlyWheel-batch-bv8-production/scripts/fr13_floor_gate.py", line 1664, in task_directories
+    metadata = exact_json(metadata_path, label=str(metadata_path))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/lumoFlyWheel-batch-bv8-production/scripts/fr13_floor_gate.py", line 604, in exact_json
+    _raw, text = strict_utf8_artifact(path, label=label)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/lumoFlyWheel-batch-bv8-production/scripts/fr13_floor_gate.py", line 569, in strict_utf8_artifact
+    raise GateError(f"missing required artifact: {path}")
+fr13_floor_gate.GateError: missing required artifact: /home/mark/lumoFlyWheel-batch-bv8-production/output/fr13_fixed32_b4_graph_batch_bv8_exact4_repaired_20260801T010452Z/tail6_fixed32_b4_graph_batch_bv8_exact4_repaired_20260801T010452Z/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json
+               total        used        free      shared  buff/cache   available
+Mem:             117          11         106           0           0         105
+Swap:             15           0          15
+2026-08-01T02:51:53Z

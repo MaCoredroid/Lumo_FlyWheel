@@ -1,0 +1,44 @@
+{
+  "final_flush": {
+    "action": "final",
+    "client_result_sha256": "f66bbe314551a948be735e1c07c203cbd5ac26274271e4539114d043a55264ab",
+    "complete_work_census_events": 6424,
+    "generation": 9,
+    "last_forward_step": 6423,
+    "pending_counters_zero": true,
+    "prev_generation": 8,
+    "status": "ok",
+    "stderr_bytes": 0
+  },
+  "posttask_boundaries": [
+    {"generation": 5, "instance_id": "astropy__astropy-12907", "work_census_events": 314},
+    {"generation": 6, "instance_id": "astropy__astropy-13033", "work_census_events": 504},
+    {"generation": 7, "instance_id": "astropy__astropy-13236", "work_census_events": 752},
+    {"generation": 8, "instance_id": "astropy__astropy-13398", "work_census_events": 6424}
+  ],
+  "pretask_boundaries": [
+    {"generation": 1, "instance_id": "astropy__astropy-13033", "work_census_events": 0},
+    {"generation": 2, "instance_id": "astropy__astropy-13398", "work_census_events": 0},
+    {"generation": 3, "instance_id": "astropy__astropy-12907", "work_census_events": 0},
+    {"generation": 4, "instance_id": "astropy__astropy-13236", "work_census_events": 0}
+  ],
+  "repair_conclusion": "sample quiescence completed at every posttask and terminal boundary",
+  "schema": "fr13.fixed32.curated_lifecycle_summary.v1",
+  "snapshot_sha256_by_generation": {
+    "1": "3deb35fead27735ce54ce01b00a698b55af9b5cae5913ca90b8ea749e37a9b57",
+    "2": "60676dd0de9351bb010e1ae8317bd103c210e2cf23363bc45b11aab7a789200a",
+    "3": "d4186786c4376fd1f2dc5ba027f319fdb03fabf03f9dc78df18c3669cb26a8ae",
+    "4": "6b106d5e4d7bc5ffc7b3e0fe8a6bbd41151802b75a94c78f100f362a506bc666",
+    "5": "49366da70094cb460f1ae490f4aa4b56bdcb2699c2ce6a850ac48057c841bf27",
+    "6": "e563ef71d8e7213a31f6f00420faa7945ce540d10d96246b558459811a85c20c",
+    "7": "300a2151501d254e367db913ddddbb78cd6e0c1fd4b8703fdc2b1b103515ee03",
+    "8": "9b4a68604607336d001c5fc2f1162cad87a9d42a052477168b0f160e94cc4271",
+    "9": "8f2b7b64189cf3d7d658bb95906e4c76e321ab7c11fc33214e160ee853f7a38f"
+  },
+  "task_boundary_sha256": {
+    "astropy__astropy-12907": "0c7681241e312e68a3e4ccda92e3c2ff909068999aafb32b64b5d9a6b6db9578",
+    "astropy__astropy-13033": "4e56f7cfa3322c51c528cb84f53c325974b9c21a7f61f6b7b289e26ae48991ba",
+    "astropy__astropy-13236": "f3176cf071dd5f13a68d7cf88e9567b9e04ba075337ffe5f0eec3fa892317fa3",
+    "astropy__astropy-13398": "c4ae5dd523535498f9523539718d2d1fe065f1a6ccc9433ba095fe0fc07753e6"
+  }
+}

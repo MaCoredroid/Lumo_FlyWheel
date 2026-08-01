@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "<stdin>", line 26, in <module>
+  File "/home/mark/lumoFlyWheel-batch-bv8-production/scripts/fr13_floor_gate.py", line 3066, in build_fixed32_chat_traffic_audit
+    task_dirs = task_directories(
+                ^^^^^^^^^^^^^^^^^
+  File "/home/mark/lumoFlyWheel-batch-bv8-production/scripts/fr13_floor_gate.py", line 1664, in task_directories
+    metadata = exact_json(metadata_path, label=str(metadata_path))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/lumoFlyWheel-batch-bv8-production/scripts/fr13_floor_gate.py", line 604, in exact_json
+    _raw, text = strict_utf8_artifact(path, label=label)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/lumoFlyWheel-batch-bv8-production/scripts/fr13_floor_gate.py", line 569, in strict_utf8_artifact
+    raise GateError(f"missing required artifact: {path}")
+fr13_floor_gate.GateError: missing required artifact: /home/mark/lumoFlyWheel-batch-bv8-production/output/fr13_fixed32_b4_graph_batch_bv8_exact4_repaired_20260801T010452Z/tail6_fixed32_b4_graph_batch_bv8_exact4_repaired_20260801T010452Z/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json

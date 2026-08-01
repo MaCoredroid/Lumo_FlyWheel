@@ -1,0 +1,155 @@
+{
+  "all_pre_completion_counts_zero": true,
+  "campaign_completed_logical_model_requests": 154,
+  "campaign_metric_scope_observed": "global_cumulative",
+  "ingress_task_counts_sum": 154,
+  "recorded_failure": {
+    "instance_id": "astropy__astropy-12907",
+    "message": "fixed32 qwen engine completion metrics do not reconcile",
+    "stage": "validate_fixed32_trace_model_requests"
+  },
+  "schema": "fr13.fixed32.qwen_metric_overlap_proof.v1",
+  "tasks": [
+    {
+      "boundary_post_generation": 5,
+      "boundary_post_work_census_events": 314,
+      "boundary_pre_generation": 3,
+      "global_post_excess_over_task": 40,
+      "instance_id": "astropy__astropy-12907",
+      "ledger_completed_logical_model_requests": 13,
+      "metric_post": {
+        "bytes": 62422,
+        "generation_tokens": 13579,
+        "max_tokens_count": 53,
+        "max_tokens_le_20000": 0,
+        "max_tokens_sum": 1736704,
+        "prompt_tokens": 1674355,
+        "request_success_stop": 53,
+        "sha256": "419ffd7ec733c13938ea34eecfaec145a4c7a19f90e7dff378ea40db68b5f739"
+      },
+      "metric_pre": {
+        "bytes": 60571,
+        "generation_tokens": 0,
+        "max_tokens_count": 0,
+        "max_tokens_le_20000": 0,
+        "max_tokens_sum": 0,
+        "prompt_tokens": 0,
+        "request_success_stop": 0,
+        "sha256": "bd7d3e897a4fa159ab40c8131f157633fdd16c5e29e544b5f9dc83bf53b768cd"
+      },
+      "qwen_result_is_error": false,
+      "qwen_result_subtype": "success",
+      "qwen_trace_bytes": 54483,
+      "qwen_trace_request_count_without_metrics": 13,
+      "qwen_trace_sha256": "d149d1c3bd37c24afa2b708f96afde940770dad3c2234fa5f8a0ee9191e026ae",
+      "task_key_id": "9c5806b8f917e3b204ab17ac9ebcdc44e7999adf99946cc48fa871bc7e082675",
+      "validator_outcome": "recorded_failure"
+    },
+    {
+      "boundary_post_generation": 6,
+      "boundary_post_work_census_events": 504,
+      "boundary_pre_generation": 1,
+      "global_post_excess_over_task": 57,
+      "instance_id": "astropy__astropy-13033",
+      "ledger_completed_logical_model_requests": 16,
+      "metric_post": {
+        "bytes": 62444,
+        "generation_tokens": 18721,
+        "max_tokens_count": 73,
+        "max_tokens_le_20000": 0,
+        "max_tokens_sum": 2392064,
+        "prompt_tokens": 2449124,
+        "request_success_stop": 73,
+        "sha256": "41a70748e7da4c70fc4b0c7b8d6670dd7bd6ddaab103a168814fe5af838dad3c"
+      },
+      "metric_pre": {
+        "bytes": 60558,
+        "generation_tokens": 0,
+        "max_tokens_count": 0,
+        "max_tokens_le_20000": 0,
+        "max_tokens_sum": 0,
+        "prompt_tokens": 0,
+        "request_success_stop": 0,
+        "sha256": "5300dcad506b1bf4b9265f9d29c3511f608916b652ac6cc4dd537805a8c1c08d"
+      },
+      "qwen_result_is_error": false,
+      "qwen_result_subtype": "success",
+      "qwen_trace_bytes": 99299,
+      "qwen_trace_request_count_without_metrics": 16,
+      "qwen_trace_sha256": "085874a8eb975e8eb72d7c6ffd102719d8426d618b42a23ce420ceeeed2ac6a9",
+      "task_key_id": "c456b57b7744103f6c18f5928675a84ceb70722c86401762b961dd74426d042f",
+      "validator_outcome": "counter_scope_mismatch_if_evaluated"
+    },
+    {
+      "boundary_post_generation": 7,
+      "boundary_post_work_census_events": 752,
+      "boundary_pre_generation": 4,
+      "global_post_excess_over_task": 47,
+      "instance_id": "astropy__astropy-13236",
+      "ledger_completed_logical_model_requests": 32,
+      "metric_post": {
+        "bytes": 62442,
+        "generation_tokens": 21506,
+        "max_tokens_count": 79,
+        "max_tokens_le_20000": 0,
+        "max_tokens_sum": 2588672,
+        "prompt_tokens": 2620641,
+        "request_success_stop": 79,
+        "sha256": "c59037ba7f7615c7622cfac151cff1a5fd3f3e513984e2ec3e7ae38087b19dd6"
+      },
+      "metric_pre": {
+        "bytes": 60571,
+        "generation_tokens": 0,
+        "max_tokens_count": 0,
+        "max_tokens_le_20000": 0,
+        "max_tokens_sum": 0,
+        "prompt_tokens": 0,
+        "request_success_stop": 0,
+        "sha256": "bd7d3e897a4fa159ab40c8131f157633fdd16c5e29e544b5f9dc83bf53b768cd"
+      },
+      "qwen_result_is_error": false,
+      "qwen_result_subtype": "success",
+      "qwen_trace_bytes": 83856,
+      "qwen_trace_request_count_without_metrics": 32,
+      "qwen_trace_sha256": "df0efda48680723f8d1e40f7e775abccdab25d8f00ed478ea04551b16877afef",
+      "task_key_id": "f4348d58c971234300c6026448dea9c7c8b64e536bc6a9faed299aa6a0523150",
+      "validator_outcome": "counter_scope_mismatch_if_evaluated"
+    },
+    {
+      "boundary_post_generation": 8,
+      "boundary_post_work_census_events": 6424,
+      "boundary_pre_generation": 2,
+      "global_post_excess_over_task": 61,
+      "instance_id": "astropy__astropy-13398",
+      "ledger_completed_logical_model_requests": 93,
+      "metric_post": {
+        "bytes": 62619,
+        "generation_tokens": 52617,
+        "max_tokens_count": 154,
+        "max_tokens_le_20000": 5,
+        "max_tokens_sum": 4982432,
+        "prompt_tokens": 6761332,
+        "request_success_stop": 154,
+        "sha256": "b3d7a11d90fb03392a9f5b7ce5d89cfbe5a28f74daf075bab5a98570caabfd72"
+      },
+      "metric_pre": {
+        "bytes": 60558,
+        "generation_tokens": 0,
+        "max_tokens_count": 0,
+        "max_tokens_le_20000": 0,
+        "max_tokens_sum": 0,
+        "prompt_tokens": 0,
+        "request_success_stop": 0,
+        "sha256": "5300dcad506b1bf4b9265f9d29c3511f608916b652ac6cc4dd537805a8c1c08d"
+      },
+      "qwen_result_is_error": false,
+      "qwen_result_subtype": "success",
+      "qwen_trace_bytes": 394860,
+      "qwen_trace_request_count_without_metrics": 90,
+      "qwen_trace_sha256": "976308134ce1fd930ad7a5e84d37b46f8601667cef3552fdab7e31885715931e",
+      "task_key_id": "1774d177f6dec55dc22261e5a4c17e0589990a651de130472059a6bfc1ebeaab",
+      "trace_to_ledger_request_gap": 3,
+      "validator_outcome": "counter_scope_mismatch_if_evaluated"
+    }
+  ]
+}

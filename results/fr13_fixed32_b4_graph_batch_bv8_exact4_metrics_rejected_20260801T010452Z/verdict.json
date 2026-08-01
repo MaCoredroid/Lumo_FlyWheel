@@ -1,0 +1,84 @@
+{
+  "artifact_classification": "curated_rejected_run",
+  "campaign": {
+    "agent_lifecycle_success_count": 4,
+    "evaluated_task_count": 0,
+    "finalized_engine_requests": 154,
+    "finalized_logical_requests": 154,
+    "health_task_count": 0,
+    "orchestrator_rc": 1,
+    "swe_window_wall_s": 5929,
+    "task_resolution_claimed": false
+  },
+  "cleanup": {
+    "container_removed": true,
+    "docker_container_count": 0,
+    "gpu_compute_process_count": 0,
+    "live_check_path": "cleanup/cleanup_status.txt",
+    "swap_used_bytes": 0
+  },
+  "excluded_sensitive_files": [
+    "arm/container_env.txt",
+    "arm/fixed32_process_identity.json"
+  ],
+  "floor_acceptance_eligible": false,
+  "formal_gate_validator_ran": false,
+  "formal_gate_verdict_exists": false,
+  "kernel_gate": {
+    "candidate": "fixed32_batch_gdn_bv8_v1",
+    "candidate_physical_launches_per_layer": 2,
+    "candidate_reference_bytes": 5009179200,
+    "graph_baseline_bytes": 177340800,
+    "graph_id": 280045996475504,
+    "graph_live_pass_sha256": "1cc860ac794071cfd711b05819d52dd6fc24c57d9f2ce59b23be39a24cb2d0b1",
+    "graph_signature": "cbec7c3653d133c61b71e0106c2164019d059a3b5a8ab8060d1f96615a154ce1",
+    "jsonl_sha256": "3181e883c53a92acf2d0cfb966b9eb0c8f631af4b405bb13b9be877bc9d72789",
+    "kernel_source_sha256": "8d0b4c592921880a000c2a19ef37745310c90183b8d4c464f52befde53203886",
+    "layer_passes": 48,
+    "production_eligible": true,
+    "reference_always_served": true,
+    "reference_physical_launches_per_layer": 8,
+    "state_restored": true,
+    "status": "pass",
+    "task_marker": "swe_verified:astropy__astropy-13398"
+  },
+  "launcher_production_eligible": true,
+  "lifecycle": {
+    "final_action": "final",
+    "final_generation": 9,
+    "final_pending_counters_zero": true,
+    "final_status": "ok",
+    "final_work_census_events": 6424,
+    "flush_repair_validated": true,
+    "posttask_generations": [5, 6, 7, 8],
+    "pretask_generations": [1, 2, 3, 4],
+    "successful_snapshot_generations": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "terminal_census_sha256": "697a0e136f3167f3cd4ffc02528a23c7cf67b5c0a256fa08e7e97f4683f41a1b",
+    "work_census_events_sha256": "c3165c92a14eb1cceeeb6ca2f1b83cd3426ad187ef55c0e067fd84a813f13d0e",
+    "work_census_raw_sha256": "d56f94a52352345c1a9a8335444d6284553f9534631440f07ce2134885312302"
+  },
+  "manifest_identity": {
+    "external_canonical_sha256": "c42fb16d2ea932f0e819c81172c49b69b312b75dd446146b6d7b6ef78af00a9e",
+    "external_launch_end_byte_identical": true,
+    "external_raw_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "forked_fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+    "runtime_attestation_canonical_sha256": "7a167058b7f4d3c3fbffcfaee4b14b613c591e0259de08e3510ee9559955dd5d",
+    "runtime_canonical_sha256": "81bf0389b37be686a3cfaaf674027ad59b57fd52470d0579a82aefe2ea022e65",
+    "runtime_launch_end_byte_identical": true,
+    "runtime_raw_sha256": "96c284833adef2c012c3fe83f48c5ca53fcbe1f1c486a04885b8f4aa8568b15b"
+  },
+  "metric_overlap_proof": "provenance/metric_overlap_summary.json",
+  "rejection": {
+    "recorded_instance_id": "astropy__astropy-12907",
+    "recorded_message": "fixed32 qwen engine completion metrics do not reconcile",
+    "scope": "per_task_qwen_provenance",
+    "summary": "per-task vLLM scrapes observed campaign-global cumulative counters under B4 concurrency"
+  },
+  "run_classification": "exact4_b4_graph_byte_diagnostic",
+  "runroot_name": "fr13_fixed32_b4_graph_batch_bv8_exact4_repaired_20260801T010452Z",
+  "schema": "fr13.fixed32.batch_gdn.b4_metrics_rejection.v1",
+  "source_commit": "92d705c31f375b8a8d42a911eaa73104c722b075",
+  "status": "rejected",
+  "subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+  "timing_eligible": false
+}

@@ -1,0 +1,20 @@
+{
+  "event_record_count": 6424,
+  "events_sha256": "c3165c92a14eb1cceeeb6ca2f1b83cd3426ad187ef55c0e067fd84a813f13d0e",
+  "full_census_bundled": false,
+  "raw_census_bytes": 41959003,
+  "raw_census_line_count": 6425,
+  "raw_census_sha256": "d56f94a52352345c1a9a8335444d6284553f9534631440f07ce2134885312302",
+  "schema": "fr13.fixed32.curated_census_summary.v1",
+  "terminal_record": {
+    "batch_histogram": {"1": 5685, "2": 251, "3": 199, "4": 289},
+    "bytes": 4664,
+    "event_count": 6424,
+    "final": true,
+    "first_event_index": 0,
+    "last_event_index": 6423,
+    "path": "census/terminal_record.json",
+    "sha256": "697a0e136f3167f3cd4ffc02528a23c7cf67b5c0a256fa08e7e97f4683f41a1b"
+  },
+  "terminal_record_count": 1
+}

@@ -1,0 +1,10 @@
+captured_at_utc=2026-08-01T03:08:09Z
+mode=400
+file_type=regular
+hard_links=1
+bytes=36
+task_marker_from_graph_pass=swe_verified:astropy__astropy-13398
+marker_content_copied=0
+matching_engine_task_key_id=1774d177f6dec55dc22261e5a4c17e0589990a651de130472059a6bfc1ebeaab
+matching_engine_accepted_requests=93
+matching_engine_completed_requests=93

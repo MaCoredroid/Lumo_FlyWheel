@@ -1,0 +1,1 @@
+{"configured_image":"vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776","image_id":"sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc","name":"/fr13-bigdenom-tail6_fixed32_b4_graph_batch_bv8_exact4_repaired_20260801T010452Z","platform":"linux","running":true,"schema":"fr13-fixed32-container-identity-v1"}

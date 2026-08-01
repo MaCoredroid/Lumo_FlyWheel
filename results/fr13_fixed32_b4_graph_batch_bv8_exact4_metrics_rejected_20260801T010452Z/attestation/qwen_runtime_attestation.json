@@ -1,0 +1,85 @@
+{
+  "agent_env": "instance_image",
+  "bundle_manifest_sha256": "2643d1d64c03887654794d9bd00a88fbf9ced7362e034557cf196b8a37e744bc",
+  "bundle_snapshot": {
+    "basename": "qwen_bundle-2643d1d64c03887654794d9bd00a88fbf9ced7362e034557cf196b8a37e744bc",
+    "container_path": "/opt/qwen",
+    "kind": "per-task-content-addressed-snapshot",
+    "mount_mode": "ro"
+  },
+  "bundle_tree": {
+    "entrypoints": {
+      "bin/qwen": {
+        "bytes": 217,
+        "mode": "0755",
+        "path": "bin/qwen",
+        "sha256": "286a61bd49fd103d0ea29a8d971030b60ac0a6e7f19b292bdf9b39858e1161e2",
+        "type": "file"
+      },
+      "node/bin/node": {
+        "bytes": 124835376,
+        "mode": "0755",
+        "path": "node/bin/node",
+        "sha256": "93956de2e59480474a7b46571da1651180b1a050cdf32641ebec4ce6e478e068",
+        "type": "file"
+      },
+      "npm/bin/qwen": {
+        "mode": "0777",
+        "path": "npm/bin/qwen",
+        "target": "../lib/node_modules/@qwen-code/qwen-code/cli-entry.js",
+        "type": "symlink"
+      },
+      "npm/lib/node_modules/@qwen-code/qwen-code/cli-entry.js": {
+        "bytes": 777,
+        "mode": "0755",
+        "path": "npm/lib/node_modules/@qwen-code/qwen-code/cli-entry.js",
+        "sha256": "98335eda2e0eaa737640cb5d43da032dee457ff7931c429f972ba3ff8a695d3a",
+        "type": "file"
+      }
+    },
+    "manifest_sha256": "2643d1d64c03887654794d9bd00a88fbf9ced7362e034557cf196b8a37e744bc",
+    "roots": [
+      "**"
+    ],
+    "schema": "fr13-qwen-agent-bundle-manifest-v1",
+    "summary": {
+      "directory_count": 1514,
+      "entry_count": 10499,
+      "executable_regular_file_count": 93,
+      "manifest_bytes": 2057964,
+      "regular_file_bytes": 327941291,
+      "regular_file_count": 8970,
+      "symlink_count": 15
+    }
+  },
+  "cleared_agent_environment": [
+    "BASH_ENV",
+    "LD_LIBRARY_PATH",
+    "LD_PRELOAD",
+    "NODE_OPTIONS",
+    "NODE_PATH"
+  ],
+  "host_mode": "remote",
+  "launcher": "qwen-code-instance-image",
+  "qwen_code_version": "0.19.4",
+  "schema": "fr13-fixed32-qwen-runtime-attestation-v1",
+  "system_settings": {
+    "bytes": 37,
+    "container_path": "/run/fr13/qwen-system-settings.json",
+    "enable_auto_skill": false,
+    "environment": {
+      "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+      "value": "/run/fr13/qwen-system-settings.json"
+    },
+    "mount_mode": "ro",
+    "remote_file": {
+      "gid": 1000,
+      "mode": "0444",
+      "nlink": 1,
+      "uid": 1000,
+      "xattrs": []
+    },
+    "sha256": "8a872a4f6f257f6d7a45f24f42500964f56e1500c5342218b71d02afe4d31fb6",
+    "source": "config/fr13_fixed32/qwen_system_settings.json"
+  }
+}

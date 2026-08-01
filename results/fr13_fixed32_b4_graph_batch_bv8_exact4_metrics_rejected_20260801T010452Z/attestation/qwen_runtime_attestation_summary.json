@@ -1,0 +1,13 @@
+{
+  "all_pre_post_byte_identical": true,
+  "excluded_raw_qwen_traces": true,
+  "representative_attestation_path": "attestation/qwen_runtime_attestation.json",
+  "representative_attestation_sha256": "4ced4ead26fed6b37e61e7b608784f0e0f37dfb0df4e4b5f234e5b74329261ef",
+  "schema": "fr13.fixed32.curated_qwen_attestation_summary.v1",
+  "tasks": [
+    {"instance_id": "astropy__astropy-12907", "post_sha256": "4ced4ead26fed6b37e61e7b608784f0e0f37dfb0df4e4b5f234e5b74329261ef", "pre_sha256": "4ced4ead26fed6b37e61e7b608784f0e0f37dfb0df4e4b5f234e5b74329261ef"},
+    {"instance_id": "astropy__astropy-13033", "post_sha256": "4ced4ead26fed6b37e61e7b608784f0e0f37dfb0df4e4b5f234e5b74329261ef", "pre_sha256": "4ced4ead26fed6b37e61e7b608784f0e0f37dfb0df4e4b5f234e5b74329261ef"},
+    {"instance_id": "astropy__astropy-13236", "post_sha256": "4ced4ead26fed6b37e61e7b608784f0e0f37dfb0df4e4b5f234e5b74329261ef", "pre_sha256": "4ced4ead26fed6b37e61e7b608784f0e0f37dfb0df4e4b5f234e5b74329261ef"},
+    {"instance_id": "astropy__astropy-13398", "post_sha256": "4ced4ead26fed6b37e61e7b608784f0e0f37dfb0df4e4b5f234e5b74329261ef", "pre_sha256": "4ced4ead26fed6b37e61e7b608784f0e0f37dfb0df4e4b5f234e5b74329261ef"}
+  ]
+}
