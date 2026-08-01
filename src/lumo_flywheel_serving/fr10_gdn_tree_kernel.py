@@ -5489,29 +5489,89 @@ def launch_fixed32_sfwd_state_fusion(
         raise ValueError(
             "FR13_FIXED32_SFWD_STATE_FUSION bias must be BF16/FP32 [C] or None"
         )
+    geometry_failures = []
+    if x.ndim != 2:
+        geometry_failures.append("x_ndim")
+    if tuple(int(value) for value in x.shape) != (required_rows, channels):
+        geometry_failures.append("x_shape")
+    if out.shape != x.shape:
+        geometry_failures.append("out_shape")
+    if conv_weights.shape != (channels, width):
+        geometry_failures.append("conv_weights_shape")
+    if spec_state_indices.ndim != 2:
+        geometry_failures.append("spec_state_indices_ndim")
     if (
-        x.ndim != 2
-        or tuple(int(value) for value in x.shape) != (required_rows, channels)
-        or out.shape != x.shape
-        or conv_weights.shape != (channels, width)
-        or spec_state_indices.ndim != 2
+        spec_state_indices.ndim < 1
         or int(spec_state_indices.shape[0]) < batch
-        or int(spec_state_indices.shape[1]) < 1
-        or spec_state_indices.dtype != torch.int32
-        or source_flat.ndim != 1
-        or source_flat.numel() != rows * width
-        or source_flat.dtype not in (torch.int32, torch.int64)
-        or source_stage.ndim != 2
-        or int(source_stage.shape[0]) < required_source_rows
-        or int(source_stage.shape[1]) != channels
-        or int(x.stride(1)) != 1
-        or int(x.stride(0)) < channels
-        or not out.is_contiguous()
-        or not source_flat.is_contiguous()
-        or not source_stage.is_contiguous()
     ):
+        geometry_failures.append("spec_state_indices_batch")
+    if (
+        spec_state_indices.ndim < 2
+        or int(spec_state_indices.shape[1]) < 1
+    ):
+        geometry_failures.append("spec_state_indices_width")
+    if spec_state_indices.dtype != torch.int32:
+        geometry_failures.append("spec_state_indices_dtype")
+    if source_flat.ndim != 1:
+        geometry_failures.append("source_flat_ndim")
+    if source_flat.numel() != rows * width:
+        geometry_failures.append("source_flat_numel")
+    if source_flat.dtype not in (torch.int32, torch.int64):
+        geometry_failures.append("source_flat_dtype")
+    if source_stage.ndim != 2:
+        geometry_failures.append("source_stage_ndim")
+    if source_stage.ndim < 1 or int(source_stage.shape[0]) < required_source_rows:
+        geometry_failures.append("source_stage_rows")
+    if source_stage.ndim < 2 or int(source_stage.shape[1]) != channels:
+        geometry_failures.append("source_stage_channels")
+    if x.ndim == 2 and int(x.stride(1)) != 1:
+        geometry_failures.append("x_channel_stride")
+    if x.ndim == 2 and int(x.stride(0)) < channels:
+        geometry_failures.append("x_row_stride")
+    if not out.is_contiguous():
+        geometry_failures.append("out_contiguous")
+    if not source_flat.is_contiguous():
+        geometry_failures.append("source_flat_contiguous")
+    if not source_stage.is_contiguous():
+        geometry_failures.append("source_stage_contiguous")
+    if geometry_failures:
+        observed = {
+            "batch": batch,
+            "tree_rows": rows,
+            "channels": channels,
+            "required_rows": required_rows,
+            "required_source_rows": required_source_rows,
+            "x": (tuple(x.shape), tuple(x.stride()), str(x.dtype)),
+            "out": (tuple(out.shape), tuple(out.stride()), str(out.dtype)),
+            "conv_state": (
+                tuple(conv_state.shape),
+                tuple(conv_state.stride()),
+                str(conv_state.dtype),
+            ),
+            "conv_weights": (
+                tuple(conv_weights.shape),
+                tuple(conv_weights.stride()),
+                str(conv_weights.dtype),
+            ),
+            "spec_state_indices": (
+                tuple(spec_state_indices.shape),
+                tuple(spec_state_indices.stride()),
+                str(spec_state_indices.dtype),
+            ),
+            "source_flat": (
+                tuple(source_flat.shape),
+                tuple(source_flat.stride()),
+                str(source_flat.dtype),
+            ),
+            "source_stage": (
+                tuple(source_stage.shape),
+                tuple(source_stage.stride()),
+                str(source_stage.dtype),
+            ),
+        }
         raise ValueError(
-            "FR13_FIXED32_SFWD_STATE_FUSION operand geometry/layout drift"
+            "FR13_FIXED32_SFWD_STATE_FUSION operand geometry/layout drift: "
+            f"failed={geometry_failures!r}; observed={observed!r}"
         )
     actual_source_flat = tuple(
         int(value) for value in source_flat.detach().cpu().tolist()

@@ -66,6 +66,9 @@ _FR13_M32_GUARD_NAMES=(
   FR13_FIXED32_CUTLASS_WAVE
   FR13_FIXED32_CUTLASS_WAVE_SO
   FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
+  FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
+  FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON
+  FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256
   FR13_FIXED32_ATTRIBUTION_ONLY
   FR13_FIXED32_B1_DIAGNOSTIC
   FR13_FIXED32_MODE
@@ -88,7 +91,8 @@ _FR13_M32_GUARD_ACTIVE=0
 [[ "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_LIVE_AB]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_PRODUCTION]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_TIMING_ARM]}" == "set:1" \
-   || "$_FR13_CALLER_SFWD_B4" == "set:1" ]] \
+   || "$_FR13_CALLER_SFWD_B4" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION]}" == "set:1" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 _FR13_LOCAL_ENV_SOURCED=0
 if [[ -n "${FR13_FIXED32_MODE:-}" && -f "$REPO/.lumo.local.env" ]]; then
@@ -100,7 +104,8 @@ fi
 [[ "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" \
-   || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "1" ]] \
+   || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "1" \
+   || "${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}" == "1" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 if (( _FR13_M32_GUARD_ACTIVE == 1 )); then
   for _fr13_guard_name in "${_FR13_M32_GUARD_NAMES[@]}"; do
@@ -339,6 +344,8 @@ FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON=${FR13_FIXED32_BATCH_GDN_RUNTIME_MA
 FR13_FIXED32_BATCH_GDN_GATE_RUNNER=${FR13_FIXED32_BATCH_GDN_GATE_RUNNER:-}
 FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
 FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
+FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON=${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON:-}
+FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256=${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256:-}
 FR13_FIXED32_CUTLASS_WAVE=${FR13_FIXED32_CUTLASS_WAVE:-stock}
 FR13_FIXED32_CUTLASS_WAVE_SO=${FR13_FIXED32_CUTLASS_WAVE_SO:-}
 FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL=${FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL:-/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl}
@@ -2027,9 +2034,9 @@ unset _fr13_cutlass_b4_byte_ab
 _fr13_sfwd_b4_byte_ab=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
 _fr13_sfwd_production=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
 case "$_fr13_sfwd_b4_byte_ab:$_fr13_sfwd_production" in
-  0:0|1:0) ;;
-  0:1|1:1)
-    echo "SFWD production remains unavailable until authenticated B1 and exact4 B4 byte prerequisites are bound" >&2
+  0:0|1:0|0:1) ;;
+  1:1)
+    echo "SFWD byte gate and production are mutually exclusive" >&2
     exit 2
     ;;
   *)
@@ -2075,14 +2082,86 @@ if [[ "$_fr13_sfwd_b4_byte_ab" == "1" ]]; then
   rm -f \
     "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.live_pass.json" \
-    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl"
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production_pass.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production_pass.sha256" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production.arm" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production_engagement.json"
   FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm
+elif [[ "$_fr13_sfwd_production" == "1" ]]; then
+  if [[ ( "${FR13_FIXED32_MODE:-}" != "tail6_fixed32" \
+          && "${FR13_FIXED32_MODE:-}" != "hydra27_fixed32" ) \
+        || "$MAX_NUM_SEQS" != "1" \
+        || "${SWE_CONCURRENCY:-}" != "1" \
+        || "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" != "0" \
+        || "${ENFORCE_EAGER:-0}" != "1" \
+        || "${FR13_DRAFT_VOCAB_ROOT:-0}" != "1" \
+        || "${FR13_DRAFT_VOCAB_K:-65536}" != "65536" \
+        || "${FR13_RING_EXPORT:-1}" != "1" \
+        || "${FR13_FLAGS_INKERNEL:-1}" != "1" \
+        || "${FR13_TREE_RUNROW_INIT:-1}" != "1" \
+        || "${FR13_TREE_CONV_FUSED:-1}" != "1" \
+        || "${FR13_CONV_WB_BATCHED:-0}" != "1" \
+        || "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" != "0" \
+        || "${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}" != "0" \
+        || "${FR13_FA2_QROW16_PRODUCTION:-0}" != "1" ]]; then
+    echo "SFWD production requires exact K64 B1 eager fixed32 with qrow16 production" >&2
+    exit 2
+  fi
+  if [[ "$_fr13_batch_gdn_diagnostic_count" != "0" \
+        || "$_fr13_batch_gdn_production" != "0" \
+        || -n "$_fr13_batch_gdn_bv_candidate" \
+        || -n "$_fr13_batch_gdn_bv_production" \
+        || -n "$_fr13_gdn_path_bv_candidate" \
+        || -n "$_fr13_gdn_path_bv_production" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" \
+        || "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" != "0" \
+        || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" != "0" \
+        || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" != "0" \
+        || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" != "0" \
+        || "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" != "0" \
+        || "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" != "0" ]]; then
+    echo "SFWD production permits only the qualified qrow16 co-candidate" >&2
+    exit 2
+  fi
+  [[ "$FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON" == /* \
+     && -f "$FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON" \
+     && ! -L "$FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON" \
+     && "$FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
+    echo "SFWD production requires a pinned regular B1 live PASS" >&2
+    exit 2
+  }
+  python3 scripts/fr13_sfwd_state_fusion_pass.py validate \
+    --live-result "$FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON" \
+    --expected-live-sha256 "$FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256" \
+    --kernel-source src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py \
+    >/dev/null
+  cp -- "$FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production_pass.json"
+  printf '%s\n' "$FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256" \
+    > "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production_pass.sha256"
+  printf '1\n' > "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production.arm"
+  chmod 400 \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production_pass.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production_pass.sha256" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production.arm"
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.live_pass.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production_engagement.json"
+  FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=
 else
   rm -f \
     "$LOG_DIR/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled" \
     "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.live_pass.json" \
     "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production_pass.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production_pass.sha256" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production.arm" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production_engagement.json" \
     2>/dev/null || true
   FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=
 fi
@@ -2537,6 +2616,11 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH="${FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH:-}" \
   -e FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB="$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" \
   -e FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION="$FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION" \
+  -e FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256="$FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256" \
+  -e FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM_PATH=/logs/fr13_fixed32_sfwd_state_fusion.production.arm \
+  -e FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_PASS_PATH=/logs/fr13_fixed32_sfwd_state_fusion.production_pass.json \
+  -e FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_PASS_SHA256_PATH=/logs/fr13_fixed32_sfwd_state_fusion.production_pass.sha256 \
+  -e FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ENGAGEMENT_PATH=/logs/fr13_fixed32_sfwd_state_fusion.production_engagement.json \
   -e FR13_FIXED32_SFWD_STATE_FUSION_ENABLED_PATH=/logs/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled \
   -e FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH="${FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH:-}" \
   -e FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_PATH=/logs/fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl \

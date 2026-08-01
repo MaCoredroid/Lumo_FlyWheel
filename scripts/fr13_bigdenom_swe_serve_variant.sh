@@ -37,6 +37,7 @@ SUBSET=${3:?subset json}
 FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
 FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
 FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
+FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
 FR13_FIXED32_COMMITTER_LAYER_BATCH=${FR13_FIXED32_COMMITTER_LAYER_BATCH:-0}
 case "$FR13_FIXED32_B1_DIAGNOSTIC" in
   0|1) ;;
@@ -50,12 +51,17 @@ case "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"; exit 2 ;;
 esac
+case "$FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION" in
+  0|1) ;;
+  *) echo "FAIL: FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION must be exactly 0 or 1"; exit 2 ;;
+esac
 case "$FR13_FIXED32_COMMITTER_LAYER_BATCH" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_COMMITTER_LAYER_BATCH must be exactly 0 or 1"; exit 2 ;;
 esac
 export FR13_FIXED32_B1_DIAGNOSTIC FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB \
-  FR13_FIXED32_COMMITTER_LAYER_BATCH FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
+  FR13_FIXED32_COMMITTER_LAYER_BATCH FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB \
+  FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
 _fixed32_eager_kernel_diagnostic=0
 if [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "1" \
       || "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" \
@@ -391,6 +397,11 @@ if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" \
   echo "FAIL: FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=1 requires a fixed32 arm"
   exit 2
 fi
+if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION" == "1" \
+      && -z "$FIXED32_MODE" ]]; then
+  echo "FAIL: FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=1 requires fixed32"
+  exit 2
+fi
 
 if [[ -n "$FIXED32_MODE" ]]; then
   # Fixed32 must never operate on a reusable Docker name. The launcher-created
@@ -463,6 +474,14 @@ if [[ -n "$FIXED32_MODE" ]]; then
        && "$FR13_FIXED32_B1_DIAGNOSTIC" == "0" ]] \
       || {
         echo "FAIL: SFWD state-fusion byte diagnostic requires exact B4 concurrency"
+        exit 2
+      }
+  fi
+  if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION" == "1" ]]; then
+    [[ "$MAX_NUM_SEQS_OVR" == "1" && "$SWE_CONCURRENCY" == "1" \
+       && "$FR13_FIXED32_B1_DIAGNOSTIC" == "0" ]] \
+      || {
+        echo "FAIL: SFWD production requires sequential real-task B1"
         exit 2
       }
   fi
