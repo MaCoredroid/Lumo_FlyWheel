@@ -10,5 +10,6 @@
   "object_emitted": false,
   "blocking_error": "Torch CPU headers omit c10/cuda/impl/cuda_cmake_macros.h",
   "qualification_effect": "none",
+  "candidate_source": "csrc/fr13_bf16_gemvx_b1_b4.cu",
   "next_action": "run prepared_build.sh with pinned Torch 2.10.0+cu130"
 }

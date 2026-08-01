@@ -7,14 +7,14 @@ REPO=$(cd "$SCRIPT_DIR/../.." && pwd)
 cd "$REPO"
 
 : "${PYTHON_BIN:?set PYTHON_BIN to pinned Torch 2.10.0+cu130 Python}"
-SOURCE_COMMIT=3ed2d6d8d2c7fe68b44a5d34835bbcfa68bc2101
-SOURCE_SHA256=4412fc292ffc5e9a7786deb857fdeb99a7283b2f0ba4833df5c2141668f3902c
-BUILDER_SHA256=2963c60cbd46c0bd314a1907a8ebb293b4324a339176d93e644cd3ad308602e7
+SOURCE_COMMIT=6ca0e1428144b8756722861149d5e97bea7f8b37
+SOURCE_SHA256=b1e9c5ce798f6b16b652be86b9a5c38b4e0f8040d881401e853705200a4638f1
+BUILDER_SHA256=9ce31e68ed7937f7c7cd9ef002efd9ef286c9ecc35947f774b5056cd37e609b2
 
 [[ -x "$PYTHON_BIN" ]] || { echo "PYTHON_BIN is not executable" >&2; exit 2; }
 git merge-base --is-ancestor "$SOURCE_COMMIT" HEAD \
   || { echo "bound source commit is not an ancestor of HEAD" >&2; exit 2; }
-[[ "$(sha256sum csrc/fr13_bf16_gemvx_m1.cu | awk '{print $1}')" == "$SOURCE_SHA256" ]] \
+[[ "$(sha256sum csrc/fr13_bf16_gemvx_b1_b4.cu | awk '{print $1}')" == "$SOURCE_SHA256" ]] \
   || { echo "B1-B4 CUDA source drifted" >&2; exit 2; }
 [[ "$(sha256sum scripts/fr13_build_bf16_gemvx_b1_b4.py | awk '{print $1}')" == "$BUILDER_SHA256" ]] \
   || { echo "B1-B4 builder drifted" >&2; exit 2; }
