@@ -1,0 +1,21 @@
+Focused verification (2026-08-01 UTC)
+
+Command:
+CUDA_VISIBLE_DEVICES='' .venv/bin/python -m pytest -q \
+  tests/test_fr13_fixed32_taw_exact_commit_kernel.py \
+  tests/test_fr13_fixed32_taw_native_precompute.py \
+  tests/test_fr13_fixed32_taw_real_task_arm.py \
+  tests/test_fr13_fixed32_taw_exact_commit_cuda.py
+
+Result:
+30 passed, 1 skipped in 1.28s
+
+Additional checks:
+- ruff: passed
+- python py_compile: passed
+- git diff --check: passed
+
+Independent serving-image CUDA correctness review:
+- tests/test_fr13_fixed32_taw_exact_commit_cuda.py: 4 passed
+- Tail6/Hydra27 at B1/B4, ordinary and threshold-boundary products
+- correctness only; no performance measurement or real-task qualification
