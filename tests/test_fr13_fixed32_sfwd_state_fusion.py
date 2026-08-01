@@ -292,6 +292,10 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     assert "FR13_FIXED32_SFWD_STATE_FUSION source candidate is eager" in launcher
     assert "actual_source_flat" in launcher
     assert "source_flat.detach().cpu().tolist()" in launcher
+    assert 'geometry_failures.append("x_shape")' in launcher
+    assert 'geometry_failures.append("source_stage_contiguous")' in launcher
+    assert '"spec_state_indices": (' in launcher
+    assert "observed={observed!r}" in launcher
     assert "launch_fixed32_sfwd_state_fusion(" in patcher
     assert "fixed32_sfwd_state_fusion_byte_gate(" in patcher
     assert patcher.count("int(conv_state.size(2)) != 34") == 2
