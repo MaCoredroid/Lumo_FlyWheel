@@ -62,12 +62,13 @@ def _function_source(name: str) -> str:
 def test_contract_is_closed_and_launch_invariant_for_b1_b4() -> None:
     for batch in (1, 2, 3, 4):
         contract = kernel.fixed32_sfwd_state_fusion_contract(
-            batch, tree_rows=32, conv_width=4, conv_state_len=12
+            batch, tree_rows=32, conv_width=4, conv_state_len=34
         )
         assert contract["physical_rows_per_request"] == 32
         assert contract["logical_rows"] == batch * 32
         assert contract["source_rows_per_request"] == 36
         assert contract["source_rows"] == batch * 36
+        assert contract["conv_state_len"] == 34
         assert contract["conv_state_launches_per_layer"] == 1
         assert contract["gdn_level_path_programs"] == (batch, 11 * batch)
         assert contract["gdn_physical_launches_per_layer"] == 2
@@ -76,11 +77,12 @@ def test_contract_is_closed_and_launch_invariant_for_b1_b4() -> None:
         assert contract["reference_always_served"] is True
 
     invalid = (
-        (0, 32, 4, 12),
-        (5, 32, 4, 12),
-        (1, 31, 4, 12),
-        (1, 32, 3, 12),
-        (1, 32, 4, 11),
+        (0, 32, 4, 34),
+        (5, 32, 4, 34),
+        (1, 31, 4, 34),
+        (1, 32, 3, 34),
+        (1, 32, 4, 12),
+        (1, 32, 4, 33),
     )
     for batch, rows, width, state_len in invalid:
         with pytest.raises(ValueError):
@@ -118,7 +120,7 @@ def test_cpu_reference_matches_direct_fused_indexing_for_b1_b4() -> None:
     torch.manual_seed(20260801)
     channels = 8
     width = 4
-    state_len = 12
+    state_len = 34
     rows = 32
     source_flat = torch.tensor(
         kernel._fr13_fixed32_conv_source_flat_expected(width),
@@ -292,6 +294,8 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     assert "source_flat.detach().cpu().tolist()" in launcher
     assert "launch_fixed32_sfwd_state_fusion(" in patcher
     assert "fixed32_sfwd_state_fusion_byte_gate(" in patcher
+    assert patcher.count("int(conv_state.size(2)) != 34") == 2
+    assert "int(conv_state.size(2)) != 12" not in patcher
     assert "No candidate bytes become model inputs in this arm." in patcher
     assert "mixed_qkv_spec = _fr10_tree_conv_out" in patcher
     assert "mixed_qkv_spec = _fr13_sfwd_candidate_out" not in patcher

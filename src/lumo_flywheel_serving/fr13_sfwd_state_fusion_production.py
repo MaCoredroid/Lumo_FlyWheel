@@ -190,7 +190,10 @@ def fixed32_sfwd_state_fusion_production_engagement(
         raise RuntimeError("FR13 SFWD production timing is eager-only")
     batch = int(batch_size)
     kernel.fixed32_sfwd_state_fusion_contract(
-        batch, tree_rows=32, conv_width=4, conv_state_len=12
+        batch,
+        tree_rows=32,
+        conv_width=4,
+        conv_state_len=kernel._FR13_FIXED32_SFWD_CONV_STATE_LEN,
     )
     if batch != 1:
         raise RuntimeError("FR13 SFWD production timing is B1-only")

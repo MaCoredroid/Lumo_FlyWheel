@@ -1174,6 +1174,7 @@ _FR13_FIXED32_LEVELS_SHA256 = (
 _FR13_FIXED32_COVERAGE_SHA256 = (
     "23b22df6bf551a4e788327db3b3d3d96e1eca49078d2c6bd0049da2d390eca8b"
 )
+_FR13_FIXED32_SFWD_CONV_STATE_LEN = 34
 
 
 def fixed32_sfwd_state_fusion_contract(
@@ -1206,10 +1207,12 @@ def fixed32_sfwd_state_fusion_contract(
             "FR13_FIXED32_SFWD_STATE_FUSION requires exactly 32 physical "
             f"rows per request, got {rows}"
         )
-    if width != 4 or state_len != 12:
+    if width != 4 or state_len != _FR13_FIXED32_SFWD_CONV_STATE_LEN:
         raise ValueError(
             "FR13_FIXED32_SFWD_STATE_FUSION requires the exact width/state "
-            f"geometry (4, 12), got ({width}, {state_len})"
+            "geometry "
+            f"(4, {_FR13_FIXED32_SFWD_CONV_STATE_LEN}), "
+            f"got ({width}, {state_len})"
         )
     source_rows = width - 1 + rows + 1
     return {
@@ -2681,7 +2684,10 @@ def fixed32_sfwd_state_fusion_byte_gate(
         )
     batch = int(batch_size)
     fixed32_sfwd_state_fusion_contract(
-        batch, tree_rows=32, conv_width=4, conv_state_len=12
+        batch,
+        tree_rows=32,
+        conv_width=4,
+        conv_state_len=_FR13_FIXED32_SFWD_CONV_STATE_LEN,
     )
     state = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_STATE
     if state["task_marker"] is None:

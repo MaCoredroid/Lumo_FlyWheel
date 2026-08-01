@@ -9632,7 +9632,7 @@ def _fr13_conv_subop_mab(
                             or _fr12_native_spine_conv_out is not None
                             or int(attn_metadata.num_spec_decodes) != 1
                             or int(_fr10_tree_n) != 32
-                            or int(conv_state.size(2)) != 12
+                            or int(conv_state.size(2)) != 34
                             or int(_fr10_width) != 4
                         ):
                             raise RuntimeError(
@@ -9687,7 +9687,7 @@ def _fr13_conv_subop_mab(
                             or self.activation not in (True, "silu", "swish")
                             or _fr12_native_spine_conv_out is not None
                             or int(_fr10_tree_n) != 32
-                            or int(conv_state.size(2)) != 12
+                            or int(conv_state.size(2)) != 34
                             or int(_fr10_width) != 4
                         ):
                             raise RuntimeError(
