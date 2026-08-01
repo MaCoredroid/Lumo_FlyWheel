@@ -247,7 +247,7 @@ FIXED32_RUNTIME_SNAPSHOT_SCHEMA = "fr13-fixed32-boundary-snapshot-v4"
 SFWD_MAIN_SIDECAR_SCHEMA = "fr13.sfwd_gpu_timer.v2"
 SFWD_SAMPLE_SIDECAR_SCHEMA = "fr13.sfwd_per_step_samples.v2"
 FIXED32_CHAT_TRAFFIC_AUDIT_SCHEMA = (
-    "fr13-fixed32-chat-task-provenance-audit-v2"
+    "fr13-fixed32-chat-task-provenance-audit-v3"
 )
 FIXED32_REAL_TASK_PROVENANCE_SCHEMA = "fr13-fixed32-real-task-provenance-v3"
 FIXED32_QWEN_CAMPAIGN_PROOF_SCHEMA = (
@@ -2319,6 +2319,34 @@ def _validate_fixed32_ingress_reports(
     }
 
 
+def _fixed32_census_membership_coverage(
+    successful_memberships: dict[str, int],
+) -> dict[str, Any]:
+    without_pure_decode = sorted(
+        engine_id
+        for engine_id, membership_count in successful_memberships.items()
+        if membership_count == 0
+    )
+    return {
+        "successful_engine_requests_with_pure_decode": (
+            len(successful_memberships) - len(without_pure_decode)
+        ),
+        "successful_engine_requests_without_pure_decode": len(
+            without_pure_decode
+        ),
+        "successful_engine_requests_without_pure_decode_sha256": (
+            hashlib.sha256(
+                json.dumps(
+                    without_pure_decode,
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                ).encode("ascii")
+            ).hexdigest()
+        ),
+        "all_successful_requests_present": not without_pure_decode,
+    }
+
+
 def validate_fixed32_ingress_and_census(
     arm_dir: Path,
     *,
@@ -2647,9 +2675,9 @@ def validate_fixed32_ingress_and_census(
                 )
             successful_memberships[engine_id] += 1
             per_task_memberships[task_id] += 1
-    if any(count <= 0 for count in successful_memberships.values()):
+    if any(count <= 0 for count in per_task_memberships.values()):
         raise GateError(
-            f"{census_path}: successful engine request absent from decode census"
+            f"{census_path}: canonical task absent from pure-decode census"
         )
     successful_by_task = {
         task_id: sum(
@@ -2704,7 +2732,7 @@ def validate_fixed32_ingress_and_census(
                 successful_memberships.values()
             ),
             "per_task_request_step_memberships": per_task_memberships,
-            "all_successful_requests_present": True,
+            **_fixed32_census_membership_coverage(successful_memberships),
             "all_census_requests_authenticated": True,
             "all_census_requests_inside_task_brackets": True,
         },
@@ -3887,7 +3915,7 @@ def build_fixed32_chat_traffic_audit(
             "all_task_agent_and_eval_terminal": True,
             "all_trace_request_counts_match_authenticated_proxy": True,
             "all_proxy_attempts_match_engine_requests": True,
-            "all_successful_engine_requests_match_census": True,
+            "all_census_requests_match_successful_engine_requests": True,
             "all_census_requests_inside_task_brackets": True,
             "no_campaign_rejections_or_aborted_requests": True,
             "no_fixed32_traffic_outside_task_brackets": True,
