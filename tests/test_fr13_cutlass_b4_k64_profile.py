@@ -415,6 +415,10 @@ def test_tail23_hydra27_stack_route_is_real_exact4_and_fixed_k64() -> None:
     assert '"draft_vocab_k": 65536' in route
     assert '"target_verifier_vocabulary": "full"' in route
     assert '"qwen_turn_tool_call_cap": qwen_derivation.DERIVED_CAP' in route
+    assert "work_census.validate_campaign(" in route
+    assert 'required_batches=(4,)' in route
+    assert '"four_way_normalized_work_signatures"' in route
+    assert "Tail23/Hydra27 stock/M128 physical-work signatures" in route
     assert (
         'timing.get("all_parent_verdict_sha256") != taw_sha256'
         in route
@@ -453,6 +457,9 @@ def test_b4_timing_binds_all_parent_verdict_and_uses_per_step_sfwd() -> None:
     )
     assert '"$ALL_PARENT_VERDICT_SHA256"' in timing
     assert "fixed32_native_precompute_production_candidate_return" in timing
-    assert "all-parent production did not engage on every measured event" in timing
+    assert "census.validate_arm(" in timing
+    assert "census.load_jsonl(census_path)" in timing
+    assert "work_census.validate_bound_arm_report(" in timing
+    assert "census_raw=census_raw" in timing
     assert "from fr13_b4_timing_math import phase_breakdown, positive" in timing
     assert 'positive(record, "s_per_fwd_gpu_per_forward")' not in timing
