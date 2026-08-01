@@ -12,8 +12,8 @@ import tempfile
 from pathlib import Path
 
 
-CANDIDATE_SHA256 = "fa9395754b13de26dbed38dfc551614dbb109058764426564dcbb3c77fdd6ea9"
-CANDIDATE_SIZE = 111_383_840
+CANDIDATE_SHA256 = "f9bbbb8dc4ffc2227a71d2bc7b260e586ffbdc0fd946749e4f69e322c46a362d"
+CANDIDATE_SIZE = 111_417_328
 CANDIDATE_SELECTORS = frozenset({"streamk_coop128", "streamk_coop128_byte_ab"})
 CONTAINER_SOURCE = Path("/tmp/fr13_cutlass_wave.abi3.so")
 CONTAINER_DESTINATION = Path(

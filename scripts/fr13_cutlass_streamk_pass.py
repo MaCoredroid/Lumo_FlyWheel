@@ -16,16 +16,17 @@ from typing import Any
 import fr13_cutlass_wave_binary as binary
 
 
-LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_live_gate.v2"
-SIDECAR_SCHEMA = "fr13.fixed32.cutlass_streamk.production_pass.v1"
+LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_live_gate.v3"
+SIDECAR_SCHEMA = "fr13.fixed32.cutlass_streamk.production_pass.v2"
 ATTESTATION_SCHEMA = "fr13.fixed32.cutlass_streamk_binary.v2"
 PATCH_SOURCE = Path("scripts/fr13_patch_cutlass_fixed32_wave.py")
-PATCH_SOURCE_SHA256 = "d461d0783c292384229a117b4d7d4a13c5c883fbea9764968cbd8addbdafafc1"
+PATCH_SOURCE_SHA256 = "7fb7d57c6ba08314c1ce4615366f4d4b85cfcee18f31e29739ef4815d3a42474"
 VLLM_BASE_COMMIT = "fe9c3d6c5f66c873d196800384ed6880687b9e52"
 PATCHED_DISPATCH_SHA256 = (
-    "9de2ab8096df470d10a8838941f28c06831f481089bd5eaf98cfed90119fef65"
+    "cee69e6c53eed8dc0a8b828fc329b96c63320d7edbe1c26e1a649fad487a5248"
 )
 EXPECTED_TASK_IDS = ("astropy__astropy-12907",)
+EXPECTED_TASK_MARKER = f"swe_verified:{EXPECTED_TASK_IDS[0]}"
 EXPECTED_PROJECTION_NK = (
     (5120, 6144),
     (5120, 17408),
@@ -153,6 +154,7 @@ def validate_live_result(
         "acceptance_valid": False,
         "task_count": 1,
         "task_ids": list(EXPECTED_TASK_IDS),
+        "task_marker": EXPECTED_TASK_MARKER,
         "batch_size": 1,
         "concurrency": 1,
         "fixed_rows": 32,
@@ -193,6 +195,9 @@ def validate_live_result(
     attestation_sha256 = _require_sha256(
         payload.get("binary_attestation_sha256"), "binary attestation SHA-256"
     )
+    real_task_arm_sha256 = _require_sha256(
+        payload.get("real_task_arm_sha256"), "real-task arm SHA-256"
+    )
     return {
         "schema": SIDECAR_SCHEMA,
         "status": "QUALIFIED",
@@ -206,6 +211,8 @@ def validate_live_result(
         "patched_dispatch_sha256": PATCHED_DISPATCH_SHA256,
         "qualification_source_commit": source_commit,
         "qualification_task_ids": list(EXPECTED_TASK_IDS),
+        "qualification_task_marker": EXPECTED_TASK_MARKER,
+        "real_task_arm_sha256": real_task_arm_sha256,
         "qualified_projection_nk": [list(shape) for shape in EXPECTED_PROJECTION_NK],
         "qualified_fixed_rows": 32,
         "served_result_during_qualification": "stock",
@@ -255,6 +262,7 @@ def verify_sidecar(
         "vllm_base_commit": VLLM_BASE_COMMIT,
         "patched_dispatch_sha256": PATCHED_DISPATCH_SHA256,
         "qualification_task_ids": list(EXPECTED_TASK_IDS),
+        "qualification_task_marker": EXPECTED_TASK_MARKER,
         "qualified_projection_nk": [list(shape) for shape in EXPECTED_PROJECTION_NK],
         "qualified_fixed_rows": 32,
         "served_result_during_qualification": "stock",
@@ -270,6 +278,10 @@ def verify_sidecar(
     _require_sha256(
         payload.get("binary_attestation_sha256"),
         "sidecar diagnostic binary-attestation SHA-256",
+    )
+    _require_sha256(
+        payload.get("real_task_arm_sha256"),
+        "sidecar real-task arm SHA-256",
     )
     source_commit = payload.get("qualification_source_commit")
     if (

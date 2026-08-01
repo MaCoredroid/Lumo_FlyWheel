@@ -55,6 +55,31 @@ def test_real_task_arm_atomically_publishes_and_rotates_exact_marker(
     assert arm.as_dict()["state"] == "ended"
 
 
+def test_cutlass_real_task_arm_uses_canonical_marker_and_artifact_contract(
+    tmp_path: Path,
+) -> None:
+    logs = tmp_path / "logs"
+    logs.mkdir(mode=0o700)
+    path = (
+        logs / orchestrator._FIXED32_CUTLASS_REAL_TASK_ARM_NAME
+    ).resolve()
+    arm = orchestrator._Fixed32CutlassRealTaskArm(
+        path=path,
+        instance_id=INSTANCE_ID,
+    )
+
+    arm.start()
+    assert path.read_text(encoding="ascii") == f"swe_verified:{INSTANCE_ID}\n"
+    arm.finish()
+
+    payload = arm.as_dict()
+    assert payload["schema"] == (
+        "fr13-fixed32-cutlass-streamk-real-task-arm-v1"
+    )
+    assert payload["state"] == "ended"
+    assert arm.artifact_name == "fixed32_cutlass_streamk_real_task_arm.json"
+
+
 def test_real_task_arm_rejects_stale_or_symlink_destination(
     tmp_path: Path,
 ) -> None:

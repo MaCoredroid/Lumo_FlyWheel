@@ -323,9 +323,11 @@ def test_ready_metadata_with_stale_lease_fails_before_full_capture(
     )
 
 
-def test_default_eager_runtime_has_no_b4_diagnostic_boot_hook(
+@pytest.mark.parametrize("cutlass_wave", ("stock", "streamk_coop128"))
+def test_non_diagnostic_eager_runtime_has_no_boot_hook(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    cutlass_wave: str,
 ) -> None:
     source = tmp_path / "gpu_model_runner.py"
     source.write_text(_GPU_RUNNER_FIXTURE)
@@ -336,10 +338,16 @@ def test_default_eager_runtime_has_no_b4_diagnostic_boot_hook(
         "_FR13_FIXED32_BATCH_GDN_BYTE_AB",
         "0",
     )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_CUTLASS_WAVE",
+        cutlass_wave,
+    )
     assert patcher._patch_gpu_model_runner_fixed32_final_full_preseed()
 
     text = source.read_text(encoding="utf-8")
     assert "FR13_FIXED32_EAGER_B4_BOOT_WARM" not in text
+    assert "FR13_FIXED32_EAGER_STREAMK_B1_BOOT_WARM" not in text
     namespace = {
         "CUDAGraphMode": _CUDAGraphMode,
         "SimpleNamespace": SimpleNamespace,
@@ -351,9 +359,30 @@ def test_default_eager_runtime_has_no_b4_diagnostic_boot_hook(
     assert runner.calls == []
 
 
-def test_eager_b4_diagnostic_boot_is_zero_traffic_and_boundary_ready(
+@pytest.mark.parametrize(
+    ("batch_gdn_byte_ab", "cutlass_wave", "capacity", "sentinel"),
+    (
+        (
+            "1",
+            "stock",
+            4,
+            "FR13_FIXED32_EAGER_B4_BOOT_WARM",
+        ),
+        (
+            "0",
+            "streamk_coop128_byte_ab",
+            1,
+            "FR13_FIXED32_EAGER_STREAMK_B1_BOOT_WARM",
+        ),
+    ),
+)
+def test_eager_diagnostic_boot_is_zero_traffic_and_boundary_ready(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    batch_gdn_byte_ab: str,
+    cutlass_wave: str,
+    capacity: int,
+    sentinel: str,
 ) -> None:
     source = tmp_path / "gpu_model_runner.py"
     source.write_text(_GPU_RUNNER_FIXTURE)
@@ -362,7 +391,12 @@ def test_eager_b4_diagnostic_boot_is_zero_traffic_and_boundary_ready(
     monkeypatch.setattr(
         patcher,
         "_FR13_FIXED32_BATCH_GDN_BYTE_AB",
-        "1",
+        batch_gdn_byte_ab,
+    )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_CUTLASS_WAVE",
+        cutlass_wave,
     )
     assert patcher._patch_gpu_model_runner_fixed32_final_full_preseed()
 
@@ -383,7 +417,7 @@ def test_eager_b4_diagnostic_boot_is_zero_traffic_and_boundary_ready(
         assert state["pending"] is None
         state["boot_warm"] = {
             "ready": True,
-            "capacity": 4,
+            "capacity": capacity,
             "vocab_size": vocab_size,
             "observed_event_absent": True,
             "pending_event_absent": True,
@@ -412,15 +446,23 @@ def test_eager_b4_diagnostic_boot_is_zero_traffic_and_boundary_ready(
         "_fr13_dfwd_timer": lambda: state.update(dfwd_ready=True),
     }
     text = source.read_text(encoding="utf-8")
-    assert "FR13_FIXED32_EAGER_B4_BOOT_WARM" in text
+    assert sentinel in text
     exec(text, namespace)
-    runner = namespace["Runner"](1)
+    runner = namespace["Runner"](1, max_num_seqs=capacity)
     assert runner.capture_model() == 0
 
-    assert state["descriptor"] == ("FULL", 128, 4, True, False, 0)
+    num_tokens = 32 * capacity
+    assert state["descriptor"] == (
+        "FULL",
+        num_tokens,
+        capacity,
+        True,
+        False,
+        0,
+    )
     assert len(runner.calls) == 1
-    num_tokens, kwargs = runner.calls[0]
-    assert num_tokens == 128
+    actual_num_tokens, kwargs = runner.calls[0]
+    assert actual_num_tokens == num_tokens
     assert kwargs == {
         "cudagraph_runtime_mode": _CUDAGraphMode.NONE,
         "force_attention": True,
@@ -440,15 +482,49 @@ def test_eager_b4_diagnostic_boot_is_zero_traffic_and_boundary_ready(
 
 
 @pytest.mark.parametrize(
-    ("mode", "max_num_seqs", "error"),
     (
-        (_CUDAGraphMode.FULL, 4, "requires CUDAGraphMode.NONE"),
-        (_CUDAGraphMode.NONE, 1, "requires max_num_seqs=4"),
+        "batch_gdn_byte_ab",
+        "cutlass_wave",
+        "mode",
+        "max_num_seqs",
+        "error",
+    ),
+    (
+        (
+            "1",
+            "stock",
+            _CUDAGraphMode.FULL,
+            4,
+            "requires CUDAGraphMode.NONE",
+        ),
+        (
+            "1",
+            "stock",
+            _CUDAGraphMode.NONE,
+            1,
+            "requires max_num_seqs=4",
+        ),
+        (
+            "0",
+            "streamk_coop128_byte_ab",
+            _CUDAGraphMode.FULL,
+            1,
+            "requires CUDAGraphMode.NONE",
+        ),
+        (
+            "0",
+            "streamk_coop128_byte_ab",
+            _CUDAGraphMode.NONE,
+            4,
+            "requires max_num_seqs=1",
+        ),
     ),
 )
-def test_eager_b4_diagnostic_boot_rejects_wrong_runtime_contract(
+def test_eager_diagnostic_boot_rejects_wrong_runtime_contract(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    batch_gdn_byte_ab: str,
+    cutlass_wave: str,
     mode: _CUDAGraphMode,
     max_num_seqs: int,
     error: str,
@@ -460,7 +536,12 @@ def test_eager_b4_diagnostic_boot_rejects_wrong_runtime_contract(
     monkeypatch.setattr(
         patcher,
         "_FR13_FIXED32_BATCH_GDN_BYTE_AB",
-        "1",
+        batch_gdn_byte_ab,
+    )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_CUTLASS_WAVE",
+        cutlass_wave,
     )
     assert patcher._patch_gpu_model_runner_fixed32_final_full_preseed()
     namespace = {
@@ -477,6 +558,38 @@ def test_eager_b4_diagnostic_boot_rejects_wrong_runtime_contract(
     with pytest.raises(RuntimeError, match=error):
         runner.capture_model()
     assert runner.calls == []
+
+
+@pytest.mark.parametrize(
+    ("batch_gdn_byte_ab", "cutlass_wave", "message"),
+    (
+        (
+            "1",
+            "streamk_coop128_byte_ab",
+            "mutually exclusive",
+        ),
+        ("0", "unknown", "FR13_FIXED32_CUTLASS_WAVE must be"),
+    ),
+)
+def test_eager_boot_warm_selector_contract_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    batch_gdn_byte_ab: str,
+    cutlass_wave: str,
+    message: str,
+) -> None:
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_BATCH_GDN_BYTE_AB",
+        batch_gdn_byte_ab,
+    )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_CUTLASS_WAVE",
+        cutlass_wave,
+    )
+
+    with pytest.raises(RuntimeError, match=message):
+        patcher._fr13_fixed32_eager_boot_warm_contract()
 
 
 def test_postprocess_boot_warm_is_unmeasured_and_idempotent(

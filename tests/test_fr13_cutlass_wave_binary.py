@@ -22,9 +22,9 @@ def test_pinned_binary_identity_and_selectors() -> None:
     module = _module()
 
     assert module.CANDIDATE_SHA256 == (
-        "fa9395754b13de26dbed38dfc551614dbb109058764426564dcbb3c77fdd6ea9"
+        "f9bbbb8dc4ffc2227a71d2bc7b260e586ffbdc0fd946749e4f69e322c46a362d"
     )
-    assert module.CANDIDATE_SIZE == 111_383_840
+    assert module.CANDIDATE_SIZE == 111_417_328
     assert module.CANDIDATE_SELECTORS == {
         "streamk_coop128",
         "streamk_coop128_byte_ab",

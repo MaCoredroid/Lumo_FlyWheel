@@ -151,7 +151,11 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "binary.CONTAINER_DESTINATION" in gate
     assert '"served_result": "stock"' in gate
     assert '"acceptance_valid": False' in gate
-    assert '"schema": "fr13.fixed32.cutlass_streamk_live_gate.v2"' in gate
+    assert '"schema": "fr13.fixed32.cutlass_streamk_live_gate.v3"' in gate
+    assert "fixed32_cutlass_streamk_real_task_arm.json" in gate
+    assert "fr13-fixed32-cutlass-streamk-real-task-arm-v1" in gate
+    assert '"task_marker": expected_task_marker' in gate
+    assert '"real_task_arm_sha256": hashlib.sha256(arm_raw).hexdigest()' in gate
     assert '"patch_source_sha256": patch_source_sha256' in gate
     assert '"binary_attestation_sha256"' in gate
     sequence = kernel_gate.index(
@@ -170,6 +174,8 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     ).read_text(encoding="utf-8")
     assert "cutlass_wave = sys.argv[10]" in serve
     assert "streamk_eager_diagnostic=(" in serve
+    assert "--fixed32-cutlass-real-event-arm" in serve
+    assert "fr13_fixed32_cutlass_streamk.real_event.arm" in serve
 
 
 def test_b4_graph_gate_pins_cutlass_stock_and_bm8_off() -> None:

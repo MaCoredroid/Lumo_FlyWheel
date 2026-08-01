@@ -168,6 +168,25 @@ def test_same_process_byte_ab_is_bounded_and_returns_stock() -> None:
     assert "return run_stock(out);" in patched
 
 
+def test_boot_warm_cannot_consume_or_satisfy_real_task_byte_gate() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    arm_path = '"/logs/fr13_fixed32_cutlass_streamk.real_event.arm"'
+    unarmed = patched.index("if (task_marker.empty())")
+    counter = patched.index("static std::atomic<int64_t> next_invocation")
+    unarmed_path = patched[unarmed:counter]
+
+    assert arm_path in patched
+    assert unarmed < counter
+    assert "run_stock(out);" in unarmed_path
+    assert "run_stream_k(candidate);" in unarmed_path
+    assert "return;" in unarmed_path
+    assert "task_marker = fixed32_cutlass_real_task_marker()" in patched
+    assert 'fr13.fixed32.cutlass_streamk_byte_ab.v2' in patched
+    assert '\\"task_marker\\"' in module.DISPATCH_REPLACEMENT
+
+
 def test_patch_is_idempotent() -> None:
     module = _module()
     first, changed = module.patch_text(_source_fixture(module))

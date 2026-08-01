@@ -164,6 +164,9 @@ _FR13_FIXED32_BATCH_GDN_BYTE_AB = os.environ.get(
 _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = os.environ.get(
     "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB", "0"
 ).strip()
+_FR13_FIXED32_CUTLASS_WAVE = os.environ.get(
+    "FR13_FIXED32_CUTLASS_WAVE", "stock"
+).strip()
 _FR13_FIXED32_TREE_SOURCE = repr(list(_FR13_FIXED32_CHOICES))
 _FR13_FIXED32_SLOT_PI = tuple(
     [0]
@@ -5837,6 +5840,43 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
     )
 
 
+def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
+    batch_gdn_byte_diagnostic = _FR13_FIXED32_BATCH_GDN_BYTE_AB
+    cutlass_wave = _FR13_FIXED32_CUTLASS_WAVE
+    if batch_gdn_byte_diagnostic not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1"
+        )
+    if cutlass_wave not in (
+        "stock",
+        "streamk_coop128",
+        "streamk_coop128_byte_ab",
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_CUTLASS_WAVE must be stock, streamk_coop128, or "
+            "streamk_coop128_byte_ab"
+        )
+    streamk_byte_diagnostic = cutlass_wave == "streamk_coop128_byte_ab"
+    if batch_gdn_byte_diagnostic == "1" and streamk_byte_diagnostic:
+        raise RuntimeError(
+            "FR13 fixed32 eager B4 and Stream-K B1 byte diagnostics are "
+            "mutually exclusive"
+        )
+    if batch_gdn_byte_diagnostic == "1":
+        return (
+            "eager B4 byte diagnostic",
+            4,
+            "FR13_FIXED32_EAGER_B4_BOOT_WARM",
+        )
+    if streamk_byte_diagnostic:
+        return (
+            "Stream-K B1 byte diagnostic",
+            1,
+            "FR13_FIXED32_EAGER_STREAMK_B1_BOOT_WARM",
+        )
+    return None
+
+
 def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     """Validate the fixed-work campaign before emitting any runtime source."""
     mode = _FR13_FIXED32_MODE
@@ -5847,10 +5887,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     graph_batch_gdn_byte_diagnostic = (
         _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
     )
-    if batch_gdn_byte_diagnostic not in ("0", "1"):
-        raise RuntimeError(
-            "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1"
-        )
+    _fr13_fixed32_eager_boot_warm_contract()
     if graph_batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
@@ -5862,6 +5899,14 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         raise RuntimeError(
             "FR13 fixed32 eager and graph-replay batched GDN diagnostics are "
             "mutually exclusive"
+        )
+    if (
+        _FR13_FIXED32_CUTLASS_WAVE == "streamk_coop128_byte_ab"
+        and graph_batch_gdn_byte_diagnostic == "1"
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 Stream-K B1 and graph-replay B4 byte diagnostics "
+            "are mutually exclusive"
         )
     if batch_gdn_byte_diagnostic == "1":
         candidate_bv = os.environ.get(
@@ -5885,6 +5930,20 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             raise RuntimeError(
                 "FR13 fixed32 eager B4 byte diagnostic cannot arm a B1 or "
                 "production route"
+            )
+    if _FR13_FIXED32_CUTLASS_WAVE == "streamk_coop128_byte_ab":
+        if not mode:
+            raise RuntimeError(
+                "FR13 fixed32 Stream-K B1 byte diagnostic requires fixed32 mode"
+            )
+        if (
+            os.environ.get("FR13_FIXED32_B1_DIAGNOSTIC", "0") != "1"
+            or os.environ.get("FR13_FIXED32_CUTLASS_WAVE_PRODUCTION", "0")
+            != "0"
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 Stream-K B1 byte diagnostic requires the "
+                "diagnostic route without production"
             )
     if graph_batch_gdn_byte_diagnostic == "1":
         candidate_bv = os.environ.get(
@@ -17923,7 +17982,10 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
         "            cudagraph_runtime_mode=cudagraph_runtime_mode,\n"
     )
     text = text.replace(anchor, inject, 1)
-    if _FR13_FIXED32_BATCH_GDN_BYTE_AB == "1":
+    eager_boot_warm_contract = _fr13_fixed32_eager_boot_warm_contract()
+    if eager_boot_warm_contract is not None:
+        eager_name, eager_capacity, eager_sentinel = eager_boot_warm_contract
+        eager_num_tokens = 32 * eager_capacity
         eager_anchor = (
             "        if self.compilation_config.cudagraph_mode "
             "== CUDAGraphMode.NONE:\n"
@@ -17937,10 +17999,10 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
         )
         if text.count(eager_anchor) != 1:
             raise RuntimeError(
-                "FR13 fixed32 eager B4 boot-warm anchor is not unique"
+                f"FR13 fixed32 {eager_name} boot-warm anchor is not unique"
             )
         eager_inject = (
-            "        # FR13_FIXED32_EAGER_B4_BOOT_WARM: the eager-only byte "
+            f"        # {eager_sentinel}: the eager-only byte "
             "gate\n"
             "        # has no final FULL capture callback. Reuse its "
             "capture-shaped\n"
@@ -17951,23 +18013,25 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
             "        if self.compilation_config.cudagraph_mode != "
             "CUDAGraphMode.NONE:\n"
             "            raise RuntimeError(\n"
-            "                \"FR13 fixed32 eager B4 byte diagnostic requires "
+            f"                \"FR13 fixed32 {eager_name} requires "
             "CUDAGraphMode.NONE\"\n"
             "            )\n"
-            "        if int(self.scheduler_config.max_num_seqs) != 4:\n"
+            f"        if int(self.scheduler_config.max_num_seqs) != "
+            f"{eager_capacity}:\n"
             "            raise RuntimeError(\n"
-            "                \"FR13 fixed32 eager B4 byte diagnostic requires "
-            "max_num_seqs=4\"\n"
+            f"                \"FR13 fixed32 {eager_name} requires "
+            f"max_num_seqs={eager_capacity}\"\n"
             "            )\n"
             "        from vllm.model_executor.layers.mamba import (\n"
             "            gdn_linear_attn as _fr13_f32_eager_boot_gdn,\n"
             "        )\n"
             "        if _fr13_f32_eager_boot_gdn."
             "_fr13_fixed32_final_full_preseed_needed(\n"
-            "            \"FULL\", 128, 4, True, False, 0,\n"
+            f"            \"FULL\", {eager_num_tokens}, {eager_capacity}, "
+            "True, False, 0,\n"
             "        ):\n"
             "            self._dummy_run(\n"
-            "                128,\n"
+            f"                {eager_num_tokens},\n"
             "                cudagraph_runtime_mode=CUDAGraphMode.NONE,\n"
             "                force_attention=True,\n"
             "                uniform_decode=True,\n"
@@ -17985,7 +18049,7 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
             "        _fr13_cfwd_timer()\n"
             "        _fr13_dfwd_timer()\n"
             "        _fr13_f32_eager_boot_gdn."
-            "_fr13_fixed32_assert_final_full_preseed_ready(4)\n"
+            f"_fr13_fixed32_assert_final_full_preseed_ready({eager_capacity})\n"
             + eager_anchor
         )
         text = text.replace(eager_anchor, eager_inject, 1)

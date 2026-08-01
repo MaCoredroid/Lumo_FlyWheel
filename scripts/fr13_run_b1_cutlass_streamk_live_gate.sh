@@ -35,11 +35,13 @@ bash scripts/fr13_run_b1_kernel_live_gate.sh
 
 ARM="hydra27_fixed32_${TAG}"
 ARMDIR="$RUNROOT/$ARM"
+TASK_ID=astropy__astropy-12907
+CUTLASS_ARM_ARTIFACT="$ARMDIR/swe_out/verified/per_task/$TASK_ID/fixed32_cutlass_streamk_real_task_arm.json"
 .venv/bin/python - \
   "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl" \
   "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_binary.json" \
   "$ARMDIR/cutlass_streamk_byte_gate.json" \
-  "$PATCH_SOURCE" "$SOURCE_COMMIT" <<'PY'
+  "$PATCH_SOURCE" "$SOURCE_COMMIT" "$CUTLASS_ARM_ARTIFACT" <<'PY'
 import hashlib
 import json
 import sys
@@ -51,11 +53,14 @@ import fr13_cutlass_streamk_pass as qualification
 
 jsonl_path, binary_path, output_path, patch_source = map(Path, sys.argv[1:5])
 source_commit = sys.argv[5]
+arm_path = Path(sys.argv[6])
 lines = jsonl_path.read_text(encoding="utf-8").splitlines()
 if not lines:
     raise SystemExit("CUTLASS Stream-K byte gate was vacuous")
 records = [json.loads(line) for line in lines]
-expected_record_schema = "fr13.fixed32.cutlass_streamk_byte_ab.v1"
+expected_record_schema = "fr13.fixed32.cutlass_streamk_byte_ab.v2"
+expected_task_id = "astropy__astropy-12907"
+expected_task_marker = f"swe_verified:{expected_task_id}"
 expected_shapes = {
     (34816, 5120),
     (5120, 17408),
@@ -66,11 +71,17 @@ expected_shapes = {
 observed_shapes = {(record["n"], record["k"]) for record in records}
 invocations = [record["invocation"] for record in records]
 binary_record = json.loads(binary_path.read_text(encoding="ascii"))
+if not arm_path.is_file() or arm_path.is_symlink():
+    raise SystemExit("CUTLASS real-task arm artifact is missing or symlinked")
+arm_raw = arm_path.read_bytes()
+arm_record = json.loads(arm_raw.decode("ascii"))
 errors = []
 if len(records) > 256:
     errors.append("diagnostic exceeded its 256-call bound")
 if any(record.get("schema") != expected_record_schema for record in records):
     errors.append("comparison record schema mismatch")
+if any(record.get("task_marker") != expected_task_marker for record in records):
+    errors.append("comparison record is not bound to the real SWE task")
 if invocations != list(range(len(records))):
     errors.append("invocations are not contiguous from zero")
 if not expected_shapes.issubset(observed_shapes):
@@ -114,6 +125,15 @@ if binary_record.get("selector") != "streamk_coop128_byte_ab":
     errors.append("installed binary selector attestation mismatch")
 if binary_record.get("production_enabled") is not False:
     errors.append("binary attestation did not remain production-off")
+expected_arm = {
+    "schema": "fr13-fixed32-cutlass-streamk-real-task-arm-v1",
+    "state": "ended",
+    "instance_id": expected_task_id,
+    "marker": expected_task_marker,
+}
+for key, expected in expected_arm.items():
+    if arm_record.get(key) != expected:
+        errors.append(f"CUTLASS real-task arm {key} mismatch")
 destination = binary_record.get("destination") or {}
 source = binary_record.get("source") or {}
 if binary_record.get("installed_mode") != "0555":
@@ -135,13 +155,15 @@ if patch_source_sha256 != qualification.PATCH_SOURCE_SHA256:
     errors.append("Stream-K patch source SHA-256 mismatch")
 
 payload = {
-    "schema": "fr13.fixed32.cutlass_streamk_live_gate.v2",
+    "schema": "fr13.fixed32.cutlass_streamk_live_gate.v3",
     "status": "pass" if not errors else "fail",
     "run_classification": "one_real_swe_verified_b1_byte_diagnostic",
     "acceptance_valid": False,
     "task_set": "one real SWE-Verified B1 diagnostic task",
     "task_count": 1,
-    "task_ids": ["astropy__astropy-12907"],
+    "task_ids": [expected_task_id],
+    "task_marker": expected_task_marker,
+    "real_task_arm_sha256": hashlib.sha256(arm_raw).hexdigest(),
     "batch_size": 1,
     "concurrency": 1,
     "fixed_rows": 32,

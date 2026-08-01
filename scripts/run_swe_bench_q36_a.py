@@ -2564,6 +2564,9 @@ _FIXED32_TAW_REAL_TASK_ARM_NAME = (
     "fr13_fixed32_taw_native_precompute.real_event.arm"
 )
 _FIXED32_BM8_REAL_TASK_ARM_NAME = "fr13_dfwd_unified_bm8.real_event.arm"
+_FIXED32_CUTLASS_REAL_TASK_ARM_NAME = (
+    "fr13_fixed32_cutlass_streamk.real_event.arm"
+)
 _FIXED32_TAW_REAL_TASK_MARKER_PREFIX = "swe_verified:"
 _FIXED32_TAW_REAL_TASK_ID_CHARACTERS = frozenset(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
@@ -2907,6 +2910,15 @@ class _Fixed32Bm8RealTaskArm(_Fixed32TawRealTaskArm):
     artifact_name = "fixed32_bm8_real_task_arm.json"
     label = "BM8"
     schema = "fr13-fixed32-bm8-real-task-arm-v1"
+
+
+class _Fixed32CutlassRealTaskArm(_Fixed32TawRealTaskArm):
+    """Atomically bind the CUTLASS byte gate to one pinned SWE task."""
+
+    arm_name = _FIXED32_CUTLASS_REAL_TASK_ARM_NAME
+    artifact_name = "fixed32_cutlass_streamk_real_task_arm.json"
+    label = "CUTLASS Stream-K"
+    schema = "fr13-fixed32-cutlass-streamk-real-task-arm-v1"
 
 
 _FIXED32_TOKEN_USAGE_FIELDS = frozenset(
@@ -6539,6 +6551,14 @@ def main(argv: list[str] | None = None) -> int:
             "real-event marker path. B1 diagnostic only."
         ),
     )
+    parser.add_argument(
+        "--fixed32-cutlass-real-event-arm",
+        type=Path,
+        help=(
+            "Host path mounted at the CUTLASS Stream-K diagnostic's exact "
+            "/logs real-event marker path. B1 diagnostic only."
+        ),
+    )
     args = parser.parse_args(argv)
 
     fixed32_values = (
@@ -6627,6 +6647,42 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(
             "--fixed32-bm8-real-event-arm requires "
             "FR13_DFWD_UNIFIED_BM8_LIVE_AB=1"
+        )
+    cutlass_wave = os.environ.get("FR13_FIXED32_CUTLASS_WAVE", "stock")
+    if cutlass_wave not in {
+        "stock",
+        "streamk_coop128",
+        "streamk_coop128_byte_ab",
+    }:
+        parser.error("FR13_FIXED32_CUTLASS_WAVE has an unsupported value")
+    fixed32_cutlass_diagnostic = cutlass_wave == "streamk_coop128_byte_ab"
+    if fixed32_cutlass_diagnostic:
+        if fixed32_taw_diagnostic or fixed32_bm8_diagnostic:
+            parser.error(
+                "fixed32 CUTLASS, TAW, and BM8 real-task diagnostics are exclusive"
+            )
+        if not fixed32_enabled or not fixed32_b1_diagnostic:
+            parser.error(
+                "fixed32 CUTLASS real-task arm requires fixed32 B1 diagnostic mode"
+            )
+        if args.fixed32_cutlass_real_event_arm is None:
+            parser.error(
+                "FR13_FIXED32_CUTLASS_WAVE=streamk_coop128_byte_ab requires "
+                "--fixed32-cutlass-real-event-arm"
+            )
+        if (
+            args.fixed32_flush_request is not None
+            and args.fixed32_cutlass_real_event_arm.parent
+            != args.fixed32_flush_request.parent
+        ):
+            parser.error(
+                "--fixed32-cutlass-real-event-arm must share the mounted "
+                "fixed32 logs directory"
+            )
+    elif args.fixed32_cutlass_real_event_arm is not None:
+        parser.error(
+            "--fixed32-cutlass-real-event-arm requires the "
+            "streamk_coop128_byte_ab selector"
         )
     fixed32_client = None
     fixed32_subset = None
@@ -6775,7 +6831,11 @@ def main(argv: list[str] | None = None) -> int:
         arm_path = (
             args.fixed32_taw_real_event_arm
             if args.fixed32_taw_real_event_arm is not None
-            else args.fixed32_bm8_real_event_arm
+            else (
+                args.fixed32_bm8_real_event_arm
+                if args.fixed32_bm8_real_event_arm is not None
+                else args.fixed32_cutlass_real_event_arm
+            )
         )
         if arm_path is not None:
             pinned_task_ids = (
@@ -6788,11 +6848,12 @@ def main(argv: list[str] | None = None) -> int:
                     "fixed32 kernel real-task arm differs from the pinned "
                     "single-task SWE-Verified binding"
                 )
-            arm_type = (
-                _Fixed32TawRealTaskArm
-                if args.fixed32_taw_real_event_arm is not None
-                else _Fixed32Bm8RealTaskArm
-            )
+            if args.fixed32_taw_real_event_arm is not None:
+                arm_type = _Fixed32TawRealTaskArm
+            elif args.fixed32_bm8_real_event_arm is not None:
+                arm_type = _Fixed32Bm8RealTaskArm
+            else:
+                arm_type = _Fixed32CutlassRealTaskArm
             taw_real_task_arm = arm_type(
                 path=arm_path,
                 instance_id=iid,

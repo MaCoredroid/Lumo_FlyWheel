@@ -44,6 +44,7 @@ def _qualified_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         "acceptance_valid": False,
         "task_count": 1,
         "task_ids": list(module.EXPECTED_TASK_IDS),
+        "task_marker": module.EXPECTED_TASK_MARKER,
         "batch_size": 1,
         "concurrency": 1,
         "fixed_rows": 32,
@@ -65,6 +66,7 @@ def _qualified_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         "patched_dispatch_sha256": module.PATCHED_DISPATCH_SHA256,
         "source_commit": "c" * 40,
         "binary_attestation_sha256": "d" * 64,
+        "real_task_arm_sha256": "e" * 64,
         "errors": [],
     }
     live_path = tmp_path / "live.json"

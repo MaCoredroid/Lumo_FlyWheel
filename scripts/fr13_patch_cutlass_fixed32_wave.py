@@ -135,6 +135,30 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
   return selection;
 }
 
+static inline std::string fixed32_cutlass_real_task_marker() {
+  constexpr const char* arm_path =
+      "/logs/fr13_fixed32_cutlass_streamk.real_event.arm";
+  std::ifstream arm(arm_path);
+  if (!arm.good()) {
+    return "";
+  }
+  std::string marker;
+  std::string trailing;
+  std::getline(arm, marker);
+  STD_TORCH_CHECK(!marker.empty() && !std::getline(arm, trailing),
+                  "FR13 Stream-K real-task arm is malformed");
+  constexpr const char* prefix = "swe_verified:";
+  constexpr const char* allowed =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/";
+  STD_TORCH_CHECK(
+      marker.size() > std::strlen(prefix) && marker.size() <= 256 &&
+          marker.rfind(prefix, 0) == 0 &&
+          marker.substr(std::strlen(prefix)).find_first_not_of(allowed) ==
+              std::string::npos,
+      "FR13 Stream-K real-task arm is noncanonical");
+  return marker;
+}
+
 static inline bool fixed32_cutlass_real_projection(int m, int n, int k) {
   const bool fixed32_rows = m == 32 || m == 64 || m == 96 || m == 128;
   const bool real_projection =
@@ -251,7 +275,17 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
 
   if (wave_variant ==
       fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab) {
-    // Diagnostic only: compare the first bounded set of real projection calls
+    // Boot/profile forwards warm both routes but cannot consume or satisfy the
+    // authenticated real-task comparison budget.
+    std::string task_marker = fixed32_cutlass_real_task_marker();
+    if (task_marker.empty()) {
+      torch::stable::Tensor candidate = torch::stable::empty_like(out);
+      run_stock(out);
+      run_stream_k(candidate);
+      return;
+    }
+
+    // Diagnostic only: compare the first bounded set of armed real-task calls
     // in one process and CUDA stream, then always serve the stock result.
     static std::atomic<int64_t> next_invocation{0};
     constexpr int64_t byte_ab_limit = 256;
@@ -304,8 +338,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       std::ofstream log(log_path, std::ios::app);
       STD_TORCH_CHECK(log.good(),
                       "FR13 Stream-K byte A/B could not open JSONL");
-      log << "{\\\"schema\\\":\\\"fr13.fixed32.cutlass_streamk_byte_ab.v1\\\","
+      log << "{\\\"schema\\\":\\\"fr13.fixed32.cutlass_streamk_byte_ab.v2\\\","
           << "\\\"invocation\\\":" << invocation << ","
+          << "\\\"task_marker\\\":\\\"" << task_marker << "\\\","
           << "\\\"m\\\":" << M << ",\\\"n\\\":" << N
           << ",\\\"k\\\":" << K << ",\\\"bytes\\\":" << output_bytes
           << ",\\\"byte_equal\\\":"

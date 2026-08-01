@@ -102,6 +102,7 @@ FIXED32_PID_PATH="$ARMDIR_ABS/logs/fr13_fixed32_engine_pid"
 FIXED32_BOUNDARY_SNAPSHOT_PATH="$ARMDIR_ABS/logs/fr13_fixed32_boundary_snapshot"
 FIXED32_TAW_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_fixed32_taw_native_precompute.real_event.arm"
 FIXED32_BM8_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_dfwd_unified_bm8.real_event.arm"
+FIXED32_CUTLASS_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_fixed32_cutlass_streamk.real_event.arm"
 FIXED32_INGRESS_SECRET_FILE=""
 FR13_FIXED32_INGRESS_TASK_IDS=""
 
@@ -1494,6 +1495,19 @@ case "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" in
     exit 2
     ;;
 esac
+if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" ]]; then
+  [[ -n "$FIXED32_MODE" && "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]] \
+    || {
+      echo "FAIL: fixed32 CUTLASS Stream-K real-task arm is B1 diagnostic only"
+      exit 2
+    }
+  [[ "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "0" \
+     && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" ]] \
+    || {
+      echo "FAIL: fixed32 CUTLASS, TAW, and BM8 real-task diagnostics are exclusive"
+      exit 2
+    }
+fi
 if [[ "$LAUNCHER" == "locked" ]]; then
   CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.78}" MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
   FR13_RUN_DIR="$ARMDIR_ABS" LOG_DIR="$ARMDIR_ABS/logs" \
@@ -2201,6 +2215,11 @@ if [[ -n "$FIXED32_MODE" ]]; then
   if [[ "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "1" ]]; then
     FIXED32_RUNNER_ARGS+=(
       --fixed32-bm8-real-event-arm "$FIXED32_BM8_REAL_EVENT_ARM_PATH"
+    )
+  fi
+  if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" ]]; then
+    FIXED32_RUNNER_ARGS+=(
+      --fixed32-cutlass-real-event-arm "$FIXED32_CUTLASS_REAL_EVENT_ARM_PATH"
     )
   fi
 fi
