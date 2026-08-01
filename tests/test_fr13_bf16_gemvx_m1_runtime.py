@@ -16,6 +16,12 @@ LAUNCHER = REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 RUNNER = REPO / "scripts" / "fr13_run_b1_draft_head_m1_live.sh"
 VALIDATOR = REPO / "scripts" / "fr13_draft_head_m1_validate.py"
 MANIFEST = REPO / "scripts" / "fr13_runtime_manifest.py"
+PREPARED = (
+    REPO
+    / "results"
+    / "fr13_fixed32_bf16_gemvx_m1_b1_ready_20260801"
+    / "prepared_command.sh"
+)
 
 
 def _patcher_module():
@@ -247,6 +253,7 @@ def test_build_attestation_binds_source_so_and_pinned_toolchain() -> None:
 def test_real_b1_runner_is_pinned_nonprobe_and_manifested() -> None:
     runner = RUNNER.read_text(encoding="utf-8")
     manifest = MANIFEST.read_text(encoding="utf-8")
+    prepared = PREPARED.read_text(encoding="utf-8")
 
     assert "config/fr13_fixed32/subset_b1_diagnostic_one.json" in runner
     assert "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb" in runner
@@ -273,6 +280,13 @@ def test_real_b1_runner_is_pinned_nonprobe_and_manifested() -> None:
     assert "probe_eligible=0" in runner
     assert "floor_acceptance_eligible=0" in runner
     assert "fr13_draft_head_m1_validate.py" in runner
+    assert 'FORKED_FA2_SO:?set an absolute path' in prepared
+    assert "PYTHON_BIN=${PYTHON_BIN:-/usr/bin/python3}" in prepared
+    assert 'PYTHON_BIN="$PYTHON_BIN"' in prepared
+    assert 'FORKED_FA2_SO="$FORKED_FA2_SO"' in prepared
+    assert "CANONICAL_FA2_SHA256=f51e23c5" in prepared
+    assert "CANONICAL_FA2_SIZE=299183936" in prepared
+    assert "$REPO/output/auto_research" not in prepared
     for path in (
         "csrc/fr13_bf16_gemvx_m1.cu",
         "scripts/fr13_build_bf16_gemvx_m1.py",

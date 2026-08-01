@@ -8,6 +8,7 @@ hardware-floor, quality, B4, or acceptance claim.
 
 - Source branch: `agent/fixed32-fullhead-m1-gemvx`
 - Source checkpoint: `531ac32c7fff4656e593af024dc13273b89ed3c1`
+- Portable runner checkpoint: `22fe545225cd5c1e2ff9d4660ff93715a339cd4c`
 - CUDA source SHA-256:
   `26ea8aad9f891b5e758a39464209d6f82008a10fac8da4c02ee052e839218a54`
 - Candidate SO SHA-256:
@@ -35,17 +36,24 @@ MTP3, and MTP4. The final record passes only when every position has exactly
 one comparison per authenticated measured event and zero mismatches.
 
 The runner is pinned to SWE-Verified task `astropy__astropy-12907`, concurrency
-1, batch 1, the canonical FA2 object, full-vocabulary root=0/K=0, a clean exact
-commit, immutable runtime manifests, terminal flush evidence, and authenticated
-chat-traffic evidence. It validates the build attestation before any Docker or
-GPU launch. This is a one-task byte diagnostic, never an acceptance or timing
-arm.
+1, batch 1, the canonical FA2 identity, full-vocabulary root=0/K=0, a clean
+exact commit, immutable runtime manifests, terminal flush evidence, and
+authenticated chat-traffic evidence. FA2 location is intentionally portable:
+the caller supplies an absolute regular path, while both the prepared command
+and runner require exactly 299,183,936 bytes and SHA-256
+`f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d`.
+The runner validates the build attestation before any Docker or GPU launch.
+This is a one-task byte diagnostic, never an acceptance or timing arm.
 
 Run `prepared_command.sh` only after the GPU is free. Supply the exact trusted
-branch or merged commit as `PINNED_SOURCE_COMMIT`; the runner rejects any other
-HEAD and any tracked or untracked checkout change.
+branch or merged commit as `PINNED_SOURCE_COMMIT` and the existing canonical
+FA2 object as `FORKED_FA2_SO`; the runner rejects any other HEAD, any tracked or
+untracked checkout change, and any FA2 identity drift. The prepared command
+defaults `PYTHON_BIN` to the host `/usr/bin/python3`; override it only with an
+existing executable host Python.
 
 ```bash
+FORKED_FA2_SO=/absolute/path/to/_vllm_fa2_C.abi3.so \
 PINNED_SOURCE_COMMIT=<exact-trusted-commit> \
   bash results/fr13_fixed32_bf16_gemvx_m1_b1_ready_20260801/prepared_command.sh
 ```
@@ -67,5 +75,6 @@ covered by this M1 gate.
 - Ruff: pass
 - Focused and neighboring CPU tests: 28 passed
 - Broad fixed32 CPU suite: 667 passed, 8 environment skips
+- Portable-runner post-fix tests: 10 passed
 - GPU or Docker launched: no
 - Real SWE-Verified task launched: no

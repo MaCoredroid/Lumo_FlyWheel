@@ -4,6 +4,8 @@
   "status": "SOURCE_AND_BUILD_READY_GPU_GATE_NOT_RUN",
   "branch": "agent/fixed32-fullhead-m1-gemvx",
   "source_checkpoint": "531ac32c7fff4656e593af024dc13273b89ed3c1",
+  "portable_runner_checkpoint": "22fe545225cd5c1e2ff9d4660ff93715a339cd4c",
+  "portable_runner_sha256": "af30e9ed4abf32c1ce36929ff47f7f6be3cf93760c1d43b67bdf1e490fe405ad",
   "candidate": {
     "source": "csrc/fr13_bf16_gemvx_m1.cu",
     "source_sha256": "26ea8aad9f891b5e758a39464209d6f82008a10fac8da4c02ee052e839218a54",
@@ -34,6 +36,10 @@
     "served_return": "stock reference BF16 logits computed first and unchanged",
     "runner": "scripts/fr13_run_b1_draft_head_m1_live.sh",
     "validator": "scripts/fr13_draft_head_m1_validate.py",
+    "host_python_default": "/usr/bin/python3",
+    "fa2_path": "caller-supplied absolute regular non-symlink",
+    "fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+    "fa2_bytes": 299183936,
     "run_completed": false,
     "performance_measurement": false,
     "acceptance_eligible": false
@@ -51,6 +57,7 @@
     "focused_and_neighbor_tests_passed": 28,
     "broad_fixed32_tests_passed": 667,
     "broad_fixed32_tests_skipped": 8,
+    "portable_runner_post_fix_tests_passed": 10,
     "gpu_used": false,
     "docker_launched": false,
     "real_swe_task_run": false
