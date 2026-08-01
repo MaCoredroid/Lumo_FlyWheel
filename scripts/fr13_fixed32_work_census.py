@@ -143,9 +143,11 @@ TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE = (
 )
 TAW_EXACT_COMMIT_LAUNCHES = WALK_CAP
 TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST = WALK_CAP
-TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-exact-commit-v3"
+TAW_ALL_PARENT_SELF_ROWS_PER_REQUEST = 13
+TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST = 17
+TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-all-parent-v4"
 TAW_SOURCE_CONTRACT_SHA256 = (
-    "42b92d872d2324bf618b35fdd71c22d0e68e5c00e25ad2a43ae553c8ab1f92da"
+    "51541928c3a758fdac34a70fe46b97753ffc1b6e9f3e5fe470c4b34a96515dc4"
 )
 TAW_TENSOR_CALL_CENSUS = {
     "walk_levels": 12,
@@ -168,26 +170,37 @@ TAW_TENSOR_CALL_CENSUS = {
 }
 TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS = {
     **TAW_TENSOR_CALL_CENSUS,
-    "walk_levels": 24,
-    "full_vocab_row_gathers": 74,
+    "walk_levels": 13,
+    "full_vocab_row_gathers": 54,
     "full_vocab_fp32_casts": 26,
     "full_vocab_softmax_calls": 26,
-    "full_vocab_normalizations": 72,
-    "full_vocab_cdf_calls": 48,
-    "source_cdf_calls": 24,
-    "qmix_zero_fills": 24,
-    "qmix_scatter_add_calls": 24,
-    "residual_subtract_calls": 24,
-    "residual_clamp_calls": 24,
-    "residual_where_calls": 48,
-    "exact_commit_launches": 24,
-    "exact_commit_programs_per_request": 24,
+    "full_vocab_normalizations": 83,
+    "full_vocab_cdf_calls": 54,
+    "source_cdf_calls": 29,
+    "qmix_zero_fills": 29,
+    "qmix_scatter_add_calls": 29,
+    "residual_subtract_calls": 29,
+    "residual_clamp_calls": 29,
+    "residual_where_calls": 58,
+    "exact_commit_launches": 13,
+    "exact_commit_programs_per_request": 13,
 }
 TAW_NATIVE_PRECOMPUTE_PRODUCTION_TENSOR_CALL_CENSUS = {
     **TAW_TENSOR_CALL_CENSUS,
-    "full_vocab_row_gathers": 50,
+    "walk_levels": 1,
+    "full_vocab_row_gathers": 30,
     "full_vocab_fp32_casts": 2,
     "full_vocab_softmax_calls": 2,
+    "full_vocab_normalizations": 47,
+    "full_vocab_cdf_calls": 30,
+    "source_cdf_calls": 17,
+    "qmix_zero_fills": 17,
+    "qmix_scatter_add_calls": 17,
+    "residual_subtract_calls": 17,
+    "residual_clamp_calls": 17,
+    "residual_where_calls": 34,
+    "exact_commit_launches": 1,
+    "exact_commit_programs_per_request": 1,
 }
 TAW_COUNT_ROUTE = "preseeded_cuda_fixed31"
 TAW_RNG_ROUTE = "bulk_device_generator"
@@ -1406,7 +1419,30 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             f"{source}.taw.route: expected a pinned fixed32 TAW route, "
             f"got {taw_route!r}"
         )
-    taw_work_multiplier = 2 if taw_route == TAW_NATIVE_PRECOMPUTE_ROUTE else 1
+    if taw_route == TAW_NATIVE_PRECOMPUTE_ROUTE:
+        expected_target_rows = (
+            TAW_ROWS_PER_REQUEST + TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST
+        )
+        expected_self_rows = (
+            TAW_ROWS_PER_REQUEST + TAW_ALL_PARENT_SELF_ROWS_PER_REQUEST
+        )
+        expected_product_write_multiplier = 2
+        expected_exact_commit_launches = TAW_EXACT_COMMIT_LAUNCHES + 1
+        expected_exact_commit_programs = (
+            TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST + 1
+        )
+    elif taw_route == TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE:
+        expected_target_rows = TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST
+        expected_self_rows = TAW_ALL_PARENT_SELF_ROWS_PER_REQUEST
+        expected_product_write_multiplier = 1
+        expected_exact_commit_launches = 1
+        expected_exact_commit_programs = 1
+    else:
+        expected_target_rows = TAW_ROWS_PER_REQUEST
+        expected_self_rows = TAW_ROWS_PER_REQUEST
+        expected_product_write_multiplier = 1
+        expected_exact_commit_launches = TAW_EXACT_COMMIT_LAUNCHES
+        expected_exact_commit_programs = TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST
     taw_exact_commit_launches = _integer(
         taw["exact_commit_launches"],
         f"{source}.taw.exact_commit_launches",
@@ -1448,43 +1484,45 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     )
     _expect(
         taw_child_lanes,
-        TAW_CHILD_LANES_PER_REQUEST * batch_size * taw_work_multiplier,
+        expected_target_rows * SAMPLER_MAX_FANOUT * batch_size,
         f"{source}.taw.child_lanes",
     )
-    for field_name, field_value in (
-        ("target_rows", taw_target_rows),
-        ("self_rows", taw_self_rows),
-        ("self_cdf_rows", taw_self_cdf_rows),
-        ("source_cdf_rows", taw_source_cdf_rows),
-        ("residual_cdf_rows", taw_residual_cdf_rows),
-        ("qmix_rows", taw_qmix_rows),
-        ("residual_rows", taw_residual_rows),
+    for field_name, field_value, expected_rows in (
+        ("target_rows", taw_target_rows, expected_target_rows),
+        ("self_rows", taw_self_rows, expected_self_rows),
+        ("self_cdf_rows", taw_self_cdf_rows, expected_self_rows),
+        ("source_cdf_rows", taw_source_cdf_rows, expected_target_rows),
+        ("residual_cdf_rows", taw_residual_cdf_rows, expected_target_rows),
+        ("qmix_rows", taw_qmix_rows, expected_target_rows),
+        ("residual_rows", taw_residual_rows, expected_target_rows),
     ):
         _expect(
             field_value,
-            TAW_ROWS_PER_REQUEST * batch_size * taw_work_multiplier,
+            expected_rows * batch_size,
             f"{source}.taw.{field_name}",
         )
     _expect(
         taw_row_scatter_slots,
-        TAW_ROW_SCATTER_SLOTS * batch_size * taw_work_multiplier,
+        TAW_ROW_SCATTER_SLOTS
+        * batch_size
+        * expected_product_write_multiplier,
         f"{source}.taw.row_scatter_slots",
     )
     _expect(
         taw_path_scatter_slots,
-        TAW_PATH_SCATTER_SLOTS * batch_size * taw_work_multiplier,
+        TAW_PATH_SCATTER_SLOTS
+        * batch_size
+        * expected_product_write_multiplier,
         f"{source}.taw.path_scatter_slots",
     )
     _expect(
         taw_exact_commit_launches,
-        TAW_EXACT_COMMIT_LAUNCHES * taw_work_multiplier,
+        expected_exact_commit_launches,
         f"{source}.taw.exact_commit_launches",
     )
     _expect(
         taw_exact_commit_programs,
-        TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST
-        * batch_size
-        * taw_work_multiplier,
+        expected_exact_commit_programs * batch_size,
         f"{source}.taw.exact_commit_programs",
     )
     taw_source_schema = _string(

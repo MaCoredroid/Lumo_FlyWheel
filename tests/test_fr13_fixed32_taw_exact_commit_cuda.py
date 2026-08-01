@@ -146,7 +146,7 @@ def _run_pair(
         **kwargs,
     )
     expected = tuple(tensor.clone() for tensor in reference[:5])
-    candidate = taw._fr13_fixed32_taw_execute_exact_cuda(
+    exact_candidate = taw._fr13_fixed32_taw_execute_exact_cuda(
         topology,
         entry,
         entry["draft_tokens"],
@@ -156,18 +156,40 @@ def _run_pair(
         uniforms,
         **kwargs,
     )
-    actual = tuple(tensor.clone() for tensor in candidate[:5])
+    exact_actual = tuple(tensor.clone() for tensor in exact_candidate[:5])
+    probability_caches = taw._fr13_fixed32_taw_probability_caches(
+        entry,
+        target,
+        self_logits,
+        native_precompute=True,
+    )
+    all_parent_candidate = taw._fr13_fixed32_taw_execute_all_parent_cuda(
+        topology,
+        entry,
+        entry["draft_tokens"],
+        entry["bonus_tokens"],
+        uniforms,
+        probability_caches=probability_caches,
+        **kwargs,
+    )
+    all_parent_actual = tuple(
+        tensor.clone() for tensor in all_parent_candidate[:5]
+    )
     torch.cuda.synchronize()
-    for name, expected_tensor, actual_tensor in zip(
-        PRODUCT_NAMES,
-        expected,
-        actual,
-        strict=True,
+    for route, actual in (
+        ("exact", exact_actual),
+        ("all_parent", all_parent_actual),
     ):
-        assert torch.equal(actual_tensor, expected_tensor), (
-            f"{name} byte mismatch\n"
-            f"reference={expected_tensor}\ncandidate={actual_tensor}"
-        )
+        for name, expected_tensor, actual_tensor in zip(
+            PRODUCT_NAMES,
+            expected,
+            actual,
+            strict=True,
+        ):
+            assert torch.equal(actual_tensor, expected_tensor), (
+                f"{route} {name} byte mismatch\n"
+                f"reference={expected_tensor}\ncandidate={actual_tensor}"
+            )
     return expected
 
 
