@@ -157,6 +157,32 @@ def test_eager_diagnostic_is_b4_only() -> None:
         )
 
 
+def test_streamk_eager_diagnostic_is_exact_b1_contract() -> None:
+    default = contract.expected_pid1_argv(1)
+    eager = contract.expected_process_pid1_argv(
+        1,
+        attribution_only=False,
+        streamk_eager_diagnostic=True,
+    )
+
+    assert eager == [*default, "--enforce-eager"]
+    assert contract.validate_process_pid1_argv(
+        eager,
+        1,
+        attribution_only=False,
+        streamk_eager_diagnostic=True,
+    ) == eager
+    with pytest.raises(
+        contract.ContractError,
+        match="Stream-K eager diagnostic requires concurrency 1",
+    ):
+        contract.expected_process_pid1_argv(
+            4,
+            attribution_only=False,
+            streamk_eager_diagnostic=True,
+        )
+
+
 def test_graph_diagnostic_is_b4_only_and_not_attribution() -> None:
     with pytest.raises(
         contract.ContractError,
@@ -181,13 +207,23 @@ def test_graph_diagnostic_is_b4_only_and_not_attribution() -> None:
 def test_eager_and_graph_diagnostics_are_mutually_exclusive() -> None:
     with pytest.raises(
         contract.ContractError,
-        match="eager and graph diagnostics are mutually exclusive",
+        match="process diagnostics are mutually exclusive",
     ):
         contract.expected_process_pid1_argv(
             4,
             attribution_only=False,
             eager_diagnostic=True,
             graph_diagnostic=True,
+        )
+    with pytest.raises(
+        contract.ContractError,
+        match="process diagnostics are mutually exclusive",
+    ):
+        contract.expected_process_pid1_argv(
+            1,
+            attribution_only=False,
+            eager_diagnostic=True,
+            streamk_eager_diagnostic=True,
         )
 
 
@@ -267,17 +303,25 @@ def test_live_attestation_receives_the_selector_explicitly() -> None:
 
     assert '"${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" \\' in serve
     assert '"${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" \\' in serve
+    assert '"${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" \\' in serve
     assert (
-        '"${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" <<\'PY\''
+        '"${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" <<\'PY\''
         in serve
     )
     assert "attribution_only_text = sys.argv[7]" in serve
     assert "batch_gdn_byte_ab_text = sys.argv[8]" in serve
     assert "batch_gdn_graph_byte_ab_text = sys.argv[9]" in serve
+    assert "sfwd_state_fusion_byte_ab_text = sys.argv[10]" in serve
     assert "attribution_only_text = os.environ" not in serve
     assert "batch_gdn_byte_ab_text = os.environ" not in serve
     assert "batch_gdn_graph_byte_ab_text = os.environ" not in serve
+    assert "sfwd_state_fusion_byte_ab_text = os.environ" not in serve
     assert "eager_diagnostic=batch_gdn_byte_ab_text == \"1\"" in serve
     assert (
         "graph_diagnostic=batch_gdn_graph_byte_ab_text == \"1\"" in serve
+    )
+    assert (
+        "streamk_eager_diagnostic="
+        "sfwd_state_fusion_byte_ab_text == \"1\""
+        in serve
     )

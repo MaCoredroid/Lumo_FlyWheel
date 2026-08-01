@@ -15,6 +15,7 @@ from scripts.fr13_hardware_floor_ledger import (
     FIXED32_SLO_MULTIPLIER,
     FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
     FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
+    FULL_VOCAB_SLO_CAP_MS,
     build_ledger,
 )
 
@@ -41,7 +42,8 @@ def test_canonical_fixed32_floor_math() -> None:
     )
     assert scenario["nonweight_costs_included"] is False
     assert FULL_VOCAB_MANDATORY_WEIGHT_BYTES == 42_025_179_008
-    assert FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS == 153.938384645
+    assert FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS == 153.9383846446886
+    assert FULL_VOCAB_SLO_CAP_MS == 177.0291423413919
 
 
 def test_fixed32_gate_uses_corrected_weight_bound_and_exact_cap() -> None:
@@ -62,7 +64,7 @@ def test_fixed32_gate_uses_corrected_weight_bound_and_exact_cap() -> None:
 @pytest.mark.parametrize(
     ("draft_vocab_k", "draft_vocab_root", "expected_bytes", "expected_floor"),
     (
-        ("0", "0", "42025179008", "153.938384645"),
+        ("0", "0", "42025179008", "153.9383846446886"),
         ("65536", "0", "34538346368", "126.514089260"),
         ("65536", "1", "32666638208", "119.658015414"),
     ),
@@ -111,7 +113,10 @@ def test_active_fixed32_paths_cannot_fall_back_to_legacy_floor() -> None:
         "FR13_MANDATORY_WEIGHT_BYTES|${FR13_MANDATORY_WEIGHT_BYTES:-}|"
         "$_fixed32_expected_mandatory_weight_bytes"
     ) in texts[LAUNCHER]
-    assert "_fixed32_expected_weight_floor_ms=153.938384645" in texts[LAUNCHER]
+    assert (
+        "_fixed32_expected_weight_floor_ms=153.9383846446886"
+        in texts[LAUNCHER]
+    )
     assert "FIXED32_MANDATORY_WEIGHT_FLOOR_MS" in texts[MEASURE]
     assert "FIXED32_MANDATORY_WEIGHT_FLOOR_MS" in texts[GATE]
 

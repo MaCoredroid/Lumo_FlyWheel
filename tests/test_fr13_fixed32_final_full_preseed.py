@@ -121,6 +121,40 @@ def test_final_full_preseed_requires_physical_32_row_descriptor(
     assert needed("FULL", 128, 4, True, False, 0) is False
 
 
+def test_sfwd_eager_kernel_diagnostic_bakes_graph_observer_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "1",
+    )
+    namespace = _runtime_functions(
+        "_fr13_fixed32_observed_current",
+        "_fr13_fixed32_observed_event_active",
+        "_fr13_fixed32_observed_nonpure_dispatch",
+        "_fr13_fixed32_observed_begin",
+        mode="hydra27_fixed32",
+    )
+
+    assert namespace["_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC"] is True
+    assert namespace["_fr13_fixed32_observed_current"]("test") is None
+    assert namespace["_fr13_fixed32_observed_event_active"]() is False
+    assert namespace["_fr13_fixed32_observed_nonpure_dispatch"]("FULL") is None
+    assert (
+        namespace["_fr13_fixed32_observed_begin"](
+            "invalid-mode",
+            99,
+            -1,
+            (),
+            0,
+            0,
+            (),
+        )
+        is None
+    )
+
+
 _GPU_RUNNER_FIXTURE = """\
 class Runner:
     def __init__(

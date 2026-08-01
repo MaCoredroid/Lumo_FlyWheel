@@ -313,3 +313,50 @@ def test_task_bracket_removes_arm_when_post_snapshot_fails(
     assert arm.rotated_path.is_file()
     assert bracket.post_attempted is True
     assert bracket.complete is False
+
+
+def test_sfwd_eager_kernel_diagnostic_bracket_never_flushes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+    metrics = iter(("pre metrics\n", "post metrics\n"))
+
+    class _Client:
+        mode = "hydra27_fixed32"
+        producer_pid = 123
+
+        def snapshot(self):
+            raise AssertionError("eager diagnostic must not flush")
+
+    monkeypatch.setattr(
+        orchestrator,
+        "_metrics_snapshot",
+        lambda _url: next(metrics),
+    )
+    bracket = orchestrator._Fixed32EagerKernelDiagnosticTaskBracket(
+        client=_Client(),
+        task_dir=task_dir,
+        instance_id=INSTANCE_ID,
+        boundary_snapshot_base=tmp_path / "unused-snapshot",
+        server_capacity=1,
+        taw_real_task_arm=None,
+    )
+    pre_path = task_dir / "metrics_pre.txt"
+    post_path = task_dir / "metrics_post.txt"
+
+    bracket.pre(pre_path)
+    payload = bracket.post(post_path)
+
+    assert pre_path.read_text(encoding="utf-8") == "pre metrics\n"
+    assert post_path.read_text(encoding="utf-8") == "post metrics\n"
+    assert payload["schema"] == (
+        "fr13-fixed32-eager-kernel-diagnostic-task-bracket-v1"
+    )
+    assert payload["acceptance_valid"] is False
+    assert payload["flush_protocol_used"] is False
+    for key in ("pre_metrics", "post_metrics"):
+        assert payload[key]["bytes"] > 0
+        assert len(payload[key]["sha256"]) == 64
+    assert not (task_dir / "fixed32_taw_real_task_arm.json").exists()

@@ -1036,7 +1036,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     0:0)
       _fixed32_expected_draft_vocab_k=0
       _fixed32_expected_mandatory_weight_bytes=42025179008
-      _fixed32_expected_weight_floor_ms=153.938384645
+      _fixed32_expected_weight_floor_ms=153.9383846446886
       ;;
     65536:0)
       _fixed32_expected_draft_vocab_k=65536
@@ -2086,6 +2086,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   "${NSYS_DOCKER_ARGS[@]}" \
   "${FR13_FIXED32_DOCKER_ARGS[@]}" \
   "${FR13_ENV_FORWARD_ARGS[@]}" \
+  -e ENFORCE_EAGER="${ENFORCE_EAGER:-0}" \
   -e FR13_FIXED32_MIDDLEWARE_FLAGS="$FR13_FIXED32_MIDDLEWARE_FLAGS" \
   -e PYTORCH_CUDA_ALLOC_CONF="$PYTORCH_CUDA_ALLOC_CONF" \
   -e VLLM_BATCH_INVARIANT="$BATCH_INVARIANT" \

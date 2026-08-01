@@ -20,6 +20,8 @@ RUNNER_PATH = ROOT / "scripts" / "fr13_run_b1_sfwd_state_fusion_gate.sh"
 TIMING_RUNNER_PATH = (
     ROOT / "scripts" / "fr13_run_b1_sfwd_state_fusion_timing.sh"
 )
+SERVE_PATH = ROOT / "scripts" / "fr13_bigdenom_swe_serve_variant.sh"
+ORCHESTRATOR_PATH = ROOT / "scripts" / "run_swe_bench_q36_a.py"
 
 sys.path.insert(0, str(ROOT / "src"))
 try:
@@ -442,6 +444,10 @@ def test_b1_full_vocab_runner_is_reference_returning_and_nonacceptance() -> None
     assert "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=1" in runner
     assert "FR13_CONV_WB_BATCHED=1" in runner
     assert "FR13_TREE_CONV_FUSED=1" in runner
+    assert "FR13_FIXED32_CUTLASS_WAVE=stock" in runner
+    assert "ENFORCE_EAGER=1" in runner
+    assert "FULL_VOCAB_FLOOR_MS=153.9383846446886" in runner
+    assert "FULL_VOCAB_CAP_MS=177.0291423413919" in runner
     assert "timing_eligible=false" in runner
     assert "floor_acceptance_eligible=false" in runner
     assert "reference_returned=true" in runner
@@ -457,6 +463,37 @@ def test_b1_full_vocab_runner_is_reference_returning_and_nonacceptance() -> None
     assert "must be the only kernel candidate" in launcher
     assert "requires exact full-vocab eager fixed32 B1" in launcher
     assert "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled" in launcher
+
+
+def test_sfwd_gate_uses_eager_lifecycle_without_graph_acceptance() -> None:
+    runner = RUNNER_PATH.read_text(encoding="utf-8")
+    serve = SERVE_PATH.read_text(encoding="utf-8")
+    orchestrator = ORCHESTRATOR_PATH.read_text(encoding="utf-8")
+
+    for artifact in (
+        "fixed32_final_flush_skipped.json",
+        "fixed32_chat_traffic_audit_skipped.json",
+        "fr13-fixed32-eager-kernel-terminal-v1",
+        "fr13-fixed32-eager-kernel-traffic-audit-skip-v1",
+        "fr13-fixed32-eager-kernel-diagnostic-task-bracket-v1",
+    ):
+        assert artifact in runner
+    assert 'terminal != expected_terminal' in runner
+    assert 'traffic.get("authenticated_engine_ledger_snapshotted") is not True' in runner
+    assert 'traffic.get("graph_census_audit_used") is not False' in runner
+
+    assert "_fixed32_eager_kernel_diagnostic=0" in serve
+    assert 'FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1"' in serve
+    assert "eager kernel diagnostic requires ENFORCE_EAGER=1" in serve
+    assert "fr13-fixed32-eager-kernel-terminal-v1" in serve
+    assert "fr13-fixed32-eager-kernel-traffic-audit-skip-v1" in serve
+    assert "fixed32 eager kernel diagnostic: graph-census needles are ineligible" in serve
+
+    assert "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" in orchestrator
+    assert "must be exactly 0 or 1" in orchestrator
+    assert "fixed32_eager_kernel_diagnostic" in orchestrator
+    assert "fixed32 eager kernel diagnostic requires ENFORCE_EAGER=1" in orchestrator
+    assert "_Fixed32EagerKernelDiagnosticTaskBracket" in orchestrator
 
 
 def test_source_gated_timing_pair_is_stock_first_and_nonacceptance() -> None:

@@ -36,6 +36,7 @@ KIND=${2:-tail6}
 SUBSET=${3:?subset json}
 FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
 FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
+FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
 case "$FR13_FIXED32_B1_DIAGNOSTIC" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1"; exit 2 ;;
@@ -44,7 +45,18 @@ case "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"; exit 2 ;;
 esac
-export FR13_FIXED32_B1_DIAGNOSTIC FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
+case "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" in
+  0|1) ;;
+  *) echo "FAIL: FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"; exit 2 ;;
+esac
+export FR13_FIXED32_B1_DIAGNOSTIC FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB \
+  FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
+_fixed32_eager_kernel_diagnostic=0
+if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" ]]; then
+  _fixed32_eager_kernel_diagnostic=1
+  [[ "${ENFORCE_EAGER:-0}" == "1" ]] \
+    || { echo "FAIL: eager kernel diagnostic requires ENFORCE_EAGER=1"; exit 2; }
+fi
 
 RUNROOT=${RUNROOT:-output/fr13_bigdenom_swe}
 ARMDIR="$RUNROOT/$ARM"
@@ -706,8 +718,7 @@ write_fixed32_chat_traffic_audit(){
     "$ARMDIR" \
     "$FIXED32_MODE" \
     "$ARMDIR/fixed32_chat_traffic_audit.json" \
-    "$FR13_FIXED32_B1_DIAGNOSTIC" \
-    "$SWE_CONCURRENCY" <<'PY'
+    "$FR13_FIXED32_B1_DIAGNOSTIC" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -726,11 +737,8 @@ arm_dir = Path(sys.argv[2]).resolve()
 mode = sys.argv[3]
 output_path = Path(sys.argv[4]).resolve()
 diagnostic_text = sys.argv[5]
-concurrency_text = sys.argv[6]
 if diagnostic_text not in {"0", "1"}:
     raise SystemExit("fixed32 B1 diagnostic selector is invalid")
-if concurrency_text not in {"1", "4"}:
-    raise SystemExit("fixed32 concurrency selector is invalid")
 subset = validate_fixed32_run_subset(
     subset_path,
     b1_diagnostic=diagnostic_text == "1",
@@ -741,7 +749,6 @@ audit = build_fixed32_chat_traffic_audit(
     mode=mode,
     subset=subset,
     dataset_record_digests=pinned_dataset_record_digests(str(repo)),
-    concurrency=int(concurrency_text),
 )
 temporary = output_path.with_name(output_path.name + ".tmp")
 temporary.write_text(
@@ -1334,6 +1341,10 @@ teardown(){
       fixed32_container_attested=0
       echo "fixed32 teardown skipped container operations: immutable incarnation attestation failed" \
         > "$ARMDIR/fixed32_final_flush.stderr"
+    elif [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then
+      printf '{"acceptance_valid":false,"flush_protocol_used":false,"run_classification":"eager_kernel_byte_diagnostic","schema":"fr13-fixed32-eager-kernel-terminal-v1"}\n' \
+        > "$ARMDIR/fixed32_final_flush_skipped.json"
+      : > "$ARMDIR/fixed32_final_flush.stderr"
     elif [[ -n "$FIXED32_PRODUCER_PID" && -f "$FIXED32_ACK_PATH" ]]; then
       .venv/bin/python scripts/fr13_fixed32_flush_protocol.py \
         --container "$CONTAINER_RUNTIME_REF" \
@@ -1365,6 +1376,16 @@ teardown(){
       echo "FAIL: fixed32 terminal engine-ledger snapshot rc=$ledger_snapshot_rc" >&2
       tail -20 "$ARMDIR/fixed32_engine_ingress_snapshot.log" >&2 || true
       (( rc == 0 )) && rc=16
+    elif [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then
+      printf '%s\n' \
+        '{"acceptance_valid":false,"authenticated_engine_ledger_snapshotted":true,"graph_census_audit_used":false,"reason":"eager_mode_has_no_cuda_graph_census","run_classification":"eager_kernel_byte_diagnostic","schema":"fr13-fixed32-eager-kernel-traffic-audit-skip-v1"}' \
+        > "$ARMDIR/fixed32_chat_traffic_audit_skipped.json" \
+        2> "$ARMDIR/fixed32_chat_traffic_audit.log"
+      audit_rc=$?
+      if (( audit_rc != 0 )); then
+        echo "FAIL: fixed32 eager diagnostic audit marker rc=$audit_rc" >&2
+        (( rc == 0 )) && rc=16
+      fi
     else
       write_fixed32_chat_traffic_audit \
         > "$ARMDIR/fixed32_chat_traffic_audit.log" 2>&1
@@ -1638,7 +1659,8 @@ PY
     "$ARMDIR/fixed32_container_identity.json" \
     "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" \
     "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" \
-    "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" <<'PY'
+    "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" \
+    "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" <<'PY'
 import json
 import subprocess
 import sys
@@ -1656,6 +1678,7 @@ container_identity_path = Path(sys.argv[6])
 attribution_only_text = sys.argv[7]
 batch_gdn_byte_ab_text = sys.argv[8]
 batch_gdn_graph_byte_ab_text = sys.argv[9]
+sfwd_state_fusion_byte_ab_text = sys.argv[10]
 runtime = contract.validate_runtime_attestation(
     json.loads(runtime_path.read_text(encoding="utf-8"))
 )
@@ -1678,6 +1701,10 @@ if batch_gdn_graph_byte_ab_text not in {"0", "1"}:
     raise SystemExit(
         "fixed32 batch-GDN graph byte diagnostic selector must be exactly 0 or 1"
     )
+if sfwd_state_fusion_byte_ab_text not in {"0", "1"}:
+    raise SystemExit(
+        "fixed32 SFWD state-fusion byte diagnostic selector must be exactly 0 or 1"
+    )
 try:
     contract.validate_process_pid1_argv(
         pid1.get("argv"),
@@ -1685,6 +1712,7 @@ try:
         attribution_only=attribution_only_text == "1",
         eager_diagnostic=batch_gdn_byte_ab_text == "1",
         graph_diagnostic=batch_gdn_graph_byte_ab_text == "1",
+        streamk_eager_diagnostic=sfwd_state_fusion_byte_ab_text == "1",
     )
 except contract.ContractError as error:
     raise SystemExit(str(error)) from error
@@ -2482,13 +2510,17 @@ PY
       "$ARMDIR/docker_after_tasks.log" >/dev/null \
       || { echo "FAIL: fixed32 canonical tasks emitted no subtree runtime needle"; SWERC=15; }
   fi
-  grep -F -m1 \
-    "[FR13_FIXED32] topology engaged: mode=$FIXED32_MODE" \
-    "$ARMDIR/docker_after_tasks.log" >/dev/null \
-    || { echo "FAIL: fixed32 canonical tasks emitted no topology needle"; SWERC=15; }
-  grep -F -m1 "[FR13_FIXED32_WORK] engaged:" \
-    "$ARMDIR/docker_after_tasks.log" >/dev/null \
-    || { echo "FAIL: fixed32 canonical tasks emitted no work needle"; SWERC=15; }
+  if [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then
+    echo "fixed32 eager kernel diagnostic: graph-census needles are ineligible"
+  else
+    grep -F -m1 \
+      "[FR13_FIXED32] topology engaged: mode=$FIXED32_MODE" \
+      "$ARMDIR/docker_after_tasks.log" >/dev/null \
+      || { echo "FAIL: fixed32 canonical tasks emitted no topology needle"; SWERC=15; }
+    grep -F -m1 "[FR13_FIXED32_WORK] engaged:" \
+      "$ARMDIR/docker_after_tasks.log" >/dev/null \
+      || { echo "FAIL: fixed32 canonical tasks emitted no work needle"; SWERC=15; }
+  fi
 fi
 
 # ---- OPT-1 post-run engagement needle ----
