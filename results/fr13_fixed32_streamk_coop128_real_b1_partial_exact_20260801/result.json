@@ -1,0 +1,21 @@
+{
+  "acceptance_valid": false,
+  "candidate": "streamk_coop128",
+  "candidate_binary_sha256": "f9bbbb8dc4ffc2227a71d2bc7b260e586ffbdc0fd946749e4f69e322c46a362d",
+  "comparisons": 240,
+  "compared_bytes": 234881024,
+  "differing_bytes": 0,
+  "draft_vocab_k": 0,
+  "draft_vocab_root": 0,
+  "fixed_rows": 32,
+  "formal_live_gate_reducer_ran": false,
+  "mismatching_comparisons": 0,
+  "outer_runner_rc": 15,
+  "raw_comparator_sha256": "61f23193df979858c116bb1a93f9e62b8a77c50af33bee0bdc8922bbe3a7234b",
+  "run_classification": "one_real_swe_verified_b1_byte_diagnostic",
+  "schema": "fr13.fixed32.streamk_coop128.real_b1_partial_exact.v1",
+  "source_commit": "fb35badb44fe344def7c2cd5874c5fb44f4426d9",
+  "status": "PARTIAL_BYTE_PASS_NOT_QUALIFIED",
+  "task_id": "astropy__astropy-12907",
+  "timing_eligible": false
+}
