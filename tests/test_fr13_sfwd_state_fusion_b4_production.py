@@ -3,7 +3,10 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -219,6 +222,82 @@ def test_runner_and_launcher_are_exact4_b4_shadow_only() -> None:
     assert "authenticated B1 and exact4 B4 byte prerequisites" in launcher
     assert "bind-prerequisites" in pass_source
     assert '"candidate_serving_permitted": False' in pass_source
+
+
+def test_launcher_explicitly_propagates_sfwd_b4_patch_contract() -> None:
+    launcher = LAUNCHER_PATH.read_text(encoding="utf-8")
+    auto_forward = launcher.index('"${FR13_ENV_FORWARD_ARGS[@]}"')
+    selector = launcher.index(
+        '-e FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB='
+        '"$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB"'
+    )
+    production = launcher.index(
+        '-e FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION='
+        '"$FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION"'
+    )
+
+    assert auto_forward < selector < production
+    for assignment in (
+        "FR13_FIXED32_SFWD_STATE_FUSION_ENABLED_PATH="
+        "/logs/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled",
+        "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH="
+        '"${FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH:-}"',
+        "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_PATH="
+        "/logs/fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl",
+        "FR13_FIXED32_SFWD_STATE_FUSION_PASS_PATH="
+        "/logs/fr13_fixed32_sfwd_state_fusion.live_pass.json",
+    ):
+        assert f"-e {assignment}" in launcher
+
+
+def test_patcher_import_selects_sfwd_b4_eager_lifecycle() -> None:
+    environment = {
+        key: value for key, value in os.environ.items() if not key.startswith("FR13_")
+    }
+    environment.update(
+        {
+            "ENFORCE_EAGER": "1",
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB": "0",
+            "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB": "0",
+            "FR13_FIXED32_CUTLASS_WAVE": "stock",
+            "FR13_FIXED32_MODE": "hydra27_fixed32",
+            "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB": "1",
+            "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION": "0",
+        }
+    )
+    program = """
+import importlib.util
+import json
+import pathlib
+
+path = pathlib.Path(r"%s")
+spec = importlib.util.spec_from_file_location("sfwd_patch_time", path)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+print(json.dumps({
+    "selector": module._FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB,
+    "contract": module._fr13_fixed32_eager_boot_warm_contract(),
+    "bindings": module._fr13_fixed32_runtime_bindings("hydra27_fixed32"),
+}))
+""" % os.fspath(PATCHER_PATH)
+
+    result = subprocess.run(
+        [sys.executable, "-c", program],
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+    payload = json.loads(result.stdout)
+    assert payload["selector"] == "1"
+    assert payload["contract"] == [
+        "SFWD B4 byte diagnostic",
+        4,
+        "FR13_FIXED32_EAGER_SFWD_B4_BOOT_WARM",
+    ]
+    assert "_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC = True" in payload["bindings"]
 
 
 def test_existing_cutlass_five_shape_cap320_contract_is_unchanged() -> None:
