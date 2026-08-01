@@ -342,12 +342,13 @@ if (
     or engagement.get("npad_invariant") is not False
     or engagement.get("layer_count") != 48
     or engagement.get("batched_route_capture_layers_by_batch")
-    != {"1": 0, "2": 0, "3": 0, "4": 48}
+    != {"1": 0, "2": 48, "3": 48, "4": 48}
     or engagement.get("qualified_batch_sizes") != [4]
-    or engagement.get("lower_batch_route") != "legacy_per_request_bv8"
+    or engagement.get("lower_batch_route")
+    != "b1_legacy_b2_b3_fixed32_batched_bv8"
     or engagement.get("physical_launches_per_layer_by_batch")
-    != {"1": 2, "2": 4, "3": 6, "4": 2}
-    or engagement.get("all_b_le_4_launch_invariant") is not False
+    != {"1": 2, "2": 2, "3": 2, "4": 2}
+    or engagement.get("all_b_le_4_launch_invariant") is not True
     or engagement.get("graph_pass_sha256") != graph_pass_sha256
     or engagement.get("gate_verdict_sha256") != gate_verdict_sha256
     or engagement.get("runtime_manifest_sha256") != runtime_manifest_sha256
@@ -372,7 +373,7 @@ if (
     != gate_runner_sha256
     or engagement_validation.get("production_sidecar_sha256")
     != engagement.get("production_sidecar_sha256")
-    or engagement_validation.get("lower_batch_batched_capture_layers") != 0
+    or engagement_validation.get("lower_batch_batched_capture_layers") != 96
 ):
     raise SystemExit("candidate lacks exact B4 batched BV8 production engagement")
 stock_wall = finite_positive(stock, "step_wall_ms")
@@ -420,16 +421,16 @@ summary = {
             "kernel_source_sha256"
         ],
         "observed_full_graph_replays_at_least": 1,
-        "lower_batch_batched_capture_layers": 0,
+        "lower_batch_batched_capture_layers": 96,
         "qualified_batch_sizes": [4],
-        "lower_batch_route": "legacy_per_request_bv8",
+        "lower_batch_route": "b1_legacy_b2_b3_fixed32_batched_bv8",
         "physical_launches_per_layer_by_batch": {
             "1": 2,
-            "2": 4,
-            "3": 6,
+            "2": 2,
+            "3": 2,
             "4": 2,
         },
-        "all_b_le_4_launch_invariant": False,
+        "all_b_le_4_launch_invariant": True,
         "step_wall_ms": candidate_wall,
         "measured_tps_fullstep_wall": candidate_tps,
         "accepted_drafts_per_event": float(candidate["accept_per_event"]),

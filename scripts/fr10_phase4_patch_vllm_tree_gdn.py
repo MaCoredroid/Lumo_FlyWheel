@@ -3604,8 +3604,13 @@ def _fr13_fixed32_observed_graph_replay(
             int(gdn["scan_calls"]),
         )
         expected_status = (
-            "ENGAGED" if int(event["batch_size"]) == 4
-            else "legacy_lower_batch"
+            "ENGAGED"
+            if int(event["batch_size"]) == 4
+            else (
+                "batched_lower_batch"
+                if production_bv == 8 and int(event["batch_size"]) >= 2
+                else "legacy_lower_batch"
+            )
         )
         if production_report.get("status") != expected_status:
             raise RuntimeError(

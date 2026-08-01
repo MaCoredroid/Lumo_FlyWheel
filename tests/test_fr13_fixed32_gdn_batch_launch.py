@@ -131,8 +131,14 @@ def test_batched_kernel_keeps_two_launches_and_b1_legacy_route() -> None:
     assert "batch * num_paths" in launcher
     assert "int(contract.get(\"launches\", -1)) != 2" in launcher
     assert "pid_batch = pid_global_path // NUM_PATHS" in batched_kernel
+    assert "pid_batch < BATCH_SIZE" in batched_kernel
     assert "global_node = pid_batch * N_ACTUAL + node_c" in batched_kernel
+    assert "H0_INDEX_ROW + pid_batch * H0_INDEX_BATCH_STRIDE" in batched_kernel
+    assert "H0_BATCH_INDEX + pid_batch * H0_ACCEPTED_BATCH_STRIDE" in batched_kernel
     assert "pid_batch.to(tl.int64) * EXPORT_SLOTS + i" in batched_kernel
+    assert "pid_batch.to(tl.int64) * EXPORT_SLOTS" in batched_kernel
+    assert "(pid_batch == 0)" in batched_kernel
+    assert "batch_size must be in [2, 4]" in launcher
     assert "launch_tree_gdn_prepared_fixed32_batch" in patcher
     assert "fixed32_batch_gdn_selector(" in patcher
     assert "_fr13_fixed32_batch_gdn_selector is not None" in patcher

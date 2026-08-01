@@ -1642,11 +1642,11 @@ def _fr13_fixed32_batch_gdn_production_control() -> dict[str, object] | None:
 
 
 def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
-    """Resolve diagnostics or exact-B4 batched production; default is legacy."""
+    """Resolve diagnostics or qualified batched production; default is legacy."""
     batch = int(batch_size)
     if batch <= 1:
-        # A MAX_NUM_SEQS=4 lifecycle can still drain or start at B1. Keep that
-        # request on the established per-request BV8 route.
+        # B1 already has the target two launches. Keep its byte-established
+        # per-request BV8 route and batch only the B2/B3 launch-count gap.
         return None
     if batch > _FR13_FIXED32_MAX_BATCH:
         raise RuntimeError(
@@ -1723,15 +1723,24 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
         # BV8 path. Real serving replays the graph and never re-enters Python.
         return None
     if production is not None:
-        if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None and batch < 4:
-            # FULL capture and serving can descend through B3/B2 as requests
-            # drain. The graph credential qualifies only exact B4; lower
-            # batches must stay on the established per-request BV8 path.
+        production_bv = _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION
+        qualified_batch = int(production["batch"])
+        if production_bv == 8:
+            if qualified_batch != 4:
+                raise RuntimeError(
+                    "FR13 fixed32 batched BV8 production requires its exact-B4 "
+                    f"live-gate credential, got B={qualified_batch}"
+                )
+            # Request identity only expands the same two level grids for B2-B4.
+            # B1 remains on its already-two-launch legacy route.
+            return "production"
+        if production_bv is not None and batch < 4:
+            # Preserve the pre-existing generic/BV64 production scope.
             return None
-        if int(production["batch"]) != batch:
+        if qualified_batch != batch:
             raise RuntimeError(
                 "FR13_FIXED32_BATCH_GDN_PRODUCTION batch does not match its "
-                f"live-gate PASS record: {batch} != {production['batch']}"
+                f"live-gate PASS record: {batch} != {qualified_batch}"
             )
         return "production"
     return None
@@ -2036,7 +2045,7 @@ def fixed32_batch_gdn_bv8_production_capture_begin(
 def _fr13_fixed32_batch_gdn_bv8_production_capture_register(
     *, batch_size: int, layer_key: int, candidate_bv: int
 ) -> None:
-    """Record each actual two-launch BV8 dispatch in the B4 graph."""
+    """Record each actual two-launch BV8 dispatch in a B2-B4 graph."""
     if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION != 8:
         return
     context = _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURE_CONTEXT
@@ -2060,8 +2069,8 @@ def _fr13_fixed32_batch_gdn_bv8_production_capture_register(
             "layer_keys",
             "candidate_bvs",
         }
-        or batch != 4
-        or int(context.get("batch_size", -1)) != 4
+        or batch not in (2, 3, 4)
+        or int(context.get("batch_size", -1)) != batch
         or key <= 0
         or selected_bv != 8
     ):
@@ -2082,7 +2091,7 @@ def fixed32_batch_gdn_bv8_production_capture_end(
     graph_signature: str,
     expected_scan_calls: int,
 ) -> None:
-    """Bind B4 batched launches and B1-B3 legacy absence to each graph."""
+    """Bind B2-B4 batched launches and B1 legacy absence to each graph."""
     global _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURE_CONTEXT
     if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION != 8:
         return
@@ -2094,7 +2103,7 @@ def fixed32_batch_gdn_bv8_production_capture_end(
     candidate_bvs = (
         context.get("candidate_bvs") if isinstance(context, dict) else None
     )
-    expected_layers = 48 if batch == 4 else 0
+    expected_layers = 0 if batch == 1 else 48
     if (
         not isinstance(context, dict)
         or int(context.get("graph_id", -1)) != identity
@@ -2135,7 +2144,7 @@ def fixed32_batch_gdn_bv8_production_replay_engaged(
     graph_signature: str,
     expected_scan_calls: int,
 ) -> dict[str, object]:
-    """Publish only after replay of the source-qualified B4 batched graph."""
+    """Publish after B4 replay once every B1-B4 graph route is captured."""
     global _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_PUBLISHED
     if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION != 8:
         return {"status": "disabled"}
@@ -2143,7 +2152,7 @@ def fixed32_batch_gdn_bv8_production_replay_engaged(
     batch = int(batch_size)
     signature = str(graph_signature)
     captures = _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURES
-    expected_layer_counts = {1: 0, 2: 0, 3: 0, 4: 48}
+    expected_layer_counts = {1: 0, 2: 48, 3: 48, 4: 48}
     actual_layer_counts = {
         captured_batch: len(record.get("layer_keys", ()))
         for captured_batch, record in captures.items()
@@ -2168,9 +2177,11 @@ def fixed32_batch_gdn_bv8_production_replay_engaged(
         )
     if batch != 4:
         return {
-            "status": "legacy_lower_batch",
+            "status": (
+                "legacy_lower_batch" if batch == 1 else "batched_lower_batch"
+            ),
             "batch_size": batch,
-            "batched_route_capture_layers": 0,
+            "batched_route_capture_layers": expected_layer_counts[batch],
         }
     if _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_PUBLISHED:
         return {
@@ -2205,14 +2216,14 @@ def fixed32_batch_gdn_bv8_production_replay_engaged(
             str(key): value for key, value in expected_layer_counts.items()
         },
         "qualified_batch_sizes": [4],
-        "lower_batch_route": "legacy_per_request_bv8",
+        "lower_batch_route": "b1_legacy_b2_b3_fixed32_batched_bv8",
         "physical_launches_per_layer_by_batch": {
             "1": 2,
-            "2": 4,
-            "3": 6,
+            "2": 2,
+            "3": 2,
             "4": 2,
         },
-        "all_b_le_4_launch_invariant": False,
+        "all_b_le_4_launch_invariant": True,
         "graph_id": identity,
         "graph_signature": signature,
         "graph_pass_sha256": record["graph_pass_sha256"],

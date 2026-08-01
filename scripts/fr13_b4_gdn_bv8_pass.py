@@ -727,19 +727,19 @@ def validate_engagement_file(
         "layer_count": 48,
         "batched_route_capture_layers_by_batch": {
             "1": 0,
-            "2": 0,
-            "3": 0,
+            "2": 48,
+            "3": 48,
             "4": 48,
         },
         "qualified_batch_sizes": [4],
-        "lower_batch_route": "legacy_per_request_bv8",
+        "lower_batch_route": "b1_legacy_b2_b3_fixed32_batched_bv8",
         "physical_launches_per_layer_by_batch": {
             "1": 2,
-            "2": 4,
-            "3": 6,
+            "2": 2,
+            "3": 2,
             "4": 2,
         },
-        "all_b_le_4_launch_invariant": False,
+        "all_b_le_4_launch_invariant": True,
         "graph_pass_sha256": expected_live_sha256,
         "gate_verdict_sha256": expected_gate_verdict_sha256,
         "production_sidecar_sha256": expected_production_sidecar_sha256,
@@ -776,7 +776,7 @@ def validate_engagement_file(
         "runtime_manifest_sha256": expected_runtime_manifest_sha256,
         "gate_runner_sha256": expected_gate_runner_sha256,
         "b4_replays_at_least": 1,
-        "lower_batch_batched_capture_layers": 0,
+        "lower_batch_batched_capture_layers": 96,
     }, raw
 
 

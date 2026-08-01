@@ -362,7 +362,7 @@ def test_credential_rejects_current_runtime_closure_drift(
         )
 
 
-def test_kernel_credential_routes_only_b4_batched_bv8(
+def test_kernel_credential_closes_two_launches_across_b1_b4(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _module_value, sidecar, live_sha256, verdict_sha256, _summary = (
@@ -388,9 +388,39 @@ def test_kernel_credential_routes_only_b4_batched_bv8(
     assert payload["_graph_pass_sha256"] == live_sha256
     assert payload["_gate_verdict_sha256"] == verdict_sha256
     assert kernel.fixed32_batch_gdn_selector(1) is None
-    assert kernel.fixed32_batch_gdn_selector(2) is None
-    assert kernel.fixed32_batch_gdn_selector(3) is None
-    assert kernel.fixed32_batch_gdn_selector(4) == "production"
+    assert all(
+        kernel.fixed32_batch_gdn_selector(batch) == "production"
+        for batch in (2, 3, 4)
+    )
+
+
+def test_bv8_lower_batch_capture_requires_every_layer_dispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _module_value, sidecar, _live_sha256, _verdict_sha256, _summary = (
+        _install_valid_credential(tmp_path)
+    )
+    monkeypatch.setenv("FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS_PATH", str(sidecar))
+    monkeypatch.setenv("FR13_FIXED32_BATCH_GDN_PRODUCTION", "1")
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_MODE", "hydra27_fixed32")
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", 8)
+    monkeypatch.setattr(
+        kernel, "_FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURE_CONTEXT", None
+    )
+    monkeypatch.setattr(
+        kernel, "_FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURES", {}
+    )
+    monkeypatch.setattr(kernel.torch.cuda, "is_available", lambda: False)
+
+    kernel.fixed32_batch_gdn_bv8_production_capture_begin(202, 2)
+    for layer_key in range(1, 48):
+        kernel._fr13_fixed32_batch_gdn_bv8_production_capture_register(
+            batch_size=2, layer_key=layer_key, candidate_bv=8
+        )
+    with pytest.raises(RuntimeError, match="capture end drift"):
+        kernel.fixed32_batch_gdn_bv8_production_capture_end(
+            202, 2, "2" * 64, 96
+        )
 
 
 def test_bv8_engagement_publishes_only_after_b4_replay(
@@ -424,10 +454,10 @@ def test_bv8_engagement_publishes_only_after_b4_replay(
         graph_id = 100 + batch
         signature = str(batch) * 64
         kernel.fixed32_batch_gdn_bv8_production_capture_begin(graph_id, batch)
-        if batch == 4:
+        if batch >= 2:
             for layer_key in range(1, 49):
                 kernel._fr13_fixed32_batch_gdn_bv8_production_capture_register(
-                    batch_size=4, layer_key=layer_key, candidate_bv=8
+                    batch_size=batch, layer_key=layer_key, candidate_bv=8
                 )
         kernel.fixed32_batch_gdn_bv8_production_capture_end(
             graph_id, batch, signature, 48 * batch
@@ -437,8 +467,15 @@ def test_bv8_engagement_publishes_only_after_b4_replay(
         102, 2, "2" * 64, 96
     )
     assert lower == {
-        "status": "legacy_lower_batch",
+        "status": "batched_lower_batch",
         "batch_size": 2,
+        "batched_route_capture_layers": 48,
+    }
+    assert kernel.fixed32_batch_gdn_bv8_production_replay_engaged(
+        101, 1, "1" * 64, 48
+    ) == {
+        "status": "legacy_lower_batch",
+        "batch_size": 1,
         "batched_route_capture_layers": 0,
     }
     assert not engagement_path.exists()
@@ -457,19 +494,22 @@ def test_bv8_engagement_publishes_only_after_b4_replay(
     assert report["npad_invariant"] is False
     assert report["batched_route_capture_layers_by_batch"] == {
         "1": 0,
-        "2": 0,
-        "3": 0,
+        "2": 48,
+        "3": 48,
         "4": 48,
     }
     assert report["qualified_batch_sizes"] == [4]
-    assert report["lower_batch_route"] == "legacy_per_request_bv8"
+    assert (
+        report["lower_batch_route"]
+        == "b1_legacy_b2_b3_fixed32_batched_bv8"
+    )
     assert report["physical_launches_per_layer_by_batch"] == {
         "1": 2,
-        "2": 4,
-        "3": 6,
+        "2": 2,
+        "3": 2,
         "4": 2,
     }
-    assert report["all_b_le_4_launch_invariant"] is False
+    assert report["all_b_le_4_launch_invariant"] is True
     assert report["graph_pass_sha256"] == live_sha256
     assert report["gate_verdict_sha256"] == verdict_sha256
     assert report["runtime_manifest_sha256"] == summary[
@@ -494,7 +534,7 @@ def test_bv8_engagement_publishes_only_after_b4_replay(
         kernel_source=KERNEL_SOURCE,
     )
     assert validated["status"] == "ENGAGED"
-    assert validated["lower_batch_batched_capture_layers"] == 0
+    assert validated["lower_batch_batched_capture_layers"] == 96
 
 
 def test_launcher_installs_bv8_credential_before_arm_and_docker() -> None:
@@ -544,7 +584,7 @@ def test_timing_runner_is_stock_first_exact4_full_wall_and_fail_closed() -> None
         'engagement.get("candidate") != "fixed32_batch_gdn_bv8_v1"',
         '"candidate_physical_launches_per_layer") != 2',
         '"lower_batch_batched_capture_layers"',
-        '"all_b_le_4_launch_invariant": False',
+        '"all_b_le_4_launch_invariant": True',
     ):
         assert needle in runner
     manifest = runner.index("scripts/fr13_runtime_manifest.py")
