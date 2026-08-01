@@ -14,6 +14,8 @@ cd "$REPO"
 : "${CUTLASS_B4_SO:?set CUTLASS_B4_SO to the pinned persistent-M128 shared object}"
 
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
+HOST_UID=$(id -u)
+HOST_GID=$(id -g)
 QUALIFICATION_PROFILE=${CUTLASS_B4_QUALIFICATION_PROFILE:-full_vocab}
 FIXED32_MODE=${CUTLASS_B4_FIXED32_MODE:-hydra27_fixed32}
 SUBSET=config/fr13_fixed32/subset_b4_four.json
@@ -92,6 +94,10 @@ ARMDIR="$RUNROOT_ABS/$ARM"
   || { echo "RUNROOT must be new: $RUNROOT_ABS" >&2; exit 2; }
 [[ -x "$PYTHON_BIN" ]] \
   || { echo "Python environment is unavailable: $PYTHON_BIN" >&2; exit 2; }
+if (( HOST_UID != 0 )); then
+  sudo -n true \
+    || { echo "passwordless sudo is required for post-teardown evidence handoff" >&2; exit 2; }
+fi
 for input in "$FORKED_FA2_SO" "$CUTLASS_B4_SO"; do
   [[ "$input" == /* && -f "$input" && ! -L "$input" ]] \
     || { echo "gate input must be an absolute regular non-symlink file: $input" >&2; exit 2; }
@@ -212,9 +218,106 @@ cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" \
   || { echo "B4 CUTLASS gate runner changed during execution" >&2; exit 14; }
 (( serve_rc == 0 )) || exit "$serve_rc"
 
+MARKER_PATH="$ARMDIR/logs/fr13_fixed32_cutlass_b4_byte_ab.real_event.arm"
+BINARY_ATTESTATION_PATH="$ARMDIR/logs/fr13_fixed32_cutlass_streamk_binary.json"
+if (( HOST_UID != 0 )); then
+  "$PYTHON_BIN" - "$MARKER_PATH" "$BINARY_ATTESTATION_PATH" <<'PY'
+import os
+import stat
+import sys
+
+expected = ((sys.argv[1], 0o400), (sys.argv[2], 0o600))
+for path, mode in expected:
+    info = os.lstat(path)
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or stat.S_ISLNK(info.st_mode)
+        or info.st_nlink != 1
+        or info.st_uid != 0
+        or info.st_gid != 0
+        or stat.S_IMODE(info.st_mode) != mode
+    ):
+        raise SystemExit(
+            "CUTLASS B4 root evidence is unsafe before ownership handoff"
+        )
+PY
+  sudo -n chown --from=0:0 --no-dereference \
+    "$HOST_UID:$HOST_GID" "$MARKER_PATH" "$BINARY_ATTESTATION_PATH"
+  "$PYTHON_BIN" - \
+    "$MARKER_PATH" "$BINARY_ATTESTATION_PATH" "$HOST_UID" "$HOST_GID" \
+    "$ARMDIR/cutlass_b4_post_teardown_evidence_handoff.json" <<'PY'
+import hashlib
+import json
+import os
+import stat
+import sys
+from pathlib import Path
+
+host_uid = int(sys.argv[3])
+host_gid = int(sys.argv[4])
+payload = {
+    "schema": "fr13.fixed32.cutlass_b4.post_teardown_evidence_handoff.v1",
+    "status": "complete",
+    "root_owner_before": {"uid": 0, "gid": 0},
+    "host_owner_after": {"uid": host_uid, "gid": host_gid},
+    "artifacts": [],
+}
+for raw_path, expected_mode in ((sys.argv[1], 0o400), (sys.argv[2], 0o600)):
+    path = Path(raw_path)
+    info = os.lstat(path)
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or stat.S_ISLNK(info.st_mode)
+        or info.st_nlink != 1
+        or info.st_uid != host_uid
+        or info.st_gid != host_gid
+        or stat.S_IMODE(info.st_mode) != expected_mode
+    ):
+        raise SystemExit(
+            "CUTLASS B4 root evidence is unsafe after ownership handoff"
+        )
+    raw = path.read_bytes()
+    after = os.lstat(path)
+    if (
+        after.st_dev,
+        after.st_ino,
+        after.st_mode,
+        after.st_nlink,
+        after.st_uid,
+        after.st_gid,
+        after.st_size,
+        after.st_mtime_ns,
+    ) != (
+        info.st_dev,
+        info.st_ino,
+        info.st_mode,
+        info.st_nlink,
+        info.st_uid,
+        info.st_gid,
+        info.st_size,
+        info.st_mtime_ns,
+    ):
+        raise SystemExit("CUTLASS B4 evidence changed during post-handoff read")
+    payload["artifacts"].append(
+        {
+            "name": path.name,
+            "bytes": len(raw),
+            "mode": f"{expected_mode:04o}",
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }
+    )
+Path(sys.argv[5]).write_text(
+    json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
+    encoding="ascii",
+)
+PY
+  printf 'post_teardown_evidence_handoff=%s\n' \
+    "$ARMDIR/cutlass_b4_post_teardown_evidence_handoff.json" \
+    >> "$RUNROOT_ABS/launcher_meta.txt"
+fi
+
 "$PYTHON_BIN" - \
-  "$ARMDIR" "$ARMDIR$CONTAINER_JSONL" \
-  "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_binary.json" \
+  "$ARMDIR" "$ARMDIR$CONTAINER_JSONL" "$BINARY_ATTESTATION_PATH" \
   "$ARMDIR/$LIVE_RESULT_NAME" "$PATCH_SOURCE" \
   "$SOURCE_COMMIT" "$SUBSET_SHA256" "$DIAGNOSTIC_SELECTOR" \
   "$RECORD_SCHEMA" "$LIVE_SCHEMA" "$STOCK_FA2_SHA256" \

@@ -270,6 +270,11 @@ def test_b4_gate_and_timing_are_closed_over_by_runtime_manifest() -> None:
     assert 'f"FR13_FIXED32_MODE={fixed32_mode}"' in gate
     assert "tail6_fixed32" in gate
     assert "COMPARISON_CALL_LIMIT=320" in gate
+    assert "passwordless sudo is required for post-teardown evidence handoff" in gate
+    assert "chown --from=0:0 --no-dereference" in gate
+    assert "info.st_uid != 0" in gate
+    assert "info.st_uid != host_uid" in gate
+    assert "cutlass_b4_post_teardown_evidence_handoff.json" in gate
     assert "comparisons > MAX_COMPARISONS" in (
         SCRIPTS / "fr13_cutlass_b4_pass.py"
     ).read_text(encoding="utf-8")
