@@ -2118,10 +2118,9 @@ elif [[ "$_fr13_sfwd_production" == "1" ]]; then
         || "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" != "0" \
         || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" != "0" \
         || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" != "0" \
-        || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" != "0" \
         || "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" != "0" \
         || "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" != "0" ]]; then
-    echo "SFWD production permits only the qualified qrow16 co-candidate" >&2
+    echo "SFWD production permits qrow16 and source-gated TAW production only" >&2
     exit 2
   fi
   [[ "$FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON" == /* \
