@@ -1,0 +1,77 @@
+{
+  "schema": "fr13.fixed32.bf16_gemvx_b1_b4.source_readiness.v1",
+  "status": "SOURCE_AND_SHADOW_RUNTIME_READY_BUILD_UNAVAILABLE",
+  "classification": "offline_source_readiness_only",
+  "performance_measurement": false,
+  "byte_equality_claim": false,
+  "production_eligible": false,
+  "floor_acceptance_eligible": false,
+  "gpu_or_container_used": false,
+  "branch": "agent/fixed32-fullhead-m1-b4",
+  "source_commit": "3ed2d6d8d2c7fe68b44a5d34835bbcfa68bc2101",
+  "source": {
+    "path": "csrc/fr13_bf16_gemvx_m1.cu",
+    "sha256": "4412fc292ffc5e9a7786deb857fdeb99a7283b2f0ba4833df5c2141668f3902c"
+  },
+  "builder": {
+    "path": "scripts/fr13_build_bf16_gemvx_b1_b4.py",
+    "sha256": "2963c60cbd46c0bd314a1907a8ebb293b4324a339176d93e644cd3ad308602e7"
+  },
+  "runtime": {
+    "patcher_path": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+    "patcher_sha256": "dd11dc6a8d49c6626a4d98e370e662dff0433aa57f7874fa1e1ff6bf01abec94",
+    "launcher_path": "scripts/fr13_launch_forked_fa2_tree_server.sh",
+    "launcher_sha256": "cf30e2a615426a9f5dc6959ab136ca7c5338c73ad31a322b8cbd265b66afbae2",
+    "selector": "FR13_DRAFT_HEAD_M1_LIVE_AB=1,FR13_DRAFT_HEAD_M1_MAX_BATCH=4",
+    "served_return": "stock reference BF16 logits unchanged",
+    "candidate_mode": "shadow only",
+    "supported_actual_batch_sizes": [1, 2, 3, 4]
+  },
+  "kernel": {
+    "symbol": "fr13_bf16_gemvx_b1_b4_kernel<B>",
+    "operator": "fr13_bf16_head::gemvx_b1_b4_out",
+    "grid": [31040, 1, 1],
+    "block": [16, 8, 1],
+    "dynamic_shared_bytes_by_batch": {
+      "1": 544,
+      "2": 1088,
+      "3": 1632,
+      "4": 2176
+    },
+    "gemm_mnk_at_b4": [4, 248320, 5120],
+    "head_weight_bytes": 2542796800,
+    "logical_weight_element_loads_per_head": 1271398400,
+    "logical_weight_bytes_per_five_head_event": 12713984000,
+    "b4_fma_count_per_head": 5085593600,
+    "candidate_launches_per_head": 1,
+    "weight_load_is_outside_request_row_loop": true,
+    "stock_order_byte_equality_unmeasured": true
+  },
+  "required_real_gate": {
+    "suite": "SWE-Verified",
+    "task_set": "canonical exact4",
+    "subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "topology": "hydra27_fixed32",
+    "concurrency": 4,
+    "max_num_seqs": 4,
+    "physical_drafts_per_request": 32,
+    "physical_drafts_total_at_b4": 128,
+    "draft_vocab_root": 0,
+    "draft_vocab_k": 0,
+    "comparison": "raw torch.int16 over every BF16 logit for root plus four MTP heads",
+    "reference_always_served": true,
+    "timing_eligible": false
+  },
+  "hardware_floor_contract": {
+    "mandatory_weight_bytes": 42025179008,
+    "floor_ms_per_step": 153.9383846446886,
+    "one_sided_u95_cap_ms": 177.0291423413919,
+    "measured_by_this_package": false
+  },
+  "blockers": [
+    "host Torch is 2.4.1+cpu instead of pinned 2.10.0+cu130; binary not built",
+    "real exact4 B4 raw-BF16 gate has not run",
+    "runner-owned B4 campaign endpoint-metrics fix must be integrated before the gate",
+    "candidate-only B4 timing and production remain forbidden"
+  ]
+}

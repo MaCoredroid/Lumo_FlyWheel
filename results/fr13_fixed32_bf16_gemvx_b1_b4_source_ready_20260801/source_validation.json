@@ -1,0 +1,36 @@
+{
+  "schema": "fr13.fixed32.bf16_gemvx_b1_b4.source_validation.v1",
+  "status": "PASS",
+  "source_commit": "3ed2d6d8d2c7fe68b44a5d34835bbcfa68bc2101",
+  "commands": [
+    {
+      "command": "pytest -q tests/test_fr13_draft_head_m32_production.py tests/test_fr13_bf16_gemvx_m1_runtime.py tests/test_fr13_bf16_gemvx_m1_source.py tests/test_fr13_bf16_gemvx_b1_b4_source.py",
+      "result": "34 passed in 0.57s"
+    },
+    {
+      "command": "bash -n scripts/fr13_launch_forked_fa2_tree_server.sh",
+      "result": "PASS"
+    },
+    {
+      "command": "python3 -m py_compile scripts/fr10_phase4_patch_vllm_tree_gdn.py tests/test_fr13_bf16_gemvx_m1_runtime.py",
+      "result": "PASS"
+    },
+    {
+      "command": "ruff check changed build and test files",
+      "result": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "docker_bind_regression": {
+    "candidate_mount_precedes_ingress_append": true,
+    "ingress_uses_array_append": true,
+    "final_docker_run_expands_accumulated_array": true
+  },
+  "binary_built": false,
+  "gpu_or_container_used": false,
+  "host_torch_observed": "2.4.1+cpu",
+  "required_build_torch": "2.10.0+cu130"
+}
