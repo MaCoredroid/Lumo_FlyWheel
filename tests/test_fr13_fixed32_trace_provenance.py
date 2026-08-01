@@ -5,6 +5,9 @@ import hashlib
 import importlib.util
 import json
 import os
+import shlex
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -2559,6 +2562,179 @@ def test_fixed32_remote_paths_and_command_isolate_read_only_settings() -> None:
     assert "-e QWEN_STREAM_IDLE_TIMEOUT_MS=600000" in command
     for variable in runner._FIXED32_CLEARED_AGENT_ENV:
         assert f"-e {variable}=" in command
+
+
+def _run_local_remote_trace_command(argv: list[str], **_kwargs: Any) -> Any:
+    if argv[0] == "ssh":
+        return subprocess.run(
+            ["bash", "-c", argv[-1]],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    if argv[0] == "scp":
+        _host, remote_path = argv[-2].split(":", 1)
+        shutil.copy2(Path(remote_path).expanduser(), Path(argv[-1]))
+        return subprocess.CompletedProcess(argv, 0, "", "")
+    raise AssertionError(f"unexpected transport command: {argv[0]}")
+
+
+def test_fixed32_remote_trace_is_written_inside_container_and_pulled_exactly(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_runner()
+    remote_out = tmp_path / "remote out"
+    remote_out.mkdir(mode=0o700)
+    remote_trace = remote_out / runner._REMOTE_AGENT_TRACE_FILENAME
+    local_trace = tmp_path / "local" / "qwen_trace.jsonl"
+    local_trace.parent.mkdir()
+    event_count = 64
+    events = [
+        {"type": "event", "sequence": index, "payload": "x" * 4096}
+        for index in range(event_count)
+    ]
+    expected = "".join(
+        json.dumps(event, ensure_ascii=True, separators=(",", ":")) + "\n"
+        for event in events
+    ).encode("ascii")
+    assert len(expected) > 258_048
+
+    writer = "\n".join(
+        (
+            "import json, pathlib, sys",
+            "path = pathlib.Path(sys.argv[1])",
+            "with path.open('w', encoding='ascii') as stream:",
+            f"    for index in range({event_count}):",
+            "        event = {'type': 'event', 'sequence': index, "
+            "'payload': 'x' * 4096}",
+            "        stream.write(json.dumps(event, ensure_ascii=True, "
+            "separators=(',', ':')) + '\\n')",
+        )
+    )
+    fake_container = " ".join(
+        (
+            "python3",
+            "-c",
+            shlex.quote(writer),
+            shlex.quote(str(remote_trace)),
+        )
+    )
+    capture_command = runner._remote_agent_trace_capture_command(
+        fake_container,
+        remote_trace_path=str(remote_trace),
+    )
+    completed = subprocess.run(
+        ["bash", "-c", capture_command],
+        input="task-credential\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == ""
+    assert remote_trace.read_bytes() == expected
+    assert remote_trace.stat().st_mode & 0o777 == 0o600
+
+    instance_command = runner._instance_agent_command(
+        container_name="agent",
+        image="image",
+        endpoint="http://127.0.0.1:8023/v1",
+        model="model",
+        host_out_dir=str(remote_out),
+        bundle_src="/tmp/bundle",
+        agents_md_b64="YQ==",
+        prompt_b64="Yg==",
+        base_commit="deadbeef",
+        session_id=contract.fixed32_trace_session_id(TASK_A),
+        trace_output_path=runner._INSTANCE_TRACE_OUTPUT_PATH,
+    )
+    assert (
+        '-p "$PROMPT" > /out/qwen_trace.jsonl; rc=$?; '
+        in instance_command
+    )
+    assert f"{fake_container} > /dev/null" in capture_command
+    assert capture_command.count('> "$trace_path"') == 1
+
+    monkeypatch.setattr(runner, "_net_retry", _run_local_remote_trace_command)
+    observation = runner._pull_remote_agent_trace(
+        host="test-host",
+        instance_id=TASK_A,
+        remote_trace_path=str(remote_trace),
+        trace_path=local_trace,
+    )
+
+    assert local_trace.read_bytes() == expected
+    assert observation == {
+        "schema": runner._REMOTE_AGENT_TRACE_OBSERVATION_SCHEMA,
+        "bytes": len(expected),
+        "sha256": hashlib.sha256(expected).hexdigest(),
+        "event_count": event_count,
+    }
+
+
+def test_nonfixed_instance_wrapper_keeps_legacy_stdout_trace_route() -> None:
+    runner = _load_runner()
+    command = runner._instance_agent_command(
+        container_name="agent",
+        image="image",
+        endpoint="http://127.0.0.1:8023/v1",
+        model="model",
+        host_out_dir="/tmp/out",
+        bundle_src="/tmp/bundle",
+        agents_md_b64="YQ==",
+        prompt_b64="Yg==",
+        base_commit="deadbeef",
+        session_id="ordinary-session",
+    )
+
+    assert '-p "$PROMPT"; rc=$?; ' in command
+    assert "> /out/qwen_trace.jsonl" not in command
+    assert runner._instance_wrapper(trace_output_path=None) == (
+        runner._INSTANCE_WRAPPER
+    )
+
+
+@pytest.mark.parametrize(
+    ("remote_bytes", "error"),
+    (
+        (b"", "trace is empty"),
+        (
+            b'{"type":"event"}\n{"private-secret-value":"truncated',
+            "trace is not newline-framed",
+        ),
+        (
+            b'{"type":"event"}\n{"private-secret-value":\n',
+            "invalid JSON",
+        ),
+    ),
+)
+def test_fixed32_remote_trace_rejection_preserves_exact_malformed_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    remote_bytes: bytes,
+    error: str,
+) -> None:
+    runner = _load_runner()
+    remote_out = tmp_path / "remote"
+    remote_out.mkdir(mode=0o700)
+    remote_trace = remote_out / runner._REMOTE_AGENT_TRACE_FILENAME
+    remote_trace.write_bytes(remote_bytes)
+    remote_trace.chmod(0o600)
+    local_trace = tmp_path / "local" / "qwen_trace.jsonl"
+    local_trace.parent.mkdir()
+    monkeypatch.setattr(runner, "_net_retry", _run_local_remote_trace_command)
+
+    with pytest.raises(runner.Fixed32BoundaryError, match=error) as raised:
+        runner._pull_remote_agent_trace(
+            host="test-host",
+            instance_id=TASK_A,
+            remote_trace_path=str(remote_trace),
+            trace_path=local_trace,
+        )
+
+    assert "private-secret-value" not in str(raised.value)
+    assert local_trace.read_bytes() == remote_bytes
 
 
 def test_fixed32_remote_cleanup_is_fail_loud(
