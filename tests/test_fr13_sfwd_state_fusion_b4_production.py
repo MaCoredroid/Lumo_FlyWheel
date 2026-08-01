@@ -208,6 +208,7 @@ def test_runner_and_launcher_are_exact4_b4_shadow_only() -> None:
     assert "FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0" in runner
     assert "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=1" in runner
     assert "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=0" in runner
+    assert "FR13_FIXED32_CUTLASS_WAVE=stock" in runner
     assert "FR13_CONV_WB_BATCHED=1" in runner
     assert "FR13_FIXED32_CONV_SOURCE_BATCH=1" in runner
     assert (
