@@ -52,6 +52,7 @@ INCLUDE_REPLACEMENT = """#pragma once
 #include <fstream>
 #include <mutex>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include <torch/headeronly/util/shim_utils.h>
@@ -61,33 +62,88 @@ TEMPLATE_ANCHOR = """          class EpilogueScheduler, class MainloopScheduler,
           bool swap_ab_ = false>
 struct cutlass_3x_gemm_fp8_blockwise {
 """
-TEMPLATE_REPLACEMENT = """          class EpilogueScheduler, class MainloopScheduler,
-          bool swap_ab_ = false, class TileScheduler = void,
-          bool force_stream_k_ = false,
-          class MainloopStageCount = cutlass::gemm::collective::StageCountAuto>
-struct cutlass_3x_gemm_fp8_blockwise {
-  static constexpr bool use_stream_k = !cute::is_void_v<TileScheduler>;
-  static constexpr bool force_stream_k = force_stream_k_;
-"""
 
 KERNEL_ANCHOR = """  using KernelType = enable_sm120_family<cutlass::gemm::kernel::GemmUniversal<
       Shape<int, int, int, int>, CollectiveMainloop, CollectiveEpilogue>>;
-"""
-KERNEL_REPLACEMENT = """  using KernelType = enable_sm120_family<cutlass::gemm::kernel::GemmUniversal<
-      Shape<int, int, int, int>, CollectiveMainloop, CollectiveEpilogue,
-      TileScheduler>>;
 """
 
 STAGE_COUNT_ANCHOR = (
     "cutlass::gemm::collective::StageCountAutoCarveout<"
     "static_cast<int>(sizeof(typename CollectiveEpilogue::SharedStorage))>"
 )
-STAGE_COUNT_REPLACEMENT = "MainloopStageCount"
+
+STREAMK_CLASS_ANCHOR = KERNEL_ANCHOR + """
+  struct GemmKernel : public KernelType {};
+};
+
+"""
+STREAMK_CLASS_REPLACEMENT = STREAMK_CLASS_ANCHOR + r"""template <
+    class OutType, int ScaleGranularityM, int ScaleGranularityN,
+    int ScaleGranularityK, class MmaTileShape, class ClusterShape,
+    class EpilogueScheduler, class MainloopScheduler, bool swap_ab_,
+    class TileScheduler, bool force_stream_k_ = false,
+    class MainloopStageCount = cutlass::gemm::collective::StageCountAuto>
+struct cutlass_3x_gemm_fp8_blockwise_streamk
+    : cutlass_3x_gemm_fp8_blockwise<
+          OutType, ScaleGranularityM, ScaleGranularityN, ScaleGranularityK,
+          MmaTileShape, ClusterShape, EpilogueScheduler, MainloopScheduler,
+          swap_ab_> {
+  using Base = cutlass_3x_gemm_fp8_blockwise<
+      OutType, ScaleGranularityM, ScaleGranularityN, ScaleGranularityK,
+      MmaTileShape, ClusterShape, EpilogueScheduler, MainloopScheduler,
+      swap_ab_>;
+  static constexpr bool use_stream_k = true;
+  static constexpr bool force_stream_k = force_stream_k_;
+
+  using CollectiveEpilogue = typename Base::CollectiveEpilogue;
+  using CollectiveMainloop = conditional_t<
+      Base::swap_ab,
+      typename cutlass::gemm::collective::CollectiveBuilder<
+          typename Base::ArchTag, typename Base::OperatorClass,
+          typename Base::ElementB,
+          cute::tuple<typename Base::LayoutB_Transpose,
+                      typename Base::LayoutSFA>,
+          Base::AlignmentB, typename Base::ElementA,
+          cute::tuple<typename Base::LayoutA_Transpose,
+                      typename Base::LayoutSFB>,
+          Base::AlignmentA, typename Base::ElementAccumulator, MmaTileShape,
+          ClusterShape, MainloopStageCount, MainloopScheduler>::CollectiveOp,
+      typename cutlass::gemm::collective::CollectiveBuilder<
+          typename Base::ArchTag, typename Base::OperatorClass,
+          typename Base::ElementA,
+          cute::tuple<typename Base::LayoutA, typename Base::LayoutSFA>,
+          Base::AlignmentA, typename Base::ElementB,
+          cute::tuple<typename Base::LayoutB, typename Base::LayoutSFB>,
+          Base::AlignmentB, typename Base::ElementAccumulator, MmaTileShape,
+          ClusterShape, MainloopStageCount, MainloopScheduler>::CollectiveOp>;
+
+  using KernelType = enable_sm120_family<cutlass::gemm::kernel::GemmUniversal<
+      Shape<int, int, int, int>, CollectiveMainloop, CollectiveEpilogue,
+      TileScheduler>>;
+
+  struct GemmKernel : public KernelType {};
+};
+
+"""
 
 CONFIG_ANCHOR = """template <typename Gemm>
 void cutlass_gemm_caller_blockwise(torch::stable::Tensor& out, torch::stable::Tensor const& a,
 """
 CONFIG_REPLACEMENT = r"""// FR13_FIXED32_CUTLASS_WAVE: source-only candidates; stock is default.
+template <typename Gemm, typename = void>
+struct fr13_fixed32_streamk_traits {
+  static constexpr bool enabled = false;
+  static constexpr bool force = false;
+};
+
+template <typename Gemm>
+struct fr13_fixed32_streamk_traits<
+    Gemm, std::void_t<decltype(Gemm::use_stream_k),
+                      decltype(Gemm::force_stream_k)>> {
+  static constexpr bool enabled = Gemm::use_stream_k;
+  static constexpr bool force = Gemm::force_stream_k;
+};
+
 template <typename OutType>
 struct sm120_blockwise_fp8_config_cooperative_streamk {
   using KernelSchedule =
@@ -96,7 +152,7 @@ struct sm120_blockwise_fp8_config_cooperative_streamk {
       cutlass::epilogue::collective::EpilogueScheduleAuto;
   using TileShape = Shape<_128, _128, _128>;
   using ClusterShape = Shape<_1, _1, _1>;
-  using Gemm = cutlass_3x_gemm_fp8_blockwise<
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_streamk<
       OutType, 1, 128, 128, TileShape, ClusterShape,
       EpilogueSchedule, KernelSchedule, false,
       cutlass::gemm::StreamKScheduler>;
@@ -110,7 +166,7 @@ struct sm120_blockwise_fp8_config_swapab_streamk {
       cutlass::epilogue::collective::EpilogueScheduleAuto;
   using TileShape = Shape<_128, _32, _128>;
   using ClusterShape = Shape<_1, _1, _1>;
-  using Gemm = cutlass_3x_gemm_fp8_blockwise<
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_streamk<
       OutType, 128, 1, 128, TileShape, ClusterShape,
       EpilogueSchedule, KernelSchedule, true,
       cutlass::gemm::StreamKScheduler>;
@@ -124,7 +180,7 @@ struct sm120_blockwise_fp8_config_swapab_streamk_wide256 {
       cutlass::epilogue::collective::EpilogueScheduleAuto;
   using TileShape = Shape<_256, _32, _128>;
   using ClusterShape = Shape<_1, _1, _1>;
-  using Gemm = cutlass_3x_gemm_fp8_blockwise<
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_streamk<
       OutType, 128, 1, 128, TileShape, ClusterShape,
       EpilogueSchedule, KernelSchedule, true,
       cutlass::gemm::StreamKScheduler, true,
@@ -209,7 +265,8 @@ void cutlass_gemm_caller_blockwise(torch::stable::Tensor& out, torch::stable::Te
 CALLER_ANCHOR = """  c3x::cutlass_gemm_caller<GemmKernel>(a.device(), prob_shape, mainloop_args,
                                        epilogue_args);
 """
-CALLER_REPLACEMENT = """  if constexpr (!Gemm::use_stream_k) {
+CALLER_REPLACEMENT = """  using StreamKTraits = fr13_fixed32_streamk_traits<Gemm>;
+  if constexpr (!StreamKTraits::enabled) {
     return c3x::cutlass_gemm_caller<GemmKernel>(
         a.device(), prob_shape, mainloop_args, epilogue_args);
   } else {
@@ -229,7 +286,7 @@ CALLER_REPLACEMENT = """  if constexpr (!Gemm::use_stream_k) {
   scheduler.reduction_mode =
       decltype(scheduler.reduction_mode)::Deterministic;
   scheduler.decomposition_mode =
-      Gemm::force_stream_k
+      StreamKTraits::force
           ? decltype(scheduler.decomposition_mode)::StreamK
           : decltype(scheduler.decomposition_mode)::Heuristic;
   typename GemmKernel::Arguments args{
@@ -444,8 +501,7 @@ def patch_text(source: str) -> tuple[str, bool]:
     if MARKER in source:
         required = (
             INCLUDE_REPLACEMENT,
-            TEMPLATE_REPLACEMENT,
-            KERNEL_REPLACEMENT,
+            STREAMK_CLASS_REPLACEMENT,
             CONFIG_REPLACEMENT,
             CALLER_REPLACEMENT,
             DISPATCH_REPLACEMENT,
@@ -457,7 +513,7 @@ def patch_text(source: str) -> tuple[str, bool]:
     single_anchors = {
         "include": INCLUDE_ANCHOR,
         "GEMM template": TEMPLATE_ANCHOR,
-        "kernel scheduler": KERNEL_ANCHOR,
+        "stock kernel class": STREAMK_CLASS_ANCHOR,
         "candidate insertion": CONFIG_ANCHOR,
         "Stream-K caller": CALLER_ANCHOR,
         "dispatch": DISPATCH_ANCHOR,
@@ -472,10 +528,8 @@ def patch_text(source: str) -> tuple[str, bool]:
             f"expected exactly two mainloop stage-count anchors, found {stage_count}"
         )
     patched = source.replace(INCLUDE_ANCHOR, INCLUDE_REPLACEMENT, 1)
-    patched = patched.replace(TEMPLATE_ANCHOR, TEMPLATE_REPLACEMENT, 1)
-    patched = patched.replace(KERNEL_ANCHOR, KERNEL_REPLACEMENT, 1)
     patched = patched.replace(
-        STAGE_COUNT_ANCHOR, STAGE_COUNT_REPLACEMENT, stage_count
+        STREAMK_CLASS_ANCHOR, STREAMK_CLASS_REPLACEMENT, 1
     )
     patched = patched.replace(CONFIG_ANCHOR, CONFIG_REPLACEMENT, 1)
     patched = patched.replace(CALLER_ANCHOR, CALLER_REPLACEMENT, 1)

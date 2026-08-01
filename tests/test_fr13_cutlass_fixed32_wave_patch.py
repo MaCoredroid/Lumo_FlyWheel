@@ -149,17 +149,20 @@ def test_wide256_is_b1_only_and_large_rows_fail_to_stock() -> None:
     assert "sm120_blockwise_fp8_config_swapab_streamk_wide256" in patched
 
 
-def test_streamk_is_the_only_kernel_template_change() -> None:
+def test_streamk_uses_a_separate_candidate_template() -> None:
     module = _module()
     patched, _ = module.patch_text(_source_fixture(module))
 
-    assert "class TileScheduler = void" in patched
+    assert patched.count(module.TEMPLATE_ANCHOR) == 1
+    assert "class TileScheduler = void" not in patched
+    assert "cutlass_3x_gemm_fp8_blockwise_streamk" in patched
+    assert "class TileScheduler, bool force_stream_k_ = false" in patched
     assert "static constexpr bool use_stream_k" in patched
     assert "bool force_stream_k_ = false" in patched
     assert "static constexpr bool force_stream_k = force_stream_k_" in patched
     assert "CollectiveMainloop, CollectiveEpilogue,\n      TileScheduler>>" in patched
     assert "typename GemmKernel::TileSchedulerArguments scheduler{}" in patched
-    assert "if constexpr (!Gemm::use_stream_k)" in patched
+    assert "if constexpr (!StreamKTraits::enabled)" in patched
     assert "} else {" in module.CALLER_REPLACEMENT
     assert "query_device_multiprocessor_count" in patched
     assert "STD_TORCH_CHECK(sm_count > 0" in patched
@@ -168,6 +171,52 @@ def test_streamk_is_the_only_kernel_template_change() -> None:
     assert "decltype(scheduler.decomposition_mode)::StreamK" in patched
     assert "decltype(scheduler.decomposition_mode)::Heuristic" in patched
     assert "scheduler.splits = 1" in patched
+
+
+def test_stock_class_is_textually_unchanged() -> None:
+    module = _module()
+    source = _source_fixture(module)
+    patched, _ = module.patch_text(source)
+    stock_start = source.index(module.TEMPLATE_ANCHOR)
+    stock_end = source.index(module.STREAMK_CLASS_ANCHOR) + len(
+        module.STREAMK_CLASS_ANCHOR
+    )
+    stock_class = source[stock_start:stock_end]
+
+    assert stock_class in patched
+    assert patched.count(module.TEMPLATE_ANCHOR) == 1
+    assert patched.count(module.KERNEL_ANCHOR) == 1
+    assert patched.count(module.STAGE_COUNT_ANCHOR) == 2
+    assert "fr13_fixed32_gemm_universal" not in patched
+    assert "class MainloopStageCount = cutlass::gemm::collective::StageCountAuto" in patched
+    assert patched.index(stock_class) < patched.index(
+        "struct cutlass_3x_gemm_fp8_blockwise_streamk"
+    )
+
+
+def test_stock_caller_uses_default_false_streamk_trait() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    assert "template <typename Gemm, typename = void>" in patched
+    assert "static constexpr bool enabled = false;" in patched
+    assert "std::void_t<decltype(Gemm::use_stream_k)" in patched
+    assert "using StreamKTraits = fr13_fixed32_streamk_traits<Gemm>;" in patched
+    assert "StreamKTraits::force" in patched
+
+
+def test_stock_dispatch_retains_original_kernel_configs() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    stock = patched[patched.index("auto run_stock"):]
+    for config in (
+        "sm120_blockwise_fp8_config_pingpong<OutType>::Gemm",
+        "sm120_blockwise_fp8_config_default<OutType>::Gemm",
+        "sm120_blockwise_fp8_config_swapab<OutType>::Gemm",
+    ):
+        assert stock.count(config) == 1
+    assert "bool swap_ab = (M <= 64) || (M % 4 != 0);" in stock
 
 
 def test_coop128_geometry_and_heuristic_mode_remain_unchanged() -> None:
@@ -181,7 +230,7 @@ def test_coop128_geometry_and_heuristic_mode_remain_unchanged() -> None:
         "template <typename OutType>\n"
         "struct sm120_blockwise_fp8_config_swapab_streamk"
     ) in patched
-    assert "Gemm::force_stream_k\n          ?" in patched
+    assert "StreamKTraits::force\n          ?" in patched
 
 
 def test_stock_dispatch_text_is_retained() -> None:
