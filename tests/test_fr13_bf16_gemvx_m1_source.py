@@ -25,26 +25,21 @@ def test_cuda_source_preserves_stock_gemvx_launch_geometry() -> None:
 
 def test_cuda_source_preserves_stock_scalar_arithmetic_order() -> None:
     source = CUDA.read_text(encoding="ascii")
-    m1_source = source[
-        source.index("fr13_bf16_gemvx_m1_kernel") : source.index(
-            "// B1-B4 uses"
-        )
-    ]
 
-    assert "float accumulator = 0.0f;" in m1_source
-    assert "#pragma unroll 1" in m1_source
-    assert "for (int k = lane; k < kHidden; k += kLanes)" in m1_source
-    assert "accumulator = __fmaf_rn(x, w, accumulator);" in m1_source
-    assert m1_source.count("__fadd_rn(") == 4
+    assert "float accumulator = 0.0f;" in source
+    assert "#pragma unroll 1" in source
+    assert "for (int k = lane; k < kHidden; k += kLanes)" in source
+    assert "accumulator = __fmaf_rn(x, w, accumulator);" in source
+    assert source.count("__fadd_rn(") == 4
     for stride in (8, 4, 2):
-        assert f"if (lane < {stride})" in m1_source
-    assert "if (lane == 0)" in m1_source
-    assert "const float reduced_sum = __fadd_rn(" in m1_source
-    assert "const float sum = __fmaf_rn(alpha, reduced_sum, beta);" in m1_source
+        assert f"if (lane < {stride})" in source
+    assert "if (lane == 0)" in source
+    assert "const float reduced_sum = __fadd_rn(" in source
+    assert "const float sum = __fmaf_rn(alpha, reduced_sum, beta);" in source
     assert "1.0f, 0.0f);" in source
-    assert "output[row] = __float2bfloat16_rn(sum);" in m1_source
-    assert "grid-stride" not in m1_source.lower()
-    assert "atomicAdd" not in m1_source
+    assert "output[row] = __float2bfloat16_rn(sum);" in source
+    assert "grid-stride" not in source.lower()
+    assert "atomicAdd" not in source
 
 
 def test_cuda_op_is_out_variant_with_strict_full_head_geometry() -> None:

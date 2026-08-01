@@ -32,6 +32,7 @@ class ProfileSpec:
 
 
 FIXED32_HOST_SCRIPT_SOURCE = (
+    "csrc/fr13_bf16_gemvx_b1_b4.cu",
     "csrc/fr13_bf16_gemvx_m1.cu",
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
     "scripts/fr10_quick_decode_tps_probe.py",
@@ -58,9 +59,11 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_merged_fill.py",
     "scripts/fr13_patch_cutlass_fixed32_wave.py",
     "scripts/fr13_patch_fa2_tree_bias.py",
+    "scripts/fr13_phase4_patch_vllm_tree_gdn_b1_b4.py",
     "scripts/fr13_required_tree_flags.sh",
     "scripts/fr13_run_b4_gdn_bv8_timing.sh",
     "scripts/fr13_run_b4_gdn_wide_live_gate.sh",
+    "scripts/fr13_run_b4_draft_head_b1_b4_live.sh",
     "scripts/fr13_run_b1_draft_head_m1_live.sh",
     "scripts/fr13_run_b1_draft_head_m1_timing.sh",
     "scripts/fr13_sg_warmup_capture_inject.py",

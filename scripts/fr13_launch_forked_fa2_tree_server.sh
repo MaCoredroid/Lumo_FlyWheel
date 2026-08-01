@@ -338,12 +338,21 @@ FR13_DRAFT_HEAD_M1_SO=${FR13_DRAFT_HEAD_M1_SO:-}
 FR13_DRAFT_HEAD_M1_SO_SHA256=${FR13_DRAFT_HEAD_M1_SO_SHA256:-}
 FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION=${FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION:-}
 FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION_SHA256=${FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION_SHA256:-}
-FR13_DRAFT_HEAD_M1_SOURCE_SHA256=$(
-  sha256sum csrc/fr13_bf16_gemvx_m1.cu | cut -d' ' -f1
-)
-FR13_DRAFT_HEAD_M1_PATCHER_SHA256=$(
-  sha256sum scripts/fr10_phase4_patch_vllm_tree_gdn.py | cut -d' ' -f1
-)
+if [[ "$FR13_DRAFT_HEAD_M1_MAX_BATCH" == "4" ]]; then
+  FR13_DRAFT_HEAD_M1_SOURCE_SHA256=$(
+    sha256sum csrc/fr13_bf16_gemvx_b1_b4.cu | cut -d' ' -f1
+  )
+  FR13_DRAFT_HEAD_M1_PATCHER_SHA256=$(
+    sha256sum scripts/fr13_phase4_patch_vllm_tree_gdn_b1_b4.py | cut -d' ' -f1
+  )
+else
+  FR13_DRAFT_HEAD_M1_SOURCE_SHA256=$(
+    sha256sum csrc/fr13_bf16_gemvx_m1.cu | cut -d' ' -f1
+  )
+  FR13_DRAFT_HEAD_M1_PATCHER_SHA256=$(
+    sha256sum scripts/fr10_phase4_patch_vllm_tree_gdn.py | cut -d' ' -f1
+  )
+fi
 FR13_DRAFT_HEAD_M1_SOURCE_COMMIT=$(git rev-parse HEAD)
 FR13_DRAFT_HEAD_M1_RUNTIME_SO=
 FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}
@@ -575,7 +584,7 @@ if [[ "$FR13_DRAFT_HEAD_M1_LIVE_AB" == "1" ]]; then
      && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
      && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
      && "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" == "0" ]] || {
-    echo "FR13 draft-head M1/B4 live A/B requires its pinned SO and must be the only kernel candidate" >&2
+    echo "FR13 draft-head M1 live A/B requires its pinned SO; B4 live A/B requires its pinned SO, and either must be the only kernel candidate" >&2
     exit 2
   }
   if [[ "$FR13_DRAFT_HEAD_M1_MAX_BATCH" == "1" ]]; then
@@ -1721,7 +1730,11 @@ if [[ "$FR13_DRAFT_HEAD_M1_LIVE_AB" == "1" \
     echo "FR13 draft-head M1 SO changed before Docker mount" >&2
     exit 2
   }
-  FR13_DRAFT_HEAD_M1_RUNTIME_SO=/tmp/fr13_bf16_gemvx_m1.abi3.so
+  if [[ "$FR13_DRAFT_HEAD_M1_MAX_BATCH" == "4" ]]; then
+    FR13_DRAFT_HEAD_M1_RUNTIME_SO=/tmp/fr13_bf16_gemvx_b1_b4.abi3.so
+  else
+    FR13_DRAFT_HEAD_M1_RUNTIME_SO=/tmp/fr13_bf16_gemvx_m1.abi3.so
+  fi
   FR13_FIXED32_DOCKER_ARGS+=(
     -v "$FR13_DRAFT_HEAD_M1_SO:$FR13_DRAFT_HEAD_M1_RUNTIME_SO:ro"
   )
@@ -2896,7 +2909,11 @@ if [[ "$FR13_DRAFT_HEAD_M1_PRODUCTION" == "1" ]]; then
     --expected-build-attestation-sha256 "$FR13_DRAFT_HEAD_M1_BUILD_ATTESTATION_SHA256"
   export FR13_DRAFT_HEAD_M1_INTERNAL_PRODUCTION_ATTESTED=1
 fi
-python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
+if [[ "$FR13_DRAFT_HEAD_M1_MAX_BATCH" == "4" ]]; then
+  python3 /workspace/scripts/fr13_phase4_patch_vllm_tree_gdn_b1_b4.py
+else
+  python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
+fi
 if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
   python3 /workspace/scripts/fr13_bm8_pass_sidecar.py verify \
     --sidecar "$FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR" \

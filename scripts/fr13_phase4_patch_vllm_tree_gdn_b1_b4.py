@@ -577,8 +577,10 @@ def _fr13_draft_head_m1_live_register(
     _os = __import__("os")
     if _os.environ.get("FR13_DRAFT_HEAD_M1_LIVE_AB", "0") != "1":
         raise RuntimeError("FR13 draft-head M1 live state registered while off")
+    max_batch = int(_os.environ.get("FR13_DRAFT_HEAD_M1_MAX_BATCH", "1"))
     if (
         _FR13_DRAFT_HEAD_M1_LIVE_STATE is not None
+        or max_batch not in (1, 4)
         or tuple(compares.shape) != (5,)
         or tuple(mismatches.shape) != (5,)
         or str(compares.dtype) != "torch.int64"
@@ -611,6 +613,7 @@ def _fr13_draft_head_m1_live_register(
         "instance_id": _os.environ.get(
             "FR13_DRAFT_HEAD_M1_INSTANCE_ID", ""
         ),
+        "max_batch": max_batch,
     }
 
 
@@ -624,6 +627,7 @@ def _fr13_draft_head_m1_live_finalize(events, flush_binding):
     event_rows = list(events)
     event_count = len(event_rows)
     draft_events = sum(int(row.get("batch_size", -1)) for row in event_rows)
+    max_batch = int(_os.environ.get("FR13_DRAFT_HEAD_M1_MAX_BATCH", "1"))
     hex_chars = frozenset("0123456789abcdef")
     if (
         not isinstance(state, dict)
@@ -653,8 +657,17 @@ def _fr13_draft_head_m1_live_finalize(events, flush_binding):
             )
         )
         or event_count < 1
-        or draft_events != event_count
-        or any(int(row.get("batch_size", -1)) != 1 for row in event_rows)
+        or max_batch not in (1, 4)
+        or int(state.get("max_batch", -1)) != max_batch
+        or any(
+            int(row.get("batch_size", -1)) not in range(1, max_batch + 1)
+            for row in event_rows
+        )
+        or (max_batch == 1 and draft_events != event_count)
+        or (
+            max_batch == 4
+            and not any(int(row.get("batch_size", -1)) == 4 for row in event_rows)
+        )
         or int(flush_binding.get("complete_work_census_events", -1))
         != event_count
     ):
@@ -668,15 +681,21 @@ def _fr13_draft_head_m1_live_finalize(events, flush_binding):
         compares == (draft_events,) * 5
         and mismatches == (0,) * 5
     )
-    instance_id = state["instance_id"]
+    instance_id = (
+        state["instance_id"] if max_batch == 1 else "canonical_exact4_campaign"
+    )
     record = {
-        "schema": "fr13.fixed32.draft_head_full_m1_live_ab.v1",
+        "schema": (
+            "fr13.fixed32.draft_head_full_m1_live_ab.v1"
+            if max_batch == 1
+            else "fr13.fixed32.draft_head_full_b1_b4_live_ab.v1"
+        ),
         "status": "PASS" if exact else "FAIL",
         "suite": "SWE-Verified",
         "instance_id": instance_id,
         "task_marker": "swe_verified:" + instance_id,
-        "concurrency": 1,
-        "batch_size": 1,
+        "concurrency": max_batch,
+        "batch_size": max_batch,
         "source_commit": state["source_commit"],
         "candidate_source_sha256": state["candidate_source_sha256"],
         "patcher_sha256": state["patcher_sha256"],
@@ -20773,6 +20792,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_m1_prod_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_M1_PRODUCTION", "0"
             )
+            _fr13_dh_m1_max_batch_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_M1_MAX_BATCH", "1"
+            )
             if _fr13_dh_rows_raw not in ("0", "32", "64", "128"):
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_PAD_ROWS must be exactly one of "
@@ -20798,12 +20820,22 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_M1_PRODUCTION must be exactly 0 or 1"
                 )
+            if _fr13_dh_m1_max_batch_raw not in ("1", "4"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_M1_MAX_BATCH must be exactly 1 or 4"
+                )
             _fr13_dh_rows = int(_fr13_dh_rows_raw)
             _fr13_dh_ab = _fr13_dh_ab_raw == "1"
             _fr13_dh_m32_live = _fr13_dh_m32_live_raw == "1"
             _fr13_dh_m32_prod = _fr13_dh_m32_prod_raw == "1"
             _fr13_dh_m1_live = _fr13_dh_m1_live_raw == "1"
             _fr13_dh_m1_prod = _fr13_dh_m1_prod_raw == "1"
+            _fr13_dh_m1_max_batch = int(_fr13_dh_m1_max_batch_raw)
+            if _fr13_dh_m1_max_batch == 4 and not _fr13_dh_m1_live:
+                raise RuntimeError(
+                    "FR13 draft-head B1-B4 kernel is shadow-only until its "
+                    "exact4 byte gate passes"
+                )
             _fr13_dh_modes = sum(
                 int(value)
                 for value in (
@@ -20974,15 +21006,18 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     if _fr13_dh_m1_observed_sha != _fr13_dh_m1_so_sha:
                         raise RuntimeError("FR13 full-head M1 SO SHA-256 drifted")
                     torch.ops.load_library(str(_fr13_dh_m1_so))
-                    if not hasattr(
-                        torch.ops.fr13_bf16_head, "gemvx_m1_out"
-                    ):
+                    _fr13_dh_m1_op = (
+                        "gemvx_m1_out"
+                        if _fr13_dh_m1_max_batch == 1
+                        else "gemvx_b1_b4_out"
+                    )
+                    if not hasattr(torch.ops.fr13_bf16_head, _fr13_dh_m1_op):
                         raise RuntimeError(
-                            "FR13 full-head M1 SO did not register its CUDA op"
+                            "FR13 full-head M1/B4 SO did not register its CUDA op"
                         )
                     self._fr13_dh_m1_head = _fr13_dh_sh
                     self._fr13_dh_m1_output = torch.empty(
-                        (1, 248320),
+                        (_fr13_dh_m1_max_batch, 248320),
                         dtype=torch.bfloat16,
                         device=_fr13_dh_w.device,
                     )
@@ -21015,8 +21050,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     self._fr13_dh_m1_ready = True
                     print(
                         "[FR13_DRAFT_HEAD_M1] stock-order full-head CUDA op "
-                        "ready grid=[31040,1,1] block=[16,8,1] shared=544 "
-                        "output=[1,248320] weight=[248320,5120]",
+                        "ready grid=[31040,1,1] block=[16,8,1] "
+                        f"max_batch={_fr13_dh_m1_max_batch} "
+                        "weight=[248320,5120]",
                         flush=True,
                     )
                 if (
@@ -21271,43 +21307,63 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             def _fr13_dh_m1_logits(_h):
                 _fr13_dh_sh = getattr(self, "_fr13_dh_m1_head", None)
                 _fr13_dh_out = getattr(self, "_fr13_dh_m1_output", None)
+                _fr13_dh_batch = int(_h.shape[0]) if _h.dim() == 2 else -1
                 if (
                     not getattr(self, "_fr13_dh_m1_ready", False)
                     or _fr13_dh_sh is not self.model.lm_head
                     or type(_fr13_dh_sh).__name__ != "ParallelLMHead"
-                    or tuple(_h.shape) != (1, 5120)
+                    or _fr13_dh_batch not in range(
+                        1, _fr13_dh_m1_max_batch + 1
+                    )
+                    or tuple(_h.shape) != (_fr13_dh_batch, 5120)
                     or tuple(_h.stride()) != (5120, 1)
                     or _h.dtype != torch.bfloat16
                     or _h.device != _fr13_dh_sh.weight.device
                     or not torch.is_tensor(_fr13_dh_out)
-                    or tuple(_fr13_dh_out.shape) != (1, 248320)
+                    or tuple(_fr13_dh_out.shape)
+                    != (_fr13_dh_m1_max_batch, 248320)
                     or tuple(_fr13_dh_out.stride()) != (248320, 1)
                     or _fr13_dh_out.dtype != torch.bfloat16
                     or _fr13_dh_out.device != _h.device
                 ):
                     raise RuntimeError(
-                        "FR13 full-head M1 engaged outside exact contiguous "
-                        "BF16 hidden[1,5120] -> logits[1,248320] contract"
+                        "FR13 full-head M1/B4 engaged outside exact contiguous "
+                        "BF16 hidden[B,5120] -> logits[B,248320] contract"
                     )
-                torch.ops.fr13_bf16_head.gemvx_m1_out(
-                    _fr13_dh_out, _h, _fr13_dh_sh.weight
-                )
-                return _fr13_dh_out
+                _fr13_dh_served_out = _fr13_dh_out[:_fr13_dh_batch]
+                if _fr13_dh_m1_max_batch == 1:
+                    torch.ops.fr13_bf16_head.gemvx_m1_out(
+                        _fr13_dh_served_out, _h, _fr13_dh_sh.weight
+                    )
+                else:
+                    torch.ops.fr13_bf16_head.gemvx_b1_b4_out(
+                        _fr13_dh_served_out, _h, _fr13_dh_sh.weight
+                    )
+                return _fr13_dh_served_out
 
-            def _fr13_dh_m1_contract(_production=False):
+            def _fr13_dh_m1_contract(_production=False, _batch_size=None):
+                if _batch_size is None:
+                    _batch_size = _fr13_dh_m1_max_batch
+                _batch_size = int(_batch_size)
+                if _batch_size not in range(1, _fr13_dh_m1_max_batch + 1):
+                    raise RuntimeError(
+                        "FR13 full-head M1/B4 contract batch drifted"
+                    )
                 return {
                     "geometry": {
-                        "batch_size": 1,
-                        "supported_batch_sizes": [1],
+                        "batch_size": _batch_size,
+                        "supported_batch_sizes": list(
+                            range(1, _fr13_dh_m1_max_batch + 1)
+                        ),
                         "calls_per_event": 5,
                         "head_positions": [
                             "root", "mtp1", "mtp2", "mtp3", "mtp4"
                         ],
-                        "input_shape": [1, 5120],
+                        "input_shape": [_batch_size, 5120],
                         "input_stride": [5120, 1],
                         "weight_shape": [248320, 5120],
                         "weight_stride": [5120, 1],
-                        "output_shape": [1, 248320],
+                        "output_shape": [_batch_size, 248320],
                         "output_stride": [248320, 1],
                         "dtype": "torch.bfloat16",
                     },
@@ -21320,10 +21376,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             else "custom stock-order BF16 M1 GEMV shadow after "
                             "stock reference"
                         ),
-                        "gemv_mnk": [1, 248320, 5120],
+                        "gemv_mnk": [_batch_size, 248320, 5120],
                         "grid": [31040, 1, 1],
                         "block": [16, 8, 1],
-                        "dynamic_shared_bytes": 544,
+                        "dynamic_shared_bytes": 544 * _batch_size,
                         "shared_row_stride_floats": 17,
                         "k_partition_lanes": 16,
                         "lane_k_iterations": 320,
@@ -21336,12 +21392,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         ),
                         "output_conversion": "__float2bfloat16_rn",
                         "candidate_launches_per_head": 1,
-                        "served_rows": 1 if _production else 0,
-                        "shadow_compared_rows": 0 if _production else 1,
+                        "served_rows": _batch_size if _production else 0,
+                        "shadow_compared_rows": (
+                            0 if _production else _batch_size
+                        ),
                     },
                 }
 
-            def _fr13_dh_m1_measured_proposal():
+            def _fr13_dh_m1_measured_proposal(_batch_size):
                 from vllm.model_executor.layers.mamba import (
                     gdn_linear_attn as _fr13_dh_m1_proposal_gdn,
                 )
@@ -21355,12 +21413,16 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     not isinstance(_fr13_dh_m1_proposal, dict)
                     or _fr13_dh_m1_proposal.get("measured")
                     not in (True, False)
-                    or int(_fr13_dh_m1_proposal.get("batch_size", -1)) != 1
+                    or int(_batch_size) not in range(
+                        1, _fr13_dh_m1_max_batch + 1
+                    )
+                    or int(_fr13_dh_m1_proposal.get("batch_size", -1))
+                    != int(_batch_size)
                     or _fr13_dh_m1_proposal.get("mode")
                     != _fr13_dh_m1_proposal_gdn._FR13_FIXED32_MODE
                 ):
                     raise RuntimeError(
-                        "FR13 full-head M1 has no exact real-B1 proposal"
+                        "FR13 full-head M1/B4 has no exact proposal"
                     )
                 return _fr13_dh_m1_proposal["measured"] is True
 
@@ -21846,7 +21908,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr13_dh_capturing = (
                             torch.cuda.is_current_stream_capturing()
                         )
-                        _fr13_dh_measured = _fr13_dh_m1_measured_proposal()
+                        _fr13_dh_batch = int(_h.shape[0])
+                        _fr13_dh_measured = _fr13_dh_m1_measured_proposal(
+                            _fr13_dh_batch
+                        )
                         if _fr13_dh_capturing:
                             _fr13_dh_position = int(
                                 self._fr13_dh_m1_capture_position
@@ -21885,13 +21950,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         )
                         self._fr13_dh_m1_compares[
                             _fr13_dh_position
-                        ].add_(_fr13_dh_count_enable)
+                        ].add_(_fr13_dh_count_enable * _fr13_dh_batch)
                         _logits = _fr13_dh_reference
                     elif _fr13_dh_m1_prod_on:
                         _fr13_dh_capturing = (
                             torch.cuda.is_current_stream_capturing()
                         )
-                        _fr13_dh_m1_measured_proposal()
+                        _fr13_dh_m1_measured_proposal(int(_h.shape[0]))
                         _fr13_dh_candidate = _fr13_dh_m1_logits(_h)
                         _fr13_dh_m1_note_production(_fr13_dh_capturing)
                         _logits = _fr13_dh_candidate
@@ -31777,15 +31842,15 @@ def _patch_rejection_sampler_bonus_handoff() -> bool:
     text = text.replace(
         "            # Override the logprobs mode to return logits because they are\n"
         "            # needed later to compute the accepted token logprobs.\n"
-        '            logprobs_mode_override="processed_logits"\n' 
+        '            logprobs_mode_override="processed_logits"\n'
         "            if self.is_processed_logprobs_mode\n"
-        '            else "raw_logits",\n' 
+        '            else "raw_logits",\n'
         "        )\n",
         "                # Override the logprobs mode to return logits (needed\n"
         "                # later for accepted token logprobs).\n"
-        '                logprobs_mode_override="processed_logits"\n' 
+        '                logprobs_mode_override="processed_logits"\n'
         "                if self.is_processed_logprobs_mode\n"
-        '                else "raw_logits",\n' 
+        '                else "raw_logits",\n'
         "            )\n",
         1,
     )

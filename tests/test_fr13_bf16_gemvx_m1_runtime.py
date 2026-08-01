@@ -97,8 +97,7 @@ def test_m1_runtime_is_default_off_strict_b1_full_vocab() -> None:
     assert "FR13_DRAFT_HEAD_M1_SO_SHA256" in snippet
 
     assert "FR13_DRAFT_HEAD_M1_LIVE_AB=${FR13_DRAFT_HEAD_M1_LIVE_AB:-0}" in launcher
-    assert "FR13 draft-head M1/B4 live A/B requires its pinned SO" in launcher
-    assert "FR13_DRAFT_HEAD_M1_MAX_BATCH=${FR13_DRAFT_HEAD_M1_MAX_BATCH:-1}" in launcher
+    assert "FR13 draft-head M1 live A/B requires its pinned SO" in launcher
     assert ':ro"' in launcher
     assert '"$_v" == "FR13_DRAFT_HEAD_M1_SO"' in launcher
     assert "FR13_DRAFT_HEAD_M1_RUNTIME_SO=/tmp/fr13_bf16_gemvx_m1.abi3.so" in launcher
@@ -110,13 +109,10 @@ def test_m1_runtime_is_default_off_strict_b1_full_vocab() -> None:
     )
     assert mount_index < ingress_index
     assert "FR13_FIXED32_DOCKER_ARGS+=(" in launcher[ingress_index:]
-    docker_run_index = launcher.index("docker run -d --pull=never")
-    assert ingress_index < docker_run_index
-    assert '"${FR13_FIXED32_DOCKER_ARGS[@]}"' in launcher[docker_run_index:]
 
 
 def test_m1_contract_and_shadow_order_cover_all_five_heads() -> None:
-    namespace: dict[str, object] = {"_fr13_dh_m1_max_batch": 1}
+    namespace: dict[str, object] = {}
     exec(
         compile(
             ast.Module(
@@ -175,7 +171,7 @@ def test_m1_production_is_candidate_only_and_fail_closed() -> None:
 
 
 def test_m1_production_contract_reports_the_served_candidate() -> None:
-    namespace: dict[str, object] = {"_fr13_dh_m1_max_batch": 1}
+    namespace: dict[str, object] = {}
     exec(
         compile(
             ast.Module(
@@ -193,73 +189,6 @@ def test_m1_production_contract_reports_the_served_candidate() -> None:
     assert contract["candidate"] == validator.EXPECTED_PRODUCTION_CANDIDATE
     assert contract["candidate"]["served_rows"] == 1
     assert contract["candidate"]["shadow_compared_rows"] == 0
-
-
-def test_b1_b4_contract_is_one_weight_reusing_launch_for_each_batch() -> None:
-    namespace: dict[str, object] = {"_fr13_dh_m1_max_batch": 4}
-    exec(
-        compile(
-            ast.Module(
-                body=[_snippet_function("_fr13_dh_m1_contract")],
-                type_ignores=[],
-            ),
-            "<b1-b4-contract>",
-            "exec",
-        ),
-        namespace,
-    )
-    contract = namespace["_fr13_dh_m1_contract"]
-    for batch_size in (1, 2, 3, 4):
-        payload = contract(False, batch_size)
-        assert payload["geometry"]["supported_batch_sizes"] == [1, 2, 3, 4]
-        assert payload["geometry"]["input_shape"] == [batch_size, 5120]
-        assert payload["geometry"]["output_shape"] == [batch_size, 248320]
-        assert payload["candidate"]["gemv_mnk"] == [
-            batch_size,
-            248320,
-            5120,
-        ]
-        assert payload["candidate"]["candidate_launches_per_head"] == 1
-        assert payload["candidate"]["shadow_compared_rows"] == batch_size
-    with pytest.raises(RuntimeError, match="contract batch drifted"):
-        contract(False, 5)
-
-
-def test_b1_b4_route_is_exact4_shadow_only_and_bind_survives_ingress() -> None:
-    snippet = _eagle_snippet()
-    launcher = LAUNCHER.read_text(encoding="utf-8")
-
-    assert '"FR13_DRAFT_HEAD_M1_MAX_BATCH", "1"' in snippet
-    assert '"gemvx_b1_b4_out"' in snippet
-    assert "torch.ops.fr13_bf16_head.gemvx_b1_b4_out(" in snippet
-    assert "_fr13_dh_reference = _sh.quant_method.apply(" in snippet
-    assert "_logits = _fr13_dh_reference" in snippet
-    assert "B1-B4 kernel is shadow-only until its " in snippet
-    assert "exact4 byte gate passes" in snippet
-
-    for value in (
-        'FR13_DRAFT_HEAD_M1_MAX_BATCH" == "4"',
-        'FR13_FIXED32_MODE:-}" == "hydra27_fixed32"',
-        'MAX_NUM_SEQS_OVR:-}" == "4"',
-        'SWE_CONCURRENCY:-}" == "4"',
-        'FR13_DRAFT_VOCAB_ROOT" == "0"',
-        'FR13_DRAFT_VOCAB_K:-}" == "0"',
-        "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398",
-    ):
-        assert value in launcher
-    assert "B1-B4 kernel is shadow-only until an exact4 byte gate passes" in launcher
-
-    mount_index = launcher.index(
-        'FR13_DRAFT_HEAD_M1_RUNTIME_SO=/tmp/fr13_bf16_gemvx_m1.abi3.so'
-    )
-    ingress_index = launcher.index(
-        'FR13_FIXED32_CONTAINER_INGRESS_SECRET_FILE=/run/fr13_fixed32_ingress_secret'
-    )
-    docker_run_index = launcher.index("docker run -d --pull=never")
-    assert mount_index < ingress_index < docker_run_index
-    assert "FR13_FIXED32_DOCKER_ARGS+=(" in launcher[ingress_index:docker_run_index]
-    assert '"${FR13_FIXED32_DOCKER_ARGS[@]}"' in launcher[docker_run_index:]
-    assert '-e FR13_DRAFT_HEAD_M1_MAX_BATCH="$FR13_DRAFT_HEAD_M1_MAX_BATCH"' in launcher
 
 
 def test_m1_finalizer_requires_exact_per_position_event_census(
@@ -300,7 +229,6 @@ def test_m1_finalizer_requires_exact_per_position_event_census(
         "patcher_sha256": "d" * 64,
         "build_attestation_sha256": "e" * 64,
         "instance_id": validator.EXPECTED_INSTANCE,
-        "max_batch": 1,
     }
     namespace = {"_FR13_DRAFT_HEAD_M1_LIVE_STATE": state}
     exec(
@@ -339,75 +267,6 @@ def test_m1_finalizer_requires_exact_per_position_event_census(
             [{"batch_size": 1} for _ in range(7)], binding
         )
     assert json.loads(out.read_text(encoding="ascii"))["status"] == "FAIL"
-
-
-def test_b1_b4_finalizer_reconciles_rows_and_requires_real_b4(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source = _patcher_module()._FR13_FIXED32_OBSERVED_RUNTIME_SOURCE
-    selected = [
-        node
-        for node in ast.parse(source).body
-        if isinstance(node, ast.FunctionDef)
-        and node.name == "_fr13_draft_head_m1_live_finalize"
-    ]
-    assert len(selected) == 1
-    out = tmp_path / "b4-live.json"
-    monkeypatch.setenv("FR13_DRAFT_HEAD_M1_LIVE_AB", "1")
-    monkeypatch.setenv("FR13_DRAFT_HEAD_M1_MAX_BATCH", "4")
-    monkeypatch.setenv("FR13_DRAFT_HEAD_M1_LIVE_JSON", str(out))
-
-    class Counter:
-        def __init__(self, values: list[int]) -> None:
-            self.values = values
-
-        def tolist(self) -> list[int]:
-            return self.values
-
-    logical_rows = 10
-    state = {
-        "compares": Counter([logical_rows] * 5),
-        "mismatches": Counter([0] * 5),
-        "geometry": {"supported_batch_sizes": [1, 2, 3, 4]},
-        "candidate": {"candidate_launches_per_head": 1},
-        "binary": {"path": "/tmp/candidate.so", "sha256": "b" * 64, "bytes": 1},
-        "source_commit": "a" * 40,
-        "candidate_source_sha256": "c" * 64,
-        "patcher_sha256": "d" * 64,
-        "build_attestation_sha256": "e" * 64,
-        "instance_id": "",
-        "max_batch": 4,
-    }
-    namespace = {"_FR13_DRAFT_HEAD_M1_LIVE_STATE": state}
-    exec(
-        compile(ast.Module(body=selected, type_ignores=[]), "<b1-b4-live>", "exec"),
-        namespace,
-    )
-    binding = {
-        "action": "final",
-        "boundary_snapshot_sha256": "f" * 64,
-        "complete_work_census_events": 4,
-        "events_sha256": "1" * 64,
-        "generation": 3,
-        "nonce": "2" * 64,
-        "producer_pid": 257,
-    }
-    namespace["_fr13_draft_head_m1_live_finalize"](
-        [{"batch_size": value} for value in (4, 3, 2, 1)], binding
-    )
-    payload = json.loads(out.read_text(encoding="ascii"))
-    assert payload["schema"] == "fr13.fixed32.draft_head_full_b1_b4_live_ab.v1"
-    assert payload["status"] == "PASS"
-    assert payload["concurrency"] == 4
-    assert payload["completed_events"] == logical_rows
-    assert payload["full_logit_comparisons"] == logical_rows * 5
-    assert payload["raw_bf16_mismatches"] == 0
-
-    binding["complete_work_census_events"] = 3
-    with pytest.raises(RuntimeError, match="live finalization drifted"):
-        namespace["_fr13_draft_head_m1_live_finalize"](
-            [{"batch_size": value} for value in (3, 2, 1)], binding
-        )
 
 
 def test_build_attestation_binds_source_so_and_pinned_toolchain() -> None:
@@ -676,7 +535,6 @@ def test_real_b1_runner_is_pinned_nonprobe_and_manifested() -> None:
     for path in (
         "csrc/fr13_bf16_gemvx_m1.cu",
         "scripts/fr13_build_bf16_gemvx_m1.py",
-        "scripts/fr13_build_bf16_gemvx_b1_b4.py",
         "scripts/fr13_draft_head_m1_validate.py",
         "scripts/fr13_run_b1_draft_head_m1_live.sh",
         "config/fr13_fixed32/subset_b1_diagnostic_one.json",

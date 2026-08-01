@@ -5,13 +5,12 @@ from pathlib import Path
 
 
 REPO = Path(__file__).resolve().parents[1]
-CUDA = REPO / "csrc" / "fr13_bf16_gemvx_m1.cu"
+CUDA = REPO / "csrc" / "fr13_bf16_gemvx_b1_b4.cu"
 BUILDER = REPO / "scripts" / "fr13_build_bf16_gemvx_b1_b4.py"
 
 
 def _candidate_source() -> str:
-    source = CUDA.read_text(encoding="ascii")
-    return source[source.index("// B1-B4 uses") :]
+    return CUDA.read_text(encoding="ascii")
 
 
 def test_b1_b4_kernel_reuses_each_weight_across_request_rows() -> None:
