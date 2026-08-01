@@ -19,7 +19,7 @@ def _module():
 
 def _source_fixture(module) -> str:
     return f"""{module.INCLUDE_ANCHOR}
-namespace vllm {{
+{module.SCHEDULER_SPECIALIZATION_ANCHOR}
 using namespace cute;
 
 template <class OutType, int ScaleGranularityM,
@@ -94,6 +94,8 @@ def test_patch_is_default_off_and_shape_gated() -> None:
     assert 'value == "streamk_coop128_byte_ab"' in patched
     assert 'value == "streamk_force_wide256"' in patched
     assert 'value == "streamk_force_wide256_byte_ab"' in patched
+    assert 'value == "static_persistent_stocktile"' in patched
+    assert 'value == "static_persistent_stocktile_byte_ab"' in patched
     assert "return fixed32_cutlass_wave_variant::stock;" in patched
     for rows in (32, 64, 96, 128):
         assert f"m == {rows}" in patched
@@ -112,8 +114,8 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 3
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 3
-    assert "PingpongSm120" not in module.CONFIG_REPLACEMENT
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 5
+    assert module.CONFIG_REPLACEMENT.count("PingpongSm120") == 1
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
     assert "OutType, 1, 128, 128, TileShape, ClusterShape" in patched
@@ -126,11 +128,63 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
         "      cutlass::gemm::StreamKScheduler, true,\n"
         "      cutlass::gemm::collective::StageCount<2>>"
     ) in patched
-    assert "using TileShape = Shape<_64, _128, _128>;" not in patched
+    assert patched.count("using TileShape = Shape<_64, _128, _128>;") == 1
     assert "MainloopStageCount" in patched
     assert "cutlass::gemm::collective::StageCount<2>" in patched
     assert "ElementAccumulator = float" not in module.CONFIG_REPLACEMENT
     assert "ElementD" not in module.CONFIG_REPLACEMENT
+
+
+def test_static_persistent_candidate_only_changes_tile_allocator() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    assert "struct fr13_fixed32_static_persistent_scheduler {};" in patched
+    assert (
+        "using Scheduler = StaticPersistentTileScheduler100;" in patched
+    )
+    assert (
+        "vllm::fr13_fixed32_static_persistent_scheduler, arch::Sm120" in patched
+    )
+    assert "cutlass_3x_gemm_fp8_blockwise_static_persistent" in patched
+    assert (
+        "Shape<int, int, int, int>, typename Base::CollectiveMainloop,\n"
+        "      typename Base::CollectiveEpilogue,\n"
+        "      fr13_fixed32_static_persistent_scheduler>>"
+    ) in patched
+    assert (
+        "using TileShape = Shape<_128, _32, _128>;" in patched
+    )
+    assert (
+        "using TileShape = Shape<_64, _128, _128>;" in patched
+    )
+    assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
+    assert "OutType, 1, 128, 128, TileShape, ClusterShape" in patched
+    assert "static_persistent_stocktile" in patched
+    assert "scheduler.splits" not in patched[
+        patched.index("auto run_static_persistent_stocktile"):
+        patched.index("auto run_stock")
+    ]
+
+
+def test_static_persistent_dispatch_covers_b1_and_b4_stock_geometries() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    candidate = patched[
+        patched.index("auto run_static_persistent_stocktile"):
+        patched.index("auto run_stock")
+    ]
+    assert "if (M <= 64)" in candidate
+    assert (
+        "sm120_blockwise_fp8_config_swapab_static_persistent<OutType>::Gemm"
+        in candidate
+    )
+    assert (
+        "sm120_blockwise_fp8_config_pingpong_static_persistent<OutType>::Gemm"
+        in candidate
+    )
+    assert "M > 64" not in candidate
 
 
 def test_wide256_is_b1_only_and_large_rows_fail_to_stock() -> None:
@@ -257,9 +311,14 @@ def test_same_process_byte_ab_is_bounded_and_returns_stock() -> None:
     assert '\\"mismatch_count\\"' in module.DISPATCH_REPLACEMENT
     assert '"/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl"' in patched
     assert '"/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl"' in patched
+    assert (
+        '"/logs/fr13_fixed32_cutlass_static_persistent_byte_ab.jsonl"'
+        in patched
+    )
     assert '\\"byte_equal\\"' in module.DISPATCH_REPLACEMENT
     assert "return run_stock(out);" in patched
     assert "fr13.fixed32.cutlass_streamk_wide256_byte_ab.v1" in patched
+    assert "fr13.fixed32.cutlass_static_persistent_byte_ab.v1" in patched
 
 
 def test_unarmed_boot_warm_cannot_dispatch_candidate_or_consume_gate() -> None:
