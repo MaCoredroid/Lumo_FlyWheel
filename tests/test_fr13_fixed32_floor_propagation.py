@@ -13,6 +13,8 @@ from scripts.fr13_hardware_floor_ledger import (
     FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
     FIXED32_SLO_CAP_MS,
     FIXED32_SLO_MULTIPLIER,
+    FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
+    FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
     build_ledger,
 )
 
@@ -38,6 +40,8 @@ def test_canonical_fixed32_floor_math() -> None:
         == FIXED32_MANDATORY_WEIGHT_FLOOR_MS
     )
     assert scenario["nonweight_costs_included"] is False
+    assert FULL_VOCAB_MANDATORY_WEIGHT_BYTES == 42_025_179_008
+    assert FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS == 153.938384645
 
 
 def test_fixed32_gate_uses_corrected_weight_bound_and_exact_cap() -> None:
@@ -55,15 +59,30 @@ def test_fixed32_gate_uses_corrected_weight_bound_and_exact_cap() -> None:
     assert compute_cap == pytest.approx(186.3)
 
 
-def test_fixed32_sequence_exports_corrected_floor() -> None:
+@pytest.mark.parametrize(
+    ("draft_vocab_k", "draft_vocab_root", "expected_bytes", "expected_floor"),
+    (
+        ("0", "0", "42025179008", "153.938384645"),
+        ("65536", "0", "34538346368", "126.514089260"),
+        ("65536", "1", "32666638208", "119.658015414"),
+    ),
+)
+def test_fixed32_sequence_exports_exact_configured_floor(
+    draft_vocab_k: str,
+    draft_vocab_root: str,
+    expected_bytes: str,
+    expected_floor: str,
+) -> None:
     command = f"""
 set -euo pipefail
 run_variant() {{ :; }}
 export BSIZE=1
 export CONC=1
 export TAG=floor_test
+export FR13_DRAFT_VOCAB_K={draft_vocab_k}
+export FR13_DRAFT_VOCAB_ROOT={draft_vocab_root}
 source {SEQUENCE}
-printf '%s' "$FR13_WEIGHT_FLOOR_MS"
+printf '%s %s' "$FR13_MANDATORY_WEIGHT_BYTES" "$FR13_WEIGHT_FLOOR_MS"
 """
     result = subprocess.run(
         ["bash", "-c", command],
@@ -72,7 +91,7 @@ printf '%s' "$FR13_WEIGHT_FLOOR_MS"
         text=True,
         cwd=REPO,
     )
-    assert result.stdout == f"{FIXED32_MANDATORY_WEIGHT_FLOOR_MS:.9f}"
+    assert result.stdout == f"{expected_bytes} {expected_floor}"
 
 
 def test_active_fixed32_paths_cannot_fall_back_to_legacy_floor() -> None:

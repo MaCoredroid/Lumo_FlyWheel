@@ -86,14 +86,21 @@ GATE_RUNNER_SHA256=$(sha256sum "$GATE_RUNNER" | awk '{print $1}')
 export BSIZE=4
 export CONC=4
 export WALL=0
-export FR13_DRAFT_VOCAB_ROOT=1
+export FR13_DRAFT_VOCAB_ROOT=0
+export FR13_DRAFT_VOCAB_K=0
+export FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0"
 export FR13_FLOOR_ORDER=TH
 source scripts/fr13_canonical_env.sh
 run_variant() { :; }
 source "$SEQUENCE"
 unset -f run_variant
+[[ "$FR13_DRAFT_VOCAB_ROOT" == "0" \
+   && "$FR13_DRAFT_VOCAB_K" == "0" \
+   && "$FR13_MANDATORY_WEIGHT_BYTES" == "42025179008" \
+   && "$FR13_WEIGHT_FLOOR_MS" == "153.938384645" ]] \
+  || { echo "full-vocabulary fixed32 floor contract did not engage" >&2; exit 2; }
 
-printf 'classification=real_swe_verified_exact4_b4_timing_candidate\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\narm=hydra27_fixed32\nlineage=successor_to_legacy_hydra23_not_same_topology\nfixed32_mode=hydra27_fixed32\nphysical_drafts=31\nactive_drafts=27\nvalid_mask=0x7abdffff\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\ngraph_pass_sha256=%s\ngraph_gate_verdict_sha256=%s\nruntime_manifest_sha256=%s\ngate_runner_sha256=%s\nfr10_metrics=1\nring_export=1\nflags_inkernel=1\ntree_gdn_geom_override=BV=8\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_exact4_b4_timing_candidate\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\narm=hydra27_fixed32\nlineage=successor_to_legacy_hydra23_not_same_topology\nfixed32_mode=hydra27_fixed32\nphysical_drafts=31\nactive_drafts=27\nvalid_mask=0x7abdffff\ndraft_vocab_k=0\ndraft_vocab_root=0\nmandatory_weight_bytes=42025179008\nweight_floor_ms=153.938384645\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\ngraph_pass_sha256=%s\ngraph_gate_verdict_sha256=%s\nruntime_manifest_sha256=%s\ngate_runner_sha256=%s\nfr10_metrics=1\nring_export=1\nflags_inkernel=1\ntree_gdn_geom_override=BV=8\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
   "$$" "$RUNROOT_ABS" "$STOCK_ARM" "$CANDIDATE_ARM" \
   "$(git rev-parse HEAD)" "$RUNNER_SHA256" "$SUBSET_SHA256" \
   "$STOCK_FA2_SHA256" "$GRAPH_PASS_SHA256" \
@@ -300,6 +307,13 @@ def validate(record, label):
         or record.get("n_tasks") != 4
         or sorted(record.get("task_instance_ids", [])) != task_ids
         or record.get("floor_is_full_step_hardware_floor") is not False
+        or record.get("mandatory_weight_bytes") != 42_025_179_008
+        or not math.isclose(
+            float(record.get("weight_floor_ms", 0.0)),
+            153.938384645,
+            rel_tol=0.0,
+            abs_tol=1e-9,
+        )
     ):
         raise SystemExit(f"{label} deploy-speed provenance is not exact4 B4")
     for key in (

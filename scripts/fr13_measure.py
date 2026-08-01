@@ -162,8 +162,11 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from fr13_hardware_floor_ledger import (  # noqa: E402
     BANDWIDTH_BYTES_PER_S,
+    CURRENT_MANDATORY_WEIGHT_BYTES,
     FIXED32_MANDATORY_WEIGHT_BYTES,
     FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
+    FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
+    FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
 )
 
 REPO = Path(__file__).resolve().parent.parent
@@ -1639,12 +1642,61 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     # Corrected fixed32 lower-bound accounting includes every mandatory target,
     # verifier-head, MTP, and drafter-head weight stream in one event. It remains
     # optimistic because nonweight traffic and execution costs are excluded.
+    _draft_vocab_config = (
+        int(os.environ.get("FR13_DRAFT_VOCAB_K", "65536")),
+        int(os.environ.get("FR13_DRAFT_VOCAB_ROOT", "0")),
+    )
+    _known_weight_ledgers = {
+        (0, 0): (
+            FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
+            FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
+            "five full-vocabulary drafter-head reads",
+        ),
+        (65_536, 0): (
+            CURRENT_MANDATORY_WEIGHT_BYTES,
+            CURRENT_MANDATORY_WEIGHT_BYTES * 1000.0 / BANDWIDTH_BYTES_PER_S,
+            "one full and four 64K drafter-head reads",
+        ),
+        (65_536, 1): (
+            FIXED32_MANDATORY_WEIGHT_BYTES,
+            FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
+            "five 64K drafter-head reads",
+        ),
+    }
+    if _draft_vocab_config not in _known_weight_ledgers:
+        raise RuntimeError(
+            "unsupported fixed32 draft-vocabulary floor configuration: "
+            f"K={_draft_vocab_config[0]} ROOT={_draft_vocab_config[1]}"
+        )
+    (
+        _mandatory_weight_bytes,
+        _expected_weight_floor_ms,
+        _drafter_head_floor_scope,
+    ) = _known_weight_ledgers[_draft_vocab_config]
+    _declared_weight_bytes = int(
+        os.environ.get("FR13_MANDATORY_WEIGHT_BYTES", _mandatory_weight_bytes)
+    )
+    if _declared_weight_bytes != _mandatory_weight_bytes:
+        raise RuntimeError(
+            "FR13_MANDATORY_WEIGHT_BYTES does not match draft-vocabulary "
+            f"configuration: {_declared_weight_bytes} != {_mandatory_weight_bytes}"
+        )
     _weight_floor_ms = float(
         os.environ.get(
             "FR13_WEIGHT_FLOOR_MS",
-            f"{FIXED32_MANDATORY_WEIGHT_FLOOR_MS:.9f}",
+            f"{_expected_weight_floor_ms:.9f}",
         )
     )
+    if not math.isclose(
+        _weight_floor_ms,
+        _expected_weight_floor_ms,
+        rel_tol=0.0,
+        abs_tol=1e-9,
+    ):
+        raise RuntimeError(
+            "FR13_WEIGHT_FLOOR_MS does not match draft-vocabulary "
+            f"configuration: {_weight_floor_ms} != {_expected_weight_floor_ms}"
+        )
     _events_per_step_f = events_per_step if events_per_step else None
     step_wall_ms = (
         wall_s_per_event * 1000.0 * _events_per_step_f
@@ -1837,7 +1889,7 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "measured_tps_fullstep_wall": measured_tps_fullstep_wall,
         "step_wall_ms": step_wall_ms,
         "weight_floor_ms": _weight_floor_ms,
-        "mandatory_weight_bytes": FIXED32_MANDATORY_WEIGHT_BYTES,
+        "mandatory_weight_bytes": _mandatory_weight_bytes,
         "weight_floor_bandwidth_bytes_per_s": BANDWIDTH_BYTES_PER_S,
         "compute_floor_ms": _compute_floor_ms,
         "rows_per_step": _rows_per_step,
@@ -1851,9 +1903,9 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
             "step_wall_ms / floor(B), where floor(B) = max(weight-read "
             f"{_weight_floor_ms:.9f}ms [FR13_WEIGHT_FLOOR_MS], compute "
             "0.54ms/row x rows_per_step [FR13_COMPUTE_MS_PER_ROW]). The "
-            f"weight term is {FIXED32_MANDATORY_WEIGHT_BYTES:,} mandatory bytes "
+            f"weight term is {_mandatory_weight_bytes:,} mandatory bytes "
             f"/ {BANDWIDTH_BYTES_PER_S:,} bytes/s and includes target, verifier "
-            "head, five MTP forwards, and five 64K drafter-head reads. It is an "
+            f"head, five MTP forwards, and {_drafter_head_floor_scope}. It is an "
             "optimistic weight-read-only lower bound: KV/state/activation traffic, "
             "attention, scan, sampling, committer work, launches, synchronization, "
             "and host gaps are excluded. A ratio of 1.0 is equality with that "

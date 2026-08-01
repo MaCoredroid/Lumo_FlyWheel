@@ -85,10 +85,27 @@ export FR13_CONV_COMMITTED_PATH=1
 export FR13_APC_COMMIT_TO_RUNNING_ROW=1
 export FR13_TREE_RUNROW_INIT=1
 export FR13_FLAGS_INKERNEL=1
-# Optimistic mandatory-weight-read floor only: 32,666,638,208 bytes / 273 GB/s.
-# The launcher contract pins this value, so an inherited legacy floor cannot
-# weaken a new fixed32 acceptance run.
-export FR13_WEIGHT_FLOOR_MS=119.658015414
+# Optimistic mandatory-weight-read floor only. Select the exact logical head
+# traffic for the configured draft vocabulary; an inherited legacy floor must
+# not weaken a fixed32 run.
+case "${FR13_DRAFT_VOCAB_K:-65536}:$FR13_DRAFT_VOCAB_ROOT" in
+  0:0)
+    export FR13_MANDATORY_WEIGHT_BYTES=42025179008
+    export FR13_WEIGHT_FLOOR_MS=153.938384645
+    ;;
+  65536:0)
+    export FR13_MANDATORY_WEIGHT_BYTES=34538346368
+    export FR13_WEIGHT_FLOOR_MS=126.514089260
+    ;;
+  65536:1)
+    export FR13_MANDATORY_WEIGHT_BYTES=32666638208
+    export FR13_WEIGHT_FLOOR_MS=119.658015414
+    ;;
+  *)
+    echo "unsupported fixed32 draft-vocab floor configuration: K=${FR13_DRAFT_VOCAB_K:-unset} ROOT=$FR13_DRAFT_VOCAB_ROOT" >&2
+    exit 2
+    ;;
+esac
 export FR13_COMPUTE_MS_PER_ROW=0.54
 export MAX_MODEL_LEN=131072
 export FR13_ENABLE_APC=1
