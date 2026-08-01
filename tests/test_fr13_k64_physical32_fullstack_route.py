@@ -312,8 +312,24 @@ def test_prepared_campaign_requires_corrected_b4_inputs_and_claims_no_measuremen
     assert "GDN_LEVEL0_COEFF_LIVE_PASS" in source
     assert "GDN_LEVEL0_COEFF_GATE_SUMMARY" in source
     assert "4725178944" in source
-    assert readiness["corrected_b4_review_tip"].startswith("68336f72a")
+    assert readiness["corrected_b4_review_tip"] == (
+        "080c417ed627e155c98e715327e0fdeb48d542ab"
+    )
+    assert readiness["corrected_b4_code_fix"].startswith("9f30d84dc")
+    assert readiness["corrected_b4_work_census_source_commit"].startswith(
+        "07a0d0e46"
+    )
     assert readiness["corrected_b4_trace_capture_integration"].startswith("4d0c57617")
+    terminal = readiness["corrected_b4_terminal_census"]
+    assert terminal["mandatory_terminal_record_validated_separately"] is True
+    assert terminal["reports_rederived_from_raw_census_bytes"] is True
+    abort = readiness["prior_b4_attempt"]
+    assert abort["classification"] == "aborted_known_invalid_source"
+    assert abort["reduced_metadata_only"] is True
+    assert abort["formal_production_pass"] is False
+    assert abort["formal_byte_verdict"] is False
+    assert abort["timing_summary"] is False
+    assert abort["accepted_as_b1_prerequisite"] is False
     assert readiness["pre_review_b4_artifacts_accepted"] is False
     gdn = readiness["gdn_level0_coeff"]
     assert gdn["production_in_both_timing_arms"] is True

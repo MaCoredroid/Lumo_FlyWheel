@@ -21,9 +21,31 @@
     "prior_258048_byte_cutoff_closed": true
   },
   "corrected_b4_review_branch": "agent/fixed32-b4-tail23-hydra27-k64-m128-review",
-  "corrected_b4_review_tip": "68336f72ada43aa1e9681329e58dc031d2a69491",
-  "corrected_b4_code_fix": "6ed4a55df803c5a7b9190e9c0de0498085a9b9d0",
+  "corrected_b4_review_tip": "080c417ed627e155c98e715327e0fdeb48d542ab",
+  "corrected_b4_code_fix": "9f30d84dc68f97bfd871862db829b7048e921847",
+  "corrected_b4_work_census_source_commit": "07a0d0e4613bb4a7ef750120700ba9a2387f58d7",
+  "corrected_b4_phase_math_fix": "6ed4a55df803c5a7b9190e9c0de0498085a9b9d0",
   "corrected_b4_trace_capture_integration": "4d0c57617e6a3675dddf8f76ecbee376b710220e",
+  "corrected_b4_terminal_census": {
+    "mandatory_terminal_record_validated_separately": true,
+    "reports_rederived_from_raw_census_bytes": true,
+    "raw_identity_bound": true,
+    "one_physical_work_signature_across_modes_and_arms": true
+  },
+  "prior_b4_attempt": {
+    "source_commit": "68336f72ada43aa1e9681329e58dc031d2a69491",
+    "classification": "aborted_known_invalid_source",
+    "reduced_metadata_only": true,
+    "tail23_all_parent_launched": true,
+    "formal_production_pass": false,
+    "formal_byte_verdict": false,
+    "m128_gate": false,
+    "timing_summary": false,
+    "tps_evidence": false,
+    "acceptance_evidence": false,
+    "hardware_floor_evidence": false,
+    "accepted_as_b1_prerequisite": false
+  },
   "pre_review_b4_artifacts_accepted": false,
   "source_contract_schema": "fr13-fixed32-taw-all-parent-v7",
   "source_contract_sha256": "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290",

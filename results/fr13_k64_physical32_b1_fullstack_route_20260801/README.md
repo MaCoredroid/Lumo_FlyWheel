@@ -7,10 +7,20 @@ The immutable implementation commit is
 `7064f094e43c6b1f14ac358f31bfc8858de3b136`. It is based on the reviewed B1
 full-stack route `c3ee2fece6daa17927ec216ff0135c5cf3ebb1e0`. The route consumes only the
 corrected TAW B4 review contract from the current route tip
-`68336f72ada43aa1e9681329e58dc031d2a69491` (code fix
-`6ed4a55df803c5a7b9190e9c0de0498085a9b9d0`, direct-file trace integration
+`080c417ed627e155c98e715327e0fdeb48d542ab` (terminal-census code fix
+`9f30d84dc68f97bfd871862db829b7048e921847`, source commit
+`07a0d0e4613bb4a7ef750120700ba9a2387f58d7`, phase-math fix
+`6ed4a55df803c5a7b9190e9c0de0498085a9b9d0`, and direct-file trace integration
 `4d0c57617e6a3675dddf8f76ecbee376b710220e`). It rejects the pre-review B4
 bundle format.
+
+The B4 attempt launched from `68336f72ada43aa1e9681329e58dc031d2a69491`
+is classified `aborted_known_invalid_source`: its timing reducer treated the
+mandatory v9 terminal census record as an event. Only the Tail23 all-parent
+stage launched, and the operator stopped it before any formal production pass,
+byte verdict, M128 gate, timing summary, TPS, acceptance, or hardware-floor
+result. That reduced abort metadata is not a B1 prerequisite and cannot be
+substituted for the corrected Tail23/Hydra27 pass and verdict inputs.
 
 The fixed32 remote-agent trace route includes direct in-container Qwen capture
 from `31de2814e10c1097bb5e6c18a32378e27b14cd47`, integrated here as

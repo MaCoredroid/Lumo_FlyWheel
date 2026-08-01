@@ -1,5 +1,9 @@
 Implementation commit: 7064f094e43c6b1f14ac358f31bfc8858de3b136
 Direct-file Qwen trace integration: 8754b8c77db2872ab22b42c29de596ab9d1a3c10
+B4 final reviewed source: 080c417ed627e155c98e715327e0fdeb48d542ab
+B4 terminal-census fix: 9f30d84dc68f97bfd871862db829b7048e921847
+B4 terminal-census source: 07a0d0e4613bb4a7ef750120700ba9a2387f58d7
+Prior B4 attempt: aborted_known_invalid_source, reduced metadata only
 Date: 2026-08-01 UTC
 
 PASS: 26 tests, 2 CUDA-dependent skips
