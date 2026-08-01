@@ -1,0 +1,77 @@
+{
+  "schema": "fr13.fixed32.gdn_parent_group.source_candidate.v1",
+  "created_at_utc": "2026-08-01T22:48:18Z",
+  "status": "SOURCE_ONLY_DEFAULT_OFF_NO_GPU_MEASUREMENT",
+  "base": {
+    "branch": "agent/fixed32-b4-tail23-hydra27-k64-m128-review",
+    "commit": "080c417ed627e155c98e715327e0fdeb48d542ab"
+  },
+  "candidate": {
+    "id": "fixed32_gdn_parent_group_v1",
+    "kernel": "_tree_gdn_path_kernel_fixed32_parent_group",
+    "file": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+    "patch_wiring": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+    "batch_sizes": [1, 2, 3, 4],
+    "physical_rows_per_request": 32,
+    "block_v": 8,
+    "logical_level_grid_z": [1, 11],
+    "candidate_level_grid_z": [1, 5],
+    "logical_programs_per_request_layer": 12,
+    "candidate_programs_per_request_layer": 6,
+    "level1_parent_reads_reference": 11,
+    "level1_parent_reads_candidate": 5,
+    "parent_nodes": [14, 0, 1, 4, 9],
+    "parent_slots": [4, 0, 1, 2, 3],
+    "group_path_indices": [[0, 9, 10], [1, 2], [3, 4], [5, 6], [7, 8]],
+    "group_sizes": [3, 2, 2, 2, 2],
+    "node_updates_per_request_layer": 32,
+    "launches_per_layer": 2,
+    "single_writer_nodes": 32,
+    "generic_path_kernel_changed": false,
+    "level0_route_changed": false
+  },
+  "selector": {
+    "env": "FR13_FIXED32_GDN_PARENT_GROUP=1",
+    "sidecars": [
+      "/logs/fr13_fixed32_gdn_parent_group.arm",
+      "/tmp/fr13_fixed32_gdn_parent_group.arm"
+    ],
+    "default_off": true,
+    "exact_fixed32_only": true,
+    "required_geometry": "BV=8",
+    "production_authorized": false,
+    "fallback_on_drift": false
+  },
+  "modeled_work_reduction": {
+    "full_parent_state_bytes": 3145728,
+    "b1_ctas_avoided_per_event_48_layers": 221184,
+    "b4_ctas_avoided_per_event_48_layers": 884736,
+    "b1_parent_read_bytes_avoided_per_event": 905969664,
+    "b4_parent_read_bytes_avoided_per_event": 3623878656,
+    "b1_cross_level_handoff_reference_bytes": 2415919104,
+    "b1_cross_level_handoff_candidate_bytes": 1509949440,
+    "classification": "static_descriptor_model_not_timing"
+  },
+  "measurement": {
+    "gpu_used": false,
+    "triton_compiled": false,
+    "synthetic_or_probe_timing": false,
+    "real_swe_verified_timing": false,
+    "b1_full_wall_ms_per_event": null,
+    "b4_full_wall_ms_per_event": null,
+    "byte_equivalence": null,
+    "acceptance_eligible": false
+  },
+  "unresolved_risks": [
+    "Triton nested static/dynamic loop compilation on the deployed SM121 toolchain",
+    "register growth or local-memory spills while the parent tile remains live",
+    "codegen-dependent raw-byte equivalence across all output and state surfaces",
+    "CUDA graph capture and replay at B1 and B4",
+    "real SWE-Verified full-step timing and acceptance"
+  ],
+  "source_sha256": {
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "94e908892651d942533aef847342f22fc32922fb242c068bfb9598827d53a3ca",
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "91397d6a8383f8b5e13a9d282ba21a31ea7a129c3ca9c84c5b40702f9c98c11e",
+    "tests/test_fr13_fixed32_gdn_parent_group.py": "ea92352d0593b406eb4d241b98d404e8ae8ba65b3a0d469d5200929133971dcc"
+  }
+}

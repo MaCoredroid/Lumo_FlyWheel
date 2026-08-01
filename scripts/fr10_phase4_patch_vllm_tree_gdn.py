@@ -672,6 +672,11 @@ def _fr13_fixed32_observed_new_state(
         "gdn_launches": 0,
         "gdn_path_programs": 0,
         "gdn_padded_slots": 0,
+        "gdn_physical_route": None,
+        "gdn_physical_programs": 0,
+        "gdn_physical_grid_z": None,
+        "gdn_level1_parent_loads": 0,
+        "gdn_single_writer_nodes": 0,
         "gdn_nodes": 0,
         "gdn_critical_path": None,
         "gdn_grid_z": None,
@@ -2204,6 +2209,106 @@ def _fr13_fixed32_observed_gdn(
             "FR13 fixed32 GDN schedule work drift: "
             + repr(normalized_contract)
         )
+    parent_group_contract = runtime_state.get(
+        "fixed32_parent_group_contract"
+    )
+    if parent_group_contract is None:
+        physical_route = "fixed32_path"
+        physical_programs = 12
+        physical_grid_z = (1, 11)
+        level1_parent_loads = 11
+        single_writer_nodes = 32
+    else:
+        if not isinstance(parent_group_contract, dict):
+            raise RuntimeError(
+                "FR13 fixed32 GDN parent-group contract is malformed"
+            )
+        normalized_parent_group = {
+            "candidate": parent_group_contract.get("candidate"),
+            "parent_nodes": tuple(
+                int(value)
+                for value in parent_group_contract.get("parent_nodes", ())
+            ),
+            "parent_slots": tuple(
+                int(value)
+                for value in parent_group_contract.get("parent_slots", ())
+            ),
+            "path_indices": tuple(
+                tuple(int(value) for value in indices)
+                for indices in parent_group_contract.get("path_indices", ())
+            ),
+            "group_sizes": tuple(
+                int(value)
+                for value in parent_group_contract.get("group_sizes", ())
+            ),
+            "groups": int(parent_group_contract.get("groups", -1)),
+            "max_group_paths": int(
+                parent_group_contract.get("max_group_paths", -1)
+            ),
+            "logical_path_counts": tuple(
+                int(value)
+                for value in parent_group_contract.get(
+                    "logical_path_counts", ()
+                )
+            ),
+            "physical_grid_z": tuple(
+                int(value)
+                for value in parent_group_contract.get("physical_grid_z", ())
+            ),
+            "logical_programs": int(
+                parent_group_contract.get("logical_programs", -1)
+            ),
+            "physical_programs": int(
+                parent_group_contract.get("physical_programs", -1)
+            ),
+            "level1_parent_loads": int(
+                parent_group_contract.get("level1_parent_loads", -1)
+            ),
+            "reference_level1_parent_loads": int(
+                parent_group_contract.get(
+                    "reference_level1_parent_loads", -1
+                )
+            ),
+            "single_writer_nodes": int(
+                parent_group_contract.get("single_writer_nodes", -1)
+            ),
+        }
+        expected_parent_group = {
+            "candidate": "fixed32_gdn_parent_group_v1",
+            "parent_nodes": (14, 0, 1, 4, 9),
+            "parent_slots": (4, 0, 1, 2, 3),
+            "path_indices": (
+                (0, 9, 10),
+                (1, 2),
+                (3, 4),
+                (5, 6),
+                (7, 8),
+            ),
+            "group_sizes": (3, 2, 2, 2, 2),
+            "groups": 5,
+            "max_group_paths": 3,
+            "logical_path_counts": (1, 11),
+            "physical_grid_z": (1, 5),
+            "logical_programs": 12,
+            "physical_programs": 6,
+            "level1_parent_loads": 5,
+            "reference_level1_parent_loads": 11,
+            "single_writer_nodes": 32,
+        }
+        if normalized_parent_group != expected_parent_group:
+            raise RuntimeError(
+                "FR13 fixed32 GDN parent-group work drift: "
+                + repr(normalized_parent_group)
+            )
+        physical_route = "fixed32_parent_group"
+        physical_programs = normalized_parent_group["physical_programs"]
+        physical_grid_z = normalized_parent_group["physical_grid_z"]
+        level1_parent_loads = normalized_parent_group[
+            "level1_parent_loads"
+        ]
+        single_writer_nodes = normalized_parent_group[
+            "single_writer_nodes"
+        ]
     if {
         "schedule": runtime_state.get("schedule"),
         "route_armed": runtime_state.get("route_armed"),
@@ -2248,6 +2353,23 @@ def _fr13_fixed32_observed_gdn(
     event["gdn_launches"] += normalized_contract["launches"]
     event["gdn_path_programs"] += normalized_contract["programs"]
     event["gdn_padded_slots"] += normalized_contract["padded_slots"]
+    prior_physical_route = event["gdn_physical_route"]
+    if (
+        prior_physical_route is not None
+        and prior_physical_route != physical_route
+    ):
+        raise RuntimeError("FR13 fixed32 GDN physical route changed")
+    event["gdn_physical_route"] = physical_route
+    prior_physical_grid = event["gdn_physical_grid_z"]
+    if (
+        prior_physical_grid is not None
+        and prior_physical_grid != physical_grid_z
+    ):
+        raise RuntimeError("FR13 fixed32 GDN physical grid changed")
+    event["gdn_physical_grid_z"] = physical_grid_z
+    event["gdn_physical_programs"] += physical_programs
+    event["gdn_level1_parent_loads"] += level1_parent_loads
+    event["gdn_single_writer_nodes"] += single_writer_nodes
     event["gdn_nodes"] += int(n_actual)
     event["gdn_critical_path"] = normalized_contract["critical"]
     event["gdn_grid_z"] = normalized_contract["path_counts"]
@@ -2929,6 +3051,20 @@ def _fr13_fixed32_graph_descriptor(
 def _fr13_fixed32_validate_forward_work(work, label):
     batch = int(work["batch_size"])
     expected_gdn_calls = 48 * batch
+    physical_route = work["gdn_physical_route"]
+    if physical_route == "fixed32_parent_group":
+        expected_physical_programs_per_scan = 6
+        expected_physical_grid_z = (1, 5)
+        expected_level1_parent_loads_per_scan = 5
+    elif physical_route == "fixed32_path":
+        expected_physical_programs_per_scan = 12
+        expected_physical_grid_z = (1, 11)
+        expected_level1_parent_loads_per_scan = 11
+    else:
+        raise RuntimeError(
+            "FR13 fixed32 GDN physical route is invalid: "
+            + repr(physical_route)
+        )
     stage_row_elems = int(work["conv_stage_row_elems"])
     stage_block = int(work["conv_stage_block"])
     expected_stage_programs = (
@@ -2950,6 +3086,13 @@ def _fr13_fixed32_validate_forward_work(work, label):
         "gdn_launches": int(work["gdn_launches"]),
         "gdn_path_programs": int(work["gdn_path_programs"]),
         "gdn_padded_slots": int(work["gdn_padded_slots"]),
+        "gdn_physical_route": physical_route,
+        "gdn_physical_programs": int(work["gdn_physical_programs"]),
+        "gdn_physical_grid_z": work["gdn_physical_grid_z"],
+        "gdn_level1_parent_loads": int(
+            work["gdn_level1_parent_loads"]
+        ),
+        "gdn_single_writer_nodes": int(work["gdn_single_writer_nodes"]),
         "gdn_nodes": int(work["gdn_nodes"]),
         "gdn_critical_path": work["gdn_critical_path"],
         "gdn_grid_z": work["gdn_grid_z"],
@@ -3004,6 +3147,15 @@ def _fr13_fixed32_validate_forward_work(work, label):
         "gdn_launches": expected_gdn_calls * 2,
         "gdn_path_programs": expected_gdn_calls * 12,
         "gdn_padded_slots": expected_gdn_calls * 82,
+        "gdn_physical_route": physical_route,
+        "gdn_physical_programs": (
+            expected_gdn_calls * expected_physical_programs_per_scan
+        ),
+        "gdn_physical_grid_z": expected_physical_grid_z,
+        "gdn_level1_parent_loads": (
+            expected_gdn_calls * expected_level1_parent_loads_per_scan
+        ),
+        "gdn_single_writer_nodes": expected_gdn_calls * 32,
         "gdn_nodes": expected_gdn_calls * 32,
         "gdn_critical_path": 12,
         "gdn_grid_z": (1, 11),
@@ -3152,6 +3304,34 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
                 ),
                 "path_programs_per_scan": (
                     int(gdn.get("path_programs", -1)) // scan_calls
+                ),
+                "physical_route": gdn.get(
+                    "physical_route", "fixed32_path"
+                ),
+                "physical_programs_per_scan": (
+                    int(
+                        gdn.get(
+                            "physical_programs",
+                            gdn.get("path_programs", -1),
+                        )
+                    )
+                    // scan_calls
+                ),
+                "physical_grid_z": list(
+                    gdn.get("physical_grid_z", gdn.get("grid_z", ()))
+                ),
+                "level1_parent_loads_per_scan": (
+                    int(gdn.get("level1_parent_loads", scan_calls * 11))
+                    // scan_calls
+                ),
+                "single_writer_nodes_per_scan": (
+                    int(
+                        gdn.get(
+                            "single_writer_nodes",
+                            gdn.get("nodes", -1),
+                        )
+                    )
+                    // scan_calls
                 ),
                 "padded_slots_per_scan": (
                     int(gdn.get("padded_slots", -1)) // scan_calls
@@ -3472,6 +3652,13 @@ def _fr13_fixed32_capture_end(
             "launches": int(work["gdn_launches"]),
             "path_programs": int(work["gdn_path_programs"]),
             "padded_slots": int(work["gdn_padded_slots"]),
+            "physical_route": work["gdn_physical_route"],
+            "physical_programs": int(work["gdn_physical_programs"]),
+            "physical_grid_z": list(work["gdn_physical_grid_z"]),
+            "level1_parent_loads": int(
+                work["gdn_level1_parent_loads"]
+            ),
+            "single_writer_nodes": int(work["gdn_single_writer_nodes"]),
             "nodes": int(work["gdn_nodes"]),
             "critical_path": int(work["gdn_critical_path"]),
             "grid_z": list(work["gdn_grid_z"]),
@@ -3830,6 +4017,21 @@ def _fr13_fixed32_observed_graph_replay(
     event["gdn_launches"] = int(gdn["launches"])
     event["gdn_path_programs"] = int(gdn["path_programs"])
     event["gdn_padded_slots"] = int(gdn["padded_slots"])
+    event["gdn_physical_route"] = gdn.get(
+        "physical_route", "fixed32_path"
+    )
+    event["gdn_physical_programs"] = int(
+        gdn.get("physical_programs", gdn["path_programs"])
+    )
+    event["gdn_physical_grid_z"] = tuple(
+        gdn.get("physical_grid_z", gdn["grid_z"])
+    )
+    event["gdn_level1_parent_loads"] = int(
+        gdn.get("level1_parent_loads", int(gdn["scan_calls"]) * 11)
+    )
+    event["gdn_single_writer_nodes"] = int(
+        gdn.get("single_writer_nodes", gdn["nodes"])
+    )
     event["gdn_nodes"] = int(gdn["nodes"])
     event["gdn_critical_path"] = int(gdn["critical_path"])
     event["gdn_grid_z"] = tuple(gdn["grid_z"])
@@ -5362,6 +5564,15 @@ def _fr13_fixed32_observed_take(mode, batch_size, forward_step_index):
             "launches": int(event["gdn_launches"]),
             "path_programs": int(event["gdn_path_programs"]),
             "padded_slots": int(event["gdn_padded_slots"]),
+            "physical_route": event["gdn_physical_route"],
+            "physical_programs": int(event["gdn_physical_programs"]),
+            "physical_grid_z": list(event["gdn_physical_grid_z"]),
+            "level1_parent_loads": int(
+                event["gdn_level1_parent_loads"]
+            ),
+            "single_writer_nodes": int(
+                event["gdn_single_writer_nodes"]
+            ),
             "nodes": int(event["gdn_nodes"]),
             "critical_path": int(event["gdn_critical_path"]),
             "grid_z": list(event["gdn_grid_z"]),
@@ -11989,6 +12200,11 @@ def _fr13_conv_subop_mab(
                                 ),
                                 "fixed32_contract": _fr13_f32_scan_state.get(
                                     "fixed32_contract"
+                                ),
+                                "fixed32_parent_group_contract": (
+                                    _fr13_f32_scan_state.get(
+                                        "fixed32_parent_group_contract"
+                                    )
                                 ),
                             },
                             bool(

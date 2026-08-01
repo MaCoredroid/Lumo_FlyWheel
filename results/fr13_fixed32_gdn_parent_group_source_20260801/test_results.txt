@@ -1,0 +1,31 @@
+FR13 fixed32 GDN parent-group source verification, 2026-08-01 UTC
+
+GPU/container commands: NOT RUN (active B4 campaign retained device ownership)
+
+python3 -m py_compile \
+  src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py \
+  scripts/fr10_phase4_patch_vllm_tree_gdn.py \
+  tests/test_fr13_fixed32_gdn_parent_group.py
+PASS
+
+python3 -m pytest -q \
+  tests/test_fr13_fixed32_gdn_parent_group.py \
+  tests/test_fr13_fixed32_gdn_schedule.py \
+  tests/test_fr13_fixed32_gdn_batch_launch.py
+12 passed
+
+Additional focused fixed32 regression files:
+- tests/test_fr13_fixed32_final_full_preseed.py: 54 passed
+- batch wide-BV, byte-A/B, and graph-gate files: 64 passed
+- B4 BV8/BV64 production files: 61 passed
+- tests/test_fr13_bm8_production_sidecar.py: 7 passed
+
+CUDA_VISIBLE_DEVICES='' python3 -m pytest -q tests/test_fr13_fixed32_*.py
+772 passed, 8 skipped, 3 failed
+
+The three broad-suite failures reproduce on the untouched base and require
+assets absent from this isolated worktree: two ingress cases require
+`.venv/bin/python`; one runtime-manifest case requires the local
+`.cache/huggingface` SWE-Verified dataset blob. The patcher `--self-test` also
+fails on the untouched base before reaching GDN validation because its conv
+pregather fixture has drifted from the current runtime contract.

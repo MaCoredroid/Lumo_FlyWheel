@@ -315,6 +315,10 @@ _FR13_FIXED32_GDN_PATH_BV_PRODUCTION_SIDECARS = (
     "/logs/fr13_fixed32_gdn_path_bv_production.flag",
     "/tmp/fr13_fixed32_gdn_path_bv_production.flag",
 )
+_FR13_FIXED32_GDN_PARENT_GROUP_SIDECARS = (
+    "/logs/fr13_fixed32_gdn_parent_group.arm",
+    "/tmp/fr13_fixed32_gdn_parent_group.arm",
+)
 _FR13_FIXED32_GDN_PATH_BV_REAL_EVENT = (
     "/logs/fr13_fixed32_gdn_path_bv.real_event.arm"
 )
@@ -405,6 +409,67 @@ def _fr13_resolve_fixed32_mode() -> str | None:
 
 
 _FR13_FIXED32_MODE = _fr13_resolve_fixed32_mode()
+
+
+def _fr13_resolve_fixed32_gdn_parent_group(
+    fixed32_mode: str | None,
+    *,
+    environ=None,
+    sidecars=None,
+    geom_override=None,
+) -> bool:
+    """Resolve the source-only fixed32 level-1 parent-group candidate."""
+    env = os.environ if environ is None else environ
+    paths = (
+        _FR13_FIXED32_GDN_PARENT_GROUP_SIDECARS
+        if sidecars is None
+        else tuple(sidecars)
+    )
+    sources: list[tuple[str, str]] = []
+    raw_env = env.get("FR13_FIXED32_GDN_PARENT_GROUP")
+    if raw_env is not None and str(raw_env).strip():
+        sources.append(
+            ("env:FR13_FIXED32_GDN_PARENT_GROUP", str(raw_env).strip())
+        )
+    for path in paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="ascii") as handle:
+                value = handle.read(16)
+        except (OSError, UnicodeError) as error:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PARENT_GROUP: cannot read sidecar "
+                f"{path}: {error}"
+            ) from error
+        if len(value) >= 16:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PARENT_GROUP: sidecar exceeds "
+                f"15 bytes: {path}"
+            )
+        sources.append((f"sidecar:{path}", value.strip()))
+    if not sources:
+        return False
+    invalid = [
+        (source, value)
+        for source, value in sources
+        if value != "1"
+    ]
+    if invalid:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PARENT_GROUP must be exactly 1 when set: "
+            + repr(invalid)
+        )
+    if fixed32_mode not in _FR13_FIXED32_MODES:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PARENT_GROUP requires an exact fixed32 mode"
+        )
+    if geom_override != {"BV": 8}:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PARENT_GROUP requires the served graph to be "
+            "pinned exactly to FR13_TREE_GDN_GEOM_OVERRIDE=BV=8"
+        )
+    return True
 
 
 def _fr13_resolve_fixed32_gdn_path_bv_candidate(
@@ -694,12 +759,26 @@ _FR13_FIXED32_GDN_PATH_BV_PRODUCTION = (
     if _FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS is not None
     else None
 )
+_FR13_FIXED32_GDN_PARENT_GROUP = (
+    _fr13_resolve_fixed32_gdn_parent_group(
+        _FR13_FIXED32_MODE,
+        geom_override=_read_tree_gdn_geom_override(),
+    )
+)
 if (
     _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
     and _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None
 ):
     raise RuntimeError(
         "FR13 fixed32 GDN path-BV diagnostic and production selectors are "
+        "mutually exclusive"
+    )
+if _FR13_FIXED32_GDN_PARENT_GROUP and (
+    _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+    or _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None
+):
+    raise RuntimeError(
+        "FR13 fixed32 GDN parent grouping and B1 path-BV selectors are "
         "mutually exclusive"
     )
 _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT = None
@@ -1046,6 +1125,18 @@ _FR13_FIXED32_SUBTREE_LEVELS = (
 _FR13_FIXED32_EXPORT_NODES = (0, 1, 4, 9, 14)
 _FR13_FIXED32_EXPORT_SLOTS = len(_FR13_FIXED32_EXPORT_NODES)
 _FR13_FIXED32_MAX_BATCH = 4
+_FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID = (
+    "fixed32_gdn_parent_group_v1"
+)
+# Level-1 logical path indices grouped by their common exported parent. The
+# member order is the original schedule order for that parent.
+_FR13_FIXED32_GDN_LEVEL1_PARENT_GROUPS = (
+    (14, (0, 9, 10)),
+    (0, (1, 2)),
+    (1, (3, 4)),
+    (4, (5, 6)),
+    (9, (7, 8)),
+)
 _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID = (
     "fixed32_sfwd_state_fusion_v1"
 )
@@ -1440,6 +1531,17 @@ if (
     raise RuntimeError(
         "FR13 fixed32 B1 path-BV and B2-B4 batched wide-BV selectors are "
         "mutually exclusive"
+    )
+if _FR13_FIXED32_GDN_PARENT_GROUP and any(
+    value not in (None, 8)
+    for value in (
+        _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE,
+        _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION,
+    )
+):
+    raise RuntimeError(
+        "FR13 fixed32 GDN parent grouping is pinned to BV8 and cannot be "
+        "combined with a wider batched-GDN selector"
     )
 
 
@@ -3341,6 +3443,114 @@ def _fr13_fixed32_schedule_contract(levels) -> dict[str, object]:
     return contract
 
 
+def _fr13_fixed32_gdn_parent_group_contract(
+    levels,
+    groups=_FR13_FIXED32_GDN_LEVEL1_PARENT_GROUPS,
+) -> dict[str, object]:
+    """Validate the exact level-1 parent-group execution descriptor."""
+    normalized = tuple(
+        tuple((tuple(int(node) for node in path), int(parent))
+              for path, parent in level)
+        for level in levels
+    )
+    normalized_groups = tuple(
+        (int(parent), tuple(int(index) for index in indices))
+        for parent, indices in groups
+    )
+    if len(normalized) != 2:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PARENT_GROUP requires exactly two levels"
+        )
+    level1 = normalized[1]
+    covered_paths = tuple(
+        index for _parent, indices in normalized_groups for index in indices
+    )
+    if tuple(sorted(covered_paths)) != tuple(range(len(level1))):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PARENT_GROUP path coverage drift: "
+            + repr(covered_paths)
+        )
+    for parent, indices in normalized_groups:
+        if not indices or tuple(sorted(indices)) != indices:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PARENT_GROUP member order drift: "
+                + repr((parent, indices))
+            )
+        for index in indices:
+            if level1[index][1] != parent:
+                raise RuntimeError(
+                    "FR13_FIXED32_GDN_PARENT_GROUP parent/path mismatch: "
+                    + repr((parent, index, level1[index][1]))
+                )
+    writer_nodes = tuple(
+        node
+        for level in normalized
+        for path, _parent in level
+        for node in path
+    )
+    if (
+        tuple(sorted(writer_nodes)) != tuple(range(32))
+        or any(writer_nodes.count(node) != 1 for node in range(32))
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PARENT_GROUP output/ring writer drift: "
+            + repr(writer_nodes)
+        )
+    parent_nodes = tuple(parent for parent, _indices in normalized_groups)
+    try:
+        parent_slots = tuple(
+            _FR13_FIXED32_EXPORT_NODES.index(parent)
+            for parent in parent_nodes
+        )
+    except ValueError as error:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PARENT_GROUP parent lacks an export slot"
+        ) from error
+    group_sizes = tuple(len(indices) for _parent, indices in normalized_groups)
+    contract = {
+        "candidate": _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID,
+        "parent_nodes": parent_nodes,
+        "parent_slots": parent_slots,
+        "path_indices": tuple(
+            indices for _parent, indices in normalized_groups
+        ),
+        "group_sizes": group_sizes,
+        "groups": len(normalized_groups),
+        "max_group_paths": max(group_sizes),
+        "logical_path_counts": tuple(len(level) for level in normalized),
+        "physical_grid_z": (1, len(normalized_groups)),
+        "logical_programs": sum(len(level) for level in normalized),
+        "physical_programs": 1 + len(normalized_groups),
+        "level1_parent_loads": len(normalized_groups),
+        "reference_level1_parent_loads": len(level1),
+        "single_writer_nodes": len(writer_nodes),
+        "writer_sha256": _fr13_canonical_sha256(tuple(sorted(writer_nodes))),
+    }
+    expected = {
+        "candidate": "fixed32_gdn_parent_group_v1",
+        "parent_nodes": (14, 0, 1, 4, 9),
+        "parent_slots": (4, 0, 1, 2, 3),
+        "path_indices": ((0, 9, 10), (1, 2), (3, 4), (5, 6), (7, 8)),
+        "group_sizes": (3, 2, 2, 2, 2),
+        "groups": 5,
+        "max_group_paths": 3,
+        "logical_path_counts": (1, 11),
+        "physical_grid_z": (1, 5),
+        "logical_programs": 12,
+        "physical_programs": 6,
+        "level1_parent_loads": 5,
+        "reference_level1_parent_loads": 11,
+        "single_writer_nodes": 32,
+        "writer_sha256": _FR13_FIXED32_COVERAGE_SHA256,
+    }
+    if contract != expected:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PARENT_GROUP contract drift: "
+            + repr(contract)
+        )
+    return contract
+
+
 def _subtree_decompose(parent) -> list:
     """Heavy-path decomposition -> list of LEVELS; each level is a list of
     (path_nodes, parent_node) with parent_node = -1 for the root path.
@@ -3495,6 +3705,7 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
     _validate_subtree_decomposition(parent_tuple, levels)
     fixed_contract = None
     fixed32_parent_slots = None
+    fixed32_parent_group = None
     if parent_tuple == _FR13_FIXED32_PARENT:
         fixed_contract = _fr13_fixed32_schedule_contract(levels)
         schedule = "fixed32"
@@ -3524,6 +3735,39 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
             fixed32_parent_slots.append(
                 torch.tensor(slots, dtype=torch.int32, device=device)
             )
+        if _FR13_FIXED32_GDN_PARENT_GROUP:
+            group_contract = _fr13_fixed32_gdn_parent_group_contract(levels)
+            max_group_paths = int(group_contract["max_group_paths"])
+            group_path_indices = torch.full(
+                (int(group_contract["groups"]), max_group_paths),
+                -1,
+                dtype=torch.int32,
+            )
+            for group_index, indices in enumerate(
+                group_contract["path_indices"]
+            ):
+                group_path_indices[group_index, : len(indices)] = torch.tensor(
+                    indices, dtype=torch.int32
+                )
+            fixed32_parent_group = {
+                "contract": group_contract,
+                "path_indices": group_path_indices.to(device),
+                "path_counts": torch.tensor(
+                    group_contract["group_sizes"],
+                    dtype=torch.int32,
+                    device=device,
+                ),
+                "parent_nodes": torch.tensor(
+                    group_contract["parent_nodes"],
+                    dtype=torch.int32,
+                    device=device,
+                ),
+                "parent_slots": torch.tensor(
+                    group_contract["parent_slots"],
+                    dtype=torch.int32,
+                    device=device,
+                ),
+            }
     elif parent_tuple == _FR13_HYDRA23_PARENT:
         schedule = "hydra23_floor"
     else:
@@ -3571,6 +3815,12 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
         "schedule": schedule,
         "fixed32_contract": fixed_contract,
         "fixed32_parent_slots": fixed32_parent_slots,
+        "fixed32_parent_group": fixed32_parent_group,
+        "fixed32_parent_group_contract": (
+            fixed32_parent_group["contract"]
+            if fixed32_parent_group is not None
+            else None
+        ),
         "route_armed": route_armed,
         "selfcheck_armed": selfcheck_armed,
         "engaged_announced": False,
@@ -3583,6 +3833,8 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
         f"lens={[level[2] for level in dev_levels]} "
         f"critical={sum(level[2] for level in dev_levels)} "
         f"(monolith {n_actual}) "
+        "parent_group="
+        f"{int(fixed32_parent_group is not None)} "
         f"route_armed={int(route_armed)} "
         f"selfcheck_armed={int(selfcheck_armed)}",
         flush=True,
@@ -7709,6 +7961,199 @@ def _tree_gdn_path_kernel_fixed32_batch(
 
 
 @triton.jit
+def _tree_gdn_path_kernel_fixed32_parent_group(
+    q,
+    k,
+    v,
+    g,
+    beta,
+    raw_a,
+    raw_b,
+    A_log,
+    dt_bias,
+    path_nodes,
+    path_lengths,
+    group_path_indices,
+    group_path_counts,
+    group_parent_refs,
+    state_export,
+    out,
+    ring_k,
+    ring_v,
+    ring_a,
+    ring_b,
+    N_ACTUAL: tl.constexpr,
+    NUM_KH: tl.constexpr,
+    NUM_VH: tl.constexpr,
+    DIM_K: tl.constexpr,
+    DIM_V: tl.constexpr,
+    BLOCK_V: tl.constexpr,
+    OUTPUT_SCALE: tl.constexpr,
+    USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
+    RAW_GATING: tl.constexpr,
+    SCAN_ALIGN: tl.constexpr,
+    MAX_PATH_LEN: tl.constexpr,
+    MAX_GROUP_PATHS: tl.constexpr,
+    NUM_GROUPS: tl.constexpr,
+    BATCH_SIZE: tl.constexpr,
+    EXPORT_SLOTS: tl.constexpr,
+    COMPACT_EXPORT: tl.constexpr,
+    RING_EXPORT: tl.constexpr = False,
+):
+    """Exact fixed32 level-1 scan, one program per exported parent.
+
+    The parent fp32 tile is loaded once, then reused as the initial state for
+    each original child path in descriptor order. Level 0 remains on the
+    established path kernel and owns export, counter, and freshness writes.
+    """
+    pid_vh = tl.program_id(0)
+    pid_v = tl.program_id(1)
+    pid_global_group = tl.program_id(2)
+    pid_batch = pid_global_group // NUM_GROUPS
+    pid_group = pid_global_group - pid_batch * NUM_GROUPS
+    batch_ok = pid_batch < BATCH_SIZE
+    head_group = NUM_VH // NUM_KH
+    pid_kh = pid_vh // head_group
+    offs_k = tl.arange(0, DIM_K)
+    offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
+    v_mask = offs_v < DIM_V
+
+    parent_ref = tl.load(group_parent_refs + pid_group)
+    if COMPACT_EXPORT:
+        export_row = (
+            pid_batch.to(tl.int64) * EXPORT_SLOTS
+            + parent_ref.to(tl.int64)
+        )
+    else:
+        export_row = parent_ref.to(tl.int64)
+    parent_state = tl.load(
+        state_export
+        + ((export_row * NUM_VH + pid_vh) * DIM_V + offs_v[:, None]) * DIM_K
+        + offs_k[None, :],
+        mask=batch_ok & v_mask[:, None],
+        other=0.0,
+    ).to(tl.float32)
+    group_path_count = tl.load(group_path_counts + pid_group)
+
+    for member in tl.static_range(0, MAX_GROUP_PATHS):
+        member_ok = batch_ok & (member < group_path_count)
+        path_index = tl.load(
+            group_path_indices + pid_group * MAX_GROUP_PATHS + member,
+            mask=member_ok,
+            other=0,
+        )
+        path_len = tl.load(
+            path_lengths + path_index,
+            mask=member_ok,
+            other=0,
+        )
+        state_i = parent_state
+        for i in tl.range(0, path_len):
+            node = tl.load(path_nodes + path_index * MAX_PATH_LEN + i)
+            n_ok = member_ok & (node >= 0) & (node < N_ACTUAL)
+            node_c = tl.maximum(node, 0)
+            global_node = pid_batch * N_ACTUAL + node_c
+            b_q = tl.load(
+                q + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
+                mask=n_ok,
+                other=0.0,
+            ).to(tl.float32)
+            b_k_raw = tl.load(
+                k + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
+                mask=n_ok,
+                other=0.0,
+            )
+            b_k = b_k_raw.to(tl.float32)
+            b_v_raw = tl.load(
+                v + (global_node * NUM_VH + pid_vh) * DIM_V + offs_v,
+                mask=n_ok & v_mask,
+                other=0.0,
+            )
+            b_v = b_v_raw.to(tl.float32)
+            if RING_EXPORT:
+                tl.store(
+                    ring_k
+                    + (global_node * NUM_KH + pid_kh) * DIM_K
+                    + offs_k,
+                    b_k_raw,
+                    mask=n_ok
+                    & (pid_v == 0)
+                    & (pid_vh % head_group == 0),
+                )
+                tl.store(
+                    ring_v
+                    + (global_node * NUM_VH + pid_vh) * DIM_V
+                    + offs_v,
+                    b_v_raw,
+                    mask=n_ok & v_mask,
+                )
+            b_b = tl.load(
+                beta + global_node * NUM_VH + pid_vh,
+                mask=n_ok,
+                other=0.0,
+            ).to(tl.float32)
+            b_g = tl.load(
+                g + global_node * NUM_VH + pid_vh,
+                mask=n_ok,
+                other=0.0,
+            ).to(tl.float32)
+            b_raw_a = b_g
+            b_raw_b = b_b
+            b_a_log = b_g
+            b_dt_bias = b_b
+            if RAW_GATING:
+                b_raw_b_in = tl.load(
+                    raw_b + global_node * NUM_VH + pid_vh,
+                    mask=n_ok,
+                    other=0.0,
+                )
+                b_raw_b = b_raw_b_in.to(tl.float32)
+                b_raw_a_in = tl.load(
+                    raw_a + global_node * NUM_VH + pid_vh,
+                    mask=n_ok,
+                    other=0.0,
+                )
+                b_raw_a = b_raw_a_in.to(tl.float32)
+                if RING_EXPORT:
+                    tl.store(
+                        ring_a + global_node * NUM_VH + pid_vh,
+                        b_raw_a_in,
+                        mask=n_ok & (pid_v == 0),
+                    )
+                    tl.store(
+                        ring_b + global_node * NUM_VH + pid_vh,
+                        b_raw_b_in,
+                        mask=n_ok & (pid_v == 0),
+                    )
+                b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
+                b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
+            new_state, out_i = _gdn_node_step(
+                state_i,
+                b_q,
+                b_k,
+                b_v,
+                b_b,
+                b_g,
+                b_raw_a,
+                b_raw_b,
+                b_a_log,
+                b_dt_bias,
+                OUTPUT_SCALE=OUTPUT_SCALE,
+                USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
+                RAW_GATING=RAW_GATING,
+                SCAN_ALIGN=SCAN_ALIGN,
+            )
+            state_i = tl.where(n_ok, new_state, state_i)
+            tl.store(
+                out
+                + (global_node * NUM_VH + pid_vh) * DIM_V
+                + offs_v,
+                out_i,
+                mask=n_ok & v_mask,
+            )
+
+
+@triton.jit
 def _tree_gdn_replay_kernel(
     k_ring,
     v_ring,
@@ -11656,6 +12101,24 @@ def launch_tree_gdn_prepared(
                 "FR13_FIXED32: exact path I/O specialization requires the "
                 "validated fixed32 schedule"
             )
+        _parent_group = st.get("fixed32_parent_group")
+        if _FR13_FIXED32_GDN_PARENT_GROUP and (
+            not _fixed32_io
+            or not isinstance(_parent_group, dict)
+            or not isinstance(_parent_group.get("contract"), dict)
+            or _parent_group["contract"].get("candidate")
+            != _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID
+            or _parent_group["contract"].get("physical_grid_z") != (1, 5)
+            or _path_block_v != 8
+            or _geom != {"BV": 8}
+            or _subtree_selfcheck_armed
+            or n_actual != 32
+            or n_pad != 32
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PARENT_GROUP exact BV8 B1 contract drift; "
+                "no fallback is permitted"
+            )
         for _li, (
             _nodes,
             _pars,
@@ -11672,6 +12135,58 @@ def launch_tree_gdn_prepared(
             if _fixed32_io:
                 _state_source = 1 if _li == 0 else 2
                 _export_mode = 1 if _li == 0 else 2
+            if _parent_group is not None and _li == 1:
+                _group_contract = _parent_group["contract"]
+                _tree_gdn_path_kernel_fixed32_parent_group[
+                    (
+                        num_vh,
+                        triton.cdiv(dim_v, _path_block_v),
+                        int(_group_contract["groups"]),
+                    )
+                ](
+                    q,
+                    k,
+                    v,
+                    g,
+                    beta,
+                    raw_a,
+                    raw_b,
+                    A_log,
+                    dt_bias,
+                    _nodes,
+                    _lengths,
+                    _parent_group["path_indices"],
+                    _parent_group["path_counts"],
+                    _parent_group["parent_nodes"],
+                    st["export"],
+                    _out,
+                    ring_k,
+                    ring_v,
+                    ring_a,
+                    ring_b,
+                    N_ACTUAL=n_actual,
+                    NUM_KH=num_kh,
+                    NUM_VH=num_vh,
+                    DIM_K=dim_k,
+                    DIM_V=dim_v,
+                    BLOCK_V=_path_block_v,
+                    OUTPUT_SCALE=output_scale,
+                    USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+                    RAW_GATING=raw_gating,
+                    SCAN_ALIGN=_scan_align,
+                    MAX_PATH_LEN=_mlen,
+                    MAX_GROUP_PATHS=int(
+                        _group_contract["max_group_paths"]
+                    ),
+                    NUM_GROUPS=int(_group_contract["groups"]),
+                    BATCH_SIZE=1,
+                    EXPORT_SLOTS=_FR13_FIXED32_EXPORT_SLOTS,
+                    COMPACT_EXPORT=False,
+                    RING_EXPORT=_ring_export,
+                    num_warps=_num_warps,
+                    **_extra_launch_kwargs,
+                )
+                continue
             _tree_gdn_path_kernel[
                 (
                     num_vh,
@@ -11740,6 +12255,11 @@ def launch_tree_gdn_prepared(
             "block_v": int(_path_block_v),
             "launch_key": (
                 "tree_gdn_path",
+                (
+                    _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID
+                    if _parent_group is not None
+                    else "path"
+                ),
                 int(_path_block_v),
                 int(triton.cdiv(dim_v, _path_block_v)),
                 int(_num_warps),
@@ -12317,6 +12837,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
     )
     contract = subtree_state.get("fixed32_contract")
     parent_slots = subtree_state.get("fixed32_parent_slots")
+    parent_group = subtree_state.get("fixed32_parent_group")
     if (
         subtree_state.get("schedule") != "fixed32"
         or contract is None
@@ -12329,6 +12850,17 @@ def launch_tree_gdn_prepared_fixed32_batch(
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN: exact two-level armed preseed contract "
             "missing or legacy subtree selfcheck is still armed"
+        )
+    if _FR13_FIXED32_GDN_PARENT_GROUP and (
+        not isinstance(parent_group, dict)
+        or not isinstance(parent_group.get("contract"), dict)
+        or parent_group["contract"].get("candidate")
+        != _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID
+        or parent_group["contract"].get("physical_grid_z") != (1, 5)
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PARENT_GROUP exact B2-B4 descriptor is missing; "
+            "no fallback is permitted"
         )
     needed_export_rows = batch * _FR13_FIXED32_EXPORT_SLOTS
     if int(subtree_state["export"].shape[0]) < needed_export_rows:
@@ -12364,6 +12896,13 @@ def launch_tree_gdn_prepared_fixed32_batch(
             "FR13 fixed32 batched wide-BV requires the served/reference route "
             "pinned exactly to BV=8"
         )
+    if _FR13_FIXED32_GDN_PARENT_GROUP and (
+        candidate_block_v != 8 or geom != {"BV": 8}
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PARENT_GROUP B2-B4 route is pinned exactly "
+            "to BV8"
+        )
     launch_contract = fixed32_batch_gdn_launch_contract(
         batch,
         n_actual=n_actual,
@@ -12385,6 +12924,11 @@ def launch_tree_gdn_prepared_fixed32_batch(
         )
 
     def _launch_batched(_block_v: int) -> None:
+        if parent_group is not None and _block_v != 8:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PARENT_GROUP cannot launch a non-BV8 "
+                f"candidate (BLOCK_V={_block_v})"
+            )
         for level_index, (
             nodes,
             _parents,
@@ -12394,6 +12938,58 @@ def launch_tree_gdn_prepared_fixed32_batch(
         ) in enumerate(subtree_state["levels"]):
             state_source = 1 if level_index == 0 else 2
             export_mode = 1 if level_index == 0 else 2
+            if parent_group is not None and level_index == 1:
+                group_contract = parent_group["contract"]
+                _tree_gdn_path_kernel_fixed32_parent_group[
+                    (
+                        num_vh,
+                        triton.cdiv(dim_v, _block_v),
+                        batch * int(group_contract["groups"]),
+                    )
+                ](
+                    q,
+                    k,
+                    v,
+                    g,
+                    beta,
+                    raw_a,
+                    raw_b,
+                    A_log,
+                    dt_bias,
+                    nodes,
+                    path_lengths,
+                    parent_group["path_indices"],
+                    parent_group["path_counts"],
+                    parent_group["parent_slots"],
+                    subtree_state["export"],
+                    out,
+                    ring_k,
+                    ring_v,
+                    ring_a,
+                    ring_b,
+                    N_ACTUAL=n_actual,
+                    NUM_KH=num_kh,
+                    NUM_VH=num_vh,
+                    DIM_K=dim_k,
+                    DIM_V=dim_v,
+                    BLOCK_V=_block_v,
+                    OUTPUT_SCALE=output_scale,
+                    USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+                    RAW_GATING=True,
+                    SCAN_ALIGN=scan_align_on(),
+                    MAX_PATH_LEN=max_path_len,
+                    MAX_GROUP_PATHS=int(
+                        group_contract["max_group_paths"]
+                    ),
+                    NUM_GROUPS=int(group_contract["groups"]),
+                    BATCH_SIZE=batch,
+                    EXPORT_SLOTS=_FR13_FIXED32_EXPORT_SLOTS,
+                    COMPACT_EXPORT=True,
+                    RING_EXPORT=ring_export,
+                    num_warps=num_warps,
+                    **extra_launch_kwargs,
+                )
+                continue
             _tree_gdn_path_kernel_fixed32_batch[
                 (num_vh, triton.cdiv(dim_v, _block_v), batch * num_paths)
             ](
