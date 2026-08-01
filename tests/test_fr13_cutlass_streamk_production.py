@@ -24,6 +24,19 @@ def _load(name: str, filename: str):
     return module
 
 
+def test_projection_contract_uses_actual_packed_qkv_shape() -> None:
+    module = _load("fr13_cutlass_streamk_shape_test", "fr13_cutlass_streamk_pass.py")
+
+    assert module.EXPECTED_PROJECTION_NK == (
+        (5120, 6144),
+        (5120, 17408),
+        (14336, 5120),
+        (16384, 5120),
+        (34816, 5120),
+    )
+    assert (8192, 5120) not in module.EXPECTED_PROJECTION_NK
+
+
 def _qualified_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     module = _load("fr13_cutlass_streamk_pass_test", "fr13_cutlass_streamk_pass.py")
     candidate_bytes = b"candidate\n"

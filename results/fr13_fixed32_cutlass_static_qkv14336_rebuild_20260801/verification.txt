@@ -1,0 +1,22 @@
+Focused tests:
+PYTHONDONTWRITEBYTECODE=1 /home/mark/shared/lumoFlyWheel/.venv/bin/python -m pytest -q tests/test_fr13_cutlass_fixed32_wave_patch.py tests/test_fr13_cutlass_wave_binary.py tests/test_fr13_cutlass_streamk_production.py tests/test_fr13_cutlass_streamk_gate_wiring.py tests/test_fr13_fixed32_final_full_preseed.py
+79 passed in 1.87s
+
+Static validation:
+- bash -n passed for the B1 live gate, kernel gate, server launcher, SWE serve launcher, and exact4 timing runner.
+- The patcher validated pinned vLLM fe9c3d6c5 and CUTLASS da5e086d, generated dispatch SHA e3e9c5e54dba7485c04db24a402c86c382f2550991fcff49f8e9fba48ecf8eaf, and then passed an idempotent second invocation.
+- fr13_cutlass_wave_binary.py verified the regular non-symlink candidate with selector static_persistent_stocktile_byte_ab.
+- Candidate SHA c4b47fa82726ea93db8e7e4f1d08ce39eacaa6448bbc7c70b04c6e798c3c4d32, bytes 113081080, mode 0555.
+- Compiled object SHA 730f657f7aa05d16d6be88722ed1e4f425666dcba160ff025233446bc648e301, bytes 13192672.
+- Object CUDA resource dump exactly matches the prior stale-8192 build: SHA c312c246a3656cf56f9e0986800005805cdb6fe58aa62af81a162d54a5430813.
+- All 1296 dynamic export names exactly match the prior stale-8192 build: SHA ec3e64dede0f15b677337bc07e0ea543cb0e864575f0277bf73ba17abde07aa1.
+- Runtime manifest preflight generated successfully; raw SHA 9b58cb69562924617ccabbf9ac14c4116d0c549f57565a4b8a72c8aa6ffbc691.
+- Corrected gate runtime inputs are staged locally; pinned stock FA2 SHA f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d.
+- No GPU or Docker command was used.
+
+Preserved real B1 stale-contract evidence:
+- Real task astropy__astropy-12907 resolved cleanly.
+- 320 records, invocations 0..319, 312541184 compared bytes.
+- 320 byte-equal records, 0 mismatching records, 0 differing bytes.
+- Old committed reducer replay returned rc=4 solely with: not all five real projection shapes were exercised.
+- No container_env, secret, or full container log was copied into this artifact.

@@ -43,9 +43,9 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "streamk_force_wide256",
     )
     assert module.STATIC_PERSISTENT_CANDIDATE_SHA256 == (
-        "66c37f2593cd38738ed2689e1cabdeaaf8383663597b4b29b46558bbf6bd2cfb"
+        "c4b47fa82726ea93db8e7e4f1d08ce39eacaa6448bbc7c70b04c6e798c3c4d32"
     )
-    assert module.STATIC_PERSISTENT_CANDIDATE_SIZE == 113_080_920
+    assert module.STATIC_PERSISTENT_CANDIDATE_SIZE == 113_081_080
     assert module.candidate_identity("static_persistent_stocktile_byte_ab") == (
         module.STATIC_PERSISTENT_CANDIDATE_SHA256,
         module.STATIC_PERSISTENT_CANDIDATE_SIZE,

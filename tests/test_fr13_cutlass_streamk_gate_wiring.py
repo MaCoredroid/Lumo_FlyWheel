@@ -299,10 +299,10 @@ def test_exact4_timing_accepts_pinned_static_persistent_candidate() -> None:
     assert "static_persistent_stocktile)" in timing
     assert (
         "STREAMK_SHA256="
-        "66c37f2593cd38738ed2689e1cabdeaaf8383663597b4b29b46558bbf6bd2cfb"
+        "c4b47fa82726ea93db8e7e4f1d08ce39eacaa6448bbc7c70b04c6e798c3c4d32"
         in timing
     )
-    assert "STREAMK_BYTES=113080920" in timing
+    assert "STREAMK_BYTES=113081080" in timing
     assert "STREAMK_LIVE_SCHEMA=fr13.fixed32.cutlass_static_persistent_live_gate.v1" in timing
     assert "CANDIDATE_ARM_LABEL=cutlass_static_persistent_stocktile" in timing
     assert "TIMING_TASK_SET=${FR13_STREAMK_TIMING_TASK_SET:-exact4}" in timing

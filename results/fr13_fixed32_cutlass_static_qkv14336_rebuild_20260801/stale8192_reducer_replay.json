@@ -1,0 +1,63 @@
+{
+  "acceptance_valid": false,
+  "batch_size": 1,
+  "binary_attestation_sha256": "0a8c64893c32bf4a0f3056e4a609240f8e7f9e61c89e8287df8d11459cf61df9",
+  "candidate": "static_persistent_stocktile",
+  "candidate_bytes": 113080920,
+  "candidate_family": "static_persistent_stocktile",
+  "candidate_sha256": "66c37f2593cd38738ed2689e1cabdeaaf8383663597b4b29b46558bbf6bd2cfb",
+  "comparator_timing_eligible": false,
+  "comparisons": 320,
+  "concurrency": 1,
+  "container_env_sha256": "9e601ee2be6581487d7675aeed9d332e371e86e5157dd3d315ebdb679c5c1d92",
+  "diagnostic_selector": "static_persistent_stocktile_byte_ab",
+  "differing_bytes": 0,
+  "draft_vocab_k": 0,
+  "draft_vocab_root": 0,
+  "engine_ledger_chain_head_sha256": "1a00ad356f95264ad06084ef67992afd77be218e4b1444b4bc14cb0f226ee7a7",
+  "errors": [
+    "not all five real projection shapes were exercised"
+  ],
+  "fixed_rows": 32,
+  "mandatory_weight_bytes": 42025179008,
+  "mandatory_weight_floor_ms": 153.9383846446886,
+  "mismatching_comparisons": 0,
+  "observed_m_values": [
+    32
+  ],
+  "observed_projection_nk": [
+    [
+      5120,
+      6144
+    ],
+    [
+      5120,
+      17408
+    ],
+    [
+      16384,
+      5120
+    ],
+    [
+      34816,
+      5120
+    ]
+  ],
+  "one_sided_u95_cap_ms": 177.0291423413919,
+  "patch_source_sha256": "35fda615dfeff85edc9347e1d016278323929fb0c8bb4f603374a1c475c2e898",
+  "patched_dispatch_sha256": "ed3c39b7f2899aa0fc3b28f24212a15bfb3ffa8635224ae25956e234453facdc",
+  "production_enabled": false,
+  "real_task_arm_sha256": "48b80e91efd5b4820bee2db94f0b84614053e7d1fdf52ca5ba662fc1fa24400d",
+  "run_classification": "one_real_swe_verified_b1_byte_diagnostic",
+  "schema": "fr13.fixed32.cutlass_static_persistent_live_gate.v1",
+  "served_result": "stock",
+  "source_commit": "3f6d16394dd3d46b727f90ef0ffd1263bef745e8",
+  "status": "fail",
+  "task_count": 1,
+  "task_ids": [
+    "astropy__astropy-12907"
+  ],
+  "task_marker": "swe_verified:astropy__astropy-12907",
+  "task_set": "one real SWE-Verified B1 diagnostic task",
+  "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
+}
