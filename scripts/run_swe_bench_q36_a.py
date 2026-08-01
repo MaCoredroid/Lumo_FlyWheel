@@ -88,6 +88,9 @@ DEFAULT_DCGM_INTERVAL_S = 0.1  # 10 Hz — 1/10th of Track B's 100 Hz default to
 # campaign scale (500 + 731 instances).
 FIXED32_INGRESS_SECRET_FILE_ENV = "FR13_FIXED32_INGRESS_SECRET_FILE"
 _FIXED32_QWEN_CODE_VERSION = "0.19.4"
+_FIXED32_QWEN_CAP_CHUNK_RELATIVE_PATH = (
+    "npm/lib/node_modules/@qwen-code/qwen-code/chunks/chunk-BFG6OZN7.js"
+)
 _FIXED32_QWEN_SETTINGS_PATH = (
     REPO_ROOT / "config" / "fr13_fixed32" / "qwen_system_settings.json"
 )
@@ -162,6 +165,7 @@ _FIXED32_QWEN_BUNDLE_TREE_REQUIRED_ENTRYPOINTS = [
     "node/bin/node",
     "npm/bin/qwen",
     "npm/lib/node_modules/@qwen-code/qwen-code/cli-entry.js",
+    _FIXED32_QWEN_CAP_CHUNK_RELATIVE_PATH,
 ]
 _FIXED32_QWEN_BUNDLE_TREE_SUMMARY = {
     "entry_count": 10_499,
@@ -206,9 +210,24 @@ _FIXED32_QWEN_BUNDLE_TREE_ENTRYPOINTS = {
             "98335eda2e0eaa737640cb5d43da032dee457ff7931c429f972ba3ff8a695d3a"
         ),
     },
+    _FIXED32_QWEN_CAP_CHUNK_RELATIVE_PATH: {
+        "path": _FIXED32_QWEN_CAP_CHUNK_RELATIVE_PATH,
+        "type": "file",
+        "mode": "0644",
+        "bytes": 5_451_144,
+        "sha256": (
+            "d61b71c03180822e875976a721a856144b70ae8b7ff687910021a5cb91a7db89"
+        ),
+    },
 }
 _FIXED32_QWEN_BUNDLE_TREE_SHA256 = (
-    "2643d1d64c03887654794d9bd00a88fbf9ced7362e034557cf196b8a37e744bc"
+    "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516"
+)
+_FIXED32_QWEN_BUNDLE_REMOTE_BASENAME = (
+    "qwen_agent_bundle-" + _FIXED32_QWEN_BUNDLE_TREE_SHA256
+)
+_FIXED32_QWEN_BUNDLE_REMOTE_PATH = (
+    "~/" + _FIXED32_QWEN_BUNDLE_REMOTE_BASENAME
 )
 _FIXED32_QWEN_BUNDLE_TREE_EXPECTED = {
     "schema": _FIXED32_QWEN_BUNDLE_TREE_SCHEMA,
@@ -583,8 +602,10 @@ def _swe_agent_env() -> str:
     runs INSIDE the official SWE-bench per-instance eval image with the conda
     'testbed' env — the benchmark-faithful setup (smoke-proven §67: import astropy
     editable + qwen 0.19.4 in-image). Requires the per-instance image on the codex
-    host + the ~/qwen_agent_bundle (both provisioned; run prepare_qwen_agent_bundle.sh
-    once). Set SWE_AGENT_ENV=legacy (or worktree) to fall back to the old
+    host + the Qwen agent bundle (both provisioned). Fixed32 uses the
+    full-tree-pinned cap-256 derivation produced by
+    fr13_derive_qwen_agent_bundle_cap256.py. Set SWE_AGENT_ENV=legacy (or
+    worktree) to fall back to the old
     qwen-code-runner:v1-over-bare-worktree behavior (which cannot self-verify, §58).
     A missing image FAILS LOUD per-instance (never silently falls back)."""
     val = os.environ.get("SWE_AGENT_ENV", "instance_image").strip().lower()
@@ -1319,7 +1340,7 @@ def _inspect_fixed32_qwen_bundle_remote_path(
 def _inspect_fixed32_qwen_bundle_remote(host: str) -> dict[str, Any]:
     return _inspect_fixed32_qwen_bundle_remote_path(
         host,
-        "~/qwen_agent_bundle",
+        _FIXED32_QWEN_BUNDLE_REMOTE_PATH,
     )
 
 
@@ -1336,7 +1357,9 @@ def _create_fixed32_qwen_snapshot_remote(
             *_EVAL_SSH_OPTS,
             host,
             (
-                "set -eu; umask 077; source=$HOME/qwen_agent_bundle; "
+                "set -eu; umask 077; source=$HOME/"
+                + shlex.quote(_FIXED32_QWEN_BUNDLE_REMOTE_BASENAME)
+                + "; "
                 'test -d "$source"; test ! -L "$source"; '
                 f"test ! -e {staging}; test ! -L {staging}; "
                 f'cp -a --reflink=auto -- "$source" {staging}; '
