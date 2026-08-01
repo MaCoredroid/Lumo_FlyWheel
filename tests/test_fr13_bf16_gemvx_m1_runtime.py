@@ -101,6 +101,14 @@ def test_m1_runtime_is_default_off_strict_b1_full_vocab() -> None:
     assert ':ro"' in launcher
     assert '"$_v" == "FR13_DRAFT_HEAD_M1_SO"' in launcher
     assert "FR13_DRAFT_HEAD_M1_RUNTIME_SO=/tmp/fr13_bf16_gemvx_m1.abi3.so" in launcher
+    mount_index = launcher.index(
+        'FR13_DRAFT_HEAD_M1_RUNTIME_SO=/tmp/fr13_bf16_gemvx_m1.abi3.so'
+    )
+    ingress_index = launcher.index(
+        'FR13_FIXED32_CONTAINER_INGRESS_SECRET_FILE=/run/fr13_fixed32_ingress_secret'
+    )
+    assert mount_index < ingress_index
+    assert "FR13_FIXED32_DOCKER_ARGS+=(" in launcher[ingress_index:]
 
 
 def test_m1_contract_and_shadow_order_cover_all_five_heads() -> None:
