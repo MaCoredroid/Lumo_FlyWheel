@@ -4862,8 +4862,18 @@ def _fr13_fixed32_observed_commit(
                 or int(committer_contract.get("candidate_staging_launches", -1))
                 != 0
                 or committer_contract.get("gate_coefficients_hoisted") is not True
+                or committer_contract.get(
+                    "physical_alias_row_uniqueness_guard"
+                ) != "validate_fixed32_conv_commit_rows"
                 or committer_contract.get("byte_gate")
-                != "required_on_first_real_nonzero_accept"
+                != "real_swe_all_accepted_lengths_0_15"
+                or committer_contract.get("byte_gate_raw_compare")
+                != "torch_equal_uint8"
+                or committer_contract.get("unseen_length_route")
+                != "shadow_then_reference"
+                or int(
+                    committer_contract.get("accepted_length_full_mask", -1)
+                ) != 0xFFFF
             )
         )
     )

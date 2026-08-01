@@ -343,6 +343,9 @@ def test_task_bracket_arms_after_pre_flush_and_rotates_after_post_flush(
                 "metrics": {
                     "committer": {
                         "layer_batch_gate_attempts_by_batch": {"1": 0},
+                        "layer_batch_gate_coverage_mask_by_batch": {
+                            "1": 0xFFFF,
+                        },
                     }
                 },
             },
@@ -394,9 +397,19 @@ def test_task_bracket_arms_after_pre_flush_and_rotates_after_post_flush(
     assert persisted == payload
 
 
-def test_task_bracket_rejects_layer_batch_gate_attempt_in_task_interval(
+@pytest.mark.parametrize(
+    ("attempt_delta", "coverage_delta", "error_match"),
+    (
+        (True, False, "attempted a committer layer-batch byte gate"),
+        (False, True, "changed committer layer-batch accepted-length coverage"),
+    ),
+)
+def test_task_bracket_rejects_layer_batch_qualification_in_task_interval(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    attempt_delta: bool,
+    coverage_delta: bool,
+    error_match: str,
 ) -> None:
     task_dir = tmp_path / "task"
     task_dir.mkdir()
@@ -443,7 +456,14 @@ def test_task_bracket_rejects_layer_batch_gate_attempt_in_task_interval(
                 "metrics": {
                     "committer": {
                         "layer_batch_gate_attempts_by_batch": {
-                            "1": ack.generation - 1,
+                            "1": (ack.generation - 1) if attempt_delta else 0,
+                        },
+                        "layer_batch_gate_coverage_mask_by_batch": {
+                            "1": (
+                                0xFFFF - (ack.generation - 1)
+                                if coverage_delta
+                                else 0xFFFF
+                            ),
                         },
                     },
                 },
@@ -473,7 +493,7 @@ def test_task_bracket_rejects_layer_batch_gate_attempt_in_task_interval(
     bracket.pre(task_dir / "metrics_pre.txt")
     with pytest.raises(
         orchestrator.Fixed32BoundaryError,
-        match="attempted a committer layer-batch byte gate",
+        match=error_match,
     ):
         bracket.post(task_dir / "metrics_post.txt")
 
@@ -667,6 +687,9 @@ def test_task_bracket_removes_arm_when_post_snapshot_fails(
                 "metrics": {
                     "committer": {
                         "layer_batch_gate_attempts_by_batch": {"1": 0},
+                        "layer_batch_gate_coverage_mask_by_batch": {
+                            "1": 0xFFFF,
+                        },
                     }
                 },
             },

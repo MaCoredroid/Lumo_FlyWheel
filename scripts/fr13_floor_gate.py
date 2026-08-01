@@ -1323,6 +1323,7 @@ def validate_runtime_boundary_snapshot(
             "captures",
             "fast_route_ready",
             "layer_batch_gate_attempts_by_batch",
+            "layer_batch_gate_coverage_mask_by_batch",
             "layer_batch_gate_passed_by_batch",
             "maximum_ready_capacity",
             "nonpure_committer_replays_by_batch",
@@ -1393,6 +1394,11 @@ def validate_runtime_boundary_snapshot(
         expected_keys=set(expected_ready_capacities),
         label=f"{path}:committer.layer_batch_gate_attempts_by_batch",
     )
+    layer_batch_gate_coverage_mask_by_batch = strict_nonnegative_int_map(
+        committer["layer_batch_gate_coverage_mask_by_batch"],
+        expected_keys=set(expected_ready_capacities),
+        label=f"{path}:committer.layer_batch_gate_coverage_mask_by_batch",
+    )
     if any(
         value not in (0, 1)
         for value in layer_batch_gate_passed_by_batch.values()
@@ -1400,11 +1406,20 @@ def validate_runtime_boundary_snapshot(
         raise GateError(
             f"{path}: committer layer-batch gate pass state is not boolean"
         )
+    expected_full_coverage = {
+        key: 0xFFFF for key in expected_ready_capacities
+    }
+    if layer_batch_gate_coverage_mask_by_batch != expected_full_coverage:
+        raise GateError(
+            f"{path}: committer layer-batch accepted-length coverage is "
+            "incomplete before measurement"
+        )
     if layer_batch_gate_passed_by_batch != {
-        key: 1 for key in expected_ready_capacities
+        key: int(layer_batch_gate_coverage_mask_by_batch[key] == 0xFFFF)
+        for key in expected_ready_capacities
     }:
         raise GateError(
-            f"{path}: committer layer-batch gate is not qualified before measurement"
+            f"{path}: committer layer-batch gate pass/coverage state diverged"
         )
     nonpure_by_batch = strict_nonnegative_int_map(
         committer["nonpure_committer_replays_by_batch"],
@@ -1554,6 +1569,9 @@ def validate_runtime_boundary_snapshot(
         "committer": {
             "layer_batch_gate_attempts_by_batch": (
                 layer_batch_gate_attempts_by_batch
+            ),
+            "layer_batch_gate_coverage_mask_by_batch": (
+                layer_batch_gate_coverage_mask_by_batch
             ),
             "layer_batch_gate_passed_by_batch": (
                 layer_batch_gate_passed_by_batch
@@ -5109,6 +5127,18 @@ def validate_flush_chain(
             raise GateError(
                 f"{boundary_path}: measured task interval attempted a committer "
                 "layer-batch byte gate"
+            )
+        if (
+            runtime_reports["pre"]["committer"][
+                "layer_batch_gate_coverage_mask_by_batch"
+            ]
+            != runtime_reports["post"]["committer"][
+                "layer_batch_gate_coverage_mask_by_batch"
+            ]
+        ):
+            raise GateError(
+                f"{boundary_path}: measured task interval changed committer "
+                "layer-batch accepted-length coverage"
             )
 
         metadata_path = task_dir / "runner_metadata.json"
