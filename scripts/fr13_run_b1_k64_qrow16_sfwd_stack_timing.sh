@@ -14,6 +14,9 @@ cd "$REPO"
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
+BLOCK_MAP=scripts/fr13_dvk_subset_blocks.json
+BLOCK_MAP_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
+BLOCK_MAP_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
 QROW16_SHA256=1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86
 QROW16_BYTES=299507792
 QROW16_PASS=$REPO/results/fr13_fixed32_qrow16_num_splits0_live_pass_20260731T173608Z/fr13_fa2_qrow16_live_paged_ab.json
@@ -49,6 +52,7 @@ unset required
    && "$(sha256sum "$QROW16_FA2_SO" | awk '{print $1}')" == "$QROW16_SHA256" ]] \
   || { echo "QROW16_FA2_SO is not the pinned candidate" >&2; exit 2; }
 [[ "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" \
+   && "$(sha256sum "$BLOCK_MAP" | awk '{print $1}')" == "$BLOCK_MAP_SHA256" \
    && "$(sha256sum "$QROW16_PASS" | awk '{print $1}')" == "$QROW16_PASS_SHA256" \
    && "$(sha256sum "$SFWD_PASS" | awk '{print $1}')" == "$SFWD_PASS_SHA256" \
    && "$(sha256sum "$BASELINE" | awk '{print $1}')" == "$BASELINE_SHA256" ]] \
@@ -77,6 +81,7 @@ export CONC=1
 export WALL=0
 export FR13_DRAFT_VOCAB_ROOT=1
 export FR13_DRAFT_VOCAB_K=65536
+export FR13_DRAFT_VOCAB_BLOCKS="$BLOCK_MAP_CONTAINER"
 export FR13_FLOOR_ORDER=HT
 source scripts/fr13_canonical_env.sh
 run_variant() { :; }
@@ -84,6 +89,7 @@ source "$SEQUENCE"
 unset -f run_variant
 [[ "$FR13_DRAFT_VOCAB_ROOT" == "1" \
    && "$FR13_DRAFT_VOCAB_K" == "65536" \
+   && "$FR13_DRAFT_VOCAB_BLOCKS" == "$BLOCK_MAP_CONTAINER" \
    && "$FR13_MANDATORY_WEIGHT_BYTES" == "$MANDATORY_WEIGHT_BYTES" \
    && "$FR13_WEIGHT_FLOOR_MS" == "$MANDATORY_WEIGHT_FLOOR_MS" ]] \
   || { echo "ROOT=1 K64 hardware-floor contract drifted" >&2; exit 2; }
@@ -94,7 +100,8 @@ mkdir -p "$RUNROOT_ABS/sidecars"
   --output "$RUNROOT_ABS/runtime_manifest.at_launch.json"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
-printf 'classification=real_swe_verified_exact4_k64_b1_kernel_stack\ntask_count=4\nbatch_size=1\nconcurrency=1\ntiming_eligible=1\nfloor_acceptance_eligible=0\ntopology=hydra27_fixed32\nphysical_rows=32\nlogical_drafts=27\nvalid_mask=0x7abdffff\ndraft_vocab_root=1\ndraft_vocab_k=65536\nqrow16_production=1\nqrow16_runtime=eager_exact_geometry\nsfwd_state_fusion_production=1\nsfwd_runtime=eager_byte_qualified\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nqrow16_sha256=%s\nqrow16_pass_sha256=%s\nsfwd_pass_sha256=%s\nbaseline_sha256=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_exact4_k64_b1_kernel_stack\ntask_count=4\nbatch_size=1\nconcurrency=1\ntiming_eligible=1\nfloor_acceptance_eligible=0\ntopology=hydra27_fixed32\nphysical_rows=32\nlogical_drafts=27\nvalid_mask=0x7abdffff\ndraft_vocab_root=1\ndraft_vocab_k=65536\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nqrow16_production=1\nqrow16_runtime=eager_exact_geometry\nsfwd_state_fusion_production=1\nsfwd_runtime=eager_byte_qualified\nall_parent_committer_production=0\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nqrow16_sha256=%s\nqrow16_pass_sha256=%s\nsfwd_pass_sha256=%s\nbaseline_sha256=%s\nstarted=%s\n' \
+  "$BLOCK_MAP_CONTAINER" "$BLOCK_MAP_SHA256" \
   "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
   "$ONE_SIDED_U95_CAP_MS" "$ARM" "$SOURCE_COMMIT" "$RUNNER_SHA256" \
   "$SUBSET_SHA256" "$QROW16_SHA256" "$QROW16_PASS_SHA256" \
@@ -133,6 +140,7 @@ if env \
     OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
     FR13_FIXED32_B1_DIAGNOSTIC=0 \
     FR13_DRAFT_VOCAB_ROOT=1 FR13_DRAFT_VOCAB_K=65536 \
+    FR13_DRAFT_VOCAB_BLOCKS="$BLOCK_MAP_CONTAINER" \
     FR13_MANDATORY_WEIGHT_BYTES="$MANDATORY_WEIGHT_BYTES" \
     FR13_WEIGHT_FLOOR_MS="$MANDATORY_WEIGHT_FLOOR_MS" \
     FR10_METRICS=0 ENFORCE_EAGER=1 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
@@ -181,6 +189,7 @@ for expected in \
     'FR13_FIXED32_MODE=hydra27_fixed32' \
     'FR13_DRAFT_VOCAB_ROOT=1' \
     'FR13_DRAFT_VOCAB_K=65536' \
+    "FR13_DRAFT_VOCAB_BLOCKS=$BLOCK_MAP_CONTAINER" \
     'MAX_NUM_SEQS=1' \
     'ENFORCE_EAGER=1' \
     'FR13_FA2_QROW16_PRODUCTION=1' \
@@ -199,6 +208,13 @@ unset expected
 SFWD_ENGAGEMENT="$RUNROOT_ABS/$ARM/logs/fr13_fixed32_sfwd_state_fusion.production_engagement.json"
 QROW16_SIDECAR="$RUNROOT_ABS/$ARM/logs/fr13_fa2_qrow16_production_pass.json"
 QROW16_ENGAGEMENT="$RUNROOT_ABS/$ARM/logs/fr13_fa2_qrow16_production_capture.json"
+HEALTH="$RUNROOT_ABS/$ARM/health.json"
+TRAFFIC_AUDIT="$RUNROOT_ABS/$ARM/fixed32_chat_traffic_audit.json"
+for required in "$HEALTH" "$TRAFFIC_AUDIT"; do
+  [[ -f "$required" && ! -L "$required" ]] \
+    || { echo "exact4 provenance is missing: $required" >&2; exit 4; }
+done
+unset required
 "$PYTHON_BIN" scripts/fr13_sfwd_state_fusion_pass.py verify-engagement \
   --engagement "$SFWD_ENGAGEMENT" \
   --expected-live-sha256 "$SFWD_PASS_SHA256" \
@@ -215,9 +231,10 @@ finalize_manifests
 
 "$PYTHON_BIN" - \
   "$SUBSET" "$RUNROOT_ABS/$ARM/deploy_speed_fullwall.json" "$BASELINE" \
-  "$SFWD_ENGAGEMENT" "$QROW16_ENGAGEMENT" "$RUNROOT_ABS/timing_summary.json" \
+  "$SFWD_ENGAGEMENT" "$QROW16_ENGAGEMENT" "$HEALTH" "$TRAFFIC_AUDIT" \
+  "$RUNROOT_ABS/timing_summary.json" \
   "$SOURCE_COMMIT" "$RUNNER_SHA256" "$SUBSET_SHA256" \
-  "$QROW16_SHA256" "$QROW16_PASS_SHA256" "$SFWD_PASS_SHA256" \
+  "$BLOCK_MAP_SHA256" "$QROW16_SHA256" "$QROW16_PASS_SHA256" "$SFWD_PASS_SHA256" \
   "$MANDATORY_WEIGHT_FLOOR_MS" "$ONE_SIDED_U95_CAP_MS" "$ARM" <<'PY'
 import hashlib
 import json
@@ -226,11 +243,13 @@ import sys
 from pathlib import Path
 
 subset_path, measure_path, baseline_path = map(Path, sys.argv[1:4])
-sfwd_path, qrow_path, out_path = map(Path, sys.argv[4:7])
-source, runner_sha, subset_sha = sys.argv[7:10]
-qrow_sha, qrow_pass_sha, sfwd_pass_sha = sys.argv[10:13]
-floor_ms, cap_ms = map(float, sys.argv[13:15])
-arm = sys.argv[15]
+sfwd_path, qrow_path, health_path, traffic_audit_path, out_path = map(
+    Path, sys.argv[4:9]
+)
+source, runner_sha, subset_sha = sys.argv[9:12]
+block_map_sha, qrow_sha, qrow_pass_sha, sfwd_pass_sha = sys.argv[12:16]
+floor_ms, cap_ms = map(float, sys.argv[16:18])
+arm = sys.argv[18]
 
 
 def load(path):
@@ -243,6 +262,8 @@ measure, measure_raw = load(measure_path)
 baseline, baseline_raw = load(baseline_path)
 sfwd, sfwd_raw = load(sfwd_path)
 qrow, qrow_raw = load(qrow_path)
+health, health_raw = load(health_path)
+traffic_audit, traffic_audit_raw = load(traffic_audit_path)
 task_ids = sorted(subset["instance_ids"])
 if (
     measure.get("schema") != "fr13.measure.deploy_speed.v1"
@@ -288,12 +309,61 @@ if (
     or qrow.get("sfwd_state_fusion_production") is not True
 ):
     raise SystemExit("qrow16 eager production engagement is incomplete")
+health_tasks = health.get("tasks")
+if (
+    health.get("swe_orchestrator_rc") != 0
+    or not isinstance(health_tasks, list)
+    or len(health_tasks) != 4
+    or sorted(task.get("instance_id") for task in health_tasks) != task_ids
+    or any(task.get("codex_timed_out") is not False for task in health_tasks)
+    or any(task.get("verdict") == "missing" for task in health_tasks)
+):
+    raise SystemExit("health record does not prove four clean canonical tasks")
+audit_subset = traffic_audit.get("subset")
+audit_checks = traffic_audit.get("checks")
+if (
+    traffic_audit.get("schema")
+    != "fr13-fixed32-chat-task-provenance-audit-v3"
+    or traffic_audit.get("mode") != "hydra27_fixed32"
+    or not isinstance(audit_subset, dict)
+    or audit_subset.get("sha256") != subset_sha
+    or audit_subset.get("task_count") != 4
+    or sorted(audit_subset.get("task_ids", [])) != task_ids
+    or not isinstance(audit_checks, dict)
+    or not audit_checks
+    or any(value is not True for value in audit_checks.values())
+):
+    raise SystemExit("authenticated traffic audit is not a clean exact4 B1 campaign")
 
 sfwd_ms = float(measure["s_per_fwd_gpu"]) * 1000.0
 dfwd_ms = float(measure["drafter_gpu_ms_per_step"])
 cfwd_ms = float(measure["committer_gpu_ms_per_step"])
 wall_ms = float(measure["step_wall_ms"])
 baseline_wall_ms = float(baseline["step_wall_ms"])
+accepted_drafts = float(measure["accept_per_event"])
+reported_full_wall_tps = float(measure["measured_tps_fullstep_wall"])
+committed_tokens = accepted_drafts + 1.0
+reconciled_full_wall_tps = committed_tokens * 1000.0 / wall_ms
+if (
+    accepted_drafts > 27.0
+    or not math.isclose(
+        reported_full_wall_tps,
+        reconciled_full_wall_tps,
+        rel_tol=1e-9,
+        abs_tol=1e-9,
+    )
+):
+    raise SystemExit("full-wall TPS does not reconcile to acceptance and wall time")
+gpu_component_ms = sfwd_ms + dfwd_ms + cfwd_ms
+other_wall_ms = wall_ms - gpu_component_ms
+if (
+    not all(math.isfinite(value) for value in (gpu_component_ms, other_wall_ms))
+    or gpu_component_ms <= 0
+    or other_wall_ms < 0
+):
+    raise SystemExit(
+        "candidate phase timers do not reconcile to nonnegative full-step wall"
+    )
 summary = {
     "schema": "fr13.fixed32.k64_qrow16_sfwd_stack.exact4_b1_timing.v1",
     "status": "complete",
@@ -308,15 +378,22 @@ summary = {
     "valid_mask": "0x7abdffff",
     "draft_vocab_root": 1,
     "draft_vocab_k": 65536,
+    "draft_vocab_blocks": "/workspace/scripts/fr13_dvk_subset_blocks.json",
+    "draft_vocab_blocks_sha256": block_map_sha,
     "source_commit": source,
     "runner_sha256": runner_sha,
     "subset_sha256": subset_sha,
     "qrow16_candidate_sha256": qrow_sha,
     "qrow16_pass_sha256": qrow_pass_sha,
     "sfwd_pass_sha256": sfwd_pass_sha,
+    "all_parent_committer_production": False,
     "measure_sha256": hashlib.sha256(measure_raw).hexdigest(),
     "sfwd_engagement_sha256": hashlib.sha256(sfwd_raw).hexdigest(),
     "qrow16_engagement_sha256": hashlib.sha256(qrow_raw).hexdigest(),
+    "health_sha256": hashlib.sha256(health_raw).hexdigest(),
+    "authenticated_traffic_audit_sha256": hashlib.sha256(
+        traffic_audit_raw
+    ).hexdigest(),
     "baseline_measure_sha256": hashlib.sha256(baseline_raw).hexdigest(),
     "timing_eligible": True,
     "floor_acceptance_eligible": False,
@@ -324,14 +401,15 @@ summary = {
         "single eager candidate arm has no matched two-arm one-sided U95"
     ),
     "full_step_wall_ms": wall_ms,
-    "full_wall_tps": measure["measured_tps_fullstep_wall"],
-    "accepted_drafts_per_event": measure["accept_per_event"],
+    "full_wall_tps": reported_full_wall_tps,
+    "accepted_drafts_per_event": accepted_drafts,
+    "committed_tokens_per_event": committed_tokens,
     "phase_ms_per_event": {
         "sfwd": sfwd_ms,
         "dfwd": dfwd_ms,
         "cfwd": cfwd_ms,
-        "gpu_component_total": sfwd_ms + dfwd_ms + cfwd_ms,
-        "other_wall": wall_ms - sfwd_ms - dfwd_ms - cfwd_ms,
+        "gpu_component_total": gpu_component_ms,
+        "other_wall": other_wall_ms,
     },
     "mandatory_weight_floor_ms": floor_ms,
     "one_sided_u95_cap_ms": cap_ms,

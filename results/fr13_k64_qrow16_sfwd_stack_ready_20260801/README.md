@@ -1,4 +1,4 @@
-# K64 qrow16 + SFWD physical32 B1 stack readiness
+# K64 qrow16 + SFWD physical32 B1 partial-stack readiness
 
 Status: production-gated and statically verified; GPU timing not run in this
 worktree.
@@ -14,6 +14,13 @@ both physical32 lineages:
 Both modes launch 31 physical draft rows plus one root row. Logical trees can
 therefore be smaller than 32 while retaining the physical32 kernel geometry;
 inactive nodes are masked, not used as accepted drafts.
+
+This runner does **not** serve the source-v7 all-parent committer candidate:
+`FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0` and
+`FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0` are deliberate. The exact4
+B4 shadow gate must first publish a source-v7 production PASS, and a combined
+co-candidate gate must bind that PASS before all-parent can join this timing
+stack. Until then, this is a qrow16 + SFWD measurement only.
 
 The historical SFWD byte pass was collected with the full-vocabulary draft
 head, but the qualified executable closure ends before draft-head logits and
