@@ -1057,11 +1057,31 @@ _FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT = (
 _FR13_FIXED32_SFWD_STATE_FUSION_PASS = (
     "/logs/fr13_fixed32_sfwd_state_fusion.live_pass.json"
 )
+_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM = (
+    "/logs/fr13_fixed32_sfwd_state_fusion.production.arm"
+)
+_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_PASS = (
+    "/logs/fr13_fixed32_sfwd_state_fusion.production_pass.json"
+)
+_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_PASS_SHA256 = (
+    "/logs/fr13_fixed32_sfwd_state_fusion.production_pass.sha256"
+)
+_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ENGAGEMENT = (
+    "/logs/fr13_fixed32_sfwd_state_fusion.production_engagement.json"
+)
 _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_STATE = {
     "task_marker": None,
     "batch": None,
     "passed": set(),
     "attempts": {},
+}
+_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_CREDENTIAL_IDS: set[int] = set()
+_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_STATE = {
+    "live_pass_sha256": None,
+    "source_sha256": None,
+    "layers": set(),
+    "launches": 0,
+    "emitted": False,
 }
 _FR13_FIXED32_BATCH_GDN_BYTE_AB_STATE = {
     "passed": set(),
@@ -1264,6 +1284,264 @@ def fixed32_sfwd_state_fusion_gate_control(
             "fixed32 runtime"
         )
     return True, _fr13_fixed32_batch_gdn_real_event_marker(event)
+
+
+def _fr13_fixed32_sfwd_state_fusion_regular_ascii(
+    path: str, label: str, *, limit: int
+) -> bytes:
+    if os.path.islink(path) or not os.path.isfile(path):
+        raise RuntimeError(f"{label} must be a regular non-symlink file: {path}")
+    try:
+        with open(path, "rb") as handle:
+            raw = handle.read(limit + 1)
+    except OSError as error:
+        raise RuntimeError(f"{label} cannot be read: {path}: {error}") from error
+    if not raw or len(raw) > limit:
+        raise RuntimeError(f"{label} is empty or exceeds {limit} bytes: {path}")
+    try:
+        raw.decode("ascii")
+    except UnicodeDecodeError as error:
+        raise RuntimeError(f"{label} must be ASCII: {path}") from error
+    return raw
+
+
+def fixed32_sfwd_state_fusion_production_control(
+    *,
+    environ=None,
+    arm_path: str | None = None,
+    pass_path: str | None = None,
+    pass_sha256_path: str | None = None,
+) -> dict[str, object] | None:
+    """Resolve the source-bound, default-off B1 eager timing selector.
+
+    This selector intentionally does not make the candidate production- or
+    acceptance-eligible. It only permits candidate-served one-task timing
+    after the same source revision passed the authenticated real-task byte
+    gate over all 48 layers.
+    """
+    env = os.environ if environ is None else environ
+    raw_selector = str(
+        env.get("FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION", "")
+    )
+    if raw_selector not in ("", "0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION must be exactly 0 or 1"
+        )
+    arm = arm_path or str(
+        env.get(
+            "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM_PATH",
+            _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM,
+        )
+    )
+    if raw_selector != "1" and not os.path.exists(arm):
+        return None
+    arm_raw = _fr13_fixed32_sfwd_state_fusion_regular_ascii(
+        arm, "FR13 SFWD state-fusion production arm", limit=8
+    )
+    if arm_raw.strip() != b"1":
+        raise RuntimeError(
+            "FR13 SFWD state-fusion production arm must contain exactly 1"
+        )
+    if _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION requires fixed32"
+        )
+    byte_selector = str(
+        env.get("FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB", "")
+    )
+    byte_enabled = str(
+        env.get(
+            "FR13_FIXED32_SFWD_STATE_FUSION_ENABLED_PATH",
+            _FR13_FIXED32_SFWD_STATE_FUSION_ENABLED,
+        )
+    )
+    if byte_selector == "1" or os.path.exists(byte_enabled):
+        raise RuntimeError(
+            "FR13 SFWD state-fusion byte gate and production timing selector "
+            "are mutually exclusive"
+        )
+
+    live_path = pass_path or str(
+        env.get(
+            "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_PASS_PATH",
+            _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_PASS,
+        )
+    )
+    digest_path = pass_sha256_path or str(
+        env.get(
+            "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_PASS_SHA256_PATH",
+            _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_PASS_SHA256,
+        )
+    )
+    pass_raw = _fr13_fixed32_sfwd_state_fusion_regular_ascii(
+        live_path, "FR13 SFWD state-fusion live PASS", limit=131072
+    )
+    digest_raw = _fr13_fixed32_sfwd_state_fusion_regular_ascii(
+        digest_path, "FR13 SFWD state-fusion PASS SHA-256", limit=80
+    )
+    expected_digest = digest_raw.decode("ascii").strip()
+    if (
+        len(expected_digest) != 64
+        or any(character not in "0123456789abcdef" for character in expected_digest)
+    ):
+        raise RuntimeError("FR13 SFWD state-fusion PASS SHA-256 is malformed")
+    env_digest = str(
+        env.get(
+            "FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256", ""
+        )
+    ).strip()
+    if env_digest and env_digest != expected_digest:
+        raise RuntimeError(
+            "FR13 SFWD state-fusion PASS SHA-256 sources disagree"
+        )
+    actual_digest = hashlib.sha256(pass_raw).hexdigest()
+    if actual_digest != expected_digest:
+        raise RuntimeError("FR13 SFWD state-fusion live PASS SHA-256 mismatch")
+    try:
+        payload = json.loads(pass_raw.decode("ascii"))
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            f"FR13 SFWD state-fusion live PASS is invalid JSON: {error}"
+        ) from error
+    if not isinstance(payload, dict):
+        raise RuntimeError("FR13 SFWD state-fusion live PASS must be an object")
+    required = {
+        "schema": "fr13.fixed32.sfwd_state_fusion.live_pass.v1",
+        "status": "byte_pass_source_only",
+        "run_classification": (
+            "one_real_swe_verified_full_vocab_b1_byte_timing_diagnostic"
+        ),
+        "candidate": _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID,
+        "task_marker": "swe_verified:astropy__astropy-12907",
+        "batch": 1,
+        "layer_count": 48,
+        "physical_rows_per_request": 32,
+        "candidate_conv_launches_per_layer": 1,
+        "gdn_level_path_programs": [1, 11],
+        "gdn_physical_launches_per_layer": 2,
+        "gdn_ring_export_unchanged": True,
+        "gdn_flags_export_unchanged": True,
+        "compared_byte_surfaces": ["conv_out", "commit_source_stage"],
+        "real_task_authenticated": True,
+        "reference_always_served": True,
+        "timing_eligible": False,
+        "floor_acceptance_eligible": False,
+        "production_eligible": False,
+    }
+    mismatches = [
+        key for key, expected in required.items() if payload.get(key) != expected
+    ]
+    source_digest = _fr13_fixed32_batch_gdn_source_sha256()
+    if payload.get("source_sha256") != source_digest:
+        mismatches.append("source_sha256")
+    layer_keys = payload.get("layer_keys")
+    if (
+        not isinstance(layer_keys, list)
+        or len(layer_keys) != 48
+        or len(set(layer_keys)) != 48
+        or any(
+            not isinstance(key, str)
+            or not key.startswith("0x")
+            or len(key) <= 2
+            or any(character not in "0123456789abcdef" for character in key[2:])
+            for key in layer_keys
+        )
+    ):
+        mismatches.append("layer_keys")
+    if mismatches:
+        raise RuntimeError(
+            "FR13 SFWD state-fusion live PASS contract mismatch: "
+            + ",".join(sorted(set(mismatches)))
+        )
+    credential = dict(payload)
+    credential["live_pass_sha256"] = actual_digest
+    credential["runtime_source_sha256"] = source_digest
+    _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_CREDENTIAL_IDS.add(
+        id(credential)
+    )
+    return credential
+
+
+def fixed32_sfwd_state_fusion_production_engagement(
+    *, credential: dict[str, object], layer_key: int, batch_size: int
+) -> dict[str, object]:
+    """Record one served candidate launch and publish a 48-layer attestation."""
+    if id(credential) not in (
+        _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_CREDENTIAL_IDS
+    ):
+        raise RuntimeError(
+            "FR13 SFWD state-fusion production credential was not validated"
+        )
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 SFWD state-fusion production timing is eager-only"
+        )
+    batch = int(batch_size)
+    fixed32_sfwd_state_fusion_contract(
+        batch, tree_rows=32, conv_width=4, conv_state_len=12
+    )
+    if batch != 1:
+        raise RuntimeError("FR13 SFWD state-fusion production timing is B1-only")
+    state = _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_STATE
+    live_digest = str(credential.get("live_pass_sha256", ""))
+    source_digest = str(credential.get("runtime_source_sha256", ""))
+    if state["live_pass_sha256"] is None:
+        state["live_pass_sha256"] = live_digest
+        state["source_sha256"] = source_digest
+    elif (
+        state["live_pass_sha256"] != live_digest
+        or state["source_sha256"] != source_digest
+    ):
+        raise RuntimeError("FR13 SFWD state-fusion production identity changed")
+    state["launches"] = int(state["launches"]) + 1
+    state["layers"].add(int(layer_key))
+    record = {
+        "candidate": _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID,
+        "batch_size": batch,
+        "layer_count": len(state["layers"]),
+        "launches_observed": int(state["launches"]),
+        "live_pass_sha256": live_digest,
+        "source_sha256": source_digest,
+        "candidate_served": True,
+    }
+    if len(state["layers"]) != 48 or bool(state["emitted"]):
+        return record
+    path = os.environ.get(
+        "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ENGAGEMENT_PATH",
+        _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ENGAGEMENT,
+    )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    payload = {
+        "schema": "fr13.fixed32.sfwd_state_fusion.production_engagement.v1",
+        "status": "engaged",
+        "run_classification": (
+            "one_real_swe_verified_full_vocab_b1_production_timing_diagnostic"
+        ),
+        **record,
+        "layer_count": 48,
+        "layer_keys": [f"0x{key:x}" for key in sorted(state["layers"])],
+        "physical_rows_per_request": 32,
+        "source_rows_per_request": 36,
+        "candidate_conv_launches_per_layer": 1,
+        "incumbent_conv_launches_per_layer": 0,
+        "gdn_level_path_programs": [1, 11],
+        "gdn_physical_launches_per_layer": 2,
+        "gdn_ring_export_unchanged": True,
+        "gdn_flags_export_unchanged": True,
+        "real_task_pass_bound": True,
+        "timing_eligible": False,
+        "floor_acceptance_eligible": False,
+        "production_eligible": False,
+    }
+    temporary = f"{path}.tmp.{os.getpid()}"
+    with open(temporary, "w", encoding="ascii") as handle:
+        json.dump(payload, handle, sort_keys=True)
+        handle.write("\n")
+    os.replace(temporary, path)
+    state["emitted"] = True
+    return record
 
 
 def _fr13_resolve_fixed32_batch_gdn_bv(
@@ -5310,14 +5588,13 @@ def launch_fixed32_sfwd_state_fusion(
     source_stage: torch.Tensor,
     batch_size: int,
     tree_rows: int,
+    production_credential: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Launch the default-off one-kernel fixed32 conv/state candidate.
 
-    This entrypoint is deliberately byte-gate-only for the first source
-    revision. It refuses CUDA graph capture, validates the topology descriptor
-    on the host, and leaves selection/serving to the caller. A later production
-    selector must be bound to a real-task pass artifact rather than enabling
-    this function implicitly.
+    Candidate serving is allowed only with a credential produced by
+    :func:`fixed32_sfwd_state_fusion_production_control`; otherwise this is the
+    reference-served byte-gate launch. Both routes remain eager-only.
     """
     if _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES:
         raise RuntimeError(
@@ -5325,11 +5602,23 @@ def launch_fixed32_sfwd_state_fusion(
         )
     if torch.cuda.is_current_stream_capturing():
         raise RuntimeError(
-            "FR13_FIXED32_SFWD_STATE_FUSION source candidate is eager "
-            "byte-gate-only; graph production is not qualified"
+            "FR13_FIXED32_SFWD_STATE_FUSION source candidate is eager-only; "
+            "graph production is not qualified"
         )
     batch = int(batch_size)
     rows = int(tree_rows)
+    if production_credential is not None:
+        if id(production_credential) not in (
+            _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_CREDENTIAL_IDS
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_SFWD_STATE_FUSION production credential was "
+                "not source-validated"
+            )
+        if batch != 1:
+            raise RuntimeError(
+                "FR13_FIXED32_SFWD_STATE_FUSION production timing is B1-only"
+            )
     if conv_state.ndim != 3:
         raise ValueError(
             "FR13_FIXED32_SFWD_STATE_FUSION conv_state must be [bank,C,L]"
