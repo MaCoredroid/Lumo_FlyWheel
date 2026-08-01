@@ -129,6 +129,11 @@ def test_sfwd_eager_kernel_diagnostic_bakes_graph_observer_off(
         "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
         "1",
     )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_TIMING",
+        "0",
+    )
     namespace = _runtime_functions(
         "_fr13_fixed32_observed_current",
         "_fr13_fixed32_observed_event_active",
@@ -153,6 +158,32 @@ def test_sfwd_eager_kernel_diagnostic_bakes_graph_observer_off(
         )
         is None
     )
+
+
+def test_sfwd_timing_diagnostic_bakes_graph_observer_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "0",
+    )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_TIMING",
+        "1",
+    )
+    namespace = _runtime_functions(
+        "_fr13_fixed32_observed_current",
+        "_fr13_fixed32_observed_event_active",
+        "_fr13_fixed32_observed_nonpure_dispatch",
+        mode="hydra27_fixed32",
+    )
+
+    assert namespace["_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC"] is True
+    assert namespace["_fr13_fixed32_observed_current"]("test") is None
+    assert namespace["_fr13_fixed32_observed_event_active"]() is False
+    assert namespace["_fr13_fixed32_observed_nonpure_dispatch"]("FULL") is None
 
 
 _GPU_RUNNER_FIXTURE = """\

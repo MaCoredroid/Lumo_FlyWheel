@@ -4863,8 +4863,21 @@ class _Fixed32TaskBracket:
 class _Fixed32EagerKernelDiagnosticTaskBracket(_Fixed32TaskBracket):
     """Authenticate a real task without claiming graph-census evidence."""
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *,
+        run_classification: str = "eager_kernel_byte_diagnostic",
+        **kwargs: Any,
+    ) -> None:
         super().__init__(**kwargs)
+        if run_classification not in {
+            "eager_kernel_byte_diagnostic",
+            "eager_kernel_timing_diagnostic",
+        }:
+            raise Fixed32BoundaryError(
+                "fixed32 eager diagnostic classification is invalid"
+            )
+        self.run_classification = run_classification
         self.pre_metrics_ref: dict[str, Any] | None = None
         self.post_metrics_ref: dict[str, Any] | None = None
 
@@ -4882,7 +4895,7 @@ class _Fixed32EagerKernelDiagnosticTaskBracket(_Fixed32TaskBracket):
             "instance_id": self.instance_id,
             "mode": self.client.mode,
             "producer_pid": self.client.producer_pid,
-            "run_classification": "eager_kernel_byte_diagnostic",
+            "run_classification": self.run_classification,
             "acceptance_valid": False,
             "flush_protocol_used": False,
             "pre_metrics": self.pre_metrics_ref,
@@ -7429,8 +7442,43 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(
                 "fixed32 eager kernel diagnostic requires ENFORCE_EAGER=1"
             )
+    sfwd_state_fusion_timing_text = os.environ.get(
+        "FR13_FIXED32_SFWD_STATE_FUSION_TIMING",
+        "0",
+    )
+    if sfwd_state_fusion_timing_text not in {"0", "1"}:
+        parser.error(
+            "FR13_FIXED32_SFWD_STATE_FUSION_TIMING must be exactly 0 or 1"
+        )
+    fixed32_sfwd_state_fusion_timing = (
+        sfwd_state_fusion_timing_text == "1"
+    )
+    if (
+        fixed32_sfwd_state_fusion_diagnostic
+        and fixed32_sfwd_state_fusion_timing
+    ):
+        parser.error("fixed32 SFWD byte and timing diagnostics are exclusive")
+    if fixed32_sfwd_state_fusion_timing:
+        if fixed32_taw_diagnostic or fixed32_bm8_diagnostic:
+            parser.error(
+                "fixed32 SFWD timing, TAW, and BM8 diagnostics are exclusive"
+            )
+        if not fixed32_enabled or not fixed32_b1_diagnostic:
+            parser.error(
+                "fixed32 SFWD timing diagnostic requires fixed32 B1 mode"
+            )
+        if os.environ.get("ENFORCE_EAGER", "0") != "1":
+            parser.error(
+                "fixed32 eager kernel diagnostic requires ENFORCE_EAGER=1"
+            )
     fixed32_eager_kernel_diagnostic = (
         fixed32_sfwd_state_fusion_diagnostic
+        or fixed32_sfwd_state_fusion_timing
+    )
+    fixed32_eager_kernel_run_classification = (
+        "eager_kernel_timing_diagnostic"
+        if fixed32_sfwd_state_fusion_timing
+        else "eager_kernel_byte_diagnostic"
     )
     fixed32_client = None
     fixed32_subset = None
@@ -7614,6 +7662,15 @@ def main(argv: list[str] | None = None) -> int:
                 boundary_snapshot_base=args.fixed32_boundary_snapshot,
                 server_capacity=serving_batch,
                 taw_real_task_arm=taw_real_task_arm,
+                **(
+                    {
+                        "run_classification": (
+                            fixed32_eager_kernel_run_classification
+                        )
+                    }
+                    if fixed32_eager_kernel_diagnostic
+                    else {}
+                ),
             )
             if fixed32_client is not None
             else None

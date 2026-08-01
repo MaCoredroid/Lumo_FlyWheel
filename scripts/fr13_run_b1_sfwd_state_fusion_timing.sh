@@ -109,6 +109,71 @@ printf '%s\n' \
   "started=$(date -u +%FT%TZ)" \
   > "$RUNROOT_ABS/launcher_meta.txt"
 
+validate_eager_lifecycle() {
+  local arm=$1
+  "$PYTHON_BIN" - "$RUNROOT_ABS/$arm" "$TASK_ID" <<'PY'
+import json
+import stat
+import sys
+from pathlib import Path
+
+armdir = Path(sys.argv[1])
+task_id = sys.argv[2]
+classification = "eager_kernel_timing_diagnostic"
+
+
+def load(path: Path) -> dict:
+    info = path.lstat()
+    if path.is_symlink() or not stat.S_ISREG(info.st_mode):
+        raise SystemExit(f"non-regular eager lifecycle artifact: {path}")
+    payload = json.loads(path.read_text(encoding="ascii"))
+    if not isinstance(payload, dict):
+        raise SystemExit(f"eager lifecycle artifact is not an object: {path}")
+    return payload
+
+
+terminal = load(armdir / "fixed32_final_flush_skipped.json")
+for key, expected in {
+    "schema": "fr13-fixed32-eager-kernel-terminal-v1",
+    "run_classification": classification,
+    "acceptance_valid": False,
+    "flush_protocol_used": False,
+}.items():
+    if terminal.get(key) != expected:
+        raise SystemExit(f"{armdir.name} terminal {key} mismatch")
+
+traffic = load(armdir / "fixed32_chat_traffic_audit_skipped.json")
+for key, expected in {
+    "schema": "fr13-fixed32-eager-kernel-traffic-audit-skip-v1",
+    "run_classification": classification,
+    "acceptance_valid": False,
+    "authenticated_engine_ledger_snapshotted": True,
+    "graph_census_audit_used": False,
+}.items():
+    if traffic.get(key) != expected:
+        raise SystemExit(f"{armdir.name} traffic audit {key} mismatch")
+
+boundaries = list(armdir.glob("swe_out/*/per_task/*/fixed32_task_boundary.json"))
+if len(boundaries) != 1:
+    raise SystemExit(
+        f"{armdir.name} expected one eager task boundary, found {len(boundaries)}"
+    )
+boundary = load(boundaries[0])
+for key, expected in {
+    "schema": "fr13-fixed32-eager-kernel-diagnostic-task-bracket-v1",
+    "instance_id": task_id,
+    "run_classification": classification,
+    "acceptance_valid": False,
+    "flush_protocol_used": False,
+}.items():
+    if boundary.get(key) != expected:
+        raise SystemExit(f"{armdir.name} task boundary {key} mismatch")
+for key in ("pre_metrics", "post_metrics"):
+    if not isinstance(boundary.get(key), dict):
+        raise SystemExit(f"{armdir.name} task boundary lacks {key}")
+PY
+}
+
 run_arm() {
   local arm=$1
   local production=$2
@@ -131,6 +196,7 @@ run_arm() {
       FR13_DFWD_GPU_TIMER_JSON="/workspace/$RUNROOT_REL/sidecars/${arm}_dfwd.json" \
       FR13_CFWD_GPU_TIMER_JSON="/workspace/$RUNROOT_REL/sidecars/${arm}_cfwd.json" \
       FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=0 \
+      FR13_FIXED32_SFWD_STATE_FUSION_TIMING=1 \
       FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION="$production" \
       FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON="$pass_json" \
       FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256="$pass_sha" \
@@ -179,10 +245,12 @@ run_arm() {
       'FR13_DRAFT_VOCAB_ROOT=0' \
       'FR13_DRAFT_VOCAB_K=0' \
       'ENFORCE_EAGER=1' \
+      'FR13_FIXED32_SFWD_STATE_FUSION_TIMING=1' \
       "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=$production"; do
     [[ "$(grep -Fxc "$expected" "$env_path")" -eq 1 ]] \
       || { echo "$arm lacks exact environment pin: $expected" >&2; return 4; }
   done
+  validate_eager_lifecycle "$arm"
   "$PYTHON_BIN" scripts/fr13_measure.py deploy-speed \
     --arm "$arm" \
     --out-root "$RUNROOT_ABS/$arm/swe_out" \

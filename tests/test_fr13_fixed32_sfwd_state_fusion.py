@@ -442,6 +442,7 @@ def test_b1_full_vocab_runner_is_reference_returning_and_nonacceptance() -> None
     assert "FR13_DRAFT_VOCAB_ROOT=0" in runner
     assert "FR13_DRAFT_VOCAB_K=0" in runner
     assert "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=1" in runner
+    assert "FR13_FIXED32_SFWD_STATE_FUSION_TIMING=0" in runner
     assert "FR13_CONV_WB_BATCHED=1" in runner
     assert "FR13_TREE_CONV_FUSED=1" in runner
     assert "FR13_FIXED32_CUTLASS_WAVE=stock" in runner
@@ -498,6 +499,7 @@ def test_sfwd_gate_uses_eager_lifecycle_without_graph_acceptance() -> None:
 
 def test_source_gated_timing_pair_is_stock_first_and_nonacceptance() -> None:
     runner = TIMING_RUNNER_PATH.read_text(encoding="utf-8")
+    launcher = LAUNCHER_PATH.read_text(encoding="utf-8")
     assert "subset_b1_diagnostic_one.json" in runner
     assert "subset_b4_four.json" not in runner
     assert "subset_b16" not in runner
@@ -505,6 +507,8 @@ def test_source_gated_timing_pair_is_stock_first_and_nonacceptance() -> None:
     assert "ACCEPT_SPEED_PROBE" not in runner
     assert "FR13_DRAFT_VOCAB_ROOT=0" in runner
     assert "FR13_DRAFT_VOCAB_K=0" in runner
+    assert "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=0" in runner
+    assert "FR13_FIXED32_SFWD_STATE_FUSION_TIMING=1" in runner
     assert "ENFORCE_EAGER=1 CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in runner
     assert "FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1" in runner
     assert "scripts/fr13_measure.py deploy-speed" in runner
@@ -513,6 +517,13 @@ def test_source_gated_timing_pair_is_stock_first_and_nonacceptance() -> None:
     assert "timing_eligible=false" in runner
     assert "floor_acceptance_eligible=false" in runner
     assert "production_eligible=false" in runner
+    assert "validate_eager_lifecycle" in runner
+    assert "fr13-fixed32-eager-kernel-terminal-v1" in runner
+    assert "fr13-fixed32-eager-kernel-traffic-audit-skip-v1" in runner
+    assert "fr13-fixed32-eager-kernel-diagnostic-task-bracket-v1" in runner
+    assert 'classification = "eager_kernel_timing_diagnostic"' in runner
+    assert "SFWD_STATE_FUSION_TIMING" in launcher
+    assert "production requires the timing selector" in launcher
     assert runner.index('run_arm "$STOCK_ARM" 0') < runner.index(
         'run_arm "$CANDIDATE_ARM" 1'
     )

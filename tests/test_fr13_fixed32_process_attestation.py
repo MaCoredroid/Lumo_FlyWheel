@@ -305,23 +305,27 @@ def test_live_attestation_receives_the_selector_explicitly() -> None:
     assert '"${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" \\' in serve
     assert '"${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" \\' in serve
     assert (
-        '"${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" <<\'PY\''
+        '"${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" \\'
+        in serve
+    )
+    assert (
+        '"${FR13_FIXED32_SFWD_STATE_FUSION_TIMING:-0}" <<\'PY\''
         in serve
     )
     assert "attribution_only_text = sys.argv[7]" in serve
     assert "batch_gdn_byte_ab_text = sys.argv[8]" in serve
     assert "batch_gdn_graph_byte_ab_text = sys.argv[9]" in serve
     assert "sfwd_state_fusion_byte_ab_text = sys.argv[10]" in serve
+    assert "sfwd_state_fusion_timing_text = sys.argv[11]" in serve
     assert "attribution_only_text = os.environ" not in serve
     assert "batch_gdn_byte_ab_text = os.environ" not in serve
     assert "batch_gdn_graph_byte_ab_text = os.environ" not in serve
     assert "sfwd_state_fusion_byte_ab_text = os.environ" not in serve
+    assert "sfwd_state_fusion_timing_text = os.environ" not in serve
     assert "eager_diagnostic=batch_gdn_byte_ab_text == \"1\"" in serve
     assert (
         "graph_diagnostic=batch_gdn_graph_byte_ab_text == \"1\"" in serve
     )
-    assert (
-        "streamk_eager_diagnostic="
-        "sfwd_state_fusion_byte_ab_text == \"1\""
-        in serve
-    )
+    assert "streamk_eager_diagnostic=(" in serve
+    assert 'sfwd_state_fusion_byte_ab_text == "1"' in serve
+    assert 'or sfwd_state_fusion_timing_text == "1"' in serve

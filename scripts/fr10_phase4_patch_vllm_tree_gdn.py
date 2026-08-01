@@ -167,6 +167,9 @@ _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = os.environ.get(
 _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB = os.environ.get(
     "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB", "0"
 ).strip()
+_FR13_FIXED32_SFWD_STATE_FUSION_TIMING = os.environ.get(
+    "FR13_FIXED32_SFWD_STATE_FUSION_TIMING", "0"
+).strip()
 _FR13_FIXED32_TREE_SOURCE = repr(list(_FR13_FIXED32_CHOICES))
 _FR13_FIXED32_SLOT_PI = tuple(
     [0]
@@ -5647,6 +5650,18 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
     sfwd_state_fusion_diagnostic = (
         sfwd_state_fusion_diagnostic_raw == "1"
     )
+    sfwd_state_fusion_timing_raw = (
+        _FR13_FIXED32_SFWD_STATE_FUSION_TIMING
+    )
+    if sfwd_state_fusion_timing_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_TIMING must be exactly 0 or 1"
+        )
+    sfwd_state_fusion_timing = sfwd_state_fusion_timing_raw == "1"
+    if sfwd_state_fusion_diagnostic and sfwd_state_fusion_timing:
+        raise RuntimeError(
+            "FR13 fixed32 SFWD byte and timing diagnostics are mutually exclusive"
+        )
     if candidate_raw and candidate_raw not in ("16", "32", "64", "128"):
         raise RuntimeError(
             "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be one of "
@@ -5680,6 +5695,10 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         raise RuntimeError(
             "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB requires fixed32 mode"
         )
+    if sfwd_state_fusion_timing and not resolved_mode:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_TIMING requires fixed32 mode"
+        )
     if not resolved_mode:
         valid_mask = 0
     elif resolved_mode in _FR13_FIXED32_MODES:
@@ -5700,7 +5719,7 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         "_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = "
         f"{graph_batch_gdn_diagnostic!r}\n"
         "_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC = "
-        f"{sfwd_state_fusion_diagnostic!r}\n"
+        f"{(sfwd_state_fusion_diagnostic or sfwd_state_fusion_timing)!r}\n"
     )
 
 
@@ -5717,6 +5736,10 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     sfwd_state_fusion_diagnostic = (
         _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
     )
+    sfwd_state_fusion_timing = _FR13_FIXED32_SFWD_STATE_FUSION_TIMING
+    sfwd_state_fusion_production = os.environ.get(
+        "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION", "0"
+    ).strip()
     if batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1"
@@ -5728,6 +5751,21 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     if sfwd_state_fusion_diagnostic not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"
+        )
+    if sfwd_state_fusion_timing not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_TIMING must be exactly 0 or 1"
+        )
+    if sfwd_state_fusion_production not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION must be exactly 0 or 1"
+        )
+    if (
+        sfwd_state_fusion_diagnostic == "1"
+        and sfwd_state_fusion_timing == "1"
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 SFWD byte and timing diagnostics are mutually exclusive"
         )
     if (
         batch_gdn_byte_diagnostic == "1"
@@ -5760,6 +5798,30 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
                 "FR13 fixed32 SFWD state-fusion byte diagnostic requires "
                 "the exclusive eager B1 shadow route"
             )
+    if sfwd_state_fusion_timing == "1":
+        if not mode:
+            raise RuntimeError(
+                "FR13_FIXED32_SFWD_STATE_FUSION_TIMING requires fixed32 mode"
+            )
+        incompatible = (
+            os.environ.get("FR13_FIXED32_B1_DIAGNOSTIC", "0") != "1"
+            or os.environ.get("ENFORCE_EAGER", "0") != "1"
+            or batch_gdn_byte_diagnostic != "0"
+            or graph_batch_gdn_byte_diagnostic != "0"
+            or bool(candidate)
+            or bool(production)
+            or taw_native_diagnostic
+        )
+        if incompatible:
+            raise RuntimeError(
+                "FR13 fixed32 SFWD state-fusion timing requires the "
+                "exclusive eager B1 route"
+            )
+    elif sfwd_state_fusion_production == "1":
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION requires "
+            "FR13_FIXED32_SFWD_STATE_FUSION_TIMING=1"
+        )
     if batch_gdn_byte_diagnostic == "1":
         candidate_bv = os.environ.get(
             "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE", ""

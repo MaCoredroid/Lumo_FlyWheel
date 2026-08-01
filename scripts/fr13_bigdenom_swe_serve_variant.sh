@@ -37,6 +37,7 @@ SUBSET=${3:?subset json}
 FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
 FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
 FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
+FR13_FIXED32_SFWD_STATE_FUSION_TIMING=${FR13_FIXED32_SFWD_STATE_FUSION_TIMING:-0}
 case "$FR13_FIXED32_B1_DIAGNOSTIC" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1"; exit 2 ;;
@@ -49,11 +50,28 @@ case "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"; exit 2 ;;
 esac
+case "$FR13_FIXED32_SFWD_STATE_FUSION_TIMING" in
+  0|1) ;;
+  *) echo "FAIL: FR13_FIXED32_SFWD_STATE_FUSION_TIMING must be exactly 0 or 1"; exit 2 ;;
+esac
+if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" \
+      && "$FR13_FIXED32_SFWD_STATE_FUSION_TIMING" == "1" ]]; then
+  echo "FAIL: SFWD byte and timing diagnostics are mutually exclusive"
+  exit 2
+fi
 export FR13_FIXED32_B1_DIAGNOSTIC FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB \
-  FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
+  FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB \
+  FR13_FIXED32_SFWD_STATE_FUSION_TIMING
 _fixed32_eager_kernel_diagnostic=0
+_fixed32_eager_kernel_run_classification=
 if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" ]]; then
   _fixed32_eager_kernel_diagnostic=1
+  _fixed32_eager_kernel_run_classification=eager_kernel_byte_diagnostic
+elif [[ "$FR13_FIXED32_SFWD_STATE_FUSION_TIMING" == "1" ]]; then
+  _fixed32_eager_kernel_diagnostic=1
+  _fixed32_eager_kernel_run_classification=eager_kernel_timing_diagnostic
+fi
+if [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then
   [[ "${ENFORCE_EAGER:-0}" == "1" ]] \
     || { echo "FAIL: eager kernel diagnostic requires ENFORCE_EAGER=1"; exit 2; }
 fi
@@ -1342,7 +1360,8 @@ teardown(){
       echo "fixed32 teardown skipped container operations: immutable incarnation attestation failed" \
         > "$ARMDIR/fixed32_final_flush.stderr"
     elif [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then
-      printf '{"acceptance_valid":false,"flush_protocol_used":false,"run_classification":"eager_kernel_byte_diagnostic","schema":"fr13-fixed32-eager-kernel-terminal-v1"}\n' \
+      printf '{"acceptance_valid":false,"flush_protocol_used":false,"run_classification":"%s","schema":"fr13-fixed32-eager-kernel-terminal-v1"}\n' \
+        "$_fixed32_eager_kernel_run_classification" \
         > "$ARMDIR/fixed32_final_flush_skipped.json"
       : > "$ARMDIR/fixed32_final_flush.stderr"
     elif [[ -n "$FIXED32_PRODUCER_PID" && -f "$FIXED32_ACK_PATH" ]]; then
@@ -1377,8 +1396,8 @@ teardown(){
       tail -20 "$ARMDIR/fixed32_engine_ingress_snapshot.log" >&2 || true
       (( rc == 0 )) && rc=16
     elif [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then
-      printf '%s\n' \
-        '{"acceptance_valid":false,"authenticated_engine_ledger_snapshotted":true,"graph_census_audit_used":false,"reason":"eager_mode_has_no_cuda_graph_census","run_classification":"eager_kernel_byte_diagnostic","schema":"fr13-fixed32-eager-kernel-traffic-audit-skip-v1"}' \
+      printf '{"acceptance_valid":false,"authenticated_engine_ledger_snapshotted":true,"graph_census_audit_used":false,"reason":"eager_mode_has_no_cuda_graph_census","run_classification":"%s","schema":"fr13-fixed32-eager-kernel-traffic-audit-skip-v1"}\n' \
+        "$_fixed32_eager_kernel_run_classification" \
         > "$ARMDIR/fixed32_chat_traffic_audit_skipped.json" \
         2> "$ARMDIR/fixed32_chat_traffic_audit.log"
       audit_rc=$?
@@ -1660,7 +1679,8 @@ PY
     "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" \
     "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" \
     "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" \
-    "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" <<'PY'
+    "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" \
+    "${FR13_FIXED32_SFWD_STATE_FUSION_TIMING:-0}" <<'PY'
 import json
 import subprocess
 import sys
@@ -1679,6 +1699,7 @@ attribution_only_text = sys.argv[7]
 batch_gdn_byte_ab_text = sys.argv[8]
 batch_gdn_graph_byte_ab_text = sys.argv[9]
 sfwd_state_fusion_byte_ab_text = sys.argv[10]
+sfwd_state_fusion_timing_text = sys.argv[11]
 runtime = contract.validate_runtime_attestation(
     json.loads(runtime_path.read_text(encoding="utf-8"))
 )
@@ -1705,6 +1726,10 @@ if sfwd_state_fusion_byte_ab_text not in {"0", "1"}:
     raise SystemExit(
         "fixed32 SFWD state-fusion byte diagnostic selector must be exactly 0 or 1"
     )
+if sfwd_state_fusion_timing_text not in {"0", "1"}:
+    raise SystemExit(
+        "fixed32 SFWD state-fusion timing selector must be exactly 0 or 1"
+    )
 try:
     contract.validate_process_pid1_argv(
         pid1.get("argv"),
@@ -1712,7 +1737,10 @@ try:
         attribution_only=attribution_only_text == "1",
         eager_diagnostic=batch_gdn_byte_ab_text == "1",
         graph_diagnostic=batch_gdn_graph_byte_ab_text == "1",
-        streamk_eager_diagnostic=sfwd_state_fusion_byte_ab_text == "1",
+        streamk_eager_diagnostic=(
+            sfwd_state_fusion_byte_ab_text == "1"
+            or sfwd_state_fusion_timing_text == "1"
+        ),
     )
 except contract.ContractError as error:
     raise SystemExit(str(error)) from error
