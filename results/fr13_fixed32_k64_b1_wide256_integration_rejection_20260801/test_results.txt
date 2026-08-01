@@ -1,0 +1,40 @@
+FR13 fixed32 K64 B1 wide256 integration rejection verification
+Date: 2026-08-01 UTC
+Execution class: CPU-only static and repository validation
+GPU commands run: 0
+Docker commands run: 0
+
+PASS  Focused rejection tests
+      /home/mark/shared/lumoFlyWheel/.venv/bin/python -m pytest -q tests/test_fr13_k64_b1_wide256_integration_rejection.py
+      6 passed in 0.15s
+
+PASS  Neighboring CUTLASS and K64 route tests
+      /home/mark/shared/lumoFlyWheel/.venv/bin/python -m pytest -q tests/test_fr13_cutlass_fixed32_wave_patch.py tests/test_fr13_cutlass_streamk_gate_wiring.py tests/test_fr13_cutlass_streamk_production.py tests/test_fr13_cutlass_wave_binary.py tests/test_fr13_k64_physical32_fullstack_route.py tests/test_fr13_k64_b1_wide256_integration_rejection.py
+      58 passed in 1.10s
+
+PASS  Python lint, formatting, compile, JSON parse, and git whitespace checks
+      ruff check: pass
+      ruff format --check: pass
+      python -m py_compile: pass
+      python -m json.tool: pass
+      git diff --check: pass
+
+PASS  Existing forced-Stream-K stock-symbol-exact artifact checksums
+      sha256sum -c results/fr13_fixed32_streamk_wide256_stock_symbol_exact_build_20260801/SHA256SUMS
+      7 files OK
+
+PASS  Candidate binary identity and ELF RUNPATH audit
+      forced Stream-K SHA-256 f7d5c01ca79829fbfff4c93949d057bd740905165b0b6793b3c0007629add962, bytes 112481752, mode 0555
+      data parallel SHA-256 5b921ab7b428f2c5cfeefc0daed0314ff903d73bb0d4f8a790b17234c9d60890, bytes 112787936, mode 0555
+      both RUNPATH values match /usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64
+
+PASS  CPU-side cuobjdump selected-kernel resource audit
+      forced Stream-K: 2 of 2 wide256 records match REG=168 STACK=8 SHARED=1024 LOCAL=0 CONSTANT[0]=2944
+      data parallel: 2 of 2 wide256 records match REG=168 STACK=0 SHARED=1024 LOCAL=0 CONSTANT[0]=2560
+
+PASS  Data-parallel build provenance fails closed as recorded
+      source commit 42a22ed39bc23ece47b3debb4efa9b4c4652cca9 declares build.log in SHA256SUMS
+      the declared build.log is absent from that source tree
+
+RESULT: REJECTED_NO_PRODUCTION_CANDIDATE
+No candidate selected. No K64 gate, timing pair, B4, GDN, or overlap route prepared.
