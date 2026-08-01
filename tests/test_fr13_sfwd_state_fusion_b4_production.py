@@ -210,6 +210,10 @@ def test_runner_and_launcher_are_exact4_b4_shadow_only() -> None:
     assert "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=0" in runner
     assert "FR13_CONV_WB_BATCHED=1" in runner
     assert "FR13_FIXED32_CONV_SOURCE_BATCH=1" in runner
+    assert (
+        "FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1"
+        in runner
+    )
     assert "candidate_shadow_only=1" in runner
     assert "reference_always_served=1" in runner
     assert "acceptance_valid=0" in runner
