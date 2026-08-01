@@ -1,0 +1,42 @@
+{
+  "binary": {
+    "bytes": 112697400,
+    "mode": "0555",
+    "path": "/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.persistent_b4_m128_stock_symbol_exact_gate_ready.abi3.so",
+    "runpath": "/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64",
+    "sha256": "1997fe0800ac4927690c021ddc2c0a3ccf763b36883c1b63f06310a0b02065d4"
+  },
+  "build": {
+    "cuda_arch": "12.1a",
+    "cutlass_revision": "v4.4.2",
+    "patched_dispatch_sha256": "d4e9a445c65be2c9991fba92d323e2cf2496061dc008f56c7a0bc7f122666b67",
+    "patch_source_sha256": "aaeededb58a1eda26b1570d7816456fdbe0cfba713488e688905c4c933b1b143",
+    "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
+  },
+  "candidate": {
+    "diagnostic_selector": "persistent_b4_m128_byte_ab",
+    "dispatch_m": 128,
+    "fallback": "stock",
+    "kernel_schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+    "selector": "persistent_b4_m128",
+    "tile_mnk": [128, 128, 128]
+  },
+  "measurement": {
+    "hardware_floor_claim": false,
+    "status": "unmeasured",
+    "task_set_required": "real SWE-Verified exact4 B4"
+  },
+  "schema": "fr13.fixed32.cutlass_b4_persistent_m128.build.v1",
+  "static_evidence": {
+    "candidate_kernel_count": 2,
+    "candidate_resources": {
+      "constant_0_bytes": 2560,
+      "registers": 168,
+      "shared_bytes": 1024,
+      "stack_bytes": 0
+    },
+    "cuobjdump_sha256": "8dab744202393bdc26cc2d2aa622f6ac1eb492dd932861ff62f63daa1c6c9841",
+    "stock_kernel_records_matched": 6,
+    "stock_resource_equivalent": true
+  }
+}

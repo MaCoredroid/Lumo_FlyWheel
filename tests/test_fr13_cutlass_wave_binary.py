@@ -30,6 +30,8 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "streamk_coop128_byte_ab",
         "streamk_force_wide256",
         "streamk_force_wide256_byte_ab",
+        "persistent_b4_m128",
+        "persistent_b4_m128_byte_ab",
     }
     assert module.WIDE256_CANDIDATE_SHA256 == (
         "f7d5c01ca79829fbfff4c93949d057bd740905165b0b6793b3c0007629add962"
@@ -39,6 +41,15 @@ def test_pinned_binary_identity_and_selectors() -> None:
         module.WIDE256_CANDIDATE_SHA256,
         module.WIDE256_CANDIDATE_SIZE,
         "streamk_force_wide256",
+    )
+    assert module.B4_M128_CANDIDATE_SHA256 == (
+        "1997fe0800ac4927690c021ddc2c0a3ccf763b36883c1b63f06310a0b02065d4"
+    )
+    assert module.B4_M128_CANDIDATE_SIZE == 112_697_400
+    assert module.candidate_identity("persistent_b4_m128_byte_ab") == (
+        module.B4_M128_CANDIDATE_SHA256,
+        module.B4_M128_CANDIDATE_SIZE,
+        "persistent_b4_m128",
     )
 
 

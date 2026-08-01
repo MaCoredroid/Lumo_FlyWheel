@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add default-off fixed32 CUTLASS Stream-K candidates to pinned vLLM.
+"""Add default-off fixed32 CUTLASS projection candidates to pinned vLLM.
 
 The candidate selector is restricted to the real Qwen3.6 projection histogram.
 It does not alter quantization granularity, tile K, accumulation type, or the
@@ -187,12 +187,31 @@ struct sm120_blockwise_fp8_config_swapab_streamk_wide256 {
       cutlass::gemm::collective::StageCount<2>>;
 };
 
+template <typename OutType>
+struct sm120_blockwise_fp8_config_b4_persistent_m128 {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_128, _128, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using BaseGemm = cutlass_3x_gemm_fp8_blockwise<
+      OutType, 1, 128, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, false>;
+  struct Gemm : BaseGemm {
+    using KernelType = typename BaseGemm::KernelType;
+    struct GemmKernel : public KernelType {};
+  };
+};
+
 enum class fixed32_cutlass_wave_variant {
   stock,
   stream_k_cooperative_128,
   stream_k_cooperative_128_byte_ab,
   stream_k_force_wide256,
   stream_k_force_wide256_byte_ab,
+  persistent_b4_m128,
+  persistent_b4_m128_byte_ab,
 };
 
 static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
@@ -217,6 +236,12 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     }
     if (value == "streamk_force_wide256_byte_ab") {
       return fixed32_cutlass_wave_variant::stream_k_force_wide256_byte_ab;
+    }
+    if (value == "persistent_b4_m128") {
+      return fixed32_cutlass_wave_variant::persistent_b4_m128;
+    }
+    if (value == "persistent_b4_m128_byte_ab") {
+      return fixed32_cutlass_wave_variant::persistent_b4_m128_byte_ab;
     }
     return fixed32_cutlass_wave_variant::stock;
   }();
@@ -244,6 +269,30 @@ static inline std::string fixed32_cutlass_real_task_marker() {
           marker.substr(std::strlen(prefix)).find_first_not_of(allowed) ==
               std::string::npos,
       "FR13 Stream-K real-task arm is noncanonical");
+  return marker;
+}
+
+static inline std::string fixed32_cutlass_b4_real_task_marker() {
+  constexpr const char* arm_path =
+      "/logs/fr13_fixed32_cutlass_b4_byte_ab.real_event.arm";
+  std::ifstream arm(arm_path);
+  if (!arm.good()) {
+    return "";
+  }
+  std::string marker;
+  std::string trailing;
+  std::getline(arm, marker);
+  STD_TORCH_CHECK(!marker.empty() && !std::getline(arm, trailing),
+                  "FR13 CUTLASS B4 real-task arm is malformed");
+  constexpr const char* prefix = "swe_verified:";
+  constexpr const char* allowed =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/";
+  STD_TORCH_CHECK(
+      marker.size() > std::strlen(prefix) && marker.size() <= 256 &&
+          marker.rfind(prefix, 0) == 0 &&
+          marker.substr(std::strlen(prefix)).find_first_not_of(allowed) ==
+              std::string::npos,
+      "FR13 CUTLASS B4 real-task arm is noncanonical");
   return marker;
 }
 
@@ -342,6 +391,13 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
            fixed32_cutlass_wave_variant::stream_k_force_wide256_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
+  if (M != 128 &&
+      (wave_variant ==
+           fixed32_cutlass_wave_variant::persistent_b4_m128 ||
+       wave_variant ==
+           fixed32_cutlass_wave_variant::persistent_b4_m128_byte_ab)) {
+    wave_variant = fixed32_cutlass_wave_variant::stock;
+  }
 
   auto run_stream_k = [&](torch::stable::Tensor& destination) {
     if (M <= 64) {
@@ -359,6 +415,13 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   auto run_stream_k_wide256 = [&](torch::stable::Tensor& destination) {
     using Gemm = typename
         sm120_blockwise_fp8_config_swapab_streamk_wide256<OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
+  auto run_b4_persistent_m128 = [&](torch::stable::Tensor& destination) {
+    using Gemm = typename
+        sm120_blockwise_fp8_config_b4_persistent_m128<OutType>::Gemm;
     return cutlass_gemm_caller_blockwise<Gemm>(
         destination, a, b, a_scales, b_scales);
   };
@@ -384,10 +447,16 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   const bool wide256_byte_ab =
       wave_variant ==
       fixed32_cutlass_wave_variant::stream_k_force_wide256_byte_ab;
+  const bool b4_m128_byte_ab =
+      wave_variant ==
+      fixed32_cutlass_wave_variant::persistent_b4_m128_byte_ab;
   if (wave_variant ==
           fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab ||
-      wide256_byte_ab) {
+      wide256_byte_ab || b4_m128_byte_ab) {
     auto run_candidate = [&](torch::stable::Tensor& destination) {
+      if (b4_m128_byte_ab) {
+        return run_b4_persistent_m128(destination);
+      }
       if (wide256_byte_ab) {
         return run_stream_k_wide256(destination);
       }
@@ -395,7 +464,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     };
     // Boot/profile forwards are not authenticated real-task work. Keep them
     // entirely on stock; candidate execution starts only after the arm exists.
-    std::string task_marker = fixed32_cutlass_real_task_marker();
+    std::string task_marker =
+        b4_m128_byte_ab ? fixed32_cutlass_b4_real_task_marker()
+                        : fixed32_cutlass_real_task_marker();
     if (task_marker.empty()) {
       return run_stock(out);
     }
@@ -446,9 +517,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       }
     }
     const char* log_path =
-        wide256_byte_ab
-            ? "/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl"
-            : "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl";
+        b4_m128_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl"
+            : (wide256_byte_ab
+                   ? "/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl"
+                   : "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl");
     static std::mutex log_mutex;
     {
       std::lock_guard<std::mutex> lock(log_mutex);
@@ -456,9 +529,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       STD_TORCH_CHECK(log.good(),
                       "FR13 Stream-K byte A/B could not open JSONL");
       log << "{\\\"schema\\\":\\\""
-          << (wide256_byte_ab
-                  ? "fr13.fixed32.cutlass_streamk_wide256_byte_ab.v1"
-                  : "fr13.fixed32.cutlass_streamk_byte_ab.v2")
+          << (b4_m128_byte_ab
+                  ? "fr13.fixed32.cutlass_persistent_b4_m128_byte_ab.v1"
+                  : (wide256_byte_ab
+                         ? "fr13.fixed32.cutlass_streamk_wide256_byte_ab.v1"
+                         : "fr13.fixed32.cutlass_streamk_byte_ab.v2"))
           << "\\\","
           << "\\\"invocation\\\":" << invocation << ","
           << "\\\"task_marker\\\":\\\"" << task_marker << "\\\","
@@ -489,6 +564,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   if (wave_variant ==
       fixed32_cutlass_wave_variant::stream_k_force_wide256) {
     return run_stream_k_wide256(out);
+  }
+
+  if (wave_variant ==
+      fixed32_cutlass_wave_variant::persistent_b4_m128) {
+    return run_b4_persistent_m128(out);
   }
 
   // Unset/unknown selectors retain the stock kernel and numeric result.

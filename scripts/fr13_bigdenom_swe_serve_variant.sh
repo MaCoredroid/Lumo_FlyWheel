@@ -1513,6 +1513,20 @@ if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       echo "FAIL: fixed32 CUTLASS, TAW, and BM8 real-task diagnostics are exclusive"
       exit 2
     }
+elif [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_byte_ab" ]]; then
+  [[ -n "$FIXED32_MODE" \
+     && "$FR13_FIXED32_B1_DIAGNOSTIC" == "0" \
+     && "$MAX_NUM_SEQS_OVR" == "4" ]] || {
+    echo "FAIL: fixed32 CUTLASS B4 byte diagnostic requires exact B4 mode"
+    exit 2
+  }
+  [[ "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "0" \
+     && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" == "0" ]] || {
+    echo "FAIL: fixed32 CUTLASS B4 byte diagnostic must be exclusive"
+    exit 2
+  }
 fi
 if [[ "$LAUNCHER" == "locked" ]]; then
   CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.78}" MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \

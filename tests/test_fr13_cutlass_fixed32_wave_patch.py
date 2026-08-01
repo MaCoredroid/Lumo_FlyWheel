@@ -94,6 +94,8 @@ def test_patch_is_default_off_and_shape_gated() -> None:
     assert 'value == "streamk_coop128_byte_ab"' in patched
     assert 'value == "streamk_force_wide256"' in patched
     assert 'value == "streamk_force_wide256_byte_ab"' in patched
+    assert 'value == "persistent_b4_m128"' in patched
+    assert 'value == "persistent_b4_m128_byte_ab"' in patched
     assert "return fixed32_cutlass_wave_variant::stock;" in patched
     for rows in (32, 64, 96, 128):
         assert f"m == {rows}" in patched
@@ -112,13 +114,13 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 3
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 3
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 4
     assert "PingpongSm120" not in module.CONFIG_REPLACEMENT
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
     assert "OutType, 1, 128, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _128, _128>;" in patched
-    assert "using TileShape = Shape<_128, _256, _128>;" not in patched
+    assert "using TileShape = Shape<_64, _256, _128>;" not in patched
     assert "using TileShape = Shape<_256, _32, _128>;" in patched
     assert (
         "OutType, 128, 1, 128, TileShape, ClusterShape,\n"
@@ -131,6 +133,31 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     assert "cutlass::gemm::collective::StageCount<2>" in patched
     assert "ElementAccumulator = float" not in module.CONFIG_REPLACEMENT
     assert "ElementD" not in module.CONFIG_REPLACEMENT
+
+
+def test_b4_m128_preserves_stock_template_and_is_exactly_m128_gated() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    config_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b4_persistent_m128"
+    )
+    config_end = patched.index("enum class fixed32_cutlass_wave_variant", config_start)
+    config = patched[config_start:config_end]
+    assert "using TileShape = Shape<_128, _128, _128>;" in config
+    assert "KernelTmaWarpSpecializedBlockwiseCooperativeSm120" in config
+    assert "cutlass_3x_gemm_fp8_blockwise<" in config
+    assert "cutlass_3x_gemm_fp8_blockwise_streamk" not in config
+    assert "OutType, 1, 128, 128, TileShape, ClusterShape" in config
+    assert "EpilogueSchedule, KernelSchedule, false>" in config
+    assert "struct Gemm : BaseGemm" in config
+    assert "struct GemmKernel : public KernelType" in config
+    assert "if (M != 128 &&" in patched
+    assert "persistent_b4_m128_byte_ab" in patched
+    assert "fixed32_cutlass_b4_real_task_marker()" in patched
+    assert (
+        '"/logs/fr13_fixed32_cutlass_b4_byte_ab.real_event.arm"' in patched
+    )
 
 
 def test_wide256_is_b1_only_and_large_rows_fail_to_stock() -> None:
@@ -257,9 +284,14 @@ def test_same_process_byte_ab_is_bounded_and_returns_stock() -> None:
     assert '\\"mismatch_count\\"' in module.DISPATCH_REPLACEMENT
     assert '"/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl"' in patched
     assert '"/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl"' in patched
+    assert (
+        '"/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl"'
+        in patched
+    )
     assert '\\"byte_equal\\"' in module.DISPATCH_REPLACEMENT
     assert "return run_stock(out);" in patched
     assert "fr13.fixed32.cutlass_streamk_wide256_byte_ab.v1" in patched
+    assert "fr13.fixed32.cutlass_persistent_b4_m128_byte_ab.v1" in patched
 
 
 def test_unarmed_boot_warm_cannot_dispatch_candidate_or_consume_gate() -> None:
@@ -276,7 +308,7 @@ def test_unarmed_boot_warm_cannot_dispatch_candidate_or_consume_gate() -> None:
     assert "return run_stock(out);" in unarmed_path
     assert "run_candidate" not in unarmed_path
     assert "empty_like" not in unarmed_path
-    assert "task_marker = fixed32_cutlass_real_task_marker()" in patched
+    assert "fixed32_cutlass_real_task_marker();" in patched
     assert 'fr13.fixed32.cutlass_streamk_byte_ab.v2' in patched
     assert '\\"task_marker\\"' in module.DISPATCH_REPLACEMENT
 

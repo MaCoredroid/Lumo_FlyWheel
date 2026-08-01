@@ -477,7 +477,7 @@ if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
   }
 fi
 case "$FR13_FIXED32_CUTLASS_WAVE" in
-  stock|streamk_coop128|streamk_coop128_byte_ab|streamk_force_wide256|streamk_force_wide256_byte_ab) ;;
+  stock|streamk_coop128|streamk_coop128_byte_ab|streamk_force_wide256|streamk_force_wide256_byte_ab|persistent_b4_m128|persistent_b4_m128_byte_ab) ;;
   *)
     echo "FR13_FIXED32_CUTLASS_WAVE has an unsupported selector" >&2
     exit 2
@@ -525,11 +525,22 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" ]]; then
     exit 2
   }
 else
-  [[ -n "${FR13_FIXED32_MODE:-}" \
-     && "$MAX_NUM_SEQS" == "1" ]] || {
-    echo "CUTLASS Stream-K candidate requires fixed32 B1" >&2
-    exit 2
-  }
+  _fr13_cutlass_b4=0
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" ]]; then
+    _fr13_cutlass_b4=1
+  fi
+  if [[ "$_fr13_cutlass_b4" == "1" ]]; then
+    [[ -n "${FR13_FIXED32_MODE:-}" && "$MAX_NUM_SEQS" == "4" ]] || {
+      echo "CUTLASS persistent M128 candidate requires fixed32 B4" >&2
+      exit 2
+    }
+  else
+    [[ -n "${FR13_FIXED32_MODE:-}" && "$MAX_NUM_SEQS" == "1" ]] || {
+      echo "CUTLASS Stream-K candidate requires fixed32 B1" >&2
+      exit 2
+    }
+  fi
   [[ "$FR13_FIXED32_CUTLASS_WAVE_SO" == /* \
      && "$FR13_FIXED32_CUTLASS_WAVE_SO" != *:* \
      && -f "$FR13_FIXED32_CUTLASS_WAVE_SO" \
@@ -545,17 +556,23 @@ else
     -v "$FR13_FIXED32_CUTLASS_WAVE_SO:/tmp/fr13_cutlass_wave.abi3.so:ro"
   )
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
-        || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" ]]; then
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" ]]; then
     [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "0" \
-       && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
+       && ( ( "$_fr13_cutlass_b4" == "0" \
+              && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" ) \
+            || ( "$_fr13_cutlass_b4" == "1" \
+                 && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" ) ) \
        && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
        && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
        && "${ENFORCE_EAGER:-0}" == "1" \
        && ( ( "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
               && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl" ) \
             || ( "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
-                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl" ) ) ]] || {
-      echo "CUTLASS Stream-K byte A/B requires diagnostic B1 eager mode without production credentials" >&2
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl" ) ) ]] || {
+      echo "CUTLASS byte A/B requires its exact eager B1 or B4 diagnostic contract" >&2
       exit 2
     }
   else
@@ -563,11 +580,20 @@ else
        && -f "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
        && ! -L "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
        && "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
-      echo "CUTLASS Stream-K production requires fixed32 B1 and a pinned live PASS" >&2
+      if [[ "$_fr13_cutlass_b4" == "1" ]]; then
+        echo "CUTLASS persistent M128 production requires fixed32 B4 and a pinned live PASS" >&2
+      else
+        echo "CUTLASS Stream-K production requires fixed32 B1 and a pinned live PASS" >&2
+      fi
       exit 2
     }
     _fr13_cutlass_streamk_source_commit=$(git rev-parse HEAD)
-    .venv/bin/python scripts/fr13_cutlass_streamk_pass.py validate \
+    _fr13_cutlass_pass_script=scripts/fr13_cutlass_streamk_pass.py
+    [[ "$_fr13_cutlass_b4" == "0" ]] \
+      || _fr13_cutlass_pass_script=scripts/fr13_cutlass_b4_pass.py
+    # B1 executes scripts/fr13_cutlass_streamk_pass.py validate; B4 executes
+    # the corresponding persistent-M128 credential validator selected above.
+    .venv/bin/python "$_fr13_cutlass_pass_script" validate \
       --live-result "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
       --expected-live-sha256 "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
       --candidate-so "$FR13_FIXED32_CUTLASS_WAVE_SO" \
@@ -575,7 +601,9 @@ else
       --expected-source-commit "$_fr13_cutlass_streamk_source_commit" \
       --candidate-selector "$FR13_FIXED32_CUTLASS_WAVE" \
       >/dev/null
+    unset _fr13_cutlass_pass_script
   fi
+  unset _fr13_cutlass_b4
 fi
 if [[ -n "${FR13_DFWD_UNIFIED_BM8_INTERNAL:-}" ]]; then
   echo "FR13 DFWD unified BM8 internal selector is launcher-private" >&2
@@ -1215,7 +1243,8 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     _fixed32_expected_eager=1
   fi
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
-        || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" ]]; then
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" ]]; then
     _fixed32_expected_eager=1
   fi
   case "${FR13_DRAFT_VOCAB_K:-65536}:$FR13_DRAFT_VOCAB_ROOT" in
@@ -1376,7 +1405,12 @@ else
 fi
 if [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" ]]; then
   _fr13_cutlass_streamk_production_sidecar_host="$LOG_DIR/fr13_fixed32_cutlass_streamk.production_pass.json"
-  .venv/bin/python scripts/fr13_cutlass_streamk_pass.py issue \
+  _fr13_cutlass_pass_script=scripts/fr13_cutlass_streamk_pass.py
+  [[ "$FR13_FIXED32_CUTLASS_WAVE" != "persistent_b4_m128" ]] \
+    || _fr13_cutlass_pass_script=scripts/fr13_cutlass_b4_pass.py
+  # B1 executes scripts/fr13_cutlass_streamk_pass.py issue; B4 executes the
+  # corresponding persistent-M128 issuer selected above.
+  .venv/bin/python "$_fr13_cutlass_pass_script" issue \
     --live-result "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
     --expected-live-sha256 "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
     --candidate-so "$FR13_FIXED32_CUTLASS_WAVE_SO" \
@@ -1392,6 +1426,7 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" ]]; then
   )
   unset _fr13_cutlass_streamk_production_sidecar_host
   unset _fr13_cutlass_streamk_source_commit
+  unset _fr13_cutlass_pass_script
 fi
 FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR=""
 FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256=""
@@ -1862,6 +1897,29 @@ else
   FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH=
 fi
 export FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH
+_fr13_cutlass_b4_byte_ab=0
+[[ "$FR13_FIXED32_CUTLASS_WAVE" != "persistent_b4_m128_byte_ab" ]] \
+  || _fr13_cutlass_b4_byte_ab=1
+if [[ "$_fr13_cutlass_b4_byte_ab" == "1" ]]; then
+  [[ "$_fr13_batch_gdn_diagnostic_count" == "0" \
+     && "$MAX_NUM_SEQS" == "4" \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+     && "${ENFORCE_EAGER:-0}" == "1" ]] || {
+    echo "CUTLASS B4 byte A/B requires exclusive eager exact-B4 diagnostics" >&2
+    exit 2
+  }
+  printf '1\n' > "$LOG_DIR/fr13_fixed32_cutlass_b4_byte_ab.enabled"
+  rm -f "$LOG_DIR/fr13_fixed32_cutlass_b4_byte_ab.real_event.arm"
+  FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH=/logs/fr13_fixed32_cutlass_b4_byte_ab.real_event.arm
+else
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_cutlass_b4_byte_ab.enabled" \
+    "$LOG_DIR/fr13_fixed32_cutlass_b4_byte_ab.real_event.arm" \
+    2>/dev/null || true
+  FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH=
+fi
+export FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH
+unset _fr13_cutlass_b4_byte_ab
 if [[ "$_fr13_batch_gdn_production" == "1" ]]; then
   [[ -n "${FR13_FIXED32_MODE:-}" ]] \
     || { echo "FR13_FIXED32_BATCH_GDN_PRODUCTION requires FR13_FIXED32_MODE" >&2; exit 2; }
@@ -2173,7 +2231,8 @@ while IFS= read -r _v; do
      || "$_v" == "FR13_FIXED32_MIDDLEWARE_FLAGS" \
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_SO" \
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
-     || "$_v" == "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH" ]] && continue
+     || "$_v" == "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH" \
+     || "$_v" == "FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH" ]] && continue
   if [[ -n "${FR13_FIXED32_MODE:-}" \
      && "$_v" == "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION" ]]; then
     continue
@@ -2306,6 +2365,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_BATCH_GDN_BV_CANDIDATE="${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
   -e FR13_FIXED32_BATCH_GDN_BV_PRODUCTION="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" \
   -e FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH="${FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH:-}" \
+  -e FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH="${FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH:-}" \
   -e FR13_APC_COMMIT_TO_RUNNING_ROW="${FR13_APC_COMMIT_TO_RUNNING_ROW:-1}" \
   -e FR13_TREE_RUNROW_INIT="${FR13_TREE_RUNROW_INIT:-1}" \
   -e FR13_COMMITTER_GRAPH="${FR13_COMMITTER_GRAPH:-1}" \

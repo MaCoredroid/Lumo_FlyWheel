@@ -6655,12 +6655,17 @@ def main(argv: list[str] | None = None) -> int:
         "streamk_coop128_byte_ab",
         "streamk_force_wide256",
         "streamk_force_wide256_byte_ab",
+        "persistent_b4_m128",
+        "persistent_b4_m128_byte_ab",
     }:
         parser.error("FR13_FIXED32_CUTLASS_WAVE has an unsupported value")
     fixed32_cutlass_diagnostic = cutlass_wave in {
         "streamk_coop128_byte_ab",
         "streamk_force_wide256_byte_ab",
     }
+    fixed32_cutlass_b4_diagnostic = (
+        cutlass_wave == "persistent_b4_m128_byte_ab"
+    )
     if fixed32_cutlass_diagnostic:
         if fixed32_taw_diagnostic or fixed32_bm8_diagnostic:
             parser.error(
@@ -6689,6 +6694,15 @@ def main(argv: list[str] | None = None) -> int:
             "--fixed32-cutlass-real-event-arm requires the "
             "CUTLASS Stream-K byte-diagnostic selector"
         )
+    if fixed32_cutlass_b4_diagnostic:
+        if fixed32_taw_diagnostic or fixed32_bm8_diagnostic:
+            parser.error(
+                "fixed32 CUTLASS B4, TAW, and BM8 diagnostics are exclusive"
+            )
+        if not fixed32_enabled or fixed32_b1_diagnostic:
+            parser.error(
+                "fixed32 CUTLASS B4 diagnostic requires non-B1 fixed32 mode"
+            )
     fixed32_client = None
     fixed32_subset = None
     if fixed32_enabled:

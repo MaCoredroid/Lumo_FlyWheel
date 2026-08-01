@@ -1,0 +1,233 @@
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+
+REPO = Path(__file__).resolve().parents[1]
+SCRIPTS = REPO / "scripts"
+
+
+def _load():
+    sys.path.insert(0, str(SCRIPTS))
+    path = SCRIPTS / "fr13_cutlass_b4_pass.py"
+    spec = importlib.util.spec_from_file_location("fr13_cutlass_b4_pass_test", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    module = _load()
+    candidate_bytes = b"persistent b4 m128 candidate\n"
+    candidate = tmp_path / "candidate.so"
+    candidate.write_bytes(candidate_bytes)
+    candidate_sha256 = hashlib.sha256(candidate_bytes).hexdigest()
+    patch_bytes = b"cutlass patch\n"
+    patch_source = tmp_path / "patch.py"
+    patch_source.write_bytes(patch_bytes)
+    patch_sha256 = hashlib.sha256(patch_bytes).hexdigest()
+    monkeypatch.setattr(module.binary, "B4_M128_CANDIDATE_SIZE", len(candidate_bytes))
+    monkeypatch.setattr(module.binary, "B4_M128_CANDIDATE_SHA256", candidate_sha256)
+    monkeypatch.setattr(module, "PATCH_SOURCE_SHA256", patch_sha256)
+    task_marker = f"swe_verified:{module.EXPECTED_TASK_IDS[1]}"
+    live = {
+        "schema": module.LIVE_SCHEMA,
+        "status": "pass",
+        "run_classification": "real_swe_verified_exact4_b4_byte_diagnostic",
+        "acceptance_valid": False,
+        "task_count": 4,
+        "task_ids": list(module.EXPECTED_TASK_IDS),
+        "task_marker": task_marker,
+        "draft_vocab_root": 1,
+        "draft_vocab_k": 65_536,
+        "mandatory_weight_bytes": module.floor.FIXED32_MANDATORY_WEIGHT_BYTES,
+        "mandatory_weight_floor_ms": module.floor.FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
+        "one_sided_u95_cap_ms": module.floor.FIXED32_SLO_CAP_MS,
+        "comparator_timing_eligible": False,
+        "batch_size": 4,
+        "concurrency": 4,
+        "fixed_rows": 128,
+        "candidate": "persistent_b4_m128",
+        "diagnostic_selector": "persistent_b4_m128_byte_ab",
+        "served_result": "stock",
+        "production_enabled": False,
+        "comparisons": 5,
+        "observed_m_values": [128],
+        "observed_projection_nk": [
+            list(shape) for shape in module.EXPECTED_PROJECTION_NK
+        ],
+        "mismatching_comparisons": 0,
+        "differing_bytes": 0,
+        "candidate_family": "persistent_b4_m128",
+        "candidate_sha256": candidate_sha256,
+        "candidate_bytes": len(candidate_bytes),
+        "patch_source_sha256": patch_sha256,
+        "vllm_base_commit": module.VLLM_BASE_COMMIT,
+        "patched_dispatch_sha256": module.PATCHED_DISPATCH_SHA256,
+        "source_commit": "c" * 40,
+        "binary_attestation_sha256": "d" * 64,
+        "real_task_arm_sha256": "e" * 64,
+        "container_env_sha256": "f" * 64,
+        "errors": [],
+    }
+    live_path = tmp_path / "live.json"
+    live_path.write_text(json.dumps(live, sort_keys=True) + "\n", encoding="ascii")
+    live_sha256 = hashlib.sha256(live_path.read_bytes()).hexdigest()
+    return module, candidate, patch_source, live_path, live_sha256, task_marker
+
+
+def test_exact4_b4_pass_issues_and_verifies_production_sidecar(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, candidate, patch_source, live, live_sha256, task_marker = _fixture(
+        tmp_path, monkeypatch
+    )
+    sidecar = tmp_path / "sidecar.json"
+
+    issued = module.issue_sidecar(
+        live,
+        live_sha256,
+        candidate,
+        sidecar,
+        patch_source,
+        expected_source_commit="c" * 40,
+    )
+    sidecar_sha256 = hashlib.sha256(sidecar.read_bytes()).hexdigest()
+    verified = module.verify_sidecar(
+        sidecar,
+        sidecar_sha256,
+        candidate,
+        patch_source,
+        candidate_selector="persistent_b4_m128",
+    )
+
+    assert issued == verified
+    assert issued["qualification_task_marker"] == task_marker
+    assert issued["qualified_fixed_rows"] == 128
+    assert issued["qualified_draft_vocab_root"] == 1
+    assert issued["qualified_draft_vocab_k"] == 65_536
+
+
+def test_b4_production_attestation_preserves_exact4_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, candidate, patch_source, live, live_sha256, task_marker = _fixture(
+        tmp_path, monkeypatch
+    )
+    sidecar = tmp_path / "sidecar.json"
+    issued = module.issue_sidecar(
+        live, live_sha256, candidate, sidecar, patch_source
+    )
+    sidecar_sha256 = hashlib.sha256(sidecar.read_bytes()).hexdigest()
+    candidate_sha256 = hashlib.sha256(candidate.read_bytes()).hexdigest()
+    identity = {
+        "bytes": candidate.stat().st_size,
+        "sha256": candidate_sha256,
+        "regular": True,
+        "symlink": False,
+    }
+    qualification_keys = (
+        "live_result_sha256",
+        "candidate_sha256",
+        "patch_source_sha256",
+        "qualification_source_commit",
+        "qualification_task_marker",
+        "real_task_arm_sha256",
+        "container_env_sha256",
+        "qualified_draft_vocab_root",
+        "qualified_draft_vocab_k",
+        "mandatory_weight_bytes",
+        "mandatory_weight_floor_ms",
+        "one_sided_u95_cap_ms",
+    )
+    attestation_payload = {
+        "schema": module.ATTESTATION_SCHEMA,
+        "selector": "persistent_b4_m128",
+        "source": {"path": str(module.binary.CONTAINER_SOURCE), **identity},
+        "destination": {
+            "path": str(module.binary.CONTAINER_DESTINATION),
+            **identity,
+        },
+        "installed_mode": "0555",
+        "production_enabled": True,
+        "qualification": {
+            "sidecar_sha256": sidecar_sha256,
+            **{key: issued[key] for key in qualification_keys},
+        },
+    }
+    attestation = tmp_path / "attestation.json"
+    attestation.write_text(
+        json.dumps(attestation_payload, sort_keys=True) + "\n", encoding="ascii"
+    )
+
+    binding = module.validate_production_attestation(attestation, sidecar_sha256)
+
+    assert binding["status"] == "BOUND"
+    assert binding["qualification_task_marker"] == task_marker
+    assert binding["qualification_task_ids"] == list(module.EXPECTED_TASK_IDS)
+    assert binding["qualified_fixed_rows"] == 128
+    assert (
+        binding["mandatory_weight_floor_ms"]
+        == module.floor.FIXED32_MANDATORY_WEIGHT_FLOOR_MS
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("task_count", 1),
+        ("batch_size", 1),
+        ("fixed_rows", 32),
+        ("draft_vocab_root", 0),
+        ("draft_vocab_k", 0),
+        ("task_marker", "swe_verified:django__django-10097"),
+    ],
+)
+def test_b4_pass_rejects_noncanonical_workload(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    value: object,
+) -> None:
+    module, candidate, patch_source, live, _, _ = _fixture(tmp_path, monkeypatch)
+    payload = json.loads(live.read_text(encoding="ascii"))
+    payload[field] = value
+    live.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
+    live_sha256 = hashlib.sha256(live.read_bytes()).hexdigest()
+
+    with pytest.raises(module.QualificationError):
+        module.validate_live_result(
+            live, live_sha256, candidate, patch_source, expected_source_commit="c" * 40
+        )
+
+
+def test_b4_gate_and_timing_are_closed_over_by_runtime_manifest() -> None:
+    manifest = (SCRIPTS / "fr13_runtime_manifest.py").read_text(encoding="utf-8")
+    gate = (SCRIPTS / "fr13_run_b4_cutlass_persistent_m128_live_gate.sh").read_text(
+        encoding="utf-8"
+    )
+    timing = (SCRIPTS / "fr13_run_b4_cutlass_persistent_m128_timing.sh").read_text(
+        encoding="utf-8"
+    )
+
+    for path in (
+        "scripts/fr13_cutlass_b4_pass.py",
+        "scripts/fr13_run_b4_cutlass_persistent_m128_live_gate.sh",
+        "scripts/fr13_run_b4_cutlass_persistent_m128_timing.sh",
+    ):
+        assert f'"{path}"' in manifest
+    assert "subset_b4_four.json" in gate
+    assert "persistent_b4_m128_byte_ab" in gate
+    assert "fixed32_cutlass_b4_byte_ab.real_event.arm" in gate
+    assert '"task_count": 4' in gate
+    assert '"fixed_rows": 128' in gate
+    assert "persistent_b4_m128" in timing
+    assert "--batch-size 4" in timing
+    assert "only_arm_delta=CUTLASS_stock_to_persistent_b4_m128" in timing
