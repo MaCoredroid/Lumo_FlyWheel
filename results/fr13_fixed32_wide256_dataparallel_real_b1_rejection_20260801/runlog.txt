@@ -1,0 +1,88 @@
+fixed32 SWE-Verified subset OK: tasks=1 diagnostic=1
+=== BIGDENOM-VARIANT SWEServe ARM hydra27_fixed32_cutlass_wide256_dataparallel_live_gate_20260801T085000Z kind=hydra27_fixed32 launcher=forked expect=31 xflags=[FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0 FR13_FIXED32_MODE=hydra27_fixed32 FR13_FIXED32_VALID_MASK=0x7abdffff FR13_FIXED32_ACTIVE_NODES=27 FR13_FIXED32_PHYSICAL_DRAFTS=31] subset=config/fr13_fixed32/subset_b1_diagnostic_one.json ===
+2026-08-01T08:48:57Z
+44f7e384196271d5de4a3c080eb166f55ab073fd
+[hygiene] recover_host_memory + assert free
+[hygiene] MemAvailable=104.1GiB swap_used=0 OK
+               total        used        free      shared  buff/cache   available
+Mem:             117          13         104           0           0         104
+Swap:             15           0          15
+fixed32 container identity promoted: id=29c66288c6e802287f3aa1b822a5658397e8512e327f0889bb543ff99ffa48a9 name=fr13-bigdenom-hydra27_fixed32_cutlass_wide256_dataparallel_live_gate_20260801T085000Z started_at=2026-08-01T08:49:10.79725128Z pid=2874230 restart_count=0
+healthy after 412s
+fixed32 runtime identity OK: runtime=7a167058b7f4d3c3fbffcfaee4b14b613c591e0259de08e3510ee9559955dd5d pid1_args=48
+fixed32 runtime ready: mode=hydra27_fixed32 producer_pid=258
+NEEDS-OVERRIDE (diagnostic arm): expecting FR13_DRAFT_VOCAB_K=0 instead of FR13_DRAFT_VOCAB_K=65536
+container env OK (hydra27_fixed32)
+PID 1 cmd=[/usr/bin/python3 /usr/local/bin/vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b --host 0.0.0.0 --port 9950 --max-num-seqs 1 --gpu-memory-utilization 0.70 --max-model-len 131072 --seed 0 --attention-backend TREE_ATTN --gdn-prefill-backend triton --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 --speculative-config {"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"} --enable-prefix-caching --enable-chunked-prefill --mamba-block-size 1024 --mamba-ssm-cache-dtype float32 --max-num-batched-tokens 4096 --block-size 1024 --long-prefill-token-threshold 1024 --compilation-config {"cudagraph_mode":"FULL_AND_PIECEWISE"} --middleware lumo_flywheel_serving.inference_proxy.Fixed32EngineIngressMiddleware --enforce-eager ]
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"}
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 257 cmd=[/usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(51) ]
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"}
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 258 cmd=[VLLM::EngineCore                                                                                                                   ]
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 684 cmd=[bash -lc 
+hit=""; pids=""
+for p in $(ls /proc | grep -E "^[0-9]+$"); do
+  e="/proc/$p/environ"; [ -r "$e" ] || continue
+  cmd="$(tr "\0" " " < /proc/$p/cmdline 2>/dev/null || true)"
+  case "$cmd" in *vllm*|*VllmWorker*|*EngineCore*|*python*) ;; *) continue ;; esac
+  dm="$(tr "\0" "\n" < "$e" | grep -E "^FR10_DECODE_MODE_DEFAULT=" || true)"
+  if [ -n "$dm" ]; then
+    pids="$pids $p"
+    echo "PID $p cmd=[$cmd]"
+    tr "\0" "\n" < "$e" | grep -E "^(FR10_DECODE_MODE_DEFAULT|LUMO_FB_KERNEL_ROWS|FR13_GB10_FP8_GEMV_CFG|FR13_GPU_COMMITTER|FR13_COMMITTER_SYNCKILL|SPEC_CONFIG|FR13_REPLAY_ROUTE)=" | sed "s/^/   /"
+    hit="1"
+  fi
+done
+echo "SUMMARY worker_env_seen=[$hit] pids=[$pids]"
+ ]
+   FR13_GB10_FP8_GEMV_CFG=0
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"}
+   FR13_REPLAY_ROUTE=1
+SUMMARY worker_env_seen=[1] pids=[ 1 257 258 684]
+worker environ needle OK (hydra27_fixed32)
+[capture needle] SKIPPED (ENFORCE_EAGER=1: eager mode has no CUDA graph capture)
+fixed32 pretask generation warmup SKIPPED: canonical SWE traffic only
+fixed32 pretask prefix-cache reset SKIPPED: fresh container
+[offload] OFFLOAD_AGENT=1 — proxy+agent on alienware, GB10 stays vLLM-only
+[offload] alienware -> GB10 vLLM 100.103.10.122:9950/health OK
+OFFLOAD_PROXY_OK host=alienware upstream=http://100.103.10.122:9950 (forced temp 0.6, raw_dumps_disabled=1, NUDGE OFF)
+proxy OK (OFFLOADED to alienware:8023)
+fixed32 ingress auth preflight OK: engine=4 rejects proxy=4 rejects
+eval offload: configured evaluator reachable
+[offload] link watchdog pid=2884509 (threshold 300s)
+fixed32 pretask zero-traffic baseline OK
+fixed32 ingress campaign begun after zero-work baseline
+curl: (23) Failure writing output to destination
+swe orchestrator rc=0 wall=387s
+[codex-offload] codex docker -> alienware (x86); endpoint=http://127.0.0.1:8023/v1 (GB10 stays vLLM-only — uncontended deploy-speed)
+=== [2026-08-01T08:56:12Z] dataset=princeton-nlp/SWE-bench_Verified tag=verified n=1 concurrency=1 ===
+[2026-08-01T08:56:12Z] -> astropy__astropy-12907
+[2026-08-01T09:02:38Z] <- astropy__astropy-12907 verdict=resolved elapsed_total=385.3s
+=== [2026-08-01T09:02:38Z] DONE n=1 resolved_rate=1.0 verdicts={'resolved': 1} ===
+FAIL: fixed32 engine ingress campaign finalize
+scripts/fr13_bigdenom_swe_serve_variant.sh: line 2486: printf: write error: No space left on device
+FAIL: fixed32 offload artifact fetch failed
+output/fr13_b1_cutlass_wide256_dataparallel_live_gate_20260801T085000Z/hydra27_fixed32_cutlass_wide256_dataparallel_live_gate_20260801T085000Z/metrics_after_swe.txt: expected one metric vllm:spec_decode_num_drafts_total, got 0
+FAIL: fixed32 canonical-task spec engagement
+FAIL: fixed32 canonical tasks emitted no subtree runtime needle
+fixed32 eager kernel diagnostic: graph-census needles are ineligible
+OSError: [Errno 28] No space left on device
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<stdin>", line 14, in <module>
+  File "/usr/lib/python3.12/pathlib.py", line 1049, in write_text
+    with self.open(mode='w', encoding=encodi

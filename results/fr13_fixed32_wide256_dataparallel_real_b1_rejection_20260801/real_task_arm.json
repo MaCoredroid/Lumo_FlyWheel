@@ -1,0 +1,15 @@
+{
+  "ended_at": "2026-08-01T09:01:45Z",
+  "floor_acceptance_eligible": false,
+  "gate_eligible": false,
+  "instance_id": "astropy__astropy-12907",
+  "live_path": "/home/mark/shared/lumoFlyWheel-streamk-wide256/output/fr13_b1_cutlass_wide256_dataparallel_live_gate_20260801T085000Z/hydra27_fixed32_cutlass_wide256_dataparallel_live_gate_20260801T085000Z/logs/fr13_fixed32_cutlass_streamk.real_event.arm",
+  "marker": "swe_verified:astropy__astropy-12907",
+  "marker_bytes": 36,
+  "marker_sha256": "04fe7f61a0e0bbd48bf28127385c481b85550b291535f3705511494ba24c8463",
+  "rotated_path": "/home/mark/shared/lumoFlyWheel-streamk-wide256/output/fr13_b1_cutlass_wide256_dataparallel_live_gate_20260801T085000Z/hydra27_fixed32_cutlass_wide256_dataparallel_live_gate_20260801T085000Z/logs/fr13_fixed32_cutlass_streamk.real_event.ended.04fe7f61a0e0bbd48bf28127385c481b85550b291535f3705511494ba24c8463.arm",
+  "run_classification": "b1_diagnostic",
+  "schema": "fr13-fixed32-cutlass-streamk-real-task-arm-v1",
+  "started_at": "2026-08-01T08:56:12Z",
+  "state": "ended"
+}

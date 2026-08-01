@@ -1,0 +1,81 @@
+{
+  "acceptance_valid": false,
+  "batch_size": 1,
+  "candidate": "wide256_dataparallel",
+  "candidate_bytes": 112787936,
+  "candidate_family": "wide256_dataparallel",
+  "candidate_sha256": "5b921ab7b428f2c5cfeefc0daed0314ff903d73bb0d4f8a790b17234c9d60890",
+  "comparator": {
+    "all_first_mismatch_offsets_even": true,
+    "differing_bytes": 10504,
+    "differing_bytes_ppm": 42.034702416076584,
+    "mismatching_comparisons": 256,
+    "records": 256,
+    "shapes": [
+      {
+        "compared_bytes": 22609920,
+        "differing_bytes": 1030,
+        "m": 32,
+        "mismatching_comparisons": 69,
+        "n": 5120,
+        "k": 6144
+      },
+      {
+        "compared_bytes": 22282240,
+        "differing_bytes": 1278,
+        "m": 32,
+        "mismatching_comparisons": 68,
+        "n": 5120,
+        "k": 17408
+      },
+      {
+        "compared_bytes": 53477376,
+        "differing_bytes": 2027,
+        "m": 32,
+        "mismatching_comparisons": 51,
+        "n": 16384,
+        "k": 5120
+      },
+      {
+        "compared_bytes": 151519232,
+        "differing_bytes": 6169,
+        "m": 32,
+        "mismatching_comparisons": 68,
+        "n": 34816,
+        "k": 5120
+      }
+    ],
+    "total_compared_bytes": 249888768
+  },
+  "concurrency": 1,
+  "diagnostic_selector": "wide256_dataparallel_byte_ab",
+  "draft_vocab_k": 0,
+  "draft_vocab_root": 0,
+  "errors": [
+    "all 256 stock/candidate comparisons differed",
+    "the 256-call comparator bound was exhausted before the required MTP projection shape",
+    "the shared filesystem filled during campaign finalization, so the formal live-gate reducer did not run"
+  ],
+  "fixed_rows": 32,
+  "formal_live_gate_valid": false,
+  "mandatory_weight_bytes": 42025179008,
+  "mandatory_weight_floor_ms": 153.9383846446886,
+  "one_sided_u95_cap_ms": 177.0291423413919,
+  "production_enabled": false,
+  "run_classification": "one_real_swe_verified_b1_byte_diagnostic",
+  "run_exit_code": 15,
+  "schema": "fr13.fixed32.cutlass_wide256_dataparallel_real_b1_rejection.v1",
+  "served_result": "stock",
+  "source_commit": "44f7e384196271d5de4a3c080eb166f55ab073fd",
+  "status": "rejected",
+  "task": {
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "ended_at": "2026-08-01T09:02:38Z",
+    "evaluation_harness_exit_code": 0,
+    "id": "astropy__astropy-12907",
+    "marker": "swe_verified:astropy__astropy-12907",
+    "resolved": true,
+    "started_at": "2026-08-01T08:56:12Z"
+  },
+  "timing_eligible": false
+}

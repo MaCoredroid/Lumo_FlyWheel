@@ -1,0 +1,19 @@
+{
+  "acceptance_valid": false,
+  "flush_protocol_used": false,
+  "instance_id": "astropy__astropy-12907",
+  "mode": "hydra27_fixed32",
+  "post_metrics": {
+    "bytes": 61668,
+    "path": "/home/mark/shared/lumoFlyWheel-streamk-wide256/output/fr13_b1_cutlass_wide256_dataparallel_live_gate_20260801T085000Z/hydra27_fixed32_cutlass_wide256_dataparallel_live_gate_20260801T085000Z/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt",
+    "sha256": "96252acd486cc9ca582213ba84d7878d4ff11514409f41db2a519e50adeb27af"
+  },
+  "pre_metrics": {
+    "bytes": 59957,
+    "path": "/home/mark/shared/lumoFlyWheel-streamk-wide256/output/fr13_b1_cutlass_wide256_dataparallel_live_gate_20260801T085000Z/hydra27_fixed32_cutlass_wide256_dataparallel_live_gate_20260801T085000Z/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt",
+    "sha256": "5796aa9d4c909cbecda04256eb785b285967ee066c953ee6a7dd1305081753c6"
+  },
+  "producer_pid": 258,
+  "run_classification": "eager_kernel_byte_diagnostic",
+  "schema": "fr13-fixed32-eager-kernel-diagnostic-task-bracket-v1"
+}
