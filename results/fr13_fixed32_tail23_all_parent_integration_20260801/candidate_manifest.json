@@ -1,13 +1,15 @@
 {
-  "schema": "fr13.fixed32.tail23_all_parent_integration.v2",
+  "schema": "fr13.fixed32.tail23_all_parent_integration.v4",
   "status": "source_static_only_live_b1_b4_gate_pending",
-  "head_commit": "c2f791961fe76a69d4a91c80ebc9ae1666c50618",
+  "head_commit": "9f58fd575276f80aafcd41ea9a5c8e9cba5e98b5",
   "branch": "agent/fixed32-node32-nonscaling-0f2",
   "commits": {
     "tail23_rescue": "db93e1969",
     "all_parent_commit": "72e87b6dc",
     "uniform_schedule_binding": "5131273d0",
-    "exact_qualification_binding": "c2f791961"
+    "exact_qualification_binding": "c2f791961",
+    "batch_safe_production_gate": "f1d7d1358",
+    "deployable_b4_qualification": "9f58fd575"
   },
   "logical_topology": {
     "tail_mode_name": "tail6_fixed32",
@@ -50,9 +52,10 @@
   "all_parent_candidate": {
     "name": "fixed32_all_parent_commit_v2",
     "default_enabled": false,
-    "source_contract_schema": "fr13-fixed32-taw-all-parent-v5",
-    "source_contract_sha256": "4ab3d740c7ebe20fbddefd4f9cbb735f3c58e1b8907376d83ce9f39c24f2ae7e",
+    "source_contract_schema": "fr13-fixed32-taw-all-parent-v7",
+    "source_contract_sha256": "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290",
     "live_pass_schema": "fr13.fixed32.taw_native_precompute.live_pass.v2",
+    "production_bundle_schema": "fr13.fixed32.taw_native_precompute.pass_bundle.v1",
     "topology_sha256": "99b1255b1c1ffeda8bbbd7800e777cfa7184f48c1f13494537a01bc70bc9bf79",
     "tail_valid_mask_bound": "0x7a9ce7ff",
     "all_mode_valid_masks_bound": true,
@@ -60,7 +63,12 @@
     "source_row_identities_bound": true,
     "uniform_levels_bound": true,
     "qualified_batches_per_replay": 1,
+    "required_independent_production_batches": [1, 4],
     "b4_replay_qualifies_b1": false,
+    "unqualified_batch_route": "exact_reference",
+    "b1_evidence_scope": "single_real_task_or_canonical_campaign",
+    "b2_b3_b4_evidence_scope": "canonical_exact4_or_exact16_campaign",
+    "campaign_marker": "swe_verified:campaign{4|16}_<canonical_subset_sha256>",
     "self_rows_per_request": 13,
     "target_rows_per_request": 17,
     "full_vocab_softmax_calls": 2,
@@ -71,18 +79,23 @@
   },
   "source_sha256": {
     "scripts/fr13_fixed32_topology.py": "146bdeace494f79cf15ef4fe54ee6c71d38cf086b5f2acfbf5149b46d102e311",
-    "scripts/fr13_device_multidraft_kernel.py": "6148f6790041cbb655d27125335530e4baa19491bb2ef535433f2046607d591b",
-    "scripts/fr13_fixed32_work_census.py": "ac2bc2606bd6d14d9efce500a5dbaf000ac4e9dffc6601e91129238fc5311f0e",
+    "scripts/fr13_device_multidraft_kernel.py": "3f5a0246ccf429bb95de24a8dfff3a7fcb155a05ea92e9201acb1ed89d8f6fca",
+    "scripts/fr13_fixed32_work_census.py": "109e889355d48b119770271130278c4d377673036354496b4cf4580570bcc867",
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "3d61e8242ec1fd6496154b16fcb91a52aa382d324b873f7d65f7bd0f9a3c5ea1",
-    "scripts/fr13_depth_acceptance.py": "e21220f7f340f93522168a6d9aebd735bc9a306baaa98f93ef5a80b25f203c07"
+    "scripts/fr13_depth_acceptance.py": "2b89186a7570356438605bf2e7da6d9d08ae1e89882c171e50416f16e1607cd8",
+    "scripts/fr13_bigdenom_swe_serve_variant.sh": "a6f13f0f2e76edf7c8069933dc6649c346ea8b4602d7f04359fd856407727c12",
+    "scripts/run_swe_bench_q36_a.py": "7ea8c0e8b2fe0122750b46d4552a464c57c33fbaa1ef5de91c83aac3eb78c54b"
   },
   "verification": {
     "fixed32_semantics": "7 passed",
-    "all_parent_focused": "43 passed, 1 skipped (CUDA unavailable)",
+    "all_parent_focused": "53 passed, 1 skipped (CUDA unavailable)",
+    "real_task_harness": "36 passed",
     "fixed_work_preseed_ownership": "109 passed, 8 deselected",
     "work_census_self_test": "PASS, 162 tamper tests",
     "tail23_depth_contract": "passed",
-    "depth_full_self_test": "blocked by pre-existing synthetic runner_metadata fixture gap after Tail23 checks",
+    "depth_full_self_test": "passed",
+    "trace_provenance": "150 passed, 1 skipped, 1 environment-only failure (pinned dataset cache absent)",
+    "ingress_wiring": "12 passed, 2 environment-only failures (.venv/bin/python absent)",
     "python_compile": "passed",
     "git_diff_check": "passed"
   },
@@ -95,7 +108,8 @@
   },
   "qualification": {
     "traffic": "real_swe_verified_only",
-    "diagnostic_task_set": "exact4",
+    "b1_diagnostic_task_set": "one pinned real task or canonical exact4/exact16 campaign",
+    "b4_diagnostic_task_sets": ["exact4", "exact16"],
     "formal_task_sets": ["exact4", "exact16"],
     "batches": [1, 4],
     "byte_equivalence_required": true,
