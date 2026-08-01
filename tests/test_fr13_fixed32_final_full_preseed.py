@@ -189,12 +189,34 @@ _GPU_WORKER_FIXTURE = """\
 class Worker:
     def __init__(self, enforce_eager):
         self.model_config = SimpleNamespace(enforce_eager=enforce_eager)
-        self.model_runner = SimpleNamespace(capture_model=self._capture_model)
-        self.capture_calls = 0
+        self.vllm_config = SimpleNamespace(
+            compilation_config=SimpleNamespace(
+                max_cudagraph_capture_size=0,
+            ),
+        )
+        self.use_v2_model_runner = False
+        self.device = "cuda:0"
+        self.rank = 1
 
-    def _capture_model(self):
-        self.capture_calls += 1
-        return 0
+    def init_device(self):
+        # Construct the model runner
+        if self.use_v2_model_runner:
+            from vllm.v1.worker.gpu.model_runner import (
+                GPUModelRunner as GPUModelRunnerV2,
+            )
+
+            self.model_runner = GPUModelRunnerV2(
+                self.vllm_config, self.device
+            )
+        else:
+            from vllm.v1.worker.gpu_model_runner import (
+                GPUModelRunner as GPUModelRunnerV1,
+            )
+
+            self.model_runner = GPUModelRunnerV1(self.vllm_config, self.device)
+
+        if self.rank == 0:
+            report_usage_stats(self.vllm_config)
 
     def compile_or_warm_up_model(self):
         kernel_warmup(self)
@@ -502,10 +524,10 @@ def test_eager_diagnostic_boot_is_zero_traffic_and_boundary_ready(
 
 
 @pytest.mark.parametrize(
-    ("batch_gdn_byte_ab", "cutlass_wave"),
+    ("batch_gdn_byte_ab", "cutlass_wave", "capture_size"),
     (
-        ("1", "stock"),
-        ("0", "streamk_force_wide256_byte_ab"),
+        ("1", "stock", 128),
+        ("0", "streamk_force_wide256_byte_ab", 32),
     ),
 )
 def test_eager_diagnostic_boot_is_reached_from_worker_lifecycle(
@@ -513,6 +535,7 @@ def test_eager_diagnostic_boot_is_reached_from_worker_lifecycle(
     monkeypatch: pytest.MonkeyPatch,
     batch_gdn_byte_ab: str,
     cutlass_wave: str,
+    capture_size: int,
 ) -> None:
     source = tmp_path / "gpu_worker.py"
     source.write_text(_GPU_WORKER_FIXTURE)
@@ -530,21 +553,54 @@ def test_eager_diagnostic_boot_is_reached_from_worker_lifecycle(
     )
     assert patcher._patch_gpu_worker_fixed32_eager_boot_warm()
 
+    class FakeRunner:
+        def __init__(self, config: object, device: object) -> None:
+            self.capture_size = (
+                config.compilation_config.max_cudagraph_capture_size
+            )
+            self.device = device
+            self.capture_calls = 0
+
+        def capture_model(self) -> int:
+            self.capture_calls += 1
+            return 0
+
+    modules = {
+        "vllm": ModuleType("vllm"),
+        "vllm.v1": ModuleType("vllm.v1"),
+        "vllm.v1.worker": ModuleType("vllm.v1.worker"),
+        "vllm.v1.worker.gpu_model_runner": ModuleType(
+            "vllm.v1.worker.gpu_model_runner"
+        ),
+    }
+    for module in modules.values():
+        module.__path__ = []
+    modules["vllm.v1.worker.gpu_model_runner"].GPUModelRunner = FakeRunner
+    for name, module in modules.items():
+        monkeypatch.setitem(sys.modules, name, module)
+
     namespace = {
         "SimpleNamespace": SimpleNamespace,
         "kernel_warmup": lambda worker: None,
+        "report_usage_stats": lambda config: None,
     }
     text = source.read_text(encoding="utf-8")
     assert "FR13_FIXED32_EAGER_BOOT_WARM_LIFECYCLE" in text
+    assert "FR13_FIXED32_EAGER_BOOT_WARM_CAPACITY" in text
     exec(text, namespace)
     worker = namespace["Worker"](True)
+    worker.init_device()
+    assert worker.model_runner.capture_size == capture_size
+    assert (
+        worker.vllm_config.compilation_config.max_cudagraph_capture_size
+        == 0
+    )
     assert worker.compile_or_warm_up_model() == 0
-    assert worker.capture_calls == 1
+    assert worker.model_runner.capture_calls == 1
 
     non_eager = namespace["Worker"](False)
     with pytest.raises(RuntimeError, match="requires enforce_eager"):
-        non_eager.compile_or_warm_up_model()
-    assert non_eager.capture_calls == 0
+        non_eager.init_device()
 
 
 def test_non_diagnostic_worker_lifecycle_is_unchanged(
