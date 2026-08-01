@@ -19,11 +19,20 @@ union of 13 self rows and 17 target-parent rows, uses two full-vocabulary
 softmax calls, and performs one integer-only exact commit launch per request.
 The candidate is default off and requires a new live byte-equivalence gate.
 
-The production gate is now fail-closed to this exact Tail23 source. PASS v2
-records bind both valid masks, the physical topology digest, the 13/17 source
-row identities, target parent slots, and both uniform-level schedules. A
-pre-Tail23 PASS is rejected. Each real replay qualifies only its exact batch;
-a B4 replay cannot qualify B1.
+The production gate is now fail-closed to this exact Tail23 source. Individual
+PASS v2 records bind both valid masks, the physical topology digest, the 13/17
+source-row identities, target-parent slots, and both uniform-level schedules.
+A production bundle requires independent B1 and B4 records, so a B4 replay
+cannot qualify B1. Unqualified B2/B3 calls explicitly use the exact reference
+path; optional B2/B3 candidate use requires their own replay records. Any
+B2/B3/B4 record must carry a canonical exact4/exact16 campaign SHA marker;
+B1 may still qualify on one real SWE-Verified task.
+
+The standard real-task harness can now produce this evidence. B4 uses one
+campaign-scoped marker across all concurrent workers, bound to the canonical
+subset path, SHA, ordered task IDs, and task count. Its artifact is mandatory
+in the atomic campaign auto-commit. A missing B4 replay leaves the bundle
+partial and production remains disabled.
 
 ## Non-scaling contract
 
@@ -47,29 +56,36 @@ scale with the logical active count while the fixed32 route is selected.
 ## Static verification
 
 - Fixed32 semantics: 7 tests passed across both modes.
-- All-parent focused suite: 43 passed, 1 CUDA test skipped on this CPU-only
+- All-parent focused suite: 53 passed, 1 CUDA test skipped on this CPU-only
   host.
+- B1/B4 real-task harness and canonical campaign binding: 36 tests passed.
 - Fixed-work, preseed, and ownership selection: 109 passed, 8 environment-only
   tests deselected.
 - Work-census self-test: passed all 162 tamper cases.
-- Tail23 depth contract and fixed report schema: passed directly.
+- Full depth reducer self-test, including synthetic real-task provenance:
+  passed.
 - Python compilation and `git diff --check`: passed.
 
-The full depth reducer self-test proceeds through the Tail23 checks, then hits
-an older synthetic floor-gate fixture that does not create the now-required
-`runner_metadata.json`. This is a fixture-provenance gap, not a kernel or
-Tail23 contract failure; the real-task gate remains fail-closed.
+The campaign reducer also accepts the authorized mixed route: independently
+qualified batches use the candidate while unqualified batches use reference,
+with one signature per batch and exact Tail/Hydra equality at each shared
+batch. The broader trace-provenance suite passed 150 tests and skipped one,
+with one environment-only failure because this worktree has no pinned
+SWE-Verified dataset cache blob. The depth fixture now emits the required
+`runner_metadata.json` and campaign proof; production validation remains
+fail-closed.
 
 ## Required live gates
 
 No container, GPU, real SWE-Verified task, timing, TPS, acceptance, or hardware
 floor measurement was run for this integration artifact. The next gates are:
 
-1. Real SWE-Verified exact4 B1 reference-returning byte diagnostic for the
-   all-parent candidate and Tail23 acceptance diagnostic, producing a PASS v2
-   record whose `covered_batches` is exactly `[1]`.
-2. Real SWE-Verified exact4 B4 byte-equivalence gate producing a distinct PASS
-   v2 record whose `covered_batches` is exactly `[4]`.
+1. Run the source-v7 byte diagnostic on either a single real SWE-Verified B1
+   task or a canonical exact4/exact16 B4 campaign. The latter keeps one
+   campaign-bound marker active across all workers and can produce separate
+   exact-batch records as real B1-B4 occupancies occur.
+2. Confirm the emitted bundle contains independently validated B1 and B4
+   records. It remains partial and cannot arm production if either is absent.
 3. Source-bound production timing on the standing exact4 and exact16 task sets,
    reporting full-wall TPS and full-step GPU-component TPS for both B1 and B4.
 4. Nsight confirmation of the expected 24-to-2 softmax and 12-to-1 exact
