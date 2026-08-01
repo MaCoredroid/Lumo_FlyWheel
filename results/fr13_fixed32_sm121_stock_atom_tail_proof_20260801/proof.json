@@ -1,0 +1,116 @@
+{
+  "implementation": {
+    "build_attempted": false,
+    "candidate_binary": null,
+    "candidate_selector": null,
+    "dispatcher_patch": false,
+    "gpu_launched": false,
+    "kernel_patch": false,
+    "same_process_comparator": false,
+    "stop_reason": "The pinned builder has no legal sub-128 output tile for the 128-wide scale block, and a sub-128 tile changes TiledMma permutation/fragment association before code generation."
+  },
+  "remaining_live_gate_risk": "No exact-safe candidate exists under the stated stock-atom contract, so binary, real-task comparator, and timing gates are intentionally inapplicable.",
+  "schema": "fr13.fixed32.cutlass_stock_atom_tail_source_proof.v1",
+  "source_base_commit": "bcde8591f8ee9b0a563c9ddc4924450643cf4114",
+  "source_identity": {
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "files": [
+      {
+        "all_required_anchors_present": true,
+        "path": "csrc/libtorch_stable/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh",
+        "required_anchor_count": 10,
+        "sha256": "6e1df3f4701f58f233b3831b848c7bbf7936e6cb34b3bc28ded208fd66c48a7f"
+      },
+      {
+        "all_required_anchors_present": true,
+        "path": "include/cutlass/gemm/collective/builders/sm120_blockwise_mma_builder.inl",
+        "required_anchor_count": 7,
+        "sha256": "40409c39fbbc5f023e8030472efab2a7b94baf41109eaa59fb009e52ce0d6509"
+      },
+      {
+        "all_required_anchors_present": true,
+        "path": "include/cute/arch/mma_sm120.hpp",
+        "required_anchor_count": 1,
+        "sha256": "4848512808aa9c1c461445ff4b35f5a02f25ce734f81a5994176e0a46e57c37a"
+      },
+      {
+        "all_required_anchors_present": true,
+        "path": "include/cutlass/gemm/kernel/sm100_tile_scheduler.hpp",
+        "required_anchor_count": 2,
+        "sha256": "54ebcaee08d4fc0663169f97c7fa665cec90d29ce5d01336c2c714f2a911b010"
+      }
+    ],
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
+  },
+  "source_proof": {
+    "candidate_viable_under_hard_contract": false,
+    "legal_positive_output_tile_m_below_128": [],
+    "minimum_builder_legal_output_tile_m": 128,
+    "problem_tail_below_128_still_has_one_stock_work_tile": true,
+    "stock_fragment_association_retained_by_smaller_partition": false,
+    "sub_128_changes_permutation_type": true,
+    "sub_128_fails_scale_granularity_constraint": true
+  },
+  "status": "BLOCKED_NEEDS_USER_HELP",
+  "stock_instantiation": {
+    "accumulator": "fp32",
+    "cluster_mnk": [
+      1,
+      1,
+      1
+    ],
+    "cooperative_atom_layout_mnk": [
+      4,
+      2,
+      1
+    ],
+    "epilogue": "stock_linear_combination_bf16_or_fp16",
+    "instruction_mnk": [
+      16,
+      8,
+      32
+    ],
+    "k_tile_sequence": 128,
+    "layout": "swap_ab",
+    "permutation_tile_mnk": [
+      128,
+      32,
+      32
+    ],
+    "scale_granularity_mnk": [
+      128,
+      1,
+      128
+    ],
+    "tile_mnk": [
+      128,
+      32,
+      128
+    ],
+    "tile_scheduler": "stock_persistent_sm100_for_arch_sm120_family"
+  },
+  "traffic_contract": {
+    "mandatory_explicit_bytes": 23823646720,
+    "mandatory_explicit_floor_ms": 88.439932,
+    "opportunity_realized": false,
+    "separate_same_tile_residual_ms": 12.688211,
+    "stock_complete_tile_bytes": 26877100032,
+    "theoretical_opportunity_bytes": 2982150144,
+    "theoretical_opportunity_ms": 10.923627,
+    "theoretical_partitioned_bytes": 23894949888
+  },
+  "wide256_rejection": {
+    "differing_bytes": 10504,
+    "real_comparisons_all_drifted": true,
+    "revived": false,
+    "status": "binding_negative_evidence"
+  },
+  "workload_contract": {
+    "batch_size": 1,
+    "draft_vocab_block_map": "scripts/fr13_dvk_subset_blocks.json",
+    "draft_vocab_block_map_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "physical_rows": 32
+  }
+}

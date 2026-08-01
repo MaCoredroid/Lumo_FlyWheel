@@ -1,0 +1,15 @@
+FR13 B1 SM121 stock-atom output-tail source proof
+Date: 2026-08-01 UTC
+
+PASS  Source audit completed against pinned vLLM and CUTLASS Git blobs.
+      Verdict: BLOCKED_NEEDS_USER_HELP
+PASS  python3 -m pytest -q tests/test_fr13_cutlass_stock_atom_tail_proof.py tests/test_fr13_cutlass_fixed32_wave_patch.py tests/test_fr13_cutlass_wave_binary.py tests/test_fr13_cutlass_streamk_production.py tests/test_fr13_cutlass_streamk_gate_wiring.py
+      46 passed in 0.11s
+PASS  python3 -m py_compile scripts/fr13_cutlass_stock_atom_tail_proof.py tests/test_fr13_cutlass_stock_atom_tail_proof.py
+PASS  Repeated source audits produced byte-identical canonical JSON.
+PASS  git diff --check
+
+NOT RUN  Candidate build: source precondition proved impossible under the hard contract.
+NOT RUN  GPU launch: forbidden until source viability; no candidate exists.
+NOT RUN  Same-process real-task comparator: no candidate binary exists.
+NOT RUN  Timing: exactness gate is inapplicable without a viable candidate.
