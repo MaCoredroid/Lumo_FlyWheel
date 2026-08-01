@@ -18,10 +18,11 @@ source drift, or K64 configuration drift fails without publishing a verdict.
 
 ## Launch
 
-Run from a clean branch with no Docker containers present:
+Run from the integrated clean worktree, after the pinned Qwen bundle-cap fix is
+present and with no Docker containers active:
 
 ```bash
-cd /home/mark/lumoFlyWheel-node32-nonscaling
+cd /home/mark/lumoFlyWheel-k64-m128-b4
 TAG="source_v7_k64_root1_$(date -u +%Y%m%dT%H%M%SZ)"
 RUNROOT="$PWD/output/fr13_tail23_all_parent_exact4_b4_${TAG}"
 FORKED_FA2_SO="$PWD/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so"
@@ -41,6 +42,44 @@ Raw task traces remain in the ignored run directory for provenance replay and
 are not auto-committed. Curate only the compact verdict, production bundle,
 campaign proof, final boundary/audit identities, and manifests after the live
 run.
+
+## Credential flow
+
+The shadow run always returns the reference committer output. Only a successful
+verdict publishes `tail23_all_parent_production_pass.json`. Validate the exact
+source-v7 bundle on the host before wiring any serving arm:
+
+```bash
+PASS="$RUNROOT/tail6_fixed32_tail23_all_parent_b4_gate_$TAG/tail23_all_parent_production_pass.json"
+.venv/bin/python - "$PASS" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+source = Path("scripts/fr13_device_multidraft_kernel.py")
+spec = importlib.util.spec_from_file_location("fr13_taw_v7_credential", source)
+if spec is None or spec.loader is None:
+    raise SystemExit("cannot import source-v7 committer")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+bundle = module._fr13_fixed32_taw_native_production_pass(
+    path=sys.argv[1], expected_mode="tail6_fixed32"
+)
+if bundle["qualified_batches"] != [1, 2, 3, 4]:
+    raise SystemExit("source-v7 credential lacks independent B1-B4 records")
+print(module._FR13_FIXED32_TAW_SOURCE_SCHEMA)
+print(module._FR13_FIXED32_TAW_SOURCE_SHA256)
+PY
+sha256sum "$PASS"
+```
+
+Consumption remains default-off. The launcher accepts this host credential only
+with `FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=1` and
+`FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON="$PASS"`; the runtime revalidates
+mode, mask, source contract, and batch coverage after the file is copied into
+the container. The current qrow16 + SFWD runner deliberately rejects that
+co-candidate. Add it only through a combined exact real-task gate, not by
+flipping the production flag in the timing command.
 
 ## Remaining live risk
 

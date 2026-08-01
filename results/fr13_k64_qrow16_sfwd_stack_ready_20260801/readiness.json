@@ -12,7 +12,8 @@
     "physical_rows": 32,
     "physical_drafts": 31,
     "qrow16_production": true,
-    "sfwd_state_fusion_production": true
+    "sfwd_state_fusion_production": true,
+    "all_parent_committer_production": false
   },
   "topologies": {
     "tail6_fixed32": {
@@ -61,6 +62,13 @@
     "timing_eligible_after_run": true,
     "floor_acceptance_eligible_after_single_run": false
   },
+  "committer_gate": {
+    "candidate": "fixed32_all_parent_commit_v2",
+    "source_contract_schema": "fr13-fixed32-taw-all-parent-v7",
+    "status": "excluded_pending_exact4_b4_pass_and_combined_gate",
+    "shadow_gate": "scripts/fr13_run_b4_tail23_all_parent_live_gate.sh",
+    "production_default_enabled": false
+  },
   "prior_k64_qrow16_comparator": {
     "measure_sha256": "0350e791bc825083bfc3635e11c875617fa1d3823eba5f93ebd7f392c50f18d0",
     "topology": "hydra27_fixed32",
@@ -73,6 +81,6 @@
   },
   "runner": {
     "path": "scripts/fr13_run_b1_k64_qrow16_sfwd_stack_timing.sh",
-    "sha256": "e4bf05702552128cf0ec7cad3134b0dcc6710968bd6fc7f9f2f3db8f823275c7"
+    "sha256": "9509bb73d2f71691902b1c6d46f4fc5ed4581d47c6e6a25996ced27085078095"
   }
 }

@@ -193,8 +193,11 @@ def test_fixed32_campaign_closes_ingress_before_fetch_and_terminal_audit() -> No
     assert "fr13-fixed32-eager-kernel-traffic-audit-skip-v1" in teardown
     assert '"authenticated_engine_ledger_snapshotted":true' in teardown
     assert '"graph_census_audit_used":false' in teardown
-    assert '"$FR13_FIXED32_B1_DIAGNOSTIC" <<\'PY\'' in serve
-    assert "concurrency=int(concurrency_text)" not in serve
+    assert '"$FR13_FIXED32_B1_DIAGNOSTIC" \\' in serve
+    assert '"$SWE_CONCURRENCY" <<\'PY\'' in serve
+    assert 'concurrency_text = sys.argv[6]' in serve
+    assert 'if concurrency_text not in {"1", "4"}' in serve
+    assert "concurrency=int(concurrency_text)" in serve
 
 
 @pytest.mark.parametrize(
