@@ -17,6 +17,9 @@ KERNEL_PATH = ROOT / "src" / "lumo_flywheel_serving" / "fr10_gdn_tree_kernel.py"
 PATCHER_PATH = ROOT / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
 LAUNCHER_PATH = ROOT / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 RUNNER_PATH = ROOT / "scripts" / "fr13_run_b1_sfwd_state_fusion_gate.sh"
+TIMING_RUNNER_PATH = (
+    ROOT / "scripts" / "fr13_run_b1_sfwd_state_fusion_timing.sh"
+)
 
 sys.path.insert(0, str(ROOT / "src"))
 try:
@@ -451,3 +454,28 @@ def test_b1_full_vocab_runner_is_reference_returning_and_nonacceptance() -> None
     assert "must be the only kernel candidate" in launcher
     assert "requires exact full-vocab eager fixed32 B1" in launcher
     assert "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled" in launcher
+
+
+def test_source_gated_timing_pair_is_stock_first_and_nonacceptance() -> None:
+    runner = TIMING_RUNNER_PATH.read_text(encoding="utf-8")
+    assert "subset_b1_diagnostic_one.json" in runner
+    assert "subset_b4_four.json" not in runner
+    assert "subset_b16" not in runner
+    assert "PROBE_ONLY" not in runner
+    assert "ACCEPT_SPEED_PROBE" not in runner
+    assert "FR13_DRAFT_VOCAB_ROOT=0" in runner
+    assert "FR13_DRAFT_VOCAB_K=0" in runner
+    assert "ENFORCE_EAGER=1 CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in runner
+    assert "FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1" in runner
+    assert "scripts/fr13_measure.py deploy-speed" in runner
+    assert "scripts/fr13_sfwd_state_fusion_pass.py validate" in runner
+    assert "scripts/fr13_sfwd_state_fusion_pass.py verify-engagement" in runner
+    assert "timing_eligible=false" in runner
+    assert "floor_acceptance_eligible=false" in runner
+    assert "production_eligible=false" in runner
+    assert runner.index('run_arm "$STOCK_ARM" 0') < runner.index(
+        'run_arm "$CANDIDATE_ARM" 1'
+    )
+    assert runner.index("fr13_sfwd_state_fusion_pass.py validate") < runner.index(
+        "docker ps -aq"
+    )
