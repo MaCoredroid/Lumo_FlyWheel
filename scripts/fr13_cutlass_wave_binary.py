@@ -14,7 +14,15 @@ from pathlib import Path
 
 CANDIDATE_SHA256 = "f9bbbb8dc4ffc2227a71d2bc7b260e586ffbdc0fd946749e4f69e322c46a362d"
 CANDIDATE_SIZE = 111_417_328
-CANDIDATE_SELECTORS = frozenset({"streamk_coop128", "streamk_coop128_byte_ab"})
+WIDE256_CANDIDATE_SHA256 = (
+    "b957cf49da2977056661443192fc2725e153adba7f21fb522c07b439c04540ee"
+)
+WIDE256_CANDIDATE_SIZE = 113_174_464
+COOP128_SELECTORS = frozenset({"streamk_coop128", "streamk_coop128_byte_ab"})
+WIDE256_SELECTORS = frozenset(
+    {"streamk_force_wide256", "streamk_force_wide256_byte_ab"}
+)
+CANDIDATE_SELECTORS = COOP128_SELECTORS | WIDE256_SELECTORS
 CONTAINER_SOURCE = Path("/tmp/fr13_cutlass_wave.abi3.so")
 CONTAINER_DESTINATION = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so"
@@ -29,21 +37,33 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def verify_candidate(path: Path) -> dict[str, object]:
+def candidate_identity(selector: str) -> tuple[str, int, str]:
+    if selector in COOP128_SELECTORS:
+        return CANDIDATE_SHA256, CANDIDATE_SIZE, "streamk_coop128"
+    if selector in WIDE256_SELECTORS:
+        return WIDE256_CANDIDATE_SHA256, WIDE256_CANDIDATE_SIZE, "streamk_force_wide256"
+    raise ValueError(f"unsupported candidate selector: {selector!r}")
+
+
+def verify_candidate(
+    path: Path, selector: str = "streamk_coop128"
+) -> dict[str, object]:
+    expected_sha256, expected_size, candidate_family = candidate_identity(selector)
     info = path.lstat()
     if path.is_symlink() or not stat.S_ISREG(info.st_mode):
         raise ValueError(f"candidate is not a regular non-symlink file: {path}")
-    if info.st_size != CANDIDATE_SIZE:
-        raise ValueError(f"candidate size mismatch: {info.st_size} != {CANDIDATE_SIZE}")
+    if info.st_size != expected_size:
+        raise ValueError(f"candidate size mismatch: {info.st_size} != {expected_size}")
     digest = sha256_file(path)
-    if digest != CANDIDATE_SHA256:
-        raise ValueError(f"candidate SHA-256 mismatch: {digest} != {CANDIDATE_SHA256}")
+    if digest != expected_sha256:
+        raise ValueError(f"candidate SHA-256 mismatch: {digest} != {expected_sha256}")
     return {
         "path": str(path.resolve(strict=True)),
         "bytes": info.st_size,
         "sha256": digest,
         "regular": True,
         "symlink": False,
+        "candidate_family": candidate_family,
     }
 
 
@@ -72,7 +92,10 @@ def _verify_production_qualification(
     expected_sidecar_sha256: str,
     candidate: Path,
     patch_source: Path,
+    selector: str,
 ) -> dict[str, object]:
+    if selector not in {"streamk_coop128", "streamk_force_wide256"}:
+        raise ValueError(f"unsupported production candidate selector: {selector!r}")
     import fr13_cutlass_streamk_pass as qualification
 
     return qualification.verify_sidecar(
@@ -80,6 +103,7 @@ def _verify_production_qualification(
         expected_sidecar_sha256,
         candidate,
         patch_source,
+        candidate_selector=selector,
     )
 
 
@@ -95,8 +119,8 @@ def install_candidate(
 ) -> dict[str, object]:
     if selector not in CANDIDATE_SELECTORS:
         raise ValueError(f"unsupported candidate selector: {selector!r}")
-    source_identity = verify_candidate(source)
-    production_enabled = selector == "streamk_coop128"
+    source_identity = verify_candidate(source, selector)
+    production_enabled = selector in {"streamk_coop128", "streamk_force_wide256"}
     qualification: dict[str, object] | None = None
     if production_enabled:
         if production_sidecar is None or expected_production_sidecar_sha256 is None:
@@ -108,6 +132,7 @@ def install_candidate(
             expected_production_sidecar_sha256,
             source,
             patch_source,
+            selector,
         )
         qualification = {
             "sidecar_sha256": expected_production_sidecar_sha256,
@@ -167,7 +192,7 @@ def install_candidate(
     finally:
         temporary.unlink(missing_ok=True)
 
-    installed_identity = verify_candidate(destination)
+    installed_identity = verify_candidate(destination, selector)
     installed_mode = stat.S_IMODE(destination.lstat().st_mode)
     if installed_mode != 0o555:
         raise ValueError(f"installed candidate mode mismatch: {installed_mode:#o}")
@@ -178,6 +203,7 @@ def install_candidate(
         "destination": installed_identity,
         "installed_mode": "0555",
         "production_enabled": production_enabled,
+        "candidate_family": source_identity["candidate_family"],
     }
     if qualification is not None:
         payload["qualification"] = qualification
@@ -190,6 +216,7 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("candidate", type=Path)
+    verify_parser.add_argument("--selector", default="streamk_coop128")
     install_parser = subparsers.add_parser("install")
     install_parser.add_argument("--source", type=Path, required=True)
     install_parser.add_argument("--destination", type=Path, required=True)
@@ -205,7 +232,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "verify":
-        payload = verify_candidate(args.candidate)
+        payload = verify_candidate(args.candidate, args.selector)
     else:
         payload = install_candidate(
             args.source,

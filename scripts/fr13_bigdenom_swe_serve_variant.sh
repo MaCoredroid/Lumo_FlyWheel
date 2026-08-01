@@ -1500,7 +1500,8 @@ case "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" in
     exit 2
     ;;
 esac
-if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" ]]; then
+if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" ]]; then
   [[ -n "$FIXED32_MODE" && "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]] \
     || {
       echo "FAIL: fixed32 CUTLASS Stream-K real-task arm is B1 diagnostic only"
@@ -1710,6 +1711,8 @@ if cutlass_wave not in {
     "stock",
     "streamk_coop128_byte_ab",
     "streamk_coop128",
+    "streamk_force_wide256_byte_ab",
+    "streamk_force_wide256",
 }:
     raise SystemExit("fixed32 CUTLASS wave selector is invalid")
 try:
@@ -1720,7 +1723,8 @@ try:
         eager_diagnostic=batch_gdn_byte_ab_text == "1",
         graph_diagnostic=batch_gdn_graph_byte_ab_text == "1",
         streamk_eager_diagnostic=(
-            cutlass_wave == "streamk_coop128_byte_ab"
+            cutlass_wave
+            in ("streamk_coop128_byte_ab", "streamk_force_wide256_byte_ab")
         ),
     )
 except contract.ContractError as error:
@@ -2222,7 +2226,8 @@ if [[ -n "$FIXED32_MODE" ]]; then
       --fixed32-bm8-real-event-arm "$FIXED32_BM8_REAL_EVENT_ARM_PATH"
     )
   fi
-  if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" ]]; then
+  if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" ]]; then
     FIXED32_RUNNER_ARGS+=(
       --fixed32-cutlass-real-event-arm "$FIXED32_CUTLASS_REAL_EVENT_ARM_PATH"
     )

@@ -77,7 +77,8 @@ run_variant() { :; }
 source scripts/fr13_fixed32_floor_timers_seq.sh
 export FR13_MANDATORY_WEIGHT_BYTES=42025179008
 export FR13_WEIGHT_FLOOR_MS=153.9383846446886
-if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" ]]; then
+if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" ]]; then
   export ENFORCE_EAGER=1
 fi
 

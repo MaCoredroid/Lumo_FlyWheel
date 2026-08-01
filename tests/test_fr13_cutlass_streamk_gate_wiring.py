@@ -152,7 +152,9 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "binary.CONTAINER_DESTINATION" in gate
     assert '"served_result": "stock"' in gate
     assert '"acceptance_valid": False' in gate
-    assert '"schema": "fr13.fixed32.cutlass_streamk_live_gate.v3"' in gate
+    assert "LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_live_gate.v3" in gate
+    assert "LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_live_gate.v1" in gate
+    assert '"schema": expected_live_schema' in gate
     assert "fixed32_cutlass_streamk_real_task_arm.json" in gate
     assert "fr13-fixed32-cutlass-streamk-real-task-arm-v1" in gate
     assert '"task_marker": expected_task_marker' in gate

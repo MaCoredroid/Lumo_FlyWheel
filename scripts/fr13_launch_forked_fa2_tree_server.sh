@@ -477,9 +477,9 @@ if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
   }
 fi
 case "$FR13_FIXED32_CUTLASS_WAVE" in
-  stock|streamk_coop128|streamk_coop128_byte_ab) ;;
+  stock|streamk_coop128|streamk_coop128_byte_ab|streamk_force_wide256|streamk_force_wide256_byte_ab) ;;
   *)
-    echo "FR13_FIXED32_CUTLASS_WAVE must be stock, streamk_coop128, or streamk_coop128_byte_ab" >&2
+    echo "FR13_FIXED32_CUTLASS_WAVE has an unsupported selector" >&2
     exit 2
     ;;
 esac
@@ -534,18 +534,23 @@ else
     exit 2
   }
   .venv/bin/python scripts/fr13_cutlass_wave_binary.py verify \
-    "$FR13_FIXED32_CUTLASS_WAVE_SO" >/dev/null
+    "$FR13_FIXED32_CUTLASS_WAVE_SO" \
+    --selector "$FR13_FIXED32_CUTLASS_WAVE" >/dev/null
   FR13_FIXED32_CUTLASS_WAVE_SO=$(realpath "$FR13_FIXED32_CUTLASS_WAVE_SO")
   FR13_CUTLASS_WAVE_DOCKER_ARGS=(
     -v "$FR13_FIXED32_CUTLASS_WAVE_SO:/tmp/fr13_cutlass_wave.abi3.so:ro"
   )
-  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" ]]; then
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" ]]; then
     [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "0" \
        && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
        && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
        && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
        && "${ENFORCE_EAGER:-0}" == "1" \
-       && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl" ]] || {
+       && ( ( "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
+              && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl" ) ) ]] || {
       echo "CUTLASS Stream-K byte A/B requires diagnostic B1 eager mode without production credentials" >&2
       exit 2
     }
@@ -565,6 +570,7 @@ else
       --candidate-so "$FR13_FIXED32_CUTLASS_WAVE_SO" \
       --patch-source scripts/fr13_patch_cutlass_fixed32_wave.py \
       --expected-source-commit "$_fr13_cutlass_streamk_source_commit" \
+      --candidate-selector "$FR13_FIXED32_CUTLASS_WAVE" \
       >/dev/null
   fi
 fi
@@ -1205,7 +1211,8 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" ]]; then
     _fixed32_expected_eager=1
   fi
-  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" ]]; then
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" ]]; then
     _fixed32_expected_eager=1
   fi
   case "${FR13_DRAFT_VOCAB_K:-65536}:$FR13_DRAFT_VOCAB_ROOT" in
@@ -1372,6 +1379,7 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" ]]; then
     --candidate-so "$FR13_FIXED32_CUTLASS_WAVE_SO" \
     --patch-source scripts/fr13_patch_cutlass_fixed32_wave.py \
     --expected-source-commit "$_fr13_cutlass_streamk_source_commit" \
+    --candidate-selector "$FR13_FIXED32_CUTLASS_WAVE" \
     --out "$_fr13_cutlass_streamk_production_sidecar_host" \
     >/dev/null
   chmod 0400 "$_fr13_cutlass_streamk_production_sidecar_host"

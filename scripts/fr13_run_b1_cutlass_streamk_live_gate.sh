@@ -11,6 +11,25 @@ cd "$REPO"
 : "${CUTLASS_STREAMK_SO:?set CUTLASS_STREAMK_SO to the pinned Stream-K shared object}"
 PATCH_SOURCE=scripts/fr13_patch_cutlass_fixed32_wave.py
 SOURCE_COMMIT=$(git rev-parse HEAD)
+GATE_CANDIDATE=${FR13_STREAMK_GATE_CANDIDATE:-streamk_coop128}
+case "$GATE_CANDIDATE" in
+  streamk_coop128)
+    DIAGNOSTIC_SELECTOR=streamk_coop128_byte_ab
+    RECORD_SCHEMA=fr13.fixed32.cutlass_streamk_byte_ab.v2
+    LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_live_gate.v3
+    CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl
+    ;;
+  streamk_force_wide256)
+    DIAGNOSTIC_SELECTOR=streamk_force_wide256_byte_ab
+    RECORD_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_byte_ab.v1
+    LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_live_gate.v1
+    CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl
+    ;;
+  *)
+    echo "unsupported Stream-K gate candidate: $GATE_CANDIDATE" >&2
+    exit 2
+    ;;
+esac
 
 if [[ -e "$RUNROOT" || -L "$RUNROOT" ]]; then
   echo "CUTLASS Stream-K gate requires a fresh RUNROOT: $RUNROOT" >&2
@@ -18,7 +37,7 @@ if [[ -e "$RUNROOT" || -L "$RUNROOT" ]]; then
 fi
 
 .venv/bin/python scripts/fr13_cutlass_wave_binary.py verify \
-  "$CUTLASS_STREAMK_SO" >/dev/null
+  "$CUTLASS_STREAMK_SO" --selector "$DIAGNOSTIC_SELECTOR" >/dev/null
 
 export FR13_GATE_QROW16=0
 export FR13_GATE_TAW_NATIVE=0
@@ -32,9 +51,9 @@ export FR13_DRAFT_VOCAB_K=0
 export FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'
 export FR13_MANDATORY_WEIGHT_BYTES=42025179008
 export FR13_WEIGHT_FLOOR_MS=153.9383846446886
-export FR13_FIXED32_CUTLASS_WAVE=streamk_coop128_byte_ab
+export FR13_FIXED32_CUTLASS_WAVE="$DIAGNOSTIC_SELECTOR"
 export FR13_FIXED32_CUTLASS_WAVE_SO="$CUTLASS_STREAMK_SO"
-export FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL=/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl
+export FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL="$CONTAINER_JSONL"
 
 bash scripts/fr13_run_b1_kernel_live_gate.sh
 
@@ -43,11 +62,12 @@ ARMDIR="$RUNROOT/$ARM"
 TASK_ID=astropy__astropy-12907
 CUTLASS_ARM_ARTIFACT="$ARMDIR/swe_out/verified/per_task/$TASK_ID/fixed32_cutlass_streamk_real_task_arm.json"
 .venv/bin/python - \
-  "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl" \
+  "$ARMDIR$CONTAINER_JSONL" \
   "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_binary.json" \
   "$ARMDIR/cutlass_streamk_byte_gate.json" \
   "$PATCH_SOURCE" "$SOURCE_COMMIT" "$CUTLASS_ARM_ARTIFACT" \
-  "$ARMDIR/container_env.txt" <<'PY'
+  "$ARMDIR/container_env.txt" "$GATE_CANDIDATE" \
+  "$DIAGNOSTIC_SELECTOR" "$RECORD_SCHEMA" "$LIVE_SCHEMA" <<'PY'
 import hashlib
 import json
 import sys
@@ -61,11 +81,17 @@ jsonl_path, binary_path, output_path, patch_source = map(Path, sys.argv[1:5])
 source_commit = sys.argv[5]
 arm_path = Path(sys.argv[6])
 container_env_path = Path(sys.argv[7])
+expected_candidate = sys.argv[8]
+expected_diagnostic_selector = sys.argv[9]
+expected_record_schema = sys.argv[10]
+expected_live_schema = sys.argv[11]
+expected_candidate_sha256, expected_candidate_size, expected_candidate_family = (
+    binary.candidate_identity(expected_diagnostic_selector)
+)
 lines = jsonl_path.read_text(encoding="utf-8").splitlines()
 if not lines:
     raise SystemExit("CUTLASS Stream-K byte gate was vacuous")
 records = [json.loads(line) for line in lines]
-expected_record_schema = "fr13.fixed32.cutlass_streamk_byte_ab.v2"
 expected_task_id = "astropy__astropy-12907"
 expected_task_marker = f"swe_verified:{expected_task_id}"
 expected_shapes = {
@@ -132,8 +158,10 @@ if any(
     errors.append("first mismatch and differing-byte count disagree")
 if binary_record.get("schema") != "fr13.fixed32.cutlass_streamk_binary.v2":
     errors.append("installed binary attestation schema mismatch")
-if binary_record.get("selector") != "streamk_coop128_byte_ab":
+if binary_record.get("selector") != expected_diagnostic_selector:
     errors.append("installed binary selector attestation mismatch")
+if binary_record.get("candidate_family") != expected_candidate_family:
+    errors.append("installed binary candidate-family attestation mismatch")
 if binary_record.get("production_enabled") is not False:
     errors.append("binary attestation did not remain production-off")
 expected_arm = {
@@ -166,16 +194,18 @@ for label, identity, expected_path in (
         errors.append(f"installed binary {label} path mismatch")
     if identity.get("regular") is not True or identity.get("symlink") is not False:
         errors.append(f"installed binary {label} file identity mismatch")
-    if identity.get("sha256") != binary.CANDIDATE_SHA256:
+    if identity.get("sha256") != expected_candidate_sha256:
         errors.append(f"installed binary {label} SHA-256 mismatch")
-    if identity.get("bytes") != binary.CANDIDATE_SIZE:
+    if identity.get("bytes") != expected_candidate_size:
         errors.append(f"installed binary {label} size mismatch")
+    if identity.get("candidate_family") != expected_candidate_family:
+        errors.append(f"installed binary {label} candidate-family mismatch")
 patch_source_sha256 = hashlib.sha256(patch_source.read_bytes()).hexdigest()
 if patch_source_sha256 != qualification.PATCH_SOURCE_SHA256:
     errors.append("Stream-K patch source SHA-256 mismatch")
 
 payload = {
-    "schema": "fr13.fixed32.cutlass_streamk_live_gate.v3",
+    "schema": expected_live_schema,
     "status": "pass" if not errors else "fail",
     "run_classification": "one_real_swe_verified_b1_byte_diagnostic",
     "acceptance_valid": False,
@@ -194,8 +224,8 @@ payload = {
     "batch_size": 1,
     "concurrency": 1,
     "fixed_rows": 32,
-    "candidate": "streamk_coop128",
-    "diagnostic_selector": "streamk_coop128_byte_ab",
+    "candidate": expected_candidate,
+    "diagnostic_selector": expected_diagnostic_selector,
     "served_result": "stock",
     "production_enabled": False,
     "comparisons": len(records),
@@ -205,8 +235,9 @@ payload = {
         record.get("byte_equal") is not True for record in records
     ),
     "differing_bytes": sum(record.get("mismatch_count", 0) for record in records),
-    "candidate_sha256": binary.CANDIDATE_SHA256,
-    "candidate_bytes": binary.CANDIDATE_SIZE,
+    "candidate_family": expected_candidate_family,
+    "candidate_sha256": expected_candidate_sha256,
+    "candidate_bytes": expected_candidate_size,
     "patch_source_sha256": patch_source_sha256,
     "vllm_base_commit": qualification.VLLM_BASE_COMMIT,
     "patched_dispatch_sha256": qualification.PATCHED_DISPATCH_SHA256,

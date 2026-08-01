@@ -62,9 +62,12 @@ TEMPLATE_ANCHOR = """          class EpilogueScheduler, class MainloopScheduler,
 struct cutlass_3x_gemm_fp8_blockwise {
 """
 TEMPLATE_REPLACEMENT = """          class EpilogueScheduler, class MainloopScheduler,
-          bool swap_ab_ = false, class TileScheduler = void>
+          bool swap_ab_ = false, class TileScheduler = void,
+          bool force_stream_k_ = false,
+          class MainloopStageCount = cutlass::gemm::collective::StageCountAuto>
 struct cutlass_3x_gemm_fp8_blockwise {
   static constexpr bool use_stream_k = !cute::is_void_v<TileScheduler>;
+  static constexpr bool force_stream_k = force_stream_k_;
 """
 
 KERNEL_ANCHOR = """  using KernelType = enable_sm120_family<cutlass::gemm::kernel::GemmUniversal<
@@ -74,6 +77,12 @@ KERNEL_REPLACEMENT = """  using KernelType = enable_sm120_family<cutlass::gemm::
       Shape<int, int, int, int>, CollectiveMainloop, CollectiveEpilogue,
       TileScheduler>>;
 """
+
+STAGE_COUNT_ANCHOR = (
+    "cutlass::gemm::collective::StageCountAutoCarveout<"
+    "static_cast<int>(sizeof(typename CollectiveEpilogue::SharedStorage))>"
+)
+STAGE_COUNT_REPLACEMENT = "MainloopStageCount"
 
 CONFIG_ANCHOR = """template <typename Gemm>
 void cutlass_gemm_caller_blockwise(torch::stable::Tensor& out, torch::stable::Tensor const& a,
@@ -107,10 +116,42 @@ struct sm120_blockwise_fp8_config_swapab_streamk {
       cutlass::gemm::StreamKScheduler>;
 };
 
+template <typename OutType>
+struct sm120_blockwise_fp8_config_cooperative_streamk_wide256 {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_128, _256, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise<
+      OutType, 1, 128, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, false,
+      cutlass::gemm::StreamKScheduler, true,
+      cutlass::gemm::collective::StageCount<2>>;
+};
+
+template <typename OutType>
+struct sm120_blockwise_fp8_config_swapab_streamk_wide256 {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_256, _32, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise<
+      OutType, 128, 1, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, true,
+      cutlass::gemm::StreamKScheduler, true,
+      cutlass::gemm::collective::StageCount<2>>;
+};
+
 enum class fixed32_cutlass_wave_variant {
   stock,
   stream_k_cooperative_128,
   stream_k_cooperative_128_byte_ab,
+  stream_k_force_wide256,
+  stream_k_force_wide256_byte_ab,
 };
 
 static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
@@ -129,6 +170,12 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     }
     if (value == "streamk_coop128_byte_ab") {
       return fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab;
+    }
+    if (value == "streamk_force_wide256") {
+      return fixed32_cutlass_wave_variant::stream_k_force_wide256;
+    }
+    if (value == "streamk_force_wide256_byte_ab") {
+      return fixed32_cutlass_wave_variant::stream_k_force_wide256_byte_ab;
     }
     return fixed32_cutlass_wave_variant::stock;
   }();
@@ -197,7 +244,9 @@ CALLER_REPLACEMENT = """  if constexpr (!Gemm::use_stream_k) {
   scheduler.reduction_mode =
       decltype(scheduler.reduction_mode)::Deterministic;
   scheduler.decomposition_mode =
-      decltype(scheduler.decomposition_mode)::Heuristic;
+      Gemm::force_stream_k
+          ? decltype(scheduler.decomposition_mode)::StreamK
+          : decltype(scheduler.decomposition_mode)::Heuristic;
   typename GemmKernel::Arguments args{
       cutlass::gemm::GemmUniversalMode::kGemm, prob_shape, mainloop_args,
       epilogue_args, hw_info, scheduler};
@@ -255,6 +304,19 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
         destination, a, b, a_scales, b_scales);
   };
 
+  auto run_stream_k_wide256 = [&](torch::stable::Tensor& destination) {
+    if (M <= 64) {
+      using Gemm = typename
+          sm120_blockwise_fp8_config_swapab_streamk_wide256<OutType>::Gemm;
+      return cutlass_gemm_caller_blockwise<Gemm>(
+          destination, a, b, a_scales, b_scales);
+    }
+    using Gemm = typename
+        sm120_blockwise_fp8_config_cooperative_streamk_wide256<OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
   auto run_stock = [&](torch::stable::Tensor& destination) {
     bool swap_ab = (M <= 64) || (M % 4 != 0);
     if (!swap_ab) {
@@ -273,15 +335,25 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
         destination, a, b, a_scales, b_scales);
   };
 
+  const bool wide256_byte_ab =
+      wave_variant ==
+      fixed32_cutlass_wave_variant::stream_k_force_wide256_byte_ab;
   if (wave_variant ==
-      fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab) {
+          fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab ||
+      wide256_byte_ab) {
+    auto run_candidate = [&](torch::stable::Tensor& destination) {
+      if (wide256_byte_ab) {
+        return run_stream_k_wide256(destination);
+      }
+      return run_stream_k(destination);
+    };
     // Boot/profile forwards warm both routes but cannot consume or satisfy the
     // authenticated real-task comparison budget.
     std::string task_marker = fixed32_cutlass_real_task_marker();
     if (task_marker.empty()) {
       torch::stable::Tensor candidate = torch::stable::empty_like(out);
       run_stock(out);
-      run_stream_k(candidate);
+      run_candidate(candidate);
       return;
     }
 
@@ -296,7 +368,7 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
 
     torch::stable::Tensor candidate = torch::stable::empty_like(out);
     run_stock(out);
-    run_stream_k(candidate);
+    run_candidate(candidate);
 
     const size_t output_bytes =
         static_cast<size_t>(out.numel()) * out.element_size();
@@ -330,15 +402,21 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
         ++mismatch_count;
       }
     }
-    constexpr const char* log_path =
-        "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl";
+    const char* log_path =
+        wide256_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl"
+            : "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl";
     static std::mutex log_mutex;
     {
       std::lock_guard<std::mutex> lock(log_mutex);
       std::ofstream log(log_path, std::ios::app);
       STD_TORCH_CHECK(log.good(),
                       "FR13 Stream-K byte A/B could not open JSONL");
-      log << "{\\\"schema\\\":\\\"fr13.fixed32.cutlass_streamk_byte_ab.v2\\\","
+      log << "{\\\"schema\\\":\\\""
+          << (wide256_byte_ab
+                  ? "fr13.fixed32.cutlass_streamk_wide256_byte_ab.v1"
+                  : "fr13.fixed32.cutlass_streamk_byte_ab.v2")
+          << "\\\","
           << "\\\"invocation\\\":" << invocation << ","
           << "\\\"task_marker\\\":\\\"" << task_marker << "\\\","
           << "\\\"m\\\":" << M << ",\\\"n\\\":" << N
@@ -363,6 +441,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   if (wave_variant ==
       fixed32_cutlass_wave_variant::stream_k_cooperative_128) {
     return run_stream_k(out);
+  }
+
+  if (wave_variant ==
+      fixed32_cutlass_wave_variant::stream_k_force_wide256) {
+    return run_stream_k_wide256(out);
   }
 
   // Unset/unknown selectors retain the stock kernel and numeric result.
@@ -397,9 +480,17 @@ def patch_text(source: str) -> tuple[str, bool]:
         count = source.count(anchor)
         if count != 1:
             raise RuntimeError(f"expected exactly one {label} anchor, found {count}")
+    stage_count = source.count(STAGE_COUNT_ANCHOR)
+    if stage_count != 2:
+        raise RuntimeError(
+            f"expected exactly two mainloop stage-count anchors, found {stage_count}"
+        )
     patched = source.replace(INCLUDE_ANCHOR, INCLUDE_REPLACEMENT, 1)
     patched = patched.replace(TEMPLATE_ANCHOR, TEMPLATE_REPLACEMENT, 1)
     patched = patched.replace(KERNEL_ANCHOR, KERNEL_REPLACEMENT, 1)
+    patched = patched.replace(
+        STAGE_COUNT_ANCHOR, STAGE_COUNT_REPLACEMENT, stage_count
+    )
     patched = patched.replace(CONFIG_ANCHOR, CONFIG_REPLACEMENT, 1)
     patched = patched.replace(CALLER_ANCHOR, CALLER_REPLACEMENT, 1)
     patched = patched.replace(DISPATCH_ANCHOR, DISPATCH_REPLACEMENT, 1)

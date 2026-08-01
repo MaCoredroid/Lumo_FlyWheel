@@ -108,6 +108,52 @@ def test_live_pass_issues_and_verifies_source_binary_bound_sidecar(
     assert issued["live_result_sha256"] == live_sha256
 
 
+def test_wide256_live_pass_is_bound_to_wide_binary_and_schema(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, candidate, patch_source, live, _ = _qualified_fixture(
+        tmp_path, monkeypatch
+    )
+    candidate_bytes = candidate.read_bytes()
+    candidate_sha256 = hashlib.sha256(candidate_bytes).hexdigest()
+    monkeypatch.setattr(module.binary, "WIDE256_CANDIDATE_SIZE", len(candidate_bytes))
+    monkeypatch.setattr(module.binary, "WIDE256_CANDIDATE_SHA256", candidate_sha256)
+    payload = json.loads(live.read_text(encoding="ascii"))
+    payload.update(
+        {
+            "schema": module.WIDE256_LIVE_SCHEMA,
+            "candidate": "streamk_force_wide256",
+            "candidate_family": "streamk_force_wide256",
+            "diagnostic_selector": "streamk_force_wide256_byte_ab",
+        }
+    )
+    live.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
+    live_sha256 = hashlib.sha256(live.read_bytes()).hexdigest()
+    sidecar = tmp_path / "wide256-sidecar.json"
+
+    issued = module.issue_sidecar(
+        live,
+        live_sha256,
+        candidate,
+        sidecar,
+        patch_source,
+        candidate_selector="streamk_force_wide256",
+    )
+    sidecar_sha256 = hashlib.sha256(sidecar.read_bytes()).hexdigest()
+    verified = module.verify_sidecar(
+        sidecar,
+        sidecar_sha256,
+        candidate,
+        patch_source,
+        candidate_selector="streamk_force_wide256",
+    )
+
+    assert verified == issued
+    assert issued["candidate_selector"] == "streamk_force_wide256"
+    assert issued["diagnostic_selector"] == "streamk_force_wide256_byte_ab"
+    assert issued["candidate_family"] == "streamk_force_wide256"
+
+
 def test_live_pass_rejects_mismatch_and_symlink(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

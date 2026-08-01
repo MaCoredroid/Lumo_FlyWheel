@@ -1,0 +1,85 @@
+{
+  "schema": "fr13.fixed32.streamk_force_wide256_build.v1",
+  "created_at_utc": "2026-08-01T05:16:24Z",
+  "status": "compiled_default_off_byte_gate_ready",
+  "performance_claim": false,
+  "acceptance_valid": false,
+  "gpu_used": false,
+  "docker_used": false,
+  "pinned_source": {
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "patch_source_sha256": "2e520f8f0d80eaf0997c263e60b15e09f0c71ce048d563fa21670fc718550178",
+    "patched_dispatch_sha256": "aa53e95e20b0bbad1e0c1de23c0284e2a633f99ddd6410b95584ed2fb1dbba2b"
+  },
+  "binary": {
+    "path": "/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.streamk_force_wide256_gate_ready.abi3.so",
+    "sha256": "b957cf49da2977056661443192fc2725e153adba7f21fb522c07b439c04540ee",
+    "bytes": 113174464,
+    "mode": "0555",
+    "runpath": "/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64"
+  },
+  "selector": {
+    "production": "streamk_force_wide256",
+    "diagnostic": "streamk_force_wide256_byte_ab",
+    "default": "stock",
+    "row_gate": [32, 64, 96, 128],
+    "projection_nk": [
+      [34816, 5120],
+      [5120, 17408],
+      [5120, 6144],
+      [16384, 5120],
+      [8192, 5120]
+    ]
+  },
+  "kernels": {
+    "small_rows": {
+      "physical_rows": [32, 64],
+      "swap_ab": true,
+      "tile_mnk": [256, 32, 128],
+      "scale_granularity_mnk": [128, 1, 128],
+      "registers": 168,
+      "stack_bytes": 8,
+      "shared_bytes": 1024
+    },
+    "large_rows": {
+      "physical_rows": [96, 128],
+      "swap_ab": false,
+      "tile_mnk": [128, 256, 128],
+      "scale_granularity_mnk": [1, 128, 128],
+      "registers": 168,
+      "stack_bytes": 552,
+      "shared_bytes": 1024
+    },
+    "schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+    "tile_scheduler": "StreamKScheduler",
+    "decomposition_mode": "StreamK",
+    "reduction_mode": "Deterministic",
+    "splits": 1,
+    "mainloop_stages": 2
+  },
+  "compiler_correction": {
+    "initial_status": "failed",
+    "initial_error": "Specialization requires Stages set to value 2 or more",
+    "cause": "automatic staging selected one stage for the 128x256x128 normal tile",
+    "resolution": "explicit StageCount<2> without changing tile, scale, scheduler, reduction, or split semantics",
+    "final_status": "compiled"
+  },
+  "b1_model": {
+    "sm_count": 48,
+    "coop128_n_tiles_by_projection": [272, 40, 40, 128, 64],
+    "wide256_n_tiles_by_projection": [136, 20, 20, 64, 32],
+    "measured_cutlass_ms_per_event": 112.312954,
+    "explicit_traffic_floor_ms_per_event_at_273_gbps": 88.439932,
+    "optimistic_max_streamk_recovery_ms_per_event": 10.923627,
+    "timing_prediction": false
+  },
+  "required_gates": {
+    "compiled": true,
+    "resource_usage_captured": true,
+    "real_b1_byte_equal": false,
+    "real_exact4_b1_timed": false,
+    "real_exact4_b4_timed": false,
+    "real_exact16_timed": false
+  }
+}

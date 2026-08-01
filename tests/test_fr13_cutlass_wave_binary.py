@@ -28,7 +28,45 @@ def test_pinned_binary_identity_and_selectors() -> None:
     assert module.CANDIDATE_SELECTORS == {
         "streamk_coop128",
         "streamk_coop128_byte_ab",
+        "streamk_force_wide256",
+        "streamk_force_wide256_byte_ab",
     }
+    assert module.WIDE256_CANDIDATE_SHA256 == (
+        "b957cf49da2977056661443192fc2725e153adba7f21fb522c07b439c04540ee"
+    )
+    assert module.WIDE256_CANDIDATE_SIZE == 113_174_464
+    assert module.candidate_identity("streamk_force_wide256") == (
+        module.WIDE256_CANDIDATE_SHA256,
+        module.WIDE256_CANDIDATE_SIZE,
+        "streamk_force_wide256",
+    )
+
+
+def test_wide256_diagnostic_install_uses_its_own_pinned_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    payload = b"wide256-candidate-extension\n"
+    digest = hashlib.sha256(payload).hexdigest()
+    monkeypatch.setattr(module, "WIDE256_CANDIDATE_SIZE", len(payload))
+    monkeypatch.setattr(module, "WIDE256_CANDIDATE_SHA256", digest)
+    source = tmp_path / "wide256.so"
+    destination = tmp_path / "installed.so"
+    attestation = tmp_path / "attestation.json"
+    source.write_bytes(payload)
+    destination.write_bytes(b"stock-extension\n")
+
+    record = module.install_candidate(
+        source,
+        destination,
+        attestation,
+        "streamk_force_wide256_byte_ab",
+    )
+
+    assert destination.read_bytes() == payload
+    assert record["production_enabled"] is False
+    assert record["candidate_family"] == "streamk_force_wide256"
+    assert record["source"]["sha256"] == digest
 
 
 def test_install_is_exact_attested_and_production_off(

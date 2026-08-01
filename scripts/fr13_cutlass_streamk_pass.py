@@ -21,11 +21,12 @@ LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_live_gate.v3"
 SIDECAR_SCHEMA = "fr13.fixed32.cutlass_streamk.production_pass.v2"
 ATTESTATION_SCHEMA = "fr13.fixed32.cutlass_streamk_binary.v2"
 PATCH_SOURCE = Path("scripts/fr13_patch_cutlass_fixed32_wave.py")
-PATCH_SOURCE_SHA256 = "7fb7d57c6ba08314c1ce4615366f4d4b85cfcee18f31e29739ef4815d3a42474"
+PATCH_SOURCE_SHA256 = "2e520f8f0d80eaf0997c263e60b15e09f0c71ce048d563fa21670fc718550178"
 VLLM_BASE_COMMIT = "fe9c3d6c5f66c873d196800384ed6880687b9e52"
 PATCHED_DISPATCH_SHA256 = (
-    "cee69e6c53eed8dc0a8b828fc329b96c63320d7edbe1c26e1a649fad487a5248"
+    "aa53e95e20b0bbad1e0c1de23c0284e2a633f99ddd6410b95584ed2fb1dbba2b"
 )
+WIDE256_LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_wide256_live_gate.v1"
 EXPECTED_TASK_IDS = ("astropy__astropy-12907",)
 EXPECTED_TASK_MARKER = f"swe_verified:{EXPECTED_TASK_IDS[0]}"
 EXPECTED_DRAFT_VOCAB_ROOT = 0
@@ -37,6 +38,25 @@ EXPECTED_PROJECTION_NK = (
     (16384, 5120),
     (34816, 5120),
 )
+CANDIDATE_CONTRACTS = {
+    "streamk_coop128": {
+        "live_schema": LIVE_SCHEMA,
+        "diagnostic_selector": "streamk_coop128_byte_ab",
+    },
+    "streamk_force_wide256": {
+        "live_schema": WIDE256_LIVE_SCHEMA,
+        "diagnostic_selector": "streamk_force_wide256_byte_ab",
+    },
+}
+
+
+def _candidate_contract(candidate_selector: str) -> dict[str, str]:
+    try:
+        return CANDIDATE_CONTRACTS[candidate_selector]
+    except KeyError as error:
+        raise QualificationError(
+            f"Stream-K candidate selector mismatch: {candidate_selector!r}"
+        ) from error
 
 
 class QualificationError(ValueError):
@@ -138,7 +158,10 @@ def validate_live_result(
     candidate_so: Path,
     patch_source: Path = PATCH_SOURCE,
     expected_source_commit: str | None = None,
+    candidate_selector: str = "streamk_coop128",
 ) -> dict[str, Any]:
+    candidate_contract = _candidate_contract(candidate_selector)
+    diagnostic_selector = candidate_contract["diagnostic_selector"]
     expected_live_sha256 = _require_sha256(
         expected_live_sha256, "expected live-result SHA-256"
     )
@@ -149,10 +172,10 @@ def validate_live_result(
             f"Stream-K live PASS SHA-256 mismatch: {live_sha256} != {expected_live_sha256}"
         )
 
-    candidate = binary.verify_candidate(candidate_so)
+    candidate = binary.verify_candidate(candidate_so, diagnostic_selector)
     patch = _validate_patch_source(patch_source)
     expected_fields: dict[str, object] = {
-        "schema": LIVE_SCHEMA,
+        "schema": candidate_contract["live_schema"],
         "status": "pass",
         "run_classification": "one_real_swe_verified_b1_byte_diagnostic",
         "acceptance_valid": False,
@@ -168,21 +191,23 @@ def validate_live_result(
         "batch_size": 1,
         "concurrency": 1,
         "fixed_rows": 32,
-        "candidate": "streamk_coop128",
-        "diagnostic_selector": "streamk_coop128_byte_ab",
+        "candidate": candidate_selector,
+        "diagnostic_selector": diagnostic_selector,
         "served_result": "stock",
         "production_enabled": False,
         "observed_m_values": [32],
         "observed_projection_nk": [list(shape) for shape in EXPECTED_PROJECTION_NK],
         "mismatching_comparisons": 0,
         "differing_bytes": 0,
-        "candidate_sha256": binary.CANDIDATE_SHA256,
-        "candidate_bytes": binary.CANDIDATE_SIZE,
+        "candidate_sha256": candidate["sha256"],
+        "candidate_bytes": candidate["bytes"],
         "patch_source_sha256": PATCH_SOURCE_SHA256,
         "vllm_base_commit": VLLM_BASE_COMMIT,
         "patched_dispatch_sha256": PATCHED_DISPATCH_SHA256,
         "errors": [],
     }
+    if candidate_selector == "streamk_force_wide256":
+        expected_fields["candidate_family"] = candidate["candidate_family"]
     for key, expected in expected_fields.items():
         if payload.get(key) != expected:
             raise QualificationError(
@@ -222,7 +247,9 @@ def validate_live_result(
     return {
         "schema": SIDECAR_SCHEMA,
         "status": "QUALIFIED",
-        "candidate_selector": "streamk_coop128",
+        "candidate_selector": candidate_selector,
+        "diagnostic_selector": diagnostic_selector,
+        "candidate_family": candidate["candidate_family"],
         "candidate_sha256": candidate["sha256"],
         "candidate_bytes": candidate["bytes"],
         "live_result_sha256": live_sha256,
@@ -254,6 +281,7 @@ def issue_sidecar(
     output: Path,
     patch_source: Path = PATCH_SOURCE,
     expected_source_commit: str | None = None,
+    candidate_selector: str = "streamk_coop128",
 ) -> dict[str, Any]:
     payload = validate_live_result(
         live_result,
@@ -261,6 +289,7 @@ def issue_sidecar(
         candidate_so,
         patch_source,
         expected_source_commit,
+        candidate_selector,
     )
     _write_json(output, payload)
     return payload
@@ -271,23 +300,34 @@ def verify_sidecar(
     expected_sidecar_sha256: str,
     candidate_so: Path,
     patch_source: Path = PATCH_SOURCE,
+    *,
+    candidate_selector: str | None = None,
 ) -> dict[str, Any]:
     expected_sidecar_sha256 = _require_sha256(
         expected_sidecar_sha256, "expected production-sidecar SHA-256"
     )
     payload, raw = _read_json(sidecar, "Stream-K production sidecar")
+    sidecar_selector = payload.get("candidate_selector")
+    if candidate_selector is not None and sidecar_selector != candidate_selector:
+        raise QualificationError("Stream-K production sidecar selector mismatch")
+    if not isinstance(sidecar_selector, str):
+        raise QualificationError("Stream-K production sidecar selector is invalid")
+    candidate_contract = _candidate_contract(sidecar_selector)
+    diagnostic_selector = candidate_contract["diagnostic_selector"]
     actual_sha256 = hashlib.sha256(raw).hexdigest()
     if actual_sha256 != expected_sidecar_sha256:
         raise QualificationError(
             "Stream-K production sidecar SHA-256 mismatch: "
             f"{actual_sha256} != {expected_sidecar_sha256}"
         )
-    candidate = binary.verify_candidate(candidate_so)
+    candidate = binary.verify_candidate(candidate_so, diagnostic_selector)
     patch = _validate_patch_source(patch_source)
     required = {
         "schema": SIDECAR_SCHEMA,
         "status": "QUALIFIED",
-        "candidate_selector": "streamk_coop128",
+        "candidate_selector": sidecar_selector,
+        "diagnostic_selector": diagnostic_selector,
+        "candidate_family": candidate["candidate_family"],
         "candidate_sha256": candidate["sha256"],
         "candidate_bytes": candidate["bytes"],
         "patch_source_sha256": patch["sha256"],
@@ -341,9 +381,16 @@ def validate_production_attestation(
         expected_sidecar_sha256, "expected production-sidecar SHA-256"
     )
     payload, raw = _read_json(attestation, "Stream-K binary attestation")
+    candidate_selector = payload.get("selector")
+    if not isinstance(candidate_selector, str):
+        raise QualificationError("Stream-K binary attestation selector is invalid")
+    candidate_contract = _candidate_contract(candidate_selector)
+    candidate_sha256, candidate_bytes, candidate_family = binary.candidate_identity(
+        candidate_selector
+    )
     required = {
         "schema": ATTESTATION_SCHEMA,
-        "selector": "streamk_coop128",
+        "selector": candidate_selector,
         "installed_mode": "0555",
         "production_enabled": True,
     }
@@ -362,8 +409,8 @@ def validate_production_attestation(
             raise QualificationError(f"Stream-K binary attestation lacks {label}")
         expected_identity = {
             "path": str(expected_path),
-            "bytes": binary.CANDIDATE_SIZE,
-            "sha256": binary.CANDIDATE_SHA256,
+            "bytes": candidate_bytes,
+            "sha256": candidate_sha256,
             "regular": True,
             "symlink": False,
         }
@@ -377,7 +424,7 @@ def validate_production_attestation(
         raise QualificationError("Stream-K binary attestation lacks qualification")
     if qualification.get("sidecar_sha256") != expected_sidecar_sha256:
         raise QualificationError("Stream-K attestation sidecar binding mismatch")
-    if qualification.get("candidate_sha256") != binary.CANDIDATE_SHA256:
+    if qualification.get("candidate_sha256") != candidate_sha256:
         raise QualificationError("Stream-K attestation candidate binding mismatch")
     if qualification.get("patch_source_sha256") != PATCH_SOURCE_SHA256:
         raise QualificationError("Stream-K attestation patch-source binding mismatch")
@@ -419,9 +466,11 @@ def validate_production_attestation(
     result = {
         "schema": "fr13.fixed32.cutlass_streamk.production_binding.v1",
         "status": "BOUND",
-        "selector": "streamk_coop128",
-        "candidate_sha256": binary.CANDIDATE_SHA256,
-        "candidate_bytes": binary.CANDIDATE_SIZE,
+        "selector": candidate_selector,
+        "diagnostic_selector": candidate_contract["diagnostic_selector"],
+        "candidate_family": candidate_family,
+        "candidate_sha256": candidate_sha256,
+        "candidate_bytes": candidate_bytes,
         "patch_source_sha256": PATCH_SOURCE_SHA256,
         "production_sidecar_sha256": expected_sidecar_sha256,
         "live_result_sha256": qualification["live_result_sha256"],
@@ -451,6 +500,9 @@ def main() -> int:
         subparser.add_argument("--candidate-so", type=Path, required=True)
         subparser.add_argument("--patch-source", type=Path, default=PATCH_SOURCE)
         subparser.add_argument("--expected-source-commit")
+        subparser.add_argument(
+            "--candidate-selector", default="streamk_coop128"
+        )
         if command == "issue":
             subparser.add_argument("--out", type=Path, required=True)
     verify_parser = subparsers.add_parser("verify")
@@ -458,6 +510,7 @@ def main() -> int:
     verify_parser.add_argument("--expected-sidecar-sha256", required=True)
     verify_parser.add_argument("--candidate-so", type=Path, required=True)
     verify_parser.add_argument("--patch-source", type=Path, default=PATCH_SOURCE)
+    verify_parser.add_argument("--candidate-selector")
     attestation_parser = subparsers.add_parser("attestation")
     attestation_parser.add_argument("--attestation", type=Path, required=True)
     attestation_parser.add_argument("--expected-sidecar-sha256", required=True)
@@ -470,6 +523,7 @@ def main() -> int:
             args.candidate_so,
             args.patch_source,
             args.expected_source_commit,
+            args.candidate_selector,
         )
     elif args.command == "issue":
         payload = issue_sidecar(
@@ -479,6 +533,7 @@ def main() -> int:
             args.out,
             args.patch_source,
             args.expected_source_commit,
+            args.candidate_selector,
         )
     elif args.command == "verify":
         payload = verify_sidecar(
@@ -486,6 +541,7 @@ def main() -> int:
             args.expected_sidecar_sha256,
             args.candidate_so,
             args.patch_source,
+            candidate_selector=args.candidate_selector,
         )
     else:
         payload = validate_production_attestation(

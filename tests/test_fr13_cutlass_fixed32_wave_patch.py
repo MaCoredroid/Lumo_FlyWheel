@@ -30,11 +30,11 @@ template <class OutType, int ScaleGranularityM,
   using StageCountType = cutlass::gemm::collective::StageCountAuto;
   using CollectiveMainloop = conditional_t<swap_ab,
       FakeBuilder<
-          cutlass::gemm::collective::StageCountAutoCarveout<0>,
+          {module.STAGE_COUNT_ANCHOR},
           MainloopScheduler
       >::CollectiveOp,
       FakeBuilder<
-          cutlass::gemm::collective::StageCountAutoCarveout<0>,
+          {module.STAGE_COUNT_ANCHOR},
           MainloopScheduler
       >::CollectiveOp>;
 {module.KERNEL_ANCHOR}
@@ -92,6 +92,8 @@ def test_patch_is_default_off_and_shape_gated() -> None:
     assert 'std::strcmp(value, "streamk_coop64") == 0' not in patched
     assert 'value == "streamk_coop128"' in patched
     assert 'value == "streamk_coop128_byte_ab"' in patched
+    assert 'value == "streamk_force_wide256"' in patched
+    assert 'value == "streamk_force_wide256_byte_ab"' in patched
     assert "return fixed32_cutlass_wave_variant::stock;" in patched
     for rows in (32, 64, 96, 128):
         assert f"m == {rows}" in patched
@@ -109,16 +111,30 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     module = _module()
     patched, _ = module.patch_text(_source_fixture(module))
 
-    assert patched.count("cutlass::gemm::StreamKScheduler") == 2
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 2
+    assert patched.count("cutlass::gemm::StreamKScheduler") == 4
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 4
     assert "PingpongSm120" not in module.CONFIG_REPLACEMENT
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
     assert "OutType, 1, 128, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _128, _128>;" in patched
+    assert "using TileShape = Shape<_128, _256, _128>;" in patched
+    assert "using TileShape = Shape<_256, _32, _128>;" in patched
+    assert (
+        "OutType, 1, 128, 128, TileShape, ClusterShape,\n"
+        "      EpilogueSchedule, KernelSchedule, false,\n"
+        "      cutlass::gemm::StreamKScheduler, true,\n"
+        "      cutlass::gemm::collective::StageCount<2>>"
+    ) in patched
+    assert (
+        "OutType, 128, 1, 128, TileShape, ClusterShape,\n"
+        "      EpilogueSchedule, KernelSchedule, true,\n"
+        "      cutlass::gemm::StreamKScheduler, true,\n"
+        "      cutlass::gemm::collective::StageCount<2>>"
+    ) in patched
     assert "using TileShape = Shape<_64, _128, _128>;" not in patched
-    assert "StageCount<2>" not in patched
-    assert "StageCountAutoCarveout<0>" in patched
+    assert "MainloopStageCount" in patched
+    assert "cutlass::gemm::collective::StageCount<2>" in patched
     assert "ElementAccumulator = float" not in module.CONFIG_REPLACEMENT
     assert "ElementD" not in module.CONFIG_REPLACEMENT
 
@@ -129,6 +145,8 @@ def test_streamk_is_the_only_kernel_template_change() -> None:
 
     assert "class TileScheduler = void" in patched
     assert "static constexpr bool use_stream_k" in patched
+    assert "bool force_stream_k_ = false" in patched
+    assert "static constexpr bool force_stream_k = force_stream_k_" in patched
     assert "CollectiveMainloop, CollectiveEpilogue,\n      TileScheduler>>" in patched
     assert "typename GemmKernel::TileSchedulerArguments scheduler{}" in patched
     assert "if constexpr (!Gemm::use_stream_k)" in patched
@@ -137,8 +155,23 @@ def test_streamk_is_the_only_kernel_template_change() -> None:
     assert "STD_TORCH_CHECK(sm_count > 0" in patched
     assert "\n  TORCH_CHECK(sm_count > 0" not in patched
     assert "Deterministic" in patched
-    assert "DecompositionMode::Heuristic" not in patched
+    assert "decltype(scheduler.decomposition_mode)::StreamK" in patched
     assert "decltype(scheduler.decomposition_mode)::Heuristic" in patched
+    assert "scheduler.splits = 1" in patched
+
+
+def test_coop128_geometry_and_heuristic_mode_remain_unchanged() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    assert "using TileShape = Shape<_128, _32, _128>;" in patched
+    assert "using TileShape = Shape<_128, _128, _128>;" in patched
+    assert (
+        "cutlass::gemm::StreamKScheduler>;\n};\n\n"
+        "template <typename OutType>\n"
+        "struct sm120_blockwise_fp8_config_swapab_streamk"
+    ) in patched
+    assert "Gemm::force_stream_k\n          ?" in patched
 
 
 def test_stock_dispatch_text_is_retained() -> None:
@@ -157,15 +190,17 @@ def test_same_process_byte_ab_is_bounded_and_returns_stock() -> None:
 
     assert "constexpr int64_t byte_ab_limit = 256" in patched
     assert "torch::stable::empty_like(out)" in patched
-    assert "run_stock(out);\n    run_stream_k(candidate);" in patched
+    assert "run_stock(out);\n    run_candidate(candidate);" in patched
     assert "cudaMemcpyDeviceToHost" in patched
     assert "cudaStreamSynchronize(stream)" in patched
     assert "++mismatch_count" in patched
     assert "break;" not in module.DISPATCH_REPLACEMENT
     assert '\\"mismatch_count\\"' in module.DISPATCH_REPLACEMENT
     assert '"/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl"' in patched
+    assert '"/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl"' in patched
     assert '\\"byte_equal\\"' in module.DISPATCH_REPLACEMENT
     assert "return run_stock(out);" in patched
+    assert "fr13.fixed32.cutlass_streamk_wide256_byte_ab.v1" in patched
 
 
 def test_boot_warm_cannot_consume_or_satisfy_real_task_byte_gate() -> None:
@@ -180,7 +215,7 @@ def test_boot_warm_cannot_consume_or_satisfy_real_task_byte_gate() -> None:
     assert arm_path in patched
     assert unarmed < counter
     assert "run_stock(out);" in unarmed_path
-    assert "run_stream_k(candidate);" in unarmed_path
+    assert "run_candidate(candidate);" in unarmed_path
     assert "return;" in unarmed_path
     assert "task_marker = fixed32_cutlass_real_task_marker()" in patched
     assert 'fr13.fixed32.cutlass_streamk_byte_ab.v2' in patched
