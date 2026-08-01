@@ -181,6 +181,7 @@ BOUNDARY="$RUNROOT_ABS/$ARM/logs/fr13_fixed32_boundary_snapshot.${FLUSH_GENERATI
   --chat-traffic-audit "$TRAFFIC_AUDIT" \
   --candidate-source "$CANDIDATE_SOURCE" \
   --expected-candidate-source-sha256 "$CANDIDATE_SOURCE_SHA256" \
+  --expected-source-commit "$SOURCE_COMMIT" \
   > "$RUNROOT_ABS/$ARM/draft_head_msweep_validation.json"
 printf 'validation_sha256=%s\n' \
   "$(sha256sum "$RUNROOT_ABS/$ARM/draft_head_msweep_validation.json" | cut -d' ' -f1)" \

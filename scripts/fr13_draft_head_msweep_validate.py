@@ -21,8 +21,7 @@ LIVE_SCHEMA = "fr13.fixed32.draft_head_full_msweep_live_ab.v1"
 EXPECTED_ROWS = [2, 4, 8, 16]
 EXPECTED_HEADS = ["root", "mtp1", "mtp2", "mtp3", "mtp4"]
 EXPECTED_GRAPH_SIGNATURE = (
-    "d9a4ddece41d146e9949b9f8ff7c2603"
-    "b8948d157b28ef69244e44469b36150c"
+    "d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c"
 )
 
 
@@ -47,9 +46,10 @@ def _require_commit(value: Any) -> str:
 
 
 def validate_live_result(
-    payload: dict[str, Any], *, expected_source_sha256: str
+    payload: dict[str, Any], *, expected_source_sha256: str, expected_source_commit: str
 ) -> dict[str, Any]:
     _require_sha256(expected_source_sha256, "candidate source")
+    _require_commit(expected_source_commit)
     if (
         payload.get("schema") != LIVE_SCHEMA
         or payload.get("status") != "COMPLETE"
@@ -60,6 +60,7 @@ def validate_live_result(
         or payload.get("batch_size") != 1
         or payload.get("candidate_rows") != EXPECTED_ROWS
         or payload.get("candidate_source_sha256") != expected_source_sha256
+        or payload.get("source_commit") != expected_source_commit
         or payload.get("served_return") != "reference BF16 logits unchanged"
         or payload.get("performance_measurement") is not False
         or payload.get("acceptance_eligible") is not False
@@ -68,7 +69,6 @@ def validate_live_result(
         or payload.get("flush_action") != "final"
     ):
         raise ValueError("small-M sweep live provenance drifted")
-    _require_commit(payload.get("source_commit"))
     for key in (
         "events_sha256",
         "boundary_snapshot_sha256",
@@ -134,8 +134,7 @@ def validate_live_result(
             or candidate["raw_bf16_mismatches"] < 0
             or candidate.get("byte_exact")
             is not (candidate["raw_bf16_mismatches"] == 0)
-            or candidate.get("valid_live_batch_sizes")
-            != list(range(1, row + 1))
+            or candidate.get("valid_live_batch_sizes") != list(range(1, row + 1))
         ):
             raise ValueError(f"small-M sweep candidate M={row} drifted")
         summary.append(
@@ -162,6 +161,7 @@ def validate(args: argparse.Namespace) -> dict[str, Any]:
     live_summary = validate_live_result(
         live_payload,
         expected_source_sha256=args.expected_candidate_source_sha256,
+        expected_source_commit=args.expected_source_commit,
     )
     terminal = validate_live_evidence(
         live_payload=live_payload,
@@ -180,6 +180,7 @@ def validate(args: argparse.Namespace) -> dict[str, Any]:
         "acceptance_eligible": False,
         "live_result_sha256": sha256_file(live_path),
         "candidate_source_sha256": source_sha,
+        "source_commit": args.expected_source_commit,
         "live": live_summary,
         "terminal": terminal,
         "traffic": traffic,
@@ -194,6 +195,7 @@ def main() -> int:
     parser.add_argument("--chat-traffic-audit", required=True)
     parser.add_argument("--candidate-source", required=True)
     parser.add_argument("--expected-candidate-source-sha256", required=True)
+    parser.add_argument("--expected-source-commit", required=True)
     args = parser.parse_args()
     print(json.dumps(validate(args), sort_keys=True, separators=(",", ":")))
     return 0

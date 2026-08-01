@@ -42,7 +42,10 @@ def _validator_module():
 def _eagle_snippet() -> str:
     tree = ast.parse(PATCHER.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.name == "_patch_eagle_tree_consumption_verify":
+        if (
+            isinstance(node, ast.FunctionDef)
+            and node.name == "_patch_eagle_tree_consumption_verify"
+        ):
             for statement in ast.walk(node):
                 if (
                     isinstance(statement, ast.Assign)
@@ -115,8 +118,7 @@ def _live_payload(source_sha: str) -> dict[str, object]:
             "forward_step_index": 0,
             "graph_id": 41,
             "graph_signature": (
-                "d9a4ddece41d146e9949b9f8ff7c2603"
-                "b8948d157b28ef69244e44469b36150c"
+                "d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c"
             ),
             "graph_replays": 1,
             "measured": True,
@@ -165,9 +167,7 @@ def test_runtime_snapshots_graph_heads_then_runs_one_measured_event() -> None:
     source = textwrap.dedent(_eagle_snippet())
     tree = ast.parse(source)
     functions = {
-        node.name: node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef)
+        node.name: node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
     }
 
     run_source = ast.unparse(functions["_fr13_dh_msweep_run_once"])
@@ -277,7 +277,9 @@ def test_validator_accepts_mismatch_results_but_rejects_m32() -> None:
     payload = _live_payload(source_sha)
 
     summary = module.validate_live_result(
-        payload, expected_source_sha256=source_sha
+        payload,
+        expected_source_sha256=source_sha,
+        expected_source_commit="a" * 40,
     )
     assert summary["candidates"][0] == {
         "m": 2,
@@ -288,7 +290,19 @@ def test_validator_accepts_mismatch_results_but_rejects_m32() -> None:
 
     payload["candidate_rows"] = [2, 4, 8, 32]
     with pytest.raises(ValueError, match="provenance drifted"):
-        module.validate_live_result(payload, expected_source_sha256=source_sha)
+        module.validate_live_result(
+            payload,
+            expected_source_sha256=source_sha,
+            expected_source_commit="a" * 40,
+        )
+
+    payload["candidate_rows"] = [2, 4, 8, 16]
+    with pytest.raises(ValueError, match="provenance drifted"):
+        module.validate_live_result(
+            payload,
+            expected_source_sha256=source_sha,
+            expected_source_commit="f" * 40,
+        )
 
 
 def test_launcher_and_runner_are_real_b1_reference_served_only() -> None:
@@ -296,12 +310,21 @@ def test_launcher_and_runner_are_real_b1_reference_served_only() -> None:
     runner = RUNNER.read_text(encoding="utf-8")
 
     assert "FR13 draft-head M32 is retired after real-B1 byte rejection" in launcher
-    assert '-e FR13_DRAFT_HEAD_MSWEEP_LIVE_AB="$FR13_DRAFT_HEAD_MSWEEP_LIVE_AB"' in launcher
-    assert '-e FR13_DRAFT_HEAD_MSWEEP_SOURCE_SHA256="$FR13_DRAFT_HEAD_MSWEEP_SOURCE_SHA256"' in launcher
+    assert (
+        '-e FR13_DRAFT_HEAD_MSWEEP_LIVE_AB="$FR13_DRAFT_HEAD_MSWEEP_LIVE_AB"'
+        in launcher
+    )
+    assert (
+        '-e FR13_DRAFT_HEAD_MSWEEP_SOURCE_SHA256="$FR13_DRAFT_HEAD_MSWEEP_SOURCE_SHA256"'
+        in launcher
+    )
     assert "config/fr13_fixed32/subset_b1_diagnostic_one.json" in runner
     assert "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb" in runner
     assert "astropy__astropy-12907" in runner
-    assert "classification=real_swe_verified_b1_full_vocab_small_m_byte_diagnostic" in runner
+    assert (
+        "classification=real_swe_verified_b1_full_vocab_small_m_byte_diagnostic"
+        in runner
+    )
     assert "diagnostic_only=1" in runner
     assert "performance_measurement=0" in runner
     assert "acceptance_eligible=0" in runner
@@ -313,6 +336,7 @@ def test_launcher_and_runner_are_real_b1_reference_served_only() -> None:
     assert "FR13_DRAFT_HEAD_M32_LIVE_AB=0" in runner
     assert "FR13_DRAFT_HEAD_MSWEEP_LIVE_AB=1" in runner
     assert "scripts/fr13_draft_head_msweep_validate.py" in runner
+    assert '--expected-source-commit "$SOURCE_COMMIT"' in runner
     assert '[[ "$(docker ps -aq | wc -l)" -eq 0 ]]' in runner
     assert "git status --porcelain=v1 --untracked-files=no" not in runner
     assert runner.count("git status --porcelain=v1") == 2
