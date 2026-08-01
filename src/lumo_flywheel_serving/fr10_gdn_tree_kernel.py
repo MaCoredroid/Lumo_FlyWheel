@@ -319,6 +319,12 @@ _FR13_FIXED32_GDN_PARENT_GROUP_SIDECARS = (
     "/logs/fr13_fixed32_gdn_parent_group.arm",
     "/tmp/fr13_fixed32_gdn_parent_group.arm",
 )
+_FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB_ENABLED = (
+    "/logs/fr13_fixed32_gdn_parent_group_byte_ab.enabled"
+)
+_FR13_FIXED32_GDN_PARENT_GROUP_REAL_EVENT = (
+    "/logs/fr13_fixed32_gdn_parent_group.real_event.arm"
+)
 _FR13_FIXED32_GDN_PATH_BV_REAL_EVENT = (
     "/logs/fr13_fixed32_gdn_path_bv.real_event.arm"
 )
@@ -781,6 +787,11 @@ if _FR13_FIXED32_GDN_PARENT_GROUP and (
         "FR13 fixed32 GDN parent grouping and B1 path-BV selectors are "
         "mutually exclusive"
     )
+if _FR13_FIXED32_GDN_PARENT_GROUP and parent_gather_selfcheck_on():
+    raise RuntimeError(
+        "FR13 fixed32 GDN parent grouping and parent-gather selfcheck are "
+        "mutually exclusive"
+    )
 _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT = None
 _FR13_FIXED32_GDN_BV_CAPTURES: dict[int, dict] = {}
 _FR13_FIXED32_GDN_BV_LIVE_STATE = {
@@ -1137,6 +1148,22 @@ _FR13_FIXED32_GDN_LEVEL1_PARENT_GROUPS = (
     (4, (5, 6)),
     (9, (7, 8)),
 )
+_FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB_SURFACES = (
+    "output",
+    "export",
+    "ring_k",
+    "ring_v",
+    "ring_a",
+    "ring_b",
+    "flags",
+    "counter",
+)
+_FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB_STATE = {
+    "task_marker_sha256": None,
+    "passed": set(),
+    "attempts": {},
+    "failed": False,
+}
 _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID = (
     "fixed32_sfwd_state_fusion_v1"
 )
@@ -1620,6 +1647,46 @@ def _fr13_fixed32_batch_gdn_real_event_marker(
             "swe_verified:<task_id>"
         )
     return marker
+
+
+def _fr13_fixed32_gdn_parent_group_byte_ab_control() -> tuple[bool, str | None]:
+    """Resolve the authenticated, eager-only B1 parent-group byte gate."""
+    raw = os.environ.get("FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB", "")
+    if raw not in ("", "0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB must be exactly 0 or 1"
+        )
+    enabled_path = os.environ.get(
+        "FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB_ENABLED_PATH",
+        _FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB_ENABLED,
+    )
+    event_path = os.environ.get(
+        "FR13_FIXED32_GDN_PARENT_GROUP_REAL_EVENT_PATH",
+        _FR13_FIXED32_GDN_PARENT_GROUP_REAL_EVENT,
+    )
+    enabled = raw == "1" or os.path.exists(enabled_path)
+    if enabled and not _FR13_FIXED32_GDN_PARENT_GROUP:
+        raise RuntimeError(
+            "FR13 fixed32 GDN parent-group byte gate requires the candidate arm"
+        )
+    if not enabled or not os.path.exists(event_path):
+        return enabled, None
+    return True, _fr13_fixed32_batch_gdn_real_event_marker(event_path)
+
+
+def fixed32_gdn_parent_group_byte_ab_report() -> dict[str, object]:
+    """Return reduced qualification state without exposing task identity."""
+    state = _FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB_STATE
+    return {
+        "status": "failed" if state["failed"] else (
+            "passed" if len(state["passed"]) == 48 else "armed"
+        ),
+        "passed_layers": len(state["passed"]),
+        "attempts": sum(int(value) for value in state["attempts"].values()),
+        "authenticated_real_event": state["task_marker_sha256"] is not None,
+        "reference_served": True,
+        "production_authorized": False,
+    }
 
 
 def _fr13_fixed32_batch_gdn_graph_byte_ab_control() -> bool:
@@ -3507,6 +3574,14 @@ def _fr13_fixed32_gdn_parent_group_contract(
             "FR13_FIXED32_GDN_PARENT_GROUP parent lacks an export slot"
         ) from error
     group_sizes = tuple(len(indices) for _parent, indices in normalized_groups)
+    group_node_counts = tuple(
+        sum(len(level1[index][0]) for index in indices)
+        for _parent, indices in normalized_groups
+    )
+    physical_level_max_steps = (
+        max(len(path) for path, _parent in normalized[0]),
+        max(group_node_counts),
+    )
     contract = {
         "candidate": _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID,
         "parent_nodes": parent_nodes,
@@ -3515,6 +3590,7 @@ def _fr13_fixed32_gdn_parent_group_contract(
             indices for _parent, indices in normalized_groups
         ),
         "group_sizes": group_sizes,
+        "group_node_counts": group_node_counts,
         "groups": len(normalized_groups),
         "max_group_paths": max(group_sizes),
         "logical_path_counts": tuple(len(level) for level in normalized),
@@ -3523,6 +3599,8 @@ def _fr13_fixed32_gdn_parent_group_contract(
         "physical_programs": 1 + len(normalized_groups),
         "level1_parent_loads": len(normalized_groups),
         "reference_level1_parent_loads": len(level1),
+        "physical_level_max_steps": physical_level_max_steps,
+        "physical_critical_path": sum(physical_level_max_steps),
         "single_writer_nodes": len(writer_nodes),
         "writer_sha256": _fr13_canonical_sha256(tuple(sorted(writer_nodes))),
     }
@@ -3532,6 +3610,7 @@ def _fr13_fixed32_gdn_parent_group_contract(
         "parent_slots": (4, 0, 1, 2, 3),
         "path_indices": ((0, 9, 10), (1, 2), (3, 4), (5, 6), (7, 8)),
         "group_sizes": (3, 2, 2, 2, 2),
+        "group_node_counts": (9, 12, 2, 2, 2),
         "groups": 5,
         "max_group_paths": 3,
         "logical_path_counts": (1, 11),
@@ -3540,6 +3619,8 @@ def _fr13_fixed32_gdn_parent_group_contract(
         "physical_programs": 6,
         "level1_parent_loads": 5,
         "reference_level1_parent_loads": 11,
+        "physical_level_max_steps": (5, 12),
+        "physical_critical_path": 17,
         "single_writer_nodes": 32,
         "writer_sha256": _FR13_FIXED32_COVERAGE_SHA256,
     }
@@ -3549,6 +3630,46 @@ def _fr13_fixed32_gdn_parent_group_contract(
             + repr(contract)
         )
     return contract
+
+
+def _fr13_fixed32_gdn_physical_execution(
+    *, parent_group: bool, batch_size: int, batched: bool
+) -> dict[str, object]:
+    """Describe the launch geometry that actually served one forward event."""
+    batch = int(batch_size)
+    if batch not in (1, 2, 3, 4):
+        raise RuntimeError(
+            "FR13 fixed32 GDN physical execution requires B1-B4, "
+            f"got B={batch}"
+        )
+    grouped = bool(parent_group)
+    folded = bool(batched)
+    level1_programs = 5 if grouped else 11
+    programs_per_request = 1 + level1_programs
+    grid_z_per_request = (1, level1_programs)
+    launch_repetitions = 1 if folded else batch
+    event_grid_z = (
+        (batch, batch * level1_programs)
+        if folded
+        else grid_z_per_request
+    )
+    physical_level_max_steps = (5, 12) if grouped else (5, 7)
+    return {
+        "route": "fixed32_parent_group" if grouped else "fixed32_path",
+        "batched": folded,
+        "batch_size": batch,
+        "grid_z_per_request": grid_z_per_request,
+        "event_grid_z": event_grid_z,
+        "launch_repetitions": launch_repetitions,
+        "physical_launches_per_layer": 2 * launch_repetitions,
+        "programs_per_request": programs_per_request,
+        "programs_per_layer": programs_per_request * batch,
+        "level1_parent_loads_per_request": 5 if grouped else 11,
+        "single_writer_nodes_per_request": 32,
+        "logical_critical_path": 12,
+        "physical_level_max_steps": physical_level_max_steps,
+        "physical_critical_path": sum(physical_level_max_steps),
+    }
 
 
 def _subtree_decompose(parent) -> list:
@@ -3821,6 +3942,7 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
             if fixed32_parent_group is not None
             else None
         ),
+        "last_physical_execution": None,
         "route_armed": route_armed,
         "selfcheck_armed": selfcheck_armed,
         "engaged_announced": False,
@@ -11836,6 +11958,7 @@ def launch_tree_gdn_prepared(
     ring_b: torch.Tensor | None = None,
     staging_flags: torch.Tensor | None = None,
     staging_rows: int = 0,
+    force_incumbent_parent_group: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor | None]:
     """Launch with precomputed graph-safe tree descriptors.
 
@@ -12082,6 +12205,7 @@ def launch_tree_gdn_prepared(
         *,
         _path_block_v=_bv,
         _counter_arg=invocation_counter,
+        _use_parent_group: bool | None = None,
     ):
         # FR13_SUBTREE_PARALLEL route: one launch per path level; paths in a
         # level scan concurrently on grid axis 2. RING/RAW semantics match
@@ -12101,8 +12225,19 @@ def launch_tree_gdn_prepared(
                 "FR13_FIXED32: exact path I/O specialization requires the "
                 "validated fixed32 schedule"
             )
-        _parent_group = st.get("fixed32_parent_group")
-        if _FR13_FIXED32_GDN_PARENT_GROUP and (
+        _available_parent_group = st.get("fixed32_parent_group")
+        if _use_parent_group is True and not isinstance(
+            _available_parent_group, dict
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PARENT_GROUP requested without its descriptor"
+            )
+        _parent_group = (
+            None
+            if _use_parent_group is False
+            else _available_parent_group
+        )
+        if _FR13_FIXED32_GDN_PARENT_GROUP and _use_parent_group is not False and (
             not _fixed32_io
             or not isinstance(_parent_group, dict)
             or not isinstance(_parent_group.get("contract"), dict)
@@ -12253,6 +12388,7 @@ def launch_tree_gdn_prepared(
             )
         return {
             "block_v": int(_path_block_v),
+            "parent_group": _parent_group is not None,
             "launch_key": (
                 "tree_gdn_path",
                 (
@@ -12377,6 +12513,58 @@ def launch_tree_gdn_prepared(
                 f"{_label} SELFCHECK MISMATCH: invocation counter did not "
                 "advance exactly once"
             )
+
+    _parent_group_gate_enabled = False
+    _parent_group_gate_marker = None
+    if _FR13_FIXED32_GDN_PARENT_GROUP and not force_incumbent_parent_group:
+        (
+            _parent_group_gate_enabled,
+            _parent_group_gate_marker,
+        ) = _fr13_fixed32_gdn_parent_group_byte_ab_control()
+
+    def _parent_group_gate_counter():
+        if count_invocation:
+            return invocation_counter
+        holder = getattr(_parent_group_gate_counter, "holder", None)
+        if holder is None:
+            holder = torch.zeros((), dtype=torch.int32, device=q.device)
+            _parent_group_gate_counter.holder = holder
+        return holder
+
+    def _parent_group_gate_snapshot(_output, _counter):
+        st = _subtree_state
+        assert st is not None
+        return {
+            "output": _output[:n_actual].clone(),
+            "export": st["export"].clone(),
+            "ring_k": ring_k.clone(),
+            "ring_v": ring_v.clone(),
+            "ring_a": ring_a.clone(),
+            "ring_b": ring_b.clone(),
+            "flags": _flags_arg.clone(),
+            "counter": _counter.clone(),
+        }
+
+    def _parent_group_gate_restore(_snapshot, _counter):
+        st = _subtree_state
+        assert st is not None
+        st["export"].copy_(_snapshot["export"])
+        ring_k.copy_(_snapshot["ring_k"])
+        ring_v.copy_(_snapshot["ring_v"])
+        ring_a.copy_(_snapshot["ring_a"])
+        ring_b.copy_(_snapshot["ring_b"])
+        _flags_arg.copy_(_snapshot["flags"])
+        _counter.copy_(_snapshot["counter"])
+
+    def _record_path_execution(*, parent_group: bool):
+        st = _subtree_state
+        assert st is not None
+        event_batch = max(int(staging_rows), 1)
+        st["last_physical_execution"] = _fr13_fixed32_gdn_physical_execution(
+            parent_group=parent_group,
+            batch_size=event_batch,
+            batched=False,
+        )
 
     if _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None:
         production_pass = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS
@@ -12532,7 +12720,88 @@ def launch_tree_gdn_prepared(
             raise ValueError(
                 "FR13_SUBTREE_PARALLEL does not support PIGGYBACK_EXPORT"
             )
-        if _subtree_selfcheck_armed:
+        if force_incumbent_parent_group:
+            _launch_paths(out, _use_parent_group=False)
+            _record_path_execution(parent_group=False)
+        elif _parent_group_gate_enabled:
+            if (
+                staging_rows != 1
+                or torch.cuda.is_current_stream_capturing()
+                or not raw_gating
+                or not _ring_export
+                or not _flags_export
+            ):
+                raise RuntimeError(
+                    "FR13 fixed32 GDN parent-group byte gate requires eager B1 "
+                    "with raw gating, K/V/A/B rings, and in-kernel flags"
+                )
+            gate_state = _FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB_STATE
+            if bool(gate_state["failed"]):
+                raise RuntimeError(
+                    "FR13 fixed32 GDN parent-group byte gate previously failed"
+                )
+            layer_key = int(A_log.data_ptr())
+            if _parent_group_gate_marker is None or layer_key in gate_state["passed"]:
+                _launch_paths(out, _use_parent_group=False)
+            else:
+                marker_sha256 = hashlib.sha256(
+                    _parent_group_gate_marker.encode("ascii")
+                ).hexdigest()
+                prior_marker = gate_state["task_marker_sha256"]
+                if prior_marker is None:
+                    gate_state["task_marker_sha256"] = marker_sha256
+                elif prior_marker != marker_sha256:
+                    raise RuntimeError(
+                        "FR13 fixed32 GDN parent-group byte gate cannot combine "
+                        "authenticated tasks in one process"
+                    )
+                attempt = int(gate_state["attempts"].get(layer_key, 0)) + 1
+                gate_state["attempts"][layer_key] = attempt
+                gate_counter = _parent_group_gate_counter()
+                before = _parent_group_gate_snapshot(out, gate_counter)
+                _launch_paths(
+                    out,
+                    _count=True,
+                    _counter_arg=gate_counter,
+                    _use_parent_group=False,
+                )
+                reference = _parent_group_gate_snapshot(out, gate_counter)
+                candidate_out = torch.empty_like(out)
+                candidate = None
+                try:
+                    _parent_group_gate_restore(before, gate_counter)
+                    _launch_paths(
+                        candidate_out,
+                        _count=True,
+                        _counter_arg=gate_counter,
+                        _use_parent_group=True,
+                    )
+                    candidate = _parent_group_gate_snapshot(
+                        candidate_out, gate_counter
+                    )
+                finally:
+                    _parent_group_gate_restore(reference, gate_counter)
+                assert candidate is not None
+                mismatches = tuple(
+                    name
+                    for name in _FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB_SURFACES
+                    if not _byte_equal(reference[name], candidate[name])
+                )
+                if mismatches:
+                    gate_state["failed"] = True
+                    raise RuntimeError(
+                        "FR13 fixed32 GDN parent-group byte gate mismatch on "
+                        + repr(mismatches)
+                    )
+                gate_state["passed"].add(layer_key)
+                print(
+                    "[FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB PASS] "
+                    f"layers={len(gate_state['passed'])} "
+                    "surfaces=8 reference_served=1 production_authorized=0",
+                    flush=True,
+                )
+            _record_path_execution(parent_group=False)
+        elif _subtree_selfcheck_armed:
             # In-process byte gate: monolith -> reference, restore every
             # externally visible buffer, then path route -> candidate.
             out_ref = torch.empty_like(out)
@@ -12564,7 +12833,10 @@ def launch_tree_gdn_prepared(
                     flush=True,
                 )
         else:
-            _launch_paths(out)
+            launch_meta = _launch_paths(out)
+            _record_path_execution(
+                parent_group=bool(launch_meta["parent_group"])
+            )
     elif hc_internal_selfcheck_on() and _hc_mask != 0:
         # In-process byte-identity gate for FR13_HC_INTERNAL (same discipline:
         # boot enforce_eager; the host compare syncs).
@@ -13092,6 +13364,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 ring_b=ring_b[start:end] if ring_export else None,
                 staging_flags=flags_arg if flags_export else None,
                 staging_rows=flags_rows,
+                force_incumbent_parent_group=True,
             )
             if collect_export:
                 reference_exports.append(
@@ -13124,6 +13397,15 @@ def launch_tree_gdn_prepared_fixed32_batch(
         if count_invocation:
             snapshot["invocation_counter"] = invocation_counter.clone()
         return snapshot
+
+    def _record_batch_execution(*, parent_group_active: bool, batched: bool) -> None:
+        subtree_state["last_physical_execution"] = (
+            _fr13_fixed32_gdn_physical_execution(
+                parent_group=parent_group_active,
+                batch_size=batch,
+                batched=batched,
+            )
+        )
 
     def _restore_external(snapshot: dict[str, torch.Tensor]) -> None:
         out[:rows].copy_(snapshot["out"])
@@ -13211,6 +13493,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
             }
         )
         _launch_reference(collect_export=False)
+        _record_batch_execution(parent_group_active=False, batched=False)
         return out, None
     if byte_ab_enabled:
         if torch.cuda.is_current_stream_capturing():
@@ -13225,9 +13508,11 @@ def launch_tree_gdn_prepared_fixed32_batch(
             )
         if batch_layer_key in gate_state["passed"]:
             _launch_reference(collect_export=False)
+            _record_batch_execution(parent_group_active=False, batched=False)
             return out, None
         elif real_event_marker is None:
             _launch_reference(collect_export=False)
+            _record_batch_execution(parent_group_active=False, batched=False)
             if batch_layer_key not in gate_state["waiting_announced"]:
                 gate_state["waiting_announced"].add(batch_layer_key)
                 print(
@@ -13239,6 +13524,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
             return out, None
         elif int(torch.count_nonzero(q[:rows]).item()) == 0:
             _launch_reference(collect_export=False)
+            _record_batch_execution(parent_group_active=False, batched=False)
             _fr13_fixed32_batch_gdn_byte_ab_emit(
                 {
                     "task_marker": real_event_marker,
@@ -13361,6 +13647,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 f"first_nonzero={first_nonzero}",
                 flush=True,
             )
+            _record_batch_execution(parent_group_active=False, batched=False)
             return out, None
     elif selector == "production":
         if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION == 8:
@@ -13387,15 +13674,22 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 candidate_bv=candidate_block_v,
             )
         _launch_batched(candidate_block_v)
+        _record_batch_execution(
+            parent_group_active=parent_group is not None,
+            batched=True,
+        )
     else:
         raise RuntimeError(
             f"FR13 fixed32 batched GDN selector is invalid: {selector!r}"
         )
     if not subtree_state.get("batch_engaged_announced", False):
         subtree_state["batch_engaged_announced"] = True
+        physical_level1_programs = 5 if parent_group is not None else 11
         print(
             "[FR13_FIXED32_BATCH_GDN ENGAGED] "
-            f"batch={batch} launches=2 path_grids=({batch},{11 * batch}) "
+            "batch="
+            f"{batch} launches=2 path_grids=({batch},"
+            f"{physical_level1_programs * batch}) "
             f"block_v={candidate_block_v} export_rows={needed_export_rows} "
             "fallback=0",
             flush=True,

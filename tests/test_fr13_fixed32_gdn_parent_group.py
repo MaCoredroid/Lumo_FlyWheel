@@ -70,6 +70,7 @@ def _load_parent_group_contract() -> dict[str, object]:
     functions = {
         "_fr13_canonical_sha256",
         "_fr13_fixed32_gdn_parent_group_contract",
+        "_fr13_fixed32_gdn_physical_execution",
     }
     tree, _source = _tree_and_source()
     assignments = [
@@ -139,11 +140,14 @@ def test_parent_group_descriptor_covers_paths_nodes_and_writers_once() -> None:
         (7, 8),
     )
     assert contract["group_sizes"] == (3, 2, 2, 2, 2)
+    assert contract["group_node_counts"] == (9, 12, 2, 2, 2)
     assert contract["physical_grid_z"] == (1, 5)
     assert contract["physical_programs"] == 6
     assert contract["logical_programs"] == 12
     assert contract["level1_parent_loads"] == 5
     assert contract["reference_level1_parent_loads"] == 11
+    assert contract["physical_level_max_steps"] == (5, 12)
+    assert contract["physical_critical_path"] == 17
 
     level1 = levels[1]
     covered_paths = [
@@ -256,10 +260,58 @@ def test_parent_group_kernel_and_launchers_keep_single_writer_surfaces() -> None
     assert "if parent_group is not None and level_index == 1:" in batched_launcher
     assert "batch * int(group_contract[\"groups\"])" in batched_launcher
     assert "COMPACT_EXPORT=True" in batched_launcher
+    assert "force_incumbent_parent_group=True" in batched_launcher
     assert "COUNT_INVOCATION=count_invocation and level_index == 0" in (
         batched_launcher
     )
     assert "FLAGS_EXPORT=flags_export and level_index == 0" in batched_launcher
+
+
+def test_parent_group_physical_execution_distinguishes_b1_and_b4() -> None:
+    namespace = _load_parent_group_contract()
+    describe = namespace["_fr13_fixed32_gdn_physical_execution"]
+
+    b1 = describe(parent_group=True, batch_size=1, batched=False)
+    assert b1["grid_z_per_request"] == (1, 5)
+    assert b1["event_grid_z"] == (1, 5)
+    assert b1["physical_launches_per_layer"] == 2
+    assert b1["physical_critical_path"] == 17
+
+    b4 = describe(parent_group=True, batch_size=4, batched=True)
+    assert b4["grid_z_per_request"] == (1, 5)
+    assert b4["event_grid_z"] == (4, 20)
+    assert b4["physical_launches_per_layer"] == 2
+    assert b4["programs_per_layer"] == 24
+
+    b4_reference = describe(parent_group=False, batch_size=4, batched=False)
+    assert b4_reference["event_grid_z"] == (1, 11)
+    assert b4_reference["launch_repetitions"] == 4
+    assert b4_reference["physical_launches_per_layer"] == 8
+    assert b4_reference["physical_critical_path"] == 12
+
+
+def test_parent_group_b1_gate_is_full_surface_and_reference_served() -> None:
+    launcher = _function_source("launch_tree_gdn_prepared")
+    source = KERNEL_PATH.read_text(encoding="utf-8")
+
+    assert "force_incumbent_parent_group: bool = False" in launcher
+    assert "_use_parent_group=False" in launcher
+    assert "_use_parent_group=True" in launcher
+    assert '"export": st["export"].clone()' in launcher
+    for surface in (
+        "output",
+        "export",
+        "ring_k",
+        "ring_v",
+        "ring_a",
+        "ring_b",
+        "flags",
+        "counter",
+    ):
+        assert f'"{surface}"' in source
+    assert "_parent_group_gate_restore(reference, gate_counter)" in launcher
+    assert "production_authorized=0" in launcher
+    assert "parent grouping and parent-gather selfcheck" in source
 
 
 @pytest.mark.parametrize("batch", [1, 4])
@@ -298,7 +350,7 @@ def test_parent_group_observer_preserves_logical_contract() -> None:
     )
     patcher = PATCHER_PATH.read_text(encoding="utf-8")
 
-    assert 'physical_route = "fixed32_parent_group"' in observer
+    assert 'physical_route == "fixed32_parent_group"' in observer
     assert '"physical_grid_z": (1, 5)' in observer
     assert 'normalized_contract["programs"]' in observer
     assert 'normalized_contract["padded_slots"]' in observer
@@ -306,6 +358,8 @@ def test_parent_group_observer_preserves_logical_contract() -> None:
     assert '"gdn_padded_slots": expected_gdn_calls * 82' in validator
     assert "expected_physical_programs_per_scan = 6" in validator
     assert "expected_level1_parent_loads_per_scan = 5" in validator
+    assert "expected_physical_critical_path = 17" in validator
+    assert "expected_physical_event_grid_z" in validator
     assert '"fixed32_parent_group_contract": (' in patcher
     assert '"physical_route": work["gdn_physical_route"]' in patcher
 
@@ -323,10 +377,17 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
         "gdn_path_programs": 0,
         "gdn_padded_slots": 0,
         "gdn_physical_route": None,
+        "gdn_physical_batched": None,
         "gdn_physical_programs": 0,
-        "gdn_physical_grid_z": None,
+        "gdn_physical_grid_z_per_request": None,
+        "gdn_physical_event_grid_z": None,
+        "gdn_physical_launch_repetitions": None,
+        "gdn_physical_launches_per_layer": None,
+        "gdn_physical_launches": 0,
         "gdn_level1_parent_loads": 0,
         "gdn_single_writer_nodes": 0,
+        "gdn_physical_level_max_steps": None,
+        "gdn_physical_critical_path": None,
         "gdn_nodes": 0,
         "gdn_critical_path": None,
         "gdn_grid_z": None,
@@ -372,6 +433,7 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
                 (7, 8),
             ),
             "group_sizes": (3, 2, 2, 2, 2),
+            "group_node_counts": (9, 12, 2, 2, 2),
             "groups": 5,
             "max_group_paths": 3,
             "logical_path_counts": (1, 11),
@@ -380,7 +442,25 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
             "physical_programs": 6,
             "level1_parent_loads": 5,
             "reference_level1_parent_loads": 11,
+            "physical_level_max_steps": (5, 12),
+            "physical_critical_path": 17,
             "single_writer_nodes": 32,
+        },
+        "gdn_physical_execution": {
+            "route": "fixed32_parent_group",
+            "batched": False,
+            "batch_size": 1,
+            "grid_z_per_request": (1, 5),
+            "event_grid_z": (1, 5),
+            "launch_repetitions": 1,
+            "physical_launches_per_layer": 2,
+            "programs_per_request": 6,
+            "programs_per_layer": 6,
+            "level1_parent_loads_per_request": 5,
+            "single_writer_nodes_per_request": 32,
+            "logical_critical_path": 12,
+            "physical_level_max_steps": (5, 12),
+            "physical_critical_path": 17,
         },
     }
 
@@ -403,6 +483,11 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
     assert event["gdn_padded_slots"] == 82
     assert event["gdn_physical_route"] == "fixed32_parent_group"
     assert event["gdn_physical_programs"] == 6
-    assert event["gdn_physical_grid_z"] == (1, 5)
+    assert event["gdn_physical_grid_z_per_request"] == (1, 5)
+    assert event["gdn_physical_event_grid_z"] == (1, 5)
+    assert event["gdn_physical_launches"] == 2
     assert event["gdn_level1_parent_loads"] == 5
     assert event["gdn_single_writer_nodes"] == 32
+    assert event["gdn_physical_level_max_steps"] == (5, 12)
+    assert event["gdn_physical_critical_path"] == 17
+    assert event["gdn_critical_path"] == 12

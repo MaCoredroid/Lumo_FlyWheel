@@ -673,10 +673,17 @@ def _fr13_fixed32_observed_new_state(
         "gdn_path_programs": 0,
         "gdn_padded_slots": 0,
         "gdn_physical_route": None,
+        "gdn_physical_batched": None,
         "gdn_physical_programs": 0,
-        "gdn_physical_grid_z": None,
+        "gdn_physical_grid_z_per_request": None,
+        "gdn_physical_event_grid_z": None,
+        "gdn_physical_launch_repetitions": None,
+        "gdn_physical_launches_per_layer": None,
+        "gdn_physical_launches": 0,
         "gdn_level1_parent_loads": 0,
         "gdn_single_writer_nodes": 0,
+        "gdn_physical_level_max_steps": None,
+        "gdn_physical_critical_path": None,
         "gdn_nodes": 0,
         "gdn_critical_path": None,
         "gdn_grid_z": None,
@@ -2212,13 +2219,7 @@ def _fr13_fixed32_observed_gdn(
     parent_group_contract = runtime_state.get(
         "fixed32_parent_group_contract"
     )
-    if parent_group_contract is None:
-        physical_route = "fixed32_path"
-        physical_programs = 12
-        physical_grid_z = (1, 11)
-        level1_parent_loads = 11
-        single_writer_nodes = 32
-    else:
+    if parent_group_contract is not None:
         if not isinstance(parent_group_contract, dict):
             raise RuntimeError(
                 "FR13 fixed32 GDN parent-group contract is malformed"
@@ -2240,6 +2241,12 @@ def _fr13_fixed32_observed_gdn(
             "group_sizes": tuple(
                 int(value)
                 for value in parent_group_contract.get("group_sizes", ())
+            ),
+            "group_node_counts": tuple(
+                int(value)
+                for value in parent_group_contract.get(
+                    "group_node_counts", ()
+                )
             ),
             "groups": int(parent_group_contract.get("groups", -1)),
             "max_group_paths": int(
@@ -2269,6 +2276,15 @@ def _fr13_fixed32_observed_gdn(
                     "reference_level1_parent_loads", -1
                 )
             ),
+            "physical_level_max_steps": tuple(
+                int(value)
+                for value in parent_group_contract.get(
+                    "physical_level_max_steps", ()
+                )
+            ),
+            "physical_critical_path": int(
+                parent_group_contract.get("physical_critical_path", -1)
+            ),
             "single_writer_nodes": int(
                 parent_group_contract.get("single_writer_nodes", -1)
             ),
@@ -2285,6 +2301,7 @@ def _fr13_fixed32_observed_gdn(
                 (7, 8),
             ),
             "group_sizes": (3, 2, 2, 2, 2),
+            "group_node_counts": (9, 12, 2, 2, 2),
             "groups": 5,
             "max_group_paths": 3,
             "logical_path_counts": (1, 11),
@@ -2293,6 +2310,8 @@ def _fr13_fixed32_observed_gdn(
             "physical_programs": 6,
             "level1_parent_loads": 5,
             "reference_level1_parent_loads": 11,
+            "physical_level_max_steps": (5, 12),
+            "physical_critical_path": 17,
             "single_writer_nodes": 32,
         }
         if normalized_parent_group != expected_parent_group:
@@ -2300,15 +2319,113 @@ def _fr13_fixed32_observed_gdn(
                 "FR13 fixed32 GDN parent-group work drift: "
                 + repr(normalized_parent_group)
             )
-        physical_route = "fixed32_parent_group"
-        physical_programs = normalized_parent_group["physical_programs"]
-        physical_grid_z = normalized_parent_group["physical_grid_z"]
-        level1_parent_loads = normalized_parent_group[
-            "level1_parent_loads"
-        ]
-        single_writer_nodes = normalized_parent_group[
-            "single_writer_nodes"
-        ]
+    physical_execution = runtime_state.get("gdn_physical_execution")
+    if not isinstance(physical_execution, dict):
+        raise RuntimeError(
+            "FR13 fixed32 GDN physical execution record is missing"
+        )
+    physical_batched = physical_execution.get("batched")
+    if type(physical_batched) is not bool:
+        raise RuntimeError(
+            "FR13 fixed32 GDN physical batched flag is malformed"
+        )
+    normalized_execution = {
+        "route": physical_execution.get("route"),
+        "batched": physical_batched,
+        "batch_size": int(physical_execution.get("batch_size", -1)),
+        "grid_z_per_request": tuple(
+            int(value)
+            for value in physical_execution.get("grid_z_per_request", ())
+        ),
+        "event_grid_z": tuple(
+            int(value)
+            for value in physical_execution.get("event_grid_z", ())
+        ),
+        "launch_repetitions": int(
+            physical_execution.get("launch_repetitions", -1)
+        ),
+        "physical_launches_per_layer": int(
+            physical_execution.get("physical_launches_per_layer", -1)
+        ),
+        "programs_per_request": int(
+            physical_execution.get("programs_per_request", -1)
+        ),
+        "programs_per_layer": int(
+            physical_execution.get("programs_per_layer", -1)
+        ),
+        "level1_parent_loads_per_request": int(
+            physical_execution.get(
+                "level1_parent_loads_per_request", -1
+            )
+        ),
+        "single_writer_nodes_per_request": int(
+            physical_execution.get(
+                "single_writer_nodes_per_request", -1
+            )
+        ),
+        "logical_critical_path": int(
+            physical_execution.get("logical_critical_path", -1)
+        ),
+        "physical_level_max_steps": tuple(
+            int(value)
+            for value in physical_execution.get(
+                "physical_level_max_steps", ()
+            )
+        ),
+        "physical_critical_path": int(
+            physical_execution.get("physical_critical_path", -1)
+        ),
+    }
+    physical_route = normalized_execution["route"]
+    if physical_route == "fixed32_parent_group":
+        if parent_group_contract is None:
+            raise RuntimeError(
+                "FR13 fixed32 GDN grouped execution lacks its descriptor"
+            )
+        level1_programs = 5
+        physical_level_max_steps = (5, 12)
+        physical_critical_path = 17
+        level1_parent_loads = 5
+    elif physical_route == "fixed32_path":
+        level1_programs = 11
+        physical_level_max_steps = (5, 7)
+        physical_critical_path = 12
+        level1_parent_loads = 11
+    else:
+        raise RuntimeError(
+            "FR13 fixed32 GDN physical route is invalid: "
+            + repr(physical_route)
+        )
+    physical_programs = 1 + level1_programs
+    single_writer_nodes = 32
+    launch_repetitions = 1 if physical_batched else batch
+    physical_grid_z_per_request = (1, level1_programs)
+    physical_event_grid_z = (
+        (batch, batch * level1_programs)
+        if physical_batched
+        else physical_grid_z_per_request
+    )
+    expected_execution = {
+        "route": physical_route,
+        "batched": physical_batched,
+        "batch_size": batch,
+        "grid_z_per_request": physical_grid_z_per_request,
+        "event_grid_z": physical_event_grid_z,
+        "launch_repetitions": launch_repetitions,
+        "physical_launches_per_layer": 2 * launch_repetitions,
+        "programs_per_request": physical_programs,
+        "programs_per_layer": physical_programs * batch,
+        "level1_parent_loads_per_request": level1_parent_loads,
+        "single_writer_nodes_per_request": 32,
+        "logical_critical_path": 12,
+        "physical_level_max_steps": physical_level_max_steps,
+        "physical_critical_path": physical_critical_path,
+    }
+    if normalized_execution != expected_execution:
+        raise RuntimeError(
+            "FR13 fixed32 GDN physical execution drift: "
+            + repr(normalized_execution)
+        )
     if {
         "schedule": runtime_state.get("schedule"),
         "route_armed": runtime_state.get("route_armed"),
@@ -2347,6 +2464,7 @@ def _fr13_fixed32_observed_gdn(
         if prior is not None and prior != value:
             raise RuntimeError("FR13 fixed32 GDN topology digest changed")
         event[key] = value
+    new_physical_layer = name not in event["gdn_layers"]
     event["gdn_calls"].add(call_key)
     event["gdn_layers"].add(name)
     event["gdn_scan_calls"] += 1
@@ -2360,13 +2478,31 @@ def _fr13_fixed32_observed_gdn(
     ):
         raise RuntimeError("FR13 fixed32 GDN physical route changed")
     event["gdn_physical_route"] = physical_route
-    prior_physical_grid = event["gdn_physical_grid_z"]
-    if (
-        prior_physical_grid is not None
-        and prior_physical_grid != physical_grid_z
+    for key, value in (
+        ("gdn_physical_batched", physical_batched),
+        (
+            "gdn_physical_grid_z_per_request",
+            physical_grid_z_per_request,
+        ),
+        ("gdn_physical_event_grid_z", physical_event_grid_z),
+        ("gdn_physical_launch_repetitions", launch_repetitions),
+        (
+            "gdn_physical_launches_per_layer",
+            expected_execution["physical_launches_per_layer"],
+        ),
+        ("gdn_physical_level_max_steps", physical_level_max_steps),
+        ("gdn_physical_critical_path", physical_critical_path),
     ):
-        raise RuntimeError("FR13 fixed32 GDN physical grid changed")
-    event["gdn_physical_grid_z"] = physical_grid_z
+        prior = event[key]
+        if prior is not None and prior != value:
+            raise RuntimeError(
+                "FR13 fixed32 GDN physical execution changed: " + key
+            )
+        event[key] = value
+    if new_physical_layer:
+        event["gdn_physical_launches"] += expected_execution[
+            "physical_launches_per_layer"
+        ]
     event["gdn_physical_programs"] += physical_programs
     event["gdn_level1_parent_loads"] += level1_parent_loads
     event["gdn_single_writer_nodes"] += single_writer_nodes
@@ -3052,19 +3188,36 @@ def _fr13_fixed32_validate_forward_work(work, label):
     batch = int(work["batch_size"])
     expected_gdn_calls = 48 * batch
     physical_route = work["gdn_physical_route"]
+    physical_batched = work["gdn_physical_batched"]
+    if type(physical_batched) is not bool:
+        raise RuntimeError("FR13 fixed32 GDN physical batched flag is invalid")
     if physical_route == "fixed32_parent_group":
         expected_physical_programs_per_scan = 6
-        expected_physical_grid_z = (1, 5)
+        expected_physical_grid_z_per_request = (1, 5)
         expected_level1_parent_loads_per_scan = 5
+        expected_physical_level_max_steps = (5, 12)
+        expected_physical_critical_path = 17
     elif physical_route == "fixed32_path":
         expected_physical_programs_per_scan = 12
-        expected_physical_grid_z = (1, 11)
+        expected_physical_grid_z_per_request = (1, 11)
         expected_level1_parent_loads_per_scan = 11
+        expected_physical_level_max_steps = (5, 7)
+        expected_physical_critical_path = 12
     else:
         raise RuntimeError(
             "FR13 fixed32 GDN physical route is invalid: "
             + repr(physical_route)
         )
+    expected_launch_repetitions = 1 if physical_batched else batch
+    expected_physical_launches_per_layer = 2 * expected_launch_repetitions
+    expected_physical_event_grid_z = (
+        (
+            batch,
+            batch * expected_physical_grid_z_per_request[1],
+        )
+        if physical_batched
+        else expected_physical_grid_z_per_request
+    )
     stage_row_elems = int(work["conv_stage_row_elems"])
     stage_block = int(work["conv_stage_block"])
     expected_stage_programs = (
@@ -3087,12 +3240,31 @@ def _fr13_fixed32_validate_forward_work(work, label):
         "gdn_path_programs": int(work["gdn_path_programs"]),
         "gdn_padded_slots": int(work["gdn_padded_slots"]),
         "gdn_physical_route": physical_route,
+        "gdn_physical_batched": physical_batched,
         "gdn_physical_programs": int(work["gdn_physical_programs"]),
-        "gdn_physical_grid_z": work["gdn_physical_grid_z"],
+        "gdn_physical_grid_z_per_request": work[
+            "gdn_physical_grid_z_per_request"
+        ],
+        "gdn_physical_event_grid_z": work[
+            "gdn_physical_event_grid_z"
+        ],
+        "gdn_physical_launch_repetitions": int(
+            work["gdn_physical_launch_repetitions"]
+        ),
+        "gdn_physical_launches_per_layer": int(
+            work["gdn_physical_launches_per_layer"]
+        ),
+        "gdn_physical_launches": int(work["gdn_physical_launches"]),
         "gdn_level1_parent_loads": int(
             work["gdn_level1_parent_loads"]
         ),
         "gdn_single_writer_nodes": int(work["gdn_single_writer_nodes"]),
+        "gdn_physical_level_max_steps": work[
+            "gdn_physical_level_max_steps"
+        ],
+        "gdn_physical_critical_path": work[
+            "gdn_physical_critical_path"
+        ],
         "gdn_nodes": int(work["gdn_nodes"]),
         "gdn_critical_path": work["gdn_critical_path"],
         "gdn_grid_z": work["gdn_grid_z"],
@@ -3148,14 +3320,25 @@ def _fr13_fixed32_validate_forward_work(work, label):
         "gdn_path_programs": expected_gdn_calls * 12,
         "gdn_padded_slots": expected_gdn_calls * 82,
         "gdn_physical_route": physical_route,
+        "gdn_physical_batched": physical_batched,
         "gdn_physical_programs": (
             expected_gdn_calls * expected_physical_programs_per_scan
         ),
-        "gdn_physical_grid_z": expected_physical_grid_z,
+        "gdn_physical_grid_z_per_request": (
+            expected_physical_grid_z_per_request
+        ),
+        "gdn_physical_event_grid_z": expected_physical_event_grid_z,
+        "gdn_physical_launch_repetitions": expected_launch_repetitions,
+        "gdn_physical_launches_per_layer": (
+            expected_physical_launches_per_layer
+        ),
+        "gdn_physical_launches": 48 * expected_physical_launches_per_layer,
         "gdn_level1_parent_loads": (
             expected_gdn_calls * expected_level1_parent_loads_per_scan
         ),
         "gdn_single_writer_nodes": expected_gdn_calls * 32,
+        "gdn_physical_level_max_steps": expected_physical_level_max_steps,
+        "gdn_physical_critical_path": expected_physical_critical_path,
         "gdn_nodes": expected_gdn_calls * 32,
         "gdn_critical_path": 12,
         "gdn_grid_z": (1, 11),
@@ -3308,6 +3491,9 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
                 "physical_route": gdn.get(
                     "physical_route", "fixed32_path"
                 ),
+                "physical_batched": bool(
+                    gdn.get("physical_batched", False)
+                ),
                 "physical_programs_per_scan": (
                     int(
                         gdn.get(
@@ -3317,8 +3503,26 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
                     )
                     // scan_calls
                 ),
-                "physical_grid_z": list(
-                    gdn.get("physical_grid_z", gdn.get("grid_z", ()))
+                "physical_grid_z_per_request": list(
+                    gdn.get(
+                        "physical_grid_z_per_request",
+                        gdn.get("physical_grid_z", gdn.get("grid_z", ())),
+                    )
+                ),
+                "physical_event_grid_z": list(
+                    gdn.get(
+                        "physical_event_grid_z",
+                        gdn.get("physical_grid_z", gdn.get("grid_z", ())),
+                    )
+                ),
+                "physical_launch_repetitions": int(
+                    gdn.get("physical_launch_repetitions", 1)
+                ),
+                "physical_launches_per_layer": int(
+                    gdn.get("physical_launches_per_layer", 2)
+                ),
+                "physical_launches_per_event": int(
+                    gdn.get("physical_launches", 96)
                 ),
                 "level1_parent_loads_per_scan": (
                     int(gdn.get("level1_parent_loads", scan_calls * 11))
@@ -3332,6 +3536,12 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
                         )
                     )
                     // scan_calls
+                ),
+                "physical_level_max_steps": list(
+                    gdn.get("physical_level_max_steps", (5, 7))
+                ),
+                "physical_critical_path": int(
+                    gdn.get("physical_critical_path", 12)
                 ),
                 "padded_slots_per_scan": (
                     int(gdn.get("padded_slots", -1)) // scan_calls
@@ -3653,12 +3863,31 @@ def _fr13_fixed32_capture_end(
             "path_programs": int(work["gdn_path_programs"]),
             "padded_slots": int(work["gdn_padded_slots"]),
             "physical_route": work["gdn_physical_route"],
+            "physical_batched": work["gdn_physical_batched"],
             "physical_programs": int(work["gdn_physical_programs"]),
-            "physical_grid_z": list(work["gdn_physical_grid_z"]),
+            "physical_grid_z_per_request": list(
+                work["gdn_physical_grid_z_per_request"]
+            ),
+            "physical_event_grid_z": list(
+                work["gdn_physical_event_grid_z"]
+            ),
+            "physical_launch_repetitions": int(
+                work["gdn_physical_launch_repetitions"]
+            ),
+            "physical_launches_per_layer": int(
+                work["gdn_physical_launches_per_layer"]
+            ),
+            "physical_launches": int(work["gdn_physical_launches"]),
             "level1_parent_loads": int(
                 work["gdn_level1_parent_loads"]
             ),
             "single_writer_nodes": int(work["gdn_single_writer_nodes"]),
+            "physical_level_max_steps": list(
+                work["gdn_physical_level_max_steps"]
+            ),
+            "physical_critical_path": int(
+                work["gdn_physical_critical_path"]
+            ),
             "nodes": int(work["gdn_nodes"]),
             "critical_path": int(work["gdn_critical_path"]),
             "grid_z": list(work["gdn_grid_z"]),
@@ -4020,17 +4249,64 @@ def _fr13_fixed32_observed_graph_replay(
     event["gdn_physical_route"] = gdn.get(
         "physical_route", "fixed32_path"
     )
+    replay_batch = int(event["batch_size"])
+    event["gdn_physical_batched"] = bool(
+        gdn.get("physical_batched", replay_batch > 1)
+    )
     event["gdn_physical_programs"] = int(
         gdn.get("physical_programs", gdn["path_programs"])
     )
-    event["gdn_physical_grid_z"] = tuple(
-        gdn.get("physical_grid_z", gdn["grid_z"])
+    event["gdn_physical_grid_z_per_request"] = tuple(
+        gdn.get(
+            "physical_grid_z_per_request",
+            gdn.get("physical_grid_z", gdn["grid_z"]),
+        )
+    )
+    event["gdn_physical_event_grid_z"] = tuple(
+        gdn.get(
+            "physical_event_grid_z",
+            (
+                replay_batch,
+                replay_batch
+                * int(event["gdn_physical_grid_z_per_request"][1]),
+            )
+            if event["gdn_physical_batched"]
+            else event["gdn_physical_grid_z_per_request"],
+        )
+    )
+    event["gdn_physical_launch_repetitions"] = int(
+        gdn.get(
+            "physical_launch_repetitions",
+            1 if event["gdn_physical_batched"] else replay_batch,
+        )
+    )
+    event["gdn_physical_launches_per_layer"] = int(
+        gdn.get(
+            "physical_launches_per_layer",
+            2 * event["gdn_physical_launch_repetitions"],
+        )
+    )
+    event["gdn_physical_launches"] = int(
+        gdn.get(
+            "physical_launches",
+            48 * event["gdn_physical_launches_per_layer"],
+        )
     )
     event["gdn_level1_parent_loads"] = int(
         gdn.get("level1_parent_loads", int(gdn["scan_calls"]) * 11)
     )
     event["gdn_single_writer_nodes"] = int(
         gdn.get("single_writer_nodes", gdn["nodes"])
+    )
+    grouped_replay = event["gdn_physical_route"] == "fixed32_parent_group"
+    event["gdn_physical_level_max_steps"] = tuple(
+        gdn.get(
+            "physical_level_max_steps",
+            (5, 12) if grouped_replay else (5, 7),
+        )
+    )
+    event["gdn_physical_critical_path"] = int(
+        gdn.get("physical_critical_path", 17 if grouped_replay else 12)
     )
     event["gdn_nodes"] = int(gdn["nodes"])
     event["gdn_critical_path"] = int(gdn["critical_path"])
@@ -5565,13 +5841,32 @@ def _fr13_fixed32_observed_take(mode, batch_size, forward_step_index):
             "path_programs": int(event["gdn_path_programs"]),
             "padded_slots": int(event["gdn_padded_slots"]),
             "physical_route": event["gdn_physical_route"],
+            "physical_batched": event["gdn_physical_batched"],
             "physical_programs": int(event["gdn_physical_programs"]),
-            "physical_grid_z": list(event["gdn_physical_grid_z"]),
+            "physical_grid_z_per_request": list(
+                event["gdn_physical_grid_z_per_request"]
+            ),
+            "physical_event_grid_z": list(
+                event["gdn_physical_event_grid_z"]
+            ),
+            "physical_launch_repetitions": int(
+                event["gdn_physical_launch_repetitions"]
+            ),
+            "physical_launches_per_layer": int(
+                event["gdn_physical_launches_per_layer"]
+            ),
+            "physical_launches": int(event["gdn_physical_launches"]),
             "level1_parent_loads": int(
                 event["gdn_level1_parent_loads"]
             ),
             "single_writer_nodes": int(
                 event["gdn_single_writer_nodes"]
+            ),
+            "physical_level_max_steps": list(
+                event["gdn_physical_level_max_steps"]
+            ),
+            "physical_critical_path": int(
+                event["gdn_physical_critical_path"]
             ),
             "nodes": int(event["gdn_nodes"]),
             "critical_path": int(event["gdn_critical_path"]),
@@ -12204,6 +12499,11 @@ def _fr13_conv_subop_mab(
                                 "fixed32_parent_group_contract": (
                                     _fr13_f32_scan_state.get(
                                         "fixed32_parent_group_contract"
+                                    )
+                                ),
+                                "gdn_physical_execution": (
+                                    _fr13_f32_scan_state.get(
+                                        "last_physical_execution"
                                     )
                                 ),
                             },
