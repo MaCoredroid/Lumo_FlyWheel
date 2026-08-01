@@ -236,6 +236,21 @@ def test_parent_group_selector_is_default_off_and_fail_closed(tmp_path) -> None:
                    geom_override={"BV": 8}) is True
 
 
+def test_parent_group_rejects_legacy_batched_gdn_credentials() -> None:
+    source = KERNEL_PATH.read_text(encoding="utf-8")
+    guard_start = source.index(
+        "if _FR13_FIXED32_GDN_PARENT_GROUP and any(\n"
+        "    value is not None"
+    )
+    guard_end = source.index("\n\n\ndef _fr13_fixed32_batch_gdn_source_sha256", guard_start)
+    guard = source[guard_start:guard_end]
+
+    assert "_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE" in guard
+    assert "_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION" in guard
+    assert "cannot reuse a legacy batched-GDN" in guard
+    assert "a distinct grouped candidate" in guard
+
+
 def test_parent_group_kernel_and_launchers_keep_single_writer_surfaces() -> None:
     kernel = _function_source("_tree_gdn_path_kernel_fixed32_parent_group")
     group_step = _function_source("_gdn_group_node_step")

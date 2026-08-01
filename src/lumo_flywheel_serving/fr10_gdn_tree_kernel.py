@@ -1560,15 +1560,16 @@ if (
         "mutually exclusive"
     )
 if _FR13_FIXED32_GDN_PARENT_GROUP and any(
-    value not in (None, 8)
+    value is not None
     for value in (
         _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE,
         _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION,
     )
 ):
     raise RuntimeError(
-        "FR13 fixed32 GDN parent grouping is pinned to BV8 and cannot be "
-        "combined with a wider batched-GDN selector"
+        "FR13 fixed32 GDN parent grouping cannot reuse a legacy batched-GDN "
+        "diagnostic or production credential; a distinct grouped candidate "
+        "identity is required"
     )
 
 
