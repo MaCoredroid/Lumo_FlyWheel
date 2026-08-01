@@ -131,6 +131,7 @@ run_arm() {
       FR13_DFWD_GPU_TIMER_JSON="/workspace/$RUNROOT_REL/sidecars/${arm}_dfwd.json" \
       FR13_CFWD_GPU_TIMER_JSON="/workspace/$RUNROOT_REL/sidecars/${arm}_cfwd.json" \
       FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=0 \
+      FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB=1 \
       FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION="$production" \
       FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON="$pass_json" \
       FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256="$pass_sha" \
@@ -179,6 +180,7 @@ run_arm() {
       'FR13_DRAFT_VOCAB_ROOT=0' \
       'FR13_DRAFT_VOCAB_K=0' \
       'ENFORCE_EAGER=1' \
+      'FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB=1' \
       "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=$production"; do
     [[ "$(grep -Fxc "$expected" "$env_path")" -eq 1 ]] \
       || { echo "$arm lacks exact environment pin: $expected" >&2; return 4; }

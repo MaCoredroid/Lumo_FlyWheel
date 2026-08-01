@@ -518,6 +518,7 @@ def test_source_gated_timing_pair_is_stock_first_and_nonacceptance() -> None:
     assert "FR13_DRAFT_VOCAB_K=0" in runner
     assert "ENFORCE_EAGER=1 CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in runner
     assert "FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1" in runner
+    assert "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB=1" in runner
     assert "scripts/fr13_measure.py deploy-speed" in runner
     assert "scripts/fr13_sfwd_state_fusion_pass.py validate" in runner
     assert "scripts/fr13_sfwd_state_fusion_pass.py verify-engagement" in runner

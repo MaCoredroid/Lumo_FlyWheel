@@ -28,6 +28,9 @@ REJECTION_SAMPLER_PATH = Path(
 GPU_MODEL_RUNNER_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py"
 )
+GPU_WORKER_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_worker.py"
+)
 REQUEST_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/request.py"
 )
@@ -166,6 +169,9 @@ _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = os.environ.get(
 ).strip()
 _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB = os.environ.get(
     "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB", "0"
+).strip()
+_FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB = os.environ.get(
+    "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB", "0"
 ).strip()
 _FR13_FIXED32_TREE_SOURCE = repr(list(_FR13_FIXED32_CHOICES))
 _FR13_FIXED32_SLOT_PI = tuple(
@@ -5647,6 +5653,14 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
     sfwd_state_fusion_diagnostic = (
         sfwd_state_fusion_diagnostic_raw == "1"
     )
+    sfwd_state_fusion_timing_raw = (
+        _FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB
+    )
+    if sfwd_state_fusion_timing_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB must be exactly 0 or 1"
+        )
+    sfwd_state_fusion_timing = sfwd_state_fusion_timing_raw == "1"
     if candidate_raw and candidate_raw not in ("16", "32", "64", "128"):
         raise RuntimeError(
             "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be one of "
@@ -5680,6 +5694,10 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         raise RuntimeError(
             "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB requires fixed32 mode"
         )
+    if sfwd_state_fusion_timing and not resolved_mode:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB requires fixed32 mode"
+        )
     if not resolved_mode:
         valid_mask = 0
     elif resolved_mode in _FR13_FIXED32_MODES:
@@ -5700,8 +5718,50 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         "_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = "
         f"{graph_batch_gdn_diagnostic!r}\n"
         "_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC = "
-        f"{sfwd_state_fusion_diagnostic!r}\n"
+        f"{(sfwd_state_fusion_diagnostic or sfwd_state_fusion_timing)!r}\n"
     )
+
+
+def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
+    """Return the zero-traffic producer contract for an eager diagnostic."""
+    batch_gdn = _FR13_FIXED32_BATCH_GDN_BYTE_AB
+    sfwd = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
+    sfwd_timing = _FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB
+    if batch_gdn not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1"
+        )
+    if sfwd not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"
+        )
+    if sfwd_timing not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB must be exactly 0 or 1"
+        )
+    if sum(value == "1" for value in (batch_gdn, sfwd, sfwd_timing)) > 1:
+        raise RuntimeError(
+            "FR13 fixed32 eager byte diagnostics are mutually exclusive"
+        )
+    if batch_gdn == "1":
+        return (
+            "eager B4 byte diagnostic",
+            4,
+            "FR13_FIXED32_EAGER_B4_BOOT_WARM",
+        )
+    if sfwd == "1":
+        return (
+            "SFWD B1 byte diagnostic",
+            1,
+            "FR13_FIXED32_EAGER_SFWD_B1_BOOT_WARM",
+        )
+    if sfwd_timing == "1":
+        return (
+            "SFWD B1 timing diagnostic",
+            1,
+            "FR13_FIXED32_EAGER_SFWD_B1_TIMING_BOOT_WARM",
+        )
+    return None
 
 
 def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
@@ -5717,6 +5777,9 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     sfwd_state_fusion_diagnostic = (
         _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
     )
+    sfwd_state_fusion_timing = (
+        _FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB
+    )
     if batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1"
@@ -5728,6 +5791,10 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     if sfwd_state_fusion_diagnostic not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"
+        )
+    if sfwd_state_fusion_timing not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB must be exactly 0 or 1"
         )
     if (
         batch_gdn_byte_diagnostic == "1"
@@ -5759,6 +5826,24 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             raise RuntimeError(
                 "FR13 fixed32 SFWD state-fusion byte diagnostic requires "
                 "the exclusive eager B1 shadow route"
+            )
+    if sfwd_state_fusion_timing == "1":
+        incompatible = (
+            not mode
+            or os.environ.get("FR13_FIXED32_B1_DIAGNOSTIC", "0") != "1"
+            or os.environ.get("ENFORCE_EAGER", "0") != "1"
+            or os.environ.get("FR13_SFWD_GPU_TIMER", "0") != "1"
+            or sfwd_state_fusion_diagnostic != "0"
+            or batch_gdn_byte_diagnostic != "0"
+            or graph_batch_gdn_byte_diagnostic != "0"
+            or bool(candidate)
+            or bool(production)
+            or taw_native_diagnostic
+        )
+        if incompatible:
+            raise RuntimeError(
+                "FR13 fixed32 SFWD state-fusion timing diagnostic requires "
+                "the exclusive eager B1 timed route"
             )
     if batch_gdn_byte_diagnostic == "1":
         candidate_bv = os.environ.get(
@@ -18057,7 +18142,10 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
         "            cudagraph_runtime_mode=cudagraph_runtime_mode,\n"
     )
     text = text.replace(anchor, inject, 1)
-    if _FR13_FIXED32_BATCH_GDN_BYTE_AB == "1":
+    eager_boot_warm_contract = _fr13_fixed32_eager_boot_warm_contract()
+    if eager_boot_warm_contract is not None:
+        eager_name, eager_capacity, eager_sentinel = eager_boot_warm_contract
+        eager_num_tokens = 32 * eager_capacity
         eager_anchor = (
             "        if self.compilation_config.cudagraph_mode "
             "== CUDAGraphMode.NONE:\n"
@@ -18071,11 +18159,10 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
         )
         if text.count(eager_anchor) != 1:
             raise RuntimeError(
-                "FR13 fixed32 eager B4 boot-warm anchor is not unique"
+                f"FR13 fixed32 {eager_name} boot-warm anchor is not unique"
             )
         eager_inject = (
-            "        # FR13_FIXED32_EAGER_B4_BOOT_WARM: the eager-only byte "
-            "gate\n"
+            f"        # {eager_sentinel}: the eager-only diagnostic\n"
             "        # has no final FULL capture callback. Reuse its "
             "capture-shaped\n"
             "        # producer and postprocess warm here, before serving, "
@@ -18085,23 +18172,25 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
             "        if self.compilation_config.cudagraph_mode != "
             "CUDAGraphMode.NONE:\n"
             "            raise RuntimeError(\n"
-            "                \"FR13 fixed32 eager B4 byte diagnostic requires "
+            f"                \"FR13 fixed32 {eager_name} requires "
             "CUDAGraphMode.NONE\"\n"
             "            )\n"
-            "        if int(self.scheduler_config.max_num_seqs) != 4:\n"
+            f"        if int(self.scheduler_config.max_num_seqs) != "
+            f"{eager_capacity}:\n"
             "            raise RuntimeError(\n"
-            "                \"FR13 fixed32 eager B4 byte diagnostic requires "
-            "max_num_seqs=4\"\n"
+            f"                \"FR13 fixed32 {eager_name} requires "
+            f"max_num_seqs={eager_capacity}\"\n"
             "            )\n"
             "        from vllm.model_executor.layers.mamba import (\n"
             "            gdn_linear_attn as _fr13_f32_eager_boot_gdn,\n"
             "        )\n"
             "        if _fr13_f32_eager_boot_gdn."
             "_fr13_fixed32_final_full_preseed_needed(\n"
-            "            \"FULL\", 128, 4, True, False, 0,\n"
+            f"            \"FULL\", {eager_num_tokens}, {eager_capacity}, "
+            "True, False, 0,\n"
             "        ):\n"
             "            self._dummy_run(\n"
-            "                128,\n"
+            f"                {eager_num_tokens},\n"
             "                cudagraph_runtime_mode=CUDAGraphMode.NONE,\n"
             "                force_attention=True,\n"
             "                uniform_decode=True,\n"
@@ -18119,11 +18208,117 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
             "        _fr13_cfwd_timer()\n"
             "        _fr13_dfwd_timer()\n"
             "        _fr13_f32_eager_boot_gdn."
-            "_fr13_fixed32_assert_final_full_preseed_ready(4)\n"
+            f"_fr13_fixed32_assert_final_full_preseed_ready({eager_capacity})\n"
             + eager_anchor
         )
         text = text.replace(eager_anchor, eager_inject, 1)
     GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
+def _patch_gpu_model_runner_fixed32_eager_boot_capacity() -> bool:
+    """Expose fixed physical capacity only while eager builders initialize."""
+    if not _FR13_FIXED32_MODE:
+        return False
+    eager_boot_warm_contract = _fr13_fixed32_eager_boot_warm_contract()
+    if eager_boot_warm_contract is None:
+        return False
+    eager_name, eager_capacity, _eager_sentinel = eager_boot_warm_contract
+    eager_num_tokens = 32 * eager_capacity
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_FIXED32_EAGER_BOOT_WARM_BUILDER_CAPACITY"
+    if sentinel in text:
+        return False
+    method_anchor = (
+        "    def initialize_metadata_builders(\n"
+        "        self, kv_cache_config: KVCacheConfig, "
+        "kernel_block_sizes: list[int]\n"
+        "    ) -> None:\n"
+        "        \"\"\"\n"
+        "        Create the metadata builders for all KV cache groups and "
+        "attn groups.\n"
+        "        \"\"\"\n"
+    )
+    body_anchor = (
+        "        for kv_cache_group_id in range("
+        "len(kv_cache_config.kv_cache_groups)):\n"
+    )
+    next_method_anchor = "\n    def _check_and_update_cudagraph_mode(\n"
+    if text.count(method_anchor) != 1:
+        raise RuntimeError(
+            f"FR13 fixed32 {eager_name} metadata-builder method anchor is "
+            "not unique"
+        )
+    method_start = text.index(method_anchor)
+    body_start = text.find(body_anchor, method_start)
+    method_end = text.find(next_method_anchor, method_start)
+    if body_start < 0 or method_end < 0 or body_start >= method_end:
+        raise RuntimeError(
+            f"FR13 fixed32 {eager_name} metadata-builder body anchors are "
+            "invalid"
+        )
+    original_body = text[body_start:method_end]
+    nested_body = "".join(
+        "    " + line if line.strip() else line
+        for line in original_body.splitlines(keepends=True)
+    )
+    inject = (
+        "        " + sentinel + ": capture-shaped eager boot only.\n"
+        "        _fr13_f32_prior_capture_size = (\n"
+        "            self.compilation_config.max_cudagraph_capture_size\n"
+        "        )\n"
+        "        if _fr13_f32_prior_capture_size not in (None, 0):\n"
+        "            raise RuntimeError(\n"
+        f"                \"FR13 fixed32 {eager_name} requires zero eager "
+        "capture capacity\"\n"
+        "            )\n"
+        "        self.compilation_config.max_cudagraph_capture_size = "
+        f"{eager_num_tokens}\n"
+        "        try:\n"
+        + nested_body
+        + "        finally:\n"
+        "            self.compilation_config.max_cudagraph_capture_size = (\n"
+        "                _fr13_f32_prior_capture_size\n"
+        "            )\n"
+    )
+    text = text[:body_start] + inject + text[method_end:]
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
+def _patch_gpu_worker_fixed32_eager_boot_warm() -> bool:
+    """Reach the zero-traffic producer when vLLM skips graphs in eager mode."""
+    if not _FR13_FIXED32_MODE:
+        return False
+    eager_boot_warm_contract = _fr13_fixed32_eager_boot_warm_contract()
+    if eager_boot_warm_contract is None:
+        return False
+    eager_name, _eager_capacity, _eager_sentinel = eager_boot_warm_contract
+    text = GPU_WORKER_PATH.read_text()
+    sentinel = "# FR13_FIXED32_EAGER_BOOT_WARM_LIFECYCLE"
+    if sentinel in text:
+        return False
+    anchor = (
+        "        cuda_graph_memory_bytes = 0\n"
+        "        if not self.model_config.enforce_eager:\n"
+        "            cuda_graph_memory_bytes = self.model_runner.capture_model()\n"
+    )
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            f"FR13 fixed32 {eager_name} worker lifecycle anchor is not unique"
+        )
+    inject = (
+        "        " + sentinel + ": eager capture_model starts with\n"
+        "        # a zero-traffic eager producer and returns before graph "
+        "capture.\n"
+        "        if not self.model_config.enforce_eager:\n"
+        "            raise RuntimeError(\n"
+        f"                \"FR13 fixed32 {eager_name} requires enforce_eager\"\n"
+        "            )\n"
+        "        cuda_graph_memory_bytes = self.model_runner.capture_model()\n"
+    )
+    text = text.replace(anchor, inject, 1)
+    GPU_WORKER_PATH.write_text(text)
     return True
 
 
@@ -33662,6 +33857,14 @@ def main() -> int:
         (
             GPU_MODEL_RUNNER_PATH,
             _patch_gpu_model_runner_fixed32_final_full_preseed(),
+        ),
+        (
+            GPU_MODEL_RUNNER_PATH,
+            _patch_gpu_model_runner_fixed32_eager_boot_capacity(),
+        ),
+        (
+            GPU_WORKER_PATH,
+            _patch_gpu_worker_fixed32_eager_boot_warm(),
         ),
         (
             GPU_MODEL_RUNNER_PATH,
