@@ -250,6 +250,11 @@ def test_parent_group_rejects_legacy_batched_gdn_credentials() -> None:
     assert "cannot reuse a legacy batched-GDN" in guard
     assert "a distinct grouped candidate" in guard
 
+    selector = _function_source("fixed32_batch_gdn_selector")
+    assert "_FR13_FIXED32_GDN_PARENT_GROUP and (" in selector
+    assert "diagnostic or graph_diagnostic or production is not None" in selector
+    assert "legacy batched-GDN routes are forbidden" in selector
+
 
 def test_parent_group_kernel_and_launchers_keep_single_writer_surfaces() -> None:
     kernel = _function_source("_tree_gdn_path_kernel_fixed32_parent_group")

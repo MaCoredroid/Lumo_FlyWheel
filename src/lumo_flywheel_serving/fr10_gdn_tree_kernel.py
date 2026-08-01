@@ -2013,6 +2013,13 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
     diagnostic, _marker = _fr13_fixed32_batch_gdn_byte_ab_control()
     graph_diagnostic = _fr13_fixed32_batch_gdn_graph_byte_ab_control()
     production = _fr13_fixed32_batch_gdn_production_control()
+    if _FR13_FIXED32_GDN_PARENT_GROUP and (
+        diagnostic or graph_diagnostic or production is not None
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 grouped GDN requires a distinct B4 diagnostic and "
+            "production identity; legacy batched-GDN routes are forbidden"
+        )
     if diagnostic and graph_diagnostic:
         raise RuntimeError(
             "FR13 fixed32 eager and graph-replay batched GDN diagnostics are "
