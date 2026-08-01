@@ -6,9 +6,10 @@ branch, so this directory contains no timing or acceptance measurements.
 The immutable implementation commit is
 `7064f094e43c6b1f14ac358f31bfc8858de3b136`. It is based on the reviewed B1
 full-stack route `c3ee2fece6daa17927ec216ff0135c5cf3ebb1e0`. The route consumes only the
-corrected TAW B4 review contract from
-`e0ac403c22525265525957ff15e118ca291e68fa` (code fix
-`6ed4a55df803c5a7b9190e9c0de0498085a9b9d0`). It rejects the pre-review B4
+corrected TAW B4 review contract from the current route tip
+`68336f72ada43aa1e9681329e58dc031d2a69491` (code fix
+`6ed4a55df803c5a7b9190e9c0de0498085a9b9d0`, direct-file trace integration
+`4d0c57617e6a3675dddf8f76ecbee376b710220e`). It rejects the pre-review B4
 bundle format.
 
 The fixed32 remote-agent trace route includes direct in-container Qwen capture

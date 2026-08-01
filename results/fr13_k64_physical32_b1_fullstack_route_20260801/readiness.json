@@ -21,8 +21,9 @@
     "prior_258048_byte_cutoff_closed": true
   },
   "corrected_b4_review_branch": "agent/fixed32-b4-tail23-hydra27-k64-m128-review",
-  "corrected_b4_review_tip": "e0ac403c22525265525957ff15e118ca291e68fa",
+  "corrected_b4_review_tip": "68336f72ada43aa1e9681329e58dc031d2a69491",
   "corrected_b4_code_fix": "6ed4a55df803c5a7b9190e9c0de0498085a9b9d0",
+  "corrected_b4_trace_capture_integration": "4d0c57617e6a3675dddf8f76ecbee376b710220e",
   "pre_review_b4_artifacts_accepted": false,
   "source_contract_schema": "fr13-fixed32-taw-all-parent-v7",
   "source_contract_sha256": "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290",

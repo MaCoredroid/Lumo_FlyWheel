@@ -312,7 +312,8 @@ def test_prepared_campaign_requires_corrected_b4_inputs_and_claims_no_measuremen
     assert "GDN_LEVEL0_COEFF_LIVE_PASS" in source
     assert "GDN_LEVEL0_COEFF_GATE_SUMMARY" in source
     assert "4725178944" in source
-    assert readiness["corrected_b4_review_tip"].startswith("e0ac403c2")
+    assert readiness["corrected_b4_review_tip"].startswith("68336f72a")
+    assert readiness["corrected_b4_trace_capture_integration"].startswith("4d0c57617")
     assert readiness["pre_review_b4_artifacts_accepted"] is False
     gdn = readiness["gdn_level0_coeff"]
     assert gdn["production_in_both_timing_arms"] is True
