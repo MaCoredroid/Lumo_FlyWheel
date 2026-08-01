@@ -2611,6 +2611,9 @@ def _fr13_fixed32_sfwd_state_fusion_pass_emit(
     payload = {
         "schema": "fr13.fixed32.sfwd_state_fusion.live_pass.v1",
         "status": "byte_pass_source_only",
+        "run_classification": (
+            "one_real_swe_verified_full_vocab_b1_byte_timing_diagnostic"
+        ),
         "candidate": _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID,
         "source_sha256": _fr13_fixed32_batch_gdn_source_sha256(),
         "task_marker": task_marker,
@@ -2624,7 +2627,10 @@ def _fr13_fixed32_sfwd_state_fusion_pass_emit(
         "gdn_ring_export_unchanged": True,
         "gdn_flags_export_unchanged": True,
         "compared_byte_surfaces": ["conv_out", "commit_source_stage"],
+        "real_task_authenticated": True,
         "reference_always_served": True,
+        "timing_eligible": False,
+        "floor_acceptance_eligible": False,
         "production_eligible": False,
         "production_blocker": (
             "source-only candidate requires graph byte qualification and "
@@ -2717,7 +2723,10 @@ def fixed32_sfwd_state_fusion_byte_gate(
         "comparisons": comparisons,
         "first_nonzero": first_nonzero,
         "zero_diff": passed,
+        "real_task_authenticated": True,
         "reference_always_served": True,
+        "timing_eligible": False,
+        "floor_acceptance_eligible": False,
         "production_eligible": False,
     }
     _fr13_fixed32_sfwd_state_fusion_emit(record)

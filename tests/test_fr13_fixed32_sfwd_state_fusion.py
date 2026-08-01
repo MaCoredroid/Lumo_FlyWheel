@@ -14,6 +14,8 @@ import torch
 ROOT = Path(__file__).resolve().parents[1]
 KERNEL_PATH = ROOT / "src" / "lumo_flywheel_serving" / "fr10_gdn_tree_kernel.py"
 PATCHER_PATH = ROOT / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
+LAUNCHER_PATH = ROOT / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
+RUNNER_PATH = ROOT / "scripts" / "fr13_run_b1_sfwd_state_fusion_gate.sh"
 
 sys.path.insert(0, str(ROOT / "src"))
 try:
@@ -254,6 +256,9 @@ def test_byte_gate_is_strict_and_never_marks_candidate_production(
     assert payload["status"] == "byte_pass_source_only"
     assert payload["layer_count"] == 48
     assert payload["reference_always_served"] is True
+    assert payload["real_task_authenticated"] is True
+    assert payload["timing_eligible"] is False
+    assert payload["floor_acceptance_eligible"] is False
     assert payload["production_eligible"] is False
     records = [json.loads(line) for line in log_path.read_text().splitlines()]
     assert [record["status"] for record in records] == [
@@ -291,3 +296,32 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
         and "launch_fixed32_sfwd_state_fusion(" in node.value
     )
     ast.parse(textwrap.dedent(fragment))
+
+
+def test_b1_full_vocab_runner_is_reference_returning_and_nonacceptance() -> None:
+    runner = RUNNER_PATH.read_text(encoding="utf-8")
+    launcher = LAUNCHER_PATH.read_text(encoding="utf-8")
+
+    assert "subset_b1_diagnostic_one.json" in runner
+    assert "subset_b4_four.json" not in runner
+    assert "subset_b16" not in runner
+    assert "FR13_DRAFT_VOCAB_ROOT=0" in runner
+    assert "FR13_DRAFT_VOCAB_K=0" in runner
+    assert "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=1" in runner
+    assert "FR13_CONV_WB_BATCHED=1" in runner
+    assert "FR13_TREE_CONV_FUSED=1" in runner
+    assert "timing_eligible=false" in runner
+    assert "floor_acceptance_eligible=false" in runner
+    assert "reference_returned=true" in runner
+    assert "physical_rows_per_request=32" in runner
+    assert "gdn_level_path_programs=1,11" in runner
+    assert "PROBE_ONLY" not in runner
+    assert "ACCEPT_SPEED_PROBE" not in runner
+
+    assert (
+        "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=/logs/"
+        "fr13_fixed32_sfwd_state_fusion.real_event.arm"
+    ) in launcher
+    assert "must be the only kernel candidate" in launcher
+    assert "requires exact full-vocab eager fixed32 B1" in launcher
+    assert "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled" in launcher

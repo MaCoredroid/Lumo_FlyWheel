@@ -926,11 +926,16 @@ if [[ ! -f "$FORKED_FA2_SO" ]]; then
 fi
 if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
+  _fr13_fixed32_sfwd_state_fusion_diagnostic=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
   _fr13_fixed32_batch_gdn_diagnostic=${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}
   _fr13_fixed32_batch_gdn_graph_diagnostic=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
   case "$FR13_FIXED32_B1_DIAGNOSTIC" in
     0|1) ;;
     *) echo "FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
+  case "$_fr13_fixed32_sfwd_state_fusion_diagnostic" in
+    0|1) ;;
+    *) echo "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
   esac
   case "$_fr13_fixed32_batch_gdn_diagnostic" in
     0|1) ;;
@@ -960,6 +965,12 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     echo "fixed32 B1 diagnostic requires MAX_NUM_SEQS=1" >&2
     exit 2
   fi
+  if [[ "$_fr13_fixed32_sfwd_state_fusion_diagnostic" == "1" \
+        && ( "$FR13_FIXED32_B1_DIAGNOSTIC" != "1" \
+             || "$MAX_NUM_SEQS" != "1" ) ]]; then
+    echo "fixed32 SFWD state-fusion byte gate requires the B1 diagnostic" >&2
+    exit 2
+  fi
   _fixed32_expected_mem=105g
   _fixed32_expected_kv_cache_memory_bytes=
   if [[ "$MAX_NUM_SEQS" == "4" ]]; then
@@ -979,6 +990,9 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     _fixed32_expected_metrics=1
   fi
   if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" ]]; then
+    _fixed32_expected_eager=1
+  fi
+  if [[ "$_fr13_fixed32_sfwd_state_fusion_diagnostic" == "1" ]]; then
     _fixed32_expected_eager=1
   fi
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" ]]; then
@@ -1113,6 +1127,7 @@ PY
   unset _fixed32_expected_weight_floor_ms
   unset _fixed32_name _fixed32_pair _fr13_fixed32_batch_gdn_diagnostic
   unset _fr13_fixed32_batch_gdn_bv8_timing
+  unset _fr13_fixed32_sfwd_state_fusion_diagnostic
 fi
 if [[ -n "$KV_CACHE_MEMORY_BYTES" \
       && ! "$KV_CACHE_MEMORY_BYTES" =~ ^[1-9][0-9]*$ ]]; then
@@ -1419,15 +1434,20 @@ if [[ "${FR13_COMMITTER_GRAPH:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_committer_graph.arm" 2>/dev/null || true
 fi
-# The batched-GDN byte gates stay reference-served until a real SWE-Verified
-# task is explicitly armed after readiness. The EngineCore worker sees these
-# /logs sidecars even when its curated environment drops FR13_*.
+# The SFWD and batched-GDN byte gates stay reference-served until an authenticated
+# real SWE-Verified request is admitted. The EngineCore worker sees these /logs
+# sidecars even when its curated environment drops FR13_*.
+_fr13_sfwd_state_fusion_byte_ab="${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}"
 _fr13_batch_gdn_byte_ab="${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}"
 _fr13_batch_gdn_graph_byte_ab="${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}"
 _fr13_batch_gdn_production="${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}"
 _fr13_batch_gdn_bv_candidate="${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}"
 _fr13_batch_gdn_bv_production="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}"
 _fr13_batch_gdn_bv8_timing="${FR13_FIXED32_BATCH_GDN_BV8_TIMING:-0}"
+case "$_fr13_sfwd_state_fusion_byte_ab" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
+esac
 case "$_fr13_batch_gdn_byte_ab" in
   0|1) ;;
   *) echo "FR13_FIXED32_BATCH_GDN_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
@@ -1522,6 +1542,58 @@ if [[ "$_fr13_batch_gdn_production" != "1" \
   echo "FR13 fixed32 B4 GDN graph PASS inputs require the production selector" >&2
   exit 2
 fi
+if [[ "$_fr13_sfwd_state_fusion_byte_ab" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
+     && "${ENFORCE_EAGER:-0}" == "1" \
+     && "${FR13_DRAFT_VOCAB_K:-65536}" == "0" \
+     && "$FR13_DRAFT_VOCAB_ROOT" == "0" \
+     && "${FR13_CONV_WB_BATCHED:-0}" == "1" \
+     && "${FR13_TREE_CONV_FUSED:-1}" == "1" \
+     && "${FR13_RING_EXPORT:-1}" == "1" \
+     && "${FR13_FLAGS_INKERNEL:-1}" == "1" \
+     && "${FR13_TREE_RUNROW_INIT:-1}" == "1" ]] || {
+    echo "FR13 SFWD state-fusion byte gate requires exact full-vocab eager fixed32 B1" >&2
+    exit 2
+  }
+  [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+     && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "0" \
+     && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+     && "$FR13_FA2_QROW16_PRODUCTION" == "0" \
+     && "$FR13_DRAFT_HEAD_PAD_ROWS" == "0" \
+     && "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" \
+     && "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "0" \
+     && "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "0" \
+     && "$FR13_FIXED32_CUTLASS_WAVE" == "stock" \
+     && -z "$_fr13_gdn_path_bv_candidate" \
+     && -z "$_fr13_gdn_path_bv_production" \
+     && "$_fr13_batch_gdn_byte_ab" == "0" \
+     && "$_fr13_batch_gdn_graph_byte_ab" == "0" \
+     && "$_fr13_batch_gdn_production" == "0" \
+     && "$_fr13_batch_gdn_bv8_timing" == "0" \
+     && -z "$_fr13_batch_gdn_bv_candidate" \
+     && -z "$_fr13_batch_gdn_bv_production" ]] || {
+    echo "FR13 SFWD state-fusion byte gate must be the only kernel candidate" >&2
+    exit 2
+  }
+  printf '1\n' > "$LOG_DIR/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
+  chmod 0400 "$LOG_DIR/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.live_pass.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl"
+  FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm
+else
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.live_pass.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl" \
+    2>/dev/null || true
+  FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=
+fi
+export FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH
 rm -f \
   "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag" \
   "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag" \
@@ -1887,7 +1959,8 @@ while IFS= read -r _v; do
   [[ "$_v" == "FR13_FIXED32_INGRESS_SECRET_FILE" \
      || "$_v" == "FR13_FIXED32_MIDDLEWARE_FLAGS" \
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_SO" \
-     || "$_v" == "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH" ]] && continue
+     || "$_v" == "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH" \
+     || "$_v" == "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH" ]] && continue
   if [[ -n "${FR13_FIXED32_MODE:-}" \
      && "$_v" == "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION" ]]; then
     continue
@@ -2020,6 +2093,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_BATCH_GDN_BV_CANDIDATE="${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
   -e FR13_FIXED32_BATCH_GDN_BV_PRODUCTION="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" \
   -e FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH="${FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH:-}" \
+  -e FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH="${FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH:-}" \
   -e FR13_APC_COMMIT_TO_RUNNING_ROW="${FR13_APC_COMMIT_TO_RUNNING_ROW:-1}" \
   -e FR13_TREE_RUNROW_INIT="${FR13_TREE_RUNROW_INIT:-1}" \
   -e FR13_COMMITTER_GRAPH="${FR13_COMMITTER_GRAPH:-1}" \

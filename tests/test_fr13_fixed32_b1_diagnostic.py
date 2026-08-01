@@ -96,6 +96,7 @@ def test_b1_diagnostic_is_guarded_across_runtime_ingress() -> None:
     assert serve.count("validate_fixed32_run_subset") >= 3
     assert "MAX_NUM_SEQS_OVR=1 and SWE_CONCURRENCY=1" in serve
     assert '"gate_eligible": False' in serve
+    assert '"timing_eligible": False' in serve
     assert "fixed32 B1 diagnostic requires MAX_NUM_SEQS=1" in launcher
     assert "fixed32 B1 diagnostic ingress task ID is not pinned" in launcher
     assert "fixed32 B1 diagnostic offload task ID is not pinned" in offload
