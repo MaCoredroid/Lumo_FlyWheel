@@ -9076,6 +9076,19 @@ def fixed32_committer_counters() -> dict[str, object]:
     maximum_ready_capacity = max(ready_capacities.values(), default=0)
     required_capacity = _FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY
     fast_route = _FR13_FIXED32_COMMITTER_FAST_ROUTE.get("state")
+    states_by_batch = (
+        fast_route.get("states_by_batch", {})
+        if isinstance(fast_route, dict)
+        else {}
+    )
+    layer_batch_gate_passed_by_batch = {
+        int(batch): int(bool(state.get("layer_batch_byte_gate_passed", False)))
+        for batch, state in states_by_batch.items()
+    }
+    layer_batch_gate_attempts_by_batch = {
+        int(batch): int(state.get("layer_batch_byte_gate_attempts", -1))
+        for batch, state in states_by_batch.items()
+    }
     fast_route_ready = (
         fast_route is not None
         and fast_route["mode"] == _FR13_FIXED32_MODE
@@ -9088,6 +9101,12 @@ def fixed32_committer_counters() -> dict[str, object]:
         ),
         "actual_replays_by_batch": dict(
             _FR13_FIXED32_COMMITTER_COUNTERS["actual_replays_by_batch"]
+        ),
+        "layer_batch_gate_passed_by_batch": (
+            layer_batch_gate_passed_by_batch
+        ),
+        "layer_batch_gate_attempts_by_batch": (
+            layer_batch_gate_attempts_by_batch
         ),
         "preseeded_graphs": len(_FR13_FIXED32_COMMITTER),
         "preseeded_batches": preseeded_batches,

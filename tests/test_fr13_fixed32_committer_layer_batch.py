@@ -124,6 +124,16 @@ def test_byte_gate_requires_real_nonzero_path_and_exact_state_bytes() -> None:
     )
 
 
+def test_counters_expose_per_batch_gate_state_for_timing_boundaries() -> None:
+    counters = _text("fixed32_committer_counters")
+
+    assert 'fast_route.get("states_by_batch", {})' in counters
+    assert '"layer_batch_gate_passed_by_batch"' in counters
+    assert '"layer_batch_gate_attempts_by_batch"' in counters
+    assert 'state.get("layer_batch_byte_gate_passed", False)' in counters
+    assert 'state.get("layer_batch_byte_gate_attempts", -1)' in counters
+
+
 def test_layer_programs_have_disjoint_layer_state_and_shared_read_only_paths() -> None:
     kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
 

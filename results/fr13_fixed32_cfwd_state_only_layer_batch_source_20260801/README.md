@@ -56,14 +56,15 @@ clone/compare/restore work. A zero-accept event before the gate passes serves
 the 48-call reference. The inherited static contract currently reports one
 candidate call for either case.
 
-Therefore this source must not be timed or accepted yet. Before a GPU
-qualification, add a dynamic last-event route/call guard and require timing to
-begin only after the B-specific real-event gate has passed. Any gate or
+Therefore this source must not be timed or accepted yet. The runtime counters
+now expose B-indexed byte-gate pass and attempt maps so a timing boundary can
+prove the gate was already passed and did not execute in a measured event.
+Before GPU qualification, wire that guard into the timing reducer. Any gate or
 pre-gate event must be rejected from the production work census.
 
 ## Static verification
 
-- `80 passed` across the focused committer, GDN schedule, full-preseed,
+- `81 passed` across the focused committer, GDN schedule, full-preseed,
   conv-commit wiring, and exact-commit suites.
 - Python compile and Ruff passed for the changed kernel/test files; the patcher
   compiled successfully.
@@ -75,7 +76,8 @@ pre-gate event must be rejected from the production work census.
 
 1. Compile the candidate on SM121 and require zero stack/local spill plus a
    resource comparison against the 48-launch reference.
-2. Add the dynamic gate-event accounting guard described above.
+2. Require `passed_before[B] == passed_after[B] == 1` and a zero gate-attempt
+   delta at every measured timing boundary.
 3. Run real SWE-Verified B1 and exact4 B4 Tail23/Hydra27 gates from the exact
    pushed source. Require first-real-nonzero raw-byte equality for all 48
    authoritative running-state rows at every used occupancy.
