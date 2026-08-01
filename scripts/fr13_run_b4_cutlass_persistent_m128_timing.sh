@@ -428,33 +428,45 @@ run_arm() {
     local all_parent_marker="$RUNROOT_ABS/$arm/logs/fr13_fixed32_taw_native_precompute_production.arm"
     local all_parent_credential="$RUNROOT_ABS/$arm/logs/fr13_fixed32_taw_native_precompute.production_pass.json"
     local work_census="$RUNROOT_ABS/$arm/logs/fr13_fixed32_work_census.jsonl"
+    local work_report="$RUNROOT_ABS/$arm/work_census_validation.json"
     [[ -f "$all_parent_marker" && ! -L "$all_parent_marker" \
        && "$(<"$all_parent_marker")" == "1" ]] \
       || { echo "$arm lacks all-parent production engagement" >&2; return 4; }
     [[ -f "$all_parent_credential" && ! -L "$all_parent_credential" \
        && "$(sha256sum "$all_parent_credential" | awk '{print $1}')" == "$ALL_PARENT_PASS_SHA256" ]] \
       || { echo "$arm used the wrong all-parent production credential" >&2; return 4; }
-    "$PYTHON_BIN" - "$work_census" <<'PY'
+    "$PYTHON_BIN" - "$work_census" "$work_report" "$FIXED32_MODE" <<'PY'
+import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
-path = Path(sys.argv[1])
-if not path.is_file() or path.is_symlink():
+sys.path.insert(0, "scripts")
+import fr13_fixed32_work_census as census
+
+census_path = Path(sys.argv[1])
+report_path = Path(sys.argv[2])
+mode = sys.argv[3]
+if not census_path.is_file() or census_path.is_symlink():
     raise SystemExit("all-parent production work census is missing")
-records = [
-    json.loads(line)
-    for line in path.read_text(encoding="ascii").splitlines()
-    if line.strip()
-]
 expected_route = "fixed32_native_precompute_production_candidate_return"
-if not records or any(
-    not isinstance(record, dict)
-    or not isinstance(record.get("taw"), dict)
-    or record["taw"].get("route") != expected_route
-    for record in records
-):
-    raise SystemExit("all-parent production did not engage on every measured event")
+report = census.validate_arm(
+    census.load_jsonl(census_path),
+    expected_mode=mode,
+    expected_route=expected_route,
+    required_batches=(4,),
+)
+raw = census_path.read_bytes()
+report["census_sha256"] = hashlib.sha256(raw).hexdigest()
+report["census_bytes"] = len(raw)
+temporary = report_path.with_name(report_path.name + ".tmp")
+temporary.write_text(
+    json.dumps(report, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+    + "\n",
+    encoding="ascii",
+)
+os.replace(temporary, report_path)
 PY
   fi
   "$PYTHON_BIN" scripts/fr13_measure.py deploy-speed \
@@ -513,7 +525,12 @@ finalize_manifests
   "$ONE_SIDED_U95_CAP_MS" "$DRAFT_VOCAB_BLOCKS_CONTAINER" \
   "$DRAFT_VOCAB_BLOCKS_SHA256" "$FIXED32_MODE" "$LOGICAL_TOPOLOGY" \
   "$ACTIVE_DRAFTS" "$VALID_MASK" "$ALL_PARENT_PRODUCTION" \
-  "$ALL_PARENT_PASS_SHA256" "$ALL_PARENT_VERDICT_SHA256" <<'PY'
+  "$ALL_PARENT_PASS_SHA256" "$ALL_PARENT_VERDICT_SHA256" \
+  "$RUNROOT_ABS/$STOCK_ARM/work_census_validation.json" \
+  "$RUNROOT_ABS/$CANDIDATE_ARM/work_census_validation.json" \
+  "$RUNROOT_ABS/$STOCK_ARM/logs/fr13_fixed32_work_census.jsonl" \
+  "$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_work_census.jsonl" <<'PY'
+import hashlib
 import json
 import math
 import sys
@@ -521,6 +538,7 @@ from pathlib import Path
 
 sys.path.insert(0, "scripts")
 from fr13_b4_timing_math import phase_breakdown, positive
+import fr13_fixed32_work_census as work_census
 
 subset_path, stock_path, candidate_path, binding_path, out_path = map(Path, sys.argv[1:6])
 sidecar_sha256, live_sha256, candidate_sha256, fa2_sha256 = sys.argv[6:10]
@@ -538,10 +556,44 @@ valid_mask = int(sys.argv[28], 0)
 all_parent_production = bool(int(sys.argv[29]))
 all_parent_pass_sha256 = sys.argv[30]
 all_parent_verdict_sha256 = sys.argv[31]
+stock_work_path, candidate_work_path = map(Path, sys.argv[32:34])
+stock_census_path, candidate_census_path = map(Path, sys.argv[34:36])
 task_ids = sorted(json.loads(subset_path.read_text(encoding="ascii"))["instance_ids"])
 stock = json.loads(stock_path.read_text(encoding="utf-8"))
 candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
 binding = json.loads(binding_path.read_text(encoding="ascii"))
+
+def load_work_report(report_path, census_path, label):
+    for kind, path in (("report", report_path), ("census", census_path)):
+        if not path.is_file() or path.is_symlink():
+            raise SystemExit(f"{label} work-census {kind} is not a regular file")
+    report_raw = report_path.read_bytes()
+    census_raw = census_path.read_bytes()
+    report = json.loads(
+        report_raw.decode("ascii"),
+        object_pairs_hook=work_census._duplicate_checked_object,
+    )
+    report = work_census.validate_bound_arm_report(
+        report,
+        census_raw=census_raw,
+        census_source=str(census_path),
+        expected_mode=fixed32_mode,
+        expected_route="fixed32_native_precompute_production_candidate_return",
+        required_batches=(4,),
+    )
+    return report, hashlib.sha256(report_raw).hexdigest()
+
+stock_work, stock_work_sha256 = load_work_report(
+    stock_work_path, stock_census_path, "stock"
+)
+candidate_work, candidate_work_sha256 = load_work_report(
+    candidate_work_path, candidate_census_path, "candidate"
+)
+if (
+    stock_work["normalized_work_signature_sha256"]
+    != candidate_work["normalized_work_signature_sha256"]
+):
+    raise SystemExit("stock/candidate physical-work signatures differ")
 
 def validate(record, label):
     if (
@@ -636,6 +688,26 @@ summary = {
     "common_committer_selector": (
         "fixed32_all_parent_commit_v2" if all_parent_production else "reference"
     ),
+    "work_census": {
+        "stock_reference": {
+            "report_sha256": stock_work_sha256,
+            "census_sha256": stock_work["census_sha256"],
+            "event_count": stock_work["event_count"],
+            "event_counts_by_batch": stock_work["event_counts_by_batch"],
+            "normalized_work_signature_sha256": stock_work[
+                "normalized_work_signature_sha256"
+            ],
+        },
+        "candidate": {
+            "report_sha256": candidate_work_sha256,
+            "census_sha256": candidate_work["census_sha256"],
+            "event_count": candidate_work["event_count"],
+            "event_counts_by_batch": candidate_work["event_counts_by_batch"],
+            "normalized_work_signature_sha256": candidate_work[
+                "normalized_work_signature_sha256"
+            ],
+        },
+    },
     "task_ids": task_ids,
     "decision_metric": "measured_tps_fullstep_wall",
     "draft_vocab_root": draft_vocab_root,

@@ -91,7 +91,9 @@ run_topology hydra27_fixed32 hydra27
   "$campaign_root/hydra27_all_parent_gate/hydra27_fixed32_hydra27_all_parent_b4_gate_hydra27_${stamp}/hydra27_all_parent_b4_byte_gate.json" \
   "$campaign_root/hydra27_m128_gate/hydra27_fixed32_cutlass_b4_m128_k64_root_gate_hydra27_m128_${stamp}/cutlass_b4_m128_k64_root_byte_gate.json" \
   "$campaign_root/hydra27_timing/timing_summary.json" \
-  "$campaign_root/paired_summary.json" "$source_commit" <<'PY'
+  "$campaign_root/paired_summary.json" "$source_commit" \
+  "$campaign_root/tail23_timing/tail6_fixed32_cutlass_persistent_m128_k64_root_tail23_timing_${stamp}/logs/fr13_fixed32_work_census.jsonl" \
+  "$campaign_root/hydra27_timing/hydra27_fixed32_cutlass_persistent_m128_k64_root_hydra27_timing_${stamp}/logs/fr13_fixed32_work_census.jsonl" <<'PY'
 import hashlib
 import json
 import math
@@ -100,16 +102,63 @@ from pathlib import Path
 
 sys.path.insert(0, "scripts")
 import fr13_derive_qwen_agent_bundle_cap256 as qwen_derivation
+import fr13_fixed32_work_census as work_census
 import fr13_floor_gate as floor_gate
 
 paths = list(map(Path, sys.argv[1:7]))
 out = Path(sys.argv[7])
 source_commit = sys.argv[8]
+tail_census_path = Path(sys.argv[9])
+hydra_census_path = Path(sys.argv[10])
+expected_work_route = "fixed32_native_precompute_production_candidate_return"
+tail_census_raw = tail_census_path.read_bytes()
+hydra_census_raw = hydra_census_path.read_bytes()
+tail_census_sha256 = hashlib.sha256(tail_census_raw).hexdigest()
+hydra_census_sha256 = hashlib.sha256(hydra_census_raw).hexdigest()
+tail_records = work_census.load_jsonl_bytes(
+    tail_census_raw, source=str(tail_census_path)
+)
+hydra_records = work_census.load_jsonl_bytes(
+    hydra_census_raw, source=str(hydra_census_path)
+)
+tail_work = work_census.validate_arm(
+    tail_records,
+    expected_mode="tail6_fixed32",
+    expected_route=expected_work_route,
+    required_batches=(4,),
+)
+hydra_work = work_census.validate_arm(
+    hydra_records,
+    expected_mode="hydra27_fixed32",
+    expected_route=expected_work_route,
+    required_batches=(4,),
+)
+physical_work = work_census.validate_campaign(
+    tail_records,
+    hydra_records,
+    required_batches=(4,),
+)
+for label, report in (
+    ("Tail23", tail_work),
+    ("Hydra27", hydra_work),
+    ("paired", physical_work),
+):
+    if work_census.normalized_work_sha256(
+        report["normalized_work_signature"]
+    ) != report["normalized_work_signature_sha256"]:
+        raise SystemExit(f"{label} normalized physical-work digest is invalid")
+if not (
+    tail_work["normalized_work_signature_sha256"]
+    == hydra_work["normalized_work_signature_sha256"]
+    == physical_work["normalized_work_signature_sha256"]
+):
+    raise SystemExit("Tail23/Hydra27 normalized physical-work signatures differ")
 expected = (
     ("tail6_fixed32", "Tail23", 23, "0x7a9ce7ff"),
     ("hydra27_fixed32", "Hydra27", 27, "0x7abdffff"),
 )
 arms = {}
+four_way_work_signatures = {}
 for index, (mode, logical, active, mask) in enumerate(expected):
     taw_path, m128_path, timing_path = paths[index * 3:index * 3 + 3]
     taw_sha256 = hashlib.sha256(taw_path.read_bytes()).hexdigest()
@@ -117,6 +166,17 @@ for index, (mode, logical, active, mask) in enumerate(expected):
     taw = json.loads(taw_path.read_text(encoding="ascii"))
     m128 = json.loads(m128_path.read_text(encoding="ascii"))
     timing = json.loads(timing_path.read_text(encoding="ascii"))
+    arm_work = tail_work if mode == "tail6_fixed32" else hydra_work
+    timing_work = timing.get("work_census", {})
+    stock_work_signature = timing_work.get("stock_reference", {}).get(
+        "normalized_work_signature_sha256"
+    )
+    candidate_work_signature = timing_work.get("candidate", {}).get(
+        "normalized_work_signature_sha256"
+    )
+    arm_census_sha256 = (
+        tail_census_sha256 if mode == "tail6_fixed32" else hydra_census_sha256
+    )
     expected_tasks = [
         "astropy__astropy-12907",
         "astropy__astropy-13033",
@@ -166,6 +226,14 @@ for index, (mode, logical, active, mask) in enumerate(expected):
         or timing.get("valid_mask") != mask
         or timing.get("physical_rows_root_inclusive") != 32
         or timing.get("sfwd_projection_rows") != 128
+        or stock_work_signature != arm_work["normalized_work_signature_sha256"]
+        or candidate_work_signature != arm_work["normalized_work_signature_sha256"]
+        or timing_work.get("candidate", {}).get("event_count")
+        != arm_work["event_count"]
+        or timing_work.get("candidate", {}).get("event_counts_by_batch")
+        != arm_work["event_counts_by_batch"]
+        or timing_work.get("candidate", {}).get("census_sha256")
+        != arm_census_sha256
         or timing.get("all_parent_production") is not True
         or timing.get("all_parent_verdict_sha256") != taw_sha256
         or timing.get("all_parent_pass_sha256")
@@ -231,6 +299,10 @@ for index, (mode, logical, active, mask) in enumerate(expected):
         ):
             raise SystemExit(f"{logical} {arm_name} phases do not reconcile")
     candidate = timing["candidate"]
+    four_way_work_signatures[f"{logical}.stock_reference"] = stock_work_signature
+    four_way_work_signatures[f"{logical}.persistent_m128"] = (
+        candidate_work_signature
+    )
     arms[logical] = {
         "mode": mode,
         "active_drafts": active,
@@ -241,6 +313,13 @@ for index, (mode, logical, active, mask) in enumerate(expected):
         "stock_cutlass_with_all_parent": timing["stock_reference"],
         "persistent_m128_with_all_parent": candidate,
     }
+
+if set(four_way_work_signatures.values()) != {
+    physical_work["normalized_work_signature_sha256"]
+}:
+    raise SystemExit(
+        "Tail23/Hydra27 stock/M128 physical-work signatures are not identical"
+    )
 
 summary = {
     "schema": "fr13.fixed32.b4_tail23_hydra27_k64_m128_stack.exact4_pair.v1",
@@ -263,6 +342,18 @@ summary = {
     "sfwd_projection_rows": 128,
     "mandatory_weight_floor_ms": 119.658015414,
     "one_sided_u95_cap_ms": 137.6067177261,
+    "physical32_work_census": {
+        "schema": physical_work["schema"],
+        "status": physical_work["status"],
+        "required_batch_sizes": physical_work["required_batch_sizes"],
+        "event_counts": physical_work["event_counts"],
+        "normalized_work_signature_sha256": physical_work[
+            "normalized_work_signature_sha256"
+        ],
+        "four_way_normalized_work_signatures": four_way_work_signatures,
+        "tail_census_sha256": tail_census_sha256,
+        "hydra_census_sha256": hydra_census_sha256,
+    },
     "arms": arms,
 }
 if (

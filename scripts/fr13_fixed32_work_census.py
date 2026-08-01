@@ -98,6 +98,7 @@ from fr13_fixed32_topology import (
 SCHEMA = "fr13-fixed32-work-census-v9"
 TERMINAL_SCHEMA = "fr13-fixed32-work-census-terminal-v9"
 REPORT_SCHEMA = "fr13-fixed32-work-census-report-v9"
+ARM_REPORT_SCHEMA = "fr13-fixed32-work-census-arm-report-v9"
 SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v9"
 
 TAIL_MODE = "tail6_fixed32"
@@ -2266,8 +2267,36 @@ def load_jsonl(path: Path) -> list[LocatedRecord]:
     return records
 
 
+def load_jsonl_bytes(raw: bytes, *, source: str) -> list[LocatedRecord]:
+    """Load strict JSONL from authenticated bytes without a path reread."""
+
+    try:
+        lines = raw.decode("utf-8").splitlines()
+    except UnicodeError as error:
+        raise CensusError(f"cannot decode census JSONL {source}: {error}") from error
+    if not lines:
+        raise CensusError(f"{source}: census JSONL is empty")
+    records: list[LocatedRecord] = []
+    for line_number, line in enumerate(lines, start=1):
+        location = f"{source}:{line_number}"
+        if not line.strip():
+            raise CensusError(f"{location}: blank JSONL records are forbidden")
+        try:
+            record = json.loads(line, object_pairs_hook=_duplicate_checked_object)
+        except (json.JSONDecodeError, DuplicateJsonKey) as error:
+            raise CensusError(f"{location}: invalid JSON: {error}") from error
+        records.append((record, location))
+    return records
+
+
 def _canonical_json(value: object) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+
+def normalized_work_sha256(value: object) -> str:
+    """Return the canonical digest used for mode-neutral physical work."""
+
+    return hashlib.sha256(_canonical_json(value).encode("ascii")).hexdigest()
 
 
 def _events_sha256(events: Sequence[object]) -> str:
@@ -2678,6 +2707,222 @@ def _validate_terminal(
     }
 
 
+def validate_arm(
+    records: Sequence[LocatedRecord],
+    *,
+    expected_mode: str,
+    expected_route: str,
+    required_batches: Sequence[int],
+) -> dict[str, Any]:
+    """Validate one complete census and require one physical-work signature."""
+
+    if expected_mode not in MODE_SEMANTICS:
+        raise CensusError(f"unsupported fixed32 mode {expected_mode!r}")
+    batches = tuple(required_batches)
+    if (
+        not batches
+        or len(set(batches)) != len(batches)
+        or any(batch not in SUPPORTED_BATCH_SIZES for batch in batches)
+    ):
+        raise CensusError(
+            "required_batches must be a non-empty unique subset of (1, 2, 3, 4)"
+        )
+
+    event_records, (terminal_raw, terminal_source) = _split_terminal(
+        records, expected_mode=expected_mode
+    )
+    events: list[ValidatedEvent] = []
+    raw_events: list[object] = []
+    for raw, source in event_records:
+        event = validate_event(raw, source=source)
+        raw_mapping = _mapping(raw, source)
+        taw = _mapping(raw_mapping.get("taw"), f"{source}.taw")
+        if event.mode != expected_mode:
+            raise CensusError(
+                f"{source}.mode: record was supplied as {expected_mode}, "
+                f"but declares {event.mode}"
+            )
+        if taw.get("route") != expected_route:
+            raise CensusError(
+                f"{source}.taw.route: expected {expected_route!r}, "
+                f"got {taw.get('route')!r}"
+            )
+        events.append(event)
+        raw_events.append(raw)
+
+    terminal = _validate_terminal(
+        terminal_raw,
+        source=terminal_source,
+        expected_mode=expected_mode,
+        raw_events=raw_events,
+        events=events,
+    )
+    event_ids = [event.event_id for event in events]
+    if len(event_ids) != len(set(event_ids)):
+        raise CensusError(f"{expected_mode}: duplicate event_id within census")
+    event_indices = [event.event_index for event in events]
+    expected_indices = list(range(len(events)))
+    if event_indices != expected_indices:
+        raise CensusError(
+            f"{expected_mode}: event_index sequence must be {expected_indices}, "
+            f"got {event_indices}"
+        )
+    forward_step_indices = [event.forward_step_index for event in events]
+    if any(
+        current <= previous
+        for previous, current in zip(
+            forward_step_indices, forward_step_indices[1:]
+        )
+    ):
+        raise CensusError(
+            f"{expected_mode}: forward_step_index values must be strictly "
+            f"increasing and unique, got {forward_step_indices}"
+        )
+    producer_pids = {event.producer_pid for event in events}
+    if len(producer_pids) != 1:
+        raise CensusError(
+            f"{expected_mode}: census has multiple producer PIDs "
+            f"{sorted(producer_pids)}"
+        )
+    event_counts = {
+        str(batch): sum(event.batch_size == batch for event in events)
+        for batch in SUPPORTED_BATCH_SIZES
+    }
+    for batch in batches:
+        if event_counts[str(batch)] == 0:
+            raise CensusError(f"{expected_mode}: missing required B{batch} events")
+
+    signatures: dict[str, int] = {}
+    for event in events:
+        signature = normalized_work_sha256(event.normalized_work)
+        signatures[signature] = signatures.get(signature, 0) + 1
+    if len(signatures) != 1:
+        raise CensusError(
+            f"{expected_mode}: census has multiple normalized physical-work "
+            f"signatures {sorted(signatures)}"
+        )
+    signature_sha256 = next(iter(signatures))
+    baseline = events[0]
+    return {
+        "schema": ARM_REPORT_SCHEMA,
+        "status": "PASS",
+        "mode": expected_mode,
+        "route": expected_route,
+        "required_batch_sizes": list(batches),
+        "event_count": len(events),
+        "event_counts_by_batch": event_counts,
+        "batch_size_sequence": [event.batch_size for event in events],
+        "forward_step_indices": forward_step_indices,
+        "producer_pid": next(iter(producer_pids)),
+        "terminal_summary": terminal,
+        "normalized_work_signature": baseline.normalized_work,
+        "normalized_work_signature_sha256": signature_sha256,
+    }
+
+
+def validate_bound_arm_report(
+    raw: object,
+    *,
+    census_raw: bytes,
+    census_source: str,
+    expected_mode: str,
+    expected_route: str,
+    required_batches: Sequence[int],
+) -> dict[str, Any]:
+    """Revalidate a persisted arm report against the live census bytes."""
+
+    report = _mapping(raw, "arm_report")
+    _exact_keys(
+        report,
+        frozenset(
+            {
+                "schema",
+                "status",
+                "mode",
+                "route",
+                "required_batch_sizes",
+                "event_count",
+                "event_counts_by_batch",
+                "batch_size_sequence",
+                "forward_step_indices",
+                "producer_pid",
+                "terminal_summary",
+                "normalized_work_signature",
+                "normalized_work_signature_sha256",
+                "census_sha256",
+                "census_bytes",
+            }
+        ),
+        "arm_report",
+    )
+    if (
+        report["schema"] != ARM_REPORT_SCHEMA
+        or report["status"] != "PASS"
+        or report["mode"] != expected_mode
+        or report["route"] != expected_route
+        or report["required_batch_sizes"] != list(required_batches)
+    ):
+        raise CensusError("arm_report identity or route contract drifted")
+    event_count = _integer(report["event_count"], "arm_report.event_count", minimum=1)
+    event_counts = _mapping(
+        report["event_counts_by_batch"], "arm_report.event_counts_by_batch"
+    )
+    _exact_keys(
+        event_counts,
+        frozenset(str(batch) for batch in SUPPORTED_BATCH_SIZES),
+        "arm_report.event_counts_by_batch",
+    )
+    parsed_counts = {
+        str(batch): _integer(
+            event_counts[str(batch)],
+            f"arm_report.event_counts_by_batch.{batch}",
+        )
+        for batch in SUPPORTED_BATCH_SIZES
+    }
+    if sum(parsed_counts.values()) != event_count:
+        raise CensusError("arm_report event counts do not sum to event_count")
+    for batch in required_batches:
+        if parsed_counts[str(batch)] == 0:
+            raise CensusError(f"arm_report is missing required B{batch} events")
+    terminal = _mapping(report["terminal_summary"], "arm_report.terminal_summary")
+    if terminal.get("final") is not True or terminal.get("event_count") != event_count:
+        raise CensusError("arm_report terminal summary is incomplete")
+    normalized = _mapping(
+        report["normalized_work_signature"],
+        "arm_report.normalized_work_signature",
+    )
+    normalized_sha256 = _sha256(
+        report["normalized_work_signature_sha256"],
+        "arm_report.normalized_work_signature_sha256",
+    )
+    if normalized_work_sha256(normalized) != normalized_sha256:
+        raise CensusError("arm_report normalized-work digest mismatch")
+    census_sha256 = _sha256(report["census_sha256"], "arm_report.census_sha256")
+    census_bytes = _integer(
+        report["census_bytes"], "arm_report.census_bytes", minimum=1
+    )
+    if (
+        census_bytes != len(census_raw)
+        or census_sha256 != hashlib.sha256(census_raw).hexdigest()
+    ):
+        raise CensusError("arm_report no longer binds the live census bytes")
+    derived = validate_arm(
+        load_jsonl_bytes(census_raw, source=census_source),
+        expected_mode=expected_mode,
+        expected_route=expected_route,
+        required_batches=required_batches,
+    )
+    derived.update(
+        {
+            "census_sha256": hashlib.sha256(census_raw).hexdigest(),
+            "census_bytes": len(census_raw),
+        }
+    )
+    if dict(report) != derived:
+        raise CensusError("arm_report differs from canonical live-census derivation")
+    return derived
+
+
 def validate_campaign(
     tail_records: Sequence[LocatedRecord],
     hydra_records: Sequence[LocatedRecord],
@@ -2779,9 +3024,7 @@ def validate_campaign(
             signatures: dict[str, int] = {}
             graph_signatures: set[str] = set()
             for event in selected:
-                signature = hashlib.sha256(
-                    _canonical_json(event.normalized_work).encode("ascii")
-                ).hexdigest()
+                signature = normalized_work_sha256(event.normalized_work)
                 signatures[signature] = signatures.get(signature, 0) + 1
                 graph_signatures.add(event.drafter_graph_signature)
             if len(signatures) > 1:
@@ -2821,8 +3064,7 @@ def validate_campaign(
                 f"B{batch_size}: Tail/Hydra physical-work signature mismatch"
             )
     baseline = all_events[0]
-    baseline_json = _canonical_json(baseline.normalized_work)
-    signature_sha256 = hashlib.sha256(baseline_json.encode("ascii")).hexdigest()
+    signature_sha256 = normalized_work_sha256(baseline.normalized_work)
     tail_forward = {
         row["batch_size"]: (
             row["graph_signature"],
@@ -3496,6 +3738,45 @@ def run_self_test() -> dict[str, Any]:
     if valid_report["forward_step_indices"][TAIL_MODE] != [5, 6, 9, 10]:
         raise AssertionError("valid fixture did not preserve global forward indices")
 
+    # Regression for the B4 timing gate: the mandatory final record is not an
+    # event and therefore has no TAW section. A complete event+terminal stream
+    # must pass strict arm validation.
+    single_b4 = reference_event(
+        TAIL_MODE,
+        4,
+        "single-tail-b4",
+        taw=_native_production_taw(4),
+    )
+    single_records = _located_campaign([single_b4], "single-tail-b4")
+    single_arm_report = validate_arm(
+        single_records,
+        expected_mode=TAIL_MODE,
+        expected_route=TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+        required_batches=(4,),
+    )
+    if (
+        single_arm_report["event_count"] != 1
+        or single_arm_report["event_counts_by_batch"]["4"] != 1
+        or single_arm_report["terminal_summary"]["final"] is not True
+    ):
+        raise AssertionError("single-event arm did not preserve its terminal proof")
+    single_census_raw = "".join(
+        _canonical_json(record) + "\n" for record, _source in single_records
+    ).encode("ascii")
+    bound_arm_report = {
+        **single_arm_report,
+        "census_sha256": hashlib.sha256(single_census_raw).hexdigest(),
+        "census_bytes": len(single_census_raw),
+    }
+    validate_bound_arm_report(
+        bound_arm_report,
+        census_raw=single_census_raw,
+        census_source="single-tail-b4",
+        expected_mode=TAIL_MODE,
+        expected_route=TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+        required_batches=(4,),
+    )
+
     mixed_tail, mixed_hydra = _valid_fixture()
     for record in (*mixed_tail, *mixed_hydra):
         batch_size = record["batch_size"]
@@ -3539,6 +3820,101 @@ def run_self_test() -> dict[str, Any]:
             )
 
     tamper_tests: list[tuple[str, Callable[[], object]]] = []
+
+    bad_bound_signature = json.loads(json.dumps(bound_arm_report))
+    bad_bound_signature["normalized_work_signature"]["physical_drafts"] = 30
+    bad_bound_signature["normalized_work_signature_sha256"] = (
+        normalized_work_sha256(bad_bound_signature["normalized_work_signature"])
+    )
+    tamper_tests.append(
+        (
+            "bound-arm-normalized-signature",
+            lambda: validate_bound_arm_report(
+                bad_bound_signature,
+                census_raw=single_census_raw,
+                census_source="single-tail-b4",
+                expected_mode=TAIL_MODE,
+                expected_route=TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+                required_batches=(4,),
+            ),
+        )
+    )
+    tamper_tests.append(
+        (
+            "bound-arm-census-substitution",
+            lambda: validate_bound_arm_report(
+                bound_arm_report,
+                census_raw=single_census_raw + b"\n",
+                census_source="single-tail-b4",
+                expected_mode=TAIL_MODE,
+                expected_route=TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+                required_batches=(4,),
+            ),
+        )
+    )
+
+    wrong_route = reference_event(TAIL_MODE, 4, "arm-wrong-route")
+    tamper_tests.append(
+        (
+            "arm-route",
+            lambda: validate_arm(
+                _located_campaign([wrong_route], "arm-wrong-route"),
+                expected_mode=TAIL_MODE,
+                expected_route=TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+                required_batches=(4,),
+            ),
+        )
+    )
+
+    wrong_mode = reference_event(
+        HYDRA_MODE,
+        4,
+        "arm-wrong-mode",
+        taw=_native_production_taw(4),
+    )
+    wrong_mode_terminal = reference_terminal_summary(
+        [wrong_mode], fixture_synthetic_runtime_proof=True
+    )
+    wrong_mode_terminal["mode"] = TAIL_MODE
+    tamper_tests.append(
+        (
+            "arm-mode",
+            lambda: validate_arm(
+                _located(
+                    [wrong_mode, wrong_mode_terminal],
+                    "arm-wrong-mode",
+                ),
+                expected_mode=TAIL_MODE,
+                expected_route=TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+                required_batches=(4,),
+            ),
+        )
+    )
+
+    bad_arm_event = reference_event(
+        TAIL_MODE,
+        4,
+        "arm-bad-terminal",
+        taw=_native_production_taw(4),
+    )
+    bad_arm_terminal = reference_terminal_summary(
+        [bad_arm_event], fixture_synthetic_runtime_proof=True
+    )
+    bad_arm_terminal["events_sha256"] = "0" * 64
+    tamper_tests.append(
+        (
+            "arm-terminal",
+            lambda: validate_arm(
+                _located(
+                    [bad_arm_event, bad_arm_terminal],
+                    "arm-bad-terminal",
+                ),
+                expected_mode=TAIL_MODE,
+                expected_route=TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+                required_batches=(4,),
+            ),
+        )
+    )
 
     def event_tamper(
         name: str,
