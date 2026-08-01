@@ -1,0 +1,43 @@
+{
+  "arm": {
+    "default": "off",
+    "env": "FR13_FIXED32_COMMITTER_LAYER_BATCH=1",
+    "sidecar": "/logs/fr13_fixed32_committer_layer_batch.arm",
+    "worker_visible_sidecar_materialized_by_launcher": true
+  },
+  "base_commit": "92d705c31f375b8a8d42a911eaa73104c722b075",
+  "branch": "agent/fixed32-cfwd-layerbatch-92d705c",
+  "candidate": {
+    "candidate_physical_recurrence_launches": 1,
+    "graph_replays_per_served_event": 1,
+    "logical_layers": 48,
+    "native_reference_physical_recurrence_launches": 48,
+    "origin_commit": "b28d467b12abeca0633f764e8aa42a65f52cf2d6",
+    "path_capacity": 16,
+    "status": "source_cpu_ready_gpu_gate_pending"
+  },
+  "correctness_gate": {
+    "comparison": "raw_byte_equality_of_all_touched_fp32_running_state_rows",
+    "failure": "restore_initial_state_and_raise",
+    "power": "first_real_nonzero_accepted_path_per_batch_occupancy",
+    "zero_accept_behavior": "serve_native_reference_graph"
+  },
+  "integration_commit": "40913fc80dd6b1226e252a8b692835ef052b5115",
+  "measurement": {
+    "current_candidate_gpu_timing": null,
+    "historical_attribution_ms_per_event": 4.082146887627696,
+    "historical_attribution_only": true,
+    "historical_complete_ranges": 881,
+    "historical_kernel_instances_per_event": 48.0,
+    "performance_claim": null,
+    "upper_bound_only": true
+  },
+  "next_gate": {
+    "batch": 1,
+    "formal_acceptance_eligible": false,
+    "instance_id": "astropy__astropy-12907",
+    "other_experimental_kernel_gates": "off",
+    "suite": "princeton-nlp/SWE-bench_Verified"
+  },
+  "schema": "fr13.fixed32.cfwd_committer_layer_batch_ready.v1"
+}
