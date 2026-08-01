@@ -1,0 +1,25 @@
+CPU/source verification on 2026-08-01 UTC
+
+Focused and surrounding fixed32 command:
+  pytest -q tests/test_fr13_fixed32_gdn_level0_coeff.py tests/test_fr13_fixed32_gdn_batch_launch.py tests/test_fr13_fixed32_gdn_path_bv_live_gate.py tests/test_fr13_fixed32_taw_real_task_arm.py tests/test_fr13_fixed32_b1_diagnostic.py tests/test_fr13_fixed32_final_full_preseed.py tests/test_fr13_fixed32_gdn_batch_byte_ab.py tests/test_fr13_fixed32_gdn_batch_graph_gate.py tests/test_fr13_fixed32_gdn_batch_wide_bv.py tests/test_fr13_b4_gdn_bv8_production.py tests/test_fr13_b4_gdn_bv64_production.py
+
+Result:
+  226 passed, 2 skipped in 3.84s
+
+Skipped tests:
+  CUDA/Triton byte gates on this non-GPU worktree.
+
+Additional checks:
+  python3 -m py_compile src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py scripts/fr10_phase4_patch_vllm_tree_gdn.py scripts/fr13_gdn_level0_coeff_pass.py scripts/run_swe_bench_q36_a.py
+  PASS
+
+  bash -n scripts/fr13_launch_forked_fa2_tree_server.sh scripts/fr13_bigdenom_swe_serve_variant.sh scripts/fr13_run_b1_gdn_level0_coeff_live_gate.sh scripts/fr13_run_b1_gdn_level0_coeff_timing.sh
+  PASS
+
+  git diff --check
+  PASS
+
+Offline SM121 build:
+  8/8 stock/candidate B1/B4 level specializations compiled.
+  All STACK=0, LOCAL=0, and SASS LDL/STL count=0.
+  The container reported no NVIDIA driver; no GPU device was exposed.

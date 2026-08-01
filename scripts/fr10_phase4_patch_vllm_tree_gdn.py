@@ -158,6 +158,12 @@ _FR13_FIXED32_GDN_PATH_BV_CANDIDATE = os.environ.get(
 _FR13_FIXED32_GDN_PATH_BV_PRODUCTION = os.environ.get(
     "FR13_FIXED32_GDN_PATH_BV_PRODUCTION", ""
 ).strip()
+_FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB = os.environ.get(
+    "FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB", "0"
+).strip()
+_FR13_FIXED32_GDN_LEVEL0_COEFF_PRODUCTION = os.environ.get(
+    "FR13_FIXED32_GDN_LEVEL0_COEFF", "0"
+).strip()
 _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = (
     os.environ.get("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", "0").strip() == "1"
 )
@@ -412,6 +418,14 @@ try:
     _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
 except NameError:
     _FR13_FIXED32_GDN_PATH_BV_PRODUCTION = None
+try:
+    _FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB
+except NameError:
+    _FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB = False
+try:
+    _FR13_FIXED32_GDN_LEVEL0_COEFF_PRODUCTION
+except NameError:
+    _FR13_FIXED32_GDN_LEVEL0_COEFF_PRODUCTION = False
 try:
     _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE
 except NameError:
@@ -3352,6 +3366,24 @@ def _fr13_fixed32_capture_begin(
                 "tree kernel"
             )
         tree_kernel.fixed32_gdn_bv_live_capture_begin(identity, batch)
+    if _FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB:
+        tree_kernel = __import__(
+            "lumo_flywheel_serving.fr10_gdn_tree_kernel",
+            fromlist=(
+                "_FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB",
+                "fixed32_gdn_bv_live_capture_begin",
+            ),
+        )
+        if getattr(
+            tree_kernel,
+            "_FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB",
+            False,
+        ) is not True:
+            raise RuntimeError(
+                "FR13 fixed32 GDN coefficient selector drift between "
+                "observer and tree kernel"
+            )
+        tree_kernel.fixed32_gdn_bv_live_capture_begin(identity, batch)
     if _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB and batch == 4:
         tree_kernel = __import__(
             "lumo_flywheel_serving.fr10_gdn_tree_kernel",
@@ -3534,6 +3566,28 @@ def _fr13_fixed32_capture_end(
             raise RuntimeError(
                 "FR13 fixed32 GDN BV selector drift between observer and "
                 "tree kernel"
+            )
+        tree_kernel.fixed32_gdn_bv_live_capture_end(
+            identity,
+            int(work["batch_size"]),
+            int(work["gdn_scan_calls"]),
+        )
+    if _FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB:
+        tree_kernel = __import__(
+            "lumo_flywheel_serving.fr10_gdn_tree_kernel",
+            fromlist=(
+                "_FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB",
+                "fixed32_gdn_bv_live_capture_end",
+            ),
+        )
+        if getattr(
+            tree_kernel,
+            "_FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB",
+            False,
+        ) is not True:
+            raise RuntimeError(
+                "FR13 fixed32 GDN coefficient selector drift between "
+                "observer and tree kernel"
             )
         tree_kernel.fixed32_gdn_bv_live_capture_end(
             identity,
@@ -3758,6 +3812,61 @@ def _fr13_fixed32_observed_graph_replay(
             raise RuntimeError(
                 "FR13 fixed32 GDN BV live gate did not pass on the first "
                 "measured full-graph replay: " + repr(gate_report)
+            )
+    if _FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB:
+        if getattr(
+            tree_kernel,
+            "_FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB",
+            False,
+        ) is not True:
+            raise RuntimeError(
+                "FR13 fixed32 GDN coefficient selector drift between "
+                "observer and tree kernel"
+            )
+        gate_report = tree_kernel.fixed32_gdn_level0_coeff_live_gate_on_replay(
+            identity,
+            int(event["batch_size"]),
+            int(gdn["scan_calls"]),
+        )
+        if (
+            gate_report.get("status") != "passed"
+            or gate_report.get("batch_size") != 1
+            or gate_report.get("records") != 48
+            or int(gate_report.get("compared_bytes", 0)) <= 0
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN coefficient live gate did not pass on the "
+                "first measured full-graph replay: " + repr(gate_report)
+            )
+    if _FR13_FIXED32_GDN_LEVEL0_COEFF_PRODUCTION:
+        credential = getattr(
+            tree_kernel,
+            "_FR13_FIXED32_GDN_LEVEL0_COEFF_PRODUCTION_PASS",
+            None,
+        )
+        if not isinstance(credential, dict):
+            raise RuntimeError(
+                "FR13 fixed32 GDN coefficient production credential did not "
+                "reach the tree kernel"
+            )
+        engagement = (
+            tree_kernel.fixed32_gdn_level0_coeff_production_on_replay(
+                identity,
+                expected_signature,
+                int(event["batch_size"]),
+                int(gdn["scan_calls"]),
+            )
+        )
+        if (
+            engagement.get("status") != "engaged"
+            or engagement.get("graph_id") != identity
+            or engagement.get("graph_signature") != expected_signature
+            or engagement.get("batch_size") != int(event["batch_size"])
+            or engagement.get("records") != int(gdn["scan_calls"])
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN coefficient production did not engage on "
+                "the first measured full-graph replay: " + repr(engagement)
             )
     production_bv = getattr(
         tree_kernel, "_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", None
@@ -5813,6 +5922,8 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
     resolved_mode = _FR13_FIXED32_MODE if mode is None else mode
     candidate_raw = _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
     production_raw = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
+    coeff_byte_ab_raw = _FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB
+    coeff_production_raw = _FR13_FIXED32_GDN_LEVEL0_COEFF_PRODUCTION
     taw_native_diagnostic = bool(_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE)
     graph_batch_gdn_diagnostic_raw = _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
     if graph_batch_gdn_diagnostic_raw not in ("0", "1"):
@@ -5820,6 +5931,16 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
             "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
         )
     graph_batch_gdn_diagnostic = graph_batch_gdn_diagnostic_raw == "1"
+    if coeff_byte_ab_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB must be exactly 0 or 1"
+        )
+    coeff_byte_ab = coeff_byte_ab_raw == "1"
+    if coeff_production_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_LEVEL0_COEFF must be exactly 0 or 1"
+        )
+    coeff_production = coeff_production_raw == "1"
     eager_kernel_diagnostic = (
         _fr13_fixed32_eager_boot_warm_contract() is not None
         and _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION != "1"
@@ -5836,10 +5957,20 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
             "16, 32, 64, or 128"
         )
     production = int(production_raw) if production_raw else None
-    if candidate is not None and production is not None:
+    if (
+        sum(
+            (
+                candidate is not None,
+                production is not None,
+                coeff_byte_ab,
+                coeff_production,
+            )
+        )
+        > 1
+    ):
         raise RuntimeError(
-            "FR13 fixed32 GDN path-BV diagnostic and production selectors "
-            "are mutually exclusive"
+            "FR13 fixed32 GDN path-BV, coefficient-staging diagnostic, and "
+            "production selectors are mutually exclusive"
         )
     if candidate is not None and not resolved_mode:
         raise RuntimeError(
@@ -5848,6 +5979,14 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
     if production is not None and not resolved_mode:
         raise RuntimeError(
             "FR13_FIXED32_GDN_PATH_BV_PRODUCTION requires fixed32 mode"
+        )
+    if coeff_byte_ab and not resolved_mode:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB requires fixed32 mode"
+        )
+    if coeff_production and not resolved_mode:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_LEVEL0_COEFF requires fixed32 mode"
         )
     if taw_native_diagnostic and not resolved_mode:
         raise RuntimeError(
@@ -5868,6 +6007,10 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         f"{candidate!r}\n"
         "_FR13_FIXED32_GDN_PATH_BV_PRODUCTION = "
         f"{production!r}\n"
+        "_FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB = "
+        f"{coeff_byte_ab!r}\n"
+        "_FR13_FIXED32_GDN_LEVEL0_COEFF_PRODUCTION = "
+        f"{coeff_production!r}\n"
         "_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = "
         f"{taw_native_diagnostic!r}\n"
         "_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = "
@@ -5967,6 +6110,8 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     mode = _FR13_FIXED32_MODE
     candidate = _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
     production = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
+    coeff_byte_ab = _FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB
+    coeff_production = _FR13_FIXED32_GDN_LEVEL0_COEFF_PRODUCTION
     taw_native_diagnostic = bool(_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE)
     batch_gdn_byte_diagnostic = _FR13_FIXED32_BATCH_GDN_BYTE_AB
     graph_batch_gdn_byte_diagnostic = (
@@ -5975,6 +6120,14 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     sfwd_b4_byte_diagnostic = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
     sfwd_production = _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
     _fr13_fixed32_eager_boot_warm_contract()
+    if coeff_byte_ab not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB must be exactly 0 or 1"
+        )
+    if coeff_production not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_LEVEL0_COEFF must be exactly 0 or 1"
+        )
     if sfwd_production not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION must be exactly 0 or 1"
@@ -6166,6 +6319,60 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
                 "FR13 fixed32 graph B4 byte diagnostic runtime contract "
                 "drift: " + repr(drift)
             )
+    if coeff_byte_ab == "1":
+        incompatible = (
+            not mode
+            or os.environ.get("FR13_FIXED32_B1_DIAGNOSTIC", "0") != "1"
+            or os.environ.get("ENFORCE_EAGER", "0") != "0"
+            or os.environ.get("FR13_TREE_GDN_GEOM_OVERRIDE", "") != "BV=8"
+            or os.environ.get("FR13_RING_EXPORT", "0") != "1"
+            or os.environ.get("FR13_FLAGS_INKERNEL", "0") != "1"
+            or os.environ.get("FR13_FIXED32_GDN_LEVEL0_COEFF", "0") != "0"
+            or bool(candidate)
+            or bool(production)
+            or taw_native_diagnostic
+            or batch_gdn_byte_diagnostic == "1"
+            or graph_batch_gdn_byte_diagnostic == "1"
+            or sfwd_b4_byte_diagnostic == "1"
+            or _FR13_FIXED32_CUTLASS_WAVE != "stock"
+            or os.environ.get("FR13_DFWD_UNIFIED_BM8_LIVE_AB", "0") != "0"
+            or os.environ.get("FR13_DFWD_UNIFIED_BM8_PRODUCTION", "0") != "0"
+            or os.environ.get("FR13_DRAFT_HEAD_M32_LIVE_AB", "0") != "0"
+            or os.environ.get("FR13_DRAFT_HEAD_M32_PRODUCTION", "0") != "0"
+            or os.environ.get("FR13_DRAFT_HEAD_M32_TIMING_ARM", "0") != "0"
+            or os.environ.get("FR13_FA2_QROW16_LIVE_PAGED_AB", "0") != "0"
+            or os.environ.get("FR13_FA2_QROW16_PRODUCTION", "0") != "0"
+        )
+        if incompatible:
+            raise RuntimeError(
+                "FR13 fixed32 GDN coefficient byte diagnostic requires the "
+                "exclusive B1 graph-replay stock-serving route"
+            )
+    if coeff_production == "1":
+        incompatible = (
+            not mode
+            or os.environ.get("FR13_TREE_GDN_GEOM_OVERRIDE", "") != "BV=8"
+            or coeff_byte_ab == "1"
+            or bool(candidate)
+            or bool(production)
+            or taw_native_diagnostic
+            or batch_gdn_byte_diagnostic == "1"
+            or graph_batch_gdn_byte_diagnostic == "1"
+            or sfwd_b4_byte_diagnostic == "1"
+            or _FR13_FIXED32_CUTLASS_WAVE != "stock"
+            or os.environ.get("FR13_DFWD_UNIFIED_BM8_LIVE_AB", "0") != "0"
+            or os.environ.get("FR13_DFWD_UNIFIED_BM8_PRODUCTION", "0") != "0"
+            or os.environ.get("FR13_DRAFT_HEAD_M32_LIVE_AB", "0") != "0"
+            or os.environ.get("FR13_DRAFT_HEAD_M32_PRODUCTION", "0") != "0"
+            or os.environ.get("FR13_DRAFT_HEAD_M32_TIMING_ARM", "0") != "0"
+            or os.environ.get("FR13_FA2_QROW16_LIVE_PAGED_AB", "0") != "0"
+            or os.environ.get("FR13_FA2_QROW16_PRODUCTION", "0") != "0"
+        )
+        if incompatible:
+            raise RuntimeError(
+                "FR13 fixed32 GDN coefficient production requires the "
+                "exclusive BV8 fixed32 route"
+            )
     if candidate:
         if candidate not in ("16", "32", "64", "128"):
             raise RuntimeError(
@@ -6190,10 +6397,20 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         raise RuntimeError(
             "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE requires fixed32 mode"
         )
-    if candidate and production:
+    if (
+        sum(
+            (
+                bool(candidate),
+                bool(production),
+                coeff_byte_ab == "1",
+                coeff_production == "1",
+            )
+        )
+        > 1
+    ):
         raise RuntimeError(
-            "FR13 fixed32 GDN path-BV diagnostic and production selectors "
-            "are mutually exclusive"
+            "FR13 fixed32 GDN path-BV, coefficient-staging diagnostic, and "
+            "production selectors are mutually exclusive"
         )
     if candidate:
         if os.environ.get("FR13_TREE_GDN_GEOM_OVERRIDE", "") != "BV=8":
