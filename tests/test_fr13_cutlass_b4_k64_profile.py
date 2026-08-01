@@ -311,6 +311,11 @@ def test_k64_root_profile_is_bound_through_gate_timing_and_launcher() -> None:
     assert '"sfwd_gpu_ms_per_step"' in timing
     assert '"dfwd_gpu_ms_per_step"' in timing
     assert '"cfwd_gpu_ms_per_step"' in timing
+    assert 'positive(record, "s_per_fwd_gpu") * 1000.0' in timing
+    assert '"gpu_component_ms_per_step"' in timing
+    assert '"other_wall_ms_per_step"' in timing
+    assert "phase components exceed full-step wall time" in timing
+    assert "phase breakdown does not reconcile" in timing
     assert "qualified_draft_vocab_blocks_sha256" in binary
     assert (
         "-e FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="

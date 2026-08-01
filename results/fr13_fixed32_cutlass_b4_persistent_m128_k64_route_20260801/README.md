@@ -43,7 +43,9 @@ bash results/fr13_fixed32_cutlass_b4_persistent_m128_k64_route_20260801/prepared
 
 The script pins the live PASS SHA and qualification source commit into the
 candidate timing arm. The final `timing_summary.json` reports full-wall step
-latency and TPS, acceptance/commit rate, and SFWD/DFWD/CFWD time for both arms.
+latency and TPS, acceptance/commit rate, and reconciled
+SFWD/DFWD/CFWD/other-wall time for both arms. SFWD is converted from the
+measurement harness's seconds-per-forward field to milliseconds-per-step.
 It remains an exact4 candidate screen, not the formal exact16/U95 acceptance
 gate.
 

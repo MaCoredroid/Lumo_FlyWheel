@@ -25,3 +25,14 @@ Runtime-manifest preflight: PASS
 External-manifest preflight: PASS
 External-manifest canonical SHA-256:
 c42fb16d2ea932f0e819c81172c49b69b312b75dd446146b6d7b6ef78af00a9e
+
+Independent timing-summary review fix:
+- convert s_per_fwd_gpu seconds to SFWD milliseconds
+- emit GPU-component and other-wall residuals
+- fail closed unless phase components reconcile to full-step wall time
+
+Post-review verification:
+- focused K64 profile and production tests: 29 passed
+- broader route suite: 141 passed
+- timing runner and prepared campaign bash syntax: PASS
+- embedded timing-summary Python compilation: PASS

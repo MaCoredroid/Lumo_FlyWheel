@@ -428,6 +428,33 @@ stock_floor = positive(stock, "floor_ms")
 candidate_floor = positive(candidate, "floor_ms")
 if not math.isclose(stock_floor, candidate_floor, rel_tol=0.0, abs_tol=1e-9):
     raise SystemExit("stock and candidate floor values differ")
+
+def phase_breakdown(record, label, wall_ms):
+    # fr13_measure stores SFWD in seconds/forward; DFWD and CFWD are already ms/step.
+    sfwd_ms = positive(record, "s_per_fwd_gpu") * 1000.0
+    dfwd_ms = positive(record, "drafter_gpu_ms_per_step")
+    cfwd_ms = positive(record, "committer_gpu_ms_per_step")
+    gpu_component_ms = sfwd_ms + dfwd_ms + cfwd_ms
+    other_wall_ms = wall_ms - gpu_component_ms
+    if not math.isfinite(other_wall_ms) or other_wall_ms < 0:
+        raise SystemExit(f"{label} phase components exceed full-step wall time")
+    if not math.isclose(
+        gpu_component_ms + other_wall_ms,
+        wall_ms,
+        rel_tol=0.0,
+        abs_tol=1e-9,
+    ):
+        raise SystemExit(f"{label} phase breakdown does not reconcile")
+    return {
+        "sfwd_gpu_ms_per_step": sfwd_ms,
+        "dfwd_gpu_ms_per_step": dfwd_ms,
+        "cfwd_gpu_ms_per_step": cfwd_ms,
+        "gpu_component_ms_per_step": gpu_component_ms,
+        "other_wall_ms_per_step": other_wall_ms,
+    }
+
+stock_phases = phase_breakdown(stock, "stock", stock_wall)
+candidate_phases = phase_breakdown(candidate, "candidate", candidate_wall)
 summary = {
     "schema": summary_schema,
     "status": "complete",
@@ -456,9 +483,7 @@ summary = {
         "measured_tps_fullstep_wall": stock_tps,
         "accepted_drafts_per_event": float(stock["accept_per_event"]),
         "committed_tokens_per_event": float(stock["committed_per_event"]),
-        "sfwd_gpu_ms_per_step": float(stock["s_per_fwd_gpu"]),
-        "dfwd_gpu_ms_per_step": float(stock["drafter_gpu_ms_per_step"]),
-        "cfwd_gpu_ms_per_step": float(stock["committer_gpu_ms_per_step"]),
+        **stock_phases,
         "step_wall_to_optimistic_floor_ratio": float(stock["floor_ratio"]),
     },
     "candidate": {
@@ -470,9 +495,7 @@ summary = {
         "measured_tps_fullstep_wall": candidate_tps,
         "accepted_drafts_per_event": float(candidate["accept_per_event"]),
         "committed_tokens_per_event": float(candidate["committed_per_event"]),
-        "sfwd_gpu_ms_per_step": float(candidate["s_per_fwd_gpu"]),
-        "dfwd_gpu_ms_per_step": float(candidate["drafter_gpu_ms_per_step"]),
-        "cfwd_gpu_ms_per_step": float(candidate["committer_gpu_ms_per_step"]),
+        **candidate_phases,
         "step_wall_to_optimistic_floor_ratio": float(candidate["floor_ratio"]),
     },
     "optimistic_floor_ms": stock_floor,
