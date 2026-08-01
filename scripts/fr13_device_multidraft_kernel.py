@@ -1187,9 +1187,9 @@ _FR13_FIXED32_TAW_NATIVE_LIVE_PASS = (
 _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS = (
     "/logs/fr13_fixed32_taw_native_precompute.production_pass.json"
 )
-_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v6"
+_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "af390b4ae49b93c9bb4cca79136127382ece92070f67714efe3c62fb678b6007"
+    "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
@@ -1535,6 +1535,22 @@ def _fr13_fixed32_taw_validate_pass_record(
     task_marker = payload.get("task_marker") if isinstance(payload, dict) else None
     geometry = payload.get("geometry") if isinstance(payload, dict) else None
     payload_mode = payload.get("mode") if isinstance(payload, dict) else None
+    payload_batch = payload.get("batch_size") if isinstance(payload, dict) else None
+    task_identity = (
+        task_marker[len("swe_verified:"):]
+        if isinstance(task_marker, str)
+        and task_marker.startswith("swe_verified:")
+        else ""
+    )
+    campaign_digest = ""
+    for prefix in ("campaign4_", "campaign16_"):
+        if task_identity.startswith(prefix):
+            campaign_digest = task_identity[len(prefix):]
+            break
+    campaign_bound = (
+        len(campaign_digest) == 64
+        and all(character in "0123456789abcdef" for character in campaign_digest)
+    )
     topology_binding = _fr13_fixed32_taw_topology_binding(topology)
     expected_valid_mask = (
         topology.VALID_MASK_BY_MODE.get(payload_mode)
@@ -1565,9 +1581,10 @@ def _fr13_fixed32_taw_validate_pass_record(
         or type(payload.get("valid_mask")) is not int
         or payload.get("valid_mask") != expected_valid_mask
         or payload.get("topology_binding") != topology_binding
-        or type(payload.get("batch_size")) is not int
-        or payload.get("batch_size") not in _FR13_FIXED32_BATCHES
-        or payload.get("covered_batches") != [payload.get("batch_size")]
+        or type(payload_batch) is not int
+        or payload_batch not in _FR13_FIXED32_BATCHES
+        or (payload_batch != 1 and not campaign_bound)
+        or payload.get("covered_batches") != [payload_batch]
         or geometry != _FR13_FIXED32_TAW_GEOMETRY
     ):
         raise RuntimeError(

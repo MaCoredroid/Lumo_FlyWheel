@@ -1507,11 +1507,15 @@ for kv in "${XFLAGS[@]:-}"; do [[ -n "$kv" ]] && export "$kv"; done
 case "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" in
   0) ;;
   1)
-    [[ -n "$FIXED32_MODE" && "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]] \
-      || {
-        echo "FAIL: fixed32 TAW native real-task arm is B1 diagnostic only"
-        exit 2
-      }
+    [[ -n "$FIXED32_MODE" ]] \
+      || { echo "FAIL: fixed32 TAW native real-event arm requires fixed32"; exit 2; }
+    if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "0" ]]; then
+      [[ "$MAX_NUM_SEQS_OVR" == "4" && "$SWE_CONCURRENCY" == "4" ]] \
+        || {
+          echo "FAIL: fixed32 TAW native campaign arm requires exact B4 concurrency"
+          exit 2
+        }
+    fi
     ;;
   *)
     echo "FAIL: FR13_FIXED32_TAW_NATIVE_PRECOMPUTE must be exactly 0 or 1"

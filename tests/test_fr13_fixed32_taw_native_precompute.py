@@ -69,13 +69,18 @@ def _fixture(topology, mode: str, batch_size: int, seed: int):
 
 def _pass_record(*, mode: str, batch_size: int) -> dict:
     topology = taw._fr13_fixed32_topology()
+    task_marker = (
+        "swe_verified:django__django-12345"
+        if batch_size == 1
+        else "swe_verified:campaign4_" + "a" * 64
+    )
     return {
         "schema": "fr13.fixed32.taw_native_precompute.live_pass.v2",
         "status": "pass",
         "candidate": taw._FR13_FIXED32_TAW_NATIVE_CANDIDATE,
         "source_contract_schema": taw._FR13_FIXED32_TAW_SOURCE_SCHEMA,
         "source_contract_sha256": taw._FR13_FIXED32_TAW_SOURCE_SHA256,
-        "task_marker": "swe_verified:django__django-12345",
+        "task_marker": task_marker,
         "mode": mode,
         "valid_mask": int(topology.VALID_MASK_BY_MODE[mode]),
         "topology_binding": taw._fr13_fixed32_taw_topology_binding(topology),
@@ -561,6 +566,9 @@ def test_native_production_bundle_warms_all_batches_with_reference_fallback(
         lambda payload: payload["topology_binding"][
             "all_parent_target_uniform_levels"
         ].__setitem__(0, 1),
+        lambda payload: payload["batch_passes"]["4"].__setitem__(
+            "task_marker", "swe_verified:django__django-12345"
+        ),
     ),
 )
 def test_native_production_rejects_tail21_or_derived_schedule_pass(
@@ -591,7 +599,7 @@ def test_native_live_pass_emitter_binds_source_and_real_task(
     taw._fr13_fixed32_taw_native_live_pass_emit(
         mode="hydra27_fixed32",
         batch_size=4,
-        task_marker="swe_verified:astropy__astropy-12907",
+        task_marker="swe_verified:campaign4_" + "b" * 64,
         evidence_route="full_graph_replay",
     )
     payload = json.loads(path.read_text(encoding="ascii"))
