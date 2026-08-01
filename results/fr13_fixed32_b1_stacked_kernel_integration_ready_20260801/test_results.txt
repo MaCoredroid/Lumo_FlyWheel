@@ -1,0 +1,18 @@
+FR13 fixed32 B1 stacked kernel integration source-only verification
+UTC date: 2026-08-01
+Integration source: 758c8e5811222d071b264bceff2af62b5d34dc60
+Base source: 968f1150638a72938e86ade8f6ed1a173ba9e3e3
+
+Command:
+PYTHONPATH=. .venv/bin/pytest -q tests/test_fr13_fixed32_sfwd_state_fusion.py tests/test_fr13_cfwd_all_parent_timing.py tests/test_fr13_fixed32_taw_native_precompute.py tests/test_fr13_fixed32_taw_exact_commit_kernel.py tests/test_fr13_fixed32_taw_exact_commit_cuda.py tests/test_fr13_fixed32_ingress_proxy.py tests/test_fr13_fixed32_ingress_wiring.py tests/test_fr13_fixed32_b1_diagnostic.py tests/test_fr13_cutlass_streamk_gate_wiring.py tests/test_fr13_cutlass_streamk_production.py tests/test_fr13_fixed32_final_full_preseed.py
+
+Result:
+142 passed, 4 skipped in 4.14s
+
+The four skips are CUDA-only tests. No GPU or Docker was used.
+
+Additional checks:
+- bash -n scripts/fr13_launch_forked_fa2_tree_server.sh: PASS
+- bash -n scripts/fr13_run_b1_cfwd_all_parent_timing.sh: PASS
+- git diff --check: PASS
+- git merge-base --is-ancestor 968f1150638a72938e86ade8f6ed1a173ba9e3e3 HEAD: PASS

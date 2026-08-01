@@ -1,0 +1,64 @@
+{
+  "schema": "fr13.fixed32.b1_stacked_kernel_integration.v1",
+  "status": "source_ready_waiting_live_credentials",
+  "date_utc": "2026-08-01",
+  "branch": "agent/fixed32-b1-stacked-kernel-integration-be00",
+  "integration_source_commit": "758c8e5811222d071b264bceff2af62b5d34dc60",
+  "base_commit": "968f1150638a72938e86ade8f6ed1a173ba9e3e3",
+  "base_parent_commit": "be00c2a6ecdc71051098be315b6c41f66c59c318",
+  "task_policy": {
+    "suite": "SWE-Verified",
+    "next_timing_task_count": 1,
+    "next_timing_classification": "diagnostic_only",
+    "formal_acceptance_eligible": false,
+    "exact16_used": false
+  },
+  "candidates": {
+    "cfwd": {
+      "candidate": "fixed32_all_parent_commit_v2",
+      "qualification_commit": "f19e90053cfe414cafc76a2ffa3326a589da5e1e",
+      "source_sha256": "8402e027b6dea8d902f86810b9e5a0fa0a01dda61e74b0f517987d2cf4c95f9a",
+      "live_pass_sha256": "b7c8f4e7f8cf3e2619d458b3ec3e5e1ffdcb5a15a2938aa18c6dda936b3c45e3",
+      "live_pass_available": true,
+      "default_enabled": false
+    },
+    "sfwd": {
+      "candidate": "fixed32_sfwd_state_fusion_v1",
+      "qualification_kernel_commit": "49d87716d018be6b946a51fc1a122e930c870785",
+      "qualification_source_sha256": "1cd112bc37f4e41237219e27fa261c902320c2204f84118e6d34862046ec5029",
+      "production_control_sha256": "19003a1e9d722f26fe348a4fb8f33319511a7fc6d507a8f9c066e36ae49b32a0",
+      "live_pass_available": false,
+      "default_enabled": false
+    },
+    "streamk": {
+      "candidate": "streamk_force_wide256",
+      "qualification_source_commit": "968f1150638a72938e86ade8f6ed1a173ba9e3e3",
+      "cutlass_patch_source_sha256": "2b36f8db3835ce5bc37545f21ed77de9eee641c229f7892d64a769db18f513f4",
+      "live_pass_available": false,
+      "default_enabled": false
+    }
+  },
+  "compatibility": {
+    "physical_rows": 32,
+    "batch_size": 1,
+    "draft_vocab_root": 0,
+    "draft_vocab_k": 0,
+    "sfwd_byte_gate_exclusive": true,
+    "production_stack_permitted": true,
+    "production_stack_requires_all_live_credentials": true
+  },
+  "execution": {
+    "gpu_used": false,
+    "docker_used": false,
+    "performance_measurement": false,
+    "probe_used": false,
+    "synthetic_task_used": false
+  },
+  "verification": {
+    "focused_tests_passed": 142,
+    "focused_tests_skipped_cuda_only": 4,
+    "focused_tests_failed": 0,
+    "launcher_bash_syntax": "pass",
+    "cfwd_runner_bash_syntax": "pass"
+  }
+}
