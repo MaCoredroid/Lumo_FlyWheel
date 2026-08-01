@@ -329,6 +329,7 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
         "gdn_single_writer_nodes": 0,
         "gdn_nodes": 0,
         "gdn_critical_path": None,
+        "gdn_physical_critical_path": None,
         "gdn_grid_z": None,
         "gdn_max_path_lengths": None,
         "gdn_export_or_mask": None,
@@ -406,3 +407,5 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
     assert event["gdn_physical_grid_z"] == (1, 5)
     assert event["gdn_level1_parent_loads"] == 5
     assert event["gdn_single_writer_nodes"] == 32
+    assert event["gdn_critical_path"] == 12
+    assert event["gdn_physical_critical_path"] == 17

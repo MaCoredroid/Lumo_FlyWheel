@@ -1,0 +1,105 @@
+{
+  "schema": "fr13.fixed32.gdn_single_launch_tree.source_candidate.v1",
+  "created_at_utc": "2026-08-01T23:12:33Z",
+  "status": "SOURCE_ONLY_DEFAULT_OFF_NO_GPU_MEASUREMENT",
+  "base": {
+    "branch": "agent/fixed32-gdn-parent-group-20260801",
+    "commit": "280ea9931ba6505f794371ba5c375f3912bc6cfa"
+  },
+  "candidate": {
+    "id": "fixed32_gdn_single_launch_tree_v1",
+    "kernel": "_tree_gdn_kernel_fixed32_single_launch",
+    "node_helper": "_tree_gdn_fixed32_single_launch_node",
+    "file": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+    "patch_wiring": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+    "batch_sizes": [1, 2, 3, 4],
+    "physical_rows_per_request": 32,
+    "block_v": 8,
+    "root_nodes": [0, 1, 4, 9, 14],
+    "branch_path_indices": [[1, 2], [3, 4], [5, 6], [7, 8], [0, 9, 10]],
+    "node_updates_per_request_layer": 32,
+    "logical_critical_path": 12,
+    "physical_recurrence_critical_path": 32,
+    "live_state_tiles": 2,
+    "aggregate_live_state_tile_bytes": 8192,
+    "physical_launches_per_layer": 1,
+    "physical_program_units_per_request_layer": 1,
+    "state_export_writes": 0,
+    "state_parent_reads": 0,
+    "single_writer_nodes": 32,
+    "generic_path_kernel_changed": false,
+    "parent_group_kernel_changed": false
+  },
+  "selector": {
+    "env": "FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE=1",
+    "sidecars": [
+      "/logs/fr13_fixed32_gdn_single_launch_tree.arm",
+      "/tmp/fr13_fixed32_gdn_single_launch_tree.arm"
+    ],
+    "default_off": true,
+    "exact_fixed32_only": true,
+    "required_geometry": "BV=8",
+    "production_authorized": false,
+    "fallback_on_drift": false,
+    "reference_forces_incumbent_structure": true
+  },
+  "modeled_work": {
+    "full_parent_state_bytes": 3145728,
+    "b1_candidate_ctas_per_event_48_layers": 36864,
+    "b4_candidate_ctas_per_event_48_layers": 147456,
+    "b1_ctas_avoided_vs_original": 405504,
+    "b4_ctas_avoided_vs_original": 1622016,
+    "b1_ctas_avoided_vs_parent_group": 184320,
+    "b4_ctas_avoided_vs_parent_group": 737280,
+    "b1_state_handoff_bytes_avoided_vs_original": 2415919104,
+    "b4_state_handoff_bytes_avoided_vs_original": 9663676416,
+    "b1_state_handoff_bytes_avoided_vs_parent_group": 1509949440,
+    "b4_state_handoff_bytes_avoided_vs_parent_group": 6039797760,
+    "b1_physical_ctas_per_layer": 768,
+    "b4_physical_ctas_per_layer": 3072,
+    "classification": "static_descriptor_model_not_timing"
+  },
+  "verification": {
+    "focused_tests_passed": 24,
+    "full_fixed32_tests_passed": 781,
+    "full_fixed32_tests_skipped": 8,
+    "full_fixed32_infra_failures": 3,
+    "work_census_tamper_tests_passed": 167,
+    "python_compile": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "measurement": {
+    "gpu_used": false,
+    "triton_compiled": false,
+    "synthetic_or_probe_timing": false,
+    "real_swe_verified_timing": false,
+    "b1_full_wall_ms_per_event": null,
+    "b4_full_wall_ms_per_event": null,
+    "raw_byte_equivalence": null,
+    "acceptance_eligible": false
+  },
+  "unresolved_risks": [
+    "Triton nested static and dynamic loop compilation on deployed SM121",
+    "register growth, layout replication, or local-memory spills",
+    "32-step serial recurrence may outweigh eliminated HBM handoff",
+    "dedicated live byte gate for the no-export candidate",
+    "CUDA graph capture and replay at B1 and B4",
+    "real SWE-Verified full-step timing and acceptance"
+  ],
+  "follow_on_candidate": {
+    "design": "two_launch_member_simd_parent_groups",
+    "physical_recurrence_critical_path": 12,
+    "level1_group_max_path_lengths": [7, 7, 1, 1, 1],
+    "level1_parent_reads": 5,
+    "physical_program_units_per_request_layer": 6,
+    "state_tensor_shape": [4, 8, 128],
+    "ideal_distributed_fp32_values_per_thread_before_temporaries": 128,
+    "status": "DESIGN_ONLY_NOT_IMPLEMENTED"
+  },
+  "source_sha256": {
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "cfaad403865aa46e526098ca6e2e02bf1aea0b67eeb2027c0c36bf39b28cd568",
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "783a6e5933a7c8616cf2d763845217f04ad41f5426befae82186cd1c1ded05bb",
+    "tests/test_fr13_fixed32_gdn_single_launch_tree.py": "d7b5d56d918a048e4a0fb9a056c7d5c1c2203dae1b711a8f61beeb3c8398a344",
+    "tests/test_fr13_fixed32_gdn_parent_group.py": "d9b3a794dcccea3b99da6a501c9b7222b59b56278eab77fa4c9be31dba304224"
+  }
+}

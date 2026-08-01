@@ -1,0 +1,28 @@
+SOURCE CANDIDATE ONLY. NO GPU OR PERFORMANCE MEASUREMENT.
+
+Focused command:
+pytest -q tests/test_fr13_bm8_production_sidecar.py tests/test_fr13_fixed32_gdn_single_launch_tree.py tests/test_fr13_fixed32_gdn_parent_group.py
+Result: 24 passed in 1.72s
+
+Full fixed32 command:
+PYTHONPATH=. pytest -q tests/test_fr13_fixed32*.py
+Result: 781 passed, 8 skipped, 3 failed in 22.17s
+Failure classification: isolated-worktree prerequisites only.
+- 2 ingress wiring cases require the intentionally absent .venv/bin/python.
+- 1 runtime-manifest case requires the intentionally absent private no-symlink .cache dataset blob.
+
+Work census:
+python3 scripts/fr13_fixed32_work_census.py --self-test
+Result: PASS, 167 tamper tests
+
+Static checks:
+python3 -m py_compile src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py scripts/fr10_phase4_patch_vllm_tree_gdn.py
+git diff --check
+Result: PASS
+
+GPU used: no
+Triton compiled: no
+Synthetic or probe timing: no
+Real SWE-Verified timing: no
+Acceptance evidence: no
+

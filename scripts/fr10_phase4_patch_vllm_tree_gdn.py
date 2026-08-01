@@ -679,6 +679,7 @@ def _fr13_fixed32_observed_new_state(
         "gdn_single_writer_nodes": 0,
         "gdn_nodes": 0,
         "gdn_critical_path": None,
+        "gdn_physical_critical_path": None,
         "gdn_grid_z": None,
         "gdn_max_path_lengths": None,
         "gdn_export_or_mask": None,
@@ -2212,12 +2213,115 @@ def _fr13_fixed32_observed_gdn(
     parent_group_contract = runtime_state.get(
         "fixed32_parent_group_contract"
     )
-    if parent_group_contract is None:
+    single_launch_contract = runtime_state.get(
+        "fixed32_single_launch_contract"
+    )
+    if (
+        parent_group_contract is not None
+        and single_launch_contract is not None
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN structural contracts are mutually exclusive"
+        )
+    if single_launch_contract is not None:
+        if not isinstance(single_launch_contract, dict):
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch contract is malformed"
+            )
+        normalized_single_launch = {
+            "candidate": single_launch_contract.get("candidate"),
+            "root_nodes": tuple(
+                int(value)
+                for value in single_launch_contract.get("root_nodes", ())
+            ),
+            "branch_path_indices": tuple(
+                tuple(int(value) for value in indices)
+                for indices in single_launch_contract.get(
+                    "branch_path_indices", ()
+                )
+            ),
+            "group_sizes": tuple(
+                int(value)
+                for value in single_launch_contract.get("group_sizes", ())
+            ),
+            "groups": int(single_launch_contract.get("groups", -1)),
+            "max_group_paths": int(
+                single_launch_contract.get("max_group_paths", -1)
+            ),
+            "launches": int(single_launch_contract.get("launches", -1)),
+            "physical_grid_z": tuple(
+                int(value)
+                for value in single_launch_contract.get("physical_grid_z", ())
+            ),
+            "physical_programs": int(
+                single_launch_contract.get("physical_programs", -1)
+            ),
+            "node_updates": int(
+                single_launch_contract.get("node_updates", -1)
+            ),
+            "critical_node_steps": int(
+                single_launch_contract.get("critical_node_steps", -1)
+            ),
+            "live_state_tiles": int(
+                single_launch_contract.get("live_state_tiles", -1)
+            ),
+            "state_export_writes": int(
+                single_launch_contract.get("state_export_writes", -1)
+            ),
+            "state_parent_reads": int(
+                single_launch_contract.get("state_parent_reads", -1)
+            ),
+            "single_writer_nodes": int(
+                single_launch_contract.get("single_writer_nodes", -1)
+            ),
+        }
+        expected_single_launch = {
+            "candidate": "fixed32_gdn_single_launch_tree_v1",
+            "root_nodes": (0, 1, 4, 9, 14),
+            "branch_path_indices": (
+                (1, 2),
+                (3, 4),
+                (5, 6),
+                (7, 8),
+                (0, 9, 10),
+            ),
+            "group_sizes": (2, 2, 2, 2, 3),
+            "groups": 5,
+            "max_group_paths": 3,
+            "launches": 1,
+            "physical_grid_z": (1,),
+            "physical_programs": 1,
+            "node_updates": 32,
+            "critical_node_steps": 32,
+            "live_state_tiles": 2,
+            "state_export_writes": 0,
+            "state_parent_reads": 0,
+            "single_writer_nodes": 32,
+        }
+        if normalized_single_launch != expected_single_launch:
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch work drift: "
+                + repr(normalized_single_launch)
+            )
+        physical_route = "fixed32_single_launch_tree"
+        physical_programs = normalized_single_launch["physical_programs"]
+        physical_grid_z = normalized_single_launch["physical_grid_z"]
+        level1_parent_loads = normalized_single_launch[
+            "state_parent_reads"
+        ]
+        single_writer_nodes = normalized_single_launch[
+            "single_writer_nodes"
+        ]
+        physical_critical_path = normalized_single_launch[
+            "critical_node_steps"
+        ]
+    elif parent_group_contract is None:
         physical_route = "fixed32_path"
         physical_programs = 12
         physical_grid_z = (1, 11)
         level1_parent_loads = 11
         single_writer_nodes = 32
+        physical_critical_path = 12
     else:
         if not isinstance(parent_group_contract, dict):
             raise RuntimeError(
@@ -2309,6 +2413,7 @@ def _fr13_fixed32_observed_gdn(
         single_writer_nodes = normalized_parent_group[
             "single_writer_nodes"
         ]
+        physical_critical_path = 17
     if {
         "schedule": runtime_state.get("schedule"),
         "route_armed": runtime_state.get("route_armed"),
@@ -2372,6 +2477,13 @@ def _fr13_fixed32_observed_gdn(
     event["gdn_single_writer_nodes"] += single_writer_nodes
     event["gdn_nodes"] += int(n_actual)
     event["gdn_critical_path"] = normalized_contract["critical"]
+    prior_physical_critical = event["gdn_physical_critical_path"]
+    if (
+        prior_physical_critical is not None
+        and int(prior_physical_critical) != physical_critical_path
+    ):
+        raise RuntimeError("FR13 fixed32 GDN physical critical path changed")
+    event["gdn_physical_critical_path"] = physical_critical_path
     event["gdn_grid_z"] = normalized_contract["path_counts"]
     event["gdn_max_path_lengths"] = normalized_contract["max_lengths"]
     prior_export = event["gdn_export_or_mask"]
@@ -3056,10 +3168,17 @@ def _fr13_fixed32_validate_forward_work(work, label):
         expected_physical_programs_per_scan = 6
         expected_physical_grid_z = (1, 5)
         expected_level1_parent_loads_per_scan = 5
+        expected_physical_critical_path = 17
+    elif physical_route == "fixed32_single_launch_tree":
+        expected_physical_programs_per_scan = 1
+        expected_physical_grid_z = (1,)
+        expected_level1_parent_loads_per_scan = 0
+        expected_physical_critical_path = 32
     elif physical_route == "fixed32_path":
         expected_physical_programs_per_scan = 12
         expected_physical_grid_z = (1, 11)
         expected_level1_parent_loads_per_scan = 11
+        expected_physical_critical_path = 12
     else:
         raise RuntimeError(
             "FR13 fixed32 GDN physical route is invalid: "
@@ -3095,6 +3214,9 @@ def _fr13_fixed32_validate_forward_work(work, label):
         "gdn_single_writer_nodes": int(work["gdn_single_writer_nodes"]),
         "gdn_nodes": int(work["gdn_nodes"]),
         "gdn_critical_path": work["gdn_critical_path"],
+        "gdn_physical_critical_path": work[
+            "gdn_physical_critical_path"
+        ],
         "gdn_grid_z": work["gdn_grid_z"],
         "gdn_max_path_lengths": work["gdn_max_path_lengths"],
         "gdn_export_or_mask": work["gdn_export_or_mask"],
@@ -3158,6 +3280,7 @@ def _fr13_fixed32_validate_forward_work(work, label):
         "gdn_single_writer_nodes": expected_gdn_calls * 32,
         "gdn_nodes": expected_gdn_calls * 32,
         "gdn_critical_path": 12,
+        "gdn_physical_critical_path": expected_physical_critical_path,
         "gdn_grid_z": (1, 11),
         "gdn_max_path_lengths": (5, 7),
         "gdn_export_or_mask": 16915,
@@ -3338,6 +3461,12 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
                 ),
                 "nodes_per_scan": int(gdn.get("nodes", -1)) // scan_calls,
                 "critical_path": int(gdn.get("critical_path", -1)),
+                "physical_recurrence_critical_path": int(
+                    gdn.get(
+                        "physical_recurrence_critical_path",
+                        gdn.get("critical_path", -1),
+                    )
+                ),
                 "grid_z": list(gdn.get("grid_z", ())),
                 "max_path_lengths": list(
                     gdn.get("max_path_lengths", ())
@@ -3661,6 +3790,9 @@ def _fr13_fixed32_capture_end(
             "single_writer_nodes": int(work["gdn_single_writer_nodes"]),
             "nodes": int(work["gdn_nodes"]),
             "critical_path": int(work["gdn_critical_path"]),
+            "physical_recurrence_critical_path": int(
+                work["gdn_physical_critical_path"]
+            ),
             "grid_z": list(work["gdn_grid_z"]),
             "max_path_lengths": list(work["gdn_max_path_lengths"]),
             "export_or_mask": int(work["gdn_export_or_mask"]),
@@ -4034,6 +4166,9 @@ def _fr13_fixed32_observed_graph_replay(
     )
     event["gdn_nodes"] = int(gdn["nodes"])
     event["gdn_critical_path"] = int(gdn["critical_path"])
+    event["gdn_physical_critical_path"] = int(
+        gdn.get("physical_recurrence_critical_path", gdn["critical_path"])
+    )
     event["gdn_grid_z"] = tuple(gdn["grid_z"])
     event["gdn_max_path_lengths"] = tuple(gdn["max_path_lengths"])
     event["gdn_export_or_mask"] = int(gdn["export_or_mask"])
@@ -5575,6 +5710,9 @@ def _fr13_fixed32_observed_take(mode, batch_size, forward_step_index):
             ),
             "nodes": int(event["gdn_nodes"]),
             "critical_path": int(event["gdn_critical_path"]),
+            "physical_recurrence_critical_path": int(
+                event["gdn_physical_critical_path"]
+            ),
             "grid_z": list(event["gdn_grid_z"]),
             "max_path_lengths": list(event["gdn_max_path_lengths"]),
             "export_or_mask": int(event["gdn_export_or_mask"]),
@@ -12204,6 +12342,11 @@ def _fr13_conv_subop_mab(
                                 "fixed32_parent_group_contract": (
                                     _fr13_f32_scan_state.get(
                                         "fixed32_parent_group_contract"
+                                    )
+                                ),
+                                "fixed32_single_launch_contract": (
+                                    _fr13_f32_scan_state.get(
+                                        "fixed32_single_launch_contract"
                                     )
                                 ),
                             },
