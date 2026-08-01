@@ -255,13 +255,15 @@ def fused_tree_conv_sources_batched(
         or zero_row.device != x.device
         or staging.device != x.device
         or prior_cols.device != x.device
-        or not x.is_contiguous()
+        or int(x.stride(1)) != 1
+        or int(x.stride(0)) < channels
         or not zero_row.is_contiguous()
         or not staging.is_contiguous()
     ):
         raise RuntimeError(
             "FR13_FIXED32_CONV_SOURCE_BATCH source contract drift: "
             f"B={b} rows={source_rows} channels={channels} "
+            f"x_shape={tuple(x.shape)} x_stride={tuple(x.stride())} "
             f"dtype={prior_bank.dtype}/{x.dtype}/{zero_row.dtype}/"
             f"{staging.dtype} device={prior_bank.device}/{x.device}/"
             f"{zero_row.device}/{staging.device}"

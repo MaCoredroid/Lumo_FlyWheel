@@ -103,6 +103,60 @@ def test_b1_b4_sources_are_byte_exact_and_stage_direct(
     )
 
 
+def test_b4_padded_row_stride_is_byte_exact() -> None:
+    batch = 4
+    tree_n = 32
+    channels = 19
+    prior_cols = torch.tensor((9, 2, 13), dtype=torch.long)
+    generator = torch.Generator().manual_seed(1744)
+    prior_bank = torch.randn(
+        (batch, channels, 17), generator=generator, dtype=torch.bfloat16
+    )
+    x_storage = torch.randn(
+        (batch * tree_n, channels + 7),
+        generator=generator,
+        dtype=torch.bfloat16,
+    )
+    x = x_storage[:, :channels]
+    assert not x.is_contiguous()
+    assert x.stride() == (channels + 7, 1)
+    zero_row = torch.zeros((1, channels), dtype=torch.bfloat16)
+    source_rows = int(prior_cols.numel()) + tree_n + 1
+    staging = torch.empty(
+        (batch * source_rows, channels), dtype=torch.bfloat16
+    )
+
+    expected_priors = torch.stack(
+        [
+            prior_bank[request].index_select(1, prior_cols)
+            for request in range(batch)
+        ]
+    )
+    expected_sources = torch.stack(
+        [
+            fused_tree_conv_source(
+                prior_window=expected_priors[request],
+                x=x[request * tree_n : (request + 1) * tree_n],
+                zero_row=zero_row,
+            )
+            for request in range(batch)
+        ]
+    )
+
+    sources, prior_windows = fused_tree_conv_sources_batched(
+        prior_bank=prior_bank,
+        prior_cols=prior_cols,
+        x=x,
+        zero_row=zero_row,
+        staging=staging,
+        batch=batch,
+        tree_n=tree_n,
+    )
+
+    assert torch.equal(_bits(sources), _bits(expected_sources))
+    assert torch.equal(_bits(prior_windows), _bits(expected_priors))
+
+
 @pytest.mark.parametrize("batch,tree_n", ((0, 32), (5, 32), (1, 31)))
 def test_fixed32_geometry_fails_loud(batch: int, tree_n: int) -> None:
     with pytest.raises(ValueError, match="requires B=1..4 and tree_n=32"):
