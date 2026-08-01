@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exact4 real SWE-Verified B1 full-wall timing pair: stock CUTLASS vs Stream-K.
+# Exact4 real SWE-Verified Hydra27/Qrow16 B1 timing: stock CUTLASS vs Stream-K.
 # The one-task comparator gate only authorizes the candidate; it is not timing.
 set -euo pipefail
 
@@ -10,7 +10,7 @@ cd "$REPO"
 
 : "${RUNROOT:?set RUNROOT to a new path under output/}"
 : "${TAG:?set TAG to a unique run tag}"
-: "${STOCK_FA2_SO:?set STOCK_FA2_SO to the exact-safe stock FA2 binary}"
+: "${QROW16_FA2_SO:?set QROW16_FA2_SO to the pinned Qrow16 candidate binary}"
 : "${CUTLASS_STREAMK_SO:?set CUTLASS_STREAMK_SO to the pinned Stream-K binary}"
 : "${STREAMK_PASS_JSON:?set STREAMK_PASS_JSON to a completed authenticated B1 byte-gate PASS}"
 : "${STREAMK_PASS_SHA256:?set STREAMK_PASS_SHA256 to its raw SHA-256}"
@@ -18,7 +18,10 @@ cd "$REPO"
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
-STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
+QROW16_FA2_SHA256=1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86
+QROW16_FA2_BYTES=299507792
+QROW16_LIVE_PASS_JSON="$REPO/results/fr13_fixed32_qrow16_num_splits0_live_pass_20260731T173608Z/fr13_fa2_qrow16_live_paged_ab.json"
+QROW16_LIVE_PASS_SHA256=36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77
 STREAMK_SHA256=f9bbbb8dc4ffc2227a71d2bc7b260e586ffbdc0fd946749e4f69e322c46a362d
 FULL_VOCAB_WEIGHT_BYTES=42025179008
 FULL_VOCAB_FLOOR_MS=153.9383846446886
@@ -28,8 +31,8 @@ SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
 SOURCE_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
-STOCK_ARM="tail6_fixed32_cutlass_stock_${TAG}"
-CANDIDATE_ARM="tail6_fixed32_cutlass_streamk_${TAG}"
+STOCK_ARM="hydra27_fixed32_qrow16_cutlass_stock_${TAG}"
+CANDIDATE_ARM="hydra27_fixed32_qrow16_cutlass_streamk_${TAG}"
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
   || { echo "TAG contains unsafe characters" >&2; exit 2; }
@@ -40,15 +43,19 @@ CANDIDATE_ARM="tail6_fixed32_cutlass_streamk_${TAG}"
 [[ -x "$PYTHON_BIN" ]] \
   || { echo "Python environment is unavailable: $PYTHON_BIN" >&2; exit 2; }
 for _fr13_streamk_file in \
-    "$STOCK_FA2_SO" "$CUTLASS_STREAMK_SO" "$STREAMK_PASS_JSON"; do
+    "$QROW16_FA2_SO" "$QROW16_LIVE_PASS_JSON" \
+    "$CUTLASS_STREAMK_SO" "$STREAMK_PASS_JSON"; do
   [[ "$_fr13_streamk_file" == /* \
      && -f "$_fr13_streamk_file" \
      && ! -L "$_fr13_streamk_file" ]] \
     || { echo "required input must be an absolute regular non-symlink file: $_fr13_streamk_file" >&2; exit 2; }
 done
 unset _fr13_streamk_file
-[[ "$(sha256sum "$STOCK_FA2_SO" | awk '{print $1}')" == "$STOCK_FA2_SHA256" ]] \
-  || { echo "STOCK_FA2_SO is not the exact-safe stock reference" >&2; exit 2; }
+[[ "$(stat -c '%s' "$QROW16_FA2_SO")" == "$QROW16_FA2_BYTES" \
+   && "$(sha256sum "$QROW16_FA2_SO" | awk '{print $1}')" == "$QROW16_FA2_SHA256" ]] \
+  || { echo "QROW16_FA2_SO is not the pinned production candidate" >&2; exit 2; }
+[[ "$(sha256sum "$QROW16_LIVE_PASS_JSON" | awk '{print $1}')" == "$QROW16_LIVE_PASS_SHA256" ]] \
+  || { echo "canonical Qrow16 live PASS SHA-256 drift" >&2; exit 2; }
 [[ "$(sha256sum "$CUTLASS_STREAMK_SO" | awk '{print $1}')" == "$STREAMK_SHA256" ]] \
   || { echo "CUTLASS_STREAMK_SO is not the pinned current candidate" >&2; exit 2; }
 [[ "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" ]] \
@@ -59,6 +66,17 @@ unset _fr13_streamk_file
   || { echo "current source identity is invalid" >&2; exit 2; }
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean" >&2; exit 2; }
+
+# Parse and validate the pinned Qrow16 PASS before the first Docker query.
+"$PYTHON_BIN" - "$QROW16_LIVE_PASS_JSON" "$QROW16_FA2_SHA256" <<'PY'
+import sys
+from pathlib import Path
+
+from scripts import fr13_qrow16_pass_sidecar as qrow
+
+payload, _ = qrow.load_json(Path(sys.argv[1]))
+qrow.validate_live_result(payload, candidate_sha256=sys.argv[2])
+PY
 
 export BSIZE=1
 export CONC=1
@@ -98,11 +116,12 @@ mkdir -p "$RUNROOT_ABS"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
 
-printf 'classification=real_swe_verified_exact4_b1_timing_candidate\ntiming_eligible=1\ncomparator_gate_timing_eligible=0\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\nphysical_rows=32\ndraft_vocab_root=0\ndraft_vocab_k=0\nfr13_needs_allow=FR13_DRAFT_VOCAB_K=0\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstreamk_sha256=%s\nstreamk_pass_sha256=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_exact4_b1_hydra27_qrow16_streamk_timing_candidate\ntiming_eligible=1\ncomparator_gate_timing_eligible=0\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\ntopology=hydra27_fixed32\nlineage=successor_to_legacy_hydra23_not_same_topology\ncommon_fa2_selector=qrow16_production\nonly_arm_delta=CUTLASS_stock_to_streamk_coop128\nphysical_rows=32\ndraft_vocab_root=0\ndraft_vocab_k=0\nfr13_needs_allow=FR13_DRAFT_VOCAB_K=0\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nqrow16_fa2_sha256=%s\nqrow16_fa2_bytes=%s\nqrow16_live_pass_sha256=%s\nstreamk_sha256=%s\nstreamk_pass_sha256=%s\nstarted=%s\n' \
   "$FULL_VOCAB_WEIGHT_BYTES" "$FULL_VOCAB_FLOOR_MS" "$FULL_VOCAB_CAP_MS" \
   "$$" "$RUNROOT_ABS" "$STOCK_ARM" "$CANDIDATE_ARM" \
   "$SOURCE_COMMIT" "$RUNNER_SHA256" "$SUBSET_SHA256" \
-  "$STOCK_FA2_SHA256" "$STREAMK_SHA256" "$STREAMK_PASS_SHA256" \
+  "$QROW16_FA2_SHA256" "$QROW16_FA2_BYTES" "$QROW16_LIVE_PASS_SHA256" \
+  "$STREAMK_SHA256" "$STREAMK_PASS_SHA256" \
   "$(date -u +%FT%TZ)" > "$RUNROOT_ABS/launcher_meta.txt"
 
 MANIFEST_FINALIZED=0
@@ -156,7 +175,7 @@ run_arm() {
     pass_json=$STREAMK_PASS_JSON
     pass_sha=$STREAMK_PASS_SHA256
   fi
-  echo "===== $arm: real exact4 B1 Stream-K production=$production ====="
+  echo "===== $arm: real exact4 B1 Hydra27/Qrow16 Stream-K production=$production ====="
   if env \
       OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
       FR13_FIXED32_B1_DIAGNOSTIC=0 \
@@ -181,7 +200,11 @@ run_arm() {
       FR13_DFWD_UNIFIED_BM8_INSTANCE_ID= \
       FR13_DRAFT_HEAD_PAD_ROWS=0 FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=0 \
       FR13_DRAFT_HEAD_M32_LIVE_AB=0 FR13_DRAFT_HEAD_M32_PRODUCTION=0 \
-      FR13_FA2_QROW16_LIVE_PAGED_AB=0 FR13_FA2_QROW16_PRODUCTION=0 \
+      FR13_FA2_QROW16_LIVE_PAGED_AB=0 \
+      FR13_FA2_QROW16_SO_SHA256="$QROW16_FA2_SHA256" \
+      FR13_FA2_QROW16_PRODUCTION=1 \
+      FR13_FA2_QROW16_LIVE_PASS_JSON="$QROW16_LIVE_PASS_JSON" \
+      FR13_FA2_QROW16_LIVE_PASS_SHA256="$QROW16_LIVE_PASS_SHA256" \
       FR13_FIXED32_BATCH_GDN_BYTE_AB=0 \
       FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=0 \
       FR13_FIXED32_BATCH_GDN_BV_CANDIDATE= \
@@ -194,10 +217,10 @@ run_arm() {
       FR13_FIXED32_GDN_PATH_BV_CANDIDATE= \
       FR13_FIXED32_GDN_PATH_BV_PRODUCTION= \
       FR13_FIXED32_ATTRIBUTION_ONLY=0 \
-      FORKED_FA2_SO="$STOCK_FA2_SO" \
+      FORKED_FA2_SO="$QROW16_FA2_SO" \
       RUNROOT="$RUNROOT_ABS" \
       bash scripts/fr13_bigdenom_swe_serve_variant.sh \
-        "$arm" tail6_fixed32 "$SUBSET" \
+        "$arm" hydra27_fixed32 "$SUBSET" \
         > "$RUNROOT_ABS/$arm.runlog" 2>&1; then
     :
   else
@@ -210,17 +233,36 @@ run_arm() {
   local container_env="$RUNROOT_ABS/$arm/container_env.txt"
   [[ -f "$container_env" && ! -L "$container_env" ]] \
     || { echo "$arm lacks a regular container environment artifact" >&2; return 4; }
-  [[ "$(grep -Fxc 'FR13_DRAFT_VOCAB_ROOT=0' "$container_env")" -eq 1 \
-     && "$(grep -Fxc 'FR13_DRAFT_VOCAB_K=0' "$container_env")" -eq 1 ]] \
-    || { echo "$arm did not run the exact full-vocabulary contract" >&2; return 4; }
+  [[ "$(grep -Fxc 'FR13_FIXED32_MODE=hydra27_fixed32' "$container_env")" -eq 1 \
+     && "$(grep -Fxc 'FR13_DRAFT_VOCAB_ROOT=0' "$container_env")" -eq 1 \
+     && "$(grep -Fxc 'FR13_DRAFT_VOCAB_K=0' "$container_env")" -eq 1 \
+     && "$(grep -Fxc 'FR13_FA2_QROW16_LIVE_PAGED_AB=0' "$container_env")" -eq 1 \
+     && "$(grep -Fxc 'FR13_FA2_QROW16_PRODUCTION=1' "$container_env")" -eq 1 \
+     && "$(grep -Fxc "FR13_FA2_QROW16_SO_SHA256=$QROW16_FA2_SHA256" "$container_env")" -eq 1 ]] \
+    || { echo "$arm did not run exact Hydra27/full-vocabulary/Qrow16 production" >&2; return 4; }
   "$PYTHON_BIN" scripts/fr13_measure.py deploy-speed \
     --arm "$arm" \
     --out-root "$RUNROOT_ABS/$arm/swe_out" \
     --expected-tok-per-draft 31 \
     --batch-size 1 \
     --out "$RUNROOT_ABS/$arm/deploy_speed_fullwall.json"
-  printf 'arm=%s serve_rc=0 container_env_sha256=%s ended=%s\n' \
+  local qrow16_sidecar="$RUNROOT_ABS/$arm/logs/fr13_fa2_qrow16_production_pass.json"
+  local qrow16_capture="$RUNROOT_ABS/$arm/logs/fr13_fa2_qrow16_production_capture.json"
+  [[ -f "$qrow16_sidecar" && ! -L "$qrow16_sidecar" \
+     && -f "$qrow16_capture" && ! -L "$qrow16_capture" ]] \
+    || { echo "$arm lacks regular Qrow16 production evidence" >&2; return 4; }
+  local qrow16_sidecar_sha256
+  qrow16_sidecar_sha256=$(sha256sum "$qrow16_sidecar" | awk '{print $1}')
+  "$PYTHON_BIN" scripts/fr13_qrow16_pass_sidecar.py verify \
+    --sidecar "$qrow16_sidecar" \
+    --expected-sidecar-sha256 "$qrow16_sidecar_sha256" \
+    --candidate-so "$QROW16_FA2_SO" \
+    --expected-candidate-sha256 "$QROW16_FA2_SHA256" \
+    >/dev/null
+  printf 'arm=%s serve_rc=0 container_env_sha256=%s qrow16_sidecar_sha256=%s qrow16_capture_sha256=%s ended=%s\n' \
     "$arm" "$(sha256sum "$container_env" | awk '{print $1}')" \
+    "$qrow16_sidecar_sha256" \
+    "$(sha256sum "$qrow16_capture" | awk '{print $1}')" \
     "$(date -u +%FT%TZ)" >> "$RUNROOT_ABS/launcher_meta.txt"
 }
 
@@ -233,6 +275,10 @@ STOCK_ATTESTATION="$RUNROOT_ABS/$STOCK_ARM/logs/fr13_fixed32_cutlass_streamk_bin
 CANDIDATE_ATTESTATION="$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_cutlass_streamk_binary.json"
 CANDIDATE_SIDECAR="$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_cutlass_streamk.production_pass.json"
 CANDIDATE_SELECTOR="$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_cutlass_wave.selector"
+STOCK_QROW16_SIDECAR="$RUNROOT_ABS/$STOCK_ARM/logs/fr13_fa2_qrow16_production_pass.json"
+CANDIDATE_QROW16_SIDECAR="$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fa2_qrow16_production_pass.json"
+STOCK_QROW16_CAPTURE="$RUNROOT_ABS/$STOCK_ARM/logs/fr13_fa2_qrow16_production_capture.json"
+CANDIDATE_QROW16_CAPTURE="$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fa2_qrow16_production_capture.json"
 [[ ! -e "$STOCK_ATTESTATION" && ! -L "$STOCK_ATTESTATION" ]] \
   || { echo "stock arm emitted a Stream-K binary attestation" >&2; exit 4; }
 [[ -f "$CANDIDATE_ATTESTATION" && ! -L "$CANDIDATE_ATTESTATION" \
@@ -261,6 +307,11 @@ finalize_manifests
   --candidate-measure "$RUNROOT_ABS/$CANDIDATE_ARM/deploy_speed_fullwall.json" \
   --stock-container-env "$RUNROOT_ABS/$STOCK_ARM/container_env.txt" \
   --candidate-container-env "$RUNROOT_ABS/$CANDIDATE_ARM/container_env.txt" \
+  --stock-qrow16-sidecar "$STOCK_QROW16_SIDECAR" \
+  --candidate-qrow16-sidecar "$CANDIDATE_QROW16_SIDECAR" \
+  --stock-qrow16-capture "$STOCK_QROW16_CAPTURE" \
+  --candidate-qrow16-capture "$CANDIDATE_QROW16_CAPTURE" \
+  --qrow16-so "$QROW16_FA2_SO" \
   --production-binding "$RUNROOT_ABS/$CANDIDATE_ARM/streamk_production_binding.json" \
   --candidate-so "$CUTLASS_STREAMK_SO" \
   --source-commit "$SOURCE_COMMIT" \

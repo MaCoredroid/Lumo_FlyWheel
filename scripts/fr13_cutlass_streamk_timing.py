@@ -17,9 +17,10 @@ from typing import Any
 import fr13_cutlass_streamk_pass as qualification
 import fr13_cutlass_wave_binary as binary
 import fr13_hardware_floor_ledger as floor
+import fr13_qrow16_pass_sidecar as qrow
 
 
-SCHEMA = "fr13.fixed32.cutlass_streamk.b1_full_wall_timing_pair.v2"
+SCHEMA = "fr13.fixed32.cutlass_streamk.b1_full_wall_timing_pair.v3"
 MEASURE_SCHEMA = "fr13.measure.deploy_speed.v1"
 EXPECTED_SUBSET_SHA256 = (
     "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
@@ -33,6 +34,14 @@ EXPECTED_TASK_IDS = (
 EXPECTED_ENV = (
     "FR13_DRAFT_VOCAB_ROOT=0",
     "FR13_DRAFT_VOCAB_K=0",
+    "FR13_FA2_QROW16_PRODUCTION=1",
+    "FR13_FA2_QROW16_SO_SHA256="
+    "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86",
+)
+QROW16_SHA256 = "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
+QROW16_BYTES = 299_507_792
+QROW16_LIVE_RESULT_SHA256 = (
+    "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
 )
 
 
@@ -154,21 +163,112 @@ def _validate_measure(record: dict[str, Any], label: str) -> dict[str, float]:
     return numeric
 
 
-def _validate_container_env(path: Path, label: str) -> str:
+def _validate_container_env(
+    path: Path,
+    label: str,
+    *,
+    cutlass_selector: str,
+    cutlass_production: int,
+) -> str:
     _regular(path, label)
     raw = path.read_bytes()
     try:
         lines = raw.decode("ascii").splitlines()
     except UnicodeDecodeError as error:
         raise TimingError(f"{label} is not ASCII") from error
-    for expected in EXPECTED_ENV:
+    expected_lines = (
+        *EXPECTED_ENV,
+        "FR13_FIXED32_MODE=hydra27_fixed32",
+        "FR13_FA2_QROW16_LIVE_PAGED_AB=0",
+        f"FR13_FIXED32_CUTLASS_WAVE={cutlass_selector}",
+        f"FR13_FIXED32_CUTLASS_WAVE_PRODUCTION={cutlass_production}",
+    )
+    for expected in expected_lines:
         if lines.count(expected) != 1:
-            raise TimingError(f"{label} lacks exact full-vocabulary pin {expected}")
-    for prefix in ("FR13_DRAFT_VOCAB_ROOT=", "FR13_DRAFT_VOCAB_K="):
+            raise TimingError(f"{label} lacks exact timing pin {expected}")
+    for prefix in (
+        "FR13_DRAFT_VOCAB_ROOT=",
+        "FR13_DRAFT_VOCAB_K=",
+        "FR13_FA2_QROW16_PRODUCTION=",
+        "FR13_FA2_QROW16_SO_SHA256=",
+        "FR13_FA2_QROW16_LIVE_PAGED_AB=",
+        "FR13_FIXED32_MODE=",
+        "FR13_FIXED32_CUTLASS_WAVE=",
+        "FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=",
+    ):
         matches = [line for line in lines if line.startswith(prefix)]
         if len(matches) != 1:
             raise TimingError(f"{label} has ambiguous {prefix[:-1]}")
     return hashlib.sha256(raw).hexdigest()
+
+
+def _validate_qrow16_engagement(
+    sidecar_path: Path,
+    capture_path: Path,
+    qrow16_so: Path,
+    label: str,
+) -> dict[str, Any]:
+    _regular(sidecar_path, f"{label} Qrow16 production sidecar")
+    sidecar_sha256 = _sha256(sidecar_path)
+    try:
+        sidecar = qrow.verify_sidecar(
+            sidecar_path=sidecar_path,
+            expected_sidecar_sha256=sidecar_sha256,
+            candidate_so=qrow16_so,
+            expected_candidate_sha256=QROW16_SHA256,
+        )
+    except (OSError, ValueError) as error:
+        raise TimingError(
+            f"{label} Qrow16 sidecar validation failed: {error}"
+        ) from error
+    if sidecar.get("live_result_sha256") != QROW16_LIVE_RESULT_SHA256:
+        raise TimingError(
+            f"{label} Qrow16 sidecar is not bound to the pinned live PASS"
+        )
+    capture, capture_raw = _load(capture_path, f"{label} Qrow16 capture")
+    required = {
+        "schema": "fr13.fixed32.fa2_qrow16_production_capture.v1",
+        "status": "ENGAGED",
+        "runtime_mode": "FULL",
+        "batch_size": 1,
+        "layer_count": 16,
+        "candidate_so_sha256": QROW16_SHA256,
+        "pass_sidecar_sha256": sidecar_sha256,
+        "dispatch": "qrow16 exact geometry; no fallback",
+    }
+    if set(capture) != {*required, "graph_id", "graph_signature", "layers"}:
+        raise TimingError(f"{label} Qrow16 capture key set drifted")
+    for key, expected in required.items():
+        if capture.get(key) != expected:
+            raise TimingError(
+                f"{label} Qrow16 capture {key} mismatch: "
+                f"{capture.get(key)!r} != {expected!r}"
+            )
+    graph_id = capture.get("graph_id")
+    graph_signature = capture.get("graph_signature")
+    layers = capture.get("layers")
+    if (
+        isinstance(graph_id, bool)
+        or not isinstance(graph_id, int)
+        or graph_id <= 0
+        or not isinstance(graph_signature, str)
+        or re.fullmatch(r"[0-9a-f]{64}", graph_signature) is None
+        or not isinstance(layers, list)
+        or len(layers) != 16
+        or any(not isinstance(layer, str) or not layer for layer in layers)
+        or len(set(layers)) != 16
+    ):
+        raise TimingError(f"{label} Qrow16 capture graph/layer identity drifted")
+    return {
+        "candidate_so_sha256": QROW16_SHA256,
+        "candidate_so_bytes": QROW16_BYTES,
+        "live_result_sha256": QROW16_LIVE_RESULT_SHA256,
+        "production_sidecar_sha256": sidecar_sha256,
+        "production_capture_sha256": hashlib.sha256(capture_raw).hexdigest(),
+        "graph_signature": graph_signature,
+        "layer_count": 16,
+        "dispatch": required["dispatch"],
+    }
 
 
 def reduce_pair(
@@ -177,6 +277,11 @@ def reduce_pair(
     candidate_measure: Path,
     stock_container_env: Path,
     candidate_container_env: Path,
+    stock_qrow16_sidecar: Path,
+    candidate_qrow16_sidecar: Path,
+    stock_qrow16_capture: Path,
+    candidate_qrow16_capture: Path,
+    qrow16_so: Path,
     production_binding: Path,
     candidate_so: Path,
     source_commit: str,
@@ -195,11 +300,49 @@ def reduce_pair(
     stock_values = _validate_measure(stock, "stock")
     candidate_values = _validate_measure(candidate, "candidate")
     stock_env_sha256 = _validate_container_env(
-        stock_container_env, "stock container environment"
+        stock_container_env,
+        "stock container environment",
+        cutlass_selector="stock",
+        cutlass_production=0,
     )
     candidate_env_sha256 = _validate_container_env(
-        candidate_container_env, "candidate container environment"
+        candidate_container_env,
+        "candidate container environment",
+        cutlass_selector="streamk_coop128",
+        cutlass_production=1,
     )
+    _regular(qrow16_so, "Qrow16 candidate SO")
+    qrow16_info = qrow16_so.lstat()
+    if (
+        qrow16_so.is_symlink()
+        or not stat.S_ISREG(qrow16_info.st_mode)
+        or qrow16_info.st_size != QROW16_BYTES
+        or _sha256(qrow16_so) != QROW16_SHA256
+    ):
+        raise TimingError("Qrow16 candidate SO identity drifted")
+    stock_qrow16 = _validate_qrow16_engagement(
+        stock_qrow16_sidecar,
+        stock_qrow16_capture,
+        qrow16_so,
+        "stock",
+    )
+    candidate_qrow16 = _validate_qrow16_engagement(
+        candidate_qrow16_sidecar,
+        candidate_qrow16_capture,
+        qrow16_so,
+        "candidate",
+    )
+    for key in (
+        "candidate_so_sha256",
+        "candidate_so_bytes",
+        "live_result_sha256",
+        "production_sidecar_sha256",
+        "graph_signature",
+        "layer_count",
+        "dispatch",
+    ):
+        if stock_qrow16[key] != candidate_qrow16[key]:
+            raise TimingError(f"Qrow16 {key} differs across timing arms")
     expected_binding = {
         "schema": "fr13.fixed32.cutlass_streamk.production_binding.v1",
         "status": "BOUND",
@@ -245,7 +388,7 @@ def reduce_pair(
         selector: str, values: dict[str, float], container_env_sha256: str
     ) -> dict[str, Any]:
         return {
-            "selector": selector,
+            "cutlass_selector": selector,
             "step_wall_ms": values["step_wall_ms"],
             "measured_tps_fullstep_wall": values["measured_tps_fullstep_wall"],
             "accepted_drafts_per_event": values["accept_per_event"],
@@ -262,7 +405,11 @@ def reduce_pair(
     return {
         "schema": SCHEMA,
         "status": "complete",
-        "run_classification": "real_swe_verified_exact4_b1_timing",
+        "run_classification": (
+            "real_swe_verified_exact4_b1_hydra27_qrow16_streamk_timing"
+        ),
+        "topology": "hydra27_fixed32",
+        "lineage": "successor_to_legacy_hydra23_not_same_topology",
         "task_count": 4,
         "batch_size": 1,
         "concurrency": 1,
@@ -271,6 +418,13 @@ def reduce_pair(
         "decision_metric": "measured_tps_fullstep_wall",
         "draft_vocab_root": 0,
         "draft_vocab_k": 0,
+        "common_kernel_stack": {
+            "fa2_selector": "qrow16 production",
+            "stock_arm": stock_qrow16,
+            "candidate_arm": candidate_qrow16,
+            "identical_in_both_arms": True,
+        },
+        "only_arm_delta": "CUTLASS stock to streamk_coop128",
         "stock_reference": arm("stock", stock_values, stock_env_sha256),
         "candidate": {
             **arm("streamk_coop128", candidate_values, candidate_env_sha256),
@@ -279,9 +433,7 @@ def reduce_pair(
             "patch_source_sha256": qualification.PATCH_SOURCE_SHA256,
             "production_binding_sha256": hashlib.sha256(binding_raw).hexdigest(),
             "live_result_sha256": binding["live_result_sha256"],
-            "production_sidecar_sha256": binding[
-                "production_sidecar_sha256"
-            ],
+            "production_sidecar_sha256": binding["production_sidecar_sha256"],
             "real_task_arm_sha256": binding["real_task_arm_sha256"],
         },
         "mandatory_weight_bytes": floor.FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
@@ -295,8 +447,8 @@ def reduce_pair(
         "timing_claim_source": "paired exact4 real SWE-Verified full-wall arms",
         "formal_floor_acceptance_eligible": False,
         "formal_floor_acceptance_reason": (
-            "paired exact4 Tail timing candidate only; the canonical Tail/Hydra "
-            "one-sided U95 floor gate was not run"
+            "paired exact4 Hydra27 same-topology kernel timing candidate only; "
+            "the canonical Tail6/Hydra27 one-sided U95 floor gate was not run"
         ),
         "production_default_enabled": False,
     }
@@ -329,6 +481,11 @@ def main() -> int:
     parser.add_argument("--candidate-measure", type=Path, required=True)
     parser.add_argument("--stock-container-env", type=Path, required=True)
     parser.add_argument("--candidate-container-env", type=Path, required=True)
+    parser.add_argument("--stock-qrow16-sidecar", type=Path, required=True)
+    parser.add_argument("--candidate-qrow16-sidecar", type=Path, required=True)
+    parser.add_argument("--stock-qrow16-capture", type=Path, required=True)
+    parser.add_argument("--candidate-qrow16-capture", type=Path, required=True)
+    parser.add_argument("--qrow16-so", type=Path, required=True)
     parser.add_argument("--production-binding", type=Path, required=True)
     parser.add_argument("--candidate-so", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
@@ -340,6 +497,11 @@ def main() -> int:
         args.candidate_measure,
         args.stock_container_env,
         args.candidate_container_env,
+        args.stock_qrow16_sidecar,
+        args.candidate_qrow16_sidecar,
+        args.stock_qrow16_capture,
+        args.candidate_qrow16_capture,
+        args.qrow16_so,
         args.production_binding,
         args.candidate_so,
         args.source_commit,

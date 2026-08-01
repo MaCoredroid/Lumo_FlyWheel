@@ -190,12 +190,18 @@ def test_exact4_timing_is_real_full_wall_full_vocab_and_source_bound() -> None:
     timing = TIMING.read_text(encoding="utf-8")
 
     assert "subset_b4_four.json" in timing
-    assert "real_swe_verified_exact4_b1_timing_candidate" in timing
+    assert (
+        "real_swe_verified_exact4_b1_hydra27_qrow16_streamk_timing_candidate" in timing
+    )
+    assert 'STOCK_ARM="hydra27_fixed32_qrow16_cutlass_stock_${TAG}"' in timing
+    assert 'CANDIDATE_ARM="hydra27_fixed32_qrow16_cutlass_streamk_${TAG}"' in timing
+    assert '"$arm" hydra27_fixed32 "$SUBSET"' in timing
+    assert "tail6_fixed32" not in timing
     assert "scripts/fr13_bigdenom_swe_serve_variant.sh" in timing
     assert "scripts/fr13_measure.py deploy-speed" in timing
     assert "measured_tps_fullstep_wall" not in timing
-    assert "run_arm \"$STOCK_ARM\" 0" in timing
-    assert "run_arm \"$CANDIDATE_ARM\" 1" in timing
+    assert 'run_arm "$STOCK_ARM" 0' in timing
+    assert 'run_arm "$CANDIDATE_ARM" 1' in timing
     assert timing.index('run_arm "$STOCK_ARM" 0') < timing.index(
         'run_arm "$CANDIDATE_ARM" 1'
     )
@@ -206,10 +212,28 @@ def test_exact4_timing_is_real_full_wall_full_vocab_and_source_bound() -> None:
     assert "FULL_VOCAB_CAP_MS=177.0291423413919" in timing
     assert (
         "STREAMK_SHA256="
-        "f9bbbb8dc4ffc2227a71d2bc7b260e586ffbdc0fd946749e4f69e322c46a362d"
-        in timing
+        "f9bbbb8dc4ffc2227a71d2bc7b260e586ffbdc0fd946749e4f69e322c46a362d" in timing
     )
-    assert "--expected-source-commit \"$SOURCE_COMMIT\"" in timing
+    assert (
+        "QROW16_FA2_SHA256="
+        "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86" in timing
+    )
+    assert "QROW16_FA2_BYTES=299507792" in timing
+    assert (
+        "QROW16_LIVE_PASS_SHA256="
+        "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77" in timing
+    )
+    assert "FR13_FA2_QROW16_PRODUCTION=1 \\" in timing
+    assert "FR13_FA2_QROW16_LIVE_PAGED_AB=0 \\" in timing
+    assert 'FORKED_FA2_SO="$QROW16_FA2_SO"' in timing
+    assert "FR13_FA2_QROW16_PRODUCTION=0" not in timing
+    assert "STOCK_FA2_SO" not in timing
+    assert "scripts/fr13_qrow16_pass_sidecar.py verify" in timing
+    assert '--stock-qrow16-sidecar "$STOCK_QROW16_SIDECAR"' in timing
+    assert '--candidate-qrow16-sidecar "$CANDIDATE_QROW16_SIDECAR"' in timing
+    assert '--stock-qrow16-capture "$STOCK_QROW16_CAPTURE"' in timing
+    assert '--candidate-qrow16-capture "$CANDIDATE_QROW16_CAPTURE"' in timing
+    assert '--expected-source-commit "$SOURCE_COMMIT"' in timing
     assert "comparator_gate_timing_eligible=0" in timing
     assert "quick_decode_tps_probe" not in timing
     assert "/v1/responses" not in timing

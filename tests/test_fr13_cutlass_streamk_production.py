@@ -240,6 +240,18 @@ def test_timing_reducer_requires_exact4_full_vocab_and_current_binding(
     monkeypatch.setattr(module.binary, "CANDIDATE_SIZE", len(candidate_bytes))
     monkeypatch.setattr(module.binary, "CANDIDATE_SHA256", candidate_sha256)
     monkeypatch.setattr(module.qualification, "PATCH_SOURCE_SHA256", "e" * 64)
+    qrow16_bytes = b"qrow16 candidate\n"
+    qrow16_sha256 = hashlib.sha256(qrow16_bytes).hexdigest()
+    qrow16_so = tmp_path / "qrow16.so"
+    qrow16_so.write_bytes(qrow16_bytes)
+    monkeypatch.setattr(module, "QROW16_BYTES", len(qrow16_bytes))
+    monkeypatch.setattr(module, "QROW16_SHA256", qrow16_sha256)
+    monkeypatch.setattr(module, "QROW16_LIVE_RESULT_SHA256", "8" * 64)
+    monkeypatch.setattr(
+        module.qrow,
+        "verify_sidecar",
+        lambda **_kwargs: {"live_result_sha256": "8" * 64},
+    )
     subset = tmp_path / "subset.json"
     subset.write_text(
         json.dumps({"instance_ids": list(module.EXPECTED_TASK_IDS)}) + "\n",
@@ -262,11 +274,56 @@ def test_timing_reducer_requires_exact4_full_vocab_and_current_binding(
     candidate.write_text(json.dumps(candidate_payload) + "\n", encoding="ascii")
     stock_env = tmp_path / "stock.env"
     candidate_env = tmp_path / "candidate.env"
-    for path in (stock_env, candidate_env):
+    for path, selector, production in (
+        (stock_env, "stock", 0),
+        (candidate_env, "streamk_coop128", 1),
+    ):
         path.write_text(
-            "FR13_DRAFT_VOCAB_ROOT=0\nFR13_DRAFT_VOCAB_K=0\n",
+            "\n".join(
+                (
+                    *module.EXPECTED_ENV,
+                    "FR13_FIXED32_MODE=hydra27_fixed32",
+                    "FR13_FA2_QROW16_LIVE_PAGED_AB=0",
+                    f"FR13_FIXED32_CUTLASS_WAVE={selector}",
+                    f"FR13_FIXED32_CUTLASS_WAVE_PRODUCTION={production}",
+                )
+            )
+            + "\n",
             encoding="ascii",
         )
+    stock_qrow16_sidecar = tmp_path / "stock-qrow16-sidecar.json"
+    candidate_qrow16_sidecar = tmp_path / "candidate-qrow16-sidecar.json"
+    for path in (stock_qrow16_sidecar, candidate_qrow16_sidecar):
+        path.write_text("{}\n", encoding="ascii")
+    qrow16_sidecar_sha256 = hashlib.sha256(
+        stock_qrow16_sidecar.read_bytes()
+    ).hexdigest()
+
+    def qrow16_capture(path: Path) -> None:
+        path.write_text(
+            json.dumps(
+                {
+                    "schema": "fr13.fixed32.fa2_qrow16_production_capture.v1",
+                    "status": "ENGAGED",
+                    "graph_id": 17,
+                    "graph_signature": "7" * 64,
+                    "runtime_mode": "FULL",
+                    "batch_size": 1,
+                    "layers": [f"model.layers.{index}" for index in range(16)],
+                    "layer_count": 16,
+                    "candidate_so_sha256": qrow16_sha256,
+                    "pass_sidecar_sha256": qrow16_sidecar_sha256,
+                    "dispatch": "qrow16 exact geometry; no fallback",
+                }
+            )
+            + "\n",
+            encoding="ascii",
+        )
+
+    stock_qrow16_capture = tmp_path / "stock-qrow16-capture.json"
+    candidate_qrow16_capture = tmp_path / "candidate-qrow16-capture.json"
+    qrow16_capture(stock_qrow16_capture)
+    qrow16_capture(candidate_qrow16_capture)
     source_commit = "c" * 40
     binding = tmp_path / "binding.json"
     binding.write_text(
@@ -309,12 +366,27 @@ def test_timing_reducer_requires_exact4_full_vocab_and_current_binding(
         candidate,
         stock_env,
         candidate_env,
+        stock_qrow16_sidecar,
+        candidate_qrow16_sidecar,
+        stock_qrow16_capture,
+        candidate_qrow16_capture,
+        qrow16_so,
         binding,
         candidate_so,
         source_commit,
     )
 
-    assert result["run_classification"] == "real_swe_verified_exact4_b1_timing"
+    assert result["run_classification"] == (
+        "real_swe_verified_exact4_b1_hydra27_qrow16_streamk_timing"
+    )
+    assert result["topology"] == "hydra27_fixed32"
+    assert result["lineage"] == "successor_to_legacy_hydra23_not_same_topology"
+    assert result["only_arm_delta"] == "CUTLASS stock to streamk_coop128"
+    assert result["common_kernel_stack"]["identical_in_both_arms"] is True
+    assert (
+        result["common_kernel_stack"]["stock_arm"]["candidate_so_sha256"]
+        == qrow16_sha256
+    )
     assert result["task_count"] == 4
     assert result["draft_vocab_k"] == 0
     assert result["mandatory_weight_bytes"] == 42_025_179_008
@@ -324,6 +396,29 @@ def test_timing_reducer_requires_exact4_full_vocab_and_current_binding(
     assert result["candidate_to_stock_full_wall_tps_ratio"] == pytest.approx(
         26.0 / 25.0
     )
+
+    drifted_qrow16 = json.loads(candidate_qrow16_capture.read_text(encoding="ascii"))
+    drifted_qrow16["graph_signature"] = "6" * 64
+    candidate_qrow16_capture.write_text(
+        json.dumps(drifted_qrow16) + "\n", encoding="ascii"
+    )
+    with pytest.raises(module.TimingError, match="graph_signature differs"):
+        module.reduce_pair(
+            subset,
+            stock,
+            candidate,
+            stock_env,
+            candidate_env,
+            stock_qrow16_sidecar,
+            candidate_qrow16_sidecar,
+            stock_qrow16_capture,
+            candidate_qrow16_capture,
+            qrow16_so,
+            binding,
+            candidate_so,
+            source_commit,
+        )
+    qrow16_capture(candidate_qrow16_capture)
 
     stale = json.loads(binding.read_text(encoding="ascii"))
     stale["qualification_source_commit"] = "0" * 40
@@ -335,6 +430,11 @@ def test_timing_reducer_requires_exact4_full_vocab_and_current_binding(
             candidate,
             stock_env,
             candidate_env,
+            stock_qrow16_sidecar,
+            candidate_qrow16_sidecar,
+            stock_qrow16_capture,
+            candidate_qrow16_capture,
+            qrow16_so,
             binding,
             candidate_so,
             source_commit,
