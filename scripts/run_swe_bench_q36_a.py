@@ -109,6 +109,14 @@ _FIXED32_MOUNTED_RUNTIME_PROOF_SCHEMA = (
 _FIXED32_MOUNTED_RUNTIME_PROOF_FILENAME = (
     "qwen_mounted_runtime_proof.json"
 )
+_FIXED32_QWEN_CAMPAIGN_PROOF_SCHEMA = (
+    "fr13-fixed32-qwen-campaign-provenance-v1"
+)
+_FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME = (
+    "fixed32_qwen_campaign_provenance.json"
+)
+_FIXED32_PENDING_RUNNER_METADATA_FILENAME = "runner_metadata.pending.json"
+_FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY = "_fixed32_campaign_runtime_args"
 _FIXED32_AGENT_PLACEMENT_SCHEMA = "fr13-fixed32-agent-placement-v1"
 _FIXED32_AGENT_HOST_ALIAS = "alienware"
 _FIXED32_MEASURED_HOST_IDENTITY = {
@@ -2336,6 +2344,85 @@ def _iso_now() -> str:
 
 _GIT_LOCK = threading.Lock()  # serialize per-task git ops when --concurrency>1
 
+_AUTOCOMMIT_TASK_ARTIFACT_RELS = (
+    "runner_metadata.json",
+    "patch.diff",
+    "qwen_trace.jsonl",
+    "eval/predictions.jsonl",
+    "eval/eval_report.json",
+    "orchestrator_crash.json",
+)
+_AUTOCOMMIT_FIXED32_CAMPAIGN_RELS = (
+    "runner_metadata.json",
+    "patch.diff",
+    "qwen_trace.jsonl",
+    "eval/predictions.jsonl",
+    "eval/eval_report.json",
+    "qwen_runtime_attestation.json",
+    "qwen_runtime_attestation_post.json",
+    _FIXED32_MOUNTED_RUNTIME_PROOF_FILENAME,
+    "fixed32_task_boundary.json",
+    "vllm_metrics_pre.txt",
+    "vllm_metrics_post.txt",
+)
+
+
+def _autocommit_paths(
+    paths: list[str],
+    message: str,
+    *,
+    strict_push: bool = False,
+) -> None:
+    """Explicit-path artifact commit and optional fail-closed push."""
+    if not paths:
+        if strict_push:
+            raise RuntimeError("artifact commit path set is empty")
+        return
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+
+    def _git(argv, timeout=120):
+        return subprocess.run(
+            ["git", *argv],
+            cwd=str(REPO_ROOT),
+            env=env,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=timeout,
+        ).returncode
+
+    with _GIT_LOCK:
+        add_rc = _git(["add", "-f", "--", *paths])
+        if add_rc != 0:
+            if strict_push:
+                raise RuntimeError(f"git add failed with rc={add_rc}")
+            return
+        staged_rc = _git(["diff", "--cached", "--quiet", "--", *paths])
+        if staged_rc not in (0, 1):
+            if strict_push:
+                raise RuntimeError(
+                    f"git staged-diff check failed with rc={staged_rc}"
+                )
+            return
+        committed = False
+        if staged_rc == 1:
+            commit_rc = _git(["commit", "-m", message, "--", *paths])
+            if commit_rc != 0:
+                if strict_push:
+                    raise RuntimeError(f"git commit failed with rc={commit_rc}")
+                return
+            committed = True
+        if strict_push:
+            for attempt in range(3):
+                push_rc = _git(["push", "origin", "HEAD"], timeout=300)
+                if push_rc == 0:
+                    return
+                if attempt < 2:
+                    time.sleep(2**attempt)
+            raise RuntimeError("git push failed after 3 attempts")
+        if committed:
+            _git(["push", "origin", "HEAD"], timeout=300)
+
 
 def _autocommit_task_artifacts(task_dir: Path, instance_id: str) -> None:
     """Best-effort auto-commit+push of ONE task's curated trace artifacts to the
@@ -2350,27 +2437,59 @@ def _autocommit_task_artifacts(task_dir: Path, instance_id: str) -> None:
     try:
         if os.environ.get("LUMO_SWE_AUTOCOMMIT", "1").strip().lower() in ("0", "off", "false", "no"):
             return
-        rels = ("runner_metadata.json", "patch.diff", "qwen_trace.jsonl",
-                "eval/predictions.jsonl", "eval/eval_report.json",
-                "orchestrator_crash.json")
-        paths = [str(task_dir / r) for r in rels if (task_dir / r).is_file()]
-        if not paths:
-            return
-        env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-        def _git(argv, timeout=120):
-            return subprocess.run(["git", *argv], cwd=str(REPO_ROOT), env=env,
-                                  check=False, stdout=subprocess.DEVNULL,
-                                  stderr=subprocess.DEVNULL, timeout=timeout).returncode
+        paths = [
+            str(task_dir / rel)
+            for rel in _AUTOCOMMIT_TASK_ARTIFACT_RELS
+            if (task_dir / rel).is_file()
+        ]
         msg = (f"FR13 SWE auto-commit: {instance_id} trace artifacts\n\n"
                "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>")
-        with _GIT_LOCK:
-            _git(["add", "-f", "--", *paths])
-            # -m/msg MUST precede the `--` pathspec separator; nothing-to-commit=>rc1
-            # (ok), non-fast-forward push=>rc!=0 (ok).
-            if _git(["commit", "-m", msg, "--", *paths]) == 0:
-                _git(["push", "origin", "HEAD"], timeout=300)
+        _autocommit_paths(paths, msg)
     except Exception:
         pass  # auto-commit is observability; a git error must never fail the run
+
+
+def _autocommit_fixed32_campaign_artifacts(
+    *,
+    dataset_out: Path,
+    per_task_root: Path,
+    instance_ids: list[str],
+) -> None:
+    """Commit and push one replay-complete B4 artifact unit."""
+    if os.environ.get("LUMO_SWE_AUTOCOMMIT", "1").strip().lower() in (
+        "0",
+        "off",
+        "false",
+        "no",
+    ):
+        return
+    required = [
+        dataset_out / _FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME,
+        *(
+            per_task_root / instance_id / rel
+            for instance_id in instance_ids
+            for rel in _AUTOCOMMIT_FIXED32_CAMPAIGN_RELS
+        ),
+    ]
+    missing = [
+        str(path)
+        for path in required
+        if not path.is_file() or path.is_symlink()
+    ]
+    if missing:
+        raise Fixed32BoundaryError(
+            "fixed32 B4 campaign artifact publication set is incomplete: "
+            f"{missing}"
+        )
+    msg = (
+        "FR13 SWE auto-commit: finalized B4 campaign artifacts\n\n"
+        "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+    )
+    _autocommit_paths(
+        [str(path) for path in required],
+        msg,
+        strict_push=True,
+    )
 
 
 def _metrics_text(metrics_url: str, *, strict: bool = False) -> str:
@@ -2986,6 +3105,79 @@ def _fixed32_usage_records(value: Any) -> list[dict[str, Any]]:
     return records
 
 
+def _fixed32_load_trace_events(
+    trace_path: Path,
+    *,
+    instance_id: str,
+) -> tuple[bytes, list[dict[str, Any]]]:
+    try:
+        raw_trace = trace_path.read_bytes()
+    except OSError as exc:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            f"cannot read trace {trace_path}: {type(exc).__name__}: {exc}"
+        ) from exc
+    if not raw_trace:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: trace is empty: {trace_path}"
+        )
+    try:
+        trace_text = raw_trace.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: trace is not UTF-8: {trace_path}"
+        ) from exc
+
+    def _trace_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        parsed: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in parsed:
+                raise ValueError("duplicate trace key")
+            parsed[key] = value
+        return parsed
+
+    def _trace_nonfinite(value: str) -> Any:
+        raise ValueError(f"nonfinite trace value: {value}")
+
+    events: list[dict[str, Any]] = []
+    for line_number, line in enumerate(trace_text.splitlines(), start=1):
+        if not line.strip():
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                f"blank JSONL record at {trace_path}:{line_number}"
+            )
+        try:
+            event = json.loads(
+                line,
+                object_pairs_hook=_trace_object,
+                parse_constant=_trace_nonfinite,
+            )
+        except (ValueError, json.JSONDecodeError) as exc:
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                f"invalid JSON at {trace_path}:{line_number}: {exc}"
+            ) from exc
+        if not isinstance(event, dict):
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                f"JSONL record is not an object at {trace_path}:{line_number}"
+            )
+        events.append(event)
+    if not events:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: trace has no JSONL events"
+        )
+    return raw_trace, events
+
+
+def _fixed32_artifact_identity(path: Path, raw: bytes) -> dict[str, Any]:
+    return {
+        "path": str(path.resolve()),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "bytes": len(raw),
+    }
+
+
 def _fixed32_real_task_provenance(
     *,
     instance_id: str,
@@ -2996,6 +3188,8 @@ def _fixed32_real_task_provenance(
     task_auth_after: dict[str, Any],
     metrics_pre_path: Path | None = None,
     metrics_post_path: Path | None = None,
+    campaign_trace_requests: dict[str, Any] | None = None,
+    campaign_metric_binding: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Validate and describe the real offloaded model run for one fixed32 task.
 
@@ -3296,64 +3490,10 @@ def _fixed32_real_task_provenance(
             )
         attestation_artifacts[filename] = raw
 
-    try:
-        raw_trace = trace_path.read_bytes()
-    except OSError as exc:
-        raise Fixed32BoundaryError(
-            f"fixed32 real-task provenance {instance_id}: "
-            f"cannot read trace {trace_path}: {type(exc).__name__}: {exc}"
-        ) from exc
-    if not raw_trace:
-        raise Fixed32BoundaryError(
-            f"fixed32 real-task provenance {instance_id}: trace is empty: {trace_path}"
-        )
-    try:
-        trace_text = raw_trace.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise Fixed32BoundaryError(
-            f"fixed32 real-task provenance {instance_id}: trace is not UTF-8: {trace_path}"
-        ) from exc
-
-    events: list[dict[str, Any]] = []
-
-    def _trace_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-        parsed: dict[str, Any] = {}
-        for key, value in pairs:
-            if key in parsed:
-                raise ValueError("duplicate trace key")
-            parsed[key] = value
-        return parsed
-
-    def _trace_nonfinite(value: str) -> Any:
-        raise ValueError(f"nonfinite trace value: {value}")
-
-    for line_number, line in enumerate(trace_text.splitlines(), start=1):
-        if not line.strip():
-            raise Fixed32BoundaryError(
-                f"fixed32 real-task provenance {instance_id}: "
-                f"blank JSONL record at {trace_path}:{line_number}"
-            )
-        try:
-            event = json.loads(
-                line,
-                object_pairs_hook=_trace_object,
-                parse_constant=_trace_nonfinite,
-            )
-        except (ValueError, json.JSONDecodeError) as exc:
-            raise Fixed32BoundaryError(
-                f"fixed32 real-task provenance {instance_id}: "
-                f"invalid JSON at {trace_path}:{line_number}: {exc}"
-            ) from exc
-        if not isinstance(event, dict):
-            raise Fixed32BoundaryError(
-                f"fixed32 real-task provenance {instance_id}: "
-                f"JSONL record is not an object at {trace_path}:{line_number}"
-            )
-        events.append(event)
-    if not events:
-        raise Fixed32BoundaryError(
-            f"fixed32 real-task provenance {instance_id}: trace has no JSONL events"
-        )
+    raw_trace, events = _fixed32_load_trace_events(
+        trace_path,
+        instance_id=instance_id,
+    )
     init_event = events[0]
     if (
         init_event.get("type") != "system"
@@ -3410,6 +3550,22 @@ def _fixed32_real_task_provenance(
             f"fixed32 real-task provenance {instance_id}: "
             "pre/post vLLM metrics must be supplied together"
         )
+    campaign_arguments = (
+        campaign_trace_requests,
+        campaign_metric_binding,
+    )
+    if any(value is not None for value in campaign_arguments) and any(
+        value is None for value in campaign_arguments
+    ):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            "campaign trace requests and metric binding must be supplied together"
+        )
+    if metrics_pre_path is not None and campaign_trace_requests is not None:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            "task and campaign metric scopes are mutually exclusive"
+        )
     metrics_pre_raw: bytes | None = None
     metrics_post_raw: bytes | None = None
     if metrics_pre_path is not None and metrics_post_path is not None:
@@ -3436,24 +3592,129 @@ def _fixed32_real_task_provenance(
                 "pre/post vLLM metrics are empty"
             )
     try:
-        trace_requests = fixed32_contract.validate_fixed32_trace_model_requests(
-            events,
-            expected_session_id=fixed32_contract.fixed32_trace_session_id(
-                instance_id
-            ),
-            expected_completed_logical_model_requests=(
-                task_auth_deltas["completed_logical_model_requests"]
-                if metrics_pre_raw is not None
-                else None
-            ),
-            metrics_pre=metrics_pre_raw,
-            metrics_post=metrics_post_raw,
+        base_trace_requests = (
+            fixed32_contract.validate_fixed32_trace_model_requests(
+                events,
+                expected_session_id=fixed32_contract.fixed32_trace_session_id(
+                    instance_id
+                ),
+            )
+            if campaign_trace_requests is not None
+            else None
+        )
+        trace_requests = (
+            campaign_trace_requests
+            if campaign_trace_requests is not None
+            else fixed32_contract.validate_fixed32_trace_model_requests(
+                events,
+                expected_session_id=fixed32_contract.fixed32_trace_session_id(
+                    instance_id
+                ),
+                expected_completed_logical_model_requests=(
+                    task_auth_deltas["completed_logical_model_requests"]
+                    if metrics_pre_raw is not None
+                    else None
+                ),
+                metrics_pre=metrics_pre_raw,
+                metrics_post=metrics_post_raw,
+            )
         )
     except fixed32_contract.ContractError as exc:
         raise Fixed32BoundaryError(
             f"fixed32 real-task provenance {instance_id}: "
             f"trace cannot independently count completed model requests: {exc}"
         ) from exc
+    campaign_artifact: dict[str, Any] | None = None
+    campaign_metric_evidence_sha256: str | None = None
+    if campaign_trace_requests is not None:
+        if (
+            not isinstance(campaign_trace_requests, dict)
+            or base_trace_requests is None
+            or not isinstance(base_trace_requests, dict)
+            or not isinstance(campaign_metric_binding, dict)
+            or set(campaign_metric_binding)
+            != {"artifact", "metric_evidence_sha256"}
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                "campaign metric binding is not exact"
+            )
+        campaign_artifact = campaign_metric_binding["artifact"]
+        campaign_metric_evidence_sha256 = campaign_metric_binding[
+            "metric_evidence_sha256"
+        ]
+        task_metric_evidence = trace_requests.get(
+            "qwen_compaction_metric_evidence"
+        )
+        artifact_digest = (
+            campaign_artifact.get("sha256")
+            if isinstance(campaign_artifact, dict)
+            else None
+        )
+        base_request_ids = base_trace_requests["model_request_ids"]
+        base_request_ids_sha256 = hashlib.sha256(
+            json.dumps(
+                base_request_ids,
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        full_request_ids = trace_requests.get("model_request_ids")
+        if (
+            not isinstance(campaign_artifact, dict)
+            or set(campaign_artifact) != {"path", "sha256", "bytes"}
+            or not isinstance(campaign_artifact.get("path"), str)
+            or not campaign_artifact["path"]
+            or not isinstance(artifact_digest, str)
+            or len(artifact_digest) != 64
+            or any(char not in "0123456789abcdef" for char in artifact_digest)
+            or type(campaign_artifact.get("bytes")) is not int
+            or campaign_artifact["bytes"] <= 0
+            or not isinstance(campaign_metric_evidence_sha256, str)
+            or len(campaign_metric_evidence_sha256) != 64
+            or any(
+                char not in "0123456789abcdef"
+                for char in campaign_metric_evidence_sha256
+            )
+            or not isinstance(task_metric_evidence, dict)
+            or task_metric_evidence.get("schema")
+            != fixed32_contract.QWEN_CAMPAIGN_TASK_METRIC_SCHEMA
+            or task_metric_evidence.get("campaign_metric_evidence_sha256")
+            != campaign_metric_evidence_sha256
+            or trace_requests.get("qwen_campaign_metric_evidence_sha256")
+            != campaign_metric_evidence_sha256
+            or task_metric_evidence.get("base_model_request_ids_sha256")
+            != base_request_ids_sha256
+            or task_metric_evidence.get(
+                "trace_completed_requests_before_failed_compactions"
+            )
+            != len(base_request_ids)
+            or trace_requests.get(
+                "hidden_successful_compaction_model_requests"
+            )
+            != base_trace_requests.get(
+                "hidden_successful_compaction_model_requests",
+                base_trace_requests.get("hidden_compaction_model_requests", 0),
+            )
+            or trace_requests.get("synthetic_compaction_failure_terminal")
+            != base_trace_requests.get(
+                "synthetic_compaction_failure_terminal",
+                False,
+            )
+            or not isinstance(full_request_ids, list)
+            or full_request_ids[: len(base_request_ids)] != base_request_ids
+            or any(
+                not isinstance(request_id, str)
+                or not request_id.startswith(
+                    "qwen-hidden-failed-compaction-sha256:"
+                )
+                for request_id in full_request_ids[len(base_request_ids) :]
+            )
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                "campaign trace request evidence does not bind to the trace"
+            )
     qwen_model_request_ids = trace_requests["model_request_ids"]
     request_id_digests = sorted(
         hashlib.sha256(response_id.encode("utf-8")).hexdigest()
@@ -3536,6 +3797,17 @@ def _fixed32_real_task_provenance(
         "hidden_failed_compaction_model_requests": trace_requests.get(
             "hidden_failed_compaction_model_requests",
             0,
+        ),
+        "synthetic_compaction_failure_terminal": trace_requests.get(
+            "synthetic_compaction_failure_terminal",
+            False,
+        ),
+        "qwen_metric_scope": (
+            "campaign" if campaign_artifact is not None else "task"
+        ),
+        "qwen_campaign_metric_proof": campaign_artifact,
+        "qwen_campaign_metric_evidence_sha256": (
+            campaign_metric_evidence_sha256
         ),
         "qwen_compaction_metric_evidence": trace_requests.get(
             "qwen_compaction_metric_evidence"
@@ -6026,6 +6298,12 @@ def _process_one(
     task_dir = (per_task_root / instance_id).resolve()
     task_dir.mkdir(parents=True, exist_ok=True)
     runner_meta_path = task_dir / "runner_metadata.json"
+    fixed32_campaign_scope = (
+        fixed32_bracket is not None and fixed32_bracket.server_capacity == 4
+    )
+    pending_runner_meta_path = (
+        task_dir / _FIXED32_PENDING_RUNNER_METADATA_FILENAME
+    )
     if skip_existing and runner_meta_path.is_file():
         return {"instance_id": instance_id, "status": "skipped_existing"}
 
@@ -6332,13 +6610,20 @@ def _process_one(
             raise Fixed32BoundaryError(
                 "fixed32 initial task provenance inputs are unavailable"
             )
-        summary["fixed32_real_task_provenance"] = (
-            _fixed32_real_task_provenance(
+        if fixed32_campaign_scope:
+            summary[_FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY] = {
                 **fixed32_initial_provenance_args,
-                metrics_pre_path=metrics_pre,
-                metrics_post_path=metrics_post,
+                "metrics_pre_path": metrics_pre,
+                "metrics_post_path": metrics_post,
+            }
+        else:
+            summary["fixed32_real_task_provenance"] = (
+                _fixed32_real_task_provenance(
+                    **fixed32_initial_provenance_args,
+                    metrics_pre_path=metrics_pre,
+                    metrics_post_path=metrics_post,
+                )
             )
-        )
     else:
         metrics_post.write_text(_metrics_snapshot(DEFAULT_METRICS_URL), encoding="utf-8")
 
@@ -6420,8 +6705,364 @@ def _process_one(
     _remove_workspace(cache_path, workspace_path)
 
     summary["ended_at"] = _iso_now()
-    runner_meta_path.write_text(json.dumps(summary, indent=2))
+    if fixed32_campaign_scope:
+        pending_summary = {
+            key: value
+            for key, value in summary.items()
+            if key != _FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY
+        }
+        pending_runner_meta_path.write_text(
+            json.dumps(pending_summary, indent=2),
+            encoding="utf-8",
+        )
+    else:
+        runner_meta_path.write_text(
+            json.dumps(summary, indent=2),
+            encoding="utf-8",
+        )
     return summary
+
+
+def _finalize_fixed32_qwen_campaign_provenance(
+    *,
+    summaries: list[dict[str, Any]],
+    instance_ids: list[str],
+    dataset_out: Path,
+    per_task_root: Path,
+) -> dict[str, Any]:
+    """Prove one B4 union window before publishing any task provenance."""
+    if len(instance_ids) < 2 or len(summaries) != len(instance_ids):
+        raise Fixed32BoundaryError(
+            "fixed32 B4 campaign finalization has an incomplete task set"
+        )
+    summaries_by_id = {
+        summary.get("instance_id"): summary for summary in summaries
+    }
+    if (
+        len(summaries_by_id) != len(instance_ids)
+        or set(summaries_by_id) != set(instance_ids)
+    ):
+        raise Fixed32BoundaryError(
+            "fixed32 B4 campaign finalization task identities differ"
+        )
+
+    records: list[dict[str, Any]] = []
+    for instance_id in instance_ids:
+        summary = summaries_by_id[instance_id]
+        runtime_args = summary.get(_FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY)
+        boundary = summary.get("fixed32_task_boundary")
+        task_dir = (per_task_root / instance_id).resolve()
+        pending_path = task_dir / _FIXED32_PENDING_RUNNER_METADATA_FILENAME
+        runner_path = task_dir / "runner_metadata.json"
+        if (
+            not isinstance(runtime_args, dict)
+            or not isinstance(boundary, dict)
+            or boundary.get("schema") != "fr13-fixed32-task-boundary-v1"
+            or boundary.get("instance_id") != instance_id
+            or runner_path.exists()
+            or not pending_path.is_file()
+            or pending_path.is_symlink()
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 campaign task {instance_id} is not unpublished and complete"
+            )
+        try:
+            pending_summary = json.loads(
+                pending_path.read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 pending metadata {pending_path} is invalid: {exc}"
+            ) from exc
+        expected_pending = {
+            key: value
+            for key, value in summary.items()
+            if key != _FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY
+        }
+        if pending_summary != expected_pending:
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 pending metadata differs for {instance_id}"
+            )
+
+        pre = boundary.get("pre")
+        post = boundary.get("post")
+        interval = boundary.get("forward_step_interval")
+        if (
+            not isinstance(pre, dict)
+            or not isinstance(post, dict)
+            or not isinstance(interval, dict)
+            or type(pre.get("generation")) is not int
+            or type(post.get("generation")) is not int
+            or pre["generation"] < 1
+            or post["generation"] <= pre["generation"]
+            or not isinstance(pre.get("counters"), dict)
+            or not isinstance(post.get("counters"), dict)
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 boundary endpoints are invalid for {instance_id}"
+            )
+        start = pre["counters"].get("pure_decode_forward_steps")
+        end = post["counters"].get("pure_decode_forward_steps")
+        if (
+            type(start) is not int
+            or type(end) is not int
+            or start < 0
+            or end <= start
+            or interval
+            != {
+                "start_forward_step": start,
+                "end_forward_step": end,
+                "expected_complete_events": end - start,
+            }
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 forward interval is invalid for {instance_id}"
+            )
+
+        task_key_id = runtime_args.get("task_key_id")
+        task_auth_before = runtime_args.get("task_auth_before")
+        task_auth_after = runtime_args.get("task_auth_after")
+        if (
+            not isinstance(task_key_id, str)
+            or not isinstance(task_auth_before, dict)
+            or not isinstance(task_auth_after, dict)
+            or task_auth_before.get("task_key_id") != task_key_id
+            or task_auth_after.get("task_key_id") != task_key_id
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 task-auth binding is invalid for {instance_id}"
+            )
+        completed_before = task_auth_before.get(
+            "completed_logical_model_requests"
+        )
+        completed_after = task_auth_after.get(
+            "completed_logical_model_requests"
+        )
+        if (
+            type(completed_before) is not int
+            or type(completed_after) is not int
+            or completed_before < 0
+            or completed_after <= completed_before
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 task-auth request count is invalid for {instance_id}"
+            )
+        trace_path = runtime_args.get("trace_path")
+        metrics_pre_path = runtime_args.get("metrics_pre_path")
+        metrics_post_path = runtime_args.get("metrics_post_path")
+        if (
+            trace_path != task_dir / "qwen_trace.jsonl"
+            or metrics_pre_path != task_dir / "vllm_metrics_pre.txt"
+            or metrics_post_path != task_dir / "vllm_metrics_post.txt"
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 task artifact paths differ for {instance_id}"
+            )
+        raw_trace, events = _fixed32_load_trace_events(
+            trace_path,
+            instance_id=instance_id,
+        )
+        records.append(
+            {
+                "instance_id": instance_id,
+                "summary": summary,
+                "runtime_args": runtime_args,
+                "task_dir": task_dir,
+                "pending_path": pending_path,
+                "runner_path": runner_path,
+                "boundary": boundary,
+                "start": start,
+                "end": end,
+                "pre_generation": pre["generation"],
+                "post_generation": post["generation"],
+                "task_key_id": task_key_id,
+                "completed": completed_after - completed_before,
+                "trace_path": trace_path,
+                "trace_raw": raw_trace,
+                "events": events,
+                "metrics_pre_path": metrics_pre_path,
+                "metrics_post_path": metrics_post_path,
+            }
+        )
+
+    merged: list[list[int]] = []
+    for record in sorted(records, key=lambda item: (item["start"], item["end"])):
+        start = record["start"]
+        end = record["end"]
+        if not merged or start > merged[-1][1]:
+            merged.append([start, end])
+        else:
+            merged[-1][1] = max(merged[-1][1], end)
+    complete_stream_steps = max(record["end"] for record in records)
+    if merged != [[0, complete_stream_steps]]:
+        raise Fixed32BoundaryError(
+            "fixed32 B4 task intervals do not cover the complete campaign stream"
+        )
+    first = min(
+        records,
+        key=lambda item: (
+            item["start"],
+            item["pre_generation"],
+            item["instance_id"],
+        ),
+    )
+    last = max(
+        records,
+        key=lambda item: (
+            item["end"],
+            item["post_generation"],
+            item["instance_id"],
+        ),
+    )
+
+    for label, path in (
+        ("pre", first["metrics_pre_path"]),
+        ("post", last["metrics_post_path"]),
+    ):
+        if not path.is_file() or path.is_symlink():
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 campaign {label} metrics are missing or symlinked"
+            )
+    metrics_pre_raw = first["metrics_pre_path"].read_bytes()
+    metrics_post_raw = last["metrics_post_path"].read_bytes()
+    if not metrics_pre_raw or not metrics_post_raw:
+        raise Fixed32BoundaryError(
+            "fixed32 B4 campaign endpoint metrics are empty"
+        )
+    campaign_tasks = [
+        {
+            "instance_id": record["instance_id"],
+            "expected_session_id": fixed32_contract.fixed32_trace_session_id(
+                record["instance_id"]
+            ),
+            "expected_completed_logical_model_requests": record["completed"],
+            "events": record["events"],
+        }
+        for record in records
+    ]
+    try:
+        reconciliation = (
+            fixed32_contract.validate_fixed32_qwen_campaign_metrics(
+                campaign_tasks,
+                metrics_pre=metrics_pre_raw,
+                metrics_post=metrics_post_raw,
+            )
+        )
+    except fixed32_contract.ContractError as exc:
+        raise Fixed32BoundaryError(
+            f"fixed32 B4 campaign metrics do not reconcile: {exc}"
+        ) from exc
+
+    proof_path = (
+        dataset_out / _FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME
+    ).resolve()
+    proof = {
+        "schema": _FIXED32_QWEN_CAMPAIGN_PROOF_SCHEMA,
+        "metric_scope": "concurrent_campaign_union",
+        "concurrency": 4,
+        "task_ids": list(instance_ids),
+        "selection": {
+            "basis": "validated_forward_counter_then_generation",
+            "pre_task_id": first["instance_id"],
+            "post_task_id": last["instance_id"],
+            "start_forward_step": first["start"],
+            "end_forward_step": last["end"],
+            "complete_stream_forward_steps": complete_stream_steps,
+            "pre_generation": first["pre_generation"],
+            "post_generation": last["post_generation"],
+        },
+        "metrics_pre": _fixed32_artifact_identity(
+            first["metrics_pre_path"],
+            metrics_pre_raw,
+        ),
+        "metrics_post": _fixed32_artifact_identity(
+            last["metrics_post_path"],
+            metrics_post_raw,
+        ),
+        "tasks": [
+            {
+                "instance_id": record["instance_id"],
+                "task_key_id": record["task_key_id"],
+                "expected_completed_logical_model_requests": record[
+                    "completed"
+                ],
+                "trace": _fixed32_artifact_identity(
+                    record["trace_path"],
+                    record["trace_raw"],
+                ),
+            }
+            for record in records
+        ],
+        "metric_evidence_sha256": reconciliation[
+            "metric_evidence_sha256"
+        ],
+        "metric_evidence": reconciliation["metric_evidence"],
+    }
+    proof_raw = (
+        json.dumps(
+            proof,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("ascii")
+    proof_identity = _fixed32_artifact_identity(proof_path, proof_raw)
+    campaign_binding = {
+        "artifact": proof_identity,
+        "metric_evidence_sha256": reconciliation[
+            "metric_evidence_sha256"
+        ],
+    }
+
+    finalized: dict[str, dict[str, Any]] = {}
+    for record in records:
+        runtime_args = {
+            key: value
+            for key, value in record["runtime_args"].items()
+            if key not in {"metrics_pre_path", "metrics_post_path"}
+        }
+        provenance = _fixed32_real_task_provenance(
+            **runtime_args,
+            campaign_trace_requests=reconciliation["tasks"][
+                record["instance_id"]
+            ],
+            campaign_metric_binding=campaign_binding,
+        )
+        finalized[record["instance_id"]] = {
+            key: value
+            for key, value in record["summary"].items()
+            if key != _FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY
+        }
+        finalized[record["instance_id"]][
+            "fixed32_real_task_provenance"
+        ] = provenance
+        finalized[record["instance_id"]][
+            "fixed32_qwen_campaign_proof"
+        ] = proof_identity
+
+    proof_tmp = proof_path.with_suffix(".json.tmp")
+    proof_tmp.write_bytes(proof_raw)
+    metadata_temps: dict[str, Path] = {}
+    for record in records:
+        runner_path = record["runner_path"]
+        temporary = runner_path.with_suffix(".json.tmp")
+        temporary.write_text(
+            json.dumps(
+                finalized[record["instance_id"]],
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        metadata_temps[record["instance_id"]] = temporary
+    os.replace(proof_tmp, proof_path)
+    for record in records:
+        instance_id = record["instance_id"]
+        os.replace(metadata_temps[instance_id], record["runner_path"])
+        record["pending_path"].unlink()
+        record["summary"].pop(_FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY, None)
+        record["summary"].update(finalized[instance_id])
+    return proof
 
 
 def _aggregate(per_task_root: Path, summary_path: Path, predictions_path: Path,
@@ -6943,7 +7584,8 @@ def main(argv: list[str] | None = None) -> int:
                 "is dead (offload proxy?). Aborting the campaign; completed "
                 "task artifacts are preserved."
             )
-        _autocommit_task_artifacts(per_task_root / iid, iid)
+        if fixed32_bracket is None or fixed32_bracket.server_capacity == 1:
+            _autocommit_task_artifacts(per_task_root / iid, iid)
         return res
 
     if args.concurrency <= 1:
@@ -6953,6 +7595,19 @@ def main(argv: list[str] | None = None) -> int:
         with _cf.ThreadPoolExecutor(max_workers=args.concurrency) as ex:
             for res in ex.map(_job, instance_ids):
                 summaries.append(res)
+
+    if fixed32_enabled and serving_batch == 4:
+        _finalize_fixed32_qwen_campaign_provenance(
+            summaries=summaries,
+            instance_ids=instance_ids,
+            dataset_out=dataset_out,
+            per_task_root=per_task_root,
+        )
+        _autocommit_fixed32_campaign_artifacts(
+            dataset_out=dataset_out,
+            per_task_root=per_task_root,
+            instance_ids=instance_ids,
+        )
 
     ended_at = _iso_now()
     summary = _aggregate(
