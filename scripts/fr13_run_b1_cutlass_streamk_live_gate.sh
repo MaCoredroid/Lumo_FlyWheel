@@ -9,6 +9,8 @@ cd "$REPO"
 : "${TAG:?set TAG to a unique run tag}"
 : "${FORKED_FA2_SO:?set FORKED_FA2_SO to the pinned FA2 shared object}"
 : "${CUTLASS_STREAMK_SO:?set CUTLASS_STREAMK_SO to the pinned Stream-K shared object}"
+PATCH_SOURCE=scripts/fr13_patch_cutlass_fixed32_wave.py
+SOURCE_COMMIT=$(git rev-parse HEAD)
 
 if [[ -e "$RUNROOT" || -L "$RUNROOT" ]]; then
   echo "CUTLASS Stream-K gate requires a fresh RUNROOT: $RUNROOT" >&2
@@ -36,15 +38,19 @@ ARMDIR="$RUNROOT/$ARM"
 .venv/bin/python - \
   "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl" \
   "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_binary.json" \
-  "$ARMDIR/cutlass_streamk_byte_gate.json" <<'PY'
+  "$ARMDIR/cutlass_streamk_byte_gate.json" \
+  "$PATCH_SOURCE" "$SOURCE_COMMIT" <<'PY'
+import hashlib
 import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, "scripts")
 import fr13_cutlass_wave_binary as binary
+import fr13_cutlass_streamk_pass as qualification
 
-jsonl_path, binary_path, output_path = map(Path, sys.argv[1:])
+jsonl_path, binary_path, output_path, patch_source = map(Path, sys.argv[1:5])
+source_commit = sys.argv[5]
 lines = jsonl_path.read_text(encoding="utf-8").splitlines()
 if not lines:
     raise SystemExit("CUTLASS Stream-K byte gate was vacuous")
@@ -102,7 +108,7 @@ if any(
     for record in records
 ):
     errors.append("first mismatch and differing-byte count disagree")
-if binary_record.get("schema") != "fr13.fixed32.cutlass_streamk_binary.v1":
+if binary_record.get("schema") != "fr13.fixed32.cutlass_streamk_binary.v2":
     errors.append("installed binary attestation schema mismatch")
 if binary_record.get("selector") != "streamk_coop128_byte_ab":
     errors.append("installed binary selector attestation mismatch")
@@ -124,13 +130,23 @@ for label, identity, expected_path in (
         errors.append(f"installed binary {label} SHA-256 mismatch")
     if identity.get("bytes") != binary.CANDIDATE_SIZE:
         errors.append(f"installed binary {label} size mismatch")
+patch_source_sha256 = hashlib.sha256(patch_source.read_bytes()).hexdigest()
+if patch_source_sha256 != qualification.PATCH_SOURCE_SHA256:
+    errors.append("Stream-K patch source SHA-256 mismatch")
 
 payload = {
-    "schema": "fr13.fixed32.cutlass_streamk_live_gate.v1",
+    "schema": "fr13.fixed32.cutlass_streamk_live_gate.v2",
     "status": "pass" if not errors else "fail",
+    "run_classification": "one_real_swe_verified_b1_byte_diagnostic",
     "acceptance_valid": False,
     "task_set": "one real SWE-Verified B1 diagnostic task",
+    "task_count": 1,
+    "task_ids": ["astropy__astropy-12907"],
+    "batch_size": 1,
+    "concurrency": 1,
+    "fixed_rows": 32,
     "candidate": "streamk_coop128",
+    "diagnostic_selector": "streamk_coop128_byte_ab",
     "served_result": "stock",
     "production_enabled": False,
     "comparisons": len(records),
@@ -142,6 +158,11 @@ payload = {
     "differing_bytes": sum(record.get("mismatch_count", 0) for record in records),
     "candidate_sha256": binary.CANDIDATE_SHA256,
     "candidate_bytes": binary.CANDIDATE_SIZE,
+    "patch_source_sha256": patch_source_sha256,
+    "vllm_base_commit": qualification.VLLM_BASE_COMMIT,
+    "patched_dispatch_sha256": qualification.PATCHED_DISPATCH_SHA256,
+    "source_commit": source_commit,
+    "binary_attestation_sha256": hashlib.sha256(binary_path.read_bytes()).hexdigest(),
     "errors": errors,
 }
 output_path.write_text(

@@ -17,14 +17,34 @@ def test_launcher_is_digest_pinned_diagnostic_only_and_worker_visible() -> None:
     launcher = LAUNCHER.read_text(encoding="utf-8")
 
     assert "FR13_FIXED32_CUTLASS_WAVE=${FR13_FIXED32_CUTLASS_WAVE:-stock}" in launcher
-    assert "CUTLASS Stream-K candidate is restricted to the fixed32 B1 diagnostic" in launcher
+    assert (
+        "CUTLASS Stream-K candidate is restricted to the fixed32 B1 diagnostic"
+        in launcher
+    )
     assert "scripts/fr13_cutlass_wave_binary.py verify" in launcher
-    assert '"$FR13_FIXED32_CUTLASS_WAVE_SO:/tmp/fr13_cutlass_wave.abi3.so:ro"' in launcher
+    assert (
+        '"$FR13_FIXED32_CUTLASS_WAVE_SO:/tmp/fr13_cutlass_wave.abi3.so:ro"' in launcher
+    )
     assert "scripts/fr13_cutlass_wave_binary.py install" in launcher
-    assert "/usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so" in launcher
+    assert (
+        "/usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so"
+        in launcher
+    )
     assert "fr13_fixed32_cutlass_wave.selector" in launcher
     assert 'chmod 0444 "$LOG_DIR/fr13_fixed32_cutlass_wave.selector"' in launcher
     assert "_fixed32_expected_eager=1" in launcher
+    assert (
+        "FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}"
+        in launcher
+    )
+    assert (
+        "CUTLASS Stream-K production requires fixed32 exact4/16 B1 and a pinned live PASS"
+        in launcher
+    )
+    assert "scripts/fr13_cutlass_streamk_pass.py validate" in launcher
+    assert "scripts/fr13_cutlass_streamk_pass.py issue" in launcher
+    assert "--production-pass-sidecar" in launcher
+    assert "--expected-production-pass-sha256" in launcher
 
 
 def test_launcher_rejects_cutlass_bm8_composition_before_sidecar_or_docker() -> None:
@@ -70,9 +90,7 @@ def test_launcher_cross_kernel_preflight_runs_before_sidecar_and_docker(
     fake_docker.chmod(0o755)
     log_dir = tmp_path / "logs"
     environment = {
-        key: value
-        for key, value in os.environ.items()
-        if not key.startswith("FR13_")
+        key: value for key, value in os.environ.items() if not key.startswith("FR13_")
     }
     environment.update(
         {
@@ -131,6 +149,9 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "binary.CONTAINER_DESTINATION" in gate
     assert '"served_result": "stock"' in gate
     assert '"acceptance_valid": False' in gate
+    assert '"schema": "fr13.fixed32.cutlass_streamk_live_gate.v2"' in gate
+    assert '"patch_source_sha256": patch_source_sha256' in gate
+    assert '"binary_attestation_sha256"' in gate
 
 
 def test_b4_graph_gate_pins_cutlass_stock_and_bm8_off() -> None:
