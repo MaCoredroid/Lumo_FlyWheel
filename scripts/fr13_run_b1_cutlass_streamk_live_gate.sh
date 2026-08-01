@@ -25,6 +25,12 @@ case "$GATE_CANDIDATE" in
     LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_live_gate.v1
     CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl
     ;;
+  wide256_dataparallel)
+    DIAGNOSTIC_SELECTOR=wide256_dataparallel_byte_ab
+    RECORD_SCHEMA=fr13.fixed32.cutlass_wide256_dataparallel_byte_ab.v1
+    LIVE_SCHEMA=fr13.fixed32.cutlass_wide256_dataparallel_live_gate.v1
+    CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_wide256_dataparallel_byte_ab.jsonl
+    ;;
   *)
     echo "unsupported Stream-K gate candidate: $GATE_CANDIDATE" >&2
     exit 2

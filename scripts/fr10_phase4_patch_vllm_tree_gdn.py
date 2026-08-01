@@ -5885,15 +5885,19 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
         "streamk_coop128_byte_ab",
         "streamk_force_wide256",
         "streamk_force_wide256_byte_ab",
+        "wide256_dataparallel",
+        "wide256_dataparallel_byte_ab",
     ):
         raise RuntimeError(
             "FR13_FIXED32_CUTLASS_WAVE must be stock, streamk_coop128, "
             "streamk_coop128_byte_ab, streamk_force_wide256, or "
-            "streamk_force_wide256_byte_ab"
+            "streamk_force_wide256_byte_ab, wide256_dataparallel, or "
+            "wide256_dataparallel_byte_ab"
         )
     streamk_byte_diagnostic = cutlass_wave in (
         "streamk_coop128_byte_ab",
         "streamk_force_wide256_byte_ab",
+        "wide256_dataparallel_byte_ab",
     )
     if batch_gdn_byte_diagnostic == "1" and streamk_byte_diagnostic:
         raise RuntimeError(
@@ -5940,7 +5944,11 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         )
     if (
         _FR13_FIXED32_CUTLASS_WAVE
-        in ("streamk_coop128_byte_ab", "streamk_force_wide256_byte_ab")
+        in (
+            "streamk_coop128_byte_ab",
+            "streamk_force_wide256_byte_ab",
+            "wide256_dataparallel_byte_ab",
+        )
         and graph_batch_gdn_byte_diagnostic == "1"
     ):
         raise RuntimeError(
@@ -5973,6 +5981,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     if _FR13_FIXED32_CUTLASS_WAVE in (
         "streamk_coop128_byte_ab",
         "streamk_force_wide256_byte_ab",
+        "wide256_dataparallel_byte_ab",
     ):
         if not mode:
             raise RuntimeError(

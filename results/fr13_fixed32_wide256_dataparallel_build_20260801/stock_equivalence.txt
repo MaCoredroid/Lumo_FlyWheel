@@ -1,0 +1,5 @@
+baseline_stock_records=6
+candidate_stock_records=6
+exact_mangled_symbol_and_resource_matches=6
+missing_or_changed_stock_records=0
+result=PASS

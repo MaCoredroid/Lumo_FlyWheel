@@ -1,0 +1,39 @@
+{
+  "schema": "fr13.fixed32.wide256_dataparallel_build.v1",
+  "created_at_utc": "2026-08-01T08:39:20Z",
+  "status": "compiled_static_verified_not_live_qualified",
+  "performance_measurement": false,
+  "acceptance_valid": false,
+  "gpu_used": false,
+  "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+  "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+  "patch_source_sha256": "4401a406b36288c15e99d6cfbce94478f32b7e99ffa8883819530f7b1a5c3e71",
+  "patched_dispatch_sha256": "eac8aaf23b917d9e4fa35e61cd08c1a469165aed4bac96024e92445c8c5b3ef5",
+  "candidate": {
+    "path": "/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.wide256_dataparallel_b1_gate_ready.abi3.so",
+    "sha256": "5b921ab7b428f2c5cfeefc0daed0314ff903d73bb0d4f8a790b17234c9d60890",
+    "bytes": 112787936,
+    "mode": "0555",
+    "diagnostic_selector": "wide256_dataparallel_byte_ab",
+    "production_selector": "wide256_dataparallel"
+  },
+  "kernel": {
+    "physical_rows": [32, 64],
+    "layout": "swap_ab",
+    "tile_mnk": [256, 32, 128],
+    "scale_granularity_mnk": [128, 1, 128],
+    "tile_scheduler": "stock_data_parallel",
+    "k_split": false,
+    "mainloop_stage_policy": "StageCountAutoCarveout",
+    "registers": 168,
+    "stack_bytes": 0,
+    "shared_bytes": 1024,
+    "constant0_bytes": 2560
+  },
+  "stock_equivalence": {
+    "baseline_kernel_records": 6,
+    "exact_symbol_and_resource_matches": 6,
+    "missing_or_changed_records": 0
+  },
+  "required_next_gate": "one_real_swe_verified_b1_byte_equal"
+}

@@ -187,12 +187,30 @@ struct sm120_blockwise_fp8_config_swapab_streamk_wide256 {
       cutlass::gemm::collective::StageCount<2>>;
 };
 
+// A wide B1 tile with the stock one-CTA-per-output-tile scheduler. Unlike
+// Stream-K, this keeps the complete K reduction in one accumulator sequence,
+// which is required for raw-byte equivalence with the stock kernel.
+template <typename OutType>
+struct sm120_blockwise_fp8_config_swapab_wide256_dataparallel {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_256, _32, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise<
+      OutType, 128, 1, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, true>;
+};
+
 enum class fixed32_cutlass_wave_variant {
   stock,
   stream_k_cooperative_128,
   stream_k_cooperative_128_byte_ab,
   stream_k_force_wide256,
   stream_k_force_wide256_byte_ab,
+  wide256_data_parallel,
+  wide256_data_parallel_byte_ab,
 };
 
 static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
@@ -217,6 +235,12 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     }
     if (value == "streamk_force_wide256_byte_ab") {
       return fixed32_cutlass_wave_variant::stream_k_force_wide256_byte_ab;
+    }
+    if (value == "wide256_dataparallel") {
+      return fixed32_cutlass_wave_variant::wide256_data_parallel;
+    }
+    if (value == "wide256_dataparallel_byte_ab") {
+      return fixed32_cutlass_wave_variant::wide256_data_parallel_byte_ab;
     }
     return fixed32_cutlass_wave_variant::stock;
   }();
@@ -339,7 +363,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       (wave_variant ==
            fixed32_cutlass_wave_variant::stream_k_force_wide256 ||
        wave_variant ==
-           fixed32_cutlass_wave_variant::stream_k_force_wide256_byte_ab)) {
+           fixed32_cutlass_wave_variant::stream_k_force_wide256_byte_ab ||
+       wave_variant ==
+           fixed32_cutlass_wave_variant::wide256_data_parallel ||
+       wave_variant ==
+           fixed32_cutlass_wave_variant::wide256_data_parallel_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
 
@@ -359,6 +387,13 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   auto run_stream_k_wide256 = [&](torch::stable::Tensor& destination) {
     using Gemm = typename
         sm120_blockwise_fp8_config_swapab_streamk_wide256<OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
+  auto run_data_parallel_wide256 = [&](torch::stable::Tensor& destination) {
+    using Gemm = typename
+        sm120_blockwise_fp8_config_swapab_wide256_dataparallel<OutType>::Gemm;
     return cutlass_gemm_caller_blockwise<Gemm>(
         destination, a, b, a_scales, b_scales);
   };
@@ -384,10 +419,16 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   const bool wide256_byte_ab =
       wave_variant ==
       fixed32_cutlass_wave_variant::stream_k_force_wide256_byte_ab;
+  const bool wide256_data_parallel_byte_ab =
+      wave_variant ==
+      fixed32_cutlass_wave_variant::wide256_data_parallel_byte_ab;
   if (wave_variant ==
           fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab ||
-      wide256_byte_ab) {
+      wide256_byte_ab || wide256_data_parallel_byte_ab) {
     auto run_candidate = [&](torch::stable::Tensor& destination) {
+      if (wide256_data_parallel_byte_ab) {
+        return run_data_parallel_wide256(destination);
+      }
       if (wide256_byte_ab) {
         return run_stream_k_wide256(destination);
       }
@@ -446,7 +487,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       }
     }
     const char* log_path =
-        wide256_byte_ab
+        wide256_data_parallel_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_wide256_dataparallel_byte_ab.jsonl"
+        : wide256_byte_ab
             ? "/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl"
             : "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl";
     static std::mutex log_mutex;
@@ -456,7 +499,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       STD_TORCH_CHECK(log.good(),
                       "FR13 Stream-K byte A/B could not open JSONL");
       log << "{\\\"schema\\\":\\\""
-          << (wide256_byte_ab
+          << (wide256_data_parallel_byte_ab
+                  ? "fr13.fixed32.cutlass_wide256_dataparallel_byte_ab.v1"
+              : wide256_byte_ab
                   ? "fr13.fixed32.cutlass_streamk_wide256_byte_ab.v1"
                   : "fr13.fixed32.cutlass_streamk_byte_ab.v2")
           << "\\\","
@@ -489,6 +534,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   if (wave_variant ==
       fixed32_cutlass_wave_variant::stream_k_force_wide256) {
     return run_stream_k_wide256(out);
+  }
+
+  if (wave_variant ==
+      fixed32_cutlass_wave_variant::wide256_data_parallel) {
+    return run_data_parallel_wide256(out);
   }
 
   // Unset/unknown selectors retain the stock kernel and numeric result.
