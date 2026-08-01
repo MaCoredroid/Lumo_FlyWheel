@@ -18070,6 +18070,83 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
     return True
 
 
+def _patch_gpu_model_runner_fixed32_eager_boot_capacity() -> bool:
+    """Give eager byte-gate metadata builders their fixed physical capacity.
+
+    Enforce-eager resolves the generic CUDA-graph capacity to zero. The
+    byte-gate boot producer still intentionally asks every attention group for
+    capture-shaped metadata, so temporarily expose the physical fixed32 token
+    capacity while main and drafter metadata builders are initialized. Restore
+    the public eager config even if a builder raises.
+    """
+    if not _FR13_FIXED32_MODE:
+        return False
+    eager_boot_warm_contract = _fr13_fixed32_eager_boot_warm_contract()
+    if eager_boot_warm_contract is None:
+        return False
+    eager_name, eager_capacity, _eager_sentinel = eager_boot_warm_contract
+    eager_num_tokens = 32 * eager_capacity
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_FIXED32_EAGER_BOOT_WARM_BUILDER_CAPACITY"
+    if sentinel in text:
+        return False
+    method_anchor = (
+        "    def initialize_metadata_builders(\n"
+        "        self, kv_cache_config: KVCacheConfig, "
+        "kernel_block_sizes: list[int]\n"
+        "    ) -> None:\n"
+        "        \"\"\"\n"
+        "        Create the metadata builders for all KV cache groups and "
+        "attn groups.\n"
+        "        \"\"\"\n"
+    )
+    body_anchor = (
+        "        for kv_cache_group_id in range("
+        "len(kv_cache_config.kv_cache_groups)):\n"
+    )
+    next_method_anchor = "\n    def _check_and_update_cudagraph_mode(\n"
+    if text.count(method_anchor) != 1:
+        raise RuntimeError(
+            f"FR13 fixed32 {eager_name} metadata-builder method anchor is "
+            "not unique"
+        )
+    method_start = text.index(method_anchor)
+    body_start = text.find(body_anchor, method_start)
+    method_end = text.find(next_method_anchor, method_start)
+    if body_start < 0 or method_end < 0 or body_start >= method_end:
+        raise RuntimeError(
+            f"FR13 fixed32 {eager_name} metadata-builder body anchors are "
+            "invalid"
+        )
+    original_body = text[body_start:method_end]
+    nested_body = "".join(
+        "    " + line if line.strip() else line
+        for line in original_body.splitlines(keepends=True)
+    )
+    inject = (
+        "        " + sentinel + ": capture-shaped eager boot only.\n"
+        "        _fr13_f32_prior_capture_size = (\n"
+        "            self.compilation_config.max_cudagraph_capture_size\n"
+        "        )\n"
+        "        if _fr13_f32_prior_capture_size not in (None, 0):\n"
+        "            raise RuntimeError(\n"
+        f"                \"FR13 fixed32 {eager_name} requires zero eager "
+        "capture capacity\"\n"
+        "            )\n"
+        "        self.compilation_config.max_cudagraph_capture_size = "
+        f"{eager_num_tokens}\n"
+        "        try:\n"
+        + nested_body
+        + "        finally:\n"
+        "            self.compilation_config.max_cudagraph_capture_size = (\n"
+        "                _fr13_f32_prior_capture_size\n"
+        "            )\n"
+    )
+    text = text[:body_start] + inject + text[method_end:]
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_worker_fixed32_eager_boot_warm() -> bool:
     """Reach the fixed32 byte-gate boot producer under enforce-eager.
 
@@ -18083,71 +18160,11 @@ def _patch_gpu_worker_fixed32_eager_boot_warm() -> bool:
     eager_boot_warm_contract = _fr13_fixed32_eager_boot_warm_contract()
     if eager_boot_warm_contract is None:
         return False
-    eager_name, eager_capacity, _eager_sentinel = eager_boot_warm_contract
-    eager_num_tokens = 32 * eager_capacity
+    eager_name, _eager_capacity, _eager_sentinel = eager_boot_warm_contract
     text = GPU_WORKER_PATH.read_text()
     sentinel = "# FR13_FIXED32_EAGER_BOOT_WARM_LIFECYCLE"
-    capacity_sentinel = "# FR13_FIXED32_EAGER_BOOT_WARM_CAPACITY"
-    if sentinel in text and capacity_sentinel in text:
+    if sentinel in text:
         return False
-    if sentinel in text or capacity_sentinel in text:
-        raise RuntimeError(
-            f"FR13 fixed32 {eager_name} worker lifecycle patch is partial"
-        )
-    construct_anchor = (
-        "        # Construct the model runner\n"
-        "        if self.use_v2_model_runner:\n"
-    )
-    if text.count(construct_anchor) != 1:
-        raise RuntimeError(
-            f"FR13 fixed32 {eager_name} runner construction anchor is not "
-            "unique"
-        )
-    construct_inject = (
-        "        " + capacity_sentinel + ": eager mode resolves the generic\n"
-        "        # CUDA-graph capacity to zero, but the zero-traffic producer\n"
-        "        # needs capture-shaped fixed32 metadata and its persistent\n"
-        "        # builder buffers. Temporarily size those buffers while the\n"
-        "        # runner is constructed, then restore the eager config.\n"
-        "        if not self.model_config.enforce_eager:\n"
-        "            raise RuntimeError(\n"
-        f"                \"FR13 fixed32 {eager_name} requires enforce_eager\"\n"
-        "            )\n"
-        "        _fr13_f32_prior_capture_size = (\n"
-        "            self.vllm_config.compilation_config."
-        "max_cudagraph_capture_size\n"
-        "        )\n"
-        "        if _fr13_f32_prior_capture_size not in (None, 0):\n"
-        "            raise RuntimeError(\n"
-        f"                \"FR13 fixed32 {eager_name} requires zero eager "
-        "capture capacity\"\n"
-        "            )\n"
-        "        self.vllm_config.compilation_config."
-        f"max_cudagraph_capture_size = {eager_num_tokens}\n"
-        "\n"
-        + construct_anchor
-    )
-    text = text.replace(construct_anchor, construct_inject, 1)
-    restore_anchor = (
-        "            self.model_runner = GPUModelRunnerV1("
-        "self.vllm_config, self.device)\n"
-        "\n"
-        "        if self.rank == 0:\n"
-    )
-    if text.count(restore_anchor) != 1:
-        raise RuntimeError(
-            f"FR13 fixed32 {eager_name} runner restore anchor is not unique"
-        )
-    restore_inject = (
-        "            self.model_runner = GPUModelRunnerV1("
-        "self.vllm_config, self.device)\n"
-        "\n"
-        "        self.vllm_config.compilation_config."
-        "max_cudagraph_capture_size = _fr13_f32_prior_capture_size\n"
-        "\n"
-        "        if self.rank == 0:\n"
-    )
-    text = text.replace(restore_anchor, restore_inject, 1)
     anchor = (
         "        cuda_graph_memory_bytes = 0\n"
         "        if not self.model_config.enforce_eager:\n"
@@ -34130,6 +34147,10 @@ def main() -> int:
         (
             GPU_MODEL_RUNNER_PATH,
             _patch_gpu_model_runner_fixed32_final_full_preseed(),
+        ),
+        (
+            GPU_MODEL_RUNNER_PATH,
+            _patch_gpu_model_runner_fixed32_eager_boot_capacity(),
         ),
         (
             GPU_WORKER_PATH,
