@@ -265,6 +265,7 @@ def validate(record, label):
         or record.get("batch_size") != 4
         or record.get("n_tasks") != 4
         or sorted(record.get("task_instance_ids", [])) != task_ids
+        or record.get("floor_is_full_step_hardware_floor") is not False
     ):
         raise SystemExit(f"{label} deploy-speed provenance is not exact4 B4")
     for key in (
@@ -311,7 +312,7 @@ summary = {
         "step_wall_ms": stock_wall,
         "measured_tps_fullstep_wall": stock_tps,
         "accepted_drafts_per_event": float(stock["accept_per_event"]),
-        "step_wall_to_floor_ratio": float(stock["floor_ratio"]),
+        "step_wall_to_optimistic_floor_ratio": float(stock["floor_ratio"]),
     },
     "candidate": {
         "selector": "persistent_b4_m128",
@@ -321,9 +322,10 @@ summary = {
         "step_wall_ms": candidate_wall,
         "measured_tps_fullstep_wall": candidate_tps,
         "accepted_drafts_per_event": float(candidate["accept_per_event"]),
-        "step_wall_to_floor_ratio": float(candidate["floor_ratio"]),
+        "step_wall_to_optimistic_floor_ratio": float(candidate["floor_ratio"]),
     },
-    "floor_ms": stock_floor,
+    "optimistic_floor_ms": stock_floor,
+    "optimistic_floor_is_full_step_hardware_floor": False,
     "candidate_to_stock_full_wall_tps_ratio": candidate_tps / stock_tps,
     "stock_to_candidate_step_wall_ratio": stock_wall / candidate_wall,
     "formal_floor_acceptance_eligible": False,

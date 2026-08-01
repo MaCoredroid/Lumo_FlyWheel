@@ -231,3 +231,5 @@ def test_b4_gate_and_timing_are_closed_over_by_runtime_manifest() -> None:
     assert "persistent_b4_m128" in timing
     assert "--batch-size 4" in timing
     assert "only_arm_delta=CUTLASS_stock_to_persistent_b4_m128" in timing
+    assert '"optimistic_floor_is_full_step_hardware_floor": False' in timing
+    assert 'record.get("floor_is_full_step_hardware_floor") is not False' in timing
