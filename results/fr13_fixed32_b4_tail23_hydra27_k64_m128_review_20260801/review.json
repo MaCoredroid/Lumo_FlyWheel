@@ -3,7 +3,7 @@
   "status": "launch_ready_after_fixes",
   "reviewed_tip": "aac82d0b19ffce16a1d69490147c2fa8697be02e",
   "review_branch": "agent/fixed32-b4-tail23-hydra27-k64-m128-review",
-  "code_commit": "6ed4a55df803c5a7b9190e9c0de0498085a9b9d0",
+  "code_commit": "4d0c57617e6a3675dddf8f76ecbee376b710220e",
   "gpu_executed": false,
   "docker_executed": false,
   "swe_verified_tasks_executed": false,
@@ -22,6 +22,12 @@
       "severity": "high",
       "title": "All-parent production bundle not bound to canonical exact4 verdict",
       "resolution": "Require and hash-bind the verdict, exact task marker, source, K64 topology, bundle, and measured production work-census route"
+    },
+    {
+      "id": "F3",
+      "severity": "high",
+      "title": "Remote Qwen stdout could be truncated before pipe drain",
+      "resolution": "Write Qwen stdout inside the container to a private regular file, attest it before and after exact transfer, then validate JSONL"
     }
   ],
   "topologies": {
@@ -56,6 +62,8 @@
     "focused_passed": 72,
     "broader_passed": 313,
     "broader_skipped": 1,
+    "post_capture_integration_passed": 322,
+    "post_capture_integration_skipped": 1,
     "work_census_tamper_tests_passed": 162,
     "runtime_manifest_sha256": "8996529e514caf31584c0701a8661c0cb4d3fece6666352e0c09d3a85ea40b2c",
     "external_manifest_sha256": "c42fb16d2ea932f0e819c81172c49b69b312b75dd446146b6d7b6ef78af00a9e"

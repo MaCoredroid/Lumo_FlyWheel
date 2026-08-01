@@ -10,7 +10,7 @@ The original tip `aac82d0b19ffce16a1d69490147c2fa8697be02e` was not safe to
 launch because its B4 phase summary mixed per-event and per-step units. The
 corrected route is on branch
 `agent/fixed32-b4-tail23-hydra27-k64-m128-review` at code commit
-`6ed4a55df803c5a7b9190e9c0de0498085a9b9d0`.
+`4d0c57617e6a3675dddf8f76ecbee376b710220e`.
 
 Launch only the review branch:
 
@@ -53,6 +53,20 @@ block map, task set and marker, mismatch counts, and production-bundle hash.
 Both timing arms also require every measured work-census event to report the
 actual `fixed32_native_precompute_production_candidate_return` route.
 
+### F3 - High: remote Qwen stdout could be truncated before pipe drain
+
+The prior Hydra-only M128 gate completed all four agents, but one canonical
+trace ended at exactly 258,048 bytes without a final newline. The candidate
+comparator was byte-exact across 320 real records, but the campaign correctly
+withheld its production pass because the task trace was incomplete.
+
+Fixed32 remote launches now precreate a private, single-link regular file and
+redirect Qwen stdout to `/out/qwen_trace.jsonl` inside the container. Docker
+stdout is discarded, the remote file identity and digest are observed before
+and after transfer, and exact local bytes are installed before strict JSONL
+validation. Malformed evidence remains intact and non-fixed32 launch behavior
+is unchanged.
+
 ## Reviewed contracts
 
 - Tail23: `tail6_fixed32`, mask `0x7a9ce7ff`, 23 active draft rows.
@@ -82,6 +96,7 @@ acceptance, and this artifact contains no new performance number.
 - focused suite: `72 passed`
 - broader provenance, ingress, floor, exact-commit, Qwen, CUTLASS, and
   all-parent suite: `313 passed, 1 skipped`
+- post-capture integration suite: `322 passed, 1 skipped`
 - B4 timing-math regression tests: pass
 - Bash syntax and four embedded Python blocks: pass
 - Ruff, Python byte compilation, and `git diff --check`: pass

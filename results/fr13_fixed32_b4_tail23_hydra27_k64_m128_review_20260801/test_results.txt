@@ -7,6 +7,9 @@ Broader CUTLASS, campaign provenance, ingress, exact-commit, all-parent,
 trace-provenance, floor-ledger, Qwen, and timing-math suite:
   313 passed, 1 skipped in 4.86s
 
+Post-capture integration suite on code commit 4d0c57617:
+  322 passed, 1 skipped in 4.15s
+
 Static checks:
   bash syntax: PASS
   embedded Python compilation: PASS (4 blocks across 2 runners)
