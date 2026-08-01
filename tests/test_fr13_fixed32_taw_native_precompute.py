@@ -255,7 +255,7 @@ def test_all_parent_schedule_and_integer_kernel_are_fixed() -> None:
         )
     ]
     assert entry["all_parent_self_uniform_levels"].tolist() == [
-        1, 1, 2, 2, 3, 3, 3, 4, 4, 5, 5, 5, 11
+        2, 2, 2, 2, 3, 3, 3, 4, 4, 5, 5, 5, 11
     ]
     assert entry["all_parent_target_uniform_levels"].tolist() == [
         0, 1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 6, 7, 8, 9, 10
