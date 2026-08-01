@@ -1,0 +1,67 @@
+{
+  "schema": "fr13.fixed32.gdn_parent_group.corrected_source_candidate.v1",
+  "created_at_utc": "2026-08-01T23:21:20Z",
+  "status": "SOURCE_ONLY_DEFAULT_OFF_NO_GPU_MEASUREMENT",
+  "source_commit": "695ab9f88f4e08ca54aac3cfcaa3eec4f4a5845c",
+  "candidate": {
+    "id": "fixed32_gdn_parent_group_v1",
+    "logical_level_grid_z": [1, 11],
+    "logical_critical_path": 12,
+    "group_node_counts": [9, 12, 2, 2, 2],
+    "physical_level_max_steps": [5, 12],
+    "physical_critical_path": 17,
+    "programs_per_request_layer": 6,
+    "level1_parent_loads_per_request_layer": 5,
+    "single_writer_nodes": 32
+  },
+  "physical_execution": {
+    "b1_grouped": {
+      "grid_z_per_request": [1, 5],
+      "event_grid_z": [1, 5],
+      "launches_per_layer": 2
+    },
+    "b4_grouped_batched": {
+      "grid_z_per_request": [1, 5],
+      "event_grid_z": [4, 20],
+      "launches_per_layer": 2
+    },
+    "b4_incumbent_reference": {
+      "grid_z_per_request": [1, 11],
+      "event_grid_z": [1, 11],
+      "launch_repetitions": 4,
+      "launches_per_layer": 8
+    }
+  },
+  "qualification": {
+    "b1_authenticated_full_surface_gate_implemented": true,
+    "b1_surfaces": [
+      "output",
+      "export",
+      "ring_k",
+      "ring_v",
+      "ring_a",
+      "ring_b",
+      "flags",
+      "counter"
+    ],
+    "b1_reference_restored_and_served": true,
+    "b2_b4_reference_forced_incumbent": true,
+    "parent_gather_selfcheck_conflict_fails_closed": true,
+    "gpu_gate_run": false,
+    "raw_byte_equivalence": null,
+    "production_authorized": false
+  },
+  "measurement": {
+    "gpu_used": false,
+    "triton_compiled": false,
+    "real_swe_verified_timing": false,
+    "full_wall_ms_per_event": null,
+    "acceptance_eligible": false
+  },
+  "source_sha256": {
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "23527b1131dec96476857f966733655d590af0e830e09b0390205a40c63aa9fc",
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "767523f3c4a66004257780423184e90843b0a50fe193cd58757e4488437185a9",
+    "tests/test_fr13_fixed32_gdn_parent_group.py": "7ffb591ccc64a42b6372fab2142bd25124b818770395fdc4c174d52a4a89e486"
+  }
+}
+
