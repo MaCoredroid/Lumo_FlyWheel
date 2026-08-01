@@ -361,6 +361,7 @@ for arm in "$STOCK_ARM" "$CANDIDATE_ARM"; do
   qrow_sidecar="$arm_dir/logs/fr13_fa2_qrow16_production_pass.json"
   qrow_engagement="$arm_dir/logs/fr13_fa2_qrow16_production_capture.json"
   gdn_production_pass="$arm_dir/logs/fr13_fixed32_gdn_level0_coeff.production_pass.json"
+  gdn_production_engagement="$arm_dir/logs/fr13_fixed32_gdn_level0_coeff.production_engagement.json"
   "$PYTHON_BIN" scripts/fr13_sfwd_state_fusion_pass.py verify-engagement \
     --engagement "$sfwd_engagement" \
     --expected-live-sha256 "$SFWD_PASS_SHA256" \
@@ -379,9 +380,12 @@ for arm in "$STOCK_ARM" "$CANDIDATE_ARM"; do
     || { echo "$arm lacks the GDN coefficient production PASS" >&2; exit 4; }
   cmp -s "$GDN_LEVEL0_COEFF_LIVE_PASS" "$gdn_production_pass" \
     || { echo "$arm served a different GDN coefficient PASS" >&2; exit 4; }
+  [[ -f "$gdn_production_engagement" && ! -L "$gdn_production_engagement" ]] \
+    || { echo "$arm lacks GDN coefficient production engagement" >&2; exit 4; }
 done
 unset arm arm_dir sfwd_engagement qrow_sidecar qrow_engagement qrow_sidecar_sha256
 unset gdn_production_pass
+unset gdn_production_engagement
 
 finalize_manifests
 "$PYTHON_BIN" scripts/fr13_taw_b1_credential.py reduce-pair \
@@ -413,6 +417,8 @@ finalize_manifests
   --candidate-container-env "$RUNROOT_ABS/$CANDIDATE_ARM/container_env.txt" \
   --stock-gdn-production-pass "$RUNROOT_ABS/$STOCK_ARM/logs/fr13_fixed32_gdn_level0_coeff.production_pass.json" \
   --candidate-gdn-production-pass "$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_gdn_level0_coeff.production_pass.json" \
+  --stock-gdn-production-engagement "$RUNROOT_ABS/$STOCK_ARM/logs/fr13_fixed32_gdn_level0_coeff.production_engagement.json" \
+  --candidate-gdn-production-engagement "$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_gdn_level0_coeff.production_engagement.json" \
   --stock-taw-census "$RUNROOT_ABS/$STOCK_ARM/logs/fr13_fixed32_work_census.jsonl" \
   --candidate-taw-census "$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_work_census.jsonl" \
   --source-commit "$SOURCE_COMMIT" \

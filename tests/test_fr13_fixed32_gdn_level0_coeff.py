@@ -482,6 +482,7 @@ def test_production_engagement_is_first_replay_source_bound(
     assert first["status"] == "engaged"
     artifact = json.loads(engagement_path.read_text(encoding="ascii"))
     assert artifact["status"] == "ENGAGED"
+    assert artifact["route"] == "fixed32_gdn_level0_coeff_production"
     assert artifact["production_pass_sha256"] == "b" * 64
     assert artifact["count_invocation"] is False
     assert artifact["fallback"] == 0
@@ -627,6 +628,7 @@ def test_timing_closeout_reconciles_units_phases_tps_and_provenance(
             {
                 "schema": "fr13.fixed32.gdn_level0_coeff.production_engagement.v1",
                 "status": "ENGAGED",
+                "route": "fixed32_gdn_level0_coeff_production",
                 "candidate": "fixed32_gdn_level0_coeff_v1",
                 "source_sha256": source_sha,
                 "production_pass_sha256": pass_sha,

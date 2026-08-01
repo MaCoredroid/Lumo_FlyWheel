@@ -243,7 +243,9 @@ def test_pair_has_only_all_parent_delta_and_full_wall_breakdown() -> None:
     assert '"b4_deployable": False' in helper
     assert '"b4_evidence_classification": "static_only"' in helper
     assert '"compared_bytes": module.EXPECTED_COMPARED_BYTES' in helper
-    assert '"arm_evidence": "production_selector_pass_and_complete_work_census"' in helper
+    assert "production_selector_pass_engagement_and_complete_work_census" in helper
+    assert "--stock-gdn-production-engagement" in pair
+    assert "--candidate-gdn-production-engagement" in pair
 
 
 def test_sfwd_launcher_admits_only_source_gated_taw_production() -> None:
@@ -420,6 +422,123 @@ def test_gdn_fullstack_binding_closes_exact_b1_byte_surface(
             source_commit="0" * 40,
             expected_live_sha256=live_sha256,
             expected_gate_sha256=hashlib.sha256(gate_raw).hexdigest(),
+        )
+
+
+@pytest.mark.parametrize("mode", sorted(credential.MODE_CONTRACTS))
+def test_pair_reducer_rejects_missing_or_tampered_gdn_engagement(
+    tmp_path: Path, mode: str
+) -> None:
+    kernel_source = ROOT / "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
+    source_sha256 = hashlib.sha256(kernel_source.read_bytes()).hexdigest()
+    live = {
+        "schema": gdn_pass.SCHEMA,
+        "status": "pass",
+        "candidate": gdn_pass.CANDIDATE,
+        "source_sha256": source_sha256,
+        "task_marker": f"swe_verified:{credential.TASK_ID}",
+        "mode": mode,
+        "batch_size": 1,
+        "covered_batches": [1],
+        "records": 48,
+        "physical_rows": 32,
+        "path_lengths": [5, 7],
+        "launches_per_layer": 2,
+        "scratch_row_start": 31,
+        "scratch_rows": 1,
+        "count_invocation": False,
+        "non_scratch_export_rows_compared": 31,
+        "surfaces": gdn_pass.SURFACES,
+        "compared_bytes": gdn_pass.EXPECTED_COMPARED_BYTES,
+        "raw_byte_equal": True,
+        "scratch_contained": True,
+        "reference_served": True,
+        "state_restored": True,
+    }
+    pass_path = tmp_path / "production-pass.json"
+    pass_raw = _write_json(pass_path, live)
+    pass_sha256 = hashlib.sha256(pass_raw).hexdigest()
+    environment_path = tmp_path / "container-env.txt"
+    environment_path.write_text(
+        "\n".join(
+            (
+                f"FR13_FIXED32_MODE={mode}",
+                "FR13_TREE_GDN_GEOM_OVERRIDE=BV=8",
+                "FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB=0",
+                "FR13_FIXED32_GDN_LEVEL0_COEFF=1",
+                "FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK=1",
+                "FR13_FIXED32_BATCH_GDN_BYTE_AB=0",
+                "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=0",
+                "FR13_FIXED32_BATCH_GDN_PRODUCTION=0",
+                "FR13_FIXED32_GDN_PATH_BV_CANDIDATE=",
+                "FR13_FIXED32_GDN_PATH_BV_PRODUCTION=",
+                "FR10_METRICS=0",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    engagement = {
+        "schema": "fr13.fixed32.gdn_level0_coeff.production_engagement.v1",
+        "status": "ENGAGED",
+        "route": "fixed32_gdn_level0_coeff_production",
+        "candidate": gdn_pass.CANDIDATE,
+        "source_sha256": source_sha256,
+        "production_pass_sha256": pass_sha256,
+        "task_marker": f"swe_verified:{credential.TASK_ID}",
+        "mode": mode,
+        "graph_id": 1,
+        "graph_signature": "a" * 64,
+        "batch_size": 1,
+        "records": 48,
+        "physical_rows": 32,
+        "path_lengths": [5, 7],
+        "launches_per_layer": 2,
+        "scratch_row_start": 31,
+        "count_invocation": False,
+        "fallback": 0,
+        "observed_full_graph_replays_at_least": 1,
+    }
+    engagement_path = tmp_path / "engagement.json"
+
+    with pytest.raises(credential.CredentialError, match="production engagement"):
+        credential._validate_gdn_arm_binding(
+            label="stock",
+            mode=mode,
+            container_env_path=environment_path,
+            production_pass_path=pass_path,
+            production_engagement_path=engagement_path,
+            expected_pass_raw=pass_raw,
+            expected_source_sha256=source_sha256,
+            expected_pass_sha256=pass_sha256,
+        )
+
+    engagement_raw = _write_json(engagement_path, engagement)
+    _, served_pass_raw, served_engagement_raw = credential._validate_gdn_arm_binding(
+        label="stock",
+        mode=mode,
+        container_env_path=environment_path,
+        production_pass_path=pass_path,
+        production_engagement_path=engagement_path,
+        expected_pass_raw=pass_raw,
+        expected_source_sha256=source_sha256,
+        expected_pass_sha256=pass_sha256,
+    )
+    assert served_pass_raw == pass_raw
+    assert served_engagement_raw == engagement_raw
+
+    engagement["production_pass_sha256"] = "b" * 64
+    _write_json(engagement_path, engagement)
+    with pytest.raises(credential.CredentialError, match="engagement drifted"):
+        credential._validate_gdn_arm_binding(
+            label="candidate",
+            mode=mode,
+            container_env_path=environment_path,
+            production_pass_path=pass_path,
+            production_engagement_path=engagement_path,
+            expected_pass_raw=pass_raw,
+            expected_source_sha256=source_sha256,
+            expected_pass_sha256=pass_sha256,
         )
 
 

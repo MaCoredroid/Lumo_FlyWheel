@@ -330,6 +330,7 @@ if (
     engagement.get("schema")
     != "fr13.fixed32.gdn_level0_coeff.production_engagement.v1"
     or engagement.get("status") != "ENGAGED"
+    or engagement.get("route") != "fixed32_gdn_level0_coeff_production"
     or engagement.get("candidate") != "fixed32_gdn_level0_coeff_v1"
     or engagement.get("source_sha256") != source_sha
     or engagement.get("production_pass_sha256") != pass_sha

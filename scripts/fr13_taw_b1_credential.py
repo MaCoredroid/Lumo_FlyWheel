@@ -1105,7 +1105,9 @@ def _validate_gdn_fullstack_inputs(
         "b4_live_qualified": False,
         "b4_deployable": False,
         "b4_evidence_classification": "static_only",
-        "arm_evidence": "production_selector_pass_and_complete_work_census",
+        "arm_evidence": (
+            "production_selector_pass_engagement_and_complete_work_census"
+        ),
     }
     return binding, live_raw, gate_raw, source_raw
 
@@ -1129,8 +1131,11 @@ def _validate_gdn_arm_binding(
     mode: str,
     container_env_path: Path,
     production_pass_path: Path,
+    production_engagement_path: Path,
     expected_pass_raw: bytes,
-) -> tuple[bytes, bytes]:
+    expected_source_sha256: str,
+    expected_pass_sha256: str,
+) -> tuple[bytes, bytes, bytes]:
     environment_raw = _read_regular(
         container_env_path,
         label=f"{label} container environment",
@@ -1177,7 +1182,48 @@ def _validate_gdn_arm_binding(
         raise CredentialError(
             f"{label} served a different GDN coefficient production PASS"
         )
-    return environment_raw, production_raw
+    engagement, engagement_raw = _load_json(
+        production_engagement_path,
+        label=f"{label} GDN coefficient production engagement",
+    )
+    expected_engagement = {
+        "schema": "fr13.fixed32.gdn_level0_coeff.production_engagement.v1",
+        "status": "ENGAGED",
+        "route": "fixed32_gdn_level0_coeff_production",
+        "candidate": "fixed32_gdn_level0_coeff_v1",
+        "source_sha256": expected_source_sha256,
+        "production_pass_sha256": expected_pass_sha256,
+        "task_marker": TASK_MARKER,
+        "mode": mode,
+        "batch_size": 1,
+        "records": 48,
+        "physical_rows": 32,
+        "path_lengths": [5, 7],
+        "launches_per_layer": 2,
+        "scratch_row_start": 31,
+        "count_invocation": False,
+        "fallback": 0,
+        "observed_full_graph_replays_at_least": 1,
+    }
+    engagement_drift = {
+        key: (engagement.get(key), value)
+        for key, value in expected_engagement.items()
+        if engagement.get(key) != value
+    }
+    graph_id = engagement.get("graph_id")
+    graph_signature = engagement.get("graph_signature")
+    if (
+        engagement_drift
+        or isinstance(graph_id, bool)
+        or not isinstance(graph_id, int)
+        or graph_id <= 0
+        or not _is_sha256(graph_signature)
+    ):
+        raise CredentialError(
+            f"{label} GDN coefficient production engagement drifted: "
+            f"{engagement_drift!r}"
+        )
+    return environment_raw, production_raw, engagement_raw
 
 
 def _load_work_census_module():
@@ -1325,30 +1371,38 @@ def reduce_pair(args: argparse.Namespace) -> dict[str, Any]:
         "stock": (stock_census_raw, stock_census_events),
         "candidate": (candidate_census_raw, candidate_census_events),
     }
-    for arm, environment_name, production_pass_name in (
+    for arm, environment_name, production_pass_name, production_engagement_name in (
         (
             "stock",
             args.stock_container_env,
             args.stock_gdn_production_pass,
+            args.stock_gdn_production_engagement,
         ),
         (
             "candidate",
             args.candidate_container_env,
             args.candidate_gdn_production_pass,
+            args.candidate_gdn_production_engagement,
         ),
     ):
-        environment_raw, served_pass_raw = _validate_gdn_arm_binding(
+        environment_raw, served_pass_raw, engagement_raw = _validate_gdn_arm_binding(
             label=arm,
             mode=args.mode,
             container_env_path=Path(environment_name),
             production_pass_path=Path(production_pass_name),
+            production_engagement_path=Path(production_engagement_name),
             expected_pass_raw=gdn_live_raw,
+            expected_source_sha256=gdn_binding["kernel_source_sha256"],
+            expected_pass_sha256=gdn_binding["live_pass_sha256"],
         )
         identity_hashes[f"{arm}_container_env_sha256"] = _sha256(
             environment_raw
         )
         identity_hashes[f"{arm}_gdn_production_pass_sha256"] = _sha256(
             served_pass_raw
+        )
+        identity_hashes[f"{arm}_gdn_production_engagement_sha256"] = _sha256(
+            engagement_raw
         )
     for arm, health_name, audit_name, sfwd_name, qrow_name in (
         (
@@ -1576,6 +1630,8 @@ def _parser() -> argparse.ArgumentParser:
     reduce_command.add_argument("--candidate-container-env", required=True)
     reduce_command.add_argument("--stock-gdn-production-pass", required=True)
     reduce_command.add_argument("--candidate-gdn-production-pass", required=True)
+    reduce_command.add_argument("--stock-gdn-production-engagement", required=True)
+    reduce_command.add_argument("--candidate-gdn-production-engagement", required=True)
     reduce_command.add_argument("--stock-taw-census", required=True)
     reduce_command.add_argument("--candidate-taw-census", required=True)
     reduce_command.add_argument("--source-commit", required=True)

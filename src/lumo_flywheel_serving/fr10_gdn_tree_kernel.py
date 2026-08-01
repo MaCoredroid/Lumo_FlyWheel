@@ -1519,6 +1519,7 @@ def fixed32_gdn_level0_coeff_production_on_replay(
     payload = {
         "schema": "fr13.fixed32.gdn_level0_coeff.production_engagement.v1",
         "status": "ENGAGED",
+        "route": "fixed32_gdn_level0_coeff_production",
         "candidate": _FR13_FIXED32_GDN_LEVEL0_COEFF_CANDIDATE_ID,
         "source_sha256": credential["source_sha256"],
         "production_pass_sha256": credential["production_pass_sha256"],
