@@ -1,0 +1,14 @@
+{
+  "schema": "fr13.fixed32.bf16_gemvx_b1_b4.host_compile_attempt.v1",
+  "status": "BLOCKED_BEFORE_SOURCE_COMPILE",
+  "gpu_or_container_used": false,
+  "host_torch": "2.4.1+cpu",
+  "host_nvcc": "13.0.88",
+  "target_arch": "sm_121a",
+  "operation": "host-only nvcc object compilation",
+  "exit_code": 1,
+  "object_emitted": false,
+  "blocking_error": "Torch CPU headers omit c10/cuda/impl/cuda_cmake_macros.h",
+  "qualification_effect": "none",
+  "next_action": "run prepared_build.sh with pinned Torch 2.10.0+cu130"
+}

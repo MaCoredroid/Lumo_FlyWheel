@@ -32,5 +32,10 @@
   "binary_built": false,
   "gpu_or_container_used": false,
   "host_torch_observed": "2.4.1+cpu",
-  "required_build_torch": "2.10.0+cu130"
+  "required_build_torch": "2.10.0+cu130",
+  "host_compile_attempt": {
+    "status": "BLOCKED_BEFORE_SOURCE_COMPILE",
+    "object_emitted": false,
+    "evidence": "build_attempt.json"
+  }
 }

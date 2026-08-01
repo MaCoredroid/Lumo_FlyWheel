@@ -53,3 +53,7 @@ and identities.
 
 The host available for this preparation exposes Torch `2.4.1+cpu`, so no
 candidate binary was built and no GPU/container was used.
+An additional host-only `nvcc -c` attempt stopped before compiling the source
+because that CPU Torch installation omits
+`c10/cuda/impl/cuda_cmake_macros.h`; it emitted no object. The exact failure is
+recorded in `build_attempt.json`.
