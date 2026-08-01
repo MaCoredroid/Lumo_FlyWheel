@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import stat
 import sys
 from pathlib import Path
@@ -14,15 +16,24 @@ from fr13_draft_head_m32_pass import (
     EXPECTED_B1_SUBSET_SHA256,
     EXPECTED_DATASET_RECORD_SHA256,
     EXPECTED_INSTANCE,
+    canonical_bytes,
     load_json,
     sha256_file,
     validate_chat_traffic_audit,
     validate_live_evidence,
+    validate_rebuilt_chat_traffic_audit,
 )
 
 
 LIVE_SCHEMA = "fr13.fixed32.draft_head_full_m1_live_ab.v1"
 VALIDATION_SCHEMA = "fr13.fixed32.draft_head_full_m1_live_validation.v1"
+SIDECAR_SCHEMA = "fr13.fixed32.draft_head_full_m1_production_pass.v1"
+ENGAGEMENT_SCHEMA = (
+    "fr13.fixed32.draft_head_full_m1_production_engagement.v1"
+)
+EXPECTED_GRAPH_SIGNATURE = (
+    "d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c"
+)
 POSITIONS = ("root", "mtp1", "mtp2", "mtp3", "mtp4")
 VOCAB_SIZE = 248_320
 HEX = frozenset("0123456789abcdef")
@@ -61,6 +72,12 @@ EXPECTED_CANDIDATE = {
     "candidate_launches_per_head": 1,
     "served_rows": 0,
     "shadow_compared_rows": 1,
+}
+EXPECTED_PRODUCTION_CANDIDATE = {
+    **EXPECTED_CANDIDATE,
+    "operation": "custom stock-order BF16 M1 GEMV served directly",
+    "served_rows": 1,
+    "shadow_compared_rows": 0,
 }
 EXPECTED_BUILD_CONTRACT = {
     "grid": [31040, 1, 1],
@@ -115,6 +132,63 @@ LIVE_KEYS = frozenset(
         "work_census_last_event_index",
     }
 )
+SIDECAR_KEYS = frozenset(
+    {
+        "boundary_snapshot_sha256",
+        "candidate",
+        "canonical_sha256",
+        "chat_traffic_audit_sha256",
+        "final_flush_sha256",
+        "geometry",
+        "instance_id",
+        "live_gate_schema",
+        "live_result_canonical_sha256",
+        "live_result_sha256",
+        "production_scope",
+        "qualified_build_attestation_sha256",
+        "qualified_candidate_so_bytes",
+        "qualified_candidate_so_sha256",
+        "qualified_candidate_source_sha256",
+        "qualified_completed_events",
+        "qualified_events_sha256",
+        "qualified_flush_generation",
+        "qualified_patcher_sha256",
+        "qualified_source_commit",
+        "qualified_trace_completed_logical_model_requests",
+        "required_runtime",
+        "schema",
+        "status",
+        "validation_schema",
+    }
+)
+ENGAGEMENT_KEYS = frozenset(
+    {
+        "build_attestation_sha256",
+        "candidate",
+        "candidate_so_sha256",
+        "candidate_source_sha256",
+        "capture_origin",
+        "captured_loop_calls",
+        "drafter_graph_id",
+        "drafter_graph_signature",
+        "execution_basis",
+        "fallback_calls",
+        "forward_step_index",
+        "geometry",
+        "observed_measured_replays_at_least",
+        "patcher_sha256",
+        "production_pass_sidecar_sha256",
+        "runtime_mode",
+        "schema",
+        "selected_root_calls",
+        "source_commit",
+        "status",
+    }
+)
+
+
+def _digest_bytes(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
 
 
 def _require_sha256(value: Any, label: str) -> str:
@@ -398,6 +472,9 @@ def validate(
             "completed_events"
         ],
         "authenticated_traffic_events": traffic["completed_events"],
+        "authenticated_trace_completed_logical_model_requests": traffic[
+            "trace_completed_logical_model_requests"
+        ],
         "served_return": payload["served_return"],
     }
 
@@ -453,6 +530,253 @@ def validate_build(
     }
 
 
+def issue_sidecar(
+    *,
+    live_result: Path,
+    expected_live_sha256: str,
+    final_flush: Path,
+    boundary_snapshot: Path,
+    chat_traffic_audit: Path,
+    candidate_source: Path,
+    expected_candidate_source_sha256: str,
+    patcher: Path,
+    expected_patcher_sha256: str,
+    build_attestation: Path,
+    expected_build_attestation_sha256: str,
+    candidate_so: Path,
+    expected_candidate_so_sha256: str,
+    out: Path,
+    repo: Path | None = None,
+) -> dict[str, Any]:
+    """Issue the production credential from an exact qualified live gate."""
+    qualification = validate(
+        live_result=live_result,
+        expected_live_sha256=expected_live_sha256,
+        final_flush=final_flush,
+        boundary_snapshot=boundary_snapshot,
+        chat_traffic_audit=chat_traffic_audit,
+        candidate_source=candidate_source,
+        expected_candidate_source_sha256=(
+            expected_candidate_source_sha256
+        ),
+        patcher=patcher,
+        expected_patcher_sha256=expected_patcher_sha256,
+        build_attestation=build_attestation,
+        expected_build_attestation_sha256=(
+            expected_build_attestation_sha256
+        ),
+        candidate_so=candidate_so,
+        expected_candidate_so_sha256=expected_candidate_so_sha256,
+    )
+    if repo is not None:
+        validate_rebuilt_chat_traffic_audit(
+            audit_path=chat_traffic_audit,
+            repo=repo,
+        )
+    live_payload, live_raw = load_json(live_result)
+    body = {
+        "schema": SIDECAR_SCHEMA,
+        "status": "PASS",
+        "live_gate_schema": LIVE_SCHEMA,
+        "validation_schema": VALIDATION_SCHEMA,
+        "live_result_sha256": expected_live_sha256,
+        "live_result_canonical_sha256": _digest_bytes(
+            canonical_bytes(live_payload)
+        ),
+        "instance_id": EXPECTED_INSTANCE,
+        "qualified_source_commit": qualification["source_commit"],
+        "qualified_candidate_source_sha256": (
+            expected_candidate_source_sha256
+        ),
+        "qualified_patcher_sha256": expected_patcher_sha256,
+        "qualified_build_attestation_sha256": (
+            expected_build_attestation_sha256
+        ),
+        "qualified_candidate_so_sha256": expected_candidate_so_sha256,
+        "qualified_candidate_so_bytes": candidate_so.stat().st_size,
+        "qualified_completed_events": qualification["completed_events"],
+        "qualified_events_sha256": live_payload["events_sha256"],
+        "qualified_flush_generation": live_payload["flush_generation"],
+        "final_flush_sha256": qualification["final_flush_sha256"],
+        "boundary_snapshot_sha256": qualification[
+            "boundary_snapshot_sha256"
+        ],
+        "chat_traffic_audit_sha256": qualification[
+            "chat_traffic_audit_sha256"
+        ],
+        "qualified_trace_completed_logical_model_requests": qualification[
+            "authenticated_trace_completed_logical_model_requests"
+        ],
+        "candidate": EXPECTED_PRODUCTION_CANDIDATE,
+        "geometry": EXPECTED_GEOMETRY,
+        "required_runtime": "fixed32 B1 full drafter graph, K0/root0",
+        "production_scope": (
+            "five exact full-vocabulary BF16 M1 GEMV calls per event"
+        ),
+    }
+    sidecar = dict(body)
+    sidecar["canonical_sha256"] = _digest_bytes(canonical_bytes(body))
+    if out.exists() or out.is_symlink():
+        raise ValueError(f"refusing to replace draft-head pass sidecar: {out}")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    temporary = out.with_name(out.name + f".tmp.{os.getpid()}")
+    temporary.write_bytes(canonical_bytes(sidecar) + b"\n")
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, out)
+    if _digest_bytes(live_raw) != expected_live_sha256:
+        raise ValueError("live result raw SHA-256 drifted during issuance")
+    return sidecar
+
+
+def verify_sidecar(
+    *,
+    sidecar_path: Path,
+    expected_sidecar_sha256: str,
+    expected_live_sha256: str,
+    candidate_source: Path,
+    expected_candidate_source_sha256: str,
+    patcher: Path,
+    expected_patcher_sha256: str,
+    candidate_so: Path,
+    expected_candidate_so_sha256: str,
+    expected_build_attestation_sha256: str,
+) -> dict[str, Any]:
+    """Verify the immutable sidecar against the candidate loaded at runtime."""
+    for path, label in (
+        (sidecar_path, "production sidecar"),
+        (candidate_source, "candidate source"),
+        (patcher, "patcher"),
+        (candidate_so, "candidate SO"),
+    ):
+        _require_regular(path, label)
+    for value, label in (
+        (expected_sidecar_sha256, "production sidecar"),
+        (expected_live_sha256, "live result"),
+        (expected_candidate_source_sha256, "candidate source"),
+        (expected_patcher_sha256, "patcher"),
+        (expected_candidate_so_sha256, "candidate SO"),
+        (expected_build_attestation_sha256, "build attestation"),
+    ):
+        _require_sha256(value, label)
+    payload, raw = load_json(sidecar_path)
+    if _digest_bytes(raw) != expected_sidecar_sha256:
+        raise ValueError("production sidecar raw SHA-256 drifted")
+    if frozenset(payload) != SIDECAR_KEYS:
+        raise ValueError("production sidecar key set drifted")
+    body = dict(payload)
+    canonical_sha256 = body.pop("canonical_sha256")
+    if canonical_sha256 != _digest_bytes(canonical_bytes(body)):
+        raise ValueError("production sidecar canonical digest drifted")
+    if (
+        payload.get("schema") != SIDECAR_SCHEMA
+        or payload.get("status") != "PASS"
+        or payload.get("live_gate_schema") != LIVE_SCHEMA
+        or payload.get("validation_schema") != VALIDATION_SCHEMA
+        or payload.get("live_result_sha256") != expected_live_sha256
+        or payload.get("instance_id") != EXPECTED_INSTANCE
+        or payload.get("qualified_candidate_source_sha256")
+        != expected_candidate_source_sha256
+        or payload.get("qualified_patcher_sha256")
+        != expected_patcher_sha256
+        or payload.get("qualified_build_attestation_sha256")
+        != expected_build_attestation_sha256
+        or payload.get("qualified_candidate_so_sha256")
+        != expected_candidate_so_sha256
+        or payload.get("qualified_candidate_so_bytes")
+        != candidate_so.stat().st_size
+        or type(payload.get("qualified_completed_events")) is not int
+        or payload["qualified_completed_events"] < 1
+        or type(payload.get("qualified_flush_generation")) is not int
+        or payload["qualified_flush_generation"] < 1
+        or type(
+            payload.get("qualified_trace_completed_logical_model_requests")
+        )
+        is not int
+        or payload["qualified_trace_completed_logical_model_requests"] < 1
+        or payload.get("candidate") != EXPECTED_PRODUCTION_CANDIDATE
+        or payload.get("geometry") != EXPECTED_GEOMETRY
+        or payload.get("required_runtime")
+        != "fixed32 B1 full drafter graph, K0/root0"
+        or payload.get("production_scope")
+        != "five exact full-vocabulary BF16 M1 GEMV calls per event"
+    ):
+        raise ValueError("production sidecar contract drifted")
+    _require_commit(payload.get("qualified_source_commit"), "qualified source")
+    for key in (
+        "live_result_canonical_sha256",
+        "qualified_events_sha256",
+        "final_flush_sha256",
+        "boundary_snapshot_sha256",
+        "chat_traffic_audit_sha256",
+        "canonical_sha256",
+    ):
+        _require_sha256(payload.get(key), f"production sidecar {key}")
+    for path, expected_sha, label in (
+        (
+            candidate_source,
+            expected_candidate_source_sha256,
+            "candidate source",
+        ),
+        (patcher, expected_patcher_sha256, "patcher"),
+        (candidate_so, expected_candidate_so_sha256, "candidate SO"),
+    ):
+        if sha256_file(path) != expected_sha:
+            raise ValueError(f"{label} SHA-256 drifted")
+    return payload
+
+
+def validate_engagement(
+    *,
+    engagement_path: Path,
+    expected_source_sha256: str,
+    expected_patcher_sha256: str,
+    expected_build_attestation_sha256: str,
+    expected_so_sha256: str,
+    expected_sidecar_sha256: str,
+) -> dict[str, Any]:
+    """Require proof that measured replay served root plus four M1 heads."""
+    for value, label in (
+        (expected_source_sha256, "candidate source"),
+        (expected_patcher_sha256, "patcher"),
+        (expected_build_attestation_sha256, "build attestation"),
+        (expected_so_sha256, "candidate SO"),
+        (expected_sidecar_sha256, "production sidecar"),
+    ):
+        _require_sha256(value, label)
+    payload, _ = load_json(engagement_path)
+    if (
+        frozenset(payload) != ENGAGEMENT_KEYS
+        or payload.get("schema") != ENGAGEMENT_SCHEMA
+        or payload.get("status") != "ENGAGED"
+        or payload.get("candidate_source_sha256")
+        != expected_source_sha256
+        or payload.get("patcher_sha256") != expected_patcher_sha256
+        or payload.get("build_attestation_sha256")
+        != expected_build_attestation_sha256
+        or payload.get("candidate_so_sha256") != expected_so_sha256
+        or payload.get("production_pass_sidecar_sha256")
+        != expected_sidecar_sha256
+        or payload.get("geometry") != EXPECTED_GEOMETRY
+        or payload.get("candidate") != EXPECTED_PRODUCTION_CANDIDATE
+        or payload.get("selected_root_calls") != 1
+        or payload.get("captured_loop_calls") != 4
+        or payload.get("fallback_calls") != 0
+        or type(payload.get("drafter_graph_id")) is not int
+        or payload["drafter_graph_id"] < 1
+        or payload.get("drafter_graph_signature")
+        != EXPECTED_GRAPH_SIGNATURE
+        or payload.get("observed_measured_replays_at_least") != 1
+        or payload.get("capture_origin") not in {"measured", "unmeasured"}
+        or payload.get("execution_basis") != "cudagraph_replay"
+        or type(payload.get("forward_step_index")) is not int
+        or payload["forward_step_index"] < 0
+        or payload.get("runtime_mode") != "FULL"
+    ):
+        raise ValueError("draft-head M1 production engagement drifted")
+    _require_commit(payload.get("source_commit"), "engagement source")
+    return payload
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -471,17 +795,45 @@ def _parser() -> argparse.ArgumentParser:
             "--expected-candidate-so-sha256", required=True
         )
 
+    def add_live_inputs(command: argparse.ArgumentParser) -> None:
+        add_build_inputs(command)
+        command.add_argument("--live-result", type=Path, required=True)
+        command.add_argument("--expected-live-sha256", required=True)
+        command.add_argument("--final-flush", type=Path, required=True)
+        command.add_argument("--boundary-snapshot", type=Path, required=True)
+        command.add_argument("--chat-traffic-audit", type=Path, required=True)
+        command.add_argument("--patcher", type=Path, required=True)
+        command.add_argument("--expected-patcher-sha256", required=True)
+
     build = subparsers.add_parser("validate-build")
     add_build_inputs(build)
     live = subparsers.add_parser("validate-live")
-    add_build_inputs(live)
-    live.add_argument("--live-result", type=Path, required=True)
-    live.add_argument("--expected-live-sha256", required=True)
-    live.add_argument("--final-flush", type=Path, required=True)
-    live.add_argument("--boundary-snapshot", type=Path, required=True)
-    live.add_argument("--chat-traffic-audit", type=Path, required=True)
-    live.add_argument("--patcher", type=Path, required=True)
-    live.add_argument("--expected-patcher-sha256", required=True)
+    add_live_inputs(live)
+    issue = subparsers.add_parser("issue")
+    add_live_inputs(issue)
+    issue.add_argument("--out", type=Path, required=True)
+    verify = subparsers.add_parser("verify")
+    verify.add_argument("--sidecar", type=Path, required=True)
+    verify.add_argument("--expected-sidecar-sha256", required=True)
+    verify.add_argument("--expected-live-sha256", required=True)
+    verify.add_argument("--candidate-source", type=Path, required=True)
+    verify.add_argument("--expected-candidate-source-sha256", required=True)
+    verify.add_argument("--patcher", type=Path, required=True)
+    verify.add_argument("--expected-patcher-sha256", required=True)
+    verify.add_argument("--candidate-so", type=Path, required=True)
+    verify.add_argument("--expected-candidate-so-sha256", required=True)
+    verify.add_argument(
+        "--expected-build-attestation-sha256", required=True
+    )
+    engagement = subparsers.add_parser("engagement")
+    engagement.add_argument("--engagement", type=Path, required=True)
+    engagement.add_argument("--expected-source-sha256", required=True)
+    engagement.add_argument("--expected-patcher-sha256", required=True)
+    engagement.add_argument(
+        "--expected-build-attestation-sha256", required=True
+    )
+    engagement.add_argument("--expected-so-sha256", required=True)
+    engagement.add_argument("--expected-sidecar-sha256", required=True)
     return parser
 
 
@@ -503,7 +855,7 @@ def main() -> int:
                     args.expected_candidate_so_sha256
                 ),
             )
-        else:
+        elif args.command == "validate-live":
             result = validate(
                 live_result=args.live_result,
                 expected_live_sha256=args.expected_live_sha256,
@@ -524,6 +876,60 @@ def main() -> int:
                 expected_candidate_so_sha256=(
                     args.expected_candidate_so_sha256
                 ),
+            )
+        elif args.command == "issue":
+            result = issue_sidecar(
+                live_result=args.live_result,
+                expected_live_sha256=args.expected_live_sha256,
+                final_flush=args.final_flush,
+                boundary_snapshot=args.boundary_snapshot,
+                chat_traffic_audit=args.chat_traffic_audit,
+                candidate_source=args.candidate_source,
+                expected_candidate_source_sha256=(
+                    args.expected_candidate_source_sha256
+                ),
+                patcher=args.patcher,
+                expected_patcher_sha256=args.expected_patcher_sha256,
+                build_attestation=args.build_attestation,
+                expected_build_attestation_sha256=(
+                    args.expected_build_attestation_sha256
+                ),
+                candidate_so=args.candidate_so,
+                expected_candidate_so_sha256=(
+                    args.expected_candidate_so_sha256
+                ),
+                out=args.out,
+                repo=args.candidate_source.resolve(strict=True).parents[1],
+            )
+        elif args.command == "verify":
+            result = verify_sidecar(
+                sidecar_path=args.sidecar,
+                expected_sidecar_sha256=args.expected_sidecar_sha256,
+                expected_live_sha256=args.expected_live_sha256,
+                candidate_source=args.candidate_source,
+                expected_candidate_source_sha256=(
+                    args.expected_candidate_source_sha256
+                ),
+                patcher=args.patcher,
+                expected_patcher_sha256=args.expected_patcher_sha256,
+                candidate_so=args.candidate_so,
+                expected_candidate_so_sha256=(
+                    args.expected_candidate_so_sha256
+                ),
+                expected_build_attestation_sha256=(
+                    args.expected_build_attestation_sha256
+                ),
+            )
+        else:
+            result = validate_engagement(
+                engagement_path=args.engagement,
+                expected_source_sha256=args.expected_source_sha256,
+                expected_patcher_sha256=args.expected_patcher_sha256,
+                expected_build_attestation_sha256=(
+                    args.expected_build_attestation_sha256
+                ),
+                expected_so_sha256=args.expected_so_sha256,
+                expected_sidecar_sha256=args.expected_sidecar_sha256,
             )
     except (OSError, ValueError) as error:
         print(f"ERROR: {error}", file=sys.stderr)

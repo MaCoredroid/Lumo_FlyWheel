@@ -3,9 +3,12 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import os
 import sys
 import textwrap
+import types
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -14,6 +17,7 @@ REPO = Path(__file__).resolve().parents[1]
 PATCHER = REPO / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
 LAUNCHER = REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 RUNNER = REPO / "scripts" / "fr13_run_b1_draft_head_m1_live.sh"
+TIMING_RUNNER = REPO / "scripts" / "fr13_run_b1_draft_head_m1_timing.sh"
 VALIDATOR = REPO / "scripts" / "fr13_draft_head_m1_validate.py"
 MANIFEST = REPO / "scripts" / "fr13_runtime_manifest.py"
 PREPARED = (
@@ -133,6 +137,52 @@ def test_m1_contract_and_shadow_order_cover_all_five_heads() -> None:
     assert snippet.count("_fr13_dvk_logits(") >= 3
 
 
+def test_m1_production_is_candidate_only_and_fail_closed() -> None:
+    snippet = _eagle_snippet()
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+
+    assert '"FR13_DRAFT_HEAD_M1_PRODUCTION", "0"' in snippet
+    assert "FR13_DRAFT_HEAD_M1_INTERNAL_PRODUCTION_ATTESTED" in snippet
+    branch_start = snippet.index("elif _fr13_dh_m1_prod_on:")
+    branch_end = snippet.index("elif _fr13_dh_m32_on:", branch_start)
+    branch = snippet[branch_start:branch_end]
+    assert "_sh.quant_method.apply" not in branch
+    assert "_fr13_dh_candidate = _fr13_dh_m1_logits(_h)" in branch
+    assert "_fr13_dh_m1_note_production(_fr13_dh_capturing)" in branch
+    assert "_logits = _fr13_dh_candidate" in branch
+    assert "_fr13_dh_m1_note_production_replay" in snippet
+
+    assert "FR13_DRAFT_HEAD_M1_PRODUCTION=${FR13_DRAFT_HEAD_M1_PRODUCTION:-0}" in launcher
+    assert "draft-head M1 live A/B and production are mutually exclusive" in launcher
+    assert "fr13_draft_head_m1_validate.py issue" in launcher
+    assert "fr13_draft_head_m1_validate.py verify" in launcher
+    assert "FR13_DRAFT_HEAD_M1_INTERNAL_PRODUCTION_ATTESTED=1" in launcher
+    assert "M1 timing arm permits only stock or M1 production" in launcher
+    assert 'if [[ "$FR13_DRAFT_HEAD_M1_LIVE_AB" == "1" \\' in launcher
+    assert '|| "$FR13_DRAFT_HEAD_M1_PRODUCTION" == "1" ]]; then' in launcher
+
+
+def test_m1_production_contract_reports_the_served_candidate() -> None:
+    namespace: dict[str, object] = {}
+    exec(
+        compile(
+            ast.Module(
+                body=[_snippet_function("_fr13_dh_m1_contract")],
+                type_ignores=[],
+            ),
+            "<m1-production-contract>",
+            "exec",
+        ),
+        namespace,
+    )
+    validator = _validator_module()
+    contract = namespace["_fr13_dh_m1_contract"](True)
+    assert contract["geometry"] == validator.EXPECTED_GEOMETRY
+    assert contract["candidate"] == validator.EXPECTED_PRODUCTION_CANDIDATE
+    assert contract["candidate"]["served_rows"] == 1
+    assert contract["candidate"]["shadow_compared_rows"] == 0
+
+
 def test_m1_finalizer_requires_exact_per_position_event_census(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -250,6 +300,193 @@ def test_build_attestation_binds_source_so_and_pinned_toolchain() -> None:
         )
 
 
+def test_m1_production_sidecar_binds_all_candidate_identities(
+    tmp_path: Path,
+) -> None:
+    validator = _validator_module()
+    source = tmp_path / "candidate.cu"
+    patcher = tmp_path / "patcher.py"
+    candidate_so = tmp_path / "candidate.so"
+    source.write_bytes(b"source")
+    patcher.write_bytes(b"patcher")
+    candidate_so.write_bytes(b"binary")
+    source_sha = validator.sha256_file(source)
+    patcher_sha = validator.sha256_file(patcher)
+    so_sha = validator.sha256_file(candidate_so)
+    build_sha = "b" * 64
+    live_sha = "c" * 64
+    body = {
+        "schema": validator.SIDECAR_SCHEMA,
+        "status": "PASS",
+        "live_gate_schema": validator.LIVE_SCHEMA,
+        "validation_schema": validator.VALIDATION_SCHEMA,
+        "live_result_sha256": live_sha,
+        "live_result_canonical_sha256": "d" * 64,
+        "instance_id": validator.EXPECTED_INSTANCE,
+        "qualified_source_commit": "a" * 40,
+        "qualified_candidate_source_sha256": source_sha,
+        "qualified_patcher_sha256": patcher_sha,
+        "qualified_build_attestation_sha256": build_sha,
+        "qualified_candidate_so_sha256": so_sha,
+        "qualified_candidate_so_bytes": candidate_so.stat().st_size,
+        "qualified_completed_events": 7,
+        "qualified_events_sha256": "e" * 64,
+        "qualified_flush_generation": 3,
+        "final_flush_sha256": "f" * 64,
+        "boundary_snapshot_sha256": "1" * 64,
+        "chat_traffic_audit_sha256": "2" * 64,
+        "qualified_trace_completed_logical_model_requests": 1,
+        "candidate": validator.EXPECTED_PRODUCTION_CANDIDATE,
+        "geometry": validator.EXPECTED_GEOMETRY,
+        "required_runtime": "fixed32 B1 full drafter graph, K0/root0",
+        "production_scope": (
+            "five exact full-vocabulary BF16 M1 GEMV calls per event"
+        ),
+    }
+    payload = dict(body)
+    payload["canonical_sha256"] = validator._digest_bytes(
+        validator.canonical_bytes(body)
+    )
+    sidecar = tmp_path / "production_pass.json"
+    sidecar.write_bytes(validator.canonical_bytes(payload) + b"\n")
+    sidecar_sha = validator.sha256_file(sidecar)
+
+    assert validator.verify_sidecar(
+        sidecar_path=sidecar,
+        expected_sidecar_sha256=sidecar_sha,
+        expected_live_sha256=live_sha,
+        candidate_source=source,
+        expected_candidate_source_sha256=source_sha,
+        patcher=patcher,
+        expected_patcher_sha256=patcher_sha,
+        candidate_so=candidate_so,
+        expected_candidate_so_sha256=so_sha,
+        expected_build_attestation_sha256=build_sha,
+    ) == payload
+    with pytest.raises(ValueError, match="contract drifted"):
+        validator.verify_sidecar(
+            sidecar_path=sidecar,
+            expected_sidecar_sha256=sidecar_sha,
+            expected_live_sha256=live_sha,
+            candidate_source=source,
+            expected_candidate_source_sha256=source_sha,
+            patcher=patcher,
+            expected_patcher_sha256="3" * 64,
+            candidate_so=candidate_so,
+            expected_candidate_so_sha256=so_sha,
+            expected_build_attestation_sha256=build_sha,
+        )
+
+
+def test_m1_production_engages_only_after_measured_replay(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    validator = _validator_module()
+    graph_id = 123
+    signature = validator.EXPECTED_GRAPH_SIGNATURE
+    source_sha = "a" * 64
+    patcher_sha = "b" * 64
+    build_sha = "c" * 64
+    so_sha = "d" * 64
+    sidecar_sha = "e" * 64
+    state = SimpleNamespace(
+        _fr13_dh_m1_production_active=True,
+        _fr13_dh_m1_engagement_written=False,
+        _fr13_dh_m1_selected_root_calls=0,
+        _fr13_dh_m1_selected_capture_calls=0,
+        _fr13_dh_m1_fallback_calls=0,
+        _fr13_dh_m1_graph_attestation=None,
+    )
+    proposal = {
+        "batch_size": 1,
+        "mode": "hydra27_fixed32",
+        "graph_id": graph_id,
+        "graph_signature": signature,
+        "graph_replays": 1,
+        "measured": False,
+        "forward_step_index": 0,
+    }
+    lifecycle = {
+        "captures": 1,
+        "batch_size": 1,
+        "graph_signature": signature,
+        "capture_origin": "unmeasured",
+        "measured_replays": 0,
+    }
+    gdn = types.ModuleType("gdn_linear_attn")
+    gdn._FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT = proposal
+    gdn._FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE = {graph_id: lifecycle}
+    packages = {
+        "vllm": types.ModuleType("vllm"),
+        "vllm.model_executor": types.ModuleType("vllm.model_executor"),
+        "vllm.model_executor.layers": types.ModuleType(
+            "vllm.model_executor.layers"
+        ),
+        "vllm.model_executor.layers.mamba": types.ModuleType(
+            "vllm.model_executor.layers.mamba"
+        ),
+    }
+    packages["vllm.model_executor.layers.mamba"].gdn_linear_attn = gdn
+    for name, package in packages.items():
+        monkeypatch.setitem(sys.modules, name, package)
+    monkeypatch.setenv("FR13_DRAFT_HEAD_M1_SOURCE_COMMIT", "f" * 40)
+    monkeypatch.setenv(
+        "FR13_DRAFT_HEAD_M1_PRODUCTION_PASS_SIDECAR_SHA256", sidecar_sha
+    )
+    writes: list[dict[str, object]] = []
+    namespace = {
+        "self": state,
+        "os": os,
+        "_fr13_dh_m1_source_sha": source_sha,
+        "_fr13_dh_m1_patcher_sha": patcher_sha,
+        "_fr13_dh_m1_build_attestation_sha": build_sha,
+        "_fr13_dh_m1_so_sha": so_sha,
+        "_fr13_dh_m1_contract": lambda _production=False: {
+            "geometry": validator.EXPECTED_GEOMETRY,
+            "candidate": validator.EXPECTED_PRODUCTION_CANDIDATE,
+        },
+        "_fr13_dh_m32_atomic_json": lambda _path, payload: writes.append(
+            payload
+        ),
+    }
+    functions = [
+        _snippet_function("_fr13_dh_m1_note_production"),
+        _snippet_function("_fr13_dh_m1_note_production_replay"),
+    ]
+    exec(
+        compile(
+            ast.Module(body=functions, type_ignores=[]),
+            "<m1-production-lifecycle>",
+            "exec",
+        ),
+        namespace,
+    )
+    note = namespace["_fr13_dh_m1_note_production"]
+    replay = namespace["_fr13_dh_m1_note_production_replay"]
+    note(False)
+    for _ in range(4):
+        note(True)
+    replay(graph_id, signature, 1)
+    assert writes == []
+
+    proposal["measured"] = True
+    proposal["forward_step_index"] = 1
+    lifecycle["measured_replays"] = 1
+    note(False)
+    replay(graph_id, signature, 1)
+    assert len(writes) == 1
+    engagement = tmp_path / "engagement.json"
+    engagement.write_bytes(validator.canonical_bytes(writes[0]) + b"\n")
+    assert validator.validate_engagement(
+        engagement_path=engagement,
+        expected_source_sha256=source_sha,
+        expected_patcher_sha256=patcher_sha,
+        expected_build_attestation_sha256=build_sha,
+        expected_so_sha256=so_sha,
+        expected_sidecar_sha256=sidecar_sha,
+    ) == writes[0]
+
+
 def test_real_b1_runner_is_pinned_nonprobe_and_manifested() -> None:
     runner = RUNNER.read_text(encoding="utf-8")
     manifest = MANIFEST.read_text(encoding="utf-8")
@@ -295,6 +532,33 @@ def test_real_b1_runner_is_pinned_nonprobe_and_manifested() -> None:
         "config/fr13_fixed32/subset_b1_diagnostic_one.json",
     ):
         assert f'"{path}"' in manifest
+
+
+def test_m1_timing_runner_is_exact4_b1_full_wall_and_isolated() -> None:
+    runner = TIMING_RUNNER.read_text(encoding="utf-8")
+    manifest = MANIFEST.read_text(encoding="utf-8")
+
+    assert "config/fr13_fixed32/subset_b4_four.json" in runner
+    assert "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5" in runner
+    assert "MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1" in runner
+    assert "fr13_draft_head_m1_validate.py validate-live" in runner
+    assert 'FR13_DRAFT_HEAD_M1_PRODUCTION="$production"' in runner
+    assert "FR13_DRAFT_HEAD_M1_TIMING_ARM=1" in runner
+    assert 'FR13_DRAFT_HEAD_M1_SO="$candidate_so"' in runner
+    assert "FR13_DRAFT_HEAD_M32_PRODUCTION=0" in runner
+    assert "export FR13_DRAFT_VOCAB_ROOT=0" in runner
+    assert "export FR13_DRAFT_VOCAB_K=0" in runner
+    assert "scripts/fr13_measure.py deploy-speed" in runner
+    assert 'record.get("n_tasks") != 4' in runner
+    assert '"measured_tps_fullstep_wall"' in runner
+    assert "MIN_RETAINED_WALL_FRACTION = 0.99" in runner
+    assert "MIN_TASK_COUNTER_STEPS = 64" in runner
+    assert "floor_acceptance_eligible=0" in runner
+    assert "stock arm emitted M1 production sidecar" in runner
+    assert '"qualified_patcher_sha256"' in runner
+    assert '"qualified_build_attestation_sha256"' in runner
+    assert '"qualified_candidate_so_sha256"' in runner
+    assert '"scripts/fr13_run_b1_draft_head_m1_timing.sh"' in manifest
 
 
 def test_fixed32_flush_calls_m1_finalizer() -> None:

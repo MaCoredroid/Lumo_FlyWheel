@@ -20770,6 +20770,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_m1_live_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_M1_LIVE_AB", "0"
             )
+            _fr13_dh_m1_prod_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_M1_PRODUCTION", "0"
+            )
             if _fr13_dh_rows_raw not in ("0", "32", "64", "128"):
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_PAD_ROWS must be exactly one of "
@@ -20791,11 +20794,16 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_M1_LIVE_AB must be exactly 0 or 1"
                 )
+            if _fr13_dh_m1_prod_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_M1_PRODUCTION must be exactly 0 or 1"
+                )
             _fr13_dh_rows = int(_fr13_dh_rows_raw)
             _fr13_dh_ab = _fr13_dh_ab_raw == "1"
             _fr13_dh_m32_live = _fr13_dh_m32_live_raw == "1"
             _fr13_dh_m32_prod = _fr13_dh_m32_prod_raw == "1"
             _fr13_dh_m1_live = _fr13_dh_m1_live_raw == "1"
+            _fr13_dh_m1_prod = _fr13_dh_m1_prod_raw == "1"
             _fr13_dh_modes = sum(
                 int(value)
                 for value in (
@@ -20804,6 +20812,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_m32_live,
                     _fr13_dh_m32_prod,
                     _fr13_dh_m1_live,
+                    _fr13_dh_m1_prod,
                 )
             )
             if _fr13_dh_modes > 1:
@@ -20820,6 +20829,16 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             ):
                 raise RuntimeError(
                     "FR13 draft-head M32 production has no launcher attestation"
+                )
+            if (
+                _fr13_dh_m1_prod
+                and os.environ.get(
+                    "FR13_DRAFT_HEAD_M1_INTERNAL_PRODUCTION_ATTESTED"
+                )
+                != "1"
+            ):
+                raise RuntimeError(
+                    "FR13 draft-head M1 production has no launcher attestation"
                 )
             if (_fr13_dh_rows or _fr13_dh_ab) and (
                 not _fr13_is_fixed32
@@ -20843,7 +20862,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     "single-logits, FR13_DRAFT_VOCAB_ROOT=0, "
                     "FR13_DRAFT_VOCAB_K=0, and no draft-vocab block map"
                 )
-            if _fr13_dh_m1_live and (
+            if (_fr13_dh_m1_live or _fr13_dh_m1_prod) and (
                 not _fr13_is_fixed32
                 or _fr13_dvk_root
                 or not _fr13_single_logits
@@ -20851,7 +20870,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 or os.environ.get("FR13_DRAFT_VOCAB_BLOCKS", "")
             ):
                 raise RuntimeError(
-                    "FR13 full-head M1 live A/B requires exact fixed32 B1, "
+                    "FR13 full-head M1 live A/B requires exact fixed32 B1; "
+                    "production requires the same fixed32 B1, "
                     "single-logits, FR13_DRAFT_VOCAB_ROOT=0, "
                     "FR13_DRAFT_VOCAB_K=0, and no draft-vocab block map"
                 )
@@ -20880,7 +20900,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_m1_so_sha = os.environ.get(
                 "FR13_DRAFT_HEAD_M1_SO_SHA256", ""
             )
-            if _fr13_dh_m1_live and any(
+            if (_fr13_dh_m1_live or _fr13_dh_m1_prod) and any(
                 len(value) != 64
                 or any(char not in "0123456789abcdef" for char in value)
                 for value in (
@@ -20903,11 +20923,16 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             self._fr13_dh_m32_fallback_calls = 0
             self._fr13_dh_m32_graph_attestation = None
             self._fr13_dh_m1_live_active = _fr13_dh_m1_live
+            self._fr13_dh_m1_production_active = _fr13_dh_m1_prod
             self._fr13_dh_m1_capture_position = 1
+            self._fr13_dh_m1_selected_root_calls = 0
+            self._fr13_dh_m1_selected_capture_calls = 0
+            self._fr13_dh_m1_fallback_calls = 0
+            self._fr13_dh_m1_graph_attestation = None
 
             def _fr13_dvk_prepare():
                 if (
-                    _fr13_dh_m1_live
+                    (_fr13_dh_m1_live or _fr13_dh_m1_prod)
                     and not getattr(self, "_fr13_dh_m1_ready", False)
                 ):
                     import hashlib as _fr13_dh_m1_hashlib
@@ -20961,31 +20986,32 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         dtype=torch.bfloat16,
                         device=_fr13_dh_w.device,
                     )
-                    self._fr13_dh_m1_mismatches = torch.zeros(
-                        (5,), dtype=torch.int64, device=_fr13_dh_w.device
-                    )
-                    self._fr13_dh_m1_compares = torch.zeros(
-                        (5,), dtype=torch.int64, device=_fr13_dh_w.device
-                    )
-                    self._fr13_dh_m1_live_count_enable = torch.zeros(
-                        (), dtype=torch.int64, device=_fr13_dh_w.device
-                    )
-                    from vllm.model_executor.layers.mamba import (
-                        gdn_linear_attn as _fr13_dh_m1_gdn,
-                    )
+                    if _fr13_dh_m1_live:
+                        self._fr13_dh_m1_mismatches = torch.zeros(
+                            (5,), dtype=torch.int64, device=_fr13_dh_w.device
+                        )
+                        self._fr13_dh_m1_compares = torch.zeros(
+                            (5,), dtype=torch.int64, device=_fr13_dh_w.device
+                        )
+                        self._fr13_dh_m1_live_count_enable = torch.zeros(
+                            (), dtype=torch.int64, device=_fr13_dh_w.device
+                        )
+                        from vllm.model_executor.layers.mamba import (
+                            gdn_linear_attn as _fr13_dh_m1_gdn,
+                        )
 
-                    _fr13_dh_m1_contract_value = _fr13_dh_m1_contract()
-                    _fr13_dh_m1_gdn._fr13_draft_head_m1_live_register(
-                        self._fr13_dh_m1_compares,
-                        self._fr13_dh_m1_mismatches,
-                        _fr13_dh_m1_contract_value["geometry"],
-                        _fr13_dh_m1_contract_value["candidate"],
-                        {
-                            "path": str(_fr13_dh_m1_so),
-                            "sha256": _fr13_dh_m1_observed_sha,
-                            "bytes": int(_fr13_dh_m1_so_info.st_size),
-                        },
-                    )
+                        _fr13_dh_m1_contract_value = _fr13_dh_m1_contract()
+                        _fr13_dh_m1_gdn._fr13_draft_head_m1_live_register(
+                            self._fr13_dh_m1_compares,
+                            self._fr13_dh_m1_mismatches,
+                            _fr13_dh_m1_contract_value["geometry"],
+                            _fr13_dh_m1_contract_value["candidate"],
+                            {
+                                "path": str(_fr13_dh_m1_so),
+                                "sha256": _fr13_dh_m1_observed_sha,
+                                "bytes": int(_fr13_dh_m1_so_info.st_size),
+                            },
+                        )
                     self._fr13_dh_m1_ready = True
                     print(
                         "[FR13_DRAFT_HEAD_M1] stock-order full-head CUDA op "
@@ -21062,6 +21088,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         int(self.model.lm_head.weight.shape[0])
                         if (
                             _fr13_dh_m1_live
+                            or _fr13_dh_m1_prod
                             or _fr13_dh_m32_live
                             or _fr13_dh_m32_prod
                         )
@@ -21267,7 +21294,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 )
                 return _fr13_dh_out
 
-            def _fr13_dh_m1_contract():
+            def _fr13_dh_m1_contract(_production=False):
                 return {
                     "geometry": {
                         "batch_size": 1,
@@ -21288,7 +21315,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "module": "ParallelLMHead",
                         "method": "UnquantizedEmbeddingMethod",
                         "operation": (
-                            "custom stock-order BF16 M1 GEMV shadow after "
+                            "custom stock-order BF16 M1 GEMV served directly"
+                            if _production
+                            else "custom stock-order BF16 M1 GEMV shadow after "
                             "stock reference"
                         ),
                         "gemv_mnk": [1, 248320, 5120],
@@ -21307,8 +21336,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         ),
                         "output_conversion": "__float2bfloat16_rn",
                         "candidate_launches_per_head": 1,
-                        "served_rows": 0,
-                        "shadow_compared_rows": 1,
+                        "served_rows": 1 if _production else 0,
+                        "shadow_compared_rows": 0 if _production else 1,
                     },
                 }
 
@@ -21334,6 +21363,164 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "FR13 full-head M1 has no exact real-B1 proposal"
                     )
                 return _fr13_dh_m1_proposal["measured"] is True
+
+            def _fr13_dh_m1_note_production(_capturing):
+                if not getattr(
+                    self, "_fr13_dh_m1_production_active", False
+                ) or getattr(
+                    self, "_fr13_dh_m1_engagement_written", False
+                ):
+                    return
+                if _capturing:
+                    self._fr13_dh_m1_selected_capture_calls += 1
+                else:
+                    self._fr13_dh_m1_selected_root_calls += 1
+                if (
+                    self._fr13_dh_m1_selected_root_calls > 1
+                    or self._fr13_dh_m1_selected_capture_calls > 4
+                ):
+                    raise RuntimeError(
+                        "FR13 draft-head M1 selection exceeded its first "
+                        "root/capture lifecycle before replay engagement"
+                    )
+
+            def _fr13_dh_m1_note_production_replay(
+                _graph_id, _graph_signature, _batch_size
+            ):
+                if not getattr(
+                    self, "_fr13_dh_m1_production_active", False
+                ) or getattr(
+                    self, "_fr13_dh_m1_engagement_written", False
+                ):
+                    return
+                from vllm.model_executor.layers.mamba import (
+                    gdn_linear_attn as _fr13_dh_m1_replay_gdn,
+                )
+
+                _fr13_dh_m1_proposal = getattr(
+                    _fr13_dh_m1_replay_gdn,
+                    "_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT",
+                    None,
+                )
+                _fr13_dh_m1_signature = str(_graph_signature)
+                _fr13_dh_m1_lifecycle = getattr(
+                    _fr13_dh_m1_replay_gdn,
+                    "_FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE",
+                    {},
+                ).get(int(_graph_id))
+                if (
+                    not isinstance(_fr13_dh_m1_proposal, dict)
+                    or int(_batch_size) != 1
+                    or int(_graph_id) <= 0
+                    or int(_fr13_dh_m1_proposal.get("graph_id", -1))
+                    != int(_graph_id)
+                    or _fr13_dh_m1_proposal.get("graph_signature")
+                    != _fr13_dh_m1_signature
+                    or int(_fr13_dh_m1_proposal.get("graph_replays", -1))
+                    != 1
+                    or self._fr13_dh_m1_selected_root_calls != 1
+                    or self._fr13_dh_m1_fallback_calls != 0
+                    or not isinstance(_fr13_dh_m1_lifecycle, dict)
+                    or int(_fr13_dh_m1_lifecycle.get("captures", -1)) != 1
+                    or int(_fr13_dh_m1_lifecycle.get("batch_size", -1)) != 1
+                    or _fr13_dh_m1_lifecycle.get("graph_signature")
+                    != _fr13_dh_m1_signature
+                    or _fr13_dh_m1_lifecycle.get("capture_origin")
+                    not in ("measured", "unmeasured")
+                    or _fr13_dh_m1_signature
+                    != (
+                        "d9a4ddece41d146e9949b9f8ff7c2603"
+                        "b8948d157b28ef69244e44469b36150c"
+                    )
+                ):
+                    raise RuntimeError(
+                        "FR13 draft-head M1 production replay engagement "
+                        "drifted"
+                    )
+                _fr13_dh_m1_graph_attestation = getattr(
+                    self, "_fr13_dh_m1_graph_attestation", None
+                )
+                if _fr13_dh_m1_graph_attestation is None:
+                    if self._fr13_dh_m1_selected_capture_calls != 4:
+                        raise RuntimeError(
+                            "FR13 draft-head M1 graph capture did not select "
+                            "four loop heads"
+                        )
+                    _fr13_dh_m1_graph_attestation = {
+                        "graph_id": int(_graph_id),
+                        "graph_signature": _fr13_dh_m1_signature,
+                        "capture_origin": _fr13_dh_m1_lifecycle[
+                            "capture_origin"
+                        ],
+                    }
+                    self._fr13_dh_m1_graph_attestation = (
+                        _fr13_dh_m1_graph_attestation
+                    )
+                elif (
+                    self._fr13_dh_m1_selected_capture_calls != 0
+                    or _fr13_dh_m1_graph_attestation.get("graph_id")
+                    != int(_graph_id)
+                    or _fr13_dh_m1_graph_attestation.get("graph_signature")
+                    != _fr13_dh_m1_signature
+                    or _fr13_dh_m1_graph_attestation.get("capture_origin")
+                    != _fr13_dh_m1_lifecycle.get("capture_origin")
+                ):
+                    raise RuntimeError(
+                        "FR13 draft-head M1 replay left its attested graph"
+                    )
+                self._fr13_dh_m1_selected_root_calls = 0
+                self._fr13_dh_m1_selected_capture_calls = 0
+                if _fr13_dh_m1_proposal.get("measured") is not True:
+                    return
+                if int(_fr13_dh_m1_lifecycle.get("measured_replays", 0)) < 1:
+                    raise RuntimeError(
+                        "FR13 draft-head M1 engagement lacks a measured replay"
+                    )
+                _fr13_dh_m1_contract_value = _fr13_dh_m1_contract(True)
+                _fr13_dh_m32_atomic_json(
+                    os.environ.get(
+                        "FR13_DRAFT_HEAD_M1_PRODUCTION_ENGAGEMENT_JSON",
+                        "/logs/fr13_draft_head_m1.production_engagement.json",
+                    ),
+                    {
+                        "schema": (
+                            "fr13.fixed32."
+                            "draft_head_full_m1_production_engagement.v1"
+                        ),
+                        "status": "ENGAGED",
+                        "source_commit": os.environ.get(
+                            "FR13_DRAFT_HEAD_M1_SOURCE_COMMIT", ""
+                        ),
+                        "candidate_source_sha256": _fr13_dh_m1_source_sha,
+                        "patcher_sha256": _fr13_dh_m1_patcher_sha,
+                        "build_attestation_sha256": (
+                            _fr13_dh_m1_build_attestation_sha
+                        ),
+                        "candidate_so_sha256": _fr13_dh_m1_so_sha,
+                        "production_pass_sidecar_sha256": os.environ.get(
+                            "FR13_DRAFT_HEAD_M1_"
+                            "PRODUCTION_PASS_SIDECAR_SHA256",
+                            "",
+                        ),
+                        "geometry": _fr13_dh_m1_contract_value["geometry"],
+                        "candidate": _fr13_dh_m1_contract_value["candidate"],
+                        "selected_root_calls": 1,
+                        "captured_loop_calls": 4,
+                        "fallback_calls": self._fr13_dh_m1_fallback_calls,
+                        "drafter_graph_id": int(_graph_id),
+                        "drafter_graph_signature": _fr13_dh_m1_signature,
+                        "observed_measured_replays_at_least": 1,
+                        "capture_origin": _fr13_dh_m1_graph_attestation[
+                            "capture_origin"
+                        ],
+                        "execution_basis": "cudagraph_replay",
+                        "forward_step_index": int(
+                            _fr13_dh_m1_proposal["forward_step_index"]
+                        ),
+                        "runtime_mode": "FULL",
+                    },
+                )
+                self._fr13_dh_m1_engagement_written = True
 
             def _fr13_dh_m32_logits(_h):
                 _fr13_dh_sh = getattr(self, "_fr13_dh_m32_head", None)
@@ -21638,12 +21825,18 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_m1_live_on = getattr(
                         self, "_fr13_dh_m1_live_active", False
                     )
+                    _fr13_dh_m1_prod_on = getattr(
+                        self, "_fr13_dh_m1_production_active", False
+                    )
+                    _fr13_dh_m1_on = (
+                        _fr13_dh_m1_live_on or _fr13_dh_m1_prod_on
+                    )
                     _fr13_dh_m32_on = (
                         _fr13_dh_m32_live_on or _fr13_dh_m32_prod_on
                     )
                     _sh = (
                         self._fr13_dh_m1_head
-                        if _fr13_dh_m1_live_on
+                        if _fr13_dh_m1_on
                         else self._fr13_dh_m32_head
                         if _fr13_dh_m32_on
                         else self._fr13_dvk_shim
@@ -21694,6 +21887,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             _fr13_dh_position
                         ].add_(_fr13_dh_count_enable)
                         _logits = _fr13_dh_reference
+                    elif _fr13_dh_m1_prod_on:
+                        _fr13_dh_capturing = (
+                            torch.cuda.is_current_stream_capturing()
+                        )
+                        _fr13_dh_m1_measured_proposal()
+                        _fr13_dh_candidate = _fr13_dh_m1_logits(_h)
+                        _fr13_dh_m1_note_production(_fr13_dh_capturing)
+                        _logits = _fr13_dh_candidate
                     elif _fr13_dh_m32_on:
                         _fr13_dh_capturing = (
                             torch.cuda.is_current_stream_capturing()
@@ -21796,7 +21997,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     return (
                         _logits,
                         None
-                        if (_fr13_dh_m1_live_on or _fr13_dh_m32_on)
+                        if (_fr13_dh_m1_on or _fr13_dh_m32_on)
                         else getattr(self, "_fr13_dvk_map_t", None),
                     )
                 except Exception as _e:
@@ -21806,6 +22007,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         raise RuntimeError(
                             "FR13 draft-head M1 live A/B failed its strict "
                             "reference-first runtime contract"
+                        ) from _e
+                    if getattr(
+                        self, "_fr13_dh_m1_production_active", False
+                    ):
+                        raise RuntimeError(
+                            "FR13 draft-head M1 production failed its strict "
+                            "candidate-only runtime contract"
                         ) from _e
                     if getattr(
                         self, "_fr13_dh_m32_production_active", False
@@ -21841,6 +22049,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
 
             if (
                 _fr13_dh_m1_live
+                or _fr13_dh_m1_prod
                 or _fr13_dh_m32_live
                 or _fr13_dh_m32_prod
                 or _fr13_dvk_root
@@ -21883,6 +22092,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 if (
                     (
                         _fr13_dh_m1_live
+                        or _fr13_dh_m1_prod
                         or _fr13_dh_m32_live
                         or _fr13_dh_m32_prod
                     )
@@ -21903,6 +22113,16 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             print(
                                 "[FR13_DRAFT_HEAD_M1] root plus four MTP "
                                 "full-vocabulary heads reference-first/shadow-routed",
+                                flush=True,
+                            )
+                    elif _fr13_dh_m1_prod:
+                        if not getattr(
+                            self, "_fr13_dh_m1_route_engaged", False
+                        ):
+                            self._fr13_dh_m1_route_engaged = True
+                            print(
+                                "[FR13_DRAFT_HEAD_M1] root plus four MTP "
+                                "full-vocabulary heads candidate-only routed",
                                 flush=True,
                             )
                     elif _fr13_dh_m32_live or _fr13_dh_m32_prod:
@@ -22062,6 +22282,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             if not _fr13_dvk_root:
                 if not (
                     _fr13_dh_m1_live
+                    or _fr13_dh_m1_prod
                     or _fr13_dh_m32_live
                     or _fr13_dh_m32_prod
                 ):
@@ -22120,6 +22341,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 _dg["graph"].replay()
                 if _fr13_is_fixed32:
                     _fr13_f32_dg_gdn._fr13_fixed32_drafter_graph_replay(
+                        id(_dg["graph"]),
+                        _dg.get("fixed32_signature"),
+                        _fr13_dg_key,
+                    )
+                    _fr13_dh_m1_note_production_replay(
                         id(_dg["graph"]),
                         _dg.get("fixed32_signature"),
                         _fr13_dg_key,
@@ -22322,6 +22548,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     # no leaves in spine-only mode), so its topk is skipped.
                     if (
                         _fr13_dh_m1_live
+                        or _fr13_dh_m1_prod
                         or _fr13_dh_m32_live
                         or _fr13_dh_m32_prod
                         or (
@@ -22463,6 +22690,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 _fr13_dg_g.replay()
                 if _fr13_is_fixed32:
                     _fr13_f32_dg_gdn._fr13_fixed32_drafter_graph_replay(
+                        id(_fr13_dg_g),
+                        _dg["fixed32_signature"],
+                        _fr13_dg_key,
+                    )
+                    _fr13_dh_m1_note_production_replay(
                         id(_fr13_dg_g),
                         _dg["fixed32_signature"],
                         _fr13_dg_key,
