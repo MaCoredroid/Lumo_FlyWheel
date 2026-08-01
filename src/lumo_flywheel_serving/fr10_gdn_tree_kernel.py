@@ -3888,6 +3888,11 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
                     dtype=torch.int32,
                     device=device,
                 ),
+                "path_max_lengths": torch.tensor(
+                    group_contract["group_max_path_lengths"],
+                    dtype=torch.int32,
+                    device=device,
+                ),
                 "parent_nodes": torch.tensor(
                     group_contract["parent_nodes"],
                     dtype=torch.int32,
@@ -8168,6 +8173,7 @@ def _tree_gdn_path_kernel_fixed32_parent_group(
     path_lengths,
     group_path_indices,
     group_path_counts,
+    group_path_max_lengths,
     group_parent_refs,
     state_export,
     out,
@@ -8242,11 +8248,12 @@ def _tree_gdn_path_kernel_fixed32_parent_group(
         mask=member_ok,
         other=0,
     )
+    group_path_max_len = tl.load(group_path_max_lengths + pid_group)
     state_i = parent_state[None, :, :] + tl.zeros(
         (SIMD_WIDTH, 1, 1), dtype=tl.float32
     )
 
-    for i in tl.static_range(0, MAX_PATH_LEN):
+    for i in tl.range(0, group_path_max_len):
         step_ok = member_ok & (i < path_len)
         node = tl.load(
             path_nodes + path_index * MAX_PATH_LEN + i,
@@ -12373,6 +12380,7 @@ def launch_tree_gdn_prepared(
                     _lengths,
                     _parent_group["path_indices"],
                     _parent_group["path_counts"],
+                    _parent_group["path_max_lengths"],
                     _parent_group["parent_nodes"],
                     st["export"],
                     _out,
@@ -13314,6 +13322,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                     path_lengths,
                     parent_group["path_indices"],
                     parent_group["path_counts"],
+                    parent_group["path_max_lengths"],
                     parent_group["parent_slots"],
                     subtree_state["export"],
                     out,

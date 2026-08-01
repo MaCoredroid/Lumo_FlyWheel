@@ -246,9 +246,11 @@ def test_parent_group_kernel_and_launchers_keep_single_writer_surfaces() -> None
 
     assert "offs_member = tl.arange(0, SIMD_WIDTH)[:, None]" in kernel
     assert "for member in tl.static_range" not in kernel
-    assert "for i in tl.static_range(0, MAX_PATH_LEN)" in kernel
+    assert "group_path_max_len = tl.load(" in kernel
+    assert "for i in tl.range(0, group_path_max_len)" in kernel
+    assert "for i in tl.static_range(0, MAX_PATH_LEN)" not in kernel
     assert kernel.index("parent_state = tl.load(") < kernel.index(
-        "for i in tl.static_range"
+        "for i in tl.range(0, group_path_max_len)"
     )
     assert "state_i = parent_state[None, :, :] + tl.zeros(" in kernel
     assert "_gdn_group_node_step(" in kernel
@@ -265,6 +267,7 @@ def test_parent_group_kernel_and_launchers_keep_single_writer_surfaces() -> None
     assert "COMPACT_EXPORT=False" in b1_launcher
     assert "BATCH_SIZE=1" in b1_launcher
     assert 'SIMD_WIDTH=int(_group_contract["simd_width"])' in b1_launcher
+    assert '_parent_group["path_max_lengths"]' in b1_launcher
     assert "COUNT_INVOCATION=_count and (_li == 0)" in b1_launcher
     assert "FLAGS_EXPORT=_flags_export and (_li == 0)" in b1_launcher
     assert "if parent_group is not None and level_index == 1:" in batched_launcher
@@ -272,6 +275,7 @@ def test_parent_group_kernel_and_launchers_keep_single_writer_surfaces() -> None
     assert "COMPACT_EXPORT=True" in batched_launcher
     assert "force_incumbent_parent_group=True" in batched_launcher
     assert 'SIMD_WIDTH=int(group_contract["simd_width"])' in batched_launcher
+    assert 'parent_group["path_max_lengths"]' in batched_launcher
     assert "COUNT_INVOCATION=count_invocation and level_index == 0" in (
         batched_launcher
     )
