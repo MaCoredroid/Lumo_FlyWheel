@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reduce a real exact4 B1 stock/Stream-K full-wall timing pair."""
+"""Reduce a real B1 stock/Stream-K full-wall timing pair."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ import fr13_hardware_floor_ledger as floor
 import fr13_qrow16_pass_sidecar as qrow
 
 
-SCHEMA = "fr13.fixed32.cutlass_streamk.b1_full_wall_timing_pair.v3"
+SCHEMA = "fr13.fixed32.cutlass_streamk.b1_full_wall_timing_pair.v4"
 MEASURE_SCHEMA = "fr13.measure.deploy_speed.v1"
 EXPECTED_SUBSET_SHA256 = (
     "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
@@ -31,6 +31,32 @@ EXPECTED_TASK_IDS = (
     "astropy__astropy-13236",
     "astropy__astropy-13398",
 )
+ONE_TASK_SUBSET_SHA256 = (
+    "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb"
+)
+ONE_TASK_IDS = (EXPECTED_TASK_IDS[0],)
+TASK_SET_CONTRACTS = {
+    "exact4": {
+        "subset_sha256": EXPECTED_SUBSET_SHA256,
+        "task_ids": EXPECTED_TASK_IDS,
+        "run_classification": (
+            "real_swe_verified_exact4_b1_hydra27_qrow16_streamk_timing"
+        ),
+        "timing_eligible": True,
+        "timing_claim_source": "paired exact4 real SWE-Verified full-wall arms",
+    },
+    "one": {
+        "subset_sha256": ONE_TASK_SUBSET_SHA256,
+        "task_ids": ONE_TASK_IDS,
+        "run_classification": (
+            "one_real_swe_verified_b1_hydra27_qrow16_streamk_timing_diagnostic"
+        ),
+        "timing_eligible": False,
+        "timing_claim_source": (
+            "paired one-task real SWE-Verified full-wall diagnostic arms"
+        ),
+    },
+}
 EXPECTED_ENV = (
     "FR13_DRAFT_VOCAB_ROOT=0",
     "FR13_DRAFT_VOCAB_K=0",
@@ -110,13 +136,15 @@ def _close(actual: float, expected: float, label: str) -> None:
         raise TimingError(f"{label} mismatch: {actual!r} != {expected!r}")
 
 
-def _validate_measure(record: dict[str, Any], label: str) -> dict[str, float]:
+def _validate_measure(
+    record: dict[str, Any], label: str, task_ids: tuple[str, ...]
+) -> dict[str, float]:
     required = {
         "schema": MEASURE_SCHEMA,
         "regime": "deployment",
         "instrument": "OFF",
         "batch_size": 1,
-        "n_tasks": 4,
+        "n_tasks": len(task_ids),
         "draft_vocab_k": 0,
         "draft_vocab_root": 0,
         "mandatory_weight_bytes": floor.FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
@@ -127,8 +155,8 @@ def _validate_measure(record: dict[str, Any], label: str) -> dict[str, float]:
             raise TimingError(
                 f"{label} {key} mismatch: {record.get(key)!r} != {expected!r}"
             )
-    if sorted(record.get("task_instance_ids", [])) != sorted(EXPECTED_TASK_IDS):
-        raise TimingError(f"{label} is not bound to the canonical exact4 task set")
+    if sorted(record.get("task_instance_ids", [])) != sorted(task_ids):
+        raise TimingError(f"{label} is not bound to the selected timing task set")
     numeric = {}
     for key in (
         "measured_tps_fullstep_wall",
@@ -285,20 +313,38 @@ def reduce_pair(
     production_binding: Path,
     candidate_so: Path,
     source_commit: str,
+    *,
+    candidate_selector: str = "streamk_coop128",
+    task_set: str = "exact4",
 ) -> dict[str, Any]:
+    try:
+        task_contract = TASK_SET_CONTRACTS[task_set]
+    except KeyError as error:
+        raise TimingError(f"unsupported timing task set: {task_set!r}") from error
+    if candidate_selector not in qualification.CANDIDATE_CONTRACTS:
+        raise TimingError(
+            f"unsupported Stream-K timing candidate: {candidate_selector!r}"
+        )
+    task_ids = tuple(task_contract["task_ids"])
+    candidate_sha256, candidate_bytes, candidate_family = binary.candidate_identity(
+        candidate_selector
+    )
+    diagnostic_selector = qualification.CANDIDATE_CONTRACTS[candidate_selector][
+        "diagnostic_selector"
+    ]
     if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
         raise TimingError("timing source commit is invalid")
-    _regular(subset, "exact4 subset")
-    if _sha256(subset) != EXPECTED_SUBSET_SHA256:
-        raise TimingError("canonical exact4 subset SHA-256 drift")
-    subset_payload, _ = _load(subset, "exact4 subset")
-    if sorted(subset_payload.get("instance_ids", [])) != sorted(EXPECTED_TASK_IDS):
-        raise TimingError("canonical exact4 subset task IDs drift")
+    _regular(subset, "timing subset")
+    if _sha256(subset) != task_contract["subset_sha256"]:
+        raise TimingError("canonical timing subset SHA-256 drift")
+    subset_payload, _ = _load(subset, "timing subset")
+    if sorted(subset_payload.get("instance_ids", [])) != sorted(task_ids):
+        raise TimingError("canonical timing subset task IDs drift")
     stock, _ = _load(stock_measure, "stock full-wall measurement")
     candidate, _ = _load(candidate_measure, "candidate full-wall measurement")
     binding, binding_raw = _load(production_binding, "production binding")
-    stock_values = _validate_measure(stock, "stock")
-    candidate_values = _validate_measure(candidate, "candidate")
+    stock_values = _validate_measure(stock, "stock", task_ids)
+    candidate_values = _validate_measure(candidate, "candidate", task_ids)
     stock_env_sha256 = _validate_container_env(
         stock_container_env,
         "stock container environment",
@@ -308,7 +354,7 @@ def reduce_pair(
     candidate_env_sha256 = _validate_container_env(
         candidate_container_env,
         "candidate container environment",
-        cutlass_selector="streamk_coop128",
+        cutlass_selector=candidate_selector,
         cutlass_production=1,
     )
     _regular(qrow16_so, "Qrow16 candidate SO")
@@ -346,9 +392,11 @@ def reduce_pair(
     expected_binding = {
         "schema": "fr13.fixed32.cutlass_streamk.production_binding.v1",
         "status": "BOUND",
-        "selector": "streamk_coop128",
-        "candidate_sha256": binary.CANDIDATE_SHA256,
-        "candidate_bytes": binary.CANDIDATE_SIZE,
+        "selector": candidate_selector,
+        "diagnostic_selector": diagnostic_selector,
+        "candidate_family": candidate_family,
+        "candidate_sha256": candidate_sha256,
+        "candidate_bytes": candidate_bytes,
         "patch_source_sha256": qualification.PATCH_SOURCE_SHA256,
         "qualification_source_commit": source_commit,
         "qualification_task_marker": qualification.EXPECTED_TASK_MARKER,
@@ -375,7 +423,7 @@ def reduce_pair(
         value = binding.get(key)
         if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
             raise TimingError(f"production binding {key} is not SHA-256")
-    actual_candidate = binary.verify_candidate(candidate_so)
+    actual_candidate = binary.verify_candidate(candidate_so, candidate_selector)
     if actual_candidate["sha256"] != binding["candidate_sha256"]:
         raise TimingError("production binding and candidate binary disagree")
 
@@ -405,15 +453,14 @@ def reduce_pair(
     return {
         "schema": SCHEMA,
         "status": "complete",
-        "run_classification": (
-            "real_swe_verified_exact4_b1_hydra27_qrow16_streamk_timing"
-        ),
+        "run_classification": task_contract["run_classification"],
         "topology": "hydra27_fixed32",
         "lineage": "successor_to_legacy_hydra23_not_same_topology",
-        "task_count": 4,
+        "task_set": task_set,
+        "task_count": len(task_ids),
         "batch_size": 1,
         "concurrency": 1,
-        "task_ids": sorted(EXPECTED_TASK_IDS),
+        "task_ids": sorted(task_ids),
         "source_commit": source_commit,
         "decision_metric": "measured_tps_fullstep_wall",
         "draft_vocab_root": 0,
@@ -424,12 +471,14 @@ def reduce_pair(
             "candidate_arm": candidate_qrow16,
             "identical_in_both_arms": True,
         },
-        "only_arm_delta": "CUTLASS stock to streamk_coop128",
+        "only_arm_delta": f"CUTLASS stock to {candidate_selector}",
         "stock_reference": arm("stock", stock_values, stock_env_sha256),
         "candidate": {
-            **arm("streamk_coop128", candidate_values, candidate_env_sha256),
-            "candidate_sha256": binary.CANDIDATE_SHA256,
-            "candidate_bytes": binary.CANDIDATE_SIZE,
+            **arm(candidate_selector, candidate_values, candidate_env_sha256),
+            "candidate_family": candidate_family,
+            "diagnostic_selector": diagnostic_selector,
+            "candidate_sha256": candidate_sha256,
+            "candidate_bytes": candidate_bytes,
             "patch_source_sha256": qualification.PATCH_SOURCE_SHA256,
             "production_binding_sha256": hashlib.sha256(binding_raw).hexdigest(),
             "live_result_sha256": binding["live_result_sha256"],
@@ -444,11 +493,13 @@ def reduce_pair(
         "stock_to_candidate_step_wall_ratio": stock_wall / candidate_wall,
         "candidate_step_wall_delta_ms": candidate_wall - stock_wall,
         "comparator_gate_timing_eligible": False,
-        "timing_claim_source": "paired exact4 real SWE-Verified full-wall arms",
+        "timing_eligible": task_contract["timing_eligible"],
+        "timing_claim_source": task_contract["timing_claim_source"],
+        "floor_acceptance_eligible": False,
         "formal_floor_acceptance_eligible": False,
         "formal_floor_acceptance_reason": (
-            "paired exact4 Hydra27 same-topology kernel timing candidate only; "
-            "the canonical Tail6/Hydra27 one-sided U95 floor gate was not run"
+            "Hydra27 same-topology kernel timing candidate only; the canonical "
+            "Tail6/Hydra27 one-sided U95 floor gate was not run"
         ),
         "production_default_enabled": False,
     }
@@ -489,6 +540,14 @@ def main() -> int:
     parser.add_argument("--production-binding", type=Path, required=True)
     parser.add_argument("--candidate-so", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
+    parser.add_argument(
+        "--candidate-selector",
+        choices=tuple(qualification.CANDIDATE_CONTRACTS),
+        default="streamk_coop128",
+    )
+    parser.add_argument(
+        "--task-set", choices=tuple(TASK_SET_CONTRACTS), default="exact4"
+    )
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     payload = reduce_pair(
@@ -505,6 +564,8 @@ def main() -> int:
         args.production_binding,
         args.candidate_so,
         args.source_commit,
+        candidate_selector=args.candidate_selector,
+        task_set=args.task_set,
     )
     _write(args.out, payload)
     print(json.dumps(payload, ensure_ascii=True, sort_keys=True))
