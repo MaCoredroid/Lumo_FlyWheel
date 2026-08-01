@@ -463,7 +463,7 @@ def test_floor_and_depth_require_exact_ingress_and_trace_evidence() -> None:
 
     assert "fr13.canonical_swe_verified_fixed32_floor_gate.v11" in floor
     assert "fr13-fixed32-chat-task-provenance-audit-v3" in floor
-    assert "fr13.depth_acceptance.fixed32.v2" in depth
+    assert "fr13.depth_acceptance.fixed32.v3" in depth
     for gate in required_gates:
         assert gate in floor
         assert gate in depth

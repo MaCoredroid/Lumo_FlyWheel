@@ -31,25 +31,15 @@ def _json(name: str) -> dict[str, object]:
     return json.loads((ARTIFACT / name).read_text(encoding="ascii"))
 
 
-def test_live_pass_is_exact_and_current_b1_production_validator_accepts() -> None:
+def test_pre_tail23_live_pass_is_exact_but_current_validator_rejects() -> None:
     path = ARTIFACT / "live_pass.json"
     assert hashlib.sha256(path.read_bytes()).hexdigest() == LIVE_PASS_SHA256
 
-    payload = kernel._fr13_fixed32_taw_native_production_pass(
-        path=str(path),
-        expected_mode="hydra27_fixed32",
-        expected_batch=1,
-    )
-    assert payload["task_marker"] == "swe_verified:astropy__astropy-12907"
-    assert payload["covered_batches"] == [1]
-    assert payload["reference_returned"] is True
-    assert payload["candidate_returned"] is False
-
-    with pytest.raises(RuntimeError, match="batch is not covered"):
+    with pytest.raises(RuntimeError, match="different candidate/source"):
         kernel._fr13_fixed32_taw_native_production_pass(
             path=str(path),
             expected_mode="hydra27_fixed32",
-            expected_batch=4,
+            expected_batch=1,
         )
 
 
