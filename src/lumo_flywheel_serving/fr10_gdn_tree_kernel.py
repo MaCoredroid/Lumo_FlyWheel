@@ -9606,17 +9606,19 @@ def _fr13_fixed32_committer_fast_state(
 @triton.jit
 def _fr13_fixed32_committer_native_layer_batch_kernel(
     A_logs,
-    a,
-    b,
+    a_rings,
+    b_rings,
     dt_biases,
-    k,
-    v,
+    k_rings,
+    v_rings,
     bank_anchor,
     bank_off16,
+    accepted_paths,
     accepted_lens,
-    ssm_state_indices,
+    spec_state_indices,
     B: tl.constexpr,
     PATH_CAP: tl.constexpr,
+    RING_N: tl.constexpr,
     H: tl.constexpr,
     HV: tl.constexpr,
     K: tl.constexpr,
@@ -9625,11 +9627,17 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     BV: tl.constexpr,
     BANK_STRIDE: tl.constexpr,
     GATE_L_STRIDE: tl.constexpr,
-    AB_L_STRIDE: tl.constexpr,
-    K_L_STRIDE: tl.constexpr,
-    V_L_STRIDE: tl.constexpr,
-    SSI_L_STRIDE: tl.constexpr,
-    SSI_SEQ_STRIDE: tl.constexpr,
+    RING_K_L_STRIDE: tl.constexpr,
+    RING_K_B_STRIDE: tl.constexpr,
+    RING_K_N_STRIDE: tl.constexpr,
+    RING_V_L_STRIDE: tl.constexpr,
+    RING_V_B_STRIDE: tl.constexpr,
+    RING_V_N_STRIDE: tl.constexpr,
+    RING_AB_L_STRIDE: tl.constexpr,
+    RING_AB_B_STRIDE: tl.constexpr,
+    RING_AB_N_STRIDE: tl.constexpr,
+    SPEC_L_STRIDE: tl.constexpr,
+    SPEC_B_STRIDE: tl.constexpr,
     BETA: tl.constexpr,
     THRESHOLD: tl.constexpr,
     USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
@@ -9639,8 +9647,9 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     Each program retains the native kernel's ordered loop through the root and
     accepted drafts. The fixed suffix is fully neutral, so it is omitted. The
     caller discards the operator output, so this commit-only realization also
-    omits the independent q projection and output store. Layers share read-only
-    path metadata and write disjoint recurrent-state banks.
+    omits the independent q projection, output store, and staging buffers. It
+    gathers each live root/path row directly from the fixed32 activation rings.
+    Layers share read-only path metadata and write disjoint state destinations.
     """
     i_k = tl.program_id(0)
     i_v = tl.program_id(1)
@@ -9652,7 +9661,6 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     i_hv = i_nh % HV
     i_h = i_hv // (HV // H)
 
-    bos = i_n * PATH_CAP
     accepted = tl.load(accepted_lens + i_n).to(tl.int64)
     T = tl.minimum(tl.maximum(accepted, 0) + 1, PATH_CAP)
 
@@ -9662,17 +9670,14 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     mask_v = o_v < V
     mask_h = mask_v[:, None] & mask_k[None, :]
 
-    p_k = k + i_l * K_L_STRIDE + (bos * H + i_h) * K + o_k
-    p_v = v + i_l * V_L_STRIDE + (bos * HV + i_hv) * V + o_v
     p_a_log = A_logs + i_l * GATE_L_STRIDE + i_hv
-    p_a = a + i_l * AB_L_STRIDE + bos * HV + i_hv
     p_dt_bias = dt_biases + i_l * GATE_L_STRIDE + i_hv
-    p_b = b + i_l * AB_L_STRIDE + bos * HV + i_hv
     # Preserve the anchor+offset form used by the byte-gated all-layer replay.
     # A raw pointer-table load loses 16-byte AxisInfo and changes reductions.
     state_bank = bank_anchor + tl.load(bank_off16 + i_l) * 4
-    ssi = ssm_state_indices + i_l * SSI_L_STRIDE
-    state_idx = tl.load(ssi + i_n * SSI_SEQ_STRIDE).to(tl.int64)
+    state_idx = tl.load(
+        spec_state_indices + i_l * SPEC_L_STRIDE + i_n * SPEC_B_STRIDE
+    ).to(tl.int64)
     if state_idx <= 0:
         return
     p_h0 = (
@@ -9685,7 +9690,44 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     b_h = tl.zeros([BV, BK], dtype=tl.float32)
     b_h += tl.load(p_h0, mask=mask_h, other=0).to(tl.float32)
 
-    for i_t in range(0, T):
+    for i_t in tl.range(0, T):
+        path_offset = tl.maximum(i_t - 1, 0)
+        path_node = tl.load(
+            accepted_paths + i_n * PATH_CAP + path_offset,
+            mask=i_t > 0,
+            other=0,
+        ).to(tl.int64)
+        node = tl.minimum(tl.maximum(path_node, 0), RING_N - 1)
+        p_k = (
+            k_rings
+            + i_l * RING_K_L_STRIDE
+            + i_n * RING_K_B_STRIDE
+            + node * RING_K_N_STRIDE
+            + i_h * K
+            + o_k
+        )
+        p_v = (
+            v_rings
+            + i_l * RING_V_L_STRIDE
+            + i_n * RING_V_B_STRIDE
+            + node * RING_V_N_STRIDE
+            + i_hv * V
+            + o_v
+        )
+        p_a = (
+            a_rings
+            + i_l * RING_AB_L_STRIDE
+            + i_n * RING_AB_B_STRIDE
+            + node * RING_AB_N_STRIDE
+            + i_hv
+        )
+        p_b = (
+            b_rings
+            + i_l * RING_AB_L_STRIDE
+            + i_n * RING_AB_B_STRIDE
+            + node * RING_AB_N_STRIDE
+            + i_hv
+        )
         b_k = tl.load(p_k, mask=mask_k, other=0).to(tl.float32)
         b_v = tl.load(p_v, mask=mask_v, other=0).to(tl.float32)
         b_b = tl.load(p_b).to(tl.float32)
@@ -9706,11 +9748,6 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
         b_v *= b_beta
         b_h += b_v[:, None] * b_k[None, :]
 
-        p_k += H * K
-        p_v += HV * V
-        p_b += HV
-        p_a += HV
-
     # Fixed32 expands one running-row index across every active path slot.
     # Intermediate state stores are not observable; publish only the final row.
     tl.store(p_h0, b_h.to(p_h0.dtype.element_ty), mask=mask_h)
@@ -9720,11 +9757,16 @@ def _fr13_fixed32_committer_native_layer_batch(
     *,
     state,
     banks_list,
+    spec_state_indices,
+    k_rings,
+    v_rings,
+    a_rings,
+    b_rings,
     A_logs,
     dt_biases,
     use_qk_l2norm_in_kernel,
 ) -> None:
-    """Launch all 48 independent native-realization committer scans once."""
+    """Launch all 48 native-realization scans to disjoint destinations once."""
     layers = 48
     batch = int(state["batch"])
     num_kh = int(state["num_kh"])
@@ -9746,17 +9788,19 @@ def _fr13_fixed32_committer_native_layer_batch(
     grid = (1, triton.cdiv(dim_v, block_v), layers * batch * num_vh)
     _fr13_fixed32_committer_native_layer_batch_kernel[grid](
         A_logs,
-        state["abuf"],
-        state["bbuf"],
+        a_rings,
+        b_rings,
         dt_biases,
-        state["kbuf"],
-        state["vbuf"],
+        k_rings,
+        v_rings,
         banks_list[0],
         state["bank_off16"],
+        state["accepted_paths"],
         state["accepted_lens"],
-        state["ssi"],
+        spec_state_indices,
         B=batch,
         PATH_CAP=16,
+        RING_N=32,
         H=num_kh,
         HV=num_vh,
         K=dim_k,
@@ -9765,11 +9809,17 @@ def _fr13_fixed32_committer_native_layer_batch(
         BV=block_v,
         BANK_STRIDE=int(banks_list[0].stride(0)),
         GATE_L_STRIDE=int(A_logs.stride(0)),
-        AB_L_STRIDE=int(state["abuf"].stride(0)),
-        K_L_STRIDE=int(state["kbuf"].stride(0)),
-        V_L_STRIDE=int(state["vbuf"].stride(0)),
-        SSI_L_STRIDE=int(state["ssi"].stride(0)),
-        SSI_SEQ_STRIDE=int(state["ssi"].stride(1)),
+        RING_K_L_STRIDE=int(k_rings.stride(0)),
+        RING_K_B_STRIDE=int(k_rings.stride(1)),
+        RING_K_N_STRIDE=int(k_rings.stride(2)),
+        RING_V_L_STRIDE=int(v_rings.stride(0)),
+        RING_V_B_STRIDE=int(v_rings.stride(1)),
+        RING_V_N_STRIDE=int(v_rings.stride(2)),
+        RING_AB_L_STRIDE=int(a_rings.stride(0)),
+        RING_AB_B_STRIDE=int(a_rings.stride(1)),
+        RING_AB_N_STRIDE=int(a_rings.stride(2)),
+        SPEC_L_STRIDE=int(spec_state_indices.stride(0)),
+        SPEC_B_STRIDE=int(spec_state_indices.stride(1)),
         BETA=1.0,
         THRESHOLD=20.0,
         USE_QK_L2NORM_IN_KERNEL=bool(use_qk_l2norm_in_kernel),
@@ -9820,43 +9870,37 @@ def _fr13_fixed32_committer_graph_body(
         state["vbuf"].zero_()
         state["ssi"].fill_(state["scratch"])
 
-    accepted_lens = state["accepted_lens"].to(torch.long)
-    node_mat = state["node_mat"]
-    node_mat[:, 0] = 0
-    node_mat[:, 1:] = (
-        state["accepted_paths"][:, :15].to(torch.long).clamp(min=0)
-    )
-    valid = state["path_offsets"].unsqueeze(0) <= accepted_lens.unsqueeze(1)
-    safe_nodes = torch.where(
-        valid, node_mat, torch.zeros_like(node_mat)
-    ).clamp(0, 31)
-    batch_index = state["batch_offsets"].view(batch, 1)
+        accepted_lens = state["accepted_lens"].to(torch.long)
+        node_mat = state["node_mat"]
+        node_mat[:, 0] = 0
+        node_mat[:, 1:] = (
+            state["accepted_paths"][:, :15].to(torch.long).clamp(min=0)
+        )
+        valid = state["path_offsets"].unsqueeze(0) <= accepted_lens.unsqueeze(1)
+        safe_nodes = torch.where(
+            valid, node_mat, torch.zeros_like(node_mat)
+        ).clamp(0, 31)
+        batch_index = state["batch_offsets"].view(batch, 1)
 
-    # Four full [48,B,16] ring gathers, including neutral slots.
-    k_selected = k_rings[:, batch_index, safe_nodes]
-    v_selected = v_rings[:, batch_index, safe_nodes]
-    a_selected = a_rings[:, batch_index, safe_nodes]
-    b_selected = b_rings[:, batch_index, safe_nodes]
-    mask4 = valid.view(1, batch, path_cap, 1, 1)
-    mask3 = valid.view(1, batch, path_cap, 1)
-    k_destination = state["kbuf"].view(
-        layers, batch, path_cap, num_kh, dim_k
-    )
-    v_destination = state["vbuf"].view(
-        layers, batch, path_cap, num_vh, dim_v
-    )
-    a_destination = state["abuf"].view(
-        layers, batch, path_cap, num_vh
-    )
-    b_destination = state["bbuf"].view(
-        layers, batch, path_cap, num_vh
-    )
-    if use_layer_batch:
-        torch.where(mask4, k_selected, 0.0, out=k_destination)
-        torch.where(mask4, v_selected, 0.0, out=v_destination)
-        torch.where(mask3, a_selected, -1e4, out=a_destination)
-        torch.where(mask3, b_selected, 0.0, out=b_destination)
-    else:
+        # Keep the incumbent full fixed16 staging graph byte-for-byte intact.
+        k_selected = k_rings[:, batch_index, safe_nodes]
+        v_selected = v_rings[:, batch_index, safe_nodes]
+        a_selected = a_rings[:, batch_index, safe_nodes]
+        b_selected = b_rings[:, batch_index, safe_nodes]
+        mask4 = valid.view(1, batch, path_cap, 1, 1)
+        mask3 = valid.view(1, batch, path_cap, 1)
+        k_destination = state["kbuf"].view(
+            layers, batch, path_cap, num_kh, dim_k
+        )
+        v_destination = state["vbuf"].view(
+            layers, batch, path_cap, num_vh, dim_v
+        )
+        a_destination = state["abuf"].view(
+            layers, batch, path_cap, num_vh
+        )
+        b_destination = state["bbuf"].view(
+            layers, batch, path_cap, num_vh
+        )
         k_destination.copy_(
             torch.where(mask4, k_selected, torch.zeros_like(k_selected))
         )
@@ -9869,16 +9913,21 @@ def _fr13_fixed32_committer_graph_body(
         b_destination.copy_(
             torch.where(mask3, b_selected, torch.zeros_like(b_selected))
         )
-    state["ssi"].copy_(
-        spec_state_indices[:, :batch, 0:1]
-        .to(torch.int32)
-        .expand(layers, batch, path_cap)
-    )
+        state["ssi"].copy_(
+            spec_state_indices[:, :batch, 0:1]
+            .to(torch.int32)
+            .expand(layers, batch, path_cap)
+        )
 
     if use_layer_batch:
         _fr13_fixed32_committer_native_layer_batch(
             state=state,
             banks_list=banks_list,
+            spec_state_indices=spec_state_indices,
+            k_rings=k_rings,
+            v_rings=v_rings,
+            a_rings=a_rings,
+            b_rings=b_rings,
             A_logs=A_logs,
             dt_biases=dt_biases,
             use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
@@ -10162,7 +10211,8 @@ def preseed_fixed32_committer_graph(
                 "state_only_output_elided": True,
                 "active_length_recurrence": True,
                 "final_state_store_once": True,
-                "direct_masked_gather_writes": True,
+                "direct_ring_loads": True,
+                "candidate_staging_launches": 0,
                 "byte_gate": "required_on_first_real_nonzero_accept",
             }
         )

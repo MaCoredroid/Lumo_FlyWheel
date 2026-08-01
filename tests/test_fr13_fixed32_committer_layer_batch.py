@@ -56,7 +56,7 @@ def test_layer_batch_kernel_keeps_native_recurrence_and_geometry() -> None:
     launch = _text("_fr13_fixed32_committer_native_layer_batch")
 
     assert "@triton.jit" in SOURCE
-    assert "for i_t in range(0, T):" in kernel
+    assert "for i_t in tl.range(0, T):" in kernel
     assert "b_h *= tl.exp(b_g)" in kernel
     assert "b_v -= tl.sum(b_h * b_k[None, :], 1)" in kernel
     assert "b_v *= b_beta" in kernel
@@ -79,7 +79,7 @@ def test_layer_batch_recurrence_stops_after_root_plus_accepted_drafts() -> None:
 
     assert "accepted_lens," in kernel
     assert "cu_seqlens," not in kernel
-    assert "bos = i_n * PATH_CAP" in kernel
+    assert "accepted_paths + i_n * PATH_CAP + path_offset" in kernel
     assert "accepted = tl.load(accepted_lens + i_n).to(tl.int64)" in kernel
     assert "T = tl.minimum(tl.maximum(accepted, 0) + 1, PATH_CAP)" in kernel
     assert 'state["accepted_lens"]' in launch
@@ -89,7 +89,7 @@ def test_layer_batch_recurrence_stops_after_root_plus_accepted_drafts() -> None:
 
 def test_layer_batch_publishes_only_the_final_running_state() -> None:
     kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
-    loop = kernel[kernel.index("for i_t in range(0, T):") :]
+    loop = kernel[kernel.index("for i_t in tl.range(0, T):") :]
 
     assert "final_state_idx" not in kernel
     assert "p_ht" not in kernel
@@ -114,17 +114,29 @@ def test_layer_batch_candidate_drops_only_dead_operator_output() -> None:
     assert "= _sg(" not in body
 
 
-def test_layer_batch_candidate_writes_masked_gathers_directly() -> None:
+def test_layer_batch_candidate_loads_live_ring_rows_without_staging() -> None:
+    kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
+    launch = _text("_fr13_fixed32_committer_native_layer_batch")
     body = _text("_fr13_fixed32_committer_graph_body")
     preseed = _text("preseed_fixed32_committer_graph")
 
-    candidate = body[body.index("if use_layer_batch:") :]
-    assert "torch.where(mask4, k_selected, 0.0, out=k_destination)" in candidate
-    assert "torch.where(mask4, v_selected, 0.0, out=v_destination)" in candidate
-    assert "torch.where(mask3, a_selected, -1e4, out=a_destination)" in candidate
-    assert "torch.where(mask3, b_selected, 0.0, out=b_destination)" in candidate
+    candidate_start = body.index("if use_layer_batch:")
+    candidate = body[candidate_start : body.index("else:", candidate_start)]
+    assert "k_rings" in kernel
+    assert "v_rings" in kernel
+    assert "a_rings" in kernel
+    assert "b_rings" in kernel
+    assert "accepted_paths" in kernel
+    assert "path_node = tl.load(" in kernel
+    assert "node * RING_K_N_STRIDE" in kernel
+    assert "node * RING_V_N_STRIDE" in kernel
+    assert 'state["kbuf"]' not in launch
+    assert 'state["vbuf"]' not in launch
+    assert "k_selected" not in candidate
+    assert "torch.where(" not in candidate
     assert '"neutralizations": 0' in preseed
-    assert '"direct_masked_gather_writes": True' in preseed
+    assert '"direct_ring_loads": True' in preseed
+    assert '"candidate_staging_launches": 0' in preseed
 
 
 def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> None:
@@ -178,10 +190,10 @@ def test_layer_programs_have_disjoint_layer_state_and_shared_read_only_paths() -
 
     assert "i_l = i_lnh // layer_span" in kernel
     assert "state_bank = bank_anchor +" in kernel
-    assert "ssi = ssm_state_indices + i_l * SSI_L_STRIDE" in kernel
-    assert "i_l * K_L_STRIDE" in kernel
-    assert "i_l * V_L_STRIDE" in kernel
-    assert "accepted_paths" not in kernel
+    assert "spec_state_indices + i_l * SPEC_L_STRIDE" in kernel
+    assert "i_l * RING_K_L_STRIDE" in kernel
+    assert "i_l * RING_V_L_STRIDE" in kernel
+    assert "accepted_paths" in kernel
     assert "accepted_lens" in kernel
 
 
@@ -203,7 +215,8 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
     assert 'committer_contract.get("state_only_output_elided") is not True' in patcher
     assert 'committer_contract.get("active_length_recurrence") is not True' in patcher
     assert 'committer_contract.get("final_state_store_once") is not True' in patcher
-    assert 'committer_contract.get("direct_masked_gather_writes") is not True' in patcher
+    assert 'committer_contract.get("direct_ring_loads") is not True' in patcher
+    assert 'committer_contract.get("candidate_staging_launches", -1)' in patcher
     assert "expected_neutralizations = 0 if layer_batch is True else 5" in patcher
     assert '"layers": int(layer_count)' in patcher
     assert "ring_gathers * int(layer_count) * path_cap * batch" in patcher
