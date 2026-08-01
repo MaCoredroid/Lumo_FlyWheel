@@ -686,6 +686,7 @@ def _fr13_resolve_fixed32_gdn_level0_coeff_production(
         or payload.get("launches_per_layer") != 2
         or payload.get("scratch_row_start") != 31
         or payload.get("scratch_rows") != 1
+        or payload.get("count_invocation") is not False
         or covered_batches != [1]
         or payload.get("raw_byte_equal") is not True
         or payload.get("scratch_contained") is not True
@@ -1115,11 +1116,14 @@ def _fr13_fixed32_gdn_bv_compare_records(
             candidate_result = run(candidate)
             candidate_surfaces = snapshot()
             if (
-                set(reference) != {"block_v", "launch_key", "output"}
+                set(reference)
+                != {"block_v", "launch_key", "count_invocation", "output"}
                 or set(candidate_result)
-                != {"block_v", "launch_key", "output"}
+                != {"block_v", "launch_key", "count_invocation", "output"}
                 or int(reference["block_v"]) != 8
                 or int(candidate_result["block_v"]) != candidate
+                or reference["count_invocation"] is not True
+                or candidate_result["count_invocation"] is not True
                 or reference["launch_key"] == candidate_result["launch_key"]
             ):
                 raise RuntimeError(
@@ -1285,10 +1289,14 @@ def _fr13_fixed32_gdn_level0_coeff_compare_records(records) -> dict[str, int]:
             candidate = run(8, True)
             candidate_surfaces = snapshot()
             if (
-                set(reference) != {"block_v", "launch_key", "output"}
-                or set(candidate) != {"block_v", "launch_key", "output"}
+                set(reference)
+                != {"block_v", "launch_key", "count_invocation", "output"}
+                or set(candidate)
+                != {"block_v", "launch_key", "count_invocation", "output"}
                 or int(reference["block_v"]) != 8
                 or int(candidate["block_v"]) != 8
+                or reference["count_invocation"] is not False
+                or candidate["count_invocation"] is not False
                 or reference["launch_key"] == candidate["launch_key"]
             ):
                 raise RuntimeError(
@@ -1349,6 +1357,7 @@ def _fr13_fixed32_gdn_level0_coeff_compare_records(records) -> dict[str, int]:
         "compared_bytes": compared_bytes,
         "scratch_row_start": 31,
         "scratch_rows": 1,
+        "count_invocation": False,
     }
 
 
@@ -1377,6 +1386,7 @@ def _fr13_fixed32_gdn_level0_coeff_live_pass_emit(
         "launches_per_layer": 2,
         "scratch_row_start": int(result["scratch_row_start"]),
         "scratch_rows": int(result["scratch_rows"]),
+        "count_invocation": result["count_invocation"],
         "non_scratch_export_rows_compared": 31,
         "compared_bytes": int(result["compared_bytes"]),
         "surfaces": [
@@ -1522,6 +1532,7 @@ def fixed32_gdn_level0_coeff_production_on_replay(
         "path_lengths": [5, 7],
         "launches_per_layer": 2,
         "scratch_row_start": 31,
+        "count_invocation": credential["count_invocation"],
         "fallback": 0,
         "observed_full_graph_replays_at_least": 1,
     }
@@ -7621,6 +7632,7 @@ def _tree_gdn_kernel(
     offs_k = tl.arange(0, DIM_K)
     offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
     v_mask = offs_v < DIM_V
+
     if COUNT_INVOCATION:
         tl.atomic_add(
             invocation_counter,
@@ -8085,6 +8097,40 @@ def _tree_gdn_path_kernel(
     offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
     v_mask = offs_v < DIM_V
 
+    # Coefficient staging is independent of the level-0 recurrence. Doing it
+    # before the scan keeps its scalar temporaries out of the long-lived state
+    # tile's register-pressure window; the next launch cannot observe scratch
+    # until this launch completes.
+    if PRECOMPUTE_LEVEL1:
+        programs_per_request: tl.constexpr = NUM_VH * (DIM_V // BLOCK_V)
+        scalar_rounds: tl.constexpr = (
+            (N_ACTUAL * NUM_VH + programs_per_request - 1)
+            // programs_per_request
+        )
+        coeff_scratch = state_export + COEFF_ROW_START * COEFF_ROW_ELEMS
+        _fixed32_gdn_stage_coefficients(
+            q,
+            k,
+            raw_a,
+            raw_b,
+            A_log,
+            dt_bias,
+            coeff_scratch,
+            pid_vh * (DIM_V // BLOCK_V) + pid_v,
+            0,
+            N_ACTUAL=N_ACTUAL,
+            NUM_KH=NUM_KH,
+            NUM_VH=NUM_VH,
+            DIM_K=DIM_K,
+            OUTPUT_SCALE=OUTPUT_SCALE,
+            PROGRAMS_PER_REQUEST=programs_per_request,
+            SCALAR_ROUNDS=scalar_rounds,
+            Q_OFFSET=Q_OFFSET,
+            K_OFFSET=K_OFFSET,
+            DECAY_OFFSET=DECAY_OFFSET,
+            BETA_OFFSET=BETA_OFFSET,
+        )
+
     # STATE_SOURCE is dynamic for the generic route. The exact fixed32
     # schedule specializes root level to h0 and level 1 to the exported
     # parent. This removes eleven dead h0 tile reads per (VH, V-block) without
@@ -8293,35 +8339,6 @@ def _tree_gdn_path_kernel(
                 state_i,
                 mask=do_exp & v_mask[:, None],
             )
-    if PRECOMPUTE_LEVEL1:
-        programs_per_request: tl.constexpr = NUM_VH * (DIM_V // BLOCK_V)
-        scalar_rounds: tl.constexpr = (
-            (N_ACTUAL * NUM_VH + programs_per_request - 1)
-            // programs_per_request
-        )
-        coeff_scratch = state_export + COEFF_ROW_START * COEFF_ROW_ELEMS
-        _fixed32_gdn_stage_coefficients(
-            q,
-            k,
-            raw_a,
-            raw_b,
-            A_log,
-            dt_bias,
-            coeff_scratch,
-            pid_vh * (DIM_V // BLOCK_V) + pid_v,
-            0,
-            N_ACTUAL=N_ACTUAL,
-            NUM_KH=NUM_KH,
-            NUM_VH=NUM_VH,
-            DIM_K=DIM_K,
-            OUTPUT_SCALE=OUTPUT_SCALE,
-            PROGRAMS_PER_REQUEST=programs_per_request,
-            SCALAR_ROUNDS=scalar_rounds,
-            Q_OFFSET=Q_OFFSET,
-            K_OFFSET=K_OFFSET,
-            DECAY_OFFSET=DECAY_OFFSET,
-            BETA_OFFSET=BETA_OFFSET,
-        )
     if FLAGS_EXPORT:
         # FR13_FLAGS_INKERNEL under the subtree route: same staging-freshness
         # store as the monolith tail (values identical: flags[0]=1 staged,
@@ -12620,6 +12637,7 @@ def launch_tree_gdn_prepared(
             or _bv != 8
             or not use_qk_l2norm_in_kernel
             or not raw_gating
+            or count_invocation
             or _scan_align
             or _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
             or _FR13_FIXED32_GDN_LEVEL0_COEFF_PRODUCTION_PASS is None
@@ -12630,7 +12648,8 @@ def launch_tree_gdn_prepared(
         ):
             raise RuntimeError(
                 "FR13_FIXED32_GDN_LEVEL0_COEFF requires exact fixed32 BV8 "
-                "two-level GDN, raw gating, in-kernel q/k norm, and SCAN_ALIGN=0"
+                "two-level GDN, raw gating, in-kernel q/k norm, "
+                "COUNT_INVOCATION=0, and SCAN_ALIGN=0"
             )
 
     def _launch_paths(
@@ -12788,6 +12807,7 @@ def launch_tree_gdn_prepared(
             )
         return {
             "block_v": int(_path_block_v),
+            "count_invocation": bool(_count),
             "launch_key": (
                 "tree_gdn_path",
                 int(_path_block_v),
@@ -13035,7 +13055,11 @@ def launch_tree_gdn_prepared(
             _gate_out = torch.empty_like(out)
             _launch_meta = _launch_paths(
                 _gate_out,
-                _count=True,
+                # The coefficient credential must cover the exact production
+                # specialization. Production timing pins FR10_METRICS=0, so
+                # COUNT_INVOCATION is a compile-time false here. The unrelated
+                # path-BV diagnostic retains its historical counted launch.
+                _count=(not _FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB),
                 _path_block_v=_gate_bv,
                 _counter_arg=_gdn_bv_gate_counter(),
                 _use_level0_coeff=_gate_coeff,

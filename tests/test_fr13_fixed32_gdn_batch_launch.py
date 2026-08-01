@@ -164,5 +164,5 @@ def test_path_kernel_default_off_candidate_ast_is_pinned() -> None:
     canonical = ast.dump(ast.parse(source), include_attributes=False)
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     assert digest == (
-        "cca1ba84104f1bbe5a9c2d3f5469f0c3bfc4fda4c9c10d4eee795f50c2b669bc"
+        "5f020ab18bf0b4cfd2c9d73d7dbf4228be5566a186f121c74d2d4bde0e8ccd6a"
     )

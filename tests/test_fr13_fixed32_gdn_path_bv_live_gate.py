@@ -99,6 +99,7 @@ def test_live_gate_runs_distinct_bv_then_restores_served_bytes(
             state[name] = f"gate:{name}".encode("ascii")
         return {
             "block_v": block_v,
+            "count_invocation": True,
             "launch_key": ("tree_gdn_path", block_v),
             "output": b"identical-output",
         }
@@ -141,6 +142,7 @@ def test_live_gate_fails_mismatch_after_restoring_served_bytes() -> None:
             state[name] = f"gate:{name}".encode("ascii")
         return {
             "block_v": block_v,
+            "count_invocation": True,
             "launch_key": ("tree_gdn_path", block_v),
             "output": b"reference" if block_v == 8 else b"candidate",
         }
@@ -165,6 +167,7 @@ def test_live_gate_rejects_false_stock_vs_stock() -> None:
     def run(_block_v: int):
         return {
             "block_v": 8,
+            "count_invocation": True,
             "launch_key": ("tree_gdn_path", 8),
             "output": b"same",
         }

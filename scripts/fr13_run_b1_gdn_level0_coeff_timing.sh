@@ -188,13 +188,21 @@ CANDIDATE_ENGAGEMENT="$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_gdn_level0_c
 [[ -f "$CANDIDATE_ENGAGEMENT" && ! -L "$CANDIDATE_ENGAGEMENT" ]] \
   || { echo "candidate arm lacks coefficient production engagement" >&2; exit 4; }
 finalize_manifests
+RUNTIME_MANIFEST_SHA256=$(sha256sum \
+  "$RUNROOT_ABS/runtime_manifest.at_launch.json" | awk '{print $1}')
+EXTERNAL_MANIFEST_SHA256=$(sha256sum \
+  "$RUNROOT_ABS/external_manifest.at_launch.json" | awk '{print $1}')
+ENGAGEMENT_SHA256=$(sha256sum "$CANDIDATE_ENGAGEMENT" | awk '{print $1}')
 
 "$PYTHON_BIN" - \
   "$SUBSET" \
   "$RUNROOT_ABS/$STOCK_ARM/deploy_speed_fullwall.json" \
   "$RUNROOT_ABS/$CANDIDATE_ARM/deploy_speed_fullwall.json" \
   "$CANDIDATE_ENGAGEMENT" "$RUNROOT_ABS/timing_summary.json" \
-  "$TOPOLOGY" "$SOURCE_SHA256" "$LIVE_PASS_SHA256" \
+  "$TOPOLOGY" "$SOURCE_COMMIT" "$SOURCE_SHA256" "$RUNNER_SHA256" \
+  "$SUBSET_SHA256" "$BLOCK_MAP_SHA256" "$FA2_SHA256" \
+  "$LIVE_PASS_SHA256" "$RUNTIME_MANIFEST_SHA256" \
+  "$EXTERNAL_MANIFEST_SHA256" "$ENGAGEMENT_SHA256" \
   "$MANDATORY_WEIGHT_FLOOR_MS" "$ONE_SIDED_U95_CAP_MS" <<'PY'
 import json
 import math
@@ -204,12 +212,38 @@ from pathlib import Path
 subset_path, stock_path, candidate_path, engagement_path, out_path = map(
     Path, sys.argv[1:6]
 )
-topology, source_sha, pass_sha = sys.argv[6:9]
-floor_ms, cap_ms = map(float, sys.argv[9:11])
+(
+    topology,
+    source_commit,
+    source_sha,
+    runner_sha,
+    subset_sha,
+    block_map_sha,
+    fa2_sha,
+    pass_sha,
+    runtime_manifest_sha,
+    external_manifest_sha,
+    engagement_sha,
+) = sys.argv[6:17]
+floor_ms, cap_ms = map(float, sys.argv[17:19])
 task_ids = sorted(json.loads(subset_path.read_text(encoding="ascii"))["instance_ids"])
 stock = json.loads(stock_path.read_text(encoding="utf-8"))
 candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
 engagement = json.loads(engagement_path.read_text(encoding="ascii"))
+
+for label, digest in (
+    ("kernel source", source_sha),
+    ("runner", runner_sha),
+    ("subset", subset_sha),
+    ("block map", block_map_sha),
+    ("FA2", fa2_sha),
+    ("live PASS", pass_sha),
+    ("runtime manifest", runtime_manifest_sha),
+    ("external manifest", external_manifest_sha),
+    ("engagement", engagement_sha),
+):
+    if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+        raise SystemExit(f"{label} SHA-256 is malformed")
 
 
 def positive(record, key):
@@ -223,33 +257,70 @@ def positive(record, key):
 
 
 def phase_record(record, label):
+    task_instance_ids = record.get("task_instance_ids")
     if (
         record.get("schema") != "fr13.measure.deploy_speed.v1"
         or record.get("regime") != "deployment"
         or record.get("instrument") != "OFF"
         or record.get("batch_size") != 1
         or record.get("n_tasks") != 4
-        or sorted(record.get("task_instance_ids", [])) != task_ids
+        or not isinstance(task_instance_ids, list)
+        or sorted(task_instance_ids) != task_ids
     ):
         raise SystemExit(f"{label} is not exact4 real SWE-Verified B1 evidence")
     wall = positive(record, "step_wall_ms")
-    sfwd = positive(record, "s_per_fwd_gpu") * 1000.0
+    wall_seconds = positive(record, "wall_s_per_event")
+    if not math.isclose(wall, wall_seconds * 1000.0, rel_tol=1e-12, abs_tol=1e-9):
+        raise SystemExit(f"{label} wall seconds/ms units do not reconcile")
+    events_per_step = positive(record, "events_per_step")
+    rows_per_step = positive(record, "rows_per_step")
+    if not math.isclose(events_per_step, 1.0, rel_tol=0.0, abs_tol=1e-12):
+        raise SystemExit(f"{label} is not a one-event B1 step stream")
+    if not math.isclose(rows_per_step, 32.0, rel_tol=0.0, abs_tol=1e-12):
+        raise SystemExit(f"{label} did not execute 32 physical rows per step")
+    sfwd_seconds = positive(record, "s_per_fwd_gpu")
+    sfwd_per_forward = positive(record, "s_per_fwd_gpu_per_forward")
+    if not math.isclose(
+        sfwd_seconds, sfwd_per_forward, rel_tol=1e-12, abs_tol=1e-12
+    ):
+        raise SystemExit(f"{label} SFWD per-event/per-forward units do not reconcile")
+    sfwd = sfwd_seconds * 1000.0
     dfwd = positive(record, "drafter_gpu_ms_per_step")
     cfwd = positive(record, "committer_gpu_ms_per_step")
     other = wall - sfwd - dfwd - cfwd
     if other < -1e-6:
         raise SystemExit(f"{label} phase timers exceed full wall")
+    other = max(other, 0.0)
+    phase_total = sfwd + dfwd + cfwd + other
+    if not math.isclose(wall, phase_total, rel_tol=1e-12, abs_tol=1e-6):
+        raise SystemExit(f"{label} phase timers do not reconcile to full wall")
+    accepted = positive(record, "accept_per_event")
+    committed = accepted + 1.0
+    measured_tps = positive(record, "measured_tps_fullstep_wall")
+    reconciled_tps = committed * 1000.0 / wall
+    if not math.isclose(measured_tps, reconciled_tps, rel_tol=1e-9, abs_tol=1e-9):
+        raise SystemExit(f"{label} full-wall TPS does not reconcile")
+    wall_steps = positive(record, "wall_steps_measured")
+    if not wall_steps.is_integer():
+        raise SystemExit(f"{label} wall step count is not integral")
     return {
         "step_wall_ms": wall,
-        "measured_tps_fullstep_wall": positive(
-            record, "measured_tps_fullstep_wall"
-        ),
-        "accepted_drafts_per_event": positive(record, "accept_per_event"),
+        "wall_seconds_per_event": wall_seconds,
+        "events_per_step": events_per_step,
+        "rows_per_step": rows_per_step,
+        "measured_tps_fullstep_wall": measured_tps,
+        "tps_from_committed_tokens_and_wall": reconciled_tps,
+        "tps_reconciliation_abs_error": abs(measured_tps - reconciled_tps),
+        "accepted_drafts_per_event": accepted,
+        "committed_tokens_per_event": committed,
         "sfwd_gpu_ms_per_step": sfwd,
         "dfwd_gpu_ms_per_step": dfwd,
         "cfwd_gpu_ms_per_step": cfwd,
-        "other_wall_ms_per_step": max(other, 0.0),
-        "wall_steps_measured": positive(record, "wall_steps_measured"),
+        "gpu_components_ms_per_step": sfwd + dfwd + cfwd,
+        "other_wall_ms_per_step": other,
+        "phase_total_ms_per_step": phase_total,
+        "phase_reconciliation_abs_error_ms": abs(wall - phase_total),
+        "wall_steps_measured": int(wall_steps),
         "step_wall_to_mandatory_weight_floor_ratio": wall / floor_ms,
         "within_1p15x_weight_floor": wall <= cap_ms,
     }
@@ -268,7 +339,11 @@ if (
     or engagement.get("physical_rows") != 32
     or engagement.get("path_lengths") != [5, 7]
     or engagement.get("launches_per_layer") != 2
+    or engagement.get("scratch_row_start") != 31
+    or engagement.get("count_invocation") is not False
     or engagement.get("fallback") != 0
+    or engagement.get("observed_full_graph_replays_at_least") != 1
+    or engagement.get("task_marker") != f"swe_verified:{task_ids[0]}"
 ):
     raise SystemExit("candidate production engagement is invalid")
 
@@ -285,6 +360,19 @@ summary = {
     "physical_rows": 32,
     "draft_vocab_root": 1,
     "draft_vocab_k": 65536,
+    "candidate_id": "fixed32_gdn_level0_coeff_v1",
+    "count_invocation": False,
+    "source_commit": source_commit,
+    "kernel_source_sha256": source_sha,
+    "runner_sha256": runner_sha,
+    "subset_sha256": subset_sha,
+    "block_map_sha256": block_map_sha,
+    "fa2_sha256": fa2_sha,
+    "live_pass_sha256": pass_sha,
+    "runtime_manifest_sha256": runtime_manifest_sha,
+    "external_manifest_sha256": external_manifest_sha,
+    "production_engagement_sha256": engagement_sha,
+    "production_graph_signature": engagement["graph_signature"],
     "mandatory_weight_floor_ms": floor_ms,
     "one_sided_u95_cap_ms": cap_ms,
     "stock": stock_phase,

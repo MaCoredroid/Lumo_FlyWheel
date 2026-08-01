@@ -11,6 +11,9 @@ from pathlib import Path
 
 SCHEMA = "fr13.fixed32.gdn_level0_coeff.live_pass.v1"
 CANDIDATE = "fixed32_gdn_level0_coeff_v1"
+# Per layer: output 393,216 + 31 FP32 export rows 97,517,568 + raw
+# K/V/A/B rings 530,432 + flags/counter 12 = 98,441,228 bytes; 48 layers.
+EXPECTED_COMPARED_BYTES = 4_725_178_944
 SURFACES = [
     "output",
     "export_non_scratch_rows",
@@ -65,6 +68,7 @@ def validate(
         "launches_per_layer": 2,
         "scratch_row_start": 31,
         "scratch_rows": 1,
+        "count_invocation": False,
         "non_scratch_export_rows_compared": 31,
         "surfaces": SURFACES,
         "raw_byte_equal": True,
@@ -82,12 +86,11 @@ def validate(
     if expected_mode not in ("tail6_fixed32", "hydra27_fixed32"):
         raise PassError("expected mode is not an exact fixed32 mode")
     compared_bytes = payload.get("compared_bytes")
-    if (
-        isinstance(compared_bytes, bool)
-        or not isinstance(compared_bytes, int)
-        or compared_bytes <= 0
-    ):
-        raise PassError("live PASS has no positive compared-byte count")
+    if compared_bytes != EXPECTED_COMPARED_BYTES:
+        raise PassError(
+            "live PASS compared-byte closure drift: "
+            f"{compared_bytes!r} != {EXPECTED_COMPARED_BYTES}"
+        )
     return payload
 
 

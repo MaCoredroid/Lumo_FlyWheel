@@ -82,6 +82,29 @@ def _command(*arguments: str) -> str:
     return (completed.stdout + completed.stderr).strip()
 
 
+def _sass_spill_instructions(sass: str) -> list[str]:
+    """Return local-memory opcodes from nvdisasm's addressed SASS lines."""
+    spills = []
+    address = re.compile(r"^\s*/\*[^*]*\*/\s*")
+    for raw_line in sass.splitlines():
+        line = address.sub("", raw_line, count=1).strip()
+        if not line or line.startswith((".", "//")) or line.endswith(":"):
+            continue
+        fields = line.split()
+        if fields and fields[0].startswith("@"):
+            fields = fields[1:]
+        if fields and fields[0].split(".", 1)[0] in {"LDL", "STL"}:
+            spills.append(raw_line)
+    return spills
+
+
+def _resource_bytes(resources: str, label: str) -> list[int]:
+    values = [int(value) for value in re.findall(rf"\b{label}:(\d+)", resources)]
+    if not values:
+        raise RuntimeError(f"resource report has no {label} field")
+    return values
+
+
 def _signature(jit_function) -> dict[str, str]:
     return {
         parameter.name: _POINTER_SIGNATURES[parameter.name]
@@ -116,7 +139,9 @@ def _specializations() -> list[dict[str, object]]:
                     **_COMMON_CONSTANTS,
                     **batch_constants,
                     "USE_QK_L2NORM_IN_KERNEL": not (candidate and level == 1),
-                    "COUNT_INVOCATION": level == 0,
+                    # Production timing pins FR10_METRICS=0. This constexpr
+                    # must therefore be false in the audited codegen too.
+                    "COUNT_INVOCATION": False,
                     "MAX_PATH_LEN": max_path_len,
                     "PRECOMPUTE_LEVEL1": candidate and level == 0,
                     "LOAD_PRECOMPUTED": candidate and level == 1,
@@ -171,16 +196,22 @@ def _compile_one(output: Path, variant: dict[str, object]) -> dict[str, object]:
     cubin = output / f"{name}.cubin"
     resources = _command("cuobjdump", "--dump-resource-usage", str(cubin))
     sass = _command("nvdisasm", "--print-code", str(cubin))
-    (output / f"{name}.resources.txt").write_text(
+    resources_path = output / f"{name}.resources.txt"
+    sass_path = output / f"{name}.sass.txt"
+    resources_path.write_text(
         resources + "\n", encoding="ascii"
     )
-    (output / f"{name}.sass.txt").write_text(sass + "\n", encoding="ascii")
+    sass_path.write_text(sass + "\n", encoding="ascii")
+    artifact_hashes["resources"] = _sha256(resources_path.read_bytes())
+    artifact_hashes["sass"] = _sha256(sass_path.read_bytes())
 
-    local_bytes = [int(value) for value in re.findall(r"\bLOCAL:(\d+)", resources)]
-    spill_instructions = re.findall(r"^\s*(?:LDL|STL)(?:\.[A-Z0-9]+)*\b", sass, re.MULTILINE)
-    if any(local_bytes) or spill_instructions:
+    stack_bytes = _resource_bytes(resources, "STACK")
+    local_bytes = _resource_bytes(resources, "LOCAL")
+    spill_instructions = _sass_spill_instructions(sass)
+    if any(stack_bytes) or any(local_bytes) or spill_instructions:
         raise RuntimeError(
-            f"{name} spills: local_bytes={local_bytes} "
+            f"{name} spills: stack_bytes={stack_bytes} "
+            f"local_bytes={local_bytes} "
             f"spill_instructions={len(spill_instructions)}"
         )
 
@@ -200,6 +231,7 @@ def _compile_one(output: Path, variant: dict[str, object]) -> dict[str, object]:
         "compile_hash": compiled.metadata.hash,
         "metadata": metadata,
         "artifact_sha256": artifact_hashes,
+        "stack_bytes": stack_bytes,
         "local_bytes": local_bytes,
         "spill_instruction_count": len(spill_instructions),
         "resources": resources.splitlines(),
@@ -215,13 +247,17 @@ def main() -> int:
 
     source_path = Path(kernel.__file__).resolve()
     records = [_compile_one(output, variant) for variant in _specializations()]
+    builder_path = Path(__file__).resolve()
     manifest = {
         "schema": "fr13.fixed32.gdn_level0_coeff.sm121_build.v1",
         "status": "pass_zero_spill",
         "target": "sm_121",
+        "production_count_invocation": False,
         "triton_version": triton.__version__,
         "ptxas_version": _command("ptxas", "--version").splitlines(),
         "cuobjdump_version": _command("cuobjdump", "--version").splitlines(),
+        "builder_path": str(builder_path),
+        "builder_sha256": _sha256(builder_path.read_bytes()),
         "source_path": str(source_path),
         "source_sha256": _sha256(source_path.read_bytes()),
         "specializations": records,
