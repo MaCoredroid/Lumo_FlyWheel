@@ -1982,7 +1982,7 @@ if [[ "$_fr13_sfwd_b4_byte_ab" == "1" ]]; then
         || -n "$_fr13_batch_gdn_bv_production" \
         || -n "$_fr13_gdn_path_bv_candidate" \
         || -n "$_fr13_gdn_path_bv_production" \
-        || -n "${FR13_FIXED32_CUTLASS_WAVE:-}" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" \
         || "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" != "0" \
         || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" != "0" \
         || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" != "0" \
