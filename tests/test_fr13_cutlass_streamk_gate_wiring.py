@@ -165,6 +165,11 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
         "bash scripts/fr13_bigdenom_swe_serve_variant.sh"
     )
     assert sequence < eager_rearm < launch
+    serve = (
+        REPO / "scripts" / "fr13_bigdenom_swe_serve_variant.sh"
+    ).read_text(encoding="utf-8")
+    assert "cutlass_wave = sys.argv[10]" in serve
+    assert "streamk_eager_diagnostic=(" in serve
 
 
 def test_b4_graph_gate_pins_cutlass_stock_and_bm8_off() -> None:

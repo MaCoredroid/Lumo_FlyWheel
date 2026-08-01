@@ -652,6 +652,7 @@ def expected_process_pid1_argv(
     attribution_only: bool,
     eager_diagnostic: bool = False,
     graph_diagnostic: bool = False,
+    streamk_eager_diagnostic: bool = False,
 ) -> list[str]:
     if type(attribution_only) is not bool:
         raise ContractError("fixed32 attribution-only selector must be boolean")
@@ -659,11 +660,19 @@ def expected_process_pid1_argv(
         raise ContractError("fixed32 eager-diagnostic selector must be boolean")
     if type(graph_diagnostic) is not bool:
         raise ContractError("fixed32 graph-diagnostic selector must be boolean")
-    if eager_diagnostic and graph_diagnostic:
+    if type(streamk_eager_diagnostic) is not bool:
         raise ContractError(
-            "fixed32 eager and graph diagnostics are mutually exclusive"
+            "fixed32 Stream-K eager-diagnostic selector must be boolean"
         )
-    if attribution_only and eager_diagnostic:
+    if sum(
+        (eager_diagnostic, graph_diagnostic, streamk_eager_diagnostic)
+    ) > 1:
+        raise ContractError(
+            "fixed32 process diagnostics are mutually exclusive"
+        )
+    if attribution_only and (
+        eager_diagnostic or streamk_eager_diagnostic
+    ):
         raise ContractError(
             "fixed32 eager diagnostic cannot be attribution-only"
         )
@@ -679,8 +688,12 @@ def expected_process_pid1_argv(
         raise ContractError(
             "fixed32 graph diagnostic requires concurrency 4"
         )
+    if streamk_eager_diagnostic and concurrency != 1:
+        raise ContractError(
+            "fixed32 Stream-K eager diagnostic requires concurrency 1"
+        )
     vllm_argv = expected_pid1_argv(concurrency)
-    if eager_diagnostic:
+    if eager_diagnostic or streamk_eager_diagnostic:
         vllm_argv = [*vllm_argv, "--enforce-eager"]
     if not attribution_only:
         return vllm_argv
@@ -694,12 +707,14 @@ def validate_process_pid1_argv(
     attribution_only: bool,
     eager_diagnostic: bool = False,
     graph_diagnostic: bool = False,
+    streamk_eager_diagnostic: bool = False,
 ) -> list[str]:
     expected = expected_process_pid1_argv(
         concurrency,
         attribution_only=attribution_only,
         eager_diagnostic=eager_diagnostic,
         graph_diagnostic=graph_diagnostic,
+        streamk_eager_diagnostic=streamk_eager_diagnostic,
     )
     if argv != expected:
         raise ContractError(f"fixed32 PID1 argv mismatch: {argv!r}")

@@ -1645,7 +1645,8 @@ PY
     "$ARMDIR/fixed32_container_identity.json" \
     "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" \
     "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" \
-    "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" <<'PY'
+    "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" \
+    "${FR13_FIXED32_CUTLASS_WAVE:-stock}" <<'PY'
 import json
 import subprocess
 import sys
@@ -1663,6 +1664,7 @@ container_identity_path = Path(sys.argv[6])
 attribution_only_text = sys.argv[7]
 batch_gdn_byte_ab_text = sys.argv[8]
 batch_gdn_graph_byte_ab_text = sys.argv[9]
+cutlass_wave = sys.argv[10]
 runtime = contract.validate_runtime_attestation(
     json.loads(runtime_path.read_text(encoding="utf-8"))
 )
@@ -1685,6 +1687,12 @@ if batch_gdn_graph_byte_ab_text not in {"0", "1"}:
     raise SystemExit(
         "fixed32 batch-GDN graph byte diagnostic selector must be exactly 0 or 1"
     )
+if cutlass_wave not in {
+    "stock",
+    "streamk_coop128_byte_ab",
+    "streamk_coop128",
+}:
+    raise SystemExit("fixed32 CUTLASS wave selector is invalid")
 try:
     contract.validate_process_pid1_argv(
         pid1.get("argv"),
@@ -1692,6 +1700,9 @@ try:
         attribution_only=attribution_only_text == "1",
         eager_diagnostic=batch_gdn_byte_ab_text == "1",
         graph_diagnostic=batch_gdn_graph_byte_ab_text == "1",
+        streamk_eager_diagnostic=(
+            cutlass_wave == "streamk_coop128_byte_ab"
+        ),
     )
 except contract.ContractError as error:
     raise SystemExit(str(error)) from error
