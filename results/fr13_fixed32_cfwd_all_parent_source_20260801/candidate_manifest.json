@@ -1,0 +1,54 @@
+{
+  "schema": "fr13.fixed32.cfwd_all_parent_source.v1",
+  "status": "source_only_live_event_gate_pending",
+  "base_commit": "c3720f2bab18c3bbb6b31f87e864af21a7a9fdf3",
+  "candidate": "fixed32_all_parent_commit_v2",
+  "source_contract": {
+    "schema": "fr13-fixed32-taw-all-parent-v4",
+    "sha256": "51541928c3a758fdac34a70fe46b97753ffc1b6e9f3e5fe470c4b34a96515dc4"
+  },
+  "fixed_contract": {
+    "physical_drafts": 31,
+    "physical_rows": 32,
+    "walk_cap": 12,
+    "fanout": 3,
+    "self_rows": 13,
+    "target_rows": 17,
+    "supported_batches": [1, 2, 3, 4],
+    "vocab": "full_only_k0_root0",
+    "floating_sampling_reimplementation": false
+  },
+  "launch_census": {
+    "reference_full_vocab_softmax_calls": 24,
+    "candidate_full_vocab_softmax_calls": 2,
+    "reference_exact_commit_launches": 12,
+    "candidate_exact_commit_launches": 1
+  },
+  "measured_attribution": {
+    "artifact": "results/fr13_fixed32_b1_nsys_20260731T013952Z_curated/nsys_attribution.json",
+    "classification": "attribution_only_old_64k_floor",
+    "cfwd_ranges": 881,
+    "cfwd_gpu_ops": 1377003,
+    "gpu_ops_per_event": 1563.0,
+    "projected_cfwd_ms_per_event": 22.755076905788876,
+    "later_exact4_cfwd_ms_per_event": 20.677390556513288
+  },
+  "expected_savings_ms_per_event": {
+    "low": 2.0,
+    "high": 6.0,
+    "classification": "source_model_not_measurement"
+  },
+  "focused_cuda_correctness": {
+    "result": "4 passed",
+    "coverage": "tail6_hydra27_b1_b4_threshold_products",
+    "classification": "unit_correctness_not_performance_or_real_task"
+  },
+  "qualification": {
+    "traffic": "real_swe_verified_exact4",
+    "batches": [1, 4],
+    "probability_bit_mismatches_required": 0,
+    "product_mismatches_required": 0,
+    "full_wall_tps_required": true,
+    "nsight_launch_confirmation_required": true
+  }
+}

@@ -111,7 +111,7 @@ def test_native_precompute_is_full_byte_equivalent_on_cpu(
     callback_rows = []
     taw.fr13_fixed32_taw_set_work_callback(callback_rows.append)
 
-    for seed in range(4):
+    for seed in range(16):
         fixture = _fixture(topology, mode, batch_size, seed)
         baseline = tuple(
             tensor.clone()
@@ -183,21 +183,22 @@ def test_native_precompute_work_census_is_pinned() -> None:
     event["taw"]["tensor_call_census"] = dict(
         census_validator.TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS
     )
-    for name in (
-        "child_lanes",
-        "target_rows",
-        "self_rows",
-        "self_cdf_rows",
-        "source_cdf_rows",
-        "residual_cdf_rows",
-        "qmix_rows",
-        "residual_rows",
-        "row_scatter_slots",
-        "path_scatter_slots",
-        "exact_commit_launches",
-        "exact_commit_programs",
-    ):
-        event["taw"][name] *= 2
+    event["taw"].update(
+        {
+            "child_lanes": 87,
+            "target_rows": 29,
+            "self_rows": 25,
+            "self_cdf_rows": 25,
+            "source_cdf_rows": 29,
+            "residual_cdf_rows": 29,
+            "qmix_rows": 29,
+            "residual_rows": 29,
+            "row_scatter_slots": 48,
+            "path_scatter_slots": 24,
+            "exact_commit_launches": 13,
+            "exact_commit_programs": 13,
+        }
+    )
     validated = census_validator.validate_event(
         event,
         source="native-precompute-contract",
@@ -217,6 +218,20 @@ def test_native_precompute_work_census_is_pinned() -> None:
     event["taw"]["tensor_call_census"] = dict(
         census_validator.TAW_NATIVE_PRECOMPUTE_PRODUCTION_TENSOR_CALL_CENSUS
     )
+    event["taw"].update(
+        {
+            "child_lanes": 51,
+            "target_rows": 17,
+            "self_rows": 13,
+            "self_cdf_rows": 13,
+            "source_cdf_rows": 17,
+            "residual_cdf_rows": 17,
+            "qmix_rows": 17,
+            "residual_rows": 17,
+            "exact_commit_launches": 1,
+            "exact_commit_programs": 1,
+        }
+    )
     validated = census_validator.validate_event(
         event,
         source="native-precompute-production-contract",
@@ -224,6 +239,81 @@ def test_native_precompute_work_census_is_pinned() -> None:
     assert validated.normalized_work["taw"]["tensor_call_census"][
         "full_vocab_softmax_calls"
     ] == 2
+    assert validated.normalized_work["taw"]["exact_commit_launches"] == 1
+
+
+def test_all_parent_schedule_and_integer_kernel_are_fixed() -> None:
+    topology = taw._fr13_fixed32_topology()
+    mode = "hydra27_fixed32"
+    valid_mask = int(topology.VALID_MASK_BY_MODE[mode])
+    taw.fr13_fixed32_taw_preseed(
+        torch.device("cpu"), mode=mode, valid_mask=valid_mask
+    )
+    entry = taw._FR13_FIXED32_TAW_CACHE[
+        taw.fr13_fixed32_taw_cache_key(
+            mode, valid_mask, 1, torch.device("cpu")
+        )
+    ]
+    assert entry["all_parent_self_uniform_levels"].tolist() == [
+        1, 1, 2, 2, 3, 3, 3, 4, 4, 5, 5, 5, 11
+    ]
+    assert entry["all_parent_target_uniform_levels"].tolist() == [
+        0, 1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 6, 7, 8, 9, 10
+    ]
+    source = MODULE_PATH.read_text(encoding="utf-8")
+    start = source.index("def _fr13_fixed32_taw_all_parent_commit_kernel(")
+    end = source.index("\n\n#", start)
+    kernel = source[start:end]
+    assert "tl.static_range(0, WALK_CAP)" in kernel
+    assert "torch." not in kernel
+    assert "softmax" not in kernel
+    assert "tl.exp" not in kernel
+
+
+@pytest.mark.parametrize("mode", ("tail6_fixed32", "hydra27_fixed32"))
+@pytest.mark.parametrize("batch_size", (1, 4))
+def test_all_parent_matches_zero_overlap_and_duplicate_siblings(
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    batch_size: int,
+) -> None:
+    topology = taw._fr13_fixed32_topology()
+    _set_fixed_env(monkeypatch, topology, mode)
+    monkeypatch.delenv("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", raising=False)
+    valid_mask = int(topology.VALID_MASK_BY_MODE[mode])
+    taw.fr13_fixed32_taw_preseed(
+        torch.device("cpu"), mode=mode, valid_mask=valid_mask
+    )
+    fixture = _fixture(topology, mode, batch_size, 20260801)
+    fixture["drafts"].fill_(1)
+    fixture["target"].fill_(float("-inf"))
+    fixture["target"][:, 0] = 0.0
+    fixture["self"].fill_(float("-inf"))
+    fixture["self"][:, 2] = 0.0
+    fixture["uniforms"][:, :, 0] = 0.0
+    fixture["uniforms"][:, :, 1] = 1.0 - torch.finfo(torch.float32).eps
+    fixture["uniforms"][:, :, 2] = 1.0 - torch.finfo(torch.float32).eps
+
+    reference = tuple(
+        tensor.clone()
+        for tensor in taw._fr13_fixed32_test_call(topology, mode, fixture)
+    )
+    monkeypatch.setenv("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", "1")
+    diagnostic = tuple(
+        tensor.clone()
+        for tensor in taw._fr13_fixed32_test_call(topology, mode, fixture)
+    )
+    assert all(
+        expected.numpy().tobytes() == actual.numpy().tobytes()
+        for expected, actual in zip(reference, diagnostic, strict=True)
+    )
+    entry = taw._FR13_FIXED32_TAW_CACHE[
+        taw.fr13_fixed32_taw_cache_key(
+            mode, valid_mask, batch_size, torch.device("cpu")
+        )
+    ]
+    assert entry["native_ab_probability_mismatches"].item() == 0
+    assert entry["native_ab_product_mismatches"].item() == 0
 
 
 def test_native_precompute_flag_fails_closed(

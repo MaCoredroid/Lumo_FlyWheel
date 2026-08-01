@@ -171,6 +171,7 @@ def test_exact_commit_dispatch_and_census_are_fail_closed() -> None:
     assert "_fr13_fixed32_taw_execute_torch" in dispatcher
     assert taw._FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS == (
         "_fr13_fixed32_taw_exact_commit_kernel",
+        "_fr13_fixed32_taw_all_parent_commit_kernel",
     )
     census = taw._FR13_FIXED32_TAW_TENSOR_CALL_CENSUS
     assert census["walk_levels"] == 12
