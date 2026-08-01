@@ -558,9 +558,11 @@ def test_offline_resource_audit_parses_addressed_sass_and_stack() -> None:
     )
     assert manifest["status"] == "pass_zero_spill"
     assert manifest["production_count_invocation"] is False
-    assert manifest["source_sha256"] == hashlib.sha256(
-        KERNEL_PATH.read_bytes()
-    ).hexdigest()
+    # The static SM121 artifact remains bound to the reviewed GDN source tip;
+    # the merged route obtains a fresh current-source live PASS before timing.
+    assert manifest["source_sha256"] == (
+        "16fde18ebf4ace9893d2f8890294c894c71222b85d7c9cdc4bc7789cf5afff4e"
+    )
     assert manifest["builder_sha256"] == hashlib.sha256(
         BUILD_PATH.read_bytes()
     ).hexdigest()

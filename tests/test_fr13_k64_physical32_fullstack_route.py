@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from scripts import fr13_taw_b1_credential as credential  # noqa: E402
 from scripts import fr13_fixed32_work_census as work_census  # noqa: E402
+from scripts import fr13_gdn_level0_coeff_pass as gdn_pass  # noqa: E402
 
 
 SOURCE = ROOT / "scripts" / "fr13_device_multidraft_kernel.py"
@@ -210,6 +211,10 @@ def test_pair_has_only_all_parent_delta_and_full_wall_breakdown() -> None:
     assert "FR13_FIXED32_B1_DIAGNOSTIC=0" in pair
     assert "FR13_FA2_QROW16_PRODUCTION=1" in pair
     assert "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=1" in pair
+    assert "FR13_FIXED32_GDN_LEVEL0_COEFF=1" in pair
+    assert "FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK=1" in pair
+    assert "GDN_LEVEL0_COEFF_GATE_SUMMARY" in pair
+    assert "GDN_COMPARED_BYTES=4725178944" in pair
     assert 'run_arm "$STOCK_ARM" 0' in pair
     assert 'run_arm "$CANDIDATE_ARM" 1' in pair
     assert "source_v7_all_parent_committer_production_0_to_1" in pair
@@ -233,6 +238,12 @@ def test_pair_has_only_all_parent_delta_and_full_wall_breakdown() -> None:
     assert '"formal_floor_acceptance_eligible": False' in helper
     assert '"s_per_fwd_gpu_per_forward"' in helper
     assert "fixed32_native_precompute_production_candidate_return" in helper
+    assert '"count_invocation": False' in helper
+    assert '"b4_live_qualified": False' in helper
+    assert '"b4_deployable": False' in helper
+    assert '"b4_evidence_classification": "static_only"' in helper
+    assert '"compared_bytes": module.EXPECTED_COMPARED_BYTES' in helper
+    assert '"arm_evidence": "production_selector_pass_and_complete_work_census"' in helper
 
 
 def test_sfwd_launcher_admits_only_source_gated_taw_production() -> None:
@@ -252,12 +263,29 @@ def test_sfwd_launcher_admits_only_source_gated_taw_production() -> None:
     assert "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" not in exact_runtime
 
 
+def test_gdn_fullstack_guard_is_explicit_and_standalone_stays_exclusive() -> None:
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+    assert "FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK" in launcher
+    assert "standalone GDN coefficient production requires the exclusive" in launcher
+    assert "exact eager K64 B1 qrow16 and SFWD production" in launcher
+    assert '-e FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK=' in launcher
+
+    patcher = PATCHER.read_text(encoding="utf-8")
+    assert '"FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK", "0"' in patcher
+    assert '"FR13_FA2_QROW16_PRODUCTION": "1"' in patcher
+    assert '"FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION": "1"' in patcher
+    assert 'taw_production not in ("0", "1")' in patcher
+
+
 def test_runtime_manifest_closes_new_gate_pair_and_b1_subset() -> None:
     manifest = MANIFEST.read_text(encoding="utf-8")
     for required in (
         "scripts/fr13_run_b1_k64_taw_source_v7_gate.sh",
         "scripts/fr13_run_b1_k64_physical32_fullstack_pair.sh",
         "scripts/fr13_taw_b1_credential.py",
+        "scripts/fr13_gdn_level0_coeff_pass.py",
+        "scripts/fr13_run_b1_gdn_level0_coeff_live_gate.sh",
+        "scripts/fr13_run_b1_gdn_level0_coeff_timing.sh",
         "config/fr13_fixed32/subset_b1_diagnostic_one.json",
     ):
         assert f'"{required}"' in manifest
@@ -276,10 +304,112 @@ def test_prepared_campaign_requires_corrected_b4_inputs_and_claims_no_measuremen
     ):
         assert required in source
     assert source.index("validate-reviewed-b4") < source.index("run_mode()")
+    assert source.index("fr13_run_b1_gdn_level0_coeff_live_gate.sh") < source.index(
+        "fr13_run_b1_k64_physical32_fullstack_pair.sh"
+    )
+    assert "GDN_LEVEL0_COEFF_LIVE_PASS" in source
+    assert "GDN_LEVEL0_COEFF_GATE_SUMMARY" in source
+    assert "4725178944" in source
     assert readiness["corrected_b4_review_tip"].startswith("e0ac403c2")
     assert readiness["pre_review_b4_artifacts_accepted"] is False
     assert readiness["gpu_campaign_run"] is False
     assert readiness["measurements_present"] is False
+
+
+@pytest.mark.parametrize("mode", sorted(credential.MODE_CONTRACTS))
+def test_gdn_fullstack_binding_closes_exact_b1_byte_surface(
+    tmp_path: Path, mode: str
+) -> None:
+    kernel_source = ROOT / "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
+    source_sha256 = hashlib.sha256(kernel_source.read_bytes()).hexdigest()
+    live = {
+        "schema": gdn_pass.SCHEMA,
+        "status": "pass",
+        "candidate": gdn_pass.CANDIDATE,
+        "source_sha256": source_sha256,
+        "task_marker": f"swe_verified:{credential.TASK_ID}",
+        "mode": mode,
+        "batch_size": 1,
+        "covered_batches": [1],
+        "records": 48,
+        "physical_rows": 32,
+        "path_lengths": [5, 7],
+        "launches_per_layer": 2,
+        "scratch_row_start": 31,
+        "scratch_rows": 1,
+        "count_invocation": False,
+        "non_scratch_export_rows_compared": 31,
+        "surfaces": gdn_pass.SURFACES,
+        "compared_bytes": gdn_pass.EXPECTED_COMPARED_BYTES,
+        "raw_byte_equal": True,
+        "scratch_contained": True,
+        "reference_served": True,
+        "state_restored": True,
+    }
+    live_path = tmp_path / "live.json"
+    live_raw = _write_json(live_path, live)
+    live_sha256 = hashlib.sha256(live_raw).hexdigest()
+    gate = {
+        "schema": "fr13.fixed32.gdn_level0_coeff.b1_gate.v1",
+        "status": "pass",
+        "run_classification": "one_real_swe_verified_k64_b1_byte_diagnostic",
+        "acceptance_valid": False,
+        "timing_eligible": False,
+        "reference_served": True,
+        "candidate_shadow_only": True,
+        "task_id": credential.TASK_ID,
+        "topology": mode,
+        "batch_size": 1,
+        "physical_rows": 32,
+        "draft_vocab_root": 1,
+        "draft_vocab_k": 65536,
+        "source_commit": "0" * 40,
+        "kernel_source_sha256": source_sha256,
+        "subset_sha256": credential.B1_SUBSET_SHA256,
+        "block_map_sha256": credential.BLOCK_MAP_SHA256,
+        "live_pass_sha256": live_sha256,
+        "records": 48,
+        "compared_bytes": gdn_pass.EXPECTED_COMPARED_BYTES,
+        "surfaces": gdn_pass.SURFACES,
+        "scratch_rows": [31],
+        "count_invocation": False,
+        "raw_byte_equal": True,
+        "state_restored": True,
+        "runner_sha256": "1" * 64,
+        "fa2_sha256": "2" * 64,
+        "live_pass_validation_sha256": "3" * 64,
+        "runtime_manifest_sha256": "4" * 64,
+        "external_manifest_sha256": "5" * 64,
+    }
+    gate_path = tmp_path / "gate.json"
+    gate_raw = _write_json(gate_path, gate)
+    gate_sha256 = hashlib.sha256(gate_raw).hexdigest()
+
+    binding, _, _, _ = credential._validate_gdn_fullstack_inputs(
+        mode=mode,
+        kernel_source=kernel_source,
+        live_pass=live_path,
+        gate_summary=gate_path,
+        source_commit="0" * 40,
+        expected_live_sha256=live_sha256,
+        expected_gate_sha256=gate_sha256,
+    )
+    assert binding["count_invocation"] is False
+    assert binding["compared_bytes"] == 4_725_178_944
+    assert binding["b4_deployable"] is False
+
+    gate["compared_bytes"] -= 1
+    gate_raw = _write_json(gate_path, gate)
+    with pytest.raises(credential.CredentialError, match="gate summary drifted"):
+        credential._validate_gdn_fullstack_inputs(
+            mode=mode,
+            kernel_source=kernel_source,
+            live_pass=live_path,
+            gate_summary=gate_path,
+            source_commit="0" * 40,
+            expected_live_sha256=live_sha256,
+            expected_gate_sha256=hashlib.sha256(gate_raw).hexdigest(),
+        )
 
 
 @pytest.mark.parametrize("mode", sorted(credential.MODE_CONTRACTS))

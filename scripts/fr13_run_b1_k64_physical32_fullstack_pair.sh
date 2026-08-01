@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exact4 B1 pair: K64 qrow16+SFWD reference vs source-v7 all-parent full stack.
+# Exact4 B1 pair: shared K64 qrow16+SFWD+GDN vs source-v7 all-parent delta.
 # This is a real SWE-Verified timing screen, not the formal exact16 U95 gate.
 set -euo pipefail
 
@@ -24,6 +24,10 @@ cd "$REPO"
 : "${TAW_MERGE_BINDING_SHA256:?set its raw SHA-256}"
 : "${TAW_PRODUCTION_PASS:?set TAW_PRODUCTION_PASS to the merged source-v7 bundle}"
 : "${TAW_PRODUCTION_PASS_SHA256:?set its raw SHA-256}"
+: "${GDN_LEVEL0_COEFF_LIVE_PASS:?set the mode-bound GDN coefficient B1 PASS}"
+: "${GDN_LEVEL0_COEFF_LIVE_PASS_SHA256:?set its raw SHA-256}"
+: "${GDN_LEVEL0_COEFF_GATE_SUMMARY:?set the complete GDN B1 gate summary}"
+: "${GDN_LEVEL0_COEFF_GATE_SUMMARY_SHA256:?set its raw SHA-256}"
 
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 SUBSET=config/fr13_fixed32/subset_b4_four.json
@@ -40,6 +44,10 @@ QROW16_PASS=$REPO/results/fr13_fixed32_qrow16_num_splits0_live_pass_20260731T173
 QROW16_PASS_SHA256=36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77
 SFWD_PASS=$REPO/results/fr13_fixed32_sfwd_b1_real_task_byte_pass_20260801/run_evidence/fr13_fixed32_sfwd_state_fusion.live_pass.json
 SFWD_PASS_SHA256=7ccfaf5cc907909b0646b752b94027e250b234a3b98bf461de61e6ae70f31782
+GDN_SOURCE=src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py
+GDN_SOURCE_SHA256=$(sha256sum "$GDN_SOURCE" | awk '{print $1}')
+GDN_TASK_ID=astropy__astropy-12907
+GDN_COMPARED_BYTES=4725178944
 MANDATORY_WEIGHT_BYTES=32666638208
 MANDATORY_WEIGHT_FLOOR_MS=119.658015414
 ONE_SIDED_U95_CAP_MS=137.6067177261
@@ -78,6 +86,7 @@ CANDIDATE_ARM="${MODE}_k64_qrow16_sfwd_taw_source_v7_${TAG}"
   || { echo "Python environment is unavailable: $PYTHON_BIN" >&2; exit 2; }
 for input in \
   "$QROW16_FA2_SO" "$QROW16_PASS" "$SFWD_PASS" \
+  "$GDN_LEVEL0_COEFF_LIVE_PASS" "$GDN_LEVEL0_COEFF_GATE_SUMMARY" \
   "$TAW_B1_CREDENTIAL" "$TAW_B1_LIVE_BUNDLE" \
   "$TAW_REVIEWED_B4_PASS" "$TAW_REVIEWED_B4_VERDICT" \
   "$TAW_MERGE_BINDING" "$TAW_PRODUCTION_PASS"; do
@@ -106,6 +115,11 @@ unset input
    && "$TAW_PRODUCTION_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
    && "$(sha256sum "$TAW_PRODUCTION_PASS" | awk '{print $1}')" == "$TAW_PRODUCTION_PASS_SHA256" ]] \
   || { echo "TAW credential or production bundle identity mismatch" >&2; exit 2; }
+[[ "$GDN_LEVEL0_COEFF_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
+   && "$(sha256sum "$GDN_LEVEL0_COEFF_LIVE_PASS" | awk '{print $1}')" == "$GDN_LEVEL0_COEFF_LIVE_PASS_SHA256" \
+   && "$GDN_LEVEL0_COEFF_GATE_SUMMARY_SHA256" =~ ^[0-9a-f]{64}$ \
+   && "$(sha256sum "$GDN_LEVEL0_COEFF_GATE_SUMMARY" | awk '{print $1}')" == "$GDN_LEVEL0_COEFF_GATE_SUMMARY_SHA256" ]] \
+  || { echo "GDN coefficient live-gate identity mismatch" >&2; exit 2; }
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean" >&2; exit 2; }
 
@@ -134,6 +148,15 @@ PY
   --merge-binding "$TAW_MERGE_BINDING" \
   --production-pass "$TAW_PRODUCTION_PASS" \
   >/dev/null
+"$PYTHON_BIN" scripts/fr13_taw_b1_credential.py validate-gdn-fullstack \
+  --mode "$MODE" \
+  --kernel-source "$GDN_SOURCE" \
+  --gdn-live-pass "$GDN_LEVEL0_COEFF_LIVE_PASS" \
+  --gdn-live-pass-sha256 "$GDN_LEVEL0_COEFF_LIVE_PASS_SHA256" \
+  --gdn-gate-summary "$GDN_LEVEL0_COEFF_GATE_SUMMARY" \
+  --gdn-gate-summary-sha256 "$GDN_LEVEL0_COEFF_GATE_SUMMARY_SHA256" \
+  --source-commit "$SOURCE_COMMIT" \
+  >/dev/null
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "all Docker containers must be absent before paired timing" >&2; exit 2; }
 
@@ -161,9 +184,12 @@ mkdir -p "$RUNROOT_ABS/sidecars"
   --output "$RUNROOT_ABS/runtime_manifest.at_launch.json"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
-printf 'classification=real_swe_verified_exact4_k64_b1_fullstack_pair\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\nonly_arm_delta=source_v7_all_parent_committer_production_0_to_1\nmode=%s\nlogical_topology=%s\nlogical_drafts=%s\nvalid_mask=%s\nphysical_drafts=31\nphysical_rows_root_inclusive=32\ntask_count=4\nbatch_size=1\nconcurrency=1\ndraft_vocab_root=1\ndraft_vocab_k=65536\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nqrow16_production=1\nsfwd_state_fusion_production=1\nsource_contract_schema=%s\nsource_contract_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nqrow16_sha256=%s\nqrow16_pass_sha256=%s\nsfwd_pass_sha256=%s\ntaw_b1_credential_sha256=%s\ntaw_b1_live_bundle_sha256=%s\ntaw_reviewed_b4_pass_sha256=%s\ntaw_reviewed_b4_verdict_sha256=%s\ntaw_merge_binding_sha256=%s\ntaw_production_pass_sha256=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_exact4_k64_b1_fullstack_pair\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\nonly_arm_delta=source_v7_all_parent_committer_production_0_to_1\nmode=%s\nlogical_topology=%s\nlogical_drafts=%s\nvalid_mask=%s\nphysical_drafts=31\nphysical_rows_root_inclusive=32\ntask_count=4\nbatch_size=1\nconcurrency=1\ndraft_vocab_root=1\ndraft_vocab_k=65536\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nqrow16_production=1\nsfwd_state_fusion_production=1\ngdn_level0_coeff_production=1\ngdn_level0_coeff_count_invocation=0\ngdn_level0_coeff_compared_bytes=%s\ngdn_level0_coeff_kernel_source_sha256=%s\ngdn_level0_coeff_live_pass_sha256=%s\ngdn_level0_coeff_gate_summary_sha256=%s\ngdn_level0_coeff_b4_live_qualified=0\nsource_contract_schema=%s\nsource_contract_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nqrow16_sha256=%s\nqrow16_pass_sha256=%s\nsfwd_pass_sha256=%s\ntaw_b1_credential_sha256=%s\ntaw_b1_live_bundle_sha256=%s\ntaw_reviewed_b4_pass_sha256=%s\ntaw_reviewed_b4_verdict_sha256=%s\ntaw_merge_binding_sha256=%s\ntaw_production_pass_sha256=%s\nstarted=%s\n' \
   "$MODE" "$LOGICAL_TOPOLOGY" "$LOGICAL_DRAFTS" "$VALID_MASK" \
   "$BLOCK_MAP_CONTAINER" "$BLOCK_MAP_SHA256" \
+  "$GDN_COMPARED_BYTES" "$GDN_SOURCE_SHA256" \
+  "$GDN_LEVEL0_COEFF_LIVE_PASS_SHA256" \
+  "$GDN_LEVEL0_COEFF_GATE_SUMMARY_SHA256" \
   "$TAW_SOURCE_SCHEMA" "$TAW_SOURCE_CONTRACT_SHA256" \
   "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
   "$ONE_SIDED_U95_CAP_MS" "$STOCK_ARM" "$CANDIDATE_ARM" \
@@ -232,6 +258,13 @@ run_arm() {
       FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=1 \
       FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON="$SFWD_PASS" \
       FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256="$SFWD_PASS_SHA256" \
+      FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 \
+      FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB=0 \
+      FR13_FIXED32_GDN_LEVEL0_COEFF=1 \
+      FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK=1 \
+      FR13_FIXED32_GDN_LEVEL0_COEFF_PASS_JSON="$GDN_LEVEL0_COEFF_LIVE_PASS" \
+      FR13_FIXED32_GDN_LEVEL0_COEFF_PASS_SHA256="$GDN_LEVEL0_COEFF_LIVE_PASS_SHA256" \
+      FR13_FIXED32_GDN_LEVEL0_COEFF_PASS_TASK_ID="$GDN_TASK_ID" \
       FR13_FIXED32_CONV_SOURCE_BATCH=0 \
       FR13_FA2_QROW16_LIVE_PAGED_AB=0 \
       FR13_FA2_QROW16_SO_SHA256="$QROW16_SHA256" \
@@ -280,6 +313,10 @@ run_arm() {
     'ENFORCE_EAGER=1' \
     'FR13_FA2_QROW16_PRODUCTION=1' \
     'FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=1' \
+    'FR13_TREE_GDN_GEOM_OVERRIDE=BV=8' \
+    'FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB=0' \
+    'FR13_FIXED32_GDN_LEVEL0_COEFF=1' \
+    'FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK=1' \
     "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=$taw_production"; do
     [[ "$(grep -Fxc "$expected" "$container_env")" -eq 1 ]] \
       || { echo "$arm lacks exact stack pin: $expected" >&2; return 4; }
@@ -323,6 +360,7 @@ for arm in "$STOCK_ARM" "$CANDIDATE_ARM"; do
   sfwd_engagement="$arm_dir/logs/fr13_fixed32_sfwd_state_fusion.production_engagement.json"
   qrow_sidecar="$arm_dir/logs/fr13_fa2_qrow16_production_pass.json"
   qrow_engagement="$arm_dir/logs/fr13_fa2_qrow16_production_capture.json"
+  gdn_production_pass="$arm_dir/logs/fr13_fixed32_gdn_level0_coeff.production_pass.json"
   "$PYTHON_BIN" scripts/fr13_sfwd_state_fusion_pass.py verify-engagement \
     --engagement "$sfwd_engagement" \
     --expected-live-sha256 "$SFWD_PASS_SHA256" \
@@ -337,8 +375,13 @@ for arm in "$STOCK_ARM" "$CANDIDATE_ARM"; do
     >/dev/null
   [[ -f "$qrow_engagement" && ! -L "$qrow_engagement" ]] \
     || { echo "$arm lacks qrow16 eager engagement" >&2; exit 4; }
+  [[ -f "$gdn_production_pass" && ! -L "$gdn_production_pass" ]] \
+    || { echo "$arm lacks the GDN coefficient production PASS" >&2; exit 4; }
+  cmp -s "$GDN_LEVEL0_COEFF_LIVE_PASS" "$gdn_production_pass" \
+    || { echo "$arm served a different GDN coefficient PASS" >&2; exit 4; }
 done
 unset arm arm_dir sfwd_engagement qrow_sidecar qrow_engagement qrow_sidecar_sha256
+unset gdn_production_pass
 
 finalize_manifests
 "$PYTHON_BIN" scripts/fr13_taw_b1_credential.py reduce-pair \
@@ -361,6 +404,15 @@ finalize_manifests
   --candidate-sfwd-engagement "$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_sfwd_state_fusion.production_engagement.json" \
   --stock-qrow-engagement "$RUNROOT_ABS/$STOCK_ARM/logs/fr13_fa2_qrow16_production_capture.json" \
   --candidate-qrow-engagement "$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fa2_qrow16_production_capture.json" \
+  --gdn-kernel-source "$GDN_SOURCE" \
+  --gdn-live-pass "$GDN_LEVEL0_COEFF_LIVE_PASS" \
+  --gdn-live-pass-sha256 "$GDN_LEVEL0_COEFF_LIVE_PASS_SHA256" \
+  --gdn-gate-summary "$GDN_LEVEL0_COEFF_GATE_SUMMARY" \
+  --gdn-gate-summary-sha256 "$GDN_LEVEL0_COEFF_GATE_SUMMARY_SHA256" \
+  --stock-container-env "$RUNROOT_ABS/$STOCK_ARM/container_env.txt" \
+  --candidate-container-env "$RUNROOT_ABS/$CANDIDATE_ARM/container_env.txt" \
+  --stock-gdn-production-pass "$RUNROOT_ABS/$STOCK_ARM/logs/fr13_fixed32_gdn_level0_coeff.production_pass.json" \
+  --candidate-gdn-production-pass "$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_gdn_level0_coeff.production_pass.json" \
   --stock-taw-census "$RUNROOT_ABS/$STOCK_ARM/logs/fr13_fixed32_work_census.jsonl" \
   --candidate-taw-census "$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_work_census.jsonl" \
   --source-commit "$SOURCE_COMMIT" \

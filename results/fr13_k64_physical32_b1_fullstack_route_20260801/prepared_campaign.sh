@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the reviewed B4 prerequisite through fresh B1 gates and paired B1 timing.
+# Run reviewed B4 prerequisites through fresh TAW/GDN B1 gates and paired timing.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -62,6 +62,11 @@ run_mode() {
   local b1_live="$gate_arm/taw_source_v7_b1_live_bundle.json"
   local merged_pass="$gate_arm/${slug}_taw_source_v7_merged_production_pass.json"
   local merge_binding="$gate_arm/${slug}_taw_source_v7_merge_binding.json"
+  local gdn_gate_tag="${slug}_gdn_b1_gate_${TAG}"
+  local gdn_gate_root="$CAMPAIGN_ROOT/${slug}_gdn_b1_gate"
+  local gdn_gate_arm="$gdn_gate_root/${mode}_k64_gdn_level0_coeff_gate_${gdn_gate_tag}"
+  local gdn_live_pass="$gdn_gate_arm/logs/fr13_fixed32_gdn_level0_coeff.live_pass.json"
+  local gdn_gate_summary="$gdn_gate_root/gate_summary.json"
 
   MODE="$mode" RUNROOT="$gate_root" TAG="$gate_tag" \
   STOCK_FA2_SO="$STOCK_FA2_SO" \
@@ -81,6 +86,13 @@ run_mode() {
     --binding-out "$merge_binding" \
     > "$gate_arm/${slug}_taw_source_v7_merge_validation.json"
 
+  TOPOLOGY="$mode" RUNROOT="$gdn_gate_root" TAG="$gdn_gate_tag" \
+  FORKED_FA2_SO="$STOCK_FA2_SO" \
+    bash scripts/fr13_run_b1_gdn_level0_coeff_live_gate.sh
+  [[ -f "$gdn_live_pass" && ! -L "$gdn_live_pass" \
+     && -f "$gdn_gate_summary" && ! -L "$gdn_gate_summary" ]] \
+    || { echo "$mode GDN coefficient B1 gate was not issued" >&2; return 4; }
+
   local pair_root="$CAMPAIGN_ROOT/${slug}_b1_pair"
   local pair_tag="${slug}_b1_pair_${TAG}"
   MODE="$mode" RUNROOT="$pair_root" TAG="$pair_tag" \
@@ -97,6 +109,10 @@ run_mode() {
   TAW_MERGE_BINDING_SHA256="$(sha256sum "$merge_binding" | awk '{print $1}')" \
   TAW_PRODUCTION_PASS="$merged_pass" \
   TAW_PRODUCTION_PASS_SHA256="$(sha256sum "$merged_pass" | awk '{print $1}')" \
+  GDN_LEVEL0_COEFF_LIVE_PASS="$gdn_live_pass" \
+  GDN_LEVEL0_COEFF_LIVE_PASS_SHA256="$(sha256sum "$gdn_live_pass" | awk '{print $1}')" \
+  GDN_LEVEL0_COEFF_GATE_SUMMARY="$gdn_gate_summary" \
+  GDN_LEVEL0_COEFF_GATE_SUMMARY_SHA256="$(sha256sum "$gdn_gate_summary" | awk '{print $1}')" \
     bash scripts/fr13_run_b1_k64_physical32_fullstack_pair.sh
   [[ -f "$pair_root/timing_summary.json" \
      && ! -L "$pair_root/timing_summary.json" ]] \
@@ -128,6 +144,7 @@ for path, mode, topology in (
 ):
     raw = path.read_bytes()
     payload = json.loads(raw.decode("ascii"))
+    gdn = payload.get("gdn_level0_coeff", {})
     if (
         payload.get("schema")
         != "fr13.fixed32.k64_physical32_fullstack.b1_pair.v1"
@@ -138,7 +155,31 @@ for path, mode, topology in (
         or payload.get("qrow16_production") is not True
         or payload.get("sfwd_state_fusion_production") is not True
         or payload.get("candidate_all_parent_committer_production") is not True
+        or payload.get("only_arm_delta")
+        != "source_v7_all_parent_committer_production_0_to_1"
         or payload.get("formal_floor_acceptance_eligible") is not False
+        or gdn.get("schema")
+        != "fr13.fixed32.gdn_level0_coeff.fullstack_binding.v1"
+        or gdn.get("status") != "bound"
+        or gdn.get("candidate") != "fixed32_gdn_level0_coeff_v1"
+        or gdn.get("mode") != mode
+        or gdn.get("qualified_batches") != [1]
+        or gdn.get("count_invocation") is not False
+        or gdn.get("compared_bytes") != 4725178944
+        or gdn.get("surfaces")
+        != [
+            "output",
+            "export_non_scratch_rows",
+            "ring_k",
+            "ring_v",
+            "ring_a",
+            "ring_b",
+            "flags",
+            "counter",
+        ]
+        or gdn.get("b4_live_qualified") is not False
+        or gdn.get("b4_deployable") is not False
+        or gdn.get("b4_evidence_classification") != "static_only"
     ):
         raise SystemExit(f"{topology} B1 paired summary is incomplete")
     arms[topology] = {
@@ -150,6 +191,7 @@ for path, mode, topology in (
         "candidate_to_stock_full_wall_tps_ratio": payload[
             "candidate_to_stock_full_wall_tps_ratio"
         ],
+        "gdn_level0_coeff": gdn,
     }
 
 summary = {

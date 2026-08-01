@@ -164,6 +164,9 @@ _FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB = os.environ.get(
 _FR13_FIXED32_GDN_LEVEL0_COEFF_PRODUCTION = os.environ.get(
     "FR13_FIXED32_GDN_LEVEL0_COEFF", "0"
 ).strip()
+_FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK = os.environ.get(
+    "FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK", "0"
+).strip()
 _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = (
     os.environ.get("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", "0").strip() == "1"
 )
@@ -6112,6 +6115,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     production = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
     coeff_byte_ab = _FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB
     coeff_production = _FR13_FIXED32_GDN_LEVEL0_COEFF_PRODUCTION
+    coeff_fullstack = _FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK
     taw_native_diagnostic = bool(_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE)
     batch_gdn_byte_diagnostic = _FR13_FIXED32_BATCH_GDN_BYTE_AB
     graph_batch_gdn_byte_diagnostic = (
@@ -6127,6 +6131,15 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     if coeff_production not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_GDN_LEVEL0_COEFF must be exactly 0 or 1"
+        )
+    if coeff_fullstack not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK must be exactly 0 or 1"
+        )
+    if coeff_fullstack == "1" and coeff_production != "1":
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK requires coefficient "
+            "production"
         )
     if sfwd_production not in ("0", "1"):
         raise RuntimeError(
@@ -6349,6 +6362,9 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
                 "exclusive B1 graph-replay stock-serving route"
             )
     if coeff_production == "1":
+        taw_production = os.environ.get(
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION", "0"
+        )
         incompatible = (
             not mode
             or os.environ.get("FR13_TREE_GDN_GEOM_OVERRIDE", "") != "BV=8"
@@ -6366,12 +6382,38 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             or os.environ.get("FR13_DRAFT_HEAD_M32_PRODUCTION", "0") != "0"
             or os.environ.get("FR13_DRAFT_HEAD_M32_TIMING_ARM", "0") != "0"
             or os.environ.get("FR13_FA2_QROW16_LIVE_PAGED_AB", "0") != "0"
-            or os.environ.get("FR13_FA2_QROW16_PRODUCTION", "0") != "0"
         )
+        if coeff_fullstack == "1":
+            exact_runtime = {
+                "FR13_FIXED32_B1_DIAGNOSTIC": "0",
+                "ENFORCE_EAGER": "1",
+                "FR13_DRAFT_VOCAB_ROOT": "1",
+                "FR13_DRAFT_VOCAB_K": "65536",
+                "FR13_FIXED32_CONV_SOURCE_BATCH": "0",
+                "FR13_FA2_QROW16_PRODUCTION": "1",
+                "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION": "1",
+                "FR10_METRICS": "0",
+            }
+            drift = {
+                name: (os.environ.get(name, ""), expected)
+                for name, expected in exact_runtime.items()
+                if os.environ.get(name, "") != expected
+            }
+            incompatible = incompatible or taw_production not in ("0", "1") or bool(
+                drift
+            )
+        else:
+            incompatible = incompatible or any(
+                (
+                    taw_production != "0",
+                    os.environ.get("FR13_FA2_QROW16_PRODUCTION", "0") != "0",
+                    sfwd_production != "0",
+                )
+            )
         if incompatible:
             raise RuntimeError(
                 "FR13 fixed32 GDN coefficient production requires the "
-                "exclusive BV8 fixed32 route"
+                "exact selected BV8 route"
             )
     if candidate:
         if candidate not in ("16", "32", "64", "128"):

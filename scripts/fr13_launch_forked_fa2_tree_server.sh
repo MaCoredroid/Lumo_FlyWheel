@@ -890,6 +890,7 @@ _fr13_gdn_path_bv_production=${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}
 _fr13_gdn_path_bv_pass_json=${FR13_FIXED32_GDN_PATH_BV_PASS_JSON:-}
 _fr13_gdn_level0_coeff_byte_ab=${FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB:-0}
 _fr13_gdn_level0_coeff_production=${FR13_FIXED32_GDN_LEVEL0_COEFF:-0}
+_fr13_gdn_level0_coeff_fullstack=${FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK:-0}
 _fr13_gdn_level0_coeff_pass_json=${FR13_FIXED32_GDN_LEVEL0_COEFF_PASS_JSON:-}
 _fr13_gdn_level0_coeff_pass_sha256=${FR13_FIXED32_GDN_LEVEL0_COEFF_PASS_SHA256:-}
 _fr13_gdn_level0_coeff_pass_task_id=${FR13_FIXED32_GDN_LEVEL0_COEFF_PASS_TASK_ID:-}
@@ -901,6 +902,15 @@ case "$_fr13_gdn_level0_coeff_production" in
   0|1) ;;
   *) echo "FR13_FIXED32_GDN_LEVEL0_COEFF must be exactly 0 or 1" >&2; exit 2 ;;
 esac
+case "$_fr13_gdn_level0_coeff_fullstack" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK must be exactly 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "$_fr13_gdn_level0_coeff_fullstack" == "1" \
+      && "$_fr13_gdn_level0_coeff_production" != "1" ]]; then
+  echo "FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK requires coefficient production" >&2
+  exit 2
+fi
 if [[ "$_fr13_gdn_level0_coeff_byte_ab" == "1" \
       && -z "${FR13_FIXED32_MODE:-}" ]]; then
   echo "FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB requires FR13_FIXED32_MODE" >&2
@@ -2039,19 +2049,37 @@ if [[ "$_fr13_gdn_level0_coeff_production" == "1" ]]; then
         || -n "$_fr13_gdn_path_bv_candidate" \
         || -n "$_fr13_gdn_path_bv_production" \
         || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" != "0" \
-        || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" != "0" \
         || "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" != "0" \
         || "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" != "0" \
         || "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" != "0" \
         || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" != "0" \
         || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" != "0" \
         || "${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}" != "0" \
-        || "${FR13_FA2_QROW16_PRODUCTION:-0}" != "0" \
         || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" != "0" \
-        || "${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}" != "0" \
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" \
         || "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" != "0" ]]; then
-    echo "GDN level-0 coefficient production requires the exclusive BV8 fixed32 kernel route" >&2
+    echo "GDN level-0 coefficient production has an incompatible kernel route" >&2
+    exit 2
+  fi
+  if [[ "$_fr13_gdn_level0_coeff_fullstack" == "1" ]]; then
+    if [[ "$MAX_NUM_SEQS" != "1" \
+          || "${SWE_CONCURRENCY:-}" != "1" \
+          || "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" != "0" \
+          || "${ENFORCE_EAGER:-0}" != "1" \
+          || "${FR13_DRAFT_VOCAB_ROOT:-0}" != "1" \
+          || "${FR13_DRAFT_VOCAB_K:-65536}" != "65536" \
+          || "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" != "0" \
+          || "${FR13_FA2_QROW16_PRODUCTION:-0}" != "1" \
+          || "${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}" != "1" \
+          || ! "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" =~ ^[01]$ \
+          || "${FR10_METRICS:-0}" != "0" ]]; then
+      echo "GDN coefficient full stack requires exact eager K64 B1 qrow16 and SFWD production" >&2
+      exit 2
+    fi
+  elif [[ "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" != "0" \
+          || "${FR13_FA2_QROW16_PRODUCTION:-0}" != "0" \
+          || "${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}" != "0" ]]; then
+    echo "standalone GDN coefficient production requires the exclusive BV8 fixed32 route" >&2
     exit 2
   fi
 fi
@@ -2738,6 +2766,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_GDN_PATH_BV_LIVE_JSON=/logs/fr13_fixed32_gdn_path_bv.live_pass.json \
   -e FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB="$_fr13_gdn_level0_coeff_byte_ab" \
   -e FR13_FIXED32_GDN_LEVEL0_COEFF="$_fr13_gdn_level0_coeff_production" \
+  -e FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK="$_fr13_gdn_level0_coeff_fullstack" \
   -e FR13_FIXED32_GDN_LEVEL0_COEFF_REAL_EVENT_PATH=/logs/fr13_fixed32_gdn_level0_coeff.real_event.arm \
   -e FR13_FIXED32_GDN_LEVEL0_COEFF_LIVE_JSON=/logs/fr13_fixed32_gdn_level0_coeff.live_pass.json \
   -e FR13_FIXED32_GDN_LEVEL0_COEFF_PRODUCTION_PASS_PATH=/logs/fr13_fixed32_gdn_level0_coeff.production_pass.json \

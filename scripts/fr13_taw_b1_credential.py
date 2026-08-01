@@ -62,6 +62,9 @@ B4_VERDICT_SCHEMAS = {
     "hydra27_fixed32": "fr13.fixed32.hydra27_all_parent.exact4_b4_live_gate.v1",
 }
 MERGE_BINDING_SCHEMA = "fr13.fixed32.taw_source_v7.b1_b4_merge_binding.v1"
+GDN_FULLSTACK_BINDING_SCHEMA = (
+    "fr13.fixed32.gdn_level0_coeff.fullstack_binding.v1"
+)
 
 
 class CredentialError(RuntimeError):
@@ -967,6 +970,216 @@ def _validate_engagements(
         raise CredentialError(f"{label} qrow16 production engagement is incomplete")
 
 
+def _load_gdn_level0_coeff_pass_module():
+    path = Path(__file__).resolve().with_name("fr13_gdn_level0_coeff_pass.py")
+    spec = importlib.util.spec_from_file_location(
+        "fr13_taw_b1_credential_gdn_level0_coeff_pass",
+        path,
+    )
+    if spec is None or spec.loader is None:
+        raise CredentialError("cannot import GDN coefficient PASS validator")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _is_sha256(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def _validate_gdn_fullstack_inputs(
+    *,
+    mode: str,
+    kernel_source: Path,
+    live_pass: Path,
+    gate_summary: Path,
+    source_commit: str,
+    expected_live_sha256: str,
+    expected_gate_sha256: str,
+) -> tuple[dict[str, Any], bytes, bytes, bytes]:
+    if mode not in MODE_CONTRACTS:
+        raise CredentialError("GDN full-stack binding mode is not fixed32")
+    if (
+        len(source_commit) != 40
+        or any(character not in "0123456789abcdef" for character in source_commit)
+    ):
+        raise CredentialError("GDN full-stack source commit is malformed")
+    if not _is_sha256(expected_live_sha256) or not _is_sha256(
+        expected_gate_sha256
+    ):
+        raise CredentialError("GDN full-stack pinned SHA-256 is malformed")
+
+    source_raw = _read_regular(
+        kernel_source,
+        label="GDN coefficient kernel source",
+        limit=8 << 20,
+    )
+    source_sha256 = _sha256(source_raw)
+    live, live_raw = _load_json(live_pass, label="GDN coefficient live PASS")
+    gate, gate_raw = _load_json(gate_summary, label="GDN coefficient gate summary")
+    live_sha256 = _sha256(live_raw)
+    gate_sha256 = _sha256(gate_raw)
+    if live_sha256 != expected_live_sha256:
+        raise CredentialError("GDN coefficient live PASS identity mismatch")
+    if gate_sha256 != expected_gate_sha256:
+        raise CredentialError("GDN coefficient gate summary identity mismatch")
+
+    module = _load_gdn_level0_coeff_pass_module()
+    try:
+        module.validate(
+            live,
+            source_sha256=source_sha256,
+            expected_task_id=TASK_ID,
+            expected_mode=mode,
+        )
+    except (ValueError, KeyError, TypeError) as error:
+        raise CredentialError(
+            f"GDN coefficient live PASS is invalid: {error}"
+        ) from error
+
+    expected_gate = {
+        "schema": "fr13.fixed32.gdn_level0_coeff.b1_gate.v1",
+        "status": "pass",
+        "run_classification": "one_real_swe_verified_k64_b1_byte_diagnostic",
+        "acceptance_valid": False,
+        "timing_eligible": False,
+        "reference_served": True,
+        "candidate_shadow_only": True,
+        "task_id": TASK_ID,
+        "topology": mode,
+        "batch_size": 1,
+        "physical_rows": 32,
+        "draft_vocab_root": 1,
+        "draft_vocab_k": 65536,
+        "source_commit": source_commit,
+        "kernel_source_sha256": source_sha256,
+        "subset_sha256": B1_SUBSET_SHA256,
+        "block_map_sha256": BLOCK_MAP_SHA256,
+        "live_pass_sha256": live_sha256,
+        "records": 48,
+        "compared_bytes": module.EXPECTED_COMPARED_BYTES,
+        "surfaces": module.SURFACES,
+        "scratch_rows": [31],
+        "count_invocation": False,
+        "raw_byte_equal": True,
+        "state_restored": True,
+    }
+    drift = {
+        key: (gate.get(key), value)
+        for key, value in expected_gate.items()
+        if gate.get(key) != value
+    }
+    if drift:
+        raise CredentialError(f"GDN coefficient gate summary drifted: {drift!r}")
+    for key in (
+        "runner_sha256",
+        "fa2_sha256",
+        "live_pass_validation_sha256",
+        "runtime_manifest_sha256",
+        "external_manifest_sha256",
+    ):
+        if not _is_sha256(gate.get(key)):
+            raise CredentialError(
+                f"GDN coefficient gate summary has malformed {key}"
+            )
+
+    binding = {
+        "schema": GDN_FULLSTACK_BINDING_SCHEMA,
+        "status": "bound",
+        "candidate": module.CANDIDATE,
+        "mode": mode,
+        "kernel_source_sha256": source_sha256,
+        "live_pass_sha256": live_sha256,
+        "gate_summary_sha256": gate_sha256,
+        "qualified_batches": [1],
+        "count_invocation": False,
+        "compared_bytes": module.EXPECTED_COMPARED_BYTES,
+        "surfaces": module.SURFACES,
+        "non_scratch_export_rows_compared": 31,
+        "scratch_rows": [31],
+        "raw_byte_equal": True,
+        "b4_live_qualified": False,
+        "b4_deployable": False,
+        "b4_evidence_classification": "static_only",
+        "arm_evidence": "production_selector_pass_and_complete_work_census",
+    }
+    return binding, live_raw, gate_raw, source_raw
+
+
+def validate_gdn_fullstack(args: argparse.Namespace) -> dict[str, Any]:
+    binding, _, _, _ = _validate_gdn_fullstack_inputs(
+        mode=args.mode,
+        kernel_source=Path(args.kernel_source),
+        live_pass=Path(args.gdn_live_pass),
+        gate_summary=Path(args.gdn_gate_summary),
+        source_commit=args.source_commit,
+        expected_live_sha256=args.gdn_live_pass_sha256,
+        expected_gate_sha256=args.gdn_gate_summary_sha256,
+    )
+    return binding
+
+
+def _validate_gdn_arm_binding(
+    *,
+    label: str,
+    mode: str,
+    container_env_path: Path,
+    production_pass_path: Path,
+    expected_pass_raw: bytes,
+) -> tuple[bytes, bytes]:
+    environment_raw = _read_regular(
+        container_env_path,
+        label=f"{label} container environment",
+        limit=4 << 20,
+    )
+    try:
+        lines = environment_raw.decode("utf-8").splitlines()
+    except UnicodeDecodeError as error:
+        raise CredentialError(
+            f"{label} container environment is not UTF-8"
+        ) from error
+    expected = {
+        "FR13_FIXED32_MODE": mode,
+        "FR13_TREE_GDN_GEOM_OVERRIDE": "BV=8",
+        "FR13_FIXED32_GDN_LEVEL0_COEFF_BYTE_AB": "0",
+        "FR13_FIXED32_GDN_LEVEL0_COEFF": "1",
+        "FR13_FIXED32_GDN_LEVEL0_COEFF_FULLSTACK": "1",
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB": "0",
+        "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB": "0",
+        "FR13_FIXED32_BATCH_GDN_PRODUCTION": "0",
+        "FR13_FIXED32_GDN_PATH_BV_CANDIDATE": "",
+        "FR13_FIXED32_GDN_PATH_BV_PRODUCTION": "",
+        "FR10_METRICS": "0",
+    }
+    observed: dict[str, list[str]] = {key: [] for key in expected}
+    for line in lines:
+        name, separator, value = line.partition("=")
+        if separator and name in observed:
+            observed[name].append(value)
+    drift = {
+        name: (observed[name], value)
+        for name, value in expected.items()
+        if observed[name] != [value]
+    }
+    if drift:
+        raise CredentialError(
+            f"{label} GDN coefficient container binding drifted: {drift!r}"
+        )
+    production_raw = _read_regular(
+        production_pass_path,
+        label=f"{label} served GDN coefficient production PASS",
+    )
+    if production_raw != expected_pass_raw:
+        raise CredentialError(
+            f"{label} served a different GDN coefficient production PASS"
+        )
+    return environment_raw, production_raw
+
+
 def _load_work_census_module():
     path = Path(__file__).resolve().with_name("fr13_fixed32_work_census.py")
     scripts_dir = os.fspath(path.parent)
@@ -1053,6 +1266,18 @@ def reduce_pair(args: argparse.Namespace) -> dict[str, Any]:
         merge_binding_raw,
     ) = _validate_merge_chain(args)
 
+    gdn_binding, gdn_live_raw, gdn_gate_raw, gdn_source_raw = (
+        _validate_gdn_fullstack_inputs(
+            mode=args.mode,
+            kernel_source=Path(args.gdn_kernel_source),
+            live_pass=Path(args.gdn_live_pass),
+            gate_summary=Path(args.gdn_gate_summary),
+            source_commit=args.source_commit,
+            expected_live_sha256=args.gdn_live_pass_sha256,
+            expected_gate_sha256=args.gdn_gate_summary_sha256,
+        )
+    )
+
     stock_measure, stock_measure_raw = _load_json(
         Path(args.stock_measure), label="stock measure"
     )
@@ -1080,6 +1305,9 @@ def reduce_pair(args: argparse.Namespace) -> dict[str, Any]:
         "merge_binding_sha256": _sha256(merge_binding_raw),
         "stock_measure_sha256": _sha256(stock_measure_raw),
         "candidate_measure_sha256": _sha256(candidate_measure_raw),
+        "gdn_kernel_source_sha256": _sha256(gdn_source_raw),
+        "gdn_live_pass_sha256": _sha256(gdn_live_raw),
+        "gdn_gate_summary_sha256": _sha256(gdn_gate_raw),
     }
     stock_census_raw, stock_census_events = _validate_taw_census(
         Path(args.stock_taw_census),
@@ -1097,6 +1325,31 @@ def reduce_pair(args: argparse.Namespace) -> dict[str, Any]:
         "stock": (stock_census_raw, stock_census_events),
         "candidate": (candidate_census_raw, candidate_census_events),
     }
+    for arm, environment_name, production_pass_name in (
+        (
+            "stock",
+            args.stock_container_env,
+            args.stock_gdn_production_pass,
+        ),
+        (
+            "candidate",
+            args.candidate_container_env,
+            args.candidate_gdn_production_pass,
+        ),
+    ):
+        environment_raw, served_pass_raw = _validate_gdn_arm_binding(
+            label=arm,
+            mode=args.mode,
+            container_env_path=Path(environment_name),
+            production_pass_path=Path(production_pass_name),
+            expected_pass_raw=gdn_live_raw,
+        )
+        identity_hashes[f"{arm}_container_env_sha256"] = _sha256(
+            environment_raw
+        )
+        identity_hashes[f"{arm}_gdn_production_pass_sha256"] = _sha256(
+            served_pass_raw
+        )
     for arm, health_name, audit_name, sfwd_name, qrow_name in (
         (
             "stock",
@@ -1173,6 +1426,7 @@ def reduce_pair(args: argparse.Namespace) -> dict[str, Any]:
         "subset_sha256": subset_sha256,
         "qrow16_production": True,
         "sfwd_state_fusion_production": True,
+        "gdn_level0_coeff": gdn_binding,
         "stock_all_parent_committer_production": False,
         "candidate_all_parent_committer_production": True,
         "only_arm_delta": "source_v7_all_parent_committer_production_0_to_1",
@@ -1280,6 +1534,17 @@ def _parser() -> argparse.ArgumentParser:
     reviewed_b4.add_argument("--production-pass", required=True)
     reviewed_b4.add_argument("--gate-verdict", required=True)
 
+    gdn_fullstack = subparsers.add_parser("validate-gdn-fullstack")
+    gdn_fullstack.add_argument(
+        "--mode", choices=sorted(MODE_CONTRACTS), required=True
+    )
+    gdn_fullstack.add_argument("--kernel-source", required=True)
+    gdn_fullstack.add_argument("--gdn-live-pass", required=True)
+    gdn_fullstack.add_argument("--gdn-live-pass-sha256", required=True)
+    gdn_fullstack.add_argument("--gdn-gate-summary", required=True)
+    gdn_fullstack.add_argument("--gdn-gate-summary-sha256", required=True)
+    gdn_fullstack.add_argument("--source-commit", required=True)
+
     reduce_command = subparsers.add_parser("reduce-pair")
     reduce_command.add_argument(
         "--mode", choices=sorted(MODE_CONTRACTS), required=True
@@ -1302,6 +1567,15 @@ def _parser() -> argparse.ArgumentParser:
     reduce_command.add_argument("--candidate-sfwd-engagement", required=True)
     reduce_command.add_argument("--stock-qrow-engagement", required=True)
     reduce_command.add_argument("--candidate-qrow-engagement", required=True)
+    reduce_command.add_argument("--gdn-kernel-source", required=True)
+    reduce_command.add_argument("--gdn-live-pass", required=True)
+    reduce_command.add_argument("--gdn-live-pass-sha256", required=True)
+    reduce_command.add_argument("--gdn-gate-summary", required=True)
+    reduce_command.add_argument("--gdn-gate-summary-sha256", required=True)
+    reduce_command.add_argument("--stock-container-env", required=True)
+    reduce_command.add_argument("--candidate-container-env", required=True)
+    reduce_command.add_argument("--stock-gdn-production-pass", required=True)
+    reduce_command.add_argument("--candidate-gdn-production-pass", required=True)
     reduce_command.add_argument("--stock-taw-census", required=True)
     reduce_command.add_argument("--candidate-taw-census", required=True)
     reduce_command.add_argument("--source-commit", required=True)
@@ -1333,6 +1607,8 @@ def main() -> int:
         result = validate_production(args)
     elif args.command == "validate-reviewed-b4":
         result = validate_reviewed_b4(args)
+    elif args.command == "validate-gdn-fullstack":
+        result = validate_gdn_fullstack(args)
     elif args.command == "reduce-pair":
         result = reduce_pair(args)
     else:  # pragma: no cover
