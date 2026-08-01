@@ -2483,6 +2483,7 @@ def _autocommit_fixed32_campaign_artifacts(
     dataset_out: Path,
     per_task_root: Path,
     instance_ids: list[str],
+    taw_campaign_arm_artifact_path: Path | None = None,
 ) -> None:
     """Commit and push one replay-complete B4 artifact unit."""
     if os.environ.get("LUMO_SWE_AUTOCOMMIT", "1").strip().lower() in (
@@ -2496,6 +2497,11 @@ def _autocommit_fixed32_campaign_artifacts(
         dataset_out / _FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME,
         dataset_out / _FIXED32_QWEN_CAMPAIGN_METRICS_PRE_FILENAME,
         dataset_out / _FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME,
+        *(
+            [taw_campaign_arm_artifact_path]
+            if taw_campaign_arm_artifact_path is not None
+            else []
+        ),
         *(
             per_task_root / instance_id / rel
             for instance_id in instance_ids
@@ -3051,6 +3057,117 @@ class _Fixed32TawRealTaskArm:
             "started_at": self.started_at,
             "ended_at": self.ended_at,
         }
+
+
+class _Fixed32TawCampaignArm(_Fixed32TawRealTaskArm):
+    """Publish one TAW marker for an exact-B4 canonical SWE campaign."""
+
+    artifact_name = "fixed32_taw_campaign_arm.json"
+    schema = "fr13-fixed32-taw-campaign-arm-v1"
+
+    def __init__(
+        self,
+        *,
+        path: Path,
+        subset_binding: dict[str, Any],
+        concurrency: int,
+    ) -> None:
+        if concurrency != 4:
+            raise Fixed32BoundaryError(
+                "fixed32 TAW campaign arm requires exact B4 concurrency"
+            )
+        if not isinstance(subset_binding, dict):
+            raise Fixed32BoundaryError(
+                "fixed32 TAW campaign arm subset binding is not an object"
+            )
+        try:
+            from fr13_floor_gate import (
+                GateError as FloorGateError,
+                validate_canonical_subset,
+            )
+
+            binding_path = Path(subset_binding["path"])
+            validated = validate_canonical_subset(binding_path)
+        except (KeyError, TypeError, ValueError, OSError, FloorGateError) as error:
+            raise Fixed32BoundaryError(
+                f"fixed32 TAW campaign arm subset binding is invalid: {error}"
+            ) from error
+        if subset_binding != validated:
+            raise Fixed32BoundaryError(
+                "fixed32 TAW campaign arm differs from the canonical subset binding"
+            )
+        task_count = validated["task_count"]
+        if task_count not in (4, 16):
+            raise Fixed32BoundaryError(
+                "fixed32 TAW campaign arm requires a canonical 4/16-task set"
+            )
+        subset_sha256 = validated["sha256"]
+        task_ids = validated["task_ids"]
+        campaign_identity = f"campaign{task_count}_{subset_sha256}"
+        super().__init__(path=path, instance_id=campaign_identity)
+        self.task_count = task_count
+        self.concurrency = concurrency
+        self.subset_path = validated["path"]
+        self.subset_sha256 = subset_sha256
+        self.task_ids = list(task_ids)
+
+    def as_dict(self) -> dict[str, Any]:
+        payload = super().as_dict()
+        payload.pop("instance_id")
+        payload.update(
+            {
+                "run_classification": "b4_taw_diagnostic",
+                "batch_size": 4,
+                "concurrency": self.concurrency,
+                "task_count": self.task_count,
+                "subset_path": self.subset_path,
+                "subset_sha256": self.subset_sha256,
+                "task_ids": self.task_ids,
+            }
+        )
+        return payload
+
+
+def _run_with_fixed32_taw_campaign_arm(
+    *,
+    arm: _Fixed32TawCampaignArm | None,
+    artifact_path: Path | None,
+    action: Any,
+) -> Any:
+    """Keep one authenticated marker live across all concurrent B4 workers."""
+    if arm is None:
+        if artifact_path is not None:
+            raise Fixed32BoundaryError(
+                "fixed32 TAW campaign artifact path has no campaign arm"
+            )
+        return action()
+    if artifact_path is None:
+        raise Fixed32BoundaryError(
+            "fixed32 TAW campaign arm has no artifact path"
+        )
+
+    def _write_artifact() -> None:
+        temporary = artifact_path.with_suffix(artifact_path.suffix + ".tmp")
+        temporary.write_text(
+            json.dumps(
+                arm.as_dict(),
+                ensure_ascii=True,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="ascii",
+        )
+        os.replace(temporary, artifact_path)
+
+    try:
+        arm.start()
+        _write_artifact()
+        return action()
+    finally:
+        if arm.active:
+            arm.finish()
+            _write_artifact()
 
 
 class _Fixed32Bm8RealTaskArm(_Fixed32TawRealTaskArm):
@@ -7405,7 +7522,7 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help=(
             "Host path mounted at the diagnostic kernel's exact /logs "
-            "real-event marker path. B1 diagnostic only."
+            "real-event marker path. B1 or exact-B4 TAW diagnostic only."
         ),
     )
     parser.add_argument(
@@ -7456,10 +7573,6 @@ def main(argv: list[str] | None = None) -> int:
         if not fixed32_enabled:
             parser.error(
                 "fixed32 TAW native real-task arm requires fixed32 runtime binding"
-            )
-        if not fixed32_b1_diagnostic:
-            parser.error(
-                "fixed32 TAW native real-task arm requires B1 diagnostic mode"
             )
         if args.fixed32_taw_real_event_arm is None:
             parser.error(
@@ -7628,6 +7741,14 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(
                 "fixed32 requires concurrency to equal the serving batch (exactly B1 or B4)"
             )
+        if (
+            fixed32_taw_diagnostic
+            and not fixed32_b1_diagnostic
+            and (serving_batch != 4 or args.concurrency != 4)
+        ):
+            parser.error(
+                "fixed32 TAW native campaign arm requires exact B4 concurrency"
+            )
         from fr13_fixed32_flush_protocol import Fixed32FlushClient
 
         fixed32_client = Fixed32FlushClient(
@@ -7740,13 +7861,32 @@ def main(argv: list[str] | None = None) -> int:
             dataset_out / _FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME
         ).resolve()
         _write_fixed32_campaign_metrics(campaign_metrics_pre_path)
+    taw_campaign_arm: _Fixed32TawCampaignArm | None = None
+    taw_campaign_arm_artifact_path: Path | None = None
+    if fixed32_taw_diagnostic and not fixed32_b1_diagnostic:
+        if args.fixed32_taw_real_event_arm is None or fixed32_subset is None:
+            raise Fixed32BoundaryError(
+                "fixed32 TAW B4 campaign arm lacks its validated binding"
+            )
+        taw_campaign_arm = _Fixed32TawCampaignArm(
+            path=args.fixed32_taw_real_event_arm,
+            subset_binding=fixed32_subset,
+            concurrency=args.concurrency,
+        )
+        taw_campaign_arm_artifact_path = (
+            dataset_out / taw_campaign_arm.artifact_name
+        )
 
     def _job(iid: str) -> dict[str, Any]:
         t0 = time.time()
         print(f"[{_iso_now()}] -> {iid}", flush=True)
         taw_real_task_arm = None
         arm_path = (
-            args.fixed32_taw_real_event_arm
+            (
+                args.fixed32_taw_real_event_arm
+                if taw_campaign_arm is None
+                else None
+            )
             if args.fixed32_taw_real_event_arm is not None
             else (
                 args.fixed32_bm8_real_event_arm
@@ -7869,13 +8009,20 @@ def main(argv: list[str] | None = None) -> int:
             _autocommit_task_artifacts(per_task_root / iid, iid)
         return res
 
-    if args.concurrency <= 1:
-        for iid in instance_ids:
-            summaries.append(_job(iid))
-    else:
-        with _cf.ThreadPoolExecutor(max_workers=args.concurrency) as ex:
-            for res in ex.map(_job, instance_ids):
-                summaries.append(res)
+    def _run_jobs() -> None:
+        if args.concurrency <= 1:
+            for iid in instance_ids:
+                summaries.append(_job(iid))
+        else:
+            with _cf.ThreadPoolExecutor(max_workers=args.concurrency) as ex:
+                for res in ex.map(_job, instance_ids):
+                    summaries.append(res)
+
+    _run_with_fixed32_taw_campaign_arm(
+        arm=taw_campaign_arm,
+        artifact_path=taw_campaign_arm_artifact_path,
+        action=_run_jobs,
+    )
 
     if fixed32_enabled and serving_batch == 4:
         assert campaign_metrics_pre_path is not None
@@ -7893,6 +8040,7 @@ def main(argv: list[str] | None = None) -> int:
             dataset_out=dataset_out,
             per_task_root=per_task_root,
             instance_ids=instance_ids,
+            taw_campaign_arm_artifact_path=taw_campaign_arm_artifact_path,
         )
 
     ended_at = _iso_now()
@@ -7909,6 +8057,17 @@ def main(argv: list[str] | None = None) -> int:
             "run_classification": "b1_diagnostic",
             "gate_eligible": False,
             "floor_acceptance_eligible": False,
+        }
+        (dataset_out / "campaign_summary.json").write_text(
+            json.dumps(summary, indent=2),
+            encoding="utf-8",
+        )
+    elif taw_campaign_arm is not None:
+        summary["fixed32_run_classification"] = {
+            "run_classification": "b4_taw_diagnostic",
+            "gate_eligible": False,
+            "floor_acceptance_eligible": False,
+            "campaign_arm": taw_campaign_arm.as_dict(),
         }
         (dataset_out / "campaign_summary.json").write_text(
             json.dumps(summary, indent=2),

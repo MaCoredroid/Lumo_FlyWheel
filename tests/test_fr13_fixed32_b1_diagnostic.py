@@ -101,9 +101,9 @@ def test_b1_diagnostic_is_guarded_across_runtime_ingress() -> None:
     assert "fixed32 B1 diagnostic offload task ID is not pinned" in offload
     assert "fixed32 B1 diagnostic proxy-control task ID is not pinned" in offload
     assert "fixed32 B1 diagnostic requires concurrency and serving batch exactly 1" in runner
-    assert "fixed32 TAW native real-task arm requires B1 diagnostic mode" in runner
+    assert "fixed32 TAW native campaign arm requires exact B4 concurrency" in runner
     assert "--fixed32-taw-real-event-arm" in serve
-    assert "fixed32 TAW native real-task arm is B1 diagnostic only" in serve
+    assert "fixed32 TAW native campaign arm requires exact B4 concurrency" in serve
     assert '"gate_eligible": False' in runner
 
 

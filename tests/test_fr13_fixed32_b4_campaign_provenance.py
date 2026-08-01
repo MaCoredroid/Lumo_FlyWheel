@@ -542,10 +542,13 @@ def test_b4_autocommit_publishes_proof_and_all_tasks_as_one_unit(
         ),
     )
     monkeypatch.setenv("LUMO_SWE_AUTOCOMMIT", "1")
+    taw_campaign_arm = dataset_out / "fixed32_taw_campaign_arm.json"
+    taw_campaign_arm.write_text("{}\n", encoding="ascii")
     runner._autocommit_fixed32_campaign_artifacts(
         dataset_out=dataset_out,
         per_task_root=per_task_root,
         instance_ids=TASK_IDS,
+        taw_campaign_arm_artifact_path=taw_campaign_arm,
     )
 
     assert len(captured) == 1
@@ -556,6 +559,7 @@ def test_b4_autocommit_publishes_proof_and_all_tasks_as_one_unit(
         str(dataset_out / runner._FIXED32_QWEN_CAMPAIGN_METRICS_PRE_FILENAME),
         str(dataset_out / runner._FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME),
     ]
+    assert str(taw_campaign_arm) in committed_paths
     assert {
         str(per_task_root / task_id / "runner_metadata.json")
         for task_id in TASK_IDS

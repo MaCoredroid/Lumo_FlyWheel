@@ -145,9 +145,9 @@ TAW_EXACT_COMMIT_LAUNCHES = WALK_CAP
 TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST = WALK_CAP
 TAW_ALL_PARENT_SELF_ROWS_PER_REQUEST = 13
 TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST = 17
-TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-all-parent-v6"
+TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 TAW_SOURCE_CONTRACT_SHA256 = (
-    "af390b4ae49b93c9bb4cca79136127382ece92070f67714efe3c62fb678b6007"
+    "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
 )
 TAW_TENSOR_CALL_CENSUS = {
     "walk_levels": 12,
@@ -2771,17 +2771,6 @@ def validate_campaign(
                 counts[mode][str(batch_size)] = len(selected)
         all_events.extend(events)
 
-    baseline = all_events[0]
-    baseline_json = _canonical_json(baseline.normalized_work)
-    for event in all_events[1:]:
-        event_json = _canonical_json(event.normalized_work)
-        if event_json != baseline_json:
-            raise CensusError(
-                "normalized work mismatch: "
-                f"{event.source} differs from baseline {baseline.source}"
-            )
-
-    signature_sha256 = hashlib.sha256(baseline_json.encode("ascii")).hexdigest()
     physical_work_histograms: dict[str, dict[str, dict[str, Any]]] = {}
     for mode, events in validated_by_mode.items():
         physical_work_histograms[mode] = {}
@@ -2807,7 +2796,12 @@ def validate_campaign(
                 "event_count": len(selected),
                 "normalized_event_signatures": dict(sorted(signatures.items())),
             }
-    for batch_size in batches:
+    shared_batches = {
+        event.batch_size for event in validated_by_mode[TAIL_MODE]
+    } & {
+        event.batch_size for event in validated_by_mode[HYDRA_MODE]
+    }
+    for batch_size in shared_batches:
         tail_signatures = set(
             physical_work_histograms[TAIL_MODE][str(batch_size)][
                 "normalized_event_signatures"
@@ -2826,6 +2820,9 @@ def validate_campaign(
             raise CensusError(
                 f"B{batch_size}: Tail/Hydra physical-work signature mismatch"
             )
+    baseline = all_events[0]
+    baseline_json = _canonical_json(baseline.normalized_work)
+    signature_sha256 = hashlib.sha256(baseline_json.encode("ascii")).hexdigest()
     tail_forward = {
         row["batch_size"]: (
             row["graph_signature"],
@@ -2950,6 +2947,38 @@ def _reference_taw(batch_size: int) -> dict[str, Any]:
         "exact_current_shape": [batch_size],
         "exact_alive_shape": [batch_size],
     }
+
+
+def _native_production_taw(batch_size: int) -> dict[str, Any]:
+    """Build the independently qualified all-parent production TAW census."""
+    taw = _reference_taw(batch_size)
+    taw.update(
+        {
+            "route": TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+            "child_lanes": (
+                TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST
+                * SAMPLER_MAX_FANOUT
+                * batch_size
+            ),
+            "target_rows": TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST * batch_size,
+            "self_rows": TAW_ALL_PARENT_SELF_ROWS_PER_REQUEST * batch_size,
+            "self_cdf_rows": TAW_ALL_PARENT_SELF_ROWS_PER_REQUEST * batch_size,
+            "source_cdf_rows": (
+                TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST * batch_size
+            ),
+            "residual_cdf_rows": (
+                TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST * batch_size
+            ),
+            "qmix_rows": TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST * batch_size,
+            "residual_rows": TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST * batch_size,
+            "exact_commit_launches": 1,
+            "exact_commit_programs": batch_size,
+            "tensor_call_census": dict(
+                TAW_NATIVE_PRECOMPUTE_PRODUCTION_TENSOR_CALL_CENSUS
+            ),
+        }
+    )
+    return taw
 
 
 def reference_event(
@@ -3466,6 +3495,24 @@ def run_self_test() -> dict[str, Any]:
         raise AssertionError("valid fixture did not preserve unequal event counts")
     if valid_report["forward_step_indices"][TAIL_MODE] != [5, 6, 9, 10]:
         raise AssertionError("valid fixture did not preserve global forward indices")
+
+    mixed_tail, mixed_hydra = _valid_fixture()
+    for record in (*mixed_tail, *mixed_hydra):
+        batch_size = record["batch_size"]
+        if batch_size in SUPPORTED_CAMPAIGN_CAPACITIES:
+            record["taw"] = _native_production_taw(batch_size)
+    mixed_report = validate_campaign(
+        _located_campaign(mixed_tail, "mixed-route-tail"),
+        _located_campaign(mixed_hydra, "mixed-route-hydra"),
+    )
+    for mode in (TAIL_MODE, HYDRA_MODE):
+        for batch_size in SUPPORTED_CAMPAIGN_CAPACITIES:
+            if not mixed_report["physical_work_histograms"][mode][
+                str(batch_size)
+            ]["normalized_event_signatures"]:
+                raise AssertionError(
+                    f"mixed-route fixture lost required B{batch_size} census"
+                )
     for incomplete_kwargs in (
         {},
         {

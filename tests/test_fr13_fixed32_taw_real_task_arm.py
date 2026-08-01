@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import stat
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,10 +14,13 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 
 import run_swe_bench_q36_a as orchestrator  # noqa: E402
+import fr13_floor_gate as floor_gate  # noqa: E402
 
 
 INSTANCE_ID = "astropy__astropy-12907"
 ARM_NAME = "fr13_fixed32_taw_native_precompute.real_event.arm"
+EXACT4 = REPO / "config/fr13_fixed32/subset_b4_four.json"
+EXACT16 = REPO / "config/fr13_fixed32/subset_b4_sixteen.json"
 
 
 def _arm_path(tmp_path: Path) -> Path:
@@ -53,6 +57,122 @@ def test_real_task_arm_atomically_publishes_and_rotates_exact_marker(
     assert stat.S_IMODE(arm.rotated_path.stat().st_mode) == 0o400
     assert arm.rotated_path.stat().st_nlink == 1
     assert arm.as_dict()["state"] == "ended"
+
+
+@pytest.mark.parametrize(("subset", "task_count"), [(EXACT4, 4), (EXACT16, 16)])
+def test_b4_campaign_arm_spans_concurrent_tasks_with_canonical_marker(
+    tmp_path: Path,
+    subset: Path,
+    task_count: int,
+) -> None:
+    path = _arm_path(tmp_path)
+    binding = floor_gate.validate_canonical_subset(subset)
+    arm = orchestrator._Fixed32TawCampaignArm(
+        path=path,
+        subset_binding=binding,
+        concurrency=4,
+    )
+    artifact_path = tmp_path / arm.artifact_name
+    expected = (
+        f"swe_verified:campaign{task_count}_{binding['sha256']}\n".encode(
+            "ascii"
+        )
+    )
+
+    def _concurrent_reads() -> list[bytes]:
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            return list(
+                executor.map(
+                    lambda _task_id: path.read_bytes(),
+                    binding["task_ids"],
+                )
+            )
+
+    observed = orchestrator._run_with_fixed32_taw_campaign_arm(
+        arm=arm,
+        artifact_path=artifact_path,
+        action=_concurrent_reads,
+    )
+
+    assert observed == [expected] * task_count
+    assert not path.exists()
+    assert arm.rotated_path.read_bytes() == expected
+    payload = json.loads(artifact_path.read_text(encoding="ascii"))
+    assert payload["schema"] == "fr13-fixed32-taw-campaign-arm-v1"
+    assert payload["state"] == "ended"
+    assert payload["task_count"] == task_count
+    assert payload["concurrency"] == 4
+    assert payload["subset_sha256"] == binding["sha256"]
+    assert payload["task_ids"] == binding["task_ids"]
+    assert payload["marker"] == expected.decode("ascii").strip()
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (
+            lambda binding: {**binding, "sha256": "0" * 64},
+            "differs from the canonical subset binding",
+        ),
+        (
+            lambda binding: {
+                **binding,
+                "task_ids": list(reversed(binding["task_ids"])),
+            },
+            "differs from the canonical subset binding",
+        ),
+    ],
+)
+def test_b4_campaign_arm_rejects_tampered_subset_binding(
+    tmp_path: Path,
+    mutate,
+    message: str,
+) -> None:
+    binding = floor_gate.validate_canonical_subset(EXACT4)
+    with pytest.raises(orchestrator.Fixed32BoundaryError, match=message):
+        orchestrator._Fixed32TawCampaignArm(
+            path=_arm_path(tmp_path),
+            subset_binding=mutate(binding),
+            concurrency=4,
+        )
+
+
+def test_b4_campaign_arm_rejects_non_b4_concurrency(tmp_path: Path) -> None:
+    binding = floor_gate.validate_canonical_subset(EXACT4)
+    with pytest.raises(
+        orchestrator.Fixed32BoundaryError,
+        match="requires exact B4 concurrency",
+    ):
+        orchestrator._Fixed32TawCampaignArm(
+            path=_arm_path(tmp_path),
+            subset_binding=binding,
+            concurrency=1,
+        )
+
+
+def test_b4_campaign_arm_rotates_when_a_worker_fails(tmp_path: Path) -> None:
+    path = _arm_path(tmp_path)
+    arm = orchestrator._Fixed32TawCampaignArm(
+        path=path,
+        subset_binding=floor_gate.validate_canonical_subset(EXACT4),
+        concurrency=4,
+    )
+    artifact_path = tmp_path / arm.artifact_name
+
+    def _fail() -> None:
+        assert path.is_file()
+        raise RuntimeError("worker failed")
+
+    with pytest.raises(RuntimeError, match="worker failed"):
+        orchestrator._run_with_fixed32_taw_campaign_arm(
+            arm=arm,
+            artifact_path=artifact_path,
+            action=_fail,
+        )
+
+    assert not path.exists()
+    assert arm.rotated_path.is_file()
+    assert json.loads(artifact_path.read_text(encoding="ascii"))["state"] == "ended"
 
 
 def test_cutlass_real_task_arm_uses_canonical_marker_and_artifact_contract(
