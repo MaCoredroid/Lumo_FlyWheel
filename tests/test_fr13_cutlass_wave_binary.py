@@ -32,9 +32,9 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "streamk_force_wide256_byte_ab",
     }
     assert module.WIDE256_CANDIDATE_SHA256 == (
-        "b957cf49da2977056661443192fc2725e153adba7f21fb522c07b439c04540ee"
+        "f682560caad085cfdc0c44eec5252352a8bc4861dc634a55e0dccbab261b7892"
     )
-    assert module.WIDE256_CANDIDATE_SIZE == 113_174_464
+    assert module.WIDE256_CANDIDATE_SIZE == 112_351_640
     assert module.candidate_identity("streamk_force_wide256") == (
         module.WIDE256_CANDIDATE_SHA256,
         module.WIDE256_CANDIDATE_SIZE,

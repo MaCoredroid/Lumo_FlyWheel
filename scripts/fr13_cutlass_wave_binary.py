@@ -15,9 +15,9 @@ from pathlib import Path
 CANDIDATE_SHA256 = "f9bbbb8dc4ffc2227a71d2bc7b260e586ffbdc0fd946749e4f69e322c46a362d"
 CANDIDATE_SIZE = 111_417_328
 WIDE256_CANDIDATE_SHA256 = (
-    "b957cf49da2977056661443192fc2725e153adba7f21fb522c07b439c04540ee"
+    "f682560caad085cfdc0c44eec5252352a8bc4861dc634a55e0dccbab261b7892"
 )
-WIDE256_CANDIDATE_SIZE = 113_174_464
+WIDE256_CANDIDATE_SIZE = 112_351_640
 COOP128_SELECTORS = frozenset({"streamk_coop128", "streamk_coop128_byte_ab"})
 WIDE256_SELECTORS = frozenset(
     {"streamk_force_wide256", "streamk_force_wide256_byte_ab"}

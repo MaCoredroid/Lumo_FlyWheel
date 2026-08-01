@@ -111,21 +111,15 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     module = _module()
     patched, _ = module.patch_text(_source_fixture(module))
 
-    assert patched.count("cutlass::gemm::StreamKScheduler") == 4
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 4
+    assert patched.count("cutlass::gemm::StreamKScheduler") == 3
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 3
     assert "PingpongSm120" not in module.CONFIG_REPLACEMENT
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
     assert "OutType, 1, 128, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _128, _128>;" in patched
-    assert "using TileShape = Shape<_128, _256, _128>;" in patched
+    assert "using TileShape = Shape<_128, _256, _128>;" not in patched
     assert "using TileShape = Shape<_256, _32, _128>;" in patched
-    assert (
-        "OutType, 1, 128, 128, TileShape, ClusterShape,\n"
-        "      EpilogueSchedule, KernelSchedule, false,\n"
-        "      cutlass::gemm::StreamKScheduler, true,\n"
-        "      cutlass::gemm::collective::StageCount<2>>"
-    ) in patched
     assert (
         "OutType, 128, 1, 128, TileShape, ClusterShape,\n"
         "      EpilogueSchedule, KernelSchedule, true,\n"
@@ -137,6 +131,22 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     assert "cutlass::gemm::collective::StageCount<2>" in patched
     assert "ElementAccumulator = float" not in module.CONFIG_REPLACEMENT
     assert "ElementD" not in module.CONFIG_REPLACEMENT
+
+
+def test_wide256_is_b1_only_and_large_rows_fail_to_stock() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    selector_gate = patched.index("if (M > 64 &&")
+    stock_assignment = patched.index(
+        "wave_variant = fixed32_cutlass_wave_variant::stock;", selector_gate
+    )
+    candidate_dispatch = patched.index("auto run_stream_k_wide256")
+
+    assert selector_gate < stock_assignment < candidate_dispatch
+    assert "stream_k_force_wide256_byte_ab" in patched[selector_gate:stock_assignment]
+    assert "sm120_blockwise_fp8_config_cooperative_streamk_wide256" not in patched
+    assert "sm120_blockwise_fp8_config_swapab_streamk_wide256" in patched
 
 
 def test_streamk_is_the_only_kernel_template_change() -> None:
@@ -203,7 +213,7 @@ def test_same_process_byte_ab_is_bounded_and_returns_stock() -> None:
     assert "fr13.fixed32.cutlass_streamk_wide256_byte_ab.v1" in patched
 
 
-def test_boot_warm_cannot_consume_or_satisfy_real_task_byte_gate() -> None:
+def test_unarmed_boot_warm_cannot_dispatch_candidate_or_consume_gate() -> None:
     module = _module()
     patched, _ = module.patch_text(_source_fixture(module))
 
@@ -214,12 +224,27 @@ def test_boot_warm_cannot_consume_or_satisfy_real_task_byte_gate() -> None:
 
     assert arm_path in patched
     assert unarmed < counter
-    assert "run_stock(out);" in unarmed_path
-    assert "run_candidate(candidate);" in unarmed_path
-    assert "return;" in unarmed_path
+    assert "return run_stock(out);" in unarmed_path
+    assert "run_candidate" not in unarmed_path
+    assert "empty_like" not in unarmed_path
     assert "task_marker = fixed32_cutlass_real_task_marker()" in patched
     assert 'fr13.fixed32.cutlass_streamk_byte_ab.v2' in patched
     assert '\\"task_marker\\"' in module.DISPATCH_REPLACEMENT
+
+
+def test_candidate_dispatch_is_after_authenticated_arm_check() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    unarmed = patched.index("if (task_marker.empty())")
+    unarmed_return = patched.index("return run_stock(out);", unarmed)
+    candidate_allocation = patched.index(
+        "torch::stable::Tensor candidate = torch::stable::empty_like(out);",
+        unarmed_return,
+    )
+    candidate_dispatch = patched.index("run_candidate(candidate);", candidate_allocation)
+
+    assert unarmed < unarmed_return < candidate_allocation < candidate_dispatch
 
 
 def test_patch_is_idempotent() -> None:

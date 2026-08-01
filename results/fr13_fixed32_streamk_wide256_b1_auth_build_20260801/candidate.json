@@ -1,0 +1,50 @@
+{
+  "schema": "fr13.fixed32.streamk_force_wide256_b1_auth_build.v1",
+  "created_at_utc": "2026-08-01T05:45:00Z",
+  "status": "compiled_default_off_b1_byte_gate_ready",
+  "performance_claim": false,
+  "acceptance_valid": false,
+  "gpu_used": false,
+  "docker_used": false,
+  "supersedes_rejected_binary_sha256": "b957cf49da2977056661443192fc2725e153adba7f21fb522c07b439c04540ee",
+  "pinned_source": {
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "patch_source_sha256": "9de6337e67a24940d5f3828f6dd5f893933210ad925e1f7aaf76f8507b3403a8",
+    "patched_dispatch_sha256": "7601b65c78dcd2d20e5ab014af1256757ed9b0658ac4ac30bf0c606e5d0497d7"
+  },
+  "binary": {
+    "path": "/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.streamk_force_wide256_b1_auth_gate_ready.abi3.so",
+    "sha256": "f682560caad085cfdc0c44eec5252352a8bc4861dc634a55e0dccbab261b7892",
+    "bytes": 112351640,
+    "mode": "0555",
+    "runpath": "/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64"
+  },
+  "dispatch_contract": {
+    "selector": "streamk_force_wide256",
+    "diagnostic_selector": "streamk_force_wide256_byte_ab",
+    "unauthenticated_diagnostic_route": "stock",
+    "candidate_rows": [32, 64],
+    "stock_rows": [96, 128],
+    "b4_candidate_claim": false
+  },
+  "kernel": {
+    "swap_ab": true,
+    "tile_mnk": [256, 32, 128],
+    "scale_granularity_mnk": [128, 1, 128],
+    "decomposition_mode": "StreamK",
+    "reduction_mode": "Deterministic",
+    "splits": 1,
+    "mainloop_stages": 2,
+    "registers": 168,
+    "stack_bytes": 8,
+    "shared_bytes": 1024
+  },
+  "required_gates": {
+    "compiled": true,
+    "static_resource_inspection": true,
+    "real_b1_byte_equal": false,
+    "real_exact4_b1_timed": false,
+    "real_b4_candidate_available": false
+  }
+}

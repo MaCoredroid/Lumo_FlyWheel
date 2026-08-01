@@ -117,21 +117,6 @@ struct sm120_blockwise_fp8_config_swapab_streamk {
 };
 
 template <typename OutType>
-struct sm120_blockwise_fp8_config_cooperative_streamk_wide256 {
-  using KernelSchedule =
-      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
-  using EpilogueSchedule =
-      cutlass::epilogue::collective::EpilogueScheduleAuto;
-  using TileShape = Shape<_128, _256, _128>;
-  using ClusterShape = Shape<_1, _1, _1>;
-  using Gemm = cutlass_3x_gemm_fp8_blockwise<
-      OutType, 1, 128, 128, TileShape, ClusterShape,
-      EpilogueSchedule, KernelSchedule, false,
-      cutlass::gemm::StreamKScheduler, true,
-      cutlass::gemm::collective::StageCount<2>>;
-};
-
-template <typename OutType>
 struct sm120_blockwise_fp8_config_swapab_streamk_wide256 {
   using KernelSchedule =
       cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
@@ -290,6 +275,16 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       fixed32_cutlass_real_projection(M, N, K)
           ? fixed32_cutlass_wave_selection()
           : fixed32_cutlass_wave_variant::stock;
+  // The normal-layout 128x256 forced-StreamK specialization returned CUTLASS
+  // Error::kErrorInternal during real B1 profile warmup. Wide256 is therefore
+  // B1-only: both selectors fail safely to stock above 64 physical rows.
+  if (M > 64 &&
+      (wave_variant ==
+           fixed32_cutlass_wave_variant::stream_k_force_wide256 ||
+       wave_variant ==
+           fixed32_cutlass_wave_variant::stream_k_force_wide256_byte_ab)) {
+    wave_variant = fixed32_cutlass_wave_variant::stock;
+  }
 
   auto run_stream_k = [&](torch::stable::Tensor& destination) {
     if (M <= 64) {
@@ -305,14 +300,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   };
 
   auto run_stream_k_wide256 = [&](torch::stable::Tensor& destination) {
-    if (M <= 64) {
-      using Gemm = typename
-          sm120_blockwise_fp8_config_swapab_streamk_wide256<OutType>::Gemm;
-      return cutlass_gemm_caller_blockwise<Gemm>(
-          destination, a, b, a_scales, b_scales);
-    }
     using Gemm = typename
-        sm120_blockwise_fp8_config_cooperative_streamk_wide256<OutType>::Gemm;
+        sm120_blockwise_fp8_config_swapab_streamk_wide256<OutType>::Gemm;
     return cutlass_gemm_caller_blockwise<Gemm>(
         destination, a, b, a_scales, b_scales);
   };
@@ -347,14 +336,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       }
       return run_stream_k(destination);
     };
-    // Boot/profile forwards warm both routes but cannot consume or satisfy the
-    // authenticated real-task comparison budget.
+    // Boot/profile forwards are not authenticated real-task work. Keep them
+    // entirely on stock; candidate execution starts only after the arm exists.
     std::string task_marker = fixed32_cutlass_real_task_marker();
     if (task_marker.empty()) {
-      torch::stable::Tensor candidate = torch::stable::empty_like(out);
-      run_stock(out);
-      run_candidate(candidate);
-      return;
+      return run_stock(out);
     }
 
     // Diagnostic only: compare the first bounded set of armed real-task calls
