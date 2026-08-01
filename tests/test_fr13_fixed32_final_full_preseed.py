@@ -194,6 +194,7 @@ class Worker:
                 max_cudagraph_capture_size=0,
             ),
         )
+        self.compilation_config = self.vllm_config.compilation_config
         self.use_v2_model_runner = False
         self.device = "cuda:0"
         self.rank = 1
@@ -225,6 +226,73 @@ class Worker:
         if not self.model_config.enforce_eager:
             cuda_graph_memory_bytes = self.model_runner.capture_model()
         return cuda_graph_memory_bytes
+"""
+
+_GPU_METADATA_RUNNER_FIXTURE = """\
+class MetadataRunner:
+    def __init__(self):
+        self.vllm_config = SimpleNamespace(
+            compilation_config=SimpleNamespace(
+                max_cudagraph_capture_size=0,
+            ),
+        )
+        self.compilation_config = self.vllm_config.compilation_config
+        self.device = "cuda:0"
+        self.parallel_config = SimpleNamespace(
+            use_ubatching=False,
+            num_ubatches=1,
+        )
+        self.speculative_config = None
+        self.attn_groups = [[SimpleNamespace(
+            create_metadata_builders=self._record_builder_capacity,
+        )]]
+        self.observed_builder_capacities = []
+
+    def _record_builder_capacity(
+        self,
+        config,
+        device,
+        kernel_block_size,
+        num_metadata_builders,
+    ):
+        self.observed_builder_capacities.append(
+            config.compilation_config.max_cudagraph_capture_size
+        )
+
+    def calculate_reorder_batch_threshold(self):
+        pass
+
+    def initialize_metadata_builders(
+        self, kv_cache_config: KVCacheConfig, kernel_block_sizes: list[int]
+    ) -> None:
+        \"\"\"
+        Create the metadata builders for all KV cache groups and attn groups.
+        \"\"\"
+        for kv_cache_group_id in range(len(kv_cache_config.kv_cache_groups)):
+            for attn_group in self.attn_groups[kv_cache_group_id]:
+                attn_group.create_metadata_builders(
+                    self.vllm_config,
+                    self.device,
+                    kernel_block_sizes[kv_cache_group_id]
+                    if kv_cache_group_id < len(kernel_block_sizes)
+                    else None,
+                    num_metadata_builders=1
+                    if not self.parallel_config.use_ubatching
+                    else self.parallel_config.num_ubatches,
+                )
+        self.calculate_reorder_batch_threshold()
+
+        if self.speculative_config and (
+            self.speculative_config.use_eagle()
+            or self.speculative_config.uses_draft_model()
+        ):
+            assert isinstance(self.drafter, EagleProposer | DraftModelProposer)
+            self.drafter.initialize_attn_backend(kv_cache_config, kernel_block_sizes)
+
+    def _check_and_update_cudagraph_mode(
+        self, attention_backends, kv_cache_groups
+    ):
+        pass
 """
 
 
@@ -524,10 +592,10 @@ def test_eager_diagnostic_boot_is_zero_traffic_and_boundary_ready(
 
 
 @pytest.mark.parametrize(
-    ("batch_gdn_byte_ab", "cutlass_wave", "capture_size"),
+    ("batch_gdn_byte_ab", "cutlass_wave"),
     (
-        ("1", "stock", 128),
-        ("0", "streamk_force_wide256_byte_ab", 32),
+        ("1", "stock"),
+        ("0", "streamk_force_wide256_byte_ab"),
     ),
 )
 def test_eager_diagnostic_boot_is_reached_from_worker_lifecycle(
@@ -535,7 +603,6 @@ def test_eager_diagnostic_boot_is_reached_from_worker_lifecycle(
     monkeypatch: pytest.MonkeyPatch,
     batch_gdn_byte_ab: str,
     cutlass_wave: str,
-    capture_size: int,
 ) -> None:
     source = tmp_path / "gpu_worker.py"
     source.write_text(_GPU_WORKER_FIXTURE)
@@ -586,21 +653,106 @@ def test_eager_diagnostic_boot_is_reached_from_worker_lifecycle(
     }
     text = source.read_text(encoding="utf-8")
     assert "FR13_FIXED32_EAGER_BOOT_WARM_LIFECYCLE" in text
-    assert "FR13_FIXED32_EAGER_BOOT_WARM_CAPACITY" in text
     exec(text, namespace)
     worker = namespace["Worker"](True)
     worker.init_device()
-    assert worker.model_runner.capture_size == capture_size
-    assert (
-        worker.vllm_config.compilation_config.max_cudagraph_capture_size
-        == 0
-    )
     assert worker.compile_or_warm_up_model() == 0
     assert worker.model_runner.capture_calls == 1
 
     non_eager = namespace["Worker"](False)
+    non_eager.init_device()
     with pytest.raises(RuntimeError, match="requires enforce_eager"):
-        non_eager.init_device()
+        non_eager.compile_or_warm_up_model()
+    assert non_eager.model_runner.capture_calls == 0
+
+
+@pytest.mark.parametrize(
+    ("batch_gdn_byte_ab", "cutlass_wave", "capture_size"),
+    (
+        ("1", "stock", 128),
+        ("0", "streamk_force_wide256_byte_ab", 32),
+    ),
+)
+def test_eager_diagnostic_metadata_builders_get_physical_capacity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    batch_gdn_byte_ab: str,
+    cutlass_wave: str,
+    capture_size: int,
+) -> None:
+    source = tmp_path / "gpu_model_runner.py"
+    source.write_text(_GPU_METADATA_RUNNER_FIXTURE)
+    monkeypatch.setattr(patcher, "GPU_MODEL_RUNNER_PATH", source)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "tail6_fixed32")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_BATCH_GDN_BYTE_AB",
+        batch_gdn_byte_ab,
+    )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_CUTLASS_WAVE",
+        cutlass_wave,
+    )
+    assert patcher._patch_gpu_model_runner_fixed32_eager_boot_capacity()
+
+    text = source.read_text(encoding="utf-8")
+    assert "FR13_FIXED32_EAGER_BOOT_WARM_BUILDER_CAPACITY" in text
+    namespace = {
+        "SimpleNamespace": SimpleNamespace,
+        "KVCacheConfig": object,
+    }
+    exec(text, namespace)
+    runner = namespace["MetadataRunner"]()
+    config = SimpleNamespace(kv_cache_groups=[object()])
+    runner.initialize_metadata_builders(config, [16])
+    assert runner.observed_builder_capacities == [capture_size]
+    assert (
+        runner.vllm_config.compilation_config.max_cudagraph_capture_size
+        == 0
+    )
+
+
+def test_eager_diagnostic_metadata_capacity_restores_after_builder_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "gpu_model_runner.py"
+    source.write_text(_GPU_METADATA_RUNNER_FIXTURE)
+    monkeypatch.setattr(patcher, "GPU_MODEL_RUNNER_PATH", source)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "tail6_fixed32")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_BATCH_GDN_BYTE_AB",
+        "0",
+    )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_CUTLASS_WAVE",
+        "streamk_force_wide256_byte_ab",
+    )
+    assert patcher._patch_gpu_model_runner_fixed32_eager_boot_capacity()
+
+    namespace = {
+        "SimpleNamespace": SimpleNamespace,
+        "KVCacheConfig": object,
+    }
+    exec(source.read_text(encoding="utf-8"), namespace)
+    runner = namespace["MetadataRunner"]()
+
+    def fail_builder(config: object, *_args: object, **_kwargs: object) -> None:
+        assert config.compilation_config.max_cudagraph_capture_size == 32
+        raise RuntimeError("builder failed")
+
+    runner.attn_groups = [[SimpleNamespace(
+        create_metadata_builders=fail_builder,
+    )]]
+    with pytest.raises(RuntimeError, match="builder failed"):
+        runner.initialize_metadata_builders(
+            SimpleNamespace(kv_cache_groups=[object()]),
+            [16],
+        )
+    assert runner.compilation_config.max_cudagraph_capture_size == 0
 
 
 def test_non_diagnostic_worker_lifecycle_is_unchanged(
