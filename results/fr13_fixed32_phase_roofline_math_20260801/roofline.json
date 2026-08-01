@@ -1,0 +1,374 @@
+{
+  "schema": "fr13.fixed32.full_vocab_phase_roofline.v1",
+  "created_at_utc": "2026-08-01T07:40:01Z",
+  "status": "EVIDENCE_RECONSTRUCTION_NO_NEW_GPU_MEASUREMENT",
+  "source_base_commit": "968f1150638a72938e86ade8f6ed1a173ba9e3e3",
+  "scope": {
+    "workload": "princeton-nlp/SWE-bench_Verified",
+    "tree_contract": "fixed32",
+    "draft_vocabulary_k": 0,
+    "draft_vocabulary_root": 0,
+    "batch_modes": [
+      "B1",
+      "B4"
+    ],
+    "latency_unit": "milliseconds_per_physical_speculative_decode_step",
+    "new_gpu_measurement": false,
+    "probe_or_synthetic_measurement_used_as_claim": false
+  },
+  "planning_ceilings": {
+    "unified_memory_bandwidth_bytes_per_second": 273000000000,
+    "unified_memory_bandwidth_classification": "GB10_ARCHITECTURAL_PLANNING_CEILING_NOT_ACHIEVED_BANDWIDTH_MEASUREMENT",
+    "dense_bf16_flops_per_second": 125000000000000,
+    "dense_bf16_compute_classification": "SOURCE_LEDGER_PLANNING_CEILING_NOT_ACHIEVED_FLOP_MEASUREMENT",
+    "roofline_rule": "phase_lower_bound_ms = max(minimum_traffic_ms, analytic_compute_ms) where both terms are known",
+    "nonweight_traffic_in_total_floor": false
+  },
+  "full_vocab_contract": {
+    "components": {
+      "sfwd_target_model": {
+        "mandatory_weight_bytes_per_step": 24382399488,
+        "weight_floor_ms_at_273_gb_s": 89.31281863736264
+      },
+      "dfwd_five_mtp_forwards": {
+        "mandatory_weight_bytes_per_step": 2385998720,
+        "weight_floor_ms_at_273_gb_s": 8.73992205128205
+      },
+      "dfwd_five_full_vocab_drafter_heads": {
+        "mandatory_weight_bytes_per_step": 12713984000,
+        "weight_floor_ms_at_273_gb_s": 46.57136996336996
+      },
+      "other_verifier_full_vocab_head": {
+        "mandatory_weight_bytes_per_step": 2542796800,
+        "weight_floor_ms_at_273_gb_s": 9.314273992673993
+      }
+    },
+    "mandatory_weight_bytes_per_step": 42025179008,
+    "mandatory_weight_floor_ms_per_step": 153.93838464468865,
+    "acceptance_multiplier": 1.15,
+    "acceptance_cap_ms_per_step": 177.0291423413919,
+    "allowance_above_mandatory_weight_floor_ms_per_step": 23.090757696703255,
+    "b1_b4_weight_bytes_invariant": true
+  },
+  "phase_roofline": [
+    {
+      "phase": "sfwd",
+      "mandatory_weight_bytes_per_step": 24382399488,
+      "weight_floor_ms_at_273_gb_s": 89.31281863736264,
+      "analytic_full_target_compute_ms": {
+        "model": "0.54 ms per physical row",
+        "b1_rows": 32,
+        "b1_ms": 17.28,
+        "b4_rows": 128,
+        "b4_ms": 69.12,
+        "measurement": false
+      },
+      "roofline_lower_bound_ms": {
+        "b1": 89.31281863736264,
+        "b4": 89.31281863736264
+      },
+      "bound_class": "WEIGHT_BANDWIDTH_AND_PROJECTION_WAVE_OCCUPANCY_WITH_STATE_MEMORY_AND_LAUNCH_SUBPHASES",
+      "b1_full_vocab_measured_ms": null,
+      "b4_full_vocab_measured_ms": null,
+      "subphases": [
+        {
+          "name": "target_fp8_projections",
+          "mandatory_fp8_weight_bytes_per_step": 23823646720,
+          "scale_bytes_per_step": 5816320,
+          "weight_floor_ms_at_273_gb_s": 87.2661052014652,
+          "launches_per_step": 256,
+          "b1": {
+            "physical_rows": 32,
+            "weight_only_arithmetic_intensity_flop_per_byte": 64,
+            "analytic_flops": 1524713390080,
+            "compute_ms_at_125_tflop_s": 12.19770712064,
+            "tflop_s_required_at_weight_floor": 17.472
+          },
+          "b4": {
+            "physical_rows": 128,
+            "weight_only_arithmetic_intensity_flop_per_byte": 256,
+            "analytic_flops": 6098853560320,
+            "compute_ms_at_125_tflop_s": 48.79082848256,
+            "tflop_s_required_at_weight_floor": 69.888
+          },
+          "historical_b1_real_swe_attribution_ms": 112.31295398412699,
+          "historical_b1_weight_equivalent_bandwidth_gb_s": 212.11842334203905,
+          "historical_attribution_class": "REAL_SWE_VERIFIED_INCOMPLETE_CAPTURE_STALE_FOR_CURRENT_STACK",
+          "bound_class": "WEIGHT_BANDWIDTH_PLUS_WAVE_OCCUPANCY",
+          "b4_measured_ms": null
+        },
+        {
+          "name": "tree_fa2_attention",
+          "mandatory_bytes_per_step": null,
+          "launches_per_step_b1": 16,
+          "launches_per_step_b4": 16,
+          "historical_b1_old_stock_ms": 24.708600648526076,
+          "b4_measured_ms": null,
+          "bound_class": "SHORT_SEQUENCE_MEMORY_AND_LAUNCH",
+          "why_bytes_unquantified": "KV traffic is context dependent and no current counter capture exists"
+        },
+        {
+          "name": "tree_gdn_path",
+          "mandatory_model_weight_bytes_per_step": 0,
+          "launches_per_step_b1": 96,
+          "launches_per_step_b4": 96,
+          "historical_b1_ms": 14.019520105442178,
+          "b4_measured_ms": null,
+          "logical_cross_level_handoff": {
+            "b1_bytes": 2415919104,
+            "b1_hbm_equivalent_ms_at_273_gb_s": 8.849520527472528,
+            "b4_bytes": 9663676416,
+            "b4_hbm_equivalent_ms_at_273_gb_s": 35.39808210989011,
+            "hard_dram_floor": false,
+            "cache_residency_measured": false
+          },
+          "bound_class": "STATE_MEMORY_AND_LAUNCH"
+        },
+        {
+          "name": "conv_state_motion",
+          "mandatory_model_weight_bytes_per_step": 0,
+          "incumbent_launches_per_step_b1": 144,
+          "candidate_launches_per_step_b1": 48,
+          "candidate_launches_per_step_b4": 48,
+          "historical_b1_ms": 15.014089253968255,
+          "candidate_timing_measured": false,
+          "bound_class": "STATE_MEMORY_AND_LAUNCH"
+        }
+      ]
+    },
+    {
+      "phase": "dfwd",
+      "mandatory_weight_bytes_per_step": 15099982720,
+      "weight_floor_ms_at_273_gb_s": 55.311292014652015,
+      "logical_row_compute": {
+        "b1_flops": 17485981440,
+        "b1_compute_ms_at_125_tflop_s": 0.13988785152,
+        "b4_flops": 69943925760,
+        "b4_compute_ms_at_125_tflop_s": 0.55955140608
+      },
+      "source_only_m32_full_head_compute_sanity": {
+        "source_commit": "3fbcf9c95b76fbc943f92e740859921db6b5cf03",
+        "b1_compute_ms_at_125_tflop_s": 3.29295588352,
+        "b4_compute_ms_at_125_tflop_s": 3.40748382208,
+        "timing_measured": false,
+        "qualification": "source_only"
+      },
+      "roofline_lower_bound_ms": {
+        "b1": 55.311292014652015,
+        "b4": 55.311292014652015
+      },
+      "bound_class": "WEIGHT_STREAM_MEMORY_WITH_SHORT_ATTENTION_AND_SELECTION_LAUNCH_COST",
+      "b1_full_vocab_measured_ms": null,
+      "b4_full_vocab_measured_ms": null,
+      "subphases": [
+        {
+          "name": "five_mtp_forwards",
+          "mandatory_weight_bytes_per_step": 2385998720,
+          "weight_floor_ms_at_273_gb_s": 8.73992205128205,
+          "projection_launches_per_step": 20,
+          "b1_weight_only_arithmetic_intensity_flop_per_byte": 2,
+          "b4_weight_only_arithmetic_intensity_flop_per_byte": 8,
+          "historical_b1_projection_ms": 8.514284570942111,
+          "historical_timing_class": "REAL_SWE_VERIFIED_INCOMPLETE_CAPTURE_STALE_FOR_CURRENT_STACK",
+          "bound_class": "WEIGHT_STREAM_MEMORY"
+        },
+        {
+          "name": "five_full_vocab_bf16_drafter_heads",
+          "mandatory_weight_bytes_per_step": 12713984000,
+          "weight_floor_ms_at_273_gb_s": 46.57136996336996,
+          "launches_per_step": 5,
+          "full_vocab_b1_measured_ms": null,
+          "full_vocab_b4_measured_ms": null,
+          "source_only_m32_minimum_traffic_bytes": 12795084800,
+          "source_only_m32_minimum_traffic_floor_ms": 46.86844249084249,
+          "bound_class": "WEIGHT_STREAM_MEMORY"
+        },
+        {
+          "name": "short_attention_and_selection",
+          "mandatory_bytes_per_step": null,
+          "historical_b1_listed_ms": 10.77328028830874,
+          "b4_measured_ms": null,
+          "bound_class": "SHORT_WORK_MEMORY_AND_LAUNCH"
+        }
+      ]
+    },
+    {
+      "phase": "cfwd",
+      "mandatory_model_weight_bytes_per_step": 0,
+      "weight_floor_ms_at_273_gb_s": 0,
+      "analytic_compute_ms": null,
+      "roofline_lower_bound_ms": null,
+      "bound_class": "STATE_MEMORY_SOFTMAX_REDUCTION_AND_LAUNCH",
+      "b1_full_vocab_measured_ms": null,
+      "b4_full_vocab_measured_ms": null,
+      "nearest_k64_exact4_b1_phase_prior_ms": 20.677390556513288,
+      "all_parent_candidate": {
+        "reference_full_vocab_softmax_calls_per_step": 24,
+        "candidate_full_vocab_softmax_calls_per_step": 2,
+        "reference_exact_commit_launches_per_step": 12,
+        "candidate_exact_commit_launches_per_step": 1,
+        "b1_real_task_byte_gate": "pass",
+        "b1_timing_measured": false,
+        "b4_byte_gate": false,
+        "b4_timing_measured": false
+      }
+    },
+    {
+      "phase": "other",
+      "mandatory_weight_bytes_per_step": 2542796800,
+      "weight_floor_ms_at_273_gb_s": 9.314273992673993,
+      "verifier_head": {
+        "b1_physical_rows": 32,
+        "b1_analytic_flops": 81369497600,
+        "b1_compute_ms_at_125_tflop_s": 0.6509559808,
+        "b1_minimum_weight_input_output_bytes": 2559016960,
+        "b1_minimum_traffic_floor_ms": 9.373688498168498,
+        "b4_physical_rows": 128,
+        "b4_analytic_flops": 325477990400,
+        "b4_compute_ms_at_125_tflop_s": 2.6038239232,
+        "b4_minimum_weight_input_output_bytes": 2607677440,
+        "b4_minimum_traffic_floor_ms": 9.551932014652015,
+        "historical_b1_ms": 12.153933,
+        "historical_b1_weight_equivalent_bandwidth_gb_s": 209.21596326061695,
+        "bound_class": "WEIGHT_STREAM_MEMORY"
+      },
+      "host_sync_residual_bytes": null,
+      "host_sync_residual_bound_class": "UNMODELED_HOST_SCHEDULER_AND_SYNCHRONIZATION",
+      "b1_full_vocab_measured_ms": null,
+      "b4_full_vocab_measured_ms": null
+    }
+  ],
+  "nearest_real_exact4_phase_prior": {
+    "classification": "VALID_REAL_SWE_VERIFIED_EXACT4_HYDRA27_B1_K64_PRIOR_NOT_FULL_VOCAB_ACCEPTANCE",
+    "source_commit": "04c98057fa9d9e658282cf0b32422716660e1210",
+    "tasks": 4,
+    "forward_events": 5148,
+    "accepted_drafts_per_event": 4.753885003885004,
+    "phase_ms_per_step": {
+      "sfwd": 159.61926324365674,
+      "dfwd": 36.813368133731736,
+      "cfwd": 20.677390556513288,
+      "other": 15.669768137471785,
+      "wall": 232.77979007137355
+    },
+    "formal_two_arm_acceptance_eligible": false,
+    "full_vocab_comparable": false
+  },
+  "full_vocab_transfer_estimate": {
+    "classification": "OPTIMISTIC_DERIVATION_NOT_MEASUREMENT",
+    "method": "add only the five-head K64-to-full-vocabulary mandatory byte delta at ideal 273 GB/s to the nearest valid K64 exact4 phase prior",
+    "added_mandatory_head_bytes_per_step": 9358540800,
+    "added_ideal_ms_per_step": 34.28036923076923,
+    "phase_planning_ms_per_step": {
+      "sfwd": 159.61926324365674,
+      "dfwd": 71.09373736450097,
+      "cfwd": 20.677390556513288,
+      "other": 15.669768137471785,
+      "wall": 267.0601593021428
+    },
+    "phase_excess_above_full_vocab_weight_floor_ms": {
+      "sfwd": 70.3064446062941,
+      "dfwd": 15.782445349848952,
+      "cfwd": 20.677390556513288,
+      "other": 6.355494144797792,
+      "total": 113.12177465745414
+    },
+    "gap_to_177_029142341_cap_ms": 90.03101696075088,
+    "required_fraction_of_excess_above_weight_floor_removed": 0.7958769850753778,
+    "minimum_sfwd_reduction_if_all_other_phases_hit_lower_bounds_ms": 47.21568690959085,
+    "streamk_best_analytical_recovery_ms": 10.923627,
+    "sfwd_reduction_remaining_after_ideal_streamk_ms": 36.29205990959085
+  },
+  "b4_evidence_state": {
+    "full_vocab_exact4_wall_timing_available": false,
+    "full_vocab_phase_timing_available": false,
+    "real_exact4_k64_byte_diagnostic_available": true,
+    "k64_byte_diagnostic_timing_collected": false,
+    "k64_byte_diagnostic_reference_always_served": true,
+    "b4_inference_from_b1_timing_allowed": false,
+    "reason": "B4 launch counts can be invariant while row compute and state traffic scale by four"
+  },
+  "decision": {
+    "current_full_vocab_b1_acceptance_claim": false,
+    "current_full_vocab_b4_acceptance_claim": false,
+    "dominant_required_reduction": "sfwd",
+    "weighted_phases_compute_bound_at_b1": false,
+    "weighted_phases_compute_bound_at_b4": false,
+    "b4_state_traffic_is_material_risk": true,
+    "next_valid_measurement": "matched real SWE-Verified exact4 full-vocabulary full-wall B1 and B4 after byte-qualified kernel composition",
+    "one_task_or_synthetic_acceptance_allowed": false
+  },
+  "evidence": [
+    {
+      "kind": "nearest_valid_exact4_b1_phase_prior",
+      "artifact_commit": "ef6ab6475de995a926ab6fbb3bb92b44877405ea",
+      "execution_source_commit": "04c98057fa9d9e658282cf0b32422716660e1210",
+      "path": "results/fr13_fixed32_qrow16_prod_exact4_b1_20260731T182827Z/measurement_summary.json",
+      "sha256": "e776b3a977f00652f0917866911dfdb3252fda9e41f2e1538251ce303c581c73"
+    },
+    {
+      "kind": "corrected_mandatory_weight_ledger",
+      "artifact_commit": "e45a7e7355b9ba9fea3ee6c30afbf7d8e85b1cdd",
+      "path": "results/fr13_hardware_floor_correction_20260731/floor_ledger.json",
+      "sha256": "1ae91dec2c31ba33c8d9d4fb78958a903e096d8892a0e3c9792e2eba24d97453"
+    },
+    {
+      "kind": "real_swe_verified_b1_symbol_attribution",
+      "artifact_commit": "fe73228983c24053601c4446399b4b41b08a2b46",
+      "execution_source_commit": "1a7a765447c8ce6068e0dd5d3a344d58ace85f2b",
+      "path": "results/fr13_fixed32_b1_nsys_20260731T013952Z_curated/nsys_attribution.json",
+      "sha256": "685c410a0ba09d00c8b244bfa06809530337cea383b88fa92a5da1013eadf2d0",
+      "classification": "attribution only; two tasks completed before capture stop; stale for current stack"
+    },
+    {
+      "kind": "full_vocab_floor_gap_source_audit",
+      "artifact_commit": "26745775600e4587fad5346f596ebdfa1138c0f1",
+      "path": "results/fr13_fixed32_fullvocab_floor_gap_audit_20260801/audit.json",
+      "git_object_sha256_with_trailing_newline": "97afbe65408f28d3e7aed0c4b1e666973ebd095d9caa3722f6ccd26cbac04880"
+    },
+    {
+      "kind": "sfwd_gdn_state_handoff_source_audit",
+      "artifact_commit": "208671628c40df2a46efc56a745c521e0feb02c6",
+      "path": "results/fr13_fixed32_sfwd_postfusion_audit_20260801/audit.json",
+      "git_object_sha256_with_trailing_newline": "acce36ee47b365398b6aa4c345d1147f15cbc58c7725199840b53be235dba8ad"
+    },
+    {
+      "kind": "cfwd_all_parent_b1_real_task_byte_pass",
+      "artifact_commit": "f19e90053cfe414cafc76a2ffa3326a589da5e1e",
+      "path": "results/fr13_fixed32_cfwd_all_parent_b1_live_pass_20260801/verification.json",
+      "git_object_sha256_with_trailing_newline": "2b42afa44d212c3d14c8ac872ccf00c4dd02523b433f25a38540a582622e9c73"
+    },
+    {
+      "kind": "cfwd_all_parent_launch_contract",
+      "artifact_commit": "386f4839ae2edcee973549166995170d414d1e4f",
+      "path": "results/fr13_fixed32_cfwd_all_parent_source_20260801/candidate_manifest.json",
+      "git_object_sha256_with_trailing_newline": "102dc769498ce74938dbc85d989465d3fc19422c7708b3aeb866f11ec03998c7"
+    },
+    {
+      "kind": "real_exact4_b4_k64_byte_only_diagnostic",
+      "artifact_commit": "054fe680eb788a70f00e11118922a998353f0e6f",
+      "path": "results/fr13_fixed32_b4_gdn_bv8_k64_nonformal_20260801T051732Z/summary.json",
+      "git_object_sha256_with_trailing_newline": "977a2507f461c657c47cef47d751f3569e7656a0fe4ec762c3809065e10dba54"
+    },
+    {
+      "kind": "dfwd_dense_bf16_compute_planning_ledger",
+      "artifact_commit": "e124003f1c343437c02a73cfebf2ae436e2fce94",
+      "path": "results/fr13_fixed32_dfwd_bf16_pad_rows_source_20260731/roofline_ledger.json",
+      "sha256": "73c17b30605d6552973216abbbc86afcdd039f4fe112497790b0ef247f7028aa"
+    },
+    {
+      "kind": "source_only_full_vocab_m32_head_geometry",
+      "artifact_commit": "3fbcf9c95b76fbc943f92e740859921db6b5cf03",
+      "path": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+      "git_object_sha256_with_trailing_newline": "6f1a70b1d0aa88005a0dac434f4f2a4196251db356041e940d0c2140444f84b1",
+      "classification": "source-only geometry, no real-task byte or timing result"
+    },
+    {
+      "kind": "streamk_analytical_recovery_model",
+      "artifact_commit": "386c31f63b4877afe409dc03794e0ba79d3bfbd9",
+      "path": "results/fr13_fixed32_cutlass_wave_20260731/candidate.json",
+      "sha256": "d2b22434346022d24c35980f554fb90af2d2910a8ca79d722a21589ac489995d",
+      "classification": "analytical candidate model, not timing"
+    }
+  ]
+}
