@@ -1,0 +1,13 @@
+{
+  "schema": "fr13.fixed32.sfwd_prior_reuse.preflight_rejection.reduced.v1",
+  "status": "rejected_before_container",
+  "reason": "missing_pinned_dataset_revision_ref",
+  "source_commit": "b6572a9ab91f281d7c1f84bfb41c24329e6323da",
+  "source_manifest_launch_end_equal": true,
+  "source_manifest_sha256": "1d436aeefaebe8acfcca4f8d00a3cf93a42b9275d026ebf0a86baced083f2f64",
+  "container_launched": false,
+  "gpu_compute_launched": false,
+  "task_count": 0,
+  "kernel_result": false,
+  "raw_artifacts_included": false
+}
