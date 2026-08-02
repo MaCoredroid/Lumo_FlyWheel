@@ -2,14 +2,120 @@
 
 from __future__ import annotations
 
+import json
 import os
+import stat
 from collections.abc import Mapping
+from pathlib import Path
 
 
 CANDIDATE = "fixed32_cfwd_native_keygroup_precompute_cuda_v3"
 SELECTOR_ENV = "FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA"
 SELECTOR_VALUE = "diagnostic"
 FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
+VLLM_COMMIT = "fe9c3d6c5f66c873d196800384ed6880687b9e52"
+OPERATOR = "_C::fr13_fixed32_cfwd_native_fullvalue"
+BINARY_BINDING_SCHEMA = "fr13.fixed32.cfwd_native_keygroup_binary.v1"
+CUDA_SOURCE_PATH = "native/fr13_fixed32_cfwd_native_fullvalue.cu"
+CUDA_SOURCE_SHA256 = (
+    "1c1a9813410dcf15bcbb4d23bec71ee16ddcd7e2dbe3b1a3698e58f71bd96985"
+)
+PATCHER_SOURCE_PATH = "scripts/fr13_patch_vllm_cfwd_native_fullvalue_cuda.py"
+PATCHER_SOURCE_SHA256 = (
+    "50bcdb4cbe71db7d75f1a233cfe6d2e5d18d6a6cf1bcf97af87db339a8452184"
+)
+MAX_BINDING_BYTES = 64 * 1024
+
+
+def _require_sha256(value: object, label: str) -> str:
+    digest = str(value)
+    if len(digest) != 64 or any(
+        character not in "0123456789abcdef" for character in digest
+    ):
+        raise RuntimeError(f"native key-group precompute CFWD {label} is invalid")
+    return digest
+
+
+def validate_binary_binding(binding: Mapping[str, object]) -> dict[str, object]:
+    """Validate the exact vLLM binary/source binding used by a live gate."""
+    if binding.get("schema") != BINARY_BINDING_SCHEMA:
+        raise RuntimeError("native key-group precompute CFWD binary schema drift")
+    if binding.get("candidate") != CANDIDATE:
+        raise RuntimeError("native key-group precompute CFWD binary candidate drift")
+    if binding.get("vllm_base_commit") != VLLM_COMMIT:
+        raise RuntimeError("native key-group precompute CFWD vLLM base drift")
+    if binding.get("operator") != OPERATOR:
+        raise RuntimeError("native key-group precompute CFWD operator binding drift")
+    sources = binding.get("source_sha256")
+    if not isinstance(sources, Mapping) or dict(sources) != {
+        CUDA_SOURCE_PATH: CUDA_SOURCE_SHA256,
+        PATCHER_SOURCE_PATH: PATCHER_SOURCE_SHA256,
+    }:
+        raise RuntimeError("native key-group precompute CFWD source binding drift")
+    binary = binding.get("binary")
+    if not isinstance(binary, Mapping):
+        raise RuntimeError("native key-group precompute CFWD binary binding is absent")
+    binary_sha256 = _require_sha256(binary.get("sha256"), "binary SHA-256")
+    binary_bytes = binary.get("bytes")
+    if type(binary_bytes) is not int or binary_bytes <= 0:
+        raise RuntimeError("native key-group precompute CFWD binary size is invalid")
+    if binding.get("architecture") != "sm_121a":
+        raise RuntimeError("native key-group precompute CFWD architecture drift")
+    if (
+        binding.get("default_on") is not False
+        or binding.get("production_authorized") is not False
+        or binding.get("timing_eligible") is not False
+    ):
+        raise RuntimeError("native key-group precompute CFWD qualification scope drift")
+    return {
+        "schema": BINARY_BINDING_SCHEMA,
+        "candidate": CANDIDATE,
+        "vllm_base_commit": VLLM_COMMIT,
+        "operator": OPERATOR,
+        "architecture": "sm_121a",
+        "source_sha256": dict(sources),
+        "binary": {"sha256": binary_sha256, "bytes": binary_bytes},
+        "default_on": False,
+        "production_authorized": False,
+        "timing_eligible": False,
+    }
+
+
+def load_binary_binding(path: str | os.PathLike[str]) -> dict[str, object]:
+    """Read one private, non-symlinked live-gate binary binding."""
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(Path(path), flags)
+    except OSError as error:
+        raise RuntimeError(
+            "native key-group precompute CFWD cannot open binary binding"
+        ) from error
+    try:
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o400
+            or not 0 < metadata.st_size <= MAX_BINDING_BYTES
+        ):
+            raise RuntimeError(
+                "native key-group precompute CFWD binary binding must be a "
+                "private read-only regular file"
+            )
+        with os.fdopen(descriptor, encoding="ascii", closefd=False) as handle:
+            payload = json.load(handle)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            "native key-group precompute CFWD cannot read binary binding"
+        ) from error
+    finally:
+        os.close(descriptor)
+    if not isinstance(payload, Mapping):
+        raise RuntimeError(
+            "native key-group precompute CFWD binary binding is not an object"
+        )
+    return validate_binary_binding(payload)
 
 
 def resource_contract(batch_size: int) -> dict[str, object]:
@@ -104,6 +210,7 @@ def resolve_candidate(
     bank_offset_table_prevalidated: bool,
     accepted_values_device_guarded: bool,
     op_available: bool,
+    binary_binding: Mapping[str, object] | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> dict[str, object] | None:
     """Resolve only an explicitly armed exact-geometry diagnostic candidate."""
@@ -144,6 +251,11 @@ def resolve_candidate(
             "armed native key-group precompute CFWD operator is absent from "
             "pinned vLLM _C"
         )
+    if binary_binding is None:
+        raise RuntimeError(
+            "armed native key-group precompute CFWD has no binary binding"
+        )
+    binding = validate_binary_binding(binary_binding)
     return {
         **resource_contract(int(batch_size)),
         "mode": mode,
@@ -155,6 +267,11 @@ def resolve_candidate(
         "timing_eligible": False,
         "bank_offset_table_prevalidated": True,
         "accepted_values_device_guarded": True,
+        "source_bound": True,
+        "source_sha256": CUDA_SOURCE_SHA256,
+        "binary_sha256": binding["binary"]["sha256"],
+        "vllm_base_commit": VLLM_COMMIT,
+        "operator": OPERATOR,
     }
 
 
@@ -174,6 +291,12 @@ def incumbent_byte_gate_plan() -> dict[str, object]:
         "restore_before_candidate": True,
         "reference_always_served_during_qualification": True,
         "same_server_process_required": True,
+        "source_binding_required": {
+            "schema": BINARY_BINDING_SCHEMA,
+            "vllm_base_commit": VLLM_COMMIT,
+            "cuda_source_sha256": CUDA_SOURCE_SHA256,
+            "patcher_source_sha256": PATCHER_SOURCE_SHA256,
+        },
         "pinned_compile_resource_gate_required": True,
         "production_credential_emitted": False,
         "timing_eligible": False,
@@ -208,6 +331,16 @@ def launch_candidate(
         raise RuntimeError(
             "unqualified native key-group precompute CFWD cannot be timed"
         )
+    if (
+        selection.get("source_bound") is not True
+        or selection.get("source_sha256") != CUDA_SOURCE_SHA256
+        or selection.get("vllm_base_commit") != VLLM_COMMIT
+        or selection.get("operator") != OPERATOR
+    ):
+        raise RuntimeError(
+            "native key-group precompute CFWD launch source binding drift"
+        )
+    _require_sha256(selection.get("binary_sha256"), "launch binary SHA-256")
     if selection.get("bank_offset_table_prevalidated") is not True or (
         selection.get("accepted_values_device_guarded") is not True
     ):

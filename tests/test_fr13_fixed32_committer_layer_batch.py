@@ -52,6 +52,41 @@ def test_layer_batch_arm_is_explicit_and_default_off(monkeypatch) -> None:
     assert requested() is True
 
 
+def test_native_keygroup_arm_is_default_off_and_fails_closed(
+    monkeypatch,
+) -> None:
+    node = _function("_fr13_fixed32_cfwd_native_keygroup_requested")
+    namespace = {
+        "os": os,
+        "_FR13_FIXED32_CFWD_NATIVE_KEYGROUP_ARM": (
+            "/logs/fr13_fixed32_cfwd_native_keygroup_precompute.arm"
+        ),
+    }
+    exec(
+        compile(ast.Module(body=[node], type_ignores=[]), str(KERNEL_PATH), "exec"),
+        namespace,
+    )
+    requested = namespace[node.name]
+    selector = "FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA"
+
+    monkeypatch.delenv(selector, raising=False)
+    monkeypatch.setattr(os.path, "exists", lambda _path: False)
+    assert requested() is False
+    monkeypatch.setenv(selector, "diagnostic")
+    assert requested() is True
+    monkeypatch.setenv(selector, "production")
+    with pytest.raises(RuntimeError, match="unset, 0, or diagnostic"):
+        requested()
+    monkeypatch.delenv(selector)
+    monkeypatch.setattr(
+        os.path,
+        "exists",
+        lambda path: path
+        == "/logs/fr13_fixed32_cfwd_native_keygroup_precompute.arm",
+    )
+    assert requested() is True
+
+
 def test_layer_batch_kernel_keeps_native_recurrence_and_geometry() -> None:
     kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
     launch = _text("_fr13_fixed32_committer_native_layer_batch")
@@ -216,6 +251,30 @@ def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> No
     assert '"state_only_output_elided": True' in preseed
     assert '"active_length_recurrence": True' in preseed
     assert '"final_state_store_once": True' in preseed
+
+
+def test_native_keygroup_reuses_reference_served_all_layer_byte_gate() -> None:
+    selection = _text("_fr13_fixed32_cfwd_native_keygroup_selection")
+    launch = _text("_fr13_fixed32_committer_native_keygroup")
+    body = _text("_fr13_fixed32_committer_graph_body")
+    preseed = _text("preseed_fixed32_committer_graph")
+    gate = _text("_fr13_fixed32_committer_layer_batch_byte_gate")
+
+    assert "native_keygroup.load_binary_binding(" in selection
+    assert "native_keygroup.resolve_candidate(" in selection
+    assert "op_available=native_keygroup.operator_available(torch)" in selection
+    assert "native_keygroup.launch_candidate(" in launch
+    assert 'bank_anchor=banks_list[0]' in launch
+    assert 'bank_off16=state["bank_off16"]' in launch
+    assert 'gate_coeffs=state["gate_coeffs"]' in launch
+    assert 'state.get("native_keygroup_selection")' in body
+    assert "_fr13_fixed32_committer_native_keygroup(" in body
+    assert '"candidate_route": "native_keygroup_precompute_cuda"' in preseed
+    assert '"candidate_source_bound": True' in preseed
+    assert "reference_graph.replay()" in gate
+    assert "candidate_graph.replay()" in gate
+    assert "for layer, (bank, reference) in enumerate(" in gate
+    assert "reference_served=1" in gate
 
 
 def test_accepted_length_mask_covers_zero_through_eleven() -> None:
@@ -392,6 +451,9 @@ def test_counters_expose_per_batch_gate_state_for_timing_boundaries() -> None:
     assert 'state.get("layer_batch_byte_gate_passed", False)' in counters
     assert 'state.get("layer_batch_byte_gate_attempts", -1)' in counters
     assert 'state.get("layer_batch_byte_gate_coverage_mask", -1)' in counters
+    assert '"candidate_routes_by_batch"' in counters
+    assert '"candidate_source_sha256_by_batch"' in counters
+    assert '"candidate_binary_sha256_by_batch"' in counters
 
 
 def test_layer_programs_have_disjoint_layer_state_and_shared_read_only_paths() -> None:

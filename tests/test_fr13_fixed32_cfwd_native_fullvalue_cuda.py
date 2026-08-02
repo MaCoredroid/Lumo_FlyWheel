@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -59,6 +60,25 @@ def _selection_kwargs() -> dict[str, object]:
         "bank_offset_table_prevalidated": True,
         "accepted_values_device_guarded": True,
         "op_available": True,
+        "binary_binding": _binary_binding(),
+    }
+
+
+def _binary_binding() -> dict[str, object]:
+    return {
+        "schema": candidate.BINARY_BINDING_SCHEMA,
+        "candidate": candidate.CANDIDATE,
+        "vllm_base_commit": candidate.VLLM_COMMIT,
+        "operator": candidate.OPERATOR,
+        "architecture": "sm_121a",
+        "source_sha256": {
+            candidate.CUDA_SOURCE_PATH: candidate.CUDA_SOURCE_SHA256,
+            candidate.PATCHER_SOURCE_PATH: candidate.PATCHER_SOURCE_SHA256,
+        },
+        "binary": {"sha256": "a" * 64, "bytes": 123_456},
+        "default_on": False,
+        "production_authorized": False,
+        "timing_eligible": False,
     }
 
 
@@ -122,6 +142,9 @@ def test_selector_is_diagnostic_only_and_never_authorizes_production() -> None:
     assert selection["production_authorized"] is False
     assert selection["fallback_on_error"] is False
     assert selection["timing_eligible"] is False
+    assert selection["source_bound"] is True
+    assert selection["source_sha256"] == candidate.CUDA_SOURCE_SHA256
+    assert selection["binary_sha256"] == "a" * 64
 
 
 @pytest.mark.parametrize(
@@ -146,6 +169,7 @@ def test_selector_is_diagnostic_only_and_never_authorizes_production() -> None:
         ("bank_offset_table_prevalidated", False),
         ("accepted_values_device_guarded", False),
         ("op_available", False),
+        ("binary_binding", None),
     ],
 )
 def test_armed_selector_fails_closed_on_any_contract_drift(
@@ -168,6 +192,55 @@ def test_unknown_selector_fails_closed() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("schema",), "wrong"),
+        (("candidate",), "wrong"),
+        (("vllm_base_commit",), "0" * 40),
+        (("operator",), "_C::wrong"),
+        (("architecture",), "sm_120"),
+        (("source_sha256", candidate.CUDA_SOURCE_PATH), "0" * 64),
+        (("binary", "sha256"), "bad"),
+        (("binary", "bytes"), 0),
+        (("default_on",), True),
+        (("production_authorized",), True),
+        (("timing_eligible",), True),
+    ],
+)
+def test_binary_binding_fails_closed_on_identity_or_scope_drift(
+    path: tuple[str, ...], value: object
+) -> None:
+    binding = _binary_binding()
+    target = binding
+    for key in path[:-1]:
+        target = target[key]  # type: ignore[assignment,index]
+    target[path[-1]] = value  # type: ignore[index]
+    kwargs = _selection_kwargs()
+    kwargs["binary_binding"] = binding
+    with pytest.raises(RuntimeError):
+        candidate.resolve_candidate(
+            **kwargs,
+            environ={candidate.SELECTOR_ENV: candidate.SELECTOR_VALUE},
+        )
+
+
+def test_binary_binding_loader_requires_private_regular_file(
+    tmp_path: Path,
+) -> None:
+    binding_path = tmp_path / "binding.json"
+    binding_path.write_text(
+        json.dumps(_binary_binding()), encoding="ascii"
+    )
+    binding_path.chmod(0o400)
+    loaded = candidate.load_binary_binding(binding_path)
+    assert loaded["binary"] == {"sha256": "a" * 64, "bytes": 123_456}
+
+    binding_path.chmod(0o600)
+    with pytest.raises(RuntimeError, match="private read-only"):
+        candidate.load_binary_binding(binding_path)
+
+
 def test_byte_gate_requires_real_work_and_full_fp32_bank_bytes() -> None:
     plan = candidate.incumbent_byte_gate_plan()
     assert plan["accepted_lengths_required"] == tuple(range(12))
@@ -176,6 +249,12 @@ def test_byte_gate_requires_real_work_and_full_fp32_bank_bytes() -> None:
     assert plan["qualification_work"]["b1"] == "real SWE-Verified task bracket"
     assert "exact4" in plan["qualification_work"]["b4"]
     assert plan["reference_always_served_during_qualification"] is True
+    assert plan["source_binding_required"] == {
+        "schema": candidate.BINARY_BINDING_SCHEMA,
+        "vllm_base_commit": candidate.VLLM_COMMIT,
+        "cuda_source_sha256": candidate.CUDA_SOURCE_SHA256,
+        "patcher_source_sha256": candidate.PATCHER_SOURCE_SHA256,
+    }
     assert plan["pinned_compile_resource_gate_required"] is True
     assert plan["production_credential_emitted"] is False
     assert plan["timing_eligible"] is False
@@ -252,6 +331,11 @@ def test_launch_rejects_unqualified_or_non_source_selection() -> None:
         ("candidate", "other"),
         ("production_authorized", True),
         ("timing_eligible", True),
+        ("source_bound", False),
+        ("source_sha256", "0" * 64),
+        ("binary_sha256", "bad"),
+        ("vllm_base_commit", "0" * 40),
+        ("operator", "_C::wrong"),
         ("bank_offset_table_prevalidated", False),
         ("accepted_values_device_guarded", False),
     ):

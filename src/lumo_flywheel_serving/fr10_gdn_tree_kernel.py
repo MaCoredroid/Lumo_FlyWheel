@@ -16,6 +16,12 @@ _FR13_COMMITTER_NATIVE_ANNOUNCED = False
 _FR13_FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT = (
     "/logs/fr13_fixed32_committer_layer_batch.real_event.arm"
 )
+_FR13_FIXED32_CFWD_NATIVE_KEYGROUP_ARM = (
+    "/logs/fr13_fixed32_cfwd_native_keygroup_precompute.arm"
+)
+_FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING = (
+    "/logs/fr13_fixed32_cfwd_native_keygroup_precompute.binding.json"
+)
 # Both fixed32 logical modes retain the full depth-11 Tail spine.  The
 # accepted_lens value counts accepted drafts only; the committer adds the root
 # internally, while columns 12..15 are storage padding and are unreachable.
@@ -43,6 +49,21 @@ def _fr13_fixed32_committer_layer_batch_requested() -> bool:
             "/logs/fr13_fixed32_committer_layer_batch.arm",
             "/tmp/fr13_fixed32_committer_layer_batch.arm",
         )
+    )
+
+
+def _fr13_fixed32_cfwd_native_keygroup_requested() -> bool:
+    """Return the default-off boot lease for the native key-group candidate."""
+    selector = os.environ.get(
+        "FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA", ""
+    ).strip()
+    if selector not in ("", "0", "diagnostic"):
+        raise RuntimeError(
+            "FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA must be "
+            "unset, 0, or diagnostic"
+        )
+    return selector == "diagnostic" or os.path.exists(
+        _FR13_FIXED32_CFWD_NATIVE_KEYGROUP_ARM
     )
 
 
@@ -9178,6 +9199,24 @@ def fixed32_committer_counters() -> dict[str, object]:
         int(batch): int(state.get("layer_batch_byte_gate_coverage_mask", -1))
         for batch, state in states_by_batch.items()
     }
+    candidate_routes_by_batch = {
+        int(batch): (
+            state.get("contract", {}).get(
+                "candidate_route", "triton_layer_batch"
+            )
+            if state.get("layer_batch", False)
+            else "reference"
+        )
+        for batch, state in states_by_batch.items()
+    }
+    candidate_source_sha256_by_batch = {
+        int(batch): state.get("contract", {}).get("candidate_source_sha256")
+        for batch, state in states_by_batch.items()
+    }
+    candidate_binary_sha256_by_batch = {
+        int(batch): state.get("contract", {}).get("candidate_binary_sha256")
+        for batch, state in states_by_batch.items()
+    }
     fast_route_ready = (
         fast_route is not None
         and fast_route["mode"] == _FR13_FIXED32_MODE
@@ -9202,6 +9241,13 @@ def fixed32_committer_counters() -> dict[str, object]:
         ),
         "layer_batch_gate_coverage_mask_by_batch": (
             layer_batch_gate_coverage_mask_by_batch
+        ),
+        "candidate_routes_by_batch": candidate_routes_by_batch,
+        "candidate_source_sha256_by_batch": (
+            candidate_source_sha256_by_batch
+        ),
+        "candidate_binary_sha256_by_batch": (
+            candidate_binary_sha256_by_batch
         ),
         "preseeded_graphs": len(_FR13_FIXED32_COMMITTER),
         "preseeded_batches": preseeded_batches,
@@ -9771,6 +9817,85 @@ def _fr13_fixed32_committer_gate_precompute(
     return gate_coeffs
 
 
+def _fr13_fixed32_cfwd_native_keygroup_selection(
+    *,
+    banks_list,
+    accepted_paths,
+    accepted_lens,
+    spec_state_indices,
+    k_rings,
+    v_rings,
+    a_rings,
+    gate_coeffs,
+    use_qk_l2norm_in_kernel,
+):
+    """Resolve the exact native binary only while its boot lease is armed."""
+    if not _fr13_fixed32_cfwd_native_keygroup_requested():
+        return None
+    from lumo_flywheel_serving import (
+        fr13_cfwd_native_fullvalue_cuda as native_keygroup,
+    )
+
+    binding = native_keygroup.load_binary_binding(
+        _FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING
+    )
+    return native_keygroup.resolve_candidate(
+        mode=_FR13_FIXED32_MODE,
+        batch_size=int(accepted_lens.shape[0]),
+        num_layers=len(banks_list),
+        ring_nodes=int(k_rings.shape[2]),
+        num_key_heads=int(k_rings.shape[3]),
+        num_value_heads=int(v_rings.shape[3]),
+        dim_k=int(k_rings.shape[4]),
+        dim_v=int(v_rings.shape[4]),
+        path_cap=int(accepted_paths.shape[1]),
+        max_accepted_length=_FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH,
+        bank_dtype=str(banks_list[0].dtype).removeprefix("torch."),
+        ring_dtype=str(k_rings.dtype).removeprefix("torch."),
+        gate_dtype=str(gate_coeffs.dtype).removeprefix("torch."),
+        index_dtype=str(spec_state_indices.dtype).removeprefix("torch."),
+        use_qk_l2norm=bool(use_qk_l2norm_in_kernel),
+        gate_coefficients_precomputed=True,
+        bank_offset_table_prevalidated=True,
+        accepted_values_device_guarded=True,
+        op_available=native_keygroup.operator_available(torch),
+        binary_binding=binding,
+        environ={native_keygroup.SELECTOR_ENV: native_keygroup.SELECTOR_VALUE},
+    )
+
+
+def _fr13_fixed32_committer_native_keygroup(
+    *,
+    selection,
+    state,
+    banks_list,
+    spec_state_indices,
+    k_rings,
+    v_rings,
+    a_rings,
+    b_rings,
+) -> None:
+    """Launch the source-bound one-CTA-per-key-group native recurrence."""
+    from lumo_flywheel_serving import (
+        fr13_cfwd_native_fullvalue_cuda as native_keygroup,
+    )
+
+    native_keygroup.launch_candidate(
+        torch_module=torch,
+        selection=selection,
+        bank_anchor=banks_list[0],
+        bank_off16=state["bank_off16"],
+        accepted_paths=state["accepted_paths"],
+        accepted_lens=state["accepted_lens"],
+        spec_state_indices=spec_state_indices,
+        k_rings=k_rings,
+        v_rings=v_rings,
+        a_rings=a_rings,
+        b_rings=b_rings,
+        gate_coeffs=state["gate_coeffs"],
+    )
+
+
 @triton.jit
 def _fr13_fixed32_committer_native_layer_batch_kernel(
     a_rings,
@@ -10093,17 +10218,30 @@ def _fr13_fixed32_committer_graph_body(
         )
 
     if use_layer_batch:
-        _fr13_fixed32_committer_native_layer_batch(
-            state=state,
-            banks_list=banks_list,
-            spec_state_indices=spec_state_indices,
-            k_rings=k_rings,
-            v_rings=v_rings,
-            a_rings=a_rings,
-            b_rings=b_rings,
-            gate_coeffs=state["gate_coeffs"],
-            use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
-        )
+        native_keygroup_selection = state.get("native_keygroup_selection")
+        if native_keygroup_selection is not None:
+            _fr13_fixed32_committer_native_keygroup(
+                selection=native_keygroup_selection,
+                state=state,
+                banks_list=banks_list,
+                spec_state_indices=spec_state_indices,
+                k_rings=k_rings,
+                v_rings=v_rings,
+                a_rings=a_rings,
+                b_rings=b_rings,
+            )
+        else:
+            _fr13_fixed32_committer_native_layer_batch(
+                state=state,
+                banks_list=banks_list,
+                spec_state_indices=spec_state_indices,
+                k_rings=k_rings,
+                v_rings=v_rings,
+                a_rings=a_rings,
+                b_rings=b_rings,
+                gate_coeffs=state["gate_coeffs"],
+                use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+            )
     else:
         for layer in range(layers):
             _sg(
@@ -10300,6 +10438,14 @@ def preseed_fixed32_committer_graph(
     total = batch * 16
     scratch = int(banks_list[0].shape[0]) - 1
     layer_batch = _fr13_fixed32_committer_layer_batch_requested()
+    native_keygroup_requested = (
+        _fr13_fixed32_cfwd_native_keygroup_requested()
+    )
+    if native_keygroup_requested and not layer_batch:
+        raise RuntimeError(
+            "native key-group CFWD requires the committer layer-batch "
+            "qualification lease"
+        )
     gate_coeffs = (
         _fr13_fixed32_committer_gate_precompute(
             A_logs=A_logs,
@@ -10312,6 +10458,21 @@ def preseed_fixed32_committer_graph(
         list(banks_list)
     )
     anchor_ptr = bank_ptrs[0]
+    native_keygroup_selection = (
+        _fr13_fixed32_cfwd_native_keygroup_selection(
+            banks_list=banks_list,
+            accepted_paths=accepted_paths,
+            accepted_lens=accepted_lens,
+            spec_state_indices=spec_state_indices,
+            k_rings=k_rings,
+            v_rings=v_rings,
+            a_rings=a_rings,
+            gate_coeffs=gate_coeffs,
+            use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+        )
+        if native_keygroup_requested
+        else None
+    )
     state = {
         "batch": batch,
         "bank_rows": int(banks_list[0].shape[0]),
@@ -10366,6 +10527,7 @@ def preseed_fixed32_committer_graph(
         ),
         "gate_coeffs": gate_coeffs,
         "layer_batch": layer_batch,
+        "native_keygroup_selection": native_keygroup_selection,
         "layer_batch_byte_gate_passed": not layer_batch,
         "layer_batch_byte_gate_attempts": 0,
         "layer_batch_byte_gate_coverage_mask": (
@@ -10427,6 +10589,34 @@ def preseed_fixed32_committer_graph(
                 ),
             }
         )
+        if native_keygroup_selection is not None:
+            state["contract"].update(
+                {
+                    "candidate": native_keygroup_selection["candidate"],
+                    "candidate_route": "native_keygroup_precompute_cuda",
+                    "candidate_source_bound": True,
+                    "candidate_source_sha256": native_keygroup_selection[
+                        "source_sha256"
+                    ],
+                    "candidate_binary_sha256": native_keygroup_selection[
+                        "binary_sha256"
+                    ],
+                    "candidate_operator": native_keygroup_selection[
+                        "operator"
+                    ],
+                    "ctas_per_event": native_keygroup_selection[
+                        "ctas_per_event"
+                    ],
+                    "ctas_per_layer_request_key_head": 1,
+                    "value_heads_per_cta": 3,
+                    "kernel_warps": native_keygroup_selection[
+                        "warps_per_cta"
+                    ],
+                    "programs_per_layer_request_value_head": None,
+                    "programs_per_layer_request_key_head": 1,
+                    "value_heads_per_program": 3,
+                }
+            )
 
     def graph_body(*, use_layer_batch=None) -> None:
         _fr13_fixed32_committer_graph_body(
@@ -10488,7 +10678,9 @@ def preseed_fixed32_committer_graph(
         f"neutralizations={state['contract']['neutralizations']} "
         f"gathers={state['contract']['ring_gathers']} "
         f"fused_calls={state['contract']['fused_calls']} "
-        f"layer_batch={int(layer_batch)} replays=1",
+        f"layer_batch={int(layer_batch)} "
+        f"candidate_route={state['contract'].get('candidate_route', 'triton')} "
+        "replays=1",
         flush=True,
     )
     return dict(state["contract"])
@@ -10571,7 +10763,9 @@ def _fr13_fixed32_committer_layer_batch_byte_gate(
         if mismatched_layers:
             raise RuntimeError(
                 "FR13 fixed32 committer layer-batch byte gate failed: "
-                f"B={batch} mismatched_layers={mismatched_layers}"
+                f"B={batch} "
+                f"candidate_route={state.get('contract', {}).get('candidate_route', 'triton')} "
+                f"mismatched_layers={mismatched_layers}"
             )
         coverage_mask |= event_mask
         state["layer_batch_byte_gate_coverage_mask"] = coverage_mask
@@ -10584,6 +10778,7 @@ def _fr13_fixed32_committer_layer_batch_byte_gate(
         "[FR13_FIXED32_COMMITTER_LAYER_BATCH BYTE-GATE COVERAGE] "
         f"B={batch} new_mask={unseen_mask:#06x} "
         f"coverage={coverage_mask:#06x} complete={int(coverage_mask == full_mask)} "
+        f"candidate_route={state.get('contract', {}).get('candidate_route', 'triton')} "
         "layers=48 state_bytes=exact reference_served=1",
         flush=True,
     )
