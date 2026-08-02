@@ -4549,6 +4549,7 @@ def _fr13_fixed32_conv_commit_row_guard_kernel(
     PATH_COLS: tl.constexpr,
     MAX_ACCEPTED: tl.constexpr,
     ALIAS_WIDTH: tl.constexpr,
+    ALIAS_CAP: tl.constexpr,
     PEER_CAP: tl.constexpr,
 ):
     """Validate one fixed physical32 layer/request destination."""
@@ -4567,39 +4568,6 @@ def _fr13_fixed32_conv_commit_row_guard_kernel(
         ((rows > 0) & (rows < BANK_ROWS)).to(tl.int32), axis=0
     ) == SPEC_COLS
 
-    accepted_len = tl.load(
-        accepted_lens + request * lens_stride_b
-    ).to(tl.int64)
-    path_offsets = tl.arange(0, PATH_COLS)
-    paths = tl.load(
-        accepted_paths
-        + request * path_stride_b
-        + path_offsets * path_stride_s
-    ).to(tl.int64)
-    active_paths = path_offsets < accepted_len
-    paths_ok = tl.sum(
-        (
-            (~active_paths)
-            | ((paths >= 0) & (paths < SPEC_COLS))
-        ).to(tl.int32),
-        axis=0,
-    ) == PATH_COLS
-    lens_ok = (accepted_len >= 0) & (accepted_len <= MAX_ACCEPTED)
-
-    leaf_pos = tl.maximum(accepted_len - 1, 0)
-    leaf_pos = tl.minimum(leaf_pos, PATH_COLS - 1)
-    leaf_node = tl.load(
-        accepted_paths
-        + request * path_stride_b
-        + leaf_pos * path_stride_s
-    ).to(tl.int64)
-    leaf_node = tl.where(accepted_len > 0, leaf_node, 0)
-    leaf_node = tl.maximum(0, tl.minimum(leaf_node, SPEC_COLS - 1))
-    selected_row = tl.load(ssi_base + leaf_node * ssi_stride_s).to(tl.int64)
-    selected_ok = (selected_row >= 0) & (selected_row < BANK_ROWS)
-
-    alias_id = tl.load(bank_alias_ids + layer).to(tl.int64)
-    alias_ok = (alias_id >= 0) & (alias_id < 16)
     running_row = tl.load(ssi_base).to(tl.int64)
     peer_offsets = tl.arange(0, PEER_CAP)
     peer_slots = peer_offsets // B
@@ -4613,19 +4581,10 @@ def _fr13_fixed32_conv_commit_row_guard_kernel(
         other=-1,
     ).to(tl.int64)
     peer_layer_ok = (peer_layers >= 0) & (peer_layers < LAYERS)
-    peer_layers_safe = tl.maximum(0, tl.minimum(peer_layers, LAYERS - 1))
-    peer_aliases = tl.load(
-        bank_alias_ids + peer_layers_safe,
-        mask=peer_entry & peer_layer_ok,
-        other=-1,
-    ).to(tl.int64)
-    peer_topology_ok = tl.sum(
-        (
-            (~peer_entry)
-            | (peer_layer_ok & (peer_aliases == alias_id))
-        ).to(tl.int32),
-        axis=0,
+    peer_table_ok = tl.sum(
+        ((~peer_entry) | peer_layer_ok).to(tl.int32), axis=0
     ) == PEER_CAP
+    peer_layers_safe = tl.maximum(0, tl.minimum(peer_layers, LAYERS - 1))
     other_rows = tl.load(
         spec_state_indices
         + peer_layers_safe * ssi_stride_l
@@ -4643,16 +4602,45 @@ def _fr13_fixed32_conv_commit_row_guard_kernel(
         duplicate_destination.to(tl.int32), axis=0
     ) == 0
 
-    tl.store(
-        guard_flags + pid,
-        rows_ok
-        & paths_ok
-        & lens_ok
-        & selected_ok
-        & alias_ok
-        & peer_topology_ok
-        & destination_unique,
-    )
+    contract_ok = rows_ok & peer_table_ok & destination_unique
+    if layer == 0:
+        accepted_len = tl.load(
+            accepted_lens + request * lens_stride_b
+        ).to(tl.int64)
+        path_offsets = tl.arange(0, PATH_COLS)
+        paths = tl.load(
+            accepted_paths
+            + request * path_stride_b
+            + path_offsets * path_stride_s
+        ).to(tl.int64)
+        active_paths = path_offsets < accepted_len
+        paths_ok = tl.sum(
+            (
+                (~active_paths)
+                | ((paths >= 0) & (paths < SPEC_COLS))
+            ).to(tl.int32),
+            axis=0,
+        ) == PATH_COLS
+        lens_ok = (accepted_len >= 0) & (accepted_len <= MAX_ACCEPTED)
+        contract_ok = contract_ok & paths_ok & lens_ok
+        if request == 0:
+            alias_offsets = tl.arange(0, ALIAS_CAP)
+            alias_entries = alias_offsets < LAYERS
+            aliases = tl.load(
+                bank_alias_ids + alias_offsets,
+                mask=alias_entries,
+                other=0,
+            ).to(tl.int64)
+            aliases_ok = tl.sum(
+                (
+                    (~alias_entries)
+                    | ((aliases >= 0) & (aliases < 16))
+                ).to(tl.int32),
+                axis=0,
+            ) == ALIAS_CAP
+            contract_ok = contract_ok & aliases_ok
+
+    tl.store(guard_flags + pid, contract_ok)
 
 
 @triton.jit
@@ -5513,13 +5501,21 @@ def preseed_fixed32_conv_col0_pregather(
             "commit_source_pointer_entries": 48,
             "commit_source_rows_per_batch": source_rows,
             "commit_state_src_shape": (32, conv_l),
-            "commit_row_guard_route": "fixed32_triton_alias3_physical32_v2",
+            "commit_row_guard_route": (
+                "fixed32_triton_alias3_ownerpath_physical32_v3"
+            ),
             "commit_row_guard_kernel_launches_per_event": 1,
             "commit_row_guard_programs_per_request": 48,
             "commit_row_guard_physical_rows": 32,
             "commit_row_guard_path_capacity": 16,
             "commit_row_guard_alias_width": 3,
             "commit_row_guard_compare_capacity": 16,
+            "commit_row_guard_path_validation_programs_per_request": 1,
+            "commit_row_guard_path_vector_loads_per_request": 1,
+            "commit_row_guard_alias_validation_programs_per_event": 1,
+            "commit_row_guard_alias_vector_loads_per_event": 1,
+            "commit_row_guard_selected_row_loads_per_program": 0,
+            "commit_row_guard_peer_topology_proof": "preseed_lease_audit",
             "commit_row_guard_torch_index_transforms": 0,
             "commit_row_guard_async_scalar_reductions": 1,
             "commit_row_guard_async_assertions": 1,
@@ -6246,6 +6242,24 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
         ],
         "row_guard_compare_capacity": state["contract"][
             "commit_row_guard_compare_capacity"
+        ],
+        "row_guard_path_validation_programs_per_request": state["contract"][
+            "commit_row_guard_path_validation_programs_per_request"
+        ],
+        "row_guard_path_vector_loads_per_request": state["contract"][
+            "commit_row_guard_path_vector_loads_per_request"
+        ],
+        "row_guard_alias_validation_programs_per_event": state["contract"][
+            "commit_row_guard_alias_validation_programs_per_event"
+        ],
+        "row_guard_alias_vector_loads_per_event": state["contract"][
+            "commit_row_guard_alias_vector_loads_per_event"
+        ],
+        "row_guard_selected_row_loads_per_program": state["contract"][
+            "commit_row_guard_selected_row_loads_per_program"
+        ],
+        "row_guard_peer_topology_proof": state["contract"][
+            "commit_row_guard_peer_topology_proof"
         ],
     }
 
@@ -10756,6 +10770,7 @@ def validate_fixed32_conv_commit_rows(
         PATH_COLS=16,
         MAX_ACCEPTED=_FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH,
         ALIAS_WIDTH=3,
+        ALIAS_CAP=64,
         PEER_CAP=16,
         num_warps=4,
         num_stages=1,

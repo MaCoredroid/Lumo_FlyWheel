@@ -2329,7 +2329,7 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         or int(contract.get("commit_launches_per_event", -1)) != 1
         or int(contract.get("commit_direct_launches_per_event", -1)) != 1
         or contract.get("commit_row_guard_route")
-        != "fixed32_triton_alias3_physical32_v2"
+        != "fixed32_triton_alias3_ownerpath_physical32_v3"
         or int(contract.get("commit_row_guard_kernel_launches_per_event", -1))
         != 1
         or int(contract.get("commit_row_guard_programs_per_request", -1)) != 48
@@ -2337,6 +2337,38 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         or int(contract.get("commit_row_guard_path_capacity", -1)) != 16
         or int(contract.get("commit_row_guard_alias_width", -1)) != 3
         or int(contract.get("commit_row_guard_compare_capacity", -1)) != 16
+        or int(
+            contract.get(
+                "commit_row_guard_path_validation_programs_per_request", -1
+            )
+        )
+        != 1
+        or int(
+            contract.get(
+                "commit_row_guard_path_vector_loads_per_request", -1
+            )
+        )
+        != 1
+        or int(
+            contract.get(
+                "commit_row_guard_alias_validation_programs_per_event", -1
+            )
+        )
+        != 1
+        or int(
+            contract.get(
+                "commit_row_guard_alias_vector_loads_per_event", -1
+            )
+        )
+        != 1
+        or int(
+            contract.get(
+                "commit_row_guard_selected_row_loads_per_program", -1
+            )
+        )
+        != 0
+        or contract.get("commit_row_guard_peer_topology_proof")
+        != "preseed_lease_audit"
         or int(contract.get("commit_row_guard_torch_index_transforms", -1)) != 0
         or int(
             contract.get("commit_row_guard_async_scalar_reductions", -1)
@@ -2694,6 +2726,24 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         ],
         "commit_row_guard_compare_capacity": contract[
             "commit_row_guard_compare_capacity"
+        ],
+        "commit_row_guard_path_validation_programs_per_request": contract[
+            "commit_row_guard_path_validation_programs_per_request"
+        ],
+        "commit_row_guard_path_vector_loads_per_request": contract[
+            "commit_row_guard_path_vector_loads_per_request"
+        ],
+        "commit_row_guard_alias_validation_programs_per_event": contract[
+            "commit_row_guard_alias_validation_programs_per_event"
+        ],
+        "commit_row_guard_alias_vector_loads_per_event": contract[
+            "commit_row_guard_alias_vector_loads_per_event"
+        ],
+        "commit_row_guard_selected_row_loads_per_program": contract[
+            "commit_row_guard_selected_row_loads_per_program"
+        ],
+        "commit_row_guard_peer_topology_proof": contract[
+            "commit_row_guard_peer_topology_proof"
         ],
         "commit_row_guard_torch_index_transforms": contract[
             "commit_row_guard_torch_index_transforms"
@@ -5162,7 +5212,7 @@ def _fr13_fixed32_observed_commit(
         or conv_commit_contract.get("source_staging_reused") is not True
         or int(conv_commit_contract.get("source_pointer_entries", -1)) != 48
         or conv_commit_contract.get("row_guard_route")
-        != "fixed32_triton_alias3_physical32_v2"
+        != "fixed32_triton_alias3_ownerpath_physical32_v3"
         or int(conv_commit_contract.get("row_guard_kernel_launches", -1)) != 1
         or int(conv_commit_contract.get("row_guard_programs_per_request", -1))
         != 48
@@ -5170,6 +5220,38 @@ def _fr13_fixed32_observed_commit(
         or int(conv_commit_contract.get("row_guard_path_capacity", -1)) != 16
         or int(conv_commit_contract.get("row_guard_alias_width", -1)) != 3
         or int(conv_commit_contract.get("row_guard_compare_capacity", -1)) != 16
+        or int(
+            conv_commit_contract.get(
+                "row_guard_path_validation_programs_per_request", -1
+            )
+        )
+        != 1
+        or int(
+            conv_commit_contract.get(
+                "row_guard_path_vector_loads_per_request", -1
+            )
+        )
+        != 1
+        or int(
+            conv_commit_contract.get(
+                "row_guard_alias_validation_programs_per_event", -1
+            )
+        )
+        != 1
+        or int(
+            conv_commit_contract.get(
+                "row_guard_alias_vector_loads_per_event", -1
+            )
+        )
+        != 1
+        or int(
+            conv_commit_contract.get(
+                "row_guard_selected_row_loads_per_program", -1
+            )
+        )
+        != 0
+        or conv_commit_contract.get("row_guard_peer_topology_proof")
+        != "preseed_lease_audit"
         or int(conv_commit_contract.get("row_guard_torch_index_transforms", -1))
         != 0
         or int(
@@ -5319,6 +5401,30 @@ def _fr13_fixed32_observed_commit(
         ],
         "row_guard_compare_capacity": conv_commit_contract[
             "row_guard_compare_capacity"
+        ],
+        "row_guard_path_validation_programs": (
+            conv_commit_contract[
+                "row_guard_path_validation_programs_per_request"
+            ]
+            * batch
+        ),
+        "row_guard_path_vector_loads": (
+            conv_commit_contract["row_guard_path_vector_loads_per_request"]
+            * batch
+        ),
+        "row_guard_alias_validation_programs": conv_commit_contract[
+            "row_guard_alias_validation_programs_per_event"
+        ],
+        "row_guard_alias_vector_loads": conv_commit_contract[
+            "row_guard_alias_vector_loads_per_event"
+        ],
+        "row_guard_selected_row_loads": (
+            conv_commit_contract["row_guard_selected_row_loads_per_program"]
+            * conv_commit_contract["row_guard_programs_per_request"]
+            * batch
+        ),
+        "row_guard_peer_topology_proof": conv_commit_contract[
+            "row_guard_peer_topology_proof"
         ],
         "row_guard_torch_index_transforms": conv_commit_contract[
             "row_guard_torch_index_transforms"
@@ -5948,7 +6054,7 @@ def _fr13_fixed32_observed_build_record(
         )
     valid_mask = int(taw_payload["valid_mask"])
     record = {
-        "schema": "fr13-fixed32-work-census-v11",
+        "schema": "fr13-fixed32-work-census-v12",
         "event_id": (
             str(identity[0]) + ":" + str(pid) + ":" + str(index)
         ),
@@ -15269,6 +15375,34 @@ def _fr13_fixed32_device_commit_route(
         "row_guard_compare_capacity": _fixed_pregather_route.get(
             "contract", {}
         ).get("commit_row_guard_compare_capacity"),
+        "row_guard_path_validation_programs_per_request": (
+            _fixed_pregather_route.get("contract", {}).get(
+                "commit_row_guard_path_validation_programs_per_request"
+            )
+        ),
+        "row_guard_path_vector_loads_per_request": (
+            _fixed_pregather_route.get("contract", {}).get(
+                "commit_row_guard_path_vector_loads_per_request"
+            )
+        ),
+        "row_guard_alias_validation_programs_per_event": (
+            _fixed_pregather_route.get("contract", {}).get(
+                "commit_row_guard_alias_validation_programs_per_event"
+            )
+        ),
+        "row_guard_alias_vector_loads_per_event": (
+            _fixed_pregather_route.get("contract", {}).get(
+                "commit_row_guard_alias_vector_loads_per_event"
+            )
+        ),
+        "row_guard_selected_row_loads_per_program": (
+            _fixed_pregather_route.get("contract", {}).get(
+                "commit_row_guard_selected_row_loads_per_program"
+            )
+        ),
+        "row_guard_peer_topology_proof": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_row_guard_peer_topology_proof"),
         "row_guard_torch_index_transforms": _fixed_pregather_route.get(
             "contract", {}
         ).get("commit_row_guard_torch_index_transforms"),
@@ -33091,13 +33225,21 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
                 "staging_reused": False,
                 "source_staging_reused": True,
                 "source_pointer_entries": 48,
-                "row_guard_route": "fixed32_triton_alias3_physical32_v2",
+                "row_guard_route": (
+                    "fixed32_triton_alias3_ownerpath_physical32_v3"
+                ),
                 "row_guard_kernel_launches": 1,
                 "row_guard_programs_per_request": 48,
                 "row_guard_physical_rows": 32,
                 "row_guard_path_capacity": 16,
                 "row_guard_alias_width": 3,
                 "row_guard_compare_capacity": 16,
+                "row_guard_path_validation_programs_per_request": 1,
+                "row_guard_path_vector_loads_per_request": 1,
+                "row_guard_alias_validation_programs_per_event": 1,
+                "row_guard_alias_vector_loads_per_event": 1,
+                "row_guard_selected_row_loads_per_program": 0,
+                "row_guard_peer_topology_proof": "preseed_lease_audit",
                 "row_guard_torch_index_transforms": 0,
                 "row_guard_async_scalar_reductions": 1,
                 "row_guard_async_assertions": 1,

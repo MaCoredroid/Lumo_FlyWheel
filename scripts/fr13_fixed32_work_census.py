@@ -95,11 +95,11 @@ from fr13_fixed32_topology import (
     WALK_CAP,
 )
 
-SCHEMA = "fr13-fixed32-work-census-v11"
-TERMINAL_SCHEMA = "fr13-fixed32-work-census-terminal-v11"
-REPORT_SCHEMA = "fr13-fixed32-work-census-report-v11"
-ARM_REPORT_SCHEMA = "fr13-fixed32-work-census-arm-report-v11"
-SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v11"
+SCHEMA = "fr13-fixed32-work-census-v12"
+TERMINAL_SCHEMA = "fr13-fixed32-work-census-terminal-v12"
+REPORT_SCHEMA = "fr13-fixed32-work-census-report-v12"
+ARM_REPORT_SCHEMA = "fr13-fixed32-work-census-arm-report-v12"
+SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v12"
 
 TAIL_MODE = "tail6_fixed32"
 HYDRA_MODE = "hydra27_fixed32"
@@ -219,10 +219,16 @@ REQUEST_KEY_PACK_ROUTE = "device_rowmap"
 KV_REMAP_ROUTE = "syncfree_target16_postsample_drafter1_postforward"
 CONV_COMMIT_ROUTE = "fixed32_direct_source_col0"
 CONV_COMMIT_SOURCE_ROWS = PHYSICAL_ROWS + GDN_CONV_KERNEL_SIZE
-CONV_ROW_GUARD_ROUTE = "fixed32_triton_alias3_physical32_v2"
+CONV_ROW_GUARD_ROUTE = "fixed32_triton_alias3_ownerpath_physical32_v3"
 CONV_ROW_GUARD_PROGRAMS_PER_REQUEST = CONV_COMMIT_LAYERS
 CONV_ROW_GUARD_ALIAS_WIDTH = 3
 CONV_ROW_GUARD_COMPARE_CAPACITY = 16
+CONV_ROW_GUARD_PATH_PROGRAMS_PER_REQUEST = 1
+CONV_ROW_GUARD_PATH_VECTOR_LOADS_PER_REQUEST = 1
+CONV_ROW_GUARD_ALIAS_PROGRAMS_PER_EVENT = 1
+CONV_ROW_GUARD_ALIAS_VECTOR_LOADS_PER_EVENT = 1
+CONV_ROW_GUARD_SELECTED_ROW_LOADS_PER_PROGRAM = 0
+CONV_ROW_GUARD_PEER_TOPOLOGY_PROOF = "preseed_lease_audit"
 CONV_PREGATHER_ROUTE = "in_graph_preconsume"
 COMMITTER_ROUTE = "fixed16_device_fill_graph"
 if TREE_ATTENTION_LAYERS + GDN_LAYERS != MODEL_LAYERS:
@@ -500,6 +506,12 @@ CONV_COMMIT_KEYS = frozenset(
         "row_guard_path_capacity",
         "row_guard_alias_width",
         "row_guard_compare_capacity",
+        "row_guard_path_validation_programs",
+        "row_guard_path_vector_loads",
+        "row_guard_alias_validation_programs",
+        "row_guard_alias_vector_loads",
+        "row_guard_selected_row_loads",
+        "row_guard_peer_topology_proof",
         "row_guard_torch_index_transforms",
         "row_guard_async_scalar_reductions",
         "row_guard_async_assertions",
@@ -1811,6 +1823,26 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "row_guard_path_capacity": ACCEPTED_PATH_CAPACITY,
             "row_guard_alias_width": CONV_ROW_GUARD_ALIAS_WIDTH,
             "row_guard_compare_capacity": CONV_ROW_GUARD_COMPARE_CAPACITY,
+            "row_guard_path_validation_programs": (
+                CONV_ROW_GUARD_PATH_PROGRAMS_PER_REQUEST * batch_size
+            ),
+            "row_guard_path_vector_loads": (
+                CONV_ROW_GUARD_PATH_VECTOR_LOADS_PER_REQUEST * batch_size
+            ),
+            "row_guard_alias_validation_programs": (
+                CONV_ROW_GUARD_ALIAS_PROGRAMS_PER_EVENT
+            ),
+            "row_guard_alias_vector_loads": (
+                CONV_ROW_GUARD_ALIAS_VECTOR_LOADS_PER_EVENT
+            ),
+            "row_guard_selected_row_loads": (
+                CONV_ROW_GUARD_SELECTED_ROW_LOADS_PER_PROGRAM
+                * CONV_ROW_GUARD_PROGRAMS_PER_REQUEST
+                * batch_size
+            ),
+            "row_guard_peer_topology_proof": (
+                CONV_ROW_GUARD_PEER_TOPOLOGY_PROOF
+            ),
             "row_guard_torch_index_transforms": 0,
             "row_guard_async_scalar_reductions": 1,
             "row_guard_async_assertions": 1,
@@ -2227,6 +2259,27 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             ],
             "row_guard_compare_capacity": conv_commit[
                 "row_guard_compare_capacity"
+            ],
+            "row_guard_path_validation_programs_per_request": (
+                int(conv_commit["row_guard_path_validation_programs"])
+                // batch_size
+            ),
+            "row_guard_path_vector_loads_per_request": (
+                int(conv_commit["row_guard_path_vector_loads"])
+                // batch_size
+            ),
+            "row_guard_alias_validation_programs_per_event": conv_commit[
+                "row_guard_alias_validation_programs"
+            ],
+            "row_guard_alias_vector_loads_per_event": conv_commit[
+                "row_guard_alias_vector_loads"
+            ],
+            "row_guard_selected_row_loads_per_program": (
+                int(conv_commit["row_guard_selected_row_loads"])
+                // int(conv_commit["row_guard_programs"])
+            ),
+            "row_guard_peer_topology_proof": conv_commit[
+                "row_guard_peer_topology_proof"
             ],
             "row_guard_torch_index_transforms": conv_commit[
                 "row_guard_torch_index_transforms"
@@ -3517,6 +3570,26 @@ def reference_event(
             "row_guard_path_capacity": ACCEPTED_PATH_CAPACITY,
             "row_guard_alias_width": CONV_ROW_GUARD_ALIAS_WIDTH,
             "row_guard_compare_capacity": CONV_ROW_GUARD_COMPARE_CAPACITY,
+            "row_guard_path_validation_programs": (
+                CONV_ROW_GUARD_PATH_PROGRAMS_PER_REQUEST * batch_size
+            ),
+            "row_guard_path_vector_loads": (
+                CONV_ROW_GUARD_PATH_VECTOR_LOADS_PER_REQUEST * batch_size
+            ),
+            "row_guard_alias_validation_programs": (
+                CONV_ROW_GUARD_ALIAS_PROGRAMS_PER_EVENT
+            ),
+            "row_guard_alias_vector_loads": (
+                CONV_ROW_GUARD_ALIAS_VECTOR_LOADS_PER_EVENT
+            ),
+            "row_guard_selected_row_loads": (
+                CONV_ROW_GUARD_SELECTED_ROW_LOADS_PER_PROGRAM
+                * CONV_ROW_GUARD_PROGRAMS_PER_REQUEST
+                * batch_size
+            ),
+            "row_guard_peer_topology_proof": (
+                CONV_ROW_GUARD_PEER_TOPOLOGY_PROOF
+            ),
             "row_guard_torch_index_transforms": 0,
             "row_guard_async_scalar_reductions": 1,
             "row_guard_async_assertions": 1,
@@ -4407,6 +4480,36 @@ def run_self_test() -> dict[str, Any]:
         "conv-commit-row-guard-compare-capacity",
         ("conv_commit", "row_guard_compare_capacity"),
         32,
+    )
+    event_tamper(
+        "conv-commit-row-guard-path-programs",
+        ("conv_commit", "row_guard_path_validation_programs"),
+        48,
+    )
+    event_tamper(
+        "conv-commit-row-guard-path-loads",
+        ("conv_commit", "row_guard_path_vector_loads"),
+        48,
+    )
+    event_tamper(
+        "conv-commit-row-guard-alias-programs",
+        ("conv_commit", "row_guard_alias_validation_programs"),
+        48,
+    )
+    event_tamper(
+        "conv-commit-row-guard-alias-loads",
+        ("conv_commit", "row_guard_alias_vector_loads"),
+        48,
+    )
+    event_tamper(
+        "conv-commit-row-guard-selected-row-loads",
+        ("conv_commit", "row_guard_selected_row_loads"),
+        48,
+    )
+    event_tamper(
+        "conv-commit-row-guard-peer-proof",
+        ("conv_commit", "row_guard_peer_topology_proof"),
+        "event_alias_reload",
     )
     event_tamper(
         "conv-commit-full-writeback",

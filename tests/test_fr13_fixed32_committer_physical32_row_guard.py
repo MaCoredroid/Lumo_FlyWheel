@@ -84,38 +84,39 @@ def _fixed_program_guard(
     bank_rows: int,
 ) -> bool:
     batch = int(paths.shape[0])
+    aliases_ok = bool(((aliases >= 0) & (aliases < 16)).all())
     flags = []
     for layer in range(48):
         for request in range(batch):
             rows = ssi[layer, request]
-            accepted = int(lens[request])
-            active = paths[request, : max(accepted, 0)]
-            leaf_pos = min(max(accepted - 1, 0), 15)
-            leaf_node = int(paths[request, leaf_pos]) if accepted > 0 else 0
-            leaf_node = min(max(leaf_node, 0), 31)
             peer_layers = tuple(
                 int(value) for value in alias_peer_layers[layer]
             )
-            peer_topology_ok = all(
-                int(aliases[peer_layer]) == int(aliases[layer])
-                for peer_layer in peer_layers
-            )
+            peer_table_ok = all(0 <= peer_layer < 48 for peer_layer in peer_layers)
             duplicate = any(
                 other_layer != layer or other_request != request
                 for other_layer in peer_layers
                 for other_request in range(batch)
+                if 0 <= other_layer < 48
                 if int(ssi[other_layer, other_request, 0]) == int(rows[0])
             )
-            flags.append(
+            contract_ok = (
                 bool((rows > 0).all())
                 and bool((rows < bank_rows).all())
-                and 0 <= accepted <= 11
-                and bool(((active >= 0) & (active < 32)).all())
-                and 0 <= int(rows[leaf_node]) < bank_rows
-                and 0 <= int(aliases[layer]) < 16
-                and peer_topology_ok
+                and peer_table_ok
                 and not duplicate
             )
+            if layer == 0:
+                accepted = int(lens[request])
+                active = paths[request, : max(accepted, 0)]
+                contract_ok = (
+                    contract_ok
+                    and 0 <= accepted <= 11
+                    and bool(((active >= 0) & (active < 32)).all())
+                )
+                if request == 0:
+                    contract_ok = contract_ok and aliases_ok
+            flags.append(contract_ok)
     return all(flags)
 
 
@@ -202,13 +203,21 @@ def test_guard_kernel_owns_fixed_physical32_and_path16_domains() -> None:
     assert "peer_offsets = tl.arange(0, PEER_CAP)" in kernel
     assert "peer_slots = peer_offsets // B" in kernel
     assert "bank_alias_peer_layers" in kernel
-    assert "peer_topology_ok" in kernel
+    assert "peer_table_ok" in kernel
     assert "duplicate_destination" in kernel
-    assert "selected_row = tl.load" in kernel
+    assert "if layer == 0:" in kernel
+    assert "if request == 0:" in kernel
+    assert "alias_offsets = tl.arange(0, ALIAS_CAP)" in kernel
+    assert "selected_row" not in kernel
+    assert "leaf_node" not in kernel
+    assert "leaf_pos" not in kernel
+    assert "peer_aliases" not in kernel
+    assert "alias_id = tl.load" not in kernel
     assert "SPEC_COLS=32" in launcher
     assert "PATH_COLS=16" in launcher
     assert "LAYERS=48" in launcher
     assert "ALIAS_WIDTH=3" in launcher
+    assert "ALIAS_CAP=64" in launcher
     assert "PEER_CAP=16" in launcher
     assert "[(48 * batch,)]" in launcher
 
@@ -238,12 +247,18 @@ def test_guard_workspace_is_preseeded_warmed_and_source_bound() -> None:
     assert "48 * batch" in preseed
     assert "validate_fixed32_conv_commit_rows(" in preseed
     assert (
-        '"commit_row_guard_route": "fixed32_triton_alias3_physical32_v2"'
+        '"fixed32_triton_alias3_ownerpath_physical32_v3"'
         in preseed
     )
     assert '"commit_row_guard_kernel_launches_per_event": 1' in preseed
     assert '"commit_row_guard_alias_width": 3' in preseed
     assert '"commit_row_guard_compare_capacity": 16' in preseed
+    assert '"commit_row_guard_path_validation_programs_per_request": 1' in preseed
+    assert '"commit_row_guard_path_vector_loads_per_request": 1' in preseed
+    assert '"commit_row_guard_alias_validation_programs_per_event": 1' in preseed
+    assert '"commit_row_guard_alias_vector_loads_per_event": 1' in preseed
+    assert '"commit_row_guard_selected_row_loads_per_program": 0' in preseed
+    assert '"commit_row_guard_peer_topology_proof": "preseed_lease_audit"' in preseed
     assert '"commit_row_guard_torch_index_transforms": 0' in preseed
     assert '"commit_row_guard_async_scalar_reductions": 1' in preseed
     assert '"commit_row_guard_async_assertions": 1' in preseed
@@ -264,6 +279,10 @@ def test_observer_binds_guard_workspace_and_fixed32_contract() -> None:
     assert 'contract.get("commit_row_guard_physical_rows", -1)' in patcher
     assert 'contract.get("commit_row_guard_alias_width", -1)' in patcher
     assert 'contract.get("commit_row_guard_compare_capacity", -1)' in patcher
+    assert '"commit_row_guard_path_validation_programs_per_request", -1' in patcher
+    assert '"commit_row_guard_alias_validation_programs_per_event", -1' in patcher
+    assert '"commit_row_guard_selected_row_loads_per_program", -1' in patcher
+    assert 'contract.get("commit_row_guard_peer_topology_proof")' in patcher
     assert 'int(commit_spec_state_indices.shape[2]) != 32' in patcher
 
 
@@ -276,14 +295,23 @@ def test_work_census_binds_fixed_row_guard_work(batch: int) -> None:
     )
     commit = event["conv_commit"]
 
-    assert census.SCHEMA == "fr13-fixed32-work-census-v11"
-    assert commit["row_guard_route"] == "fixed32_triton_alias3_physical32_v2"
+    assert census.SCHEMA == "fr13-fixed32-work-census-v12"
+    assert (
+        commit["row_guard_route"]
+        == "fixed32_triton_alias3_ownerpath_physical32_v3"
+    )
     assert commit["row_guard_kernel_launches"] == 1
     assert commit["row_guard_programs"] == 48 * batch
     assert commit["row_guard_physical_rows"] == 32
     assert commit["row_guard_path_capacity"] == 16
     assert commit["row_guard_alias_width"] == 3
     assert commit["row_guard_compare_capacity"] == 16
+    assert commit["row_guard_path_validation_programs"] == batch
+    assert commit["row_guard_path_vector_loads"] == batch
+    assert commit["row_guard_alias_validation_programs"] == 1
+    assert commit["row_guard_alias_vector_loads"] == 1
+    assert commit["row_guard_selected_row_loads"] == 0
+    assert commit["row_guard_peer_topology_proof"] == "preseed_lease_audit"
     assert commit["row_guard_torch_index_transforms"] == 0
     assert commit["row_guard_async_scalar_reductions"] == 1
     assert commit["row_guard_async_assertions"] == 1
@@ -295,3 +323,9 @@ def test_work_census_binds_fixed_row_guard_work(batch: int) -> None:
     assert normalized["row_guard_physical_rows"] == 32
     assert normalized["row_guard_alias_width"] == 3
     assert normalized["row_guard_compare_capacity"] == 16
+    assert normalized["row_guard_path_validation_programs_per_request"] == 1
+    assert normalized["row_guard_path_vector_loads_per_request"] == 1
+    assert normalized["row_guard_alias_validation_programs_per_event"] == 1
+    assert normalized["row_guard_alias_vector_loads_per_event"] == 1
+    assert normalized["row_guard_selected_row_loads_per_program"] == 0
+    assert normalized["row_guard_peer_topology_proof"] == "preseed_lease_audit"

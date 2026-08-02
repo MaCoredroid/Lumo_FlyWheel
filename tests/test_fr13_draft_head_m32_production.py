@@ -231,7 +231,7 @@ def _traffic_audit(tmp_path: Path, events: int = 7) -> Path:
                 "all_successful_requests_present": True,
                 "bytes": 1024,
                 "event_count": events,
-                "event_schema": "fr13-fixed32-work-census-v11",
+                "event_schema": "fr13-fixed32-work-census-v12",
                 "path": "/evidence/fr13_fixed32_work_census.jsonl",
                 "per_task_request_step_memberships": {
                     module.EXPECTED_INSTANCE: events
@@ -239,7 +239,7 @@ def _traffic_audit(tmp_path: Path, events: int = 7) -> Path:
                 "request_step_memberships": events,
                 "sha256": _sha(b"census"),
                 "successful_engine_requests": 1,
-                "terminal_schema": "fr13-fixed32-work-census-terminal-v11",
+                "terminal_schema": "fr13-fixed32-work-census-terminal-v12",
             },
             "engine": {"authenticated": True},
             "exact_proxy_engine_attempt_parity": True,
