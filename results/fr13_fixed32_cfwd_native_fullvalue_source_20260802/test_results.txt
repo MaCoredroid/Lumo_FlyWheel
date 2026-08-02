@@ -1,0 +1,21 @@
+Fixed32 CFWD native full-value source verification (2026-08-02 UTC)
+
+PYTHONPATH=src CUDA_VISIBLE_DEVICES='' \
+  /home/mark/lumoFlyWheel-b4-compactionfix-rerun/.venv/bin/python -m pytest -q \
+  tests/test_fr13_fixed32_cfwd_native_fullvalue_cuda.py \
+  tests/test_fr13_fixed32_task_boundary_snapshot.py \
+  tests/test_fr13_fixed32_committer_layer_batch.py
+
+89 passed in 0.37s
+
+Focused native source/contract/patch lifecycle suite: 34 passed in 0.31s.
+Ruff on the three new Python files: pass.
+Python byte compilation on the three new Python files: pass.
+git diff --check: pass.
+
+A broader sparse-worktree attempt reached 109 passed and 10 failures. All 10
+failures were missing-artifact errors for canonical subset JSON files omitted
+by this sparse checkout; candidate code was not involved.
+
+No GPU command, CUDA compile, real-event byte qualification, synthetic/probe
+performance run, or real-task timing measurement is represented here.

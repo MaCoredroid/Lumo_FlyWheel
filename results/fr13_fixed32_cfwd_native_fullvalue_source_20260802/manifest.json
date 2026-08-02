@@ -1,0 +1,97 @@
+{
+  "base_commit": "f45bc9fed8194fca87974be62d8400146ffdb5db",
+  "branch": "agent/fixed32-cfwd-native-fullvalue-20260802",
+  "candidate": {
+    "accepted_recurrence": "ordered_root_plus_accepted_drafts",
+    "ctas_per_layer_request_value_head": 1,
+    "default_on": false,
+    "diagnostic_selector_only": true,
+    "dim_k": 128,
+    "dim_v": 128,
+    "duplicate_value_tile_k_loads_per_cta_step": 0,
+    "final_bank_store_dtype": "float32",
+    "fp32_state_elements_per_thread": 32,
+    "key_columns_per_lane": 4,
+    "k_hbm_vector_loads_per_cta_step": 1,
+    "k_norms_per_cta_step": 1,
+    "launches_per_event": 1,
+    "production_authorized": false,
+    "source_only": true,
+    "static_shared_bytes_source_model": 548,
+    "threads_per_cta": 512,
+    "timing_eligible": false,
+    "value_rows_per_warp": 8,
+    "warps_per_cta": 16
+  },
+  "qualification": {
+    "b1_real_swe_byte_gate": null,
+    "b1_real_swe_timing": null,
+    "b4_exact4_real_swe_byte_gate": null,
+    "b4_exact4_real_swe_timing": null,
+    "cuda_compile": null,
+    "local_bytes": null,
+    "pinned_architecture": "sm_121",
+    "registers_per_thread": null,
+    "required_max_registers_per_thread": 64,
+    "required_minimum_ctas_per_sm": 2,
+    "spill_load_bytes": null,
+    "spill_store_bytes": null,
+    "stack_frame_bytes": null,
+    "status": "pending",
+    "timing_eligible": false
+  },
+  "raw_byte_risk": {
+    "classification": "material_unresolved",
+    "reason": "native CUDA reduction and transcendental codegen differs from Triton",
+    "required_comparison": "raw bytes of all 48 FP32 running bank rows",
+    "required_reachable_accepted_lengths": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ]
+  },
+  "schema": "fr13.fixed32.cfwd_native_fullvalue_source.v1",
+  "source_commit": "d5b8ec3cc802e9fd24af642915c02156a47f043f",
+  "source_sha256": {
+    "native/fr13_fixed32_cfwd_native_fullvalue.cu": "05aac542b60fb6f27f06455f3fd0524da6e7962d3d953406f9d94be1abe32ef1",
+    "scripts/fr13_patch_vllm_cfwd_native_fullvalue_cuda.py": "4140e7155954ce02177e3c2b4c016e7ce77306809ddcf86d51538fcbca8d1616",
+    "src/lumo_flywheel_serving/fr13_cfwd_native_fullvalue_cuda.py": "43ea9700f49cf1974b4b763e3f08ae7c21766406d2f40c1f71d54a087bd3ce61",
+    "tests/test_fr13_fixed32_cfwd_native_fullvalue_cuda.py": "7acf0803e3cc9f6fefbf4a99ae7dfb4b2255fdfff4f45f036e6bda07ec126d0b"
+  },
+  "static_work_model": {
+    "b1": {
+      "bv64_ctas_per_event": 4608,
+      "logical_duplicate_bf16_k_mib_removed_per_step": 0.5625,
+      "native_ctas_per_event": 2304,
+      "native_warps_per_event": 36864
+    },
+    "b4": {
+      "bv64_ctas_per_event": 18432,
+      "logical_duplicate_bf16_k_mib_removed_per_step": 2.25,
+      "native_ctas_per_event": 9216,
+      "native_warps_per_event": 147456
+    },
+    "classification": "logical_source_work_not_latency_or_dram_measurement",
+    "state_hbm_traffic_removed": false
+  },
+  "status": "source_static_only_gpu_compile_byte_and_real_swe_timing_pending",
+  "verification": {
+    "adjacent_and_candidate_tests_passed": 89,
+    "candidate_tests_passed": 34,
+    "cuda_compile_run": false,
+    "gpu_command_run": false,
+    "python_byte_compile": "pass",
+    "ruff": "pass",
+    "synthetic_or_probe_performance_run": false,
+    "whitespace": "pass"
+  }
+}
