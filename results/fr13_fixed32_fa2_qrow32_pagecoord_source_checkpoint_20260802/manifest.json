@@ -1,0 +1,67 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow32_pagecoord_source_checkpoint.v1",
+  "status": "SOURCE_CANDIDATE_INSTRUCTION_VERIFICATION_PENDING",
+  "source_commit": "1f04f2e19524d5ba7f7729229958641de274368c",
+  "classification": {
+    "gpu_used": false,
+    "compiler_used": false,
+    "linker_used": false,
+    "disassembler_used": false,
+    "performance_measurement": false,
+    "synthetic_probe_used": false,
+    "real_swe_task_used": false,
+    "byte_parity_claim": false,
+    "call0_claim": false,
+    "instruction_reduction_claim": false,
+    "timing_eligible": false,
+    "production_eligible": false,
+    "default_off": true
+  },
+  "source": {
+    "fa2_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+    "patcher_sha256": "2742c15c4e870138c5182b1dc88165d595864cbaaf542e048a1bff715e48e032",
+    "translation_unit_sha256": "1ee6b8a6f857c59d86973f337654acff9938bf4232767ad267e73e8e87bbec86",
+    "stock_utils_sha256": "f7309f85d0aa7fcf726ff1d24527effe0aec8e0145d8aa86d82e51554ce6485b",
+    "candidate_utils_sha256": "2092a0b772f79fe6b5133cc0af7763f93e3a6935e33e0de59da55f3960d8a795"
+  },
+  "specialization": {
+    "page_block_size": 1024,
+    "block_n": 64,
+    "blocks_per_page": 16,
+    "virtual_page_expression": "n_block >> 4",
+    "page_offset_expression": "((n_block & 15) << 6) + block_row_offset",
+    "coordinate_width_bits": 32,
+    "prior_candidate_global_coordinate_width_bits": 64,
+    "stock_dynamic_path_preserved": true,
+    "qrow16_specialized": false,
+    "api_gate_requires_page_block_size_1024": true,
+    "query_order_changed": false,
+    "k_order_changed": false,
+    "mask_semantics_changed": false,
+    "bf16_output_reduction_changed": false,
+    "fp32_lse_reduction_changed": false
+  },
+  "proof": {
+    "all_threads_covered": true,
+    "all_block_residues_covered": true,
+    "all_valid_partial_clamps_covered": true,
+    "largest_nonnegative_int_n_block_represented": true,
+    "passed": true
+  },
+  "tests": {
+    "focused_source_passed": 19,
+    "focused_source_failed": 0,
+    "py_compile_passed": true,
+    "git_diff_check_passed": true
+  },
+  "pending": {
+    "fresh_sm121a_compile": true,
+    "sass_call0_verification": true,
+    "instruction_delta_verification": true,
+    "resource_admission": true,
+    "pinned_gcc11_4_abi_relink": true,
+    "tail23_exact4_byte_gate": true,
+    "hydra27_exact4_byte_gate": true,
+    "real_swe_verified_timing": true
+  }
+}
