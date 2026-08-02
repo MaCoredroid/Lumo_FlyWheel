@@ -151,6 +151,23 @@ class Fr13Fixed32M128LinearScheduler100
     return {0, static_cast<int32_t>(linear_idx), 0, true};
   }
 
+  // M and L are single compile-time tiles, and the fixed candidate uses a
+  // 1x1x1 cluster. Expose those constants to the mainloop and epilogue instead
+  // of re-reading the zero CTA-in-cluster coordinate for every work tile.
+  CUTLASS_DEVICE static auto
+  work_tile_to_cta_coord(WorkTileInfo work_tile_info) {
+    return cute::make_coord(
+        cute::Int<0>{}, work_tile_info.N_idx,
+        cute::Underscore{}, cute::Int<0>{});
+  }
+
+  CUTLASS_DEVICE static auto
+  work_tile_to_cta_coord(
+      WorkTileInfo work_tile_info,
+      [[maybe_unused]] dim3 block_id_in_cluster) {
+    return work_tile_to_cta_coord(work_tile_info);
+  }
+
   CUTLASS_DEVICE void
   advance_to_next_work(uint32_t advance_count = 1) {
     current_work_linear_idx_ += total_grid_size_ * uint64_t(advance_count);
@@ -190,6 +207,11 @@ template <class TileShape, class ClusterShape,
 struct TileSchedulerSelector<
     vllm::fr13_fixed32_m128_static_scheduler, arch::Sm120,
     TileShape, ClusterShape, SchedulerPipelineStageCount> {
+  static_assert(
+      cute::size<0>(ClusterShape{}) == 1 &&
+      cute::size<1>(ClusterShape{}) == 1 &&
+      cute::size<2>(ClusterShape{}) == 1,
+      "fixed32 M128 coordinate scheduler requires a 1x1x1 cluster");
   using Scheduler = Fr13Fixed32M128LinearScheduler100;
 };
 }  // namespace cutlass::gemm::kernel::detail

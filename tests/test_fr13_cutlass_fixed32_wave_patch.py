@@ -188,6 +188,19 @@ def test_b4_m128_static_changes_only_complete_tile_scheduler() -> None:
     assert "params.log_swizzle_size_ == 0" in scheduler
     assert "direct_linear_geometry ? uint64_t(params.problem_tiles_n_) : 0" in scheduler
     assert "return {0, static_cast<int32_t>(linear_idx), 0, true};" in scheduler
+    assert "work_tile_to_cta_coord(WorkTileInfo work_tile_info)" in scheduler
+    assert "cute::Int<0>{}, work_tile_info.N_idx," in scheduler
+    assert "cute::Underscore{}, cute::Int<0>{}" in scheduler
+    coordinate_override = scheduler[
+        scheduler.index("work_tile_to_cta_coord(WorkTileInfo work_tile_info)") :
+        scheduler.index("CUTLASS_DEVICE void\n  advance_to_next_work")
+    ]
+    assert "cute::block_id_in_cluster" not in coordinate_override
+    assert ".M_idx +" not in coordinate_override
+    assert ".L_idx +" not in coordinate_override
+    assert "cute::size<0>(ClusterShape{}) == 1" in scheduler
+    assert "cute::size<1>(ClusterShape{}) == 1" in scheduler
+    assert "cute::size<2>(ClusterShape{}) == 1" in scheduler
     assert "scheduler_params.divmod_batch_" not in scheduler
     assert "divmod_cluster_blk_major_" not in scheduler
     assert "current_work_linear_idx_ += total_grid_size_" in scheduler
@@ -244,6 +257,23 @@ def test_b4_m128_linear_scheduler_covers_each_real_n_tile_once() -> None:
             assert len(work) == n_tiles
             assert len(set(work)) == n_tiles
             assert sorted(n_tile for _, n_tile, _ in work) == list(range(n_tiles))
+
+
+def test_b4_m128_static_coordinate_contract_has_no_residue_tiles() -> None:
+    # Each allowlisted projection is one complete M tile, one L tile, and an
+    # integral number of complete N tiles. The scheduler may therefore expose
+    # M=0 and L=0 as static coordinates while preserving the dynamic N index.
+    for m, n, k, l in (
+        (128, 34816, 5120, 1),
+        (128, 5120, 17408, 1),
+        (128, 5120, 6144, 1),
+        (128, 16384, 5120, 1),
+        (128, 14336, 5120, 1),
+    ):
+        assert m == 128
+        assert n % 128 == 0
+        assert k % 128 == 0
+        assert l == 1
 
 
 def test_wide256_is_b1_only_and_large_rows_fail_to_stock() -> None:
