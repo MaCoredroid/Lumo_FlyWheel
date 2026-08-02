@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One real SWE-Verified K64/root1 B1 byte gate for packed x-gather C64/W16.
+# One real SWE-Verified K64/root1 B1 byte gate for paired-weight x-gather C64/W16.
 # The candidate is shadow-only and the incumbent tensors remain served.
 set -euo pipefail
 
