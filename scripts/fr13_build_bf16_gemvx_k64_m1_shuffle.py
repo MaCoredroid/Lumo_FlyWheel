@@ -18,6 +18,9 @@ SOURCE = REPO / "csrc" / "fr13_bf16_gemvx_k64_m1_shuffle.cu"
 EXPECTED_TORCH = "2.11.0+cu130"
 EXPECTED_CUDA = "13.0"
 EXPECTED_ARCH = "12.1a"
+CUDA_PACKAGE_INCLUDE = Path(
+    "/usr/local/lib/python3.12/dist-packages/nvidia/cu13/include"
+)
 
 
 def sha256_file(path: Path) -> str:
@@ -61,6 +64,8 @@ def build(output: Path, build_dir: Path, attestation: Path) -> dict[str, object]
     ).stdout
     if f"release {EXPECTED_CUDA}" not in cuda_version:
         raise RuntimeError("pinned build requires CUDA 13.0 nvcc")
+    if not (CUDA_PACKAGE_INCLUDE / "cusparse.h").is_file():
+        raise RuntimeError("pinned CUDA 13 package headers are unavailable")
 
     output = output.resolve()
     build_dir = build_dir.resolve()
@@ -77,9 +82,10 @@ def build(output: Path, build_dir: Path, attestation: Path) -> dict[str, object]
             name="fr13_bf16_gemvx_k64_m1_shuffle_r32",
             sources=[str(SOURCE)],
             build_directory=str(build_dir),
-            extra_cflags=["-O3"],
+            extra_cflags=["-O3", f"-I{CUDA_PACKAGE_INCLUDE}"],
             extra_cuda_cflags=[
                 "-O3",
+                f"-I{CUDA_PACKAGE_INCLUDE}",
                 "--fmad=true",
                 "--expt-relaxed-constexpr",
                 "--threads=1",
