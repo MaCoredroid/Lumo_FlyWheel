@@ -31,7 +31,9 @@ that every N tile is covered exactly once without duplication for each shape.
 - The patch applied to the pinned vLLM source and pinned CUTLASS v4.4.2 checkout,
   and a second application was idempotent.
 - The generated patched dispatch SHA256 is
-  `7e61697914224f8af32b4627d0a5c1d6bf452cd03fe8a958fe3bb8e9547f6fe8`.
+  `8671829b9f50a5438cf36edbed9efabca5e391e1d41112b1878ad44d342cd855`.
+- An independent source review verified the active cooperative-kernel API,
+  both raster orientations, exact grid-stride coverage, and fail-closed behavior.
 
 No NVCC compile, link, SASS/resource inspection, GPU execution, container run,
 synthetic performance probe, or real-task run was performed for this source

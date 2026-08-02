@@ -7,12 +7,12 @@
   "source": {
     "branch": "agent/fixed32-sfwd-b4-m128-linear-scheduler-20260802",
     "base_static_scheduler_commit": "469949c587a2cc125b50ac0908126b53b4d18a8d",
-    "implementation_commit": "e2c56c8fde6329b4b189c75ffe823300e09154c6",
+    "implementation_commit": "17bdf1dd994fcbed3a3106955364709ff2f32c7e",
     "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
     "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
     "cutlass_revision": "v4.4.2",
-    "patch_source_sha256": "5f4421e92f3180864b829c1a49ed1bf277f1ebf227ed4a494d9cc919a91bd6e8",
-    "generated_dispatch_sha256": "7e61697914224f8af32b4627d0a5c1d6bf452cd03fe8a958fe3bb8e9547f6fe8"
+    "patch_source_sha256": "6152bb8a6e0d03de22b630e96e780e9eb73c296e109be884f436e0545ba90328",
+    "generated_dispatch_sha256": "8671829b9f50a5438cf36edbed9efabca5e391e1d41112b1878ad44d342cd855"
   },
   "candidate": {
     "selector": "persistent_b4_m128_static",
@@ -60,6 +60,7 @@
     "diff_check": "pass",
     "pinned_source_apply": "pass",
     "pinned_source_idempotency": "pass",
+    "independent_source_review": "pass",
     "nvcc_compile": "not_run",
     "resource_and_sass_audit": "not_run",
     "real_swe_verified_byte_gate": "not_run",
