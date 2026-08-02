@@ -28,6 +28,8 @@ _FR13_CALLER_ENFORCE_EAGER="${ENFORCE_EAGER+set}:${ENFORCE_EAGER-}"
 _FR13_CALLER_CUDAGRAPH_MODE="${CUDAGRAPH_MODE+set}:${CUDAGRAPH_MODE-}"
 _FR13_CALLER_CUTLASS_WAVE="${FR13_FIXED32_CUTLASS_WAVE+set}:${FR13_FIXED32_CUTLASS_WAVE-}"
 _FR13_CALLER_CUTLASS_WAVE_SO="${FR13_FIXED32_CUTLASS_WAVE_SO+set}:${FR13_FIXED32_CUTLASS_WAVE_SO-}"
+_FR13_CALLER_CUTLASS_WAVE_RESOURCE="${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL+set}:${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL-}"
+_FR13_CALLER_CUTLASS_WAVE_RESOURCE_SHA="${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256+set}:${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256-}"
 _FR13_CALLER_CUTLASS_WAVE_PRODUCTION="${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION+set}:${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION-}"
 _FR13_CALLER_CUTLASS_WAVE_PASS_JSON="${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON-}"
 _FR13_CALLER_CUTLASS_WAVE_PASS_SHA="${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256-}"
@@ -65,6 +67,8 @@ _FR13_M32_GUARD_NAMES=(
   FR13_FIXED32_BATCH_GDN_BV_CANDIDATE
   FR13_FIXED32_CUTLASS_WAVE
   FR13_FIXED32_CUTLASS_WAVE_SO
+  FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL
+  FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256
   FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
   FR13_FIXED32_ATTRIBUTION_ONLY
   FR13_FIXED32_B1_DIAGNOSTIC
@@ -125,6 +129,8 @@ if [[ "$_FR13_CALLER_BATCH_GDN_PRODUCTION" == set:* \
       || "$_FR13_CALLER_BATCH_GDN_BV8_TIMING" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_SO" == set:* \
+      || "$_FR13_CALLER_CUTLASS_WAVE_RESOURCE" == set:* \
+      || "$_FR13_CALLER_CUTLASS_WAVE_RESOURCE_SHA" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_PRODUCTION" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_PASS_JSON" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE" == set:* \
@@ -152,6 +158,8 @@ if [[ "$_FR13_CALLER_BATCH_GDN_PRODUCTION" == set:* \
       || "${CUDAGRAPH_MODE+set}:${CUDAGRAPH_MODE-}" != "$_FR13_CALLER_CUDAGRAPH_MODE" \
       || "${FR13_FIXED32_CUTLASS_WAVE+set}:${FR13_FIXED32_CUTLASS_WAVE-}" != "$_FR13_CALLER_CUTLASS_WAVE" \
       || "${FR13_FIXED32_CUTLASS_WAVE_SO+set}:${FR13_FIXED32_CUTLASS_WAVE_SO-}" != "$_FR13_CALLER_CUTLASS_WAVE_SO" \
+      || "${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL+set}:${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL-}" != "$_FR13_CALLER_CUTLASS_WAVE_RESOURCE" \
+      || "${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256+set}:${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256-}" != "$_FR13_CALLER_CUTLASS_WAVE_RESOURCE_SHA" \
       || "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION+set}:${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION-}" != "$_FR13_CALLER_CUTLASS_WAVE_PRODUCTION" \
       || "${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON-}" != "$_FR13_CALLER_CUTLASS_WAVE_PASS_JSON" \
       || "${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256-}" != "$_FR13_CALLER_CUTLASS_WAVE_PASS_SHA" \
@@ -185,6 +193,8 @@ unset \
   _FR13_CALLER_CUDAGRAPH_MODE \
   _FR13_CALLER_CUTLASS_WAVE \
   _FR13_CALLER_CUTLASS_WAVE_SO \
+  _FR13_CALLER_CUTLASS_WAVE_RESOURCE \
+  _FR13_CALLER_CUTLASS_WAVE_RESOURCE_SHA \
   _FR13_CALLER_CUTLASS_WAVE_PRODUCTION \
   _FR13_CALLER_CUTLASS_WAVE_PASS_JSON \
   _FR13_CALLER_CUTLASS_WAVE_PASS_SHA \
@@ -341,6 +351,8 @@ FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:
 FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
 FR13_FIXED32_CUTLASS_WAVE=${FR13_FIXED32_CUTLASS_WAVE:-stock}
 FR13_FIXED32_CUTLASS_WAVE_SO=${FR13_FIXED32_CUTLASS_WAVE_SO:-}
+FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL=${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL:-}
+FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256=${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256:-}
 FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL=${FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL:-/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl}
 FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}
 FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON=${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON:-}
@@ -509,7 +521,7 @@ if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
   }
 fi
 case "$FR13_FIXED32_CUTLASS_WAVE" in
-  stock|streamk_coop128|streamk_coop128_byte_ab|streamk_force_wide256|streamk_force_wide256_byte_ab|persistent_b4_m128|persistent_b4_m128_byte_ab) ;;
+  stock|streamk_coop128|streamk_coop128_byte_ab|streamk_force_wide256|streamk_force_wide256_byte_ab|persistent_b4_m128|persistent_b4_m128_byte_ab|persistent_b4_m128_static|persistent_b4_m128_static_byte_ab) ;;
   *)
     echo "FR13_FIXED32_CUTLASS_WAVE has an unsupported selector" >&2
     exit 2
@@ -550,6 +562,8 @@ fi
 FR13_CUTLASS_WAVE_DOCKER_ARGS=()
 if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" ]]; then
   [[ -z "$FR13_FIXED32_CUTLASS_WAVE_SO" \
+     && -z "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL" \
+     && -z "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256" \
      && "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "0" \
      && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
      && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
@@ -560,8 +574,14 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" ]]; then
 else
   _fr13_cutlass_b4=0
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128" \
-        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" ]]; then
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
     _fr13_cutlass_b4=1
+  fi
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static" ]]; then
+    echo "CUTLASS static M128 production remains unavailable until Tail23 and Hydra27 raw-byte PASS" >&2
+    exit 2
   fi
   if [[ "$_fr13_cutlass_b4" == "1" ]]; then
     [[ -n "${FR13_FIXED32_MODE:-}" && "$MAX_NUM_SEQS" == "4" ]] || {
@@ -601,16 +621,47 @@ else
     echo "CUTLASS Stream-K candidate requires an absolute regular non-symlink SO path" >&2
     exit 2
   }
+  _fr13_cutlass_resource_args=()
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
+    [[ "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL" == /* \
+       && "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL" != *:* \
+       && -f "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL" \
+       && ! -L "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL" \
+       && "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256" == "7ab2c3223366f4591fc2324a47c805aa0a1e9d4a106743af4256d4089054a2dc" ]] || {
+      echo "CUTLASS static M128 diagnostic requires its pinned resource credential" >&2
+      exit 2
+    }
+    _fr13_cutlass_resource_args=(
+      --resource-credential "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL"
+      --expected-resource-credential-sha256 "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256"
+    )
+  else
+    [[ -z "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL" \
+       && -z "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256" ]] || {
+      echo "non-static CUTLASS selector forbids a static M128 resource credential" >&2
+      exit 2
+    }
+  fi
   .venv/bin/python scripts/fr13_cutlass_wave_binary.py verify \
     "$FR13_FIXED32_CUTLASS_WAVE_SO" \
-    --selector "$FR13_FIXED32_CUTLASS_WAVE" >/dev/null
+    --selector "$FR13_FIXED32_CUTLASS_WAVE" \
+    "${_fr13_cutlass_resource_args[@]}" >/dev/null
   FR13_FIXED32_CUTLASS_WAVE_SO=$(realpath "$FR13_FIXED32_CUTLASS_WAVE_SO")
   FR13_CUTLASS_WAVE_DOCKER_ARGS=(
     -v "$FR13_FIXED32_CUTLASS_WAVE_SO:/tmp/fr13_cutlass_wave.abi3.so:ro"
   )
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
+    FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL=$(
+      realpath "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL"
+    )
+    FR13_CUTLASS_WAVE_DOCKER_ARGS+=(
+      -v "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL:/tmp/fr13_cutlass_wave_resource_credential.json:ro"
+    )
+  fi
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
-        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" ]]; then
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
     [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "0" \
        && ( ( "$_fr13_cutlass_b4" == "0" \
               && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" ) \
@@ -625,7 +676,9 @@ else
             || ( "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
                  && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl" ) \
             || ( "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
-                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl" ) ) ]] || {
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_persistent_b4_m128_static_byte_ab.jsonl" ) ) ]] || {
       echo "CUTLASS byte A/B requires its exact eager B1 or B4 diagnostic contract" >&2
       exit 2
     }
@@ -679,6 +732,7 @@ else
     unset _fr13_cutlass_pass_profile_args
   fi
   unset _fr13_cutlass_b4
+  unset _fr13_cutlass_resource_args
 fi
 if [[ -n "${FR13_DFWD_UNIFIED_BM8_INTERNAL:-}" ]]; then
   echo "FR13 DFWD unified BM8 internal selector is launcher-private" >&2
@@ -1339,7 +1393,8 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   fi
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
-        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" ]]; then
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
     _fixed32_expected_eager=1
   fi
   case "${FR13_DRAFT_VOCAB_K:-65536}:$FR13_DRAFT_VOCAB_ROOT" in
@@ -2002,8 +2057,10 @@ else
 fi
 export FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH
 _fr13_cutlass_b4_byte_ab=0
-[[ "$FR13_FIXED32_CUTLASS_WAVE" != "persistent_b4_m128_byte_ab" ]] \
-  || _fr13_cutlass_b4_byte_ab=1
+if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
+      || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
+  _fr13_cutlass_b4_byte_ab=1
+fi
 if [[ "$_fr13_cutlass_b4_byte_ab" == "1" ]]; then
   [[ "$_fr13_batch_gdn_diagnostic_count" == "0" \
      && "$MAX_NUM_SEQS" == "4" \
@@ -2397,6 +2454,8 @@ while IFS= read -r _v; do
   [[ "$_v" == "FR13_FIXED32_INGRESS_SECRET_FILE" \
      || "$_v" == "FR13_FIXED32_MIDDLEWARE_FLAGS" \
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_SO" \
+     || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL" \
+     || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256" \
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
      || "$_v" == "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH" \
      || "$_v" == "FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH" \
@@ -2600,6 +2659,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON="$FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON" \
   -e FR13_FIXED32_CUTLASS_WAVE="$FR13_FIXED32_CUTLASS_WAVE" \
   -e FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL="$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" \
+  -e FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256="$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256" \
   -e FR13_FIXED32_CUTLASS_WAVE_PRODUCTION="$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" \
   -e FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR="$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR" \
   -e FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256="$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256" \
@@ -2841,6 +2901,14 @@ if [[ "\${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ]]; then
       --expected-production-pass-sha256 "\$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256" \
       --fixed32-mode "\$FR13_FIXED32_MODE" \
       --patch-source /workspace/scripts/fr13_patch_cutlass_fixed32_wave.py
+  elif [[ "\$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
+    python3 /workspace/scripts/fr13_cutlass_wave_binary.py install \
+      --source /tmp/fr13_cutlass_wave.abi3.so \
+      --destination /usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so \
+      --attestation /logs/fr13_fixed32_cutlass_streamk_binary.json \
+      --selector "\$FR13_FIXED32_CUTLASS_WAVE" \
+      --resource-credential /tmp/fr13_cutlass_wave_resource_credential.json \
+      --expected-resource-credential-sha256 "\$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256"
   else
     python3 /workspace/scripts/fr13_cutlass_wave_binary.py install \
       --source /tmp/fr13_cutlass_wave.abi3.so \

@@ -8,6 +8,15 @@ from pathlib import Path
 import pytest
 
 
+REPO = Path(__file__).resolve().parents[1]
+STATIC_RESOURCE_CREDENTIAL = (
+    REPO
+    / "results"
+    / "fr13_fixed32_cutlass_b4_m128_static_host_build_20260802"
+    / "build_manifest.json"
+)
+
+
 def _module():
     path = Path("scripts/fr13_cutlass_wave_binary.py")
     spec = importlib.util.spec_from_file_location("fr13_cutlass_wave_binary", path)
@@ -32,6 +41,8 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "streamk_force_wide256_byte_ab",
         "persistent_b4_m128",
         "persistent_b4_m128_byte_ab",
+        "persistent_b4_m128_static",
+        "persistent_b4_m128_static_byte_ab",
     }
     assert module.WIDE256_CANDIDATE_SHA256 == (
         "f7d5c01ca79829fbfff4c93949d057bd740905165b0b6793b3c0007629add962"
@@ -51,6 +62,126 @@ def test_pinned_binary_identity_and_selectors() -> None:
         module.B4_M128_CANDIDATE_SIZE,
         "persistent_b4_m128",
     )
+    assert module.candidate_identity("persistent_b4_m128_static_byte_ab") == (
+        module.STATIC_B4_M128_CANDIDATE_SHA256,
+        module.STATIC_B4_M128_CANDIDATE_SIZE,
+        "persistent_b4_m128_static",
+    )
+
+
+def _static_resource_fixture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    module,
+    candidate_sha256: str,
+    candidate_size: int,
+) -> tuple[Path, str]:
+    payload = json.loads(STATIC_RESOURCE_CREDENTIAL.read_text(encoding="ascii"))
+    payload["outputs"]["candidate_binary"]["sha256"] = candidate_sha256
+    payload["outputs"]["candidate_binary"]["bytes"] = candidate_size
+    raw = (json.dumps(payload, ensure_ascii=True, sort_keys=True) + "\n").encode(
+        "ascii"
+    )
+    credential = tmp_path / "static-resource.json"
+    credential.write_bytes(raw)
+    credential_sha256 = hashlib.sha256(raw).hexdigest()
+    monkeypatch.setattr(
+        module, "STATIC_B4_M128_CANDIDATE_SHA256", candidate_sha256
+    )
+    monkeypatch.setattr(module, "STATIC_B4_M128_CANDIDATE_SIZE", candidate_size)
+    monkeypatch.setattr(
+        module,
+        "STATIC_B4_M128_RESOURCE_CREDENTIAL_SHA256",
+        credential_sha256,
+    )
+    monkeypatch.setattr(
+        module, "STATIC_B4_M128_RESOURCE_CREDENTIAL_SIZE", len(raw)
+    )
+    return credential, credential_sha256
+
+
+def test_static_resource_credential_is_exactly_pinned() -> None:
+    module = _module()
+
+    binding = module.verify_static_m128_resource_credential(
+        STATIC_RESOURCE_CREDENTIAL,
+        module.STATIC_B4_M128_RESOURCE_CREDENTIAL_SHA256,
+    )
+
+    assert binding["sha256"] == module.STATIC_B4_M128_RESOURCE_CREDENTIAL_SHA256
+    assert binding["candidate_sha256"] == module.STATIC_B4_M128_CANDIDATE_SHA256
+    assert binding["candidate_bytes"] == module.STATIC_B4_M128_CANDIDATE_SIZE
+    assert binding["resource_records"] == 309
+    assert binding["registers_per_thread"] == 168
+    assert binding["stack_bytes_per_thread"] == 0
+    assert binding["local_bytes_per_thread"] == 0
+
+
+def test_static_m128_diagnostic_install_binds_resource_and_stays_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    payload = b"static-m128-candidate\n"
+    digest = hashlib.sha256(payload).hexdigest()
+    credential, credential_sha256 = _static_resource_fixture(
+        tmp_path, monkeypatch, module, digest, len(payload)
+    )
+    source = tmp_path / "static-m128.so"
+    destination = tmp_path / "installed.so"
+    attestation = tmp_path / "attestation.json"
+    source.write_bytes(payload)
+    destination.write_bytes(b"stock-extension\n")
+
+    record = module.install_candidate(
+        source,
+        destination,
+        attestation,
+        "persistent_b4_m128_static_byte_ab",
+        resource_credential=credential,
+        expected_resource_credential_sha256=credential_sha256,
+    )
+
+    assert destination.read_bytes() == payload
+    assert record["production_enabled"] is False
+    assert record["candidate_family"] == "persistent_b4_m128_static"
+    assert record["source"]["resource_credential"]["sha256"] == credential_sha256
+    assert record["destination"]["resource_credential"] == record["source"][
+        "resource_credential"
+    ]
+
+
+def test_static_m128_install_fails_closed_without_gate_or_resource(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    payload = b"static-m128-candidate\n"
+    digest = hashlib.sha256(payload).hexdigest()
+    credential, credential_sha256 = _static_resource_fixture(
+        tmp_path, monkeypatch, module, digest, len(payload)
+    )
+    source = tmp_path / "static-m128.so"
+    destination = tmp_path / "installed.so"
+    attestation = tmp_path / "attestation.json"
+    source.write_bytes(payload)
+    destination.write_bytes(b"stock-extension\n")
+
+    with pytest.raises(ValueError, match="pinned resource credential"):
+        module.install_candidate(
+            source,
+            destination,
+            attestation,
+            "persistent_b4_m128_static_byte_ab",
+        )
+    with pytest.raises(ValueError, match="Tail23 and Hydra27"):
+        module.install_candidate(
+            source,
+            destination,
+            attestation,
+            "persistent_b4_m128_static",
+            resource_credential=credential,
+            expected_resource_credential_sha256=credential_sha256,
+        )
+    assert destination.read_bytes() == b"stock-extension\n"
 
 
 def test_wide256_diagnostic_install_uses_its_own_pinned_identity(

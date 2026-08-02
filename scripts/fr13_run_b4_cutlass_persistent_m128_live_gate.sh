@@ -20,9 +20,39 @@ SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
 PATCH_SOURCE=scripts/fr13_patch_cutlass_fixed32_wave.py
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
-DIAGNOSTIC_SELECTOR=persistent_b4_m128_byte_ab
-RECORD_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_byte_ab.v1
-CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl
+CANDIDATE_SELECTOR=${CUTLASS_B4_CANDIDATE_SELECTOR:-persistent_b4_m128}
+RESOURCE_CREDENTIAL=${CUTLASS_B4_RESOURCE_CREDENTIAL:-}
+RESOURCE_CREDENTIAL_SHA256=${CUTLASS_B4_RESOURCE_CREDENTIAL_SHA256:-}
+case "$CANDIDATE_SELECTOR" in
+  persistent_b4_m128)
+    DIAGNOSTIC_SELECTOR=persistent_b4_m128_byte_ab
+    RECORD_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_byte_ab.v1
+    CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl
+    FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_live_gate.v1
+    K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_k64_root_live_gate.v1
+    CANDIDATE_ARM_NAME=m128
+    [[ -z "$RESOURCE_CREDENTIAL" && -z "$RESOURCE_CREDENTIAL_SHA256" ]] || {
+      echo "incumbent persistent M128 gate forbids a static resource credential" >&2
+      exit 2
+    }
+    ;;
+  persistent_b4_m128_static)
+    DIAGNOSTIC_SELECTOR=persistent_b4_m128_static_byte_ab
+    RECORD_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_static_byte_ab.v1
+    CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_persistent_b4_m128_static_byte_ab.jsonl
+    FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_static_live_gate.v1
+    K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_static_k64_root_live_gate.v1
+    CANDIDATE_ARM_NAME=m128_static
+    [[ "$RESOURCE_CREDENTIAL_SHA256" == "7ab2c3223366f4591fc2324a47c805aa0a1e9d4a106743af4256d4089054a2dc" ]] || {
+      echo "static M128 gate requires the pinned host-build resource credential SHA-256" >&2
+      exit 2
+    }
+    ;;
+  *)
+    echo "CUTLASS_B4_CANDIDATE_SELECTOR is unsupported" >&2
+    exit 2
+    ;;
+esac
 DRAFT_VOCAB_BLOCKS_HOST=scripts/fr13_dvk_subset_blocks.json
 DRAFT_VOCAB_BLOCKS_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
 DRAFT_VOCAB_BLOCKS_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
@@ -33,28 +63,28 @@ STOCK_FA2_BYTES=299183936
 case "$QUALIFICATION_PROFILE" in
   full_vocab)
     RUN_CLASSIFICATION=real_swe_verified_exact4_b4_byte_diagnostic
-    LIVE_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_live_gate.v1
+    LIVE_SCHEMA=$FULL_VOCAB_LIVE_SCHEMA
     DRAFT_VOCAB_ROOT=0
     DRAFT_VOCAB_K=0
     NEEDS_ALLOW=FR13_DRAFT_VOCAB_K=0
     MANDATORY_WEIGHT_BYTES=42025179008
     MANDATORY_WEIGHT_FLOOR_MS=153.9383846446886
     ONE_SIDED_U95_CAP_MS=177.0291423413919
-    LIVE_RESULT_NAME=cutlass_b4_m128_byte_gate.json
-    PRODUCTION_PASS_NAME=cutlass_b4_m128.production_pass.json
+    LIVE_RESULT_NAME=cutlass_b4_${CANDIDATE_ARM_NAME}_byte_gate.json
+    PRODUCTION_PASS_NAME=cutlass_b4_${CANDIDATE_ARM_NAME}.production_pass.json
     ARM_PROFILE_SUFFIX=
     ;;
   k64_root)
     RUN_CLASSIFICATION=real_swe_verified_exact4_b4_k64_root_byte_diagnostic
-    LIVE_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_k64_root_live_gate.v1
+    LIVE_SCHEMA=$K64_ROOT_LIVE_SCHEMA
     DRAFT_VOCAB_ROOT=1
     DRAFT_VOCAB_K=65536
     NEEDS_ALLOW=
     MANDATORY_WEIGHT_BYTES=32666638208
     MANDATORY_WEIGHT_FLOOR_MS=119.658015414
     ONE_SIDED_U95_CAP_MS=137.6067177261
-    LIVE_RESULT_NAME=cutlass_b4_m128_k64_root_byte_gate.json
-    PRODUCTION_PASS_NAME=cutlass_b4_m128_k64_root.production_pass.json
+    LIVE_RESULT_NAME=cutlass_b4_${CANDIDATE_ARM_NAME}_k64_root_byte_gate.json
+    PRODUCTION_PASS_NAME=cutlass_b4_${CANDIDATE_ARM_NAME}_k64_root.production_pass.json
     ARM_PROFILE_SUFFIX=_k64_root
     ;;
   *)
@@ -81,7 +111,7 @@ case "$FIXED32_MODE" in
     exit 2
     ;;
 esac
-ARM="${FIXED32_MODE}_cutlass_b4_m128${ARM_PROFILE_SUFFIX}_gate_${TAG}"
+ARM="${FIXED32_MODE}_cutlass_b4_${CANDIDATE_ARM_NAME}${ARM_PROFILE_SUFFIX}_gate_${TAG}"
 ARMDIR="$RUNROOT_ABS/$ARM"
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
@@ -96,6 +126,14 @@ for input in "$FORKED_FA2_SO" "$CUTLASS_B4_SO"; do
   [[ "$input" == /* && -f "$input" && ! -L "$input" ]] \
     || { echo "gate input must be an absolute regular non-symlink file: $input" >&2; exit 2; }
 done
+if [[ "$CANDIDATE_SELECTOR" == "persistent_b4_m128_static" ]]; then
+  [[ "$RESOURCE_CREDENTIAL" == /* \
+     && -f "$RESOURCE_CREDENTIAL" \
+     && ! -L "$RESOURCE_CREDENTIAL" ]] || {
+    echo "static M128 gate requires an absolute regular resource credential" >&2
+    exit 2
+  }
+fi
 [[ "$(stat -c '%s' "$FORKED_FA2_SO")" == "$STOCK_FA2_BYTES" \
    && "$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')" == "$STOCK_FA2_SHA256" ]] \
   || { echo "FORKED_FA2_SO is not the exact-safe stock reference" >&2; exit 2; }
@@ -111,8 +149,16 @@ fi
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "all Docker containers must be absent before the gate" >&2; exit 2; }
 
+RESOURCE_CREDENTIAL_ARGS=()
+if [[ "$CANDIDATE_SELECTOR" == "persistent_b4_m128_static" ]]; then
+  RESOURCE_CREDENTIAL_ARGS=(
+    --resource-credential "$RESOURCE_CREDENTIAL"
+    --expected-resource-credential-sha256 "$RESOURCE_CREDENTIAL_SHA256"
+  )
+fi
 "$PYTHON_BIN" scripts/fr13_cutlass_wave_binary.py verify \
-  "$CUTLASS_B4_SO" --selector "$DIAGNOSTIC_SELECTOR" >/dev/null
+  "$CUTLASS_B4_SO" --selector "$DIAGNOSTIC_SELECTOR" \
+  "${RESOURCE_CREDENTIAL_ARGS[@]}" >/dev/null
 
 export BSIZE=4
 export CONC=4
@@ -132,7 +178,7 @@ unset -f run_variant
   || { echo "canonical B4 qualification floor contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS"
-printf 'classification=%s\nqualification_profile=%s\ntiming_eligible=0\nfloor_acceptance_eligible=0\nreference_always_served=1\ntopology=%s\nlogical_topology=%s\nactive_drafts=%s\nvalid_mask=%s\nphysical_drafts=31\nphysical_rows_root_inclusive=32\nbatch_size=4\nconcurrency=4\nfixed_rows=128\neager_builder_capacity=128\ncomparison_call_limit=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_selector=persistent_b4_m128\ndiagnostic_selector=%s\nenforce_eager=1\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+printf 'classification=%s\nqualification_profile=%s\ntiming_eligible=0\nfloor_acceptance_eligible=0\nreference_always_served=1\ntopology=%s\nlogical_topology=%s\nactive_drafts=%s\nvalid_mask=%s\nphysical_drafts=31\nphysical_rows_root_inclusive=32\nbatch_size=4\nconcurrency=4\nfixed_rows=128\neager_builder_capacity=128\ncomparison_call_limit=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_selector=%s\ndiagnostic_selector=%s\nresource_credential_sha256=%s\nenforce_eager=1\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
   "$RUN_CLASSIFICATION" "$QUALIFICATION_PROFILE" \
   "$FIXED32_MODE" "$LOGICAL_TOPOLOGY" "$ACTIVE_DRAFTS" "$VALID_MASK" \
   "$COMPARISON_CALL_LIMIT" "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" \
@@ -141,7 +187,8 @@ printf 'classification=%s\nqualification_profile=%s\ntiming_eligible=0\nfloor_ac
   "$FR13_WEIGHT_FLOOR_MS" "$ONE_SIDED_U95_CAP_MS" "$$" \
   "$RUNROOT_ABS" "$ARM" "$SOURCE_COMMIT" "$RUNNER_SHA256" \
   "$SUBSET_SHA256" "$STOCK_FA2_SHA256" "$STOCK_FA2_BYTES" \
-  "$DIAGNOSTIC_SELECTOR" "$B4_KV_CACHE_MEMORY_BYTES" \
+  "$CANDIDATE_SELECTOR" "$DIAGNOSTIC_SELECTOR" \
+  "$RESOURCE_CREDENTIAL_SHA256" "$B4_KV_CACHE_MEMORY_BYTES" \
   "$(date -u +%FT%TZ)" > "$RUNROOT_ABS/launcher_meta.txt"
 
 "$PYTHON_BIN" scripts/fr13_runtime_manifest.py \
@@ -172,6 +219,8 @@ if env \
     FR13_FIXED32_GDN_PATH_BV_PRODUCTION= \
     FR13_FIXED32_CUTLASS_WAVE="$DIAGNOSTIC_SELECTOR" \
     FR13_FIXED32_CUTLASS_WAVE_SO="$CUTLASS_B4_SO" \
+    FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL="$RESOURCE_CREDENTIAL" \
+    FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256="$RESOURCE_CREDENTIAL_SHA256" \
     FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL="$CONTAINER_JSONL" \
     FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=0 \
     FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON= \
@@ -217,10 +266,11 @@ cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" \
   "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_binary.json" \
   "$ARMDIR/$LIVE_RESULT_NAME" "$PATCH_SOURCE" \
   "$SOURCE_COMMIT" "$SUBSET_SHA256" "$DIAGNOSTIC_SELECTOR" \
-  "$RECORD_SCHEMA" "$LIVE_SCHEMA" "$STOCK_FA2_SHA256" \
+  "$CANDIDATE_SELECTOR" "$RECORD_SCHEMA" "$LIVE_SCHEMA" \
+  "$STOCK_FA2_SHA256" \
   "$COMPARISON_CALL_LIMIT" "$QUALIFICATION_PROFILE" \
   "$DRAFT_VOCAB_BLOCKS_SHA256" "$FIXED32_MODE" "$LOGICAL_TOPOLOGY" \
-  "$ACTIVE_DRAFTS" "$VALID_MASK" <<'PY'
+  "$ACTIVE_DRAFTS" "$VALID_MASK" "$RESOURCE_CREDENTIAL_SHA256" <<'PY'
 import hashlib
 import json
 import os
@@ -246,16 +296,18 @@ patch_source = Path(sys.argv[5])
 source_commit = sys.argv[6]
 subset_sha256 = sys.argv[7]
 diagnostic_selector = sys.argv[8]
-record_schema = sys.argv[9]
-live_schema = sys.argv[10]
-stock_fa2_sha256 = sys.argv[11]
-comparison_call_limit = int(sys.argv[12])
-qualification_profile = sys.argv[13]
-draft_vocab_blocks_sha256 = sys.argv[14]
-fixed32_mode = sys.argv[15]
-logical_topology = sys.argv[16]
-active_drafts = int(sys.argv[17])
-valid_mask = int(sys.argv[18], 0)
+candidate_selector = sys.argv[9]
+record_schema = sys.argv[10]
+live_schema = sys.argv[11]
+stock_fa2_sha256 = sys.argv[12]
+comparison_call_limit = int(sys.argv[13])
+qualification_profile = sys.argv[14]
+draft_vocab_blocks_sha256 = sys.argv[15]
+fixed32_mode = sys.argv[16]
+logical_topology = sys.argv[17]
+active_drafts = int(sys.argv[18])
+valid_mask = int(sys.argv[19], 0)
+resource_credential_sha256 = sys.argv[20]
 if fixed32_mode not in qualification.QUALIFIED_FIXED32_MODES:
     raise SystemExit("CUTLASS B4 fixed32 topology is unsupported")
 if comparison_call_limit != qualification.MAX_COMPARISONS:
@@ -264,7 +316,13 @@ try:
     profile = qualification.QUALIFICATION_PROFILES[qualification_profile]
 except KeyError as error:
     raise SystemExit("CUTLASS B4 qualification profile is invalid") from error
-if live_schema != profile["live_schema"]:
+candidate_contract = qualification._candidate_contract(candidate_selector)
+if candidate_contract["diagnostic_selector"] != diagnostic_selector:
+    raise SystemExit("CUTLASS B4 candidate/diagnostic selector contract drifted")
+expected_live_schema = qualification._contract_profile_value(
+    candidate_contract, "live_schemas", qualification_profile
+)
+if live_schema != expected_live_schema:
     raise SystemExit("CUTLASS B4 live schema/profile contract drifted")
 if (
     qualification_profile == "k64_root"
@@ -363,8 +421,43 @@ for label, expected_path in (
     ):
         errors.append(f"installed binary {label} identity mismatch")
 
+resource_binding = {}
+if candidate_contract["requires_resource_credential"] is True:
+    if (
+        resource_credential_sha256
+        != binary.STATIC_B4_M128_RESOURCE_CREDENTIAL_SHA256
+    ):
+        errors.append("static M128 resource-credential input is not pinned")
+    for label in ("source", "destination"):
+        identity = binary_record.get(label) or {}
+        resource = identity.get("resource_credential") or {}
+        if (
+            resource.get("sha256") != resource_credential_sha256
+            or resource.get("schema")
+            != binary.STATIC_B4_M128_RESOURCE_CREDENTIAL_SCHEMA
+            or resource.get("candidate_sha256") != expected_sha256
+            or resource.get("candidate_bytes") != expected_size
+            or resource.get("regular") is not True
+            or resource.get("symlink") is not False
+        ):
+            errors.append(
+                f"installed binary {label} resource-credential binding mismatch"
+            )
+    try:
+        resource_binding = qualification._resource_binding(
+            binary_record.get("source") or {}
+        )
+    except qualification.QualificationError as error:
+        errors.append(str(error))
+else:
+    if resource_credential_sha256:
+        errors.append("incumbent M128 diagnostic received a static resource credential")
+
 patch_sha256 = hashlib.sha256(patch_source.read_bytes()).hexdigest()
-if patch_sha256 != qualification.PATCH_SOURCE_SHA256:
+expected_patch_sha256, expected_dispatch_sha256 = (
+    qualification._candidate_source_hashes(candidate_selector)
+)
+if patch_sha256 != expected_patch_sha256:
     errors.append("CUTLASS patch source SHA-256 mismatch")
 
 ledger_verification = verify_fixed32_ingress_ledger(
@@ -442,7 +535,7 @@ payload = {
     "concurrency": 4,
     "fixed_rows": 128,
     "eager_builder_capacity": 128,
-    "candidate": "persistent_b4_m128",
+    "candidate": candidate_selector,
     "diagnostic_selector": diagnostic_selector,
     "served_result": "stock",
     "production_enabled": False,
@@ -458,11 +551,12 @@ payload = {
     "stock_fa2_sha256": stock_fa2_sha256,
     "patch_source_sha256": patch_sha256,
     "vllm_base_commit": qualification.VLLM_BASE_COMMIT,
-    "patched_dispatch_sha256": qualification.PATCHED_DISPATCH_SHA256,
+    "patched_dispatch_sha256": expected_dispatch_sha256,
     "source_commit": source_commit,
     "binary_attestation_sha256": hashlib.sha256(binary_raw).hexdigest(),
     "errors": errors,
 }
+payload.update(resource_binding)
 if qualification_profile == "k64_root":
     expected_blocks_env = (
         "FR13_DRAFT_VOCAB_BLOCKS="
@@ -491,11 +585,19 @@ PY
 
 LIVE_RESULT="$ARMDIR/$LIVE_RESULT_NAME"
 LIVE_SHA256=$(sha256sum "$LIVE_RESULT" | awk '{print $1}')
+QUALIFICATION_RESOURCE_ARGS=()
+if [[ "$CANDIDATE_SELECTOR" == "persistent_b4_m128_static" ]]; then
+  QUALIFICATION_RESOURCE_ARGS=(
+    --resource-credential "$RESOURCE_CREDENTIAL"
+    --expected-resource-credential-sha256 "$RESOURCE_CREDENTIAL_SHA256"
+  )
+fi
 "$PYTHON_BIN" scripts/fr13_cutlass_b4_pass.py issue \
   --live-result "$LIVE_RESULT" --expected-live-sha256 "$LIVE_SHA256" \
   --candidate-so "$CUTLASS_B4_SO" --patch-source "$PATCH_SOURCE" \
   --expected-source-commit "$SOURCE_COMMIT" \
-  --candidate-selector persistent_b4_m128 \
+  --candidate-selector "$CANDIDATE_SELECTOR" \
+  "${QUALIFICATION_RESOURCE_ARGS[@]}" \
   --qualification-profile "$QUALIFICATION_PROFILE" \
   --fixed32-mode "$FIXED32_MODE" \
   --out "$ARMDIR/$PRODUCTION_PASS_NAME"

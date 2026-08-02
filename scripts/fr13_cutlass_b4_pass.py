@@ -21,6 +21,16 @@ LIVE_SCHEMA = "fr13.fixed32.cutlass_persistent_b4_m128_live_gate.v1"
 SIDECAR_SCHEMA = "fr13.fixed32.cutlass_b4.production_pass.v1"
 K64_ROOT_LIVE_SCHEMA = "fr13.fixed32.cutlass_persistent_b4_m128_k64_root_live_gate.v1"
 K64_ROOT_SIDECAR_SCHEMA = "fr13.fixed32.cutlass_b4.k64_root.production_pass.v1"
+STATIC_LIVE_SCHEMA = "fr13.fixed32.cutlass_persistent_b4_m128_static_live_gate.v1"
+STATIC_K64_ROOT_LIVE_SCHEMA = (
+    "fr13.fixed32.cutlass_persistent_b4_m128_static_k64_root_live_gate.v1"
+)
+STATIC_SIDECAR_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.m128_static.production_pass.v1"
+)
+STATIC_K64_ROOT_SIDECAR_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.m128_static.k64_root.production_pass.v1"
+)
 ATTESTATION_SCHEMA = "fr13.fixed32.cutlass_streamk_binary.v2"
 PATCH_SOURCE = Path("scripts/fr13_patch_cutlass_fixed32_wave.py")
 PATCH_SOURCE_SHA256 = "656c53b20497fc08cc7fdfb18256235b07cfad9868fde2faa70e6b0b9dfca41a"
@@ -32,6 +42,12 @@ DRAFT_VOCAB_BLOCKS_SHA256 = (
 VLLM_BASE_COMMIT = "fe9c3d6c5f66c873d196800384ed6880687b9e52"
 PATCHED_DISPATCH_SHA256 = (
     "13debfa754beeb4a6ae9818612b4bf729619f0be03637372626de3778b2b3780"
+)
+STATIC_PATCH_SOURCE_SHA256 = (
+    "977c0204d03d022bd3f4b745ad4a0bad8ec36d7bf82ac1c6f82aa42a62094fab"
+)
+STATIC_PATCHED_DISPATCH_SHA256 = (
+    "446771039af31a2ae386b917540be2a018fdc8d947c001030696ec9a6608a4c4"
 )
 EXPECTED_TASK_IDS = (
     "astropy__astropy-12907",
@@ -61,8 +77,44 @@ EXPECTED_PROJECTION_NK = (
 )
 CANDIDATE_CONTRACTS = {
     "persistent_b4_m128": {
-        "live_schema": LIVE_SCHEMA,
         "diagnostic_selector": "persistent_b4_m128_byte_ab",
+        "live_schemas": {
+            "full_vocab": LIVE_SCHEMA,
+            "k64_root": K64_ROOT_LIVE_SCHEMA,
+        },
+        "sidecar_schemas": {
+            "full_vocab": SIDECAR_SCHEMA,
+            "k64_root": K64_ROOT_SIDECAR_SCHEMA,
+        },
+        "binding_schemas": {
+            "full_vocab": "fr13.fixed32.cutlass_b4.production_binding.v1",
+            "k64_root": (
+                "fr13.fixed32.cutlass_b4.k64_root.production_binding.v1"
+            ),
+        },
+        "production_authorized": True,
+        "requires_resource_credential": False,
+    },
+    "persistent_b4_m128_static": {
+        "diagnostic_selector": "persistent_b4_m128_static_byte_ab",
+        "live_schemas": {
+            "full_vocab": STATIC_LIVE_SCHEMA,
+            "k64_root": STATIC_K64_ROOT_LIVE_SCHEMA,
+        },
+        "sidecar_schemas": {
+            "full_vocab": STATIC_SIDECAR_SCHEMA,
+            "k64_root": STATIC_K64_ROOT_SIDECAR_SCHEMA,
+        },
+        "binding_schemas": {
+            "full_vocab": (
+                "fr13.fixed32.cutlass_b4.m128_static.production_binding.v1"
+            ),
+            "k64_root": (
+                "fr13.fixed32.cutlass_b4.m128_static.k64_root.production_binding.v1"
+            ),
+        },
+        "production_authorized": False,
+        "requires_resource_credential": True,
     },
 }
 QUALIFICATION_PROFILES: dict[str, dict[str, object]] = {
@@ -93,13 +145,39 @@ QUALIFICATION_PROFILES: dict[str, dict[str, object]] = {
 }
 
 
-def _candidate_contract(candidate_selector: str) -> dict[str, str]:
+def _candidate_contract(candidate_selector: str) -> dict[str, object]:
     try:
         return CANDIDATE_CONTRACTS[candidate_selector]
     except KeyError as error:
         raise QualificationError(
             f"CUTLASS B4 candidate selector mismatch: {candidate_selector!r}"
         ) from error
+
+
+def _contract_profile_value(
+    candidate_contract: dict[str, object],
+    field: str,
+    qualification_profile: str,
+) -> str:
+    values = candidate_contract.get(field)
+    if not isinstance(values, dict):
+        raise QualificationError(f"CUTLASS B4 candidate contract lacks {field}")
+    value = values.get(qualification_profile)
+    if not isinstance(value, str):
+        raise QualificationError(
+            f"CUTLASS B4 candidate contract lacks {field}.{qualification_profile}"
+        )
+    return value
+
+
+def _candidate_source_hashes(candidate_selector: str) -> tuple[str, str]:
+    if candidate_selector == "persistent_b4_m128":
+        return PATCH_SOURCE_SHA256, PATCHED_DISPATCH_SHA256
+    if candidate_selector == "persistent_b4_m128_static":
+        return STATIC_PATCH_SOURCE_SHA256, STATIC_PATCHED_DISPATCH_SHA256
+    raise QualificationError(
+        f"CUTLASS B4 candidate selector mismatch: {candidate_selector!r}"
+    )
 
 
 class QualificationError(ValueError):
@@ -188,12 +266,15 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def _validate_patch_source(path: Path) -> dict[str, object]:
+def _validate_patch_source(
+    path: Path,
+    expected_sha256: str = PATCH_SOURCE_SHA256,
+) -> dict[str, object]:
     info = _regular_file(path, "CUTLASS wave patch source")
     digest = sha256_file(path)
-    if digest != PATCH_SOURCE_SHA256:
+    if digest != expected_sha256:
         raise QualificationError(
-            f"CUTLASS wave patch source SHA-256 mismatch: {digest} != {PATCH_SOURCE_SHA256}"
+            f"CUTLASS wave patch source SHA-256 mismatch: {digest} != {expected_sha256}"
         )
     return {
         "path": str(path.resolve(strict=True)),
@@ -201,6 +282,29 @@ def _validate_patch_source(path: Path) -> dict[str, object]:
         "sha256": digest,
         "regular": True,
         "symlink": False,
+    }
+
+
+def _resource_binding(candidate: dict[str, object]) -> dict[str, object]:
+    resource = candidate.get("resource_credential")
+    if not isinstance(resource, dict):
+        raise QualificationError(
+            "static M128 candidate lacks its pinned resource credential"
+        )
+    return {
+        "resource_credential_sha256": resource["sha256"],
+        "resource_credential_schema": resource["schema"],
+        "candidate_resource_records": resource["resource_records"],
+        "candidate_registers_per_thread": resource["registers_per_thread"],
+        "candidate_stack_bytes_per_thread": resource["stack_bytes_per_thread"],
+        "candidate_local_bytes_per_thread": resource["local_bytes_per_thread"],
+        "candidate_static_shared_bytes_per_cta": resource[
+            "static_shared_bytes_per_cta"
+        ],
+        "candidate_constant0_bytes": resource["constant0_bytes"],
+        "candidate_parameter_bytes": resource["parameter_bytes"],
+        "candidate_threads_per_cta": resource["threads_per_cta"],
+        "candidate_warps_per_cta": resource["warps_per_cta"],
     }
 
 
@@ -232,6 +336,8 @@ def validate_live_result(
     qualification_profile: str = "full_vocab",
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
     fixed32_mode: str = "hydra27_fixed32",
+    resource_credential: Path | None = None,
+    expected_resource_credential_sha256: str | None = None,
 ) -> dict[str, Any]:
     if fixed32_mode not in QUALIFIED_FIXED32_MODES:
         raise QualificationError(
@@ -250,15 +356,27 @@ def validate_live_result(
             f"CUTLASS B4 live PASS SHA-256 mismatch: {live_sha256} != {expected_live_sha256}"
         )
 
-    candidate = binary.verify_candidate(candidate_so, diagnostic_selector)
-    patch = _validate_patch_source(patch_source)
+    candidate = binary.verify_candidate(
+        candidate_so,
+        diagnostic_selector,
+        resource_credential=resource_credential,
+        expected_resource_credential_sha256=(
+            expected_resource_credential_sha256
+        ),
+    )
+    patch_source_sha256, patched_dispatch_sha256 = _candidate_source_hashes(
+        candidate_selector
+    )
+    patch = _validate_patch_source(patch_source, patch_source_sha256)
     block_map = (
         _validate_draft_vocab_blocks(draft_vocab_blocks)
         if profile["requires_block_map"]
         else None
     )
     expected_fields: dict[str, object] = {
-        "schema": profile["live_schema"],
+        "schema": _contract_profile_value(
+            candidate_contract, "live_schemas", qualification_profile
+        ),
         "status": "pass",
         "run_classification": profile["run_classification"],
         "acceptance_valid": False,
@@ -286,11 +404,13 @@ def validate_live_result(
         "differing_bytes": 0,
         "candidate_sha256": candidate["sha256"],
         "candidate_bytes": candidate["bytes"],
-        "patch_source_sha256": PATCH_SOURCE_SHA256,
+        "patch_source_sha256": patch_source_sha256,
         "vllm_base_commit": VLLM_BASE_COMMIT,
-        "patched_dispatch_sha256": PATCHED_DISPATCH_SHA256,
+        "patched_dispatch_sha256": patched_dispatch_sha256,
         "errors": [],
     }
+    if candidate_contract["requires_resource_credential"] is True:
+        expected_fields.update(_resource_binding(candidate))
     if qualification_profile == "k64_root":
         assert block_map is not None
         expected_fields.update(
@@ -343,7 +463,9 @@ def validate_live_result(
         payload.get("container_env_sha256"), "container environment SHA-256"
     )
     result = {
-        "schema": profile["sidecar_schema"],
+        "schema": _contract_profile_value(
+            candidate_contract, "sidecar_schemas", qualification_profile
+        ),
         "status": "QUALIFIED",
         "candidate_selector": candidate_selector,
         "diagnostic_selector": diagnostic_selector,
@@ -354,7 +476,7 @@ def validate_live_result(
         "binary_attestation_sha256": attestation_sha256,
         "patch_source_sha256": patch["sha256"],
         "vllm_base_commit": VLLM_BASE_COMMIT,
-        "patched_dispatch_sha256": PATCHED_DISPATCH_SHA256,
+        "patched_dispatch_sha256": patched_dispatch_sha256,
         "qualification_source_commit": source_commit,
         "qualification_task_ids": list(EXPECTED_TASK_IDS),
         "qualification_task_marker": task_marker,
@@ -373,6 +495,8 @@ def validate_live_result(
         "served_result_during_qualification": "stock",
         "production_default_enabled": False,
     }
+    if candidate_contract["requires_resource_credential"] is True:
+        result.update(_resource_binding(candidate))
     if qualification_profile == "k64_root":
         assert block_map is not None
         result.update(
@@ -396,6 +520,8 @@ def issue_sidecar(
     qualification_profile: str = "full_vocab",
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
     fixed32_mode: str = "hydra27_fixed32",
+    resource_credential: Path | None = None,
+    expected_resource_credential_sha256: str | None = None,
 ) -> dict[str, Any]:
     payload = validate_live_result(
         live_result,
@@ -407,6 +533,8 @@ def issue_sidecar(
         qualification_profile,
         draft_vocab_blocks,
         fixed32_mode,
+        resource_credential,
+        expected_resource_credential_sha256,
     )
     _write_json(output, payload)
     return payload
@@ -422,6 +550,8 @@ def verify_sidecar(
     qualification_profile: str | None = None,
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
     fixed32_mode: str = "hydra27_fixed32",
+    resource_credential: Path | None = None,
+    expected_resource_credential_sha256: str | None = None,
 ) -> dict[str, Any]:
     if fixed32_mode not in QUALIFIED_FIXED32_MODES:
         raise QualificationError(
@@ -431,10 +561,18 @@ def verify_sidecar(
         expected_sidecar_sha256, "expected production-sidecar SHA-256"
     )
     payload, raw = _read_json(sidecar, "CUTLASS B4 production sidecar")
+    sidecar_selector = payload.get("candidate_selector")
+    if not isinstance(sidecar_selector, str):
+        raise QualificationError("CUTLASS B4 production sidecar selector is invalid")
+    candidate_contract = _candidate_contract(sidecar_selector)
     schema = payload.get("schema")
-    if schema == SIDECAR_SCHEMA:
+    if schema == _contract_profile_value(
+        candidate_contract, "sidecar_schemas", "full_vocab"
+    ):
         sidecar_profile = "full_vocab"
-    elif schema == K64_ROOT_SIDECAR_SCHEMA:
+    elif schema == _contract_profile_value(
+        candidate_contract, "sidecar_schemas", "k64_root"
+    ):
         sidecar_profile = "k64_root"
     else:
         raise QualificationError("CUTLASS B4 production sidecar schema mismatch")
@@ -443,28 +581,38 @@ def verify_sidecar(
             "CUTLASS B4 production sidecar qualification-profile mismatch"
         )
     profile = _qualification_profile(sidecar_profile)
-    sidecar_selector = payload.get("candidate_selector")
     if candidate_selector is not None and sidecar_selector != candidate_selector:
         raise QualificationError("CUTLASS B4 production sidecar selector mismatch")
-    if not isinstance(sidecar_selector, str):
-        raise QualificationError("CUTLASS B4 production sidecar selector is invalid")
-    candidate_contract = _candidate_contract(sidecar_selector)
     diagnostic_selector = candidate_contract["diagnostic_selector"]
+    if not isinstance(diagnostic_selector, str):
+        raise QualificationError("CUTLASS B4 diagnostic selector contract is invalid")
     actual_sha256 = hashlib.sha256(raw).hexdigest()
     if actual_sha256 != expected_sidecar_sha256:
         raise QualificationError(
             "CUTLASS B4 production sidecar SHA-256 mismatch: "
             f"{actual_sha256} != {expected_sidecar_sha256}"
         )
-    candidate = binary.verify_candidate(candidate_so, diagnostic_selector)
-    patch = _validate_patch_source(patch_source)
+    candidate = binary.verify_candidate(
+        candidate_so,
+        diagnostic_selector,
+        resource_credential=resource_credential,
+        expected_resource_credential_sha256=(
+            expected_resource_credential_sha256
+        ),
+    )
+    patch_source_sha256, patched_dispatch_sha256 = _candidate_source_hashes(
+        sidecar_selector
+    )
+    patch = _validate_patch_source(patch_source, patch_source_sha256)
     block_map = (
         _validate_draft_vocab_blocks(draft_vocab_blocks)
         if profile["requires_block_map"]
         else None
     )
     required = {
-        "schema": profile["sidecar_schema"],
+        "schema": _contract_profile_value(
+            candidate_contract, "sidecar_schemas", sidecar_profile
+        ),
         "status": "QUALIFIED",
         "candidate_selector": sidecar_selector,
         "diagnostic_selector": diagnostic_selector,
@@ -473,7 +621,7 @@ def verify_sidecar(
         "candidate_bytes": candidate["bytes"],
         "patch_source_sha256": patch["sha256"],
         "vllm_base_commit": VLLM_BASE_COMMIT,
-        "patched_dispatch_sha256": PATCHED_DISPATCH_SHA256,
+        "patched_dispatch_sha256": patched_dispatch_sha256,
         "qualification_task_ids": list(EXPECTED_TASK_IDS),
         "qualified_draft_vocab_root": profile["draft_vocab_root"],
         "qualified_draft_vocab_k": profile["draft_vocab_k"],
@@ -488,6 +636,8 @@ def verify_sidecar(
         "served_result_during_qualification": "stock",
         "production_default_enabled": False,
     }
+    if candidate_contract["requires_resource_credential"] is True:
+        required.update(_resource_binding(candidate))
     if sidecar_profile == "k64_root":
         assert block_map is not None
         required.update(
@@ -552,6 +702,11 @@ def validate_production_attestation(
     if not isinstance(candidate_selector, str):
         raise QualificationError("CUTLASS B4 binary attestation selector is invalid")
     candidate_contract = _candidate_contract(candidate_selector)
+    if candidate_contract["production_authorized"] is not True:
+        raise QualificationError(
+            "static M128 production remains unavailable until Tail23 and Hydra27 "
+            "raw-byte gates pass"
+        )
     candidate_sha256, candidate_bytes, candidate_family = binary.candidate_identity(
         candidate_selector
     )
@@ -608,7 +763,8 @@ def validate_production_attestation(
         raise QualificationError("CUTLASS B4 attestation sidecar binding mismatch")
     if qualification.get("candidate_sha256") != candidate_sha256:
         raise QualificationError("CUTLASS B4 attestation candidate binding mismatch")
-    if qualification.get("patch_source_sha256") != PATCH_SOURCE_SHA256:
+    patch_source_sha256, _ = _candidate_source_hashes(candidate_selector)
+    if qualification.get("patch_source_sha256") != patch_source_sha256:
         raise QualificationError("CUTLASS B4 attestation patch-source binding mismatch")
     for key, expected in (
         ("qualified_draft_vocab_root", profile["draft_vocab_root"]),
@@ -676,14 +832,16 @@ def validate_production_attestation(
         "attestation live-result SHA-256",
     )
     result = {
-        "schema": profile["binding_schema"],
+        "schema": _contract_profile_value(
+            candidate_contract, "binding_schemas", attested_profile
+        ),
         "status": "BOUND",
         "selector": candidate_selector,
         "diagnostic_selector": candidate_contract["diagnostic_selector"],
         "candidate_family": candidate_family,
         "candidate_sha256": candidate_sha256,
         "candidate_bytes": candidate_bytes,
-        "patch_source_sha256": PATCH_SOURCE_SHA256,
+        "patch_source_sha256": patch_source_sha256,
         "production_sidecar_sha256": expected_sidecar_sha256,
         "live_result_sha256": qualification["live_result_sha256"],
         "binary_attestation_sha256": hashlib.sha256(raw).hexdigest(),
@@ -728,6 +886,8 @@ def main() -> int:
         subparser.add_argument("--patch-source", type=Path, default=PATCH_SOURCE)
         subparser.add_argument("--expected-source-commit")
         subparser.add_argument("--candidate-selector", default="persistent_b4_m128")
+        subparser.add_argument("--resource-credential", type=Path)
+        subparser.add_argument("--expected-resource-credential-sha256")
         subparser.add_argument(
             "--qualification-profile",
             choices=tuple(QUALIFICATION_PROFILES),
@@ -751,6 +911,8 @@ def main() -> int:
     verify_parser.add_argument("--candidate-so", type=Path, required=True)
     verify_parser.add_argument("--patch-source", type=Path, default=PATCH_SOURCE)
     verify_parser.add_argument("--candidate-selector")
+    verify_parser.add_argument("--resource-credential", type=Path)
+    verify_parser.add_argument("--expected-resource-credential-sha256")
     verify_parser.add_argument(
         "--qualification-profile", choices=tuple(QUALIFICATION_PROFILES)
     )
@@ -793,6 +955,8 @@ def main() -> int:
             args.qualification_profile,
             args.draft_vocab_blocks,
             args.fixed32_mode,
+            args.resource_credential,
+            args.expected_resource_credential_sha256,
         )
     elif args.command == "issue":
         payload = issue_sidecar(
@@ -806,6 +970,8 @@ def main() -> int:
             args.qualification_profile,
             args.draft_vocab_blocks,
             args.fixed32_mode,
+            args.resource_credential,
+            args.expected_resource_credential_sha256,
         )
     elif args.command == "verify":
         payload = verify_sidecar(
@@ -817,6 +983,10 @@ def main() -> int:
             qualification_profile=args.qualification_profile,
             draft_vocab_blocks=args.draft_vocab_blocks,
             fixed32_mode=args.fixed32_mode,
+            resource_credential=args.resource_credential,
+            expected_resource_credential_sha256=(
+                args.expected_resource_credential_sha256
+            ),
         )
     else:
         payload = validate_production_attestation(

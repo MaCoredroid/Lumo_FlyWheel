@@ -61,7 +61,8 @@ if [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "1" \
       || "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
-      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_byte_ab" ]]; then
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_static_byte_ab" ]]; then
   _fixed32_eager_kernel_diagnostic=1
   [[ "${ENFORCE_EAGER:-0}" == "1" ]] \
     || { echo "FAIL: eager kernel diagnostic requires ENFORCE_EAGER=1"; exit 2; }
@@ -1559,7 +1560,8 @@ if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       echo "FAIL: fixed32 CUTLASS, TAW, and BM8 real-task diagnostics are exclusive"
       exit 2
     }
-elif [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_byte_ab" ]]; then
+elif [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_byte_ab" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_static_byte_ab" ]]; then
   [[ -n "$FIXED32_MODE" \
      && "$FR13_FIXED32_B1_DIAGNOSTIC" == "0" \
      && "$MAX_NUM_SEQS_OVR" == "4" ]] || {
@@ -1798,6 +1800,8 @@ if cutlass_wave not in {
     "streamk_force_wide256",
     "persistent_b4_m128_byte_ab",
     "persistent_b4_m128",
+    "persistent_b4_m128_static_byte_ab",
+    "persistent_b4_m128_static",
 }:
     raise SystemExit("fixed32 CUTLASS wave selector is invalid")
 try:
@@ -1807,7 +1811,10 @@ try:
         attribution_only=attribution_only_text == "1",
         eager_diagnostic=(
             batch_gdn_byte_ab_text == "1"
-            or cutlass_wave == "persistent_b4_m128_byte_ab"
+            or cutlass_wave in {
+                "persistent_b4_m128_byte_ab",
+                "persistent_b4_m128_static_byte_ab",
+            }
             or sfwd_b4_byte_ab_text == "1"
         ),
         graph_diagnostic=batch_gdn_graph_byte_ab_text == "1",

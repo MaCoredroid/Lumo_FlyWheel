@@ -354,11 +354,12 @@ def test_b4_selector_reaches_eager_process_attestation() -> None:
     serve = (SCRIPTS / "fr13_bigdenom_swe_serve_variant.sh").read_text(encoding="utf-8")
     orchestrator = (SCRIPTS / "run_swe_bench_q36_a.py").read_text(encoding="utf-8")
 
-    assert 'cutlass_wave == "persistent_b4_m128_byte_ab"' in serve
+    assert '"persistent_b4_m128_byte_ab",' in serve
+    assert '"persistent_b4_m128_static_byte_ab",' in serve
     assert '"persistent_b4_m128"' in serve
     assert '"persistent_b4_m128_byte_ab"' in serve
-    assert 'batch_gdn_byte_ab_text == "1"\n            or cutlass_wave' in serve
-    assert '== "persistent_b4_m128_byte_ab" ]]; then' in serve
+    assert 'batch_gdn_byte_ab_text == "1"\n            or cutlass_wave in {' in serve
+    assert '== "persistent_b4_m128_static_byte_ab" ]]; then' in serve
     assert "fr13-fixed32-eager-kernel-terminal-v1" in serve
     assert "fr13-fixed32-eager-kernel-traffic-audit-skip-v1" in serve
     assert "fixed32 eager kernel diagnostic: graph-census needles" in serve
