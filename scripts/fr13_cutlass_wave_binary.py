@@ -34,6 +34,10 @@ IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SHA256 = (
     "bab51a0f346fe3230e351004732a0cc41f1bd6c0732b238e3ae592f07f47e208"
 )
 IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SIZE = 115_315_576
+IDENTITY_B4_CANDIDATE_SHA256 = (
+    "d7771d5a95a34d6072a796d520e8f2fa500aeccc900d57e1477941b966ea77a9"
+)
+IDENTITY_B4_CANDIDATE_SIZE = 116_284_480
 B4_M128_CANDIDATE_SHA256 = (
     "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
 )
@@ -68,6 +72,12 @@ IDENTITY_STAGE2_PINGPONG_B1_SELECTORS = frozenset(
         "identity_stage2_pingpong_b1_byte_ab",
     }
 )
+IDENTITY_STOCKSHAPE_B4_SELECTORS = frozenset(
+    {"identity_stockshape_b4", "identity_stockshape_b4_byte_ab"}
+)
+IDENTITY_DIVISOR_B4_SELECTORS = frozenset(
+    {"identity_divisor_b4", "identity_divisor_b4_byte_ab"}
+)
 B4_M128_SELECTORS = frozenset({"persistent_b4_m128", "persistent_b4_m128_byte_ab"})
 STATIC_B4_M128_SELECTORS = frozenset(
     {"persistent_b4_m128_static", "persistent_b4_m128_static_byte_ab"}
@@ -79,6 +89,8 @@ CANDIDATE_SELECTORS = (
     | DIVISOR_STATIC_B1_SELECTORS
     | IDENTITY_STAGE2_SELECTORS
     | IDENTITY_STAGE2_PINGPONG_B1_SELECTORS
+    | IDENTITY_STOCKSHAPE_B4_SELECTORS
+    | IDENTITY_DIVISOR_B4_SELECTORS
     | B4_M128_SELECTORS
     | STATIC_B4_M128_SELECTORS
 )
@@ -90,6 +102,8 @@ INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
     "divisor_static_stocktile",
     "identity_stage2_static",
     "identity_stage2_pingpong_b1",
+    "identity_stockshape_b4",
+    "identity_divisor_b4",
     "persistent_b4_m128_static",
 }
 CONTAINER_SOURCE = Path("/tmp/fr13_cutlass_wave.abi3.so")
@@ -134,6 +148,18 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
             IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SHA256,
             IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SIZE,
             "identity_stage2_pingpong_b1",
+        )
+    if selector in IDENTITY_STOCKSHAPE_B4_SELECTORS:
+        return (
+            IDENTITY_B4_CANDIDATE_SHA256,
+            IDENTITY_B4_CANDIDATE_SIZE,
+            "identity_stockshape_b4",
+        )
+    if selector in IDENTITY_DIVISOR_B4_SELECTORS:
+        return (
+            IDENTITY_B4_CANDIDATE_SHA256,
+            IDENTITY_B4_CANDIDATE_SIZE,
+            "identity_divisor_b4",
         )
     if selector in B4_M128_SELECTORS:
         return B4_M128_CANDIDATE_SHA256, B4_M128_CANDIDATE_SIZE, "persistent_b4_m128"

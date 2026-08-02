@@ -47,6 +47,10 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "identity_stage2_static_byte_ab",
         "identity_stage2_pingpong_b1",
         "identity_stage2_pingpong_b1_byte_ab",
+        "identity_stockshape_b4",
+        "identity_stockshape_b4_byte_ab",
+        "identity_divisor_b4",
+        "identity_divisor_b4_byte_ab",
         "persistent_b4_m128",
         "persistent_b4_m128_byte_ab",
         "persistent_b4_m128_static",
@@ -80,6 +84,20 @@ def test_pinned_binary_identity_and_selectors() -> None:
         module.IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SHA256,
         module.IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SIZE,
         "identity_stage2_pingpong_b1",
+    )
+    assert module.IDENTITY_B4_CANDIDATE_SHA256 == (
+        "d7771d5a95a34d6072a796d520e8f2fa500aeccc900d57e1477941b966ea77a9"
+    )
+    assert module.IDENTITY_B4_CANDIDATE_SIZE == 116_284_480
+    assert module.candidate_identity("identity_stockshape_b4_byte_ab") == (
+        module.IDENTITY_B4_CANDIDATE_SHA256,
+        module.IDENTITY_B4_CANDIDATE_SIZE,
+        "identity_stockshape_b4",
+    )
+    assert module.candidate_identity("identity_divisor_b4_byte_ab") == (
+        module.IDENTITY_B4_CANDIDATE_SHA256,
+        module.IDENTITY_B4_CANDIDATE_SIZE,
+        "identity_divisor_b4",
     )
     assert module.B4_M128_CANDIDATE_SHA256 == (
         "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
@@ -306,6 +324,62 @@ def test_static_b1_diagnostic_installs_but_production_stays_blocked(
     destination.chmod(0o644)
     destination.write_bytes(b"stock-extension\n")
     with pytest.raises(ValueError, match="K64/root raw-byte gate"):
+        module.install_candidate(
+            source,
+            destination,
+            attestation,
+            production_selector,
+        )
+    assert destination.read_bytes() == b"stock-extension\n"
+
+
+@pytest.mark.parametrize(
+    ("diagnostic_selector", "production_selector", "family"),
+    (
+        (
+            "identity_stockshape_b4_byte_ab",
+            "identity_stockshape_b4",
+            "identity_stockshape_b4",
+        ),
+        (
+            "identity_divisor_b4_byte_ab",
+            "identity_divisor_b4",
+            "identity_divisor_b4",
+        ),
+    ),
+)
+def test_identity_b4_diagnostic_installs_but_production_stays_blocked(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    diagnostic_selector: str,
+    production_selector: str,
+    family: str,
+) -> None:
+    module = _module()
+    payload = f"{family}-candidate\n".encode("ascii")
+    digest = hashlib.sha256(payload).hexdigest()
+    monkeypatch.setattr(module, "IDENTITY_B4_CANDIDATE_SIZE", len(payload))
+    monkeypatch.setattr(module, "IDENTITY_B4_CANDIDATE_SHA256", digest)
+    source = tmp_path / "identity-b4.so"
+    destination = tmp_path / "installed.so"
+    attestation = tmp_path / "attestation.json"
+    source.write_bytes(payload)
+    destination.write_bytes(b"stock-extension\n")
+
+    record = module.install_candidate(
+        source,
+        destination,
+        attestation,
+        diagnostic_selector,
+    )
+
+    assert destination.read_bytes() == payload
+    assert record["production_enabled"] is False
+    assert record["candidate_family"] == family
+
+    destination.chmod(0o644)
+    destination.write_bytes(b"stock-extension\n")
+    with pytest.raises(ValueError, match="Tail23 and Hydra27 raw-byte gates"):
         module.install_candidate(
             source,
             destination,
