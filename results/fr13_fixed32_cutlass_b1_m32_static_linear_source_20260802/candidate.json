@@ -1,0 +1,109 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_m32_static_linear_source.v1",
+  "created_at_utc": "2026-08-02T05:05:13Z",
+  "status": "source_only_default_off",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "source": {
+    "repo_base_commit": "3aa852cd9fe901f3431361f58619cf291279d70a",
+    "implementation_commit": "246ea98e7671d787079940fee9c958b4ded9642f",
+    "branch": "agent/fixed32-sfwd-b1-m32-static-linear-source-20260802",
+    "patch_source_sha256": "3f93cdaa5d644b82fdb2daff99b6f3477ef6e9960649af575385070096324333",
+    "patched_dispatch_sha256": "85800af2eaaac712a0cb8371c942b067e032e51cf7d06efb43c06ea75369a435",
+    "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "vllm_dispatch_unpatched_sha256": "6e1df3f4701f58f233b3831b848c7bbf7936e6cb34b3bc28ded208fd66c48a7f",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2"
+  },
+  "candidate": {
+    "selector": "m32_static_linear",
+    "diagnostic_selector": "m32_static_linear_byte_ab",
+    "default_enabled": false,
+    "dispatch_m": 32,
+    "projection_shapes_mnk": [
+      [32, 34816, 5120],
+      [32, 5120, 17408],
+      [32, 5120, 6144],
+      [32, 16384, 5120],
+      [32, 14336, 5120]
+    ],
+    "swapped_output_tiles_m": [272, 40, 40, 128, 112],
+    "swapped_output_tiles_n": [1, 1, 1, 1, 1],
+    "full_k_tiles": [40, 136, 48, 40, 40],
+    "tile_mnk": [128, 32, 128],
+    "cluster_mnk": [1, 1, 1],
+    "kernel_schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+    "scale_granularity_mnk": [128, 1, 128],
+    "swap_ab": true,
+    "base_collective": "stock sm120_blockwise_fp8_config_swapab",
+    "scheduler": "Fr13Fixed32M32LinearScheduler100",
+    "work_mapping": "linear_idx_to_m_with_n_l_zero",
+    "predicted_added_device_bodies": 2,
+    "predicted_output_types": ["bfloat16", "float16"]
+  },
+  "exactness_construction": {
+    "collective_mainloop_reused": true,
+    "collective_epilogue_reused": true,
+    "k_tile_unchanged": true,
+    "k_iteration_order_unchanged_per_output": true,
+    "split_k": false,
+    "stream_k": false,
+    "stage_override": false,
+    "epilogue_substitution": false,
+    "output_tile_count_unchanged": true,
+    "all_dimensions_exact_for_allowlist": true,
+    "raw_byte_gate_still_required": true
+  },
+  "scheduler_contract": {
+    "base": "StaticPersistentTileScheduler100",
+    "problem_tiles_n": 1,
+    "problem_tiles_l": 1,
+    "cluster_shape_m": 1,
+    "cluster_shape_n": 1,
+    "log_swizzle_size": 0,
+    "blocks_per_problem_equals_problem_tiles_m": true,
+    "cta_coordinate": "M,0,_,0",
+    "grid_stride": true
+  },
+  "generic_static_comparator": {
+    "branch": "agent/fixed32-cutlass-static-scheduler-fb35",
+    "source_commit": "0adf68ed969bf488f8a050d2d3ea17573d847898",
+    "artifact_commit": "668c06e0d1a3736266c7745adebdf9ac86ea94ae",
+    "selector": "static_persistent_stocktile",
+    "diagnostic_selector": "static_persistent_stocktile_byte_ab",
+    "risk_order": "lower",
+    "canonical_artifact_binary_sha256": "b1cbd96651ec5e2b35cdacbe7fe6e75105e0c18593feea67c31f8cf8057cac4a",
+    "offline_audit_rebuild_sha256": "66c37f2593cd38738ed2689e1cabdeaaf8383663597b4b29b46558bbf6bd2cfb",
+    "m32_registers": 168,
+    "m32_stack_bytes": 0,
+    "m32_shared_bytes": 1024,
+    "stock_sass_instructions": 1176,
+    "generic_static_sass_instructions": 936,
+    "sass_instruction_reduction": 240,
+    "sass_instruction_reduction_percent": 20.408,
+    "real_swe_verified_byte_gate": "not_run"
+  },
+  "fixed_campaign_contract": {
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "physical_rows_root_inclusive_per_request": 32,
+    "task_sets": [4, 16],
+    "changed_by_candidate": false
+  },
+  "verification": {
+    "focused_tests": "48 passed in 0.17s",
+    "ruff": "pass",
+    "pycompile": "pass",
+    "pinned_source_apply": "pass",
+    "pinned_source_idempotency": "pass",
+    "cutlass_pin_validation": "pass",
+    "host_build": "not_run",
+    "gpu_runtime": "not_run",
+    "real_swe_verified_byte_gate": "not_run",
+    "b1_timing": "not_run"
+  },
+  "disk_at_closeout": {
+    "available": "4.4 GiB",
+    "build_started": false
+  }
+}
