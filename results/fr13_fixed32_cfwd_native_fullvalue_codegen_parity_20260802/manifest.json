@@ -1,0 +1,45 @@
+{
+  "branch": "agent/fixed32-cfwd-native-fullvalue-20260802",
+  "candidate": {
+    "default_on": false,
+    "diagnostic_selector_only": true,
+    "production_authorized": false,
+    "timing_eligible": false
+  },
+  "code_commit": "4ec55c0128f47d801e7bc64f8a4cadf4123ec057",
+  "qualification": {
+    "b1_real_swe_raw_byte_gate": null,
+    "b1_real_swe_timing": null,
+    "b4_exact4_real_swe_raw_byte_gate": null,
+    "b4_exact4_real_swe_timing": null,
+    "codegen_contract": "pass",
+    "compile_resource_gate": "pass",
+    "hardware_floor_claim_changed": false,
+    "status": "codegen_pass_raw_byte_and_timing_pending"
+  },
+  "schema": "fr13.fixed32.cfwd_native_fullvalue_codegen_parity.v1",
+  "source_sha256": {
+    "native/fr13_fixed32_cfwd_native_fullvalue.cu": "ed43ae9f4fda0294ef8bb0f803402a339a24d76929b792228b050ca6378f8d79",
+    "scripts/fr13_check_cfwd_native_fullvalue_codegen.py": "dbb72b3e0be67858525523c1b11105c874a4855a436ff9601701cdb377d97dbf",
+    "tests/test_fr13_fixed32_cfwd_native_fullvalue_cuda.py": "b38ecd4fc6b5dfbb76b3e8a0a36b3b59b1970e1411e8a72a65b4dd184c59c938"
+  },
+  "toolchain": {
+    "architecture": "sm_121a",
+    "cuda": "13.0.88",
+    "triton_incumbent_comparison": "3.6.0"
+  },
+  "verification": {
+    "cuda_compile_run": true,
+    "cuda_kernel_launch_run": false,
+    "docker_mutation": false,
+    "focused_tests_passed": 42,
+    "gpu_query_run": false,
+    "object_codegen_checker": "pass",
+    "python_byte_compile": "pass",
+    "real_swe_campaign_run": false,
+    "ruff": "unavailable_module_not_found",
+    "synthetic_or_probe_performance_run": false,
+    "timing_measurement_run": false,
+    "whitespace": "pass"
+  }
+}

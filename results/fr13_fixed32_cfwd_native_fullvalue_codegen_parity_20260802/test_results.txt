@@ -1,0 +1,19 @@
+Fixed32 CFWD native full-value codegen parity (2026-08-02 UTC)
+
+Focused suite:
+42 passed in 0.14s
+
+Python byte compilation: pass.
+git diff --check: pass.
+Ruff unavailable in this shell: /usr/bin/python3: No module named ruff.
+
+Exact full-translation-unit SM121a compile:
+- 64 registers/thread
+- 0-byte stack frame
+- 0-byte spill stores and loads
+- 0 local bytes
+- 548 source static shared bytes; 1,572 including target reservation
+
+Exact reduced object/SASS contract checker: pass.
+No CUDA kernel launch, GPU query, Docker mutation, real SWE-Verified campaign,
+synthetic/probe timing, or timing measurement is represented here.

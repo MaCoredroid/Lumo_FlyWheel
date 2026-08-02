@@ -1,0 +1,31 @@
+{
+  "incumbent_compiles": {
+    "triton_bv128": {
+      "local_load_instructions": 53,
+      "local_store_instructions": 53,
+      "registers_per_thread": 255,
+      "stack_frame_bytes": 424
+    },
+    "triton_bv64": {
+      "local_bytes": 0,
+      "registers_per_thread": 254,
+      "shared_bytes_reported": 1024,
+      "stack_frame_bytes": 0
+    }
+  },
+  "native_alignment": {
+    "exp": "mul_rn_log2e_then_ex2_approx",
+    "four_group_order": "group0_plus_group2_then_group1_plus_group3",
+    "group_reduction": "mul_then_xor16_fma_then_xor8_4_2_1_add",
+    "residual": "sub_rn_then_mul_rn",
+    "rsqrt": "rsqrt_approx_ftz",
+    "sigmoid_division": "div_full",
+    "state_decay": "mul_rn",
+    "state_update": "fma_rn"
+  },
+  "remaining_codegen_difference": {
+    "softplus_log": "same_polynomial_constants_and_order_but_native_non_ftz_fma_and_different_control_flow",
+    "strict_edge_path": "inline_complete_triton_log_polynomial_with_explicit_ftz_ptx_if_real_byte_gate_localizes_here"
+  },
+  "schema": "fr13.fixed32.cfwd_native_fullvalue_math_contract.v1"
+}

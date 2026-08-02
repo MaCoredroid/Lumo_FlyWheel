@@ -1,0 +1,27 @@
+{
+  "architecture": "sm_121a",
+  "contract_pass": true,
+  "forbidden_sass_counts": {
+    "CALL": 0,
+    "LDL": 0,
+    "STL": 0
+  },
+  "resources": {
+    "cuobjdump_shared_bytes": 1572,
+    "local_bytes": 0,
+    "ptxas_source_static_shared_bytes": 548,
+    "registers_per_thread": 64,
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0,
+    "stack_bytes": 0
+  },
+  "sass_counts": {
+    "FFMA": 78,
+    "MUFU.EX2": 3,
+    "MUFU.RCP": 2,
+    "MUFU.RSQ": 1,
+    "SHFL.BFLY": 174,
+    "SHFL.IDX": 16
+  },
+  "schema": "fr13.fixed32.cfwd_native_fullvalue_codegen_receipt.v1"
+}
