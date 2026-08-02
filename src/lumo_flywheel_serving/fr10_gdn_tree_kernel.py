@@ -4429,6 +4429,89 @@ def _fr13_fixed32_conv_direct_col0_kernel(
 
 
 @triton.jit
+def _fr13_fixed32_conv_flat_zeroelide_col0_kernel(
+    anchor_ptr,
+    bank_off16,
+    source_anchor,
+    source_off16,
+    state_src,
+    spec_state_indices,
+    accepted_paths,
+    accepted_lens,
+    ssi_stride_l,
+    ssi_stride_b,
+    ssi_stride_s,
+    path_stride_b,
+    path_stride_s,
+    lens_stride_b,
+    bank_row_stride,
+    source_row_stride,
+    CONV_C: tl.constexpr,
+    CONV_L: tl.constexpr,
+    LIVE_SOURCE_COLS: tl.constexpr,
+    SOURCE_ROWS: tl.constexpr,
+    ELEM_BYTES: tl.constexpr,
+    SPEC_COLS: tl.constexpr,
+    PATH_COLS: tl.constexpr,
+    B: tl.constexpr,
+    BLOCK: tl.constexpr,
+):
+    """Commit a canonical contiguous row without reading its zero suffix."""
+    pid_l = tl.program_id(0)
+    pid_b = tl.program_id(1)
+    pid_flat = tl.program_id(2)
+    if pid_b >= B:
+        return
+
+    accepted_len = tl.load(accepted_lens + pid_b * lens_stride_b)
+    leaf_pos = tl.maximum(accepted_len - 1, 0)
+    leaf_pos = tl.minimum(leaf_pos, PATH_COLS - 1)
+    leaf_node = tl.load(
+        accepted_paths
+        + pid_b * path_stride_b
+        + leaf_pos * path_stride_s
+    )
+    leaf_node = tl.where(accepted_len > 0, leaf_node, 0)
+    leaf_node = tl.maximum(0, tl.minimum(leaf_node, SPEC_COLS - 1))
+
+    spec_layer = (
+        spec_state_indices
+        + pid_l * ssi_stride_l
+        + pid_b * ssi_stride_b
+    )
+    dst_row = tl.load(spec_layer + 0 * ssi_stride_s)
+    bank = anchor_ptr + tl.load(bank_off16 + pid_l) * (16 // ELEM_BYTES)
+    source = (
+        source_anchor
+        + tl.load(source_off16 + pid_l) * (16 // ELEM_BYTES)
+    )
+    flat_start = pid_flat * BLOCK
+    state_col = flat_start // CONV_C
+    channel = flat_start - state_col * CONV_C + tl.arange(0, BLOCK)
+    flat = flat_start + tl.arange(0, BLOCK)
+    row_mask = flat < (CONV_C * CONV_L)
+    live_col = state_col < LIVE_SOURCE_COLS
+    source_row = tl.load(
+        state_src + leaf_node * CONV_L + state_col,
+        mask=live_col,
+        other=0,
+    ).to(tl.int64)
+    source_batch = pid_b.to(tl.int64) * SOURCE_ROWS
+    values = tl.load(
+        source
+        + (source_batch + source_row) * source_row_stride
+        + channel,
+        mask=row_mask & live_col,
+        other=0.0,
+    )
+    tl.store(
+        bank + dst_row.to(tl.int64) * bank_row_stride + flat,
+        values,
+        mask=row_mask,
+    )
+
+
+@triton.jit
 def _fr13_fixed32_sfwd_state_fusion_kernel(
     x,
     conv_state,
@@ -4564,6 +4647,26 @@ _FR13_FIXED32_CONV_PREGATHER: dict = {}
 _FR13_FIXED32_CONV_SSI_GROUPS: dict[tuple[str, ...], dict[str, object]] = {}
 _FR13_FIXED32_BATCHES = (1, 2, 3, 4)
 _FR13_FIXED32_CONV_COMMIT_ROUTE = "fixed32_direct_source_col0"
+_FR13_FIXED32_CONV_FLAT_COMMIT_ROUTE = (
+    "fixed32_flat_zeroelide_source_col0"
+)
+_FR13_FIXED32_CONV_FLAT_COMMIT_ENV = "FR13_FIXED32_CONV_FLAT_COMMIT"
+_FR13_FIXED32_CONV_FLAT_C = 10_240
+_FR13_FIXED32_CONV_FLAT_L = 34
+_FR13_FIXED32_CONV_FLAT_SOURCE_ROWS = 36
+_FR13_FIXED32_CONV_FLAT_LIVE_SOURCE_COLS = 3
+
+
+def _fr13_resolve_fixed32_conv_flat_commit(*, environ=None) -> bool:
+    """Resolve the default-off canonical flattened conv-commit candidate."""
+    env = os.environ if environ is None else environ
+    selector = env.get(_FR13_FIXED32_CONV_FLAT_COMMIT_ENV, "").strip()
+    if selector not in ("", "0", "diagnostic"):
+        raise RuntimeError(
+            f"{_FR13_FIXED32_CONV_FLAT_COMMIT_ENV} must be unset, 0, or "
+            "diagnostic"
+        )
+    return selector == "diagnostic"
 
 
 def _fixed32_conv_page_safe_row_span(
@@ -4982,6 +5085,39 @@ def preseed_fixed32_conv_col0_pregather(
         raise ValueError(
             "FR13_FIXED32_CONV_DIRECT state-src range does not match source rows"
         )
+    block = 1024
+    flat_commit = _fr13_resolve_fixed32_conv_flat_commit()
+    flat_zero_row = source_rows - 1
+    flat_zero_suffix = all(
+        all(
+            state_src_values[node * conv_l + state_col] == flat_zero_row
+            for state_col in range(
+                _FR13_FIXED32_CONV_FLAT_LIVE_SOURCE_COLS, conv_l
+            )
+        )
+        for node in range(32)
+    )
+    flat_contract = (
+        anchor.dtype == torch.bfloat16
+        and conv_c == _FR13_FIXED32_CONV_FLAT_C
+        and conv_l == _FR13_FIXED32_CONV_FLAT_L
+        and source_rows == _FR13_FIXED32_CONV_FLAT_SOURCE_ROWS
+        and conv_c % block == 0
+        and tuple(int(value) for value in anchor.stride()[1:])
+        == (1, _FR13_FIXED32_CONV_FLAT_C)
+        and flat_zero_suffix
+    )
+    if flat_commit and not flat_contract:
+        raise ValueError(
+            "FR13_FIXED32_CONV_FLAT_COMMIT requires canonical BF16 "
+            "C=10240/L=34 bank stride (1,10240), 36 source rows, and "
+            "state_src[:,3:]==35"
+        )
+    commit_route = (
+        _FR13_FIXED32_CONV_FLAT_COMMIT_ROUTE
+        if flat_commit
+        else _FR13_FIXED32_CONV_COMMIT_ROUTE
+    )
     if (
         not torch.is_tensor(commit_spec_state_indices)
         or commit_spec_state_indices.device != anchor.device
@@ -5041,6 +5177,7 @@ def preseed_fixed32_conv_col0_pregather(
             )
             or existing.get("source_rows_per_batch") != source_rows
             or existing.get("state_src_values") != state_src_values
+            or existing.get("commit_flat_zeroelide") != flat_commit
         ):
             raise RuntimeError(
                 "FR13_FIXED32_CONV_PREGATHER was already preseeded with "
@@ -5112,7 +5249,6 @@ def preseed_fixed32_conv_col0_pregather(
                 f"{index}: staging=[{staging_lo:#x},{staging_hi:#x}) "
                 f"bank=[{bank_lo:#x},{bank_hi:#x})"
             )
-    block = 1024
     commit_lease_token = object()
     state = {
         "mode": _FR13_FIXED32_MODE,
@@ -5165,6 +5301,9 @@ def preseed_fixed32_conv_col0_pregather(
         "conv_l": conv_l,
         "element_bytes": element_bytes,
         "block": block,
+        "commit_route": commit_route,
+        "commit_flat_zeroelide": flat_commit,
+        "commit_flat_contract_verified": flat_contract,
         "token": None,
         "n": 0,
         "stages": 0,
@@ -5250,7 +5389,7 @@ def preseed_fixed32_conv_col0_pregather(
             "staging_capacity": capacity,
             "row_elems": row_elems,
             "staging_bank_nonalias": True,
-            "commit_route": _FR13_FIXED32_CONV_COMMIT_ROUTE,
+            "commit_route": commit_route,
             "commit_launches_per_event": 1,
             "commit_direct_launches_per_event": 1,
             "commit_gather_launches_per_event": 0,
@@ -5260,6 +5399,23 @@ def preseed_fixed32_conv_col0_pregather(
             "commit_source_pointer_entries": 48,
             "commit_source_rows_per_batch": source_rows,
             "commit_state_src_shape": (32, conv_l),
+            "commit_flat_zeroelide": flat_commit,
+            "commit_flat_contract_verified": flat_contract,
+            "commit_live_source_cols": (
+                _FR13_FIXED32_CONV_FLAT_LIVE_SOURCE_COLS
+                if flat_commit
+                else conv_l
+            ),
+            "commit_literal_zero_cols": (
+                conv_l - _FR13_FIXED32_CONV_FLAT_LIVE_SOURCE_COLS
+                if flat_commit
+                else 0
+            ),
+            "commit_programs_per_layer_request": (
+                triton.cdiv(row_elems, block)
+                if flat_commit
+                else triton.cdiv(conv_c, block)
+            ),
             "commit_full_node_writebacks": 0,
             "commit_conv_remaps": 0,
             "commit_bank_overlap_policy": "exact_alias_only_16x3",
@@ -5346,37 +5502,70 @@ def preseed_fixed32_conv_col0_pregather(
                 B=batch,
                 BLOCK=block,
             )
-            direct_grid = (48, batch, triton.cdiv(conv_c, block))
-            _fr13_fixed32_conv_direct_col0_kernel[direct_grid](
-                anchor,
-                offsets,
-                source_refs[0],
-                source_offsets,
-                direct_state_src,
-                safe_commit_ssi,
-                safe_paths,
-                safe_lens,
-                safe_commit_ssi.stride(0),
-                safe_commit_ssi.stride(1),
-                safe_commit_ssi.stride(2),
-                safe_paths.stride(0),
-                safe_paths.stride(1),
-                safe_lens.stride(0),
-                int(anchor.stride(0)),
-                int(anchor.stride(1)),
-                int(anchor.stride(2)),
-                int(source_refs[0].stride(0)),
-                int(source_refs[0].stride(1)),
-                CONV_C=conv_c,
-                CONV_L=conv_l,
-                SOURCE_ROWS=source_rows,
-                ELEM_BYTES=element_bytes,
-                SPEC_COLS=int(safe_commit_ssi.shape[2]),
-                PATH_COLS=int(safe_paths.shape[1]),
-                B=batch,
-                BLOCK_C=block,
-                num_warps=4,
-            )
+            if flat_commit:
+                flat_grid = (48, batch, triton.cdiv(row_elems, block))
+                _fr13_fixed32_conv_flat_zeroelide_col0_kernel[flat_grid](
+                    anchor,
+                    offsets,
+                    source_refs[0],
+                    source_offsets,
+                    direct_state_src,
+                    safe_commit_ssi,
+                    safe_paths,
+                    safe_lens,
+                    safe_commit_ssi.stride(0),
+                    safe_commit_ssi.stride(1),
+                    safe_commit_ssi.stride(2),
+                    safe_paths.stride(0),
+                    safe_paths.stride(1),
+                    safe_lens.stride(0),
+                    int(anchor.stride(0)),
+                    int(source_refs[0].stride(0)),
+                    CONV_C=conv_c,
+                    CONV_L=conv_l,
+                    LIVE_SOURCE_COLS=(
+                        _FR13_FIXED32_CONV_FLAT_LIVE_SOURCE_COLS
+                    ),
+                    SOURCE_ROWS=source_rows,
+                    ELEM_BYTES=element_bytes,
+                    SPEC_COLS=int(safe_commit_ssi.shape[2]),
+                    PATH_COLS=int(safe_paths.shape[1]),
+                    B=batch,
+                    BLOCK=block,
+                    num_warps=4,
+                )
+            else:
+                direct_grid = (48, batch, triton.cdiv(conv_c, block))
+                _fr13_fixed32_conv_direct_col0_kernel[direct_grid](
+                    anchor,
+                    offsets,
+                    source_refs[0],
+                    source_offsets,
+                    direct_state_src,
+                    safe_commit_ssi,
+                    safe_paths,
+                    safe_lens,
+                    safe_commit_ssi.stride(0),
+                    safe_commit_ssi.stride(1),
+                    safe_commit_ssi.stride(2),
+                    safe_paths.stride(0),
+                    safe_paths.stride(1),
+                    safe_lens.stride(0),
+                    int(anchor.stride(0)),
+                    int(anchor.stride(1)),
+                    int(anchor.stride(2)),
+                    int(source_refs[0].stride(0)),
+                    int(source_refs[0].stride(1)),
+                    CONV_C=conv_c,
+                    CONV_L=conv_l,
+                    SOURCE_ROWS=source_rows,
+                    ELEM_BYTES=element_bytes,
+                    SPEC_COLS=int(safe_commit_ssi.shape[2]),
+                    PATH_COLS=int(safe_paths.shape[1]),
+                    B=batch,
+                    BLOCK_C=block,
+                    num_warps=4,
+                )
     finally:
         for layer, (bank, saved) in enumerate(
             zip(bank_refs, saved_warm_rows, strict=True)
@@ -5856,6 +6045,41 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
         and tuple(direct_state_src.shape) == (32 * int(state["conv_l"]),)
         and direct_state_src.is_contiguous()
     )
+    direct_state_src_values = (
+        tuple(int(value) for value in direct_state_src.cpu().tolist())
+        if direct_source_valid
+        else ()
+    )
+    flat_commit = bool(state.get("commit_flat_zeroelide"))
+    expected_commit_route = (
+        _FR13_FIXED32_CONV_FLAT_COMMIT_ROUTE
+        if flat_commit
+        else _FR13_FIXED32_CONV_COMMIT_ROUTE
+    )
+    flat_contract_valid = (
+        not flat_commit
+        or (
+            state.get("commit_flat_contract_verified") is True
+            and anchor.dtype == torch.bfloat16
+            and int(state["conv_c"]) == _FR13_FIXED32_CONV_FLAT_C
+            and int(state["conv_l"]) == _FR13_FIXED32_CONV_FLAT_L
+            and int(state["source_rows_per_batch"])
+            == _FR13_FIXED32_CONV_FLAT_SOURCE_ROWS
+            and tuple(int(value) for value in anchor.stride()[1:])
+            == (1, _FR13_FIXED32_CONV_FLAT_C)
+            and all(
+                direct_state_src_values[
+                    node * int(state["conv_l"]) + state_col
+                ]
+                == _FR13_FIXED32_CONV_FLAT_SOURCE_ROWS - 1
+                for node in range(32)
+                for state_col in range(
+                    _FR13_FIXED32_CONV_FLAT_LIVE_SOURCE_COLS,
+                    int(state["conv_l"]),
+                )
+            )
+        )
+    )
     if (
         _FR13_FIXED32_CONV_PREGATHER.get("commit_lease_token")
         is not state.get("commit_lease_token")
@@ -5886,6 +6110,10 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
         or int(row_elems) != int(state["row_elems"])
         or int(conv_l) != int(state["conv_l"])
         or int(element_bytes) != int(state["element_bytes"])
+        or state.get("commit_route") != expected_commit_route
+        or state.get("contract", {}).get("commit_route")
+        != expected_commit_route
+        or not flat_contract_valid
         or operand_meta != state.get("commit_operand_meta")
         or operand_data_ptrs != state.get("commit_operand_data_ptrs")
         or not direct_source_valid
@@ -5903,8 +6131,7 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
             for source in direct_sources
         )
         != state.get("source_strides")
-        or tuple(int(value) for value in direct_state_src.cpu().tolist())
-        != state.get("state_src_values")
+        or direct_state_src_values != state.get("state_src_values")
         or tuple(int(value) for value in state["source_off16"].cpu().tolist())
         != tuple(
             (pointer - direct_source_pointers[0]) // 16
@@ -5942,6 +6169,8 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
         "source_staging_reused": True,
         "source_pointer_entries": 48,
         "state_src_shape": (32, int(state["conv_l"])),
+        "flat_zeroelide": flat_commit,
+        "flat_contract_verified": flat_contract_valid,
     }
 
 
@@ -5983,7 +6212,7 @@ def launch_fixed32_conv_commit_to_col0(
         or _FR13_FIXED32_CONV_PREGATHER.get("commit_lease_token")
         is not state.get("commit_lease_token")
         or state.get("contract", {}).get("commit_route")
-        != _FR13_FIXED32_CONV_COMMIT_ROUTE
+        != state.get("commit_route")
         or not isinstance(conv_banks, tuple)
         or conv_banks is not state["banks"]
         or len(conv_banks) != 48
@@ -6002,6 +6231,10 @@ def launch_fixed32_conv_commit_to_col0(
         or state.get("source_anchor") is not state["source_stagings"][0]
         or state["source_anchor"].device != state["anchor"].device
         or state["source_anchor"].dtype != state["anchor"].dtype
+        or (
+            state.get("commit_flat_zeroelide")
+            and state.get("commit_flat_contract_verified") is not True
+        )
     ):
         raise RuntimeError(
             "FR13_FIXED32_CONV_COMMIT persistent identity/geometry drift"
@@ -6016,37 +6249,68 @@ def launch_fixed32_conv_commit_to_col0(
     )
     conv_c = int(state["conv_c"])
     block = int(state["block"])
-    grid = (48, batch, triton.cdiv(conv_c, block))
-    _fr13_fixed32_conv_direct_col0_kernel[grid](
-        state["anchor"],
-        state["off16"],
-        state["source_anchor"],
-        state["source_off16"],
-        state["state_src"],
-        spec_state_indices,
-        accepted_paths,
-        accepted_lens,
-        spec_state_indices.stride(0),
-        spec_state_indices.stride(1),
-        spec_state_indices.stride(2),
-        accepted_paths.stride(0),
-        accepted_paths.stride(1),
-        accepted_lens.stride(0),
-        int(state["anchor"].stride(0)),
-        int(state["anchor"].stride(1)),
-        int(state["anchor"].stride(2)),
-        int(state["source_anchor"].stride(0)),
-        int(state["source_anchor"].stride(1)),
-        CONV_C=conv_c,
-        CONV_L=int(state["conv_l"]),
-        SOURCE_ROWS=int(state["source_rows_per_batch"]),
-        ELEM_BYTES=int(state["element_bytes"]),
-        SPEC_COLS=int(spec_state_indices.shape[2]),
-        PATH_COLS=int(accepted_paths.shape[1]),
-        B=batch,
-        BLOCK_C=block,
-        num_warps=4,
-    )
+    if state["commit_flat_zeroelide"]:
+        grid = (48, batch, triton.cdiv(int(state["row_elems"]), block))
+        _fr13_fixed32_conv_flat_zeroelide_col0_kernel[grid](
+            state["anchor"],
+            state["off16"],
+            state["source_anchor"],
+            state["source_off16"],
+            state["state_src"],
+            spec_state_indices,
+            accepted_paths,
+            accepted_lens,
+            spec_state_indices.stride(0),
+            spec_state_indices.stride(1),
+            spec_state_indices.stride(2),
+            accepted_paths.stride(0),
+            accepted_paths.stride(1),
+            accepted_lens.stride(0),
+            int(state["anchor"].stride(0)),
+            int(state["source_anchor"].stride(0)),
+            CONV_C=conv_c,
+            CONV_L=int(state["conv_l"]),
+            LIVE_SOURCE_COLS=_FR13_FIXED32_CONV_FLAT_LIVE_SOURCE_COLS,
+            SOURCE_ROWS=int(state["source_rows_per_batch"]),
+            ELEM_BYTES=int(state["element_bytes"]),
+            SPEC_COLS=int(spec_state_indices.shape[2]),
+            PATH_COLS=int(accepted_paths.shape[1]),
+            B=batch,
+            BLOCK=block,
+            num_warps=4,
+        )
+    else:
+        grid = (48, batch, triton.cdiv(conv_c, block))
+        _fr13_fixed32_conv_direct_col0_kernel[grid](
+            state["anchor"],
+            state["off16"],
+            state["source_anchor"],
+            state["source_off16"],
+            state["state_src"],
+            spec_state_indices,
+            accepted_paths,
+            accepted_lens,
+            spec_state_indices.stride(0),
+            spec_state_indices.stride(1),
+            spec_state_indices.stride(2),
+            accepted_paths.stride(0),
+            accepted_paths.stride(1),
+            accepted_lens.stride(0),
+            int(state["anchor"].stride(0)),
+            int(state["anchor"].stride(1)),
+            int(state["anchor"].stride(2)),
+            int(state["source_anchor"].stride(0)),
+            int(state["source_anchor"].stride(1)),
+            CONV_C=conv_c,
+            CONV_L=int(state["conv_l"]),
+            SOURCE_ROWS=int(state["source_rows_per_batch"]),
+            ELEM_BYTES=int(state["element_bytes"]),
+            SPEC_COLS=int(spec_state_indices.shape[2]),
+            PATH_COLS=int(accepted_paths.shape[1]),
+            B=batch,
+            BLOCK_C=block,
+            num_warps=4,
+        )
     state["commit_direct_launches"] += 1
     state["commit_direct_launches_by_batch"][batch] += 1
 

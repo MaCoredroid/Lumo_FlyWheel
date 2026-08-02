@@ -71,6 +71,7 @@ def _install_preseed(
     monkeypatch: pytest.MonkeyPatch,
     *,
     channel_contiguous: bool,
+    flat_commit: bool = False,
 ) -> tuple[
     tuple[torch.Tensor, ...],
     tuple[torch.Tensor, ...],
@@ -81,6 +82,10 @@ def _install_preseed(
     monkeypatch.setattr(kernel, "_FR13_FIXED32_MODE", "tail6_fixed32")
     monkeypatch.setattr(kernel, "_FR13_FIXED32_CONV_PREGATHER", {})
     monkeypatch.setattr(kernel, "_FR13_FIXED32_CONV_SSI_GROUPS", {})
+    monkeypatch.setenv(
+        "FR13_FIXED32_CONV_FLAT_COMMIT",
+        "diagnostic" if flat_commit else "0",
+    )
     order = tuple(f"gdn.{index:02d}" for index in range(48))
     raws = []
     banks = []
@@ -278,6 +283,41 @@ def _direct_commit_reference(
             bank[destination].copy_(
                 source.index_select(0, source_indices).transpose(0, 1)
             )
+
+
+def _flat_zeroelide_commit_reference(
+    *,
+    banks: tuple[torch.Tensor, ...],
+    sources: tuple[torch.Tensor, ...],
+    state_src: torch.Tensor,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    accepted_lens: torch.Tensor,
+    batch: int,
+) -> None:
+    state_length = int(banks[0].shape[2])
+    source_rows = 36
+    live_cols = 3
+    for layer, (bank, source) in enumerate(
+        zip(banks, sources, strict=True)
+    ):
+        for request in range(batch):
+            accepted_len = int(accepted_lens[request].item())
+            leaf = (
+                int(accepted_paths[request, accepted_len - 1].item())
+                if accepted_len > 0
+                else 0
+            )
+            leaf = max(0, min(leaf, int(spec_state_indices.shape[2]) - 1))
+            source_indices = (
+                state_src.view(32, state_length)[leaf, :live_cols]
+                + request * source_rows
+            )
+            destination = int(spec_state_indices[layer, request, 0].item())
+            bank[destination, :, :live_cols].copy_(
+                source.index_select(0, source_indices).transpose(0, 1)
+            )
+            bank[destination, :, live_cols:].zero_()
 
 
 def _exact_deployed_page_bank(
@@ -582,6 +622,79 @@ def test_deployed_layout_pregather_and_direct_commit_are_page_exact(
     assert counters["direct_launches_by_batch"][4] == 1
     assert counters["gather_launches"] == 0
     assert counters["scatter_launches"] == 0
+
+
+@pytest.mark.parametrize("batch", (1, 4), ids=("b1", "b4"))
+def test_flat_zeroelide_commit_is_page_exact_without_zero_row_loads(
+    monkeypatch: pytest.MonkeyPatch,
+    batch: int,
+) -> None:
+    raws, banks, commit_ssi, paths, lens = _install_preseed(
+        monkeypatch,
+        channel_contiguous=True,
+        flat_commit=True,
+    )
+    state = kernel._FR13_FIXED32_CONV_PREGATHER["state"]
+    assert state["contract"]["commit_route"] == (
+        "fixed32_flat_zeroelide_source_col0"
+    )
+    assert state["contract"]["commit_flat_contract_verified"] is True
+    assert state["contract"]["commit_live_source_cols"] == 3
+    assert state["contract"]["commit_literal_zero_cols"] == 31
+    assert state["contract"]["commit_programs_per_layer_request"] == 340
+
+    sources = state["source_stagings"]
+    for layer, source in enumerate(sources):
+        source.view(4, 36, DEPLOYED_CONV_SHAPE[0])[:, 35].fill_(
+            4096 + layer
+        )
+    paths.zero_()
+    lens.zero_()
+    if batch == 4:
+        paths[1, 0] = 7
+        paths[2, 14] = 31
+        paths[3, 2] = 19
+        lens[:4].copy_(
+            torch.tensor([0, 1, 15, 3], dtype=torch.int32, device="cuda")
+        )
+
+    expected_raws = tuple(raw.clone() for raw in raws)
+    _flat_zeroelide_commit_reference(
+        banks=_bank_views_for_raw_clones(expected_raws, banks),
+        sources=sources,
+        state_src=state["state_src"],
+        spec_state_indices=commit_ssi,
+        accepted_paths=paths,
+        accepted_lens=lens,
+        batch=batch,
+    )
+    kernel.launch_fixed32_conv_commit_to_col0(
+        conv_banks=banks,
+        spec_state_indices=commit_ssi,
+        accepted_paths=paths,
+        accepted_lens=lens,
+        num_spec_decodes=batch,
+    )
+    assert all(
+        torch.equal(raw, expected)
+        for raw, expected in zip(raws, expected_raws, strict=True)
+    )
+    for raw in raws:
+        _assert_deployed_page_gaps_are_sentinel(raw, rows=13)
+
+
+def test_flat_zeroelide_commit_rejects_noncanonical_bank_layout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(
+        ValueError,
+        match="requires canonical BF16 C=10240/L=34 bank stride",
+    ):
+        _install_preseed(
+            monkeypatch,
+            channel_contiguous=False,
+            flat_commit=True,
+        )
 
 
 @pytest.mark.parametrize(
