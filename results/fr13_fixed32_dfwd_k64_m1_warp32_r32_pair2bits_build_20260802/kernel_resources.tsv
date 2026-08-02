@@ -1,0 +1,2 @@
+registers_per_thread	stack_bytes_per_thread	local_bytes_per_thread	static_shared_bytes_per_cta	constant0_bytes
+20	0	0	0	928
