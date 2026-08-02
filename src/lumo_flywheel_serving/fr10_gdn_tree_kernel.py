@@ -4468,7 +4468,9 @@ def _fr13_fixed32_conv_direct_col0_metadata_kernel(
         path_value = tl.load(
             accepted_paths
             + pid_b * path_stride_b
-            + path_col * path_stride_s
+            + path_col * path_stride_s,
+            mask=metadata_writer,
+            other=0,
         )
         tl.store(
             committer_paths
