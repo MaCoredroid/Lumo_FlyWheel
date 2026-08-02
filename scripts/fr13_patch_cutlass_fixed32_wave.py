@@ -58,6 +58,29 @@ INCLUDE_REPLACEMENT = """#pragma once
 #include <torch/headeronly/util/shim_utils.h>
 """
 
+SCHEDULER_SPECIALIZATION_ANCHOR = """#include "cutlass_gemm_caller.cuh"
+
+namespace vllm {
+"""
+SCHEDULER_SPECIALIZATION_REPLACEMENT = r"""#include "cutlass_gemm_caller.cuh"
+
+namespace vllm {
+struct fr13_fixed32_mtp_m1_static_scheduler {};
+}  // namespace vllm
+
+namespace cutlass::gemm::kernel::detail {
+template <class TileShape, class ClusterShape,
+          uint32_t SchedulerPipelineStageCount>
+struct TileSchedulerSelector<
+    vllm::fr13_fixed32_mtp_m1_static_scheduler, arch::Sm120,
+    TileShape, ClusterShape, SchedulerPipelineStageCount> {
+  using Scheduler = StaticPersistentTileScheduler100;
+};
+}  // namespace cutlass::gemm::kernel::detail
+
+namespace vllm {
+"""
+
 TEMPLATE_ANCHOR = """          class EpilogueScheduler, class MainloopScheduler,
           bool swap_ab_ = false>
 struct cutlass_3x_gemm_fp8_blockwise {
@@ -120,6 +143,28 @@ struct cutlass_3x_gemm_fp8_blockwise_streamk
   using KernelType = enable_sm120_family<cutlass::gemm::kernel::GemmUniversal<
       Shape<int, int, int, int>, CollectiveMainloop, CollectiveEpilogue,
       TileScheduler>>;
+
+  struct GemmKernel : public KernelType {};
+};
+
+template <
+    class OutType, int ScaleGranularityM, int ScaleGranularityN,
+    int ScaleGranularityK, class MmaTileShape, class ClusterShape,
+    class EpilogueScheduler, class MainloopScheduler, bool swap_ab_>
+struct cutlass_3x_gemm_fp8_blockwise_static_persistent
+    : cutlass_3x_gemm_fp8_blockwise<
+          OutType, ScaleGranularityM, ScaleGranularityN, ScaleGranularityK,
+          MmaTileShape, ClusterShape, EpilogueScheduler, MainloopScheduler,
+          swap_ab_> {
+  using Base = cutlass_3x_gemm_fp8_blockwise<
+      OutType, ScaleGranularityM, ScaleGranularityN, ScaleGranularityK,
+      MmaTileShape, ClusterShape, EpilogueScheduler, MainloopScheduler,
+      swap_ab_>;
+
+  using KernelType = enable_sm120_family<cutlass::gemm::kernel::GemmUniversal<
+      Shape<int, int, int, int>, typename Base::CollectiveMainloop,
+      typename Base::CollectiveEpilogue,
+      fr13_fixed32_mtp_m1_static_scheduler>>;
 
   struct GemmKernel : public KernelType {};
 };
@@ -204,6 +249,22 @@ struct sm120_blockwise_fp8_config_b4_persistent_m128 {
   };
 };
 
+// The real B1 MTP projections use the stock swapped-AB tile and exact M=1.
+// Keep every numeric template parameter unchanged and replace only Blackwell
+// dynamic CLC tile allocation with CUTLASS static persistence.
+template <typename OutType>
+struct sm120_blockwise_fp8_config_swapab_mtp_m1_static {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_128, _32, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_static_persistent<
+      OutType, 128, 1, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, true>;
+};
+
 enum class fixed32_cutlass_wave_variant {
   stock,
   stream_k_cooperative_128,
@@ -212,6 +273,8 @@ enum class fixed32_cutlass_wave_variant {
   stream_k_force_wide256_byte_ab,
   persistent_b4_m128,
   persistent_b4_m128_byte_ab,
+  static_persistent_mtp_m1,
+  static_persistent_mtp_m1_byte_ab,
 };
 
 static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
@@ -242,6 +305,12 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     }
     if (value == "persistent_b4_m128_byte_ab") {
       return fixed32_cutlass_wave_variant::persistent_b4_m128_byte_ab;
+    }
+    if (value == "static_persistent_mtp_m1") {
+      return fixed32_cutlass_wave_variant::static_persistent_mtp_m1;
+    }
+    if (value == "static_persistent_mtp_m1_byte_ab") {
+      return fixed32_cutlass_wave_variant::static_persistent_mtp_m1_byte_ab;
     }
     return fixed32_cutlass_wave_variant::stock;
   }();
@@ -296,15 +365,22 @@ static inline std::string fixed32_cutlass_b4_real_task_marker() {
   return marker;
 }
 
-static inline bool fixed32_cutlass_real_projection(int m, int n, int k) {
-  const bool fixed32_rows = m == 32 || m == 64 || m == 96 || m == 128;
-  const bool real_projection =
+static inline bool fixed32_cutlass_real_projection_nk(int n, int k) {
+  return
       (n == 34816 && k == 5120) ||
       (n == 5120 && k == 17408) ||
       (n == 5120 && k == 6144) ||
       (n == 16384 && k == 5120) ||
       (n == 14336 && k == 5120);
-  return fixed32_rows && real_projection;
+}
+
+static inline bool fixed32_cutlass_real_projection(int m, int n, int k) {
+  const bool fixed32_rows = m == 32 || m == 64 || m == 96 || m == 128;
+  return fixed32_rows && fixed32_cutlass_real_projection_nk(n, k);
+}
+
+static inline bool fixed32_cutlass_mtp_m1_projection(int m, int n, int k) {
+  return m == 1 && fixed32_cutlass_real_projection_nk(n, k);
 }
 
 template <typename Gemm>
@@ -377,9 +453,18 @@ DISPATCH_ANCHOR = """  int M = a.size(0);
   }
 """
 DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
+  fixed32_cutlass_wave_variant selected_wave_variant =
+      fixed32_cutlass_wave_selection();
+  const bool mtp_m1_selection =
+      selected_wave_variant ==
+          fixed32_cutlass_wave_variant::static_persistent_mtp_m1 ||
+      selected_wave_variant ==
+          fixed32_cutlass_wave_variant::static_persistent_mtp_m1_byte_ab;
   fixed32_cutlass_wave_variant wave_variant =
-      fixed32_cutlass_real_projection(M, N, K)
-          ? fixed32_cutlass_wave_selection()
+      (fixed32_cutlass_real_projection(M, N, K) ||
+       (mtp_m1_selection &&
+        fixed32_cutlass_mtp_m1_projection(M, N, K)))
+          ? selected_wave_variant
           : fixed32_cutlass_wave_variant::stock;
   // The normal-layout 128x256 forced-StreamK specialization returned CUTLASS
   // Error::kErrorInternal during real B1 profile warmup. Wide256 is therefore
@@ -396,6 +481,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
            fixed32_cutlass_wave_variant::persistent_b4_m128 ||
        wave_variant ==
            fixed32_cutlass_wave_variant::persistent_b4_m128_byte_ab)) {
+    wave_variant = fixed32_cutlass_wave_variant::stock;
+  }
+  if (M != 1 && mtp_m1_selection) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
 
@@ -426,6 +514,14 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
         destination, a, b, a_scales, b_scales);
   };
 
+  auto run_static_persistent_mtp_m1 =
+      [&](torch::stable::Tensor& destination) {
+    using Gemm = typename
+        sm120_blockwise_fp8_config_swapab_mtp_m1_static<OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
   auto run_stock = [&](torch::stable::Tensor& destination) {
     bool swap_ab = (M <= 64) || (M % 4 != 0);
     if (!swap_ab) {
@@ -450,12 +546,18 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   const bool b4_m128_byte_ab =
       wave_variant ==
       fixed32_cutlass_wave_variant::persistent_b4_m128_byte_ab;
+  const bool mtp_m1_byte_ab =
+      wave_variant ==
+      fixed32_cutlass_wave_variant::static_persistent_mtp_m1_byte_ab;
   if (wave_variant ==
           fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab ||
-      wide256_byte_ab || b4_m128_byte_ab) {
+      wide256_byte_ab || b4_m128_byte_ab || mtp_m1_byte_ab) {
     auto run_candidate = [&](torch::stable::Tensor& destination) {
       if (b4_m128_byte_ab) {
         return run_b4_persistent_m128(destination);
+      }
+      if (mtp_m1_byte_ab) {
+        return run_static_persistent_mtp_m1(destination);
       }
       if (wide256_byte_ab) {
         return run_stream_k_wide256(destination);
@@ -476,8 +578,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     static std::atomic<int64_t> next_invocation{0};
     constexpr int64_t byte_ab_limit = 256;
     constexpr int64_t b4_m128_byte_ab_limit = 320;
+    constexpr int64_t mtp_m1_byte_ab_limit = 320;
     const int64_t selected_byte_ab_limit =
-        b4_m128_byte_ab ? b4_m128_byte_ab_limit : byte_ab_limit;
+        b4_m128_byte_ab
+            ? b4_m128_byte_ab_limit
+            : (mtp_m1_byte_ab ? mtp_m1_byte_ab_limit : byte_ab_limit);
     int64_t invocation = next_invocation.fetch_add(1);
     if (invocation >= selected_byte_ab_limit) {
       return run_stock(out);
@@ -522,9 +627,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     const char* log_path =
         b4_m128_byte_ab
             ? "/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl"
-            : (wide256_byte_ab
+            : (mtp_m1_byte_ab
+                   ? "/logs/fr13_fixed32_cutlass_static_mtp_m1_byte_ab.jsonl"
+                   : (wide256_byte_ab
                    ? "/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl"
-                   : "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl");
+                   : "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl"));
     static std::mutex log_mutex;
     {
       std::lock_guard<std::mutex> lock(log_mutex);
@@ -534,9 +641,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       log << "{\\\"schema\\\":\\\""
           << (b4_m128_byte_ab
                   ? "fr13.fixed32.cutlass_persistent_b4_m128_byte_ab.v1"
-                  : (wide256_byte_ab
+                  : (mtp_m1_byte_ab
+                         ? "fr13.fixed32.cutlass_static_mtp_m1_byte_ab.v1"
+                         : (wide256_byte_ab
                          ? "fr13.fixed32.cutlass_streamk_wide256_byte_ab.v1"
-                         : "fr13.fixed32.cutlass_streamk_byte_ab.v2"))
+                         : "fr13.fixed32.cutlass_streamk_byte_ab.v2")))
           << "\\\","
           << "\\\"invocation\\\":" << invocation << ","
           << "\\\"task_marker\\\":\\\"" << task_marker << "\\\","
@@ -574,6 +683,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     return run_b4_persistent_m128(out);
   }
 
+  if (wave_variant ==
+      fixed32_cutlass_wave_variant::static_persistent_mtp_m1) {
+    return run_static_persistent_mtp_m1(out);
+  }
+
   // Unset/unknown selectors retain the stock kernel and numeric result.
   return run_stock(out);
 """
@@ -584,6 +698,7 @@ def patch_text(source: str) -> tuple[str, bool]:
     if MARKER in source:
         required = (
             INCLUDE_REPLACEMENT,
+            SCHEDULER_SPECIALIZATION_REPLACEMENT,
             STREAMK_CLASS_REPLACEMENT,
             CONFIG_REPLACEMENT,
             CALLER_REPLACEMENT,
@@ -595,6 +710,7 @@ def patch_text(source: str) -> tuple[str, bool]:
 
     single_anchors = {
         "include": INCLUDE_ANCHOR,
+        "static scheduler specialization": SCHEDULER_SPECIALIZATION_ANCHOR,
         "GEMM template": TEMPLATE_ANCHOR,
         "stock kernel class": STREAMK_CLASS_ANCHOR,
         "candidate insertion": CONFIG_ANCHOR,
@@ -611,6 +727,11 @@ def patch_text(source: str) -> tuple[str, bool]:
             f"expected exactly two mainloop stage-count anchors, found {stage_count}"
         )
     patched = source.replace(INCLUDE_ANCHOR, INCLUDE_REPLACEMENT, 1)
+    patched = patched.replace(
+        SCHEDULER_SPECIALIZATION_ANCHOR,
+        SCHEDULER_SPECIALIZATION_REPLACEMENT,
+        1,
+    )
     patched = patched.replace(
         STREAMK_CLASS_ANCHOR, STREAMK_CLASS_REPLACEMENT, 1
     )
