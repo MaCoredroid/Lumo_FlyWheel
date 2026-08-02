@@ -541,10 +541,27 @@ if [[ "$FR13_FA2_QROW32_LIVE_PAGED_AB" == "1" ]]; then
     exit 2
   }
 fi
-if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" \
-      && -z "$FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID" ]]; then
-  echo "FR13 qrow16 live paged A/B requires an instance id" >&2
-  exit 2
+if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" ]]; then
+  [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID" == "astropy__astropy-12907" \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
+     && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+     && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
+     && -z "${FR13_NEEDS_ALLOW:-}" \
+     && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" == "0" \
+     && -z "${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
+     && "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+     && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
+     && "${FR13_DRAFT_HEAD_PAD_ROWS:-0}" == "0" \
+     && "${FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB:-0}" == "0" \
+     && "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" == "0" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" ]] || {
+    echo "FR13 qrow16 live A/B requires the canonical K64 ROOT=1 real B1 task and no other candidate" >&2
+    exit 2
+  }
 fi
 if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
   [[ -f "$FR13_FA2_QROW16_LIVE_PASS_JSON" \

@@ -17,6 +17,10 @@ QROW16_EXPECTED_SHA256 = (
     "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
 )
 QROW16_EXPECTED_SIZE = 299_507_792
+QROW16_DIVFREE_EXPECTED_SHA256 = (
+    "106e54d1c82ec7ce7576cbb44bb4aa2342b2985bb58e97aeeca5503275bee3e2"
+)
+QROW16_DIVFREE_EXPECTED_SIZE = 299_491_544
 QROW16_REJECTED_SHA256 = (
     "35ba18c9bab4b37362aa3b26441e8a58edfcd3d0a75692fda90fc131a0b3307c"
 )
@@ -29,6 +33,8 @@ def test_suffix_only_fa2_identity_is_pinned() -> None:
     assert contract.FA2_SIZE == EXPECTED_SIZE
     assert contract.QROW16_FA2_SHA256 == QROW16_EXPECTED_SHA256
     assert contract.QROW16_FA2_SIZE == QROW16_EXPECTED_SIZE
+    assert contract.QROW16_DIVFREE_FA2_SHA256 == QROW16_DIVFREE_EXPECTED_SHA256
+    assert contract.QROW16_DIVFREE_FA2_SIZE == QROW16_DIVFREE_EXPECTED_SIZE
 
 
 @pytest.mark.skipif(not FA2_PATH.is_file(), reason="ignored FA2 binary is not staged")
@@ -98,24 +104,39 @@ def test_runtime_identity_defaults_to_stock_when_qrow_is_off() -> None:
 
 
 @pytest.mark.parametrize(
-    "selector",
-    ["FR13_FA2_QROW16_LIVE_PAGED_AB", "FR13_FA2_QROW16_PRODUCTION"],
+    ("selector", "candidate_size", "candidate_sha256"),
+    [
+        (
+            "FR13_FA2_QROW16_LIVE_PAGED_AB",
+            QROW16_DIVFREE_EXPECTED_SIZE,
+            QROW16_DIVFREE_EXPECTED_SHA256,
+        ),
+        (
+            "FR13_FA2_QROW16_PRODUCTION",
+            QROW16_EXPECTED_SIZE,
+            QROW16_EXPECTED_SHA256,
+        ),
+    ],
 )
-def test_runtime_identity_selects_only_pinned_qrow_candidate(selector: str) -> None:
+def test_runtime_identity_selects_only_pinned_qrow_candidate(
+    selector: str,
+    candidate_size: int,
+    candidate_sha256: str,
+) -> None:
     env = {
         "FR13_FA2_QROW16_LIVE_PAGED_AB": "0",
         "FR13_FA2_QROW16_PRODUCTION": "0",
-        "FR13_FA2_QROW16_SO_SHA256": QROW16_EXPECTED_SHA256,
+        "FR13_FA2_QROW16_SO_SHA256": candidate_sha256,
     }
     env[selector] = "1"
     assert contract._expected_runtime_fa2_identity(env) == (
-        QROW16_EXPECTED_SIZE,
-        QROW16_EXPECTED_SHA256,
+        candidate_size,
+        candidate_sha256,
     )
     contract.validate_runtime_attestation(
         _runtime_payload(
-            size=QROW16_EXPECTED_SIZE,
-            sha256=QROW16_EXPECTED_SHA256,
+            size=candidate_size,
+            sha256=candidate_sha256,
         )
     )
 
@@ -126,7 +147,7 @@ def test_runtime_identity_rejects_arbitrary_qrow_declaration() -> None:
         "FR13_FA2_QROW16_PRODUCTION": "0",
         "FR13_FA2_QROW16_SO_SHA256": "0" * 64,
     }
-    with pytest.raises(contract.ContractError, match="not the pinned candidate"):
+    with pytest.raises(contract.ContractError, match="not the pinned division-free candidate"):
         contract._expected_runtime_fa2_identity(env)
     with pytest.raises(contract.ContractError, match="source FA2 mismatch"):
         contract.validate_runtime_attestation(
@@ -138,11 +159,11 @@ def test_runtime_identity_accepts_exact_qrow_source_and_destination() -> None:
     env = {
         "FR13_FA2_QROW16_LIVE_PAGED_AB": "1",
         "FR13_FA2_QROW16_PRODUCTION": "0",
-        "FR13_FA2_QROW16_SO_SHA256": QROW16_EXPECTED_SHA256,
+        "FR13_FA2_QROW16_SO_SHA256": QROW16_DIVFREE_EXPECTED_SHA256,
     }
     payload = _runtime_payload(
-        size=QROW16_EXPECTED_SIZE,
-        sha256=QROW16_EXPECTED_SHA256,
+        size=QROW16_DIVFREE_EXPECTED_SIZE,
+        sha256=QROW16_DIVFREE_EXPECTED_SHA256,
     )
     contract._require_built_runtime_fa2_identity(
         payload["forked_fa2"]["source"],
@@ -157,7 +178,7 @@ def test_runtime_identity_rejects_superseded_qrow_candidate() -> None:
         "FR13_FA2_QROW16_PRODUCTION": "0",
         "FR13_FA2_QROW16_SO_SHA256": QROW16_REJECTED_SHA256,
     }
-    with pytest.raises(contract.ContractError, match="not the pinned candidate"):
+    with pytest.raises(contract.ContractError, match="not the pinned division-free candidate"):
         contract._expected_runtime_fa2_identity(env)
     with pytest.raises(contract.ContractError, match="source FA2 mismatch"):
         contract.validate_runtime_attestation(

@@ -126,6 +126,8 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
     assert "dim3 grid(num_m_block, params.b, params.h)" in candidate
     assert "auto kernel = &fr13_flash_fwd_fixed32_qrow16_kernel" in candidate
     assert candidate.count("fr13_flash_fwd_fixed32_qrow16_kernel") == 2
+    assert "__asm__(" not in candidate
+    assert "FR13_FA2_QROW16_DEVICE_SYMBOL_COMPAT" not in candidate
     assert "__maxnreg__" not in candidate
     assert "FLASH_NAMESPACE::compute_attn_splitkv<" in candidate
     assert "auto kernel = &flash_fwd_splitkv_kernel<" not in candidate
@@ -348,9 +350,13 @@ def test_qrow16_private_kernel_preserves_exact_flags() -> None:
     module = _module()
     translation_unit = module.FIXED32_QUERY_TILE16_TRANSLATION_UNIT
 
+    assert translation_unit.count("template <>") == 1
     assert translation_unit.count("__global__") == 1
     assert "__maxnreg__" not in translation_unit
     assert translation_unit.count("fr13_flash_fwd_fixed32_qrow16_kernel") == 2
+    assert "__asm__(" not in translation_unit
+    assert "FR13_FA2_QROW16_DEVICE_SYMBOL_COMPAT" not in translation_unit
+    assert "flash_fwd_splitkv_kernelI23Flash_fwd_kernel_traits" not in translation_unit
     assert "flash_fwd_splitkv_kernel<" not in translation_unit
     kernel_match = re.search(
         r"compute_attn_splitkv<(?P<arguments>.*?)\n"
@@ -753,6 +759,9 @@ def test_qrow16_live_gate_uses_retained_paged_operands_after_real_replay() -> No
     patcher = Path("scripts/fr13_patch_fa2_tree_bias.py").read_text()
     launcher = Path("scripts/fr13_launch_forked_fa2_tree_server.sh").read_text()
     gate_launcher = Path("scripts/fr13_run_b1_kernel_live_gate.sh").read_text()
+    divfree_runner = Path(
+        "scripts/fr13_run_b1_k64_qrow16_divfree_live_gate.sh"
+    ).read_text()
 
     assert "FR13_FA2_QROW16_LIVE_PAGED_AB_REPLAY" in patcher
     replay = patcher.index('anchor = "        entry.cudagraph.replay()\\n"')
@@ -776,6 +785,9 @@ def test_qrow16_live_gate_uses_retained_paged_operands_after_real_replay() -> No
     assert '"raw_byte_mismatches": lse_mismatches' in patcher
     assert '"served_return": "stock captured graph output unchanged"' in patcher
     assert '"candidate_so_sha256": candidate_so_sha256' in patcher
+    assert '"draft_vocab_root": draft_vocab_root' in patcher
+    assert '"draft_vocab_k": draft_vocab_k' in patcher
+    assert 'raise RuntimeError("FR13 qrow16 live gate requires K64 ROOT=1")' in patcher
     assert "entry.output" not in patcher[
         patcher.index("def _fr13_fa2_qrow16_live_ab_replay") :
         patcher.index("def _patch_tree_attn")
@@ -784,9 +796,41 @@ def test_qrow16_live_gate_uses_retained_paged_operands_after_real_replay() -> No
     assert "FR13_FA2_QROW16_LIVE_PAGED_AB=${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}" in launcher
     assert "FR13 qrow16 internal selectors are launcher-private" in launcher
     assert "fixed32 qrow16 candidate FA2 sha256 mismatch" in launcher
+    assert "canonical K64 ROOT=1 real B1 task and no other candidate" in launcher
     assert "--fixed32-query-tile16-live-ab" in launcher
     assert "FR13_GATE_QROW16=${FR13_GATE_QROW16:-0}" in gate_launcher
     assert 'FR13_FA2_QROW16_LIVE_PAGED_AB="$FR13_GATE_QROW16"' in gate_launcher
+
+    assert "FR13_RUN_QROW16_DIVFREE_LIVE_GATE:-0" in divfree_runner
+    assert "config/fr13_fixed32/subset_b1_diagnostic_one.json" in divfree_runner
+    assert "FR13_DRAFT_VOCAB_ROOT=1 FR13_DRAFT_VOCAB_K=65536" in divfree_runner
+    assert "FR13_NEEDS_ALLOW=" in divfree_runner
+    assert "MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1" in divfree_runner
+    assert "FR13_FA2_QROW16_LIVE_PAGED_AB=1" in divfree_runner
+    assert "FR13_FA2_QROW16_PRODUCTION=0" in divfree_runner
+    assert "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0" in divfree_runner
+    assert "FR13_SFWD_GPU_TIMER=0" in divfree_runner
+    assert "performance_measurement" in divfree_runner
+
+
+def test_qrow16_fatbin_graft_and_so_finalize_are_fail_closed() -> None:
+    graft = Path("scripts/fr13_fa2_qrow16_fatbin_graft.py").read_text()
+    finalize = Path("scripts/fr13_fa2_qrow16_so_finalize.py").read_text()
+
+    assert "CUDA_VISIBLE_DEVICES must be explicitly empty" in graft
+    assert "--expected-host-object-sha256" in graft
+    assert "candidate PTX still contains signed 64-bit division" in graft
+    assert "--update-section" in graft
+    assert "ptx_signed_64bit_division_count" in graft
+    assert "CANDIDATE_SYMBOL" in graft
+    assert "HOST_SYMBOL" in graft
+
+    assert "CUDA_VISIBLE_DEVICES must be explicitly empty" in finalize
+    assert "REPAIRED_SYMBOLS" in finalize
+    assert "candidate has dynamic-ABI drift beyond the repair allowlist" in finalize
+    assert "finalized dynamic symbol table does not exactly match reference" in finalize
+    assert "finalized DT_NEEDED entries do not exactly match reference" in finalize
+    assert "finalization changed shared-object size" in finalize
 
 
 def test_qrow32_live_gate_is_exact4_all_layer_and_stock_served() -> None:

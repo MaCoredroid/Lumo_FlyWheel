@@ -1364,6 +1364,10 @@ def _fr13_fa2_qrow16_live_ab_replay(graph_id, runtime_mode, batch_size):
         or any(char not in "0123456789abcdef" for char in candidate_so_sha256)
     ):
         raise RuntimeError("FR13 qrow16 live gate has no candidate SO digest")
+    draft_vocab_root = int(os.environ.get("FR13_DRAFT_VOCAB_ROOT", "0"))
+    draft_vocab_k = int(os.environ.get("FR13_DRAFT_VOCAB_K", "0"))
+    if draft_vocab_root != 1 or draft_vocab_k != 65536:
+        raise RuntimeError("FR13 qrow16 live gate requires K64 ROOT=1")
     if torch.cuda.is_current_stream_capturing():
         raise RuntimeError("FR13 qrow16 live gate ran inside CUDA capture")
     _FR13_FA2_QROW16_LIVE_AB_ATTEMPTED = True
@@ -1416,6 +1420,8 @@ def _fr13_fa2_qrow16_live_ab_replay(graph_id, runtime_mode, batch_size):
         "instance_id": instance_id,
         "concurrency": 1,
         "physical_rows": 32,
+        "draft_vocab_root": draft_vocab_root,
+        "draft_vocab_k": draft_vocab_k,
         "candidate_so_sha256": candidate_so_sha256,
         "graph_id": int(graph_id),
         "runtime_mode": str(runtime_mode).upper(),
