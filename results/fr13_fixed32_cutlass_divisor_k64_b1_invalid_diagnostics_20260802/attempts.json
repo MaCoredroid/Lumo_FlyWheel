@@ -1,0 +1,35 @@
+{
+  "attempts": [
+    {
+      "cleanup_full_identity_match": true,
+      "docker_oom_killed": false,
+      "failure_class": "external_supervisor_exec_session_timeout",
+      "measurement_valid": false,
+      "name": "foreground_attempt",
+      "no_timing_result": true,
+      "task_window_opened": false
+    },
+    {
+      "assistant_group_count": 4,
+      "engaged_spec_events": 303,
+      "failure_class": "terminal_assistant_missing_nonempty_text",
+      "final_assistant_group_size": 1,
+      "final_assistant_nonempty_text_count": 0,
+      "final_assistant_parent_is_top_level": true,
+      "final_assistant_thinking_item_count": 1,
+      "final_assistant_tool_terminal_count": 0,
+      "final_flush_present": true,
+      "measurement_valid": false,
+      "metrics_bracket_complete": true,
+      "name": "detached_real_task_attempt",
+      "normal_end_manifests_present": false,
+      "result_terminal_success": true,
+      "runner_metadata_present": false,
+      "task_window_opened": true,
+      "timer_sidecar_file_count": 4,
+      "trace_event_count": 16,
+      "wall_steps_measured": 302
+    }
+  ],
+  "schema": "fr13.fixed32.cutlass.divisor_k64.b1.invalid_attempts.v1"
+}

@@ -1,0 +1,20 @@
+{
+  "acceptance_eligible": false,
+  "active_tree_nodes": 27,
+  "branch": "agent/fixed32-cutlass-divisor-balanced-20260802",
+  "candidate_binary_included": false,
+  "candidate_binary_sha256": "338e89d062c2b1ac40909dbc8d64d4ab6b0def9fd86988c9e395e8244606a9f6",
+  "candidate_selector": "divisor_static_stocktile",
+  "diagnostic_task_count": 1,
+  "draft_vocab_block_map_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+  "draft_vocab_k": 65536,
+  "draft_vocab_root_reduced": true,
+  "live_qualification_sha256": "79615f06edf35e866807d9157216b76c6446820b9f65ecd6c659f35c97666dae",
+  "live_qualification_source_commit": "ba85478c80acb987704d6bdce830ecdba4d36ce3",
+  "measurement_valid": false,
+  "physical_draft_nodes": 32,
+  "profile": "k64_root",
+  "schema": "fr13.fixed32.cutlass.divisor_k64.b1.invalid_provenance.v1",
+  "source_commit": "1d2986c7f2e75abadae128d8fd2336d7560f86c7",
+  "source_was_clean_and_pushed_at_launch": true
+}

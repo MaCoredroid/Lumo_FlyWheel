@@ -1,0 +1,32 @@
+{
+  "acceptance_eligible": false,
+  "aggregate": {
+    "accept_per_event": 4.472312703583062,
+    "committed_per_event": 5.472312703583062,
+    "committer_gpu_ms_per_step": 31.698679864989046,
+    "component_sum_ms_per_step": 223.68459644748995,
+    "compute_floor_ms": 17.28,
+    "configured_floor_ms": 119.658015414,
+    "drafter_gpu_ms_per_step": 35.21732918059013,
+    "events_per_step": 1.0,
+    "floor_ratio": 1.8693657560136905,
+    "fullstep_alignment_ratio": 1.0191295121387927,
+    "gpu_derived_fullstep_tps": 24.932406899921357,
+    "modeled_rows_per_step": 32.0,
+    "other_overhead_ms_per_step": 4.198658906484937,
+    "step_wall_ms": 223.68459644748995,
+    "target_1_15x_floor_ms": 137.6067177261,
+    "target_gap_ms": 86.07787872138995,
+    "target_reduction_needed_pct": 38.481808800633,
+    "verifier_gpu_ms_per_step": 152.56992849542583,
+    "wall_steps_measured": 302,
+    "wall_tps": 24.464414584165116,
+    "weight_floor_ms": 119.658015414
+  },
+  "floor_is_full_step_hardware_floor": false,
+  "invalid_reason": "terminal_assistant_missing_nonempty_text",
+  "measurement_valid": false,
+  "run_classification": "one_task_b1_diagnostic",
+  "schema": "fr13.fixed32.cutlass.divisor_k64.b1.invalid_metrics.v1",
+  "task_provenance_valid": false
+}
