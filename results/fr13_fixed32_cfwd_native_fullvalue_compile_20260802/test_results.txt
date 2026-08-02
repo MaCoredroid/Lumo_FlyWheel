@@ -1,0 +1,24 @@
+Fixed32 CFWD native full-value compile qualification (2026-08-02 UTC)
+
+Candidate plus adjacent lifecycle/task-boundary suites:
+90 passed in 0.47s
+
+Ruff on the candidate Python wrapper, patcher, and test: pass.
+Python byte compilation on those three files: pass.
+git diff --check: pass.
+
+Exact full-translation-unit SM121a compile after the address-lifetime fix:
+- 64 registers/thread
+- 0-byte stack frame
+- 0-byte spill stores and loads
+- 0 local bytes
+- 548 source static shared bytes; 1,572 bytes including target reservation
+- 0 SASS LDL and 0 SASS STL
+
+Exact host-only incumbent Triton BV128 compile:
+- 255 registers/thread
+- 424-byte stack frame
+- 53 SASS LDL and 53 SASS STL
+
+No CUDA kernel launch, GPU query, Docker mutation, real SWE-Verified campaign,
+synthetic/probe performance run, or timing measurement is represented here.

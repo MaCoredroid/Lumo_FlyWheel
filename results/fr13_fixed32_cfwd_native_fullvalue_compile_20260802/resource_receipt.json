@@ -1,0 +1,58 @@
+{
+  "abi": {
+    "exported_symbol_binding": "GLOBAL_DEFAULT",
+    "exported_symbol_demangled": "fr13_fixed32_cfwd_native_fullvalue(at::Tensor&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, at::Tensor const&, long, bool, bool)",
+    "host_wrapper_compiled": true,
+    "linked_into_serving_image": false
+  },
+  "candidate_post_fix": {
+    "barriers": 1,
+    "local_bytes": 0,
+    "ptxas_source_static_shared_bytes": 548,
+    "registers_per_thread": 64,
+    "sass_add_positive_zero_count": 32,
+    "sass_ldl_count": 0,
+    "sass_stl_count": 0,
+    "shared_bytes_reported": 1572,
+    "shared_bytes_target_reserved": 1024,
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0,
+    "stack_frame_bytes": 0,
+    "threads_per_cta": 512,
+    "two_ctas_per_sm_register_eligibility": true
+  },
+  "compile": {
+    "architecture": "compute_121a_sm_121a",
+    "extension_target": "non_stable_vllm__C",
+    "full_translation_unit": true,
+    "object_published": false,
+    "source_code_commit": "c5af15b4e95ec6f0f0b536ca12e7b35c68ea0b03",
+    "source_sha256": "1d22e30e736e055b2b55a20e01c8011991a044aaf8ea86fe8af872d3f91fb8e2",
+    "vllm_source_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
+  },
+  "incumbent_exact_triton_bv128_host_compile": {
+    "ffma_count": 129,
+    "kernel": "_fr13_fixed32_committer_native_layer_batch_kernel",
+    "ldl_count": 53,
+    "mufu_count": 5,
+    "registers_per_thread": 255,
+    "shared_bytes_reported": 1024,
+    "shfl_count": 331,
+    "stack_frame_bytes": 424,
+    "stl_count": 53
+  },
+  "initial_exact_compile_before_address_lifetime_fix": {
+    "registers_per_thread": 64,
+    "spill_load_bytes": 8,
+    "spill_store_bytes": 8,
+    "stack_frame_bytes": 8
+  },
+  "interpretation": {
+    "compile_resource_gate": "pass",
+    "observed_occupancy": false,
+    "performance_claim": false,
+    "raw_byte_gate": "pending_high_risk",
+    "timing_eligible": false
+  },
+  "schema": "fr13.fixed32.cfwd_native_fullvalue_resource_receipt.v1"
+}

@@ -1,0 +1,65 @@
+{
+  "branch": "agent/fixed32-cfwd-native-fullvalue-20260802",
+  "candidate": {
+    "default_on": false,
+    "diagnostic_selector_only": true,
+    "dim_k": 128,
+    "dim_v": 128,
+    "fp32_state_elements_per_thread": 32,
+    "production_authorized": false,
+    "threads_per_cta": 512,
+    "timing_eligible": false,
+    "warps_per_cta": 16
+  },
+  "code_commit": "c5af15b4e95ec6f0f0b536ca12e7b35c68ea0b03",
+  "qualification": {
+    "b1_real_swe_raw_byte_gate": null,
+    "b1_real_swe_timing": null,
+    "b4_exact4_real_swe_raw_byte_gate": null,
+    "b4_exact4_real_swe_timing": null,
+    "compile_target": "non_stable_vllm__C",
+    "compile_translation_unit": "exact_full_source_and_host_wrapper",
+    "resource_gate": "pass",
+    "serving_image_link": null,
+    "status": "compile_resource_pass_raw_byte_and_timing_pending",
+    "timing_eligible": false
+  },
+  "raw_byte_audit": {
+    "classification": "high_risk_first_attempt_unlikely",
+    "fixed_mismatch": "initial_state_load_plus_positive_zero_matches_incumbent",
+    "logical_recurrence_order_preserved": true,
+    "remaining_mismatches": [
+      "k_norm_reduction_tree_and_fma_grouping",
+      "state_dot_reduction_tree_and_grouping",
+      "transcendental_approximations_order_and_fusion"
+    ],
+    "required_gate": "all_48_fp32_running_bank_rows_on_real_swe_verified_b1_and_exact4_b4"
+  },
+  "schema": "fr13.fixed32.cfwd_native_fullvalue_compile.v1",
+  "source_sha256": {
+    "native/fr13_fixed32_cfwd_native_fullvalue.cu": "1d22e30e736e055b2b55a20e01c8011991a044aaf8ea86fe8af872d3f91fb8e2",
+    "scripts/fr13_patch_vllm_cfwd_native_fullvalue_cuda.py": "4140e7155954ce02177e3c2b4c016e7ce77306809ddcf86d51538fcbca8d1616",
+    "src/lumo_flywheel_serving/fr13_cfwd_native_fullvalue_cuda.py": "43ea9700f49cf1974b4b763e3f08ae7c21766406d2f40c1f71d54a087bd3ce61",
+    "tests/test_fr13_fixed32_cfwd_native_fullvalue_cuda.py": "4b7765c16e337fc1cbdbde9c2fe4531e6c72e7012b5846e9ea0d5304031e3717"
+  },
+  "toolchain": {
+    "architecture": "sm_121a",
+    "cuda": "13.0.88",
+    "pytorch": "2.10.0+cu130",
+    "triton_incumbent_comparison": "3.6.0",
+    "vllm_source_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
+  },
+  "verification": {
+    "adjacent_and_candidate_tests_passed": 90,
+    "cuda_compile_run": true,
+    "cuda_kernel_launch_run": false,
+    "docker_mutation": false,
+    "gpu_query_run": false,
+    "python_byte_compile": "pass",
+    "real_swe_campaign_run": false,
+    "ruff": "pass",
+    "synthetic_or_probe_performance_run": false,
+    "timing_measurement_run": false,
+    "whitespace": "pass"
+  }
+}
