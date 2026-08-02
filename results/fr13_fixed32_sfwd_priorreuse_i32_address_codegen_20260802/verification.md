@@ -1,10 +1,10 @@
 # Verification
 
-- Source revision: `b108b8819bed9424c28ff4c9c4bb33bd495994cc`.
+- Source revision: `0cdab29fcbc90351e915bb687994785cbd2fcdd9`.
 - Checked-in codegen-helper hash: bound and verified before both builds.
 - Focused state-fusion plus int32-descriptor suite: 18 passed.
 - Python bytecode compilation: passed.
-- Dense B4 address maximum and unsafe-stride rejection: passed.
+- Live padded B4 address maximum and unsafe-stride rejection: passed.
 - Fresh isolated-cache builds: two.
 - Compiled specializations per build: B1 and B4.
 - Duplicate generated output trees: byte identical.

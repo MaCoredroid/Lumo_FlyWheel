@@ -4,7 +4,7 @@ Status: **offline SM121a codegen improves the int32-descriptor candidate;
 live correctness and runtime performance remain unqualified**.
 
 This package audits source commit
-`b108b8819bed9424c28ff4c9c4bb33bd495994cc` at the fixed B1/B4
+`0cdab29fcbc90351e915bb687994785cbd2fcdd9` at the fixed B1/B4
 specialization: 32 physical rows per request, row group 32, 10,240 channels,
 `BLOCK_C=64`, width 4, state length 34, eight warps, and three stages. CUDA
 visibility was explicitly empty. No GPU kernel, Docker service, SWE task,
@@ -19,10 +19,11 @@ int32. Conv-state bank addressing remains int64 because its selected bank row
 is runtime state.
 
 The host-side contract accepts only B1-B4, requires a valid row stride, and
-rejects any specialization whose maximum dense-buffer element offset exceeds
-signed int32. At the exact dense B4 shape, the maximum `x`/`out` offset is
-1,310,719 elements and the maximum source-stage offset is 1,474,559 elements,
-both below 2,147,483,647.
+rejects any specialization whose maximum buffer element offset exceeds signed
+int32. The source-bound real B1 layout evidence shows a padded `x` row stride
+of 16,384 elements. At that exact padded B4 specialization, the maximum `x`
+offset is 2,091,007 elements; the dense output and source-stage maxima are
+1,310,719 and 1,474,559 elements. All remain below 2,147,483,647.
 
 The module is offline-only and has no launcher or production selector. It
 cannot be engaged by the serving stack. A source-bound real B1
@@ -30,7 +31,7 @@ reference-served byte gate is required before timing or production work.
 
 ## Result
 
-| Metric | C64 prior reuse | Int32 descriptor | Int32 dense offsets |
+| Metric | C64 prior reuse | Int32 descriptor | Int32 buffer offsets |
 |---|---:|---:|---:|
 | CTAs per request | 160 | 160 | 160 |
 | B1 / B4 CTAs per launch | 160 / 640 | 160 / 640 | 160 / 640 |
