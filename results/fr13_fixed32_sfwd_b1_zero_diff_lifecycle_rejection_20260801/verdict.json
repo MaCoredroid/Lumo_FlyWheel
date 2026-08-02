@@ -1,0 +1,32 @@
+{
+  "acceptance_eligible": false,
+  "arm": "hydra27_fixed32_sfwd_state_fusion_fullvocab_b1_20260801T114554Z",
+  "batch_size": 1,
+  "candidate": "fixed32_sfwd_state_fusion_v1",
+  "compared_bytes": 66846720,
+  "comparison_records": 48,
+  "completed_tasks": 0,
+  "differing_bytes": 0,
+  "failure": {
+    "engine": "RuntimeError: FR13 fixed32 KV16 compact/full row-map drift",
+    "harness": "fixed32 qwen engine completion metrics do not reconcile",
+    "phase": "sample_tokens_after_first_authenticated_real_decode"
+  },
+  "floor_acceptance_eligible": false,
+  "gpu_timing_samples": 0,
+  "layer_count": 48,
+  "production_eligible": false,
+  "real_task_authenticated": true,
+  "reference_always_served": true,
+  "run_classification": "real_swe_verified_b1_byte_gate_zero_diff_lifecycle_rejected",
+  "run_root": "output/fr13_b1_sfwd_state_fusion_live_gate_20260801T114554Z",
+  "schema": "fr13.fixed32.sfwd_state_fusion.zero_diff_lifecycle_rejection.v1",
+  "source_commit": "f35b73725a5a35cd44f77ac77309201156a34dae",
+  "status": "rejected_lifecycle",
+  "task_ids": [
+    "astropy__astropy-12907"
+  ],
+  "timing_eligible": false,
+  "wrapper_rc": 15,
+  "zero_diff_records": 48
+}

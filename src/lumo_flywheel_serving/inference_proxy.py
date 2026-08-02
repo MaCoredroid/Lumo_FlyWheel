@@ -87,6 +87,15 @@ _FIXED32_SFWD_B4_REAL_EVENT_ARM_NAME = (
 _FIXED32_SFWD_B4_ENABLED_NAME = (
     "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
 )
+_FIXED32_SFWD_PRIOR_REUSE_ENABLED_NAME = (
+    "fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled"
+)
+_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM_NAME = (
+    "fr13_fixed32_sfwd_state_fusion.production.arm"
+)
+_FIXED32_SFWD_B1_TASK_IDS = (
+    "astropy__astropy-12907",
+)
 _FIXED32_BATCH_GDN_EXACT4_TASK_IDS = (
     "astropy__astropy-12907",
     "astropy__astropy-13033",
@@ -1475,19 +1484,32 @@ class Fixed32EngineIngress:
             )
 
     def _validate_sfwd_b4_enabled_sidecar(self, path: Path) -> None:
-        enabled = path.with_name(_FIXED32_SFWD_B4_ENABLED_NAME)
-        if not os.path.lexists(enabled):
-            raise Fixed32IngressError(
-                "fixed32 SFWD B4 requires its enabled sidecar"
+        route_names = [_FIXED32_SFWD_B4_ENABLED_NAME]
+        if self.task_ids == _FIXED32_SFWD_B1_TASK_IDS:
+            route_names.extend(
+                (
+                    _FIXED32_SFWD_PRIOR_REUSE_ENABLED_NAME,
+                    _FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM_NAME,
+                )
             )
+        enabled_paths = [
+            path.with_name(name)
+            for name in route_names
+            if os.path.lexists(path.with_name(name))
+        ]
+        if len(enabled_paths) != 1:
+            raise Fixed32IngressError(
+                "fixed32 SFWD requires exactly one route sidecar"
+            )
+        enabled = enabled_paths[0]
         if self._read_sfwd_b4_sidecar(
             enabled,
-            label=f"enabled sidecar {enabled.name}",
+            label=f"route sidecar {enabled.name}",
             max_bytes=2,
             required_mode=0o400,
         ) != b"1\n":
             raise Fixed32IngressError(
-                "fixed32 SFWD B4 enabled sidecar is invalid"
+                "fixed32 SFWD route sidecar is invalid"
             )
 
     def _validate_batch_gdn_real_event_arm(
@@ -1569,9 +1591,12 @@ class Fixed32EngineIngress:
     ) -> Path | None:
         if raw_path is None or not os.fspath(raw_path):
             return None
-        if self.task_ids != _FIXED32_BATCH_GDN_EXACT4_TASK_IDS:
+        if self.task_ids not in (
+            _FIXED32_BATCH_GDN_EXACT4_TASK_IDS,
+            _FIXED32_SFWD_B1_TASK_IDS,
+        ):
             raise Fixed32IngressError(
-                "fixed32 SFWD B4 real-event arm requires canonical exact4 tasks"
+                "fixed32 SFWD real-event arm requires canonical exact4 or B1 tasks"
             )
         path = Path(raw_path)
         if not path.is_absolute() or path.name != _FIXED32_SFWD_B4_REAL_EVENT_ARM_NAME:
@@ -1752,7 +1777,7 @@ class Fixed32EngineIngress:
         self._cutlass_b4_published_marker = marker
 
     def _arm_sfwd_b4_real_event(self, task_key_id: str) -> None:
-        """Publish exact4 only after every task has an authenticated request."""
+        """Publish B1 immediately or exact4 after every task authenticates."""
         path = self.sfwd_b4_real_event_arm
         if path is None:
             return
@@ -1763,7 +1788,8 @@ class Fixed32EngineIngress:
             if counts["accepted_engine_requests"] > 0
         }
         authenticated.add(task_key_id)
-        if authenticated != self.task_key_ids:
+        is_b1 = self.task_ids == _FIXED32_SFWD_B1_TASK_IDS
+        if not is_b1 and authenticated != self.task_key_ids:
             return
         marker = (
             "\n".join(
@@ -1771,12 +1797,13 @@ class Fixed32EngineIngress:
             )
             + "\n"
         ).encode("ascii")
+        marker_mode = 0o400 if is_b1 else 0o444
         if self._sfwd_b4_published_marker is not None:
             published = self._read_sfwd_b4_sidecar(
                 path,
                 label="real-event arm",
                 max_bytes=1024,
-                required_mode=0o444,
+                required_mode=marker_mode,
             )
             if published != self._sfwd_b4_published_marker:
                 raise Fixed32IngressError(
@@ -1794,7 +1821,7 @@ class Fixed32EngineIngress:
             | getattr(os, "O_CLOEXEC", 0)
         )
         try:
-            descriptor = os.open(temporary, flags, 0o444)
+            descriptor = os.open(temporary, flags, marker_mode)
             try:
                 view = memoryview(marker)
                 while view:
@@ -1802,7 +1829,7 @@ class Fixed32EngineIngress:
                     if written <= 0:
                         raise OSError("short write")
                     view = view[written:]
-                os.fchmod(descriptor, 0o444)
+                os.fchmod(descriptor, marker_mode)
                 os.fsync(descriptor)
             finally:
                 os.close(descriptor)
@@ -1831,7 +1858,7 @@ class Fixed32EngineIngress:
             path,
             label="real-event arm",
             max_bytes=1024,
-            required_mode=0o444,
+            required_mode=marker_mode,
         )
         if published != marker:
             raise Fixed32IngressError(

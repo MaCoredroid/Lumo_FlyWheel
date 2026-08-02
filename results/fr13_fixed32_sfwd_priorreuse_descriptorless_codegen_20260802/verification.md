@@ -1,0 +1,21 @@
+# Verification
+
+- Source revision: `4ca86e3beddd9a69a7b3471ccc22ba5c2708b029`.
+- Fixed parent arithmetic equals all 32 reference parent edges.
+- All 96 derived non-final source rows equal the reference descriptor.
+- Ordered BF16-product and FP32-add CPU math: exact equality for every node.
+- Descriptor pointer is absent from the candidate kernel signature and source.
+- Live padded B1/B4 int32 address maxima and unsafe-stride rejection: passed.
+- Focused descriptorless, dense-int32, and state-fusion suites: 24 passed.
+- Python bytecode compilation: passed.
+- Fresh isolated-cache builds: two.
+- Compiled specializations per build: B1 and B4.
+- Duplicate generated output trees: byte identical.
+- B1/B4 cubin, PTX, SASS, resource, and non-launch metrics: identical.
+- Target and producer: SM121a, `ptxas-blackwell` 12.9.86.
+- Stack, local memory, LDL, STL, shared memory, and calls: zero.
+- Exact register allocation: 40 registers/thread and 10,240 registers/CTA.
+- Register-budget ceiling: six CTAs or 48 warps/SM, versus four or 32 at `b108b8819`.
+- Source tree whitespace/error check: passed.
+- CUDA visibility during codegen: explicitly empty.
+- Live correctness, timing, SWE task, service, and production selection: not run.

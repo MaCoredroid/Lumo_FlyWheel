@@ -1,0 +1,4 @@
+schedule	rows_per_program	block_c	ctas_per_request	b1_ctas_per_launch	b4_ctas_per_launch	registers	static_sass	encoded_sass	cubin_bytes	ldg	stg	lds	sts	stack_bytes	local_bytes	ldl	stl	calls
+row8_c256	8	256	160	160	640	111	1219	1240	84016	116	20	0	0	0	0	0	0	0
+row16_c128	16	128	160	160	640	105	1260	1288	86248	116	20	32	16	0	0	0	0	0
+row32_c64	32	64	160	160	640	109	1215	1240	83480	116	20	4	0	0	0	0	0	0

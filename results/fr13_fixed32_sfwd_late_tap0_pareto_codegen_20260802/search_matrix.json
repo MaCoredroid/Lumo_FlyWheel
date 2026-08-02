@@ -1,0 +1,33 @@
+{
+  "candidate_reload_nodes": [17, 18, 19, 20, 21, 22, 23, 24],
+  "classification": "targeted_offline_codegen_search",
+  "deletion_from_candidate": [
+    {"removed_node": 17, "registers": 40, "ldg": 89, "static": 1881, "encoded": 1896, "stack_bytes": 16, "verdict": "reject_spill"},
+    {"removed_node": 18, "registers": 48, "ldg": 89, "static": 1867, "encoded": 1880, "stack_bytes": 0, "verdict": "reject_register_ceiling"},
+    {"removed_node": 19, "registers": 48, "ldg": 89, "static": 1870, "encoded": 1880, "stack_bytes": 0, "verdict": "reject_register_ceiling"},
+    {"removed_node": 20, "registers": 48, "ldg": 89, "static": 1862, "encoded": 1872, "stack_bytes": 0, "verdict": "reject_register_ceiling"},
+    {"removed_node": 21, "registers": 48, "ldg": 89, "static": 1858, "encoded": 1872, "stack_bytes": 0, "verdict": "reject_register_ceiling"},
+    {"removed_node": 22, "registers": 40, "ldg": 89, "static": 1881, "encoded": 1896, "stack_bytes": 32, "verdict": "reject_spill"},
+    {"removed_node": 23, "registers": 40, "ldg": 89, "static": 1880, "encoded": 1896, "stack_bytes": 24, "verdict": "reject_spill"},
+    {"removed_node": 24, "registers": 40, "ldg": 89, "static": 1886, "encoded": 1896, "stack_bytes": 24, "verdict": "reject_spill"}
+  ],
+  "greedy_path": [
+    {"reload_nodes": "13-24", "reload_count": 12, "registers": 44, "ldg": 99, "static": 1965, "encoded": 1976, "stack_bytes": 0},
+    {"reload_nodes": "14-24", "reload_count": 11, "registers": 44, "ldg": 97, "static": 1959, "encoded": 1976, "stack_bytes": 0},
+    {"reload_nodes": "15-24", "reload_count": 10, "registers": 44, "ldg": 95, "static": 1941, "encoded": 1952, "stack_bytes": 0},
+    {"reload_nodes": "15,17-24", "reload_count": 9, "registers": 44, "ldg": 93, "static": 1924, "encoded": 1936, "stack_bytes": 0},
+    {"reload_nodes": "17-24", "reload_count": 8, "registers": 44, "ldg": 91, "static": 1920, "encoded": 1936, "stack_bytes": 0}
+  ],
+  "same_load_valid_swaps": [
+    {"removed_node": 17, "added_node": 13, "registers": 44, "ldg": 91, "static": 1931, "encoded": 1944, "stack_bytes": 0},
+    {"removed_node": 17, "added_node": 14, "registers": 44, "ldg": 91, "static": 1928, "encoded": 1944, "stack_bytes": 0}
+  ],
+  "search_scope": {
+    "candidate_deletions": 8,
+    "same_load_swaps": 28,
+    "six_extra_load_liveness_candidates": 16,
+    "threshold_and_greedy_candidates": 5
+  },
+  "search_scope_limit": "not_exhaustive_over_all_possible_kernel_transformations",
+  "selected": "17-24"
+}

@@ -8109,11 +8109,41 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(
             "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"
         )
+    sfwd_state_fusion_timing_text = os.environ.get(
+        "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB",
+        "0",
+    )
+    if sfwd_state_fusion_timing_text not in {"0", "1"}:
+        parser.error(
+            "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB must be exactly 0 or 1"
+        )
+    sfwd_prior_reuse_text = os.environ.get(
+        "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB",
+        "0",
+    )
+    if sfwd_prior_reuse_text not in {"0", "1"}:
+        parser.error(
+            "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB must be exactly 0 or 1"
+        )
+    if (
+        sum(
+            value == "1"
+            for value in (
+                sfwd_state_fusion_eager_diagnostic,
+                sfwd_state_fusion_timing_text,
+                sfwd_prior_reuse_text,
+            )
+        )
+        > 1
+    ):
+        parser.error("fixed32 SFWD diagnostics are exclusive")
     fixed32_eager_kernel_diagnostic = (
         fixed32_cutlass_diagnostic
         or fixed32_cutlass_b4_diagnostic
         or batch_gdn_eager_diagnostic == "1"
         or sfwd_state_fusion_eager_diagnostic == "1"
+        or sfwd_state_fusion_timing_text == "1"
+        or sfwd_prior_reuse_text == "1"
     )
     if (
         fixed32_eager_kernel_diagnostic

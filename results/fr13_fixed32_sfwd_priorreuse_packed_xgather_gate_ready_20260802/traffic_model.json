@@ -1,0 +1,38 @@
+{
+  "assumptions": {
+    "bias": false,
+    "bytes_per_bfloat16": 2,
+    "channels_per_cta": 64,
+    "ctas_per_request": 160,
+    "historical_x_elements_by_tap": [
+      23,
+      28,
+      31
+    ],
+    "historical_x_elements_per_channel": 82,
+    "physical_rows": 32,
+    "prior_elements_per_channel": 3,
+    "stage_store_elements_per_channel": 36,
+    "weight_elements_per_channel": 4
+  },
+  "baseline_descriptorless_fixedbase": {
+    "global_bytes_per_cta": 24196,
+    "global_bytes_per_request_layer": 3871360,
+    "global_x_elements_per_channel": 114
+  },
+  "packed_xgather": {
+    "global_bytes_per_cta": 13700,
+    "global_bytes_per_request_layer": 2192000,
+    "global_x_elements_per_channel": 32,
+    "logical_shared_bytes_per_cta": 14592
+  },
+  "reduction": {
+    "global_bytes_per_48_layer_forward": 80609280,
+    "global_bytes_per_cta": 10496,
+    "global_bytes_per_request_layer": 1679360,
+    "global_fraction": 0.433790709208134
+  },
+  "schema": "fr13.fixed32.sfwd_xgather.logical_traffic.v2",
+  "scope": "logical kernel operand traffic before cache effects",
+  "status": "analytical_not_measured"
+}

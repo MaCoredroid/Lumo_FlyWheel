@@ -1,0 +1,92 @@
+{
+  "schema": "fr13.fixed32.sfwd_state_fusion.rowgroup8.codegen.v1",
+  "status": "OFFLINE_CODEGEN_PASS_B1_BYTE_GATE_REQUIRED",
+  "date_utc": "2026-08-02",
+  "branch": "agent/fixed32-sfwd-state-fusion-rowgroup8-20260802",
+  "rowgroup4_source_commit": "f7456b7fc83bdc292cf25b4f2d15e22a2f224363",
+  "rowgroup8_initial_commit": "b540aa20d482dadf215575922189925a5f5a6ed0",
+  "rowgroup8_rowmask_commit": "75d6786138e146580a4c5b8df9d669037210e7af",
+  "rowgroup8_final_commit": "37e88f2be00373b25adbc63c6e923068442f7089",
+  "candidate": "fixed32_sfwd_state_fusion_rowgroup8_v3",
+  "toolchain": {
+    "torch": "2.10.0+cu130",
+    "triton": "3.6.0",
+    "cuda_nvcc": "13.0.88",
+    "nvdisasm": "13.0.85",
+    "cuobjdump": "13.0.85",
+    "target": "sm_121a",
+    "num_stages": 3
+  },
+  "deployed_contract": {
+    "model_config_sha256": "f78c412bfdec65a88c8aa2a031d39c2fda32e3377ae48a77f971bc40a4f095df",
+    "batch_sizes_compiled": [1, 4],
+    "physical_rows_per_request": 32,
+    "channels": 10240,
+    "conv_width": 4,
+    "conv_state_length": 12,
+    "source_rows": 36,
+    "block_channels": 256,
+    "rows_per_program": 8,
+    "num_warps": 8,
+    "has_bias": false,
+    "source_descriptor_dtype": "int64"
+  },
+  "final_codegen": {
+    "b1_compile_hash": "3f7b8bfc71527c8fe62ea98610806009ec551efde22069b333ab3ea1462f52b3",
+    "b4_compile_hash": "6e17630d94cd78d7850ab56a841102895028ae1deeb5dc5344a5466fc68b2634",
+    "cubin_sha256": "5491dc1259e49cf7270e58cfcee45bc5eb95551c5191e80b86a8ff3fcc51202b",
+    "sass_sha256": "b17603374b1df98c2ceb2165fa8c5a03955cafdaef294a52f139b0a8d6edc601",
+    "cubin_bytes": 78096,
+    "registers": 88,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "elf_shared_bytes": 1024,
+    "launch_shared_bytes": 4096,
+    "static_sass_instructions": 1083,
+    "encoded_sass_instructions": 1104,
+    "ldg": 116,
+    "stg": 20,
+    "lds": 0,
+    "sts": 0,
+    "ldl": 0,
+    "stl": 0,
+    "calls": 0,
+    "b1_ctas": 160,
+    "b4_ctas": 640
+  },
+  "resource_verdict": {
+    "compile_pass": true,
+    "stack_zero": true,
+    "local_zero": true,
+    "spill_instructions_zero": true,
+    "calls_zero": true,
+    "b1_b4_cubins_identical": true,
+    "program_ratio_over_rowgroup4": 0.5,
+    "viable_offline": true,
+    "latency_claim": false
+  },
+  "verification": {
+    "python_compile": "pass",
+    "focused_tests": "8 passed",
+    "rowgroup4_exact_reconstruction": "pass",
+    "b1_offline_codegen": "pass",
+    "b4_offline_codegen": "pass",
+    "fresh_rebuild_byte_identity": "pass",
+    "diff_check": "pass"
+  },
+  "claims": {
+    "offline_codegen_inspected": true,
+    "resource_gate_passed": true,
+    "byte_equal": false,
+    "performance_measured": false,
+    "real_swe_verified_run": false,
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false,
+    "production_enabled": false
+  },
+  "required_next": [
+    "authenticated real SWE-Verified B1 48-layer raw-byte gate",
+    "continue serving incumbent bytes during qualification",
+    "no selector or timing before exact byte equality"
+  ]
+}

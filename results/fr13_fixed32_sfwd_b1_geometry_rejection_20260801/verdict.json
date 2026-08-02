@@ -1,0 +1,25 @@
+{
+  "candidate": "fixed32_sfwd_state_fusion_v1",
+  "comparison_records": 0,
+  "failure": {
+    "actual_conv_state_length": 34,
+    "expected_conv_state_length": 12,
+    "message": "FR13_FIXED32_SFWD_STATE_FUSION dependency/geometry contract drifted",
+    "phase": "first_authenticated_real_decode"
+  },
+  "floor_acceptance_eligible": false,
+  "gpu_timing_samples": 0,
+  "physical_rows_per_request": 32,
+  "production_eligible": false,
+  "reference_always_served": true,
+  "run_classification": "real_swe_verified_b1_byte_gate_rejected_before_comparison",
+  "run_root": "output/fr13_b1_sfwd_state_fusion_live_gate_20260801T110008Z",
+  "schema": "fr13.fixed32.sfwd_state_fusion.geometry_rejection.v1",
+  "source_commit": "443344789dd4df0bda671832c1badd4f1bd04d4d",
+  "status": "rejected",
+  "task_ids": [
+    "astropy__astropy-12907"
+  ],
+  "timing_eligible": false,
+  "wrapper_rc": 15
+}

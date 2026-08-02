@@ -1,0 +1,11 @@
+e6c090ab08f7768ea42647ec42c335fd40359502b9a1f3a355ae0544e210a285  README.md
+4f171f8790bc81e54cc33871275c3c3618220740745bb4362893daae67168c95  audit.json
+b11d48fe49bc68ff3da0f6b4356b09fe3aa09582cc0781729ad1e32a4b88ace1  prepared_command.sh
+b2992363abb73f5519cd6e1d06d290fb0b607af9155ed525288593ade3b93bdb  test_results.txt
+43d65985e90173f157b35f5fcda87bc421b0a1cd645bd71965452f54cd97b0e4  ../../scripts/fr13_run_b1_sfwd_state_fusion_gate.sh
+4e5d6f9e1424b729b2182dfd96cf2d74bc7d287c7831cb1f870482c1c149b979  ../../scripts/fr13_bigdenom_swe_serve_variant.sh
+d381ee751dcb68df279f77ca2d6faf66dac078490746df32ee261258a9c663b0  ../../scripts/run_swe_bench_q36_a.py
+5df124b99b34a5c482265d852fd78d24f6721722e64052f8f23da9d298ddba1a  ../../scripts/fr10_phase4_patch_vllm_tree_gdn.py
+bb8d628bd444aa33981377dc679b4b15ff25231d6ed88c3dc78260c742bb254b  ../../scripts/fr13_fixed32_contract.py
+dff1da1f1cbd29d59c3454540754123f715130145c44cf3031f2e63559aae781  ../../scripts/fr13_launch_forked_fa2_tree_server.sh
+f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d  /home/mark/fr13_runs/auto_research_streamk_source_20260801/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so

@@ -1,0 +1,61 @@
+{
+  "candidate": "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_u32x2_frontier5_loadonce_v3",
+  "classification": "source_only_exact_schedule_audit",
+  "execution": {
+    "compiler_used": false,
+    "docker_used": false,
+    "gpu_used": false,
+    "real_task_used": false
+  },
+  "performance_claim": false,
+  "production_eligible": false,
+  "real_task_gate_required": true,
+  "schedule": {
+    "natural_order": {
+      "live_x_sum": 230,
+      "peak_live_x": 11
+    },
+    "node_order": [27, 25, 23, 18, 13, 8, 3, 0, 2, 7, 12, 17, 22, 1, 5, 6, 4, 10, 11, 9, 15, 16, 14, 20, 21, 19, 24, 26, 28, 29, 30, 31],
+    "selected_live_counts": [4, 4, 4, 4, 4, 3, 2, 1, 2, 3, 4, 5, 5, 2, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+    "selected_live_x_sum": 116,
+    "selected_peak_live_x": 5,
+    "x_global_loads_per_channel": 32,
+    "x_reload_count": 0
+  },
+  "schedule_proof": {
+    "attained_peak": 5,
+    "exact_for_fixed_topology_and_load_once_model": true,
+    "method": "memoized_depth_first_enumeration_of_partial_node_schedules",
+    "peak4_schedule_exists": false,
+    "search_states": 2257
+  },
+  "semantic_contract": {
+    "bf16_product_rounding_preserved": true,
+    "fp32_accumulation_order_preserved": true,
+    "silu_expression_preserved": true,
+    "source_stage_rows_preserved": true,
+    "tap_sources_preserved": true,
+    "x_out_source_distinct_storage_required": true
+  },
+  "source_commit": "ac8d848b63278a9c956ebbb31b9b7836372816f1",
+  "source_hashes": {
+    "gate": "7811ae1a0e1a5d2c5af43f7ea5ed5a5ad5b4cf89951dc05361d93156c7dc451c",
+    "kernel": "beb8b1320c1ed2ad679b7d37b74ed4b07ac4e42343e0deb660050f69775f421b",
+    "launcher": "a3772a0887ef916a389e446fd72b2d1583a22c6d4a526fde890d72136575c0a8",
+    "runner": "7d623f695b2f1103c5101953144985157120c7e91ae6127990d031333e099cab"
+  },
+  "structural_counts": {
+    "bf16_to_fp32_products": 128,
+    "current_row_global_loads": 32,
+    "output_stores": 32,
+    "silu_expressions": 32,
+    "source_stage_current_row_stores": 32
+  },
+  "validation": {
+    "bash_syntax": "pass",
+    "focused_sfwd_tests": 67,
+    "git_diff_check": "pass",
+    "python_compile": "pass",
+    "ruff": "pass"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "baseline": {
+    "candidate": "fixed32_sfwd_channel_serial_r32_b1c128w4_bxc256w8_u32x2_s20_v1",
+    "b1": {
+      "block_c": 128,
+      "num_warps": 4,
+      "ctas_per_launch": 80,
+      "registers": 48,
+      "static_sass_instructions": 897,
+      "encoded_sass_instructions": 912,
+      "ldg": 38,
+      "stg": 68
+    },
+    "b4": {
+      "block_c": 256,
+      "num_warps": 8,
+      "ctas_per_launch": 160,
+      "ctas_per_request": 40,
+      "registers": 48,
+      "static_sass_instructions": 895,
+      "encoded_sass_instructions": 912,
+      "ldg": 38,
+      "stg": 68
+    }
+  },
+  "candidate": "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_u32x2_s20_lane2_v1",
+  "classification": "offline_codegen_only",
+  "source_commit": "8a29e700989288149ef8170be883cc86f66d36df",
+  "schedules": {
+    "b1": {
+      "block_c": 128,
+      "num_warps": 2,
+      "channels_per_thread": 2,
+      "ctas_per_launch": 80,
+      "registers": 80,
+      "static_sass_instructions": 1743,
+      "encoded_sass_instructions": 1760,
+      "ldg": 75,
+      "stg": 136
+    },
+    "b4": {
+      "block_c": 256,
+      "num_warps": 4,
+      "channels_per_thread": 2,
+      "ctas_per_launch": 160,
+      "ctas_per_request": 40,
+      "registers": 80,
+      "static_sass_instructions": 1743,
+      "encoded_sass_instructions": 1760,
+      "ldg": 75,
+      "stg": 136
+    }
+  },
+  "launch_weighted_delta_percent": {
+    "b1_static_sass": -2.842808,
+    "b1_encoded_sass": -3.508772,
+    "b1_ldg": -1.315789,
+    "b1_stg": 0.0,
+    "b4_static_sass": -2.625698,
+    "b4_encoded_sass": -3.508772,
+    "b4_ldg": -1.315789,
+    "b4_stg": 0.0
+  },
+  "common_zero_resources": {
+    "bar": 0,
+    "calls": 0,
+    "elf_shared_bytes": 0,
+    "launch_shared_bytes": 0,
+    "ldl": 0,
+    "lds": 0,
+    "local_bytes": 0,
+    "stack_bytes": 0,
+    "stl": 0,
+    "sts": 0
+  },
+  "target": "sm_121a",
+  "cuda_visible_devices_empty": true,
+  "performance_claim": false,
+  "real_task_gate_required": true,
+  "production_eligible": false
+}

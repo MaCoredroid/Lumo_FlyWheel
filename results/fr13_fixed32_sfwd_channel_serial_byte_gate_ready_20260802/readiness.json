@@ -1,0 +1,62 @@
+{
+  "schema": "fr13.fixed32.sfwd_channel_serial.byte_gate_ready.v1",
+  "status": "READY_FOR_ONE_REAL_SWE_VERIFIED_B1_BYTE_GATE",
+  "candidate": "fixed32_sfwd_channel_serial_r32_c64_w2_v1",
+  "source_commit": "07e46a9783d1f8347fd9f959309cfeeb95694d2c",
+  "branch": "agent/fixed32-sfwd-channel-serial-20260802",
+  "source_binding": {
+    "schema": "fr13.fixed32.sfwd_prior_reuse.source_manifest.v1",
+    "manifest_sha256": "d9e7673a0101e416259846bd2259e666f09d7387f1895d3446d7b1940bc150bb",
+    "file_count": 14,
+    "reference_gdn_source_bound": true,
+    "wrapper_sha256": "779b0f6c76ab55a3ef7695e460c50ec65341e7e1607ce2f60af8ad78aab98697",
+    "kernel_sha256": "f296133d946ba83d6b04add2938c5869461bce9a917a09bc9cbd790e17e52b90",
+    "gate_sha256": "3ec638e75e6de5ed7c221885dd9a5ac6d6e5af72915ca092741e408ebcc540ec",
+    "runner_sha256": "48767060784b463187d61abd6b611f3b5f9cbaff94df4741ba704aa029a856c5"
+  },
+  "runtime_contract": {
+    "batch_size": 1,
+    "physical_rows_per_request": 32,
+    "block_c": 64,
+    "num_warps": 2,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "topology_host_validation": "exact_parent_each_launch",
+    "source_descriptor_device_validation": false,
+    "source_descriptor_launcher_argument": false,
+    "reference_always_served": true,
+    "production_enabled": false
+  },
+  "byte_gate": {
+    "run_classification": "one_real_swe_verified_k64_root_b1_byte_diagnostic",
+    "task_count": 1,
+    "compared_surfaces": ["conv_out", "commit_source_stage"],
+    "required_layer_count": 48,
+    "zero_diff_required": true,
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false
+  },
+  "offline_codegen": {
+    "registers_reported": 64,
+    "bar": 0,
+    "lds": 0,
+    "sts": 0,
+    "launch_shared_bytes": 0,
+    "local_bytes": 0,
+    "stack_bytes": 0,
+    "calls": 0,
+    "b1_b4_binary_identity": true,
+    "fresh_cache_binary_identity": true
+  },
+  "verification": {
+    "focused_tests": "94 passed",
+    "ruff": "pass",
+    "pycompile": "pass",
+    "bash_syntax": "pass",
+    "diff_check": "pass",
+    "source_manifest_generation": "pass",
+    "gpu_or_docker_used": false,
+    "runtime_correctness_qualified": false,
+    "performance_measured": false
+  }
+}

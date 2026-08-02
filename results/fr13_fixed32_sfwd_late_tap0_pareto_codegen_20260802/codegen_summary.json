@@ -1,0 +1,97 @@
+{
+  "candidate": "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_u32x2_firstuse_tap0n17_24_v2",
+  "classification": "offline_codegen_only",
+  "common_zero_resources": {
+    "bar": 0,
+    "calls": 0,
+    "elf_shared_bytes": 0,
+    "launch_shared_bytes": 0,
+    "ldl": 0,
+    "lds": 0,
+    "local_bytes": 0,
+    "stack_bytes": 0,
+    "stl": 0,
+    "sts": 0
+  },
+  "comparison_to_single_reload": {
+    "encoded_sass_change_percent": 5.676855895197,
+    "global_load_change_percent": 18.181818181818,
+    "register_change_percent": -8.333333333333,
+    "static_sass_change_percent": 5.610561056106
+  },
+  "comparison_to_threshold12": {
+    "encoded_sass_change_percent": -2.024291497976,
+    "global_load_change_percent": -8.080808080808,
+    "register_change_percent": 0.0,
+    "static_sass_change_percent": -2.290076335878
+  },
+  "mechanism": {
+    "current_row_load_position": "first_use",
+    "global_x_loads_per_channel": 40,
+    "late_tap0_reload_nodes": [17, 18, 19, 20, 21, 22, 23, 24],
+    "late_tap0_source_rows": [2, 3, 4, 4, 4, 7, 8, 9],
+    "reload_count": 8
+  },
+  "performance_claim": false,
+  "prior_single_reload": {
+    "encoded_sass_instructions": 1832,
+    "ldg": 77,
+    "registers": 48,
+    "static_sass_instructions": 1818,
+    "stg": 136
+  },
+  "production_eligible": false,
+  "real_task_gate_required": true,
+  "schedules": {
+    "b1": {
+      "block_c": 128,
+      "compile_hash": "74d5231c23f118fe1beb5baa7bb18d3b7805b372b825f6a0bd56af69d34bf01d",
+      "ctas_per_launch": 80,
+      "ctas_per_request": 80,
+      "cubin_bytes": 112208,
+      "cubin_sha256": "dd7f3dc40899e462bf3f670d62da4d25d0c9c4b3c04ff5e4bc37584fbec71af3",
+      "encoded_sass_instructions": 1936,
+      "ldg": 91,
+      "num_warps": 2,
+      "registers": 44,
+      "static_sass_instructions": 1920,
+      "stg": 136
+    },
+    "b4": {
+      "block_c": 256,
+      "compile_hash": "050438a52c5079ffd13fa0c49d9913329a6ee0e54726427ff0c53bea62303371",
+      "ctas_per_launch": 160,
+      "ctas_per_request": 40,
+      "cubin_bytes": 112208,
+      "cubin_sha256": "9ee973495e48958963da7e171b742b87890d74b30548762da23008d717cc761b",
+      "encoded_sass_instructions": 1936,
+      "ldg": 91,
+      "num_warps": 4,
+      "registers": 44,
+      "static_sass_instructions": 1920,
+      "stg": 136
+    }
+  },
+  "source_commit": "375fa3bfc4eb1fb6495e9aadddca5de3ab6339da",
+  "source_function_sha256": "9e80e9e2e486930b01aca9ceeb14e6a5f641353ad94df34e704a318d7ca0336a",
+  "source_hashes": {
+    "gate": "4f6b0aa92b5a05ca70d4283240919f317583c44a4381d8f963839178e0218379",
+    "kernel": "db2efbcacf57ededcb892593553e7515cfca49e234ef4b06fbf1b5a45ea61126",
+    "launcher": "279d4ab5e53d345e63293e6dd00ee4259d351cb6f3960c22a83607940a135a0b",
+    "runner": "131c087056d6fad63f83a95ce3142a5e335c609774e9ad706d77244dc650c122"
+  },
+  "target": "sm_121a",
+  "threshold12_reference": {
+    "encoded_sass_instructions": 1976,
+    "ldg": 99,
+    "registers": 44,
+    "static_sass_instructions": 1965,
+    "stg": 136
+  },
+  "toolchain": {
+    "backend": "ptxas-blackwell 12.9.86",
+    "num_stages": 3,
+    "torch": "2.10.0+cu130",
+    "triton": "3.6.0"
+  }
+}

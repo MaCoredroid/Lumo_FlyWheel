@@ -1,0 +1,88 @@
+{
+  "schema": "fr13.fixed32.sfwd_state_fusion.b1_gate_readiness.v1",
+  "status": "SOURCE_READY_REAL_B1_NOT_RUN",
+  "branch": "agent/fixed32-sfwd-state-fusion-6a4f",
+  "source_commit": "9f178d14ee83b407e78c0fce41624513981c6e58",
+  "candidate_source_commit": "5838534519f4f9e91e7fa9979e3dd868884d6cd6",
+  "full_vocab_registry_fix": {
+    "upstream_commit": "1a82491f56cff5750706c6ab5239397c5124c8c7",
+    "local_cherry_pick": "73b55466ff6742d0311ba0b6563f7df84151e28d"
+  },
+  "candidate": {
+    "id": "fixed32_sfwd_state_fusion_v1",
+    "selector": "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=1",
+    "runner": "scripts/fr13_run_b1_sfwd_state_fusion_gate.sh",
+    "default_enabled": false,
+    "production_enabled": false,
+    "candidate_runs_in_shadow": true,
+    "reference_returned": true,
+    "byte_surfaces": [
+      "conv_out",
+      "commit_source_stage"
+    ],
+    "required_unique_layers": 48
+  },
+  "real_task_contract": {
+    "dataset": "SWE-bench_Verified",
+    "task_set": "one",
+    "task_count": 1,
+    "task_ids": [
+      "astropy__astropy-12907"
+    ],
+    "subset": "config/fr13_fixed32/subset_b1_diagnostic_one.json",
+    "subset_sha256": "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb",
+    "batch_size": 1,
+    "concurrency": 1,
+    "draft_vocab_k": 0,
+    "draft_vocab_root": 0,
+    "authenticated_marker": "engine ingress publishes after accepted request",
+    "marker_path": "/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm"
+  },
+  "fixed_physical_work": {
+    "physical_rows_per_request": 32,
+    "candidate_conv_state_launches_per_layer": 1,
+    "gdn_level_path_programs": [
+      1,
+      11
+    ],
+    "gdn_physical_launches_per_layer": 2,
+    "gdn_ring_export_unchanged": true,
+    "gdn_freshness_flags_unchanged": true
+  },
+  "eligibility": {
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false,
+    "production_eligible": false
+  },
+  "full_vocab_floor_context": {
+    "mandatory_weight_bytes": 42025179008,
+    "mandatory_weight_floor_ms_per_step": 153.938384645,
+    "one_sided_u95_cap_ms_per_step": 177.02914234175,
+    "classification": "contract_context_not_measurement"
+  },
+  "measurement": {
+    "gpu_used": false,
+    "real_swe_verified_run_started": false,
+    "synthetic_or_probe_run_started": false,
+    "exact4_or_exact16_run_started": false,
+    "wall_ms_per_step": null,
+    "gpu_component_ms_per_step": null
+  },
+  "verification": {
+    "focused_cpu_source_tests": "197 passed in 3.17s",
+    "shell_syntax": "pass",
+    "python_compile": "pass",
+    "inline_gate_verifier_compile": "pass"
+  },
+  "source_sha256": {
+    "scripts/fr13_run_b1_sfwd_state_fusion_gate.sh": "bfe315b3445f9e4ac4edfa3ac959b6b2f355650de949f7be571096bd55a383cc",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh": "a8f7e9355ed07315509175c47f82c318e1ba09d102c8c5974f3bed89c3faca44",
+    "scripts/fr13_run_b1_kernel_live_gate.sh": "7eed61daa4a53a724de74a2a2553197d8b6956422314a98a334911d67bf879ca",
+    "scripts/fr13_bigdenom_swe_serve_variant.sh": "3ef218d5bd69887b799b6ffb31bc3b4f6376a17ed0a41b24c2a22ec76345b86c",
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "1cd112bc37f4e41237219e27fa261c902320c2204f84118e6d34862046ec5029",
+    "src/lumo_flywheel_serving/inference_proxy.py": "7ed9f07795afee5bf867596eabfe7be2675cbe43d413de50504cb07b36cc03b9",
+    "tests/test_fr13_fixed32_sfwd_state_fusion.py": "92df5b81672c265634decb5a57819632a52fbce7d9fcd8c06ad01a322b66f620",
+    "tests/test_fr13_fixed32_ingress_proxy.py": "25a5c28d9363a596f036b82d50230ff6b96266ce0b042a2ac62686697b90c3a0",
+    "tests/test_fr13_fixed32_b1_diagnostic.py": "1385bafc17523f379fd090155d93582cca972e3f012d7d3a2355b6b3486cb53a"
+  }
+}

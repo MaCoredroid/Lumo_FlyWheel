@@ -14,6 +14,14 @@ _FR13_CALLER_BATCH_GDN_GATE_VERDICT_SHA="${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VER
 _FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST="${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON+set}:${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON-}"
 _FR13_CALLER_BATCH_GDN_GATE_RUNNER="${FR13_FIXED32_BATCH_GDN_GATE_RUNNER+set}:${FR13_FIXED32_BATCH_GDN_GATE_RUNNER-}"
 _FR13_CALLER_BATCH_GDN_BV8_TIMING="${FR13_FIXED32_BATCH_GDN_BV8_TIMING+set}:${FR13_FIXED32_BATCH_GDN_BV8_TIMING-}"
+_FR13_CALLER_SFWD_FUSION_PRODUCTION="${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION+set}:${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION-}"
+_FR13_CALLER_SFWD_FUSION_TIMING="${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB+set}:${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB-}"
+_FR13_CALLER_SFWD_FUSION_PASS_JSON="${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON+set}:${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON-}"
+_FR13_CALLER_SFWD_FUSION_PASS_SHA="${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256+set}:${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256-}"
+_FR13_CALLER_SFWD_PRIOR_REUSE="${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB+set}:${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB-}"
+_FR13_CALLER_SFWD_PRIOR_MANIFEST="${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH+set}:${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH-}"
+_FR13_CALLER_SFWD_PRIOR_MANIFEST_SHA="${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256+set}:${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256-}"
+_FR13_CALLER_SFWD_PRIOR_SOURCE_COMMIT="${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_COMMIT+set}:${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_COMMIT-}"
 _FR13_CALLER_FR10_METRICS="${FR10_METRICS+set}:${FR10_METRICS-}"
 _FR13_CALLER_RING_EXPORT="${FR13_RING_EXPORT+set}:${FR13_RING_EXPORT-}"
 _FR13_CALLER_FLAGS_INKERNEL="${FR13_FLAGS_INKERNEL+set}:${FR13_FLAGS_INKERNEL-}"
@@ -147,7 +155,15 @@ if [[ "$_FR13_CALLER_BATCH_GDN_PRODUCTION" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_PRODUCTION" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_PASS_JSON" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE" == set:* \
-      || "$_FR13_CALLER_CUTLASS_WAVE_QUAL_PROFILE" == set:* ]]; then
+      || "$_FR13_CALLER_CUTLASS_WAVE_QUAL_PROFILE" == set:* \
+      || "$_FR13_CALLER_SFWD_FUSION_PRODUCTION" == set:* \
+      || "$_FR13_CALLER_SFWD_FUSION_TIMING" == set:* \
+      || "$_FR13_CALLER_SFWD_FUSION_PASS_JSON" == set:* \
+      || "$_FR13_CALLER_SFWD_FUSION_PASS_SHA" == set:* \
+      || "$_FR13_CALLER_SFWD_PRIOR_REUSE" == set:* \
+      || "$_FR13_CALLER_SFWD_PRIOR_MANIFEST" == set:* \
+      || "$_FR13_CALLER_SFWD_PRIOR_MANIFEST_SHA" == set:* \
+      || "$_FR13_CALLER_SFWD_PRIOR_SOURCE_COMMIT" == set:* ]]; then
   if [[ "${FR13_FIXED32_BATCH_GDN_PRODUCTION+set}:${FR13_FIXED32_BATCH_GDN_PRODUCTION-}" != "$_FR13_CALLER_BATCH_GDN_PRODUCTION" \
       || "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION+set}:${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION-}" != "$_FR13_CALLER_BATCH_GDN_BV_PRODUCTION" \
       || "${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON-}" != "$_FR13_CALLER_BATCH_GDN_GRAPH_PASS_JSON" \
@@ -157,6 +173,14 @@ if [[ "$_FR13_CALLER_BATCH_GDN_PRODUCTION" == set:* \
       || "${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON+set}:${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON-}" != "$_FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST" \
       || "${FR13_FIXED32_BATCH_GDN_GATE_RUNNER+set}:${FR13_FIXED32_BATCH_GDN_GATE_RUNNER-}" != "$_FR13_CALLER_BATCH_GDN_GATE_RUNNER" \
       || "${FR13_FIXED32_BATCH_GDN_BV8_TIMING+set}:${FR13_FIXED32_BATCH_GDN_BV8_TIMING-}" != "$_FR13_CALLER_BATCH_GDN_BV8_TIMING" \
+      || "${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION+set}:${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION-}" != "$_FR13_CALLER_SFWD_FUSION_PRODUCTION" \
+      || "${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB+set}:${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB-}" != "$_FR13_CALLER_SFWD_FUSION_TIMING" \
+      || "${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON+set}:${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON-}" != "$_FR13_CALLER_SFWD_FUSION_PASS_JSON" \
+      || "${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256+set}:${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256-}" != "$_FR13_CALLER_SFWD_FUSION_PASS_SHA" \
+      || "${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB+set}:${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB-}" != "$_FR13_CALLER_SFWD_PRIOR_REUSE" \
+      || "${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH+set}:${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH-}" != "$_FR13_CALLER_SFWD_PRIOR_MANIFEST" \
+      || "${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256+set}:${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256-}" != "$_FR13_CALLER_SFWD_PRIOR_MANIFEST_SHA" \
+      || "${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_COMMIT+set}:${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_COMMIT-}" != "$_FR13_CALLER_SFWD_PRIOR_SOURCE_COMMIT" \
       || "${FR10_METRICS+set}:${FR10_METRICS-}" != "$_FR13_CALLER_FR10_METRICS" \
       || "${FR13_RING_EXPORT+set}:${FR13_RING_EXPORT-}" != "$_FR13_CALLER_RING_EXPORT" \
       || "${FR13_FLAGS_INKERNEL+set}:${FR13_FLAGS_INKERNEL-}" != "$_FR13_CALLER_FLAGS_INKERNEL" \
@@ -192,6 +216,14 @@ unset \
   _FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST \
   _FR13_CALLER_BATCH_GDN_GATE_RUNNER \
   _FR13_CALLER_BATCH_GDN_BV8_TIMING \
+  _FR13_CALLER_SFWD_FUSION_PRODUCTION \
+  _FR13_CALLER_SFWD_FUSION_TIMING \
+  _FR13_CALLER_SFWD_FUSION_PASS_JSON \
+  _FR13_CALLER_SFWD_FUSION_PASS_SHA \
+  _FR13_CALLER_SFWD_PRIOR_REUSE \
+  _FR13_CALLER_SFWD_PRIOR_MANIFEST \
+  _FR13_CALLER_SFWD_PRIOR_MANIFEST_SHA \
+  _FR13_CALLER_SFWD_PRIOR_SOURCE_COMMIT \
   _FR13_CALLER_FR10_METRICS \
   _FR13_CALLER_RING_EXPORT \
   _FR13_CALLER_FLAGS_INKERNEL \
@@ -367,9 +399,14 @@ FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256=${FR13_FIXED32_BATCH_GDN_GRAPH_
 FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON=${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON:-}
 FR13_FIXED32_BATCH_GDN_GATE_RUNNER=${FR13_FIXED32_BATCH_GDN_GATE_RUNNER:-}
 FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
+FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB=${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB:-0}
 FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
 FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON=${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON:-}
 FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256=${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256:-}
+FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB=${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}
+FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH=${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH:-}
+FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256=${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256:-}
+FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_COMMIT=${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_COMMIT:-}
 FR13_FIXED32_CUTLASS_WAVE=${FR13_FIXED32_CUTLASS_WAVE:-stock}
 FR13_FIXED32_CUTLASS_WAVE_SO=${FR13_FIXED32_CUTLASS_WAVE_SO:-}
 FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL=${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL:-}
@@ -1461,6 +1498,10 @@ if [[ ! -f "$FORKED_FA2_SO" ]]; then
 fi
 if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
+  _fr13_fixed32_sfwd_state_fusion_diagnostic=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
+  _fr13_fixed32_sfwd_state_fusion_timing=${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB:-0}
+  _fr13_fixed32_sfwd_state_fusion_production=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
+  _fr13_fixed32_sfwd_prior_reuse=${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}
   _fr13_fixed32_batch_gdn_diagnostic=${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}
   _fr13_fixed32_batch_gdn_graph_diagnostic=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
   _fr13_fixed32_sfwd_b4_diagnostic=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
@@ -1468,6 +1509,32 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     0|1) ;;
     *) echo "FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1" >&2; exit 2 ;;
   esac
+  case "$_fr13_fixed32_sfwd_state_fusion_diagnostic" in
+    0|1) ;;
+    *) echo "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
+  case "$_fr13_fixed32_sfwd_state_fusion_timing" in
+    0|1) ;;
+    *) echo "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
+  case "$_fr13_fixed32_sfwd_prior_reuse" in
+    0|1) ;;
+    *) echo "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
+  case "$_fr13_fixed32_sfwd_state_fusion_production" in
+    0|1) ;;
+    *) echo "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
+  _fr13_fixed32_sfwd_route_count=$((
+    10#$_fr13_fixed32_sfwd_state_fusion_diagnostic
+    + 10#$_fr13_fixed32_sfwd_state_fusion_timing
+    + 10#$_fr13_fixed32_sfwd_state_fusion_production
+    + 10#$_fr13_fixed32_sfwd_prior_reuse
+  ))
+  if (( _fr13_fixed32_sfwd_route_count > 1 )); then
+    echo "fixed32 SFWD diagnostics and production are mutually exclusive" >&2
+    exit 2
+  fi
   case "$_fr13_fixed32_batch_gdn_diagnostic" in
     0|1) ;;
     *) echo "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
@@ -1505,6 +1572,12 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     echo "fixed32 B1 diagnostic requires MAX_NUM_SEQS=1" >&2
     exit 2
   fi
+  if [[ "$_fr13_fixed32_sfwd_prior_reuse" == "1" \
+        && ( "$FR13_FIXED32_B1_DIAGNOSTIC" != "1" \
+             || "$MAX_NUM_SEQS" != "1" ) ]]; then
+    echo "fixed32 SFWD prior-reuse byte gate requires the B1 diagnostic" >&2
+    exit 2
+  fi
   _fixed32_expected_mem=105g
   _fixed32_expected_kv_cache_memory_bytes=
   if [[ "$MAX_NUM_SEQS" == "4" ]]; then
@@ -1526,7 +1599,10 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" ]]; then
     _fixed32_expected_eager=1
   fi
-  if [[ "$_fr13_fixed32_sfwd_b4_diagnostic" == "1" ]]; then
+  if [[ "$_fr13_fixed32_sfwd_state_fusion_diagnostic" == "1" \
+        || "$_fr13_fixed32_sfwd_state_fusion_timing" == "1" \
+        || "$_fr13_fixed32_sfwd_state_fusion_production" == "1" \
+        || "$_fr13_fixed32_sfwd_prior_reuse" == "1" ]]; then
     _fixed32_expected_eager=1
   fi
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
@@ -1692,6 +1768,10 @@ PY
   unset _fixed32_expected_weight_floor_ms
   unset _fixed32_name _fixed32_pair _fr13_fixed32_batch_gdn_diagnostic
   unset _fr13_fixed32_batch_gdn_bv8_timing
+  unset _fr13_fixed32_sfwd_state_fusion_diagnostic
+  unset _fr13_fixed32_sfwd_state_fusion_timing
+  unset _fr13_fixed32_sfwd_state_fusion_production
+  unset _fr13_fixed32_sfwd_prior_reuse
 fi
 if [[ -n "$KV_CACHE_MEMORY_BYTES" \
       && ! "$KV_CACHE_MEMORY_BYTES" =~ ^[1-9][0-9]*$ ]]; then
@@ -2250,19 +2330,92 @@ fi
 export FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH
 unset _fr13_cutlass_b4_byte_ab
 _fr13_sfwd_b4_byte_ab=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
+_fr13_sfwd_state_fusion_timing="${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB:-0}"
 _fr13_sfwd_production=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
-case "$_fr13_sfwd_b4_byte_ab:$_fr13_sfwd_production" in
-  0:0|1:0|0:1) ;;
-  1:1)
-    echo "SFWD byte gate and production are mutually exclusive" >&2
+_fr13_sfwd_prior_reuse=${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}
+for _fr13_sfwd_selector in \
+  "$_fr13_sfwd_b4_byte_ab" \
+  "$_fr13_sfwd_state_fusion_timing" \
+  "$_fr13_sfwd_production" \
+  "$_fr13_sfwd_prior_reuse"; do
+  case "$_fr13_sfwd_selector" in
+    0|1) ;;
+    *) echo "FR13 SFWD selectors must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
+done
+_fr13_sfwd_route_count=$((
+  10#$_fr13_sfwd_b4_byte_ab
+  + 10#$_fr13_sfwd_state_fusion_timing
+  + 10#$_fr13_sfwd_production
+  + 10#$_fr13_sfwd_prior_reuse
+))
+if (( _fr13_sfwd_route_count > 1 )); then
+  echo "FR13 SFWD diagnostics and production are mutually exclusive" >&2
+  exit 2
+fi
+if [[ "$_fr13_sfwd_prior_reuse" == "1" ]]; then
+  if [[ -z "${FR13_FIXED32_MODE:-}" \
+        || "$MAX_NUM_SEQS" != "1" \
+        || "${SWE_CONCURRENCY:-}" != "1" \
+        || "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" != "1" \
+        || "${ENFORCE_EAGER:-0}" != "1" \
+        || "${FR13_DRAFT_VOCAB_ROOT:-0}" != "1" \
+        || "${FR13_DRAFT_VOCAB_K:-65536}" != "65536" \
+        || "${FR13_DRAFT_VOCAB_BLOCKS:-}" != "/workspace/scripts/fr13_dvk_subset_blocks.json" \
+        || "${FR13_RING_EXPORT:-1}" != "1" \
+        || "${FR13_FLAGS_INKERNEL:-1}" != "1" \
+        || "${FR13_TREE_RUNROW_INIT:-1}" != "1" \
+        || "${FR13_TREE_CONV_FUSED:-1}" != "1" \
+        || "${FR13_CONV_WB_BATCHED:-0}" != "1" \
+        || "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" != "0" ]]; then
+    echo "SFWD prior-reuse requires exact K64/root1 eager fixed32 B1" >&2
     exit 2
-    ;;
-  *)
-    echo "FR13 SFWD byte and production selectors must be exactly 0 or 1" >&2
+  fi
+  if [[ "$_fr13_batch_gdn_diagnostic_count" != "0" \
+        || "$_fr13_batch_gdn_production" != "0" \
+        || -n "$_fr13_batch_gdn_bv_candidate" \
+        || -n "$_fr13_batch_gdn_bv_production" \
+        || -n "$_fr13_gdn_path_bv_candidate" \
+        || -n "$_fr13_gdn_path_bv_production" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" \
+        || "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" != "0" \
+        || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" != "0" \
+        || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" != "0" \
+        || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" != "0" \
+        || "${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}" != "0" \
+        || "${FR13_FA2_QROW16_PRODUCTION:-0}" != "0" \
+        || "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" != "0" \
+        || "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" != "0" ]]; then
+    echo "SFWD prior-reuse must be the only SFWD candidate and kernel route" >&2
     exit 2
-    ;;
-esac
-if [[ "$_fr13_sfwd_b4_byte_ab" == "1" ]]; then
+  fi
+  [[ "$FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH" == /workspace/* \
+     && "$FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ \
+     && "$FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {
+    echo "SFWD prior-reuse requires bound source-manifest credentials" >&2
+    exit 2
+  }
+  _fr13_sfwd_prior_manifest_host="$REPO/${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH#/workspace/}"
+  [[ -f "$_fr13_sfwd_prior_manifest_host" \
+     && ! -L "$_fr13_sfwd_prior_manifest_host" \
+     && "$(sha256sum "$_fr13_sfwd_prior_manifest_host" | awk '{print $1}')" == "$FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256" ]] || {
+    echo "SFWD prior-reuse source manifest is missing or changed" >&2
+    exit 2
+  }
+  cp -- "$_fr13_sfwd_prior_manifest_host" \
+    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.source_manifest.json"
+  printf '1\n' > "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled"
+  chmod 0400 \
+    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.source_manifest.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled"
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production.arm" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.live_pass.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.byte_ab.jsonl"
+  FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm
+elif [[ "$_fr13_sfwd_b4_byte_ab" == "1" ]]; then
   if [[ -z "${FR13_FIXED32_MODE:-}" \
         || "$MAX_NUM_SEQS" != "4" \
         || "${SWE_CONCURRENCY:-}" != "4" \
@@ -2383,6 +2536,14 @@ else
   FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=
 fi
 export FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH
+if [[ "$_fr13_sfwd_prior_reuse" != "1" ]]; then
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled" \
+    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.source_manifest.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.live_pass.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.byte_ab.jsonl" \
+    2>/dev/null || true
+fi
 if [[ "$_fr13_batch_gdn_production" == "1" ]]; then
   [[ -n "${FR13_FIXED32_MODE:-}" ]] \
     || { echo "FR13_FIXED32_BATCH_GDN_PRODUCTION requires FR13_FIXED32_MODE" >&2; exit 2; }
@@ -2834,8 +2995,13 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH="${FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH:-}" \
   -e FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH="${FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH:-}" \
   -e FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB="$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" \
+  -e FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB="${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB:-0}" \
+  -e FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB="${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}" \
+  -e FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH="${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH:-}" \
+  -e FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256="${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256:-}" \
+  -e FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_COMMIT="${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_COMMIT:-}" \
   -e FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION="$FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION" \
-  -e FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256="$FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256" \
+  -e FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256="${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256:-}" \
   -e FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM_PATH=/logs/fr13_fixed32_sfwd_state_fusion.production.arm \
   -e FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_PASS_PATH=/logs/fr13_fixed32_sfwd_state_fusion.production_pass.json \
   -e FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_PASS_SHA256_PATH=/logs/fr13_fixed32_sfwd_state_fusion.production_pass.sha256 \

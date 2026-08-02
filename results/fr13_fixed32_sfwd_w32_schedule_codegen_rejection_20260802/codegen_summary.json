@@ -1,0 +1,56 @@
+{
+  "schema": "fr13.fixed32.sfwd_w32_schedule.codegen_rejection.v1",
+  "status": "OFFLINE_CODEGEN_REJECTED_WARP_WEIGHTED_WORK_AND_RESIDENCY",
+  "source_commit": "0e3d33ad22b111a7dae025085b2c6509cd3a4be7",
+  "compile_contract": {
+    "batches": [1, 4],
+    "rows_per_program": 32,
+    "block_c": 64,
+    "target": "sm_121a"
+  },
+  "selected_w16": {
+    "threads_per_cta": 512,
+    "registers_reported": 54,
+    "registers_allocated_per_thread": 56,
+    "registers_allocated_per_cta": 28672,
+    "static_sass": 382,
+    "encoded_sass": 400,
+    "warp_weighted_static_sass": 6112,
+    "warp_weighted_encoded_sass": 6400,
+    "ldg": 19,
+    "warp_weighted_ldg": 304,
+    "stg": 12,
+    "warp_weighted_stg": 192,
+    "bar": 3,
+    "warp_weighted_bar": 48
+  },
+  "candidate_w32": {
+    "threads_per_cta": 1024,
+    "registers_reported": 38,
+    "registers_allocated_per_thread": 40,
+    "registers_allocated_per_cta": 40960,
+    "static_sass": 244,
+    "encoded_sass": 264,
+    "warp_weighted_static_sass": 7808,
+    "warp_weighted_encoded_sass": 8448,
+    "ldg": 11,
+    "warp_weighted_ldg": 352,
+    "stg": 8,
+    "warp_weighted_stg": 256,
+    "bar": 3,
+    "warp_weighted_bar": 96,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "ldl": 0,
+    "stl": 0,
+    "calls": 0
+  },
+  "verification": {
+    "b1_b4_binary_identity": true,
+    "fresh_cache_binary_identity": true,
+    "gpu_or_docker_used": false,
+    "runtime_candidate_bound": false,
+    "performance_measured": false,
+    "floor_acceptance_eligible": false
+  }
+}

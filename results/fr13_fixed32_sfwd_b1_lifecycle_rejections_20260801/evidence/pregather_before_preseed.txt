@@ -1,0 +1,16 @@
+Failure: PREGATHER_BEFORE_PRESEED
+Source commit: 3c45640ae623bdd1826498412d53b85698fbbeb2
+Source log: output/fr13_b1_sfwd_state_fusion_live_gate_20260801T101754Z/hydra27_fixed32_sfwd_state_fusion_fullvocab_b1_20260801T101754Z/docker_after_tasks.log
+Source log SHA-256: 7c0f26eb535a787e569c23cacef069556ea40926d7ff73b9aea3bf22a3786adf
+Source lines: 272-277 and 364-366
+
+Sanitized excerpt (logger prefix removed):
+  File "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py", line 8320, in _forward_core
+    _fr13_cpg_f2 = _fr13_cpg_staged2(
+  File "/workspace/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py", line 6015, in conv_col0_staged
+    raise RuntimeError(
+RuntimeError: FR13_FIXED32_CONV_PREGATHER consumer ran before preseed
+
+  File "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py", line 8510, in _forward_core
+    raise RuntimeError(
+RuntimeError: FR10 tree state linear remap failed: RuntimeError:FR13_FIXED32_CONV_PREGATHER consumer ran before preseed

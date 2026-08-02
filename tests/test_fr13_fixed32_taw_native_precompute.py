@@ -10,6 +10,7 @@ import torch
 
 
 MODULE_PATH = Path("scripts/fr13_device_multidraft_kernel.py")
+RUNNER_PATH = Path("scripts/fr13_run_b1_kernel_live_gate.sh")
 SPEC = importlib.util.spec_from_file_location(
     "fr13_fixed32_taw_native_precompute",
     MODULE_PATH,
@@ -28,6 +29,18 @@ assert CENSUS_SPEC is not None and CENSUS_SPEC.loader is not None
 census_validator = importlib.util.module_from_spec(CENSUS_SPEC)
 sys.modules[CENSUS_SPEC.name] = census_validator
 CENSUS_SPEC.loader.exec_module(census_validator)
+
+
+def test_b1_runner_overrides_legacy_vocab_registry_for_full_vocab() -> None:
+    runner = RUNNER_PATH.read_text(encoding="utf-8")
+    full_vocab = runner.index('if [[ "$FR13_DRAFT_VOCAB_K" == "0" ]]')
+    registry_override = runner.index(
+        'export FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0"',
+        full_vocab,
+    )
+    launch = runner.index("bash scripts/fr13_bigdenom_swe_serve_variant.sh")
+
+    assert full_vocab < registry_override < launch
 
 
 def _set_fixed_env(

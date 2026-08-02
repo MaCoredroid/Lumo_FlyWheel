@@ -1,0 +1,4 @@
+git diff --check: pass
+bash -n scripts/fr13_run_b1_sfwd_state_fusion_gate.sh scripts/fr13_launch_forked_fa2_tree_server.sh: pass
+python -m py_compile src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py tests/test_fr13_fixed32_sfwd_state_fusion.py: pass
+pytest tests/test_fr13_fixed32_sfwd_state_fusion.py tests/test_fr13_fixed32_floor_propagation.py tests/test_fr13_draft_vocab_root_wiring.py tests/test_fr13_fixed32_b1_diagnostic.py tests/test_fr13_b1_gate_bundle.py: 31 passed in 1.01s

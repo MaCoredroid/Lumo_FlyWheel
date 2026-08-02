@@ -1,0 +1,165 @@
+{
+  "schema": "fr13.fixed32.sfwd_state_fusion.row32_c128_priorreuse.live34_codegen_manifest.v1",
+  "artifact": "results/fr13_fixed32_sfwd_state_fusion_row32_c128_priorreuse_live34_codegen_20260802",
+  "date_utc": "2026-08-02",
+  "branch": "agent/fixed32-sfwd-state-fusion-row32-c64-20260802",
+  "source_variant": "row32_c64_prior_vector_reuse",
+  "probed_schedule": "row32_c128_prior_vector_reuse",
+  "runtime_candidate_id": "fixed32_sfwd_state_fusion_rowgroup32_c64_xreuse_v6",
+  "status": "OFFLINE_STATIC_LAUNCH_TOTAL_WIN_OCCUPANCY_RISK_RUNTIME_UNQUALIFIED",
+  "classification": "artifact-only C128 timing candidate; checked-in C64 schedule retained",
+  "claims": {
+    "source_qualified": true,
+    "offline_codegen_inspected": true,
+    "resource_gate_passed": true,
+    "launch_total_static_work_improved": true,
+    "occupancy_risk_resolved": false,
+    "byte_equal": false,
+    "correctness_qualified": false,
+    "performance_measured": false,
+    "gpu_kernel_executed": false,
+    "real_task_run": false,
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false,
+    "production_enabled": false,
+    "production_selected": false
+  },
+  "change_scope": {
+    "kernel_source_changed": false,
+    "focused_test_changed": false,
+    "timing_harness_changed": false,
+    "runner_changed": false,
+    "gate_harness_changed": false,
+    "production_schedule_changed": false,
+    "compile_probe_only": true
+  },
+  "source_binding": {
+    "commit": "4f649835d42b98264ad71b46121637b12f8d9ea1",
+    "tree": "fabb2ca1347f8c56477ee78ffa29aaf992fc4fc7",
+    "kernel_function_sha256": "957310fadf0fc995b54689e2e95c6c602bf9099660c98480fe6b68e189a3da71",
+    "paths": {
+      "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": {
+        "git_blob_sha1": "2a0c095b0b69737dc4bac19fcd84b25fa761ccae",
+        "sha256": "6c0f0ad607f15ea2727c2a9b244b1fe1c5ddb88268d70264c08f10470a5d2098"
+      },
+      "tests/test_fr13_fixed32_sfwd_state_fusion.py": {
+        "git_blob_sha1": "ee224f1c61904e3da6d8d77d89f3a2b03d7fad26",
+        "sha256": "5df0952c40c629b271b1c90d3157374e0b62f15ff328a2b547adfbcf4c054ce6"
+      }
+    }
+  },
+  "compile_contract": {
+    "batch_sizes": [
+      1,
+      4
+    ],
+    "physical_rows_per_request": 32,
+    "rows_per_program": 32,
+    "block_c": 128,
+    "channels": 10240,
+    "conv_width": 4,
+    "conv_state_len": 34,
+    "source_rows_per_request": 36,
+    "source_descriptor_dtype": "int64",
+    "state_index_dtype": "int32",
+    "has_bias": false,
+    "num_warps": 8,
+    "num_stages": 3,
+    "target": "sm_121a",
+    "cuda_visible_devices": "",
+    "canonical_path": "/home/mark/lumoFlyWheel-sfwd-state-fusion/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+    "output_and_cache_location": "isolated /tmp directories"
+  },
+  "schedule_decision": {
+    "static_verdict": "launch-total win",
+    "production_verdict": "retain C64 pending GPU correctness and timing",
+    "baseline": "row32/C64 prior-reuse at 4f649835d42b98264ad71b46121637b12f8d9ea1",
+    "benefit": "Halves CTAs and reduces launch-total warp-weighted static/encoded/LDG/STG counts by 6-10 percent.",
+    "risk": "Allocated registers per CTA rise 25 percent, register-limited residency falls 4 to 3 CTAs per SM, and B1 mean grid CTAs per 48-SM GB10 halves."
+  },
+  "occupancy_risk": {
+    "gb10_sm_count": 48,
+    "registers_per_sm": 65536,
+    "b1_grid_ctas_per_sm_mean": 1.666667,
+    "b1_grid_ctas_per_sm_mean_baseline": 3.333333,
+    "register_limited_ctas_per_sm": 3,
+    "register_limited_ctas_per_sm_baseline": 4,
+    "register_limited_warps_per_sm": 24,
+    "register_limited_warps_per_sm_baseline": 32,
+    "runtime_required": true
+  },
+  "resource_verdict": {
+    "compile_pass": true,
+    "b1_b4_cubin_sass_ptx_identity": true,
+    "fresh_cache_binary_identity": true,
+    "conservative_resource_limits_pass": true,
+    "launch_total_improvement_gate_pass": true,
+    "cta_count_halved": true,
+    "launch_shared_zero": true,
+    "stack_zero": true,
+    "local_zero": true,
+    "spill_instructions_zero": true,
+    "calls_zero": true,
+    "unsafe_resource_usage_observed": false,
+    "viable_offline": true
+  },
+  "verification": {
+    "focused_tests": "14 passed",
+    "python_compile": "pass",
+    "git_diff_check": "pass",
+    "cuda_visibility_refusal": "pass",
+    "b1_offline_codegen": "pass",
+    "b4_offline_codegen": "pass",
+    "fresh_cache_binary_identity": "pass",
+    "fresh_disassembly_identity": "pass",
+    "independent_summary_and_resource_verifier": "pass",
+    "launch_total_improvement_gate": "pass",
+    "verifier_sha256": "9915c92b68853742bc0bd6e4df58ccd8e448fbffb8585ab5a83957b69ce21651"
+  },
+  "audit_implementation": {
+    "copied_as_starting_point": true,
+    "changes_after_copy": [],
+    "source": "git:89bc74269:results/fr13_fixed32_sfwd_state_fusion_row32_c64_priorreuse_live34_codegen_20260802/offline_codegen_audit.py",
+    "source_sha256": "b58de78d8d2d2818f858933b2a2e8b59a0fe03834d0dc4e5f8152eb7aa6ac376",
+    "packaged_sha256": "b58de78d8d2d2818f858933b2a2e8b59a0fe03834d0dc4e5f8152eb7aa6ac376"
+  },
+  "results_files": [
+    "codegen_summary.json",
+    "codegen_summary.tsv"
+  ],
+  "package_policy": {
+    "reduced_non_sensitive": true,
+    "contains_binaries": false,
+    "contains_cubin": false,
+    "contains_ptx": false,
+    "contains_sass": false,
+    "contains_ir": false,
+    "contains_pyc_or_pycache": false,
+    "contains_model_or_task_content": false,
+    "contains_prompt_content": false,
+    "contains_patch_content": false,
+    "contains_raw_request_logs": false,
+    "contains_process_data": false,
+    "contains_environment_dump": false,
+    "contains_credentials": false,
+    "contains_secrets": false
+  },
+  "toolchain": {
+    "torch": "2.10.0+cu130",
+    "torch_cuda": "13.0",
+    "triton": "3.6.0",
+    "target": "sm_121a",
+    "num_stages": 3,
+    "backend_producer": {
+      "toolkit_version": "12.9",
+      "tool_name": "ptxas-blackwell",
+      "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+      "target": "sm_121a"
+    },
+    "inspection_tools": {
+      "nvdisasm": "13.0.85",
+      "cuobjdump": "13.0.85"
+    },
+    "system_nvcc_inspection_only": "13.0.88"
+  }
+}

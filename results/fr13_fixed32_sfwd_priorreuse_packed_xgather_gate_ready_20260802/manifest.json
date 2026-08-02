@@ -1,0 +1,23 @@
+{
+  "artifact": "fr13_fixed32_sfwd_priorreuse_packed_xgather_gate_ready_20260802",
+  "batch_size": 1,
+  "candidate": "fixed32_sfwd_prior_reuse_packed_xgather_rowgroup32_c64_w16_v1",
+  "contains_raw_logs": false,
+  "contains_task_or_model_content": false,
+  "conv_block_c": 64,
+  "conv_num_warps": 16,
+  "conv_rows_per_program": 32,
+  "default_off": true,
+  "draft_vocab_k": 65536,
+  "draft_vocab_root": 1,
+  "kernel_function_sha256": "f2126939176c839571d4e23300ef89863cbec60bc9ec4c6a6b58e804b937eccc",
+  "no_docker": true,
+  "no_gpu_execution": true,
+  "no_swe_task": true,
+  "reference_always_served": true,
+  "schema": "fr13.fixed32.reduced_artifact.v1",
+  "source_commit": "eb1a69de3dc180bd29b4488e834c60a3db7bca88",
+  "source_manifest_sha256": "e230f6a112e02558eb05c8a3811f116fb944f2431868545baadca8fa2d4a5be2",
+  "status": "ready_not_executed",
+  "timing_eligible": false
+}

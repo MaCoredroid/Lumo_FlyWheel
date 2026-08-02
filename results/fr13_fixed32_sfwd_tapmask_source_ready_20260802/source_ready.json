@@ -1,0 +1,55 @@
+{
+  "schema": "fr13.fixed32.sfwd_tapmask.source_ready.v1",
+  "status": "OFFLINE_SOURCE_READY_CODEGEN_REQUIRED",
+  "candidate": "fixed32_sfwd_priorpair_quad_xgather_fixedstrides_tapmask_r32_c64_w16_v1",
+  "source_commit": "1a1a2459870b5eb9c4358c415a4cde4a6c7d67db",
+  "parent_head": "95d743333f7bdd2af51f285fd13d324add2e6b8b",
+  "fixed_geometry": {
+    "physical_rows": 32,
+    "channels": 10240,
+    "conv_width": 4,
+    "state_len": 34,
+    "rows_per_program": 32,
+    "block_c": 64,
+    "num_warps": 16
+  },
+  "topology_proof": {
+    "derived_from_fixed_parent_vector": true,
+    "all_physical_rows_checked": 32,
+    "prior_row_thresholds_by_tap": [9, 4, 1],
+    "tap0_prior_values": [0, 1, 1, 1, 2, 2, 2, 2, 2],
+    "tap1_prior_values": [1, 2, 2, 2],
+    "tap2_prior_values": [2],
+    "tap_accumulation_order_unchanged": true,
+    "weight_unpack_order_unchanged": true,
+    "current_x_gather_layout_unchanged": true,
+    "global_addressing_unchanged": true
+  },
+  "verification": {
+    "focused_tests": "24 passed",
+    "ruff": true,
+    "python_byte_compile": true,
+    "git_diff_check": true,
+    "gpu_or_docker_used": false,
+    "codegen_performed": false,
+    "performance_measured": false,
+    "runtime_correctness_qualified": false,
+    "floor_acceptance_eligible": false
+  },
+  "next_gate": {
+    "kind": "isolated_fresh_cache_sm121a_codegen",
+    "batches": [1, 4],
+    "reject_on_register_increase": true,
+    "reject_on_memory_or_barrier_class_increase": true,
+    "reject_on_spill_local_stack_or_call": true,
+    "real_byte_gate_allowed_before_codegen_pass": false
+  },
+  "evidence_boundary": {
+    "raw_compiler_artifacts_included": false,
+    "raw_logs_included": false,
+    "task_identifiers_included": false,
+    "task_model_request_response_patch_content_included": false,
+    "environment_values_included": false,
+    "process_or_container_identifiers_included": false
+  }
+}
