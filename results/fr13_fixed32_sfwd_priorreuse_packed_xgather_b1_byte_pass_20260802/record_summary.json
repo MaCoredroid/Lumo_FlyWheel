@@ -1,0 +1,19 @@
+{
+  "all_records_real_task_authenticated": true,
+  "all_records_reference_always_served": true,
+  "all_records_status_pass": true,
+  "byte_equal_false": 0,
+  "candidate_count": 1,
+  "compared_bytes": 30749491200,
+  "comparison_records": 22080,
+  "differing_bytes": 0,
+  "layer_count": 48,
+  "schema": "fr13.fixed32.sfwd_prior_reuse.reduced_record_summary.v1",
+  "shape_or_dtype_mismatches": 0,
+  "surface_comparisons": 44160,
+  "surface_counts": {
+    "commit_source_stage": 22080,
+    "conv_out": 22080
+  },
+  "zero_diff_false": 0
+}

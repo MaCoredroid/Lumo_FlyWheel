@@ -30,7 +30,8 @@
     "global_bytes_per_48_layer_forward": 80609280,
     "global_bytes_per_cta": 10496,
     "global_bytes_per_request_layer": 1679360,
-    "global_fraction": 0.433790709208134
+    "global_fraction": 0.433790709208134,
+    "global_percent": 43.3790709208134
   },
   "schema": "fr13.fixed32.sfwd_xgather.logical_traffic.v2",
   "scope": "logical kernel operand traffic before cache effects",
