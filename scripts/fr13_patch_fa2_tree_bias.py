@@ -26,6 +26,8 @@ it can be tagged only by the canonical retained-live exact4 byte diagnostic.
 Both fixed32 query routes fix the paged-KV block size at 1024, allowing only
 their dedicated translation units to resolve pages directly from 64-row
 K-block coordinates. There is no qrow32 production selector.
+The B4 trait also forms its nonnull block-table row directly and constructs
+sequence metadata from only the required dynamic ``seqused_k`` value.
 """
 
 from __future__ import annotations
@@ -71,6 +73,25 @@ struct StaticQueryBatchLayout {
     static constexpr int query_heads = 0;
     static constexpr int kv_heads = 0;
     static constexpr int query_heads_per_kv = 0;
+};
+
+template <typename Kernel_traits>
+struct StaticPagedQueryBlockInfo {
+    template <typename Params>
+    __forceinline__ __device__
+    StaticPagedQueryBlockInfo(const Params &params, const int bidb)
+        : actual_seqlen_q(StaticQueryRows<Kernel_traits>::value)
+        , seqlen_k_cache(0)
+        , actual_seqlen_k(params.seqused_k[bidb]) {
+        static_assert(StaticQueryRows<Kernel_traits>::value == 32);
+        static_assert(StaticQueryBatchLayout<Kernel_traits>::sequences == 4);
+    }
+
+    const int actual_seqlen_q;
+    // Append_KV is forbidden for this trait. Retain the member only so the
+    // discarded generic append branch remains syntactically well formed.
+    const int seqlen_k_cache;
+    const int actual_seqlen_k;
 };
 
 template <typename Kernel_traits, typename BlockInfoT,
@@ -613,6 +634,8 @@ FIXED32_QUERY_TILE32_API_GATE = r'''    if (params.tree_bias_batch_stride == kFr
             && params.seqused_k != nullptr
             && params.is_seqlens_k_cumulative
             && !params.seqlenq_ngroups_swapped
+            && params.leftpad_k == nullptr
+            && params.cache_batch_idx == nullptr
             && params.block_table != nullptr
             && params.block_table_batch_stride > 0
             && params.page_block_size == 1024
@@ -1206,6 +1229,115 @@ inline __device__ void compute_attn_splitkv(const Params &params) {
     return True
 
 
+def _patch_fixed32_query_tile32_static_paged_metadata(
+    path: Path,
+    *,
+    fixed32_query_tile32: bool = False,
+) -> bool:
+    if not fixed32_query_tile32:
+        return False
+    text = path.read_text()
+    function_signature = (
+        "template<typename Kernel_traits, bool Is_causal, bool Is_local, "
+        "bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, "
+        "bool Split, bool Append_KV, typename Params>\n"
+        "inline __device__ void compute_attn_1rowblock_splitkv"
+    )
+    function_start = text.index(function_signature)
+    function_end = text.index(
+        "\n////////////////////////////////////////////////////////////////////////////////////////////////////\n\n"
+        "template<typename Kernel_traits, bool Is_dropout",
+        function_start,
+    )
+    function = text[function_start:function_end]
+    marker = (
+        "// FR13_FA2_QROW32_STATIC_PAGED_METADATA: direct exact4 sequence metadata."
+    )
+    if marker in function:
+        required = (
+            "StaticPagedQueryBlockInfo<Kernel_traits>",
+            "static_assert(!kStaticQueryBatch || kStaticPagedKV);",
+            "static_assert(!kStaticQueryBatch || !Append_KV);",
+            "block_table = params.block_table",
+            "if constexpr (kStaticQueryBatch)",
+        )
+        if function.count(marker) != 1 or any(item not in function for item in required):
+            raise RuntimeError("qrow32 static paged metadata specialization drifted")
+        return False
+
+    binfo_anchor = (
+        "    const BlockInfo</*Varlen=*/!Is_even_MN> binfo(params, bidb);\n"
+    )
+    static_binfo = r'''    // FR13_FA2_QROW32_STATIC_PAGED_METADATA: direct exact4 sequence metadata.
+    static_assert(!kStaticQueryBatch || kStaticPagedKV);
+    static_assert(!kStaticQueryBatch || !Split);
+    static_assert(!kStaticQueryBatch || !Append_KV);
+    using QueryBlockInfo = std::conditional_t<
+        kStaticQueryBatch,
+        StaticPagedQueryBlockInfo<Kernel_traits>,
+        BlockInfo</*Varlen=*/!Is_even_MN>>;
+    const QueryBlockInfo binfo(params, bidb);
+'''
+    if function.count(binfo_anchor) != 1:
+        raise RuntimeError("split-KV BlockInfo construction anchor drifted")
+    function = function.replace(binfo_anchor, static_binfo, 1)
+
+    dynamic_paged_base = r'''    const int bidb_cache = params.cache_batch_idx == nullptr ? bidb : params.cache_batch_idx[bidb];
+    const int *block_table = params.block_table == nullptr ? nullptr : params.block_table + bidb * params.block_table_batch_stride;
+    if constexpr (kStaticPagedKV) {
+        if (block_table == nullptr) { return; }
+    }
+    const index_t row_offset_k = kStaticPagedKV || block_table != nullptr
+        ? (bidh_k) * params.k_head_stride
+        : binfo.k_offset(params.k_batch_stride, params.k_row_stride, bidb_cache)
+          + (n_block_max - 1) * kBlockN * params.k_row_stride + (bidh_k) * params.k_head_stride;
+    const index_t row_offset_v = kStaticPagedKV || block_table != nullptr
+        ? (bidh_k) * params.v_head_stride
+        : binfo.k_offset(params.v_batch_stride, params.v_row_stride, bidb_cache)
+          + (n_block_max - 1) * kBlockN * params.v_row_stride + (bidh_k) * params.v_head_stride;
+'''
+    static_paged_base = r'''    const int *block_table;
+    index_t row_offset_k;
+    index_t row_offset_v;
+    if constexpr (kStaticQueryBatch) {
+        // The gate requires a paged table and the varlen paged API forbids a
+        // cache-batch remap, so form the only reachable row directly.
+        block_table = params.block_table
+            + bidb * params.block_table_batch_stride;
+        row_offset_k = bidh_k * params.k_head_stride;
+        row_offset_v = bidh_k * params.v_head_stride;
+    } else {
+        const int bidb_cache = params.cache_batch_idx == nullptr
+            ? bidb : params.cache_batch_idx[bidb];
+        block_table = params.block_table == nullptr
+            ? nullptr
+            : params.block_table + bidb * params.block_table_batch_stride;
+        if constexpr (kStaticPagedKV) {
+            if (block_table == nullptr) { return; }
+        }
+        row_offset_k = kStaticPagedKV || block_table != nullptr
+            ? (bidh_k) * params.k_head_stride
+            : binfo.k_offset(params.k_batch_stride, params.k_row_stride, bidb_cache)
+              + (n_block_max - 1) * kBlockN * params.k_row_stride
+              + (bidh_k) * params.k_head_stride;
+        row_offset_v = kStaticPagedKV || block_table != nullptr
+            ? (bidh_k) * params.v_head_stride
+            : binfo.k_offset(params.v_batch_stride, params.v_row_stride, bidb_cache)
+              + (n_block_max - 1) * kBlockN * params.v_row_stride
+              + (bidh_k) * params.v_head_stride;
+    }
+'''
+    if function.count(dynamic_paged_base) != 1:
+        raise RuntimeError(
+            "split-KV paged metadata/address anchor drifted: expected one, found "
+            f"{function.count(dynamic_paged_base)}"
+        )
+    function = function.replace(dynamic_paged_base, static_paged_base, 1)
+    text = text[:function_start] + function + text[function_end:]
+    path.write_text(text)
+    return True
+
+
 def _patch_fixed32_query_translation_unit(
     path: Path,
     *,
@@ -1532,6 +1664,13 @@ def patch_fa2_source(
     )
     flash_fwd_kernel_changed = (
         _patch_fixed32_query_tile32_static_batch_layout(
+            files["flash_fwd_kernel.h"],
+            fixed32_query_tile32=fixed32_query_tile32,
+        )
+        or flash_fwd_kernel_changed
+    )
+    flash_fwd_kernel_changed = (
+        _patch_fixed32_query_tile32_static_paged_metadata(
             files["flash_fwd_kernel.h"],
             fixed32_query_tile32=fixed32_query_tile32,
         )

@@ -326,6 +326,8 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     assert "params.cu_seqlens_q != nullptr" in api_gate
     assert "params.cu_seqlens_k != nullptr" in api_gate
     assert "params.seqused_k != nullptr" in api_gate
+    assert "params.leftpad_k == nullptr" in api_gate
+    assert "params.cache_batch_idx == nullptr" in api_gate
     assert "params.block_table != nullptr" in api_gate
     assert f"params.page_block_size == {static_page_size}" in api_gate
     assert "params.window_size_left < 0" in api_gate
@@ -434,6 +436,9 @@ def test_qrow32_traits_precede_the_exact_splitkv_instantiation() -> None:
         tile_earlyout=True
     )
     assert "struct StaticQueryBatchLayout" in module._tree_bias_helper(
+        tile_earlyout=True
+    )
+    assert "struct StaticPagedQueryBlockInfo" in module._tree_bias_helper(
         tile_earlyout=True
     )
     assert "static_query_offset" in module._tree_bias_helper(
@@ -801,6 +806,108 @@ inline __device__ void compute_attn_splitkv(const Params &params) {
             stock_offset = q_prefix[batch] * row_stride
             static_offset = batch * 32 * row_stride
             assert static_offset == stock_offset
+
+
+def test_qrow32_static_paged_metadata_keeps_only_dynamic_sequence_length(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    kernel = tmp_path / "flash_fwd_kernel.h"
+    signature = (
+        "template<typename Kernel_traits, bool Is_causal, bool Is_local, "
+        "bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, "
+        "bool Split, bool Append_KV, typename Params>\n"
+        "inline __device__ void compute_attn_1rowblock_splitkv"
+        "(const Params &params) {\n"
+    )
+    dynamic_paged_base = """    const int bidb_cache = params.cache_batch_idx == nullptr ? bidb : params.cache_batch_idx[bidb];
+    const int *block_table = params.block_table == nullptr ? nullptr : params.block_table + bidb * params.block_table_batch_stride;
+    if constexpr (kStaticPagedKV) {
+        if (block_table == nullptr) { return; }
+    }
+    const index_t row_offset_k = kStaticPagedKV || block_table != nullptr
+        ? (bidh_k) * params.k_head_stride
+        : binfo.k_offset(params.k_batch_stride, params.k_row_stride, bidb_cache)
+          + (n_block_max - 1) * kBlockN * params.k_row_stride + (bidh_k) * params.k_head_stride;
+    const index_t row_offset_v = kStaticPagedKV || block_table != nullptr
+        ? (bidh_k) * params.v_head_stride
+        : binfo.k_offset(params.v_batch_stride, params.v_row_stride, bidb_cache)
+          + (n_block_max - 1) * kBlockN * params.v_row_stride + (bidh_k) * params.v_head_stride;
+"""
+    body = (
+        "    using index_t = typename Kernel_traits::index_t;\n"
+        "    constexpr bool kStaticQueryBatch = true;\n"
+        "    constexpr bool kStaticPagedKV = true;\n"
+        "    const BlockInfo</*Varlen=*/!Is_even_MN> binfo(params, bidb);\n"
+        + dynamic_paged_base
+        + "    dynamic_k_length_sentinel(binfo.actual_seqlen_k);\n"
+        + "    mask_order_sentinel();\n"
+        + "    qk_pv_order_sentinel();\n"
+        + "}\n"
+    )
+    stock = (
+        signature
+        + body
+        + "\n////////////////////////////////////////////////////////////////////////////////////////////////////\n\n"
+        + "template<typename Kernel_traits, bool Is_dropout\n"
+        + "struct UnrelatedForwardKernel;\n"
+    )
+    kernel.write_text(stock)
+
+    assert not module._patch_fixed32_query_tile32_static_paged_metadata(kernel)
+    assert kernel.read_text() == stock
+    assert module._patch_fixed32_query_tile32_static_paged_metadata(
+        kernel,
+        fixed32_query_tile32=True,
+    )
+    candidate = kernel.read_text()
+    assert "FR13_FA2_QROW32_STATIC_PAGED_METADATA" in candidate
+    assert "StaticPagedQueryBlockInfo<Kernel_traits>" in candidate
+    assert "static_assert(!kStaticQueryBatch || kStaticPagedKV);" in candidate
+    assert "static_assert(!kStaticQueryBatch || !Split);" in candidate
+    assert "static_assert(!kStaticQueryBatch || !Append_KV);" in candidate
+    assert "if constexpr (kStaticQueryBatch)" in candidate
+    assert "block_table = params.block_table" in candidate
+    assert "+ bidb * params.block_table_batch_stride" in candidate
+    assert "row_offset_k = bidh_k * params.k_head_stride" in candidate
+    assert "row_offset_v = bidh_k * params.v_head_stride" in candidate
+    # The complete generic path remains available only in the discarded else.
+    assert "params.cache_batch_idx == nullptr" in candidate
+    assert "params.block_table == nullptr" in candidate
+    assert "binfo.k_offset(params.k_batch_stride" in candidate
+    for sentinel in (
+        "dynamic_k_length_sentinel(binfo.actual_seqlen_k)",
+        "mask_order_sentinel()",
+        "qk_pv_order_sentinel()",
+    ):
+        assert candidate.count(sentinel) == stock.count(sentinel) == 1
+    assert not module._patch_fixed32_query_tile32_static_paged_metadata(
+        kernel,
+        fixed32_query_tile32=True,
+    )
+    assert kernel.read_text() == candidate
+
+    helper = module._tree_bias_helper(tile_earlyout=True)
+    info_start = helper.index("struct StaticPagedQueryBlockInfo")
+    info_end = helper.index("template <typename Kernel_traits, typename BlockInfoT", info_start)
+    static_info = helper[info_start:info_end]
+    assert "params.seqused_k[bidb]" in static_info
+    assert "cu_seqlens_q" not in static_info
+    assert "cu_seqlens_k" not in static_info
+    assert "leftpad_k" not in static_info
+    assert "cache_batch_idx" not in static_info
+
+    # Paged varlen rejects left padding, and the live gate requires seqused_k.
+    # The lightweight load is therefore exactly BlockInfo.actual_seqlen_k.
+    for sequence_length in (32, 33, 1024, 8191):
+        original_actual_k = sequence_length - 0
+        static_actual_k = sequence_length
+        assert static_actual_k == original_actual_k
+    for block_table_stride in (1, 7, 64, 257):
+        for batch in range(4):
+            original_nonnull_row = batch * block_table_stride
+            static_row = batch * block_table_stride
+            assert static_row == original_nonnull_row
 
 
 def test_qrow16_static_paged_path_folds_only_the_private_trait(
