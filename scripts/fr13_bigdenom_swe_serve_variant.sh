@@ -39,6 +39,8 @@ FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
 FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
 FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB=${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB:-0}
 FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB=${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}
+FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB=${FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB:-0}
+FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION=${FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION:-0}
 case "$FR13_FIXED32_B1_DIAGNOSTIC" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1"; exit 2 ;;
@@ -59,21 +61,36 @@ case "$FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB must be exactly 0 or 1"; exit 2 ;;
 esac
+case "$FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB" in
+  0|1) ;;
+  *) echo "FAIL: FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB must be exactly 0 or 1"; exit 2 ;;
+esac
+case "$FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION" in
+  0|1) ;;
+  *) echo "FAIL: FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION must be exactly 0 or 1"; exit 2 ;;
+esac
+[[ "$FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION" != "1" \
+   || "$FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB" == "1" ]] \
+  || { echo "FAIL: prior-reuse production requires timing"; exit 2; }
 _fixed32_sfwd_route_count=$((
   10#$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
   + 10#$FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB
   + 10#$FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
+  + 10#$FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB
 ))
 (( _fixed32_sfwd_route_count <= 1 )) \
   || { echo "FAIL: SFWD diagnostics are mutually exclusive"; exit 2; }
 export FR13_FIXED32_B1_DIAGNOSTIC FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB \
   FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB \
   FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB \
-  FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
+  FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB \
+  FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB \
+  FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION
 _fixed32_eager_kernel_diagnostic=0
 if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" \
    || "$FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB" == "1" \
-   || "$FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB" == "1" ]]; then
+   || "$FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB" == "1" \
+   || "$FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB" == "1" ]]; then
   _fixed32_eager_kernel_diagnostic=1
   [[ "${ENFORCE_EAGER:-0}" == "1" ]] \
     || { echo "FAIL: eager kernel diagnostic requires ENFORCE_EAGER=1"; exit 2; }
@@ -1362,6 +1379,11 @@ teardown(){
       fixed32_container_attested=0
       echo "fixed32 teardown skipped container operations: immutable incarnation attestation failed" \
         > "$ARMDIR/fixed32_final_flush.stderr"
+    elif [[ "$FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB" == "1" \
+            || "$FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB" == "1" ]]; then
+      printf '{"acceptance_valid":false,"final_flush_skipped":true,"flush_protocol_used":true,"run_classification":"eager_kernel_timing_diagnostic","schema":"fr13-fixed32-eager-timing-terminal-v1","task_boundary_flush_required":true}\n' \
+        > "$ARMDIR/fixed32_final_flush_skipped.json"
+      : > "$ARMDIR/fixed32_final_flush.stderr"
     elif [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then
       printf '{"acceptance_valid":false,"flush_protocol_used":false,"run_classification":"eager_kernel_byte_diagnostic","schema":"fr13-fixed32-eager-kernel-terminal-v1"}\n' \
         > "$ARMDIR/fixed32_final_flush_skipped.json"
@@ -1398,8 +1420,13 @@ teardown(){
       tail -20 "$ARMDIR/fixed32_engine_ingress_snapshot.log" >&2 || true
       (( rc == 0 )) && rc=16
     elif [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then
-      printf '%s\n' \
-        '{"acceptance_valid":false,"authenticated_engine_ledger_snapshotted":true,"graph_census_audit_used":false,"reason":"eager_mode_has_no_cuda_graph_census","run_classification":"eager_kernel_byte_diagnostic","schema":"fr13-fixed32-eager-kernel-traffic-audit-skip-v1"}' \
+      if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB" == "1" \
+            || "$FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB" == "1" ]]; then
+        _fixed32_eager_traffic_record='{"acceptance_valid":false,"authenticated_engine_ledger_snapshotted":true,"graph_census_audit_used":false,"reason":"eager_mode_has_no_cuda_graph_census","run_classification":"eager_kernel_timing_diagnostic","schema":"fr13-fixed32-eager-timing-traffic-audit-skip-v1","task_boundary_flush_required":true}'
+      else
+        _fixed32_eager_traffic_record='{"acceptance_valid":false,"authenticated_engine_ledger_snapshotted":true,"graph_census_audit_used":false,"reason":"eager_mode_has_no_cuda_graph_census","run_classification":"eager_kernel_byte_diagnostic","schema":"fr13-fixed32-eager-kernel-traffic-audit-skip-v1"}'
+      fi
+      printf '%s\n' "$_fixed32_eager_traffic_record" \
         > "$ARMDIR/fixed32_chat_traffic_audit_skipped.json" \
         2> "$ARMDIR/fixed32_chat_traffic_audit.log"
       audit_rc=$?

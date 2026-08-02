@@ -177,13 +177,35 @@ _FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB = os.environ.get(
 _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB = os.environ.get(
     "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB", "0"
 ).strip()
+_FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB = os.environ.get(
+    "FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB", "0"
+).strip()
+_FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION = os.environ.get(
+    "FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION", "0"
+).strip()
 _FR13_FIXED32_SFWD_PRIOR_REUSE_IMPORT = (
     "from lumo_flywheel_serving.fr13_sfwd_prior_reuse import "
     "fixed32_sfwd_prior_reuse_byte_gate, "
     "fixed32_sfwd_prior_reuse_gate_control, "
     "launch_fixed32_sfwd_prior_reuse\n"
-    if _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB == "1"
+    if (
+        _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB == "1"
+        or _FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION == "1"
+    )
     else ""
+)
+_FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_IMPORT = (
+    "from lumo_flywheel_serving.fr13_sfwd_prior_reuse_timing import "
+    "fixed32_sfwd_prior_reuse_timing_control, "
+    "fixed32_sfwd_prior_reuse_timing_engagement\n"
+    if _FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION == "1"
+    else ""
+)
+_FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_BINDING = (
+    "_FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_CREDENTIAL = "
+    "fixed32_sfwd_prior_reuse_timing_control()\n"
+    if _FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION == "1"
+    else "_FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_CREDENTIAL = None\n"
 )
 _FR13_FIXED32_TREE_SOURCE = repr(list(_FR13_FIXED32_CHOICES))
 _FR13_FIXED32_SLOT_PI = tuple(
@@ -5691,6 +5713,22 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
             "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB must be exactly 0 or 1"
         )
     sfwd_prior_reuse = sfwd_prior_reuse_raw == "1"
+    sfwd_prior_timing_raw = _FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB
+    if sfwd_prior_timing_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB must be exactly 0 or 1"
+        )
+    sfwd_prior_timing = sfwd_prior_timing_raw == "1"
+    sfwd_prior_production_raw = _FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION
+    if sfwd_prior_production_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION must be exactly 0 or 1"
+        )
+    sfwd_prior_production = sfwd_prior_production_raw == "1"
+    if sfwd_prior_production and not sfwd_prior_timing:
+        raise RuntimeError(
+            "FR13 SFWD prior-reuse production requires its timing selector"
+        )
     sfwd_prior_manifest_sha256 = os.environ.get(
         "FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256", ""
     ).strip()
@@ -5745,6 +5783,10 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         raise RuntimeError(
             "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB requires fixed32 mode"
         )
+    if sfwd_prior_timing and not resolved_mode:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB requires fixed32 mode"
+        )
     if not resolved_mode:
         valid_mask = 0
     elif resolved_mode in _FR13_FIXED32_MODES:
@@ -5766,6 +5808,10 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         f"{graph_batch_gdn_diagnostic!r}\n"
         "_FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB = "
         f"{sfwd_prior_reuse!r}\n"
+        "_FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB = "
+        f"{sfwd_prior_timing!r}\n"
+        "_FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION = "
+        f"{sfwd_prior_production!r}\n"
         "_FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH = "
         f"{'/logs/fr13_fixed32_sfwd_prior_reuse.source_manifest.json'!r}\n"
         "_FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256 = "
@@ -5773,7 +5819,7 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         "_FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_COMMIT = "
         f"{sfwd_prior_source_commit!r}\n"
         "_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC = "
-        f"{(sfwd_state_fusion_diagnostic or sfwd_state_fusion_timing or sfwd_prior_reuse)!r}\n"
+        f"{(sfwd_state_fusion_diagnostic or sfwd_state_fusion_timing or sfwd_prior_reuse or sfwd_prior_timing)!r}\n"
     )
 
 
@@ -5783,6 +5829,8 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
     sfwd = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
     sfwd_timing = _FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB
     sfwd_prior_reuse = _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
+    sfwd_prior_timing = _FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB
+    sfwd_prior_production = _FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION
     if batch_gdn not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1"
@@ -5799,10 +5847,28 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
         raise RuntimeError(
             "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB must be exactly 0 or 1"
         )
+    if sfwd_prior_production not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION must be exactly 0 or 1"
+        )
+    if sfwd_prior_production == "1" and sfwd_prior_timing != "1":
+        raise RuntimeError(
+            "FR13 SFWD prior-reuse production requires its timing selector"
+        )
+    if sfwd_prior_timing not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB must be exactly 0 or 1"
+        )
     if (
         sum(
             value == "1"
-            for value in (batch_gdn, sfwd, sfwd_timing, sfwd_prior_reuse)
+            for value in (
+                batch_gdn,
+                sfwd,
+                sfwd_timing,
+                sfwd_prior_reuse,
+                sfwd_prior_timing,
+            )
         )
         > 1
     ):
@@ -5833,6 +5899,12 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
             1,
             "FR13_FIXED32_EAGER_SFWD_PRIOR_REUSE_B1_BOOT_WARM",
         )
+    if sfwd_prior_timing == "1":
+        return (
+            "SFWD prior-reuse B1 timing diagnostic",
+            1,
+            "FR13_FIXED32_EAGER_SFWD_PRIOR_REUSE_B1_TIMING_BOOT_WARM",
+        )
     return None
 
 
@@ -5853,6 +5925,8 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         _FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB
     )
     sfwd_prior_reuse = _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
+    sfwd_prior_timing = _FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB
+    sfwd_prior_production = _FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION
     if batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1"
@@ -5872,6 +5946,18 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     if sfwd_prior_reuse not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB must be exactly 0 or 1"
+        )
+    if sfwd_prior_timing not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB must be exactly 0 or 1"
+        )
+    if sfwd_prior_production not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_PRIOR_REUSE_PRODUCTION must be exactly 0 or 1"
+        )
+    if sfwd_prior_production == "1" and sfwd_prior_timing != "1":
+        raise RuntimeError(
+            "FR13 SFWD prior-reuse production requires its timing selector"
         )
     if (
         batch_gdn_byte_diagnostic == "1"
@@ -5899,6 +5985,8 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             or bool(production)
             or taw_native_diagnostic
             or sfwd_prior_reuse != "0"
+            or sfwd_prior_timing != "0"
+            or sfwd_prior_production != "0"
         )
         if incompatible:
             raise RuntimeError(
@@ -5918,6 +6006,8 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             or bool(production)
             or taw_native_diagnostic
             or sfwd_prior_reuse != "0"
+            or sfwd_prior_timing != "0"
+            or sfwd_prior_production != "0"
         )
         if incompatible:
             raise RuntimeError(
@@ -5941,11 +6031,37 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             or bool(candidate)
             or bool(production)
             or taw_native_diagnostic
+            or sfwd_prior_timing != "0"
+            or sfwd_prior_production != "0"
         )
         if incompatible:
             raise RuntimeError(
                 "FR13 fixed32 SFWD prior-reuse byte diagnostic requires "
                 "the exclusive eager B1 shadow route"
+            )
+    if sfwd_prior_timing == "1":
+        incompatible = (
+            not mode
+            or os.environ.get("FR13_FIXED32_B1_DIAGNOSTIC", "0") != "1"
+            or os.environ.get("ENFORCE_EAGER", "0") != "1"
+            or os.environ.get("FR13_SFWD_GPU_TIMER", "0") != "1"
+            or sfwd_state_fusion_diagnostic != "0"
+            or sfwd_state_fusion_timing != "0"
+            or sfwd_prior_reuse != "0"
+            or batch_gdn_byte_diagnostic != "0"
+            or graph_batch_gdn_byte_diagnostic != "0"
+            or os.environ.get("FR13_FIXED32_BATCH_GDN_PRODUCTION", "0") != "0"
+            or bool(os.environ.get("FR13_FIXED32_BATCH_GDN_BV_CANDIDATE", ""))
+            or bool(os.environ.get("FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", ""))
+            or os.environ.get("FR13_FIXED32_BATCH_GDN_BV8_TIMING", "0") != "0"
+            or bool(candidate)
+            or bool(production)
+            or taw_native_diagnostic
+        )
+        if incompatible:
+            raise RuntimeError(
+                "FR13 fixed32 SFWD prior-reuse timing diagnostic requires "
+                "the exclusive eager B1 timed route"
             )
     if batch_gdn_byte_diagnostic == "1":
         candidate_bv = os.environ.get(
@@ -7158,6 +7274,7 @@ def _patch_gdn_linear() -> bool:
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
             "from lumo_flywheel_serving.fr10_gdn_tree_kernel import fixed32_batch_gdn_selector, fixed32_sfwd_state_fusion_byte_gate, fixed32_sfwd_state_fusion_gate_control, gather_committed_path_conv_prior, launch_fixed32_sfwd_state_fusion, launch_tree_gdn_prepared, launch_tree_gdn_prepared_fixed32_batch, launch_tree_state_linear_remap, subtree_get\n"
             f"{_FR13_FIXED32_SFWD_PRIOR_REUSE_IMPORT}"
+            f"{_FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_IMPORT}"
             "from lumo_flywheel_serving.fr13_sfwd_state_fusion_production import fixed32_sfwd_state_fusion_production_control, fixed32_sfwd_state_fusion_production_engagement\n"
             "from lumo_flywheel_serving.fr13_replay_conv_remap import replay_conv_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
@@ -7180,6 +7297,11 @@ def _patch_gdn_linear() -> bool:
             "_FR13_FLAGS_INKERNEL = " + ("True" if os.environ.get("FR13_FLAGS_INKERNEL", "0") == "1" else "False") + "  # scan-kernel flag stores, PATCH-TIME env (default OFF); regate = queue 2c\n"
             "_FR13_CONV_WB_BATCHED = " + ("True" if os.environ.get("FR13_CONV_WB_BATCHED", "0") == "1" else "False") + "  # FR13_CONV_WB_BATCHED (B2c) baked from PATCH-TIME env: ONE batched conv writeback across requests replaces the per-b launch loop (committer host-gap slice)\n"
             "_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION = fixed32_sfwd_state_fusion_production_control()\n"
+            f"{_FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_BINDING}"
+            "if (_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION is not None and _FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_CREDENTIAL is not None):\n"
+            "    raise RuntimeError('FR13 SFWD timing credentials are not exclusive')\n"
+            "_FR13_FIXED32_SFWD_PRODUCTION = (_FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_CREDENTIAL if _FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_CREDENTIAL is not None else _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION)\n"
+            "_FR13_FIXED32_SFWD_PRODUCTION_KIND = ('prior_reuse' if _FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_CREDENTIAL is not None else ('rowgroup8' if _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION is not None else None))\n"
             "# FR13_TREE_CONV_FUSED (FIX-3): read ONCE at module scope; default OFF\n"
             "# until the byte A/B + live gate pass. ON fuses the tree causal-conv\n"
             "# emulation's per-node state write-back loop / per-col tap loop /\n"
@@ -8827,7 +8949,7 @@ def _fr13_conv_subop_mab(
                                 ) from _fr10_len_exc
                     if (
                         _fr13_conv_committed_path
-                        and _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
+                        and _FR13_FIXED32_SFWD_PRODUCTION
                         is not None
                     ):
                         # The qualified SFWD kernel reads the accepted col-0
@@ -9412,7 +9534,7 @@ def _fr13_conv_subop_mab(
                             + ":"
                             + str(_fr10_seed_conv_exc)
                         ) from _fr10_seed_conv_exc
-                if _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION is not None:
+                if _FR13_FIXED32_SFWD_PRODUCTION is not None:
                     _fr10_prior_read_mode = "sfwd_state_fusion_direct_col0"
                     _fr10_conv_read_cols = None
                     _fr10_prior_conv_bank_rows = None
@@ -9652,7 +9774,7 @@ def _fr13_conv_subop_mab(
                         os.environ.get("FR10_METRICS", "0") == "1"
                         and _fr10_conv_diag is not None
                     )
-                    if _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION is None:
+                    if _FR13_FIXED32_SFWD_PRODUCTION is None:
                         assert _fr10_prior_conv_state_bank is not None
                     _fr12_native_spine_oracle_enabled = (
                         os.environ.get("FR12_NATIVE_SPINE_ORACLE", "0") == "1"
@@ -9711,8 +9833,9 @@ def _fr13_conv_subop_mab(
                     _fr13_sfwd_candidate_kind = None
                     _fr13_sfwd_candidate_out = None
                     _fr13_sfwd_candidate_stage = None
-                    _fr13_sfwd_production = (
-                        _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
+                    _fr13_sfwd_production = _FR13_FIXED32_SFWD_PRODUCTION
+                    _fr13_sfwd_production_kind = (
+                        _FR13_FIXED32_SFWD_PRODUCTION_KIND
                     )
                     if _FR13_FIXED32_MODE and _fr13_sfwd_production is None:
                         if _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:
@@ -9748,7 +9871,7 @@ def _fr13_conv_subop_mab(
                             or int(_fr10_width) != 4
                         ):
                             raise RuntimeError(
-                                "FR13_FIXED32_SFWD_STATE_FUSION production "
+                                "FR13 fixed32 SFWD production "
                                 "dependency/geometry contract drifted"
                             )
                         from lumo_flywheel_serving.fr13_tree_conv_fused import (
@@ -9764,7 +9887,7 @@ def _fr13_conv_subop_mab(
                             mixed_qkv_spec.dtype,
                             mixed_qkv_spec.device,
                         )
-                        launch_fixed32_sfwd_state_fusion(
+                        _fr13_sfwd_production_kwargs = dict(
                             x=mixed_qkv_spec,
                             conv_state=conv_state,
                             spec_state_indices=spec_state_indices_tensor,
@@ -9776,11 +9899,26 @@ def _fr13_conv_subop_mab(
                             batch_size=1,
                             tree_rows=int(_fr10_tree_n),
                         )
-                        fixed32_sfwd_state_fusion_production_engagement(
-                            credential=_fr13_sfwd_production,
-                            layer_key=int(conv_weights.data_ptr()),
-                            batch_size=1,
-                        )
+                        if _fr13_sfwd_production_kind == "prior_reuse":
+                            launch_fixed32_sfwd_prior_reuse(
+                                **_fr13_sfwd_production_kwargs
+                            )
+                        else:
+                            launch_fixed32_sfwd_state_fusion(
+                                **_fr13_sfwd_production_kwargs
+                            )
+                        if _fr13_sfwd_production_kind == "prior_reuse":
+                            fixed32_sfwd_prior_reuse_timing_engagement(
+                                credential=_fr13_sfwd_production,
+                                layer_key=int(conv_weights.data_ptr()),
+                                batch_size=1,
+                            )
+                        else:
+                            fixed32_sfwd_state_fusion_production_engagement(
+                                credential=_fr13_sfwd_production,
+                                layer_key=int(conv_weights.data_ptr()),
+                                batch_size=1,
+                            )
                     elif (
                         _fr13_sfwd_gate_enabled
                         and _fr13_sfwd_task_marker is not None
@@ -30679,6 +30817,13 @@ _fr13_f32_flush_break_wall_chain()
 '''
         fixed_flush = fixed_flush.replace(
             "__FR13_FIXED32_MODE__", repr(_FR13_FIXED32_MODE)
+        )
+        fixed_flush = fixed_flush.replace(
+            "__FR13_FIXED32_EAGER_TIMING_BOUNDARY__",
+            repr(
+                _FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB == "1"
+                or _FR13_FIXED32_SFWD_PRIOR_REUSE_TIMING_AB == "1"
+            ),
         )
         text += fixed_flush
     GPU_MODEL_RUNNER_PATH.write_text(text)
