@@ -275,7 +275,12 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     assert "TreeKernelTraits::kGmemThreadsPerRow == 8" in candidate
     assert "TreeKernelTraits::kGmemRowsPerThread == 8" in candidate
     assert "static_assert(smem_size == 80 * 1024)" in candidate
-    assert "dim3 grid(num_m_block, params.b, params.h)" in candidate
+    assert "using StaticLayout = StaticQueryBatchLayout<TreeKernelTraits>" in candidate
+    assert "StaticLayout::query_heads_per_kv" in candidate
+    assert "StaticLayout::sequences" in candidate
+    assert "StaticLayout::kv_heads" in candidate
+    assert "dim3 grid(" in candidate
+    assert "num_m_block" not in candidate
     assert "false,  // Split" in candidate
     assert "flash_fwd_splitkv_combine_kernel" not in candidate
     assert "params.num_splits = " not in candidate
@@ -293,6 +298,11 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     assert f"static constexpr int block_n_log2 = {static_block_n_log2}" in candidate
     assert "StaticQueryRows<Fr13Fixed32Qrow32KernelTraits>" in candidate
     assert f"static constexpr int value = {static_query_rows}" in candidate
+    assert "StaticQueryBatchLayout<Fr13Fixed32Qrow32KernelTraits>" in candidate
+    assert "static constexpr int sequences = 4" in candidate
+    assert "static constexpr int query_heads = 24" in candidate
+    assert "static constexpr int kv_heads = 4" in candidate
+    assert "static constexpr int query_heads_per_kv = 6" in candidate
     assert "using TreeKernelTraits = Fr13Fixed32Qrow32KernelTraits" in candidate
 
     api_gate = module.FIXED32_QUERY_TILE32_API_GATE
@@ -394,6 +404,9 @@ def test_qrow32_traits_precede_the_exact_splitkv_instantiation() -> None:
     query_specialization_at = translation_unit.index(
         "struct StaticQueryRows<Fr13Fixed32Qrow32KernelTraits>"
     )
+    batch_specialization_at = translation_unit.index(
+        "struct StaticQueryBatchLayout<Fr13Fixed32Qrow32KernelTraits>"
+    )
     launcher_at = translation_unit.index(
         "void fr13_run_mha_fwd_fixed32_qrow32("
     )
@@ -406,6 +419,7 @@ def test_qrow32_traits_precede_the_exact_splitkv_instantiation() -> None:
         < alias_at
         < page_specialization_at
         < query_specialization_at
+        < batch_specialization_at
         < launcher_at
         < instantiation_at
     )
@@ -419,11 +433,20 @@ def test_qrow32_traits_precede_the_exact_splitkv_instantiation() -> None:
     assert "struct StaticQueryRows" in module._tree_bias_helper(
         tile_earlyout=True
     )
+    assert "struct StaticQueryBatchLayout" in module._tree_bias_helper(
+        tile_earlyout=True
+    )
+    assert "static_query_offset" in module._tree_bias_helper(
+        tile_earlyout=True
+    )
     assert translation_unit.count(
         "StaticPagedKVBlockSize<Fr13Fixed32Qrow32KernelTraits>"
     ) == 1
     assert translation_unit.count(
         "StaticQueryRows<Fr13Fixed32Qrow32KernelTraits>"
+    ) == 1
+    assert translation_unit.count(
+        "StaticQueryBatchLayout<Fr13Fixed32Qrow32KernelTraits>"
     ) == 1
     assert "run_mha_fwd_splitkv_dispatch" not in translation_unit
     assert "run_flash_splitkv_fwd" not in translation_unit
@@ -663,6 +686,123 @@ template<typename Kernel_traits, bool Is_dropout
     ).read_text()
 
 
+def test_qrow32_static_batch_layout_is_bijective_and_removes_address_division(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    kernel = tmp_path / "flash_fwd_kernel.h"
+    signature = (
+        "template<typename Kernel_traits, bool Is_causal, bool Is_local, "
+        "bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, "
+        "bool Split, bool Append_KV, typename Params>\n"
+        "inline __device__ void compute_attn_1rowblock_splitkv"
+        "(const Params &params, const int bidb, const int bidh) {\n"
+    )
+    split_body = """    constexpr int kNWarps = Kernel_traits::kNWarps;
+    auto q0 = binfo.q_offset(params.q_batch_stride, params.q_row_stride, bidb);
+    auto q1 = binfo.q_offset(params.o_batch_stride, params.o_row_stride, bidb);
+    auto q2 = binfo.q_offset(params.o_batch_stride, params.o_row_stride, bidb);
+    auto q3 = binfo.q_offset(params.seqlen_q, 1, bidb);
+    auto h0 = (bidh / params.h_h_k_ratio) * params.k_head_stride;
+    auto h1 = (bidh / params.h_h_k_ratio) * params.k_head_stride;
+    auto h2 = (bidh / params.h_h_k_ratio) * params.v_head_stride;
+    auto h3 = (bidh / params.h_h_k_ratio) * params.v_head_stride;
+    auto h4 = (bidh / params.h_h_k_ratio) * params.knew_head_stride;
+    auto h5 = (bidh / params.h_h_k_ratio) * params.vnew_head_stride;
+    mask.template apply_mask<Is_causal, Is_even_MN>(scores, 0, 0, 32);
+    qk_accumulation_order_sentinel();
+    pv_accumulation_order_sentinel();
+    dynamic_k_length_sentinel(binfo.actual_seqlen_k);
+}
+"""
+    dynamic_wrapper = """template<typename Kernel_traits, bool Is_causal, bool Is_local, bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, bool Split, bool Append_KV, typename Params>
+inline __device__ void compute_attn_splitkv(const Params &params) {
+    const int m_block = blockIdx.x;
+    // The block index for the batch.
+    const int bidb = Split ? blockIdx.z / params.h : blockIdx.y;
+    // The block index for the head.
+    const int bidh = Split ? blockIdx.z - bidb * params.h : blockIdx.z;
+    const int n_split_idx = Split ? blockIdx.y : 0;
+    const int num_n_splits = Split ? gridDim.y : 1;
+    FLASH_NAMESPACE::compute_attn_1rowblock_splitkv<Kernel_traits, Is_causal, Is_local, Has_alibi, Is_even_MN, Is_even_K, Is_softcap, Split, Append_KV>(params, bidb, bidh, m_block, n_split_idx, num_n_splits);
+}"""
+    stock = (
+        signature
+        + split_body
+        + "\n////////////////////////////////////////////////////////////////////////////////////////////////////\n\n"
+        + "template<typename Kernel_traits, bool Is_dropout\n"
+        + "struct UnrelatedForwardKernel;\n\n"
+        + dynamic_wrapper
+        + "\n"
+    )
+    kernel.write_text(stock)
+
+    assert not module._patch_fixed32_query_tile32_static_batch_layout(kernel)
+    assert kernel.read_text() == stock
+    assert module._patch_fixed32_query_tile32_static_batch_layout(
+        kernel,
+        fixed32_query_tile32=True,
+    )
+    candidate = kernel.read_text()
+    candidate_function = candidate[
+        candidate.index(signature[:-2]) : candidate.index(
+            "\n////////////////////////////////////////////////////////////////////////////////////////////////////\n\n"
+            "template<typename Kernel_traits, bool Is_dropout"
+        )
+    ]
+    assert candidate_function.count("binfo.q_offset(") == 0
+    assert candidate_function.count(
+        "static_query_offset<Kernel_traits>(binfo, "
+    ) == 4
+    assert candidate_function.count("bidh / params.h_h_k_ratio") == 1
+    assert candidate_function.count("bidh_k") == 9
+    assert "blockIdx.z" in candidate_function
+    assert "FR13_FA2_QROW32_STATIC_BATCH_GRID" in candidate
+    assert "if constexpr (kStaticQueryBatch)" in candidate
+    assert "const int m_block = 0" in candidate
+    assert "blockIdx.z * kStaticQueryHeadsPerKV" in candidate
+    assert "+ blockIdx.x" in candidate
+    assert "const int bidb = Split ? blockIdx.z / params.h : blockIdx.y;" in candidate
+    assert "const int bidh = Split ? blockIdx.z - bidb * params.h : blockIdx.z;" in candidate
+    for sentinel in (
+        "mask.template apply_mask<Is_causal, Is_even_MN>",
+        "qk_accumulation_order_sentinel()",
+        "pv_accumulation_order_sentinel()",
+        "dynamic_k_length_sentinel(binfo.actual_seqlen_k)",
+    ):
+        assert candidate.count(sentinel) == stock.count(sentinel) == 1
+    assert not module._patch_fixed32_query_tile32_static_batch_layout(
+        kernel,
+        fixed32_query_tile32=True,
+    )
+    assert kernel.read_text() == candidate
+
+    # Exhaust the complete launch domain. The remap is a bijection onto the
+    # original (batch, query-head) domain, and blockIdx.z is exactly qhead // 6.
+    mapped = set()
+    for kv_head in range(4):
+        for batch in range(4):
+            for query_head_lane in range(6):
+                query_head = kv_head * 6 + query_head_lane
+                assert query_head // 6 == kv_head
+                mapped.add((batch, query_head))
+    assert len(mapped) == 96
+    assert mapped == {
+        (batch, query_head)
+        for batch in range(4)
+        for query_head in range(24)
+    }
+
+    # The live gate separately verifies [0, 32, 64, 96, 128]. Under that exact
+    # packed layout, every replaced q_offset is identical for any row stride.
+    q_prefix = [0, 32, 64, 96, 128]
+    for batch in range(4):
+        for row_stride in (1, 24 * 256, 24 * 256 + 17):
+            stock_offset = q_prefix[batch] * row_stride
+            static_offset = batch * 32 * row_stride
+            assert static_offset == stock_offset
+
+
 def test_qrow16_static_paged_path_folds_only_the_private_trait(
     tmp_path: Path,
 ) -> None:
@@ -708,6 +848,20 @@ def test_qrow16_static_paged_path_folds_only_the_private_trait(
         fixed32_query_tile16=True,
     )
     assert kernel.read_text() == candidate
+
+    # The same trait-controlled routing fold is valid for B4's private qrow32
+    # kernel; stock traits still instantiate only the dynamic branch.
+    qrow32_kernel = tmp_path / "flash_fwd_kernel_qrow32.h"
+    qrow32_kernel.write_text(stock)
+    assert module._patch_fixed32_query_static_paged_path(
+        qrow32_kernel,
+        fixed32_query_tile32=True,
+    )
+    assert qrow32_kernel.read_text() == candidate
+    assert not module._patch_fixed32_query_static_paged_path(
+        qrow32_kernel,
+        fixed32_query_tile32=True,
+    )
 
 
 def test_source_build_candidates_are_independent_and_default_off() -> None:

@@ -65,6 +65,35 @@ struct StaticQueryRows {
     static constexpr int value = 0;
 };
 
+template <typename Kernel_traits>
+struct StaticQueryBatchLayout {
+    static constexpr int sequences = 0;
+    static constexpr int query_heads = 0;
+    static constexpr int kv_heads = 0;
+    static constexpr int query_heads_per_kv = 0;
+};
+
+template <typename Kernel_traits, typename BlockInfoT,
+          typename BatchStrideT, typename RowStrideT>
+__forceinline__ __device__
+typename Kernel_traits::index_t static_query_offset(
+        const BlockInfoT &binfo,
+        const BatchStrideT batch_stride,
+        const RowStrideT row_stride,
+        const int bidb) {
+    using index_t = typename Kernel_traits::index_t;
+    constexpr int kStaticQueryRows = StaticQueryRows<Kernel_traits>::value;
+    if constexpr (kStaticQueryRows != 0) {
+        return static_cast<index_t>(bidb) * kStaticQueryRows
+            * static_cast<index_t>(row_stride);
+    } else {
+        return binfo.q_offset(
+            static_cast<index_t>(batch_stride),
+            static_cast<index_t>(row_stride),
+            bidb);
+    }
+}
+
 template <typename Kernel_traits, typename Engine, typename Layout, typename Params, typename BlockInfoT>
 __forceinline__ __device__ void apply_tree_bias(Tensor<Engine, Layout> &tensor_,
                                                 const Params &params,
@@ -468,6 +497,14 @@ struct StaticQueryRows<Fr13Fixed32Qrow32KernelTraits> {
     static constexpr int value = 32;
 };
 
+template <>
+struct StaticQueryBatchLayout<Fr13Fixed32Qrow32KernelTraits> {
+    static constexpr int sequences = 4;
+    static constexpr int query_heads = 24;
+    static constexpr int kv_heads = 4;
+    static constexpr int query_heads_per_kv = 6;
+};
+
 // Gate-only entry point. The ordinary and production paths cannot tag the
 // exact4 diagnostic bias layout that selects this hidden function.
 __attribute__((visibility("hidden")))
@@ -490,10 +527,20 @@ void fr13_run_mha_fwd_fixed32_qrow32(
     static_assert(1024 % TreeKernelTraits::kGmemRowsPerThread == 0);
     constexpr size_t smem_size = TreeKernelTraits::kSmemSize;
     static_assert(smem_size == 80 * 1024);
-    const int num_m_block =
-        (params.seqlen_q + TreeKernelTraits::kBlockM - 1)
-        / TreeKernelTraits::kBlockM;
-    dim3 grid(num_m_block, params.b, params.h);
+    using StaticLayout = StaticQueryBatchLayout<TreeKernelTraits>;
+    static_assert(StaticLayout::sequences == 4);
+    static_assert(StaticLayout::query_heads == 24);
+    static_assert(StaticLayout::kv_heads == 4);
+    static_assert(StaticLayout::query_heads_per_kv == 6);
+    static_assert(
+        StaticLayout::query_heads
+        == StaticLayout::kv_heads * StaticLayout::query_heads_per_kv);
+    // blockIdx.x is the query-head lane within a six-head GQA group;
+    // blockIdx.z is therefore already the KV head. This remains 96 CTAs.
+    dim3 grid(
+        StaticLayout::query_heads_per_kv,
+        StaticLayout::sequences,
+        StaticLayout::kv_heads);
     auto kernel = &flash_fwd_splitkv_kernel<
         TreeKernelTraits,
         false,  // Is_causal
@@ -844,8 +891,9 @@ def _patch_fixed32_query_static_paged_path(
     path: Path,
     *,
     fixed32_query_tile16: bool = False,
+    fixed32_query_tile32: bool = False,
 ) -> bool:
-    if not fixed32_query_tile16:
+    if not (fixed32_query_tile16 or fixed32_query_tile32):
         return False
     text = path.read_text()
     signature = (
@@ -1006,6 +1054,154 @@ def _patch_fixed32_query_tile32_static_query(
     )
     function = function_prefix + "{\n" + function_body
     text = text[:function_start] + function + text[function_end:]
+    path.write_text(text)
+    return True
+
+
+def _patch_fixed32_query_tile32_static_batch_layout(
+    path: Path,
+    *,
+    fixed32_query_tile32: bool = False,
+) -> bool:
+    if not fixed32_query_tile32:
+        return False
+    text = path.read_text()
+    function_signature = (
+        "template<typename Kernel_traits, bool Is_causal, bool Is_local, "
+        "bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, "
+        "bool Split, bool Append_KV, typename Params>\n"
+        "inline __device__ void compute_attn_1rowblock_splitkv"
+    )
+    function_start = text.index(function_signature)
+    function_end = text.index(
+        "\n////////////////////////////////////////////////////////////////////////////////////////////////////\n\n"
+        "template<typename Kernel_traits, bool Is_dropout",
+        function_start,
+    )
+    function = text[function_start:function_end]
+    marker = "// FR13_FA2_QROW32_STATIC_BATCH_LAYOUT: fixed exact4 CTA coordinates."
+    wrapper_marker = (
+        "// FR13_FA2_QROW32_STATIC_BATCH_GRID: blockIdx.x selects the GQA lane."
+    )
+    if marker in function:
+        required_counts = {
+            marker: 1,
+            "static_query_offset<Kernel_traits>(binfo, ": 4,
+            "bidh / params.h_h_k_ratio": 1,
+            "int bidh_k;": 1,
+        }
+        for snippet, expected in required_counts.items():
+            if function.count(snippet) != expected:
+                raise RuntimeError("qrow32 static batch layout drifted")
+        if text.count(wrapper_marker) != 1:
+            raise RuntimeError("qrow32 static batch grid drifted")
+        return False
+
+    query_offset = "binfo.q_offset("
+    head_division = "bidh / params.h_h_k_ratio"
+    if function.count(query_offset) != 4:
+        raise RuntimeError(
+            "split-KV query-offset use count drifted: expected 4, found "
+            f"{function.count(query_offset)}"
+        )
+    if function.count(head_division) != 6:
+        raise RuntimeError(
+            "split-KV GQA-head division count drifted: expected 6, found "
+            f"{function.count(head_division)}"
+        )
+    function = function.replace(
+        query_offset,
+        "static_query_offset<Kernel_traits>(binfo, ",
+    )
+    function = function.replace(head_division, "bidh_k")
+
+    warp_anchor = "    constexpr int kNWarps = Kernel_traits::kNWarps;\n"
+    static_layout = r'''    // FR13_FA2_QROW32_STATIC_BATCH_LAYOUT: fixed exact4 CTA coordinates.
+    constexpr int kStaticSequences =
+        StaticQueryBatchLayout<Kernel_traits>::sequences;
+    constexpr int kStaticQueryHeads =
+        StaticQueryBatchLayout<Kernel_traits>::query_heads;
+    constexpr int kStaticKVHeads =
+        StaticQueryBatchLayout<Kernel_traits>::kv_heads;
+    constexpr int kStaticQueryHeadsPerKV =
+        StaticQueryBatchLayout<Kernel_traits>::query_heads_per_kv;
+    constexpr bool kStaticQueryBatch = kStaticSequences != 0;
+    static_assert(!kStaticQueryBatch || kStaticSequences == 4);
+    static_assert(!kStaticQueryBatch || kStaticQueryHeads == 24);
+    static_assert(!kStaticQueryBatch || kStaticKVHeads == 4);
+    static_assert(!kStaticQueryBatch || kStaticQueryHeadsPerKV == 6);
+    static_assert(
+        !kStaticQueryBatch
+        || kStaticQueryHeads == kStaticKVHeads * kStaticQueryHeadsPerKV);
+    int bidh_k;
+    if constexpr (kStaticQueryBatch) {
+        bidh_k = static_cast<int>(blockIdx.z);
+    } else {
+        bidh_k = bidh / params.h_h_k_ratio;
+    }
+'''
+    if function.count(warp_anchor) != 1:
+        raise RuntimeError("split-KV warp trait anchor drifted")
+    function = function.replace(
+        warp_anchor,
+        warp_anchor + static_layout,
+        1,
+    )
+    text = text[:function_start] + function + text[function_end:]
+
+    dynamic_wrapper = r'''template<typename Kernel_traits, bool Is_causal, bool Is_local, bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, bool Split, bool Append_KV, typename Params>
+inline __device__ void compute_attn_splitkv(const Params &params) {
+    const int m_block = blockIdx.x;
+    // The block index for the batch.
+    const int bidb = Split ? blockIdx.z / params.h : blockIdx.y;
+    // The block index for the head.
+    const int bidh = Split ? blockIdx.z - bidb * params.h : blockIdx.z;
+    const int n_split_idx = Split ? blockIdx.y : 0;
+    const int num_n_splits = Split ? gridDim.y : 1;
+    FLASH_NAMESPACE::compute_attn_1rowblock_splitkv<Kernel_traits, Is_causal, Is_local, Has_alibi, Is_even_MN, Is_even_K, Is_softcap, Split, Append_KV>(params, bidb, bidh, m_block, n_split_idx, num_n_splits);
+}'''
+    static_wrapper = r'''template<typename Kernel_traits, bool Is_causal, bool Is_local, bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, bool Split, bool Append_KV, typename Params>
+inline __device__ void compute_attn_splitkv(const Params &params) {
+    // FR13_FA2_QROW32_STATIC_BATCH_GRID: blockIdx.x selects the GQA lane.
+    constexpr int kStaticSequences =
+        StaticQueryBatchLayout<Kernel_traits>::sequences;
+    constexpr int kStaticQueryHeads =
+        StaticQueryBatchLayout<Kernel_traits>::query_heads;
+    constexpr int kStaticKVHeads =
+        StaticQueryBatchLayout<Kernel_traits>::kv_heads;
+    constexpr int kStaticQueryHeadsPerKV =
+        StaticQueryBatchLayout<Kernel_traits>::query_heads_per_kv;
+    constexpr bool kStaticQueryBatch = kStaticSequences != 0;
+    static_assert(!kStaticQueryBatch || !Split);
+    static_assert(!kStaticQueryBatch || kStaticSequences == 4);
+    static_assert(!kStaticQueryBatch || kStaticQueryHeads == 24);
+    static_assert(!kStaticQueryBatch || kStaticKVHeads == 4);
+    static_assert(!kStaticQueryBatch || kStaticQueryHeadsPerKV == 6);
+    static_assert(
+        !kStaticQueryBatch
+        || kStaticQueryHeads == kStaticKVHeads * kStaticQueryHeadsPerKV);
+    if constexpr (kStaticQueryBatch) {
+        const int m_block = 0;
+        const int bidb = blockIdx.y;
+        const int bidh = blockIdx.z * kStaticQueryHeadsPerKV + blockIdx.x;
+        FLASH_NAMESPACE::compute_attn_1rowblock_splitkv<Kernel_traits, Is_causal, Is_local, Has_alibi, Is_even_MN, Is_even_K, Is_softcap, Split, Append_KV>(params, bidb, bidh, m_block, 0, 1);
+    } else {
+        const int m_block = blockIdx.x;
+        // The block index for the batch.
+        const int bidb = Split ? blockIdx.z / params.h : blockIdx.y;
+        // The block index for the head.
+        const int bidh = Split ? blockIdx.z - bidb * params.h : blockIdx.z;
+        const int n_split_idx = Split ? blockIdx.y : 0;
+        const int num_n_splits = Split ? gridDim.y : 1;
+        FLASH_NAMESPACE::compute_attn_1rowblock_splitkv<Kernel_traits, Is_causal, Is_local, Has_alibi, Is_even_MN, Is_even_K, Is_softcap, Split, Append_KV>(params, bidb, bidh, m_block, n_split_idx, num_n_splits);
+    }
+}'''
+    if text.count(dynamic_wrapper) != 1:
+        raise RuntimeError(
+            "split-KV CTA-coordinate wrapper drifted: expected one stock body, "
+            f"found {text.count(dynamic_wrapper)}"
+        )
+    text = text.replace(dynamic_wrapper, static_wrapper, 1)
     path.write_text(text)
     return True
 
@@ -1323,11 +1519,19 @@ def patch_fa2_source(
         _patch_fixed32_query_static_paged_path(
             files["flash_fwd_kernel.h"],
             fixed32_query_tile16=fixed32_query_tile16,
+            fixed32_query_tile32=fixed32_query_tile32,
         )
         or flash_fwd_kernel_changed
     )
     flash_fwd_kernel_changed = (
         _patch_fixed32_query_tile32_static_query(
+            files["flash_fwd_kernel.h"],
+            fixed32_query_tile32=fixed32_query_tile32,
+        )
+        or flash_fwd_kernel_changed
+    )
+    flash_fwd_kernel_changed = (
+        _patch_fixed32_query_tile32_static_batch_layout(
             files["flash_fwd_kernel.h"],
             fixed32_query_tile32=fixed32_query_tile32,
         )
