@@ -1,0 +1,77 @@
+{
+  "schema": "fr13.fixed32.cutlass_identity_stage2_loadable_gate_ready.v1",
+  "created_utc": "2026-08-02T17:10:30Z",
+  "status": "READY_FOR_ONE_REAL_SWE_VERIFIED_B1_K64_ROOT_BYTE_GATE",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "scope": {
+    "route": "Tail23/Hydra27",
+    "qualification_profile": "k64_root",
+    "batch_size": 1,
+    "fixed_rows": 32,
+    "served_result": "stock",
+    "default_enabled": false
+  },
+  "source": {
+    "branch": "agent/fixed32-cutlass-identity-stage2-20260802",
+    "kernel_source_commit": "4ef7d21a08042ad88a73758643519e7f4d6c67c8",
+    "source_audit_commit": "7960c9627",
+    "gate_wiring_commit": "10a7c2bddf7b6f464ca342b5856257ce6b593d14",
+    "patch_file": "scripts/fr13_patch_cutlass_fixed32_wave.py",
+    "patch_sha256": "a35a3818ecde4dd1d8c7f23bc1b04c8bb79932aa32f7959e3c61b5d88cb65a41",
+    "generated_dispatch_sha256": "f38d3349a03272a9229d9fa2498dfa6a45f791a445e20caf18580a5cea9dbdf6"
+  },
+  "candidate": {
+    "selector": "identity_stage2_static",
+    "diagnostic_selector": "identity_stage2_static_byte_ab",
+    "binary_sha256": "fda710872a88d29b8c5d04f463f4e1f3149f919c494437fb49f5fb9620bb0c92",
+    "binary_bytes": 114909032,
+    "object_sha256": "b3b35078e89bc65d4b7ccde0c9e1959de47b765f3a5ca7552412465f5530baee",
+    "object_bytes": 16475176,
+    "native_cubin_sha256": "06f6b8c1d1a38fee3d6bd6e994eaa55a5f362b8a7d454b29b67fb7a23e87acad",
+    "native_cubin_bytes": 1601112,
+    "elf_class": "ELF64",
+    "elf_machine": "AArch64",
+    "elf_type": "shared_object",
+    "import_result": "pass"
+  },
+  "kernel_resources": {
+    "registers_per_thread": 168,
+    "static_shared_bytes_per_cta": 1024,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "b1_stage2_sass_slots": 864,
+    "b1_identity_auto_sass_slots": 896,
+    "b4_stage2_sass_slots": 1352,
+    "b4_identity_auto_sass_slots": 1352
+  },
+  "abi_audit": {
+    "reference_family": "divisor_static_stocktile_k64_root",
+    "reference_sha256": "338e89d062c2b1ac40909dbc8d64d4ab6b0def9fd86988c9e395e8244606a9f6",
+    "reference_bytes": 113837288,
+    "reference_defined_dynamic_symbols": 1303,
+    "candidate_defined_dynamic_symbols": 1308,
+    "added_defined_dynamic_symbols": 5,
+    "removed_defined_dynamic_symbols": 0,
+    "reference_undefined_dynamic_symbols": 183,
+    "candidate_undefined_dynamic_symbols": 183,
+    "added_or_removed_undefined_dynamic_symbols": 0,
+    "dt_needed_equal": true,
+    "dt_needed_count": 9,
+    "runpath_equal": true
+  },
+  "verification": {
+    "host_link": "pass",
+    "binary_identity_verifier": "pass",
+    "dynamic_import": "pass",
+    "shell_syntax": "pass",
+    "python_compile": "pass",
+    "ruff_changed_scope": "pass_with_three_preexisting_unrelated_f841_excluded",
+    "cutlass_tests": "pass_93_of_93",
+    "git_diff_check": "pass",
+    "gpu_runtime_used": false,
+    "docker_used": false,
+    "real_workload_measurement": "not_run",
+    "runtime_byte_equality": "required_not_run"
+  }
+}
