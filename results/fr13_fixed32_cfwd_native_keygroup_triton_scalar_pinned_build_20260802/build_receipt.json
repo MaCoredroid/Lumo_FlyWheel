@@ -1,0 +1,43 @@
+{
+  "architecture": "sm_121a",
+  "binary": {
+    "bytes": 201386728,
+    "sha256": "c9647856777d17dd3cde07a1d0e0b4c87ea1fb823bebd65f45ded1d461f8af26"
+  },
+  "build": {
+    "build_ninja_sha256": "058585ea2078941b515e42a7eb4b7c319543eb45f52f42a82720429744246638",
+    "candidate_object": {
+      "bytes": 6229472,
+      "path_class": "full_extension_candidate_object",
+      "sha256": "7d405783dea70b04e2bae89ffd6a0ae2779119b689884a5f36d1de3f80d31546"
+    },
+    "candidate_source_forced_rebuild": true,
+    "candidate_source_in_build_graph": true,
+    "cmake_cache_sha256": "f0359136061004b0bfc95a8c0744e0954e3b6c5258043afd8fe8d4da3beee173",
+    "full_extension_relinked_after_candidate_object": true,
+    "full_extension_target": "_C.abi3.so",
+    "generator": "ninja"
+  },
+  "candidate": "fixed32_cfwd_native_keygroup_triton_scalar_cuda_v4",
+  "default_on": false,
+  "operator": "_C::fr13_fixed32_cfwd_native_fullvalue",
+  "patched_vllm_sha256": {
+    "CMakeLists.txt": "2a82eabaf9b6ab63bcb357932a5bf60b46506d81528845ac651d250759b9a1ba",
+    "csrc/fr13_fixed32_cfwd_native_fullvalue.cu": "5699ab062624bd2f6368143c48068bfccf1f9c3b5629e243d92616b94359bc54",
+    "csrc/ops.h": "01cf1cd80d4e78509bc9298c487a64d54e5622595d69bfe395b1a9bfaf57581f",
+    "csrc/torch_bindings.cpp": "3849a0d5a2e6928b311a76c34039b97b0156a61f56e33c94a6db41a88fde5e27"
+  },
+  "production_authorized": false,
+  "schema": "fr13.fixed32.cfwd_native_keygroup_pinned_build.v1",
+  "source_sha256": {
+    "native/fr13_fixed32_cfwd_native_fullvalue.cu": "5699ab062624bd2f6368143c48068bfccf1f9c3b5629e243d92616b94359bc54",
+    "scripts/fr13_patch_vllm_cfwd_native_fullvalue_cuda.py": "78aadbbf0cd5c1150ff26f6345804d309781a34de0469bd319897c2ad640a4e0"
+  },
+  "timing_eligible": false,
+  "validation": {
+    "binding_host_verify": "pass",
+    "full_extension_operator_present": true,
+    "post_glibc_2_35_symbols": 0
+  },
+  "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
+}

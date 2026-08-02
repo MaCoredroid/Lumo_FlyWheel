@@ -1,0 +1,8 @@
+PASS pinned build source and binary binding verification
+PASS forced candidate object rebuild
+PASS full extension relink after candidate object
+PASS full extension operator and v4 signature present
+PASS no post-GLIBC-2.35 dynamic symbol reference
+PASS exact SM121a resource and SASS checker
+NOT RUN real SWE-Verified B1 byte gate
+NOT RUN B4 or timing
