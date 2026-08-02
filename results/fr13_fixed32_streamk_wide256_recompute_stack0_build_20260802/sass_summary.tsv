@@ -1,0 +1,4 @@
+kernel	instructions	sr_tid_x	ldl	stl	device_calls	registers	stack_bytes	local_bytes	shared_bytes	constant0_bytes
+fp16_wide256_recompute	4952	15	0	0	0	168	0	0	1024	2944
+bf16_wide256_recompute	4952	15	0	0	0	168	0	0	1024	2944
+prior_fp16_wide256	4936	2	15	1	0	168	8	0	1024	2944

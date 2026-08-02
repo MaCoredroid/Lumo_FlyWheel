@@ -1,0 +1,63 @@
+{
+  "schema": "fr13.fixed32.streamk_wide256_recompute_stack0_build.v1",
+  "status": "rejected_b1_comparison_cap_256",
+  "performance_evidence": false,
+  "gpu_task_executed": false,
+  "source": {
+    "repository_commit": "cbd5b8e6bf7302f03f02bfe2885dfe47b044c65e",
+    "patch_sha256": "28451424c8f78b44d967ce73df34e900b5415366f6a1b0b377899b3062a01d20",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "patched_dispatch_sha256": "20982686b07735ea95b7f176cc6b2981e9916f0fcbc598021457f61e50a41fd2"
+  },
+  "binary": {
+    "path": "/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.streamk_force_wide256_b1_recompute_stack0_k64_root1_gate_ready.abi3.so",
+    "sha256": "c668c584b84f97e3ff53448238a0b03e3ea610549b1dc2b7fd6664fdd22c4098",
+    "bytes": 113080976,
+    "mode": "0555",
+    "runpath": "/home/mark/fr13_streamk_build/venv/lib/python3.12/site-packages/torch/lib:/usr/local/cuda/lib64:"
+  },
+  "toolchain": {
+    "cuda": "13.0.88",
+    "gcc": "13.3.0",
+    "architecture": "sm_121a"
+  },
+  "resource_audit": {
+    "result": "pass",
+    "candidate_records": 2,
+    "candidate_registers_per_thread": 168,
+    "candidate_stack_bytes_per_thread": 0,
+    "candidate_local_bytes_per_thread": 0,
+    "candidate_static_shared_bytes_per_cta": 1024,
+    "candidate_constant0_bytes": 2944,
+    "stock_records": 6,
+    "missing_or_changed_stock_records": 0,
+    "stock_registers_per_thread": 168,
+    "stock_stack_bytes_per_thread": 0,
+    "stock_local_bytes_per_thread": 0,
+    "stock_static_shared_bytes_per_cta": 1024,
+    "stock_constant0_bytes": 2560
+  },
+  "sass_audit": {
+    "result": "pass",
+    "candidate_instruction_count": 4952,
+    "candidate_tid_x_reads": 15,
+    "candidate_local_loads": 0,
+    "candidate_local_stores": 0,
+    "candidate_device_calls": 0,
+    "prior_binary_sha256": "f7d5c01ca79829fbfff4c93949d057bd740905165b0b6793b3c0007629add962",
+    "prior_instruction_count": 4936,
+    "prior_tid_x_reads": 2,
+    "prior_local_loads": 15,
+    "prior_local_stores": 1,
+    "prior_device_calls": 0
+  },
+  "qualification_blocker": {
+    "comparison_cap": 256,
+    "first_four_shape_calls": [69, 68, 51, 68],
+    "first_four_shape_total": 256,
+    "required_shape_count": 5,
+    "required_rebuild_cap": 320
+  },
+  "next_gate": "rebuild with B1 comparison cap 320 before any real task"
+}

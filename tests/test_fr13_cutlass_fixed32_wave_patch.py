@@ -353,7 +353,7 @@ def test_same_process_byte_ab_is_bounded_and_returns_stock() -> None:
     module = _module()
     patched, _ = module.patch_text(_source_fixture(module))
 
-    assert "constexpr int64_t byte_ab_limit = 256" in patched
+    assert "constexpr int64_t byte_ab_limit = 320" in patched
     assert "constexpr int64_t b4_m128_byte_ab_limit = 320" in patched
     assert "b4_m128_byte_ab || b4_m128_static_byte_ab" in patched
     assert "? b4_m128_byte_ab_limit" in patched
