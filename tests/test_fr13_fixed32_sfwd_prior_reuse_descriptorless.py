@@ -292,5 +292,31 @@ def test_packed_xgather_loads_current_x_once_and_reuses_it() -> None:
     assert fragment is not None
     assert fragment.count("tl.load(x_batch") == 1
     assert "tl.gather(current_x, x_index, axis=0)" in fragment
-    assert "tl.broadcast_to(x_node, ROWS_PER_PROGRAM, BLOCK_C)" in fragment
+
+
+def test_channel_major_xgather_places_rows_on_gather_axis() -> None:
+    module_path = Path(
+        sys.modules[
+            "lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless"
+        ].__file__
+    )
+    source = module_path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    kernel = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name
+        == "_fr13_fixed32_sfwd_prior_reuse_channel_major_xgather_kernel"
+    )
+    fragment = ast.get_source_segment(source, kernel)
+    assert fragment is not None
+
+    assert "tl.arange(0, BLOCK_C)[:, None]" in fragment
+    assert "tl.arange(0, ROWS_PER_PROGRAM)[None, :]" in fragment
+    assert "tl.zeros((BLOCK_C, ROWS_PER_PROGRAM)" in fragment
+    assert fragment.count("tl.load(x_batch") == 1
+    assert "tl.gather(current_x, x_index, axis=1)" in fragment
+    assert "tl.broadcast_to(x_node, BLOCK_C, ROWS_PER_PROGRAM)" in fragment
+    assert "out_batch + offs_n * C + offs_c" in fragment
     assert "((WIDTH - 1) + offs_n) * C" in fragment
