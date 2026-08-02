@@ -1,0 +1,3 @@
+batch	ctas_per_request	ctas_per_launch	registers	allocated_registers_per_cta	launch_shared_bytes	stack_bytes	local_bytes	static_sass	encoded_sass	ldg	stg	lds	sts	cubin_bytes
+1	160	160	62	16384	0	0	0	993	1008	64	20	0	0	69088
+4	160	640	62	16384	0	0	0	993	1008	64	20	0	0	69088
