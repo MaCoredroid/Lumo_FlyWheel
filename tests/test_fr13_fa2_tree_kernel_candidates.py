@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import re
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 
@@ -315,6 +317,106 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
         assert stock_block == candidate_block == 0
         assert candidate_warp == stock_warp
         assert candidate_warp_row == stock_warp_row
+
+
+def test_qrow32_traits_precede_the_exact_splitkv_instantiation() -> None:
+    module = _module()
+    translation_unit = module.FIXED32_QUERY_TILE32_TRANSLATION_UNIT
+
+    include_at = translation_unit.index('#include "flash_fwd_launch_template.h"')
+    namespace_at = translation_unit.index("namespace FLASH_NAMESPACE {")
+    alias_at = translation_unit.index("using Fr13Fixed32Qrow32KernelTraits")
+    page_specialization_at = translation_unit.index(
+        "struct StaticPagedKVBlockSize<Fr13Fixed32Qrow32KernelTraits>"
+    )
+    query_specialization_at = translation_unit.index(
+        "struct StaticQueryRows<Fr13Fixed32Qrow32KernelTraits>"
+    )
+    launcher_at = translation_unit.index(
+        "void fr13_run_mha_fwd_fixed32_qrow32("
+    )
+    instantiation_at = translation_unit.index(
+        "auto kernel = &flash_fwd_splitkv_kernel<"
+    )
+    assert (
+        include_at
+        < namespace_at
+        < alias_at
+        < page_specialization_at
+        < query_specialization_at
+        < launcher_at
+        < instantiation_at
+    )
+
+    # The included launch header exposes these primaries through utils.h and
+    # flash_fwd_kernel.h. The qrow TU specializes both before the first use
+    # that instantiates the exact BM32/N64/two-warp kernel type.
+    assert "struct StaticPagedKVBlockSize" in (
+        module.FIXED32_QUERY_TILE32_STATIC_PAGE_TRAIT
+    )
+    assert "struct StaticQueryRows" in module._tree_bias_helper(
+        tile_earlyout=True
+    )
+    assert translation_unit.count(
+        "StaticPagedKVBlockSize<Fr13Fixed32Qrow32KernelTraits>"
+    ) == 1
+    assert translation_unit.count(
+        "StaticQueryRows<Fr13Fixed32Qrow32KernelTraits>"
+    ) == 1
+    assert "run_mha_fwd_splitkv_dispatch" not in translation_unit
+    assert "run_flash_splitkv_fwd" not in translation_unit
+
+    kernel_match = re.search(
+        r"auto kernel = &flash_fwd_splitkv_kernel<(?P<arguments>.*?)\n"
+        r"    >;",
+        translation_unit,
+        flags=re.DOTALL,
+    )
+    assert kernel_match is not None
+    uncommented = re.sub(r"//[^\n]*", "", kernel_match.group("arguments"))
+    arguments = [argument.strip() for argument in uncommented.split(",")]
+    assert arguments == [
+        "TreeKernelTraits",
+        "false",  # Is_causal
+        "false",  # Is_local
+        "false",  # Has_alibi
+        "false",  # Is_even_MN
+        "true",  # Is_even_K
+        "false",  # Is_softcap
+        "false",  # Split
+        "false",  # Append_KV
+    ]
+
+
+def test_qrow32_hidden_launcher_abi_and_build_name_are_stable() -> None:
+    module = _module()
+    declaration = module.FIXED32_QUERY_TILE32_API_DECLARATION
+    definition = module.FIXED32_QUERY_TILE32_TRANSLATION_UNIT
+    signature_pattern = re.compile(
+        r"void\s+fr13_run_mha_fwd_fixed32_qrow32\s*\(\s*"
+        r"Flash_fwd_params\s*&params\s*,\s*cudaStream_t\s+stream\s*\)"
+    )
+
+    declaration_match = signature_pattern.search(declaration)
+    definition_match = signature_pattern.search(definition)
+    assert declaration_match is not None
+    assert definition_match is not None
+    assert re.sub(r"\s+", "", declaration_match.group()) == re.sub(
+        r"\s+", "", definition_match.group()
+    )
+    assert declaration.count('__attribute__((visibility("hidden")))') == 1
+    assert definition.count('__attribute__((visibility("hidden")))') == 1
+    assert 'extern "C"' not in declaration
+    assert 'extern "C"' not in definition
+    assert "fr13_run_mha_fwd_fixed32_qrow32(params, stream);" in (
+        module.FIXED32_QUERY_TILE32_API_GATE
+    )
+
+    # The pinned FA2 CMake contract discovers csrc/flash_attn/src/
+    # flash_fwd_*.cu at configure time. Keep the generated name in that set.
+    generated_name = "flash_fwd_fr13_qrow32_hdim256_bf16_sm80.cu"
+    assert fnmatchcase(generated_name, "flash_fwd_*.cu")
+    assert definition.startswith("// FR13 fixed32 B4 qrow32 gate candidate.")
 
 
 def test_qrow32_static_page_specialization_is_opt_in_exact_and_idempotent(
