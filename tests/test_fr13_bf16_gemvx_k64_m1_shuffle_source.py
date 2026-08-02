@@ -9,15 +9,15 @@ CUDA = REPO / "csrc" / "fr13_bf16_gemvx_k64_m1_shuffle.cu"
 BUILDER = REPO / "scripts" / "fr13_build_bf16_gemvx_k64_m1_shuffle.py"
 
 
-def test_cuda_source_is_strict_k64_m1_and_halves_r16_cta_grid() -> None:
+def test_cuda_source_is_strict_k64_m1_full_warp() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert "constexpr int kHidden = 5120;" in source
     assert "constexpr int kVocab = 65536;" in source
-    assert "constexpr int kLanes = 16;" in source
-    assert "constexpr int kRowsPerCta = 32;" in source
+    assert "constexpr int kLanes = 32;" in source
+    assert "constexpr int kRowsPerCta = 16;" in source
     assert "static_assert(kLanes * kRowsPerCta == 512);" in source
-    assert "static_assert(kCtas == 2048);" in source
+    assert "static_assert(kCtas == 4096);" in source
     assert "const dim3 block(kLanes, kRowsPerCta, 1);" in source
     assert "<<<kCtas, block, 0, at::cuda::getCurrentCUDAStream()>>>" in source
     assert "__syncthreads" not in source
@@ -31,11 +31,11 @@ def test_cuda_source_preserves_scalar_accumulation_and_reduction_order() -> None
     assert "#pragma unroll 1" in source
     assert "for (int k = lane; k < kHidden; k += kLanes)" in source
     assert "accumulator = __fmaf_rn(x, w, accumulator);" in source
-    assert source.count("__shfl_down_sync(") == 4
-    assert source.count("__fadd_rn(") == 4
-    for stride in (8, 4, 2, 1):
+    assert source.count("__shfl_down_sync(") == 5
+    assert source.count("__fadd_rn(") == 5
+    for stride in (16, 8, 4, 2, 1):
         assert f", {stride}, kLanes)" in source
-    for threshold in (8, 4, 2):
+    for threshold in (16, 8, 4, 2):
         assert f"if (lane < {threshold})" in source
     assert "if (lane == 0)" in source
     assert "const float sum = __fmaf_rn(alpha, reduced_sum, beta);" in source
@@ -44,21 +44,21 @@ def test_cuda_source_preserves_scalar_accumulation_and_reduction_order() -> None
     assert "atomicAdd" not in source
 
 
-def test_width16_shuffle_keeps_two_rows_per_warp_independent() -> None:
+def test_width32_shuffle_assigns_one_row_per_warp() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert "constexpr unsigned kFullWarpMask = 0xffffffffu;" in source
     assert "static_cast<int>(threadIdx.x)" in source
     assert "static_cast<int>(threadIdx.y)" in source
-    assert source.count("kFullWarpMask, accumulator") == 4
-    assert source.count("kLanes);") >= 4
+    assert source.count("kFullWarpMask, accumulator") == 5
+    assert source.count("kLanes);") >= 5
 
 
 def test_cuda_op_is_out_variant_with_strict_k64_geometry() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert (
-        "gemvx_m1_shuffle_r32_out(Tensor(a!) output, Tensor input, "
+        "gemvx_m1_warp32_out(Tensor(a!) output, Tensor input, "
         "Tensor weight) -> ()" in source
     )
     assert "input.sizes() == at::IntArrayRef({1, kHidden})" in source
@@ -86,6 +86,8 @@ def test_builder_is_pinned_default_off_and_claims_no_qualification() -> None:
     assert '"resource_claim": False' in source
     assert '"performance_measurement": False' in source
     assert '"production_default_enabled": False' in source
-    assert '"grid": [2048, 1, 1]' in source
-    assert '"block": [16, 32, 1]' in source
-    assert '"output_rows_per_cta": 32' in source
+    assert '"grid": [4096, 1, 1]' in source
+    assert '"block": [32, 16, 1]' in source
+    assert '"output_rows_per_cta": 16' in source
+    assert '"k_partition_lanes": 32' in source
+    assert '"lane_k_iterations": 160' in source

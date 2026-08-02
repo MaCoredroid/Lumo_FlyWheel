@@ -11,22 +11,21 @@ namespace {
 
 constexpr int kHidden = 5120;
 constexpr int kVocab = 65536;
-constexpr int kLanes = 16;
-constexpr int kRowsPerCta = 32;
+constexpr int kLanes = 32;
+constexpr int kRowsPerCta = 16;
 constexpr int kCtas = kVocab / kRowsPerCta;
 constexpr unsigned kFullWarpMask = 0xffffffffu;
 
 static_assert(kHidden % kLanes == 0);
 static_assert(kVocab % kRowsPerCta == 0);
 static_assert(kLanes * kRowsPerCta == 512);
-static_assert(kCtas == 2048);
+static_assert(kCtas == 4096);
 static_assert(sizeof(at::BFloat16) == sizeof(__nv_bfloat16));
 
-// Keep the incumbent M1 scalar accumulation and 8+4+2+1 reduction tree.
-// A CUDA warp contains two independent 16-lane rows, so width=16 shuffles
-// remove CTA barriers without mixing either row's partial sums.
+// One full warp owns each output row. This halves the dependent FMA chain and
+// keeps weight reads contiguous while avoiding shared memory and CTA barriers.
 __global__ __launch_bounds__(kLanes * kRowsPerCta) void
-fr13_bf16_gemvx_k64_m1_shuffle_r32_kernel(
+fr13_bf16_gemvx_k64_m1_warp32_kernel(
     __nv_bfloat16* __restrict__ output,
     const __nv_bfloat16* __restrict__ input,
     const __nv_bfloat16* __restrict__ weight, const float alpha,
@@ -44,7 +43,11 @@ fr13_bf16_gemvx_k64_m1_shuffle_r32_kernel(
   }
 
   float peer =
-      __shfl_down_sync(kFullWarpMask, accumulator, 8, kLanes);
+      __shfl_down_sync(kFullWarpMask, accumulator, 16, kLanes);
+  if (lane < 16) {
+    accumulator = __fadd_rn(accumulator, peer);
+  }
+  peer = __shfl_down_sync(kFullWarpMask, accumulator, 8, kLanes);
   if (lane < 8) {
     accumulator = __fadd_rn(accumulator, peer);
   }
@@ -64,9 +67,9 @@ fr13_bf16_gemvx_k64_m1_shuffle_r32_kernel(
   }
 }
 
-void fr13_bf16_gemvx_k64_m1_shuffle_r32_out(at::Tensor output,
-                                             const at::Tensor& input,
-                                             const at::Tensor& weight) {
+void fr13_bf16_gemvx_k64_m1_warp32_out(at::Tensor output,
+                                        const at::Tensor& input,
+                                        const at::Tensor& weight) {
   TORCH_CHECK(input.is_cuda() && weight.is_cuda() && output.is_cuda(),
               "FR13 BF16 K64 M1 shuffle requires CUDA tensors");
   TORCH_CHECK(input.device() == weight.device() &&
@@ -88,7 +91,7 @@ void fr13_bf16_gemvx_k64_m1_shuffle_r32_out(at::Tensor output,
 
   const c10::cuda::CUDAGuard device_guard(input.device());
   const dim3 block(kLanes, kRowsPerCta, 1);
-  fr13_bf16_gemvx_k64_m1_shuffle_r32_kernel
+  fr13_bf16_gemvx_k64_m1_warp32_kernel
       <<<kCtas, block, 0, at::cuda::getCurrentCUDAStream()>>>(
           reinterpret_cast<__nv_bfloat16*>(
               output.data_ptr<at::BFloat16>()),
@@ -104,10 +107,9 @@ void fr13_bf16_gemvx_k64_m1_shuffle_r32_out(at::Tensor output,
 
 TORCH_LIBRARY_FRAGMENT(fr13_bf16_k64_head, library) {
   library.def(
-      "gemvx_m1_shuffle_r32_out(Tensor(a!) output, Tensor input, Tensor weight) -> ()");
+      "gemvx_m1_warp32_out(Tensor(a!) output, Tensor input, Tensor weight) -> ()");
 }
 
 TORCH_LIBRARY_IMPL(fr13_bf16_k64_head, CUDA, library) {
-  library.impl("gemvx_m1_shuffle_r32_out",
-               &fr13_bf16_gemvx_k64_m1_shuffle_r32_out);
+  library.impl("gemvx_m1_warp32_out", &fr13_bf16_gemvx_k64_m1_warp32_out);
 }
