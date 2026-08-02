@@ -130,28 +130,59 @@ def test_k64_root_live_pass_issues_and_verifies_distinct_sidecar(
     )
 
 
-def test_k64_root_accepts_static_persistent_stocktile_profile(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    (
+        "candidate_selector",
+        "size_attribute",
+        "sha_attribute",
+        "live_schema_attribute",
+        "diagnostic_selector",
+    ),
+    (
+        (
+            "static_persistent_stocktile",
+            "STATIC_PERSISTENT_B1_CANDIDATE_SIZE",
+            "STATIC_PERSISTENT_B1_CANDIDATE_SHA256",
+            "STATIC_PERSISTENT_K64_ROOT_LIVE_SCHEMA",
+            "static_persistent_stocktile_byte_ab",
+        ),
+        (
+            "m32_static_linear",
+            "M32_STATIC_LINEAR_CANDIDATE_SIZE",
+            "M32_STATIC_LINEAR_CANDIDATE_SHA256",
+            "M32_STATIC_LINEAR_K64_ROOT_LIVE_SCHEMA",
+            "m32_static_linear_byte_ab",
+        ),
+    ),
+)
+def test_k64_root_accepts_static_b1_scheduler_profiles(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    candidate_selector: str,
+    size_attribute: str,
+    sha_attribute: str,
+    live_schema_attribute: str,
+    diagnostic_selector: str,
 ) -> None:
     module, candidate, patch_source, live, _ = _k64_fixture(tmp_path, monkeypatch)
     candidate_sha256 = hashlib.sha256(candidate.read_bytes()).hexdigest()
     monkeypatch.setattr(
         module.binary,
-        "STATIC_PERSISTENT_B1_CANDIDATE_SIZE",
+        size_attribute,
         len(candidate.read_bytes()),
     )
     monkeypatch.setattr(
         module.binary,
-        "STATIC_PERSISTENT_B1_CANDIDATE_SHA256",
+        sha_attribute,
         candidate_sha256,
     )
     payload = json.loads(live.read_text(encoding="ascii"))
     payload.update(
         {
-            "schema": module.STATIC_PERSISTENT_K64_ROOT_LIVE_SCHEMA,
-            "candidate": "static_persistent_stocktile",
-            "candidate_family": "static_persistent_stocktile",
-            "diagnostic_selector": "static_persistent_stocktile_byte_ab",
+            "schema": getattr(module, live_schema_attribute),
+            "candidate": candidate_selector,
+            "candidate_family": candidate_selector,
+            "diagnostic_selector": diagnostic_selector,
         }
     )
     live.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
@@ -164,13 +195,13 @@ def test_k64_root_accepts_static_persistent_stocktile_profile(
         candidate,
         sidecar,
         patch_source,
-        candidate_selector="static_persistent_stocktile",
+        candidate_selector=candidate_selector,
         qualification_profile="k64_root",
         draft_vocab_blocks=BLOCK_MAP,
     )
 
-    assert issued["candidate_selector"] == "static_persistent_stocktile"
-    assert issued["diagnostic_selector"] == "static_persistent_stocktile_byte_ab"
+    assert issued["candidate_selector"] == candidate_selector
+    assert issued["diagnostic_selector"] == diagnostic_selector
     assert issued["qualification_profile"] == "k64_root"
     assert issued["qualified_comparison_call_limit"] == 320
 

@@ -41,6 +41,8 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "streamk_force_wide256_byte_ab",
         "static_persistent_stocktile",
         "static_persistent_stocktile_byte_ab",
+        "m32_static_linear",
+        "m32_static_linear_byte_ab",
         "persistent_b4_m128",
         "persistent_b4_m128_byte_ab",
         "persistent_b4_m128_static",
@@ -60,6 +62,15 @@ def test_pinned_binary_identity_and_selectors() -> None:
         module.STATIC_PERSISTENT_B1_CANDIDATE_SIZE,
         "static_persistent_stocktile",
     )
+    assert module.candidate_identity("m32_static_linear_byte_ab") == (
+        module.M32_STATIC_LINEAR_CANDIDATE_SHA256,
+        module.M32_STATIC_LINEAR_CANDIDATE_SIZE,
+        "m32_static_linear",
+    )
+    assert module.M32_STATIC_LINEAR_CANDIDATE_SHA256 == (
+        "079d82d60426411bf403eb96f4869cb8d3872a4a68d49e9c336a55a90d571f91"
+    )
+    assert module.M32_STATIC_LINEAR_CANDIDATE_SIZE == 113_809_232
     assert module.B4_M128_CANDIDATE_SHA256 == (
         "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
     )

@@ -70,14 +70,15 @@ case "$B1_WORKLOAD_PROFILE" in
     ;;
   k64_root)
     [[ ( "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
-         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" ) \
+         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" \
+         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "m32_static_linear_byte_ab" ) \
        && "$FR13_GATE_QROW16" == "0" \
        && "$FR13_GATE_TAW_NATIVE" == "0" \
        && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
        && "$FR13_GATE_DRAFT_HEAD_M32" == "0" \
        && "$FR13_GATE_BM8" == "0" \
        && "$FR13_GATE_GDN_BV" == "0" ]] || {
-      echo "B1 k64_root is restricted to the isolated wide256 byte gate" >&2
+      echo "B1 k64_root is restricted to an isolated fixed32 CUTLASS byte gate" >&2
       exit 2
     }
     DRAFT_VOCAB_ROOT=1
@@ -127,7 +128,8 @@ source scripts/fr13_fixed32_floor_timers_seq.sh
   || { echo "canonical B1 workload floor contract drifted" >&2; exit 2; }
 if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
-      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" ]]; then
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "m32_static_linear_byte_ab" ]]; then
   export ENFORCE_EAGER=1
 fi
 

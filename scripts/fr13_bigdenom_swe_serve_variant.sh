@@ -62,6 +62,7 @@ if [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "1" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "m32_static_linear_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_static_byte_ab" ]]; then
   _fixed32_eager_kernel_diagnostic=1
@@ -1550,7 +1551,8 @@ case "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" in
 esac
 if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
-      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" ]]; then
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "m32_static_linear_byte_ab" ]]; then
   [[ -n "$FIXED32_MODE" && "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]] \
     || {
       echo "FAIL: fixed32 CUTLASS Stream-K real-task arm is B1 diagnostic only"
@@ -1802,6 +1804,8 @@ if cutlass_wave not in {
     "streamk_force_wide256",
     "static_persistent_stocktile_byte_ab",
     "static_persistent_stocktile",
+    "m32_static_linear_byte_ab",
+    "m32_static_linear",
     "persistent_b4_m128_byte_ab",
     "persistent_b4_m128",
     "persistent_b4_m128_static_byte_ab",
@@ -1828,6 +1832,7 @@ try:
                 "streamk_coop128_byte_ab",
                 "streamk_force_wide256_byte_ab",
                 "static_persistent_stocktile_byte_ab",
+                "m32_static_linear_byte_ab",
             )
         ),
     )
@@ -2332,7 +2337,8 @@ if [[ -n "$FIXED32_MODE" ]]; then
   fi
   if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
-        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" ]]; then
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "m32_static_linear_byte_ab" ]]; then
     FIXED32_RUNNER_ARGS+=(
       --fixed32-cutlass-real-event-arm "$FIXED32_CUTLASS_REAL_EVENT_ARM_PATH"
     )

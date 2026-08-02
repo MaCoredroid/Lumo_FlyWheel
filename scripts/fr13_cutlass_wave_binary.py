@@ -22,6 +22,10 @@ STATIC_PERSISTENT_B1_CANDIDATE_SHA256 = (
     "88c50e7d1b6060c2bcec68f50985a1db47b43d299b574edfbfc32cac1ce68742"
 )
 STATIC_PERSISTENT_B1_CANDIDATE_SIZE = 113_383_800
+M32_STATIC_LINEAR_CANDIDATE_SHA256 = (
+    "079d82d60426411bf403eb96f4869cb8d3872a4a68d49e9c336a55a90d571f91"
+)
+M32_STATIC_LINEAR_CANDIDATE_SIZE = 113_809_232
 B4_M128_CANDIDATE_SHA256 = (
     "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
 )
@@ -44,6 +48,9 @@ WIDE256_SELECTORS = frozenset(
 STATIC_PERSISTENT_B1_SELECTORS = frozenset(
     {"static_persistent_stocktile", "static_persistent_stocktile_byte_ab"}
 )
+M32_STATIC_LINEAR_SELECTORS = frozenset(
+    {"m32_static_linear", "m32_static_linear_byte_ab"}
+)
 B4_M128_SELECTORS = frozenset({"persistent_b4_m128", "persistent_b4_m128_byte_ab"})
 STATIC_B4_M128_SELECTORS = frozenset(
     {"persistent_b4_m128_static", "persistent_b4_m128_static_byte_ab"}
@@ -52,6 +59,7 @@ CANDIDATE_SELECTORS = (
     COOP128_SELECTORS
     | WIDE256_SELECTORS
     | STATIC_PERSISTENT_B1_SELECTORS
+    | M32_STATIC_LINEAR_SELECTORS
     | B4_M128_SELECTORS
     | STATIC_B4_M128_SELECTORS
 )
@@ -60,6 +68,7 @@ PRODUCTION_SELECTORS = frozenset(
 )
 INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
     "static_persistent_stocktile",
+    "m32_static_linear",
     "persistent_b4_m128_static",
 }
 CONTAINER_SOURCE = Path("/tmp/fr13_cutlass_wave.abi3.so")
@@ -86,6 +95,12 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
             STATIC_PERSISTENT_B1_CANDIDATE_SHA256,
             STATIC_PERSISTENT_B1_CANDIDATE_SIZE,
             "static_persistent_stocktile",
+        )
+    if selector in M32_STATIC_LINEAR_SELECTORS:
+        return (
+            M32_STATIC_LINEAR_CANDIDATE_SHA256,
+            M32_STATIC_LINEAR_CANDIDATE_SIZE,
+            "m32_static_linear",
         )
     if selector in B4_M128_SELECTORS:
         return B4_M128_CANDIDATE_SHA256, B4_M128_CANDIDATE_SIZE, "persistent_b4_m128"
@@ -354,7 +369,7 @@ def install_candidate(
     if selector not in CANDIDATE_SELECTORS:
         raise ValueError(f"unsupported candidate selector: {selector!r}")
     if selector not in INSTALLABLE_SELECTORS:
-        if selector == "static_persistent_stocktile":
+        if selector in {"static_persistent_stocktile", "m32_static_linear"}:
             raise ValueError(
                 "static B1 production remains unavailable until the K64/root "
                 "raw-byte gate passes"
