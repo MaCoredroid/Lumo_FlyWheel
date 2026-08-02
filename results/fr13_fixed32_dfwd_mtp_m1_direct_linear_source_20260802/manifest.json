@@ -1,0 +1,89 @@
+{
+  "schema": "fr13.fixed32.dfwd_mtp_m1_direct_linear_source.v1",
+  "created_at_utc": "2026-08-02T03:16:22Z",
+  "status": "SOURCE_ONLY_DEFAULT_OFF_COMPILE_AND_REAL_BYTE_GATE_PENDING",
+  "acceptance_valid": false,
+  "timing_eligible": false,
+  "performance_claim": false,
+  "byte_equality_claim": false,
+  "resource_claim": false,
+  "production_default_enabled": false,
+  "source": {
+    "branch": "agent/fixed32-dfwd-mtp-m1-static-20260802",
+    "implementation_commit": "6d8c3ba753cc052e33ee34ffd6a005c8c805146a",
+    "patch_path": "scripts/fr13_patch_cutlass_fixed32_wave.py",
+    "patch_sha256": "bafeb7aa1768bd9c82111f1d512dd547ee46796de1f8f16ce98bfb9b5ba73b82",
+    "test_path": "tests/test_fr13_cutlass_fixed32_wave_patch.py",
+    "test_sha256": "7c940d819b8c12e6fbb993e5bcdcab61ea4a11cf1d5167560676685a81894d86",
+    "patched_dispatch_sha256": "0a95bafecd5c07324202e58e9ba529b98fc1bb6d46f39edd5fa830e034158f0d",
+    "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "static_tile_scheduler_sha256": "3cf17407654833666b3be9f7e807f299779ef5f4492bf844d0da180409f2f5f6",
+    "sm100_static_tile_scheduler_sha256": "0ed331127afe83d20ec23b1a92e160f7388bb3727c77f05e496cc72371c664fd"
+  },
+  "fixed_workload_contract": {
+    "batch_size": 1,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "physical_rows_root_inclusive": 32,
+    "candidate_original_m": 1,
+    "mtp_forwards_per_event": 4,
+    "mtp_projection_launches_per_event": 20,
+    "drafter_quality_changed": false,
+    "rejection_sampling_changed": false,
+    "physical32_semantics_changed": false
+  },
+  "candidate": {
+    "production_selector": "static_persistent_mtp_m1",
+    "diagnostic_selector": "static_persistent_mtp_m1_byte_ab",
+    "scheduler": "Fr13Fixed32MtpM1DirectLinearScheduler",
+    "base_scheduler": "StaticPersistentTileScheduler100",
+    "swap_ab": true,
+    "tile_mnk": [128, 32, 128],
+    "cluster_mnk": [1, 1, 1],
+    "max_swizzle_size": 1,
+    "post_swap_problem_mnkl": "(original_N,1,K,1)",
+    "projection_geometry": [
+      {"original_nk": [34816, 5120], "tiled_mnkl": [272, 1, 40, 1]},
+      {"original_nk": [5120, 17408], "tiled_mnkl": [40, 1, 136, 1]},
+      {"original_nk": [5120, 6144], "tiled_mnkl": [40, 1, 48, 1]},
+      {"original_nk": [16384, 5120], "tiled_mnkl": [128, 1, 40, 1]},
+      {"original_nk": [14336, 5120], "tiled_mnkl": [112, 1, 40, 1]}
+    ],
+    "generic_along_n_mapping": "tile_m=blockIdx.y+wave*gridDim.y,tile_n=0,tile_l=0",
+    "direct_mapping": "valid linear_idx maps to {linear_idx,0,0}",
+    "generic_stateful_divmod_path_bypassed": true,
+    "full_k_output_tile_ownership": true,
+    "split_k": false,
+    "runtime_selector_default": "stock"
+  },
+  "source_guard": {
+    "problem_tiles_n": 1,
+    "problem_tiles_l": 1,
+    "cluster_shape_m": 1,
+    "cluster_shape_n": 1,
+    "log_swizzle_size": 0,
+    "blocks_per_problem_equals_problem_tiles_m": true,
+    "invalid_geometry_returns_no_candidate_work": true
+  },
+  "verification": {
+    "focused_patch_tests": "25 passed",
+    "python_compile": "pass",
+    "git_diff_check": "pass",
+    "pinned_cutlass_headers": "pass",
+    "pinned_source_apply": "pass",
+    "pinned_source_idempotency": "pass",
+    "ruff": "not_run_unavailable",
+    "cuda_compile": "not_run_live_campaign_host_protected",
+    "sass_resource_check": "not_run_live_campaign_host_protected",
+    "gpu": "not_run",
+    "docker": "not_run",
+    "real_swe_task": "not_run"
+  },
+  "required_next_gates": [
+    "pinned sm_121a compile and SASS resource audit with no unexpected divmod",
+    "real SWE-Verified B1 K64/root1 phase-bound byte gate over all five shapes and 20 launches per event",
+    "matched real SWE-Verified exact4 Tail23 and Hydra27 timing",
+    "exact16 one-sided U95 before formal floor acceptance"
+  ]
+}

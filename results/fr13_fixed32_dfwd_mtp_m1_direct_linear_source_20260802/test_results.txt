@@ -1,0 +1,14 @@
+source_commit=6d8c3ba753cc052e33ee34ffd6a005c8c805146a
+focused_tests=25 passed in 0.08s
+python_compile=pass
+git_diff_check=pass
+pinned_cutlass_headers=pass
+pinned_source_apply=pass
+pinned_source_idempotency=pass
+patched_dispatch_sha256=0a95bafecd5c07324202e58e9ba529b98fc1bb6d46f39edd5fa830e034158f0d
+ruff=not_run_unavailable
+cuda_compile=not_run_live_campaign_host_protected
+sass_resource_check=not_run_live_campaign_host_protected
+gpu=not_run
+docker=not_run
+real_swe_task=not_run
