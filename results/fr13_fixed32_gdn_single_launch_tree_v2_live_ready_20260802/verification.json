@@ -1,0 +1,31 @@
+{
+  "checks": {
+    "artifact_contains_no_compiler_or_runtime_payloads": true,
+    "ast_parse_changed_python": true,
+    "authenticated_source_bound_marker_tests": true,
+    "bash_syntax": true,
+    "candidate_never_served_during_gate": true,
+    "exact_output_ring_flag_counter_comparison_tests": true,
+    "focused_and_related_tests_passed": 102,
+    "full_pinned_input_runtime_manifest": true,
+    "git_diff_check": true,
+    "gpu_or_docker_run_performed": false,
+    "probe_or_synthetic_run_performed": false,
+    "reference_state_restoration_tests": true,
+    "ruff_changed_verifier_and_tests": true,
+    "runtime_manifest_file_count": 87,
+    "runtime_manifest_self_test": true,
+    "sm121_audit_checksums_validated_by_live_verifier": true,
+    "wrong_fa2_preflight_rejected_before_runroot": true
+  },
+  "implementation_commit": "10538aea58caa52ce815a978140c2f3ce3664bfc",
+  "notes": [
+    "B1 is a one-task byte diagnostic; canonical exact4 B4 is the decisive indexing gate.",
+    "The live verdict is non-timing, non-acceptance, reference-served, and production-default-off.",
+    "The raw runtime manifest and ignored pinned inputs are intentionally excluded.",
+    "Full-file inference_proxy Ruff retains six unrelated pre-existing findings below line 4219."
+  ],
+  "runtime_manifest_sha256": "8b0ae02a3dda01b63b353ad8d3f1ed72ed25aa360f06846f57ea86d4dfe8905a",
+  "schema": "fr13.fixed32.gdn_single_launch_tree_v2.live_readiness.verification.v1",
+  "status": "PASS_STATIC_READY_NOT_EXECUTED"
+}

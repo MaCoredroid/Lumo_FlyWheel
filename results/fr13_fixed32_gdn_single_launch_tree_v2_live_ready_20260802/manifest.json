@@ -1,0 +1,27 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "529046187178c2f75e1fa54574d26f348bc6287bdccc27349618f73891455b98",
+      "size": 3138
+    },
+    {
+      "path": "readiness.json",
+      "sha256": "1e4972512dcd5faa3d042c35110252e2450e4f51f10211acbcc90ead78ee461e",
+      "size": 2980
+    },
+    {
+      "path": "source_hashes.tsv",
+      "sha256": "e88fd064e9d3ae0e453e12a5b3ee114433667f1d74c73c9f596a1b33d631aa41",
+      "size": 1934
+    },
+    {
+      "path": "verification.json",
+      "sha256": "1088bbf515b485bf8e068e38ef8eb01d278ea2842bd680832b98516ecaf83f3b",
+      "size": 1503
+    }
+  ],
+  "implementation_commit": "10538aea58caa52ce815a978140c2f3ce3664bfc",
+  "schema": "fr13.fixed32.gdn_single_launch_tree_v2.live_readiness.manifest.v1",
+  "status": "READY_NOT_EXECUTED"
+}
