@@ -100,6 +100,8 @@ def test_patch_is_default_off_and_shape_gated() -> None:
     assert 'value == "persistent_b4_m128_byte_ab"' in patched
     assert 'value == "persistent_b4_m128_static"' in patched
     assert 'value == "persistent_b4_m128_static_byte_ab"' in patched
+    assert 'value == "m32_static_linear"' in patched
+    assert 'value == "m32_static_linear_byte_ab"' in patched
     assert "return fixed32_cutlass_wave_variant::stock;" in patched
     for rows in (32, 64, 96, 128):
         assert f"m == {rows}" in patched
@@ -248,6 +250,116 @@ def test_b4_m128_static_changes_only_complete_tile_scheduler() -> None:
     assert (
         "fr13.fixed32.cutlass_persistent_b4_m128_static_byte_ab.v1" in patched
     )
+
+
+def test_m32_static_linear_changes_only_stock_scheduler_coordinates() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    scheduler_source = module.SCHEDULER_SPECIALIZATION_REPLACEMENT
+    scheduler_start = scheduler_source.index(
+        "class Fr13Fixed32M32LinearScheduler100"
+    )
+    scheduler_end = scheduler_source.index(
+        "template <class TileShape, class ClusterShape,",
+        scheduler_start,
+    )
+    scheduler = scheduler_source[scheduler_start:scheduler_end]
+    assert ": public StaticPersistentTileScheduler100" in scheduler
+    assert "using CLCResponse = typename Base::CLCResponse;" in scheduler
+    assert "CLCResponse* clc_response_ptr" in scheduler
+    assert ": Base(clc_response_ptr, params, block_id_in_cluster)" in scheduler
+    assert "params.problem_tiles_n_ == 1" in scheduler
+    assert "params.problem_tiles_l_ == 1" in scheduler
+    assert "params.cluster_shape_m_ == 1" in scheduler
+    assert "params.cluster_shape_n_ == 1" in scheduler
+    assert "params.log_swizzle_size_ == 0" in scheduler
+    assert (
+        "params.blocks_per_problem_ == uint64_t(params.problem_tiles_m_)"
+        in scheduler
+    )
+    assert (
+        "direct_linear_geometry ? uint64_t(params.problem_tiles_m_) : 0"
+        in scheduler
+    )
+    assert "return {static_cast<int32_t>(linear_idx), 0, 0, true};" in scheduler
+    assert "work_tile_info.M_idx, cute::Int<0>{}," in scheduler
+    assert "cute::Underscore{}, cute::Int<0>{}" in scheduler
+    assert "cute::block_id_in_cluster" not in scheduler
+    assert "divmod_" not in scheduler
+    assert "get_work_idx_m_and_n" not in scheduler
+    assert "current_work_linear_idx_ += total_grid_size_" in scheduler
+
+    selector_start = scheduler_source.index(
+        "vllm::fr13_fixed32_m32_static_linear_scheduler"
+    )
+    selector = scheduler_source[selector_start:]
+    assert "using Scheduler = Fr13Fixed32M32LinearScheduler100;" in selector
+    assert "cute::size<0>(ClusterShape{}) == 1" in selector
+    assert "cute::size<1>(ClusterShape{}) == 1" in selector
+    assert "cute::size<2>(ClusterShape{}) == 1" in selector
+
+    wrapper_start = patched.index(
+        "struct cutlass_3x_gemm_fp8_blockwise_m32_static_linear"
+    )
+    wrapper_end = patched.index(
+        "// FR13_FIXED32_CUTLASS_WAVE: source-only candidates",
+        wrapper_start,
+    )
+    wrapper = patched[wrapper_start:wrapper_end]
+    assert "typename Base::CollectiveMainloop" in wrapper
+    assert "typename Base::CollectiveEpilogue" in wrapper
+    assert "fr13_fixed32_m32_static_linear_scheduler" in wrapper
+    assert "CollectiveBuilder" not in wrapper
+    assert "StreamKScheduler" not in wrapper
+
+    config_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b1_m32_static_linear"
+    )
+    config_end = patched.index("enum class fixed32_cutlass_wave_variant", config_start)
+    config = patched[config_start:config_end]
+    assert "using TileShape = Shape<_128, _32, _128>;" in config
+    assert "using ClusterShape = Shape<_1, _1, _1>;" in config
+    assert "KernelTmaWarpSpecializedBlockwiseCooperativeSm120" in config
+    assert "OutType, 128, 1, 128, TileShape, ClusterShape" in config
+    assert "EpilogueSchedule, KernelSchedule, true>" in config
+    assert "StreamKScheduler" not in config
+    assert "StageCount" not in config
+    assert "ElementAccumulator" not in config
+    assert "ElementCompute" not in config
+
+
+def test_m32_static_linear_is_exactly_gated_and_default_off() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    assert (
+        "return m == 32 && fixed32_cutlass_real_projection(m, n, k);"
+        in patched
+    )
+    gate_start = patched.index("if (!fixed32_cutlass_m32_projection(M, N, K)")
+    gate_end = patched.index("auto run_stream_k", gate_start)
+    gate = patched[gate_start:gate_end]
+    assert "m32_static_linear" in gate
+    assert "m32_static_linear_byte_ab" in gate
+    assert "wave_variant = fixed32_cutlass_wave_variant::stock;" in gate
+
+    assert "auto run_m32_static_linear" in patched
+    assert (
+        "sm120_blockwise_fp8_config_b1_m32_static_linear<OutType>::Gemm"
+        in patched
+    )
+    assert 'value == "m32_static_linear"' in patched
+    assert 'value == "m32_static_linear_byte_ab"' in patched
+    assert '"/logs/fr13_fixed32_cutlass_m32_static_linear_byte_ab.jsonl"' in patched
+    assert "fr13.fixed32.cutlass_m32_static_linear_byte_ab.v1" in patched
+    assert "fixed32_cutlass_real_task_marker();" in patched
+    assert (
+        "fixed32_cutlass_wave_variant::m32_static_linear) {\n"
+        "    return run_m32_static_linear(out);"
+        in patched
+    )
+    assert "return fixed32_cutlass_wave_variant::stock;" in patched
 
 
 def test_wide256_is_b1_only_and_large_rows_fail_to_stock() -> None:
