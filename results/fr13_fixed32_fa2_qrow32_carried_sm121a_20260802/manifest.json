@@ -1,0 +1,131 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow32_carried_sm121a_audit.v1",
+  "status": "HOST_BUILD_PASS_ADMISSION_REJECT_REGISTER_REGRESSION",
+  "source": {
+    "branch": "agent/fixed32-fa2-qrow16-divfree-20260802",
+    "evidence_head_before_audit": "d4e9196b948c6d16ad866c14245269e7ffe0d6a0",
+    "fa2_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+    "retained_incumbent_commit": "adc96dd0e5e179f4e9693829544ab2683325451d",
+    "immediate_predecessor_commit": "d01ec11d157dc6b2717829b58cdd636d68e3fa5e",
+    "candidate_commit": "61cee753ca3438584680e1be8f94681622207d18"
+  },
+  "classification": {
+    "host_only": true,
+    "compiler_used": true,
+    "disassembler_used": true,
+    "gpu_used": false,
+    "container_used": false,
+    "synthetic_probe_used": false,
+    "real_swe_task_used": false,
+    "raw_task_data_retained": false,
+    "performance_measurement": false,
+    "byte_parity_claim": false,
+    "timing_eligible": false,
+    "production_eligible": false,
+    "default_off": true
+  },
+  "toolchain": {
+    "host_arch": "aarch64",
+    "target_arch": "sm_121a",
+    "nvcc": "13.0.88",
+    "optimization": "O3",
+    "use_fast_math": true,
+    "cxx_standard": 17,
+    "register_usage_level_3_sensitivity_checked": true
+  },
+  "retained_incumbent": {
+    "header_sha256": "934e8c6c2e72c667f3cb0a8dc53b11c16a4eba8e3ac2b5811c882eff399ac3de",
+    "translation_unit_sha256": "1ee6b8a6f857c59d86973f337654acff9938bf4232767ad267e73e8e87bbec86",
+    "object_sha256": "f2f4e56978f9c3a5b16ad0f07afc8843047ba1128b348b836953abf42d069484",
+    "sass_sha256": "33f54ae835f88e86b87a8a10a13b9e7d5069fb345e9f8e7321d9c9cbda3257c6",
+    "single_sm121a_cubin": true,
+    "registers": 254,
+    "stack_bytes": 0,
+    "static_local_bytes": 0,
+    "spill_store_bytes": 0,
+    "spill_load_bytes": 0,
+    "static_shared_bytes": 1024,
+    "dynamic_shared_bytes": 81920,
+    "sass_instructions": 4810,
+    "sass_ldl": 0,
+    "sass_stl": 0,
+    "sass_call": 0,
+    "sass_ldg": 76
+  },
+  "immediate_predecessor": {
+    "header_sha256": "b33e39e5e7b9320e0bec498ff1125ff5fdcca57148c68563cd2ec13355d516d6",
+    "translation_unit_sha256": "d46e381313b90492cfb57d9bd97047bcd04561c2ad3df97afaddf03f53215d51",
+    "object_sha256": "b478f395ad8370d18adff86970a44e157f140d7e6d8934fffce2c2e7961b8746",
+    "sass_sha256": "473ae876c1a75b904d6a2cca86c34e41b05fc6f232e9524df3fedcf348e3a004",
+    "single_sm121a_cubin": true,
+    "registers": 255,
+    "stack_bytes": 0,
+    "static_local_bytes": 0,
+    "spill_store_bytes": 0,
+    "spill_load_bytes": 0,
+    "static_shared_bytes": 1024,
+    "dynamic_shared_bytes": 81920,
+    "sass_instructions": 4115,
+    "sass_ldl": 0,
+    "sass_stl": 0,
+    "sass_call": 0,
+    "sass_ldg": 69
+  },
+  "carried_candidate": {
+    "header_sha256": "c2c0a57bb64ebbdfb5db199991d50243e17645965d31d7a403b779221dbbf1fd",
+    "translation_unit_sha256": "d46e381313b90492cfb57d9bd97047bcd04561c2ad3df97afaddf03f53215d51",
+    "object_sha256": "82db2904ec06e7788e12c8d0864e85a7f64b2b009821df1f5cbd6602b34b971b",
+    "sass_sha256": "d32cca940cb305dcc8d6e2b656400bffa57e55715fb9a279dc5b8e212ff13dea",
+    "single_sm121a_cubin": true,
+    "registers": 255,
+    "register_usage_level_3_registers": 255,
+    "stack_bytes": 0,
+    "static_local_bytes": 0,
+    "spill_store_bytes": 0,
+    "spill_load_bytes": 0,
+    "static_shared_bytes": 1024,
+    "dynamic_shared_bytes": 81920,
+    "sass_instructions": 4082,
+    "sass_ldl": 0,
+    "sass_stl": 0,
+    "sass_call": 0,
+    "sass_ldg": 68
+  },
+  "candidate_minus_immediate_predecessor": {
+    "registers": 0,
+    "static_local_bytes": 0,
+    "sass_instructions": -33,
+    "sass_instruction_percent": -0.801944,
+    "sass_ldg": -1,
+    "sass_lea": -35,
+    "sass_imad": -3,
+    "sass_isetp": 5,
+    "mandatory_math_or_pipeline_count_changed": false
+  },
+  "candidate_minus_retained_incumbent": {
+    "registers": 1,
+    "static_local_bytes": 0,
+    "sass_instructions": -728,
+    "sass_instruction_percent": -15.135135,
+    "sass_ldg": -8,
+    "mandatory_math_or_pipeline_count_changed": false
+  },
+  "verification": {
+    "focused_tests_passed": 29,
+    "focused_tests_failed": 0,
+    "python_byte_compile": "pass",
+    "static_resource_parser": "pass",
+    "static_sass_parser": "pass",
+    "git_diff_check": "pass"
+  },
+  "admission": {
+    "verdict": "REJECT_REGISTER_REGRESSION_TO_255",
+    "carried_edit_resource_neutral_vs_predecessor": true,
+    "full_route_register_regression_vs_retained_incumbent": true,
+    "required_source_fix": "recover_at_least_one_register_without_restoring_page_load",
+    "required_after_source_fix": [
+      "canonical real SWE-Verified exact4 B4 Tail23 raw-byte gate",
+      "canonical real SWE-Verified exact4 B4 Hydra27 raw-byte gate"
+    ]
+  }
+}

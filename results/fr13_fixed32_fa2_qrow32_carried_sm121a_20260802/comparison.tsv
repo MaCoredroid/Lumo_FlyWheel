@@ -1,0 +1,4 @@
+variant	source_commit	registers	stack_bytes	local_bytes	spill_stores	spill_loads	static_shared_bytes	dynamic_shared_bytes	calls	instructions	ldg	lea	object_sha256	verdict
+retained_direct_page	adc96dd0e5e179f4e9693829544ab2683325451d	254	0	0	0	0	1024	81920	0	4810	76	206	f2f4e56978f9c3a5b16ad0f07afc8843047ba1128b348b836953abf42d069484	RETAIN
+fused_initial_predecessor	d01ec11d157dc6b2717829b58cdd636d68e3fa5e	255	0	0	0	0	1024	81920	0	4115	69	237	b478f395ad8370d18adff86970a44e157f140d7e6d8934fffce2c2e7961b8746	REFERENCE_ONLY
+carried_candidate	61cee753ca3438584680e1be8f94681622207d18	255	0	0	0	0	1024	81920	0	4082	68	202	82db2904ec06e7788e12c8d0864e85a7f64b2b009821df1f5cbd6602b34b971b	REJECT_REGISTER_REGRESSION_TO_255

@@ -1,0 +1,20 @@
+classification=host_only_paired_sm121a_codegen
+target=sm_121a
+fa2_commit=29210221863736a08f71a866459e368ad1ac4a95
+retained_incumbent_patch_commit=adc96dd0e5e179f4e9693829544ab2683325451d
+immediate_predecessor_patch_commit=d01ec11d157dc6b2717829b58cdd636d68e3fa5e
+candidate_patch_commit=61cee753ca3438584680e1be8f94681622207d18
+nvcc=13.0.88
+host_arch=aarch64
+optimization=-O3
+fast_math=true
+cxx_standard=17
+common_defines=FLASHATTENTION_DISABLE_BACKWARD,FLASHATTENTION_DISABLE_DROPOUT,FLASHATTENTION_DISABLE_PYBIND,Py_LIMITED_API=3,TORCH_EXTENSION_NAME=_vllm_fa2_C,ENABLE_FP8,CUTLASS_ENABLE_DIRECT_CUDA_DRIVER_CALL=1
+common_nvcc_flags=--expt-relaxed-constexpr,--expt-extended-lambda,--use_fast_math,-Xcompiler=-fPIC,-gencode=arch=compute_121a,code=sm_121a,-Xptxas=-v
+source_generation=python3 scripts/fr13_patch_fa2_tree_bias.py --fa2-src SOURCE --skip-python --tree-bias-tile-earlyout --fixed32-query-tile32
+resource_audit=cuobjdump --list-elf OBJECT; cuobjdump --dump-resource-usage OBJECT; cuobjdump --dump-sass OBJECT
+register_usage_level_3_sensitivity=checked_candidate_remains_255_registers
+gpu_execution=false
+task_execution=false
+timing_execution=false
+raw_compiler_or_sass_published=false
