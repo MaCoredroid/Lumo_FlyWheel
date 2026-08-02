@@ -1046,7 +1046,7 @@ _FR13_FIXED32_EXPORT_NODES = (0, 1, 4, 9, 14)
 _FR13_FIXED32_EXPORT_SLOTS = len(_FR13_FIXED32_EXPORT_NODES)
 _FR13_FIXED32_MAX_BATCH = 4
 _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID = (
-    "fixed32_sfwd_state_fusion_rowgroup32_c64_v5"
+    "fixed32_sfwd_state_fusion_rowgroup32_c64_xreuse_v6"
 )
 _FR13_FIXED32_SFWD_ROWS_PER_PROGRAM = 32
 _FR13_FIXED32_SFWD_BLOCK_C = 64
@@ -4339,9 +4339,9 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
     tl.store(out + (pid_b * N + offs_n) * C + offs_c, activated)
 
     stage_base = pid_b.to(tl.int64) * SOURCE_ROWS
-    current_x = tl.load(
-        x + (pid_b * N + offs_n) * x_stride_row + offs_c
-    )
+    # The final tap is the validated fixed32 descriptor's current node. Reuse
+    # that BF16 load for commit-source staging instead of reading x twice.
+    current_x = x_value
     tl.store(
         source_stage
         + (stage_base + (WIDTH - 1) + offs_n) * C

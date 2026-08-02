@@ -71,6 +71,10 @@ def test_contract_is_closed_and_launch_invariant_for_b1_b4() -> None:
         assert contract["channels"] == 10240
         assert contract["conv_state_len"] == 34
         assert contract["conv_state_launches_per_layer"] == 1
+        assert (
+            contract["candidate"]
+            == "fixed32_sfwd_state_fusion_rowgroup32_c64_xreuse_v6"
+        )
         assert contract["conv_rows_per_program"] == 32
         assert contract["conv_row_groups_per_request"] == 1
         assert contract["gdn_level_path_programs"] == (batch, 11 * batch)
@@ -115,6 +119,7 @@ def test_source_descriptor_is_the_exact_fixed32_window_mapping() -> None:
         expected.extend(source[-4:])
     assert actual == tuple(expected)
     assert actual[:4] == (0, 1, 2, 3)
+    assert actual[3::4] == tuple(3 + node for node in range(32))
     assert min(actual) == 0
     assert max(actual) == 34
 
@@ -335,6 +340,8 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     assert "source_stage" in candidate
     assert "rows_per_program = _FR13_FIXED32_SFWD_ROWS_PER_PROGRAM" in launcher
     assert "num_warps=8" in launcher
+    assert "current_x = x_value" in candidate
+    assert "x + (pid_b * N + offs_n) * x_stride_row + offs_c" not in candidate
     assert "x_stride_row" in candidate
     assert "* x_stride_row" in candidate
     assert "FR13_FIXED32_SFWD_STATE_FUSION source candidate is eager" in launcher
@@ -366,7 +373,7 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     ast.parse(textwrap.dedent(fragment))
 
 
-def test_rowgroup32_c64_covers_each_b1_b4_physical_row_once() -> None:
+def test_rowgroup32_c64_xreuse_covers_each_b1_b4_physical_row_once() -> None:
     rows = 32
     rows_per_program = kernel._FR13_FIXED32_SFWD_ROWS_PER_PROGRAM
     assert rows_per_program == 32
