@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the default-off native key-group CFWD op in pinned vLLM `_C`."""
+"""Install the default-off key-group precompute CFWD op in pinned vLLM `_C`."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 VLLM_COMMIT = "fe9c3d6c5f66c873d196800384ed6880687b9e52"
-MARKER = "FR13_FIXED32_CFWD_NATIVE_KEYGROUP_CUDA_V2"
+MARKER = "FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA_V3"
 CUDA_DESTINATION = Path("csrc/fr13_fixed32_cfwd_native_fullvalue.cu")
 
 PINNED_SHA256 = {
@@ -99,10 +99,14 @@ def _already_patched(source_root: Path, cuda_payload: bytes) -> bool:
     if not any(hits):
         return False
     if not all(hits):
-        raise RuntimeError("partial FR13 native key-group CFWD patch detected")
+        raise RuntimeError(
+            "partial FR13 native key-group precompute CFWD patch detected"
+        )
     destination = source_root / CUDA_DESTINATION
     if not destination.is_file() or destination.read_bytes() != cuda_payload:
-        raise RuntimeError("patched native key-group CFWD CUDA bytes drifted")
+        raise RuntimeError(
+            "patched native key-group precompute CFWD CUDA bytes drifted"
+        )
     return True
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the pinned SM121 native key-group CFWD object contract."""
+"""Check the pinned SM121 key-group precompute CFWD object contract."""
 
 from __future__ import annotations
 
@@ -13,19 +13,19 @@ from pathlib import Path
 
 KERNEL_MARKER = "fixed32_cfwd_native_fullvalue_kernel"
 EXPECTED_RESOURCES = {
-    "registers_per_thread": 168,
+    "registers_per_thread": 64,
     "stack_bytes": 0,
-    "cuobjdump_shared_bytes": 99_892,
+    "cuobjdump_shared_bytes": 7_576,
     "local_bytes": 0,
 }
 EXPECTED_SASS_COUNTS = {
-    "MUFU.EX2": 9,
-    "MUFU.RSQ": 1,
-    "MUFU.RCP": 4,
-    "SHFL.BFLY": 654,
-    "SHFL.IDX": 64,
+    "MUFU.EX2": 3,
+    "MUFU.RSQ": 3,
+    "MUFU.RCP": 2,
+    "SHFL.BFLY": 202,
+    "SHFL.IDX": 16,
     "SHFL.DOWN": 0,
-    "FFMA": 294,
+    "FFMA": 82,
 }
 
 
@@ -36,7 +36,9 @@ def _opcode_count(sass: str, opcode: str) -> int:
 def check_codegen(resource_report: str, sass: str) -> dict[str, object]:
     arch_match = re.search(r"^arch = (\S+)$", resource_report, re.MULTILINE)
     if arch_match is None or arch_match.group(1) != "sm_121a":
-        raise RuntimeError("native key-group CFWD object must target sm_121a")
+        raise RuntimeError(
+            "native key-group precompute CFWD object must target sm_121a"
+        )
 
     resource_match = re.search(
         rf"^ Function [^\n]*{KERNEL_MARKER}[^\n]*:\n"
@@ -45,7 +47,9 @@ def check_codegen(resource_report: str, sass: str) -> dict[str, object]:
         re.MULTILINE,
     )
     if resource_match is None:
-        raise RuntimeError("native key-group CFWD kernel resources not found")
+        raise RuntimeError(
+            "native key-group precompute CFWD kernel resources not found"
+        )
     registers, stack, shared, local = map(int, resource_match.groups())
     resources = {
         "registers_per_thread": registers,
@@ -54,7 +58,9 @@ def check_codegen(resource_report: str, sass: str) -> dict[str, object]:
         "local_bytes": local,
     }
     if resources != EXPECTED_RESOURCES:
-        raise RuntimeError(f"native key-group CFWD resource drift: {resources}")
+        raise RuntimeError(
+            f"native key-group precompute CFWD resource drift: {resources}"
+        )
 
     forbidden_counts = {
         "LDL": len(re.findall(r"\bLDL(?:\.|\s)", sass)),
@@ -63,7 +69,8 @@ def check_codegen(resource_report: str, sass: str) -> dict[str, object]:
     }
     if any(forbidden_counts.values()):
         raise RuntimeError(
-            f"native key-group CFWD local/call drift: {forbidden_counts}"
+            "native key-group precompute CFWD local/call drift: "
+            f"{forbidden_counts}"
         )
 
     sass_counts = {
@@ -72,7 +79,7 @@ def check_codegen(resource_report: str, sass: str) -> dict[str, object]:
     }
     if sass_counts != EXPECTED_SASS_COUNTS:
         raise RuntimeError(
-            f"native key-group CFWD SASS shape drift: {sass_counts}"
+            f"native key-group precompute CFWD SASS shape drift: {sass_counts}"
         )
 
     return {
@@ -136,11 +143,17 @@ def main() -> int:
     )
     args = parser.parse_args()
     if not args.object.is_file() or not args.source.is_file():
-        raise RuntimeError("native key-group CFWD source/object binding is absent")
+        raise RuntimeError(
+            "native key-group precompute CFWD source/object binding is absent"
+        )
     if "arch=compute_121a,code=sm_121a" not in args.compile_command:
-        raise RuntimeError("native key-group CFWD compile architecture is unbound")
+        raise RuntimeError(
+            "native key-group precompute CFWD compile architecture is unbound"
+        )
     if args.source.name not in args.compile_command:
-        raise RuntimeError("native key-group CFWD compile source is unbound")
+        raise RuntimeError(
+            "native key-group precompute CFWD compile source is unbound"
+        )
 
     receipt = check_codegen(
         _cuobjdump(args.cuobjdump, "--dump-resource-usage", args.object),

@@ -18,46 +18,35 @@ constexpr int kDimK = 128;
 constexpr int kDimV = 128;
 constexpr int kPathCap = 16;
 constexpr int kMaxAcceptedLength = 11;
+constexpr int kPrecomputedSteps = kMaxAcceptedLength + 1;
 constexpr int kHeadGroup = kValueHeads / kKeyHeads;
-constexpr int kWarpsPerBlock = 12;
+constexpr int kWarpsPerBlock = 16;
 constexpr int kThreadsPerBlock = kWarpsPerBlock * 32;
-constexpr int kGroupedValueRows = kHeadGroup * kDimV;
-constexpr int kValuesPerWarp =
-    (kGroupedValueRows + kWarpsPerBlock - 1) / kWarpsPerBlock;
-constexpr int kPaddedValueRows = kValuesPerWarp * kWarpsPerBlock;
-constexpr int kRegisterValuesPerWarp = 16;
-constexpr int kSharedValuesPerWarp = kValuesPerWarp - kRegisterValuesPerWarp;
+constexpr int kValuesPerWarp = kDimV / kWarpsPerBlock;
 constexpr int kKeyQuads = kDimK / 32;
 constexpr int kStateElementsPerThread = kValuesPerWarp * kKeyQuads;
-constexpr int kRegisterStateElementsPerThread =
-    kRegisterValuesPerWarp * kKeyQuads;
-constexpr int kSharedStateElementsPerThread =
-    kSharedValuesPerWarp * kKeyQuads;
-constexpr int kSharedStateElements =
-    kSharedStateElementsPerThread * kThreadsPerBlock;
 constexpr int kNormPartialWarps = kDimK / 32;
-constexpr int kMetadataSharedBytes =
-    kDimK * sizeof(float) + kNormPartialWarps * sizeof(float) +
-    kHeadGroup * 2 * sizeof(float) + 3 * sizeof(int32_t);
+constexpr int kStepsPerWave = kWarpsPerBlock / kNormPartialWarps;
+constexpr int kPrecomputeWaves =
+    (kPrecomputedSteps + kStepsPerWave - 1) / kStepsPerWave;
 constexpr int kSharedBytes =
-    kMetadataSharedBytes + kSharedStateElements * sizeof(float);
+    kPrecomputedSteps * kDimK * sizeof(float) +
+    kStepsPerWave * kNormPartialWarps * sizeof(float) +
+    kPrecomputedSteps * kHeadGroup * 2 * sizeof(float) +
+    kPrecomputedSteps * sizeof(int32_t) + 2 * sizeof(int32_t);
 constexpr unsigned kFullWarpMask = 0xffffffffu;
 constexpr float kLog2E = 0x1.715476p+0f;
 
 static_assert(kHeadGroup == 3);
-static_assert(kThreadsPerBlock == 384);
-static_assert(kGroupedValueRows == 384);
-static_assert(kValuesPerWarp == 32);
-static_assert(kPaddedValueRows == 384);
-static_assert(kRegisterValuesPerWarp == 16);
-static_assert(kSharedValuesPerWarp == 16);
+static_assert(kPrecomputedSteps == 12);
+static_assert(kThreadsPerBlock == 512);
+static_assert(kValuesPerWarp == 8);
 static_assert(kKeyQuads == 4);
-static_assert(kStateElementsPerThread == 128);
-static_assert(kRegisterStateElementsPerThread == 64);
-static_assert(kSharedStateElementsPerThread == 64);
+static_assert(kStateElementsPerThread == 32);
 static_assert(kNormPartialWarps == 4);
-static_assert(kMetadataSharedBytes == 564);
-static_assert(kSharedBytes == 98868);
+static_assert(kStepsPerWave == 4);
+static_assert(kPrecomputeWaves == 3);
+static_assert(kSharedBytes == 6552);
 
 __device__ __forceinline__ float load_bf16(const __nv_bfloat16* pointer) {
   return __bfloat162float(*pointer);
@@ -119,7 +108,7 @@ __device__ __forceinline__ float sigmoid(float value) {
       1.0f, __fadd_rn(1.0f, triton_exp(__fsub_rn(0.0f, value))));
 }
 
-__global__ __launch_bounds__(kThreadsPerBlock, 1)
+__global__ __launch_bounds__(kThreadsPerBlock, 2)
 void fixed32_cfwd_native_fullvalue_kernel(
     float* bank_anchor, const int64_t* bank_off16,
     const int32_t* accepted_paths, const int32_t* accepted_lens,
@@ -133,12 +122,10 @@ void fixed32_cfwd_native_fullvalue_kernel(
     int64_t ring_ab_layer_stride, int64_t ring_ab_batch_stride,
     int64_t ring_ab_node_stride, int64_t spec_layer_stride,
     int64_t spec_batch_stride, int batch_size) {
-  __shared__ float normalized_k[kDimK];
-  __shared__ float norm_partials[kNormPartialWarps];
-  __shared__ float recurrence_scalars[kHeadGroup][2];
-  __shared__ float shared_state[kSharedStateElementsPerThread]
-                               [kThreadsPerBlock];
-  __shared__ int32_t shared_node;
+  __shared__ float normalized_ks[kPrecomputedSteps][kDimK];
+  __shared__ float norm_partials[kStepsPerWave][kNormPartialWarps];
+  __shared__ float recurrence_scalars[kPrecomputedSteps][kHeadGroup][2];
+  __shared__ int32_t shared_nodes[kPrecomputedSteps];
   __shared__ int32_t shared_steps;
   __shared__ int32_t shared_state_index;
 
@@ -162,249 +149,173 @@ void fixed32_cfwd_native_fullvalue_kernel(
     return;
   }
 
-  float state[kRegisterValuesPerWarp][kKeyQuads];
-  // Do not carry a 64-bit bank base and row offset through the recurrence.
-  float* load_state_bank = bank_anchor + bank_off16[layer] * 4;
-  const int64_t load_state_row_offset =
-      static_cast<int64_t>(shared_state_index) * bank_stride;
-#pragma unroll
-  for (int value_lane = 0; value_lane < kRegisterValuesPerWarp; ++value_lane) {
-    const int grouped_value_index = warp * kValuesPerWarp + value_lane;
-    const int local_value_head = grouped_value_index / kDimV;
-    const int value_index = grouped_value_index % kDimV;
+  const int steps = shared_steps;
+  const int gate_task_count = steps * kHeadGroup;
+  if (thread_id < gate_task_count) {
+    const int step = thread_id / kHeadGroup;
+    const int local_value_head = thread_id % kHeadGroup;
+    int node = 0;
+    if (step > 0) {
+      node = accepted_paths[
+          static_cast<int64_t>(request) * kPathCap + step - 1];
+      node = min(max(node, 0), kRingNodes - 1);
+    }
+    if (local_value_head == 0) {
+      shared_nodes[step] = node;
+    }
     const int value_head = key_head * kHeadGroup + local_value_head;
-#pragma unroll
-    for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-      const int key_index = lane + key_quad * 32;
-      const int state_inner_offset =
-          (value_head * kDimV + value_index) * kDimK + key_index;
-      const int64_t state_offset = load_state_row_offset + state_inner_offset;
-      state[value_lane][key_quad] =
-          load_state_bank[state_offset] + 0.0f;
-    }
+    const int64_t gate_offset =
+        static_cast<int64_t>(layer) * gate_layer_stride + value_head * 2;
+    const int ab_offset =
+        layer * static_cast<int>(ring_ab_layer_stride) +
+        request * static_cast<int>(ring_ab_batch_stride) +
+        node * static_cast<int>(ring_ab_node_stride) + value_head;
+    const float x = __fadd_rn(load_bf16(a_rings + ab_offset),
+                              gate_coeffs[gate_offset + 1]);
+    const float decay =
+        __fmul_rn(gate_coeffs[gate_offset], softplus(x));
+    recurrence_scalars[step][local_value_head][0] = triton_exp(decay);
+    recurrence_scalars[step][local_value_head][1] =
+        sigmoid(load_bf16(b_rings + ab_offset));
   }
-#pragma unroll
-  for (int shared_value_lane = 0;
-       shared_value_lane < kSharedValuesPerWarp; ++shared_value_lane) {
-    const int value_lane = kRegisterValuesPerWarp + shared_value_lane;
-    const int grouped_value_index = warp * kValuesPerWarp + value_lane;
-    const int local_value_head = grouped_value_index / kDimV;
-    const int value_index = grouped_value_index % kDimV;
-    const int value_head = key_head * kHeadGroup + local_value_head;
-#pragma unroll
-    for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-      const int key_index = lane + key_quad * 32;
-      const int state_inner_offset =
-          (value_head * kDimV + value_index) * kDimK + key_index;
-      const int64_t state_offset = load_state_row_offset + state_inner_offset;
-      const int shared_element = shared_value_lane * kKeyQuads + key_quad;
-      shared_state[shared_element][thread_id] =
-          load_state_bank[state_offset] + 0.0f;
-    }
-  }
-  for (int step = 0; step < shared_steps; ++step) {
-    if (thread_id == 0) {
-      int node = 0;
-      if (step > 0) {
-        node = accepted_paths[
-            static_cast<int64_t>(request) * kPathCap + step - 1];
-        node = min(max(node, 0), kRingNodes - 1);
-      }
-      shared_node = node;
-#pragma unroll
-      for (int local_value_head = 0; local_value_head < kHeadGroup;
-           ++local_value_head) {
-        const int value_head = key_head * kHeadGroup + local_value_head;
-        const int64_t gate_offset =
-            static_cast<int64_t>(layer) * gate_layer_stride + value_head * 2;
-        const int ab_offset =
-            layer * static_cast<int>(ring_ab_layer_stride) +
-            request * static_cast<int>(ring_ab_batch_stride) +
-            node * static_cast<int>(ring_ab_node_stride) + value_head;
-        const float x = __fadd_rn(load_bf16(a_rings + ab_offset),
-                                  gate_coeffs[gate_offset + 1]);
-        const float decay =
-            __fmul_rn(gate_coeffs[gate_offset], softplus(x));
-        recurrence_scalars[local_value_head][0] = triton_exp(decay);
-        recurrence_scalars[local_value_head][1] =
-            sigmoid(load_bf16(b_rings + ab_offset));
-      }
-    }
-    // Publish the accepted node/scalars after every warp finished the
-    // preceding step.
-    __syncthreads();
+  __syncthreads();
 
+  const int step_slot = warp / kNormPartialWarps;
+  const int norm_warp = warp % kNormPartialWarps;
+#pragma unroll
+  for (int wave = 0; wave < kPrecomputeWaves; ++wave) {
+    const int step = wave * kStepsPerWave + step_slot;
+    const bool active_step = step < steps;
     float warp_partial = 0.0f;
-    if (thread_id < kDimK) {
+    if (active_step) {
+      const int key_index = norm_warp * 32 + lane;
       const int64_t key_offset =
           static_cast<int64_t>(layer) * ring_k_layer_stride +
           static_cast<int64_t>(request) * ring_k_batch_stride +
-          static_cast<int64_t>(shared_node) * ring_k_node_stride +
-          static_cast<int64_t>(key_head) * kDimK + thread_id;
+          static_cast<int64_t>(shared_nodes[step]) * ring_k_node_stride +
+          static_cast<int64_t>(key_head) * kDimK + key_index;
       const float key_value = load_bf16(k_rings + key_offset);
-      normalized_k[thread_id] = key_value;
+      normalized_ks[step][key_index] = key_value;
       warp_partial = triton_butterfly_product_sum(key_value, key_value);
     }
-    if (lane == 0 && warp < kNormPartialWarps) {
-      norm_partials[warp] = warp_partial;
+    if (active_step && lane == 0) {
+      norm_partials[step_slot][norm_warp] = warp_partial;
     }
-    // Publish the four K-norm partials.
     __syncthreads();
 
-    if (warp == 0) {
-      float norm = lane < kNormPartialWarps ? norm_partials[lane] : 0.0f;
+    if (active_step && norm_warp == 0) {
+      float norm = lane < kNormPartialWarps
+                       ? norm_partials[step_slot][lane]
+                       : 0.0f;
       norm = triton_butterfly_four_sum(norm);
       if (lane == 0) {
-        norm_partials[0] = triton_rsqrt(__fadd_rn(norm, 1.0e-6f));
+        norm_partials[step_slot][0] =
+            triton_rsqrt(__fadd_rn(norm, 1.0e-6f));
       }
     }
     __syncthreads();
-    if (thread_id < kDimK) {
-      normalized_k[thread_id] =
-          __fmul_rn(normalized_k[thread_id], norm_partials[0]);
+    if (active_step) {
+      const int key_index = norm_warp * 32 + lane;
+      normalized_ks[step][key_index] = __fmul_rn(
+          normalized_ks[step][key_index], norm_partials[step_slot][0]);
     }
-    // All 12 warps and all three value heads consume this normalized K vector.
+    // Protect the per-wave partials and publish all active immutable K rows.
     __syncthreads();
+  }
 
+  // Process one value head at a time so the same 32-element register tile is
+  // reused three times without persistent shared-state storage.
+#pragma unroll 1
+  for (int local_value_head = 0; local_value_head < kHeadGroup;
+       ++local_value_head) {
+    const int value_head = key_head * kHeadGroup + local_value_head;
+    const int value_row_base = warp * kValuesPerWarp;
+    float state[kValuesPerWarp][kKeyQuads];
+    float* load_state_bank = bank_anchor + bank_off16[layer] * 4;
+    const int64_t load_state_row_offset =
+        static_cast<int64_t>(shared_state_index) * bank_stride;
 #pragma unroll
-    for (int value_lane = 0; value_lane < kRegisterValuesPerWarp;
-         ++value_lane) {
-      const int grouped_value_index = warp * kValuesPerWarp + value_lane;
-      const int local_value_head = grouped_value_index / kDimV;
-      const int value_index = grouped_value_index % kDimV;
-      const int value_head = key_head * kHeadGroup + local_value_head;
-      const float decay_scale = recurrence_scalars[local_value_head][0];
-      const float beta = recurrence_scalars[local_value_head][1];
+    for (int value_lane = 0; value_lane < kValuesPerWarp; ++value_lane) {
+      const int value_index = value_row_base + value_lane;
 #pragma unroll
       for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
+        const int key_index = lane + key_quad * 32;
+        const int state_inner_offset =
+            (value_head * kDimV + value_index) * kDimK + key_index;
+        const int64_t state_offset = load_state_row_offset + state_inner_offset;
         state[value_lane][key_quad] =
-            __fmul_rn(state[value_lane][key_quad], decay_scale);
-      }
-      float partial02 = triton_butterfly_product_sum(
-          state[value_lane][0], normalized_k[lane]);
-      partial02 = __fadd_rn(
-          partial02,
-          triton_butterfly_product_sum(state[value_lane][2],
-                                       normalized_k[lane + 64]));
-      float partial13 = triton_butterfly_product_sum(
-          state[value_lane][1], normalized_k[lane + 32]);
-      partial13 = __fadd_rn(
-          partial13,
-          triton_butterfly_product_sum(state[value_lane][3],
-                                       normalized_k[lane + 96]));
-      float state_k = __fadd_rn(partial02, partial13);
-      state_k = __shfl_sync(kFullWarpMask, state_k, 0);
-      const int64_t value_offset =
-          static_cast<int64_t>(layer) * ring_v_layer_stride +
-          static_cast<int64_t>(request) * ring_v_batch_stride +
-          static_cast<int64_t>(shared_node) * ring_v_node_stride +
-          static_cast<int64_t>(value_head) * kDimV + value_index;
-      float value = lane == 0 ? load_bf16(v_rings + value_offset) : 0.0f;
-      value = __shfl_sync(kFullWarpMask, value, 0);
-      const float residual =
-          __fmul_rn(__fsub_rn(value, state_k), beta);
-#pragma unroll
-      for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-        const int key_index = lane + key_quad * 32;
-        state[value_lane][key_quad] = __fmaf_rn(
-            residual, normalized_k[key_index],
-            state[value_lane][key_quad]);
+            load_state_bank[state_offset] + 0.0f;
       }
     }
-#pragma unroll
-    for (int shared_value_lane = 0;
-         shared_value_lane < kSharedValuesPerWarp; ++shared_value_lane) {
-      const int value_lane = kRegisterValuesPerWarp + shared_value_lane;
-      const int grouped_value_index = warp * kValuesPerWarp + value_lane;
-      const int local_value_head = grouped_value_index / kDimV;
-      const int value_index = grouped_value_index % kDimV;
-      const int value_head = key_head * kHeadGroup + local_value_head;
-      const float decay_scale = recurrence_scalars[local_value_head][0];
-      const float beta = recurrence_scalars[local_value_head][1];
-      float shared_values[kKeyQuads];
-#pragma unroll
-      for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-        const int shared_element = shared_value_lane * kKeyQuads + key_quad;
-        shared_values[key_quad] = __fmul_rn(
-            shared_state[shared_element][thread_id], decay_scale);
-      }
-      float partial02 = triton_butterfly_product_sum(
-          shared_values[0], normalized_k[lane]);
-      partial02 = __fadd_rn(
-          partial02,
-          triton_butterfly_product_sum(shared_values[2],
-                                       normalized_k[lane + 64]));
-      float partial13 = triton_butterfly_product_sum(
-          shared_values[1], normalized_k[lane + 32]);
-      partial13 = __fadd_rn(
-          partial13,
-          triton_butterfly_product_sum(shared_values[3],
-                                       normalized_k[lane + 96]));
-      float state_k = __fadd_rn(partial02, partial13);
-      state_k = __shfl_sync(kFullWarpMask, state_k, 0);
-      const int64_t value_offset =
-          static_cast<int64_t>(layer) * ring_v_layer_stride +
-          static_cast<int64_t>(request) * ring_v_batch_stride +
-          static_cast<int64_t>(shared_node) * ring_v_node_stride +
-          static_cast<int64_t>(value_head) * kDimV + value_index;
-      float value = lane == 0 ? load_bf16(v_rings + value_offset) : 0.0f;
-      value = __shfl_sync(kFullWarpMask, value, 0);
-      const float residual =
-          __fmul_rn(__fsub_rn(value, state_k), beta);
-#pragma unroll
-      for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-        const int key_index = lane + key_quad * 32;
-        const int shared_element = shared_value_lane * kKeyQuads + key_quad;
-        shared_state[shared_element][thread_id] = __fmaf_rn(
-            residual, normalized_k[key_index], shared_values[key_quad]);
-      }
-    }
-    // Prevent the cooperative loader from overwriting K while a peer warp
-    // still consumes the current recurrence step.
-    __syncthreads();
-  }
 
-  float* store_state_bank = bank_anchor + bank_off16[layer] * 4;
-  int store_thread_id;
-  asm volatile("mov.u32 %0, %%tid.x;" : "=r"(store_thread_id));
-  const int store_warp = store_thread_id >> 5;
-  const int store_lane = store_thread_id & 31;
-  const int store_key_head = blockIdx.x % kKeyHeads;
-  const int64_t store_state_row_offset =
-      static_cast<int64_t>(shared_state_index) * bank_stride;
+    for (int step = 0; step < steps; ++step) {
+      const float decay_scale =
+          recurrence_scalars[step][local_value_head][0];
+      const float beta = recurrence_scalars[step][local_value_head][1];
+      float step_k[kKeyQuads];
 #pragma unroll
-  for (int value_lane = 0; value_lane < kRegisterValuesPerWarp;
-       ++value_lane) {
-    const int grouped_value_index = store_warp * kValuesPerWarp + value_lane;
-    const int local_value_head = grouped_value_index / kDimV;
-    const int value_index = grouped_value_index % kDimV;
-    const int value_head = store_key_head * kHeadGroup + local_value_head;
+      for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
+        step_k[key_quad] = normalized_ks[step][lane + key_quad * 32];
+      }
+      const int64_t value_base =
+          static_cast<int64_t>(layer) * ring_v_layer_stride +
+          static_cast<int64_t>(request) * ring_v_batch_stride +
+          static_cast<int64_t>(shared_nodes[step]) * ring_v_node_stride +
+          static_cast<int64_t>(value_head) * kDimV;
 #pragma unroll
-    for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-      const int key_index = store_lane + key_quad * 32;
-      const int state_inner_offset =
-          (value_head * kDimV + value_index) * kDimK + key_index;
-      const int64_t state_offset = store_state_row_offset + state_inner_offset;
-      store_state_bank[state_offset] = state[value_lane][key_quad];
+      for (int value_lane = 0; value_lane < kValuesPerWarp; ++value_lane) {
+        const int value_index = value_row_base + value_lane;
+#pragma unroll
+        for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
+          state[value_lane][key_quad] =
+              __fmul_rn(state[value_lane][key_quad], decay_scale);
+        }
+        float partial02 = triton_butterfly_product_sum(
+            state[value_lane][0], step_k[0]);
+        partial02 = __fadd_rn(
+            partial02,
+            triton_butterfly_product_sum(state[value_lane][2], step_k[2]));
+        float partial13 = triton_butterfly_product_sum(
+            state[value_lane][1], step_k[1]);
+        partial13 = __fadd_rn(
+            partial13,
+            triton_butterfly_product_sum(state[value_lane][3], step_k[3]));
+        float state_k = __fadd_rn(partial02, partial13);
+        state_k = __shfl_sync(kFullWarpMask, state_k, 0);
+        float value = lane == 0
+                          ? load_bf16(v_rings + value_base + value_index)
+                          : 0.0f;
+        value = __shfl_sync(kFullWarpMask, value, 0);
+        const float residual =
+            __fmul_rn(__fsub_rn(value, state_k), beta);
+#pragma unroll
+        for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
+          state[value_lane][key_quad] = __fmaf_rn(
+              residual, step_k[key_quad], state[value_lane][key_quad]);
+        }
+      }
     }
-  }
+
+    float* store_state_bank = bank_anchor + bank_off16[layer] * 4;
+    int store_thread_id;
+    asm volatile("mov.u32 %0, %%tid.x;" : "=r"(store_thread_id));
+    const int store_warp = store_thread_id >> 5;
+    const int store_lane = store_thread_id & 31;
+    const int store_value_row_base = store_warp * kValuesPerWarp;
+    const int store_value_head = key_head * kHeadGroup + local_value_head;
+    const int64_t store_state_row_offset =
+        static_cast<int64_t>(shared_state_index) * bank_stride;
 #pragma unroll
-  for (int shared_value_lane = 0;
-       shared_value_lane < kSharedValuesPerWarp; ++shared_value_lane) {
-    const int value_lane = kRegisterValuesPerWarp + shared_value_lane;
-    const int grouped_value_index = store_warp * kValuesPerWarp + value_lane;
-    const int local_value_head = grouped_value_index / kDimV;
-    const int value_index = grouped_value_index % kDimV;
-    const int value_head = store_key_head * kHeadGroup + local_value_head;
+    for (int value_lane = 0; value_lane < kValuesPerWarp; ++value_lane) {
+      const int value_index = store_value_row_base + value_lane;
 #pragma unroll
-    for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-      const int key_index = store_lane + key_quad * 32;
-      const int state_inner_offset =
-          (value_head * kDimV + value_index) * kDimK + key_index;
-      const int64_t state_offset = store_state_row_offset + state_inner_offset;
-      const int shared_element = shared_value_lane * kKeyQuads + key_quad;
-      store_state_bank[state_offset] =
-          shared_state[shared_element][store_thread_id];
+      for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
+        const int key_index = store_lane + key_quad * 32;
+        const int state_inner_offset =
+            (store_value_head * kDimV + value_index) * kDimK + key_index;
+        const int64_t state_offset = store_state_row_offset + state_inner_offset;
+        store_state_bank[state_offset] = state[value_lane][key_quad];
+      }
     }
   }
 }

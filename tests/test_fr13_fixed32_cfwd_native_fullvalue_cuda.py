@@ -68,27 +68,33 @@ def test_resource_contract_maps_each_key_group_to_one_cta(batch: int) -> None:
     assert contract["ctas_per_event"] == 48 * batch * 16
     assert contract["ctas_per_layer_request_key_head"] == 1
     assert contract["value_heads_per_cta"] == 3
+    assert contract["value_heads_processed_sequentially"] is True
     assert contract["launches_per_event"] == 1
-    assert contract["threads_per_cta"] == 384
-    assert contract["warps_per_cta"] == 12
-    assert contract["value_rows_per_warp"] == 32
-    assert contract["padded_value_rows_per_cta"] == 384
-    assert contract["inactive_padding_value_rows_per_cta"] == 0
+    assert contract["threads_per_cta"] == 512
+    assert contract["warps_per_cta"] == 16
+    assert contract["value_rows_per_warp_per_head"] == 8
     assert contract["key_columns_per_lane"] == 4
-    assert contract["fp32_state_elements_per_thread"] == 128
-    assert contract["fp32_register_state_elements_per_thread"] == 64
-    assert contract["fp32_shared_state_elements_per_thread"] == 64
-    assert contract["normalized_k_shared_elements"] == 128
-    assert contract["static_shared_bytes_source_model"] == 98_868
+    assert contract["fp32_state_elements_per_thread"] == 32
+    assert contract["fp32_register_state_elements_per_thread"] == 32
+    assert contract["fp32_shared_state_elements_per_thread"] == 0
+    assert contract["precomputed_step_capacity"] == 12
+    assert contract["precomputed_steps_per_wave"] == 4
+    assert contract["precompute_waves"] == 3
+    assert contract["normalized_k_shared_elements"] == 12 * 128
+    assert contract["norm_partial_shared_elements"] == 16
+    assert contract["precomputed_node_shared_elements"] == 12
+    assert contract["precomputed_gate_scalar_shared_elements"] == 72
+    assert contract["static_shared_bytes_source_model"] == 6_552
     assert contract["k_hbm_vector_loads_per_cta_step"] == 1
     assert contract["k_norms_per_cta_step"] == 1
     assert contract["duplicate_value_head_k_loads_per_key_head_step"] == 0
+    assert contract["persistent_shared_state_elements"] == 0
     assert contract["state_hbm_traffic_removed"] is False
     assert contract["final_bank_store_dtype"] == "float32"
     assert contract["compile_gate"] == {
         "architecture": "sm_121a",
-        "registers_per_thread_at_most": 168,
-        "minimum_ctas_per_sm_target": 1,
+        "registers_per_thread_at_most": 64,
+        "minimum_ctas_per_sm_target": 2,
         "stack_frame_bytes": 0,
         "local_bytes": 0,
         "spill_load_bytes": 0,
@@ -258,76 +264,67 @@ def test_launch_rejects_unqualified_or_non_source_selection() -> None:
             )
 
 
-def test_cuda_source_has_one_shared_k_load_and_norm_per_key_group_step() -> None:
+def test_cuda_source_precomputes_four_steps_per_wave_without_shared_state() -> None:
     source = CUDA_SOURCE.read_text(encoding="utf-8")
-    assert "constexpr int kWarpsPerBlock = 12;" in source
-    assert "static_assert(kThreadsPerBlock == 384);" in source
-    assert "static_assert(kGroupedValueRows == 384);" in source
-    assert "static_assert(kPaddedValueRows == 384);" in source
-    assert "static_assert(kStateElementsPerThread == 128);" in source
-    assert "static_assert(kRegisterStateElementsPerThread == 64);" in source
-    assert "static_assert(kSharedStateElementsPerThread == 64);" in source
-    assert "static_assert(kSharedBytes == 98868);" in source
-    assert "__launch_bounds__(kThreadsPerBlock, 1)" in source
-    assert "float state[kRegisterValuesPerWarp][kKeyQuads];" in source
-    assert "__shared__ float shared_state[kSharedStateElementsPerThread]" in source
+    assert "constexpr int kPrecomputedSteps = kMaxAcceptedLength + 1;" in source
+    assert "constexpr int kWarpsPerBlock = 16;" in source
+    assert "static_assert(kThreadsPerBlock == 512);" in source
+    assert "static_assert(kValuesPerWarp == 8);" in source
+    assert "static_assert(kStateElementsPerThread == 32);" in source
+    assert "static_assert(kStepsPerWave == 4);" in source
+    assert "static_assert(kPrecomputeWaves == 3);" in source
+    assert "static_assert(kSharedBytes == 6552);" in source
+    assert "__launch_bounds__(kThreadsPerBlock, 2)" in source
+    assert "float state[kValuesPerWarp][kKeyQuads];" in source
+    assert "__shared__ float shared_state" not in source
     assert "const int key_head = blockIdx.x % kKeyHeads;" in source
-    assert "const int local_value_head = grouped_value_index / kDimV;" in source
-    assert "const int value_head = key_head * kHeadGroup + local_value_head;" in source
-    assert "__shared__ float recurrence_scalars[kHeadGroup][2];" in source
-    assert "__shared__ float normalized_k[kDimK];" in source
-    assert "if (thread_id < kDimK)" in source
+    assert "__shared__ float normalized_ks[kPrecomputedSteps][kDimK];" in source
+    assert "__shared__ float norm_partials[kStepsPerWave]" in source
+    assert "__shared__ float recurrence_scalars[kPrecomputedSteps]" in source
+    assert "__shared__ int32_t shared_nodes[kPrecomputedSteps];" in source
+    assert "const int gate_task_count = steps * kHeadGroup;" in source
+    assert "const int step_slot = warp / kNormPartialWarps;" in source
+    assert "const int norm_warp = warp % kNormPartialWarps;" in source
+    assert "for (int wave = 0; wave < kPrecomputeWaves; ++wave)" in source
+    assert "const bool active_step = step < steps;" in source
     assert source.count("const float key_value = load_bf16(k_rings + key_offset)") == 1
     assert source.count("norm = triton_butterfly_four_sum(norm);") == 1
-    assert "__fmul_rn(normalized_k[thread_id], norm_partials[0])" in source
-    assert "All 12 warps and all three value heads consume" in source
+    assert "normalized_ks[step][key_index] = __fmul_rn(" in source
+    assert "#pragma unroll 1" in source
+    assert "for (int local_value_head = 0; local_value_head < kHeadGroup;" in source
     assert "kLayers * batch_size * kKeyHeads" in source
-    assert source.count("__syncthreads();") >= 6
+    assert source.count("__syncthreads();") == 5
 
 
 def test_cuda_source_preserves_ordered_active_recurrence_and_fp32_store() -> None:
     source = CUDA_SOURCE.read_text(encoding="utf-8")
-    loop = source[source.index("for (int step = 0;") :]
+    loop = source[source.index("// Process one value head at a time") :]
     assert "shared_steps = min(max(accepted, 0) + 1" in source
-    assert "step - 1" in loop
+    assert "float state[kValuesPerWarp][kKeyQuads];" in loop
+    assert "for (int step = 0; step < steps; ++step)" in loop
     assert "__fmul_rn(state[value_lane][key_quad], decay_scale)" in loop
-    assert loop.count("float partial02 = triton_butterfly_product_sum(") == 2
-    assert loop.count("float partial13 = triton_butterfly_product_sum(") == 2
-    assert loop.count("float state_k = __fadd_rn(partial02, partial13);") == 2
-    assert loop.count("__fmul_rn(__fsub_rn(value, state_k), beta)") == 2
+    assert loop.count("float partial02 = triton_butterfly_product_sum(") == 1
+    assert loop.count("float partial13 = triton_butterfly_product_sum(") == 1
+    assert loop.count("float state_k = __fadd_rn(partial02, partial13);") == 1
+    assert loop.count("__fmul_rn(__fsub_rn(value, state_k), beta)") == 1
     assert "state[value_lane][key_quad] = __fmaf_rn(" in loop
-    assert "shared_state[shared_element][thread_id] = __fmaf_rn(" in loop
     assert loop.index("decay_scale);") < loop.index("float partial02")
     assert loop.index("float partial02") < loop.index("const float residual")
     assert loop.index("const float residual") < loop.index("= __fmaf_rn(")
-    register_dot = loop[
-        loop.index("float partial02 = triton_butterfly_product_sum(") :
-        loop.index("for (int shared_value_lane")
-    ]
-    assert register_dot.index("state[value_lane][0]") < register_dot.index(
+    assert loop.index("state[value_lane][0]") < loop.index(
         "state[value_lane][2]"
     )
-    assert register_dot.index("state[value_lane][2]") < register_dot.index(
+    assert loop.index("state[value_lane][2]") < loop.index(
         "state[value_lane][1]"
     )
-    assert register_dot.index("state[value_lane][1]") < register_dot.index(
+    assert loop.index("state[value_lane][1]") < loop.index(
         "state[value_lane][3]"
-    )
-    shared_dot = loop[loop.index("for (int shared_value_lane") :]
-    assert shared_dot.index("shared_values[0]") < shared_dot.index(
-        "shared_values[2]"
-    )
-    assert shared_dot.index("shared_values[2]") < shared_dot.index(
-        "shared_values[1]"
-    )
-    assert shared_dot.index("shared_values[1]") < shared_dot.index(
-        "shared_values[3]"
     )
     assert "float* bank_anchor" in source
     assert "state_bank[state_offset] = state[value_lane][key_quad];" in source
     assert "__float2bfloat16" not in source
     assert "requires FP32 state banks" in source
-    assert source.count("load_state_bank[state_offset] + 0.0f;") == 2
+    assert source.count("load_state_bank[state_offset] + 0.0f;") == 1
     assert 'asm volatile("mov.u32 %0, %%tid.x;"' in source
 
 
@@ -340,7 +337,7 @@ def test_cuda_source_pins_incumbent_ptx_math_and_reduction_order() -> None:
     assert "expf(" not in source
     assert "rsqrtf(" not in source
     helper = source[
-        source.index("float triton_butterfly_product_sum") :
+        source.index("float triton_butterfly_product_sum"):
         source.index("float triton_butterfly_four_sum")
     ]
     assert "const float product = __fmul_rn(lhs, rhs);" in helper
@@ -348,9 +345,34 @@ def test_cuda_source_pins_incumbent_ptx_math_and_reduction_order() -> None:
     assert "float value = __fmaf_rn(lhs, rhs, partner);" in helper
     assert "for (int mask = 8; mask > 0; mask >>= 1)" in helper
     assert "__fadd_rn(" in helper
-    assert source.count("normalized_k[lane + 64]") == 2
-    assert source.count("normalized_k[lane + 32]") == 2
-    assert source.count("normalized_k[lane + 96]") == 2
+    assert "step_k[key_quad] = normalized_ks[step][lane + key_quad * 32];" in source
+    assert source.index("state[value_lane][0], step_k[0]") < source.index(
+        "state[value_lane][2], step_k[2]"
+    )
+    assert source.index("state[value_lane][2], step_k[2]") < source.index(
+        "state[value_lane][1], step_k[1]"
+    )
+    assert source.index("state[value_lane][1], step_k[1]") < source.index(
+        "state[value_lane][3], step_k[3]"
+    )
+
+
+def test_cuda_source_precomputes_root_nodes_and_three_head_gates() -> None:
+    source = CUDA_SOURCE.read_text(encoding="utf-8")
+    precompute = source[
+        source.index("const int gate_task_count"):
+        source.index("// Process one value head at a time")
+    ]
+    assert "const int step = thread_id / kHeadGroup;" in precompute
+    assert "const int local_value_head = thread_id % kHeadGroup;" in precompute
+    assert "if (step > 0)" in precompute
+    assert "step - 1" in precompute
+    assert "shared_nodes[step] = node;" in precompute
+    assert "recurrence_scalars[step][local_value_head][0]" in precompute
+    assert "recurrence_scalars[step][local_value_head][1]" in precompute
+    assert precompute.index("recurrence_scalars") < precompute.index(
+        "for (int wave = 0;"
+    )
 
 
 def test_cuda_source_checks_narrow_gate_ring_offset_contract() -> None:
@@ -368,7 +390,7 @@ def _codegen_fixture(checker) -> tuple[str, str]:
 arch = sm_121a
 Resource usage:
  Function mangled_{checker.KERNEL_MARKER}_symbol:
-  REG:168 STACK:0 SHARED:99892 LOCAL:0 CONSTANT[0]:1084
+  REG:64 STACK:0 SHARED:7576 LOCAL:0 CONSTANT[0]:1084
 """
     sass = "\n".join(
         opcode
@@ -378,7 +400,7 @@ Resource usage:
     return resource_report, sass
 
 
-def test_codegen_checker_accepts_pinned_sm121_grouped_contract() -> None:
+def test_codegen_checker_accepts_pinned_sm121_precompute_contract() -> None:
     checker = _load_codegen_checker()
     resource_report, sass = _codegen_fixture(checker)
     receipt = checker.check_codegen(resource_report, sass)
@@ -403,7 +425,7 @@ def test_codegen_checker_rejects_resource_or_math_drift() -> None:
     checker = _load_codegen_checker()
     resource_report, sass = _codegen_fixture(checker)
     with pytest.raises(RuntimeError, match="resource drift"):
-        checker.check_codegen(resource_report.replace("REG:168", "REG:160"), sass)
+        checker.check_codegen(resource_report.replace("REG:64", "REG:63"), sass)
     with pytest.raises(RuntimeError, match="SASS shape drift"):
         checker.check_codegen(resource_report, sass.replace("MUFU.EX2", "NOP", 1))
 
