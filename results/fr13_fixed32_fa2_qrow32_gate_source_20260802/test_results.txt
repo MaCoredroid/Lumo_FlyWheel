@@ -1,0 +1,37 @@
+Fixed32 B4 FA2 qrow32 gate source verification (2026-08-02 UTC)
+
+Code commit:
+bee486b2271910b1c874e1880b69eb2dfe0a6070
+
+Ruff:
+/home/mark/lumoFlyWheel-b4-compactionfix-rerun/.venv/bin/python -m ruff check \
+  scripts/fr13_patch_fa2_tree_bias.py \
+  scripts/fr13_fa2_qrow32_gate.py \
+  tests/test_fr13_fa2_tree_kernel_candidates.py \
+  tests/test_fr13_fa2_qrow32_gate.py
+
+All checks passed.
+
+Focused and compatibility pytest:
+/home/mark/lumoFlyWheel-b4-compactionfix-rerun/.venv/bin/python -m pytest -q \
+  tests/test_fr13_fa2_tree_kernel_candidates.py \
+  tests/test_fr13_fa2_qrow32_gate.py \
+  tests/test_fr13_fixed32_fa2_identity.py \
+  tests/test_fr13_qrow16_production_sidecar.py
+
+24 passed, 1 skipped in 0.13s
+
+bash -n scripts/fr13_launch_forked_fa2_tree_server.sh \
+  scripts/fr13_run_b4_fa2_qrow32_live_gate.sh
+PASS
+
+python -m py_compile on the changed Python implementation and tests
+PASS
+
+git diff --check
+PASS
+
+No GPU compile, container launch, synthetic probe, real exact4 byte run, or
+performance measurement is represented here. The live runner was not invoked
+in this isolated audit worktree because its canonical exact4 config fixture is
+absent and no inactive B4 GPU container was available.

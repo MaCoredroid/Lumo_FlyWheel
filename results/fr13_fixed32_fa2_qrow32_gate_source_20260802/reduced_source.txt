@@ -1,0 +1,79 @@
+FR13 fixed32 B4 FA2 qrow32 reduced source contract
+===================================================
+
+Build flags (both required)
+---------------------------
+--tree-bias-tile-earlyout --fixed32-query-tile32
+
+Hidden CUDA launcher traits
+---------------------------
+kBlockM = 32
+kBlockN = 64
+kNWarps = 2
+kNThreads = 64
+kSmemSize = 81920 bytes (expected; GPU compile inspection pending)
+grid = (ceil(seqlen_q / 32), batch, query_heads)
+Split = false
+Append_KV = false
+
+Gate-only C++ dispatch, reduced
+--------------------------------
+if (params.tree_bias_batch_stride == kFr13Qrow32BatchStrideSentinel) {
+    TORCH_CHECK(
+        params.tree_bias_ptr != nullptr
+        && params.is_bf16
+        && !params.is_causal
+        && params.b == 4
+        && params.total_q == 128
+        && params.d == 256
+        && params.d_rounded == 256
+        && params.h == 24
+        && params.h_k == 4
+        && params.h_h_k_ratio == 6
+        && params.seqlen_q == 32
+        && params.seqlen_q_rounded == 128
+        && params.tree_bias_rows == 32
+        && params.tree_bias_cols == 32
+        && params.tree_bias_row_stride == 32
+        && params.tree_bias_col_stride == 1
+        && params.cu_seqlens_q != nullptr
+        && params.cu_seqlens_k != nullptr
+        && params.seqused_k != nullptr
+        && params.block_table != nullptr
+        && params.page_block_size == 1024
+        && params.num_splits == 0
+        && force_split_kernel,
+        "FR13 qrow32 gate dispatch reached non-canonical B4 geometry");
+    fr13_run_mha_fwd_fixed32_qrow32(params, stream);
+    return;
+}
+// Existing stock dispatch follows unchanged.
+
+Retained-live gate topology
+---------------------------
+suite = SWE-Verified
+tasks = astropy__astropy-12907, astropy__astropy-13033,
+        astropy__astropy-13236, astropy__astropy-13398
+concurrency = 4
+draft vocabulary = K64, root reduction on
+graph mode = FULL_AND_PIECEWISE
+target layers = language_model.model.layers.{3,7,...,63}.self_attn.attn
+slot query starts = [0, 32, 64, 96, 128]
+
+For the first real exact4 FULL replay:
+1. Retain live paged Q/K/V, query starts, sequence lengths, block table, and
+   tree bias for all 16 target layers during final graph capture.
+2. Serve the stock captured graph output unchanged.
+3. Recall stock and tagged qrow32 separately on each retained layer.
+4. Require zero BF16 output and FP32 LSE raw-byte mismatches overall and for
+   each of the four physical32 slots.
+5. Write aggregate evidence only; emit no timing sample.
+
+Qualification boundary
+----------------------
+CPU/static source gates: pass.
+SM121 object compile, registers, spills, stack/local memory, and final SO ABI:
+pending.
+Real Tail23 exact4 byte gate: pending.
+Real Hydra27 exact4 byte gate: pending.
+Performance measurement: not run and not eligible.

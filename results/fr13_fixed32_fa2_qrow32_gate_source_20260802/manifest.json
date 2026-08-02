@@ -1,0 +1,77 @@
+{
+  "base_commit": "0eaff4db158180aff2b93e6cc4bb071898d2843a",
+  "branch": "agent/fixed32-tree-attn-next-audit-20260801",
+  "build_contract": {
+    "discovery_routes": [
+      "fresh_configure_discovered_object",
+      "explicit_object_compile_and_append"
+    ],
+    "fa2_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+    "required_patch_flags": [
+      "--tree-bias-tile-earlyout",
+      "--fixed32-query-tile32"
+    ],
+    "stock_object_sha256": "fc31f75bf88bf318cd9530745734c2f7fee6d755b372fefdcf11d157f014f389"
+  },
+  "candidate": {
+    "block_m": 32,
+    "block_n": 64,
+    "default_on": false,
+    "dynamic_shared_bytes_expected": 81920,
+    "head_dim": 256,
+    "hidden_launcher": true,
+    "production_selector": false,
+    "split_k": false,
+    "threads_expected": 64,
+    "warps": 2
+  },
+  "code_commit": "bee486b2271910b1c874e1880b69eb2dfe0a6070",
+  "dispatch_contract": {
+    "batch_stride_sentinel": 131091,
+    "failure_policy": "tagged_noncanonical_geometry_raises",
+    "required_runtime_split_state": {
+      "force_split_kernel": true,
+      "params_num_splits": 0
+    },
+    "selector_scope": "gate_only_retained_live_exact4"
+  },
+  "geometry": {
+    "batch": 4,
+    "kv_heads": 4,
+    "page_block_size": 1024,
+    "physical_rows_per_slot": 32,
+    "query_heads": 24,
+    "target_layers": 16,
+    "total_query_rows": 128
+  },
+  "qualification": {
+    "candidate_abi_and_resource_gate": "pending_gpu_build",
+    "hydra27_real_exact4_byte_gate": "pending",
+    "performance_measurement": "not_run_not_eligible",
+    "stock_default_preserved": true,
+    "tail23_real_exact4_byte_gate": "pending"
+  },
+  "real_task_contract": {
+    "concurrency": 4,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "suite": "SWE-Verified",
+    "subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "task_ids": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033",
+      "astropy__astropy-13236",
+      "astropy__astropy-13398"
+    ]
+  },
+  "schema": "fr13.fixed32.fa2_qrow32_gate_source.v1",
+  "source_sha256": {
+    "generated_qrow32_translation_unit": "455126833a486b5307713940169fb800b703bfc81ba62c921d50065f27369de4",
+    "qrow32_api_gate": "a6365bdd3bc5786ea46c7a165262e2d8efa7e700868f7218eaee6a96ca1edbff",
+    "scripts/fr13_fa2_qrow32_gate.py": "ef3e3f9b37cb35c8f31c61c1a7c68ebcdf421f82478d6274c4222110a6d723a8",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh": "8882ab97bd06ea27efac69a5b5a47ee5060c220fd341de4677eafe7c7b459b2d",
+    "scripts/fr13_patch_fa2_tree_bias.py": "bdf9948b4fe40ad5f3e15a84a02a95755afbb6faae4df6d66dc1b56d530953fa",
+    "scripts/fr13_run_b4_fa2_qrow32_live_gate.sh": "f26a09d5cd58b1b08e7990270fe9a523e72f4853d0c48762505bd4fdf31fa0ba"
+  },
+  "status": "source_and_cpu_gates_pass_gpu_and_real_exact4_gates_pending"
+}
