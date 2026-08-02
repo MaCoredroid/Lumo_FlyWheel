@@ -8066,6 +8066,8 @@ def main(argv: list[str] | None = None) -> int:
         "static_persistent_stocktile_byte_ab",
         "divisor_static_stocktile",
         "divisor_static_stocktile_byte_ab",
+        "identity_stage2_static",
+        "identity_stage2_static_byte_ab",
         "persistent_b4_m128",
         "persistent_b4_m128_byte_ab",
         "persistent_b4_m128_static",
@@ -8077,6 +8079,7 @@ def main(argv: list[str] | None = None) -> int:
         "streamk_force_wide256_byte_ab",
         "static_persistent_stocktile_byte_ab",
         "divisor_static_stocktile_byte_ab",
+        "identity_stage2_static_byte_ab",
     }
     fixed32_cutlass_b4_diagnostic = cutlass_wave in {
         "persistent_b4_m128_byte_ab",

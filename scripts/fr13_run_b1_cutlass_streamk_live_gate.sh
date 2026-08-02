@@ -45,6 +45,14 @@ case "$GATE_CANDIDATE" in
     CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_divisor_static_byte_ab.jsonl
     K64_ROOT_RESULT_NAME=cutlass_divisor_static_k64_root_byte_gate.json
     ;;
+  identity_stage2_static)
+    DIAGNOSTIC_SELECTOR=identity_stage2_static_byte_ab
+    RECORD_SCHEMA=fr13.fixed32.cutlass_identity_stage2_static_byte_ab.v1
+    FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_stage2_live_gate.v1
+    K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_stage2_k64_root_live_gate.v1
+    CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_identity_stage2_static_byte_ab.jsonl
+    K64_ROOT_RESULT_NAME=cutlass_identity_stage2_k64_root_byte_gate.json
+    ;;
   *)
     echo "unsupported Stream-K gate candidate: $GATE_CANDIDATE" >&2
     exit 2
@@ -71,7 +79,8 @@ case "$QUALIFICATION_PROFILE" in
   k64_root)
     [[ "$GATE_CANDIDATE" == "streamk_force_wide256" \
        || "$GATE_CANDIDATE" == "static_persistent_stocktile" \
-       || "$GATE_CANDIDATE" == "divisor_static_stocktile" ]] || {
+       || "$GATE_CANDIDATE" == "divisor_static_stocktile" \
+       || "$GATE_CANDIDATE" == "identity_stage2_static" ]] || {
       echo "B1 k64_root qualification requires a pinned B1 projection candidate" >&2
       exit 2
     }

@@ -26,6 +26,10 @@ DIVISOR_STATIC_B1_CANDIDATE_SHA256 = (
     "338e89d062c2b1ac40909dbc8d64d4ab6b0def9fd86988c9e395e8244606a9f6"
 )
 DIVISOR_STATIC_B1_CANDIDATE_SIZE = 113_837_288
+IDENTITY_STAGE2_CANDIDATE_SHA256 = (
+    "fda710872a88d29b8c5d04f463f4e1f3149f919c494437fb49f5fb9620bb0c92"
+)
+IDENTITY_STAGE2_CANDIDATE_SIZE = 114_909_032
 B4_M128_CANDIDATE_SHA256 = (
     "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
 )
@@ -51,6 +55,9 @@ STATIC_PERSISTENT_B1_SELECTORS = frozenset(
 DIVISOR_STATIC_B1_SELECTORS = frozenset(
     {"divisor_static_stocktile", "divisor_static_stocktile_byte_ab"}
 )
+IDENTITY_STAGE2_SELECTORS = frozenset(
+    {"identity_stage2_static", "identity_stage2_static_byte_ab"}
+)
 B4_M128_SELECTORS = frozenset({"persistent_b4_m128", "persistent_b4_m128_byte_ab"})
 STATIC_B4_M128_SELECTORS = frozenset(
     {"persistent_b4_m128_static", "persistent_b4_m128_static_byte_ab"}
@@ -60,6 +67,7 @@ CANDIDATE_SELECTORS = (
     | WIDE256_SELECTORS
     | STATIC_PERSISTENT_B1_SELECTORS
     | DIVISOR_STATIC_B1_SELECTORS
+    | IDENTITY_STAGE2_SELECTORS
     | B4_M128_SELECTORS
     | STATIC_B4_M128_SELECTORS
 )
@@ -69,6 +77,7 @@ PRODUCTION_SELECTORS = frozenset(
 INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
     "static_persistent_stocktile",
     "divisor_static_stocktile",
+    "identity_stage2_static",
     "persistent_b4_m128_static",
 }
 CONTAINER_SOURCE = Path("/tmp/fr13_cutlass_wave.abi3.so")
@@ -101,6 +110,12 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
             DIVISOR_STATIC_B1_CANDIDATE_SHA256,
             DIVISOR_STATIC_B1_CANDIDATE_SIZE,
             "divisor_static_stocktile",
+        )
+    if selector in IDENTITY_STAGE2_SELECTORS:
+        return (
+            IDENTITY_STAGE2_CANDIDATE_SHA256,
+            IDENTITY_STAGE2_CANDIDATE_SIZE,
+            "identity_stage2_static",
         )
     if selector in B4_M128_SELECTORS:
         return B4_M128_CANDIDATE_SHA256, B4_M128_CANDIDATE_SIZE, "persistent_b4_m128"
@@ -372,6 +387,7 @@ def install_candidate(
         if selector in {
             "static_persistent_stocktile",
             "divisor_static_stocktile",
+            "identity_stage2_static",
         }:
             raise ValueError(
                 "static B1 production remains unavailable until the K64/root "

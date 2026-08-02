@@ -26,10 +26,13 @@ STATIC_PERSISTENT_K64_ROOT_LIVE_SCHEMA = (
 DIVISOR_STATIC_K64_ROOT_LIVE_SCHEMA = (
     "fr13.fixed32.cutlass_divisor_static_k64_root_live_gate.v1"
 )
+IDENTITY_STAGE2_K64_ROOT_LIVE_SCHEMA = (
+    "fr13.fixed32.cutlass_identity_stage2_k64_root_live_gate.v1"
+)
 K64_ROOT_SIDECAR_SCHEMA = "fr13.fixed32.cutlass_streamk.k64_root.production_pass.v1"
 ATTESTATION_SCHEMA = "fr13.fixed32.cutlass_streamk_binary.v2"
 PATCH_SOURCE = Path("scripts/fr13_patch_cutlass_fixed32_wave.py")
-PATCH_SOURCE_SHA256 = "f91c115447b8c563f963c507984c4d9186dd6c4815975587b5d997f01cb1cf74"
+PATCH_SOURCE_SHA256 = "a35a3818ecde4dd1d8c7f23bc1b04c8bb79932aa32f7959e3c61b5d88cb65a41"
 DRAFT_VOCAB_BLOCKS_SOURCE = Path("scripts/fr13_dvk_subset_blocks.json")
 DRAFT_VOCAB_BLOCKS_CONTAINER_PATH = "/workspace/scripts/fr13_dvk_subset_blocks.json"
 DRAFT_VOCAB_BLOCKS_SHA256 = (
@@ -37,7 +40,7 @@ DRAFT_VOCAB_BLOCKS_SHA256 = (
 )
 VLLM_BASE_COMMIT = "fe9c3d6c5f66c873d196800384ed6880687b9e52"
 PATCHED_DISPATCH_SHA256 = (
-    "6fb538e2b875f5528828d349067f98e420ec003a2b292598dcb46bfab09bdba5"
+    "f38d3349a03272a9229d9fa2498dfa6a45f791a445e20caf18580a5cea9dbdf6"
 )
 WIDE256_LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_wide256_live_gate.v1"
 EXPECTED_TASK_IDS = ("astropy__astropy-12907",)
@@ -71,6 +74,11 @@ CANDIDATE_CONTRACTS = {
         "live_schema": "fr13.fixed32.cutlass_divisor_static_live_gate.v1",
         "k64_root_live_schema": DIVISOR_STATIC_K64_ROOT_LIVE_SCHEMA,
         "diagnostic_selector": "divisor_static_stocktile_byte_ab",
+    },
+    "identity_stage2_static": {
+        "live_schema": "fr13.fixed32.cutlass_identity_stage2_live_gate.v1",
+        "k64_root_live_schema": IDENTITY_STAGE2_K64_ROOT_LIVE_SCHEMA,
+        "diagnostic_selector": "identity_stage2_static_byte_ab",
     },
 }
 QUALIFICATION_PROFILES: dict[str, dict[str, object]] = {
@@ -127,6 +135,7 @@ def _qualification_profile(
         "streamk_force_wide256",
         "static_persistent_stocktile",
         "divisor_static_stocktile",
+        "identity_stage2_static",
     }:
         raise QualificationError(
             "B1 k64_root qualification is restricted to wide256 or "

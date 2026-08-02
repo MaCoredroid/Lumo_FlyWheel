@@ -71,7 +71,8 @@ case "$B1_WORKLOAD_PROFILE" in
   k64_root)
     [[ ( "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
          || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" \
-         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "divisor_static_stocktile_byte_ab" ) \
+         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "divisor_static_stocktile_byte_ab" \
+         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_static_byte_ab" ) \
        && "$FR13_GATE_QROW16" == "0" \
        && "$FR13_GATE_TAW_NATIVE" == "0" \
        && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
@@ -129,7 +130,8 @@ source scripts/fr13_fixed32_floor_timers_seq.sh
 if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" \
-      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "divisor_static_stocktile_byte_ab" ]]; then
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "divisor_static_stocktile_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_static_byte_ab" ]]; then
   export ENFORCE_EAGER=1
 fi
 
