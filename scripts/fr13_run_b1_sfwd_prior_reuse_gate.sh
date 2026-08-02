@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One real SWE-Verified K64/root1 B1 byte gate for packed x-gather C64/W16.
+# One real SWE-Verified K64/root1 B1 byte gate for prior-pair x-gather C64/W16.
 # The candidate is shadow-only and the incumbent tensors remain served.
 set -euo pipefail
 
@@ -119,7 +119,7 @@ bash scripts/fr13_run_b1_kernel_live_gate.sh
 finalize_source_manifest
 
 printf '%s\n' \
-  'classification=one_real_swe_verified_k64_root_b1_sfwd_prior_reuse_byte_diagnostic' \
+  'classification=one_real_swe_verified_k64_root_b1_sfwd_priorpair_quadweight_xgather_byte_diagnostic' \
   'task_set=one' \
   'task_count=1' \
   'reference_returned=true' \
@@ -136,6 +136,10 @@ printf '%s\n' \
   'source_descriptor_launcher_argument=false' \
   'source_descriptor_in_kernel=false' \
   'current_x_global_loads_per_element=1' \
+  'prior_pair_load_width_bits=32' \
+  'weight_quad_load_width_bits=64' \
+  'conv_state_required_contiguous=true' \
+  'conv_state_required_alignment_bytes=4' \
   'x_stride=16384,1' \
   'out_stride=10240,1' \
   'source_stage_stride=10240,1' \

@@ -318,6 +318,10 @@ def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
     assert "source_manifest.at_end.json" in runner
     assert "source_descriptor_in_kernel=false" in runner
     assert "current_x_global_loads_per_element=1" in runner
+    assert "prior_pair_load_width_bits=32" in runner
+    assert "weight_quad_load_width_bits=64" in runner
+    assert "conv_state_required_contiguous=true" in runner
+    assert "conv_state_required_alignment_bytes=4" in runner
     assert "conv_num_warps=16" in runner
     assert "topology_host_validation=exact_parent_each_launch" in runner
     assert "source_descriptor_device_validation=false" in runner
