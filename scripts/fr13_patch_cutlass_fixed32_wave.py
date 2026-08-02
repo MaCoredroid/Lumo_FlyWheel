@@ -71,6 +71,7 @@ SCHEDULER_SPECIALIZATION_REPLACEMENT = r"""#include "cutlass_gemm_caller.cuh"
 
 namespace vllm {
 struct fr13_fixed32_m128_static_scheduler {};
+struct fr13_fixed32_m128_divisor_static_scheduler {};
 struct fr13_fixed32_wide256_recompute_scheduler {};
 }  // namespace vllm
 
@@ -321,6 +322,68 @@ struct TileSchedulerSelector<
     TileShape, ClusterShape, SchedulerPipelineStageCount> {
   using Scheduler = StaticPersistentTileScheduler100;
 };
+
+// Fixed32 B1 has one output-row tile and 40, 112, 128, or 272 column
+// tiles. A 48-CTA persistent grid leaves a partially occupied final wave for
+// all but the 40-tile projection. Keep every stock tile intact, but select the
+// widest divisor of the logical tile count down to 28 CTAs. On the pinned
+// shapes this launches 40, 28, 32, and 34 CTAs respectively, so every CTA has
+// the same number of complete output tiles.
+class Fr13DivisorBalancedStaticTileScheduler100
+    : public StaticPersistentTileScheduler100 {
+  using Base = StaticPersistentTileScheduler100;
+
+ public:
+  using Base::Base;
+  using Base::get_grid_shape;
+  using Params = typename Base::Params;
+
+  template <class ProblemShapeMNKL, class TileShape, class AtomThrShape,
+            class ClusterShape>
+  CUTLASS_HOST_DEVICE static dim3 get_grid_shape(
+      Params const& params, ProblemShapeMNKL problem_shape_mnkl,
+      TileShape tile_shape_mnk, AtomThrShape atom_thr_shape_mnk,
+      ClusterShape cluster_shape_mnk, KernelHardwareInfo hw_info) {
+    dim3 base_grid = Base::get_grid_shape(
+        params, problem_shape_mnkl, tile_shape_mnk, atom_thr_shape_mnk,
+        cluster_shape_mnk, hw_info);
+    dim3 problem_blocks = Base::get_tiled_cta_shape_mnl(
+        problem_shape_mnkl, tile_shape_mnk, atom_thr_shape_mnk,
+        cluster_shape_mnk);
+    uint64_t logical_tiles = uint64_t(problem_blocks.x) *
+        uint64_t(problem_blocks.y) * uint64_t(problem_blocks.z);
+    uint32_t base_ctas = base_grid.x * base_grid.y * base_grid.z;
+    constexpr uint32_t MinBalancedCtas = 28;
+    uint32_t balanced_ctas = base_ctas;
+    for (uint32_t candidate = base_ctas;
+         candidate >= MinBalancedCtas; --candidate) {
+      if (logical_tiles % candidate == 0) {
+        balanced_ctas = candidate;
+        break;
+      }
+    }
+    if (balanced_ctas == base_ctas) {
+      return base_grid;
+    }
+    // The candidate is admitted only for cluster (1,1,1), L=1 fixed32 B1.
+    // Preserve CUTLASS's one-dimensional launch orientation.
+    if (base_grid.y == 1 && base_grid.z == 1) {
+      return dim3(balanced_ctas, 1, 1);
+    }
+    if (base_grid.x == 1 && base_grid.z == 1) {
+      return dim3(1, balanced_ctas, 1);
+    }
+    return base_grid;
+  }
+};
+
+template <class TileShape, class ClusterShape,
+          uint32_t SchedulerPipelineStageCount>
+struct TileSchedulerSelector<
+    vllm::fr13_fixed32_m128_divisor_static_scheduler, arch::Sm120,
+    TileShape, ClusterShape, SchedulerPipelineStageCount> {
+  using Scheduler = Fr13DivisorBalancedStaticTileScheduler100;
+};
 }  // namespace cutlass::gemm::kernel::detail
 
 namespace vllm {
@@ -414,6 +477,28 @@ struct cutlass_3x_gemm_fp8_blockwise_m128_static
   struct GemmKernel : public KernelType {};
 };
 
+template <
+    class OutType, int ScaleGranularityM, int ScaleGranularityN,
+    int ScaleGranularityK, class MmaTileShape, class ClusterShape,
+    class EpilogueScheduler, class MainloopScheduler, bool swap_ab_>
+struct cutlass_3x_gemm_fp8_blockwise_m128_divisor_static
+    : cutlass_3x_gemm_fp8_blockwise<
+          OutType, ScaleGranularityM, ScaleGranularityN, ScaleGranularityK,
+          MmaTileShape, ClusterShape, EpilogueScheduler, MainloopScheduler,
+          swap_ab_> {
+  using Base = cutlass_3x_gemm_fp8_blockwise<
+      OutType, ScaleGranularityM, ScaleGranularityN, ScaleGranularityK,
+      MmaTileShape, ClusterShape, EpilogueScheduler, MainloopScheduler,
+      swap_ab_>;
+
+  using KernelType = enable_sm120_family<cutlass::gemm::kernel::GemmUniversal<
+      Shape<int, int, int, int>, typename Base::CollectiveMainloop,
+      typename Base::CollectiveEpilogue,
+      fr13_fixed32_m128_divisor_static_scheduler>>;
+
+  struct GemmKernel : public KernelType {};
+};
+
 """
 
 CONFIG_ANCHOR = """template <typename Gemm>
@@ -494,6 +579,19 @@ struct sm120_blockwise_fp8_config_b1_static_persistent_stocktile {
 };
 
 template <typename OutType>
+struct sm120_blockwise_fp8_config_b1_divisor_static_stocktile {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_128, _32, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_m128_divisor_static<
+      OutType, 128, 1, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, true>;
+};
+
+template <typename OutType>
 struct sm120_blockwise_fp8_config_b4_persistent_m128 {
   using KernelSchedule =
       cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
@@ -533,6 +631,8 @@ enum class fixed32_cutlass_wave_variant {
   stream_k_force_wide256_byte_ab,
   static_persistent_stocktile,
   static_persistent_stocktile_byte_ab,
+  divisor_static_stocktile,
+  divisor_static_stocktile_byte_ab,
   persistent_b4_m128,
   persistent_b4_m128_byte_ab,
   persistent_b4_m128_static,
@@ -567,6 +667,12 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     }
     if (value == "static_persistent_stocktile_byte_ab") {
       return fixed32_cutlass_wave_variant::static_persistent_stocktile_byte_ab;
+    }
+    if (value == "divisor_static_stocktile") {
+      return fixed32_cutlass_wave_variant::divisor_static_stocktile;
+    }
+    if (value == "divisor_static_stocktile_byte_ab") {
+      return fixed32_cutlass_wave_variant::divisor_static_stocktile_byte_ab;
     }
     if (value == "persistent_b4_m128") {
       return fixed32_cutlass_wave_variant::persistent_b4_m128;
@@ -732,6 +838,13 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
                            static_persistent_stocktile_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
+  if (M != 32 &&
+      (wave_variant ==
+           fixed32_cutlass_wave_variant::divisor_static_stocktile ||
+       wave_variant == fixed32_cutlass_wave_variant::
+                           divisor_static_stocktile_byte_ab)) {
+    wave_variant = fixed32_cutlass_wave_variant::stock;
+  }
   if (M != 128 &&
       (wave_variant ==
            fixed32_cutlass_wave_variant::persistent_b4_m128 ||
@@ -768,6 +881,14 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       [&](torch::stable::Tensor& destination) {
     using Gemm = typename
         sm120_blockwise_fp8_config_b1_static_persistent_stocktile<OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
+  auto run_divisor_static_stocktile =
+      [&](torch::stable::Tensor& destination) {
+    using Gemm = typename
+        sm120_blockwise_fp8_config_b1_divisor_static_stocktile<OutType>::Gemm;
     return cutlass_gemm_caller_blockwise<Gemm>(
         destination, a, b, a_scales, b_scales);
   };
@@ -811,6 +932,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   const bool static_persistent_byte_ab =
       wave_variant ==
       fixed32_cutlass_wave_variant::static_persistent_stocktile_byte_ab;
+  const bool divisor_static_byte_ab =
+      wave_variant ==
+      fixed32_cutlass_wave_variant::divisor_static_stocktile_byte_ab;
   const bool b4_m128_byte_ab =
       wave_variant ==
       fixed32_cutlass_wave_variant::persistent_b4_m128_byte_ab;
@@ -819,8 +943,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       fixed32_cutlass_wave_variant::persistent_b4_m128_static_byte_ab;
   if (wave_variant ==
           fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab ||
-      wide256_byte_ab || static_persistent_byte_ab || b4_m128_byte_ab ||
-      b4_m128_static_byte_ab) {
+      wide256_byte_ab || static_persistent_byte_ab ||
+      divisor_static_byte_ab || b4_m128_byte_ab || b4_m128_static_byte_ab) {
     auto run_candidate = [&](torch::stable::Tensor& destination) {
       if (b4_m128_static_byte_ab) {
         return run_b4_persistent_m128_static(destination);
@@ -833,6 +957,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       }
       if (static_persistent_byte_ab) {
         return run_static_persistent_stocktile(destination);
+      }
+      if (divisor_static_byte_ab) {
+        return run_divisor_static_stocktile(destination);
       }
       return run_stream_k(destination);
     };
@@ -905,6 +1032,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
             ? "/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl"
         : static_persistent_byte_ab
             ? "/logs/fr13_fixed32_cutlass_static_persistent_byte_ab.jsonl"
+        : divisor_static_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_divisor_static_byte_ab.jsonl"
             : "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl";
     static std::mutex log_mutex;
     {
@@ -921,6 +1050,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
                   ? "fr13.fixed32.cutlass_streamk_wide256_byte_ab.v1"
               : static_persistent_byte_ab
                   ? "fr13.fixed32.cutlass_static_persistent_byte_ab.v1"
+              : divisor_static_byte_ab
+                  ? "fr13.fixed32.cutlass_divisor_static_byte_ab.v1"
                   : "fr13.fixed32.cutlass_streamk_byte_ab.v2")
           << "\\\","
           << "\\\"invocation\\\":" << invocation << ","
@@ -957,6 +1088,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   if (wave_variant ==
       fixed32_cutlass_wave_variant::static_persistent_stocktile) {
     return run_static_persistent_stocktile(out);
+  }
+
+  if (wave_variant ==
+      fixed32_cutlass_wave_variant::divisor_static_stocktile) {
+    return run_divisor_static_stocktile(out);
   }
 
   if (wave_variant ==

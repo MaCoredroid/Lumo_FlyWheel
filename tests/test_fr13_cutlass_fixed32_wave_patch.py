@@ -96,6 +96,8 @@ def test_patch_is_default_off_and_shape_gated() -> None:
     assert 'value == "streamk_force_wide256_byte_ab"' in patched
     assert 'value == "static_persistent_stocktile"' in patched
     assert 'value == "static_persistent_stocktile_byte_ab"' in patched
+    assert 'value == "divisor_static_stocktile"' in patched
+    assert 'value == "divisor_static_stocktile_byte_ab"' in patched
     assert 'value == "persistent_b4_m128"' in patched
     assert 'value == "persistent_b4_m128_byte_ab"' in patched
     assert 'value == "persistent_b4_m128_static"' in patched
@@ -119,7 +121,7 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 2
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 6
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 7
     assert "PingpongSm120" not in module.CONFIG_REPLACEMENT
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
@@ -202,6 +204,44 @@ def test_b1_static_persistent_reuses_stock_collective_and_generic_scheduler() ->
         in patched
     )
     assert "fr13.fixed32.cutlass_static_persistent_byte_ab.v1" in patched
+
+
+def test_b1_divisor_static_balances_real_projection_tile_counts() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    assert "struct fr13_fixed32_m128_divisor_static_scheduler {};" in patched
+    assert "class Fr13DivisorBalancedStaticTileScheduler100" in patched
+    assert "constexpr uint32_t MinBalancedCtas = 28;" in patched
+    assert "logical_tiles % candidate == 0" in patched
+    assert "using Scheduler = Fr13DivisorBalancedStaticTileScheduler100;" in patched
+    assert "if (M != 32 &&" in patched
+    assert "run_divisor_static_stocktile" in patched
+    assert '"/logs/fr13_fixed32_cutlass_divisor_static_byte_ab.jsonl"' in patched
+    assert "fr13.fixed32.cutlass_divisor_static_byte_ab.v1" in patched
+
+    # Pinned M32 tile counts and the corresponding widest divisors in [28, 48].
+    expected = {40: 40, 112: 28, 128: 32, 272: 34}
+    for logical_tiles, grid_ctas in expected.items():
+        selected = next(
+            candidate
+            for candidate in range(min(48, logical_tiles), 27, -1)
+            if logical_tiles % candidate == 0
+        )
+        assert selected == grid_ctas
+
+    config_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b1_divisor_static_stocktile"
+    )
+    config_end = patched.index(
+        "struct sm120_blockwise_fp8_config_b4_persistent_m128", config_start
+    )
+    config = patched[config_start:config_end]
+    assert "using TileShape = Shape<_128, _32, _128>;" in config
+    assert "using ClusterShape = Shape<_1, _1, _1>;" in config
+    assert "OutType, 128, 1, 128, TileShape, ClusterShape" in config
+    assert "cutlass_3x_gemm_fp8_blockwise_m128_divisor_static" in config
+    assert "StreamKScheduler" not in config
 
 
 def test_b4_m128_static_changes_only_complete_tile_scheduler() -> None:
