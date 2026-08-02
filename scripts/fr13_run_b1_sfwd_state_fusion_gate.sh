@@ -114,12 +114,18 @@ floor_ms = float(sys.argv[5])
 cap_ms = float(sys.argv[6])
 draft_vocab_blocks_sha256 = sys.argv[7]
 logs = arm_dir / "logs"
+run_root = arm_dir.parent
 records_path = logs / "fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl"
 pass_path = logs / "fr13_fixed32_sfwd_state_fusion.live_pass.json"
 marker_path = logs / "fr13_fixed32_sfwd_state_fusion.real_event.arm"
 diagnostic_path = arm_dir / "fixed32_b1_diagnostic.json"
 container_env_path = arm_dir / "container_env.txt"
 engine_ledger_path = logs / "fr13_fixed32_engine_ingress.jsonl"
+docker_after_tasks_path = arm_dir / "docker_after_tasks.log"
+runtime_manifest_launch_path = run_root / "runtime_manifest.at_launch.json"
+runtime_manifest_end_path = run_root / "runtime_manifest.at_end.json"
+external_manifest_launch_path = run_root / "external_manifest.at_launch.json"
+external_manifest_end_path = run_root / "external_manifest.at_end.json"
 output_path = arm_dir / "sfwd_state_fusion_k64_root_b1_gate.json"
 
 
@@ -139,11 +145,38 @@ marker_raw = regular(marker_path)
 diagnostic_raw = regular(diagnostic_path)
 container_env_raw = regular(container_env_path)
 engine_ledger_raw = regular(engine_ledger_path)
+docker_after_tasks_raw = regular(docker_after_tasks_path)
+runtime_manifest_launch_raw = regular(runtime_manifest_launch_path)
+runtime_manifest_end_raw = regular(runtime_manifest_end_path)
+external_manifest_launch_raw = regular(external_manifest_launch_path)
+external_manifest_end_raw = regular(external_manifest_end_path)
 records = [json.loads(line) for line in records_raw.decode("ascii").splitlines()]
 live_pass = json.loads(pass_raw.decode("ascii"))
 diagnostic = json.loads(diagnostic_raw.decode("ascii"))
 marker = f"swe_verified:{task_id}"
 errors = []
+
+if runtime_manifest_launch_raw != runtime_manifest_end_raw:
+    errors.append("fixed32 runtime manifest drifted during the real task")
+if external_manifest_launch_raw != external_manifest_end_raw:
+    errors.append("fixed32 external manifest drifted during the real task")
+
+docker_after_tasks = docker_after_tasks_raw.decode("utf-8", errors="replace")
+shim_prefix = "[FR13_DRAFT_VOCAB] shim built K=65536 "
+root_prefix = "[FR13_DRAFT_VOCAB_ROOT] engaged K=65536 "
+disabled_prefix = "[FR13_DRAFT_VOCAB] DISABLED"
+shim_lines = [
+    line for line in docker_after_tasks.splitlines() if shim_prefix in line
+]
+root_lines = [
+    line for line in docker_after_tasks.splitlines() if root_prefix in line
+]
+if len(shim_lines) != 1 or "mode=gather" not in shim_lines[0]:
+    errors.append("K64 draft-vocabulary gather shim did not engage exactly once")
+if len(root_lines) != 1 or "mode=gather" not in root_lines[0]:
+    errors.append("K64 root gather did not engage exactly once")
+if disabled_prefix in docker_after_tasks:
+    errors.append("draft-vocabulary runtime fallback to full vocabulary engaged")
 
 if not records:
     errors.append("SFWD state-fusion byte gate was vacuous")
@@ -246,6 +279,13 @@ payload = {
     "live_pass_sha256": hashlib.sha256(pass_raw).hexdigest(),
     "real_event_marker_sha256": hashlib.sha256(marker_raw).hexdigest(),
     "engine_ingress_ledger_sha256": hashlib.sha256(engine_ledger_raw).hexdigest(),
+    "docker_after_tasks_sha256": hashlib.sha256(docker_after_tasks_raw).hexdigest(),
+    "runtime_manifest_sha256": hashlib.sha256(
+        runtime_manifest_launch_raw
+    ).hexdigest(),
+    "external_manifest_sha256": hashlib.sha256(
+        external_manifest_launch_raw
+    ).hexdigest(),
     "container_env_sha256": hashlib.sha256(container_env_raw).hexdigest(),
     "errors": errors,
 }

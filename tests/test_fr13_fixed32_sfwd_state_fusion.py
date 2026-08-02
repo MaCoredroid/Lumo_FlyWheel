@@ -382,6 +382,19 @@ def test_b1_k64_root_runner_is_reference_returning_and_nonacceptance() -> None:
     assert "K64_ROOT_WEIGHT_BYTES=32666638208" in runner
     assert "K64_ROOT_FLOOR_MS=119.658015414" in runner
     assert "K64_ROOT_CAP_MS=137.6067177261" in runner
+    assert 'docker_after_tasks_path = arm_dir / "docker_after_tasks.log"' in runner
+    assert 'shim_prefix = "[FR13_DRAFT_VOCAB] shim built K=65536 "' in runner
+    assert 'root_prefix = "[FR13_DRAFT_VOCAB_ROOT] engaged K=65536 "' in runner
+    assert 'disabled_prefix = "[FR13_DRAFT_VOCAB] DISABLED"' in runner
+    assert 'len(shim_lines) != 1 or "mode=gather" not in shim_lines[0]' in runner
+    assert 'len(root_lines) != 1 or "mode=gather" not in root_lines[0]' in runner
+    assert "draft-vocabulary runtime fallback to full vocabulary engaged" in runner
+    assert 'run_root / "runtime_manifest.at_launch.json"' in runner
+    assert 'run_root / "runtime_manifest.at_end.json"' in runner
+    assert 'run_root / "external_manifest.at_launch.json"' in runner
+    assert 'run_root / "external_manifest.at_end.json"' in runner
+    assert "runtime_manifest_launch_raw != runtime_manifest_end_raw" in runner
+    assert "external_manifest_launch_raw != external_manifest_end_raw" in runner
     assert "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=1" in runner
     assert "FR13_CONV_WB_BATCHED=1" in runner
     assert "FR13_TREE_CONV_FUSED=1" in runner
