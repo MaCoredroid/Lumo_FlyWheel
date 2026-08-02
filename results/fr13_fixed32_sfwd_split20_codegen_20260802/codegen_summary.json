@@ -1,9 +1,9 @@
 {
   "candidate": "fixed32_sfwd_channel_serial_r32_b1c128w4_bxc256w8_u32x2_s20_v1",
   "classification": "offline_codegen_only",
-  "source_commit": "34a83376a855ec90d6b7b4f44c618056d2870c99",
+  "source_commit": "57ad3d8c7122068a76d01b3614508a5aa7195f59",
   "source_hashes": {
-    "launcher_sha256": "062b98c282db089cfbf446db2c4dfdb7d324584158e79c2b21e1140dd79ec9c1",
+    "launcher_sha256": "91c30b2dd64f451b476756dd28525307ff89893995541ad74ff1aa315b806c42",
     "kernel_sha256": "39d3d6234318770a44b6dbea463b04caf74b0c648cd43938b43598e98d50db2f",
     "gate_sha256": "b155ca9fe42833282a5069f7e047c2630c635322ef04c4afb30867d412c132bf",
     "runner_sha256": "1a48c0c63fce6ef3eea4430c0aa28093bab58757062217db9e385168377dcb1c"

@@ -4,6 +4,8 @@
   unit tests after the split20 source and topology-test changes.
 - The structural topology test checks all 32 nodes and four operand columns
   against the fixed descriptorless source table.
+- The launcher fails closed unless the two 32-bit weight loads are 4-byte
+  aligned; the post-guard focused kernel suite reports `26 passed`.
 - Python compilation completed for the launcher, kernel source, and gate.
 - Shell syntax validation completed for the real B1 runner.
 - `git diff --check` completed without errors.
