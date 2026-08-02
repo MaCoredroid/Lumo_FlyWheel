@@ -1,0 +1,78 @@
+{
+  "schema": "fr13.fixed32.cutlass_fixedalpha_crossbatch_source_audit.v1",
+  "created_utc": "2026-08-02T13:53:18Z",
+  "scope": {
+    "route": "Tail23/Hydra27",
+    "draft_profile": "K64/root",
+    "batches": [1, 4],
+    "fixed_rows": 32,
+    "projection_shapes_nk": [
+      [34816, 5120],
+      [5120, 17408],
+      [5120, 6144],
+      [16384, 5120],
+      [14336, 5120]
+    ]
+  },
+  "source": {
+    "branch": "agent/fixed32-cutlass-fixedalpha-crossbatch-20260802",
+    "commit": "db4465cd7e2b272c142697024a45c814b1274a46",
+    "base_commit": "ba85478c80acb987704d6bdce830ecdba4d36ce3",
+    "patch_file": "scripts/fr13_patch_cutlass_fixed32_wave.py",
+    "patch_sha256": "4a35a032a84f26f84f178d8cc926d918a9c8899b503abfb829c347d5e0a2b662",
+    "patch_bytes": 57393
+  },
+  "pinned_inputs": {
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "generated_dispatch_sha256": "06bef270f22fc99333ca5006871a7526ed9fc9e47d17a08c2afcc8fae14f079a",
+    "generated_dispatch_bytes": 58030
+  },
+  "build": {
+    "target": "sm_121a",
+    "cuda_compiler": "13.0.88",
+    "host_object_sha256": "cede80ddebaba473f937f15a5ffc7f4780b268690e5e67b9d659d1245f826f28",
+    "host_object_bytes": 16350008,
+    "native_cubin_sha256": "dd67279d81d1aee79ab5a4fba0cd6a5c721ba90abf2f4bdc9a7451bd947bf1c8",
+    "native_cubin_bytes": 1603928,
+    "translation_units": 1,
+    "warnings": 0
+  },
+  "candidate": {
+    "selector": "fixedalpha_static",
+    "diagnostic_selector": "fixedalpha_static_byte_ab",
+    "default_enabled": false,
+    "b1": {
+      "tile_mnk": [128, 32, 128],
+      "scale_granularity_mnk": [128, 1, 128],
+      "swap_ab": true,
+      "scheduler": "divisor_balanced_static",
+      "k_traversal": "ordered_full_k"
+    },
+    "b4": {
+      "tile_mnk": [128, 128, 128],
+      "scale_granularity_mnk": [1, 128, 128],
+      "swap_ab": false,
+      "scheduler": "static_persistent",
+      "k_traversal": "ordered_full_k"
+    },
+    "changed_component": "epilogue_alpha_beta_visitor_state",
+    "retained_numeric_operations": [
+      "fp32_multiply_by_one",
+      "round_to_nearest_output_conversion"
+    ]
+  },
+  "verification": {
+    "patch_tests": "pass_27_of_27",
+    "cutlass_tests": "pass_92_of_92",
+    "ruff": "pass",
+    "py_compile": "pass",
+    "git_diff_check": "pass",
+    "isolated_host_compile": "pass",
+    "resource_gate": "pass_no_regression",
+    "static_codegen_gate": "pass_reduced",
+    "runtime_gpu_measurement": "not_run",
+    "real_workload_measurement": "not_run",
+    "performance_acceptance": false
+  }
+}
