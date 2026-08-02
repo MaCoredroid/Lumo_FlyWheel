@@ -1,0 +1,18 @@
+{
+  "accepted_length_domain": [
+    0,
+    11
+  ],
+  "active_step_order": "root_then_accepted_paths_in_original_order",
+  "critical_path_change": 0,
+  "full_value_rows_computed_in_parallel": true,
+  "ordered_recurrence_math_equal": true,
+  "ordered_recurrence_math_sha256": "d16ad65fe4affb85a85051bf8dc7530c17a34dd85826c05d6bd8adec67b1ce22",
+  "physical_node_domain": [
+    0,
+    31
+  ],
+  "reduction_axis": "K",
+  "schema": "fr13.fixed32.cfwd_physical32_fulltile_composed.math_contract.v1",
+  "serial_value_tile_loop_added": false
+}
