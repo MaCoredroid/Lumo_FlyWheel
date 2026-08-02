@@ -9,14 +9,15 @@ CUDA = REPO / "csrc" / "fr13_bf16_gemvx_k64_m1_shuffle.cu"
 BUILDER = REPO / "scripts" / "fr13_build_bf16_gemvx_k64_m1_shuffle.py"
 
 
-def test_cuda_source_is_strict_k64_m1_and_halves_reference_cta_grid() -> None:
+def test_cuda_source_is_strict_k64_m1_and_halves_r16_cta_grid() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert "constexpr int kHidden = 5120;" in source
     assert "constexpr int kVocab = 65536;" in source
     assert "constexpr int kLanes = 16;" in source
-    assert "constexpr int kRowsPerCta = 16;" in source
-    assert "static_assert(kCtas == 4096);" in source
+    assert "constexpr int kRowsPerCta = 32;" in source
+    assert "static_assert(kLanes * kRowsPerCta == 512);" in source
+    assert "static_assert(kCtas == 2048);" in source
     assert "const dim3 block(kLanes, kRowsPerCta, 1);" in source
     assert "<<<kCtas, block, 0, at::cuda::getCurrentCUDAStream()>>>" in source
     assert "__syncthreads" not in source
@@ -57,8 +58,8 @@ def test_cuda_op_is_out_variant_with_strict_k64_geometry() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert (
-        "gemvx_m1_shuffle_out(Tensor(a!) output, Tensor input, Tensor weight) -> ()"
-        in source
+        "gemvx_m1_shuffle_r32_out(Tensor(a!) output, Tensor input, "
+        "Tensor weight) -> ()" in source
     )
     assert "input.sizes() == at::IntArrayRef({1, kHidden})" in source
     assert "weight.sizes() == at::IntArrayRef({kVocab, kHidden})" in source
@@ -66,6 +67,7 @@ def test_cuda_op_is_out_variant_with_strict_k64_geometry() -> None:
     assert "weight must be contiguous [65536,5120]" in source
     assert "at::cuda::getCurrentCUDAStream()" in source
     assert "C10_CUDA_KERNEL_LAUNCH_CHECK();" in source
+    assert "TORCH_LIBRARY_FRAGMENT(fr13_bf16_k64_head, library)" in source
 
 
 def test_builder_is_pinned_default_off_and_claims_no_qualification() -> None:
@@ -81,3 +83,6 @@ def test_builder_is_pinned_default_off_and_claims_no_qualification() -> None:
     assert '"resource_claim": False' in source
     assert '"performance_measurement": False' in source
     assert '"production_default_enabled": False' in source
+    assert '"grid": [2048, 1, 1]' in source
+    assert '"block": [16, 32, 1]' in source
+    assert '"output_rows_per_cta": 32' in source
