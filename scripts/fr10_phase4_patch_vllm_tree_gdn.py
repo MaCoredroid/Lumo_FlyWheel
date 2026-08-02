@@ -4824,6 +4824,27 @@ def _fr13_fixed32_observed_commit(
             )
         )
     layer_batch = committer_contract.get("layer_batch", False)
+    metadata_copy_fusion = committer_contract.get(
+        "metadata_copy_fusion", False
+    )
+    metadata_published_delta = _fr13_fixed32_batch_counter_delta(
+        committer_after,
+        committer_before,
+        "metadata_fusion_published_by_batch",
+        batch,
+    )
+    metadata_consumed_delta = _fr13_fixed32_batch_counter_delta(
+        committer_after,
+        committer_before,
+        "metadata_fusion_consumed_by_batch",
+        batch,
+    )
+    metadata_fallback_delta = _fr13_fixed32_batch_counter_delta(
+        committer_after,
+        committer_before,
+        "metadata_fusion_fallbacks_by_batch",
+        batch,
+    )
     normalized_committer = {
         "batch": int(committer_contract.get("batch", -1)),
         "path_cap": int(committer_contract.get("path_cap", -1)),
@@ -4844,6 +4865,41 @@ def _fr13_fixed32_observed_commit(
     expected_ring_gathers = 0 if layer_batch is True else 4
     committer_fallback = int(
         type(layer_batch) is not bool
+        or type(metadata_copy_fusion) is not bool
+        or (
+            metadata_copy_fusion is True
+            and (
+                layer_batch is not True
+                or metadata_published_delta != 1
+                or metadata_consumed_delta != 1
+                or metadata_fallback_delta != 0
+                or int(
+                    committer_contract.get(
+                        "metadata_copy_launches_per_event", -1
+                    )
+                ) != 0
+                or int(
+                    committer_contract.get(
+                        "metadata_copy_elements_per_request", -1
+                    )
+                ) != 17
+                or committer_contract.get("metadata_validation_lease")
+                != "conv_direct_exact_pointer_batch_stream_one_shot"
+                or committer_contract.get("metadata_guarded_fallback")
+                is not True
+                or committer_contract.get(
+                    "duplicate_committer_metadata_guard"
+                ) is not False
+            )
+        )
+        or (
+            metadata_copy_fusion is False
+            and (
+                metadata_published_delta != 0
+                or metadata_consumed_delta != 0
+                or metadata_fallback_delta != 0
+            )
+        )
         or normalized_committer["batch"] != batch
         or normalized_committer["path_cap"] != 16
         or normalized_committer["neutralizations"] != expected_neutralizations

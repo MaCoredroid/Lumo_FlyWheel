@@ -52,6 +52,73 @@ def test_layer_batch_arm_is_explicit_and_default_off(monkeypatch) -> None:
     assert requested() is True
 
 
+def test_metadata_fusion_arm_is_explicit_and_default_off(monkeypatch) -> None:
+    node = _function("_fr13_fixed32_committer_metadata_fusion_requested")
+    namespace = {"os": os}
+    exec(
+        compile(ast.Module(body=[node], type_ignores=[]), str(KERNEL_PATH), "exec"),
+        namespace,
+    )
+    requested = namespace[node.name]
+
+    monkeypatch.delenv(
+        "FR13_FIXED32_COMMITTER_METADATA_FUSION", raising=False
+    )
+    monkeypatch.setattr(os.path, "exists", lambda _path: False)
+    assert requested() is False
+
+    monkeypatch.setenv("FR13_FIXED32_COMMITTER_METADATA_FUSION", "1")
+    assert requested() is True
+    monkeypatch.delenv("FR13_FIXED32_COMMITTER_METADATA_FUSION")
+    monkeypatch.setattr(
+        os.path,
+        "exists",
+        lambda path: path
+        == "/logs/fr13_fixed32_committer_metadata_fusion.arm",
+    )
+    assert requested() is True
+
+
+def test_metadata_fusion_lease_is_exact_and_one_shot() -> None:
+    nodes = [
+        _function("_fr13_fixed32_committer_publish_metadata_lease"),
+        _function("_fr13_fixed32_committer_consume_metadata_lease"),
+    ]
+    namespace = {
+        "_FR13_FIXED32_COMMITTER_METADATA_LEASE": {},
+        "RuntimeError": RuntimeError,
+    }
+    exec(
+        compile(ast.Module(body=nodes, type_ignores=[]), str(KERNEL_PATH), "exec"),
+        namespace,
+    )
+    publish = namespace["_fr13_fixed32_committer_publish_metadata_lease"]
+    consume = namespace["_fr13_fixed32_committer_consume_metadata_lease"]
+
+    publish(("stream-1", "batch-4", "ptrs-a"))
+    with pytest.raises(RuntimeError, match="prior lease was not consumed"):
+        publish(("stream-1", "batch-4", "ptrs-a"))
+    assert consume(("stream-2", "batch-4", "ptrs-a")) is False
+    assert namespace["_FR13_FIXED32_COMMITTER_METADATA_LEASE"] == {}
+
+    publish(("stream-1", "batch-4", "ptrs-a"))
+    assert consume(("stream-1", "batch-4", "ptrs-a")) is True
+    assert consume(("stream-1", "batch-4", "ptrs-a")) is False
+
+
+def test_metadata_fusion_lease_key_binds_pointer_batch_stream_and_shapes() -> None:
+    key = _text("_fr13_fixed32_committer_metadata_lease_key")
+
+    assert '"fixed32_committer_metadata_fusion_v1"' in key
+    assert "int(batch)" in key
+    assert "int(validation_bank_rows)" in key
+    assert "tuple(stream_key)" in key
+    assert "int(tensor.data_ptr())" in key
+    assert "tensor.stride()" in key
+    assert "str(tensor.dtype)" in key
+    assert "str(tensor.device)" in key
+
+
 def test_layer_batch_kernel_keeps_native_recurrence_and_geometry() -> None:
     kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
     launch = _text("_fr13_fixed32_committer_native_layer_batch")
@@ -133,6 +200,31 @@ def test_layer_batch_consumes_prevalidated_fixed32_scan_bounds() -> None:
     assert '"hot_scan_bound_clamps": 0' in preseed
     assert '"physical_node_domain": 32' in preseed
     assert '"accepted_steps_max": 12' in preseed
+
+
+def test_metadata_fusion_preserves_guarded_replay_fallback() -> None:
+    replay = _text("_fr13_fixed32_committer_replay")
+    conv = _text("launch_fixed32_conv_commit_to_col0")
+    preseed = _text("preseed_fixed32_committer_graph")
+    resolver = _text("_fr13_fixed32_committer_metadata_fusion_state")
+
+    assert "if state.get(\"metadata_copy_fusion\", False):" in replay
+    assert "_fr13_fixed32_committer_consume_metadata_lease(" in replay
+    assert "if not metadata_fused:" in replay
+    assert 'state["accepted_paths"].copy_(accepted_paths)' in replay
+    assert 'state["accepted_lens"].copy_(accepted_lens)' in replay
+    assert "_fr13_fixed32_validate_running_rows(" in replay
+    assert "_fr13_fixed32_device_assert(" in replay
+    assert "_fr13_fixed32_conv_direct_col0_metadata_kernel[grid](" in conv
+    assert conv.index(
+        "_fr13_fixed32_conv_direct_col0_metadata_kernel[grid]("
+    ) < conv.index("_fr13_fixed32_committer_publish_metadata_lease(")
+    assert '"metadata_copy_fusion": metadata_copy_fusion' in preseed
+    assert '"metadata_copy_launches_per_event": (' in preseed
+    assert '"metadata_copy_elements_per_request": (' in preseed
+    assert '"metadata_guarded_fallback": True' in preseed
+    for allocation in ("torch.empty(", "torch.zeros(", "torch.full("):
+        assert allocation not in resolver
 
 
 def test_layer_batch_publishes_only_the_final_running_state() -> None:
@@ -222,6 +314,9 @@ def test_layer_batch_candidate_loads_live_ring_rows_without_staging() -> None:
     assert '"programs_per_layer_request_value_head": 1' in preseed
     assert '"duplicate_value_tile_k_loads_per_step": 0' in preseed
     assert '"state_elements_per_thread_before_compiler_effects": 64' in preseed
+    assert '"metadata_copy_fusion": metadata_copy_fusion' in preseed
+    assert '"metadata_validation_lease": (' in preseed
+    assert '"duplicate_committer_metadata_guard": (' in preseed
 
 
 def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> None:
@@ -417,6 +512,9 @@ def test_counters_expose_per_batch_gate_state_for_timing_boundaries() -> None:
     assert 'state.get("layer_batch_byte_gate_passed", False)' in counters
     assert 'state.get("layer_batch_byte_gate_attempts", -1)' in counters
     assert 'state.get("layer_batch_byte_gate_coverage_mask", -1)' in counters
+    assert '"metadata_fusion_published_by_batch"' in counters
+    assert '"metadata_fusion_consumed_by_batch"' in counters
+    assert '"metadata_fusion_fallbacks_by_batch"' in counters
 
 
 def test_layer_programs_have_disjoint_layer_state_and_shared_read_only_paths() -> None:
@@ -459,6 +557,14 @@ def test_launcher_materializes_worker_visible_arm_only_when_requested() -> None:
     assert 'if [[ "$FR13_FIXED32_COMMITTER_LAYER_BATCH" == "1" ]]' in launcher
     assert '"$ARMDIR/logs/fr13_fixed32_committer_layer_batch.arm"' in launcher
     assert "committer layer-batch arm requires a fixed32 kind" in launcher
+    assert "FR13_FIXED32_COMMITTER_METADATA_FUSION=${" in launcher
+    assert (
+        "FR13_FIXED32_COMMITTER_METADATA_FUSION must be exactly 0 or 1"
+        in launcher
+    )
+    assert 'if [[ "$FR13_FIXED32_COMMITTER_METADATA_FUSION" == "1" ]]' in launcher
+    assert '"$ARMDIR/logs/fr13_fixed32_committer_metadata_fusion.arm"' in launcher
+    assert "committer metadata fusion requires layer-batch mode" in launcher
     assert "FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION=${" in launcher
     assert "CFWD B1 qualification requires exact B1" in launcher
     assert "CFWD campaign qualification requires exact B4" in launcher
@@ -475,6 +581,14 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
     patcher = PATCHER_PATH.read_text()
 
     assert 'layer_batch = committer_contract.get("layer_batch", False)' in patcher
+    assert '"metadata_copy_fusion", False' in patcher
+    assert '"metadata_fusion_published_by_batch"' in patcher
+    assert '"metadata_fusion_consumed_by_batch"' in patcher
+    assert '"metadata_fusion_fallbacks_by_batch"' in patcher
+    assert '"metadata_copy_launches_per_event", -1' in patcher
+    assert '"metadata_copy_elements_per_request", -1' in patcher
+    assert '!= "conv_direct_exact_pointer_batch_stream_one_shot"' in patcher
+    assert '"duplicate_committer_metadata_guard"' in patcher
     assert "expected_fused_calls = 1 if layer_batch is True else 48" in patcher
     assert 'committer_contract.get("state_only_output_elided") is not True' in patcher
     assert 'committer_contract.get("active_length_recurrence") is not True' in patcher

@@ -46,6 +46,19 @@ def _fr13_fixed32_committer_layer_batch_requested() -> bool:
     )
 
 
+def _fr13_fixed32_committer_metadata_fusion_requested() -> bool:
+    """Return the boot-time arm for conv-to-committer metadata fusion."""
+    if os.environ.get("FR13_FIXED32_COMMITTER_METADATA_FUSION") == "1":
+        return True
+    return any(
+        os.path.exists(path)
+        for path in (
+            "/logs/fr13_fixed32_committer_metadata_fusion.arm",
+            "/tmp/fr13_fixed32_committer_metadata_fusion.arm",
+        )
+    )
+
+
 def _fr13_fixed32_committer_layer_batch_real_event_marker(
     path: str = _FR13_FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT,
 ) -> str | None:
@@ -4408,6 +4421,113 @@ def _fr13_fixed32_conv_direct_col0_kernel(
 
 
 @triton.jit
+def _fr13_fixed32_conv_direct_col0_metadata_kernel(
+    anchor_ptr,
+    bank_off16,
+    source_anchor,
+    source_off16,
+    state_src,
+    spec_state_indices,
+    accepted_paths,
+    accepted_lens,
+    committer_paths,
+    committer_lens,
+    ssi_stride_l,
+    ssi_stride_b,
+    ssi_stride_s,
+    path_stride_b,
+    path_stride_s,
+    lens_stride_b,
+    committer_path_stride_b,
+    committer_path_stride_s,
+    committer_lens_stride_b,
+    bank_row_stride,
+    bank_c_stride,
+    bank_l_stride,
+    source_row_stride,
+    source_c_stride,
+    CONV_C: tl.constexpr,
+    CONV_L: tl.constexpr,
+    SOURCE_ROWS: tl.constexpr,
+    ELEM_BYTES: tl.constexpr,
+    SPEC_COLS: tl.constexpr,
+    PATH_COLS: tl.constexpr,
+    B: tl.constexpr,
+    BLOCK_C: tl.constexpr,
+):
+    """Direct col0 commit with one disjoint metadata writer per request."""
+    pid_l = tl.program_id(0)
+    pid_b = tl.program_id(1)
+    pid_c = tl.program_id(2)
+    if pid_b >= B:
+        return
+
+    accepted_len = tl.load(accepted_lens + pid_b * lens_stride_b)
+    metadata_writer = (pid_l == 0) & (pid_c == 0)
+    for path_col in tl.static_range(0, PATH_COLS):
+        path_value = tl.load(
+            accepted_paths
+            + pid_b * path_stride_b
+            + path_col * path_stride_s
+        )
+        tl.store(
+            committer_paths
+            + pid_b * committer_path_stride_b
+            + path_col * committer_path_stride_s,
+            path_value,
+            mask=metadata_writer,
+        )
+    tl.store(
+        committer_lens + pid_b * committer_lens_stride_b,
+        accepted_len,
+        mask=metadata_writer,
+    )
+
+    leaf_pos = tl.maximum(accepted_len - 1, 0)
+    leaf_pos = tl.minimum(leaf_pos, PATH_COLS - 1)
+    leaf_node = tl.load(
+        accepted_paths
+        + pid_b * path_stride_b
+        + leaf_pos * path_stride_s
+    )
+    leaf_node = tl.where(accepted_len > 0, leaf_node, 0)
+    leaf_node = tl.maximum(0, tl.minimum(leaf_node, SPEC_COLS - 1))
+
+    spec_layer = (
+        spec_state_indices
+        + pid_l * ssi_stride_l
+        + pid_b * ssi_stride_b
+    )
+    dst_row = tl.load(spec_layer + 0 * ssi_stride_s)
+    bank = anchor_ptr + tl.load(bank_off16 + pid_l) * (16 // ELEM_BYTES)
+    source = (
+        source_anchor
+        + tl.load(source_off16 + pid_l) * (16 // ELEM_BYTES)
+    )
+    offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)
+    c_mask = offs_c < CONV_C
+    source_batch = pid_b.to(tl.int64) * SOURCE_ROWS
+    for state_col in tl.static_range(0, CONV_L):
+        source_row = tl.load(
+            state_src + leaf_node * CONV_L + state_col
+        ).to(tl.int64)
+        values = tl.load(
+            source
+            + (source_batch + source_row) * source_row_stride
+            + offs_c * source_c_stride,
+            mask=c_mask,
+        )
+        tl.store(
+            bank
+            + dst_row.to(tl.int64) * bank_row_stride
+            + offs_c * bank_c_stride
+            + state_col * bank_l_stride,
+            values,
+            mask=c_mask,
+        )
+
+
+@triton.jit
 def _fr13_fixed32_sfwd_state_fusion_kernel(
     x,
     conv_state,
@@ -5985,47 +6105,116 @@ def launch_fixed32_conv_commit_to_col0(
         raise RuntimeError(
             "FR13_FIXED32_CONV_COMMIT persistent identity/geometry drift"
         )
+    metadata_fusion = _fr13_fixed32_committer_metadata_fusion_state(
+        batch=batch,
+        spec_state_indices=spec_state_indices,
+        accepted_paths=accepted_paths,
+        accepted_lens=accepted_lens,
+    )
+    if metadata_fusion is None:
+        committer_state = None
+        validation_bank_rows = int(state["anchor"].shape[0])
+    else:
+        committer_state, validation_bank_rows = metadata_fusion
     validate_fixed32_conv_commit_rows(
         spec_state_indices=spec_state_indices,
         accepted_paths=accepted_paths,
         accepted_lens=accepted_lens,
         bank_alias_ids=state["bank_alias_ids_device"],
         batch=batch,
-        bank_rows=int(state["anchor"].shape[0]),
+        bank_rows=validation_bank_rows,
     )
     conv_c = int(state["conv_c"])
     block = int(state["block"])
     grid = (48, batch, triton.cdiv(conv_c, block))
-    _fr13_fixed32_conv_direct_col0_kernel[grid](
-        state["anchor"],
-        state["off16"],
-        state["source_anchor"],
-        state["source_off16"],
-        state["state_src"],
-        spec_state_indices,
-        accepted_paths,
-        accepted_lens,
-        spec_state_indices.stride(0),
-        spec_state_indices.stride(1),
-        spec_state_indices.stride(2),
-        accepted_paths.stride(0),
-        accepted_paths.stride(1),
-        accepted_lens.stride(0),
-        int(state["anchor"].stride(0)),
-        int(state["anchor"].stride(1)),
-        int(state["anchor"].stride(2)),
-        int(state["source_anchor"].stride(0)),
-        int(state["source_anchor"].stride(1)),
-        CONV_C=conv_c,
-        CONV_L=int(state["conv_l"]),
-        SOURCE_ROWS=int(state["source_rows_per_batch"]),
-        ELEM_BYTES=int(state["element_bytes"]),
-        SPEC_COLS=int(spec_state_indices.shape[2]),
-        PATH_COLS=int(accepted_paths.shape[1]),
-        B=batch,
-        BLOCK_C=block,
-        num_warps=4,
-    )
+    if committer_state is None:
+        _fr13_fixed32_conv_direct_col0_kernel[grid](
+            state["anchor"],
+            state["off16"],
+            state["source_anchor"],
+            state["source_off16"],
+            state["state_src"],
+            spec_state_indices,
+            accepted_paths,
+            accepted_lens,
+            spec_state_indices.stride(0),
+            spec_state_indices.stride(1),
+            spec_state_indices.stride(2),
+            accepted_paths.stride(0),
+            accepted_paths.stride(1),
+            accepted_lens.stride(0),
+            int(state["anchor"].stride(0)),
+            int(state["anchor"].stride(1)),
+            int(state["anchor"].stride(2)),
+            int(state["source_anchor"].stride(0)),
+            int(state["source_anchor"].stride(1)),
+            CONV_C=conv_c,
+            CONV_L=int(state["conv_l"]),
+            SOURCE_ROWS=int(state["source_rows_per_batch"]),
+            ELEM_BYTES=int(state["element_bytes"]),
+            SPEC_COLS=int(spec_state_indices.shape[2]),
+            PATH_COLS=int(accepted_paths.shape[1]),
+            B=batch,
+            BLOCK_C=block,
+            num_warps=4,
+        )
+    else:
+        destination_paths = committer_state["accepted_paths"]
+        destination_lens = committer_state["accepted_lens"]
+        stream_key = _fr13_fixed32_committer_stream_key(accepted_paths.device)
+        lease_key = _fr13_fixed32_committer_metadata_lease_key(
+            batch=batch,
+            spec_state_indices=spec_state_indices,
+            accepted_paths=accepted_paths,
+            accepted_lens=accepted_lens,
+            committer_paths=destination_paths,
+            committer_lens=destination_lens,
+            validation_bank_rows=validation_bank_rows,
+            stream_key=stream_key,
+        )
+        if _FR13_FIXED32_COMMITTER_METADATA_LEASE:
+            raise RuntimeError(
+                "FR13 fixed32 metadata-fusion prior lease was not consumed"
+            )
+        _fr13_fixed32_conv_direct_col0_metadata_kernel[grid](
+            state["anchor"],
+            state["off16"],
+            state["source_anchor"],
+            state["source_off16"],
+            state["state_src"],
+            spec_state_indices,
+            accepted_paths,
+            accepted_lens,
+            destination_paths,
+            destination_lens,
+            spec_state_indices.stride(0),
+            spec_state_indices.stride(1),
+            spec_state_indices.stride(2),
+            accepted_paths.stride(0),
+            accepted_paths.stride(1),
+            accepted_lens.stride(0),
+            destination_paths.stride(0),
+            destination_paths.stride(1),
+            destination_lens.stride(0),
+            int(state["anchor"].stride(0)),
+            int(state["anchor"].stride(1)),
+            int(state["anchor"].stride(2)),
+            int(state["source_anchor"].stride(0)),
+            int(state["source_anchor"].stride(1)),
+            CONV_C=conv_c,
+            CONV_L=int(state["conv_l"]),
+            SOURCE_ROWS=int(state["source_rows_per_batch"]),
+            ELEM_BYTES=int(state["element_bytes"]),
+            SPEC_COLS=int(spec_state_indices.shape[2]),
+            PATH_COLS=int(accepted_paths.shape[1]),
+            B=batch,
+            BLOCK_C=block,
+            num_warps=4,
+        )
+        _fr13_fixed32_committer_publish_metadata_lease(lease_key)
+        _FR13_FIXED32_COMMITTER_COUNTERS[
+            "metadata_fusion_published_by_batch"
+        ][batch] += 1
     state["commit_direct_launches"] += 1
     state["commit_direct_launches_by_batch"][batch] += 1
 
@@ -9124,15 +9313,131 @@ _FR13_FIXED32_COMMITTER = {}
 _FR13_FIXED32_COMMITTER_GATE_COEFFS: dict[tuple, torch.Tensor] = {}
 _FR13_FIXED32_COMMITTER_GATE_PRECOMPUTE_LAUNCHES = 0
 _FR13_FIXED32_COMMITTER_FAST_ROUTE: dict[str, object] = {}
+_FR13_FIXED32_COMMITTER_METADATA_LEASE: dict[str, object] = {}
 _FR13_FIXED32_COMMITTER_CALLBACKS = []
 _FR13_FIXED32_COMMITTER_COUNTERS = {
     "captures": 0,
     "actual_replays_enqueued": 0,
     "actual_replays_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
+    "metadata_fusion_published_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
+    "metadata_fusion_consumed_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
+    "metadata_fusion_fallbacks_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
 }
 _FR13_FIXED32_COMMITTER_ANNOUNCED = False
 _FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY = None
 _FR13_FIXED32_COMMITTER_WARMUP: dict[str, object] = {}
+
+
+def _fr13_fixed32_committer_stream_key(device) -> tuple[str, int]:
+    stream = torch.cuda.current_stream(device)
+    return str(device), int(stream.cuda_stream)
+
+
+def _fr13_fixed32_committer_metadata_lease_key(
+    *,
+    batch: int,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    accepted_lens: torch.Tensor,
+    committer_paths: torch.Tensor,
+    committer_lens: torch.Tensor,
+    validation_bank_rows: int,
+    stream_key: tuple[str, int] | None = None,
+) -> tuple:
+    """Bind one conv validation/copy to one exact committer replay."""
+    if stream_key is None:
+        stream_key = _fr13_fixed32_committer_stream_key(accepted_paths.device)
+    tensors = (
+        spec_state_indices,
+        accepted_paths,
+        accepted_lens,
+        committer_paths,
+        committer_lens,
+    )
+    return (
+        "fixed32_committer_metadata_fusion_v1",
+        int(batch),
+        int(validation_bank_rows),
+        tuple(stream_key),
+        tuple(int(tensor.data_ptr()) for tensor in tensors),
+        (
+            tuple(int(value) for value in spec_state_indices.shape),
+            (int(batch), 16),
+            (int(batch),),
+            tuple(int(value) for value in committer_paths.shape),
+            tuple(int(value) for value in committer_lens.shape),
+        ),
+        tuple(tuple(int(value) for value in tensor.stride()) for tensor in tensors),
+        tuple(str(tensor.dtype) for tensor in tensors),
+        tuple(str(tensor.device) for tensor in tensors),
+    )
+
+
+def _fr13_fixed32_committer_publish_metadata_lease(key: tuple) -> None:
+    if _FR13_FIXED32_COMMITTER_METADATA_LEASE:
+        raise RuntimeError(
+            "FR13 fixed32 metadata-fusion prior lease was not consumed"
+        )
+    _FR13_FIXED32_COMMITTER_METADATA_LEASE["key"] = key
+
+
+def _fr13_fixed32_committer_consume_metadata_lease(key: tuple) -> bool:
+    prior = _FR13_FIXED32_COMMITTER_METADATA_LEASE.pop("key", None)
+    _FR13_FIXED32_COMMITTER_METADATA_LEASE.clear()
+    return prior == key
+
+
+def _fr13_fixed32_committer_metadata_fusion_state(
+    *,
+    batch: int,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    accepted_lens: torch.Tensor,
+) -> tuple[dict, int] | None:
+    """Resolve the armed B-specific destinations for the preceding conv launch."""
+    route = _FR13_FIXED32_COMMITTER_FAST_ROUTE.get("state")
+    if not isinstance(route, dict):
+        return None
+    state = route.get("states_by_batch", {}).get(int(batch))
+    if not isinstance(state, dict) or not state.get("metadata_copy_fusion", False):
+        return None
+    destination_paths = state.get("accepted_paths")
+    destination_lens = state.get("accepted_lens")
+    if (
+        route.get("spec_state_indices") is not spec_state_indices
+        or int(route.get("accepted_paths_data_ptr", -1))
+        != int(accepted_paths.data_ptr())
+        or int(route.get("accepted_lens_data_ptr", -1))
+        != int(accepted_lens.data_ptr())
+        or tuple(int(value) for value in accepted_paths.shape)
+        != (int(route.get("capacity", -1)), 16)
+        or tuple(int(value) for value in accepted_lens.shape)
+        != (int(route.get("capacity", -1)),)
+        or accepted_paths.dtype != torch.int32
+        or accepted_lens.dtype != torch.int32
+        or not accepted_paths.is_contiguous()
+        or not accepted_lens.is_contiguous()
+        or not torch.is_tensor(destination_paths)
+        or not torch.is_tensor(destination_lens)
+        or tuple(destination_paths.shape) != (int(batch), 16)
+        or tuple(destination_lens.shape) != (int(batch),)
+        or destination_paths.dtype != torch.int32
+        or destination_lens.dtype != torch.int32
+        or destination_paths.device != accepted_paths.device
+        or destination_lens.device != accepted_lens.device
+        or int(destination_paths.data_ptr()) == int(accepted_paths.data_ptr())
+        or int(destination_lens.data_ptr()) == int(accepted_lens.data_ptr())
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 metadata-fusion persistent operand drift"
+        )
+    validation_bank_rows = min(
+        int(state["bank_rows"]),
+        int(_FR13_FIXED32_CONV_PREGATHER["state"]["anchor"].shape[0]),
+    )
+    if validation_bank_rows <= 0:
+        raise RuntimeError("FR13 fixed32 metadata-fusion has no valid bank rows")
+    return state, validation_bank_rows
 
 
 def _fr13_fixed32_tensor_bits_equal(
@@ -9190,6 +9495,21 @@ def fixed32_committer_counters() -> dict[str, object]:
         ),
         "actual_replays_by_batch": dict(
             _FR13_FIXED32_COMMITTER_COUNTERS["actual_replays_by_batch"]
+        ),
+        "metadata_fusion_published_by_batch": dict(
+            _FR13_FIXED32_COMMITTER_COUNTERS[
+                "metadata_fusion_published_by_batch"
+            ]
+        ),
+        "metadata_fusion_consumed_by_batch": dict(
+            _FR13_FIXED32_COMMITTER_COUNTERS[
+                "metadata_fusion_consumed_by_batch"
+            ]
+        ),
+        "metadata_fusion_fallbacks_by_batch": dict(
+            _FR13_FIXED32_COMMITTER_COUNTERS[
+                "metadata_fusion_fallbacks_by_batch"
+            ]
         ),
         "gate_precompute_launches": int(
             _FR13_FIXED32_COMMITTER_GATE_PRECOMPUTE_LAUNCHES
@@ -10301,6 +10621,13 @@ def preseed_fixed32_committer_graph(
     total = batch * 16
     scratch = int(banks_list[0].shape[0]) - 1
     layer_batch = _fr13_fixed32_committer_layer_batch_requested()
+    metadata_copy_fusion = (
+        _fr13_fixed32_committer_metadata_fusion_requested()
+    )
+    if metadata_copy_fusion and not layer_batch:
+        raise RuntimeError(
+            "FR13 fixed32 metadata fusion requires committer layer batching"
+        )
     gate_coeffs = (
         _fr13_fixed32_committer_gate_precompute(
             A_logs=A_logs,
@@ -10367,6 +10694,7 @@ def preseed_fixed32_committer_graph(
         ),
         "gate_coeffs": gate_coeffs,
         "layer_batch": layer_batch,
+        "metadata_copy_fusion": metadata_copy_fusion,
         "layer_batch_byte_gate_passed": not layer_batch,
         "layer_batch_byte_gate_attempts": 0,
         "layer_batch_byte_gate_coverage_mask": (
@@ -10418,6 +10746,22 @@ def preseed_fixed32_committer_graph(
                 "programs_per_layer_request_value_head": 1,
                 "duplicate_value_tile_k_loads_per_step": 0,
                 "state_elements_per_thread_before_compiler_effects": 64,
+                "metadata_copy_fusion": metadata_copy_fusion,
+                "metadata_copy_launches_per_event": (
+                    0 if metadata_copy_fusion else 2
+                ),
+                "metadata_copy_elements_per_request": (
+                    17 if metadata_copy_fusion else 0
+                ),
+                "metadata_validation_lease": (
+                    "conv_direct_exact_pointer_batch_stream_one_shot"
+                    if metadata_copy_fusion
+                    else "disabled"
+                ),
+                "metadata_guarded_fallback": True,
+                "duplicate_committer_metadata_guard": (
+                    not metadata_copy_fusion
+                ),
                 "physical_alias_row_uniqueness_guard": (
                     "validate_fixed32_conv_commit_rows"
                 ),
@@ -10783,6 +11127,8 @@ def preseed_fixed32_committer_graphs_all_batches(
         "bank_anchor": banks_list[0],
         "bank_tail": banks_list[-1],
         "spec_state_indices": spec_state_indices,
+        "accepted_paths_data_ptr": int(accepted_paths.data_ptr()),
+        "accepted_lens_data_ptr": int(accepted_lens.data_ptr()),
         "k_rings": k_rings,
         "v_rings": v_rings,
         "a_rings": a_rings,
@@ -10844,6 +11190,16 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
             int(value) != 0
             for value in counters["actual_replays_by_batch"].values()
         )
+        or any(
+            int(value) != 0
+            for key in (
+                "metadata_fusion_published_by_batch",
+                "metadata_fusion_consumed_by_batch",
+                "metadata_fusion_fallbacks_by_batch",
+            )
+            for value in counters[key].values()
+        )
+        or bool(_FR13_FIXED32_COMMITTER_METADATA_LEASE)
     ):
         raise RuntimeError(
             "FR13 fixed32 committer boot warm started after a measured replay"
@@ -10960,6 +11316,14 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
     )
     saved_actual = int(counters["actual_replays_enqueued"])
     saved_by_batch = dict(counters["actual_replays_by_batch"])
+    metadata_counter_keys = (
+        "metadata_fusion_published_by_batch",
+        "metadata_fusion_consumed_by_batch",
+        "metadata_fusion_fallbacks_by_batch",
+    )
+    saved_metadata_counters = {
+        key: dict(counters[key]) for key in metadata_counter_keys
+    }
     saved_callbacks = tuple(_FR13_FIXED32_COMMITTER_CALLBACKS)
     global _FR13_FIXED32_COMMITTER_ANNOUNCED
     saved_announced = _FR13_FIXED32_COMMITTER_ANNOUNCED
@@ -11056,6 +11420,10 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
             counters["actual_replays_enqueued"] = saved_actual
             counters["actual_replays_by_batch"].clear()
             counters["actual_replays_by_batch"].update(saved_by_batch)
+            for key in metadata_counter_keys:
+                counters[key].clear()
+                counters[key].update(saved_metadata_counters[key])
+            _FR13_FIXED32_COMMITTER_METADATA_LEASE.clear()
             _FR13_FIXED32_COMMITTER_CALLBACKS[:] = saved_callbacks
             _FR13_FIXED32_COMMITTER_ANNOUNCED = saved_announced
             torch.cuda.synchronize(route["device"])
@@ -11112,6 +11480,11 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
     measured_state_restored = (
         int(counters["actual_replays_enqueued"]) == saved_actual
         and dict(counters["actual_replays_by_batch"]) == saved_by_batch
+        and all(
+            dict(counters[key]) == saved_metadata_counters[key]
+            for key in metadata_counter_keys
+        )
+        and not _FR13_FIXED32_COMMITTER_METADATA_LEASE
         and int(conv_state["commit_gather_launches"])
         == saved_conv_gathers
         and int(conv_state["commit_scatter_launches"])
@@ -11239,26 +11612,51 @@ def _fr13_fixed32_committer_replay(
         burn_node_bank=burn_node_bank,
     )
 
-    state["accepted_paths"].copy_(accepted_paths)
-    state["accepted_lens"].copy_(accepted_lens)
-    _fr13_fixed32_validate_running_rows(
-        spec_state_indices=spec_state_indices,
-        batch=batch,
-        bank_rows=int(state["bank_rows"]),
-    )
-    lens = state["accepted_lens"].to(torch.long).view(batch, 1)
-    positions = torch.arange(16, device=accepted_paths.device).view(1, 16)
-    active = positions < lens
-    paths = state["accepted_paths"].to(torch.long)
-    dynamic_ok = (
-        (lens >= 0).all()
-        & (lens <= _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH).all()
-        & ((~active) | ((paths >= 0) & (paths < 32))).all()
-    )
-    _fr13_fixed32_device_assert(
-        dynamic_ok,
-        "FR13_FIXED32_COMMIT_DEVICE_FILL dynamic contract violation",
-    )
+    metadata_fused = False
+    if state.get("metadata_copy_fusion", False):
+        validation_bank_rows = min(
+            int(state["bank_rows"]),
+            int(_FR13_FIXED32_CONV_PREGATHER["state"]["anchor"].shape[0]),
+        )
+        lease_key = _fr13_fixed32_committer_metadata_lease_key(
+            batch=batch,
+            spec_state_indices=spec_state_indices,
+            accepted_paths=accepted_paths,
+            accepted_lens=accepted_lens,
+            committer_paths=state["accepted_paths"],
+            committer_lens=state["accepted_lens"],
+            validation_bank_rows=validation_bank_rows,
+        )
+        metadata_fused = _fr13_fixed32_committer_consume_metadata_lease(
+            lease_key
+        )
+        counter_key = (
+            "metadata_fusion_consumed_by_batch"
+            if metadata_fused
+            else "metadata_fusion_fallbacks_by_batch"
+        )
+        _FR13_FIXED32_COMMITTER_COUNTERS[counter_key][batch] += 1
+    if not metadata_fused:
+        state["accepted_paths"].copy_(accepted_paths)
+        state["accepted_lens"].copy_(accepted_lens)
+        _fr13_fixed32_validate_running_rows(
+            spec_state_indices=spec_state_indices,
+            batch=batch,
+            bank_rows=int(state["bank_rows"]),
+        )
+        lens = state["accepted_lens"].to(torch.long).view(batch, 1)
+        positions = torch.arange(16, device=accepted_paths.device).view(1, 16)
+        active = positions < lens
+        paths = state["accepted_paths"].to(torch.long)
+        dynamic_ok = (
+            (lens >= 0).all()
+            & (lens <= _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH).all()
+            & ((~active) | ((paths >= 0) & (paths < 32))).all()
+        )
+        _fr13_fixed32_device_assert(
+            dynamic_ok,
+            "FR13_FIXED32_COMMIT_DEVICE_FILL dynamic contract violation",
+        )
     graph = state["graph"]
     if state.get("layer_batch", False):
         gate_passed = _fr13_fixed32_committer_layer_batch_byte_gate(
