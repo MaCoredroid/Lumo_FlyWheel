@@ -28,7 +28,7 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
 )
 
 
-CANDIDATE = "fixed32_sfwd_channel_serial_r32_b1c128w4_bxc256w8_u32x2_v1"
+CANDIDATE = "fixed32_sfwd_channel_serial_r32_b1c128w4_bxc256w8_u32x2_s20_v1"
 ROWS_PER_PROGRAM = 32
 BLOCK_C = 128
 NUM_WARPS = 4

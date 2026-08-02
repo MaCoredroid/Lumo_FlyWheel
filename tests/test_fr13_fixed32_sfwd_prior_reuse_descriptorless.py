@@ -417,7 +417,7 @@ def test_packed_xgather_specializes_prior_masks_to_fixed_topology() -> None:
     assert "source_row == 0" not in fragment
 
 
-def test_channel_serial_direct_tuples_match_every_fixed_source() -> None:
+def test_channel_serial_split20_math_matches_every_fixed_source() -> None:
     module_path = Path(
         sys.modules[
             "lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless"
@@ -431,30 +431,44 @@ def test_channel_serial_direct_tuples_match_every_fixed_source() -> None:
         if isinstance(node, ast.FunctionDef)
         and node.name == "_fr13_fixed32_sfwd_channel_serial_kernel"
     )
-    assignments = {
-        node.targets[0].id: node.value
-        for node in ast.walk(kernel)
-        if isinstance(node, ast.Assign)
-        and len(node.targets) == 1
-        and isinstance(node.targets[0], ast.Name)
-    }
-
     def source_row(expression: ast.expr) -> int:
-        if isinstance(expression, ast.Name) and expression.id.startswith("prior_"):
-            return int(expression.id.removeprefix("prior_"))
-        assert isinstance(expression, ast.Subscript)
-        assert isinstance(expression.value, ast.Name)
-        assert expression.value.id == "x_rows"
-        assert isinstance(expression.slice, ast.Constant)
-        return CONV_WIDTH - 1 + int(expression.slice.value)
+        while isinstance(expression, ast.Call):
+            assert isinstance(expression.func, ast.Attribute)
+            expression = expression.func.value
+        assert isinstance(expression, ast.BinOp)
+        assert isinstance(expression.op, ast.Mult)
+        source = expression.left
+        assert isinstance(source, ast.Name)
+        if source.id.startswith("prior_"):
+            return int(source.id.removeprefix("prior_"))
+        assert source.id.startswith("x_")
+        return CONV_WIDTH - 1 + int(source.id.removeprefix("x_"))
 
     expected = fixed32_descriptorless_sources()
     for tap in range(CONV_WIDTH - 1):
-        direct = assignments[f"tap_{tap}"]
-        assert isinstance(direct, ast.Tuple)
-        assert tuple(source_row(item) for item in direct.elts) == tuple(
+        products = [
+            node.value
+            for node in kernel.body
+            if isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == f"product_{tap}"
+        ]
+        assert len(products) == FIXED32_ROWS
+        assert tuple(source_row(item) for item in products) == tuple(
             row[tap] for row in expected
         )
+    current_products = [
+        node.value
+        for node in kernel.body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "product_3"
+    ]
+    assert tuple(source_row(item) for item in current_products) == tuple(
+        CONV_WIDTH - 1 + node for node in range(FIXED32_ROWS)
+    )
 
 
 def test_channel_serial_keeps_global_rows_coalesced_and_ordered() -> None:
@@ -494,9 +508,13 @@ def test_channel_serial_keeps_global_rows_coalesced_and_ordered() -> None:
     assert "tl.reshape" not in fragment
     assert "tl.split" not in fragment
     assert "ROWS_PER_PROGRAM" not in argument_names
-    assert "for node in tl.static_range(0, N):" in fragment
-    assert "tl.store(out_batch + node * C + offs_c, activated)" in fragment
-    assert "((WIDTH - 1) + node) * C + offs_c" in fragment
+    assert "for node in tl.static_range(0, N):" not in fragment
+    assert fragment.count("tl.store(out_batch +") == FIXED32_ROWS
+    assert fragment.count("tl.store(stage_batch + ((WIDTH - 1) +") == FIXED32_ROWS
+    assert fragment.index("x_19 = tl.load(") < fragment.index("product_0 = (")
+    assert fragment.index(
+        "tl.store(stage_batch + ((WIDTH - 1) + 19) * C + offs_c, x_19)"
+    ) < fragment.index("x_20 = tl.load(")
     ordered = (
         "product_0 =",
         "acc = bias_value + product_0",

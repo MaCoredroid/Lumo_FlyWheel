@@ -101,7 +101,7 @@ def test_contract_closes_adaptive_row32_geometry_for_b1_b4() -> None:
         assert contract["source_descriptor_device_validation"] is False
         assert contract["source_descriptor_launcher_argument"] is False
         assert contract["candidate"] == (
-            "fixed32_sfwd_channel_serial_r32_b1c128w4_bxc256w8_u32x2_v1"
+            "fixed32_sfwd_channel_serial_r32_b1c128w4_bxc256w8_u32x2_s20_v1"
         )
     for geometry in ((0, 32, 4, 34), (1, 31, 4, 34), (1, 32, 3, 34)):
         with pytest.raises(ValueError):
@@ -250,13 +250,12 @@ def test_launcher_uses_channel_serial_kernel_and_exact_layout() -> None:
         path=KERNEL_MODULE_PATH,
     )
     launcher = _function_source("launch_fixed32_sfwd_prior_reuse")
-    assert kernel.index("prior_0 = tl.load(") < kernel.index(
-        "for node in tl.static_range(0, N):"
-    )
-    assert "tap_0 = (" in kernel
-    assert "tap_1 = (" in kernel
-    assert "tap_2 = (" in kernel
-    assert "x_rows[node] * weight_3" in kernel
+    assert kernel.index("prior_0 = tl.load(") < kernel.index("x_0 = tl.load(")
+    assert "tap_0 = (" not in kernel
+    assert "tap_1 = (" not in kernel
+    assert "tap_2 = (" not in kernel
+    assert "for node in tl.static_range(0, N):" not in kernel
+    assert "product_3 = (x_31 * weight_3)" in kernel
     assert "tl.gather" not in kernel
     assert "stage_batch + 2 * C + offs_c" in kernel
     assert "source_flat" not in kernel
@@ -276,6 +275,12 @@ def test_launcher_uses_channel_serial_kernel_and_exact_layout() -> None:
     assert "weight_pair_23" in kernel
     assert "tl.pointer_type(tl.uint64)" not in kernel
     assert kernel.count("tl.load(x_batch") == 32
+    assert kernel.count("tl.store(out_batch +") == 32
+    assert kernel.count("tl.store(stage_batch + ((WIDTH - 1) +") == 32
+    assert kernel.index("x_19 = tl.load(") < kernel.index("product_0 = (")
+    assert kernel.index(
+        "tl.store(stage_batch + ((WIDTH - 1) + 19) * C + offs_c, x_19)"
+    ) < kernel.index("x_20 = tl.load(")
     assert 'block_c = int(contract["conv_block_c"])' in launcher
     assert 'num_warps = int(contract["conv_num_warps"])' in launcher
     assert "grid = (batch, triton.cdiv(channels, block_c))" in launcher
