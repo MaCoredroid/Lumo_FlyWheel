@@ -240,6 +240,21 @@ def test_metadata_fusion_preserves_guarded_replay_fallback() -> None:
         assert allocation not in resolver
 
 
+def test_metadata_fusion_copy_is_one_uniform_vector_writer() -> None:
+    kernel = _text("_fr13_fixed32_conv_direct_col0_metadata_kernel")
+
+    assert "metadata_writer = (pid_l == 0) & (pid_c == 0)" in kernel
+    assert "if metadata_writer:" in kernel
+    assert "path_cols = tl.arange(0, PATH_COLS)" in kernel
+    assert "tl.static_range(0, PATH_COLS)" not in kernel
+    writer = kernel[kernel.index("if metadata_writer:") :]
+    leaf = writer.index("leaf_pos =")
+    writer = writer[:leaf]
+    assert writer.count("tl.load(") == 1
+    assert writer.count("tl.store(") == 2
+    assert "mask=metadata_writer" not in writer
+
+
 def test_layer_batch_publishes_only_the_final_running_state() -> None:
     kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
     loop = kernel[kernel.index("for i_t in tl.range(0, T):") :]

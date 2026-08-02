@@ -177,8 +177,10 @@ def test_direct_commit_uses_logical_inner_strides_and_pregather_stays_logical() 
     assert "(source_batch + source_row) * source_row_stride" in direct_source
     assert "for state_col in tl.static_range(0, CONV_L)" in direct_source
     assert "metadata_writer = (pid_l == 0) & (pid_c == 0)" in fused_source
-    assert "for path_col in tl.static_range(0, PATH_COLS)" in fused_source
-    assert "mask=metadata_writer" in fused_source
+    assert "if metadata_writer:" in fused_source
+    assert "path_cols = tl.arange(0, PATH_COLS)" in fused_source
+    assert "for path_col in tl.static_range(0, PATH_COLS)" not in fused_source
+    assert "mask=metadata_writer" not in fused_source
     assert "committer_paths" in fused_source
     assert "committer_lens" in fused_source
     for needle in (

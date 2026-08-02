@@ -4464,26 +4464,23 @@ def _fr13_fixed32_conv_direct_col0_metadata_kernel(
 
     accepted_len = tl.load(accepted_lens + pid_b * lens_stride_b)
     metadata_writer = (pid_l == 0) & (pid_c == 0)
-    for path_col in tl.static_range(0, PATH_COLS):
-        path_value = tl.load(
+    if metadata_writer:
+        path_cols = tl.arange(0, PATH_COLS)
+        path_values = tl.load(
             accepted_paths
             + pid_b * path_stride_b
-            + path_col * path_stride_s,
-            mask=metadata_writer,
-            other=0,
+            + path_cols * path_stride_s,
         )
         tl.store(
             committer_paths
             + pid_b * committer_path_stride_b
-            + path_col * committer_path_stride_s,
-            path_value,
-            mask=metadata_writer,
+            + path_cols * committer_path_stride_s,
+            path_values,
         )
-    tl.store(
-        committer_lens + pid_b * committer_lens_stride_b,
-        accepted_len,
-        mask=metadata_writer,
-    )
+        tl.store(
+            committer_lens + pid_b * committer_lens_stride_b,
+            accepted_len,
+        )
 
     leaf_pos = tl.maximum(accepted_len - 1, 0)
     leaf_pos = tl.minimum(leaf_pos, PATH_COLS - 1)
