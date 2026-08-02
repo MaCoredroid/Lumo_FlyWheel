@@ -305,19 +305,23 @@ def test_live_attestation_receives_the_selector_explicitly() -> None:
     assert '"${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" \\' in serve
     assert '"${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" \\' in serve
     assert '"${FR13_FIXED32_CUTLASS_WAVE:-stock}" \\' in serve
-    assert '"$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" <<\'PY\'' in serve
+    assert '"$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" \\' in serve
+    assert '"$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER" \\' in serve
+    assert '"$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH" <<\'PY\'' in serve
     assert "attribution_only_text = sys.argv[7]" in serve
     assert "batch_gdn_byte_ab_text = sys.argv[8]" in serve
     assert "batch_gdn_graph_byte_ab_text = sys.argv[9]" in serve
     assert "cutlass_wave = sys.argv[10]" in serve
     assert "sfwd_b4_byte_ab_text = sys.argv[11]" in serve
+    assert "grouped_simd_eager_text = sys.argv[12]" in serve
+    assert "grouped_simd_graph_text = sys.argv[13]" in serve
     assert "attribution_only_text = os.environ" not in serve
     assert "batch_gdn_byte_ab_text = os.environ" not in serve
     assert "batch_gdn_graph_byte_ab_text = os.environ" not in serve
     assert "eager_diagnostic=(" in serve
     assert "batch_gdn_byte_ab_text == \"1\"" in serve
+    assert "or grouped_simd_eager_text == \"1\"" in serve
     assert 'or cutlass_wave == "persistent_b4_m128_byte_ab"' in serve
     assert 'or sfwd_b4_byte_ab_text == "1"' in serve
-    assert (
-        "graph_diagnostic=batch_gdn_graph_byte_ab_text == \"1\"" in serve
-    )
+    assert "graph_diagnostic=(" in serve
+    assert "or grouped_simd_graph_text == \"1\"" in serve

@@ -46,6 +46,21 @@ EXACT4_TASK_IDS = (
     "astropy__astropy-13236",
     "astropy__astropy-13398",
 )
+EXACT16_TASK_IDS = (
+    *EXACT4_TASK_IDS,
+    "astropy__astropy-13453",
+    "astropy__astropy-13579",
+    "astropy__astropy-13977",
+    "astropy__astropy-14096",
+    "astropy__astropy-14182",
+    "astropy__astropy-14309",
+    "astropy__astropy-14365",
+    "astropy__astropy-14369",
+    "astropy__astropy-14508",
+    "astropy__astropy-14539",
+    "astropy__astropy-14598",
+    "astropy__astropy-14995",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -680,6 +695,69 @@ def test_engine_middleware_arms_sfwd_only_after_all_exact4_are_authenticated(
         + "\n"
     ).encode("ascii")
     assert observed == [None, None, None, expected]
+    assert marker.read_bytes() == expected
+    info = os.lstat(marker)
+    assert stat.S_ISREG(info.st_mode)
+    assert info.st_nlink == 1
+    assert stat.S_IMODE(info.st_mode) == 0o444
+
+
+@pytest.mark.parametrize("task_ids", (EXACT4_TASK_IDS, EXACT16_TASK_IDS))
+def test_engine_arms_grouped_simd_only_after_complete_authenticated_campaign(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    task_ids: tuple[str, ...],
+) -> None:
+    secret_path = tmp_path / "secret.json"
+    _task_seed, engine_bearer = _write_secret(secret_path)
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    enabled = logs / "fr13_fixed32_gdn_parent_group_simd_b4_graph.enabled"
+    enabled.write_bytes(b"1\n")
+    marker = logs / "fr13_fixed32_gdn_parent_group_simd_b4.real_event.arm"
+    monkeypatch.setenv(
+        "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_REAL_EVENT_PATH", str(marker)
+    )
+    observed: list[bytes | None] = []
+
+    async def inner(scope: Any, receive: Any, send: Any) -> None:
+        observed.append(marker.read_bytes() if marker.exists() else None)
+        await receive()
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"{}", "more_body": False})
+
+    middleware = Fixed32EngineIngressMiddleware(
+        inner,
+        secret_file=secret_path,
+        canonical_task_ids=task_ids,
+        ledger_path=tmp_path / "engine.jsonl",
+    )
+    middleware.ingress.begin(_begin_payload(task_ids))
+    for index, task_id in enumerate(task_ids):
+        wire_id = f"fr13-chat-{index + 1:032x}"
+        status, payload = asyncio.run(
+            _asgi_call(
+                middleware,
+                path="/v1/chat/completions",
+                body=b'{"messages":[]}',
+                headers=[
+                    (b"authorization", f"Bearer {engine_bearer}".encode()),
+                    (
+                        FIXED32_TASK_KEY_HEADER.lower().encode(),
+                        fixed32_task_key_id(task_id).encode(),
+                    ),
+                    (b"x-request-id", wire_id.encode()),
+                ],
+            )
+        )
+        assert status == 200
+        assert payload == {}
+
+    expected = (
+        "\n".join(f"swe_verified:{task_id}" for task_id in task_ids) + "\n"
+    ).encode("ascii")
+    assert observed[:-1] == [None] * (len(task_ids) - 1)
+    assert observed[-1] == expected
     assert marker.read_bytes() == expected
     info = os.lstat(marker)
     assert stat.S_ISREG(info.st_mode)

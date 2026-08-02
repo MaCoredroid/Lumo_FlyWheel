@@ -53,6 +53,9 @@ FIXED32_CUTLASS_B4_REAL_EVENT_ARM_ENV = (
 FIXED32_SFWD_B4_REAL_EVENT_ARM_ENV = (
     "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH"
 )
+FIXED32_GDN_PARENT_GROUP_SIMD_REAL_EVENT_ARM_ENV = (
+    "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_REAL_EVENT_PATH"
+)
 
 FIXED32_INGRESS_SECRETS_SCHEMA = "fr13-fixed32-ingress-secrets-v1"
 FIXED32_INGRESS_LEDGER_SCHEMA = "fr13.fixed32.ingress-ledger-record.v1"
@@ -87,11 +90,35 @@ _FIXED32_SFWD_B4_REAL_EVENT_ARM_NAME = (
 _FIXED32_SFWD_B4_ENABLED_NAME = (
     "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
 )
+_FIXED32_GDN_PARENT_GROUP_SIMD_REAL_EVENT_ARM_NAME = (
+    "fr13_fixed32_gdn_parent_group_simd_b4.real_event.arm"
+)
+_FIXED32_GDN_PARENT_GROUP_SIMD_EAGER_ENABLED_NAME = (
+    "fr13_fixed32_gdn_parent_group_simd_b4_eager.enabled"
+)
+_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_ENABLED_NAME = (
+    "fr13_fixed32_gdn_parent_group_simd_b4_graph.enabled"
+)
 _FIXED32_BATCH_GDN_EXACT4_TASK_IDS = (
     "astropy__astropy-12907",
     "astropy__astropy-13033",
     "astropy__astropy-13236",
     "astropy__astropy-13398",
+)
+_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT16_TASK_IDS = (
+    *_FIXED32_BATCH_GDN_EXACT4_TASK_IDS,
+    "astropy__astropy-13453",
+    "astropy__astropy-13579",
+    "astropy__astropy-13977",
+    "astropy__astropy-14096",
+    "astropy__astropy-14182",
+    "astropy__astropy-14309",
+    "astropy__astropy-14365",
+    "astropy__astropy-14369",
+    "astropy__astropy-14508",
+    "astropy__astropy-14539",
+    "astropy__astropy-14598",
+    "astropy__astropy-14995",
 )
 _FIXED32_LEDGER_KEYS = frozenset(
     {
@@ -1277,6 +1304,7 @@ class Fixed32EngineIngress:
         batch_gdn_real_event_arm: str | Path | None = None,
         cutlass_b4_real_event_arm: str | Path | None = None,
         sfwd_b4_real_event_arm: str | Path | None = None,
+        gdn_parent_group_simd_real_event_arm: str | Path | None = None,
     ) -> None:
         self.secrets = load_fixed32_ingress_secrets(secret_file)
         self.task_ids = parse_fixed32_task_ids(canonical_task_ids)
@@ -1319,12 +1347,19 @@ class Fixed32EngineIngress:
         self.sfwd_b4_real_event_arm = self._validate_sfwd_b4_real_event_arm(
             sfwd_b4_real_event_arm
         )
+        self._gdn_parent_group_simd_published_marker: bytes | None = None
+        self.gdn_parent_group_simd_real_event_arm = (
+            self._validate_gdn_parent_group_simd_real_event_arm(
+                gdn_parent_group_simd_real_event_arm
+            )
+        )
         if sum(
             arm is not None
             for arm in (
                 self.batch_gdn_real_event_arm,
                 self.cutlass_b4_real_event_arm,
                 self.sfwd_b4_real_event_arm,
+                self.gdn_parent_group_simd_real_event_arm,
             )
         ) > 1:
             raise Fixed32IngressError(
@@ -1435,6 +1470,23 @@ class Fixed32EngineIngress:
             required_mode=required_mode,
         )
 
+    @classmethod
+    def _read_gdn_parent_group_simd_sidecar(
+        cls,
+        path: Path,
+        *,
+        label: str,
+        max_bytes: int,
+        required_mode: int | None = None,
+    ) -> bytes:
+        return cls._read_real_event_sidecar(
+            path,
+            gate_label="GDN parent-group SIMD B4",
+            label=label,
+            max_bytes=max_bytes,
+            required_mode=required_mode,
+        )
+
     def _validate_batch_gdn_enabled_sidecar(self, path: Path) -> None:
         enabled_paths = tuple(
             path.with_name(name)
@@ -1488,6 +1540,32 @@ class Fixed32EngineIngress:
         ) != b"1\n":
             raise Fixed32IngressError(
                 "fixed32 SFWD B4 enabled sidecar is invalid"
+            )
+
+    def _validate_gdn_parent_group_simd_enabled_sidecar(
+        self, path: Path
+    ) -> None:
+        enabled_paths = tuple(
+            path.with_name(name)
+            for name in (
+                _FIXED32_GDN_PARENT_GROUP_SIMD_EAGER_ENABLED_NAME,
+                _FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_ENABLED_NAME,
+            )
+            if os.path.lexists(path.with_name(name))
+        )
+        if len(enabled_paths) != 1:
+            raise Fixed32IngressError(
+                "fixed32 GDN parent-group SIMD requires exactly one eager or "
+                "graph enabled sidecar"
+            )
+        enabled = enabled_paths[0]
+        if self._read_gdn_parent_group_simd_sidecar(
+            enabled,
+            label=f"enabled sidecar {enabled.name}",
+            max_bytes=2,
+        ) != b"1\n":
+            raise Fixed32IngressError(
+                "fixed32 GDN parent-group SIMD enabled sidecar is invalid"
             )
 
     def _validate_batch_gdn_real_event_arm(
@@ -1599,6 +1677,50 @@ class Fixed32EngineIngress:
             ) from exc
         raise Fixed32IngressError(
             "fixed32 SFWD B4 real-event arm must be new at engine boot"
+        )
+
+    def _validate_gdn_parent_group_simd_real_event_arm(
+        self, raw_path: str | Path | None
+    ) -> Path | None:
+        if raw_path is None or not os.fspath(raw_path):
+            return None
+        if self.task_ids not in (
+            _FIXED32_BATCH_GDN_EXACT4_TASK_IDS,
+            _FIXED32_GDN_PARENT_GROUP_SIMD_EXACT16_TASK_IDS,
+        ):
+            raise Fixed32IngressError(
+                "fixed32 GDN parent-group SIMD real-event arm requires the "
+                "canonical exact4 or exact16 tasks"
+            )
+        path = Path(raw_path)
+        if (
+            not path.is_absolute()
+            or path.name != _FIXED32_GDN_PARENT_GROUP_SIMD_REAL_EVENT_ARM_NAME
+        ):
+            raise Fixed32IngressError(
+                "fixed32 GDN parent-group SIMD real-event arm path is invalid"
+            )
+        try:
+            parent_info = os.lstat(path.parent)
+        except OSError as exc:
+            raise Fixed32IngressError(
+                "fixed32 GDN parent-group SIMD arm parent is unavailable"
+            ) from exc
+        if not stat.S_ISDIR(parent_info.st_mode) or stat.S_ISLNK(parent_info.st_mode):
+            raise Fixed32IngressError(
+                "fixed32 GDN parent-group SIMD arm parent must be a directory"
+            )
+        self._validate_gdn_parent_group_simd_enabled_sidecar(path)
+        try:
+            os.lstat(path)
+        except FileNotFoundError:
+            return path
+        except OSError as exc:
+            raise Fixed32IngressError(
+                "fixed32 GDN parent-group SIMD arm cannot be inspected"
+            ) from exc
+        raise Fixed32IngressError(
+            "fixed32 GDN parent-group SIMD arm must be new at engine boot"
         )
 
     def _arm_batch_gdn_real_event(self, task_key_id: str) -> None:
@@ -1839,6 +1961,94 @@ class Fixed32EngineIngress:
             )
         self._sfwd_b4_published_marker = marker
 
+    def _arm_gdn_parent_group_simd_real_event(self, task_key_id: str) -> None:
+        """Publish only after every exact4/exact16 task is authenticated."""
+        path = self.gdn_parent_group_simd_real_event_arm
+        if path is None:
+            return
+        self._validate_gdn_parent_group_simd_enabled_sidecar(path)
+        authenticated = {
+            key_id
+            for key_id, counts in self._task_counts.items()
+            if counts["accepted_engine_requests"] > 0
+        }
+        authenticated.add(task_key_id)
+        if authenticated != self.task_key_ids:
+            return
+        marker = (
+            "\n".join(
+                f"swe_verified:{task_id}" for task_id in self.task_ids
+            )
+            + "\n"
+        ).encode("ascii")
+        if self._gdn_parent_group_simd_published_marker is not None:
+            published = self._read_gdn_parent_group_simd_sidecar(
+                path,
+                label="real-event arm",
+                max_bytes=4096,
+                required_mode=0o444,
+            )
+            if published != self._gdn_parent_group_simd_published_marker:
+                raise Fixed32IngressError(
+                    "fixed32 GDN parent-group SIMD arm changed after publication"
+                )
+            return
+        temporary = path.with_name(
+            f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+        )
+        flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        try:
+            descriptor = os.open(temporary, flags, 0o444)
+            try:
+                view = memoryview(marker)
+                while view:
+                    written = os.write(descriptor, view)
+                    if written <= 0:
+                        raise OSError("short write")
+                    view = view[written:]
+                os.fchmod(descriptor, 0o444)
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            try:
+                os.link(temporary, path, follow_symlinks=False)
+            except FileExistsError as exc:
+                raise Fixed32IngressError(
+                    "fixed32 GDN parent-group SIMD arm existed before publication"
+                ) from exc
+        except Fixed32IngressError:
+            raise
+        except OSError as exc:
+            raise Fixed32IngressError(
+                "fixed32 GDN parent-group SIMD arm publication failed"
+            ) from exc
+        finally:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                raise Fixed32IngressError(
+                    "fixed32 GDN parent-group SIMD temporary cleanup failed"
+                ) from exc
+        published = self._read_gdn_parent_group_simd_sidecar(
+            path,
+            label="real-event arm",
+            max_bytes=4096,
+            required_mode=0o444,
+        )
+        if published != marker:
+            raise Fixed32IngressError(
+                "fixed32 GDN parent-group SIMD arm publication is invalid"
+            )
+        self._gdn_parent_group_simd_published_marker = marker
+
     def is_engine_bearer(self, bearer: str | None) -> bool:
         return isinstance(bearer, str) and hmac.compare_digest(
             bearer, self.secrets.engine_bearer
@@ -1933,6 +2143,7 @@ class Fixed32EngineIngress:
             self._arm_batch_gdn_real_event(task_key_id)
             self._arm_cutlass_b4_real_event(task_key_id)
             self._arm_sfwd_b4_real_event(task_key_id)
+            self._arm_gdn_parent_group_simd_real_event(task_key_id)
             self.ledger.append(
                 phase="campaign",
                 event="request_accepted",
@@ -2036,6 +2247,7 @@ class Fixed32EngineIngressMiddleware:
         batch_gdn_real_event_arm: str | Path | None = None,
         cutlass_b4_real_event_arm: str | Path | None = None,
         sfwd_b4_real_event_arm: str | Path | None = None,
+        gdn_parent_group_simd_real_event_arm: str | Path | None = None,
         max_body_bytes: int | None = None,
     ) -> None:
         self.app = app
@@ -2055,6 +2267,10 @@ class Fixed32EngineIngressMiddleware:
         if sfwd_b4_real_event_arm is None:
             sfwd_b4_real_event_arm = os.environ.get(
                 FIXED32_SFWD_B4_REAL_EVENT_ARM_ENV
+            )
+        if gdn_parent_group_simd_real_event_arm is None:
+            gdn_parent_group_simd_real_event_arm = os.environ.get(
+                FIXED32_GDN_PARENT_GROUP_SIMD_REAL_EVENT_ARM_ENV
             )
         if not secret_file or not canonical_task_ids or not ledger_path:
             raise Fixed32IngressError("fixed32 engine ingress configuration is incomplete")
@@ -2076,6 +2292,9 @@ class Fixed32EngineIngressMiddleware:
             batch_gdn_real_event_arm=batch_gdn_real_event_arm,
             cutlass_b4_real_event_arm=cutlass_b4_real_event_arm,
             sfwd_b4_real_event_arm=sfwd_b4_real_event_arm,
+            gdn_parent_group_simd_real_event_arm=(
+                gdn_parent_group_simd_real_event_arm
+            ),
         )
 
     @staticmethod

@@ -36,6 +36,10 @@ KIND=${2:-tail6}
 SUBSET=${3:?subset json}
 FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
 FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
+FR13_FIXED32_GDN_PARENT_GROUP=${FR13_FIXED32_GDN_PARENT_GROUP:-0}
+FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER=${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER:-0}
+FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH=${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH:-0}
+FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION=${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION:-0}
 FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
 FR13_FIXED32_COMMITTER_LAYER_BATCH=${FR13_FIXED32_COMMITTER_LAYER_BATCH:-0}
 case "$FR13_FIXED32_B1_DIAGNOSTIC" in
@@ -46,6 +50,18 @@ case "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"; exit 2 ;;
 esac
+for _fr13_group_pair in \
+  "FR13_FIXED32_GDN_PARENT_GROUP:$FR13_FIXED32_GDN_PARENT_GROUP" \
+  "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER:$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER" \
+  "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH:$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH" \
+  "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION:$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION"; do
+  _fr13_group_name=${_fr13_group_pair%%:*}
+  _fr13_group_value=${_fr13_group_pair#*:}
+  case "$_fr13_group_value" in
+    0|1) ;;
+    *) echo "FAIL: $_fr13_group_name must be exactly 0 or 1"; exit 2 ;;
+  esac
+done
 case "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"; exit 2 ;;
@@ -55,9 +71,14 @@ case "$FR13_FIXED32_COMMITTER_LAYER_BATCH" in
   *) echo "FAIL: FR13_FIXED32_COMMITTER_LAYER_BATCH must be exactly 0 or 1"; exit 2 ;;
 esac
 export FR13_FIXED32_B1_DIAGNOSTIC FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB \
+  FR13_FIXED32_GDN_PARENT_GROUP \
+  FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER \
+  FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH \
+  FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION \
   FR13_FIXED32_COMMITTER_LAYER_BATCH FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
 _fixed32_eager_kernel_diagnostic=0
 if [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "1" \
+      || "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER" == "1" \
       || "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
@@ -386,6 +407,29 @@ if [[ "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" == "1" \
   echo "FAIL: FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=1 requires a fixed32 arm"
   exit 2
 fi
+if [[ "$FR13_FIXED32_GDN_PARENT_GROUP" == "1" \
+      && -z "$FIXED32_MODE" ]]; then
+  echo "FAIL: FR13_FIXED32_GDN_PARENT_GROUP=1 requires a fixed32 arm"
+  exit 2
+fi
+if [[ ( "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER" == "1" \
+        || "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH" == "1" \
+        || "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION" == "1" ) \
+      && "$FR13_FIXED32_GDN_PARENT_GROUP" != "1" ]]; then
+  echo "FAIL: grouped SIMD qualification/production requires its parent-group arm"
+  exit 2
+fi
+if [[ "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER" == "1" \
+      && "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH" == "1" ]]; then
+  echo "FAIL: grouped SIMD eager and graph gates are mutually exclusive"
+  exit 2
+fi
+if [[ "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION" == "1" \
+      && ( "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER" == "1" \
+           || "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH" == "1" ) ]]; then
+  echo "FAIL: grouped SIMD qualification and production selectors are mutually exclusive"
+  exit 2
+fi
 if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" \
       && -z "$FIXED32_MODE" ]]; then
   echo "FAIL: FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=1 requires a fixed32 arm"
@@ -457,6 +501,23 @@ if [[ -n "$FIXED32_MODE" ]]; then
         echo "FAIL: fixed32 graph byte diagnostic requires MAX_NUM_SEQS_OVR=4 and SWE_CONCURRENCY=4"
         exit 2
       }
+  fi
+  if [[ "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER" == "1" \
+        || "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH" == "1" \
+        || "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION" == "1" ]]; then
+    [[ "$MAX_NUM_SEQS_OVR" == "4" && "$SWE_CONCURRENCY" == "4" \
+       && "$FR13_FIXED32_B1_DIAGNOSTIC" == "0" ]] \
+      || {
+        echo "FAIL: grouped SIMD qualification/production requires exact B4 concurrency"
+        exit 2
+      }
+  fi
+  if [[ "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH" == "1" \
+        || "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION" == "1" ]]; then
+    [[ "${ENFORCE_EAGER:-0}" == "0" ]] || {
+      echo "FAIL: grouped SIMD graph/production requires ENFORCE_EAGER=0"
+      exit 2
+    }
   fi
   if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" ]]; then
     [[ "$MAX_NUM_SEQS_OVR" == "4" && "$SWE_CONCURRENCY" == "4" \
@@ -1546,6 +1607,26 @@ case "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" in
     exit 2
     ;;
 esac
+if [[ "$FR13_FIXED32_GDN_PARENT_GROUP" == "1" ]]; then
+  [[ -n "$FIXED32_MODE" \
+     && "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
+     && "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "0" \
+     && -z "${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
+     && -z "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}" \
+     && "${FR13_FIXED32_BATCH_GDN_BV8_TIMING:-0}" == "0" \
+     && "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "0" \
+     && "${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}" == "0" \
+     && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+     && "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "0" \
+     && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" == "0" ]] || {
+    echo "FAIL: grouped SIMD must be the only fixed32 GDN/kernel candidate"
+    exit 2
+  }
+fi
 if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" ]]; then
   [[ -n "$FIXED32_MODE" && "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]] \
@@ -1744,7 +1825,9 @@ PY
     "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" \
     "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" \
     "${FR13_FIXED32_CUTLASS_WAVE:-stock}" \
-    "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" <<'PY'
+    "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" \
+    "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER" \
+    "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH" <<'PY'
 import json
 import subprocess
 import sys
@@ -1764,6 +1847,8 @@ batch_gdn_byte_ab_text = sys.argv[8]
 batch_gdn_graph_byte_ab_text = sys.argv[9]
 cutlass_wave = sys.argv[10]
 sfwd_b4_byte_ab_text = sys.argv[11]
+grouped_simd_eager_text = sys.argv[12]
+grouped_simd_graph_text = sys.argv[13]
 runtime = contract.validate_runtime_attestation(
     json.loads(runtime_path.read_text(encoding="utf-8"))
 )
@@ -1790,6 +1875,14 @@ if sfwd_b4_byte_ab_text not in {"0", "1"}:
     raise SystemExit(
         "fixed32 SFWD B4 byte diagnostic selector must be exactly 0 or 1"
     )
+if grouped_simd_eager_text not in {"0", "1"}:
+    raise SystemExit(
+        "fixed32 grouped SIMD eager selector must be exactly 0 or 1"
+    )
+if grouped_simd_graph_text not in {"0", "1"}:
+    raise SystemExit(
+        "fixed32 grouped SIMD graph selector must be exactly 0 or 1"
+    )
 if cutlass_wave not in {
     "stock",
     "streamk_coop128_byte_ab",
@@ -1807,10 +1900,14 @@ try:
         attribution_only=attribution_only_text == "1",
         eager_diagnostic=(
             batch_gdn_byte_ab_text == "1"
+            or grouped_simd_eager_text == "1"
             or cutlass_wave == "persistent_b4_m128_byte_ab"
             or sfwd_b4_byte_ab_text == "1"
         ),
-        graph_diagnostic=batch_gdn_graph_byte_ab_text == "1",
+        graph_diagnostic=(
+            batch_gdn_graph_byte_ab_text == "1"
+            or grouped_simd_graph_text == "1"
+        ),
         streamk_eager_diagnostic=(
             cutlass_wave
             in ("streamk_coop128_byte_ab", "streamk_force_wide256_byte_ab")

@@ -63,6 +63,15 @@ _FR13_M32_GUARD_NAMES=(
   FR13_FIXED32_BATCH_GDN_BYTE_AB
   FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
   FR13_FIXED32_BATCH_GDN_BV_CANDIDATE
+  FR13_FIXED32_GDN_PARENT_GROUP
+  FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB
+  FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER
+  FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH
+  FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION
+  FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT4_EAGER_PASS_PATH
+  FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT4_GRAPH_PASS_PATH
+  FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT16_EAGER_PASS_PATH
+  FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT16_GRAPH_PASS_PATH
   FR13_FIXED32_CUTLASS_WAVE
   FR13_FIXED32_CUTLASS_WAVE_SO
   FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
@@ -88,6 +97,7 @@ _FR13_M32_GUARD_ACTIVE=0
 [[ "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_LIVE_AB]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_PRODUCTION]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_TIMING_ARM]}" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_GDN_PARENT_GROUP]}" == "set:1" \
    || "$_FR13_CALLER_SFWD_B4" == "set:1" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 _FR13_LOCAL_ENV_SOURCED=0
@@ -100,6 +110,7 @@ fi
 [[ "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" \
+   || "${FR13_FIXED32_GDN_PARENT_GROUP:-0}" == "1" \
    || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "1" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 if (( _FR13_M32_GUARD_ACTIVE == 1 )); then
@@ -337,6 +348,15 @@ FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON=${FR13_FIXED32_BATCH_GDN_GRAPH_GA
 FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256=${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256:-}
 FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON=${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON:-}
 FR13_FIXED32_BATCH_GDN_GATE_RUNNER=${FR13_FIXED32_BATCH_GDN_GATE_RUNNER:-}
+FR13_FIXED32_GDN_PARENT_GROUP=${FR13_FIXED32_GDN_PARENT_GROUP:-0}
+FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB=${FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB:-0}
+FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER=${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER:-0}
+FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH=${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH:-0}
+FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION=${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION:-0}
+FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT4_EAGER_PASS_PATH=${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT4_EAGER_PASS_PATH:-}
+FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT4_GRAPH_PASS_PATH=${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT4_GRAPH_PASS_PATH:-}
+FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT16_EAGER_PASS_PATH=${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT16_EAGER_PASS_PATH:-}
+FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT16_GRAPH_PASS_PATH=${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT16_GRAPH_PASS_PATH:-}
 FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
 FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
 FR13_FIXED32_CUTLASS_WAVE=${FR13_FIXED32_CUTLASS_WAVE:-stock}
@@ -1271,6 +1291,10 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
   _fr13_fixed32_batch_gdn_diagnostic=${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}
   _fr13_fixed32_batch_gdn_graph_diagnostic=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
+  _fr13_fixed32_gdn_parent_group=${FR13_FIXED32_GDN_PARENT_GROUP:-0}
+  _fr13_fixed32_gdn_parent_group_eager=${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER:-0}
+  _fr13_fixed32_gdn_parent_group_graph=${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH:-0}
+  _fr13_fixed32_gdn_parent_group_production=${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION:-0}
   _fr13_fixed32_sfwd_b4_diagnostic=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
   case "$FR13_FIXED32_B1_DIAGNOSTIC" in
     0|1) ;;
@@ -1284,6 +1308,44 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     0|1) ;;
     *) echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
   esac
+  for _fr13_group_pair in \
+    "FR13_FIXED32_GDN_PARENT_GROUP:$_fr13_fixed32_gdn_parent_group" \
+    "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER:$_fr13_fixed32_gdn_parent_group_eager" \
+    "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH:$_fr13_fixed32_gdn_parent_group_graph" \
+    "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION:$_fr13_fixed32_gdn_parent_group_production"; do
+    _fr13_group_name=${_fr13_group_pair%%:*}
+    _fr13_group_value=${_fr13_group_pair#*:}
+    case "$_fr13_group_value" in
+      0|1) ;;
+      *) echo "$_fr13_group_name must be exactly 0 or 1" >&2; exit 2 ;;
+    esac
+  done
+  _fr13_fixed32_gdn_parent_group_gate_count=$((
+    10#$_fr13_fixed32_gdn_parent_group_eager
+    + 10#$_fr13_fixed32_gdn_parent_group_graph
+  ))
+  if (( _fr13_fixed32_gdn_parent_group_gate_count > 1 )); then
+    echo "grouped SIMD eager and graph B4 gates are mutually exclusive" >&2
+    exit 2
+  fi
+  if [[ ( "$_fr13_fixed32_gdn_parent_group_eager" == "1" \
+          || "$_fr13_fixed32_gdn_parent_group_graph" == "1" \
+          || "$_fr13_fixed32_gdn_parent_group_production" == "1" ) \
+        && "$_fr13_fixed32_gdn_parent_group" != "1" ]]; then
+    echo "grouped SIMD gate/production selectors require FR13_FIXED32_GDN_PARENT_GROUP=1" >&2
+    exit 2
+  fi
+  if [[ "$_fr13_fixed32_gdn_parent_group_production" == "1" \
+        && "$_fr13_fixed32_gdn_parent_group_gate_count" != "0" ]]; then
+    echo "grouped SIMD qualification and production selectors are mutually exclusive" >&2
+    exit 2
+  fi
+  if [[ ( "$_fr13_fixed32_gdn_parent_group_gate_count" != "0" \
+          || "$_fr13_fixed32_gdn_parent_group_production" == "1" ) \
+        && "$MAX_NUM_SEQS" != "4" ]]; then
+    echo "grouped SIMD qualification/production requires MAX_NUM_SEQS=4" >&2
+    exit 2
+  fi
   case "$_fr13_fixed32_sfwd_b4_diagnostic" in
     0|1) ;;
     *) echo "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
@@ -1324,6 +1386,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   _fixed32_expected_eager=0
   if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" \
         || "$_fr13_fixed32_batch_gdn_graph_diagnostic" == "1" \
+        || "$_fr13_fixed32_gdn_parent_group_gate_count" != "0" \
         || "$_fr13_fixed32_batch_gdn_bv8_timing" == "1" \
         || ( "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "1" \
              && "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" == "8" ) ]]; then
@@ -1332,6 +1395,9 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     _fixed32_expected_metrics=1
   fi
   if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" ]]; then
+    _fixed32_expected_eager=1
+  fi
+  if [[ "$_fr13_fixed32_gdn_parent_group_eager" == "1" ]]; then
     _fixed32_expected_eager=1
   fi
   if [[ "$_fr13_fixed32_sfwd_b4_diagnostic" == "1" ]]; then
@@ -1846,6 +1912,249 @@ fi
 # The batched-GDN byte gates stay reference-served until a real SWE-Verified
 # task is explicitly armed after readiness. The EngineCore worker sees these
 # /logs sidecars even when its curated environment drops FR13_*.
+_fr13_gdn_parent_group="${FR13_FIXED32_GDN_PARENT_GROUP:-0}"
+_fr13_gdn_parent_group_legacy_gate="${FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB:-0}"
+_fr13_gdn_parent_group_simd_eager="${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER:-0}"
+_fr13_gdn_parent_group_simd_graph="${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH:-0}"
+_fr13_gdn_parent_group_simd_production="${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION:-0}"
+for _fr13_group_pair in \
+  "FR13_FIXED32_GDN_PARENT_GROUP:$_fr13_gdn_parent_group" \
+  "FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB:$_fr13_gdn_parent_group_legacy_gate" \
+  "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER:$_fr13_gdn_parent_group_simd_eager" \
+  "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH:$_fr13_gdn_parent_group_simd_graph" \
+  "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION:$_fr13_gdn_parent_group_simd_production"; do
+  _fr13_group_name=${_fr13_group_pair%%:*}
+  _fr13_group_value=${_fr13_group_pair#*:}
+  case "$_fr13_group_value" in
+    0|1) ;;
+    *) echo "$_fr13_group_name must be 0 or 1" >&2; exit 2 ;;
+  esac
+done
+_fr13_gdn_parent_group_simd_gate_count=$((
+  10#$_fr13_gdn_parent_group_simd_eager
+  + 10#$_fr13_gdn_parent_group_simd_graph
+))
+if (( _fr13_gdn_parent_group_simd_gate_count > 1 )); then
+  echo "grouped SIMD eager and graph B4 gates are mutually exclusive" >&2
+  exit 2
+fi
+if [[ ( "$_fr13_gdn_parent_group_simd_gate_count" != "0" \
+        || "$_fr13_gdn_parent_group_simd_production" == "1" ) \
+      && "$_fr13_gdn_parent_group" != "1" ]]; then
+  echo "grouped SIMD qualification/production requires its parent-group arm" >&2
+  exit 2
+fi
+if [[ "$_fr13_gdn_parent_group_simd_production" == "1" \
+      && "$_fr13_gdn_parent_group_simd_gate_count" != "0" ]]; then
+  echo "grouped SIMD qualification and production selectors are mutually exclusive" >&2
+  exit 2
+fi
+if [[ "$_fr13_gdn_parent_group" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "${FR13_TREE_GDN_GEOM_OVERRIDE:-}" == "BV=8" ]] || {
+    echo "FR13_FIXED32_GDN_PARENT_GROUP requires fixed32 BV=8" >&2
+    exit 2
+  }
+  [[ "$_fr13_gdn_parent_group_legacy_gate" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "0" \
+     && -z "${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
+     && -z "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}" \
+     && "${FR13_FIXED32_BATCH_GDN_BV8_TIMING:-0}" == "0" \
+     && "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}" == "0" \
+     && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+     && "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" == "0" ]] || {
+    echo "grouped SIMD must be the only fixed32 GDN/kernel candidate" >&2
+    exit 2
+  }
+  printf '1\n' > "$LOG_DIR/fr13_fixed32_gdn_parent_group.arm"
+  chmod 400 "$LOG_DIR/fr13_fixed32_gdn_parent_group.arm"
+else
+  rm -f "$LOG_DIR/fr13_fixed32_gdn_parent_group.arm" 2>/dev/null || true
+fi
+if (( _fr13_gdn_parent_group_simd_gate_count == 1 )); then
+  [[ "$MAX_NUM_SEQS" == "4" \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+     && "${FR10_METRICS:-0}" == "1" \
+     && "${FR13_RING_EXPORT:-1}" == "1" \
+     && "${FR13_FLAGS_INKERNEL:-1}" == "1" ]] || {
+    echo "grouped SIMD live gates require exact B4 metrics/ring/flags" >&2
+    exit 2
+  }
+  if [[ "$_fr13_gdn_parent_group_simd_eager" == "1" ]]; then
+    [[ "${ENFORCE_EAGER:-0}" == "1" ]] || {
+      echo "grouped SIMD eager gate requires ENFORCE_EAGER=1" >&2
+      exit 2
+    }
+    printf '1\n' > "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd_b4_eager.enabled"
+    chmod 400 "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd_b4_eager.enabled"
+    rm -f "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd_b4_graph.enabled"
+  else
+    [[ "${ENFORCE_EAGER:-0}" == "0" \
+       && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" ]] || {
+      echo "grouped SIMD graph gate requires the final full-graph route" >&2
+      exit 2
+    }
+    printf '1\n' > "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd_b4_graph.enabled"
+    chmod 400 "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd_b4_graph.enabled"
+    rm -f "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd_b4_eager.enabled"
+  fi
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd_b4.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd.exact4.eager.pass.json" \
+    "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd.exact4.graph.pass.json" \
+    "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd.exact16.eager.pass.json" \
+    "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd.exact16.graph.pass.json"
+  FR13_FIXED32_GDN_PARENT_GROUP_SIMD_REAL_EVENT_PATH=/logs/fr13_fixed32_gdn_parent_group_simd_b4.real_event.arm
+else
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd_b4_eager.enabled" \
+    "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd_b4_graph.enabled" \
+    "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd_b4.real_event.arm" \
+    2>/dev/null || true
+  FR13_FIXED32_GDN_PARENT_GROUP_SIMD_REAL_EVENT_PATH=
+fi
+if [[ "$_fr13_gdn_parent_group_simd_production" == "1" ]]; then
+  [[ "$MAX_NUM_SEQS" == "4" \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+     && "${ENFORCE_EAGER:-0}" == "0" \
+     && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" ]] || {
+    echo "grouped SIMD production requires the B4 final full-graph route" >&2
+    exit 2
+  }
+  for _fr13_group_pass_name in \
+    FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT4_EAGER_PASS_PATH \
+    FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT4_GRAPH_PASS_PATH \
+    FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT16_EAGER_PASS_PATH \
+    FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT16_GRAPH_PASS_PATH; do
+    [[ -n "${!_fr13_group_pass_name}" ]] || {
+      echo "grouped SIMD production requires $_fr13_group_pass_name" >&2
+      exit 2
+    }
+  done
+  python3 - "$LOG_DIR" \
+    "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT4_EAGER_PASS_PATH" \
+    "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT4_GRAPH_PASS_PATH" \
+    "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT16_EAGER_PASS_PATH" \
+    "$FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT16_GRAPH_PASS_PATH" <<'PY'
+import os
+import secrets
+import stat
+import sys
+from pathlib import Path
+
+
+destination_dir = Path(sys.argv[1])
+sources = tuple(Path(value) for value in sys.argv[2:])
+names = (
+    "fr13_fixed32_gdn_parent_group_simd.exact4.eager.pass.json",
+    "fr13_fixed32_gdn_parent_group_simd.exact4.graph.pass.json",
+    "fr13_fixed32_gdn_parent_group_simd.exact16.eager.pass.json",
+    "fr13_fixed32_gdn_parent_group_simd.exact16.graph.pass.json",
+)
+
+
+def identity(info: os.stat_result) -> tuple[int, ...]:
+    return (
+        info.st_dev,
+        info.st_ino,
+        info.st_mode,
+        info.st_nlink,
+        info.st_size,
+        info.st_mtime_ns,
+        info.st_ctime_ns,
+    )
+
+
+for source, name in zip(sources, names, strict=True):
+    if not source.is_absolute():
+        raise SystemExit(f"grouped SIMD PASS source must be absolute: {source}")
+    source_fd = None
+    temporary_fd = None
+    temporary = destination_dir / (
+        f".{name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+    )
+    destination = destination_dir / name
+    try:
+        source_fd = os.open(
+            source,
+            os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+        )
+        before = os.fstat(source_fd)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_nlink != 1
+            or stat.S_IMODE(before.st_mode) != 0o444
+            or before.st_size <= 0
+            or before.st_size > 65536
+        ):
+            raise RuntimeError(
+                f"grouped SIMD PASS source is not immutable: {source}"
+            )
+        remaining = before.st_size
+        chunks = []
+        while remaining:
+            chunk = os.read(source_fd, remaining)
+            if not chunk:
+                raise RuntimeError(f"grouped SIMD PASS source truncated: {source}")
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(source_fd, 1) or identity(os.fstat(source_fd)) != identity(before):
+            raise RuntimeError(f"grouped SIMD PASS source changed: {source}")
+        temporary_fd = os.open(
+            temporary,
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+            0o600,
+        )
+        view = memoryview(b"".join(chunks))
+        while view:
+            written = os.write(temporary_fd, view)
+            if written <= 0:
+                raise OSError("short grouped SIMD PASS write")
+            view = view[written:]
+        os.fchmod(temporary_fd, 0o444)
+        os.fsync(temporary_fd)
+        os.close(temporary_fd)
+        temporary_fd = None
+        os.replace(temporary, destination)
+        installed = os.lstat(destination)
+        if (
+            not stat.S_ISREG(installed.st_mode)
+            or stat.S_ISLNK(installed.st_mode)
+            or installed.st_nlink != 1
+            or stat.S_IMODE(installed.st_mode) != 0o444
+            or installed.st_size != before.st_size
+        ):
+            raise RuntimeError(
+                f"grouped SIMD PASS installation failed: {destination}"
+            )
+    finally:
+        if source_fd is not None:
+            os.close(source_fd)
+        if temporary_fd is not None:
+            os.close(temporary_fd)
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+PY
+  printf '1\n' > "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd.production.arm"
+  chmod 400 "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd.production.arm"
+else
+  rm -f "$LOG_DIR/fr13_fixed32_gdn_parent_group_simd.production.arm" \
+    2>/dev/null || true
+fi
+export FR13_FIXED32_GDN_PARENT_GROUP_SIMD_REAL_EVENT_PATH
 _fr13_batch_gdn_byte_ab="${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}"
 _fr13_batch_gdn_graph_byte_ab="${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}"
 _fr13_batch_gdn_production="${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}"
@@ -2399,6 +2708,7 @@ while IFS= read -r _v; do
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_SO" \
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
      || "$_v" == "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH" \
+     || "$_v" == "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_REAL_EVENT_PATH" \
      || "$_v" == "FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH" \
      || "$_v" == "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH" ]] && continue
   if [[ -n "${FR13_FIXED32_MODE:-}" \
@@ -2534,6 +2844,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_BATCH_GDN_BV_CANDIDATE="${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
   -e FR13_FIXED32_BATCH_GDN_BV_PRODUCTION="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" \
   -e FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH="${FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH:-}" \
+  -e FR13_FIXED32_GDN_PARENT_GROUP_SIMD_REAL_EVENT_PATH="${FR13_FIXED32_GDN_PARENT_GROUP_SIMD_REAL_EVENT_PATH:-}" \
   -e FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH="${FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH:-}" \
   -e FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB="$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" \
   -e FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION="$FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION" \

@@ -167,6 +167,15 @@ _FR13_FIXED32_BATCH_GDN_BYTE_AB = os.environ.get(
 _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = os.environ.get(
     "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB", "0"
 ).strip()
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER = os.environ.get(
+    "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER", "0"
+).strip()
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH = os.environ.get(
+    "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH", "0"
+).strip()
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION = os.environ.get(
+    "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION", "0"
+).strip()
 _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB = os.environ.get(
     "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB", "0"
 ).strip()
@@ -417,6 +426,10 @@ try:
     _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
 except NameError:
     _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = False
+try:
+    _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH
+except NameError:
+    _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH = False
 try:
     _FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC
 except NameError:
@@ -673,6 +686,13 @@ def _fr13_fixed32_observed_new_state(
         "gdn_path_programs": 0,
         "gdn_padded_slots": 0,
         "gdn_physical_route": None,
+        "gdn_physical_candidate": None,
+        "gdn_physical_kernel": None,
+        "gdn_kernel_source_sha256": None,
+        "gdn_parent_contract_sha256": None,
+        "gdn_writer_sha256": None,
+        "gdn_qualification_route": None,
+        "gdn_credential_sha256": None,
         "gdn_physical_batched": None,
         "gdn_physical_programs": 0,
         "gdn_physical_grid_z_per_request": None,
@@ -2409,6 +2429,75 @@ def _fr13_fixed32_observed_gdn(
             "FR13 fixed32 GDN physical route is invalid: "
             + repr(physical_route)
         )
+    physical_candidate = physical_execution.get("candidate")
+    physical_kernel = physical_execution.get("kernel")
+    kernel_source_sha256 = physical_execution.get("kernel_source_sha256")
+    parent_contract_sha256 = physical_execution.get("parent_contract_sha256")
+    writer_sha256 = physical_execution.get("writer_sha256")
+    qualification_route = physical_execution.get("qualification_route")
+    credential_sha256 = physical_execution.get("credential_sha256")
+    identity_digests = (
+        kernel_source_sha256,
+        parent_contract_sha256,
+        writer_sha256,
+    )
+    if physical_route == "fixed32_parent_group_simd":
+        b1_source_candidate = batch == 1
+        if (
+            physical_candidate != "fixed32_gdn_parent_group_simd_v2"
+            or physical_kernel != "tree_gdn_parent_group_simd_width4_v2"
+            or any(
+                not isinstance(value, str)
+                or len(value) != 64
+                or any(character not in "0123456789abcdef" for character in value)
+                for value in identity_digests
+            )
+            or (
+                b1_source_candidate
+                and (
+                    physical_batched
+                    or qualification_route
+                    != "b1_process_local_source_candidate"
+                    or credential_sha256 is not None
+                )
+            )
+            or (
+                not b1_source_candidate
+                and (
+                    not physical_batched
+                    or qualification_route != "parent_group_production"
+                    or not isinstance(credential_sha256, str)
+                    or len(credential_sha256) != 64
+                    or any(
+                        character not in "0123456789abcdef"
+                        for character in credential_sha256
+                    )
+                )
+            )
+        ):
+            raise RuntimeError(
+                "FR13 grouped SIMD execution identity is invalid: "
+                + repr(
+                    (
+                        physical_candidate,
+                        physical_kernel,
+                        identity_digests,
+                        qualification_route,
+                        credential_sha256,
+                    )
+                )
+            )
+    elif any(
+        value is not None
+        for value in (
+            physical_candidate,
+            physical_kernel,
+            *identity_digests,
+            qualification_route,
+            credential_sha256,
+        )
+    ):
+        raise RuntimeError("FR13 incumbent GDN route carried grouped credentials")
     physical_programs = 1 + level1_programs
     single_writer_nodes = 32
     launch_repetitions = 1 if physical_batched else batch
@@ -2491,6 +2580,19 @@ def _fr13_fixed32_observed_gdn(
     ):
         raise RuntimeError("FR13 fixed32 GDN physical route changed")
     event["gdn_physical_route"] = physical_route
+    for key, value in (
+        ("gdn_physical_candidate", physical_candidate),
+        ("gdn_physical_kernel", physical_kernel),
+        ("gdn_kernel_source_sha256", kernel_source_sha256),
+        ("gdn_parent_contract_sha256", parent_contract_sha256),
+        ("gdn_writer_sha256", writer_sha256),
+        ("gdn_qualification_route", qualification_route),
+        ("gdn_credential_sha256", credential_sha256),
+    ):
+        prior = event[key]
+        if prior is not None and prior != value:
+            raise RuntimeError("FR13 fixed32 GDN execution identity changed: " + key)
+        event[key] = value
     for key, value in (
         ("gdn_physical_batched", physical_batched),
         (
@@ -3766,6 +3868,22 @@ def _fr13_fixed32_capture_begin(
                 "and tree kernel"
             )
         tree_kernel.fixed32_batch_gdn_graph_live_capture_begin(identity, batch)
+    if _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH and batch == 4:
+        tree_kernel = __import__(
+            "lumo_flywheel_serving.fr10_gdn_tree_kernel",
+            fromlist=(
+                "_fr13_fixed32_gdn_parent_group_simd_graph_control",
+                "fixed32_gdn_parent_group_simd_graph_capture_begin",
+            ),
+        )
+        if not tree_kernel._fr13_fixed32_gdn_parent_group_simd_graph_control():
+            raise RuntimeError(
+                "FR13 grouped SIMD graph selector drift between observer and "
+                "tree kernel"
+            )
+        tree_kernel.fixed32_gdn_parent_group_simd_graph_capture_begin(
+            identity, batch
+        )
     tree_kernel = __import__(
         "lumo_flywheel_serving.fr10_gdn_tree_kernel",
         fromlist=(
@@ -3876,6 +3994,13 @@ def _fr13_fixed32_capture_end(
             "path_programs": int(work["gdn_path_programs"]),
             "padded_slots": int(work["gdn_padded_slots"]),
             "physical_route": work["gdn_physical_route"],
+            "physical_candidate": work["gdn_physical_candidate"],
+            "physical_kernel": work["gdn_physical_kernel"],
+            "kernel_source_sha256": work["gdn_kernel_source_sha256"],
+            "parent_contract_sha256": work["gdn_parent_contract_sha256"],
+            "writer_sha256": work["gdn_writer_sha256"],
+            "qualification_route": work["gdn_qualification_route"],
+            "credential_sha256": work["gdn_credential_sha256"],
             "physical_batched": work["gdn_physical_batched"],
             "physical_programs": int(work["gdn_physical_programs"]),
             "physical_grid_z_per_request": list(
@@ -3980,6 +4105,28 @@ def _fr13_fixed32_capture_end(
                 "and tree kernel"
             )
         tree_kernel.fixed32_batch_gdn_graph_live_capture_end(
+            identity,
+            4,
+            signature,
+            48,
+        )
+    if (
+        _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH
+        and int(work["batch_size"]) == 4
+    ):
+        tree_kernel = __import__(
+            "lumo_flywheel_serving.fr10_gdn_tree_kernel",
+            fromlist=(
+                "_fr13_fixed32_gdn_parent_group_simd_graph_control",
+                "fixed32_gdn_parent_group_simd_graph_capture_end",
+            ),
+        )
+        if not tree_kernel._fr13_fixed32_gdn_parent_group_simd_graph_control():
+            raise RuntimeError(
+                "FR13 grouped SIMD graph selector drift between observer and "
+                "tree kernel"
+            )
+        tree_kernel.fixed32_gdn_parent_group_simd_graph_capture_end(
             identity,
             4,
             signature,
@@ -4167,6 +4314,43 @@ def _fr13_fixed32_observed_graph_replay(
                 "FR13 fixed32 B4 graph GDN byte gate did not pass on the "
                 "authenticated full-graph replay: " + repr(gate_report)
             )
+    if (
+        _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH
+        and int(event["batch_size"]) == 4
+    ):
+        if not tree_kernel._fr13_fixed32_gdn_parent_group_simd_graph_control():
+            raise RuntimeError(
+                "FR13 grouped SIMD graph selector drift between observer and "
+                "tree kernel"
+            )
+        gate_report = (
+            tree_kernel.fixed32_gdn_parent_group_simd_graph_gate_on_replay(
+                identity,
+                expected_signature,
+                4,
+                48,
+            )
+        )
+        gate_status = gate_report.get("status")
+        if gate_status not in (
+            "waiting_for_authenticated_campaign",
+            "passed",
+        ):
+            raise RuntimeError(
+                "FR13 grouped SIMD graph gate entered an invalid state: "
+                + repr(gate_report)
+            )
+        if gate_status == "passed" and (
+            gate_report.get("graph_id") != identity
+            or gate_report.get("graph_signature") != expected_signature
+            or gate_report.get("batch_size") != 4
+            or gate_report.get("records") != 48
+            or gate_report.get("campaign") not in ("exact4", "exact16")
+        ):
+            raise RuntimeError(
+                "FR13 grouped SIMD graph PASS identity drift: "
+                + repr(gate_report)
+            )
     if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None:
         if getattr(
             tree_kernel, "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE", None
@@ -4262,6 +4446,13 @@ def _fr13_fixed32_observed_graph_replay(
     event["gdn_physical_route"] = gdn.get(
         "physical_route", "fixed32_path"
     )
+    event["gdn_physical_candidate"] = gdn.get("physical_candidate")
+    event["gdn_physical_kernel"] = gdn.get("physical_kernel")
+    event["gdn_kernel_source_sha256"] = gdn.get("kernel_source_sha256")
+    event["gdn_parent_contract_sha256"] = gdn.get("parent_contract_sha256")
+    event["gdn_writer_sha256"] = gdn.get("writer_sha256")
+    event["gdn_qualification_route"] = gdn.get("qualification_route")
+    event["gdn_credential_sha256"] = gdn.get("credential_sha256")
     replay_batch = int(event["batch_size"])
     event["gdn_physical_batched"] = bool(
         gdn.get("physical_batched", replay_batch > 1)
@@ -5859,6 +6050,13 @@ def _fr13_fixed32_observed_take(mode, batch_size, forward_step_index):
             "path_programs": int(event["gdn_path_programs"]),
             "padded_slots": int(event["gdn_padded_slots"]),
             "physical_route": event["gdn_physical_route"],
+            "physical_candidate": event["gdn_physical_candidate"],
+            "physical_kernel": event["gdn_physical_kernel"],
+            "kernel_source_sha256": event["gdn_kernel_source_sha256"],
+            "parent_contract_sha256": event["gdn_parent_contract_sha256"],
+            "writer_sha256": event["gdn_writer_sha256"],
+            "qualification_route": event["gdn_qualification_route"],
+            "credential_sha256": event["gdn_credential_sha256"],
             "physical_batched": event["gdn_physical_batched"],
             "physical_programs": int(event["gdn_physical_programs"]),
             "physical_grid_z_per_request": list(
@@ -6341,6 +6539,12 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
             "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
         )
     graph_batch_gdn_diagnostic = graph_batch_gdn_diagnostic_raw == "1"
+    grouped_simd_graph_raw = _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH
+    if grouped_simd_graph_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH must be exactly 0 or 1"
+        )
+    grouped_simd_graph = grouped_simd_graph_raw == "1"
     eager_kernel_diagnostic = (
         _fr13_fixed32_eager_boot_warm_contract() is not None
     )
@@ -6392,6 +6596,8 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         f"{taw_native_diagnostic!r}\n"
         "_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = "
         f"{graph_batch_gdn_diagnostic!r}\n"
+        "_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH = "
+        f"{grouped_simd_graph!r}\n"
         "_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC = "
         f"{eager_kernel_diagnostic!r}\n"
     )
@@ -6399,11 +6605,16 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
 
 def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
     batch_gdn_byte_diagnostic = _FR13_FIXED32_BATCH_GDN_BYTE_AB
+    grouped_simd_eager = _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER
     sfwd_b4_byte_diagnostic = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
     cutlass_wave = _FR13_FIXED32_CUTLASS_WAVE
     if batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1"
+        )
+    if grouped_simd_eager not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER must be exactly 0 or 1"
         )
     if cutlass_wave not in (
         "stock",
@@ -6434,6 +6645,7 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
     if sum(
         (
             batch_gdn_byte_diagnostic == "1",
+            grouped_simd_eager == "1",
             streamk_byte_diagnostic,
             persistent_b4_byte_diagnostic,
             sfwd_b4_byte_diagnostic == "1",
@@ -6446,6 +6658,12 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
     if batch_gdn_byte_diagnostic == "1":
         return (
             "eager B4 byte diagnostic",
+            4,
+            "FR13_FIXED32_EAGER_B4_BOOT_WARM",
+        )
+    if grouped_simd_eager == "1":
+        return (
+            "grouped SIMD B4 byte diagnostic",
             4,
             "FR13_FIXED32_EAGER_B4_BOOT_WARM",
         )
@@ -6480,6 +6698,11 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     graph_batch_gdn_byte_diagnostic = (
         _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
     )
+    grouped_simd_eager = _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER
+    grouped_simd_graph = _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH
+    grouped_simd_production = (
+        _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION
+    )
     sfwd_b4_byte_diagnostic = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
     sfwd_production = os.environ.get(
         "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION", "0"
@@ -6497,6 +6720,31 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     if graph_batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
+        )
+    if any(
+        value not in ("0", "1")
+        for value in (
+            grouped_simd_eager,
+            grouped_simd_graph,
+            grouped_simd_production,
+        )
+    ):
+        raise RuntimeError(
+            "FR13 grouped SIMD selectors must be exactly 0 or 1"
+        )
+    if sum(
+        value == "1"
+        for value in (
+            batch_gdn_byte_diagnostic,
+            graph_batch_gdn_byte_diagnostic,
+            grouped_simd_eager,
+            grouped_simd_graph,
+            grouped_simd_production,
+        )
+    ) > 1:
+        raise RuntimeError(
+            "FR13 legacy batched-GDN and grouped SIMD selectors are mutually "
+            "exclusive"
         )
     if (
         batch_gdn_byte_diagnostic == "1"
@@ -6636,6 +6884,91 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             raise RuntimeError(
                 "FR13 fixed32 graph B4 byte diagnostic runtime contract "
                 "drift: " + repr(drift)
+            )
+    if grouped_simd_eager == "1" or grouped_simd_graph == "1":
+        if not mode:
+            raise RuntimeError(
+                "FR13 grouped SIMD B4 byte gate requires fixed32 mode"
+            )
+        if os.environ.get("FR13_FIXED32_GDN_PARENT_GROUP", "") != "1":
+            raise RuntimeError(
+                "FR13 grouped SIMD B4 byte gate requires its distinct candidate arm"
+            )
+        incompatible = (
+            os.environ.get("FR13_FIXED32_BATCH_GDN_PRODUCTION", "0") != "0"
+            or bool(os.environ.get("FR13_FIXED32_BATCH_GDN_BV_CANDIDATE", ""))
+            or bool(os.environ.get("FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", ""))
+            or bool(candidate)
+            or bool(production)
+        )
+        if incompatible:
+            raise RuntimeError(
+                "FR13 grouped SIMD B4 byte gate cannot reuse a legacy candidate "
+                "or production route"
+            )
+        exact_runtime = {
+            "FR13_TREE_GDN_GEOM_OVERRIDE": "BV=8",
+            "FR13_RING_EXPORT": "1",
+            "FR13_FLAGS_INKERNEL": "1",
+            "FR10_METRICS": "1",
+        }
+        drift = {
+            name: (os.environ.get(name, ""), expected)
+            for name, expected in exact_runtime.items()
+            if os.environ.get(name, "") != expected
+        }
+        if drift:
+            raise RuntimeError(
+                "FR13 grouped SIMD B4 byte gate runtime contract drift: "
+                + repr(drift)
+            )
+    if grouped_simd_production == "1":
+        if not mode:
+            raise RuntimeError(
+                "FR13 grouped SIMD production requires fixed32 mode"
+            )
+        if os.environ.get("FR13_FIXED32_GDN_PARENT_GROUP", "") != "1":
+            raise RuntimeError(
+                "FR13 grouped SIMD production requires its distinct candidate arm"
+            )
+        incompatible = (
+            grouped_simd_eager != "0"
+            or grouped_simd_graph != "0"
+            or os.environ.get("FR13_FIXED32_B1_DIAGNOSTIC", "0") != "0"
+            or os.environ.get("FR13_FIXED32_BATCH_GDN_BYTE_AB", "0") != "0"
+            or os.environ.get("FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB", "0")
+            != "0"
+            or os.environ.get("FR13_FIXED32_BATCH_GDN_PRODUCTION", "0")
+            != "0"
+            or bool(
+                os.environ.get("FR13_FIXED32_BATCH_GDN_BV_CANDIDATE", "")
+            )
+            or bool(
+                os.environ.get("FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", "")
+            )
+            or bool(candidate)
+            or bool(production)
+        )
+        if incompatible:
+            raise RuntimeError(
+                "FR13 grouped SIMD production cannot reuse a diagnostic or "
+                "legacy credential"
+            )
+        exact_runtime = {
+            "FR13_TREE_GDN_GEOM_OVERRIDE": "BV=8",
+            "FR13_RING_EXPORT": "1",
+            "FR13_FLAGS_INKERNEL": "1",
+            "ENFORCE_EAGER": "0",
+        }
+        drift = {
+            name: (os.environ.get(name, ""), expected)
+            for name, expected in exact_runtime.items()
+            if os.environ.get(name, "") != expected
+        }
+        if drift:
+            raise RuntimeError(
+                "FR13 grouped SIMD production runtime contract drift: "
+                + repr(drift)
             )
     if candidate:
         if candidate not in ("16", "32", "64", "128"):

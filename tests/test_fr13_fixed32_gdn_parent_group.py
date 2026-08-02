@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import hashlib
 import json
 import os
@@ -251,9 +252,12 @@ def test_parent_group_rejects_legacy_batched_gdn_credentials() -> None:
     assert "a distinct grouped candidate" in guard
 
     selector = _function_source("fixed32_batch_gdn_selector")
-    assert "_FR13_FIXED32_GDN_PARENT_GROUP and (" in selector
-    assert "diagnostic or graph_diagnostic or production is not None" in selector
+    assert "if _FR13_FIXED32_GDN_PARENT_GROUP:" in selector
+    assert "if diagnostic or graph_diagnostic or production is not None:" in selector
     assert "legacy batched-GDN routes are forbidden" in selector
+    assert "_fr13_fixed32_gdn_parent_group_simd_eager_control" in selector
+    assert "_fr13_fixed32_gdn_parent_group_simd_graph_control" in selector
+    assert "_fr13_fixed32_gdn_parent_group_simd_production_control" in selector
 
 
 def test_parent_group_kernel_and_launchers_keep_single_writer_surfaces() -> None:
@@ -284,6 +288,12 @@ def test_parent_group_kernel_and_launchers_keep_single_writer_surfaces() -> None
     assert "(pid_vh % head_group == 0)" in kernel
 
     assert "if _parent_group is not None and _li == 1:" in b1_launcher
+    assert "_serve_incumbent_parent_group = True" in b1_launcher
+    assert "if _serve_incumbent_parent_group:" in b1_launcher
+    assert (
+        "_fr13_fixed32_gdn_parent_group_simd_b4_selector_armed()"
+        in b1_launcher
+    )
     assert "COMPACT_EXPORT=False" in b1_launcher
     assert "BATCH_SIZE=1" in b1_launcher
     assert 'SIMD_WIDTH=int(_group_contract["simd_width"])' in b1_launcher
@@ -347,6 +357,10 @@ def test_parent_group_b1_gate_is_full_surface_and_reference_served() -> None:
     assert "_parent_group_gate_restore(reference, gate_counter)" in launcher
     assert "production_authorized=0" in launcher
     assert "parent grouping and parent-gather selfcheck" in source
+    report = _function_source("fixed32_gdn_parent_group_byte_ab_report")
+    assert '"process_local_only": True' in report
+    assert '"production_authorized": False' in report
+    assert 'identity["parent_contract_sha256"]' in report
 
 
 @pytest.mark.parametrize("batch", [1, 4])
@@ -413,6 +427,13 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
         "gdn_path_programs": 0,
         "gdn_padded_slots": 0,
         "gdn_physical_route": None,
+        "gdn_physical_candidate": None,
+        "gdn_physical_kernel": None,
+        "gdn_kernel_source_sha256": None,
+        "gdn_parent_contract_sha256": None,
+        "gdn_writer_sha256": None,
+        "gdn_qualification_route": None,
+        "gdn_credential_sha256": None,
         "gdn_physical_batched": None,
         "gdn_physical_programs": 0,
         "gdn_physical_grid_z_per_request": None,
@@ -432,6 +453,7 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
         "gdn_parent_sha256": None,
         "gdn_ancestry_sha256": None,
     }
+    event_template = copy.deepcopy(event)
     namespace = {
         "_fr13_fixed32_observed_work_target": (
             lambda _label, _capturing, _batch: (event, None)
@@ -487,6 +509,13 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
         },
         "gdn_physical_execution": {
             "route": "fixed32_parent_group_simd",
+            "candidate": "fixed32_gdn_parent_group_simd_v2",
+            "kernel": "tree_gdn_parent_group_simd_width4_v2",
+            "kernel_source_sha256": "c" * 64,
+            "parent_contract_sha256": "d" * 64,
+            "writer_sha256": "e" * 64,
+            "qualification_route": "b1_process_local_source_candidate",
+            "credential_sha256": None,
             "batched": False,
             "batch_size": 1,
             "grid_z_per_request": (1, 5),
@@ -521,6 +550,10 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
     assert event["gdn_path_programs"] == 12
     assert event["gdn_padded_slots"] == 82
     assert event["gdn_physical_route"] == "fixed32_parent_group_simd"
+    assert event["gdn_physical_candidate"] == "fixed32_gdn_parent_group_simd_v2"
+    assert event["gdn_physical_kernel"] == "tree_gdn_parent_group_simd_width4_v2"
+    assert event["gdn_qualification_route"] == "b1_process_local_source_candidate"
+    assert event["gdn_credential_sha256"] is None
     assert event["gdn_physical_programs"] == 6
     assert event["gdn_physical_grid_z_per_request"] == (1, 5)
     assert event["gdn_physical_event_grid_z"] == (1, 5)
@@ -530,3 +563,62 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
     assert event["gdn_physical_level_max_steps"] == (5, 7)
     assert event["gdn_physical_critical_path"] == 12
     assert event["gdn_critical_path"] == 12
+
+    b4_runtime = copy.deepcopy(runtime_state)
+    b4_execution = b4_runtime["gdn_physical_execution"]
+    b4_execution.update(
+        qualification_route="parent_group_production",
+        credential_sha256="f" * 64,
+        batched=True,
+        batch_size=4,
+        event_grid_z=(4, 20),
+        launch_repetitions=1,
+        physical_launches_per_layer=2,
+        programs_per_layer=24,
+    )
+
+    def observe_b4(observed_runtime: dict[str, object]) -> None:
+        observed_event = copy.deepcopy(event_template)
+        observed_event["batch_size"] = 4
+        namespace["_fr13_fixed32_observed_work_target"] = (
+            lambda _label, _capturing, _batch: (observed_event, None)
+        )
+        namespace["_fr13_fixed32_observed_gdn"](
+            "gdn.0",
+            0,
+            4,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+            (32, 32),
+            (32, 32),
+            observed_runtime,
+        )
+
+    observe_b4(b4_runtime)
+
+    invalid_source_identity = copy.deepcopy(b4_runtime)
+    invalid_source_identity["gdn_physical_execution"].update(
+        qualification_route="b1_process_local_source_candidate",
+        credential_sha256=None,
+    )
+    with pytest.raises(RuntimeError, match="execution identity is invalid"):
+        observe_b4(invalid_source_identity)
+
+    invalid_credential = copy.deepcopy(b4_runtime)
+    invalid_credential["gdn_physical_execution"]["credential_sha256"] = "F" * 64
+    with pytest.raises(RuntimeError, match="execution identity is invalid"):
+        observe_b4(invalid_credential)
+
+    invalid_unbatched = copy.deepcopy(b4_runtime)
+    invalid_unbatched["gdn_physical_execution"].update(
+        batched=False,
+        event_grid_z=(1, 5),
+        launch_repetitions=4,
+        physical_launches_per_layer=8,
+    )
+    with pytest.raises(RuntimeError, match="execution identity is invalid"):
+        observe_b4(invalid_unbatched)

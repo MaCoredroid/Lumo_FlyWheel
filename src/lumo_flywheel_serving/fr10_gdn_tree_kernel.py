@@ -1139,6 +1139,12 @@ _FR13_FIXED32_MAX_BATCH = 4
 _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID = (
     "fixed32_gdn_parent_group_simd_v2"
 )
+_FR13_FIXED32_GDN_PARENT_GROUP_KERNEL_ID = (
+    "tree_gdn_parent_group_simd_width4_v2"
+)
+_FR13_FIXED32_GDN_PARENT_GROUP_REFERENCE_KERNEL_ID = (
+    "per_request_tree_gdn_path_bv8"
+)
 # Level-1 logical path indices grouped by their common exported parent. The
 # member order is the original schedule order for that parent.
 _FR13_FIXED32_GDN_LEVEL1_PARENT_GROUPS = (
@@ -1163,6 +1169,100 @@ _FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB_STATE = {
     "passed": set(),
     "attempts": {},
     "failed": False,
+}
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_SURFACES = (
+    "out",
+    "export",
+    "ring_k",
+    "ring_v",
+    "ring_a",
+    "ring_b",
+    "flags",
+    "invocation_counter",
+)
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT4_TASK_IDS = (
+    "astropy__astropy-12907",
+    "astropy__astropy-13033",
+    "astropy__astropy-13236",
+    "astropy__astropy-13398",
+)
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT16_TASK_IDS = (
+    *_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT4_TASK_IDS,
+    "astropy__astropy-13453",
+    "astropy__astropy-13579",
+    "astropy__astropy-13977",
+    "astropy__astropy-14096",
+    "astropy__astropy-14182",
+    "astropy__astropy-14309",
+    "astropy__astropy-14365",
+    "astropy__astropy-14369",
+    "astropy__astropy-14508",
+    "astropy__astropy-14539",
+    "astropy__astropy-14598",
+    "astropy__astropy-14995",
+)
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_CAMPAIGNS = {
+    "exact4": {
+        "task_ids": _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT4_TASK_IDS,
+        "subset_sha256": (
+            "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+        ),
+    },
+    "exact16": {
+        "task_ids": _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EXACT16_TASK_IDS,
+        "subset_sha256": (
+            "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c"
+        ),
+    },
+}
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EAGER_ENABLED = (
+    "/logs/fr13_fixed32_gdn_parent_group_simd_b4_eager.enabled"
+)
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_ENABLED = (
+    "/logs/fr13_fixed32_gdn_parent_group_simd_b4_graph.enabled"
+)
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_REAL_EVENT = (
+    "/logs/fr13_fixed32_gdn_parent_group_simd_b4.real_event.arm"
+)
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION_ARM = (
+    "/logs/fr13_fixed32_gdn_parent_group_simd.production.arm"
+)
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PASS_PATHS = {
+    ("exact4", "eager"): (
+        "/logs/fr13_fixed32_gdn_parent_group_simd.exact4.eager.pass.json"
+    ),
+    ("exact4", "graph"): (
+        "/logs/fr13_fixed32_gdn_parent_group_simd.exact4.graph.pass.json"
+    ),
+    ("exact16", "eager"): (
+        "/logs/fr13_fixed32_gdn_parent_group_simd.exact16.eager.pass.json"
+    ),
+    ("exact16", "graph"): (
+        "/logs/fr13_fixed32_gdn_parent_group_simd.exact16.graph.pass.json"
+    ),
+}
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EAGER_STATE = {
+    "campaign_identity_sha256": None,
+    "passed": set(),
+    "attempts": {},
+    "waiting_announced": set(),
+    "failed": False,
+}
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_IDENTITY_CACHE = None
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_CAMPAIGN_CACHE = None
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION_CREDENTIAL = None
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_CONTEXT = None
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_CAPTURES: dict[int, dict] = {}
+_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_STATE = {
+    "status": "disabled",
+    "candidate": _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID,
+    "kernel": _FR13_FIXED32_GDN_PARENT_GROUP_KERNEL_ID,
+    "campaign": None,
+    "campaign_identity_sha256": None,
+    "graph_id": None,
+    "graph_signature": None,
+    "batch_size": None,
+    "records": 0,
 }
 _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID = (
     "fixed32_sfwd_state_fusion_v1"
@@ -1678,16 +1778,443 @@ def _fr13_fixed32_gdn_parent_group_byte_ab_control() -> tuple[bool, str | None]:
 def fixed32_gdn_parent_group_byte_ab_report() -> dict[str, object]:
     """Return reduced qualification state without exposing task identity."""
     state = _FR13_FIXED32_GDN_PARENT_GROUP_BYTE_AB_STATE
+    identity = _fr13_fixed32_gdn_parent_group_simd_identity()
     return {
         "status": "failed" if state["failed"] else (
             "passed" if len(state["passed"]) == 48 else "armed"
         ),
+        "candidate": _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID,
+        "kernel": _FR13_FIXED32_GDN_PARENT_GROUP_KERNEL_ID,
+        "kernel_source_sha256": identity["kernel_source_sha256"],
+        "parent_contract_sha256": identity["parent_contract_sha256"],
+        "writer_sha256": identity["writer_sha256"],
         "passed_layers": len(state["passed"]),
         "attempts": sum(int(value) for value in state["attempts"].values()),
         "authenticated_real_event": state["task_marker_sha256"] is not None,
+        "process_local_only": True,
         "reference_served": True,
         "production_authorized": False,
     }
+
+
+def _fr13_fixed32_gdn_parent_group_simd_enabled(
+    *, env_name: str, default_path: str
+) -> bool:
+    raw = os.environ.get(env_name, "")
+    if raw not in ("", "0", "1"):
+        raise RuntimeError(f"{env_name} must be exactly 0 or 1")
+    path = os.environ.get(f"{env_name}_ENABLED_PATH", default_path)
+    return raw == "1" or os.path.exists(path)
+
+
+def _fr13_fixed32_gdn_parent_group_simd_campaign() -> dict[str, object] | None:
+    """Read a full authenticated exact4/exact16 marker set fail-closed."""
+    global _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_CAMPAIGN_CACHE
+    cached = _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_CAMPAIGN_CACHE
+    if isinstance(cached, dict):
+        return dict(cached)
+    path = os.environ.get(
+        "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_REAL_EVENT_PATH",
+        _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_REAL_EVENT,
+    )
+    if not os.path.exists(path):
+        return None
+    try:
+        before = os.lstat(path)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or stat.S_ISLNK(before.st_mode)
+            or before.st_nlink != 1
+            or stat.S_IMODE(before.st_mode) != 0o444
+        ):
+            raise RuntimeError(
+                "FR13 grouped SIMD real-event arm must be a mode-0444 "
+                "single-link regular file"
+            )
+        with open(path, encoding="ascii") as handle:
+            raw = handle.read(4097)
+        after = os.lstat(path)
+    except (OSError, UnicodeError) as error:
+        raise RuntimeError(
+            "FR13 grouped SIMD cannot read its authenticated real-event arm"
+        ) from error
+    if len(raw) > 4096 or (before.st_dev, before.st_ino, before.st_size) != (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+    ):
+        raise RuntimeError("FR13 grouped SIMD real-event arm changed while reading")
+    markers = tuple(line for line in raw.splitlines() if line)
+    matched = None
+    for campaign, contract in _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_CAMPAIGNS.items():
+        expected = tuple(
+            f"swe_verified:{task_id}" for task_id in contract["task_ids"]
+        )
+        if markers == expected:
+            matched = (campaign, contract)
+            break
+    if matched is None:
+        raise RuntimeError(
+            "FR13 grouped SIMD real-event arm is not the canonical exact4 "
+            "or exact16 SWE-Verified marker set"
+        )
+    campaign, contract = matched
+    marker_sha256 = hashlib.sha256(
+        ("\n".join(markers) + "\n").encode("ascii")
+    ).hexdigest()
+    reduced = {
+        "campaign": campaign,
+        "subset_sha256": contract["subset_sha256"],
+        "task_count": len(markers),
+        "task_markers_sha256": marker_sha256,
+    }
+    reduced["campaign_identity_sha256"] = hashlib.sha256(
+        json.dumps(
+            reduced,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+    ).hexdigest()
+    _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_CAMPAIGN_CACHE = dict(reduced)
+    return dict(reduced)
+
+
+def _fr13_fixed32_gdn_parent_group_simd_eager_control(
+) -> tuple[bool, dict[str, object] | None]:
+    enabled = _fr13_fixed32_gdn_parent_group_simd_enabled(
+        env_name="FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER",
+        default_path=_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EAGER_ENABLED,
+    )
+    if enabled and not _FR13_FIXED32_GDN_PARENT_GROUP:
+        raise RuntimeError("FR13 grouped SIMD eager gate requires its candidate arm")
+    return enabled, (
+        _fr13_fixed32_gdn_parent_group_simd_campaign() if enabled else None
+    )
+
+
+def _fr13_fixed32_gdn_parent_group_simd_graph_control() -> bool:
+    enabled = _fr13_fixed32_gdn_parent_group_simd_enabled(
+        env_name="FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH",
+        default_path=_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_ENABLED,
+    )
+    if enabled and not _FR13_FIXED32_GDN_PARENT_GROUP:
+        raise RuntimeError("FR13 grouped SIMD graph gate requires its candidate arm")
+    return enabled
+
+
+def _fr13_fixed32_gdn_parent_group_simd_production_armed() -> bool:
+    """Check the production selector without reading its qualification files."""
+    raw = os.environ.get("FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION", "")
+    if raw not in ("", "0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION must be exactly 0 or 1"
+        )
+    arm_path = os.environ.get(
+        "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION_ARM_PATH",
+        _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION_ARM,
+    )
+    return raw == "1" or os.path.exists(arm_path)
+
+
+def _fr13_fixed32_gdn_parent_group_simd_b4_selector_armed() -> bool:
+    """Resolve B4 routing without authenticating or authorizing production."""
+    eager = _fr13_fixed32_gdn_parent_group_simd_enabled(
+        env_name="FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_EAGER",
+        default_path=_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EAGER_ENABLED,
+    )
+    graph = _fr13_fixed32_gdn_parent_group_simd_enabled(
+        env_name="FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_GRAPH",
+        default_path=_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_ENABLED,
+    )
+    production = _fr13_fixed32_gdn_parent_group_simd_production_armed()
+    if sum((eager, graph, production)) > 1:
+        raise RuntimeError(
+            "FR13 grouped SIMD eager, graph, and production selectors are "
+            "mutually exclusive"
+        )
+    return eager or graph or production
+
+
+def _fr13_fixed32_gdn_parent_group_simd_pass_path(
+    campaign: str, gate: str
+) -> Path:
+    key = (str(campaign), str(gate))
+    if key not in _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PASS_PATHS:
+        raise RuntimeError("FR13 grouped SIMD PASS slot is invalid: " + repr(key))
+    env_name = (
+        "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_"
+        f"{key[0].upper()}_{key[1].upper()}_PASS_PATH"
+    )
+    return Path(os.environ.get(env_name, _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PASS_PATHS[key]))
+
+
+def _fr13_fixed32_gdn_parent_group_simd_validate_pass(
+    payload: object, *, campaign: str, gate: str
+) -> dict[str, object]:
+    """Validate one reduced live PASS against the exact current source."""
+    if not isinstance(payload, dict):
+        raise RuntimeError("FR13 grouped SIMD live PASS must be an object")
+    contract = _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_CAMPAIGNS[campaign]
+    identity = _fr13_fixed32_gdn_parent_group_simd_identity()
+    expected_marker_sha256 = hashlib.sha256(
+        (
+            "\n".join(
+                f"swe_verified:{task_id}" for task_id in contract["task_ids"]
+            )
+            + "\n"
+        ).encode("ascii")
+    ).hexdigest()
+    expected_campaign_identity = {
+        "campaign": campaign,
+        "subset_sha256": contract["subset_sha256"],
+        "task_count": len(contract["task_ids"]),
+        "task_markers_sha256": expected_marker_sha256,
+    }
+    expected_campaign_identity_sha256 = hashlib.sha256(
+        json.dumps(
+            expected_campaign_identity,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+    ).hexdigest()
+    layer_keys = payload.get("layer_keys")
+    graph_signature = payload.get("graph_signature")
+    try:
+        parsed_layer_keys = (
+            [int(key, 16) for key in layer_keys]
+            if isinstance(layer_keys, list)
+            else None
+        )
+    except (TypeError, ValueError):
+        parsed_layer_keys = None
+    expected_keys = {
+        "schema",
+        "status",
+        "candidate",
+        "kernel",
+        "reference_kernel",
+        "mode",
+        "campaign",
+        "subset_sha256",
+        "task_count",
+        "task_markers_sha256",
+        "campaign_identity_sha256",
+        "gate",
+        "batch",
+        "physical_rows_per_request",
+        "reference_bv",
+        "candidate_bv",
+        "simd_width",
+        "groups",
+        "group_max_path_lengths",
+        "grid_z_per_request",
+        "event_grid_z",
+        "reference_physical_launches_per_layer",
+        "candidate_physical_launches_per_layer",
+        "logical_critical_path",
+        "physical_critical_path",
+        "parent_loads",
+        "kernel_source_sha256",
+        "parent_contract_sha256",
+        "writer_sha256",
+        "compared_byte_surfaces",
+        "layer_count",
+        "layer_keys",
+        "graph_id",
+        "graph_signature",
+        "capture_records",
+        "raw_byte_equal",
+        "state_restored",
+        "reference_served",
+        "real_task_authenticated",
+        "campaign_authenticated",
+        "production_default_enabled",
+    }
+    invalid = (
+        set(payload) != expected_keys
+        or payload.get("schema")
+        != "fr13.fixed32.gdn_parent_group_simd.b4_live_pass.v1"
+        or payload.get("status") != "pass"
+        or payload.get("candidate")
+        != _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID
+        or payload.get("kernel") != _FR13_FIXED32_GDN_PARENT_GROUP_KERNEL_ID
+        or payload.get("reference_kernel")
+        != _FR13_FIXED32_GDN_PARENT_GROUP_REFERENCE_KERNEL_ID
+        or payload.get("mode") != _FR13_FIXED32_MODE
+        or payload.get("campaign") != campaign
+        or payload.get("subset_sha256") != contract["subset_sha256"]
+        or payload.get("task_count") != len(contract["task_ids"])
+        or payload.get("gate") != gate
+        or payload.get("batch") != 4
+        or payload.get("physical_rows_per_request") != 32
+        or payload.get("reference_bv") != 8
+        or payload.get("candidate_bv") != 8
+        or payload.get("simd_width") != 4
+        or payload.get("groups") != 5
+        or payload.get("group_max_path_lengths") != [7, 7, 1, 1, 1]
+        or payload.get("grid_z_per_request") != [1, 5]
+        or payload.get("event_grid_z") != [4, 20]
+        or payload.get("reference_physical_launches_per_layer") != 8
+        or payload.get("candidate_physical_launches_per_layer") != 2
+        or payload.get("logical_critical_path") != 12
+        or payload.get("physical_critical_path") != 12
+        or payload.get("parent_loads") != 5
+        or payload.get("kernel_source_sha256")
+        != identity["kernel_source_sha256"]
+        or payload.get("parent_contract_sha256")
+        != identity["parent_contract_sha256"]
+        or payload.get("writer_sha256") != identity["writer_sha256"]
+        or payload.get("compared_byte_surfaces")
+        != list(_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_SURFACES)
+        or payload.get("layer_count") != 48
+        or not isinstance(layer_keys, list)
+        or len(layer_keys) != 48
+        or len(set(layer_keys)) != 48
+        or not all(isinstance(key, str) and key.startswith("0x") for key in layer_keys)
+        or parsed_layer_keys is None
+        or any(key <= 0 for key in parsed_layer_keys)
+        or layer_keys
+        != [f"0x{key:x}" for key in sorted(parsed_layer_keys)]
+        or payload.get("raw_byte_equal") is not True
+        or payload.get("state_restored") is not True
+        or payload.get("reference_served") is not True
+        or payload.get("real_task_authenticated") is not True
+        or payload.get("campaign_authenticated") is not True
+        or payload.get("production_default_enabled") is not False
+        or payload.get("task_markers_sha256") != expected_marker_sha256
+        or payload.get("campaign_identity_sha256")
+        != expected_campaign_identity_sha256
+        or (
+            gate == "eager"
+            and (
+                payload.get("graph_id") is not None
+                or graph_signature is not None
+                or payload.get("capture_records") is not None
+            )
+        )
+        or (
+            gate == "graph"
+            and (
+                type(payload.get("graph_id")) is not int
+                or payload["graph_id"] <= 0
+                or not isinstance(graph_signature, str)
+                or len(graph_signature) != 64
+                or any(
+                    character not in "0123456789abcdef"
+                    for character in graph_signature
+                )
+                or payload.get("capture_records") != 48
+            )
+        )
+    )
+    if invalid:
+        raise RuntimeError(
+            f"FR13 grouped SIMD {campaign}/{gate} live PASS is invalid"
+        )
+    return dict(payload)
+
+
+def _fr13_fixed32_gdn_parent_group_simd_production_control(
+) -> dict[str, object] | None:
+    """Require all four distinct exact4/exact16 eager/graph PASS records."""
+    global _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION_CREDENTIAL
+    if not _fr13_fixed32_gdn_parent_group_simd_production_armed():
+        return None
+    cached = _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION_CREDENTIAL
+    if isinstance(cached, dict):
+        return cached
+    if not _FR13_FIXED32_GDN_PARENT_GROUP:
+        raise RuntimeError("FR13 grouped SIMD production requires its candidate arm")
+    validated = {}
+    file_digests = {}
+    for campaign in ("exact4", "exact16"):
+        for gate in ("eager", "graph"):
+            path = _fr13_fixed32_gdn_parent_group_simd_pass_path(campaign, gate)
+            descriptor = None
+            try:
+                descriptor = os.open(
+                    path,
+                    os.O_RDONLY
+                    | getattr(os, "O_NOFOLLOW", 0)
+                    | getattr(os, "O_CLOEXEC", 0),
+                )
+                before = os.fstat(descriptor)
+                if (
+                    not stat.S_ISREG(before.st_mode)
+                    or before.st_nlink != 1
+                    or stat.S_IMODE(before.st_mode) != 0o444
+                    or before.st_size <= 0
+                    or before.st_size > 65536
+                ):
+                    raise RuntimeError(
+                        f"FR13 grouped SIMD production requires an immutable "
+                        f"single-link {campaign}/{gate} PASS"
+                    )
+                remaining = before.st_size
+                chunks = []
+                while remaining:
+                    chunk = os.read(descriptor, remaining)
+                    if not chunk:
+                        raise RuntimeError(
+                            f"FR13 grouped SIMD {campaign}/{gate} PASS was truncated"
+                        )
+                    chunks.append(chunk)
+                    remaining -= len(chunk)
+                if os.read(descriptor, 1):
+                    raise RuntimeError(
+                        f"FR13 grouped SIMD {campaign}/{gate} PASS grew while reading"
+                    )
+                after = os.fstat(descriptor)
+                identity_fields = (
+                    "st_dev",
+                    "st_ino",
+                    "st_mode",
+                    "st_nlink",
+                    "st_size",
+                    "st_mtime_ns",
+                    "st_ctime_ns",
+                )
+                if any(
+                    getattr(before, field) != getattr(after, field)
+                    for field in identity_fields
+                ):
+                    raise RuntimeError(
+                        f"FR13 grouped SIMD {campaign}/{gate} PASS changed while reading"
+                    )
+                raw_payload = b"".join(chunks)
+                payload = json.loads(raw_payload.decode("ascii"))
+            except (OSError, UnicodeError, json.JSONDecodeError) as error:
+                raise RuntimeError(
+                    f"FR13 grouped SIMD cannot read {campaign}/{gate} PASS"
+                ) from error
+            finally:
+                if descriptor is not None:
+                    os.close(descriptor)
+            validated[(campaign, gate)] = (
+                _fr13_fixed32_gdn_parent_group_simd_validate_pass(
+                    payload, campaign=campaign, gate=gate
+                )
+            )
+            file_digests[f"{campaign}_{gate}"] = hashlib.sha256(raw_payload).hexdigest()
+    credential_sha256 = hashlib.sha256(
+        json.dumps(
+            file_digests,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+    ).hexdigest()
+    credential = {
+        "candidate": _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID,
+        "kernel": _FR13_FIXED32_GDN_PARENT_GROUP_KERNEL_ID,
+        "credential_sha256": credential_sha256,
+        "pass_sha256": file_digests,
+        "validated": validated,
+    }
+    _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_PRODUCTION_CREDENTIAL = credential
+    return credential
 
 
 def _fr13_fixed32_batch_gdn_graph_byte_ab_control() -> bool:
@@ -2013,13 +2540,45 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
     diagnostic, _marker = _fr13_fixed32_batch_gdn_byte_ab_control()
     graph_diagnostic = _fr13_fixed32_batch_gdn_graph_byte_ab_control()
     production = _fr13_fixed32_batch_gdn_production_control()
-    if _FR13_FIXED32_GDN_PARENT_GROUP and (
-        diagnostic or graph_diagnostic or production is not None
-    ):
-        raise RuntimeError(
-            "FR13 fixed32 grouped GDN requires a distinct B4 diagnostic and "
-            "production identity; legacy batched-GDN routes are forbidden"
+    grouped_eager, _grouped_campaign = (
+        _fr13_fixed32_gdn_parent_group_simd_eager_control()
+    )
+    grouped_graph = _fr13_fixed32_gdn_parent_group_simd_graph_control()
+    grouped_production = (
+        _fr13_fixed32_gdn_parent_group_simd_production_control()
+    )
+    if _FR13_FIXED32_GDN_PARENT_GROUP:
+        if diagnostic or graph_diagnostic or production is not None:
+            raise RuntimeError(
+                "FR13 fixed32 grouped GDN requires a distinct B4 diagnostic "
+                "and production identity; legacy batched-GDN routes are forbidden"
+            )
+        selected = sum(
+            (
+                grouped_eager,
+                grouped_graph,
+                grouped_production is not None,
+            )
         )
+        if selected > 1:
+            raise RuntimeError(
+                "FR13 grouped SIMD eager, graph, and production selectors are "
+                "mutually exclusive"
+            )
+        if grouped_eager:
+            return "parent_group_eager" if batch == 4 else None
+        if grouped_graph:
+            context = _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_CONTEXT
+            if (
+                batch == 4
+                and isinstance(context, dict)
+                and int(context.get("batch_size", -1)) == 4
+            ):
+                return "parent_group_graph_capture"
+            return None
+        if grouped_production is not None:
+            return "parent_group_production"
+        return None
     if diagnostic and graph_diagnostic:
         raise RuntimeError(
             "FR13 fixed32 eager and graph-replay batched GDN diagnostics are "
@@ -3046,6 +3605,22 @@ def _fr13_fixed32_batch_gdn_byte_ab_emit(record: dict[str, object]) -> None:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
+def _fr13_fixed32_gdn_parent_group_simd_emit(
+    record: dict[str, object]
+) -> None:
+    path = os.environ.get(
+        "FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_BYTE_AB_PATH",
+        "/logs/fr13_fixed32_gdn_parent_group_simd_b4_byte_ab.jsonl",
+    )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    payload = dict(record)
+    payload["schema"] = "fr13.fixed32.gdn_parent_group_simd.b4_byte_ab.v1"
+    with open(path, "a", encoding="ascii") as handle:
+        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
 def _fr13_fixed32_batch_gdn_live_pass_emit(
     *,
     task_marker: str,
@@ -3161,6 +3736,103 @@ def _fr13_fixed32_batch_gdn_live_pass_emit(
     os.replace(temporary, path)
 
 
+def _fr13_fixed32_gdn_parent_group_simd_live_pass_emit(
+    *,
+    campaign_identity: dict[str, object],
+    gate: str,
+    layer_keys: set[int],
+    graph_id: int | None = None,
+    graph_signature: str | None = None,
+    capture_records: int | None = None,
+) -> None:
+    """Publish one source-bound reduced PASS after all 48 B4 layers match."""
+    if len(layer_keys) != 48:
+        return
+    if gate == "eager" and bool(
+        _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EAGER_STATE["failed"]
+    ):
+        raise RuntimeError(
+            "FR13 grouped SIMD eager PASS is permanently blocked by a mismatch"
+        )
+    campaign = str(campaign_identity.get("campaign", ""))
+    if campaign not in _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_CAMPAIGNS:
+        raise RuntimeError("FR13 grouped SIMD PASS campaign is invalid")
+    if gate not in ("eager", "graph"):
+        raise RuntimeError("FR13 grouped SIMD PASS gate is invalid")
+    if gate == "graph" and (
+        type(graph_id) is not int
+        or graph_id <= 0
+        or not isinstance(graph_signature, str)
+        or len(graph_signature) != 64
+        or any(character not in "0123456789abcdef" for character in graph_signature)
+        or capture_records != 48
+    ):
+        raise RuntimeError("FR13 grouped SIMD graph PASS identity drift")
+    identity = _fr13_fixed32_gdn_parent_group_simd_identity()
+    payload = {
+        "schema": "fr13.fixed32.gdn_parent_group_simd.b4_live_pass.v1",
+        "status": "pass",
+        "candidate": identity["candidate"],
+        "kernel": identity["kernel"],
+        "reference_kernel": _FR13_FIXED32_GDN_PARENT_GROUP_REFERENCE_KERNEL_ID,
+        "mode": _FR13_FIXED32_MODE,
+        "campaign": campaign,
+        "subset_sha256": campaign_identity["subset_sha256"],
+        "task_count": campaign_identity["task_count"],
+        "task_markers_sha256": campaign_identity["task_markers_sha256"],
+        "campaign_identity_sha256": campaign_identity[
+            "campaign_identity_sha256"
+        ],
+        "gate": gate,
+        "batch": 4,
+        "physical_rows_per_request": 32,
+        "reference_bv": 8,
+        "candidate_bv": 8,
+        "simd_width": 4,
+        "groups": 5,
+        "group_max_path_lengths": [7, 7, 1, 1, 1],
+        "grid_z_per_request": [1, 5],
+        "event_grid_z": [4, 20],
+        "reference_physical_launches_per_layer": 8,
+        "candidate_physical_launches_per_layer": 2,
+        "logical_critical_path": 12,
+        "physical_critical_path": 12,
+        "parent_loads": 5,
+        "kernel_source_sha256": identity["kernel_source_sha256"],
+        "parent_contract_sha256": identity["parent_contract_sha256"],
+        "writer_sha256": identity["writer_sha256"],
+        "compared_byte_surfaces": list(
+            _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_SURFACES
+        ),
+        "layer_count": 48,
+        "layer_keys": [f"0x{key:x}" for key in sorted(layer_keys)],
+        "graph_id": int(graph_id) if graph_id is not None else None,
+        "graph_signature": graph_signature,
+        "capture_records": capture_records,
+        "raw_byte_equal": True,
+        "state_restored": True,
+        "reference_served": True,
+        "real_task_authenticated": True,
+        "campaign_authenticated": True,
+        "production_default_enabled": False,
+    }
+    _fr13_fixed32_gdn_parent_group_simd_validate_pass(
+        payload, campaign=campaign, gate=gate
+    )
+    path = _fr13_fixed32_gdn_parent_group_simd_pass_path(campaign, gate)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    encoded = (
+        json.dumps(payload, ensure_ascii=True, sort_keys=True) + "\n"
+    ).encode("ascii")
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    with open(temporary, "xb") as handle:
+        handle.write(encoded)
+        handle.flush()
+        os.fsync(handle.fileno())
+        os.fchmod(handle.fileno(), 0o444)
+    os.replace(temporary, path)
+
+
 def _fr13_fixed32_batch_gdn_graph_compare_records(
     records,
     *,
@@ -3168,6 +3840,10 @@ def _fr13_fixed32_batch_gdn_graph_compare_records(
     graph_id: int,
     graph_signature: str,
     task_marker: str,
+    reference_kernel: str = _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL,
+    candidate_kernel: str = _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL,
+    qualification_identity: dict[str, object] | None = None,
+    emit_record=None,
 ) -> dict[str, object]:
     """Shadow the replayed per-request BV8 graph with one batched candidate."""
     candidate = int(candidate_bv)
@@ -3234,12 +3910,10 @@ def _fr13_fixed32_batch_gdn_graph_compare_records(
                 }
                 or int(reference_meta["block_v"]) != 8
                 or int(reference_meta["physical_launches"]) != 8
-                or reference_meta["kernel_structure"]
-                != _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL
+                or reference_meta["kernel_structure"] != reference_kernel
                 or int(candidate_meta["block_v"]) != candidate
                 or int(candidate_meta["physical_launches"]) != 2
-                or candidate_meta["kernel_structure"]
-                != _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL
+                or candidate_meta["kernel_structure"] != candidate_kernel
                 or reference_meta["kernel_structure"]
                 == candidate_meta["kernel_structure"]
             ):
@@ -3304,8 +3978,7 @@ def _fr13_fixed32_batch_gdn_graph_compare_records(
             if not bool(item["byte_equal"])
         ]
         zero_diff = not graph_bad and not arm_bad
-        _fr13_fixed32_batch_gdn_byte_ab_emit(
-            {
+        record_payload = {
                 "gate_mode": "post_replay_shadow",
                 "task_marker": task_marker,
                 "graph_id": int(graph_id),
@@ -3316,12 +3989,8 @@ def _fr13_fixed32_batch_gdn_graph_compare_records(
                 "physical_rows_per_request": 32,
                 "reference_bv": 8,
                 "candidate_bv": candidate,
-                "reference_kernel_structure": (
-                    _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL
-                ),
-                "candidate_kernel_structure": (
-                    _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL
-                ),
+                "reference_kernel_structure": reference_kernel,
+                "candidate_kernel_structure": candidate_kernel,
                 "carrier_nonzero": True,
                 "legacy_physical_launches": 8,
                 "candidate_physical_launches": 2,
@@ -3331,8 +4000,10 @@ def _fr13_fixed32_batch_gdn_graph_compare_records(
                 "zero_diff": zero_diff,
                 "reference_restored_and_served": True,
                 "status": "pass" if zero_diff else "mismatch_reference_served",
-            }
-        )
+        }
+        if qualification_identity is not None:
+            record_payload.update(qualification_identity)
+        (emit_record or _fr13_fixed32_batch_gdn_byte_ab_emit)(record_payload)
         if not zero_diff:
             raise RuntimeError(
                 "FR13 fixed32 B4 graph GDN byte mismatch at record "
@@ -3344,8 +4015,8 @@ def _fr13_fixed32_batch_gdn_graph_compare_records(
         "layer_keys": layer_keys,
         "reference_bv": 8,
         "candidate_bv": candidate,
-        "reference_kernel_structure": _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL,
-        "candidate_kernel_structure": _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL,
+        "reference_kernel_structure": reference_kernel,
+        "candidate_kernel_structure": candidate_kernel,
     }
 
 
@@ -3435,6 +4106,249 @@ def fixed32_batch_gdn_graph_live_gate_on_replay(
 
 def fixed32_batch_gdn_graph_live_gate_report() -> dict[str, object]:
     return dict(_FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_STATE)
+
+
+def fixed32_gdn_parent_group_simd_graph_capture_active(
+    batch_size: int,
+) -> bool:
+    context = _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_CONTEXT
+    return bool(
+        _fr13_fixed32_gdn_parent_group_simd_graph_control()
+        and int(batch_size) == 4
+        and isinstance(context, dict)
+        and int(context.get("batch_size", -1)) == 4
+    )
+
+
+def fixed32_gdn_parent_group_simd_graph_capture_begin(
+    graph_id: int, batch_size: int
+) -> None:
+    """Capture incumbent B4 bytes under the dedicated grouped-SIMD gate."""
+    global _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_CONTEXT
+    if not _fr13_fixed32_gdn_parent_group_simd_graph_control():
+        return
+    identity = int(graph_id)
+    batch = int(batch_size)
+    if batch != 4:
+        return
+    terminal_status = _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_STATE.get(
+        "status"
+    )
+    if terminal_status in ("failed", "passed"):
+        raise RuntimeError(
+            "FR13 grouped SIMD graph qualification is terminal in this "
+            f"process: {terminal_status}"
+        )
+    if (
+        not _FR13_FIXED32_GDN_PARENT_GROUP
+        or _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES
+        or identity <= 0
+        or _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_CONTEXT is not None
+        or identity in _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_CAPTURES
+    ):
+        raise RuntimeError(
+            "FR13 grouped SIMD graph capture begin drift: "
+            + repr((identity, batch, _FR13_FIXED32_MODE))
+        )
+    _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_CONTEXT = {
+        "graph_id": identity,
+        "batch_size": 4,
+        "records": [],
+    }
+    _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_STATE.update(
+        status="armed",
+        campaign=None,
+        campaign_identity_sha256=None,
+        graph_id=None,
+        graph_signature=None,
+        batch_size=None,
+        records=0,
+    )
+
+
+def _fr13_fixed32_gdn_parent_group_simd_graph_register(record: dict) -> None:
+    if not _fr13_fixed32_gdn_parent_group_simd_graph_control():
+        return
+    context = _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_CONTEXT
+    required = {
+        "layer_key",
+        "snapshot",
+        "restore",
+        "run_reference",
+        "run_candidate",
+        "carrier_nonzero",
+        "byte_equal",
+        "surface_names",
+    }
+    if (
+        not isinstance(context, dict)
+        or set(context) != {"graph_id", "batch_size", "records"}
+        or int(context.get("batch_size", -1)) != 4
+        or not isinstance(record, dict)
+        or set(record) != required
+        or type(record.get("layer_key")) is not int
+        or int(record["layer_key"]) <= 0
+        or tuple(record.get("surface_names", ()))
+        != _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_B4_SURFACES
+        or not all(
+            callable(record[name])
+            for name in required - {"layer_key", "surface_names"}
+        )
+    ):
+        raise RuntimeError("FR13 grouped SIMD graph capture record drift")
+    if torch.cuda.is_available() and not torch.cuda.is_current_stream_capturing():
+        raise RuntimeError("FR13 grouped SIMD graph record was not CUDA-captured")
+    context["records"].append(record)
+
+
+def fixed32_gdn_parent_group_simd_graph_capture_end(
+    graph_id: int,
+    batch_size: int,
+    graph_signature: str,
+    expected_records: int = 48,
+) -> None:
+    global _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_CONTEXT
+    if not _fr13_fixed32_gdn_parent_group_simd_graph_control():
+        return
+    identity = int(graph_id)
+    batch = int(batch_size)
+    if batch != 4:
+        return
+    context = _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_CONTEXT
+    records = context.get("records") if isinstance(context, dict) else None
+    layer_keys = (
+        [int(record.get("layer_key", -1)) for record in records]
+        if isinstance(records, list)
+        else []
+    )
+    signature = str(graph_signature)
+    if (
+        not isinstance(context, dict)
+        or int(context.get("graph_id", -1)) != identity
+        or int(context.get("batch_size", -1)) != 4
+        or int(expected_records) != 48
+        or not isinstance(records, list)
+        or len(records) != 48
+        or len(set(layer_keys)) != 48
+        or len(signature) != 64
+        or any(character not in "0123456789abcdef" for character in signature)
+    ):
+        raise RuntimeError("FR13 grouped SIMD graph capture end drift")
+    _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_CAPTURES[identity] = {
+        "batch_size": 4,
+        "graph_signature": signature,
+        "records": tuple(records),
+        "layer_keys": frozenset(layer_keys),
+    }
+    _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_CONTEXT = None
+
+
+def fixed32_gdn_parent_group_simd_graph_gate_on_replay(
+    graph_id: int,
+    graph_signature: str,
+    batch_size: int,
+    expected_records: int = 48,
+) -> dict[str, object]:
+    """Shadow only after an entire exact4/exact16 campaign is authenticated."""
+    state = _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_STATE
+    if not _fr13_fixed32_gdn_parent_group_simd_graph_control():
+        return dict(state)
+    if int(batch_size) != 4:
+        return dict(state)
+    campaign = _fr13_fixed32_gdn_parent_group_simd_campaign()
+    if campaign is None:
+        if state.get("status") == "armed":
+            state["status"] = "waiting_for_authenticated_campaign"
+        return dict(state)
+    if state.get("status") == "passed":
+        if state.get("campaign_identity_sha256") != campaign.get(
+            "campaign_identity_sha256"
+        ):
+            raise RuntimeError("FR13 grouped SIMD graph campaign changed after PASS")
+        return dict(state)
+    if state.get("status") not in (
+        "armed",
+        "waiting_for_authenticated_campaign",
+    ):
+        raise RuntimeError("FR13 grouped SIMD graph gate is not runnable")
+    if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+        raise RuntimeError("FR13 grouped SIMD graph gate cannot run during capture")
+    identity = int(graph_id)
+    signature = str(graph_signature)
+    capture = _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_CAPTURES.get(identity)
+    records = capture.get("records") if isinstance(capture, dict) else None
+    if (
+        not isinstance(capture, dict)
+        or int(capture.get("batch_size", -1)) != 4
+        or capture.get("graph_signature") != signature
+        or int(expected_records) != 48
+        or not isinstance(records, tuple)
+        or len(records) != 48
+        or len(capture.get("layer_keys", ())) != 48
+    ):
+        raise RuntimeError("FR13 grouped SIMD graph replay/capture drift")
+    source_identity = _fr13_fixed32_gdn_parent_group_simd_identity()
+    reduced_identity = {
+        "candidate": source_identity["candidate"],
+        "kernel": source_identity["kernel"],
+        "kernel_source_sha256": source_identity["kernel_source_sha256"],
+        "parent_contract_sha256": source_identity["parent_contract_sha256"],
+        "writer_sha256": source_identity["writer_sha256"],
+        "campaign": campaign["campaign"],
+        "subset_sha256": campaign["subset_sha256"],
+        "task_count": campaign["task_count"],
+        "task_markers_sha256": campaign["task_markers_sha256"],
+        "campaign_identity_sha256": campaign[
+            "campaign_identity_sha256"
+        ],
+    }
+    state["status"] = "running"
+    try:
+        result = _fr13_fixed32_batch_gdn_graph_compare_records(
+            records,
+            candidate_bv=8,
+            graph_id=identity,
+            graph_signature=signature,
+            task_marker="campaign:" + str(campaign["campaign_identity_sha256"]),
+            reference_kernel=(
+                _FR13_FIXED32_GDN_PARENT_GROUP_REFERENCE_KERNEL_ID
+            ),
+            candidate_kernel=_FR13_FIXED32_GDN_PARENT_GROUP_KERNEL_ID,
+            qualification_identity=reduced_identity,
+            emit_record=_fr13_fixed32_gdn_parent_group_simd_emit,
+        )
+        _fr13_fixed32_gdn_parent_group_simd_live_pass_emit(
+            campaign_identity=campaign,
+            gate="graph",
+            layer_keys=result["layer_keys"],
+            graph_id=identity,
+            graph_signature=signature,
+            capture_records=int(result["records"]),
+        )
+    except Exception:
+        state["status"] = "failed"
+        raise
+    state.update(
+        status="passed",
+        campaign=campaign["campaign"],
+        campaign_identity_sha256=campaign["campaign_identity_sha256"],
+        graph_id=identity,
+        graph_signature=signature,
+        batch_size=4,
+        records=int(result["records"]),
+    )
+    _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_CAPTURES.clear()
+    print(
+        "[FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH PASS] "
+        f"campaign={campaign['campaign']} batch=4 records=48 "
+        "reference_served=1",
+        flush=True,
+    )
+    return dict(state)
+
+
+def fixed32_gdn_parent_group_simd_graph_gate_report() -> dict[str, object]:
+    return dict(_FR13_FIXED32_GDN_PARENT_GROUP_SIMD_GRAPH_STATE)
 
 
 def _fr13_canonical_sha256(value) -> str:
@@ -3648,6 +4562,26 @@ def _fr13_fixed32_gdn_parent_group_contract(
             + repr(contract)
         )
     return contract
+
+
+def _fr13_fixed32_gdn_parent_group_simd_identity() -> dict[str, str]:
+    """Bind qualification to the exact source, descriptor, and writer set."""
+    global _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_IDENTITY_CACHE
+    cached = _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_IDENTITY_CACHE
+    if isinstance(cached, dict):
+        return dict(cached)
+    contract = _fr13_fixed32_gdn_parent_group_contract(
+        _FR13_FIXED32_SUBTREE_LEVELS
+    )
+    identity = {
+        "candidate": _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID,
+        "kernel": _FR13_FIXED32_GDN_PARENT_GROUP_KERNEL_ID,
+        "kernel_source_sha256": _fr13_fixed32_batch_gdn_source_sha256(),
+        "parent_contract_sha256": _fr13_canonical_sha256(contract),
+        "writer_sha256": str(contract["writer_sha256"]),
+    }
+    _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_IDENTITY_CACHE = dict(identity)
+    return dict(identity)
 
 
 def _fr13_fixed32_gdn_physical_execution(
@@ -12612,9 +13546,19 @@ def launch_tree_gdn_prepared(
                 "advance exactly once"
             )
 
+    _serve_incumbent_parent_group = bool(force_incumbent_parent_group)
+    if (
+        _FR13_FIXED32_GDN_PARENT_GROUP
+        and int(staging_rows) in range(_FR13_FIXED32_MAX_BATCH + 1)
+        and _fr13_fixed32_gdn_parent_group_simd_b4_selector_armed()
+    ):
+        # B4 capture/preseed includes underfilled B1-B3 shapes. Keep every
+        # per-request fallback on the incumbent; production qualification is
+        # read only by the actual batched route.
+        _serve_incumbent_parent_group = True
     _parent_group_gate_enabled = False
     _parent_group_gate_marker = None
-    if _FR13_FIXED32_GDN_PARENT_GROUP and not force_incumbent_parent_group:
+    if _FR13_FIXED32_GDN_PARENT_GROUP and not _serve_incumbent_parent_group:
         (
             _parent_group_gate_enabled,
             _parent_group_gate_marker,
@@ -12658,11 +13602,23 @@ def launch_tree_gdn_prepared(
         st = _subtree_state
         assert st is not None
         event_batch = max(int(staging_rows), 1)
-        st["last_physical_execution"] = _fr13_fixed32_gdn_physical_execution(
+        execution = _fr13_fixed32_gdn_physical_execution(
             parent_group=parent_group,
             batch_size=event_batch,
             batched=False,
         )
+        if parent_group:
+            identity = _fr13_fixed32_gdn_parent_group_simd_identity()
+            execution.update(
+                candidate=identity["candidate"],
+                kernel=identity["kernel"],
+                kernel_source_sha256=identity["kernel_source_sha256"],
+                parent_contract_sha256=identity["parent_contract_sha256"],
+                writer_sha256=identity["writer_sha256"],
+                qualification_route="b1_process_local_source_candidate",
+                credential_sha256=None,
+            )
+        st["last_physical_execution"] = execution
 
     if _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None:
         production_pass = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS
@@ -12818,7 +13774,7 @@ def launch_tree_gdn_prepared(
             raise ValueError(
                 "FR13_SUBTREE_PARALLEL does not support PIGGYBACK_EXPORT"
             )
-        if force_incumbent_parent_group:
+        if _serve_incumbent_parent_group:
             _launch_paths(out, _use_parent_group=False)
             _record_path_execution(parent_group=False)
         elif _parent_group_gate_enabled:
@@ -13499,13 +14455,29 @@ def launch_tree_gdn_prepared_fixed32_batch(
         return snapshot
 
     def _record_batch_execution(*, parent_group_active: bool, batched: bool) -> None:
-        subtree_state["last_physical_execution"] = (
-            _fr13_fixed32_gdn_physical_execution(
+        execution = _fr13_fixed32_gdn_physical_execution(
                 parent_group=parent_group_active,
                 batch_size=batch,
                 batched=batched,
-            )
         )
+        if parent_group_active:
+            source_identity = _fr13_fixed32_gdn_parent_group_simd_identity()
+            execution.update(
+                candidate=source_identity["candidate"],
+                kernel=source_identity["kernel"],
+                kernel_source_sha256=source_identity["kernel_source_sha256"],
+                parent_contract_sha256=source_identity[
+                    "parent_contract_sha256"
+                ],
+                writer_sha256=source_identity["writer_sha256"],
+                qualification_route=selector,
+                credential_sha256=(
+                    grouped_production_credential["credential_sha256"]
+                    if grouped_production_credential is not None
+                    else None
+                ),
+            )
+        subtree_state["last_physical_execution"] = execution
 
     def _restore_external(snapshot: dict[str, torch.Tensor]) -> None:
         out[:rows].copy_(snapshot["out"])
@@ -13520,22 +14492,52 @@ def launch_tree_gdn_prepared_fixed32_batch(
         if count_invocation:
             invocation_counter.copy_(snapshot["invocation_counter"])
 
-    byte_ab_enabled = selector == "diagnostic"
-    graph_byte_ab_capture = selector == "graph_capture"
-    real_event_marker = None
-    if byte_ab_enabled:
-        _enabled, real_event_marker = (
-            _fr13_fixed32_batch_gdn_byte_ab_control()
+    grouped_production_credential = None
+    if selector == "parent_group_production":
+        grouped_production_credential = (
+            _fr13_fixed32_gdn_parent_group_simd_production_control()
         )
+        if grouped_production_credential is None:
+            raise RuntimeError("FR13 grouped SIMD production selector drifted")
+    grouped_eager_enabled = selector == "parent_group_eager"
+    grouped_graph_capture = selector == "parent_group_graph_capture"
+    byte_ab_enabled = selector == "diagnostic" or grouped_eager_enabled
+    graph_byte_ab_capture = selector == "graph_capture" or grouped_graph_capture
+    real_event_marker = None
+    grouped_campaign_identity = None
+    if byte_ab_enabled:
+        if grouped_eager_enabled:
+            _enabled, grouped_campaign_identity = (
+                _fr13_fixed32_gdn_parent_group_simd_eager_control()
+            )
+            real_event_marker = (
+                "campaign:"
+                + str(grouped_campaign_identity["campaign_identity_sha256"])
+                if grouped_campaign_identity is not None
+                else None
+            )
+        else:
+            _enabled, real_event_marker = (
+                _fr13_fixed32_batch_gdn_byte_ab_control()
+            )
         if not _enabled:
             raise RuntimeError(
                 "FR13 fixed32 batched GDN diagnostic selector drifted"
             )
     layer_key = int(A_log.data_ptr())
     batch_layer_key = (batch, layer_key)
-    gate_state = _FR13_FIXED32_BATCH_GDN_BYTE_AB_STATE
+    gate_state = (
+        _FR13_FIXED32_GDN_PARENT_GROUP_SIMD_EAGER_STATE
+        if grouped_eager_enabled
+        else _FR13_FIXED32_BATCH_GDN_BYTE_AB_STATE
+    )
     if graph_byte_ab_capture:
-        if batch != 4 or not fixed32_batch_gdn_graph_live_capture_active(batch):
+        capture_active = (
+            fixed32_gdn_parent_group_simd_graph_capture_active(batch)
+            if grouped_graph_capture
+            else fixed32_batch_gdn_graph_live_capture_active(batch)
+        )
+        if batch != 4 or not capture_active:
             raise RuntimeError(
                 "FR13 fixed32 B4 graph GDN capture selector drifted"
             )
@@ -13555,7 +14557,11 @@ def launch_tree_gdn_prepared_fixed32_batch(
             return {
                 "block_v": 8,
                 "physical_launches": 2 * batch,
-                "kernel_structure": _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL,
+                "kernel_structure": (
+                    _FR13_FIXED32_GDN_PARENT_GROUP_REFERENCE_KERNEL_ID
+                    if grouped_graph_capture
+                    else _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL
+                ),
                 "compact_export": compact_export,
             }
 
@@ -13572,14 +14578,17 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 "physical_launches": int(
                     launch_contract["physical_launches_per_layer"]
                 ),
-                "kernel_structure": _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL,
+                "kernel_structure": (
+                    _FR13_FIXED32_GDN_PARENT_GROUP_KERNEL_ID
+                    if grouped_graph_capture
+                    else _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL
+                ),
                 "compact_export": subtree_state["export"][
                     :needed_export_rows
                 ].clone(),
             }
 
-        _fr13_fixed32_batch_gdn_graph_live_capture_register(
-            {
+        capture_record = {
                 "layer_key": layer_key,
                 "snapshot": _snapshot_external,
                 "restore": _restore_external,
@@ -13590,8 +14599,11 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 ),
                 "byte_equal": _fr13_tensor_byte_equal,
                 "surface_names": _FR13_FIXED32_BATCH_GDN_GRAPH_SURFACES,
-            }
-        )
+        }
+        if grouped_graph_capture:
+            _fr13_fixed32_gdn_parent_group_simd_graph_register(capture_record)
+        else:
+            _fr13_fixed32_batch_gdn_graph_live_capture_register(capture_record)
         _launch_reference(collect_export=False)
         _record_batch_execution(parent_group_active=False, batched=False)
         return out, None
@@ -13605,6 +14617,13 @@ def launch_tree_gdn_prepared_fixed32_batch(
             raise RuntimeError(
                 "FR13_FIXED32_BATCH_GDN_BYTE_AB requires K/V/A/B ring export, "
                 "in-kernel flags, and the invocation counter"
+            )
+        if grouped_eager_enabled and bool(gate_state["failed"]):
+            _launch_reference(collect_export=False)
+            _record_batch_execution(parent_group_active=False, batched=False)
+            raise RuntimeError(
+                "FR13 grouped SIMD eager gate previously mismatched; "
+                "qualification is permanently failed in this process"
             )
         if batch_layer_key in gate_state["passed"]:
             _launch_reference(collect_export=False)
@@ -13625,8 +14644,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
         elif int(torch.count_nonzero(q[:rows]).item()) == 0:
             _launch_reference(collect_export=False)
             _record_batch_execution(parent_group_active=False, batched=False)
-            _fr13_fixed32_batch_gdn_byte_ab_emit(
-                {
+            zero_record = {
                     "task_marker": real_event_marker,
                     "layer_key": f"0x{layer_key:x}",
                     "batch": batch,
@@ -13637,10 +14655,25 @@ def launch_tree_gdn_prepared_fixed32_batch(
                     "zero_diff": None,
                     "reference_restored_and_served": True,
                     "status": "zero_carrier_reference_served",
-                }
-            )
+            }
+            if grouped_eager_enabled:
+                _fr13_fixed32_gdn_parent_group_simd_emit(zero_record)
+            else:
+                _fr13_fixed32_batch_gdn_byte_ab_emit(zero_record)
             return out, None
         else:
+            if grouped_eager_enabled:
+                assert grouped_campaign_identity is not None
+                bound_campaign = gate_state.get("campaign_identity_sha256")
+                current_campaign = grouped_campaign_identity[
+                    "campaign_identity_sha256"
+                ]
+                if bound_campaign is None:
+                    gate_state["campaign_identity_sha256"] = current_campaign
+                elif bound_campaign != current_campaign:
+                    raise RuntimeError(
+                        "FR13 grouped SIMD eager campaign changed in one process"
+                    )
             bound_marker = gate_state.get("task_marker")
             bound_candidate_bv = gate_state.get("candidate_bv")
             if bound_marker is None:
@@ -13723,7 +14756,30 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 "reference_restored_and_served": True,
                 "status": "pass" if zero_diff else "mismatch_reference_served",
             }
-            _fr13_fixed32_batch_gdn_byte_ab_emit(record)
+            if grouped_eager_enabled:
+                source_identity = _fr13_fixed32_gdn_parent_group_simd_identity()
+                record.update(
+                    candidate=source_identity["candidate"],
+                    kernel=source_identity["kernel"],
+                    kernel_source_sha256=source_identity[
+                        "kernel_source_sha256"
+                    ],
+                    parent_contract_sha256=source_identity[
+                        "parent_contract_sha256"
+                    ],
+                    writer_sha256=source_identity["writer_sha256"],
+                    campaign=grouped_campaign_identity["campaign"],
+                    subset_sha256=grouped_campaign_identity[
+                        "subset_sha256"
+                    ],
+                    task_count=grouped_campaign_identity["task_count"],
+                    task_markers_sha256=grouped_campaign_identity[
+                        "task_markers_sha256"
+                    ],
+                )
+                _fr13_fixed32_gdn_parent_group_simd_emit(record)
+            else:
+                _fr13_fixed32_batch_gdn_byte_ab_emit(record)
             if zero_diff:
                 gate_state["passed"].add(batch_layer_key)
                 batch_layer_keys = {
@@ -13731,13 +14787,22 @@ def launch_tree_gdn_prepared_fixed32_batch(
                     for passed_batch, passed_layer_key in gate_state["passed"]
                     if passed_batch == batch
                 }
-                _fr13_fixed32_batch_gdn_live_pass_emit(
-                    task_marker=real_event_marker,
-                    batch=batch,
-                    layer_keys=batch_layer_keys,
-                    reference_bv=block_v,
-                    candidate_bv=candidate_block_v,
-                )
+                if grouped_eager_enabled and not bool(gate_state["failed"]):
+                    _fr13_fixed32_gdn_parent_group_simd_live_pass_emit(
+                        campaign_identity=grouped_campaign_identity,
+                        gate="eager",
+                        layer_keys=batch_layer_keys,
+                    )
+                else:
+                    _fr13_fixed32_batch_gdn_live_pass_emit(
+                        task_marker=real_event_marker,
+                        batch=batch,
+                        layer_keys=batch_layer_keys,
+                        reference_bv=block_v,
+                        candidate_bv=candidate_block_v,
+                    )
+            elif grouped_eager_enabled:
+                gate_state["failed"] = True
             print(
                 "[FR13_FIXED32_BATCH_GDN_BYTE_AB "
                 f"{'PASS' if zero_diff else 'MISMATCH'}] "
@@ -13749,6 +14814,17 @@ def launch_tree_gdn_prepared_fixed32_batch(
             )
             _record_batch_execution(parent_group_active=False, batched=False)
             return out, None
+    elif selector == "parent_group_production":
+        if (
+            parent_group is None
+            or candidate_block_v != 8
+            or grouped_production_credential is None
+        ):
+            raise RuntimeError(
+                "FR13 grouped SIMD production lost its exact BV8 credential"
+            )
+        _launch_batched(8)
+        _record_batch_execution(parent_group_active=True, batched=True)
     elif selector == "production":
         if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION == 8:
             if (
