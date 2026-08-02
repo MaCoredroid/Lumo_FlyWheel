@@ -1,0 +1,68 @@
+{
+  "acceptance_valid": false,
+  "batch_size": 1,
+  "binary_attestation_sha256": "9843f8718e4a2d60c6311befd068c2eaef29cd2833439abafa46c3774169d2fc",
+  "candidate": "m32_static_linear",
+  "candidate_bytes": 113809232,
+  "candidate_family": "m32_static_linear",
+  "candidate_sha256": "079d82d60426411bf403eb96f4869cb8d3872a4a68d49e9c336a55a90d571f91",
+  "comparator_timing_eligible": false,
+  "comparison_call_limit": 320,
+  "comparisons": 320,
+  "concurrency": 1,
+  "container_env_sha256": "0edda7ce972eec512e1b4749042db0e044b2494c93ce5c898e1875398d95cdaa",
+  "diagnostic_selector": "m32_static_linear_byte_ab",
+  "differing_bytes": 0,
+  "draft_vocab_blocks": "/workspace/scripts/fr13_dvk_subset_blocks.json",
+  "draft_vocab_blocks_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+  "draft_vocab_k": 65536,
+  "draft_vocab_root": 1,
+  "errors": [],
+  "fixed_rows": 32,
+  "mandatory_weight_bytes": 32666638208,
+  "mandatory_weight_floor_ms": 119.658015414,
+  "mismatching_comparisons": 0,
+  "observed_m_values": [
+    32
+  ],
+  "observed_projection_nk": [
+    [
+      5120,
+      6144
+    ],
+    [
+      5120,
+      17408
+    ],
+    [
+      14336,
+      5120
+    ],
+    [
+      16384,
+      5120
+    ],
+    [
+      34816,
+      5120
+    ]
+  ],
+  "one_sided_u95_cap_ms": 137.6067177261,
+  "patch_source_sha256": "59fb1d8a39a6b634fde9895db3efd32e2921636ef017e30167dd94748e718e39",
+  "patched_dispatch_sha256": "9709adac0a029a57de58229c8dc9478bd647491988749bd23697fb40131d42ff",
+  "production_enabled": false,
+  "qualification_profile": "k64_root",
+  "real_task_arm_sha256": "0a8cc63526f7bba64aedf9a5c29be619bdeb22859305bec238ec2280a9209786",
+  "run_classification": "one_real_swe_verified_b1_k64_root_byte_diagnostic",
+  "schema": "fr13.fixed32.cutlass_m32_static_linear_k64_root_live_gate.v1",
+  "served_result": "stock",
+  "source_commit": "53b502c6e8ca215e6bf4e509bbd505eba8714bf2",
+  "status": "pass",
+  "task_count": 1,
+  "task_ids": [
+    "astropy__astropy-12907"
+  ],
+  "task_marker": "swe_verified:astropy__astropy-12907",
+  "task_set": "one real SWE-Verified B1 diagnostic task",
+  "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
+}

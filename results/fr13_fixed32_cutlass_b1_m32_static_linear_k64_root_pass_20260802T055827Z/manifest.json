@@ -1,0 +1,131 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_m32_static_linear_k64_root_reduced_artifact.v1",
+  "status": "PASS",
+  "branch": "agent/fixed32-b1-static-m32-gate-20260802",
+  "source_commit": "53b502c6e8ca215e6bf4e509bbd505eba8714bf2",
+  "run": {
+    "tag": "m32_static_k64_20260802T055827Z",
+    "classification": "one_real_swe_verified_b1_k64_root_byte_diagnostic",
+    "campaign_classification": "b1_diagnostic",
+    "eager_lifecycle_classification": "eager_kernel_byte_diagnostic",
+    "qualification_profile": "k64_root",
+    "batch_size": 1,
+    "concurrency": 1,
+    "fixed_rows": 32,
+    "draft_vocab_root": 1,
+    "draft_vocab_k": 65536
+  },
+  "task": {
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "instance_id": "astropy__astropy-12907",
+    "authenticated_task_marker": "swe_verified:astropy__astropy-12907",
+    "verdict": "resolved",
+    "failure_mode": "tests_passed",
+    "agent_exit_code": 0,
+    "evaluator_exit_code": 0,
+    "harness_exit_code": 0,
+    "timed_out": false
+  },
+  "candidate": {
+    "family": "m32_static_linear",
+    "diagnostic_selector": "m32_static_linear_byte_ab",
+    "sha256": "079d82d60426411bf403eb96f4869cb8d3872a4a68d49e9c336a55a90d571f91",
+    "bytes": 113809232,
+    "installed_mode": "0555",
+    "binary_attestation_sha256": "9843f8718e4a2d60c6311befd068c2eaef29cd2833439abafa46c3774169d2fc",
+    "retained_in_package": false
+  },
+  "source": {
+    "patch_source_sha256": "59fb1d8a39a6b634fde9895db3efd32e2921636ef017e30167dd94748e718e39",
+    "patched_dispatch_sha256": "9709adac0a029a57de58229c8dc9478bd647491988749bd23697fb40131d42ff",
+    "gate_reducer_sha256": "161cb32df93b098d3e8417079fb658992c46b41070740d99e40318ed73e7f7bc",
+    "draft_vocab_blocks_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+    "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
+  },
+  "comparison": {
+    "record_count": 320,
+    "comparison_call_limit": 320,
+    "invocation_first": 0,
+    "invocation_last": 319,
+    "unique_invocations": 320,
+    "contiguous_from_zero": true,
+    "byte_equal_records": 320,
+    "mismatching_comparisons": 0,
+    "differing_bytes": 0,
+    "bytes_compared": 311951360,
+    "projection_nk": [
+      [
+        5120,
+        6144
+      ],
+      [
+        5120,
+        17408
+      ],
+      [
+        14336,
+        5120
+      ],
+      [
+        16384,
+        5120
+      ],
+      [
+        34816,
+        5120
+      ]
+    ],
+    "served_result": "stock",
+    "exact_320_required_by_reducer": false,
+    "reducer_minimum_comparisons": 5,
+    "reducer_maximum_comparisons": 320
+  },
+  "runtime_k64_provenance": {
+    "container_env_sha256": "0edda7ce972eec512e1b4749042db0e044b2494c93ce5c898e1875398d95cdaa",
+    "runtime_log_sha256": "e2779f46093bbd4981a539becae2c8876f67badbd624aea401866542760a2f6f",
+    "full_and_after_task_logs_byte_equal": true,
+    "shim_built_k65536_gather_marker_count": 1,
+    "root_engaged_k65536_gather_marker_count": 1,
+    "draft_vocab_disabled_marker_count": 0,
+    "formal_reducer_reopens_runtime_logs": false
+  },
+  "credentials": {
+    "live_result": {
+      "path": "cutlass_m32_static_linear_k64_root_byte_gate.json",
+      "sha256": "583a3be6eb7bd2b1d7b5aebd606f0da69232d5fbb9a2311d1d6038b3e2b88da6",
+      "status": "pass"
+    },
+    "issued_sidecar": {
+      "path": "cutlass_m32_static_linear_k64_root_production_pass.json",
+      "sha256": "beb9c1b73d47b15501ce4c5e92d1d2a8b94c8245f5663531ac013bf478ec12ea",
+      "validator_status": "QUALIFIED",
+      "production_default_enabled": false,
+      "credential_only": true
+    }
+  },
+  "classification": {
+    "acceptance_valid": false,
+    "timing_evidence": false,
+    "comparator_timing_eligible": false,
+    "hardware_floor_evidence": false,
+    "production_execution_evidence": false,
+    "production_performance_evidence": false,
+    "candidate_served": false,
+    "production_enabled_during_run": false
+  },
+  "teardown_qualification": {
+    "container_removal_bound_by_zero_serve_exit": true,
+    "proxy_stop_record_is_best_effort": true,
+    "independent_probe_at_utc": "2026-08-02T06:24:24Z",
+    "independent_named_container_count": 0,
+    "independent_tagged_local_runtime_process_count": 0,
+    "independent_relevant_listener_count": 0,
+    "independent_gpu_compute_process_count": 0,
+    "independent_remote_proxy_process_count": 0,
+    "independent_remote_proxy_listener_count": 0,
+    "remote_sensitive_capture_directory_present": true,
+    "remote_sensitive_capture_inspected": false,
+    "remote_sensitive_capture_included": false,
+    "stale_offload_metrics_excluded": true
+  }
+}

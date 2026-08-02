@@ -1,0 +1,159 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_m32_static_linear_k64_root_reduced_verification.v1",
+  "verified_at_utc": "2026-08-02T06:24:24Z",
+  "status": "PASS",
+  "checks": {
+    "live_result_sha256_matches": true,
+    "issued_sidecar_sha256_matches": true,
+    "candidate_sha256_matches": true,
+    "candidate_regular_file": true,
+    "candidate_mode_0555": true,
+    "formal_live_result_validate_exit_code": 0,
+    "formal_sidecar_issue_exit_code": 0,
+    "reissued_sidecar_byte_equal": true,
+    "formal_issued_sidecar_verify_exit_code": 0,
+    "comparison_records_observed": 320,
+    "comparison_call_limit": 320,
+    "invocations_contiguous_zero_through_319": true,
+    "invocations_unique": true,
+    "all_records_byte_equal": true,
+    "mismatch_count_sum": 0,
+    "non_equal_record_count": 0,
+    "differing_bytes_sum": 0,
+    "compared_bytes_sum": 311951360,
+    "all_records_fixed_rows_32": true,
+    "all_records_real_task_bound": true,
+    "all_five_projection_shapes_observed": true,
+    "comparison_record_schema_unique": true
+  },
+  "per_shape_record_counts": [
+    {
+      "n": 5120,
+      "k": 6144,
+      "records": 80
+    },
+    {
+      "n": 5120,
+      "k": 17408,
+      "records": 80
+    },
+    {
+      "n": 14336,
+      "k": 5120,
+      "records": 20
+    },
+    {
+      "n": 16384,
+      "k": 5120,
+      "records": 60
+    },
+    {
+      "n": 34816,
+      "k": 5120,
+      "records": 80
+    }
+  ],
+  "formal_reducer_scope": {
+    "minimum_comparisons": 5,
+    "maximum_comparisons": 320,
+    "requires_exact_320": false,
+    "exact_320_independently_observed": true,
+    "reopens_arm_artifact": false,
+    "reopens_environment_artifact": false,
+    "reopens_runtime_logs_for_k64_markers": false,
+    "arm_artifact_independently_rehashed": true,
+    "environment_artifact_independently_rehashed": true,
+    "runtime_logs_independently_audited": true
+  },
+  "runtime_k64_provenance": {
+    "draft_vocab_root": 1,
+    "draft_vocab_k": 65536,
+    "qualification_profile": "k64_root",
+    "empty_needs_allow": true,
+    "block_map_sha256_matches": true,
+    "full_and_after_task_logs_byte_equal": true,
+    "shim_built_k65536_gather_marker_count": 1,
+    "root_engaged_k65536_gather_marker_count": 1,
+    "draft_vocab_disabled_marker_count": 0,
+    "unrelated_no_stage_fallback_messages_present": true,
+    "fallback_absence_claim_limited_to_draft_vocab_disabled_marker": true
+  },
+  "authentication": {
+    "canonical_task_count": 1,
+    "proxy_accepted_logical_requests": 7,
+    "proxy_completed_logical_requests": 7,
+    "proxy_failed_attempts": 0,
+    "proxy_aborted_logical_requests": 0,
+    "proxy_active_requests_at_finalize": 0,
+    "proxy_campaign_rejected_requests": 0,
+    "engine_accepted_requests": 7,
+    "engine_completed_requests": 7,
+    "engine_active_requests_at_finalize": 0,
+    "engine_campaign_rejected_requests": 0,
+    "proxy_and_engine_canonical_task_sets_match": true,
+    "real_task_arm_state": "ended",
+    "terminal_marker_sha256_matches_filename": true
+  },
+  "task_lifecycle": {
+    "swe_orchestrator_exit_code": 0,
+    "agent_exit_code": 0,
+    "evaluator_worker_exit_code": 0,
+    "evaluator_harness_exit_code": 0,
+    "task_verdict": "resolved",
+    "task_failure_mode": "tests_passed",
+    "task_timed_out": false,
+    "serve_exit_code": 0,
+    "run_container_attested_and_removed": true,
+    "arm_end_recorded": true,
+    "runtime_manifest_launch_end_byte_equal": true,
+    "external_manifest_launch_end_byte_equal": true,
+    "vllm_request_metrics_bytes": 0,
+    "request_completion_supported_by_authenticated_ledgers": true,
+    "provenance_summary_postrun_attestation_sha256_present": false,
+    "underlying_lifecycle_otherwise_independently_hash_bound": true
+  },
+  "teardown_probe": {
+    "audited_at_utc": "2026-08-02T06:24:24Z",
+    "offload_proxy_stop_recorded": true,
+    "offload_proxy_stop_helper_propagates_remote_failures": false,
+    "local_named_container_count": 0,
+    "local_tagged_runtime_process_count": 0,
+    "local_port_9950_listener_count": 0,
+    "local_port_8023_listener_count": 0,
+    "local_gpu_compute_process_count": 0,
+    "local_gpu_utilization_percent": 0,
+    "remote_proxy_process_count": 0,
+    "remote_port_8023_listener_count": 0,
+    "remote_target_container_count": 0,
+    "remote_proxy_pid_file_present": false,
+    "remote_proxy_log_file_present": false,
+    "remote_nohup_file_present": false,
+    "remote_finalized_ledger_matches_local_sha256": true,
+    "remote_sensitive_capture_directory_present": true,
+    "remote_sensitive_capture_inspected": false,
+    "remote_sensitive_capture_included": false,
+    "stale_archived_offload_metrics_excluded": true
+  },
+  "scope": {
+    "diagnostic_only": true,
+    "acceptance_valid": false,
+    "timing_claim": false,
+    "tps_claim": false,
+    "hardware_floor_claim": false,
+    "production_run": false,
+    "production_performance_claim": false,
+    "production_enabled": false,
+    "candidate_served": false,
+    "sidecar_is_credential_only": true
+  },
+  "package_policy": {
+    "raw_comparator_records_included": false,
+    "logs_included": false,
+    "prompts_or_model_outputs_included": false,
+    "task_patches_included": false,
+    "environment_payloads_included": false,
+    "secrets_included": false,
+    "candidate_binary_included": false,
+    "process_or_container_ids_included": false
+  }
+}
