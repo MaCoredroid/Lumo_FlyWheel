@@ -1,0 +1,69 @@
+{
+  "schema": "fr13.fixed32.cfwd_native_contiguous_k_hostproof.v1",
+  "classification": "READY_AFTER_V5_FOR_REAL_B1_BYTE_GATE",
+  "acceptance_result": false,
+  "candidate": "fixed32_cfwd_native_keygroup_contiguous_k_cuda_v8",
+  "source_commit": "40a956e868f3ba2221b53716698c6e5787a9396f",
+  "source_sha256": "cc0ddb8d5aab11e1f6156f434492302bae6b6481d0fd7f38282f70e28687e09f",
+  "object_sha256": "26205f50a84155dc0984fb24b4c615fc83b6401395c567e55724f5a995e6e2dd",
+  "target_architecture": "sm_121a",
+  "cuda_release": "13.0",
+  "tests": {
+    "passed": 170,
+    "failed": 0,
+    "exact_expression_tree_proof": true
+  },
+  "resources": {
+    "registers_per_thread": 64,
+    "stack_bytes": 0,
+    "source_shared_bytes": 6488,
+    "cuobjdump_shared_bytes": 7512,
+    "local_bytes": 0,
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0
+  },
+  "sass": {
+    "static_instruction_sites": 1016,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 207,
+    "FFMA": 84,
+    "FMUL": 96,
+    "MUFU.EX2": 3,
+    "MUFU.RCP": 2,
+    "MUFU.RSQ": 1,
+    "SHFL.BFLY": 140,
+    "SHFL.DOWN": 0,
+    "SHFL.IDX": 17,
+    "LDG.E.128": 8,
+    "STG.E.128": 8,
+    "LDS.128": 1,
+    "STS.128": 1,
+    "signed_zero_fadd_rz": 64,
+    "LDL": 0,
+    "STL": 0,
+    "CALL": 0
+  },
+  "static_delta_from_v7": {
+    "instruction_sites": -216,
+    "shuffle_sites": -60,
+    "FADD": -57,
+    "FFMA": 0,
+    "registers_per_thread": 0,
+    "source_shared_bytes": 0,
+    "cuobjdump_shared_bytes": 0,
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0
+  },
+  "execution": {
+    "gpu_used": false,
+    "container_launched": false,
+    "real_swe_task_run": false,
+    "timing_run": false
+  },
+  "qualification_order": {
+    "first": "v5_real_swe_verified_b1_raw_fp32_bank_byte_gate",
+    "second": "v8_real_swe_verified_b1_raw_fp32_bank_byte_gate",
+    "fallback_on_v8_rejection": "v7_real_swe_verified_b1_raw_fp32_bank_byte_gate",
+    "fallback_on_v7_rejection": "v6_real_swe_verified_b1_raw_fp32_bank_byte_gate"
+  }
+}
