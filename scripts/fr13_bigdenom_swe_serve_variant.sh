@@ -39,6 +39,7 @@ FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
 FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
 FR13_FIXED32_COMMITTER_LAYER_BATCH=${FR13_FIXED32_COMMITTER_LAYER_BATCH:-0}
 FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION=${FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION:-0}
+FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA=${FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA:-0}
 case "$FR13_FIXED32_B1_DIAGNOSTIC" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1"; exit 2 ;;
@@ -59,9 +60,14 @@ case "$FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION must be exactly 0 or 1"; exit 2 ;;
 esac
+case "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA" in
+  0|diagnostic) ;;
+  *) echo "FAIL: FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA must be 0 or diagnostic"; exit 2 ;;
+esac
 export FR13_FIXED32_B1_DIAGNOSTIC FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB \
   FR13_FIXED32_COMMITTER_LAYER_BATCH \
   FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION \
+  FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA \
   FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
 _fixed32_eager_kernel_diagnostic=0
 if [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "1" \
@@ -119,6 +125,12 @@ fi
 if [[ "$FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION" == "1" \
       && "$FR13_FIXED32_COMMITTER_LAYER_BATCH" != "1" ]]; then
   echo "FAIL: CFWD qualification requires FR13_FIXED32_COMMITTER_LAYER_BATCH=1"
+  exit 2
+fi
+if [[ "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA" == "diagnostic" \
+      && ( "$FR13_FIXED32_COMMITTER_LAYER_BATCH" != "1" \
+           || "$FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION" != "1" ) ]]; then
+  echo "FAIL: native key-group CFWD requires layer-batch qualification"
   exit 2
 fi
 FIXED32_MODE=""
@@ -1630,6 +1642,39 @@ if [[ "$FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION" == "1" ]]; then
      && "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" == "0" \
      && "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "0" ]] || {
     echo "FAIL: CFWD layer-batch qualification must be the only kernel diagnostic"
+    exit 2
+  }
+fi
+if [[ "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA" == "diagnostic" ]]; then
+  [[ "${LUMO_SWE_AUTOCOMMIT:-1}" == "0" ]] || {
+    echo "FAIL: native key-group CFWD byte qualification forbids task autocommit"
+    exit 2
+  }
+  [[ -n "$FIXED32_MODE" \
+     && "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" \
+     && "$MAX_NUM_SEQS_OVR" == "1" \
+     && "$SWE_CONCURRENCY" == "1" \
+     && "$FR13_FIXED32_COMMITTER_LAYER_BATCH" == "1" \
+     && "$FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION" == "1" \
+     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+     && "${FR13_DRAFT_VOCAB_ROOT:-0}" == "1" \
+     && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
+     && "$(sha256sum scripts/fr13_dvk_subset_blocks.json | awk '{print $1}')" == "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff" \
+     && "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" == "0" \
+     && "${FR13_DRAFT_HEAD_PAD_ROWS:-0}" == "0" \
+     && "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "0" \
+     && -z "${FR13_NEEDS_ALLOW:-}" \
+     && "${ENFORCE_EAGER:-0}" == "0" ]] || {
+    echo "FAIL: native key-group CFWD requires exact K64/root1 graph-mode B1"
+    exit 2
+  }
+  [[ "${FR13_SFWD_GPU_TIMER:-0}" == "1" \
+     && "${FR13_DFWD_GPU_TIMER:-0}" == "1" \
+     && "${FR13_CFWD_GPU_TIMER:-0}" == "1" \
+     && "${FR13_GRAPH_TIMER:-0}" == "0" \
+     && "${FR13_REPLAY_GPU_TIMER:-0}" == "0" \
+     && "${FR13_COMMIT_FULL_GPU_TIMER:-0}" == "0" ]] || {
+    echo "FAIL: native key-group CFWD requires boundary counters and forbids auxiliary timing"
     exit 2
   }
 fi

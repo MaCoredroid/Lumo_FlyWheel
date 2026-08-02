@@ -169,7 +169,20 @@ def _snapshot(
                 "actual_replays_enqueued": events + nonpure_replays,
                 "all_batches_ready": True,
                 "captures": server_capacity,
+                "candidate_binary_sha256_by_batch": {
+                    str(batch): None
+                    for batch in range(1, server_capacity + 1)
+                },
+                "candidate_routes_by_batch": {
+                    str(batch): "triton_layer_batch"
+                    for batch in range(1, server_capacity + 1)
+                },
+                "candidate_source_sha256_by_batch": {
+                    str(batch): None
+                    for batch in range(1, server_capacity + 1)
+                },
                 "fast_route_ready": True,
+                "gate_precompute_launches": server_capacity,
                 "layer_batch_gate_attempts_by_batch": {
                     str(batch): 0
                     for batch in range(1, server_capacity + 1)
@@ -348,6 +361,77 @@ def test_task_boundary_accepts_in_graph_pregather_counts(
     ] == {
         str(batch): 0x0FFF for batch in range(1, server_capacity + 1)
     }
+
+
+def test_b1_boundary_accepts_and_preserves_native_cfwd_candidate_identity(
+    tmp_path: Path,
+) -> None:
+    payload, ack = _snapshot(server_capacity=1)
+    committer = payload["metrics"]["committer"]
+    committer["candidate_routes_by_batch"] = {
+        "1": "native_keygroup_precompute_cuda"
+    }
+    committer["candidate_source_sha256_by_batch"] = {
+        "1": orchestrator._FIXED32_CFWD_NATIVE_KEYGROUP_SOURCE_SHA256
+    }
+    committer["candidate_binary_sha256_by_batch"] = {"1": "d" * 64}
+    base_path = _write_snapshot(tmp_path, payload)
+
+    loaded, path, _ = orchestrator._load_fixed32_boundary_snapshot(
+        base_path=base_path,
+        ack=ack,
+        server_capacity=1,
+    )
+    assert loaded == payload
+    floor_report = floor_gate.validate_runtime_boundary_snapshot(
+        path,
+        ack=_ack_dict(ack),
+        server_capacity=1,
+        metrics_path=None,
+        metric_values=None,
+        reference=None,
+        census_path=_write_census(tmp_path, payload),
+    )
+    assert floor_report["committer"]["candidate_routes_by_batch"] == {
+        "1": "native_keygroup_precompute_cuda"
+    }
+    assert floor_report["committer"]["candidate_source_sha256_by_batch"] == {
+        "1": orchestrator._FIXED32_CFWD_NATIVE_KEYGROUP_SOURCE_SHA256
+    }
+    assert floor_report["committer"]["candidate_binary_sha256_by_batch"] == {
+        "1": "d" * 64
+    }
+
+
+@pytest.mark.parametrize(
+    ("route", "source_sha256", "binary_sha256"),
+    (
+        ("unsupported", None, None),
+        ("native_keygroup_precompute_cuda", "e" * 64, "d" * 64),
+        (
+            "native_keygroup_precompute_cuda",
+            orchestrator._FIXED32_CFWD_NATIVE_KEYGROUP_SOURCE_SHA256,
+            None,
+        ),
+    ),
+)
+def test_both_validators_reject_unbound_native_cfwd_candidate_identity(
+    tmp_path: Path,
+    route: str,
+    source_sha256: str | None,
+    binary_sha256: str | None,
+) -> None:
+    payload, ack = _snapshot(server_capacity=1)
+    committer = payload["metrics"]["committer"]
+    committer["candidate_routes_by_batch"] = {"1": route}
+    committer["candidate_source_sha256_by_batch"] = {"1": source_sha256}
+    committer["candidate_binary_sha256_by_batch"] = {"1": binary_sha256}
+    _assert_both_validators_reject(
+        tmp_path,
+        payload,
+        ack,
+        server_capacity=1,
+    )
 
 
 @pytest.mark.parametrize(
@@ -890,8 +974,27 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
         "actual_replays_by_batch": raw_by_batch,
         "actual_replays_enqueued": 2,
         "all_batches_ready": True,
+        "candidate_binary_sha256_by_batch": {
+            1: None,
+            2: None,
+            3: None,
+            4: None,
+        },
+        "candidate_routes_by_batch": {
+            1: "triton_layer_batch",
+            2: "triton_layer_batch",
+            3: "triton_layer_batch",
+            4: "triton_layer_batch",
+        },
+        "candidate_source_sha256_by_batch": {
+            1: None,
+            2: None,
+            3: None,
+            4: None,
+        },
         "captures": 4,
         "fast_route_ready": True,
+        "gate_precompute_launches": 4,
         "layer_batch_gate_attempts_by_batch": {
             1: 0,
             2: 0,

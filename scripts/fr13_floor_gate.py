@@ -96,6 +96,9 @@ class GateError(RuntimeError):
 
 
 FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK = 0x0FFF
+FIXED32_CFWD_NATIVE_KEYGROUP_SOURCE_SHA256 = (
+    "1c1a9813410dcf15bcbb4d23bec71ee16ddcd7e2dbe3b1a3698e58f71bd96985"
+)
 
 
 CANONICAL_TASK_IDS = (
@@ -830,6 +833,43 @@ def strict_nonnegative_int_map(
     }
 
 
+def strict_committer_route_map(
+    value: object,
+    *,
+    expected_keys: set[str] | frozenset[str],
+    label: str,
+) -> dict[str, str]:
+    if not isinstance(value, dict):
+        raise GateError(f"{label}: expected object")
+    exact_keys(value, expected_keys, label)
+    allowed = {
+        "reference",
+        "triton_layer_batch",
+        "native_keygroup_precompute_cuda",
+    }
+    if any(type(item) is not str or item not in allowed for item in value.values()):
+        raise GateError(f"{label}: unsupported route")
+    return dict(value)
+
+
+def strict_optional_sha256_map(
+    value: object,
+    *,
+    expected_keys: set[str] | frozenset[str],
+    label: str,
+) -> dict[str, str | None]:
+    if not isinstance(value, dict):
+        raise GateError(f"{label}: expected object")
+    exact_keys(value, expected_keys, label)
+    if any(
+        item is not None
+        and (type(item) is not str or re.fullmatch(r"[0-9a-f]{64}", item) is None)
+        for item in value.values()
+    ):
+        raise GateError(f"{label}: invalid SHA-256")
+    return dict(value)
+
+
 def strict_nonnegative_int_list(
     value: object,
     *,
@@ -1323,8 +1363,12 @@ def validate_runtime_boundary_snapshot(
             "actual_replays_by_batch",
             "actual_replays_enqueued",
             "all_batches_ready",
+            "candidate_binary_sha256_by_batch",
+            "candidate_routes_by_batch",
+            "candidate_source_sha256_by_batch",
             "captures",
             "fast_route_ready",
+            "gate_precompute_launches",
             "layer_batch_gate_attempts_by_batch",
             "layer_batch_gate_coverage_mask_by_batch",
             "layer_batch_gate_passed_by_batch",
@@ -1360,6 +1404,7 @@ def validate_runtime_boundary_snapshot(
     for key in (
         "actual_replays_enqueued",
         "captures",
+        "gate_precompute_launches",
         "maximum_ready_capacity",
         "nonpure_committer_replays_enqueued",
         "preseeded_graphs",
@@ -1402,6 +1447,36 @@ def validate_runtime_boundary_snapshot(
         expected_keys=set(expected_ready_capacities),
         label=f"{path}:committer.layer_batch_gate_coverage_mask_by_batch",
     )
+    candidate_routes_by_batch = strict_committer_route_map(
+        committer["candidate_routes_by_batch"],
+        expected_keys=set(expected_ready_capacities),
+        label=f"{path}:committer.candidate_routes_by_batch",
+    )
+    candidate_source_sha256_by_batch = strict_optional_sha256_map(
+        committer["candidate_source_sha256_by_batch"],
+        expected_keys=set(expected_ready_capacities),
+        label=f"{path}:committer.candidate_source_sha256_by_batch",
+    )
+    candidate_binary_sha256_by_batch = strict_optional_sha256_map(
+        committer["candidate_binary_sha256_by_batch"],
+        expected_keys=set(expected_ready_capacities),
+        label=f"{path}:committer.candidate_binary_sha256_by_batch",
+    )
+    for batch, route in candidate_routes_by_batch.items():
+        source_sha256 = candidate_source_sha256_by_batch[batch]
+        binary_sha256 = candidate_binary_sha256_by_batch[batch]
+        if route == "native_keygroup_precompute_cuda":
+            if (
+                source_sha256 != FIXED32_CFWD_NATIVE_KEYGROUP_SOURCE_SHA256
+                or binary_sha256 is None
+            ):
+                raise GateError(
+                    f"{path}: native key-group CFWD route is not source/binary bound"
+                )
+        elif source_sha256 is not None or binary_sha256 is not None:
+            raise GateError(
+                f"{path}: nonnative CFWD route carries a candidate identity"
+            )
     if any(
         value not in (0, 1)
         for value in layer_batch_gate_passed_by_batch.values()
@@ -1583,6 +1658,14 @@ def validate_runtime_boundary_snapshot(
             "layer_batch_gate_passed_by_batch": (
                 layer_batch_gate_passed_by_batch
             ),
+            "candidate_routes_by_batch": candidate_routes_by_batch,
+            "candidate_source_sha256_by_batch": (
+                candidate_source_sha256_by_batch
+            ),
+            "candidate_binary_sha256_by_batch": (
+                candidate_binary_sha256_by_batch
+            ),
+            "gate_precompute_launches": committer["gate_precompute_launches"],
             "actual_replays_enqueued": committer[
                 "actual_replays_enqueued"
             ],
@@ -8290,6 +8373,31 @@ def write_fixture_arm(
                     "captures": concurrency,
                     "actual_replays_enqueued": step,
                     "actual_replays_by_batch": by_batch,
+                    "candidate_binary_sha256_by_batch": {
+                        str(batch): None
+                        for batch in range(1, concurrency + 1)
+                    },
+                    "candidate_routes_by_batch": {
+                        str(batch): "triton_layer_batch"
+                        for batch in range(1, concurrency + 1)
+                    },
+                    "candidate_source_sha256_by_batch": {
+                        str(batch): None
+                        for batch in range(1, concurrency + 1)
+                    },
+                    "gate_precompute_launches": concurrency,
+                    "layer_batch_gate_attempts_by_batch": {
+                        str(batch): 0
+                        for batch in range(1, concurrency + 1)
+                    },
+                    "layer_batch_gate_coverage_mask_by_batch": {
+                        str(batch): FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+                        for batch in range(1, concurrency + 1)
+                    },
+                    "layer_batch_gate_passed_by_batch": {
+                        str(batch): 1
+                        for batch in range(1, concurrency + 1)
+                    },
                     "nonpure_committer_replays_enqueued": 0,
                     "nonpure_committer_replays_by_batch": zero_by_batch,
                     "nonpure_dispatch": {

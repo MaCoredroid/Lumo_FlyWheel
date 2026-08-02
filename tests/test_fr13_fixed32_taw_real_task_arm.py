@@ -39,6 +39,25 @@ def _cfwd_arm_path(tmp_path: Path) -> Path:
     ).resolve()
 
 
+def _committer_candidate_identity(
+    *batches: str,
+    route: str = "triton_layer_batch",
+    source_sha256: str | None = None,
+    binary_sha256: str | None = None,
+) -> dict[str, dict[str, str | None]]:
+    return {
+        "candidate_routes_by_batch": {
+            batch: route for batch in batches
+        },
+        "candidate_source_sha256_by_batch": {
+            batch: source_sha256 for batch in batches
+        },
+        "candidate_binary_sha256_by_batch": {
+            batch: binary_sha256 for batch in batches
+        },
+    }
+
+
 def test_real_task_arm_atomically_publishes_and_rotates_exact_marker(
     tmp_path: Path,
 ) -> None:
@@ -694,6 +713,7 @@ def test_task_bracket_arms_after_pre_flush_and_rotates_after_post_flush(
                 "schema": "fr13-fixed32-boundary-snapshot-v4",
                 "metrics": {
                     "committer": {
+                        **_committer_candidate_identity("1"),
                         "layer_batch_gate_attempts_by_batch": {"1": 0},
                         "layer_batch_gate_coverage_mask_by_batch": {
                             "1": 0x0FFF,
@@ -806,6 +826,14 @@ def test_cfwd_qualification_bracket_removes_arm_before_post_flush_and_records_co
                 "schema": "fr13-fixed32-boundary-snapshot-v4",
                 "metrics": {
                     "committer": {
+                        **_committer_candidate_identity(
+                            "1",
+                            route="native_keygroup_precompute_cuda",
+                            source_sha256=(
+                                orchestrator._FIXED32_CFWD_NATIVE_KEYGROUP_SOURCE_SHA256
+                            ),
+                            binary_sha256="d" * 64,
+                        ),
                         "layer_batch_gate_attempts_by_batch": {
                             "1": 3 if post else 2,
                         },
@@ -867,6 +895,18 @@ def test_cfwd_qualification_bracket_removes_arm_before_post_flush_and_records_co
     assert coverage["shadow_candidate_replays"] == 1
     assert coverage["new_depth_reference_served_replays"] == 1
     assert coverage["formal_work_census_eligible"] is False
+    assert payload["candidate_identity"] == {
+        "pre_routes_by_batch": {"1": "native_keygroup_precompute_cuda"},
+        "pre_source_sha256_by_batch": {
+            "1": orchestrator._FIXED32_CFWD_NATIVE_KEYGROUP_SOURCE_SHA256
+        },
+        "pre_binary_sha256_by_batch": {"1": "d" * 64},
+        "post_routes_by_batch": {"1": "native_keygroup_precompute_cuda"},
+        "post_source_sha256_by_batch": {
+            "1": orchestrator._FIXED32_CFWD_NATIVE_KEYGROUP_SOURCE_SHA256
+        },
+        "post_binary_sha256_by_batch": {"1": "d" * 64},
+    }
     arm_payload = json.loads(
         (
             task_dir / "fixed32_committer_layer_batch_real_task_arm.json"
@@ -919,6 +959,7 @@ def test_cfwd_qualification_does_not_post_flush_when_arm_removal_fails(
                 "schema": "fr13-fixed32-boundary-snapshot-v4",
                 "metrics": {
                     "committer": {
+                        **_committer_candidate_identity("1"),
                         "layer_batch_gate_attempts_by_batch": {"1": 0},
                         "layer_batch_gate_coverage_mask_by_batch": {"1": 0},
                     }
@@ -961,10 +1002,16 @@ def test_cfwd_qualification_does_not_post_flush_when_arm_removal_fails(
 
 
 @pytest.mark.parametrize(
-    ("attempt_delta", "coverage_delta", "error_match"),
+    ("attempt_delta", "coverage_delta", "identity_delta", "error_match"),
     (
-        (True, False, "attempted a committer layer-batch byte gate"),
-        (False, True, "changed committer layer-batch accepted-length coverage"),
+        (True, False, False, "attempted a committer layer-batch byte gate"),
+        (
+            False,
+            True,
+            False,
+            "changed committer layer-batch accepted-length coverage",
+        ),
+        (False, False, True, "changed committer candidate identity"),
     ),
 )
 def test_task_bracket_rejects_layer_batch_qualification_in_task_interval(
@@ -972,6 +1019,7 @@ def test_task_bracket_rejects_layer_batch_qualification_in_task_interval(
     monkeypatch: pytest.MonkeyPatch,
     attempt_delta: bool,
     coverage_delta: bool,
+    identity_delta: bool,
     error_match: str,
 ) -> None:
     task_dir = tmp_path / "task"
@@ -1018,6 +1066,18 @@ def test_task_bracket_rejects_layer_batch_qualification_in_task_interval(
                 "schema": "fr13-fixed32-boundary-snapshot-v4",
                 "metrics": {
                     "committer": {
+                        **_committer_candidate_identity(
+                            "1",
+                            route="native_keygroup_precompute_cuda",
+                            source_sha256=(
+                                orchestrator._FIXED32_CFWD_NATIVE_KEYGROUP_SOURCE_SHA256
+                            ),
+                            binary_sha256=(
+                                "e" * 64
+                                if identity_delta and ack.generation == 2
+                                else "d" * 64
+                            ),
+                        ),
                         "layer_batch_gate_attempts_by_batch": {
                             "1": (ack.generation - 1) if attempt_delta else 0,
                         },
@@ -1249,6 +1309,7 @@ def test_task_bracket_removes_arm_when_post_snapshot_fails(
                 "schema": "fr13-fixed32-boundary-snapshot-v4",
                 "metrics": {
                     "committer": {
+                        **_committer_candidate_identity("1"),
                         "layer_batch_gate_attempts_by_batch": {"1": 0},
                         "layer_batch_gate_coverage_mask_by_batch": {
                             "1": 0x0FFF,

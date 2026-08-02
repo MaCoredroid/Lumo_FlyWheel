@@ -40,6 +40,8 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_b4_campaign_driver.sh",
     "scripts/fr13_bigdenom_swe_serve_variant.sh",
     "scripts/fr13_canonical_env.sh",
+    "scripts/fr13_cfwd_native_keygroup_b1_gate.py",
+    "scripts/fr13_cfwd_native_keygroup_binary.py",
     "scripts/fr13_cutlass_b4_pass.py",
     "scripts/fr13_cutlass_streamk_pass.py",
     "scripts/fr13_cutlass_streamk_timing.py",
@@ -56,6 +58,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_merged_drafter.py",
     "scripts/fr13_merged_fill.py",
     "scripts/fr13_patch_cutlass_fixed32_wave.py",
+    "scripts/fr13_patch_vllm_cfwd_native_fullvalue_cuda.py",
     "scripts/fr13_patch_fa2_tree_bias.py",
     "scripts/fr13_required_tree_flags.sh",
     "scripts/fr13_run_b1_cutlass_streamk_live_gate.sh",
@@ -85,6 +88,7 @@ FIXED32_PYTHON_PACKAGE_SOURCE = (
     "src/lumo_flywheel_serving/fr10_equivalence_gate.py",
     "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
     "src/lumo_flywheel_serving/fr10_tree_rejection_sampler.py",
+    "src/lumo_flywheel_serving/fr13_cfwd_native_fullvalue_cuda.py",
     "src/lumo_flywheel_serving/fr13_ex2_silu.py",
     "src/lumo_flywheel_serving/fr13_fa2_spine_reorder.py",
     "src/lumo_flywheel_serving/fr13_replay_conv_remap.py",
@@ -139,7 +143,7 @@ PROFILES = {
         verdict_tools=FIXED32_VERDICT_TOOLS,
         package_dir="src/lumo_flywheel_serving",
         package_name="lumo_flywheel_serving",
-        package_file_count=25,
+        package_file_count=26,
     ),
 }
 

@@ -24,6 +24,18 @@ PATCHER_SOURCE_PATH = "scripts/fr13_patch_vllm_cfwd_native_fullvalue_cuda.py"
 PATCHER_SOURCE_SHA256 = (
     "50bcdb4cbe71db7d75f1a233cfe6d2e5d18d6a6cf1bcf97af87db339a8452184"
 )
+PATCHED_VLLM_SHA256 = {
+    "CMakeLists.txt": (
+        "bf040399fd8f5e94a1ee7aa0076da17e4f7de44aa9e99170806401b5c8983fa0"
+    ),
+    "csrc/ops.h": (
+        "a3182a4f38af21ff001de6ec80454420c9d1800b64ff3e19de594746b589f5c0"
+    ),
+    "csrc/torch_bindings.cpp": (
+        "e8c3dbc98131ee62cda7a0072d5cb47c469652237076f394a5deef9a6667fda7"
+    ),
+    "csrc/fr13_fixed32_cfwd_native_fullvalue.cu": CUDA_SOURCE_SHA256,
+}
 MAX_BINDING_BYTES = 64 * 1024
 
 
@@ -38,6 +50,22 @@ def _require_sha256(value: object, label: str) -> str:
 
 def validate_binary_binding(binding: Mapping[str, object]) -> dict[str, object]:
     """Validate the exact vLLM binary/source binding used by a live gate."""
+    expected_keys = {
+        "schema",
+        "candidate",
+        "vllm_base_commit",
+        "operator",
+        "architecture",
+        "source_sha256",
+        "patched_vllm_sha256",
+        "build",
+        "binary",
+        "default_on",
+        "production_authorized",
+        "timing_eligible",
+    }
+    if set(binding) != expected_keys:
+        raise RuntimeError("native key-group precompute CFWD binary keys drift")
     if binding.get("schema") != BINARY_BINDING_SCHEMA:
         raise RuntimeError("native key-group precompute CFWD binary schema drift")
     if binding.get("candidate") != CANDIDATE:
@@ -52,6 +80,45 @@ def validate_binary_binding(binding: Mapping[str, object]) -> dict[str, object]:
         PATCHER_SOURCE_PATH: PATCHER_SOURCE_SHA256,
     }:
         raise RuntimeError("native key-group precompute CFWD source binding drift")
+    patched_vllm = binding.get("patched_vllm_sha256")
+    if not isinstance(patched_vllm, Mapping) or dict(patched_vllm) != (
+        PATCHED_VLLM_SHA256
+    ):
+        raise RuntimeError("native key-group precompute CFWD patched vLLM drift")
+    build = binding.get("build")
+    if not isinstance(build, Mapping) or set(build) != {
+        "generator",
+        "candidate_source_in_build_graph",
+        "candidate_source_forced_rebuild",
+        "candidate_source_mtime_ns",
+        "full_vllm_extension_target",
+        "full_extension_mtime_ns",
+        "cmake_cache_sha256",
+        "build_ninja_sha256",
+    }:
+        raise RuntimeError("native key-group precompute CFWD build binding drift")
+    if (
+        build.get("generator") != "ninja"
+        or build.get("candidate_source_in_build_graph") is not True
+        or build.get("candidate_source_forced_rebuild") is not True
+        or build.get("full_vllm_extension_target") != "_C.abi3.so"
+    ):
+        raise RuntimeError("native key-group precompute CFWD build target drift")
+    cmake_cache_sha256 = _require_sha256(
+        build.get("cmake_cache_sha256"), "CMake cache SHA-256"
+    )
+    build_ninja_sha256 = _require_sha256(
+        build.get("build_ninja_sha256"), "build.ninja SHA-256"
+    )
+    candidate_source_mtime_ns = build.get("candidate_source_mtime_ns")
+    full_extension_mtime_ns = build.get("full_extension_mtime_ns")
+    if (
+        type(candidate_source_mtime_ns) is not int
+        or candidate_source_mtime_ns <= 0
+        or type(full_extension_mtime_ns) is not int
+        or full_extension_mtime_ns < candidate_source_mtime_ns
+    ):
+        raise RuntimeError("native key-group precompute CFWD forced rebuild drift")
     binary = binding.get("binary")
     if not isinstance(binary, Mapping):
         raise RuntimeError("native key-group precompute CFWD binary binding is absent")
@@ -74,6 +141,17 @@ def validate_binary_binding(binding: Mapping[str, object]) -> dict[str, object]:
         "operator": OPERATOR,
         "architecture": "sm_121a",
         "source_sha256": dict(sources),
+        "patched_vllm_sha256": dict(patched_vllm),
+        "build": {
+            "generator": "ninja",
+            "candidate_source_in_build_graph": True,
+            "candidate_source_forced_rebuild": True,
+            "candidate_source_mtime_ns": candidate_source_mtime_ns,
+            "full_vllm_extension_target": "_C.abi3.so",
+            "full_extension_mtime_ns": full_extension_mtime_ns,
+            "cmake_cache_sha256": cmake_cache_sha256,
+            "build_ninja_sha256": build_ninja_sha256,
+        },
         "binary": {"sha256": binary_sha256, "bytes": binary_bytes},
         "default_on": False,
         "production_authorized": False,
@@ -83,6 +161,21 @@ def validate_binary_binding(binding: Mapping[str, object]) -> dict[str, object]:
 
 def load_binary_binding(path: str | os.PathLike[str]) -> dict[str, object]:
     """Read one private, non-symlinked live-gate binary binding."""
+    def reject_duplicates(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                raise RuntimeError(
+                    "native key-group precompute CFWD duplicate binding key"
+                )
+            result[key] = value
+        return result
+
+    def reject_constant(_value: str) -> object:
+        raise RuntimeError(
+            "native key-group precompute CFWD non-finite binding value"
+        )
+
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
     flags |= getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -104,7 +197,11 @@ def load_binary_binding(path: str | os.PathLike[str]) -> dict[str, object]:
                 "private read-only regular file"
             )
         with os.fdopen(descriptor, encoding="ascii", closefd=False) as handle:
-            payload = json.load(handle)
+            payload = json.load(
+                handle,
+                object_pairs_hook=reject_duplicates,
+                parse_constant=reject_constant,
+            )
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise RuntimeError(
             "native key-group precompute CFWD cannot read binary binding"

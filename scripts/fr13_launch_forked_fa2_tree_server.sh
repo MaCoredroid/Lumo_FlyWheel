@@ -66,6 +66,11 @@ _FR13_M32_GUARD_NAMES=(
   FR13_FIXED32_CUTLASS_WAVE
   FR13_FIXED32_CUTLASS_WAVE_SO
   FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
+  FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA
+  FR13_FIXED32_CFWD_NATIVE_KEYGROUP_SO
+  FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING_JSON
+  FR13_FIXED32_COMMITTER_LAYER_BATCH
+  FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION
   FR13_FIXED32_ATTRIBUTION_ONLY
   FR13_FIXED32_B1_DIAGNOSTIC
   FR13_FIXED32_MODE
@@ -88,7 +93,8 @@ _FR13_M32_GUARD_ACTIVE=0
 [[ "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_LIVE_AB]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_PRODUCTION]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_TIMING_ARM]}" == "set:1" \
-   || "$_FR13_CALLER_SFWD_B4" == "set:1" ]] \
+   || "$_FR13_CALLER_SFWD_B4" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA]}" == "set:diagnostic" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 _FR13_LOCAL_ENV_SOURCED=0
 if [[ -n "${FR13_FIXED32_MODE:-}" && -f "$REPO/.lumo.local.env" ]]; then
@@ -100,7 +106,8 @@ fi
 [[ "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" \
-   || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "1" ]] \
+   || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "1" \
+   || "${FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA:-0}" == "diagnostic" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 if (( _FR13_M32_GUARD_ACTIVE == 1 )); then
   for _fr13_guard_name in "${_FR13_M32_GUARD_NAMES[@]}"; do
@@ -339,6 +346,11 @@ FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON=${FR13_FIXED32_BATCH_GDN_RUNTIME_MA
 FR13_FIXED32_BATCH_GDN_GATE_RUNNER=${FR13_FIXED32_BATCH_GDN_GATE_RUNNER:-}
 FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
 FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
+FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA=${FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA:-0}
+FR13_FIXED32_CFWD_NATIVE_KEYGROUP_SO=${FR13_FIXED32_CFWD_NATIVE_KEYGROUP_SO:-}
+FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING_JSON=${FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING_JSON:-}
+FR13_FIXED32_COMMITTER_LAYER_BATCH=${FR13_FIXED32_COMMITTER_LAYER_BATCH:-0}
+FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION=${FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION:-0}
 FR13_FIXED32_CUTLASS_WAVE=${FR13_FIXED32_CUTLASS_WAVE:-stock}
 FR13_FIXED32_CUTLASS_WAVE_SO=${FR13_FIXED32_CUTLASS_WAVE_SO:-}
 FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL=${FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL:-/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl}
@@ -547,6 +559,94 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE" != "stock" \
   echo "nonstock CUTLASS wave requires both BM8 selectors to be 0" >&2
   exit 2
 fi
+FR13_CFWD_NATIVE_KEYGROUP_DOCKER_ARGS=()
+case "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA" in
+  0)
+    [[ -z "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_SO" \
+       && -z "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING_JSON" ]] || {
+      echo "default-off native key-group CFWD forbids candidate inputs" >&2
+      exit 2
+    }
+    ;;
+  diagnostic)
+    [[ -n "${FR13_FIXED32_MODE:-}" \
+       && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
+       && "$MAX_NUM_SEQS" == "1" \
+       && "$FR13_FIXED32_COMMITTER_LAYER_BATCH" == "1" \
+       && "$FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION" == "1" \
+       && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+       && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+       && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
+       && "$(sha256sum scripts/fr13_dvk_subset_blocks.json | awk '{print $1}')" == "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff" \
+       && -z "${FR13_NEEDS_ALLOW:-}" \
+       && "${ENFORCE_EAGER:-0}" == "0" ]] || {
+      echo "native key-group CFWD requires exact K64/root1 graph-mode B1 qualification" >&2
+      exit 2
+    }
+    [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" \
+       && "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "0" \
+       && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+       && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "0" \
+       && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+       && "$FR13_FA2_QROW16_PRODUCTION" == "0" \
+       && "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "0" \
+       && "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "0" \
+       && "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
+       && "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" == "0" \
+       && "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "0" \
+       && "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "0" \
+       && "$FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION" == "0" \
+       && "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" == "0" \
+       && "$FR13_DRAFT_HEAD_PAD_ROWS" == "0" \
+       && "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" \
+       && "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "0" \
+       && "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "0" \
+       && "$FR13_DRAFT_HEAD_M32_TIMING_ARM" == "0" ]] || {
+      echo "native key-group CFWD must be the only kernel candidate" >&2
+      exit 2
+    }
+    [[ "${FR13_SFWD_GPU_TIMER:-0}" == "1" \
+       && "${FR13_DFWD_GPU_TIMER:-0}" == "1" \
+       && "${FR13_CFWD_GPU_TIMER:-0}" == "1" \
+       && "${FR13_GRAPH_TIMER:-0}" == "0" \
+       && "${FR13_REPLAY_GPU_TIMER:-0}" == "0" \
+       && "${FR13_COMMIT_FULL_GPU_TIMER:-0}" == "0" ]] || {
+      echo "native key-group CFWD requires boundary counters and forbids auxiliary timing" >&2
+      exit 2
+    }
+    [[ "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_SO" == /* \
+       && "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_SO" != *:* \
+       && -f "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_SO" \
+       && ! -L "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_SO" \
+       && "$(stat -c '%h' "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_SO")" == "1" ]] || {
+      echo "native key-group CFWD requires an absolute single-link candidate _C.abi3.so" >&2
+      exit 2
+    }
+    [[ "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING_JSON" == /* \
+       && "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING_JSON" != *:* \
+       && -f "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING_JSON" \
+       && ! -L "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING_JSON" \
+       && "$(stat -c '%h:%a' "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING_JSON")" == "1:400" ]] || {
+      echo "native key-group CFWD requires an absolute private binding JSON" >&2
+      exit 2
+    }
+    .venv/bin/python scripts/fr13_cfwd_native_keygroup_binary.py verify \
+      --repo "$REPO" \
+      --candidate-so "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_SO" \
+      --binding "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING_JSON" \
+      >/dev/null
+    FR13_FIXED32_CFWD_NATIVE_KEYGROUP_SO=$(realpath "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_SO")
+    FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING_JSON=$(realpath "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING_JSON")
+    FR13_CFWD_NATIVE_KEYGROUP_DOCKER_ARGS=(
+      -v "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_SO:/tmp/fr13_cfwd_native_keygroup._C.abi3.so:ro"
+      -v "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING_JSON:/tmp/fr13_cfwd_native_keygroup.binding.json:ro"
+    )
+    ;;
+  *)
+    echo "FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA must be 0 or diagnostic" >&2
+    exit 2
+    ;;
+esac
 FR13_CUTLASS_WAVE_DOCKER_ARGS=()
 if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" ]]; then
   [[ -z "$FR13_FIXED32_CUTLASS_WAVE_SO" \
@@ -1756,6 +1856,9 @@ PY
     "$LOG_DIR/fr13_fixed32_runtime_attestation.json" \
     "$LOG_DIR"/fr13_fixed32_boundary_snapshot.*.json \
     "$LOG_DIR/fr13_fixed32_committer_layer_batch.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_cfwd_native_keygroup_precompute.arm" \
+    "$LOG_DIR/fr13_fixed32_cfwd_native_keygroup_precompute.binding.json" \
+    "$LOG_DIR/fr13_fixed32_cfwd_native_keygroup_precompute.install.json" \
     "$LOG_DIR/fr13_fixed32_mode.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag" \
@@ -1802,6 +1905,9 @@ else
     "$LOG_DIR"/fr13_fixed32_batch_gdn_bv8.production_engagement.json.tmp.* \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv64.production_engagement.json" \
     "$LOG_DIR"/fr13_fixed32_batch_gdn_bv64.production_engagement.json.tmp.* \
+    "$LOG_DIR/fr13_fixed32_cfwd_native_keygroup_precompute.arm" \
+    "$LOG_DIR/fr13_fixed32_cfwd_native_keygroup_precompute.binding.json" \
+    "$LOG_DIR/fr13_fixed32_cfwd_native_keygroup_precompute.install.json" \
     2>/dev/null || true
 fi
 # FR13_COMMITTER_NATIVE sidecar (worker-env-drop-proof): the EngineCore worker drops FR13_* env vars, so
@@ -2428,6 +2534,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
   -v "$FORKED_FA2_SO:/tmp/fr13_fork_fa2.so:ro" \
   "${FR13_CUTLASS_WAVE_DOCKER_ARGS[@]}" \
+  "${FR13_CFWD_NATIVE_KEYGROUP_DOCKER_ARGS[@]}" \
   -v "${FR13_COMPILE_CACHE_DIR:-$HOME/.cache/fr13_vllm_container_cache}:/root/.cache" \
   "${NSYS_DOCKER_ARGS[@]}" \
   "${FR13_FIXED32_DOCKER_ARGS[@]}" \
@@ -2830,6 +2937,22 @@ temporary.write_text(
 )
 temporary.replace(identity_path)
 PY
+fi
+if [[ "\${FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA:-0}" == "diagnostic" ]]; then
+  python3 /workspace/scripts/fr13_cfwd_native_keygroup_binary.py install \
+    --repo /workspace \
+    --candidate-so /tmp/fr13_cfwd_native_keygroup._C.abi3.so \
+    --binding /tmp/fr13_cfwd_native_keygroup.binding.json \
+    --destination /usr/local/lib/python3.12/dist-packages/vllm/_C.abi3.so \
+    --binding-destination /logs/fr13_fixed32_cfwd_native_keygroup_precompute.binding.json \
+    --arm /logs/fr13_fixed32_cfwd_native_keygroup_precompute.arm \
+    > /logs/fr13_fixed32_cfwd_native_keygroup_precompute.install.json
+  chmod 400 \
+    /logs/fr13_fixed32_cfwd_native_keygroup_precompute.install.json
+  chown --reference=/logs \
+    /logs/fr13_fixed32_cfwd_native_keygroup_precompute.arm \
+    /logs/fr13_fixed32_cfwd_native_keygroup_precompute.binding.json \
+    /logs/fr13_fixed32_cfwd_native_keygroup_precompute.install.json
 fi
 if [[ "\${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ]]; then
   if [[ "\${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" == "1" ]]; then

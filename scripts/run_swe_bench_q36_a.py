@@ -35,6 +35,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import secrets
 import shlex
 import shutil
@@ -128,6 +129,9 @@ _FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME = (
 _FIXED32_PENDING_RUNNER_METADATA_FILENAME = "runner_metadata.pending.json"
 _FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY = "_fixed32_campaign_runtime_args"
 _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK = 0x0FFF
+_FIXED32_CFWD_NATIVE_KEYGROUP_SOURCE_SHA256 = (
+    "1c1a9813410dcf15bcbb4d23bec71ee16ddcd7e2dbe3b1a3698e58f71bd96985"
+)
 _FIXED32_CFWD_QUALIFICATION_CLASSIFICATION = (
     "cfwd_layer_batch_real_swe_qualification"
 )
@@ -4319,6 +4323,47 @@ def _fixed32_nonnegative_int_map(
     }
 
 
+def _fixed32_committer_route_map(
+    value: Any,
+    *,
+    expected_keys: frozenset[str],
+    label: str,
+) -> dict[str, str]:
+    if not isinstance(value, dict) or frozenset(value) != expected_keys:
+        actual = sorted(value) if isinstance(value, dict) else type(value).__name__
+        raise Fixed32BoundaryError(
+            f"{label} keys mismatch: expected={sorted(expected_keys)} actual={actual}"
+        )
+    allowed = {
+        "reference",
+        "triton_layer_batch",
+        "native_keygroup_precompute_cuda",
+    }
+    if any(type(item) is not str or item not in allowed for item in value.values()):
+        raise Fixed32BoundaryError(f"{label} contains an unsupported route")
+    return dict(value)
+
+
+def _fixed32_optional_sha256_map(
+    value: Any,
+    *,
+    expected_keys: frozenset[str],
+    label: str,
+) -> dict[str, str | None]:
+    if not isinstance(value, dict) or frozenset(value) != expected_keys:
+        actual = sorted(value) if isinstance(value, dict) else type(value).__name__
+        raise Fixed32BoundaryError(
+            f"{label} keys mismatch: expected={sorted(expected_keys)} actual={actual}"
+        )
+    if any(
+        item is not None
+        and (type(item) is not str or re.fullmatch(r"[0-9a-f]{64}", item) is None)
+        for item in value.values()
+    ):
+        raise Fixed32BoundaryError(f"{label} contains an invalid SHA-256")
+    return dict(value)
+
+
 def _fixed32_nonnegative_int_list(value: Any, *, label: str) -> list[int]:
     if not isinstance(value, list):
         raise Fixed32BoundaryError(f"{label} must be a list")
@@ -4675,7 +4720,11 @@ def _load_fixed32_boundary_snapshot(
                 "actual_replays_enqueued",
                 "all_batches_ready",
                 "captures",
+                "candidate_binary_sha256_by_batch",
+                "candidate_routes_by_batch",
+                "candidate_source_sha256_by_batch",
                 "fast_route_ready",
+                "gate_precompute_launches",
                 "maximum_ready_capacity",
                 "layer_batch_gate_attempts_by_batch",
                 "layer_batch_gate_coverage_mask_by_batch",
@@ -4714,6 +4763,7 @@ def _load_fixed32_boundary_snapshot(
     for key in (
         "actual_replays_enqueued",
         "captures",
+        "gate_precompute_launches",
         "maximum_ready_capacity",
         "nonpure_committer_replays_enqueued",
         "preseeded_graphs",
@@ -4750,6 +4800,36 @@ def _load_fixed32_boundary_snapshot(
         expected_keys=ready_capacity_keys,
         label=f"{path}:committer.layer_batch_gate_coverage_mask_by_batch",
     )
+    candidate_routes_by_batch = _fixed32_committer_route_map(
+        committer["candidate_routes_by_batch"],
+        expected_keys=ready_capacity_keys,
+        label=f"{path}:committer.candidate_routes_by_batch",
+    )
+    candidate_source_sha256_by_batch = _fixed32_optional_sha256_map(
+        committer["candidate_source_sha256_by_batch"],
+        expected_keys=ready_capacity_keys,
+        label=f"{path}:committer.candidate_source_sha256_by_batch",
+    )
+    candidate_binary_sha256_by_batch = _fixed32_optional_sha256_map(
+        committer["candidate_binary_sha256_by_batch"],
+        expected_keys=ready_capacity_keys,
+        label=f"{path}:committer.candidate_binary_sha256_by_batch",
+    )
+    for batch, route in candidate_routes_by_batch.items():
+        source_sha256 = candidate_source_sha256_by_batch[batch]
+        binary_sha256 = candidate_binary_sha256_by_batch[batch]
+        if route == "native_keygroup_precompute_cuda":
+            if (
+                source_sha256 != _FIXED32_CFWD_NATIVE_KEYGROUP_SOURCE_SHA256
+                or binary_sha256 is None
+            ):
+                raise Fixed32BoundaryError(
+                    f"{path}: native key-group CFWD route is not source/binary bound"
+                )
+        elif source_sha256 is not None or binary_sha256 is not None:
+            raise Fixed32BoundaryError(
+                f"{path}: nonnative CFWD route carries a candidate identity"
+            )
     if any(value not in (0, 1) for value in layer_batch_gate_passed_by_batch.values()):
         raise Fixed32BoundaryError(
             f"{path}: committer layer-batch gate pass state is not boolean"
@@ -4996,8 +5076,14 @@ class _Fixed32TaskBracket:
         self.post_snapshot_ref = None
         self.pre_layer_batch_gate_attempts_by_batch = None
         self.pre_layer_batch_gate_coverage_mask_by_batch = None
+        self.pre_committer_candidate_routes_by_batch = None
+        self.pre_committer_candidate_source_sha256_by_batch = None
+        self.pre_committer_candidate_binary_sha256_by_batch = None
         self.post_layer_batch_gate_attempts_by_batch = None
         self.post_layer_batch_gate_coverage_mask_by_batch = None
+        self.post_committer_candidate_routes_by_batch = None
+        self.post_committer_candidate_source_sha256_by_batch = None
+        self.post_committer_candidate_binary_sha256_by_batch = None
         self.post_attempted = False
         self.artifact_path = task_dir / "fixed32_task_boundary.json"
         self.taw_arm_artifact_path = task_dir / (
@@ -5116,6 +5202,14 @@ class _Fixed32TaskBracket:
                     "layer_batch_gate_coverage_mask_by_batch"
                 ]
             )
+            committer = snapshot["metrics"]["committer"]
+            candidate_routes = dict(committer["candidate_routes_by_batch"])
+            candidate_sources = dict(
+                committer["candidate_source_sha256_by_batch"]
+            )
+            candidate_binaries = dict(
+                committer["candidate_binary_sha256_by_batch"]
+            )
             metrics = _fixed32_metrics_snapshot(
                 metrics_url=DEFAULT_METRICS_URL,
                 snapshot=snapshot,
@@ -5133,6 +5227,9 @@ class _Fixed32TaskBracket:
         }
         self.pre_layer_batch_gate_attempts_by_batch = gate_attempts
         self.pre_layer_batch_gate_coverage_mask_by_batch = gate_coverage
+        self.pre_committer_candidate_routes_by_batch = candidate_routes
+        self.pre_committer_candidate_source_sha256_by_batch = candidate_sources
+        self.pre_committer_candidate_binary_sha256_by_batch = candidate_binaries
         try:
             metrics_path.write_text(metrics, encoding="utf-8")
             if self.taw_real_task_arm is not None:
@@ -5153,6 +5250,9 @@ class _Fixed32TaskBracket:
             self.pre_snapshot_ref = None
             self.pre_layer_batch_gate_attempts_by_batch = None
             self.pre_layer_batch_gate_coverage_mask_by_batch = None
+            self.pre_committer_candidate_routes_by_batch = None
+            self.pre_committer_candidate_source_sha256_by_batch = None
+            self.pre_committer_candidate_binary_sha256_by_batch = None
             detail = f"{type(exc).__name__}: {exc}"
             if cleanup_error is not None:
                 detail += (
@@ -5214,12 +5314,42 @@ class _Fixed32TaskBracket:
                         "layer_batch_gate_coverage_mask_by_batch"
                     ]
                 )
+                committer = snapshot["metrics"]["committer"]
+                post_candidate_routes = dict(
+                    committer["candidate_routes_by_batch"]
+                )
+                post_candidate_sources = dict(
+                    committer["candidate_source_sha256_by_batch"]
+                )
+                post_candidate_binaries = dict(
+                    committer["candidate_binary_sha256_by_batch"]
+                )
+                if (
+                    post_candidate_routes
+                    != self.pre_committer_candidate_routes_by_batch
+                    or post_candidate_sources
+                    != self.pre_committer_candidate_source_sha256_by_batch
+                    or post_candidate_binaries
+                    != self.pre_committer_candidate_binary_sha256_by_batch
+                ):
+                    raise Fixed32BoundaryError(
+                        "fixed32 task interval changed committer candidate identity"
+                    )
                 self._validate_layer_batch_gate_transition(
                     post_attempts=post_gate_attempts,
                     post_coverage=post_gate_coverage,
                 )
                 self.post_layer_batch_gate_attempts_by_batch = post_gate_attempts
                 self.post_layer_batch_gate_coverage_mask_by_batch = post_gate_coverage
+                self.post_committer_candidate_routes_by_batch = (
+                    post_candidate_routes
+                )
+                self.post_committer_candidate_source_sha256_by_batch = (
+                    post_candidate_sources
+                )
+                self.post_committer_candidate_binary_sha256_by_batch = (
+                    post_candidate_binaries
+                )
                 metrics = _fixed32_metrics_snapshot(
                     metrics_url=DEFAULT_METRICS_URL,
                     snapshot=snapshot,
@@ -5340,6 +5470,22 @@ class _Fixed32CfwdQualificationTaskBracket(_Fixed32TaskBracket):
         pre_coverage = self.pre_layer_batch_gate_coverage_mask_by_batch
         post_attempts = self.post_layer_batch_gate_attempts_by_batch
         post_coverage = self.post_layer_batch_gate_coverage_mask_by_batch
+        candidate_identity = {
+            "pre_routes_by_batch": self.pre_committer_candidate_routes_by_batch,
+            "pre_source_sha256_by_batch": (
+                self.pre_committer_candidate_source_sha256_by_batch
+            ),
+            "pre_binary_sha256_by_batch": (
+                self.pre_committer_candidate_binary_sha256_by_batch
+            ),
+            "post_routes_by_batch": self.post_committer_candidate_routes_by_batch,
+            "post_source_sha256_by_batch": (
+                self.post_committer_candidate_source_sha256_by_batch
+            ),
+            "post_binary_sha256_by_batch": (
+                self.post_committer_candidate_binary_sha256_by_batch
+            ),
+        }
         coverage = None
         if isinstance(pre_attempts, dict) and isinstance(pre_coverage, dict):
             coverage = {
@@ -5406,6 +5552,7 @@ class _Fixed32CfwdQualificationTaskBracket(_Fixed32TaskBracket):
             "durable_production_pass": False,
             "timing_requires_same_server_process": True,
             "same_process_timing_handoff_implemented": False,
+            "candidate_identity": candidate_identity,
             "qualification_coverage": coverage,
         }
 
