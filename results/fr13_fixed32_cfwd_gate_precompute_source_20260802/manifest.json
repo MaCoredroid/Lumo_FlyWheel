@@ -1,0 +1,43 @@
+{
+  "branch": "agent/fixed32-cfwd-layerbatch-b4-route-080c",
+  "candidate": {
+    "cache_scope": "one_model_per_worker_process",
+    "default_on": false,
+    "event_independent_gate_precompute": true,
+    "gate_exp_per_event": 0,
+    "gate_precompute_launches_per_process": 1,
+    "output_dtype": "float32",
+    "output_shape": [
+      48,
+      48,
+      2
+    ]
+  },
+  "geometry": {
+    "layers": 48,
+    "value_heads": 48,
+    "value_tile": 64
+  },
+  "qualification": {
+    "gpu_compile_resource_gate": "pending",
+    "real_swe_verified_byte_coverage": "pending",
+    "real_swe_verified_timing": "pending",
+    "timing_eligible": false
+  },
+  "schema": "fr13.fixed32.cfwd_gate_precompute_source.v1",
+  "static_work_model": {
+    "b1": {
+      "gate_exp_removed_per_event": 4608,
+      "hot_programs_per_event": 4608
+    },
+    "b4": {
+      "gate_exp_removed_per_event": 18432,
+      "hot_programs_per_event": 18432
+    },
+    "classification": "logical_instruction_count_not_latency_or_dram_measurement",
+    "one_time_coefficient_bytes": 18432,
+    "one_time_gate_exp": 2304
+  },
+  "status": "source_static_only_gpu_and_real_swe_gates_pending",
+  "tip_commit": "288745d89194c12e2ce96eabb203e601dc1d4fc1"
+}
