@@ -1,0 +1,5 @@
+kernel	ctas_b1	ctas_b4	num_warps	registers	launch_shared_bytes	reported_shared_bytes	stack_bytes	local_bytes	spill_loads	spill_stores	calls	cubin_bytes
+probability_block_sums	30720	122880	4	16	16	1024	0	0	0	0	0	15136
+parent_setup	17	68	8	34	32	1024	0	0	0	0	0	26144
+residual_block_sums	17408	69632	4	29	16	1024	0	0	0	0	0	17216
+inverse_cdf	30	120	8	42	128	1024	0	0	0	0	0	48208

@@ -1,0 +1,14 @@
+{
+  "accept_probability": "min(1, p[selected] / q_mix[selected]) = min(1, S_raw / (T * selected_multiplicity))",
+  "candidate": "fixed32_cfwd_sparse_decisions_v1",
+  "child_occurrence_rule": "every valid child occurrence contributes independently, including duplicate tokens",
+  "distinct_token_reduction": "when every drafted token is unique, each drafted-token residual is max(p[t] * (1 - 1 / S), 0) and is zero because S <= 1",
+  "fallback": "when residual mass is zero, sample from the normalized target row",
+  "inverse_cdf_rule": "first token whose cumulative mass is strictly greater than uniform * total_mass",
+  "normalization": "T = sum_t raw_target[t], p[t] = raw_target[t] / T",
+  "q_mix": "q_mix[t] = sum_i(1[child_i=t] * p[child_i] / S) = multiplicity[t] * p[t] / S",
+  "residual": "r[t] = max(p[t] - q_mix[t], 0), normalized only for sampling",
+  "schema": "fr13.fixed32.cfwd_sparse_decisions.math.v1",
+  "source_selection": "source_i is sampled proportional to p[child_i]; global target normalization cancels",
+  "sparse_sampling_equivalence": "block selection followed by in-block selection uses the same unnormalized residual mass because categorical sampling is scale invariant"
+}

@@ -1,0 +1,51 @@
+{
+  "acceptance_valid": false,
+  "architecture": "sm_121a",
+  "batches": [
+    1,
+    4
+  ],
+  "candidate": "fixed32_cfwd_sparse_decisions_v1",
+  "candidate_source": {
+    "bytes": 20578,
+    "path": "scripts/fr13_cfwd_fused_decision_kernel.py",
+    "sha256": "8e620a0403d7bc82e5cbe4e49f4699fcbeff839868c422bdaf8b98068ba28c6c"
+  },
+  "codegen": {
+    "deterministic_duplicate_builds": true,
+    "kernels": 4,
+    "max_registers": 42,
+    "spills": 0,
+    "stack_bytes": 0,
+    "summary_sha256": "8a6f06f2b6ea6025b16b014dc5ac42db63e63b63fa27aacaebed8d392284589b"
+  },
+  "default_enabled": false,
+  "distributional_rule": "canonical duplicate-aware rejection sampling",
+  "docker_used": false,
+  "floor_acceptance_eligible": false,
+  "gpu_kernel_launched": false,
+  "gpu_queried": false,
+  "logical_workspace_bytes": {
+    "b1": 193721,
+    "b4": 774884
+  },
+  "production_enabled": false,
+  "raw_logs_published": false,
+  "real_swe_verified_task_run": false,
+  "schema": "fr13.fixed32.cfwd_sparse_decisions.codegen_artifact.v1",
+  "source_commit": "76fbf3705a606ffdfd0e55bfff3de20b743fc676",
+  "source_contract": {
+    "schema": "fr13-fixed32-taw-all-parent-v8",
+    "sha256": "0f856a9e3d43f7c218d1b1f05d724fd82b5f0d3ce501c42bc742cc8cfc9acd0d"
+  },
+  "status": "offline_source_codegen_pass",
+  "synthetic_or_probe_timing_run": false,
+  "timing_eligible": false,
+  "toolchain": {
+    "num_stages": 3,
+    "torch": "2.10.0+cu130",
+    "torch_cuda": "13.0",
+    "triton": "3.6.0"
+  },
+  "tuning_workload": null
+}

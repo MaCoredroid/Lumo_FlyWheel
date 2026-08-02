@@ -1,0 +1,11 @@
+PASS candidate CPU/oracle/property suite: 24 tests
+PASS combined focused candidate/native-precompute/exact-commit/gate/campaign suite: 64 tests
+PASS Python byte compilation for changed Python sources
+PASS bash -n for launcher, serving wrapper, and exact4 gate runner
+PASS Ruff for changed Python sources and focused tests
+PASS git diff --check
+PASS offline SM121a compile A with CUDA_VISIBLE_DEVICES empty
+PASS offline SM121a compile B with CUDA_VISIBLE_DEVICES empty
+PASS compile A/B reduced summaries byte-identical
+NOT RUN GPU query, CUDA kernel launch, Docker, real SWE-Verified task, synthetic/probe timing, or throughput timing
+KNOWN BASELINE FAILURE scripts/fr13_device_multidraft_kernel.py --self-test duplicate acceptance assertion also fails at unchanged base 42a794bbf
