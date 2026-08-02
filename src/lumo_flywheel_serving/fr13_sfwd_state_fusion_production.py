@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 from pathlib import Path
 
 import torch
@@ -12,7 +13,12 @@ import torch
 from lumo_flywheel_serving import fr10_gdn_tree_kernel as kernel
 
 
-CANDIDATE = "fixed32_sfwd_state_fusion_v1"
+CANDIDATE = "fixed32_sfwd_state_fusion_rowgroup8_v3"
+DRAFT_VOCAB_K = 65536
+DRAFT_VOCAB_ROOT = 1
+DRAFT_VOCAB_BLOCKS_SHA256 = (
+    "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
+)
 PRODUCTION_ARM = "/logs/fr13_fixed32_sfwd_state_fusion.production.arm"
 PRODUCTION_PASS = "/logs/fr13_fixed32_sfwd_state_fusion.production_pass.json"
 PRODUCTION_PASS_SHA256 = (
@@ -21,11 +27,13 @@ PRODUCTION_PASS_SHA256 = (
 PRODUCTION_ENGAGEMENT = (
     "/logs/fr13_fixed32_sfwd_state_fusion.production_engagement.json"
 )
+REAL_EVENT_PATH = "/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm"
 BYTE_ENABLED = "/logs/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
 _CREDENTIAL_IDS: set[int] = set()
 _STATE = {
     "live_pass_sha256": None,
     "source_sha256": None,
+    "task_marker": None,
     "layers": set(),
     "launches": 0,
     "emitted": False,
@@ -55,6 +63,40 @@ def _kernel_source_sha256() -> str:
     except OSError as error:
         raise RuntimeError(f"FR13 SFWD kernel source cannot be hashed: {error}") from error
     return hashlib.sha256(raw).hexdigest()
+
+
+def _authenticated_real_event(credential: dict[str, object]) -> str | None:
+    path = os.environ.get(
+        "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH",
+        REAL_EVENT_PATH,
+    )
+    if not path:
+        raise RuntimeError("FR13 SFWD production timing lacks a real-event path")
+    if not os.path.isabs(path) or os.path.basename(path) != os.path.basename(
+        REAL_EVENT_PATH
+    ):
+        raise RuntimeError("FR13 SFWD production real-event path is invalid")
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        raise RuntimeError(
+            f"FR13 SFWD production real-event marker cannot be inspected: {error}"
+        ) from error
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or stat.S_ISLNK(info.st_mode)
+        or stat.S_IMODE(info.st_mode) != 0o444
+    ):
+        raise RuntimeError(
+            "FR13 SFWD production real-event marker must be a mode-0444 regular file"
+        )
+    raw = _regular_ascii(path, "FR13 SFWD production real-event marker", limit=256)
+    expected = f"{credential.get('task_marker', '')}\n".encode("ascii")
+    if raw != expected or not expected.startswith(b"swe_verified:"):
+        raise RuntimeError("FR13 SFWD production real-event marker is not credential-bound")
+    return raw.decode("ascii").strip()
 
 
 def fixed32_sfwd_state_fusion_production_control(
@@ -131,12 +173,15 @@ def fixed32_sfwd_state_fusion_production_control(
         "schema": "fr13.fixed32.sfwd_state_fusion.live_pass.v1",
         "status": "byte_pass_source_only",
         "run_classification": (
-            "one_real_swe_verified_full_vocab_b1_byte_timing_diagnostic"
+            "one_real_swe_verified_k64_root_b1_byte_diagnostic"
         ),
         "candidate": CANDIDATE,
         "source_sha256": source_digest,
         "task_marker": "swe_verified:astropy__astropy-12907",
         "batch": 1,
+        "draft_vocab_k": DRAFT_VOCAB_K,
+        "draft_vocab_root": DRAFT_VOCAB_ROOT,
+        "draft_vocab_blocks_sha256": DRAFT_VOCAB_BLOCKS_SHA256,
         "layer_count": 48,
         "physical_rows_per_request": 32,
         "candidate_conv_launches_per_layer": 1,
@@ -197,14 +242,28 @@ def fixed32_sfwd_state_fusion_production_engagement(
     )
     if batch != 1:
         raise RuntimeError("FR13 SFWD production timing is B1-only")
+    task_marker = _authenticated_real_event(credential)
+    if task_marker is None:
+        return {
+            "candidate": CANDIDATE,
+            "batch_size": batch,
+            "layer_count": len(_STATE["layers"]),
+            "launches_observed": int(_STATE["launches"]),
+            "live_pass_sha256": str(credential.get("live_pass_sha256", "")),
+            "source_sha256": str(credential.get("runtime_source_sha256", "")),
+            "candidate_served": True,
+            "real_task_bound": False,
+        }
     live_digest = str(credential.get("live_pass_sha256", ""))
     source_digest = str(credential.get("runtime_source_sha256", ""))
     if _STATE["live_pass_sha256"] is None:
         _STATE["live_pass_sha256"] = live_digest
         _STATE["source_sha256"] = source_digest
+        _STATE["task_marker"] = task_marker
     elif (
         _STATE["live_pass_sha256"] != live_digest
         or _STATE["source_sha256"] != source_digest
+        or _STATE["task_marker"] != task_marker
     ):
         raise RuntimeError("FR13 SFWD production identity changed")
     _STATE["launches"] = int(_STATE["launches"]) + 1
@@ -217,6 +276,7 @@ def fixed32_sfwd_state_fusion_production_engagement(
         "live_pass_sha256": live_digest,
         "source_sha256": source_digest,
         "candidate_served": True,
+        "real_task_bound": True,
     }
     if len(_STATE["layers"]) != 48 or bool(_STATE["emitted"]):
         return record
@@ -231,13 +291,17 @@ def fixed32_sfwd_state_fusion_production_engagement(
         "schema": "fr13.fixed32.sfwd_state_fusion.production_engagement.v1",
         "status": "engaged",
         "run_classification": (
-            "one_real_swe_verified_full_vocab_b1_production_timing_diagnostic"
+            "one_real_swe_verified_k64_root_b1_production_timing_diagnostic"
         ),
         **record,
+        "task_marker": task_marker,
         "layer_count": 48,
         "layer_keys": [f"0x{key:x}" for key in sorted(_STATE["layers"])],
         "physical_rows_per_request": 32,
         "source_rows_per_request": 36,
+        "draft_vocab_k": DRAFT_VOCAB_K,
+        "draft_vocab_root": DRAFT_VOCAB_ROOT,
+        "draft_vocab_blocks_sha256": DRAFT_VOCAB_BLOCKS_SHA256,
         "candidate_conv_launches_per_layer": 1,
         "incumbent_conv_launches_per_layer": 0,
         "gdn_level_path_programs": [1, 11],

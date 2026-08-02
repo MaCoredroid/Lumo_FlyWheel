@@ -14,14 +14,17 @@ from pathlib import Path
 from typing import Any
 
 
-CANDIDATE = "fixed32_sfwd_state_fusion_v1"
+CANDIDATE = "fixed32_sfwd_state_fusion_rowgroup8_v3"
 LIVE_SCHEMA = "fr13.fixed32.sfwd_state_fusion.live_pass.v1"
 ENGAGEMENT_SCHEMA = (
     "fr13.fixed32.sfwd_state_fusion.production_engagement.v1"
 )
 TASK_MARKER = "swe_verified:astropy__astropy-12907"
-RUN_CLASSIFICATION = (
-    "one_real_swe_verified_full_vocab_b1_byte_timing_diagnostic"
+RUN_CLASSIFICATION = "one_real_swe_verified_k64_root_b1_byte_diagnostic"
+DRAFT_VOCAB_K = 65536
+DRAFT_VOCAB_ROOT = 1
+DRAFT_VOCAB_BLOCKS_SHA256 = (
+    "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
 )
 
 
@@ -90,6 +93,9 @@ def validate_live_result(
         "source_sha256": source_sha256,
         "task_marker": TASK_MARKER,
         "batch": 1,
+        "draft_vocab_k": DRAFT_VOCAB_K,
+        "draft_vocab_root": DRAFT_VOCAB_ROOT,
+        "draft_vocab_blocks_sha256": DRAFT_VOCAB_BLOCKS_SHA256,
         "layer_count": 48,
         "physical_rows_per_request": 32,
         "candidate_conv_launches_per_layer": 1,
@@ -149,6 +155,9 @@ def validate_live_path(
         "candidate": CANDIDATE,
         "task_marker": TASK_MARKER,
         "batch_size": 1,
+        "draft_vocab_k": DRAFT_VOCAB_K,
+        "draft_vocab_root": DRAFT_VOCAB_ROOT,
+        "draft_vocab_blocks_sha256": DRAFT_VOCAB_BLOCKS_SHA256,
         "physical_rows_per_request": 32,
         "layer_count": 48,
         "live_pass_sha256": actual_live_sha256,
@@ -167,14 +176,19 @@ def validate_engagement(
         "schema": ENGAGEMENT_SCHEMA,
         "status": "engaged",
         "run_classification": (
-            "one_real_swe_verified_full_vocab_b1_production_timing_diagnostic"
+            "one_real_swe_verified_k64_root_b1_production_timing_diagnostic"
         ),
         "candidate": CANDIDATE,
+        "task_marker": TASK_MARKER,
         "batch_size": 1,
+        "draft_vocab_k": DRAFT_VOCAB_K,
+        "draft_vocab_root": DRAFT_VOCAB_ROOT,
+        "draft_vocab_blocks_sha256": DRAFT_VOCAB_BLOCKS_SHA256,
         "layer_count": 48,
         "live_pass_sha256": live_pass_sha256,
         "source_sha256": source_sha256,
         "candidate_served": True,
+        "real_task_bound": True,
         "physical_rows_per_request": 32,
         "source_rows_per_request": 36,
         "candidate_conv_launches_per_layer": 1,
