@@ -551,6 +551,10 @@ def launch_fixed32_sfwd_prior_reuse(
         geometry_failures.append("spec_state_indices_width")
     if spec_state_indices.dtype != torch.int32:
         geometry_failures.append("spec_state_indices_dtype")
+    if not conv_state.is_contiguous():
+        geometry_failures.append("conv_state_contiguous")
+    if int(conv_state.data_ptr()) % 4 != 0:
+        geometry_failures.append("conv_state_u32_alignment")
     if source_stage.ndim != 2:
         geometry_failures.append("source_stage_ndim")
     if geometry_failures:

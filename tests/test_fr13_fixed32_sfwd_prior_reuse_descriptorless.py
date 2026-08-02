@@ -328,5 +328,30 @@ def test_packed_xgather_loads_contiguous_weights_as_exact_pairs() -> None:
     assert "weight_quad >> (tap << 4)" in fragment
     assert "weight_quad >> 32" in fragment
     assert "weight_quad >> 48" in fragment
-    assert fragment.count("to(tl.bfloat16, bitcast=True)") == 3
+    assert "weight_bits.to(tl.bfloat16, bitcast=True)" in fragment
+    assert "weight_2_bits.to(tl.bfloat16, bitcast=True)" in fragment
+    assert "current_weight_bits.to(tl.bfloat16, bitcast=True)" in fragment
     assert "tl.load(weight_channels + tap)" not in fragment
+
+
+def test_packed_xgather_loads_first_two_prior_values_as_exact_pair() -> None:
+    module_path = Path(
+        sys.modules[
+            "lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless"
+        ].__file__
+    )
+    source = module_path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    kernel = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel"
+    )
+    fragment = ast.get_source_segment(source, kernel)
+
+    assert fragment is not None
+    assert "prior_base.to(tl.pointer_type(tl.uint32))" in fragment
+    assert "prior_pair.to(tl.uint16).to(tl.bfloat16, bitcast=True)" in fragment
+    assert "(prior_pair >> 16).to(tl.uint16).to(" in fragment
+    assert "prior_base + 2 * conv_stride_l" in fragment

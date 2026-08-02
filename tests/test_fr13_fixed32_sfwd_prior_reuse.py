@@ -246,7 +246,7 @@ def test_launcher_uses_packed_xgather_kernel_and_exact_layout() -> None:
         path=KERNEL_MODULE_PATH,
     )
     launcher = _function_source("launch_fixed32_sfwd_prior_reuse")
-    assert kernel.index("prior_0 = tl.load(") < kernel.index(
+    assert kernel.index("prior_pair = tl.load(") < kernel.index(
         "for tap in tl.static_range(0, WIDTH - 2):"
     )
     assert "tl.where(source_row == 1, prior_1, prior_2)" in kernel
@@ -265,6 +265,8 @@ def test_launcher_uses_packed_xgather_kernel_and_exact_layout() -> None:
     assert "tl.gather(current_x, x_index, axis=0)" in kernel
     assert "grid = (batch, triton.cdiv(channels, BLOCK_C))" in launcher
     assert "fixed32_specialized_layout_contract(" in launcher
+    assert "not conv_state.is_contiguous()" in launcher
+    assert "int(conv_state.data_ptr()) % 4 != 0" in launcher
     assert "_fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel[grid](" in launcher
     assert "X_STRIDE_ROW=X_ROW_STRIDE" in launcher
     assert "ROWS_PER_PROGRAM=ROWS_PER_PROGRAM" in launcher
