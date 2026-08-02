@@ -1,0 +1,30 @@
+{
+  "schema": "fr13.fixed32.b4_m128.block_map_install_fix.v1",
+  "status": "pass",
+  "source_commit": "5bf4267ace0c2c1234f257f0b9142157d922a23c",
+  "failure": {
+    "classification": "pre_serve_candidate_startup",
+    "cause": "relative_block_map_resolved_from_container_workdir",
+    "real_task_measurements": 0,
+    "timing_valid": false
+  },
+  "fix": {
+    "block_map_container_path": "/workspace/scripts/fr13_dvk_subset_blocks.json",
+    "block_map_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+    "explicit_launcher_binding": true,
+    "explicit_installer_binding": true,
+    "kernel_or_workload_change": false
+  },
+  "verification": {
+    "focused_tests_passed": 60,
+    "pinned_image_digest": "sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "pinned_image_native_workdir": "/vllm-workspace",
+    "production_installer_replay": "pass",
+    "candidate_family": "persistent_b4_m128",
+    "qualification_profile": "k64_root",
+    "fixed32_mode": "tail6_fixed32",
+    "performance_probe_run": false
+  },
+  "next_gate": "fresh_tail23_all_parent_exact4_at_fix_commit"
+}
+
