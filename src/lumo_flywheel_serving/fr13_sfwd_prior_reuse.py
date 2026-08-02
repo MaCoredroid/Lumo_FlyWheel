@@ -91,6 +91,9 @@ def fixed32_sfwd_prior_reuse_contract(
         "conv_row_groups_per_request": 1,
         "conv_block_c": BLOCK_C,
         "conv_num_warps": NUM_WARPS,
+        "topology_host_validation": "exact_parent_each_launch",
+        "source_descriptor_device_validation": False,
+        "source_descriptor_launcher_argument": False,
         "gdn_level_path_programs": (batch, 11 * batch),
         "gdn_physical_launches_per_layer": 2,
         "gdn_ring_export": True,
@@ -296,6 +299,9 @@ def _pass_emit(
         "conv_rows_per_program": ROWS_PER_PROGRAM,
         "conv_block_c": BLOCK_C,
         "conv_num_warps": NUM_WARPS,
+        "topology_host_validation": "exact_parent_each_launch",
+        "source_descriptor_device_validation": False,
+        "source_descriptor_launcher_argument": False,
         "x_shape": [FIXED32_ROWS, CHANNELS],
         "x_stride": [X_ROW_STRIDE, 1],
         "out_stride": [CHANNELS, 1],
@@ -418,6 +424,9 @@ def fixed32_sfwd_prior_reuse_byte_gate(
         "conv_rows_per_program": ROWS_PER_PROGRAM,
         "conv_block_c": BLOCK_C,
         "conv_num_warps": NUM_WARPS,
+        "topology_host_validation": "exact_parent_each_launch",
+        "source_descriptor_device_validation": False,
+        "source_descriptor_launcher_argument": False,
         "x_shape": [FIXED32_ROWS, CHANNELS],
         "x_stride": [X_ROW_STRIDE, 1],
         "out_stride": [CHANNELS, 1],
@@ -453,18 +462,14 @@ def fixed32_sfwd_prior_reuse_byte_gate(
     return record
 
 
-def _source_flat_expected(width: int = 4) -> tuple[int, ...]:
-    rows: list[int] = []
-    for node in range(len(FIXED32_PARENT)):
-        path = []
-        cursor = node
-        while cursor >= 0:
-            path.append(cursor)
-            cursor = FIXED32_PARENT[cursor]
-        path.reverse()
-        source = list(range(width - 1)) + [width - 1 + path_node for path_node in path]
-        rows.extend(source[-width:])
-    return tuple(rows)
+def _validate_fixed32_tree_parent(tree_parent: object) -> tuple[int, ...]:
+    try:
+        actual = tuple(int(value) for value in tree_parent)
+    except (TypeError, ValueError) as error:
+        raise ValueError("FR13 SFWD prior-reuse tree parent is malformed") from error
+    if actual != FIXED32_PARENT:
+        raise RuntimeError("FR13 SFWD prior-reuse host parent vector drifted")
+    return actual
 
 
 def launch_fixed32_sfwd_prior_reuse(
@@ -472,7 +477,7 @@ def launch_fixed32_sfwd_prior_reuse(
     x: torch.Tensor,
     conv_state: torch.Tensor,
     spec_state_indices: torch.Tensor,
-    source_flat: torch.Tensor,
+    tree_parent: object,
     conv_weights: torch.Tensor,
     bias: torch.Tensor | None,
     out: torch.Tensor,
@@ -483,6 +488,7 @@ def launch_fixed32_sfwd_prior_reuse(
     """Launch the default-off rowgroup32/C64 prior-reuse candidate."""
     if _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES:
         raise RuntimeError("FR13 SFWD prior-reuse requires an exact fixed32 mode")
+    _validate_fixed32_tree_parent(tree_parent)
     if torch.cuda.is_current_stream_capturing():
         raise RuntimeError("FR13 SFWD prior-reuse is eager byte-gate-only")
     batch = int(batch_size)
@@ -505,7 +511,6 @@ def launch_fixed32_sfwd_prior_reuse(
         x,
         conv_state,
         spec_state_indices,
-        source_flat,
         conv_weights,
         out,
         source_stage,
@@ -543,16 +548,8 @@ def launch_fixed32_sfwd_prior_reuse(
         geometry_failures.append("spec_state_indices_width")
     if spec_state_indices.dtype != torch.int32:
         geometry_failures.append("spec_state_indices_dtype")
-    if source_flat.ndim != 1:
-        geometry_failures.append("source_flat_ndim")
-    if source_flat.numel() != rows * width:
-        geometry_failures.append("source_flat_numel")
-    if source_flat.dtype not in (torch.int32, torch.int64):
-        geometry_failures.append("source_flat_dtype")
     if source_stage.ndim != 2:
         geometry_failures.append("source_stage_ndim")
-    if not source_flat.is_contiguous():
-        geometry_failures.append("source_flat_contiguous")
     if geometry_failures:
         observed = {
             "batch": batch,
@@ -577,11 +574,6 @@ def launch_fixed32_sfwd_prior_reuse(
                 tuple(spec_state_indices.stride()),
                 str(spec_state_indices.dtype),
             ),
-            "source_flat": (
-                tuple(source_flat.shape),
-                tuple(source_flat.stride()),
-                str(source_flat.dtype),
-            ),
             "source_stage": (
                 tuple(source_stage.shape),
                 tuple(source_stage.stride()),
@@ -592,12 +584,6 @@ def launch_fixed32_sfwd_prior_reuse(
             "FR13 SFWD prior-reuse operand geometry/layout drift: "
             f"failed={geometry_failures!r}; observed={observed!r}"
         )
-    actual_source_flat = tuple(
-        int(value) for value in source_flat.detach().cpu().tolist()
-    )
-    if actual_source_flat != _source_flat_expected(width):
-        raise RuntimeError("FR13 SFWD prior-reuse source descriptor drift")
-
     layout_contract = fixed32_specialized_layout_contract(
         batch,
         x_shape=tuple(x.shape),

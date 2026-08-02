@@ -96,6 +96,9 @@ def test_contract_closes_row32_c64_for_b1_b4() -> None:
         assert contract["conv_row_groups_per_request"] == 1
         assert contract["conv_block_c"] == 64
         assert contract["conv_num_warps"] == 16
+        assert contract["topology_host_validation"] == "exact_parent_each_launch"
+        assert contract["source_descriptor_device_validation"] is False
+        assert contract["source_descriptor_launcher_argument"] is False
     for geometry in ((0, 32, 4, 34), (1, 31, 4, 34), (1, 32, 3, 34)):
         with pytest.raises(ValueError):
             candidate.fixed32_sfwd_prior_reuse_contract(
@@ -264,6 +267,20 @@ def test_launcher_uses_packed_xgather_kernel_and_exact_layout() -> None:
     assert "ROWS_PER_PROGRAM=ROWS_PER_PROGRAM" in launcher
     assert "BLOCK_C=BLOCK_C" in launcher
     assert "num_warps=NUM_WARPS" in launcher
+    assert "source_flat" not in launcher
+    assert ".cpu(" not in launcher
+    assert ".item(" not in launcher
+    assert ".tolist(" not in launcher
+
+
+def test_launcher_requires_exact_host_parent_vector() -> None:
+    parent = list(candidate.FIXED32_PARENT)
+    assert candidate._validate_fixed32_tree_parent(parent) == candidate.FIXED32_PARENT
+    parent[-1] = 0
+    with pytest.raises(RuntimeError, match="host parent vector drifted"):
+        candidate._validate_fixed32_tree_parent(parent)
+    with pytest.raises(RuntimeError, match="host parent vector drifted"):
+        candidate._validate_fixed32_tree_parent(parent[:-1])
 
 
 def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
@@ -294,6 +311,10 @@ def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
     assert "source_descriptor_in_kernel=false" in runner
     assert "current_x_global_loads_per_element=1" in runner
     assert "conv_num_warps=16" in runner
+    assert "topology_host_validation=exact_parent_each_launch" in runner
+    assert "source_descriptor_device_validation=false" in runner
+    assert "source_descriptor_launcher_argument=false" in runner
+    assert "tree_parent=_fr10_parent" in patcher
     assert "x_stride=16384,1" in runner
     assert "reference_gdn_source_bound" in gate
     assert "fr13_sfwd_prior_reuse_descriptorless.py" in gate

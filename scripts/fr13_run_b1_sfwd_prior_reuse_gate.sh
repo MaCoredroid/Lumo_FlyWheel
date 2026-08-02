@@ -131,6 +131,9 @@ printf '%s\n' \
   'conv_rows_per_program=32' \
   'conv_block_c=64' \
   'conv_num_warps=16' \
+  'topology_host_validation=exact_parent_each_launch' \
+  'source_descriptor_device_validation=false' \
+  'source_descriptor_launcher_argument=false' \
   'source_descriptor_in_kernel=false' \
   'current_x_global_loads_per_element=1' \
   'x_stride=16384,1' \

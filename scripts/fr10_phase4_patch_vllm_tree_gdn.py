@@ -9834,23 +9834,32 @@ def _fr13_conv_subop_mab(
                                 : _fr13_sfwd_b * _fr13_sfwd_srows
                             ]
                         )
-                        _fr13_sfwd_launcher = (
-                            launch_fixed32_sfwd_prior_reuse
-                            if _fr13_sfwd_candidate_kind == "prior_reuse"
-                            else launch_fixed32_sfwd_state_fusion
-                        )
-                        _fr13_sfwd_launcher(
-                            x=mixed_qkv_spec,
-                            conv_state=conv_state,
-                            spec_state_indices=spec_state_indices_tensor,
-                            source_flat=_fr10_source_flat,
-                            conv_weights=conv_weights,
-                            bias=self.conv1d.bias,
-                            out=_fr13_sfwd_candidate_out,
-                            source_stage=_fr13_sfwd_candidate_stage,
-                            batch_size=_fr13_sfwd_b,
-                            tree_rows=int(_fr10_tree_n),
-                        )
+                        if _fr13_sfwd_candidate_kind == "prior_reuse":
+                            launch_fixed32_sfwd_prior_reuse(
+                                x=mixed_qkv_spec,
+                                conv_state=conv_state,
+                                spec_state_indices=spec_state_indices_tensor,
+                                tree_parent=_fr10_parent,
+                                conv_weights=conv_weights,
+                                bias=self.conv1d.bias,
+                                out=_fr13_sfwd_candidate_out,
+                                source_stage=_fr13_sfwd_candidate_stage,
+                                batch_size=_fr13_sfwd_b,
+                                tree_rows=int(_fr10_tree_n),
+                            )
+                        else:
+                            launch_fixed32_sfwd_state_fusion(
+                                x=mixed_qkv_spec,
+                                conv_state=conv_state,
+                                spec_state_indices=spec_state_indices_tensor,
+                                source_flat=_fr10_source_flat,
+                                conv_weights=conv_weights,
+                                bias=self.conv1d.bias,
+                                out=_fr13_sfwd_candidate_out,
+                                source_stage=_fr13_sfwd_candidate_stage,
+                                batch_size=_fr13_sfwd_b,
+                                tree_rows=int(_fr10_tree_n),
+                            )
                     for _fr10_b in range(
                         0
                         if _fr13_sfwd_production is not None
