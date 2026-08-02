@@ -1,0 +1,27 @@
+Fixed32 native key-group CFWD pinned-image build (2026-08-02 UTC)
+
+Pinned image build:
+- Python 3.12 development/SABI discovery: pass
+- GCC 11.4 and NVCC 13.0.88 full _C.abi3.so build: pass
+- Exact candidate object forced rebuild and full relink: pass
+- Private source/object/binary binding issuance: pass
+- GLIBC <= 2.35 ceiling: pass; observed maximum GLIBC 2.34
+- Observed maximum GLIBCXX 3.4.21 and CXXABI 1.3.9
+
+Exact rebuilt-object SM121a codegen checker: pass
+- 64 registers/thread
+- stack/local bytes: 0/0
+- reported shared bytes: 7,592
+- LDL/STL/CALL: 0/0/0
+- frozen SASS arithmetic/shuffle counts: pass
+
+Focused source, selector, binary, committer, and B1 gate suite:
+99 passed in 0.36s
+
+Host private-binding verification: pass
+Post-build Docker containers: 0
+Post-build GPU compute processes: 0
+
+No GPU kernel launch, real SWE-Verified task, synthetic/probe timing,
+throughput measurement, hardware-floor result, or production authorization is
+represented. The live K64/root1 B1 all-depth byte gate is pending.

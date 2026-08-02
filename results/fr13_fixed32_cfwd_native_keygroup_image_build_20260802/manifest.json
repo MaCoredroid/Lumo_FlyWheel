@@ -1,0 +1,101 @@
+{
+  "abi": {
+    "ceiling": {
+      "glibc": "2.35"
+    },
+    "maximum_required": {
+      "cxxabi": "1.3.9",
+      "glibc": "2.34",
+      "glibcxx": "3.4.21"
+    },
+    "pass": true
+  },
+  "branch": "agent/fixed32-cfwd-keygroup-precompute-register-20260802",
+  "build": {
+    "architecture": "sm_121a",
+    "candidate_object": {
+      "bytes": 6261768,
+      "sha256": "5ac9344a80432cd5f15bbd45f6682cff3afe9f84392666a923d56550dbc99714"
+    },
+    "candidate_source_forced_rebuild": true,
+    "full_extension": {
+      "bytes": 201407632,
+      "sha256": "bd5f38ff19f3ebb08f00fce2498746cfa111a7819fb63b3b12ccf4dc2edbc9e4",
+      "target": "_C.abi3.so"
+    },
+    "full_extension_relinked_after_candidate": true,
+    "generator": "ninja",
+    "private_binding": {
+      "bytes": 1817,
+      "mode": "0400",
+      "schema": "fr13.fixed32.cfwd_native_keygroup_binary.v1",
+      "sha256": "0345f08be7f702053d3a719a10a01fdf33d7bf5494a6e600294ee5099eb290fb"
+    },
+    "source_commit": "be921b3dc21980915077d6ee02e15921603f5356",
+    "source_sha256": {
+      "native/fr13_fixed32_cfwd_native_fullvalue.cu": "1c1a9813410dcf15bcbb4d23bec71ee16ddcd7e2dbe3b1a3698e58f71bd96985",
+      "scripts/fr13_cfwd_native_keygroup_binary.py": "4681f9e20f880f1502f47289b5b7d92e11eee31bba9fd4ccdd5e617f5934f14f",
+      "scripts/fr13_patch_vllm_cfwd_native_fullvalue_cuda.py": "50bcdb4cbe71db7d75f1a233cfe6d2e5d18d6a6cf1bcf97af87db339a8452184",
+      "src/lumo_flywheel_serving/fr13_cfwd_native_fullvalue_cuda.py": "2f92a7bef4be1b37ebcccc05ee5e0c396755a2a3cda8c17f27ae9bb5a0a2e7f0"
+    }
+  },
+  "candidate": {
+    "default_on": false,
+    "name": "fixed32_cfwd_native_keygroup_precompute_cuda_v3",
+    "operator": "_C::fr13_fixed32_cfwd_native_fullvalue",
+    "production_authorized": false,
+    "timing_eligible": false
+  },
+  "codegen": {
+    "architecture": "sm_121a",
+    "contract_pass": true,
+    "forbidden_sass_counts": {
+      "CALL": 0,
+      "LDL": 0,
+      "STL": 0
+    },
+    "resources": {
+      "local_bytes": 0,
+      "registers_per_thread": 64,
+      "reported_shared_bytes": 7592,
+      "stack_bytes": 0
+    },
+    "sass_counts": {
+      "FFMA": 82,
+      "MUFU.EX2": 3,
+      "MUFU.RCP": 2,
+      "MUFU.RSQ": 3,
+      "SHFL.BFLY": 202,
+      "SHFL.DOWN": 0,
+      "SHFL.IDX": 16
+    }
+  },
+  "qualification": {
+    "b1_real_swe_all_depth_byte_gate": null,
+    "b1_real_swe_timing": null,
+    "b4_exact4_real_swe_byte_gate": null,
+    "b4_exact4_real_swe_timing": null,
+    "hardware_floor_claim_changed": false,
+    "status": "pinned_image_binary_ready_live_gate_pending"
+  },
+  "runtime_image": {
+    "digest": "sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "gcc": "11.4.0",
+    "glibc": "2.35",
+    "nvcc": "13.0.88",
+    "python": "3.12.13"
+  },
+  "schema": "fr13.fixed32.cfwd_native_keygroup_image_build.v1",
+  "verification": {
+    "binary_binding": "pass",
+    "docker_build_run": true,
+    "focused_tests_passed": 99,
+    "gpu_kernel_launch_run": false,
+    "post_build_docker_containers": 0,
+    "post_build_gpu_compute_processes": 0,
+    "real_swe_campaign_run": false,
+    "synthetic_or_probe_timing_run": false,
+    "timing_measurement_run": false
+  },
+  "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
+}
