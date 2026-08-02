@@ -162,3 +162,45 @@ def test_route_wiring_is_exclusive_timed_and_source_bound() -> None:
     assert "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB=0" in runner
     assert "unset FR10_ALLOW_LINEAR_FALLBACK" in runner
     assert timing.QUALIFIED_REDUCED_GATE_SHA256 in PASS_PATH.read_text()
+
+
+def test_launcher_cleans_all_sfwd_routes_before_publishing_timing_arm() -> None:
+    launcher = (ROOT / "scripts/fr13_launch_forked_fa2_tree_server.sh").read_text()
+    candidate_start = launcher.index(
+        'if [[ "$_fr13_sfwd_prior_production" == "1" ]]; then'
+    )
+    candidate_end = launcher.index(
+        'elif [[ "$_fr13_sfwd_prior_reuse" == "1" ]]; then',
+        candidate_start,
+    )
+    candidate = launcher[candidate_start:candidate_end]
+    cleanup = candidate.index("  rm -f \\\n")
+    gate_publish = candidate.index(
+        '  cp -- "$FR13_FIXED32_SFWD_PRIOR_REUSE_GATE_JSON"'
+    )
+    arm_publish = candidate.index(
+        "  printf '1\\n' > \"$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.timing.arm\""
+    )
+    assert cleanup < gate_publish < arm_publish
+    for sidecar in (
+        "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled",
+        "fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled",
+        "fr13_fixed32_sfwd_state_fusion.production.arm",
+        "fr13_fixed32_sfwd_prior_reuse.timing.arm",
+    ):
+        assert f'$LOG_DIR/{sidecar}' in candidate
+
+    stock_start = launcher.index(
+        'elif [[ "$_fr13_sfwd_prior_timing" == "1" ]]; then',
+        candidate_end,
+    )
+    stock_end = launcher.index("\nelse\n", stock_start)
+    stock = launcher[stock_start:stock_end]
+    for sidecar in (
+        "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled",
+        "fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled",
+        "fr13_fixed32_sfwd_state_fusion.production.arm",
+        "fr13_fixed32_sfwd_prior_reuse.timing.arm",
+    ):
+        assert f'$LOG_DIR/{sidecar}' in stock
+    assert "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=" in stock

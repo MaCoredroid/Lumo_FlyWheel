@@ -179,7 +179,7 @@ def test_fixed32_campaign_closes_ingress_before_fetch_and_terminal_audit() -> No
     assert "if (( ledger_snapshot_rc == 0 )); then" in teardown
     assert "container_cleanup_rc=$?" in teardown
     assert "_fixed32_record_container_cleanup_failure" in teardown
-    assert "_fixed32_classify_container_state" in teardown
+    assert "_fixed32_remove_attested_stopped_container" in teardown
     assert "(( rc == 0 )) && rc=17" in teardown
     assert 'case "$FIXED32_CONTAINER_CLEANUP_OUTCOME" in' in serve
     assert "fixed32 exact container preserved after" in serve
@@ -187,6 +187,7 @@ def test_fixed32_campaign_closes_ingress_before_fetch_and_terminal_audit() -> No
     assert '"engine-ledger materialization failure"' in teardown
     assert 'chmod 700 "$ARMDIR" "$ARMDIR/logs"' in serve
     assert "_fixed32_container_incarnation_matches" in serve
+    assert "_fixed32_stopped_container_incarnation_matches" in serve
     assert ".State.StartedAt" in serve
     assert ".RestartCount" in serve
     assert "build_fixed32_chat_traffic_audit" in serve

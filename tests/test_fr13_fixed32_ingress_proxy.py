@@ -575,6 +575,7 @@ def test_engine_middleware_arms_batch_gdn_from_authenticated_exact4_request(
     (
         "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled",
         "fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled",
+        "fr13_fixed32_sfwd_prior_reuse.timing.arm",
         "fr13_fixed32_sfwd_state_fusion.production.arm",
     ),
 )
@@ -661,6 +662,10 @@ def test_engine_middleware_arms_sfwd_fusion_only_after_authenticated_b1_request(
         (),
         (
             "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled",
+            "fr13_fixed32_sfwd_state_fusion.production.arm",
+        ),
+        (
+            "fr13_fixed32_sfwd_prior_reuse.timing.arm",
             "fr13_fixed32_sfwd_state_fusion.production.arm",
         ),
     ),

@@ -919,6 +919,42 @@ _fixed32_container_incarnation_matches() {
     && [[ "$actual_restart_count" == "$FIXED32_CONTAINER_RESTART_COUNT" ]]
 }
 
+_fixed32_stopped_container_incarnation_matches() {
+  local container_ref=$1
+  local identity=""
+  local actual_id=""
+  local actual_name=""
+  local actual_status=""
+  local actual_running=""
+  local actual_paused=""
+  local actual_started_at=""
+  local actual_pid=""
+  local actual_restart_count=""
+  local extra=""
+
+  [[ "$container_ref" =~ ^[0-9a-f]{64}$ ]] || return 1
+  [[ -n "$FIXED32_CONTAINER_STARTED_AT" ]] \
+    && [[ "$FIXED32_CONTAINER_INIT_PID" =~ ^[1-9][0-9]*$ ]] \
+    && [[ "$FIXED32_CONTAINER_RESTART_COUNT" == "0" ]] \
+    || return 1
+  identity=$(
+    docker inspect --format \
+      '{{.Id}} {{.Name}} {{.State.Status}} {{.State.Running}} {{.State.Paused}} {{.State.StartedAt}} {{.State.Pid}} {{.RestartCount}}' \
+      "$container_ref" 2>/dev/null
+  ) || return 1
+  read -r actual_id actual_name actual_status actual_running actual_paused \
+    actual_started_at actual_pid actual_restart_count extra <<< "$identity"
+  [[ -z "$extra" ]] \
+    && [[ "$actual_id" == "$container_ref" ]] \
+    && [[ "$actual_name" == "/$CONTAINER" ]] \
+    && [[ "$actual_status" == "exited" ]] \
+    && [[ "$actual_running" == "false" ]] \
+    && [[ "$actual_paused" == "false" ]] \
+    && [[ "$actual_started_at" == "$FIXED32_CONTAINER_STARTED_AT" ]] \
+    && [[ "$actual_pid" == "0" ]] \
+    && [[ "$actual_restart_count" == "$FIXED32_CONTAINER_RESTART_COUNT" ]]
+}
+
 _promote_fixed32_container_from_cidfile() {
   local -a container_ids=()
   local candidate=""
@@ -969,12 +1005,16 @@ _fixed32_classify_container_state() {
        && "$actual_restart_count" =~ ^[0-9]+$ ]]; then
       FIXED32_CONTAINER_CLEANUP_OUTCOME="drifted"
       if [[ "$actual_name" == "/$CONTAINER" \
-         && "$actual_status" == "running" \
-         && "$actual_running" == "true" \
-         && "$actual_paused" == "false" \
          && "$actual_started_at" == "$FIXED32_CONTAINER_STARTED_AT" \
-         && "$actual_pid" == "$FIXED32_CONTAINER_INIT_PID" \
-         && "$actual_restart_count" == "$FIXED32_CONTAINER_RESTART_COUNT" ]]; then
+         && "$actual_restart_count" == "$FIXED32_CONTAINER_RESTART_COUNT" \
+         && ( ( "$actual_status" == "running" \
+                && "$actual_running" == "true" \
+                && "$actual_paused" == "false" \
+                && "$actual_pid" == "$FIXED32_CONTAINER_INIT_PID" ) \
+              || ( "$actual_status" == "exited" \
+                   && "$actual_running" == "false" \
+                   && "$actual_paused" == "false" \
+                   && "$actual_pid" == "0" ) ) ]]; then
         FIXED32_CONTAINER_CLEANUP_OUTCOME="exact_preserved"
       fi
     fi
@@ -1047,6 +1087,31 @@ _fixed32_remove_attested_container() {
   _fixed32_classify_container_state "$container_ref"
   echo \
     "fixed32 container removal failed: outcome=$FIXED32_CONTAINER_CLEANUP_OUTCOME" \
+    >&2
+  return 1
+}
+
+_fixed32_remove_attested_stopped_container() {
+  local container_ref=$1
+  local log_output=$2
+  FIXED32_CONTAINER_CLEANUP_OUTCOME="removal_unproven"
+  if ! _fixed32_stopped_container_incarnation_matches "$container_ref"; then
+    _fixed32_classify_container_state "$container_ref"
+    return 1
+  fi
+  docker logs "$container_ref" > "$log_output" 2>&1 || true
+  if ! _fixed32_stopped_container_incarnation_matches "$container_ref"; then
+    echo "fixed32 stopped container removal skipped after incarnation drift" >&2
+    _fixed32_classify_container_state "$container_ref"
+    return 1
+  fi
+  if docker rm -f "$container_ref" >/dev/null 2>&1; then
+    FIXED32_CONTAINER_CLEANUP_OUTCOME="removed"
+    return 0
+  fi
+  _fixed32_classify_container_state "$container_ref"
+  echo \
+    "fixed32 stopped container removal failed: outcome=$FIXED32_CONTAINER_CLEANUP_OUTCOME" \
     >&2
   return 1
 }
@@ -1462,13 +1527,18 @@ teardown(){
       fi
     else
       if [[ -n "$CONTAINER_RUNTIME_REF" ]]; then
-        _fixed32_classify_container_state "$CONTAINER_RUNTIME_REF"
+        _fixed32_remove_attested_stopped_container \
+          "$CONTAINER_RUNTIME_REF" "$ARMDIR/docker_full.log"
+        container_cleanup_rc=$?
       else
+        container_cleanup_rc=1
         FIXED32_CONTAINER_CLEANUP_OUTCOME="removal_unproven"
       fi
-      _fixed32_record_container_cleanup_failure \
-        "${CONTAINER_RUNTIME_REF:-unavailable}" \
-        "engine-ledger materialization failure"
+      if (( container_cleanup_rc != 0 )); then
+        _fixed32_record_container_cleanup_failure \
+          "${CONTAINER_RUNTIME_REF:-unavailable}" \
+          "engine-ledger materialization failure"
+      fi
     fi
   elif [[ -n "$CONTAINER_RUNTIME_REF" ]]; then
     docker logs "$CONTAINER_RUNTIME_REF" > "$ARMDIR/docker_full.log" 2>&1 || true
