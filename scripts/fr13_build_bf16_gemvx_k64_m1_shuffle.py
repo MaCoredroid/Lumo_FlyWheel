@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and attest the default-off FR13 BF16 K64 M1 warp32 R32 pair2 op."""
+"""Build the default-off FR13 BF16 K64 M1 warp32 R32 pair2bits op."""
 
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def build(output: Path, build_dir: Path, attestation: Path) -> dict[str, object]
     os.environ["TORCH_CUDA_ARCH_LIST"] = EXPECTED_ARCH
     built = Path(
         load(
-            name="fr13_bf16_gemvx_k64_m1_warp32_r32_pair2",
+            name="fr13_bf16_gemvx_k64_m1_warp32_r32_pair2bits",
             sources=[str(SOURCE)],
             build_directory=str(build_dir),
             extra_cflags=["-O3", f"-I{CUDA_PACKAGE_INCLUDE}"],
@@ -101,12 +101,12 @@ def build(output: Path, build_dir: Path, attestation: Path) -> dict[str, object]
 
     if not hasattr(
         torch.ops.fr13_bf16_k64_head,
-        "gemvx_m1_warp32_r32_pair2_out",
+        "gemvx_m1_warp32_r32_pair2bits_out",
     ):
         raise RuntimeError("built library did not register the FR13 CUDA op")
 
     payload: dict[str, object] = {
-        "schema": "fr13.fixed32.bf16_gemvx_k64_m1_warp32_r32_pair2_build.v1",
+        "schema": "fr13.fixed32.bf16_gemvx_k64_m1_warp32_r32_pair2bits_build.v1",
         "status": "BUILT_UNQUALIFIED",
         "performance_measurement": False,
         "byte_equality_claim": False,
@@ -135,9 +135,10 @@ def build(output: Path, build_dir: Path, attestation: Path) -> dict[str, object]
             "elements_per_load": 2,
             "lane_load_iterations": 80,
             "lane_fma_iterations": 160,
+            "packed_unpack": "BF16 bits shifted/masked into exact FP32 bits",
             "reduction_strides": [16, 8, 4, 2, 1],
             "accumulator": "fp32 positive zero",
-            "multiply_accumulate": "two __fmaf_rn per aligned BF16 pair",
+            "multiply_accumulate": "two __fmaf_rn per packed BF16 pair",
             "reduction": "__fadd_rn width-32 shuffle tree",
             "epilogue": "__fmaf_rn(1.0f, reduced_sum, 0.0f)",
             "output": "__float2bfloat16_rn",

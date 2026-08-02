@@ -3,13 +3,15 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import torch
+
 
 REPO = Path(__file__).resolve().parents[1]
 CUDA = REPO / "csrc" / "fr13_bf16_gemvx_k64_m1_shuffle.cu"
 BUILDER = REPO / "scripts" / "fr13_build_bf16_gemvx_k64_m1_shuffle.py"
 
 
-def test_cuda_source_is_strict_k64_m1_full_warp_r32_pair2() -> None:
+def test_cuda_source_is_strict_k64_m1_full_warp_r32_pair2bits() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert "constexpr int kHidden = 5120;" in source
@@ -26,14 +28,20 @@ def test_cuda_source_is_strict_k64_m1_full_warp_r32_pair2() -> None:
     assert "extern __shared__" not in source
 
 
-def test_cuda_source_uses_aligned_pair_loads_and_fp32_accumulation() -> None:
+def test_cuda_source_uses_packed_pair_loads_and_fp32_accumulation() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert "float accumulator = 0.0f;" in source
     assert "#pragma unroll 1" in source
     assert "for (int pair = lane; pair < kPairs; pair += kLanes)" in source
-    assert source.count("__bfloat1622float2(") == 2
-    assert source.count("accumulator = __fmaf_rn(x.") == 2
+    assert "reinterpret_cast<const unsigned int*>(input)" in source
+    assert "reinterpret_cast<const unsigned int*>(weight)" in source
+    assert source.count("__uint_as_float(") == 4
+    assert "x << 16" in source
+    assert "x & 0xffff0000u" in source
+    assert "w << 16" in source
+    assert "w & 0xffff0000u" in source
+    assert source.count("accumulator = __fmaf_rn(x") == 2
     assert source.count("__shfl_down_sync(") == 5
     assert source.count("__fadd_rn(") == 5
     for stride in (16, 8, 4, 2, 1):
@@ -45,6 +53,16 @@ def test_cuda_source_uses_aligned_pair_loads_and_fp32_accumulation() -> None:
     assert "1.0f, 0.0f);" in source
     assert "output[row] = __float2bfloat16_rn(sum);" in source
     assert "atomicAdd" not in source
+
+
+def test_bf16_bit_expansion_matches_fp32_for_every_non_nan_pattern() -> None:
+    raw = torch.arange(1 << 16, dtype=torch.int32)
+    bf16 = raw.to(torch.int16).view(torch.bfloat16)
+    actual = bf16.float().view(torch.int32)
+    expected = raw << 16
+    is_nan = ((raw & 0x7F80) == 0x7F80) & ((raw & 0x007F) != 0)
+
+    assert torch.equal(actual[~is_nan], expected[~is_nan])
 
 
 def test_width32_shuffle_assigns_one_row_per_warp() -> None:
@@ -61,15 +79,15 @@ def test_cuda_op_is_out_variant_with_strict_k64_geometry() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert (
-        "gemvx_m1_warp32_r32_pair2_out(Tensor(a!) output, Tensor input, "
+        "gemvx_m1_warp32_r32_pair2bits_out(Tensor(a!) output, Tensor input, "
         "Tensor weight) -> ()" in source
     )
     assert "input.sizes() == at::IntArrayRef({1, kHidden})" in source
     assert "weight.sizes() == at::IntArrayRef({kVocab, kHidden})" in source
     assert "output.sizes() == at::IntArrayRef({1, kVocab})" in source
     assert "weight must be contiguous [65536,5120]" in source
-    assert "pair2 inputs must be 4-byte aligned" in source
-    assert "alignof(__nv_bfloat162)" in source
+    assert "pair2bits inputs must be 4-byte aligned" in source
+    assert "alignof(unsigned int)" in source
     assert "at::cuda::getCurrentCUDAStream()" in source
     assert "C10_CUDA_KERNEL_LAUNCH_CHECK();" in source
     assert "TORCH_LIBRARY_FRAGMENT(fr13_bf16_k64_head, library)" in source
@@ -98,3 +116,4 @@ def test_builder_is_pinned_default_off_and_claims_no_qualification() -> None:
     assert '"elements_per_load": 2' in source
     assert '"lane_load_iterations": 80' in source
     assert '"lane_fma_iterations": 160' in source
+    assert '"packed_unpack": "BF16 bits shifted/masked into exact FP32 bits"' in source

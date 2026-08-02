@@ -25,11 +25,12 @@ static_assert(kVocab % kRowsPerCta == 0);
 static_assert(kLanes * kRowsPerCta == 1024);
 static_assert(kCtas == 2048);
 static_assert(sizeof(at::BFloat16) == sizeof(__nv_bfloat16));
+static_assert(sizeof(unsigned int) == 2 * sizeof(__nv_bfloat16));
 
-// One full warp owns each output row. Each lane reads one aligned BF16 pair per
-// iteration, halving loop and load-instruction count without shared memory.
+// One full warp owns each output row. Each lane reads one aligned packed BF16
+// pair and expands its two bit patterns directly into exact FP32 values.
 __global__ __launch_bounds__(kLanes * kRowsPerCta) void
-fr13_bf16_gemvx_k64_m1_warp32_r32_pair2_kernel(
+fr13_bf16_gemvx_k64_m1_warp32_r32_pair2bits_kernel(
     __nv_bfloat16* __restrict__ output,
     const __nv_bfloat16* __restrict__ input,
     const __nv_bfloat16* __restrict__ weight, const float alpha,
@@ -37,18 +38,21 @@ fr13_bf16_gemvx_k64_m1_warp32_r32_pair2_kernel(
   const int lane = static_cast<int>(threadIdx.x);
   const int row_in_cta = static_cast<int>(threadIdx.y);
   const int row = static_cast<int>(blockIdx.x) * kRowsPerCta + row_in_cta;
-  const auto* input_pairs =
-      reinterpret_cast<const __nv_bfloat162*>(input);
+  const auto* input_pairs = reinterpret_cast<const unsigned int*>(input);
   const auto* weight_pairs =
-      reinterpret_cast<const __nv_bfloat162*>(weight) + row * kPairs;
+      reinterpret_cast<const unsigned int*>(weight) + row * kPairs;
 
   float accumulator = 0.0f;
 #pragma unroll 1
   for (int pair = lane; pair < kPairs; pair += kLanes) {
-    const float2 x = __bfloat1622float2(input_pairs[pair]);
-    const float2 w = __bfloat1622float2(weight_pairs[pair]);
-    accumulator = __fmaf_rn(x.x, w.x, accumulator);
-    accumulator = __fmaf_rn(x.y, w.y, accumulator);
+    const unsigned int x = input_pairs[pair];
+    const unsigned int w = weight_pairs[pair];
+    const float x0 = __uint_as_float(x << 16);
+    const float x1 = __uint_as_float(x & 0xffff0000u);
+    const float w0 = __uint_as_float(w << 16);
+    const float w1 = __uint_as_float(w & 0xffff0000u);
+    accumulator = __fmaf_rn(x0, w0, accumulator);
+    accumulator = __fmaf_rn(x1, w1, accumulator);
   }
 
   float peer =
@@ -76,7 +80,7 @@ fr13_bf16_gemvx_k64_m1_warp32_r32_pair2_kernel(
   }
 }
 
-void fr13_bf16_gemvx_k64_m1_warp32_r32_pair2_out(
+void fr13_bf16_gemvx_k64_m1_warp32_r32_pair2bits_out(
     at::Tensor output, const at::Tensor& input, const at::Tensor& weight) {
   TORCH_CHECK(input.is_cuda() && weight.is_cuda() && output.is_cuda(),
               "FR13 BF16 K64 M1 shuffle requires CUDA tensors");
@@ -98,16 +102,16 @@ void fr13_bf16_gemvx_k64_m1_warp32_r32_pair2_out(
               "FR13 BF16 K64 M1 output must be contiguous [1,65536]");
   TORCH_CHECK(
       reinterpret_cast<std::uintptr_t>(input.data_ptr()) %
-                  alignof(__nv_bfloat162) ==
+                  alignof(unsigned int) ==
               0 &&
           reinterpret_cast<std::uintptr_t>(weight.data_ptr()) %
-                  alignof(__nv_bfloat162) ==
+                  alignof(unsigned int) ==
               0,
-      "FR13 BF16 K64 M1 pair2 inputs must be 4-byte aligned");
+      "FR13 BF16 K64 M1 pair2bits inputs must be 4-byte aligned");
 
   const c10::cuda::CUDAGuard device_guard(input.device());
   const dim3 block(kLanes, kRowsPerCta, 1);
-  fr13_bf16_gemvx_k64_m1_warp32_r32_pair2_kernel
+  fr13_bf16_gemvx_k64_m1_warp32_r32_pair2bits_kernel
       <<<kCtas, block, 0, at::cuda::getCurrentCUDAStream()>>>(
           reinterpret_cast<__nv_bfloat16*>(
               output.data_ptr<at::BFloat16>()),
@@ -123,10 +127,10 @@ void fr13_bf16_gemvx_k64_m1_warp32_r32_pair2_out(
 
 TORCH_LIBRARY_FRAGMENT(fr13_bf16_k64_head, library) {
   library.def(
-      "gemvx_m1_warp32_r32_pair2_out(Tensor(a!) output, Tensor input, Tensor weight) -> ()");
+      "gemvx_m1_warp32_r32_pair2bits_out(Tensor(a!) output, Tensor input, Tensor weight) -> ()");
 }
 
 TORCH_LIBRARY_IMPL(fr13_bf16_k64_head, CUDA, library) {
-  library.impl("gemvx_m1_warp32_r32_pair2_out",
-               &fr13_bf16_gemvx_k64_m1_warp32_r32_pair2_out);
+  library.impl("gemvx_m1_warp32_r32_pair2bits_out",
+               &fr13_bf16_gemvx_k64_m1_warp32_r32_pair2bits_out);
 }
