@@ -103,12 +103,20 @@ def test_contract_closes_adaptive_row32_geometry_for_b1_b4() -> None:
         expected_geometry = (128, 2) if batch == 1 else (256, 4)
         assert contract["conv_block_c"] == expected_geometry[0]
         assert contract["conv_num_warps"] == expected_geometry[1]
+        assert contract["conv_peak_live_x"] == 5
+        assert contract["conv_live_x_sum"] == 116
+        assert contract["x_global_loads_per_channel"] == 32
+        assert contract["x_reload_count"] == 0
+        assert tuple(contract["conv_node_order"]) == (
+            27, 25, 23, 18, 13, 8, 3, 0, 2, 7, 12, 17, 22, 1, 5, 6,
+            4, 10, 11, 9, 15, 16, 14, 20, 21, 19, 24, 26, 28, 29, 30, 31,
+        )
         assert contract["topology_host_validation"] == "exact_parent_each_launch"
         assert contract["source_descriptor_device_validation"] is False
         assert contract["source_descriptor_launcher_argument"] is False
         assert contract["candidate"] == (
             "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_"
-            "u32x2_firstuse_tap0n17_24_v2"
+            "u32x2_frontier5_loadonce_v3"
         )
     for geometry in ((0, 32, 4, 34), (1, 31, 4, 34), (1, 32, 3, 34)):
         with pytest.raises(ValueError):
@@ -281,24 +289,14 @@ def test_launcher_uses_channel_serial_kernel_and_exact_layout() -> None:
     assert "weight_pair_01" in kernel
     assert "weight_pair_23" in kernel
     assert "tl.pointer_type(tl.uint64)" not in kernel
-    assert kernel.count("tl.load(x_batch") == 40
+    assert kernel.count("tl.load(x_batch") == 32
     assert kernel.count("tl.store(out_batch +") == 32
     assert kernel.count("tl.store(stage_batch + ((WIDTH - 1) +") == 32
-    assert kernel.count("x_4 = tl.load(x_batch + 4 * X_STRIDE_ROW + offs_c)") == 1
-    late_tap0_sources = (2, 3, 4, 4, 4, 7, 8, 9)
-    for node, source_row in zip(range(17, 25), late_tap0_sources, strict=True):
-        node_start = kernel.index(f"x_{node} = tl.load(")
-        node_end = kernel.index(f"activated_{node} =", node_start)
-        node_block = kernel[node_start:node_end]
-        assert (
-            f"tl.load(x_batch + {source_row} * X_STRIDE_ROW + offs_c)"
-            in node_block
-        )
-        assert "product_0 = (" in node_block
-        assert "* weight_0" in node_block
-    assert kernel.index(
-        "tl.store(stage_batch + ((WIDTH - 1) + 19) * C + offs_c, x_19)"
-    ) < kernel.index("x_20 = tl.load(")
+    for row in range(32):
+        assert kernel.count(
+            f"x_{row} = tl.load(x_batch + {row} * X_STRIDE_ROW + offs_c)"
+        ) == 1
+    assert "Exact load-once order minimizes the current-row frontier: peak 5" in kernel
     assert 'block_c = int(contract["conv_block_c"])' in launcher
     assert 'num_warps = int(contract["conv_num_warps"])' in launcher
     assert "grid = (batch, triton.cdiv(channels, block_c))" in launcher
@@ -309,6 +307,8 @@ def test_launcher_uses_channel_serial_kernel_and_exact_layout() -> None:
     assert "not spec_state_indices.is_contiguous()" in launcher
     assert "int(spec_state_indices.shape[1]) != rows" in launcher
     assert "int(conv_weights.data_ptr()) % 4 != 0" in launcher
+    assert "x_out_source_storage_alias" in launcher
+    assert "tensor.untyped_storage().data_ptr()" in launcher
     assert "_fr13_fixed32_sfwd_channel_serial_kernel[grid](" in launcher
     assert "X_STRIDE_ROW=X_ROW_STRIDE" in launcher
     assert "ROWS_PER_PROGRAM=ROWS_PER_PROGRAM" not in launcher
@@ -363,8 +363,11 @@ def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
     assert "host-readiness" in runner
     assert "sfwd_prior_reuse_host_readiness.json" in runner
     assert "source_descriptor_in_kernel=false" in runner
-    assert "x_global_loads_per_channel=40" in runner
-    assert "late_tap0_reload_nodes=17-24" in runner
+    assert "x_global_loads_per_channel=32" in runner
+    assert "x_reload_count=0" in runner
+    assert "conv_peak_live_x=5" in runner
+    assert "conv_live_x_sum=116" in runner
+    assert "conv_node_order=27,25,23,18,13,8,3,0" in runner
     assert "conv_block_c=128" in runner
     assert "conv_num_warps=2" in runner
     assert "topology_host_validation=exact_parent_each_launch" in runner

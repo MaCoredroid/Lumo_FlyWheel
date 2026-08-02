@@ -19,6 +19,10 @@ from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
 from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
     CHANNELS,
     CONV_WIDTH,
+    FIXED32_CHANNEL_SERIAL_FRONTIER5_LIVE_X_SUM,
+    FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER,
+    FIXED32_CHANNEL_SERIAL_FRONTIER5_PEAK_LIVE_X,
+    FIXED32_CHANNEL_SERIAL_LOADS_PER_CHANNEL,
     FIXED32_PARENT,
     FIXED32_ROWS,
     SOURCE_ROWS,
@@ -28,7 +32,10 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
 )
 
 
-CANDIDATE = "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_u32x2_firstuse_tap0n17_24_v2"
+CANDIDATE = (
+    "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_"
+    "u32x2_frontier5_loadonce_v3"
+)
 ROWS_PER_PROGRAM = 32
 BLOCK_C = 128
 NUM_WARPS = 2
@@ -95,6 +102,13 @@ def fixed32_sfwd_prior_reuse_contract(
         "conv_row_groups_per_request": 1,
         "conv_block_c": block_c,
         "conv_num_warps": num_warps,
+        "conv_node_order": FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER,
+        "conv_peak_live_x": FIXED32_CHANNEL_SERIAL_FRONTIER5_PEAK_LIVE_X,
+        "conv_live_x_sum": FIXED32_CHANNEL_SERIAL_FRONTIER5_LIVE_X_SUM,
+        "x_global_loads_per_channel": (
+            FIXED32_CHANNEL_SERIAL_LOADS_PER_CHANNEL
+        ),
+        "x_reload_count": 0,
         "topology_host_validation": "exact_parent_each_launch",
         "source_descriptor_device_validation": False,
         "source_descriptor_launcher_argument": False,
@@ -303,6 +317,13 @@ def _pass_emit(
         "conv_rows_per_program": ROWS_PER_PROGRAM,
         "conv_block_c": BLOCK_C,
         "conv_num_warps": NUM_WARPS,
+        "conv_node_order": list(FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER),
+        "conv_peak_live_x": FIXED32_CHANNEL_SERIAL_FRONTIER5_PEAK_LIVE_X,
+        "conv_live_x_sum": FIXED32_CHANNEL_SERIAL_FRONTIER5_LIVE_X_SUM,
+        "x_global_loads_per_channel": (
+            FIXED32_CHANNEL_SERIAL_LOADS_PER_CHANNEL
+        ),
+        "x_reload_count": 0,
         "topology_host_validation": "exact_parent_each_launch",
         "source_descriptor_device_validation": False,
         "source_descriptor_launcher_argument": False,
@@ -428,6 +449,13 @@ def fixed32_sfwd_prior_reuse_byte_gate(
         "conv_rows_per_program": ROWS_PER_PROGRAM,
         "conv_block_c": BLOCK_C,
         "conv_num_warps": NUM_WARPS,
+        "conv_node_order": list(FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER),
+        "conv_peak_live_x": FIXED32_CHANNEL_SERIAL_FRONTIER5_PEAK_LIVE_X,
+        "conv_live_x_sum": FIXED32_CHANNEL_SERIAL_FRONTIER5_LIVE_X_SUM,
+        "x_global_loads_per_channel": (
+            FIXED32_CHANNEL_SERIAL_LOADS_PER_CHANNEL
+        ),
+        "x_reload_count": 0,
         "topology_host_validation": "exact_parent_each_launch",
         "source_descriptor_device_validation": False,
         "source_descriptor_launcher_argument": False,
@@ -541,6 +569,13 @@ def launch_fixed32_sfwd_prior_reuse(
     ):
         raise ValueError("FR13 SFWD prior-reuse bias must be BF16/FP32 [C] or None")
     geometry_failures = []
+    if len(
+        {
+            int(tensor.untyped_storage().data_ptr())
+            for tensor in (x, out, source_stage)
+        }
+    ) != 3:
+        geometry_failures.append("x_out_source_storage_alias")
     if x.ndim != 2:
         geometry_failures.append("x_ndim")
     if tuple(int(value) for value in x.shape) != (required_rows, channels):

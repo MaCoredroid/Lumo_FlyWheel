@@ -147,8 +147,11 @@ printf '%s\n' \
   'source_descriptor_device_validation=false' \
   'source_descriptor_launcher_argument=false' \
   'source_descriptor_in_kernel=false' \
-  'x_global_loads_per_channel=40' \
-  'late_tap0_reload_nodes=17-24' \
+  'x_global_loads_per_channel=32' \
+  'x_reload_count=0' \
+  'conv_peak_live_x=5' \
+  'conv_live_x_sum=116' \
+  'conv_node_order=27,25,23,18,13,8,3,0,2,7,12,17,22,1,5,6,4,10,11,9,15,16,14,20,21,19,24,26,28,29,30,31' \
   'x_stride=16384,1' \
   'out_stride=10240,1' \
   'source_stage_stride=10240,1' \

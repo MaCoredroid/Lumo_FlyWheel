@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from functools import lru_cache
 from pathlib import Path
 import sys
 import types
@@ -24,6 +25,10 @@ except ModuleNotFoundError:
 from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
     CHANNELS,
     CONV_WIDTH,
+    FIXED32_CHANNEL_SERIAL_FRONTIER5_LIVE_X_SUM,
+    FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER,
+    FIXED32_CHANNEL_SERIAL_FRONTIER5_PEAK_LIVE_X,
+    FIXED32_CHANNEL_SERIAL_LOADS_PER_CHANNEL,
     FIXED32_PARENT,
     FIXED32_PACKED_SOURCE_DELTAS,
     FIXED32_ROWS,
@@ -31,6 +36,7 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
     SOURCE_ROWS,
     X_ROW_STRIDE,
     fixed32_derived_parent_q,
+    fixed32_channel_serial_liveness_profile,
     fixed32_descriptorless_sources,
     fixed32_i32_address_contract,
     fixed32_packed_source_entry,
@@ -75,6 +81,67 @@ def test_packed_sources_match_every_descriptorless_source() -> None:
     assert len(FIXED32_PACKED_SOURCE_DELTAS) == 8
     assert fixed32_packed_sources() == expected
     assert tuple(fixed32_packed_source_entry(node) for node in range(32)) == expected
+
+
+def test_channel_serial_frontier5_schedule_is_load_once_optimal() -> None:
+    profile = fixed32_channel_serial_liveness_profile()
+    natural = fixed32_channel_serial_liveness_profile(tuple(range(FIXED32_ROWS)))
+
+    assert profile["node_order"] == FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER
+    assert profile["peak_live_x"] == 5
+    assert profile["live_x_sum"] == 116
+    assert profile["x_global_loads_per_channel"] == FIXED32_ROWS
+    assert (
+        profile["peak_live_x"]
+        == FIXED32_CHANNEL_SERIAL_FRONTIER5_PEAK_LIVE_X
+    )
+    assert (
+        profile["live_x_sum"]
+        == FIXED32_CHANNEL_SERIAL_FRONTIER5_LIVE_X_SUM
+    )
+    assert (
+        profile["x_global_loads_per_channel"]
+        == FIXED32_CHANNEL_SERIAL_LOADS_PER_CHANNEL
+    )
+    assert natural["peak_live_x"] == 11
+    assert natural["live_x_sum"] == 230
+
+    requirements = profile["current_rows_by_node"]
+    operation_users = [0] * FIXED32_ROWS
+    requirement_masks = []
+    for node, current_rows in enumerate(requirements):
+        mask = sum(1 << current_row for current_row in current_rows)
+        requirement_masks.append(mask)
+        for current_row in current_rows:
+            operation_users[current_row] |= 1 << node
+    all_operations = (1 << FIXED32_ROWS) - 1
+
+    @lru_cache(maxsize=None)
+    def boundary(scheduled: int) -> int:
+        remaining = all_operations ^ scheduled
+        result = 0
+        for current_row, users in enumerate(operation_users):
+            if users & scheduled and users & remaining:
+                result |= 1 << current_row
+        return result
+
+    @lru_cache(maxsize=None)
+    def has_peak4_schedule(scheduled: int) -> bool:
+        if scheduled == all_operations:
+            return True
+        active = boundary(scheduled)
+        remaining = all_operations ^ scheduled
+        while remaining:
+            operation = remaining & -remaining
+            remaining ^= operation
+            node = operation.bit_length() - 1
+            if (active | requirement_masks[node]).bit_count() <= 4 and (
+                has_peak4_schedule(scheduled | operation)
+            ):
+                return True
+        return False
+
+    assert has_peak4_schedule(0) is False
 
 
 def test_packed_source_decoder_rejects_out_of_range_nodes() -> None:
@@ -417,7 +484,7 @@ def test_packed_xgather_specializes_prior_masks_to_fixed_topology() -> None:
     assert "source_row == 0" not in fragment
 
 
-def test_channel_serial_split20_math_matches_every_fixed_source() -> None:
+def test_channel_serial_frontier5_math_matches_every_fixed_source() -> None:
     module_path = Path(
         sys.modules[
             "lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless"
@@ -471,7 +538,8 @@ def test_channel_serial_split20_math_matches_every_fixed_source() -> None:
         ]
         assert len(products) == FIXED32_ROWS
         assert tuple(source_row(item) for item in products) == tuple(
-            row[tap] for row in expected
+            expected[node][tap]
+            for node in FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER
         )
     current_products = [
         node.value
@@ -482,7 +550,27 @@ def test_channel_serial_split20_math_matches_every_fixed_source() -> None:
         and node.targets[0].id == "product_3"
     ]
     assert tuple(source_row(item) for item in current_products) == tuple(
-        CONV_WIDTH - 1 + node for node in range(FIXED32_ROWS)
+        CONV_WIDTH - 1 + node
+        for node in FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER
+    )
+    expected_activation = ast.parse(
+        "acc / (1.0 + tl.exp(0.0 - acc))", mode="eval"
+    ).body
+    activations = [
+        node
+        for node in kernel.body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id.startswith("activated_")
+    ]
+    assert tuple(
+        int(node.targets[0].id.removeprefix("activated_"))
+        for node in activations
+    ) == FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER
+    assert all(
+        ast.dump(node.value) == ast.dump(expected_activation)
+        for node in activations
     )
 
 
@@ -514,21 +602,39 @@ def test_channel_serial_keeps_global_rows_coalesced_and_ordered() -> None:
     assert "tl.arange(0, BLOCK_C)" in fragment
     assert "tl.arange(0, BLOCK_C)[:, None]" not in fragment
     assert "tl.arange(0, N)" not in fragment
-    assert fragment.count("tl.load(x_batch +") == FIXED32_ROWS + 8
-    reload_counts = {2: 1, 3: 1, 4: 3, 7: 1, 8: 1, 9: 1}
+    assert fragment.count("tl.load(x_batch +") == FIXED32_ROWS
+    profile = fixed32_channel_serial_liveness_profile()
+    seen = set()
+    expected_load_order = []
+    for node in FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER:
+        first_uses = sorted(profile["current_rows_by_node"][node] - seen)
+        expected_load_order.extend(first_uses)
+        seen.update(first_uses)
+    observed_load_order = [
+        int(statement.targets[0].id.removeprefix("x_"))
+        for statement in kernel.body
+        if isinstance(statement, ast.Assign)
+        and len(statement.targets) == 1
+        and isinstance(statement.targets[0], ast.Name)
+        and statement.targets[0].id.startswith("x_")
+        and isinstance(statement.value, ast.Call)
+        and isinstance(statement.value.func, ast.Attribute)
+        and statement.value.func.attr == "load"
+    ]
+    assert observed_load_order == expected_load_order
+    assert sorted(observed_load_order) == list(range(FIXED32_ROWS))
     for row in range(FIXED32_ROWS):
         load = f"x_{row} = tl.load(x_batch + {row} * X_STRIDE_ROW + offs_c)"
         product = f"product_3 = (x_{row} * weight_3)"
         assert fragment.count(
             f"x_batch + {row} * X_STRIDE_ROW + offs_c"
-        ) == 1 + reload_counts.get(row, 0)
+        ) == 1
         assert fragment.index(load) < fragment.index(product)
-        if row:
-            prior_store = (
-                "tl.store(stage_batch + ((WIDTH - 1) + "
-                f"{row - 1}) * C + offs_c, x_{row - 1})"
-            )
-            assert fragment.index(prior_store) < fragment.index(load)
+        stage_store = (
+            "tl.store(stage_batch + ((WIDTH - 1) + "
+            f"{row}) * C + offs_c, x_{row})"
+        )
+        assert fragment.index(load) < fragment.index(stage_store)
     assert "tl.gather" not in fragment
     assert "tl.join" not in fragment
     assert "tl.permute" not in fragment
@@ -536,14 +642,18 @@ def test_channel_serial_keeps_global_rows_coalesced_and_ordered() -> None:
     assert "tl.split" not in fragment
     assert "ROWS_PER_PROGRAM" not in argument_names
     assert "for node in tl.static_range(0, N):" not in fragment
+    assert fragment.count(".to(tl.bfloat16).to(tl.float32)") == 128
+    assert fragment.count("acc = bias_value + product_0") == FIXED32_ROWS
+    assert fragment.count("acc = acc + product_") == 3 * FIXED32_ROWS
+    assert fragment.count("acc / (1.0 + tl.exp(0.0 - acc))") == FIXED32_ROWS
     assert fragment.count("tl.store(out_batch +") == FIXED32_ROWS
     assert fragment.count("tl.store(stage_batch + ((WIDTH - 1) +") == FIXED32_ROWS
-    assert fragment.count(
-        "x_4 = tl.load(x_batch + 4 * X_STRIDE_ROW + offs_c)"
-    ) == 1
-    assert fragment.index(
-        "tl.store(stage_batch + ((WIDTH - 1) + 19) * C + offs_c, x_19)"
-    ) < fragment.index("x_20 = tl.load(")
+    output_positions = tuple(
+        fragment.index(f"tl.store(out_batch + {node} * C + offs_c")
+        for node in FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER
+    )
+    assert output_positions == tuple(sorted(output_positions))
+    assert "peak 5" in fragment
     ordered = (
         "product_0 =",
         "acc = bias_value + product_0",
