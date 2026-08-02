@@ -271,3 +271,26 @@ def test_kernel_retains_descriptorless_and_int64_state_contracts() -> None:
     assert "stage_offset = pid_b * SOURCE_ROWS * C" in fragment
     assert ").to(tl.int64)" in fragment
     assert "bank_row * conv_stride_row" in fragment
+
+
+def test_packed_xgather_loads_current_x_once_and_reuses_it() -> None:
+    module_path = Path(
+        sys.modules[
+            "lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless"
+        ].__file__
+    )
+    source = module_path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    kernel = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel"
+    )
+    fragment = ast.get_source_segment(source, kernel)
+
+    assert fragment is not None
+    assert fragment.count("tl.load(x_batch") == 1
+    assert "tl.gather(current_x, x_index, axis=0)" in fragment
+    assert "tl.broadcast_to(x_node, ROWS_PER_PROGRAM, BLOCK_C)" in fragment
+    assert "((WIDTH - 1) + offs_n) * C" in fragment
