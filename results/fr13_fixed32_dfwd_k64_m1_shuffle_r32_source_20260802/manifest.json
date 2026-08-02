@@ -1,0 +1,60 @@
+{
+  "schema": "fr13.fixed32.dfwd_k64_m1_shuffle_r32_source.v1",
+  "created_at_utc": "2026-08-02T13:36:45Z",
+  "status": "source_only_default_off_compile_pending",
+  "acceptance_valid": false,
+  "timing_eligible": false,
+  "performance_claim": false,
+  "byte_equality_claim": false,
+  "production_default_enabled": false,
+  "gpu_used": false,
+  "docker_used": false,
+  "source": {
+    "branch": "agent/fixed32-dfwd-k64-m1-shuffle-r32-20260802",
+    "commit": "fc5effa3fb5cc20b78829c2aac363d62ec2bfb37",
+    "cuda_path": "csrc/fr13_bf16_gemvx_k64_m1_shuffle.cu",
+    "cuda_sha256": "56d4fcd551dd022efa00dcb926bb4ea5176e6b5a02fa562ccc1886e007001897",
+    "parent_cuda_sha256": "13d02e78a3f2f7298d756f306e33f0fbbc2f1ee7cb6d757ff7815a3a83177e3f",
+    "builder_sha256": "1033f3eca49de7c867b2962a56b5bb508db27b929873dcfa4ad9ecdb10b4fbfb",
+    "test_sha256": "304968cc8c4fb476d6115d5259a8dd20c410896d116351d1d30c834da5b31832"
+  },
+  "workload_contract": {
+    "batch_size": 1,
+    "draft_vocab_root": 1,
+    "draft_vocab_k": 65536,
+    "hidden_size": 5120,
+    "head_calls_per_event": 5,
+    "dtype": "bf16"
+  },
+  "candidate": {
+    "operation": "fr13_bf16_k64_head::gemvx_m1_shuffle_r32_out",
+    "grid": [2048, 1, 1],
+    "block": [16, 32, 1],
+    "threads": 1048576,
+    "rows_per_cta": 32,
+    "warps_per_cta": 16,
+    "parent_grid": [4096, 1, 1],
+    "parent_block": [16, 16, 1],
+    "parent_rows_per_cta": 16,
+    "cta_reduction_fraction": 0.5,
+    "dynamic_shared_bytes": 0,
+    "k_partition_lanes": 16,
+    "lane_k_iterations": 320,
+    "reduction_strides": [8, 4, 2, 1],
+    "ordered_row_math_unchanged": true
+  },
+  "checks": {
+    "focused_source_tests": "5 passed",
+    "python_compile": "pass",
+    "ruff": "pass",
+    "diff_check": "pass"
+  },
+  "not_run": [
+    "CUDA compile",
+    "SASS resource audit",
+    "GPU runtime",
+    "real SWE-Verified B1 gate",
+    "full-step timing",
+    "hardware-floor acceptance"
+  ]
+}
