@@ -1,0 +1,8 @@
+PASS: one real SWE-Verified B1 task resolved
+PASS: underlying serve arm rc=0
+PASS: pair8 ready marker observed once
+PASS: pair8 eager execution marker observed once
+PASS: timer sidecars finalized with no dropped or pending SFWD spans
+PASS: runner marker-path regression tests, 6 passed
+REJECT: B1 wall TPS 20.472470407 is below prior stock 24.367
+INELIGIBLE: B1 diagnostic is not a gate or floor-acceptance run

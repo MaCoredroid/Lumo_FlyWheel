@@ -1,0 +1,90 @@
+{
+  "binary": {
+    "bytes": 114328,
+    "sha256": "6065985824bd2fd5353a2bd203ef2a77a205547171f2ffb89c19252e968fbce1"
+  },
+  "branch": "agent/fixed32-dfwd-k64-m1-pair8-runtime-20260802",
+  "claims": {
+    "acceptance_measurement": true,
+    "b4_measurement": false,
+    "byte_equality": false,
+    "floor_acceptance_eligible": false,
+    "gate_eligible": false,
+    "hardware_floor": false,
+    "live_cuda_graph_replay": true,
+    "live_extension_load": true,
+    "lossless_output_equivalence": false,
+    "performance_measurement": true,
+    "production_default_enabled": false,
+    "real_task_correctness": true
+  },
+  "diagnostic": {
+    "classification": "b1_diagnostic",
+    "host_compile_overlap": true,
+    "max_num_seqs": 1,
+    "published_evidence": "sanitized_reduction_only",
+    "swe_concurrency": 1,
+    "task_count": 1,
+    "task_resolved_count": 1
+  },
+  "floor": {
+    "mandatory_weight_read_lower_bound_ms_per_step": 119.658015414,
+    "observed_ratio": 1.899376135015,
+    "one_sided_u95_1_15x_cap_ms_per_step": 137.6067177261,
+    "observed_to_cap_ratio": 1.651631421752
+  },
+  "kernel_engagement": {
+    "engaged_marker_count_observed": 1,
+    "fallback_marker_count_observed": 0,
+    "ready_marker_count_observed": 1,
+    "shim_marker_count_observed": 1
+  },
+  "measurement": {
+    "acceptance": {
+      "accepted_draft_tokens": 3536,
+      "accepted_drafts_per_event": 3.652892561983,
+      "committed_tokens_per_event": 4.652892561983,
+      "spec_draft_events": 968
+    },
+    "gpu_components_ms_per_step": {
+      "cfwd": 23.71776063352125,
+      "dfwd": 35.797077646538014,
+      "sfwd": 154.84509875849875,
+      "sum": 214.359937038558
+    },
+    "gpu_component_tps": 21.705980260418,
+    "timer_integrity": {
+      "cfwd_spans": 979,
+      "dfwd_spans": 979,
+      "sfwd_bookkeeping_errors": 0,
+      "sfwd_dropped": 0,
+      "sfwd_pending": 0,
+      "sfwd_steps": 979,
+      "wall_chain_open": false,
+      "wall_invalid_request_ids": 0,
+      "wall_steps": 967
+    },
+    "wall_ms_per_step": 227.27557884061164,
+    "wall_tps": 20.472470406715
+  },
+  "prior_stock_b1_reference": {
+    "accepted_drafts_per_event": 4.89,
+    "committed_tokens_per_event_change_percent": -21.003521867853,
+    "pairing": "prior_diagnostic_reference_not_simultaneous_pair",
+    "wall_ms_per_step": 241.709,
+    "wall_step_latency_reduction_percent": 5.971395763254,
+    "wall_tps": 24.367,
+    "wall_tps_change_percent": -15.982802943673
+  },
+  "run_source_commit": "168b6d23a",
+  "runner_postcheck": {
+    "fixed_by_commit": "abbd87372",
+    "focused_tests": 6,
+    "focused_tests_status": "PASS",
+    "outer_launcher_rc": 4,
+    "serve_arm_rc": 0,
+    "status": "FALSE_NEGATIVE_EVIDENCE_PATH_FIXED"
+  },
+  "schema": "fr13.fixed32.dfwd_k64_m1_pair8_real_b1.v1",
+  "status": "REJECT_DOMINATED_B1_DIAGNOSTIC"
+}
