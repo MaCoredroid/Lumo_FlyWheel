@@ -1,0 +1,17 @@
+2026-08-02 UTC
+
+source anchor and remote branch: dce33a709ba863f73ba06504a4643b5169ba6750
+tracked source status: clean
+containers: 0
+GPU compute processes: 0
+service listeners on gate ports: 0
+FA2 files under local auto_research: 1; expected SHA-256 matched
+chat template: regular mode-0644 file; exact HEAD SHA-256 matched
+local credential file: regular mode-0600 file; content not inspected or retained
+shared virtual environment: present
+K64 block map and real one-task subset: exact SHA-256 matched
+live34 rowgroup8 codegen: fresh-cache B1/B4 rebuild matched
+focused source tests: 149 passed in 2.75s
+shell syntax, Python bytecode compilation, git diff check: pass
+
+No task, service, container, or GPU kernel was launched by this preflight.
