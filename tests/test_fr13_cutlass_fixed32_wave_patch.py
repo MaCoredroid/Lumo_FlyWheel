@@ -320,7 +320,12 @@ def test_identity_stage2_uses_identity_epilogue_across_batches() -> None:
 
     assert "using CollectiveMainloop = conditional_t<" in wrapper
     assert "typename Base::CollectiveMainloop" not in wrapper
-    assert "ClusterShape, MainloopStageCount, MainloopScheduler" in wrapper
+    assert "class MainloopStageCount = void>\nstruct cutlass_3x" in patched
+    assert "using ResolvedMainloopStageCount = conditional_t<" in wrapper
+    assert "std::is_void_v<MainloopStageCount>" in wrapper
+    assert "StageCountAutoCarveout<" in wrapper
+    assert "sizeof(typename CollectiveEpilogue::SharedStorage)" in wrapper
+    assert "ClusterShape, ResolvedMainloopStageCount," in wrapper
     assert "using CollectiveEpilogue" in wrapper
     assert "typename Base::CollectiveEpilogue" not in wrapper
     assert "cutlass::epilogue::thread::Identity" in wrapper
@@ -329,6 +334,9 @@ def test_identity_stage2_uses_identity_epilogue_across_batches() -> None:
     assert "cutlass::multiplies" not in wrapper
     assert "fr13_fixed32_one_scalar_broadcast" not in patched
     assert "CollectiveEpilogue, TileScheduler" in wrapper
+    assert wrapper.index("using CollectiveEpilogue") < wrapper.index(
+        "using ResolvedMainloopStageCount"
+    ) < wrapper.index("using CollectiveMainloop")
 
     b1_start = patched.index(
         "struct sm120_blockwise_fp8_config_b1_divisor_static_identity"

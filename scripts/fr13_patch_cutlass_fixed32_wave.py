@@ -593,7 +593,7 @@ template <
     int ScaleGranularityK, class MmaTileShape, class ClusterShape,
     class EpilogueScheduler, class MainloopScheduler, bool swap_ab_,
     class TileScheduler,
-    class MainloopStageCount = cutlass::gemm::collective::StageCountAuto>
+    class MainloopStageCount = void>
 struct cutlass_3x_gemm_fp8_blockwise_identity_static
     : cutlass_3x_gemm_fp8_blockwise<
           OutType, ScaleGranularityM, ScaleGranularityN, ScaleGranularityK,
@@ -612,27 +612,6 @@ struct cutlass_3x_gemm_fp8_blockwise_identity_static
           cutlass::FloatRoundStyle::round_to_nearest>,
       cutlass::epilogue::fusion::Sm90AccFetch>;
 
-  using CollectiveMainloop = conditional_t<
-      Base::swap_ab,
-      typename cutlass::gemm::collective::CollectiveBuilder<
-          typename Base::ArchTag, typename Base::OperatorClass,
-          typename Base::ElementB,
-          cute::tuple<typename Base::LayoutB_Transpose,
-                      typename Base::LayoutSFA>,
-          Base::AlignmentB, typename Base::ElementA,
-          cute::tuple<typename Base::LayoutA_Transpose,
-                      typename Base::LayoutSFB>,
-          Base::AlignmentA, typename Base::ElementAccumulator, MmaTileShape,
-          ClusterShape, MainloopStageCount, MainloopScheduler>::CollectiveOp,
-      typename cutlass::gemm::collective::CollectiveBuilder<
-          typename Base::ArchTag, typename Base::OperatorClass,
-          typename Base::ElementA,
-          cute::tuple<typename Base::LayoutA, typename Base::LayoutSFA>,
-          Base::AlignmentA, typename Base::ElementB,
-          cute::tuple<typename Base::LayoutB, typename Base::LayoutSFB>,
-          Base::AlignmentB, typename Base::ElementAccumulator, MmaTileShape,
-          ClusterShape, MainloopStageCount, MainloopScheduler>::CollectiveOp>;
-
   using CollectiveEpilogue =
       typename cutlass::epilogue::collective::CollectiveBuilder<
           typename Base::ArchTag, typename Base::OperatorClass,
@@ -647,6 +626,35 @@ struct cutlass_3x_gemm_fp8_blockwise_identity_static
                         typename Base::LayoutD>,
           Base::AlignmentD, EpilogueScheduler,
           Fr13EpilogueCallbacks>::CollectiveOp;
+
+  using ResolvedMainloopStageCount = conditional_t<
+      std::is_void_v<MainloopStageCount>,
+      cutlass::gemm::collective::StageCountAutoCarveout<
+          static_cast<int>(sizeof(typename CollectiveEpilogue::SharedStorage))>,
+      MainloopStageCount>;
+
+  using CollectiveMainloop = conditional_t<
+      Base::swap_ab,
+      typename cutlass::gemm::collective::CollectiveBuilder<
+          typename Base::ArchTag, typename Base::OperatorClass,
+          typename Base::ElementB,
+          cute::tuple<typename Base::LayoutB_Transpose,
+                      typename Base::LayoutSFA>,
+          Base::AlignmentB, typename Base::ElementA,
+          cute::tuple<typename Base::LayoutA_Transpose,
+                      typename Base::LayoutSFB>,
+          Base::AlignmentA, typename Base::ElementAccumulator, MmaTileShape,
+          ClusterShape, ResolvedMainloopStageCount,
+          MainloopScheduler>::CollectiveOp,
+      typename cutlass::gemm::collective::CollectiveBuilder<
+          typename Base::ArchTag, typename Base::OperatorClass,
+          typename Base::ElementA,
+          cute::tuple<typename Base::LayoutA, typename Base::LayoutSFA>,
+          Base::AlignmentA, typename Base::ElementB,
+          cute::tuple<typename Base::LayoutB, typename Base::LayoutSFB>,
+          Base::AlignmentB, typename Base::ElementAccumulator, MmaTileShape,
+          ClusterShape, ResolvedMainloopStageCount,
+          MainloopScheduler>::CollectiveOp>;
 
   using KernelType = enable_sm120_family<cutlass::gemm::kernel::GemmUniversal<
       Shape<int, int, int, int>, CollectiveMainloop,
