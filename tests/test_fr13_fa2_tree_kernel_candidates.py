@@ -257,9 +257,12 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     static_page_log2 = 10
     static_page_size = 1 << static_page_log2
     static_block_n_log2 = 6
+    static_query_rows = 32
     assert f"static constexpr int value = {static_page_size}" in candidate
     assert f"static constexpr int log2 = {static_page_log2}" in candidate
     assert f"static constexpr int block_n_log2 = {static_block_n_log2}" in candidate
+    assert "StaticQueryRows<Fr13Fixed32Qrow32KernelTraits>" in candidate
+    assert f"static constexpr int value = {static_query_rows}" in candidate
     assert "using TreeKernelTraits = Fr13Fixed32Qrow32KernelTraits" in candidate
 
     api_gate = module.FIXED32_QUERY_TILE32_API_GATE
@@ -396,6 +399,93 @@ def test_qrow32_static_page_specialization_is_opt_in_exact_and_idempotent(
                         ((n_block & 15) << 6) + block_row_offset
                         == remainder
                     )
+
+
+def test_qrow32_static_query_specialization_is_exact_and_keeps_kv_masking(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    kernel = tmp_path / "flash_fwd_kernel.h"
+    signature = (
+        "template<typename Kernel_traits, bool Is_causal, bool Is_local, "
+        "bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, "
+        "bool Split, bool Append_KV, typename Params>\n"
+        "inline __device__ void compute_attn_1rowblock_splitkv"
+        "(const Params &params, const int bidb, const int bidh, "
+        "const int m_block, const int n_split_idx, const int num_n_splits) {\n"
+    )
+    actual_q = "binfo.actual_seqlen_q"
+    function = signature + """    constexpr int kBlockM = Kernel_traits::kBlockM;
+    const BlockInfo</*Varlen=*/!Is_even_MN> binfo(params, bidb);
+    if (m_block * kBlockM >= binfo.actual_seqlen_q) return;
+    int use_0 = binfo.actual_seqlen_q - m_block * kBlockM;
+    int use_1 = binfo.actual_seqlen_q + m_block * kBlockM;
+    int use_2 = binfo.actual_seqlen_q;
+    int use_3 = binfo.actual_seqlen_q;
+    FLASH_NAMESPACE::copy<Is_even_MN, Is_even_K, /*Clear_OOB_MN=*/false, /*Clear_OOB_K=*/false>(
+        output_0, binfo.actual_seqlen_q - m_block * kBlockM);
+    if (row < binfo.actual_seqlen_q - m_block * kBlockM && get<1>(tOcO(0, m, 0)) == 0) { gLSEaccum(row) = Split ? -INFINITY : INFINITY; }
+    auto shape_q = make_shape(binfo.actual_seqlen_q, params.h, params.d);
+    FLASH_NAMESPACE::copy<Is_even_MN, Is_even_K>(gmem_tiled_copy_Q,
+        query, binfo.actual_seqlen_q - m_block * kBlockM);
+    auto mask = Mask(binfo.actual_seqlen_q);
+    FLASH_NAMESPACE::copy<Is_even_MN, Is_even_K>(gmem_tiled_copy_KV, kv);
+    mask.template apply_mask<Is_causal, Is_even_MN>(scores, 0, 0, 32);
+    if (row < binfo.actual_seqlen_q - m_block * kBlockM) { gLSEaccum(row) = lse(mi); }
+    FLASH_NAMESPACE::copy<Is_even_MN, Is_even_K, /*Clear_OOB_MN=*/false, /*Clear_OOB_K=*/false>(
+        output_1, binfo.actual_seqlen_q - m_block * kBlockM);
+}
+"""
+    assert function.count(actual_q) == 12
+    suffix = """////////////////////////////////////////////////////////////////////////////////////////////////////
+
+template<typename Kernel_traits, bool Is_dropout
+"""
+    stock = function + "\n" + suffix
+    kernel.write_text(stock)
+
+    assert not module._patch_fixed32_query_tile32_static_query(kernel)
+    assert kernel.read_text() == stock
+    assert module._patch_fixed32_query_tile32_static_query(
+        kernel,
+        fixed32_query_tile32=True,
+    )
+    candidate = kernel.read_text()
+    assert candidate.count("FR13_FA2_QROW32_STATIC_QUERY") == 1
+    assert "constexpr bool kStaticQueryTile = kStaticQueryRows == kBlockM" in candidate
+    assert "const int query_m_block = kStaticQueryTile ? 0 : m_block" in candidate
+    assert "if constexpr (!kStaticQueryTile)" in candidate
+    assert candidate.count(
+        "copy<kStaticQueryTile || Is_even_MN, Is_even_K, "
+        "/*Clear_OOB_MN=*/false"
+    ) == 2
+    assert "copy<kStaticQueryTile || Is_even_MN, Is_even_K>(gmem_tiled_copy_Q" in candidate
+    assert "copy<Is_even_MN, Is_even_K>(gmem_tiled_copy_KV" in candidate
+    assert "mask.template apply_mask<Is_causal, Is_even_MN>" in candidate
+    assert "kStaticQueryTile || row < actual_seqlen_q" in candidate
+    assert not module._patch_fixed32_query_tile32_static_query(
+        kernel,
+        fixed32_query_tile32=True,
+    )
+
+    rows = set()
+    for thread_idx in range(64):
+        row_base = (thread_idx // 32) * 16 + (thread_idx % 32) // 4
+        for row_in_mma in (0, 8):
+            row = row_base + row_in_mma
+            assert 0 <= row < 32
+            rows.add(row)
+    assert rows == set(range(32))
+
+    helper = module._tree_bias_helper(tile_earlyout=True)
+    assert "if constexpr (!kStaticQueryTile)" in helper
+    assert "if (kStaticQueryTile || (q_rel >= 0 && q_rel < tree_bias_rows))" in helper
+    assert "if (k_rel >= 0 && k_rel < tree_bias_cols)" in helper
+    assert "mask.template apply_mask" not in helper
+    assert "StaticQueryRows" not in module.FIXED32_QUERY_TILE16_TRANSLATION_UNIT
+    assert "q_start != [0, 32, 64, 96, 128]" in Path(
+        "scripts/fr13_patch_fa2_tree_bias.py"
+    ).read_text()
 
 
 def test_source_build_candidates_are_independent_and_default_off() -> None:

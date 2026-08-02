@@ -46,8 +46,8 @@ DEFAULT_FA2_CANDIDATES = [
 
 
 TREE_BIAS_TILE_OVERLAP_GUARD = r'''    // FR13_FA2_TREE_BIAS_TILE_EARLYOUT: only the suffix tiles carry bias.
-    const int bias_col_begin = context_len + params.tree_bias_k_offset;
-    const int bias_col_end = bias_col_begin + params.tree_bias_cols;
+    const int bias_col_begin = context_len + tree_bias_k_offset;
+    const int bias_col_end = bias_col_begin + tree_bias_cols;
     const int block_col_begin = n_block * Kernel_traits::kBlockN;
     const int block_col_end = block_col_begin + Kernel_traits::kBlockN;
     if (block_col_end <= bias_col_begin || block_col_begin >= bias_col_end) {
@@ -60,6 +60,11 @@ def _tree_bias_helper(tile_earlyout: bool) -> str:
     overlap_guard = TREE_BIAS_TILE_OVERLAP_GUARD if tile_earlyout else ""
     return r'''
 // FR13_FA2_TREE_BIAS: add a dense query-suffix ancestry bias after QK.
+template <typename Kernel_traits>
+struct StaticQueryRows {
+    static constexpr int value = 0;
+};
+
 template <typename Kernel_traits, typename Engine, typename Layout, typename Params, typename BlockInfoT>
 __forceinline__ __device__ void apply_tree_bias(Tensor<Engine, Layout> &tensor_,
                                                 const Params &params,
@@ -68,32 +73,54 @@ __forceinline__ __device__ void apply_tree_bias(Tensor<Engine, Layout> &tensor_,
                                                 const int n_block,
                                                 const int row_idx_offset,
                                                 const int warp_row_stride) {
-    if (params.tree_bias_ptr == nullptr) { return; }
+    constexpr int kStaticQueryRows = StaticQueryRows<Kernel_traits>::value;
+    constexpr bool kStaticQueryTile = kStaticQueryRows != 0;
+    static_assert(!kStaticQueryTile || Kernel_traits::kBlockM == 32);
+    static_assert(!kStaticQueryTile || Kernel_traits::kNWarps == 2);
+    static_assert(!kStaticQueryTile || Kernel_traits::kNThreads == 64);
+    if constexpr (!kStaticQueryTile) {
+        if (params.tree_bias_ptr == nullptr) { return; }
+    }
     static_assert(Layout::rank == 3, "Only support 3D Tensor");
     static_assert(decltype(size<0>(tensor_))::value == 4, "First dimension must be 4");
     Tensor tensor = make_tensor(tensor_.data(), FLASH_NAMESPACE::convert_layout_acc_rowcol(tensor_.layout()));
+    static_assert(!kStaticQueryTile || decltype(size<0, 0>(tensor))::value == 2);
+    static_assert(!kStaticQueryTile || decltype(size<0, 1>(tensor))::value == 1);
     const float *tree_bias = reinterpret_cast<const float *>(params.tree_bias_ptr)
         + bidb * params.tree_bias_batch_stride;
-    const int context_len = binfo.actual_seqlen_k - binfo.actual_seqlen_q;
+    const int query_rows = kStaticQueryTile ? kStaticQueryRows : binfo.actual_seqlen_q;
+    const int tree_bias_rows = kStaticQueryTile ? 32 : params.tree_bias_rows;
+    const int tree_bias_cols = kStaticQueryTile ? 32 : params.tree_bias_cols;
+    const int tree_bias_q_offset = kStaticQueryTile ? 0 : params.tree_bias_q_offset;
+    const int tree_bias_k_offset = kStaticQueryTile ? 0 : params.tree_bias_k_offset;
+    const int64_t tree_bias_row_stride = kStaticQueryTile ? 32 : params.tree_bias_row_stride;
+    const int64_t tree_bias_col_stride = kStaticQueryTile ? 1 : params.tree_bias_col_stride;
+    const int context_len = binfo.actual_seqlen_k - query_rows;
 ''' + overlap_guard + r'''    const int lane_id = threadIdx.x % 32;
     const int col_idx_offset = n_block * Kernel_traits::kBlockN + (lane_id % 4) * 2;
+    const int fixed_row_idx_offset =
+        (threadIdx.x / 32) * 16 + (threadIdx.x % 32) / 4;
+    const int query_row_idx_offset =
+        kStaticQueryTile ? fixed_row_idx_offset : row_idx_offset;
+    const int query_warp_row_stride =
+        kStaticQueryTile ? 32 : warp_row_stride;
     #pragma unroll
     for (int mi = 0; mi < size<0, 1>(tensor); ++mi) {
-        const int row_idx_base = row_idx_offset + mi * warp_row_stride;
+        const int row_idx_base = query_row_idx_offset + mi * query_warp_row_stride;
         #pragma unroll
         for (int i = 0; i < size<0, 0>(tensor); ++i) {
-            const int q_rel = row_idx_base + i * 8 - params.tree_bias_q_offset;
-            if (q_rel >= 0 && q_rel < params.tree_bias_rows) {
+            const int q_rel = row_idx_base + i * 8 - tree_bias_q_offset;
+            if (kStaticQueryTile || (q_rel >= 0 && q_rel < tree_bias_rows)) {
                 #pragma unroll
                 for (int nj = 0; nj < size<1, 1>(tensor); ++nj) {
                     const int col_idx_base = col_idx_offset + nj * 8;
                     #pragma unroll
                     for (int j = 0; j < size<1, 0>(tensor); ++j) {
-                        const int k_rel = col_idx_base + j - context_len - params.tree_bias_k_offset;
-                        if (k_rel >= 0 && k_rel < params.tree_bias_cols) {
+                        const int k_rel = col_idx_base + j - context_len - tree_bias_k_offset;
+                        if (k_rel >= 0 && k_rel < tree_bias_cols) {
                             const float bias = tree_bias[
-                                q_rel * params.tree_bias_row_stride
-                                + k_rel * params.tree_bias_col_stride
+                                q_rel * tree_bias_row_stride
+                                + k_rel * tree_bias_col_stride
                             ];
                             if (bias == -INFINITY) {
                                 tensor(make_coord(i, mi), make_coord(j, nj)) = -INFINITY;
@@ -244,6 +271,11 @@ struct StaticPagedKVBlockSize<Fr13Fixed32Qrow32KernelTraits> {
     static constexpr int value = 1024;
     static constexpr int log2 = 10;
     static constexpr int block_n_log2 = 6;
+};
+
+template <>
+struct StaticQueryRows<Fr13Fixed32Qrow32KernelTraits> {
+    static constexpr int value = 32;
 };
 
 // Gate-only entry point. The ordinary and production paths cannot tag the
@@ -617,6 +649,127 @@ def _patch_fixed32_query_tile32_static_page(
     return changed
 
 
+def _patch_fixed32_query_tile32_static_query(
+    path: Path,
+    *,
+    fixed32_query_tile32: bool = False,
+) -> bool:
+    if not fixed32_query_tile32:
+        return False
+    text = path.read_text()
+    signature = (
+        "template<typename Kernel_traits, bool Is_causal, bool Is_local, "
+        "bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, "
+        "bool Split, bool Append_KV, typename Params>\n"
+        "inline __device__ void compute_attn_1rowblock_splitkv"
+    )
+    function_start = text.index(signature)
+    function_end = text.index(
+        "\n////////////////////////////////////////////////////////////////////////////////////////////////////\n\n"
+        "template<typename Kernel_traits, bool Is_dropout",
+        function_start,
+    )
+    function = text[function_start:function_end]
+    marker = "// FR13_FA2_QROW32_STATIC_QUERY: exact one-tile varlen query extent."
+    if marker in function:
+        required = (
+            "constexpr bool kStaticQueryTile = kStaticQueryRows == kBlockM;",
+            "const int query_m_block = kStaticQueryTile ? 0 : m_block;",
+            "FLASH_NAMESPACE::copy<kStaticQueryTile || Is_even_MN, Is_even_K>",
+            "mask.template apply_mask<Is_causal, Is_even_MN>",
+        )
+        if function.count(marker) != 1 or any(item not in function for item in required):
+            raise RuntimeError("qrow32 static query specialization drifted")
+        return False
+
+    function_prefix, function_body = function.split("{\n", 1)
+    if function_body.count("binfo.actual_seqlen_q") != 12:
+        raise RuntimeError("split-KV query-length use count drifted")
+    function_body = function_body.replace(
+        "binfo.actual_seqlen_q",
+        "actual_seqlen_q",
+    )
+    function_body = function_body.replace("m_block", "query_m_block")
+    binfo_anchor = "    const BlockInfo</*Varlen=*/!Is_even_MN> binfo(params, bidb);\n"
+    static_query = r'''    // FR13_FA2_QROW32_STATIC_QUERY: exact one-tile varlen query extent.
+    constexpr int kStaticQueryRows = StaticQueryRows<Kernel_traits>::value;
+    constexpr bool kStaticQueryTile = kStaticQueryRows == kBlockM;
+    static_assert(kStaticQueryRows == 0 || kStaticQueryTile);
+    const int actual_seqlen_q =
+        kStaticQueryTile ? kStaticQueryRows : binfo.actual_seqlen_q;
+    const int query_m_block = kStaticQueryTile ? 0 : m_block;
+'''
+    if function_body.count(binfo_anchor) != 1:
+        raise RuntimeError("split-KV BlockInfo anchor drifted")
+    function_body = function_body.replace(
+        binfo_anchor,
+        binfo_anchor + static_query,
+        1,
+    )
+    early_exit = "    if (query_m_block * kBlockM >= actual_seqlen_q) return;\n"
+    static_early_exit = r'''    if constexpr (!kStaticQueryTile) {
+        if (query_m_block * kBlockM >= actual_seqlen_q) return;
+    }
+'''
+    if function_body.count(early_exit) != 1:
+        raise RuntimeError("split-KV query early-exit anchor drifted")
+    function_body = function_body.replace(early_exit, static_early_exit, 1)
+
+    output_copy = (
+        "FLASH_NAMESPACE::copy<Is_even_MN, Is_even_K, "
+        "/*Clear_OOB_MN=*/false, /*Clear_OOB_K=*/false>("
+    )
+    if function_body.count(output_copy) != 2:
+        raise RuntimeError("split-KV output predicate count drifted")
+    function_body = function_body.replace(
+        output_copy,
+        "FLASH_NAMESPACE::copy<kStaticQueryTile || Is_even_MN, Is_even_K, "
+        "/*Clear_OOB_MN=*/false, /*Clear_OOB_K=*/false>(",
+    )
+    query_copy = (
+        "FLASH_NAMESPACE::copy<Is_even_MN, Is_even_K>"
+        "(gmem_tiled_copy_Q,"
+    )
+    if function_body.count(query_copy) != 1:
+        raise RuntimeError("split-KV query predicate anchor drifted")
+    function_body = function_body.replace(
+        query_copy,
+        "FLASH_NAMESPACE::copy<kStaticQueryTile || Is_even_MN, Is_even_K>"
+        "(gmem_tiled_copy_Q,",
+        1,
+    )
+    early_lse = (
+        "if (row < actual_seqlen_q - query_m_block * kBlockM "
+        "&& get<1>(tOcO(0, m, 0)) == 0)"
+    )
+    if function_body.count(early_lse) != 1:
+        raise RuntimeError("split-KV empty-output LSE predicate drifted")
+    function_body = function_body.replace(
+        early_lse,
+        "if ((kStaticQueryTile "
+        "|| row < actual_seqlen_q - query_m_block * kBlockM) "
+        "&& get<1>(tOcO(0, m, 0)) == 0)",
+        1,
+    )
+    epilogue_lse = (
+        "if (row < actual_seqlen_q - query_m_block * kBlockM) "
+        "{ gLSEaccum(row) = lse(mi); }"
+    )
+    if function_body.count(epilogue_lse) != 1:
+        raise RuntimeError("split-KV epilogue LSE predicate drifted")
+    function_body = function_body.replace(
+        epilogue_lse,
+        "if (kStaticQueryTile "
+        "|| row < actual_seqlen_q - query_m_block * kBlockM) "
+        "{ gLSEaccum(row) = lse(mi); }",
+        1,
+    )
+    function = function_prefix + "{\n" + function_body
+    text = text[:function_start] + function + text[function_end:]
+    path.write_text(text)
+    return True
+
+
 def _patch_fixed32_query_translation_unit(
     path: Path,
     *,
@@ -922,12 +1075,20 @@ def patch_fa2_source(
     missing = [str(path) for path in files.values() if not path.exists()]
     if missing:
         raise FileNotFoundError("missing FA2 source files: " + ", ".join(missing))
+    flash_fwd_kernel_changed = _patch_flash_fwd_kernel(
+        files["flash_fwd_kernel.h"],
+        tile_earlyout=tree_bias_tile_earlyout,
+    )
+    flash_fwd_kernel_changed = (
+        _patch_fixed32_query_tile32_static_query(
+            files["flash_fwd_kernel.h"],
+            fixed32_query_tile32=fixed32_query_tile32,
+        )
+        or flash_fwd_kernel_changed
+    )
     return {
         "flash.h": _patch_flash_h(files["flash.h"]),
-        "flash_fwd_kernel.h": _patch_flash_fwd_kernel(
-            files["flash_fwd_kernel.h"],
-            tile_earlyout=tree_bias_tile_earlyout,
-        ),
+        "flash_fwd_kernel.h": flash_fwd_kernel_changed,
         "utils.h": _patch_fixed32_query_tile32_static_page(
             files["utils.h"],
             fixed32_query_tile32=fixed32_query_tile32,
