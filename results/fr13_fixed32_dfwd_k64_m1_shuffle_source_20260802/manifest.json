@@ -1,0 +1,115 @@
+{
+  "schema": "fr13.fixed32.dfwd_k64_m1_shuffle_source.v1",
+  "status": "SOURCE_ONLY_DEFAULT_OFF_COMPILE_AND_REAL_BYTE_GATE_PENDING",
+  "acceptance_valid": false,
+  "timing_eligible": false,
+  "performance_claim": false,
+  "byte_equality_claim": false,
+  "resource_claim": false,
+  "production_default_enabled": false,
+  "source": {
+    "base_commit": "1ceb286609806c828e5d03089e4f45d6a09e7463",
+    "branch": "agent/fixed32-dfwd-k64-m1-shuffle-20260802",
+    "checkpoint": "716fed3ad878aff5f5eb94100d5c6a5dbb816011",
+    "cuda_path": "csrc/fr13_bf16_gemvx_k64_m1_shuffle.cu",
+    "cuda_sha256": "13d02e78a3f2f7298d756f306e33f0fbbc2f1ee7cb6d757ff7815a3a83177e3f",
+    "builder_path": "scripts/fr13_build_bf16_gemvx_k64_m1_shuffle.py",
+    "builder_sha256": "cf604b9797287588a4ea90cca3036ec69d036054acb5c00355d0f737e3c8b8b1",
+    "source_test_path": "tests/test_fr13_bf16_gemvx_k64_m1_shuffle_source.py",
+    "source_test_sha256": "fd626b6811d37a600d37a3b7ed756be72bb4e38aa40a3c4ebe6b842afaf754d8"
+  },
+  "target_selection": {
+    "basis": "real SWE-Verified B1 Nsight attribution",
+    "profiled_complete_events": 881,
+    "profiled_dfwd_ms_per_event": 47.435717,
+    "bf16_vocab_heads_ms_per_event": 26.227316,
+    "bf16_vocab_head_calls_per_event": 5,
+    "bf16_vocab_head_weight_bytes_per_event": 3355443200,
+    "bf16_vocab_head_effective_gb_per_s": 127.93696465166319,
+    "mtp_fp8_cutlass_ms_per_event": 8.514285,
+    "unified_attention_ms_per_event": 6.967564,
+    "latest_valid_exact4_k64_dfwd_ms_per_event": 36.813368133731736,
+    "latest_valid_exact4_kernel_split_available": false
+  },
+  "fixed_workload_contract": {
+    "batch_size": 1,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "physical_rows_root_inclusive": 32,
+    "hidden_size": 5120,
+    "dtype": "bf16",
+    "head_calls_per_event": 5,
+    "drafter_quality_changed": false,
+    "rejection_sampling_changed": false
+  },
+  "candidate": {
+    "operation": "fr13_bf16_k64_head::gemvx_m1_shuffle_out",
+    "gemv_mnk": [
+      1,
+      65536,
+      5120
+    ],
+    "grid": [
+      4096,
+      1,
+      1
+    ],
+    "block": [
+      16,
+      16,
+      1
+    ],
+    "dynamic_shared_bytes_requested": 0,
+    "output_rows_per_cta": 16,
+    "k_partition_lanes": 16,
+    "lane_k_iterations": 320,
+    "reduction_strides": [
+      8,
+      4,
+      2,
+      1
+    ],
+    "reference_candidate_rows_per_cta": 8,
+    "reference_candidate_k64_ctas": 8192,
+    "candidate_k64_ctas": 4096,
+    "cta_grid_reduction_fraction": 0.5,
+    "removed_source_level_cta_barriers": 4,
+    "removed_source_level_shared_partial_bytes_per_cta": 544,
+    "runtime_dispatch_wired": false
+  },
+  "exact_order_contract": {
+    "accumulator_initial_value": "fp32 positive zero",
+    "multiply_accumulate": "__fmaf_rn dependent scalar chain at k=lane+16*n",
+    "reduction": "width-16 shuffle exchange with __fadd_rn at 8,4,2,1",
+    "epilogue": "__fmaf_rn(1.0f,reduced_sum,positive_zero)",
+    "conversion": "__float2bfloat16_rn",
+    "atomic_reduction": false,
+    "cross_output_dependency": false,
+    "claim_requires_real_byte_gate": true
+  },
+  "verification": {
+    "focused_source_tests_passed": 5,
+    "python_compile": "pass",
+    "git_diff_check": "pass",
+    "ruff": "not_run_unavailable",
+    "cuda_compile": "not_run_live_campaign_host_protected",
+    "sass_resource_check": "not_run_live_campaign_host_protected",
+    "gpu": "not_run",
+    "docker": "not_run",
+    "real_swe_task": "not_run"
+  },
+  "required_next_gates": [
+    "pinned sm_121a compile and zero stack/local/call/shared/barrier resource audit",
+    "real SWE-Verified one-task B1 K64/root1 shadow byte gate over all five head positions",
+    "matched real SWE-Verified exact4 Tail23 and Hydra27 candidate timing",
+    "exact16 one-sided U95 before formal floor acceptance"
+  ],
+  "scope_exclusions": [
+    "B4 M4 projection kernel",
+    "drafter K selection or quality tuning",
+    "verifier projection",
+    "MTP transformer GEMMs",
+    "unified attention",
+    "committer"
+  ]
+}
