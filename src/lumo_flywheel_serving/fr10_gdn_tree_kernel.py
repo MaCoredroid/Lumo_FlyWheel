@@ -14217,6 +14217,20 @@ def launch_tree_gdn_prepared(
             ring_b.copy_(snapshot["ring_b"])
             _flags_arg.copy_(snapshot["flags"])
             _single_gate_counter().copy_(snapshot["counter"])
+            _subtree_state["last_executed_gdn"] = {
+                "route": "fixed32_path",
+                "candidate": None,
+                "physical_launches": 2,
+                "physical_programs": 12,
+                "physical_grid_z": (1, 11),
+                "physical_recurrence_critical_path": 12,
+                "state_export_writes": 5,
+                "state_parent_reads": 11,
+                "logical_launches": 2,
+                "logical_programs": 12,
+                "logical_padded_slots": 82,
+                "logical_critical_path": 12,
+            }
 
         def _single_gate_run_reference():
             _launch_paths(

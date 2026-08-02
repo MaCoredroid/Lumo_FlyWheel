@@ -32,6 +32,9 @@ CANDIDATE=fixed32_gdn_single_launch_root_loop_v1
 KERNEL_SOURCE=src/lumo_flywheel_serving/fr13_gdn_single_launch_root_loop.py
 SUPPORT_SOURCE=src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py
 PATCHER_SOURCE=scripts/fr10_phase4_patch_vllm_tree_gdn.py
+LAUNCHER_SOURCE=scripts/fr13_launch_forked_fa2_tree_server.sh
+RUNTIME_MANIFEST_SOURCE=scripts/fr13_runtime_manifest.py
+INGRESS_SOURCE=src/lumo_flywheel_serving/inference_proxy.py
 VERIFIER=scripts/fr13_gdn_single_launch_live_verdict.py
 RESOURCE_AUDIT=results/fr13_fixed32_gdn_single_launch_root_loop_v1_live_ready_20260802
 SOURCE_COMMIT=$(git rev-parse HEAD)
@@ -118,6 +121,9 @@ VERIFIER_SHA256=$(sha256sum "$VERIFIER" | awk '{print $1}')
 KERNEL_SOURCE_SHA256=$(sha256sum "$KERNEL_SOURCE" | awk '{print $1}')
 SUPPORT_SOURCE_SHA256=$(sha256sum "$SUPPORT_SOURCE" | awk '{print $1}')
 PATCHER_SOURCE_SHA256=$(sha256sum "$PATCHER_SOURCE" | awk '{print $1}')
+LAUNCHER_SOURCE_SHA256=$(sha256sum "$LAUNCHER_SOURCE" | awk '{print $1}')
+RUNTIME_MANIFEST_SOURCE_SHA256=$(sha256sum "$RUNTIME_MANIFEST_SOURCE" | awk '{print $1}')
+INGRESS_SOURCE_SHA256=$(sha256sum "$INGRESS_SOURCE" | awk '{print $1}')
 audit_source_sha256() {
   awk -F '\t' -v path="$1" '$2 == path {print $3}' \
     "$RESOURCE_AUDIT/source_hashes.tsv"
@@ -125,6 +131,9 @@ audit_source_sha256() {
 [[ "$(audit_source_sha256 "$KERNEL_SOURCE")" == "$KERNEL_SOURCE_SHA256" \
    && "$(audit_source_sha256 "$SUPPORT_SOURCE")" == "$SUPPORT_SOURCE_SHA256" \
    && "$(audit_source_sha256 "$PATCHER_SOURCE")" == "$PATCHER_SOURCE_SHA256" \
+   && "$(audit_source_sha256 "$LAUNCHER_SOURCE")" == "$LAUNCHER_SOURCE_SHA256" \
+   && "$(audit_source_sha256 "$RUNTIME_MANIFEST_SOURCE")" == "$RUNTIME_MANIFEST_SOURCE_SHA256" \
+   && "$(audit_source_sha256 "$INGRESS_SOURCE")" == "$INGRESS_SOURCE_SHA256" \
    && "$(audit_source_sha256 "scripts/$ENTRYPOINT_NAME")" == "$RUNNER_SHA256" \
    && "$(audit_source_sha256 "scripts/fr13_run_gdn_single_launch_live_gate.sh")" == "$CORE_SHA256" \
    && "$(audit_source_sha256 "$VERIFIER")" == "$VERIFIER_SHA256" ]] \
@@ -161,7 +170,7 @@ printf 'classification=%s\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptan
   "$STOCK_FA2_SHA256" "$(date -u +%FT%TZ)" \
   > "$RUNROOT_ABS/launcher_meta.txt"
 
-"$PYTHON_BIN" scripts/fr13_runtime_manifest.py \
+"$PYTHON_BIN" "$RUNTIME_MANIFEST_SOURCE" \
   --repo "$PWD" --profile fixed32 --sequence "$SEQUENCE" \
   --output "$RUNROOT_ABS/runtime_manifest.at_launch.json"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
@@ -221,7 +230,7 @@ fi
 printf 'serve_rc=%s ended=%s\n' "$serve_rc" "$(date -u +%FT%TZ)" \
   >> "$RUNROOT_ABS/launcher_meta.txt"
 
-"$PYTHON_BIN" scripts/fr13_runtime_manifest.py \
+"$PYTHON_BIN" "$RUNTIME_MANIFEST_SOURCE" \
   --repo "$PWD" --profile fixed32 --sequence "$SEQUENCE" \
   --output "$RUNROOT_ABS/runtime_manifest.at_end.json"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
@@ -236,7 +245,11 @@ cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" \
    && "$(sha256sum "$CORE_PATH" | awk '{print $1}')" == "$CORE_SHA256" \
    && "$(sha256sum "$VERIFIER" | awk '{print $1}')" == "$VERIFIER_SHA256" \
    && "$(sha256sum "$KERNEL_SOURCE" | awk '{print $1}')" == "$KERNEL_SOURCE_SHA256" \
-   && "$(sha256sum "$SUPPORT_SOURCE" | awk '{print $1}')" == "$SUPPORT_SOURCE_SHA256" ]] \
+   && "$(sha256sum "$SUPPORT_SOURCE" | awk '{print $1}')" == "$SUPPORT_SOURCE_SHA256" \
+   && "$(sha256sum "$PATCHER_SOURCE" | awk '{print $1}')" == "$PATCHER_SOURCE_SHA256" \
+   && "$(sha256sum "$LAUNCHER_SOURCE" | awk '{print $1}')" == "$LAUNCHER_SOURCE_SHA256" \
+   && "$(sha256sum "$RUNTIME_MANIFEST_SOURCE" | awk '{print $1}')" == "$RUNTIME_MANIFEST_SOURCE_SHA256" \
+   && "$(sha256sum "$INGRESS_SOURCE" | awk '{print $1}')" == "$INGRESS_SOURCE_SHA256" ]] \
   || { echo "qualification source changed during execution" >&2; exit 14; }
 (( serve_rc == 0 )) || exit "$serve_rc"
 

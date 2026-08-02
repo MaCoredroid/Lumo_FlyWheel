@@ -46,7 +46,7 @@ AUDITED_CANDIDATE_SOURCE_SHA256 = (
     "6299f5dfd30800d4635d96cb77316ee9797f468753064296f012b2e30a0f05af"
 )
 AUDITED_SUPPORT_SOURCE_SHA256 = (
-    "72438aaa1626e0ccd971ab78263968fd497b5204ac4ec1c263eee62c9cb7c0a6"
+    "d6e4311f8cb2c6697590f86fc881e5b24f70454704b8c143a238ee6117396b51"
 )
 AUDITED_PATCHER_SOURCE_SHA256 = (
     "085617fe49f2ba782b545071d2f171aa5b9c4c863a31f703ba56ebfa49170dd6"
@@ -381,6 +381,7 @@ def build_verdict(args: argparse.Namespace) -> dict[str, Any]:
     block_map_path = args.block_map.resolve()
     patcher_path = REPO / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
     launcher_path = REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
+    runtime_manifest_tool_path = REPO / "scripts" / "fr13_runtime_manifest.py"
     ingress_path = REPO / "src" / "lumo_flywheel_serving" / "inference_proxy.py"
     core_runner_path = CORE_RUNNER.resolve()
     for path, expected in (
@@ -401,6 +402,11 @@ def build_verdict(args: argparse.Namespace) -> dict[str, Any]:
         raise VerdictError("runtime patcher differs from the sm_121a audited source")
     verifier_sha256 = _sha256_bytes(_regular_bytes(verifier_path))
     core_runner_sha256 = _sha256_bytes(_regular_bytes(core_runner_path))
+    launcher_sha256 = _sha256_bytes(_regular_bytes(launcher_path))
+    runtime_manifest_tool_sha256 = _sha256_bytes(
+        _regular_bytes(runtime_manifest_tool_path)
+    )
+    ingress_sha256 = _sha256_bytes(_regular_bytes(ingress_path))
     resource_audit_sha256 = _validate_resource_audit(
         {
             kernel_path.relative_to(REPO).as_posix(): kernel_sha256,
@@ -408,6 +414,11 @@ def build_verdict(args: argparse.Namespace) -> dict[str, Any]:
             patcher_path.relative_to(REPO).as_posix(): patcher_sha256,
             verifier_path.relative_to(REPO).as_posix(): verifier_sha256,
             core_runner_path.relative_to(REPO).as_posix(): core_runner_sha256,
+            launcher_path.relative_to(REPO).as_posix(): launcher_sha256,
+            runtime_manifest_tool_path.relative_to(REPO).as_posix(): (
+                runtime_manifest_tool_sha256
+            ),
+            ingress_path.relative_to(REPO).as_posix(): ingress_sha256,
         }
     )
 
@@ -525,12 +536,11 @@ def build_verdict(args: argparse.Namespace) -> dict[str, Any]:
         kernel_path.relative_to(REPO).as_posix(): kernel_sha256,
         support_path.relative_to(REPO).as_posix(): support_sha256,
         patcher_path.relative_to(REPO).as_posix(): patcher_sha256,
-        launcher_path.relative_to(REPO).as_posix(): _sha256_bytes(
-            _regular_bytes(launcher_path)
+        launcher_path.relative_to(REPO).as_posix(): launcher_sha256,
+        runtime_manifest_tool_path.relative_to(REPO).as_posix(): (
+            runtime_manifest_tool_sha256
         ),
-        ingress_path.relative_to(REPO).as_posix(): _sha256_bytes(
-            _regular_bytes(ingress_path)
-        ),
+        ingress_path.relative_to(REPO).as_posix(): ingress_sha256,
         subset_path.relative_to(REPO).as_posix(): args.subset_sha256,
         block_map_path.relative_to(REPO).as_posix(): args.block_map_sha256,
     }
@@ -598,6 +608,9 @@ def build_verdict(args: argparse.Namespace) -> dict[str, Any]:
         "core_runner_sha256": required_closure[
             core_runner_path.relative_to(REPO).as_posix()
         ],
+        "launcher_source_sha256": launcher_sha256,
+        "runtime_manifest_tool_sha256": runtime_manifest_tool_sha256,
+        "authenticated_ingress_sha256": ingress_sha256,
         "stock_fa2_sha256": args.stock_fa2_sha256,
         "live_pass_sha256": _sha256_bytes(pass_raw),
         "runtime_manifest_sha256": runtime_sha256,

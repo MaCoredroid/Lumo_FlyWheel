@@ -23,6 +23,7 @@ B1_RUNNER_PATH = REPO / "scripts" / "fr13_run_b1_gdn_single_launch_live_gate.sh"
 B4_RUNNER_PATH = REPO / "scripts" / "fr13_run_b4_gdn_single_launch_live_gate.sh"
 CORE_RUNNER_PATH = REPO / "scripts" / "fr13_run_gdn_single_launch_live_gate.sh"
 RUNTIME_MANIFEST_PATH = REPO / "scripts" / "fr13_runtime_manifest.py"
+INGRESS_PATH = REPO / "src" / "lumo_flywheel_serving" / "inference_proxy.py"
 COMPILE_HARNESS_PATH = REPO / "scripts" / "fr13_compile_gdn_single_launch_sm121.py"
 ROOT_LOOP_PATH = (
     REPO
@@ -850,6 +851,29 @@ def test_authenticated_gate_restores_reference_and_emits_only_complete_pass(
     assert payload["candidate_state_export_writes"] == 0
 
 
+def test_b1_shadow_restore_resets_host_route_metadata_to_reference() -> None:
+    source = _function_source("launch_tree_gdn_prepared")
+    restore_source = source.split("def _single_gate_restore", 1)[1].split(
+        "def _single_gate_run_reference", 1
+    )[0]
+    expected_fields = {
+        '"route": "fixed32_path"',
+        '"candidate": None',
+        '"physical_launches": 2',
+        '"physical_programs": 12',
+        '"physical_grid_z": (1, 11)',
+        '"physical_recurrence_critical_path": 12',
+        '"state_export_writes": 5',
+        '"state_parent_reads": 11',
+        '"logical_launches": 2',
+        '"logical_programs": 12',
+        '"logical_padded_slots": 82',
+        '"logical_critical_path": 12',
+    }
+    assert '_subtree_state["last_executed_gdn"] = {' in restore_source
+    assert all(field in restore_source for field in expected_fields)
+
+
 def test_static_single_launch_pass_cannot_authorize_root_loop(
     tmp_path: Path,
 ) -> None:
@@ -1035,6 +1059,20 @@ def test_live_launcher_and_runners_are_reference_served_k64_exact_task_only() ->
     assert "fixed32_gdn_single_launch_root_loop_v1" in core
     assert "--support-source \"$SUPPORT_SOURCE\"" in core
     assert "audit_source_sha256" in core
+    audited_runtime_sources = {
+        "LAUNCHER_SOURCE": "scripts/fr13_launch_forked_fa2_tree_server.sh",
+        "RUNTIME_MANIFEST_SOURCE": "scripts/fr13_runtime_manifest.py",
+        "INGRESS_SOURCE": "src/lumo_flywheel_serving/inference_proxy.py",
+    }
+    for variable, path in audited_runtime_sources.items():
+        assert f"{variable}={path}" in core
+        assert f'audit_source_sha256 "${variable}"' in core
+        assert f'sha256sum "${variable}"' in core
+    assert "launcher_path.relative_to(REPO).as_posix(): launcher_sha256" in verifier
+    assert (
+        "runtime_manifest_tool_path.relative_to(REPO).as_posix(): (" in verifier
+    )
+    assert "ingress_path.relative_to(REPO).as_posix(): ingress_sha256" in verifier
     assert 'CAPTURE_ONLY=0 ACCEPT_SPEED_PROBE=0 PROBE_ONLY=0' in core
     assert "FR13_DRAFT_VOCAB_K=65536" in core
     assert "FR13_DRAFT_VOCAB_ROOT=1" in core
@@ -1054,6 +1092,7 @@ def test_live_launcher_and_runners_are_reference_served_k64_exact_task_only() ->
         "scripts/fr13_run_gdn_single_launch_live_gate.sh",
         "scripts/fr13_gdn_single_launch_live_verdict.py",
         "src/lumo_flywheel_serving/fr13_gdn_single_launch_root_loop.py",
+        str(INGRESS_PATH.relative_to(REPO)),
         "results/fr13_fixed32_gdn_single_launch_root_loop_v1_live_ready_20260802/SHA256SUMS",
         "config/fr13_fixed32/subset_b1_diagnostic_one.json",
     ):
