@@ -218,13 +218,18 @@ if [[ "$serve_rc" == "0" && "$FR13_GATE_DRAFT_HEAD_M32" == "1" ]]; then
 fi
 if [[ "$serve_rc" == "0" \
       && "$FR13_GATE_DRAFT_HEAD_M1_VEC" == "pair8bits" ]]; then
+  DRAFT_HEAD_RUNTIME_LOG="$RUNROOT/$ARM/docker_after_tasks.log"
+  [[ -f "$DRAFT_HEAD_RUNTIME_LOG" && ! -L "$DRAFT_HEAD_RUNTIME_LOG" ]] || {
+    echo "pair8bits run completed without its final runtime log" >&2
+    exit 4
+  }
   rg -q '\[FR13_DRAFT_HEAD_M1_VEC\] ready selector=pair8bits' \
-    "$RUNROOT/$ARM.runlog" || {
+    "$DRAFT_HEAD_RUNTIME_LOG" || {
     echo "pair8bits run completed without its readiness marker" >&2
     exit 4
   }
   rg -q '\[FR13_DRAFT_HEAD_M1_VEC\] engaged selector=pair8bits eager_launch=1' \
-    "$RUNROOT/$ARM.runlog" || {
+    "$DRAFT_HEAD_RUNTIME_LOG" || {
     echo "pair8bits run completed without an executed-kernel marker" >&2
     exit 4
   }

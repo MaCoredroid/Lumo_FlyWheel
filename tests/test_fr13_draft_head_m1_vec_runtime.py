@@ -146,8 +146,11 @@ def test_real_b1_runner_selects_k64_floor_and_requires_execution() -> None:
     assert 'unset FR13_NEEDS_ALLOW' in gate
     assert 'float(os.environ["FR13_WEIGHT_FLOOR_MS"]) * 1.15' in gate
     assert 'FR13_DRAFT_HEAD_M1_VEC="$FR13_GATE_DRAFT_HEAD_M1_VEC" \\' in gate
+    assert 'DRAFT_HEAD_RUNTIME_LOG="$RUNROOT/$ARM/docker_after_tasks.log"' in gate
+    assert '[[ -f "$DRAFT_HEAD_RUNTIME_LOG" && ! -L "$DRAFT_HEAD_RUNTIME_LOG" ]]' in gate
     assert "ready selector=pair8bits" in gate
     assert "engaged selector=pair8bits eager_launch=1" in gate
+    assert gate.count('"$DRAFT_HEAD_RUNTIME_LOG" || {') == 2
     assert "must be the only enabled kernel candidate" in gate
 
     assert 'export FR13_GATE_DRAFT_HEAD_M1_VEC=pair8bits' in runner
