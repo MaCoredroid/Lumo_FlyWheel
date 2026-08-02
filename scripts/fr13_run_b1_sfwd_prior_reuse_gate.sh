@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One real SWE-Verified K64/root1 B1 byte gate for descriptorless fixed-base C64.
+# One real SWE-Verified K64/root1 B1 byte gate for packed x-gather C64/W16.
 # The candidate is shadow-only and the incumbent tensors remain served.
 set -euo pipefail
 
@@ -130,7 +130,9 @@ printf '%s\n' \
   'physical_rows_per_request=32' \
   'conv_rows_per_program=32' \
   'conv_block_c=64' \
+  'conv_num_warps=16' \
   'source_descriptor_in_kernel=false' \
+  'current_x_global_loads_per_element=1' \
   'x_stride=16384,1' \
   'out_stride=10240,1' \
   'source_stage_stride=10240,1' \

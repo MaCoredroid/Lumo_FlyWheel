@@ -23,14 +23,15 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
     FIXED32_ROWS,
     SOURCE_ROWS,
     X_ROW_STRIDE,
-    _fr13_fixed32_sfwd_prior_reuse_descriptorless_kernel,
+    _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel,
     fixed32_specialized_layout_contract,
 )
 
 
-CANDIDATE = "fixed32_sfwd_prior_reuse_descriptorless_fixedbase_rowgroup32_c64_v1"
+CANDIDATE = "fixed32_sfwd_prior_reuse_packed_xgather_rowgroup32_c64_w16_v1"
 ROWS_PER_PROGRAM = 32
 BLOCK_C = 64
+NUM_WARPS = 16
 CONV_STATE_LEN = 34
 ENABLED_PATH = "/logs/fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled"
 REAL_EVENT_PATH = "/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm"
@@ -89,6 +90,7 @@ def fixed32_sfwd_prior_reuse_contract(
         "conv_rows_per_program": ROWS_PER_PROGRAM,
         "conv_row_groups_per_request": 1,
         "conv_block_c": BLOCK_C,
+        "conv_num_warps": NUM_WARPS,
         "gdn_level_path_programs": (batch, 11 * batch),
         "gdn_physical_launches_per_layer": 2,
         "gdn_ring_export": True,
@@ -293,6 +295,7 @@ def _pass_emit(
         "physical_rows_per_request": 32,
         "conv_rows_per_program": ROWS_PER_PROGRAM,
         "conv_block_c": BLOCK_C,
+        "conv_num_warps": NUM_WARPS,
         "x_shape": [FIXED32_ROWS, CHANNELS],
         "x_stride": [X_ROW_STRIDE, 1],
         "out_stride": [CHANNELS, 1],
@@ -414,6 +417,7 @@ def fixed32_sfwd_prior_reuse_byte_gate(
         "physical_rows_per_request": 32,
         "conv_rows_per_program": ROWS_PER_PROGRAM,
         "conv_block_c": BLOCK_C,
+        "conv_num_warps": NUM_WARPS,
         "x_shape": [FIXED32_ROWS, CHANNELS],
         "x_stride": [X_ROW_STRIDE, 1],
         "out_stride": [CHANNELS, 1],
@@ -608,7 +612,7 @@ def launch_fixed32_sfwd_prior_reuse(
 
     grid = (batch, triton.cdiv(channels, BLOCK_C))
     bias_arg = bias if bias is not None else x
-    _fr13_fixed32_sfwd_prior_reuse_descriptorless_kernel[grid](
+    _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel[grid](
         x,
         conv_state,
         spec_state_indices,
@@ -631,7 +635,7 @@ def launch_fixed32_sfwd_prior_reuse(
         X_STRIDE_ROW=X_ROW_STRIDE,
         ROWS_PER_PROGRAM=ROWS_PER_PROGRAM,
         BLOCK_C=BLOCK_C,
-        num_warps=8,
+        num_warps=NUM_WARPS,
     )
     contract["conv_programs_per_request"] = triton.cdiv(channels, BLOCK_C)
     contract["layouts"] = layout_contract["layouts"]
