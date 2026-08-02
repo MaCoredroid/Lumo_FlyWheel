@@ -2282,6 +2282,29 @@ def _fr13_fixed32_observed_gdn(
                     "group_max_path_lengths", ()
                 )
             ),
+            "dense_schedule_shape": tuple(
+                int(value)
+                for value in parent_group_contract.get(
+                    "dense_schedule_shape", ()
+                )
+            ),
+            "dense_schedule_sha256": parent_group_contract.get(
+                "dense_schedule_sha256"
+            ),
+            "group_controls": tuple(
+                int(value)
+                for value in parent_group_contract.get("group_controls", ())
+            ),
+            "group_control_loads_per_program": int(
+                parent_group_contract.get(
+                    "group_control_loads_per_program", -1
+                )
+            ),
+            "runtime_path_metadata_loads_per_program": int(
+                parent_group_contract.get(
+                    "runtime_path_metadata_loads_per_program", -1
+                )
+            ),
             "logical_path_counts": tuple(
                 int(value)
                 for value in parent_group_contract.get(
@@ -2320,7 +2343,7 @@ def _fr13_fixed32_observed_gdn(
             ),
         }
         expected_parent_group = {
-            "candidate": "fixed32_gdn_parent_group_simd_v2",
+            "candidate": "fixed32_gdn_parent_group_dense_simd_v3",
             "parent_nodes": (14, 0, 1, 4, 9),
             "parent_slots": (4, 0, 1, 2, 3),
             "path_indices": (
@@ -2337,6 +2360,13 @@ def _fr13_fixed32_observed_gdn(
             "member_execution": "parallel_simd",
             "group_node_counts": (9, 12, 2, 2, 2),
             "group_max_path_lengths": (7, 7, 1, 1, 1),
+            "dense_schedule_shape": (5, 4, 7),
+            "dense_schedule_sha256": (
+                "500f9821c279c030fd0f42080d2a5410e5fef4de3d476c5ddf39f23c6a27f915"
+            ),
+            "group_controls": (1934, 1792, 289, 324, 361),
+            "group_control_loads_per_program": 1,
+            "runtime_path_metadata_loads_per_program": 0,
             "logical_path_counts": (1, 11),
             "physical_grid_z": (1, 5),
             "logical_programs": 12,
@@ -2444,8 +2474,9 @@ def _fr13_fixed32_observed_gdn(
     if physical_route == "fixed32_parent_group_simd":
         b1_source_candidate = batch == 1
         if (
-            physical_candidate != "fixed32_gdn_parent_group_simd_v2"
-            or physical_kernel != "tree_gdn_parent_group_simd_width4_v2"
+            physical_candidate != "fixed32_gdn_parent_group_dense_simd_v3"
+            or physical_kernel
+            != "tree_gdn_parent_group_dense_simd_width4_v3"
             or any(
                 not isinstance(value, str)
                 or len(value) != 64

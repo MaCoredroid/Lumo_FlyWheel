@@ -63,8 +63,8 @@ def _pass_payload(
     return {
         "schema": "fr13.fixed32.gdn_parent_group_simd.b4_live_pass.v1",
         "status": "pass",
-        "candidate": "fixed32_gdn_parent_group_simd_v2",
-        "kernel": "tree_gdn_parent_group_simd_width4_v2",
+        "candidate": "fixed32_gdn_parent_group_dense_simd_v3",
+        "kernel": "tree_gdn_parent_group_dense_simd_width4_v3",
         "reference_kernel": "per_request_tree_gdn_path_bv8",
         "mode": "hydra27_fixed32",
         **campaign_identity,
@@ -142,8 +142,8 @@ def test_production_requires_four_distinct_source_bound_passes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     identity = {
-        "candidate": "fixed32_gdn_parent_group_simd_v2",
-        "kernel": "tree_gdn_parent_group_simd_width4_v2",
+        "candidate": "fixed32_gdn_parent_group_dense_simd_v3",
+        "kernel": "tree_gdn_parent_group_dense_simd_width4_v3",
         "kernel_source_sha256": "b" * 64,
         "parent_contract_sha256": "c" * 64,
         "writer_sha256": "d" * 64,
@@ -188,7 +188,9 @@ def test_production_requires_four_distinct_source_bound_passes(
     credential = (
         kernel._fr13_fixed32_gdn_parent_group_simd_production_control()
     )
-    assert credential["candidate"] == "fixed32_gdn_parent_group_simd_v2"
+    assert credential["candidate"] == (
+        "fixed32_gdn_parent_group_dense_simd_v3"
+    )
     assert len(credential["pass_sha256"]) == 4
     assert len(credential["credential_sha256"]) == 64
 
@@ -222,8 +224,8 @@ def test_eager_mismatch_permanently_blocks_later_pass(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     identity = {
-        "candidate": "fixed32_gdn_parent_group_simd_v2",
-        "kernel": "tree_gdn_parent_group_simd_width4_v2",
+        "candidate": "fixed32_gdn_parent_group_dense_simd_v3",
+        "kernel": "tree_gdn_parent_group_dense_simd_width4_v3",
         "kernel_source_sha256": "b" * 64,
         "parent_contract_sha256": "c" * 64,
         "writer_sha256": "d" * 64,
@@ -480,7 +482,7 @@ def _graph_record(layer_key: int) -> dict[str, object]:
         return {
             "block_v": block_v,
             "physical_launches": 2,
-            "kernel_structure": "tree_gdn_parent_group_simd_width4_v2",
+            "kernel_structure": "tree_gdn_parent_group_dense_simd_width4_v3",
             "compact_export": compact.clone(),
         }
 
@@ -502,8 +504,8 @@ def test_graph_shadow_waits_for_campaign_then_passes_without_task_ids(
     signature = "e" * 64
     state = {
         "status": "armed",
-        "candidate": "fixed32_gdn_parent_group_simd_v2",
-        "kernel": "tree_gdn_parent_group_simd_width4_v2",
+        "candidate": "fixed32_gdn_parent_group_dense_simd_v3",
+        "kernel": "tree_gdn_parent_group_dense_simd_width4_v3",
         "campaign": None,
         "campaign_identity_sha256": None,
         "graph_id": None,
@@ -543,8 +545,8 @@ def test_graph_shadow_waits_for_campaign_then_passes_without_task_ids(
         kernel,
         "_fr13_fixed32_gdn_parent_group_simd_identity",
         lambda: {
-            "candidate": "fixed32_gdn_parent_group_simd_v2",
-            "kernel": "tree_gdn_parent_group_simd_width4_v2",
+            "candidate": "fixed32_gdn_parent_group_dense_simd_v3",
+            "kernel": "tree_gdn_parent_group_dense_simd_width4_v3",
             "kernel_source_sha256": "1" * 64,
             "parent_contract_sha256": "2" * 64,
             "writer_sha256": "3" * 64,
@@ -581,8 +583,8 @@ def test_graph_capture_cannot_reset_terminal_qualification(
 ) -> None:
     state = {
         "status": terminal_status,
-        "candidate": "fixed32_gdn_parent_group_simd_v2",
-        "kernel": "tree_gdn_parent_group_simd_width4_v2",
+        "candidate": "fixed32_gdn_parent_group_dense_simd_v3",
+        "kernel": "tree_gdn_parent_group_dense_simd_width4_v3",
         "campaign": "exact4" if terminal_status == "passed" else None,
         "campaign_identity_sha256": (
             _campaign_identity("exact4")["campaign_identity_sha256"]

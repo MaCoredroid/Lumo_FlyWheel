@@ -1137,10 +1137,10 @@ _FR13_FIXED32_EXPORT_NODES = (0, 1, 4, 9, 14)
 _FR13_FIXED32_EXPORT_SLOTS = len(_FR13_FIXED32_EXPORT_NODES)
 _FR13_FIXED32_MAX_BATCH = 4
 _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID = (
-    "fixed32_gdn_parent_group_simd_v2"
+    "fixed32_gdn_parent_group_dense_simd_v3"
 )
 _FR13_FIXED32_GDN_PARENT_GROUP_KERNEL_ID = (
-    "tree_gdn_parent_group_simd_width4_v2"
+    "tree_gdn_parent_group_dense_simd_width4_v3"
 )
 _FR13_FIXED32_GDN_PARENT_GROUP_REFERENCE_KERNEL_ID = (
     "per_request_tree_gdn_path_bv8"
@@ -4432,6 +4432,53 @@ def _fr13_fixed32_schedule_contract(levels) -> dict[str, object]:
     return contract
 
 
+def _fr13_fixed32_gdn_parent_group_dense_schedule(
+    levels,
+    groups=_FR13_FIXED32_GDN_LEVEL1_PARENT_GROUPS,
+) -> tuple[tuple[tuple[tuple[int, ...], ...], ...], tuple[int, ...]]:
+    """Pack the exact level-1 paths into a fixed 5x4x7 node schedule."""
+    level1 = tuple(
+        (tuple(int(node) for node in path), int(parent))
+        for path, parent in levels[1]
+    )
+    normalized_groups = tuple(
+        (int(parent), tuple(int(index) for index in indices))
+        for parent, indices in groups
+    )
+    simd_width = 4
+    schedule_depth = 7
+    dense_groups = []
+    controls = []
+    for parent, indices in normalized_groups:
+        try:
+            parent_slot = _FR13_FIXED32_EXPORT_NODES.index(parent)
+        except ValueError as error:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PARENT_GROUP parent lacks an export slot"
+            ) from error
+        paths = tuple(level1[index][0] for index in indices)
+        if (
+            not paths
+            or len(paths) > simd_width
+            or any(len(path) > schedule_depth for path in paths)
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PARENT_GROUP dense schedule overflow"
+            )
+        dense_members = tuple(
+            path + (-1,) * (schedule_depth - len(path))
+            for path in paths
+        ) + tuple(
+            (-1,) * schedule_depth
+            for _ in range(simd_width - len(paths))
+        )
+        dense_groups.append(dense_members)
+        max_path_length = max(len(path) for path in paths)
+        # [4:0] parent node, [7:5] compact slot, [10:8] max path length.
+        controls.append(parent | (parent_slot << 5) | (max_path_length << 8))
+    return tuple(dense_groups), tuple(controls)
+
+
 def _fr13_fixed32_gdn_parent_group_contract(
     levels,
     groups=_FR13_FIXED32_GDN_LEVEL1_PARENT_GROUPS,
@@ -4508,6 +4555,25 @@ def _fr13_fixed32_gdn_parent_group_contract(
         max(len(path) for path, _parent in normalized[0]),
         max(group_max_path_lengths),
     )
+    dense_group_nodes, group_controls = (
+        _fr13_fixed32_gdn_parent_group_dense_schedule(
+            normalized, normalized_groups
+        )
+    )
+    dense_nodes = tuple(
+        node
+        for group in dense_group_nodes
+        for member in group
+        for node in member
+        if node >= 0
+    )
+    level1_nodes = tuple(
+        node for path, _parent in level1 for node in path
+    )
+    if tuple(sorted(dense_nodes)) != tuple(sorted(level1_nodes)):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PARENT_GROUP dense node coverage drift"
+        )
     contract = {
         "candidate": _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID,
         "parent_nodes": parent_nodes,
@@ -4522,6 +4588,11 @@ def _fr13_fixed32_gdn_parent_group_contract(
         "member_execution": "parallel_simd",
         "group_node_counts": group_node_counts,
         "group_max_path_lengths": group_max_path_lengths,
+        "dense_schedule_shape": (5, 4, 7),
+        "dense_schedule_sha256": _fr13_canonical_sha256(dense_group_nodes),
+        "group_controls": group_controls,
+        "group_control_loads_per_program": 1,
+        "runtime_path_metadata_loads_per_program": 0,
         "logical_path_counts": tuple(len(level) for level in normalized),
         "physical_grid_z": (1, len(normalized_groups)),
         "logical_programs": sum(len(level) for level in normalized),
@@ -4534,7 +4605,7 @@ def _fr13_fixed32_gdn_parent_group_contract(
         "writer_sha256": _fr13_canonical_sha256(tuple(sorted(writer_nodes))),
     }
     expected = {
-        "candidate": "fixed32_gdn_parent_group_simd_v2",
+        "candidate": "fixed32_gdn_parent_group_dense_simd_v3",
         "parent_nodes": (14, 0, 1, 4, 9),
         "parent_slots": (4, 0, 1, 2, 3),
         "path_indices": ((0, 9, 10), (1, 2), (3, 4), (5, 6), (7, 8)),
@@ -4545,6 +4616,13 @@ def _fr13_fixed32_gdn_parent_group_contract(
         "member_execution": "parallel_simd",
         "group_node_counts": (9, 12, 2, 2, 2),
         "group_max_path_lengths": (7, 7, 1, 1, 1),
+        "dense_schedule_shape": (5, 4, 7),
+        "dense_schedule_sha256": (
+            "500f9821c279c030fd0f42080d2a5410e5fef4de3d476c5ddf39f23c6a27f915"
+        ),
+        "group_controls": (1934, 1792, 289, 324, 361),
+        "group_control_loads_per_program": 1,
+        "runtime_path_metadata_loads_per_program": 0,
         "logical_path_counts": (1, 11),
         "physical_grid_z": (1, 5),
         "logical_programs": 12,
@@ -4810,38 +4888,18 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
             )
         if _FR13_FIXED32_GDN_PARENT_GROUP:
             group_contract = _fr13_fixed32_gdn_parent_group_contract(levels)
-            max_group_paths = int(group_contract["max_group_paths"])
-            group_path_indices = torch.full(
-                (int(group_contract["groups"]), max_group_paths),
-                -1,
-                dtype=torch.int32,
+            dense_group_nodes, group_controls = (
+                _fr13_fixed32_gdn_parent_group_dense_schedule(levels)
             )
-            for group_index, indices in enumerate(
-                group_contract["path_indices"]
-            ):
-                group_path_indices[group_index, : len(indices)] = torch.tensor(
-                    indices, dtype=torch.int32
-                )
             fixed32_parent_group = {
                 "contract": group_contract,
-                "path_indices": group_path_indices.to(device),
-                "path_counts": torch.tensor(
-                    group_contract["group_sizes"],
+                "dense_nodes": torch.tensor(
+                    dense_group_nodes,
                     dtype=torch.int32,
                     device=device,
                 ),
-                "path_max_lengths": torch.tensor(
-                    group_contract["group_max_path_lengths"],
-                    dtype=torch.int32,
-                    device=device,
-                ),
-                "parent_nodes": torch.tensor(
-                    group_contract["parent_nodes"],
-                    dtype=torch.int32,
-                    device=device,
-                ),
-                "parent_slots": torch.tensor(
-                    group_contract["parent_slots"],
+                "group_controls": torch.tensor(
+                    group_controls,
                     dtype=torch.int32,
                     device=device,
                 ),
@@ -9111,12 +9169,8 @@ def _tree_gdn_path_kernel_fixed32_parent_group(
     raw_b,
     A_log,
     dt_bias,
-    path_nodes,
-    path_lengths,
-    group_path_indices,
-    group_path_counts,
-    group_path_max_lengths,
-    group_parent_refs,
+    dense_group_nodes,
+    group_controls,
     state_export,
     out,
     ring_k,
@@ -9134,7 +9188,6 @@ def _tree_gdn_path_kernel_fixed32_parent_group(
     RAW_GATING: tl.constexpr,
     SCAN_ALIGN: tl.constexpr,
     MAX_PATH_LEN: tl.constexpr,
-    MAX_GROUP_PATHS: tl.constexpr,
     SIMD_WIDTH: tl.constexpr,
     NUM_GROUPS: tl.constexpr,
     BATCH_SIZE: tl.constexpr,
@@ -9148,7 +9201,8 @@ def _tree_gdn_path_kernel_fixed32_parent_group(
     every original child path. Member lanes advance in lockstep and retain
     independent state, preserving the seven-step maximum branch depth instead
     of serializing all paths in a group. Level 0 remains on the established
-    path kernel and owns export, counter, and freshness writes.
+    path kernel and owns export, counter, and freshness writes. A dense fixed
+    physical schedule removes runtime path-count/index/length indirection.
     """
     pid_vh = tl.program_id(0)
     pid_v = tl.program_id(1)
@@ -9163,14 +9217,17 @@ def _tree_gdn_path_kernel_fixed32_parent_group(
     offs_member = tl.arange(0, SIMD_WIDTH)[:, None]
     v_mask = offs_v < DIM_V
 
-    parent_ref = tl.load(group_parent_refs + pid_group)
+    group_control = tl.load(group_controls + pid_group)
+    parent_node = group_control & 31
+    parent_slot = (group_control >> 5) & 7
+    group_path_max_len = group_control >> 8
     if COMPACT_EXPORT:
         export_row = (
             pid_batch.to(tl.int64) * EXPORT_SLOTS
-            + parent_ref.to(tl.int64)
+            + parent_slot.to(tl.int64)
         )
     else:
-        export_row = parent_ref.to(tl.int64)
+        export_row = parent_node.to(tl.int64)
     parent_state = tl.load(
         state_export
         + ((export_row * NUM_VH + pid_vh) * DIM_V + offs_v[:, None]) * DIM_K
@@ -9178,31 +9235,17 @@ def _tree_gdn_path_kernel_fixed32_parent_group(
         mask=batch_ok & v_mask[:, None],
         other=0.0,
     ).to(tl.float32)
-    group_path_count = tl.load(group_path_counts + pid_group)
-    member_ok = batch_ok & (offs_member < group_path_count)
-    path_index = tl.load(
-        group_path_indices + pid_group * MAX_GROUP_PATHS + offs_member,
-        mask=member_ok,
-        other=0,
-    )
-    path_len = tl.load(
-        path_lengths + path_index,
-        mask=member_ok,
-        other=0,
-    )
-    group_path_max_len = tl.load(group_path_max_lengths + pid_group)
     state_i = parent_state[None, :, :] + tl.zeros(
         (SIMD_WIDTH, 1, 1), dtype=tl.float32
     )
 
     for i in tl.range(0, group_path_max_len):
-        step_ok = member_ok & (i < path_len)
         node = tl.load(
-            path_nodes + path_index * MAX_PATH_LEN + i,
-            mask=step_ok,
-            other=-1,
+            dense_group_nodes
+            + (pid_group * SIMD_WIDTH + offs_member) * MAX_PATH_LEN
+            + i,
         )
-        n_ok = step_ok & (node >= 0) & (node < N_ACTUAL)
+        n_ok = batch_ok & (node >= 0) & (node < N_ACTUAL)
         node_c = tl.maximum(node, 0)
         global_node = pid_batch * N_ACTUAL + node_c
         b_q = tl.load(
@@ -13318,12 +13361,8 @@ def launch_tree_gdn_prepared(
                     raw_b,
                     A_log,
                     dt_bias,
-                    _nodes,
-                    _lengths,
-                    _parent_group["path_indices"],
-                    _parent_group["path_counts"],
-                    _parent_group["path_max_lengths"],
-                    _parent_group["parent_nodes"],
+                    _parent_group["dense_nodes"],
+                    _parent_group["group_controls"],
                     st["export"],
                     _out,
                     ring_k,
@@ -13341,9 +13380,6 @@ def launch_tree_gdn_prepared(
                     RAW_GATING=raw_gating,
                     SCAN_ALIGN=_scan_align,
                     MAX_PATH_LEN=_mlen,
-                    MAX_GROUP_PATHS=int(
-                        _group_contract["max_group_paths"]
-                    ),
                     SIMD_WIDTH=int(_group_contract["simd_width"]),
                     NUM_GROUPS=int(_group_contract["groups"]),
                     BATCH_SIZE=1,
@@ -14282,12 +14318,8 @@ def launch_tree_gdn_prepared_fixed32_batch(
                     raw_b,
                     A_log,
                     dt_bias,
-                    nodes,
-                    path_lengths,
-                    parent_group["path_indices"],
-                    parent_group["path_counts"],
-                    parent_group["path_max_lengths"],
-                    parent_group["parent_slots"],
+                    parent_group["dense_nodes"],
+                    parent_group["group_controls"],
                     subtree_state["export"],
                     out,
                     ring_k,
@@ -14305,9 +14337,6 @@ def launch_tree_gdn_prepared_fixed32_batch(
                     RAW_GATING=True,
                     SCAN_ALIGN=scan_align_on(),
                     MAX_PATH_LEN=max_path_len,
-                    MAX_GROUP_PATHS=int(
-                        group_contract["max_group_paths"]
-                    ),
                     SIMD_WIDTH=int(group_contract["simd_width"]),
                     NUM_GROUPS=int(group_contract["groups"]),
                     BATCH_SIZE=batch,

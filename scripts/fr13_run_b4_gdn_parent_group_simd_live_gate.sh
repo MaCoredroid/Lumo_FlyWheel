@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Real SWE-Verified B4 byte qualification for fixed32_gdn_parent_group_simd_v2.
+# Real SWE-Verified B4 byte qualification for fixed32_gdn_parent_group_dense_simd_v3.
 # The candidate is shadow-only and the incumbent bytes are always served.
 set -euo pipefail
 
@@ -135,8 +135,8 @@ if (
     or info.st_nlink != 1
     or stat.S_IMODE(info.st_mode) != 0o444
     or payload.get("status") != "pass"
-    or payload.get("candidate") != "fixed32_gdn_parent_group_simd_v2"
-    or payload.get("kernel") != "tree_gdn_parent_group_simd_width4_v2"
+    or payload.get("candidate") != "fixed32_gdn_parent_group_dense_simd_v3"
+    or payload.get("kernel") != "tree_gdn_parent_group_dense_simd_width4_v3"
     or payload.get("campaign") != campaign
     or payload.get("gate") != gate
     or payload.get("mode") != mode

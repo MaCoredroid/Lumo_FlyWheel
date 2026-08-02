@@ -70,6 +70,7 @@ def _load_parent_group_contract() -> dict[str, object]:
     }
     functions = {
         "_fr13_canonical_sha256",
+        "_fr13_fixed32_gdn_parent_group_dense_schedule",
         "_fr13_fixed32_gdn_parent_group_contract",
         "_fr13_fixed32_gdn_physical_execution",
     }
@@ -145,6 +146,13 @@ def test_parent_group_descriptor_covers_paths_nodes_and_writers_once() -> None:
     assert contract["member_execution"] == "parallel_simd"
     assert contract["group_node_counts"] == (9, 12, 2, 2, 2)
     assert contract["group_max_path_lengths"] == (7, 7, 1, 1, 1)
+    assert contract["dense_schedule_shape"] == (5, 4, 7)
+    assert contract["dense_schedule_sha256"] == (
+        "500f9821c279c030fd0f42080d2a5410e5fef4de3d476c5ddf39f23c6a27f915"
+    )
+    assert contract["group_controls"] == (1934, 1792, 289, 324, 361)
+    assert contract["group_control_loads_per_program"] == 1
+    assert contract["runtime_path_metadata_loads_per_program"] == 0
     assert contract["physical_level_max_steps"] == (5, 7)
     assert contract["physical_critical_path"] == 12
     assert contract["physical_grid_z"] == (1, 5)
@@ -164,6 +172,56 @@ def test_parent_group_descriptor_covers_paths_nodes_and_writers_once() -> None:
         contract["parent_nodes"], contract["path_indices"], strict=True
     ):
         assert all(level1[index][1] == parent for index in indices)
+
+    dense_schedule, group_controls = namespace[
+        "_fr13_fixed32_gdn_parent_group_dense_schedule"
+    ](levels)
+    assert group_controls == contract["group_controls"]
+    assert dense_schedule == (
+        (
+            (19, 24, 26, 28, 29, 30, 31),
+            (20, -1, -1, -1, -1, -1, -1),
+            (21, -1, -1, -1, -1, -1, -1),
+            (-1, -1, -1, -1, -1, -1, -1),
+        ),
+        (
+            (2, 7, 12, 17, 22, -1, -1),
+            (3, 8, 13, 18, 23, 25, 27),
+            (-1, -1, -1, -1, -1, -1, -1),
+            (-1, -1, -1, -1, -1, -1, -1),
+        ),
+        (
+            (5, -1, -1, -1, -1, -1, -1),
+            (6, -1, -1, -1, -1, -1, -1),
+            (-1, -1, -1, -1, -1, -1, -1),
+            (-1, -1, -1, -1, -1, -1, -1),
+        ),
+        (
+            (10, -1, -1, -1, -1, -1, -1),
+            (11, -1, -1, -1, -1, -1, -1),
+            (-1, -1, -1, -1, -1, -1, -1),
+            (-1, -1, -1, -1, -1, -1, -1),
+        ),
+        (
+            (15, -1, -1, -1, -1, -1, -1),
+            (16, -1, -1, -1, -1, -1, -1),
+            (-1, -1, -1, -1, -1, -1, -1),
+            (-1, -1, -1, -1, -1, -1, -1),
+        ),
+    )
+    dense_nodes = [
+        node
+        for group in dense_schedule
+        for member in group
+        for node in member
+        if node >= 0
+    ]
+    assert dense_nodes == [
+        node
+        for indices in contract["path_indices"]
+        for index in indices
+        for node in level1[index][0]
+    ]
 
     output_writers = [
         node
@@ -270,7 +328,10 @@ def test_parent_group_kernel_and_launchers_keep_single_writer_surfaces() -> None
 
     assert "offs_member = tl.arange(0, SIMD_WIDTH)[:, None]" in kernel
     assert "for member in tl.static_range" not in kernel
-    assert "group_path_max_len = tl.load(" in kernel
+    assert "group_control = tl.load(group_controls + pid_group)" in kernel
+    assert "parent_node = group_control & 31" in kernel
+    assert "parent_slot = (group_control >> 5) & 7" in kernel
+    assert "group_path_max_len = group_control >> 8" in kernel
     assert "for i in tl.range(0, group_path_max_len)" in kernel
     assert "for i in tl.static_range(0, MAX_PATH_LEN)" not in kernel
     assert kernel.index("parent_state = tl.load(") < kernel.index(
@@ -286,6 +347,16 @@ def test_parent_group_kernel_and_launchers_keep_single_writer_surfaces() -> None
     assert "tl.store(\n                state_export" not in kernel
     assert "mask=n_ok & (pid_v == 0)" in kernel
     assert "(pid_vh % head_group == 0)" in kernel
+    assert "dense_group_nodes" in kernel
+    for stale_descriptor in (
+        "path_lengths",
+        "group_path_indices",
+        "group_path_counts",
+        "group_path_max_lengths",
+        "group_parent_refs",
+        "MAX_GROUP_PATHS",
+    ):
+        assert stale_descriptor not in kernel
 
     assert "if _parent_group is not None and _li == 1:" in b1_launcher
     assert "_serve_incumbent_parent_group = True" in b1_launcher
@@ -297,7 +368,9 @@ def test_parent_group_kernel_and_launchers_keep_single_writer_surfaces() -> None
     assert "COMPACT_EXPORT=False" in b1_launcher
     assert "BATCH_SIZE=1" in b1_launcher
     assert 'SIMD_WIDTH=int(_group_contract["simd_width"])' in b1_launcher
-    assert '_parent_group["path_max_lengths"]' in b1_launcher
+    assert '_parent_group["dense_nodes"]' in b1_launcher
+    assert '_parent_group["group_controls"]' in b1_launcher
+    assert '_parent_group["path_max_lengths"]' not in b1_launcher
     assert "COUNT_INVOCATION=_count and (_li == 0)" in b1_launcher
     assert "FLAGS_EXPORT=_flags_export and (_li == 0)" in b1_launcher
     assert "if parent_group is not None and level_index == 1:" in batched_launcher
@@ -305,7 +378,9 @@ def test_parent_group_kernel_and_launchers_keep_single_writer_surfaces() -> None
     assert "COMPACT_EXPORT=True" in batched_launcher
     assert "force_incumbent_parent_group=True" in batched_launcher
     assert 'SIMD_WIDTH=int(group_contract["simd_width"])' in batched_launcher
-    assert 'parent_group["path_max_lengths"]' in batched_launcher
+    assert 'parent_group["dense_nodes"]' in batched_launcher
+    assert 'parent_group["group_controls"]' in batched_launcher
+    assert 'parent_group["path_max_lengths"]' not in batched_launcher
     assert "COUNT_INVOCATION=count_invocation and level_index == 0" in (
         batched_launcher
     )
@@ -480,7 +555,7 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
             "ancestry_sha256": "b" * 64,
         },
         "fixed32_parent_group_contract": {
-            "candidate": "fixed32_gdn_parent_group_simd_v2",
+            "candidate": "fixed32_gdn_parent_group_dense_simd_v3",
             "parent_nodes": (14, 0, 1, 4, 9),
             "parent_slots": (4, 0, 1, 2, 3),
             "path_indices": (
@@ -497,6 +572,13 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
             "member_execution": "parallel_simd",
             "group_node_counts": (9, 12, 2, 2, 2),
             "group_max_path_lengths": (7, 7, 1, 1, 1),
+            "dense_schedule_shape": (5, 4, 7),
+            "dense_schedule_sha256": (
+                "500f9821c279c030fd0f42080d2a5410e5fef4de3d476c5ddf39f23c6a27f915"
+            ),
+            "group_controls": (1934, 1792, 289, 324, 361),
+            "group_control_loads_per_program": 1,
+            "runtime_path_metadata_loads_per_program": 0,
             "physical_level_max_steps": (5, 7),
             "physical_critical_path": 12,
             "logical_path_counts": (1, 11),
@@ -509,8 +591,8 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
         },
         "gdn_physical_execution": {
             "route": "fixed32_parent_group_simd",
-            "candidate": "fixed32_gdn_parent_group_simd_v2",
-            "kernel": "tree_gdn_parent_group_simd_width4_v2",
+            "candidate": "fixed32_gdn_parent_group_dense_simd_v3",
+            "kernel": "tree_gdn_parent_group_dense_simd_width4_v3",
             "kernel_source_sha256": "c" * 64,
             "parent_contract_sha256": "d" * 64,
             "writer_sha256": "e" * 64,
@@ -550,8 +632,12 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
     assert event["gdn_path_programs"] == 12
     assert event["gdn_padded_slots"] == 82
     assert event["gdn_physical_route"] == "fixed32_parent_group_simd"
-    assert event["gdn_physical_candidate"] == "fixed32_gdn_parent_group_simd_v2"
-    assert event["gdn_physical_kernel"] == "tree_gdn_parent_group_simd_width4_v2"
+    assert event["gdn_physical_candidate"] == (
+        "fixed32_gdn_parent_group_dense_simd_v3"
+    )
+    assert event["gdn_physical_kernel"] == (
+        "tree_gdn_parent_group_dense_simd_width4_v3"
+    )
     assert event["gdn_qualification_route"] == "b1_process_local_source_candidate"
     assert event["gdn_credential_sha256"] is None
     assert event["gdn_physical_programs"] == 6
