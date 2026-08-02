@@ -1,0 +1,39 @@
+{
+  "schema": "fr13.fixed32.cfwd_native_keygroup_pretask_identity_rejection.v1",
+  "classification": "infrastructure_pretask_rejection",
+  "source_commit": "65dd99a8173c0007df4e1ee033f74bc4880d2b48",
+  "qualification_profile": {
+    "batch_size": 1,
+    "draft_vocab": "k64",
+    "root_reduction": true,
+    "topology": "hydra27_fixed32",
+    "task_source": "swe_bench_verified"
+  },
+  "runtime": {
+    "boot_completed": true,
+    "health_ready": true,
+    "ingress_opened": true,
+    "model_requests_completed": 0,
+    "swe_tasks_completed": 0
+  },
+  "rejection": {
+    "phase": "pre_task_immutable_boundary",
+    "validator": "native_cfwd_source_binary_identity",
+    "reason": "host validator pinned the retired v3 source identity while the installed candidate and immutable runtime boundary carried the v4 source identity",
+    "retired_v3_source_sha256": "1c1a9813410dcf15bcbb4d23bec71ee16ddcd7e2dbe3b1a3698e58f71bd96985",
+    "bound_v4_source_sha256": "5699ab062624bd2f6368143c48068bfccf1f9c3b5629e243d92616b94359bc54",
+    "bound_v4_binary_sha256": "c9647856777d17dd3cde07a1d0e0b4c87ea1fb823bebd65f45ded1d461f8af26"
+  },
+  "result": {
+    "kernel_correctness_result": false,
+    "byte_gate_coverage_observed": false,
+    "performance_measurement": false,
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false
+  },
+  "cleanup": {
+    "preserved_container_removed": true,
+    "docker_empty_after_cleanup": true,
+    "gpu_compute_processes_after_cleanup": 0
+  }
+}

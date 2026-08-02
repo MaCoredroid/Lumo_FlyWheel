@@ -1,0 +1,22 @@
+{
+  "schema": "fr13.fixed32.cfwd_native_keygroup_b1_relaunch_readiness.v1",
+  "candidate": "fixed32_cfwd_native_keygroup_triton_scalar_cuda_v4",
+  "canonical_source_sha256": "5699ab062624bd2f6368143c48068bfccf1f9c3b5629e243d92616b94359bc54",
+  "validators": {
+    "task_boundary_source_identity_updated": true,
+    "floor_gate_source_identity_updated": true,
+    "candidate_contract_regression_assertion_added": true
+  },
+  "host_verification": {
+    "focused_tests_passed": 74,
+    "python_compile_passed": true,
+    "shell_parse_passed": true,
+    "ruff_passed": true,
+    "diff_check_passed": true
+  },
+  "status": {
+    "host_repair_ready": true,
+    "gpu_relaunch_performed": false,
+    "real_swe_verified_requalification_required": true
+  }
+}

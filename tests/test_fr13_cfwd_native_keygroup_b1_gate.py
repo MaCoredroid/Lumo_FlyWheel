@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "src"))
 
 import fr13_cfwd_native_keygroup_b1_gate as gate  # noqa: E402
+import run_swe_bench_q36_a as orchestrator  # noqa: E402
 import fr13_runtime_manifest as runtime_manifest  # noqa: E402
 
 
@@ -394,6 +395,14 @@ def test_gate_runner_and_launcher_are_closed_over_exact_b1_contract() -> None:
     assert "export FR13_GRAPH_TIMER=0" in runner
     assert "export LUMO_SWE_AUTOCOMMIT=0" in runner
     assert "fr13_cfwd_native_keygroup_b1_gate.py" in runner
+    assert (
+        orchestrator._FIXED32_CFWD_NATIVE_KEYGROUP_SOURCE_SHA256
+        == gate.candidate.CUDA_SOURCE_SHA256
+    )
+    assert (
+        gate.floor_gate.FIXED32_CFWD_NATIVE_KEYGROUP_SOURCE_SHA256
+        == gate.candidate.CUDA_SOURCE_SHA256
+    )
 
     assert "native key-group CFWD requires layer-batch qualification" in serve
     assert "native key-group CFWD requires boundary counters and forbids auxiliary timing" in serve
