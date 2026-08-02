@@ -1,0 +1,137 @@
+{
+  "schema": "fr13.fixed32.dfwd_mtp_m1_static_source.v1",
+  "status": "SOURCE_ONLY_DEFAULT_OFF_COMPILE_AND_REAL_BYTE_GATE_PENDING",
+  "acceptance_valid": false,
+  "timing_eligible": false,
+  "performance_claim": false,
+  "byte_equality_claim": false,
+  "resource_claim": false,
+  "production_default_enabled": false,
+  "source": {
+    "base_commit": "1ceb286609806c828e5d03089e4f45d6a09e7463",
+    "branch": "agent/fixed32-dfwd-mtp-m1-static-20260802",
+    "checkpoint": "50b720f0cfeda22f9718e18951267fe54d920d77",
+    "patch_path": "scripts/fr13_patch_cutlass_fixed32_wave.py",
+    "patch_sha256": "32bd6e38068a60d5ce9919133298c9bd5bf49eda960c61171a01be0542f25a17",
+    "test_path": "tests/test_fr13_cutlass_fixed32_wave_patch.py",
+    "test_sha256": "54586646c61fd1ea0acd44dab0ea04eab3fbef6a15f0e1dcf8a0af6f9c0262b5",
+    "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2"
+  },
+  "target_selection": {
+    "basis": "provenance-bound real SWE-Verified B1 Nsight attribution",
+    "profiled_complete_events": 881,
+    "dfwd_ms_per_event": 47.435717,
+    "mtp_fp8_cutlass_ms_per_event": 8.514284570942111,
+    "mtp_fp8_cutlass_launches_per_event": 20,
+    "mtp_fp8_cutlass_share_of_dfwd": 0.17949100521328068,
+    "unified_attention_ms_per_event": 6.967564062429058,
+    "unified_attention_launches_per_event": 4,
+    "unified_attention_share_of_dfwd": 0.14688434090181457,
+    "unified_attention_existing_candidate": "agent/fixed32-dfwd-unified-bm8@d4f1780b3530107d2349d9f4f2a66912f20cad06"
+  },
+  "floor_bound": {
+    "mtp_forward_mandatory_weight_bytes": 1908798976,
+    "bandwidth_bytes_per_second": 273000000000,
+    "mandatory_weight_floor_ms": 6.991937641025641,
+    "observed_group_floor_ratio": 1.2177289055016742,
+    "optimistic_scheduler_headroom_ms": 1.5223469299164707,
+    "weight_reads_removed": false
+  },
+  "fixed_workload_contract": {
+    "batch_size": 1,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "physical_rows_root_inclusive": 32,
+    "mtp_forwards_per_event": 4,
+    "candidate_projection_m": 1,
+    "drafter_quality_changed": false,
+    "rejection_sampling_changed": false,
+    "physical32_semantics_changed": false
+  },
+  "candidate": {
+    "production_selector": "static_persistent_mtp_m1",
+    "diagnostic_selector": "static_persistent_mtp_m1_byte_ab",
+    "dispatch_m": 1,
+    "projection_nk": [
+      [
+        34816,
+        5120
+      ],
+      [
+        5120,
+        17408
+      ],
+      [
+        5120,
+        6144
+      ],
+      [
+        16384,
+        5120
+      ],
+      [
+        14336,
+        5120
+      ]
+    ],
+    "tile_mnk": [
+      128,
+      32,
+      128
+    ],
+    "cluster": [
+      1,
+      1,
+      1
+    ],
+    "scale_granularity": [
+      128,
+      1,
+      128
+    ],
+    "swap_ab": true,
+    "mainloop": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+    "epilogue": "EpilogueScheduleAuto",
+    "stock_scheduler": "dynamic CLC selected by stock GemmUniversal",
+    "candidate_scheduler": "StaticPersistentTileScheduler100",
+    "full_k_output_tile_ownership": true,
+    "split_k": false,
+    "runtime_selector_default": "stock",
+    "other_row_counts_fall_back_to_stock": true
+  },
+  "diagnostic_source_hook": {
+    "maximum_comparisons": 320,
+    "authenticated_real_task_arm_required": true,
+    "execution_order": "stock then candidate",
+    "comparison": "all output bytes",
+    "served_return": "stock",
+    "formal_phase_bound_reducer_implemented": false,
+    "credential_issued": false
+  },
+  "verification": {
+    "focused_patch_tests_passed": 24,
+    "python_compile": "pass",
+    "git_diff_check": "pass",
+    "ruff": "not_run_unavailable",
+    "cuda_compile": "not_run_live_campaign_host_protected",
+    "sass_resource_check": "not_run_live_campaign_host_protected",
+    "gpu": "not_run",
+    "docker": "not_run",
+    "real_swe_task": "not_run"
+  },
+  "required_next_gates": [
+    "pinned sm_121a compile and stock-versus-candidate SASS resource audit",
+    "real SWE-Verified one-task B1 K64/root1 phase-bound byte gate with 20 launches per event",
+    "matched real SWE-Verified exact4 Tail23 and Hydra27 candidate timing",
+    "exact16 one-sided U95 before formal floor acceptance"
+  ],
+  "scope_exclusions": [
+    "B4 M4 MTP projection scheduler",
+    "unified-attention BM8 candidate",
+    "draft vocabulary head",
+    "drafter K selection or quality tuning",
+    "verifier",
+    "committer"
+  ]
+}

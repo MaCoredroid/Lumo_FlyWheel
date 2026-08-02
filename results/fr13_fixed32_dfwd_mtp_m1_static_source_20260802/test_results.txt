@@ -1,0 +1,9 @@
+FR13 fixed32 DFWD MTP M1 static scheduler source checkpoint
+
+PASS python3 -m py_compile scripts/fr13_patch_cutlass_fixed32_wave.py
+PASS python3 -m pytest -q tests/test_fr13_cutlass_fixed32_wave_patch.py
+     24 passed in 0.06s
+PASS git diff --check
+SKIP ruff: executable unavailable in this worktree
+NOT RUN CUDA compile, nvcc, Triton, C++ build, Docker, GPU, perf probe
+NOT RUN real SWE-Verified byte gate or timing
