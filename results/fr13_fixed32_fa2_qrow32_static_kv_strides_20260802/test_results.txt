@@ -1,0 +1,21 @@
+Fixed32 B4 FA2 qrow32 static-K/V-stride verification (2026-08-02 UTC)
+
+Host test selection:
+  tests/test_fr13_fa2_tree_kernel_candidates.py
+  tests/test_fr13_fa2_qrow32_static_gate.py
+  tests/test_fr13_fa2_qrow32_gate.py
+
+Result: 27 passed in 0.19s
+
+Additional host checks:
+  Python byte compilation: pass
+  Pinned FA2 header transform: pass
+  Pinned FA2 resolver migration: pass
+  Second-pass transform idempotence: pass
+  Static page/row/column address equivalence proof: pass
+  Static KV-head offset equivalence proof: pass
+  Split-forward arithmetic/control census preservation: pass
+  git diff --check: pass
+
+No GPU compile, binary-resource gate, real-event byte qualification,
+synthetic performance probe, or full-step timing is represented here.
