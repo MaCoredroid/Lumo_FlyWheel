@@ -21,7 +21,7 @@ Run from the clean branch HEAD containing this artifact:
 cd /home/mark/lumoFlyWheel-b1-wide256-k64-root-profile
 RUNROOT=output/fr13_b1_wide256_recompute_k64_root_gate_20260802T_gateZ \
 TAG=wide256_recompute_k64_root_cap320_20260802T_gateZ \
-FORKED_FA2_SO=/home/mark/lumoFlyWheel-kernel-integrated/output/fr13_qrow16_production_assets/_vllm_fa2_C.qrow16_num_splits0.abi3.so \
+FORKED_FA2_SO=/home/mark/lumoFlyWheel-b1-wide256-k64-root-profile/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so \
 CUTLASS_STREAMK_SO=/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.streamk_force_wide256_b1_recompute_stack0_k64_root1_gate_ready_cap320.abi3.so \
 FR13_STREAMK_GATE_CANDIDATE=streamk_force_wide256 \
 FR13_STREAMK_QUALIFICATION_PROFILE=k64_root \

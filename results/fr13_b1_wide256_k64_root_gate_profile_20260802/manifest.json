@@ -7,6 +7,12 @@
     "sha256": "503277a2dca6784502b709007adfe45f42d0f1a1851107e7b913e1e85a00de5a"
   },
   "candidate_selector": "streamk_force_wide256",
+  "common_fa2": {
+    "bytes": 299183936,
+    "path": "/home/mark/lumoFlyWheel-b1-wide256-k64-root-profile/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so",
+    "selector": "stock",
+    "sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d"
+  },
   "diagnostic_selector": "streamk_force_wide256_byte_ab",
   "draft_vocab": {
     "blocks_container_path": "/workspace/scripts/fr13_dvk_subset_blocks.json",
