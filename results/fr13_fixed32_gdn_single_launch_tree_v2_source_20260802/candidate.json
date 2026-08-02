@@ -1,0 +1,92 @@
+{
+  "schema": "fr13.fixed32.gdn_single_launch_tree.source_qualification.v2",
+  "created_at_utc": "2026-08-02T00:03:50Z",
+  "status": "SOURCE_QUALIFIED_DEFAULT_OFF_NO_GPU_MEASUREMENT",
+  "candidate": {
+    "id": "fixed32_gdn_single_launch_tree_v2",
+    "identity_schema": "fr13.fixed32.gdn_single_launch.identity.v2",
+    "kernel": "_tree_gdn_kernel_fixed32_single_launch",
+    "node_helper": "_tree_gdn_fixed32_single_launch_node",
+    "source": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+    "patcher": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+    "supported_batches": [1, 4],
+    "physical_rows_per_request": 32,
+    "block_v": 8,
+    "num_warps": 8,
+    "threads_per_cta": 256,
+    "nominal_register_fp32_values_per_cta": 4096,
+    "nominal_register_fp32_values_per_thread": 16,
+    "nominal_register_bytes_per_cta": 16384,
+    "physical_launches_per_layer": 1,
+    "physical_programs_per_request_layer": 1,
+    "physical_recurrence_critical_path": 32,
+    "state_export_writes_per_request_layer": 0,
+    "state_parent_reads_per_request_layer": 0,
+    "logical_launches_per_request_layer": 2,
+    "logical_programs_per_request_layer": 12,
+    "logical_padded_slots_per_request_layer": 82,
+    "logical_critical_path": 12
+  },
+  "identity": {
+    "contract_sha256": "ac748f003754a5f8562d864112c074450f376d10a9589d6047f1b88032f60393",
+    "groups_sha256": "cba9010f16772510ff6017e866a520552e7ada913bb786152133597cbc7c1f62",
+    "execution_sha256": "80aed4d1a882ee4d4cde21dbf4314ed3abaae3f7553e35b6db5cd7574fe3b7db",
+    "parent_sha256": "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd",
+    "ancestry_sha256": "90873d81e83ce1644ee4701e043b7e9d26e83b7a7ca752d538a0e6eed1946dad",
+    "source_sha256": "ca5ff6496c7cf3221996e6aa5971d36207e305e51f5c4a308f71d15165ab659a",
+    "tail6_fixed32_b1_identity_sha256": "c0f23d95a83aac322b421df93a60235866744eb95dd6906812ad3061b8b5bbad",
+    "tail6_fixed32_b4_identity_sha256": "899866553479c237242c4f7068664c1ecf0cce32d41efb6a904e323c2b71b868",
+    "hydra27_fixed32_b1_identity_sha256": "2034579e67a81d133bf146262cdce03d4a940df74bd870f1d9c921f17004dd22",
+    "hydra27_fixed32_b4_identity_sha256": "46279e28fe9306876568dfa9eaadf586fd0b1eebc22c4c012bf5ac5ba37d57e8"
+  },
+  "qualification": {
+    "authoritative_surfaces": [
+      "out",
+      "ring_k",
+      "ring_v",
+      "ring_a",
+      "ring_b",
+      "flags",
+      "counter"
+    ],
+    "candidate_export_must_equal_pre_run_baseline": true,
+    "state_restored_on_success_or_failure": true,
+    "reference_always_served": true,
+    "records_per_task_marker": 48,
+    "b1_required_real_swe_verified_tasks": 1,
+    "b4_required_subset": "config/fr13_fixed32/subset_b4_four.json",
+    "b4_subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "b4_required_real_swe_verified_tasks": 4,
+    "legacy_v1_pass_authorizes_v2": false,
+    "legacy_batched_bv_pass_authorizes_v2": false
+  },
+  "verification": {
+    "focused_tests_passed": 24,
+    "full_fixed32_tests_passed": 788,
+    "full_fixed32_tests_skipped": 8,
+    "full_fixed32_environment_failures": 3,
+    "python_compile": "PASS",
+    "git_diff_check": "PASS",
+    "gpu_used": false,
+    "triton_compiled": false
+  },
+  "performance": {
+    "b1_full_step_wall_ms": null,
+    "b1_full_step_tps": null,
+    "b1_gpu_component_tps": null,
+    "b4_full_step_wall_ms": null,
+    "b4_full_step_tps": null,
+    "b4_gpu_component_tps": null,
+    "hardware_floor_ms_per_step": null,
+    "ratio_to_hardware_floor": null,
+    "one_sided_u95_ratio_to_floor": null,
+    "acceptance_status": "PENDING_REAL_SWE_VERIFIED_B1_AND_B4"
+  },
+  "pending": [
+    "real SWE-Verified B1 raw-byte qualification",
+    "canonical exact4 SWE-Verified B4 raw-byte qualification",
+    "SM121 Triton compilation and register/local-memory inspection",
+    "real full-step wall TPS and GPU-component breakdown",
+    "hardware-floor acceptance under B1 and B4"
+  ]
+}

@@ -477,4 +477,8 @@ def test_patcher_wires_graph_capture_signature_and_unconditional_replay_hook() -
     assert "fixed32_batch_gdn_graph_live_capture_begin(identity, batch)" in source
     assert "fixed32_batch_gdn_graph_live_capture_end(" in source
     assert "fixed32_batch_gdn_graph_live_gate_on_replay(" in source
-    assert "repr(_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB == \"1\")" in source
+    assert "_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB == \"1\"" in source
+    assert "_FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB == \"1\"" in source
+    assert "_FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB == \"1\"" in source
+    assert "FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB_ENABLED_PATH" in source
+    assert "FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB_ENABLED_PATH" in source

@@ -1,0 +1,31 @@
+SOURCE QUALIFICATION ONLY. NO GPU OR PERFORMANCE MEASUREMENT.
+
+Focused command:
+PYTHONPATH=. pytest -q tests/test_fr13_fixed32_gdn_single_launch_tree.py tests/test_fr13_fixed32_gdn_parent_group.py
+Result: 24 passed in 2.19s
+
+Full fixed32 command:
+PYTHONPATH=. pytest -q tests/test_fr13_fixed32*.py
+Result: 788 passed, 8 skipped, 3 environment failures in 22.13s
+
+Environment failure separation:
+- 2 ingress-wiring cases require the absent private .venv/bin/python.
+- 1 runtime-manifest case requires the absent private no-symlink Hugging Face dataset cache.
+
+Static checks:
+python3 -m py_compile src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py scripts/fr10_phase4_patch_vllm_tree_gdn.py tests/test_fr13_fixed32_gdn_single_launch_tree.py tests/test_fr13_fixed32_gdn_parent_group.py tests/test_fr13_fixed32_gdn_batch_graph_gate.py
+git diff --check
+Result: PASS
+
+Patcher observer self-test:
+python3 scripts/fr10_phase4_patch_vllm_tree_gdn.py --self-test
+Result: pre-existing conv-pregather fixture failure before GDN assertions.
+Reproduction against unchanged parent commit 989c6917a: same failure.
+
+GPU used: no
+Triton compiled: no
+Synthetic or probe timing: no
+Real SWE-Verified timing: no
+B1 live PASS: pending
+B4 exact4 live PASS: pending
+Hardware-floor acceptance: pending
