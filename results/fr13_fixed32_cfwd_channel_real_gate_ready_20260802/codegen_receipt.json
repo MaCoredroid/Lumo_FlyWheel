@@ -1,0 +1,86 @@
+{
+  "architecture": "sm_121a",
+  "code_commit": "75caa9cf67d98eb0b711d374139903a745c65039",
+  "constants": {
+    "BLOCK_C": 1024,
+    "CONV_C": 10240,
+    "CONV_L": 34,
+    "ELEM_BYTES": 2,
+    "LIVE_SOURCE_COLS": 3,
+    "PATH_COLS": 16,
+    "SOURCE_ROWS": 36,
+    "SPEC_COLS": 32
+  },
+  "contract_pass": true,
+  "gpu_visible": false,
+  "kernel": "_fr13_fixed32_conv_channel_zeroelide_col0_kernel",
+  "performance_measured": false,
+  "schema": "fr13.fixed32.conv_channel_zeroelide_codegen.v1",
+  "semantic_traffic_bytes": {
+    "1": {
+      "destination_writes": 33423360,
+      "source_reads": 2949120
+    },
+    "4": {
+      "destination_writes": 133693440,
+      "source_reads": 11796480
+    }
+  },
+  "source_file_sha256": "f86b51e0eb49f60c0c988a0e91059b729c53dcbf58bd451a0a63c3f54f195750",
+  "variants": [
+    {
+      "batch": 1,
+      "compile_hash": "8eac57dce06f10870ac7e9e32671d43d0e38d927839818a772338793855982a3",
+      "ctas_per_event": 480,
+      "ctas_per_layer_request": 10,
+      "cubin_bytes": 74328,
+      "cubin_sha256": "f1771e935d09963b5a6013aa08eabe8fe5d8845b976137cf685c022fedc9360b",
+      "forbidden_sass_counts": {
+        "CALL": 0,
+        "LDL": 0,
+        "STL": 0
+      },
+      "function_source_sha256": "dc575bd5e980e3e9f212aaa03c045966813d14a080c0b5d98b2c1f92c0c9d633",
+      "launch_shared_bytes": 0,
+      "local_bytes": 0,
+      "registers_per_thread": 48,
+      "reported_shared_bytes": 0,
+      "sass_counts": {
+        "BRA": 204,
+        "EXIT": 3,
+        "ISETP": 3,
+        "LDG": 32,
+        "SEL": 1,
+        "STG": 272
+      },
+      "stack_bytes": 0
+    },
+    {
+      "batch": 4,
+      "compile_hash": "bffad44476dffca379ff401bb7ed0dd3a653d0ad0de4f3640afa97eb66d7994c",
+      "ctas_per_event": 1920,
+      "ctas_per_layer_request": 10,
+      "cubin_bytes": 75312,
+      "cubin_sha256": "b9faeaedbeff17f9d8e9e73c91cfa23462a5764cefa72daa28ab0a7926307aa5",
+      "forbidden_sass_counts": {
+        "CALL": 0,
+        "LDL": 0,
+        "STL": 0
+      },
+      "function_source_sha256": "dc575bd5e980e3e9f212aaa03c045966813d14a080c0b5d98b2c1f92c0c9d633",
+      "launch_shared_bytes": 0,
+      "local_bytes": 0,
+      "registers_per_thread": 48,
+      "reported_shared_bytes": 0,
+      "sass_counts": {
+        "BRA": 204,
+        "EXIT": 3,
+        "ISETP": 3,
+        "LDG": 32,
+        "SEL": 1,
+        "STG": 272
+      },
+      "stack_bytes": 0
+    }
+  ]
+}

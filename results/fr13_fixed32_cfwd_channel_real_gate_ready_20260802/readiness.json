@@ -1,0 +1,26 @@
+{
+  "b1_real_gate_pending": true,
+  "b4_real_gate_ready": false,
+  "candidate": "fixed32_channel_zeroelide_source_col0",
+  "code_commit": "75caa9cf67d98eb0b711d374139903a745c65039",
+  "defaults_off": true,
+  "formal_acceptance_eligible": false,
+  "gpu_execution_performed": false,
+  "hardware_floor_claimed": false,
+  "host_verification": {
+    "census_tamper_cases_passed": 167,
+    "focused_tests_passed": 72,
+    "independent_review_blockers": 0,
+    "offline_codegen_contract_pass": true
+  },
+  "performance_measured": false,
+  "qualification_scope": {
+    "batch": 1,
+    "concurrency": 1,
+    "run_classification": "b1_diagnostic",
+    "task_count": 1
+  },
+  "real_swe_verified_task_executed": false,
+  "schema": "fr13.fixed32.conv_channel_real_gate_readiness.v1",
+  "state": "ready_for_b1_real_gate"
+}
