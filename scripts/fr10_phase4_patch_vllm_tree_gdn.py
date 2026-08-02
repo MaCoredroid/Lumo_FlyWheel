@@ -4858,6 +4858,14 @@ def _fr13_fixed32_observed_commit(
                 != 48
                 or committer_contract.get("state_only_output_elided") is not True
                 or committer_contract.get("active_length_recurrence") is not True
+                or committer_contract.get(
+                    "pre_replay_dynamic_bound_guard"
+                ) is not True
+                or int(
+                    committer_contract.get("hot_scan_bound_clamps", -1)
+                ) != 0
+                or int(committer_contract.get("physical_node_domain", -1)) != 32
+                or int(committer_contract.get("accepted_steps_max", -1)) != 12
                 or committer_contract.get("final_state_store_once") is not True
                 or committer_contract.get("direct_ring_loads") is not True
                 or int(committer_contract.get("direct_ring_inputs", -1)) != 4

@@ -9785,7 +9785,6 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     spec_state_indices,
     B: tl.constexpr,
     PATH_CAP: tl.constexpr,
-    RING_N: tl.constexpr,
     H: tl.constexpr,
     HV: tl.constexpr,
     K: tl.constexpr,
@@ -9830,7 +9829,10 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     i_h = i_hv // (HV // H)
 
     accepted = tl.load(accepted_lens + i_n).to(tl.int64)
-    T = tl.minimum(tl.maximum(accepted, 0) + 1, PATH_CAP)
+    # Replay enqueues a device assertion for accepted in [0, 11] and every
+    # active node in [0, 31] before this graph. Consume that validated domain
+    # directly so the hot scan does not repeat bounds clamps in every program.
+    T = accepted + 1
 
     o_k = i_k * BK + tl.arange(0, BK)
     o_v = i_v * BV + tl.arange(0, BV)
@@ -9866,7 +9868,7 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
             mask=i_t > 0,
             other=0,
         ).to(tl.int64)
-        node = tl.minimum(tl.maximum(path_node, 0), RING_N - 1)
+        node = path_node
         p_k = (
             k_rings
             + i_l * RING_K_L_STRIDE
@@ -9971,7 +9973,6 @@ def _fr13_fixed32_committer_native_layer_batch(
         spec_state_indices,
         B=batch,
         PATH_CAP=16,
-        RING_N=32,
         H=num_kh,
         HV=num_vh,
         K=dim_k,
@@ -10395,6 +10396,10 @@ def preseed_fixed32_committer_graph(
                 "layer_batch": True,
                 "state_only_output_elided": True,
                 "active_length_recurrence": True,
+                "pre_replay_dynamic_bound_guard": True,
+                "hot_scan_bound_clamps": 0,
+                "physical_node_domain": 32,
+                "accepted_steps_max": 12,
                 "final_state_store_once": True,
                 "direct_ring_loads": True,
                 "direct_ring_inputs": 4,

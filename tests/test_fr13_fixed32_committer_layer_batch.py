@@ -82,7 +82,7 @@ def test_layer_batch_recurrence_stops_after_root_plus_accepted_drafts() -> None:
     assert "cu_seqlens," not in kernel
     assert "accepted_paths + i_n * PATH_CAP + path_offset" in kernel
     assert "accepted = tl.load(accepted_lens + i_n).to(tl.int64)" in kernel
-    assert "T = tl.minimum(tl.maximum(accepted, 0) + 1, PATH_CAP)" in kernel
+    assert "T = accepted + 1" in kernel
     assert 'state["accepted_lens"]' in launch
     assert 'state["cu"]' not in launch
     assert "PATH_CAP=16" in launch
@@ -95,6 +95,31 @@ def test_committer_guards_reject_unreachable_padding_lengths() -> None:
     bound = "lens <= _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH"
     assert bound in row_guard
     assert bound in replay
+
+
+def test_layer_batch_consumes_prevalidated_fixed32_scan_bounds() -> None:
+    kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
+    launch = _text("_fr13_fixed32_committer_native_layer_batch")
+    replay = _text("_fr13_fixed32_committer_replay")
+    preseed = _text("preseed_fixed32_committer_graph")
+
+    assert replay.index("dynamic_ok = (") < replay.index("graph.replay()")
+    assert replay.index("_fr13_fixed32_device_assert(") < replay.index(
+        "graph.replay()"
+    )
+    assert "(lens >= 0).all()" in replay
+    assert "lens <= _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH" in replay
+    assert "(paths >= 0) & (paths < 32)" in replay
+    assert "T = accepted + 1" in kernel
+    assert "node = path_node" in kernel
+    assert "tl.minimum(tl.maximum(accepted" not in kernel
+    assert "tl.minimum(tl.maximum(path_node" not in kernel
+    assert "RING_N: tl.constexpr" not in kernel
+    assert "RING_N=32" not in launch
+    assert '"pre_replay_dynamic_bound_guard": True' in preseed
+    assert '"hot_scan_bound_clamps": 0' in preseed
+    assert '"physical_node_domain": 32' in preseed
+    assert '"accepted_steps_max": 12' in preseed
 
 
 def test_layer_batch_publishes_only_the_final_running_state() -> None:
@@ -437,6 +462,10 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
     assert "expected_fused_calls = 1 if layer_batch is True else 48" in patcher
     assert 'committer_contract.get("state_only_output_elided") is not True' in patcher
     assert 'committer_contract.get("active_length_recurrence") is not True' in patcher
+    assert '"pre_replay_dynamic_bound_guard"' in patcher
+    assert 'committer_contract.get("hot_scan_bound_clamps", -1)' in patcher
+    assert 'committer_contract.get("physical_node_domain", -1)' in patcher
+    assert 'committer_contract.get("accepted_steps_max", -1)' in patcher
     assert 'committer_contract.get("final_state_store_once") is not True' in patcher
     assert 'committer_contract.get("direct_ring_loads") is not True' in patcher
     assert 'committer_contract.get("direct_ring_inputs", -1)' in patcher
