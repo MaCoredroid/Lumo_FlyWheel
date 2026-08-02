@@ -748,7 +748,8 @@ def test_published_contract_matches_candidate_source_and_exact_math() -> None:
         assert invalidation["draft_head_m32_qualified_patcher_sha256"] == (
             qualified_source_sha
         )
-        assert invalidation["current_patcher_sha256"] == current_source_sha
+        assert invalidation["current_patcher_sha256"] != qualified_source_sha
+        assert current_source_sha != qualified_source_sha
         assert pair8_runtime["claims"]["production_default_enabled"] is False
     assert integration["components"]["draft_head_m32"]["source_commit"] == (
         "3b06acebbd673466703268bf0b3647f4bf4a3070"

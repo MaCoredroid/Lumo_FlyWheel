@@ -21360,6 +21360,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         (3,), dtype=torch.int64, device=_fr13_dh_w.device
                     )
                     self._fr13_dh_ab_root_checks = 0
+                    self._fr13_dh_pad_seen_eager = False
                     if _fr13_dh_m32_live:
                         self._fr13_dh_m32_live_count_enable = torch.zeros(
                             (), dtype=torch.int64, device=_fr13_dh_w.device
@@ -21402,10 +21403,26 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "FR13 draft-head M32 engaged outside exact B1 BF16 "
                         "hidden[1,5120] stride[5120,1] contract"
                     )
+                if (
+                    _fr13_dh_rows
+                    and not self._fr13_dh_pad_seen_eager
+                    and torch.cuda.is_current_stream_capturing()
+                ):
+                    raise RuntimeError(
+                        "FR13 direct padded draft head reached capture before "
+                        "one eager GEMM launch"
+                    )
                 _fr13_dh_in = self._fr13_dh_pad_inputs[_rows]
                 _fr13_dh_out = self._fr13_dh_pad_outputs[_rows]
                 _fr13_dh_in.copy_(_h.expand_as(_fr13_dh_in))
                 torch.mm(_fr13_dh_in, _sh.weight.t(), out=_fr13_dh_out)
+                if _fr13_dh_rows and not self._fr13_dh_pad_seen_eager:
+                    print(
+                        "[FR13_DRAFT_HEAD_PAD] engaged "
+                        f"candidate_rows={_rows} eager_launch=1",
+                        flush=True,
+                    )
+                    self._fr13_dh_pad_seen_eager = True
                 if (
                     tuple(_fr13_dh_in.stride()) != (5120, 1)
                     or tuple(_sh.weight.t().stride()) != (1, 5120)

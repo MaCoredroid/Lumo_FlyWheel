@@ -21,6 +21,7 @@ case "$FR13_GATE_QROW16" in
 esac
 FR13_GATE_TAW_NATIVE=${FR13_GATE_TAW_NATIVE:-1}
 FR13_GATE_DRAFT_HEAD_PAD=${FR13_GATE_DRAFT_HEAD_PAD:-0}
+FR13_GATE_DRAFT_HEAD_PAD_ROWS=${FR13_GATE_DRAFT_HEAD_PAD_ROWS:-0}
 FR13_GATE_DRAFT_HEAD_M32=${FR13_GATE_DRAFT_HEAD_M32:-0}
 FR13_GATE_DRAFT_HEAD_M1_VEC=${FR13_GATE_DRAFT_HEAD_M1_VEC:-0}
 FR13_GATE_BM8=${FR13_GATE_BM8:-0}
@@ -34,6 +35,10 @@ case "$FR13_GATE_DRAFT_HEAD_M1_VEC" in
   0|pair8bits) ;;
   *) echo "FR13_GATE_DRAFT_HEAD_M1_VEC must be 0 or pair8bits" >&2; exit 2 ;;
 esac
+case "$FR13_GATE_DRAFT_HEAD_PAD_ROWS" in
+  0|32) ;;
+  *) echo "FR13_GATE_DRAFT_HEAD_PAD_ROWS must be 0 or 32" >&2; exit 2 ;;
+esac
 FR13_DRAFT_HEAD_M1_VEC_SO=${FR13_DRAFT_HEAD_M1_VEC_SO:-}
 FR13_GATE_GDN_BV=${FR13_GATE_GDN_BV:-64}
 case "$FR13_GATE_GDN_BV" in
@@ -45,6 +50,7 @@ if [[ "$FR13_GATE_BM8" == "1" \
       && ( "$FR13_GATE_QROW16" != "0" \
            || "$FR13_GATE_TAW_NATIVE" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_PAD_ROWS" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M32" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M1_VEC" != "0" \
            || "$FR13_GATE_GDN_BV" != "0" ) ]]; then
@@ -55,6 +61,7 @@ if [[ "$FR13_GATE_DRAFT_HEAD_M32" == "1" \
       && ( "$FR13_GATE_QROW16" != "0" \
            || "$FR13_GATE_TAW_NATIVE" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_PAD_ROWS" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M1_VEC" != "0" \
            || "$FR13_GATE_BM8" != "0" \
            || "$FR13_GATE_GDN_BV" != "0" ) ]]; then
@@ -65,10 +72,22 @@ if [[ "$FR13_GATE_DRAFT_HEAD_M1_VEC" == "pair8bits" \
       && ( "$FR13_GATE_QROW16" != "0" \
            || "$FR13_GATE_TAW_NATIVE" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_PAD_ROWS" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M32" != "0" \
            || "$FR13_GATE_BM8" != "0" \
            || "$FR13_GATE_GDN_BV" != "0" ) ]]; then
   echo "FR13_GATE_DRAFT_HEAD_M1_VEC must be the only enabled kernel candidate" >&2
+  exit 2
+fi
+if [[ "$FR13_GATE_DRAFT_HEAD_PAD_ROWS" != "0" \
+      && ( "$FR13_GATE_QROW16" != "0" \
+           || "$FR13_GATE_TAW_NATIVE" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_M32" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_M1_VEC" != "0" \
+           || "$FR13_GATE_BM8" != "0" \
+           || "$FR13_GATE_GDN_BV" != "0" ) ]]; then
+  echo "FR13_GATE_DRAFT_HEAD_PAD_ROWS must be the only enabled kernel candidate" >&2
   exit 2
 fi
 
@@ -85,18 +104,29 @@ SOURCE_COMMIT=$(git rev-parse HEAD)
 export BSIZE=1
 export CONC=1
 export WALL=0
-if [[ "$FR13_GATE_DRAFT_HEAD_M1_VEC" == "pair8bits" ]]; then
+if [[ "$FR13_GATE_DRAFT_HEAD_PAD" == "1" \
+      || "$FR13_GATE_DRAFT_HEAD_PAD_ROWS" != "0" \
+      || "$FR13_GATE_DRAFT_HEAD_M32" == "1" \
+      || "$FR13_GATE_DRAFT_HEAD_M1_VEC" == "pair8bits" ]]; then
   export FR13_DRAFT_VOCAB_ROOT=1
   export FR13_DRAFT_VOCAB_K=65536
   export FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json
   unset FR13_NEEDS_ALLOW
-  [[ -f "$FR13_DRAFT_HEAD_M1_VEC_SO" \
-     && ! -L "$FR13_DRAFT_HEAD_M1_VEC_SO" \
-     && "$FR13_DRAFT_HEAD_M1_VEC_SO" == /* ]] || {
-    echo "pair8bits runner requires an absolute regular non-symlink SO" >&2
-    exit 2
-  }
-  DRAFT_HEAD_M1_VEC_SO_SHA=$(sha256sum "$FR13_DRAFT_HEAD_M1_VEC_SO" | awk '{print $1}')
+  if [[ "$FR13_GATE_DRAFT_HEAD_M1_VEC" == "pair8bits" ]]; then
+    [[ -f "$FR13_DRAFT_HEAD_M1_VEC_SO" \
+       && ! -L "$FR13_DRAFT_HEAD_M1_VEC_SO" \
+       && "$FR13_DRAFT_HEAD_M1_VEC_SO" == /* ]] || {
+      echo "pair8bits runner requires an absolute regular non-symlink SO" >&2
+      exit 2
+    }
+    DRAFT_HEAD_M1_VEC_SO_SHA=$(sha256sum "$FR13_DRAFT_HEAD_M1_VEC_SO" | awk '{print $1}')
+  else
+    [[ -z "$FR13_DRAFT_HEAD_M1_VEC_SO" ]] || {
+      echo "non-pair8bits draft-head runner forbids a candidate SO" >&2
+      exit 2
+    }
+    DRAFT_HEAD_M1_VEC_SO_SHA=none
+  fi
 else
   export FR13_DRAFT_VOCAB_ROOT=0
   export FR13_DRAFT_VOCAB_K=0
@@ -124,9 +154,10 @@ if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
 fi
 
 mkdir -p "$RUNROOT"
-printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_m32_gate=%s\ndraft_head_m1_vec_gate=%s\ndraft_head_m1_vec_so_sha256=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nstarted=%s\n' \
+printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_pad_rows_gate=%s\ndraft_head_m32_gate=%s\ndraft_head_m1_vec_gate=%s\ndraft_head_m1_vec_so_sha256=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nstarted=%s\n' \
   "$$" "$RUNROOT" "$ARM" "$SOURCE_COMMIT" "$FA2_SHA" "$FR13_GATE_BM8" \
-  "$FR13_GATE_DRAFT_HEAD_M32" "$FR13_GATE_DRAFT_HEAD_M1_VEC" \
+  "$FR13_GATE_DRAFT_HEAD_PAD_ROWS" "$FR13_GATE_DRAFT_HEAD_M32" \
+  "$FR13_GATE_DRAFT_HEAD_M1_VEC" \
   "$DRAFT_HEAD_M1_VEC_SO_SHA" "$FR13_DRAFT_VOCAB_ROOT" \
   "$FR13_DRAFT_VOCAB_K" "$FR13_MANDATORY_WEIGHT_BYTES" \
   "$FR13_WEIGHT_FLOOR_MS" "$FR13_WEIGHT_FLOOR_U95_CAP_MS" \
@@ -150,7 +181,7 @@ OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
   FR13_CFWD_GPU_TIMER=1 \
   FR13_CFWD_GPU_TIMER_JSON="/workspace/$RUNROOT/sidecars/${ARM}_cfwd.json" \
   FR13_FIXED32_TAW_NATIVE_PRECOMPUTE="$FR13_GATE_TAW_NATIVE" \
-  FR13_DRAFT_HEAD_PAD_ROWS=0 \
+  FR13_DRAFT_HEAD_PAD_ROWS="$FR13_GATE_DRAFT_HEAD_PAD_ROWS" \
   FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB="$FR13_GATE_DRAFT_HEAD_PAD" \
   FR13_DRAFT_HEAD_M32_LIVE_AB="$FR13_GATE_DRAFT_HEAD_M32" \
   FR13_DRAFT_HEAD_M32_INSTANCE_ID=astropy__astropy-12907 \
@@ -231,6 +262,24 @@ if [[ "$serve_rc" == "0" \
   rg -q '\[FR13_DRAFT_HEAD_M1_VEC\] engaged selector=pair8bits eager_launch=1' \
     "$DRAFT_HEAD_RUNTIME_LOG" || {
     echo "pair8bits run completed without an executed-kernel marker" >&2
+    exit 4
+  }
+fi
+if [[ "$serve_rc" == "0" \
+      && "$FR13_GATE_DRAFT_HEAD_PAD_ROWS" != "0" ]]; then
+  DRAFT_HEAD_RUNTIME_LOG="$RUNROOT/$ARM/docker_after_tasks.log"
+  [[ -f "$DRAFT_HEAD_RUNTIME_LOG" && ! -L "$DRAFT_HEAD_RUNTIME_LOG" ]] || {
+    echo "direct padded draft-head run lacks its final runtime log" >&2
+    exit 4
+  }
+  rg -q "\[FR13_DRAFT_HEAD_PAD\] static buffers ready candidate_rows=$FR13_GATE_DRAFT_HEAD_PAD_ROWS " \
+    "$DRAFT_HEAD_RUNTIME_LOG" || {
+    echo "direct padded draft-head run lacks its readiness marker" >&2
+    exit 4
+  }
+  rg -q "\[FR13_DRAFT_HEAD_PAD\] engaged candidate_rows=$FR13_GATE_DRAFT_HEAD_PAD_ROWS eager_launch=1" \
+    "$DRAFT_HEAD_RUNTIME_LOG" || {
+    echo "direct padded draft-head run lacks its executed-GEMM marker" >&2
     exit 4
   }
 fi

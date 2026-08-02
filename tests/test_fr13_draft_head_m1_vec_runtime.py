@@ -150,7 +150,11 @@ def test_real_b1_runner_selects_k64_floor_and_requires_execution() -> None:
     assert '[[ -f "$DRAFT_HEAD_RUNTIME_LOG" && ! -L "$DRAFT_HEAD_RUNTIME_LOG" ]]' in gate
     assert "ready selector=pair8bits" in gate
     assert "engaged selector=pair8bits eager_launch=1" in gate
-    assert gate.count('"$DRAFT_HEAD_RUNTIME_LOG" || {') == 2
+    pair8_postcheck = gate[
+        gate.index('&& "$FR13_GATE_DRAFT_HEAD_M1_VEC" == "pair8bits"') :
+        gate.index('&& "$FR13_GATE_DRAFT_HEAD_PAD_ROWS" != "0"')
+    ]
+    assert pair8_postcheck.count('"$DRAFT_HEAD_RUNTIME_LOG" || {') == 2
     assert "must be the only enabled kernel candidate" in gate
 
     assert 'export FR13_GATE_DRAFT_HEAD_M1_VEC=pair8bits' in runner

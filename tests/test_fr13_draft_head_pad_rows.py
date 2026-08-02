@@ -9,6 +9,9 @@ import torch
 REPO = Path(__file__).resolve().parents[1]
 PATCHER = REPO / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
 LAUNCHER = REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
+LIVE_GATE = REPO / "scripts" / "fr13_run_b1_kernel_live_gate.sh"
+M32_RUNNER = REPO / "scripts" / "fr13_run_b1_draft_head_m32_quality.sh"
+RUNTIME_MANIFEST = REPO / "scripts" / "fr13_runtime_manifest.py"
 PAD_ROWS = (32, 64, 128)
 
 
@@ -63,9 +66,15 @@ def test_static_buffers_and_gemm_use_only_selected_rows() -> None:
     assert "_fr13_dh_in.copy_(_h.expand_as(_fr13_dh_in))" in snippet
     assert "torch.mm(_fr13_dh_in, _sh.weight.t(), out=_fr13_dh_out)" in snippet
     assert "return _fr13_dh_out[:1]" in snippet
+    assert "self._fr13_dh_pad_seen_eager = False" in snippet
+    assert "direct padded draft head reached capture before " in snippet
+    assert '"[FR13_DRAFT_HEAD_PAD] engaged "' in snippet
+    assert 'f"candidate_rows={_rows} eager_launch=1"' in snippet
     helper_start = snippet.index("def _fr13_dh_pad_logits")
     helper_end = snippet.index("def _fr13_dvk_logits", helper_start)
-    assert "torch.empty" not in snippet[helper_start:helper_end]
+    helper = snippet[helper_start:helper_end]
+    assert "torch.empty" not in helper
+    assert helper.count("torch.cuda.is_current_stream_capturing()") == 1
 
 
 def test_all_row_byte_ab_is_full_logit_graph_capturable_and_reference_returning() -> None:
@@ -121,6 +130,28 @@ def test_launcher_passes_only_strict_candidate_modes() -> None:
         '"$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" \\'
         in launcher
     )
+
+
+def test_real_b1_m32_quality_runner_is_fixed_k64_and_requires_execution() -> None:
+    gate = LIVE_GATE.read_text(encoding="utf-8")
+    runner = M32_RUNNER.read_text(encoding="utf-8")
+    manifest = RUNTIME_MANIFEST.read_text(encoding="utf-8")
+
+    assert "FR13_GATE_DRAFT_HEAD_PAD_ROWS=${FR13_GATE_DRAFT_HEAD_PAD_ROWS:-0}" in gate
+    assert 'case "$FR13_GATE_DRAFT_HEAD_PAD_ROWS" in' in gate
+    assert "FR13_GATE_DRAFT_HEAD_PAD_ROWS must be 0 or 32" in gate
+    assert 'export FR13_DRAFT_VOCAB_K=65536' in gate
+    assert 'FR13_DRAFT_HEAD_PAD_ROWS="$FR13_GATE_DRAFT_HEAD_PAD_ROWS" \\' in gate
+    assert "static buffers ready candidate_rows=$FR13_GATE_DRAFT_HEAD_PAD_ROWS" in gate
+    assert "engaged candidate_rows=$FR13_GATE_DRAFT_HEAD_PAD_ROWS eager_launch=1" in gate
+    assert 'DRAFT_HEAD_RUNTIME_LOG="$RUNROOT/$ARM/docker_after_tasks.log"' in gate
+
+    assert "FR13_GATE_DRAFT_HEAD_PAD_ROWS=32" in runner
+    assert "FR13_GATE_DRAFT_HEAD_PAD=0" in runner
+    assert "FR13_GATE_DRAFT_HEAD_M32=0" in runner
+    assert "FR13_GATE_DRAFT_HEAD_M1_VEC=0" in runner
+    assert 'exec bash "$SCRIPT_DIR/fr13_run_b1_kernel_live_gate.sh"' in runner
+    assert '"scripts/fr13_run_b1_draft_head_m32_quality.sh"' in manifest
 
 
 def test_exact_bytes_flops_buffers_and_roofline() -> None:
