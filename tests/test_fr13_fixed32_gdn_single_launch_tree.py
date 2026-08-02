@@ -1087,6 +1087,8 @@ def test_live_launcher_and_runners_are_reference_served_k64_exact_task_only() ->
     assert 'KV_CACHE_MEMORY_BYTES="$B4_KV_CACHE_MEMORY_BYTES"' not in core
     assert 'FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB="$B1_GATE"' in core
     assert 'FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB="$B4_GATE"' in core
+    assert "FR13_FIXED32_GDN_PARENT_GROUP= \\" in core
+    assert "FR13_FIXED32_GDN_PARENT_GROUP=0" not in core
     assert 'fr13_run_gdn_single_launch_live_gate.sh" b1' in b1
     assert 'fr13_run_gdn_single_launch_live_gate.sh" b4' in b4
     assert "core_runner_path.relative_to(REPO).as_posix()" in verifier
