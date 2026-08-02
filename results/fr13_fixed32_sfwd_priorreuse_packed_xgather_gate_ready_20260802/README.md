@@ -8,16 +8,18 @@ SWE-Verified K64/root1 B1 byte gate.
 
 The kernel loads the full current `32x64` channel tile once per CTA, stages it
 for cross-warp gather, and reuses it for the three historical convolution
-taps. The incumbent descriptorless kernel logically reads 111 `x` elements
-per channel: 32 current rows plus 79 historical tree rows. The x-gather kernel
+taps. The incumbent descriptorless kernel logically reads 114 `x` elements
+per channel: 32 current rows plus 82 historical tree rows. The three tap
+counts are 23, 28, and 31. The x-gather kernel
 reads only the 32 current rows from global memory.
 
 Including prior state, weights, output, commit-source staging, and the state
-index, the analytical global traffic is 23,812 bytes per incumbent CTA versus
-13,700 bytes per x-gather CTA. That is 10,112 bytes, or 42.466%, less logical
-global traffic before cache effects. At 160 CTAs, this is 1,617,920 bytes per
-request-layer and 77,660,160 bytes per 48-layer forward. The candidate adds
-14,208 logical shared-memory bytes per CTA plus synchronization.
+index, the analytical global traffic is 24,196 bytes per incumbent CTA versus
+13,700 bytes per x-gather CTA. That is 10,496 bytes, or
+43.3790709208134%, less logical global traffic before cache effects. At 160
+CTAs, this is 1,679,360 bytes per request-layer and 80,609,280 bytes per
+48-layer forward. The candidate adds 14,592 logical shared-memory bytes per
+CTA plus synchronization.
 
 The selected row32/C64/W16 B1 specialization compiles offline for SM121a at
 55 registers, 4,096 launch-shared bytes, 408 static and 424 encoded SASS
