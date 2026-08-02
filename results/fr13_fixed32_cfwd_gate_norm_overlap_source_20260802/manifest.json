@@ -1,0 +1,66 @@
+{
+  "artifact_path": "results/fr13_fixed32_cfwd_gate_norm_overlap_source_20260802",
+  "base_commit": "be921b3dc21980915077d6ee02e15921603f5356",
+  "branch": "agent/fixed32-cfwd-overlap-precompute-experimental-20260802",
+  "canonical_source": {
+    "path": "native/fr13_fixed32_cfwd_native_fullvalue.cu",
+    "sha256": "1c1a9813410dcf15bcbb4d23bec71ee16ddcd7e2dbe3b1a3698e58f71bd96985",
+    "unchanged": true
+  },
+  "qualification": {
+    "byte_correctness_gate": "pending",
+    "cuda_compile": "pending",
+    "gpu_codegen_resource_sass": "pending",
+    "hardware_floor_claim_changed": false,
+    "performance_claim": null,
+    "real_swe_verified_timing": "pending",
+    "status": "unselected_source_only"
+  },
+  "schema": "fr13.fixed32.cfwd_gate_norm_overlap_source.v1",
+  "source_commit": "eea6b0d50a85748d04fddfdb2d71ce21a626b187",
+  "variants": {
+    "overlap_active_waves": {
+      "active_wave_formula": "ceil(steps / 4)",
+      "barriers_skipped_per_inactive_trailing_wave": 2,
+      "default_on": false,
+      "path": "native/experimental/fr13_fixed32_cfwd_native_fullvalue_overlap_active_waves.cu",
+      "runtime_barriers_by_step_range": {
+        "1-4": 5,
+        "5-8": 7,
+        "9-12": 9
+      },
+      "selected": false,
+      "sha256": "cd2e8415a51b32208da947e2a56f214df5c4bde95e43552ec24fb2780591df32",
+      "static_syncthreads_sites": 5,
+      "uniform_guard_above_all_per_wave_shared_accesses_and_barriers": true
+    },
+    "overlap_only": {
+      "default_on": false,
+      "node_publishers_per_live_step": 1,
+      "path": "native/experimental/fr13_fixed32_cfwd_native_fullvalue_overlap.cu",
+      "post_gate_barrier_replaced_by_earlier_node_table_barrier": true,
+      "runtime_barriers_for_valid_cta": 9,
+      "runtime_barrier_reduction_vs_canonical": 0,
+      "scheduling_hypothesis_only": "overlap gate transcendentals with first K-normalization work before its barrier",
+      "selected": false,
+      "sha256": "dbe421cf75646a92fa9c0342de43208797d9d654c0a9f00c4b4f7604fde1f4f7",
+      "static_syncthreads_sites": 5
+    }
+  },
+  "verification": {
+    "byte_correctness_run": false,
+    "canonical_source_sha256_preserved": true,
+    "cuda_compile_run": false,
+    "docker_or_container_action": false,
+    "focused_tests_passed": 71,
+    "gpu_codegen_or_resource_check_run": false,
+    "gpu_query_or_launch_run": false,
+    "python_byte_compile": "pass",
+    "real_swe_verified_campaign_run": false,
+    "ruff": "pass",
+    "synthetic_or_probe_run": false,
+    "test_source_sha256": "39db6169421d22db162b9332498ffa89a8bdfe46d2a9e6075ee662f816c5ccac",
+    "timing_measurement_run": false,
+    "whitespace": "pass"
+  }
+}

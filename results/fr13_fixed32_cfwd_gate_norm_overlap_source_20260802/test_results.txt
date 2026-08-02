@@ -1,0 +1,32 @@
+Fixed32 CFWD gate/norm overlap source readiness (2026-08-02 UTC)
+
+Focused source validation:
+PYTHONPATH=src /home/mark/shared/lumoFlyWheel/.venv/bin/python -m pytest -q \
+  tests/test_fr13_fixed32_cfwd_overlap_experimental.py \
+  tests/test_fr13_fixed32_cfwd_native_fullvalue_cuda.py
+
+71 passed in 0.23s
+
+ruff check tests/test_fr13_fixed32_cfwd_overlap_experimental.py: pass
+python -m py_compile tests/test_fr13_fixed32_cfwd_overlap_experimental.py: pass
+Canonical CUDA source SHA256 equals the frozen binding: pass
+git diff --check: pass
+
+The overlap-only source replaces the post-gate barrier with the earlier
+node-table publication barrier. Its five static barrier sites and nine runtime
+barrier arrivals per thread for a valid CTA are unchanged from canonical; the
+only benefit hypothesis is warp-scheduling overlap before the first norm
+barrier.
+
+The separate active-wave source uses the CTA-uniform formula
+active_waves=(steps+3)/4. Steps 1-4, 5-8, and 9-12 select 1, 2, and 3 waves.
+Every skipped trailing wave removes two runtime barrier arrivals; the guard is
+above all per-wave shared-memory accesses and both per-wave barriers.
+
+No CUDA compile, codegen/resource/SASS check, Docker/container action, GPU query
+or launch, byte-correctness gate, real SWE-Verified campaign, synthetic probe,
+timing measurement, hardware-floor result, or performance claim is represented.
+
+Artifact self-verification from this directory:
+python3 -m json.tool manifest.json >/dev/null
+sha256sum --check SHA256SUMS
