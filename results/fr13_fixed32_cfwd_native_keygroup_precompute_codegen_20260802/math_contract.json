@@ -1,0 +1,36 @@
+{
+  "exact_math": {
+    "exp": "mul_rn_log2e_then_ex2_approx",
+    "four_group_order": "group0_plus_group2_then_group1_plus_group3",
+    "group_reduction": "mul_then_xor16_fma_then_xor8_4_2_1_add",
+    "residual": "sub_rn_then_mul_rn",
+    "rsqrt": "rsqrt_approx_ftz",
+    "sigmoid_division": "div_full",
+    "state_decay": "mul_rn",
+    "state_update": "fma_rn"
+  },
+  "precompute": {
+    "gate_task_mapping": "thread_id_divmod_3_to_step_and_local_value_head",
+    "k_layout": "step_major_12_by_128_fp32",
+    "inverse_norm_layout": "four_per_wave_slots_separate_from_norm_partials",
+    "normalization_mapping": "four_warp_group_per_step_four_steps_per_wave",
+    "normalization_barriers_per_wave": 2,
+    "normalization_waves": 3,
+    "normalized_k_final_publish_barriers": 1,
+    "root_node": 0,
+    "suffix_node_mapping": "step_s_uses_clamped_accepted_path_s_minus_1"
+  },
+  "state_pass": {
+    "fp32_state_elements_per_thread": 32,
+    "persistent_shared_state_elements": 0,
+    "value_heads_processed": 3,
+    "value_heads_processed_sequentially": true,
+    "value_rows_per_warp_per_head": 8,
+    "warps": 16
+  },
+  "remaining_byte_risk": {
+    "required_gate": "all_48_fp32_running_bank_rows_on_real_swe_verified_b1_and_exact4_b4",
+    "softplus_log": "cuda_logf_retains_known_ftz_and_control_flow_difference"
+  },
+  "schema": "fr13.fixed32.cfwd_native_keygroup_precompute_math_contract.v1"
+}

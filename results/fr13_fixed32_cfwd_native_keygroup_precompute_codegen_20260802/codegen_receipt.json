@@ -1,0 +1,53 @@
+{
+  "architecture": "sm_121a",
+  "binding": {
+    "compile_command": "nice -n 19 /usr/local/cuda/bin/nvcc -forward-unknown-to-host-compiler -DTORCH_EXTENSION_NAME=_C -DUSE_CUDA -I/home/mark/fr13_streamk_build/venv/lib/python3.12/site-packages/torch/include -I/home/mark/fr13_streamk_build/venv/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -isystem /usr/include/python3.12 -isystem /usr/local/cuda/include --expt-relaxed-constexpr --expt-extended-lambda -O2 -DNDEBUG -std=c++17 -Xcompiler=-fPIC -gencode arch=compute_121a,code=sm_121a --ptxas-options=-v -c native/fr13_fixed32_cfwd_native_fullvalue.cu -o /tmp/fr13_fixed32_cfwd_native_keygroup_precompute_reg_invnorm.sm121a.o",
+    "compile_command_sha256": "64bd1acac96000e112da18b377e39f35b0ba028027effd8d71be3150c57660b9",
+    "object_name": "fr13_fixed32_cfwd_native_keygroup_precompute_reg_invnorm.sm121a.o",
+    "object_published": false,
+    "object_sha256": "8a20199ee6ad357f6188aed5551fa2697c0185ca86edf63f4fa2d8b8f29649b0",
+    "source_commit": "ecfff80b32063d575d1e9ab5006bac2bdd525055",
+    "source_name": "fr13_fixed32_cfwd_native_fullvalue.cu",
+    "source_sha256": "1c1a9813410dcf15bcbb4d23bec71ee16ddcd7e2dbe3b1a3698e58f71bd96985"
+  },
+  "contract_pass": true,
+  "forbidden_sass_counts": {
+    "CALL": 0,
+    "LDL": 0,
+    "STL": 0
+  },
+  "loop_codegen": {
+    "active_state_step_loop": "rolled",
+    "normalization_wave_loop": "unrolled_three_copies",
+    "value_head_loop": "rolled_pragma_unroll_1"
+  },
+  "synchronization": {
+    "dynamic_cta_barriers_at_three_waves": 9,
+    "final_normalized_k_publish_barriers": 1,
+    "metadata_barriers": 2,
+    "normalization_barriers_per_wave": 2
+  },
+  "resources": {
+    "cuobjdump_shared_bytes": 7592,
+    "local_bytes": 0,
+    "ptxas_source_static_shared_bytes": 6568,
+    "registers_per_thread": 64,
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0,
+    "stack_bytes": 0
+  },
+  "sass_counts": {
+    "FFMA": 82,
+    "MUFU.EX2": 3,
+    "MUFU.RCP": 2,
+    "MUFU.RSQ": 3,
+    "SHFL.BFLY": 202,
+    "SHFL.DOWN": 0,
+    "SHFL.IDX": 16
+  },
+  "schema": "fr13.fixed32.cfwd_native_keygroup_precompute_codegen_receipt.v1",
+  "toolchain": {
+    "cuobjdump": "CUDA 13.0 V13.0.85",
+    "nvcc": "CUDA 13.0 V13.0.88"
+  }
+}

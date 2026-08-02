@@ -1,0 +1,43 @@
+{
+  "base_commit": "e060157b5f51ce21cc15ea577f7fc4f1193c56c2",
+  "branch": "agent/fixed32-cfwd-keygroup-precompute-register-20260802",
+  "candidate": {
+    "default_on": false,
+    "diagnostic_selector_only": true,
+    "production_authorized": false,
+    "timing_eligible": false
+  },
+  "code_commit": "ecfff80b32063d575d1e9ab5006bac2bdd525055",
+  "qualification": {
+    "b1_real_swe_raw_byte_gate": null,
+    "b1_real_swe_timing": null,
+    "b4_exact4_real_swe_raw_byte_gate": null,
+    "b4_exact4_real_swe_timing": null,
+    "codegen_contract": "pass",
+    "compile_resource_gate": "pass",
+    "hardware_floor_claim_changed": false,
+    "status": "codegen_pass_raw_byte_and_timing_pending"
+  },
+  "schema": "fr13.fixed32.cfwd_native_keygroup_precompute_codegen.v1",
+  "source_sha256": {
+    "native/fr13_fixed32_cfwd_native_fullvalue.cu": "1c1a9813410dcf15bcbb4d23bec71ee16ddcd7e2dbe3b1a3698e58f71bd96985",
+    "scripts/fr13_check_cfwd_native_keygroup_codegen.py": "5c379cc66228f4d3b1232c875f8f5c4d9db3e2c322be135a299515280300b8a8",
+    "scripts/fr13_patch_vllm_cfwd_native_fullvalue_cuda.py": "50bcdb4cbe71db7d75f1a233cfe6d2e5d18d6a6cf1bcf97af87db339a8452184",
+    "src/lumo_flywheel_serving/fr13_cfwd_native_fullvalue_cuda.py": "428ca89746bd33a025a9b193368932ea92da3d68203ec257271bae339fd6901d",
+    "tests/test_fr13_fixed32_cfwd_native_fullvalue_cuda.py": "07307dd8ef891e3d35885eb551bafbac1f8b079c824aad77c586bd2235942dd0"
+  },
+  "verification": {
+    "cuda_compile_run": true,
+    "cuda_kernel_launch_run": false,
+    "docker_or_container_mutation": false,
+    "focused_tests_passed": 43,
+    "gpu_query_run": false,
+    "object_codegen_checker": "pass",
+    "python_byte_compile": "pass",
+    "read_only_correctness_review": "pass_no_defect_found",
+    "real_swe_campaign_run_for_candidate": false,
+    "synthetic_or_probe_performance_run": false,
+    "timing_measurement_run": false,
+    "whitespace": "pass"
+  }
+}

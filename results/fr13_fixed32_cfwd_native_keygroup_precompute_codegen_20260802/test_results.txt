@@ -1,0 +1,26 @@
+Fixed32 native key-group precompute CFWD codegen (2026-08-02 UTC)
+
+Focused selector, source, installer, and codegen-checker suite:
+43 passed in 0.13s
+
+Python byte compilation: pass.
+git diff --check: pass.
+Read-only correctness review: pass, no concrete defect found.
+
+Exact full-translation-unit SM121a compile and bound object checker:
+- source commit ecfff80b32063d575d1e9ab5006bac2bdd525055
+- frozen object SHA256 8a20199ee6ad357f6188aed5551fa2697c0185ca86edf63f4fa2d8b8f29649b0
+- 64 registers/thread
+- 0-byte stack frame; 0-byte spill stores and loads; 0 local bytes
+- 6,568 source static shared bytes; 7,592 including target reservation
+- SASS LDL/STL/CALL all zero
+
+Separating the four inverse norms from the partial array reduces dynamic CTA
+barriers from 11 to 9 for the fixed three-wave precompute.
+
+The value-head and active-step state loops remain rolled; only the three fixed
+normalization waves are unrolled. Static SASS counts therefore bind the rolled
+kernel body and do not represent 36 duplicated state recurrences.
+
+No CUDA launch, GPU query, container mutation, real SWE-Verified campaign,
+synthetic/probe timing, or timing measurement is represented here.
