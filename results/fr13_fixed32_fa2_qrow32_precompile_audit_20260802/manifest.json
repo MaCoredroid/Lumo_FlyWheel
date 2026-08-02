@@ -1,0 +1,75 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow32_precompile_audit.v1",
+  "status": "SOURCE_PRECOMPILE_AUDIT_PASS_COMPILE_AND_RUNTIME_PENDING",
+  "audit_source_commit": "3b03a14604cdc1fdba68d69a5e6aac8507ae6b96",
+  "kernel_source_commit": "d47b03f942defed2ef4b4f63053d5bb7fe8152df",
+  "fa2_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+  "classification": {
+    "fresh_pinned_archive": true,
+    "patch_first_pass_changed": true,
+    "patch_second_pass_idempotent": true,
+    "compiler_used": false,
+    "linker_used": false,
+    "disassembler_used": false,
+    "gpu_used": false,
+    "container_used": false,
+    "synthetic_probe_used": false,
+    "real_swe_task_used": false,
+    "performance_measurement": false,
+    "byte_parity_claim": false,
+    "compile_claim": false,
+    "production_eligible": false
+  },
+  "source_hashes": {
+    "patcher_sha256": "066139094047602bfeecc24dc8ac4e03b4598db5374e4305ab89e6be3b19d14a",
+    "focused_test_sha256": "4af26eff2095e62084aad6cc5a55fe69ab440e1d0c85e79102283fbcd0f1076b",
+    "candidate_flash_fwd_kernel_sha256": "129f7a979a2f8eb73f231832bade6f5f122aee8a0343bdd31833dfa774829a0a",
+    "candidate_utils_sha256": "2092a0b772f79fe6b5133cc0af7763f93e3a6935e33e0de59da55f3960d8a795",
+    "pinned_launch_header_sha256": "d9e9f4b92cb731d7955b514449e59b8e411bf7a0c929aafb454f2402d41fe976",
+    "pinned_kernel_traits_sha256": "14fec3ad6efa9ae421d77d6d3946bf4b613481cf40d5475ecf9e466d53c7ebdb",
+    "generated_translation_unit_sha256": "d87f3f6806dcc15737815ffa4e5c82f154b36c0b7f30c4da03a2216949876ded",
+    "candidate_flash_api_sha256": "18464dd285adf01b6195af088d7db3ae9bbc47029ad2c3d408d02a43c8289087",
+    "pinned_cmake_sha256": "79424996db7d2b5b801b9bd6b8c77baf73b6cf8061b2eaad65f53eee968328d1"
+  },
+  "compiler_visible_contract": {
+    "cxx_standard": 17,
+    "primary_traits_visible_before_specialization": true,
+    "specializations_before_exact_instantiation": true,
+    "exact_trait_identity_shared": true,
+    "splitkv_boolean_template_arity": 8,
+    "splitkv_argument_order_matches_pinned_header": true,
+    "hidden_launcher_signature_matches": true,
+    "flash_namespace_matches": true,
+    "cmake_source_glob_matches": true,
+    "concrete_source_blockers": 0
+  },
+  "trait_arithmetic": {
+    "head_dim": 256,
+    "block_m": 32,
+    "block_n": 64,
+    "warps": 2,
+    "threads": 64,
+    "gmem_threads_per_row": 8,
+    "gmem_rows_per_thread": 8,
+    "smem_bytes": 81920,
+    "page_block_size": 1024,
+    "blocks_per_page": 16
+  },
+  "tests": {
+    "focused_source_passed": 22,
+    "focused_source_failed": 0,
+    "py_compile_passed": true,
+    "git_diff_check_passed": true
+  },
+  "pending": {
+    "fresh_sm121a_nvcc_compile": true,
+    "pinned_gcc11_4_link": true,
+    "hidden_symbol_resolution": true,
+    "sass_static_query_verification": true,
+    "sass_direct_page_verification": true,
+    "resource_admission": true,
+    "tail23_exact4_byte_gate": true,
+    "hydra27_exact4_byte_gate": true,
+    "real_swe_verified_b4_timing": true
+  }
+}
