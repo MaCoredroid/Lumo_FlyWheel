@@ -77,6 +77,7 @@ CONTAINER_SOURCE = Path("/tmp/fr13_cutlass_wave.abi3.so")
 CONTAINER_DESTINATION = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so"
 )
+DRAFT_VOCAB_BLOCKS = Path("scripts/fr13_dvk_subset_blocks.json")
 
 
 def sha256_file(path: Path) -> str:
@@ -332,6 +333,7 @@ def _verify_production_qualification(
     patch_source: Path,
     selector: str,
     fixed32_mode: str,
+    draft_vocab_blocks: Path,
 ) -> dict[str, object]:
     if selector not in {
         "streamk_coop128",
@@ -346,7 +348,11 @@ def _verify_production_qualification(
     else:
         import fr13_cutlass_streamk_pass as qualification
 
-    kwargs = {"fixed32_mode": fixed32_mode} if selector == "persistent_b4_m128" else {}
+    kwargs = (
+        {"fixed32_mode": fixed32_mode}
+        if selector == "persistent_b4_m128"
+        else {"draft_vocab_blocks": draft_vocab_blocks}
+    )
     return qualification.verify_sidecar(
         sidecar,
         expected_sidecar_sha256,
@@ -367,6 +373,7 @@ def install_candidate(
     expected_production_sidecar_sha256: str | None = None,
     patch_source: Path = Path("scripts/fr13_patch_cutlass_fixed32_wave.py"),
     fixed32_mode: str = "hydra27_fixed32",
+    draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS,
     resource_credential: Path | None = None,
     expected_resource_credential_sha256: str | None = None,
 ) -> dict[str, object]:
@@ -397,6 +404,7 @@ def install_candidate(
             patch_source,
             selector,
             fixed32_mode,
+            draft_vocab_blocks,
         )
         qualification = {
             "sidecar_sha256": expected_production_sidecar_sha256,
@@ -513,6 +521,11 @@ def main() -> int:
         type=Path,
         default=Path("scripts/fr13_patch_cutlass_fixed32_wave.py"),
     )
+    install_parser.add_argument(
+        "--draft-vocab-blocks",
+        type=Path,
+        default=DRAFT_VOCAB_BLOCKS,
+    )
     args = parser.parse_args()
 
     if args.command == "verify":
@@ -534,6 +547,7 @@ def main() -> int:
             expected_production_sidecar_sha256=(args.expected_production_pass_sha256),
             patch_source=args.patch_source,
             fixed32_mode=args.fixed32_mode,
+            draft_vocab_blocks=args.draft_vocab_blocks,
             resource_credential=args.resource_credential,
             expected_resource_credential_sha256=(
                 args.expected_resource_credential_sha256

@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -366,6 +368,38 @@ def test_direct_selector_requires_and_binds_production_qualification(
     assert record["qualification"] == {
         "sidecar_sha256": "d" * 64,
         **qualification,
+    }
+
+
+def test_b1_production_qualification_uses_explicit_draft_vocab_map(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    block_map = tmp_path / "blocks.json"
+    captured: dict[str, object] = {}
+
+    def verify_sidecar(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return {"status": "qualified"}
+
+    qualification = types.SimpleNamespace(verify_sidecar=verify_sidecar)
+    monkeypatch.setitem(sys.modules, "fr13_cutlass_streamk_pass", qualification)
+
+    result = module._verify_production_qualification(
+        tmp_path / "sidecar.json",
+        "a" * 64,
+        tmp_path / "candidate.so",
+        tmp_path / "patch.py",
+        "divisor_static_stocktile",
+        "hydra27_fixed32",
+        block_map,
+    )
+
+    assert result == {"status": "qualified"}
+    assert captured["kwargs"] == {
+        "candidate_selector": "divisor_static_stocktile",
+        "draft_vocab_blocks": block_map,
     }
 
 

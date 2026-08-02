@@ -48,6 +48,10 @@ def test_launcher_is_digest_pinned_diagnostic_only_and_worker_visible() -> None:
     assert "scripts/fr13_cutlass_streamk_pass.py issue" in launcher
     assert "--production-pass-sidecar" in launcher
     assert "--expected-production-pass-sha256" in launcher
+    assert (
+        "--draft-vocab-blocks /workspace/scripts/fr13_dvk_subset_blocks.json"
+        in launcher
+    )
 
 
 def test_launcher_rejects_cutlass_bm8_composition_before_sidecar_or_docker() -> None:
