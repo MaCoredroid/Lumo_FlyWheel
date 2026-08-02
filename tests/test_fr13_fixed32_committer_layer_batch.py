@@ -68,10 +68,23 @@ def test_layer_batch_kernel_keeps_native_recurrence_and_geometry() -> None:
     assert "tl.store(p_o" not in kernel
     assert "state_bank = bank_anchor + tl.load(bank_off16 + i_l) * 4" in kernel
     assert "_gdn_node_step" not in kernel
-    assert "block_v = min(triton.next_power_of_2(dim_v), 64)" in launch
+    assert "block_v = triton.next_power_of_2(dim_v)" in launch
     assert "num_warps=8" in launch
     assert "num_stages=3" in launch
     assert "layers * batch * num_vh" in launch
+
+
+def test_full_value_tile_reuses_one_k_normalization_for_all_value_rows() -> None:
+    kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
+    launch = _text("_fr13_fixed32_committer_native_layer_batch")
+    loop = kernel[kernel.index("for i_t in tl.range(0, T):") :]
+
+    assert "block_v = triton.next_power_of_2(dim_v)" in launch
+    assert "grid = (1, triton.cdiv(dim_v, block_v)," in launch
+    assert loop.count("b_k = tl.load(p_k") == 1
+    assert loop.count("tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)") == 1
+    assert loop.count("b_v = tl.load(p_v") == 1
+    assert "o_v = i_v * BV + tl.arange(0, BV)" in kernel
 
 
 def test_layer_batch_recurrence_stops_after_root_plus_accepted_drafts() -> None:
@@ -203,9 +216,12 @@ def test_layer_batch_candidate_loads_live_ring_rows_without_staging() -> None:
     assert '"event_independent_gate_precompute": True' in preseed
     assert '"gate_precompute_launches_per_process": int(' in preseed
     assert '"gate_exp_per_event": 0' in preseed
-    assert '"value_tile": 64' in preseed
+    assert '"full_value_tile": True' in preseed
+    assert '"value_tile": 128' in preseed
     assert '"kernel_warps": 8' in preseed
-    assert '"programs_per_layer_request_value_head": 2' in preseed
+    assert '"programs_per_layer_request_value_head": 1' in preseed
+    assert '"duplicate_value_tile_k_loads_per_step": 0' in preseed
+    assert '"state_elements_per_thread_before_compiler_effects": 64' in preseed
 
 
 def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> None:
@@ -474,9 +490,12 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
     assert '"event_independent_gate_precompute"' in patcher
     assert '"gate_precompute_launches_per_process", -1' in patcher
     assert 'committer_contract.get("gate_exp_per_event", -1)' in patcher
+    assert 'committer_contract.get("full_value_tile") is not True' in patcher
     assert 'committer_contract.get("value_tile", -1)' in patcher
     assert 'committer_contract.get("kernel_warps", -1)' in patcher
     assert '"programs_per_layer_request_value_head", -1' in patcher
+    assert '"duplicate_value_tile_k_loads_per_step", -1' in patcher
+    assert '"state_elements_per_thread_before_compiler_effects", -1' in patcher
     assert '"physical_alias_row_uniqueness_guard"' in patcher
     assert '!= "validate_fixed32_conv_commit_rows"' in patcher
     assert '!= "real_swe_all_reachable_accepted_lengths_0_11"' in patcher
