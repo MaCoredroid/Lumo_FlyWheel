@@ -4,7 +4,7 @@ Status: **READY_NOT_EXECUTED**.
 
 This reduced artifact binds the default-off
 `fixed32_gdn_single_launch_root_loop_v1` candidate to source commit
-`08dc6187a0ccf70b13f8c988f77b02d126ffdc79` and to its exact B1/B4
+`68207580978bdad2c926f98fa0e81fbe4fa2fd0a` and to its exact B1/B4
 `sm_121a` code generation. It is not a byte-parity PASS, timing result,
 acceptance result, performance claim, or production authorization.
 
@@ -21,6 +21,10 @@ The production selector remains default-off. During either live gate, the
 candidate runs only as a shadow comparison and the captured reference graph is
 always served. Candidate output and state can become production-eligible only
 after an exact, source-bound PASS for that batch profile.
+
+The B1 shadow path also restores the host-visible route metadata to the
+reference route. The live runner and verifier enforce the pinned launcher,
+runtime-manifest tool, and authenticated-ingress source hashes before reuse.
 
 Each authenticated task comparison covers all 48 layers and exact raw bytes for
 `out`, `ring_k`, `ring_v`, `ring_a`, `ring_b`, `flags`, and `counter`. Candidate

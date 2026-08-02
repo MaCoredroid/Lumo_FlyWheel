@@ -2,11 +2,11 @@
   "schema": "fr13.fixed32.gdn_single_launch.root_loop.live_ready.codegen.v1",
   "status": "PASS_ZERO_SPILL_READY_NOT_EXECUTED",
   "candidate": "fixed32_gdn_single_launch_root_loop_v1",
-  "implementation_commit": "08dc6187a0ccf70b13f8c988f77b02d126ffdc79",
-  "created_at_utc": "2026-08-02T09:01:40Z",
+  "implementation_commit": "68207580978bdad2c926f98fa0e81fbe4fa2fd0a",
+  "created_at_utc": "2026-08-02T09:37:25Z",
   "target": "sm_121a",
   "kernel": "_tree_gdn_kernel_fixed32_single_launch_root_loop",
-  "source_report_sha256": "91a9570fa192162107c29d173902773bda612a076d891f211a536a5387fd57ad",
+  "source_report_sha256": "e906fae346d3e162283f54dca1a4cecd09660a349dc8e94e8624ea306923e78f",
   "build": {
     "compile_passes": 2,
     "fresh_process_per_pass": true,
@@ -71,7 +71,7 @@
       "capmerc_text_bytes": 3594,
       "cubin_bytes": 131128,
       "compile_hash": "3f8b97e5a5b34b147c98ea5562bf4e45190b9e97cd866894e68c4651ead63b9e",
-      "cubin_sha256": "b80e8eb2a8d29397281cf97eee9a35f3c87c7dfe4a9bbe311e5c2c645dd1b138",
+      "cubin_sha256": "18017fc978323a49efa7dab595a2434ff1f27da3f81ef401ddc4b0bc496fbf0b",
       "cuobjdump_sass_sha256": "32f88bc678c6ece68388b4009d94eeb2584b86c43415623d93b43aef33cabc0a",
       "nvdisasm_sass_sha256": "af94775cd5247f0bdf348fb3a83142a54c18e9d55b7ec90eafd1bb5914a86c85",
       "resource_report_sha256": "25b87f7ac2ec4d5bf343323c0ad119efcfb799a5fc28698435c4d6612318821c"
@@ -105,7 +105,7 @@
       "capmerc_text_bytes": 3594,
       "cubin_bytes": 131256,
       "compile_hash": "c813910fa1f698f56c673668c1d048bc5da129a4bbb74013d31b1c8fc5e58b1e",
-      "cubin_sha256": "aac0c95661498021e69426b7030d25ea89895cec87325dc9cedea1c991df93cb",
+      "cubin_sha256": "81b8169147b6ea6ccc1bf2015fb538ff65dbb51f920a637978225315f51a84b9",
       "cuobjdump_sass_sha256": "2178b61dd4ebfbf10fcfeca5955971080f13448c7d51b00cc8614fdae48760e9",
       "nvdisasm_sass_sha256": "1d5303b79245381b20d33738aca8d35958d78d8f6063c5d39cd00f12f1b85a75",
       "resource_report_sha256": "25b87f7ac2ec4d5bf343323c0ad119efcfb799a5fc28698435c4d6612318821c"
