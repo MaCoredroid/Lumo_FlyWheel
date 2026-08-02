@@ -1,0 +1,127 @@
+{
+  "schema": "fr13.fixed32.sfwd_state_fusion.k64_root_b1_timing_rejection.reduced.v1",
+  "status": "rejected_performance_b1_diagnostic",
+  "run_classification": "one_real_swe_verified_k64_root_b1_sfwd_state_fusion_timing_diagnostic",
+  "source_commit": "2771cf78b86c73b30ef3fcd92a954192196f8483",
+  "source_timing_summary_sha256": "d69a511cae21f1d84931ab0dc621c33422658591de332c53f698d505019bab70",
+  "candidate": "fixed32_sfwd_state_fusion_rowgroup8_v3",
+  "candidate_served": true,
+  "batch_size": 1,
+  "task_count": 1,
+  "physical_rows_per_request": 32,
+  "draft_vocab_k": 65536,
+  "draft_vocab_root": 1,
+  "draft_vocab_blocks_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+  "live_pass_sha256": "756c47e267ed44a08e011aaeb0651475156692829781de4870bd501bd4c0e7c1",
+  "floor": {
+    "scope": "optimistic_mandatory_weight_read_lower_bound",
+    "mandatory_weight_bytes": 32666638208,
+    "lower_bound_ms": 119.658015414,
+    "one_sided_u95_1_15x_cap_ms": 137.6067177261,
+    "is_full_step_hardware_floor": false,
+    "acceptance_eligible": false
+  },
+  "qualification": {
+    "real_task_authenticated": true,
+    "both_arms_resolved": true,
+    "both_arms_tests_passed": true,
+    "both_arms_agent_exit_zero": true,
+    "both_arms_eval_exit_zero": true,
+    "both_arms_no_timeout": true,
+    "k64_shim_engagements_per_arm": 1,
+    "k64_root_engagements_per_arm": 1,
+    "full_vocab_fallbacks_per_arm": 0,
+    "source_manifest_launch_end_equal": true,
+    "source_manifest_sha256": "907fb5229f54a1fdc56e9bdaf2aa9da60140a5aeb80a4f0ee046f823a1792ea0",
+    "runtime_manifest_launch_end_equal": true,
+    "runtime_manifest_sha256": "3411829a8709e17aa1237f92e97f2c3c3a4476fa3ad81de9100b706523b7b2d7",
+    "external_manifest_launch_end_equal": true,
+    "external_manifest_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "graph_census_delta_per_arm": 0,
+    "clean_teardown_per_arm": true,
+    "docker_clean_after_campaign": true
+  },
+  "stock": {
+    "step_wall_ms": 242.2868396792892,
+    "fullstep_wall_tps": 21.129126406299015,
+    "accept_per_event": 4.119309262166405,
+    "committed_per_event": 5.119309262166405,
+    "gpu_component_sum_ms": 231.36363207852378,
+    "phase_ms_per_step": {
+      "sfwd": 170.855128182305,
+      "dfwd": 35.23357738094565,
+      "cfwd": 25.27492651527313,
+      "other": 10.9232076007654
+    },
+    "phase_share_percent": {
+      "sfwd": 70.51770884810043,
+      "dfwd": 14.542092929019054,
+      "cfwd": 10.431819800336289,
+      "other": 4.508378422544228
+    },
+    "timing_reconciliation": {
+      "pure_decode_steps": 648,
+      "sfwd_steps": 648,
+      "sfwd_drafts": 648,
+      "sfwd_forward_starts": 648,
+      "sfwd_forward_dropped": 0,
+      "dfwd_spans": 648,
+      "cfwd_spans": 648,
+      "wall_steps": 636,
+      "wall_drafts": 636,
+      "bookkeeping_errors": 0
+    },
+    "over_optimistic_floor_ratio": 2.02482749560078,
+    "over_1_15x_cap_ratio": 1.760719561391983,
+    "reduction_to_1_15x_cap_ms": 104.6801219531892,
+    "reduction_to_1_15x_cap_percent_of_wall": 43.20503833049803
+  },
+  "candidate_result": {
+    "step_wall_ms": 244.5690465970579,
+    "fullstep_wall_tps": 20.63545583978492,
+    "accept_per_event": 4.046793760831889,
+    "committed_per_event": 5.046793760831889,
+    "gpu_component_sum_ms": 234.13797310513456,
+    "phase_ms_per_step": {
+      "sfwd": 172.55782328530807,
+      "dfwd": 35.45012048975191,
+      "cfwd": 26.130029330074596,
+      "other": 10.431073491923348
+    },
+    "timing_reconciliation": {
+      "pure_decode_steps": 586,
+      "sfwd_steps": 586,
+      "sfwd_drafts": 586,
+      "sfwd_forward_starts": 586,
+      "sfwd_forward_dropped": 0,
+      "dfwd_spans": 586,
+      "cfwd_spans": 586,
+      "wall_steps": 576,
+      "wall_drafts": 576,
+      "bookkeeping_errors": 0
+    },
+    "over_optimistic_floor_ratio": 2.043900241457985,
+    "over_1_15x_cap_ratio": 1.7773045577895525
+  },
+  "candidate_minus_stock": {
+    "step_wall_ms": 2.2822069177687183,
+    "step_wall_percent": 0.9419442346887852,
+    "fullstep_wall_tps": -0.49367056651409413,
+    "fullstep_wall_tps_percent": -2.3364457054264265,
+    "accept_per_event": -0.07251550133451623,
+    "accept_per_event_percent": -1.7603801200490432,
+    "gpu_component_sum_ms": 2.7743410266107844,
+    "sfwd_ms": 1.702695103003066,
+    "dfwd_ms": 0.21654310880626326,
+    "cfwd_ms": 0.8551028148014659,
+    "other_ms": -0.4921341088420519
+  },
+  "acceptance": {
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false,
+    "production_eligible": false,
+    "one_sided_u95_present": false,
+    "blocker": "one task is diagnostic only; exact4 or exact16 required"
+  },
+  "raw_artifacts_included": false
+}
