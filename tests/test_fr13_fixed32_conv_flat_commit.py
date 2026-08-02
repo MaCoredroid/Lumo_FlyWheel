@@ -35,18 +35,16 @@ def _constant(name: str):
     return ast.literal_eval(node.value)
 
 
-def _resolver():
+def _resolver(function_name: str, env_name: str):
     node = next(
         item
         for item in TREE.body
         if isinstance(item, ast.FunctionDef)
-        and item.name == "_fr13_resolve_fixed32_conv_flat_commit"
+        and item.name == function_name
     )
     namespace = {
         "os": os,
-        "_FR13_FIXED32_CONV_FLAT_COMMIT_ENV": (
-            "FR13_FIXED32_CONV_FLAT_COMMIT"
-        ),
+        env_name: _constant(env_name),
     }
     exec(compile(ast.Module(body=[node], type_ignores=[]), SOURCE_PATH, "exec"),
          namespace)
@@ -54,7 +52,10 @@ def _resolver():
 
 
 def test_flat_commit_selector_is_default_off_and_fail_closed() -> None:
-    resolve = _resolver()
+    resolve = _resolver(
+        "_fr13_resolve_fixed32_conv_flat_commit",
+        "_FR13_FIXED32_CONV_FLAT_COMMIT_ENV",
+    )
     assert resolve(environ={}) is False
     assert resolve(environ={"FR13_FIXED32_CONV_FLAT_COMMIT": ""}) is False
     assert resolve(environ={"FR13_FIXED32_CONV_FLAT_COMMIT": "0"}) is False
@@ -64,6 +65,30 @@ def test_flat_commit_selector_is_default_off_and_fail_closed() -> None:
     )
     with pytest.raises(RuntimeError, match="must be unset, 0, or diagnostic"):
         resolve(environ={"FR13_FIXED32_CONV_FLAT_COMMIT": "1"})
+
+
+def test_channel_commit_selector_is_default_off_and_fail_closed() -> None:
+    resolve = _resolver(
+        "_fr13_resolve_fixed32_conv_channel_commit",
+        "_FR13_FIXED32_CONV_CHANNEL_COMMIT_ENV",
+    )
+    assert resolve(environ={}) is False
+    assert (
+        resolve(environ={"FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT": "0"})
+        is False
+    )
+    assert (
+        resolve(
+            environ={
+                "FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT": "diagnostic"
+            }
+        )
+        is True
+    )
+    with pytest.raises(RuntimeError, match="must be unset, 0, or diagnostic"):
+        resolve(
+            environ={"FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT": "1"}
+        )
 
 
 def test_flat_kernel_owns_contiguous_row_and_elides_zero_source_loads() -> None:
@@ -94,6 +119,34 @@ def test_flat_route_is_preseeded_once_and_incumbent_remains_fallback() -> None:
     assert "_fr13_resolve_fixed32_conv_flat_commit" not in launch
 
 
+def test_channel_kernel_keeps_low_cta_map_and_elides_zero_source_loads() -> None:
+    body = _function_text("_fr13_fixed32_conv_channel_zeroelide_col0_kernel")
+    assert "offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)" in body
+    assert "tl.static_range(0, LIVE_SOURCE_COLS)" in body
+    assert "state_src + leaf_node * CONV_L + state_col" in body
+    assert "tl.zeros((BLOCK_C,), dtype=tl.bfloat16)" in body
+    assert "tl.static_range(LIVE_SOURCE_COLS, CONV_L)" in body
+    zero_loop = body[body.index("tl.static_range(LIVE_SOURCE_COLS, CONV_L)") :]
+    assert "tl.load(" not in zero_loop
+
+
+def test_channel_route_is_preseeded_and_mutually_exclusive() -> None:
+    preseed = _function_text("preseed_fixed32_conv_col0_pregather")
+    launch = _function_text("launch_fixed32_conv_commit_to_col0")
+    assert "channel_commit = _fr13_resolve_fixed32_conv_channel_commit()" in preseed
+    assert "zero-eliding candidates are mutually exclusive" in preseed
+    assert '"commit_channel_zeroelide": channel_commit' in preseed
+    assert "elif channel_commit:" in preseed
+    assert (
+        "_fr13_fixed32_conv_channel_zeroelide_col0_kernel[\n"
+        "                    channel_grid\n"
+        "                ](" in preseed
+    )
+    assert 'elif state["commit_channel_zeroelide"]:' in launch
+    assert "_fr13_fixed32_conv_channel_zeroelide_col0_kernel[grid]" in launch
+    assert "_fr13_resolve_fixed32_conv_channel_commit" not in launch
+
+
 def test_flat_contract_is_bound_to_deployed_geometry() -> None:
     assert _constant("_FR13_FIXED32_CONV_FLAT_C") == 10_240
     assert _constant("_FR13_FIXED32_CONV_FLAT_L") == 34
@@ -102,4 +155,8 @@ def test_flat_contract_is_bound_to_deployed_geometry() -> None:
     assert (
         _constant("_FR13_FIXED32_CONV_FLAT_COMMIT_ROUTE")
         == "fixed32_flat_zeroelide_source_col0"
+    )
+    assert (
+        _constant("_FR13_FIXED32_CONV_CHANNEL_COMMIT_ROUTE")
+        == "fixed32_channel_zeroelide_source_col0"
     )

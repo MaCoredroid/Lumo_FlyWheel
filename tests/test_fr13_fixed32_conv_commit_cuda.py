@@ -72,6 +72,7 @@ def _install_preseed(
     *,
     channel_contiguous: bool,
     flat_commit: bool = False,
+    channel_commit: bool = False,
 ) -> tuple[
     tuple[torch.Tensor, ...],
     tuple[torch.Tensor, ...],
@@ -85,6 +86,10 @@ def _install_preseed(
     monkeypatch.setenv(
         "FR13_FIXED32_CONV_FLAT_COMMIT",
         "diagnostic" if flat_commit else "0",
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT",
+        "diagnostic" if channel_commit else "0",
     )
     order = tuple(f"gdn.{index:02d}" for index in range(48))
     raws = []
@@ -695,6 +700,70 @@ def test_flat_zeroelide_commit_rejects_noncanonical_bank_layout(
             channel_contiguous=False,
             flat_commit=True,
         )
+
+
+@pytest.mark.parametrize(
+    ("batch", "channel_contiguous"),
+    ((1, False), (1, True), (4, True)),
+    ids=("b1-last-dim", "b1-channel", "b4-channel"),
+)
+def test_channel_zeroelide_commit_is_exact_with_ten_programs_per_layer(
+    monkeypatch: pytest.MonkeyPatch,
+    batch: int,
+    channel_contiguous: bool,
+) -> None:
+    raws, banks, commit_ssi, paths, lens = _install_preseed(
+        monkeypatch,
+        channel_contiguous=channel_contiguous,
+        channel_commit=True,
+    )
+    state = kernel._FR13_FIXED32_CONV_PREGATHER["state"]
+    assert state["contract"]["commit_route"] == (
+        "fixed32_channel_zeroelide_source_col0"
+    )
+    assert state["contract"]["commit_channel_contract_verified"] is True
+    assert state["contract"]["commit_live_source_cols"] == 3
+    assert state["contract"]["commit_literal_zero_cols"] == 31
+    assert state["contract"]["commit_programs_per_layer_request"] == 10
+
+    sources = state["source_stagings"]
+    for layer, source in enumerate(sources):
+        source.view(4, 36, DEPLOYED_CONV_SHAPE[0])[:, 35].fill_(
+            4096 + layer
+        )
+    paths.zero_()
+    lens.zero_()
+    if batch == 4:
+        paths[1, 0] = 7
+        paths[2, 14] = 31
+        paths[3, 2] = 19
+        lens[:4].copy_(
+            torch.tensor([0, 1, 15, 3], dtype=torch.int32, device="cuda")
+        )
+
+    expected_raws = tuple(raw.clone() for raw in raws)
+    _flat_zeroelide_commit_reference(
+        banks=_bank_views_for_raw_clones(expected_raws, banks),
+        sources=sources,
+        state_src=state["state_src"],
+        spec_state_indices=commit_ssi,
+        accepted_paths=paths,
+        accepted_lens=lens,
+        batch=batch,
+    )
+    kernel.launch_fixed32_conv_commit_to_col0(
+        conv_banks=banks,
+        spec_state_indices=commit_ssi,
+        accepted_paths=paths,
+        accepted_lens=lens,
+        num_spec_decodes=batch,
+    )
+    assert all(
+        torch.equal(raw, expected)
+        for raw, expected in zip(raws, expected_raws, strict=True)
+    )
+    for raw in raws:
+        _assert_deployed_page_gaps_are_sentinel(raw, rows=13)
 
 
 @pytest.mark.parametrize(
