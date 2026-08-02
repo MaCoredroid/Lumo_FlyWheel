@@ -200,6 +200,173 @@ FIXED32_QUERY_STATIC_PAGE_OFFSET = r'''    constexpr int kStaticPageBlockSize = 
 '''
 
 
+FIXED32_QUERY_STATIC_PAGED_PATH_REPLACEMENTS = (
+    (
+        r'''    constexpr int kNWarps = Kernel_traits::kNWarps;
+''',
+        r'''    constexpr int kNWarps = Kernel_traits::kNWarps;
+    // FR13_FA2_QROW16_STATIC_PAGED_PATH: remove dynamic page routing only for
+    // the private trait whose physical page size is fixed at compile time.
+    constexpr bool kStaticPagedKV =
+        FLASH_NAMESPACE::StaticPagedKVBlockSize<Kernel_traits>::value != 0;
+''',
+        "static paged-path trait",
+        1,
+    ),
+    (
+        r'''    const int *block_table = params.block_table == nullptr ? nullptr : params.block_table + bidb * params.block_table_batch_stride;
+    const index_t row_offset_k = block_table == nullptr
+        ? binfo.k_offset(params.k_batch_stride, params.k_row_stride, bidb_cache)
+          + (n_block_max - 1) * kBlockN * params.k_row_stride + (bidh / params.h_h_k_ratio) * params.k_head_stride
+        : (bidh / params.h_h_k_ratio) * params.k_head_stride; // block addresses are later resolved per-thread
+    const index_t row_offset_v = block_table == nullptr
+        ? binfo.k_offset(params.v_batch_stride, params.v_row_stride, bidb_cache)
+          + (n_block_max - 1) * kBlockN * params.v_row_stride + (bidh / params.h_h_k_ratio) * params.v_head_stride
+        : (bidh / params.h_h_k_ratio) * params.v_head_stride;
+''',
+        r'''    const int *block_table = params.block_table == nullptr ? nullptr : params.block_table + bidb * params.block_table_batch_stride;
+    if constexpr (kStaticPagedKV) {
+        if (block_table == nullptr) { return; }
+    }
+    const index_t row_offset_k = kStaticPagedKV || block_table != nullptr
+        ? (bidh / params.h_h_k_ratio) * params.k_head_stride
+        : binfo.k_offset(params.k_batch_stride, params.k_row_stride, bidb_cache)
+          + (n_block_max - 1) * kBlockN * params.k_row_stride + (bidh / params.h_h_k_ratio) * params.k_head_stride;
+    const index_t row_offset_v = kStaticPagedKV || block_table != nullptr
+        ? (bidh / params.h_h_k_ratio) * params.v_head_stride
+        : binfo.k_offset(params.v_batch_stride, params.v_row_stride, bidb_cache)
+          + (n_block_max - 1) * kBlockN * params.v_row_stride + (bidh / params.h_h_k_ratio) * params.v_head_stride;
+''',
+        "static paged-path base offsets",
+        1,
+    ),
+    (
+        r'''    if (block_table != nullptr) {
+        auto final_block_size = binfo.actual_seqlen_k - (n_block_max - 1) * kBlockN;
+        tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.k_batch_stride, params.k_row_stride, final_block_size);
+        tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.v_batch_stride, params.v_row_stride, final_block_size);
+    }
+''',
+        r'''    if constexpr (kStaticPagedKV) {
+        auto final_block_size = binfo.actual_seqlen_k - (n_block_max - 1) * kBlockN;
+        tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.k_batch_stride, params.k_row_stride, final_block_size);
+        tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.v_batch_stride, params.v_row_stride, final_block_size);
+    } else if (block_table != nullptr) {
+        auto final_block_size = binfo.actual_seqlen_k - (n_block_max - 1) * kBlockN;
+        tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.k_batch_stride, params.k_row_stride, final_block_size);
+        tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.v_batch_stride, params.v_row_stride, final_block_size);
+    }
+''',
+        "static paged-path initial tile",
+        1,
+    ),
+    (
+        r'''            if (block_table == nullptr) {
+                tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
+                tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
+            } else {
+                if (n_block > n_block_copy_min) {
+                    tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block - 1, params.page_block_size,
+                        block_table, params.v_batch_stride, params.v_row_stride);
+                    tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block - 1, params.page_block_size,
+                        block_table, params.k_batch_stride, params.k_row_stride);
+                }
+            }
+''',
+        r'''            if constexpr (kStaticPagedKV) {
+                if (n_block > n_block_copy_min) {
+                    tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block - 1, params.page_block_size,
+                        block_table, params.v_batch_stride, params.v_row_stride);
+                    tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block - 1, params.page_block_size,
+                        block_table, params.k_batch_stride, params.k_row_stride);
+                }
+            } else if (block_table == nullptr) {
+                tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
+                tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
+            } else {
+                if (n_block > n_block_copy_min) {
+                    tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block - 1, params.page_block_size,
+                        block_table, params.v_batch_stride, params.v_row_stride);
+                    tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block - 1, params.page_block_size,
+                        block_table, params.k_batch_stride, params.k_row_stride);
+                }
+            }
+''',
+        "static paged-path append-KV advance",
+        1,
+    ),
+    (
+        r'''            if (block_table == nullptr) {
+                tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
+            } else {
+                tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block, params.page_block_size,
+                    block_table, params.v_batch_stride, params.v_row_stride);
+            }
+''',
+        r'''            if constexpr (kStaticPagedKV) {
+                tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block, params.page_block_size,
+                    block_table, params.v_batch_stride, params.v_row_stride);
+            } else if (block_table == nullptr) {
+                tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
+            } else {
+                tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block, params.page_block_size,
+                    block_table, params.v_batch_stride, params.v_row_stride);
+            }
+''',
+        "static paged-path masked V advance",
+        1,
+    ),
+    (
+        r'''        if (block_table == nullptr) {
+            tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
+        } else {
+            tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block, params.page_block_size,
+                block_table, params.v_batch_stride, params.v_row_stride);
+        }
+''',
+        r'''        if constexpr (kStaticPagedKV) {
+            tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block, params.page_block_size,
+                block_table, params.v_batch_stride, params.v_row_stride);
+        } else if (block_table == nullptr) {
+            tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
+        } else {
+            tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block, params.page_block_size,
+                block_table, params.v_batch_stride, params.v_row_stride);
+        }
+''',
+        "static paged-path unmasked V advance",
+        1,
+    ),
+    (
+        r'''            if (block_table == nullptr) {
+                tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
+            } else {
+                tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block - 1, params.page_block_size,
+                    block_table, params.k_batch_stride, params.k_row_stride);
+            }
+''',
+        r'''            if constexpr (kStaticPagedKV) {
+                tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block - 1, params.page_block_size,
+                    block_table, params.k_batch_stride, params.k_row_stride);
+            } else if (block_table == nullptr) {
+                tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
+            } else {
+                tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block - 1, params.page_block_size,
+                    block_table, params.k_batch_stride, params.k_row_stride);
+            }
+''',
+        "static paged-path K advances",
+        2,
+    ),
+)
+
+
 FIXED32_QUERY_TILE16_TRANSLATION_UNIT = r'''// FR13 fixed32 B1 qrow16 internal kernel.
 #include "namespace_config.h"
 #include "flash_fwd_launch_template.h"
@@ -216,8 +383,9 @@ struct StaticPagedKVBlockSize<Fr13Fixed32Qrow16KernelTraits> {
     static constexpr int block_n_log2 = 6;
 };
 
-// This exact non-templated wrapper is private to the fail-closed B1 launcher.
-__global__
+// RU3 must lower pressure before this exact cap; the cap alone spills.
+// This non-templated wrapper is private to the fail-closed B1 launcher.
+__global__ __maxnreg__(216)
 void fr13_flash_fwd_fixed32_qrow16_kernel(
         KERNEL_PARAM_MODIFIER const Flash_fwd_params params) {
 #if defined(ARCH_SUPPORTS_FLASH)
@@ -672,6 +840,55 @@ def _patch_fixed32_query_static_page(
     return changed
 
 
+def _patch_fixed32_query_static_paged_path(
+    path: Path,
+    *,
+    fixed32_query_tile16: bool = False,
+) -> bool:
+    if not fixed32_query_tile16:
+        return False
+    text = path.read_text()
+    signature = (
+        "template<typename Kernel_traits, bool Is_causal, bool Is_local, "
+        "bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, "
+        "bool Split, bool Append_KV, typename Params>\n"
+        "inline __device__ void compute_attn_1rowblock_splitkv"
+    )
+    function_start = text.index(signature)
+    function_end = text.index(
+        "\n////////////////////////////////////////////////////////////////////////////////////////////////////\n\n"
+        "template<typename Kernel_traits, bool Is_dropout",
+        function_start,
+    )
+    function = text[function_start:function_end]
+    function = "\n".join(line.rstrip() for line in function.split("\n"))
+    marker = "FR13_FA2_QROW16_STATIC_PAGED_PATH"
+    if marker in function:
+        required_counts = {
+            marker: 1,
+            "if constexpr (kStaticPagedKV)": 7,
+            "kStaticPagedKV || block_table != nullptr": 2,
+            "} else if (block_table == nullptr) {": 5,
+            "} else if (block_table != nullptr) {": 1,
+            "if (block_table == nullptr) { return; }": 1,
+        }
+        for snippet, expected in required_counts.items():
+            if function.count(snippet) != expected:
+                raise RuntimeError("fixed32 qrow16 static paged path drifted")
+        return False
+
+    for old, new, label, expected in FIXED32_QUERY_STATIC_PAGED_PATH_REPLACEMENTS:
+        if function.count(old) != expected:
+            raise RuntimeError(
+                f"{label} anchor count drifted: expected {expected}, "
+                f"found {function.count(old)}"
+            )
+        function = function.replace(old, new)
+    text = text[:function_start] + function + text[function_end:]
+    path.write_text(text)
+    return True
+
+
 def _patch_fixed32_query_tile32_static_query(
     path: Path,
     *,
@@ -1101,6 +1318,13 @@ def patch_fa2_source(
     flash_fwd_kernel_changed = _patch_flash_fwd_kernel(
         files["flash_fwd_kernel.h"],
         tile_earlyout=tree_bias_tile_earlyout,
+    )
+    flash_fwd_kernel_changed = (
+        _patch_fixed32_query_static_paged_path(
+            files["flash_fwd_kernel.h"],
+            fixed32_query_tile16=fixed32_query_tile16,
+        )
+        or flash_fwd_kernel_changed
     )
     flash_fwd_kernel_changed = (
         _patch_fixed32_query_tile32_static_query(

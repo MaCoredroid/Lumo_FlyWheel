@@ -128,7 +128,8 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
     assert candidate.count("fr13_flash_fwd_fixed32_qrow16_kernel") == 2
     assert "__asm__(" not in candidate
     assert "FR13_FA2_QROW16_DEVICE_SYMBOL_COMPAT" not in candidate
-    assert "__maxnreg__" not in candidate
+    assert candidate.count("__global__ __maxnreg__(216)") == 1
+    assert "RU3 must lower pressure before this exact cap" in candidate
     assert "FLASH_NAMESPACE::compute_attn_splitkv<" in candidate
     assert "auto kernel = &flash_fwd_splitkv_kernel<" not in candidate
     assert "false,  // Is_causal" in candidate
@@ -352,7 +353,7 @@ def test_qrow16_private_kernel_preserves_exact_flags() -> None:
 
     assert translation_unit.count("template <>") == 1
     assert translation_unit.count("__global__") == 1
-    assert "__maxnreg__" not in translation_unit
+    assert translation_unit.count("__global__ __maxnreg__(216)") == 1
     assert translation_unit.count("fr13_flash_fwd_fixed32_qrow16_kernel") == 2
     assert "__asm__(" not in translation_unit
     assert "FR13_FA2_QROW16_DEVICE_SYMBOL_COMPAT" not in translation_unit
@@ -662,6 +663,53 @@ template<typename Kernel_traits, bool Is_dropout
     ).read_text()
 
 
+def test_qrow16_static_paged_path_folds_only_the_private_trait(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    kernel = tmp_path / "flash_fwd_kernel.h"
+    signature = (
+        "template<typename Kernel_traits, bool Is_causal, bool Is_local, "
+        "bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, "
+        "bool Split, bool Append_KV, typename Params>\n"
+        "inline __device__ void compute_attn_1rowblock_splitkv"
+        "(const Params &params) {\n"
+    )
+    body = "".join(
+        old * expected
+        for old, _new, _label, expected in (
+            module.FIXED32_QUERY_STATIC_PAGED_PATH_REPLACEMENTS
+        )
+    )
+    suffix = (
+        "}\n\n"
+        "////////////////////////////////////////////////////////////////////////////////////////////////////\n\n"
+        "template<typename Kernel_traits, bool Is_dropout\n"
+    )
+    stock = signature + body + suffix
+    kernel.write_text(stock)
+
+    assert not module._patch_fixed32_query_static_paged_path(kernel)
+    assert kernel.read_text() == stock
+    assert module._patch_fixed32_query_static_paged_path(
+        kernel,
+        fixed32_query_tile16=True,
+    )
+    candidate = kernel.read_text()
+    assert candidate.count("FR13_FA2_QROW16_STATIC_PAGED_PATH") == 1
+    assert candidate.count("if constexpr (kStaticPagedKV)") == 7
+    assert candidate.count("kStaticPagedKV || block_table != nullptr") == 2
+    assert candidate.count("} else if (block_table == nullptr) {") == 5
+    assert candidate.count("} else if (block_table != nullptr) {") == 1
+    assert candidate.count("if (block_table == nullptr) { return; }") == 1
+    assert "StaticPagedKVBlockSize<Kernel_traits>::value != 0" in candidate
+    assert not module._patch_fixed32_query_static_paged_path(
+        kernel,
+        fixed32_query_tile16=True,
+    )
+    assert kernel.read_text() == candidate
+
+
 def test_source_build_candidates_are_independent_and_default_off() -> None:
     text = Path("scripts/fr13_patch_fa2_tree_bias.py").read_text()
 
@@ -816,6 +864,7 @@ def test_qrow16_live_gate_uses_retained_paged_operands_after_real_replay() -> No
 def test_qrow16_fatbin_graft_and_so_finalize_are_fail_closed() -> None:
     graft = Path("scripts/fr13_fa2_qrow16_fatbin_graft.py").read_text()
     finalize = Path("scripts/fr13_fa2_qrow16_so_finalize.py").read_text()
+    builder = Path("scripts/fr13_build_fa2_qrow16_sm121a.py").read_text()
 
     assert "CUDA_VISIBLE_DEVICES must be explicitly empty" in graft
     assert "--expected-host-object-sha256" in graft
@@ -824,6 +873,14 @@ def test_qrow16_fatbin_graft_and_so_finalize_are_fail_closed() -> None:
     assert "ptx_signed_64bit_division_count" in graft
     assert "CANDIDATE_SYMBOL" in graft
     assert "HOST_SYMBOL" in graft
+    assert "CUDA_VISIBLE_DEVICES must be explicitly empty" in builder
+    assert "REGISTER_USAGE_LEVEL = 3" in builder
+    assert "EXPECTED_REGISTERS = 216" in builder
+    assert "qrow16 source is missing the RU3-paired 216-register cap" in builder
+    assert "0 bytes spill stores" in builder
+    assert "0 bytes spill loads" in builder
+    assert "arch=compute_121a,code=sm_121a" in builder
+    assert "performance_measurement" in builder
 
     assert "CUDA_VISIBLE_DEVICES must be explicitly empty" in finalize
     assert "REPAIRED_SYMBOLS" in finalize
