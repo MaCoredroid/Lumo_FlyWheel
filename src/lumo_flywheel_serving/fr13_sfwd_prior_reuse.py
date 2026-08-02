@@ -28,10 +28,12 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
 )
 
 
-CANDIDATE = "fixed32_sfwd_channel_serial_r32_c128_w4_u32x2_v1"
+CANDIDATE = "fixed32_sfwd_channel_serial_r32_b1c128w4_bxc256w8_u32x2_v1"
 ROWS_PER_PROGRAM = 32
 BLOCK_C = 128
 NUM_WARPS = 4
+MULTIBATCH_BLOCK_C = 256
+MULTIBATCH_NUM_WARPS = 8
 CONV_STATE_LEN = 34
 ENABLED_PATH = "/logs/fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled"
 REAL_EVENT_PATH = "/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm"
@@ -58,7 +60,7 @@ def fixed32_sfwd_prior_reuse_contract(
     conv_width: int,
     conv_state_len: int,
 ) -> dict[str, object]:
-    """Validate the closed rowgroup32/C128 prior-reuse geometry."""
+    """Validate the closed rowgroup32 adaptive prior-reuse geometry."""
     batch = int(batch_size)
     rows = int(tree_rows)
     width = int(conv_width)
@@ -76,6 +78,8 @@ def fixed32_sfwd_prior_reuse_contract(
             f"({CONV_WIDTH}, {CONV_STATE_LEN}), got ({width}, {state_len})"
         )
     source_rows = width - 1 + rows + 1
+    block_c = BLOCK_C if batch == 1 else MULTIBATCH_BLOCK_C
+    num_warps = NUM_WARPS if batch == 1 else MULTIBATCH_NUM_WARPS
     return {
         "candidate": CANDIDATE,
         "batch_size": batch,
@@ -89,8 +93,8 @@ def fixed32_sfwd_prior_reuse_contract(
         "conv_state_launches_per_layer": 1,
         "conv_rows_per_program": ROWS_PER_PROGRAM,
         "conv_row_groups_per_request": 1,
-        "conv_block_c": BLOCK_C,
-        "conv_num_warps": NUM_WARPS,
+        "conv_block_c": block_c,
+        "conv_num_warps": num_warps,
         "topology_host_validation": "exact_parent_each_launch",
         "source_descriptor_device_validation": False,
         "source_descriptor_launcher_argument": False,
@@ -488,7 +492,7 @@ def launch_fixed32_sfwd_prior_reuse(
     batch_size: int,
     tree_rows: int,
 ) -> dict[str, object]:
-    """Launch the default-off rowgroup32/C128 prior-reuse candidate."""
+    """Launch the default-off rowgroup32 adaptive prior-reuse candidate."""
     if _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES:
         raise RuntimeError("FR13 SFWD prior-reuse requires an exact fixed32 mode")
     _validate_fixed32_tree_parent(tree_parent)
@@ -610,7 +614,9 @@ def launch_fixed32_sfwd_prior_reuse(
         conv_weights_stride=tuple(conv_weights.stride()),
     )
 
-    grid = (batch, triton.cdiv(channels, BLOCK_C))
+    block_c = int(contract["conv_block_c"])
+    num_warps = int(contract["conv_num_warps"])
+    grid = (batch, triton.cdiv(channels, block_c))
     bias_arg = bias if bias is not None else x
     _fr13_fixed32_sfwd_channel_serial_kernel[grid](
         x,
@@ -629,10 +635,10 @@ def launch_fixed32_sfwd_prior_reuse(
         SOURCE_ROWS=source_rows_per_batch,
         HAS_BIAS=bias is not None,
         X_STRIDE_ROW=X_ROW_STRIDE,
-        BLOCK_C=BLOCK_C,
-        num_warps=NUM_WARPS,
+        BLOCK_C=block_c,
+        num_warps=num_warps,
     )
-    contract["conv_programs_per_request"] = triton.cdiv(channels, BLOCK_C)
+    contract["conv_programs_per_request"] = triton.cdiv(channels, block_c)
     contract["layouts"] = layout_contract["layouts"]
     contract["maximum_offsets"] = layout_contract["maximum_offsets"]
     return contract

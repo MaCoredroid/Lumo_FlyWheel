@@ -85,7 +85,7 @@ def _source_manifest(tmp_path: Path, commit: str) -> tuple[Path, str]:
     return path, hashlib.sha256(raw.encode("ascii")).hexdigest()
 
 
-def test_contract_closes_row32_c64_for_b1_b4() -> None:
+def test_contract_closes_adaptive_row32_geometry_for_b1_b4() -> None:
     for batch in (1, 2, 3, 4):
         contract = candidate.fixed32_sfwd_prior_reuse_contract(
             batch, tree_rows=32, conv_width=4, conv_state_len=34
@@ -94,13 +94,14 @@ def test_contract_closes_row32_c64_for_b1_b4() -> None:
         assert contract["physical_rows_per_request"] == 32
         assert contract["conv_rows_per_program"] == 32
         assert contract["conv_row_groups_per_request"] == 1
-        assert contract["conv_block_c"] == 128
-        assert contract["conv_num_warps"] == 4
+        expected_geometry = (128, 4) if batch == 1 else (256, 8)
+        assert contract["conv_block_c"] == expected_geometry[0]
+        assert contract["conv_num_warps"] == expected_geometry[1]
         assert contract["topology_host_validation"] == "exact_parent_each_launch"
         assert contract["source_descriptor_device_validation"] is False
         assert contract["source_descriptor_launcher_argument"] is False
         assert contract["candidate"] == (
-            "fixed32_sfwd_channel_serial_r32_c128_w4_u32x2_v1"
+            "fixed32_sfwd_channel_serial_r32_b1c128w4_bxc256w8_u32x2_v1"
         )
     for geometry in ((0, 32, 4, 34), (1, 31, 4, 34), (1, 32, 3, 34)):
         with pytest.raises(ValueError):
@@ -275,7 +276,9 @@ def test_launcher_uses_channel_serial_kernel_and_exact_layout() -> None:
     assert "weight_pair_23" in kernel
     assert "tl.pointer_type(tl.uint64)" not in kernel
     assert kernel.count("tl.load(x_batch") == 32
-    assert "grid = (batch, triton.cdiv(channels, BLOCK_C))" in launcher
+    assert 'block_c = int(contract["conv_block_c"])' in launcher
+    assert 'num_warps = int(contract["conv_num_warps"])' in launcher
+    assert "grid = (batch, triton.cdiv(channels, block_c))" in launcher
     assert "fixed32_specialized_layout_contract(" in launcher
     assert "int(conv_state.stride(1)) != 1" in launcher
     assert "int(conv_state.stride(2)) != channels" in launcher
@@ -285,8 +288,8 @@ def test_launcher_uses_channel_serial_kernel_and_exact_layout() -> None:
     assert "_fr13_fixed32_sfwd_channel_serial_kernel[grid](" in launcher
     assert "X_STRIDE_ROW=X_ROW_STRIDE" in launcher
     assert "ROWS_PER_PROGRAM=ROWS_PER_PROGRAM" not in launcher
-    assert "BLOCK_C=BLOCK_C" in launcher
-    assert "num_warps=NUM_WARPS" in launcher
+    assert "BLOCK_C=block_c" in launcher
+    assert "num_warps=num_warps" in launcher
     assert "source_flat" not in launcher
     assert "CONV_STRIDE_ROW=int(conv_state.stride(0))" in launcher
     assert "int(spec_state_indices.stride(" not in launcher

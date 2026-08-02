@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One real SWE-Verified K64/root1 B1 byte gate for the register-local
-# channel-serial C128/W4 two-pair candidate.
+# adaptive channel-serial two-pair candidate (C128/W4 at B1).
 # The candidate is shadow-only and the incumbent tensors remain served.
 set -euo pipefail
 
