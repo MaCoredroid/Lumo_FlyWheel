@@ -771,6 +771,24 @@ struct sm120_blockwise_fp8_config_b4_stockshape_identity_divisor {
       fr13_fixed32_m128_divisor_static_scheduler>;
 };
 
+// Preserve the B4 stock tile and divisor-balanced scheduler while limiting the
+// mainloop to two stages. This isolates whether lower shared-memory residency
+// pressure outweighs the shorter TMA pipeline for the fixed K64 projections.
+template <typename OutType>
+struct sm120_blockwise_fp8_config_b4_stockshape_identity_divisor_stage2 {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwisePingpongSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_64, _128, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
+      OutType, 1, 128, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, false,
+      fr13_fixed32_m128_divisor_static_scheduler,
+      cutlass::gemm::collective::StageCount<2>>;
+};
+
 enum class fixed32_cutlass_wave_variant {
   stock,
   stream_k_cooperative_128,
@@ -793,6 +811,8 @@ enum class fixed32_cutlass_wave_variant {
   identity_stockshape_b4_byte_ab,
   identity_divisor_b4,
   identity_divisor_b4_byte_ab,
+  identity_divisor_stage2_b4,
+  identity_divisor_stage2_b4_byte_ab,
 };
 
 static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
@@ -865,6 +885,12 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     }
     if (value == "identity_divisor_b4_byte_ab") {
       return fixed32_cutlass_wave_variant::identity_divisor_b4_byte_ab;
+    }
+    if (value == "identity_divisor_stage2_b4") {
+      return fixed32_cutlass_wave_variant::identity_divisor_stage2_b4;
+    }
+    if (value == "identity_divisor_stage2_b4_byte_ab") {
+      return fixed32_cutlass_wave_variant::identity_divisor_stage2_b4_byte_ab;
     }
     return fixed32_cutlass_wave_variant::stock;
   }();
@@ -1059,7 +1085,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   if (M != 128 &&
       (wave_variant == fixed32_cutlass_wave_variant::identity_divisor_b4 ||
        wave_variant ==
-           fixed32_cutlass_wave_variant::identity_divisor_b4_byte_ab)) {
+           fixed32_cutlass_wave_variant::identity_divisor_b4_byte_ab ||
+       wave_variant ==
+           fixed32_cutlass_wave_variant::identity_divisor_stage2_b4 ||
+       wave_variant == fixed32_cutlass_wave_variant::
+                           identity_divisor_stage2_b4_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
 
@@ -1158,6 +1188,15 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
         destination, a, b, a_scales, b_scales);
   };
 
+  auto run_identity_divisor_stage2_b4 =
+      [&](torch::stable::Tensor& destination) {
+    using Gemm = typename
+        sm120_blockwise_fp8_config_b4_stockshape_identity_divisor_stage2<
+            OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
   auto run_stock = [&](torch::stable::Tensor& destination) {
     bool swap_ab = (M <= 64) || (M % 4 != 0);
     if (!swap_ab) {
@@ -1203,13 +1242,20 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   const bool identity_divisor_b4_byte_ab =
       wave_variant ==
       fixed32_cutlass_wave_variant::identity_divisor_b4_byte_ab;
+  const bool identity_divisor_stage2_b4_byte_ab =
+      wave_variant == fixed32_cutlass_wave_variant::
+                          identity_divisor_stage2_b4_byte_ab;
   if (wave_variant ==
           fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab ||
       wide256_byte_ab || static_persistent_byte_ab ||
       divisor_static_byte_ab || b4_m128_byte_ab || b4_m128_static_byte_ab ||
       identity_stage2_static_byte_ab || identity_stage2_pingpong_b1_byte_ab ||
-      identity_stockshape_b4_byte_ab || identity_divisor_b4_byte_ab) {
+      identity_stockshape_b4_byte_ab || identity_divisor_b4_byte_ab ||
+      identity_divisor_stage2_b4_byte_ab) {
     auto run_candidate = [&](torch::stable::Tensor& destination) {
+      if (identity_divisor_stage2_b4_byte_ab) {
+        return run_identity_divisor_stage2_b4(destination);
+      }
       if (identity_divisor_b4_byte_ab) {
         return run_identity_divisor_b4(destination);
       }
@@ -1244,7 +1290,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     std::string task_marker =
         (b4_m128_byte_ab || b4_m128_static_byte_ab ||
          (identity_stage2_static_byte_ab && M == 128) ||
-         identity_stockshape_b4_byte_ab || identity_divisor_b4_byte_ab)
+         identity_stockshape_b4_byte_ab || identity_divisor_b4_byte_ab ||
+         identity_divisor_stage2_b4_byte_ab)
             ? fixed32_cutlass_b4_real_task_marker()
             : fixed32_cutlass_real_task_marker();
     if (task_marker.empty()) {
@@ -1259,7 +1306,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     const int64_t selected_byte_ab_limit =
         (b4_m128_byte_ab || b4_m128_static_byte_ab ||
          (identity_stage2_static_byte_ab && M == 128) ||
-         identity_stockshape_b4_byte_ab || identity_divisor_b4_byte_ab)
+         identity_stockshape_b4_byte_ab || identity_divisor_b4_byte_ab ||
+         identity_divisor_stage2_b4_byte_ab)
             ? b4_m128_byte_ab_limit
             : byte_ab_limit;
     int64_t invocation = next_invocation.fetch_add(1);
@@ -1304,7 +1352,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       }
     }
     const char* log_path =
-        identity_divisor_b4_byte_ab
+        identity_divisor_stage2_b4_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_identity_divisor_stage2_b4_byte_ab.jsonl"
+        : identity_divisor_b4_byte_ab
             ? "/logs/fr13_fixed32_cutlass_identity_divisor_b4_byte_ab.jsonl"
         : identity_stockshape_b4_byte_ab
             ? "/logs/fr13_fixed32_cutlass_identity_stockshape_b4_byte_ab.jsonl"
@@ -1330,7 +1380,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       STD_TORCH_CHECK(log.good(),
                       "FR13 Stream-K byte A/B could not open JSONL");
       log << "{\\\"schema\\\":\\\""
-          << (identity_divisor_b4_byte_ab
+          << (identity_divisor_stage2_b4_byte_ab
+                  ? "fr13.fixed32.cutlass_identity_divisor_stage2_b4_byte_ab.v1"
+              : identity_divisor_b4_byte_ab
                   ? "fr13.fixed32.cutlass_identity_divisor_b4_byte_ab.v1"
               : identity_stockshape_b4_byte_ab
                   ? "fr13.fixed32.cutlass_identity_stockshape_b4_byte_ab.v1"
@@ -1419,6 +1471,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   if (wave_variant ==
       fixed32_cutlass_wave_variant::identity_divisor_b4) {
     return run_identity_divisor_b4(out);
+  }
+
+  if (wave_variant ==
+      fixed32_cutlass_wave_variant::identity_divisor_stage2_b4) {
+    return run_identity_divisor_stage2_b4(out);
   }
 
   // Unset/unknown selectors retain the stock kernel and numeric result.
