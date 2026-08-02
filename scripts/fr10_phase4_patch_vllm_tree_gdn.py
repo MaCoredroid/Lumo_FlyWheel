@@ -2290,6 +2290,12 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
     row_elems = state.get("row_elems")
     block = state.get("block")
     contract = state.get("contract")
+    commit_route = (
+        contract.get("commit_route") if isinstance(contract, dict) else None
+    )
+    channel_commit = (
+        commit_route == "fixed32_channel_zeroelide_source_col0"
+    )
     if (
         type(capacity) is not int
         or capacity not in (1, 2, 3, 4)
@@ -2320,7 +2326,49 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         or int(contract.get("commit_bank_alias_width", -1)) != 3
         or contract.get("commit_bank_destination_guard") != "alias_row_unique"
         or contract.get("commit_null_row_rejected") is not True
-        or contract.get("commit_route") != "fixed32_direct_source_col0"
+        or commit_route
+        not in {
+            "fixed32_direct_source_col0",
+            "fixed32_channel_zeroelide_source_col0",
+        }
+        or (
+            channel_commit
+            and (
+                contract.get("commit_channel_zeroelide") is not True
+                or contract.get("commit_channel_contract_verified") is not True
+                or int(contract.get("commit_live_source_cols", -1)) != 3
+                or int(contract.get("commit_literal_zero_cols", -1)) != 31
+                or int(
+                    contract.get("commit_programs_per_layer_request", -1)
+                )
+                != 10
+                or contract.get("commit_channel_byte_gate")
+                != "real_swe_all_reachable_accepted_lengths_0_11"
+                or contract.get("commit_channel_byte_gate_raw_compare")
+                != "torch_equal_uint8"
+                or contract.get("commit_channel_byte_gate_collateral")
+                != "companion_ssm_running_rows"
+                or contract.get("commit_channel_unseen_length_route")
+                != "shadow_then_reference"
+                or int(
+                    contract.get("commit_channel_accepted_length_max", -1)
+                )
+                != 11
+                or int(
+                    contract.get(
+                        "commit_channel_accepted_length_full_mask", -1
+                    )
+                )
+                != 0x0FFF
+                or not 0
+                <= int(
+                    state.get("commit_channel_byte_gate_coverage_mask", -1)
+                )
+                <= 0x0FFF
+                or int(state.get("commit_channel_byte_gate_attempts", -1)) < 0
+                or type(state.get("commit_channel_byte_gate_passed")) is not bool
+            )
+        )
         or int(contract.get("commit_launches_per_event", -1)) != 1
         or int(contract.get("commit_direct_launches_per_event", -1)) != 1
         or int(contract.get("commit_full_node_writebacks", -1)) != 0
@@ -2607,6 +2655,34 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
             "commit_bank_destination_guard"
         ],
         "commit_null_row_rejected": contract["commit_null_row_rejected"],
+        "commit_route": commit_route,
+        "commit_channel_zeroelide": channel_commit,
+        "commit_channel_contract_verified": contract.get(
+            "commit_channel_contract_verified"
+        ),
+        "commit_live_source_cols": contract.get("commit_live_source_cols"),
+        "commit_literal_zero_cols": contract.get("commit_literal_zero_cols"),
+        "commit_programs_per_layer_request": contract.get(
+            "commit_programs_per_layer_request"
+        ),
+        "commit_channel_byte_gate": contract.get(
+            "commit_channel_byte_gate"
+        ),
+        "commit_channel_byte_gate_raw_compare": contract.get(
+            "commit_channel_byte_gate_raw_compare"
+        ),
+        "commit_channel_byte_gate_collateral": contract.get(
+            "commit_channel_byte_gate_collateral"
+        ),
+        "commit_channel_unseen_length_route": contract.get(
+            "commit_channel_unseen_length_route"
+        ),
+        "commit_channel_accepted_length_max": contract.get(
+            "commit_channel_accepted_length_max"
+        ),
+        "commit_channel_accepted_length_full_mask": contract.get(
+            "commit_channel_accepted_length_full_mask"
+        ),
         "ssi_pointer_entries": 48,
         "ssi_groups": 3,
         "ssi_source_shapes": [
@@ -4963,6 +5039,49 @@ def _fr13_fixed32_observed_commit(
         for other in (1, 2, 3, 4)
         if other != batch
     }
+    channel_reference_delta = _fr13_fixed32_counter_delta(
+        conv_commit_after,
+        conv_commit_before,
+        "channel_reference_served",
+    )
+    channel_candidate_delta = _fr13_fixed32_counter_delta(
+        conv_commit_after,
+        conv_commit_before,
+        "channel_candidate_served",
+    )
+    channel_reference_batch_delta = _fr13_fixed32_batch_counter_delta(
+        conv_commit_after,
+        conv_commit_before,
+        "channel_reference_served_by_batch",
+        batch,
+    )
+    channel_candidate_batch_delta = _fr13_fixed32_batch_counter_delta(
+        conv_commit_after,
+        conv_commit_before,
+        "channel_candidate_served_by_batch",
+        batch,
+    )
+    channel_reference_shadow_delta = _fr13_fixed32_counter_delta(
+        conv_commit_after,
+        conv_commit_before,
+        "channel_reference_shadow_launches",
+    )
+    channel_candidate_shadow_delta = _fr13_fixed32_counter_delta(
+        conv_commit_after,
+        conv_commit_before,
+        "channel_candidate_shadow_launches",
+    )
+    channel_attempt_delta = _fr13_fixed32_counter_delta(
+        conv_commit_after,
+        conv_commit_before,
+        "channel_byte_gate_attempts",
+    )
+    channel_coverage_before = int(
+        conv_commit_before.get("channel_byte_gate_coverage_mask", -1)
+    )
+    channel_coverage_after = int(
+        conv_commit_after.get("channel_byte_gate_coverage_mask", -1)
+    )
     conv_row_elems = int(conv_commit_contract.get("row_elems", -1))
     conv_channels = int(conv_commit_contract.get("channels", -1))
     conv_state_length = int(conv_commit_contract.get("state_length", -1))
@@ -4970,12 +5089,94 @@ def _fr13_fixed32_observed_commit(
         conv_commit_contract.get("source_rows_per_batch", -1)
     )
     conv_block = int(conv_commit_contract.get("block", -1))
+    candidate_route = conv_commit_contract.get("route")
+    channel_candidate = (
+        candidate_route == "fixed32_channel_zeroelide_source_col0"
+    )
+    selected_route = (
+        "fixed32_channel_zeroelide_source_col0"
+        if channel_candidate_delta == 1
+        else "fixed32_direct_source_col0"
+    )
+    channel_deltas_valid = (
+        (
+            channel_candidate
+            and channel_reference_delta + channel_candidate_delta == 1
+            and channel_reference_batch_delta == channel_reference_delta
+            and channel_candidate_batch_delta == channel_candidate_delta
+            and channel_reference_shadow_delta
+            == channel_candidate_shadow_delta
+            == channel_attempt_delta
+            and channel_attempt_delta in (0, 1)
+            and 0 <= channel_coverage_before <= channel_coverage_after <= 0x0FFF
+            and (
+                channel_attempt_delta == 0
+                or (
+                    channel_reference_delta == 1
+                    and channel_candidate_delta == 0
+                    and channel_coverage_after != channel_coverage_before
+                )
+            )
+        )
+        or (
+            not channel_candidate
+            and channel_reference_delta == 0
+            and channel_candidate_delta == 0
+            and channel_reference_batch_delta == 0
+            and channel_candidate_batch_delta == 0
+            and channel_reference_shadow_delta == 0
+            and channel_candidate_shadow_delta == 0
+            and channel_attempt_delta == 0
+            and channel_coverage_before == channel_coverage_after == 0
+        )
+    )
     if (
         conv_commit_before.get("preseeded") is not True
         or conv_commit_after.get("preseeded") is not True
-        or conv_commit_after.get("route") != "fixed32_direct_source_col0"
-        or conv_commit_contract.get("route")
-        != "fixed32_direct_source_col0"
+        or conv_commit_after.get("route") != candidate_route
+        or candidate_route
+        not in {
+            "fixed32_direct_source_col0",
+            "fixed32_channel_zeroelide_source_col0",
+        }
+        or not channel_deltas_valid
+        or (
+            channel_candidate
+            and (
+                conv_commit_contract.get("channel_zeroelide") is not True
+                or conv_commit_contract.get("channel_contract_verified")
+                is not True
+                or int(conv_commit_contract.get("live_source_cols", -1)) != 3
+                or int(conv_commit_contract.get("literal_zero_cols", -1))
+                != 31
+                or int(
+                    conv_commit_contract.get(
+                        "programs_per_layer_request", -1
+                    )
+                )
+                != 10
+                or conv_commit_contract.get("channel_byte_gate")
+                != "real_swe_all_reachable_accepted_lengths_0_11"
+                or conv_commit_contract.get("channel_byte_gate_raw_compare")
+                != "torch_equal_uint8"
+                or conv_commit_contract.get("channel_byte_gate_collateral")
+                != "companion_ssm_running_rows"
+                or conv_commit_contract.get("channel_unseen_length_route")
+                != "shadow_then_reference"
+                or int(
+                    conv_commit_contract.get(
+                        "channel_accepted_length_max", -1
+                    )
+                )
+                != 11
+                or int(
+                    conv_commit_contract.get(
+                        "channel_accepted_length_full_mask", -1
+                    )
+                )
+                != 0x0FFF
+            )
+        )
         or int(conv_commit_contract.get("layers", -1)) != 48
         or conv_row_elems <= 0
         or conv_channels != 10240
@@ -5018,6 +5219,15 @@ def _fr13_fixed32_observed_commit(
                     gather_batch_delta,
                     scatter_batch_delta,
                     other_commit_deltas,
+                    (
+                        channel_reference_delta,
+                        channel_candidate_delta,
+                        channel_reference_shadow_delta,
+                        channel_candidate_shadow_delta,
+                        channel_attempt_delta,
+                        channel_coverage_before,
+                        channel_coverage_after,
+                    ),
                     conv_commit_contract,
                 )
             )
@@ -5088,13 +5298,16 @@ def _fr13_fixed32_observed_commit(
             )
         )
     conv_rows = int(layer_count) * batch
-    conv_programs = (
-        int(layer_count)
-        * batch
-        * ((conv_channels + conv_block - 1) // conv_block)
+    programs_per_layer_request = int(
+        conv_commit_contract.get("programs_per_layer_request", -1)
     )
+    if programs_per_layer_request <= 0:
+        programs_per_layer_request = (
+            conv_channels + conv_block - 1
+        ) // conv_block
+    conv_programs = int(layer_count) * batch * programs_per_layer_request
     event["conv_commit"] = {
-        "route": "fixed32_direct_source_col0",
+        "route": selected_route,
         "layers": int(layer_count),
         "requests": batch,
         "row_elems": conv_row_elems,
@@ -15060,6 +15273,39 @@ def _fr13_fixed32_device_commit_route(
         "paths_bound": _fixed_pregather_route.get("contract", {}).get(
             "commit_paths_bound"
         ),
+        "channel_zeroelide": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_channel_zeroelide"),
+        "channel_contract_verified": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_channel_contract_verified"),
+        "live_source_cols": _fixed_pregather_route.get("contract", {}).get(
+            "commit_live_source_cols"
+        ),
+        "literal_zero_cols": _fixed_pregather_route.get("contract", {}).get(
+            "commit_literal_zero_cols"
+        ),
+        "programs_per_layer_request": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_programs_per_layer_request"),
+        "channel_byte_gate": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_channel_byte_gate"),
+        "channel_byte_gate_raw_compare": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_channel_byte_gate_raw_compare"),
+        "channel_byte_gate_collateral": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_channel_byte_gate_collateral"),
+        "channel_unseen_length_route": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_channel_unseen_length_route"),
+        "channel_accepted_length_max": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_channel_accepted_length_max"),
+        "channel_accepted_length_full_mask": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_channel_accepted_length_full_mask"),
     }
     if _fixed_pure_event:
         _g._fr13_fixed32_observed_commit(

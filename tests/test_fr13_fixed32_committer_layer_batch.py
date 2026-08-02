@@ -496,7 +496,7 @@ def test_candidate_binds_physical_alias_row_uniqueness_guard() -> None:
     assert "bank_alias_ids.view(48, 1) * bank_rows + running_rows" in guard
     assert "distinct_destinations" in guard
     assert conv_commit.index("validate_fixed32_conv_commit_rows(") < conv_commit.index(
-        "_fr13_fixed32_conv_direct_col0_kernel[grid]("
+        "_fr13_fixed32_conv_commit_kernel_launch("
     )
     kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
     assert "disjoint physical ``(alias," in kernel

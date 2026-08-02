@@ -94,16 +94,26 @@ def test_fixed_route_delegates_row_guard_to_launcher_before_replay() -> None:
     assert calls.index("_fixed_conv_commit") < calls.index("_fixed_replay")
 
 
-def test_launcher_is_exactly_one_direct_kernel_without_host_sync() -> None:
+def test_launcher_selects_exactly_one_kernel_without_direct_host_sync() -> None:
     tree = ast.parse(KERNEL_PATH.read_text())
     launcher = _function(tree, "launch_fixed32_conv_commit_to_col0")
+    kernel_launch = _function(
+        tree, "_fr13_fixed32_conv_commit_kernel_launch"
+    )
     calls = [
         _called_name(node) for node in ast.walk(launcher) if isinstance(node, ast.Call)
     ]
-    kernel_calls = [
+    selected_launches = [
         name
         for name in calls
-        if name == "_fr13_fixed32_conv_direct_col0_kernel"
+        if name == "_fr13_fixed32_conv_commit_kernel_launch"
+    ]
+    low_level_calls = [
+        _called_name(node)
+        for node in ast.walk(kernel_launch)
+        if isinstance(node, ast.Call)
+        and _called_name(node).startswith("_fr13_fixed32_conv_")
+        and _called_name(node).endswith("_col0_kernel")
     ]
     banned_suffixes = (
         ".item",
@@ -115,9 +125,16 @@ def test_launcher_is_exactly_one_direct_kernel_without_host_sync() -> None:
     )
     source = ast.unparse(launcher)
 
-    assert kernel_calls == ["_fr13_fixed32_conv_direct_col0_kernel"]
+    assert selected_launches == ["_fr13_fixed32_conv_commit_kernel_launch"]
+    assert sorted(low_level_calls) == sorted(
+        [
+            "_fr13_fixed32_conv_direct_col0_kernel",
+            "_fr13_fixed32_conv_flat_zeroelide_col0_kernel",
+            "_fr13_fixed32_conv_channel_zeroelide_col0_kernel",
+        ]
+    )
     assert calls.index("validate_fixed32_conv_commit_rows") < calls.index(
-        kernel_calls[0]
+        selected_launches[0]
     )
     assert not any(name.endswith(banned_suffixes) for name in calls), calls
     assert not any(isinstance(node, ast.Try) for node in ast.walk(launcher))
@@ -161,7 +178,7 @@ def test_direct_commit_uses_logical_inner_strides_and_pregather_stays_logical() 
     assert "for state_col in tl.static_range(0, CONV_L)" in direct_source
 
 
-def test_direct_kernel_calls_exist_only_in_preseed_and_launcher() -> None:
+def test_direct_kernel_calls_exist_only_in_preseed_and_low_level_launcher() -> None:
     tree = ast.parse(KERNEL_PATH.read_text())
     direct_name = "_fr13_fixed32_conv_direct_col0_kernel"
     owners: dict[str, list[str]] = {}
@@ -177,7 +194,7 @@ def test_direct_kernel_calls_exist_only_in_preseed_and_launcher() -> None:
 
     assert owners == {
         "preseed_fixed32_conv_col0_pregather": [direct_name],
-        "launch_fixed32_conv_commit_to_col0": [direct_name],
+        "_fr13_fixed32_conv_commit_kernel_launch": [direct_name],
     }
 
 
@@ -322,3 +339,21 @@ def test_patcher_preseed_live_selfchecks_every_batch_prefix() -> None:
     assert "1, _fr13_f32_cap + 1" in fragment
     assert "num_spec_decodes=(" in fragment
     assert "_fr13_f32_live_B" in fragment
+
+
+def test_runtime_observer_distinguishes_channel_shadow_and_served_routes() -> None:
+    tree = _observed_runtime_tree(ast.parse(PATCHER_PATH.read_text()))
+    runtime = _function(tree, "_fr13_fixed32_conv_runtime_contract")
+    observed = _function(tree, "_fr13_fixed32_observed_commit")
+    runtime_source = ast.unparse(runtime)
+    observed_source = ast.unparse(observed)
+
+    assert "fixed32_channel_zeroelide_source_col0" in runtime_source
+    assert "commit_channel_byte_gate_raw_compare" in runtime_source
+    assert "commit_channel_byte_gate_collateral" in runtime_source
+    assert "commit_channel_accepted_length_full_mask" in runtime_source
+    assert "channel_reference_shadow_launches" in observed_source
+    assert "channel_candidate_shadow_launches" in observed_source
+    assert "channel_reference_served_by_batch" in observed_source
+    assert "channel_candidate_served_by_batch" in observed_source
+    assert "event['conv_commit'] = {'route': selected_route" in observed_source

@@ -16,6 +16,12 @@ _FR13_COMMITTER_NATIVE_ANNOUNCED = False
 _FR13_FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT = (
     "/logs/fr13_fixed32_committer_layer_batch.real_event.arm"
 )
+_FR13_FIXED32_CONV_CHANNEL_COMMIT_ARM = (
+    "/logs/fr13_fixed32_conv_channel_zeroelide_commit.arm"
+)
+_FR13_FIXED32_CONV_CHANNEL_REAL_EVENT = (
+    "/logs/fr13_fixed32_conv_channel_zeroelide.real_event.arm"
+)
 _FR13_FIXED32_CFWD_NATIVE_KEYGROUP_ARM = (
     "/logs/fr13_fixed32_cfwd_native_keygroup_precompute.arm"
 )
@@ -116,6 +122,13 @@ def _fr13_fixed32_committer_layer_batch_real_event_marker(
             "swe_verified:<task_id>"
         )
     return marker
+
+
+def _fr13_fixed32_conv_channel_real_event_marker() -> str | None:
+    """Read the channel-commit candidate's authenticated SWE event arm."""
+    return _fr13_fixed32_committer_layer_batch_real_event_marker(
+        path=_FR13_FIXED32_CONV_CHANNEL_REAL_EVENT,
+    )
 
 
 def _fr13_fixed32_committer_accepted_length_mask(
@@ -4777,7 +4790,10 @@ def _fr13_resolve_fixed32_conv_channel_commit(*, environ=None) -> bool:
             f"{_FR13_FIXED32_CONV_CHANNEL_COMMIT_ENV} must be unset, 0, or "
             "diagnostic"
         )
-    return selector == "diagnostic"
+    return selector == "diagnostic" or (
+        environ is None
+        and os.path.exists(_FR13_FIXED32_CONV_CHANNEL_COMMIT_ARM)
+    )
 
 
 def _fixed32_conv_page_safe_row_span(
@@ -5439,6 +5455,19 @@ def preseed_fixed32_conv_col0_pregather(
         "commit_flat_contract_verified": flat_contract,
         "commit_channel_zeroelide": channel_commit,
         "commit_channel_contract_verified": channel_contract,
+        "commit_channel_byte_gate_coverage_mask": 0,
+        "commit_channel_byte_gate_attempts": 0,
+        "commit_channel_byte_gate_passed": False,
+        "commit_channel_reference_shadow_launches": 0,
+        "commit_channel_candidate_shadow_launches": 0,
+        "commit_channel_reference_served": 0,
+        "commit_channel_candidate_served": 0,
+        "commit_channel_reference_served_by_batch": {
+            batch: 0 for batch in batches
+        },
+        "commit_channel_candidate_served_by_batch": {
+            batch: 0 for batch in batches
+        },
         "token": None,
         "n": 0,
         "stages": 0,
@@ -5538,6 +5567,30 @@ def preseed_fixed32_conv_col0_pregather(
             "commit_flat_contract_verified": flat_contract,
             "commit_channel_zeroelide": channel_commit,
             "commit_channel_contract_verified": channel_contract,
+            "commit_channel_byte_gate": (
+                "real_swe_all_reachable_accepted_lengths_0_11"
+                if channel_commit
+                else None
+            ),
+            "commit_channel_byte_gate_raw_compare": (
+                "torch_equal_uint8" if channel_commit else None
+            ),
+            "commit_channel_byte_gate_collateral": (
+                "companion_ssm_running_rows" if channel_commit else None
+            ),
+            "commit_channel_unseen_length_route": (
+                "shadow_then_reference" if channel_commit else None
+            ),
+            "commit_channel_accepted_length_max": (
+                _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH
+                if channel_commit
+                else None
+            ),
+            "commit_channel_accepted_length_full_mask": (
+                _FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+                if channel_commit
+                else None
+            ),
             "commit_live_source_cols": (
                 _FR13_FIXED32_CONV_FLAT_LIVE_SOURCE_COLS
                 if flat_commit or channel_commit
@@ -6373,6 +6426,253 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
     }
 
 
+def _fr13_fixed32_conv_commit_kernel_launch(
+    *,
+    state,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    accepted_lens: torch.Tensor,
+    batch: int,
+    route: str,
+) -> None:
+    """Enqueue one selected conv commit kernel without counters or syncs."""
+    conv_c = int(state["conv_c"])
+    block = int(state["block"])
+    if route == _FR13_FIXED32_CONV_FLAT_COMMIT_ROUTE:
+        grid = (48, batch, triton.cdiv(int(state["row_elems"]), block))
+        _fr13_fixed32_conv_flat_zeroelide_col0_kernel[grid](
+            state["anchor"],
+            state["off16"],
+            state["source_anchor"],
+            state["source_off16"],
+            state["state_src"],
+            spec_state_indices,
+            accepted_paths,
+            accepted_lens,
+            spec_state_indices.stride(0),
+            spec_state_indices.stride(1),
+            spec_state_indices.stride(2),
+            accepted_paths.stride(0),
+            accepted_paths.stride(1),
+            accepted_lens.stride(0),
+            int(state["anchor"].stride(0)),
+            int(state["source_anchor"].stride(0)),
+            CONV_C=conv_c,
+            CONV_L=int(state["conv_l"]),
+            LIVE_SOURCE_COLS=_FR13_FIXED32_CONV_FLAT_LIVE_SOURCE_COLS,
+            SOURCE_ROWS=int(state["source_rows_per_batch"]),
+            ELEM_BYTES=int(state["element_bytes"]),
+            SPEC_COLS=int(spec_state_indices.shape[2]),
+            PATH_COLS=int(accepted_paths.shape[1]),
+            B=batch,
+            BLOCK=block,
+            num_warps=4,
+        )
+        return
+    if route == _FR13_FIXED32_CONV_CHANNEL_COMMIT_ROUTE:
+        grid = (48, batch, triton.cdiv(conv_c, block))
+        _fr13_fixed32_conv_channel_zeroelide_col0_kernel[grid](
+            state["anchor"],
+            state["off16"],
+            state["source_anchor"],
+            state["source_off16"],
+            state["state_src"],
+            spec_state_indices,
+            accepted_paths,
+            accepted_lens,
+            spec_state_indices.stride(0),
+            spec_state_indices.stride(1),
+            spec_state_indices.stride(2),
+            accepted_paths.stride(0),
+            accepted_paths.stride(1),
+            accepted_lens.stride(0),
+            int(state["anchor"].stride(0)),
+            int(state["anchor"].stride(1)),
+            int(state["anchor"].stride(2)),
+            int(state["source_anchor"].stride(0)),
+            int(state["source_anchor"].stride(1)),
+            CONV_C=conv_c,
+            CONV_L=int(state["conv_l"]),
+            LIVE_SOURCE_COLS=_FR13_FIXED32_CONV_FLAT_LIVE_SOURCE_COLS,
+            SOURCE_ROWS=int(state["source_rows_per_batch"]),
+            ELEM_BYTES=int(state["element_bytes"]),
+            SPEC_COLS=int(spec_state_indices.shape[2]),
+            PATH_COLS=int(accepted_paths.shape[1]),
+            B=batch,
+            BLOCK_C=block,
+            num_warps=4,
+        )
+        return
+    if route != _FR13_FIXED32_CONV_COMMIT_ROUTE:
+        raise RuntimeError(
+            f"FR13_FIXED32_CONV_COMMIT unsupported selected route {route!r}"
+        )
+    grid = (48, batch, triton.cdiv(conv_c, block))
+    _fr13_fixed32_conv_direct_col0_kernel[grid](
+        state["anchor"],
+        state["off16"],
+        state["source_anchor"],
+        state["source_off16"],
+        state["state_src"],
+        spec_state_indices,
+        accepted_paths,
+        accepted_lens,
+        spec_state_indices.stride(0),
+        spec_state_indices.stride(1),
+        spec_state_indices.stride(2),
+        accepted_paths.stride(0),
+        accepted_paths.stride(1),
+        accepted_lens.stride(0),
+        int(state["anchor"].stride(0)),
+        int(state["anchor"].stride(1)),
+        int(state["anchor"].stride(2)),
+        int(state["source_anchor"].stride(0)),
+        int(state["source_anchor"].stride(1)),
+        CONV_C=conv_c,
+        CONV_L=int(state["conv_l"]),
+        SOURCE_ROWS=int(state["source_rows_per_batch"]),
+        ELEM_BYTES=int(state["element_bytes"]),
+        SPEC_COLS=int(spec_state_indices.shape[2]),
+        PATH_COLS=int(accepted_paths.shape[1]),
+        B=batch,
+        BLOCK_C=block,
+        num_warps=4,
+    )
+
+
+def _fr13_fixed32_conv_channel_byte_gate(
+    *,
+    state,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    accepted_lens: torch.Tensor,
+    batch: int,
+) -> bool:
+    """Qualify channel zero elision on authenticated, unmeasured events."""
+    if not state.get("commit_channel_zeroelide", False):
+        return True
+    full_mask = _FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+    coverage_mask = int(
+        state.get("commit_channel_byte_gate_coverage_mask", -1)
+    )
+    if not 0 <= coverage_mask <= full_mask:
+        raise RuntimeError(
+            "FR13 fixed32 conv channel coverage mask is invalid"
+        )
+    if coverage_mask == full_mask:
+        state["commit_channel_byte_gate_passed"] = True
+        return True
+    if _fr13_fixed32_conv_channel_real_event_marker() is None:
+        return False
+    event_mask = _fr13_fixed32_committer_accepted_length_mask(
+        accepted_lens[:batch].tolist(),
+        batch=batch,
+    )
+    unseen_mask = event_mask & ~coverage_mask
+    if unseen_mask == 0:
+        return True
+
+    running_rows = spec_state_indices[:, :batch, 0].to(torch.long)
+    conv_banks = state["banks"]
+    ssm_banks = state["ssm_banks"]
+    state["commit_channel_byte_gate_attempts"] += 1
+    saved_conv_rows = tuple(
+        bank.index_select(0, running_rows[layer]).clone()
+        for layer, bank in enumerate(conv_banks)
+    )
+    saved_ssm_rows = tuple(
+        bank.index_select(0, running_rows[layer]).clone()
+        for layer, bank in enumerate(ssm_banks)
+    )
+
+    def restore() -> None:
+        for layer, bank in enumerate(conv_banks):
+            bank.index_copy_(0, running_rows[layer], saved_conv_rows[layer])
+        for layer, bank in enumerate(ssm_banks):
+            bank.index_copy_(0, running_rows[layer], saved_ssm_rows[layer])
+
+    try:
+        _fr13_fixed32_conv_commit_kernel_launch(
+            state=state,
+            spec_state_indices=spec_state_indices,
+            accepted_paths=accepted_paths,
+            accepted_lens=accepted_lens,
+            batch=batch,
+            route=_FR13_FIXED32_CONV_COMMIT_ROUTE,
+        )
+        state["commit_channel_reference_shadow_launches"] += 1
+        torch.cuda.synchronize(accepted_lens.device)
+        reference_conv_rows = tuple(
+            bank.index_select(0, running_rows[layer]).clone()
+            for layer, bank in enumerate(conv_banks)
+        )
+        reference_ssm_mismatches = tuple(
+            layer
+            for layer, (bank, saved) in enumerate(
+                zip(ssm_banks, saved_ssm_rows, strict=True)
+            )
+            if not _fr13_fixed32_tensor_bits_equal(
+                bank.index_select(0, running_rows[layer]), saved
+            )
+        )
+        if reference_ssm_mismatches:
+            raise RuntimeError(
+                "FR13 fixed32 conv incumbent touched companion SSM rows: "
+                f"B={batch} layers={reference_ssm_mismatches}"
+            )
+        restore()
+        _fr13_fixed32_conv_commit_kernel_launch(
+            state=state,
+            spec_state_indices=spec_state_indices,
+            accepted_paths=accepted_paths,
+            accepted_lens=accepted_lens,
+            batch=batch,
+            route=_FR13_FIXED32_CONV_CHANNEL_COMMIT_ROUTE,
+        )
+        state["commit_channel_candidate_shadow_launches"] += 1
+        torch.cuda.synchronize(accepted_lens.device)
+        conv_mismatches = tuple(
+            layer
+            for layer, (bank, reference) in enumerate(
+                zip(conv_banks, reference_conv_rows, strict=True)
+            )
+            if not _fr13_fixed32_tensor_bits_equal(
+                bank.index_select(0, running_rows[layer]), reference
+            )
+        )
+        ssm_mismatches = tuple(
+            layer
+            for layer, (bank, saved) in enumerate(
+                zip(ssm_banks, saved_ssm_rows, strict=True)
+            )
+            if not _fr13_fixed32_tensor_bits_equal(
+                bank.index_select(0, running_rows[layer]), saved
+            )
+        )
+        if conv_mismatches or ssm_mismatches:
+            raise RuntimeError(
+                "FR13 fixed32 conv channel byte gate failed: "
+                f"B={batch} conv_layers={conv_mismatches} "
+                f"ssm_layers={ssm_mismatches}"
+            )
+        coverage_mask |= event_mask
+        state["commit_channel_byte_gate_coverage_mask"] = coverage_mask
+        state["commit_channel_byte_gate_passed"] = coverage_mask == full_mask
+    finally:
+        restore()
+        torch.cuda.synchronize(accepted_lens.device)
+
+    print(
+        "[FR13_FIXED32_CONV_CHANNEL BYTE-GATE COVERAGE] "
+        f"B={batch} new_mask={unseen_mask:#06x} "
+        f"coverage={coverage_mask:#06x} "
+        f"complete={int(coverage_mask == full_mask)} "
+        "conv_bytes=exact companion_ssm_bytes=unchanged reference_served=1",
+        flush=True,
+    )
+    return False
+
+
 def launch_fixed32_conv_commit_to_col0(
     *,
     conv_banks,
@@ -6454,103 +6754,35 @@ def launch_fixed32_conv_commit_to_col0(
         batch=batch,
         bank_rows=int(state["anchor"].shape[0]),
     )
-    conv_c = int(state["conv_c"])
-    block = int(state["block"])
-    if state["commit_flat_zeroelide"]:
-        grid = (48, batch, triton.cdiv(int(state["row_elems"]), block))
-        _fr13_fixed32_conv_flat_zeroelide_col0_kernel[grid](
-            state["anchor"],
-            state["off16"],
-            state["source_anchor"],
-            state["source_off16"],
-            state["state_src"],
-            spec_state_indices,
-            accepted_paths,
-            accepted_lens,
-            spec_state_indices.stride(0),
-            spec_state_indices.stride(1),
-            spec_state_indices.stride(2),
-            accepted_paths.stride(0),
-            accepted_paths.stride(1),
-            accepted_lens.stride(0),
-            int(state["anchor"].stride(0)),
-            int(state["source_anchor"].stride(0)),
-            CONV_C=conv_c,
-            CONV_L=int(state["conv_l"]),
-            LIVE_SOURCE_COLS=_FR13_FIXED32_CONV_FLAT_LIVE_SOURCE_COLS,
-            SOURCE_ROWS=int(state["source_rows_per_batch"]),
-            ELEM_BYTES=int(state["element_bytes"]),
-            SPEC_COLS=int(spec_state_indices.shape[2]),
-            PATH_COLS=int(accepted_paths.shape[1]),
-            B=batch,
-            BLOCK=block,
-            num_warps=4,
+    selected_route = state["commit_route"]
+    if state["commit_channel_zeroelide"]:
+        channel_qualified = _fr13_fixed32_conv_channel_byte_gate(
+            state=state,
+            spec_state_indices=spec_state_indices,
+            accepted_paths=accepted_paths,
+            accepted_lens=accepted_lens,
+            batch=batch,
         )
-    elif state["commit_channel_zeroelide"]:
-        grid = (48, batch, triton.cdiv(conv_c, block))
-        _fr13_fixed32_conv_channel_zeroelide_col0_kernel[grid](
-            state["anchor"],
-            state["off16"],
-            state["source_anchor"],
-            state["source_off16"],
-            state["state_src"],
-            spec_state_indices,
-            accepted_paths,
-            accepted_lens,
-            spec_state_indices.stride(0),
-            spec_state_indices.stride(1),
-            spec_state_indices.stride(2),
-            accepted_paths.stride(0),
-            accepted_paths.stride(1),
-            accepted_lens.stride(0),
-            int(state["anchor"].stride(0)),
-            int(state["anchor"].stride(1)),
-            int(state["anchor"].stride(2)),
-            int(state["source_anchor"].stride(0)),
-            int(state["source_anchor"].stride(1)),
-            CONV_C=conv_c,
-            CONV_L=int(state["conv_l"]),
-            LIVE_SOURCE_COLS=_FR13_FIXED32_CONV_FLAT_LIVE_SOURCE_COLS,
-            SOURCE_ROWS=int(state["source_rows_per_batch"]),
-            ELEM_BYTES=int(state["element_bytes"]),
-            SPEC_COLS=int(spec_state_indices.shape[2]),
-            PATH_COLS=int(accepted_paths.shape[1]),
-            B=batch,
-            BLOCK_C=block,
-            num_warps=4,
+        selected_route = (
+            _FR13_FIXED32_CONV_CHANNEL_COMMIT_ROUTE
+            if channel_qualified
+            else _FR13_FIXED32_CONV_COMMIT_ROUTE
         )
-    else:
-        grid = (48, batch, triton.cdiv(conv_c, block))
-        _fr13_fixed32_conv_direct_col0_kernel[grid](
-            state["anchor"],
-            state["off16"],
-            state["source_anchor"],
-            state["source_off16"],
-            state["state_src"],
-            spec_state_indices,
-            accepted_paths,
-            accepted_lens,
-            spec_state_indices.stride(0),
-            spec_state_indices.stride(1),
-            spec_state_indices.stride(2),
-            accepted_paths.stride(0),
-            accepted_paths.stride(1),
-            accepted_lens.stride(0),
-            int(state["anchor"].stride(0)),
-            int(state["anchor"].stride(1)),
-            int(state["anchor"].stride(2)),
-            int(state["source_anchor"].stride(0)),
-            int(state["source_anchor"].stride(1)),
-            CONV_C=conv_c,
-            CONV_L=int(state["conv_l"]),
-            SOURCE_ROWS=int(state["source_rows_per_batch"]),
-            ELEM_BYTES=int(state["element_bytes"]),
-            SPEC_COLS=int(spec_state_indices.shape[2]),
-            PATH_COLS=int(accepted_paths.shape[1]),
-            B=batch,
-            BLOCK_C=block,
-            num_warps=4,
-        )
+    _fr13_fixed32_conv_commit_kernel_launch(
+        state=state,
+        spec_state_indices=spec_state_indices,
+        accepted_paths=accepted_paths,
+        accepted_lens=accepted_lens,
+        batch=batch,
+        route=selected_route,
+    )
+    if state["commit_channel_zeroelide"]:
+        if selected_route == _FR13_FIXED32_CONV_CHANNEL_COMMIT_ROUTE:
+            state["commit_channel_candidate_served"] += 1
+            state["commit_channel_candidate_served_by_batch"][batch] += 1
+        else:
+            state["commit_channel_reference_served"] += 1
+            state["commit_channel_reference_served_by_batch"][batch] += 1
     state["commit_direct_launches"] += 1
     state["commit_direct_launches_by_batch"][batch] += 1
 
@@ -6572,6 +6804,19 @@ def fixed32_conv_col0_commit_counters() -> dict[str, object]:
                 batch: 0 for batch in _FR13_FIXED32_BATCHES
             },
             "scatter_launches_by_batch": {
+                batch: 0 for batch in _FR13_FIXED32_BATCHES
+            },
+            "channel_byte_gate_coverage_mask": 0,
+            "channel_byte_gate_attempts": 0,
+            "channel_byte_gate_passed": False,
+            "channel_reference_shadow_launches": 0,
+            "channel_candidate_shadow_launches": 0,
+            "channel_reference_served": 0,
+            "channel_candidate_served": 0,
+            "channel_reference_served_by_batch": {
+                batch: 0 for batch in _FR13_FIXED32_BATCHES
+            },
+            "channel_candidate_served_by_batch": {
                 batch: 0 for batch in _FR13_FIXED32_BATCHES
             },
         }
@@ -6596,6 +6841,43 @@ def fixed32_conv_col0_commit_counters() -> dict[str, object]:
         "scatter_launches_by_batch": {
             batch: int(
                 state["commit_scatter_launches_by_batch"].get(batch, 0)
+            )
+            for batch in _FR13_FIXED32_BATCHES
+        },
+        "channel_byte_gate_coverage_mask": int(
+            state.get("commit_channel_byte_gate_coverage_mask", 0)
+        ),
+        "channel_byte_gate_attempts": int(
+            state.get("commit_channel_byte_gate_attempts", 0)
+        ),
+        "channel_byte_gate_passed": bool(
+            state.get("commit_channel_byte_gate_passed", False)
+        ),
+        "channel_reference_shadow_launches": int(
+            state.get("commit_channel_reference_shadow_launches", 0)
+        ),
+        "channel_candidate_shadow_launches": int(
+            state.get("commit_channel_candidate_shadow_launches", 0)
+        ),
+        "channel_reference_served": int(
+            state.get("commit_channel_reference_served", 0)
+        ),
+        "channel_candidate_served": int(
+            state.get("commit_channel_candidate_served", 0)
+        ),
+        "channel_reference_served_by_batch": {
+            batch: int(
+                state.get("commit_channel_reference_served_by_batch", {}).get(
+                    batch, 0
+                )
+            )
+            for batch in _FR13_FIXED32_BATCHES
+        },
+        "channel_candidate_served_by_batch": {
+            batch: int(
+                state.get("commit_channel_candidate_served_by_batch", {}).get(
+                    batch, 0
+                )
             )
             for batch in _FR13_FIXED32_BATCHES
         },

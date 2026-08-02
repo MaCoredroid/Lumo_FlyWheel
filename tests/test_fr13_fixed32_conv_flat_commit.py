@@ -110,12 +110,15 @@ def test_flat_kernel_owns_contiguous_row_and_elides_zero_source_loads() -> None:
 def test_flat_route_is_preseeded_once_and_incumbent_remains_fallback() -> None:
     preseed = _function_text("preseed_fixed32_conv_col0_pregather")
     launch = _function_text("launch_fixed32_conv_commit_to_col0")
+    kernel_launch = _function_text(
+        "_fr13_fixed32_conv_commit_kernel_launch"
+    )
     assert "flat_commit = _fr13_resolve_fixed32_conv_flat_commit()" in preseed
     assert "state_src[:,3:]==35" in preseed
     assert '"commit_flat_zeroelide": flat_commit' in preseed
-    assert 'if state["commit_flat_zeroelide"]:' in launch
-    assert "_fr13_fixed32_conv_flat_zeroelide_col0_kernel[grid]" in launch
-    assert "_fr13_fixed32_conv_direct_col0_kernel[grid]" in launch
+    assert 'selected_route = state["commit_route"]' in launch
+    assert "_fr13_fixed32_conv_flat_zeroelide_col0_kernel[grid]" in kernel_launch
+    assert "_fr13_fixed32_conv_direct_col0_kernel[grid]" in kernel_launch
     assert "_fr13_resolve_fixed32_conv_flat_commit" not in launch
 
 
@@ -133,6 +136,9 @@ def test_channel_kernel_keeps_low_cta_map_and_elides_zero_source_loads() -> None
 def test_channel_route_is_preseeded_and_mutually_exclusive() -> None:
     preseed = _function_text("preseed_fixed32_conv_col0_pregather")
     launch = _function_text("launch_fixed32_conv_commit_to_col0")
+    kernel_launch = _function_text(
+        "_fr13_fixed32_conv_commit_kernel_launch"
+    )
     assert "channel_commit = _fr13_resolve_fixed32_conv_channel_commit()" in preseed
     assert "zero-eliding candidates are mutually exclusive" in preseed
     assert '"commit_channel_zeroelide": channel_commit' in preseed
@@ -142,9 +148,43 @@ def test_channel_route_is_preseeded_and_mutually_exclusive() -> None:
         "                    channel_grid\n"
         "                ](" in preseed
     )
-    assert 'elif state["commit_channel_zeroelide"]:' in launch
-    assert "_fr13_fixed32_conv_channel_zeroelide_col0_kernel[grid]" in launch
+    assert 'if state["commit_channel_zeroelide"]:' in launch
+    assert "_fr13_fixed32_conv_channel_byte_gate(" in launch
+    assert (
+        "_fr13_fixed32_conv_channel_zeroelide_col0_kernel[grid]"
+        in kernel_launch
+    )
     assert "_fr13_resolve_fixed32_conv_channel_commit" not in launch
+
+
+def test_channel_gate_is_real_event_only_exact_and_reference_served() -> None:
+    gate = _function_text("_fr13_fixed32_conv_channel_byte_gate")
+    marker = gate.index("_fr13_fixed32_conv_channel_real_event_marker()")
+    accepted_lens_read = gate.index("accepted_lens[:batch].tolist()")
+
+    assert marker < accepted_lens_read
+    assert 'saved_conv_rows = tuple(' in gate
+    assert 'saved_ssm_rows = tuple(' in gate
+    assert gate.count("_fr13_fixed32_conv_commit_kernel_launch(") == 2
+    assert "route=_FR13_FIXED32_CONV_COMMIT_ROUTE" in gate
+    assert "route=_FR13_FIXED32_CONV_CHANNEL_COMMIT_ROUTE" in gate
+    assert gate.count("_fr13_fixed32_tensor_bits_equal(") == 3
+    assert 'state["commit_channel_byte_gate_coverage_mask"]' in gate
+    assert "finally:" in gate
+    assert gate.rstrip().endswith("return False")
+
+
+def test_channel_gate_contract_binds_all_depths_and_collateral_rows() -> None:
+    preseed = _function_text("preseed_fixed32_conv_col0_pregather")
+
+    assert '"commit_channel_byte_gate": (' in preseed
+    assert '"real_swe_all_reachable_accepted_lengths_0_11"' in preseed
+    assert '"commit_channel_byte_gate_raw_compare": (' in preseed
+    assert '"torch_equal_uint8" if channel_commit else None' in preseed
+    assert '"commit_channel_byte_gate_collateral": (' in preseed
+    assert '"companion_ssm_running_rows" if channel_commit else None' in preseed
+    assert '"commit_channel_unseen_length_route": (' in preseed
+    assert '"shadow_then_reference" if channel_commit else None' in preseed
 
 
 def test_flat_contract_is_bound_to_deployed_geometry() -> None:
