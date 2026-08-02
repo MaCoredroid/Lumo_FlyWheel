@@ -100,7 +100,7 @@ def test_contract_closes_row32_c64_for_b1_b4() -> None:
         assert contract["source_descriptor_device_validation"] is False
         assert contract["source_descriptor_launcher_argument"] is False
         assert contract["candidate"] == (
-            "fixed32_sfwd_priorpair_quad_xgather_fixedstrides_r32_c64_w16_v1"
+            "fixed32_sfwd_priorpair_quad_xgather_fixedstrides_tapmask_r32_c64_w16_v1"
         )
     for geometry in ((0, 32, 4, 34), (1, 31, 4, 34), (1, 32, 3, 34)):
         with pytest.raises(ValueError):
@@ -252,7 +252,9 @@ def test_launcher_uses_packed_xgather_kernel_and_exact_layout() -> None:
     assert kernel.index("prior_pair = tl.load(") < kernel.index(
         "for tap in tl.static_range(0, WIDTH - 2):"
     )
-    assert "tl.where(source_row == 1, prior_1, prior_2)" in kernel
+    assert "from_prior = offs_n < 9" in kernel
+    assert "from_prior = offs_n < 4" in kernel
+    assert "from_prior = offs_n == 0" in kernel
     assert "tl.gather(current_x, current_index, axis=0)" in kernel
     assert "current_value * current_weight" in kernel
     assert "current_x * current_weight" not in kernel
@@ -343,7 +345,7 @@ def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
     assert "reference_gdn_source_bound" in gate
     assert "fr13_sfwd_prior_reuse_descriptorless.py" in gate
     assert "candidate_kernel_source_sha256" in gate
-    assert f'CANDIDATE = "{candidate.CANDIDATE}"' in gate
+    assert candidate.CANDIDATE in gate
     assert "tuple(mixed_qkv_spec.shape)" in patcher
     assert "_fr13_sfwd_candidate_out = torch.empty(" in patcher
     assert candidate.CANDIDATE not in production

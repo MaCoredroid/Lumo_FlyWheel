@@ -125,6 +125,30 @@ def test_descriptorless_sources_preserve_ordered_conv_math() -> None:
         assert torch.equal(candidate, expected)
 
 
+def test_fixed_topology_prior_masks_match_every_source_row() -> None:
+    sources = fixed32_descriptorless_sources()
+    thresholds = (9, 4, 1)
+
+    for tap, threshold in enumerate(thresholds):
+        assert tuple(source[tap] < 3 for source in sources) == tuple(
+            node < threshold for node in range(FIXED32_ROWS)
+        )
+
+    assert tuple(source[0] for source in sources[:9]) == (
+        0,
+        1,
+        1,
+        1,
+        2,
+        2,
+        2,
+        2,
+        2,
+    )
+    assert tuple(source[1] for source in sources[:4]) == (1, 2, 2, 2)
+    assert sources[0][2] == 2
+
+
 def test_descriptor_pointer_is_absent_from_kernel_contract() -> None:
     module_path = Path(
         sys.modules[
@@ -364,3 +388,30 @@ def test_packed_xgather_loads_first_two_prior_values_as_exact_pair() -> None:
     assert "prior_pair.to(tl.uint16).to(tl.bfloat16, bitcast=True)" in fragment
     assert "(prior_pair >> 16).to(tl.uint16).to(" in fragment
     assert "prior_base + 2" in fragment
+
+
+def test_packed_xgather_specializes_prior_masks_to_fixed_topology() -> None:
+    module_path = Path(
+        sys.modules[
+            "lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless"
+        ].__file__
+    )
+    source = module_path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    kernel = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel"
+    )
+    fragment = ast.get_source_segment(source, kernel)
+
+    assert fragment is not None
+    assert "if tap == 0:" in fragment
+    assert "from_prior = offs_n < 9" in fragment
+    assert "from_prior = offs_n < 4" in fragment
+    assert "from_prior = offs_n == 0" in fragment
+    assert "tl.where(offs_n == 0, prior_1, prior_2)" in fragment
+    assert "tl.where(from_prior, prior_2, x_value)" in fragment
+    assert "source_row < (WIDTH - 1)" not in fragment
+    assert "source_row == 0" not in fragment

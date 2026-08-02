@@ -629,12 +629,16 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
             source_0,
             source_1,
         )
-        from_prior = source_row < (WIDTH - 1)
-        prior_value = tl.where(
-            source_row == 0,
-            prior_0,
-            tl.where(source_row == 1, prior_1, prior_2),
-        )
+        if tap == 0:
+            from_prior = offs_n < 9
+            prior_value = tl.where(
+                offs_n == 0,
+                prior_0,
+                tl.where(offs_n < 4, prior_1, prior_2),
+            )
+        else:
+            from_prior = offs_n < 4
+            prior_value = tl.where(offs_n == 0, prior_1, prior_2)
         x_node = tl.maximum(source_row - (WIDTH - 1), 0)
         x_index = tl.broadcast_to(x_node, ROWS_PER_PROGRAM, BLOCK_C)
         x_value = tl.gather(current_x, x_index, axis=0)
@@ -645,16 +649,11 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
         acc = acc + product
 
     source_row = source_2
-    from_prior = source_row < (WIDTH - 1)
-    prior_value = tl.where(
-        source_row == 0,
-        prior_0,
-        tl.where(source_row == 1, prior_1, prior_2),
-    )
+    from_prior = offs_n == 0
     x_node = tl.maximum(source_row - (WIDTH - 1), 0)
     x_index = tl.broadcast_to(x_node, ROWS_PER_PROGRAM, BLOCK_C)
     x_value = tl.gather(current_x, x_index, axis=0)
-    value = tl.where(from_prior, prior_value, x_value).to(tl.bfloat16)
+    value = tl.where(from_prior, prior_2, x_value).to(tl.bfloat16)
     weight_2_bits = (weight_quad >> 32).to(tl.uint16)
     weight_2 = weight_2_bits.to(tl.bfloat16, bitcast=True)
     product = (value * weight_2).to(tl.bfloat16).to(tl.float32)
