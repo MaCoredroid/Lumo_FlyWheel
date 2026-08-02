@@ -28,6 +28,9 @@ REJECTION_SAMPLER_PATH = Path(
 GPU_MODEL_RUNNER_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py"
 )
+GPU_WORKER_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_worker.py"
+)
 REQUEST_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/request.py"
 )
@@ -163,6 +166,12 @@ _FR13_FIXED32_BATCH_GDN_BYTE_AB = os.environ.get(
 ).strip()
 _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = os.environ.get(
     "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB", "0"
+).strip()
+_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB = os.environ.get(
+    "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB", "0"
+).strip()
+_FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB = os.environ.get(
+    "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB", "0"
 ).strip()
 _FR13_FIXED32_TREE_SOURCE = repr(list(_FR13_FIXED32_CHOICES))
 _FR13_FIXED32_SLOT_PI = tuple(
@@ -407,11 +416,23 @@ try:
     _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
 except NameError:
     _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = False
+try:
+    _FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC
+except NameError:
+    _FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC = False
 _FR13_FIXED32_DRAFTER_TREE_LAYER = "mtp.layers.0.self_attn.attn"
 _FR13_FIXED32_TARGET_TREE_LAYERS = frozenset(
     "language_model.model.layers.%d.self_attn.attn" % layer
     for layer in range(3, 64, 4)
 )
+
+
+def _fr13_fixed32_unmeasured_full_row_map_valid(batch_rows, compact_batch):
+    """Admit equal full/compact rows only for isolated eager diagnostics."""
+    return batch_rows > compact_batch or (
+        _FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC
+        and batch_rows == compact_batch
+    )
 
 
 def _fr13_fixed32_topology_needle():
@@ -563,7 +584,10 @@ def _fr13_fixed32_manifest_entry(entry, label):
 
 
 def _fr13_fixed32_observed_current(stage):
-    if not _FR13_FIXED32_MODE:
+    if (
+        not _FR13_FIXED32_MODE
+        or globals().get("_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC", False)
+    ):
         return None
     event = globals().get("_FR13_FIXED32_OBSERVED_CURRENT")
     if not isinstance(event, dict):
@@ -574,7 +598,10 @@ def _fr13_fixed32_observed_current(stage):
 
 
 def _fr13_fixed32_observed_event_active():
-    if not _FR13_FIXED32_MODE:
+    if (
+        not _FR13_FIXED32_MODE
+        or globals().get("_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC", False)
+    ):
         return False
     event = globals().get("_FR13_FIXED32_OBSERVED_CURRENT")
     if event is None:
@@ -1567,7 +1594,10 @@ def _fr13_fixed32_boot_preseed_inputs():
 
 
 def _fr13_fixed32_observed_nonpure_dispatch(cudagraph_mode_name):
-    if not _FR13_FIXED32_MODE:
+    if (
+        not _FR13_FIXED32_MODE
+        or globals().get("_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC", False)
+    ):
         return
     counters = _FR13_FIXED32_NONPURE_DISPATCH
     name = str(cudagraph_mode_name).upper()
@@ -1634,7 +1664,10 @@ def _fr13_fixed32_observed_begin(
     global _FR13_FIXED32_CAPTURE_FROZEN
     global _FR13_FIXED32_OBSERVED_CURRENT
     global _FR13_FIXED32_TOPOLOGY_NEEDLE_EMITTED
-    if not _FR13_FIXED32_MODE:
+    if (
+        not _FR13_FIXED32_MODE
+        or globals().get("_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC", False)
+    ):
         return
     batch = int(batch_size)
     forward = int(forward_step_index)
@@ -5622,6 +5655,24 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
             "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
         )
     graph_batch_gdn_diagnostic = graph_batch_gdn_diagnostic_raw == "1"
+    sfwd_state_fusion_diagnostic_raw = (
+        _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
+    )
+    if sfwd_state_fusion_diagnostic_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"
+        )
+    sfwd_state_fusion_diagnostic = (
+        sfwd_state_fusion_diagnostic_raw == "1"
+    )
+    sfwd_state_fusion_timing_raw = (
+        _FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB
+    )
+    if sfwd_state_fusion_timing_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB must be exactly 0 or 1"
+        )
+    sfwd_state_fusion_timing = sfwd_state_fusion_timing_raw == "1"
     if candidate_raw and candidate_raw not in ("16", "32", "64", "128"):
         raise RuntimeError(
             "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be one of "
@@ -5651,6 +5702,14 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         raise RuntimeError(
             "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE requires fixed32 mode"
         )
+    if sfwd_state_fusion_diagnostic and not resolved_mode:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB requires fixed32 mode"
+        )
+    if sfwd_state_fusion_timing and not resolved_mode:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB requires fixed32 mode"
+        )
     if not resolved_mode:
         valid_mask = 0
     elif resolved_mode in _FR13_FIXED32_MODES:
@@ -5670,7 +5729,51 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         f"{taw_native_diagnostic!r}\n"
         "_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = "
         f"{graph_batch_gdn_diagnostic!r}\n"
+        "_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC = "
+        f"{(sfwd_state_fusion_diagnostic or sfwd_state_fusion_timing)!r}\n"
     )
+
+
+def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
+    """Return the zero-traffic producer contract for an eager diagnostic."""
+    batch_gdn = _FR13_FIXED32_BATCH_GDN_BYTE_AB
+    sfwd = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
+    sfwd_timing = _FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB
+    if batch_gdn not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1"
+        )
+    if sfwd not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"
+        )
+    if sfwd_timing not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB must be exactly 0 or 1"
+        )
+    if sum(value == "1" for value in (batch_gdn, sfwd, sfwd_timing)) > 1:
+        raise RuntimeError(
+            "FR13 fixed32 eager byte diagnostics are mutually exclusive"
+        )
+    if batch_gdn == "1":
+        return (
+            "eager B4 byte diagnostic",
+            4,
+            "FR13_FIXED32_EAGER_B4_BOOT_WARM",
+        )
+    if sfwd == "1":
+        return (
+            "SFWD B1 byte diagnostic",
+            1,
+            "FR13_FIXED32_EAGER_SFWD_B1_BOOT_WARM",
+        )
+    if sfwd_timing == "1":
+        return (
+            "SFWD B1 timing diagnostic",
+            1,
+            "FR13_FIXED32_EAGER_SFWD_B1_TIMING_BOOT_WARM",
+        )
+    return None
 
 
 def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
@@ -5683,6 +5786,12 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     graph_batch_gdn_byte_diagnostic = (
         _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
     )
+    sfwd_state_fusion_diagnostic = (
+        _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
+    )
+    sfwd_state_fusion_timing = (
+        _FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB
+    )
     if batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1"
@@ -5690,6 +5799,14 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     if graph_batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
+        )
+    if sfwd_state_fusion_diagnostic not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"
+        )
+    if sfwd_state_fusion_timing not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB must be exactly 0 or 1"
         )
     if (
         batch_gdn_byte_diagnostic == "1"
@@ -5699,6 +5816,47 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             "FR13 fixed32 eager and graph-replay batched GDN diagnostics are "
             "mutually exclusive"
         )
+    if sfwd_state_fusion_diagnostic == "1":
+        if not mode:
+            raise RuntimeError(
+                "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB requires fixed32 mode"
+            )
+        incompatible = (
+            os.environ.get("FR13_FIXED32_B1_DIAGNOSTIC", "0") != "1"
+            or os.environ.get("ENFORCE_EAGER", "0") != "1"
+            or os.environ.get(
+                "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION", "0"
+            )
+            != "0"
+            or batch_gdn_byte_diagnostic != "0"
+            or graph_batch_gdn_byte_diagnostic != "0"
+            or bool(candidate)
+            or bool(production)
+            or taw_native_diagnostic
+        )
+        if incompatible:
+            raise RuntimeError(
+                "FR13 fixed32 SFWD state-fusion byte diagnostic requires "
+                "the exclusive eager B1 shadow route"
+            )
+    if sfwd_state_fusion_timing == "1":
+        incompatible = (
+            not mode
+            or os.environ.get("FR13_FIXED32_B1_DIAGNOSTIC", "0") != "1"
+            or os.environ.get("ENFORCE_EAGER", "0") != "1"
+            or os.environ.get("FR13_SFWD_GPU_TIMER", "0") != "1"
+            or sfwd_state_fusion_diagnostic != "0"
+            or batch_gdn_byte_diagnostic != "0"
+            or graph_batch_gdn_byte_diagnostic != "0"
+            or bool(candidate)
+            or bool(production)
+            or taw_native_diagnostic
+        )
+        if incompatible:
+            raise RuntimeError(
+                "FR13 fixed32 SFWD state-fusion timing diagnostic requires "
+                "the exclusive eager B1 timed route"
+            )
     if batch_gdn_byte_diagnostic == "1":
         candidate_bv = os.environ.get(
             "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE", ""
@@ -5915,10 +6073,55 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
 
 
 
+def _ensure_gdn_pad_slot_id_binding(text: str) -> str:
+    tree = ast.parse(text)
+    for node in tree.body:
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if node.module != "vllm.v1.attention.backends.utils":
+            continue
+        if any(
+            (alias.asname or alias.name) == "PAD_SLOT_ID"
+            for alias in node.names
+        ):
+            return text
+
+    import_anchor = (
+        "from vllm.v1.attention.backends.utils import (\n"
+        "    NULL_BLOCK_ID,\n"
+    )
+    if text.count(import_anchor) != 1:
+        raise RuntimeError(
+            "gdn_attn.py PAD_SLOT_ID import anchor not found exactly once"
+        )
+    patched = text.replace(
+        import_anchor,
+        import_anchor + "    PAD_SLOT_ID,\n",
+        1,
+    )
+    bound = any(
+        isinstance(node, ast.ImportFrom)
+        and node.module == "vllm.v1.attention.backends.utils"
+        and any(
+            (alias.asname or alias.name) == "PAD_SLOT_ID"
+            for alias in node.names
+        )
+        for node in ast.parse(patched).body
+    )
+    if not bound:
+        raise RuntimeError("generated gdn_attn.py has no PAD_SLOT_ID binding")
+    return patched
+
+
 def _patch_gdn_attn() -> bool:
     text = GDN_ATTN_PATH.read_text()
+    text_with_pad_slot = _ensure_gdn_pad_slot_id_binding(text)
     if "fr10_tree_parent" in text:
+        if text_with_pad_slot != text:
+            GDN_ATTN_PATH.write_text(text_with_pad_slot)
+            return True
         return False
+    text = text_with_pad_slot
     fixed32_mode = _FR13_FIXED32_MODE
     fixed32_path_cols = "16" if fixed32_mode else "self.num_spec + 1"
 
@@ -6864,6 +7067,7 @@ def _patch_gdn_linear() -> bool:
         (
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
             "from lumo_flywheel_serving.fr10_gdn_tree_kernel import fixed32_batch_gdn_selector, fixed32_sfwd_state_fusion_byte_gate, fixed32_sfwd_state_fusion_gate_control, gather_committed_path_conv_prior, launch_fixed32_sfwd_state_fusion, launch_tree_gdn_prepared, launch_tree_gdn_prepared_fixed32_batch, launch_tree_state_linear_remap, subtree_get\n"
+            "from lumo_flywheel_serving.fr13_sfwd_state_fusion_production import fixed32_sfwd_state_fusion_production_control, fixed32_sfwd_state_fusion_production_engagement\n"
             "from lumo_flywheel_serving.fr13_replay_conv_remap import replay_conv_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
             "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, conv_wb_staging_get, freeze_conv_wb_staging_sources, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, launch_conv_state_writeback, launch_conv_state_writeback_batched, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
@@ -6884,6 +7088,7 @@ def _patch_gdn_linear() -> bool:
             "_FR13_EAGER_PACK = " + ("True" if os.environ.get("FR13_EAGER_PACK", "1") == "1" else "False") + "  # FR13_EAGER_PACK baked from PATCH-TIME env (worker-env drops it)\n"
             "_FR13_FLAGS_INKERNEL = " + ("True" if os.environ.get("FR13_FLAGS_INKERNEL", "0") == "1" else "False") + "  # scan-kernel flag stores, PATCH-TIME env (default OFF); regate = queue 2c\n"
             "_FR13_CONV_WB_BATCHED = " + ("True" if os.environ.get("FR13_CONV_WB_BATCHED", "0") == "1" else "False") + "  # FR13_CONV_WB_BATCHED (B2c) baked from PATCH-TIME env: ONE batched conv writeback across requests replaces the per-b launch loop (committer host-gap slice)\n"
+            "_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION = fixed32_sfwd_state_fusion_production_control()\n"
             "# FR13_TREE_CONV_FUSED (FIX-3): read ONCE at module scope; default OFF\n"
             "# until the byte A/B + live gate pass. ON fuses the tree causal-conv\n"
             "# emulation's per-node state write-back loop / per-col tap loop /\n"
@@ -8529,7 +8734,17 @@ def _fr13_conv_subop_mab(
                                     + ":"
                                     + str(_fr10_len_exc)
                                 ) from _fr10_len_exc
-                    if _fr13_conv_committed_path:
+                    if (
+                        _fr13_conv_committed_path
+                        and _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
+                        is not None
+                    ):
+                        # The qualified SFWD kernel reads the accepted col-0
+                        # prior directly and publishes the persistent commit
+                        # source itself. The per-layer prior-window prep and
+                        # pregather are therefore dead on this B1 eager arm.
+                        pass
+                    elif _fr13_conv_committed_path:
                         # FR13_CONV_COMMITTED_PATH (default ON): snapshot the
                         # committed-path prior conv window BEFORE the in-place
                         # remap below mutates the bank. The window is read
@@ -9106,7 +9321,12 @@ def _fr13_conv_subop_mab(
                             + ":"
                             + str(_fr10_seed_conv_exc)
                         ) from _fr10_seed_conv_exc
-                if (
+                if _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION is not None:
+                    _fr10_prior_read_mode = "sfwd_state_fusion_direct_col0"
+                    _fr10_conv_read_cols = None
+                    _fr10_prior_conv_bank_rows = None
+                    _fr10_prior_conv_state_bank = None
+                elif (
                     _fr13_conv_committed_path
                     and _fr13_committed_prior_bank is not None
                 ):
@@ -9341,7 +9561,8 @@ def _fr13_conv_subop_mab(
                         os.environ.get("FR10_METRICS", "0") == "1"
                         and _fr10_conv_diag is not None
                     )
-                    assert _fr10_prior_conv_state_bank is not None
+                    if _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION is None:
+                        assert _fr10_prior_conv_state_bank is not None
                     _fr12_native_spine_oracle_enabled = (
                         os.environ.get("FR12_NATIVE_SPINE_ORACLE", "0") == "1"
                     )
@@ -9398,12 +9619,69 @@ def _fr13_conv_subop_mab(
                     _fr13_sfwd_task_marker = None
                     _fr13_sfwd_candidate_out = None
                     _fr13_sfwd_candidate_stage = None
-                    if _FR13_FIXED32_MODE:
+                    _fr13_sfwd_production = (
+                        _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
+                    )
+                    if _FR13_FIXED32_MODE and _fr13_sfwd_production is None:
                         (
                             _fr13_sfwd_gate_enabled,
                             _fr13_sfwd_task_marker,
                         ) = fixed32_sfwd_state_fusion_gate_control()
-                    if (
+                    if _fr13_sfwd_production is not None:
+                        # Source-bound B1 timing arm: the fused kernel is the
+                        # sole conv/source producer. It writes the tensor that
+                        # is consumed by GDN and the persistent staging buffer
+                        # consumed by the later accepted-path col-0 commit.
+                        if (
+                            not _FR13_FIXED32_MODE
+                            or not _FR13_CONV_WB_BATCHED
+                            or not _FR13_TREE_CONV_FUSED
+                            or os.environ.get("FR13_RING_EXPORT", "1") != "1"
+                            or not _FR13_FLAGS_INKERNEL
+                            or os.environ.get("FR13_TREE_RUNROW_INIT", "1")
+                            != "1"
+                            or self.activation not in (True, "silu", "swish")
+                            or _fr12_native_spine_conv_out is not None
+                            or int(attn_metadata.num_spec_decodes) != 1
+                            or int(_fr10_tree_n) != 32
+                            or int(conv_state.size(2)) != 34
+                            or int(_fr10_width) != 4
+                        ):
+                            raise RuntimeError(
+                                "FR13_FIXED32_SFWD_STATE_FUSION production "
+                                "dependency/geometry contract drifted"
+                            )
+                        from lumo_flywheel_serving.fr13_tree_conv_fused import (
+                            conv_wb_staging_get as _fr13_sfwd_stage_get,
+                        )
+                        _fr13_wbb_srows = (
+                            int(_fr10_width) - 1 + int(_fr10_tree_n) + 1
+                        )
+                        _fr13_wbb_stage = _fr13_sfwd_stage_get(
+                            str(self.prefix),
+                            _fr13_wbb_srows,
+                            int(mixed_qkv_spec.size(1)),
+                            mixed_qkv_spec.dtype,
+                            mixed_qkv_spec.device,
+                        )
+                        launch_fixed32_sfwd_state_fusion(
+                            x=mixed_qkv_spec,
+                            conv_state=conv_state,
+                            spec_state_indices=spec_state_indices_tensor,
+                            source_flat=_fr10_source_flat,
+                            conv_weights=conv_weights,
+                            bias=self.conv1d.bias,
+                            out=_fr10_tree_conv_out,
+                            source_stage=_fr13_wbb_stage[:_fr13_wbb_srows],
+                            batch_size=1,
+                            tree_rows=int(_fr10_tree_n),
+                        )
+                        fixed32_sfwd_state_fusion_production_engagement(
+                            credential=_fr13_sfwd_production,
+                            layer_key=int(conv_weights.data_ptr()),
+                            batch_size=1,
+                        )
+                    elif (
                         _fr13_sfwd_gate_enabled
                         and _fr13_sfwd_task_marker is not None
                     ):
@@ -9421,7 +9699,7 @@ def _fr13_conv_subop_mab(
                             or self.activation not in (True, "silu", "swish")
                             or _fr12_native_spine_conv_out is not None
                             or int(_fr10_tree_n) != 32
-                            or int(conv_state.size(2)) != 12
+                            or int(conv_state.size(2)) != 34
                             or int(_fr10_width) != 4
                         ):
                             raise RuntimeError(
@@ -9466,7 +9744,11 @@ def _fr13_conv_subop_mab(
                             batch_size=_fr13_sfwd_b,
                             tree_rows=int(_fr10_tree_n),
                         )
-                    for _fr10_b in range(attn_metadata.num_spec_decodes):
+                    for _fr10_b in range(
+                        0
+                        if _fr13_sfwd_production is not None
+                        else attn_metadata.num_spec_decodes
+                    ):
                         _fr10_start = _fr10_b * _fr10_tree_n
                         _fr10_end = _fr10_start + _fr10_tree_n
                         _fr10_x = mixed_qkv_spec[_fr10_start:_fr10_end]
@@ -14290,6 +14572,9 @@ def _fr13_fixed32_device_commit_route(
         or (
             not _fixed_pure_event
             and _fixed_batch_rows == batch
+            and not getattr(
+                _g, "_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC", False
+            )
         )
     ):
         raise RuntimeError(
@@ -14455,7 +14740,12 @@ def _fr13_fixed32_device_commit_route(
         burn_node_bank=False,
         banks_list=banks,
     )
-    if not _fixed_pure_event:
+    if (
+        not _fixed_pure_event
+        and not getattr(
+            _g, "_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC", False
+        )
+    ):
         _nonpure_replays = getattr(
             _g, "_FR13_FIXED32_NONPURE_COMMIT_REPLAYS_BY_BATCH", None
         )
@@ -17864,7 +18154,10 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
         "            cudagraph_runtime_mode=cudagraph_runtime_mode,\n"
     )
     text = text.replace(anchor, inject, 1)
-    if _FR13_FIXED32_BATCH_GDN_BYTE_AB == "1":
+    eager_boot_warm_contract = _fr13_fixed32_eager_boot_warm_contract()
+    if eager_boot_warm_contract is not None:
+        eager_name, eager_capacity, eager_sentinel = eager_boot_warm_contract
+        eager_num_tokens = 32 * eager_capacity
         eager_anchor = (
             "        if self.compilation_config.cudagraph_mode "
             "== CUDAGraphMode.NONE:\n"
@@ -17878,11 +18171,10 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
         )
         if text.count(eager_anchor) != 1:
             raise RuntimeError(
-                "FR13 fixed32 eager B4 boot-warm anchor is not unique"
+                f"FR13 fixed32 {eager_name} boot-warm anchor is not unique"
             )
         eager_inject = (
-            "        # FR13_FIXED32_EAGER_B4_BOOT_WARM: the eager-only byte "
-            "gate\n"
+            f"        # {eager_sentinel}: the eager-only diagnostic\n"
             "        # has no final FULL capture callback. Reuse its "
             "capture-shaped\n"
             "        # producer and postprocess warm here, before serving, "
@@ -17892,23 +18184,25 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
             "        if self.compilation_config.cudagraph_mode != "
             "CUDAGraphMode.NONE:\n"
             "            raise RuntimeError(\n"
-            "                \"FR13 fixed32 eager B4 byte diagnostic requires "
+            f"                \"FR13 fixed32 {eager_name} requires "
             "CUDAGraphMode.NONE\"\n"
             "            )\n"
-            "        if int(self.scheduler_config.max_num_seqs) != 4:\n"
+            f"        if int(self.scheduler_config.max_num_seqs) != "
+            f"{eager_capacity}:\n"
             "            raise RuntimeError(\n"
-            "                \"FR13 fixed32 eager B4 byte diagnostic requires "
-            "max_num_seqs=4\"\n"
+            f"                \"FR13 fixed32 {eager_name} requires "
+            f"max_num_seqs={eager_capacity}\"\n"
             "            )\n"
             "        from vllm.model_executor.layers.mamba import (\n"
             "            gdn_linear_attn as _fr13_f32_eager_boot_gdn,\n"
             "        )\n"
             "        if _fr13_f32_eager_boot_gdn."
             "_fr13_fixed32_final_full_preseed_needed(\n"
-            "            \"FULL\", 128, 4, True, False, 0,\n"
+            f"            \"FULL\", {eager_num_tokens}, {eager_capacity}, "
+            "True, False, 0,\n"
             "        ):\n"
             "            self._dummy_run(\n"
-            "                128,\n"
+            f"                {eager_num_tokens},\n"
             "                cudagraph_runtime_mode=CUDAGraphMode.NONE,\n"
             "                force_attention=True,\n"
             "                uniform_decode=True,\n"
@@ -17926,11 +18220,117 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
             "        _fr13_cfwd_timer()\n"
             "        _fr13_dfwd_timer()\n"
             "        _fr13_f32_eager_boot_gdn."
-            "_fr13_fixed32_assert_final_full_preseed_ready(4)\n"
+            f"_fr13_fixed32_assert_final_full_preseed_ready({eager_capacity})\n"
             + eager_anchor
         )
         text = text.replace(eager_anchor, eager_inject, 1)
     GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
+def _patch_gpu_model_runner_fixed32_eager_boot_capacity() -> bool:
+    """Expose fixed physical capacity only while eager builders initialize."""
+    if not _FR13_FIXED32_MODE:
+        return False
+    eager_boot_warm_contract = _fr13_fixed32_eager_boot_warm_contract()
+    if eager_boot_warm_contract is None:
+        return False
+    eager_name, eager_capacity, _eager_sentinel = eager_boot_warm_contract
+    eager_num_tokens = 32 * eager_capacity
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_FIXED32_EAGER_BOOT_WARM_BUILDER_CAPACITY"
+    if sentinel in text:
+        return False
+    method_anchor = (
+        "    def initialize_metadata_builders(\n"
+        "        self, kv_cache_config: KVCacheConfig, "
+        "kernel_block_sizes: list[int]\n"
+        "    ) -> None:\n"
+        "        \"\"\"\n"
+        "        Create the metadata builders for all KV cache groups and "
+        "attn groups.\n"
+        "        \"\"\"\n"
+    )
+    body_anchor = (
+        "        for kv_cache_group_id in range("
+        "len(kv_cache_config.kv_cache_groups)):\n"
+    )
+    next_method_anchor = "\n    def _check_and_update_cudagraph_mode(\n"
+    if text.count(method_anchor) != 1:
+        raise RuntimeError(
+            f"FR13 fixed32 {eager_name} metadata-builder method anchor is "
+            "not unique"
+        )
+    method_start = text.index(method_anchor)
+    body_start = text.find(body_anchor, method_start)
+    method_end = text.find(next_method_anchor, method_start)
+    if body_start < 0 or method_end < 0 or body_start >= method_end:
+        raise RuntimeError(
+            f"FR13 fixed32 {eager_name} metadata-builder body anchors are "
+            "invalid"
+        )
+    original_body = text[body_start:method_end]
+    nested_body = "".join(
+        "    " + line if line.strip() else line
+        for line in original_body.splitlines(keepends=True)
+    )
+    inject = (
+        "        " + sentinel + ": capture-shaped eager boot only.\n"
+        "        _fr13_f32_prior_capture_size = (\n"
+        "            self.compilation_config.max_cudagraph_capture_size\n"
+        "        )\n"
+        "        if _fr13_f32_prior_capture_size not in (None, 0):\n"
+        "            raise RuntimeError(\n"
+        f"                \"FR13 fixed32 {eager_name} requires zero eager "
+        "capture capacity\"\n"
+        "            )\n"
+        "        self.compilation_config.max_cudagraph_capture_size = "
+        f"{eager_num_tokens}\n"
+        "        try:\n"
+        + nested_body
+        + "        finally:\n"
+        "            self.compilation_config.max_cudagraph_capture_size = (\n"
+        "                _fr13_f32_prior_capture_size\n"
+        "            )\n"
+    )
+    text = text[:body_start] + inject + text[method_end:]
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
+def _patch_gpu_worker_fixed32_eager_boot_warm() -> bool:
+    """Reach the zero-traffic producer when vLLM skips graphs in eager mode."""
+    if not _FR13_FIXED32_MODE:
+        return False
+    eager_boot_warm_contract = _fr13_fixed32_eager_boot_warm_contract()
+    if eager_boot_warm_contract is None:
+        return False
+    eager_name, _eager_capacity, _eager_sentinel = eager_boot_warm_contract
+    text = GPU_WORKER_PATH.read_text()
+    sentinel = "# FR13_FIXED32_EAGER_BOOT_WARM_LIFECYCLE"
+    if sentinel in text:
+        return False
+    anchor = (
+        "        cuda_graph_memory_bytes = 0\n"
+        "        if not self.model_config.enforce_eager:\n"
+        "            cuda_graph_memory_bytes = self.model_runner.capture_model()\n"
+    )
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            f"FR13 fixed32 {eager_name} worker lifecycle anchor is not unique"
+        )
+    inject = (
+        "        " + sentinel + ": eager capture_model starts with\n"
+        "        # a zero-traffic eager producer and returns before graph "
+        "capture.\n"
+        "        if not self.model_config.enforce_eager:\n"
+        "            raise RuntimeError(\n"
+        f"                \"FR13 fixed32 {eager_name} requires enforce_eager\"\n"
+        "            )\n"
+        "        cuda_graph_memory_bytes = self.model_runner.capture_model()\n"
+    )
+    text = text.replace(anchor, inject, 1)
+    GPU_WORKER_PATH.write_text(text)
     return True
 
 
@@ -30657,7 +31057,10 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                    )\n"
         "                    or (\n"
         "                        not _fr13_f32_measured\n"
-        "                        and _fr13_f32_batch_rows <= _fr13_f32_B\n"
+        "                        and not _fr13_f32_kv_gdn."
+        "_fr13_fixed32_unmeasured_full_row_map_valid(\n"
+        "                            _fr13_f32_batch_rows, _fr13_f32_B\n"
+        "                        )\n"
         "                    )\n"
         "                ):\n"
         "                    raise RuntimeError(\n"
@@ -33469,6 +33872,14 @@ def main() -> int:
         (
             GPU_MODEL_RUNNER_PATH,
             _patch_gpu_model_runner_fixed32_final_full_preseed(),
+        ),
+        (
+            GPU_MODEL_RUNNER_PATH,
+            _patch_gpu_model_runner_fixed32_eager_boot_capacity(),
+        ),
+        (
+            GPU_WORKER_PATH,
+            _patch_gpu_worker_fixed32_eager_boot_warm(),
         ),
         (
             GPU_MODEL_RUNNER_PATH,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import sys
 import textwrap
@@ -16,6 +17,11 @@ KERNEL_PATH = ROOT / "src" / "lumo_flywheel_serving" / "fr10_gdn_tree_kernel.py"
 PATCHER_PATH = ROOT / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
 LAUNCHER_PATH = ROOT / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 RUNNER_PATH = ROOT / "scripts" / "fr13_run_b1_sfwd_state_fusion_gate.sh"
+TIMING_RUNNER_PATH = (
+    ROOT / "scripts" / "fr13_run_b1_sfwd_state_fusion_timing.sh"
+)
+SERVE_PATH = ROOT / "scripts" / "fr13_bigdenom_swe_serve_variant.sh"
+ORCHESTRATOR_PATH = ROOT / "scripts" / "run_swe_bench_q36_a.py"
 
 sys.path.insert(0, str(ROOT / "src"))
 try:
@@ -35,6 +41,9 @@ except ModuleNotFoundError:
     sys.modules["triton.language"] = language_stub
 
 from lumo_flywheel_serving import fr10_gdn_tree_kernel as kernel  # noqa: E402
+from lumo_flywheel_serving import (  # noqa: E402
+    fr13_sfwd_state_fusion_production as production,
+)
 
 
 def _function_source(name: str) -> str:
@@ -53,13 +62,14 @@ def _function_source(name: str) -> str:
 def test_contract_is_closed_and_launch_invariant_for_b1_b4() -> None:
     for batch in (1, 2, 3, 4):
         contract = kernel.fixed32_sfwd_state_fusion_contract(
-            batch, tree_rows=32, conv_width=4, conv_state_len=12
+            batch, tree_rows=32, conv_width=4, conv_state_len=34
         )
         assert contract["physical_rows_per_request"] == 32
         assert contract["logical_rows"] == batch * 32
         assert contract["source_rows_per_request"] == 36
         assert contract["source_rows"] == batch * 36
         assert contract["channels"] == 10240
+        assert contract["conv_state_len"] == 34
         assert contract["conv_state_launches_per_layer"] == 1
         assert contract["conv_rows_per_program"] == 8
         assert contract["conv_row_groups_per_request"] == 4
@@ -70,11 +80,12 @@ def test_contract_is_closed_and_launch_invariant_for_b1_b4() -> None:
         assert contract["reference_always_served"] is True
 
     invalid = (
-        (0, 32, 4, 12),
-        (5, 32, 4, 12),
-        (1, 31, 4, 12),
-        (1, 32, 3, 12),
-        (1, 32, 4, 11),
+        (0, 32, 4, 34),
+        (5, 32, 4, 34),
+        (1, 31, 4, 34),
+        (1, 32, 3, 34),
+        (1, 32, 4, 12),
+        (1, 32, 4, 33),
     )
     for batch, rows, width, state_len in invalid:
         with pytest.raises(ValueError):
@@ -112,7 +123,7 @@ def test_cpu_reference_matches_direct_fused_indexing_for_b1_b4() -> None:
     torch.manual_seed(20260801)
     channels = 8
     width = 4
-    state_len = 12
+    state_len = 34
     rows = 32
     source_flat = torch.tensor(
         kernel._fr13_fixed32_conv_source_flat_expected(width),
@@ -324,11 +335,22 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     assert "source_stage" in candidate
     assert "rows_per_program = _FR13_FIXED32_SFWD_ROWS_PER_PROGRAM" in launcher
     assert "num_warps=8" in launcher
+    assert "x_stride_row" in candidate
+    assert "* x_stride_row" in candidate
     assert "FR13_FIXED32_SFWD_STATE_FUSION source candidate is eager" in launcher
     assert "actual_source_flat" in launcher
     assert "source_flat.detach().cpu().tolist()" in launcher
+    assert 'geometry_failures.append("x_shape")' in launcher
+    assert 'geometry_failures.append("x_channel_stride")' in launcher
+    assert 'geometry_failures.append("x_row_stride")' in launcher
+    assert 'geometry_failures.append("x_contiguous")' not in launcher
+    assert 'geometry_failures.append("source_stage_contiguous")' in launcher
+    assert '"spec_state_indices": (' in launcher
+    assert "observed={observed!r}" in launcher
     assert "launch_fixed32_sfwd_state_fusion(" in patcher
     assert "fixed32_sfwd_state_fusion_byte_gate(" in patcher
+    assert patcher.count("int(conv_state.size(2)) != 34") == 2
+    assert "int(conv_state.size(2)) != 12" not in patcher
     assert "No candidate bytes become model inputs in this arm." in patcher
     assert "mixed_qkv_spec = _fr10_tree_conv_out" in patcher
     assert "mixed_qkv_spec = _fr13_sfwd_candidate_out" not in patcher
@@ -368,6 +390,131 @@ def test_rowgroup8_covers_each_b1_b4_physical_row_once() -> None:
         assert edge_writers == [(request, 0) for request in range(batch)]
 
 
+def _production_live_pass(source_sha256: str) -> dict[str, object]:
+    return {
+        "schema": "fr13.fixed32.sfwd_state_fusion.live_pass.v1",
+        "status": "byte_pass_source_only",
+        "run_classification": (
+            "one_real_swe_verified_full_vocab_b1_byte_timing_diagnostic"
+        ),
+        "candidate": "fixed32_sfwd_state_fusion_v1",
+        "source_sha256": source_sha256,
+        "task_marker": "swe_verified:astropy__astropy-12907",
+        "batch": 1,
+        "layer_count": 48,
+        "layer_keys": [f"0x{index + 1:x}" for index in range(48)],
+        "physical_rows_per_request": 32,
+        "candidate_conv_launches_per_layer": 1,
+        "gdn_level_path_programs": [1, 11],
+        "gdn_physical_launches_per_layer": 2,
+        "gdn_ring_export_unchanged": True,
+        "gdn_flags_export_unchanged": True,
+        "compared_byte_surfaces": ["conv_out", "commit_source_stage"],
+        "real_task_authenticated": True,
+        "reference_always_served": True,
+        "timing_eligible": False,
+        "floor_acceptance_eligible": False,
+        "production_eligible": False,
+    }
+
+
+def test_production_control_is_default_off_and_source_bound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    arm = tmp_path / "production.arm"
+    live = tmp_path / "production_pass.json"
+    digest = tmp_path / "production_pass.sha256"
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_MODE", "hydra27_fixed32")
+    assert production.fixed32_sfwd_state_fusion_production_control(
+        environ={},
+        arm_path=str(arm),
+        pass_path=str(live),
+        pass_sha256_path=str(digest),
+    ) is None
+
+    arm.write_text("1\n", encoding="ascii")
+    payload = _production_live_pass(
+        hashlib.sha256(KERNEL_PATH.read_bytes()).hexdigest()
+    )
+    raw = json.dumps(payload, sort_keys=True).encode("ascii") + b"\n"
+    live.write_bytes(raw)
+    digest.write_text(hashlib.sha256(raw).hexdigest() + "\n", encoding="ascii")
+    credential = production.fixed32_sfwd_state_fusion_production_control(
+        environ={},
+        arm_path=str(arm),
+        pass_path=str(live),
+        pass_sha256_path=str(digest),
+    )
+    assert credential is not None
+    assert credential["live_pass_sha256"] == hashlib.sha256(raw).hexdigest()
+    assert id(credential) in (
+        production._CREDENTIAL_IDS
+    )
+
+    payload["source_sha256"] = "0" * 64
+    bad_raw = json.dumps(payload, sort_keys=True).encode("ascii") + b"\n"
+    live.write_bytes(bad_raw)
+    digest.write_text(
+        hashlib.sha256(bad_raw).hexdigest() + "\n", encoding="ascii"
+    )
+    with pytest.raises(RuntimeError, match="source_sha256"):
+        production.fixed32_sfwd_state_fusion_production_control(
+            environ={},
+            arm_path=str(arm),
+            pass_path=str(live),
+            pass_sha256_path=str(digest),
+        )
+
+
+def test_production_engagement_and_served_wiring_cover_all_layers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engagement = tmp_path / "engagement.json"
+    credential = {
+        "live_pass_sha256": "1" * 64,
+        "runtime_source_sha256": "2" * 64,
+    }
+    monkeypatch.setattr(kernel, "_FR13_FIXED32_MODE", "hydra27_fixed32")
+    monkeypatch.setattr(
+        production,
+        "_CREDENTIAL_IDS",
+        {id(credential)},
+    )
+    monkeypatch.setattr(
+        production,
+        "_STATE",
+        {
+            "live_pass_sha256": None,
+            "source_sha256": None,
+            "layers": set(),
+            "launches": 0,
+            "emitted": False,
+        },
+    )
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ENGAGEMENT_PATH",
+        str(engagement),
+    )
+    for layer in range(48):
+        production.fixed32_sfwd_state_fusion_production_engagement(
+            credential=credential, layer_key=layer + 1, batch_size=1
+        )
+    record = json.loads(engagement.read_text(encoding="ascii"))
+    assert record["candidate_served"] is True
+    assert record["layer_count"] == 48
+    assert record["incumbent_conv_launches_per_layer"] == 0
+    assert record["timing_eligible"] is False
+    assert record["floor_acceptance_eligible"] is False
+
+    patcher = PATCHER_PATH.read_text(encoding="utf-8")
+    assert "fixed32_sfwd_state_fusion_production_control()" in patcher
+    assert "out=_fr10_tree_conv_out" in patcher
+    assert "fr13_sfwd_state_fusion_production import" in patcher
+    assert "if _fr13_sfwd_production is not None" in patcher
+    assert "else attn_metadata.num_spec_decodes" in patcher
+
+
 def test_b1_k64_root_runner_is_reference_returning_and_nonacceptance() -> None:
     runner = RUNNER_PATH.read_text(encoding="utf-8")
     launcher = LAUNCHER_PATH.read_text(encoding="utf-8")
@@ -398,11 +545,17 @@ def test_b1_k64_root_runner_is_reference_returning_and_nonacceptance() -> None:
     assert "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=1" in runner
     assert "FR13_CONV_WB_BATCHED=1" in runner
     assert "FR13_TREE_CONV_FUSED=1" in runner
+    assert "FR13_FIXED32_CUTLASS_WAVE=stock" in runner
+    assert "ENFORCE_EAGER=1" in runner
     assert "timing_eligible=false" in runner
     assert "floor_acceptance_eligible=false" in runner
     assert "reference_returned=true" in runner
     assert "physical_rows_per_request=32" in runner
     assert "gdn_level_path_programs=1,11" in runner
+    assert 'process_identity_path = arm_dir / "fixed32_process_identity.json"' in runner
+    assert 'pid1_argv.count("--max-num-seqs") != 1' in runner
+    assert 'pid1_argv[max_num_seqs_index + 1] != "1"' in runner
+    assert '"MAX_NUM_SEQS=1",' not in runner
     assert "PROBE_ONLY" not in runner
     assert "ACCEPT_SPEED_PROBE" not in runner
 
@@ -413,3 +566,71 @@ def test_b1_k64_root_runner_is_reference_returning_and_nonacceptance() -> None:
     assert "must be the only kernel candidate" in launcher
     assert "requires exact K64/root1 eager fixed32 B1" in launcher
     assert "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled" in launcher
+
+
+def test_sfwd_gate_uses_eager_lifecycle_without_graph_acceptance() -> None:
+    runner = RUNNER_PATH.read_text(encoding="utf-8")
+    kernel_gate = (
+        ROOT / "scripts" / "fr13_run_b1_kernel_live_gate.sh"
+    ).read_text(encoding="utf-8")
+    serve = SERVE_PATH.read_text(encoding="utf-8")
+    orchestrator = ORCHESTRATOR_PATH.read_text(encoding="utf-8")
+
+    for artifact in (
+        "fixed32_final_flush_skipped.json",
+        "fixed32_chat_traffic_audit_skipped.json",
+        "fr13-fixed32-eager-kernel-terminal-v1",
+        "fr13-fixed32-eager-kernel-traffic-audit-skip-v1",
+        "fr13-fixed32-eager-kernel-diagnostic-task-bracket-v1",
+    ):
+        assert artifact in runner
+    assert 'terminal != expected_terminal' in runner
+    assert 'traffic.get("authenticated_engine_ledger_snapshotted") is not True' in runner
+    assert 'traffic.get("graph_census_audit_used") is not False' in runner
+
+    assert "_fixed32_eager_kernel_diagnostic=0" in serve
+    assert 'FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1"' in serve
+    assert "eager kernel diagnostic requires ENFORCE_EAGER=1" in serve
+    assert "fr13-fixed32-eager-kernel-terminal-v1" in serve
+    assert "fr13-fixed32-eager-kernel-traffic-audit-skip-v1" in serve
+    assert "fixed32 eager kernel diagnostic: graph-census needles are ineligible" in serve
+    eager_restore = (
+        'if [[ "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "1" ]]; then'
+    )
+    assert eager_restore in kernel_gate
+    assert kernel_gate.index("source scripts/fr13_fixed32_floor_timers_seq.sh") < (
+        kernel_gate.index(eager_restore)
+    )
+    assert kernel_gate.index(eager_restore) < kernel_gate.index('mkdir -p "$RUNROOT"')
+
+    assert "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" in orchestrator
+    assert "must be exactly 0 or 1" in orchestrator
+    assert "fixed32_eager_kernel_diagnostic" in orchestrator
+    assert "fixed32 eager kernel diagnostic requires ENFORCE_EAGER=1" in orchestrator
+    assert "_Fixed32EagerKernelDiagnosticTaskBracket" in orchestrator
+
+
+def test_source_gated_timing_pair_is_stock_first_and_nonacceptance() -> None:
+    runner = TIMING_RUNNER_PATH.read_text(encoding="utf-8")
+    assert "subset_b1_diagnostic_one.json" in runner
+    assert "subset_b4_four.json" not in runner
+    assert "subset_b16" not in runner
+    assert "PROBE_ONLY" not in runner
+    assert "ACCEPT_SPEED_PROBE" not in runner
+    assert "FR13_DRAFT_VOCAB_ROOT=0" in runner
+    assert "FR13_DRAFT_VOCAB_K=0" in runner
+    assert "ENFORCE_EAGER=1 CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in runner
+    assert "FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1" in runner
+    assert "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB=1" in runner
+    assert "scripts/fr13_measure.py deploy-speed" in runner
+    assert "scripts/fr13_sfwd_state_fusion_pass.py validate" in runner
+    assert "scripts/fr13_sfwd_state_fusion_pass.py verify-engagement" in runner
+    assert "timing_eligible=false" in runner
+    assert "floor_acceptance_eligible=false" in runner
+    assert "production_eligible=false" in runner
+    assert runner.index('run_arm "$STOCK_ARM" 0') < runner.index(
+        'run_arm "$CANDIDATE_ARM" 1'
+    )
+    assert runner.index("fr13_sfwd_state_fusion_pass.py validate") < runner.index(
+        "docker ps -aq"
+    )

@@ -1,0 +1,105 @@
+{
+  "artifact_schema": "fr13-fixed32-sfwd-b1-lifecycle-rejections-v1",
+  "verdict": "REJECTED_LIFECYCLE",
+  "acceptance_eligible": false,
+  "measurements_valid": false,
+  "timing_valid": false,
+  "batch_size": 1,
+  "concurrency": 1,
+  "real_swe_verified_task_ids": [
+    "astropy__astropy-12907"
+  ],
+  "attempts": [
+    {
+      "attempt_id": "20260801T094600Z",
+      "source_commit": "456db364351d020d8ffd11bcc085aeb9edfc5043",
+      "runroot": "output/fr13_b1_sfwd_state_fusion_live_gate_20260801T094600Z",
+      "arm": "hydra27_fixed32_sfwd_state_fusion_fullvocab_b1_20260801T094600Z",
+      "failure_class": "PAD_IMPORT_NAME_ERROR",
+      "failure": "NameError: name 'PAD_SLOT_ID' is not defined",
+      "comparator_output_present": false,
+      "comparator_records": 0,
+      "forward_starts": 0,
+      "pure_decode_steps_timed": 0,
+      "wall_steps_timed": 0,
+      "completed_tasks": 0,
+      "source_evidence": {
+        "runlog": {
+          "path": "output/fr13_b1_sfwd_state_fusion_live_gate_20260801T094600Z/hydra27_fixed32_sfwd_state_fusion_fullvocab_b1_20260801T094600Z.runlog",
+          "sha256": "1531bc357ac2602d243c4e4a9b0edcb4a4f411d8e71c0a51a82b6ec6457c0c16"
+        },
+        "docker_after_tasks": {
+          "path": "output/fr13_b1_sfwd_state_fusion_live_gate_20260801T094600Z/hydra27_fixed32_sfwd_state_fusion_fullvocab_b1_20260801T094600Z/docker_after_tasks.log",
+          "sha256": "bd432662c764707374cda007bb7a3e3591a556da09a1dde4c6b273b65eb2ceab"
+        },
+        "diagnostic": {
+          "path": "output/fr13_b1_sfwd_state_fusion_live_gate_20260801T094600Z/hydra27_fixed32_sfwd_state_fusion_fullvocab_b1_20260801T094600Z/fixed32_b1_diagnostic.json",
+          "sha256": "fb4a790715612dd18dbdeb464d33e4852fcf9d7469a368b2ee8ed2a2d1faaa2d"
+        },
+        "gpu_timer_summary": {
+          "path": "output/fr13_b1_sfwd_state_fusion_live_gate_20260801T094600Z/sidecars/hydra27_fixed32_sfwd_state_fusion_fullvocab_b1_20260801T094600Z.json.256",
+          "sha256": "e914738230419227391fb845378e39e64661f0ae8369b403e2ab09bc8239981d"
+        },
+        "per_step_samples": {
+          "path": "output/fr13_b1_sfwd_state_fusion_live_gate_20260801T094600Z/sidecars/hydra27_fixed32_sfwd_state_fusion_fullvocab_b1_20260801T094600Z.json.samples.256",
+          "sha256": "9ff42de312a8d03182944ff3855be78ba0428d38448c98edd6778024dfe3925d"
+        }
+      }
+    },
+    {
+      "attempt_id": "20260801T101754Z",
+      "source_commit": "3c45640ae623bdd1826498412d53b85698fbbeb2",
+      "runroot": "output/fr13_b1_sfwd_state_fusion_live_gate_20260801T101754Z",
+      "arm": "hydra27_fixed32_sfwd_state_fusion_fullvocab_b1_20260801T101754Z",
+      "failure_class": "PREGATHER_BEFORE_PRESEED",
+      "failure": "RuntimeError: FR13_FIXED32_CONV_PREGATHER consumer ran before preseed",
+      "comparator_output_present": false,
+      "comparator_records": 0,
+      "forward_starts": 0,
+      "pure_decode_steps_timed": 0,
+      "wall_steps_timed": 0,
+      "completed_tasks": 0,
+      "source_evidence": {
+        "runlog": {
+          "path": "output/fr13_b1_sfwd_state_fusion_live_gate_20260801T101754Z/hydra27_fixed32_sfwd_state_fusion_fullvocab_b1_20260801T101754Z.runlog",
+          "sha256": "0bf9c93638db6b054c1702a0b5c6a23cf544508db979c75a723e6aac74ec6559"
+        },
+        "docker_after_tasks": {
+          "path": "output/fr13_b1_sfwd_state_fusion_live_gate_20260801T101754Z/hydra27_fixed32_sfwd_state_fusion_fullvocab_b1_20260801T101754Z/docker_after_tasks.log",
+          "sha256": "7c0f26eb535a787e569c23cacef069556ea40926d7ff73b9aea3bf22a3786adf"
+        },
+        "diagnostic": {
+          "path": "output/fr13_b1_sfwd_state_fusion_live_gate_20260801T101754Z/hydra27_fixed32_sfwd_state_fusion_fullvocab_b1_20260801T101754Z/fixed32_b1_diagnostic.json",
+          "sha256": "fb4a790715612dd18dbdeb464d33e4852fcf9d7469a368b2ee8ed2a2d1faaa2d"
+        },
+        "gpu_timer_summary": {
+          "path": "output/fr13_b1_sfwd_state_fusion_live_gate_20260801T101754Z/sidecars/hydra27_fixed32_sfwd_state_fusion_fullvocab_b1_20260801T101754Z.json.257",
+          "sha256": "3608e9fa4166aaa6f755549727f130f1ee68839a89c64faf428317b0b5af8ad1"
+        },
+        "per_step_samples": {
+          "path": "output/fr13_b1_sfwd_state_fusion_live_gate_20260801T101754Z/sidecars/hydra27_fixed32_sfwd_state_fusion_fullvocab_b1_20260801T101754Z.json.samples.257",
+          "sha256": "838be6cb9bb9bab6d2c3a6e2a2bea0e865db114b7a64b395d893d2c9ed90c747"
+        }
+      }
+    }
+  ],
+  "fix_commits": [
+    {
+      "commit": "3c45640ae623bdd1826498412d53b85698fbbeb2",
+      "subject": "fix(fixed32): bind GDN pad slot sentinel",
+      "fixes": "PAD_IMPORT_NAME_ERROR"
+    },
+    {
+      "commit": "cff5ad03c99e4518dcd132f6f8123cdcd841cd36",
+      "subject": "fix(fixed32): preseed eager SFWD state",
+      "fixes": "PREGATHER_BEFORE_PRESEED"
+    }
+  ],
+  "excluded_results": [
+    "tps",
+    "latency",
+    "acceptance",
+    "confidence_bound",
+    "hardware_floor_ratio"
+  ]
+}

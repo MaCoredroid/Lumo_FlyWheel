@@ -120,12 +120,15 @@ pass_path = logs / "fr13_fixed32_sfwd_state_fusion.live_pass.json"
 marker_path = logs / "fr13_fixed32_sfwd_state_fusion.real_event.arm"
 diagnostic_path = arm_dir / "fixed32_b1_diagnostic.json"
 container_env_path = arm_dir / "container_env.txt"
+process_identity_path = arm_dir / "fixed32_process_identity.json"
 engine_ledger_path = logs / "fr13_fixed32_engine_ingress.jsonl"
 docker_after_tasks_path = arm_dir / "docker_after_tasks.log"
 runtime_manifest_launch_path = run_root / "runtime_manifest.at_launch.json"
 runtime_manifest_end_path = run_root / "runtime_manifest.at_end.json"
 external_manifest_launch_path = run_root / "external_manifest.at_launch.json"
 external_manifest_end_path = run_root / "external_manifest.at_end.json"
+terminal_path = arm_dir / "fixed32_final_flush_skipped.json"
+traffic_path = arm_dir / "fixed32_chat_traffic_audit_skipped.json"
 output_path = arm_dir / "sfwd_state_fusion_k64_root_b1_gate.json"
 
 
@@ -141,18 +144,32 @@ def regular(path: Path, *, nonempty: bool = True) -> bytes:
 
 records_raw = regular(records_path)
 pass_raw = regular(pass_path)
+marker_info = os.lstat(marker_path)
+if (
+    not stat.S_ISREG(marker_info.st_mode)
+    or stat.S_ISLNK(marker_info.st_mode)
+    or marker_info.st_nlink != 1
+    or stat.S_IMODE(marker_info.st_mode) != 0o444
+):
+    raise SystemExit("authenticated real-event marker metadata mismatch")
 marker_raw = regular(marker_path)
 diagnostic_raw = regular(diagnostic_path)
 container_env_raw = regular(container_env_path)
+process_identity_raw = regular(process_identity_path)
 engine_ledger_raw = regular(engine_ledger_path)
 docker_after_tasks_raw = regular(docker_after_tasks_path)
 runtime_manifest_launch_raw = regular(runtime_manifest_launch_path)
 runtime_manifest_end_raw = regular(runtime_manifest_end_path)
 external_manifest_launch_raw = regular(external_manifest_launch_path)
 external_manifest_end_raw = regular(external_manifest_end_path)
+terminal_raw = regular(terminal_path)
+traffic_raw = regular(traffic_path)
 records = [json.loads(line) for line in records_raw.decode("ascii").splitlines()]
 live_pass = json.loads(pass_raw.decode("ascii"))
 diagnostic = json.loads(diagnostic_raw.decode("ascii"))
+process_identity = json.loads(process_identity_raw.decode("ascii"))
+terminal = json.loads(terminal_raw.decode("ascii"))
+traffic = json.loads(traffic_raw.decode("ascii"))
 marker = f"swe_verified:{task_id}"
 errors = []
 
@@ -177,6 +194,19 @@ if len(root_lines) != 1 or "mode=gather" not in root_lines[0]:
     errors.append("K64 root gather did not engage exactly once")
 if disabled_prefix in docker_after_tasks:
     errors.append("draft-vocabulary runtime fallback to full vocabulary engaged")
+
+bracket_paths = list(
+    arm_dir.glob(
+        f"swe_out/*/per_task/{task_id}/fixed32_task_boundary.json"
+    )
+)
+if len(bracket_paths) != 1:
+    errors.append("eager real-task metrics bracket is missing or ambiguous")
+    bracket = {}
+    bracket_raw = b""
+else:
+    bracket_raw = regular(bracket_paths[0])
+    bracket = json.loads(bracket_raw.decode("utf-8"))
 
 if not records:
     errors.append("SFWD state-fusion byte gate was vacuous")
@@ -233,6 +263,41 @@ if diagnostic.get("task_ids") != [task_id]:
 if diagnostic.get("floor_acceptance_eligible") is not False:
     errors.append("B1 diagnostic claimed floor acceptance eligibility")
 
+expected_terminal = {
+    "schema": "fr13-fixed32-eager-kernel-terminal-v1",
+    "run_classification": "eager_kernel_byte_diagnostic",
+    "acceptance_valid": False,
+    "flush_protocol_used": False,
+}
+if terminal != expected_terminal:
+    errors.append("eager terminal no-flush marker mismatch")
+if (
+    traffic.get("schema")
+    != "fr13-fixed32-eager-kernel-traffic-audit-skip-v1"
+    or traffic.get("run_classification")
+    != "eager_kernel_byte_diagnostic"
+    or traffic.get("acceptance_valid") is not False
+    or traffic.get("authenticated_engine_ledger_snapshotted") is not True
+    or traffic.get("graph_census_audit_used") is not False
+):
+    errors.append("eager graph-census skip marker mismatch")
+if (arm_dir / "fixed32_final_flush.json").exists():
+    errors.append("eager diagnostic unexpectedly emitted a graph flush")
+if (arm_dir / "fixed32_chat_traffic_audit.json").exists():
+    errors.append("eager diagnostic unexpectedly emitted a graph census audit")
+if (
+    bracket.get("schema")
+    != "fr13-fixed32-eager-kernel-diagnostic-task-bracket-v1"
+    or bracket.get("run_classification")
+    != "eager_kernel_byte_diagnostic"
+    or bracket.get("instance_id") != task_id
+    or bracket.get("acceptance_valid") is not False
+    or bracket.get("flush_protocol_used") is not False
+    or not isinstance(bracket.get("pre_metrics"), dict)
+    or not isinstance(bracket.get("post_metrics"), dict)
+):
+    errors.append("eager real-task metrics bracket contract mismatch")
+
 container_env = container_env_raw.decode("ascii").splitlines()
 for expected in (
     "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=1",
@@ -241,10 +306,27 @@ for expected in (
     "FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json",
     "FR13_CONV_WB_BATCHED=1",
     "FR13_TREE_CONV_FUSED=1",
-    "MAX_NUM_SEQS=1",
+    "FR13_FIXED32_CUTLASS_WAVE=stock",
+    "ENFORCE_EAGER=1",
 ):
     if container_env.count(expected) != 1:
         errors.append(f"container environment mismatch: {expected}")
+
+pid1 = process_identity.get("pid1")
+pid1_argv = pid1.get("argv") if isinstance(pid1, dict) else None
+if (
+    not isinstance(pid1_argv, list)
+    or not all(isinstance(argument, str) for argument in pid1_argv)
+    or pid1_argv.count("--max-num-seqs") != 1
+):
+    errors.append("captured PID 1 argv has invalid --max-num-seqs cardinality")
+else:
+    max_num_seqs_index = pid1_argv.index("--max-num-seqs")
+    if (
+        max_num_seqs_index + 1 >= len(pid1_argv)
+        or pid1_argv[max_num_seqs_index + 1] != "1"
+    ):
+        errors.append("captured PID 1 argv did not use --max-num-seqs 1")
 
 payload = {
     "schema": "fr13.fixed32.sfwd_state_fusion.k64_root_b1_gate.v1",
@@ -286,7 +368,13 @@ payload = {
     "external_manifest_sha256": hashlib.sha256(
         external_manifest_launch_raw
     ).hexdigest(),
+    "eager_task_bracket_sha256": (
+        hashlib.sha256(bracket_raw).hexdigest() if bracket_raw else None
+    ),
+    "terminal_skip_sha256": hashlib.sha256(terminal_raw).hexdigest(),
+    "traffic_skip_sha256": hashlib.sha256(traffic_raw).hexdigest(),
     "container_env_sha256": hashlib.sha256(container_env_raw).hexdigest(),
+    "process_identity_sha256": hashlib.sha256(process_identity_raw).hexdigest(),
     "errors": errors,
 }
 output_path.write_text(

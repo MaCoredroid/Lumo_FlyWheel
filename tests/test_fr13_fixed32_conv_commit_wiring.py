@@ -94,6 +94,18 @@ def test_fixed_route_delegates_row_guard_to_launcher_before_replay() -> None:
     assert calls.index("_fixed_conv_commit") < calls.index("_fixed_replay")
 
 
+def test_eager_diagnostic_skips_graph_only_commit_census() -> None:
+    tree = _fixed_route_tree(ast.parse(PATCHER_PATH.read_text()))
+    route = _function(tree, "_fr13_fixed32_device_commit_route")
+    source = ast.unparse(route)
+
+    assert source.count("_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC") == 2
+    assert "_FR13_FIXED32_NONPURE_COMMIT_REPLAYS_BY_BATCH" in source
+    assert source.count(
+        "not getattr(_g, '_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC'"
+    ) == 2
+
+
 def test_launcher_is_exactly_one_direct_kernel_without_host_sync() -> None:
     tree = ast.parse(KERNEL_PATH.read_text())
     launcher = _function(tree, "launch_fixed32_conv_commit_to_col0")

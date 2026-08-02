@@ -643,7 +643,7 @@ def test_engine_middleware_arms_sfwd_fusion_only_after_authenticated_b1_request(
     info = os.lstat(marker)
     assert stat.S_ISREG(info.st_mode)
     assert info.st_nlink == 1
-    assert stat.S_IMODE(info.st_mode) == 0o400
+    assert stat.S_IMODE(info.st_mode) == 0o444
 
 
 def test_engine_middleware_rejects_inexact_sfwd_fusion_arm_configuration(

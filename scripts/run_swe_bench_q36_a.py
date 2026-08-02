@@ -4860,6 +4860,144 @@ class _Fixed32TaskBracket:
         return json.loads(self.artifact_path.read_text(encoding="utf-8"))
 
 
+class _Fixed32EagerKernelDiagnosticTaskBracket(_Fixed32TaskBracket):
+    """Authenticate a real task without claiming graph-census evidence."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.pre_metrics_ref: dict[str, Any] | None = None
+        self.post_metrics_ref: dict[str, Any] | None = None
+
+    @property
+    def started(self) -> bool:
+        return self.pre_metrics_ref is not None
+
+    @property
+    def complete(self) -> bool:
+        return self.post_metrics_ref is not None
+
+    def _write_artifact(self) -> None:
+        payload = {
+            "schema": "fr13-fixed32-eager-kernel-diagnostic-task-bracket-v1",
+            "instance_id": self.instance_id,
+            "mode": self.client.mode,
+            "producer_pid": self.client.producer_pid,
+            "run_classification": "eager_kernel_byte_diagnostic",
+            "acceptance_valid": False,
+            "flush_protocol_used": False,
+            "pre_metrics": self.pre_metrics_ref,
+            "post_metrics": self.post_metrics_ref,
+        }
+        temporary = self.artifact_path.with_suffix(".json.tmp")
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, self.artifact_path)
+
+    @staticmethod
+    def _metrics_ref(path: Path, raw: bytes) -> dict[str, Any]:
+        return {
+            "path": str(path),
+            "bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }
+
+    def pre(self, metrics_path: Path) -> None:
+        if self.started or self.post_attempted:
+            raise Fixed32BoundaryError(
+                "fixed32 eager diagnostic task pre bracket was invoked twice"
+            )
+        try:
+            metrics = _metrics_snapshot(DEFAULT_METRICS_URL).encode("utf-8")
+            metrics_path.write_bytes(metrics)
+            self.pre_metrics_ref = self._metrics_ref(metrics_path, metrics)
+            if self.taw_real_task_arm is not None:
+                self.taw_real_task_arm.start()
+                self._write_taw_arm_artifact()
+            self._write_artifact()
+        except Exception as exc:
+            cleanup_error = None
+            if (
+                self.taw_real_task_arm is not None
+                and self.taw_real_task_arm.active
+            ):
+                try:
+                    self.taw_real_task_arm.finish()
+                    self._write_taw_arm_artifact()
+                except Exception as error:  # noqa: BLE001
+                    cleanup_error = error
+            self.pre_metrics_ref = None
+            detail = f"{type(exc).__name__}: {exc}"
+            if cleanup_error is not None:
+                detail += (
+                    "; arm cleanup failed: "
+                    f"{type(cleanup_error).__name__}: {cleanup_error}"
+                )
+            raise Fixed32BoundaryError(
+                f"fixed32 eager diagnostic pre bracket failed: {detail}"
+            ) from exc
+
+    def post(self, metrics_path: Path) -> dict[str, Any]:
+        if not self.started:
+            raise Fixed32BoundaryError(
+                "fixed32 eager diagnostic post bracket has no pre bracket"
+            )
+        if self.post_attempted:
+            if self.complete:
+                return json.loads(self.artifact_path.read_text(encoding="utf-8"))
+            raise Fixed32BoundaryError(
+                "fixed32 eager diagnostic post bracket already failed"
+            )
+        self.post_attempted = True
+        metrics_error = None
+        try:
+            metrics = _metrics_snapshot(DEFAULT_METRICS_URL).encode("utf-8")
+            metrics_path.write_bytes(metrics)
+            self.post_metrics_ref = self._metrics_ref(metrics_path, metrics)
+        except Exception as exc:
+            metrics_error = exc
+        arm_error = None
+        if self.taw_real_task_arm is not None:
+            try:
+                self.taw_real_task_arm.finish()
+                self._write_taw_arm_artifact()
+            except Exception as exc:  # noqa: BLE001
+                arm_error = exc
+        if metrics_error is not None or arm_error is not None:
+            self.post_metrics_ref = None
+            try:
+                self._write_artifact()
+            except Exception:
+                pass
+            details = []
+            if metrics_error is not None:
+                details.append(
+                    f"metrics={type(metrics_error).__name__}: {metrics_error}"
+                )
+            if arm_error is not None:
+                details.append(f"arm={type(arm_error).__name__}: {arm_error}")
+            cause = metrics_error if metrics_error is not None else arm_error
+            raise Fixed32BoundaryError(
+                "fixed32 eager diagnostic post bracket failed: "
+                + "; ".join(details)
+            ) from cause
+        try:
+            self._write_artifact()
+        except Exception as exc:
+            self.post_metrics_ref = None
+            try:
+                self._write_artifact()
+            except Exception:
+                pass
+            raise Fixed32BoundaryError(
+                "fixed32 eager diagnostic post bracket artifact failed: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+        return json.loads(self.artifact_path.read_text(encoding="utf-8"))
+
+
 def _spawn_dcgm_sampler(out_path: Path, interval_s: float = DEFAULT_DCGM_INTERVAL_S
                        ) -> subprocess.Popen[bytes] | None:
     """Spawn the same DCGM/NVML sampler Track B uses, writing JSONL to out_path."""
@@ -7269,6 +7407,44 @@ def main(argv: list[str] | None = None) -> int:
             "--fixed32-bm8-real-event-arm requires "
             "FR13_DFWD_UNIFIED_BM8_LIVE_AB=1"
         )
+    sfwd_state_fusion_text = os.environ.get(
+        "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "0",
+    )
+    if sfwd_state_fusion_text not in {"0", "1"}:
+        parser.error(
+            "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"
+        )
+    sfwd_state_fusion_timing_text = os.environ.get(
+        "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB",
+        "0",
+    )
+    if sfwd_state_fusion_timing_text not in {"0", "1"}:
+        parser.error(
+            "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB must be exactly 0 or 1"
+        )
+    if sfwd_state_fusion_text == sfwd_state_fusion_timing_text == "1":
+        parser.error("fixed32 SFWD byte and timing diagnostics are exclusive")
+    fixed32_sfwd_state_fusion_diagnostic = (
+        sfwd_state_fusion_text == "1"
+        or sfwd_state_fusion_timing_text == "1"
+    )
+    if fixed32_sfwd_state_fusion_diagnostic:
+        if fixed32_taw_diagnostic or fixed32_bm8_diagnostic:
+            parser.error(
+                "fixed32 SFWD, TAW, and BM8 real-task diagnostics are exclusive"
+            )
+        if not fixed32_enabled or not fixed32_b1_diagnostic:
+            parser.error(
+                "fixed32 SFWD real-task diagnostic requires fixed32 B1 mode"
+            )
+        if os.environ.get("ENFORCE_EAGER", "0") != "1":
+            parser.error(
+                "fixed32 eager kernel diagnostic requires ENFORCE_EAGER=1"
+            )
+    fixed32_eager_kernel_diagnostic = (
+        fixed32_sfwd_state_fusion_diagnostic
+    )
     fixed32_client = None
     fixed32_subset = None
     if fixed32_enabled:
@@ -7438,8 +7614,13 @@ def main(argv: list[str] | None = None) -> int:
                 path=arm_path,
                 instance_id=iid,
             )
+        fixed32_bracket_type = (
+            _Fixed32EagerKernelDiagnosticTaskBracket
+            if fixed32_eager_kernel_diagnostic
+            else _Fixed32TaskBracket
+        )
         fixed32_bracket = (
-            _Fixed32TaskBracket(
+            fixed32_bracket_type(
                 client=fixed32_client,
                 task_dir=(per_task_root / iid).resolve(),
                 instance_id=iid,

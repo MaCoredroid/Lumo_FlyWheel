@@ -1,0 +1,18 @@
+CPU/source-only verification. No GPU campaign was started.
+
+Focused command:
+.venv/bin/python -m pytest -q tests/test_fr13_fixed32_sfwd_state_fusion.py tests/test_fr13_fixed32_ingress_proxy.py tests/test_fr13_fixed32_b1_diagnostic.py tests/test_fr13_fixed32_ingress_wiring.py tests/test_fr13_fixed32_taw_native_precompute.py tests/test_fr13_fixed32_process_attestation.py tests/test_fr13_fixed32_gdn_batch_wide_bv.py tests/test_fr13_fixed32_gdn_batch_graph_gate.py tests/test_fr13_fixed32_gdn_path_bv_live_gate.py tests/test_fr13_dfwd_unified_attention_bm8.py tests/test_fr13_draft_head_pad_rows.py tests/test_fr13_cutlass_streamk_gate_wiring.py tests/test_fr13_fixed32_taw_real_task_arm.py tests/test_fr13_fixed32_final_full_preseed.py tests/test_fr13_fixed32_conv_commit_wiring.py tests/test_fr13_fixed32_floor_propagation.py
+
+Result:
+247 passed in 4.42s
+
+Additional checks:
+- Python compilation: pass
+- Shell syntax for the gate, generic B1 runner, serve wrapper, launcher, timing runner, and fixed32 sequence: pass
+- Inline B1 gate verifier compilation: pass
+- Ruff on changed Python files except the legacy patcher baseline: pass
+- Ruff fatal parse/name rules on the patcher: pass
+- Git diff whitespace check: pass
+
+The full patcher Ruff run retains four pre-existing findings: one unused import
+and three unused local assignments. No new finding was introduced by this work.

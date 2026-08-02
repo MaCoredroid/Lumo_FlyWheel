@@ -121,6 +121,83 @@ def test_final_full_preseed_requires_physical_32_row_descriptor(
     assert needed("FULL", 128, 4, True, False, 0) is False
 
 
+def test_sfwd_eager_kernel_diagnostic_bakes_graph_observer_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "1",
+    )
+    namespace = _runtime_functions(
+        "_fr13_fixed32_observed_current",
+        "_fr13_fixed32_observed_event_active",
+        "_fr13_fixed32_observed_nonpure_dispatch",
+        "_fr13_fixed32_observed_begin",
+        mode="hydra27_fixed32",
+    )
+
+    assert namespace["_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC"] is True
+    assert namespace["_fr13_fixed32_observed_current"]("test") is None
+    assert namespace["_fr13_fixed32_observed_event_active"]() is False
+    assert namespace["_fr13_fixed32_observed_nonpure_dispatch"]("FULL") is None
+    assert (
+        namespace["_fr13_fixed32_observed_begin"](
+            "invalid-mode",
+            99,
+            -1,
+            (),
+            0,
+            0,
+            (),
+        )
+        is None
+    )
+
+
+def test_sfwd_eager_diagnostic_allows_equal_full_and_compact_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "1",
+    )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB",
+        "0",
+    )
+    eager = _runtime_functions(
+        "_fr13_fixed32_unmeasured_full_row_map_valid",
+        mode="hydra27_fixed32",
+    )
+    valid = eager["_fr13_fixed32_unmeasured_full_row_map_valid"]
+
+    assert eager["_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC"] is True
+    assert valid(1, 1) is True
+    assert valid(4, 4) is True
+    assert valid(4, 2) is True
+    assert valid(1, 2) is False
+
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "0",
+    )
+    normal = _runtime_functions(
+        "_fr13_fixed32_unmeasured_full_row_map_valid",
+        mode="hydra27_fixed32",
+    )
+    normal_valid = normal["_fr13_fixed32_unmeasured_full_row_map_valid"]
+    assert normal["_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC"] is False
+    assert normal_valid(1, 1) is False
+    assert normal_valid(4, 2) is True
+
+    source = PATCHER_PATH.read_text(encoding="utf-8")
+    assert source.count("_fr13_fixed32_unmeasured_full_row_map_valid") == 2
+
+
 _GPU_RUNNER_FIXTURE = """\
 class Runner:
     def __init__(
@@ -183,6 +260,66 @@ class Runner:
             )
             return 0
         return 1
+"""
+
+_GPU_MODEL_RUNNER_BUILDER_FIXTURE = '''\
+from __future__ import annotations
+
+class GPUModelRunner:
+    def __init__(self, compilation_config, attn_groups, drafter):
+        self.compilation_config = compilation_config
+        self.vllm_config = SimpleNamespace(
+            compilation_config=compilation_config,
+        )
+        self.attn_groups = attn_groups
+        self.device = "cuda:0"
+        self.parallel_config = SimpleNamespace(use_ubatching=False)
+        self.speculative_config = SimpleNamespace()
+        self.drafter = drafter
+
+    def initialize_metadata_builders(
+        self, kv_cache_config: KVCacheConfig, kernel_block_sizes: list[int]
+    ) -> None:
+        """
+        Create the metadata builders for all KV cache groups and attn groups.
+        """
+        for kv_cache_group_id in range(len(kv_cache_config.kv_cache_groups)):
+            for attn_group in self.attn_groups[kv_cache_group_id]:
+                attn_group.create_metadata_builders(
+                    self.vllm_config,
+                    self.device,
+                    kernel_block_sizes[kv_cache_group_id],
+                    num_metadata_builders=1,
+                )
+        self.drafter.initialize_attn_backend(
+            kv_cache_config,
+            kernel_block_sizes,
+        )
+
+    def _check_and_update_cudagraph_mode(
+        self,
+    ) -> None:
+        return None
+'''
+
+_GPU_WORKER_FIXTURE = """\
+class Worker:
+    def __init__(self, enforce_eager):
+        self.model_config = SimpleNamespace(enforce_eager=enforce_eager)
+        self.model_runner = SimpleNamespace(capture_model=self._capture_model)
+        self.capture_calls = 0
+
+    def _capture_model(self):
+        self.capture_calls += 1
+        return 0
+
+    def compile_or_warm_up_model(self):
+        kernel_warmup(self)
+
+        cuda_graph_memory_bytes = 0
+        if not self.model_config.enforce_eager:
+            cuda_graph_memory_bytes = self.model_runner.capture_model()
+        return cuda_graph_memory_bytes
 """
 
 
@@ -477,6 +614,233 @@ def test_eager_b4_diagnostic_boot_rejects_wrong_runtime_contract(
     with pytest.raises(RuntimeError, match=error):
         runner.capture_model()
     assert runner.calls == []
+
+
+def test_sfwd_eager_boot_preseeds_before_first_request_consumer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "gpu_model_runner.py"
+    source.write_text(_GPU_RUNNER_FIXTURE, encoding="utf-8")
+    monkeypatch.setattr(patcher, "GPU_MODEL_RUNNER_PATH", source)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "hydra27_fixed32")
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_BATCH_GDN_BYTE_AB", "0")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "1",
+    )
+    assert patcher._patch_gpu_model_runner_fixed32_final_full_preseed()
+
+    order: list[str] = []
+    state = {"preseeded": False, "postprocess_ready": False}
+
+    def needed(*descriptor: object) -> bool:
+        order.append("needed")
+        assert descriptor == ("FULL", 32, 1, True, False, 0)
+        return True
+
+    def warm(_vocab_size: int) -> None:
+        assert state["preseeded"] is True
+        state["postprocess_ready"] = True
+        order.append("postprocess")
+
+    def assert_ready(batch: int) -> None:
+        assert batch == 1
+        assert state == {"preseeded": True, "postprocess_ready": True}
+        order.append("ready")
+
+    fake_gdn = SimpleNamespace(
+        _fr13_fixed32_final_full_preseed_needed=needed,
+        _fr13_fixed32_warm_final_full_postprocess=warm,
+        _fr13_fixed32_assert_final_full_preseed_ready=assert_ready,
+    )
+    _install_fake_gdn(monkeypatch, fake_gdn)
+    namespace = {
+        "CUDAGraphMode": _CUDAGraphMode,
+        "SimpleNamespace": SimpleNamespace,
+        "logger": SimpleNamespace(warning=lambda *args: None),
+        "_fr13_cfwd_timer": lambda: order.append("cfwd_warm"),
+        "_fr13_dfwd_timer": lambda: order.append("dfwd_warm"),
+    }
+    generated = source.read_text(encoding="utf-8")
+    assert "FR13_FIXED32_EAGER_SFWD_B1_BOOT_WARM" in generated
+    exec(generated, namespace)
+    runner = namespace["Runner"](1, max_num_seqs=1)
+
+    def producer(num_tokens: int, **kwargs: object) -> None:
+        assert num_tokens == 32
+        assert kwargs["cudagraph_runtime_mode"] is _CUDAGraphMode.NONE
+        assert kwargs["is_graph_capturing"] is True
+        state["preseeded"] = True
+        order.append("producer")
+
+    runner._dummy_run = producer
+    assert runner.capture_model() == 0
+
+    # This models the fail-closed first-request conv-pregather consumer.
+    assert state["preseeded"] is True
+    order.append("first_request_consumer")
+    assert order == [
+        "needed",
+        "producer",
+        "postprocess",
+        "cfwd_warm",
+        "dfwd_warm",
+        "ready",
+        "first_request_consumer",
+    ]
+
+
+@pytest.mark.parametrize("production", ("0", "1"))
+def test_sfwd_timing_arms_share_explicit_b1_boot_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    production: str,
+) -> None:
+    source = tmp_path / "gpu_model_runner.py"
+    source.write_text(_GPU_RUNNER_FIXTURE, encoding="utf-8")
+    monkeypatch.setattr(patcher, "GPU_MODEL_RUNNER_PATH", source)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "hydra27_fixed32")
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_BATCH_GDN_BYTE_AB", "0")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "0",
+    )
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB",
+        "1",
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION",
+        production,
+    )
+
+    assert patcher._fr13_fixed32_eager_boot_warm_contract() == (
+        "SFWD B1 timing diagnostic",
+        1,
+        "FR13_FIXED32_EAGER_SFWD_B1_TIMING_BOOT_WARM",
+    )
+    runtime = _runtime_functions(
+        "_fr13_fixed32_observed_event_active",
+        mode="hydra27_fixed32",
+    )
+    assert runtime["_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC"] is True
+    assert patcher._patch_gpu_model_runner_fixed32_final_full_preseed()
+    generated = source.read_text(encoding="utf-8")
+    assert "FR13_FIXED32_EAGER_SFWD_B1_TIMING_BOOT_WARM" in generated
+    assert '"FULL", 32, 1, True, False, 0' in generated
+
+
+def test_sfwd_eager_metadata_builders_observe_b1_physical_capacity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "gpu_model_runner.py"
+    source.write_text(_GPU_MODEL_RUNNER_BUILDER_FIXTURE, encoding="utf-8")
+    monkeypatch.setattr(patcher, "GPU_MODEL_RUNNER_PATH", source)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "hydra27_fixed32")
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_BATCH_GDN_BYTE_AB", "0")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "1",
+    )
+    assert patcher._patch_gpu_model_runner_fixed32_eager_boot_capacity()
+
+    observed: list[tuple[str, int]] = []
+    config = SimpleNamespace(max_cudagraph_capture_size=0)
+
+    class AttnGroup:
+        def create_metadata_builders(
+            self, vllm_config: object, *_args: object, **_kwargs: object
+        ) -> None:
+            observed.append(
+                (
+                    "target",
+                    vllm_config.compilation_config.max_cudagraph_capture_size,
+                )
+            )
+
+    class Drafter:
+        def initialize_attn_backend(self, *_args: object) -> None:
+            observed.append(("drafter", config.max_cudagraph_capture_size))
+
+    namespace = {"SimpleNamespace": SimpleNamespace}
+    exec(source.read_text(encoding="utf-8"), namespace)
+    runner = namespace["GPUModelRunner"](config, [[AttnGroup()]], Drafter())
+    runner.initialize_metadata_builders(
+        SimpleNamespace(kv_cache_groups=[object()]),
+        [16],
+    )
+
+    assert observed == [("target", 32), ("drafter", 32)]
+    assert config.max_cudagraph_capture_size == 0
+
+
+def test_sfwd_eager_worker_reaches_zero_traffic_boot_producer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "gpu_worker.py"
+    source.write_text(_GPU_WORKER_FIXTURE, encoding="utf-8")
+    monkeypatch.setattr(patcher, "GPU_WORKER_PATH", source)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "hydra27_fixed32")
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_BATCH_GDN_BYTE_AB", "0")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "1",
+    )
+    assert patcher._patch_gpu_worker_fixed32_eager_boot_warm()
+
+    namespace = {
+        "SimpleNamespace": SimpleNamespace,
+        "kernel_warmup": lambda _worker: None,
+    }
+    generated = source.read_text(encoding="utf-8")
+    assert "FR13_FIXED32_EAGER_BOOT_WARM_LIFECYCLE" in generated
+    exec(generated, namespace)
+    worker = namespace["Worker"](True)
+    assert worker.compile_or_warm_up_model() == 0
+    assert worker.capture_calls == 1
+
+    non_eager = namespace["Worker"](False)
+    with pytest.raises(RuntimeError, match="requires enforce_eager"):
+        non_eager.compile_or_warm_up_model()
+    assert non_eager.capture_calls == 0
+
+
+def test_non_diagnostic_eager_lifecycle_is_unchanged(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worker_source = tmp_path / "gpu_worker.py"
+    runner_source = tmp_path / "gpu_model_runner.py"
+    worker_source.write_text(_GPU_WORKER_FIXTURE, encoding="utf-8")
+    runner_source.write_text(
+        _GPU_MODEL_RUNNER_BUILDER_FIXTURE,
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(patcher, "GPU_WORKER_PATH", worker_source)
+    monkeypatch.setattr(patcher, "GPU_MODEL_RUNNER_PATH", runner_source)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "hydra27_fixed32")
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_BATCH_GDN_BYTE_AB", "0")
+    monkeypatch.setattr(
+        patcher,
+        "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB",
+        "0",
+    )
+
+    assert not patcher._patch_gpu_worker_fixed32_eager_boot_warm()
+    assert not patcher._patch_gpu_model_runner_fixed32_eager_boot_capacity()
+    assert worker_source.read_text(encoding="utf-8") == _GPU_WORKER_FIXTURE
+    assert (
+        runner_source.read_text(encoding="utf-8")
+        == _GPU_MODEL_RUNNER_BUILDER_FIXTURE
+    )
 
 
 def test_postprocess_boot_warm_is_unmeasured_and_idempotent(
