@@ -19,14 +19,14 @@ EXPECTED_RESOURCES = {
     "local_bytes": 0,
 }
 EXPECTED_SASS_COUNTS = {
-    "FADD": 257,
-    "MUFU.EX2": 0,
+    "FADD": 262,
+    "MUFU.EX2": 3,
     "MUFU.RSQ": 3,
-    "MUFU.RCP": 1,
+    "MUFU.RCP": 2,
     "SHFL.BFLY": 202,
     "SHFL.IDX": 16,
     "SHFL.DOWN": 0,
-    "FFMA": 70,
+    "FFMA": 82,
 }
 EXPECTED_SIGNED_ZERO_FADD_RZ = 64
 

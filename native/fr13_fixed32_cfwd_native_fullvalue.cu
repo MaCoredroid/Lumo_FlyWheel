@@ -36,6 +36,7 @@ constexpr int kSharedBytes =
     kPrecomputedSteps * kHeadGroup * 2 * sizeof(float) +
     kPrecomputedSteps * sizeof(int32_t) + 2 * sizeof(int32_t);
 constexpr unsigned kFullWarpMask = 0xffffffffu;
+constexpr float kLog2E = 0x1.715476p+0f;
 
 static_assert(kHeadGroup == 3);
 static_assert(kPrecomputedSteps == 12);
@@ -52,11 +53,27 @@ __device__ __forceinline__ float load_bf16(const __nv_bfloat16* pointer) {
   return __bfloat162float(*pointer);
 }
 
+__device__ __forceinline__ float triton_exp(float value) {
+  const float exponent = __fmul_rn(value, kLog2E);
+  float result;
+  asm volatile("ex2.approx.f32 %0, %1;" : "=f"(result) : "f"(exponent));
+  return result;
+}
+
 __device__ __forceinline__ float triton_rsqrt(float value) {
   float result;
   asm volatile("rsqrt.approx.ftz.f32 %0, %1;"
                : "=f"(result)
                : "f"(value));
+  return result;
+}
+
+__device__ __forceinline__ float triton_divide(float numerator,
+                                                float denominator) {
+  float result;
+  asm volatile("div.full.f32 %0, %1, %2;"
+               : "=f"(result)
+               : "f"(numerator), "f"(denominator));
   return result;
 }
 
@@ -81,23 +98,35 @@ __device__ __forceinline__ float triton_butterfly_four_sum(float value) {
                    __shfl_xor_sync(kFullWarpMask, value, 1));
 }
 
+__device__ __forceinline__ float softplus(float value) {
+  return value <= 20.0f
+             ? logf(__fadd_rn(1.0f, triton_exp(value)))
+             : value;
+}
+
+__device__ __forceinline__ float sigmoid(float value) {
+  return triton_divide(
+      1.0f, __fadd_rn(1.0f, triton_exp(__fsub_rn(0.0f, value))));
+}
+
 __global__ __launch_bounds__(kThreadsPerBlock, 2)
 void fixed32_cfwd_native_fullvalue_kernel(
     float* bank_anchor, const int64_t* bank_off16,
     const int32_t* accepted_paths, const int32_t* accepted_lens,
     const int32_t* spec_state_indices, const __nv_bfloat16* k_rings,
-    const __nv_bfloat16* v_rings, const float* event_gate_scalars,
+    const __nv_bfloat16* v_rings, const __nv_bfloat16* a_rings,
+    const __nv_bfloat16* b_rings, const float* gate_coeffs,
     int64_t bank_stride, int64_t gate_layer_stride,
-    int64_t gate_batch_stride, int64_t gate_step_stride,
-    int64_t gate_head_stride,
     int64_t ring_k_layer_stride, int64_t ring_k_batch_stride,
     int64_t ring_k_node_stride, int64_t ring_v_layer_stride,
     int64_t ring_v_batch_stride, int64_t ring_v_node_stride,
-    int64_t spec_layer_stride, int64_t spec_batch_stride, int batch_size) {
+    int64_t ring_ab_layer_stride, int64_t ring_ab_batch_stride,
+    int64_t ring_ab_node_stride, int64_t spec_layer_stride,
+    int64_t spec_batch_stride, int batch_size) {
   __shared__ float normalized_ks[kPrecomputedSteps][kDimK];
   __shared__ float norm_partials[kStepsPerWave][kNormPartialWarps];
   __shared__ float inverse_norms[kStepsPerWave];
-  __shared__ float shared_recurrence_scalars[kPrecomputedSteps][kHeadGroup][2];
+  __shared__ float recurrence_scalars[kPrecomputedSteps][kHeadGroup][2];
   __shared__ int32_t shared_nodes[kPrecomputedSteps];
   __shared__ int32_t shared_steps;
   __shared__ int32_t shared_state_index;
@@ -138,14 +167,18 @@ void fixed32_cfwd_native_fullvalue_kernel(
     }
     const int value_head = key_head * kHeadGroup + local_value_head;
     const int64_t gate_offset =
-        static_cast<int64_t>(layer) * gate_layer_stride +
-        static_cast<int64_t>(request) * gate_batch_stride +
-        static_cast<int64_t>(step) * gate_step_stride +
-        static_cast<int64_t>(value_head) * gate_head_stride;
-    shared_recurrence_scalars[step][local_value_head][0] =
-        event_gate_scalars[gate_offset];
-    shared_recurrence_scalars[step][local_value_head][1] =
-        event_gate_scalars[gate_offset + 1];
+        static_cast<int64_t>(layer) * gate_layer_stride + value_head * 2;
+    const int ab_offset =
+        layer * static_cast<int>(ring_ab_layer_stride) +
+        request * static_cast<int>(ring_ab_batch_stride) +
+        node * static_cast<int>(ring_ab_node_stride) + value_head;
+    const float x = __fadd_rn(load_bf16(a_rings + ab_offset),
+                              gate_coeffs[gate_offset + 1]);
+    const float decay =
+        __fmul_rn(gate_coeffs[gate_offset], softplus(x));
+    recurrence_scalars[step][local_value_head][0] = triton_exp(decay);
+    recurrence_scalars[step][local_value_head][1] =
+        sigmoid(load_bf16(b_rings + ab_offset));
   }
   __syncthreads();
 
@@ -219,8 +252,8 @@ void fixed32_cfwd_native_fullvalue_kernel(
 
     for (int step = 0; step < steps; ++step) {
       const float decay_scale =
-          shared_recurrence_scalars[step][local_value_head][0];
-      const float beta = shared_recurrence_scalars[step][local_value_head][1];
+          recurrence_scalars[step][local_value_head][0];
+      const float beta = recurrence_scalars[step][local_value_head][1];
       float step_k[kKeyQuads];
 #pragma unroll
       for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
@@ -306,7 +339,8 @@ void fr13_fixed32_cfwd_native_fullvalue(
     torch::Tensor& bank_anchor, const torch::Tensor& bank_off16,
     const torch::Tensor& accepted_paths, const torch::Tensor& accepted_lens,
     const torch::Tensor& spec_state_indices, const torch::Tensor& k_rings,
-    const torch::Tensor& v_rings, const torch::Tensor& event_gate_scalars,
+    const torch::Tensor& v_rings, const torch::Tensor& a_rings,
+    const torch::Tensor& b_rings, const torch::Tensor& gate_coeffs,
     int64_t batch_size, bool bank_offset_table_prevalidated,
     bool accepted_values_device_guarded) {
   TORCH_CHECK(batch_size >= 1 && batch_size <= 4,
@@ -337,7 +371,9 @@ void fr13_fixed32_cfwd_native_fullvalue(
            {&spec_state_indices, "spec_state_indices"},
            {&k_rings, "k_rings"},
            {&v_rings, "v_rings"},
-           {&event_gate_scalars, "event_gate_scalars"},
+           {&a_rings, "a_rings"},
+           {&b_rings, "b_rings"},
+           {&gate_coeffs, "gate_coeffs"},
        }) {
     check_cuda_contiguous(*item.first, item.second, device);
   }
@@ -361,8 +397,10 @@ void fr13_fixed32_cfwd_native_fullvalue(
               "FR13 native full-value CFWD state-index geometry drift");
 
   TORCH_CHECK(k_rings.scalar_type() == torch::kBFloat16 &&
-                  v_rings.scalar_type() == torch::kBFloat16,
-              "FR13 native full-value CFWD K/V rings must be BF16");
+                  v_rings.scalar_type() == torch::kBFloat16 &&
+                  a_rings.scalar_type() == torch::kBFloat16 &&
+                  b_rings.scalar_type() == torch::kBFloat16,
+              "FR13 native full-value CFWD rings must be BF16");
   TORCH_CHECK(k_rings.dim() == 5 &&
                   k_rings.size(0) == kLayers &&
                   k_rings.size(1) >= batch_size &&
@@ -377,14 +415,20 @@ void fr13_fixed32_cfwd_native_fullvalue(
                   v_rings.size(3) == kValueHeads &&
                   v_rings.size(4) == kDimV,
               "FR13 native full-value CFWD V-ring geometry drift");
-  TORCH_CHECK(event_gate_scalars.scalar_type() == torch::kFloat32 &&
-                  event_gate_scalars.dim() == 5 &&
-                  event_gate_scalars.size(0) == kLayers &&
-                  event_gate_scalars.size(1) == batch_size &&
-                  event_gate_scalars.size(2) == kPrecomputedSteps &&
-                  event_gate_scalars.size(3) == kValueHeads &&
-                  event_gate_scalars.size(4) == 2,
-              "FR13 native full-value CFWD event-gate scalar drift");
+  TORCH_CHECK(a_rings.dim() == 4 && b_rings.sizes() == a_rings.sizes() &&
+                  a_rings.size(0) == kLayers &&
+                  a_rings.size(1) == k_rings.size(1) &&
+                  a_rings.size(2) == kRingNodes &&
+                  a_rings.size(3) == kValueHeads,
+              "FR13 native full-value CFWD gate-ring geometry drift");
+  TORCH_CHECK(a_rings.numel() <= INT32_MAX,
+              "FR13 native full-value CFWD gate-ring offset exceeds int32");
+  TORCH_CHECK(gate_coeffs.scalar_type() == torch::kFloat32 &&
+                  gate_coeffs.dim() == 3 &&
+                  gate_coeffs.size(0) == kLayers &&
+                  gate_coeffs.size(1) == kValueHeads &&
+                  gate_coeffs.size(2) == 2,
+              "FR13 native full-value CFWD gate coefficient drift");
 
   const auto* properties = at::cuda::getCurrentDeviceProperties();
   TORCH_CHECK(properties->major == 12 && properties->minor == 1,
@@ -406,12 +450,15 @@ void fr13_fixed32_cfwd_native_fullvalue(
           k_rings.data_ptr<at::BFloat16>()),
       reinterpret_cast<const __nv_bfloat16*>(
           v_rings.data_ptr<at::BFloat16>()),
-      event_gate_scalars.data_ptr<float>(), bank_anchor.stride(0),
-      event_gate_scalars.stride(0), event_gate_scalars.stride(1),
-      event_gate_scalars.stride(2), event_gate_scalars.stride(3),
-      k_rings.stride(0), k_rings.stride(1),
+      reinterpret_cast<const __nv_bfloat16*>(
+          a_rings.data_ptr<at::BFloat16>()),
+      reinterpret_cast<const __nv_bfloat16*>(
+          b_rings.data_ptr<at::BFloat16>()),
+      gate_coeffs.data_ptr<float>(), bank_anchor.stride(0),
+      gate_coeffs.stride(0), k_rings.stride(0), k_rings.stride(1),
       k_rings.stride(2), v_rings.stride(0), v_rings.stride(1),
-      v_rings.stride(2), spec_state_indices.stride(0),
+      v_rings.stride(2), a_rings.stride(0), a_rings.stride(1),
+      a_rings.stride(2), spec_state_indices.stride(0),
       spec_state_indices.stride(1), static_cast<int>(batch_size));
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }

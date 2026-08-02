@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 VLLM_COMMIT = "fe9c3d6c5f66c873d196800384ed6880687b9e52"
-MARKER = "FR13_FIXED32_CFWD_NATIVE_KEYGROUP_TRITON_SCALAR_CUDA_V4"
+MARKER = "FR13_FIXED32_CFWD_NATIVE_KEYGROUP_FUSED_GATE_SUFFIX_ZERO_CUDA_V6"
 CUDA_DESTINATION = Path("csrc/fr13_fixed32_cfwd_native_fullvalue.cu")
 
 PINNED_SHA256 = {
@@ -39,7 +39,8 @@ void fr13_fixed32_cfwd_native_fullvalue(
     torch::Tensor& bank_anchor, const torch::Tensor& bank_off16,
     const torch::Tensor& accepted_paths, const torch::Tensor& accepted_lens,
     const torch::Tensor& spec_state_indices, const torch::Tensor& k_rings,
-    const torch::Tensor& v_rings, const torch::Tensor& event_gate_scalars,
+    const torch::Tensor& v_rings, const torch::Tensor& a_rings,
+    const torch::Tensor& b_rings, const torch::Tensor& gate_coeffs,
     int64_t batch_size, bool bank_offset_table_prevalidated,
     bool accepted_values_device_guarded);
 
@@ -54,7 +55,7 @@ BINDINGS_REPLACEMENT = BINDINGS_ANCHOR + f"""  // {MARKER}
       "fr13_fixed32_cfwd_native_fullvalue("
       "Tensor! bank_anchor, Tensor bank_off16, Tensor accepted_paths, "
       "Tensor accepted_lens, Tensor spec_state_indices, Tensor k_rings, "
-      "Tensor v_rings, Tensor event_gate_scalars, "
+      "Tensor v_rings, Tensor a_rings, Tensor b_rings, Tensor gate_coeffs, "
       "int batch_size, bool bank_offset_table_prevalidated, "
       "bool accepted_values_device_guarded) -> ()");
   ops.impl("fr13_fixed32_cfwd_native_fullvalue", torch::kCUDA,

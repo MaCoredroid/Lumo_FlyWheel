@@ -10321,124 +10321,6 @@ def _fr13_fixed32_committer_gate_precompute(
     return gate_coeffs
 
 
-@triton.jit
-def _fr13_fixed32_committer_event_gate_scalar_kernel(
-    a_rings,
-    b_rings,
-    gate_coeffs,
-    accepted_paths,
-    accepted_lens,
-    event_gate_scalars,
-    TOTAL: tl.constexpr,
-    B: tl.constexpr,
-    STEPS: tl.constexpr,
-    PATH_CAP: tl.constexpr,
-    RING_N: tl.constexpr,
-    HV: tl.constexpr,
-    GATE_L_STRIDE: tl.constexpr,
-    RING_AB_L_STRIDE: tl.constexpr,
-    RING_AB_B_STRIDE: tl.constexpr,
-    RING_AB_N_STRIDE: tl.constexpr,
-    BETA: tl.constexpr,
-    THRESHOLD: tl.constexpr,
-    BLOCK: tl.constexpr,
-):
-    """Materialize incumbent-lowered decay/beta scalars for the native scan."""
-    offsets = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
-    mask = offsets < TOTAL
-    value_head = offsets % HV
-    remaining = offsets // HV
-    step = remaining % STEPS
-    remaining = remaining // STEPS
-    request = remaining % B
-    layer = remaining // B
-
-    accepted = tl.load(accepted_lens + request, mask=mask, other=0).to(tl.int64)
-    steps = tl.minimum(tl.maximum(accepted, 0) + 1, STEPS)
-    active = mask & (step < steps)
-    path_offset = tl.maximum(step - 1, 0)
-    path_node = tl.load(
-        accepted_paths + request * PATH_CAP + path_offset,
-        mask=active & (step > 0),
-        other=0,
-    ).to(tl.int64)
-    node = tl.minimum(tl.maximum(path_node, 0), RING_N - 1)
-    ring_offset = (
-        layer * RING_AB_L_STRIDE
-        + request * RING_AB_B_STRIDE
-        + node * RING_AB_N_STRIDE
-        + value_head
-    )
-    gate_offset = layer * GATE_L_STRIDE + value_head * 2
-    b_a_scale = tl.load(gate_coeffs + gate_offset, mask=active, other=0.0)
-    b_dt_bias = tl.load(gate_coeffs + gate_offset + 1, mask=active, other=0.0)
-    b_a = tl.load(a_rings + ring_offset, mask=active, other=0.0).to(tl.float32)
-    b_b = tl.load(b_rings + ring_offset, mask=active, other=0.0).to(tl.float32)
-
-    # Keep this expression identical to the byte-gate reference kernel.
-    x = b_a + b_dt_bias
-    softplus_x = tl.where(
-        BETA * x <= THRESHOLD,
-        (1 / BETA) * tl.log(1 + tl.exp(BETA * x)),
-        x,
-    )
-    b_g = b_a_scale * softplus_x
-    decay = tl.exp(b_g)
-    beta = tl.sigmoid(b_b.to(tl.float32))
-    tl.store(event_gate_scalars + offsets * 2, decay, mask=active)
-    tl.store(event_gate_scalars + offsets * 2 + 1, beta, mask=active)
-
-
-def _fr13_fixed32_committer_event_gate_scalar_precompute(
-    *,
-    state,
-    a_rings,
-    b_rings,
-    gate_coeffs,
-) -> None:
-    """Enqueue one captured Triton launch using the incumbent gate math."""
-    layers = 48
-    batch = int(state["batch"])
-    steps = _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH + 1
-    value_heads = int(state["num_vh"])
-    event_gate_scalars = state.get("event_gate_scalars")
-    expected = (layers, batch, steps, value_heads, 2)
-    if (
-        not torch.is_tensor(event_gate_scalars)
-        or tuple(event_gate_scalars.shape) != expected
-        or event_gate_scalars.dtype != torch.float32
-        or not event_gate_scalars.is_contiguous()
-    ):
-        raise RuntimeError(
-            "FR13 native key-group event-gate scalar buffer contract drift"
-        )
-    total = layers * batch * steps * value_heads
-    block = 256
-    _fr13_fixed32_committer_event_gate_scalar_kernel[(triton.cdiv(total, block),)](
-        a_rings,
-        b_rings,
-        gate_coeffs,
-        state["accepted_paths"],
-        state["accepted_lens"],
-        event_gate_scalars,
-        TOTAL=total,
-        B=batch,
-        STEPS=steps,
-        PATH_CAP=16,
-        RING_N=32,
-        HV=value_heads,
-        GATE_L_STRIDE=int(gate_coeffs.stride(0)),
-        RING_AB_L_STRIDE=int(a_rings.stride(0)),
-        RING_AB_B_STRIDE=int(a_rings.stride(1)),
-        RING_AB_N_STRIDE=int(a_rings.stride(2)),
-        BETA=1.0,
-        THRESHOLD=20.0,
-        BLOCK=block,
-        num_warps=4,
-        num_stages=1,
-    )
-
-
 def _fr13_fixed32_cfwd_native_keygroup_selection(
     *,
     banks_list,
@@ -10497,17 +10379,11 @@ def _fr13_fixed32_committer_native_keygroup(
     a_rings,
     b_rings,
 ) -> None:
-    """Launch incumbent-lowered gate scalars, then the native recurrence."""
+    """Launch the source-bound one-CTA-per-key-group native recurrence."""
     from lumo_flywheel_serving import (
         fr13_cfwd_native_fullvalue_cuda as native_keygroup,
     )
 
-    _fr13_fixed32_committer_event_gate_scalar_precompute(
-        state=state,
-        a_rings=a_rings,
-        b_rings=b_rings,
-        gate_coeffs=state["gate_coeffs"],
-    )
     native_keygroup.launch_candidate(
         torch_module=torch,
         selection=selection,
@@ -10518,7 +10394,9 @@ def _fr13_fixed32_committer_native_keygroup(
         spec_state_indices=spec_state_indices,
         k_rings=k_rings,
         v_rings=v_rings,
-        event_gate_scalars=state["event_gate_scalars"],
+        a_rings=a_rings,
+        b_rings=b_rings,
+        gate_coeffs=state["gate_coeffs"],
     )
 
 
@@ -11152,19 +11030,6 @@ def preseed_fixed32_committer_graph(
             else None
         ),
         "gate_coeffs": gate_coeffs,
-        "event_gate_scalars": (
-            torch.empty(
-                48,
-                batch,
-                _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH + 1,
-                num_vh,
-                2,
-                dtype=torch.float32,
-                device=device,
-            )
-            if native_keygroup_selection is not None
-            else None
-        ),
         "layer_batch": layer_batch,
         "native_keygroup_selection": native_keygroup_selection,
         "layer_batch_byte_gate_passed": not layer_batch,
@@ -11254,11 +11119,13 @@ def preseed_fixed32_committer_graph(
                     "programs_per_layer_request_value_head": None,
                     "programs_per_layer_request_key_head": 1,
                     "value_heads_per_program": 3,
-                    "candidate_scalar_precompute_launches": 1,
-                    "candidate_kernel_launches_per_event": 2,
-                    "event_gate_scalar_precompute": "triton_incumbent_math",
-                    "event_gate_scalar_active_prefix_only": True,
-                    "native_gate_transcendentals": 0,
+                    "candidate_scalar_precompute_launches": 0,
+                    "candidate_kernel_launches_per_event": 1,
+                    "event_gate_scalar_buffer_elements": 0,
+                    "native_gate_transcendentals_per_active_scalar": 3,
+                    "fixed16_inactive_suffix_collapse": (
+                        "finite_state_fadd_positive_zero"
+                    ),
                 }
             )
 
