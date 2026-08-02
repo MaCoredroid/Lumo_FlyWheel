@@ -37,6 +37,14 @@ case "$GATE_CANDIDATE" in
     CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_static_persistent_byte_ab.jsonl
     K64_ROOT_RESULT_NAME=cutlass_static_persistent_k64_root_byte_gate.json
     ;;
+  divisor_static_stocktile)
+    DIAGNOSTIC_SELECTOR=divisor_static_stocktile_byte_ab
+    RECORD_SCHEMA=fr13.fixed32.cutlass_divisor_static_byte_ab.v1
+    FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_divisor_static_live_gate.v1
+    K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_divisor_static_k64_root_live_gate.v1
+    CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_divisor_static_byte_ab.jsonl
+    K64_ROOT_RESULT_NAME=cutlass_divisor_static_k64_root_byte_gate.json
+    ;;
   *)
     echo "unsupported Stream-K gate candidate: $GATE_CANDIDATE" >&2
     exit 2
@@ -62,8 +70,9 @@ case "$QUALIFICATION_PROFILE" in
     ;;
   k64_root)
     [[ "$GATE_CANDIDATE" == "streamk_force_wide256" \
-       || "$GATE_CANDIDATE" == "static_persistent_stocktile" ]] || {
-      echo "B1 k64_root qualification is restricted to wide256 or static-persistent stock-tile" >&2
+       || "$GATE_CANDIDATE" == "static_persistent_stocktile" \
+       || "$GATE_CANDIDATE" == "divisor_static_stocktile" ]] || {
+      echo "B1 k64_root qualification requires a pinned B1 projection candidate" >&2
       exit 2
     }
     LIVE_SCHEMA=$K64_ROOT_LIVE_SCHEMA

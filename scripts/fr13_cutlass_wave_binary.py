@@ -22,6 +22,10 @@ STATIC_PERSISTENT_B1_CANDIDATE_SHA256 = (
     "88c50e7d1b6060c2bcec68f50985a1db47b43d299b574edfbfc32cac1ce68742"
 )
 STATIC_PERSISTENT_B1_CANDIDATE_SIZE = 113_383_800
+DIVISOR_STATIC_B1_CANDIDATE_SHA256 = (
+    "338e89d062c2b1ac40909dbc8d64d4ab6b0def9fd86988c9e395e8244606a9f6"
+)
+DIVISOR_STATIC_B1_CANDIDATE_SIZE = 113_837_288
 B4_M128_CANDIDATE_SHA256 = (
     "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
 )
@@ -44,6 +48,9 @@ WIDE256_SELECTORS = frozenset(
 STATIC_PERSISTENT_B1_SELECTORS = frozenset(
     {"static_persistent_stocktile", "static_persistent_stocktile_byte_ab"}
 )
+DIVISOR_STATIC_B1_SELECTORS = frozenset(
+    {"divisor_static_stocktile", "divisor_static_stocktile_byte_ab"}
+)
 B4_M128_SELECTORS = frozenset({"persistent_b4_m128", "persistent_b4_m128_byte_ab"})
 STATIC_B4_M128_SELECTORS = frozenset(
     {"persistent_b4_m128_static", "persistent_b4_m128_static_byte_ab"}
@@ -52,6 +59,7 @@ CANDIDATE_SELECTORS = (
     COOP128_SELECTORS
     | WIDE256_SELECTORS
     | STATIC_PERSISTENT_B1_SELECTORS
+    | DIVISOR_STATIC_B1_SELECTORS
     | B4_M128_SELECTORS
     | STATIC_B4_M128_SELECTORS
 )
@@ -60,6 +68,7 @@ PRODUCTION_SELECTORS = frozenset(
 )
 INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
     "static_persistent_stocktile",
+    "divisor_static_stocktile",
     "persistent_b4_m128_static",
 }
 CONTAINER_SOURCE = Path("/tmp/fr13_cutlass_wave.abi3.so")
@@ -86,6 +95,12 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
             STATIC_PERSISTENT_B1_CANDIDATE_SHA256,
             STATIC_PERSISTENT_B1_CANDIDATE_SIZE,
             "static_persistent_stocktile",
+        )
+    if selector in DIVISOR_STATIC_B1_SELECTORS:
+        return (
+            DIVISOR_STATIC_B1_CANDIDATE_SHA256,
+            DIVISOR_STATIC_B1_CANDIDATE_SIZE,
+            "divisor_static_stocktile",
         )
     if selector in B4_M128_SELECTORS:
         return B4_M128_CANDIDATE_SHA256, B4_M128_CANDIDATE_SIZE, "persistent_b4_m128"
@@ -354,7 +369,10 @@ def install_candidate(
     if selector not in CANDIDATE_SELECTORS:
         raise ValueError(f"unsupported candidate selector: {selector!r}")
     if selector not in INSTALLABLE_SELECTORS:
-        if selector == "static_persistent_stocktile":
+        if selector in {
+            "static_persistent_stocktile",
+            "divisor_static_stocktile",
+        }:
             raise ValueError(
                 "static B1 production remains unavailable until the K64/root "
                 "raw-byte gate passes"

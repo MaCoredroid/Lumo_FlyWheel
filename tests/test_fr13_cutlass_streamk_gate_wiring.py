@@ -193,18 +193,23 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert '"binary_attestation_sha256"' in gate
     assert "static_persistent_stocktile" in gate
     assert "static_persistent_stocktile_byte_ab" in gate
+    assert "divisor_static_stocktile" in gate
+    assert "divisor_static_stocktile_byte_ab" in gate
     assert "fr13.fixed32.cutlass_static_persistent_byte_ab.v1" in gate
+    assert "fr13.fixed32.cutlass_divisor_static_byte_ab.v1" in gate
     assert (
         "fr13.fixed32.cutlass_static_persistent_k64_root_live_gate.v1" in gate
     )
+    assert "fr13.fixed32.cutlass_divisor_static_k64_root_live_gate.v1" in gate
     assert "cutlass_static_persistent_k64_root_byte_gate.json" in gate
+    assert "cutlass_divisor_static_k64_root_byte_gate.json" in gate
     assert (
-        "B1 k64_root qualification is restricted to wide256 or "
-        "static-persistent stock-tile" in gate
+        "B1 k64_root qualification requires a pinned B1 projection candidate"
+        in gate
     )
     assert (
-        "CUTLASS k64_root B1 qualification requires wide256 or "
-        "static-persistent stock-tile" in launcher
+        "CUTLASS k64_root B1 qualification requires a pinned B1 projection "
+        "candidate" in launcher
     )
     assert '--qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"' in launcher
     assert "--draft-vocab-blocks scripts/fr13_dvk_subset_blocks.json" in launcher

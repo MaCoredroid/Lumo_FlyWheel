@@ -41,6 +41,8 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "streamk_force_wide256_byte_ab",
         "static_persistent_stocktile",
         "static_persistent_stocktile_byte_ab",
+        "divisor_static_stocktile",
+        "divisor_static_stocktile_byte_ab",
         "persistent_b4_m128",
         "persistent_b4_m128_byte_ab",
         "persistent_b4_m128_static",
@@ -59,6 +61,11 @@ def test_pinned_binary_identity_and_selectors() -> None:
         module.STATIC_PERSISTENT_B1_CANDIDATE_SHA256,
         module.STATIC_PERSISTENT_B1_CANDIDATE_SIZE,
         "static_persistent_stocktile",
+    )
+    assert module.candidate_identity("divisor_static_stocktile_byte_ab") == (
+        module.DIVISOR_STATIC_B1_CANDIDATE_SHA256,
+        module.DIVISOR_STATIC_B1_CANDIDATE_SIZE,
+        "divisor_static_stocktile",
     )
     assert module.B4_M128_CANDIDATE_SHA256 == (
         "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
@@ -218,16 +225,39 @@ def test_wide256_diagnostic_install_uses_its_own_pinned_identity(
     assert record["source"]["sha256"] == digest
 
 
+@pytest.mark.parametrize(
+    ("size_attr", "sha_attr", "diagnostic_selector", "production_selector", "family"),
+    (
+        (
+            "STATIC_PERSISTENT_B1_CANDIDATE_SIZE",
+            "STATIC_PERSISTENT_B1_CANDIDATE_SHA256",
+            "static_persistent_stocktile_byte_ab",
+            "static_persistent_stocktile",
+            "static_persistent_stocktile",
+        ),
+        (
+            "DIVISOR_STATIC_B1_CANDIDATE_SIZE",
+            "DIVISOR_STATIC_B1_CANDIDATE_SHA256",
+            "divisor_static_stocktile_byte_ab",
+            "divisor_static_stocktile",
+            "divisor_static_stocktile",
+        ),
+    ),
+)
 def test_static_b1_diagnostic_installs_but_production_stays_blocked(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    size_attr: str,
+    sha_attr: str,
+    diagnostic_selector: str,
+    production_selector: str,
+    family: str,
 ) -> None:
     module = _module()
-    payload = b"static-persistent-b1-candidate\n"
+    payload = f"{family}-candidate\n".encode("ascii")
     digest = hashlib.sha256(payload).hexdigest()
-    monkeypatch.setattr(
-        module, "STATIC_PERSISTENT_B1_CANDIDATE_SIZE", len(payload)
-    )
-    monkeypatch.setattr(module, "STATIC_PERSISTENT_B1_CANDIDATE_SHA256", digest)
+    monkeypatch.setattr(module, size_attr, len(payload))
+    monkeypatch.setattr(module, sha_attr, digest)
     source = tmp_path / "static-b1.so"
     destination = tmp_path / "installed.so"
     attestation = tmp_path / "attestation.json"
@@ -238,12 +268,12 @@ def test_static_b1_diagnostic_installs_but_production_stays_blocked(
         source,
         destination,
         attestation,
-        "static_persistent_stocktile_byte_ab",
+        diagnostic_selector,
     )
 
     assert destination.read_bytes() == payload
     assert record["production_enabled"] is False
-    assert record["candidate_family"] == "static_persistent_stocktile"
+    assert record["candidate_family"] == family
 
     destination.chmod(0o644)
     destination.write_bytes(b"stock-extension\n")
@@ -252,7 +282,7 @@ def test_static_b1_diagnostic_installs_but_production_stays_blocked(
             source,
             destination,
             attestation,
-            "static_persistent_stocktile",
+            production_selector,
         )
     assert destination.read_bytes() == b"stock-extension\n"
 

@@ -23,10 +23,13 @@ K64_ROOT_LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_wide256_k64_root_live_gate.
 STATIC_PERSISTENT_K64_ROOT_LIVE_SCHEMA = (
     "fr13.fixed32.cutlass_static_persistent_k64_root_live_gate.v1"
 )
+DIVISOR_STATIC_K64_ROOT_LIVE_SCHEMA = (
+    "fr13.fixed32.cutlass_divisor_static_k64_root_live_gate.v1"
+)
 K64_ROOT_SIDECAR_SCHEMA = "fr13.fixed32.cutlass_streamk.k64_root.production_pass.v1"
 ATTESTATION_SCHEMA = "fr13.fixed32.cutlass_streamk_binary.v2"
 PATCH_SOURCE = Path("scripts/fr13_patch_cutlass_fixed32_wave.py")
-PATCH_SOURCE_SHA256 = "442e0053591399acf0a471a81193b386c6b8983f8acb2e66ae0c372d2c58e332"
+PATCH_SOURCE_SHA256 = "f91c115447b8c563f963c507984c4d9186dd6c4815975587b5d997f01cb1cf74"
 DRAFT_VOCAB_BLOCKS_SOURCE = Path("scripts/fr13_dvk_subset_blocks.json")
 DRAFT_VOCAB_BLOCKS_CONTAINER_PATH = "/workspace/scripts/fr13_dvk_subset_blocks.json"
 DRAFT_VOCAB_BLOCKS_SHA256 = (
@@ -34,7 +37,7 @@ DRAFT_VOCAB_BLOCKS_SHA256 = (
 )
 VLLM_BASE_COMMIT = "fe9c3d6c5f66c873d196800384ed6880687b9e52"
 PATCHED_DISPATCH_SHA256 = (
-    "007f40ebb29b3476239cbea85ffa3d1c1b8a80aeb227a3728782acfa5ae5cb60"
+    "6fb538e2b875f5528828d349067f98e420ec003a2b292598dcb46bfab09bdba5"
 )
 WIDE256_LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_wide256_live_gate.v1"
 EXPECTED_TASK_IDS = ("astropy__astropy-12907",)
@@ -63,6 +66,11 @@ CANDIDATE_CONTRACTS = {
         "live_schema": "fr13.fixed32.cutlass_static_persistent_live_gate.v1",
         "k64_root_live_schema": STATIC_PERSISTENT_K64_ROOT_LIVE_SCHEMA,
         "diagnostic_selector": "static_persistent_stocktile_byte_ab",
+    },
+    "divisor_static_stocktile": {
+        "live_schema": "fr13.fixed32.cutlass_divisor_static_live_gate.v1",
+        "k64_root_live_schema": DIVISOR_STATIC_K64_ROOT_LIVE_SCHEMA,
+        "diagnostic_selector": "divisor_static_stocktile_byte_ab",
     },
 }
 QUALIFICATION_PROFILES: dict[str, dict[str, object]] = {
@@ -118,6 +126,7 @@ def _qualification_profile(
     if name == "k64_root" and candidate_selector not in {
         "streamk_force_wide256",
         "static_persistent_stocktile",
+        "divisor_static_stocktile",
     }:
         raise QualificationError(
             "B1 k64_root qualification is restricted to wide256 or "
@@ -309,6 +318,7 @@ def validate_live_result(
     if candidate_selector in {
         "streamk_force_wide256",
         "static_persistent_stocktile",
+        "divisor_static_stocktile",
     }:
         expected_fields["candidate_family"] = candidate["candidate_family"]
     if qualification_profile == "k64_root":
