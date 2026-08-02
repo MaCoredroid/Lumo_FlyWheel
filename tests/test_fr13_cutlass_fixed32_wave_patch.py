@@ -237,6 +237,7 @@ def test_m32_static_linear_changes_only_stock_scheduler_coordinates() -> None:
     assert "params.cluster_shape_m_ == 1" in scheduler
     assert "params.cluster_shape_n_ == 1" in scheduler
     assert "params.log_swizzle_size_ == 0" in scheduler
+    assert "static_cast<void>(direct_linear_geometry);" in scheduler
     assert (
         "params.blocks_per_problem_ == uint64_t(params.problem_tiles_m_)"
         in scheduler

@@ -355,6 +355,7 @@ class Fr13Fixed32M32LinearScheduler100
         params.blocks_per_problem_ == uint64_t(params.problem_tiles_m_);
     CUTLASS_ASSERT(direct_linear_geometry &&
                    "fixed32 M32 direct scheduler requires tiled NxL=1x1");
+    static_cast<void>(direct_linear_geometry);
 #else
     CUTLASS_ASSERT(false && "device-only fixed32 M32 scheduler constructor");
 #endif
