@@ -1,0 +1,16 @@
+Source commit: c94943b4887eca8bd1ef1857e69a8d11ce21ac9a
+
+Host-only checks:
+- pytest -q tests/test_fr13_fixed32_taw_real_task_arm.py tests/test_fr13_fixed32_task_boundary_snapshot.py tests/test_fr13_fixed32_committer_layer_batch.py
+  Result: 91 passed
+- pytest -q tests/test_fr13_fixed32_final_full_preseed.py tests/test_fr13_fixed32_conv_commit_wiring.py
+  Result: 65 passed
+- python3 -m py_compile on the changed kernel and tests: pass
+- Ruff on the changed kernel and tests: pass
+- git diff --check: pass
+
+Not run:
+- Triton/CUDA compilation or code generation
+- GPU or Docker execution
+- real SWE-Verified byte qualification or timing
+- synthetic performance probes

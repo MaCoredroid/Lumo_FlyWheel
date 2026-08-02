@@ -1,0 +1,5 @@
+path	old_source_form	new_source_form	ownership
+path_values	16 scalar loads plus 16 scalar stores with writer mask in every program	1 vector load plus 1 vector store inside uniform branch	pid_l=0 and pid_c=0 only
+accepted_length	1 scalar store with writer mask in every program	1 scalar store inside uniform branch	pid_l=0 and pid_c=0 only
+conv_state	unchanged	unchanged	all existing conv programs
+lease	publish after kernel enqueue	unchanged	host one-shot exact key
