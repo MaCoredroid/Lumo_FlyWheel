@@ -66,7 +66,10 @@ clean:
 
 ```bash
 cd /home/mark/lumoFlyWheel-sfwd-state-fusion-rowgroup8
-test "$(git rev-parse HEAD)" = 0a73d82ab9fbf6d5d5828e7b4f14b4689c4a7b64
+SOURCE_COMMIT=0a73d82ab9fbf6d5d5828e7b4f14b4689c4a7b64
+git merge-base --is-ancestor "$SOURCE_COMMIT" HEAD
+test "$(sha256sum scripts/fr13_run_b1_sfwd_state_fusion_gate.sh | awk '{print $1}')" = 57dfaa7c0d91c90bd4324db76cb70d8233c19503814b545b62aa92e49f1f0458
+test "$(sha256sum src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py | awk '{print $1}')" = 6b1087f091e27f22a1fe1f033538dcaf5aa626962d9b9d285774d0677ab49f67
 FA2=/home/mark/lumoFlyWheel-b1-wide256-k64-root-profile/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so
 test "$(sha256sum "$FA2" | awk '{print $1}')" = f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
