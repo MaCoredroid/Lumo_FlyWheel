@@ -1,0 +1,70 @@
+{
+  "schema": "fr13.fixed32.sfwd_packed_xgather.timing_route_repair_ready.v1",
+  "status": "SOURCE_ROUTE_REPAIRED_READY_FOR_COORDINATED_RERUN",
+  "candidate": "fixed32_sfwd_prior_reuse_packed_xgather_rowgroup32_c64_w16_v1",
+  "attempt": {
+    "classification": "candidate_pretask_readiness_failure",
+    "real_workload": "SWE-Verified",
+    "batch_size": 1,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "physical_rows_per_request": 32,
+    "stock_arm_completed": true,
+    "stock_task_count": 1,
+    "candidate_task_count": 0,
+    "candidate_kernel_executed": false,
+    "candidate_measurement_available": false,
+    "paired_timing_complete": false,
+    "acceptance_eligible": false
+  },
+  "stock_diagnostic": {
+    "step_wall_ms": 241.70921510056287,
+    "derived_fullstep_wall_tps": 24.366982898548276,
+    "accepted_drafts_per_event": 4.889724310776942,
+    "committed_tokens_per_event": 5.889724310776942
+  },
+  "failure": {
+    "phase": "candidate_model_readiness",
+    "class": "source_route_api_drift",
+    "kernel_fault": false,
+    "task_fault": false,
+    "summary": "The prior-reuse production route supplied the removed source descriptor keyword instead of the required fixed-tree parent keyword."
+  },
+  "repair": {
+    "commit": "3c6a25e9674ca041ec8430889211c596e40054ef",
+    "prior_reuse_callsites": 2,
+    "callsites_match_launcher_signature": true,
+    "tree_parent_keyword_present_on_all_callsites": true,
+    "source_flat_keyword_absent_from_prior_reuse_callsites": true,
+    "state_fusion_source_flat_contract_preserved": true
+  },
+  "verification": {
+    "focused_tests": "21 passed",
+    "bash_syntax": true,
+    "python_byte_compile": true,
+    "git_diff_check": true,
+    "gpu_or_docker_used_for_repair": false,
+    "rerun_launched": false
+  },
+  "lifecycle": {
+    "failed_route_exit_census_all_zero": true,
+    "docker_containers": 0,
+    "gpu_compute_processes": 0,
+    "gpu_memory_used_mib": 0,
+    "runtime_manifest_launch_end_byte_equal": true,
+    "external_manifest_launch_end_byte_equal": true,
+    "candidate_source_manifest_launch_end_byte_equal": true,
+    "failed_route_exit_census_sha256": "25ba44fece7b8098f5d989e01f3ec94b1a6b45a02a116803147f4024585f96a1",
+    "runtime_manifest_sha256": "5270a7e7116f1c008b5d79ed3dc4cd84a474b0bc5c5201ac89d7e0b4670f8939",
+    "external_manifest_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "candidate_source_manifest_sha256": "62208c1f439296c7864c95408d8ad0e3f4b491342a23725e5477dbbf1fd0f7b7"
+  },
+  "evidence_boundary": {
+    "raw_artifacts_included": false,
+    "raw_sidecar_paths_included": false,
+    "task_identifiers_included": false,
+    "task_model_request_response_patch_content_included": false,
+    "environment_values_included": false,
+    "process_or_container_identifiers_included": false
+  }
+}
