@@ -200,6 +200,7 @@ void fr13_run_mha_fwd_fixed32_qrow32(
     static_assert(TreeKernelTraits::kGmemRowsPerThread == 8);
     static_assert(1024 % TreeKernelTraits::kGmemRowsPerThread == 0);
     constexpr size_t smem_size = TreeKernelTraits::kSmemSize;
+    static_assert(smem_size == 80 * 1024);
     const int num_m_block =
         (params.seqlen_q + TreeKernelTraits::kBlockM - 1)
         / TreeKernelTraits::kBlockM;

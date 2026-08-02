@@ -242,6 +242,7 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     assert "TreeKernelTraits::kNThreads == 64" in candidate
     assert "TreeKernelTraits::kGmemThreadsPerRow == 8" in candidate
     assert "TreeKernelTraits::kGmemRowsPerThread == 8" in candidate
+    assert "static_assert(smem_size == 80 * 1024)" in candidate
     assert "dim3 grid(num_m_block, params.b, params.h)" in candidate
     assert "false,  // Split" in candidate
     assert "flash_fwd_splitkv_combine_kernel" not in candidate
