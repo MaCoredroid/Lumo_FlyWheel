@@ -23,11 +23,16 @@ except ModuleNotFoundError:
 
 from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
     CHANNELS,
+    CONV_WIDTH,
     FIXED32_PARENT,
+    FIXED32_ROWS,
     SIGNED_INT32_MAX,
+    SOURCE_ROWS,
+    X_ROW_STRIDE,
     fixed32_derived_parent_q,
     fixed32_descriptorless_sources,
     fixed32_i32_address_contract,
+    fixed32_specialized_layout_contract,
 )
 
 
@@ -122,26 +127,126 @@ def test_descriptor_pointer_is_absent_from_kernel_contract() -> None:
 
 
 def test_b1_b4_live_padded_offsets_fit_signed_int32() -> None:
-    live_x_stride_row = 16384
     for batch in (1, 4):
         maxima = fixed32_i32_address_contract(
             batch,
-            x_stride_row=live_x_stride_row,
+            x_stride_row=X_ROW_STRIDE,
         )
         assert maxima == {
-            "x": (batch * 32 - 1) * live_x_stride_row + CHANNELS - 1,
+            "x": (batch * 32 - 1) * X_ROW_STRIDE + CHANNELS - 1,
             "out": batch * 32 * CHANNELS - 1,
             "source_stage": batch * 36 * CHANNELS - 1,
         }
         assert max(maxima.values()) <= SIGNED_INT32_MAX
 
 
-def test_descriptorless_contract_rejects_unsafe_stride() -> None:
-    unsafe_stride = SIGNED_INT32_MAX // (4 * 32 - 1) + 1
-
+def test_descriptorless_contract_rejects_wrong_x_stride() -> None:
     try:
-        fixed32_i32_address_contract(4, x_stride_row=unsafe_stride)
+        fixed32_i32_address_contract(4, x_stride_row=CHANNELS)
     except ValueError as error:
-        assert "overflow" in str(error)
+        assert "padded" in str(error)
     else:
-        raise AssertionError("unsafe int32 row stride was accepted")
+        raise AssertionError("wrong x row stride was accepted")
+
+
+def _specialized_layout(batch: int) -> dict[str, tuple[int, ...]]:
+    return {
+        "x_shape": (batch * FIXED32_ROWS, CHANNELS),
+        "x_stride": (X_ROW_STRIDE, 1),
+        "out_shape": (batch * FIXED32_ROWS, CHANNELS),
+        "out_stride": (CHANNELS, 1),
+        "source_stage_shape": (batch * SOURCE_ROWS, CHANNELS),
+        "source_stage_stride": (CHANNELS, 1),
+        "conv_weights_shape": (CHANNELS, CONV_WIDTH),
+        "conv_weights_stride": (CONV_WIDTH, 1),
+    }
+
+
+def test_specialized_layout_contract_accepts_exact_b1_b4() -> None:
+    for batch in (1, 4):
+        layouts = _specialized_layout(batch)
+        contract = fixed32_specialized_layout_contract(batch, **layouts)
+
+        assert contract["batch_size"] == batch
+        assert contract["layouts"] == layouts
+        assert contract["maximum_offsets"]["x"] == (
+            (batch * FIXED32_ROWS - 1) * X_ROW_STRIDE + CHANNELS - 1
+        )
+
+
+def test_specialized_layout_contract_rejects_each_layout_drift() -> None:
+    exact = _specialized_layout(4)
+    drifted = {
+        "x_shape": (4 * FIXED32_ROWS - 1, CHANNELS),
+        "x_stride": (CHANNELS, 1),
+        "out_shape": (4 * FIXED32_ROWS - 1, CHANNELS),
+        "out_stride": (CHANNELS + 1, 1),
+        "source_stage_shape": (4 * SOURCE_ROWS - 1, CHANNELS),
+        "source_stage_stride": (CHANNELS + 1, 1),
+        "conv_weights_shape": (CHANNELS, CONV_WIDTH - 1),
+        "conv_weights_stride": (1, CHANNELS),
+    }
+    for name, value in drifted.items():
+        observed = dict(exact)
+        observed[name] = value
+        try:
+            fixed32_specialized_layout_contract(4, **observed)
+        except ValueError as error:
+            assert name in str(error)
+        else:
+            raise AssertionError(f"specialized layout drift accepted: {name}")
+
+
+def test_specialized_batch_bases_match_flat_element_offsets() -> None:
+    for batch in range(4):
+        for node in (0, 1, FIXED32_ROWS - 1):
+            for channel in (0, 63, CHANNELS - 1):
+                x_flat = (batch * FIXED32_ROWS + node) * X_ROW_STRIDE + channel
+                x_batched = (
+                    batch * FIXED32_ROWS * X_ROW_STRIDE
+                    + node * X_ROW_STRIDE
+                    + channel
+                )
+                out_flat = (batch * FIXED32_ROWS + node) * CHANNELS + channel
+                out_batched = (
+                    batch * FIXED32_ROWS * CHANNELS + node * CHANNELS + channel
+                )
+                assert x_batched == x_flat
+                assert out_batched == out_flat
+
+        for source_row in (0, 1, SOURCE_ROWS - 1):
+            source_flat = (batch * SOURCE_ROWS + source_row) * CHANNELS
+            source_offset = (
+                batch * SOURCE_ROWS * CHANNELS + source_row * CHANNELS
+            )
+            assert source_offset == source_flat
+
+
+def test_kernel_retains_descriptorless_and_int64_state_contracts() -> None:
+    module_path = Path(
+        sys.modules[
+            "lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless"
+        ].__file__
+    )
+    source = module_path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    kernel = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_fixed32_sfwd_prior_reuse_descriptorless_kernel"
+    )
+    fragment = ast.get_source_segment(source, kernel)
+    assert fragment is not None
+    argument_names = tuple(argument.arg for argument in kernel.args.args)
+
+    assert "source_descriptor" not in argument_names
+    assert "x_stride_row" not in argument_names
+    assert "weight_stride_c" not in argument_names
+    assert "weight_stride_w" not in argument_names
+    assert "X_STRIDE_ROW" in argument_names
+    assert "x_batch = x + pid_b * N * X_STRIDE_ROW" in fragment
+    assert "out_batch = out + pid_b * N * C" in fragment
+    assert "stage_offset = pid_b * SOURCE_ROWS * C" in fragment
+    assert ").to(tl.int64)" in fragment
+    assert "bank_row * conv_stride_row" in fragment
