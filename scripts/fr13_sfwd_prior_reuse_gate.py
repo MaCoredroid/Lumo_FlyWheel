@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 
-CANDIDATE = "fixed32_sfwd_channel_serial_r32_b1c128w4_bxc256w8_u32x2_s20_v1"
+CANDIDATE = "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_u32x2_s20_lane2_v1"
 SOURCE_SCHEMA = "fr13.fixed32.sfwd_prior_reuse.source_manifest.v1"
 REFERENCE_GDN_SOURCE_SHA256 = (
     "6c0f0ad607f15ea2727c2a9b244b1fe1c5ddb88268d70264c08f10470a5d2098"
@@ -226,7 +226,7 @@ def validate_gate(args: argparse.Namespace) -> None:
         "physical_rows_per_request": 32,
         "conv_rows_per_program": 32,
         "conv_block_c": 128,
-        "conv_num_warps": 4,
+        "conv_num_warps": 2,
         "topology_host_validation": "exact_parent_each_launch",
         "source_descriptor_device_validation": False,
         "source_descriptor_launcher_argument": False,
@@ -302,7 +302,7 @@ def validate_gate(args: argparse.Namespace) -> None:
         "physical_rows_per_request": 32,
         "conv_rows_per_program": 32,
         "conv_block_c": 128,
-        "conv_num_warps": 4,
+        "conv_num_warps": 2,
         "topology_host_validation": "exact_parent_each_launch",
         "source_descriptor_device_validation": False,
         "source_descriptor_launcher_argument": False,
@@ -471,7 +471,7 @@ def validate_gate(args: argparse.Namespace) -> None:
             "physical_rows_per_request": 32,
             "conv_rows_per_program": 32,
             "conv_block_c": 128,
-            "conv_num_warps": 4,
+            "conv_num_warps": 2,
             "topology_host_validation": "exact_parent_each_launch",
             "source_descriptor_device_validation": False,
             "source_descriptor_launcher_argument": False,

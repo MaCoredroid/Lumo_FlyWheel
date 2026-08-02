@@ -94,14 +94,15 @@ def test_contract_closes_adaptive_row32_geometry_for_b1_b4() -> None:
         assert contract["physical_rows_per_request"] == 32
         assert contract["conv_rows_per_program"] == 32
         assert contract["conv_row_groups_per_request"] == 1
-        expected_geometry = (128, 4) if batch == 1 else (256, 8)
+        expected_geometry = (128, 2) if batch == 1 else (256, 4)
         assert contract["conv_block_c"] == expected_geometry[0]
         assert contract["conv_num_warps"] == expected_geometry[1]
         assert contract["topology_host_validation"] == "exact_parent_each_launch"
         assert contract["source_descriptor_device_validation"] is False
         assert contract["source_descriptor_launcher_argument"] is False
         assert contract["candidate"] == (
-            "fixed32_sfwd_channel_serial_r32_b1c128w4_bxc256w8_u32x2_s20_v1"
+            "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_"
+            "u32x2_s20_lane2_v1"
         )
     for geometry in ((0, 32, 4, 34), (1, 31, 4, 34), (1, 32, 3, 34)):
         with pytest.raises(ValueError):
@@ -345,7 +346,7 @@ def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
     assert "source_descriptor_in_kernel=false" in runner
     assert "current_x_global_loads_per_element=1" in runner
     assert "conv_block_c=128" in runner
-    assert "conv_num_warps=4" in runner
+    assert "conv_num_warps=2" in runner
     assert "topology_host_validation=exact_parent_each_launch" in runner
     assert "source_descriptor_device_validation=false" in runner
     assert "source_descriptor_launcher_argument=false" in runner
