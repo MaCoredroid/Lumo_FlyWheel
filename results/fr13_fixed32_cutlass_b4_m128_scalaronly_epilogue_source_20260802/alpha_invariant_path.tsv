@@ -1,0 +1,10 @@
+stage	value_or_state	writeability	pinned_source_path
+dispatch_epilogue_arguments	empty callback Arguments	caller has no alpha field	vLLM scaled_mm_blockwise_sm120_fp8_dispatch.cuh
+cute_tuple_default	all callback Arguments leaves default-constructed	candidate scalar leaf Arguments is empty	cute/container/tuple.hpp
+collective_conversion	calls FusionCallbacks::to_underlying_arguments	no candidate-specific override path	cutlass/epilogue/collective/sm90_epilogue_tma_warpspecialized.hpp
+custom_leaf_conversion	returns Params{Element(1)} unconditionally	caller input ignored	generated vLLM dispatch
+kernel_params	one FP32 scalar with value one	runtime kernel parameter	cutlass/epilogue/fusion/sm90_visitor_tma_warpspecialized.hpp
+visitor_constructor	copies params.scalar once	no pointer or stride state	generated vLLM dispatch
+producer_callback	no scalar update	returns empty callbacks	generated vLLM dispatch
+consumer_callback	fills fragment from stored scalar	no scalar update	generated vLLM dispatch
+compute	FP32 cutlass::multiplies then output conversion	operation retained	cutlass/epilogue/fusion/sm90_visitor_compute_tma_warpspecialized.hpp

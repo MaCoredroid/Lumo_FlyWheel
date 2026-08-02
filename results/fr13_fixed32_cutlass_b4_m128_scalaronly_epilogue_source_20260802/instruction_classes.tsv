@@ -1,0 +1,10 @@
+scope	class	count	note
+existing_prelinear_static_bf16	total_instructions	1440	reduced census from existing local binary
+existing_prelinear_static_bf16	registers	168	zero stack/local/spills
+existing_prelinear_static_bf16	device_call	0	no CALL instruction
+existing_prelinear_static_bf16	fmul_total	72	all FMUL instructions
+existing_prelinear_static_bf16	output_scale_fmul	64	retained by candidate
+existing_prelinear_static_bf16	bf16_output_pack	32	retained output conversion
+existing_prelinear_static_bf16	alpha_resolution_regions	2	pointer/fallback regions observed locally; raw SASS omitted
+scalar_only_candidate	exact_instruction_delta	NA	compile and disassembly pending
+scalar_only_candidate	exact_register_delta	NA	compile and resource audit pending

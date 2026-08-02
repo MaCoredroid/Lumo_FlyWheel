@@ -1,0 +1,14 @@
+26 focused source tests passed in 0.08s
+Python bytecode compilation: pass
+git diff --check: pass
+Pinned vLLM/CUTLASS source apply: pass
+Pinned source second apply: already patched
+Generated dispatch SHA256: 319bda31b05222e17eedefa65dbe328e87a9afd335301a75cf4bbb150911aedc
+Alpha Arguments -> Params -> visitor path review: pass
+Candidate caller-supplied alpha field: absent
+Candidate scalar pointer/stride/mutator path: absent
+Runtime FP32 multiply and output conversion expression: retained
+NVCC/C++ compile: not run while B1 wide256 build is live
+GPU or container execution: not run
+Real SWE-Verified byte gate: not run
+Timing: not run

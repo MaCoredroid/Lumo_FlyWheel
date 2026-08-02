@@ -1,0 +1,12 @@
+metric	stock_sourceless_linear_combination	m128_scalar_only_candidate	delta	note
+visitor_operations	6	3	-3	type-level callback tree nodes
+compute_operations	2	1	-1	outer void-C combination removed; FP32 multiply retained
+scalar_broadcast_operations	2	1	-1	generic alpha leaf replaced; beta leaf removed
+source_fetch_operations	1	0	-1	ElementC is void in both routes
+accumulator_fetch_operations	1	1	0	unchanged
+host_scalar_value_fields	2	0	-2	candidate Arguments is empty
+optional_scalar_pointer_fields	2	0	-2	alpha_ptr and beta_ptr removed
+dynamic_batch_stride_fields	2	0	-2	dAlpha and dBeta removed; L remains one
+device_scalar_value_fields	2	1	-1	candidate Params contains only fixed runtime alpha
+runtime_fp32_output_multiply	1	1	0	Sm90Compute cutlass::multiplies retained
+round_to_nearest_output_conversion	1	1	0	multiply then output conversion retained
