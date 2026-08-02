@@ -160,7 +160,7 @@ if any(record.get("production_eligible") is not False for record in records):
 expected_pass = {
     "schema": "fr13.fixed32.sfwd_state_fusion.live_pass.v1",
     "status": "byte_pass_source_only",
-    "candidate": "fixed32_sfwd_state_fusion_rowgroup4_v2",
+    "candidate": "fixed32_sfwd_state_fusion_rowgroup8_v3",
     "task_marker": marker,
     "batch": 1,
     "layer_count": 48,
@@ -210,7 +210,7 @@ payload = {
     "timing_eligible": False,
     "floor_acceptance_eligible": False,
     "production_enabled": False,
-    "candidate": "fixed32_sfwd_state_fusion_rowgroup4_v2",
+    "candidate": "fixed32_sfwd_state_fusion_rowgroup8_v3",
     "batch_size": 1,
     "physical_rows_per_request": 32,
     "candidate_conv_launches_per_layer": 1,
