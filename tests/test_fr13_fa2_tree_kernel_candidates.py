@@ -199,14 +199,86 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
         assert candidate_warp_row == stock_warp_row
 
 
+def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    translation_unit = tmp_path / "flash_fwd_split_hdim256_bf16_sm80.cu"
+    stock = "\n".join(
+        (
+            '#include "namespace_config.h"',
+            '#include "flash_fwd_launch_template.h"',
+            "namespace FLASH_NAMESPACE {",
+            module.STOCK_FIXED32_QUERY_INSTANTIATION,
+            "} // namespace FLASH_NAMESPACE",
+        )
+    )
+    translation_unit.write_text(stock)
+
+    assert not module._patch_fixed32_query_tile32_translation_unit(
+        translation_unit
+    )
+    assert module._patch_fixed32_query_tile32_translation_unit(
+        translation_unit,
+        fixed32_query_tile32=True,
+    )
+    qrow_translation_unit = translation_unit.with_name(
+        "flash_fwd_fr13_qrow32_hdim256_bf16_sm80.cu"
+    )
+    candidate = qrow_translation_unit.read_text()
+    assert translation_unit.read_text() == stock
+    assert candidate == module.FIXED32_QUERY_TILE32_TRANSLATION_UNIT
+    assert module.STOCK_FIXED32_QUERY_INSTANTIATION not in candidate
+    assert not module._patch_fixed32_query_tile32_translation_unit(
+        translation_unit,
+        fixed32_query_tile32=True,
+    )
+
+    assert '__attribute__((visibility("hidden")))' in candidate
+    assert "fr13_run_mha_fwd_fixed32_qrow32" in candidate
+    assert "kTreeBlockM = 32" in candidate
+    assert "kTreeBlockN = 64" in candidate
+    assert "kTreeWarps = 2" in candidate
+    assert "TreeKernelTraits::kNThreads == 64" in candidate
+    assert "TreeKernelTraits::kGmemThreadsPerRow == 8" in candidate
+    assert "TreeKernelTraits::kGmemRowsPerThread == 8" in candidate
+    assert "dim3 grid(num_m_block, params.b, params.h)" in candidate
+    assert "false,  // Split" in candidate
+    assert "flash_fwd_splitkv_combine_kernel" not in candidate
+    assert "params.num_splits = " not in candidate
+    assert "qrow32 source candidate" in candidate
+    assert "production selector" in candidate
+
+    # Stock BM64 uses warps 0 and 1 for physical rows 0..31. BM32 preserves
+    # each row's warp and warp-local coordinate while dropping warps 2 and 3.
+    for row in range(32):
+        stock_block, stock_warp, stock_warp_row = _row_mapping(
+            row,
+            block_m=64,
+            warps=4,
+        )
+        candidate_block, candidate_warp, candidate_warp_row = _row_mapping(
+            row,
+            block_m=32,
+            warps=2,
+        )
+        assert stock_block == candidate_block == 0
+        assert candidate_warp == stock_warp
+        assert candidate_warp_row == stock_warp_row
+
+
 def test_source_build_candidates_are_independent_and_default_off() -> None:
     text = Path("scripts/fr13_patch_fa2_tree_bias.py").read_text()
 
     assert 'parser.add_argument(\n        "--tree-bias-tile-earlyout",' in text
     assert 'parser.add_argument(\n        "--fixed32-query-tile16",' in text
+    assert 'parser.add_argument(\n        "--fixed32-query-tile32",' in text
     assert 'parser.add_argument(\n        "--fixed32-query-tile16-live-ab",' in text
     assert "tree_bias_tile_earlyout: bool = False" in text
     assert "fixed32_query_tile16: bool = False" in text
+    assert "fixed32_query_tile32: bool = False" in text
+    qrow32 = text[text.index("FIXED32_QUERY_TILE32_TRANSLATION_UNIT") :]
+    assert "No production selector references" in qrow32
     assert "tree_splitkv" not in text
     assert "tree-splitkv" not in text
     assert "FR13_FA2_TREE_SPLITKV" not in text

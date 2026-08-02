@@ -17,6 +17,12 @@ the stock geometry, which already supplies 96 CTAs per layer. The candidate is
 a hidden launcher in one dedicated production translation unit; the stock
 explicit instantiation, shared launcher, and every unrelated CUDA object
 remain untouched.
+
+The source-only ``--fixed32-query-tile32`` build adds the corresponding B4
+specialization: one 32-row, two-warp CTA per batch/head. It has the same
+96-CTA layer grid and complete ordered K loop as stock BM64 while avoiding the
+32 query rows outside each physical32 batch slot. No runtime selector is
+installed until the private binary passes resource and real-byte gates.
 """
 
 from __future__ import annotations
@@ -137,6 +143,61 @@ void fr13_run_mha_fwd_fixed32_qrow16(
     // The public FA2 API requires paged-KV blocks divisible by 16;
     // production fixes the physical page at 1024 rows.
     static_assert(TreeKernelTraits::kGmemRowsPerThread == 16);
+    static_assert(1024 % TreeKernelTraits::kGmemRowsPerThread == 0);
+    constexpr size_t smem_size = TreeKernelTraits::kSmemSize;
+    const int num_m_block =
+        (params.seqlen_q + TreeKernelTraits::kBlockM - 1)
+        / TreeKernelTraits::kBlockM;
+    dim3 grid(num_m_block, params.b, params.h);
+    auto kernel = &flash_fwd_splitkv_kernel<
+        TreeKernelTraits,
+        false,  // Is_causal
+        false,  // Is_local
+        false,  // Has_alibi
+        false,  // Is_even_MN: paged varlen Q has cu_seqlens_q
+        true,   // Is_even_K: d == kHeadDim == 256
+        false,  // Is_softcap
+        false,  // Split
+        false   // Append_KV
+    >;
+    if (smem_size >= 48 * 1024) {
+        C10_CUDA_CHECK(cudaFuncSetAttribute(
+            kernel,
+            cudaFuncAttributeMaxDynamicSharedMemorySize,
+            smem_size));
+    }
+    kernel<<<grid, TreeKernelTraits::kNThreads, smem_size, stream>>>(params);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+} // namespace FLASH_NAMESPACE
+'''
+
+
+FIXED32_QUERY_TILE32_TRANSLATION_UNIT = r'''// FR13 fixed32 B4 qrow32 source candidate.
+#include "namespace_config.h"
+#include "flash_fwd_launch_template.h"
+
+namespace FLASH_NAMESPACE {
+
+// Source/resource-gate entry point only. No production selector references
+// this hidden function until the exact4 live paged raw-byte gate passes.
+__attribute__((visibility("hidden")))
+void fr13_run_mha_fwd_fixed32_qrow32(
+        Flash_fwd_params &params, cudaStream_t stream) {
+    // One physical32 query CTA per batch/head: B4 * H24 = 96 CTAs/layer.
+    // This is query tiling, not split-K. Every real row retains one warp's
+    // complete ordered K-block loop and no combine kernel is launched.
+    constexpr static int kTreeBlockM = 32;
+    constexpr static int kTreeBlockN = 64;
+    constexpr static int kTreeWarps = 2;
+    static_assert(kTreeBlockM == 16 * kTreeWarps);
+    using TreeKernelTraits = Flash_fwd_kernel_traits<
+        256, kTreeBlockM, kTreeBlockN, kTreeWarps,
+        false, false, cutlass::bfloat16_t>;
+    static_assert(TreeKernelTraits::kNThreads == 64);
+    static_assert(TreeKernelTraits::kGmemThreadsPerRow == 8);
+    static_assert(TreeKernelTraits::kGmemRowsPerThread == 8);
     static_assert(1024 % TreeKernelTraits::kGmemRowsPerThread == 0);
     constexpr size_t smem_size = TreeKernelTraits::kSmemSize;
     const int num_m_block =
@@ -356,6 +417,27 @@ def _patch_fixed32_query_translation_unit(
             raise RuntimeError("existing qrow16 translation unit drifted")
         return False
     qrow_path.write_text(FIXED32_QUERY_TILE16_TRANSLATION_UNIT)
+    return True
+
+
+def _patch_fixed32_query_tile32_translation_unit(
+    path: Path,
+    *,
+    fixed32_query_tile32: bool = False,
+) -> bool:
+    if not fixed32_query_tile32:
+        return False
+    stock_text = path.read_text()
+    if STOCK_FIXED32_QUERY_INSTANTIATION not in stock_text:
+        raise RuntimeError("stock fixed32 FA2 explicit instantiation drifted")
+    if "FR13_FA2_FIXED32_QUERY_TILE32" in stock_text:
+        raise RuntimeError("qrow32 must not share the stock instantiation TU")
+    qrow_path = path.with_name("flash_fwd_fr13_qrow32_hdim256_bf16_sm80.cu")
+    if qrow_path.exists():
+        if qrow_path.read_text() != FIXED32_QUERY_TILE32_TRANSLATION_UNIT:
+            raise RuntimeError("existing qrow32 translation unit drifted")
+        return False
+    qrow_path.write_text(FIXED32_QUERY_TILE32_TRANSLATION_UNIT)
     return True
 
 
@@ -587,6 +669,7 @@ def patch_fa2_source(
     *,
     tree_bias_tile_earlyout: bool = False,
     fixed32_query_tile16: bool = False,
+    fixed32_query_tile32: bool = False,
 ) -> dict[str, bool]:
     files = {
         "flash.h": fa2_src / "csrc/flash_attn/src/flash.h",
@@ -608,6 +691,10 @@ def patch_fa2_source(
         "flash_fwd_fr13_qrow16_hdim256_bf16_sm80.cu": _patch_fixed32_query_translation_unit(
             files["flash_fwd_split_hdim256_bf16_sm80.cu"],
             fixed32_query_tile16=fixed32_query_tile16,
+        ),
+        "flash_fwd_fr13_qrow32_hdim256_bf16_sm80.cu": _patch_fixed32_query_tile32_translation_unit(
+            files["flash_fwd_split_hdim256_bf16_sm80.cu"],
+            fixed32_query_tile32=fixed32_query_tile32,
         ),
         "flash_api.cpp": _patch_flash_api_cpp(
             files["flash_api.cpp"],
@@ -2004,6 +2091,11 @@ def main() -> int:
         help="build the fixed32 B1 tree-only FA2 16-row query-tile candidate",
     )
     parser.add_argument(
+        "--fixed32-query-tile32",
+        action="store_true",
+        help="build the source-only fixed32 B4 FA2 32-row query-tile candidate",
+    )
+    parser.add_argument(
         "--fixed32-query-tile16-live-ab",
         action="store_true",
         help="install the one-shot live paged B1 stock/qrow16 byte gate",
@@ -2028,6 +2120,7 @@ def main() -> int:
     payload: dict[str, object] = {
         "tree_bias_tile_earlyout": args.tree_bias_tile_earlyout,
         "fixed32_query_tile16": args.fixed32_query_tile16,
+        "fixed32_query_tile32": args.fixed32_query_tile32,
         "fixed32_query_tile16_live_ab": args.fixed32_query_tile16_live_ab,
         "fixed32_query_tile16_production": args.fixed32_query_tile16_production,
         "dfwd_unified_bm8_production": args.dfwd_unified_bm8_production,
@@ -2039,6 +2132,7 @@ def main() -> int:
             fa2_src,
             tree_bias_tile_earlyout=args.tree_bias_tile_earlyout,
             fixed32_query_tile16=args.fixed32_query_tile16,
+            fixed32_query_tile32=args.fixed32_query_tile32,
         )
     if not args.skip_python:
         payload["python"] = patch_installed_vllm(
