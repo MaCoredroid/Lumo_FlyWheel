@@ -9824,8 +9824,10 @@ def _fr13_conv_subop_mab(
                                 mixed_qkv_spec.device,
                             )
                         )
-                        _fr13_sfwd_candidate_out = torch.empty_like(
-                            mixed_qkv_spec
+                        _fr13_sfwd_candidate_out = torch.empty(
+                            tuple(mixed_qkv_spec.shape),
+                            dtype=mixed_qkv_spec.dtype,
+                            device=mixed_qkv_spec.device,
                         )
                         _fr13_sfwd_candidate_stage = torch.empty_like(
                             _fr13_sfwd_reference_stage[

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One real SWE-Verified K64/root1 B1 byte gate for the C64 prior-reuse kernel.
+# One real SWE-Verified K64/root1 B1 byte gate for descriptorless fixed-base C64.
 # The candidate is shadow-only and the incumbent tensors remain served.
 set -euo pipefail
 
@@ -130,6 +130,11 @@ printf '%s\n' \
   'physical_rows_per_request=32' \
   'conv_rows_per_program=32' \
   'conv_block_c=64' \
+  'source_descriptor_in_kernel=false' \
+  'x_stride=16384,1' \
+  'out_stride=10240,1' \
+  'source_stage_stride=10240,1' \
+  'conv_weights_stride=4,1' \
   "source_commit=$SOURCE_COMMIT" \
   "source_manifest_sha256=$MANIFEST_SHA256" \
   >> "$RUNROOT_ABS/launcher_meta.txt"

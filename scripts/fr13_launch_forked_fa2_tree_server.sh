@@ -1529,6 +1529,7 @@ fi
 # real SWE-Verified request is admitted. The EngineCore worker sees these /logs
 # sidecars even when its curated environment drops FR13_*.
 _fr13_sfwd_state_fusion_byte_ab="${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}"
+_fr13_sfwd_state_fusion_timing="${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB:-0}"
 _fr13_sfwd_state_fusion_production="${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}"
 _fr13_sfwd_prior_reuse="${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}"
 _fr13_batch_gdn_byte_ab="${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}"
@@ -1540,6 +1541,10 @@ _fr13_batch_gdn_bv8_timing="${FR13_FIXED32_BATCH_GDN_BV8_TIMING:-0}"
 case "$_fr13_sfwd_state_fusion_byte_ab" in
   0|1) ;;
   *) echo "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
+esac
+case "$_fr13_sfwd_state_fusion_timing" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB must be 0 or 1" >&2; exit 2 ;;
 esac
 case "$_fr13_sfwd_state_fusion_production" in
   0|1) ;;

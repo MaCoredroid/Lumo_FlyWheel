@@ -13,6 +13,12 @@ import torch
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "src" / "lumo_flywheel_serving" / "fr13_sfwd_prior_reuse.py"
+KERNEL_MODULE_PATH = (
+    ROOT
+    / "src"
+    / "lumo_flywheel_serving"
+    / "fr13_sfwd_prior_reuse_descriptorless.py"
+)
 OLD_KERNEL_PATH = ROOT / "src" / "lumo_flywheel_serving" / "fr10_gdn_tree_kernel.py"
 PATCHER_PATH = ROOT / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
 LAUNCHER_PATH = ROOT / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
@@ -42,8 +48,8 @@ except ModuleNotFoundError:
 from lumo_flywheel_serving import fr13_sfwd_prior_reuse as candidate  # noqa: E402
 
 
-def _function_source(name: str) -> str:
-    source = MODULE_PATH.read_text(encoding="utf-8")
+def _function_source(name: str, *, path: Path = MODULE_PATH) -> str:
+    source = path.read_text(encoding="utf-8")
     tree = ast.parse(source)
     node = next(
         item
@@ -57,6 +63,7 @@ def _function_source(name: str) -> str:
 
 def _source_manifest(tmp_path: Path, commit: str) -> tuple[Path, str]:
     source_sha = hashlib.sha256(MODULE_PATH.read_bytes()).hexdigest()
+    kernel_source_sha = hashlib.sha256(KERNEL_MODULE_PATH.read_bytes()).hexdigest()
     payload = {
         "schema": candidate.SOURCE_MANIFEST_SCHEMA,
         "candidate": candidate.CANDIDATE,
@@ -65,7 +72,11 @@ def _source_manifest(tmp_path: Path, commit: str) -> tuple[Path, str]:
             candidate.SOURCE_RELATIVE_PATH: {
                 "bytes": MODULE_PATH.stat().st_size,
                 "sha256": source_sha,
-            }
+            },
+            candidate.KERNEL_SOURCE_RELATIVE_PATH: {
+                "bytes": KERNEL_MODULE_PATH.stat().st_size,
+                "sha256": kernel_source_sha,
+            },
         },
     }
     path = tmp_path / "source_manifest.json"
@@ -151,6 +162,9 @@ def test_byte_gate_binds_manifest_and_compares_both_surfaces(
     )
     assert record["zero_diff"] is True
     assert record["source_manifest_sha256"] == manifest_sha
+    assert record["candidate_kernel_source_sha256"] == hashlib.sha256(
+        KERNEL_MODULE_PATH.read_bytes()
+    ).hexdigest()
     assert [item["name"] for item in record["comparisons"]] == [
         "conv_out",
         "commit_source_stage",
@@ -189,6 +203,9 @@ def test_pass_requires_k64_root1_and_carries_source_binding(
         "source_commit": "2" * 40,
         "source_manifest_sha256": "3" * 64,
         "candidate_source_sha256": hashlib.sha256(MODULE_PATH.read_bytes()).hexdigest(),
+        "candidate_kernel_source_sha256": hashlib.sha256(
+            KERNEL_MODULE_PATH.read_bytes()
+        ).hexdigest(),
     }
     candidate._pass_emit(
         task_marker="swe_verified:astropy__astropy-12907",
@@ -219,16 +236,28 @@ def test_pass_requires_k64_root1_and_carries_source_binding(
         )
 
 
-def test_kernel_reuses_prior_vectors_and_specializes_final_tap() -> None:
-    kernel = _function_source("_fr13_fixed32_sfwd_prior_reuse_kernel")
+def test_launcher_uses_descriptorless_fixed_base_kernel_and_exact_layout() -> None:
+    kernel = _function_source(
+        "_fr13_fixed32_sfwd_prior_reuse_descriptorless_kernel",
+        path=KERNEL_MODULE_PATH,
+    )
     launcher = _function_source("launch_fixed32_sfwd_prior_reuse")
     assert kernel.index("prior_0 = tl.load(") < kernel.index(
         "for tap in tl.static_range(0, WIDTH - 1):"
     )
     assert "tl.where(source_row == 1, prior_1, prior_2)" in kernel
     assert "current_x * current_weight" in kernel
-    assert "source_stage + (stage_base + 2) * C + offs_c" in kernel
+    assert "source_stage + stage_offset + 2 * C + offs_c" in kernel
+    assert "source_flat" not in kernel
+    assert "x_stride_row" not in kernel
+    assert "weight_stride_c" not in kernel
+    assert "weight_stride_w" not in kernel
+    assert "x_batch = x + pid_b * N * X_STRIDE_ROW" in kernel
+    assert "weight_channels = conv_weights + offs_c * WIDTH" in kernel
     assert "grid = (batch, triton.cdiv(channels, BLOCK_C))" in launcher
+    assert "fixed32_specialized_layout_contract(" in launcher
+    assert "_fr13_fixed32_sfwd_prior_reuse_descriptorless_kernel[grid](" in launcher
+    assert "X_STRIDE_ROW=X_ROW_STRIDE" in launcher
     assert "ROWS_PER_PROGRAM=ROWS_PER_PROGRAM" in launcher
     assert "BLOCK_C=BLOCK_C" in launcher
     assert "num_warps=8" in launcher
@@ -249,15 +278,25 @@ def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
     assert "SFWD prior-reuse must be the only SFWD candidate" in launcher
     assert "fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled" in launcher
     assert "FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256" in launcher
+    assert (
+        '_fr13_sfwd_state_fusion_timing="${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB:-0}"'
+        in launcher
+    )
     assert "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0" in generic
     assert "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=0" in runner
     assert "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=0" in runner
     assert "unset FR13_NEEDS_ALLOW FR10_ALLOW_LINEAR_FALLBACK" in runner
     assert "source_manifest.at_launch.json" in runner
     assert "source_manifest.at_end.json" in runner
-    assert "qualified_rowgroup8_kernel_preserved" in gate
+    assert "source_descriptor_in_kernel=false" in runner
+    assert "x_stride=16384,1" in runner
+    assert "reference_gdn_source_bound" in gate
+    assert "fr13_sfwd_prior_reuse_descriptorless.py" in gate
+    assert "candidate_kernel_source_sha256" in gate
+    assert "tuple(mixed_qkv_spec.shape)" in patcher
+    assert "_fr13_sfwd_candidate_out = torch.empty(" in patcher
     assert candidate.CANDIDATE not in production
-    assert 'CANDIDATE = "fixed32_sfwd_state_fusion_rowgroup8_v3"' in production
+    assert 'CANDIDATE = "fixed32_sfwd_state_fusion_v1"' in production
     assert hashlib.sha256(OLD_KERNEL_PATH.read_bytes()).hexdigest() == (
-        "c3036ae4775553e3aeb2131e8b3609c852a22ab86493f7d9843d4aeaed825a70"
+        "6c0f0ad607f15ea2727c2a9b244b1fe1c5ddb88268d70264c08f10470a5d2098"
     )

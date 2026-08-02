@@ -1,4 +1,4 @@
-"""Offline-only fixed32 SFWD prior-reuse kernel with derived topology."""
+"""Fixed32 SFWD prior-reuse kernel with derived topology and fixed bases."""
 
 from __future__ import annotations
 

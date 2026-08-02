@@ -15,15 +15,16 @@ from pathlib import Path
 from typing import Any
 
 
-CANDIDATE = "fixed32_sfwd_prior_reuse_rowgroup32_c64_v1"
+CANDIDATE = "fixed32_sfwd_prior_reuse_descriptorless_fixedbase_rowgroup32_c64_v1"
 SOURCE_SCHEMA = "fr13.fixed32.sfwd_prior_reuse.source_manifest.v1"
-QUALIFIED_ROWGROUP8_KERNEL_SHA256 = (
-    "c3036ae4775553e3aeb2131e8b3609c852a22ab86493f7d9843d4aeaed825a70"
+REFERENCE_GDN_SOURCE_SHA256 = (
+    "6c0f0ad607f15ea2727c2a9b244b1fe1c5ddb88268d70264c08f10470a5d2098"
 )
 SOURCE_FILES = (
     "config/fr13_fixed32/subset_b1_diagnostic_one.json",
     "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
     "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse.py",
+    "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py",
     "src/lumo_flywheel_serving/fr13_sfwd_state_fusion_production.py",
     "src/lumo_flywheel_serving/inference_proxy.py",
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
@@ -111,18 +112,16 @@ def write_source_manifest(args: argparse.Namespace) -> None:
         }
     if (
         files["src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"]["sha256"]
-        != QUALIFIED_ROWGROUP8_KERNEL_SHA256
+        != REFERENCE_GDN_SOURCE_SHA256
     ):
-        raise GateError(
-            "qualified rowgroup8 kernel source changed; its live PASS would drift"
-        )
+        raise GateError("reference GDN source changed from the bound gate base")
     _write_json(
         Path(args.output).resolve(),
         {
             "schema": SOURCE_SCHEMA,
             "candidate": CANDIDATE,
             "source_commit": commit,
-            "qualified_rowgroup8_kernel_preserved": True,
+            "reference_gdn_source_bound": True,
             "files": files,
         },
     )
@@ -156,13 +155,13 @@ def validate_gate(args: argparse.Namespace) -> None:
         source_launch.get("schema") != SOURCE_SCHEMA
         or source_launch.get("candidate") != CANDIDATE
         or source_launch.get("source_commit") != source_commit
-        or source_launch.get("qualified_rowgroup8_kernel_preserved") is not True
+        or source_launch.get("reference_gdn_source_bound") is not True
         or not isinstance(files, dict)
         or tuple(sorted(files)) != tuple(sorted(SOURCE_FILES))
         or files.get("src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py", {}).get(
             "sha256"
         )
-        != QUALIFIED_ROWGROUP8_KERNEL_SHA256
+        != REFERENCE_GDN_SOURCE_SHA256
         or any(
             not isinstance(entry, dict)
             or not isinstance(entry.get("bytes"), int)
@@ -219,11 +218,20 @@ def validate_gate(args: argparse.Namespace) -> None:
         "candidate_source_sha256": files[
             "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse.py"
         ]["sha256"],
+        "candidate_kernel_source_sha256": files[
+            "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py"
+        ]["sha256"],
         "task_marker": marker,
         "batch": 1,
         "physical_rows_per_request": 32,
         "conv_rows_per_program": 32,
         "conv_block_c": 64,
+        "x_shape": [32, 10240],
+        "x_stride": [16384, 1],
+        "out_stride": [10240, 1],
+        "source_stage_shape": [36, 10240],
+        "source_stage_stride": [10240, 1],
+        "conv_weights_stride": [4, 1],
         "candidate_conv_launches_per_layer": 1,
         "gdn_level_path_programs": [1, 11],
         "gdn_physical_launches_per_layer": 2,
@@ -276,6 +284,9 @@ def validate_gate(args: argparse.Namespace) -> None:
         "candidate_source_sha256": files[
             "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse.py"
         ]["sha256"],
+        "candidate_kernel_source_sha256": files[
+            "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py"
+        ]["sha256"],
         "task_marker": marker,
         "batch": 1,
         "draft_vocab_k": 65536,
@@ -287,6 +298,12 @@ def validate_gate(args: argparse.Namespace) -> None:
         "physical_rows_per_request": 32,
         "conv_rows_per_program": 32,
         "conv_block_c": 64,
+        "x_shape": [32, 10240],
+        "x_stride": [16384, 1],
+        "out_stride": [10240, 1],
+        "source_stage_shape": [36, 10240],
+        "source_stage_stride": [10240, 1],
+        "conv_weights_stride": [4, 1],
         "candidate_conv_launches_per_layer": 1,
         "gdn_level_path_programs": [1, 11],
         "gdn_physical_launches_per_layer": 2,
@@ -430,9 +447,12 @@ def validate_gate(args: argparse.Namespace) -> None:
             "candidate": CANDIDATE,
             "source_commit": source_commit,
             "source_manifest_sha256": source_sha,
-            "qualified_rowgroup8_kernel_preserved": True,
+            "reference_gdn_source_bound": True,
             "candidate_source_sha256": files[
                 "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse.py"
+            ]["sha256"],
+            "candidate_kernel_source_sha256": files[
+                "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py"
             ]["sha256"],
             "task_set": "one",
             "task_count": 1,
@@ -443,6 +463,12 @@ def validate_gate(args: argparse.Namespace) -> None:
             "physical_rows_per_request": 32,
             "conv_rows_per_program": 32,
             "conv_block_c": 64,
+            "x_shape": [32, 10240],
+            "x_stride": [16384, 1],
+            "out_stride": [10240, 1],
+            "source_stage_shape": [36, 10240],
+            "source_stage_stride": [10240, 1],
+            "conv_weights_stride": [4, 1],
             "layer_count": 48,
             "comparison_count": len(records),
             "compared_byte_surfaces": ["conv_out", "commit_source_stage"],

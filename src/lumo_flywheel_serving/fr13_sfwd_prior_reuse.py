@@ -9,21 +9,28 @@ from pathlib import Path
 
 import torch
 import triton
-import triton.language as tl
 
 from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
     _FR13_FIXED32_MODE,
     _FR13_FIXED32_MODES,
-    _FR13_FIXED32_PARENT,
     _fr13_fixed32_batch_gdn_byte_diff,
     _fr13_fixed32_batch_gdn_real_event_marker,
 )
+from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
+    CHANNELS,
+    CONV_WIDTH,
+    FIXED32_PARENT,
+    FIXED32_ROWS,
+    SOURCE_ROWS,
+    X_ROW_STRIDE,
+    _fr13_fixed32_sfwd_prior_reuse_descriptorless_kernel,
+    fixed32_specialized_layout_contract,
+)
 
 
-CANDIDATE = "fixed32_sfwd_prior_reuse_rowgroup32_c64_v1"
+CANDIDATE = "fixed32_sfwd_prior_reuse_descriptorless_fixedbase_rowgroup32_c64_v1"
 ROWS_PER_PROGRAM = 32
 BLOCK_C = 64
-CHANNELS = 10240
 CONV_STATE_LEN = 34
 ENABLED_PATH = "/logs/fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled"
 REAL_EVENT_PATH = "/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm"
@@ -31,6 +38,9 @@ PASS_PATH = "/logs/fr13_fixed32_sfwd_prior_reuse.live_pass.json"
 RECORDS_PATH = "/logs/fr13_fixed32_sfwd_prior_reuse.byte_ab.jsonl"
 SOURCE_MANIFEST_SCHEMA = "fr13.fixed32.sfwd_prior_reuse.source_manifest.v1"
 SOURCE_RELATIVE_PATH = "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse.py"
+KERNEL_SOURCE_RELATIVE_PATH = (
+    "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py"
+)
 _STATE = {
     "task_marker": None,
     "batch": None,
@@ -54,15 +64,15 @@ def fixed32_sfwd_prior_reuse_contract(
     state_len = int(conv_state_len)
     if batch not in (1, 2, 3, 4):
         raise ValueError(f"FR13 SFWD prior-reuse requires B1-B4, got B={batch}")
-    if rows != 32:
+    if rows != FIXED32_ROWS:
         raise ValueError(
             "FR13 SFWD prior-reuse requires exactly 32 physical rows per "
             f"request, got {rows}"
         )
-    if width != 4 or state_len != CONV_STATE_LEN:
+    if width != CONV_WIDTH or state_len != CONV_STATE_LEN:
         raise ValueError(
             "FR13 SFWD prior-reuse requires width/state geometry "
-            f"(4, {CONV_STATE_LEN}), got ({width}, {state_len})"
+            f"({CONV_WIDTH}, {CONV_STATE_LEN}), got ({width}, {state_len})"
         )
     source_rows = width - 1 + rows + 1
     return {
@@ -171,14 +181,26 @@ def _source_binding(
             "FR13 SFWD prior-reuse source manifest is not canonical ASCII JSON"
         ) from error
     files = payload.get("files")
-    expected_source_sha = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    source_path = Path(__file__)
+    kernel_source_path = source_path.with_name(
+        "fr13_sfwd_prior_reuse_descriptorless.py"
+    )
+    expected_source_sha = hashlib.sha256(source_path.read_bytes()).hexdigest()
+    expected_kernel_source_sha = hashlib.sha256(
+        kernel_source_path.read_bytes()
+    ).hexdigest()
     source_entry = files.get(SOURCE_RELATIVE_PATH) if isinstance(files, dict) else None
+    kernel_source_entry = (
+        files.get(KERNEL_SOURCE_RELATIVE_PATH) if isinstance(files, dict) else None
+    )
     if (
         payload.get("schema") != SOURCE_MANIFEST_SCHEMA
         or payload.get("candidate") != CANDIDATE
         or payload.get("source_commit") != source_commit
         or not isinstance(source_entry, dict)
         or source_entry.get("sha256") != expected_source_sha
+        or not isinstance(kernel_source_entry, dict)
+        or kernel_source_entry.get("sha256") != expected_kernel_source_sha
     ):
         raise RuntimeError(
             "FR13 SFWD prior-reuse source manifest is not bound to runtime source"
@@ -187,6 +209,7 @@ def _source_binding(
         "source_commit": source_commit,
         "source_manifest_sha256": observed_sha,
         "candidate_source_sha256": expected_source_sha,
+        "candidate_kernel_source_sha256": expected_kernel_source_sha,
     }
 
 
@@ -270,6 +293,12 @@ def _pass_emit(
         "physical_rows_per_request": 32,
         "conv_rows_per_program": ROWS_PER_PROGRAM,
         "conv_block_c": BLOCK_C,
+        "x_shape": [FIXED32_ROWS, CHANNELS],
+        "x_stride": [X_ROW_STRIDE, 1],
+        "out_stride": [CHANNELS, 1],
+        "source_stage_shape": [SOURCE_ROWS, CHANNELS],
+        "source_stage_stride": [CHANNELS, 1],
+        "conv_weights_stride": [CONV_WIDTH, 1],
         "candidate_conv_launches_per_layer": 1,
         "gdn_level_path_programs": [int(batch), 11 * int(batch)],
         "gdn_physical_launches_per_layer": 2,
@@ -385,6 +414,12 @@ def fixed32_sfwd_prior_reuse_byte_gate(
         "physical_rows_per_request": 32,
         "conv_rows_per_program": ROWS_PER_PROGRAM,
         "conv_block_c": BLOCK_C,
+        "x_shape": [FIXED32_ROWS, CHANNELS],
+        "x_stride": [X_ROW_STRIDE, 1],
+        "out_stride": [CHANNELS, 1],
+        "source_stage_shape": [SOURCE_ROWS, CHANNELS],
+        "source_stage_stride": [CHANNELS, 1],
+        "conv_weights_stride": [CONV_WIDTH, 1],
         "candidate_conv_launches_per_layer": 1,
         "gdn_level_path_programs": [batch, 11 * batch],
         "gdn_physical_launches_per_layer": 2,
@@ -414,134 +449,14 @@ def fixed32_sfwd_prior_reuse_byte_gate(
     return record
 
 
-@triton.jit
-def _fr13_fixed32_sfwd_prior_reuse_kernel(
-    x,
-    conv_state,
-    spec_state_indices,
-    source_flat,
-    conv_weights,
-    bias,
-    out,
-    source_stage,
-    x_stride_row,
-    conv_stride_row,
-    conv_stride_c,
-    conv_stride_l,
-    ssi_stride_b,
-    ssi_stride_s,
-    weight_stride_c,
-    weight_stride_w,
-    B: tl.constexpr,
-    N: tl.constexpr,
-    C: tl.constexpr,
-    WIDTH: tl.constexpr,
-    STATE_LEN: tl.constexpr,
-    SOURCE_ROWS: tl.constexpr,
-    HAS_BIAS: tl.constexpr,
-    ROWS_PER_PROGRAM: tl.constexpr,
-    BLOCK_C: tl.constexpr,
-):
-    """Fuse fixed32 convolution and commit-source staging with prior reuse."""
-    pid_row_group = tl.program_id(0)
-    pid_c = tl.program_id(1)
-    row_groups = N // ROWS_PER_PROGRAM
-    pid_b = pid_row_group // row_groups
-    pid_n_group = pid_row_group - pid_b * row_groups
-    pid_n_base = pid_n_group * ROWS_PER_PROGRAM
-    offs_n = pid_n_base + tl.arange(0, ROWS_PER_PROGRAM)[:, None]
-    offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)[None, :]
-
-    bank_row = tl.load(spec_state_indices + pid_b * ssi_stride_b + 0 * ssi_stride_s).to(
-        tl.int64
-    )
-    stage_base = pid_b.to(tl.int64) * SOURCE_ROWS
-    prior_0 = tl.load(
-        conv_state
-        + bank_row * conv_stride_row
-        + offs_c * conv_stride_c
-        + 0 * conv_stride_l
-    )
-    prior_1 = tl.load(
-        conv_state
-        + bank_row * conv_stride_row
-        + offs_c * conv_stride_c
-        + 1 * conv_stride_l
-    )
-    prior_2 = tl.load(
-        conv_state
-        + bank_row * conv_stride_row
-        + offs_c * conv_stride_c
-        + 2 * conv_stride_l
-    )
-    acc = tl.zeros((ROWS_PER_PROGRAM, BLOCK_C), dtype=tl.float32)
-    if HAS_BIAS:
-        acc = tl.load(bias + offs_c).to(tl.float32)
-    for tap in tl.static_range(0, WIDTH - 1):
-        source_row = tl.load(source_flat + offs_n * WIDTH + tap).to(tl.int64)
-        from_prior = source_row < (WIDTH - 1)
-        prior_value = tl.where(
-            source_row == 0,
-            prior_0,
-            tl.where(source_row == 1, prior_1, prior_2),
-        )
-        x_node = source_row - (WIDTH - 1)
-        x_value = tl.load(
-            x + (pid_b.to(tl.int64) * N + x_node) * x_stride_row + offs_c,
-            mask=(~from_prior) & (x_node >= 0) & (x_node < N),
-            other=0.0,
-        )
-        value = tl.where(from_prior, prior_value, x_value).to(tl.bfloat16)
-        weight = tl.load(
-            conv_weights + offs_c * weight_stride_c + tap * weight_stride_w
-        ).to(tl.bfloat16)
-        product = (value * weight).to(tl.bfloat16).to(tl.float32)
-        acc = acc + product
-
-    current_x = tl.load(x + (pid_b.to(tl.int64) * N + offs_n) * x_stride_row + offs_c)
-    current_weight = tl.load(
-        conv_weights + offs_c * weight_stride_c + (WIDTH - 1) * weight_stride_w
-    ).to(tl.bfloat16)
-    current_product = (current_x * current_weight).to(tl.bfloat16).to(tl.float32)
-    acc = acc + current_product
-
-    activated = acc / (1.0 + tl.exp(0.0 - acc))
-    tl.store(out + (pid_b * N + offs_n) * C + offs_c, activated)
-    tl.store(
-        source_stage + (stage_base + (WIDTH - 1) + offs_n) * C + offs_c,
-        current_x,
-    )
-    source_edge_writer = pid_n_base == 0
-    tl.store(
-        source_stage + stage_base * C + offs_c,
-        prior_0,
-        mask=source_edge_writer,
-    )
-    tl.store(
-        source_stage + (stage_base + 1) * C + offs_c,
-        prior_1,
-        mask=source_edge_writer,
-    )
-    tl.store(
-        source_stage + (stage_base + 2) * C + offs_c,
-        prior_2,
-        mask=source_edge_writer,
-    )
-    tl.store(
-        source_stage + (stage_base + SOURCE_ROWS - 1) * C + offs_c,
-        0.0,
-        mask=source_edge_writer,
-    )
-
-
 def _source_flat_expected(width: int = 4) -> tuple[int, ...]:
     rows: list[int] = []
-    for node in range(len(_FR13_FIXED32_PARENT)):
+    for node in range(len(FIXED32_PARENT)):
         path = []
         cursor = node
         while cursor >= 0:
             path.append(cursor)
-            cursor = _FR13_FIXED32_PARENT[cursor]
+            cursor = FIXED32_PARENT[cursor]
         path.reverse()
         source = list(range(width - 1)) + [width - 1 + path_node for path_node in path]
         rows.extend(source[-width:])
@@ -614,10 +529,6 @@ def launch_fixed32_sfwd_prior_reuse(
         geometry_failures.append("x_ndim")
     if tuple(int(value) for value in x.shape) != (required_rows, channels):
         geometry_failures.append("x_shape")
-    if out.shape != x.shape:
-        geometry_failures.append("out_shape")
-    if conv_weights.shape != (channels, width):
-        geometry_failures.append("conv_weights_shape")
     if spec_state_indices.ndim != 2:
         geometry_failures.append("spec_state_indices_ndim")
     if channels != CHANNELS:
@@ -636,20 +547,8 @@ def launch_fixed32_sfwd_prior_reuse(
         geometry_failures.append("source_flat_dtype")
     if source_stage.ndim != 2:
         geometry_failures.append("source_stage_ndim")
-    if source_stage.ndim < 1 or int(source_stage.shape[0]) < required_source_rows:
-        geometry_failures.append("source_stage_rows")
-    if source_stage.ndim < 2 or int(source_stage.shape[1]) != channels:
-        geometry_failures.append("source_stage_channels")
-    if x.ndim == 2 and int(x.stride(1)) != 1:
-        geometry_failures.append("x_channel_stride")
-    if x.ndim == 2 and int(x.stride(0)) < channels:
-        geometry_failures.append("x_row_stride")
-    if not out.is_contiguous():
-        geometry_failures.append("out_contiguous")
     if not source_flat.is_contiguous():
         geometry_failures.append("source_flat_contiguous")
-    if not source_stage.is_contiguous():
-        geometry_failures.append("source_stage_contiguous")
     if geometry_failures:
         observed = {
             "batch": batch,
@@ -695,25 +594,33 @@ def launch_fixed32_sfwd_prior_reuse(
     if actual_source_flat != _source_flat_expected(width):
         raise RuntimeError("FR13 SFWD prior-reuse source descriptor drift")
 
+    layout_contract = fixed32_specialized_layout_contract(
+        batch,
+        x_shape=tuple(x.shape),
+        x_stride=tuple(x.stride()),
+        out_shape=tuple(out.shape),
+        out_stride=tuple(out.stride()),
+        source_stage_shape=tuple(source_stage.shape),
+        source_stage_stride=tuple(source_stage.stride()),
+        conv_weights_shape=tuple(conv_weights.shape),
+        conv_weights_stride=tuple(conv_weights.stride()),
+    )
+
     grid = (batch, triton.cdiv(channels, BLOCK_C))
     bias_arg = bias if bias is not None else x
-    _fr13_fixed32_sfwd_prior_reuse_kernel[grid](
+    _fr13_fixed32_sfwd_prior_reuse_descriptorless_kernel[grid](
         x,
         conv_state,
         spec_state_indices,
-        source_flat,
         conv_weights,
         bias_arg,
         out,
         source_stage,
-        int(x.stride(0)),
         int(conv_state.stride(0)),
         int(conv_state.stride(1)),
         int(conv_state.stride(2)),
         int(spec_state_indices.stride(0)),
         int(spec_state_indices.stride(1)),
-        int(conv_weights.stride(0)),
-        int(conv_weights.stride(1)),
         B=batch,
         N=rows,
         C=channels,
@@ -721,9 +628,12 @@ def launch_fixed32_sfwd_prior_reuse(
         STATE_LEN=state_len,
         SOURCE_ROWS=source_rows_per_batch,
         HAS_BIAS=bias is not None,
+        X_STRIDE_ROW=X_ROW_STRIDE,
         ROWS_PER_PROGRAM=ROWS_PER_PROGRAM,
         BLOCK_C=BLOCK_C,
         num_warps=8,
     )
     contract["conv_programs_per_request"] = triton.cdiv(channels, BLOCK_C)
+    contract["layouts"] = layout_contract["layouts"]
+    contract["maximum_offsets"] = layout_contract["maximum_offsets"]
     return contract
