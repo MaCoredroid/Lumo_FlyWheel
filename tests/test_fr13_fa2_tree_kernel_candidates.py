@@ -137,6 +137,7 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
     assert "run_flash_splitkv_fwd<StockKernelTraits, false>" not in candidate
     assert "AllowSplit" not in candidate
     assert "FR13_ALLOW_SPLIT_SWITCH" not in candidate
+    assert "StaticPagedKVBlockSize" not in candidate
     assert "kTreeBlockM = 16" in candidate
     assert "kTreeBlockN = 64" in candidate
     assert "kTreeWarps = 1" in candidate
@@ -227,6 +228,7 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     )
     candidate = qrow_translation_unit.read_text()
     assert translation_unit.read_text() == stock
+    assert "StaticPagedKVBlockSize" not in translation_unit.read_text()
     assert candidate == module.FIXED32_QUERY_TILE32_TRANSLATION_UNIT
     assert module.STOCK_FIXED32_QUERY_INSTANTIATION not in candidate
     assert not module._patch_fixed32_query_tile32_translation_unit(
@@ -250,6 +252,13 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     assert "qrow32 gate candidate" in candidate
     assert "Gate-only entry point" in candidate
     assert "ordinary and production paths cannot tag" in candidate
+    assert "using Fr13Fixed32Qrow32KernelTraits" in candidate
+    assert "StaticPagedKVBlockSize<Fr13Fixed32Qrow32KernelTraits>" in candidate
+    static_page_log2 = 10
+    static_page_size = 1 << static_page_log2
+    assert f"static constexpr int value = {static_page_size}" in candidate
+    assert f"static constexpr int log2 = {static_page_log2}" in candidate
+    assert "using TreeKernelTraits = Fr13Fixed32Qrow32KernelTraits" in candidate
 
     api_gate = module.FIXED32_QUERY_TILE32_API_GATE
     assert "kFr13Qrow32BatchStrideSentinel" in api_gate
@@ -273,7 +282,7 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     assert "params.cu_seqlens_k != nullptr" in api_gate
     assert "params.seqused_k != nullptr" in api_gate
     assert "params.block_table != nullptr" in api_gate
-    assert "params.page_block_size == 1024" in api_gate
+    assert f"params.page_block_size == {static_page_size}" in api_gate
     assert "params.window_size_left < 0" in api_gate
     assert "params.window_size_right < 0" in api_gate
     assert "params.alibi_slopes_ptr == nullptr" in api_gate
@@ -301,6 +310,60 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
         assert stock_block == candidate_block == 0
         assert candidate_warp == stock_warp
         assert candidate_warp_row == stock_warp_row
+
+
+def test_qrow32_static_page_specialization_is_opt_in_exact_and_idempotent(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    utils = tmp_path / "utils.h"
+    dynamic_offset = """    const int64_t global_row_offset = block_row_offset + n_block * kBlockN;
+    const int64_t page_offset = global_row_offset % page_block_size;
+    const int64_t virtual_page_idx = global_row_offset / page_block_size;
+"""
+    stock = (
+        "namespace FLASH_NAMESPACE {\n"
+        "template <typename Kernel_traits>\n"
+        "__forceinline__ __device__\n"
+        "int64_t resolve_thread_kv_page_slice_offset(\n"
+        "    const int tidx, const int n_block, const int page_block_size) {\n"
+        + dynamic_offset
+        + "    return page_offset + virtual_page_idx;\n"
+        "}\n"
+        "}\n"
+    )
+    utils.write_text(stock)
+
+    assert not module._patch_fixed32_query_tile32_static_page(utils)
+    assert utils.read_text() == stock
+    assert module._patch_fixed32_query_tile32_static_page(
+        utils,
+        fixed32_query_tile32=True,
+    )
+    candidate = utils.read_text()
+    assert candidate.count("FR13_FA2_QROW32_STATIC_PAGE") == 1
+    assert candidate.count("struct StaticPagedKVBlockSize") == 1
+    assert "static constexpr int value = 0" in candidate
+    assert "if constexpr (kStaticPageBlockSize != 0)" in candidate
+    assert "unsigned_global_row_offset >> kStaticPageBlockLog2" in candidate
+    assert "kStaticPageBlockSize - 1" in candidate
+    assert candidate.count("global_row_offset % page_block_size") == 1
+    assert candidate.count("global_row_offset / page_block_size") == 1
+    assert not module._patch_fixed32_query_tile32_static_page(
+        utils,
+        fixed32_query_tile32=True,
+    )
+    assert utils.read_text() == candidate
+
+    # Every helper call uses an active, nonnegative K block and a nonnegative
+    # per-thread row. The qrow32 shift/mask is therefore exactly divmod(x, 1024).
+    for thread_idx in range(64):
+        block_row_offset = (thread_idx // 8) * 8
+        for n_block in (0, 1, 15, 16, 127, 1023):
+            global_row_offset = block_row_offset + n_block * 64
+            quotient, remainder = divmod(global_row_offset, 1024)
+            assert global_row_offset >> 10 == quotient
+            assert global_row_offset & 1023 == remainder
 
 
 def test_source_build_candidates_are_independent_and_default_off() -> None:
