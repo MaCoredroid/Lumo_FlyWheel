@@ -1,0 +1,68 @@
+{
+  "candidate": "fixed32_sfwd_channel_serial_r32_c128_w4_u32x2_v1",
+  "classification": "offline_codegen_only",
+  "source_commit": "d3143f9163b4094ea0ae4d8c34d523103bc4eb0b",
+  "geometry": {
+    "block_c": 128,
+    "channels": 10240,
+    "ctas_per_request": 80,
+    "num_warps": 4,
+    "physical_rows_per_request": 32,
+    "threads_per_cta": 128,
+    "warps_per_request": 320
+  },
+  "live_layout_contract": {
+    "conv_state_layout": "bank_channel_state",
+    "conv_state_stride": [2097152, 1, 10240],
+    "conv_weights_stride": [4, 1]
+  },
+  "results": {
+    "b1": {
+      "compile_hash": "daa94bce3adbf6a15deb274a64c3492496e760acc63dc1617bd7213633b77a8e",
+      "ctas_per_launch": 80
+    },
+    "b4": {
+      "compile_hash": "ebfca876381a9b48d12c72efa98b2919c984a532a50cf7d3c0d92438e4e1d1b1",
+      "ctas_per_launch": 320
+    },
+    "binary_identical_across_b1_b4": true,
+    "fresh_cache_results_identical": true,
+    "resources": {
+      "bar": 0,
+      "calls": 0,
+      "cubin_bytes": 63496,
+      "elf_shared_bytes": 0,
+      "encoded_sass_instructions": 920,
+      "ldg": 38,
+      "ldl": 0,
+      "lds": 0,
+      "local_bytes": 0,
+      "launch_shared_bytes": 0,
+      "registers": 60,
+      "stack_bytes": 0,
+      "static_sass_instructions": 903,
+      "stg": 68,
+      "stl": 0,
+      "sts": 0
+    }
+  },
+  "hashes": {
+    "cubin_sha256": "568d054f7db123a4a7c47fed9ba1b9831aa3ee58085c42d78b748f314ad0afbd",
+    "kernel_source_file_sha256": "5865f87a9682d29f7caeba31e4ddabbc670118b22f0639e7e264fabb7f7f55aa",
+    "kernel_source_function_sha256": "cac6e3ee0a72ee1b5e992999d01e157722d0404ee7ce048bf18b7799f56d7514",
+    "launcher_source_file_sha256": "e64f5421a86b5bae12db5c9f4b2c3c130b02a696573cabcdb8b5c236afaedbde",
+    "ptx_sha256": "7e6fdcd5fb15300827cac3da654402cb986346447d52955f947ee012529e7aaf",
+    "sass_sha256": "f15475038c07630c44cc4cd93ef6a9459ee321ef7967c3f04ccaa39faccbb6d0"
+  },
+  "toolchain": {
+    "backend": "ptxas-blackwell",
+    "backend_version": "Cuda compilation tools, release 12.9, V12.9.86",
+    "target": "sm_121a",
+    "torch": "2.10.0+cu130",
+    "torch_cuda": "13.0",
+    "triton": "3.6.0"
+  },
+  "performance_claim": false,
+  "real_task_gate_required": true,
+  "production_eligible": false
+}
