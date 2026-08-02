@@ -1,0 +1,43 @@
+{
+  "branch": "agent/fixed32-cfwd-keygroup-cuda-20260802",
+  "candidate": {
+    "default_on": false,
+    "diagnostic_selector_only": true,
+    "production_authorized": false,
+    "timing_eligible": false
+  },
+  "code_commit": "783c4ed662d065cf4a9716b620a4e567fa5e6aab",
+  "qualification": {
+    "b1_real_swe_raw_byte_gate": null,
+    "b1_real_swe_timing": null,
+    "b4_exact4_real_swe_raw_byte_gate": null,
+    "b4_exact4_real_swe_timing": null,
+    "codegen_contract": "pass",
+    "compile_resource_gate": "pass",
+    "hardware_floor_claim_changed": false,
+    "internal_prevalidation_trust_risk": true,
+    "status": "codegen_pass_raw_byte_and_timing_pending"
+  },
+  "schema": "fr13.fixed32.cfwd_native_keygroup_codegen.v1",
+  "source_sha256": {
+    "native/fr13_fixed32_cfwd_native_fullvalue.cu": "1400f1f71d7f1512102a7659c678e1655e82d6adb78eb4403c6469add4673ae0",
+    "scripts/fr13_check_cfwd_native_keygroup_codegen.py": "0ab18d10bedf250bcbf05cb96f9fbd7e102ae413eb959c7e43a72816f49bc0b2",
+    "scripts/fr13_patch_vllm_cfwd_native_fullvalue_cuda.py": "07b01ce5dd79062833d5cee56c51357158c864ccce39af002716eaf5453f6c22",
+    "src/lumo_flywheel_serving/fr13_cfwd_native_fullvalue_cuda.py": "d945f3c4c55616b02b3a232bbabfe044a029409e7cfbc1c9154be839b6d8ea87",
+    "tests/test_fr13_fixed32_cfwd_native_fullvalue_cuda.py": "85a736b77dc333b9ea8941589c3b43c75c678c7999c0025a43a21ba4d3835f4b"
+  },
+  "verification": {
+    "cuda_compile_run": true,
+    "cuda_kernel_launch_run": false,
+    "docker_mutation": false,
+    "focused_tests_passed": 42,
+    "gpu_performance_query_run": false,
+    "object_codegen_checker": "pass",
+    "python_byte_compile": "pass",
+    "real_swe_campaign_run_for_candidate": false,
+    "ruff": "pass",
+    "synthetic_or_probe_performance_run": false,
+    "timing_measurement_run": false,
+    "whitespace": "pass"
+  }
+}

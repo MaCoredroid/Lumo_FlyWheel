@@ -1,0 +1,36 @@
+{
+  "architecture": "sm_121a",
+  "binding": {
+    "compile_command": "/usr/local/cuda/bin/nvcc -forward-unknown-to-host-compiler -DTORCH_EXTENSION_NAME=_C -DUSE_CUDA -I/home/mark/fr13_streamk_build/venv/lib/python3.12/site-packages/torch/include -I/home/mark/fr13_streamk_build/venv/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -isystem /usr/include/python3.12 -isystem /usr/local/cuda/include --expt-relaxed-constexpr --expt-extended-lambda -O2 -DNDEBUG -std=c++17 -Xcompiler=-fPIC -gencode arch=compute_121a,code=sm_121a --ptxas-options=-v -c native/fr13_fixed32_cfwd_native_fullvalue.cu -o /tmp/fr13_fixed32_cfwd_native_keygroup384_parity.sm121a.o",
+    "compile_command_sha256": "9cf12876ffcca1683693ec2ffbd870c7471f0085c0e4aa27d0e10c427c881a13",
+    "object_name": "fr13_fixed32_cfwd_native_keygroup384_parity.sm121a.o",
+    "object_sha256": "90cd61e0a347330d417e5bd9c47bb6157e9ee7c4a713879f990bb37319bb7f13",
+    "source_name": "fr13_fixed32_cfwd_native_fullvalue.cu",
+    "source_sha256": "1400f1f71d7f1512102a7659c678e1655e82d6adb78eb4403c6469add4673ae0"
+  },
+  "contract_pass": true,
+  "forbidden_sass_counts": {
+    "CALL": 0,
+    "LDL": 0,
+    "STL": 0
+  },
+  "resources": {
+    "cuobjdump_shared_bytes": 99892,
+    "local_bytes": 0,
+    "registers_per_thread": 168,
+    "stack_bytes": 0
+  },
+  "sass_counts": {
+    "FFMA": 294,
+    "MUFU.EX2": 9,
+    "MUFU.RCP": 4,
+    "MUFU.RSQ": 1,
+    "SHFL.BFLY": 654,
+    "SHFL.DOWN": 0,
+    "SHFL.IDX": 64
+  },
+  "toolchain": {
+    "cuobjdump": "CUDA 13.0 V13.0.85",
+    "nvcc": "CUDA 13.0 V13.0.88"
+  }
+}
