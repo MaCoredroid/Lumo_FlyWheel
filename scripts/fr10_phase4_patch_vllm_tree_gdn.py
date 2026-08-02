@@ -5897,6 +5897,8 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
         "identity_stage2_pingpong_b1_byte_ab",
         "identity_stockshape_b4",
         "identity_stockshape_b4_byte_ab",
+        "identity_divisor_b4",
+        "identity_divisor_b4_byte_ab",
         "persistent_b4_m128",
         "persistent_b4_m128_byte_ab",
         "persistent_b4_m128_static",
@@ -5911,6 +5913,7 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
             "identity_stage2_static, identity_stage2_static_byte_ab, "
             "identity_stage2_pingpong_b1, identity_stage2_pingpong_b1_byte_ab, "
             "identity_stockshape_b4, identity_stockshape_b4_byte_ab, "
+            "identity_divisor_b4, identity_divisor_b4_byte_ab, "
             "persistent_b4_m128_byte_ab, persistent_b4_m128_static, or "
             "persistent_b4_m128_static_byte_ab"
         )
@@ -5927,6 +5930,7 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
         "identity_stage2_pingpong_b1_byte_ab",
     )
     persistent_b4_byte_diagnostic = cutlass_wave in (
+        "identity_divisor_b4_byte_ab",
         "identity_stockshape_b4_byte_ab",
         "persistent_b4_m128_byte_ab",
         "persistent_b4_m128_static_byte_ab",
@@ -6017,6 +6021,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
                 "identity_stage2_static_byte_ab",
                 "identity_stage2_pingpong_b1_byte_ab",
                 "identity_stockshape_b4_byte_ab",
+                "identity_divisor_b4_byte_ab",
                 "persistent_b4_m128_byte_ab",
                 "persistent_b4_m128_static_byte_ab",
             )
@@ -6073,6 +6078,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
                 "diagnostic route without production"
             )
     if _FR13_FIXED32_CUTLASS_WAVE in (
+        "identity_divisor_b4_byte_ab",
         "identity_stockshape_b4_byte_ab",
         "persistent_b4_m128_byte_ab",
         "persistent_b4_m128_static_byte_ab",

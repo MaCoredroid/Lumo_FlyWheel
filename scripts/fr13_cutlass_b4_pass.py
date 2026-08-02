@@ -43,6 +43,18 @@ IDENTITY_STOCKSHAPE_SIDECAR_SCHEMA = (
 IDENTITY_STOCKSHAPE_K64_ROOT_SIDECAR_SCHEMA = (
     "fr13.fixed32.cutlass_b4.identity_stockshape.k64_root.production_pass.v1"
 )
+IDENTITY_DIVISOR_LIVE_SCHEMA = (
+    "fr13.fixed32.cutlass_identity_divisor_b4_live_gate.v1"
+)
+IDENTITY_DIVISOR_K64_ROOT_LIVE_SCHEMA = (
+    "fr13.fixed32.cutlass_identity_divisor_b4_k64_root_live_gate.v1"
+)
+IDENTITY_DIVISOR_SIDECAR_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_divisor.production_pass.v1"
+)
+IDENTITY_DIVISOR_K64_ROOT_SIDECAR_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_divisor.k64_root.production_pass.v1"
+)
 ATTESTATION_SCHEMA = "fr13.fixed32.cutlass_streamk_binary.v2"
 PATCH_SOURCE = Path("scripts/fr13_patch_cutlass_fixed32_wave.py")
 PATCH_SOURCE_SHA256 = "656c53b20497fc08cc7fdfb18256235b07cfad9868fde2faa70e6b0b9dfca41a"
@@ -62,10 +74,10 @@ STATIC_PATCHED_DISPATCH_SHA256 = (
     "446771039af31a2ae386b917540be2a018fdc8d947c001030696ec9a6608a4c4"
 )
 IDENTITY_STOCKSHAPE_PATCH_SOURCE_SHA256 = (
-    "9a736b188e8629a84a847cca1852e59fdfee553f0609dfaf9582bc5cd2a751cb"
+    "73d889292a812068593a26e83b320b8e12a27811ffba07e6f8532d0030f3cd90"
 )
 IDENTITY_STOCKSHAPE_PATCHED_DISPATCH_SHA256 = (
-    "7e6335bfa5f41f4f74033d1a9074352ef9d6d1f9d2921d492fbbdd60613932f7"
+    "9bdd435d68cf914203faf4603c068e3df53e1b80efe3335d56671d1910ac45bf"
 )
 EXPECTED_TASK_IDS = (
     "astropy__astropy-12907",
@@ -94,6 +106,27 @@ EXPECTED_PROJECTION_NK = (
     (34816, 5120),
 )
 CANDIDATE_CONTRACTS = {
+    "identity_divisor_b4": {
+        "diagnostic_selector": "identity_divisor_b4_byte_ab",
+        "live_schemas": {
+            "full_vocab": IDENTITY_DIVISOR_LIVE_SCHEMA,
+            "k64_root": IDENTITY_DIVISOR_K64_ROOT_LIVE_SCHEMA,
+        },
+        "sidecar_schemas": {
+            "full_vocab": IDENTITY_DIVISOR_SIDECAR_SCHEMA,
+            "k64_root": IDENTITY_DIVISOR_K64_ROOT_SIDECAR_SCHEMA,
+        },
+        "binding_schemas": {
+            "full_vocab": (
+                "fr13.fixed32.cutlass_b4.identity_divisor.production_binding.v1"
+            ),
+            "k64_root": (
+                "fr13.fixed32.cutlass_b4.identity_divisor.k64_root.production_binding.v1"
+            ),
+        },
+        "production_authorized": False,
+        "requires_resource_credential": False,
+    },
     "identity_stockshape_b4": {
         "diagnostic_selector": "identity_stockshape_b4_byte_ab",
         "live_schemas": {
@@ -210,6 +243,11 @@ def _contract_profile_value(
 
 
 def _candidate_source_hashes(candidate_selector: str) -> tuple[str, str]:
+    if candidate_selector == "identity_divisor_b4":
+        return (
+            IDENTITY_STOCKSHAPE_PATCH_SOURCE_SHA256,
+            IDENTITY_STOCKSHAPE_PATCHED_DISPATCH_SHA256,
+        )
     if candidate_selector == "identity_stockshape_b4":
         return (
             IDENTITY_STOCKSHAPE_PATCH_SOURCE_SHA256,

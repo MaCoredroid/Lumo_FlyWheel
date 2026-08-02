@@ -312,3 +312,21 @@ def test_identity_stockshape_selector_is_exact_b4_diagnostic_only() -> None:
         "stock-shape identity production remains unavailable"
         in sources["fr13_launch_forked_fa2_tree_server.sh"]
     )
+
+    divisor = module.CANDIDATE_CONTRACTS["identity_divisor_b4"]
+    assert divisor["diagnostic_selector"] == "identity_divisor_b4_byte_ab"
+    assert divisor["production_authorized"] is False
+    assert divisor["requires_resource_credential"] is False
+    assert divisor["live_schemas"] == {
+        "full_vocab": module.IDENTITY_DIVISOR_LIVE_SCHEMA,
+        "k64_root": module.IDENTITY_DIVISOR_K64_ROOT_LIVE_SCHEMA,
+    }
+    for source in sources.values():
+        assert "identity_divisor_b4_byte_ab" in source
+    assert "identity_divisor_b4)" in sources[
+        "fr13_run_b4_cutlass_persistent_m128_live_gate.sh"
+    ]
+    assert (
+        "divisor identity production remains unavailable"
+        in sources["fr13_launch_forked_fa2_tree_server.sh"]
+    )

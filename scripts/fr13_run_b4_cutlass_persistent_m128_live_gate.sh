@@ -24,6 +24,18 @@ CANDIDATE_SELECTOR=${CUTLASS_B4_CANDIDATE_SELECTOR:-persistent_b4_m128}
 RESOURCE_CREDENTIAL=${CUTLASS_B4_RESOURCE_CREDENTIAL:-}
 RESOURCE_CREDENTIAL_SHA256=${CUTLASS_B4_RESOURCE_CREDENTIAL_SHA256:-}
 case "$CANDIDATE_SELECTOR" in
+  identity_divisor_b4)
+    DIAGNOSTIC_SELECTOR=identity_divisor_b4_byte_ab
+    RECORD_SCHEMA=fr13.fixed32.cutlass_identity_divisor_b4_byte_ab.v1
+    CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_identity_divisor_b4_byte_ab.jsonl
+    FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_divisor_b4_live_gate.v1
+    K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_divisor_b4_k64_root_live_gate.v1
+    CANDIDATE_ARM_NAME=identity_divisor
+    [[ -z "$RESOURCE_CREDENTIAL" && -z "$RESOURCE_CREDENTIAL_SHA256" ]] || {
+      echo "divisor identity gate forbids a static resource credential" >&2
+      exit 2
+    }
+    ;;
   identity_stockshape_b4)
     DIAGNOSTIC_SELECTOR=identity_stockshape_b4_byte_ab
     RECORD_SCHEMA=fr13.fixed32.cutlass_identity_stockshape_b4_byte_ab.v1
