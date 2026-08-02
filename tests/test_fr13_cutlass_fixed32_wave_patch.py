@@ -255,12 +255,15 @@ def test_b4_m128_scalar_epilogue_keeps_runtime_multiply_without_generic_state() 
         "struct cutlass_3x_gemm_fp8_blockwise_m128_static", scalar_start
     )
     scalar_callback = patched[scalar_start:scalar_end]
-    assert "Element scalar = Element(1);" in scalar_callback
+    assert "struct Arguments {};" in scalar_callback
+    assert "struct Params {\n    Element scalar;" in scalar_callback
+    assert "return {Element(1)};" in scalar_callback
     assert "params.scalar" in scalar_callback
     assert "fragment.fill(scalar);" in scalar_callback
     assert "scalar_ptrs" not in scalar_callback
     assert "dScalar" not in scalar_callback
     assert "beta" not in scalar_callback
+    assert "Arguments const& args" not in scalar_callback
     assert "is_producer_load_needed() const" in scalar_callback
     assert "is_C_load_needed() const" in scalar_callback
     assert scalar_callback.count("return false;") == 2

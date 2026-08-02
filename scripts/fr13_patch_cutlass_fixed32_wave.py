@@ -286,22 +286,22 @@ struct cutlass_3x_gemm_fp8_blockwise_streamk
 };
 
 // The fixed M128 route always uses alpha=1, beta=0, L=1, and no source C.
-// Keep alpha as a runtime FP32 operand so the emitted numeric operation remains
-// multiply-then-convert, but omit the generic scalar pointer/stride machinery.
+// Materialize alpha=1 in the device Params conversion so callers cannot change
+// it, while retaining a runtime FP32 kernel operand and multiply-then-convert.
 template <class Element>
 struct fr13_fixed32_runtime_scalar_broadcast {
   struct SharedStorage {};
+  struct Arguments {};
 
-  struct Arguments {
-    Element scalar = Element(1);
+  struct Params {
+    Element scalar;
   };
-  using Params = Arguments;
 
   template <class ProblemShape>
   static constexpr Params
   to_underlying_arguments(
-      ProblemShape const&, Arguments const& args, void*) {
-    return args;
+      ProblemShape const&, Arguments const&, void*) {
+    return {Element(1)};
   }
 
   template <class ProblemShape>
