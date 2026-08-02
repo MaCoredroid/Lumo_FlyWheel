@@ -1,0 +1,12 @@
+real_swe_verified_task: PASS (1/1 resolved)
+run_classification: PASS (B1 diagnostic, not acceptance eligible)
+fixed_k64_root1_contract: PASS
+candidate_rows_32_ready_marker: PASS (count=1)
+candidate_rows_32_engaged_marker: PASS (count=1)
+candidate_rows_32_fallback_marker: PASS (count=0)
+candidate_rows_32_fatal_marker: PASS (count=0)
+timer_integrity: PASS (zero dropped, pending, bookkeeping, and invalid-request counts)
+launch_end_external_manifest_match: PASS
+launch_end_runtime_manifest_match: PASS
+host_compile_overlap: PRESENT
+raw_sensitive_evidence_excluded: PASS
