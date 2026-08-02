@@ -1,0 +1,10 @@
+24 passed in 0.17s
+Ruff: All checks passed
+Python bytecode compilation: pass
+git diff --check: pass
+Pinned vLLM/CUTLASS source apply: pass
+Pinned source second apply: already patched
+NVCC compile: not run while paired B4 campaign is live
+GPU or container execution: not run
+Real SWE-Verified byte gate: not run
+Timing: not run

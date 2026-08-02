@@ -1,0 +1,68 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_m128_linear_scheduler_source.v1",
+  "created_at_utc": "2026-08-02T03:12:02Z",
+  "status": "source_only_default_off",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "agent/fixed32-sfwd-b4-m128-linear-scheduler-20260802",
+    "base_static_scheduler_commit": "469949c587a2cc125b50ac0908126b53b4d18a8d",
+    "implementation_commit": "e2c56c8fde6329b4b189c75ffe823300e09154c6",
+    "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2",
+    "patch_source_sha256": "5f4421e92f3180864b829c1a49ed1bf277f1ebf227ed4a494d9cc919a91bd6e8",
+    "generated_dispatch_sha256": "7e61697914224f8af32b4627d0a5c1d6bf452cd03fe8a958fe3bb8e9547f6fe8"
+  },
+  "candidate": {
+    "selector": "persistent_b4_m128_static",
+    "diagnostic_selector": "persistent_b4_m128_static_byte_ab",
+    "default_enabled": false,
+    "scheduler": "Fr13Fixed32M128LinearScheduler100",
+    "base_scheduler": "StaticPersistentTileScheduler100",
+    "tile_mnk": [128, 128, 128],
+    "cluster_mnk": [1, 1, 1],
+    "physical_m": 128,
+    "problem_l_tiles": 1,
+    "projection_nk": [
+      [34816, 5120],
+      [5120, 17408],
+      [5120, 6144],
+      [16384, 5120],
+      [14336, 5120]
+    ],
+    "n_tiles": [272, 40, 40, 128, 112],
+    "work_mapping": "valid linear index -> (0, linear index, 0)",
+    "advance": "linear index += physical grid size"
+  },
+  "preserved": {
+    "collective_mainloop": true,
+    "collective_epilogue": true,
+    "tile_shape": true,
+    "cluster_shape": true,
+    "host_scheduler_parameter_setup": true,
+    "physical_grid_sizing": true,
+    "full_k_per_output_tile": true,
+    "k_iteration_order": true,
+    "output_tile_count": true,
+    "math_instruction_definition": true,
+    "stock_default": true
+  },
+  "removed_from_active_work_decode": [
+    "generic batch divmod",
+    "generic cluster-minor division",
+    "generic swizzled two-dimensional M/N decode"
+  ],
+  "verification": {
+    "focused_source_tests": "24 passed",
+    "ruff": "pass",
+    "pycompile": "pass",
+    "diff_check": "pass",
+    "pinned_source_apply": "pass",
+    "pinned_source_idempotency": "pass",
+    "nvcc_compile": "not_run",
+    "resource_and_sass_audit": "not_run",
+    "real_swe_verified_byte_gate": "not_run",
+    "b4_timing": "not_run"
+  }
+}
