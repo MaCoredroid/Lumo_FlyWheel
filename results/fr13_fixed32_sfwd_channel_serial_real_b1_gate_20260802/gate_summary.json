@@ -1,0 +1,54 @@
+{
+  "candidate": "fixed32_sfwd_channel_serial_r32_c64_w2_v1",
+  "classification": "one_real_swe_verified_k64_root_b1_byte_diagnostic",
+  "status": "pass",
+  "source_commit": "df7f6166257dae0ce40ca9684cd9f280c640906c",
+  "source_identity": {
+    "candidate_source_sha256": "5ae901728a0842e6cd19af70f8bd022791b030efd199268fc1ef8fc5e98b66c9",
+    "candidate_kernel_source_sha256": "f1aa0a6d441407f872ca10a9270f3e9a6c70ae6cead823e59495c4c9c695704d",
+    "source_manifest_sha256": "10352f534ff74c39242a5bb315d1e3e3e80a73e82b0e3d582b7b1cecfb4c975d",
+    "launch_end_manifests_identical": true
+  },
+  "configuration": {
+    "batch_size": 1,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "physical_rows_per_request": 32,
+    "conv_rows_per_program": 32,
+    "conv_block_c": 64,
+    "conv_num_warps": 2,
+    "conv_state_layout": "bank_channel_state",
+    "conv_state_stride": [2097152, 1, 10240]
+  },
+  "correctness": {
+    "task_count": 1,
+    "real_task_authenticated": true,
+    "comparison_count": 35808,
+    "layer_count": 48,
+    "comparison_surfaces": ["conv_out", "commit_source_stage"],
+    "passing_comparisons": 35808,
+    "mismatching_comparisons": 0,
+    "reference_returned": true,
+    "no_fallback": true,
+    "final_census_passed": true,
+    "final_task_boundary_passed": true
+  },
+  "lifecycle_digests": {
+    "validated_gate_output_sha256": "05fe4d83ddefdf0b485dbfaa9e2af1378d759fa072eea4ee83f8399005e83aba",
+    "records_sha256": "e19fa450fd3a09de560e3247f8f67c24133735eee99e24bd8d6395a192819641",
+    "live_pass_sha256": "7bfa53bbad16a8f55db80180ea3d81249673815be69c665432076b441167e6ab",
+    "runtime_manifest_sha256": "00810c6d3993786ad08c8bc5d186a6e569aee7a1ed926616b3f808c71b366a30",
+    "external_manifest_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "diagnostic_sha256": "cb087a7ec3f0d8cb3ee57a53a9b9f7959b92cb388daab76b07b0ed82747c7c61",
+    "task_bracket_sha256": "91db908e93db2fc9e14bf8683156129179640935b60972cf00b6a51ab9f792cb",
+    "terminal_sha256": "a68e9b2b6a89c3997a39e86b1802246cf6980ab4e8555261e0ad6dbfffd874c9",
+    "engine_ledger_sha256": "b4603c574a3673e78b7c7ad022e9d293b0e713b785f66f50add4f19b555514ed",
+    "traffic_sha256": "d22c5642e71208f1a97262e57df83451cd3222764c80690f9d51ee0201210932"
+  },
+  "eligibility": {
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false,
+    "production_enabled": false
+  },
+  "raw_content_included": false
+}
