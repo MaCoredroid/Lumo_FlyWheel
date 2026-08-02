@@ -357,3 +357,6 @@ def test_runtime_observer_distinguishes_channel_shadow_and_served_routes() -> No
     assert "channel_reference_served_by_batch" in observed_source
     assert "channel_candidate_served_by_batch" in observed_source
     assert "event['conv_commit'] = {'route': selected_route" in observed_source
+    assert "channel_host_syncs = 148" in observed_source
+    assert "'host_syncs': channel_host_syncs" in observed_source
+    assert "'fallback': 0" in observed_source

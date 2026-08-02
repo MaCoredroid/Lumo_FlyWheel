@@ -2296,6 +2296,15 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
     channel_commit = (
         commit_route == "fixed32_channel_zeroelide_source_col0"
     )
+    channel_gate_coverage = state.get(
+        "commit_channel_byte_gate_coverage_mask_by_batch"
+    )
+    channel_gate_attempts = state.get(
+        "commit_channel_byte_gate_attempts_by_batch"
+    )
+    channel_gate_passed = state.get(
+        "commit_channel_byte_gate_passed_by_batch"
+    )
     if (
         type(capacity) is not int
         or capacity not in (1, 2, 3, 4)
@@ -2360,13 +2369,32 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
                     )
                 )
                 != 0x0FFF
-                or not 0
-                <= int(
-                    state.get("commit_channel_byte_gate_coverage_mask", -1)
+                or any(
+                    not isinstance(mapping, dict)
+                    or set(mapping) != set(range(1, capacity + 1))
+                    for mapping in (
+                        channel_gate_coverage,
+                        channel_gate_attempts,
+                        channel_gate_passed,
+                    )
                 )
-                <= 0x0FFF
-                or int(state.get("commit_channel_byte_gate_attempts", -1)) < 0
-                or type(state.get("commit_channel_byte_gate_passed")) is not bool
+                or any(
+                    type(value) is not int or not 0 <= value <= 0x0FFF
+                    for value in channel_gate_coverage.values()
+                )
+                or any(
+                    type(value) is not int or value < 0
+                    for value in channel_gate_attempts.values()
+                )
+                or any(
+                    type(value) is not bool
+                    for value in channel_gate_passed.values()
+                )
+                or any(
+                    channel_gate_passed[key]
+                    != (channel_gate_coverage[key] == 0x0FFF)
+                    for key in channel_gate_coverage
+                )
             )
         )
         or int(contract.get("commit_launches_per_event", -1)) != 1
@@ -5071,16 +5099,31 @@ def _fr13_fixed32_observed_commit(
         conv_commit_before,
         "channel_candidate_shadow_launches",
     )
-    channel_attempt_delta = _fr13_fixed32_counter_delta(
+    channel_attempt_delta = _fr13_fixed32_batch_counter_delta(
         conv_commit_after,
         conv_commit_before,
-        "channel_byte_gate_attempts",
+        "channel_byte_gate_attempts_by_batch",
+        batch,
     )
+    channel_coverage_before_map = conv_commit_before.get(
+        "channel_byte_gate_coverage_mask_by_batch"
+    )
+    channel_coverage_after_map = conv_commit_after.get(
+        "channel_byte_gate_coverage_mask_by_batch"
+    )
+    if not isinstance(channel_coverage_before_map, dict) or not isinstance(
+        channel_coverage_after_map, dict
+    ):
+        raise RuntimeError("FR13 fixed32 conv channel coverage maps are missing")
     channel_coverage_before = int(
-        conv_commit_before.get("channel_byte_gate_coverage_mask", -1)
+        channel_coverage_before_map.get(
+            batch, channel_coverage_before_map.get(str(batch), -1)
+        )
     )
     channel_coverage_after = int(
-        conv_commit_after.get("channel_byte_gate_coverage_mask", -1)
+        channel_coverage_after_map.get(
+            batch, channel_coverage_after_map.get(str(batch), -1)
+        )
     )
     conv_row_elems = int(conv_commit_contract.get("row_elems", -1))
     conv_channels = int(conv_commit_contract.get("channels", -1))
@@ -5306,6 +5349,14 @@ def _fr13_fixed32_observed_commit(
             conv_channels + conv_block - 1
         ) // conv_block
     conv_programs = int(layer_count) * batch * programs_per_layer_request
+    channel_host_syncs = 0
+    if channel_attempt_delta == 1:
+        # One accepted-lens transfer, three explicit synchronizations, and
+        # 144 exact tensor equality results cross the host boundary.
+        channel_host_syncs = 148
+    elif channel_candidate_delta == 1 and channel_coverage_before != 0x0FFF:
+        # Covered-but-incomplete qualification still reads accepted lengths.
+        channel_host_syncs = 1
     event["conv_commit"] = {
         "route": selected_route,
         "layers": int(layer_count),
@@ -5324,8 +5375,11 @@ def _fr13_fixed32_observed_commit(
         "source_pointer_entries": 48,
         "full_node_writebacks": 0,
         "conv_remaps": 0,
-        "host_syncs": 0,
+        "host_syncs": channel_host_syncs,
         "skips": 0,
+        # Reference service is the intentional qualification route for an
+        # unseen accepted length, not a fatal runtime fallback. Its exact
+        # count is carried by the immutable conv-commit boundary counters.
         "fallback": 0,
     }
     programs = pregather_layers * batch * ((row_elems + block - 1) // block)
@@ -5779,10 +5833,16 @@ def _fr13_fixed32_failure_counts(observed, taw):
                 "kv_remap",
                 "syncfree_target16_postsample_drafter1_postforward",
             ),
-            ("conv_commit", "fixed32_direct_source_col0"),
             ("conv_pregather", "in_graph_preconsume"),
             ("committer", "fixed16_device_fill_graph"),
         )
+    )
+    route_mismatches += int(
+        observed.get("conv_commit", {}).get("route")
+        not in {
+            "fixed32_direct_source_col0",
+            "fixed32_channel_zeroelide_source_col0",
+        }
     )
     taw_iterations = taw.get("loop_iterations")
     output_capacity = observed.get("output_publish", {}).get("capacity")
@@ -31140,12 +31200,20 @@ def _fr13_f32_flush_write_boundary(request, counters):
     ) = _fr13_f32_flush_runtime_state()
     from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
         fixed32_committer_counters as commit_counters,
+        fixed32_conv_col0_commit_counters as conv_commit_counters,
         fixed32_conv_col0_pregather_counters as pregather_counters,
     )
     batch_histogram = {str(batch): 0 for batch in (1, 2, 3, 4)}
     for event in events:
         batch_histogram[str(int(event["batch_size"]))] += 1
     pregather_metrics = dict(pregather_counters())
+    conv_commit_metrics = dict(conv_commit_counters())
+    channel_commit_metrics = (
+        {"conv_commit": conv_commit_metrics}
+        if conv_commit_metrics.get("route")
+        == "fixed32_channel_zeroelide_source_col0"
+        else {}
+    )
     pregather_metrics["graph_replay_stages"] = len(events)
     pregather_metrics["graph_replay_stages_by_batch"] = {
         batch: int(batch_histogram[str(batch)]) for batch in (1, 2, 3, 4)
@@ -31238,6 +31306,7 @@ def _fr13_f32_flush_write_boundary(request, counters):
             },
             "boot_warm": boot_warm_metrics,
             "committer": committer_metrics,
+            **channel_commit_metrics,
             "conv_pregather": pregather_metrics,
         },
     }

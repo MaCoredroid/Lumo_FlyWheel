@@ -2510,7 +2510,12 @@ def validate_fixed32_ingress_and_census(
     mode: str,
     task_ids: list[str],
     task_bindings: dict[str, dict[str, Any]],
+    allow_conv_channel_qualification: bool = False,
 ) -> dict[str, Any]:
+    if type(allow_conv_channel_qualification) is not bool:
+        raise GateError(
+            f"{arm_dir}: conv-channel qualification policy must be boolean"
+        )
     canonical_task_keys = {
         fixed32_task_key_id(task_id) for task_id in task_ids
     }
@@ -2804,7 +2809,13 @@ def validate_fixed32_ingress_and_census(
         ):
             raise GateError(f"{source}: work-census event schema mismatch")
         try:
-            event = validate_work_census_event(raw_event, source=source)
+            event = validate_work_census_event(
+                raw_event,
+                source=source,
+                allow_conv_channel_qualification=(
+                    allow_conv_channel_qualification
+                ),
+            )
         except WorkCensusError as error:
             raise GateError(f"{source}: {error}") from error
         if (
@@ -3565,10 +3576,25 @@ def build_fixed32_chat_traffic_audit(
     subset: dict[str, Any],
     dataset_record_digests: dict[str, str],
     concurrency: int,
+    allow_conv_channel_qualification: bool = False,
 ) -> dict[str, Any]:
     task_ids = list(subset["task_ids"])
+    if type(allow_conv_channel_qualification) is not bool:
+        raise GateError(
+            f"{arm_dir}: conv-channel qualification policy must be boolean"
+        )
     if concurrency not in (1, 4):
         raise GateError(f"{arm_dir}: fixed32 provenance concurrency is invalid")
+    if allow_conv_channel_qualification and (
+        concurrency != 1
+        or len(task_ids) != 1
+        or subset.get("task_count") != 1
+        or subset.get("run_classification") != "b1_diagnostic"
+    ):
+        raise GateError(
+            f"{arm_dir}: conv-channel qualification requires the pinned "
+            "one-task B1 diagnostic subset"
+        )
     task_dirs = task_directories(
         arm_dir,
         len(task_ids),
@@ -4047,6 +4073,9 @@ def build_fixed32_chat_traffic_audit(
         mode=mode,
         task_ids=task_ids,
         task_bindings=task_bindings,
+        allow_conv_channel_qualification=(
+            allow_conv_channel_qualification
+        ),
     )
     intervals = sorted(
         (

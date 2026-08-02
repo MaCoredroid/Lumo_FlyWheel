@@ -1037,6 +1037,40 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
     kernel_module.fixed32_committer_counters = lambda: copy.deepcopy(
         commit_counters
     )
+    kernel_module.fixed32_conv_col0_commit_counters = lambda: {
+        "preseeded": True,
+        "route": "fixed32_direct_source_col0",
+        "direct_launches": 1,
+        "gather_launches": 0,
+        "scatter_launches": 0,
+        "direct_launches_by_batch": {1: 0, 2: 0, 3: 0, 4: 1},
+        "gather_launches_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
+        "scatter_launches_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
+        "channel_byte_gate_coverage_mask_by_batch": {
+            1: 0,
+            2: 0,
+            3: 0,
+            4: 0,
+        },
+        "channel_byte_gate_attempts_by_batch": {
+            1: 0,
+            2: 0,
+            3: 0,
+            4: 0,
+        },
+        "channel_byte_gate_passed_by_batch": {
+            1: False,
+            2: False,
+            3: False,
+            4: False,
+        },
+        "channel_reference_shadow_launches": 0,
+        "channel_candidate_shadow_launches": 0,
+        "channel_reference_served": 0,
+        "channel_candidate_served": 0,
+        "channel_reference_served_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
+        "channel_candidate_served_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
+    }
     kernel_module.fixed32_conv_col0_pregather_counters = (
         lambda: copy.deepcopy(pregather_counters)
     )

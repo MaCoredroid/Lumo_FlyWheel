@@ -169,7 +169,10 @@ def test_channel_gate_is_real_event_only_exact_and_reference_served() -> None:
     assert "route=_FR13_FIXED32_CONV_COMMIT_ROUTE" in gate
     assert "route=_FR13_FIXED32_CONV_CHANNEL_COMMIT_ROUTE" in gate
     assert gate.count("_fr13_fixed32_tensor_bits_equal(") == 3
-    assert 'state["commit_channel_byte_gate_coverage_mask"]' in gate
+    assert '"commit_channel_byte_gate_coverage_mask_by_batch"' in gate
+    assert 'coverage_mask = int(coverage_by_batch[batch])' in gate
+    assert 'attempts_by_batch[batch] += 1' in gate
+    assert 'passed_by_batch[batch] = coverage_mask == full_mask' in gate
     assert "finally:" in gate
     assert gate.rstrip().endswith("return False")
 

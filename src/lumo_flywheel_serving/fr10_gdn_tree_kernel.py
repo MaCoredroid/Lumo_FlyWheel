@@ -5455,9 +5455,15 @@ def preseed_fixed32_conv_col0_pregather(
         "commit_flat_contract_verified": flat_contract,
         "commit_channel_zeroelide": channel_commit,
         "commit_channel_contract_verified": channel_contract,
-        "commit_channel_byte_gate_coverage_mask": 0,
-        "commit_channel_byte_gate_attempts": 0,
-        "commit_channel_byte_gate_passed": False,
+        "commit_channel_byte_gate_coverage_mask_by_batch": {
+            batch: 0 for batch in batches
+        },
+        "commit_channel_byte_gate_attempts_by_batch": {
+            batch: 0 for batch in batches
+        },
+        "commit_channel_byte_gate_passed_by_batch": {
+            batch: False for batch in batches
+        },
         "commit_channel_reference_shadow_launches": 0,
         "commit_channel_candidate_shadow_launches": 0,
         "commit_channel_reference_served": 0,
@@ -6552,15 +6558,25 @@ def _fr13_fixed32_conv_channel_byte_gate(
     if not state.get("commit_channel_zeroelide", False):
         return True
     full_mask = _FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
-    coverage_mask = int(
-        state.get("commit_channel_byte_gate_coverage_mask", -1)
+    coverage_by_batch = state.get(
+        "commit_channel_byte_gate_coverage_mask_by_batch"
     )
+    attempts_by_batch = state.get("commit_channel_byte_gate_attempts_by_batch")
+    passed_by_batch = state.get("commit_channel_byte_gate_passed_by_batch")
+    if not all(
+        isinstance(mapping, dict) and batch in mapping
+        for mapping in (coverage_by_batch, attempts_by_batch, passed_by_batch)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 conv channel batch gate maps are invalid"
+        )
+    coverage_mask = int(coverage_by_batch[batch])
     if not 0 <= coverage_mask <= full_mask:
         raise RuntimeError(
             "FR13 fixed32 conv channel coverage mask is invalid"
         )
     if coverage_mask == full_mask:
-        state["commit_channel_byte_gate_passed"] = True
+        passed_by_batch[batch] = True
         return True
     if _fr13_fixed32_conv_channel_real_event_marker() is None:
         return False
@@ -6575,7 +6591,7 @@ def _fr13_fixed32_conv_channel_byte_gate(
     running_rows = spec_state_indices[:, :batch, 0].to(torch.long)
     conv_banks = state["banks"]
     ssm_banks = state["ssm_banks"]
-    state["commit_channel_byte_gate_attempts"] += 1
+    attempts_by_batch[batch] += 1
     saved_conv_rows = tuple(
         bank.index_select(0, running_rows[layer]).clone()
         for layer, bank in enumerate(conv_banks)
@@ -6656,8 +6672,8 @@ def _fr13_fixed32_conv_channel_byte_gate(
                 f"ssm_layers={ssm_mismatches}"
             )
         coverage_mask |= event_mask
-        state["commit_channel_byte_gate_coverage_mask"] = coverage_mask
-        state["commit_channel_byte_gate_passed"] = coverage_mask == full_mask
+        coverage_by_batch[batch] = coverage_mask
+        passed_by_batch[batch] = coverage_mask == full_mask
     finally:
         restore()
         torch.cuda.synchronize(accepted_lens.device)
@@ -6806,9 +6822,15 @@ def fixed32_conv_col0_commit_counters() -> dict[str, object]:
             "scatter_launches_by_batch": {
                 batch: 0 for batch in _FR13_FIXED32_BATCHES
             },
-            "channel_byte_gate_coverage_mask": 0,
-            "channel_byte_gate_attempts": 0,
-            "channel_byte_gate_passed": False,
+            "channel_byte_gate_coverage_mask_by_batch": {
+                batch: 0 for batch in _FR13_FIXED32_BATCHES
+            },
+            "channel_byte_gate_attempts_by_batch": {
+                batch: 0 for batch in _FR13_FIXED32_BATCHES
+            },
+            "channel_byte_gate_passed_by_batch": {
+                batch: False for batch in _FR13_FIXED32_BATCHES
+            },
             "channel_reference_shadow_launches": 0,
             "channel_candidate_shadow_launches": 0,
             "channel_reference_served": 0,
@@ -6844,15 +6866,30 @@ def fixed32_conv_col0_commit_counters() -> dict[str, object]:
             )
             for batch in _FR13_FIXED32_BATCHES
         },
-        "channel_byte_gate_coverage_mask": int(
-            state.get("commit_channel_byte_gate_coverage_mask", 0)
-        ),
-        "channel_byte_gate_attempts": int(
-            state.get("commit_channel_byte_gate_attempts", 0)
-        ),
-        "channel_byte_gate_passed": bool(
-            state.get("commit_channel_byte_gate_passed", False)
-        ),
+        "channel_byte_gate_coverage_mask_by_batch": {
+            batch: int(
+                state.get(
+                    "commit_channel_byte_gate_coverage_mask_by_batch", {}
+                ).get(batch, 0)
+            )
+            for batch in _FR13_FIXED32_BATCHES
+        },
+        "channel_byte_gate_attempts_by_batch": {
+            batch: int(
+                state.get(
+                    "commit_channel_byte_gate_attempts_by_batch", {}
+                ).get(batch, 0)
+            )
+            for batch in _FR13_FIXED32_BATCHES
+        },
+        "channel_byte_gate_passed_by_batch": {
+            batch: bool(
+                state.get(
+                    "commit_channel_byte_gate_passed_by_batch", {}
+                ).get(batch, False)
+            )
+            for batch in _FR13_FIXED32_BATCHES
+        },
         "channel_reference_shadow_launches": int(
             state.get("commit_channel_reference_shadow_launches", 0)
         ),
@@ -12074,6 +12111,25 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
     saved_conv_direct_by_batch = dict(
         conv_state["commit_direct_launches_by_batch"]
     )
+    channel_scalar_names = (
+        "commit_channel_reference_shadow_launches",
+        "commit_channel_candidate_shadow_launches",
+        "commit_channel_reference_served",
+        "commit_channel_candidate_served",
+    )
+    saved_conv_channel_scalars = {
+        name: conv_state[name] for name in channel_scalar_names
+    }
+    channel_map_names = (
+        "commit_channel_byte_gate_coverage_mask_by_batch",
+        "commit_channel_byte_gate_attempts_by_batch",
+        "commit_channel_byte_gate_passed_by_batch",
+        "commit_channel_reference_served_by_batch",
+        "commit_channel_candidate_served_by_batch",
+    )
+    saved_conv_channel_maps = {
+        name: dict(conv_state[name]) for name in channel_map_names
+    }
     saved_actual = int(counters["actual_replays_enqueued"])
     saved_by_batch = dict(counters["actual_replays_by_batch"])
     saved_callbacks = tuple(_FR13_FIXED32_COMMITTER_CALLBACKS)
@@ -12169,6 +12225,11 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
             conv_state["commit_direct_launches_by_batch"].update(
                 saved_conv_direct_by_batch
             )
+            for name, value in saved_conv_channel_scalars.items():
+                conv_state[name] = value
+            for name, values in saved_conv_channel_maps.items():
+                conv_state[name].clear()
+                conv_state[name].update(values)
             counters["actual_replays_enqueued"] = saved_actual
             counters["actual_replays_by_batch"].clear()
             counters["actual_replays_by_batch"].update(saved_by_batch)
@@ -12240,6 +12301,14 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
         == saved_conv_scatters_by_batch
         and dict(conv_state["commit_direct_launches_by_batch"])
         == saved_conv_direct_by_batch
+        and all(
+            conv_state[name] == value
+            for name, value in saved_conv_channel_scalars.items()
+        )
+        and all(
+            dict(conv_state[name]) == values
+            for name, values in saved_conv_channel_maps.items()
+        )
         and tuple(_FR13_FIXED32_COMMITTER_CALLBACKS) == saved_callbacks
         and _FR13_FIXED32_COMMITTER_ANNOUNCED is saved_announced
     )

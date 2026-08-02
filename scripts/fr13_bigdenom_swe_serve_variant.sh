@@ -40,6 +40,8 @@ FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:
 FR13_FIXED32_COMMITTER_LAYER_BATCH=${FR13_FIXED32_COMMITTER_LAYER_BATCH:-0}
 FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION=${FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION:-0}
 FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA=${FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA:-0}
+FR13_FIXED32_CONV_FLAT_COMMIT=${FR13_FIXED32_CONV_FLAT_COMMIT:-0}
+FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT=${FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT:-0}
 case "$FR13_FIXED32_B1_DIAGNOSTIC" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1"; exit 2 ;;
@@ -64,10 +66,19 @@ case "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA" in
   0|diagnostic) ;;
   *) echo "FAIL: FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA must be 0 or diagnostic"; exit 2 ;;
 esac
+case "$FR13_FIXED32_CONV_FLAT_COMMIT" in
+  0) ;;
+  *) echo "FAIL: FR13_FIXED32_CONV_FLAT_COMMIT is not qualified for SWE launch"; exit 2 ;;
+esac
+case "$FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT" in
+  0|diagnostic) ;;
+  *) echo "FAIL: FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT must be 0 or diagnostic"; exit 2 ;;
+esac
 export FR13_FIXED32_B1_DIAGNOSTIC FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB \
   FR13_FIXED32_COMMITTER_LAYER_BATCH \
   FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION \
   FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA \
+  FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT \
   FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
 _fixed32_eager_kernel_diagnostic=0
 if [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "1" \
@@ -143,6 +154,7 @@ FIXED32_TAW_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_fixed32_taw_native_precom
 FIXED32_BM8_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_dfwd_unified_bm8.real_event.arm"
 FIXED32_CUTLASS_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_fixed32_cutlass_streamk.real_event.arm"
 FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_fixed32_committer_layer_batch.real_event.arm"
+FIXED32_CONV_CHANNEL_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_fixed32_conv_channel_zeroelide.real_event.arm"
 FIXED32_INGRESS_SECRET_FILE=""
 FR13_FIXED32_INGRESS_TASK_IDS=""
 
@@ -773,7 +785,8 @@ write_fixed32_chat_traffic_audit(){
     "$FIXED32_MODE" \
     "$ARMDIR/fixed32_chat_traffic_audit.json" \
     "$FR13_FIXED32_B1_DIAGNOSTIC" \
-    "$SWE_CONCURRENCY" <<'PY'
+    "$SWE_CONCURRENCY" \
+    "$FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -793,10 +806,13 @@ mode = sys.argv[3]
 output_path = Path(sys.argv[4]).resolve()
 diagnostic_text = sys.argv[5]
 concurrency_text = sys.argv[6]
+conv_channel_text = sys.argv[7]
 if diagnostic_text not in {"0", "1"}:
     raise SystemExit("fixed32 B1 diagnostic selector is invalid")
 if concurrency_text not in {"1", "4"}:
     raise SystemExit("fixed32 chat-task audit concurrency is invalid")
+if conv_channel_text not in {"0", "diagnostic"}:
+    raise SystemExit("fixed32 conv-channel audit selector is invalid")
 subset = validate_fixed32_run_subset(
     subset_path,
     b1_diagnostic=diagnostic_text == "1",
@@ -808,6 +824,7 @@ audit = build_fixed32_chat_traffic_audit(
     subset=subset,
     dataset_record_digests=pinned_dataset_record_digests(str(repo)),
     concurrency=int(concurrency_text),
+    allow_conv_channel_qualification=conv_channel_text == "diagnostic",
 )
 temporary = output_path.with_name(output_path.name + ".tmp")
 temporary.write_text(
@@ -1393,6 +1410,7 @@ teardown(){
   fi
   # Never let an interrupted qualification arm survive into terminal flush.
   rm -f -- "$FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT_ARM_PATH" 2>/dev/null || true
+  rm -f -- "$FIXED32_CONV_CHANNEL_REAL_EVENT_ARM_PATH" 2>/dev/null || true
   if [[ -n "$FIXED32_MODE" ]]; then
     if [[ -z "$CONTAINER_RUNTIME_REF" ]]; then
       _promote_fixed32_container_from_cidfile >/dev/null 2>&1 || true
@@ -1615,6 +1633,38 @@ if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" ]]; then
      && "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "0" \
      && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" ]] || {
     echo "FAIL: fixed32 SFWD state-fusion byte diagnostic must be exclusive"
+    exit 2
+  }
+fi
+if [[ "$FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT" == "diagnostic" ]]; then
+  [[ "${LUMO_SWE_AUTOCOMMIT:-1}" == "0" ]] || {
+    echo "FAIL: channel zero-elide conv qualification forbids task autocommit"
+    exit 2
+  }
+  [[ -n "$FIXED32_MODE" \
+     && "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" \
+     && "$MAX_NUM_SEQS_OVR" == "1" \
+     && "$SWE_CONCURRENCY" == "1" \
+     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+     && "${FR13_DRAFT_VOCAB_ROOT:-0}" == "1" \
+     && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
+     && "$(sha256sum scripts/fr13_dvk_subset_blocks.json | awk '{print $1}')" == "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff" \
+     && "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" == "0" \
+     && "${ENFORCE_EAGER:-0}" == "0" ]] || {
+    echo "FAIL: channel zero-elide conv qualification requires exact K64/root1 graph-mode B1"
+    exit 2
+  }
+  [[ "$FR13_FIXED32_CONV_FLAT_COMMIT" == "0" \
+     && "$FR13_FIXED32_COMMITTER_LAYER_BATCH" == "0" \
+     && "$FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION" == "0" \
+     && "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA" == "0" \
+     && "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "0" \
+     && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+     && "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
+     && "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" == "0" \
+     && "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "0" ]] || {
+    echo "FAIL: channel zero-elide conv qualification must be the only kernel diagnostic"
     exit 2
   }
 fi
@@ -2412,6 +2462,12 @@ if [[ -n "$FIXED32_MODE" ]]; then
     FIXED32_RUNNER_ARGS+=(
       --fixed32-committer-layer-batch-real-event-arm \
       "$FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT_ARM_PATH"
+    )
+  fi
+  if [[ "$FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT" == "diagnostic" ]]; then
+    FIXED32_RUNNER_ARGS+=(
+      --fixed32-conv-channel-real-event-arm \
+      "$FIXED32_CONV_CHANNEL_REAL_EVENT_ARM_PATH"
     )
   fi
 fi

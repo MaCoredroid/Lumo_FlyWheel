@@ -942,8 +942,18 @@ def forward_graph_structural_signature(batch_size: int) -> str:
     return hashlib.sha256(canonical.encode("ascii")).hexdigest()
 
 
-def validate_event(raw: object, *, source: str) -> ValidatedEvent:
+def validate_event(
+    raw: object,
+    *,
+    source: str,
+    allow_conv_channel_qualification: bool = False,
+) -> ValidatedEvent:
     """Validate one event and return its arm-independent work signature."""
+
+    if type(allow_conv_channel_qualification) is not bool:
+        raise CensusError(
+            f"{source}: conv-channel qualification policy must be boolean"
+        )
 
     event = _mapping(raw, source)
     _exact_keys(event, TOP_LEVEL_KEYS, source)
@@ -1769,11 +1779,43 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             // CONV_PREGATHER_BLOCK
         )
     )
+    conv_commit_raw = _mapping(event["conv_commit"], f"{source}.conv_commit")
+    _exact_keys(conv_commit_raw, CONV_COMMIT_KEYS, f"{source}.conv_commit")
+    conv_commit_route = _string(
+        conv_commit_raw["route"], f"{source}.conv_commit.route"
+    )
+    conv_commit_host_syncs = _integer(
+        conv_commit_raw["host_syncs"], f"{source}.conv_commit.host_syncs"
+    )
+    if allow_conv_channel_qualification:
+        allowed_syncs = {
+            "fixed32_direct_source_col0": {0, 148},
+            "fixed32_channel_zeroelide_source_col0": {0, 1},
+        }
+        if (
+            conv_commit_route not in allowed_syncs
+            or conv_commit_host_syncs not in allowed_syncs[conv_commit_route]
+        ):
+            raise CensusError(
+                f"{source}.conv_commit: channel qualification route/sync "
+                "combination is unsupported"
+            )
+    else:
+        _expect(
+            conv_commit_route,
+            CONV_COMMIT_ROUTE,
+            f"{source}.conv_commit.route",
+        )
+        _expect(
+            conv_commit_host_syncs,
+            0,
+            f"{source}.conv_commit.host_syncs",
+        )
     conv_commit = _fixed_section(
-        event["conv_commit"],
+        conv_commit_raw,
         keys=CONV_COMMIT_KEYS,
         expected={
-            "route": CONV_COMMIT_ROUTE,
+            "route": conv_commit_route,
             "layers": CONV_COMMIT_LAYERS,
             "requests": batch_size,
             "row_elems": CONV_PREGATHER_ROW_ELEMS,
@@ -1790,7 +1832,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "source_pointer_entries": 48,
             "full_node_writebacks": 0,
             "conv_remaps": 0,
-            "host_syncs": 0,
+            "host_syncs": conv_commit_host_syncs,
             "skips": 0,
             "fallback": 0,
         },
@@ -1897,6 +1939,11 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         )
         for failure_name in sorted(FAILURE_KEYS)
     }
+    expected_conv_commit_route = (
+        conv_commit_route
+        if allow_conv_channel_qualification
+        else CONV_COMMIT_ROUTE
+    )
     route_mismatches = sum(
         section["route"] != route
         for section, route in (
@@ -1904,7 +1951,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             (accepted_path_pack, ACCEPTED_PATH_PACK_ROUTE),
             (request_key_pack, REQUEST_KEY_PACK_ROUTE),
             (kv_remap, KV_REMAP_ROUTE),
-            (conv_commit, CONV_COMMIT_ROUTE),
+            (conv_commit, expected_conv_commit_route),
             (conv_pregather, CONV_PREGATHER_ROUTE),
             (committer, COMMITTER_ROUTE),
         )

@@ -69,6 +69,8 @@ _FR13_M32_GUARD_NAMES=(
   FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA
   FR13_FIXED32_CFWD_NATIVE_KEYGROUP_SO
   FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING_JSON
+  FR13_FIXED32_CONV_FLAT_COMMIT
+  FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT
   FR13_FIXED32_COMMITTER_LAYER_BATCH
   FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION
   FR13_FIXED32_ATTRIBUTION_ONLY
@@ -94,6 +96,7 @@ _FR13_M32_GUARD_ACTIVE=0
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_PRODUCTION]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_TIMING_ARM]}" == "set:1" \
    || "$_FR13_CALLER_SFWD_B4" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT]}" == "set:diagnostic" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA]}" == "set:diagnostic" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 _FR13_LOCAL_ENV_SOURCED=0
@@ -107,6 +110,7 @@ fi
    || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" \
    || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "1" \
+   || "${FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT:-0}" == "diagnostic" \
    || "${FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA:-0}" == "diagnostic" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 if (( _FR13_M32_GUARD_ACTIVE == 1 )); then
@@ -349,6 +353,8 @@ FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=${FR13_FIXED32_SFWD_STATE_FUSION_PRODU
 FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA=${FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA:-0}
 FR13_FIXED32_CFWD_NATIVE_KEYGROUP_SO=${FR13_FIXED32_CFWD_NATIVE_KEYGROUP_SO:-}
 FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING_JSON=${FR13_FIXED32_CFWD_NATIVE_KEYGROUP_BINDING_JSON:-}
+FR13_FIXED32_CONV_FLAT_COMMIT=${FR13_FIXED32_CONV_FLAT_COMMIT:-0}
+FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT=${FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT:-0}
 FR13_FIXED32_COMMITTER_LAYER_BATCH=${FR13_FIXED32_COMMITTER_LAYER_BATCH:-0}
 FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION=${FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION:-0}
 FR13_FIXED32_CUTLASS_WAVE=${FR13_FIXED32_CUTLASS_WAVE:-stock}
@@ -558,6 +564,58 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE" != "stock" \
            || "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" != "0" ) ]]; then
   echo "nonstock CUTLASS wave requires both BM8 selectors to be 0" >&2
   exit 2
+fi
+case "$FR13_FIXED32_CONV_FLAT_COMMIT" in
+  0) ;;
+  *) echo "FR13_FIXED32_CONV_FLAT_COMMIT is not qualified for server launch" >&2; exit 2 ;;
+esac
+case "$FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT" in
+  0|diagnostic) ;;
+  *) echo "FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT must be 0 or diagnostic" >&2; exit 2 ;;
+esac
+if [[ "$FR13_FIXED32_CONV_FLAT_COMMIT" == "diagnostic" \
+      && "$FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT" == "diagnostic" ]]; then
+  echo "fixed32 conv zero-eliding candidates are mutually exclusive" >&2
+  exit 2
+fi
+if [[ "$FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT" == "diagnostic" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+     && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
+     && "$(sha256sum scripts/fr13_dvk_subset_blocks.json | awk '{print $1}')" == "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff" \
+     && -z "${FR13_NEEDS_ALLOW:-}" \
+     && "${ENFORCE_EAGER:-0}" == "0" ]] || {
+    echo "channel zero-elide conv commit requires exact K64/root1 graph-mode B1" >&2
+    exit 2
+  }
+  [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" \
+     && "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "0" \
+     && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+     && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "0" \
+     && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+     && "$FR13_FA2_QROW16_PRODUCTION" == "0" \
+     && "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "0" \
+     && "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "0" \
+     && "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "0" \
+     && "$FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION" == "0" \
+     && "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA" == "0" \
+     && "$FR13_FIXED32_COMMITTER_LAYER_BATCH" == "0" \
+     && "$FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION" == "0" \
+     && "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" == "0" \
+     && "$FR13_DRAFT_HEAD_PAD_ROWS" == "0" \
+     && "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" \
+     && "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "0" \
+     && "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "0" \
+     && "$FR13_DRAFT_HEAD_M32_TIMING_ARM" == "0" ]] || {
+    echo "channel zero-elide conv commit must be the only kernel candidate" >&2
+    exit 2
+  }
 fi
 FR13_CFWD_NATIVE_KEYGROUP_DOCKER_ARGS=()
 case "$FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA" in
@@ -1856,6 +1914,8 @@ PY
     "$LOG_DIR/fr13_fixed32_runtime_attestation.json" \
     "$LOG_DIR"/fr13_fixed32_boundary_snapshot.*.json \
     "$LOG_DIR/fr13_fixed32_committer_layer_batch.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_conv_channel_zeroelide_commit.arm" \
+    "$LOG_DIR/fr13_fixed32_conv_channel_zeroelide.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_cfwd_native_keygroup_precompute.arm" \
     "$LOG_DIR/fr13_fixed32_cfwd_native_keygroup_precompute.binding.json" \
     "$LOG_DIR/fr13_fixed32_cfwd_native_keygroup_precompute.install.json" \
@@ -1871,6 +1931,10 @@ PY
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv64.production_engagement.json" \
     "$LOG_DIR"/fr13_fixed32_batch_gdn_bv64.production_engagement.json.tmp.*
   printf '%s\n' "$FR13_FIXED32_MODE" > "$LOG_DIR/fr13_fixed32_mode.flag"
+  if [[ "$FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT" == "diagnostic" ]]; then
+    install -m 400 /dev/null \
+      "$LOG_DIR/fr13_fixed32_conv_channel_zeroelide_commit.arm"
+  fi
   if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
     printf '%s\n' "$_fr13_gdn_path_bv_candidate" \
       > "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag"
@@ -1905,6 +1969,8 @@ else
     "$LOG_DIR"/fr13_fixed32_batch_gdn_bv8.production_engagement.json.tmp.* \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv64.production_engagement.json" \
     "$LOG_DIR"/fr13_fixed32_batch_gdn_bv64.production_engagement.json.tmp.* \
+    "$LOG_DIR/fr13_fixed32_conv_channel_zeroelide_commit.arm" \
+    "$LOG_DIR/fr13_fixed32_conv_channel_zeroelide.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_cfwd_native_keygroup_precompute.arm" \
     "$LOG_DIR/fr13_fixed32_cfwd_native_keygroup_precompute.binding.json" \
     "$LOG_DIR/fr13_fixed32_cfwd_native_keygroup_precompute.install.json" \
@@ -2661,6 +2727,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_CONV_NODEBANK="${FR13_CONV_NODEBANK:-0}" \
   -e FR13_CONV_WB_BATCHED="${FR13_CONV_WB_BATCHED:-0}" \
   -e FR13_FIXED32_CONV_SOURCE_BATCH="${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" \
+  -e FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT="$FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT" \
   -e FR13_SPEC_BLOCKS_CAP="${FR13_SPEC_BLOCKS_CAP:-0}" \
   -e FR13_SUBTREE_PARALLEL="${FR13_SUBTREE_PARALLEL:-1}" \
   -e FR13_SUBTREE_PARALLEL_SELFCHECK="${FR13_SUBTREE_PARALLEL_SELFCHECK:-0}" \

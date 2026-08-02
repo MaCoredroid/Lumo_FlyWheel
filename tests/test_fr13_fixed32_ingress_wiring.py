@@ -204,11 +204,17 @@ def test_fixed32_chat_traffic_audit_passes_validated_concurrency() -> None:
     )
     writer = serve[writer_start:writer_end]
 
-    assert '"$FR13_FIXED32_B1_DIAGNOSTIC" \\\n    "$SWE_CONCURRENCY" <<\'PY\'' in writer
+    assert '"$FR13_FIXED32_B1_DIAGNOSTIC" \\\n    "$SWE_CONCURRENCY" \\\n    "$FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT" <<\'PY\'' in writer
     assert "concurrency_text = sys.argv[6]" in writer
     assert 'if concurrency_text not in {"1", "4"}:' in writer
     assert 'raise SystemExit("fixed32 chat-task audit concurrency is invalid")' in writer
     assert "concurrency=int(concurrency_text)" in writer
+    assert "conv_channel_text = sys.argv[7]" in writer
+    assert 'if conv_channel_text not in {"0", "diagnostic"}:' in writer
+    assert (
+        'allow_conv_channel_qualification=conv_channel_text == "diagnostic"'
+        in writer
+    )
 
 
 @pytest.mark.parametrize(
