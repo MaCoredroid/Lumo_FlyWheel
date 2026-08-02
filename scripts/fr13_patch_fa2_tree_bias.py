@@ -28,6 +28,8 @@ their dedicated translation units to resolve pages directly from 64-row
 K-block coordinates. There is no qrow32 production selector.
 The B4 trait also forms its nonnull block-table row directly and constructs
 sequence metadata from only the required dynamic ``seqused_k`` value.
+Its canonical contiguous K/V page, row, and head strides are compile-time
+constants in the private page resolver and base-head address.
 """
 
 from __future__ import annotations
@@ -203,7 +205,7 @@ FIXED32_QUERY_TILE16_BATCH_STRIDE_SENTINEL = 0x46523133
 FIXED32_QUERY_TILE32_BATCH_STRIDE_SENTINEL = 0x20013
 
 
-FIXED32_QUERY_STATIC_PAGE_TRAIT = r'''// FR13_FA2_FIXED32_STATIC_PAGE: stock traits retain the dynamic page size.
+FIXED32_QUERY_STATIC_PAGE_TRAIT_LEGACY = r'''// FR13_FA2_FIXED32_STATIC_PAGE: stock traits retain the dynamic page size.
 template <typename Kernel_traits>
 struct StaticPagedKVBlockSize {
     static constexpr int value = 0;
@@ -214,7 +216,25 @@ struct StaticPagedKVBlockSize {
 '''
 
 
-FIXED32_QUERY_STATIC_PAGE_OFFSET = r'''    constexpr int kStaticPageBlockSize = StaticPagedKVBlockSize<Kernel_traits>::value;
+FIXED32_QUERY_STATIC_PAGE_TRAIT = r'''// FR13_FA2_FIXED32_STATIC_PAGE: stock traits retain the dynamic page size.
+template <typename Kernel_traits>
+struct StaticPagedKVBlockSize {
+    static constexpr int value = 0;
+    static constexpr int log2 = 0;
+    static constexpr int block_n_log2 = 0;
+};
+
+template <typename Kernel_traits>
+struct StaticPagedKVStrides {
+    static constexpr int64_t page = 0;
+    static constexpr int64_t row = 0;
+    static constexpr int64_t head = 0;
+};
+
+'''
+
+
+FIXED32_QUERY_STATIC_PAGE_OFFSET_LEGACY = r'''    constexpr int kStaticPageBlockSize = StaticPagedKVBlockSize<Kernel_traits>::value;
     if constexpr (kStaticPageBlockSize != 0) {
         constexpr int kStaticPageBlockLog2 = StaticPagedKVBlockSize<Kernel_traits>::log2;
         constexpr int kStaticBlockNLog2 = StaticPagedKVBlockSize<Kernel_traits>::block_n_log2;
@@ -239,6 +259,52 @@ FIXED32_QUERY_STATIC_PAGE_OFFSET = r'''    constexpr int kStaticPageBlockSize = 
         return ((int64_t) block_table[virtual_page_idx]) * ((int64_t) page_stride)
             + ((int64_t) page_offset) * ((int64_t) row_stride)
             + col_offset;
+    } else {
+        const int64_t global_row_offset = block_row_offset + n_block * kBlockN;
+        const int64_t page_offset = global_row_offset % page_block_size;
+        const int64_t virtual_page_idx = global_row_offset / page_block_size;
+        return ((int64_t) block_table[virtual_page_idx]) * ((int64_t) page_stride)
+            + page_offset * ((int64_t) row_stride)
+            + col_offset;
+    }
+'''
+
+
+FIXED32_QUERY_STATIC_PAGE_OFFSET = r'''    constexpr int kStaticPageBlockSize = StaticPagedKVBlockSize<Kernel_traits>::value;
+    if constexpr (kStaticPageBlockSize != 0) {
+        constexpr int kStaticPageBlockLog2 = StaticPagedKVBlockSize<Kernel_traits>::log2;
+        constexpr int kStaticBlockNLog2 = StaticPagedKVBlockSize<Kernel_traits>::block_n_log2;
+        constexpr int kBlocksPerPageLog2 = kStaticPageBlockLog2 - kStaticBlockNLog2;
+        constexpr int kBlocksPerPage = 1U << kBlocksPerPageLog2;
+        constexpr int64_t kStaticPageStride = StaticPagedKVStrides<Kernel_traits>::page;
+        constexpr int64_t kStaticRowStride = StaticPagedKVStrides<Kernel_traits>::row;
+        constexpr bool kStaticStrides = kStaticPageStride != 0;
+        static_assert(kStaticPageBlockSize > 0);
+        static_assert(kStaticPageBlockSize == (1U << kStaticPageBlockLog2));
+        static_assert(Kernel_traits::kBlockN == (1U << kStaticBlockNLog2));
+        static_assert(kStaticPageBlockLog2 >= kStaticBlockNLog2);
+        static_assert((kStaticPageStride == 0) == (kStaticRowStride == 0));
+        static_assert(Kernel_traits::kNThreads % Kernel_traits::kGmemThreadsPerRow == 0);
+        static_assert(
+            Kernel_traits::kNThreads / Kernel_traits::kGmemThreadsPerRow
+                * Kernel_traits::kGmemRowsPerThread
+            == Kernel_traits::kBlockN);
+        // n_block is active and nonnegative. Each fixed32 thread starts below
+        // kBlockN, and the partial-block clamp can only lower that row offset.
+        // Resolve the page in 32-bit block coordinates before address math.
+        const int page_offset =
+            ((n_block & (kBlocksPerPage - 1)) << kStaticBlockNLog2)
+            + static_cast<int>(block_row_offset);
+        const int virtual_page_idx = n_block >> kBlocksPerPageLog2;
+        if constexpr (kStaticStrides) {
+            return ((int64_t) block_table[virtual_page_idx]) * kStaticPageStride
+                + ((int64_t) page_offset) * kStaticRowStride
+                + col_offset;
+        } else {
+            return ((int64_t) block_table[virtual_page_idx]) * ((int64_t) page_stride)
+                + ((int64_t) page_offset) * ((int64_t) row_stride)
+                + col_offset;
+        }
     } else {
         const int64_t global_row_offset = block_row_offset + n_block * kBlockN;
         const int64_t page_offset = global_row_offset % page_block_size;
@@ -514,6 +580,13 @@ struct StaticPagedKVBlockSize<Fr13Fixed32Qrow32KernelTraits> {
 };
 
 template <>
+struct StaticPagedKVStrides<Fr13Fixed32Qrow32KernelTraits> {
+    static constexpr int64_t page = 1024 * 4 * 256;
+    static constexpr int64_t row = 4 * 256;
+    static constexpr int64_t head = 256;
+};
+
+template <>
 struct StaticQueryRows<Fr13Fixed32Qrow32KernelTraits> {
     static constexpr int value = 32;
 };
@@ -618,8 +691,10 @@ FIXED32_QUERY_TILE32_API_GATE = r'''    if (params.tree_bias_batch_stride == kFr
             && params.seqlen_q == 32
             && params.seqlen_q_rounded == 128
             && params.q_head_stride == 256
+            && params.k_batch_stride == 1024 * 4 * 256
             && params.k_row_stride == 4 * 256
             && params.k_head_stride == 256
+            && params.v_batch_stride == 1024 * 4 * 256
             && params.v_row_stride == 4 * 256
             && params.v_head_stride == 256
             && params.o_head_stride == 256
@@ -875,8 +950,17 @@ def _patch_fixed32_query_static_page(
     )
     trait_marker = "// FR13_FA2_FIXED32_STATIC_PAGE: stock traits retain the dynamic page size."
     if trait_marker in text:
-        if text.count(trait_marker) != 1 or FIXED32_QUERY_STATIC_PAGE_TRAIT not in text:
+        if text.count(trait_marker) != 1:
             raise RuntimeError("fixed32 static paged-KV trait drifted")
+        if FIXED32_QUERY_STATIC_PAGE_TRAIT not in text:
+            if text.count(FIXED32_QUERY_STATIC_PAGE_TRAIT_LEGACY) != 1:
+                raise RuntimeError("fixed32 static paged-KV trait drifted")
+            text = text.replace(
+                FIXED32_QUERY_STATIC_PAGE_TRAIT_LEGACY,
+                FIXED32_QUERY_STATIC_PAGE_TRAIT,
+                1,
+            )
+            changed = True
     else:
         text, did = _insert_once(
             text,
@@ -897,6 +981,15 @@ def _patch_fixed32_query_static_page(
     if FIXED32_QUERY_STATIC_PAGE_OFFSET in text:
         if text.count(FIXED32_QUERY_STATIC_PAGE_OFFSET) != 1:
             raise RuntimeError("fixed32 static paged-KV offset was duplicated")
+    elif FIXED32_QUERY_STATIC_PAGE_OFFSET_LEGACY in text:
+        if text.count(FIXED32_QUERY_STATIC_PAGE_OFFSET_LEGACY) != 1:
+            raise RuntimeError("fixed32 static paged-KV legacy offset was duplicated")
+        text = text.replace(
+            FIXED32_QUERY_STATIC_PAGE_OFFSET_LEGACY,
+            FIXED32_QUERY_STATIC_PAGE_OFFSET,
+            1,
+        )
+        changed = True
     else:
         text, did = _replace_once(
             text,
@@ -1338,6 +1431,66 @@ def _patch_fixed32_query_tile32_static_paged_metadata(
     return True
 
 
+def _patch_fixed32_query_tile32_static_kv_strides(
+    path: Path,
+    *,
+    fixed32_query_tile32: bool = False,
+) -> bool:
+    if not fixed32_query_tile32:
+        return False
+    text = path.read_text()
+    function_signature = (
+        "template<typename Kernel_traits, bool Is_causal, bool Is_local, "
+        "bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, "
+        "bool Split, bool Append_KV, typename Params>\n"
+        "inline __device__ void compute_attn_1rowblock_splitkv"
+    )
+    function_start = text.index(function_signature)
+    function_end = text.index(
+        "\n////////////////////////////////////////////////////////////////////////////////////////////////////\n\n"
+        "template<typename Kernel_traits, bool Is_dropout",
+        function_start,
+    )
+    function = text[function_start:function_end]
+    marker = (
+        "// FR13_FA2_QROW32_STATIC_KV_STRIDES: canonical contiguous page layout."
+    )
+    if marker in function:
+        required = (
+            "StaticPagedKVStrides<Kernel_traits>::head",
+            "static_assert(kStaticKVHeadStride == 256);",
+            "row_offset_k = bidh_k * kStaticKVHeadStride;",
+            "row_offset_v = bidh_k * kStaticKVHeadStride;",
+        )
+        if function.count(marker) != 1 or any(item not in function for item in required):
+            raise RuntimeError("qrow32 static KV stride specialization drifted")
+        return False
+
+    static_head_base = r'''        block_table = params.block_table
+            + bidb * params.block_table_batch_stride;
+        row_offset_k = bidh_k * params.k_head_stride;
+        row_offset_v = bidh_k * params.v_head_stride;
+'''
+    fixed_head_base = r'''        // FR13_FA2_QROW32_STATIC_KV_STRIDES: canonical contiguous page layout.
+        constexpr int64_t kStaticKVHeadStride =
+            StaticPagedKVStrides<Kernel_traits>::head;
+        static_assert(kStaticKVHeadStride == 256);
+        block_table = params.block_table
+            + bidb * params.block_table_batch_stride;
+        row_offset_k = bidh_k * kStaticKVHeadStride;
+        row_offset_v = bidh_k * kStaticKVHeadStride;
+'''
+    if function.count(static_head_base) != 1:
+        raise RuntimeError(
+            "split-KV static KV head-stride anchor drifted: expected one, found "
+            f"{function.count(static_head_base)}"
+        )
+    function = function.replace(static_head_base, fixed_head_base, 1)
+    text = text[:function_start] + function + text[function_end:]
+    path.write_text(text)
+    return True
+
+
 def _patch_fixed32_query_translation_unit(
     path: Path,
     *,
@@ -1671,6 +1824,13 @@ def patch_fa2_source(
     )
     flash_fwd_kernel_changed = (
         _patch_fixed32_query_tile32_static_paged_metadata(
+            files["flash_fwd_kernel.h"],
+            fixed32_query_tile32=fixed32_query_tile32,
+        )
+        or flash_fwd_kernel_changed
+    )
+    flash_fwd_kernel_changed = (
+        _patch_fixed32_query_tile32_static_kv_strides(
             files["flash_fwd_kernel.h"],
             fixed32_query_tile32=fixed32_query_tile32,
         )

@@ -147,6 +147,7 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
     assert "FR13_ALLOW_SPLIT_SWITCH" not in candidate
     assert "using Fr13Fixed32Qrow16KernelTraits" in candidate
     assert "StaticPagedKVBlockSize<Fr13Fixed32Qrow16KernelTraits>" in candidate
+    assert "StaticPagedKVStrides<Fr13Fixed32Qrow16KernelTraits>" not in candidate
     assert "using TreeKernelTraits = Fr13Fixed32Qrow16KernelTraits" in candidate
     assert "kTreeBlockM = 16" in candidate
     assert "kTreeBlockN = 64" in candidate
@@ -289,6 +290,7 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     assert "ordinary and production paths cannot tag" in candidate
     assert "using Fr13Fixed32Qrow32KernelTraits" in candidate
     assert "StaticPagedKVBlockSize<Fr13Fixed32Qrow32KernelTraits>" in candidate
+    assert "StaticPagedKVStrides<Fr13Fixed32Qrow32KernelTraits>" in candidate
     static_page_log2 = 10
     static_page_size = 1 << static_page_log2
     static_block_n_log2 = 6
@@ -296,6 +298,9 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     assert f"static constexpr int value = {static_page_size}" in candidate
     assert f"static constexpr int log2 = {static_page_log2}" in candidate
     assert f"static constexpr int block_n_log2 = {static_block_n_log2}" in candidate
+    assert "static constexpr int64_t page = 1024 * 4 * 256" in candidate
+    assert "static constexpr int64_t row = 4 * 256" in candidate
+    assert "static constexpr int64_t head = 256" in candidate
     assert "StaticQueryRows<Fr13Fixed32Qrow32KernelTraits>" in candidate
     assert f"static constexpr int value = {static_query_rows}" in candidate
     assert "StaticQueryBatchLayout<Fr13Fixed32Qrow32KernelTraits>" in candidate
@@ -323,6 +328,8 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     assert "params.tree_bias_cols == 32" in api_gate
     assert "params.tree_bias_row_stride == 32" in api_gate
     assert "params.tree_bias_col_stride == 1" in api_gate
+    assert "params.k_batch_stride == 1024 * 4 * 256" in api_gate
+    assert "params.v_batch_stride == 1024 * 4 * 256" in api_gate
     assert "params.cu_seqlens_q != nullptr" in api_gate
     assert "params.cu_seqlens_k != nullptr" in api_gate
     assert "params.seqused_k != nullptr" in api_gate
@@ -403,6 +410,9 @@ def test_qrow32_traits_precede_the_exact_splitkv_instantiation() -> None:
     page_specialization_at = translation_unit.index(
         "struct StaticPagedKVBlockSize<Fr13Fixed32Qrow32KernelTraits>"
     )
+    stride_specialization_at = translation_unit.index(
+        "struct StaticPagedKVStrides<Fr13Fixed32Qrow32KernelTraits>"
+    )
     query_specialization_at = translation_unit.index(
         "struct StaticQueryRows<Fr13Fixed32Qrow32KernelTraits>"
     )
@@ -420,6 +430,7 @@ def test_qrow32_traits_precede_the_exact_splitkv_instantiation() -> None:
         < namespace_at
         < alias_at
         < page_specialization_at
+        < stride_specialization_at
         < query_specialization_at
         < batch_specialization_at
         < launcher_at
@@ -430,6 +441,9 @@ def test_qrow32_traits_precede_the_exact_splitkv_instantiation() -> None:
     # flash_fwd_kernel.h. The qrow TU specializes both before the first use
     # that instantiates the exact BM32/N64/two-warp kernel type.
     assert "struct StaticPagedKVBlockSize" in (
+        module.FIXED32_QUERY_STATIC_PAGE_TRAIT
+    )
+    assert "struct StaticPagedKVStrides" in (
         module.FIXED32_QUERY_STATIC_PAGE_TRAIT
     )
     assert "struct StaticQueryRows" in module._tree_bias_helper(
@@ -446,6 +460,9 @@ def test_qrow32_traits_precede_the_exact_splitkv_instantiation() -> None:
     )
     assert translation_unit.count(
         "StaticPagedKVBlockSize<Fr13Fixed32Qrow32KernelTraits>"
+    ) == 1
+    assert translation_unit.count(
+        "StaticPagedKVStrides<Fr13Fixed32Qrow32KernelTraits>"
     ) == 1
     assert translation_unit.count(
         "StaticQueryRows<Fr13Fixed32Qrow32KernelTraits>"
@@ -544,8 +561,15 @@ def test_fixed32_static_page_specialization_is_opt_in_exact_and_idempotent(
     candidate = utils.read_text()
     assert candidate.count("FR13_FA2_FIXED32_STATIC_PAGE") == 1
     assert candidate.count("struct StaticPagedKVBlockSize") == 1
+    assert candidate.count("struct StaticPagedKVStrides") == 1
     assert "static constexpr int value = 0" in candidate
+    assert "static constexpr int64_t page = 0" in candidate
+    assert "static constexpr int64_t row = 0" in candidate
+    assert "static constexpr int64_t head = 0" in candidate
     assert "if constexpr (kStaticPageBlockSize != 0)" in candidate
+    assert "if constexpr (kStaticStrides)" in candidate
+    assert "StaticPagedKVStrides<Kernel_traits>::page" in candidate
+    assert "StaticPagedKVStrides<Kernel_traits>::row" in candidate
     assert "n_block >> kBlocksPerPageLog2" in candidate
     assert "n_block & (kBlocksPerPage - 1)" in candidate
     assert "<< kStaticBlockNLog2" in candidate
@@ -560,6 +584,29 @@ def test_fixed32_static_page_specialization_is_opt_in_exact_and_idempotent(
         fixed32_query_tile16=True,
     )
     assert utils.read_text() == candidate
+
+    # A previously patched pinned header migrates in place to the stride trait
+    # and remains idempotent; no clean-source rebuild is required for the edit.
+    legacy_utils = tmp_path / "legacy_utils.h"
+    legacy = candidate.replace(
+        module.FIXED32_QUERY_STATIC_PAGE_TRAIT,
+        module.FIXED32_QUERY_STATIC_PAGE_TRAIT_LEGACY,
+        1,
+    ).replace(
+        module.FIXED32_QUERY_STATIC_PAGE_OFFSET,
+        module.FIXED32_QUERY_STATIC_PAGE_OFFSET_LEGACY,
+        1,
+    )
+    legacy_utils.write_text(legacy)
+    assert module._patch_fixed32_query_static_page(
+        legacy_utils,
+        fixed32_query_tile32=True,
+    )
+    assert legacy_utils.read_text() == candidate
+    assert not module._patch_fixed32_query_static_page(
+        legacy_utils,
+        fixed32_query_tile32=True,
+    )
 
     # Both private routes install the same header specialization surface.
     qrow32_utils = tmp_path / "qrow32_utils.h"
@@ -602,6 +649,23 @@ def test_fixed32_static_page_specialization_is_opt_in_exact_and_idempotent(
                             ((n_block & 15) << 6) + block_row_offset
                             == remainder
                         )
+
+    page_stride = 1024 * 4 * 256
+    row_stride = 4 * 256
+    for physical_page in (0, 1, 17, 4095):
+        for page_offset in (0, 1, 63, 64, 1023):
+            for col_offset in (0, 1, 127, 255):
+                dynamic_address = (
+                    physical_page * page_stride
+                    + page_offset * row_stride
+                    + col_offset
+                )
+                static_address = (
+                    physical_page * (1024 * 4 * 256)
+                    + page_offset * (4 * 256)
+                    + col_offset
+                )
+                assert static_address == dynamic_address
 
 
 def test_qrow32_static_query_specialization_is_exact_and_keeps_kv_masking(
@@ -887,6 +951,33 @@ def test_qrow32_static_paged_metadata_keeps_only_dynamic_sequence_length(
     )
     assert kernel.read_text() == candidate
 
+    assert not module._patch_fixed32_query_tile32_static_kv_strides(kernel)
+    assert module._patch_fixed32_query_tile32_static_kv_strides(
+        kernel,
+        fixed32_query_tile32=True,
+    )
+    stride_candidate = kernel.read_text()
+    assert "FR13_FA2_QROW32_STATIC_KV_STRIDES" in stride_candidate
+    assert "StaticPagedKVStrides<Kernel_traits>::head" in stride_candidate
+    assert "static_assert(kStaticKVHeadStride == 256);" in stride_candidate
+    assert "row_offset_k = bidh_k * kStaticKVHeadStride;" in stride_candidate
+    assert "row_offset_v = bidh_k * kStaticKVHeadStride;" in stride_candidate
+    # Runtime head strides remain only in the generic nonstatic branch.
+    assert "row_offset_k = kStaticPagedKV || block_table != nullptr" in stride_candidate
+    assert "(bidh_k) * params.k_head_stride" in stride_candidate
+    assert "(bidh_k) * params.v_head_stride" in stride_candidate
+    for sentinel in (
+        "dynamic_k_length_sentinel(binfo.actual_seqlen_k)",
+        "mask_order_sentinel()",
+        "qk_pv_order_sentinel()",
+    ):
+        assert stride_candidate.count(sentinel) == stock.count(sentinel) == 1
+    assert not module._patch_fixed32_query_tile32_static_kv_strides(
+        kernel,
+        fixed32_query_tile32=True,
+    )
+    assert kernel.read_text() == stride_candidate
+
     helper = module._tree_bias_helper(tile_earlyout=True)
     info_start = helper.index("struct StaticPagedQueryBlockInfo")
     info_end = helper.index("template <typename Kernel_traits, typename BlockInfoT", info_start)
@@ -908,6 +999,8 @@ def test_qrow32_static_paged_metadata_keeps_only_dynamic_sequence_length(
             original_nonnull_row = batch * block_table_stride
             static_row = batch * block_table_stride
             assert static_row == original_nonnull_row
+    for kv_head in range(4):
+        assert kv_head * 256 == kv_head * (4 * 256 // 4)
 
 
 def test_qrow16_static_paged_path_folds_only_the_private_trait(
