@@ -1,0 +1,56 @@
+{
+  "schema": "fr13.fixed32.cfwd_native_keygroup_b1_byte_rejection.v1",
+  "classification": "REJECT_BYTE_MISMATCH_48_OF_48",
+  "source_commit": "eb44684ca6a1530977563df53f355987a178d345",
+  "qualification_profile": {
+    "batch_size": 1,
+    "draft_vocab": "k64",
+    "root_reduction": true,
+    "topology": "hydra27_fixed32",
+    "task_count": 1,
+    "task_source": "swe_bench_verified"
+  },
+  "candidate": {
+    "route": "native_keygroup_precompute_cuda",
+    "source_sha256": "5699ab062624bd2f6368143c48068bfccf1f9c3b5629e243d92616b94359bc54",
+    "binary_sha256": "c9647856777d17dd3cde07a1d0e0b4c87ea1fb823bebd65f45ded1d461f8af26"
+  },
+  "runtime": {
+    "boot_completed": true,
+    "health_ready": true,
+    "authenticated_task_interval_opened": true,
+    "candidate_comparison_attempted": true,
+    "swe_tasks_completed": 0,
+    "host_compile_overlap": true
+  },
+  "rejection": {
+    "phase": "first_authenticated_b1_candidate_comparison",
+    "batch_size": 1,
+    "model_layers": 48,
+    "mismatched_layers": 48,
+    "all_layers_mismatched": true,
+    "primary_reason": "candidate output did not byte-match the native reference on any model layer",
+    "secondary_outer_status": "post-gate engine liveness failure followed by outer runner exit 15"
+  },
+  "result": {
+    "kernel_correctness_passed": false,
+    "byte_gate_coverage_complete": false,
+    "task_verdict_available": false,
+    "performance_measurement": false,
+    "timing_eligible": false,
+    "tps_available": false,
+    "floor_acceptance_eligible": false
+  },
+  "cleanup": {
+    "campaign_arm_rotated": true,
+    "docker_empty_after_cleanup": true,
+    "gpu_compute_processes_after_cleanup": 0
+  },
+  "privacy": {
+    "raw_task_data_absent": true,
+    "raw_model_data_absent": true,
+    "raw_logs_absent": true,
+    "environment_absent": true,
+    "process_and_container_identifiers_absent": true
+  }
+}
