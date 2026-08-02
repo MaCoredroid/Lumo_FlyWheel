@@ -129,12 +129,12 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 2
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 13
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 14
     assert (
         module.CONFIG_REPLACEMENT.count(
             "KernelTmaWarpSpecializedBlockwisePingpongSm120"
         )
-        == 4
+        == 5
     )
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
@@ -478,7 +478,10 @@ def test_b4_identity_divisor_stage2_preserves_math_and_grid_contract() -> None:
     config_start = patched.index(
         "struct sm120_blockwise_fp8_config_b4_stockshape_identity_divisor_stage2"
     )
-    config_end = patched.index("enum class fixed32_cutlass_wave_variant", config_start)
+    config_end = patched.index(
+        "struct sm120_blockwise_fp8_config_b4_stockshape_identity_twom",
+        config_start,
+    )
     config = patched[config_start:config_end]
 
     assert "KernelTmaWarpSpecializedBlockwisePingpongSm120" in config
@@ -499,6 +502,57 @@ def test_b4_identity_divisor_stage2_preserves_math_and_grid_contract() -> None:
     assert (
         "fixed32_cutlass_wave_variant::identity_divisor_stage2_b4) {\n"
         "    return run_identity_divisor_stage2_b4(out);"
+        in patched
+    )
+
+
+def test_b4_twom_scheduler_removes_generic_per_tile_divmods() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+    scheduler_start = patched.index("class Fr13B4TwoMStaticTileScheduler100")
+    scheduler_end = patched.index(
+        "template <class TileShape, class ClusterShape,\n"
+        "          uint32_t SchedulerPipelineStageCount>\n"
+        "struct TileSchedulerSelector<\n"
+        "    vllm::fr13_fixed32_m128_divisor_static_scheduler",
+        scheduler_start,
+    )
+    scheduler = patched[scheduler_start:scheduler_end]
+
+    assert "linear_idx & 1" in scheduler
+    assert "linear_idx >> 1" in scheduler
+    assert "L_idx" not in scheduler
+    assert "divmod_batch_" not in scheduler
+    assert "divmod_cluster_shape" not in scheduler
+    assert "divmod_cluster_blk_major_" not in scheduler
+    assert "raster_order_" not in scheduler
+    assert "total_grid_size_ * uint64_t(advance_count)" in scheduler
+    assert "fr13_fixed32_b4_twom_static_scheduler" in patched
+    assert "using Scheduler = Fr13B4TwoMStaticTileScheduler100;" in patched
+
+
+def test_b4_identity_twom_keeps_complete_tile_math() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+    config_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b4_stockshape_identity_twom"
+    )
+    config_end = patched.index("enum class fixed32_cutlass_wave_variant", config_start)
+    config = patched[config_start:config_end]
+
+    assert "KernelTmaWarpSpecializedBlockwisePingpongSm120" in config
+    assert "using TileShape = Shape<_64, _128, _128>;" in config
+    assert "OutType, 1, 128, 128, TileShape, ClusterShape" in config
+    assert "fr13_fixed32_b4_twom_static_scheduler" in config
+    assert "StageCount<" not in config
+    assert "StreamK" not in config
+    assert "identity_twom_b4_byte_ab" in patched
+    assert "auto run_identity_twom_b4" in patched
+    assert '"/logs/fr13_fixed32_cutlass_identity_twom_b4_byte_ab.jsonl"' in patched
+    assert "fr13.fixed32.cutlass_identity_twom_b4_byte_ab.v1" in patched
+    assert (
+        "fixed32_cutlass_wave_variant::identity_twom_b4) {\n"
+        "    return run_identity_twom_b4(out);"
         in patched
     )
 
