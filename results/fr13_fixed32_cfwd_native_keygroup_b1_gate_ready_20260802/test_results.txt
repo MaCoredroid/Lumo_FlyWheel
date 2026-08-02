@@ -1,0 +1,22 @@
+Fixed32 native key-group CFWD B1 gate readiness (2026-08-02 UTC)
+
+Focused B1 boundary, runtime-arm, committer, selector, binary, and gate suite:
+169 passed in 0.52s
+
+Ruff: pass.
+Python byte compilation: pass.
+Runtime-manifest self-test: pass.
+git diff --check: pass.
+
+The source-bound binary contract requires the exact pinned patched vLLM graph,
+the canonical full _C.abi3.so target, exactly one reachable candidate object,
+and a forced source-to-object-to-extension rebuild before binding issuance.
+
+The live B1 postvalidator requires one resolved real SWE-Verified task,
+accepted lengths 0 through 11, byte equality for every FP32 bank across all 48
+layers, reference serving, exact candidate identity, and a reconstructed traffic
+audit. The launcher pins K64/root1 and disables competing candidates.
+
+No full-extension build, CUDA launch, GPU query, Docker/container action, real
+SWE campaign, synthetic/probe timing, or timing measurement is represented by
+this readiness artifact. The real K64/root1 B1 gate remains pending.

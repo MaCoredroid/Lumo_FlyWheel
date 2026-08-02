@@ -1,0 +1,92 @@
+{
+  "branch": "agent/fixed32-cfwd-keygroup-precompute-register-20260802",
+  "candidate": {
+    "default_on": false,
+    "diagnostic_selector_only": true,
+    "production_authorized": false,
+    "timing_eligible": false
+  },
+  "candidate_source_commit": "ecfff80b32063d575d1e9ab5006bac2bdd525055",
+  "code_commit": "675387f243535f0df66b4f158fefa42735dd14e1",
+  "codegen_evidence": {
+    "architecture": "sm_121a",
+    "candidate_object_sha256": "8a20199ee6ad357f6188aed5551fa2697c0185ca86edf63f4fa2d8b8f29649b0",
+    "forbidden_sass_counts": {
+      "CALL": 0,
+      "LDL": 0,
+      "STL": 0
+    },
+    "local_bytes": 0,
+    "ptxas_source_static_shared_bytes": 6568,
+    "registers_per_thread": 64,
+    "reported_shared_bytes": 7592,
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0,
+    "stack_bytes": 0
+  },
+  "gate_contract": {
+    "accepted_lengths_required": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "all_48_layers_required": true,
+    "batch_size": 1,
+    "candidate_binary_target": "vllm/_C.abi3.so",
+    "candidate_object_forced_rebuild_required": true,
+    "concurrency": 1,
+    "draft_vocab_k": 65536,
+    "fp32_bank_byte_equality_required": true,
+    "real_swe_verified_resolved_task": true,
+    "reference_served_required": true,
+    "root_reduction": 1
+  },
+  "integration_commits": [
+    "78e2b84924d8e44ab2899e7ce5a7caa07344d54f",
+    "91e73010e5ca40b97bb1fa99d79c1eeb5705be3d",
+    "675387f243535f0df66b4f158fefa42735dd14e1"
+  ],
+  "qualification": {
+    "b1_real_swe_all_depth_byte_gate": null,
+    "b1_real_swe_timing": null,
+    "b4_exact4_real_swe_byte_gate": null,
+    "b4_exact4_real_swe_timing": null,
+    "hardware_floor_claim_changed": false,
+    "status": "gate_implementation_ready_live_build_and_run_pending"
+  },
+  "schema": "fr13.fixed32.cfwd_native_keygroup_b1_gate_ready.v1",
+  "source_sha256": {
+    "native/fr13_fixed32_cfwd_native_fullvalue.cu": "1c1a9813410dcf15bcbb4d23bec71ee16ddcd7e2dbe3b1a3698e58f71bd96985",
+    "scripts/fr13_cfwd_native_keygroup_b1_gate.py": "3fecf2c5eeb58457982d9b6d1e8fce56f55a1f6cfaaffe2b989b86412066a3de",
+    "scripts/fr13_cfwd_native_keygroup_binary.py": "4681f9e20f880f1502f47289b5b7d92e11eee31bba9fd4ccdd5e617f5934f14f",
+    "scripts/fr13_patch_vllm_cfwd_native_fullvalue_cuda.py": "50bcdb4cbe71db7d75f1a233cfe6d2e5d18d6a6cf1bcf97af87db339a8452184",
+    "scripts/fr13_run_b1_cfwd_native_keygroup_gate.sh": "a46135c639fab9278750a67b3d146cfc7df17ec08156ef10579d668e26b3e489",
+    "src/lumo_flywheel_serving/fr13_cfwd_native_fullvalue_cuda.py": "2f92a7bef4be1b37ebcccc05ee5e0c396755a2a3cda8c17f27ae9bb5a0a2e7f0",
+    "tests/test_fr13_cfwd_native_keygroup_b1_gate.py": "9284618faaf106679102afd713ccf95fe929898b5ca5fe445317afd4bad6fda3",
+    "tests/test_fr13_cfwd_native_keygroup_binary.py": "ad9689bc187bdc513c6dd2cf5ec0b09cd58ca422e59c98a3e6c4ce7f37908fb5",
+    "tests/test_fr13_fixed32_cfwd_native_fullvalue_cuda.py": "2e505d437b95464ae5caa2bcef3acfca3103fcd6cd61f882a3590ce584a4fb95"
+  },
+  "verification": {
+    "cuda_kernel_launch_run": false,
+    "docker_or_container_action": false,
+    "focused_tests_passed": 169,
+    "gpu_query_run": false,
+    "python_byte_compile": "pass",
+    "real_swe_campaign_run_for_candidate": false,
+    "ruff": "pass",
+    "runtime_manifest_self_test": "pass",
+    "synthetic_or_probe_performance_run": false,
+    "timing_measurement_run": false,
+    "whitespace": "pass"
+  },
+  "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
+}
