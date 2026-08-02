@@ -1,0 +1,62 @@
+{
+  "schema": "fr13.fixed32.sfwd_state_fusion.rowgroup4.source.v1",
+  "status": "SOURCE_ONLY_UNQUALIFIED",
+  "date_utc": "2026-08-02",
+  "branch": "agent/fixed32-sfwd-state-fusion-rowgroup4-20260802",
+  "source_commit": "f7456b7fc83bdc292cf25b4f2d15e22a2f224363",
+  "candidate": "fixed32_sfwd_state_fusion_rowgroup4_v2",
+  "fixed_contract": {
+    "batch_sizes": [1, 2, 3, 4],
+    "physical_rows_per_request": 32,
+    "conv_width": 4,
+    "conv_state_length": 12,
+    "block_channels": 256,
+    "rows_per_program": 4,
+    "warps_per_program": 8,
+    "physical_launches_per_layer": 1,
+    "drafter_vocab_k": 65536,
+    "drafter_vocab_root": 1
+  },
+  "source_delta": {
+    "prior_grid": "B*32 x ceil(C/256)",
+    "candidate_grid": "B*8 x ceil(C/256)",
+    "program_block_ratio_candidate_over_prior": 0.25,
+    "repeated_conv_weight_load_ratio_candidate_over_prior": 0.25,
+    "launch_count_changed": false,
+    "storage_changed": false,
+    "tap_math_changed": false,
+    "activation_math_changed": false,
+    "recurrence_changed": false,
+    "drafter_quality_changed": false
+  },
+  "source_sha256": {
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "91733455520aca01a73c1ea88fd3deb4f41bb3472264b552a1fd2de16832902c",
+    "scripts/fr13_run_b1_sfwd_state_fusion_gate.sh": "4089334e0f2145f72bc32547489c51074181caf0f4a768917e53d9b96fc5e586",
+    "tests/test_fr13_fixed32_sfwd_state_fusion.py": "a68ba0d8d4e3537bc62799e1238eb3b8fef6a564b2294be39928454f7348163b",
+    "source_commit_patch": "975d45ac38c6b9aa246026362df8e3a7e5de0f267a7ce02605296701a4896cb2"
+  },
+  "verification": {
+    "python_compile": "pass",
+    "ruff": "pass",
+    "focused_tests": "8 passed",
+    "combined_schedule_tests": "12 passed",
+    "diff_check": "pass"
+  },
+  "claims": {
+    "compiled": false,
+    "codegen_inspected": false,
+    "resource_qualified": false,
+    "byte_equal": false,
+    "performance_measured": false,
+    "real_swe_verified_run": false,
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false,
+    "production_enabled": false
+  },
+  "required_next": [
+    "pinned SM121a Triton codegen and resource inspection after campaign teardown",
+    "authenticated real SWE-Verified B1 48-layer raw-byte gate",
+    "graph-safe production qualification",
+    "standing exact4 real-task full-step timing before exact16"
+  ]
+}

@@ -1,0 +1,13 @@
+FR13 fixed32 SFWD state-fusion row-group source verification
+
+python bytecode compile: PASS
+ruff changed source/test: PASS
+focused state-fusion suite: 8 passed in 1.52s
+combined SFWD/GDN schedule suite: 12 passed in 1.56s
+git diff --check before source commit: PASS
+
+CUDA/Triton codegen: NOT RUN
+GPU/resource/SASS inspection: NOT RUN
+real SWE-Verified byte gate: NOT RUN
+performance measurement: NOT RUN
+production/floor claim: NONE
