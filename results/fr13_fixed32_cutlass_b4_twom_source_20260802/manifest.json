@@ -1,0 +1,40 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_twom_source.v1",
+  "created_at_utc": "2026-08-02T18:37:04Z",
+  "status": "source_gate_pass_default_off",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "agent/fixed32-cutlass-b4-divisor-stage2-20260802",
+    "commit": "bf282c2493d13287e4ce72975900fa80445f7da0",
+    "patch_source_sha256": "f780978583eeb67bdb23b8330d35ac9fb61ee57c5832d3a37045f026b2b5c51a"
+  },
+  "candidate": {
+    "selector": "identity_twom_b4",
+    "diagnostic_selector": "identity_twom_b4_byte_ab",
+    "default_enabled": false,
+    "physical_m": 128,
+    "tile_mnk": [64, 128, 128],
+    "cluster_mnk": [1, 1, 1],
+    "mainloop_schedule": "KernelTmaWarpSpecializedBlockwisePingpongSm120",
+    "mainloop_stages": "auto",
+    "epilogue": "identity",
+    "tile_scheduler": "fr13_fixed32_b4_twom_static_scheduler",
+    "m_tile_mapping": "m=linear_index_and_1,n=linear_index_shift_1,l=0",
+    "split_k": false
+  },
+  "source_checks": {
+    "focused_tests": "33 passed",
+    "ruff": "pass",
+    "pycompile": "pass",
+    "git_diff_check": "pass"
+  },
+  "not_run": [
+    "host CUDA compile",
+    "resource and SASS audit",
+    "GPU kernel runtime",
+    "real SWE-Verified B4 byte gate",
+    "full-step timing",
+    "hardware-floor acceptance"
+  ]
+}

@@ -72,6 +72,7 @@ SCHEDULER_SPECIALIZATION_REPLACEMENT = r"""#include "cutlass_gemm_caller.cuh"
 namespace vllm {
 struct fr13_fixed32_m128_static_scheduler {};
 struct fr13_fixed32_m128_divisor_static_scheduler {};
+struct fr13_fixed32_b4_twom_static_scheduler {};
 struct fr13_fixed32_wide256_recompute_scheduler {};
 }  // namespace vllm
 
@@ -375,12 +376,98 @@ class Fr13DivisorBalancedStaticTileScheduler100
   }
 };
 
+// Fixed32 B4 with a 64-row tile always has exactly two M tiles, one batch
+// plane, cluster (1,1,1), and complete output tiles. Map the persistent linear
+// work index directly and remove the generic batch/cluster/raster divmods from
+// every tile assignment.
+class Fr13B4TwoMStaticTileScheduler100
+    : public Fr13DivisorBalancedStaticTileScheduler100 {
+  using Base = Fr13DivisorBalancedStaticTileScheduler100;
+  uint32_t current_work_linear_idx_ = 0;
+  uint32_t total_grid_size_ = 0;
+  uint32_t problem_tiles_ = 0;
+
+  CUTLASS_DEVICE void initialize_linear_work(Params const& params) {
+#if defined(__CUDA_ARCH__)
+    current_work_linear_idx_ = blockIdx.x + gridDim.x *
+        (blockIdx.y + gridDim.y * blockIdx.z);
+    total_grid_size_ = gridDim.x * gridDim.y * gridDim.z;
+    problem_tiles_ = static_cast<uint32_t>(params.blocks_per_problem_);
+#endif
+  }
+
+ public:
+  using Params = typename Base::Params;
+  using WorkTileInfo = typename Base::WorkTileInfo;
+  using CLCResponse = typename Base::CLCResponse;
+
+  CUTLASS_DEVICE explicit Fr13B4TwoMStaticTileScheduler100(
+      Params const& params) : Base(params) {
+    initialize_linear_work(params);
+  }
+
+  CUTLASS_DEVICE explicit Fr13B4TwoMStaticTileScheduler100(
+      CLCResponse* response, Params const& params, dim3 block_id_in_cluster)
+      : Base(response, params, block_id_in_cluster) {
+    initialize_linear_work(params);
+  }
+
+  template <class ClusterShape>
+  CUTLASS_DEVICE WorkTileInfo initial_work_tile_info(
+      ClusterShape) const {
+    return get_current_work();
+  }
+
+  CUTLASS_DEVICE WorkTileInfo get_current_work() const {
+    return get_current_work_for_linear_idx(current_work_linear_idx_);
+  }
+
+  CUTLASS_DEVICE WorkTileInfo get_current_work_for_linear_idx(
+      uint32_t linear_idx) const {
+    if (linear_idx >= problem_tiles_) {
+      return WorkTileInfo::invalid_work_tile();
+    }
+    return {static_cast<int32_t>(linear_idx & 1),
+            static_cast<int32_t>(linear_idx >> 1), 0, true};
+  }
+
+  CUTLASS_DEVICE void advance_to_next_work(uint32_t advance_count = 1) {
+    current_work_linear_idx_ += total_grid_size_ * advance_count;
+  }
+
+  CUTLASS_DEVICE bool is_last_tile(
+      WorkTileInfo&, uint32_t advance_count = 1) const {
+    return current_work_linear_idx_ +
+        total_grid_size_ * advance_count >= problem_tiles_;
+  }
+
+  CUTLASS_DEVICE auto fetch_next_work(WorkTileInfo) {
+    advance_to_next_work();
+    return cute::make_tuple(get_current_work(), true);
+  }
+
+  template <class TileSchedulerPipeline, class TileSchedulerPipelineState>
+  CUTLASS_DEVICE auto fetch_next_work(
+      WorkTileInfo work_tile_info, TileSchedulerPipeline&,
+      TileSchedulerPipelineState) {
+    return fetch_next_work(work_tile_info);
+  }
+};
+
 template <class TileShape, class ClusterShape,
           uint32_t SchedulerPipelineStageCount>
 struct TileSchedulerSelector<
     vllm::fr13_fixed32_m128_divisor_static_scheduler, arch::Sm120,
     TileShape, ClusterShape, SchedulerPipelineStageCount> {
   using Scheduler = Fr13DivisorBalancedStaticTileScheduler100;
+};
+
+template <class TileShape, class ClusterShape,
+          uint32_t SchedulerPipelineStageCount>
+struct TileSchedulerSelector<
+    vllm::fr13_fixed32_b4_twom_static_scheduler, arch::Sm120,
+    TileShape, ClusterShape, SchedulerPipelineStageCount> {
+  using Scheduler = Fr13B4TwoMStaticTileScheduler100;
 };
 }  // namespace cutlass::gemm::kernel::detail
 
@@ -506,7 +593,7 @@ template <
     int ScaleGranularityK, class MmaTileShape, class ClusterShape,
     class EpilogueScheduler, class MainloopScheduler, bool swap_ab_,
     class TileScheduler,
-    class MainloopStageCount = cutlass::gemm::collective::StageCountAuto>
+    class MainloopStageCount = void>
 struct cutlass_3x_gemm_fp8_blockwise_identity_static
     : cutlass_3x_gemm_fp8_blockwise<
           OutType, ScaleGranularityM, ScaleGranularityN, ScaleGranularityK,
@@ -525,27 +612,6 @@ struct cutlass_3x_gemm_fp8_blockwise_identity_static
           cutlass::FloatRoundStyle::round_to_nearest>,
       cutlass::epilogue::fusion::Sm90AccFetch>;
 
-  using CollectiveMainloop = conditional_t<
-      Base::swap_ab,
-      typename cutlass::gemm::collective::CollectiveBuilder<
-          typename Base::ArchTag, typename Base::OperatorClass,
-          typename Base::ElementB,
-          cute::tuple<typename Base::LayoutB_Transpose,
-                      typename Base::LayoutSFA>,
-          Base::AlignmentB, typename Base::ElementA,
-          cute::tuple<typename Base::LayoutA_Transpose,
-                      typename Base::LayoutSFB>,
-          Base::AlignmentA, typename Base::ElementAccumulator, MmaTileShape,
-          ClusterShape, MainloopStageCount, MainloopScheduler>::CollectiveOp,
-      typename cutlass::gemm::collective::CollectiveBuilder<
-          typename Base::ArchTag, typename Base::OperatorClass,
-          typename Base::ElementA,
-          cute::tuple<typename Base::LayoutA, typename Base::LayoutSFA>,
-          Base::AlignmentA, typename Base::ElementB,
-          cute::tuple<typename Base::LayoutB, typename Base::LayoutSFB>,
-          Base::AlignmentB, typename Base::ElementAccumulator, MmaTileShape,
-          ClusterShape, MainloopStageCount, MainloopScheduler>::CollectiveOp>;
-
   using CollectiveEpilogue =
       typename cutlass::epilogue::collective::CollectiveBuilder<
           typename Base::ArchTag, typename Base::OperatorClass,
@@ -560,6 +626,35 @@ struct cutlass_3x_gemm_fp8_blockwise_identity_static
                         typename Base::LayoutD>,
           Base::AlignmentD, EpilogueScheduler,
           Fr13EpilogueCallbacks>::CollectiveOp;
+
+  using ResolvedMainloopStageCount = conditional_t<
+      std::is_void_v<MainloopStageCount>,
+      cutlass::gemm::collective::StageCountAutoCarveout<
+          static_cast<int>(sizeof(typename CollectiveEpilogue::SharedStorage))>,
+      MainloopStageCount>;
+
+  using CollectiveMainloop = conditional_t<
+      Base::swap_ab,
+      typename cutlass::gemm::collective::CollectiveBuilder<
+          typename Base::ArchTag, typename Base::OperatorClass,
+          typename Base::ElementB,
+          cute::tuple<typename Base::LayoutB_Transpose,
+                      typename Base::LayoutSFA>,
+          Base::AlignmentB, typename Base::ElementA,
+          cute::tuple<typename Base::LayoutA_Transpose,
+                      typename Base::LayoutSFB>,
+          Base::AlignmentA, typename Base::ElementAccumulator, MmaTileShape,
+          ClusterShape, ResolvedMainloopStageCount,
+          MainloopScheduler>::CollectiveOp,
+      typename cutlass::gemm::collective::CollectiveBuilder<
+          typename Base::ArchTag, typename Base::OperatorClass,
+          typename Base::ElementA,
+          cute::tuple<typename Base::LayoutA, typename Base::LayoutSFA>,
+          Base::AlignmentA, typename Base::ElementB,
+          cute::tuple<typename Base::LayoutB, typename Base::LayoutSFB>,
+          Base::AlignmentB, typename Base::ElementAccumulator, MmaTileShape,
+          ClusterShape, ResolvedMainloopStageCount,
+          MainloopScheduler>::CollectiveOp>;
 
   using KernelType = enable_sm120_family<cutlass::gemm::kernel::GemmUniversal<
       Shape<int, int, int, int>, CollectiveMainloop,
@@ -757,6 +852,22 @@ struct sm120_blockwise_fp8_config_b4_stockshape_identity {
       EpilogueSchedule, KernelSchedule, false, void>;
 };
 
+// Isolate a two-stage TMA mainloop on B4 while retaining the stock dynamic
+// scheduler, 64x128x128 tile, ping-pong schedule, and identity epilogue.
+template <typename OutType>
+struct sm120_blockwise_fp8_config_b4_stockshape_identity_stage2 {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwisePingpongSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_64, _128, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
+      OutType, 1, 128, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, false, void,
+      cutlass::gemm::collective::StageCount<2>>;
+};
+
 template <typename OutType>
 struct sm120_blockwise_fp8_config_b4_stockshape_identity_divisor {
   using KernelSchedule =
@@ -769,6 +880,38 @@ struct sm120_blockwise_fp8_config_b4_stockshape_identity_divisor {
       OutType, 1, 128, 128, TileShape, ClusterShape,
       EpilogueSchedule, KernelSchedule, false,
       fr13_fixed32_m128_divisor_static_scheduler>;
+};
+
+// Preserve the B4 stock tile and divisor-balanced scheduler while limiting the
+// mainloop to two stages. This isolates whether lower shared-memory residency
+// pressure outweighs the shorter TMA pipeline for the fixed K64 projections.
+template <typename OutType>
+struct sm120_blockwise_fp8_config_b4_stockshape_identity_divisor_stage2 {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwisePingpongSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_64, _128, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
+      OutType, 1, 128, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, false,
+      fr13_fixed32_m128_divisor_static_scheduler,
+      cutlass::gemm::collective::StageCount<2>>;
+};
+
+template <typename OutType>
+struct sm120_blockwise_fp8_config_b4_stockshape_identity_twom {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwisePingpongSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_64, _128, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
+      OutType, 1, 128, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, false,
+      fr13_fixed32_b4_twom_static_scheduler>;
 };
 
 enum class fixed32_cutlass_wave_variant {
@@ -791,8 +934,14 @@ enum class fixed32_cutlass_wave_variant {
   identity_stage2_pingpong_b1_byte_ab,
   identity_stockshape_b4,
   identity_stockshape_b4_byte_ab,
+  identity_stockshape_stage2_b4,
+  identity_stockshape_stage2_b4_byte_ab,
   identity_divisor_b4,
   identity_divisor_b4_byte_ab,
+  identity_divisor_stage2_b4,
+  identity_divisor_stage2_b4_byte_ab,
+  identity_twom_b4,
+  identity_twom_b4_byte_ab,
 };
 
 static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
@@ -860,11 +1009,29 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     if (value == "identity_stockshape_b4_byte_ab") {
       return fixed32_cutlass_wave_variant::identity_stockshape_b4_byte_ab;
     }
+    if (value == "identity_stockshape_stage2_b4") {
+      return fixed32_cutlass_wave_variant::identity_stockshape_stage2_b4;
+    }
+    if (value == "identity_stockshape_stage2_b4_byte_ab") {
+      return fixed32_cutlass_wave_variant::identity_stockshape_stage2_b4_byte_ab;
+    }
     if (value == "identity_divisor_b4") {
       return fixed32_cutlass_wave_variant::identity_divisor_b4;
     }
     if (value == "identity_divisor_b4_byte_ab") {
       return fixed32_cutlass_wave_variant::identity_divisor_b4_byte_ab;
+    }
+    if (value == "identity_divisor_stage2_b4") {
+      return fixed32_cutlass_wave_variant::identity_divisor_stage2_b4;
+    }
+    if (value == "identity_divisor_stage2_b4_byte_ab") {
+      return fixed32_cutlass_wave_variant::identity_divisor_stage2_b4_byte_ab;
+    }
+    if (value == "identity_twom_b4") {
+      return fixed32_cutlass_wave_variant::identity_twom_b4;
+    }
+    if (value == "identity_twom_b4_byte_ab") {
+      return fixed32_cutlass_wave_variant::identity_twom_b4_byte_ab;
     }
     return fixed32_cutlass_wave_variant::stock;
   }();
@@ -1036,6 +1203,12 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
            fixed32_cutlass_wave_variant::persistent_b4_m128_static_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
+  if (N > 65536 &&
+      (wave_variant == fixed32_cutlass_wave_variant::identity_twom_b4 ||
+       wave_variant ==
+           fixed32_cutlass_wave_variant::identity_twom_b4_byte_ab)) {
+    wave_variant = fixed32_cutlass_wave_variant::stock;
+  }
   if (M != 32 && M != 128 &&
       (wave_variant == fixed32_cutlass_wave_variant::identity_stage2_static ||
        wave_variant ==
@@ -1053,13 +1226,24 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       (wave_variant ==
            fixed32_cutlass_wave_variant::identity_stockshape_b4 ||
        wave_variant == fixed32_cutlass_wave_variant::
-                           identity_stockshape_b4_byte_ab)) {
+                           identity_stockshape_b4_byte_ab ||
+       wave_variant == fixed32_cutlass_wave_variant::
+                           identity_stockshape_stage2_b4 ||
+       wave_variant == fixed32_cutlass_wave_variant::
+                           identity_stockshape_stage2_b4_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
   if (M != 128 &&
       (wave_variant == fixed32_cutlass_wave_variant::identity_divisor_b4 ||
        wave_variant ==
-           fixed32_cutlass_wave_variant::identity_divisor_b4_byte_ab)) {
+           fixed32_cutlass_wave_variant::identity_divisor_b4_byte_ab ||
+       wave_variant ==
+           fixed32_cutlass_wave_variant::identity_divisor_stage2_b4 ||
+       wave_variant == fixed32_cutlass_wave_variant::
+                           identity_divisor_stage2_b4_byte_ab ||
+       wave_variant == fixed32_cutlass_wave_variant::identity_twom_b4 ||
+       wave_variant ==
+           fixed32_cutlass_wave_variant::identity_twom_b4_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
 
@@ -1149,11 +1333,36 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
         destination, a, b, a_scales, b_scales);
   };
 
+  auto run_identity_stockshape_stage2_b4 =
+      [&](torch::stable::Tensor& destination) {
+    using Gemm = typename
+        sm120_blockwise_fp8_config_b4_stockshape_identity_stage2<
+            OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
   auto run_identity_divisor_b4 =
       [&](torch::stable::Tensor& destination) {
     using Gemm = typename
         sm120_blockwise_fp8_config_b4_stockshape_identity_divisor<
             OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
+  auto run_identity_divisor_stage2_b4 =
+      [&](torch::stable::Tensor& destination) {
+    using Gemm = typename
+        sm120_blockwise_fp8_config_b4_stockshape_identity_divisor_stage2<
+            OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
+  auto run_identity_twom_b4 = [&](torch::stable::Tensor& destination) {
+    using Gemm = typename
+        sm120_blockwise_fp8_config_b4_stockshape_identity_twom<OutType>::Gemm;
     return cutlass_gemm_caller_blockwise<Gemm>(
         destination, a, b, a_scales, b_scales);
   };
@@ -1200,18 +1409,37 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   const bool identity_stockshape_b4_byte_ab =
       wave_variant == fixed32_cutlass_wave_variant::
                           identity_stockshape_b4_byte_ab;
+  const bool identity_stockshape_stage2_b4_byte_ab =
+      wave_variant == fixed32_cutlass_wave_variant::
+                          identity_stockshape_stage2_b4_byte_ab;
   const bool identity_divisor_b4_byte_ab =
       wave_variant ==
       fixed32_cutlass_wave_variant::identity_divisor_b4_byte_ab;
+  const bool identity_divisor_stage2_b4_byte_ab =
+      wave_variant == fixed32_cutlass_wave_variant::
+                          identity_divisor_stage2_b4_byte_ab;
+  const bool identity_twom_b4_byte_ab =
+      wave_variant == fixed32_cutlass_wave_variant::identity_twom_b4_byte_ab;
   if (wave_variant ==
           fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab ||
       wide256_byte_ab || static_persistent_byte_ab ||
       divisor_static_byte_ab || b4_m128_byte_ab || b4_m128_static_byte_ab ||
       identity_stage2_static_byte_ab || identity_stage2_pingpong_b1_byte_ab ||
-      identity_stockshape_b4_byte_ab || identity_divisor_b4_byte_ab) {
+      identity_stockshape_b4_byte_ab ||
+      identity_stockshape_stage2_b4_byte_ab || identity_divisor_b4_byte_ab ||
+      identity_divisor_stage2_b4_byte_ab || identity_twom_b4_byte_ab) {
     auto run_candidate = [&](torch::stable::Tensor& destination) {
+      if (identity_twom_b4_byte_ab) {
+        return run_identity_twom_b4(destination);
+      }
+      if (identity_divisor_stage2_b4_byte_ab) {
+        return run_identity_divisor_stage2_b4(destination);
+      }
       if (identity_divisor_b4_byte_ab) {
         return run_identity_divisor_b4(destination);
+      }
+      if (identity_stockshape_stage2_b4_byte_ab) {
+        return run_identity_stockshape_stage2_b4(destination);
       }
       if (identity_stockshape_b4_byte_ab) {
         return run_identity_stockshape_b4(destination);
@@ -1244,7 +1472,10 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     std::string task_marker =
         (b4_m128_byte_ab || b4_m128_static_byte_ab ||
          (identity_stage2_static_byte_ab && M == 128) ||
-         identity_stockshape_b4_byte_ab || identity_divisor_b4_byte_ab)
+         identity_stockshape_b4_byte_ab ||
+         identity_stockshape_stage2_b4_byte_ab ||
+         identity_divisor_b4_byte_ab ||
+         identity_divisor_stage2_b4_byte_ab || identity_twom_b4_byte_ab)
             ? fixed32_cutlass_b4_real_task_marker()
             : fixed32_cutlass_real_task_marker();
     if (task_marker.empty()) {
@@ -1259,7 +1490,10 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     const int64_t selected_byte_ab_limit =
         (b4_m128_byte_ab || b4_m128_static_byte_ab ||
          (identity_stage2_static_byte_ab && M == 128) ||
-         identity_stockshape_b4_byte_ab || identity_divisor_b4_byte_ab)
+         identity_stockshape_b4_byte_ab ||
+         identity_stockshape_stage2_b4_byte_ab ||
+         identity_divisor_b4_byte_ab ||
+         identity_divisor_stage2_b4_byte_ab || identity_twom_b4_byte_ab)
             ? b4_m128_byte_ab_limit
             : byte_ab_limit;
     int64_t invocation = next_invocation.fetch_add(1);
@@ -1304,8 +1538,14 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       }
     }
     const char* log_path =
-        identity_divisor_b4_byte_ab
+        identity_twom_b4_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_identity_twom_b4_byte_ab.jsonl"
+        : identity_divisor_stage2_b4_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_identity_divisor_stage2_b4_byte_ab.jsonl"
+        : identity_divisor_b4_byte_ab
             ? "/logs/fr13_fixed32_cutlass_identity_divisor_b4_byte_ab.jsonl"
+        : identity_stockshape_stage2_b4_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_identity_stockshape_stage2_b4_byte_ab.jsonl"
         : identity_stockshape_b4_byte_ab
             ? "/logs/fr13_fixed32_cutlass_identity_stockshape_b4_byte_ab.jsonl"
         : identity_stage2_pingpong_b1_byte_ab
@@ -1330,8 +1570,14 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       STD_TORCH_CHECK(log.good(),
                       "FR13 Stream-K byte A/B could not open JSONL");
       log << "{\\\"schema\\\":\\\""
-          << (identity_divisor_b4_byte_ab
+          << (identity_twom_b4_byte_ab
+                  ? "fr13.fixed32.cutlass_identity_twom_b4_byte_ab.v1"
+              : identity_divisor_stage2_b4_byte_ab
+                  ? "fr13.fixed32.cutlass_identity_divisor_stage2_b4_byte_ab.v1"
+              : identity_divisor_b4_byte_ab
                   ? "fr13.fixed32.cutlass_identity_divisor_b4_byte_ab.v1"
+              : identity_stockshape_stage2_b4_byte_ab
+                  ? "fr13.fixed32.cutlass_identity_stockshape_stage2_b4_byte_ab.v1"
               : identity_stockshape_b4_byte_ab
                   ? "fr13.fixed32.cutlass_identity_stockshape_b4_byte_ab.v1"
               : identity_stage2_pingpong_b1_byte_ab
@@ -1417,8 +1663,22 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   }
 
   if (wave_variant ==
+      fixed32_cutlass_wave_variant::identity_stockshape_stage2_b4) {
+    return run_identity_stockshape_stage2_b4(out);
+  }
+
+  if (wave_variant ==
       fixed32_cutlass_wave_variant::identity_divisor_b4) {
     return run_identity_divisor_b4(out);
+  }
+
+  if (wave_variant ==
+      fixed32_cutlass_wave_variant::identity_divisor_stage2_b4) {
+    return run_identity_divisor_stage2_b4(out);
+  }
+
+  if (wave_variant == fixed32_cutlass_wave_variant::identity_twom_b4) {
+    return run_identity_twom_b4(out);
   }
 
   // Unset/unknown selectors retain the stock kernel and numeric result.
