@@ -9887,25 +9887,35 @@ def _fr13_conv_subop_mab(
                             mixed_qkv_spec.dtype,
                             mixed_qkv_spec.device,
                         )
-                        _fr13_sfwd_production_kwargs = dict(
-                            x=mixed_qkv_spec,
-                            conv_state=conv_state,
-                            spec_state_indices=spec_state_indices_tensor,
-                            source_flat=_fr10_source_flat,
-                            conv_weights=conv_weights,
-                            bias=self.conv1d.bias,
-                            out=_fr10_tree_conv_out,
-                            source_stage=_fr13_wbb_stage[:_fr13_wbb_srows],
-                            batch_size=1,
-                            tree_rows=int(_fr10_tree_n),
-                        )
                         if _fr13_sfwd_production_kind == "prior_reuse":
                             launch_fixed32_sfwd_prior_reuse(
-                                **_fr13_sfwd_production_kwargs
+                                x=mixed_qkv_spec,
+                                conv_state=conv_state,
+                                spec_state_indices=spec_state_indices_tensor,
+                                tree_parent=_fr10_parent,
+                                conv_weights=conv_weights,
+                                bias=self.conv1d.bias,
+                                out=_fr10_tree_conv_out,
+                                source_stage=_fr13_wbb_stage[
+                                    :_fr13_wbb_srows
+                                ],
+                                batch_size=1,
+                                tree_rows=int(_fr10_tree_n),
                             )
                         else:
                             launch_fixed32_sfwd_state_fusion(
-                                **_fr13_sfwd_production_kwargs
+                                x=mixed_qkv_spec,
+                                conv_state=conv_state,
+                                spec_state_indices=spec_state_indices_tensor,
+                                source_flat=_fr10_source_flat,
+                                conv_weights=conv_weights,
+                                bias=self.conv1d.bias,
+                                out=_fr10_tree_conv_out,
+                                source_stage=_fr13_wbb_stage[
+                                    :_fr13_wbb_srows
+                                ],
+                                batch_size=1,
+                                tree_rows=int(_fr10_tree_n),
                             )
                         if _fr13_sfwd_production_kind == "prior_reuse":
                             fixed32_sfwd_prior_reuse_timing_engagement(

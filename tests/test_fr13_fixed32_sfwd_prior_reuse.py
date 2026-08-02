@@ -4,6 +4,7 @@ import ast
 import hashlib
 import json
 import sys
+import textwrap
 import types
 from pathlib import Path
 
@@ -59,6 +60,31 @@ def _function_source(name: str, *, path: Path = MODULE_PATH) -> str:
     segment = ast.get_source_segment(source, node)
     assert segment is not None
     return segment
+
+
+def _direct_call_keywords(name: str, *, path: Path) -> list[set[str]]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    trees = [tree]
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and f"{name}(" in node.value
+        ):
+            wrapped = "def _fragment():\n" + textwrap.indent(
+                textwrap.dedent(node.value), "    "
+            )
+            trees.append(ast.parse(wrapped))
+    return [
+        {keyword.arg for keyword in node.keywords if keyword.arg is not None}
+        for candidate_tree in trees
+        for node in ast.walk(candidate_tree)
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == name
+        )
+    ]
 
 
 def _source_manifest(tmp_path: Path, commit: str) -> tuple[Path, str]:
@@ -330,3 +356,22 @@ def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
     assert hashlib.sha256(OLD_KERNEL_PATH.read_bytes()).hexdigest() == (
         "6c0f0ad607f15ea2727c2a9b244b1fe1c5ddb88268d70264c08f10470a5d2098"
     )
+
+
+def test_both_prior_reuse_calls_match_descriptorless_launcher_signature() -> None:
+    launcher_tree = ast.parse(MODULE_PATH.read_text(encoding="utf-8"))
+    launcher = next(
+        node
+        for node in launcher_tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "launch_fixed32_sfwd_prior_reuse"
+    )
+    required = {argument.arg for argument in launcher.args.kwonlyargs}
+    calls = _direct_call_keywords(
+        "launch_fixed32_sfwd_prior_reuse", path=PATCHER_PATH
+    )
+
+    assert len(calls) == 2
+    assert all(keywords == required for keywords in calls)
+    assert all("tree_parent" in keywords for keywords in calls)
+    assert all("source_flat" not in keywords for keywords in calls)
