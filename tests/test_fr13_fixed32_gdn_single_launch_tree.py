@@ -1081,6 +1081,10 @@ def test_live_launcher_and_runners_are_reference_served_k64_exact_task_only() ->
         "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d" in core
     )
     assert "CAPTURE_ONLY=0 ACCEPT_SPEED_PROBE=0 PROBE_ONLY=0" in core
+    assert "KV_CACHE_MEMORY_BYTES_VALUE=" in core
+    assert "KV_CACHE_MEMORY_BYTES_VALUE=$B4_KV_CACHE_MEMORY_BYTES" in core
+    assert 'KV_CACHE_MEMORY_BYTES="$KV_CACHE_MEMORY_BYTES_VALUE"' in core
+    assert 'KV_CACHE_MEMORY_BYTES="$B4_KV_CACHE_MEMORY_BYTES"' not in core
     assert 'FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB="$B1_GATE"' in core
     assert 'FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB="$B4_GATE"' in core
     assert 'fr13_run_gdn_single_launch_live_gate.sh" b1' in b1
