@@ -1,0 +1,18 @@
+FR13 B4 Tail23 persistent-M128 exact4 timing reduction
+
+real SWE-Verified tasks: 4
+batch/concurrency: 4/4
+normalized work signatures equal: PASS
+production binary attestation validation: PASS after read-only handoff
+production sidecar validation: PASS
+K64/root1 provenance and corrected floor: PASS
+full-step SFWD/DFWD/CFWD/other reduction: PASS
+timing_summary schema/status: PASS
+formal floor acceptance eligible: NO
+production default enabled: NO
+raw task material published: NO
+
+permission lifecycle fix:
+  bash syntax: PASS
+  focused CUTLASS lifecycle tests: 45 passed
+  commit: e0b4b290a
