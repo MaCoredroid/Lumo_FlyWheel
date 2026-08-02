@@ -25,6 +25,7 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
     CHANNELS,
     CONV_WIDTH,
     FIXED32_PARENT,
+    FIXED32_PACKED_SOURCE_DELTAS,
     FIXED32_ROWS,
     SIGNED_INT32_MAX,
     SOURCE_ROWS,
@@ -32,6 +33,8 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
     fixed32_derived_parent_q,
     fixed32_descriptorless_sources,
     fixed32_i32_address_contract,
+    fixed32_packed_source_entry,
+    fixed32_packed_sources,
     fixed32_specialized_layout_contract,
 )
 
@@ -64,6 +67,24 @@ def test_descriptorless_sources_match_every_non_final_tap() -> None:
     for node in range(32):
         assert derived[node] == reference[node][:-1]
         assert reference[node][-1] == node + 3
+
+
+def test_packed_sources_match_every_descriptorless_source() -> None:
+    expected = fixed32_descriptorless_sources()
+
+    assert len(FIXED32_PACKED_SOURCE_DELTAS) == 8
+    assert fixed32_packed_sources() == expected
+    assert tuple(fixed32_packed_source_entry(node) for node in range(32)) == expected
+
+
+def test_packed_source_decoder_rejects_out_of_range_nodes() -> None:
+    for node in (-1, 32):
+        try:
+            fixed32_packed_source_entry(node)
+        except ValueError as error:
+            assert "[0, 32)" in str(error)
+        else:
+            raise AssertionError(f"packed source decoder accepted node {node}")
 
 
 def test_descriptorless_sources_preserve_ordered_conv_math() -> None:

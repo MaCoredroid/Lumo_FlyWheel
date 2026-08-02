@@ -156,6 +156,38 @@ def fixed32_descriptorless_sources() -> tuple[tuple[int, int, int], ...]:
     return tuple(rows)
 
 
+# Four 11-bit source-delta entries occupy each 64-bit word. The entry fields
+# are d0[3:0], (d1 + 1)[7:4], and (d2 + 2)[10:8].
+FIXED32_PACKED_SOURCE_DELTAS = (
+    0x0222011100000000,
+    0x0455044403330222,
+    0x0688057704660466,
+    0x059B048A048A0489,
+    0x048C048C048C06AC,
+    0x048C048C06AE059D,
+    0x012601590159048C,
+    0x0000000100120126,
+)
+
+
+def fixed32_packed_source_entry(node: int) -> tuple[int, int, int]:
+    """Decode the three historical source rows from the packed constants."""
+    index = int(node)
+    if index < 0 or index >= FIXED32_ROWS:
+        raise ValueError("packed SFWD node must be in [0, 32)")
+    packed = FIXED32_PACKED_SOURCE_DELTAS[index >> 2]
+    entry = (packed >> ((index & 3) << 4)) & 0x7FF
+    delta_0 = entry & 0xF
+    delta_1 = ((entry >> 4) & 0xF) - 1
+    delta_2 = ((entry >> 8) & 0x7) - 2
+    return index - delta_0, index - delta_1, index - delta_2
+
+
+def fixed32_packed_sources() -> tuple[tuple[int, int, int], ...]:
+    """Decode every fixed32 source triple for source-level verification."""
+    return tuple(fixed32_packed_source_entry(node) for node in range(FIXED32_ROWS))
+
+
 @triton.jit
 def _fr13_fixed32_sfwd_prior_reuse_descriptorless_kernel(
     x,
@@ -298,6 +330,170 @@ def _fr13_fixed32_sfwd_prior_reuse_descriptorless_kernel(
     current_product = (
         current_x * current_weight
     ).to(tl.bfloat16).to(tl.float32)
+    acc = acc + current_product
+
+    activated = acc / (1.0 + tl.exp(0.0 - acc))
+    tl.store(out_batch + offs_n * C + offs_c, activated)
+
+    tl.store(
+        source_stage
+        + stage_offset
+        + ((WIDTH - 1) + offs_n) * C
+        + offs_c,
+        current_x,
+    )
+    source_edge_writer = pid_n_base == 0
+    tl.store(
+        source_stage + stage_offset + offs_c,
+        prior_0,
+        mask=source_edge_writer,
+    )
+    tl.store(
+        source_stage + stage_offset + C + offs_c,
+        prior_1,
+        mask=source_edge_writer,
+    )
+    tl.store(
+        source_stage + stage_offset + 2 * C + offs_c,
+        prior_2,
+        mask=source_edge_writer,
+    )
+    tl.store(
+        source_stage
+        + stage_offset
+        + (SOURCE_ROWS - 1) * C
+        + offs_c,
+        0.0,
+        mask=source_edge_writer,
+    )
+
+
+@triton.jit
+def _fr13_fixed32_sfwd_prior_reuse_packed_kernel(
+    x,
+    conv_state,
+    spec_state_indices,
+    conv_weights,
+    bias,
+    out,
+    source_stage,
+    conv_stride_row,
+    conv_stride_c,
+    conv_stride_l,
+    ssi_stride_b,
+    ssi_stride_s,
+    B: tl.constexpr,
+    N: tl.constexpr,
+    C: tl.constexpr,
+    WIDTH: tl.constexpr,
+    STATE_LEN: tl.constexpr,
+    SOURCE_ROWS: tl.constexpr,
+    HAS_BIAS: tl.constexpr,
+    X_STRIDE_ROW: tl.constexpr,
+    ROWS_PER_PROGRAM: tl.constexpr,
+    BLOCK_C: tl.constexpr,
+):
+    """Fuse SFWD using a packed fixed32 topology decoder."""
+    pid_row_group = tl.program_id(0)
+    pid_c = tl.program_id(1)
+    row_groups = N // ROWS_PER_PROGRAM
+    pid_b = pid_row_group // row_groups
+    pid_n_group = pid_row_group - pid_b * row_groups
+    pid_n_base = pid_n_group * ROWS_PER_PROGRAM
+    offs_n = pid_n_base + tl.arange(0, ROWS_PER_PROGRAM)[:, None]
+    offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)[None, :]
+    x_batch = x + pid_b * N * X_STRIDE_ROW
+    out_batch = out + pid_b * N * C
+    weight_channels = conv_weights + offs_c * WIDTH
+
+    bank_row = tl.load(
+        spec_state_indices + pid_b * ssi_stride_b + 0 * ssi_stride_s
+    ).to(tl.int64)
+    stage_offset = pid_b * SOURCE_ROWS * C
+    prior_0 = tl.load(
+        conv_state
+        + bank_row * conv_stride_row
+        + offs_c * conv_stride_c
+        + 0 * conv_stride_l
+    )
+    prior_1 = tl.load(
+        conv_state
+        + bank_row * conv_stride_row
+        + offs_c * conv_stride_c
+        + 1 * conv_stride_l
+    )
+    prior_2 = tl.load(
+        conv_state
+        + bank_row * conv_stride_row
+        + offs_c * conv_stride_c
+        + 2 * conv_stride_l
+    )
+
+    source_group = offs_n >> 2
+    packed = tl.where(
+        source_group == 0,
+        0x0222011100000000,
+        tl.where(
+            source_group == 1,
+            0x0455044403330222,
+            tl.where(
+                source_group == 2,
+                0x0688057704660466,
+                tl.where(
+                    source_group == 3,
+                    0x059B048A048A0489,
+                    tl.where(
+                        source_group == 4,
+                        0x048C048C048C06AC,
+                        tl.where(
+                            source_group == 5,
+                            0x048C048C06AE059D,
+                            tl.where(
+                                source_group == 6,
+                                0x012601590159048C,
+                                0x0000000100120126,
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+    entry_shift = (offs_n & 3) << 4
+    source_entry = ((packed >> entry_shift) & 0x7FF).to(tl.int32)
+    source_0 = offs_n - (source_entry & 0xF)
+    source_1 = offs_n - ((source_entry >> 4) & 0xF) + 1
+    source_2 = offs_n - ((source_entry >> 8) & 0x7) + 2
+
+    acc = tl.zeros((ROWS_PER_PROGRAM, BLOCK_C), dtype=tl.float32)
+    if HAS_BIAS:
+        acc = tl.load(bias + offs_c).to(tl.float32)
+    for tap in tl.static_range(0, WIDTH - 1):
+        source_row = tl.where(
+            tap == 0,
+            source_0,
+            tl.where(tap == 1, source_1, source_2),
+        )
+        from_prior = source_row < (WIDTH - 1)
+        prior_value = tl.where(
+            source_row == 0,
+            prior_0,
+            tl.where(source_row == 1, prior_1, prior_2),
+        )
+        x_node = source_row - (WIDTH - 1)
+        x_value = tl.load(
+            x_batch + x_node * X_STRIDE_ROW + offs_c,
+            mask=(~from_prior) & (x_node >= 0) & (x_node < N),
+            other=0.0,
+        )
+        value = tl.where(from_prior, prior_value, x_value).to(tl.bfloat16)
+        weight = tl.load(weight_channels + tap).to(tl.bfloat16)
+        product = (value * weight).to(tl.bfloat16).to(tl.float32)
+        acc = acc + product
+
+    current_x = tl.load(x_batch + offs_n * X_STRIDE_ROW + offs_c)
+    current_weight = tl.load(weight_channels + (WIDTH - 1)).to(tl.bfloat16)
+    current_product = (current_x * current_weight).to(tl.bfloat16).to(tl.float32)
     acc = acc + current_product
 
     activated = acc / (1.0 + tl.exp(0.0 - acc))
