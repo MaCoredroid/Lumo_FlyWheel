@@ -1,0 +1,80 @@
+{
+  "candidate": "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_u32x2_firstuse_r21_v1",
+  "classification": "offline_codegen_only",
+  "common_zero_resources": {
+    "bar": 0,
+    "calls": 0,
+    "elf_shared_bytes": 0,
+    "launch_shared_bytes": 0,
+    "ldl": 0,
+    "lds": 0,
+    "local_bytes": 0,
+    "stack_bytes": 0,
+    "stl": 0,
+    "sts": 0
+  },
+  "comparison_to_lane_pair": {
+    "encoded_sass_change_percent": 4.090909090909,
+    "global_load_change_percent": 2.666666666667,
+    "register_change_percent": -40.0,
+    "static_sass_change_percent": 4.302925989673
+  },
+  "comparison_to_split20_warp_weighted_proxy": {
+    "b1_static_sass_change_percent": 1.33779264214,
+    "b4_static_sass_change_percent": 1.564245810056,
+    "encoded_sass_change_percent": 0.438596491228,
+    "global_load_change_percent": 1.315789473684,
+    "global_store_change_percent": 0.0,
+    "register_change_percent": 0.0,
+    "warps_per_cta_change_percent": -50.0
+  },
+  "mechanism": {
+    "current_row_load_position": "first_use",
+    "global_x_loads_per_channel": 33,
+    "long_edge_reload": "row21_from_row4",
+    "reloaded_rows": [4]
+  },
+  "performance_claim": false,
+  "prior_lane_pair": {
+    "encoded_sass_instructions": 1760,
+    "ldg": 75,
+    "registers": 80,
+    "static_sass_instructions": 1743,
+    "stg": 136
+  },
+  "production_eligible": false,
+  "real_task_gate_required": true,
+  "schedules": {
+    "b1": {
+      "block_c": 128,
+      "ctas_per_launch": 80,
+      "ctas_per_request": 80,
+      "cubin_bytes": 107704,
+      "encoded_sass_instructions": 1832,
+      "ldg": 77,
+      "num_warps": 2,
+      "registers": 48,
+      "static_sass_instructions": 1818,
+      "stg": 136
+    },
+    "b4": {
+      "block_c": 256,
+      "ctas_per_launch": 160,
+      "ctas_per_request": 40,
+      "cubin_bytes": 107704,
+      "encoded_sass_instructions": 1832,
+      "ldg": 77,
+      "num_warps": 4,
+      "registers": 48,
+      "static_sass_instructions": 1818,
+      "stg": 136
+    }
+  },
+  "source_commit": "0d5baca3ab8b8c49c0fddae47db957d025211a02",
+  "source_hashes": {
+    "gate_sha256": "d2e5fcd6f63aab73f5f4f5bf155003c835380b7bd19ce21414b778e1f0ef0e80",
+    "kernel_sha256": "655963c4aca3bcece0daddbd44455cf8d36ba3e8b3d8ee1e55660f02c948b742",
+    "launcher_sha256": "530315c77a2f6cbfa6619169e775578f586405ec1e58071b908a912be8ae6bec",
+    "runner_sha256": "d950519a699ae6ac3a116293288c63184473f2e163af421a51248ed387709234"
+  }
+}
