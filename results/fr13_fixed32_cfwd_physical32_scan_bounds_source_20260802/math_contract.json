@@ -1,0 +1,13 @@
+{
+  "base_function_sha256": "10c5a714c6786932c68f3a887ec6891a4b1a7f7886c8ca0b49686500e21418e3",
+  "current_function_sha256": "69a28bd523e81efded80377a2dd3e69828047bad2187a950dcaeac7c2cdbab4b",
+  "domain_equivalence": {
+    "accepted": "0 <= accepted <= 11 implies min(max(accepted, 0) + 1, 16) == accepted + 1",
+    "node": "0 <= active_node <= 31 implies clamp(active_node, 0, 31) == active_node"
+  },
+  "loop_order": "root_then_accepted_paths_in_original_order",
+  "ordered_recurrence_math_equal": true,
+  "ordered_recurrence_math_sha256": "d16ad65fe4affb85a85051bf8dc7530c17a34dd85826c05d6bd8adec67b1ce22",
+  "recurrent_steps_equal_on_guarded_domain": true,
+  "schema": "fr13.fixed32.cfwd_physical32_scan_bounds.math_contract.v1"
+}

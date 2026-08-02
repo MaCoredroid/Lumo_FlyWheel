@@ -1,0 +1,71 @@
+{
+  "acceptance_evidence": false,
+  "base_commit": "a79581171789c60bba34b89e1cc58813d1637995",
+  "branch": "agent/fixed32-cfwd-physical32-metadata-20260802",
+  "candidate_serving_permitted": false,
+  "change": {
+    "accepted_length_domain": [
+      0,
+      11
+    ],
+    "accepted_steps_max": 12,
+    "hot_scan_bound_clamps_after": 0,
+    "hot_scan_bound_clamps_before_per_program": {
+      "accepted_length": 2,
+      "per_active_step_node": 2
+    },
+    "physical_node_domain": [
+      0,
+      31
+    ],
+    "removed_constexpr": "RING_N",
+    "source_after": {
+      "node": "path_node",
+      "steps": "accepted + 1"
+    }
+  },
+  "codegen": {
+    "calls": null,
+    "local_bytes": null,
+    "registers": null,
+    "shared_bytes": null,
+    "spills": null,
+    "stack_bytes": null,
+    "status": "pending_b4_live_arm_teardown"
+  },
+  "critical_path_change": 0,
+  "gpu_or_docker_run_performed": false,
+  "guard": {
+    "implementation": "torch._assert_async",
+    "ordering": "after_live_metadata_copy_before_graph_replay",
+    "status": "retained_fail_closed"
+  },
+  "launch_count_change": 0,
+  "ordered_recurrence_math_sha256": {
+    "after": "d16ad65fe4affb85a85051bf8dc7530c17a34dd85826c05d6bd8adec67b1ce22",
+    "before": "d16ad65fe4affb85a85051bf8dc7530c17a34dd85826c05d6bd8adec67b1ce22",
+    "equal": true
+  },
+  "program_count_change": 0,
+  "qualification": {
+    "b1_real_swe_byte_gate": "not_run",
+    "b4_exact16_real_swe_byte_gate": "not_run",
+    "b4_exact4_real_swe_byte_gate": "not_run"
+  },
+  "schema": "fr13.fixed32.cfwd_physical32_scan_bounds.source.v1",
+  "source_commit": "e69243aeb6888599930274f8885c1b8efc5112d9",
+  "source_sha256": {
+    "kernel": "2df19eaf6441d65470083f18488eb8fdf909d601e8665ddbfbcee4b608f4f6c8",
+    "observer_patcher": "c8b935c2ca67512d2fddfb0320647fa576c689be7b4d2e475fed292c3eaf6395",
+    "static_test": "9351e510b7cfad5689d2f9779fdaa1acd0c8f4dc52cff34d25f29d060ca61aa5"
+  },
+  "status": "SOURCE_STATIC_ONLY_CODEGEN_BYTE_TIMING_PENDING",
+  "synthetic_probe_executed": false,
+  "tests": {
+    "focused_cfwd_lifecycle_committer": "85_passed",
+    "python_compile": "pass",
+    "preseed_observer": "54_passed"
+  },
+  "timing_evidence": false,
+  "u95_floor_acceptance_evidence": false
+}

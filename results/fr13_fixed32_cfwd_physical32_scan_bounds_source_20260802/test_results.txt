@@ -1,0 +1,24 @@
+Source commit: e69243aeb6888599930274f8885c1b8efc5112d9
+
+Host-only checks:
+- python3 -m py_compile on kernel, observer patcher, and focused test: pass
+- fixed32 task-arm, task-boundary, and layer-batch suite: 85 passed in 0.64s
+- fixed32 final-full preseed/observer suite: 54 passed in 1.50s
+- git diff --check: pass
+
+Static equivalence receipt:
+- accepted guard remains 0 <= accepted <= 11 before graph replay
+- active path-node guard remains 0 <= node < 32 before graph replay
+- old clamped steps and new accepted+1 are equal on the guarded domain
+- old clamped node and new path_node are equal on the guarded domain
+- ordered recurrence math source hashes match: d16ad65fe4affb85a85051bf8dc7530c17a34dd85826c05d6bd8adec67b1ce22
+- launches, programs, active steps, stores, and recurrence order are unchanged
+
+Not run:
+- Triton or CUDA code generation
+- SASS/resource inspection
+- Docker or GPU execution
+- real SWE-Verified B1/B4 byte qualification
+- real SWE-Verified B1/B4 timing
+- hardware-floor or one-sided U95 acceptance measurement
+- synthetic probes
