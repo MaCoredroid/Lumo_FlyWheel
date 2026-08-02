@@ -78,6 +78,9 @@ def test_builder_is_pinned_default_off_and_claims_no_qualification() -> None:
     assert 'EXPECTED_TORCH = "2.11.0+cu130"' in source
     assert 'EXPECTED_CUDA = "13.0"' in source
     assert 'EXPECTED_ARCH = "12.1a"' in source
+    assert '"/usr/local/lib/python3.12/dist-packages/nvidia/cu13/include"' in source
+    assert '(CUDA_PACKAGE_INCLUDE / "cusparse.h").is_file()' in source
+    assert 'f"-I{CUDA_PACKAGE_INCLUDE}"' in source
     assert '"status": "BUILT_UNQUALIFIED"' in source
     assert '"byte_equality_claim": False' in source
     assert '"resource_claim": False' in source
