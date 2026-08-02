@@ -290,6 +290,7 @@ def test_launcher_uses_channel_serial_kernel_and_exact_layout() -> None:
     assert "int(conv_state.stride(0)) < channels * state_len" in launcher
     assert "not spec_state_indices.is_contiguous()" in launcher
     assert "int(spec_state_indices.shape[1]) != rows" in launcher
+    assert "int(conv_weights.data_ptr()) % 4 != 0" in launcher
     assert "_fr13_fixed32_sfwd_channel_serial_kernel[grid](" in launcher
     assert "X_STRIDE_ROW=X_ROW_STRIDE" in launcher
     assert "ROWS_PER_PROGRAM=ROWS_PER_PROGRAM" not in launcher

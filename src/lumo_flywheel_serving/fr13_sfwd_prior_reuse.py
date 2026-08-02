@@ -557,6 +557,8 @@ def launch_fixed32_sfwd_prior_reuse(
         geometry_failures.append("spec_state_indices_dtype")
     if not spec_state_indices.is_contiguous():
         geometry_failures.append("spec_state_indices_contiguous")
+    if int(conv_weights.data_ptr()) % 4 != 0:
+        geometry_failures.append("conv_weights_u32_alignment")
     if conv_state.ndim == 3 and int(conv_state.stride(1)) != 1:
         geometry_failures.append("conv_state_channel_stride")
     if conv_state.ndim == 3 and int(conv_state.stride(2)) != channels:
