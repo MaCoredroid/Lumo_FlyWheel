@@ -18,6 +18,7 @@
     "reference_always_served_during_gate": true,
     "candidate_state_and_outputs_restored": true,
     "b1_host_route_metadata_restored": true,
+    "profile_specific_kv_cache_contract_enforced": true,
     "all_authoritative_surfaces_compared": true,
     "authenticated_b1_and_exact4_b4_only": true,
     "runtime_manifest_includes_candidate_and_audit": true,

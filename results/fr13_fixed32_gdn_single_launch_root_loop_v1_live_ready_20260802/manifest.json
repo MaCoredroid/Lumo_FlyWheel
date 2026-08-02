@@ -17,6 +17,7 @@
     "reference_always_served_during_gate": true,
     "candidate_shadow_only_during_gate": true,
     "b1_host_route_metadata_restored": true,
+    "profile_specific_kv_cache_contract_enforced": true,
     "ready_runtime_sources_enforced": true,
     "production_default_enabled": false,
     "comparison_kind": "exact_raw_bytes",

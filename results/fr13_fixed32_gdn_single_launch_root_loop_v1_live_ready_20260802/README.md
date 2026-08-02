@@ -25,6 +25,8 @@ after an exact, source-bound PASS for that batch profile.
 The B1 shadow path also restores the host-visible route metadata to the
 reference route. The live runner and verifier enforce the pinned launcher,
 runtime-manifest tool, and authenticated-ingress source hashes before reuse.
+The runner keeps the canonical KV-cache profile split: B1 passes no explicit
+cache-memory reservation, while B4 passes 40 GiB.
 
 Each authenticated task comparison covers all 48 layers and exact raw bytes for
 `out`, `ring_k`, `ring_v`, `ring_a`, `ring_b`, `flags`, and `counter`. Candidate
