@@ -355,8 +355,6 @@ class Fr13Fixed32M32LinearScheduler100
         params.blocks_per_problem_ == uint64_t(params.problem_tiles_m_);
     CUTLASS_ASSERT(direct_linear_geometry &&
                    "fixed32 M32 direct scheduler requires tiled NxL=1x1");
-    direct_linear_blocks_ =
-        direct_linear_geometry ? uint64_t(params.problem_tiles_m_) : 0;
 #else
     CUTLASS_ASSERT(false && "device-only fixed32 M32 scheduler constructor");
 #endif
@@ -376,7 +374,8 @@ class Fr13Fixed32M32LinearScheduler100
 
   CUTLASS_DEVICE WorkTileInfo
   get_current_work_for_linear_idx(uint64_t linear_idx) const {
-    if (linear_idx >= direct_linear_blocks_) {
+    if (linear_idx >=
+        uint64_t(this->scheduler_params.blocks_per_problem_)) {
       return WorkTileInfo::invalid_work_tile();
     }
     return {static_cast<int32_t>(linear_idx), 0, 0, true};
@@ -427,7 +426,6 @@ class Fr13Fixed32M32LinearScheduler100
  private:
   uint64_t current_work_linear_idx_ = 0;
   uint64_t total_grid_size_ = 0;
-  uint64_t direct_linear_blocks_ = 0;
 };
 
 template <class TileShape, class ClusterShape,
