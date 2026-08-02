@@ -1,0 +1,26 @@
+K64 physical32 B1 stack review verification
+============================================
+
+Focused review suite:
+  pytest -q tests/test_fr13_k64_qrow16_sfwd_stack.py \
+    tests/test_fr13_fixed32_ingress_wiring.py \
+    tests/test_fr13_fixed32_sfwd_state_fusion.py \
+    tests/test_fr13_fixed32_taw_native_precompute.py \
+    tests/test_fr13_qrow16_production_sidecar.py
+  61 passed in 3.56s
+
+Broader affected fixed32 suite:
+  194 passed, 1 skipped in 5.45s
+
+All-parent source-v7 and campaign-provenance suite:
+  233 passed, 1 skipped in 4.83s
+
+Static checks:
+  bash -n on serve, B1 timing, and Tail23 B4 gate runners: PASS
+  python -m py_compile on modified Python sources: PASS
+  ruff check on modified Python/tests: PASS
+  fixed32 runtime-manifest preflight: PASS
+  git diff --check: PASS
+
+No Docker container, GPU kernel, SWE-Verified task, timing, TPS, acceptance,
+or hardware-floor measurement was run for this review.

@@ -1,0 +1,18 @@
+contract	evidence	result
+cxx_language	CMakeLists.txt sets CMAKE_CXX_STANDARD 17	PASS
+primary_page_trait	utils.h defines StaticPagedKVBlockSize before dependent helper use	PASS
+primary_query_trait	flash_fwd_kernel.h defines StaticQueryRows before dependent helper use	PASS
+specialization_order	TU include line 3; page specialization line 11; query specialization line 18; kernel use line 48	PASS
+trait_identity	both specializations and TreeKernelTraits use Fr13Fixed32Qrow32KernelTraits	PASS
+splitkv_template_arity	pinned launch header declares eight boolean parameters after Kernel_traits	PASS
+splitkv_template_arguments	false false false false true false false false in pinned order	PASS
+launcher_abi	void fr13_run_mha_fwd_fixed32_qrow32(Flash_fwd_params&, cudaStream_t)	PASS
+launcher_namespace	declaration and definition are in FLASH_NAMESPACE	PASS
+launcher_visibility	declaration and definition both use hidden visibility	PASS
+c_abi	no extern C declaration or definition	PASS
+source_discovery	generated name matches pinned csrc/flash_attn/src/flash_fwd_*.cu glob	PASS
+mma_shape	16 rows per warp times two warps equals block M 32	PASS
+gmem_copy	64 threads / 8 threads per row times 8 rows per thread equals block N 64	PASS
+shared_memory	32x256x2 query bytes plus two 64x256x2 KV tiles equals 81920 bytes	PASS
+page_coordinates	1024/64=16 blocks; quotient shift 4 and remainder mask 15 are exact	PASS
+source_blockers	no concrete compiler-visible blocker found	PASS

@@ -1,0 +1,11 @@
+command=python3 -m pytest -q tests/test_fr13_fa2_tree_kernel_candidates.py tests/test_fr13_fa2_qrow32_gate.py tests/test_fr13_fa2_qrow32_static_gate.py
+result=19 passed in 0.11s
+py_compile=PASS
+git_diff_check=PASS
+nvcc=NOT_RUN
+cxx=NOT_RUN
+link=NOT_RUN
+disassembly=NOT_RUN
+gpu=NOT_RUN
+byte_gate=NOT_RUN
+timing=NOT_RUN

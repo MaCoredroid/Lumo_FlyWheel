@@ -1,0 +1,12 @@
+Focused:
+PYTHONPATH=. .venv/bin/pytest -q tests/test_fr13_fixed32_ingress_proxy.py tests/test_fr13_fixed32_sfwd_state_fusion.py
+51 passed in 1.06s
+
+Full fixed32:
+PYTHONPATH=. .venv/bin/pytest -q tests/test_fr13_fixed32_*.py
+693 passed, 7 skipped in 14.71s
+
+Static:
+bash -n scripts/fr13_run_b1_sfwd_state_fusion_gate.sh
+.venv/bin/ruff check --ignore F841,E701 src/lumo_flywheel_serving/inference_proxy.py tests/test_fr13_fixed32_ingress_proxy.py tests/test_fr13_fixed32_sfwd_state_fusion.py
+All checks passed.

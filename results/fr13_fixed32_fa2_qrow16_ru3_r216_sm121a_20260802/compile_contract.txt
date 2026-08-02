@@ -1,0 +1,20 @@
+classification=host_only_offline_codegen
+source_commit=8cf2307a70156cf3cb8c2cb30dcd448bc5332c3f
+fa2_commit=29210221863736a08f71a866459e368ad1ac4a95
+target=sm_121a
+nvcc=13.0.88
+optimization=-O3
+fast_math=true
+cxx_standard=17
+register_usage_level=3
+kernel_maxnreg=216
+required_pair=register_usage_level_3_plus_maxnreg_216
+source_generation=python3 scripts/fr13_patch_fa2_tree_bias.py --fa2-src SOURCE --skip-python --tree-bias-tile-earlyout --fixed32-query-tile16
+builder=CUDA_VISIBLE_DEVICES= python3 scripts/fr13_build_fa2_qrow16_sm121a.py --fa2-src SOURCE --cutlass-src CUTLASS --torch-root TORCH --python-include PYTHON_INCLUDE --output-object OBJECT --manifest MANIFEST
+resource_check=/usr/local/cuda/bin/cuobjdump --dump-resource-usage OBJECT
+life_range_check=/usr/local/cuda/bin/nvdisasm -c -plr -lrm=count CUBIN
+gpu_used=false
+container_used=false
+synthetic_probe_used=false
+real_task_used=false
+performance_measurement=false

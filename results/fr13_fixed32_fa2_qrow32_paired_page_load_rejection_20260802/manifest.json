@@ -1,0 +1,49 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow32_paired_page_load_review.v1",
+  "status": "REJECTED_REGISTER_LIFETIME",
+  "source_commit": "1f04f2e19524d5ba7f7729229958641de274368c",
+  "classification": {
+    "kernel_source_changed": false,
+    "gpu_used": false,
+    "compiler_used": false,
+    "linker_used": false,
+    "disassembler_used": false,
+    "performance_measurement": false,
+    "synthetic_probe_used": false,
+    "real_swe_task_used": false,
+    "raw_sass_published": false,
+    "timing_eligible": false,
+    "production_eligible": false,
+    "default_off": true
+  },
+  "uniformity": {
+    "virtual_page_expression": "n_block >> 4",
+    "warp_uniform": true,
+    "cta_uniform": true,
+    "k_v_same_coordinate_has_same_physical_page": true
+  },
+  "saved_evidence": {
+    "sass_sha256": "fb7b01a8d691c8f76f7514094b15d9494f36e0b3aebc05a8a04762dd34a8ecd2",
+    "registers": 244,
+    "initial_pair_source_calls": 2,
+    "initial_pair_compiled_page_loads": 1,
+    "mask_k_to_first_unmasked_v_instruction_slots": 584,
+    "steady_k_to_next_v_instruction_slots": 757
+  },
+  "decision": {
+    "initial_pair_helper": "reject_no_additional_load_removed",
+    "carry_physical_page_id": "reject_adds_long_lived_32_bit_value",
+    "carry_v_pointer": "reject_adds_long_lived_64_bit_value",
+    "move_k_prefetch": "reject_changes_async_copy_order",
+    "cta_shared_broadcast": "reject_adds_storage_and_barrier",
+    "warp_shuffle_broadcast": "reject_adds_synchronization_and_two_warp_duplication",
+    "kernel_edit": false
+  },
+  "current_candidate": {
+    "source_commit": "1f04f2e19524d5ba7f7729229958641de274368c",
+    "direct_page_coordinates_retained": true,
+    "call0_verification_pending": true,
+    "resource_verification_pending": true,
+    "abi_byte_and_timing_gates_pending": true
+  }
+}

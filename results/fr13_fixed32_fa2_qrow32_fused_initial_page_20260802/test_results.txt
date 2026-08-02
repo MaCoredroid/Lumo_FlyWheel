@@ -1,0 +1,22 @@
+Fixed32 B4 FA2 qrow32 fused-initial-page verification (2026-08-02 UTC)
+
+Host test selection:
+  tests/test_fr13_fa2_tree_kernel_candidates.py
+  tests/test_fr13_fa2_qrow32_static_gate.py
+  tests/test_fr13_fa2_qrow32_gate.py
+
+Result: 28 passed in 0.56s
+
+Additional host checks:
+  Python byte compilation: pass
+  Pinned FA2 header transform: pass
+  Second-pass transform idempotence: pass
+  Static K/V stride prerequisite rejection: pass
+  Initial relative-address equivalence proof: 262,144 cases passed
+  qrow16 and generic fallback retention: pass
+  Staggered pipeline address paths unchanged: pass
+  Attention arithmetic/control census preservation: pass
+  git diff --check: pass
+
+No GPU compile, binary-resource gate, real-event byte qualification,
+synthetic performance probe, or full-step timing is represented here.

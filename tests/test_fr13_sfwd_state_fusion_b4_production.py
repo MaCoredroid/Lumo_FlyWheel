@@ -241,7 +241,8 @@ def test_runner_and_launcher_are_exact4_b4_shadow_only() -> None:
     assert '-e ENFORCE_EAGER="${ENFORCE_EAGER:-0}"' in launcher
     assert "_Fixed32EagerKernelDiagnosticTaskBracket" in orchestrator
     assert 'or sfwd_state_fusion_eager_diagnostic == "1"' in orchestrator
-    assert "authenticated B1 and exact4 B4 byte prerequisites" in launcher
+    assert "SFWD production requires exact K64 B1 eager fixed32" in launcher
+    assert "SFWD production permits qrow16 and source-gated TAW production only" in launcher
     assert "bind-prerequisites" in pass_source
     assert '"candidate_serving_permitted": False' in pass_source
 

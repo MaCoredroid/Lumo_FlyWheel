@@ -1,0 +1,8 @@
+18 passed in 0.19s
+Ruff: all checks passed
+py_compile: passed
+
+Focused files:
+- tests/test_fr13_fa2_qrow32_static_gate.py
+- tests/test_fr13_fa2_qrow32_gate.py
+- tests/test_fr13_fa2_tree_kernel_candidates.py

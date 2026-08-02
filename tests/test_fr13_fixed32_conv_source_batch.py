@@ -201,10 +201,12 @@ def test_candidate_has_constant_source_op_count_and_preserves_legacy_arm() -> No
 
     conv = _conv_replacement()
     candidate = conv.index("fused_tree_conv_sources_batched(")
-    request_loop = conv.index(
-        "for _fr10_b in range(attn_metadata.num_spec_decodes):"
-    )
+    request_loop = conv.index("for _fr10_b in range(")
     assert candidate < request_loop
+    assert (
+        "if _fr13_sfwd_production is not None\n"
+        "                        else attn_metadata.num_spec_decodes"
+    ) in conv[request_loop : request_loop + 240]
     assert "if not _FR13_FIXED32_CONV_SOURCE_BATCH:" in conv
     assert (
         "_fr10_prior_conv_state_bank[\n"

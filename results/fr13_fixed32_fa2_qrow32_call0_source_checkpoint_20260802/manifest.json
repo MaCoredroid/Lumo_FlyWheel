@@ -1,0 +1,70 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow32_call0_source_checkpoint.v1",
+  "status": "SOURCE_CANDIDATE_CALL0_VERIFICATION_PENDING",
+  "source_commit": "437f1878dbc26e8b4f611c5dfe8331dd543f27ed",
+  "classification": {
+    "gpu_used": false,
+    "container_used": false,
+    "compiler_used": false,
+    "linker_used": false,
+    "disassembler_used": false,
+    "performance_measurement": false,
+    "synthetic_probe_used": false,
+    "real_swe_task_used": false,
+    "byte_parity_claim": false,
+    "call0_claim": false,
+    "timing_eligible": false,
+    "production_eligible": false,
+    "default_off": true
+  },
+  "source": {
+    "fa2_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+    "patcher_sha256": "c5ef6d2d672cd3e78924191c7d7449f4c1ffc92a4833be8d332856715a5b292f",
+    "translation_unit_sha256": "df72742090ae531dcb1dfb78b16af9d0702534b2c54aeb0f4909957072fc2077",
+    "stock_utils_sha256": "f7309f85d0aa7fcf726ff1d24527effe0aec8e0145d8aa86d82e51554ce6485b",
+    "candidate_utils_sha256": "7f8e3b53b239405cf57af682de0e365cd2798f8ab1561307d5e2b12acbc7f152"
+  },
+  "specialization": {
+    "trait": "StaticPagedKVBlockSize<Fr13Fixed32Qrow32KernelTraits>",
+    "page_block_size": 1024,
+    "page_block_log2": 10,
+    "quotient_operation": "unsigned_global_row_offset >> 10",
+    "remainder_operation": "unsigned_global_row_offset & 1023",
+    "api_gate_requires_page_block_size_1024": true,
+    "stock_trait_value": 0,
+    "qrow16_specialized": false,
+    "query_order_changed": false,
+    "k_order_changed": false,
+    "mask_semantics_changed": false,
+    "bf16_output_reduction_changed": false,
+    "fp32_lse_reduction_changed": false
+  },
+  "saved_evidence": {
+    "object_sha256": "f278003683390281fc71db674832adf582a9f52895c6de342f15dece65e9507a",
+    "sass_sha256": "fb7b01a8d691c8f76f7514094b15d9494f36e0b3aebc05a8a04762dd34a8ecd2",
+    "call_count": 4,
+    "call_target": "0x13830",
+    "call_sites": [
+      "0x1ae0",
+      "0x7ce0",
+      "0xa130",
+      "0xef70"
+    ],
+    "saved_object_matches_candidate_source": false
+  },
+  "tests": {
+    "focused_source_passed": 19,
+    "focused_source_failed": 0,
+    "py_compile_passed": true,
+    "git_diff_check_passed": true
+  },
+  "pending": {
+    "fresh_sm121a_compile": true,
+    "sass_call0_verification": true,
+    "resource_admission": true,
+    "pinned_gcc11_4_abi_relink": true,
+    "tail23_exact4_byte_gate": true,
+    "hydra27_exact4_byte_gate": true,
+    "real_swe_verified_timing": true
+  }
+}

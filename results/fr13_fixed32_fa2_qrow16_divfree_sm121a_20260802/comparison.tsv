@@ -1,0 +1,4 @@
+variant	registers	stack_bytes	local_bytes	static_shared_bytes	dynamic_shared_bytes	spill_stores	spill_loads	calls	instructions	text_bytes	relocatable_object_bytes	verdict
+incumbent_dynamic_page	244	0	0	1024	73728	0	0	4	5440	87040	241880	BASELINE
+candidate_division_free_exact_wrapper	224	0	0	1024	73728	0	0	0	5040	80640	159760	PASS_STATIC_RESOURCE_ADMISSION
+

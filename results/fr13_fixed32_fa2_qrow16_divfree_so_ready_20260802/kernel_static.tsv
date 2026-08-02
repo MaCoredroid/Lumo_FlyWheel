@@ -1,0 +1,4 @@
+target	registers	stack_bytes	local_bytes	spill_loads	spill_stores	calls	instructions	hmma_bf16	ffma	fmul	ldgsts	ldsm	global_loads	global_stores	s64_divrem
+sm121a	224	0	0	0	0	0	5040	512	132	264	336	288	76	38	0
+incumbent_ptx	-	-	-	-	-	4	5440	512	132	264	336	288	76	38	4
+

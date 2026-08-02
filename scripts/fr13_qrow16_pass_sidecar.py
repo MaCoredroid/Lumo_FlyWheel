@@ -81,6 +81,14 @@ def validate_live_result(
         payload.get("suite") != "SWE-Verified"
         or payload.get("concurrency") != 1
         or payload.get("physical_rows") != 32
+        or (
+            "draft_vocab_root" in payload
+            and payload.get("draft_vocab_root") != 1
+        )
+        or (
+            "draft_vocab_k" in payload
+            and payload.get("draft_vocab_k") != 65536
+        )
         or payload.get("runtime_mode") != "FULL"
         or not isinstance(payload.get("instance_id"), str)
         or not payload["instance_id"]

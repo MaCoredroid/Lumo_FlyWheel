@@ -91,6 +91,10 @@ QROW16_FA2_SHA256 = (
     "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
 )
 QROW16_FA2_SIZE = 299_507_792
+QROW16_DIVFREE_FA2_SHA256 = (
+    "106e54d1c82ec7ce7576cbb44bb4aa2342b2985bb58e97aeeca5503275bee3e2"
+)
+QROW16_DIVFREE_FA2_SIZE = 299_491_544
 CONTAINER_FA2_SOURCE = Path("/tmp/fr13_fork_fa2.so")
 CONTAINER_FA2_DESTINATION = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so"
@@ -2836,11 +2840,18 @@ def _expected_runtime_fa2_identity(
             raise ContractError(f"{name} must be exactly 0 or 1")
     if live == "1" and production == "1":
         raise ContractError("qrow16 live and production selectors are mutually exclusive")
-    if live == "1" or production == "1":
+    if live == "1":
+        declared_sha256 = env.get("FR13_FA2_QROW16_SO_SHA256", "")
+        if declared_sha256 != QROW16_DIVFREE_FA2_SHA256:
+            raise ContractError(
+                "qrow16 live runtime FA2 declaration is not the pinned division-free candidate"
+            )
+        return QROW16_DIVFREE_FA2_SIZE, QROW16_DIVFREE_FA2_SHA256
+    if production == "1":
         declared_sha256 = env.get("FR13_FA2_QROW16_SO_SHA256", "")
         if declared_sha256 != QROW16_FA2_SHA256:
             raise ContractError(
-                "qrow16 runtime FA2 declaration is not the pinned candidate"
+                "qrow16 production runtime FA2 declaration is not the qualified candidate"
             )
         return QROW16_FA2_SIZE, QROW16_FA2_SHA256
     return FA2_SIZE, FA2_SHA256
@@ -2939,6 +2950,7 @@ def validate_runtime_attestation(payload: object) -> dict[str, Any]:
     known_identities = {
         (FA2_SIZE, FA2_SHA256),
         (QROW16_FA2_SIZE, QROW16_FA2_SHA256),
+        (QROW16_DIVFREE_FA2_SIZE, QROW16_DIVFREE_FA2_SHA256),
     }
     for key, record, expected_path in (
         ("source", source, str(CONTAINER_FA2_SOURCE)),

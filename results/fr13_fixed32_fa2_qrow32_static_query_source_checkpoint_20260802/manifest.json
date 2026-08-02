@@ -1,0 +1,96 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow32_static_query_source_checkpoint.v1",
+  "status": "SOURCE_CANDIDATE_COMPILE_AND_MEASUREMENT_PENDING",
+  "source_commit": "d47b03f942defed2ef4b4f63053d5bb7fe8152df",
+  "classification": {
+    "gpu_used": false,
+    "compiler_used": false,
+    "linker_used": false,
+    "disassembler_used": false,
+    "performance_measurement": false,
+    "synthetic_probe_used": false,
+    "real_swe_task_used": false,
+    "byte_parity_claim": false,
+    "call0_claim": false,
+    "instruction_reduction_claim": false,
+    "timing_eligible": false,
+    "production_eligible": false,
+    "default_off": true
+  },
+  "source": {
+    "fa2_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+    "patcher_sha256": "066139094047602bfeecc24dc8ac4e03b4598db5374e4305ab89e6be3b19d14a",
+    "translation_unit_sha256": "d87f3f6806dcc15737815ffa4e5c82f154b36c0b7f30c4da03a2216949876ded",
+    "pinned_flash_fwd_kernel_sha256": "934e8c6c2e72c667f3cb0a8dc53b11c16a4eba8e3ac2b5811c882eff399ac3de",
+    "candidate_flash_fwd_kernel_sha256": "129f7a979a2f8eb73f231832bade6f5f122aee8a0343bdd31833dfa774829a0a"
+  },
+  "admission": {
+    "batch": 4,
+    "total_q": 128,
+    "seqlen_q": 32,
+    "seqlen_q_rounded": 128,
+    "cu_seqlens_q": [0, 32, 64, 96, 128],
+    "tree_bias_rows": 32,
+    "tree_bias_cols": 32,
+    "tree_bias_q_offset": 0,
+    "tree_bias_k_offset": 0,
+    "tree_bias_row_stride": 32,
+    "tree_bias_col_stride": 1,
+    "block_m": 32,
+    "block_n": 64,
+    "warps": 2,
+    "threads": 64,
+    "page_block_size": 1024
+  },
+  "specialized_query_work": {
+    "actual_seqlen_q": 32,
+    "query_m_block": 0,
+    "query_cta_early_exit_removed": true,
+    "query_copy_row_predicate_removed": true,
+    "output_copy_row_predicates_removed": 2,
+    "lse_row_predicates_removed": 2,
+    "tree_bias_null_check_removed": true,
+    "tree_bias_query_bounds_removed": true,
+    "tree_bias_query_mapping_fixed": true
+  },
+  "preserved_dynamic_work": {
+    "cu_seqlens_q_offsets": true,
+    "actual_seqlen_k": true,
+    "kv_last_block_copy_predicate": true,
+    "score_kv_tail_mask": true,
+    "tree_bias_k_bounds": true,
+    "query_order_changed": false,
+    "k_order_changed": false,
+    "mask_semantics_changed": false,
+    "softmax_reduction_changed": false,
+    "async_copy_order_changed": false,
+    "storage_changed": false,
+    "launch_count_changed": false,
+    "launch_grid_changed": false
+  },
+  "proof": {
+    "all_64_threads_covered": true,
+    "all_query_fragment_rows_within_0_31": true,
+    "all_32_query_rows_covered": true,
+    "pinned_header_anchor_count": 12,
+    "pinned_header_transform_passed": true,
+    "transform_idempotent": true,
+    "passed": true
+  },
+  "tests": {
+    "focused_source_passed": 20,
+    "focused_source_failed": 0,
+    "py_compile_passed": true,
+    "git_diff_check_passed": true
+  },
+  "pending": {
+    "fresh_sm121a_compile": true,
+    "sass_query_predicate_verification": true,
+    "sass_call0_verification": true,
+    "resource_admission": true,
+    "pinned_gcc11_4_abi_relink": true,
+    "tail23_exact4_byte_gate": true,
+    "hydra27_exact4_byte_gate": true,
+    "real_swe_verified_b4_timing": true
+  }
+}

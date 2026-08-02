@@ -1,0 +1,5 @@
+route	variant	registers	stack_bytes	local_bytes	static_shared_bytes	dynamic_shared_bytes	spill_stores	spill_loads	calls	instructions	text_bytes	object_bytes	verdict
+B4_qrow32	direct_page_incumbent	254	0	0	1024	81920	0	0	0	4824	77184	821760	RETAIN
+B4_qrow32	static_query_candidate	255	0	0	1024	81920	0	0	0	4512	72192	813088	REJECT_REGISTER_REGRESSION
+B1_qrow16	pre_generic_static_query_header	244	0	0	1024	73728	0	0	4	5456	87296	846536	CONTROL
+B1_qrow16	current_generic_static_query_header	244	0	0	1024	73728	0	0	4	5440	87040	846184	CONTROL_PASS

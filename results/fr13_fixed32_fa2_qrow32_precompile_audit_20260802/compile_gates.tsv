@@ -1,0 +1,12 @@
+gate	status	required_evidence
+fresh_pinned_archive_patch	PASS	first pass changed expected files; second pass changed none
+source_contract_tests	PASS	22 focused tests
+sm121a_nvcc_template_instantiation	NOT_RUN	successful compile of generated qrow32 TU
+pinned_gcc11_4_link	NOT_RUN	successful extension link with pinned toolchain
+hidden_launcher_symbol	NOT_RUN	definition resolves and is absent from exported dynamic API
+sass_static_query	NOT_RUN	query predicates and tile-index work absent as intended
+sass_direct_page	NOT_RUN	no integer divmod in specialized page-address path
+resource_admission	NOT_RUN	registers shared memory occupancy and spill audit
+tail23_exact4_byte_gate	NOT_RUN	canonical real exact4 all-layer byte parity
+hydra27_exact4_byte_gate	NOT_RUN	canonical real exact4 all-layer byte parity
+real_swe_verified_b4_timing	NOT_RUN	standing real-task campaign measurement
