@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and attest the default-off FR13 BF16 K64 M1 shuffle op."""
+"""Build and attest the default-off FR13 BF16 K64 M1 R32 shuffle op."""
 
 from __future__ import annotations
 
@@ -74,7 +74,7 @@ def build(output: Path, build_dir: Path, attestation: Path) -> dict[str, object]
     os.environ["TORCH_CUDA_ARCH_LIST"] = EXPECTED_ARCH
     built = Path(
         load(
-            name="fr13_bf16_gemvx_k64_m1_shuffle",
+            name="fr13_bf16_gemvx_k64_m1_shuffle_r32",
             sources=[str(SOURCE)],
             build_directory=str(build_dir),
             extra_cflags=["-O3"],
@@ -93,11 +93,11 @@ def build(output: Path, build_dir: Path, attestation: Path) -> dict[str, object]
     temporary.chmod(0o555)
     temporary.replace(output)
 
-    if not hasattr(torch.ops.fr13_bf16_k64_head, "gemvx_m1_shuffle_out"):
+    if not hasattr(torch.ops.fr13_bf16_k64_head, "gemvx_m1_shuffle_r32_out"):
         raise RuntimeError("built library did not register the FR13 CUDA op")
 
     payload: dict[str, object] = {
-        "schema": "fr13.fixed32.bf16_gemvx_k64_m1_shuffle_build.v1",
+        "schema": "fr13.fixed32.bf16_gemvx_k64_m1_shuffle_r32_build.v1",
         "status": "BUILT_UNQUALIFIED",
         "performance_measurement": False,
         "byte_equality_claim": False,
@@ -117,10 +117,11 @@ def build(output: Path, build_dir: Path, attestation: Path) -> dict[str, object]
             "mode": "0555",
         },
         "kernel_contract": {
-            "grid": [4096, 1, 1],
-            "block": [16, 16, 1],
+            "grid": [2048, 1, 1],
+            "block": [16, 32, 1],
             "dynamic_shared_bytes": 0,
             "gemv_mnk": [1, 65536, 5120],
+            "output_rows_per_cta": 32,
             "k_partition_lanes": 16,
             "lane_k_iterations": 320,
             "reduction_strides": [8, 4, 2, 1],
