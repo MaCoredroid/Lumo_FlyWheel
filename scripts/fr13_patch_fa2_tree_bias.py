@@ -23,9 +23,9 @@ one 32-row, two-warp CTA per batch/head. It has the same 96-CTA layer grid and
 complete ordered K loop as stock BM64 while avoiding the 32 query rows outside
 each physical32 batch slot. Its private selector is gate-only and default-off;
 it can be tagged only by the canonical retained-live exact4 byte diagnostic.
-That gate also fixes the paged-KV block size at 1024, allowing only this
-translation unit to resolve pages directly from 64-row K-block coordinates.
-There is no production selector.
+Both fixed32 query routes fix the paged-KV block size at 1024, allowing only
+their dedicated translation units to resolve pages directly from 64-row
+K-block coordinates. There is no qrow32 production selector.
 """
 
 from __future__ import annotations
@@ -153,7 +153,7 @@ FIXED32_QUERY_TILE16_BATCH_STRIDE_SENTINEL = 0x46523133
 FIXED32_QUERY_TILE32_BATCH_STRIDE_SENTINEL = 0x20013
 
 
-FIXED32_QUERY_TILE32_STATIC_PAGE_TRAIT = r'''// FR13_FA2_QROW32_STATIC_PAGE: stock traits retain the dynamic page size.
+FIXED32_QUERY_STATIC_PAGE_TRAIT = r'''// FR13_FA2_FIXED32_STATIC_PAGE: stock traits retain the dynamic page size.
 template <typename Kernel_traits>
 struct StaticPagedKVBlockSize {
     static constexpr int value = 0;
@@ -164,7 +164,7 @@ struct StaticPagedKVBlockSize {
 '''
 
 
-FIXED32_QUERY_TILE32_STATIC_PAGE_OFFSET = r'''    constexpr int kStaticPageBlockSize = StaticPagedKVBlockSize<Kernel_traits>::value;
+FIXED32_QUERY_STATIC_PAGE_OFFSET = r'''    constexpr int kStaticPageBlockSize = StaticPagedKVBlockSize<Kernel_traits>::value;
     if constexpr (kStaticPageBlockSize != 0) {
         constexpr int kStaticPageBlockLog2 = StaticPagedKVBlockSize<Kernel_traits>::log2;
         constexpr int kStaticBlockNLog2 = StaticPagedKVBlockSize<Kernel_traits>::block_n_log2;
@@ -179,7 +179,7 @@ FIXED32_QUERY_TILE32_STATIC_PAGE_OFFSET = r'''    constexpr int kStaticPageBlock
             Kernel_traits::kNThreads / Kernel_traits::kGmemThreadsPerRow
                 * Kernel_traits::kGmemRowsPerThread
             == Kernel_traits::kBlockN);
-        // n_block is active and nonnegative. Each qrow32 thread starts below
+        // n_block is active and nonnegative. Each fixed32 thread starts below
         // kBlockN, and the partial-block clamp can only lower that row offset.
         // Resolve the page in 32-bit block coordinates before address math.
         const int page_offset =
@@ -206,6 +206,38 @@ FIXED32_QUERY_TILE16_TRANSLATION_UNIT = r'''// FR13 fixed32 B1 qrow16 internal k
 
 namespace FLASH_NAMESPACE {
 
+using Fr13Fixed32Qrow16KernelTraits = Flash_fwd_kernel_traits<
+    256, 16, 64, 1, false, false, cutlass::bfloat16_t>;
+
+template <>
+struct StaticPagedKVBlockSize<Fr13Fixed32Qrow16KernelTraits> {
+    static constexpr int value = 1024;
+    static constexpr int log2 = 10;
+    static constexpr int block_n_log2 = 6;
+};
+
+// Keep the division-free page resolver within the incumbent register ceiling.
+// This exact kernel is private to the fail-closed B1 launcher below.
+__global__ __maxnreg__(244)
+void fr13_flash_fwd_fixed32_qrow16_kernel(
+        KERNEL_PARAM_MODIFIER const Flash_fwd_params params) {
+#if defined(ARCH_SUPPORTS_FLASH)
+    FLASH_NAMESPACE::compute_attn_splitkv<
+        Fr13Fixed32Qrow16KernelTraits,
+        false,  // Is_causal
+        false,  // Is_local
+        false,  // Has_alibi
+        false,  // Is_even_MN: paged varlen Q has cu_seqlens_q
+        true,   // Is_even_K: d == kHeadDim == 256
+        false,  // Is_softcap
+        false,  // Split
+        false   // Append_KV
+    >(params);
+#else
+    FLASH_UNSUPPORTED_ARCH
+#endif
+}
+
 // Internal caller-only entry point. This separate TU keeps the stock HD256
 // BF16 explicit-instantiation object byte-for-byte unchanged.
 __attribute__((visibility("hidden")))
@@ -218,9 +250,10 @@ void fr13_run_mha_fwd_fixed32_qrow16(
     constexpr static int kTreeBlockN = 64;
     constexpr static int kTreeWarps = 1;
     static_assert(kTreeBlockM == 16 * kTreeWarps);
-    using TreeKernelTraits = Flash_fwd_kernel_traits<
-        256, kTreeBlockM, kTreeBlockN, kTreeWarps,
-        false, false, cutlass::bfloat16_t>;
+    using TreeKernelTraits = Fr13Fixed32Qrow16KernelTraits;
+    static_assert(TreeKernelTraits::kBlockM == kTreeBlockM);
+    static_assert(TreeKernelTraits::kBlockN == kTreeBlockN);
+    static_assert(TreeKernelTraits::kNWarps == kTreeWarps);
     static_assert(TreeKernelTraits::kNThreads == 32);
     static_assert(TreeKernelTraits::kGmemThreadsPerRow == 8);
     // The public FA2 API requires paged-KV blocks divisible by 16;
@@ -232,17 +265,7 @@ void fr13_run_mha_fwd_fixed32_qrow16(
         (params.seqlen_q + TreeKernelTraits::kBlockM - 1)
         / TreeKernelTraits::kBlockM;
     dim3 grid(num_m_block, params.b, params.h);
-    auto kernel = &flash_fwd_splitkv_kernel<
-        TreeKernelTraits,
-        false,  // Is_causal
-        false,  // Is_local
-        false,  // Has_alibi
-        false,  // Is_even_MN: paged varlen Q has cu_seqlens_q
-        true,   // Is_even_K: d == kHeadDim == 256
-        false,  // Is_softcap
-        false,  // Split
-        false   // Append_KV
-    >;
+    auto kernel = &fr13_flash_fwd_fixed32_qrow16_kernel;
     if (smem_size >= 48 * 1024) {
         C10_CUDA_CHECK(cudaFuncSetAttribute(
             kernel,
@@ -598,12 +621,13 @@ def _patch_flash_fwd_kernel(path: Path, *, tile_earlyout: bool = False) -> bool:
     return changed
 
 
-def _patch_fixed32_query_tile32_static_page(
+def _patch_fixed32_query_static_page(
     path: Path,
     *,
+    fixed32_query_tile16: bool = False,
     fixed32_query_tile32: bool = False,
 ) -> bool:
-    if not fixed32_query_tile32:
+    if not (fixed32_query_tile16 or fixed32_query_tile32):
         return False
     text = path.read_text()
     changed = False
@@ -612,16 +636,16 @@ def _patch_fixed32_query_tile32_static_page(
         "__forceinline__ __device__\n"
         "int64_t resolve_thread_kv_page_slice_offset(\n"
     )
-    trait_marker = "// FR13_FA2_QROW32_STATIC_PAGE: stock traits retain the dynamic page size."
+    trait_marker = "// FR13_FA2_FIXED32_STATIC_PAGE: stock traits retain the dynamic page size."
     if trait_marker in text:
-        if text.count(trait_marker) != 1 or FIXED32_QUERY_TILE32_STATIC_PAGE_TRAIT not in text:
-            raise RuntimeError("qrow32 static paged-KV trait drifted")
+        if text.count(trait_marker) != 1 or FIXED32_QUERY_STATIC_PAGE_TRAIT not in text:
+            raise RuntimeError("fixed32 static paged-KV trait drifted")
     else:
         text, did = _insert_once(
             text,
             helper_anchor,
-            FIXED32_QUERY_TILE32_STATIC_PAGE_TRAIT,
-            "qrow32 static paged-KV trait",
+            FIXED32_QUERY_STATIC_PAGE_TRAIT,
+            "fixed32 static paged-KV trait",
         )
         changed = changed or did
 
@@ -633,15 +657,15 @@ def _patch_fixed32_query_tile32_static_page(
         + page_offset * ((int64_t) row_stride)
         + col_offset;
 '''
-    if FIXED32_QUERY_TILE32_STATIC_PAGE_OFFSET in text:
-        if text.count(FIXED32_QUERY_TILE32_STATIC_PAGE_OFFSET) != 1:
-            raise RuntimeError("qrow32 static paged-KV offset was duplicated")
+    if FIXED32_QUERY_STATIC_PAGE_OFFSET in text:
+        if text.count(FIXED32_QUERY_STATIC_PAGE_OFFSET) != 1:
+            raise RuntimeError("fixed32 static paged-KV offset was duplicated")
     else:
         text, did = _replace_once(
             text,
             dynamic_offset,
-            FIXED32_QUERY_TILE32_STATIC_PAGE_OFFSET,
-            "qrow32 static paged-KV offset",
+            FIXED32_QUERY_STATIC_PAGE_OFFSET,
+            "fixed32 static paged-KV offset",
         )
         changed = changed or did
     if changed:
@@ -1089,8 +1113,9 @@ def patch_fa2_source(
     return {
         "flash.h": _patch_flash_h(files["flash.h"]),
         "flash_fwd_kernel.h": flash_fwd_kernel_changed,
-        "utils.h": _patch_fixed32_query_tile32_static_page(
+        "utils.h": _patch_fixed32_query_static_page(
             files["utils.h"],
+            fixed32_query_tile16=fixed32_query_tile16,
             fixed32_query_tile32=fixed32_query_tile32,
         ),
         "flash_fwd_fr13_qrow16_hdim256_bf16_sm80.cu": _patch_fixed32_query_translation_unit(

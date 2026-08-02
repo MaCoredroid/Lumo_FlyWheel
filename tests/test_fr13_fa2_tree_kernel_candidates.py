@@ -124,8 +124,11 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
     assert "fr13_run_mha_fwd_fixed32_qrow16" in candidate
     assert "constexpr size_t smem_size = TreeKernelTraits::kSmemSize" in candidate
     assert "dim3 grid(num_m_block, params.b, params.h)" in candidate
-    assert "auto kernel = &flash_fwd_splitkv_kernel<" in candidate
-    assert candidate.count("auto kernel = &flash_fwd_splitkv_kernel<") == 1
+    assert "auto kernel = &fr13_flash_fwd_fixed32_qrow16_kernel" in candidate
+    assert candidate.count("fr13_flash_fwd_fixed32_qrow16_kernel") == 2
+    assert "__global__ __maxnreg__(244)" in candidate
+    assert "FLASH_NAMESPACE::compute_attn_splitkv<" in candidate
+    assert "auto kernel = &flash_fwd_splitkv_kernel<" not in candidate
     assert "false,  // Is_causal" in candidate
     assert "false,  // Is_local" in candidate
     assert "false,  // Has_alibi" in candidate
@@ -139,7 +142,9 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
     assert "run_flash_splitkv_fwd<StockKernelTraits, false>" not in candidate
     assert "AllowSplit" not in candidate
     assert "FR13_ALLOW_SPLIT_SWITCH" not in candidate
-    assert "StaticPagedKVBlockSize" not in candidate
+    assert "using Fr13Fixed32Qrow16KernelTraits" in candidate
+    assert "StaticPagedKVBlockSize<Fr13Fixed32Qrow16KernelTraits>" in candidate
+    assert "using TreeKernelTraits = Fr13Fixed32Qrow16KernelTraits" in candidate
     assert "kTreeBlockM = 16" in candidate
     assert "kTreeBlockN = 64" in candidate
     assert "kTreeWarps = 1" in candidate
@@ -150,6 +155,26 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
     assert "public FA2 API requires paged-KV blocks divisible by 16" in candidate
     assert "flash_fwd_splitkv_combine_kernel" not in candidate
     assert "params.num_splits = " not in candidate
+
+    include_at = candidate.index('#include "flash_fwd_launch_template.h"')
+    namespace_at = candidate.index("namespace FLASH_NAMESPACE {")
+    alias_at = candidate.index("using Fr13Fixed32Qrow16KernelTraits")
+    specialization_at = candidate.index(
+        "struct StaticPagedKVBlockSize<Fr13Fixed32Qrow16KernelTraits>"
+    )
+    launcher_at = candidate.index("void fr13_run_mha_fwd_fixed32_qrow16(")
+    kernel_at = candidate.index("void fr13_flash_fwd_fixed32_qrow16_kernel(")
+    launch_at = candidate.index("auto kernel = &fr13_flash_fwd_fixed32_qrow16_kernel")
+    assert (
+        include_at
+        < namespace_at
+        < alias_at
+        < specialization_at
+        < kernel_at
+        < launcher_at
+        < launch_at
+    )
+    assert "StaticQueryRows<Fr13Fixed32Qrow16KernelTraits>" not in candidate
 
     api = module.FIXED32_QUERY_TILE16_API_DISPATCH
     stock_body = module.STOCK_RUN_MHA_FWD[
@@ -319,6 +344,35 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
         assert candidate_warp_row == stock_warp_row
 
 
+def test_qrow16_private_kernel_caps_registers_and_preserves_flags() -> None:
+    module = _module()
+    translation_unit = module.FIXED32_QUERY_TILE16_TRANSLATION_UNIT
+
+    assert translation_unit.count("__global__ __maxnreg__(244)") == 1
+    assert translation_unit.count("fr13_flash_fwd_fixed32_qrow16_kernel") == 2
+    assert "flash_fwd_splitkv_kernel<" not in translation_unit
+    kernel_match = re.search(
+        r"compute_attn_splitkv<(?P<arguments>.*?)\n"
+        r"    >\(params\);",
+        translation_unit,
+        flags=re.DOTALL,
+    )
+    assert kernel_match is not None
+    uncommented = re.sub(r"//[^\n]*", "", kernel_match.group("arguments"))
+    arguments = [argument.strip() for argument in uncommented.split(",")]
+    assert arguments == [
+        "Fr13Fixed32Qrow16KernelTraits",
+        "false",  # Is_causal
+        "false",  # Is_local
+        "false",  # Has_alibi
+        "false",  # Is_even_MN
+        "true",  # Is_even_K
+        "false",  # Is_softcap
+        "false",  # Split
+        "false",  # Append_KV
+    ]
+
+
 def test_qrow32_traits_precede_the_exact_splitkv_instantiation() -> None:
     module = _module()
     translation_unit = module.FIXED32_QUERY_TILE32_TRANSLATION_UNIT
@@ -352,7 +406,7 @@ def test_qrow32_traits_precede_the_exact_splitkv_instantiation() -> None:
     # flash_fwd_kernel.h. The qrow TU specializes both before the first use
     # that instantiates the exact BM32/N64/two-warp kernel type.
     assert "struct StaticPagedKVBlockSize" in (
-        module.FIXED32_QUERY_TILE32_STATIC_PAGE_TRAIT
+        module.FIXED32_QUERY_STATIC_PAGE_TRAIT
     )
     assert "struct StaticQueryRows" in module._tree_bias_helper(
         tile_earlyout=True
@@ -419,7 +473,7 @@ def test_qrow32_hidden_launcher_abi_and_build_name_are_stable() -> None:
     assert definition.startswith("// FR13 fixed32 B4 qrow32 gate candidate.")
 
 
-def test_qrow32_static_page_specialization_is_opt_in_exact_and_idempotent(
+def test_fixed32_static_page_specialization_is_opt_in_exact_and_idempotent(
     tmp_path: Path,
 ) -> None:
     module = _module()
@@ -445,14 +499,14 @@ def test_qrow32_static_page_specialization_is_opt_in_exact_and_idempotent(
     )
     utils.write_text(stock)
 
-    assert not module._patch_fixed32_query_tile32_static_page(utils)
+    assert not module._patch_fixed32_query_static_page(utils)
     assert utils.read_text() == stock
-    assert module._patch_fixed32_query_tile32_static_page(
+    assert module._patch_fixed32_query_static_page(
         utils,
-        fixed32_query_tile32=True,
+        fixed32_query_tile16=True,
     )
     candidate = utils.read_text()
-    assert candidate.count("FR13_FA2_QROW32_STATIC_PAGE") == 1
+    assert candidate.count("FR13_FA2_FIXED32_STATIC_PAGE") == 1
     assert candidate.count("struct StaticPagedKVBlockSize") == 1
     assert "static constexpr int value = 0" in candidate
     assert "if constexpr (kStaticPageBlockSize != 0)" in candidate
@@ -465,42 +519,53 @@ def test_qrow32_static_page_specialization_is_opt_in_exact_and_idempotent(
     assert candidate.count("const int64_t global_row_offset") == 1
     assert candidate.count("global_row_offset % page_block_size") == 1
     assert candidate.count("global_row_offset / page_block_size") == 1
-    assert not module._patch_fixed32_query_tile32_static_page(
+    assert not module._patch_fixed32_query_static_page(
         utils,
-        fixed32_query_tile32=True,
+        fixed32_query_tile16=True,
     )
     assert utils.read_text() == candidate
+
+    # Both private routes install the same header specialization surface.
+    qrow32_utils = tmp_path / "qrow32_utils.h"
+    qrow32_utils.write_text(stock)
+    assert module._patch_fixed32_query_static_page(
+        qrow32_utils,
+        fixed32_query_tile32=True,
+    )
+    assert qrow32_utils.read_text() == candidate
 
     # Exhaust all thread rows, page-block residues, and valid partial-block
     # clamps. Quotient representatives include the largest nonnegative int
     # n_block, so the proof does not depend on a small sequence length.
     max_block_quotient = (2**31 - 1) // 16
-    for thread_idx in range(64):
-        original_block_row_offset = (thread_idx // 8) * 8
-        for partial_block_size in (None, *range(65)):
-            block_row_offset = original_block_row_offset
-            if partial_block_size is not None:
-                final_row_offset = max(partial_block_size - 1, 0)
-                final_thread_row_offset = (
-                    (final_row_offset + 7) // 8
-                ) * 8
-                block_row_offset = min(
-                    block_row_offset,
-                    final_thread_row_offset,
-                )
-            assert 0 <= block_row_offset < 64
-            for block_quotient in (0, 1, 17, max_block_quotient):
-                for block_residue in range(16):
-                    n_block = block_quotient * 16 + block_residue
-                    if n_block > 2**31 - 1:
-                        continue
-                    global_row_offset = block_row_offset + n_block * 64
-                    quotient, remainder = divmod(global_row_offset, 1024)
-                    assert n_block >> 4 == quotient
-                    assert (
-                        ((n_block & 15) << 6) + block_row_offset
-                        == remainder
+    for threads, rows_per_thread in ((32, 16), (64, 8)):
+        for thread_idx in range(threads):
+            original_block_row_offset = (thread_idx // 8) * rows_per_thread
+            for partial_block_size in (None, *range(65)):
+                block_row_offset = original_block_row_offset
+                if partial_block_size is not None:
+                    final_row_offset = max(partial_block_size - 1, 0)
+                    final_thread_row_offset = (
+                        (final_row_offset + rows_per_thread - 1)
+                        // rows_per_thread
+                    ) * rows_per_thread
+                    block_row_offset = min(
+                        block_row_offset,
+                        final_thread_row_offset,
                     )
+                assert 0 <= block_row_offset < 64
+                for block_quotient in (0, 1, 17, max_block_quotient):
+                    for block_residue in range(16):
+                        n_block = block_quotient * 16 + block_residue
+                        if n_block > 2**31 - 1:
+                            continue
+                        global_row_offset = block_row_offset + n_block * 64
+                        quotient, remainder = divmod(global_row_offset, 1024)
+                        assert n_block >> 4 == quotient
+                        assert (
+                            ((n_block & 15) << 6) + block_row_offset
+                            == remainder
+                        )
 
 
 def test_qrow32_static_query_specialization_is_exact_and_keeps_kv_masking(
@@ -601,7 +666,7 @@ def test_source_build_candidates_are_independent_and_default_off() -> None:
     assert "tree_bias_tile_earlyout: bool = False" in text
     assert "fixed32_query_tile16: bool = False" in text
     assert "fixed32_query_tile32: bool = False" in text
-    assert "There is no production selector" in text
+    assert "There is no qrow32 production selector" in text
     assert "fixed32_query_tile32_production" not in text
     assert "--fixed32-query-tile32 requires --tree-bias-tile-earlyout" in text
     assert "fixed32 qrow32 requires --tree-bias-tile-earlyout" in text
