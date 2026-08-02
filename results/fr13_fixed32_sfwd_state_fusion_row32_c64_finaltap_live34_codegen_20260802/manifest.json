@@ -1,0 +1,150 @@
+{
+  "schema": "fr13.fixed32.sfwd_state_fusion.row32_c64_finaltap.live34_codegen_manifest.v1",
+  "artifact": "results/fr13_fixed32_sfwd_state_fusion_row32_c64_finaltap_live34_codegen_20260802",
+  "date_utc": "2026-08-02",
+  "branch": "agent/fixed32-sfwd-state-fusion-row32-c64-20260802",
+  "source_variant": "row32_c64_finaltap_specialization",
+  "runtime_candidate_id": "fixed32_sfwd_state_fusion_rowgroup32_c64_xreuse_v6",
+  "status": "OFFLINE_CODEGEN_VIABLE_CORRECTNESS_AND_PERFORMANCE_UNQUALIFIED",
+  "claims": {
+    "source_qualified": true,
+    "offline_codegen_inspected": true,
+    "resource_gate_passed": true,
+    "immediate_static_baseline_improved": true,
+    "byte_equal": false,
+    "correctness_qualified": false,
+    "performance_measured": false,
+    "gpu_kernel_executed": false,
+    "real_task_run": false,
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false,
+    "production_enabled": false
+  },
+  "change_scope": {
+    "kernel_source_changed": true,
+    "focused_test_changed": true,
+    "timing_harness_changed": false,
+    "runner_changed": false,
+    "gate_harness_changed": false,
+    "launch_geometry_changed": false,
+    "correctness_contract_expanded": false
+  },
+  "source_binding": {
+    "commit": "9920370699fa11e677c510bc28bc066eed18ad88",
+    "parent_commit": "0482413f190d8a4c4541eecb54c235c33d53fdab",
+    "tree": "f93ba43911c82251313b6e49185e135899f330b1",
+    "kernel_function_sha256": "c7338326ec87236bf0239c683e0979dcc4c13d433e429ef6ff41822fdc7fe8db",
+    "paths": {
+      "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": {
+        "git_blob_sha1": "62b2cdcf2e232c85849dabf3b8e10f0ae4131817",
+        "sha256": "b330970b1fe58bdee6ae2ca267394498ac970d7eb076ccad001d07106834b853"
+      },
+      "tests/test_fr13_fixed32_sfwd_state_fusion.py": {
+        "git_blob_sha1": "d4f2b3fb00439ff334d6de3549aa8ed011c50d02",
+        "sha256": "0c90a26b54cf315a9d5b51657be39182227286f117a809ecbb0f9950a6b823ea"
+      }
+    }
+  },
+  "compile_contract": {
+    "batch_sizes": [
+      1,
+      4
+    ],
+    "physical_rows_per_request": 32,
+    "rows_per_program": 32,
+    "block_c": 64,
+    "channels": 10240,
+    "conv_width": 4,
+    "conv_state_len": 34,
+    "source_rows_per_request": 36,
+    "source_descriptor_dtype": "int64",
+    "state_index_dtype": "int32",
+    "has_bias": false,
+    "num_warps": 8,
+    "num_stages": 3,
+    "target": "sm_121a",
+    "cuda_visible_devices": "",
+    "canonical_path": "/home/mark/lumoFlyWheel-sfwd-state-fusion/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+    "output_and_cache_location": "isolated /tmp directories"
+  },
+  "optimization": {
+    "selected": "specialize validated final tap and reuse direct current-x load",
+    "baseline": "row32/C64 x-reuse v6 at 3d268dda7ba60cec7ef430445820602794dbe13c",
+    "selection_reason": "Reduces same-warp SASS, global-load instructions, shared loads, cubin size, and reported registers while preserving CTA count and register allocation quantum."
+  },
+  "resource_verdict": {
+    "compile_pass": true,
+    "b1_b4_cubin_sass_ptx_identity": true,
+    "fresh_cache_binary_identity": true,
+    "conservative_resource_limits_pass": true,
+    "immediate_baseline_improvement_gate_pass": true,
+    "cta_count_unchanged": true,
+    "allocated_register_quantum_unchanged": true,
+    "stack_zero": true,
+    "local_zero": true,
+    "spill_instructions_zero": true,
+    "calls_zero": true,
+    "unsafe_resource_usage_observed": false,
+    "viable_offline": true
+  },
+  "verification": {
+    "focused_tests": "13 passed",
+    "python_compile": "pass",
+    "git_diff_check": "pass",
+    "cuda_visibility_refusal": "pass",
+    "b1_offline_codegen": "pass",
+    "b4_offline_codegen": "pass",
+    "fresh_cache_binary_identity": "pass",
+    "fresh_disassembly_identity": "pass",
+    "independent_summary_and_resource_verifier": "pass",
+    "improvement_gate": "pass",
+    "source_commit_push": "verified",
+    "verifier_sha256": "684dcbe6241596f4272057c04d07e87214e43ba974d7400f08901adf155fcdd5"
+  },
+  "audit_implementation": {
+    "copied_as_starting_point": true,
+    "changes_after_copy": [],
+    "source": "git:0482413f1:results/fr13_fixed32_sfwd_state_fusion_row32_c64_xreuse_live34_codegen_20260802/offline_codegen_audit.py",
+    "source_sha256": "b58de78d8d2d2818f858933b2a2e8b59a0fe03834d0dc4e5f8152eb7aa6ac376",
+    "packaged_sha256": "b58de78d8d2d2818f858933b2a2e8b59a0fe03834d0dc4e5f8152eb7aa6ac376"
+  },
+  "results_files": [
+    "codegen_summary.json",
+    "codegen_summary.tsv"
+  ],
+  "package_policy": {
+    "reduced_non_sensitive": true,
+    "contains_binaries": false,
+    "contains_cubin": false,
+    "contains_ptx": false,
+    "contains_sass": false,
+    "contains_ir": false,
+    "contains_pyc_or_pycache": false,
+    "contains_model_or_task_content": false,
+    "contains_prompt_content": false,
+    "contains_patch_content": false,
+    "contains_raw_request_logs": false,
+    "contains_process_data": false,
+    "contains_environment_dump": false,
+    "contains_credentials": false,
+    "contains_secrets": false
+  },
+  "toolchain": {
+    "torch": "2.10.0+cu130",
+    "torch_cuda": "13.0",
+    "triton": "3.6.0",
+    "target": "sm_121a",
+    "num_stages": 3,
+    "backend_producer": {
+      "toolkit_version": "12.9",
+      "tool_name": "ptxas-blackwell",
+      "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+      "target": "sm_121a"
+    },
+    "inspection_tools": {
+      "nvdisasm": "13.0.85",
+      "cuobjdump": "13.0.85"
+    },
+    "system_nvcc_inspection_only": "13.0.88"
+  }
+}
