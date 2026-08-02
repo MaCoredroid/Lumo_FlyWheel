@@ -1,0 +1,31 @@
+{
+  "evidence_sha256": {
+    "campaign_summary": "36630b56077fd9bd8cc65dea1b721073706e95ad117b311aa9ad7ab2e83eeed1",
+    "gate_summary": "99d05a77292ff6d8bd50e166c03d7e14f96922816e782cf7a9ecced41a48d4f5",
+    "health": "bf417d52d457c0fd8e1de3a6d998f1f41d1927d65d9f901bf8309bd5d466cfe6",
+    "live_pass": "c44c02dc0b5248fd11371f684cdfe0c8d2a7ae1b1c3aae4f1df1f3ef5957a9dd",
+    "records": "2617191b1cecbbadad63cae9f58bb8a85706007ab0ff4f103f28195b6f0a8628"
+  },
+  "external_manifest": {
+    "end_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "launch_equals_end": true,
+    "launch_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f"
+  },
+  "post_run_host_census": {
+    "checked_at_utc": "2026-08-02T12:02:31Z",
+    "gpu_compute_processes": 0,
+    "gpu_memory_used_mib": 0,
+    "running_docker_containers": 0
+  },
+  "runtime_manifest": {
+    "end_sha256": "00810c6d3993786ad08c8bc5d186a6e569aee7a1ed926616b3f808c71b366a30",
+    "launch_equals_end": true,
+    "launch_sha256": "00810c6d3993786ad08c8bc5d186a6e569aee7a1ed926616b3f808c71b366a30"
+  },
+  "schema": "fr13.fixed32.sfwd_prior_reuse.reduced_identity_lifecycle.v1",
+  "source_manifest": {
+    "end_sha256": "f0bb5f5d7e78d10ac1fc7db92cfd7b96c1126850703e486f21ab509d448b772c",
+    "launch_equals_end": true,
+    "launch_sha256": "f0bb5f5d7e78d10ac1fc7db92cfd7b96c1126850703e486f21ab509d448b772c"
+  }
+}
