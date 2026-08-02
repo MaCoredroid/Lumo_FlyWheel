@@ -43,6 +43,18 @@ IDENTITY_STOCKSHAPE_SIDECAR_SCHEMA = (
 IDENTITY_STOCKSHAPE_K64_ROOT_SIDECAR_SCHEMA = (
     "fr13.fixed32.cutlass_b4.identity_stockshape.k64_root.production_pass.v1"
 )
+IDENTITY_STOCKSHAPE_STAGE2_LIVE_SCHEMA = (
+    "fr13.fixed32.cutlass_identity_stockshape_stage2_b4_live_gate.v1"
+)
+IDENTITY_STOCKSHAPE_STAGE2_K64_ROOT_LIVE_SCHEMA = (
+    "fr13.fixed32.cutlass_identity_stockshape_stage2_b4_k64_root_live_gate.v1"
+)
+IDENTITY_STOCKSHAPE_STAGE2_SIDECAR_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_stockshape_stage2.production_pass.v1"
+)
+IDENTITY_STOCKSHAPE_STAGE2_K64_ROOT_SIDECAR_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_stockshape_stage2.k64_root.production_pass.v1"
+)
 IDENTITY_DIVISOR_LIVE_SCHEMA = (
     "fr13.fixed32.cutlass_identity_divisor_b4_live_gate.v1"
 )
@@ -78,6 +90,12 @@ IDENTITY_STOCKSHAPE_PATCH_SOURCE_SHA256 = (
 )
 IDENTITY_STOCKSHAPE_PATCHED_DISPATCH_SHA256 = (
     "9bdd435d68cf914203faf4603c068e3df53e1b80efe3335d56671d1910ac45bf"
+)
+IDENTITY_STOCKSHAPE_STAGE2_PATCH_SOURCE_SHA256 = (
+    "b4ec629ad903992030730ba15e24d9820cae771527953035c275402dd465fbec"
+)
+IDENTITY_STOCKSHAPE_STAGE2_PATCHED_DISPATCH_SHA256 = (
+    "d21bff568fea29bc3a801d31b274f76692559aa22eab549fede9823fe5ee72c7"
 )
 EXPECTED_TASK_IDS = (
     "astropy__astropy-12907",
@@ -143,6 +161,27 @@ CANDIDATE_CONTRACTS = {
             ),
             "k64_root": (
                 "fr13.fixed32.cutlass_b4.identity_stockshape.k64_root.production_binding.v1"
+            ),
+        },
+        "production_authorized": False,
+        "requires_resource_credential": False,
+    },
+    "identity_stockshape_stage2_b4": {
+        "diagnostic_selector": "identity_stockshape_stage2_b4_byte_ab",
+        "live_schemas": {
+            "full_vocab": IDENTITY_STOCKSHAPE_STAGE2_LIVE_SCHEMA,
+            "k64_root": IDENTITY_STOCKSHAPE_STAGE2_K64_ROOT_LIVE_SCHEMA,
+        },
+        "sidecar_schemas": {
+            "full_vocab": IDENTITY_STOCKSHAPE_STAGE2_SIDECAR_SCHEMA,
+            "k64_root": IDENTITY_STOCKSHAPE_STAGE2_K64_ROOT_SIDECAR_SCHEMA,
+        },
+        "binding_schemas": {
+            "full_vocab": (
+                "fr13.fixed32.cutlass_b4.identity_stockshape_stage2.production_binding.v1"
+            ),
+            "k64_root": (
+                "fr13.fixed32.cutlass_b4.identity_stockshape_stage2.k64_root.production_binding.v1"
             ),
         },
         "production_authorized": False,
@@ -252,6 +291,11 @@ def _candidate_source_hashes(candidate_selector: str) -> tuple[str, str]:
         return (
             IDENTITY_STOCKSHAPE_PATCH_SOURCE_SHA256,
             IDENTITY_STOCKSHAPE_PATCHED_DISPATCH_SHA256,
+        )
+    if candidate_selector == "identity_stockshape_stage2_b4":
+        return (
+            IDENTITY_STOCKSHAPE_STAGE2_PATCH_SOURCE_SHA256,
+            IDENTITY_STOCKSHAPE_STAGE2_PATCHED_DISPATCH_SHA256,
         )
     if candidate_selector == "persistent_b4_m128":
         return PATCH_SOURCE_SHA256, PATCHED_DISPATCH_SHA256

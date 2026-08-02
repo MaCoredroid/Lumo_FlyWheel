@@ -1,0 +1,77 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_identity_stockshape_stage2_host_build.v1",
+  "created_at_utc": "2026-08-02T22:33:05Z",
+  "status": "host_compile_link_audit_pass_default_off",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "agent/fixed32-cutlass-b4-divisor-stage2-20260802",
+    "source_commit": "7d5607f2756d9c2508ecee6292959eb3099a3c60",
+    "patch_source_sha256": "b4ec629ad903992030730ba15e24d9820cae771527953035c275402dd465fbec",
+    "patched_dispatch_sha256": "d21bff568fea29bc3a801d31b274f76692559aa22eab549fede9823fe5ee72c7",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2"
+  },
+  "candidate": {
+    "selector": "identity_stockshape_stage2_b4",
+    "diagnostic_selector": "identity_stockshape_stage2_b4_byte_ab",
+    "default_enabled": false,
+    "production_authorized": false,
+    "physical_m": 128,
+    "tile_mnk": [64, 128, 128],
+    "cluster_mnk": [1, 1, 1],
+    "mainloop_schedule": "KernelTmaWarpSpecializedBlockwisePingpongSm120",
+    "mainloop_stage_count": 2,
+    "epilogue": "identity",
+    "tile_scheduler": "dynamic_default",
+    "split_k": false
+  },
+  "host_build": {
+    "result": "pass",
+    "target_arch": "sm_121a",
+    "gpu_runtime_used": false,
+    "candidate_binary_import": "pass",
+    "pinned_binary_verifier": "pass"
+  },
+  "outputs": {
+    "candidate_binary": {
+      "published": false,
+      "sha256": "6a33fcfc13f70e0d5a6d10d4d8cdfd279056a391257683496e1e397857ab94a1",
+      "bytes": 117526952
+    },
+    "candidate_object": {
+      "published": false,
+      "sha256": "c1b7d6d3d612c15bc2931f86600659dd2fe94713dd94d14307a64ee25b6f3f00",
+      "bytes": 21343224
+    },
+    "candidate_cubin": {
+      "published": false,
+      "sha256": "462dd84bc47be91c379737537d772dcb95af68cf2b457d9aa322ed4e3f05a765",
+      "bytes": 2173768
+    }
+  },
+  "stage2_resource_audit": {
+    "result": "pass",
+    "candidate_kernel_dtypes": ["bf16", "fp16"],
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant_bytes": 2560,
+    "focused_sass_local_load_store_instructions": 0,
+    "detected_spills": false
+  },
+  "source_checks": {
+    "focused_gate_suite": "106 passed",
+    "candidate_binary_verify_stage2": "pass",
+    "git_diff_check": "pass"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "real SWE-Verified exact4 B4 Hydra27 raw-byte gate",
+    "real SWE-Verified exact4 B4 Tail23 raw-byte gate",
+    "paired B4 full-step timing",
+    "hardware-floor acceptance"
+  ]
+}
