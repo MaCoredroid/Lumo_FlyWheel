@@ -415,3 +415,90 @@ def test_packed_xgather_specializes_prior_masks_to_fixed_topology() -> None:
     assert "tl.where(from_prior, prior_2, x_value)" in fragment
     assert "source_row < (WIDTH - 1)" not in fragment
     assert "source_row == 0" not in fragment
+
+
+def test_channel_serial_direct_tuples_match_every_fixed_source() -> None:
+    module_path = Path(
+        sys.modules[
+            "lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless"
+        ].__file__
+    )
+    source = module_path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    kernel = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_fixed32_sfwd_channel_serial_kernel"
+    )
+    assignments = {
+        node.targets[0].id: node.value
+        for node in ast.walk(kernel)
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+    }
+
+    def source_row(expression: ast.expr) -> int:
+        if isinstance(expression, ast.Name) and expression.id.startswith("prior_"):
+            return int(expression.id.removeprefix("prior_"))
+        assert isinstance(expression, ast.Subscript)
+        assert isinstance(expression.value, ast.Name)
+        assert expression.value.id == "x_rows"
+        assert isinstance(expression.slice, ast.Constant)
+        return CONV_WIDTH - 1 + int(expression.slice.value)
+
+    expected = fixed32_descriptorless_sources()
+    for tap in range(CONV_WIDTH - 1):
+        direct = assignments[f"tap_{tap}"]
+        assert isinstance(direct, ast.Tuple)
+        assert tuple(source_row(item) for item in direct.elts) == tuple(
+            row[tap] for row in expected
+        )
+
+
+def test_channel_serial_keeps_global_rows_coalesced_and_ordered() -> None:
+    module_path = Path(
+        sys.modules[
+            "lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless"
+        ].__file__
+    )
+    source = module_path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    kernel = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_fixed32_sfwd_channel_serial_kernel"
+    )
+    fragment = ast.get_source_segment(source, kernel)
+    argument_names = tuple(argument.arg for argument in kernel.args.args)
+
+    assert fragment is not None
+    assert "tl.arange(0, BLOCK_C)" in fragment
+    assert "tl.arange(0, BLOCK_C)[:, None]" not in fragment
+    assert "tl.arange(0, N)" not in fragment
+    assert fragment.count("tl.load(x_batch +") == FIXED32_ROWS
+    for row in range(FIXED32_ROWS):
+        assert f"x_batch + {row} * X_STRIDE_ROW + offs_c" in fragment
+    assert "tl.gather" not in fragment
+    assert "tl.join" not in fragment
+    assert "tl.permute" not in fragment
+    assert "tl.reshape" not in fragment
+    assert "tl.split" not in fragment
+    assert "ROWS_PER_PROGRAM" not in argument_names
+    assert "for node in tl.static_range(0, N):" in fragment
+    assert "tl.store(out_batch + node * C + offs_c, activated)" in fragment
+    assert "((WIDTH - 1) + node) * C + offs_c" in fragment
+    ordered = (
+        "product_0 =",
+        "acc = bias_value + product_0",
+        "product_1 =",
+        "acc = acc + product_1",
+        "product_2 =",
+        "acc = acc + product_2",
+        "product_3 =",
+        "acc = acc + product_3",
+    )
+    positions = tuple(fragment.index(value) for value in ordered)
+    assert positions == tuple(sorted(positions))

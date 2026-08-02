@@ -704,3 +704,133 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
         0.0,
         mask=source_edge_writer,
     )
+
+
+@triton.jit
+def _fr13_fixed32_sfwd_channel_serial_kernel(
+    x,
+    conv_state,
+    spec_state_indices,
+    conv_weights,
+    bias,
+    out,
+    source_stage,
+    B: tl.constexpr,
+    N: tl.constexpr,
+    C: tl.constexpr,
+    WIDTH: tl.constexpr,
+    STATE_LEN: tl.constexpr,
+    SOURCE_ROWS: tl.constexpr,
+    HAS_BIAS: tl.constexpr,
+    X_STRIDE_ROW: tl.constexpr,
+    BLOCK_C: tl.constexpr,
+):
+    """Keep every fixed32 row register-local to a coalesced channel lane."""
+    pid_b = tl.program_id(0)
+    pid_c = tl.program_id(1)
+    offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)
+    x_batch = x + pid_b * N * X_STRIDE_ROW
+    out_batch = out + pid_b * N * C
+    stage_batch = source_stage + pid_b * SOURCE_ROWS * C
+
+    bank_row = tl.load(spec_state_indices + pid_b * N).to(tl.int64)
+    prior_base = conv_state + bank_row * C * STATE_LEN + offs_c * STATE_LEN
+    prior_pair = tl.load(prior_base.to(tl.pointer_type(tl.uint32)))
+    prior_0 = prior_pair.to(tl.uint16).to(tl.bfloat16, bitcast=True)
+    prior_1 = (prior_pair >> 16).to(tl.uint16).to(
+        tl.bfloat16, bitcast=True
+    )
+    prior_2 = tl.load(prior_base + 2)
+
+    weight_channels = conv_weights + offs_c * WIDTH
+    weight_quad = tl.load(weight_channels.to(tl.pointer_type(tl.uint64)))
+    weight_0 = weight_quad.to(tl.uint16).to(tl.bfloat16, bitcast=True)
+    weight_1 = (weight_quad >> 16).to(tl.uint16).to(
+        tl.bfloat16, bitcast=True
+    )
+    weight_2 = (weight_quad >> 32).to(tl.uint16).to(
+        tl.bfloat16, bitcast=True
+    )
+    weight_3 = (weight_quad >> 48).to(tl.uint16).to(
+        tl.bfloat16, bitcast=True
+    )
+
+    x_rows = (
+        tl.load(x_batch + 0 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 1 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 2 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 3 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 4 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 5 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 6 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 7 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 8 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 9 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 10 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 11 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 12 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 13 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 14 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 15 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 16 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 17 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 18 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 19 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 20 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 21 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 22 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 23 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 24 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 25 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 26 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 27 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 28 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 29 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 30 * X_STRIDE_ROW + offs_c),
+        tl.load(x_batch + 31 * X_STRIDE_ROW + offs_c),
+    )
+    tap_0 = (
+        prior_0, prior_1, prior_1, prior_1, prior_2, prior_2, prior_2,
+        prior_2, prior_2, x_rows[0], x_rows[0], x_rows[0], x_rows[0],
+        x_rows[0], x_rows[1], x_rows[1], x_rows[1], x_rows[2], x_rows[3],
+        x_rows[4], x_rows[4], x_rows[4], x_rows[7], x_rows[8], x_rows[9],
+        x_rows[13], x_rows[14], x_rows[18], x_rows[19], x_rows[24],
+        x_rows[26], x_rows[28],
+    )
+    tap_1 = (
+        prior_1, prior_2, prior_2, prior_2, x_rows[0], x_rows[0], x_rows[0],
+        x_rows[0], x_rows[0], x_rows[1], x_rows[1], x_rows[1], x_rows[2],
+        x_rows[3], x_rows[4], x_rows[4], x_rows[4], x_rows[7], x_rows[8],
+        x_rows[9], x_rows[9], x_rows[9], x_rows[12], x_rows[13], x_rows[14],
+        x_rows[18], x_rows[19], x_rows[23], x_rows[24], x_rows[26],
+        x_rows[28], x_rows[29],
+    )
+    tap_2 = (
+        prior_2, x_rows[0], x_rows[0], x_rows[0], x_rows[1], x_rows[1],
+        x_rows[1], x_rows[2], x_rows[3], x_rows[4], x_rows[4], x_rows[4],
+        x_rows[7], x_rows[8], x_rows[9], x_rows[9], x_rows[9], x_rows[12],
+        x_rows[13], x_rows[14], x_rows[14], x_rows[14], x_rows[17],
+        x_rows[18], x_rows[19], x_rows[23], x_rows[24], x_rows[25],
+        x_rows[26], x_rows[28], x_rows[29], x_rows[30],
+    )
+
+    bias_value = tl.zeros((BLOCK_C,), dtype=tl.float32)
+    if HAS_BIAS:
+        bias_value = tl.load(bias + offs_c).to(tl.float32)
+    for node in tl.static_range(0, N):
+        product_0 = (tap_0[node] * weight_0).to(tl.bfloat16).to(tl.float32)
+        acc = bias_value + product_0
+        product_1 = (tap_1[node] * weight_1).to(tl.bfloat16).to(tl.float32)
+        acc = acc + product_1
+        product_2 = (tap_2[node] * weight_2).to(tl.bfloat16).to(tl.float32)
+        acc = acc + product_2
+        product_3 = (x_rows[node] * weight_3).to(tl.bfloat16).to(tl.float32)
+        acc = acc + product_3
+        activated = acc / (1.0 + tl.exp(0.0 - acc))
+        tl.store(out_batch + node * C + offs_c, activated)
+        tl.store(stage_batch + ((WIDTH - 1) + node) * C + offs_c, x_rows[node])
+
+    tl.store(stage_batch + offs_c, prior_0)
+    tl.store(stage_batch + C + offs_c, prior_1)
+    tl.store(stage_batch + 2 * C + offs_c, prior_2)
+    tl.store(stage_batch + (SOURCE_ROWS - 1) * C + offs_c, 0.0)
