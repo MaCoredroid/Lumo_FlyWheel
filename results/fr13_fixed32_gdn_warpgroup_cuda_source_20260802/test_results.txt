@@ -1,0 +1,21 @@
+FR13 fixed32 native GDN warp-group source candidate
+created_at_utc=2026-08-02T00:02:59Z
+source_commit=a39955827401bd83e8c9e42e967360b9c2519cb8
+
+PASS PYTHONPATH=src pytest -q tests/test_fr13_fixed32_gdn_warpgroup_cuda.py
+RESULT 28 passed in 0.24s
+
+PASS PYTHONPATH=src pytest -q tests/test_fr13_fixed32_gdn_parent_group.py tests/test_fr13_fixed32_gdn_warpgroup_cuda.py
+RESULT 39 passed in 1.41s
+
+PASS python3 -m py_compile candidate module, patcher, and focused test
+PASS exact pinned-vLLM patch apply
+PASS exact pinned-vLLM patch idempotence
+PASS patched pinned-vLLM git diff --check
+
+NOT_RUN pinned vLLM/torch image compile
+BLOCKED host-only nvcc syntax compile: host torch lacks its generated CUDA CMake header
+NOT_AVAILABLE ruff executable
+NOT_RUN GPU kernel or performance probe
+NOT_RUN real SWE-Verified B1/B4 timing
+NOT_RUN raw-byte gate or CUDA graph gate
