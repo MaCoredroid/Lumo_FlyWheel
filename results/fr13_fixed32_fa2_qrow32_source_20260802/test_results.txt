@@ -1,0 +1,12 @@
+Fixed32 B4 FA2 qrow32 source verification (2026-08-02 UTC)
+
+/home/mark/lumoFlyWheel-b4-compactionfix-rerun/.venv/bin/python -m pytest -q \
+  tests/test_fr13_fa2_tree_kernel_candidates.py
+
+6 passed in 0.12s
+
+python -m py_compile changed Python files: pass
+git diff --check: pass
+
+No GPU compile, binary-resource gate, real-event byte qualification, or
+performance measurement is represented here.

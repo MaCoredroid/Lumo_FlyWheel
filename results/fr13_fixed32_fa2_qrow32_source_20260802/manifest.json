@@ -1,0 +1,53 @@
+{
+  "branch": "agent/fixed32-tree-attn-next-audit-20260801",
+  "candidate": {
+    "block_m": 32,
+    "block_n": 64,
+    "default_on": false,
+    "head_dim": 256,
+    "runtime_selector_installed": false,
+    "split_k": false,
+    "warps": 2
+  },
+  "geometry": {
+    "batch": 4,
+    "kv_heads": 4,
+    "physical_rows_per_batch_slot": 32,
+    "query_heads": 24,
+    "target_layers": 16,
+    "topology_invariant": true
+  },
+  "qualification": {
+    "abi_elf_parity": "pending",
+    "gpu_compile_resource_gate": "pending",
+    "real_swe_verified_byte_coverage": "pending",
+    "real_swe_verified_timing": "pending",
+    "timing_eligible": false
+  },
+  "schema": "fr13.fixed32.fa2_qrow32_source.v1",
+  "static_work_model": {
+    "candidate": {
+      "ctas_per_graph_replay": 1536,
+      "ctas_per_layer": 96,
+      "dynamic_shared_bytes_per_cta": 81920,
+      "kv_passes_per_batch_head": 1,
+      "out_of_extent_query_rows_per_tile": 0,
+      "threads_per_cta": 64,
+      "threads_per_graph_replay": 98304,
+      "threads_per_layer": 6144
+    },
+    "classification": "static_launch_and_trait_counts_not_performance_measurement",
+    "stock": {
+      "ctas_per_graph_replay": 1536,
+      "ctas_per_layer": 96,
+      "dynamic_shared_bytes_per_cta": 98304,
+      "kv_passes_per_batch_head": 1,
+      "out_of_extent_query_rows_per_tile": 32,
+      "threads_per_cta": 128,
+      "threads_per_graph_replay": 196608,
+      "threads_per_layer": 12288
+    }
+  },
+  "status": "source_static_only_gpu_and_real_swe_gates_pending",
+  "tip_commit": "0d82804785a6c6819831b368410dcb4ed4fed3a2"
+}
