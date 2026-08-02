@@ -1,0 +1,41 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_m128_integrated_host_abi.v1",
+  "classification": "candidate_template_symbol_replacement_with_runpath_drift",
+  "defined_symbols": {
+    "prior_count": 1297,
+    "integrated_count": 1297,
+    "prior_normalized_sha256": "0e97766e83c2fb7f1028384d425613d13b81789717604740f4cadcddd02019c0",
+    "integrated_normalized_sha256": "d4fa769f2de17905e0855c7c7ec17a7bfe56d1b1e32a78dc804fc777033b8077",
+    "removed": 2,
+    "added": 2,
+    "delta_scope": "static_m128_candidate_weak_get_grid_shape_only",
+    "stock_delta": 0
+  },
+  "undefined_symbols": {
+    "prior_count": 182,
+    "integrated_count": 182,
+    "normalized_sha256": "17ec344692de4bfafd3a89b477dd5a30fcb0a175a7f070890fc10d084947638c",
+    "sets_equal": true
+  },
+  "dt_needed": {
+    "sets_equal": true,
+    "entries": [
+      "libtorch.so",
+      "libcudart.so.13",
+      "libcuda.so.1",
+      "libtorch_cpu.so",
+      "libtorch_cuda.so",
+      "libstdc++.so.6",
+      "libgcc_s.so.1",
+      "libc.so.6",
+      "ld-linux-aarch64.so.1"
+    ]
+  },
+  "runpath": {
+    "equal": false,
+    "prior": "/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64",
+    "integrated": "/home/mark/fr13_streamk_build/venv/lib/python3.12/site-packages/torch/lib:/usr/local/cuda/lib64:",
+    "binary_rewritten": false
+  },
+  "runtime_import_run": false
+}

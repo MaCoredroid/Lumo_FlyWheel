@@ -1,0 +1,24 @@
+# Pinned generated dispatch identity.
+sha256sum /home/mark/fr13_m128_static_build/vllm-source/csrc/libtorch_stable/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh
+
+# Integrated incremental compile/link from the previously configured isolated
+# host build tree. The Ninja log records the candidate object and final link.
+env TORCH_CUDA_ARCH_LIST=12.1a \
+  /home/mark/fr13_streamk_build/venv/bin/ninja \
+  -C /home/mark/fr13_m128_static_build/vllm-build \
+  -j2 _C_stable_libtorch
+
+# Static audit tools. Function filters used the exact mangled device symbols
+# recorded by cuobjdump; raw outputs remain local under the audit directory.
+/usr/local/cuda/bin/cuobjdump --dump-resource-usage INTEGRATED_BINARY
+/usr/local/cuda/bin/cuobjdump --list-elf INTEGRATED_BINARY
+/usr/local/cuda/bin/cuobjdump --extract-elf all INTEGRATED_BINARY
+/usr/local/cuda/bin/cuobjdump --dump-sass --function FUNCTION_MANGLED CUBIN_10
+/usr/local/cuda/bin/cuobjdump --dump-elf-symbols CUBIN_10
+nm -D INTEGRATED_BINARY
+readelf -d INTEGRATED_BINARY
+
+# Exact binary preservation.
+install -m 0555 \
+  /home/mark/fr13_m128_static_build/vllm-build/_C_stable_libtorch.abi3.so \
+  /home/mark/fr13_m128_static_build/bin/_C_stable_libtorch.persistent_b4_m128_integrated_direct_linear_static_coord_scalar_8eba8a4756234f70.abi3.so

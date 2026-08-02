@@ -1,0 +1,23 @@
+Generated dispatch SHA256: 319bda31b05222e17eedefa65dbe328e87a9afd335301a75cf4bbb150911aedc
+Integrated incremental object compile and extension link: 2/2 steps, pass
+Immutable binary copy and byte comparison: pass
+Complete 309-record resource dump equality versus prior static binary: pass
+Candidate parameter layout and 1,792-byte parameter size: pass
+Candidate SASS body audit for BF16 and FP16: pass
+Cubin inventory and SHA256 comparison: pass, 16/17 byte-identical
+Changed-cubin function audit: pass, 14/16 byte-identical
+Incumbent dynamic-persistent M128 SASS preservation: pass
+Undefined dynamic-symbol and DT_NEEDED equality: pass
+Defined dynamic-symbol audit: candidate-only 2-for-2 template replacement
+RUNPATH equality: fail, recorded as packaging caveat without binary rewrite
+48 focused source/selector/qualification/binary-helper tests passed in 0.20s
+Python bytecode compilation: pass
+git diff --check: pass
+Ruff: not a build gate; existing E741 in test loop variable
+
+Not run:
+- GPU kernel runtime or extension import
+- Docker
+- synthetic or probe performance
+- real SWE-Verified exact4 B4 raw-byte gates
+- B4 full-step timing or hardware-floor acceptance
