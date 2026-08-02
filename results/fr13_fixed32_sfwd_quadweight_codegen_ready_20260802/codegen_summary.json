@@ -1,0 +1,67 @@
+{
+  "baseline": {
+    "bar": 5,
+    "encoded_sass_instructions": 424,
+    "ldg": 33,
+    "lds": 8,
+    "registers": 55,
+    "static_sass_instructions": 408,
+    "stg": 12,
+    "sts": 10
+  },
+  "candidate": "fixed32_sfwd_quadweight_xgather_row32_c64_w16_v1",
+  "candidate_codegen": {
+    "bar": 3,
+    "batches": [
+      1,
+      4
+    ],
+    "b1_b4_binary_identity": true,
+    "block_c": 64,
+    "calls": 0,
+    "ctas_per_request": 160,
+    "cubin_bytes": 36912,
+    "cubin_sha256": "a90a1ab2bb1fdd07b8da2b7b9c1496fcdf76647075eca372a3a5c70b2be6a8b6",
+    "elf_shared_bytes": 1024,
+    "encoded_sass_instructions": 416,
+    "fresh_cache_rebuild_identity": true,
+    "launch_shared_bytes": 4096,
+    "ldg": 24,
+    "ldl": 0,
+    "lds": 6,
+    "local_bytes": 0,
+    "num_warps": 16,
+    "ptx_sha256": "c62ee227200a2812651e74b4e08797e4c83392efad439e9bcb717780fef6c841",
+    "registers": 60,
+    "rows_per_program": 32,
+    "sass_sha256": "931ecda57bad40ea2551731da8c105bc42f1139cc522113c4bd1fdba4d527c91",
+    "stack_bytes": 0,
+    "static_sass_instructions": 395,
+    "stg": 12,
+    "stl": 0,
+    "sts": 6
+  },
+  "delta_candidate_minus_baseline": {
+    "bar": -2,
+    "encoded_sass_instructions": -8,
+    "ldg": -9,
+    "lds": -2,
+    "registers": 5,
+    "static_sass_instructions": -13,
+    "stg": 0,
+    "sts": -4
+  },
+  "qualified_base_live_artifact_commit": "24fd27237914747a5acb82a6f4d94c2cc37a963e",
+  "qualified_base_source_commit": "7c9fda4bc643176f43404ddd4d633789fc46ef23",
+  "schema": "fr13.fixed32.sfwd_quadweight_xgather.codegen.v1",
+  "source_commit": "bba1b8a79cae4ac3cc7866694592ce09a0687d8b",
+  "source_function_sha256": "0cb8a5b06ff7898a5b8d05a6085be7044651174039cea06c4b993af0d808a9d5",
+  "status": "offline_codegen_pass_real_byte_gate_required",
+  "target": "sm_121a",
+  "toolchain": {
+    "cuda_toolkit": "12.9",
+    "ptxas": "12.9.86",
+    "torch": "2.10.0+cu130",
+    "triton": "3.6.0"
+  }
+}
