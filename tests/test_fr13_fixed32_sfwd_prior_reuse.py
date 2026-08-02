@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import importlib.util
 import json
 import sys
 import types
@@ -46,6 +47,11 @@ except ModuleNotFoundError:
     sys.modules["triton.language"] = language_stub
 
 from lumo_flywheel_serving import fr13_sfwd_prior_reuse as candidate  # noqa: E402
+
+GATE_SPEC = importlib.util.spec_from_file_location("fr13_sfwd_prior_reuse_gate", GATE_PATH)
+assert GATE_SPEC is not None and GATE_SPEC.loader is not None
+gate_module = importlib.util.module_from_spec(GATE_SPEC)
+GATE_SPEC.loader.exec_module(gate_module)
 
 
 def _function_source(name: str, *, path: Path = MODULE_PATH) -> str:
@@ -354,6 +360,8 @@ def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
     assert "unset FR13_NEEDS_ALLOW FR10_ALLOW_LINEAR_FALLBACK" in runner
     assert "source_manifest.at_launch.json" in runner
     assert "source_manifest.at_end.json" in runner
+    assert "host-readiness" in runner
+    assert "sfwd_prior_reuse_host_readiness.json" in runner
     assert "source_descriptor_in_kernel=false" in runner
     assert "x_global_loads_per_channel=40" in runner
     assert "late_tap0_reload_nodes=17-24" in runner
@@ -370,6 +378,8 @@ def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
     assert "reference_gdn_source_bound" in gate
     assert "fr13_sfwd_prior_reuse_descriptorless.py" in gate
     assert "candidate_kernel_source_sha256" in gate
+    assert "HOST_READINESS_SCHEMA" in gate
+    assert "docker/chat_templates/qwen3-openai-codex.jinja" in gate
     assert candidate.CANDIDATE in gate
     assert "tuple(mixed_qkv_spec.shape)" in patcher
     assert "_fr13_sfwd_candidate_out = torch.empty(" in patcher
@@ -378,3 +388,120 @@ def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
     assert hashlib.sha256(OLD_KERNEL_PATH.read_bytes()).hexdigest() == (
         "6c0f0ad607f15ea2727c2a9b244b1fe1c5ddb88268d70264c08f10470a5d2098"
     )
+
+
+def test_host_readiness_is_pushed_host_only_and_binds_strict_b1_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    python_path = repo / ".venv/bin/python"
+    python_path.parent.mkdir(parents=True)
+    python_path.write_text("#!/bin/sh\nexit 0\n", encoding="ascii")
+    python_path.chmod(0o755)
+    fa2_relative = "output/stock-fa2.so"
+    fa2 = repo / fa2_relative
+    fa2.parent.mkdir(parents=True)
+    fa2.write_bytes(b"stock-fa2")
+
+    source_relative = "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse.py"
+    kernel_relative = (
+        "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py"
+    )
+    subset_relative = "config/subset.json"
+    blocks_relative = "scripts/blocks.json"
+    template_relative = "docker/chat-template.jinja"
+    source_files = (
+        subset_relative,
+        template_relative,
+        source_relative,
+        kernel_relative,
+        blocks_relative,
+    )
+    subset_sha = "a" * 64
+    blocks_sha = "b" * 64
+    template_sha = "c" * 64
+    commit = "1" * 40
+    files = {
+        relative: {"bytes": 1, "sha256": "d" * 64}
+        for relative in source_files
+    }
+    files[subset_relative]["sha256"] = subset_sha
+    files[blocks_relative]["sha256"] = blocks_sha
+    files[template_relative]["sha256"] = template_sha
+    manifest_payload = {
+        "schema": gate_module.SOURCE_SCHEMA,
+        "candidate": gate_module.CANDIDATE,
+        "source_commit": commit,
+        "reference_gdn_source_bound": True,
+        "files": files,
+    }
+    manifest = tmp_path / "source-manifest.json"
+    manifest_raw = (
+        json.dumps(manifest_payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+        + "\n"
+    ).encode("ascii")
+    manifest.write_bytes(manifest_raw)
+
+    monkeypatch.setattr(gate_module, "SOURCE_FILES", source_files)
+    monkeypatch.setattr(gate_module, "SUBSET_RELATIVE", subset_relative)
+    monkeypatch.setattr(gate_module, "SUBSET_SHA256", subset_sha)
+    monkeypatch.setattr(gate_module, "DRAFT_VOCAB_BLOCKS_RELATIVE", blocks_relative)
+    monkeypatch.setattr(gate_module, "DRAFT_VOCAB_BLOCKS_SHA256", blocks_sha)
+    monkeypatch.setattr(gate_module, "CHAT_TEMPLATE_RELATIVE", template_relative)
+    monkeypatch.setattr(gate_module, "CHAT_TEMPLATE_SHA256", template_sha)
+    monkeypatch.setattr(gate_module, "FA2_REPO_RELATIVE", fa2_relative)
+    monkeypatch.setattr(gate_module, "FA2_SIZE", len(b"stock-fa2"))
+    monkeypatch.setattr(
+        gate_module, "FA2_SHA256", hashlib.sha256(b"stock-fa2").hexdigest()
+    )
+
+    pushed = True
+
+    def fake_git(_repo: Path, *arguments: str) -> str:
+        if arguments == ("rev-parse", "--show-toplevel"):
+            return str(repo)
+        if arguments == ("rev-parse", "HEAD"):
+            return commit
+        if arguments == ("status", "--porcelain=v1", "--untracked-files=no"):
+            return ""
+        if arguments == ("symbolic-ref", "--short", "HEAD"):
+            return "agent/test"
+        if arguments == ("rev-parse", "@{upstream}"):
+            return commit if pushed else "2" * 40
+        raise AssertionError(arguments)
+
+    def fake_manifest(args) -> None:
+        Path(args.output).write_bytes(manifest_raw)
+
+    monkeypatch.setattr(gate_module, "_git_stdout", fake_git)
+    monkeypatch.setattr(gate_module, "write_source_manifest", fake_manifest)
+    output = tmp_path / "readiness.json"
+    args = types.SimpleNamespace(
+        repo=str(repo),
+        source_commit=commit,
+        source_manifest=str(manifest),
+        fa2_so=str(fa2),
+        output=str(output),
+    )
+    gate_module.write_host_readiness(args)
+    payload = json.loads(output.read_text(encoding="ascii"))
+    assert payload["source_commit"] == payload["upstream_commit"] == commit
+    assert payload["source_binding"]["file_count"] == len(source_files)
+    assert payload["byte_gate"]["compared_surfaces"] == [
+        "conv_out",
+        "commit_source_stage",
+    ]
+    assert payload["byte_gate"]["required_layer_count"] == 48
+    assert payload["byte_gate"]["reference_always_served"] is True
+    assert payload["launch_policy"] == {
+        "default_off": True,
+        "host_only_preflight": True,
+        "gpu_or_docker_used": False,
+        "launched": False,
+        "runtime_correctness_qualified": False,
+    }
+
+    pushed = False
+    with pytest.raises(gate_module.GateError, match="not pushed"):
+        gate_module.write_host_readiness(args)

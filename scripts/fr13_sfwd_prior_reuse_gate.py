@@ -17,11 +17,33 @@ from typing import Any
 
 CANDIDATE = "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_u32x2_firstuse_tap0n17_24_v2"
 SOURCE_SCHEMA = "fr13.fixed32.sfwd_prior_reuse.source_manifest.v1"
+HOST_READINESS_SCHEMA = "fr13.fixed32.sfwd_prior_reuse.host_readiness.v1"
 REFERENCE_GDN_SOURCE_SHA256 = (
     "6c0f0ad607f15ea2727c2a9b244b1fe1c5ddb88268d70264c08f10470a5d2098"
 )
+SUBSET_RELATIVE = "config/fr13_fixed32/subset_b1_diagnostic_one.json"
+SUBSET_SHA256 = "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb"
+DRAFT_VOCAB_BLOCKS_RELATIVE = "scripts/fr13_dvk_subset_blocks.json"
+DRAFT_VOCAB_BLOCKS_SHA256 = (
+    "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
+)
+CHAT_TEMPLATE_RELATIVE = "docker/chat_templates/qwen3-openai-codex.jinja"
+CHAT_TEMPLATE_SHA256 = (
+    "c166a05aaf5ad4b807a7c46497f92180e3df24e64d4b54d27fd26ec61bec38da"
+)
+FA2_REPO_RELATIVE = (
+    "output/auto_research/"
+    "qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-"
+    "20260504T053925Z/cutlass_source_workspace/vllm-source/build/"
+    "lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so"
+)
+FA2_SHA256 = "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d"
+FA2_SIZE = 299_183_936
+BYTE_SURFACES = ("conv_out", "commit_source_stage")
+REQUIRED_LAYER_COUNT = 48
 SOURCE_FILES = (
-    "config/fr13_fixed32/subset_b1_diagnostic_one.json",
+    SUBSET_RELATIVE,
+    CHAT_TEMPLATE_RELATIVE,
     "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
     "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse.py",
     "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py",
@@ -33,7 +55,7 @@ SOURCE_FILES = (
     "scripts/fr13_run_b1_kernel_live_gate.sh",
     "scripts/fr13_run_b1_sfwd_prior_reuse_gate.sh",
     "scripts/fr13_sfwd_prior_reuse_gate.py",
-    "scripts/fr13_dvk_subset_blocks.json",
+    DRAFT_VOCAB_BLOCKS_RELATIVE,
     "scripts/run_swe_bench_q36_a.py",
 )
 
@@ -72,15 +94,11 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     os.replace(temporary, path)
 
 
-def write_source_manifest(args: argparse.Namespace) -> None:
-    repo = Path(args.repo).resolve()
-    commit = str(args.source_commit)
-    if re.fullmatch(r"[0-9a-f]{40}", commit) is None:
-        raise GateError("source commit must be a full lowercase Git SHA")
+def _git_stdout(repo: Path, *arguments: str) -> str:
     try:
-        head = (
+        return (
             subprocess.run(
-                ["git", "-C", str(repo), "rev-parse", "HEAD"],
+                ["git", "-C", str(repo), *arguments],
                 check=True,
                 capture_output=True,
             )
@@ -88,7 +106,29 @@ def write_source_manifest(args: argparse.Namespace) -> None:
             .strip()
         )
     except (OSError, subprocess.CalledProcessError, UnicodeError) as error:
-        raise GateError("cannot resolve the source repository HEAD") from error
+        raise GateError(f"Git command failed: {' '.join(arguments)}") from error
+
+
+def _stream_file_record(path: Path) -> dict[str, Any]:
+    try:
+        info = os.lstat(path)
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            while chunk := handle.read(1024 * 1024):
+                digest.update(chunk)
+    except OSError as error:
+        raise GateError(f"required runtime asset is unreadable: {path}: {error}") from error
+    if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode) or info.st_size <= 0:
+        raise GateError(f"required runtime asset is not a regular file: {path}")
+    return {"bytes": info.st_size, "sha256": digest.hexdigest()}
+
+
+def write_source_manifest(args: argparse.Namespace) -> None:
+    repo = Path(args.repo).resolve()
+    commit = str(args.source_commit)
+    if re.fullmatch(r"[0-9a-f]{40}", commit) is None:
+        raise GateError("source commit must be a full lowercase Git SHA")
+    head = _git_stdout(repo, "rev-parse", "HEAD")
     if head != commit:
         raise GateError("source commit does not equal repository HEAD")
     files: dict[str, dict[str, Any]] = {}
@@ -125,6 +165,137 @@ def write_source_manifest(args: argparse.Namespace) -> None:
             "files": files,
         },
     )
+
+
+def write_host_readiness(args: argparse.Namespace) -> None:
+    repo = Path(args.repo).resolve()
+    commit = str(args.source_commit)
+    if re.fullmatch(r"[0-9a-f]{40}", commit) is None:
+        raise GateError("source commit must be a full lowercase Git SHA")
+    if Path(_git_stdout(repo, "rev-parse", "--show-toplevel")).resolve() != repo:
+        raise GateError("readiness repository is not the exact Git worktree root")
+    if _git_stdout(repo, "rev-parse", "HEAD") != commit:
+        raise GateError("readiness source commit does not equal repository HEAD")
+    if _git_stdout(repo, "status", "--porcelain=v1", "--untracked-files=no"):
+        raise GateError("tracked worktree must be clean for readiness")
+    branch = _git_stdout(repo, "symbolic-ref", "--short", "HEAD")
+    upstream_commit = _git_stdout(repo, "rev-parse", "@{upstream}")
+    if upstream_commit != commit:
+        raise GateError("readiness source commit is not pushed to its upstream")
+
+    manifest_path = Path(args.source_manifest).resolve()
+    source_manifest, source_manifest_raw = _load_json(manifest_path)
+    with tempfile.TemporaryDirectory(prefix="fr13-sfwd-readiness-") as temporary:
+        regenerated = Path(temporary) / "source_manifest.json"
+        write_source_manifest(
+            argparse.Namespace(
+                repo=str(repo), source_commit=commit, output=str(regenerated)
+            )
+        )
+        if _regular(regenerated) != source_manifest_raw:
+            raise GateError("provided source manifest is not the exact regenerated manifest")
+    files = source_manifest.get("files")
+    if (
+        source_manifest.get("schema") != SOURCE_SCHEMA
+        or source_manifest.get("candidate") != CANDIDATE
+        or source_manifest.get("source_commit") != commit
+        or source_manifest.get("reference_gdn_source_bound") is not True
+        or not isinstance(files, dict)
+        or tuple(sorted(files)) != tuple(sorted(SOURCE_FILES))
+        or files.get(SUBSET_RELATIVE, {}).get("sha256") != SUBSET_SHA256
+        or files.get(DRAFT_VOCAB_BLOCKS_RELATIVE, {}).get("sha256")
+        != DRAFT_VOCAB_BLOCKS_SHA256
+        or files.get(CHAT_TEMPLATE_RELATIVE, {}).get("sha256")
+        != CHAT_TEMPLATE_SHA256
+    ):
+        raise GateError("host readiness source-manifest contract mismatch")
+
+    fa2_argument = Path(args.fa2_so)
+    try:
+        fa2 = fa2_argument.resolve(strict=True)
+        canonical_fa2 = (repo / FA2_REPO_RELATIVE).resolve(strict=True)
+    except OSError as error:
+        raise GateError("stock FA2 runtime asset is not materialized") from error
+    if fa2 != canonical_fa2:
+        raise GateError("stock FA2 must use the canonical repository-relative path")
+    fa2_record = _stream_file_record(fa2_argument)
+    if fa2_record != {"bytes": FA2_SIZE, "sha256": FA2_SHA256}:
+        raise GateError("stock FA2 size or SHA-256 drifted")
+    python_path = repo / ".venv/bin/python"
+    try:
+        python_resolved = python_path.resolve(strict=True)
+    except OSError as error:
+        raise GateError("repository virtual-environment Python is unavailable") from error
+    if not python_resolved.is_file() or not os.access(python_resolved, os.X_OK):
+        raise GateError("repository virtual-environment Python is not executable")
+
+    source_sha = hashlib.sha256(source_manifest_raw).hexdigest()
+    _write_json(
+        Path(args.output).resolve(),
+        {
+            "schema": HOST_READINESS_SCHEMA,
+            "status": "ready_for_one_real_swe_verified_b1_byte_gate",
+            "candidate": CANDIDATE,
+            "source_commit": commit,
+            "branch": branch,
+            "upstream_commit": upstream_commit,
+            "source_binding": {
+                "schema": SOURCE_SCHEMA,
+                "manifest_sha256": source_sha,
+                "file_count": len(SOURCE_FILES),
+                "reference_gdn_source_bound": True,
+                "candidate_source_sha256": files[
+                    "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse.py"
+                ]["sha256"],
+                "candidate_kernel_source_sha256": files[
+                    "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py"
+                ]["sha256"],
+            },
+            "runtime_assets": {
+                "stock_fa2": {
+                    "repo_relative_path": FA2_REPO_RELATIVE,
+                    **fa2_record,
+                },
+                "task_subset_sha256": SUBSET_SHA256,
+                "draft_vocab_blocks_sha256": DRAFT_VOCAB_BLOCKS_SHA256,
+                "chat_template_sha256": CHAT_TEMPLATE_SHA256,
+                "venv_python_available": True,
+            },
+            "runtime_contract": {
+                "batch_size": 1,
+                "physical_rows_per_request": 32,
+                "conv_rows_per_program": 32,
+                "conv_block_c": 128,
+                "conv_num_warps": 2,
+                "draft_vocab_k": 65536,
+                "draft_vocab_root": 1,
+                "topology_host_validation": "exact_parent_each_launch",
+                "source_descriptor_device_validation": False,
+                "source_descriptor_launcher_argument": False,
+            },
+            "byte_gate": {
+                "run_classification": (
+                    "one_real_swe_verified_k64_root_b1_byte_diagnostic"
+                ),
+                "task_count": 1,
+                "compared_surfaces": list(BYTE_SURFACES),
+                "required_layer_count": REQUIRED_LAYER_COUNT,
+                "zero_diff_required": True,
+                "reference_always_served": True,
+                "timing_eligible": False,
+                "floor_acceptance_eligible": False,
+                "production_eligible": False,
+            },
+            "launch_policy": {
+                "default_off": True,
+                "host_only_preflight": True,
+                "gpu_or_docker_used": False,
+                "launched": False,
+                "runtime_correctness_qualified": False,
+            },
+        },
+    )
+    print(json.dumps(json.loads(Path(args.output).read_text(encoding="ascii")), sort_keys=True))
 
 
 def _load_json(path: Path) -> tuple[dict[str, Any], bytes]:
@@ -172,6 +343,86 @@ def validate_gate(args: argparse.Namespace) -> None:
         )
     ):
         raise GateError("SFWD prior-reuse source manifest contract mismatch")
+
+    host_readiness, host_readiness_raw = _load_json(
+        root / "sfwd_prior_reuse_host_readiness.json"
+    )
+    source_binding = host_readiness.get("source_binding")
+    runtime_assets = host_readiness.get("runtime_assets")
+    runtime_contract = host_readiness.get("runtime_contract")
+    byte_gate = host_readiness.get("byte_gate")
+    launch_policy = host_readiness.get("launch_policy")
+    if (
+        host_readiness.get("schema") != HOST_READINESS_SCHEMA
+        or host_readiness.get("status")
+        != "ready_for_one_real_swe_verified_b1_byte_gate"
+        or host_readiness.get("candidate") != CANDIDATE
+        or host_readiness.get("source_commit") != source_commit
+        or not isinstance(host_readiness.get("branch"), str)
+        or not host_readiness["branch"]
+        or host_readiness.get("upstream_commit") != source_commit
+        or source_binding
+        != {
+            "schema": SOURCE_SCHEMA,
+            "manifest_sha256": source_sha,
+            "file_count": len(SOURCE_FILES),
+            "reference_gdn_source_bound": True,
+            "candidate_source_sha256": files[
+                "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse.py"
+            ]["sha256"],
+            "candidate_kernel_source_sha256": files[
+                "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py"
+            ]["sha256"],
+        }
+        or runtime_assets
+        != {
+            "stock_fa2": {
+                "repo_relative_path": FA2_REPO_RELATIVE,
+                "bytes": FA2_SIZE,
+                "sha256": FA2_SHA256,
+            },
+            "task_subset_sha256": SUBSET_SHA256,
+            "draft_vocab_blocks_sha256": DRAFT_VOCAB_BLOCKS_SHA256,
+            "chat_template_sha256": CHAT_TEMPLATE_SHA256,
+            "venv_python_available": True,
+        }
+        or runtime_contract
+        != {
+            "batch_size": 1,
+            "physical_rows_per_request": 32,
+            "conv_rows_per_program": 32,
+            "conv_block_c": 128,
+            "conv_num_warps": 2,
+            "draft_vocab_k": 65536,
+            "draft_vocab_root": 1,
+            "topology_host_validation": "exact_parent_each_launch",
+            "source_descriptor_device_validation": False,
+            "source_descriptor_launcher_argument": False,
+        }
+        or byte_gate
+        != {
+            "run_classification": (
+                "one_real_swe_verified_k64_root_b1_byte_diagnostic"
+            ),
+            "task_count": 1,
+            "compared_surfaces": list(BYTE_SURFACES),
+            "required_layer_count": REQUIRED_LAYER_COUNT,
+            "zero_diff_required": True,
+            "reference_always_served": True,
+            "timing_eligible": False,
+            "floor_acceptance_eligible": False,
+            "production_eligible": False,
+        }
+        or launch_policy
+        != {
+            "default_off": True,
+            "host_only_preflight": True,
+            "gpu_or_docker_used": False,
+            "launched": False,
+            "runtime_correctness_qualified": False,
+        }
+    ):
+        raise GateError("SFWD prior-reuse host-readiness contract mismatch")
 
     runtime_launch_raw = _regular(root / "runtime_manifest.at_launch.json")
     runtime_end_raw = _regular(root / "runtime_manifest.at_end.json")
@@ -255,8 +506,7 @@ def validate_gate(args: argparse.Namespace) -> None:
         comparisons = record.get("comparisons")
         if (
             not isinstance(comparisons, list)
-            or [item.get("name") for item in comparisons]
-            != ["conv_out", "commit_source_stage"]
+            or [item.get("name") for item in comparisons] != list(BYTE_SURFACES)
             or any(item.get("byte_equal") is not True for item in comparisons)
         ):
             raise GateError("comparison surfaces are incomplete or unequal")
@@ -266,8 +516,8 @@ def validate_gate(args: argparse.Namespace) -> None:
         for record in records
     }
     if (
-        len(record_layers) != 48
-        or len(record_pairs) != 48
+        len(record_layers) != REQUIRED_LAYER_COUNT
+        or len(record_pairs) != REQUIRED_LAYER_COUNT
         or any(
             not isinstance(key, str)
             or re.fullmatch(r"0x[0-9a-f]+", key) is None
@@ -295,10 +545,8 @@ def validate_gate(args: argparse.Namespace) -> None:
         "batch": 1,
         "draft_vocab_k": 65536,
         "draft_vocab_root": 1,
-        "draft_vocab_blocks_sha256": (
-            "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
-        ),
-        "layer_count": 48,
+        "draft_vocab_blocks_sha256": DRAFT_VOCAB_BLOCKS_SHA256,
+        "layer_count": REQUIRED_LAYER_COUNT,
         "physical_rows_per_request": 32,
         "conv_rows_per_program": 32,
         "conv_block_c": 128,
@@ -317,7 +565,7 @@ def validate_gate(args: argparse.Namespace) -> None:
         "gdn_physical_launches_per_layer": 2,
         "gdn_ring_export_unchanged": True,
         "gdn_flags_export_unchanged": True,
-        "compared_byte_surfaces": ["conv_out", "commit_source_stage"],
+        "compared_byte_surfaces": list(BYTE_SURFACES),
         "real_task_authenticated": True,
         "reference_always_served": True,
         "timing_eligible": False,
@@ -328,14 +576,14 @@ def validate_gate(args: argparse.Namespace) -> None:
         if live_pass.get(key) != expected:
             raise GateError(f"live PASS {key} mismatch")
     layers = live_pass.get("layers")
-    if not isinstance(layers, list) or len(layers) != 48:
+    if not isinstance(layers, list) or len(layers) != REQUIRED_LAYER_COUNT:
         raise GateError("live PASS does not bind 48 layers")
     pass_pairs = {
         (item.get("layer_key"), item.get("layer_prefix_sha256"))
         for item in layers
         if isinstance(item, dict)
     }
-    if len(pass_pairs) != 48 or pass_pairs != record_pairs:
+    if len(pass_pairs) != REQUIRED_LAYER_COUNT or pass_pairs != record_pairs:
         raise GateError("record and live PASS layer identities differ")
     if marker_raw != (marker + "\n").encode("ascii"):
         raise GateError("authenticated real-event marker bytes mismatch")
@@ -481,9 +729,9 @@ def validate_gate(args: argparse.Namespace) -> None:
             "source_stage_shape": [36, 10240],
             "source_stage_stride": [10240, 1],
             "conv_weights_stride": [4, 1],
-            "layer_count": 48,
+            "layer_count": REQUIRED_LAYER_COUNT,
             "comparison_count": len(records),
-            "compared_byte_surfaces": ["conv_out", "commit_source_stage"],
+            "compared_byte_surfaces": list(BYTE_SURFACES),
             "timing_eligible": False,
             "floor_acceptance_eligible": False,
             "production_enabled": False,
@@ -499,6 +747,7 @@ def validate_gate(args: argparse.Namespace) -> None:
             "container_env_sha256": hashlib.sha256(container_env_raw).hexdigest(),
             "engine_ledger_sha256": hashlib.sha256(engine_raw).hexdigest(),
             "docker_log_sha256": hashlib.sha256(docker_raw).hexdigest(),
+            "host_readiness_sha256": hashlib.sha256(host_readiness_raw).hexdigest(),
         },
     )
     print(json.dumps(json.loads(output.read_text(encoding="ascii")), sort_keys=True))
@@ -512,6 +761,13 @@ def parser() -> argparse.ArgumentParser:
     manifest.add_argument("--source-commit", required=True)
     manifest.add_argument("--output", required=True)
     manifest.set_defaults(function=write_source_manifest)
+    readiness = subparsers.add_parser("host-readiness")
+    readiness.add_argument("--repo", required=True)
+    readiness.add_argument("--source-commit", required=True)
+    readiness.add_argument("--source-manifest", required=True)
+    readiness.add_argument("--fa2-so", required=True)
+    readiness.add_argument("--output", required=True)
+    readiness.set_defaults(function=write_host_readiness)
     validate = subparsers.add_parser("validate")
     validate.add_argument("--arm-dir", required=True)
     validate.add_argument("--source-commit", required=True)

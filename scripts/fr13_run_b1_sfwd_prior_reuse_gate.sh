@@ -24,6 +24,7 @@ ARMDIR="$RUNROOT_ABS/$ARM"
 TASK_ID=astropy__astropy-12907
 MANIFEST_LAUNCH="$RUNROOT_ABS/sfwd_prior_reuse_source_manifest.at_launch.json"
 MANIFEST_END="$RUNROOT_ABS/sfwd_prior_reuse_source_manifest.at_end.json"
+HOST_READINESS="$RUNROOT_ABS/sfwd_prior_reuse_host_readiness.json"
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
   || { echo "TAG contains unsafe characters" >&2; exit 2; }
@@ -35,6 +36,8 @@ MANIFEST_END="$RUNROOT_ABS/sfwd_prior_reuse_source_manifest.at_end.json"
   || { echo "current source identity is invalid" >&2; exit 2; }
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean" >&2; exit 2; }
+[[ -x .venv/bin/python ]] \
+  || { echo "repository virtual-environment Python is unavailable" >&2; exit 2; }
 [[ "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" ]] \
   || { echo "canonical one-task B1 subset SHA-256 drift" >&2; exit 2; }
 [[ -f "$DRAFT_VOCAB_BLOCKS" && ! -L "$DRAFT_VOCAB_BLOCKS" ]] \
@@ -49,6 +52,14 @@ mkdir -p "$RUNROOT_ABS"
   --output "$MANIFEST_LAUNCH"
 MANIFEST_SHA256=$(sha256sum "$MANIFEST_LAUNCH" | awk '{print $1}')
 MANIFEST_CONTAINER="/workspace/${MANIFEST_LAUNCH#"$REPO/"}"
+.venv/bin/python scripts/fr13_sfwd_prior_reuse_gate.py host-readiness \
+  --repo "$REPO" \
+  --source-commit "$SOURCE_COMMIT" \
+  --source-manifest "$MANIFEST_LAUNCH" \
+  --fa2-so "$FORKED_FA2_SO" \
+  --output "$HOST_READINESS" \
+  >/dev/null
+HOST_READINESS_SHA256=$(sha256sum "$HOST_READINESS" | awk '{print $1}')
 
 export RUNROOT=${RUNROOT_ABS#"$REPO/"}
 export FR13_GATE_QROW16=0
@@ -148,6 +159,7 @@ printf '%s\n' \
   'spec_state_indices_contiguous=true' \
   "source_commit=$SOURCE_COMMIT" \
   "source_manifest_sha256=$MANIFEST_SHA256" \
+  "host_readiness_sha256=$HOST_READINESS_SHA256" \
   >> "$RUNROOT_ABS/launcher_meta.txt"
 
 .venv/bin/python scripts/fr13_sfwd_prior_reuse_gate.py validate \
