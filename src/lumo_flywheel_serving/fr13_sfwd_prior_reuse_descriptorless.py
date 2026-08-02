@@ -758,7 +758,7 @@ def _fr13_fixed32_sfwd_channel_serial_kernel(
     if HAS_BIAS:
         bias_value = tl.load(bias + offs_c).to(tl.float32)
 
-    # Load each current row at first use; row 21 reloads its sole long edge.
+    # Load current rows at first use; nodes 17-24 reload their tap-0 ancestor.
     x_0 = tl.load(x_batch + 0 * X_STRIDE_ROW + offs_c)
     product_0 = (prior_0 * weight_0).to(tl.bfloat16).to(tl.float32)
     acc = bias_value + product_0
@@ -964,7 +964,9 @@ def _fr13_fixed32_sfwd_channel_serial_kernel(
     tl.store(out_batch + 16 * C + offs_c, activated_16)
     tl.store(stage_batch + ((WIDTH - 1) + 16) * C + offs_c, x_16)
     x_17 = tl.load(x_batch + 17 * X_STRIDE_ROW + offs_c)
-    product_0 = (x_2 * weight_0).to(tl.bfloat16).to(tl.float32)
+    product_0 = (
+        tl.load(x_batch + 2 * X_STRIDE_ROW + offs_c) * weight_0
+    ).to(tl.bfloat16).to(tl.float32)
     acc = bias_value + product_0
     product_1 = (x_7 * weight_1).to(tl.bfloat16).to(tl.float32)
     acc = acc + product_1
@@ -976,7 +978,9 @@ def _fr13_fixed32_sfwd_channel_serial_kernel(
     tl.store(out_batch + 17 * C + offs_c, activated_17)
     tl.store(stage_batch + ((WIDTH - 1) + 17) * C + offs_c, x_17)
     x_18 = tl.load(x_batch + 18 * X_STRIDE_ROW + offs_c)
-    product_0 = (x_3 * weight_0).to(tl.bfloat16).to(tl.float32)
+    product_0 = (
+        tl.load(x_batch + 3 * X_STRIDE_ROW + offs_c) * weight_0
+    ).to(tl.bfloat16).to(tl.float32)
     acc = bias_value + product_0
     product_1 = (x_8 * weight_1).to(tl.bfloat16).to(tl.float32)
     acc = acc + product_1
@@ -988,7 +992,9 @@ def _fr13_fixed32_sfwd_channel_serial_kernel(
     tl.store(out_batch + 18 * C + offs_c, activated_18)
     tl.store(stage_batch + ((WIDTH - 1) + 18) * C + offs_c, x_18)
     x_19 = tl.load(x_batch + 19 * X_STRIDE_ROW + offs_c)
-    product_0 = (x_4 * weight_0).to(tl.bfloat16).to(tl.float32)
+    product_0 = (
+        tl.load(x_batch + 4 * X_STRIDE_ROW + offs_c) * weight_0
+    ).to(tl.bfloat16).to(tl.float32)
     acc = bias_value + product_0
     product_1 = (x_9 * weight_1).to(tl.bfloat16).to(tl.float32)
     acc = acc + product_1
@@ -1000,7 +1006,9 @@ def _fr13_fixed32_sfwd_channel_serial_kernel(
     tl.store(out_batch + 19 * C + offs_c, activated_19)
     tl.store(stage_batch + ((WIDTH - 1) + 19) * C + offs_c, x_19)
     x_20 = tl.load(x_batch + 20 * X_STRIDE_ROW + offs_c)
-    product_0 = (x_4 * weight_0).to(tl.bfloat16).to(tl.float32)
+    product_0 = (
+        tl.load(x_batch + 4 * X_STRIDE_ROW + offs_c) * weight_0
+    ).to(tl.bfloat16).to(tl.float32)
     acc = bias_value + product_0
     product_1 = (x_9 * weight_1).to(tl.bfloat16).to(tl.float32)
     acc = acc + product_1
@@ -1012,8 +1020,9 @@ def _fr13_fixed32_sfwd_channel_serial_kernel(
     tl.store(out_batch + 20 * C + offs_c, activated_20)
     tl.store(stage_batch + ((WIDTH - 1) + 20) * C + offs_c, x_20)
     x_21 = tl.load(x_batch + 21 * X_STRIDE_ROW + offs_c)
-    x_4 = tl.load(x_batch + 4 * X_STRIDE_ROW + offs_c)
-    product_0 = (x_4 * weight_0).to(tl.bfloat16).to(tl.float32)
+    product_0 = (
+        tl.load(x_batch + 4 * X_STRIDE_ROW + offs_c) * weight_0
+    ).to(tl.bfloat16).to(tl.float32)
     acc = bias_value + product_0
     product_1 = (x_9 * weight_1).to(tl.bfloat16).to(tl.float32)
     acc = acc + product_1
@@ -1025,7 +1034,9 @@ def _fr13_fixed32_sfwd_channel_serial_kernel(
     tl.store(out_batch + 21 * C + offs_c, activated_21)
     tl.store(stage_batch + ((WIDTH - 1) + 21) * C + offs_c, x_21)
     x_22 = tl.load(x_batch + 22 * X_STRIDE_ROW + offs_c)
-    product_0 = (x_7 * weight_0).to(tl.bfloat16).to(tl.float32)
+    product_0 = (
+        tl.load(x_batch + 7 * X_STRIDE_ROW + offs_c) * weight_0
+    ).to(tl.bfloat16).to(tl.float32)
     acc = bias_value + product_0
     product_1 = (x_12 * weight_1).to(tl.bfloat16).to(tl.float32)
     acc = acc + product_1
@@ -1037,7 +1048,9 @@ def _fr13_fixed32_sfwd_channel_serial_kernel(
     tl.store(out_batch + 22 * C + offs_c, activated_22)
     tl.store(stage_batch + ((WIDTH - 1) + 22) * C + offs_c, x_22)
     x_23 = tl.load(x_batch + 23 * X_STRIDE_ROW + offs_c)
-    product_0 = (x_8 * weight_0).to(tl.bfloat16).to(tl.float32)
+    product_0 = (
+        tl.load(x_batch + 8 * X_STRIDE_ROW + offs_c) * weight_0
+    ).to(tl.bfloat16).to(tl.float32)
     acc = bias_value + product_0
     product_1 = (x_13 * weight_1).to(tl.bfloat16).to(tl.float32)
     acc = acc + product_1
@@ -1049,7 +1062,9 @@ def _fr13_fixed32_sfwd_channel_serial_kernel(
     tl.store(out_batch + 23 * C + offs_c, activated_23)
     tl.store(stage_batch + ((WIDTH - 1) + 23) * C + offs_c, x_23)
     x_24 = tl.load(x_batch + 24 * X_STRIDE_ROW + offs_c)
-    product_0 = (x_9 * weight_0).to(tl.bfloat16).to(tl.float32)
+    product_0 = (
+        tl.load(x_batch + 9 * X_STRIDE_ROW + offs_c) * weight_0
+    ).to(tl.bfloat16).to(tl.float32)
     acc = bias_value + product_0
     product_1 = (x_14 * weight_1).to(tl.bfloat16).to(tl.float32)
     acc = acc + product_1

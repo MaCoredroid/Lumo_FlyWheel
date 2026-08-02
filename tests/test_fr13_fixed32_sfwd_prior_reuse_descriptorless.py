@@ -438,6 +438,21 @@ def test_channel_serial_split20_math_matches_every_fixed_source() -> None:
         assert isinstance(expression, ast.BinOp)
         assert isinstance(expression.op, ast.Mult)
         source = expression.left
+        if isinstance(source, ast.Call):
+            assert isinstance(source.func, ast.Attribute)
+            assert source.func.attr == "load"
+            stride_terms = [
+                item
+                for item in ast.walk(source.args[0])
+                if isinstance(item, ast.BinOp)
+                and isinstance(item.op, ast.Mult)
+                and isinstance(item.left, ast.Constant)
+                and isinstance(item.left.value, int)
+                and isinstance(item.right, ast.Name)
+                and item.right.id == "X_STRIDE_ROW"
+            ]
+            assert len(stride_terms) == 1
+            return CONV_WIDTH - 1 + int(stride_terms[0].left.value)
         assert isinstance(source, ast.Name)
         if source.id.startswith("prior_"):
             return int(source.id.removeprefix("prior_"))
@@ -499,13 +514,14 @@ def test_channel_serial_keeps_global_rows_coalesced_and_ordered() -> None:
     assert "tl.arange(0, BLOCK_C)" in fragment
     assert "tl.arange(0, BLOCK_C)[:, None]" not in fragment
     assert "tl.arange(0, N)" not in fragment
-    assert fragment.count("tl.load(x_batch +") == FIXED32_ROWS + 1
+    assert fragment.count("tl.load(x_batch +") == FIXED32_ROWS + 8
+    reload_counts = {2: 1, 3: 1, 4: 3, 7: 1, 8: 1, 9: 1}
     for row in range(FIXED32_ROWS):
         load = f"x_{row} = tl.load(x_batch + {row} * X_STRIDE_ROW + offs_c)"
         product = f"product_3 = (x_{row} * weight_3)"
         assert fragment.count(
             f"x_batch + {row} * X_STRIDE_ROW + offs_c"
-        ) == (2 if row == 4 else 1)
+        ) == 1 + reload_counts.get(row, 0)
         assert fragment.index(load) < fragment.index(product)
         if row:
             prior_store = (
@@ -524,7 +540,7 @@ def test_channel_serial_keeps_global_rows_coalesced_and_ordered() -> None:
     assert fragment.count("tl.store(stage_batch + ((WIDTH - 1) +") == FIXED32_ROWS
     assert fragment.count(
         "x_4 = tl.load(x_batch + 4 * X_STRIDE_ROW + offs_c)"
-    ) == 2
+    ) == 1
     assert fragment.index(
         "tl.store(stage_batch + ((WIDTH - 1) + 19) * C + offs_c, x_19)"
     ) < fragment.index("x_20 = tl.load(")

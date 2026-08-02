@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One real SWE-Verified K64/root1 B1 byte gate for the register-local
-# channel-serial two-lane candidate with one long-edge reload (C128/W2 at B1).
+# channel-serial two-lane candidate with eight late tap-0 reloads (C128/W2 at B1).
 # The candidate is shadow-only and the incumbent tensors remain served.
 set -euo pipefail
 
@@ -136,8 +136,8 @@ printf '%s\n' \
   'source_descriptor_device_validation=false' \
   'source_descriptor_launcher_argument=false' \
   'source_descriptor_in_kernel=false' \
-  'x_global_loads_per_channel=33' \
-  'long_edge_reload=row21_from_row4' \
+  'x_global_loads_per_channel=40' \
+  'late_tap0_reload_nodes=17-24' \
   'x_stride=16384,1' \
   'out_stride=10240,1' \
   'source_stage_stride=10240,1' \
