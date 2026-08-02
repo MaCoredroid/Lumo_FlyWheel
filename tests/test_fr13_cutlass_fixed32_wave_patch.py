@@ -116,7 +116,7 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     module = _module()
     patched, _ = module.patch_text(_source_fixture(module))
 
-    assert patched.count("cutlass::gemm::StreamKScheduler") == 3
+    assert patched.count("cutlass::gemm::StreamKScheduler") == 2
     assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 5
     assert "PingpongSm120" not in module.CONFIG_REPLACEMENT
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
@@ -128,7 +128,7 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     assert (
         "OutType, 128, 1, 128, TileShape, ClusterShape,\n"
         "      EpilogueSchedule, KernelSchedule, true,\n"
-        "      cutlass::gemm::StreamKScheduler, true,\n"
+        "      fr13_fixed32_wide256_recompute_scheduler, true,\n"
         "      cutlass::gemm::collective::StageCount<2>>"
     ) in patched
     assert "using TileShape = Shape<_64, _128, _128>;" not in patched
@@ -227,6 +227,32 @@ def test_wide256_is_b1_only_and_large_rows_fail_to_stock() -> None:
     assert "stream_k_force_wide256_byte_ab" in patched[selector_gate:stock_assignment]
     assert "sm120_blockwise_fp8_config_cooperative_streamk_wide256" not in patched
     assert "sm120_blockwise_fp8_config_swapab_streamk_wide256" in patched
+
+
+def test_wide256_recomputes_only_fixup_barrier_coordinate() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    assert "struct fr13_fixed32_wide256_recompute_scheduler {};" in patched
+    assert "class Fr13Wide256RecomputeTileScheduler" in patched
+    assert "using Base::Base;" in patched
+    assert "using Base::fixup;" in patched
+    assert 'asm volatile("mov.u32 %0, %%tid.x;"' in patched
+    assert "thread_idx % BarrierManager::ThreadCount" in patched
+    assert "uint32_t barrier_group_thread_idx =" not in (
+        module.SCHEDULER_SPECIALIZATION_REPLACEMENT
+    )
+    assert patched.count("barrier_group_thread_idx<BarrierManager>()") == 9
+    assert "ReductionMode::Deterministic" in patched
+    assert "CUTLASS_HOST_DEVICE static auto tile_peer_range" in patched
+    assert "find_unit(start_k_tile + cur_k_tile)" in patched
+    assert "params.div_cluster_size(tile_idx)" in patched
+    assert "params.divmod_k_tiles_per_sk_big_unit_.divide(k_tile)" in patched
+    assert "params.divmod_k_tiles_per_sk_unit_.divide(" in patched
+    assert "UnderlyingStreamKScheduler::compute_epilogue" in patched
+    assert "UnderlyingStreamKScheduler::template separate_reduction" in patched
+    assert "fr13_fixed32_wide256_recompute_scheduler, true" in patched
+    assert "cutlass::gemm::StreamKScheduler, true" not in patched
 
 
 def test_streamk_uses_a_separate_candidate_template() -> None:
