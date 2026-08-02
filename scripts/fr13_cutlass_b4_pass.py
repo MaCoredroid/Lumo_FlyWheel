@@ -25,9 +25,7 @@ STATIC_LIVE_SCHEMA = "fr13.fixed32.cutlass_persistent_b4_m128_static_live_gate.v
 STATIC_K64_ROOT_LIVE_SCHEMA = (
     "fr13.fixed32.cutlass_persistent_b4_m128_static_k64_root_live_gate.v1"
 )
-STATIC_SIDECAR_SCHEMA = (
-    "fr13.fixed32.cutlass_b4.m128_static.production_pass.v1"
-)
+STATIC_SIDECAR_SCHEMA = "fr13.fixed32.cutlass_b4.m128_static.production_pass.v1"
 STATIC_K64_ROOT_SIDECAR_SCHEMA = (
     "fr13.fixed32.cutlass_b4.m128_static.k64_root.production_pass.v1"
 )
@@ -55,9 +53,15 @@ IDENTITY_STOCKSHAPE_STAGE2_SIDECAR_SCHEMA = (
 IDENTITY_STOCKSHAPE_STAGE2_K64_ROOT_SIDECAR_SCHEMA = (
     "fr13.fixed32.cutlass_b4.identity_stockshape_stage2.k64_root.production_pass.v1"
 )
-IDENTITY_DIVISOR_LIVE_SCHEMA = (
-    "fr13.fixed32.cutlass_identity_divisor_b4_live_gate.v1"
+IDENTITY_STOCKSHAPE_STAGE2_DUAL_K64_ROOT_SIDECAR_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_stockshape_stage2.k64_root."
+    "dual_topology.production_pass.v1"
 )
+IDENTITY_STOCKSHAPE_STAGE2_DUAL_K64_ROOT_BINDING_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_stockshape_stage2.k64_root."
+    "dual_topology.production_binding.v1"
+)
+IDENTITY_DIVISOR_LIVE_SCHEMA = "fr13.fixed32.cutlass_identity_divisor_b4_live_gate.v1"
 IDENTITY_DIVISOR_K64_ROOT_LIVE_SCHEMA = (
     "fr13.fixed32.cutlass_identity_divisor_b4_k64_root_live_gate.v1"
 )
@@ -116,6 +120,7 @@ K64_ROOT_MANDATORY_WEIGHT_FLOOR_MS = floor.FIXED32_MANDATORY_WEIGHT_FLOOR_MS
 K64_ROOT_SLO_CAP_MS = 137.6067177261
 MAX_COMPARISONS = 320
 QUALIFIED_FIXED32_MODES = ("tail6_fixed32", "hydra27_fixed32")
+STAGE2_DUAL_PRODUCTION_SELECTOR = "identity_stockshape_stage2_b4"
 EXPECTED_PROJECTION_NK = (
     (5120, 6144),
     (5120, 17408),
@@ -199,9 +204,7 @@ CANDIDATE_CONTRACTS = {
         },
         "binding_schemas": {
             "full_vocab": "fr13.fixed32.cutlass_b4.production_binding.v1",
-            "k64_root": (
-                "fr13.fixed32.cutlass_b4.k64_root.production_binding.v1"
-            ),
+            "k64_root": ("fr13.fixed32.cutlass_b4.k64_root.production_binding.v1"),
         },
         "production_authorized": True,
         "requires_resource_credential": False,
@@ -217,9 +220,7 @@ CANDIDATE_CONTRACTS = {
             "k64_root": STATIC_K64_ROOT_SIDECAR_SCHEMA,
         },
         "binding_schemas": {
-            "full_vocab": (
-                "fr13.fixed32.cutlass_b4.m128_static.production_binding.v1"
-            ),
+            "full_vocab": ("fr13.fixed32.cutlass_b4.m128_static.production_binding.v1"),
             "k64_root": (
                 "fr13.fixed32.cutlass_b4.m128_static.k64_root.production_binding.v1"
             ),
@@ -486,9 +487,7 @@ def validate_live_result(
         candidate_so,
         diagnostic_selector,
         resource_credential=resource_credential,
-        expected_resource_credential_sha256=(
-            expected_resource_credential_sha256
-        ),
+        expected_resource_credential_sha256=(expected_resource_credential_sha256),
     )
     patch_source_sha256, patched_dispatch_sha256 = _candidate_source_hashes(
         candidate_selector
@@ -666,6 +665,146 @@ def issue_sidecar(
     return payload
 
 
+def validate_dual_live_results(
+    tail23_live_result: Path,
+    expected_tail23_live_sha256: str,
+    hydra27_live_result: Path,
+    expected_hydra27_live_sha256: str,
+    candidate_so: Path,
+    patch_source: Path = PATCH_SOURCE,
+    expected_source_commit: str | None = None,
+    draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
+) -> dict[str, Any]:
+    """Validate both canonical K64 exact4 topologies for Stage2 production."""
+
+    qualifications = {
+        "tail6_fixed32": validate_live_result(
+            tail23_live_result,
+            expected_tail23_live_sha256,
+            candidate_so,
+            patch_source,
+            expected_source_commit,
+            STAGE2_DUAL_PRODUCTION_SELECTOR,
+            "k64_root",
+            draft_vocab_blocks,
+            "tail6_fixed32",
+        ),
+        "hydra27_fixed32": validate_live_result(
+            hydra27_live_result,
+            expected_hydra27_live_sha256,
+            candidate_so,
+            patch_source,
+            expected_source_commit,
+            STAGE2_DUAL_PRODUCTION_SELECTOR,
+            "k64_root",
+            draft_vocab_blocks,
+            "hydra27_fixed32",
+        ),
+    }
+    tail = qualifications["tail6_fixed32"]
+    hydra = qualifications["hydra27_fixed32"]
+    common_fields = (
+        "candidate_selector",
+        "diagnostic_selector",
+        "candidate_family",
+        "candidate_sha256",
+        "candidate_bytes",
+        "patch_source_sha256",
+        "vllm_base_commit",
+        "patched_dispatch_sha256",
+        "qualification_source_commit",
+        "qualification_task_ids",
+        "qualified_draft_vocab_root",
+        "qualified_draft_vocab_k",
+        "qualified_comparison_call_limit",
+        "mandatory_weight_bytes",
+        "mandatory_weight_floor_ms",
+        "one_sided_u95_cap_ms",
+        "qualified_projection_nk",
+        "qualified_fixed_rows",
+        "qualified_eager_builder_capacity",
+        "qualified_draft_vocab_blocks",
+        "qualified_draft_vocab_blocks_sha256",
+        "served_result_during_qualification",
+        "production_default_enabled",
+    )
+    for field in common_fields:
+        if tail.get(field) != hydra.get(field):
+            raise QualificationError(
+                f"Stage2 dual-topology qualification {field} differs between arms"
+            )
+
+    topology_qualifications: dict[str, dict[str, object]] = {}
+    for mode in QUALIFIED_FIXED32_MODES:
+        record = qualifications[mode]
+        topology_qualifications[mode] = {
+            "topology": mode,
+            "live_result_sha256": record["live_result_sha256"],
+            "binary_attestation_sha256": record["binary_attestation_sha256"],
+            "qualification_task_marker": record["qualification_task_marker"],
+            "real_task_arm_sha256": record["real_task_arm_sha256"],
+            "container_env_sha256": record["container_env_sha256"],
+        }
+
+    return {
+        "schema": IDENTITY_STOCKSHAPE_STAGE2_DUAL_K64_ROOT_SIDECAR_SCHEMA,
+        "status": "QUALIFIED",
+        "candidate_selector": tail["candidate_selector"],
+        "diagnostic_selector": tail["diagnostic_selector"],
+        "candidate_family": tail["candidate_family"],
+        "candidate_sha256": tail["candidate_sha256"],
+        "candidate_bytes": tail["candidate_bytes"],
+        "patch_source_sha256": tail["patch_source_sha256"],
+        "vllm_base_commit": tail["vllm_base_commit"],
+        "patched_dispatch_sha256": tail["patched_dispatch_sha256"],
+        "qualification_source_commit": tail["qualification_source_commit"],
+        "qualification_profile": "k64_root",
+        "qualification_topologies": list(QUALIFIED_FIXED32_MODES),
+        "qualification_task_ids": tail["qualification_task_ids"],
+        "topology_qualifications": topology_qualifications,
+        "qualified_draft_vocab_root": tail["qualified_draft_vocab_root"],
+        "qualified_draft_vocab_k": tail["qualified_draft_vocab_k"],
+        "qualified_comparison_call_limit": tail["qualified_comparison_call_limit"],
+        "mandatory_weight_bytes": tail["mandatory_weight_bytes"],
+        "mandatory_weight_floor_ms": tail["mandatory_weight_floor_ms"],
+        "one_sided_u95_cap_ms": tail["one_sided_u95_cap_ms"],
+        "qualified_projection_nk": tail["qualified_projection_nk"],
+        "qualified_fixed_rows": tail["qualified_fixed_rows"],
+        "qualified_eager_builder_capacity": tail["qualified_eager_builder_capacity"],
+        "qualified_draft_vocab_blocks": tail["qualified_draft_vocab_blocks"],
+        "qualified_draft_vocab_blocks_sha256": tail[
+            "qualified_draft_vocab_blocks_sha256"
+        ],
+        "served_result_during_qualification": "stock",
+        "production_default_enabled": False,
+    }
+
+
+def issue_dual_sidecar(
+    tail23_live_result: Path,
+    expected_tail23_live_sha256: str,
+    hydra27_live_result: Path,
+    expected_hydra27_live_sha256: str,
+    candidate_so: Path,
+    output: Path,
+    patch_source: Path = PATCH_SOURCE,
+    expected_source_commit: str | None = None,
+    draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
+) -> dict[str, Any]:
+    payload = validate_dual_live_results(
+        tail23_live_result,
+        expected_tail23_live_sha256,
+        hydra27_live_result,
+        expected_hydra27_live_sha256,
+        candidate_so,
+        patch_source,
+        expected_source_commit,
+        draft_vocab_blocks,
+    )
+    _write_json(output, payload)
+    return payload
+
+
 def verify_sidecar(
     sidecar: Path,
     expected_sidecar_sha256: str,
@@ -722,9 +861,7 @@ def verify_sidecar(
         candidate_so,
         diagnostic_selector,
         resource_credential=resource_credential,
-        expected_resource_credential_sha256=(
-            expected_resource_credential_sha256
-        ),
+        expected_resource_credential_sha256=(expected_resource_credential_sha256),
     )
     patch_source_sha256, patched_dispatch_sha256 = _candidate_source_hashes(
         sidecar_selector
@@ -809,6 +946,250 @@ def verify_sidecar(
     return payload
 
 
+def verify_dual_sidecar(
+    sidecar: Path,
+    expected_sidecar_sha256: str,
+    candidate_so: Path,
+    patch_source: Path = PATCH_SOURCE,
+    draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
+) -> dict[str, Any]:
+    """Verify the only production credential accepted by the Stage2 selector."""
+
+    expected_sidecar_sha256 = _require_sha256(
+        expected_sidecar_sha256, "expected dual production-sidecar SHA-256"
+    )
+    payload, raw = _read_json(sidecar, "CUTLASS B4 Stage2 dual production sidecar")
+    actual_sha256 = hashlib.sha256(raw).hexdigest()
+    if actual_sha256 != expected_sidecar_sha256:
+        raise QualificationError(
+            "CUTLASS B4 Stage2 dual sidecar SHA-256 mismatch: "
+            f"{actual_sha256} != {expected_sidecar_sha256}"
+        )
+    candidate = binary.verify_candidate(
+        candidate_so, "identity_stockshape_stage2_b4_byte_ab"
+    )
+    patch_source_sha256, patched_dispatch_sha256 = _candidate_source_hashes(
+        STAGE2_DUAL_PRODUCTION_SELECTOR
+    )
+    patch = _validate_patch_source(patch_source, patch_source_sha256)
+    block_map = _validate_draft_vocab_blocks(draft_vocab_blocks)
+    profile = _qualification_profile("k64_root")
+    required: dict[str, object] = {
+        "schema": IDENTITY_STOCKSHAPE_STAGE2_DUAL_K64_ROOT_SIDECAR_SCHEMA,
+        "status": "QUALIFIED",
+        "candidate_selector": STAGE2_DUAL_PRODUCTION_SELECTOR,
+        "diagnostic_selector": "identity_stockshape_stage2_b4_byte_ab",
+        "candidate_family": "identity_stockshape_stage2_b4",
+        "candidate_sha256": candidate["sha256"],
+        "candidate_bytes": candidate["bytes"],
+        "patch_source_sha256": patch["sha256"],
+        "vllm_base_commit": VLLM_BASE_COMMIT,
+        "patched_dispatch_sha256": patched_dispatch_sha256,
+        "qualification_profile": "k64_root",
+        "qualification_topologies": list(QUALIFIED_FIXED32_MODES),
+        "qualification_task_ids": list(EXPECTED_TASK_IDS),
+        "qualified_draft_vocab_root": profile["draft_vocab_root"],
+        "qualified_draft_vocab_k": profile["draft_vocab_k"],
+        "qualified_comparison_call_limit": MAX_COMPARISONS,
+        "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
+        "mandatory_weight_floor_ms": profile["mandatory_weight_floor_ms"],
+        "one_sided_u95_cap_ms": profile["one_sided_u95_cap_ms"],
+        "qualified_projection_nk": [list(shape) for shape in EXPECTED_PROJECTION_NK],
+        "qualified_fixed_rows": 128,
+        "qualified_eager_builder_capacity": 128,
+        "qualified_draft_vocab_blocks": DRAFT_VOCAB_BLOCKS_CONTAINER_PATH,
+        "qualified_draft_vocab_blocks_sha256": block_map["sha256"],
+        "served_result_during_qualification": "stock",
+        "production_default_enabled": False,
+    }
+    for key, expected in required.items():
+        if payload.get(key) != expected:
+            raise QualificationError(
+                f"CUTLASS B4 Stage2 dual sidecar {key} mismatch: "
+                f"{payload.get(key)!r} != {expected!r}"
+            )
+    source_commit = payload.get("qualification_source_commit")
+    if (
+        not isinstance(source_commit, str)
+        or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None
+    ):
+        raise QualificationError(
+            "Stage2 dual sidecar qualification source commit is invalid"
+        )
+    topology_records = payload.get("topology_qualifications")
+    if not isinstance(topology_records, dict) or set(topology_records) != set(
+        QUALIFIED_FIXED32_MODES
+    ):
+        raise QualificationError(
+            "Stage2 dual sidecar lacks exactly Tail23 and Hydra27 qualifications"
+        )
+    for mode in QUALIFIED_FIXED32_MODES:
+        record = topology_records.get(mode)
+        if not isinstance(record, dict) or record.get("topology") != mode:
+            raise QualificationError(
+                f"Stage2 dual sidecar topology record is invalid for {mode}"
+            )
+        marker = record.get("qualification_task_marker")
+        if not isinstance(marker, str) or marker not in EXPECTED_TASK_MARKERS:
+            raise QualificationError(
+                f"Stage2 dual sidecar task marker is not canonical for {mode}"
+            )
+        for key in (
+            "live_result_sha256",
+            "binary_attestation_sha256",
+            "real_task_arm_sha256",
+            "container_env_sha256",
+        ):
+            _require_sha256(record.get(key), f"{mode} {key}")
+    return payload
+
+
+def _validate_stage2_dual_production_attestation(
+    payload: dict[str, Any],
+    raw: bytes,
+    expected_sidecar_sha256: str,
+    draft_vocab_blocks: Path,
+) -> dict[str, Any]:
+    candidate_sha256, candidate_bytes, candidate_family = binary.candidate_identity(
+        STAGE2_DUAL_PRODUCTION_SELECTOR
+    )
+    required = {
+        "schema": ATTESTATION_SCHEMA,
+        "selector": STAGE2_DUAL_PRODUCTION_SELECTOR,
+        "installed_mode": "0555",
+        "production_enabled": True,
+        "candidate_family": candidate_family,
+    }
+    for key, expected in required.items():
+        if payload.get(key) != expected:
+            raise QualificationError(f"CUTLASS B4 Stage2 attestation {key} mismatch")
+    for label, expected_path in (
+        ("source", binary.CONTAINER_SOURCE),
+        ("destination", binary.CONTAINER_DESTINATION),
+    ):
+        identity = payload.get(label)
+        if not isinstance(identity, dict):
+            raise QualificationError(f"CUTLASS B4 Stage2 attestation lacks {label}")
+        expected_identity = {
+            "path": str(expected_path),
+            "bytes": candidate_bytes,
+            "sha256": candidate_sha256,
+            "regular": True,
+            "symlink": False,
+        }
+        for key, expected in expected_identity.items():
+            if identity.get(key) != expected:
+                raise QualificationError(
+                    f"CUTLASS B4 Stage2 attestation {label}.{key} mismatch"
+                )
+    qualification = payload.get("qualification")
+    if not isinstance(qualification, dict):
+        raise QualificationError(
+            "CUTLASS B4 Stage2 attestation lacks dual qualification"
+        )
+    block_map = _validate_draft_vocab_blocks(draft_vocab_blocks)
+    profile = _qualification_profile("k64_root")
+    required_qualification: dict[str, object] = {
+        "sidecar_sha256": expected_sidecar_sha256,
+        "candidate_sha256": candidate_sha256,
+        "patch_source_sha256": IDENTITY_STOCKSHAPE_STAGE2_PATCH_SOURCE_SHA256,
+        "qualification_profile": "k64_root",
+        "qualification_topologies": list(QUALIFIED_FIXED32_MODES),
+        "qualification_task_ids": list(EXPECTED_TASK_IDS),
+        "qualified_draft_vocab_root": profile["draft_vocab_root"],
+        "qualified_draft_vocab_k": profile["draft_vocab_k"],
+        "qualified_comparison_call_limit": MAX_COMPARISONS,
+        "qualified_eager_builder_capacity": 128,
+        "qualified_fixed_rows": 128,
+        "qualified_projection_nk": [list(shape) for shape in EXPECTED_PROJECTION_NK],
+        "qualified_draft_vocab_blocks": DRAFT_VOCAB_BLOCKS_CONTAINER_PATH,
+        "qualified_draft_vocab_blocks_sha256": block_map["sha256"],
+        "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
+        "mandatory_weight_floor_ms": profile["mandatory_weight_floor_ms"],
+        "one_sided_u95_cap_ms": profile["one_sided_u95_cap_ms"],
+    }
+    for key, expected in required_qualification.items():
+        if qualification.get(key) != expected:
+            raise QualificationError(
+                f"CUTLASS B4 Stage2 attestation {key} binding mismatch"
+            )
+    source_commit = qualification.get("qualification_source_commit")
+    if (
+        not isinstance(source_commit, str)
+        or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None
+    ):
+        raise QualificationError(
+            "CUTLASS B4 Stage2 attestation source commit is invalid"
+        )
+    topology_records = qualification.get("topology_qualifications")
+    if not isinstance(topology_records, dict) or set(topology_records) != set(
+        QUALIFIED_FIXED32_MODES
+    ):
+        raise QualificationError(
+            "CUTLASS B4 Stage2 attestation lacks both topology qualifications"
+        )
+    live_result_sha256_by_topology: dict[str, str] = {}
+    task_markers_by_topology: dict[str, str] = {}
+    real_task_arm_sha256_by_topology: dict[str, str] = {}
+    container_env_sha256_by_topology: dict[str, str] = {}
+    binary_attestation_sha256_by_topology: dict[str, str] = {}
+    for mode in QUALIFIED_FIXED32_MODES:
+        record = topology_records.get(mode)
+        if not isinstance(record, dict) or record.get("topology") != mode:
+            raise QualificationError(
+                f"CUTLASS B4 Stage2 attestation record is invalid for {mode}"
+            )
+        marker = record.get("qualification_task_marker")
+        if not isinstance(marker, str) or marker not in EXPECTED_TASK_MARKERS:
+            raise QualificationError(
+                f"CUTLASS B4 Stage2 attestation marker is invalid for {mode}"
+            )
+        task_markers_by_topology[mode] = marker
+        for key, destination in (
+            ("live_result_sha256", live_result_sha256_by_topology),
+            ("binary_attestation_sha256", binary_attestation_sha256_by_topology),
+            ("real_task_arm_sha256", real_task_arm_sha256_by_topology),
+            ("container_env_sha256", container_env_sha256_by_topology),
+        ):
+            destination[mode] = _require_sha256(record.get(key), f"{mode} {key}")
+    return {
+        "schema": IDENTITY_STOCKSHAPE_STAGE2_DUAL_K64_ROOT_BINDING_SCHEMA,
+        "status": "BOUND",
+        "selector": STAGE2_DUAL_PRODUCTION_SELECTOR,
+        "diagnostic_selector": "identity_stockshape_stage2_b4_byte_ab",
+        "candidate_family": candidate_family,
+        "candidate_sha256": candidate_sha256,
+        "candidate_bytes": candidate_bytes,
+        "patch_source_sha256": IDENTITY_STOCKSHAPE_STAGE2_PATCH_SOURCE_SHA256,
+        "production_sidecar_sha256": expected_sidecar_sha256,
+        "binary_install_attestation_sha256": hashlib.sha256(raw).hexdigest(),
+        "qualification_source_commit": source_commit,
+        "qualification_profile": "k64_root",
+        "qualification_topologies": list(QUALIFIED_FIXED32_MODES),
+        "qualification_task_ids": list(EXPECTED_TASK_IDS),
+        "qualification_task_markers_by_topology": task_markers_by_topology,
+        "live_result_sha256_by_topology": live_result_sha256_by_topology,
+        "binary_attestation_sha256_by_topology": (
+            binary_attestation_sha256_by_topology
+        ),
+        "real_task_arm_sha256_by_topology": real_task_arm_sha256_by_topology,
+        "container_env_sha256_by_topology": container_env_sha256_by_topology,
+        "qualified_draft_vocab_root": profile["draft_vocab_root"],
+        "qualified_draft_vocab_k": profile["draft_vocab_k"],
+        "qualified_comparison_call_limit": MAX_COMPARISONS,
+        "qualified_eager_builder_capacity": 128,
+        "qualified_fixed_rows": 128,
+        "qualified_projection_nk": [list(shape) for shape in EXPECTED_PROJECTION_NK],
+        "qualified_draft_vocab_blocks": DRAFT_VOCAB_BLOCKS_CONTAINER_PATH,
+        "qualified_draft_vocab_blocks_sha256": block_map["sha256"],
+        "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
+        "mandatory_weight_floor_ms": profile["mandatory_weight_floor_ms"],
+        "one_sided_u95_cap_ms": profile["one_sided_u95_cap_ms"],
+        "installed_mode": "0555",
+        "production_default_enabled": False,
+    }
+
+
 def validate_production_attestation(
     attestation: Path,
     expected_sidecar_sha256: str,
@@ -827,6 +1208,17 @@ def validate_production_attestation(
     candidate_selector = payload.get("selector")
     if not isinstance(candidate_selector, str):
         raise QualificationError("CUTLASS B4 binary attestation selector is invalid")
+    if candidate_selector == STAGE2_DUAL_PRODUCTION_SELECTOR:
+        if qualification_profile not in (None, "k64_root"):
+            raise QualificationError(
+                "Stage2 dual production is qualified only for k64_root"
+            )
+        return _validate_stage2_dual_production_attestation(
+            payload,
+            raw,
+            expected_sidecar_sha256,
+            draft_vocab_blocks,
+        )
     candidate_contract = _candidate_contract(candidate_selector)
     if candidate_contract["production_authorized"] is not True:
         raise QualificationError(
@@ -1031,6 +1423,22 @@ def main() -> int:
         )
         if command == "issue":
             subparser.add_argument("--out", type=Path, required=True)
+    for command in ("dual-validate", "dual-issue"):
+        subparser = subparsers.add_parser(command)
+        subparser.add_argument("--tail23-live-result", type=Path, required=True)
+        subparser.add_argument("--expected-tail23-live-sha256", required=True)
+        subparser.add_argument("--hydra27-live-result", type=Path, required=True)
+        subparser.add_argument("--expected-hydra27-live-sha256", required=True)
+        subparser.add_argument("--candidate-so", type=Path, required=True)
+        subparser.add_argument("--patch-source", type=Path, default=PATCH_SOURCE)
+        subparser.add_argument("--expected-source-commit")
+        subparser.add_argument(
+            "--draft-vocab-blocks",
+            type=Path,
+            default=DRAFT_VOCAB_BLOCKS_SOURCE,
+        )
+        if command == "dual-issue":
+            subparser.add_argument("--out", type=Path, required=True)
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("--sidecar", type=Path, required=True)
     verify_parser.add_argument("--expected-sidecar-sha256", required=True)
@@ -1051,6 +1459,16 @@ def main() -> int:
         "--fixed32-mode",
         choices=QUALIFIED_FIXED32_MODES,
         default="hydra27_fixed32",
+    )
+    dual_verify_parser = subparsers.add_parser("dual-verify")
+    dual_verify_parser.add_argument("--sidecar", type=Path, required=True)
+    dual_verify_parser.add_argument("--expected-sidecar-sha256", required=True)
+    dual_verify_parser.add_argument("--candidate-so", type=Path, required=True)
+    dual_verify_parser.add_argument("--patch-source", type=Path, default=PATCH_SOURCE)
+    dual_verify_parser.add_argument(
+        "--draft-vocab-blocks",
+        type=Path,
+        default=DRAFT_VOCAB_BLOCKS_SOURCE,
     )
     attestation_parser = subparsers.add_parser("attestation")
     attestation_parser.add_argument("--attestation", type=Path, required=True)
@@ -1099,6 +1517,29 @@ def main() -> int:
             args.resource_credential,
             args.expected_resource_credential_sha256,
         )
+    elif args.command == "dual-validate":
+        payload = validate_dual_live_results(
+            args.tail23_live_result,
+            args.expected_tail23_live_sha256,
+            args.hydra27_live_result,
+            args.expected_hydra27_live_sha256,
+            args.candidate_so,
+            args.patch_source,
+            args.expected_source_commit,
+            args.draft_vocab_blocks,
+        )
+    elif args.command == "dual-issue":
+        payload = issue_dual_sidecar(
+            args.tail23_live_result,
+            args.expected_tail23_live_sha256,
+            args.hydra27_live_result,
+            args.expected_hydra27_live_sha256,
+            args.candidate_so,
+            args.out,
+            args.patch_source,
+            args.expected_source_commit,
+            args.draft_vocab_blocks,
+        )
     elif args.command == "verify":
         payload = verify_sidecar(
             args.sidecar,
@@ -1113,6 +1554,14 @@ def main() -> int:
             expected_resource_credential_sha256=(
                 args.expected_resource_credential_sha256
             ),
+        )
+    elif args.command == "dual-verify":
+        payload = verify_dual_sidecar(
+            args.sidecar,
+            args.expected_sidecar_sha256,
+            args.candidate_so,
+            args.patch_source,
+            args.draft_vocab_blocks,
         )
     else:
         payload = validate_production_attestation(

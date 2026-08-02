@@ -142,18 +142,14 @@ def _static_resource_fixture(
     credential = tmp_path / "static-resource.json"
     credential.write_bytes(raw)
     credential_sha256 = hashlib.sha256(raw).hexdigest()
-    monkeypatch.setattr(
-        module, "STATIC_B4_M128_CANDIDATE_SHA256", candidate_sha256
-    )
+    monkeypatch.setattr(module, "STATIC_B4_M128_CANDIDATE_SHA256", candidate_sha256)
     monkeypatch.setattr(module, "STATIC_B4_M128_CANDIDATE_SIZE", candidate_size)
     monkeypatch.setattr(
         module,
         "STATIC_B4_M128_RESOURCE_CREDENTIAL_SHA256",
         credential_sha256,
     )
-    monkeypatch.setattr(
-        module, "STATIC_B4_M128_RESOURCE_CREDENTIAL_SIZE", len(raw)
-    )
+    monkeypatch.setattr(module, "STATIC_B4_M128_RESOURCE_CREDENTIAL_SIZE", len(raw))
     return credential, credential_sha256
 
 
@@ -202,9 +198,10 @@ def test_static_m128_diagnostic_install_binds_resource_and_stays_off(
     assert record["production_enabled"] is False
     assert record["candidate_family"] == "persistent_b4_m128_static"
     assert record["source"]["resource_credential"]["sha256"] == credential_sha256
-    assert record["destination"]["resource_credential"] == record["source"][
-        "resource_credential"
-    ]
+    assert (
+        record["destination"]["resource_credential"]
+        == record["source"]["resource_credential"]
+    )
 
 
 def test_static_m128_install_fails_closed_without_gate_or_resource(
@@ -403,7 +400,12 @@ def test_identity_b4_diagnostic_installs_but_production_stays_blocked(
 
     destination.chmod(0o644)
     destination.write_bytes(b"stock-extension\n")
-    with pytest.raises(ValueError, match="Tail23 and Hydra27 raw-byte gates"):
+    expected_error = (
+        "requires a pinned production sidecar"
+        if family == "identity_stockshape_stage2_b4"
+        else "Tail23 and Hydra27 raw-byte gates"
+    )
+    with pytest.raises(ValueError, match=expected_error):
         module.install_candidate(
             source,
             destination,

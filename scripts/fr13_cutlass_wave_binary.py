@@ -106,7 +106,12 @@ CANDIDATE_SELECTORS = (
     | STATIC_B4_M128_SELECTORS
 )
 PRODUCTION_SELECTORS = frozenset(
-    {"streamk_coop128", "streamk_force_wide256", "persistent_b4_m128"}
+    {
+        "streamk_coop128",
+        "streamk_force_wide256",
+        "persistent_b4_m128",
+        "identity_stockshape_stage2_b4",
+    }
 )
 INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
     "static_persistent_stocktile",
@@ -114,7 +119,6 @@ INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
     "identity_stage2_static",
     "identity_stage2_pingpong_b1",
     "identity_stockshape_b4",
-    "identity_stockshape_stage2_b4",
     "identity_divisor_b4",
     "persistent_b4_m128_static",
 }
@@ -215,10 +219,7 @@ def verify_candidate(
         "candidate_family": candidate_family,
     }
     if selector in STATIC_B4_M128_SELECTORS:
-        if (
-            resource_credential is None
-            or expected_resource_credential_sha256 is None
-        ):
+        if resource_credential is None or expected_resource_credential_sha256 is None:
             raise ValueError(
                 "static M128 candidate requires a pinned resource credential"
             )
@@ -313,19 +314,29 @@ def verify_static_m128_resource_credential(
     }
     for key, expected in required.items():
         if payload.get(key) != expected:
-            raise ValueError(
-                f"static M128 resource credential {key} mismatch"
-            )
+            raise ValueError(f"static M128 resource credential {key} mismatch")
     nested_required = (
-        (source, "patch_source_sha256", "977c0204d03d022bd3f4b745ad4a0bad8ec36d7bf82ac1c6f82aa42a62094fab"),
+        (
+            source,
+            "patch_source_sha256",
+            "977c0204d03d022bd3f4b745ad4a0bad8ec36d7bf82ac1c6f82aa42a62094fab",
+        ),
         (source, "vllm_commit", "fe9c3d6c5f66c873d196800384ed6880687b9e52"),
-        (source, "patched_dispatch_sha256", "446771039af31a2ae386b917540be2a018fdc8d947c001030696ec9a6608a4c4"),
+        (
+            source,
+            "patched_dispatch_sha256",
+            "446771039af31a2ae386b917540be2a018fdc8d947c001030696ec9a6608a4c4",
+        ),
         (source, "cutlass_commit", "da5e086dab31d63815acafdac9a9c5893b1c69e2"),
         (candidate, "selector", "persistent_b4_m128_static"),
         (candidate, "diagnostic_selector", "persistent_b4_m128_static_byte_ab"),
         (candidate, "default_enabled", False),
         (host_build, "result", "pass"),
-        (host_build, "candidate_object_observed_gencode", "arch=compute_121a,code=sm_121a"),
+        (
+            host_build,
+            "candidate_object_observed_gencode",
+            "arch=compute_121a,code=sm_121a",
+        ),
         (host_build, "gpu_runtime_used", False),
         (host_build, "docker_used", False),
         (candidate_binary, "sha256", STATIC_B4_M128_CANDIDATE_SHA256),
@@ -353,9 +364,7 @@ def verify_static_m128_resource_credential(
     )
     for section, key, expected in nested_required:
         if section.get(key) != expected:
-            raise ValueError(
-                f"static M128 resource credential {key} mismatch"
-            )
+            raise ValueError(f"static M128 resource credential {key} mismatch")
     return {
         "path": str(path.resolve(strict=True)),
         "bytes": info.st_size,
@@ -412,13 +421,21 @@ def _verify_production_qualification(
         "streamk_coop128",
         "streamk_force_wide256",
         "persistent_b4_m128",
+        "identity_stockshape_stage2_b4",
     }:
         raise ValueError(f"unsupported production candidate selector: {selector!r}")
-    if selector == "persistent_b4_m128":
+    if selector in {"persistent_b4_m128", "identity_stockshape_stage2_b4"}:
         import fr13_cutlass_b4_pass as qualification
     else:
         import fr13_cutlass_streamk_pass as qualification
 
+    if selector == "identity_stockshape_stage2_b4":
+        return qualification.verify_dual_sidecar(
+            sidecar,
+            expected_sidecar_sha256,
+            candidate,
+            patch_source,
+        )
     kwargs = {"fixed32_mode": fixed32_mode} if selector == "persistent_b4_m128" else {}
     return qualification.verify_sidecar(
         sidecar,
@@ -483,17 +500,11 @@ def install_candidate(
         )
         qualification = {
             "sidecar_sha256": expected_production_sidecar_sha256,
-            "live_result_sha256": qualification_record["live_result_sha256"],
             "candidate_sha256": qualification_record["candidate_sha256"],
             "patch_source_sha256": qualification_record["patch_source_sha256"],
             "qualification_source_commit": qualification_record[
                 "qualification_source_commit"
             ],
-            "qualification_task_marker": qualification_record[
-                "qualification_task_marker"
-            ],
-            "real_task_arm_sha256": qualification_record["real_task_arm_sha256"],
-            "container_env_sha256": qualification_record["container_env_sha256"],
             "qualified_draft_vocab_root": qualification_record[
                 "qualified_draft_vocab_root"
             ],
@@ -504,6 +515,28 @@ def install_candidate(
             ],
             "one_sided_u95_cap_ms": qualification_record["one_sided_u95_cap_ms"],
         }
+        if selector == "identity_stockshape_stage2_b4":
+            for key in (
+                "qualification_profile",
+                "qualification_topologies",
+                "qualification_task_ids",
+                "topology_qualifications",
+                "qualified_comparison_call_limit",
+                "qualified_eager_builder_capacity",
+                "qualified_fixed_rows",
+                "qualified_projection_nk",
+                "qualified_draft_vocab_blocks",
+                "qualified_draft_vocab_blocks_sha256",
+            ):
+                qualification[key] = qualification_record[key]
+        else:
+            for key in (
+                "live_result_sha256",
+                "qualification_task_marker",
+                "real_task_arm_sha256",
+                "container_env_sha256",
+            ):
+                qualification[key] = qualification_record[key]
         for key in (
             "qualified_eager_builder_capacity",
             "qualified_topology",
@@ -511,7 +544,10 @@ def install_candidate(
         ):
             if key in qualification_record:
                 qualification[key] = qualification_record[key]
-        if qualification_record.get("qualification_profile") == "k64_root":
+        if (
+            selector != "identity_stockshape_stage2_b4"
+            and qualification_record.get("qualification_profile") == "k64_root"
+        ):
             for key in (
                 "qualification_profile",
                 "qualified_draft_vocab_blocks",
