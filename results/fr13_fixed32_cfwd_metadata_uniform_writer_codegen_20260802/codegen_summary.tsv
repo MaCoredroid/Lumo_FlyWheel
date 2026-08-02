@@ -1,0 +1,4 @@
+specialization	registers	stack_bytes	local_bytes	shared_bytes	constant0_bytes	sass_instructions	ldl	stl	calls	writer_ctas	nonwriter_ctas	cubin_sha256
+metadata_b1	56	0	0	0	1048	2088	0	0	0	1	479	5365cf9988bf1ef5992599a572cd856087885781abd1a63efca82b9ca805738b
+metadata_b4	56	0	0	0	1048	2088	0	0	0	4	1916	3fa4f2aa32d789ba3959500710362e83e4383aa99baa38dbe6ea8d89c904b301
+direct_no_metadata_b1	48	0	0	0	1024	2064	0	0	0	0	480	dfdc864277435f3116563f188e601b7c977cca78609cb6ff185f0753a88b883a
