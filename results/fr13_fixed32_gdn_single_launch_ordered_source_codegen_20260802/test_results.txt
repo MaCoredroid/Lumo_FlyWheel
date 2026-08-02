@@ -1,0 +1,21 @@
+focused_command=python3 -m pytest -q tests/test_fr13_fixed32_gdn_single_launch_ordered.py
+focused_result=6 passed in 0.64s
+
+regression_command=python3 -m pytest -q tests/test_fr13_fixed32_gdn_single_launch_ordered.py tests/test_fr13_fixed32_gdn_batch_launch.py tests/test_fr13_fixed32_gdn_batch_byte_ab.py tests/test_fr13_fixed32_gdn_batch_graph_gate.py tests/test_fr13_fixed32_gdn_batch_wide_bv.py tests/test_fr13_b4_gdn_bv8_production.py tests/test_fr13_fixed32_final_full_preseed.py
+regression_result=148 passed in 2.41s
+
+static_command=python3 -m py_compile src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py scripts/fr10_phase4_patch_vllm_tree_gdn.py tests/test_fr13_fixed32_gdn_single_launch_ordered.py
+static_result=pass
+diff_check=pass
+
+default_import_result=single_launch_false,b4_selector_none
+exact_import_result=single_launch_true,b2_selector_none,b4_selector_single_launch,outer_root_loop_ordered_tl_range,single_writer_nodes_32
+
+codegen_passes=2
+codegen_result=sm121a_b1_b4_zero_stack_zero_spill_deterministic
+gpu_kernel_executed=0
+real_swe_verified_task_executed=0
+timing_executed=0
+acceptance_claimed=0
+
+known_unrelated_fixture_gap=tests/test_fr13_k64_physical32_fullstack_route.py: 64 passed, 1 failed because results/fr13_k64_physical32_b1_fullstack_route_20260801/prepared_campaign.sh is absent from the base checkout

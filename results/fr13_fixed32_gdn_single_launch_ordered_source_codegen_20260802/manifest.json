@@ -1,0 +1,80 @@
+{
+  "schema": "fr13.fixed32.gdn_single_launch.ordered_source_codegen.v1",
+  "status": "SOURCE_CODEGEN_READY_LIVE_UNQUALIFIED",
+  "created_at_utc": "2026-08-02T23:44:33Z",
+  "base_commit": "2216f1dfa47f0062f4e1d32c50a8083d720b96fd",
+  "branch": "agent/fixed32-gdn-singleloop-main-20260802",
+  "candidate": "fixed32_gdn_single_launch_tree_v2",
+  "selector": "FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE=1",
+  "selector_contract": {
+    "fixed32_modes": [
+      "tail6_fixed32",
+      "hydra27_fixed32"
+    ],
+    "tree_rows": 32,
+    "geometry": "BV=8",
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "default_off": true,
+    "invalid_or_conflicting_source_fails_closed": true,
+    "legacy_b1_path_bv_mutually_exclusive": true,
+    "legacy_b4_batch_bv_mutually_exclusive": true
+  },
+  "topology_contract": {
+    "root_nodes": [0, 1, 4, 9, 14],
+    "branch_path_indices": [
+      [1, 2],
+      [3, 4],
+      [5, 6],
+      [7, 8],
+      [0, 9, 10]
+    ],
+    "group_sizes": [2, 2, 2, 2, 3],
+    "node_updates": 32,
+    "single_writer_nodes": 32,
+    "live_state_tiles": 2,
+    "outer_root_loop": "ordered_tl_range",
+    "inner_member_loop": "tl.static_range",
+    "branch_path_loop": "tl.range",
+    "state_export_writes_per_request_layer": 0,
+    "state_parent_reads_per_request_layer": 0
+  },
+  "physical_routes": {
+    "b1": {
+      "grid": [48, 16, 1],
+      "physical_launches_per_layer": 1,
+      "ctas_per_launch": 768
+    },
+    "b4": {
+      "grid": [48, 16, 4],
+      "physical_launches_per_layer": 1,
+      "ctas_per_launch": 3072
+    }
+  },
+  "source_sha256": {
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "d6745eaced9c38371b6530cfc49de5af4fffd131a8d8f959072617bddea0914c",
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "0f1d68b60da46a5de58c679df5e6b2a8f779f9ecc1d46142fa38e4e72c130c85",
+    "tests/test_fr13_fixed32_gdn_single_launch_ordered.py": "2e76df6e03dd1d228edc2a99d68d4fb1263edf3a845800e573b54febbfa325fe"
+  },
+  "validation": {
+    "focused_tests": "6 passed",
+    "fixed32_regression_tests": "148 passed",
+    "py_compile": "pass",
+    "diff_check": "pass",
+    "offline_sm121a_compile_passes": 2,
+    "fresh_container_per_pass": true,
+    "compile_hashes_equal": true,
+    "cubin_hashes_equal": true
+  },
+  "excluded": {
+    "gpu_execution": true,
+    "real_swe_verified_task": true,
+    "synthetic_probe": true,
+    "byte_parity_gate": true,
+    "cuda_graph_replay": true,
+    "timing": true,
+    "floor_acceptance": true,
+    "production_authorization": true,
+    "raw_cubin_ptx_sass_ir_retained": true
+  }
+}

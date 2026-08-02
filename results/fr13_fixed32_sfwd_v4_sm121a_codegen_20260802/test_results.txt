@@ -1,0 +1,18 @@
+PASS offline primary SM121a compile: v3/v4 x B1/B4
+PASS offline isolated fresh-cache rebuild: v3/v4 x B1/B4
+PASS independent nvdisasm/cuobjdump verification: 4 primary + 4 rebuild cubins
+PASS primary/rebuild byte identity: cubin/PTX/SASS/resource/ELF
+PASS static gate: registers <=255; stack/local/LDL/STL/calls all zero
+PASS source gate: fixed32; 32 unique x loads; zero reloads; 32 activations
+PASS source gate: v4 activation window 2; peak live accumulators 2
+PASS focused pytest: 31 passed in 2.99s
+
+Focused pytest command:
+PYTHONPATH=/home/mark/fr13_streamk_build/venv/lib/python3.12/site-packages:src \
+  python3 -m pytest -q \
+  tests/test_fr13_fixed32_sfwd_v4_codegen_artifact.py \
+  tests/test_fr13_fixed32_sfwd_prior_reuse_descriptorless.py \
+  tests/test_fr13_fixed32_sfwd_prior_reuse.py
+
+No GPU kernel, service, real task, synthetic task, request, timing, or
+acceptance run was launched by this audit.

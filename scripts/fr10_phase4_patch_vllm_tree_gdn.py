@@ -12685,6 +12685,14 @@ def _fr13_conv_subop_mab(
                                 "fixed32_contract": _fr13_f32_scan_state.get(
                                     "fixed32_contract"
                                 ),
+                                "fixed32_single_launch_contract": (
+                                    _fr13_f32_scan_state.get(
+                                        "fixed32_single_launch_contract"
+                                    )
+                                ),
+                                "executed_gdn": _fr13_f32_scan_state.get(
+                                    "last_executed_gdn"
+                                ),
                             },
                             bool(
                                 torch.cuda.is_available()
