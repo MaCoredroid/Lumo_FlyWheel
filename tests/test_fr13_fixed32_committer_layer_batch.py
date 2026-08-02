@@ -274,6 +274,9 @@ def test_native_keygroup_reuses_reference_served_all_layer_byte_gate() -> None:
     assert '"candidate_kernel_launches_per_event": 1' in preseed
     assert '"event_gate_scalar_buffer_elements": 0' in preseed
     assert '"native_gate_transcendentals_per_active_scalar": 3' in preseed
+    assert '"normalization_strategy": "one_warp_per_step"' in preseed
+    assert '"normalization_warps": 12' in preseed
+    assert '"normalization_cta_barriers": 1' in preseed
     assert 'state.get("native_keygroup_selection")' in body
     assert "_fr13_fixed32_committer_native_keygroup(" in body
     assert '"candidate_route": "native_keygroup_precompute_cuda"' in preseed

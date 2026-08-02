@@ -11123,6 +11123,9 @@ def preseed_fixed32_committer_graph(
                     "candidate_kernel_launches_per_event": 1,
                     "event_gate_scalar_buffer_elements": 0,
                     "native_gate_transcendentals_per_active_scalar": 3,
+                    "normalization_strategy": "one_warp_per_step",
+                    "normalization_warps": 12,
+                    "normalization_cta_barriers": 1,
                     "fixed16_inactive_suffix_collapse": (
                         "finite_state_fadd_positive_zero"
                     ),

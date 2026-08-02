@@ -15,18 +15,20 @@ KERNEL_MARKER = "fixed32_cfwd_native_fullvalue_kernel"
 EXPECTED_RESOURCES = {
     "registers_per_thread": 64,
     "stack_bytes": 0,
-    "cuobjdump_shared_bytes": 7_592,
+    "cuobjdump_shared_bytes": 7_512,
     "local_bytes": 0,
 }
 EXPECTED_SASS_COUNTS = {
-    "FADD": 262,
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 264,
+    "FMUL": 99,
     "MUFU.EX2": 3,
-    "MUFU.RSQ": 3,
+    "MUFU.RSQ": 1,
     "MUFU.RCP": 2,
-    "SHFL.BFLY": 202,
-    "SHFL.IDX": 16,
+    "SHFL.BFLY": 200,
+    "SHFL.IDX": 17,
     "SHFL.DOWN": 0,
-    "FFMA": 82,
+    "FFMA": 84,
 }
 EXPECTED_SIGNED_ZERO_FADD_RZ = 64
 

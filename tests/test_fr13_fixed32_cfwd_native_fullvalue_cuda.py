@@ -120,11 +120,14 @@ def test_resource_contract_maps_each_key_group_to_one_cta(batch: int) -> None:
     assert contract["fp32_register_state_elements_per_thread"] == 32
     assert contract["fp32_shared_state_elements_per_thread"] == 0
     assert contract["precomputed_step_capacity"] == 12
-    assert contract["precomputed_steps_per_wave"] == 4
-    assert contract["precompute_waves"] == 3
+    assert contract["normalization_warps"] == 12
+    assert contract["precomputed_steps_per_wave"] == 12
+    assert contract["precompute_waves"] == 1
+    assert contract["normalization_key_values_per_lane"] == 4
+    assert contract["normalization_cta_barriers"] == 1
     assert contract["normalized_k_shared_elements"] == 12 * 128
-    assert contract["norm_partial_shared_elements"] == 16
-    assert contract["inverse_norm_shared_elements"] == 4
+    assert contract["norm_partial_shared_elements"] == 0
+    assert contract["inverse_norm_shared_elements"] == 0
     assert contract["precomputed_node_shared_elements"] == 12
     assert contract["precomputed_gate_scalar_shared_elements"] == 72
     assert contract["event_gate_scalar_elements"] == 0
@@ -132,7 +135,7 @@ def test_resource_contract_maps_each_key_group_to_one_cta(batch: int) -> None:
         "native_incumbent_equivalent_lowering"
     )
     assert contract["native_gate_transcendentals_per_active_scalar"] == 3
-    assert contract["static_shared_bytes_source_model"] == 6_568
+    assert contract["static_shared_bytes_source_model"] == 6_488
     assert contract["k_hbm_vector_loads_per_cta_step"] == 1
     assert contract["k_norms_per_cta_step"] == 1
     assert contract["duplicate_value_head_k_loads_per_key_head_step"] == 0
@@ -387,43 +390,45 @@ def test_launch_rejects_unqualified_or_non_source_selection() -> None:
             )
 
 
-def test_cuda_source_precomputes_four_steps_per_wave_without_shared_state() -> None:
+def test_cuda_source_maps_one_step_to_each_normalization_warp() -> None:
     source = CUDA_SOURCE.read_text(encoding="utf-8")
     assert "constexpr int kPrecomputedSteps = kMaxAcceptedLength + 1;" in source
     assert "constexpr int kWarpsPerBlock = 16;" in source
     assert "static_assert(kThreadsPerBlock == 512);" in source
     assert "static_assert(kValuesPerWarp == 8);" in source
     assert "static_assert(kStateElementsPerThread == 32);" in source
-    assert "static_assert(kStepsPerWave == 4);" in source
-    assert "static_assert(kPrecomputeWaves == 3);" in source
-    assert "static_assert(kSharedBytes == 6568);" in source
+    assert "static_assert(kNormalizationWarps == 12);" in source
+    assert "static_assert(kNormalizationWarps <= kWarpsPerBlock);" in source
+    assert "static_assert(kSharedBytes == 6488);" in source
     assert "__launch_bounds__(kThreadsPerBlock, 2)" in source
     assert "float state[kValuesPerWarp][kKeyQuads];" in source
     assert "__shared__ float shared_state" not in source
     assert "const int key_head = blockIdx.x % kKeyHeads;" in source
     assert "__shared__ float normalized_ks[kPrecomputedSteps][kDimK];" in source
-    assert "__shared__ float norm_partials[kStepsPerWave]" in source
-    assert "__shared__ float inverse_norms[kStepsPerWave];" in source
+    assert "norm_partials" not in source
+    assert "inverse_norms" not in source
     assert "__shared__ float recurrence_scalars[kPrecomputedSteps]" in source
     assert "__shared__ int32_t shared_nodes[kPrecomputedSteps];" in source
     assert "const int gate_task_count = steps * kHeadGroup;" in source
-    assert "const int step_slot = warp / kNormPartialWarps;" in source
-    assert "const int norm_warp = warp % kNormPartialWarps;" in source
-    assert "for (int wave = 0; wave < kPrecomputeWaves; ++wave)" in source
-    assert "const bool active_step = step < steps;" in source
+    assert "const int normalization_step = warp;" in source
+    assert "if (normalization_step < steps)" in source
+    assert "float step_keys[kKeyQuads];" in source
+    assert "float step_partials[kKeyQuads];" in source
     assert source.count("const float key_value = load_bf16(k_rings + key_offset)") == 1
-    assert source.count("norm = triton_butterfly_four_sum(norm);") == 1
-    assert "normalized_ks[step][key_index] = __fmul_rn(" in source
+    assert source.count("triton_butterfly_product_sum(key_value, key_value)") == 1
+    assert "__fadd_rn(step_partials[0], step_partials[2])" in source
+    assert "__fadd_rn(step_partials[1], step_partials[3])" in source
+    assert "__shfl_sync(kFullWarpMask, inverse_norm, 0)" in source
+    assert "normalized_ks[normalization_step][key_index]" in source
     assert "#pragma unroll 1" in source
     assert "for (int local_value_head = 0; local_value_head < kHeadGroup;" in source
     assert "kLayers * batch_size * kKeyHeads" in source
-    assert source.count("__syncthreads();") == 5
-    wave_loop = source[
-        source.index("for (int wave = 0; wave < kPrecomputeWaves; ++wave)") :
+    assert source.count("__syncthreads();") == 3
+    normalization = source[
+        source.index("const int normalization_step = warp;") :
         source.index("// Publish every immutable normalized K row")
     ]
-    assert wave_loop.count("__syncthreads();") == 2
-    assert "inverse_norms[step_slot]" in wave_loop
+    assert "__syncthreads();" not in normalization
 
 
 def test_cuda_source_preserves_ordered_active_recurrence_and_fp32_store() -> None:
@@ -472,7 +477,7 @@ def test_cuda_source_pins_incumbent_reduction_and_fused_gate_order() -> None:
     assert 'asm volatile("div.full.f32 %0, %1, %2;"' in source
     helper = source[
         source.index("float triton_butterfly_product_sum"):
-        source.index("float triton_butterfly_four_sum")
+        source.index("float softplus")
     ]
     assert "const float product = __fmul_rn(lhs, rhs);" in helper
     assert "__shfl_xor_sync(kFullWarpMask, product, 16)" in helper
@@ -509,7 +514,7 @@ def test_cuda_source_loads_root_nodes_and_precomputed_three_head_gates() -> None
     assert "gate_coeffs[gate_offset + 1]" in precompute
     assert "triton_exp(decay)" in precompute
     assert precompute.index("recurrence_scalars") < precompute.index(
-        "for (int wave = 0;"
+        "const int normalization_step = warp;"
     )
 
 
@@ -528,7 +533,7 @@ def _codegen_fixture(checker) -> tuple[str, str]:
 arch = sm_121a
 Resource usage:
  Function mangled_{checker.KERNEL_MARKER}_symbol:
-  REG:64 STACK:0 SHARED:7592 LOCAL:0 CONSTANT[0]:1084
+  REG:64 STACK:0 SHARED:7512 LOCAL:0 CONSTANT[0]:1084
 """
     sass_lines = []
     for opcode, count in checker.EXPECTED_SASS_COUNTS.items():

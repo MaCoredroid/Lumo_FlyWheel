@@ -25,14 +25,9 @@ constexpr int kThreadsPerBlock = kWarpsPerBlock * 32;
 constexpr int kValuesPerWarp = kDimV / kWarpsPerBlock;
 constexpr int kKeyQuads = kDimK / 32;
 constexpr int kStateElementsPerThread = kValuesPerWarp * kKeyQuads;
-constexpr int kNormPartialWarps = kDimK / 32;
-constexpr int kStepsPerWave = kWarpsPerBlock / kNormPartialWarps;
-constexpr int kPrecomputeWaves =
-    (kPrecomputedSteps + kStepsPerWave - 1) / kStepsPerWave;
+constexpr int kNormalizationWarps = kPrecomputedSteps;
 constexpr int kSharedBytes =
     kPrecomputedSteps * kDimK * sizeof(float) +
-    kStepsPerWave * kNormPartialWarps * sizeof(float) +
-    kStepsPerWave * sizeof(float) +
     kPrecomputedSteps * kHeadGroup * 2 * sizeof(float) +
     kPrecomputedSteps * sizeof(int32_t) + 2 * sizeof(int32_t);
 constexpr unsigned kFullWarpMask = 0xffffffffu;
@@ -44,10 +39,9 @@ static_assert(kThreadsPerBlock == 512);
 static_assert(kValuesPerWarp == 8);
 static_assert(kKeyQuads == 4);
 static_assert(kStateElementsPerThread == 32);
-static_assert(kNormPartialWarps == 4);
-static_assert(kStepsPerWave == 4);
-static_assert(kPrecomputeWaves == 3);
-static_assert(kSharedBytes == 6568);
+static_assert(kNormalizationWarps == 12);
+static_assert(kNormalizationWarps <= kWarpsPerBlock);
+static_assert(kSharedBytes == 6488);
 
 __device__ __forceinline__ float load_bf16(const __nv_bfloat16* pointer) {
   return __bfloat162float(*pointer);
@@ -91,13 +85,6 @@ __device__ __forceinline__ float triton_butterfly_product_sum(float lhs,
   return value;
 }
 
-__device__ __forceinline__ float triton_butterfly_four_sum(float value) {
-  value = __fadd_rn(value,
-                    __shfl_xor_sync(kFullWarpMask, value, 2));
-  return __fadd_rn(value,
-                   __shfl_xor_sync(kFullWarpMask, value, 1));
-}
-
 __device__ __forceinline__ float softplus(float value) {
   return value <= 20.0f
              ? logf(__fadd_rn(1.0f, triton_exp(value)))
@@ -124,8 +111,6 @@ void fixed32_cfwd_native_fullvalue_kernel(
     int64_t ring_ab_node_stride, int64_t spec_layer_stride,
     int64_t spec_batch_stride, int batch_size) {
   __shared__ float normalized_ks[kPrecomputedSteps][kDimK];
-  __shared__ float norm_partials[kStepsPerWave][kNormPartialWarps];
-  __shared__ float inverse_norms[kStepsPerWave];
   __shared__ float recurrence_scalars[kPrecomputedSteps][kHeadGroup][2];
   __shared__ int32_t shared_nodes[kPrecomputedSteps];
   __shared__ int32_t shared_steps;
@@ -182,44 +167,42 @@ void fixed32_cfwd_native_fullvalue_kernel(
   }
   __syncthreads();
 
-  const int step_slot = warp / kNormPartialWarps;
-  const int norm_warp = warp % kNormPartialWarps;
+  // One warp owns each step. Four values per lane preserve the incumbent
+  // K128 reduction tree without cross-warp scratch or wave barriers.
+  const int normalization_step = warp;
+  if (normalization_step < steps) {
+    float step_keys[kKeyQuads];
+    float step_partials[kKeyQuads];
 #pragma unroll
-  for (int wave = 0; wave < kPrecomputeWaves; ++wave) {
-    const int step = wave * kStepsPerWave + step_slot;
-    const bool active_step = step < steps;
-    float warp_partial = 0.0f;
-    if (active_step) {
-      const int key_index = norm_warp * 32 + lane;
+    for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
+      const int key_index = lane + key_quad * 32;
       const int64_t key_offset =
           static_cast<int64_t>(layer) * ring_k_layer_stride +
           static_cast<int64_t>(request) * ring_k_batch_stride +
-          static_cast<int64_t>(shared_nodes[step]) * ring_k_node_stride +
+          static_cast<int64_t>(shared_nodes[normalization_step]) *
+              ring_k_node_stride +
           static_cast<int64_t>(key_head) * kDimK + key_index;
       const float key_value = load_bf16(k_rings + key_offset);
-      normalized_ks[step][key_index] = key_value;
-      warp_partial = triton_butterfly_product_sum(key_value, key_value);
+      step_keys[key_quad] = key_value;
+      step_partials[key_quad] =
+          triton_butterfly_product_sum(key_value, key_value);
     }
-    if (active_step && lane == 0) {
-      norm_partials[step_slot][norm_warp] = warp_partial;
-    }
-    __syncthreads();
 
-    if (active_step && norm_warp == 0) {
-      float norm = lane < kNormPartialWarps
-                       ? norm_partials[step_slot][lane]
-                       : 0.0f;
-      norm = triton_butterfly_four_sum(norm);
-      if (lane == 0) {
-        inverse_norms[step_slot] =
-            triton_rsqrt(__fadd_rn(norm, 1.0e-6f));
-      }
+    float inverse_norm = 0.0f;
+    if (lane == 0) {
+      const float partial02 =
+          __fadd_rn(step_partials[0], step_partials[2]);
+      const float partial13 =
+          __fadd_rn(step_partials[1], step_partials[3]);
+      inverse_norm = triton_rsqrt(
+          __fadd_rn(__fadd_rn(partial02, partial13), 1.0e-6f));
     }
-    __syncthreads();
-    if (active_step) {
-      const int key_index = norm_warp * 32 + lane;
-      normalized_ks[step][key_index] = __fmul_rn(
-          normalized_ks[step][key_index], inverse_norms[step_slot]);
+    inverse_norm = __shfl_sync(kFullWarpMask, inverse_norm, 0);
+#pragma unroll
+    for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
+      const int key_index = lane + key_quad * 32;
+      normalized_ks[normalization_step][key_index] =
+          __fmul_rn(step_keys[key_quad], inverse_norm);
     }
   }
   // Publish every immutable normalized K row before recurrence warps consume it.

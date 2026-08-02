@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 
-CANDIDATE = "fixed32_cfwd_native_keygroup_fused_gate_suffix_zero_cuda_v6"
+CANDIDATE = "fixed32_cfwd_native_keygroup_warpstep_cuda_v7"
 SELECTOR_ENV = "FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA"
 SELECTOR_VALUE = "diagnostic"
 FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
@@ -18,21 +18,21 @@ OPERATOR = "_C::fr13_fixed32_cfwd_native_fullvalue"
 BINARY_BINDING_SCHEMA = "fr13.fixed32.cfwd_native_keygroup_binary.v1"
 CUDA_SOURCE_PATH = "native/fr13_fixed32_cfwd_native_fullvalue.cu"
 CUDA_SOURCE_SHA256 = (
-    "6d75ac0685641f5433592c9a39ce6584f676980cc472c5a39e6a23d4a6d5e814"
+    "e022acdefdd045fe08407c222a3b8b56eb6caac7f5e929e3ce1190dbbda3fc9d"
 )
 PATCHER_SOURCE_PATH = "scripts/fr13_patch_vllm_cfwd_native_fullvalue_cuda.py"
 PATCHER_SOURCE_SHA256 = (
-    "20486b544265016fd4e50dac9bcb20633d33dc9a95aeb8ec991ca1f5712e500d"
+    "3c34f710838a272e2b3777c1d7d858fec5af217b8d410e6ba300f4429fb00ab0"
 )
 PATCHED_VLLM_SHA256 = {
     "CMakeLists.txt": (
-        "6c7a6f3f7f318e43ff1fd830bade20f9dc9e4e680a170834bf3ae62a463c319f"
+        "51693b25fb4cc56734d8102be28e4c892aecc4e98e18eab8fe48ed0af109ff16"
     ),
     "csrc/ops.h": (
-        "e506ccbf98ff5c3b5e3b69b044b55de80415f529ea9257a29db49cd00b630ae2"
+        "bcbaf7aae9b331584b1e3fb50897329aa26339a8588bf4c623da33348db3538f"
     ),
     "csrc/torch_bindings.cpp": (
-        "48c8c3e6b579cdac3c80bbf8de128c53d54f709ed98b5aff325a2c042b5874db"
+        "ffae2ccd54b9c06f522255e0088ba481a055662ee179bf0b12243941b486827a"
     ),
     "csrc/fr13_fixed32_cfwd_native_fullvalue.cu": CUDA_SOURCE_SHA256,
 }
@@ -288,17 +288,20 @@ def resource_contract(batch_size: int) -> dict[str, object]:
         "fp32_register_state_elements_per_thread": 32,
         "fp32_shared_state_elements_per_thread": 0,
         "precomputed_step_capacity": 12,
-        "precomputed_steps_per_wave": 4,
-        "precompute_waves": 3,
+        "normalization_warps": 12,
+        "precomputed_steps_per_wave": 12,
+        "precompute_waves": 1,
+        "normalization_key_values_per_lane": 4,
+        "normalization_cta_barriers": 1,
         "normalized_k_shared_elements": 12 * 128,
-        "norm_partial_shared_elements": 4 * 4,
-        "inverse_norm_shared_elements": 4,
+        "norm_partial_shared_elements": 0,
+        "inverse_norm_shared_elements": 0,
         "precomputed_node_shared_elements": 12,
         "precomputed_gate_scalar_shared_elements": 12 * 3 * 2,
         "event_gate_scalar_elements": 0,
         "event_gate_scalar_math": "native_incumbent_equivalent_lowering",
         "native_gate_transcendentals_per_active_scalar": 3,
-        "static_shared_bytes_source_model": 6_568,
+        "static_shared_bytes_source_model": 6_488,
         "k_hbm_vector_loads_per_cta_step": 1,
         "k_norms_per_cta_step": 1,
         "duplicate_value_head_k_loads_per_key_head_step": 0,
