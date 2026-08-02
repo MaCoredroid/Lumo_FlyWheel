@@ -1,0 +1,26 @@
+Fixed32 B4 FA2 qrow32 carried-page SM121a verification (2026-08-02 UTC)
+
+focused_command:
+  python3 -m pytest -q
+  tests/test_fr13_fa2_tree_kernel_candidates.py
+  tests/test_fr13_fa2_qrow32_gate.py
+  tests/test_fr13_fa2_qrow32_static_gate.py
+
+focused_result=29_passed_0_failed
+python_byte_compile=PASS
+candidate_single_sm121a_cubin=PASS
+candidate_resource_parser=PASS
+candidate_ptxas_stack_spill_parser=PASS
+candidate_sass_local_memory_parser=PASS
+candidate_registers=255
+candidate_stack_bytes=0
+candidate_local_bytes=0
+candidate_spill_stores=0
+candidate_spill_loads=0
+candidate_sass_ldl=0
+candidate_sass_stl=0
+candidate_sass_call=0
+git_diff_check=PASS
+gpu_used=false
+real_swe_task_used=false
+timing_used=false
