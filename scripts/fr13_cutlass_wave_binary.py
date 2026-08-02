@@ -101,6 +101,7 @@ def _verify_production_qualification(
     patch_source: Path,
     selector: str,
     fixed32_mode: str,
+    draft_vocab_blocks: Path | None = None,
 ) -> dict[str, object]:
     if selector not in {
         "streamk_coop128",
@@ -114,6 +115,8 @@ def _verify_production_qualification(
         import fr13_cutlass_streamk_pass as qualification
 
     kwargs = {"fixed32_mode": fixed32_mode} if selector == "persistent_b4_m128" else {}
+    if selector == "persistent_b4_m128" and draft_vocab_blocks is not None:
+        kwargs["draft_vocab_blocks"] = draft_vocab_blocks
     return qualification.verify_sidecar(
         sidecar,
         expected_sidecar_sha256,
@@ -134,6 +137,7 @@ def install_candidate(
     expected_production_sidecar_sha256: str | None = None,
     patch_source: Path = Path("scripts/fr13_patch_cutlass_fixed32_wave.py"),
     fixed32_mode: str = "hydra27_fixed32",
+    draft_vocab_blocks: Path | None = None,
 ) -> dict[str, object]:
     if selector not in CANDIDATE_SELECTORS:
         raise ValueError(f"unsupported candidate selector: {selector!r}")
@@ -156,6 +160,7 @@ def install_candidate(
             patch_source,
             selector,
             fixed32_mode,
+            draft_vocab_blocks,
         )
         qualification = {
             "sidecar_sha256": expected_production_sidecar_sha256,
@@ -263,6 +268,7 @@ def main() -> int:
         type=Path,
         default=Path("scripts/fr13_patch_cutlass_fixed32_wave.py"),
     )
+    install_parser.add_argument("--draft-vocab-blocks", type=Path)
     args = parser.parse_args()
 
     if args.command == "verify":
@@ -277,6 +283,7 @@ def main() -> int:
             expected_production_sidecar_sha256=(args.expected_production_pass_sha256),
             patch_source=args.patch_source,
             fixed32_mode=args.fixed32_mode,
+            draft_vocab_blocks=args.draft_vocab_blocks,
         )
     print(json.dumps(payload, ensure_ascii=True, sort_keys=True))
     return 0

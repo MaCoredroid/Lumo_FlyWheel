@@ -2840,7 +2840,8 @@ if [[ "\${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ]]; then
       --production-pass-sidecar "\$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR" \
       --expected-production-pass-sha256 "\$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256" \
       --fixed32-mode "\$FR13_FIXED32_MODE" \
-      --patch-source /workspace/scripts/fr13_patch_cutlass_fixed32_wave.py
+      --patch-source /workspace/scripts/fr13_patch_cutlass_fixed32_wave.py \
+      --draft-vocab-blocks "\$FR13_DRAFT_VOCAB_BLOCKS"
   else
     python3 /workspace/scripts/fr13_cutlass_wave_binary.py install \
       --source /tmp/fr13_cutlass_wave.abi3.so \

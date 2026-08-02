@@ -319,6 +319,7 @@ def test_k64_root_profile_is_bound_through_gate_timing_and_launcher() -> None:
     assert "phase components exceed full-step wall time" in timing_math
     assert "phase breakdown does not reconcile" in timing_math
     assert "qualified_draft_vocab_blocks_sha256" in binary
+    assert '--draft-vocab-blocks "\\$FR13_DRAFT_VOCAB_BLOCKS"' in launcher
     assert (
         "-e FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="
         '"$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"'

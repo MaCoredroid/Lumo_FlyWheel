@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -155,6 +157,37 @@ def test_direct_selector_requires_and_binds_production_qualification(
         "sidecar_sha256": "d" * 64,
         **qualification,
     }
+
+
+def test_b4_production_verifier_uses_explicit_block_map(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    observed: dict[str, object] = {}
+
+    def verify_sidecar(*args: object, **kwargs: object) -> dict[str, object]:
+        observed.update(kwargs)
+        return {}
+
+    monkeypatch.setitem(
+        sys.modules,
+        "fr13_cutlass_b4_pass",
+        types.SimpleNamespace(verify_sidecar=verify_sidecar),
+    )
+    block_map = tmp_path / "fr13_dvk_subset_blocks.json"
+
+    module._verify_production_qualification(
+        tmp_path / "pass.json",
+        "a" * 64,
+        tmp_path / "candidate.so",
+        tmp_path / "patch.py",
+        "persistent_b4_m128",
+        "tail6_fixed32",
+        block_map,
+    )
+
+    assert observed["fixed32_mode"] == "tail6_fixed32"
+    assert observed["draft_vocab_blocks"] == block_map
 
 
 def test_verify_rejects_symlink(
