@@ -1,0 +1,62 @@
+{
+  "candidate": "fixed32_sfwd_channel_serial_r32_b1c128w4_bxc256w8_u32x2_v1",
+  "classification": "offline_codegen_only",
+  "source_commit": "5b101cbef5a57cf34b359457f69768fcedb186fd",
+  "source_hashes": {
+    "launcher_sha256": "76228e4dd79d7c86bb5603e30302d147c10ade5f4d22215e09d287ebb86db5b1",
+    "kernel_sha256": "5865f87a9682d29f7caeba31e4ddabbc670118b22f0639e7e264fabb7f7f55aa",
+    "gate_sha256": "96e4a5560fa834418f513a38cc2d9bf0fad6500abf97825b90d3f2ae0e98c609",
+    "runner_sha256": "8039ac57cb16631c38917a6cbaa956db84a709e74b531ee9aaab03af61a56892"
+  },
+  "kernel_function_sha256": "cac6e3ee0a72ee1b5e992999d01e157722d0404ee7ce048bf18b7799f56d7514",
+  "schedules": {
+    "b1": {
+      "block_c": 128,
+      "num_warps": 4,
+      "ctas_per_request": 80,
+      "ctas_per_launch": 80,
+      "registers": 60,
+      "static_sass_instructions": 903,
+      "encoded_sass_instructions": 920,
+      "ldg": 38,
+      "stg": 68,
+      "cubin_bytes": 63496,
+      "compile_hash": "daa94bce3adbf6a15deb274a64c3492496e760acc63dc1617bd7213633b77a8e",
+      "cubin_sha256": "c7346664f8402e12c4c0781d2b53c8ab00b853ddd6f0a47920449b846ac4caec",
+      "sass_sha256": "f15475038c07630c44cc4cd93ef6a9459ee321ef7967c3f04ccaa39faccbb6d0",
+      "ptx_sha256": "e69de3803d7d253e325fee8a97d67e5d48cf27caf585f0d9b3ef4cc4067f9c73"
+    },
+    "b4": {
+      "block_c": 256,
+      "num_warps": 8,
+      "ctas_per_request": 40,
+      "ctas_per_launch": 160,
+      "registers": 64,
+      "static_sass_instructions": 888,
+      "encoded_sass_instructions": 904,
+      "ldg": 38,
+      "stg": 68,
+      "cubin_bytes": 62856,
+      "compile_hash": "81ee70940868e8aedb4f9645dba6596f11264f11abb764b93a83d0debd0fc4d8",
+      "cubin_sha256": "aa1159d436183993c2fa736b7b1507862f33cbc20dd3936382a953dea16f8c76",
+      "sass_sha256": "c070f3a56dfad2acc487148d474ebae31541b22732d22b8284b9c4fa1e8c2abb",
+      "ptx_sha256": "fa7dbe13a34bdb901dabfa78fe8ae0236db875d0f3eb025ebd01784c5c773e0f"
+    }
+  },
+  "common_zero_resources": {
+    "bar": 0,
+    "calls": 0,
+    "elf_shared_bytes": 0,
+    "launch_shared_bytes": 0,
+    "ldl": 0,
+    "lds": 0,
+    "local_bytes": 0,
+    "stack_bytes": 0,
+    "stl": 0,
+    "sts": 0
+  },
+  "fresh_cache_results_identical": true,
+  "performance_claim": false,
+  "real_task_gate_required": true,
+  "production_eligible": false
+}
