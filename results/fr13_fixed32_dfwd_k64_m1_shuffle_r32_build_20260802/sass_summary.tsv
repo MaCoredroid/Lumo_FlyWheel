@@ -1,0 +1,2 @@
+encoded_including_nop	nop	operational	ldg_u16	stg_u16	shuffle_down	fadd	ffma_static	bf16_conversion	barrier	local_load_store	calls	atomics
+64	14	50	2	1	4	4	2	1	0	0	0	0

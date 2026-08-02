@@ -1,0 +1,10 @@
+5 focused source tests passed
+python compile: pass
+Ruff: pass
+git diff --check: pass
+pinned sm_121a compile and link: pass
+extension registration: pass
+resource audit: pass
+SASS audit: pass
+GPU runtime: not run
+real SWE-Verified task: not run
