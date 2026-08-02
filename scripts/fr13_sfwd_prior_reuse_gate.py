@@ -16,7 +16,7 @@ from typing import Any
 
 
 CANDIDATE = (
-    "fixed32_sfwd_priorpair_quad_xgather_fixedstrides_tapmask_r32_c64_w16_v1"
+    "fixed32_sfwd_priorpair_quad_xgather_fixedstrides_tapmask_pairgather_r32_c64_w16_v1"
 )
 SOURCE_SCHEMA = "fr13.fixed32.sfwd_prior_reuse.source_manifest.v1"
 REFERENCE_GDN_SOURCE_SHA256 = (

@@ -100,7 +100,7 @@ def test_contract_closes_row32_c64_for_b1_b4() -> None:
         assert contract["source_descriptor_device_validation"] is False
         assert contract["source_descriptor_launcher_argument"] is False
         assert contract["candidate"] == (
-            "fixed32_sfwd_priorpair_quad_xgather_fixedstrides_tapmask_r32_c64_w16_v1"
+            "fixed32_sfwd_priorpair_quad_xgather_fixedstrides_tapmask_pairgather_r32_c64_w16_v1"
         )
     for geometry in ((0, 32, 4, 34), (1, 31, 4, 34), (1, 32, 3, 34)):
         with pytest.raises(ValueError):
@@ -250,11 +250,14 @@ def test_launcher_uses_packed_xgather_kernel_and_exact_layout() -> None:
     )
     launcher = _function_source("launch_fixed32_sfwd_prior_reuse")
     assert kernel.index("prior_pair = tl.load(") < kernel.index(
-        "for tap in tl.static_range(0, WIDTH - 2):"
+        "paired_x = tl.gather(current_x, paired_index, axis=0)"
     )
-    assert "from_prior = offs_n < 9" in kernel
-    assert "from_prior = offs_n < 4" in kernel
+    assert "value_0 = tl.where(offs_n < 9" in kernel
+    assert "value_1 = tl.where(offs_n < 4" in kernel
     assert "from_prior = offs_n == 0" in kernel
+    assert kernel.index("acc = acc + product_0") < kernel.index(
+        "acc = acc + product_1"
+    )
     assert "tl.gather(current_x, current_index, axis=0)" in kernel
     assert "current_value * current_weight" in kernel
     assert "current_x * current_weight" not in kernel

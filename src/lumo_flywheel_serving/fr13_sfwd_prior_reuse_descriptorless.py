@@ -622,31 +622,44 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
     if HAS_BIAS:
         acc = tl.load(bias + offs_c).to(tl.float32)
 
+    x_node_0 = tl.maximum(source_0 - (WIDTH - 1), 0)
+    x_node_1 = tl.maximum(source_1 - (WIDTH - 1), 0)
+    x_index_0 = tl.broadcast_to(x_node_0, ROWS_PER_PROGRAM, BLOCK_C)
+    x_index_1 = tl.broadcast_to(x_node_1, ROWS_PER_PROGRAM, BLOCK_C)
+    paired_index = tl.reshape(
+        tl.permute(tl.join(x_index_0, x_index_1), (2, 0, 1)),
+        (2 * ROWS_PER_PROGRAM, BLOCK_C),
+        can_reorder=False,
+    )
+    paired_x = tl.gather(current_x, paired_index, axis=0)
+    paired_x = tl.permute(
+        tl.reshape(
+            paired_x,
+            (2, ROWS_PER_PROGRAM, BLOCK_C),
+            can_reorder=False,
+        ),
+        (1, 2, 0),
+    )
+    x_value_0, x_value_1 = tl.split(paired_x)
+
     weight_quad = tl.load(weight_channels.to(tl.pointer_type(tl.uint64)))
-    for tap in tl.static_range(0, WIDTH - 2):
-        source_row = tl.where(
-            tap == 0,
-            source_0,
-            source_1,
-        )
-        if tap == 0:
-            from_prior = offs_n < 9
-            prior_value = tl.where(
-                offs_n == 0,
-                prior_0,
-                tl.where(offs_n < 4, prior_1, prior_2),
-            )
-        else:
-            from_prior = offs_n < 4
-            prior_value = tl.where(offs_n == 0, prior_1, prior_2)
-        x_node = tl.maximum(source_row - (WIDTH - 1), 0)
-        x_index = tl.broadcast_to(x_node, ROWS_PER_PROGRAM, BLOCK_C)
-        x_value = tl.gather(current_x, x_index, axis=0)
-        value = tl.where(from_prior, prior_value, x_value).to(tl.bfloat16)
-        weight_bits = (weight_quad >> (tap << 4)).to(tl.uint16)
-        weight = weight_bits.to(tl.bfloat16, bitcast=True)
-        product = (value * weight).to(tl.bfloat16).to(tl.float32)
-        acc = acc + product
+    prior_value_0 = tl.where(
+        offs_n == 0,
+        prior_0,
+        tl.where(offs_n < 4, prior_1, prior_2),
+    )
+    value_0 = tl.where(offs_n < 9, prior_value_0, x_value_0).to(tl.bfloat16)
+    weight_0_bits = weight_quad.to(tl.uint16)
+    weight_0 = weight_0_bits.to(tl.bfloat16, bitcast=True)
+    product_0 = (value_0 * weight_0).to(tl.bfloat16).to(tl.float32)
+    acc = acc + product_0
+
+    prior_value_1 = tl.where(offs_n == 0, prior_1, prior_2)
+    value_1 = tl.where(offs_n < 4, prior_value_1, x_value_1).to(tl.bfloat16)
+    weight_1_bits = (weight_quad >> 16).to(tl.uint16)
+    weight_1 = weight_1_bits.to(tl.bfloat16, bitcast=True)
+    product_1 = (value_1 * weight_1).to(tl.bfloat16).to(tl.float32)
+    acc = acc + product_1
 
     source_row = source_2
     from_prior = offs_n == 0

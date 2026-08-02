@@ -29,7 +29,7 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
 
 
 CANDIDATE = (
-    "fixed32_sfwd_priorpair_quad_xgather_fixedstrides_tapmask_r32_c64_w16_v1"
+    "fixed32_sfwd_priorpair_quad_xgather_fixedstrides_tapmask_pairgather_r32_c64_w16_v1"
 )
 ROWS_PER_PROGRAM = 32
 BLOCK_C = 64

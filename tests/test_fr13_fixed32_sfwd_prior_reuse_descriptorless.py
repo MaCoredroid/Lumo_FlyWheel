@@ -149,6 +149,32 @@ def test_fixed_topology_prior_masks_match_every_source_row() -> None:
     assert sources[0][2] == 2
 
 
+def test_paired_local_gather_preserves_tap_zero_then_tap_one_rows() -> None:
+    current_x = torch.arange(FIXED32_ROWS * 64).reshape(FIXED32_ROWS, 64)
+    sources = fixed32_descriptorless_sources()
+    index_0 = torch.tensor(
+        [max(source[0] - (CONV_WIDTH - 1), 0) for source in sources]
+    )[:, None].expand(FIXED32_ROWS, 64)
+    index_1 = torch.tensor(
+        [max(source[1] - (CONV_WIDTH - 1), 0) for source in sources]
+    )[:, None].expand(FIXED32_ROWS, 64)
+
+    paired_index = (
+        torch.stack((index_0, index_1), dim=-1)
+        .permute(2, 0, 1)
+        .reshape(2 * FIXED32_ROWS, 64)
+    )
+    paired_x = (
+        torch.gather(current_x, 0, paired_index)
+        .reshape(2, FIXED32_ROWS, 64)
+        .permute(1, 2, 0)
+    )
+    paired_0, paired_1 = paired_x.unbind(dim=-1)
+
+    assert torch.equal(paired_0, torch.gather(current_x, 0, index_0))
+    assert torch.equal(paired_1, torch.gather(current_x, 0, index_1))
+
+
 def test_descriptor_pointer_is_absent_from_kernel_contract() -> None:
     module_path = Path(
         sys.modules[
@@ -316,19 +342,52 @@ def test_packed_xgather_loads_current_x_once_and_reuses_it() -> None:
     assert fragment is not None
     assert fragment.count("tl.load(x_batch") == 1
     assert fragment.count("tl.gather(current_x,") == 3
+    assert "tl.gather(current_x, paired_index, axis=0)" in fragment
     assert "tl.gather(current_x, x_index, axis=0)" in fragment
     assert "tl.broadcast_to(x_node, ROWS_PER_PROGRAM, BLOCK_C)" in fragment
     assert "offs_n - pid_n_base, ROWS_PER_PROGRAM, BLOCK_C" in fragment
     assert "tl.gather(current_x, current_index, axis=0)" in fragment
     assert "current_value * current_weight" in fragment
     assert "current_x * current_weight" not in fragment
-    assert fragment.index("for tap in tl.static_range(0, WIDTH - 2):") < (
-        fragment.index("current_index = tl.broadcast_to(")
+    assert "for tap in tl.static_range(0, WIDTH - 2):" not in fragment
+    assert fragment.index("product_0 =") < fragment.index("acc = acc + product_0")
+    assert fragment.index("acc = acc + product_0") < fragment.index("product_1 =")
+    assert fragment.index("product_1 =") < fragment.index("acc = acc + product_1")
+    assert fragment.index("acc = acc + product_1") < fragment.index(
+        "current_index = tl.broadcast_to("
     )
     assert fragment.index("current_product =") < fragment.index(
         "acc = acc + current_product"
     )
     assert "((WIDTH - 1) + offs_n) * C" in fragment
+
+
+def test_packed_xgather_pairs_only_local_rows_without_global_address_drift() -> None:
+    module_path = Path(
+        sys.modules[
+            "lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless"
+        ].__file__
+    )
+    source = module_path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    kernel = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel"
+    )
+    fragment = ast.get_source_segment(source, kernel)
+
+    assert fragment is not None
+    assert "tl.permute(tl.join(x_index_0, x_index_1), (2, 0, 1))" in fragment
+    assert "(2 * ROWS_PER_PROGRAM, BLOCK_C)" in fragment
+    assert fragment.count("can_reorder=False") == 2
+    assert "x_value_0, x_value_1 = tl.split(paired_x)" in fragment
+    assert fragment.count(
+        "tl.load(x_batch + offs_n * X_STRIDE_ROW + offs_c)"
+    ) == 1
+    assert fragment.count("tl.store(out_batch + offs_n * C + offs_c") == 1
+    assert fragment.count("((WIDTH - 1) + offs_n) * C") == 1
 
 
 def test_packed_xgather_loads_contiguous_weights_as_exact_pairs() -> None:
@@ -349,10 +408,12 @@ def test_packed_xgather_loads_contiguous_weights_as_exact_pairs() -> None:
 
     assert fragment is not None
     assert fragment.count("tl.pointer_type(tl.uint64)") == 1
-    assert "weight_quad >> (tap << 4)" in fragment
+    assert "weight_0_bits = weight_quad.to(tl.uint16)" in fragment
+    assert "weight_quad >> 16" in fragment
     assert "weight_quad >> 32" in fragment
     assert "weight_quad >> 48" in fragment
-    assert "weight_bits.to(tl.bfloat16, bitcast=True)" in fragment
+    assert "weight_0_bits.to(tl.bfloat16, bitcast=True)" in fragment
+    assert "weight_1_bits.to(tl.bfloat16, bitcast=True)" in fragment
     assert "weight_2_bits.to(tl.bfloat16, bitcast=True)" in fragment
     assert "current_weight_bits.to(tl.bfloat16, bitcast=True)" in fragment
     assert "tl.load(weight_channels + tap)" not in fragment
@@ -407,9 +468,8 @@ def test_packed_xgather_specializes_prior_masks_to_fixed_topology() -> None:
     fragment = ast.get_source_segment(source, kernel)
 
     assert fragment is not None
-    assert "if tap == 0:" in fragment
-    assert "from_prior = offs_n < 9" in fragment
-    assert "from_prior = offs_n < 4" in fragment
+    assert "value_0 = tl.where(offs_n < 9" in fragment
+    assert "value_1 = tl.where(offs_n < 4" in fragment
     assert "from_prior = offs_n == 0" in fragment
     assert "tl.where(offs_n == 0, prior_1, prior_2)" in fragment
     assert "tl.where(from_prior, prior_2, x_value)" in fragment
