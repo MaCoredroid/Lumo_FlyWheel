@@ -75,7 +75,7 @@ def test_builder_is_pinned_default_off_and_claims_no_qualification() -> None:
     assert tree is not None
     source = BUILDER.read_text(encoding="ascii")
 
-    assert 'EXPECTED_TORCH = "2.10.0+cu130"' in source
+    assert 'EXPECTED_TORCH = "2.11.0+cu130"' in source
     assert 'EXPECTED_CUDA = "13.0"' in source
     assert 'EXPECTED_ARCH = "12.1a"' in source
     assert '"status": "BUILT_UNQUALIFIED"' in source

@@ -15,7 +15,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 SOURCE = REPO / "csrc" / "fr13_bf16_gemvx_k64_m1_shuffle.cu"
-EXPECTED_TORCH = "2.10.0+cu130"
+EXPECTED_TORCH = "2.11.0+cu130"
 EXPECTED_CUDA = "13.0"
 EXPECTED_ARCH = "12.1a"
 
