@@ -12,7 +12,7 @@ CUDA = REPO / "csrc" / "fr13_bf16_gemvx_k64_m1_shuffle.cu"
 BUILDER = REPO / "scripts" / "fr13_build_bf16_gemvx_k64_m1_shuffle.py"
 
 
-def test_cuda_source_is_strict_k64_m1_warp4_sharedx_pair8bits() -> None:
+def test_cuda_source_is_strict_k64_m1_warp4_globalx_pair8bits() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert "constexpr int kHidden = 5120;" in source
@@ -35,20 +35,14 @@ def test_cuda_source_is_strict_k64_m1_warp4_sharedx_pair8bits() -> None:
     assert "<<<kCtas, block, 0, at::cuda::getCurrentCUDAStream()>>>" in source
 
 
-def test_cta_stages_the_exact_hidden_vector_once() -> None:
+def test_each_warp_loads_one_hidden_octet_for_four_rows() -> None:
     source = CUDA.read_text(encoding="ascii")
 
-    assert "constexpr int kSharedInputBytes = kHidden * sizeof(__nv_bfloat16);" in source
-    assert "static_assert(kSharedInputBytes == 10240);" in source
-    assert "__shared__ __align__(16) uint4 shared_input_octets[kOctets];" in source
-    assert "const int thread = warp * kLanes + lane;" in source
-    assert (
-        "for (int octet = thread; octet < kOctets; "
-        "octet += kThreadsPerCta)" in source
-    )
-    assert "shared_input_octets[octet] = input_octets[octet];" in source
-    assert source.count("= input_octets[octet];") == 1
-    assert source.count("__syncthreads();") == 1
+    assert "const auto* input_octets = reinterpret_cast<const uint4*>(input);" in source
+    assert "const uint4 x = input_octets[octet];" in source
+    assert source.count("input_octets[octet]") == 1
+    assert "__shared__" not in source
+    assert "__syncthreads" not in source
     assert "extern __shared__" not in source
 
 
@@ -64,7 +58,7 @@ def test_each_warp_accumulates_four_rows_in_the_pair8_order() -> None:
             re.findall(rf"accumulator{row}\s*=\s*__fmaf_rn\(", source)
         ) == 8
         assert f"fr13_reduce_full_warp(accumulator{row}, lane)" in source
-    assert source.count("const uint4 x = shared_input_octets[octet];") == 1
+    assert source.count("const uint4 x = input_octets[octet];") == 1
     assert source.count("__uint_as_float(") == 40
     assert source.count("__shfl_down_sync(") == 5
     assert source.count("__fadd_rn(") == 5
@@ -84,14 +78,14 @@ def test_static_work_reduces_input_loads_and_warps_without_weight_duplication() 
     lane_iterations = octets // lanes
 
     baseline_input_loads_per_cta = baseline_warps_per_cta * lanes * lane_iterations
-    candidate_input_loads_per_cta = octets
+    candidate_input_loads_per_cta = candidate_warps_per_cta * lanes * lane_iterations
     candidate_weight_loads_per_cta = (
         candidate_warps_per_cta * rows_per_warp * lanes * lane_iterations
     )
 
     assert baseline_input_loads_per_cta == 20480
-    assert candidate_input_loads_per_cta == 640
-    assert baseline_input_loads_per_cta // candidate_input_loads_per_cta == 32
+    assert candidate_input_loads_per_cta == 5120
+    assert baseline_input_loads_per_cta // candidate_input_loads_per_cta == 4
     assert candidate_weight_loads_per_cta == 20480
     assert ctas * baseline_warps_per_cta == 65536
     assert ctas * candidate_warps_per_cta == 16384
@@ -111,14 +105,14 @@ def test_cuda_op_is_out_variant_with_strict_k64_geometry() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert (
-        "gemvx_m1_warp4_sharedx_pair8bits_out(Tensor(a!) output, "
+        "gemvx_m1_warp4_globalx_pair8bits_out(Tensor(a!) output, "
         "Tensor input, Tensor weight) -> ()" in source
     )
     assert "input.sizes() == at::IntArrayRef({1, kHidden})" in source
     assert "weight.sizes() == at::IntArrayRef({kVocab, kHidden})" in source
     assert "output.sizes() == at::IntArrayRef({1, kVocab})" in source
     assert "weight must be contiguous [65536,5120]" in source
-    assert "warp4 shared-x inputs must be 16-byte aligned" in source
+    assert "warp4 global-x inputs must be 16-byte aligned" in source
     assert "alignof(uint4)" in source
     assert "at::cuda::getCurrentCUDAStream()" in source
     assert "C10_CUDA_KERNEL_LAUNCH_CHECK();" in source
@@ -143,12 +137,12 @@ def test_builder_is_pinned_default_off_and_claims_no_qualification() -> None:
     assert '"production_default_enabled": False' in source
     assert '"grid": [2048, 1, 1]' in source
     assert '"block": [32, 8, 1]' in source
-    assert '"static_shared_bytes": 10240' in source
+    assert '"static_shared_bytes": 0' in source
     assert '"output_rows_per_cta": 32' in source
     assert '"warps_per_cta": 8' in source
     assert '"output_rows_per_warp": 4' in source
-    assert '"input_staging_loads_per_cta": 640' in source
-    assert '"lane_shared_input_iterations": 20' in source
+    assert '"input_global_loads_per_cta": 5120' in source
+    assert '"lane_input_global_iterations": 20' in source
     assert '"lane_weight_load_iterations": 80' in source
     assert '"lane_fma_iterations": 640' in source
     assert '"packed_unpack": "BF16 bits shifted/masked into exact FP32 bits"' in source

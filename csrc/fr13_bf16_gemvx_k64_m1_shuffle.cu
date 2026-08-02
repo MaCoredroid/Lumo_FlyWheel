@@ -21,7 +21,6 @@ constexpr int kThreadsPerCta = kLanes * kWarpsPerCta;
 constexpr int kCtas = kVocab / kRowsPerCta;
 constexpr int kElementsPerLoad = 8;
 constexpr int kOctets = kHidden / kElementsPerLoad;
-constexpr int kSharedInputBytes = kHidden * sizeof(__nv_bfloat16);
 constexpr unsigned kFullWarpMask = 0xffffffffu;
 
 static_assert(kHidden % (kLanes * kElementsPerLoad) == 0);
@@ -30,7 +29,6 @@ static_assert(kRowsPerCta == 32);
 static_assert(kThreadsPerCta == 256);
 static_assert(kCtas == 2048);
 static_assert(kOctets == 640);
-static_assert(kSharedInputBytes == 10240);
 static_assert(alignof(uint4) == 16);
 static_assert((kHidden * sizeof(__nv_bfloat16)) % alignof(uint4) == 0);
 static_assert(sizeof(at::BFloat16) == sizeof(__nv_bfloat16));
@@ -59,24 +57,18 @@ __device__ __forceinline__ float fr13_reduce_full_warp(float accumulator,
   return lane == 0 ? __fadd_rn(accumulator, peer) : accumulator;
 }
 
-// Eight warps own 32 output rows. The CTA stages the 10 KiB hidden vector
-// once; each warp reuses it while accumulating four independent rows in the
-// same octet, FMA, and shuffle order as the one-row pair8bits kernel.
+// Eight warps own 32 output rows. Each warp loads one hidden octet and reuses
+// it across four independent rows in the same octet, FMA, and shuffle order
+// as the one-row pair8bits kernel.
 __global__ __launch_bounds__(kThreadsPerCta) void
-fr13_bf16_gemvx_k64_m1_warp4_sharedx_pair8bits_kernel(
+fr13_bf16_gemvx_k64_m1_warp4_globalx_pair8bits_kernel(
     __nv_bfloat16* __restrict__ output,
     const __nv_bfloat16* __restrict__ input,
     const __nv_bfloat16* __restrict__ weight, const float alpha,
     const float beta) {
-  __shared__ __align__(16) uint4 shared_input_octets[kOctets];
   const int lane = static_cast<int>(threadIdx.x);
   const int warp = static_cast<int>(threadIdx.y);
-  const int thread = warp * kLanes + lane;
   const auto* input_octets = reinterpret_cast<const uint4*>(input);
-  for (int octet = thread; octet < kOctets; octet += kThreadsPerCta) {
-    shared_input_octets[octet] = input_octets[octet];
-  }
-  __syncthreads();
 
   const int first_row =
       static_cast<int>(blockIdx.x) * kRowsPerCta + warp * kRowsPerWarp;
@@ -92,7 +84,7 @@ fr13_bf16_gemvx_k64_m1_warp4_sharedx_pair8bits_kernel(
 
 #pragma unroll 1
   for (int octet = lane; octet < kOctets; octet += kLanes) {
-    const uint4 x = shared_input_octets[octet];
+    const uint4 x = input_octets[octet];
     const float x0 = __uint_as_float(x.x << 16);
     const float x1 = __uint_as_float(x.x & 0xffff0000u);
     const float x2 = __uint_as_float(x.y << 16);
@@ -180,17 +172,17 @@ fr13_bf16_gemvx_k64_m1_warp4_sharedx_pair8bits_kernel(
   }
 }
 
-void fr13_bf16_gemvx_k64_m1_warp4_sharedx_pair8bits_out(
+void fr13_bf16_gemvx_k64_m1_warp4_globalx_pair8bits_out(
     at::Tensor output, const at::Tensor& input, const at::Tensor& weight) {
   TORCH_CHECK(input.is_cuda() && weight.is_cuda() && output.is_cuda(),
-              "FR13 BF16 K64 M1 warp4 shared-x requires CUDA tensors");
+              "FR13 BF16 K64 M1 warp4 global-x requires CUDA tensors");
   TORCH_CHECK(input.device() == weight.device() &&
                   output.device() == input.device(),
-              "FR13 BF16 K64 M1 warp4 shared-x tensors must share one CUDA device");
+              "FR13 BF16 K64 M1 warp4 global-x tensors must share one CUDA device");
   TORCH_CHECK(input.scalar_type() == at::kBFloat16 &&
                   weight.scalar_type() == at::kBFloat16 &&
                   output.scalar_type() == at::kBFloat16,
-              "FR13 BF16 K64 M1 warp4 shared-x requires BF16 tensors");
+              "FR13 BF16 K64 M1 warp4 global-x requires BF16 tensors");
   TORCH_CHECK(input.sizes() == at::IntArrayRef({1, kHidden}) &&
                   input.strides() == at::IntArrayRef({kHidden, 1}),
               "FR13 BF16 K64 M1 input must be contiguous [1,5120]");
@@ -206,11 +198,11 @@ void fr13_bf16_gemvx_k64_m1_warp4_sharedx_pair8bits_out(
           reinterpret_cast<std::uintptr_t>(weight.data_ptr()) %
                   alignof(uint4) ==
               0,
-      "FR13 BF16 K64 M1 warp4 shared-x inputs must be 16-byte aligned");
+      "FR13 BF16 K64 M1 warp4 global-x inputs must be 16-byte aligned");
 
   const c10::cuda::CUDAGuard device_guard(input.device());
   const dim3 block(kLanes, kWarpsPerCta, 1);
-  fr13_bf16_gemvx_k64_m1_warp4_sharedx_pair8bits_kernel
+  fr13_bf16_gemvx_k64_m1_warp4_globalx_pair8bits_kernel
       <<<kCtas, block, 0, at::cuda::getCurrentCUDAStream()>>>(
           reinterpret_cast<__nv_bfloat16*>(
               output.data_ptr<at::BFloat16>()),
@@ -226,10 +218,10 @@ void fr13_bf16_gemvx_k64_m1_warp4_sharedx_pair8bits_out(
 
 TORCH_LIBRARY_FRAGMENT(fr13_bf16_k64_head, library) {
   library.def(
-      "gemvx_m1_warp4_sharedx_pair8bits_out(Tensor(a!) output, Tensor input, Tensor weight) -> ()");
+      "gemvx_m1_warp4_globalx_pair8bits_out(Tensor(a!) output, Tensor input, Tensor weight) -> ()");
 }
 
 TORCH_LIBRARY_IMPL(fr13_bf16_k64_head, CUDA, library) {
-  library.impl("gemvx_m1_warp4_sharedx_pair8bits_out",
-               &fr13_bf16_gemvx_k64_m1_warp4_sharedx_pair8bits_out);
+  library.impl("gemvx_m1_warp4_globalx_pair8bits_out",
+               &fr13_bf16_gemvx_k64_m1_warp4_globalx_pair8bits_out);
 }
