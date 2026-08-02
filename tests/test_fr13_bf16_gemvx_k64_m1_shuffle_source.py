@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 import torch
@@ -11,47 +12,89 @@ CUDA = REPO / "csrc" / "fr13_bf16_gemvx_k64_m1_shuffle.cu"
 BUILDER = REPO / "scripts" / "fr13_build_bf16_gemvx_k64_m1_shuffle.py"
 
 
-def test_cuda_source_is_strict_k64_m1_full_warp_r32_pair8bits() -> None:
+def test_cuda_source_is_strict_k64_m1_warp4_sharedx_pair8bits() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert "constexpr int kHidden = 5120;" in source
     assert "constexpr int kVocab = 65536;" in source
     assert "constexpr int kLanes = 32;" in source
-    assert "constexpr int kRowsPerCta = 32;" in source
+    assert "constexpr int kWarpsPerCta = 8;" in source
+    assert "constexpr int kRowsPerWarp = 4;" in source
+    assert "constexpr int kRowsPerCta = kWarpsPerCta * kRowsPerWarp;" in source
+    assert "constexpr int kThreadsPerCta = kLanes * kWarpsPerCta;" in source
     assert "constexpr int kElementsPerLoad = 8;" in source
     assert "constexpr int kOctets = kHidden / kElementsPerLoad;" in source
-    assert "static_assert(kLanes * kRowsPerCta == 1024);" in source
+    assert "static_assert(kRowsPerCta == 32);" in source
+    assert "static_assert(kThreadsPerCta == 256);" in source
     assert "static_assert(kCtas == 2048);" in source
-    assert "const dim3 block(kLanes, kRowsPerCta, 1);" in source
+    assert "static_assert(kOctets == 640);" in source
+    assert "static_assert(alignof(uint4) == 16);" in source
+    assert "(kHidden * sizeof(__nv_bfloat16)) % alignof(uint4) == 0" in source
+    assert "__launch_bounds__(kThreadsPerCta)" in source
+    assert "const dim3 block(kLanes, kWarpsPerCta, 1);" in source
     assert "<<<kCtas, block, 0, at::cuda::getCurrentCUDAStream()>>>" in source
-    assert "__syncthreads" not in source
+
+
+def test_cta_stages_the_exact_hidden_vector_once() -> None:
+    source = CUDA.read_text(encoding="ascii")
+
+    assert "constexpr int kSharedInputBytes = kHidden * sizeof(__nv_bfloat16);" in source
+    assert "static_assert(kSharedInputBytes == 10240);" in source
+    assert "__shared__ __align__(16) uint4 shared_input_octets[kOctets];" in source
+    assert "const int thread = warp * kLanes + lane;" in source
+    assert (
+        "for (int octet = thread; octet < kOctets; "
+        "octet += kThreadsPerCta)" in source
+    )
+    assert "shared_input_octets[octet] = input_octets[octet];" in source
+    assert source.count("= input_octets[octet];") == 1
+    assert source.count("__syncthreads();") == 1
     assert "extern __shared__" not in source
 
 
-def test_cuda_source_uses_packed_octet_loads_and_fp32_accumulation() -> None:
+def test_each_warp_accumulates_four_rows_in_the_pair8_order() -> None:
     source = CUDA.read_text(encoding="ascii")
 
-    assert "float accumulator = 0.0f;" in source
-    assert "#pragma unroll 1" in source
-    assert "for (int octet = lane; octet < kOctets; octet += kLanes)" in source
-    assert "reinterpret_cast<const uint4*>(input)" in source
-    assert "reinterpret_cast<const uint4*>(weight)" in source
-    assert source.count("__uint_as_float(") == 16
-    for half in ("x.x", "x.y", "x.z", "x.w", "w.x", "w.y", "w.z", "w.w"):
-        assert f"{half} << 16" in source
-        assert f"{half} & 0xffff0000u" in source
-    assert source.count("accumulator = __fmaf_rn(x") == 8
+    assert "warp * kRowsPerWarp" in source
+    for row in range(4):
+        assert f"const auto* weight{row}" in source
+        assert f"float accumulator{row} = 0.0f;" in source
+        assert f"const uint4 w{row} = weight{row}[octet];" in source
+        assert len(
+            re.findall(rf"accumulator{row}\s*=\s*__fmaf_rn\(", source)
+        ) == 8
+        assert f"fr13_reduce_full_warp(accumulator{row}, lane)" in source
+    assert source.count("const uint4 x = shared_input_octets[octet];") == 1
+    assert source.count("__uint_as_float(") == 40
     assert source.count("__shfl_down_sync(") == 5
     assert source.count("__fadd_rn(") == 5
     for stride in (16, 8, 4, 2, 1):
         assert f", {stride}, kLanes)" in source
-    for threshold in (16, 8, 4, 2):
-        assert f"if (lane < {threshold})" in source
-    assert "if (lane == 0)" in source
-    assert "const float sum = __fmaf_rn(alpha, reduced_sum, beta);" in source
-    assert "1.0f, 0.0f);" in source
-    assert "output[row] = __float2bfloat16_rn(sum);" in source
+    assert source.count("__float2bfloat16_rn(") == 4
     assert "atomicAdd" not in source
+
+
+def test_static_work_reduces_input_loads_and_warps_without_weight_duplication() -> None:
+    octets = 5120 // 8
+    ctas = 65536 // 32
+    baseline_warps_per_cta = 32
+    candidate_warps_per_cta = 8
+    rows_per_warp = 4
+    lanes = 32
+    lane_iterations = octets // lanes
+
+    baseline_input_loads_per_cta = baseline_warps_per_cta * lanes * lane_iterations
+    candidate_input_loads_per_cta = octets
+    candidate_weight_loads_per_cta = (
+        candidate_warps_per_cta * rows_per_warp * lanes * lane_iterations
+    )
+
+    assert baseline_input_loads_per_cta == 20480
+    assert candidate_input_loads_per_cta == 640
+    assert baseline_input_loads_per_cta // candidate_input_loads_per_cta == 32
+    assert candidate_weight_loads_per_cta == 20480
+    assert ctas * baseline_warps_per_cta == 65536
+    assert ctas * candidate_warps_per_cta == 16384
 
 
 def test_bf16_bit_expansion_matches_fp32_for_every_non_nan_pattern() -> None:
@@ -64,28 +107,18 @@ def test_bf16_bit_expansion_matches_fp32_for_every_non_nan_pattern() -> None:
     assert torch.equal(actual[~is_nan], expected[~is_nan])
 
 
-def test_width32_shuffle_assigns_one_row_per_warp() -> None:
-    source = CUDA.read_text(encoding="ascii")
-
-    assert "constexpr unsigned kFullWarpMask = 0xffffffffu;" in source
-    assert "static_cast<int>(threadIdx.x)" in source
-    assert "static_cast<int>(threadIdx.y)" in source
-    assert source.count("kFullWarpMask, accumulator") == 5
-    assert source.count("kLanes);") >= 5
-
-
 def test_cuda_op_is_out_variant_with_strict_k64_geometry() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert (
-        "gemvx_m1_warp32_r32_pair8bits_out(Tensor(a!) output, Tensor input, "
-        "Tensor weight) -> ()" in source
+        "gemvx_m1_warp4_sharedx_pair8bits_out(Tensor(a!) output, "
+        "Tensor input, Tensor weight) -> ()" in source
     )
     assert "input.sizes() == at::IntArrayRef({1, kHidden})" in source
     assert "weight.sizes() == at::IntArrayRef({kVocab, kHidden})" in source
     assert "output.sizes() == at::IntArrayRef({1, kVocab})" in source
     assert "weight must be contiguous [65536,5120]" in source
-    assert "pair8bits inputs must be 16-byte aligned" in source
+    assert "warp4 shared-x inputs must be 16-byte aligned" in source
     assert "alignof(uint4)" in source
     assert "at::cuda::getCurrentCUDAStream()" in source
     assert "C10_CUDA_KERNEL_LAUNCH_CHECK();" in source
@@ -109,10 +142,13 @@ def test_builder_is_pinned_default_off_and_claims_no_qualification() -> None:
     assert '"performance_measurement": False' in source
     assert '"production_default_enabled": False' in source
     assert '"grid": [2048, 1, 1]' in source
-    assert '"block": [32, 32, 1]' in source
+    assert '"block": [32, 8, 1]' in source
+    assert '"static_shared_bytes": 10240' in source
     assert '"output_rows_per_cta": 32' in source
-    assert '"k_partition_lanes": 32' in source
-    assert '"elements_per_load": 8' in source
-    assert '"lane_load_iterations": 20' in source
-    assert '"lane_fma_iterations": 160' in source
+    assert '"warps_per_cta": 8' in source
+    assert '"output_rows_per_warp": 4' in source
+    assert '"input_staging_loads_per_cta": 640' in source
+    assert '"lane_shared_input_iterations": 20' in source
+    assert '"lane_weight_load_iterations": 80' in source
+    assert '"lane_fma_iterations": 640' in source
     assert '"packed_unpack": "BF16 bits shifted/masked into exact FP32 bits"' in source
