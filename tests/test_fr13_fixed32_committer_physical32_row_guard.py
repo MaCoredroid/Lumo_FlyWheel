@@ -80,6 +80,7 @@ def _fixed_program_guard(
     paths: torch.Tensor,
     lens: torch.Tensor,
     aliases: torch.Tensor,
+    alias_peer_layers: torch.Tensor,
     bank_rows: int,
 ) -> bool:
     batch = int(paths.shape[0])
@@ -92,12 +93,18 @@ def _fixed_program_guard(
             leaf_pos = min(max(accepted - 1, 0), 15)
             leaf_node = int(paths[request, leaf_pos]) if accepted > 0 else 0
             leaf_node = min(max(leaf_node, 0), 31)
+            peer_layers = tuple(
+                int(value) for value in alias_peer_layers[layer]
+            )
+            peer_topology_ok = all(
+                int(aliases[peer_layer]) == int(aliases[layer])
+                for peer_layer in peer_layers
+            )
             duplicate = any(
                 other_layer != layer or other_request != request
-                for other_layer in range(48)
+                for other_layer in peer_layers
                 for other_request in range(batch)
-                if int(aliases[other_layer]) == int(aliases[layer])
-                and int(ssi[other_layer, other_request, 0]) == int(rows[0])
+                if int(ssi[other_layer, other_request, 0]) == int(rows[0])
             )
             flags.append(
                 bool((rows > 0).all())
@@ -106,6 +113,7 @@ def _fixed_program_guard(
                 and bool(((active >= 0) & (active < 32)).all())
                 and 0 <= int(rows[leaf_node]) < bank_rows
                 and 0 <= int(aliases[layer]) < 16
+                and peer_topology_ok
                 and not duplicate
             )
     return all(flags)
@@ -113,10 +121,10 @@ def _fixed_program_guard(
 
 def _valid_fixture(batch: int) -> tuple[torch.Tensor, ...]:
     bank_rows = 257
-    aliases = torch.arange(16, dtype=torch.int64).repeat_interleave(3)
+    aliases = torch.arange(16, dtype=torch.int64).repeat(3)
     ssi = torch.empty((48, batch, 32), dtype=torch.int32)
     for layer in range(48):
-        alias_rank = layer % 3
+        alias_rank = layer // 16
         for request in range(batch):
             ssi[layer, request] = (
                 torch.arange(32, dtype=torch.int32) + layer + request + 1
@@ -130,10 +138,22 @@ def _valid_fixture(batch: int) -> tuple[torch.Tensor, ...]:
     return ssi, paths, lens, aliases, torch.tensor(bank_rows)
 
 
+def _alias_peer_layers(aliases: torch.Tensor) -> torch.Tensor:
+    rows = []
+    for layer in range(48):
+        peers = torch.nonzero(
+            aliases == aliases[layer], as_tuple=False
+        ).view(-1)
+        assert int(peers.numel()) == 3
+        rows.append(peers.to(torch.int32))
+    return torch.stack(rows)
+
+
 @pytest.mark.parametrize("batch", (1, 4))
 def test_fixed_program_partition_matches_prior_guard(batch: int) -> None:
     ssi, paths, lens, aliases, bank_rows_tensor = _valid_fixture(batch)
     bank_rows = int(bank_rows_tensor)
+    alias_peer_layers = _alias_peer_layers(aliases)
     fixtures = [(ssi, paths, lens, aliases)]
 
     for target, index, value in (
@@ -158,7 +178,7 @@ def test_fixed_program_partition_matches_prior_guard(batch: int) -> None:
         )
 
     duplicate_ssi = ssi.clone()
-    duplicate_ssi[1, 0, 0] = duplicate_ssi[0, 0, 0]
+    duplicate_ssi[16, 0, 0] = duplicate_ssi[0, 0, 0]
     fixtures.append((duplicate_ssi, paths, lens, aliases))
 
     inactive_paths = paths.clone()
@@ -168,9 +188,9 @@ def test_fixed_program_partition_matches_prior_guard(batch: int) -> None:
     fixtures.append((ssi, inactive_paths, inactive_lens, aliases))
 
     for candidate in fixtures:
-        assert _fixed_program_guard(*candidate, bank_rows) == _legacy_guard(
-            *candidate, bank_rows
-        )
+        assert _fixed_program_guard(
+            *candidate, alias_peer_layers, bank_rows
+        ) == _legacy_guard(*candidate, bank_rows)
 
 
 def test_guard_kernel_owns_fixed_physical32_and_path16_domains() -> None:
@@ -179,13 +199,17 @@ def test_guard_kernel_owns_fixed_physical32_and_path16_domains() -> None:
 
     assert "row_offsets = tl.arange(0, SPEC_COLS)" in kernel
     assert "path_offsets = tl.arange(0, PATH_COLS)" in kernel
-    assert "other_offsets = tl.arange(0, OTHER_CAP)" in kernel
+    assert "peer_offsets = tl.arange(0, PEER_CAP)" in kernel
+    assert "peer_slots = peer_offsets // B" in kernel
+    assert "bank_alias_peer_layers" in kernel
+    assert "peer_topology_ok" in kernel
     assert "duplicate_destination" in kernel
     assert "selected_row = tl.load" in kernel
     assert "SPEC_COLS=32" in launcher
     assert "PATH_COLS=16" in launcher
     assert "LAYERS=48" in launcher
-    assert "OTHER_CAP=256" in launcher
+    assert "ALIAS_WIDTH=3" in launcher
+    assert "PEER_CAP=16" in launcher
     assert "[(48 * batch,)]" in launcher
 
 
@@ -213,13 +237,19 @@ def test_guard_workspace_is_preseeded_warmed_and_source_bound() -> None:
     assert '"row_guard_flags_by_batch": row_guard_flags' in preseed
     assert "48 * batch" in preseed
     assert "validate_fixed32_conv_commit_rows(" in preseed
-    assert '"commit_row_guard_route": "fixed32_triton_physical32_v1"' in preseed
+    assert (
+        '"commit_row_guard_route": "fixed32_triton_alias3_physical32_v2"'
+        in preseed
+    )
     assert '"commit_row_guard_kernel_launches_per_event": 1' in preseed
-    assert '"commit_row_guard_compare_capacity": 256' in preseed
+    assert '"commit_row_guard_alias_width": 3' in preseed
+    assert '"commit_row_guard_compare_capacity": 16' in preseed
     assert '"commit_row_guard_torch_index_transforms": 0' in preseed
     assert '"commit_row_guard_async_scalar_reductions": 1' in preseed
     assert '"commit_row_guard_async_assertions": 1' in preseed
     assert "row_guard_flags_by_batch" in capture
+    assert "bank_alias_peer_layers_device" in capture
+    assert 'bank_alias_peer_layers=state["bank_alias_peer_layers_device"]' in commit
     assert 'guard_flags=state["row_guard_flags_by_batch"][batch]' in commit
 
 
@@ -232,6 +262,7 @@ def test_observer_binds_guard_workspace_and_fixed32_contract() -> None:
     assert "id(row_guard_flags_by_batch[guard_batch])" in patcher
     assert "int(row_guard_flags_by_batch[guard_batch].data_ptr())" in patcher
     assert 'contract.get("commit_row_guard_physical_rows", -1)' in patcher
+    assert 'contract.get("commit_row_guard_alias_width", -1)' in patcher
     assert 'contract.get("commit_row_guard_compare_capacity", -1)' in patcher
     assert 'int(commit_spec_state_indices.shape[2]) != 32' in patcher
 
@@ -245,13 +276,14 @@ def test_work_census_binds_fixed_row_guard_work(batch: int) -> None:
     )
     commit = event["conv_commit"]
 
-    assert census.SCHEMA == "fr13-fixed32-work-census-v10"
-    assert commit["row_guard_route"] == "fixed32_triton_physical32_v1"
+    assert census.SCHEMA == "fr13-fixed32-work-census-v11"
+    assert commit["row_guard_route"] == "fixed32_triton_alias3_physical32_v2"
     assert commit["row_guard_kernel_launches"] == 1
     assert commit["row_guard_programs"] == 48 * batch
     assert commit["row_guard_physical_rows"] == 32
     assert commit["row_guard_path_capacity"] == 16
-    assert commit["row_guard_compare_capacity"] == 256
+    assert commit["row_guard_alias_width"] == 3
+    assert commit["row_guard_compare_capacity"] == 16
     assert commit["row_guard_torch_index_transforms"] == 0
     assert commit["row_guard_async_scalar_reductions"] == 1
     assert commit["row_guard_async_assertions"] == 1
@@ -261,4 +293,5 @@ def test_work_census_binds_fixed_row_guard_work(batch: int) -> None:
     ).normalized_work["conv_commit"]
     assert normalized["row_guard_programs_per_request"] == 48
     assert normalized["row_guard_physical_rows"] == 32
-    assert normalized["row_guard_compare_capacity"] == 256
+    assert normalized["row_guard_alias_width"] == 3
+    assert normalized["row_guard_compare_capacity"] == 16

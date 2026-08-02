@@ -27,6 +27,7 @@ class _GuardKernelStub:
         accepted_paths,
         accepted_lens,
         bank_alias_ids,
+        bank_alias_peer_layers,
         guard_flags,
         *_strides,
         **constants,
@@ -139,11 +140,19 @@ def _guard_result(
 
     guard = _load_guard(record_assert)
     guard_flags = torch.empty((48 * batch,), dtype=torch.bool)
+    peer_layers = torch.tensor(
+        [
+            (layer % 16, layer % 16 + 16, layer % 16 + 32)
+            for layer in range(48)
+        ],
+        dtype=torch.int32,
+    )
     guard(
         spec_state_indices=spec_state_indices,
         accepted_paths=accepted_paths,
         accepted_lens=accepted_lens,
         bank_alias_ids=bank_alias_ids,
+        bank_alias_peer_layers=peer_layers,
         guard_flags=guard_flags,
         batch=batch,
         bank_rows=bank_rows,

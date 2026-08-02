@@ -4532,6 +4532,7 @@ def _fr13_fixed32_conv_commit_row_guard_kernel(
     accepted_paths,
     accepted_lens,
     bank_alias_ids,
+    bank_alias_peer_layers,
     guard_flags,
     ssi_stride_l,
     ssi_stride_b,
@@ -4539,13 +4540,16 @@ def _fr13_fixed32_conv_commit_row_guard_kernel(
     path_stride_b,
     path_stride_s,
     lens_stride_b,
+    peer_stride_l,
+    peer_stride_s,
     BANK_ROWS: tl.constexpr,
     B: tl.constexpr,
     LAYERS: tl.constexpr,
     SPEC_COLS: tl.constexpr,
     PATH_COLS: tl.constexpr,
     MAX_ACCEPTED: tl.constexpr,
-    OTHER_CAP: tl.constexpr,
+    ALIAS_WIDTH: tl.constexpr,
+    PEER_CAP: tl.constexpr,
 ):
     """Validate one fixed physical32 layer/request destination."""
     pid = tl.program_id(0)
@@ -4597,26 +4601,42 @@ def _fr13_fixed32_conv_commit_row_guard_kernel(
     alias_id = tl.load(bank_alias_ids + layer).to(tl.int64)
     alias_ok = (alias_id >= 0) & (alias_id < 16)
     running_row = tl.load(ssi_base).to(tl.int64)
-    other_offsets = tl.arange(0, OTHER_CAP)
-    other_valid = other_offsets < LAYERS * B
-    other_layers = other_offsets // B
-    other_requests = other_offsets - other_layers * B
-    other_aliases = tl.load(
-        bank_alias_ids + other_layers,
-        mask=other_valid,
+    peer_offsets = tl.arange(0, PEER_CAP)
+    peer_slots = peer_offsets // B
+    other_requests = peer_offsets - peer_slots * B
+    peer_entry = peer_slots < ALIAS_WIDTH
+    peer_layers = tl.load(
+        bank_alias_peer_layers
+        + layer * peer_stride_l
+        + peer_slots * peer_stride_s,
+        mask=peer_entry,
         other=-1,
     ).to(tl.int64)
+    peer_layer_ok = (peer_layers >= 0) & (peer_layers < LAYERS)
+    peer_layers_safe = tl.maximum(0, tl.minimum(peer_layers, LAYERS - 1))
+    peer_aliases = tl.load(
+        bank_alias_ids + peer_layers_safe,
+        mask=peer_entry & peer_layer_ok,
+        other=-1,
+    ).to(tl.int64)
+    peer_topology_ok = tl.sum(
+        (
+            (~peer_entry)
+            | (peer_layer_ok & (peer_aliases == alias_id))
+        ).to(tl.int32),
+        axis=0,
+    ) == PEER_CAP
     other_rows = tl.load(
         spec_state_indices
-        + other_layers * ssi_stride_l
+        + peer_layers_safe * ssi_stride_l
         + other_requests * ssi_stride_b,
-        mask=other_valid,
+        mask=peer_entry & peer_layer_ok,
         other=-1,
     ).to(tl.int64)
     duplicate_destination = (
-        other_valid
-        & (other_offsets != pid)
-        & (other_aliases == alias_id)
+        peer_entry
+        & peer_layer_ok
+        & ((peer_layers != layer) | (other_requests != request))
         & (other_rows == running_row)
     )
     destination_unique = tl.sum(
@@ -4630,6 +4650,7 @@ def _fr13_fixed32_conv_commit_row_guard_kernel(
         & lens_ok
         & selected_ok
         & alias_ok
+        & peer_topology_ok
         & destination_unique,
     )
 
@@ -5274,6 +5295,15 @@ def preseed_fixed32_conv_col0_pregather(
         dtype=torch.int64,
         device=anchor.device,
     )
+    alias_peer_layers = tuple(
+        tuple(int(peer) for peer in alias_classes[alias_id])
+        for alias_id in alias_ids
+    )
+    alias_peer_layers_device = torch.tensor(
+        alias_peer_layers,
+        dtype=torch.int32,
+        device=anchor.device,
+    )
     ssi_ptrs = torch.tensor(
         [int(source.data_ptr()) for source in ssi_sources],
         dtype=torch.int64,
@@ -5345,6 +5375,8 @@ def preseed_fixed32_conv_col0_pregather(
         "bank_alias_ids": alias_ids,
         "bank_alias_ranks": alias_ranks,
         "bank_alias_ids_device": alias_ids_device,
+        "bank_alias_peer_layers": alias_peer_layers,
+        "bank_alias_peer_layers_device": alias_peer_layers_device,
         "off16": offsets,
         "ssi_sources": ssi_sources,
         "ssi_ptrs": ssi_ptrs,
@@ -5408,6 +5440,7 @@ def preseed_fixed32_conv_col0_pregather(
             tuple(id(bank) for bank in ssm_bank_refs),
             id(offsets),
             id(alias_ids_device),
+            id(alias_peer_layers_device),
             tuple(id(source) for source in ssi_sources),
             id(ssi_ptrs),
             id(ssi_strides),
@@ -5429,6 +5462,7 @@ def preseed_fixed32_conv_col0_pregather(
             ),
             int(offsets.data_ptr()),
             int(alias_ids_device.data_ptr()),
+            int(alias_peer_layers_device.data_ptr()),
             tuple(int(source.data_ptr()) for source in ssi_sources),
             int(ssi_ptrs.data_ptr()),
             int(ssi_strides.data_ptr()),
@@ -5479,12 +5513,13 @@ def preseed_fixed32_conv_col0_pregather(
             "commit_source_pointer_entries": 48,
             "commit_source_rows_per_batch": source_rows,
             "commit_state_src_shape": (32, conv_l),
-            "commit_row_guard_route": "fixed32_triton_physical32_v1",
+            "commit_row_guard_route": "fixed32_triton_alias3_physical32_v2",
             "commit_row_guard_kernel_launches_per_event": 1,
             "commit_row_guard_programs_per_request": 48,
             "commit_row_guard_physical_rows": 32,
             "commit_row_guard_path_capacity": 16,
-            "commit_row_guard_compare_capacity": 256,
+            "commit_row_guard_alias_width": 3,
+            "commit_row_guard_compare_capacity": 16,
             "commit_row_guard_torch_index_transforms": 0,
             "commit_row_guard_async_scalar_reductions": 1,
             "commit_row_guard_async_assertions": 1,
@@ -5561,6 +5596,7 @@ def preseed_fixed32_conv_col0_pregather(
                 accepted_paths=safe_paths,
                 accepted_lens=safe_lens,
                 bank_alias_ids=alias_ids_device,
+                bank_alias_peer_layers=alias_peer_layers_device,
                 guard_flags=row_guard_flags[batch],
                 batch=batch,
                 bank_rows=int(anchor.shape[0]),
@@ -5935,6 +5971,7 @@ def launch_fixed32_conv_col0_pregather(
             tuple(id(bank) for bank in state["ssm_banks"]),
             id(state["off16"]),
             id(state["bank_alias_ids_device"]),
+            id(state["bank_alias_peer_layers_device"]),
             tuple(id(source) for source in state["ssi_sources"]),
             id(state["ssi_ptrs"]),
             id(state["ssi_strides"]),
@@ -5960,6 +5997,7 @@ def launch_fixed32_conv_col0_pregather(
             ),
             int(state["off16"].data_ptr()),
             int(state["bank_alias_ids_device"].data_ptr()),
+            int(state["bank_alias_peer_layers_device"].data_ptr()),
             tuple(int(source.data_ptr()) for source in state["ssi_sources"]),
             int(state["ssi_ptrs"].data_ptr()),
             int(state["ssi_strides"].data_ptr()),
@@ -6113,6 +6151,11 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
         or tuple(alias_classes) != state.get("bank_alias_classes")
         or tuple(alias_ids) != state.get("bank_alias_ids")
         or tuple(alias_ranks) != state.get("bank_alias_ranks")
+        or tuple(
+            tuple(int(peer) for peer in alias_classes[alias_id])
+            for alias_id in alias_ids
+        )
+        != state.get("bank_alias_peer_layers")
         or not torch.is_tensor(state.get("bank_alias_ids_device"))
         or state["bank_alias_ids_device"].dtype != torch.int64
         or state["bank_alias_ids_device"].device != anchor.device
@@ -6122,6 +6165,16 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
             int(value) for value in state["bank_alias_ids_device"].tolist()
         )
         != tuple(alias_ids)
+        or not torch.is_tensor(state.get("bank_alias_peer_layers_device"))
+        or state["bank_alias_peer_layers_device"].dtype != torch.int32
+        or state["bank_alias_peer_layers_device"].device != anchor.device
+        or tuple(state["bank_alias_peer_layers_device"].shape) != (48, 3)
+        or not state["bank_alias_peer_layers_device"].is_contiguous()
+        or tuple(
+            tuple(int(peer) for peer in row)
+            for row in state["bank_alias_peer_layers_device"].tolist()
+        )
+        != state.get("bank_alias_peer_layers")
         or any(
             source is not expected
             for source, expected in zip(
@@ -6187,6 +6240,13 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
         "source_staging_reused": True,
         "source_pointer_entries": 48,
         "state_src_shape": (32, int(state["conv_l"])),
+        "row_guard_route": state["contract"]["commit_row_guard_route"],
+        "row_guard_alias_width": state["contract"][
+            "commit_row_guard_alias_width"
+        ],
+        "row_guard_compare_capacity": state["contract"][
+            "commit_row_guard_compare_capacity"
+        ],
     }
 
 
@@ -6267,6 +6327,7 @@ def launch_fixed32_conv_commit_to_col0(
         accepted_paths=accepted_paths,
         accepted_lens=accepted_lens,
         bank_alias_ids=state["bank_alias_ids_device"],
+        bank_alias_peer_layers=state["bank_alias_peer_layers_device"],
         guard_flags=state["row_guard_flags_by_batch"][batch],
         batch=batch,
         bank_rows=validation_bank_rows,
@@ -10625,6 +10686,7 @@ def validate_fixed32_conv_commit_rows(
     accepted_paths: torch.Tensor,
     accepted_lens: torch.Tensor,
     bank_alias_ids: torch.Tensor,
+    bank_alias_peer_layers: torch.Tensor,
     guard_flags: torch.Tensor,
     batch: int,
     bank_rows: int,
@@ -10657,6 +10719,11 @@ def validate_fixed32_conv_commit_rows(
         or bank_alias_ids.device != spec_state_indices.device
         or tuple(bank_alias_ids.shape) != (48,)
         or not bank_alias_ids.is_contiguous()
+        or not torch.is_tensor(bank_alias_peer_layers)
+        or bank_alias_peer_layers.dtype != torch.int32
+        or bank_alias_peer_layers.device != spec_state_indices.device
+        or tuple(bank_alias_peer_layers.shape) != (48, 3)
+        or not bank_alias_peer_layers.is_contiguous()
         or not torch.is_tensor(guard_flags)
         or guard_flags.dtype != torch.bool
         or guard_flags.device != spec_state_indices.device
@@ -10672,6 +10739,7 @@ def validate_fixed32_conv_commit_rows(
         accepted_paths,
         accepted_lens,
         bank_alias_ids,
+        bank_alias_peer_layers,
         guard_flags,
         int(spec_state_indices.stride(0)),
         int(spec_state_indices.stride(1)),
@@ -10679,13 +10747,16 @@ def validate_fixed32_conv_commit_rows(
         int(accepted_paths.stride(0)),
         int(accepted_paths.stride(1)),
         int(accepted_lens.stride(0)),
+        int(bank_alias_peer_layers.stride(0)),
+        int(bank_alias_peer_layers.stride(1)),
         BANK_ROWS=bank_rows,
         B=batch,
         LAYERS=48,
         SPEC_COLS=32,
         PATH_COLS=16,
         MAX_ACCEPTED=_FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH,
-        OTHER_CAP=256,
+        ALIAS_WIDTH=3,
+        PEER_CAP=16,
         num_warps=4,
         num_stages=1,
     )

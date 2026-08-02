@@ -563,8 +563,9 @@ def test_candidate_binds_physical_alias_row_uniqueness_guard() -> None:
 
     assert '"physical_alias_row_uniqueness_guard": (' in preseed
     assert '"validate_fixed32_conv_commit_rows"' in preseed
-    assert "other_aliases == alias_id" in guard
+    assert "peer_aliases == alias_id" in guard
     assert "other_rows == running_row" in guard
+    assert "peer_topology_ok" in guard
     assert "destination_unique" in guard
     assert conv_commit.index("validate_fixed32_conv_commit_rows(") < conv_commit.index(
         "_fr13_fixed32_conv_direct_col0_kernel[grid]("
@@ -640,10 +641,11 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
     assert '"state_elements_per_thread_before_compiler_effects", -1' in patcher
     assert '"physical_alias_row_uniqueness_guard"' in patcher
     assert '!= "validate_fixed32_conv_commit_rows"' in patcher
-    assert '!= "fixed32_triton_physical32_v1"' in patcher
+    assert '!= "fixed32_triton_alias3_physical32_v2"' in patcher
     assert 'conv_commit_contract.get("row_guard_kernel_launches", -1)' in patcher
     assert 'conv_commit_contract.get("row_guard_programs_per_request", -1)' in patcher
     assert 'conv_commit_contract.get("row_guard_physical_rows", -1)' in patcher
+    assert 'conv_commit_contract.get("row_guard_alias_width", -1)' in patcher
     assert 'conv_commit_contract.get("row_guard_compare_capacity", -1)' in patcher
     assert 'conv_commit_contract.get("row_guard_torch_index_transforms", -1)' in patcher
     assert 'conv_commit_contract.get("row_guard_async_scalar_reductions", -1)' in patcher
