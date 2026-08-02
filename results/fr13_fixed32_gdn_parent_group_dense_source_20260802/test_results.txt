@@ -1,0 +1,29 @@
+Source commit: 73413f28738812d468a2268ca0bab69f910169b2
+
+Host-only checks:
+- python3 -m py_compile on kernel, observer patcher, and focused tests: pass
+- tests/test_fr13_fixed32_gdn_parent_group.py: 11 passed in 0.89s
+- tests/test_fr13_fixed32_gdn_parent_group_simd_qualification.py: 19 passed in 1.00s
+- bash -n scripts/fr13_run_b4_gdn_parent_group_simd_live_gate.sh: pass
+- git diff --check: pass
+
+Static contract receipt:
+- candidate: fixed32_gdn_parent_group_dense_simd_v3
+- kernel: tree_gdn_parent_group_dense_simd_width4_v3
+- dense schedule: [5,4,7]
+- dense schedule SHA-256: 500f9821c279c030fd0f42080d2a5410e5fef4de3d476c5ddf39f23c6a27f915
+- packed controls: (1934, 1792, 289, 324, 361)
+- grouped launches per layer: 2
+- level-1 parent loads per request: 5
+- physical critical path: 12
+- single-writer physical nodes: 32
+- runtime path metadata loads per grouped program: 0
+
+Not run:
+- Triton or CUDA code generation
+- SASS/resource inspection
+- Docker or GPU execution
+- real SWE-Verified exact4/exact16 byte qualification
+- B1 or B4 full-step timing
+- hardware-floor or one-sided U95 acceptance measurement
+- synthetic probes

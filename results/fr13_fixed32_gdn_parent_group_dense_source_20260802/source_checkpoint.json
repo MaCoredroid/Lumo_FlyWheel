@@ -1,0 +1,90 @@
+{
+  "acceptance_evidence": false,
+  "base_commit": "57399b3ac526025f071661754aef48d3ee733369",
+  "branch": "agent/fixed32-gdn-physical32-invariant-20260802",
+  "candidate": "fixed32_gdn_parent_group_dense_simd_v3",
+  "candidate_serving_permitted": false,
+  "change": {
+    "dense_schedule_sha256": "500f9821c279c030fd0f42080d2a5410e5fef4de3d476c5ddf39f23c6a27f915",
+    "dense_schedule_shape": [
+      5,
+      4,
+      7
+    ],
+    "group_control_loads_per_program": 1,
+    "group_controls": [
+      1934,
+      1792,
+      289,
+      324,
+      361
+    ],
+    "removed_runtime_descriptors": [
+      "group_parent_refs",
+      "group_path_counts",
+      "group_path_indices",
+      "path_lengths",
+      "group_path_max_lengths"
+    ],
+    "runtime_path_metadata_loads_per_program": 0
+  },
+  "codegen": {
+    "calls": null,
+    "local_bytes": null,
+    "registers": null,
+    "shared_bytes": null,
+    "spills": null,
+    "stack_bytes": null,
+    "status": "pending_b4_live_arm_teardown"
+  },
+  "contract": {
+    "group_max_path_lengths": [
+      7,
+      7,
+      1,
+      1,
+      1
+    ],
+    "groups": 5,
+    "level1_parent_loads_per_request": 5,
+    "member_execution": "parallel_simd",
+    "physical_critical_path": 12,
+    "physical_launches_per_layer": 2,
+    "physical_rows_per_request": 32,
+    "simd_width": 4,
+    "single_writer_nodes": 32
+  },
+  "gpu_or_docker_run_performed": false,
+  "hardware_floor_ms_per_step": null,
+  "kernel": "tree_gdn_parent_group_dense_simd_width4_v3",
+  "production_default_enabled": false,
+  "qualification": {
+    "hydra27_fixed32_exact16_b4": "not_run",
+    "hydra27_fixed32_exact4_b4": "not_run",
+    "tail6_fixed32_exact16_b4": "not_run",
+    "tail6_fixed32_exact4_b4": "not_run"
+  },
+  "schema": "fr13.fixed32.gdn_parent_group_dense.source_checkpoint.v1",
+  "single_launch_composition": {
+    "grouped_critical_path": 12,
+    "projected_composed_critical_path": 22,
+    "reason": "unproven_launch_saving_does_not_justify_lost_group_parallelism",
+    "status": "rejected_not_implemented"
+  },
+  "source_commit": "73413f28738812d468a2268ca0bab69f910169b2",
+  "source_identity": {
+    "kernel_source_sha256": "8b4cf9f074a5ce70dd0eeff06c5c66e5e405e61bfa2533350a89a84d117cc52a",
+    "parent_contract_sha256": "892ed007e37d19ba9697944495731950dfefc663cdaab044c42c47290df78fbb",
+    "writer_sha256": "23b22df6bf551a4e788327db3b3d3d96e1eca49078d2c6bd0049da2d390eca8b"
+  },
+  "status": "SOURCE_STATIC_CHECKPOINT_CODEGEN_BYTE_TIMING_PENDING",
+  "synthetic_probe_executed": false,
+  "tests": {
+    "parent_group_contract_and_observer": "11_passed",
+    "python_compile": "pass",
+    "qualification_lifecycle": "19_passed",
+    "runner_shell_syntax": "pass"
+  },
+  "timing_evidence": false,
+  "u95_floor_acceptance_evidence": false
+}
