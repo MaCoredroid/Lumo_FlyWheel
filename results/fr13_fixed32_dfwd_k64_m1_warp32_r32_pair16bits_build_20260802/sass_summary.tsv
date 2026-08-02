@@ -1,0 +1,2 @@
+encoded_including_nop	nop	operational	ldg_128	stg_u16	shuffle_down	fadd	ffma_static	prmt	shf	lop3_total	bf16_conversion	barrier	local_load_store	calls	atomics
+112	9	103	4	1	5	5	17	0	6	17	1	0	0	0	0
