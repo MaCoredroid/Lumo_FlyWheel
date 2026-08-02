@@ -9,13 +9,15 @@ CUDA = REPO / "csrc" / "fr13_bf16_gemvx_k64_m1_shuffle.cu"
 BUILDER = REPO / "scripts" / "fr13_build_bf16_gemvx_k64_m1_shuffle.py"
 
 
-def test_cuda_source_is_strict_k64_m1_full_warp_r32() -> None:
+def test_cuda_source_is_strict_k64_m1_full_warp_r32_pair2() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert "constexpr int kHidden = 5120;" in source
     assert "constexpr int kVocab = 65536;" in source
     assert "constexpr int kLanes = 32;" in source
     assert "constexpr int kRowsPerCta = 32;" in source
+    assert "constexpr int kElementsPerLoad = 2;" in source
+    assert "constexpr int kPairs = kHidden / kElementsPerLoad;" in source
     assert "static_assert(kLanes * kRowsPerCta == 1024);" in source
     assert "static_assert(kCtas == 2048);" in source
     assert "const dim3 block(kLanes, kRowsPerCta, 1);" in source
@@ -24,13 +26,14 @@ def test_cuda_source_is_strict_k64_m1_full_warp_r32() -> None:
     assert "extern __shared__" not in source
 
 
-def test_cuda_source_preserves_scalar_accumulation_and_reduction_order() -> None:
+def test_cuda_source_uses_aligned_pair_loads_and_fp32_accumulation() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert "float accumulator = 0.0f;" in source
     assert "#pragma unroll 1" in source
-    assert "for (int k = lane; k < kHidden; k += kLanes)" in source
-    assert "accumulator = __fmaf_rn(x, w, accumulator);" in source
+    assert "for (int pair = lane; pair < kPairs; pair += kLanes)" in source
+    assert source.count("__bfloat1622float2(") == 2
+    assert source.count("accumulator = __fmaf_rn(x.") == 2
     assert source.count("__shfl_down_sync(") == 5
     assert source.count("__fadd_rn(") == 5
     for stride in (16, 8, 4, 2, 1):
@@ -58,13 +61,15 @@ def test_cuda_op_is_out_variant_with_strict_k64_geometry() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert (
-        "gemvx_m1_warp32_r32_out(Tensor(a!) output, Tensor input, "
+        "gemvx_m1_warp32_r32_pair2_out(Tensor(a!) output, Tensor input, "
         "Tensor weight) -> ()" in source
     )
     assert "input.sizes() == at::IntArrayRef({1, kHidden})" in source
     assert "weight.sizes() == at::IntArrayRef({kVocab, kHidden})" in source
     assert "output.sizes() == at::IntArrayRef({1, kVocab})" in source
     assert "weight must be contiguous [65536,5120]" in source
+    assert "pair2 inputs must be 4-byte aligned" in source
+    assert "alignof(__nv_bfloat162)" in source
     assert "at::cuda::getCurrentCUDAStream()" in source
     assert "C10_CUDA_KERNEL_LAUNCH_CHECK();" in source
     assert "TORCH_LIBRARY_FRAGMENT(fr13_bf16_k64_head, library)" in source
@@ -90,4 +95,6 @@ def test_builder_is_pinned_default_off_and_claims_no_qualification() -> None:
     assert '"block": [32, 32, 1]' in source
     assert '"output_rows_per_cta": 32' in source
     assert '"k_partition_lanes": 32' in source
-    assert '"lane_k_iterations": 160' in source
+    assert '"elements_per_load": 2' in source
+    assert '"lane_load_iterations": 80' in source
+    assert '"lane_fma_iterations": 160' in source
