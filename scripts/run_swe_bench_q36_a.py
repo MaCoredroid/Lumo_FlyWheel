@@ -141,6 +141,9 @@ _FIXED32_CFWD_B4_QUALIFICATION_CLASSIFICATION = (
 _FIXED32_CONV_CHANNEL_QUALIFICATION_CLASSIFICATION = (
     "conv_channel_zeroelide_real_swe_qualification"
 )
+_FIXED32_CONV_CHANNEL_B4_QUALIFICATION_CLASSIFICATION = (
+    "conv_channel_zeroelide_real_swe_b4_qualification"
+)
 _FIXED32_AGENT_PLACEMENT_SCHEMA = "fr13-fixed32-agent-placement-v1"
 _FIXED32_AGENT_HOST_ALIAS = "alienware"
 _FIXED32_MEASURED_HOST_IDENTITY = {
@@ -3288,6 +3291,38 @@ class _Fixed32ConvChannelRealTaskArm(_Fixed32TawRealTaskArm):
         return payload
 
 
+class _Fixed32ConvChannelCampaignArm(_Fixed32TawCampaignArm):
+    """Bind channel-commit qualification to one canonical exact4 campaign."""
+
+    arm_name = _FIXED32_CONV_CHANNEL_REAL_TASK_ARM_NAME
+    artifact_name = "fixed32_conv_channel_campaign_arm.json"
+    label = "conv channel zero-elide campaign"
+    schema = "fr13-fixed32-conv-channel-campaign-arm-v1"
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        if self.task_count != 4:
+            raise Fixed32BoundaryError(
+                "fixed32 conv channel campaign arm requires canonical exact4"
+            )
+
+    def as_dict(self) -> dict[str, Any]:
+        payload = super().as_dict()
+        payload.update(
+            {
+                "run_classification": (
+                    _FIXED32_CONV_CHANNEL_B4_QUALIFICATION_CLASSIFICATION
+                ),
+                "performance_measurement": False,
+                "timing_eligible": False,
+                "acceptance_valid": False,
+                "process_local_qualification_only": True,
+                "durable_production_pass": False,
+            }
+        )
+        return payload
+
+
 class _Fixed32CommitterLayerBatchCampaignArm(_Fixed32TawCampaignArm):
     """Bind CFWD qualification to one canonical exact4/16 B4 campaign."""
 
@@ -4509,6 +4544,7 @@ def _validate_fixed32_conv_commit_metrics(
         or scalars["channel_reference_shadow_launches"]
         != scalars["channel_candidate_shadow_launches"]
         or scalars["channel_reference_shadow_launches"] != sum(attempts.values())
+        or scalars["channel_reference_served"] != sum(attempts.values())
     ):
         raise Fixed32BoundaryError(f"{label}: channel counters do not reconcile")
     inactive = {str(batch) for batch in range(server_capacity + 1, 5)}
@@ -6134,6 +6170,64 @@ class _Fixed32CfwdB4QualificationMemberTaskBracket(_Fixed32TaskBracket):
         }
 
 
+class _Fixed32ConvChannelB4QualificationMemberTaskBracket(
+    _Fixed32TaskBracket
+):
+    """Bracket one B4 member while channel coverage remains campaign-wide."""
+
+    require_conv_commit_metrics = True
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        if self.server_capacity != 4:
+            raise Fixed32BoundaryError(
+                "fixed32 conv channel B4 member requires capacity 4"
+            )
+        if self.taw_real_task_arm is not None:
+            raise Fixed32BoundaryError(
+                "fixed32 conv channel B4 qualification forbids per-task arms"
+            )
+
+    def _validate_conv_commit_transition(
+        self,
+        post_counters: dict[str, Any] | None,
+    ) -> None:
+        pre = self.pre_conv_commit_counters
+        post = post_counters
+        if not isinstance(pre, dict) or not isinstance(post, dict):
+            raise Fixed32BoundaryError(
+                "fixed32 conv channel B4 member lacks conv-commit counters"
+            )
+        route = "fixed32_channel_zeroelide_source_col0"
+        if pre.get("route") != route or post.get("route") != route:
+            raise Fixed32BoundaryError(
+                "fixed32 conv channel B4 qualification route changed"
+            )
+        _fixed32_cfwd_b4_qualification_transition(
+            pre_attempts=pre["channel_byte_gate_attempts_by_batch"],
+            pre_coverage=pre["channel_byte_gate_coverage_mask_by_batch"],
+            post_attempts=post["channel_byte_gate_attempts_by_batch"],
+            post_coverage=post["channel_byte_gate_coverage_mask_by_batch"],
+        )
+
+    def _artifact_classification(self) -> dict[str, Any]:
+        return {
+            "run_classification": (
+                _FIXED32_CONV_CHANNEL_B4_QUALIFICATION_CLASSIFICATION
+                + "_member"
+            ),
+            "acceptance_valid": False,
+            "performance_measurement": False,
+            "timing_eligible": False,
+            "gate_eligible": False,
+            "floor_acceptance_eligible": False,
+            "qualification_scope": "canonical_exact4_campaign",
+            "per_task_qualification_claim": False,
+            "process_local_qualification_only": True,
+            "durable_production_pass": False,
+        }
+
+
 class _Fixed32CfwdSameServerTimingHandoff:
     """An in-memory-only proof required immediately before CFWD timing."""
 
@@ -6449,6 +6543,35 @@ class _Fixed32CfwdB4QualificationCampaignBracket:
     def _write_artifact(self) -> None:
         self._write_json(self.artifact_path, self.as_dict())
 
+    def _capture_pre_snapshot(self, snapshot: dict[str, Any]) -> None:
+        del snapshot
+
+    def _validate_post_snapshot(
+        self,
+        *,
+        snapshot: dict[str, Any],
+        transition: dict[str, dict[str, int]],
+        event_delta: int,
+    ) -> None:
+        del snapshot, transition, event_delta
+
+    def _build_timing_handoff(
+        self,
+        *,
+        qualification_post_ack: Any,
+        post_attempts: dict[str, int],
+        post_coverage: dict[str, int],
+    ) -> _Fixed32CfwdSameServerTimingHandoff:
+        return _Fixed32CfwdSameServerTimingHandoff(
+            client=self.client,
+            campaign_arm=self.campaign_arm,
+            qualification_post_ack=qualification_post_ack,
+            post_attempts=post_attempts,
+            post_coverage=post_coverage,
+            boundary_snapshot_base=self.boundary_snapshot_base,
+            server_capacity=self.server_capacity,
+        )
+
     def pre(self) -> None:
         if self.state != "planned":
             raise Fixed32BoundaryError(
@@ -6463,6 +6586,7 @@ class _Fixed32CfwdB4QualificationCampaignBracket:
                 allow_incomplete_layer_batch_coverage=True,
             )
             attempts, coverage = self._snapshot_gate_maps(snapshot)
+            self._capture_pre_snapshot(snapshot)
             metrics = _fixed32_metrics_snapshot(
                 metrics_url=DEFAULT_METRICS_URL,
                 snapshot=snapshot,
@@ -6550,6 +6674,11 @@ class _Fixed32CfwdB4QualificationCampaignBracket:
                 post_attempts=attempts,
                 post_coverage=coverage,
             )
+            self._validate_post_snapshot(
+                snapshot=snapshot,
+                transition=transition,
+                event_delta=event_delta,
+            )
             metrics = _fixed32_metrics_snapshot(
                 metrics_url=DEFAULT_METRICS_URL,
                 snapshot=snapshot,
@@ -6567,14 +6696,10 @@ class _Fixed32CfwdB4QualificationCampaignBracket:
                 for mask in coverage.values()
             )
             if action_succeeded and complete:
-                self.handoff = _Fixed32CfwdSameServerTimingHandoff(
-                    client=self.client,
-                    campaign_arm=self.campaign_arm,
+                self.handoff = self._build_timing_handoff(
                     qualification_post_ack=ack,
                     post_attempts=attempts,
                     post_coverage=coverage,
-                    boundary_snapshot_base=self.boundary_snapshot_base,
-                    server_capacity=self.server_capacity,
                 )
                 self.state = "qualified_process_local"
             elif action_succeeded:
@@ -6610,6 +6735,164 @@ class _Fixed32CfwdB4QualificationCampaignBracket:
             raise
         self.post(action_succeeded=True)
         return result
+
+
+class _Fixed32ConvChannelB4QualificationCampaignBracket(
+    _Fixed32CfwdB4QualificationCampaignBracket
+):
+    """Own the real exact4 channel byte gate as one campaign interval."""
+
+    schema = "fr13-fixed32-conv-channel-b4-qualification-campaign-v1"
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        if not isinstance(self.campaign_arm, _Fixed32ConvChannelCampaignArm):
+            raise Fixed32BoundaryError(
+                "fixed32 conv channel B4 campaign requires its dedicated arm"
+            )
+        self._pre_channel_state: dict[str, Any] | None = None
+
+    @staticmethod
+    def _snapshot_gate_maps(
+        snapshot: dict[str, Any],
+    ) -> tuple[dict[str, int], dict[str, int]]:
+        conv_commit = snapshot["metrics"][_FIXED32_BOUNDARY_CONV_COMMIT_KEY]
+        return (
+            dict(conv_commit["channel_byte_gate_attempts_by_batch"]),
+            dict(conv_commit["channel_byte_gate_coverage_mask_by_batch"]),
+        )
+
+    @staticmethod
+    def _channel_state(snapshot: dict[str, Any]) -> dict[str, Any]:
+        fixed = snapshot["metrics"]["fixed32"]
+        conv_commit = snapshot["metrics"][_FIXED32_BOUNDARY_CONV_COMMIT_KEY]
+        scalar_names = (
+            "direct_launches",
+            "gather_launches",
+            "scatter_launches",
+            "channel_reference_shadow_launches",
+            "channel_candidate_shadow_launches",
+            "channel_reference_served",
+            "channel_candidate_served",
+        )
+        map_names = (
+            "direct_launches_by_batch",
+            "channel_reference_served_by_batch",
+            "channel_candidate_served_by_batch",
+        )
+        return {
+            "route": conv_commit["route"],
+            "batch_histogram": dict(fixed["batch_histogram"]),
+            "scalars": {
+                name: int(conv_commit[name]) for name in scalar_names
+            },
+            "maps": {
+                name: dict(conv_commit[name]) for name in map_names
+            },
+        }
+
+    def _capture_pre_snapshot(self, snapshot: dict[str, Any]) -> None:
+        self._pre_channel_state = self._channel_state(snapshot)
+
+    def _validate_post_snapshot(
+        self,
+        *,
+        snapshot: dict[str, Any],
+        transition: dict[str, dict[str, int]],
+        event_delta: int,
+    ) -> None:
+        pre = self._pre_channel_state
+        if not isinstance(pre, dict):
+            raise Fixed32BoundaryError(
+                "fixed32 conv channel B4 campaign lost its pre counters"
+            )
+        post = self._channel_state(snapshot)
+        route = "fixed32_channel_zeroelide_source_col0"
+        if pre["route"] != route or post["route"] != route:
+            raise Fixed32BoundaryError(
+                "fixed32 conv channel B4 campaign route changed"
+            )
+        batches = tuple(str(batch) for batch in range(1, 5))
+        histogram_delta = {
+            batch: (
+                post["batch_histogram"][batch]
+                - pre["batch_histogram"][batch]
+            )
+            for batch in batches
+        }
+        attempt_delta = transition["attempt_delta_by_batch"]
+        if (
+            any(delta < 0 for delta in histogram_delta.values())
+            or sum(histogram_delta.values()) != event_delta
+            or any(
+                attempt_delta[batch] > histogram_delta[batch]
+                for batch in batches
+            )
+        ):
+            raise Fixed32BoundaryError(
+                "fixed32 conv channel B4 attempts do not bind decode events"
+            )
+        expected_map_deltas = {
+            "direct_launches_by_batch": histogram_delta,
+            "channel_reference_served_by_batch": attempt_delta,
+            "channel_candidate_served_by_batch": {
+                batch: histogram_delta[batch] - attempt_delta[batch]
+                for batch in batches
+            },
+        }
+        for name, expected in expected_map_deltas.items():
+            actual = {
+                batch: post["maps"][name][batch] - pre["maps"][name][batch]
+                for batch in batches
+            }
+            if actual != expected:
+                raise Fixed32BoundaryError(
+                    "fixed32 conv channel B4 served counters do not bind "
+                    "decode occupancy"
+                )
+        total_attempts = sum(attempt_delta.values())
+        expected_scalar_deltas = {
+            "direct_launches": event_delta,
+            "gather_launches": 0,
+            "scatter_launches": 0,
+            "channel_reference_shadow_launches": total_attempts,
+            "channel_candidate_shadow_launches": total_attempts,
+            "channel_reference_served": total_attempts,
+            "channel_candidate_served": event_delta - total_attempts,
+        }
+        actual_scalar_deltas = {
+            name: post["scalars"][name] - pre["scalars"][name]
+            for name in expected_scalar_deltas
+        }
+        if actual_scalar_deltas != expected_scalar_deltas:
+            raise Fixed32BoundaryError(
+                "fixed32 conv channel B4 scalar counters do not reconcile"
+            )
+
+    def _build_timing_handoff(
+        self,
+        *,
+        qualification_post_ack: Any,
+        post_attempts: dict[str, int],
+        post_coverage: dict[str, int],
+    ) -> None:
+        del qualification_post_ack, post_attempts, post_coverage
+        return None
+
+    def as_dict(self) -> dict[str, Any]:
+        payload = super().as_dict()
+        payload.update(
+            {
+                "run_classification": (
+                    _FIXED32_CONV_CHANNEL_B4_QUALIFICATION_CLASSIFICATION
+                ),
+                "acceptance_valid": False,
+                "same_process_timing_handoff_contract_implemented": False,
+                "same_process_timing_execution_implemented": False,
+                "timing_handoff": None,
+            }
+        )
+        return payload
 
 
 class _Fixed32EagerKernelDiagnosticTaskBracket(_Fixed32TaskBracket):
@@ -8565,7 +8848,10 @@ def _process_one(
     )
     fixed32_conv_channel_qualification = isinstance(
         fixed32_bracket,
-        _Fixed32ConvChannelQualificationTaskBracket,
+        (
+            _Fixed32ConvChannelQualificationTaskBracket,
+            _Fixed32ConvChannelB4QualificationMemberTaskBracket,
+        ),
     )
     pending_runner_meta_path = (
         task_dir / _FIXED32_PENDING_RUNNER_METADATA_FILENAME
@@ -8629,10 +8915,13 @@ def _process_one(
                 "same_process_timing_execution_implemented": False,
             }
         elif fixed32_conv_channel_qualification:
+            channel_classification = (
+                _FIXED32_CONV_CHANNEL_B4_QUALIFICATION_CLASSIFICATION + "_member"
+                if fixed32_campaign_scope
+                else _FIXED32_CONV_CHANNEL_QUALIFICATION_CLASSIFICATION
+            )
             summary["fixed32_run_classification"] = {
-                "run_classification": (
-                    _FIXED32_CONV_CHANNEL_QUALIFICATION_CLASSIFICATION
-                ),
+                "run_classification": channel_classification,
                 "acceptance_valid": False,
                 "performance_measurement": False,
                 "timing_eligible": False,
@@ -9555,7 +9844,8 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help=(
             "Host path mounted at the channel zero-elide conv commit kernel's "
-            "exact /logs real-event marker path. B1 task qualification only."
+            "exact /logs real-event marker path. B1 task or canonical exact4 "
+            "B4 campaign qualification only."
         ),
     )
     args = parser.parse_args(argv)
@@ -9743,9 +10033,9 @@ def main(argv: list[str] | None = None) -> int:
             "FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION=1"
         )
     if fixed32_conv_channel_diagnostic:
-        if not fixed32_enabled or not fixed32_b1_diagnostic:
+        if not fixed32_enabled:
             parser.error(
-                "fixed32 conv channel real-task arm requires B1 diagnostic mode"
+                "fixed32 conv channel real-event arm requires fixed32 runtime"
             )
         if args.fixed32_conv_channel_real_event_arm is None:
             parser.error(
@@ -9859,6 +10149,21 @@ def main(argv: list[str] | None = None) -> int:
             elif serving_batch != 4 or args.concurrency != 4:
                 parser.error(
                     "fixed32 CFWD campaign qualification requires exact B4"
+                )
+        if fixed32_conv_channel_diagnostic:
+            if fixed32_b1_diagnostic:
+                if serving_batch != 1 or args.concurrency != 1:
+                    parser.error(
+                        "fixed32 conv channel B1 qualification requires exact B1"
+                    )
+            elif (
+                serving_batch != 4
+                or args.concurrency != 4
+                or fixed32_subset.get("task_count") != 4
+            ):
+                parser.error(
+                    "fixed32 conv channel campaign qualification requires "
+                    "canonical exact4 B4"
                 )
         if (
             fixed32_taw_diagnostic
@@ -10033,6 +10338,49 @@ def main(argv: list[str] | None = None) -> int:
                 dataset_out / "fixed32_cfwd_b4_qualification_metrics_post.txt"
             ),
         )
+    conv_channel_campaign_bracket: (
+        _Fixed32ConvChannelB4QualificationCampaignBracket | None
+    ) = None
+    conv_channel_campaign_arm_artifact_path: Path | None = None
+    if fixed32_conv_channel_diagnostic and not fixed32_b1_diagnostic:
+        if (
+            args.fixed32_conv_channel_real_event_arm is None
+            or fixed32_subset is None
+            or fixed32_client is None
+            or args.fixed32_boundary_snapshot is None
+        ):
+            raise Fixed32BoundaryError(
+                "fixed32 conv channel B4 campaign lacks its validated binding"
+            )
+        conv_channel_campaign_arm = _Fixed32ConvChannelCampaignArm(
+            path=args.fixed32_conv_channel_real_event_arm,
+            subset_binding=fixed32_subset,
+            concurrency=args.concurrency,
+        )
+        conv_channel_campaign_arm_artifact_path = (
+            dataset_out / conv_channel_campaign_arm.artifact_name
+        )
+        conv_channel_campaign_bracket = (
+            _Fixed32ConvChannelB4QualificationCampaignBracket(
+                client=fixed32_client,
+                boundary_snapshot_base=args.fixed32_boundary_snapshot,
+                server_capacity=serving_batch,
+                campaign_arm=conv_channel_campaign_arm,
+                artifact_path=(
+                    dataset_out
+                    / "fixed32_conv_channel_b4_qualification_campaign.json"
+                ),
+                arm_artifact_path=conv_channel_campaign_arm_artifact_path,
+                metrics_pre_path=(
+                    dataset_out
+                    / "fixed32_conv_channel_b4_qualification_metrics_pre.txt"
+                ),
+                metrics_post_path=(
+                    dataset_out
+                    / "fixed32_conv_channel_b4_qualification_metrics_post.txt"
+                ),
+            )
+        )
 
     def _job(iid: str) -> dict[str, Any]:
         t0 = time.time()
@@ -10046,7 +10394,10 @@ def main(argv: list[str] | None = None) -> int:
             )
             else (
                 args.fixed32_conv_channel_real_event_arm
-                if args.fixed32_conv_channel_real_event_arm is not None
+                if (
+                    args.fixed32_conv_channel_real_event_arm is not None
+                    and fixed32_b1_diagnostic
+                )
                 else (
                     (
                         args.fixed32_taw_real_event_arm
@@ -10096,6 +10447,8 @@ def main(argv: list[str] | None = None) -> int:
         elif fixed32_conv_channel_diagnostic:
             fixed32_bracket_type = (
                 _Fixed32ConvChannelQualificationTaskBracket
+                if fixed32_b1_diagnostic
+                else _Fixed32ConvChannelB4QualificationMemberTaskBracket
             )
         elif fixed32_eager_kernel_diagnostic:
             fixed32_bracket_type = _Fixed32EagerKernelDiagnosticTaskBracket
@@ -10202,6 +10555,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if cfwd_campaign_bracket is not None:
         cfwd_campaign_bracket.run(_run_jobs)
+    elif conv_channel_campaign_bracket is not None:
+        conv_channel_campaign_bracket.run(_run_jobs)
     else:
         _run_with_fixed32_taw_campaign_arm(
             arm=taw_campaign_arm,
@@ -10224,7 +10579,10 @@ def main(argv: list[str] | None = None) -> int:
         # Qualification contains task traces and is not itself a publishable
         # timing unit. Its reduced artifact must be produced explicitly after
         # review; never let the generic campaign autocommitter sweep raw output.
-        if cfwd_campaign_bracket is None:
+        if (
+            cfwd_campaign_bracket is None
+            and conv_channel_campaign_bracket is None
+        ):
             _autocommit_fixed32_campaign_artifacts(
                 dataset_out=dataset_out,
                 per_task_root=per_task_root,
@@ -10296,34 +10654,60 @@ def main(argv: list[str] | None = None) -> int:
             encoding="utf-8",
         )
     elif fixed32_conv_channel_diagnostic:
-        completed = []
-        remaining_by_task = {}
-        for task in summaries:
-            boundary = task.get("fixed32_task_boundary")
-            qualification = (
-                boundary.get("qualification_coverage")
-                if isinstance(boundary, dict)
-                else None
+        if conv_channel_campaign_bracket is not None:
+            campaign_payload = conv_channel_campaign_bracket.as_dict()
+            qualification = campaign_payload.get("qualification_coverage")
+            coverage_complete = bool(
+                isinstance(qualification, dict)
+                and qualification.get("coverage_complete")
             )
-            if isinstance(qualification, dict):
-                completed.append(bool(qualification.get("coverage_complete")))
-                remaining_by_task[str(task.get("instance_id", ""))] = (
-                    qualification.get("remaining_lengths_by_batch")
+            summary["fixed32_run_classification"] = {
+                "run_classification": (
+                    _FIXED32_CONV_CHANNEL_B4_QUALIFICATION_CLASSIFICATION
+                ),
+                "acceptance_valid": False,
+                "performance_measurement": False,
+                "timing_eligible": False,
+                "gate_eligible": False,
+                "floor_acceptance_eligible": False,
+                "process_local_qualification_only": True,
+                "durable_production_pass": False,
+                "same_process_timing_handoff_contract_implemented": False,
+                "same_process_timing_execution_implemented": False,
+                "coverage_complete": coverage_complete,
+                "campaign_qualification": campaign_payload,
+            }
+        else:
+            completed = []
+            remaining_by_task = {}
+            for task in summaries:
+                boundary = task.get("fixed32_task_boundary")
+                qualification = (
+                    boundary.get("qualification_coverage")
+                    if isinstance(boundary, dict)
+                    else None
                 )
-        summary["fixed32_run_classification"] = {
-            "run_classification": (
-                _FIXED32_CONV_CHANNEL_QUALIFICATION_CLASSIFICATION
-            ),
-            "acceptance_valid": False,
-            "performance_measurement": False,
-            "timing_eligible": False,
-            "gate_eligible": False,
-            "floor_acceptance_eligible": False,
-            "process_local_qualification_only": True,
-            "durable_production_pass": False,
-            "coverage_complete": bool(completed) and all(completed),
-            "remaining_lengths_by_task": remaining_by_task,
-        }
+                if isinstance(qualification, dict):
+                    completed.append(
+                        bool(qualification.get("coverage_complete"))
+                    )
+                    remaining_by_task[str(task.get("instance_id", ""))] = (
+                        qualification.get("remaining_lengths_by_batch")
+                    )
+            summary["fixed32_run_classification"] = {
+                "run_classification": (
+                    _FIXED32_CONV_CHANNEL_QUALIFICATION_CLASSIFICATION
+                ),
+                "acceptance_valid": False,
+                "performance_measurement": False,
+                "timing_eligible": False,
+                "gate_eligible": False,
+                "floor_acceptance_eligible": False,
+                "process_local_qualification_only": True,
+                "durable_production_pass": False,
+                "coverage_complete": bool(completed) and all(completed),
+                "remaining_lengths_by_task": remaining_by_task,
+            }
         (dataset_out / "campaign_summary.json").write_text(
             json.dumps(summary, indent=2),
             encoding="utf-8",

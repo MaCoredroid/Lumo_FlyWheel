@@ -3585,16 +3585,30 @@ def build_fixed32_chat_traffic_audit(
         )
     if concurrency not in (1, 4):
         raise GateError(f"{arm_dir}: fixed32 provenance concurrency is invalid")
-    if allow_conv_channel_qualification and (
-        concurrency != 1
-        or len(task_ids) != 1
-        or subset.get("task_count") != 1
-        or subset.get("run_classification") != "b1_diagnostic"
-    ):
-        raise GateError(
-            f"{arm_dir}: conv-channel qualification requires the pinned "
-            "one-task B1 diagnostic subset"
+    if allow_conv_channel_qualification:
+        b1_scope = (
+            concurrency == 1
+            and len(task_ids) == 1
+            and subset.get("task_count") == 1
+            and subset.get("run_classification") == "b1_diagnostic"
         )
+        b4_scope = False
+        if (
+            concurrency == 4
+            and len(task_ids) == 4
+            and subset.get("task_count") == 4
+            and type(subset.get("path")) is str
+        ):
+            try:
+                canonical = validate_canonical_subset(Path(subset["path"]))
+            except (OSError, GateError):
+                canonical = None
+            b4_scope = canonical == subset
+        if not b1_scope and not b4_scope:
+            raise GateError(
+                f"{arm_dir}: conv-channel qualification requires the pinned "
+                "one-task B1 diagnostic or canonical exact4 B4 subset"
+            )
     task_dirs = task_directories(
         arm_dir,
         len(task_ids),

@@ -1642,18 +1642,28 @@ if [[ "$FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT" == "diagnostic" ]]; then
     exit 2
   }
   [[ -n "$FIXED32_MODE" \
-     && "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" \
-     && "$MAX_NUM_SEQS_OVR" == "1" \
-     && "$SWE_CONCURRENCY" == "1" \
      && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
      && "${FR13_DRAFT_VOCAB_ROOT:-0}" == "1" \
      && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
      && "$(sha256sum scripts/fr13_dvk_subset_blocks.json | awk '{print $1}')" == "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff" \
      && "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" == "0" \
      && "${ENFORCE_EAGER:-0}" == "0" ]] || {
-    echo "FAIL: channel zero-elide conv qualification requires exact K64/root1 graph-mode B1"
+    echo "FAIL: channel zero-elide conv qualification requires K64/root1 graph mode"
     exit 2
   }
+  if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
+    [[ "$MAX_NUM_SEQS_OVR" == "1" && "$SWE_CONCURRENCY" == "1" ]] || {
+      echo "FAIL: channel zero-elide conv B1 qualification requires exact B1"
+      exit 2
+    }
+  else
+    [[ "$MAX_NUM_SEQS_OVR" == "4" \
+       && "$SWE_CONCURRENCY" == "4" \
+       && "$(sha256sum "$SUBSET" | awk '{print $1}')" == "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5" ]] || {
+      echo "FAIL: channel zero-elide conv campaign qualification requires canonical exact4 B4"
+      exit 2
+    }
+  fi
   [[ "$FR13_FIXED32_CONV_FLAT_COMMIT" == "0" \
      && "$FR13_FIXED32_COMMITTER_LAYER_BATCH" == "0" \
      && "$FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION" == "0" \

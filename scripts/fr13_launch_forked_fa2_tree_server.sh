@@ -580,17 +580,26 @@ if [[ "$FR13_FIXED32_CONV_FLAT_COMMIT" == "diagnostic" \
 fi
 if [[ "$FR13_FIXED32_CONV_CHANNEL_ZEROELIDE_COMMIT" == "diagnostic" ]]; then
   [[ -n "${FR13_FIXED32_MODE:-}" \
-     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
-     && "$MAX_NUM_SEQS" == "1" \
      && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
      && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
      && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
      && "$(sha256sum scripts/fr13_dvk_subset_blocks.json | awk '{print $1}')" == "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff" \
      && -z "${FR13_NEEDS_ALLOW:-}" \
      && "${ENFORCE_EAGER:-0}" == "0" ]] || {
-    echo "channel zero-elide conv commit requires exact K64/root1 graph-mode B1" >&2
+    echo "channel zero-elide conv commit requires K64/root1 graph mode" >&2
     exit 2
   }
+  if [[ "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" ]]; then
+    [[ "$MAX_NUM_SEQS" == "1" ]] || {
+      echo "channel zero-elide conv B1 qualification requires exact B1" >&2
+      exit 2
+    }
+  else
+    [[ "$MAX_NUM_SEQS" == "4" ]] || {
+      echo "channel zero-elide conv campaign qualification requires exact B4" >&2
+      exit 2
+    }
+  fi
   [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" \
      && "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "0" \
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
