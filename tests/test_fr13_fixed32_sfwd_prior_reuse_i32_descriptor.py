@@ -20,7 +20,10 @@ except ModuleNotFoundError:
     sys.modules["triton.language"] = language_stub
 
 from lumo_flywheel_serving.fr13_sfwd_prior_reuse_i32_descriptor import (
+    CHANNELS,
     FIXED32_PARENT,
+    SIGNED_INT32_MAX,
+    fixed32_i32_address_contract,
     fixed32_i32_source_descriptor,
 )
 
@@ -82,3 +85,25 @@ def test_i32_descriptor_preserves_exact_ordered_conv_math() -> None:
             candidate = candidate + candidate_product
 
         assert torch.equal(candidate, reference)
+
+
+def test_b4_dense_offsets_fit_signed_int32() -> None:
+    maxima = fixed32_i32_address_contract(4, x_stride_row=CHANNELS)
+
+    assert maxima == {
+        "x": 4 * 32 * CHANNELS - 1,
+        "out": 4 * 32 * CHANNELS - 1,
+        "source_stage": 4 * 36 * CHANNELS - 1,
+    }
+    assert max(maxima.values()) <= SIGNED_INT32_MAX
+
+
+def test_i32_address_contract_rejects_unsafe_stride() -> None:
+    unsafe_stride = SIGNED_INT32_MAX // (4 * 32 - 1) + 1
+
+    try:
+        fixed32_i32_address_contract(4, x_stride_row=unsafe_stride)
+    except ValueError as error:
+        assert "overflow" in str(error)
+    else:
+        raise AssertionError("unsafe int32 row stride was accepted")

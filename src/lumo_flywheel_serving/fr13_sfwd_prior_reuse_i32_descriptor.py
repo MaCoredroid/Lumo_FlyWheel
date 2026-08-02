@@ -40,6 +40,35 @@ FIXED32_PARENT = (
     29,
     30,
 )
+
+FIXED32_ROWS = 32
+CHANNELS = 10240
+SOURCE_ROWS = 36
+SIGNED_INT32_MAX = (1 << 31) - 1
+
+
+def fixed32_i32_address_contract(
+    batch_size: int,
+    *,
+    x_stride_row: int,
+) -> dict[str, int]:
+    """Prove every narrowed dense-buffer element offset fits signed int32."""
+    batch = int(batch_size)
+    stride = int(x_stride_row)
+    if batch not in (1, 2, 3, 4):
+        raise ValueError("int32 SFWD addressing requires B1-B4")
+    if stride < CHANNELS:
+        raise ValueError("int32 SFWD addressing requires a valid row stride")
+    maxima = {
+        "x": (batch * FIXED32_ROWS - 1) * stride + CHANNELS - 1,
+        "out": batch * FIXED32_ROWS * CHANNELS - 1,
+        "source_stage": batch * SOURCE_ROWS * CHANNELS - 1,
+    }
+    if max(maxima.values()) > SIGNED_INT32_MAX:
+        raise ValueError("int32 SFWD dense-buffer offset would overflow")
+    return maxima
+
+
 def fixed32_i32_source_descriptor(width: int = 4) -> tuple[int, ...]:
     """Return the three non-final source rows for each fixed32 node."""
     if width != 4:
@@ -100,7 +129,7 @@ def _fr13_fixed32_sfwd_prior_reuse_i32_descriptor_kernel(
     bank_row = tl.load(
         spec_state_indices + pid_b * ssi_stride_b + 0 * ssi_stride_s
     ).to(tl.int64)
-    stage_base = pid_b.to(tl.int64) * SOURCE_ROWS
+    stage_base = pid_b * SOURCE_ROWS
     prior_0 = tl.load(
         conv_state
         + bank_row * conv_stride_row
@@ -125,7 +154,7 @@ def _fr13_fixed32_sfwd_prior_reuse_i32_descriptor_kernel(
     for tap in tl.static_range(0, WIDTH - 1):
         source_row = tl.load(
             source_descriptor + offs_n * (WIDTH - 1) + tap
-        ).to(tl.int64)
+        )
         from_prior = source_row < (WIDTH - 1)
         prior_value = tl.where(
             source_row == 0,
@@ -135,7 +164,7 @@ def _fr13_fixed32_sfwd_prior_reuse_i32_descriptor_kernel(
         x_node = source_row - (WIDTH - 1)
         x_value = tl.load(
             x
-            + (pid_b.to(tl.int64) * N + x_node) * x_stride_row
+            + (pid_b * N + x_node) * x_stride_row
             + offs_c,
             mask=(~from_prior) & (x_node >= 0) & (x_node < N),
             other=0.0,
@@ -148,7 +177,7 @@ def _fr13_fixed32_sfwd_prior_reuse_i32_descriptor_kernel(
         acc = acc + product
 
     current_x = tl.load(
-        x + (pid_b.to(tl.int64) * N + offs_n) * x_stride_row + offs_c
+        x + (pid_b * N + offs_n) * x_stride_row + offs_c
     )
     current_weight = tl.load(
         conv_weights
