@@ -259,6 +259,7 @@ finalize_manifests() {
 
 runner_exit() {
   local rc=$?
+  local census_rc=0
   trap - EXIT
   if (( MANIFEST_FINALIZED == 0 )); then
     if finalize_manifests; then
@@ -267,6 +268,13 @@ runner_exit() {
       local manifest_rc=$?
       (( rc == 0 )) && rc=$manifest_rc
     fi
+  fi
+  if write_host_zero_census \
+      failed_route_exit "$RUNROOT_ABS/host_zero.failed_route_exit.json"; then
+    :
+  else
+    census_rc=$?
+    (( rc == 0 )) && rc=$census_rc
   fi
   exit "$rc"
 }

@@ -302,7 +302,7 @@ def validate_engagement(
         r"[0-9a-f]{64}", layer_digest
     ) is None:
         raise PassError("timing engagement layer-key digest mismatch")
-    if isinstance(launches, bool) or not isinstance(launches, int) or launches < 48:
+    if isinstance(launches, bool) or not isinstance(launches, int) or launches != 48:
         raise PassError("timing engagement launch count mismatch")
     if "layer_keys" in payload or "task_marker" in payload:
         raise PassError("timing engagement contains raw identifiers")

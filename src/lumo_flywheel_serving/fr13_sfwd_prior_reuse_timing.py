@@ -350,6 +350,10 @@ def fixed32_sfwd_prior_reuse_timing_engagement(
     )
     if len(_STATE["layers"]) != 48 or bool(_STATE["emitted"]):
         return record
+    if int(_STATE["launches"]) != 48:
+        raise RuntimeError(
+            "FR13 SFWD prior-reuse timing requires exactly one launch per layer"
+        )
     layer_key_digest = hashlib.sha256(
         json.dumps(
             sorted(_STATE["layers"]),

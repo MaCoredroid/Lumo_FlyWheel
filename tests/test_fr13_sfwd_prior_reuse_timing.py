@@ -165,6 +165,25 @@ def test_engagement_attests_sole_candidate_producer_and_closes_at_48(
     assert len(payload["layer_key_digest"]) == 64
     assert "task_marker" not in payload
     assert "layer_keys" not in payload
+    validated = _pass_module().validate_engagement(
+        engagement,
+        gate_sha256=timing.QUALIFIED_REDUCED_GATE_SHA256,
+        candidate_source=CANDIDATE_PATH,
+        candidate_kernel_source=KERNEL_PATH,
+    )
+    assert validated["launches_observed"] == 48
+    payload["launches_observed"] = 49
+    engagement.write_text(
+        json.dumps(payload, ensure_ascii=True, sort_keys=True) + "\n",
+        encoding="ascii",
+    )
+    with pytest.raises(ValueError, match="launch count mismatch"):
+        _pass_module().validate_engagement(
+            engagement,
+            gate_sha256=timing.QUALIFIED_REDUCED_GATE_SHA256,
+            candidate_source=CANDIDATE_PATH,
+            candidate_kernel_source=KERNEL_PATH,
+        )
     with pytest.raises(RuntimeError, match="more than 48 layers"):
         timing.fixed32_sfwd_prior_reuse_timing_engagement(
             credential=credential, layer_key=49, batch_size=1
