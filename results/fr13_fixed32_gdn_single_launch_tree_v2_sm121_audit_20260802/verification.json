@@ -1,0 +1,30 @@
+{
+  "schema": "fr13.fixed32.gdn_single_launch.sm121_verification.v1",
+  "status": "PASS",
+  "checks": {
+    "required_source_commit": true,
+    "kernel_source_hash_bound": true,
+    "exact_launcher_signature_and_constexprs_recorded": true,
+    "b1_fresh_cache_compiles": 2,
+    "b4_fresh_cache_compiles": 2,
+    "fresh_process_per_pass": true,
+    "candidate_cubin_hashes_deterministic": true,
+    "cuobjdump_resource_parse": true,
+    "cuobjdump_sass_parse": true,
+    "nvdisasm_sass_parse": true,
+    "independent_sass_counts_equal": true,
+    "zero_stack_local_spill_calls": true,
+    "current_two_launch_comparators_compiled": true,
+    "level0_coefficient_comparison_reduced": true,
+    "focused_source_contract_tests_passed": 24,
+    "gpu_kernel_not_executed": true,
+    "service_or_task_not_executed": true,
+    "timing_or_acceptance_not_executed": true,
+    "raw_compiler_artifacts_not_retained": true,
+    "package_inventory_validated": true,
+    "package_checksums_validated": true,
+    "sensitive_content_scan_passed": true,
+    "python_ast_parse": true,
+    "git_diff_check": true
+  }
+}

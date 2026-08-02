@@ -1,0 +1,11 @@
+source_id	specialization	batch	level	physical_launches_per_layer	grid	ctas_per_request	ctas_per_launch	registers_per_thread	registers_per_cta	stack_bytes	local_bytes	shared_bytes	ldl	stl	calls	sass_instructions	primary_text_bytes	capmerc_text_bytes	cubin_bytes	qualification
+82bdc7e-current	b1_single_launch	1	all	1	48x16x1	768	768	97	24832	0	0	1024	0	0	0	7232	115712	15118	567680	exact_live_compile
+82bdc7e-current	b4_single_launch	4	all	1	48x16x4	768	3072	97	24832	0	0	1024	0	0	0	7232	115712	15118	567680	exact_live_compile
+82bdc7e-current	b1_current_level0	1	0	2	48x16x1	768	768	80	20480	0	0	1024	0	0	0	552	8832	1866	50664	exact_live_comparator
+82bdc7e-current	b1_current_level1	1	1	2	48x16x11	8448	8448	80	20480	0	0	1024	0	0	0	488	7808	1270	46568	exact_live_comparator
+82bdc7e-current	b4_current_level0	4	0	2	48x16x4	768	3072	64	16384	0	0	1024	0	0	0	592	9472	1930	52768	exact_live_comparator
+82bdc7e-current	b4_current_level1	4	1	2	48x16x44	8448	33792	80	20480	0	0	1024	0	0	0	504	8064	1274	48048	exact_live_comparator
+78d2b64-level0-coeff	b1_candidate_level0	1	0	2	48x16x1	768	768	77	19712	0	0	1024	0	0	0	856	13696	2690	70160	context_only_count_invocation_false
+78d2b64-level0-coeff	b1_candidate_level1	1	1	2	48x16x11	8448	8448	64	16384	0	0	1024	0	0	0	400	6400	1334	37752	context_only_count_invocation_false
+78d2b64-level0-coeff	b4_candidate_level0	4	0	2	48x16x4	768	3072	79	20224	0	0	1024	0	0	0	880	14080	2606	73216	context_only_stride1_count_invocation_false
+78d2b64-level0-coeff	b4_candidate_level1	4	1	2	48x16x44	8448	33792	64	16384	0	0	1024	0	0	0	416	6656	1214	39128	context_only_stride1_count_invocation_false

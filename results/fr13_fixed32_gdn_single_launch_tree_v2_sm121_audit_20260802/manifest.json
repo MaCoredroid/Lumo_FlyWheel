@@ -1,0 +1,67 @@
+{
+  "schema": "fr13.fixed32.gdn_single_launch.sm121_reduced_artifact.v1",
+  "status": "CODEGEN_VIABILITY_PASS_ZERO_SPILL",
+  "candidate": "fixed32_gdn_single_launch_tree_v2",
+  "source_commit": "82bdc7e03838593706dfb9e96648dcac7234a615",
+  "target": "sm_121a",
+  "batches": [
+    1,
+    4
+  ],
+  "verdict_scope": "offline codegen viability only",
+  "exact_candidate_resources": {
+    "registers_per_thread": 97,
+    "registers_per_cta": 24832,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "shared_bytes_cuobjdump": 1024,
+    "shared_bytes_triton_metadata": 128,
+    "ldl_instructions": 0,
+    "stl_instructions": 0,
+    "call_instructions": 0,
+    "sass_instructions": 7232,
+    "primary_text_bytes": 115712,
+    "capmerc_text_bytes": 15118,
+    "cubin_bytes": 567680
+  },
+  "launch_geometry": {
+    "ctas_per_request": 768,
+    "b1_ctas_per_launch": 768,
+    "b4_ctas_per_launch": 3072,
+    "physical_launches_per_layer": 1,
+    "recurrence_steps": 32
+  },
+  "compilation": {
+    "fresh_cache_passes": 2,
+    "fresh_process_per_pass": true,
+    "deterministic_cubin_hashes": true,
+    "independent_sass_instruction_counts_equal": true,
+    "raw_compiler_artifacts_retained": false
+  },
+  "comparison": {
+    "current_two_launch_compiled_from_same_source": true,
+    "level0_coefficient_source_commit": "78d2b64aeebea8ba2fea679b2c9e826cd274d4d0",
+    "level0_coefficient_build_manifest_sha256": "f6e4b5553aec439535a0a36b3b2ec45b33c41c5c7aa2a7cbe968d8ec34aea0e7",
+    "level0_coefficient_exact_live_equivalent": false
+  },
+  "excluded": {
+    "gpu_execution": true,
+    "service": true,
+    "synthetic_probe": true,
+    "real_task": true,
+    "byte_gate": true,
+    "timing": true,
+    "acceptance": true,
+    "cubin_ptx_sass_ir_retention": true,
+    "task_model_prompt_request_process_environment_data": true
+  },
+  "inventory": [
+    "README.md",
+    "compiler_audit.json",
+    "manifest.json",
+    "resources.tsv",
+    "source_hashes.tsv",
+    "verification.json",
+    "SHA256SUMS"
+  ]
+}
