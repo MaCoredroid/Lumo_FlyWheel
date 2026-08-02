@@ -22,6 +22,7 @@ import torch
 import triton
 import triton.language as tl
 from triton.backends.compiler import GPUTarget
+from triton.backends.nvidia.compiler import get_ptxas
 from triton.compiler import ASTSource
 
 
@@ -180,15 +181,18 @@ def compile_one(
         if hasattr(compiled.metadata, "_asdict")
         else vars(compiled.metadata)
     )
+    ctas_per_request = (32 // rows_per_program) * (
+        (10240 + block_c - 1) // block_c
+    )
+    ptxas = get_ptxas(121)
     result = {
         "batch": batch,
         "rows_per_program": rows_per_program,
         "block_c": block_c,
         "state_len": state_len,
         "num_warps": num_warps,
-        "ctas_per_request": batch
-        * (32 // rows_per_program)
-        * ((10240 + block_c - 1) // block_c),
+        "ctas_per_request": ctas_per_request,
+        "ctas_per_launch": batch * ctas_per_request,
         "compile_hash": metadata["hash"],
         "cubin_sha256": sha256(cubin),
         "cubin_bytes": len(cubin),
@@ -217,6 +221,8 @@ def compile_one(
             "torch": torch.__version__,
             "torch_cuda": torch.version.cuda,
             "triton": triton.__version__,
+            "ptxas": Path(ptxas.path).name,
+            "ptxas_cuda": ptxas.version,
             "target": "sm_121a",
             "num_stages": 3,
         },
