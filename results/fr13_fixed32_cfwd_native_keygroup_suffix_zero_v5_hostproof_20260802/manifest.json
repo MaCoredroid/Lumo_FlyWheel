@@ -1,0 +1,52 @@
+{
+  "schema": "fr13.fixed32.cfwd_native_keygroup_suffix_zero_hostproof.v1",
+  "classification": "READY_FOR_REAL_B1_BYTE_GATE",
+  "acceptance_result": false,
+  "candidate": "fixed32_cfwd_native_keygroup_suffix_zero_cuda_v5",
+  "source_commit": "2572fa82abe11db04e899c711133678ed16cbbbe",
+  "source_sha256": "aaafab67be3754825109879b14033a892a87c4ae0b32da9d8d5106f903a2b0f9",
+  "object_sha256": "fc2fc4a973b10e10e6a42603337fa93543b868916b4b7bb49b5a29fa61a37a97",
+  "target_architecture": "sm_121a",
+  "cuda_release": "13.0",
+  "tests": {
+    "passed": 77,
+    "failed": 0
+  },
+  "resources": {
+    "registers_per_thread": 64,
+    "stack_bytes": 0,
+    "cuobjdump_shared_bytes": 7592,
+    "local_bytes": 0,
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0
+  },
+  "sass": {
+    "FADD": 257,
+    "FFMA": 70,
+    "MUFU.EX2": 0,
+    "MUFU.RCP": 1,
+    "MUFU.RSQ": 3,
+    "SHFL.BFLY": 202,
+    "SHFL.DOWN": 0,
+    "SHFL.IDX": 16,
+    "signed_zero_fadd_rz": 64,
+    "LDL": 0,
+    "STL": 0,
+    "CALL": 0
+  },
+  "delta_from_rejected_v4": {
+    "FADD": 32,
+    "signed_zero_fadd_rz": 32,
+    "registers_per_thread": 0,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0
+  },
+  "execution": {
+    "gpu_used": false,
+    "container_launched": false,
+    "real_swe_task_run": false
+  },
+  "required_next_gate": "real_swe_verified_b1_raw_fp32_bank_byte_gate"
+}
