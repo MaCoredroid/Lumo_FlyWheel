@@ -1,4 +1,4 @@
-"""Control contract for the default-off fixed32 native CFWD candidate."""
+"""Control contract for the default-off fixed32 native key-group CFWD."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import os
 from collections.abc import Mapping
 
 
-CANDIDATE = "fixed32_cfwd_native_fullvalue_cuda_v1"
-SELECTOR_ENV = "FR13_FIXED32_CFWD_NATIVE_FULLVALUE_CUDA"
+CANDIDATE = "fixed32_cfwd_native_keygroup_cuda_v2"
+SELECTOR_ENV = "FR13_FIXED32_CFWD_NATIVE_KEYGROUP_CUDA"
 SELECTOR_VALUE = "diagnostic"
 FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
 
@@ -16,8 +16,8 @@ def resource_contract(batch_size: int) -> dict[str, object]:
     """Return source-level launch/resource facts, never measured results."""
     batch = int(batch_size)
     if batch not in (1, 2, 3, 4):
-        raise ValueError(f"native full-value CFWD requires B1-B4, got B={batch}")
-    ctas = 48 * batch * 48
+        raise ValueError(f"native key-group CFWD requires B1-B4, got B={batch}")
+    ctas = 48 * batch * 16
     return {
         "candidate": CANDIDATE,
         "batch_size": batch,
@@ -25,32 +25,38 @@ def resource_contract(batch_size: int) -> dict[str, object]:
         "physical_rows_per_request": 32,
         "num_key_heads": 16,
         "num_value_heads": 48,
+        "value_heads_per_key_head": 3,
         "dim_k": 128,
         "dim_v": 128,
         "path_cap": 16,
         "max_accepted_length": 11,
         "root_inclusive_recurrence_steps_max": 12,
         "ctas_per_event": ctas,
-        "ctas_per_layer": batch * 48,
-        "ctas_per_layer_request_value_head": 1,
+        "ctas_per_layer": batch * 16,
+        "ctas_per_layer_request_key_head": 1,
+        "value_heads_per_cta": 3,
         "launches_per_event": 1,
-        "threads_per_cta": 512,
-        "warps_per_cta": 16,
-        "value_rows_per_warp": 8,
+        "threads_per_cta": 384,
+        "warps_per_cta": 12,
+        "value_rows_per_warp": 32,
+        "padded_value_rows_per_cta": 384,
+        "inactive_padding_value_rows_per_cta": 0,
         "key_columns_per_lane": 4,
-        "fp32_state_elements_per_thread": 32,
+        "fp32_state_elements_per_thread": 128,
+        "fp32_register_state_elements_per_thread": 64,
+        "fp32_shared_state_elements_per_thread": 64,
         "normalized_k_shared_elements": 128,
-        "static_shared_bytes_source_model": 548,
+        "static_shared_bytes_source_model": 98_868,
         "k_hbm_vector_loads_per_cta_step": 1,
         "k_norms_per_cta_step": 1,
-        "duplicate_value_tile_k_loads_per_cta_step": 0,
+        "duplicate_value_head_k_loads_per_key_head_step": 0,
         "state_hbm_traffic_removed": False,
         "gate_coefficients_precomputed": True,
         "final_bank_store_dtype": "float32",
         "compile_gate": {
-            "architecture": "sm_121",
-            "registers_per_thread_at_most": 64,
-            "minimum_ctas_per_sm_target": 2,
+            "architecture": "sm_121a",
+            "registers_per_thread_at_most": 168,
+            "minimum_ctas_per_sm_target": 1,
             "stack_frame_bytes": 0,
             "local_bytes": 0,
             "spill_load_bytes": 0,
@@ -122,11 +128,11 @@ def resolve_candidate(
     )
     if not exact:
         raise RuntimeError(
-            "armed native full-value CFWD exact fixed32 contract drift"
+            "armed native key-group CFWD exact fixed32 contract drift"
         )
     if not op_available:
         raise RuntimeError(
-            "armed native full-value CFWD operator is absent from pinned vLLM _C"
+            "armed native key-group CFWD operator is absent from pinned vLLM _C"
         )
     return {
         **resource_contract(int(batch_size)),
@@ -181,17 +187,17 @@ def launch_candidate(
 ) -> None:
     """Launch a source-bound diagnostic selection or fail before dispatch."""
     if selection.get("candidate") != CANDIDATE:
-        raise RuntimeError("native full-value CFWD selection is not source-bound")
+        raise RuntimeError("native key-group CFWD selection is not source-bound")
     if selection.get("production_authorized") is not False:
-        raise RuntimeError("native full-value CFWD cannot authorize production")
+        raise RuntimeError("native key-group CFWD cannot authorize production")
     if selection.get("timing_eligible") is not False:
-        raise RuntimeError("unqualified native full-value CFWD cannot be timed")
+        raise RuntimeError("unqualified native key-group CFWD cannot be timed")
     if selection.get("bank_offset_table_prevalidated") is not True or (
         selection.get("accepted_values_device_guarded") is not True
     ):
-        raise RuntimeError("native full-value CFWD safety guards are absent")
+        raise RuntimeError("native key-group CFWD safety guards are absent")
     if not operator_available(torch_module):
-        raise RuntimeError("native full-value CFWD op disappeared before launch")
+        raise RuntimeError("native key-group CFWD op disappeared before launch")
     op = torch_module.ops._C.fr13_fixed32_cfwd_native_fullvalue
     op(
         bank_anchor,
