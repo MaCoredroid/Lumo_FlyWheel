@@ -60,6 +60,8 @@ def test_contract_is_closed_and_launch_invariant_for_b1_b4() -> None:
         assert contract["source_rows_per_request"] == 36
         assert contract["source_rows"] == batch * 36
         assert contract["conv_state_launches_per_layer"] == 1
+        assert contract["conv_rows_per_program"] == 4
+        assert contract["conv_row_groups_per_request"] == 8
         assert contract["gdn_level_path_programs"] == (batch, 11 * batch)
         assert contract["gdn_physical_launches_per_layer"] == 2
         assert contract["gdn_ring_export"] is True
@@ -277,7 +279,13 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     assert "acc = acc + product" in candidate
     assert "tl.sum" not in candidate
     assert "tl.dot" not in candidate
+    assert "ROWS_PER_PROGRAM: tl.constexpr" in candidate
+    assert "tl.arange(0, ROWS_PER_PROGRAM)[:, None]" in candidate
+    assert "row_groups = N // ROWS_PER_PROGRAM" in candidate
+    assert "source_edge_writer = pid_n_base == 0" in candidate
     assert "source_stage" in candidate
+    assert "rows_per_program = _FR13_FIXED32_SFWD_ROWS_PER_PROGRAM" in launcher
+    assert "num_warps=8" in launcher
     assert "FR13_FIXED32_SFWD_STATE_FUSION source candidate is eager" in launcher
     assert "actual_source_flat" in launcher
     assert "source_flat.detach().cpu().tolist()" in launcher
@@ -296,6 +304,30 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
         and "launch_fixed32_sfwd_state_fusion(" in node.value
     )
     ast.parse(textwrap.dedent(fragment))
+
+
+def test_rowgroup4_covers_each_b1_b4_physical_row_once() -> None:
+    rows = 32
+    rows_per_program = kernel._FR13_FIXED32_SFWD_ROWS_PER_PROGRAM
+    assert rows_per_program == 4
+    for batch in (1, 2, 3, 4):
+        row_groups = rows // rows_per_program
+        covered: list[tuple[int, int]] = []
+        edge_writers: list[tuple[int, int]] = []
+        for linear_group in range(batch * row_groups):
+            request = linear_group // row_groups
+            group = linear_group - request * row_groups
+            base = group * rows_per_program
+            for offset in range(rows_per_program):
+                covered.append((request, base + offset))
+                if base + offset == 0:
+                    edge_writers.append((request, base + offset))
+        assert covered == [
+            (request, row)
+            for request in range(batch)
+            for row in range(rows)
+        ]
+        assert edge_writers == [(request, 0) for request in range(batch)]
 
 
 def test_b1_full_vocab_runner_is_reference_returning_and_nonacceptance() -> None:

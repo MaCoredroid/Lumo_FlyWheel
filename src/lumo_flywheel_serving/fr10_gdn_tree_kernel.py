@@ -1046,8 +1046,10 @@ _FR13_FIXED32_EXPORT_NODES = (0, 1, 4, 9, 14)
 _FR13_FIXED32_EXPORT_SLOTS = len(_FR13_FIXED32_EXPORT_NODES)
 _FR13_FIXED32_MAX_BATCH = 4
 _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID = (
-    "fixed32_sfwd_state_fusion_v1"
+    "fixed32_sfwd_state_fusion_rowgroup4_v2"
 )
+_FR13_FIXED32_SFWD_ROWS_PER_PROGRAM = 4
+_FR13_FIXED32_SFWD_BLOCK_C = 256
 _FR13_FIXED32_SFWD_STATE_FUSION_ENABLED = (
     "/logs/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
 )
@@ -1222,6 +1224,10 @@ def fixed32_sfwd_state_fusion_contract(
         "source_rows_per_request": source_rows,
         "source_rows": batch * source_rows,
         "conv_state_launches_per_layer": 1,
+        "conv_rows_per_program": _FR13_FIXED32_SFWD_ROWS_PER_PROGRAM,
+        "conv_row_groups_per_request": (
+            rows // _FR13_FIXED32_SFWD_ROWS_PER_PROGRAM
+        ),
         "gdn_level_path_programs": (batch, 11 * batch),
         "gdn_physical_launches_per_layer": 2,
         "gdn_ring_export": True,
@@ -4235,42 +4241,52 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
     STATE_LEN: tl.constexpr,
     SOURCE_ROWS: tl.constexpr,
     HAS_BIAS: tl.constexpr,
+    ROWS_PER_PROGRAM: tl.constexpr,
     BLOCK_C: tl.constexpr,
 ):
     """Fuse exact fixed32 conv compute and both state-motion directions.
 
-    One program owns one physical tree row and one channel tile. It reads the
-    prior col-0 state directly (removing the all-layer pregather consumer),
-    executes the same four BF16 tap products and ordered FP32 adds as the
-    incumbent, writes the BF16 conv result, and materializes the persistent
-    ``prior ++ x ++ zero`` source used by the exact post-accept col-0 commit.
+    One program owns a fixed group of physical tree rows and one channel tile.
+    It reads the prior col-0 state directly (removing the all-layer pregather
+    consumer), reuses each channel-weight vector across the row group, executes
+    the same four BF16 tap products and ordered FP32 adds as the incumbent,
+    writes the BF16 conv result, and materializes the persistent ``prior ++ x
+    ++ zero`` source used by the exact post-accept col-0 commit.
 
     Ring K/V/A/B export and freshness flags remain fused into the following
     fixed32 GDN path scan. Keeping those stores in their natural producer
     avoids an extra state-motion launch and preserves stream ordering.
     """
-    pid_row = tl.program_id(0)
+    pid_row_group = tl.program_id(0)
     pid_c = tl.program_id(1)
-    pid_b = pid_row // N
-    pid_n = pid_row - pid_b * N
-    offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)
+    row_groups = N // ROWS_PER_PROGRAM
+    pid_b = pid_row_group // row_groups
+    pid_n_group = pid_row_group - pid_b * row_groups
+    pid_n_base = pid_n_group * ROWS_PER_PROGRAM
+    offs_n = pid_n_base + tl.arange(0, ROWS_PER_PROGRAM)[:, None]
+    offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)[None, :]
+    n_mask = offs_n < N
     c_mask = offs_c < C
 
     bank_row = tl.load(
         spec_state_indices + pid_b * ssi_stride_b + 0 * ssi_stride_s
     ).to(tl.int64)
-    acc = tl.zeros((BLOCK_C,), dtype=tl.float32)
+    acc = tl.zeros((ROWS_PER_PROGRAM, BLOCK_C), dtype=tl.float32)
     if HAS_BIAS:
         acc = tl.load(bias + offs_c, mask=c_mask, other=0.0).to(tl.float32)
     for tap in tl.static_range(0, WIDTH):
-        source_row = tl.load(source_flat + pid_n * WIDTH + tap).to(tl.int64)
+        source_row = tl.load(
+            source_flat + offs_n * WIDTH + tap,
+            mask=n_mask,
+            other=0,
+        ).to(tl.int64)
         from_prior = source_row < (WIDTH - 1)
         prior_value = tl.load(
             conv_state
             + bank_row * conv_stride_row
             + offs_c * conv_stride_c
             + source_row * conv_stride_l,
-            mask=c_mask & from_prior,
+            mask=n_mask & c_mask & from_prior,
             other=0.0,
         )
         x_node = source_row - (WIDTH - 1)
@@ -4278,7 +4294,13 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
             x
             + (pid_b.to(tl.int64) * N + x_node) * C
             + offs_c,
-            mask=c_mask & (~from_prior) & (x_node >= 0) & (x_node < N),
+            mask=(
+                n_mask
+                & c_mask
+                & (~from_prior)
+                & (x_node >= 0)
+                & (x_node < N)
+            ),
             other=0.0,
         )
         value = tl.where(from_prior, prior_value, x_value).to(tl.bfloat16)
@@ -4297,25 +4319,25 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
 
     activated = acc / (1.0 + tl.exp(0.0 - acc))
     tl.store(
-        out + (pid_b * N + pid_n) * C + offs_c,
+        out + (pid_b * N + offs_n) * C + offs_c,
         activated,
-        mask=c_mask,
+        mask=n_mask & c_mask,
     )
 
     stage_base = pid_b.to(tl.int64) * SOURCE_ROWS
     current_x = tl.load(
-        x + (pid_b * N + pid_n) * C + offs_c,
-        mask=c_mask,
+        x + (pid_b * N + offs_n) * C + offs_c,
+        mask=n_mask & c_mask,
         other=0.0,
     )
     tl.store(
         source_stage
-        + (stage_base + (WIDTH - 1) + pid_n) * C
+        + (stage_base + (WIDTH - 1) + offs_n) * C
         + offs_c,
         current_x,
-        mask=c_mask,
+        mask=n_mask & c_mask,
     )
-    source_edge_writer = pid_n == 0
+    source_edge_writer = pid_n_base == 0
     for prior_col in tl.static_range(0, WIDTH - 1):
         prior_value = tl.load(
             conv_state
@@ -5406,8 +5428,16 @@ def launch_fixed32_sfwd_state_fusion(
             "FR13_FIXED32_SFWD_STATE_FUSION fixed32 source descriptor drift"
         )
 
-    block_c = 256
-    grid = (required_rows, triton.cdiv(channels, block_c))
+    rows_per_program = _FR13_FIXED32_SFWD_ROWS_PER_PROGRAM
+    block_c = _FR13_FIXED32_SFWD_BLOCK_C
+    if rows % rows_per_program != 0:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION row-group geometry drift"
+        )
+    grid = (
+        batch * (rows // rows_per_program),
+        triton.cdiv(channels, block_c),
+    )
     bias_arg = bias if bias is not None else x
     _fr13_fixed32_sfwd_state_fusion_kernel[grid](
         x,
@@ -5432,8 +5462,12 @@ def launch_fixed32_sfwd_state_fusion(
         STATE_LEN=state_len,
         SOURCE_ROWS=source_rows_per_batch,
         HAS_BIAS=bias is not None,
+        ROWS_PER_PROGRAM=rows_per_program,
         BLOCK_C=block_c,
-        num_warps=4,
+        num_warps=8,
+    )
+    contract["conv_programs_per_request"] = (
+        (rows // rows_per_program) * triton.cdiv(channels, block_c)
     )
     return contract
 
