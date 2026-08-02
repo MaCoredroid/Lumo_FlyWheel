@@ -1,0 +1,76 @@
+{
+  "address_resolution": {
+    "active_calls_after": "N",
+    "active_calls_before": "2N-1",
+    "initial_partial_block_calls": 1,
+    "next_block_calls_per_remaining_block_after": 1,
+    "next_block_calls_per_remaining_block_before": 2,
+    "qrow16_fallback_changed": false,
+    "stock_generic_fallback_changed": false
+  },
+  "branch": "agent/fixed32-fa2-qrow16-divfree-20260802",
+  "candidate": {
+    "block_m": 32,
+    "block_n": 64,
+    "default_on": false,
+    "head_dim": 256,
+    "is_causal": false,
+    "is_local": false,
+    "masking_steps": 1,
+    "runtime_selector": "gate_only",
+    "split_k": false,
+    "warps": 2
+  },
+  "contract": {
+    "k_head_stride_elements": 256,
+    "k_page_stride_elements": 1048576,
+    "k_row_stride_elements": 1024,
+    "page_block_size": 1024,
+    "v_head_stride_elements": 256,
+    "v_page_stride_elements": 1048576,
+    "v_row_stride_elements": 1024
+  },
+  "geometry": {
+    "ctas_per_layer": 96,
+    "grid": [
+      6,
+      4,
+      4
+    ],
+    "target_layers": 16,
+    "total_target_ctas": 1536
+  },
+  "operation_order": {
+    "async_copy_changed": false,
+    "fence_or_wait_changed": false,
+    "gemm_changed": false,
+    "mask_changed": false,
+    "pointer_assignment_only": true,
+    "pv_changed": false,
+    "softmax_changed": false
+  },
+  "pinned_header": {
+    "after_sha256": "c2c0a57bb64ebbdfb5db199991d50243e17645965d31d7a403b779221dbbf1fd",
+    "before_sha256": "b33e39e5e7b9320e0bec498ff1125ff5fdcca57148c68563cd2ec13355d516d6",
+    "second_pass_byte_equal": true
+  },
+  "qualification": {
+    "gpu_compile_resource_gate": "pending",
+    "private_sass_address_census": "pending",
+    "real_swe_verified_all_layer_byte_gate": "pending",
+    "real_swe_verified_full_step_timing": "pending",
+    "synthetic_performance_probe": false,
+    "timing_eligible": false
+  },
+  "schema": "fr13.fixed32.fa2_qrow32_carried_kv_page_source.v1",
+  "source_commit": "61cee753c",
+  "status": "host_source_verified_gpu_and_real_swe_gates_pending",
+  "verification": {
+    "block_state_pairs": 8519680,
+    "fail_closed_fused_address_prerequisite": true,
+    "host_tests_passed": 29,
+    "python_byte_compile": "pass",
+    "reverse_loop_sequences": 262144,
+    "transform_idempotence": "pass"
+  }
+}

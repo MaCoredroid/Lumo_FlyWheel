@@ -1,0 +1,22 @@
+Fixed32 B4 FA2 qrow32 carried-K/V-page verification (2026-08-02 UTC)
+
+Host test selection:
+  tests/test_fr13_fa2_tree_kernel_candidates.py
+  tests/test_fr13_fa2_qrow32_static_gate.py
+  tests/test_fr13_fa2_qrow32_gate.py
+
+Result: 29 passed in 2.99s
+
+Additional host checks:
+  Python byte compilation: pass
+  Pinned FA2 header transform: pass
+  Second-pass transform idempotence: pass
+  Fused static K/V address prerequisite rejection: pass
+  Reverse-loop pointer-state equivalence: 262,144 sequences passed
+  Modeled block-state comparisons: 8,519,680 passed
+  qrow16 and generic fallback retention: pass
+  K/V copy and attention operation order preservation: pass
+  git diff --check: pass
+
+No GPU compile, binary-resource gate, real-event byte qualification,
+synthetic performance probe, or full-step timing is represented here.
