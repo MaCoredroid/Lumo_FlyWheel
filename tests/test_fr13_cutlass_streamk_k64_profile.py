@@ -130,6 +130,51 @@ def test_k64_root_live_pass_issues_and_verifies_distinct_sidecar(
     )
 
 
+def test_k64_root_accepts_static_persistent_stocktile_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, candidate, patch_source, live, _ = _k64_fixture(tmp_path, monkeypatch)
+    candidate_sha256 = hashlib.sha256(candidate.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        module.binary,
+        "STATIC_PERSISTENT_B1_CANDIDATE_SIZE",
+        len(candidate.read_bytes()),
+    )
+    monkeypatch.setattr(
+        module.binary,
+        "STATIC_PERSISTENT_B1_CANDIDATE_SHA256",
+        candidate_sha256,
+    )
+    payload = json.loads(live.read_text(encoding="ascii"))
+    payload.update(
+        {
+            "schema": module.STATIC_PERSISTENT_K64_ROOT_LIVE_SCHEMA,
+            "candidate": "static_persistent_stocktile",
+            "candidate_family": "static_persistent_stocktile",
+            "diagnostic_selector": "static_persistent_stocktile_byte_ab",
+        }
+    )
+    live.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
+    live_sha256 = hashlib.sha256(live.read_bytes()).hexdigest()
+    sidecar = tmp_path / "static-sidecar.json"
+
+    issued = module.issue_sidecar(
+        live,
+        live_sha256,
+        candidate,
+        sidecar,
+        patch_source,
+        candidate_selector="static_persistent_stocktile",
+        qualification_profile="k64_root",
+        draft_vocab_blocks=BLOCK_MAP,
+    )
+
+    assert issued["candidate_selector"] == "static_persistent_stocktile"
+    assert issued["diagnostic_selector"] == "static_persistent_stocktile_byte_ab"
+    assert issued["qualification_profile"] == "k64_root"
+    assert issued["qualified_comparison_call_limit"] == 320
+
+
 def test_k64_root_rejects_non_wide_candidate_and_block_map_drift(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

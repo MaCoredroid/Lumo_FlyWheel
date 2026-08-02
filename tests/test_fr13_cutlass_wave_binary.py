@@ -39,6 +39,8 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "streamk_coop128_byte_ab",
         "streamk_force_wide256",
         "streamk_force_wide256_byte_ab",
+        "static_persistent_stocktile",
+        "static_persistent_stocktile_byte_ab",
         "persistent_b4_m128",
         "persistent_b4_m128_byte_ab",
         "persistent_b4_m128_static",
@@ -52,6 +54,11 @@ def test_pinned_binary_identity_and_selectors() -> None:
         module.WIDE256_CANDIDATE_SHA256,
         module.WIDE256_CANDIDATE_SIZE,
         "streamk_force_wide256",
+    )
+    assert module.candidate_identity("static_persistent_stocktile_byte_ab") == (
+        module.STATIC_PERSISTENT_B1_CANDIDATE_SHA256,
+        module.STATIC_PERSISTENT_B1_CANDIDATE_SIZE,
+        "static_persistent_stocktile",
     )
     assert module.B4_M128_CANDIDATE_SHA256 == (
         "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
@@ -209,6 +216,45 @@ def test_wide256_diagnostic_install_uses_its_own_pinned_identity(
     assert record["production_enabled"] is False
     assert record["candidate_family"] == "streamk_force_wide256"
     assert record["source"]["sha256"] == digest
+
+
+def test_static_b1_diagnostic_installs_but_production_stays_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    payload = b"static-persistent-b1-candidate\n"
+    digest = hashlib.sha256(payload).hexdigest()
+    monkeypatch.setattr(
+        module, "STATIC_PERSISTENT_B1_CANDIDATE_SIZE", len(payload)
+    )
+    monkeypatch.setattr(module, "STATIC_PERSISTENT_B1_CANDIDATE_SHA256", digest)
+    source = tmp_path / "static-b1.so"
+    destination = tmp_path / "installed.so"
+    attestation = tmp_path / "attestation.json"
+    source.write_bytes(payload)
+    destination.write_bytes(b"stock-extension\n")
+
+    record = module.install_candidate(
+        source,
+        destination,
+        attestation,
+        "static_persistent_stocktile_byte_ab",
+    )
+
+    assert destination.read_bytes() == payload
+    assert record["production_enabled"] is False
+    assert record["candidate_family"] == "static_persistent_stocktile"
+
+    destination.chmod(0o644)
+    destination.write_bytes(b"stock-extension\n")
+    with pytest.raises(ValueError, match="K64/root raw-byte gate"):
+        module.install_candidate(
+            source,
+            destination,
+            attestation,
+            "static_persistent_stocktile",
+        )
+    assert destination.read_bytes() == b"stock-extension\n"
 
 
 def test_install_is_exact_attested_and_production_off(

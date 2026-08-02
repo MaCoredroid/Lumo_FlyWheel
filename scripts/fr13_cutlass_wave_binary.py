@@ -18,6 +18,10 @@ WIDE256_CANDIDATE_SHA256 = (
     "503277a2dca6784502b709007adfe45f42d0f1a1851107e7b913e1e85a00de5a"
 )
 WIDE256_CANDIDATE_SIZE = 113_079_680
+STATIC_PERSISTENT_B1_CANDIDATE_SHA256 = (
+    "88c50e7d1b6060c2bcec68f50985a1db47b43d299b574edfbfc32cac1ce68742"
+)
+STATIC_PERSISTENT_B1_CANDIDATE_SIZE = 113_383_800
 B4_M128_CANDIDATE_SHA256 = (
     "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
 )
@@ -37,6 +41,9 @@ COOP128_SELECTORS = frozenset({"streamk_coop128", "streamk_coop128_byte_ab"})
 WIDE256_SELECTORS = frozenset(
     {"streamk_force_wide256", "streamk_force_wide256_byte_ab"}
 )
+STATIC_PERSISTENT_B1_SELECTORS = frozenset(
+    {"static_persistent_stocktile", "static_persistent_stocktile_byte_ab"}
+)
 B4_M128_SELECTORS = frozenset({"persistent_b4_m128", "persistent_b4_m128_byte_ab"})
 STATIC_B4_M128_SELECTORS = frozenset(
     {"persistent_b4_m128_static", "persistent_b4_m128_static_byte_ab"}
@@ -44,13 +51,17 @@ STATIC_B4_M128_SELECTORS = frozenset(
 CANDIDATE_SELECTORS = (
     COOP128_SELECTORS
     | WIDE256_SELECTORS
+    | STATIC_PERSISTENT_B1_SELECTORS
     | B4_M128_SELECTORS
     | STATIC_B4_M128_SELECTORS
 )
 PRODUCTION_SELECTORS = frozenset(
     {"streamk_coop128", "streamk_force_wide256", "persistent_b4_m128"}
 )
-INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {"persistent_b4_m128_static"}
+INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
+    "static_persistent_stocktile",
+    "persistent_b4_m128_static",
+}
 CONTAINER_SOURCE = Path("/tmp/fr13_cutlass_wave.abi3.so")
 CONTAINER_DESTINATION = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so"
@@ -70,6 +81,12 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
         return CANDIDATE_SHA256, CANDIDATE_SIZE, "streamk_coop128"
     if selector in WIDE256_SELECTORS:
         return WIDE256_CANDIDATE_SHA256, WIDE256_CANDIDATE_SIZE, "streamk_force_wide256"
+    if selector in STATIC_PERSISTENT_B1_SELECTORS:
+        return (
+            STATIC_PERSISTENT_B1_CANDIDATE_SHA256,
+            STATIC_PERSISTENT_B1_CANDIDATE_SIZE,
+            "static_persistent_stocktile",
+        )
     if selector in B4_M128_SELECTORS:
         return B4_M128_CANDIDATE_SHA256, B4_M128_CANDIDATE_SIZE, "persistent_b4_m128"
     if selector in STATIC_B4_M128_SELECTORS:
@@ -337,6 +354,11 @@ def install_candidate(
     if selector not in CANDIDATE_SELECTORS:
         raise ValueError(f"unsupported candidate selector: {selector!r}")
     if selector not in INSTALLABLE_SELECTORS:
+        if selector == "static_persistent_stocktile":
+            raise ValueError(
+                "static B1 production remains unavailable until the K64/root "
+                "raw-byte gate passes"
+            )
         raise ValueError(
             "static M128 production remains unavailable until Tail23 and Hydra27 "
             "raw-byte gates pass"

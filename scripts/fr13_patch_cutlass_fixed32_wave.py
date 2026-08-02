@@ -477,6 +477,22 @@ struct sm120_blockwise_fp8_config_swapab_streamk_wide256 {
       cutlass::gemm::collective::StageCount<2>>;
 };
 
+// Reuse the audited static scheduler wrapper with the exact stock B1
+// swap-AB collective. Despite its legacy type name, the wrapper is generic in
+// tile shape and changes only complete-output-tile assignment.
+template <typename OutType>
+struct sm120_blockwise_fp8_config_b1_static_persistent_stocktile {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_128, _32, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_m128_static<
+      OutType, 128, 1, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, true>;
+};
+
 template <typename OutType>
 struct sm120_blockwise_fp8_config_b4_persistent_m128 {
   using KernelSchedule =
@@ -515,6 +531,8 @@ enum class fixed32_cutlass_wave_variant {
   stream_k_cooperative_128_byte_ab,
   stream_k_force_wide256,
   stream_k_force_wide256_byte_ab,
+  static_persistent_stocktile,
+  static_persistent_stocktile_byte_ab,
   persistent_b4_m128,
   persistent_b4_m128_byte_ab,
   persistent_b4_m128_static,
@@ -543,6 +561,12 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     }
     if (value == "streamk_force_wide256_byte_ab") {
       return fixed32_cutlass_wave_variant::stream_k_force_wide256_byte_ab;
+    }
+    if (value == "static_persistent_stocktile") {
+      return fixed32_cutlass_wave_variant::static_persistent_stocktile;
+    }
+    if (value == "static_persistent_stocktile_byte_ab") {
+      return fixed32_cutlass_wave_variant::static_persistent_stocktile_byte_ab;
     }
     if (value == "persistent_b4_m128") {
       return fixed32_cutlass_wave_variant::persistent_b4_m128;
@@ -701,7 +725,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       (wave_variant ==
            fixed32_cutlass_wave_variant::stream_k_force_wide256 ||
        wave_variant ==
-           fixed32_cutlass_wave_variant::stream_k_force_wide256_byte_ab)) {
+           fixed32_cutlass_wave_variant::stream_k_force_wide256_byte_ab ||
+       wave_variant ==
+           fixed32_cutlass_wave_variant::static_persistent_stocktile ||
+       wave_variant == fixed32_cutlass_wave_variant::
+                           static_persistent_stocktile_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
   if (M != 128 &&
@@ -732,6 +760,14 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   auto run_stream_k_wide256 = [&](torch::stable::Tensor& destination) {
     using Gemm = typename
         sm120_blockwise_fp8_config_swapab_streamk_wide256<OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
+  auto run_static_persistent_stocktile =
+      [&](torch::stable::Tensor& destination) {
+    using Gemm = typename
+        sm120_blockwise_fp8_config_b1_static_persistent_stocktile<OutType>::Gemm;
     return cutlass_gemm_caller_blockwise<Gemm>(
         destination, a, b, a_scales, b_scales);
   };
@@ -772,6 +808,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   const bool wide256_byte_ab =
       wave_variant ==
       fixed32_cutlass_wave_variant::stream_k_force_wide256_byte_ab;
+  const bool static_persistent_byte_ab =
+      wave_variant ==
+      fixed32_cutlass_wave_variant::static_persistent_stocktile_byte_ab;
   const bool b4_m128_byte_ab =
       wave_variant ==
       fixed32_cutlass_wave_variant::persistent_b4_m128_byte_ab;
@@ -780,7 +819,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       fixed32_cutlass_wave_variant::persistent_b4_m128_static_byte_ab;
   if (wave_variant ==
           fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab ||
-      wide256_byte_ab || b4_m128_byte_ab || b4_m128_static_byte_ab) {
+      wide256_byte_ab || static_persistent_byte_ab || b4_m128_byte_ab ||
+      b4_m128_static_byte_ab) {
     auto run_candidate = [&](torch::stable::Tensor& destination) {
       if (b4_m128_static_byte_ab) {
         return run_b4_persistent_m128_static(destination);
@@ -790,6 +830,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       }
       if (wide256_byte_ab) {
         return run_stream_k_wide256(destination);
+      }
+      if (static_persistent_byte_ab) {
+        return run_static_persistent_stocktile(destination);
       }
       return run_stream_k(destination);
     };
@@ -860,6 +903,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
             ? "/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl"
         : wide256_byte_ab
             ? "/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl"
+        : static_persistent_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_static_persistent_byte_ab.jsonl"
             : "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl";
     static std::mutex log_mutex;
     {
@@ -874,6 +919,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
                   ? "fr13.fixed32.cutlass_persistent_b4_m128_byte_ab.v1"
               : wide256_byte_ab
                   ? "fr13.fixed32.cutlass_streamk_wide256_byte_ab.v1"
+              : static_persistent_byte_ab
+                  ? "fr13.fixed32.cutlass_static_persistent_byte_ab.v1"
                   : "fr13.fixed32.cutlass_streamk_byte_ab.v2")
           << "\\\","
           << "\\\"invocation\\\":" << invocation << ","
@@ -905,6 +952,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   if (wave_variant ==
       fixed32_cutlass_wave_variant::stream_k_force_wide256) {
     return run_stream_k_wide256(out);
+  }
+
+  if (wave_variant ==
+      fixed32_cutlass_wave_variant::static_persistent_stocktile) {
+    return run_static_persistent_stocktile(out);
   }
 
   if (wave_variant ==

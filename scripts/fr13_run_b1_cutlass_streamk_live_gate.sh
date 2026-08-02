@@ -17,13 +17,25 @@ case "$GATE_CANDIDATE" in
     DIAGNOSTIC_SELECTOR=streamk_coop128_byte_ab
     RECORD_SCHEMA=fr13.fixed32.cutlass_streamk_byte_ab.v2
     FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_live_gate.v3
+    K64_ROOT_LIVE_SCHEMA=
     CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl
+    K64_ROOT_RESULT_NAME=
     ;;
   streamk_force_wide256)
     DIAGNOSTIC_SELECTOR=streamk_force_wide256_byte_ab
     RECORD_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_byte_ab.v1
     FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_live_gate.v1
+    K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_k64_root_live_gate.v1
     CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl
+    K64_ROOT_RESULT_NAME=cutlass_streamk_k64_root_byte_gate.json
+    ;;
+  static_persistent_stocktile)
+    DIAGNOSTIC_SELECTOR=static_persistent_stocktile_byte_ab
+    RECORD_SCHEMA=fr13.fixed32.cutlass_static_persistent_byte_ab.v1
+    FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_static_persistent_live_gate.v1
+    K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_static_persistent_k64_root_live_gate.v1
+    CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_static_persistent_byte_ab.jsonl
+    K64_ROOT_RESULT_NAME=cutlass_static_persistent_k64_root_byte_gate.json
     ;;
   *)
     echo "unsupported Stream-K gate candidate: $GATE_CANDIDATE" >&2
@@ -49,11 +61,12 @@ case "$QUALIFICATION_PROFILE" in
     LIVE_RESULT_NAME=cutlass_streamk_byte_gate.json
     ;;
   k64_root)
-    [[ "$GATE_CANDIDATE" == "streamk_force_wide256" ]] || {
-      echo "B1 k64_root qualification is restricted to streamk_force_wide256" >&2
+    [[ "$GATE_CANDIDATE" == "streamk_force_wide256" \
+       || "$GATE_CANDIDATE" == "static_persistent_stocktile" ]] || {
+      echo "B1 k64_root qualification is restricted to wide256 or static-persistent stock-tile" >&2
       exit 2
     }
-    LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_k64_root_live_gate.v1
+    LIVE_SCHEMA=$K64_ROOT_LIVE_SCHEMA
     RUN_CLASSIFICATION=one_real_swe_verified_b1_k64_root_byte_diagnostic
     DRAFT_VOCAB_ROOT=1
     DRAFT_VOCAB_K=65536
@@ -63,7 +76,7 @@ case "$QUALIFICATION_PROFILE" in
     ONE_SIDED_U95_CAP_MS=137.6067177261
     MAX_COMPARISONS=320
     ARM_PROFILE_SUFFIX=_k64_root
-    LIVE_RESULT_NAME=cutlass_streamk_k64_root_byte_gate.json
+    LIVE_RESULT_NAME=$K64_ROOT_RESULT_NAME
     ;;
   *)
     echo "FR13_STREAMK_QUALIFICATION_PROFILE must be full_vocab or k64_root" >&2
@@ -202,7 +215,7 @@ if any(
 ):
     errors.append("a comparison reported an invalid differing-byte count")
 if any(record.get("byte_equal") is not True for record in records):
-    errors.append("at least one stock/Stream-K output differed")
+    errors.append("at least one stock/candidate output differed")
 if any(
     record.get("byte_equal") is not (record.get("mismatch_count") == 0)
     for record in records

@@ -94,6 +94,8 @@ def test_patch_is_default_off_and_shape_gated() -> None:
     assert 'value == "streamk_coop128_byte_ab"' in patched
     assert 'value == "streamk_force_wide256"' in patched
     assert 'value == "streamk_force_wide256_byte_ab"' in patched
+    assert 'value == "static_persistent_stocktile"' in patched
+    assert 'value == "static_persistent_stocktile_byte_ab"' in patched
     assert 'value == "persistent_b4_m128"' in patched
     assert 'value == "persistent_b4_m128_byte_ab"' in patched
     assert 'value == "persistent_b4_m128_static"' in patched
@@ -117,7 +119,7 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 2
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 5
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 6
     assert "PingpongSm120" not in module.CONFIG_REPLACEMENT
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
@@ -165,6 +167,41 @@ def test_b4_m128_preserves_stock_template_and_is_exactly_m128_gated() -> None:
     assert (
         '"/logs/fr13_fixed32_cutlass_b4_byte_ab.real_event.arm"' in patched
     )
+
+
+def test_b1_static_persistent_reuses_stock_collective_and_generic_scheduler() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    config_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b1_static_persistent_stocktile"
+    )
+    config_end = patched.index(
+        "struct sm120_blockwise_fp8_config_b4_persistent_m128", config_start
+    )
+    config = patched[config_start:config_end]
+    assert "using TileShape = Shape<_128, _32, _128>;" in config
+    assert "using ClusterShape = Shape<_1, _1, _1>;" in config
+    assert "KernelTmaWarpSpecializedBlockwiseCooperativeSm120" in config
+    assert "OutType, 128, 1, 128, TileShape, ClusterShape" in config
+    assert "EpilogueSchedule, KernelSchedule, true>" in config
+    assert "cutlass_3x_gemm_fp8_blockwise_m128_static" in config
+    assert "StreamKScheduler" not in config
+    assert "StageCount" not in config
+
+    selector_gate = patched.index("if (M > 64 &&")
+    stock_assignment = patched.index(
+        "wave_variant = fixed32_cutlass_wave_variant::stock;", selector_gate
+    )
+    guard = patched[selector_gate:stock_assignment]
+    assert "static_persistent_stocktile" in guard
+    assert "static_persistent_stocktile_byte_ab" in guard
+    assert "run_static_persistent_stocktile" in patched
+    assert (
+        '"/logs/fr13_fixed32_cutlass_static_persistent_byte_ab.jsonl"'
+        in patched
+    )
+    assert "fr13.fixed32.cutlass_static_persistent_byte_ab.v1" in patched
 
 
 def test_b4_m128_static_changes_only_complete_tile_scheduler() -> None:
@@ -368,6 +405,10 @@ def test_same_process_byte_ab_is_bounded_and_returns_stock() -> None:
     assert '"/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl"' in patched
     assert '"/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl"' in patched
     assert (
+        '"/logs/fr13_fixed32_cutlass_static_persistent_byte_ab.jsonl"'
+        in patched
+    )
+    assert (
         '"/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl"'
         in patched
     )
@@ -378,6 +419,7 @@ def test_same_process_byte_ab_is_bounded_and_returns_stock() -> None:
     assert '\\"byte_equal\\"' in module.DISPATCH_REPLACEMENT
     assert "return run_stock(out);" in patched
     assert "fr13.fixed32.cutlass_streamk_wide256_byte_ab.v1" in patched
+    assert "fr13.fixed32.cutlass_static_persistent_byte_ab.v1" in patched
     assert "fr13.fixed32.cutlass_persistent_b4_m128_byte_ab.v1" in patched
     assert "fr13.fixed32.cutlass_persistent_b4_m128_static_byte_ab.v1" in patched
 
