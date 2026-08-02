@@ -3868,6 +3868,9 @@ _FIXED32_COUNTER_KEYS = frozenset(
     }
 )
 _FIXED32_BOUNDARY_SNAPSHOT_SCHEMA = "fr13-fixed32-boundary-snapshot-v4"
+_FIXED32_EAGER_TIMING_BOUNDARY_SNAPSHOT_SCHEMA = (
+    "fr13-fixed32-eager-timing-boundary-snapshot-v1"
+)
 _FIXED32_BOUNDARY_TOP_KEYS = frozenset(
     {
         "schema",
@@ -3904,6 +3907,20 @@ _FIXED32_REQUIRED_METRICS = {
     "vllm:spec_decode_num_draft_tokens_total",
     "vllm:fr13_fixed32_pure_decode_forward_steps_total",
     "vllm:fr13_fixed32_complete_work_census_events_total",
+    "vllm:fr13_drafter_gpu_seconds_total",
+    "vllm:fr13_drafter_gpu_spans_total",
+    "vllm:fr13_committer_gpu_seconds_total",
+    "vllm:fr13_committer_gpu_spans_total",
+}
+_FIXED32_EAGER_TIMING_METRICS = {
+    "vllm:fr13_decode_forward_gpu_seconds_total",
+    "vllm:fr13_decode_forward_gpu_steps_total",
+    "vllm:fr13_decode_forward_gpu_drafts_total",
+    "vllm:fr13_decode_step_wall_seconds_total",
+    "vllm:fr13_decode_step_wall_drafts_total",
+    "vllm:fr13_decode_step_wall_steps_total",
+    "vllm:fr13_decode_step_wall_attempts_total",
+    "vllm:fr13_decode_step_wall_rejected_total",
     "vllm:fr13_drafter_gpu_seconds_total",
     "vllm:fr13_drafter_gpu_spans_total",
     "vllm:fr13_committer_gpu_seconds_total",
@@ -4631,6 +4648,194 @@ def _fixed32_metrics_snapshot(
     return "\n".join(retained) + "\n"
 
 
+def _load_fixed32_eager_timing_boundary_snapshot(
+    *,
+    base_path: Path,
+    ack: Any,
+) -> tuple[dict[str, Any], Path, str]:
+    """Load one nonce-bound eager B1 timer snapshot without graph claims."""
+    ack_counters = _validate_fixed32_ack(
+        ack,
+        label="eager timing boundary snapshot ack",
+    )
+    path = Path(f"{base_path}.{ack.generation}.json")
+    try:
+        raw = path.read_bytes()
+    except OSError as error:
+        raise Fixed32BoundaryError(
+            f"cannot read eager timing boundary snapshot {path}: {error}"
+        ) from error
+    if not raw or len(raw) > 1024 * 1024:
+        raise Fixed32BoundaryError(
+            f"eager timing boundary snapshot has invalid size: {path}"
+        )
+    try:
+        payload = json.loads(
+            raw,
+            object_pairs_hook=_fixed32_duplicate_checked,
+            parse_constant=_fixed32_reject_constant,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise Fixed32BoundaryError(
+            f"invalid eager timing boundary snapshot {path}: {error}"
+        ) from error
+    _fixed32_exact_keys(payload, _FIXED32_BOUNDARY_TOP_KEYS, str(path))
+    snapshot_counters = _validate_fixed32_counter_payload(
+        payload["counters"],
+        label=f"{path}:snapshot",
+    )
+    if (
+        payload["schema"]
+        != _FIXED32_EAGER_TIMING_BOUNDARY_SNAPSHOT_SCHEMA
+        or payload["mode"] != ack.mode
+        or payload["producer_pid"] != ack.producer_pid
+        or payload["generation"] != ack.generation
+        or payload["nonce"] != ack.nonce
+        or payload["action"] != ack.action
+        or snapshot_counters != ack_counters
+    ):
+        raise Fixed32BoundaryError(
+            f"eager timing boundary snapshot does not bind to ack: {path}"
+        )
+    if snapshot_counters["complete_work_census_events"] != 0:
+        raise Fixed32BoundaryError(
+            f"{path}: eager timing boundary must not claim graph census events"
+        )
+    metrics = payload["metrics"]
+    _fixed32_exact_keys(
+        metrics,
+        frozenset({"sfwd", "dfwd", "cfwd", "integrity"}),
+        f"{path}:metrics",
+    )
+    sfwd = metrics["sfwd"]
+    _fixed32_exact_keys(
+        sfwd,
+        frozenset(
+            {
+                "gpu_seconds",
+                "steps",
+                "drafts",
+                "forward_starts",
+                "forward_dropped",
+                "wall_seconds",
+                "wall_drafts",
+                "wall_steps",
+                "wall_rejected",
+            }
+        ),
+        f"{path}:sfwd",
+    )
+    for key in ("gpu_seconds", "wall_seconds"):
+        _fixed32_nonnegative_float(sfwd[key], f"{path}:sfwd.{key}")
+    for key in (
+        "steps",
+        "drafts",
+        "forward_starts",
+        "forward_dropped",
+        "wall_drafts",
+        "wall_steps",
+        "wall_rejected",
+    ):
+        _fixed32_nonnegative_int(sfwd[key], f"{path}:sfwd.{key}")
+    steps = snapshot_counters["pure_decode_forward_steps"]
+    if (
+        sfwd["steps"] != steps
+        or sfwd["drafts"] != steps
+        or sfwd["forward_starts"] != steps
+        or sfwd["forward_dropped"] != 0
+        or sfwd["wall_drafts"] != sfwd["wall_steps"]
+        or sfwd["wall_steps"] > steps
+    ):
+        raise Fixed32BoundaryError(
+            f"{path}: eager B1 SFWD counters do not reconcile"
+        )
+    for label in ("dfwd", "cfwd"):
+        span = metrics[label]
+        _fixed32_exact_keys(
+            span,
+            frozenset({"gpu_seconds", "spans"}),
+            f"{path}:{label}",
+        )
+        _fixed32_nonnegative_float(
+            span["gpu_seconds"], f"{path}:{label}.gpu_seconds"
+        )
+        _fixed32_nonnegative_int(span["spans"], f"{path}:{label}.spans")
+    integrity = metrics["integrity"]
+    _fixed32_exact_keys(
+        integrity,
+        frozenset(
+            {
+                "classification",
+                "graph_census_claimed",
+                "sfwd_pending",
+                "dfwd_pending",
+                "cfwd_pending",
+            }
+        ),
+        f"{path}:integrity",
+    )
+    for key in ("sfwd_pending", "dfwd_pending", "cfwd_pending"):
+        _fixed32_nonnegative_int(integrity[key], f"{path}:integrity.{key}")
+    if (
+        integrity["classification"] != "eager_b1_task_timing"
+        or integrity["graph_census_claimed"] is not False
+        or any(
+            integrity[key] != 0
+            for key in ("sfwd_pending", "dfwd_pending", "cfwd_pending")
+        )
+    ):
+        raise Fixed32BoundaryError(
+            f"{path}: eager timing integrity contract failed"
+        )
+    return payload, path, hashlib.sha256(raw).hexdigest()
+
+
+def _fixed32_eager_timing_metrics_snapshot(
+    *,
+    metrics_url: str,
+    snapshot: dict[str, Any],
+) -> str:
+    """Render flushed eager timer counters over the live server counters."""
+    raw = _metrics_text(metrics_url, strict=True)
+    retained = []
+    for line in raw.splitlines():
+        stripped = line.lstrip()
+        series = (
+            stripped.split("{", 1)[0].split(None, 1)[0]
+            if stripped
+            else ""
+        )
+        if series not in _FIXED32_EAGER_TIMING_METRICS:
+            retained.append(line)
+    sfwd = snapshot["metrics"]["sfwd"]
+    dfwd = snapshot["metrics"]["dfwd"]
+    cfwd = snapshot["metrics"]["cfwd"]
+    exact = (
+        ("vllm:fr13_decode_forward_gpu_seconds_total", sfwd["gpu_seconds"]),
+        ("vllm:fr13_decode_forward_gpu_steps_total", sfwd["steps"]),
+        ("vllm:fr13_decode_forward_gpu_drafts_total", sfwd["drafts"]),
+        ("vllm:fr13_decode_step_wall_seconds_total", sfwd["wall_seconds"]),
+        ("vllm:fr13_decode_step_wall_drafts_total", sfwd["wall_drafts"]),
+        ("vllm:fr13_decode_step_wall_steps_total", sfwd["wall_steps"]),
+        (
+            "vllm:fr13_decode_step_wall_attempts_total",
+            sfwd["wall_steps"] + sfwd["wall_rejected"],
+        ),
+        ("vllm:fr13_decode_step_wall_rejected_total", sfwd["wall_rejected"]),
+        ("vllm:fr13_drafter_gpu_seconds_total", dfwd["gpu_seconds"]),
+        ("vllm:fr13_drafter_gpu_spans_total", dfwd["spans"]),
+        ("vllm:fr13_committer_gpu_seconds_total", cfwd["gpu_seconds"]),
+        ("vllm:fr13_committer_gpu_spans_total", cfwd["spans"]),
+    )
+    retained.extend(
+        f"{name} {value:.17g}"
+        if isinstance(value, float)
+        else f"{name} {value}"
+        for name, value in exact
+    )
+    return "\n".join(retained) + "\n"
+
+
 class _Fixed32TaskBracket:
     """One task's strict flush-before-metrics evidence bracket."""
 
@@ -4993,6 +5198,240 @@ class _Fixed32EagerKernelDiagnosticTaskBracket(_Fixed32TaskBracket):
                 pass
             raise Fixed32BoundaryError(
                 "fixed32 eager diagnostic post bracket artifact failed: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+        return json.loads(self.artifact_path.read_text(encoding="utf-8"))
+
+
+def _fixed32_eager_timing_interval(
+    pre: dict[str, Any],
+    post: dict[str, Any],
+) -> dict[str, Any]:
+    """Require one complete B1 timer interval between authenticated flushes."""
+    pre_counters = pre["counters"]
+    post_counters = post["counters"]
+    step_delta = (
+        post_counters["pure_decode_forward_steps"]
+        - pre_counters["pure_decode_forward_steps"]
+    )
+    census_delta = (
+        post_counters["complete_work_census_events"]
+        - pre_counters["complete_work_census_events"]
+    )
+    pre_sfwd = pre["metrics"]["sfwd"]
+    post_sfwd = post["metrics"]["sfwd"]
+    pre_dfwd = pre["metrics"]["dfwd"]
+    post_dfwd = post["metrics"]["dfwd"]
+    pre_cfwd = pre["metrics"]["cfwd"]
+    post_cfwd = post["metrics"]["cfwd"]
+    deltas = {
+        "pure_decode_forward_steps": step_delta,
+        "graph_census_events": census_delta,
+        "sfwd_steps": post_sfwd["steps"] - pre_sfwd["steps"],
+        "sfwd_drafts": post_sfwd["drafts"] - pre_sfwd["drafts"],
+        "sfwd_forward_starts": (
+            post_sfwd["forward_starts"] - pre_sfwd["forward_starts"]
+        ),
+        "sfwd_forward_dropped": (
+            post_sfwd["forward_dropped"] - pre_sfwd["forward_dropped"]
+        ),
+        "sfwd_gpu_seconds": (
+            post_sfwd["gpu_seconds"] - pre_sfwd["gpu_seconds"]
+        ),
+        "wall_seconds": (
+            post_sfwd["wall_seconds"] - pre_sfwd["wall_seconds"]
+        ),
+        "wall_steps": post_sfwd["wall_steps"] - pre_sfwd["wall_steps"],
+        "wall_drafts": post_sfwd["wall_drafts"] - pre_sfwd["wall_drafts"],
+        "wall_rejected": (
+            post_sfwd["wall_rejected"] - pre_sfwd["wall_rejected"]
+        ),
+        "dfwd_gpu_seconds": (
+            post_dfwd["gpu_seconds"] - pre_dfwd["gpu_seconds"]
+        ),
+        "dfwd_spans": post_dfwd["spans"] - pre_dfwd["spans"],
+        "cfwd_gpu_seconds": (
+            post_cfwd["gpu_seconds"] - pre_cfwd["gpu_seconds"]
+        ),
+        "cfwd_spans": post_cfwd["spans"] - pre_cfwd["spans"],
+    }
+    if (
+        step_delta <= 0
+        or census_delta != 0
+        or deltas["sfwd_steps"] != step_delta
+        or deltas["sfwd_drafts"] != step_delta
+        or deltas["sfwd_forward_starts"] != step_delta
+        or deltas["sfwd_forward_dropped"] != 0
+        or deltas["dfwd_spans"] != step_delta
+        or deltas["cfwd_spans"] != step_delta
+        or deltas["wall_steps"] <= 0
+        or deltas["wall_drafts"] != deltas["wall_steps"]
+        or deltas["wall_steps"] > step_delta
+        or deltas["wall_rejected"] < 0
+        or any(
+            deltas[key] <= 0.0
+            for key in (
+                "sfwd_gpu_seconds",
+                "wall_seconds",
+                "dfwd_gpu_seconds",
+                "cfwd_gpu_seconds",
+            )
+        )
+    ):
+        raise Fixed32BoundaryError(
+            "fixed32 eager B1 task timer deltas do not reconcile: "
+            f"{deltas}"
+        )
+    return deltas
+
+
+class _Fixed32EagerTimingTaskBracket(_Fixed32TaskBracket):
+    """Bind exact eager timer deltas to one real SWE-Verified task."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        if self.taw_real_task_arm is not None:
+            raise Fixed32BoundaryError(
+                "eager timing task bracket cannot carry another kernel arm"
+            )
+        self.pre_snapshot: dict[str, Any] | None = None
+        self.post_snapshot: dict[str, Any] | None = None
+        self.pre_metrics_ref: dict[str, Any] | None = None
+        self.post_metrics_ref: dict[str, Any] | None = None
+        self.interval: dict[str, Any] | None = None
+
+    def _write_artifact(self) -> None:
+        payload = {
+            "schema": "fr13-fixed32-eager-timing-task-boundary-v1",
+            "instance_id": self.instance_id,
+            "mode": self.client.mode,
+            "producer_pid": self.client.producer_pid,
+            "run_classification": "eager_kernel_timing_diagnostic",
+            "acceptance_valid": False,
+            "flush_protocol_used": True,
+            "graph_census_claimed": False,
+            "pre": (
+                self.pre_ack.as_dict() if self.pre_ack is not None else None
+            ),
+            "post": (
+                self.post_ack.as_dict() if self.post_ack is not None else None
+            ),
+            "pre_runtime_snapshot": self.pre_snapshot_ref,
+            "post_runtime_snapshot": self.post_snapshot_ref,
+            "pre_metrics": self.pre_metrics_ref,
+            "post_metrics": self.post_metrics_ref,
+            "timing_interval": self.interval,
+        }
+        temporary = self.artifact_path.with_suffix(".json.tmp")
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, self.artifact_path)
+
+    @staticmethod
+    def _metrics_ref(path: Path, raw: bytes) -> dict[str, Any]:
+        return {
+            "path": str(path),
+            "bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }
+
+    def pre(self, metrics_path: Path) -> None:
+        if self.started or self.post_attempted:
+            raise Fixed32BoundaryError(
+                "fixed32 eager timing task pre bracket was invoked twice"
+            )
+        try:
+            ack = self.client.snapshot()
+            _validate_fixed32_ack(ack, label="eager timing pre")
+            snapshot, snapshot_path, snapshot_sha = (
+                _load_fixed32_eager_timing_boundary_snapshot(
+                    base_path=self.boundary_snapshot_base,
+                    ack=ack,
+                )
+            )
+            metrics = _fixed32_eager_timing_metrics_snapshot(
+                metrics_url=DEFAULT_METRICS_URL,
+                snapshot=snapshot,
+            ).encode("utf-8")
+            metrics_path.write_bytes(metrics)
+            self.pre_ack = ack
+            self.pre_snapshot = snapshot
+            self.pre_snapshot_ref = {
+                "schema": snapshot["schema"],
+                "generation": ack.generation,
+                "path": str(snapshot_path),
+                "sha256": snapshot_sha,
+            }
+            self.pre_metrics_ref = self._metrics_ref(metrics_path, metrics)
+            self._write_artifact()
+        except Exception as exc:
+            self.pre_ack = None
+            self.pre_snapshot = None
+            self.pre_snapshot_ref = None
+            self.pre_metrics_ref = None
+            raise Fixed32BoundaryError(
+                "fixed32 eager timing pre bracket failed: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+
+    def post(self, metrics_path: Path) -> dict[str, Any]:
+        if not self.started or self.pre_snapshot is None:
+            raise Fixed32BoundaryError(
+                "fixed32 eager timing post bracket has no pre bracket"
+            )
+        if self.post_attempted:
+            if self.complete:
+                return json.loads(
+                    self.artifact_path.read_text(encoding="utf-8")
+                )
+            raise Fixed32BoundaryError(
+                "fixed32 eager timing post bracket already failed"
+            )
+        self.post_attempted = True
+        try:
+            ack = self.client.snapshot()
+            _validate_fixed32_ack(ack, label="eager timing post")
+            snapshot, snapshot_path, snapshot_sha = (
+                _load_fixed32_eager_timing_boundary_snapshot(
+                    base_path=self.boundary_snapshot_base,
+                    ack=ack,
+                )
+            )
+            interval = _fixed32_eager_timing_interval(
+                self.pre_snapshot,
+                snapshot,
+            )
+            metrics = _fixed32_eager_timing_metrics_snapshot(
+                metrics_url=DEFAULT_METRICS_URL,
+                snapshot=snapshot,
+            ).encode("utf-8")
+            metrics_path.write_bytes(metrics)
+            self.post_ack = ack
+            self.post_snapshot = snapshot
+            self.post_snapshot_ref = {
+                "schema": snapshot["schema"],
+                "generation": ack.generation,
+                "path": str(snapshot_path),
+                "sha256": snapshot_sha,
+            }
+            self.post_metrics_ref = self._metrics_ref(metrics_path, metrics)
+            self.interval = interval
+            self._write_artifact()
+        except Exception as exc:
+            self.post_ack = None
+            self.post_snapshot = None
+            self.post_snapshot_ref = None
+            self.post_metrics_ref = None
+            self.interval = None
+            try:
+                self._write_artifact()
+            except Exception:
+                pass
+            raise Fixed32BoundaryError(
+                "fixed32 eager timing post bracket failed: "
                 f"{type(exc).__name__}: {exc}"
             ) from exc
         return json.loads(self.artifact_path.read_text(encoding="utf-8"))
@@ -7425,9 +7864,12 @@ def main(argv: list[str] | None = None) -> int:
         )
     if sfwd_state_fusion_text == sfwd_state_fusion_timing_text == "1":
         parser.error("fixed32 SFWD byte and timing diagnostics are exclusive")
+    fixed32_sfwd_state_fusion_timing = (
+        sfwd_state_fusion_timing_text == "1"
+    )
     fixed32_sfwd_state_fusion_diagnostic = (
         sfwd_state_fusion_text == "1"
-        or sfwd_state_fusion_timing_text == "1"
+        or fixed32_sfwd_state_fusion_timing
     )
     if fixed32_sfwd_state_fusion_diagnostic:
         if fixed32_taw_diagnostic or fixed32_bm8_diagnostic:
@@ -7614,11 +8056,12 @@ def main(argv: list[str] | None = None) -> int:
                 path=arm_path,
                 instance_id=iid,
             )
-        fixed32_bracket_type = (
-            _Fixed32EagerKernelDiagnosticTaskBracket
-            if fixed32_eager_kernel_diagnostic
-            else _Fixed32TaskBracket
-        )
+        if fixed32_sfwd_state_fusion_timing:
+            fixed32_bracket_type = _Fixed32EagerTimingTaskBracket
+        elif fixed32_eager_kernel_diagnostic:
+            fixed32_bracket_type = _Fixed32EagerKernelDiagnosticTaskBracket
+        else:
+            fixed32_bracket_type = _Fixed32TaskBracket
         fixed32_bracket = (
             fixed32_bracket_type(
                 client=fixed32_client,
