@@ -1,0 +1,112 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow16_static_paged_ru3_r216_sm121a.v1",
+  "status": "PASS_STATIC_ADMISSION_REAL_B1_BYTE_GATE_PENDING",
+  "created_utc": "2026-08-02T17:41:09Z",
+  "source_commit": "8cf2307a70156cf3cb8c2cb30dcd448bc5332c3f",
+  "fa2_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+  "classification": {
+    "host_only": true,
+    "compiler_used": true,
+    "disassembler_used": true,
+    "gpu_used": false,
+    "container_used": false,
+    "synthetic_probe_used": false,
+    "real_swe_task_used": false,
+    "raw_task_data_retained": false,
+    "raw_runtime_logs_retained": false,
+    "performance_measurement": false,
+    "byte_parity_claim": false,
+    "timing_eligible": false,
+    "production_eligible": false,
+    "default_off": true
+  },
+  "geometry": {
+    "physical_query_rows": 32,
+    "query_block_m": 16,
+    "key_block_n": 64,
+    "warps": 1,
+    "threads": 32,
+    "head_dim": 256,
+    "page_block_size": 1024,
+    "dynamic_shared_bytes": 73728
+  },
+  "specialization": {
+    "private_static_paged_trait": true,
+    "stock_dynamic_path_retained": true,
+    "missing_block_table_fails_closed": true,
+    "register_usage_level": 3,
+    "kernel_max_registers": 216,
+    "ordered_k_loop_changed": false,
+    "qk_pv_accumulation_order_changed": false,
+    "row_mapping_changed": false,
+    "paged_kv_semantics_changed": false,
+    "mask_semantics_changed": false,
+    "output_store_semantics_changed": false,
+    "split_or_combine_added": false,
+    "num_splits_setting_added": false
+  },
+  "boundary": {
+    "cap_216_without_ru3": {
+      "registers": 216,
+      "stack_bytes": 16,
+      "spill_store_bytes": 24,
+      "spill_load_bytes": 20,
+      "decision": "REJECT"
+    },
+    "ru3_without_cap": {
+      "registers": 218,
+      "peak_live_gpr": 212,
+      "stack_bytes": 0,
+      "spill_store_bytes": 0,
+      "spill_load_bytes": 0,
+      "decision": "CLEAN_ABOVE_TARGET"
+    },
+    "ru3_with_cap_216": {
+      "registers": 216,
+      "peak_live_gpr": 208,
+      "stack_bytes": 0,
+      "local_bytes": 0,
+      "spill_store_bytes": 0,
+      "spill_load_bytes": 0,
+      "calls": 0,
+      "decision": "PASS_STATIC_ADMISSION"
+    }
+  },
+  "candidate": {
+    "target": "sm_121a",
+    "registers": 216,
+    "peak_live_gpr": 208,
+    "static_shared_bytes": 1024,
+    "dynamic_shared_bytes": 73728,
+    "disassembled_instructions": 5051,
+    "text_instruction_slots": 5064,
+    "hmma_bf16": 512,
+    "ffma": 132,
+    "fmul": 264,
+    "ldgsts": 336,
+    "ldsm": 288,
+    "object_size": 161952,
+    "cubin_size": 135280,
+    "object_sha256": "67a47c406cda887b8bd1686095315431a447a3dd6db0db62ab32fc6a1ec6a452",
+    "cubin_sha256": "1b80aaafb69d0caf730c14de373a15df377b8341ab1e21166350361ea593e2cd",
+    "sass_sha256": "351234296985a77c98d707c54a30be65c89c5303329d411a2fdaebfca4d498d2",
+    "binary_committed": false
+  },
+  "tests": {
+    "focused_passed": 25,
+    "focused_failed": 0,
+    "py_compile_passed": true,
+    "ruff_available": false,
+    "git_diff_check_passed": true,
+    "fresh_source_generation_passed": true,
+    "second_patch_idempotence_passed": true
+  },
+  "decision": {
+    "static_resource_admission": "PASS",
+    "exact_sm121a_object": "READY",
+    "real_k64_root1_b1_byte_gate": "PENDING",
+    "real_b1_timing": "FORBIDDEN_UNTIL_BYTE_PASS",
+    "hardware_floor_claim": "NONE",
+    "production": "NOT_AUTHORIZED"
+  }
+}

@@ -1,0 +1,6 @@
+variant	register_usage_level	max_register_cap	registers	peak_live_gpr	stack_bytes	local_bytes	spill_store_bytes	spill_load_bytes	calls	disassembled_instructions	text_instruction_slots	object_bytes	verdict
+prior_division_free	default	none	224	221	0	0	0	0	0	5032	5040	159776	BASELINE
+static_paged_default	default	none	224	222	0	0	0	0	0	4918	4928	157680	BRANCH_ELISION_ONLY
+static_paged_ru3_no_cap	3	none	218	212	0	0	0	0	0	5047	5056	161792	CLEAN_ABOVE_TARGET
+static_paged_cap_only	default	216	216	NA	16	0	24	20	0	NA	NA	NA	REJECT_SPILLS
+static_paged_ru3_r216	3	216	216	208	0	0	0	0	0	5051	5064	161952	PASS_STATIC_ADMISSION
