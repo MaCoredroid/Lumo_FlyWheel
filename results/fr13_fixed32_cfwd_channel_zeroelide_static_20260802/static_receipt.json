@@ -1,0 +1,49 @@
+{
+  "schema": "fr13.fixed32.cfwd_channel_zeroelide_static.v1",
+  "candidate": "fixed32_channel_zeroelide_source_col0",
+  "source_commit": "c0538f33f9b8016369cd7ecc72f01af4b2e1456c",
+  "source_sha256": "d20028f0a4bae83112b71ea593ba4e4865d4367e79bd90d800974df0759f28c4",
+  "contract": {
+    "dtype": "bfloat16",
+    "channels": 10240,
+    "state_columns": 34,
+    "source_rows_per_request": 36,
+    "live_source_columns": 3,
+    "literal_zero_columns": 31,
+    "zero_source_row": 35,
+    "zero_suffix_verified_at_preseed": true,
+    "programs_per_layer_request": 10,
+    "default_enabled": false,
+    "selector": "diagnostic"
+  },
+  "semantic_traffic_bytes": {
+    "1": {
+      "incumbent_source_reads": 33423360,
+      "candidate_source_reads": 2949120,
+      "removed_source_reads": 30474240,
+      "destination_writes": 33423360,
+      "candidate_ctas_per_event": 480,
+      "flat_candidate_ctas_per_event": 16320
+    },
+    "4": {
+      "incumbent_source_reads": 133693440,
+      "candidate_source_reads": 11796480,
+      "removed_source_reads": 121896960,
+      "destination_writes": 133693440,
+      "candidate_ctas_per_event": 1920,
+      "flat_candidate_ctas_per_event": 65280
+    }
+  },
+  "host_verification": {
+    "tests_passed": 98,
+    "cuda_modules_skipped": 1,
+    "ruff_passed": true,
+    "py_compile_passed": true,
+    "diff_check_passed": true
+  },
+  "compiled_codegen_checked": false,
+  "gpu_executed": false,
+  "byte_equivalence_measured": false,
+  "performance_measured": false,
+  "hardware_floor_claimed": false
+}

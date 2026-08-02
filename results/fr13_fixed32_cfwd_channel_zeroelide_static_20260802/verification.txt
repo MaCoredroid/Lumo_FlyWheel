@@ -1,0 +1,11 @@
+source_commit=c0538f33f9b8016369cd7ecc72f01af4b2e1456c
+focused_host_tests=98 passed, 1 skipped
+ruff=pass
+py_compile=pass
+git_diff_check=pass
+compiled_codegen=not_run
+gpu_execution=not_run
+real_task_byte_gate=not_run
+b1_timing=not_run
+b4_timing=not_run
+hardware_floor=not_claimed
