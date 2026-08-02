@@ -1,0 +1,16 @@
+{
+  "acceptance_valid": false,
+  "candidate_arm_launched": false,
+  "docker_clean_after_manual_cleanup": true,
+  "failure_class": "generation_zero_timer_helper_order",
+  "floor_claim": false,
+  "launch_end_manifests_unchanged": true,
+  "measurement_valid": false,
+  "run_tag": "k64root_20260802T081335Z",
+  "schema": "fr13.fixed32.sfwd.b1_timing.pretask_boot_rejection.v1",
+  "source_commit": "30e2fd8f264413834640c8605a9b12c3b642ee7c",
+  "status": "rejected_pre_task_boot",
+  "stock_arm_reached_health": false,
+  "task_directories": 0,
+  "timing_summary_present": false
+}
