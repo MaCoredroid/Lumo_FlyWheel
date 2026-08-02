@@ -13,11 +13,24 @@ from lumo_flywheel_serving import fr13_cfwd_native_fullvalue_cuda as candidate
 ROOT = Path(__file__).resolve().parents[1]
 CUDA_SOURCE = ROOT / "native/fr13_fixed32_cfwd_native_fullvalue.cu"
 PATCHER_SOURCE = ROOT / "scripts/fr13_patch_vllm_cfwd_native_fullvalue_cuda.py"
+CODEGEN_CHECKER_SOURCE = (
+    ROOT / "scripts/fr13_check_cfwd_native_fullvalue_codegen.py"
+)
 
 
 def _load_patcher():
     spec = importlib.util.spec_from_file_location(
         "cfwd_native_fullvalue_patcher", PATCHER_SOURCE
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_codegen_checker():
+    spec = importlib.util.spec_from_file_location(
+        "cfwd_native_fullvalue_codegen_checker", CODEGEN_CHECKER_SOURCE
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -250,8 +263,8 @@ def test_cuda_source_has_one_shared_k_load_and_cta_norm_per_step() -> None:
     assert "__shared__ float normalized_k[kDimK];" in source
     assert "if (thread_id < kDimK)" in source
     assert source.count("const float key_value = load_bf16(k_rings + key_offset)") == 1
-    assert source.count("norm = warp_sum(norm);") == 1
-    assert source.count("normalized_k[thread_id] *= norm_partials[0]") == 1
+    assert source.count("norm = triton_butterfly_four_sum(norm);") == 1
+    assert "__fmul_rn(normalized_k[thread_id], norm_partials[0])" in source
     assert "All 16 warps consume the same normalized K vector" in source
     assert source.count("__syncthreads();") >= 6
 
@@ -261,13 +274,15 @@ def test_cuda_source_preserves_ordered_active_recurrence_and_fp32_store() -> Non
     loop = source[source.index("for (int step = 0;") :]
     assert "shared_steps = min(max(accepted, 0) + 1" in source
     assert "step - 1" in loop
-    assert "state[value_lane][key_quad] *= decay_scale;" in loop
-    assert "state_k += state[value_lane][key_quad] * normalized_k[key_index];" in loop
-    assert "const float residual = (value - state_k) * beta;" in loop
-    assert "state[value_lane][key_quad] += residual * normalized_k[key_index];" in loop
-    assert loop.index("*= decay_scale") < loop.index("state_k +=")
-    assert loop.index("state_k +=") < loop.index("const float residual")
-    assert loop.index("const float residual") < loop.index("+= residual")
+    assert "__fmul_rn(state[value_lane][key_quad], decay_scale)" in loop
+    assert "float partial02 = triton_butterfly_product_sum(" in loop
+    assert "float partial13 = triton_butterfly_product_sum(" in loop
+    assert "float state_k = __fadd_rn(partial02, partial13);" in loop
+    assert "__fmul_rn(__fsub_rn(value, state_k), beta)" in loop
+    assert "state[value_lane][key_quad] = __fmaf_rn(" in loop
+    assert loop.index("decay_scale);") < loop.index("float partial02")
+    assert loop.index("float partial02") < loop.index("const float residual")
+    assert loop.index("const float residual") < loop.index("= __fmaf_rn(")
     assert "float* bank_anchor" in source
     assert "state_bank[state_offset] = state[value_lane][key_quad];" in source
     assert "__float2bfloat16" not in source
@@ -278,6 +293,84 @@ def test_cuda_source_matches_incumbent_initial_zero_accumulate() -> None:
     source = CUDA_SOURCE.read_text(encoding="utf-8")
     assert "including its -0.0 to +0.0 normalization" in source
     assert "load_state_bank[state_offset] + 0.0f;" in source
+
+
+def test_cuda_source_pins_incumbent_ptx_math_contract() -> None:
+    source = CUDA_SOURCE.read_text(encoding="utf-8")
+    assert "constexpr float kLog2E = 0x1.715476p+0f;" in source
+    assert 'asm volatile("ex2.approx.f32 %0, %1;"' in source
+    assert 'asm volatile("rsqrt.approx.ftz.f32 %0, %1;"' in source
+    assert 'asm volatile("div.full.f32 %0, %1, %2;"' in source
+    assert "expf(" not in source
+    assert "rsqrtf(" not in source
+
+
+def test_cuda_source_matches_incumbent_reduction_and_fma_order() -> None:
+    source = CUDA_SOURCE.read_text(encoding="utf-8")
+    helper = source[
+        source.index("float triton_butterfly_product_sum"):
+        source.index("float triton_butterfly_four_sum")
+    ]
+    assert "const float product = __fmul_rn(lhs, rhs);" in helper
+    assert "__shfl_xor_sync(kFullWarpMask, product, 16)" in helper
+    assert "float value = __fmaf_rn(lhs, rhs, partner);" in helper
+    assert "for (int mask = 8; mask > 0; mask >>= 1)" in helper
+    assert "__fadd_rn(" in helper
+    loop = source[source.index("for (int step = 0;") :]
+    assert "(group 0 + group 2) + (group 1 + group 3)" in loop
+    assert loop.index("state[value_lane][0]") < loop.index(
+        "state[value_lane][2]"
+    )
+    assert loop.index("state[value_lane][2]") < loop.index(
+        "state[value_lane][1]"
+    )
+    assert loop.index("state[value_lane][1]") < loop.index(
+        "state[value_lane][3]"
+    )
+
+
+def _codegen_fixture(checker) -> tuple[str, str]:
+    resource_report = f"""
+arch = sm_121a
+Resource usage:
+ Function mangled_{checker.KERNEL_MARKER}_symbol:
+  REG:64 STACK:0 SHARED:1572 LOCAL:0 CONSTANT[0]:1084
+"""
+    sass = "\n".join(
+        opcode
+        for opcode, count in checker.EXPECTED_SASS_COUNTS.items()
+        for _ in range(count)
+    )
+    return resource_report, sass
+
+
+def test_codegen_checker_accepts_pinned_sm121_sass_contract() -> None:
+    checker = _load_codegen_checker()
+    resource_report, sass = _codegen_fixture(checker)
+    receipt = checker.check_codegen(resource_report, sass)
+    assert receipt["contract_pass"] is True
+    assert receipt["resources"]["registers_per_thread"] == 64
+    assert receipt["forbidden_sass_counts"] == {
+        "LDL": 0,
+        "STL": 0,
+        "CALL": 0,
+    }
+    assert receipt["sass_counts"] == checker.EXPECTED_SASS_COUNTS
+
+
+@pytest.mark.parametrize("forbidden", ["LDL.64", "STL.64", "CALL"])
+def test_codegen_checker_rejects_local_or_call_drift(forbidden: str) -> None:
+    checker = _load_codegen_checker()
+    resource_report, sass = _codegen_fixture(checker)
+    with pytest.raises(RuntimeError, match="local/call drift"):
+        checker.check_codegen(resource_report, f"{sass}\n{forbidden}")
+
+
+def test_codegen_checker_rejects_math_shape_drift() -> None:
+    checker = _load_codegen_checker()
+    resource_report, sass = _codegen_fixture(checker)
+    with pytest.raises(RuntimeError, match="SASS shape drift"):
+        checker.check_codegen(resource_report, sass.replace("MUFU.EX2", "NOP", 1))
 
 
 def test_cuda_extension_contract_is_sm121_and_strict() -> None:

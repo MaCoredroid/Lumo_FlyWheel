@@ -28,6 +28,8 @@ constexpr int kNormPartialWarps = kDimK / 32;
 constexpr int kSharedBytes =
     kDimK * sizeof(float) + kNormPartialWarps * sizeof(float) +
     2 * sizeof(float) + 3 * sizeof(int32_t);
+constexpr unsigned kFullWarpMask = 0xffffffffu;
+constexpr float kLog2E = 0x1.715476p+0f;
 
 static_assert(kThreadsPerBlock == 512);
 static_assert(kValuesPerWarp == 8);
@@ -40,20 +42,65 @@ __device__ __forceinline__ float load_bf16(const __nv_bfloat16* pointer) {
   return __bfloat162float(*pointer);
 }
 
-__device__ __forceinline__ float warp_sum(float value) {
+// Triton lowers tl.exp directly to mul(log2(e)) + ex2.approx. CUDA expf uses
+// a different libdevice range-reduction sequence, so pin the exact PTX op.
+__device__ __forceinline__ float triton_exp(float value) {
+  const float exponent = __fmul_rn(value, kLog2E);
+  float result;
+  asm volatile("ex2.approx.f32 %0, %1;" : "=f"(result) : "f"(exponent));
+  return result;
+}
+
+__device__ __forceinline__ float triton_rsqrt(float value) {
+  float result;
+  asm volatile("rsqrt.approx.ftz.f32 %0, %1;"
+               : "=f"(result)
+               : "f"(value));
+  return result;
+}
+
+__device__ __forceinline__ float triton_divide(float numerator,
+                                                float denominator) {
+  float result;
+  asm volatile("div.full.f32 %0, %1, %2;"
+               : "=f"(result)
+               : "f"(numerator), "f"(denominator));
+  return result;
+}
+
+// The incumbent BV64 and BV128 Triton programs reduce every contiguous
+// 32-key group with XOR 16/8/4/2/1. The first add fuses the local product into
+// one rounded FMA; later levels are separately rounded additions.
+__device__ __forceinline__ float triton_butterfly_product_sum(float lhs,
+                                                               float rhs) {
+  const float product = __fmul_rn(lhs, rhs);
+  const float partner =
+      __shfl_xor_sync(kFullWarpMask, product, 16);
+  float value = __fmaf_rn(lhs, rhs, partner);
 #pragma unroll
-  for (int delta = 16; delta > 0; delta >>= 1) {
-    value += __shfl_down_sync(0xffffffffu, value, delta);
+  for (int mask = 8; mask > 0; mask >>= 1) {
+    value = __fadd_rn(
+        value, __shfl_xor_sync(kFullWarpMask, value, mask));
   }
-  return __shfl_sync(0xffffffffu, value, 0);
+  return value;
+}
+
+__device__ __forceinline__ float triton_butterfly_four_sum(float value) {
+  value = __fadd_rn(value,
+                    __shfl_xor_sync(kFullWarpMask, value, 2));
+  return __fadd_rn(value,
+                   __shfl_xor_sync(kFullWarpMask, value, 1));
 }
 
 __device__ __forceinline__ float softplus(float value) {
-  return value <= 20.0f ? logf(1.0f + expf(value)) : value;
+  return value <= 20.0f
+             ? logf(__fadd_rn(1.0f, triton_exp(value)))
+             : value;
 }
 
 __device__ __forceinline__ float sigmoid(float value) {
-  return 1.0f / (1.0f + expf(-value));
+  return triton_divide(
+      1.0f, __fadd_rn(1.0f, triton_exp(__fsub_rn(0.0f, value))));
 }
 
 __global__ __launch_bounds__(kThreadsPerBlock, 2)
@@ -135,15 +182,17 @@ void fixed32_cfwd_native_fullvalue_kernel(
           static_cast<int64_t>(layer) * ring_ab_layer_stride +
           static_cast<int64_t>(request) * ring_ab_batch_stride +
           static_cast<int64_t>(node) * ring_ab_node_stride + value_head;
-      const float x = load_bf16(a_rings + ab_offset) + gate_coeffs[gate_offset + 1];
-      const float decay = gate_coeffs[gate_offset] * softplus(x);
-      recurrence_scalars[0] = expf(decay);
+      const float x = __fadd_rn(load_bf16(a_rings + ab_offset),
+                                gate_coeffs[gate_offset + 1]);
+      const float decay =
+          __fmul_rn(gate_coeffs[gate_offset], softplus(x));
+      recurrence_scalars[0] = triton_exp(decay);
       recurrence_scalars[1] = sigmoid(load_bf16(b_rings + ab_offset));
     }
     // Publish the node/scalars after every warp finished the preceding step.
     __syncthreads();
 
-    float norm_term = 0.0f;
+    float warp_partial = 0.0f;
     if (thread_id < kDimK) {
       const int64_t key_offset =
           static_cast<int64_t>(layer) * ring_k_layer_stride +
@@ -152,9 +201,8 @@ void fixed32_cfwd_native_fullvalue_kernel(
           static_cast<int64_t>(key_head) * kDimK + thread_id;
       const float key_value = load_bf16(k_rings + key_offset);
       normalized_k[thread_id] = key_value;
-      norm_term = key_value * key_value;
+      warp_partial = triton_butterfly_product_sum(key_value, key_value);
     }
-    const float warp_partial = warp_sum(norm_term);
     if (lane == 0 && warp < kNormPartialWarps) {
       norm_partials[warp] = warp_partial;
     }
@@ -162,14 +210,15 @@ void fixed32_cfwd_native_fullvalue_kernel(
 
     if (warp == 0) {
       float norm = lane < kNormPartialWarps ? norm_partials[lane] : 0.0f;
-      norm = warp_sum(norm);
+      norm = triton_butterfly_four_sum(norm);
       if (lane == 0) {
-        norm_partials[0] = rsqrtf(norm + 1.0e-6f);
+        norm_partials[0] = triton_rsqrt(__fadd_rn(norm, 1.0e-6f));
       }
     }
     __syncthreads();
     if (thread_id < kDimK) {
-      normalized_k[thread_id] *= norm_partials[0];
+      normalized_k[thread_id] =
+          __fmul_rn(normalized_k[thread_id], norm_partials[0]);
     }
     // All 16 warps consume the same normalized K vector below.
     __syncthreads();
@@ -181,27 +230,40 @@ void fixed32_cfwd_native_fullvalue_kernel(
       const int value_index = warp * kValuesPerWarp + value_lane;
 #pragma unroll
       for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-        state[value_lane][key_quad] *= decay_scale;
+        state[value_lane][key_quad] =
+            __fmul_rn(state[value_lane][key_quad], decay_scale);
       }
-      float state_k = 0.0f;
-#pragma unroll
-      for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-        const int key_index = lane + key_quad * 32;
-        state_k += state[value_lane][key_quad] * normalized_k[key_index];
-      }
-      state_k = warp_sum(state_k);
+      // Match Triton's four contiguous K=32 partials and its cross-group
+      // butterfly order: (group 0 + group 2) + (group 1 + group 3).
+      float partial02 = triton_butterfly_product_sum(
+          state[value_lane][0], normalized_k[lane]);
+      partial02 = __fadd_rn(
+          partial02,
+          triton_butterfly_product_sum(state[value_lane][2],
+                                       normalized_k[lane + 64]));
+      float partial13 = triton_butterfly_product_sum(
+          state[value_lane][1], normalized_k[lane + 32]);
+      partial13 = __fadd_rn(
+          partial13,
+          triton_butterfly_product_sum(state[value_lane][3],
+                                       normalized_k[lane + 96]));
+      float state_k = __fadd_rn(partial02, partial13);
+      state_k = __shfl_sync(kFullWarpMask, state_k, 0);
       const int64_t value_offset =
           static_cast<int64_t>(layer) * ring_v_layer_stride +
           static_cast<int64_t>(request) * ring_v_batch_stride +
           static_cast<int64_t>(shared_node) * ring_v_node_stride +
           static_cast<int64_t>(value_head) * kDimV + value_index;
       float value = lane == 0 ? load_bf16(v_rings + value_offset) : 0.0f;
-      value = __shfl_sync(0xffffffffu, value, 0);
-      const float residual = (value - state_k) * beta;
+      value = __shfl_sync(kFullWarpMask, value, 0);
+      const float residual =
+          __fmul_rn(__fsub_rn(value, state_k), beta);
 #pragma unroll
       for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
         const int key_index = lane + key_quad * 32;
-        state[value_lane][key_quad] += residual * normalized_k[key_index];
+        state[value_lane][key_quad] = __fmaf_rn(
+            residual, normalized_k[key_index],
+            state[value_lane][key_quad]);
       }
     }
     // Prevent the cooperative loader from overwriting K while a peer warp
@@ -210,7 +272,11 @@ void fixed32_cfwd_native_fullvalue_kernel(
   }
 
   float* store_state_bank = bank_anchor + bank_off16[layer] * 4;
-  const int store_thread_id = threadIdx.x;
+  // Read %tid.x again through inline PTX so the optimizer cannot common the
+  // final-store address with the initial-load address and keep it live (or
+  // spill it) across the recurrence.
+  int store_thread_id;
+  asm volatile("mov.u32 %0, %%tid.x;" : "=r"(store_thread_id));
   const int store_warp = store_thread_id >> 5;
   const int store_lane = store_thread_id & 31;
   const int64_t store_state_row_offset =
