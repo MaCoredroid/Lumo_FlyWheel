@@ -1,0 +1,15 @@
+{
+  "authenticated_tasks_started": 0,
+  "container_started": false,
+  "correctness_result": false,
+  "external_manifest_at_launch_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+  "gpu_process_started": false,
+  "launch_log_sha256": "198ecccd4a903ff8cdb6bd4819066c2d9bbdde759a04a0c42e5ffacc7eee9a78",
+  "measurement_result": false,
+  "reason": "relative FA2 host path was rejected as an invalid Docker volume source",
+  "run_log_sha256": "d78ccbdeee330c1a42553c4cbdd32c9d0608bad0aff5f88fc005a6ea71806e51",
+  "runtime_manifest_at_launch_sha256": "ff7aaf5a0ab2ce7ffb62be34581f6e7afc92560722d2df97beffa34723cdf0ec",
+  "schema": "fr13.fixed32.preflight_rejection.reduced.v1",
+  "serve_rc": 125,
+  "status": "rejected_before_container"
+}
