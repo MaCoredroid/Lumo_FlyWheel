@@ -4303,19 +4303,35 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
     bank_row = tl.load(
         spec_state_indices + pid_b * ssi_stride_b + 0 * ssi_stride_s
     ).to(tl.int64)
+    stage_base = pid_b.to(tl.int64) * SOURCE_ROWS
+    prior_0 = tl.load(
+        conv_state
+        + bank_row * conv_stride_row
+        + offs_c * conv_stride_c
+        + 0 * conv_stride_l
+    )
+    prior_1 = tl.load(
+        conv_state
+        + bank_row * conv_stride_row
+        + offs_c * conv_stride_c
+        + 1 * conv_stride_l
+    )
+    prior_2 = tl.load(
+        conv_state
+        + bank_row * conv_stride_row
+        + offs_c * conv_stride_c
+        + 2 * conv_stride_l
+    )
     acc = tl.zeros((ROWS_PER_PROGRAM, BLOCK_C), dtype=tl.float32)
     if HAS_BIAS:
         acc = tl.load(bias + offs_c).to(tl.float32)
     for tap in tl.static_range(0, WIDTH - 1):
         source_row = tl.load(source_flat + offs_n * WIDTH + tap).to(tl.int64)
         from_prior = source_row < (WIDTH - 1)
-        prior_value = tl.load(
-            conv_state
-            + bank_row * conv_stride_row
-            + offs_c * conv_stride_c
-            + source_row * conv_stride_l,
-            mask=from_prior,
-            other=0.0,
+        prior_value = tl.where(
+            source_row == 0,
+            prior_0,
+            tl.where(source_row == 1, prior_1, prior_2),
         )
         x_node = source_row - (WIDTH - 1)
         x_value = tl.load(
@@ -4354,7 +4370,6 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
     activated = acc / (1.0 + tl.exp(0.0 - acc))
     tl.store(out + (pid_b * N + offs_n) * C + offs_c, activated)
 
-    stage_base = pid_b.to(tl.int64) * SOURCE_ROWS
     tl.store(
         source_stage
         + (stage_base + (WIDTH - 1) + offs_n) * C
@@ -4362,22 +4377,21 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
         current_x,
     )
     source_edge_writer = pid_n_base == 0
-    for prior_col in tl.static_range(0, WIDTH - 1):
-        prior_value = tl.load(
-            conv_state
-            + bank_row * conv_stride_row
-            + offs_c * conv_stride_c
-            + prior_col * conv_stride_l,
-            mask=source_edge_writer,
-            other=0.0,
-        )
-        tl.store(
-            source_stage
-            + (stage_base + prior_col) * C
-            + offs_c,
-            prior_value,
-            mask=source_edge_writer,
-        )
+    tl.store(
+        source_stage + stage_base * C + offs_c,
+        prior_0,
+        mask=source_edge_writer,
+    )
+    tl.store(
+        source_stage + (stage_base + 1) * C + offs_c,
+        prior_1,
+        mask=source_edge_writer,
+    )
+    tl.store(
+        source_stage + (stage_base + 2) * C + offs_c,
+        prior_2,
+        mask=source_edge_writer,
+    )
     tl.store(
         source_stage
         + (stage_base + SOURCE_ROWS - 1) * C

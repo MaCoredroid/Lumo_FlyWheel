@@ -124,6 +124,34 @@ def test_source_descriptor_is_the_exact_fixed32_window_mapping() -> None:
     assert max(actual) == 34
 
 
+def test_prior_vector_reuse_matches_exact_descriptor_selection() -> None:
+    source = kernel._fr13_fixed32_conv_source_flat_expected(4)
+    prior = tuple(f"prior_{column}" for column in range(3))
+    current = tuple(f"x_{node}" for node in range(32))
+
+    for node in range(32):
+        for tap in range(3):
+            source_row = source[node * 4 + tap]
+            generic = (
+                prior[source_row]
+                if source_row < 3
+                else current[source_row - 3]
+            )
+            selected_prior = (
+                prior[0]
+                if source_row == 0
+                else prior[1]
+                if source_row == 1
+                else prior[2]
+            )
+            reused = (
+                selected_prior
+                if source_row < 3
+                else current[source_row - 3]
+            )
+            assert reused == generic
+
+
 def test_cpu_reference_matches_direct_fused_indexing_for_b1_b4() -> None:
     torch.manual_seed(20260801)
     channels = 8
@@ -345,6 +373,12 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     assert "+ (WIDTH - 1) * weight_stride_w" in candidate
     assert "current_product = (" in candidate
     assert "acc = acc + current_product" in candidate
+    assert candidate.count("prior_0 = tl.load(") == 1
+    assert candidate.count("prior_1 = tl.load(") == 1
+    assert candidate.count("prior_2 = tl.load(") == 1
+    assert "source_row == 0" in candidate
+    assert "source_row == 1" in candidate
+    assert "mask=from_prior" not in candidate
     assert "x_stride_row" in candidate
     assert "* x_stride_row" in candidate
     assert "FR13_FIXED32_SFWD_STATE_FUSION source candidate is eager" in launcher
