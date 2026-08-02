@@ -709,6 +709,26 @@ struct sm120_blockwise_fp8_config_b1_divisor_static_identity_stage2 {
       cutlass::gemm::collective::StageCount<2>>;
 };
 
+// Alternate complete output tiles between two consumer warp groups. The
+// divisor-balanced B1 grid gives each CTA 4 or 8 tiles on the three wider
+// projections, so ping-pong can overlap mainloop and epilogue without split K
+// or any change to a tile's accumulation order. The two N=5120 projections
+// retain the cooperative kernel because they assign only one tile per CTA.
+template <typename OutType>
+struct sm120_blockwise_fp8_config_b1_divisor_static_identity_pingpong_stage2 {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwisePingpongSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_128, _32, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
+      OutType, 128, 1, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, true,
+      fr13_fixed32_m128_divisor_static_scheduler,
+      cutlass::gemm::collective::StageCount<2>>;
+};
+
 template <typename OutType>
 struct sm120_blockwise_fp8_config_b4_m128_static_identity_stage2 {
   using KernelSchedule =
@@ -740,6 +760,8 @@ enum class fixed32_cutlass_wave_variant {
   persistent_b4_m128_static_byte_ab,
   identity_stage2_static,
   identity_stage2_static_byte_ab,
+  identity_stage2_pingpong_b1,
+  identity_stage2_pingpong_b1_byte_ab,
 };
 
 static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
@@ -794,6 +816,12 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     }
     if (value == "identity_stage2_static_byte_ab") {
       return fixed32_cutlass_wave_variant::identity_stage2_static_byte_ab;
+    }
+    if (value == "identity_stage2_pingpong_b1") {
+      return fixed32_cutlass_wave_variant::identity_stage2_pingpong_b1;
+    }
+    if (value == "identity_stage2_pingpong_b1_byte_ab") {
+      return fixed32_cutlass_wave_variant::identity_stage2_pingpong_b1_byte_ab;
     }
     return fixed32_cutlass_wave_variant::stock;
   }();
@@ -971,6 +999,13 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
            fixed32_cutlass_wave_variant::identity_stage2_static_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
+  if (M != 32 &&
+      (wave_variant ==
+           fixed32_cutlass_wave_variant::identity_stage2_pingpong_b1 ||
+       wave_variant == fixed32_cutlass_wave_variant::
+                           identity_stage2_pingpong_b1_byte_ab)) {
+    wave_variant = fixed32_cutlass_wave_variant::stock;
+  }
 
   auto run_stream_k = [&](torch::stable::Tensor& destination) {
     if (M <= 64) {
@@ -1038,6 +1073,18 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
         destination, a, b, a_scales, b_scales);
   };
 
+  auto run_identity_stage2_pingpong_b1 =
+      [&](torch::stable::Tensor& destination) {
+    if (N == 5120) {
+      return run_identity_stage2_static(destination);
+    }
+    using Gemm = typename
+        sm120_blockwise_fp8_config_b1_divisor_static_identity_pingpong_stage2<
+            OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
   auto run_stock = [&](torch::stable::Tensor& destination) {
     bool swap_ab = (M <= 64) || (M % 4 != 0);
     if (!swap_ab) {
@@ -1074,12 +1121,18 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   const bool identity_stage2_static_byte_ab =
       wave_variant ==
       fixed32_cutlass_wave_variant::identity_stage2_static_byte_ab;
+  const bool identity_stage2_pingpong_b1_byte_ab =
+      wave_variant == fixed32_cutlass_wave_variant::
+                          identity_stage2_pingpong_b1_byte_ab;
   if (wave_variant ==
           fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab ||
       wide256_byte_ab || static_persistent_byte_ab ||
       divisor_static_byte_ab || b4_m128_byte_ab || b4_m128_static_byte_ab ||
-      identity_stage2_static_byte_ab) {
+      identity_stage2_static_byte_ab || identity_stage2_pingpong_b1_byte_ab) {
     auto run_candidate = [&](torch::stable::Tensor& destination) {
+      if (identity_stage2_pingpong_b1_byte_ab) {
+        return run_identity_stage2_pingpong_b1(destination);
+      }
       if (identity_stage2_static_byte_ab) {
         return run_identity_stage2_static(destination);
       }
@@ -1163,7 +1216,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       }
     }
     const char* log_path =
-        identity_stage2_static_byte_ab
+        identity_stage2_pingpong_b1_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_identity_stage2_pingpong_b1_byte_ab.jsonl"
+        : identity_stage2_static_byte_ab
             ? "/logs/fr13_fixed32_cutlass_identity_stage2_static_byte_ab.jsonl"
         : b4_m128_static_byte_ab
             ? "/logs/fr13_fixed32_cutlass_persistent_b4_m128_static_byte_ab.jsonl"
@@ -1183,7 +1238,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       STD_TORCH_CHECK(log.good(),
                       "FR13 Stream-K byte A/B could not open JSONL");
       log << "{\\\"schema\\\":\\\""
-          << (identity_stage2_static_byte_ab
+          << (identity_stage2_pingpong_b1_byte_ab
+                  ? "fr13.fixed32.cutlass_identity_stage2_pingpong_b1_byte_ab.v1"
+              : identity_stage2_static_byte_ab
                   ? "fr13.fixed32.cutlass_identity_stage2_static_byte_ab.v1"
               : b4_m128_static_byte_ab
                   ? "fr13.fixed32.cutlass_persistent_b4_m128_static_byte_ab.v1"
@@ -1251,6 +1308,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   if (wave_variant ==
       fixed32_cutlass_wave_variant::identity_stage2_static) {
     return run_identity_stage2_static(out);
+  }
+
+  if (wave_variant ==
+      fixed32_cutlass_wave_variant::identity_stage2_pingpong_b1) {
+    return run_identity_stage2_pingpong_b1(out);
   }
 
   // Unset/unknown selectors retain the stock kernel and numeric result.

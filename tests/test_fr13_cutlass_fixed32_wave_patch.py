@@ -104,6 +104,8 @@ def test_patch_is_default_off_and_shape_gated() -> None:
     assert 'value == "persistent_b4_m128_static_byte_ab"' in patched
     assert 'value == "identity_stage2_static"' in patched
     assert 'value == "identity_stage2_static_byte_ab"' in patched
+    assert 'value == "identity_stage2_pingpong_b1"' in patched
+    assert 'value == "identity_stage2_pingpong_b1_byte_ab"' in patched
     assert "return fixed32_cutlass_wave_variant::stock;" in patched
     for rows in (32, 64, 96, 128):
         assert f"m == {rows}" in patched
@@ -123,8 +125,13 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 2
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 9
-    assert "PingpongSm120" not in module.CONFIG_REPLACEMENT
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 10
+    assert (
+        module.CONFIG_REPLACEMENT.count(
+            "KernelTmaWarpSpecializedBlockwisePingpongSm120"
+        )
+        == 1
+    )
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
     assert "OutType, 1, 128, 128, TileShape, ClusterShape" in patched
@@ -350,6 +357,38 @@ def test_identity_stage2_uses_identity_epilogue_across_batches() -> None:
     assert (
         "fixed32_cutlass_wave_variant::identity_stage2_static) {\n"
         "    return run_identity_stage2_static(out);"
+        in patched
+    )
+
+
+def test_identity_stage2_pingpong_is_b1_only_and_preserves_full_k() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+    config_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b1_divisor_static_identity_pingpong_stage2"
+    )
+    config_end = patched.index("};", config_start)
+    config = patched[config_start:config_end]
+
+    assert "KernelTmaWarpSpecializedBlockwisePingpongSm120" in config
+    assert "Shape<_128, _32, _128>" in config
+    assert "fr13_fixed32_m128_divisor_static_scheduler" in config
+    assert "cutlass::gemm::collective::StageCount<2>" in config
+    assert "StreamK" not in config
+    assert "if (M != 32 &&" in patched
+    assert "auto run_identity_stage2_pingpong_b1" in patched
+    assert "if (N == 5120)" in patched
+    assert "return run_identity_stage2_static(destination);" in patched
+    assert (
+        '"/logs/fr13_fixed32_cutlass_identity_stage2_pingpong_b1_byte_ab.jsonl"'
+        in patched
+    )
+    assert (
+        "fr13.fixed32.cutlass_identity_stage2_pingpong_b1_byte_ab.v1" in patched
+    )
+    assert (
+        "fixed32_cutlass_wave_variant::identity_stage2_pingpong_b1) {\n"
+        "    return run_identity_stage2_pingpong_b1(out);"
         in patched
     )
 
