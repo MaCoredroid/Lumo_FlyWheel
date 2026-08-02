@@ -570,15 +570,24 @@ def test_engine_middleware_arms_batch_gdn_from_authenticated_exact4_request(
     assert marker.read_bytes() == expected
 
 
+@pytest.mark.parametrize(
+    "route_sidecar_name",
+    (
+        "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled",
+        "fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled",
+        "fr13_fixed32_sfwd_state_fusion.production.arm",
+    ),
+)
 def test_engine_middleware_arms_sfwd_fusion_only_after_authenticated_b1_request(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    route_sidecar_name: str,
 ) -> None:
     secret_path = tmp_path / "secret.json"
     _task_seed, engine_bearer = _write_secret(secret_path)
     logs = tmp_path / "logs"
     logs.mkdir()
-    enabled = logs / "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
+    enabled = logs / route_sidecar_name
     enabled.write_bytes(b"1\n")
     enabled.chmod(0o400)
     marker = logs / "fr13_fixed32_sfwd_state_fusion.real_event.arm"

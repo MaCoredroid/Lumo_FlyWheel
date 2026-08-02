@@ -80,6 +80,10 @@ _FIXED32_SFWD_STATE_FUSION_REAL_EVENT_ARM_NAME = (
 _FIXED32_SFWD_STATE_FUSION_ENABLED_NAME = (
     "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
 )
+_FIXED32_SFWD_PRIOR_REUSE_ENABLED_NAME = "fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled"
+_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM_NAME = (
+    "fr13_fixed32_sfwd_state_fusion.production.arm"
+)
 _FIXED32_SFWD_STATE_FUSION_B1_TASK_IDS = (
     "astropy__astropy-12907",
 )
@@ -1506,16 +1510,35 @@ class Fixed32EngineIngress:
         self._batch_gdn_published_marker = marker
 
     def _validate_sfwd_state_fusion_enabled_sidecar(self, path: Path) -> None:
-        enabled = path.with_name(_FIXED32_SFWD_STATE_FUSION_ENABLED_NAME)
+        candidates = (
+            path.with_name(_FIXED32_SFWD_STATE_FUSION_ENABLED_NAME),
+            path.with_name(_FIXED32_SFWD_PRIOR_REUSE_ENABLED_NAME),
+            path.with_name(_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM_NAME),
+        )
+        present = []
+        for candidate in candidates:
+            try:
+                os.lstat(candidate)
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                raise Fixed32IngressError(
+                    "fixed32 SFWD state-fusion route sidecar cannot be inspected"
+                ) from exc
+            present.append(candidate)
+        if len(present) != 1:
+            raise Fixed32IngressError(
+                "fixed32 SFWD state-fusion requires exactly one route sidecar"
+            )
         if self._read_real_event_sidecar(
-            enabled,
+            present[0],
             gate_label="fixed32 SFWD state fusion",
-            label="enabled sidecar",
+            label="route sidecar",
             max_bytes=2,
             required_mode=0o400,
         ) != b"1\n":
             raise Fixed32IngressError(
-                "fixed32 SFWD state-fusion enabled sidecar is invalid"
+                "fixed32 SFWD state-fusion route sidecar is invalid"
             )
 
     def _validate_sfwd_state_fusion_real_event_arm(

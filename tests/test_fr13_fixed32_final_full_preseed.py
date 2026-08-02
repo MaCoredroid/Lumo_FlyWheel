@@ -692,6 +692,38 @@ def test_sfwd_eager_boot_preseeds_before_first_request_consumer(
     ]
 
 
+def test_sfwd_prior_reuse_bakes_b1_boot_and_source_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "hydra27_fixed32")
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_BATCH_GDN_BYTE_AB", "0")
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB", "0")
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB", "0")
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB", "1")
+    monkeypatch.setenv("FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256", "a" * 64)
+    monkeypatch.setenv("FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_COMMIT", "b" * 40)
+
+    assert patcher._fr13_fixed32_eager_boot_warm_contract() == (
+        "SFWD prior-reuse B1 byte diagnostic",
+        1,
+        "FR13_FIXED32_EAGER_SFWD_PRIOR_REUSE_B1_BOOT_WARM",
+    )
+    namespace: dict[str, object] = {}
+    exec(
+        patcher._fr13_fixed32_runtime_bindings("hydra27_fixed32"),
+        namespace,
+    )
+    assert namespace["_FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB"] is True
+    assert (
+        namespace["_FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH"]
+        == "/logs/fr13_fixed32_sfwd_prior_reuse.source_manifest.json"
+    )
+    assert (
+        namespace["_FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256"] == "a" * 64
+    )
+    assert namespace["_FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_COMMIT"] == "b" * 40
+
+
 @pytest.mark.parametrize("production", ("0", "1"))
 def test_sfwd_timing_arms_share_explicit_b1_boot_contract(
     tmp_path: Path,
