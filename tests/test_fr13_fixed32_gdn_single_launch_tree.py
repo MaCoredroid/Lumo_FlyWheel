@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import hashlib
 import importlib.util
 import json
@@ -22,6 +23,12 @@ B1_RUNNER_PATH = REPO / "scripts" / "fr13_run_b1_gdn_single_launch_live_gate.sh"
 B4_RUNNER_PATH = REPO / "scripts" / "fr13_run_b4_gdn_single_launch_live_gate.sh"
 CORE_RUNNER_PATH = REPO / "scripts" / "fr13_run_gdn_single_launch_live_gate.sh"
 RUNTIME_MANIFEST_PATH = REPO / "scripts" / "fr13_runtime_manifest.py"
+ROOT_LOOP_PATH = (
+    REPO
+    / "src"
+    / "lumo_flywheel_serving"
+    / "fr13_gdn_single_launch_root_loop.py"
+)
 
 
 def _tree_and_source(path: Path = KERNEL_PATH) -> tuple[ast.Module, str]:
@@ -1023,3 +1030,70 @@ def test_live_launcher_and_runners_are_reference_served_k64_exact_task_only() ->
         "config/fr13_fixed32/subset_b1_diagnostic_one.json",
     ):
         assert f'"{path}"' in runtime_manifest
+
+
+def test_codegen_root_loop_changes_only_the_outer_ordered_loop() -> None:
+    production_tree, _production_source = _tree_and_source(KERNEL_PATH)
+    candidate_tree, candidate_source = _tree_and_source(ROOT_LOOP_PATH)
+    production = copy.deepcopy(
+        next(
+            node
+            for node in production_tree.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "_tree_gdn_kernel_fixed32_single_launch"
+        )
+    )
+    candidate = copy.deepcopy(
+        next(
+            node
+            for node in candidate_tree.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name
+            == "_tree_gdn_kernel_fixed32_single_launch_root_loop"
+        )
+    )
+
+    class ReplaceRootStaticRange(ast.NodeTransformer):
+        replacements = 0
+
+        def visit_For(self, node: ast.For) -> ast.For:
+            self.generic_visit(node)
+            call = node.iter
+            if (
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "static_range"
+                and len(call.args) == 2
+                and isinstance(call.args[1], ast.Name)
+                and call.args[1].id == "ROOT_STEPS"
+            ):
+                call.func.attr = "range"
+                self.replacements += 1
+            return node
+
+    transformer = ReplaceRootStaticRange()
+    production = transformer.visit(production)
+    assert transformer.replacements == 1
+    production.name = candidate.name = "normalized_single_launch"
+    production.body[0] = candidate.body[0] = ast.Expr(value=ast.Constant(value=""))
+    assert ast.dump(production, include_attributes=False) == ast.dump(
+        candidate,
+        include_attributes=False,
+    )
+
+    candidate_kernel = _function_source(
+        "_tree_gdn_kernel_fixed32_single_launch_root_loop",
+        path=ROOT_LOOP_PATH,
+    )
+    assert "for root_index in tl.range(0, ROOT_STEPS):" in candidate_kernel
+    assert "for member in tl.static_range(0, MAX_GROUP_PATHS):" in candidate_kernel
+    assert "for path_offset in tl.range(0, path_len):" in candidate_kernel
+    assert candidate_kernel.count("_tree_gdn_fixed32_single_launch_node(") == 2
+    assert "state_export" not in candidate_kernel
+    assert "fr13_gdn_single_launch_root_loop" not in LAUNCHER_PATH.read_text(
+        encoding="utf-8"
+    )
+    assert "fr13_gdn_single_launch_root_loop.py" not in RUNTIME_MANIFEST_PATH.read_text(
+        encoding="utf-8"
+    )
+    assert 'CANDIDATE = "fixed32_gdn_single_launch_root_loop_v1"' in candidate_source
