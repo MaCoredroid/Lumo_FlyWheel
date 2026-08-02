@@ -1,0 +1,24 @@
+{
+  "artifact": "fr13_fixed32_sfwd_priorreuse_packed_sources_codegen_20260802",
+  "batches": [
+    1,
+    4
+  ],
+  "candidate": "fixed32_sfwd_prior_reuse_packed_sources_v1",
+  "contains_raw_logs": false,
+  "contains_task_or_model_content": false,
+  "kernel_source": "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py",
+  "kernel_source_sha256": "4b49d0ad5da7dae6d696925cb81fbb154e0351b75687dd076dc19db97af694a7",
+  "no_docker": true,
+  "no_gpu_execution": true,
+  "no_swe_task": true,
+  "no_timing": true,
+  "schedules": [
+    "row32_c64_w8",
+    "row32_c64_w16"
+  ],
+  "schema": "fr13.fixed32.reduced_artifact.v1",
+  "source_commit": "c6300f58ac2361e6ad63a2c463bdb137c93ffb21",
+  "status": "offline_codegen_pass_runtime_unqualified",
+  "target": "sm_121a"
+}
