@@ -1,0 +1,15 @@
+FR13 fixed32 SFWD state-fusion row-group-8 offline verification
+
+python bytecode compile: PASS
+focused state-fusion suite: 8 passed in 1.32s
+git diff --check before artifact commit: PASS
+row-group-4 B1/B4 exact codegen reconstruction: PASS
+row-group-8 b540/75d/37e B1/B4 SM121a compile: PASS
+final 37e fresh rebuild byte identity: PASS
+final stack/local/spill/call audit: PASS (all zero)
+
+GPU kernel execution: NOT RUN
+real SWE-Verified byte gate: NOT RUN
+task execution: NOT RUN
+performance measurement: NOT RUN
+production/floor claim: NONE
