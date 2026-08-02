@@ -1,0 +1,7 @@
+kernel_site	generic_cluster_coordinate_helper_calls_replaced	generic_coordinate_additions_replaced	new_coordinate
+initial_work	1	3	0,N,_,0
+mainloop_load_next_work	1	3	0,N,_,0
+mma_next_work	1	3	0,N,_,0
+epilogue_load_next_work	1	3	0,N,_,0
+epilogue_store_next_work	1	3	0,N,_,0
+total	5	15	0,N,_,0

@@ -1,0 +1,78 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_m128_static_coord_source.v1",
+  "created_at_utc": "2026-08-02T03:37:32Z",
+  "status": "source_only_default_off",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "agent/fixed32-sfwd-b4-m128-static-coord-20260802",
+    "base_linear_scheduler_commit": "f8dcece42f69abfc804969f12ecf06183755d154",
+    "implementation_commit": "451e8d491667f15a24bbc4b0508e6af461710ca1",
+    "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2",
+    "patch_source_sha256": "514134df4663eb7ac82c761b9a1550f4d08a81c4eb5d8ee6e7786ea6d453cfc0",
+    "test_source_sha256": "1ed7c14680dc75c0a57a64e3b747a9c7512aa3a3ec38e6c1ccd2f7a2ac767da4",
+    "generated_dispatch_sha256": "21ba590c5fc8fb998f72787f7601bbddaf632065676310ce85ba33a07d7e1982"
+  },
+  "candidate": {
+    "selector": "persistent_b4_m128_static",
+    "diagnostic_selector": "persistent_b4_m128_static_byte_ab",
+    "default_enabled": false,
+    "scheduler": "Fr13Fixed32M128LinearScheduler100",
+    "physical_m": 128,
+    "problem_l": 1,
+    "tile_mnk": [128, 128, 128],
+    "cluster_mnk": [1, 1, 1],
+    "cta_coordinate": [0, "work.N_idx", "_", 0],
+    "projection_nk": [
+      [34816, 5120],
+      [5120, 17408],
+      [5120, 6144],
+      [16384, 5120],
+      [14336, 5120]
+    ]
+  },
+  "source_operation_model": {
+    "generic_coordinate_conversion_sites_replaced": 5,
+    "generic_cluster_coordinate_reads_replaced": 5,
+    "coordinate_additions_replaced": 15,
+    "downstream_constant_fold_claim": false,
+    "reason": "requires compiled SASS comparison"
+  },
+  "existing_prelinear_static_kernel": {
+    "binary_sha256": "9c63ed03ad73640293ba544fc5acad9047dcf9e202854d86f83a7ba4ca5a7d39",
+    "sass_sha256_bf16": "00f5c84e4993c8b0830f00fd3a2a7d33d244a66235fb9a7f3ac4eaa32e80862e",
+    "instructions": 1440,
+    "text_bytes": 23040,
+    "registers": 168,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "detected_spills": false,
+    "device_calls": 0,
+    "predicated_instructions": 152,
+    "cga_cta_id_reads": 7
+  },
+  "preserved": {
+    "dynamic_n_tile_index": true,
+    "physical_grid_stride": true,
+    "complete_output_tile_ownership": true,
+    "full_k_per_output_tile": true,
+    "k_iteration_order": true,
+    "collective_mainloop": true,
+    "collective_epilogue": true,
+    "output_tile_count": true,
+    "stock_default": true
+  },
+  "verification": {
+    "focused_source_tests": "25 passed",
+    "pycompile": "pass",
+    "diff_check": "pass",
+    "pinned_source_apply": "pass",
+    "pinned_source_idempotency": "pass",
+    "nvcc_compile": "not_run",
+    "resource_and_sass_audit": "not_run_for_new_candidate",
+    "real_swe_verified_byte_gate": "not_run",
+    "b4_timing": "not_run"
+  }
+}

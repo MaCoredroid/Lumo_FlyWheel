@@ -1,0 +1,10 @@
+25 focused source tests passed in 0.10s
+Python bytecode compilation: pass
+git diff --check: pass
+Pinned vLLM/CUTLASS source apply: pass
+Pinned source second apply: already patched
+Generated dispatch SHA256: 21ba590c5fc8fb998f72787f7601bbddaf632065676310ce85ba33a07d7e1982
+NVCC/C++ compile: not run while paired B4 campaign is live
+GPU or container execution: not run
+Real SWE-Verified byte gate: not run
+Timing: not run

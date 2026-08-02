@@ -1,0 +1,18 @@
+scope	class	count	note
+existing_prelinear_static_bf16	total_instructions	1440	reduced census from existing local binary
+existing_prelinear_static_bf16	predicated_instructions	152	all opcode classes
+existing_prelinear_static_bf16	device_call	0	no CALL instruction
+existing_prelinear_static_bf16	local_load_store	0	no LDL, STL, LD.LOCAL, or ST.LOCAL
+existing_prelinear_static_bf16	qmma_16832_f32_e4m3_e4m3	128	mandatory projection math
+existing_prelinear_static_bf16	ffma	128	mandatory projection math
+existing_prelinear_static_bf16	fmul	72	mandatory projection math
+existing_prelinear_static_bf16	ldsm_16_m88_4	48	mandatory projection staging
+existing_prelinear_static_bf16	stsm_16_m88_2	16	mandatory projection staging
+existing_prelinear_static_bf16	bf16_output_pack	32	mandatory output conversion
+existing_prelinear_static_bf16	bra	31	control flow
+existing_prelinear_static_bf16	bra_u	15	control flow
+existing_prelinear_static_bf16	integer_add_family	177	IADD and UIADD variants
+existing_prelinear_static_bf16	integer_mad_lea_family	103	IMAD, UIMAD, LEA, and ULEA variants
+existing_prelinear_static_bf16	integer_shift_family	75	SHF and USHF variants
+existing_prelinear_static_bf16	integer_predicate_family	50	ISETP and UISETP variants
+existing_prelinear_static_bf16	sr_cga_cta_id_reads	7	includes pipeline and barrier lifecycle uses outside this patch
