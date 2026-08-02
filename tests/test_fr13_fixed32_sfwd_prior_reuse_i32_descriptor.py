@@ -87,11 +87,15 @@ def test_i32_descriptor_preserves_exact_ordered_conv_math() -> None:
         assert torch.equal(candidate, reference)
 
 
-def test_b4_dense_offsets_fit_signed_int32() -> None:
-    maxima = fixed32_i32_address_contract(4, x_stride_row=CHANNELS)
+def test_b4_live_padded_offsets_fit_signed_int32() -> None:
+    live_x_stride_row = 16384
+    maxima = fixed32_i32_address_contract(
+        4,
+        x_stride_row=live_x_stride_row,
+    )
 
     assert maxima == {
-        "x": 4 * 32 * CHANNELS - 1,
+        "x": (4 * 32 - 1) * live_x_stride_row + CHANNELS - 1,
         "out": 4 * 32 * CHANNELS - 1,
         "source_stage": 4 * 36 * CHANNELS - 1,
     }
