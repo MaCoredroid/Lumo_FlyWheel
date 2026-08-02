@@ -274,6 +274,12 @@ def test_cuda_source_preserves_ordered_active_recurrence_and_fp32_store() -> Non
     assert "requires FP32 state banks" in source
 
 
+def test_cuda_source_matches_incumbent_initial_zero_accumulate() -> None:
+    source = CUDA_SOURCE.read_text(encoding="utf-8")
+    assert "including its -0.0 to +0.0 normalization" in source
+    assert "load_state_bank[state_offset] + 0.0f;" in source
+
+
 def test_cuda_extension_contract_is_sm121_and_strict() -> None:
     source = CUDA_SOURCE.read_text(encoding="utf-8")
     assert "properties->major == 12 && properties->minor == 1" in source

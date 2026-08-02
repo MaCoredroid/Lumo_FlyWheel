@@ -98,19 +98,25 @@ void fixed32_cfwd_native_fullvalue_kernel(
     return;
   }
 
-  float* state_bank = bank_anchor + bank_off16[layer] * 4;
   float state[kValuesPerWarp][kKeyQuads];
+  // Keep the bank base out of the recurrence live set. Recompute it for the
+  // final store instead of carrying a 64-bit address across every step.
+  float* load_state_bank = bank_anchor + bank_off16[layer] * 4;
+  const int64_t load_state_row_offset =
+      static_cast<int64_t>(shared_state_index) * bank_stride;
 #pragma unroll
   for (int value_lane = 0; value_lane < kValuesPerWarp; ++value_lane) {
     const int value_index = warp * kValuesPerWarp + value_lane;
 #pragma unroll
     for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
       const int key_index = lane + key_quad * 32;
-      const int64_t state_offset =
-          static_cast<int64_t>(shared_state_index) * bank_stride +
-          (static_cast<int64_t>(value_head) * kDimV + value_index) * kDimK +
-          key_index;
-      state[value_lane][key_quad] = state_bank[state_offset];
+      const int state_inner_offset =
+          (value_head * kDimV + value_index) * kDimK + key_index;
+      const int64_t state_offset = load_state_row_offset + state_inner_offset;
+      // Match the incumbent Triton b_h=zeros; b_h+=load initialization,
+      // including its -0.0 to +0.0 normalization.
+      state[value_lane][key_quad] =
+          load_state_bank[state_offset] + 0.0f;
     }
   }
 
@@ -203,17 +209,22 @@ void fixed32_cfwd_native_fullvalue_kernel(
     __syncthreads();
   }
 
+  float* store_state_bank = bank_anchor + bank_off16[layer] * 4;
+  const int store_thread_id = threadIdx.x;
+  const int store_warp = store_thread_id >> 5;
+  const int store_lane = store_thread_id & 31;
+  const int64_t store_state_row_offset =
+      static_cast<int64_t>(shared_state_index) * bank_stride;
 #pragma unroll
   for (int value_lane = 0; value_lane < kValuesPerWarp; ++value_lane) {
-    const int value_index = warp * kValuesPerWarp + value_lane;
+    const int value_index = store_warp * kValuesPerWarp + value_lane;
 #pragma unroll
     for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-      const int key_index = lane + key_quad * 32;
-      const int64_t state_offset =
-          static_cast<int64_t>(shared_state_index) * bank_stride +
-          (static_cast<int64_t>(value_head) * kDimV + value_index) * kDimK +
-          key_index;
-      state_bank[state_offset] = state[value_lane][key_quad];
+      const int key_index = store_lane + key_quad * 32;
+      const int state_inner_offset =
+          (value_head * kDimV + value_index) * kDimK + key_index;
+      const int64_t state_offset = store_state_row_offset + state_inner_offset;
+      store_state_bank[state_offset] = state[value_lane][key_quad];
     }
   }
 }
