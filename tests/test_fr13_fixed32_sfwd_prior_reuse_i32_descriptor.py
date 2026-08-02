@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import sys
 import types
 
@@ -21,10 +22,17 @@ except ModuleNotFoundError:
 
 from lumo_flywheel_serving.fr13_sfwd_prior_reuse_i32_descriptor import (
     CHANNELS,
+    CONV_WIDTH,
+    DESCRIPTOR_TAPS,
     FIXED32_PARENT,
+    FIXED32_ROWS,
     SIGNED_INT32_MAX,
+    SOURCE_ROWS,
+    X_ROW_STRIDE,
+    _fr13_fixed32_sfwd_prior_reuse_i32_descriptor_kernel,
     fixed32_i32_address_contract,
     fixed32_i32_source_descriptor,
+    fixed32_specialized_layout_contract,
 )
 
 
@@ -87,23 +95,110 @@ def test_i32_descriptor_preserves_exact_ordered_conv_math() -> None:
         assert torch.equal(candidate, reference)
 
 
-def test_b4_dense_offsets_fit_signed_int32() -> None:
-    maxima = fixed32_i32_address_contract(4, x_stride_row=CHANNELS)
+def test_b4_fixed_offsets_fit_signed_int32() -> None:
+    maxima = fixed32_i32_address_contract(4, x_stride_row=X_ROW_STRIDE)
 
     assert maxima == {
-        "x": 4 * 32 * CHANNELS - 1,
+        "x": (4 * 32 - 1) * X_ROW_STRIDE + CHANNELS - 1,
         "out": 4 * 32 * CHANNELS - 1,
         "source_stage": 4 * 36 * CHANNELS - 1,
     }
     assert max(maxima.values()) <= SIGNED_INT32_MAX
 
 
-def test_i32_address_contract_rejects_unsafe_stride() -> None:
-    unsafe_stride = SIGNED_INT32_MAX // (4 * 32 - 1) + 1
-
+def test_i32_address_contract_rejects_wrong_x_stride() -> None:
     try:
-        fixed32_i32_address_contract(4, x_stride_row=unsafe_stride)
+        fixed32_i32_address_contract(4, x_stride_row=CHANNELS)
     except ValueError as error:
-        assert "overflow" in str(error)
+        assert "padded" in str(error)
     else:
-        raise AssertionError("unsafe int32 row stride was accepted")
+        raise AssertionError("wrong x row stride was accepted")
+
+
+def _specialized_layout(batch: int) -> dict[str, tuple[int, ...]]:
+    return {
+        "x_shape": (batch * FIXED32_ROWS, CHANNELS),
+        "x_stride": (X_ROW_STRIDE, 1),
+        "out_shape": (batch * FIXED32_ROWS, CHANNELS),
+        "out_stride": (CHANNELS, 1),
+        "source_stage_shape": (batch * SOURCE_ROWS, CHANNELS),
+        "source_stage_stride": (CHANNELS, 1),
+        "conv_weights_shape": (CHANNELS, CONV_WIDTH),
+        "conv_weights_stride": (CONV_WIDTH, 1),
+        "source_descriptor_shape": (FIXED32_ROWS * DESCRIPTOR_TAPS,),
+        "source_descriptor_stride": (1,),
+    }
+
+
+def test_specialized_layout_contract_accepts_exact_b1_b4() -> None:
+    for batch in (1, 4):
+        layouts = _specialized_layout(batch)
+        contract = fixed32_specialized_layout_contract(batch, **layouts)
+
+        assert contract["batch_size"] == batch
+        assert contract["layouts"] == layouts
+        assert contract["maximum_offsets"]["x"] == (
+            (batch * FIXED32_ROWS - 1) * X_ROW_STRIDE + CHANNELS - 1
+        )
+
+
+def test_specialized_layout_contract_rejects_each_specialized_drift() -> None:
+    exact = _specialized_layout(4)
+    drifted = {
+        "x_stride": (CHANNELS, 1),
+        "out_stride": (CHANNELS + 1, 1),
+        "source_stage_stride": (CHANNELS + 1, 1),
+        "conv_weights_stride": (1, CHANNELS),
+        "source_descriptor_stride": (2,),
+    }
+    for name, value in drifted.items():
+        observed = dict(exact)
+        observed[name] = value
+        try:
+            fixed32_specialized_layout_contract(4, **observed)
+        except ValueError as error:
+            assert name in str(error)
+        else:
+            raise AssertionError(f"specialized layout drift accepted: {name}")
+
+
+def test_specialized_batch_bases_match_flat_element_offsets() -> None:
+    for batch in range(4):
+        for node in (0, 1, FIXED32_ROWS - 1):
+            for channel in (0, 63, CHANNELS - 1):
+                x_flat = (batch * FIXED32_ROWS + node) * X_ROW_STRIDE + channel
+                x_batched = (
+                    batch * FIXED32_ROWS * X_ROW_STRIDE
+                    + node * X_ROW_STRIDE
+                    + channel
+                )
+                out_flat = (batch * FIXED32_ROWS + node) * CHANNELS + channel
+                out_batched = (
+                    batch * FIXED32_ROWS * CHANNELS + node * CHANNELS + channel
+                )
+                assert x_batched == x_flat
+                assert out_batched == out_flat
+
+        for source_row in (0, 1, SOURCE_ROWS - 1):
+            source_flat = (batch * SOURCE_ROWS + source_row) * CHANNELS
+            source_batched = (
+                batch * SOURCE_ROWS * CHANNELS + source_row * CHANNELS
+            )
+            assert source_batched == source_flat
+
+
+def test_kernel_specializes_only_validated_dense_and_padded_terms() -> None:
+    source = inspect.getsource(
+        _fr13_fixed32_sfwd_prior_reuse_i32_descriptor_kernel
+    )
+
+    assert "X_STRIDE_ROW: tl.constexpr" in source
+    assert "x_batch = x + pid_b * N * X_STRIDE_ROW" in source
+    assert "out_batch = out + pid_b * N * C" in source
+    assert "stage_batch = source_stage + pid_b * SOURCE_ROWS * C" in source
+    assert "conv_weights + offs_c * WIDTH + tap" in source
+    assert "x_stride_row" not in source
+    assert "weight_stride_c" not in source
+    assert "weight_stride_w" not in source
+    assert ").to(tl.int64)" in source
+    assert "bank_row * conv_stride_row" in source
