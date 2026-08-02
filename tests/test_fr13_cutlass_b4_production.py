@@ -345,9 +345,7 @@ def test_b4_timing_keeps_live_qualification_separate_from_harness_commit() -> No
         "CUTLASS persistent M128 production requires a pinned qualification source commit"
         in launcher
     )
-    assert (
-        "CUTLASS B1 production forbids a B4 qualification source override" in launcher
-    )
+    assert "CUTLASS B1 qualification source commit must be lowercase SHA-1" in launcher
 
 
 def test_b4_selector_reaches_eager_process_attestation() -> None:

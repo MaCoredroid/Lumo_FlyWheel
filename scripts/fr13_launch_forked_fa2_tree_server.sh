@@ -583,11 +583,6 @@ else
     echo "CUTLASS static M128 production remains unavailable until Tail23 and Hydra27 raw-byte PASS" >&2
     exit 2
   fi
-  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "static_persistent_stocktile" \
-        || "$FR13_FIXED32_CUTLASS_WAVE" == "divisor_static_stocktile" ]]; then
-    echo "CUTLASS static B1 production remains unavailable until the K64/root raw-byte PASS" >&2
-    exit 2
-  fi
   if [[ "$_fr13_cutlass_b4" == "1" ]]; then
     [[ -n "${FR13_FIXED32_MODE:-}" && "$MAX_NUM_SEQS" == "4" ]] || {
       echo "CUTLASS persistent M128 candidate requires fixed32 B4" >&2
@@ -735,11 +730,15 @@ else
       }
       _fr13_cutlass_streamk_source_commit=$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT
     else
-      [[ -z "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT" ]] || {
-        echo "CUTLASS B1 production forbids a B4 qualification source override" >&2
-        exit 2
-      }
-      _fr13_cutlass_streamk_source_commit=$(git rev-parse HEAD)
+      if [[ -n "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT" ]]; then
+        [[ "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {
+          echo "CUTLASS B1 qualification source commit must be lowercase SHA-1" >&2
+          exit 2
+        }
+        _fr13_cutlass_streamk_source_commit=$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT
+      else
+        _fr13_cutlass_streamk_source_commit=$(git rev-parse HEAD)
+      fi
     fi
     _fr13_cutlass_pass_script=scripts/fr13_cutlass_streamk_pass.py
     _fr13_cutlass_pass_profile_args=()

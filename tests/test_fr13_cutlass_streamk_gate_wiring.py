@@ -211,6 +211,9 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
         "CUTLASS k64_root B1 qualification requires a pinned B1 projection "
         "candidate" in launcher
     )
+    assert "CUTLASS static B1 production remains unavailable" not in launcher
+    assert '"${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" == "1"' in kernel_gate
+    assert '"${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "divisor_static_stocktile"' in kernel_gate
     assert '--qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"' in launcher
     assert "--draft-vocab-blocks scripts/fr13_dvk_subset_blocks.json" in launcher
     sequence = kernel_gate.index(

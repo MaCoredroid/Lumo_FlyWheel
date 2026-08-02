@@ -71,7 +71,10 @@ case "$B1_WORKLOAD_PROFILE" in
   k64_root)
     [[ ( "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
          || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" \
-         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "divisor_static_stocktile_byte_ab" ) \
+         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "divisor_static_stocktile_byte_ab" \
+         || ( "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" == "1" \
+              && ( "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile" \
+                   || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "divisor_static_stocktile" ) ) ) \
        && "$FR13_GATE_QROW16" == "0" \
        && "$FR13_GATE_TAW_NATIVE" == "0" \
        && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
