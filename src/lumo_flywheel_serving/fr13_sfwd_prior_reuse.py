@@ -28,7 +28,7 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
 )
 
 
-CANDIDATE = "fixed32_sfwd_prior_reuse_packed_xgather_rowgroup32_c64_w16_v1"
+CANDIDATE = "fixed32_sfwd_quadweight_xgather_rowgroup32_c64_w16_v1"
 ROWS_PER_PROGRAM = 32
 BLOCK_C = 64
 NUM_WARPS = 16
