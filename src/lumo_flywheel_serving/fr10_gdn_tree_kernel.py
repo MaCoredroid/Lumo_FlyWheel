@@ -9877,7 +9877,7 @@ def _fr13_fixed32_committer_native_layer_batch(
             "48-layer K=V=128 geometry"
         )
     block_k = triton.next_power_of_2(dim_k)
-    block_v = min(triton.next_power_of_2(dim_v), 32)
+    block_v = min(triton.next_power_of_2(dim_v), 64)
     grid = (1, triton.cdiv(dim_v, block_v), layers * batch * num_vh)
     _fr13_fixed32_committer_native_layer_batch_kernel[grid](
         A_logs,
@@ -9916,7 +9916,7 @@ def _fr13_fixed32_committer_native_layer_batch(
         BETA=1.0,
         THRESHOLD=20.0,
         USE_QK_L2NORM_IN_KERNEL=bool(use_qk_l2norm_in_kernel),
-        num_warps=4,
+        num_warps=8,
         num_stages=3,
     )
 
@@ -10314,6 +10314,9 @@ def preseed_fixed32_committer_graph(
                 "direct_ring_inputs": 4,
                 "candidate_staging_launches": 0,
                 "gate_coefficients_hoisted": True,
+                "value_tile": 64,
+                "kernel_warps": 8,
+                "programs_per_layer_request_value_head": 2,
                 "physical_alias_row_uniqueness_guard": (
                     "validate_fixed32_conv_commit_rows"
                 ),

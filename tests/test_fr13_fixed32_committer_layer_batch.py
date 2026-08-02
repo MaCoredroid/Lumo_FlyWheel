@@ -68,8 +68,8 @@ def test_layer_batch_kernel_keeps_native_recurrence_and_geometry() -> None:
     assert "tl.store(p_o" not in kernel
     assert "state_bank = bank_anchor + tl.load(bank_off16 + i_l) * 4" in kernel
     assert "_gdn_node_step" not in kernel
-    assert "block_v = min(triton.next_power_of_2(dim_v), 32)" in launch
-    assert "num_warps=4" in launch
+    assert "block_v = min(triton.next_power_of_2(dim_v), 64)" in launch
+    assert "num_warps=8" in launch
     assert "num_stages=3" in launch
     assert "layers * batch * num_vh" in launch
 
@@ -162,6 +162,9 @@ def test_layer_batch_candidate_loads_live_ring_rows_without_staging() -> None:
     assert '"direct_ring_inputs": 4' in preseed
     assert '"candidate_staging_launches": 0' in preseed
     assert '"gate_coefficients_hoisted": True' in preseed
+    assert '"value_tile": 64' in preseed
+    assert '"kernel_warps": 8' in preseed
+    assert '"programs_per_layer_request_value_head": 2' in preseed
 
 
 def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> None:
@@ -422,6 +425,9 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
     assert 'committer_contract.get("direct_ring_inputs", -1)' in patcher
     assert 'committer_contract.get("candidate_staging_launches", -1)' in patcher
     assert 'committer_contract.get("gate_coefficients_hoisted") is not True' in patcher
+    assert 'committer_contract.get("value_tile", -1)' in patcher
+    assert 'committer_contract.get("kernel_warps", -1)' in patcher
+    assert '"programs_per_layer_request_value_head", -1' in patcher
     assert '"physical_alias_row_uniqueness_guard"' in patcher
     assert '!= "validate_fixed32_conv_commit_rows"' in patcher
     assert '!= "real_swe_all_reachable_accepted_lengths_0_11"' in patcher

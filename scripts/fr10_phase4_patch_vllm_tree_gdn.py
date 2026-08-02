@@ -4864,6 +4864,13 @@ def _fr13_fixed32_observed_commit(
                 or int(committer_contract.get("candidate_staging_launches", -1))
                 != 0
                 or committer_contract.get("gate_coefficients_hoisted") is not True
+                or int(committer_contract.get("value_tile", -1)) != 64
+                or int(committer_contract.get("kernel_warps", -1)) != 8
+                or int(
+                    committer_contract.get(
+                        "programs_per_layer_request_value_head", -1
+                    )
+                ) != 2
                 or committer_contract.get(
                     "physical_alias_row_uniqueness_guard"
                 ) != "validate_fixed32_conv_commit_rows"
