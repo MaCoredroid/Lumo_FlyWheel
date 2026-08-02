@@ -172,8 +172,17 @@ def test_b4_m128_static_changes_only_complete_tile_scheduler() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert "struct fr13_fixed32_m128_static_scheduler {};" in patched
-    assert "using Scheduler = StaticPersistentTileScheduler100;" in patched
+    assert "class Fr13Fixed32M128LinearScheduler100" in patched
+    assert ": public StaticPersistentTileScheduler100" in patched
+    assert "using Scheduler = Fr13Fixed32M128LinearScheduler100;" in patched
     assert "arch::Sm120" in module.SCHEDULER_SPECIALIZATION_REPLACEMENT
+
+    scheduler = module.SCHEDULER_SPECIALIZATION_REPLACEMENT
+    assert "return {0, static_cast<int32_t>(linear_idx), 0, true};" in scheduler
+    assert "scheduler_params.divmod_batch_" not in scheduler
+    assert "divmod_cluster_blk_major_" not in scheduler
+    assert "current_work_linear_idx_ += total_grid_size_" in scheduler
+    assert "linear_idx >= this->scheduler_params.blocks_per_problem_" in scheduler
 
     config_start = patched.index(
         "struct sm120_blockwise_fp8_config_b4_persistent_m128_static"
@@ -211,6 +220,21 @@ def test_b4_m128_static_changes_only_complete_tile_scheduler() -> None:
     assert (
         "fr13.fixed32.cutlass_persistent_b4_m128_static_byte_ab.v1" in patched
     )
+
+
+def test_b4_m128_linear_scheduler_covers_each_real_n_tile_once() -> None:
+    # M=128 and tile-M=128 make M_idx=0; ordinary GEMM uses L=1. CUTLASS's
+    # persistent grid stride must therefore enumerate only the N-tile axis.
+    for n_tiles in (272, 40, 40, 128, 112):
+        for physical_workers in (1, min(32, n_tiles), min(132, n_tiles)):
+            work = [
+                (0, n_tile, 0)
+                for worker in range(physical_workers)
+                for n_tile in range(worker, n_tiles, physical_workers)
+            ]
+            assert len(work) == n_tiles
+            assert len(set(work)) == n_tiles
+            assert sorted(n_tile for _, n_tile, _ in work) == list(range(n_tiles))
 
 
 def test_wide256_is_b1_only_and_large_rows_fail_to_stock() -> None:
