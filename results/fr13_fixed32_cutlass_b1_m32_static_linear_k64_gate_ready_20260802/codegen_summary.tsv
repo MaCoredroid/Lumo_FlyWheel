@@ -1,0 +1,4 @@
+variant	dtype	registers	stack_bytes	local_bytes	shared_bytes	sass_slots	ldl	stl	calls	qmma	ffma	fmul	ldsm	stsm	output_packs	syncs
+stock	fp16/bf16	168	0	0	1024	1176	0	0	0	32	32	24	24	4	8	77
+generic_static	fp16/bf16	168	0	0	1024	936	0	0	0	32	32	24	24	4	8	38
+m32_static_linear	fp16/bf16	168	0	0	1024	648	0	0	0	32	32	24	24	4	8	38

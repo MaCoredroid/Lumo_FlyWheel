@@ -1,0 +1,54 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_m32_static_linear_k64_gate_ready.v1",
+  "status": "HOST_CODEGEN_AND_GATE_WIRING_PASS_LIVE_GATE_PENDING",
+  "branch": "agent/fixed32-b1-static-m32-gate-20260802",
+  "kernel_source_commit": "5aae84c25b30d472a4c014e9343783b902d446ba",
+  "gate_source_commit": "bbe534024abcb51c9debdc6738f008af6c85a2ea",
+  "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+  "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+  "candidate": {
+    "selector": "m32_static_linear",
+    "diagnostic_selector": "m32_static_linear_byte_ab",
+    "sha256": "079d82d60426411bf403eb96f4869cb8d3872a4a68d49e9c336a55a90d571f91",
+    "bytes": 113809232,
+    "mode": "0555",
+    "build_id": "dcb1fa96503b8bff225a7590da310248ccb24eae"
+  },
+  "source": {
+    "patch_sha256": "59fb1d8a39a6b634fde9895db3efd32e2921636ef017e30167dd94748e718e39",
+    "patched_dispatch_sha256": "9709adac0a029a57de58229c8dc9478bd647491988749bd23697fb40131d42ff"
+  },
+  "codegen": {
+    "registers": 168,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "shared_bytes": 1024,
+    "sass_slots": 648,
+    "generic_static_sass_slots": 936,
+    "stock_sass_slots": 1176,
+    "spill_loads": 0,
+    "spill_stores": 0,
+    "calls": 0
+  },
+  "gate": {
+    "qualification_profile": "k64_root",
+    "batch_size": 1,
+    "physical_rows": 32,
+    "comparison_limit": 320,
+    "required_projection_shapes": 5,
+    "reference_served": true,
+    "candidate_shadow_only": true,
+    "production_enabled": false,
+    "live_gate_run": false
+  },
+  "classification": {
+    "gpu_used": false,
+    "container_used": false,
+    "real_swe_task_used": false,
+    "synthetic_probe_used": false,
+    "performance_measurement": false,
+    "acceptance_valid": false,
+    "timing_eligible": false,
+    "production_eligible": false
+  }
+}

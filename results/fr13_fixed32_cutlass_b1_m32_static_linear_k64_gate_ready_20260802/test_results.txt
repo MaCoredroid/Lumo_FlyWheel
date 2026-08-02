@@ -1,0 +1,12 @@
+focused_command=python3 -m pytest -q tests/test_fr13_b4_gdn_bv64_production.py tests/test_fr13_cutlass_b4_k64_profile.py tests/test_fr13_cutlass_b4_production.py tests/test_fr13_cutlass_fixed32_wave_patch.py tests/test_fr13_cutlass_streamk_gate_wiring.py tests/test_fr13_cutlass_streamk_k64_profile.py tests/test_fr13_cutlass_streamk_production.py tests/test_fr13_cutlass_wave_binary.py tests/test_fr13_fixed32_final_full_preseed.py tests/test_fr13_fixed32_process_attestation.py tests/test_fr13_sfwd_state_fusion_b4_production.py
+focused_result=230 passed in 1.43s
+python_compile=PASS
+bash_syntax=PASS
+git_diff_check=PASS
+candidate_binary_verify=PASS
+host_build=PASS
+host_build_warnings=0
+gpu=NOT_RUN
+container=NOT_RUN
+real_swe_task=NOT_RUN
+timing=NOT_RUN
