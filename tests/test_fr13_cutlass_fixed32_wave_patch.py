@@ -573,9 +573,11 @@ def test_b4_twom_scheduler_removes_generic_per_tile_divmods() -> None:
     assert "divmod_cluster_blk_major_" not in scheduler
     assert "raster_order_" not in scheduler
     assert "uint32_t current_work_linear_idx_" in scheduler
-    assert "uint32_t total_grid_size_" in scheduler
-    assert "uint32_t problem_tiles_" in scheduler
-    assert "total_grid_size_ * advance_count" in scheduler
+    assert "uint32_t total_grid_size_" not in scheduler
+    assert "uint32_t problem_tiles_" not in scheduler
+    assert "gridDim.x * gridDim.y * gridDim.z" in scheduler
+    assert "this->scheduler_params.blocks_per_problem_" in scheduler
+    assert "total_grid_size() * advance_count" in scheduler
     assert "uint64_t" not in scheduler
     assert "fr13_fixed32_b4_twom_static_scheduler" in patched
     assert "using Scheduler = Fr13B4TwoMStaticTileScheduler100;" in patched
@@ -594,7 +596,7 @@ def test_b4_identity_twom_keeps_complete_tile_math() -> None:
     assert "using TileShape = Shape<_64, _128, _128>;" in config
     assert "OutType, 1, 128, 128, TileShape, ClusterShape" in config
     assert "fr13_fixed32_b4_twom_static_scheduler" in config
-    assert "StageCount<" not in config
+    assert "cutlass::gemm::collective::StageCount<2>" in config
     assert "StreamK" not in config
     assert "identity_twom_b4_byte_ab" in patched
     assert "auto run_identity_twom_b4" in patched
