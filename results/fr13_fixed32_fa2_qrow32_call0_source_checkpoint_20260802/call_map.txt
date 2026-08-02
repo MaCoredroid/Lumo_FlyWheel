@@ -1,0 +1,13 @@
+saved_sass_sha256=fb7b01a8d691c8f76f7514094b15d9494f36e0b3aebc05a8a04762dd34a8ecd2
+saved_object_sha256=f278003683390281fc71db674832adf582a9f52895c6de342f15dece65e9507a
+division_target=0x13830
+division_target_end=0x13cf0
+call_0=0x1ae0 initial-final-block-kv flash_fwd_kernel.h:702-705
+call_1=0x7ce0 masking-loop-k-prefetch flash_fwd_kernel.h:999-1000
+call_2=0xa130 unmasked-loop-v-advance flash_fwd_kernel.h:1039-1040
+call_3=0xef70 unmasked-loop-k-prefetch flash_fwd_kernel.h:1066-1067
+denominator_low=c[0][0x4f0]=Flash_fwd_params.page_block_size
+numerator_registers=R170:R171
+quotient_registers=R24:R25
+old_static_call_count=4
+candidate_static_call_count=unverified
