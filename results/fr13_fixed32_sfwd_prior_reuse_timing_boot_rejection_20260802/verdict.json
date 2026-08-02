@@ -1,0 +1,21 @@
+{
+  "acceptance_valid": false,
+  "candidate_arm_reached_health": false,
+  "candidate_authenticated_task_count": 0,
+  "candidate_route_marker_count_on_failure": 1,
+  "candidate_route_marker_recognized_before_fix": false,
+  "candidate_timing_summary_present": false,
+  "failure_class": "prior_reuse_timing_route_marker_not_admitted",
+  "fix_commit": "7e4c34f5c82279a21a3db97d02ae8a3f011ecd30",
+  "floor_claim": false,
+  "original_source_commit": "1a34b6dd57e04e07e070b8a672df19ff91e40943",
+  "pair_measurement_valid": false,
+  "raw_artifacts_included": false,
+  "rerun_required": true,
+  "schema": "fr13.fixed32.sfwd_prior_reuse.b1_timing_boot_rejection.v1",
+  "source_launch_end_manifests_equal": true,
+  "status": "rejected_pre_task_candidate_boot",
+  "stock_arm_completed": true,
+  "stock_authenticated_task_count": 1,
+  "timing_eligible": false
+}
