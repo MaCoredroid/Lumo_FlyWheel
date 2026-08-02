@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# One real SWE-Verified K64/root1 B1 byte gate for the fixed-stride
-# prior-pair/quad-weight packed x-gather C64/W16 candidate.
+# One real SWE-Verified K64/root1 B1 byte gate for the register-local
+# channel-serial C64/W2 candidate.
 # The candidate is shadow-only and the incumbent tensors remain served.
 set -euo pipefail
 
