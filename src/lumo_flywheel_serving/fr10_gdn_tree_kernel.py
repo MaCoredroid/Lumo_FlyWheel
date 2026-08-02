@@ -9384,9 +9384,15 @@ def _fr13_fixed32_committer_publish_metadata_lease(key: tuple) -> None:
 
 
 def _fr13_fixed32_committer_consume_metadata_lease(key: tuple) -> bool:
-    prior = _FR13_FIXED32_COMMITTER_METADATA_LEASE.pop("key", None)
+    if not _FR13_FIXED32_COMMITTER_METADATA_LEASE:
+        return False
+    prior = _FR13_FIXED32_COMMITTER_METADATA_LEASE.get("key")
+    if prior is None or prior != key:
+        raise RuntimeError(
+            "FR13 fixed32 metadata-fusion lease mismatch; refusing fallback"
+        )
     _FR13_FIXED32_COMMITTER_METADATA_LEASE.clear()
-    return prior == key
+    return True
 
 
 def _fr13_fixed32_committer_metadata_fusion_state(

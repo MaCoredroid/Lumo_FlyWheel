@@ -98,12 +98,25 @@ def test_metadata_fusion_lease_is_exact_and_one_shot() -> None:
     publish(("stream-1", "batch-4", "ptrs-a"))
     with pytest.raises(RuntimeError, match="prior lease was not consumed"):
         publish(("stream-1", "batch-4", "ptrs-a"))
-    assert consume(("stream-2", "batch-4", "ptrs-a")) is False
+    with pytest.raises(RuntimeError, match="lease mismatch; refusing fallback"):
+        consume(("stream-2", "batch-4", "ptrs-a"))
+    assert namespace["_FR13_FIXED32_COMMITTER_METADATA_LEASE"] == {
+        "key": ("stream-1", "batch-4", "ptrs-a")
+    }
+    assert consume(("stream-1", "batch-4", "ptrs-a")) is True
     assert namespace["_FR13_FIXED32_COMMITTER_METADATA_LEASE"] == {}
 
     publish(("stream-1", "batch-4", "ptrs-a"))
     assert consume(("stream-1", "batch-4", "ptrs-a")) is True
+    # An absent lease is the only case permitted to use the guarded fallback.
     assert consume(("stream-1", "batch-4", "ptrs-a")) is False
+
+    namespace["_FR13_FIXED32_COMMITTER_METADATA_LEASE"]["malformed"] = True
+    with pytest.raises(RuntimeError, match="lease mismatch; refusing fallback"):
+        consume(("stream-1", "batch-4", "ptrs-a"))
+    assert namespace["_FR13_FIXED32_COMMITTER_METADATA_LEASE"] == {
+        "malformed": True
+    }
 
 
 def test_metadata_fusion_lease_key_binds_pointer_batch_stream_and_shapes() -> None:
