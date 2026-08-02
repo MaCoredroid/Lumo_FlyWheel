@@ -216,9 +216,8 @@ struct StaticPagedKVBlockSize<Fr13Fixed32Qrow16KernelTraits> {
     static constexpr int block_n_log2 = 6;
 };
 
-// Keep the division-free page resolver within the incumbent register ceiling.
-// This exact kernel is private to the fail-closed B1 launcher below.
-__global__ __maxnreg__(244)
+// This exact non-templated wrapper is private to the fail-closed B1 launcher.
+__global__
 void fr13_flash_fwd_fixed32_qrow16_kernel(
         KERNEL_PARAM_MODIFIER const Flash_fwd_params params) {
 #if defined(ARCH_SUPPORTS_FLASH)

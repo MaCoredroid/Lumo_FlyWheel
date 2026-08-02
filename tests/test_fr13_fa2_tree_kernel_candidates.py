@@ -126,7 +126,7 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
     assert "dim3 grid(num_m_block, params.b, params.h)" in candidate
     assert "auto kernel = &fr13_flash_fwd_fixed32_qrow16_kernel" in candidate
     assert candidate.count("fr13_flash_fwd_fixed32_qrow16_kernel") == 2
-    assert "__global__ __maxnreg__(244)" in candidate
+    assert "__maxnreg__" not in candidate
     assert "FLASH_NAMESPACE::compute_attn_splitkv<" in candidate
     assert "auto kernel = &flash_fwd_splitkv_kernel<" not in candidate
     assert "false,  // Is_causal" in candidate
@@ -344,11 +344,12 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
         assert candidate_warp_row == stock_warp_row
 
 
-def test_qrow16_private_kernel_caps_registers_and_preserves_flags() -> None:
+def test_qrow16_private_kernel_preserves_exact_flags() -> None:
     module = _module()
     translation_unit = module.FIXED32_QUERY_TILE16_TRANSLATION_UNIT
 
-    assert translation_unit.count("__global__ __maxnreg__(244)") == 1
+    assert translation_unit.count("__global__") == 1
+    assert "__maxnreg__" not in translation_unit
     assert translation_unit.count("fr13_flash_fwd_fixed32_qrow16_kernel") == 2
     assert "flash_fwd_splitkv_kernel<" not in translation_unit
     kernel_match = re.search(
