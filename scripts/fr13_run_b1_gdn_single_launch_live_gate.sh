@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One real SWE-Verified K64/root1 B1 single-launch GDN byte diagnostic.
+# One real SWE-Verified K64/root1 B1 ordered-root-loop GDN byte diagnostic.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

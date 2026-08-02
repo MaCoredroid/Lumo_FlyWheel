@@ -1843,9 +1843,10 @@ if [[ "${FR13_COMMITTER_GRAPH:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_committer_graph.arm" 2>/dev/null || true
 fi
-# The single-launch GDN tree is source-only and default-off. Qualification
-# captures the final graph, serves the incumbent two-launch bytes, and lets the
-# authenticated engine ingress publish the only accepted real-event markers.
+# The ordered-root-loop single-launch GDN candidate is default-off.
+# Qualification captures the final graph, serves the incumbent two-launch
+# bytes, and lets authenticated engine ingress publish the only accepted
+# real-event markers.
 _fr13_gdn_single_launch_tree="${FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE:-0}"
 _fr13_gdn_single_launch_production="${FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION:-0}"
 _fr13_gdn_single_launch_b1="${FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB:-0}"

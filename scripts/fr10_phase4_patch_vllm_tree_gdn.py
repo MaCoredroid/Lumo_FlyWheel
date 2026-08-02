@@ -2293,7 +2293,7 @@ def _fr13_fixed32_observed_gdn(
             ),
         }
         expected_single_launch = {
-            "candidate": "fixed32_gdn_single_launch_tree_v2",
+            "candidate": "fixed32_gdn_single_launch_root_loop_v1",
             "root_nodes": (0, 1, 4, 9, 14),
             "branch_path_indices": (
                 (1, 2),
@@ -2320,7 +2320,7 @@ def _fr13_fixed32_observed_gdn(
                 "FR13 fixed32 GDN single-launch work drift: "
                 + repr(normalized_single_launch)
             )
-        physical_route = "fixed32_single_launch_tree"
+        physical_route = "fixed32_single_launch_root_loop"
         physical_programs = normalized_single_launch["physical_programs"]
         physical_grid_z = normalized_single_launch["physical_grid_z"]
         level1_parent_loads = normalized_single_launch[
@@ -2481,7 +2481,7 @@ def _fr13_fixed32_observed_gdn(
         "fixed32_path": None,
         "fixed32_batch_path": None,
         "fixed32_parent_group": "fixed32_gdn_parent_group_v1",
-        "fixed32_single_launch_tree": "fixed32_gdn_single_launch_tree_v2",
+        "fixed32_single_launch_root_loop": "fixed32_gdn_single_launch_root_loop_v1",
     }.get(physical_route, object())
     if candidate_id != expected_candidate:
         raise RuntimeError(
@@ -3255,12 +3255,12 @@ def _fr13_fixed32_validate_forward_work(work, label):
         expected_candidate = "fixed32_gdn_parent_group_v1"
         expected_physical_launches = 48 * 2
         expected_state_export_writes = expected_gdn_calls * 5
-    elif physical_route == "fixed32_single_launch_tree":
+    elif physical_route == "fixed32_single_launch_root_loop":
         expected_physical_programs_per_scan = 1
         expected_physical_grid_z = (batch,)
         expected_level1_parent_loads_per_scan = 0
         expected_physical_critical_path = 32
-        expected_candidate = "fixed32_gdn_single_launch_tree_v2"
+        expected_candidate = "fixed32_gdn_single_launch_root_loop_v1"
         expected_physical_launches = 48
         expected_state_export_writes = 0
     elif physical_route == "fixed32_path":

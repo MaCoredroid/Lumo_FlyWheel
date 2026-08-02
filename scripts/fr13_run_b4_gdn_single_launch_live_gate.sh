@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Canonical exact4 SWE-Verified K64/root1 B4 single-launch GDN byte diagnostic.
+# Canonical exact4 K64/root1 B4 ordered-root-loop GDN byte diagnostic.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

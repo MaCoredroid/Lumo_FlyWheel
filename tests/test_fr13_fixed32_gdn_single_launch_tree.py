@@ -23,11 +23,17 @@ B1_RUNNER_PATH = REPO / "scripts" / "fr13_run_b1_gdn_single_launch_live_gate.sh"
 B4_RUNNER_PATH = REPO / "scripts" / "fr13_run_b4_gdn_single_launch_live_gate.sh"
 CORE_RUNNER_PATH = REPO / "scripts" / "fr13_run_gdn_single_launch_live_gate.sh"
 RUNTIME_MANIFEST_PATH = REPO / "scripts" / "fr13_runtime_manifest.py"
+COMPILE_HARNESS_PATH = REPO / "scripts" / "fr13_compile_gdn_single_launch_sm121.py"
 ROOT_LOOP_PATH = (
     REPO
     / "src"
     / "lumo_flywheel_serving"
     / "fr13_gdn_single_launch_root_loop.py"
+)
+READY_AUDIT_PATH = (
+    REPO
+    / "results"
+    / "fr13_fixed32_gdn_single_launch_root_loop_v1_live_ready_20260802"
 )
 
 
@@ -234,7 +240,7 @@ def test_depth_first_contract_covers_each_node_and_writer_once() -> None:
     levels = namespace["_FR13_FIXED32_SUBTREE_LEVELS"]
     contract = namespace["_fr13_fixed32_gdn_single_launch_contract"](levels)
 
-    assert contract["candidate"] == "fixed32_gdn_single_launch_tree_v2"
+    assert contract["candidate"] == "fixed32_gdn_single_launch_root_loop_v1"
     assert contract["root_nodes"] == (0, 1, 4, 9, 14)
     assert contract["branch_path_indices"] == (
         (1, 2),
@@ -447,19 +453,25 @@ def test_kernel_interleaves_root_and_branch_with_two_state_tiles() -> None:
     assert kernel.index("b_a_log = tl.load(") < kernel.index(
         "for root_index in tl.static_range"
     )
+    assert hashlib.sha256(helper.encode()).hexdigest() == (
+        "39734a9dcfaf14c45de0fd35d8e0b12f6c099a8c3850fdc4c2b472dd3229ca6c"
+    )
+    assert hashlib.sha256(kernel.encode()).hexdigest() == (
+        "870fe9943a8e33b7dff6457b4e8524ef85173cbbea4ddd432a3effd9991cd03d"
+    )
 
 
 def test_b1_b4_launchers_use_one_grid_and_reference_forces_incumbent() -> None:
     b1 = _function_source("launch_tree_gdn_prepared")
     b4 = _function_source("launch_tree_gdn_prepared_fixed32_batch")
 
-    assert "_tree_gdn_kernel_fixed32_single_launch[" in b1
+    assert "_fr13_fixed32_gdn_single_launch_candidate_kernel()[" in b1
     assert "triton.cdiv(dim_v, _path_block_v),\n                    1," in b1
     assert "COUNT_INVOCATION=_count" in b1
     assert "FLAGS_EXPORT=_flags_export" in b1
     assert "and not force_reference_structure" in b1
 
-    assert "_tree_gdn_kernel_fixed32_single_launch[" in b4
+    assert "_fr13_fixed32_gdn_single_launch_candidate_kernel()[" in b4
     assert "triton.cdiv(dim_v, _block_v),\n                    batch," in b4
     assert "COUNT_INVOCATION=count_invocation" in b4
     assert "FLAGS_EXPORT=flags_export" in b4
@@ -467,6 +479,12 @@ def test_b1_b4_launchers_use_one_grid_and_reference_forces_incumbent() -> None:
     assert b4.index("force_reference_structure=True") > b4.index(
         "def _launch_reference"
     )
+    loader = _function_source(
+        "_fr13_fixed32_gdn_single_launch_candidate_kernel"
+    )
+    assert "from . import fr13_gdn_single_launch_root_loop as candidate_module" in loader
+    assert "candidate_module.CANDIDATE" in loader
+    assert "_FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL" in loader
 
 
 @pytest.mark.parametrize("batch", [1, 4])
@@ -592,7 +610,7 @@ def test_observer_records_single_launch_physical_work() -> None:
         },
         "fixed32_parent_group_contract": None,
         "fixed32_single_launch_contract": {
-            "candidate": "fixed32_gdn_single_launch_tree_v2",
+            "candidate": "fixed32_gdn_single_launch_root_loop_v1",
             "root_nodes": (0, 1, 4, 9, 14),
             "branch_path_indices": (
                 (1, 2),
@@ -617,8 +635,8 @@ def test_observer_records_single_launch_physical_work() -> None:
             "single_writer_nodes": 32,
         },
         "executed_gdn": {
-            "route": "fixed32_single_launch_tree",
-            "candidate": "fixed32_gdn_single_launch_tree_v2",
+            "route": "fixed32_single_launch_root_loop",
+            "candidate": "fixed32_gdn_single_launch_root_loop_v1",
             "physical_launches": 1,
             "physical_programs": 1,
             "physical_grid_z": (1,),
@@ -648,8 +666,8 @@ def test_observer_records_single_launch_physical_work() -> None:
     )
 
     assert event["gdn_path_programs"] == 12
-    assert event["gdn_physical_route"] == "fixed32_single_launch_tree"
-    assert event["gdn_candidate"] == "fixed32_gdn_single_launch_tree_v2"
+    assert event["gdn_physical_route"] == "fixed32_single_launch_root_loop"
+    assert event["gdn_candidate"] == "fixed32_gdn_single_launch_root_loop_v1"
     assert event["gdn_physical_launches"] == 1
     assert event["gdn_physical_programs"] == 1
     assert event["gdn_physical_grid_z"] == (1,)
@@ -687,6 +705,7 @@ def _single_launch_identity(namespace: dict[str, object], batch: int) -> dict:
         contract,
         batch,
         source_sha256="d" * 64,
+        support_source_sha256="e" * 64,
         mode="tail6_fixed32",
     )
 
@@ -831,7 +850,7 @@ def test_authenticated_gate_restores_reference_and_emits_only_complete_pass(
     assert payload["candidate_state_export_writes"] == 0
 
 
-def test_legacy_single_launch_pass_cannot_authorize_v2(
+def test_static_single_launch_pass_cannot_authorize_root_loop(
     tmp_path: Path,
 ) -> None:
     namespace = _load_lifecycle_namespace()
@@ -840,9 +859,9 @@ def test_legacy_single_launch_pass_cannot_authorize_v2(
     legacy.write_text(
         json.dumps(
             {
-                "schema": "fr13.fixed32.gdn_single_launch.b1_live_pass.v1",
+                "schema": "fr13.fixed32.gdn_single_launch.b1_live_pass.v2",
                 "status": "pass",
-                "candidate": "fixed32_gdn_single_launch_tree_v1",
+                "candidate": "fixed32_gdn_single_launch_tree_v2",
             }
         )
         + "\n",
@@ -956,18 +975,21 @@ def test_live_verifier_recomputes_exact_source_identity(batch: int, mode: str) -
         "groups_sha256": verifier.GROUPS_SHA256,
         "execution_sha256": verifier.EXECUTION_SHA256,
     }
-    source_sha256 = hashlib.sha256(KERNEL_PATH.read_bytes()).hexdigest()
+    source_sha256 = hashlib.sha256(ROOT_LOOP_PATH.read_bytes()).hexdigest()
+    support_source_sha256 = hashlib.sha256(KERNEL_PATH.read_bytes()).hexdigest()
     namespace["_FR13_FIXED32_MODE"] = mode
     source_identity = namespace["_fr13_fixed32_gdn_single_launch_identity"](
         contract,
         batch,
         source_sha256=source_sha256,
+        support_source_sha256=support_source_sha256,
         mode=mode,
     )
     verifier_identity = verifier.single_launch_identity(
         batch_size=batch,
         mode=mode,
         source_sha256=source_sha256,
+        support_source_sha256=support_source_sha256,
     )
     assert verifier_identity == source_identity
 
@@ -1010,6 +1032,10 @@ def test_live_launcher_and_runners_are_reference_served_k64_exact_task_only() ->
     assert "FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_REAL_EVENT_PATH" in launcher
     assert "FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_REAL_EVENT_PATH" in launcher
     assert "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION=0" in core
+    assert "fixed32_gdn_single_launch_root_loop_v1" in core
+    assert "--support-source \"$SUPPORT_SOURCE\"" in core
+    assert "audit_source_sha256" in core
+    assert 'CAPTURE_ONLY=0 ACCEPT_SPEED_PROBE=0 PROBE_ONLY=0' in core
     assert "FR13_DRAFT_VOCAB_K=65536" in core
     assert "FR13_DRAFT_VOCAB_ROOT=1" in core
     assert (
@@ -1027,6 +1053,8 @@ def test_live_launcher_and_runners_are_reference_served_k64_exact_task_only() ->
         "scripts/fr13_run_b4_gdn_single_launch_live_gate.sh",
         "scripts/fr13_run_gdn_single_launch_live_gate.sh",
         "scripts/fr13_gdn_single_launch_live_verdict.py",
+        "src/lumo_flywheel_serving/fr13_gdn_single_launch_root_loop.py",
+        "results/fr13_fixed32_gdn_single_launch_root_loop_v1_live_ready_20260802/SHA256SUMS",
         "config/fr13_fixed32/subset_b1_diagnostic_one.json",
     ):
         assert f'"{path}"' in runtime_manifest
@@ -1093,7 +1121,70 @@ def test_codegen_root_loop_changes_only_the_outer_ordered_loop() -> None:
     assert "fr13_gdn_single_launch_root_loop" not in LAUNCHER_PATH.read_text(
         encoding="utf-8"
     )
-    assert "fr13_gdn_single_launch_root_loop.py" not in RUNTIME_MANIFEST_PATH.read_text(
+    assert "fr13_gdn_single_launch_root_loop.py" in RUNTIME_MANIFEST_PATH.read_text(
         encoding="utf-8"
     )
     assert 'CANDIDATE = "fixed32_gdn_single_launch_root_loop_v1"' in candidate_source
+
+
+def test_sm121_harness_directly_targets_the_root_loop_candidate() -> None:
+    source = COMPILE_HARNESS_PATH.read_text(encoding="utf-8")
+    candidate_sha256 = hashlib.sha256(ROOT_LOOP_PATH.read_bytes()).hexdigest()
+
+    assert '"fr13_gdn_single_launch_root_loop.py"' in source
+    assert "SUPPORT_PATH = REPO / \"src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py\"" in source
+    assert f'"{candidate_sha256}"' in source
+    assert "types.ModuleType(package_name)" in source
+    assert '"lumo_flywheel_serving.fr13_gdn_single_launch_root_loop"' in source
+
+
+def test_root_loop_ready_artifact_is_reduced_source_bound_and_not_executed() -> None:
+    expected_files = {
+        "README.md",
+        "SHA256SUMS",
+        "codegen.json",
+        "manifest.json",
+        "resources.tsv",
+        "source_hashes.tsv",
+        "verification.json",
+    }
+    assert {path.name for path in READY_AUDIT_PATH.iterdir()} == expected_files
+    checksum_rows = {}
+    for line in (READY_AUDIT_PATH / "SHA256SUMS").read_text(
+        encoding="ascii"
+    ).splitlines():
+        digest, filename = line.split("  ", 1)
+        checksum_rows[filename] = digest
+    assert set(checksum_rows) == expected_files - {"SHA256SUMS"}
+    for filename, digest in checksum_rows.items():
+        assert hashlib.sha256(
+            (READY_AUDIT_PATH / filename).read_bytes()
+        ).hexdigest() == digest
+
+    manifest = json.loads((READY_AUDIT_PATH / "manifest.json").read_text())
+    verification = json.loads(
+        (READY_AUDIT_PATH / "verification.json").read_text()
+    )
+    codegen = json.loads((READY_AUDIT_PATH / "codegen.json").read_text())
+    assert manifest["status"] == "READY_NOT_EXECUTED"
+    assert manifest["candidate"] == "fixed32_gdn_single_launch_root_loop_v1"
+    assert verification["status"] == "READY_NOT_EXECUTED"
+    assert verification["checks"]["gpu_kernel_not_executed"] is True
+    assert verification["checks"]["duplicate_sm121_build_passed"] is True
+    assert codegen["status"] == "PASS_ZERO_SPILL_READY_NOT_EXECUTED"
+    assert {variant["batch"] for variant in codegen["variants"]} == {1, 4}
+    assert all(
+        variant["kernel"]
+        == "_tree_gdn_kernel_fixed32_single_launch_root_loop"
+        and variant["ctas_per_request"] == 768
+        and variant["sass_instructions"] == 1592
+        and variant["stack_bytes"] == 0
+        and variant["ldl_instructions"] == 0
+        and variant["stl_instructions"] == 0
+        and variant["call_instructions"] == 0
+        for variant in codegen["variants"]
+    )
+    assert not any(
+        path.suffix in {".cubin", ".ptx", ".sass", ".ttir", ".ttgir", ".log"}
+        for path in READY_AUDIT_PATH.iterdir()
+    )

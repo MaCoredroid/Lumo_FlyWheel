@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Internal runner for reference-served fixed32 GDN single-launch qualification.
+# Internal runner for reference-served fixed32 GDN root-loop qualification.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -28,9 +28,12 @@ MANDATORY_WEIGHT_FLOOR_MS=119.658015414
 ONE_SIDED_U95_CAP_MS=137.6067177261
 B4_KV_CACHE_MEMORY_BYTES=42949672960
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
-KERNEL_SOURCE=src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py
+CANDIDATE=fixed32_gdn_single_launch_root_loop_v1
+KERNEL_SOURCE=src/lumo_flywheel_serving/fr13_gdn_single_launch_root_loop.py
+SUPPORT_SOURCE=src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py
+PATCHER_SOURCE=scripts/fr10_phase4_patch_vllm_tree_gdn.py
 VERIFIER=scripts/fr13_gdn_single_launch_live_verdict.py
-RESOURCE_AUDIT=results/fr13_fixed32_gdn_single_launch_tree_v2_sm121_audit_20260802
+RESOURCE_AUDIT=results/fr13_fixed32_gdn_single_launch_root_loop_v1_live_ready_20260802
 SOURCE_COMMIT=$(git rev-parse HEAD)
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 ENTRYPOINT_PATH=$(realpath "$QUALIFICATION_ENTRYPOINT")
@@ -57,7 +60,7 @@ case "$PROFILE" in
     SUBSET=$SUBSET_B1
     SUBSET_SHA256=$SUBSET_B1_SHA256
     ENTRYPOINT_NAME=fr13_run_b1_gdn_single_launch_live_gate.sh
-    RUN_CLASSIFICATION=one_real_swe_verified_k64_root1_b1_byte_diagnostic
+    RUN_CLASSIFICATION=one_real_swe_verified_k64_root1_gdn_root_loop_b1_byte_diagnostic
     ;;
   b4)
     BATCH_SIZE=4
@@ -69,11 +72,11 @@ case "$PROFILE" in
     SUBSET=$SUBSET_B4
     SUBSET_SHA256=$SUBSET_B4_SHA256
     ENTRYPOINT_NAME=fr13_run_b4_gdn_single_launch_live_gate.sh
-    RUN_CLASSIFICATION=real_swe_verified_exact4_k64_root1_b4_byte_diagnostic
+    RUN_CLASSIFICATION=real_swe_verified_exact4_k64_root1_gdn_root_loop_b4_byte_diagnostic
     ;;
   *) echo "profile must be b1 or b4" >&2; exit 2 ;;
 esac
-ARM="${TOPOLOGY}_k64_root1_gdn_single_launch_${PROFILE}_gate_${TAG}"
+ARM="${TOPOLOGY}_k64_root1_gdn_root_loop_${PROFILE}_gate_${TAG}"
 ARMDIR="$RUNROOT_ABS/$ARM"
 VERDICT="$RUNROOT_ABS/${PROFILE}_gdn_single_launch_gate_verdict.json"
 
@@ -113,6 +116,20 @@ RUNNER_SHA256=$(sha256sum "$ENTRYPOINT_PATH" | awk '{print $1}')
 CORE_SHA256=$(sha256sum "$CORE_PATH" | awk '{print $1}')
 VERIFIER_SHA256=$(sha256sum "$VERIFIER" | awk '{print $1}')
 KERNEL_SOURCE_SHA256=$(sha256sum "$KERNEL_SOURCE" | awk '{print $1}')
+SUPPORT_SOURCE_SHA256=$(sha256sum "$SUPPORT_SOURCE" | awk '{print $1}')
+PATCHER_SOURCE_SHA256=$(sha256sum "$PATCHER_SOURCE" | awk '{print $1}')
+audit_source_sha256() {
+  awk -F '\t' -v path="$1" '$2 == path {print $3}' \
+    "$RESOURCE_AUDIT/source_hashes.tsv"
+}
+[[ "$(audit_source_sha256 "$KERNEL_SOURCE")" == "$KERNEL_SOURCE_SHA256" \
+   && "$(audit_source_sha256 "$SUPPORT_SOURCE")" == "$SUPPORT_SOURCE_SHA256" \
+   && "$(audit_source_sha256 "$PATCHER_SOURCE")" == "$PATCHER_SOURCE_SHA256" \
+   && "$(audit_source_sha256 "scripts/$ENTRYPOINT_NAME")" == "$RUNNER_SHA256" \
+   && "$(audit_source_sha256 "scripts/fr13_run_gdn_single_launch_live_gate.sh")" == "$CORE_SHA256" \
+   && "$(audit_source_sha256 "$VERIFIER")" == "$VERIFIER_SHA256" ]] \
+  || { echo "single-launch source differs from the ready audit" >&2; exit 2; }
+unset -f audit_source_sha256
 
 export BSIZE=$BATCH_SIZE
 export CONC=$CONCURRENCY
@@ -134,11 +151,12 @@ unset -f run_variant
   || { echo "fixed32 K64/root1 deployment contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS/sidecars"
-printf 'classification=%s\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\ncandidate_shadow_only=1\nreference_always_served=1\ncandidate=fixed32_gdn_single_launch_tree_v2\nmode=%s\nlogical_drafts=%s\nvalid_mask=%s\nphysical_rows_per_request=32\nbatch_size=%s\nconcurrency=%s\ndraft_vocab_k=65536\ndraft_vocab_root=1\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nsource_commit=%s\nkernel_source_sha256=%s\nrunner_sha256=%s\ncore_runner_sha256=%s\nverifier_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nprobe_modes=forbidden\nstarted=%s\n' \
-  "$RUN_CLASSIFICATION" "$TOPOLOGY" "$LOGICAL_DRAFTS" "$VALID_MASK" \
+printf 'classification=%s\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\ncandidate_shadow_only=1\nreference_always_served=1\ncandidate=%s\nmode=%s\nlogical_drafts=%s\nvalid_mask=%s\nphysical_rows_per_request=32\nbatch_size=%s\nconcurrency=%s\ndraft_vocab_k=65536\ndraft_vocab_root=1\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nsource_commit=%s\nkernel_source_sha256=%s\nsupport_source_sha256=%s\nrunner_sha256=%s\ncore_runner_sha256=%s\nverifier_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nprobe_modes=forbidden\nstarted=%s\n' \
+  "$RUN_CLASSIFICATION" "$CANDIDATE" "$TOPOLOGY" "$LOGICAL_DRAFTS" "$VALID_MASK" \
   "$BATCH_SIZE" "$CONCURRENCY" "$BLOCK_MAP_SHA256" \
   "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
   "$ONE_SIDED_U95_CAP_MS" "$SOURCE_COMMIT" "$KERNEL_SOURCE_SHA256" \
+  "$SUPPORT_SOURCE_SHA256" \
   "$RUNNER_SHA256" "$CORE_SHA256" "$VERIFIER_SHA256" "$SUBSET_SHA256" \
   "$STOCK_FA2_SHA256" "$(date -u +%FT%TZ)" \
   > "$RUNROOT_ABS/launcher_meta.txt"
@@ -216,7 +234,9 @@ cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" \
   || { echo "external manifest changed during qualification" >&2; exit 14; }
 [[ "$(sha256sum "$ENTRYPOINT_PATH" | awk '{print $1}')" == "$RUNNER_SHA256" \
    && "$(sha256sum "$CORE_PATH" | awk '{print $1}')" == "$CORE_SHA256" \
-   && "$(sha256sum "$VERIFIER" | awk '{print $1}')" == "$VERIFIER_SHA256" ]] \
+   && "$(sha256sum "$VERIFIER" | awk '{print $1}')" == "$VERIFIER_SHA256" \
+   && "$(sha256sum "$KERNEL_SOURCE" | awk '{print $1}')" == "$KERNEL_SOURCE_SHA256" \
+   && "$(sha256sum "$SUPPORT_SOURCE" | awk '{print $1}')" == "$SUPPORT_SOURCE_SHA256" ]] \
   || { echo "qualification source changed during execution" >&2; exit 14; }
 (( serve_rc == 0 )) || exit "$serve_rc"
 
@@ -228,6 +248,7 @@ cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" \
   --runner-sha256 "$RUNNER_SHA256" \
   --source-commit "$SOURCE_COMMIT" \
   --kernel-source "$KERNEL_SOURCE" \
+  --support-source "$SUPPORT_SOURCE" \
   --subset "$SUBSET" \
   --subset-sha256 "$SUBSET_SHA256" \
   --block-map "$BLOCK_MAP" \

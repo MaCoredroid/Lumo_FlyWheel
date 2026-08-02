@@ -90,6 +90,7 @@ FIXED32_PYTHON_PACKAGE_SOURCE = (
     "src/lumo_flywheel_serving/fr10_tree_rejection_sampler.py",
     "src/lumo_flywheel_serving/fr13_ex2_silu.py",
     "src/lumo_flywheel_serving/fr13_fa2_spine_reorder.py",
+    "src/lumo_flywheel_serving/fr13_gdn_single_launch_root_loop.py",
     "src/lumo_flywheel_serving/fr13_replay_conv_remap.py",
     "src/lumo_flywheel_serving/fr13_tree_conv_fused.py",
     "src/lumo_flywheel_serving/inference_proxy.py",
@@ -128,6 +129,13 @@ FIXED32_RUNTIME_DATA_AND_CONFIG = (
 FIXED32_REQUIRED_ABSENCE = ("output/fr13_prewarm/corpus_active.jsonl",)
 
 FIXED32_VERDICT_TOOLS = (
+    "results/fr13_fixed32_gdn_single_launch_root_loop_v1_live_ready_20260802/README.md",
+    "results/fr13_fixed32_gdn_single_launch_root_loop_v1_live_ready_20260802/SHA256SUMS",
+    "results/fr13_fixed32_gdn_single_launch_root_loop_v1_live_ready_20260802/codegen.json",
+    "results/fr13_fixed32_gdn_single_launch_root_loop_v1_live_ready_20260802/manifest.json",
+    "results/fr13_fixed32_gdn_single_launch_root_loop_v1_live_ready_20260802/resources.tsv",
+    "results/fr13_fixed32_gdn_single_launch_root_loop_v1_live_ready_20260802/source_hashes.tsv",
+    "results/fr13_fixed32_gdn_single_launch_root_loop_v1_live_ready_20260802/verification.json",
     "scripts/fr13_depth_acceptance.py",
     "scripts/fr13_fixed32_work_census.py",
     "scripts/fr13_floor_gate.py",
@@ -144,7 +152,7 @@ PROFILES = {
         verdict_tools=FIXED32_VERDICT_TOOLS,
         package_dir="src/lumo_flywheel_serving",
         package_name="lumo_flywheel_serving",
-        package_file_count=25,
+        package_file_count=26,
     ),
 }
 

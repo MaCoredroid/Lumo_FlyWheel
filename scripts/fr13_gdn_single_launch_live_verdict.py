@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate and bind a fixed32 GDN single-launch live qualification."""
+"""Validate and bind a fixed32 GDN ordered-root-loop qualification."""
 
 from __future__ import annotations
 
@@ -33,20 +33,23 @@ from lumo_flywheel_serving.inference_proxy import (  # noqa: E402
 )
 
 
-CANDIDATE = "fixed32_gdn_single_launch_tree_v2"
-IDENTITY_SCHEMA = "fr13.fixed32.gdn_single_launch.identity.v2"
-KERNEL = "_tree_gdn_kernel_fixed32_single_launch"
+CANDIDATE = "fixed32_gdn_single_launch_root_loop_v1"
+IDENTITY_SCHEMA = "fr13.fixed32.gdn_single_launch_root_loop.identity.v1"
+KERNEL = "_tree_gdn_kernel_fixed32_single_launch_root_loop"
 NODE_HELPER = "_tree_gdn_fixed32_single_launch_node"
-CONTRACT_SHA256 = "ac748f003754a5f8562d864112c074450f376d10a9589d6047f1b88032f60393"
+CONTRACT_SHA256 = "4b176594fed96343939c99e0416a00e7ef88e549d12b73172ef187a431cc5645"
 GROUPS_SHA256 = "cba9010f16772510ff6017e866a520552e7ada913bb786152133597cbc7c1f62"
 EXECUTION_SHA256 = "80aed4d1a882ee4d4cde21dbf4314ed3abaae3f7553e35b6db5cd7574fe3b7db"
 PARENT_SHA256 = "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd"
 ANCESTRY_SHA256 = "90873d81e83ce1644ee4701e043b7e9d26e83b7a7ca752d538a0e6eed1946dad"
-AUDITED_KERNEL_SOURCE_SHA256 = (
-    "ca5ff6496c7cf3221996e6aa5971d36207e305e51f5c4a308f71d15165ab659a"
+AUDITED_CANDIDATE_SOURCE_SHA256 = (
+    "6299f5dfd30800d4635d96cb77316ee9797f468753064296f012b2e30a0f05af"
+)
+AUDITED_SUPPORT_SOURCE_SHA256 = (
+    "72438aaa1626e0ccd971ab78263968fd497b5204ac4ec1c263eee62c9cb7c0a6"
 )
 AUDITED_PATCHER_SOURCE_SHA256 = (
-    "a32674b2b3dd8949c26001ca8a2664656373ab4890b207b6bddaca03367e6e94"
+    "085617fe49f2ba782b545071d2f171aa5b9c4c863a31f703ba56ebfa49170dd6"
 )
 EXACT4_SUBSET_SHA256 = (
     "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
@@ -70,11 +73,13 @@ SURFACES = [
     "counter",
 ]
 RESOURCE_AUDIT = (
-    REPO / "results" / "fr13_fixed32_gdn_single_launch_tree_v2_sm121_audit_20260802"
+    REPO
+    / "results"
+    / "fr13_fixed32_gdn_single_launch_root_loop_v1_live_ready_20260802"
 )
 RESOURCE_AUDIT_FILES = (
     "README.md",
-    "compiler_audit.json",
+    "codegen.json",
     "manifest.json",
     "resources.tsv",
     "source_hashes.tsv",
@@ -184,6 +189,7 @@ def single_launch_identity(
     batch_size: int,
     mode: str,
     source_sha256: str,
+    support_source_sha256: str,
 ) -> dict[str, Any]:
     if batch_size not in (1, 4) or mode not in (
         "tail6_fixed32",
@@ -206,6 +212,7 @@ def single_launch_identity(
         "state_parent_reads_per_request_layer": 0,
         "authoritative_surfaces": SURFACES,
         "source_sha256": source_sha256,
+        "support_source_sha256": support_source_sha256,
         "contract_sha256": CONTRACT_SHA256,
         "groups_sha256": GROUPS_SHA256,
         "execution_sha256": EXECUTION_SHA256,
@@ -255,15 +262,99 @@ def _runtime_manifest(
     return actual, raw
 
 
-def _validate_resource_audit(source_sha256: str) -> str:
+def _validate_resource_audit(required_sources: dict[str, str]) -> str:
     checksum_sha256 = _validate_checksum_manifest(RESOURCE_AUDIT)
     verification, _raw = _json(RESOURCE_AUDIT / "verification.json")
-    source_rows = _regular_bytes(RESOURCE_AUDIT / "source_hashes.tsv").decode("ascii")
+    codegen, _codegen_raw = _json(RESOURCE_AUDIT / "codegen.json")
+    manifest, _manifest_raw = _json(RESOURCE_AUDIT / "manifest.json")
+    source_text = _regular_bytes(
+        RESOURCE_AUDIT / "source_hashes.tsv"
+    ).decode("ascii")
+    lines = source_text.splitlines()
+    if not lines or lines[0] != "role\tpath_or_identity\tsha256":
+        raise VerdictError("resource audit source binding header is invalid")
+    source_rows: dict[str, str] = {}
+    for line in lines[1:]:
+        fields = line.split("\t")
+        if (
+            len(fields) != 3
+            or not fields[0]
+            or not fields[1]
+            or fields[1] in source_rows
+            or len(fields[2]) != 64
+            or any(
+                character not in "0123456789abcdef"
+                for character in fields[2]
+            )
+        ):
+            raise VerdictError("resource audit source binding row is invalid")
+        source_rows[fields[1]] = fields[2]
+    variants = codegen.get("variants")
+    implementation_commit = manifest.get("implementation_commit")
+    checks = verification.get("checks")
     if (
-        verification.get("status") != "PASS"
-        or verification.get("checks", {}).get("gpu_kernel_not_executed") is not True
-        or f"candidate_kernel\tsrc/lumo_flywheel_serving/fr10_gdn_tree_kernel.py\t{source_sha256}\n"
-        not in source_rows
+        manifest.get("schema")
+        != "fr13.fixed32.gdn_single_launch.root_loop.live_ready.manifest.v1"
+        or verification.get("schema")
+        != "fr13.fixed32.gdn_single_launch.root_loop.live_ready.verification.v1"
+        or codegen.get("schema")
+        != "fr13.fixed32.gdn_single_launch.root_loop.live_ready.codegen.v1"
+        or not isinstance(implementation_commit, str)
+        or len(implementation_commit) != 40
+        or any(
+            character not in "0123456789abcdef"
+            for character in implementation_commit
+        )
+        or verification.get("implementation_commit") != implementation_commit
+        or codegen.get("implementation_commit") != implementation_commit
+        or verification.get("status") != "READY_NOT_EXECUTED"
+        or not isinstance(checks, dict)
+        or checks.get("gpu_kernel_not_executed") is not True
+        or checks.get("docker_not_launched") is not True
+        or checks.get("swe_task_not_executed") is not True
+        or checks.get("probe_not_executed") is not True
+        or checks.get("timing_not_executed") is not True
+        or checks.get("duplicate_sm121_build_passed") is not True
+        or manifest.get("status") != "READY_NOT_EXECUTED"
+        or manifest.get("candidate") != CANDIDATE
+        or manifest.get("inventory")
+        != [*RESOURCE_AUDIT_FILES, "SHA256SUMS"]
+        or codegen.get("status") != "PASS_ZERO_SPILL_READY_NOT_EXECUTED"
+        or codegen.get("candidate") != CANDIDATE
+        or codegen.get("target") != "sm_121a"
+        or not isinstance(variants, list)
+        or len(variants) != 2
+        or not all(isinstance(variant, dict) for variant in variants)
+        or [variant.get("batch") for variant in variants] != [1, 4]
+        or any(
+            variant.get("kernel") != KERNEL
+            or variant.get("physical_launches_per_layer") != 1
+            or variant.get("ctas_per_request") != 768
+            or variant.get("ctas_per_launch")
+            != 768 * int(variant.get("batch", 0))
+            or variant.get("num_warps") != 8
+            or variant.get("registers_per_thread") != 112
+            or variant.get("sass_instructions") != 1592
+            or variant.get("primary_text_bytes") != 25472
+            or any(
+                variant.get(field) != 0
+                for field in (
+                    "stack_bytes",
+                    "local_bytes",
+                    "ldl_instructions",
+                    "stl_instructions",
+                    "call_instructions",
+                    "indirect_branch_instructions",
+                    "global_scratch_bytes",
+                    "tmem_bytes",
+                )
+            )
+            for variant in variants
+        )
+        or any(
+            source_rows.get(path) != digest
+            for path, digest in required_sources.items()
+        )
     ):
         raise VerdictError("offline sm_121a resource audit is not source-bound")
     return checksum_sha256
@@ -283,6 +374,7 @@ def build_verdict(args: argparse.Namespace) -> dict[str, Any]:
 
     arm = args.arm_dir.resolve()
     kernel_path = args.kernel_source.resolve()
+    support_path = args.support_source.resolve()
     runner_path = args.runner.resolve()
     verifier_path = Path(__file__).resolve()
     subset_path = args.subset.resolve()
@@ -299,12 +391,25 @@ def build_verdict(args: argparse.Namespace) -> dict[str, Any]:
         if _sha256_bytes(_regular_bytes(path)) != expected:
             raise VerdictError(f"qualification input changed: {path}")
     kernel_sha256 = _sha256_bytes(_regular_bytes(kernel_path))
+    support_sha256 = _sha256_bytes(_regular_bytes(support_path))
     patcher_sha256 = _sha256_bytes(_regular_bytes(patcher_path))
-    if kernel_sha256 != AUDITED_KERNEL_SOURCE_SHA256:
+    if kernel_sha256 != AUDITED_CANDIDATE_SOURCE_SHA256:
         raise VerdictError("kernel source differs from the sm_121a audited source")
+    if support_sha256 != AUDITED_SUPPORT_SOURCE_SHA256:
+        raise VerdictError("kernel support source differs from the bound source")
     if patcher_sha256 != AUDITED_PATCHER_SOURCE_SHA256:
         raise VerdictError("runtime patcher differs from the sm_121a audited source")
-    resource_audit_sha256 = _validate_resource_audit(kernel_sha256)
+    verifier_sha256 = _sha256_bytes(_regular_bytes(verifier_path))
+    core_runner_sha256 = _sha256_bytes(_regular_bytes(core_runner_path))
+    resource_audit_sha256 = _validate_resource_audit(
+        {
+            kernel_path.relative_to(REPO).as_posix(): kernel_sha256,
+            support_path.relative_to(REPO).as_posix(): support_sha256,
+            patcher_path.relative_to(REPO).as_posix(): patcher_sha256,
+            verifier_path.relative_to(REPO).as_posix(): verifier_sha256,
+            core_runner_path.relative_to(REPO).as_posix(): core_runner_sha256,
+        }
+    )
 
     subset = validate_fixed32_run_subset(
         subset_path,
@@ -375,17 +480,19 @@ def build_verdict(args: argparse.Namespace) -> dict[str, Any]:
         batch_size=batch,
         mode=mode,
         source_sha256=kernel_sha256,
+        support_source_sha256=support_sha256,
     )
     expected_pass: dict[str, Any] = {
         "schema": (
-            "fr13.fixed32.gdn_single_launch.b1_live_pass.v2"
+            "fr13.fixed32.gdn_single_launch_root_loop.b1_live_pass.v1"
             if batch == 1
-            else "fr13.fixed32.gdn_single_launch.b4_exact4_live_pass.v2"
+            else "fr13.fixed32.gdn_single_launch_root_loop.b4_exact4_live_pass.v1"
         ),
         "status": "pass",
         "candidate": CANDIDATE,
         "identity_sha256": identity["identity_sha256"],
         "source_sha256": kernel_sha256,
+        "support_source_sha256": support_sha256,
         "contract_sha256": CONTRACT_SHA256,
         "mode": mode,
         "batch_size": batch,
@@ -413,11 +520,10 @@ def build_verdict(args: argparse.Namespace) -> dict[str, Any]:
     relative_verifier = verifier_path.relative_to(REPO).as_posix()
     required_closure = {
         relative_runner: args.runner_sha256,
-        relative_verifier: _sha256_bytes(_regular_bytes(verifier_path)),
-        core_runner_path.relative_to(REPO).as_posix(): _sha256_bytes(
-            _regular_bytes(core_runner_path)
-        ),
+        relative_verifier: verifier_sha256,
+        core_runner_path.relative_to(REPO).as_posix(): core_runner_sha256,
         kernel_path.relative_to(REPO).as_posix(): kernel_sha256,
+        support_path.relative_to(REPO).as_posix(): support_sha256,
         patcher_path.relative_to(REPO).as_posix(): patcher_sha256,
         launcher_path.relative_to(REPO).as_posix(): _sha256_bytes(
             _regular_bytes(launcher_path)
@@ -428,6 +534,14 @@ def build_verdict(args: argparse.Namespace) -> dict[str, Any]:
         subset_path.relative_to(REPO).as_posix(): args.subset_sha256,
         block_map_path.relative_to(REPO).as_posix(): args.block_map_sha256,
     }
+    required_closure.update(
+        {
+            (RESOURCE_AUDIT / filename).relative_to(REPO).as_posix(): (
+                _sha256_bytes(_regular_bytes(RESOURCE_AUDIT / filename))
+            )
+            for filename in (*RESOURCE_AUDIT_FILES, "SHA256SUMS")
+        }
+    )
     runtime_sha256, runtime_raw = _runtime_manifest(
         runtime_path,
         required=required_closure,
@@ -445,15 +559,15 @@ def build_verdict(args: argparse.Namespace) -> dict[str, Any]:
 
     return {
         "schema": (
-            "fr13.fixed32.gdn_single_launch.b1_k64_live_verdict.v1"
+            "fr13.fixed32.gdn_single_launch_root_loop.b1_k64_live_verdict.v1"
             if batch == 1
-            else "fr13.fixed32.gdn_single_launch.b4_exact4_k64_live_verdict.v1"
+            else "fr13.fixed32.gdn_single_launch_root_loop.b4_exact4_k64_live_verdict.v1"
         ),
         "status": "pass",
         "run_classification": (
-            "one_real_swe_verified_k64_root1_b1_byte_diagnostic"
+            "one_real_swe_verified_k64_root1_gdn_root_loop_b1_byte_diagnostic"
             if batch == 1
-            else "real_swe_verified_exact4_k64_root1_b4_byte_diagnostic"
+            else "real_swe_verified_exact4_k64_root1_gdn_root_loop_b4_byte_diagnostic"
         ),
         "acceptance_valid": False,
         "timing_eligible": False,
@@ -475,6 +589,7 @@ def build_verdict(args: argparse.Namespace) -> dict[str, Any]:
         "subset_sha256": args.subset_sha256,
         "source_commit": args.source_commit,
         "kernel_source_sha256": kernel_sha256,
+        "support_source_sha256": support_sha256,
         "patcher_source_sha256": patcher_sha256,
         "contract_sha256": CONTRACT_SHA256,
         "identity_sha256": identity["identity_sha256"],
@@ -514,6 +629,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--runner-sha256", required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--kernel-source", type=Path, required=True)
+    parser.add_argument("--support-source", type=Path, required=True)
     parser.add_argument("--subset", type=Path, required=True)
     parser.add_argument("--subset-sha256", required=True)
     parser.add_argument("--block-map", type=Path, required=True)

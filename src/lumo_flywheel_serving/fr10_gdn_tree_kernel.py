@@ -1221,13 +1221,13 @@ _FR13_FIXED32_GDN_LEVEL1_PARENT_GROUPS = (
     (9, (7, 8)),
 )
 _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID = (
-    "fixed32_gdn_single_launch_tree_v2"
+    "fixed32_gdn_single_launch_root_loop_v1"
 )
 _FR13_FIXED32_GDN_SINGLE_LAUNCH_IDENTITY_SCHEMA = (
-    "fr13.fixed32.gdn_single_launch.identity.v2"
+    "fr13.fixed32.gdn_single_launch_root_loop.identity.v1"
 )
 _FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL = (
-    "_tree_gdn_kernel_fixed32_single_launch"
+    "_tree_gdn_kernel_fixed32_single_launch_root_loop"
 )
 _FR13_FIXED32_GDN_SINGLE_LAUNCH_NODE_HELPER = (
     "_tree_gdn_fixed32_single_launch_node"
@@ -3867,9 +3867,9 @@ def _fr13_fixed32_gdn_single_launch_contract(
     }
     contract["contract_sha256"] = _fr13_canonical_sha256(contract)
     expected = {
-        "schema": "fr13.fixed32.gdn_single_launch.identity.v2",
-        "candidate": "fixed32_gdn_single_launch_tree_v2",
-        "kernel": "_tree_gdn_kernel_fixed32_single_launch",
+        "schema": "fr13.fixed32.gdn_single_launch_root_loop.identity.v1",
+        "candidate": "fixed32_gdn_single_launch_root_loop_v1",
+        "kernel": "_tree_gdn_kernel_fixed32_single_launch_root_loop",
         "node_helper": "_tree_gdn_fixed32_single_launch_node",
         "root_nodes": (0, 1, 4, 9, 14),
         "branch_path_indices": ((1, 2), (3, 4), (5, 6), (7, 8), (0, 9, 10)),
@@ -3905,14 +3905,38 @@ def _fr13_fixed32_gdn_single_launch_contract(
     return contract
 
 
-def _fr13_fixed32_gdn_single_launch_source_sha256() -> str:
+def _fr13_fixed32_gdn_single_launch_source_hashes() -> tuple[str, str]:
+    support_path = Path(__file__).resolve()
+    candidate_path = support_path.with_name(
+        "fr13_gdn_single_launch_root_loop.py"
+    )
     try:
-        payload = Path(__file__).resolve().read_bytes()
+        candidate_payload = candidate_path.read_bytes()
+        support_payload = support_path.read_bytes()
     except OSError as error:
         raise RuntimeError(
-            "FR13 fixed32 GDN single-launch cannot hash its source"
+            "FR13 fixed32 GDN root-loop cannot hash its candidate/support source"
         ) from error
-    return hashlib.sha256(payload).hexdigest()
+    return (
+        hashlib.sha256(candidate_payload).hexdigest(),
+        hashlib.sha256(support_payload).hexdigest(),
+    )
+
+
+def _fr13_fixed32_gdn_single_launch_candidate_kernel():
+    from . import fr13_gdn_single_launch_root_loop as candidate_module
+
+    kernel = candidate_module._tree_gdn_kernel_fixed32_single_launch_root_loop
+    if (
+        candidate_module.CANDIDATE
+        != _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID
+        or getattr(kernel, "__name__", None)
+        != _FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN root-loop candidate module identity drift"
+        )
+    return kernel
 
 
 def _fr13_fixed32_gdn_single_launch_identity(
@@ -3920,6 +3944,7 @@ def _fr13_fixed32_gdn_single_launch_identity(
     batch_size: int,
     *,
     source_sha256: str | None = None,
+    support_source_sha256: str | None = None,
     mode: str | None = None,
 ) -> dict[str, object]:
     """Bind selector, topology, kernel source, and physical work identity."""
@@ -3963,11 +3988,24 @@ def _fr13_fixed32_gdn_single_launch_identity(
             raise RuntimeError(
                 "FR13 fixed32 GDN single-launch contract digest drift"
             )
-    source = source_sha256 or _fr13_fixed32_gdn_single_launch_source_sha256()
+    if source_sha256 is None or support_source_sha256 is None:
+        actual_source, actual_support = (
+            _fr13_fixed32_gdn_single_launch_source_hashes()
+        )
+    else:
+        actual_source, actual_support = source_sha256, support_source_sha256
+    source = source_sha256 or actual_source
+    support_source = support_source_sha256 or actual_support
     if (
         not isinstance(source, str)
         or len(source) != 64
         or any(character not in "0123456789abcdef" for character in source)
+        or not isinstance(support_source, str)
+        or len(support_source) != 64
+        or any(
+            character not in "0123456789abcdef"
+            for character in support_source
+        )
     ):
         raise RuntimeError(
             "FR13 fixed32 GDN single-launch source digest drift"
@@ -3990,6 +4028,7 @@ def _fr13_fixed32_gdn_single_launch_identity(
             _FR13_FIXED32_GDN_SINGLE_LAUNCH_SURFACES
         ),
         "source_sha256": source,
+        "support_source_sha256": support_source,
         "contract_sha256": contract["contract_sha256"],
         "groups_sha256": contract["groups_sha256"],
         "execution_sha256": contract["execution_sha256"],
@@ -4161,9 +4200,9 @@ def _fr13_fixed32_gdn_single_launch_validate_pass(
             "FR13 fixed32 GDN single-launch PASS is unreadable"
         ) from error
     expected_schema = (
-        "fr13.fixed32.gdn_single_launch.b1_live_pass.v2"
+        "fr13.fixed32.gdn_single_launch_root_loop.b1_live_pass.v1"
         if batch == 1
-        else "fr13.fixed32.gdn_single_launch.b4_exact4_live_pass.v2"
+        else "fr13.fixed32.gdn_single_launch_root_loop.b4_exact4_live_pass.v1"
     )
     markers = payload.get("task_markers") if isinstance(payload, dict) else None
     marker_valid = (
@@ -4187,6 +4226,8 @@ def _fr13_fixed32_gdn_single_launch_validate_pass(
         != _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID
         or payload.get("identity_sha256") != identity.get("identity_sha256")
         or payload.get("source_sha256") != identity.get("source_sha256")
+        or payload.get("support_source_sha256")
+        != identity.get("support_source_sha256")
         or payload.get("contract_sha256") != identity.get("contract_sha256")
         or payload.get("mode") != identity.get("mode")
         or payload.get("batch_size") != batch
@@ -4276,14 +4317,15 @@ def _fr13_fixed32_gdn_single_launch_emit_pass(
     )
     payload = {
         "schema": (
-            "fr13.fixed32.gdn_single_launch.b1_live_pass.v2"
+            "fr13.fixed32.gdn_single_launch_root_loop.b1_live_pass.v1"
             if batch == 1
-            else "fr13.fixed32.gdn_single_launch.b4_exact4_live_pass.v2"
+            else "fr13.fixed32.gdn_single_launch_root_loop.b4_exact4_live_pass.v1"
         ),
         "status": "pass",
         "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
         "identity_sha256": identity["identity_sha256"],
         "source_sha256": identity["source_sha256"],
+        "support_source_sha256": identity["support_source_sha256"],
         "contract_sha256": identity["contract_sha256"],
         "mode": identity["mode"],
         "batch_size": batch,
@@ -13607,7 +13649,7 @@ def launch_tree_gdn_prepared(
                 st["levels"][1]
             )
             _single_contract = _single_launch["contract"]
-            _tree_gdn_kernel_fixed32_single_launch[
+            _fr13_fixed32_gdn_single_launch_candidate_kernel()[
                 (
                     num_vh,
                     triton.cdiv(dim_v, _path_block_v),
@@ -13671,7 +13713,7 @@ def launch_tree_gdn_prepared(
                 **_extra_launch_kwargs,
             )
             st["last_executed_gdn"] = {
-                "route": "fixed32_single_launch_tree",
+                "route": "fixed32_single_launch_root_loop",
                 "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
                 "physical_launches": 1,
                 "physical_programs": 1,
@@ -14679,7 +14721,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 subtree_state["levels"][1]
             )
             single_contract = single_launch["contract"]
-            _tree_gdn_kernel_fixed32_single_launch[
+            _fr13_fixed32_gdn_single_launch_candidate_kernel()[
                 (
                     num_vh,
                     triton.cdiv(dim_v, _block_v),
@@ -14743,7 +14785,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 **extra_launch_kwargs,
             )
             subtree_state["last_executed_gdn"] = {
-                "route": "fixed32_single_launch_tree",
+                "route": "fixed32_single_launch_root_loop",
                 "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
                 "physical_launches": 1,
                 "physical_programs": batch,

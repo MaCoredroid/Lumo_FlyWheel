@@ -1,8 +1,10 @@
-"""Codegen-only fixed32 GDN single-launch root-loop candidate.
+"""Qualification-only fixed32 GDN single-launch root-loop candidate.
 
-This module is intentionally absent from the serving launchers. It preserves
-the audited kernel's node helper and exact fixed32 descriptors while replacing
-only the five-way static root expansion with an ordered runtime loop.
+The default serving route remains in ``fr10_gdn_tree_kernel``. Its authenticated
+live gate imports this candidate only for the shadow comparison or after an
+exact source-bound PASS. The candidate preserves the audited kernel's node
+helper and descriptors while replacing only the five-way static root expansion
+with an ordered runtime loop.
 """
 
 from __future__ import annotations
@@ -208,7 +210,7 @@ def _tree_gdn_kernel_fixed32_single_launch_root_loop(
         tl.store(flags_ptr + 1, FLAGS_ROWS, mask=flag_writer)
 
 
-# The existing audit's variant inventory looks up this compatibility name.
+# The shared SM121 audit inventory looks up this compatibility name.
 _tree_gdn_kernel_fixed32_single_launch = (
     _tree_gdn_kernel_fixed32_single_launch_root_loop
 )

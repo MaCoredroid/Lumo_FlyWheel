@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline SM121a compile/resource audit for fixed32 GDN single launch.
+"""Offline SM121a compile/resource audit for the fixed32 GDN root loop.
 
 The coordinator runs two isolated workers. Each worker imports the kernel
 source directly, compiles exact B1/B4 live specializations plus the current
@@ -19,16 +19,29 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import types
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 
 REPO = Path(__file__).resolve().parents[1]
-KERNEL_PATH = REPO / "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
+KERNEL_PATH = (
+    REPO
+    / "src"
+    / "lumo_flywheel_serving"
+    / "fr13_gdn_single_launch_root_loop.py"
+)
+SUPPORT_PATH = REPO / "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
 PATCHER_PATH = REPO / "scripts/fr10_phase4_patch_vllm_tree_gdn.py"
 EXPECTED_KERNEL_SHA256 = (
-    "ca5ff6496c7cf3221996e6aa5971d36207e305e51f5c4a308f71d15165ab659a"
+    "6299f5dfd30800d4635d96cb77316ee9797f468753064296f012b2e30a0f05af"
+)
+EXPECTED_SUPPORT_SHA256 = (
+    "72438aaa1626e0ccd971ab78263968fd497b5204ac4ec1c263eee62c9cb7c0a6"
+)
+EXPECTED_PATCHER_SHA256 = (
+    "085617fe49f2ba782b545071d2f171aa5b9c4c863a31f703ba56ebfa49170dd6"
 )
 TARGET_ARCH = 121
 TARGET_WARP_SIZE = 32
@@ -110,8 +123,14 @@ def _file_sha256(path: Path) -> str:
 
 
 def _load_kernel():
+    package_name = "lumo_flywheel_serving"
+    package = types.ModuleType(package_name)
+    package.__package__ = package_name
+    package.__path__ = [str(REPO / "src" / package_name)]
+    sys.modules[package_name] = package
     spec = importlib.util.spec_from_file_location(
-        "_fr13_gdn_single_launch_compile_target", KERNEL_PATH
+        "lumo_flywheel_serving.fr13_gdn_single_launch_root_loop",
+        KERNEL_PATH,
     )
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load {KERNEL_PATH}")
@@ -458,6 +477,21 @@ def _coordinate(output: Path) -> int:
         raise RuntimeError(f"refusing to overwrite {output}")
     output.parent.mkdir(parents=True, exist_ok=True)
 
+    expected_sources = {
+        KERNEL_PATH: EXPECTED_KERNEL_SHA256,
+        SUPPORT_PATH: EXPECTED_SUPPORT_SHA256,
+        PATCHER_PATH: EXPECTED_PATCHER_SHA256,
+    }
+    initial_source_hashes = {
+        path: _file_sha256(path) for path in expected_sources
+    }
+    for path, expected_sha256 in expected_sources.items():
+        if initial_source_hashes[path] != expected_sha256:
+            raise RuntimeError(
+                f"source drift: {path}: "
+                f"{initial_source_hashes[path]} != {expected_sha256}"
+            )
+
     pass_reports = []
     for pass_index in (1, 2):
         with tempfile.TemporaryDirectory(
@@ -540,6 +574,11 @@ def _coordinate(output: Path) -> int:
             )
         )
     ]
+    if {
+        path: _file_sha256(path) for path in expected_sources
+    } != initial_source_hashes:
+        raise RuntimeError("candidate/support source changed during audit")
+
     report = {
         "schema": "fr13.fixed32.gdn_single_launch.sm121_resource_audit.v1",
         "status": (
@@ -550,9 +589,11 @@ def _coordinate(output: Path) -> int:
         "source": {
             "commit": _run_tool("git", "rev-parse", "HEAD").strip(),
             "kernel_path": str(KERNEL_PATH.relative_to(REPO)),
-            "kernel_sha256": _file_sha256(KERNEL_PATH),
+            "kernel_sha256": initial_source_hashes[KERNEL_PATH],
+            "support_path": str(SUPPORT_PATH.relative_to(REPO)),
+            "support_sha256": initial_source_hashes[SUPPORT_PATH],
             "patcher_path": str(PATCHER_PATH.relative_to(REPO)),
-            "patcher_sha256": _file_sha256(PATCHER_PATH),
+            "patcher_sha256": initial_source_hashes[PATCHER_PATH],
             "harness_path": str(Path(__file__).resolve().relative_to(REPO)),
             "harness_sha256": _file_sha256(Path(__file__).resolve()),
         },
