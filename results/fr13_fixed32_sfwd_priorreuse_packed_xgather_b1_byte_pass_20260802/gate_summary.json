@@ -1,0 +1,40 @@
+{
+  "artifact": "fr13_fixed32_sfwd_priorreuse_packed_xgather_b1_byte_pass_20260802",
+  "batch_size": 1,
+  "candidate": "fixed32_sfwd_prior_reuse_packed_xgather_rowgroup32_c64_w16_v1",
+  "candidate_conv_launches_per_layer": 1,
+  "candidate_kernel_source_sha256": "ff36101628cc15ead6fef6a7d17c2eb6decbc910c110c635b96d059fea1c1203",
+  "candidate_source_sha256": "42fc6ae355a268cb33b454d02914862b2af7fb6b665d808d8899533992750623",
+  "compared_byte_surfaces": [
+    "conv_out",
+    "commit_source_stage"
+  ],
+  "comparison_records": 22080,
+  "contains_raw_logs": false,
+  "contains_task_or_model_content": false,
+  "draft_vocab_k": 65536,
+  "draft_vocab_root": 1,
+  "floor_acceptance_eligible": false,
+  "layer_count": 48,
+  "no_fallback": true,
+  "physical_rows_per_request": 32,
+  "production_enabled": false,
+  "real_task_authenticated": true,
+  "reference_always_served": true,
+  "run_classification": "one_real_swe_verified_k64_root_b1_byte_diagnostic",
+  "schema": "fr13.fixed32.sfwd_prior_reuse.reduced_b1_byte_pass.v1",
+  "source_commit": "7c9fda4bc643176f43404ddd4d633789fc46ef23",
+  "source_descriptor_device_validation": false,
+  "source_descriptor_launcher_argument": false,
+  "status": "pass_source_only",
+  "swe_orchestrator_exit_code": 0,
+  "task_count": 1,
+  "task_failure_mode_counts": {
+    "tests_passed": 1
+  },
+  "task_verdict_counts": {
+    "resolved": 1
+  },
+  "timing_eligible": false,
+  "topology_host_validation": "exact_parent_each_launch"
+}
