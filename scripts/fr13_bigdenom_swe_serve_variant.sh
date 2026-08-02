@@ -65,6 +65,7 @@ if [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "1" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "divisor_static_stocktile_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_static_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_pingpong_b1_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stockshape_b4_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_static_byte_ab" ]]; then
   _fixed32_eager_kernel_diagnostic=1
@@ -1568,7 +1569,8 @@ if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       echo "FAIL: fixed32 CUTLASS, TAW, and BM8 real-task diagnostics are exclusive"
       exit 2
     }
-elif [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_byte_ab" \
+elif [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stockshape_b4_byte_ab" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_byte_ab" \
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_static_byte_ab" ]]; then
   [[ -n "$FIXED32_MODE" \
      && "$FR13_FIXED32_B1_DIAGNOSTIC" == "0" \
@@ -1814,6 +1816,8 @@ if cutlass_wave not in {
     "identity_stage2_static",
     "identity_stage2_pingpong_b1_byte_ab",
     "identity_stage2_pingpong_b1",
+    "identity_stockshape_b4_byte_ab",
+    "identity_stockshape_b4",
     "persistent_b4_m128_byte_ab",
     "persistent_b4_m128",
     "persistent_b4_m128_static_byte_ab",
@@ -1828,6 +1832,7 @@ try:
         eager_diagnostic=(
             batch_gdn_byte_ab_text == "1"
             or cutlass_wave in {
+                "identity_stockshape_b4_byte_ab",
                 "persistent_b4_m128_byte_ab",
                 "persistent_b4_m128_static_byte_ab",
             }

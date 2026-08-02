@@ -106,6 +106,8 @@ def test_patch_is_default_off_and_shape_gated() -> None:
     assert 'value == "identity_stage2_static_byte_ab"' in patched
     assert 'value == "identity_stage2_pingpong_b1"' in patched
     assert 'value == "identity_stage2_pingpong_b1_byte_ab"' in patched
+    assert 'value == "identity_stockshape_b4"' in patched
+    assert 'value == "identity_stockshape_b4_byte_ab"' in patched
     assert "return fixed32_cutlass_wave_variant::stock;" in patched
     for rows in (32, 64, 96, 128):
         assert f"m == {rows}" in patched
@@ -125,12 +127,12 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 2
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 10
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 11
     assert (
         module.CONFIG_REPLACEMENT.count(
             "KernelTmaWarpSpecializedBlockwisePingpongSm120"
         )
-        == 1
+        == 2
     )
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
@@ -144,7 +146,7 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
         "      fr13_fixed32_wide256_recompute_scheduler, true,\n"
         "      cutlass::gemm::collective::StageCount<2>>"
     ) in patched
-    assert "using TileShape = Shape<_64, _128, _128>;" not in patched
+    assert "using TileShape = Shape<_64, _128, _128>;" in patched
     assert "MainloopStageCount" in patched
     assert "cutlass::gemm::collective::StageCount<2>" in patched
     assert "ElementAccumulator = float" not in module.CONFIG_REPLACEMENT
@@ -389,6 +391,38 @@ def test_identity_stage2_pingpong_is_b1_only_and_preserves_full_k() -> None:
     assert (
         "fixed32_cutlass_wave_variant::identity_stage2_pingpong_b1) {\n"
         "    return run_identity_stage2_pingpong_b1(out);"
+        in patched
+    )
+
+
+def test_b4_stockshape_identity_keeps_stock_shape_and_scheduling() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+    config_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b4_stockshape_identity"
+    )
+    config_end = patched.index("enum class fixed32_cutlass_wave_variant", config_start)
+    config = patched[config_start:config_end]
+
+    assert "KernelTmaWarpSpecializedBlockwisePingpongSm120" in config
+    assert "using TileShape = Shape<_64, _128, _128>;" in config
+    assert "OutType, 1, 128, 128, TileShape, ClusterShape" in config
+    assert "EpilogueSchedule, KernelSchedule, false, void>" in config
+    assert "StageCount<" not in config
+    assert "StreamK" not in config
+    assert "fr13_fixed32_m128_static_scheduler" not in config
+    assert "fr13_fixed32_m128_divisor_static_scheduler" not in config
+    assert "if (M != 128 &&" in patched
+    assert "auto run_identity_stockshape_b4" in patched
+    assert "fixed32_cutlass_b4_real_task_marker()" in patched
+    assert (
+        '"/logs/fr13_fixed32_cutlass_identity_stockshape_b4_byte_ab.jsonl"'
+        in patched
+    )
+    assert "fr13.fixed32.cutlass_identity_stockshape_b4_byte_ab.v1" in patched
+    assert (
+        "fixed32_cutlass_wave_variant::identity_stockshape_b4) {\n"
+        "    return run_identity_stockshape_b4(out);"
         in patched
     )
 
