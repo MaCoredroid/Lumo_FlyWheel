@@ -1,0 +1,23 @@
+{
+  "destination_domain": {
+    "alias_groups": 16,
+    "alias_width": 3,
+    "identity": "pair(alias_id, running_row)",
+    "peer_table_source": "validated_bank_alias_classes"
+  },
+  "equivalence": {
+    "global_guard": "all 48 layers grouped by equal alias id",
+    "local_guard": "the three preseeded layers in the current alias class",
+    "result": "equal on the validated 16x3 alias topology"
+  },
+  "fixed_work": {
+    "active_peer_entries": "3 * batch_size",
+    "compare_lane_capacity": 16,
+    "grid_programs": "48 * batch_size",
+    "path_slots_per_program": 16,
+    "physical_rows_per_program": 32
+  },
+  "new_event_launches": 0,
+  "schema": "fr13.fixed32.cfwd_alias3_row_guard.static_contract.v1",
+  "semantic_result_tree_changed": false
+}

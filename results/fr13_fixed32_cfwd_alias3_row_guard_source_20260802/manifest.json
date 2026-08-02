@@ -1,0 +1,63 @@
+{
+  "acceptance_evidence": false,
+  "base_commit": "574b327997e30b0ccf2f79166b637b462e2c4701",
+  "branch": "agent/fixed32-committer-alias3-rowguard-20260802",
+  "candidate_serving_permitted": false,
+  "codegen": {
+    "calls": null,
+    "local_bytes": null,
+    "registers": null,
+    "shared_bytes": null,
+    "spills": null,
+    "stack_bytes": null,
+    "status": "pending_real_gate_gpu_teardown"
+  },
+  "gpu_or_docker_run_performed": false,
+  "optimization": {
+    "active_node_count_dependency": false,
+    "alias_groups": 16,
+    "alias_width": 3,
+    "compare_capacity_after": 16,
+    "compare_capacity_before": 256,
+    "compare_capacity_reduction_factor": 16,
+    "event_launch_count_change": 0,
+    "guard_programs_per_request": 48,
+    "new_valid_compare_candidates_per_program": "3 * batch_size",
+    "old_valid_compare_candidates_per_program": "48 * batch_size",
+    "peer_table_bytes": 576,
+    "peer_table_shape": [
+      48,
+      3
+    ],
+    "physical_rows_per_program": 32,
+    "route": "fixed32_triton_alias3_physical32_v2",
+    "valid_compare_candidate_reduction_factor": 16
+  },
+  "qualification": {
+    "b1_real_swe_byte_gate": "not_run",
+    "b4_exact16_real_swe_byte_gate": "not_run",
+    "b4_exact4_real_swe_byte_gate": "not_run"
+  },
+  "schema": "fr13.fixed32.cfwd_alias3_row_guard.source.v1",
+  "source_commit": "029427c02720d2759145d1405945baa87a02092b",
+  "source_sha256": {
+    "kernel": "83ab7c495a9f712298ab3bf9b9c5d1acdf156b569dc307ca507fbd62ecc0fea3",
+    "observer_patcher": "0163cc7906629e6d3dd9c95fdaa0b8e47541f8e7c9a95ac7e26150788b7856c2",
+    "row_guard_test": "e7c47a217cb762f800af61576b110cc644cd1a49b9d8e459ec590506878aafca",
+    "work_census": "68f2231a90fb322706790b392373ca40b41322c12d8cddc4ef6e83367bd15f8c"
+  },
+  "status": "SOURCE_STATIC_ONLY_CODEGEN_BYTE_TIMING_PENDING",
+  "synthetic_probe_executed": false,
+  "tests": {
+    "ast_parse": "pass",
+    "focused_alias3_row_guard_suite": "64_passed",
+    "git_diff_check": "pass",
+    "work_census_self_test": "171_tamper_tests_passed"
+  },
+  "timing_evidence": false,
+  "u95_floor_acceptance_evidence": false,
+  "work_census": {
+    "event_schema": "fr13-fixed32-work-census-v11",
+    "normalized_work_signature_sha256": "649eb61e7bd3131cbcd7e83d48113b29aaa6851d17e42f7bf23eed5364df1b16"
+  }
+}
