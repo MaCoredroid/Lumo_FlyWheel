@@ -1,0 +1,14 @@
+surface	pinned_requirement	integrated_implementation	source_status
+scheduler_constructor	TileScheduler(CLCResponse*,Params const&,dim3)	exact overload delegates to static base then initializes direct state	matched
+initial_work	initial_work_tile_info(ClusterShape)	returns direct current work	matched
+participant_fetch	fetch_next_work(WorkTileInfo,pipeline&,state)	advances by physical grid stride and returns direct work	matched
+cta_coordinate	work_tile_to_cta_coord(WorkTileInfo)	returns Int0,N,Underscore,Int0	matched
+cluster_shape	compile-time 1x1x1	TileSchedulerSelector static_asserts all three modes one	matched
+physical_grid_z	persistent get_grid_shape initializes z to one	candidate L tile count is one	matched_from_pinned_source
+callback_builder	direct non-FusionOperation callback passthrough	Sm90EVT supplied directly to CollectiveBuilder	matched
+callback_static_api	Arguments/Params/workspace/can_implement methods	custom scalar leaf implements complete visitor leaf API	matched
+callback_runtime_api	load/store callbacks and C-load queries	custom leaf returns empty producer and scalar consumer callbacks	matched
+callback_traits	direct visitor ElementCompute void falls back to accumulator	accumulator and candidate compute type are both FP32	matched
+alpha_conversion	FusionCallbacks Arguments converted to Params	empty Arguments unconditionally becomes Params{Element(1)}	matched
+mainloop_carveout	mainloop stage count remains stock-derived	candidate uses typename Base::CollectiveMainloop	matched
+epilogue_geometry	stock tile/C-D/layout/alignment/schedule	candidate rebuild copies all builder inputs except callbacks	matched

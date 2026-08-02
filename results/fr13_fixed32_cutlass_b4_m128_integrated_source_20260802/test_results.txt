@@ -1,0 +1,15 @@
+54 focused source/selector/qualification/binary-helper tests passed in 0.16s
+Python bytecode compilation: pass
+git diff --check: pass
+Pinned vLLM/CUTLASS source apply: pass
+Pinned source second apply: already patched
+Integration fragment checks: pass
+Derived scheduler generic divmod reference: absent
+Patch source SHA256: 5f6c8da9ce1b873c0917b43b736bca6d29c7bc3b856d80eecf7b643c14a0ae1c
+Test source SHA256: 465a6e3b7c6c0e890b7e302bc6c41506f967b4d17b9fd4c389e331230afe8b0a
+Generated dispatch SHA256: 319bda31b05222e17eedefa65dbe328e87a9afd335301a75cf4bbb150911aedc
+NVCC/C++ compile: not run while B1 build 98248 is live
+GPU or container execution: not run
+Resource and SASS audit: not run
+Real SWE-Verified byte gate: not run
+Timing: not run

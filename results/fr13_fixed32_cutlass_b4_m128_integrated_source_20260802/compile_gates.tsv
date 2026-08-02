@@ -1,0 +1,9 @@
+gate	status	reject_condition	reason
+nvcc_interface_instantiation	pending	any scheduler/callback/template compile failure	custom derived scheduler and direct visitor have not been compiled together
+resource_audit	pending	register growth from 168 baseline or any stack/local/spill	derived scheduler adds state while unused private base state remains in its object layout
+device_calls	pending	any device CALL	static baseline had zero and kernel-floor work requires inlining
+mandatory_math_sass	pending	QMMA/FFMA pipeline, 64 output FMUL, or 32 BF16 packs missing or reordered	preserve exact projection and output math
+overhead_sass	pending	generic divmod/coordinate/scalar-resolution paths remain	prove source changes affected emitted code
+raw_byte_exact4	pending	any mismatching comparison or differing byte	required real SWE-Verified correctness gate
+paired_real_task_timing	pending	campaign provenance or standing task-set rule violated	performance evidence must use real workload after correctness
+acceptance	pending	one-sided U95 above 1.15x hardware floor	final objective
