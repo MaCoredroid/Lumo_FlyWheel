@@ -1,0 +1,6 @@
+7 focused source/codegen-contract tests passed in 0.84 seconds.
+
+Python compilation and git diff checks passed. CUDA 13.0.88 generated the exact
+SM121a cubin with 40 registers and zero shared memory, barriers, stack/local
+traffic, spills, or calls. No GPU, Docker, task, timing, or acceptance run was
+performed.
