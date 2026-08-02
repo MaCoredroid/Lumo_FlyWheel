@@ -1,0 +1,92 @@
+{
+  "schema": "fr13.fixed32.sfwd_priorreuse_descriptorless_fixedbase.integration_ready.v1",
+  "artifact": "results/fr13_fixed32_sfwd_priorreuse_descriptorless_fixedbase_integration_ready_20260802",
+  "date_utc": "2026-08-02",
+  "status": "READY_NOT_EXECUTED",
+  "branch": "agent/fixed32-sfwd-descriptorless-fixedbase-20260802",
+  "candidate": "fixed32_sfwd_prior_reuse_descriptorless_fixedbase_rowgroup32_c64_v1",
+  "source_binding": {
+    "commit": "8ec4c5126cbb323f27143a06064629b76e142550",
+    "parent_commit": "0325ba24999be03af19fced9c25d25e5cc306712",
+    "tree": "038be62272533aa0741429d74684919fa8c8dd3e",
+    "source_manifest_sha256": "17515b06ffbdd601d6d3fdd05072890059e614ce8e400784f41ea1cdd0e43741",
+    "integration_source_sha256": "2bbc54caeae36bafeb6b751c15130d4cf4fe2e8af2e59fd10b1190f0f6e65796",
+    "kernel_source_sha256": "0bfe6fbf00065494ea5969afc7499ca7be992aadef3c0422b3522c864d5c0780",
+    "kernel_function_ast_sha256": "9bd969965b5787dfbac17f3f35e9242292869c79fdc7136467f45251841649dd",
+    "reference_gdn_source_sha256": "6c0f0ad607f15ea2727c2a9b244b1fe1c5ddb88268d70264c08f10470a5d2098"
+  },
+  "qualification_target": {
+    "task_source": "SWE-Verified",
+    "task_set": "canonical one-task B1 diagnostic set",
+    "task_count": 1,
+    "batch_size": 1,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "physical_rows_per_request": 32,
+    "rows_per_program": 32,
+    "block_c": 64,
+    "layer_count": 48,
+    "compared_byte_surfaces": ["conv_out", "commit_source_stage"],
+    "reference_always_served": true,
+    "no_fallback": true
+  },
+  "layout_contract": {
+    "x_shape": [32, 10240],
+    "x_stride": [16384, 1],
+    "out_shape": [32, 10240],
+    "out_stride": [10240, 1],
+    "source_stage_shape": [36, 10240],
+    "source_stage_stride": [10240, 1],
+    "conv_weights_shape": [10240, 4],
+    "conv_weights_stride": [4, 1],
+    "source_descriptor_kernel_argument": false,
+    "conv_state_bank_addressing": "int64_runtime_stride"
+  },
+  "offline_codegen_reference": {
+    "artifact": "results/fr13_fixed32_sfwd_priorreuse_descriptorless_fixedbase_codegen_20260802",
+    "source_commit": "83b8eb0f697eb1e5c98470aa214e6b31317d9e8d",
+    "exact_kernel_function_unchanged": true,
+    "batches": [1, 4],
+    "registers_per_thread": 40,
+    "static_sass_instructions": 718,
+    "encoded_sass_instructions": 736,
+    "ldg": 37,
+    "stg": 20,
+    "stack_local_spills_calls_zero": true
+  },
+  "predecessor_live_gate": {
+    "result_commit": "580784d8c7efa2b40ec5d6edd850bd84a45d3647",
+    "candidate": "fixed32_sfwd_prior_reuse_rowgroup32_c64_v1",
+    "status": "pass",
+    "compared_bytes": 34893987840,
+    "differing_bytes": 0,
+    "applies_to_current_kernel": false,
+    "use": "gate protocol and route provenance only"
+  },
+  "runner": "scripts/fr13_run_b1_sfwd_prior_reuse_gate.sh",
+  "claims": {
+    "source_committed_and_pushed": true,
+    "default_off": true,
+    "reference_served": true,
+    "source_manifest_generated": true,
+    "runtime_source_binding_checked": true,
+    "live_byte_gate_executed": false,
+    "gpu_kernel_executed": false,
+    "docker_or_service_launched": false,
+    "real_task_run": false,
+    "performance_measured": false,
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false,
+    "production_enabled": false
+  },
+  "package_policy": {
+    "reduced_non_sensitive": true,
+    "contains_binaries": false,
+    "contains_cubin_ptx_sass_or_ir": false,
+    "contains_model_or_task_content": false,
+    "contains_raw_requests_responses_or_patches": false,
+    "contains_process_or_container_data": false,
+    "contains_environment_dump": false,
+    "contains_credentials_or_secrets": false
+  }
+}
