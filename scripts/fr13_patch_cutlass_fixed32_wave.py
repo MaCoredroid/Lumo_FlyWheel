@@ -285,6 +285,98 @@ struct cutlass_3x_gemm_fp8_blockwise_streamk
   struct GemmKernel : public KernelType {};
 };
 
+// The fixed M128 route always uses alpha=1, beta=0, L=1, and no source C.
+// Keep alpha as a runtime FP32 operand so the emitted numeric operation remains
+// multiply-then-convert, but omit the generic scalar pointer/stride machinery.
+template <class Element>
+struct fr13_fixed32_runtime_scalar_broadcast {
+  struct SharedStorage {};
+
+  struct Arguments {
+    Element scalar = Element(1);
+  };
+  using Params = Arguments;
+
+  template <class ProblemShape>
+  static constexpr Params
+  to_underlying_arguments(
+      ProblemShape const&, Arguments const& args, void*) {
+    return args;
+  }
+
+  template <class ProblemShape>
+  static bool
+  can_implement(ProblemShape const&, Arguments const&) {
+    return true;
+  }
+
+  template <class ProblemShape>
+  static size_t
+  get_workspace_size(ProblemShape const&, Arguments const&) {
+    return 0;
+  }
+
+  template <class ProblemShape>
+  static cutlass::Status
+  initialize_workspace(
+      ProblemShape const&, Arguments const&, void*, cudaStream_t,
+      cutlass::CudaHostAdapter* = nullptr) {
+    return cutlass::Status::kSuccess;
+  }
+
+  CUTLASS_DEVICE bool
+  is_producer_load_needed() const {
+    return false;
+  }
+
+  CUTLASS_DEVICE bool
+  is_C_load_needed() const {
+    return false;
+  }
+
+  CUTLASS_HOST_DEVICE
+  fr13_fixed32_runtime_scalar_broadcast() = default;
+
+  CUTLASS_HOST_DEVICE
+  fr13_fixed32_runtime_scalar_broadcast(
+      Params const& params, SharedStorage const&)
+      : scalar(params.scalar) {}
+
+  template <class... Args>
+  CUTLASS_DEVICE auto
+  get_producer_load_callbacks(
+      cutlass::epilogue::fusion::ProducerLoadArgs<Args...> const&) {
+    return cutlass::epilogue::fusion::EmptyProducerLoadCallbacks{};
+  }
+
+  struct ConsumerStoreCallbacks
+      : cutlass::epilogue::fusion::EmptyConsumerStoreCallbacks {
+    CUTLASS_DEVICE explicit
+    ConsumerStoreCallbacks(Element scalar_) : scalar(scalar_) {}
+
+    Element scalar;
+
+    template <typename ElementAccumulator, int FragmentSize>
+    CUTLASS_DEVICE cutlass::Array<Element, FragmentSize>
+    visit(
+        cutlass::Array<ElementAccumulator, FragmentSize> const&,
+        int, int, int) {
+      cutlass::Array<Element, FragmentSize> fragment;
+      fragment.fill(scalar);
+      return fragment;
+    }
+  };
+
+  template <bool ReferenceSrc, class... Args>
+  CUTLASS_DEVICE auto
+  get_consumer_store_callbacks(
+      cutlass::epilogue::fusion::ConsumerStoreArgs<Args...> const&) {
+    return ConsumerStoreCallbacks(scalar);
+  }
+
+  Element scalar = Element(1);
+};
+
 template <
     class OutType, int ScaleGranularityM, int ScaleGranularityN,
     int ScaleGranularityK, class MmaTileShape, class ClusterShape,
@@ -299,9 +391,33 @@ struct cutlass_3x_gemm_fp8_blockwise_m128_static
       MmaTileShape, ClusterShape, EpilogueScheduler, MainloopScheduler,
       swap_ab_>;
 
+  using Fr13EpilogueCallbacks = cutlass::epilogue::fusion::Sm90EVT<
+      cutlass::epilogue::fusion::Sm90Compute<
+          cutlass::multiplies,
+          typename cutlass::detail::get_unpacked_element_type<OutType>::type,
+          typename Base::ElementCompute,
+          cutlass::FloatRoundStyle::round_to_nearest>,
+      fr13_fixed32_runtime_scalar_broadcast<typename Base::ElementCompute>,
+      cutlass::epilogue::fusion::Sm90AccFetch>;
+
+  using CollectiveEpilogue =
+      typename cutlass::epilogue::collective::CollectiveBuilder<
+          typename Base::ArchTag, typename Base::OperatorClass,
+          MmaTileShape, ClusterShape,
+          cutlass::epilogue::collective::EpilogueTileAuto,
+          typename Base::ElementAccumulator, typename Base::ElementCompute,
+          typename Base::ElementC,
+          conditional_t<Base::swap_ab, typename Base::LayoutC_Transpose,
+                        typename Base::LayoutC>,
+          Base::AlignmentC, typename Base::ElementD,
+          conditional_t<Base::swap_ab, typename Base::LayoutD_Transpose,
+                        typename Base::LayoutD>,
+          Base::AlignmentD, EpilogueScheduler,
+          Fr13EpilogueCallbacks>::CollectiveOp;
+
   using KernelType = enable_sm120_family<cutlass::gemm::kernel::GemmUniversal<
       Shape<int, int, int, int>, typename Base::CollectiveMainloop,
-      typename Base::CollectiveEpilogue,
+      CollectiveEpilogue,
       fr13_fixed32_m128_static_scheduler>>;
 
   struct GemmKernel : public KernelType {};

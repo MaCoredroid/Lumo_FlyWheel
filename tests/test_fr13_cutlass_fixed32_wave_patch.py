@@ -167,7 +167,7 @@ def test_b4_m128_preserves_stock_template_and_is_exactly_m128_gated() -> None:
     )
 
 
-def test_b4_m128_static_changes_only_complete_tile_scheduler() -> None:
+def test_b4_m128_static_specializes_scheduler_and_scalar_epilogue() -> None:
     module = _module()
     patched, _ = module.patch_text(_source_fixture(module))
 
@@ -227,7 +227,9 @@ def test_b4_m128_static_changes_only_complete_tile_scheduler() -> None:
     candidate_class_end = patched.index(module.CONFIG_ANCHOR, candidate_class_start)
     candidate_class = patched[candidate_class_start:candidate_class_end]
     assert "typename Base::CollectiveMainloop" in candidate_class
-    assert "typename Base::CollectiveEpilogue" in candidate_class
+    assert "using Fr13EpilogueCallbacks" in candidate_class
+    assert "using CollectiveEpilogue" in candidate_class
+    assert "typename Base::CollectiveEpilogue" not in candidate_class
     assert "fr13_fixed32_m128_static_scheduler" in candidate_class
 
     m128_gate = patched[patched.index("if (M != 128 &&"):]
@@ -242,6 +244,51 @@ def test_b4_m128_static_changes_only_complete_tile_scheduler() -> None:
     assert (
         "fr13.fixed32.cutlass_persistent_b4_m128_static_byte_ab.v1" in patched
     )
+
+
+def test_b4_m128_scalar_epilogue_keeps_runtime_multiply_without_generic_state() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    scalar_start = patched.index("struct fr13_fixed32_runtime_scalar_broadcast")
+    scalar_end = patched.index(
+        "struct cutlass_3x_gemm_fp8_blockwise_m128_static", scalar_start
+    )
+    scalar_callback = patched[scalar_start:scalar_end]
+    assert "Element scalar = Element(1);" in scalar_callback
+    assert "params.scalar" in scalar_callback
+    assert "fragment.fill(scalar);" in scalar_callback
+    assert "scalar_ptrs" not in scalar_callback
+    assert "dScalar" not in scalar_callback
+    assert "beta" not in scalar_callback
+    assert "is_producer_load_needed() const" in scalar_callback
+    assert "is_C_load_needed() const" in scalar_callback
+    assert scalar_callback.count("return false;") == 2
+
+    candidate_start = patched.index(
+        "struct cutlass_3x_gemm_fp8_blockwise_m128_static"
+    )
+    candidate_end = patched.index(module.CONFIG_ANCHOR, candidate_start)
+    candidate = patched[candidate_start:candidate_end]
+    assert "Sm90Compute<\n          cutlass::multiplies" in candidate
+    assert "fr13_fixed32_runtime_scalar_broadcast" in candidate
+    assert "cutlass::epilogue::fusion::Sm90AccFetch" in candidate
+    assert "cutlass::FloatRoundStyle::round_to_nearest" in candidate
+    assert "typename cutlass::detail::get_unpacked_element_type<OutType>::type" in candidate
+    assert "typename Base::ElementCompute" in candidate
+    assert "typename Base::ElementC" in candidate
+    assert "Base::AlignmentC" in candidate
+    assert "Base::AlignmentD" in candidate
+
+    # Stock remains a generic LinearCombination; only the default-off static
+    # candidate receives the reduced callback tree.
+    stock_start = patched.index(module.TEMPLATE_ANCHOR)
+    stock_end = patched.index(module.STREAMK_CLASS_ANCHOR) + len(
+        module.STREAMK_CLASS_ANCHOR
+    )
+    stock = patched[stock_start:stock_end]
+    assert "using CollectiveEpilogue = FakeEpilogue;" in stock
+    assert "fr13_fixed32_runtime_scalar_broadcast" not in stock
 
 
 def test_b4_m128_linear_scheduler_covers_each_real_n_tile_once() -> None:
