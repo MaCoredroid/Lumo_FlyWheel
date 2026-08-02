@@ -1,0 +1,56 @@
+{
+  "schema": "fr13.fixed32.cfwd_native_fused_gate_suffix_zero_hostproof.v1",
+  "classification": "READY_AFTER_V5_FOR_REAL_B1_BYTE_GATE",
+  "acceptance_result": false,
+  "candidate": "fixed32_cfwd_native_keygroup_fused_gate_suffix_zero_cuda_v6",
+  "source_commit": "02593f63589619fd919bae968586dae34779af1b",
+  "source_sha256": "6d75ac0685641f5433592c9a39ce6584f676980cc472c5a39e6a23d4a6d5e814",
+  "object_sha256": "b01a1182daac53750ef1ecd50e5da0c2cd1e50dac59bf03afd73aa310928a294",
+  "target_architecture": "sm_121a",
+  "cuda_release": "13.0",
+  "tests": {
+    "passed": 169,
+    "failed": 0
+  },
+  "resources": {
+    "registers_per_thread": 64,
+    "stack_bytes": 0,
+    "cuobjdump_shared_bytes": 7592,
+    "local_bytes": 0,
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0
+  },
+  "sass": {
+    "FADD": 262,
+    "FFMA": 82,
+    "MUFU.EX2": 3,
+    "MUFU.RCP": 2,
+    "MUFU.RSQ": 3,
+    "SHFL.BFLY": 202,
+    "SHFL.DOWN": 0,
+    "SHFL.IDX": 16,
+    "signed_zero_fadd_rz": 64,
+    "LDL": 0,
+    "STL": 0,
+    "CALL": 0
+  },
+  "static_delta_from_v5": {
+    "candidate_launches_per_event": -1,
+    "b1_event_scalar_buffer_bytes": -221184,
+    "b4_event_scalar_buffer_bytes": -884736,
+    "b1_worst_case_scalar_write_read_bytes": -442368,
+    "b4_worst_case_scalar_write_read_bytes": -1769472
+  },
+  "execution": {
+    "gpu_used": false,
+    "container_launched": false,
+    "real_swe_task_run": false,
+    "timing_run": false
+  },
+  "required_gate_order": [
+    "v5_real_swe_verified_b1_raw_fp32_bank_byte_gate",
+    "v6_real_swe_verified_b1_raw_fp32_bank_byte_gate",
+    "v6_real_swe_verified_timing",
+    "v6_exact4_b4_qualification"
+  ]
+}
