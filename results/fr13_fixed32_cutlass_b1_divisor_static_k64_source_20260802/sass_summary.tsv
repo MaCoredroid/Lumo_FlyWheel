@@ -1,0 +1,6 @@
+variant	dtype	instructions	qmma	ffma	fmul	ldsm	stsm	branches	syncs	local_load_store	calls
+generic_static_stocktile	bf16	936	32	32	24	24	4	45	38	0	0
+divisor_static_stocktile	bf16	936	32	32	24	24	4	45	38	0	0
+generic_static_stocktile	fp16	936	32	32	24	24	4	45	38	0	0
+divisor_static_stocktile	fp16	936	32	32	24	24	4	45	38	0	0
+
