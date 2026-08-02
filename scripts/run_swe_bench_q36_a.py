@@ -4487,7 +4487,9 @@ def _validate_fixed32_conv_commit_metrics(
     attempts = maps["channel_byte_gate_attempts_by_batch"]
     if any(
         mask > _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
-        or attempts[batch] != mask.bit_count()
+        or (attempts[batch] == 0) != (mask.bit_count() == 0)
+        or attempts[batch] > mask.bit_count()
+        or mask.bit_count() > int(batch) * attempts[batch]
         or passed[batch]
         is not (mask == _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK)
         for batch, mask in coverage.items()

@@ -28,21 +28,25 @@ def _channel_counters(
     coverage_mask: int,
     reference_served: int,
     candidate_served: int,
+    batch: int = 1,
+    attempts: int | None = None,
 ) -> dict[str, object]:
-    attempts = coverage_mask.bit_count()
-    zero_map = {str(batch): 0 for batch in range(1, 5)}
+    if attempts is None:
+        attempts = coverage_mask.bit_count()
+    batch_key = str(batch)
+    zero_map = {str(item): 0 for item in range(1, 5)}
     attempts_map = dict(zero_map)
-    attempts_map["1"] = attempts
+    attempts_map[batch_key] = attempts
     coverage_map = dict(zero_map)
-    coverage_map["1"] = coverage_mask
-    passed_map = {str(batch): False for batch in range(1, 5)}
-    passed_map["1"] = coverage_mask == 0x0FFF
+    coverage_map[batch_key] = coverage_mask
+    passed_map = {str(item): False for item in range(1, 5)}
+    passed_map[batch_key] = coverage_mask == 0x0FFF
     reference_map = dict(zero_map)
-    reference_map["1"] = reference_served
+    reference_map[batch_key] = reference_served
     candidate_map = dict(zero_map)
-    candidate_map["1"] = candidate_served
+    candidate_map[batch_key] = candidate_served
     direct_map = dict(zero_map)
-    direct_map["1"] = reference_served + candidate_served
+    direct_map[batch_key] = reference_served + candidate_served
     return {
         "preseeded": True,
         "route": "fixed32_channel_zeroelide_source_col0",
@@ -62,6 +66,54 @@ def _channel_counters(
         "channel_reference_served_by_batch": reference_map,
         "channel_candidate_served_by_batch": candidate_map,
     }
+
+
+def test_channel_metrics_count_gate_attempts_per_event_at_b4() -> None:
+    counters = _channel_counters(
+        coverage_mask=0b1111,
+        reference_served=1,
+        candidate_served=0,
+        batch=4,
+        attempts=1,
+    )
+
+    orchestrator._validate_fixed32_conv_commit_metrics(
+        counters,
+        server_capacity=4,
+        label="b4",
+    )
+
+
+@pytest.mark.parametrize(
+    ("batch", "coverage_mask", "attempts"),
+    (
+        (1, 0b11, 1),
+        (2, 0b111, 1),
+        (4, 0b1, 2),
+    ),
+)
+def test_channel_metrics_reject_impossible_event_to_depth_counts(
+    batch: int,
+    coverage_mask: int,
+    attempts: int,
+) -> None:
+    counters = _channel_counters(
+        coverage_mask=coverage_mask,
+        reference_served=attempts,
+        candidate_served=0,
+        batch=batch,
+        attempts=attempts,
+    )
+
+    with pytest.raises(
+        orchestrator.Fixed32BoundaryError,
+        match="channel byte-gate state is incoherent",
+    ):
+        orchestrator._validate_fixed32_conv_commit_metrics(
+            counters,
+            server_capacity=max(batch, 1),
+            label="impossible",
+        )
 
 
 def test_launcher_binds_default_off_selector_to_private_sidecar() -> None:
