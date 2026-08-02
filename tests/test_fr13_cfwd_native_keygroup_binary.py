@@ -47,6 +47,15 @@ def _binding(binary_path: Path) -> dict[str, object]:
             "candidate_source_in_build_graph": True,
             "candidate_source_forced_rebuild": True,
             "candidate_source_mtime_ns": 1,
+            "candidate_object_outputs": ["CMakeFiles/candidate.cu.o"],
+            "candidate_objects": [
+                {
+                    "path": "CMakeFiles/candidate.cu.o",
+                    "sha256": "a" * 64,
+                    "bytes": 123,
+                    "mtime_ns": 2,
+                }
+            ],
             "full_vllm_extension_target": "_C.abi3.so",
             "full_extension_mtime_ns": 2,
             "cmake_cache_sha256": "b" * 64,
@@ -85,6 +94,7 @@ def test_issue_binds_exact_patched_source_build_graph_and_full_extension(
         lambda _build, _source, _binary: {
             "generator": "ninja",
             "candidate_source_in_build_graph": True,
+            "candidate_object_outputs": ["CMakeFiles/candidate.cu.o"],
             "full_vllm_extension_target": "_C.abi3.so",
             "cmake_cache_sha256": "b" * 64,
             "build_ninja_sha256": "c" * 64,
@@ -96,6 +106,14 @@ def test_issue_binds_exact_patched_source_build_graph_and_full_extension(
         lambda **_kwargs: {
             "candidate_source_forced_rebuild": True,
             "candidate_source_mtime_ns": 1,
+            "candidate_objects": [
+                {
+                    "path": "CMakeFiles/candidate.cu.o",
+                    "sha256": "a" * 64,
+                    "bytes": 123,
+                    "mtime_ns": 2,
+                }
+            ],
             "full_extension_mtime_ns": 2,
         },
     )
@@ -190,14 +208,18 @@ def test_build_graph_requires_candidate_in_full_extension_target(
         encoding="utf-8",
     )
     (build_dir / "build.ninja").write_text(
-        "build vllm/_C.abi3.so: link "
-        f"{source_root.resolve() / binary_gate.patcher.CUDA_DESTINATION}\n",
+        "build CMakeFiles/candidate.cu.o: cuda "
+        f"{source_root.resolve() / binary_gate.patcher.CUDA_DESTINATION}\n"
+        "build vllm/_C.abi3.so: link CMakeFiles/candidate.cu.o\n",
         encoding="utf-8",
     )
     result = binary_gate.verify_build_graph(
         build_dir, source_root, candidate_so
     )
     assert result["candidate_source_in_build_graph"] is True
+    assert result["candidate_object_outputs"] == [
+        "CMakeFiles/candidate.cu.o"
+    ]
     assert result["full_vllm_extension_target"] == "_C.abi3.so"
 
     (build_dir / "build.ninja").write_text(
@@ -234,7 +256,7 @@ def test_build_graph_rejects_candidate_reachable_only_from_stable_extension(
 
     with pytest.raises(
         binary_gate.BinaryBindingError,
-        match="full vLLM .* does not reach candidate CUDA source",
+        match="full vLLM .* does not reach exactly one candidate object",
     ):
         binary_gate.verify_build_graph(build_dir, source_root, candidate_so)
 
@@ -256,8 +278,9 @@ def test_build_graph_rejects_arbitrary_binary_outside_canonical_output(
         encoding="utf-8",
     )
     (build_dir / "build.ninja").write_text(
-        "build vllm/_C.abi3.so: link "
-        f"{source_root / binary_gate.patcher.CUDA_DESTINATION}\n",
+        "build candidate.cu.o: cuda "
+        f"{source_root / binary_gate.patcher.CUDA_DESTINATION}\n"
+        "build vllm/_C.abi3.so: link candidate.cu.o\n",
         encoding="utf-8",
     )
 
@@ -279,10 +302,13 @@ def test_forced_rebuild_requires_full_extension_newer_than_touched_source(
     source_root = tmp_path / "vllm"
     build_dir = tmp_path / "build"
     source_path = source_root / binary_gate.patcher.CUDA_DESTINATION
+    object_path = build_dir / "CMakeFiles/candidate.cu.o"
     binary_path = build_dir / "vllm/_C.abi3.so"
     source_path.parent.mkdir(parents=True)
+    object_path.parent.mkdir(parents=True)
     binary_path.parent.mkdir(parents=True)
     source_path.write_bytes(b"source")
+    object_path.write_bytes(b"object")
     binary_path.write_bytes(b"binary")
     cmake = Path("/bin/true").resolve(strict=True)
     (build_dir / "CMakeCache.txt").write_text(
@@ -302,8 +328,12 @@ def test_forced_rebuild_requires_full_extension_newer_than_touched_source(
         if relink:
             source_mtime_ns = source_path.stat().st_mtime_ns
             os.utime(
+                object_path,
+                ns=(object_path.stat().st_atime_ns, source_mtime_ns + 1),
+            )
+            os.utime(
                 binary_path,
-                ns=(binary_path.stat().st_atime_ns, source_mtime_ns + 1),
+                ns=(binary_path.stat().st_atime_ns, source_mtime_ns + 2),
             )
         return subprocess.CompletedProcess(command, 0, b"", b"")
 
@@ -313,6 +343,7 @@ def test_forced_rebuild_requires_full_extension_newer_than_touched_source(
             build_dir=build_dir,
             source_root=source_root,
             binary_path=binary_path,
+            candidate_object_outputs=("CMakeFiles/candidate.cu.o",),
         )
         assert report["candidate_source_forced_rebuild"] is True
         assert report["full_extension_mtime_ns"] >= report[
@@ -327,4 +358,5 @@ def test_forced_rebuild_requires_full_extension_newer_than_touched_source(
                 build_dir=build_dir,
                 source_root=source_root,
                 binary_path=binary_path,
+                candidate_object_outputs=("CMakeFiles/candidate.cu.o",),
             )

@@ -81,6 +81,15 @@ def _binary_binding() -> dict[str, object]:
             "candidate_source_in_build_graph": True,
             "candidate_source_forced_rebuild": True,
             "candidate_source_mtime_ns": 1,
+            "candidate_object_outputs": ["CMakeFiles/candidate.cu.o"],
+            "candidate_objects": [
+                {
+                    "path": "CMakeFiles/candidate.cu.o",
+                    "sha256": "d" * 64,
+                    "bytes": 123,
+                    "mtime_ns": 2,
+                }
+            ],
             "full_vllm_extension_target": "_C.abi3.so",
             "full_extension_mtime_ns": 2,
             "cmake_cache_sha256": "b" * 64,
@@ -215,6 +224,9 @@ def test_unknown_selector_fails_closed() -> None:
         (("patched_vllm_sha256", "CMakeLists.txt"), "0" * 64),
         (("build", "generator"), "make"),
         (("build", "candidate_source_in_build_graph"), False),
+        (("build", "candidate_source_forced_rebuild"), False),
+        (("build", "candidate_object_outputs"), ["/tmp/candidate.o"]),
+        (("build", "candidate_source_mtime_ns"), 3),
         (("build", "full_vllm_extension_target"), "_C_stable_libtorch.abi3.so"),
         (("build", "cmake_cache_sha256"), "bad"),
         (("binary", "sha256"), "bad"),

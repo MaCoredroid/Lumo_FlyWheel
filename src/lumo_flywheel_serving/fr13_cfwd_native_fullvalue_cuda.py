@@ -91,6 +91,8 @@ def validate_binary_binding(binding: Mapping[str, object]) -> dict[str, object]:
         "candidate_source_in_build_graph",
         "candidate_source_forced_rebuild",
         "candidate_source_mtime_ns",
+        "candidate_object_outputs",
+        "candidate_objects",
         "full_vllm_extension_target",
         "full_extension_mtime_ns",
         "cmake_cache_sha256",
@@ -112,13 +114,38 @@ def validate_binary_binding(binding: Mapping[str, object]) -> dict[str, object]:
     )
     candidate_source_mtime_ns = build.get("candidate_source_mtime_ns")
     full_extension_mtime_ns = build.get("full_extension_mtime_ns")
+    candidate_object_outputs = build.get("candidate_object_outputs")
+    candidate_objects = build.get("candidate_objects")
     if (
         type(candidate_source_mtime_ns) is not int
         or candidate_source_mtime_ns <= 0
         or type(full_extension_mtime_ns) is not int
-        or full_extension_mtime_ns < candidate_source_mtime_ns
+        or not isinstance(candidate_object_outputs, list)
+        or len(candidate_object_outputs) != 1
+        or type(candidate_object_outputs[0]) is not str
+        or Path(candidate_object_outputs[0]).is_absolute()
+        or ".." in Path(candidate_object_outputs[0]).parts
+        or Path(candidate_object_outputs[0]).suffix != ".o"
+        or not isinstance(candidate_objects, list)
+        or len(candidate_objects) != 1
+        or not isinstance(candidate_objects[0], Mapping)
+        or set(candidate_objects[0]) != {"path", "sha256", "bytes", "mtime_ns"}
+        or candidate_objects[0].get("path") != candidate_object_outputs[0]
     ):
         raise RuntimeError("native key-group precompute CFWD forced rebuild drift")
+    candidate_object_sha256 = _require_sha256(
+        candidate_objects[0].get("sha256"), "candidate object SHA-256"
+    )
+    candidate_object_bytes = candidate_objects[0].get("bytes")
+    candidate_object_mtime_ns = candidate_objects[0].get("mtime_ns")
+    if (
+        type(candidate_object_bytes) is not int
+        or candidate_object_bytes <= 0
+        or type(candidate_object_mtime_ns) is not int
+        or candidate_object_mtime_ns < candidate_source_mtime_ns
+        or full_extension_mtime_ns < candidate_object_mtime_ns
+    ):
+        raise RuntimeError("native key-group precompute CFWD object rebuild drift")
     binary = binding.get("binary")
     if not isinstance(binary, Mapping):
         raise RuntimeError("native key-group precompute CFWD binary binding is absent")
@@ -147,6 +174,15 @@ def validate_binary_binding(binding: Mapping[str, object]) -> dict[str, object]:
             "candidate_source_in_build_graph": True,
             "candidate_source_forced_rebuild": True,
             "candidate_source_mtime_ns": candidate_source_mtime_ns,
+            "candidate_object_outputs": list(candidate_object_outputs),
+            "candidate_objects": [
+                {
+                    "path": candidate_object_outputs[0],
+                    "sha256": candidate_object_sha256,
+                    "bytes": candidate_object_bytes,
+                    "mtime_ns": candidate_object_mtime_ns,
+                }
+            ],
             "full_vllm_extension_target": "_C.abi3.so",
             "full_extension_mtime_ns": full_extension_mtime_ns,
             "cmake_cache_sha256": cmake_cache_sha256,

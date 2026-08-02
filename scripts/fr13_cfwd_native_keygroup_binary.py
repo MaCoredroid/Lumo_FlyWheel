@@ -179,6 +179,19 @@ def verify_patched_source(
     return observed_hashes
 
 
+def _build_output_path(build_dir: Path, token: str) -> Path:
+    decoded = token.replace("$ ", " ").replace("$:", ":")
+    path = Path(decoded)
+    resolved = (path if path.is_absolute() else build_dir / path).resolve(
+        strict=False
+    )
+    try:
+        resolved.relative_to(build_dir)
+    except ValueError as error:
+        raise BinaryBindingError("build.ninja output escapes the build directory") from error
+    return resolved
+
+
 def verify_build_graph(
     build_dir: Path, source_root: Path, binary_path: Path
 ) -> dict[str, object]:
@@ -244,12 +257,7 @@ def verify_build_graph(
     matched_full_targets = tuple(
         target
         for target in full_targets
-        if (
-            Path(target.replace("$ ", " "))
-            if Path(target.replace("$ ", " ")).is_absolute()
-            else build_dir / Path(target.replace("$ ", " "))
-        ).resolve(strict=False)
-        == binary_path
+        if _build_output_path(build_dir, target) == binary_path
     )
     if not matched_full_targets:
         raise BinaryBindingError(
@@ -265,17 +273,38 @@ def verify_build_graph(
                 frontier.append(dependency)
     cuda_suffix = patcher.CUDA_DESTINATION.as_posix()
     cuda_absolute = str(source_root / patcher.CUDA_DESTINATION)
-    if not any(
-        dependency.replace("$ ", " ") in {cuda_suffix, cuda_absolute}
-        or dependency.replace("$ ", " ").endswith(f"/{cuda_suffix}")
-        for dependency in reachable
-    ):
-        raise BinaryBindingError(
-            "full vLLM _C.abi3.so target does not reach candidate CUDA source"
+    def is_candidate_source(dependency: str) -> bool:
+        decoded = dependency.replace("$ ", " ").replace("$:", ":")
+        return decoded in {cuda_suffix, cuda_absolute} or decoded.endswith(
+            f"/{cuda_suffix}"
         )
+
+    candidate_object_outputs = tuple(
+        sorted(
+            output
+            for output in reachable
+            if output in dependencies
+            and _build_output_path(build_dir, output).suffix == ".o"
+            and any(
+                is_candidate_source(dependency)
+                for dependency in dependencies.get(output, ())
+            )
+        )
+    )
+    if len(candidate_object_outputs) != 1:
+        raise BinaryBindingError(
+            "full vLLM _C.abi3.so target does not reach exactly one candidate object"
+        )
+    candidate_object_path = _build_output_path(
+        build_dir, candidate_object_outputs[0]
+    )
+    candidate_object_output = candidate_object_path.relative_to(
+        build_dir
+    ).as_posix()
     return {
         "generator": "ninja",
         "candidate_source_in_build_graph": True,
+        "candidate_object_outputs": [candidate_object_output],
         "full_vllm_extension_target": "_C.abi3.so",
         "cmake_cache_sha256": _sha256_bytes(cache),
         "build_ninja_sha256": _sha256_bytes(ninja),
@@ -296,6 +325,7 @@ def _force_rebuild_candidate_target(
     build_dir: Path,
     source_root: Path,
     binary_path: Path,
+    candidate_object_outputs: tuple[str, ...],
 ) -> dict[str, object]:
     build_dir = build_dir.resolve(strict=True)
     source_root = source_root.resolve(strict=True)
@@ -308,6 +338,11 @@ def _force_rebuild_candidate_target(
         ) from error
     if binary_path.name != "_C.abi3.so":
         raise BinaryBindingError("candidate binary is not the full _C.abi3.so")
+    if len(candidate_object_outputs) != 1:
+        raise BinaryBindingError("forced rebuild requires exactly one candidate object")
+    candidate_object_path = _build_output_path(
+        build_dir, candidate_object_outputs[0]
+    )
 
     cache = _read_regular(
         build_dir / "CMakeCache.txt", max_bytes=16 * 1024 * 1024
@@ -369,10 +404,16 @@ def _force_rebuild_candidate_target(
         detail = error.stderr.decode("utf-8", errors="replace")[-4096:].strip()
         raise BinaryBindingError(f"forced candidate rebuild failed: {detail}") from error
     binary_after = binary_path.lstat()
+    candidate_object = candidate_object_path.lstat()
     if (
         binary_path.is_symlink()
         or not stat.S_ISREG(binary_after.st_mode)
         or binary_after.st_nlink != 1
+        or candidate_object_path.is_symlink()
+        or not stat.S_ISREG(candidate_object.st_mode)
+        or candidate_object.st_nlink != 1
+        or candidate_object.st_mtime_ns < source_touched.st_mtime_ns
+        or binary_after.st_mtime_ns < candidate_object.st_mtime_ns
         or binary_after.st_mtime_ns < source_touched.st_mtime_ns
     ):
         raise BinaryBindingError(
@@ -381,6 +422,14 @@ def _force_rebuild_candidate_target(
     return {
         "candidate_source_forced_rebuild": True,
         "candidate_source_mtime_ns": source_touched.st_mtime_ns,
+        "candidate_objects": [
+            {
+                "path": candidate_object_outputs[0],
+                "sha256": _sha256_bytes(_read_regular(candidate_object_path)),
+                "bytes": candidate_object.st_size,
+                "mtime_ns": candidate_object.st_mtime_ns,
+            }
+        ],
         "full_extension_mtime_ns": binary_after.st_mtime_ns,
     }
 
@@ -465,6 +514,7 @@ def issue_binding(
         build_dir=build_dir,
         source_root=source_root,
         binary_path=binary_path,
+        candidate_object_outputs=tuple(build_before["candidate_object_outputs"]),
     )
     if verify_patched_source(source_root, repo_root) != patched_vllm:
         raise BinaryBindingError("patched vLLM source changed during forced rebuild")
