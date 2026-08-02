@@ -1,0 +1,129 @@
+{
+  "artifact": "results/fr13_fixed32_sfwd_state_fusion_row16_c128_live34_codegen_20260802",
+  "audit_implementation": {
+    "changes_after_copy": [
+      "separate CTAs per request from CTAs per launch",
+      "extract the embedded cubin backend producer from cuobjdump ELF notes"
+    ],
+    "copied_as_starting_point": true,
+    "packaged_sha256": "0c750a2fc254f381dbdd47bcb44c2f1642f9063f3277def74970aa055230a640",
+    "source": "/home/mark/lumoFlyWheel-sfwd-state-fusion-rowgroup8/results/fr13_fixed32_sfwd_state_fusion_rowgroup8_live34_codegen_20260802/offline_codegen_audit.py",
+    "source_sha256": "2e5b3a9701f13e819367942bec1d3c31c3cd6d03dd1235864ac39fb91fa0ce64"
+  },
+  "branch": "agent/fixed32-sfwd-state-fusion-row16-c128-20260802",
+  "candidate": "fixed32_sfwd_state_fusion_rowgroup16_c128_v4",
+  "claims": {
+    "byte_equal": false,
+    "correctness_qualified": false,
+    "floor_acceptance_eligible": false,
+    "gpu_kernel_executed": false,
+    "offline_codegen_inspected": true,
+    "performance_measured": false,
+    "production_enabled": false,
+    "real_task_run": false,
+    "resource_gate_passed": true,
+    "timing_eligible": false
+  },
+  "compile_contract": {
+    "batch_sizes": [
+      1,
+      4
+    ],
+    "block_c": 128,
+    "canonical_path": "/home/mark/lumoFlyWheel-sfwd-state-fusion/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+    "channels": 10240,
+    "conv_state_len": 34,
+    "conv_width": 4,
+    "cuda_visible_devices": "",
+    "has_bias": false,
+    "num_stages": 3,
+    "num_warps": 8,
+    "output_and_cache_location": "isolated /tmp directories",
+    "physical_rows_per_request": 32,
+    "rows_per_program": 16,
+    "source_descriptor_dtype": "int64",
+    "source_rows_per_request": 36,
+    "state_index_dtype": "int32",
+    "target": "sm_121a"
+  },
+  "date_utc": "2026-08-02",
+  "package_policy": {
+    "contains_binaries": false,
+    "contains_cubin": false,
+    "contains_environment_dump": false,
+    "contains_model_or_task_content": false,
+    "contains_patch_content": false,
+    "contains_prompt_content": false,
+    "contains_ptx": false,
+    "contains_raw_request_logs": false,
+    "contains_sass": false,
+    "contains_secrets": false,
+    "reduced_non_sensitive": true
+  },
+  "resource_verdict": {
+    "b1_b4_cubin_sass_ptx_identity": true,
+    "calls_zero": true,
+    "compile_pass": true,
+    "conservative_resource_limits_pass": true,
+    "fresh_cache_rebuild_identity": true,
+    "local_zero": true,
+    "spill_instructions_zero": true,
+    "stack_zero": true,
+    "unsafe_resource_usage_observed": false,
+    "viable_offline": true
+  },
+  "results_file": "codegen_summary.json",
+  "schema": "fr13.fixed32.sfwd_state_fusion.row16_c128.live34_codegen_manifest.v1",
+  "source_binding": {
+    "commit": "d83b5aa40a876e3a9ee3bc667a2b3e814ba9e42e",
+    "kernel_function_sha256": "d2f507f51e15c0f31aae9d3b59a61f6dec9b2b31f9e9e2e96e6296b6a3e45b9c",
+    "parent_commit": "8b1786a34612f789a99159ea19ffe6dea4f75dc3",
+    "paths": {
+      "scripts/fr13_run_b1_sfwd_state_fusion_gate.sh": {
+        "git_blob_sha1": "e9c9e4734f3403abb5cb0be50f73a7d8e060b369",
+        "sha256": "db233139e6ccb9a1159897b0bd8db22cab926d54afa14755d3f75eea75bc7f93"
+      },
+      "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": {
+        "git_blob_sha1": "8db9dc7761dfa66d1b3601a485ea58cf9f75a2f8",
+        "sha256": "089d94f675dc22fbb3e3f217c9d79fc3038e8039f9a0458cad569a735cb991e1"
+      },
+      "tests/test_fr13_fixed32_sfwd_state_fusion.py": {
+        "git_blob_sha1": "dcb5f49cb0043f807d901bbb8a823663efe7be99",
+        "sha256": "085da59f4353c2e93599de6fa1d5d49ab33ec67a7c15a38422aae31742fb8929"
+      }
+    },
+    "tree": "6d176100c9100b3cc72c04e8bf72fbda2e04a914"
+  },
+  "status": "OFFLINE_CODEGEN_VIABLE_CORRECTNESS_AND_PERFORMANCE_UNQUALIFIED",
+  "toolchain": {
+    "backend_producer": {
+      "target": "sm_121a",
+      "tool_name": "ptxas-blackwell",
+      "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+      "toolkit_version": "12.9"
+    },
+    "inspection_tools": {
+      "cuobjdump": "13.0.85",
+      "nvdisasm": "13.0.85"
+    },
+    "num_stages": 3,
+    "target": "sm_121a",
+    "torch": "2.10.0+cu130",
+    "torch_cuda": "13.0",
+    "triton": "3.6.0",
+    "unused_system_nvcc": "13.0.88"
+  },
+  "verification": {
+    "b1_offline_codegen": "pass",
+    "b4_offline_codegen": "pass",
+    "cuda_visibility_refusal": "pass",
+    "focused_tests": "13 passed",
+    "fresh_cache_binary_identity": "pass",
+    "fresh_disassembly_identity": "pass",
+    "git_diff_check": "pass",
+    "independent_summary_and_resource_verifier": "pass",
+    "python_compile": "pass",
+    "shell_syntax": "pass",
+    "verifier_sha256": "bf3d951d46df03a29913cf0939513a3488268565984e00197b2e189cd21364be"
+  }
+}
