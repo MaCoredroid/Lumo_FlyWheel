@@ -1,0 +1,90 @@
+{
+  "branch": "agent/fixed32-dfwd-k64-m32-quality-curve-20260802",
+  "claims": {
+    "acceptance_measurement": false,
+    "b4_measurement": false,
+    "hardware_floor": false,
+    "output_equivalence": false,
+    "performance_measurement": false,
+    "production_default_enabled": false,
+    "real_task_correctness": false
+  },
+  "floor_context_ms_per_step": {
+    "mandatory_weight_read_lower_bound": 119.658015414,
+    "one_sided_u95_1_15x_cap": 137.6067177261
+  },
+  "modeled_operation": {
+    "calls_per_speculative_event": 5,
+    "candidate_rows": 32,
+    "flops_per_call": 21474836480,
+    "minimum_weight_read_floor_ms_per_call_at_273_gbps": 2.4582001465201464,
+    "minimum_weight_read_floor_ms_per_event_at_273_gbps": 12.291000732600734,
+    "operational_intensity_flop_per_minimum_byte": 31.78581821709186,
+    "persistent_input_output_bytes_per_call": 4521984,
+    "weight_bytes_per_call": 671088640
+  },
+  "runtime_contract": {
+    "batch_size": 1,
+    "candidate_rows": 32,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "hidden": {
+      "dtype": "bfloat16",
+      "shape": [1, 5120],
+      "stride": [5120, 1]
+    },
+    "output": {
+      "dtype": "bfloat16",
+      "served_shape": [1, 65536],
+      "static_shape": [32, 65536]
+    },
+    "weight": {
+      "dtype": "bfloat16",
+      "shape": [65536, 5120],
+      "stride": [5120, 1]
+    }
+  },
+  "schema": "fr13.fixed32.dfwd_k64_m32_quality_source.v1",
+  "source_commit": "a5fd0e0d61f4de1092ab24dd2e4771c9a63e2f0f",
+  "source_files": {
+    "draft_vocab_map": {
+      "path": "scripts/fr13_dvk_subset_blocks.json",
+      "sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
+    },
+    "live_gate": {
+      "path": "scripts/fr13_run_b1_kernel_live_gate.sh",
+      "sha256": "3008cb723bcd7043dbf786b6bad6d6f58d1f2d796528916b09f793abf8f51993"
+    },
+    "m32_runner": {
+      "path": "scripts/fr13_run_b1_draft_head_m32_quality.sh",
+      "sha256": "74390c4fd8379a2d0e639de1d56e43f75cedc9d138ac4f6e0eea851ec52f061a"
+    },
+    "patcher": {
+      "path": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+      "sha256": "d6ca8b5f20ef22727181a3f6b655371e7cb0d75616b6f70b59799b5faf03ccc2"
+    },
+    "runtime_manifest": {
+      "path": "scripts/fr13_runtime_manifest.py",
+      "sha256": "34b5aedb5cfaa2cef24cb2cffac592c826a35db61fa306d0619c6a640aa4643f"
+    },
+    "test": {
+      "path": "tests/test_fr13_draft_head_pad_rows.py",
+      "sha256": "6fbe039a05622b7866a010a93cde3e7fd1e302ebaf5d7ce5dbe739f62708347b"
+    }
+  },
+  "structural_scope": {
+    "committer_changed": false,
+    "drafter_logits_may_change": true,
+    "rejection_sampling_contract_changed": false,
+    "verifier_math_changed": false
+  },
+  "status": "SOURCE_READY_LIVE_UNQUALIFIED",
+  "verification": {
+    "bash_syntax": "PASS",
+    "diff_check": "PASS",
+    "focused_tests": 53,
+    "focused_tests_status": "PASS",
+    "python_compile": "PASS",
+    "runtime_manifest_self_test": "PASS"
+  }
+}

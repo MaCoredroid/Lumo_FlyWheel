@@ -1,0 +1,11 @@
+53 focused tests passed.
+
+Coverage included the M32 fixed K64/root1 runner, mutually exclusive candidate
+selection, direct padded GEMM setup and one-time pre-capture execution
+attestation, runtime-manifest closure, pair8 coexistence, historical M32
+qualification invalidation, and fixed32 process attestation. Python
+compilation, Bash syntax, the runtime-manifest self-test, and git diff checks
+passed.
+
+No GPU, Docker, real-task, acceptance, throughput, B4, output-equivalence,
+production, or hardware-floor result is included in this source artifact.
