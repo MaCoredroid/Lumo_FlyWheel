@@ -262,6 +262,9 @@ def test_launcher_uses_packed_xgather_kernel_and_exact_layout() -> None:
     assert "conv_stride_c" not in kernel
     assert "conv_stride_l" not in kernel
     assert "bank_row * C * STATE_LEN" in kernel
+    assert "ssi_stride_b" not in kernel
+    assert "ssi_stride_s" not in kernel
+    assert "spec_state_indices + pid_b * N" in kernel
     assert "x_batch = x + pid_b * N * X_STRIDE_ROW" in kernel
     assert "weight_channels = conv_weights + offs_c * WIDTH" in kernel
     assert "weight_quad" in kernel
@@ -270,6 +273,8 @@ def test_launcher_uses_packed_xgather_kernel_and_exact_layout() -> None:
     assert "grid = (batch, triton.cdiv(channels, BLOCK_C))" in launcher
     assert "fixed32_specialized_layout_contract(" in launcher
     assert "not conv_state.is_contiguous()" in launcher
+    assert "not spec_state_indices.is_contiguous()" in launcher
+    assert "int(spec_state_indices.shape[1]) != rows" in launcher
     assert "int(conv_state.data_ptr()) % 4 != 0" in launcher
     assert "_fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel[grid](" in launcher
     assert "X_STRIDE_ROW=X_ROW_STRIDE" in launcher
@@ -278,6 +283,7 @@ def test_launcher_uses_packed_xgather_kernel_and_exact_layout() -> None:
     assert "num_warps=NUM_WARPS" in launcher
     assert "source_flat" not in launcher
     assert "int(conv_state.stride(" not in launcher
+    assert "int(spec_state_indices.stride(" not in launcher
     assert ".cpu(" not in launcher
     assert ".item(" not in launcher
     assert ".tolist(" not in launcher

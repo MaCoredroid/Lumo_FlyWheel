@@ -541,8 +541,6 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
     bias,
     out,
     source_stage,
-    ssi_stride_b,
-    ssi_stride_s,
     B: tl.constexpr,
     N: tl.constexpr,
     C: tl.constexpr,
@@ -568,7 +566,7 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
     weight_channels = conv_weights + offs_c * WIDTH
 
     bank_row = tl.load(
-        spec_state_indices + pid_b * ssi_stride_b + 0 * ssi_stride_s
+        spec_state_indices + pid_b * N
     ).to(tl.int64)
     stage_offset = pid_b * SOURCE_ROWS * C
     prior_base = (

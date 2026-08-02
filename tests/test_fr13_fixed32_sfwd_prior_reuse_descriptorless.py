@@ -355,6 +355,9 @@ def test_packed_xgather_loads_first_two_prior_values_as_exact_pair() -> None:
     assert "conv_stride_row" not in argument_names
     assert "conv_stride_c" not in argument_names
     assert "conv_stride_l" not in argument_names
+    assert "ssi_stride_b" not in argument_names
+    assert "ssi_stride_s" not in argument_names
+    assert "spec_state_indices + pid_b * N" in fragment
     assert "bank_row * C * STATE_LEN" in fragment
     assert "offs_c * STATE_LEN" in fragment
     assert "prior_base.to(tl.pointer_type(tl.uint32))" in fragment

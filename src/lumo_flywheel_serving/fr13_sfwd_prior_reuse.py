@@ -547,10 +547,12 @@ def launch_fixed32_sfwd_prior_reuse(
         geometry_failures.append("channels")
     if spec_state_indices.ndim < 1 or int(spec_state_indices.shape[0]) < batch:
         geometry_failures.append("spec_state_indices_batch")
-    if spec_state_indices.ndim < 2 or int(spec_state_indices.shape[1]) < 1:
+    if spec_state_indices.ndim < 2 or int(spec_state_indices.shape[1]) != rows:
         geometry_failures.append("spec_state_indices_width")
     if spec_state_indices.dtype != torch.int32:
         geometry_failures.append("spec_state_indices_dtype")
+    if not spec_state_indices.is_contiguous():
+        geometry_failures.append("spec_state_indices_contiguous")
     if not conv_state.is_contiguous():
         geometry_failures.append("conv_state_contiguous")
     if int(conv_state.data_ptr()) % 4 != 0:
@@ -613,8 +615,6 @@ def launch_fixed32_sfwd_prior_reuse(
         bias_arg,
         out,
         source_stage,
-        int(spec_state_indices.stride(0)),
-        int(spec_state_indices.stride(1)),
         B=batch,
         N=rows,
         C=channels,
