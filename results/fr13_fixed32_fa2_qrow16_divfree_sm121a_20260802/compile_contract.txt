@@ -1,0 +1,25 @@
+classification=host_only_offline_codegen
+fa2_commit=29210221863736a08f71a866459e368ad1ac4a95
+incumbent_repository_commit=b25b6adaf31dbd2358302ebfc5f8d763dd8e79de
+candidate_repository_commit=b37798e6d90e8f208f18503781bc10b95b469fbe
+target=sm_121a
+nvcc=13.0.88
+cuobjdump=13.0.85
+host_compiler=GCC_13.3.0
+host_arch=aarch64
+optimization=-O3
+fast_math=true
+cxx_standard=17
+nvcc_workers=1
+niceness=19
+common_defines=FLASHATTENTION_DISABLE_BACKWARD,FLASHATTENTION_DISABLE_DROPOUT,FLASHATTENTION_DISABLE_PYBIND,Py_LIMITED_API=3,TORCH_EXTENSION_NAME=_vllm_fa2_C,ENABLE_FP8,CUTLASS_ENABLE_DIRECT_CUDA_DRIVER_CALL=1,C10_CUDA_NO_CMAKE_CONFIGURE_FILE
+common_nvcc_flags=--expt-relaxed-constexpr,--expt-extended-lambda,--use_fast_math,-Xcompiler=-fPIC,-gencode=arch=compute_121a,code=sm_121a,-Xptxas=-v
+source_generation=python3 scripts/fr13_patch_fa2_tree_bias.py --fa2-src SOURCE --skip-python --tree-bias-tile-earlyout --fixed32-query-tile16
+disassembly=/usr/local/cuda/bin/cuobjdump --dump-resource-usage OBJECT; /usr/local/cuda/bin/cuobjdump --dump-sass OBJECT
+torch_header_workaround=C10_CUDA_NO_CMAKE_CONFIGURE_FILE_bypasses_absent_generated_cuda_cmake_macros_header
+paired_baseline_reproduced_published_register_call_instruction_counts=true
+gpu_used=false
+container_used=false
+synthetic_probe_used=false
+real_task_used=false
+timing_used=false

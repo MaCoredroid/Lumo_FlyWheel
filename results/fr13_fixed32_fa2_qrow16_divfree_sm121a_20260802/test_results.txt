@@ -1,0 +1,20 @@
+focused_command=python3 -m pytest -q tests/test_fr13_fa2_tree_kernel_candidates.py tests/test_fr13_fa2_qrow32_gate.py tests/test_fr13_fa2_qrow32_static_gate.py
+focused_result=23 passed in 0.19s
+py_compile=PASS
+ruff=PASS
+git_diff_check=PASS
+fresh_pinned_source_generation=PASS
+second_patch_idempotence=PASS_ALL_FILES_UNCHANGED
+incumbent_sm121a_compile=PASS
+candidate_sm121a_compile=PASS
+incumbent_resource_disassembly=PASS
+candidate_resource_disassembly=PASS
+candidate_call_ldl_stl_count=0
+gpu=NOT_USED
+container=NOT_USED
+synthetic_probe=NOT_USED
+real_task=NOT_USED
+byte_gate=NOT_RUN
+timing=NOT_RUN
+production=NOT_AUTHORIZED
+
