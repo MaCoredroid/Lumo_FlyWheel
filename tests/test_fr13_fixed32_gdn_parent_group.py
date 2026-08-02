@@ -323,9 +323,12 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
         "gdn_path_programs": 0,
         "gdn_padded_slots": 0,
         "gdn_physical_route": None,
+        "gdn_candidate": None,
+        "gdn_physical_launches": 0,
         "gdn_physical_programs": 0,
         "gdn_physical_grid_z": None,
         "gdn_level1_parent_loads": 0,
+        "gdn_state_export_writes": 0,
         "gdn_single_writer_nodes": 0,
         "gdn_nodes": 0,
         "gdn_critical_path": None,
@@ -383,6 +386,20 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
             "reference_level1_parent_loads": 11,
             "single_writer_nodes": 32,
         },
+        "executed_gdn": {
+            "route": "fixed32_parent_group",
+            "candidate": "fixed32_gdn_parent_group_v1",
+            "physical_launches": 2,
+            "physical_programs": 6,
+            "physical_grid_z": (1, 5),
+            "physical_recurrence_critical_path": 17,
+            "state_export_writes": 5,
+            "state_parent_reads": 5,
+            "logical_launches": 2,
+            "logical_programs": 12,
+            "logical_padded_slots": 82,
+            "logical_critical_path": 12,
+        },
     }
 
     namespace["_fr13_fixed32_observed_gdn"](
@@ -403,9 +420,12 @@ def test_parent_group_observer_records_physical_work_separately() -> None:
     assert event["gdn_path_programs"] == 12
     assert event["gdn_padded_slots"] == 82
     assert event["gdn_physical_route"] == "fixed32_parent_group"
+    assert event["gdn_candidate"] == "fixed32_gdn_parent_group_v1"
+    assert event["gdn_physical_launches"] == 2
     assert event["gdn_physical_programs"] == 6
     assert event["gdn_physical_grid_z"] == (1, 5)
     assert event["gdn_level1_parent_loads"] == 5
+    assert event["gdn_state_export_writes"] == 5
     assert event["gdn_single_writer_nodes"] == 32
     assert event["gdn_critical_path"] == 12
     assert event["gdn_physical_critical_path"] == 17

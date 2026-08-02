@@ -4,6 +4,7 @@ import ast
 import hashlib
 import json
 import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -64,7 +65,12 @@ def _load_contract_namespace() -> dict[str, object]:
         "_FR13_FIXED32_SUBTREE_LEVELS",
         "_FR13_FIXED32_EXPORT_NODES",
         "_FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_IDENTITY_SCHEMA",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_NODE_HELPER",
         "_FR13_FIXED32_GDN_DEPTH_FIRST_GROUPS",
+        "_FR13_FIXED32_PARENT_SHA256",
+        "_FR13_FIXED32_ANCESTRY_SHA256",
     }
     functions = {
         "_fr13_canonical_sha256",
@@ -127,12 +133,94 @@ def _load_selector_namespace() -> dict[str, object]:
     return namespace
 
 
+def _load_lifecycle_namespace() -> dict[str, object]:
+    constants = {
+        "_FR13_FIXED32_MODES",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_IDENTITY_SCHEMA",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_NODE_HELPER",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_SURFACES",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_GATE_ENABLED",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_GATE_ENABLED",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_REAL_EVENT",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_REAL_EVENT",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_PASS",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_PASS",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXACT4_MARKERS",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXACT4_SHA256",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURE_CONTEXT",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURES",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_GATE_STATE",
+        "_FR13_FIXED32_PARENT_SHA256",
+        "_FR13_FIXED32_ANCESTRY_SHA256",
+    }
+    functions = {
+        "_fr13_canonical_sha256",
+        "_fr13_fixed32_gdn_single_launch_identity",
+        "_fr13_fixed32_gdn_single_launch_gate_enabled",
+        "_fr13_fixed32_gdn_single_launch_real_event_marker",
+        "_fr13_fixed32_gdn_single_launch_validate_pass",
+        "fixed32_gdn_single_launch_selector",
+        "_fr13_fixed32_gdn_single_launch_emit_pass",
+        "fixed32_gdn_single_launch_live_capture_begin",
+        "_fr13_fixed32_gdn_single_launch_capture_register",
+        "fixed32_gdn_single_launch_live_capture_end",
+        "fixed32_gdn_single_launch_live_gate_on_replay",
+        "fixed32_gdn_single_launch_live_gate_report",
+    }
+    tree, _source = _tree_and_source()
+    body = [
+        node
+        for node in tree.body
+        if (
+            isinstance(node, (ast.Assign, ast.AnnAssign))
+            and any(
+                isinstance(target, ast.Name) and target.id in constants
+                for target in (
+                    node.targets if isinstance(node, ast.Assign) else (node.target,)
+                )
+            )
+        )
+        or (isinstance(node, ast.FunctionDef) and node.name in functions)
+    ]
+    namespace = {
+        "hashlib": hashlib,
+        "json": json,
+        "os": os,
+        "stat": stat,
+        "Path": Path,
+    }
+    exec(
+        compile(
+            ast.fix_missing_locations(ast.Module(body=body, type_ignores=[])),
+            KERNEL_PATH,
+            "exec",
+        ),
+        namespace,
+    )
+    namespace["_FR13_FIXED32_MODE"] = "tail6_fixed32"
+    namespace["_FR13_FIXED32_GDN_SINGLE_LAUNCH"] = True
+    return namespace
+
+
+class _Bytes:
+    def __init__(self, value: int):
+        self.value = int(value)
+
+    def clone(self):
+        return _Bytes(self.value)
+
+    def copy_(self, other) -> None:
+        self.value = int(other.value)
+
+
 def test_depth_first_contract_covers_each_node_and_writer_once() -> None:
     namespace = _load_contract_namespace()
     levels = namespace["_FR13_FIXED32_SUBTREE_LEVELS"]
     contract = namespace["_fr13_fixed32_gdn_single_launch_contract"](levels)
 
-    assert contract["candidate"] == "fixed32_gdn_single_launch_tree_v1"
+    assert contract["candidate"] == "fixed32_gdn_single_launch_tree_v2"
     assert contract["root_nodes"] == (0, 1, 4, 9, 14)
     assert contract["branch_path_indices"] == (
         (1, 2),
@@ -355,7 +443,7 @@ def test_b1_b4_launchers_use_one_grid_and_reference_forces_incumbent() -> None:
     assert "triton.cdiv(dim_v, _path_block_v),\n                    1," in b1
     assert "COUNT_INVOCATION=_count" in b1
     assert "FLAGS_EXPORT=_flags_export" in b1
-    assert "if force_reference_structure" in b1
+    assert "and not force_reference_structure" in b1
 
     assert "_tree_gdn_kernel_fixed32_single_launch[" in b4
     assert "triton.cdiv(dim_v, _block_v),\n                    batch," in b4
@@ -420,8 +508,8 @@ def test_observer_separates_logical_and_physical_critical_paths() -> None:
     )
     patcher = PATCHER_PATH.read_text(encoding="utf-8")
 
-    assert 'physical_route = "fixed32_single_launch_tree"' in observer
-    assert 'physical_critical_path = normalized_single_launch[' in observer
+    assert 'physical_route = str(executed["route"])' in observer
+    assert 'executed = runtime_state.get("executed_gdn")' in observer
     assert 'event["gdn_critical_path"] = normalized_contract["critical"]' in observer
     assert 'event["gdn_physical_critical_path"] = physical_critical_path' in observer
     assert 'expected_physical_critical_path = 32' in validator
@@ -447,9 +535,12 @@ def test_observer_records_single_launch_physical_work() -> None:
         "gdn_path_programs": 0,
         "gdn_padded_slots": 0,
         "gdn_physical_route": None,
+        "gdn_candidate": None,
+        "gdn_physical_launches": 0,
         "gdn_physical_programs": 0,
         "gdn_physical_grid_z": None,
         "gdn_level1_parent_loads": 0,
+        "gdn_state_export_writes": 0,
         "gdn_single_writer_nodes": 0,
         "gdn_nodes": 0,
         "gdn_critical_path": None,
@@ -487,7 +578,7 @@ def test_observer_records_single_launch_physical_work() -> None:
         },
         "fixed32_parent_group_contract": None,
         "fixed32_single_launch_contract": {
-            "candidate": "fixed32_gdn_single_launch_tree_v1",
+            "candidate": "fixed32_gdn_single_launch_tree_v2",
             "root_nodes": (0, 1, 4, 9, 14),
             "branch_path_indices": (
                 (1, 2),
@@ -511,6 +602,20 @@ def test_observer_records_single_launch_physical_work() -> None:
             "state_parent_reads": 0,
             "single_writer_nodes": 32,
         },
+        "executed_gdn": {
+            "route": "fixed32_single_launch_tree",
+            "candidate": "fixed32_gdn_single_launch_tree_v2",
+            "physical_launches": 1,
+            "physical_programs": 1,
+            "physical_grid_z": (1,),
+            "physical_recurrence_critical_path": 32,
+            "state_export_writes": 0,
+            "state_parent_reads": 0,
+            "logical_launches": 2,
+            "logical_programs": 12,
+            "logical_padded_slots": 82,
+            "logical_critical_path": 12,
+        },
     }
 
     namespace["_fr13_fixed32_observed_gdn"](
@@ -530,8 +635,280 @@ def test_observer_records_single_launch_physical_work() -> None:
 
     assert event["gdn_path_programs"] == 12
     assert event["gdn_physical_route"] == "fixed32_single_launch_tree"
+    assert event["gdn_candidate"] == "fixed32_gdn_single_launch_tree_v2"
+    assert event["gdn_physical_launches"] == 1
     assert event["gdn_physical_programs"] == 1
     assert event["gdn_physical_grid_z"] == (1,)
     assert event["gdn_level1_parent_loads"] == 0
+    assert event["gdn_state_export_writes"] == 0
     assert event["gdn_critical_path"] == 12
     assert event["gdn_physical_critical_path"] == 32
+
+
+def _single_launch_identity(namespace: dict[str, object], batch: int) -> dict:
+    contract = {
+        "schema": namespace[
+            "_FR13_FIXED32_GDN_SINGLE_LAUNCH_IDENTITY_SCHEMA"
+        ],
+        "candidate": namespace[
+            "_FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID"
+        ],
+        "kernel": namespace["_FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL"],
+        "node_helper": namespace[
+            "_FR13_FIXED32_GDN_SINGLE_LAUNCH_NODE_HELPER"
+        ],
+        "physical_grid_z": (1,),
+        "physical_programs": 1,
+        "critical_node_steps": 32,
+        "state_export_writes": 0,
+        "state_parent_reads": 0,
+        "single_writer_nodes": 32,
+        "parent_sha256": namespace["_FR13_FIXED32_PARENT_SHA256"],
+        "ancestry_sha256": namespace["_FR13_FIXED32_ANCESTRY_SHA256"],
+        "contract_sha256": "a" * 64,
+        "groups_sha256": "b" * 64,
+        "execution_sha256": "c" * 64,
+    }
+    return namespace["_fr13_fixed32_gdn_single_launch_identity"](
+        contract,
+        batch,
+        source_sha256="d" * 64,
+        mode="tail6_fixed32",
+    )
+
+
+def _single_launch_gate_record(namespace, identity, layer_key, batch):
+    current = {
+        "out": _Bytes(1),
+        "export": _Bytes(7),
+        "ring_k": _Bytes(1),
+        "ring_v": _Bytes(1),
+        "ring_a": _Bytes(1),
+        "ring_b": _Bytes(1),
+        "flags": _Bytes(1),
+        "counter": _Bytes(10),
+    }
+
+    def snapshot():
+        return {name: value.clone() for name, value in current.items()}
+
+    def restore(saved):
+        for name, value in saved.items():
+            current[name].copy_(value)
+
+    def run_reference():
+        for name in ("out", "ring_k", "ring_v", "ring_a", "ring_b", "flags"):
+            current[name].value = 1
+        current["counter"].value = 11
+        current["export"].value = 9
+        return {
+            "kernel_structure": "fixed32_path",
+            "physical_launches": 2 * batch,
+            "state_export_writes": 5 * batch,
+        }
+
+    def run_candidate():
+        for name in ("out", "ring_k", "ring_v", "ring_a", "ring_b", "flags"):
+            current[name].value = 1
+        current["counter"].value = 11
+        return {
+            "candidate": namespace[
+                "_FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID"
+            ],
+            "kernel_structure": namespace[
+                "_FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL"
+            ],
+            "identity_sha256": identity["identity_sha256"],
+            "physical_launches": 1,
+            "state_export_writes": 0,
+        }
+
+    return {
+        "record": {
+            "layer_key": layer_key,
+            "identity": identity,
+            "snapshot": snapshot,
+            "restore": restore,
+            "run_reference": run_reference,
+            "run_candidate": run_candidate,
+            "carrier_nonzero": lambda: True,
+            "byte_equal": lambda left, right: left.value == right.value,
+        },
+        "current": current,
+    }
+
+
+@pytest.mark.parametrize("batch", (1, 4))
+def test_authenticated_gate_restores_reference_and_emits_only_complete_pass(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    batch: int,
+) -> None:
+    namespace = _load_lifecycle_namespace()
+    identity = _single_launch_identity(namespace, batch)
+    enabled = tmp_path / "enabled"
+    marker_path = tmp_path / "real-event.arm"
+    pass_path = tmp_path / "live-pass.json"
+    namespace[f"_FR13_FIXED32_GDN_SINGLE_LAUNCH_B{batch}_GATE_ENABLED"] = str(
+        enabled
+    )
+    namespace[f"_FR13_FIXED32_GDN_SINGLE_LAUNCH_B{batch}_REAL_EVENT"] = str(
+        marker_path
+    )
+    namespace[f"_FR13_FIXED32_GDN_SINGLE_LAUNCH_B{batch}_PASS"] = str(pass_path)
+    monkeypatch.setenv(
+        f"FR13_FIXED32_GDN_SINGLE_LAUNCH_B{batch}_BYTE_AB", "1"
+    )
+    monkeypatch.setenv(
+        f"FR13_FIXED32_GDN_SINGLE_LAUNCH_B{batch}_REAL_EVENT_PATH",
+        str(marker_path),
+    )
+    monkeypatch.setenv(
+        f"FR13_FIXED32_GDN_SINGLE_LAUNCH_B{batch}_PASS_PATH", str(pass_path)
+    )
+    graph_id = 700 + batch
+    signature = "e" * 64
+    namespace["fixed32_gdn_single_launch_live_capture_begin"](graph_id, batch)
+    carriers = []
+    for layer in range(48):
+        carrier = _single_launch_gate_record(namespace, identity, layer + 1, batch)
+        carriers.append(carrier)
+        namespace["_fr13_fixed32_gdn_single_launch_capture_register"](
+            carrier["record"]
+        )
+    namespace["fixed32_gdn_single_launch_live_capture_end"](
+        graph_id, batch, signature, 48
+    )
+
+    markers = (
+        ("swe_verified:astropy__astropy-14539",)
+        if batch == 1
+        else namespace["_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXACT4_MARKERS"]
+    )
+    for index, marker in enumerate(markers):
+        marker_path.write_text(marker + "\n", encoding="ascii")
+        report = namespace["fixed32_gdn_single_launch_live_gate_on_replay"](
+            graph_id, signature, batch, 48
+        )
+        assert report["comparisons"] == 48 * 7
+        assert report["reference_served"] is True
+        assert report["candidate_export_baseline_unchanged"] is True
+        assert report["state_restored"] is True
+        assert pass_path.exists() is (index == len(markers) - 1)
+        assert all(
+            carrier["current"][name].value == value
+            for carrier in carriers
+            for name, value in {
+                "out": 1,
+                "export": 7,
+                "ring_k": 1,
+                "ring_v": 1,
+                "ring_a": 1,
+                "ring_b": 1,
+                "flags": 1,
+                "counter": 10,
+            }.items()
+        )
+
+    payload = namespace["_fr13_fixed32_gdn_single_launch_validate_pass"](
+        batch, identity, pass_path=str(pass_path)
+    )
+    assert payload["candidate_physical_launches_per_layer"] == 1
+    assert payload["candidate_state_export_writes"] == 0
+
+
+def test_legacy_single_launch_pass_cannot_authorize_v2(
+    tmp_path: Path,
+) -> None:
+    namespace = _load_lifecycle_namespace()
+    identity = _single_launch_identity(namespace, 1)
+    legacy = tmp_path / "legacy-pass.json"
+    legacy.write_text(
+        json.dumps(
+            {
+                "schema": "fr13.fixed32.gdn_single_launch.b1_live_pass.v1",
+                "status": "pass",
+                "candidate": "fixed32_gdn_single_launch_tree_v1",
+            }
+        )
+        + "\n",
+        encoding="ascii",
+    )
+    with pytest.raises(RuntimeError, match="identity/contract is invalid"):
+        namespace["_fr13_fixed32_gdn_single_launch_validate_pass"](
+            1, identity, pass_path=str(legacy)
+        )
+
+
+def test_single_launch_gate_restores_baseline_on_mismatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    namespace = _load_lifecycle_namespace()
+    identity = _single_launch_identity(namespace, 1)
+    marker_path = tmp_path / "real-event.arm"
+    pass_path = tmp_path / "live-pass.json"
+    marker_path.write_text(
+        "swe_verified:astropy__astropy-14539\n", encoding="ascii"
+    )
+    monkeypatch.setenv("FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB", "1")
+    monkeypatch.setenv(
+        "FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_REAL_EVENT_PATH", str(marker_path)
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_PASS_PATH", str(pass_path)
+    )
+    namespace["fixed32_gdn_single_launch_live_capture_begin"](801, 1)
+    carriers = []
+    for layer in range(48):
+        carrier = _single_launch_gate_record(namespace, identity, layer + 1, 1)
+        carriers.append(carrier)
+        if layer == 7:
+            original = carrier["record"]["run_candidate"]
+
+            def mismatch(original=original, current=carrier["current"]):
+                metadata = original()
+                current["out"].value = 2
+                return metadata
+
+            carrier["record"]["run_candidate"] = mismatch
+        namespace["_fr13_fixed32_gdn_single_launch_capture_register"](
+            carrier["record"]
+        )
+    namespace["fixed32_gdn_single_launch_live_capture_end"](
+        801, 1, "f" * 64, 48
+    )
+    with pytest.raises(RuntimeError, match="byte mismatch"):
+        namespace["fixed32_gdn_single_launch_live_gate_on_replay"](
+            801, "f" * 64, 1, 48
+        )
+    assert not pass_path.exists()
+    assert all(
+        carrier["current"]["out"].value == 1
+        and carrier["current"]["export"].value == 7
+        and carrier["current"]["counter"].value == 10
+        for carrier in carriers
+    )
+
+
+def test_b4_launcher_binds_candidate_to_new_selector_and_graph_gate() -> None:
+    source = _function_source("launch_tree_gdn_prepared_fixed32_batch")
+    assert 'selector == "single_launch_graph_capture"' in source
+    assert 'selector == "single_launch_production"' in source
+    assert "_single_candidate=True" in source
+    assert '"physical_launches": 1' in source
+    assert '"state_export_writes": 0' in source
+    assert "_fr13_fixed32_gdn_single_launch_capture_register" in source
+    assert "_launch_reference(collect_export=False)" in source
+
+
+def test_patcher_binds_single_launch_gate_and_actual_route_census() -> None:
+    patcher = PATCHER_PATH.read_text(encoding="utf-8")
+    assert "fixed32_gdn_single_launch_live_capture_begin(identity, batch)" in patcher
+    assert "fixed32_gdn_single_launch_live_capture_end(" in patcher
+    assert "fixed32_gdn_single_launch_live_gate_on_replay(" in patcher
+    assert '"executed_gdn": _fr13_f32_scan_state.get(' in patcher
+    assert '"legacy_structure_semantics": "logical_fixed32_path_equivalent"' in patcher
+    assert '"logical_launches": int(work["gdn_launches"])' in patcher
+    assert '"physical_launches_per_layer": (' in patcher
+    assert '"state_export_writes_per_layer": (' in patcher

@@ -1221,8 +1221,59 @@ _FR13_FIXED32_GDN_LEVEL1_PARENT_GROUPS = (
     (9, (7, 8)),
 )
 _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID = (
-    "fixed32_gdn_single_launch_tree_v1"
+    "fixed32_gdn_single_launch_tree_v2"
 )
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_IDENTITY_SCHEMA = (
+    "fr13.fixed32.gdn_single_launch.identity.v2"
+)
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL = (
+    "_tree_gdn_kernel_fixed32_single_launch"
+)
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_NODE_HELPER = (
+    "_tree_gdn_fixed32_single_launch_node"
+)
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_SURFACES = (
+    "out",
+    "ring_k",
+    "ring_v",
+    "ring_a",
+    "ring_b",
+    "flags",
+    "counter",
+)
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_GATE_ENABLED = (
+    "/logs/fr13_fixed32_gdn_single_launch_b1_byte_ab.enabled"
+)
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_GATE_ENABLED = (
+    "/logs/fr13_fixed32_gdn_single_launch_b4_byte_ab.enabled"
+)
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_REAL_EVENT = (
+    "/logs/fr13_fixed32_gdn_single_launch_b1.real_event.arm"
+)
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_REAL_EVENT = (
+    "/logs/fr13_fixed32_gdn_single_launch_b4.real_event.arm"
+)
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_PASS = (
+    "/logs/fr13_fixed32_gdn_single_launch_b1.live_pass.json"
+)
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_PASS = (
+    "/logs/fr13_fixed32_gdn_single_launch_b4.live_pass.json"
+)
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXACT4_MARKERS = (
+    "swe_verified:astropy__astropy-12907",
+    "swe_verified:astropy__astropy-13033",
+    "swe_verified:astropy__astropy-13236",
+    "swe_verified:astropy__astropy-13398",
+)
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXACT4_SHA256 = (
+    "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+)
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURE_CONTEXT = None
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURES: dict[int, dict] = {}
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_GATE_STATE = {
+    1: {"markers": {}, "failed": False},
+    4: {"markers": {}, "failed": False},
+}
 # Interleave each root-chain node's terminal side paths before advancing the
 # root chain. The current root tile remains live and unchanged while one
 # branch tile is scanned, so the kernel needs two state tiles rather than five.
@@ -2080,6 +2131,27 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
         _fr13_fixed32_batch_gdn_byte_ab_control()
         _fr13_fixed32_batch_gdn_graph_byte_ab_control()
         _fr13_fixed32_batch_gdn_production_control()
+        if batch != 4:
+            return None
+        single_contract = _fr13_fixed32_gdn_single_launch_contract(
+            _FR13_FIXED32_SUBTREE_LEVELS
+        )
+        single_identity = _fr13_fixed32_gdn_single_launch_identity(
+            single_contract, 4
+        )
+        single_route = fixed32_gdn_single_launch_selector(
+            4, single_identity
+        )
+        if single_route == "qualification_reference":
+            context = _FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURE_CONTEXT
+            if (
+                isinstance(context, dict)
+                and int(context.get("batch_size", -1)) == 4
+            ):
+                return "single_launch_graph_capture"
+            return None
+        if single_route == "production_candidate":
+            return "single_launch_production"
         return None
     diagnostic, _marker = _fr13_fixed32_batch_gdn_byte_ab_control()
     graph_diagnostic = _fr13_fixed32_batch_gdn_graph_byte_ab_control()
@@ -3766,7 +3838,10 @@ def _fr13_fixed32_gdn_single_launch_contract(
         len(indices) for _parent, indices in normalized_groups
     )
     contract = {
+        "schema": _FR13_FIXED32_GDN_SINGLE_LAUNCH_IDENTITY_SCHEMA,
         "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
+        "kernel": _FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL,
+        "node_helper": _FR13_FIXED32_GDN_SINGLE_LAUNCH_NODE_HELPER,
         "root_nodes": root_path,
         "branch_path_indices": tuple(
             indices for _parent, indices in normalized_groups
@@ -3785,11 +3860,17 @@ def _fr13_fixed32_gdn_single_launch_contract(
         "state_export_writes": 0,
         "state_parent_reads": 0,
         "single_writer_nodes": len(execution),
+        "parent_sha256": _FR13_FIXED32_PARENT_SHA256,
+        "ancestry_sha256": _FR13_FIXED32_ANCESTRY_SHA256,
         "groups_sha256": _fr13_canonical_sha256(normalized_groups),
         "execution_sha256": _fr13_canonical_sha256(execution),
     }
+    contract["contract_sha256"] = _fr13_canonical_sha256(contract)
     expected = {
-        "candidate": "fixed32_gdn_single_launch_tree_v1",
+        "schema": "fr13.fixed32.gdn_single_launch.identity.v2",
+        "candidate": "fixed32_gdn_single_launch_tree_v2",
+        "kernel": "_tree_gdn_kernel_fixed32_single_launch",
+        "node_helper": "_tree_gdn_fixed32_single_launch_node",
         "root_nodes": (0, 1, 4, 9, 14),
         "branch_path_indices": ((1, 2), (3, 4), (5, 6), (7, 8), (0, 9, 10)),
         "group_sizes": (2, 2, 2, 2, 3),
@@ -3806,6 +3887,8 @@ def _fr13_fixed32_gdn_single_launch_contract(
         "state_export_writes": 0,
         "state_parent_reads": 0,
         "single_writer_nodes": 32,
+        "parent_sha256": _FR13_FIXED32_PARENT_SHA256,
+        "ancestry_sha256": _FR13_FIXED32_ANCESTRY_SHA256,
         "groups_sha256": (
             "cba9010f16772510ff6017e866a520552e7ada913bb786152133597cbc7c1f62"
         ),
@@ -3813,12 +3896,702 @@ def _fr13_fixed32_gdn_single_launch_contract(
             "80aed4d1a882ee4d4cde21dbf4314ed3abaae3f7553e35b6db5cd7574fe3b7db"
         ),
     }
+    expected["contract_sha256"] = _fr13_canonical_sha256(expected)
     if contract != expected:
         raise RuntimeError(
             "FR13_FIXED32_GDN_SINGLE_LAUNCH contract drift: "
             + repr(contract)
         )
     return contract
+
+
+def _fr13_fixed32_gdn_single_launch_source_sha256() -> str:
+    try:
+        payload = Path(__file__).resolve().read_bytes()
+    except OSError as error:
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch cannot hash its source"
+        ) from error
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _fr13_fixed32_gdn_single_launch_identity(
+    contract: dict[str, object],
+    batch_size: int,
+    *,
+    source_sha256: str | None = None,
+    mode: str | None = None,
+) -> dict[str, object]:
+    """Bind selector, topology, kernel source, and physical work identity."""
+    batch = int(batch_size)
+    resolved_mode = _FR13_FIXED32_MODE if mode is None else mode
+    if batch not in (1, 4) or resolved_mode not in _FR13_FIXED32_MODES:
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch identity requires B1/B4 fixed32"
+        )
+    required = {
+        "schema": _FR13_FIXED32_GDN_SINGLE_LAUNCH_IDENTITY_SCHEMA,
+        "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
+        "kernel": _FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL,
+        "node_helper": _FR13_FIXED32_GDN_SINGLE_LAUNCH_NODE_HELPER,
+        "physical_grid_z": (1,),
+        "physical_programs": 1,
+        "critical_node_steps": 32,
+        "state_export_writes": 0,
+        "state_parent_reads": 0,
+        "single_writer_nodes": 32,
+        "parent_sha256": _FR13_FIXED32_PARENT_SHA256,
+        "ancestry_sha256": _FR13_FIXED32_ANCESTRY_SHA256,
+    }
+    if not isinstance(contract, dict) or any(
+        contract.get(key) != value for key, value in required.items()
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch identity contract drift"
+        )
+    for digest_name in (
+        "contract_sha256",
+        "groups_sha256",
+        "execution_sha256",
+    ):
+        digest = contract.get(digest_name)
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch contract digest drift"
+            )
+    source = source_sha256 or _fr13_fixed32_gdn_single_launch_source_sha256()
+    if (
+        not isinstance(source, str)
+        or len(source) != 64
+        or any(character not in "0123456789abcdef" for character in source)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch source digest drift"
+        )
+    identity = {
+        "schema": _FR13_FIXED32_GDN_SINGLE_LAUNCH_IDENTITY_SCHEMA,
+        "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
+        "kernel": _FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL,
+        "node_helper": _FR13_FIXED32_GDN_SINGLE_LAUNCH_NODE_HELPER,
+        "mode": resolved_mode,
+        "batch_size": batch,
+        "physical_rows_per_request": 32,
+        "block_v": 8,
+        "physical_launches_per_layer": 1,
+        "physical_programs_per_request_layer": 1,
+        "physical_recurrence_critical_path": 32,
+        "state_export_writes_per_request_layer": 0,
+        "state_parent_reads_per_request_layer": 0,
+        "authoritative_surfaces": list(
+            _FR13_FIXED32_GDN_SINGLE_LAUNCH_SURFACES
+        ),
+        "source_sha256": source,
+        "contract_sha256": contract["contract_sha256"],
+        "groups_sha256": contract["groups_sha256"],
+        "execution_sha256": contract["execution_sha256"],
+        "parent_sha256": contract["parent_sha256"],
+        "ancestry_sha256": contract["ancestry_sha256"],
+        "selector": "FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE=1",
+    }
+    identity["identity_sha256"] = _fr13_canonical_sha256(identity)
+    return identity
+
+
+def _fr13_fixed32_gdn_single_launch_gate_enabled(
+    batch_size: int,
+    *,
+    environ=None,
+    enabled_path: str | None = None,
+) -> bool:
+    batch = int(batch_size)
+    if batch not in (1, 4):
+        return False
+    env = os.environ if environ is None else environ
+    env_name = f"FR13_FIXED32_GDN_SINGLE_LAUNCH_B{batch}_BYTE_AB"
+    raw = str(env.get(env_name, ""))
+    if raw not in ("", "0", "1"):
+        raise RuntimeError(f"{env_name} must be exactly 0 or 1")
+    default_path = (
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_GATE_ENABLED
+        if batch == 1
+        else _FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_GATE_ENABLED
+    )
+    path = enabled_path or str(
+        env.get(f"{env_name}_ENABLED_PATH", default_path)
+    )
+    armed = raw == "1" or os.path.exists(path)
+    if armed and not _FR13_FIXED32_GDN_SINGLE_LAUNCH:
+        raise RuntimeError(
+            f"{env_name} requires FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE=1"
+        )
+    return armed
+
+
+def _fr13_fixed32_gdn_single_launch_real_event_marker(
+    batch_size: int,
+    *,
+    environ=None,
+    event_path: str | None = None,
+) -> str:
+    batch = int(batch_size)
+    if batch not in (1, 4):
+        raise RuntimeError("single-launch real-event marker requires B1/B4")
+    env = os.environ if environ is None else environ
+    default_path = (
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_REAL_EVENT
+        if batch == 1
+        else _FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_REAL_EVENT
+    )
+    path = event_path or str(
+        env.get(
+            f"FR13_FIXED32_GDN_SINGLE_LAUNCH_B{batch}_REAL_EVENT_PATH",
+            default_path,
+        )
+    )
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(
+        os, "O_NOFOLLOW", 0
+    )
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as error:
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch requires an authenticated "
+            f"B{batch} real-event marker"
+        ) from error
+    try:
+        info = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_nlink != 1
+            or info.st_size <= 0
+            or info.st_size > 256
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch real-event identity drift"
+            )
+        raw = os.read(descriptor, info.st_size + 1)
+        if len(raw) != info.st_size:
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch real-event marker changed"
+            )
+    finally:
+        os.close(descriptor)
+    try:
+        marker = raw.decode("ascii").strip()
+    except UnicodeError as error:
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch real-event marker is not ASCII"
+        ) from error
+    prefix = "swe_verified:"
+    task_id = marker[len(prefix):] if marker.startswith(prefix) else ""
+    if not task_id or any(
+        character
+        not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+        for character in task_id
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch marker must be "
+            "swe_verified:<task_id>"
+        )
+    if batch == 4 and marker not in (
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXACT4_MARKERS
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch B4 gate requires canonical exact4"
+        )
+    return marker
+
+
+def _fr13_fixed32_gdn_single_launch_validate_pass(
+    batch_size: int,
+    identity: dict[str, object],
+    *,
+    environ=None,
+    pass_path: str | None = None,
+) -> dict[str, object]:
+    batch = int(batch_size)
+    env = os.environ if environ is None else environ
+    default_path = (
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_PASS
+        if batch == 1
+        else _FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_PASS
+    )
+    path = pass_path or str(
+        env.get(
+            f"FR13_FIXED32_GDN_SINGLE_LAUNCH_B{batch}_PASS_PATH",
+            default_path,
+        )
+    )
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(
+        os, "O_NOFOLLOW", 0
+    )
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as error:
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch PASS is unreadable"
+        ) from error
+    try:
+        info = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_nlink != 1
+            or info.st_size <= 0
+            or info.st_size > 65536
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch production requires its own "
+                "bounded regular PASS file"
+            )
+        raw_payload = os.read(descriptor, info.st_size + 1)
+        if len(raw_payload) != info.st_size:
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch PASS changed while reading"
+            )
+    finally:
+        os.close(descriptor)
+    try:
+        payload = json.loads(raw_payload.decode("ascii"))
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch PASS is unreadable"
+        ) from error
+    expected_schema = (
+        "fr13.fixed32.gdn_single_launch.b1_live_pass.v2"
+        if batch == 1
+        else "fr13.fixed32.gdn_single_launch.b4_exact4_live_pass.v2"
+    )
+    markers = payload.get("task_markers") if isinstance(payload, dict) else None
+    marker_valid = (
+        isinstance(markers, list)
+        and len(markers) == (1 if batch == 1 else 4)
+        and len(set(markers)) == len(markers)
+        and all(
+            isinstance(marker, str) and marker.startswith("swe_verified:")
+            for marker in markers
+        )
+    )
+    if batch == 4:
+        marker_valid = marker_valid and tuple(markers) == (
+            _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXACT4_MARKERS
+        )
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != expected_schema
+        or payload.get("status") != "pass"
+        or payload.get("candidate")
+        != _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID
+        or payload.get("identity_sha256") != identity.get("identity_sha256")
+        or payload.get("source_sha256") != identity.get("source_sha256")
+        or payload.get("contract_sha256") != identity.get("contract_sha256")
+        or payload.get("mode") != identity.get("mode")
+        or payload.get("batch_size") != batch
+        or payload.get("layer_count") != 48
+        or payload.get("records_per_marker") != 48
+        or payload.get("reference_kernel_structure") != "fixed32_path"
+        or payload.get("candidate_kernel_structure")
+        != _FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL
+        or payload.get("candidate_physical_launches_per_layer") != 1
+        or payload.get("candidate_state_export_writes") != 0
+        or payload.get("candidate_export_baseline_unchanged") is not True
+        or payload.get("authoritative_surfaces")
+        != list(_FR13_FIXED32_GDN_SINGLE_LAUNCH_SURFACES)
+        or payload.get("raw_byte_equal") is not True
+        or payload.get("reference_always_served_during_qualification") is not True
+        or payload.get("state_restored") is not True
+        or marker_valid is not True
+        or (
+            batch == 4
+            and payload.get("exact4_subset_sha256")
+            != _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXACT4_SHA256
+        )
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch PASS identity/contract is invalid"
+        )
+    return payload
+
+
+def fixed32_gdn_single_launch_selector(
+    batch_size: int,
+    identity: dict[str, object],
+    *,
+    environ=None,
+    enabled_path: str | None = None,
+    pass_path: str | None = None,
+) -> str:
+    """Resolve reference, qualification-reference, or qualified production."""
+    batch = int(batch_size)
+    env = os.environ if environ is None else environ
+    if not _FR13_FIXED32_GDN_SINGLE_LAUNCH:
+        return "incumbent"
+    gate = _fr13_fixed32_gdn_single_launch_gate_enabled(
+        batch, environ=env, enabled_path=enabled_path
+    )
+    production_raw = str(
+        env.get("FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION", "")
+    )
+    if production_raw not in ("", "0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION must be 0 or 1"
+        )
+    production = production_raw == "1"
+    if gate and production:
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch qualification and production "
+            "selectors are mutually exclusive"
+        )
+    if gate:
+        return "qualification_reference"
+    if production:
+        _fr13_fixed32_gdn_single_launch_validate_pass(
+            batch, identity, environ=env, pass_path=pass_path
+        )
+        return "production_candidate"
+    return "reference"
+
+
+def _fr13_fixed32_gdn_single_launch_emit_pass(
+    batch_size: int,
+    identity: dict[str, object],
+    markers: tuple[str, ...],
+    *,
+    environ=None,
+) -> None:
+    batch = int(batch_size)
+    env = os.environ if environ is None else environ
+    path = str(
+        env.get(
+            f"FR13_FIXED32_GDN_SINGLE_LAUNCH_B{batch}_PASS_PATH",
+            (
+                _FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_PASS
+                if batch == 1
+                else _FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_PASS
+            ),
+        )
+    )
+    payload = {
+        "schema": (
+            "fr13.fixed32.gdn_single_launch.b1_live_pass.v2"
+            if batch == 1
+            else "fr13.fixed32.gdn_single_launch.b4_exact4_live_pass.v2"
+        ),
+        "status": "pass",
+        "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
+        "identity_sha256": identity["identity_sha256"],
+        "source_sha256": identity["source_sha256"],
+        "contract_sha256": identity["contract_sha256"],
+        "mode": identity["mode"],
+        "batch_size": batch,
+        "task_markers": list(markers),
+        "layer_count": 48,
+        "records_per_marker": 48,
+        "reference_kernel_structure": "fixed32_path",
+        "candidate_kernel_structure": (
+            _FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL
+        ),
+        "candidate_physical_launches_per_layer": 1,
+        "candidate_state_export_writes": 0,
+        "candidate_export_baseline_unchanged": True,
+        "authoritative_surfaces": list(
+            _FR13_FIXED32_GDN_SINGLE_LAUNCH_SURFACES
+        ),
+        "raw_byte_equal": True,
+        "reference_always_served_during_qualification": True,
+        "state_restored": True,
+    }
+    if batch == 4:
+        payload["exact4_subset_sha256"] = (
+            _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXACT4_SHA256
+        )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    temporary = f"{path}.tmp.{os.getpid()}"
+    with open(temporary, "w", encoding="ascii") as handle:
+        json.dump(payload, handle, ensure_ascii=True, sort_keys=True)
+        handle.write("\n")
+    os.replace(temporary, path)
+
+
+def fixed32_gdn_single_launch_live_capture_begin(
+    graph_id: int,
+    batch_size: int,
+) -> None:
+    global _FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURE_CONTEXT
+    batch = int(batch_size)
+    if not _fr13_fixed32_gdn_single_launch_gate_enabled(batch):
+        return
+    identity = int(graph_id)
+    if (
+        identity <= 0
+        or batch not in (1, 4)
+        or _FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURE_CONTEXT is not None
+        or identity in _FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURES
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch capture begin drift"
+        )
+    _FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURE_CONTEXT = {
+        "graph_id": identity,
+        "batch_size": batch,
+        "records": [],
+    }
+
+
+def _fr13_fixed32_gdn_single_launch_capture_register(record: dict) -> None:
+    context = _FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURE_CONTEXT
+    required = {
+        "layer_key",
+        "identity",
+        "snapshot",
+        "restore",
+        "run_reference",
+        "run_candidate",
+        "carrier_nonzero",
+        "byte_equal",
+    }
+    if (
+        not isinstance(context, dict)
+        or not isinstance(record, dict)
+        or set(record) != required
+        or not all(
+            callable(record[name])
+            for name in (
+                "snapshot",
+                "restore",
+                "run_reference",
+                "run_candidate",
+                "carrier_nonzero",
+                "byte_equal",
+            )
+        )
+        or not isinstance(record["identity"], dict)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch capture record drift"
+        )
+    context["records"].append(record)
+
+
+def fixed32_gdn_single_launch_live_capture_end(
+    graph_id: int,
+    batch_size: int,
+    graph_signature: str,
+    expected_records: int,
+) -> None:
+    global _FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURE_CONTEXT
+    context = _FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURE_CONTEXT
+    identity = int(graph_id)
+    batch = int(batch_size)
+    records = context.get("records") if isinstance(context, dict) else None
+    if (
+        not isinstance(context, dict)
+        or context.get("graph_id") != identity
+        or context.get("batch_size") != batch
+        or batch not in (1, 4)
+        or not isinstance(graph_signature, str)
+        or len(graph_signature) != 64
+        or any(
+            character not in "0123456789abcdef"
+            for character in graph_signature
+        )
+        or not isinstance(records, list)
+        or len(records) != int(expected_records)
+        or len(records) != 48
+    ):
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURE_CONTEXT = None
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch capture end drift"
+        )
+    _FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURES[identity] = {
+        "batch_size": batch,
+        "graph_signature": graph_signature,
+        "records": tuple(records),
+    }
+    _FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURE_CONTEXT = None
+
+
+def fixed32_gdn_single_launch_live_gate_on_replay(
+    graph_id: int,
+    graph_signature: str,
+    batch_size: int,
+    expected_records: int,
+) -> dict[str, object]:
+    identity = int(graph_id)
+    batch = int(batch_size)
+    capture = _FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURES.get(identity)
+    records = capture.get("records") if isinstance(capture, dict) else None
+    if (
+        not isinstance(capture, dict)
+        or capture.get("batch_size") != batch
+        or capture.get("graph_signature") != graph_signature
+        or not isinstance(records, tuple)
+        or len(records) != int(expected_records)
+        or len(records) != 48
+        or batch not in (1, 4)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch replay/capture identity drift"
+        )
+    marker = _fr13_fixed32_gdn_single_launch_real_event_marker(batch)
+    gate_state = _FR13_FIXED32_GDN_SINGLE_LAUNCH_GATE_STATE[batch]
+    if gate_state.get("failed"):
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch gate previously failed"
+        )
+    existing = gate_state["markers"].get(marker)
+    if existing is not None:
+        return dict(existing)
+
+    layer_keys: set[int] = set()
+    bound_identity = None
+    comparisons = 0
+    try:
+        for index, record in enumerate(records):
+            layer_key = int(record["layer_key"])
+            if layer_key in layer_keys:
+                raise RuntimeError(
+                    "FR13 fixed32 GDN single-launch gate reused a layer key"
+                )
+            layer_keys.add(layer_key)
+            record_identity = record["identity"]
+            if bound_identity is None:
+                bound_identity = record_identity
+            elif record_identity != bound_identity:
+                raise RuntimeError(
+                    "FR13 fixed32 GDN single-launch identity changed by layer"
+                )
+            if not bool(record["carrier_nonzero"]()):
+                raise RuntimeError(
+                    "FR13 fixed32 GDN single-launch refused a zero carrier"
+                )
+            snapshot = record["snapshot"]
+            restore = record["restore"]
+            byte_equal = record["byte_equal"]
+            baseline = snapshot()
+            expected_keys = {
+                "out",
+                "export",
+                "ring_k",
+                "ring_v",
+                "ring_a",
+                "ring_b",
+                "flags",
+                "counter",
+            }
+            if set(baseline) != expected_keys:
+                raise RuntimeError(
+                    "FR13 fixed32 GDN single-launch baseline surface drift"
+                )
+            try:
+                reference_meta = record["run_reference"]()
+                reference = snapshot()
+                restore(baseline)
+                candidate_meta = record["run_candidate"]()
+                candidate = snapshot()
+                if (
+                    reference_meta
+                    != {
+                        "kernel_structure": "fixed32_path",
+                        "physical_launches": 2 * batch,
+                        "state_export_writes": 5 * batch,
+                    }
+                    or candidate_meta
+                    != {
+                        "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
+                        "kernel_structure": _FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL,
+                        "identity_sha256": record_identity["identity_sha256"],
+                        "physical_launches": 1,
+                        "state_export_writes": 0,
+                    }
+                ):
+                    raise RuntimeError(
+                        "FR13 fixed32 GDN single-launch launch metadata drift"
+                    )
+                for surface in _FR13_FIXED32_GDN_SINGLE_LAUNCH_SURFACES:
+                    if not byte_equal(reference[surface], candidate[surface]):
+                        raise RuntimeError(
+                            "FR13 fixed32 GDN single-launch byte mismatch at "
+                            f"record {index} surface {surface}"
+                        )
+                    comparisons += 1
+                if not byte_equal(baseline["export"], candidate["export"]):
+                    raise RuntimeError(
+                        "FR13 fixed32 GDN single-launch candidate modified export"
+                    )
+                for surface in (
+                    "out",
+                    "ring_k",
+                    "ring_v",
+                    "ring_a",
+                    "ring_b",
+                    "flags",
+                ):
+                    if not byte_equal(baseline[surface], reference[surface]):
+                        raise RuntimeError(
+                            "FR13 fixed32 GDN single-launch captured reference "
+                            f"drifted at {surface}"
+                        )
+            finally:
+                restore(baseline)
+            restored = snapshot()
+            if any(
+                not byte_equal(baseline[name], restored[name])
+                for name in expected_keys
+            ):
+                raise RuntimeError(
+                    "FR13 fixed32 GDN single-launch failed state restoration"
+                )
+    except Exception:
+        gate_state["failed"] = True
+        raise
+    assert isinstance(bound_identity, dict)
+    report = {
+        "status": "passed",
+        "batch_size": batch,
+        "records": len(records),
+        "comparisons": comparisons,
+        "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
+        "identity_sha256": bound_identity["identity_sha256"],
+        "reference_served": True,
+        "candidate_export_baseline_unchanged": True,
+        "state_restored": True,
+    }
+    gate_state["markers"][marker] = dict(report)
+    if batch == 1:
+        _fr13_fixed32_gdn_single_launch_emit_pass(
+            1, bound_identity, (marker,)
+        )
+    elif all(
+        task_marker in gate_state["markers"]
+        for task_marker in _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXACT4_MARKERS
+    ):
+        _fr13_fixed32_gdn_single_launch_emit_pass(
+            4,
+            bound_identity,
+            _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXACT4_MARKERS,
+        )
+    return report
+
+
+def fixed32_gdn_single_launch_live_gate_report(
+    batch_size: int,
+) -> dict[str, object]:
+    batch = int(batch_size)
+    state = _FR13_FIXED32_GDN_SINGLE_LAUNCH_GATE_STATE.get(batch)
+    if not isinstance(state, dict):
+        return {"status": "disabled", "batch_size": batch}
+    return {
+        "status": "failed" if state["failed"] else "armed",
+        "batch_size": batch,
+        "markers_passed": len(state["markers"]),
+        "required_markers": 1 if batch == 1 else 4,
+    }
 
 
 def _subtree_decompose(parent) -> list:
@@ -4055,6 +4828,12 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
                 )
             fixed32_single_launch = {
                 "contract": single_contract,
+                "identity": {
+                    batch: _fr13_fixed32_gdn_single_launch_identity(
+                        single_contract, batch
+                    )
+                    for batch in (1, 4)
+                },
                 "path_indices": group_path_indices.to(device),
                 "path_counts": torch.tensor(
                     single_contract["group_sizes"],
@@ -4121,6 +4900,12 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
             if fixed32_single_launch is not None
             else None
         ),
+        "fixed32_single_launch_identity": (
+            fixed32_single_launch["identity"]
+            if fixed32_single_launch is not None
+            else None
+        ),
+        "last_executed_gdn": None,
         "route_armed": route_armed,
         "selfcheck_armed": selfcheck_armed,
         "engaged_announced": False,
@@ -12711,6 +13496,25 @@ def launch_tree_gdn_prepared(
         _subtree_state is not None
         and _subtree_state["selfcheck_armed"]
     )
+    _single_identity = None
+    _single_route = "incumbent"
+    if _FR13_FIXED32_GDN_SINGLE_LAUNCH and not force_reference_structure:
+        identity_by_batch = (
+            _subtree_state.get("fixed32_single_launch_identity")
+            if isinstance(_subtree_state, dict)
+            else None
+        )
+        if (
+            not isinstance(identity_by_batch, dict)
+            or not isinstance(identity_by_batch.get(1), dict)
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch B1 identity is missing"
+            )
+        _single_identity = identity_by_batch[1]
+        _single_route = fixed32_gdn_single_launch_selector(
+            1, _single_identity
+        )
 
     def _launch_paths(
         _out,
@@ -12718,6 +13522,8 @@ def launch_tree_gdn_prepared(
         *,
         _path_block_v=_bv,
         _counter_arg=invocation_counter,
+        _force_reference=force_reference_structure,
+        _single_candidate=(_single_route == "production_candidate"),
     ):
         # FR13_SUBTREE_PARALLEL route: one launch per path level; paths in a
         # level scan concurrently on grid axis 2. RING/RAW semantics match
@@ -12739,33 +13545,44 @@ def launch_tree_gdn_prepared(
             )
         _parent_group = (
             None
-            if force_reference_structure
+            if _force_reference
             else st.get("fixed32_parent_group")
         )
         _single_launch = (
-            None
-            if force_reference_structure
-            else st.get("fixed32_single_launch")
+            st.get("fixed32_single_launch")
+            if _single_candidate and not _force_reference
+            else None
         )
-        if _FR13_FIXED32_GDN_PARENT_GROUP and not force_reference_structure and (
-            not _fixed32_io
-            or not isinstance(_parent_group, dict)
-            or not isinstance(_parent_group.get("contract"), dict)
-            or _parent_group["contract"].get("candidate")
-            != _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID
-            or _parent_group["contract"].get("physical_grid_z") != (1, 5)
-            or _path_block_v != 8
-            or _geom != {"BV": 8}
-            or _subtree_selfcheck_armed
-            or n_actual != 32
-            or n_pad != 32
+        if _force_reference:
+            _single_launch = None
+        if _single_candidate and not _FR13_FIXED32_GDN_SINGLE_LAUNCH:
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch candidate requested while off"
+            )
+        if (
+            _FR13_FIXED32_GDN_PARENT_GROUP
+            and not _force_reference
+            and (
+                not _fixed32_io
+                or not isinstance(_parent_group, dict)
+                or not isinstance(_parent_group.get("contract"), dict)
+                or _parent_group["contract"].get("candidate")
+                != _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID
+                or _parent_group["contract"].get("physical_grid_z") != (1, 5)
+                or _path_block_v != 8
+                or _geom != {"BV": 8}
+                or _subtree_selfcheck_armed
+                or n_actual != 32
+                or n_pad != 32
+            )
         ):
             raise RuntimeError(
                 "FR13_FIXED32_GDN_PARENT_GROUP exact BV8 B1 contract drift; "
                 "no fallback is permitted"
             )
-        if _FR13_FIXED32_GDN_SINGLE_LAUNCH and not force_reference_structure and (
-            not _fixed32_io
+        if _single_candidate and (
+            _force_reference
+            or not _fixed32_io
             or not isinstance(_single_launch, dict)
             or not isinstance(_single_launch.get("contract"), dict)
             or _single_launch["contract"].get("candidate")
@@ -12853,6 +13670,20 @@ def launch_tree_gdn_prepared(
                 num_warps=_num_warps,
                 **_extra_launch_kwargs,
             )
+            st["last_executed_gdn"] = {
+                "route": "fixed32_single_launch_tree",
+                "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
+                "physical_launches": 1,
+                "physical_programs": 1,
+                "physical_grid_z": (1,),
+                "physical_recurrence_critical_path": 32,
+                "state_export_writes": 0,
+                "state_parent_reads": 0,
+                "logical_launches": 2,
+                "logical_programs": 12,
+                "logical_padded_slots": 82,
+                "logical_critical_path": 12,
+            }
             if not st["engaged_announced"]:
                 st["engaged_announced"] = True
                 print(
@@ -13004,6 +13835,36 @@ def launch_tree_gdn_prepared(
                 f"critical={st['critical']}",
                 flush=True,
             )
+        if _parent_group is not None:
+            st["last_executed_gdn"] = {
+                "route": "fixed32_parent_group",
+                "candidate": _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID,
+                "physical_launches": 2,
+                "physical_programs": 6,
+                "physical_grid_z": (1, 5),
+                "physical_recurrence_critical_path": 17,
+                "state_export_writes": 5,
+                "state_parent_reads": 5,
+                "logical_launches": 2,
+                "logical_programs": 12,
+                "logical_padded_slots": 82,
+                "logical_critical_path": 12,
+            }
+        else:
+            st["last_executed_gdn"] = {
+                "route": "fixed32_path",
+                "candidate": None,
+                "physical_launches": 2,
+                "physical_programs": 12,
+                "physical_grid_z": (1, 11),
+                "physical_recurrence_critical_path": 12,
+                "state_export_writes": 5,
+                "state_parent_reads": 11,
+                "logical_launches": 2,
+                "logical_programs": 12,
+                "logical_padded_slots": 82,
+                "logical_critical_path": 12,
+            }
         return {
             "block_v": int(_path_block_v),
             "launch_key": (
@@ -13257,6 +14118,106 @@ def launch_tree_gdn_prepared(
                 "run": _gdn_bv_gate_run,
                 "byte_equal": _byte_equal,
                 "surface_names": _FR13_FIXED32_GDN_BV_SURFACES,
+            }
+        )
+
+    if (
+        _single_route == "qualification_reference"
+        and isinstance(_FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURE_CONTEXT, dict)
+        and int(
+            _FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURE_CONTEXT.get(
+                "batch_size", -1
+            )
+        )
+        == 1
+    ):
+        if (
+            _single_identity is None
+            or _subtree_state is None
+            or not _ring_export
+            or not _flags_export
+            or _bv != 8
+            or _geom != {"BV": 8}
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch B1 gate requires exact BV8 "
+                "output/rings/flags"
+            )
+        _single_gate_counter_holder = {}
+
+        def _single_gate_counter():
+            if count_invocation:
+                return invocation_counter
+            counter = _single_gate_counter_holder.get("counter")
+            if counter is None:
+                counter = torch.zeros((), dtype=torch.int32, device=q.device)
+                _single_gate_counter_holder["counter"] = counter
+            return counter
+
+        def _single_gate_snapshot():
+            return {
+                "out": out.clone(),
+                "export": _subtree_state["export"].clone(),
+                "ring_k": ring_k.clone(),
+                "ring_v": ring_v.clone(),
+                "ring_a": ring_a.clone(),
+                "ring_b": ring_b.clone(),
+                "flags": _flags_arg.clone(),
+                "counter": _single_gate_counter().clone(),
+            }
+
+        def _single_gate_restore(snapshot):
+            out.copy_(snapshot["out"])
+            _subtree_state["export"].copy_(snapshot["export"])
+            ring_k.copy_(snapshot["ring_k"])
+            ring_v.copy_(snapshot["ring_v"])
+            ring_a.copy_(snapshot["ring_a"])
+            ring_b.copy_(snapshot["ring_b"])
+            _flags_arg.copy_(snapshot["flags"])
+            _single_gate_counter().copy_(snapshot["counter"])
+
+        def _single_gate_run_reference():
+            _launch_paths(
+                out,
+                _count=True,
+                _counter_arg=_single_gate_counter(),
+                _force_reference=True,
+                _single_candidate=False,
+            )
+            return {
+                "kernel_structure": "fixed32_path",
+                "physical_launches": 2,
+                "state_export_writes": 5,
+            }
+
+        def _single_gate_run_candidate():
+            _launch_paths(
+                out,
+                _count=True,
+                _counter_arg=_single_gate_counter(),
+                _force_reference=False,
+                _single_candidate=True,
+            )
+            return {
+                "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
+                "kernel_structure": _FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL,
+                "identity_sha256": _single_identity["identity_sha256"],
+                "physical_launches": 1,
+                "state_export_writes": 0,
+            }
+
+        _fr13_fixed32_gdn_single_launch_capture_register(
+            {
+                "layer_key": int(A_log.data_ptr()),
+                "identity": _single_identity,
+                "snapshot": _single_gate_snapshot,
+                "restore": _single_gate_restore,
+                "run_reference": _single_gate_run_reference,
+                "run_candidate": _single_gate_run_candidate,
+                "carrier_nonzero": lambda: bool(
+                    int(torch.count_nonzero(q[:n_actual]).item())
+                ),
+                "byte_equal": _byte_equal,
             }
         )
 
@@ -13696,8 +14657,16 @@ def launch_tree_gdn_prepared_fixed32_batch(
             f"got {flags_rows}/{batch}"
         )
 
-    def _launch_batched(_block_v: int) -> None:
-        if single_launch is not None:
+    def _launch_batched(
+        _block_v: int,
+        *,
+        _single_candidate: bool = False,
+    ) -> None:
+        if _single_candidate:
+            if single_launch is None:
+                raise RuntimeError(
+                    "FR13_FIXED32_GDN_SINGLE_LAUNCH B4 descriptor is missing"
+                )
             if _block_v != 8 or geom != {"BV": 8}:
                 raise RuntimeError(
                     "FR13_FIXED32_GDN_SINGLE_LAUNCH cannot launch outside "
@@ -13773,6 +14742,20 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 num_warps=num_warps,
                 **extra_launch_kwargs,
             )
+            subtree_state["last_executed_gdn"] = {
+                "route": "fixed32_single_launch_tree",
+                "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
+                "physical_launches": 1,
+                "physical_programs": batch,
+                "physical_grid_z": (batch,),
+                "physical_recurrence_critical_path": 32,
+                "state_export_writes": 0,
+                "state_parent_reads": 0,
+                "logical_launches": 2 * batch,
+                "logical_programs": 12 * batch,
+                "logical_padded_slots": 82 * batch,
+                "logical_critical_path": 12,
+            }
             return
         if parent_group is not None and _block_v != 8:
             raise RuntimeError(
@@ -13897,6 +14880,36 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 num_warps=num_warps,
                 **extra_launch_kwargs,
             )
+        if parent_group is not None:
+            subtree_state["last_executed_gdn"] = {
+                "route": "fixed32_parent_group",
+                "candidate": _FR13_FIXED32_GDN_PARENT_GROUP_CANDIDATE_ID,
+                "physical_launches": 2,
+                "physical_programs": 6 * batch,
+                "physical_grid_z": (batch, 5 * batch),
+                "physical_recurrence_critical_path": 17,
+                "state_export_writes": 5 * batch,
+                "state_parent_reads": 5 * batch,
+                "logical_launches": 2 * batch,
+                "logical_programs": 12 * batch,
+                "logical_padded_slots": 82 * batch,
+                "logical_critical_path": 12,
+            }
+        else:
+            subtree_state["last_executed_gdn"] = {
+                "route": "fixed32_batch_path",
+                "candidate": None,
+                "physical_launches": 2,
+                "physical_programs": 12 * batch,
+                "physical_grid_z": (batch, 11 * batch),
+                "physical_recurrence_critical_path": 12,
+                "state_export_writes": 5 * batch,
+                "state_parent_reads": 11 * batch,
+                "logical_launches": 2 * batch,
+                "logical_programs": 12 * batch,
+                "logical_padded_slots": 82 * batch,
+                "logical_critical_path": 12,
+            }
 
     def _launch_reference(*, collect_export: bool) -> torch.Tensor | None:
         reference_exports = []
@@ -13955,8 +14968,37 @@ def launch_tree_gdn_prepared_fixed32_batch(
                     )
                 )
         if not collect_export:
+            subtree_state["last_executed_gdn"] = {
+                "route": "fixed32_path",
+                "candidate": None,
+                "physical_launches": 2 * batch,
+                "physical_programs": 12 * batch,
+                "physical_grid_z": (1, 11),
+                "physical_recurrence_critical_path": 12,
+                "state_export_writes": 5 * batch,
+                "state_parent_reads": 11 * batch,
+                "logical_launches": 2 * batch,
+                "logical_programs": 12 * batch,
+                "logical_padded_slots": 82 * batch,
+                "logical_critical_path": 12,
+            }
             return None
-        return torch.cat(reference_exports, dim=0)
+        result = torch.cat(reference_exports, dim=0)
+        subtree_state["last_executed_gdn"] = {
+            "route": "fixed32_path",
+            "candidate": None,
+            "physical_launches": 2 * batch,
+            "physical_programs": 12 * batch,
+            "physical_grid_z": (1, 11),
+            "physical_recurrence_critical_path": 12,
+            "state_export_writes": 5 * batch,
+            "state_parent_reads": 11 * batch,
+            "logical_launches": 2 * batch,
+            "logical_programs": 12 * batch,
+            "logical_padded_slots": 82 * batch,
+            "logical_critical_path": 12,
+        }
+        return result
 
     def _snapshot_external() -> dict[str, torch.Tensor]:
         snapshot = {
@@ -14003,6 +15045,126 @@ def launch_tree_gdn_prepared_fixed32_batch(
     layer_key = int(A_log.data_ptr())
     batch_layer_key = (batch, layer_key)
     gate_state = _FR13_FIXED32_BATCH_GDN_BYTE_AB_STATE
+    single_graph_capture = selector == "single_launch_graph_capture"
+    single_production = selector == "single_launch_production"
+    if single_graph_capture or single_production:
+        identity_by_batch = (
+            single_launch.get("identity")
+            if isinstance(single_launch, dict)
+            else None
+        )
+        single_identity = (
+            identity_by_batch.get(4)
+            if isinstance(identity_by_batch, dict)
+            else None
+        )
+        if (
+            batch != 4
+            or not isinstance(single_identity, dict)
+            or single_identity.get("candidate")
+            != _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID
+            or single_identity.get("batch_size") != 4
+            or single_identity.get("physical_launches_per_layer") != 1
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch B4 identity drift"
+            )
+    if single_graph_capture:
+        context = _FR13_FIXED32_GDN_SINGLE_LAUNCH_CAPTURE_CONTEXT
+        if (
+            not isinstance(context, dict)
+            or int(context.get("batch_size", -1)) != 4
+            or not ring_export
+            or not flags_export
+            or not count_invocation
+            or candidate_block_v != 8
+            or geom != {"BV": 8}
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch B4 gate requires the final "
+                "BV8 graph with output/rings/flags/counter"
+            )
+        if (
+            torch.cuda.is_available()
+            and not torch.cuda.is_current_stream_capturing()
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch B4 gate requires CUDA capture"
+            )
+
+        def _single_snapshot() -> dict[str, torch.Tensor]:
+            return {
+                "out": out[:rows].clone(),
+                "export": subtree_state["export"].clone(),
+                "ring_k": ring_k[:rows].clone(),
+                "ring_v": ring_v[:rows].clone(),
+                "ring_a": ring_a[:rows].clone(),
+                "ring_b": ring_b[:rows].clone(),
+                "flags": flags_arg.clone(),
+                "counter": invocation_counter.clone(),
+            }
+
+        def _single_restore(snapshot: dict[str, torch.Tensor]) -> None:
+            out[:rows].copy_(snapshot["out"])
+            subtree_state["export"].copy_(snapshot["export"])
+            ring_k[:rows].copy_(snapshot["ring_k"])
+            ring_v[:rows].copy_(snapshot["ring_v"])
+            ring_a[:rows].copy_(snapshot["ring_a"])
+            ring_b[:rows].copy_(snapshot["ring_b"])
+            flags_arg.copy_(snapshot["flags"])
+            invocation_counter.copy_(snapshot["counter"])
+            subtree_state["last_executed_gdn"] = {
+                "route": "fixed32_path",
+                "candidate": None,
+                "physical_launches": 2 * batch,
+                "physical_programs": 12 * batch,
+                "physical_grid_z": (1, 11),
+                "physical_recurrence_critical_path": 12,
+                "state_export_writes": 5 * batch,
+                "state_parent_reads": 11 * batch,
+                "logical_launches": 2 * batch,
+                "logical_programs": 12 * batch,
+                "logical_padded_slots": 82 * batch,
+                "logical_critical_path": 12,
+            }
+
+        def _single_run_reference() -> dict[str, object]:
+            _launch_reference(collect_export=False)
+            return {
+                "kernel_structure": "fixed32_path",
+                "physical_launches": 2 * batch,
+                "state_export_writes": 5 * batch,
+            }
+
+        def _single_run_candidate() -> dict[str, object]:
+            _launch_batched(8, _single_candidate=True)
+            return {
+                "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
+                "kernel_structure": _FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL,
+                "identity_sha256": single_identity["identity_sha256"],
+                "physical_launches": 1,
+                "state_export_writes": 0,
+            }
+
+        _fr13_fixed32_gdn_single_launch_capture_register(
+            {
+                "layer_key": layer_key,
+                "identity": single_identity,
+                "snapshot": _single_snapshot,
+                "restore": _single_restore,
+                "run_reference": _single_run_reference,
+                "run_candidate": _single_run_candidate,
+                "carrier_nonzero": lambda: bool(
+                    int(torch.count_nonzero(q[:rows]).item())
+                ),
+                "byte_equal": _fr13_tensor_byte_equal,
+            }
+        )
+        _launch_reference(collect_export=False)
+        return out, None
+    if single_production:
+        _launch_batched(8, _single_candidate=True)
+        return out, None
     if graph_byte_ab_capture:
         if batch != 4 or not fixed32_batch_gdn_graph_live_capture_active(batch):
             raise RuntimeError(

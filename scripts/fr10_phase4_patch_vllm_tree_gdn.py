@@ -167,6 +167,12 @@ _FR13_FIXED32_BATCH_GDN_BYTE_AB = os.environ.get(
 _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = os.environ.get(
     "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB", "0"
 ).strip()
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB = os.environ.get(
+    "FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB", "0"
+).strip()
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB = os.environ.get(
+    "FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB", "0"
+).strip()
 _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB = os.environ.get(
     "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB", "0"
 ).strip()
@@ -417,6 +423,14 @@ try:
     _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
 except NameError:
     _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = False
+try:
+    _FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB
+except NameError:
+    _FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB = False
+try:
+    _FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB
+except NameError:
+    _FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB = False
 try:
     _FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC
 except NameError:
@@ -673,9 +687,12 @@ def _fr13_fixed32_observed_new_state(
         "gdn_path_programs": 0,
         "gdn_padded_slots": 0,
         "gdn_physical_route": None,
+        "gdn_candidate": None,
+        "gdn_physical_launches": 0,
         "gdn_physical_programs": 0,
         "gdn_physical_grid_z": None,
         "gdn_level1_parent_loads": 0,
+        "gdn_state_export_writes": 0,
         "gdn_single_writer_nodes": 0,
         "gdn_nodes": 0,
         "gdn_critical_path": None,
@@ -2276,7 +2293,7 @@ def _fr13_fixed32_observed_gdn(
             ),
         }
         expected_single_launch = {
-            "candidate": "fixed32_gdn_single_launch_tree_v1",
+            "candidate": "fixed32_gdn_single_launch_tree_v2",
             "root_nodes": (0, 1, 4, 9, 14),
             "branch_path_indices": (
                 (1, 2),
@@ -2414,6 +2431,63 @@ def _fr13_fixed32_observed_gdn(
             "single_writer_nodes"
         ]
         physical_critical_path = 17
+    executed = runtime_state.get("executed_gdn")
+    executed_keys = {
+        "route",
+        "candidate",
+        "physical_launches",
+        "physical_programs",
+        "physical_grid_z",
+        "physical_recurrence_critical_path",
+        "state_export_writes",
+        "state_parent_reads",
+        "logical_launches",
+        "logical_programs",
+        "logical_padded_slots",
+        "logical_critical_path",
+    }
+    if not isinstance(executed, dict) or set(executed) != executed_keys:
+        raise RuntimeError(
+            "FR13 fixed32 GDN actual executed-route metadata is missing: "
+            + repr(executed)
+        )
+    execution_scope = int(executed.get("logical_launches", -1)) // 2
+    if (
+        execution_scope not in (1, batch)
+        or int(executed.get("logical_launches", -1)) != 2 * execution_scope
+        or int(executed.get("logical_programs", -1)) != 12 * execution_scope
+        or int(executed.get("logical_padded_slots", -1)) != 82 * execution_scope
+        or int(executed.get("logical_critical_path", -1)) != 12
+        or int(executed.get("physical_launches", -1)) < 1
+        or int(executed.get("physical_programs", -1)) < 1
+        or int(executed.get("state_export_writes", -1)) < 0
+        or int(executed.get("state_parent_reads", -1)) < 0
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN actual executed-route work drift: "
+            + repr(executed)
+        )
+    physical_route = str(executed["route"])
+    candidate_id = executed["candidate"]
+    physical_launches = int(executed["physical_launches"])
+    physical_programs = int(executed["physical_programs"])
+    physical_grid_z = tuple(int(value) for value in executed["physical_grid_z"])
+    level1_parent_loads = int(executed["state_parent_reads"])
+    physical_critical_path = int(
+        executed["physical_recurrence_critical_path"]
+    )
+    state_export_writes = int(executed["state_export_writes"])
+    expected_candidate = {
+        "fixed32_path": None,
+        "fixed32_batch_path": None,
+        "fixed32_parent_group": "fixed32_gdn_parent_group_v1",
+        "fixed32_single_launch_tree": "fixed32_gdn_single_launch_tree_v2",
+    }.get(physical_route, object())
+    if candidate_id != expected_candidate:
+        raise RuntimeError(
+            "FR13 fixed32 GDN executed candidate identity drift: "
+            + repr((physical_route, candidate_id))
+        )
     if {
         "schedule": runtime_state.get("schedule"),
         "route_armed": runtime_state.get("route_armed"),
@@ -2465,6 +2539,10 @@ def _fr13_fixed32_observed_gdn(
     ):
         raise RuntimeError("FR13 fixed32 GDN physical route changed")
     event["gdn_physical_route"] = physical_route
+    prior_candidate = event["gdn_candidate"]
+    if prior_candidate is not None and prior_candidate != candidate_id:
+        raise RuntimeError("FR13 fixed32 GDN executed candidate changed")
+    event["gdn_candidate"] = candidate_id
     prior_physical_grid = event["gdn_physical_grid_z"]
     if (
         prior_physical_grid is not None
@@ -2472,8 +2550,11 @@ def _fr13_fixed32_observed_gdn(
     ):
         raise RuntimeError("FR13 fixed32 GDN physical grid changed")
     event["gdn_physical_grid_z"] = physical_grid_z
-    event["gdn_physical_programs"] += physical_programs
-    event["gdn_level1_parent_loads"] += level1_parent_loads
+    if index % execution_scope == 0:
+        event["gdn_physical_launches"] += physical_launches
+        event["gdn_physical_programs"] += physical_programs
+        event["gdn_level1_parent_loads"] += level1_parent_loads
+        event["gdn_state_export_writes"] += state_export_writes
     event["gdn_single_writer_nodes"] += single_writer_nodes
     event["gdn_nodes"] += int(n_actual)
     event["gdn_critical_path"] = normalized_contract["critical"]
@@ -3166,19 +3247,38 @@ def _fr13_fixed32_validate_forward_work(work, label):
     physical_route = work["gdn_physical_route"]
     if physical_route == "fixed32_parent_group":
         expected_physical_programs_per_scan = 6
-        expected_physical_grid_z = (1, 5)
+        expected_physical_grid_z = (
+            (1, 5) if batch == 1 else (batch, 5 * batch)
+        )
         expected_level1_parent_loads_per_scan = 5
         expected_physical_critical_path = 17
+        expected_candidate = "fixed32_gdn_parent_group_v1"
+        expected_physical_launches = 48 * 2
+        expected_state_export_writes = expected_gdn_calls * 5
     elif physical_route == "fixed32_single_launch_tree":
         expected_physical_programs_per_scan = 1
-        expected_physical_grid_z = (1,)
+        expected_physical_grid_z = (batch,)
         expected_level1_parent_loads_per_scan = 0
         expected_physical_critical_path = 32
+        expected_candidate = "fixed32_gdn_single_launch_tree_v2"
+        expected_physical_launches = 48
+        expected_state_export_writes = 0
     elif physical_route == "fixed32_path":
         expected_physical_programs_per_scan = 12
         expected_physical_grid_z = (1, 11)
         expected_level1_parent_loads_per_scan = 11
         expected_physical_critical_path = 12
+        expected_candidate = None
+        expected_physical_launches = expected_gdn_calls * 2
+        expected_state_export_writes = expected_gdn_calls * 5
+    elif physical_route == "fixed32_batch_path":
+        expected_physical_programs_per_scan = 12
+        expected_physical_grid_z = (batch, 11 * batch)
+        expected_level1_parent_loads_per_scan = 11
+        expected_physical_critical_path = 12
+        expected_candidate = None
+        expected_physical_launches = 48 * 2
+        expected_state_export_writes = expected_gdn_calls * 5
     else:
         raise RuntimeError(
             "FR13 fixed32 GDN physical route is invalid: "
@@ -3206,11 +3306,14 @@ def _fr13_fixed32_validate_forward_work(work, label):
         "gdn_path_programs": int(work["gdn_path_programs"]),
         "gdn_padded_slots": int(work["gdn_padded_slots"]),
         "gdn_physical_route": physical_route,
+        "gdn_candidate": work["gdn_candidate"],
+        "gdn_physical_launches": int(work["gdn_physical_launches"]),
         "gdn_physical_programs": int(work["gdn_physical_programs"]),
         "gdn_physical_grid_z": work["gdn_physical_grid_z"],
         "gdn_level1_parent_loads": int(
             work["gdn_level1_parent_loads"]
         ),
+        "gdn_state_export_writes": int(work["gdn_state_export_writes"]),
         "gdn_single_writer_nodes": int(work["gdn_single_writer_nodes"]),
         "gdn_nodes": int(work["gdn_nodes"]),
         "gdn_critical_path": work["gdn_critical_path"],
@@ -3270,6 +3373,8 @@ def _fr13_fixed32_validate_forward_work(work, label):
         "gdn_path_programs": expected_gdn_calls * 12,
         "gdn_padded_slots": expected_gdn_calls * 82,
         "gdn_physical_route": physical_route,
+        "gdn_candidate": expected_candidate,
+        "gdn_physical_launches": expected_physical_launches,
         "gdn_physical_programs": (
             expected_gdn_calls * expected_physical_programs_per_scan
         ),
@@ -3277,6 +3382,7 @@ def _fr13_fixed32_validate_forward_work(work, label):
         "gdn_level1_parent_loads": (
             expected_gdn_calls * expected_level1_parent_loads_per_scan
         ),
+        "gdn_state_export_writes": expected_state_export_writes,
         "gdn_single_writer_nodes": expected_gdn_calls * 32,
         "gdn_nodes": expected_gdn_calls * 32,
         "gdn_critical_path": 12,
@@ -3422,14 +3528,25 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
             "gdn": {
                 "layers": len(gdn.get("layers", ())),
                 "scan_calls": scan_calls,
-                "launches_per_scan": (
-                    int(gdn.get("launches", -1)) // scan_calls
+                "logical_launches_per_scan": (
+                    int(gdn.get("logical_launches", gdn.get("launches", -1)))
+                    // scan_calls
                 ),
-                "path_programs_per_scan": (
-                    int(gdn.get("path_programs", -1)) // scan_calls
+                "logical_path_programs_per_scan": (
+                    int(
+                        gdn.get(
+                            "logical_path_programs",
+                            gdn.get("path_programs", -1),
+                        )
+                    )
+                    // scan_calls
                 ),
                 "physical_route": gdn.get(
                     "physical_route", "fixed32_path"
+                ),
+                "candidate": gdn.get("candidate"),
+                "physical_launches_per_layer": int(
+                    gdn.get("physical_launches_per_layer", -1)
                 ),
                 "physical_programs_per_scan": (
                     int(
@@ -3456,11 +3573,22 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
                     )
                     // scan_calls
                 ),
-                "padded_slots_per_scan": (
-                    int(gdn.get("padded_slots", -1)) // scan_calls
+                "logical_padded_slots_per_scan": (
+                    int(
+                        gdn.get(
+                            "logical_padded_slots",
+                            gdn.get("padded_slots", -1),
+                        )
+                    )
+                    // scan_calls
                 ),
                 "nodes_per_scan": int(gdn.get("nodes", -1)) // scan_calls,
-                "critical_path": int(gdn.get("critical_path", -1)),
+                "logical_critical_path": int(
+                    gdn.get("logical_critical_path", gdn.get("critical_path", -1))
+                ),
+                "state_export_writes_per_layer": int(
+                    gdn.get("state_export_writes_per_layer", -1)
+                ),
                 "physical_recurrence_critical_path": int(
                     gdn.get(
                         "physical_recurrence_critical_path",
@@ -3672,6 +3800,17 @@ def _fr13_fixed32_capture_begin(
                 "and tree kernel"
             )
         tree_kernel.fixed32_batch_gdn_graph_live_capture_begin(identity, batch)
+    single_launch_gate = (
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB and batch == 1
+    ) or (
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB and batch == 4
+    )
+    if single_launch_gate:
+        tree_kernel = __import__(
+            "lumo_flywheel_serving.fr10_gdn_tree_kernel",
+            fromlist=("fixed32_gdn_single_launch_live_capture_begin",),
+        )
+        tree_kernel.fixed32_gdn_single_launch_live_capture_begin(identity, batch)
     tree_kernel = __import__(
         "lumo_flywheel_serving.fr10_gdn_tree_kernel",
         fromlist=(
@@ -3778,14 +3917,28 @@ def _fr13_fixed32_capture_end(
                 [name, index] for name, index in sorted(work["gdn_calls"])
             ],
             "scan_calls": int(work["gdn_scan_calls"]),
+            "legacy_structure_semantics": "logical_fixed32_path_equivalent",
+            "logical_launches": int(work["gdn_launches"]),
+            "logical_path_programs": int(work["gdn_path_programs"]),
+            "logical_padded_slots": int(work["gdn_padded_slots"]),
+            "logical_critical_path": int(work["gdn_critical_path"]),
             "launches": int(work["gdn_launches"]),
             "path_programs": int(work["gdn_path_programs"]),
             "padded_slots": int(work["gdn_padded_slots"]),
             "physical_route": work["gdn_physical_route"],
+            "candidate": work["gdn_candidate"],
+            "physical_launches": int(work["gdn_physical_launches"]),
+            "physical_launches_per_layer": (
+                int(work["gdn_physical_launches"]) // 48
+            ),
             "physical_programs": int(work["gdn_physical_programs"]),
             "physical_grid_z": list(work["gdn_physical_grid_z"]),
             "level1_parent_loads": int(
                 work["gdn_level1_parent_loads"]
+            ),
+            "state_export_writes": int(work["gdn_state_export_writes"]),
+            "state_export_writes_per_layer": (
+                int(work["gdn_state_export_writes"]) // 48
             ),
             "single_writer_nodes": int(work["gdn_single_writer_nodes"]),
             "nodes": int(work["gdn_nodes"]),
@@ -3872,6 +4025,24 @@ def _fr13_fixed32_capture_end(
         tree_kernel.fixed32_batch_gdn_graph_live_capture_end(
             identity,
             4,
+            signature,
+            48,
+        )
+    single_launch_gate = (
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB
+        and int(work["batch_size"]) == 1
+    ) or (
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB
+        and int(work["batch_size"]) == 4
+    )
+    if single_launch_gate:
+        tree_kernel = __import__(
+            "lumo_flywheel_serving.fr10_gdn_tree_kernel",
+            fromlist=("fixed32_gdn_single_launch_live_capture_end",),
+        )
+        tree_kernel.fixed32_gdn_single_launch_live_capture_end(
+            identity,
+            int(work["batch_size"]),
             signature,
             48,
         )
@@ -4057,6 +4228,33 @@ def _fr13_fixed32_observed_graph_replay(
                 "FR13 fixed32 B4 graph GDN byte gate did not pass on the "
                 "authenticated full-graph replay: " + repr(gate_report)
             )
+    single_launch_gate = (
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB
+        and int(event["batch_size"]) == 1
+    ) or (
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB
+        and int(event["batch_size"]) == 4
+    )
+    if single_launch_gate:
+        gate_report = tree_kernel.fixed32_gdn_single_launch_live_gate_on_replay(
+            identity,
+            expected_signature,
+            int(event["batch_size"]),
+            48,
+        )
+        if (
+            gate_report.get("status") != "passed"
+            or gate_report.get("batch_size") != int(event["batch_size"])
+            or gate_report.get("records") != 48
+            or gate_report.get("comparisons") != 48 * 7
+            or gate_report.get("reference_served") is not True
+            or gate_report.get("candidate_export_baseline_unchanged") is not True
+            or gate_report.get("state_restored") is not True
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch byte gate did not pass on the "
+                "authenticated full-graph replay: " + repr(gate_report)
+            )
     if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None:
         if getattr(
             tree_kernel, "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE", None
@@ -4146,11 +4344,19 @@ def _fr13_fixed32_observed_graph_replay(
         (str(name), int(index)) for name, index in gdn["call_pairs"]
     }
     event["gdn_scan_calls"] = int(gdn["scan_calls"])
-    event["gdn_launches"] = int(gdn["launches"])
-    event["gdn_path_programs"] = int(gdn["path_programs"])
-    event["gdn_padded_slots"] = int(gdn["padded_slots"])
+    event["gdn_launches"] = int(gdn.get("logical_launches", gdn["launches"]))
+    event["gdn_path_programs"] = int(
+        gdn.get("logical_path_programs", gdn["path_programs"])
+    )
+    event["gdn_padded_slots"] = int(
+        gdn.get("logical_padded_slots", gdn["padded_slots"])
+    )
     event["gdn_physical_route"] = gdn.get(
         "physical_route", "fixed32_path"
+    )
+    event["gdn_candidate"] = gdn.get("candidate")
+    event["gdn_physical_launches"] = int(
+        gdn.get("physical_launches", int(gdn["scan_calls"]) * 2)
     )
     event["gdn_physical_programs"] = int(
         gdn.get("physical_programs", gdn["path_programs"])
@@ -4161,11 +4367,16 @@ def _fr13_fixed32_observed_graph_replay(
     event["gdn_level1_parent_loads"] = int(
         gdn.get("level1_parent_loads", int(gdn["scan_calls"]) * 11)
     )
+    event["gdn_state_export_writes"] = int(
+        gdn.get("state_export_writes", int(gdn["scan_calls"]) * 5)
+    )
     event["gdn_single_writer_nodes"] = int(
         gdn.get("single_writer_nodes", gdn["nodes"])
     )
     event["gdn_nodes"] = int(gdn["nodes"])
-    event["gdn_critical_path"] = int(gdn["critical_path"])
+    event["gdn_critical_path"] = int(
+        gdn.get("logical_critical_path", gdn["critical_path"])
+    )
     event["gdn_physical_critical_path"] = int(
         gdn.get("physical_recurrence_critical_path", gdn["critical_path"])
     )
@@ -5696,14 +5907,28 @@ def _fr13_fixed32_observed_take(mode, batch_size, forward_step_index):
         },
         "gdn": {
             "scan_calls": int(event["gdn_scan_calls"]),
+            "legacy_structure_semantics": "logical_fixed32_path_equivalent",
+            "logical_launches": int(event["gdn_launches"]),
+            "logical_path_programs": int(event["gdn_path_programs"]),
+            "logical_padded_slots": int(event["gdn_padded_slots"]),
+            "logical_critical_path": int(event["gdn_critical_path"]),
             "launches": int(event["gdn_launches"]),
             "path_programs": int(event["gdn_path_programs"]),
             "padded_slots": int(event["gdn_padded_slots"]),
             "physical_route": event["gdn_physical_route"],
+            "candidate": event["gdn_candidate"],
+            "physical_launches": int(event["gdn_physical_launches"]),
+            "physical_launches_per_layer": (
+                int(event["gdn_physical_launches"]) // 48
+            ),
             "physical_programs": int(event["gdn_physical_programs"]),
             "physical_grid_z": list(event["gdn_physical_grid_z"]),
             "level1_parent_loads": int(
                 event["gdn_level1_parent_loads"]
+            ),
+            "state_export_writes": int(event["gdn_state_export_writes"]),
+            "state_export_writes_per_layer": (
+                int(event["gdn_state_export_writes"]) // 48
             ),
             "single_writer_nodes": int(
                 event["gdn_single_writer_nodes"]
@@ -6166,6 +6391,28 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
             "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
         )
     graph_batch_gdn_diagnostic = graph_batch_gdn_diagnostic_raw == "1"
+    single_launch_b1_raw = _FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB
+    single_launch_b4_raw = _FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB
+    if single_launch_b1_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB must be exactly 0 or 1"
+        )
+    if single_launch_b4_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB must be exactly 0 or 1"
+        )
+    single_launch_b1 = single_launch_b1_raw == "1" or os.path.exists(
+        os.environ.get(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB_ENABLED_PATH",
+            "/logs/fr13_fixed32_gdn_single_launch_b1_byte_ab.enabled",
+        )
+    )
+    single_launch_b4 = single_launch_b4_raw == "1" or os.path.exists(
+        os.environ.get(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB_ENABLED_PATH",
+            "/logs/fr13_fixed32_gdn_single_launch_b4_byte_ab.enabled",
+        )
+    )
     eager_kernel_diagnostic = (
         _fr13_fixed32_eager_boot_warm_contract() is not None
     )
@@ -6217,6 +6464,10 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         f"{taw_native_diagnostic!r}\n"
         "_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = "
         f"{graph_batch_gdn_diagnostic!r}\n"
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB = "
+        f"{single_launch_b1!r}\n"
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB = "
+        f"{single_launch_b4!r}\n"
         "_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC = "
         f"{eager_kernel_diagnostic!r}\n"
     )
@@ -6305,6 +6556,8 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     graph_batch_gdn_byte_diagnostic = (
         _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
     )
+    single_launch_b1_raw = _FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB
+    single_launch_b4_raw = _FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB
     sfwd_b4_byte_diagnostic = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
     sfwd_production = os.environ.get(
         "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION", "0"
@@ -6323,6 +6576,51 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
         )
+    if single_launch_b1_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB must be exactly 0 or 1"
+        )
+    if single_launch_b4_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB must be exactly 0 or 1"
+        )
+    single_launch_b1 = single_launch_b1_raw == "1" or os.path.exists(
+        os.environ.get(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB_ENABLED_PATH",
+            "/logs/fr13_fixed32_gdn_single_launch_b1_byte_ab.enabled",
+        )
+    )
+    single_launch_b4 = single_launch_b4_raw == "1" or os.path.exists(
+        os.environ.get(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB_ENABLED_PATH",
+            "/logs/fr13_fixed32_gdn_single_launch_b4_byte_ab.enabled",
+        )
+    )
+    if single_launch_b1 and single_launch_b4:
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch B1/B4 qualification gates must "
+            "run in separate processes"
+        )
+    if single_launch_b1 or single_launch_b4:
+        incompatible = (
+            not mode
+            or os.environ.get("FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE", "0")
+            != "1"
+            or os.environ.get(
+                "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION", "0"
+            )
+            != "0"
+            or batch_gdn_byte_diagnostic != "0"
+            or graph_batch_gdn_byte_diagnostic != "0"
+            or bool(candidate)
+            or bool(production)
+            or os.environ.get("ENFORCE_EAGER", "0") == "1"
+        )
+        if incompatible:
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch qualification requires its "
+                "exclusive final-graph reference-served route"
+            )
     if (
         batch_gdn_byte_diagnostic == "1"
         and graph_batch_gdn_byte_diagnostic == "1"
@@ -12348,6 +12646,9 @@ def _fr13_conv_subop_mab(
                                     _fr13_f32_scan_state.get(
                                         "fixed32_single_launch_contract"
                                     )
+                                ),
+                                "executed_gdn": _fr13_f32_scan_state.get(
+                                    "last_executed_gdn"
                                 ),
                             },
                             bool(
@@ -32598,7 +32899,23 @@ def _patch_cudagraph_wrapper_subspan_mark() -> bool:
         "        entry.cudagraph.replay()\n"
         + (
             "        if ("
-            + repr(_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB == "1")
+            + repr(
+                _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB == "1"
+                or _FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB == "1"
+                or _FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB == "1"
+                or os.path.exists(
+                    os.environ.get(
+                        "FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB_ENABLED_PATH",
+                        "/logs/fr13_fixed32_gdn_single_launch_b1_byte_ab.enabled",
+                    )
+                )
+                or os.path.exists(
+                    os.environ.get(
+                        "FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB_ENABLED_PATH",
+                        "/logs/fr13_fixed32_gdn_single_launch_b4_byte_ab.enabled",
+                    )
+                )
+            )
             + " or getattr(torch, \"_fr13_sfwd_open\", False)):\n"
             "            from vllm.model_executor.layers.mamba import (\n"
             "                gdn_linear_attn as _fr13_f32_replay_gdn,\n"
@@ -32861,6 +33178,20 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
                 "export_or_mask": reference["gdn"]["export_or_mask"],
                 "parent_sha256": tree["physical_parent_digest"],
                 "ancestry_sha256": tree["bias_digest"],
+            },
+            "executed_gdn": {
+                "route": "fixed32_path",
+                "candidate": None,
+                "physical_launches": 2,
+                "physical_programs": 12,
+                "physical_grid_z": (1, 11),
+                "physical_recurrence_critical_path": 12,
+                "state_export_writes": 5,
+                "state_parent_reads": 11,
+                "logical_launches": 2,
+                "logical_programs": 12,
+                "logical_padded_slots": 82,
+                "logical_critical_path": 12,
             },
         }
 
