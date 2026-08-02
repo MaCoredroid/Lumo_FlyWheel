@@ -3,6 +3,8 @@
 - The packed source decoder matches all 32 established topology rows.
 - The x-gather kernel has exactly one global `x` tile load in source and reuses
   it for all historical taps.
+- Independent packed-topology decoding counts 23, 28, and 31 historical `x`
+  rows across the three taps, for 82 total per channel.
 - The focused kernel and gate suite passes 19 tests.
 - The final-full-preseed and ingress suites pass 68 tests.
 - Python compilation, shell syntax, Ruff, and `git diff --check` pass.
