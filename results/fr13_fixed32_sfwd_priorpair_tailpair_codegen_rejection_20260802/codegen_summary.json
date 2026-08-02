@@ -1,0 +1,71 @@
+{
+  "schema": "fr13.fixed32.sfwd_priorpair_tailpair.codegen_rejection.v1",
+  "status": "OFFLINE_CODEGEN_REJECTED_NO_STATIC_IMPROVEMENT",
+  "source_commit": "96406cdafab1118ff50d0b670a2a9c4eaca0a373",
+  "baseline_commit": "6254582fc8b2000f00bc3fa425e8d55df11b3216",
+  "compile_contract": {
+    "batches": [1, 4],
+    "rows_per_program": 32,
+    "block_c": 64,
+    "num_warps": 16,
+    "channels": 10240,
+    "conv_width": 4,
+    "state_len": 34,
+    "target": "sm_121a"
+  },
+  "baseline": {
+    "registers": 55,
+    "launch_shared_bytes": 4096,
+    "elf_shared_bytes": 1024,
+    "static_sass_instructions": 391,
+    "encoded_sass_instructions": 408,
+    "ldg": 19,
+    "stg": 12,
+    "lds": 6,
+    "sts": 6,
+    "bar": 3,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "ldl": 0,
+    "stl": 0,
+    "calls": 0
+  },
+  "candidate": {
+    "registers": 55,
+    "launch_shared_bytes": 4096,
+    "elf_shared_bytes": 1024,
+    "static_sass_instructions": 391,
+    "encoded_sass_instructions": 408,
+    "ldg": 19,
+    "stg": 12,
+    "lds": 6,
+    "sts": 6,
+    "bar": 3,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "ldl": 0,
+    "stl": 0,
+    "calls": 0
+  },
+  "logical_traffic_delta": {
+    "bytes_per_cta": 128,
+    "ctas_per_request": 160,
+    "bytes_per_request_layer": 20480,
+    "bytes_per_48_layer_forward": 983040
+  },
+  "verification": {
+    "focused_tests": "22 passed",
+    "b1_b4_metrics_identical": true,
+    "gpu_or_docker_used": false,
+    "runtime_candidate_bound": false,
+    "runtime_correctness_qualified": false,
+    "performance_measured": false,
+    "floor_acceptance_eligible": false
+  },
+  "toolchain": {
+    "torch": "2.10.0+cu130",
+    "torch_cuda": "13.0",
+    "triton": "3.6.0",
+    "backend": "ptxas-blackwell 12.9.86"
+  }
+}
