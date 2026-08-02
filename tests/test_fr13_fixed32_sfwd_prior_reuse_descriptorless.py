@@ -121,11 +121,15 @@ def test_descriptor_pointer_is_absent_from_kernel_contract() -> None:
     assert argument_names[-2:] == ("ROWS_PER_PROGRAM", "BLOCK_C")
 
 
-def test_b1_b4_dense_offsets_fit_signed_int32() -> None:
+def test_b1_b4_live_padded_offsets_fit_signed_int32() -> None:
+    live_x_stride_row = 16384
     for batch in (1, 4):
-        maxima = fixed32_i32_address_contract(batch, x_stride_row=CHANNELS)
+        maxima = fixed32_i32_address_contract(
+            batch,
+            x_stride_row=live_x_stride_row,
+        )
         assert maxima == {
-            "x": batch * 32 * CHANNELS - 1,
+            "x": (batch * 32 - 1) * live_x_stride_row + CHANNELS - 1,
             "out": batch * 32 * CHANNELS - 1,
             "source_stage": batch * 36 * CHANNELS - 1,
         }
