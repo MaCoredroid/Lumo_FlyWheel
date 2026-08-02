@@ -30004,6 +30004,23 @@ def _fr13_f32_flush_counters(*, require_drained):
     }
 
 
+def _fr13_f32_flush_ready_counters():
+    # The timing timer module is appended later in the real patch sequence.
+    # Generation zero is an import-ready control-plane record, not a measured
+    # boundary, so it must not resolve those later symbols during module import.
+    if globals().get("_FR13_FIXED32_EAGER_TIMING_BOUNDARY", False):
+        return {
+            "pure_decode_forward_steps": 0,
+            "complete_work_census_events": 0,
+            "work_census_first_forward_step": None,
+            "work_census_last_forward_step": None,
+            "sfwd_pending": 0,
+            "dfwd_pending": 0,
+            "cfwd_pending": 0,
+        }
+    return _fr13_f32_flush_counters(require_drained=True)
+
+
 def _fr13_f32_flush_reconcile():
     (
         gdn, events, forward_steps, _first, _last, sfwd, dfwd, cfwd,
@@ -30729,7 +30746,7 @@ _fr13_f32_flush_write_ack(
     nonce=_FR13_FIXED32_FLUSH_READY_NONCE,
     action="ready",
     status="ok",
-    counters=_fr13_f32_flush_counters(require_drained=True),
+    counters=_fr13_f32_flush_ready_counters(),
 )
 _fr13_f32_flush_break_wall_chain()
 '''

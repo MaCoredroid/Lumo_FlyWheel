@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import json
+import signal
 import threading
 import time
 from pathlib import Path
@@ -38,7 +40,7 @@ def _load_floor_gate() -> Any:
     return module
 
 
-def _timer_namespace() -> dict[str, object]:
+def _timer_module_source() -> str:
     tree = ast.parse(PATCHER.read_text(encoding="utf-8"))
     patch_function = next(
         node
@@ -55,8 +57,15 @@ def _timer_namespace() -> dict[str, object]:
             for target in node.targets
         )
     )
+    return module_source
+
+
+def _timer_namespace() -> dict[str, object]:
     namespace: dict[str, object] = {}
-    exec(compile(module_source, "<fr13-sfwd-timer>", "exec"), namespace)
+    exec(
+        compile(_timer_module_source(), "<fr13-sfwd-timer>", "exec"),
+        namespace,
+    )
     return namespace
 
 
@@ -428,6 +437,115 @@ def test_flush_boundaries_break_wall_chain_after_snapshot() -> None:
     wall_break = flush_one.index("_fr13_f32_flush_break_wall_chain()")
     sidecar_dump = flush_one.index("sfwd._dump_json")
     assert boundary < wall_break < sidecar_dump
+
+
+def test_real_patch_order_timing_ready_closes_before_timer_symbols(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patcher_source = PATCHER.read_text(encoding="utf-8")
+    main_source = ast.get_source_segment(
+        patcher_source,
+        next(
+            node
+            for node in ast.parse(patcher_source).body
+            if isinstance(node, ast.FunctionDef) and node.name == "main"
+        ),
+    )
+    assert main_source is not None
+    assert main_source.index("_patch_gpu_model_runner_exec_lock()") < (
+        main_source.index("_patch_gpu_model_runner_sfwd_gpu_timer()")
+    )
+
+    paths = {
+        "FR13_FIXED32_ENGINE_PID_FILE": tmp_path / "engine.pid",
+        "FR13_FIXED32_FLUSH_REQUEST_PATH": tmp_path / "request.json",
+        "FR13_FIXED32_FLUSH_ACK_PATH": tmp_path / "ack.json",
+        "FR13_FIXED32_WORK_CENSUS_PATH": tmp_path / "census.jsonl",
+        "FR13_FIXED32_BOUNDARY_SNAPSHOT_PATH": tmp_path / "boundary",
+    }
+    for name, path in paths.items():
+        monkeypatch.setenv(name, str(path))
+    lock = threading.RLock()
+    namespace: dict[str, object] = {
+        "_fr13_sg_threading": threading,
+        "_FR13_SG_EXEC_LOCK": lock,
+        "_FR13_FIXED32_SAMPLE_COND": threading.Condition(lock),
+        "_FR13_FIXED32_SAMPLE_PENDING": {},
+        "_FR13_FIXED32_SAMPLE_FAILURE": None,
+        "_FR13_FIXED32_FLUSH_QUIESCING": False,
+    }
+    generated_flush = (
+        _fixed_flush_source()
+        .replace("__FR13_FIXED32_MODE__", repr("hydra27_fixed32"))
+        .replace("__FR13_FIXED32_EAGER_TIMING_BOUNDARY__", repr(True))
+    )
+    prior_handler = signal.getsignal(signal.SIGUSR2)
+    try:
+        exec(
+            compile(generated_flush, "<fixed32-timing-import>", "exec"),
+            namespace,
+        )
+    finally:
+        signal.signal(signal.SIGUSR2, prior_handler)
+
+    assert "_fr13_sfwd_timer" not in namespace
+    ready = json.loads(paths["FR13_FIXED32_FLUSH_ACK_PATH"].read_text())
+    assert ready["generation"] == 0
+    assert ready["action"] == "ready"
+    assert ready["counters"] == {
+        "pure_decode_forward_steps": 0,
+        "complete_work_census_events": 0,
+        "work_census_first_forward_step": None,
+        "work_census_last_forward_step": None,
+        "sfwd_pending": 0,
+        "dfwd_pending": 0,
+        "cfwd_pending": 0,
+    }
+
+    # The next generated block in the real patch sequence closes the symbols
+    # that positive-generation timing snapshots resolve.
+    exec(
+        compile(
+            _timer_module_source(),
+            "<fixed32-timing-timer-module>",
+            "exec",
+        ),
+        namespace,
+    )
+    assert callable(namespace["_fr13_sfwd_timer"])
+    assert callable(namespace["_fr13_dfwd_timer"])
+    assert callable(namespace["_fr13_cfwd_timer"])
+
+
+def test_non_timing_ready_still_uses_reconciled_runtime_counters() -> None:
+    source = _fixed_flush_source()
+    tree = ast.parse(source)
+    definition = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_f32_flush_ready_counters"
+    )
+    expected = {"graph_path": "reconciled"}
+    calls: list[bool] = []
+    namespace = {
+        "_FR13_FIXED32_EAGER_TIMING_BOUNDARY": False,
+        "_fr13_f32_flush_counters": lambda *, require_drained: (
+            calls.append(require_drained) or expected
+        ),
+    }
+    exec(
+        compile(
+            ast.Module(body=[definition], type_ignores=[]),
+            "<fixed32-nontiming-ready>",
+            "exec",
+        ),
+        namespace,
+    )
+
+    assert namespace["_fr13_f32_flush_ready_counters"]() is expected
+    assert calls == [True]
 
 
 @pytest.mark.parametrize(
