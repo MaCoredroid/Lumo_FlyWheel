@@ -1,0 +1,4 @@
+schedule	rows_per_program	block_c	num_warps	threads_per_cta	ctas_per_request	b1_ctas_per_launch	b4_ctas_per_launch	registers	allocated_registers_per_thread	static_sass	encoded_sass	warp_weighted_static_sass	warp_weighted_encoded_sass	cubin_bytes	ldg	warp_weighted_ldg	stg	lds	sts	stack_bytes	local_bytes	ldl	stl	calls
+row32_c64_v5	32	64	8	256	160	160	640	109	112	1215	1240	9720	9920	83480	116	928	20	4	0	0	0	0	0	0
+row32_c64_w16_rejected	32	64	16	512	160	160	640	60	64	695	720	11120	11520	52280	64	1024	12	16	8	0	0	0	0	0
+row32_c64_xreuse_v6	32	64	8	256	160	160	640	112	112	1163	1184	9304	9472	81288	108	864	20	4	0	0	0	0	0	0
