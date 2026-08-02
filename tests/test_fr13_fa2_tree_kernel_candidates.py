@@ -256,8 +256,10 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     assert "StaticPagedKVBlockSize<Fr13Fixed32Qrow32KernelTraits>" in candidate
     static_page_log2 = 10
     static_page_size = 1 << static_page_log2
+    static_block_n_log2 = 6
     assert f"static constexpr int value = {static_page_size}" in candidate
     assert f"static constexpr int log2 = {static_page_log2}" in candidate
+    assert f"static constexpr int block_n_log2 = {static_block_n_log2}" in candidate
     assert "using TreeKernelTraits = Fr13Fixed32Qrow32KernelTraits" in candidate
 
     api_gate = module.FIXED32_QUERY_TILE32_API_GATE
@@ -320,16 +322,20 @@ def test_qrow32_static_page_specialization_is_opt_in_exact_and_idempotent(
     dynamic_offset = """    const int64_t global_row_offset = block_row_offset + n_block * kBlockN;
     const int64_t page_offset = global_row_offset % page_block_size;
     const int64_t virtual_page_idx = global_row_offset / page_block_size;
+
+    return ((int64_t) block_table[virtual_page_idx]) * ((int64_t) page_stride)
+        + page_offset * ((int64_t) row_stride)
+        + col_offset;
 """
     stock = (
         "namespace FLASH_NAMESPACE {\n"
         "template <typename Kernel_traits>\n"
         "__forceinline__ __device__\n"
         "int64_t resolve_thread_kv_page_slice_offset(\n"
-        "    const int tidx, const int n_block, const int page_block_size) {\n"
+        "    const int tidx, const int n_block, const int page_block_size,\n"
+        "    const int* block_table, const int page_stride, const int row_stride) {\n"
         + dynamic_offset
-        + "    return page_offset + virtual_page_idx;\n"
-        "}\n"
+        + "}\n"
         "}\n"
     )
     utils.write_text(stock)
@@ -345,8 +351,13 @@ def test_qrow32_static_page_specialization_is_opt_in_exact_and_idempotent(
     assert candidate.count("struct StaticPagedKVBlockSize") == 1
     assert "static constexpr int value = 0" in candidate
     assert "if constexpr (kStaticPageBlockSize != 0)" in candidate
-    assert "unsigned_global_row_offset >> kStaticPageBlockLog2" in candidate
-    assert "kStaticPageBlockSize - 1" in candidate
+    assert "n_block >> kBlocksPerPageLog2" in candidate
+    assert "n_block & (kBlocksPerPage - 1)" in candidate
+    assert "<< kStaticBlockNLog2" in candidate
+    assert "const int page_offset =" in candidate
+    assert "const int virtual_page_idx = n_block >>" in candidate
+    assert "unsigned_global_row_offset" not in candidate
+    assert candidate.count("const int64_t global_row_offset") == 1
     assert candidate.count("global_row_offset % page_block_size") == 1
     assert candidate.count("global_row_offset / page_block_size") == 1
     assert not module._patch_fixed32_query_tile32_static_page(
@@ -355,15 +366,36 @@ def test_qrow32_static_page_specialization_is_opt_in_exact_and_idempotent(
     )
     assert utils.read_text() == candidate
 
-    # Every helper call uses an active, nonnegative K block and a nonnegative
-    # per-thread row. The qrow32 shift/mask is therefore exactly divmod(x, 1024).
+    # Exhaust all thread rows, page-block residues, and valid partial-block
+    # clamps. Quotient representatives include the largest nonnegative int
+    # n_block, so the proof does not depend on a small sequence length.
+    max_block_quotient = (2**31 - 1) // 16
     for thread_idx in range(64):
-        block_row_offset = (thread_idx // 8) * 8
-        for n_block in (0, 1, 15, 16, 127, 1023):
-            global_row_offset = block_row_offset + n_block * 64
-            quotient, remainder = divmod(global_row_offset, 1024)
-            assert global_row_offset >> 10 == quotient
-            assert global_row_offset & 1023 == remainder
+        original_block_row_offset = (thread_idx // 8) * 8
+        for partial_block_size in (None, *range(65)):
+            block_row_offset = original_block_row_offset
+            if partial_block_size is not None:
+                final_row_offset = max(partial_block_size - 1, 0)
+                final_thread_row_offset = (
+                    (final_row_offset + 7) // 8
+                ) * 8
+                block_row_offset = min(
+                    block_row_offset,
+                    final_thread_row_offset,
+                )
+            assert 0 <= block_row_offset < 64
+            for block_quotient in (0, 1, 17, max_block_quotient):
+                for block_residue in range(16):
+                    n_block = block_quotient * 16 + block_residue
+                    if n_block > 2**31 - 1:
+                        continue
+                    global_row_offset = block_row_offset + n_block * 64
+                    quotient, remainder = divmod(global_row_offset, 1024)
+                    assert n_block >> 4 == quotient
+                    assert (
+                        ((n_block & 15) << 6) + block_row_offset
+                        == remainder
+                    )
 
 
 def test_source_build_candidates_are_independent_and_default_off() -> None:

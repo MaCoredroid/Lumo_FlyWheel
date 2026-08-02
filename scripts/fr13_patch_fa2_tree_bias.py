@@ -24,7 +24,7 @@ complete ordered K loop as stock BM64 while avoiding the 32 query rows outside
 each physical32 batch slot. Its private selector is gate-only and default-off;
 it can be tagged only by the canonical retained-live exact4 byte diagnostic.
 That gate also fixes the paged-KV block size at 1024, allowing only this
-translation unit to replace paged row divmod with ``>> 10`` and ``& 1023``.
+translation unit to resolve pages directly from 64-row K-block coordinates.
 There is no production selector.
 """
 
@@ -131,29 +131,44 @@ template <typename Kernel_traits>
 struct StaticPagedKVBlockSize {
     static constexpr int value = 0;
     static constexpr int log2 = 0;
+    static constexpr int block_n_log2 = 0;
 };
 
 '''
 
 
-FIXED32_QUERY_TILE32_STATIC_PAGE_OFFSET = r'''    const int64_t global_row_offset = block_row_offset + n_block * kBlockN;
-    int64_t page_offset;
-    int64_t virtual_page_idx;
-    constexpr int kStaticPageBlockSize = StaticPagedKVBlockSize<Kernel_traits>::value;
+FIXED32_QUERY_TILE32_STATIC_PAGE_OFFSET = r'''    constexpr int kStaticPageBlockSize = StaticPagedKVBlockSize<Kernel_traits>::value;
     if constexpr (kStaticPageBlockSize != 0) {
         constexpr int kStaticPageBlockLog2 = StaticPagedKVBlockSize<Kernel_traits>::log2;
+        constexpr int kStaticBlockNLog2 = StaticPagedKVBlockSize<Kernel_traits>::block_n_log2;
+        constexpr int kBlocksPerPageLog2 = kStaticPageBlockLog2 - kStaticBlockNLog2;
+        constexpr int kBlocksPerPage = 1U << kBlocksPerPageLog2;
         static_assert(kStaticPageBlockSize > 0);
         static_assert(kStaticPageBlockSize == (1U << kStaticPageBlockLog2));
-        // Active K blocks and per-thread row offsets are nonnegative. Casting to
-        // uint64_t makes the fixed power-of-two quotient an exact logical shift.
-        const uint64_t unsigned_global_row_offset = static_cast<uint64_t>(global_row_offset);
-        page_offset = static_cast<int64_t>(
-            unsigned_global_row_offset & static_cast<uint64_t>(kStaticPageBlockSize - 1));
-        virtual_page_idx = static_cast<int64_t>(
-            unsigned_global_row_offset >> kStaticPageBlockLog2);
+        static_assert(Kernel_traits::kBlockN == (1U << kStaticBlockNLog2));
+        static_assert(kStaticPageBlockLog2 >= kStaticBlockNLog2);
+        static_assert(Kernel_traits::kNThreads % Kernel_traits::kGmemThreadsPerRow == 0);
+        static_assert(
+            Kernel_traits::kNThreads / Kernel_traits::kGmemThreadsPerRow
+                * Kernel_traits::kGmemRowsPerThread
+            == Kernel_traits::kBlockN);
+        // n_block is active and nonnegative. Each qrow32 thread starts below
+        // kBlockN, and the partial-block clamp can only lower that row offset.
+        // Resolve the page in 32-bit block coordinates before address math.
+        const int page_offset =
+            ((n_block & (kBlocksPerPage - 1)) << kStaticBlockNLog2)
+            + static_cast<int>(block_row_offset);
+        const int virtual_page_idx = n_block >> kBlocksPerPageLog2;
+        return ((int64_t) block_table[virtual_page_idx]) * ((int64_t) page_stride)
+            + ((int64_t) page_offset) * ((int64_t) row_stride)
+            + col_offset;
     } else {
-        page_offset = global_row_offset % page_block_size;
-        virtual_page_idx = global_row_offset / page_block_size;
+        const int64_t global_row_offset = block_row_offset + n_block * kBlockN;
+        const int64_t page_offset = global_row_offset % page_block_size;
+        const int64_t virtual_page_idx = global_row_offset / page_block_size;
+        return ((int64_t) block_table[virtual_page_idx]) * ((int64_t) page_stride)
+            + page_offset * ((int64_t) row_stride)
+            + col_offset;
     }
 '''
 
@@ -228,6 +243,7 @@ template <>
 struct StaticPagedKVBlockSize<Fr13Fixed32Qrow32KernelTraits> {
     static constexpr int value = 1024;
     static constexpr int log2 = 10;
+    static constexpr int block_n_log2 = 6;
 };
 
 // Gate-only entry point. The ordinary and production paths cannot tag the
@@ -580,6 +596,10 @@ def _patch_fixed32_query_tile32_static_page(
     dynamic_offset = r'''    const int64_t global_row_offset = block_row_offset + n_block * kBlockN;
     const int64_t page_offset = global_row_offset % page_block_size;
     const int64_t virtual_page_idx = global_row_offset / page_block_size;
+
+    return ((int64_t) block_table[virtual_page_idx]) * ((int64_t) page_stride)
+        + page_offset * ((int64_t) row_stride)
+        + col_offset;
 '''
     if FIXED32_QUERY_TILE32_STATIC_PAGE_OFFSET in text:
         if text.count(FIXED32_QUERY_TILE32_STATIC_PAGE_OFFSET) != 1:
