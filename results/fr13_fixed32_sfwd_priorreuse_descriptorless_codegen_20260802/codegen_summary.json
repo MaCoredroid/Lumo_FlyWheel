@@ -1,7 +1,7 @@
 {
   "schema": "fr13.fixed32.sfwd_priorreuse_descriptorless.sm121_codegen.v1",
   "status": "offline_codegen_viable_correctness_and_performance_unqualified",
-  "source_commit": "9aa2dd05ecc75004e36ddc2aaa7af6cb20cda737",
+  "source_commit": "4ca86e3beddd9a69a7b3471ccc22ba5c2708b029",
   "candidate": "fixed32_sfwd_prior_reuse_row32_c64_descriptorless_v1",
   "codegen_helper": {
     "path": "results/fr13_fixed32_sfwd_state_fusion_row32_c64_priorreuse_live34_codegen_20260802/offline_codegen_audit.py",
@@ -24,6 +24,14 @@
     "num_warps": 8,
     "num_stages": 3,
     "target": "sm_121a"
+  },
+  "address_contract": {
+    "signed_int32_max": 2147483647,
+    "b4_live_x_stride_row": 16384,
+    "b4_max_x_offset_elements": 2091007,
+    "b4_max_out_offset_elements": 1310719,
+    "b4_max_source_stage_offset_elements": 1474559,
+    "unsafe_stride_rejected": true
   },
   "results": [
     {

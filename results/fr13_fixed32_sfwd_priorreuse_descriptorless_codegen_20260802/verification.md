@@ -1,11 +1,11 @@
 # Verification
 
-- Source revision: `9aa2dd05ecc75004e36ddc2aaa7af6cb20cda737`.
+- Source revision: `4ca86e3beddd9a69a7b3471ccc22ba5c2708b029`.
 - Fixed parent arithmetic equals all 32 reference parent edges.
 - All 96 derived non-final source rows equal the reference descriptor.
 - Ordered BF16-product and FP32-add CPU math: exact equality for every node.
 - Descriptor pointer is absent from the candidate kernel signature and source.
-- B1/B4 dense int32 address maxima and unsafe-stride rejection: passed.
+- Live padded B1/B4 int32 address maxima and unsafe-stride rejection: passed.
 - Focused descriptorless, dense-int32, and state-fusion suites: 24 passed.
 - Python bytecode compilation: passed.
 - Fresh isolated-cache builds: two.

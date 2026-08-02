@@ -4,7 +4,7 @@ Status: **offline SM121a codegen improves the dense-int32 C64 prior-reuse
 kernel; live correctness and runtime performance remain unqualified**.
 
 This package audits source commit
-`9aa2dd05ecc75004e36ddc2aaa7af6cb20cda737` at the fixed B1/B4
+`4ca86e3beddd9a69a7b3471ccc22ba5c2708b029` at the fixed B1/B4
 specialization: 32 physical rows per request, row group 32, 10,240 channels,
 `BLOCK_C=64`, convolution width 4, state length 34, eight warps, and three
 stages. CUDA visibility was explicitly empty. No GPU kernel, service, SWE task,
@@ -19,6 +19,11 @@ is applied three times; CPU tests prove that it reproduces all 32 parent edges
 and all 96 non-final source rows. Convolution products remain ordered BF16
 products accumulated by FP32 adds, followed by the unchanged current-node tap,
 activation, output, current-row, prior-row, and zero-row stores.
+
+The source-bound real B1 layout uses a padded `x` row stride of 16,384
+elements. At the corresponding B4 maximum, the largest `x` element offset is
+2,091,007; dense output and source-stage maxima are 1,310,719 and 1,474,559.
+All remain below the signed-int32 maximum of 2,147,483,647.
 
 The module remains offline-only. It has no serving launcher, selector, or
 production integration. A source-bound real SWE B1 reference-served byte gate
@@ -53,8 +58,9 @@ otherwise identical. A second build with a separate fresh cache and output
 tree reproduced every generated file byte for byte.
 
 The focused descriptorless, dense-int32, and state-fusion suites passed 24
-tests. This is not a real-task correctness result and contains no latency, TPS,
-acceptance, hardware-floor, or production claim.
+tests, including the live padded B4 address maximum. This is not a real-task
+correctness result and contains no latency, TPS, acceptance, hardware-floor,
+or production claim.
 
 The package contains only source hashes and derived summaries. Cubin, PTX,
 SASS, IR, model/task content, requests, responses, patches, environment dumps,
