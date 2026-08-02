@@ -1,0 +1,22 @@
+# Verification
+
+- Source revision: `6ab0a4882e7c34d6e41ca88727094609932acc9e`.
+- Prior live-layout evidence artifact commit and file hashes: bound.
+- Focused state-fusion, descriptor, and layout suite: 22 passed.
+- Python bytecode compilation: passed.
+- Exact padded `x`, dense output/stage/weight, and descriptor contracts: passed.
+- Logical-dense `x` stride `[10240,1]`: rejected as real-layout invalid.
+- Fresh isolated-cache builds: two.
+- Compiled exact source specializations per build: B1 and B4.
+- Duplicate generated output trees: byte identical.
+- B1/B4 cubin, PTX, SASS, resource, and non-launch metrics: identical.
+- Target and producer: SM121a, `ptxas-blackwell` 12.9.86.
+- Reported/allocated registers per thread: 42/48.
+- Allocated registers per CTA: 12,288.
+- Register-limited CTA/warp residency proxy: 5/40 versus baseline 4/32.
+- Static/encoded SASS instructions: 778/792.
+- LDG/STG/LDS/STS: 64/20/0/0.
+- Stack, local memory, LDL, STL, shared memory, and calls: zero.
+- Source tree whitespace/error check: passed.
+- CUDA visibility during codegen: explicitly empty.
+- Live correctness, timing, SWE task, service, and production selection: not run.
