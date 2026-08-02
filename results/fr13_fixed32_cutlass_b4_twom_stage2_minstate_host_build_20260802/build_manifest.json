@@ -104,6 +104,14 @@
     "stsm": 0,
     "performance_inference_allowed": false
   },
+  "stockshape_stage2_repin_audit": {
+    "prior_binary_sha256": "6a33fcfc13f70e0d5a6d10d4d8cdfd279056a391257683496e1e397857ab94a1",
+    "candidate_kernel_count": 2,
+    "candidate_kernel_dtypes": ["fp16", "bf16"],
+    "focused_sass_exact_match_to_prior_binary": true,
+    "focused_sass_sha256": "1bfc10c3645abea2b4d60efdfe87e2dd68b110f143f802b346e5f4445fd20600",
+    "fresh_binary_bound_real_byte_gate_required": true
+  },
   "prior_twom_candidate_per_dtype": {
     "binary_sha256": "6a33fcfc13f70e0d5a6d10d4d8cdfd279056a391257683496e1e397857ab94a1",
     "mainloop_stage_count": "auto",
