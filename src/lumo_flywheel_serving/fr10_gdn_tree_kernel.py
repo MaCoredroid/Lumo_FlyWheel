@@ -9956,7 +9956,9 @@ def _fr13_fixed32_committer_native_layer_batch(
             "48-layer K=V=128 geometry"
         )
     block_k = triton.next_power_of_2(dim_k)
-    block_v = min(triton.next_power_of_2(dim_v), 64)
+    # Own the pinned V=128 state in one program so the K vector and its
+    # normalization are shared by every value row for this value head.
+    block_v = triton.next_power_of_2(dim_v)
     grid = (1, triton.cdiv(dim_v, block_v), layers * batch * num_vh)
     _fr13_fixed32_committer_native_layer_batch_kernel[grid](
         a_rings,
@@ -10405,9 +10407,12 @@ def preseed_fixed32_committer_graph(
                     _FR13_FIXED32_COMMITTER_GATE_PRECOMPUTE_LAUNCHES
                 ),
                 "gate_exp_per_event": 0,
-                "value_tile": 64,
+                "full_value_tile": True,
+                "value_tile": 128,
                 "kernel_warps": 8,
-                "programs_per_layer_request_value_head": 2,
+                "programs_per_layer_request_value_head": 1,
+                "duplicate_value_tile_k_loads_per_step": 0,
+                "state_elements_per_thread_before_compiler_effects": 64,
                 "physical_alias_row_uniqueness_guard": (
                     "validate_fixed32_conv_commit_rows"
                 ),

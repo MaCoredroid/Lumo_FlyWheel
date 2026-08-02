@@ -4873,13 +4873,24 @@ def _fr13_fixed32_observed_commit(
                     )
                 ) != 1
                 or int(committer_contract.get("gate_exp_per_event", -1)) != 0
-                or int(committer_contract.get("value_tile", -1)) != 64
+                or committer_contract.get("full_value_tile") is not True
+                or int(committer_contract.get("value_tile", -1)) != 128
                 or int(committer_contract.get("kernel_warps", -1)) != 8
                 or int(
                     committer_contract.get(
                         "programs_per_layer_request_value_head", -1
                     )
-                ) != 2
+                ) != 1
+                or int(
+                    committer_contract.get(
+                        "duplicate_value_tile_k_loads_per_step", -1
+                    )
+                ) != 0
+                or int(
+                    committer_contract.get(
+                        "state_elements_per_thread_before_compiler_effects", -1
+                    )
+                ) != 64
                 or committer_contract.get(
                     "physical_alias_row_uniqueness_guard"
                 ) != "validate_fixed32_conv_commit_rows"
