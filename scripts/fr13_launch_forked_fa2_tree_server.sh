@@ -2849,6 +2849,10 @@ if [[ "\${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ]]; then
       --attestation /logs/fr13_fixed32_cutlass_streamk_binary.json \
       --selector "\$FR13_FIXED32_CUTLASS_WAVE"
   fi
+  # The installer runs as root under a restrictive umask, while the paired
+  # post-teardown reducer runs as the host user. The attestation contains only
+  # binary identity/provenance, so hand it off read-only for host validation.
+  chmod 0444 /logs/fr13_fixed32_cutlass_streamk_binary.json
 fi
 cp /tmp/fr13_fork_fa2.so /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so
 sha256sum /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so | tee /logs/fr13_forked_fa2.sha256

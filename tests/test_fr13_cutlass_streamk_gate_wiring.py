@@ -30,6 +30,10 @@ def test_launcher_is_digest_pinned_diagnostic_only_and_worker_visible() -> None:
     )
     assert "scripts/fr13_cutlass_wave_binary.py install" in launcher
     assert (
+        "chmod 0444 /logs/fr13_fixed32_cutlass_streamk_binary.json"
+        in launcher
+    )
+    assert (
         "/usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so"
         in launcher
     )
