@@ -463,10 +463,13 @@ def fixed32_sfwd_prior_reuse_byte_gate(
 
 
 def _validate_fixed32_tree_parent(tree_parent: object) -> tuple[int, ...]:
-    try:
-        actual = tuple(int(value) for value in tree_parent)
-    except (TypeError, ValueError) as error:
-        raise ValueError("FR13 SFWD prior-reuse tree parent is malformed") from error
+    if not isinstance(tree_parent, (list, tuple)) or any(
+        type(value) is not int for value in tree_parent
+    ):
+        raise ValueError(
+            "FR13 SFWD prior-reuse tree parent must be a host int list/tuple"
+        )
+    actual = tuple(tree_parent)
     if actual != FIXED32_PARENT:
         raise RuntimeError("FR13 SFWD prior-reuse host parent vector drifted")
     return actual

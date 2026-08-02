@@ -281,6 +281,9 @@ def test_launcher_requires_exact_host_parent_vector() -> None:
         candidate._validate_fixed32_tree_parent(parent)
     with pytest.raises(RuntimeError, match="host parent vector drifted"):
         candidate._validate_fixed32_tree_parent(parent[:-1])
+    for malformed in (torch.tensor(candidate.FIXED32_PARENT), [False], None):
+        with pytest.raises(ValueError, match="host int list/tuple"):
+            candidate._validate_fixed32_tree_parent(malformed)
 
 
 def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
