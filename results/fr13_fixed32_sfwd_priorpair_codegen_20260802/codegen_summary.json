@@ -1,0 +1,104 @@
+{
+  "acceptance_eligible": false,
+  "candidate": "fixed32_sfwd_priorpair_quadweight_xgather_rowgroup32_c64_w16_v1",
+  "classification": "offline_static_codegen_only",
+  "compiled_code": {
+    "b1": {
+      "compile_hash": "183675c8f64d241bb14d68fd65777a3e40ceecc3d78354cf2444f91410ec541b",
+      "ctas_per_launch": 160,
+      "summary_sha256": "fd2e95f2622f1da31db5592563bda5039ff2c74e78f1efe3ed3e9a7d1898930a"
+    },
+    "b4": {
+      "compile_hash": "754d9164eee62d35b4e7c6bb7ac80104b1b4b2a2f40f852de96b7b1e20f776f7",
+      "ctas_per_launch": 640,
+      "summary_sha256": "654f54e79a064e0c91325c069b4eb0e145775833e86db89eb3973464a9f4ad7c"
+    },
+    "common": {
+      "bar": 3,
+      "calls": 0,
+      "ctas_per_request": 160,
+      "cubin_bytes": 36432,
+      "cubin_sha256": "4f297a867ac0474bab44d92ae6acac6cabbbf9e27532a59f97a662964d069694",
+      "elf_shared_bytes": 1024,
+      "encoded_sass_instructions": 408,
+      "launch_shared_bytes": 4096,
+      "ldg": 19,
+      "ldl": 0,
+      "lds": 6,
+      "local_bytes": 0,
+      "ptx_sha256": "a82715bf1335c89898d2e43cacf0d34d32957a90cde0aa73b538011284db589a",
+      "registers": 55,
+      "sass_sha256": "fbd3cd86104000588a19258b6b7ea770346bb64d313b9220a1a4460923c12730",
+      "source_function_sha256": "6f908356a611d0c8bae5e46ec45faf608956dccd5463e87cd7921e94512182c1",
+      "stack_bytes": 0,
+      "static_sass_instructions": 391,
+      "stg": 12,
+      "stl": 0,
+      "sts": 6
+    }
+  },
+  "fixed_geometry": {
+    "block_c": 64,
+    "channels": 10240,
+    "num_stages": 3,
+    "num_warps": 16,
+    "physical_rows": 32,
+    "rows_per_program": 32,
+    "state_len": 34,
+    "width": 4
+  },
+  "gpu_executed": false,
+  "reference_comparison": {
+    "candidate": {
+      "bar": 3,
+      "encoded_sass_instructions": 408,
+      "ldg": 19,
+      "lds": 6,
+      "registers": 55,
+      "static_sass_instructions": 391,
+      "sts": 6
+    },
+    "delta": {
+      "bar": -2,
+      "encoded_sass_instructions": -16,
+      "ldg": -14,
+      "lds": -2,
+      "registers": 0,
+      "static_sass_instructions": -17,
+      "sts": -4
+    },
+    "packed_xgather_before_prior_pair": {
+      "bar": 5,
+      "encoded_sass_instructions": 424,
+      "ldg": 33,
+      "lds": 8,
+      "registers": 55,
+      "static_sass_instructions": 408,
+      "sts": 10,
+      "summary_sha256": "03a752c89090a2eb0c172a51024c53b4c55946efb31f342902b1c332abc38213"
+    },
+    "status": "static_instruction_comparison_not_timing"
+  },
+  "reproducibility": {
+    "b1_primary_equals_fresh_rebuild": true,
+    "b4_primary_equals_fresh_rebuild": true,
+    "candidate_b1_b4_cubin_equal": true,
+    "fresh_cache_builds": 2
+  },
+  "schema": "fr13.fixed32.sfwd_priorpair.codegen.v1",
+  "source_identity": {
+    "candidate_gate_sha256": "69e59381fd97e42a741d3b5b882f18b9fc2981888020176371cb8e9cdf3a55d5",
+    "candidate_kernel_source_sha256": "c905e8799495263993b25950b745f6df84c618699ec387ba8765c1514cabdb78",
+    "candidate_wrapper_sha256": "d6b296f5b208664be144e697adb1d6dbf8cda03ac9cb287e92272602c38637c5",
+    "commit": "d65ffa7e0b24eae5bd8c3874546facc6ce8bc09a"
+  },
+  "timing_eligible": false,
+  "toolchain": {
+    "backend": "ptxas-blackwell",
+    "cuda": "13.0",
+    "ptxas": "12.9.86",
+    "target": "sm_121a",
+    "torch": "2.10.0+cu130",
+    "triton": "3.6.0"
+  }
+}
