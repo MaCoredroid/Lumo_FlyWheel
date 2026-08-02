@@ -567,7 +567,7 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
 
     bank_row = tl.load(
         spec_state_indices + pid_b * N
-    ).to(tl.int64)
+    ).to(tl.int32)
     stage_offset = pid_b * SOURCE_ROWS * C
     prior_base = (
         conv_state

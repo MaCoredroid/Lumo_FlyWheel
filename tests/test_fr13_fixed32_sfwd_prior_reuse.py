@@ -279,6 +279,7 @@ def test_launcher_uses_packed_xgather_kernel_and_exact_layout() -> None:
     assert "not spec_state_indices.is_contiguous()" in launcher
     assert "int(spec_state_indices.shape[1]) != rows" in launcher
     assert "int(conv_state.data_ptr()) % 4 != 0" in launcher
+    assert "int(conv_state.numel()) > SIGNED_INT32_MAX" in launcher
     assert "_fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel[grid](" in launcher
     assert "X_STRIDE_ROW=X_ROW_STRIDE" in launcher
     assert "ROWS_PER_PROGRAM=ROWS_PER_PROGRAM" in launcher

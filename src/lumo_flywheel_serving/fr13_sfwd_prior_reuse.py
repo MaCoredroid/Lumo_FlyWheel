@@ -21,6 +21,7 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
     CONV_WIDTH,
     FIXED32_PARENT,
     FIXED32_ROWS,
+    SIGNED_INT32_MAX,
     SOURCE_ROWS,
     X_ROW_STRIDE,
     _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel,
@@ -557,6 +558,8 @@ def launch_fixed32_sfwd_prior_reuse(
         geometry_failures.append("conv_state_contiguous")
     if int(conv_state.data_ptr()) % 4 != 0:
         geometry_failures.append("conv_state_u32_alignment")
+    if int(conv_state.numel()) > SIGNED_INT32_MAX:
+        geometry_failures.append("conv_state_i32_address_range")
     if source_stage.ndim != 2:
         geometry_failures.append("source_stage_ndim")
     if geometry_failures:
