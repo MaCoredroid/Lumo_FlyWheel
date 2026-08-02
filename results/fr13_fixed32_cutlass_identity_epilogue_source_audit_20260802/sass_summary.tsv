@@ -1,0 +1,9 @@
+batch	dtype	variant	text_bytes	sass_slots	constant_loads	qmma	ffma	fmul	ldsm	stsm	f2fp	sync	call	local_load	local_store
+B1	fp16	baseline_divisor_static	14976	936	93	32	32	24	24	4	8	38	0	0	0
+B1	fp16	identity_divisor_static	14336	896	84	32	32	8	24	4	8	38	0	0	0
+B1	bf16	baseline_divisor_static	14976	936	93	32	32	24	24	4	8	38	0	0	0
+B1	bf16	identity_divisor_static	14336	896	84	32	32	8	24	4	8	38	0	0	0
+B4	fp16	baseline_m128_static	23040	1440	89	128	128	72	48	16	32	28	0	0	0
+B4	fp16	identity_m128_static	21632	1352	80	128	128	8	48	16	32	28	0	0	0
+B4	bf16	baseline_m128_static	23040	1440	89	128	128	72	48	16	32	28	0	0	0
+B4	bf16	identity_m128_static	21632	1352	80	128	128	8	48	16	32	28	0	0	0
