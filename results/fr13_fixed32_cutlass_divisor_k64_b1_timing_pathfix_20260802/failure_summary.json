@@ -1,0 +1,22 @@
+{
+  "schema": "fr13.fixed32.cutlass_divisor_k64_b1_timing_failure.v1",
+  "status": "PRE_TASK_HARNESS_FAILURE_DIAGNOSED",
+  "failed_source_commit": "eb30ed08b8217517e0c73670f479a4168ab5c2b7",
+  "exit_code": 2,
+  "arm_elapsed_seconds": 19,
+  "failure_stage": "container_side_cutlass_production_install",
+  "primary_exception": "QualificationError",
+  "cause": "k64_block_map_resolved_through_host_relative_default",
+  "host_side_sidecar_issue_completed": true,
+  "container_side_sidecar_revalidation_completed": false,
+  "server_started": false,
+  "task_ingress_started": false,
+  "task_output_present": false,
+  "timing_samples_present": false,
+  "runtime_end_manifest_present": false,
+  "cleanup_messages_are_secondary": true,
+  "kernel_regression_evidence": false,
+  "timing_result_valid": false,
+  "acceptance_result_valid": false,
+  "raw_failure_artifacts_published": false
+}
