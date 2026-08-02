@@ -4864,6 +4864,15 @@ def _fr13_fixed32_observed_commit(
                 or int(committer_contract.get("candidate_staging_launches", -1))
                 != 0
                 or committer_contract.get("gate_coefficients_hoisted") is not True
+                or committer_contract.get(
+                    "event_independent_gate_precompute"
+                ) is not True
+                or int(
+                    committer_contract.get(
+                        "gate_precompute_launches_per_process", -1
+                    )
+                ) != 1
+                or int(committer_contract.get("gate_exp_per_event", -1)) != 0
                 or int(committer_contract.get("value_tile", -1)) != 64
                 or int(committer_contract.get("kernel_warps", -1)) != 8
                 or int(

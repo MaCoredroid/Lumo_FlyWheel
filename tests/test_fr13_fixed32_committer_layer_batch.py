@@ -107,16 +107,29 @@ def test_layer_batch_publishes_only_the_final_running_state() -> None:
     assert "tl.store(p_h0, b_h.to(p_h0.dtype.element_ty), mask=mask_h)" in kernel
 
 
-def test_layer_batch_hoists_constant_gate_coefficients() -> None:
+def test_layer_batch_precomputes_event_invariant_gate_coefficients() -> None:
+    precompute_kernel = _text(
+        "_fr13_fixed32_committer_gate_precompute_kernel"
+    )
+    precompute = _text("_fr13_fixed32_committer_gate_precompute")
     kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
-    loop_at = kernel.index("for i_t in tl.range(0, T):")
+    preseed = _text("preseed_fixed32_committer_graph")
+    loop = kernel[kernel.index("for i_t in tl.range(0, T):") :]
 
-    assert kernel.index("b_a_scale = -tl.exp(") < loop_at
-    assert kernel.index("b_dt_bias = tl.load(p_dt_bias)") < loop_at
-    loop = kernel[loop_at:]
-    assert "tl.load(p_a_log)" not in loop
-    assert "tl.load(p_dt_bias)" not in loop
+    assert "a_scale = -tl.exp(" in precompute_kernel
+    assert "dt_biases + offsets, mask=mask, other=0" in precompute_kernel
+    assert "_FR13_FIXED32_COMMITTER_GATE_COEFFS.get(key)" in precompute
+    assert "_FR13_FIXED32_COMMITTER_GATE_COEFFS[key] = gate_coeffs" in precompute
+    assert "_FR13_FIXED32_COMMITTER_GATE_PRECOMPUTE_LAUNCHES += 1" in precompute
+    assert "b_a_scale = tl.load(p_gate)" in kernel
+    assert "b_dt_bias = tl.load(p_gate + 1)" in kernel
+    assert "A_logs" not in kernel
+    assert "dt_biases" not in kernel
+    assert "p_gate" not in loop
     assert "b_g = b_a_scale * softplus_x" in loop
+    assert preseed.index("_fr13_fixed32_committer_gate_precompute(") < preseed.index(
+        "capture_graph(use_layer_batch=False)"
+    )
 
 
 def test_layer_batch_candidate_drops_only_dead_operator_output() -> None:
@@ -162,6 +175,9 @@ def test_layer_batch_candidate_loads_live_ring_rows_without_staging() -> None:
     assert '"direct_ring_inputs": 4' in preseed
     assert '"candidate_staging_launches": 0' in preseed
     assert '"gate_coefficients_hoisted": True' in preseed
+    assert '"event_independent_gate_precompute": True' in preseed
+    assert '"gate_precompute_launches_per_process": int(' in preseed
+    assert '"gate_exp_per_event": 0' in preseed
     assert '"value_tile": 64' in preseed
     assert '"kernel_warps": 8' in preseed
     assert '"programs_per_layer_request_value_head": 2' in preseed
@@ -352,6 +368,7 @@ def test_byte_gate_serves_reference_once_then_allows_covered_depth() -> None:
 def test_counters_expose_per_batch_gate_state_for_timing_boundaries() -> None:
     counters = _text("fixed32_committer_counters")
 
+    assert '"gate_precompute_launches": int(' in counters
     assert 'fast_route.get("states_by_batch", {})' in counters
     assert '"layer_batch_gate_passed_by_batch"' in counters
     assert '"layer_batch_gate_attempts_by_batch"' in counters
@@ -425,6 +442,9 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
     assert 'committer_contract.get("direct_ring_inputs", -1)' in patcher
     assert 'committer_contract.get("candidate_staging_launches", -1)' in patcher
     assert 'committer_contract.get("gate_coefficients_hoisted") is not True' in patcher
+    assert '"event_independent_gate_precompute"' in patcher
+    assert '"gate_precompute_launches_per_process", -1' in patcher
+    assert 'committer_contract.get("gate_exp_per_event", -1)' in patcher
     assert 'committer_contract.get("value_tile", -1)' in patcher
     assert 'committer_contract.get("kernel_warps", -1)' in patcher
     assert '"programs_per_layer_request_value_head", -1' in patcher

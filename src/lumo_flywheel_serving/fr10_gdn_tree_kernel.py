@@ -9121,6 +9121,8 @@ def _fr13_native_committer_all_layers_device(
 
 
 _FR13_FIXED32_COMMITTER = {}
+_FR13_FIXED32_COMMITTER_GATE_COEFFS: dict[tuple, torch.Tensor] = {}
+_FR13_FIXED32_COMMITTER_GATE_PRECOMPUTE_LAUNCHES = 0
 _FR13_FIXED32_COMMITTER_FAST_ROUTE: dict[str, object] = {}
 _FR13_FIXED32_COMMITTER_CALLBACKS = []
 _FR13_FIXED32_COMMITTER_COUNTERS = {
@@ -9188,6 +9190,9 @@ def fixed32_committer_counters() -> dict[str, object]:
         ),
         "actual_replays_by_batch": dict(
             _FR13_FIXED32_COMMITTER_COUNTERS["actual_replays_by_batch"]
+        ),
+        "gate_precompute_launches": int(
+            _FR13_FIXED32_COMMITTER_GATE_PRECOMPUTE_LAUNCHES
         ),
         "layer_batch_gate_passed_by_batch": (
             layer_batch_gate_passed_by_batch
@@ -9694,11 +9699,83 @@ def _fr13_fixed32_committer_fast_state(
 
 
 @triton.jit
-def _fr13_fixed32_committer_native_layer_batch_kernel(
+def _fr13_fixed32_committer_gate_precompute_kernel(
     A_logs,
+    dt_biases,
+    gate_coeffs,
+    N: tl.constexpr,
+    BLOCK: tl.constexpr,
+):
+    offsets = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+    mask = offsets < N
+    a_scale = -tl.exp(
+        tl.load(A_logs + offsets, mask=mask, other=0).to(tl.float32)
+    )
+    dt_bias = tl.load(
+        dt_biases + offsets, mask=mask, other=0
+    ).to(tl.float32)
+    tl.store(gate_coeffs + offsets * 2, a_scale, mask=mask)
+    tl.store(gate_coeffs + offsets * 2 + 1, dt_bias, mask=mask)
+
+
+def _fr13_fixed32_committer_gate_precompute(
+    *, A_logs: torch.Tensor, dt_biases: torch.Tensor
+) -> torch.Tensor:
+    """Materialize event-invariant FP32 gate coefficients once per process."""
+    global _FR13_FIXED32_COMMITTER_GATE_PRECOMPUTE_LAUNCHES
+    if (
+        tuple(A_logs.shape) != tuple(dt_biases.shape)
+        or A_logs.ndim != 2
+        or not A_logs.is_contiguous()
+        or not dt_biases.is_contiguous()
+        or A_logs.device != dt_biases.device
+    ):
+        raise RuntimeError("FR13 fixed32 gate-precompute input contract drift")
+    key = (
+        str(A_logs.device),
+        int(A_logs.data_ptr()),
+        int(dt_biases.data_ptr()),
+        tuple(int(value) for value in A_logs.shape),
+        tuple(int(value) for value in A_logs.stride()),
+        tuple(int(value) for value in dt_biases.stride()),
+        str(A_logs.dtype),
+        str(dt_biases.dtype),
+    )
+    existing = _FR13_FIXED32_COMMITTER_GATE_COEFFS.get(key)
+    if existing is not None:
+        return existing
+    if _FR13_FIXED32_COMMITTER_GATE_COEFFS:
+        raise RuntimeError(
+            "FR13 fixed32 gate-precompute operands changed after preseed"
+        )
+    total = int(A_logs.numel())
+    block = 256
+    gate_coeffs = torch.empty(
+        (*A_logs.shape, 2),
+        dtype=torch.float32,
+        device=A_logs.device,
+    )
+    _fr13_fixed32_committer_gate_precompute_kernel[
+        (triton.cdiv(total, block),)
+    ](
+        A_logs,
+        dt_biases,
+        gate_coeffs,
+        N=total,
+        BLOCK=block,
+        num_warps=4,
+        num_stages=1,
+    )
+    _FR13_FIXED32_COMMITTER_GATE_PRECOMPUTE_LAUNCHES += 1
+    _FR13_FIXED32_COMMITTER_GATE_COEFFS[key] = gate_coeffs
+    return gate_coeffs
+
+
+@triton.jit
+def _fr13_fixed32_committer_native_layer_batch_kernel(
     a_rings,
     b_rings,
-    dt_biases,
+    gate_coeffs,
     k_rings,
     v_rings,
     bank_anchor,
@@ -9761,10 +9838,9 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     mask_v = o_v < V
     mask_h = mask_v[:, None] & mask_k[None, :]
 
-    p_a_log = A_logs + i_l * GATE_L_STRIDE + i_hv
-    p_dt_bias = dt_biases + i_l * GATE_L_STRIDE + i_hv
-    b_a_scale = -tl.exp(tl.load(p_a_log).to(tl.float32))
-    b_dt_bias = tl.load(p_dt_bias).to(tl.float32)
+    p_gate = gate_coeffs + i_l * GATE_L_STRIDE + i_hv * 2
+    b_a_scale = tl.load(p_gate)
+    b_dt_bias = tl.load(p_gate + 1)
     # Preserve the anchor+offset form used by the byte-gated all-layer replay.
     # A raw pointer-table load loses 16-byte AxisInfo and changes reductions.
     state_bank = bank_anchor + tl.load(bank_off16 + i_l) * 4
@@ -9855,8 +9931,7 @@ def _fr13_fixed32_committer_native_layer_batch(
     v_rings,
     a_rings,
     b_rings,
-    A_logs,
-    dt_biases,
+    gate_coeffs,
     use_qk_l2norm_in_kernel,
 ) -> None:
     """Launch all 48 native-realization scans to disjoint destinations once."""
@@ -9871,6 +9946,10 @@ def _fr13_fixed32_committer_native_layer_batch(
         or dim_k != 128
         or dim_v != 128
         or int(state["bank_off16"].numel()) != layers
+        or not torch.is_tensor(gate_coeffs)
+        or tuple(gate_coeffs.shape) != (layers, num_vh, 2)
+        or gate_coeffs.dtype != torch.float32
+        or not gate_coeffs.is_contiguous()
     ):
         raise RuntimeError(
             "FR13 fixed32 committer layer-batch requires the pinned "
@@ -9880,10 +9959,9 @@ def _fr13_fixed32_committer_native_layer_batch(
     block_v = min(triton.next_power_of_2(dim_v), 64)
     grid = (1, triton.cdiv(dim_v, block_v), layers * batch * num_vh)
     _fr13_fixed32_committer_native_layer_batch_kernel[grid](
-        A_logs,
         a_rings,
         b_rings,
-        dt_biases,
+        gate_coeffs,
         k_rings,
         v_rings,
         banks_list[0],
@@ -9901,7 +9979,7 @@ def _fr13_fixed32_committer_native_layer_batch(
         BK=block_k,
         BV=block_v,
         BANK_STRIDE=int(banks_list[0].stride(0)),
-        GATE_L_STRIDE=int(A_logs.stride(0)),
+        GATE_L_STRIDE=int(gate_coeffs.stride(0)),
         RING_K_L_STRIDE=int(k_rings.stride(0)),
         RING_K_B_STRIDE=int(k_rings.stride(1)),
         RING_K_N_STRIDE=int(k_rings.stride(2)),
@@ -10021,8 +10099,7 @@ def _fr13_fixed32_committer_graph_body(
             v_rings=v_rings,
             a_rings=a_rings,
             b_rings=b_rings,
-            A_logs=A_logs,
-            dt_biases=dt_biases,
+            gate_coeffs=state["gate_coeffs"],
             use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
         )
     else:
@@ -10221,6 +10298,14 @@ def preseed_fixed32_committer_graph(
     total = batch * 16
     scratch = int(banks_list[0].shape[0]) - 1
     layer_batch = _fr13_fixed32_committer_layer_batch_requested()
+    gate_coeffs = (
+        _fr13_fixed32_committer_gate_precompute(
+            A_logs=A_logs,
+            dt_biases=dt_biases,
+        )
+        if layer_batch
+        else None
+    )
     bank_ptrs, _bank_shape, _bank_stride = build_replay_bank_pointer_table(
         list(banks_list)
     )
@@ -10277,6 +10362,7 @@ def preseed_fixed32_committer_graph(
             if layer_batch
             else None
         ),
+        "gate_coeffs": gate_coeffs,
         "layer_batch": layer_batch,
         "layer_batch_byte_gate_passed": not layer_batch,
         "layer_batch_byte_gate_attempts": 0,
@@ -10314,6 +10400,11 @@ def preseed_fixed32_committer_graph(
                 "direct_ring_inputs": 4,
                 "candidate_staging_launches": 0,
                 "gate_coefficients_hoisted": True,
+                "event_independent_gate_precompute": True,
+                "gate_precompute_launches_per_process": int(
+                    _FR13_FIXED32_COMMITTER_GATE_PRECOMPUTE_LAUNCHES
+                ),
+                "gate_exp_per_event": 0,
                 "value_tile": 64,
                 "kernel_warps": 8,
                 "programs_per_layer_request_value_head": 2,
