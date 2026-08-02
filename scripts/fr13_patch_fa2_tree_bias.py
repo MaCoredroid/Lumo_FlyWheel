@@ -18,11 +18,12 @@ a hidden launcher in one dedicated production translation unit; the stock
 explicit instantiation, shared launcher, and every unrelated CUDA object
 remain untouched.
 
-The source-only ``--fixed32-query-tile32`` build adds the corresponding B4
-specialization: one 32-row, two-warp CTA per batch/head. It has the same
-96-CTA layer grid and complete ordered K loop as stock BM64 while avoiding the
-32 query rows outside each physical32 batch slot. No runtime selector is
-installed until the private binary passes resource and real-byte gates.
+The ``--fixed32-query-tile32`` build adds the corresponding B4 specialization:
+one 32-row, two-warp CTA per batch/head. It has the same 96-CTA layer grid and
+complete ordered K loop as stock BM64 while avoiding the 32 query rows outside
+each physical32 batch slot. Its private selector is gate-only and default-off;
+it can be tagged only by the canonical retained-live exact4 byte diagnostic.
+There is no production selector.
 """
 
 from __future__ import annotations
@@ -117,6 +118,12 @@ STOCK_FIXED32_QUERY_INSTANTIATION = r'''template void run_mha_fwd_splitkv_dispat
 FIXED32_QUERY_TILE16_BATCH_STRIDE_SENTINEL = 0x46523133
 
 
+# Unlike B1, B4 dereferences the tree-bias batch stride. Keep this sentinel
+# large enough to be private but small enough for the gate's deliberately
+# padded four-batch diagnostic tensor (about 1.6 MiB of BF32 storage).
+FIXED32_QUERY_TILE32_BATCH_STRIDE_SENTINEL = 0x20013
+
+
 FIXED32_QUERY_TILE16_TRANSLATION_UNIT = r'''// FR13 fixed32 B1 qrow16 internal kernel.
 #include "namespace_config.h"
 #include "flash_fwd_launch_template.h"
@@ -174,14 +181,14 @@ void fr13_run_mha_fwd_fixed32_qrow16(
 '''
 
 
-FIXED32_QUERY_TILE32_TRANSLATION_UNIT = r'''// FR13 fixed32 B4 qrow32 source candidate.
+FIXED32_QUERY_TILE32_TRANSLATION_UNIT = r'''// FR13 fixed32 B4 qrow32 gate candidate.
 #include "namespace_config.h"
 #include "flash_fwd_launch_template.h"
 
 namespace FLASH_NAMESPACE {
 
-// Source/resource-gate entry point only. No production selector references
-// this hidden function until the exact4 live paged raw-byte gate passes.
+// Gate-only entry point. The ordinary and production paths cannot tag the
+// exact4 diagnostic bias layout that selects this hidden function.
 __attribute__((visibility("hidden")))
 void fr13_run_mha_fwd_fixed32_qrow32(
         Flash_fwd_params &params, cudaStream_t stream) {
@@ -227,6 +234,77 @@ void fr13_run_mha_fwd_fixed32_qrow32(
 }
 
 } // namespace FLASH_NAMESPACE
+'''
+
+
+RUN_MHA_FWD_SIGNATURE = (
+    "void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, "
+    "bool force_split_kernel=false) {\n"
+)
+
+
+FIXED32_QUERY_TILE32_API_DECLARATION = rf'''constexpr int64_t kFr13Qrow32BatchStrideSentinel =
+    {FIXED32_QUERY_TILE32_BATCH_STRIDE_SENTINEL};
+
+__attribute__((visibility("hidden")))
+void fr13_run_mha_fwd_fixed32_qrow32(
+    Flash_fwd_params &params, cudaStream_t stream);
+
+'''
+
+
+FIXED32_QUERY_TILE32_API_GATE = r'''    if (params.tree_bias_batch_stride == kFr13Qrow32BatchStrideSentinel) {
+        TORCH_CHECK(
+            params.tree_bias_ptr != nullptr
+            && params.is_bf16
+            && !params.is_causal
+            && params.b == 4
+            && params.total_q == 128
+            && params.d == 256
+            && params.d_rounded == 256
+            && params.h == 24
+            && params.h_k == 4
+            && params.h_h_k_ratio == 6
+            && params.seqlen_q == 32
+            && params.seqlen_q_rounded == 128
+            && params.q_head_stride == 256
+            && params.k_row_stride == 4 * 256
+            && params.k_head_stride == 256
+            && params.v_row_stride == 4 * 256
+            && params.v_head_stride == 256
+            && params.o_head_stride == 256
+            && params.tree_bias_rows == 32
+            && params.tree_bias_cols == 32
+            && params.tree_bias_row_stride == 32
+            && params.tree_bias_col_stride == 1
+            && params.tree_bias_q_offset == 0
+            && params.tree_bias_k_offset == 0
+            && params.cu_seqlens_q != nullptr
+            && params.cu_seqlens_k != nullptr
+            && params.seqused_k != nullptr
+            && params.is_seqlens_k_cumulative
+            && !params.seqlenq_ngroups_swapped
+            && params.block_table != nullptr
+            && params.block_table_batch_stride > 0
+            && params.page_block_size == 1024
+            && params.window_size_left < 0
+            && params.window_size_right < 0
+            && params.alibi_slopes_ptr == nullptr
+            && params.knew_ptr == nullptr
+            && params.vnew_ptr == nullptr
+            && params.p_ptr == nullptr
+            && params.softmax_lse_ptr != nullptr
+            && params.p_dropout == 1.0f
+            && params.softcap == 0.0f
+            // set_params_fprop zero-initializes this field. Varlen q=32 does
+            // not enter the max_seqlen_q==1 q-group split-K setup. Paged KV
+            // reaches this family through force_split_kernel instead.
+            && params.num_splits == 0
+            && force_split_kernel,
+            "FR13 qrow32 gate dispatch reached non-canonical B4 geometry");
+        fr13_run_mha_fwd_fixed32_qrow32(params, stream);
+        return;
+    }
 '''
 
 
@@ -316,6 +394,34 @@ def _insert_once(text: str, marker: str, insert: str, label: str) -> tuple[str, 
     if marker not in text:
         raise RuntimeError(f"marker not found for {label}")
     return text.replace(marker, insert + marker, 1), True
+
+
+def _install_hidden_api_gate(
+    text: str,
+    *,
+    declaration: str,
+    gate: str,
+    label: str,
+) -> tuple[str, bool]:
+    """Install a private dispatch without replacing the stock function body."""
+    changed = False
+    text, did = _insert_once(
+        text,
+        RUN_MHA_FWD_SIGNATURE,
+        declaration,
+        f"{label} declaration",
+    )
+    changed = changed or did
+    if gate.strip() not in text:
+        if RUN_MHA_FWD_SIGNATURE not in text:
+            raise RuntimeError(f"anchor not found for {label} body")
+        text = text.replace(
+            RUN_MHA_FWD_SIGNATURE,
+            RUN_MHA_FWD_SIGNATURE + gate,
+            1,
+        )
+        changed = True
+    return text, changed
 
 
 def _patch_flash_h(path: Path) -> bool:
@@ -446,6 +552,7 @@ def _patch_flash_api_cpp(
     path: Path,
     *,
     fixed32_query_tile16: bool = False,
+    fixed32_query_tile32: bool = False,
 ) -> bool:
     text = path.read_text()
     changed = False
@@ -595,11 +702,26 @@ mha_varlen_fwd_tree_bias(at::Tensor &q,
     )
     changed = changed or did
     if fixed32_query_tile16:
-        text, did = _replace_once(
+        signature = RUN_MHA_FWD_SIGNATURE
+        signature_at = FIXED32_QUERY_TILE16_API_DISPATCH.index(signature)
+        stock_body_at = FIXED32_QUERY_TILE16_API_DISPATCH.index(
+            "    FP16_SWITCH", signature_at
+        )
+        text, did = _install_hidden_api_gate(
             text,
-            STOCK_RUN_MHA_FWD,
-            FIXED32_QUERY_TILE16_API_DISPATCH,
-            "fixed32 FA2 query tile16 hidden API dispatch",
+            declaration=FIXED32_QUERY_TILE16_API_DISPATCH[:signature_at],
+            gate=FIXED32_QUERY_TILE16_API_DISPATCH[
+                signature_at + len(signature) : stock_body_at
+            ],
+            label="fixed32 FA2 query tile16 hidden API dispatch",
+        )
+        changed = changed or did
+    if fixed32_query_tile32:
+        text, did = _install_hidden_api_gate(
+            text,
+            declaration=FIXED32_QUERY_TILE32_API_DECLARATION,
+            gate=FIXED32_QUERY_TILE32_API_GATE,
+            label="fixed32 FA2 query tile32 gate-only API dispatch",
         )
         changed = changed or did
     if changed:
@@ -672,6 +794,11 @@ def patch_fa2_source(
     fixed32_query_tile16: bool = False,
     fixed32_query_tile32: bool = False,
 ) -> dict[str, bool]:
+    if fixed32_query_tile32 and not tree_bias_tile_earlyout:
+        raise ValueError(
+            "fixed32 qrow32 requires --tree-bias-tile-earlyout in the same "
+            "source patch invocation"
+        )
     files = {
         "flash.h": fa2_src / "csrc/flash_attn/src/flash.h",
         "flash_fwd_kernel.h": fa2_src / "csrc/flash_attn/src/flash_fwd_kernel.h",
@@ -700,6 +827,7 @@ def patch_fa2_source(
         "flash_api.cpp": _patch_flash_api_cpp(
             files["flash_api.cpp"],
             fixed32_query_tile16=fixed32_query_tile16,
+            fixed32_query_tile32=fixed32_query_tile32,
         ),
         "flash_api_torch_lib.cpp": _patch_torch_lib(files["flash_api_torch_lib.cpp"]),
     }
@@ -1037,6 +1165,419 @@ def _fr13_fa2_qrow16_live_ab_replay(graph_id, runtime_mode, batch_size):
 '''
 
 
+FIXED32_QUERY_TILE32_LIVE_AB_HELPERS = r'''# FR13_FA2_QROW32_LIVE_PAGED_AB
+_FR13_FA2_QROW32_LIVE_AB_GRAPHS = {}
+_FR13_FA2_QROW32_LIVE_AB_ATTEMPTED = False
+_FR13_FA2_QROW32_LIVE_AB_PASSED = False
+_FR13_FA2_QROW32_BATCH_STRIDE_SENTINEL = 131091
+_FR13_FA2_QROW32_TARGET_LAYERS = tuple(
+    f"language_model.model.layers.{index}.self_attn.attn"
+    for index in range(3, 64, 4)
+)
+_FR13_FA2_QROW32_CANONICAL_TASK_IDS = (
+    "astropy__astropy-12907",
+    "astropy__astropy-13033",
+    "astropy__astropy-13236",
+    "astropy__astropy-13398",
+)
+_FR13_FA2_QROW32_EXACT4_SUBSET_SHA256 = (
+    "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+)
+
+
+def _fr13_fa2_qrow32_candidate_tree_bias(tree_bias):
+    """Copy the live mask into the private, semantically exact B4 layout."""
+    if tree_bias.dtype != torch.float32:
+        raise RuntimeError("FR13 qrow32 tree bias is not FP32")
+    if tuple(tree_bias.shape) not in ((32, 32), (4, 32, 32)):
+        raise RuntimeError("FR13 qrow32 tree bias shape drifted")
+    if int(tree_bias.stride(-1)) != 1:
+        raise RuntimeError("FR13 qrow32 tree bias columns are not contiguous")
+    source = tree_bias.unsqueeze(0).expand(4, -1, -1) if tree_bias.ndim == 2 else tree_bias
+    tagged = torch.empty_strided(
+        (4, 32, 32),
+        (_FR13_FA2_QROW32_BATCH_STRIDE_SENTINEL, 32, 1),
+        dtype=tree_bias.dtype,
+        device=tree_bias.device,
+    )
+    tagged.copy_(source)
+    if tuple(tagged.stride()) != (
+        _FR13_FA2_QROW32_BATCH_STRIDE_SENTINEL,
+        32,
+        1,
+    ):
+        raise RuntimeError("FR13 qrow32 selector stride was not preserved")
+    return tagged
+
+
+def _fr13_fa2_qrow32_live_ab_register(
+    *,
+    layer,
+    flash_fn,
+    query,
+    key_cache,
+    value_cache,
+    cu_seqlens_q,
+    max_seqlen_q,
+    seqused_k,
+    max_seqlen_k,
+    softmax_scale,
+    causal,
+    window_size,
+    block_table,
+    softcap,
+    num_splits,
+    tree_bias,
+):
+    """Retain every target layer from the final exact4 B4 FULL graph."""
+    if os.environ.get("FR13_FA2_QROW32_LIVE_PAGED_AB", "0") != "1":
+        return
+    if not (
+        torch.cuda.is_available()
+        and torch.cuda.is_current_stream_capturing()
+    ):
+        return
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_qrow_gdn
+
+    context = getattr(_fr13_qrow_gdn, "_FR13_FIXED32_CAPTURE_CONTEXT", None)
+    if not isinstance(context, dict):
+        # Memory-profile graphs deliberately have no final capture context.
+        return
+    descriptor = context.get("descriptor")
+    if not isinstance(descriptor, dict) or int(descriptor.get("num_reqs", -1)) != 4:
+        return
+    graph_id = int(context.get("graph_id", 0))
+    if graph_id <= 0:
+        raise RuntimeError("FR13 qrow32 live gate has no final graph identity")
+    layer_name = str(getattr(layer, "layer_name", ""))
+    if layer_name not in _FR13_FA2_QROW32_TARGET_LAYERS:
+        raise RuntimeError("FR13 qrow32 live gate reached a non-target layer")
+
+    exact = (
+        query.dtype == torch.bfloat16
+        and tuple(query.shape) == (128, 24, 256)
+        and int(query.stride(-1)) == 1
+        and int(query.stride(-2)) == 256
+        and key_cache.dtype == torch.bfloat16
+        and value_cache.dtype == torch.bfloat16
+        and tuple(key_cache.shape[1:]) == (1024, 4, 256)
+        and tuple(value_cache.shape) == tuple(key_cache.shape)
+        and tuple(key_cache.stride()) == (1024 * 4 * 256, 4 * 256, 256, 1)
+        and tuple(value_cache.stride()) == tuple(key_cache.stride())
+        and cu_seqlens_q.dtype == torch.int32
+        and tuple(cu_seqlens_q.shape) == (5,)
+        and seqused_k.dtype == torch.int32
+        and tuple(seqused_k.shape) == (4,)
+        and block_table.dtype == torch.int32
+        and block_table.ndim == 2
+        and int(block_table.shape[0]) == 4
+        and tree_bias.dtype == torch.float32
+        and tuple(tree_bias.shape) in ((32, 32), (4, 32, 32))
+        and int(tree_bias.stride(-1)) == 1
+        and int(max_seqlen_q) == 32
+        and int(max_seqlen_k) > 0
+        and not bool(causal)
+        and float(softcap) == 0.0
+        and int(num_splits) in (0, 1)
+    )
+    if not exact:
+        raise RuntimeError("FR13 qrow32 live gate saw non-canonical B4 geometry")
+    if window_size is not None and tuple(int(x) for x in window_size) != (-1, -1):
+        raise RuntimeError("FR13 qrow32 live gate requires a full attention window")
+
+    graph = _FR13_FA2_QROW32_LIVE_AB_GRAPHS.setdefault(graph_id, {})
+    if layer_name in graph:
+        raise RuntimeError("FR13 qrow32 target layer executed twice in capture")
+    graph[layer_name] = {
+        "layer_name": layer_name,
+        "flash_fn": flash_fn,
+        "query": query,
+        "key_cache": key_cache,
+        "value_cache": value_cache,
+        "cu_seqlens_q": cu_seqlens_q,
+        "max_seqlen_q": int(max_seqlen_q),
+        "seqused_k": seqused_k,
+        "max_seqlen_k": int(max_seqlen_k),
+        "softmax_scale": float(softmax_scale),
+        "causal": bool(causal),
+        "window_size": None if window_size is None else list(window_size),
+        "block_table": block_table,
+        "softcap": float(softcap),
+        "num_splits": int(num_splits),
+        "tree_bias": tree_bias,
+    }
+    logger.info(
+        "FR13 qrow32 live paged A/B registered graph=%d layer=%s count=%d",
+        graph_id,
+        layer_name,
+        len(graph),
+    )
+
+
+def _fr13_fa2_qrow32_live_ab_call(bundle, out, *, candidate=False):
+    tree_bias = bundle["tree_bias"]
+    if candidate:
+        tree_bias = _fr13_fa2_qrow32_candidate_tree_bias(tree_bias)
+    return bundle["flash_fn"](
+        q=bundle["query"],
+        k=bundle["key_cache"],
+        v=bundle["value_cache"],
+        out=out,
+        cu_seqlens_q=bundle["cu_seqlens_q"],
+        max_seqlen_q=bundle["max_seqlen_q"],
+        seqused_k=bundle["seqused_k"],
+        max_seqlen_k=bundle["max_seqlen_k"],
+        softmax_scale=bundle["softmax_scale"],
+        causal=bundle["causal"],
+        alibi_slopes=None,
+        window_size=bundle["window_size"],
+        block_table=bundle["block_table"],
+        softcap=bundle["softcap"],
+        scheduler_metadata=None,
+        fa_version=2,
+        num_splits=bundle["num_splits"],
+        s_aux=None,
+        tree_bias=tree_bias,
+        return_softmax_lse=True,
+    )
+
+
+def _fr13_fa2_qrow32_raw_bytes(tensor):
+    return tensor.detach().contiguous().view(torch.uint8).cpu().numpy().tobytes()
+
+
+def _fr13_fa2_qrow32_byte_summary(stock, candidate):
+    import hashlib as _hashlib
+
+    if stock.dtype != candidate.dtype or tuple(stock.shape) != tuple(candidate.shape):
+        raise RuntimeError("FR13 qrow32 comparison tensor contract drifted")
+    stock_bytes = _fr13_fa2_qrow32_raw_bytes(stock)
+    candidate_bytes = _fr13_fa2_qrow32_raw_bytes(candidate)
+    mismatches = abs(len(stock_bytes) - len(candidate_bytes)) + sum(
+        left != right
+        for left, right in zip(stock_bytes, candidate_bytes)
+    )
+    return {
+        "dtype": str(stock.dtype),
+        "shape": list(stock.shape),
+        "bytes": len(stock_bytes),
+        "raw_byte_mismatches": mismatches,
+        "stock_sha256": _hashlib.sha256(stock_bytes).hexdigest(),
+        "candidate_sha256": _hashlib.sha256(candidate_bytes).hexdigest(),
+    }
+
+
+def _fr13_fa2_qrow32_live_ab_write(record):
+    import json as _json
+    from pathlib import Path as _Path
+
+    path = _Path(
+        os.environ.get(
+            "FR13_FA2_QROW32_LIVE_PAGED_AB_JSON",
+            "/logs/fr13_fa2_qrow32_live_paged_ab.json",
+        )
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(
+        _json.dumps(record, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
+        encoding="ascii",
+    )
+    temporary.replace(path)
+
+
+def _fr13_fa2_qrow32_live_ab_replay(graph_id, runtime_mode, batch_size):
+    """Run the all-layer byte gate after the first real stock exact4 replay."""
+    global _FR13_FA2_QROW32_LIVE_AB_ATTEMPTED
+    global _FR13_FA2_QROW32_LIVE_AB_PASSED
+
+    if os.environ.get("FR13_FA2_QROW32_LIVE_PAGED_AB", "0") != "1":
+        return
+    if _FR13_FA2_QROW32_LIVE_AB_ATTEMPTED:
+        return
+    if str(runtime_mode).upper() != "FULL" or int(batch_size) != 4:
+        return
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_qrow_gdn
+
+    if not _fr13_qrow_gdn._fr13_fixed32_observed_event_active():
+        return
+    event = getattr(_fr13_qrow_gdn, "_FR13_FIXED32_OBSERVED_CURRENT", None)
+    if not isinstance(event, dict) or int(event.get("batch_size", -1)) != 4:
+        raise RuntimeError("FR13 qrow32 live gate has no exact4 observed event")
+    graph = _FR13_FA2_QROW32_LIVE_AB_GRAPHS.get(int(graph_id))
+    if not isinstance(graph, dict):
+        raise RuntimeError("FR13 qrow32 live gate has no retained graph operands")
+    if set(graph) != set(_FR13_FA2_QROW32_TARGET_LAYERS):
+        raise RuntimeError(
+            "FR13 qrow32 live gate did not retain all 16 target tree layers"
+        )
+    task_ids = tuple(
+        item
+        for item in os.environ.get(
+            "FR13_FA2_QROW32_LIVE_PAGED_AB_TASK_IDS", ""
+        ).split(",")
+        if item
+    )
+    if task_ids != _FR13_FA2_QROW32_CANONICAL_TASK_IDS:
+        raise RuntimeError("FR13 qrow32 live gate task identity is not canonical exact4")
+    if (
+        os.environ.get("FR13_FA2_QROW32_LIVE_PAGED_AB_SUBSET_SHA256", "")
+        != _FR13_FA2_QROW32_EXACT4_SUBSET_SHA256
+    ):
+        raise RuntimeError("FR13 qrow32 live gate subset digest drifted")
+    fixed32_mode = os.environ.get("FR13_FIXED32_MODE", "")
+    if fixed32_mode not in ("tail6_fixed32", "hydra27_fixed32"):
+        raise RuntimeError("FR13 qrow32 live gate topology mode drifted")
+    candidate_so_sha256 = os.environ.get("FR13_FA2_QROW32_SO_SHA256", "")
+    if (
+        len(candidate_so_sha256) != 64
+        or any(char not in "0123456789abcdef" for char in candidate_so_sha256)
+    ):
+        raise RuntimeError("FR13 qrow32 live gate has no candidate SO digest")
+    source_commit = os.environ.get("FR13_FA2_QROW32_SOURCE_COMMIT", "")
+    if (
+        len(source_commit) != 40
+        or any(char not in "0123456789abcdef" for char in source_commit)
+    ):
+        raise RuntimeError("FR13 qrow32 live gate has no source commit")
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError("FR13 qrow32 live gate ran inside CUDA capture")
+
+    _FR13_FA2_QROW32_LIVE_AB_ATTEMPTED = True
+    torch.cuda.synchronize()
+    layer_records = []
+    total_output_mismatches = 0
+    total_lse_mismatches = 0
+    tree_bias_sha256 = set()
+    shared_q_start = None
+    shared_seq_lens = None
+
+    import hashlib as _hashlib
+
+    for layer_name in _FR13_FA2_QROW32_TARGET_LAYERS:
+        bundle = graph[layer_name]
+        q_start = [int(x) for x in bundle["cu_seqlens_q"].cpu().tolist()]
+        seq_lens = [int(x) for x in bundle["seqused_k"].cpu().tolist()]
+        if q_start != [0, 32, 64, 96, 128]:
+            raise RuntimeError("FR13 qrow32 live query segments drifted")
+        if (
+            len(seq_lens) != 4
+            or any(length < 32 for length in seq_lens)
+            or any(length > bundle["max_seqlen_k"] for length in seq_lens)
+        ):
+            raise RuntimeError("FR13 qrow32 live sequence metadata drifted")
+        if shared_q_start is None:
+            shared_q_start = q_start
+            shared_seq_lens = seq_lens
+        elif q_start != shared_q_start or seq_lens != shared_seq_lens:
+            raise RuntimeError("FR13 qrow32 live metadata differs across layers")
+
+        bias_bytes = _fr13_fa2_qrow32_raw_bytes(bundle["tree_bias"])
+        bias_sha256 = _hashlib.sha256(bias_bytes).hexdigest()
+        tree_bias_sha256.add(bias_sha256)
+        stock_buf = torch.empty_like(bundle["query"])
+        candidate_buf = torch.empty_like(bundle["query"])
+        stock_out, stock_lse = _fr13_fa2_qrow32_live_ab_call(bundle, stock_buf)
+        candidate_out, candidate_lse = _fr13_fa2_qrow32_live_ab_call(
+            bundle, candidate_buf, candidate=True
+        )
+        torch.cuda.synchronize()
+        if stock_out.dtype != torch.bfloat16 or candidate_out.dtype != torch.bfloat16:
+            raise RuntimeError("FR13 qrow32 live gate output is not BF16")
+        if stock_lse.dtype != torch.float32 or candidate_lse.dtype != torch.float32:
+            raise RuntimeError("FR13 qrow32 live gate LSE is not FP32")
+
+        output_summary = _fr13_fa2_qrow32_byte_summary(stock_out, candidate_out)
+        lse_summary = _fr13_fa2_qrow32_byte_summary(stock_lse, candidate_lse)
+        slot_records = []
+        for slot in range(4):
+            begin = slot * 32
+            end = begin + 32
+            slot_records.append(
+                {
+                    "slot": slot,
+                    "query_rows": [begin, end],
+                    "output": _fr13_fa2_qrow32_byte_summary(
+                        stock_out[begin:end], candidate_out[begin:end]
+                    ),
+                    "lse": _fr13_fa2_qrow32_byte_summary(
+                        stock_lse[..., begin:end], candidate_lse[..., begin:end]
+                    ),
+                }
+            )
+        total_output_mismatches += int(output_summary["raw_byte_mismatches"])
+        total_lse_mismatches += int(lse_summary["raw_byte_mismatches"])
+        layer_records.append(
+            {
+                "layer_name": layer_name,
+                "tree_bias_sha256": bias_sha256,
+                "output": output_summary,
+                "lse": lse_summary,
+                "slots": slot_records,
+            }
+        )
+
+    if len(tree_bias_sha256) != 1:
+        raise RuntimeError("FR13 qrow32 physical32 mask differs across layers")
+    passed = total_output_mismatches == 0 and total_lse_mismatches == 0
+    record = {
+        "schema": "fr13.fixed32.fa2_qrow32_live_paged_exact4_ab.v1",
+        "status": "PASS" if passed else "FAIL",
+        "suite": "SWE-Verified",
+        "task_ids": list(task_ids),
+        "subset_sha256": _FR13_FA2_QROW32_EXACT4_SUBSET_SHA256,
+        "concurrency": 4,
+        "batch_size": 4,
+        "physical_rows_per_slot": 32,
+        "total_query_rows": 128,
+        "fixed32_mode": fixed32_mode,
+        "candidate_so_sha256": candidate_so_sha256,
+        "source_commit": source_commit,
+        "engine_pid": os.getpid(),
+        "graph_id": int(graph_id),
+        "runtime_mode": str(runtime_mode).upper(),
+        "layer_count": len(layer_records),
+        "target_layers": list(_FR13_FA2_QROW32_TARGET_LAYERS),
+        "stock_calls": len(layer_records),
+        "candidate_calls": len(layer_records),
+        "operands": {
+            "query_shape": [128, 24, 256],
+            "query_start_loc": shared_q_start,
+            "seq_lens": shared_seq_lens,
+            "suffix_start_mod64": [
+                (length - 32) % 64 for length in shared_seq_lens
+            ],
+            "slot_coverage": [0, 1, 2, 3],
+            "key_cache_tail_shape": [1024, 4, 256],
+            "tree_bias_shape": list(next(iter(graph.values()))["tree_bias"].shape),
+            "tree_bias_sha256": next(iter(tree_bias_sha256)),
+        },
+        "output_raw_byte_mismatches": total_output_mismatches,
+        "lse_raw_byte_mismatches": total_lse_mismatches,
+        "layers": layer_records,
+        "candidate_dispatch": "qrow32 gate-only exact-geometry require",
+        "served_return": "stock captured graph output unchanged",
+        "fallback_allowed": False,
+        "performance_measurement": False,
+    }
+    _fr13_fa2_qrow32_live_ab_write(record)
+    if not passed:
+        raise RuntimeError(
+            "FR13 qrow32 live paged exact4 byte A/B mismatch: "
+            f"output_bytes={total_output_mismatches} "
+            f"lse_bytes={total_lse_mismatches}"
+        )
+    _FR13_FA2_QROW32_LIVE_AB_PASSED = True
+    logger.warning(
+        "[FR13_FA2_QROW32_LIVE_PAGED_AB] PASS mode=%s layers=16 slots=4 "
+        "output_byte_mismatches=0 lse_byte_mismatches=0 stock_served=1",
+        fixed32_mode,
+    )
+
+
+'''
+
+
 FIXED32_QUERY_TILE16_PRODUCTION_HELPERS = r'''# FR13_FA2_QROW16_PRODUCTION
 _FR13_FA2_QROW16_PRODUCTION_GRAPHS = {}
 _FR13_FA2_QROW16_EAGER_STATE = {
@@ -1362,6 +1903,7 @@ def _patch_tree_attn(
     path: Path,
     *,
     fixed32_query_tile16_live_ab: bool = False,
+    fixed32_query_tile32_live_ab: bool = False,
     fixed32_query_tile16_production: bool = False,
     dfwd_unified_bm8_production: bool = False,
 ) -> bool:
@@ -1511,6 +2053,14 @@ def _fr13_sr_causal_flag():
             "def _get_depth_counts(",
             FIXED32_QUERY_TILE16_LIVE_AB_HELPERS,
             "qrow16 live paged A/B helpers",
+        )
+        changed = changed or did
+    if fixed32_query_tile32_live_ab:
+        text, did = _insert_once(
+            text,
+            "def _get_depth_counts(",
+            FIXED32_QUERY_TILE32_LIVE_AB_HELPERS,
+            "qrow32 live paged exact4 A/B helpers",
         )
         changed = changed or did
     if fixed32_query_tile16_production:
@@ -1732,6 +2282,42 @@ def _fr13_sr_causal_flag():
         if text.count(live_call_anchor) != 1:
             raise RuntimeError(
                 "qrow16 live paged A/B decode-call anchor is not unique"
+            )
+        text = text.replace(live_call_anchor, live_call_replacement, 1)
+        changed = True
+    if fixed32_query_tile32_live_ab and (
+        "_fr13_fa2_qrow32_live_ab_register(\n" not in text.split(
+            "class TreeAttentionImpl", 1
+        )[-1]
+    ):
+        live_call_anchor = (
+            "                if not _fr13_reordered:\n"
+            "                    flash_attn_varlen_func(\n"
+        )
+        live_call_replacement = """                if not _fr13_reordered:
+                    _fr13_fa2_qrow32_live_ab_register(
+                        layer=layer,
+                        flash_fn=flash_attn_varlen_func,
+                        query=query[:num_decode_tokens],
+                        key_cache=key_cache,
+                        value_cache=value_cache,
+                        cu_seqlens_q=decode_meta.query_start_loc,
+                        max_seqlen_q=decode_meta.max_query_len,
+                        seqused_k=decode_meta.seq_lens,
+                        max_seqlen_k=decode_meta.max_seq_len,
+                        softmax_scale=self.scale,
+                        causal=_fr13_sr_causal_flag(),
+                        window_size=sliding_window_size,
+                        block_table=decode_meta.block_table,
+                        softcap=self.logits_soft_cap,
+                        num_splits=1 if envs.VLLM_BATCH_INVARIANT else 0,
+                        tree_bias=tree_bias,
+                    )
+                    flash_attn_varlen_func(
+"""
+        if text.count(live_call_anchor) != 1:
+            raise RuntimeError(
+                "qrow32 live paged exact4 A/B decode-call anchor is not unique"
             )
         text = text.replace(live_call_anchor, live_call_replacement, 1)
         changed = True
@@ -1997,6 +2583,31 @@ def _patch_cuda_graph_qrow16_live_ab(path: Path) -> bool:
     return True
 
 
+def _patch_cuda_graph_qrow32_live_ab(path: Path) -> bool:
+    text = path.read_text()
+    sentinel = "# FR13_FA2_QROW32_LIVE_PAGED_AB_REPLAY"
+    if sentinel in text:
+        return False
+    anchor = "        entry.cudagraph.replay()\n"
+    if text.count(anchor) != 1:
+        raise RuntimeError("qrow32 live paged A/B replay anchor is not unique")
+    replacement = anchor + f'''        {sentinel}: the stock FULL graph has
+        # produced the first real exact4 event's retained queries. All-layer
+        # diagnostic recalls are ordered after it and never replace entry.output.
+        from vllm.v1.attention.backends.tree_attn import (
+            _fr13_fa2_qrow32_live_ab_replay,
+        )
+        _fr13_fa2_qrow32_live_ab_replay(
+            id(entry.cudagraph),
+            self.runtime_mode.name,
+            entry.batch_descriptor.num_reqs,
+        )
+'''
+    path.write_text(text.replace(anchor, replacement, 1))
+    py_compile.compile(path, doraise=True)
+    return True
+
+
 def _patch_cuda_graph_qrow16_production(path: Path) -> bool:
     text = path.read_text()
     sentinel = "# FR13_FA2_QROW16_PRODUCTION_CAPTURE_END"
@@ -2026,6 +2637,7 @@ def patch_installed_vllm(
     site_packages: Path,
     *,
     fixed32_query_tile16_live_ab: bool = False,
+    fixed32_query_tile32_live_ab: bool = False,
     fixed32_query_tile16_production: bool = False,
     dfwd_unified_bm8_production: bool = False,
 ) -> dict[str, bool]:
@@ -2036,6 +2648,7 @@ def patch_installed_vllm(
         "tree_attn.py": _patch_tree_attn(
             site_packages / "vllm/v1/attention/backends/tree_attn.py",
             fixed32_query_tile16_live_ab=fixed32_query_tile16_live_ab,
+            fixed32_query_tile32_live_ab=fixed32_query_tile32_live_ab,
             fixed32_query_tile16_production=fixed32_query_tile16_production,
             dfwd_unified_bm8_production=dfwd_unified_bm8_production,
         ),
@@ -2048,6 +2661,10 @@ def patch_installed_vllm(
     }
     if fixed32_query_tile16_live_ab:
         result["cuda_graph.py"] = _patch_cuda_graph_qrow16_live_ab(
+            site_packages / "vllm/compilation/cuda_graph.py"
+        )
+    elif fixed32_query_tile32_live_ab:
+        result["cuda_graph.py"] = _patch_cuda_graph_qrow32_live_ab(
             site_packages / "vllm/compilation/cuda_graph.py"
         )
     elif fixed32_query_tile16_production:
@@ -2094,12 +2711,17 @@ def main() -> int:
     parser.add_argument(
         "--fixed32-query-tile32",
         action="store_true",
-        help="build the source-only fixed32 B4 FA2 32-row query-tile candidate",
+        help="build the gate-only fixed32 B4 FA2 32-row query-tile candidate",
     )
     parser.add_argument(
         "--fixed32-query-tile16-live-ab",
         action="store_true",
         help="install the one-shot live paged B1 stock/qrow16 byte gate",
+    )
+    parser.add_argument(
+        "--fixed32-query-tile32-live-ab",
+        action="store_true",
+        help="install the all-layer live paged exact4 B4 stock/qrow32 byte gate",
     )
     parser.add_argument(
         "--fixed32-query-tile16-production",
@@ -2117,12 +2739,37 @@ def main() -> int:
         and args.fixed32_query_tile16_production
     ):
         parser.error("qrow16 live A/B and production selectors are mutually exclusive")
+    private_selectors = sum(
+        bool(value)
+        for value in (
+            args.fixed32_query_tile16_live_ab,
+            args.fixed32_query_tile32_live_ab,
+            args.fixed32_query_tile16_production,
+        )
+    )
+    if private_selectors > 1:
+        parser.error("qrow16/qrow32 private selectors are mutually exclusive")
+    if args.fixed32_query_tile32 and not args.tree_bias_tile_earlyout:
+        parser.error(
+            "--fixed32-query-tile32 requires --tree-bias-tile-earlyout in "
+            "the same source-build invocation"
+        )
+    if (
+        args.fixed32_query_tile32_live_ab
+        and not args.skip_source
+        and not args.fixed32_query_tile32
+    ):
+        parser.error(
+            "a combined qrow32 source/live patch requires "
+            "--fixed32-query-tile32"
+        )
 
     payload: dict[str, object] = {
         "tree_bias_tile_earlyout": args.tree_bias_tile_earlyout,
         "fixed32_query_tile16": args.fixed32_query_tile16,
         "fixed32_query_tile32": args.fixed32_query_tile32,
         "fixed32_query_tile16_live_ab": args.fixed32_query_tile16_live_ab,
+        "fixed32_query_tile32_live_ab": args.fixed32_query_tile32_live_ab,
         "fixed32_query_tile16_production": args.fixed32_query_tile16_production,
         "dfwd_unified_bm8_production": args.dfwd_unified_bm8_production,
     }
@@ -2139,6 +2786,7 @@ def main() -> int:
         payload["python"] = patch_installed_vllm(
             args.site_packages,
             fixed32_query_tile16_live_ab=args.fixed32_query_tile16_live_ab,
+            fixed32_query_tile32_live_ab=args.fixed32_query_tile32_live_ab,
             fixed32_query_tile16_production=args.fixed32_query_tile16_production,
             dfwd_unified_bm8_production=args.dfwd_unified_bm8_production,
         )

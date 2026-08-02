@@ -54,6 +54,12 @@ _FR13_M32_GUARD_NAMES=(
   FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION
   FR13_FA2_QROW16_LIVE_PAGED_AB
   FR13_FA2_QROW16_PRODUCTION
+  FR13_FA2_QROW32_LIVE_PAGED_AB
+  FR13_FA2_QROW32_LIVE_PAGED_AB_TASK_IDS
+  FR13_FA2_QROW32_LIVE_PAGED_AB_SUBSET_SHA256
+  FR13_FA2_QROW32_LIVE_PAGED_AB_JSON
+  FR13_FA2_QROW32_SO_SHA256
+  FR13_FA2_QROW32_SOURCE_COMMIT
   FR13_DFWD_UNIFIED_BM8_LIVE_AB
   FR13_DFWD_UNIFIED_BM8_PRODUCTION
   FR13_FIXED32_GDN_PATH_BV_CANDIDATE
@@ -92,6 +98,7 @@ _FR13_M32_GUARD_ACTIVE=0
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_PRODUCTION]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_TIMING_ARM]}" == "set:1" \
    || "$_FR13_CALLER_SFWD_B4" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_LIVE_PAGED_AB]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION]}" == "set:1" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 _FR13_LOCAL_ENV_SOURCED=0
@@ -105,6 +112,7 @@ fi
    || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" \
    || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "1" \
+   || "${FR13_FA2_QROW32_LIVE_PAGED_AB:-0}" == "1" \
    || "${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}" == "1" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 if (( _FR13_M32_GUARD_ACTIVE == 1 )); then
@@ -325,6 +333,12 @@ FR13_FA2_QROW16_SO_SHA256=${FR13_FA2_QROW16_SO_SHA256:-}
 FR13_FA2_QROW16_PRODUCTION=${FR13_FA2_QROW16_PRODUCTION:-0}
 FR13_FA2_QROW16_LIVE_PASS_JSON=${FR13_FA2_QROW16_LIVE_PASS_JSON:-}
 FR13_FA2_QROW16_LIVE_PASS_SHA256=${FR13_FA2_QROW16_LIVE_PASS_SHA256:-}
+FR13_FA2_QROW32_LIVE_PAGED_AB=${FR13_FA2_QROW32_LIVE_PAGED_AB:-0}
+FR13_FA2_QROW32_LIVE_PAGED_AB_TASK_IDS=${FR13_FA2_QROW32_LIVE_PAGED_AB_TASK_IDS:-}
+FR13_FA2_QROW32_LIVE_PAGED_AB_SUBSET_SHA256=${FR13_FA2_QROW32_LIVE_PAGED_AB_SUBSET_SHA256:-}
+FR13_FA2_QROW32_LIVE_PAGED_AB_JSON=${FR13_FA2_QROW32_LIVE_PAGED_AB_JSON:-/logs/fr13_fa2_qrow32_live_paged_ab.json}
+FR13_FA2_QROW32_SO_SHA256=${FR13_FA2_QROW32_SO_SHA256:-}
+FR13_FA2_QROW32_SOURCE_COMMIT=${FR13_FA2_QROW32_SOURCE_COMMIT:-}
 FR13_DFWD_UNIFIED_BM8_LIVE_AB=${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}
 FR13_DFWD_UNIFIED_BM8_INSTANCE_ID=${FR13_DFWD_UNIFIED_BM8_INSTANCE_ID:-}
 FR13_DFWD_UNIFIED_BM8_LIVE_JSON=${FR13_DFWD_UNIFIED_BM8_LIVE_JSON:-/logs/fr13_dfwd_unified_bm8.live.json}
@@ -405,6 +419,10 @@ case "$FR13_FA2_QROW16_PRODUCTION" in
   0|1) ;;
   *) echo "FR13_FA2_QROW16_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
 esac
+case "$FR13_FA2_QROW32_LIVE_PAGED_AB" in
+  0|1) ;;
+  *) echo "FR13_FA2_QROW32_LIVE_PAGED_AB must be 0 or 1" >&2; exit 2 ;;
+esac
 if [[ -n "${FR13_FA2_QROW16_INTERNAL_DISPATCH:-}" \
       || -n "${FR13_FA2_QROW16_INTERNAL_PRODUCTION_ATTESTED:-}" ]]; then
   echo "FR13 qrow16 internal selectors are launcher-private" >&2
@@ -413,6 +431,12 @@ fi
 if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" \
       && "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
   echo "FR13 qrow16 live A/B and production are mutually exclusive" >&2
+  exit 2
+fi
+if [[ "$FR13_FA2_QROW32_LIVE_PAGED_AB" == "1" \
+      && ( "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" \
+           || "$FR13_FA2_QROW16_PRODUCTION" == "1" ) ]]; then
+  echo "FR13 qrow32 live A/B and qrow16 selectors are mutually exclusive" >&2
   exit 2
 fi
 case "$FR13_DRAFT_HEAD_PAD_ROWS" in
@@ -499,6 +523,21 @@ if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" \
      && "$MAX_NUM_SEQS" == "1" \
      && "$FR13_FA2_QROW16_SO_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
     echo "FR13 qrow16 candidate modes require fixed32 B1 and candidate SO SHA-256" >&2
+    exit 2
+  }
+fi
+_FR13_FA2_QROW32_CANDIDATE_MODE=0
+if [[ "$FR13_FA2_QROW32_LIVE_PAGED_AB" == "1" ]]; then
+  _FR13_FA2_QROW32_CANDIDATE_MODE=1
+  [[ ( "${FR13_FIXED32_MODE:-}" == "tail6_fixed32" \
+       || "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" ) \
+     && "$MAX_NUM_SEQS" == "4" \
+     && "${SWE_CONCURRENCY:-}" == "4" \
+     && "$FR13_FA2_QROW32_SO_SHA256" =~ ^[0-9a-f]{64}$ \
+     && "$FR13_FA2_QROW32_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ \
+     && "$FR13_FA2_QROW32_LIVE_PAGED_AB_TASK_IDS" == "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398" \
+     && "$FR13_FA2_QROW32_LIVE_PAGED_AB_SUBSET_SHA256" == "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5" ]] || {
+    echo "FR13 qrow32 live A/B requires canonical SWE-Verified exact4 B4 identity and candidate provenance" >&2
     exit 2
   }
 fi
@@ -1445,24 +1484,40 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     || { echo "fixed32 forbids FR13_SERVE_BATCH_FLAGS" >&2; exit 2; }
   PYTHONPATH="$REPO/scripts" .venv/bin/python - \
     "$REPO" "$IMAGE" "$FORKED_FA2_SO" "$TREE" "$SPEC_CONFIG" \
-    "$_FR13_FA2_QROW16_CANDIDATE_MODE" "$FR13_FA2_QROW16_SO_SHA256" <<'PY'
+    "$_FR13_FA2_QROW16_CANDIDATE_MODE" "$FR13_FA2_QROW16_SO_SHA256" \
+    "$_FR13_FA2_QROW32_CANDIDATE_MODE" "$FR13_FA2_QROW32_SO_SHA256" <<'PY'
 import sys
 from pathlib import Path
 
 import fr13_fixed32_contract as contract
 
-repo, image, fa2_raw, tree, spec_config, qrow_candidate, qrow_sha256 = sys.argv[1:]
+(
+    repo,
+    image,
+    fa2_raw,
+    tree,
+    spec_config,
+    qrow16_candidate,
+    qrow16_sha256,
+    qrow32_candidate,
+    qrow32_sha256,
+) = sys.argv[1:]
 fa2 = Path(fa2_raw).resolve(strict=True)
 expected_fa2 = Path(repo).resolve() / contract.FA2_REPO_RELATIVE
 if image != contract.IMAGE_REFERENCE:
     raise SystemExit(f"fixed32 image override is forbidden: {image!r}")
 contract._docker_image_record()
 actual_sha256 = contract.sha256_file(fa2)
-if qrow_candidate == "1":
-    if actual_sha256 != qrow_sha256:
+if qrow16_candidate == "1":
+    if actual_sha256 != qrow16_sha256:
         raise SystemExit("fixed32 qrow16 candidate FA2 sha256 mismatch")
     if actual_sha256 == contract.FA2_SHA256:
         raise SystemExit("fixed32 qrow16 live gate received the stock FA2 binary")
+elif qrow32_candidate == "1":
+    if actual_sha256 != qrow32_sha256:
+        raise SystemExit("fixed32 qrow32 candidate FA2 sha256 mismatch")
+    if actual_sha256 == contract.FA2_SHA256:
+        raise SystemExit("fixed32 qrow32 live gate received the stock FA2 binary")
 else:
     if fa2 != expected_fa2:
         raise SystemExit(f"fixed32 FA2 realpath mismatch: {fa2} != {expected_fa2}")
@@ -2670,6 +2725,12 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FA2_QROW16_PRODUCTION="$FR13_FA2_QROW16_PRODUCTION" \
   -e FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR="$FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR" \
   -e FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256="$FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256" \
+  -e FR13_FA2_QROW32_LIVE_PAGED_AB="$FR13_FA2_QROW32_LIVE_PAGED_AB" \
+  -e FR13_FA2_QROW32_LIVE_PAGED_AB_TASK_IDS="$FR13_FA2_QROW32_LIVE_PAGED_AB_TASK_IDS" \
+  -e FR13_FA2_QROW32_LIVE_PAGED_AB_SUBSET_SHA256="$FR13_FA2_QROW32_LIVE_PAGED_AB_SUBSET_SHA256" \
+  -e FR13_FA2_QROW32_LIVE_PAGED_AB_JSON="$FR13_FA2_QROW32_LIVE_PAGED_AB_JSON" \
+  -e FR13_FA2_QROW32_SO_SHA256="$FR13_FA2_QROW32_SO_SHA256" \
+  -e FR13_FA2_QROW32_SOURCE_COMMIT="$FR13_FA2_QROW32_SOURCE_COMMIT" \
   -e FR13_DFWD_UNIFIED_BM8_LIVE_AB="$FR13_DFWD_UNIFIED_BM8_LIVE_AB" \
   -e FR13_DFWD_UNIFIED_BM8_INSTANCE_ID="$FR13_DFWD_UNIFIED_BM8_INSTANCE_ID" \
   -e FR13_DFWD_UNIFIED_BM8_LIVE_JSON="$FR13_DFWD_UNIFIED_BM8_LIVE_JSON" \
@@ -2961,7 +3022,7 @@ if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
   export FR13_DFWD_UNIFIED_BM8_INTERNAL_PRODUCTION_ATTESTED=1
 fi
 python3 /workspace/scripts/fr13_patch_fa2_tree_bias.py --skip-source \
-  $(if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" ]]; then printf '%s' '--fixed32-query-tile16-live-ab'; elif [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then printf '%s' '--fixed32-query-tile16-production'; fi) \
+  $(if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" ]]; then printf '%s' '--fixed32-query-tile16-live-ab'; elif [[ "$FR13_FA2_QROW32_LIVE_PAGED_AB" == "1" ]]; then printf '%s' '--fixed32-query-tile32-live-ab'; elif [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then printf '%s' '--fixed32-query-tile16-production'; fi) \
   $(if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then printf '%s' '--dfwd-unified-bm8-production'; fi)
 python3 - <<'PY'
 import hashlib
@@ -2982,6 +3043,13 @@ if os.environ.get('FR13_FA2_QROW16_LIVE_PAGED_AB', '0') == '1':
     graph_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/compilation/cuda_graph.py')
     if 'FR13_FA2_QROW16_LIVE_PAGED_AB_REPLAY' not in graph_path.read_text():
         raise SystemExit(f'qrow16 live replay patch missing in {graph_path}')
+if os.environ.get('FR13_FA2_QROW32_LIVE_PAGED_AB', '0') == '1':
+    live_needle = 'FR13_FA2_QROW32_LIVE_PAGED_AB'
+    if live_needle not in text:
+        raise SystemExit(f'{live_needle} patch missing in {path}')
+    graph_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/compilation/cuda_graph.py')
+    if 'FR13_FA2_QROW32_LIVE_PAGED_AB_REPLAY' not in graph_path.read_text():
+        raise SystemExit(f'qrow32 live replay patch missing in {graph_path}')
 if os.environ.get('FR13_FA2_QROW16_PRODUCTION', '0') == '1':
     if os.environ.get('FR13_FA2_QROW16_INTERNAL_PRODUCTION_ATTESTED') != '1':
         raise SystemExit('qrow16 production attestation missing')

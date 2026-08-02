@@ -247,8 +247,43 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     assert "false,  // Split" in candidate
     assert "flash_fwd_splitkv_combine_kernel" not in candidate
     assert "params.num_splits = " not in candidate
-    assert "qrow32 source candidate" in candidate
-    assert "production selector" in candidate
+    assert "qrow32 gate candidate" in candidate
+    assert "Gate-only entry point" in candidate
+    assert "ordinary and production paths cannot tag" in candidate
+
+    api_gate = module.FIXED32_QUERY_TILE32_API_GATE
+    assert "kFr13Qrow32BatchStrideSentinel" in api_gate
+    assert "params.tree_bias_ptr != nullptr" in api_gate
+    assert "params.is_bf16" in api_gate
+    assert "!params.is_causal" in api_gate
+    assert "params.b == 4" in api_gate
+    assert "params.total_q == 128" in api_gate
+    assert "params.d == 256" in api_gate
+    assert "params.d_rounded == 256" in api_gate
+    assert "params.h == 24" in api_gate
+    assert "params.h_k == 4" in api_gate
+    assert "params.h_h_k_ratio == 6" in api_gate
+    assert "params.seqlen_q == 32" in api_gate
+    assert "params.seqlen_q_rounded == 128" in api_gate
+    assert "params.tree_bias_rows == 32" in api_gate
+    assert "params.tree_bias_cols == 32" in api_gate
+    assert "params.tree_bias_row_stride == 32" in api_gate
+    assert "params.tree_bias_col_stride == 1" in api_gate
+    assert "params.cu_seqlens_q != nullptr" in api_gate
+    assert "params.cu_seqlens_k != nullptr" in api_gate
+    assert "params.seqused_k != nullptr" in api_gate
+    assert "params.block_table != nullptr" in api_gate
+    assert "params.page_block_size == 1024" in api_gate
+    assert "params.window_size_left < 0" in api_gate
+    assert "params.window_size_right < 0" in api_gate
+    assert "params.alibi_slopes_ptr == nullptr" in api_gate
+    assert "params.knew_ptr == nullptr" in api_gate
+    assert "params.vnew_ptr == nullptr" in api_gate
+    assert "params.softcap == 0.0f" in api_gate
+    assert "params.num_splits == 0" in api_gate
+    assert "params.num_splits == 1" not in api_gate
+    assert "force_split_kernel" in api_gate
+    assert "fr13_run_mha_fwd_fixed32_qrow32(params, stream)" in api_gate
 
     # Stock BM64 uses warps 0 and 1 for physical rows 0..31. BM32 preserves
     # each row's warp and warp-local coordinate while dropping warps 2 and 3.
@@ -275,17 +310,72 @@ def test_source_build_candidates_are_independent_and_default_off() -> None:
     assert 'parser.add_argument(\n        "--fixed32-query-tile16",' in text
     assert 'parser.add_argument(\n        "--fixed32-query-tile32",' in text
     assert 'parser.add_argument(\n        "--fixed32-query-tile16-live-ab",' in text
+    assert 'parser.add_argument(\n        "--fixed32-query-tile32-live-ab",' in text
     assert "tree_bias_tile_earlyout: bool = False" in text
     assert "fixed32_query_tile16: bool = False" in text
     assert "fixed32_query_tile32: bool = False" in text
-    qrow32 = text[text.index("FIXED32_QUERY_TILE32_TRANSLATION_UNIT") :]
-    assert "No production selector references" in qrow32
+    assert "There is no production selector" in text
+    assert "fixed32_query_tile32_production" not in text
+    assert "--fixed32-query-tile32 requires --tree-bias-tile-earlyout" in text
+    assert "fixed32 qrow32 requires --tree-bias-tile-earlyout" in text
     assert "tree_splitkv" not in text
     assert "tree-splitkv" not in text
     assert "FR13_FA2_TREE_SPLITKV" not in text
     assert "AllowSplit" not in text
     assert "FR13_ALLOW_SPLIT_SWITCH" not in text
     assert "params.o_batch_stride = max_seqlen_q * params.o_row_stride" not in text
+
+
+def test_qrow32_api_gate_composes_with_qrow16_and_is_idempotent() -> None:
+    module = _module()
+    text, changed = module._install_hidden_api_gate(
+        module.STOCK_RUN_MHA_FWD,
+        declaration=module.FIXED32_QUERY_TILE32_API_DECLARATION,
+        gate=module.FIXED32_QUERY_TILE32_API_GATE,
+        label="test qrow32",
+    )
+    assert changed
+    assert text.count("fr13_run_mha_fwd_fixed32_qrow32") == 2
+    assert text.count(module.FIXED32_QUERY_TILE32_API_GATE.strip()) == 1
+    assert module.STOCK_RUN_MHA_FWD[
+        module.STOCK_RUN_MHA_FWD.index("    FP16_SWITCH") : -1
+    ] in text
+
+    text, changed = module._install_hidden_api_gate(
+        text,
+        declaration=module.FIXED32_QUERY_TILE32_API_DECLARATION,
+        gate=module.FIXED32_QUERY_TILE32_API_GATE,
+        label="test qrow32",
+    )
+    assert not changed
+
+    signature_at = module.FIXED32_QUERY_TILE16_API_DISPATCH.index(
+        module.RUN_MHA_FWD_SIGNATURE
+    )
+    stock_body_at = module.FIXED32_QUERY_TILE16_API_DISPATCH.index(
+        "    FP16_SWITCH", signature_at
+    )
+    text, changed = module._install_hidden_api_gate(
+        text,
+        declaration=module.FIXED32_QUERY_TILE16_API_DISPATCH[:signature_at],
+        gate=module.FIXED32_QUERY_TILE16_API_DISPATCH[
+            signature_at + len(module.RUN_MHA_FWD_SIGNATURE) : stock_body_at
+        ],
+        label="test qrow16",
+    )
+    assert changed
+    assert text.count("fr13_run_mha_fwd_fixed32_qrow16") == 2
+    assert text.count("fr13_run_mha_fwd_fixed32_qrow32") == 2
+
+
+def test_qrow32_source_patch_requires_exact_safe_tile_earlyout(tmp_path: Path) -> None:
+    module = _module()
+    try:
+        module.patch_fa2_source(tmp_path, fixed32_query_tile32=True)
+    except ValueError as error:
+        assert "requires --tree-bias-tile-earlyout" in str(error)
+    else:
+        raise AssertionError("qrow32 source patch accepted the one-flag build")
 
 
 def test_qrow16_capture_checker_is_compile_preflight_only() -> None:
@@ -344,3 +434,52 @@ def test_qrow16_live_gate_uses_retained_paged_operands_after_real_replay() -> No
     assert "--fixed32-query-tile16-live-ab" in launcher
     assert "FR13_GATE_QROW16=${FR13_GATE_QROW16:-0}" in gate_launcher
     assert 'FR13_FA2_QROW16_LIVE_PAGED_AB="$FR13_GATE_QROW16"' in gate_launcher
+
+
+def test_qrow32_live_gate_is_exact4_all_layer_and_stock_served() -> None:
+    patcher = Path("scripts/fr13_patch_fa2_tree_bias.py").read_text()
+    launcher = Path("scripts/fr13_launch_forked_fa2_tree_server.sh").read_text()
+    runner = Path("scripts/fr13_run_b4_fa2_qrow32_live_gate.sh").read_text()
+
+    assert "FR13_FA2_QROW32_LIVE_PAGED_AB_REPLAY" in patcher
+    replay = patcher.index('anchor = "        entry.cudagraph.replay()\\n"')
+    gate = patcher.index("_fr13_fa2_qrow32_live_ab_replay(", replay)
+    assert replay < gate
+    assert "range(3, 64, 4)" in patcher
+    assert 'int(descriptor.get("num_reqs", -1)) != 4' in patcher
+    assert 'tuple(query.shape) == (128, 24, 256)' in patcher
+    assert 'tuple(cu_seqlens_q.shape) == (5,)' in patcher
+    assert 'tuple(seqused_k.shape) == (4,)' in patcher
+    assert 'int(block_table.shape[0]) == 4' in patcher
+    assert 'tuple(key_cache.shape[1:]) == (1024, 4, 256)' in patcher
+    assert "torch.empty_strided(" in patcher
+    assert "_FR13_FA2_QROW32_BATCH_STRIDE_SENTINEL" in patcher
+    assert 'q_start != [0, 32, 64, 96, 128]' in patcher
+    assert '"slot_coverage": [0, 1, 2, 3]' in patcher
+    assert '"layer_count": len(layer_records)' in patcher
+    assert '"stock_calls": len(layer_records)' in patcher
+    assert '"candidate_calls": len(layer_records)' in patcher
+    assert '"served_return": "stock captured graph output unchanged"' in patcher
+    assert '"fallback_allowed": False' in patcher
+    assert '"performance_measurement": False' in patcher
+    assert 'return_softmax_lse=True' in patcher
+    assert "stock_out.dtype != torch.bfloat16" in patcher
+    assert "stock_lse.dtype != torch.float32" in patcher
+    assert "raw_byte_mismatches" in patcher
+
+    assert "FR13_FA2_QROW32_LIVE_PAGED_AB=${FR13_FA2_QROW32_LIVE_PAGED_AB:-0}" in launcher
+    assert "fixed32 qrow32 candidate FA2 sha256 mismatch" in launcher
+    assert "--fixed32-query-tile32-live-ab" in launcher
+    assert "qrow32 live A/B requires canonical SWE-Verified exact4 B4 identity" in launcher
+    assert '-e FR13_FA2_QROW32_LIVE_PAGED_AB="$FR13_FA2_QROW32_LIVE_PAGED_AB"' in launcher
+
+    assert "Real SWE-Verified exact4 B4 same-EngineCore byte gate" in runner
+    assert "config/fr13_fixed32/subset_b4_four.json" in runner
+    assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in runner
+    assert "FR13_DRAFT_VOCAB_K=65536" in runner
+    assert "FR13_DRAFT_VOCAB_ROOT=1" in runner
+    assert "FR13_FA2_QROW32_LIVE_PAGED_AB=1" in runner
+    assert "FR13_FA2_QROW16_LIVE_PAGED_AB=0" in runner
+    assert "FR13_FA2_QROW16_PRODUCTION=0" in runner
+    assert "ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in runner
+    assert "scripts/fr13_fa2_qrow32_gate.py verify-live" in runner
