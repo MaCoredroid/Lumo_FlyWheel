@@ -62,14 +62,17 @@ export BSIZE=1
 export CONC=1
 export WALL=0
 export FR13_FLOOR_ORDER=TH
+export FR13_DRAFT_VOCAB_K=65536
+export FR13_DRAFT_VOCAB_ROOT=1
+export FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json
+run_variant() { :; }
+source scripts/fr13_fixed32_floor_timers_seq.sh
+unset -f run_variant
 export FR13_FIXED32_B1_DIAGNOSTIC=1
 export FR13_FIXED32_TAW_WALK_CAP=12
 export FR13_FIXED32_COMMITTER_LAYER_BATCH=1
 export FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION=1
 export FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA=diagnostic
-export FR13_DRAFT_VOCAB_K=65536
-export FR13_DRAFT_VOCAB_ROOT=1
-export FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json
 export FR13_MANDATORY_WEIGHT_BYTES=32666638208
 export FR13_WEIGHT_FLOOR_MS=119.658015414
 export FR13_FIXED32_CUTLASS_WAVE=stock
