@@ -36,6 +36,10 @@ CUTLASS_REQUIRED_SHA256 = {
         "54ebcaee08d4fc0663169f97c7fa665cec90d29ce5d01336c2c714f2a911b010",
     Path("include/cutlass/gemm/kernel/sm100_tile_scheduler_stream_k.hpp"):
         "f9baf471896f03c530344a489942758f48c63acd6f31f5d6a41b3e0da0f8eee4",
+    Path("include/cutlass/gemm/kernel/static_tile_scheduler.hpp"):
+        "3cf17407654833666b3be9f7e807f299779ef5f4492bf844d0da180409f2f5f6",
+    Path("include/cutlass/gemm/kernel/sm100_static_tile_scheduler.hpp"):
+        "0ed331127afe83d20ec23b1a92e160f7388bb3727c77f05e496cc72371c664fd",
     Path("include/cutlass/gemm/kernel/tile_scheduler_params.h"):
         "ef48a12e8920183e88259d0b685279c2232fc2fb12c4fb4db7e8d0fbfdc019e9",
     Path("include/cutlass/gemm/kernel/sm90_gemm_tma_warpspecialized_pingpong.hpp"):
@@ -69,12 +73,103 @@ struct fr13_fixed32_mtp_m1_static_scheduler {};
 }  // namespace vllm
 
 namespace cutlass::gemm::kernel::detail {
+// The swapped-AB MTP M=1 problem is tiled as (ceil(N / 128), 1, 1).
+// Preserve CUTLASS static-persistent grid-stride order while bypassing its
+// generic batch, cluster, raster, and swizzle divmods for this exact geometry.
+class Fr13Fixed32MtpM1DirectLinearScheduler
+    : public StaticPersistentTileScheduler100 {
+ public:
+  using BaseScheduler = StaticPersistentTileScheduler100;
+  using Params = typename BaseScheduler::Params;
+  using RasterOrder = typename Params::RasterOrder;
+  using WorkTileInfo = typename BaseScheduler::WorkTileInfo;
+  using CLCResponse = typename BaseScheduler::CLCResponse;
+
+ private:
+  uint64_t current_work_linear_idx_ = 0;
+  uint64_t total_grid_size_ = 0;
+  uint64_t direct_linear_blocks_ = 0;
+
+ public:
+  CUTLASS_DEVICE explicit Fr13Fixed32MtpM1DirectLinearScheduler(
+      CLCResponse* clc_response_ptr, Params const& params,
+      dim3 block_id_in_cluster)
+      : BaseScheduler(clc_response_ptr, params, block_id_in_cluster) {
+#if defined(__CUDA_ARCH__)
+    if (params.raster_order_ == RasterOrder::AlongN) {
+      current_work_linear_idx_ =
+          uint64_t(blockIdx.x) + uint64_t(blockIdx.y) * uint64_t(gridDim.x);
+    } else {
+      current_work_linear_idx_ =
+          uint64_t(blockIdx.x) * uint64_t(gridDim.y) + uint64_t(blockIdx.y);
+    }
+    total_grid_size_ =
+        uint64_t(gridDim.x) * uint64_t(gridDim.y) * uint64_t(gridDim.z);
+
+    const bool direct_linear_geometry =
+        params.problem_tiles_n_ == 1 && params.problem_tiles_l_ == 1 &&
+        params.cluster_shape_m_ == 1 && params.cluster_shape_n_ == 1 &&
+        params.log_swizzle_size_ == 0 &&
+        params.blocks_per_problem_ == uint64_t(params.problem_tiles_m_);
+    CUTLASS_ASSERT(direct_linear_geometry &&
+                   "FR13 MTP M1 direct scheduler requires tiled NxL=1x1");
+    direct_linear_blocks_ =
+        direct_linear_geometry ? uint64_t(params.problem_tiles_m_) : 0;
+#else
+    CUTLASS_ASSERT(false && "This line should never be reached");
+#endif
+  }
+
+  template <class ClusterShape>
+  CUTLASS_DEVICE WorkTileInfo
+  initial_work_tile_info(ClusterShape cluster_shape) {
+    CUTLASS_UNUSED(cluster_shape);
+    return get_current_work();
+  }
+
+  CUTLASS_DEVICE WorkTileInfo get_current_work() const {
+    return get_current_work_for_linear_idx(current_work_linear_idx_);
+  }
+
+  CUTLASS_DEVICE WorkTileInfo
+  get_current_work_for_linear_idx(uint64_t linear_idx) const {
+    if (linear_idx >= direct_linear_blocks_) {
+      return WorkTileInfo::invalid_work_tile();
+    }
+    return {static_cast<int32_t>(linear_idx), 0, 0, true};
+  }
+
+  CUTLASS_DEVICE void advance_to_next_work(uint32_t advance_count = 1) {
+    current_work_linear_idx_ +=
+        total_grid_size_ * uint64_t(advance_count);
+  }
+
+  CUTLASS_DEVICE bool
+  is_last_tile(WorkTileInfo&, uint32_t advance_count = 1) const {
+    return current_work_linear_idx_ +
+               total_grid_size_ * uint64_t(advance_count) >=
+           direct_linear_blocks_;
+  }
+
+  CUTLASS_DEVICE auto fetch_next_work(WorkTileInfo) {
+    advance_to_next_work();
+    return cute::make_tuple(get_current_work(), true);
+  }
+
+  template <class TileSchedulerPipeline, class TileSchedulerPipelineState>
+  CUTLASS_DEVICE auto fetch_next_work(
+      WorkTileInfo work_tile_info, TileSchedulerPipeline&,
+      TileSchedulerPipelineState) {
+    return fetch_next_work(work_tile_info);
+  }
+};
+
 template <class TileShape, class ClusterShape,
           uint32_t SchedulerPipelineStageCount>
 struct TileSchedulerSelector<
     vllm::fr13_fixed32_mtp_m1_static_scheduler, arch::Sm120,
     TileShape, ClusterShape, SchedulerPipelineStageCount> {
-  using Scheduler = StaticPersistentTileScheduler100;
+  using Scheduler = Fr13Fixed32MtpM1DirectLinearScheduler;
 };
 }  // namespace cutlass::gemm::kernel::detail
 

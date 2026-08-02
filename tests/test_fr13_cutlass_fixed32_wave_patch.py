@@ -139,12 +139,13 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     assert "ElementD" not in module.CONFIG_REPLACEMENT
 
 
-def test_mtp_m1_static_scheduler_preserves_stock_math_and_is_exact_m1() -> None:
+def test_mtp_m1_direct_scheduler_preserves_stock_math_and_is_exact_m1() -> None:
     module = _module()
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert "struct fr13_fixed32_mtp_m1_static_scheduler {};" in patched
-    assert "using Scheduler = StaticPersistentTileScheduler100;" in patched
+    assert "class Fr13Fixed32MtpM1DirectLinearScheduler" in patched
+    assert "using Scheduler = Fr13Fixed32MtpM1DirectLinearScheduler;" in patched
     config_start = patched.index(
         "struct sm120_blockwise_fp8_config_swapab_mtp_m1_static"
     )
@@ -166,6 +167,43 @@ def test_mtp_m1_static_scheduler_preserves_stock_math_and_is_exact_m1() -> None:
     assert selector_gate < stock_assignment < candidate_dispatch
     assert "fixed32_cutlass_mtp_m1_projection(M, N, K)" in patched
     assert "m == 1 && fixed32_cutlass_real_projection_nk(n, k)" in patched
+
+
+def test_mtp_m1_post_swap_geometry_is_direct_linear_for_every_projection() -> None:
+    module = _module()
+    scheduler = module.SCHEDULER_SPECIALIZATION_REPLACEMENT
+    projection_nk = (
+        (34816, 5120),
+        (5120, 17408),
+        (5120, 6144),
+        (16384, 5120),
+        (14336, 5120),
+    )
+    expected_tiled_mnkl = (
+        (272, 1, 40, 1),
+        (40, 1, 136, 1),
+        (40, 1, 48, 1),
+        (128, 1, 40, 1),
+        (112, 1, 40, 1),
+    )
+
+    # swap_ab=true changes original (M=1,N,K,L=1) to (N,1,K,1).
+    actual_tiled_mnkl = tuple(
+        ((n + 127) // 128, (1 + 31) // 32, (k + 127) // 128, 1)
+        for n, k in projection_nk
+    )
+    assert actual_tiled_mnkl == expected_tiled_mnkl
+    assert all(tiled_n == 1 and tiled_l == 1
+               for _, tiled_n, _, tiled_l in actual_tiled_mnkl)
+
+    assert "params.problem_tiles_n_ == 1" in scheduler
+    assert "params.problem_tiles_l_ == 1" in scheduler
+    assert "params.cluster_shape_m_ == 1" in scheduler
+    assert "params.cluster_shape_n_ == 1" in scheduler
+    assert "params.log_swizzle_size_ == 0" in scheduler
+    assert "return {static_cast<int32_t>(linear_idx), 0, 0, true};" in scheduler
+    assert "divmod_batch_" not in scheduler
+    assert "get_work_idx_m_and_n" not in scheduler
 
 
 def test_mtp_selector_cannot_change_fixed32_projection_rows() -> None:
