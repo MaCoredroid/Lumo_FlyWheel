@@ -22,6 +22,7 @@ TIMING_RUNNER_PATH = (
 )
 SERVE_PATH = ROOT / "scripts" / "fr13_bigdenom_swe_serve_variant.sh"
 ORCHESTRATOR_PATH = ROOT / "scripts" / "run_swe_bench_q36_a.py"
+MEASURE_PATH = ROOT / "scripts" / "fr13_measure.py"
 
 sys.path.insert(0, str(ROOT / "src"))
 try:
@@ -661,6 +662,9 @@ def test_sfwd_gate_uses_eager_lifecycle_without_graph_acceptance() -> None:
 def test_source_gated_timing_pair_is_stock_first_and_nonacceptance() -> None:
     runner = TIMING_RUNNER_PATH.read_text(encoding="utf-8")
     launcher = LAUNCHER_PATH.read_text(encoding="utf-8")
+    patcher_source = PATCHER_PATH.read_text(encoding="utf-8")
+    orchestrator = ORCHESTRATOR_PATH.read_text(encoding="utf-8")
+    measure = MEASURE_PATH.read_text(encoding="utf-8")
     assert "subset_b1_diagnostic_one.json" in runner
     assert "subset_b4_four.json" not in runner
     assert "subset_b16" not in runner
@@ -704,6 +708,14 @@ def test_source_gated_timing_pair_is_stock_first_and_nonacceptance() -> None:
     assert "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=$real_event_path" in runner
     assert "candidate lacks the authenticated real-task engagement marker" in runner
     assert "scripts/fr13_measure.py deploy-speed" in runner
+    assert '"draft_vocab_k": _draft_vocab_config[0]' in measure
+    assert '"draft_vocab_root": _draft_vocab_config[1]' in measure
+    assert "fr13-fixed32-eager-timing-boundary-snapshot-v1" in patcher_source
+    assert "_fr13_eager_timing_pure_b1" in patcher_source
+    assert 'with_samples=not globals().get(' in patcher_source
+    assert "_Fixed32EagerTimingTaskBracket" in orchestrator
+    assert "fixed32 eager B1 task timer deltas do not reconcile" in orchestrator
+    assert "fr13-fixed32-eager-timing-task-boundary-v1" in runner
     assert "scripts/fr13_sfwd_state_fusion_pass.py validate" in runner
     assert "scripts/fr13_sfwd_state_fusion_pass.py verify-engagement" in runner
     assert "timing_eligible=false" in runner

@@ -446,9 +446,64 @@ def campaign(arm: str) -> dict:
         or evaluation.get("exit_code") != 0
     ):
         raise SystemExit(f"{arm} real task did not complete cleanly")
+    boundary, boundary_raw = load(
+        metadata_paths[0].parent / "fixed32_task_boundary.json"
+    )
+    interval = boundary.get("timing_interval")
+    if (
+        boundary.get("schema")
+        != "fr13-fixed32-eager-timing-task-boundary-v1"
+        or boundary.get("instance_id") != "astropy__astropy-12907"
+        or boundary.get("run_classification")
+        != "eager_kernel_timing_diagnostic"
+        or boundary.get("flush_protocol_used") is not True
+        or boundary.get("graph_census_claimed") is not False
+        or not isinstance(boundary.get("pre"), dict)
+        or not isinstance(boundary.get("post"), dict)
+        or not isinstance(boundary.get("pre_runtime_snapshot"), dict)
+        or not isinstance(boundary.get("post_runtime_snapshot"), dict)
+        or boundary["pre_runtime_snapshot"].get("schema")
+        != "fr13-fixed32-eager-timing-boundary-snapshot-v1"
+        or boundary["post_runtime_snapshot"].get("schema")
+        != "fr13-fixed32-eager-timing-boundary-snapshot-v1"
+        or not isinstance(interval, dict)
+        or isinstance(interval.get("pure_decode_forward_steps"), bool)
+        or not isinstance(interval.get("pure_decode_forward_steps"), int)
+        or interval.get("pure_decode_forward_steps", 0) <= 0
+        or interval.get("graph_census_events") != 0
+        or interval.get("sfwd_steps")
+        != interval.get("pure_decode_forward_steps")
+        or interval.get("sfwd_drafts")
+        != interval.get("pure_decode_forward_steps")
+        or interval.get("dfwd_spans")
+        != interval.get("pure_decode_forward_steps")
+        or interval.get("cfwd_spans")
+        != interval.get("pure_decode_forward_steps")
+        or interval.get("sfwd_forward_starts")
+        != interval.get("pure_decode_forward_steps")
+        or interval.get("sfwd_forward_dropped") != 0
+        or isinstance(interval.get("wall_steps"), bool)
+        or not isinstance(interval.get("wall_steps"), int)
+        or interval.get("wall_steps", 0) <= 0
+        or interval.get("wall_drafts") != interval.get("wall_steps")
+        or not all(
+            not isinstance(interval.get(key), bool)
+            and isinstance(interval.get(key), (int, float))
+            and math.isfinite(float(interval[key]))
+            and float(interval[key]) > 0.0
+            for key in (
+                "sfwd_gpu_seconds",
+                "wall_seconds",
+                "dfwd_gpu_seconds",
+                "cfwd_gpu_seconds",
+            )
+        )
+    ):
+        raise SystemExit(f"{arm} lacks a complete authenticated timing bracket")
     return {
         "campaign_summary_sha256": hashlib.sha256(raw).hexdigest(),
         "runner_metadata_sha256": hashlib.sha256(metadata_raw).hexdigest(),
+        "task_boundary_sha256": hashlib.sha256(boundary_raw).hexdigest(),
         "instances_total": 1,
         "resolved": 1,
         "tests_passed": 1,

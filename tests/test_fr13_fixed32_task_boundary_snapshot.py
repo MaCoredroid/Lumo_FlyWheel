@@ -911,3 +911,88 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
     assert floor_report["committer"][
         "nonpure_committer_replays_enqueued"
     ] == 1
+
+
+def test_eager_timing_boundary_loader_binds_drained_timer_snapshot(
+    tmp_path: Path,
+) -> None:
+    counters = {
+        "pure_decode_forward_steps": 3,
+        "complete_work_census_events": 0,
+        "work_census_first_forward_step": None,
+        "work_census_last_forward_step": None,
+        "sfwd_pending": 0,
+        "dfwd_pending": 0,
+        "cfwd_pending": 0,
+    }
+    ack = SimpleNamespace(
+        mode="hydra27_fixed32",
+        producer_pid=123,
+        generation=7,
+        nonce="a" * 64,
+        action="snapshot",
+        counters=counters,
+    )
+    payload = {
+        "schema": "fr13-fixed32-eager-timing-boundary-snapshot-v1",
+        "mode": ack.mode,
+        "producer_pid": ack.producer_pid,
+        "generation": ack.generation,
+        "nonce": ack.nonce,
+        "action": ack.action,
+        "counters": counters,
+        "metrics": {
+            "sfwd": {
+                "gpu_seconds": 0.6,
+                "steps": 3,
+                "drafts": 3,
+                "forward_starts": 3,
+                "forward_dropped": 0,
+                "wall_seconds": 0.9,
+                "wall_drafts": 2,
+                "wall_steps": 2,
+                "wall_rejected": 0,
+            },
+            "dfwd": {"gpu_seconds": 0.3, "spans": 3},
+            "cfwd": {"gpu_seconds": 0.15, "spans": 3},
+            "integrity": {
+                "classification": "eager_b1_task_timing",
+                "graph_census_claimed": False,
+                "sfwd_pending": 0,
+                "dfwd_pending": 0,
+                "cfwd_pending": 0,
+            },
+        },
+    }
+    base_path = tmp_path / "timing_boundary"
+    path = Path(f"{base_path}.{ack.generation}.json")
+    raw = (
+        json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+        + "\n"
+    ).encode("ascii")
+    path.write_bytes(raw)
+
+    loaded, loaded_path, digest = (
+        orchestrator._load_fixed32_eager_timing_boundary_snapshot(
+            base_path=base_path,
+            ack=ack,
+        )
+    )
+
+    assert loaded == payload
+    assert loaded_path == path
+    assert digest == hashlib.sha256(raw).hexdigest()
+
+    payload["nonce"] = "b" * 64
+    path.write_text(
+        json.dumps(payload, ensure_ascii=True, separators=(",", ":")) + "\n",
+        encoding="ascii",
+    )
+    with pytest.raises(
+        orchestrator.Fixed32BoundaryError,
+        match="does not bind to ack",
+    ):
+        orchestrator._load_fixed32_eager_timing_boundary_snapshot(
+            base_path=base_path,
+            ack=ack,
+        )

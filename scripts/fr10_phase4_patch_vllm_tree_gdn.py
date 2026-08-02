@@ -18771,7 +18771,13 @@ def _patch_gpu_model_runner_replay_draft_reqkey() -> bool:
         "                    )\n"
         "                _fr13_dfwd_ev = (\n"
         "                    _fr13_dfwd_begin()\n"
-        "                    if (not _fr13_f32_draft_on or _fr13_f32_draft_measured)\n"
+        "                    if (\n"
+        "                        not _fr13_f32_draft_on\n"
+        "                        or _fr13_f32_draft_measured\n"
+        "                        or globals().get(\n"
+        "                            '_FR13_FIXED32_EAGER_TIMING_BOUNDARY', False\n"
+        "                        )\n"
+        "                    )\n"
         "                    else None\n"
         "                )\n"
         "                _fr13_dfwd_nvtx = _fr13_fixed32_nvtx_begin(\n"
@@ -26851,7 +26857,12 @@ def _fr13_sfwd_begin(max_num_scheduled_tokens, num_tokens, num_reqs,
         from vllm.model_executor.layers.mamba import (
             gdn_linear_attn as _fr13_sfwd_gdn,
         )
-        if getattr(_fr13_sfwd_gdn, "_FR13_FIXED32_MODE", ""):
+        if (
+            getattr(_fr13_sfwd_gdn, "_FR13_FIXED32_MODE", "")
+            and not globals().get(
+                "_FR13_FIXED32_EAGER_TIMING_BOUNDARY", False
+            )
+        ):
             _fr13_sfwd_pure = (
                 _fr13_sfwd_gdn._fr13_fixed32_observed_event_active()
             )
@@ -27126,10 +27137,51 @@ def _fr13_cfwd_timer():
     return _FR13_CFWD_TIMER
 
 
+def _fr13_eager_timing_pure_b1():
+    """Bind component timers to the same eager B1 pure step as SFWD."""
+    if not globals().get("_FR13_FIXED32_EAGER_TIMING_BOUNDARY", False):
+        return False
+    try:
+        from vllm.model_executor.layers.mamba import (
+            gdn_linear_attn as _fr13_timing_gdn,
+        )
+        return bool(
+            getattr(_fr13_timing_gdn, "_FR13_FIXED32_MODE", "")
+            and getattr(
+                _fr13_timing_gdn,
+                "_FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC",
+                False,
+            )
+            and int(
+                getattr(
+                    _fr13_timing_gdn,
+                    "_FR13_FIXED32_CURRENT_FORWARD_STEP",
+                    -1,
+                )
+            )
+            >= 0
+            and int(
+                getattr(_fr13_timing_gdn, "_FR13_FIXED32_BATCH_ROWS", -1)
+            )
+            == 1
+            and int(
+                getattr(_fr13_timing_gdn, "_FR13_FIXED32_SPEC_ROWS", -1)
+            )
+            == 1
+        )
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _fr13_dfwd_begin():
     if torch.cuda.is_current_stream_capturing():
         return None  # boot-29i: event ops inside a capture invalidate it
     if __import__("os").environ.get("FR13_DFWD_GPU_TIMER", "0") != "1":
+        return None
+    if (
+        globals().get("_FR13_FIXED32_EAGER_TIMING_BOUNDARY", False)
+        and not _fr13_eager_timing_pure_b1()
+    ):
         return None
     try:
         return _fr13_dfwd_timer().begin()
@@ -27151,12 +27203,20 @@ def _fr13_cfwd_begin():
         return None  # boot-29i: event ops inside a capture invalidate it
     if __import__("os").environ.get("FR13_CFWD_GPU_TIMER", "0") != "1":
         return None
+    if (
+        globals().get("_FR13_FIXED32_EAGER_TIMING_BOUNDARY", False)
+        and not _fr13_eager_timing_pure_b1()
+    ):
+        return None
     try:
         from vllm.model_executor.layers.mamba import (
             gdn_linear_attn as _fr13_cfwd_gdn,
         )
         if (
             getattr(_fr13_cfwd_gdn, "_FR13_FIXED32_MODE", "")
+            and not globals().get(
+                "_FR13_FIXED32_EAGER_TIMING_BOUNDARY", False
+            )
             and not _fr13_cfwd_gdn._fr13_fixed32_observed_event_active()
         ):
             return None
@@ -29637,6 +29697,7 @@ import sys as _fr13_f32_flush_sys
 from pathlib import Path as _Fr13F32FlushPath
 
 _FR13_FIXED32_FLUSH_MODE = __FR13_FIXED32_MODE__
+_FR13_FIXED32_EAGER_TIMING_BOUNDARY = __FR13_FIXED32_EAGER_TIMING_BOUNDARY__
 _FR13_FIXED32_FLUSH_REQUEST_SCHEMA = "fr13-fixed32-flush-request-v1"
 _FR13_FIXED32_FLUSH_ACK_SCHEMA = "fr13-fixed32-flush-ack-v1"
 _FR13_FIXED32_FLUSH_REQUEST_KEYS = frozenset({
@@ -29768,6 +29829,29 @@ def _fr13_f32_flush_runtime_state():
     sfwd = globals().get("_FR13_SFWD_GPU_TIMER")
     dfwd = globals().get("_FR13_DFWD_TIMER")
     cfwd = globals().get("_FR13_CFWD_TIMER")
+    if globals().get("_FR13_FIXED32_EAGER_TIMING_BOUNDARY", False):
+        timer_flags = (
+            "FR13_SFWD_GPU_TIMER",
+            "FR13_DFWD_GPU_TIMER",
+            "FR13_CFWD_GPU_TIMER",
+        )
+        if any(
+            _fr13_f32_flush_os.environ.get(name, "0") != "1"
+            for name in timer_flags
+        ):
+            raise RuntimeError(
+                "fixed32 eager timing boundary requires all component timers"
+            )
+        sfwd = _fr13_sfwd_timer()
+        dfwd = _fr13_dfwd_timer()
+        cfwd = _fr13_cfwd_timer()
+        if not all(
+            timer is not None and timer._enabled
+            for timer in (sfwd, dfwd, cfwd)
+        ):
+            raise RuntimeError(
+                "fixed32 eager timing boundary timer initialization failed"
+            )
     return gdn, events, forward_steps, first, last, sfwd, dfwd, cfwd
 
 
@@ -29925,6 +30009,8 @@ def _fr13_f32_flush_reconcile():
         gdn, events, forward_steps, _first, _last, sfwd, dfwd, cfwd,
     ) = _fr13_f32_flush_runtime_state()
     if gdn is None:
+        if globals().get("_FR13_FIXED32_EAGER_TIMING_BOUNDARY", False):
+            raise RuntimeError("fixed32 eager timing boundary has no GDN runtime")
         if forward_steps or events:
             raise RuntimeError("fixed32 GDN state disappeared")
         return
@@ -29946,6 +30032,52 @@ def _fr13_f32_flush_reconcile():
         gdn, "_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT", None
     ) is not None:
         raise RuntimeError("fixed32 flush saw an incomplete drafter graph capture")
+    if globals().get("_FR13_FIXED32_EAGER_TIMING_BOUNDARY", False):
+        pending = tuple(
+            len(timer._pending) for timer in (sfwd, dfwd, cfwd)
+        )
+        sfwd_steps = int(sfwd._n_steps)
+        sfwd_drafts = int(sfwd._n_drafts)
+        sfwd_starts = int(sfwd._fwd_started)
+        sfwd_dropped = int(sfwd._fwd_dropped)
+        dfwd_spans = int(dfwd._n_spans)
+        cfwd_spans = int(cfwd._n_spans)
+        wall_steps = int(sfwd._wall_steps)
+        wall_drafts = int(sfwd._wall_drafts)
+        if events:
+            raise RuntimeError(
+                "fixed32 eager timing unexpectedly published graph census events"
+            )
+        if pending != (0, 0, 0):
+            raise RuntimeError(
+                "fixed32 eager timing boundary has pending timers: "
+                + repr(pending)
+            )
+        if (
+            forward_steps != sfwd_steps
+            or sfwd_steps != sfwd_drafts
+            or sfwd_starts != sfwd_steps
+            or sfwd_dropped != 0
+            or wall_drafts != wall_steps
+            or wall_steps > sfwd_steps
+        ):
+            raise RuntimeError(
+                "fixed32 eager B1 timer ledgers do not reconcile: "
+                + repr(
+                    {
+                        "forward_steps": forward_steps,
+                        "sfwd_steps": sfwd_steps,
+                        "sfwd_drafts": sfwd_drafts,
+                        "sfwd_starts": sfwd_starts,
+                        "sfwd_dropped": sfwd_dropped,
+                        "dfwd_spans": dfwd_spans,
+                        "cfwd_spans": cfwd_spans,
+                        "wall_steps": wall_steps,
+                        "wall_drafts": wall_drafts,
+                    }
+                )
+            )
+        return
     _fr13_f32_flush_boot_warm_metrics(gdn)
     if len(events) != forward_steps:
         raise RuntimeError(
@@ -30265,6 +30397,60 @@ def _fr13_f32_flush_write_boundary(request, counters):
     (
         gdn, events, _forward_steps, _first, _last, sfwd, dfwd, cfwd,
     ) = _fr13_f32_flush_runtime_state()
+    if globals().get("_FR13_FIXED32_EAGER_TIMING_BOUNDARY", False):
+        snapshot = {
+            "schema": "fr13-fixed32-eager-timing-boundary-snapshot-v1",
+            "mode": _FR13_FIXED32_FLUSH_MODE,
+            "producer_pid": _FR13_FIXED32_FLUSH_PID,
+            "generation": request["generation"],
+            "nonce": request["nonce"],
+            "action": request["action"],
+            "counters": counters,
+            "metrics": {
+                "sfwd": {
+                    "gpu_seconds": float(sfwd._accum_s),
+                    "steps": int(sfwd._n_steps),
+                    "drafts": int(sfwd._n_drafts),
+                    "forward_starts": int(sfwd._fwd_started),
+                    "forward_dropped": int(sfwd._fwd_dropped),
+                    "wall_seconds": float(sfwd._wall_accum_s),
+                    "wall_drafts": int(sfwd._wall_drafts),
+                    "wall_steps": int(sfwd._wall_steps),
+                    "wall_rejected": int(sfwd._wall_rejected),
+                },
+                "dfwd": {
+                    "gpu_seconds": float(dfwd._accum_s),
+                    "spans": int(dfwd._n_spans),
+                },
+                "cfwd": {
+                    "gpu_seconds": float(cfwd._accum_s),
+                    "spans": int(cfwd._n_spans),
+                },
+                "integrity": {
+                    "classification": "eager_b1_task_timing",
+                    "graph_census_claimed": False,
+                    "sfwd_pending": len(sfwd._pending),
+                    "dfwd_pending": len(dfwd._pending),
+                    "cfwd_pending": len(cfwd._pending),
+                },
+            },
+        }
+        boundary_path = _Fr13F32FlushPath(
+            str(_FR13_FIXED32_FLUSH_BOUNDARY_PATH)
+            + "." + str(request["generation"]) + ".json"
+        )
+        if boundary_path.exists():
+            raise RuntimeError(
+                "fixed32 immutable eager timing boundary already exists: "
+                + str(boundary_path)
+            )
+        _fr13_f32_flush_atomic_text(
+            boundary_path,
+            _fr13_f32_flush_json.dumps(
+                snapshot, sort_keys=True, separators=(",", ":")
+            ) + "\n",
+        )
+        return
     from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
         fixed32_committer_counters as commit_counters,
         fixed32_conv_col0_pregather_counters as pregather_counters,
@@ -30453,12 +30639,22 @@ def _fr13_f32_flush_one(request):
             # predecessor from before this task boundary.
             _fr13_f32_flush_break_wall_chain()
             if sfwd is not None:
-                sfwd._dump_json(final=(action == "final"), with_samples=True)
+                sfwd._dump_json(
+                    final=(action == "final"),
+                    with_samples=not globals().get(
+                        "_FR13_FIXED32_EAGER_TIMING_BOUNDARY", False
+                    ),
+                )
             if dfwd is not None:
                 dfwd._dump()
             if cfwd is not None:
                 cfwd._dump()
-            _fr13_f32_flush_write_census(events, final=(action == "final"))
+            if not globals().get(
+                "_FR13_FIXED32_EAGER_TIMING_BOUNDARY", False
+            ):
+                _fr13_f32_flush_write_census(
+                    events, final=(action == "final")
+                )
             _FR13_FIXED32_FLUSH_GENERATION = request["generation"]
             if action == "final":
                 _FR13_FIXED32_FLUSH_TERMINAL = True
@@ -30539,6 +30735,12 @@ _fr13_f32_flush_break_wall_chain()
 '''
         fixed_flush = fixed_flush.replace(
             "__FR13_FIXED32_MODE__", repr(_FR13_FIXED32_MODE)
+        )
+        fixed_flush = fixed_flush.replace(
+            "__FR13_FIXED32_EAGER_TIMING_BOUNDARY__",
+            repr(
+                _FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB == "1"
+            ),
         )
         text += fixed_flush
     GPU_MODEL_RUNNER_PATH.write_text(text)

@@ -1824,6 +1824,8 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "label": f"deploy_speed_{args.arm}_b{args.batch_size}",
         "arm": args.arm,
         "batch_size": args.batch_size,
+        "draft_vocab_k": _draft_vocab_config[0],
+        "draft_vocab_root": _draft_vocab_config[1],
         "out_root": args.out_root,
         "n_tasks": len(task_dirs),
         "task_instance_ids": [d.name for d in task_dirs],

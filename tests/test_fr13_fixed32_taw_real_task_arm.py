@@ -360,3 +360,138 @@ def test_sfwd_eager_kernel_diagnostic_bracket_never_flushes(
         assert payload[key]["bytes"] > 0
         assert len(payload[key]["sha256"]) == 64
     assert not (task_dir / "fixed32_taw_real_task_arm.json").exists()
+
+
+def test_sfwd_eager_timing_bracket_flushes_and_reconciles_b1_deltas(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+
+    def counters(steps: int) -> dict[str, object]:
+        return {
+            "pure_decode_forward_steps": steps,
+            "complete_work_census_events": 0,
+            "work_census_first_forward_step": None,
+            "work_census_last_forward_step": None,
+            "sfwd_pending": 0,
+            "dfwd_pending": 0,
+            "cfwd_pending": 0,
+        }
+
+    def snapshot(
+        *,
+        steps: int,
+        gpu: float,
+        wall_steps: int,
+        dfwd_spans: int,
+        cfwd_spans: int,
+    ) -> dict[str, object]:
+        return {
+            "schema": "fr13-fixed32-eager-timing-boundary-snapshot-v1",
+            "counters": counters(steps),
+            "metrics": {
+                "sfwd": {
+                    "gpu_seconds": gpu,
+                    "steps": steps,
+                    "drafts": steps,
+                    "forward_starts": steps,
+                    "forward_dropped": 0,
+                    "wall_seconds": gpu * 2.0,
+                    "wall_steps": wall_steps,
+                    "wall_drafts": wall_steps,
+                    "wall_rejected": 0,
+                },
+                "dfwd": {
+                    "gpu_seconds": gpu / 2.0,
+                    "spans": dfwd_spans,
+                },
+                "cfwd": {
+                    "gpu_seconds": gpu / 4.0,
+                    "spans": cfwd_spans,
+                },
+            },
+        }
+
+    acks = [
+        _Ack(
+            mode="hydra27_fixed32",
+            producer_pid=123,
+            generation=1,
+            nonce="1" * 64,
+            action="snapshot",
+            counters=counters(5),
+        ),
+        _Ack(
+            mode="hydra27_fixed32",
+            producer_pid=123,
+            generation=2,
+            nonce="2" * 64,
+            action="snapshot",
+            counters=counters(8),
+        ),
+    ]
+    snapshots = {
+        1: snapshot(
+            steps=5,
+            gpu=1.0,
+            wall_steps=4,
+            dfwd_spans=10,
+            cfwd_spans=5,
+        ),
+        2: snapshot(
+            steps=8,
+            gpu=1.6,
+            wall_steps=6,
+            dfwd_spans=13,
+            cfwd_spans=8,
+        ),
+    }
+
+    class _Client:
+        mode = "hydra27_fixed32"
+        producer_pid = 123
+        calls = 0
+
+        def snapshot(self) -> _Ack:
+            ack = acks[self.calls]
+            self.calls += 1
+            return ack
+
+    client = _Client()
+    monkeypatch.setattr(
+        orchestrator,
+        "_load_fixed32_eager_timing_boundary_snapshot",
+        lambda **kwargs: (
+            snapshots[kwargs["ack"].generation],
+            tmp_path / f"snapshot.{kwargs['ack'].generation}.json",
+            str(kwargs["ack"].generation) * 64,
+        ),
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "_fixed32_eager_timing_metrics_snapshot",
+        lambda **kwargs: f"steps={kwargs['snapshot']['metrics']['sfwd']['steps']}\n",
+    )
+    bracket = orchestrator._Fixed32EagerTimingTaskBracket(
+        client=client,
+        task_dir=task_dir,
+        instance_id=INSTANCE_ID,
+        boundary_snapshot_base=tmp_path / "snapshot",
+        server_capacity=1,
+        taw_real_task_arm=None,
+    )
+
+    bracket.pre(task_dir / "metrics_pre.txt")
+    payload = bracket.post(task_dir / "metrics_post.txt")
+
+    assert client.calls == 2
+    assert payload["schema"] == "fr13-fixed32-eager-timing-task-boundary-v1"
+    assert payload["flush_protocol_used"] is True
+    assert payload["graph_census_claimed"] is False
+    assert payload["timing_interval"]["pure_decode_forward_steps"] == 3
+    assert payload["timing_interval"]["dfwd_spans"] == 3
+    assert payload["timing_interval"]["cfwd_spans"] == 3
+    assert (task_dir / "metrics_pre.txt").read_text() == "steps=5\n"
+    assert (task_dir / "metrics_post.txt").read_text() == "steps=8\n"

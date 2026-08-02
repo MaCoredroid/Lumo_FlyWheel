@@ -1351,6 +1351,10 @@ teardown(){
       fixed32_container_attested=0
       echo "fixed32 teardown skipped container operations: immutable incarnation attestation failed" \
         > "$ARMDIR/fixed32_final_flush.stderr"
+    elif [[ "$FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB" == "1" ]]; then
+      printf '{"acceptance_valid":false,"final_flush_skipped":true,"flush_protocol_used":true,"run_classification":"eager_kernel_timing_diagnostic","schema":"fr13-fixed32-eager-timing-terminal-v1","task_boundary_flush_required":true}\n' \
+        > "$ARMDIR/fixed32_final_flush_skipped.json"
+      : > "$ARMDIR/fixed32_final_flush.stderr"
     elif [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then
       printf '{"acceptance_valid":false,"flush_protocol_used":false,"run_classification":"eager_kernel_byte_diagnostic","schema":"fr13-fixed32-eager-kernel-terminal-v1"}\n' \
         > "$ARMDIR/fixed32_final_flush_skipped.json"
@@ -1387,8 +1391,12 @@ teardown(){
       tail -20 "$ARMDIR/fixed32_engine_ingress_snapshot.log" >&2 || true
       (( rc == 0 )) && rc=16
     elif [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then
-      printf '%s\n' \
-        '{"acceptance_valid":false,"authenticated_engine_ledger_snapshotted":true,"graph_census_audit_used":false,"reason":"eager_mode_has_no_cuda_graph_census","run_classification":"eager_kernel_byte_diagnostic","schema":"fr13-fixed32-eager-kernel-traffic-audit-skip-v1"}' \
+      if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB" == "1" ]]; then
+        _fixed32_eager_traffic_record='{"acceptance_valid":false,"authenticated_engine_ledger_snapshotted":true,"graph_census_audit_used":false,"reason":"eager_mode_has_no_cuda_graph_census","run_classification":"eager_kernel_timing_diagnostic","schema":"fr13-fixed32-eager-timing-traffic-audit-skip-v1","task_boundary_flush_required":true}'
+      else
+        _fixed32_eager_traffic_record='{"acceptance_valid":false,"authenticated_engine_ledger_snapshotted":true,"graph_census_audit_used":false,"reason":"eager_mode_has_no_cuda_graph_census","run_classification":"eager_kernel_byte_diagnostic","schema":"fr13-fixed32-eager-kernel-traffic-audit-skip-v1"}'
+      fi
+      printf '%s\n' "$_fixed32_eager_traffic_record" \
         > "$ARMDIR/fixed32_chat_traffic_audit_skipped.json" \
         2> "$ARMDIR/fixed32_chat_traffic_audit.log"
       audit_rc=$?
