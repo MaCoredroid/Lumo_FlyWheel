@@ -526,7 +526,11 @@ def test_b4_twom_scheduler_removes_generic_per_tile_divmods() -> None:
     assert "divmod_cluster_shape" not in scheduler
     assert "divmod_cluster_blk_major_" not in scheduler
     assert "raster_order_" not in scheduler
-    assert "total_grid_size_ * uint64_t(advance_count)" in scheduler
+    assert "uint32_t current_work_linear_idx_" in scheduler
+    assert "uint32_t total_grid_size_" in scheduler
+    assert "uint32_t problem_tiles_" in scheduler
+    assert "total_grid_size_ * advance_count" in scheduler
+    assert "uint64_t" not in scheduler
     assert "fr13_fixed32_b4_twom_static_scheduler" in patched
     assert "using Scheduler = Fr13B4TwoMStaticTileScheduler100;" in patched
 
@@ -555,6 +559,7 @@ def test_b4_identity_twom_keeps_complete_tile_math() -> None:
         "    return run_identity_twom_b4(out);"
         in patched
     )
+    assert "if (N > 65536 &&" in patched
 
 
 def test_wide256_is_b1_only_and_large_rows_fail_to_stock() -> None:

@@ -383,15 +383,16 @@ class Fr13DivisorBalancedStaticTileScheduler100
 class Fr13B4TwoMStaticTileScheduler100
     : public Fr13DivisorBalancedStaticTileScheduler100 {
   using Base = Fr13DivisorBalancedStaticTileScheduler100;
-  uint64_t current_work_linear_idx_ = 0;
-  uint64_t total_grid_size_ = 0;
+  uint32_t current_work_linear_idx_ = 0;
+  uint32_t total_grid_size_ = 0;
+  uint32_t problem_tiles_ = 0;
 
-  CUTLASS_DEVICE void initialize_linear_work() {
+  CUTLASS_DEVICE void initialize_linear_work(Params const& params) {
 #if defined(__CUDA_ARCH__)
-    current_work_linear_idx_ = uint64_t(blockIdx.x) + uint64_t(gridDim.x) *
-        (uint64_t(blockIdx.y) + uint64_t(gridDim.y) * uint64_t(blockIdx.z));
-    total_grid_size_ = uint64_t(gridDim.x) * uint64_t(gridDim.y) *
-        uint64_t(gridDim.z);
+    current_work_linear_idx_ = blockIdx.x + gridDim.x *
+        (blockIdx.y + gridDim.y * blockIdx.z);
+    total_grid_size_ = gridDim.x * gridDim.y * gridDim.z;
+    problem_tiles_ = static_cast<uint32_t>(params.blocks_per_problem_);
 #endif
   }
 
@@ -402,13 +403,13 @@ class Fr13B4TwoMStaticTileScheduler100
 
   CUTLASS_DEVICE explicit Fr13B4TwoMStaticTileScheduler100(
       Params const& params) : Base(params) {
-    initialize_linear_work();
+    initialize_linear_work(params);
   }
 
   CUTLASS_DEVICE explicit Fr13B4TwoMStaticTileScheduler100(
       CLCResponse* response, Params const& params, dim3 block_id_in_cluster)
       : Base(response, params, block_id_in_cluster) {
-    initialize_linear_work();
+    initialize_linear_work(params);
   }
 
   template <class ClusterShape>
@@ -422,8 +423,8 @@ class Fr13B4TwoMStaticTileScheduler100
   }
 
   CUTLASS_DEVICE WorkTileInfo get_current_work_for_linear_idx(
-      uint64_t linear_idx) const {
-    if (linear_idx >= this->scheduler_params.blocks_per_problem_) {
+      uint32_t linear_idx) const {
+    if (linear_idx >= problem_tiles_) {
       return WorkTileInfo::invalid_work_tile();
     }
     return {static_cast<int32_t>(linear_idx & 1),
@@ -431,14 +432,13 @@ class Fr13B4TwoMStaticTileScheduler100
   }
 
   CUTLASS_DEVICE void advance_to_next_work(uint32_t advance_count = 1) {
-    current_work_linear_idx_ += total_grid_size_ * uint64_t(advance_count);
+    current_work_linear_idx_ += total_grid_size_ * advance_count;
   }
 
   CUTLASS_DEVICE bool is_last_tile(
       WorkTileInfo&, uint32_t advance_count = 1) const {
     return current_work_linear_idx_ +
-        total_grid_size_ * uint64_t(advance_count) >=
-        this->scheduler_params.blocks_per_problem_;
+        total_grid_size_ * advance_count >= problem_tiles_;
   }
 
   CUTLASS_DEVICE auto fetch_next_work(WorkTileInfo) {
@@ -1169,6 +1169,12 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
            fixed32_cutlass_wave_variant::persistent_b4_m128_static ||
        wave_variant ==
            fixed32_cutlass_wave_variant::persistent_b4_m128_static_byte_ab)) {
+    wave_variant = fixed32_cutlass_wave_variant::stock;
+  }
+  if (N > 65536 &&
+      (wave_variant == fixed32_cutlass_wave_variant::identity_twom_b4 ||
+       wave_variant ==
+           fixed32_cutlass_wave_variant::identity_twom_b4_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
   if (M != 32 && M != 128 &&
