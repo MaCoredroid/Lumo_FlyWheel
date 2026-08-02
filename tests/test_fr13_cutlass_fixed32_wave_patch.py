@@ -241,10 +241,8 @@ def test_m32_static_linear_changes_only_stock_scheduler_coordinates() -> None:
         "params.blocks_per_problem_ == uint64_t(params.problem_tiles_m_)"
         in scheduler
     )
-    assert (
-        "direct_linear_geometry ? uint64_t(params.problem_tiles_m_) : 0"
-        in scheduler
-    )
+    assert "this->scheduler_params.blocks_per_problem_" in scheduler
+    assert "direct_linear_blocks_" not in scheduler
     assert "return {static_cast<int32_t>(linear_idx), 0, 0, true};" in scheduler
     assert "work_tile_info.M_idx, cute::Int<0>{}," in scheduler
     assert "cute::Underscore{}, cute::Int<0>{}" in scheduler
