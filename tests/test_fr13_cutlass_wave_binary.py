@@ -49,6 +49,8 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "identity_stage2_pingpong_b1_byte_ab",
         "identity_stockshape_b4",
         "identity_stockshape_b4_byte_ab",
+        "identity_stockshape_stage2_b4",
+        "identity_stockshape_stage2_b4_byte_ab",
         "identity_divisor_b4",
         "identity_divisor_b4_byte_ab",
         "persistent_b4_m128",
@@ -98,6 +100,11 @@ def test_pinned_binary_identity_and_selectors() -> None:
         module.IDENTITY_B4_CANDIDATE_SHA256,
         module.IDENTITY_B4_CANDIDATE_SIZE,
         "identity_divisor_b4",
+    )
+    assert module.candidate_identity("identity_stockshape_stage2_b4_byte_ab") == (
+        module.IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SHA256,
+        module.IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SIZE,
+        "identity_stockshape_stage2_b4",
     )
     assert module.B4_M128_CANDIDATE_SHA256 == (
         "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
@@ -346,6 +353,11 @@ def test_static_b1_diagnostic_installs_but_production_stays_blocked(
             "identity_divisor_b4",
             "identity_divisor_b4",
         ),
+        (
+            "identity_stockshape_stage2_b4_byte_ab",
+            "identity_stockshape_stage2_b4",
+            "identity_stockshape_stage2_b4",
+        ),
     ),
 )
 def test_identity_b4_diagnostic_installs_but_production_stays_blocked(
@@ -358,8 +370,16 @@ def test_identity_b4_diagnostic_installs_but_production_stays_blocked(
     module = _module()
     payload = f"{family}-candidate\n".encode("ascii")
     digest = hashlib.sha256(payload).hexdigest()
-    monkeypatch.setattr(module, "IDENTITY_B4_CANDIDATE_SIZE", len(payload))
-    monkeypatch.setattr(module, "IDENTITY_B4_CANDIDATE_SHA256", digest)
+    if family == "identity_stockshape_stage2_b4":
+        monkeypatch.setattr(
+            module, "IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SIZE", len(payload)
+        )
+        monkeypatch.setattr(
+            module, "IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SHA256", digest
+        )
+    else:
+        monkeypatch.setattr(module, "IDENTITY_B4_CANDIDATE_SIZE", len(payload))
+        monkeypatch.setattr(module, "IDENTITY_B4_CANDIDATE_SHA256", digest)
     source = tmp_path / "identity-b4.so"
     destination = tmp_path / "installed.so"
     attestation = tmp_path / "attestation.json"

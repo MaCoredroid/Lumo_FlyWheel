@@ -38,6 +38,10 @@ IDENTITY_B4_CANDIDATE_SHA256 = (
     "d7771d5a95a34d6072a796d520e8f2fa500aeccc900d57e1477941b966ea77a9"
 )
 IDENTITY_B4_CANDIDATE_SIZE = 116_284_480
+IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SHA256 = (
+    "6a33fcfc13f70e0d5a6d10d4d8cdfd279056a391257683496e1e397857ab94a1"
+)
+IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SIZE = 117_526_952
 B4_M128_CANDIDATE_SHA256 = (
     "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
 )
@@ -75,6 +79,12 @@ IDENTITY_STAGE2_PINGPONG_B1_SELECTORS = frozenset(
 IDENTITY_STOCKSHAPE_B4_SELECTORS = frozenset(
     {"identity_stockshape_b4", "identity_stockshape_b4_byte_ab"}
 )
+IDENTITY_STOCKSHAPE_STAGE2_B4_SELECTORS = frozenset(
+    {
+        "identity_stockshape_stage2_b4",
+        "identity_stockshape_stage2_b4_byte_ab",
+    }
+)
 IDENTITY_DIVISOR_B4_SELECTORS = frozenset(
     {"identity_divisor_b4", "identity_divisor_b4_byte_ab"}
 )
@@ -90,6 +100,7 @@ CANDIDATE_SELECTORS = (
     | IDENTITY_STAGE2_SELECTORS
     | IDENTITY_STAGE2_PINGPONG_B1_SELECTORS
     | IDENTITY_STOCKSHAPE_B4_SELECTORS
+    | IDENTITY_STOCKSHAPE_STAGE2_B4_SELECTORS
     | IDENTITY_DIVISOR_B4_SELECTORS
     | B4_M128_SELECTORS
     | STATIC_B4_M128_SELECTORS
@@ -103,6 +114,7 @@ INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
     "identity_stage2_static",
     "identity_stage2_pingpong_b1",
     "identity_stockshape_b4",
+    "identity_stockshape_stage2_b4",
     "identity_divisor_b4",
     "persistent_b4_m128_static",
 }
@@ -154,6 +166,12 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
             IDENTITY_B4_CANDIDATE_SHA256,
             IDENTITY_B4_CANDIDATE_SIZE,
             "identity_stockshape_b4",
+        )
+    if selector in IDENTITY_STOCKSHAPE_STAGE2_B4_SELECTORS:
+        return (
+            IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SHA256,
+            IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SIZE,
+            "identity_stockshape_stage2_b4",
         )
     if selector in IDENTITY_DIVISOR_B4_SELECTORS:
         return (

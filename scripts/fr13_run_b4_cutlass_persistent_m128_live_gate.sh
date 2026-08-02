@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Real SWE-Verified exact4 B4 byte gate for the persistent CUTLASS M128 kernel.
+# Real SWE-Verified exact4 B4 byte gate for fixed32 CUTLASS candidates.
 # The diagnostic always serves the stock result and contributes no timing samples.
 set -euo pipefail
 
@@ -45,6 +45,18 @@ case "$CANDIDATE_SELECTOR" in
     CANDIDATE_ARM_NAME=identity_stockshape
     [[ -z "$RESOURCE_CREDENTIAL" && -z "$RESOURCE_CREDENTIAL_SHA256" ]] || {
       echo "stock-shape identity gate forbids a static resource credential" >&2
+      exit 2
+    }
+    ;;
+  identity_stockshape_stage2_b4)
+    DIAGNOSTIC_SELECTOR=identity_stockshape_stage2_b4_byte_ab
+    RECORD_SCHEMA=fr13.fixed32.cutlass_identity_stockshape_stage2_b4_byte_ab.v1
+    CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_identity_stockshape_stage2_b4_byte_ab.jsonl
+    FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_stockshape_stage2_b4_live_gate.v1
+    K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_stockshape_stage2_b4_k64_root_live_gate.v1
+    CANDIDATE_ARM_NAME=identity_stockshape_stage2
+    [[ -z "$RESOURCE_CREDENTIAL" && -z "$RESOURCE_CREDENTIAL_SHA256" ]] || {
+      echo "stock-shape Stage2 identity gate forbids a static resource credential" >&2
       exit 2
     }
     ;;

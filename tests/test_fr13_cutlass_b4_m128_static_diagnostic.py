@@ -330,3 +330,42 @@ def test_identity_stockshape_selector_is_exact_b4_diagnostic_only() -> None:
         "divisor identity production remains unavailable"
         in sources["fr13_launch_forked_fa2_tree_server.sh"]
     )
+
+
+def test_identity_stockshape_stage2_selector_is_exact_b4_diagnostic_only() -> None:
+    module = _load()
+    contract = module.CANDIDATE_CONTRACTS["identity_stockshape_stage2_b4"]
+    assert (
+        contract["diagnostic_selector"]
+        == "identity_stockshape_stage2_b4_byte_ab"
+    )
+    assert contract["production_authorized"] is False
+    assert contract["requires_resource_credential"] is False
+    assert contract["live_schemas"] == {
+        "full_vocab": module.IDENTITY_STOCKSHAPE_STAGE2_LIVE_SCHEMA,
+        "k64_root": module.IDENTITY_STOCKSHAPE_STAGE2_K64_ROOT_LIVE_SCHEMA,
+    }
+    assert module._candidate_source_hashes("identity_stockshape_stage2_b4") == (
+        module.IDENTITY_STOCKSHAPE_STAGE2_PATCH_SOURCE_SHA256,
+        module.IDENTITY_STOCKSHAPE_STAGE2_PATCHED_DISPATCH_SHA256,
+    )
+
+    sources = {
+        name: (SCRIPTS / name).read_text(encoding="utf-8")
+        for name in (
+            "fr13_run_b4_cutlass_persistent_m128_live_gate.sh",
+            "fr13_launch_forked_fa2_tree_server.sh",
+            "fr13_bigdenom_swe_serve_variant.sh",
+            "run_swe_bench_q36_a.py",
+            "fr10_phase4_patch_vllm_tree_gdn.py",
+        )
+    }
+    for source in sources.values():
+        assert "identity_stockshape_stage2_b4_byte_ab" in source
+    assert "identity_stockshape_stage2_b4)" in sources[
+        "fr13_run_b4_cutlass_persistent_m128_live_gate.sh"
+    ]
+    assert (
+        "stock-shape Stage2 identity production remains unavailable"
+        in sources["fr13_launch_forked_fa2_tree_server.sh"]
+    )

@@ -521,7 +521,7 @@ if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
   }
 fi
 case "$FR13_FIXED32_CUTLASS_WAVE" in
-  stock|streamk_coop128|streamk_coop128_byte_ab|streamk_force_wide256|streamk_force_wide256_byte_ab|static_persistent_stocktile|static_persistent_stocktile_byte_ab|divisor_static_stocktile|divisor_static_stocktile_byte_ab|identity_stage2_static|identity_stage2_static_byte_ab|identity_stage2_pingpong_b1|identity_stage2_pingpong_b1_byte_ab|identity_stockshape_b4|identity_stockshape_b4_byte_ab|identity_divisor_b4|identity_divisor_b4_byte_ab|persistent_b4_m128|persistent_b4_m128_byte_ab|persistent_b4_m128_static|persistent_b4_m128_static_byte_ab) ;;
+  stock|streamk_coop128|streamk_coop128_byte_ab|streamk_force_wide256|streamk_force_wide256_byte_ab|static_persistent_stocktile|static_persistent_stocktile_byte_ab|divisor_static_stocktile|divisor_static_stocktile_byte_ab|identity_stage2_static|identity_stage2_static_byte_ab|identity_stage2_pingpong_b1|identity_stage2_pingpong_b1_byte_ab|identity_stockshape_b4|identity_stockshape_b4_byte_ab|identity_stockshape_stage2_b4|identity_stockshape_stage2_b4_byte_ab|identity_divisor_b4|identity_divisor_b4_byte_ab|persistent_b4_m128|persistent_b4_m128_byte_ab|persistent_b4_m128_static|persistent_b4_m128_static_byte_ab) ;;
   *)
     echo "FR13_FIXED32_CUTLASS_WAVE has an unsupported selector" >&2
     exit 2
@@ -577,6 +577,8 @@ else
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_divisor_b4_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static" \
@@ -589,6 +591,10 @@ else
   fi
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4" ]]; then
     echo "CUTLASS B4 stock-shape identity production remains unavailable until Tail23 and Hydra27 raw-byte PASS" >&2
+    exit 2
+  fi
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4" ]]; then
+    echo "CUTLASS B4 stock-shape Stage2 identity production remains unavailable until Tail23 and Hydra27 raw-byte PASS" >&2
     exit 2
   fi
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "identity_divisor_b4" ]]; then
@@ -710,6 +716,7 @@ else
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stage2_pingpong_b1_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_divisor_b4_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
     [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "0" \
@@ -735,6 +742,8 @@ else
                  && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_identity_stage2_pingpong_b1_byte_ab.jsonl" ) \
             || ( "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4_byte_ab" \
                  && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_identity_stockshape_b4_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_identity_stockshape_stage2_b4_byte_ab.jsonl" ) \
             || ( "$FR13_FIXED32_CUTLASS_WAVE" == "identity_divisor_b4_byte_ab" \
                  && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_identity_divisor_b4_byte_ab.jsonl" ) \
             || ( "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
@@ -1465,6 +1474,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stage2_pingpong_b1_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_divisor_b4_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
     _fixed32_expected_eager=1
@@ -2135,6 +2145,7 @@ export FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH
 _fr13_cutlass_b4_byte_ab=0
 if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "identity_divisor_b4_byte_ab" \
       || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4_byte_ab" \
+      || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4_byte_ab" \
       || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
       || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
   _fr13_cutlass_b4_byte_ab=1
