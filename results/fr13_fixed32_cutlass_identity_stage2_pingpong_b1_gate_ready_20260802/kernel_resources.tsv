@@ -1,0 +1,3 @@
+dtype	registers	shared_bytes	stack_bytes	local_bytes	constant0_bytes
+fp16	168	1024	0	0	2688
+bf16	168	1024	0	0	2688
