@@ -324,9 +324,9 @@ def test_packed_xgather_loads_contiguous_weights_as_exact_pairs() -> None:
     fragment = ast.get_source_segment(source, kernel)
 
     assert fragment is not None
-    assert fragment.count("tl.pointer_type(tl.uint32)") == 2
-    assert "weight_pair_01 >> (tap << 4)" in fragment
-    assert "weight_pair_23.to(tl.uint16)" in fragment
-    assert "weight_pair_23 >> 16" in fragment
+    assert fragment.count("tl.pointer_type(tl.uint64)") == 1
+    assert "weight_quad >> (tap << 4)" in fragment
+    assert "weight_quad >> 32" in fragment
+    assert "weight_quad >> 48" in fragment
     assert fragment.count("to(tl.bfloat16, bitcast=True)") == 3
     assert "tl.load(weight_channels + tap)" not in fragment

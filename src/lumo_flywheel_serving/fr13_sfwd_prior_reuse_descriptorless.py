@@ -634,9 +634,7 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
     if HAS_BIAS:
         acc = tl.load(bias + offs_c).to(tl.float32)
 
-    weight_pair_01 = tl.load(
-        weight_channels.to(tl.pointer_type(tl.uint32))
-    )
+    weight_quad = tl.load(weight_channels.to(tl.pointer_type(tl.uint64)))
     for tap in tl.static_range(0, WIDTH - 2):
         source_row = tl.where(
             tap == 0,
@@ -653,7 +651,7 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
         x_index = tl.broadcast_to(x_node, ROWS_PER_PROGRAM, BLOCK_C)
         x_value = tl.gather(current_x, x_index, axis=0)
         value = tl.where(from_prior, prior_value, x_value).to(tl.bfloat16)
-        weight_bits = (weight_pair_01 >> (tap << 4)).to(tl.uint16)
+        weight_bits = (weight_quad >> (tap << 4)).to(tl.uint16)
         weight = weight_bits.to(tl.bfloat16, bitcast=True)
         product = (value * weight).to(tl.bfloat16).to(tl.float32)
         acc = acc + product
@@ -669,10 +667,7 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
     x_index = tl.broadcast_to(x_node, ROWS_PER_PROGRAM, BLOCK_C)
     x_value = tl.gather(current_x, x_index, axis=0)
     value = tl.where(from_prior, prior_value, x_value).to(tl.bfloat16)
-    weight_pair_23 = tl.load(
-        (weight_channels + 2).to(tl.pointer_type(tl.uint32))
-    )
-    weight_2_bits = weight_pair_23.to(tl.uint16)
+    weight_2_bits = (weight_quad >> 32).to(tl.uint16)
     weight_2 = weight_2_bits.to(tl.bfloat16, bitcast=True)
     product = (value * weight_2).to(tl.bfloat16).to(tl.float32)
     acc = acc + product
@@ -681,7 +676,7 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
         offs_n - pid_n_base, ROWS_PER_PROGRAM, BLOCK_C
     )
     current_value = tl.gather(current_x, current_index, axis=0)
-    current_weight_bits = (weight_pair_23 >> 16).to(tl.uint16)
+    current_weight_bits = (weight_quad >> 48).to(tl.uint16)
     current_weight = current_weight_bits.to(tl.bfloat16, bitcast=True)
     current_product = (current_value * current_weight).to(tl.bfloat16).to(
         tl.float32
