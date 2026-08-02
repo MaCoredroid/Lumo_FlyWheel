@@ -282,6 +282,7 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     assert "ROWS_PER_PROGRAM: tl.constexpr" in candidate
     assert "tl.arange(0, ROWS_PER_PROGRAM)[:, None]" in candidate
     assert "row_groups = N // ROWS_PER_PROGRAM" in candidate
+    assert "n_mask" not in candidate
     assert "source_edge_writer = pid_n_base == 0" in candidate
     assert "source_stage" in candidate
     assert "rows_per_program = _FR13_FIXED32_SFWD_ROWS_PER_PROGRAM" in launcher

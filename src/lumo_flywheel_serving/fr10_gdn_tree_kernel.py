@@ -4265,7 +4265,6 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
     pid_n_base = pid_n_group * ROWS_PER_PROGRAM
     offs_n = pid_n_base + tl.arange(0, ROWS_PER_PROGRAM)[:, None]
     offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)[None, :]
-    n_mask = offs_n < N
     c_mask = offs_c < C
 
     bank_row = tl.load(
@@ -4275,18 +4274,14 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
     if HAS_BIAS:
         acc = tl.load(bias + offs_c, mask=c_mask, other=0.0).to(tl.float32)
     for tap in tl.static_range(0, WIDTH):
-        source_row = tl.load(
-            source_flat + offs_n * WIDTH + tap,
-            mask=n_mask,
-            other=0,
-        ).to(tl.int64)
+        source_row = tl.load(source_flat + offs_n * WIDTH + tap).to(tl.int64)
         from_prior = source_row < (WIDTH - 1)
         prior_value = tl.load(
             conv_state
             + bank_row * conv_stride_row
             + offs_c * conv_stride_c
             + source_row * conv_stride_l,
-            mask=n_mask & c_mask & from_prior,
+            mask=c_mask & from_prior,
             other=0.0,
         )
         x_node = source_row - (WIDTH - 1)
@@ -4295,8 +4290,7 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
             + (pid_b.to(tl.int64) * N + x_node) * C
             + offs_c,
             mask=(
-                n_mask
-                & c_mask
+                c_mask
                 & (~from_prior)
                 & (x_node >= 0)
                 & (x_node < N)
@@ -4321,13 +4315,13 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
     tl.store(
         out + (pid_b * N + offs_n) * C + offs_c,
         activated,
-        mask=n_mask & c_mask,
+        mask=c_mask,
     )
 
     stage_base = pid_b.to(tl.int64) * SOURCE_ROWS
     current_x = tl.load(
         x + (pid_b * N + offs_n) * C + offs_c,
-        mask=n_mask & c_mask,
+        mask=c_mask,
         other=0.0,
     )
     tl.store(
@@ -4335,7 +4329,7 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
         + (stage_base + (WIDTH - 1) + offs_n) * C
         + offs_c,
         current_x,
-        mask=n_mask & c_mask,
+        mask=c_mask,
     )
     source_edge_writer = pid_n_base == 0
     for prior_col in tl.static_range(0, WIDTH - 1):
