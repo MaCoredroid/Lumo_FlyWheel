@@ -541,9 +541,6 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
     bias,
     out,
     source_stage,
-    conv_stride_row,
-    conv_stride_c,
-    conv_stride_l,
     ssi_stride_b,
     ssi_stride_s,
     B: tl.constexpr,
@@ -576,15 +573,15 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
     stage_offset = pid_b * SOURCE_ROWS * C
     prior_base = (
         conv_state
-        + bank_row * conv_stride_row
-        + offs_c * conv_stride_c
+        + bank_row * C * STATE_LEN
+        + offs_c * STATE_LEN
     )
     prior_pair = tl.load(prior_base.to(tl.pointer_type(tl.uint32)))
     prior_0 = prior_pair.to(tl.uint16).to(tl.bfloat16, bitcast=True)
     prior_1 = (prior_pair >> 16).to(tl.uint16).to(
         tl.bfloat16, bitcast=True
     )
-    prior_2 = tl.load(prior_base + 2 * conv_stride_l)
+    prior_2 = tl.load(prior_base + 2)
 
     source_group = offs_n >> 2
     packed = tl.where(

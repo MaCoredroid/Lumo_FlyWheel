@@ -258,6 +258,10 @@ def test_launcher_uses_packed_xgather_kernel_and_exact_layout() -> None:
     assert "x_stride_row" not in kernel
     assert "weight_stride_c" not in kernel
     assert "weight_stride_w" not in kernel
+    assert "conv_stride_row" not in kernel
+    assert "conv_stride_c" not in kernel
+    assert "conv_stride_l" not in kernel
+    assert "bank_row * C * STATE_LEN" in kernel
     assert "x_batch = x + pid_b * N * X_STRIDE_ROW" in kernel
     assert "weight_channels = conv_weights + offs_c * WIDTH" in kernel
     assert "weight_quad" in kernel
@@ -273,6 +277,7 @@ def test_launcher_uses_packed_xgather_kernel_and_exact_layout() -> None:
     assert "BLOCK_C=BLOCK_C" in launcher
     assert "num_warps=NUM_WARPS" in launcher
     assert "source_flat" not in launcher
+    assert "int(conv_state.stride(" not in launcher
     assert ".cpu(" not in launcher
     assert ".item(" not in launcher
     assert ".tolist(" not in launcher

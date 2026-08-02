@@ -349,9 +349,15 @@ def test_packed_xgather_loads_first_two_prior_values_as_exact_pair() -> None:
         and node.name == "_fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel"
     )
     fragment = ast.get_source_segment(source, kernel)
+    argument_names = tuple(argument.arg for argument in kernel.args.args)
 
     assert fragment is not None
+    assert "conv_stride_row" not in argument_names
+    assert "conv_stride_c" not in argument_names
+    assert "conv_stride_l" not in argument_names
+    assert "bank_row * C * STATE_LEN" in fragment
+    assert "offs_c * STATE_LEN" in fragment
     assert "prior_base.to(tl.pointer_type(tl.uint32))" in fragment
     assert "prior_pair.to(tl.uint16).to(tl.bfloat16, bitcast=True)" in fragment
     assert "(prior_pair >> 16).to(tl.uint16).to(" in fragment
-    assert "prior_base + 2 * conv_stride_l" in fragment
+    assert "prior_base + 2" in fragment
