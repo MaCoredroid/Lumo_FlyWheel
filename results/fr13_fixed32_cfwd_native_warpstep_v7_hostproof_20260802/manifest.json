@@ -1,0 +1,59 @@
+{
+  "schema": "fr13.fixed32.cfwd_native_warpstep_hostproof.v1",
+  "classification": "READY_AFTER_V5_FOR_REAL_B1_BYTE_GATE",
+  "acceptance_result": false,
+  "candidate": "fixed32_cfwd_native_keygroup_warpstep_cuda_v7",
+  "source_commit": "5457657d97bf8ccbd5360b243b27b908659ecd76",
+  "source_sha256": "e022acdefdd045fe08407c222a3b8b56eb6caac7f5e929e3ce1190dbbda3fc9d",
+  "object_sha256": "152c55b3f950a0a9d163e8a7f61e73dc20f4cd915927435e89b6fce446fed88f",
+  "target_architecture": "sm_121a",
+  "cuda_release": "13.0",
+  "tests": {
+    "passed": 169,
+    "failed": 0
+  },
+  "resources": {
+    "registers_per_thread": 64,
+    "stack_bytes": 0,
+    "source_shared_bytes": 6488,
+    "cuobjdump_shared_bytes": 7512,
+    "local_bytes": 0,
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0
+  },
+  "sass": {
+    "BAR.SYNC.DEFER_BLOCKING": 3,
+    "FADD": 264,
+    "FFMA": 84,
+    "FMUL": 99,
+    "MUFU.EX2": 3,
+    "MUFU.RCP": 2,
+    "MUFU.RSQ": 1,
+    "SHFL.BFLY": 200,
+    "SHFL.DOWN": 0,
+    "SHFL.IDX": 17,
+    "signed_zero_fadd_rz": 64,
+    "LDL": 0,
+    "STL": 0,
+    "CALL": 0
+  },
+  "static_delta_from_v6": {
+    "cta_barrier_instructions": -6,
+    "source_shared_bytes": -80,
+    "cuobjdump_shared_bytes": -80,
+    "registers_per_thread": 0,
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0
+  },
+  "execution": {
+    "gpu_used": false,
+    "container_launched": false,
+    "real_swe_task_run": false,
+    "timing_run": false
+  },
+  "qualification_order": {
+    "first": "v5_real_swe_verified_b1_raw_fp32_bank_byte_gate",
+    "second": "v7_real_swe_verified_b1_raw_fp32_bank_byte_gate",
+    "fallback_on_v7_rejection": "v6_real_swe_verified_b1_raw_fp32_bank_byte_gate"
+  }
+}
