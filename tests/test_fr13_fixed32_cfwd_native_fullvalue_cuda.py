@@ -390,7 +390,7 @@ def test_launch_rejects_unqualified_or_non_source_selection() -> None:
             )
 
 
-def test_cuda_source_maps_one_step_to_each_normalization_warp() -> None:
+def test_cuda_source_maps_steps_to_warps_and_k_quads_to_lane_float4s() -> None:
     source = CUDA_SOURCE.read_text(encoding="utf-8")
     assert "constexpr int kPrecomputedSteps = kMaxAcceptedLength + 1;" in source
     assert "constexpr int kWarpsPerBlock = 16;" in source
@@ -401,7 +401,7 @@ def test_cuda_source_maps_one_step_to_each_normalization_warp() -> None:
     assert "static_assert(kNormalizationWarps <= kWarpsPerBlock);" in source
     assert "static_assert(kSharedBytes == 6488);" in source
     assert "__launch_bounds__(kThreadsPerBlock, 2)" in source
-    assert "float state[kValuesPerWarp][kKeyQuads];" in source
+    assert "float4 state[kValuesPerWarp];" in source
     assert "__shared__ float shared_state" not in source
     assert "const int key_head = blockIdx.x % kKeyHeads;" in source
     assert "__shared__ float normalized_ks[kPrecomputedSteps][kDimK];" in source
@@ -412,14 +412,15 @@ def test_cuda_source_maps_one_step_to_each_normalization_warp() -> None:
     assert "const int gate_task_count = steps * kHeadGroup;" in source
     assert "const int normalization_step = warp;" in source
     assert "if (normalization_step < steps)" in source
-    assert "float step_keys[kKeyQuads];" in source
-    assert "float step_partials[kKeyQuads];" in source
-    assert source.count("const float key_value = load_bf16(k_rings + key_offset)") == 1
-    assert source.count("triton_butterfly_product_sum(key_value, key_value)") == 1
-    assert "__fadd_rn(step_partials[0], step_partials[2])" in source
-    assert "__fadd_rn(step_partials[1], step_partials[3])" in source
+    assert "const int key_base = lane * kKeyQuads;" in source
+    assert "float key_values[kKeyQuads];" in source
+    assert "const float4 step_keys = make_float4(" in source
+    assert source.count("key_values[element] = load_bf16(k_rings + key_offset);") == 1
+    assert source.count("triton_contiguous_product_sum(step_keys, step_keys)") == 1
+    assert "step_partials" not in source
     assert "__shfl_sync(kFullWarpMask, inverse_norm, 0)" in source
-    assert "normalized_ks[normalization_step][key_index]" in source
+    assert "&normalized_ks[normalization_step][key_base]" in source
+    assert "reinterpret_cast<float4*>" in source
     assert "#pragma unroll 1" in source
     assert "for (int local_value_head = 0; local_value_head < kHeadGroup;" in source
     assert "kLayers * batch_size * kKeyHeads" in source
@@ -435,33 +436,29 @@ def test_cuda_source_preserves_ordered_active_recurrence_and_fp32_store() -> Non
     source = CUDA_SOURCE.read_text(encoding="utf-8")
     loop = source[source.index("// Process one value head at a time") :]
     assert "shared_steps = min(max(accepted, 0) + 1" in source
-    assert "float state[kValuesPerWarp][kKeyQuads];" in loop
+    assert "float4 state[kValuesPerWarp];" in loop
     assert "for (int step = 0; step < steps; ++step)" in loop
-    assert "__fmul_rn(state[value_lane][key_quad], decay_scale)" in loop
-    assert loop.count("float partial02 = triton_butterfly_product_sum(") == 1
-    assert loop.count("float partial13 = triton_butterfly_product_sum(") == 1
-    assert loop.count("float state_k = __fadd_rn(partial02, partial13);") == 1
+    assert "__fmul_rn(state[value_lane].x, decay_scale)" in loop
+    assert loop.count("triton_contiguous_product_sum(state[value_lane], step_k)") == 1
+    assert loop.count("state_k = __shfl_sync(kFullWarpMask, state_k, 0);") == 1
     assert loop.count("__fmul_rn(__fsub_rn(value, state_k), beta)") == 1
-    assert "state[value_lane][key_quad] = __fmaf_rn(" in loop
-    assert loop.index("decay_scale);") < loop.index("float partial02")
-    assert loop.index("float partial02") < loop.index("const float residual")
-    assert loop.index("const float residual") < loop.index("= __fmaf_rn(")
-    assert loop.index("state[value_lane][0]") < loop.index(
-        "state[value_lane][2]"
+    assert "__fmaf_rn(residual, step_k.x, state[value_lane].x)" in loop
+    assert loop.index("decay_scale),") < loop.index(
+        "triton_contiguous_product_sum(state[value_lane], step_k)"
     )
-    assert loop.index("state[value_lane][2]") < loop.index(
-        "state[value_lane][1]"
+    assert loop.index("triton_contiguous_product_sum") < loop.index(
+        "const float residual"
     )
-    assert loop.index("state[value_lane][1]") < loop.index(
-        "state[value_lane][3]"
-    )
+    assert loop.index("const float residual") < loop.index("__fmaf_rn(residual")
     assert "float* bank_anchor" in source
-    assert "store_state_bank[state_offset] =\n            __fadd_rn(" in source
-    assert "state[value_lane][key_quad], 0.0f);" in source
+    assert "*reinterpret_cast<const float4*>(" in source
+    assert "*reinterpret_cast<float4*>(store_state_bank + state_offset)" in source
+    assert source.count("__fadd_rn(state[value_lane].") == 4
     assert "fixed-16 reference always runs at least four zero-K suffix" in source
     assert "__float2bfloat16" not in source
     assert "requires FP32 state banks" in source
-    assert source.count("load_state_bank[state_offset] + 0.0f;") == 1
+    assert "loaded.x + 0.0f" in source
+    assert "loaded.w + 0.0f" in source
     assert 'asm volatile("mov.u32 %0, %%tid.x;"' in source
 
 
@@ -476,24 +473,81 @@ def test_cuda_source_pins_incumbent_reduction_and_fused_gate_order() -> None:
     assert 'asm volatile("ex2.approx.f32 %0, %1;"' in source
     assert 'asm volatile("div.full.f32 %0, %1, %2;"' in source
     helper = source[
-        source.index("float triton_butterfly_product_sum"):
+        source.index("float triton_contiguous_product_sum"):
         source.index("float softplus")
     ]
-    assert "const float product = __fmul_rn(lhs, rhs);" in helper
-    assert "__shfl_xor_sync(kFullWarpMask, product, 16)" in helper
-    assert "float value = __fmaf_rn(lhs, rhs, partner);" in helper
-    assert "for (int mask = 8; mask > 0; mask >>= 1)" in helper
-    assert "__fadd_rn(" in helper
-    assert "step_k[key_quad] = normalized_ks[step][lane + key_quad * 32];" in source
-    assert source.index("state[value_lane][0], step_k[0]") < source.index(
-        "state[value_lane][2], step_k[2]"
+    assert "const float products[kKeyQuads]" in helper
+    assert "__fmul_rn(lhs.x, rhs.x)" in helper
+    assert "__fmaf_rn(lhs.x, rhs.x," in helper
+    assert "__shfl_xor_sync(kFullWarpMask, products[0], 4, 8)" in helper
+    assert "for (int lane_mask = 2; lane_mask > 0; lane_mask >>= 1)" in helper
+    assert "__shfl_xor_sync(kFullWarpMask, values[element], lane_mask, 8)" in helper
+    assert "__fadd_rn(values[0], values[2])" in helper
+    assert "__fadd_rn(values[1], values[3])" in helper
+    assert "__shfl_xor_sync(kFullWarpMask, value, 16)" in helper
+    assert "__shfl_xor_sync(kFullWarpMask, value, 8)" in helper
+    assert "const float4 step_k = *reinterpret_cast<const float4*>(" in source
+    assert "triton_contiguous_product_sum(state[value_lane], step_k)" in source
+
+
+def test_contiguous_reduction_has_the_exact_incumbent_expression_tree() -> None:
+    products = [("mul", index) for index in range(128)]
+
+    incumbent_quads = []
+    for quad in range(4):
+        values = [
+            ("fma", quad * 32 + lane, products[quad * 32 + (lane ^ 16)])
+            for lane in range(32)
+        ]
+        for mask in (8, 4, 2, 1):
+            previous = values
+            values = [
+                ("add", previous[lane], previous[lane ^ mask])
+                for lane in range(32)
+            ]
+        incumbent_quads.append(values[0])
+    incumbent = (
+        "add",
+        ("add", incumbent_quads[0], incumbent_quads[2]),
+        ("add", incumbent_quads[1], incumbent_quads[3]),
     )
-    assert source.index("state[value_lane][2], step_k[2]") < source.index(
-        "state[value_lane][1], step_k[1]"
+
+    contiguous_quads = []
+    for quad in range(4):
+        values = [
+            [
+                (
+                    "fma",
+                    quad * 32 + lane * 4 + element,
+                    products[quad * 32 + (lane ^ 4) * 4 + element],
+                )
+                for element in range(4)
+            ]
+            for lane in range(8)
+        ]
+        for lane_mask in (2, 1):
+            previous = values
+            values = [
+                [
+                    ("add", previous[lane][element], previous[lane ^ lane_mask][element])
+                    for element in range(4)
+                ]
+                for lane in range(8)
+            ]
+        contiguous_quads.append(
+            (
+                "add",
+                ("add", values[0][0], values[0][2]),
+                ("add", values[0][1], values[0][3]),
+            )
+        )
+    contiguous = (
+        "add",
+        ("add", contiguous_quads[0], contiguous_quads[2]),
+        ("add", contiguous_quads[1], contiguous_quads[3]),
     )
-    assert source.index("state[value_lane][1], step_k[1]") < source.index(
-        "state[value_lane][3], step_k[3]"
-    )
+
+    assert contiguous == incumbent
 
 
 def test_cuda_source_loads_root_nodes_and_precomputed_three_head_gates() -> None:

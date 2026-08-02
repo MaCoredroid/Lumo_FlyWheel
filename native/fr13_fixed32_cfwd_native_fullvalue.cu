@@ -71,18 +71,39 @@ __device__ __forceinline__ float triton_divide(float numerator,
   return result;
 }
 
-__device__ __forceinline__ float triton_butterfly_product_sum(float lhs,
-                                                               float rhs) {
-  const float product = __fmul_rn(lhs, rhs);
-  const float partner =
-      __shfl_xor_sync(kFullWarpMask, product, 16);
-  float value = __fmaf_rn(lhs, rhs, partner);
+__device__ __forceinline__ float triton_contiguous_product_sum(float4 lhs,
+                                                               float4 rhs) {
+  const float products[kKeyQuads] = {
+      __fmul_rn(lhs.x, rhs.x), __fmul_rn(lhs.y, rhs.y),
+      __fmul_rn(lhs.z, rhs.z), __fmul_rn(lhs.w, rhs.w)};
+  float values[kKeyQuads] = {
+      __fmaf_rn(lhs.x, rhs.x,
+                __shfl_xor_sync(kFullWarpMask, products[0], 4, 8)),
+      __fmaf_rn(lhs.y, rhs.y,
+                __shfl_xor_sync(kFullWarpMask, products[1], 4, 8)),
+      __fmaf_rn(lhs.z, rhs.z,
+                __shfl_xor_sync(kFullWarpMask, products[2], 4, 8)),
+      __fmaf_rn(lhs.w, rhs.w,
+                __shfl_xor_sync(kFullWarpMask, products[3], 4, 8))};
 #pragma unroll
-  for (int mask = 8; mask > 0; mask >>= 1) {
-    value = __fadd_rn(
-        value, __shfl_xor_sync(kFullWarpMask, value, mask));
+  for (int lane_mask = 2; lane_mask > 0; lane_mask >>= 1) {
+#pragma unroll
+    for (int element = 0; element < kKeyQuads; ++element) {
+      values[element] = __fadd_rn(
+          values[element],
+          __shfl_xor_sync(kFullWarpMask, values[element], lane_mask, 8));
+    }
   }
-  return value;
+
+  // The eight-lane groups are the incumbent contiguous 32-element quads.
+  // Local component adds reproduce its final xor-2 then xor-1 stages.
+  const float quad_partial02 = __fadd_rn(values[0], values[2]);
+  const float quad_partial13 = __fadd_rn(values[1], values[3]);
+  float value = __fadd_rn(quad_partial02, quad_partial13);
+  value = __fadd_rn(
+      value, __shfl_xor_sync(kFullWarpMask, value, 16));
+  return __fadd_rn(
+      value, __shfl_xor_sync(kFullWarpMask, value, 8));
 }
 
 __device__ __forceinline__ float softplus(float value) {
@@ -167,43 +188,37 @@ void fixed32_cfwd_native_fullvalue_kernel(
   }
   __syncthreads();
 
-  // One warp owns each step. Four values per lane preserve the incumbent
-  // K128 reduction tree without cross-warp scratch or wave barriers.
+  // One warp owns each step. Each eight-lane subgroup owns one incumbent
+  // 32-element K quad; four contiguous values per lane vectorize publication.
   const int normalization_step = warp;
   if (normalization_step < steps) {
-    float step_keys[kKeyQuads];
-    float step_partials[kKeyQuads];
+    const int key_base = lane * kKeyQuads;
+    float key_values[kKeyQuads];
 #pragma unroll
-    for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-      const int key_index = lane + key_quad * 32;
+    for (int element = 0; element < kKeyQuads; ++element) {
+      const int key_index = key_base + element;
       const int64_t key_offset =
           static_cast<int64_t>(layer) * ring_k_layer_stride +
           static_cast<int64_t>(request) * ring_k_batch_stride +
           static_cast<int64_t>(shared_nodes[normalization_step]) *
               ring_k_node_stride +
           static_cast<int64_t>(key_head) * kDimK + key_index;
-      const float key_value = load_bf16(k_rings + key_offset);
-      step_keys[key_quad] = key_value;
-      step_partials[key_quad] =
-          triton_butterfly_product_sum(key_value, key_value);
+      key_values[element] = load_bf16(k_rings + key_offset);
     }
+    const float4 step_keys = make_float4(
+        key_values[0], key_values[1], key_values[2], key_values[3]);
+    const float norm = triton_contiguous_product_sum(step_keys, step_keys);
 
     float inverse_norm = 0.0f;
     if (lane == 0) {
-      const float partial02 =
-          __fadd_rn(step_partials[0], step_partials[2]);
-      const float partial13 =
-          __fadd_rn(step_partials[1], step_partials[3]);
-      inverse_norm = triton_rsqrt(
-          __fadd_rn(__fadd_rn(partial02, partial13), 1.0e-6f));
+      inverse_norm = triton_rsqrt(__fadd_rn(norm, 1.0e-6f));
     }
     inverse_norm = __shfl_sync(kFullWarpMask, inverse_norm, 0);
-#pragma unroll
-    for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-      const int key_index = lane + key_quad * 32;
-      normalized_ks[normalization_step][key_index] =
-          __fmul_rn(step_keys[key_quad], inverse_norm);
-    }
+    *reinterpret_cast<float4*>(&normalized_ks[normalization_step][key_base]) =
+        make_float4(__fmul_rn(step_keys.x, inverse_norm),
+                    __fmul_rn(step_keys.y, inverse_norm),
+                    __fmul_rn(step_keys.z, inverse_norm),
+                    __fmul_rn(step_keys.w, inverse_norm));
   }
   // Publish every immutable normalized K row before recurrence warps consume it.
   __syncthreads();
@@ -215,33 +230,30 @@ void fixed32_cfwd_native_fullvalue_kernel(
        ++local_value_head) {
     const int value_head = key_head * kHeadGroup + local_value_head;
     const int value_row_base = warp * kValuesPerWarp;
-    float state[kValuesPerWarp][kKeyQuads];
+    float4 state[kValuesPerWarp];
     float* load_state_bank = bank_anchor + bank_off16[layer] * 4;
     const int64_t load_state_row_offset =
         static_cast<int64_t>(shared_state_index) * bank_stride;
 #pragma unroll
     for (int value_lane = 0; value_lane < kValuesPerWarp; ++value_lane) {
       const int value_index = value_row_base + value_lane;
-#pragma unroll
-      for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-        const int key_index = lane + key_quad * 32;
-        const int state_inner_offset =
-            (value_head * kDimV + value_index) * kDimK + key_index;
-        const int64_t state_offset = load_state_row_offset + state_inner_offset;
-        state[value_lane][key_quad] =
-            load_state_bank[state_offset] + 0.0f;
-      }
+      const int key_base = lane * kKeyQuads;
+      const int state_inner_offset =
+          (value_head * kDimV + value_index) * kDimK + key_base;
+      const int64_t state_offset = load_state_row_offset + state_inner_offset;
+      const float4 loaded = *reinterpret_cast<const float4*>(
+          load_state_bank + state_offset);
+      state[value_lane] =
+          make_float4(loaded.x + 0.0f, loaded.y + 0.0f,
+                      loaded.z + 0.0f, loaded.w + 0.0f);
     }
 
     for (int step = 0; step < steps; ++step) {
       const float decay_scale =
           recurrence_scalars[step][local_value_head][0];
       const float beta = recurrence_scalars[step][local_value_head][1];
-      float step_k[kKeyQuads];
-#pragma unroll
-      for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-        step_k[key_quad] = normalized_ks[step][lane + key_quad * 32];
-      }
+      const float4 step_k = *reinterpret_cast<const float4*>(
+          &normalized_ks[step][lane * kKeyQuads]);
       const int64_t value_base =
           static_cast<int64_t>(layer) * ring_v_layer_stride +
           static_cast<int64_t>(request) * ring_v_batch_stride +
@@ -250,22 +262,13 @@ void fixed32_cfwd_native_fullvalue_kernel(
 #pragma unroll
       for (int value_lane = 0; value_lane < kValuesPerWarp; ++value_lane) {
         const int value_index = value_row_base + value_lane;
-#pragma unroll
-        for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-          state[value_lane][key_quad] =
-              __fmul_rn(state[value_lane][key_quad], decay_scale);
-        }
-        float partial02 = triton_butterfly_product_sum(
-            state[value_lane][0], step_k[0]);
-        partial02 = __fadd_rn(
-            partial02,
-            triton_butterfly_product_sum(state[value_lane][2], step_k[2]));
-        float partial13 = triton_butterfly_product_sum(
-            state[value_lane][1], step_k[1]);
-        partial13 = __fadd_rn(
-            partial13,
-            triton_butterfly_product_sum(state[value_lane][3], step_k[3]));
-        float state_k = __fadd_rn(partial02, partial13);
+        state[value_lane] = make_float4(
+            __fmul_rn(state[value_lane].x, decay_scale),
+            __fmul_rn(state[value_lane].y, decay_scale),
+            __fmul_rn(state[value_lane].z, decay_scale),
+            __fmul_rn(state[value_lane].w, decay_scale));
+        float state_k =
+            triton_contiguous_product_sum(state[value_lane], step_k);
         state_k = __shfl_sync(kFullWarpMask, state_k, 0);
         float value = lane == 0
                           ? load_bf16(v_rings + value_base + value_index)
@@ -273,11 +276,11 @@ void fixed32_cfwd_native_fullvalue_kernel(
         value = __shfl_sync(kFullWarpMask, value, 0);
         const float residual =
             __fmul_rn(__fsub_rn(value, state_k), beta);
-#pragma unroll
-        for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-          state[value_lane][key_quad] = __fmaf_rn(
-              residual, step_k[key_quad], state[value_lane][key_quad]);
-        }
+        state[value_lane] = make_float4(
+            __fmaf_rn(residual, step_k.x, state[value_lane].x),
+            __fmaf_rn(residual, step_k.y, state[value_lane].y),
+            __fmaf_rn(residual, step_k.z, state[value_lane].z),
+            __fmaf_rn(residual, step_k.w, state[value_lane].w));
       }
     }
 
@@ -293,18 +296,18 @@ void fixed32_cfwd_native_fullvalue_kernel(
 #pragma unroll
     for (int value_lane = 0; value_lane < kValuesPerWarp; ++value_lane) {
       const int value_index = store_value_row_base + value_lane;
-#pragma unroll
-      for (int key_quad = 0; key_quad < kKeyQuads; ++key_quad) {
-        const int key_index = store_lane + key_quad * 32;
-        const int state_inner_offset =
-            (store_value_head * kDimV + value_index) * kDimK + key_index;
-        const int64_t state_offset = store_state_row_offset + state_inner_offset;
-        // The fixed-16 reference always runs at least four zero-K suffix steps.
-        // For finite state, their net state effect is this signed-zero
-        // normalization at the final FMA boundary.
-        store_state_bank[state_offset] =
-            __fadd_rn(state[value_lane][key_quad], 0.0f);
-      }
+      const int key_base = store_lane * kKeyQuads;
+      const int state_inner_offset =
+          (store_value_head * kDimV + value_index) * kDimK + key_base;
+      const int64_t state_offset = store_state_row_offset + state_inner_offset;
+      // The fixed-16 reference always runs at least four zero-K suffix steps.
+      // For finite state, their net state effect is this signed-zero
+      // normalization at the final FMA boundary.
+      *reinterpret_cast<float4*>(store_state_bank + state_offset) =
+          make_float4(__fadd_rn(state[value_lane].x, 0.0f),
+                      __fadd_rn(state[value_lane].y, 0.0f),
+                      __fadd_rn(state[value_lane].z, 0.0f),
+                      __fadd_rn(state[value_lane].w, 0.0f));
     }
   }
 }

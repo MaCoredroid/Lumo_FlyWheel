@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the pinned SM121 key-group precompute CFWD object contract."""
+"""Check the pinned SM121 key-group contiguous-K CFWD object contract."""
 
 from __future__ import annotations
 
@@ -20,15 +20,19 @@ EXPECTED_RESOURCES = {
 }
 EXPECTED_SASS_COUNTS = {
     "BAR.SYNC.DEFER_BLOCKING": 3,
-    "FADD": 264,
-    "FMUL": 99,
+    "FADD": 207,
+    "FMUL": 96,
     "MUFU.EX2": 3,
     "MUFU.RSQ": 1,
     "MUFU.RCP": 2,
-    "SHFL.BFLY": 200,
+    "SHFL.BFLY": 140,
     "SHFL.IDX": 17,
     "SHFL.DOWN": 0,
     "FFMA": 84,
+    "LDG.E.128": 8,
+    "STG.E.128": 8,
+    "LDS.128": 1,
+    "STS.128": 1,
 }
 EXPECTED_SIGNED_ZERO_FADD_RZ = 64
 

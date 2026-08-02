@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 
-CANDIDATE = "fixed32_cfwd_native_keygroup_warpstep_cuda_v7"
+CANDIDATE = "fixed32_cfwd_native_keygroup_contiguous_k_cuda_v8"
 SELECTOR_ENV = "FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA"
 SELECTOR_VALUE = "diagnostic"
 FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
@@ -18,21 +18,21 @@ OPERATOR = "_C::fr13_fixed32_cfwd_native_fullvalue"
 BINARY_BINDING_SCHEMA = "fr13.fixed32.cfwd_native_keygroup_binary.v1"
 CUDA_SOURCE_PATH = "native/fr13_fixed32_cfwd_native_fullvalue.cu"
 CUDA_SOURCE_SHA256 = (
-    "e022acdefdd045fe08407c222a3b8b56eb6caac7f5e929e3ce1190dbbda3fc9d"
+    "cc0ddb8d5aab11e1f6156f434492302bae6b6481d0fd7f38282f70e28687e09f"
 )
 PATCHER_SOURCE_PATH = "scripts/fr13_patch_vllm_cfwd_native_fullvalue_cuda.py"
 PATCHER_SOURCE_SHA256 = (
-    "3c34f710838a272e2b3777c1d7d858fec5af217b8d410e6ba300f4429fb00ab0"
+    "56054a088d22f1dbacce23a7edb4a6c984582022d2418af5730141584bcee3fa"
 )
 PATCHED_VLLM_SHA256 = {
     "CMakeLists.txt": (
-        "51693b25fb4cc56734d8102be28e4c892aecc4e98e18eab8fe48ed0af109ff16"
+        "725eb42a1d0e521bf323026fb55401073a20c2c54cccf39b1fbee27d7fa87f5b"
     ),
     "csrc/ops.h": (
-        "bcbaf7aae9b331584b1e3fb50897329aa26339a8588bf4c623da33348db3538f"
+        "b07d66ff6238355485b3970d2e7927fb76e63cd0e9af5750d193be99a3bd4f40"
     ),
     "csrc/torch_bindings.cpp": (
-        "ffae2ccd54b9c06f522255e0088ba481a055662ee179bf0b12243941b486827a"
+        "43bdfd0377a8b698953e54248b7fde7e73e525f6de5a39cafa0b72f3ae8316f5"
     ),
     "csrc/fr13_fixed32_cfwd_native_fullvalue.cu": CUDA_SOURCE_SHA256,
 }
