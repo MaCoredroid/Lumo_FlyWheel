@@ -1,0 +1,33 @@
+diff --git a/src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py b/src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py
+--- a/src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py
++++ b/src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py
+@@ -740,19 +740,17 @@ def _fr13_fixed32_sfwd_channel_serial_kernel(
+     prior_1 = tl.load(prior_base + C)
+     prior_2 = tl.load(prior_base + 2 * C)
+ 
+-    weight_channels = conv_weights + offs_c * WIDTH
+-    weight_pair_01 = tl.load(weight_channels.to(tl.pointer_type(tl.uint32)))
+-    weight_pair_23 = tl.load(
+-        (weight_channels + 2).to(tl.pointer_type(tl.uint32))
+-    )
+-    weight_0 = weight_pair_01.to(tl.uint16).to(tl.bfloat16, bitcast=True)
+-    weight_1 = (weight_pair_01 >> 16).to(tl.uint16).to(
+-        tl.bfloat16, bitcast=True
+-    )
+-    weight_2 = weight_pair_23.to(tl.uint16).to(tl.bfloat16, bitcast=True)
+-    weight_3 = (weight_pair_23 >> 16).to(tl.uint16).to(
+-        tl.bfloat16, bitcast=True
++    weight_matrix = tl.load(
++        conv_weights
++        + offs_c[:, None] * WIDTH
++        + tl.arange(0, WIDTH)[None, :]
+     )
++    weight_pairs = tl.reshape(weight_matrix, (BLOCK_C * 2, 2))
++    weight_even, weight_odd = tl.split(weight_pairs)
++    weight_even = tl.reshape(weight_even, (BLOCK_C, 2))
++    weight_odd = tl.reshape(weight_odd, (BLOCK_C, 2))
++    weight_0, weight_2 = tl.split(weight_even)
++    weight_1, weight_3 = tl.split(weight_odd)
+ 
+     x_rows = (
+         tl.load(x_batch + 0 * X_STRIDE_ROW + offs_c),
