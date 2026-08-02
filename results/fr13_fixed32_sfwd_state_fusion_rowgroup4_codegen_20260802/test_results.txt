@@ -1,0 +1,13 @@
+FR13 fixed32 SFWD state-fusion row-group-4 offline verification
+
+python bytecode compile: PASS
+focused state-fusion suite: 8 passed in 0.96s
+git diff --check before artifact: PASS
+baseline B1/B4 SM121a compile: PASS
+candidate B1/B4 SM121a compile: PASS
+candidate stack/local/spill/call audit: PASS (all zero)
+
+real SWE-Verified byte gate: NOT RUN
+performance measurement: NOT RUN
+production/floor claim: NONE
+
