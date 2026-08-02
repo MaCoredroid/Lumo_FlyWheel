@@ -500,92 +500,15 @@ struct cutlass_3x_gemm_fp8_blockwise_m128_divisor_static
 };
 
 // Fixed32 projection calls have no source C and always use alpha=1, beta=0.
-// Keep the runtime FP32 multiply and output conversion order, but remove the
-// generic alpha/beta pointer, fallback, and batch-stride visitor state.
-template <class Element>
-struct fr13_fixed32_one_scalar_broadcast {
-  struct SharedStorage {};
-  struct Arguments {};
-
-  struct Params {
-    Element scalar;
-  };
-
-  template <class ProblemShape>
-  static constexpr Params to_underlying_arguments(
-      ProblemShape const&, Arguments const&, void*) {
-    return {Element(1)};
-  }
-
-  template <class ProblemShape>
-  static bool can_implement(ProblemShape const&, Arguments const&) {
-    return true;
-  }
-
-  template <class ProblemShape>
-  static size_t get_workspace_size(ProblemShape const&, Arguments const&) {
-    return 0;
-  }
-
-  template <class ProblemShape>
-  static cutlass::Status initialize_workspace(
-      ProblemShape const&, Arguments const&, void*, cudaStream_t,
-      cutlass::CudaHostAdapter* = nullptr) {
-    return cutlass::Status::kSuccess;
-  }
-
-  CUTLASS_DEVICE bool is_producer_load_needed() const {
-    return false;
-  }
-
-  CUTLASS_DEVICE bool is_C_load_needed() const {
-    return false;
-  }
-
-  CUTLASS_HOST_DEVICE fr13_fixed32_one_scalar_broadcast() = default;
-
-  CUTLASS_HOST_DEVICE fr13_fixed32_one_scalar_broadcast(
-      Params const& params, SharedStorage const&)
-      : scalar(params.scalar) {}
-
-  template <class... Args>
-  CUTLASS_DEVICE auto get_producer_load_callbacks(
-      cutlass::epilogue::fusion::ProducerLoadArgs<Args...> const&) {
-    return cutlass::epilogue::fusion::EmptyProducerLoadCallbacks{};
-  }
-
-  struct ConsumerStoreCallbacks
-      : cutlass::epilogue::fusion::EmptyConsumerStoreCallbacks {
-    CUTLASS_DEVICE explicit ConsumerStoreCallbacks(Element scalar_)
-        : scalar(scalar_) {}
-
-    Element scalar;
-
-    template <typename ElementAccumulator, int FragmentSize>
-    CUTLASS_DEVICE cutlass::Array<Element, FragmentSize> visit(
-        cutlass::Array<ElementAccumulator, FragmentSize> const&,
-        int, int, int) {
-      cutlass::Array<Element, FragmentSize> fragment;
-      fragment.fill(scalar);
-      return fragment;
-    }
-  };
-
-  template <bool ReferenceSrc, class... Args>
-  CUTLASS_DEVICE auto get_consumer_store_callbacks(
-      cutlass::epilogue::fusion::ConsumerStoreArgs<Args...> const&) {
-    return ConsumerStoreCallbacks(scalar);
-  }
-
-  Element scalar = Element(1);
-};
-
+// Convert the accumulator directly to the output type with the same explicit
+// round-to-nearest policy, removing the generic alpha/beta visitor and the
+// mathematically redundant FP32 multiply by one.
 template <
     class OutType, int ScaleGranularityM, int ScaleGranularityN,
     int ScaleGranularityK, class MmaTileShape, class ClusterShape,
     class EpilogueScheduler, class MainloopScheduler, bool swap_ab_,
     class TileScheduler>
-struct cutlass_3x_gemm_fp8_blockwise_fixedalpha_static
+struct cutlass_3x_gemm_fp8_blockwise_identity_static
     : cutlass_3x_gemm_fp8_blockwise<
           OutType, ScaleGranularityM, ScaleGranularityN, ScaleGranularityK,
           MmaTileShape, ClusterShape, EpilogueScheduler, MainloopScheduler,
@@ -597,11 +520,10 @@ struct cutlass_3x_gemm_fp8_blockwise_fixedalpha_static
 
   using Fr13EpilogueCallbacks = cutlass::epilogue::fusion::Sm90EVT<
       cutlass::epilogue::fusion::Sm90Compute<
-          cutlass::multiplies,
+          cutlass::epilogue::thread::Identity,
           typename cutlass::detail::get_unpacked_element_type<OutType>::type,
-          typename Base::ElementCompute,
+          typename Base::ElementAccumulator,
           cutlass::FloatRoundStyle::round_to_nearest>,
-      fr13_fixed32_one_scalar_broadcast<typename Base::ElementCompute>,
       cutlass::epilogue::fusion::Sm90AccFetch>;
 
   using CollectiveEpilogue =
@@ -751,28 +673,28 @@ struct sm120_blockwise_fp8_config_b4_persistent_m128_static {
 };
 
 template <typename OutType>
-struct sm120_blockwise_fp8_config_b1_divisor_static_fixedalpha {
+struct sm120_blockwise_fp8_config_b1_divisor_static_identity {
   using KernelSchedule =
       cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
   using EpilogueSchedule =
       cutlass::epilogue::collective::EpilogueScheduleAuto;
   using TileShape = Shape<_128, _32, _128>;
   using ClusterShape = Shape<_1, _1, _1>;
-  using Gemm = cutlass_3x_gemm_fp8_blockwise_fixedalpha_static<
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
       OutType, 128, 1, 128, TileShape, ClusterShape,
       EpilogueSchedule, KernelSchedule, true,
       fr13_fixed32_m128_divisor_static_scheduler>;
 };
 
 template <typename OutType>
-struct sm120_blockwise_fp8_config_b4_m128_static_fixedalpha {
+struct sm120_blockwise_fp8_config_b4_m128_static_identity {
   using KernelSchedule =
       cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
   using EpilogueSchedule =
       cutlass::epilogue::collective::EpilogueScheduleAuto;
   using TileShape = Shape<_128, _128, _128>;
   using ClusterShape = Shape<_1, _1, _1>;
-  using Gemm = cutlass_3x_gemm_fp8_blockwise_fixedalpha_static<
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
       OutType, 1, 128, 128, TileShape, ClusterShape,
       EpilogueSchedule, KernelSchedule, false,
       fr13_fixed32_m128_static_scheduler>;
@@ -792,8 +714,8 @@ enum class fixed32_cutlass_wave_variant {
   persistent_b4_m128_byte_ab,
   persistent_b4_m128_static,
   persistent_b4_m128_static_byte_ab,
-  fixedalpha_static,
-  fixedalpha_static_byte_ab,
+  identity_static,
+  identity_static_byte_ab,
 };
 
 static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
@@ -843,11 +765,11 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     if (value == "persistent_b4_m128_static_byte_ab") {
       return fixed32_cutlass_wave_variant::persistent_b4_m128_static_byte_ab;
     }
-    if (value == "fixedalpha_static") {
-      return fixed32_cutlass_wave_variant::fixedalpha_static;
+    if (value == "identity_static") {
+      return fixed32_cutlass_wave_variant::identity_static;
     }
-    if (value == "fixedalpha_static_byte_ab") {
-      return fixed32_cutlass_wave_variant::fixedalpha_static_byte_ab;
+    if (value == "identity_static_byte_ab") {
+      return fixed32_cutlass_wave_variant::identity_static_byte_ab;
     }
     return fixed32_cutlass_wave_variant::stock;
   }();
@@ -1020,9 +942,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
   if (M != 32 && M != 128 &&
-      (wave_variant == fixed32_cutlass_wave_variant::fixedalpha_static ||
+      (wave_variant == fixed32_cutlass_wave_variant::identity_static ||
        wave_variant ==
-           fixed32_cutlass_wave_variant::fixedalpha_static_byte_ab)) {
+           fixed32_cutlass_wave_variant::identity_static_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
 
@@ -1077,15 +999,15 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
         destination, a, b, a_scales, b_scales);
   };
 
-  auto run_fixedalpha_static = [&](torch::stable::Tensor& destination) {
+  auto run_identity_static = [&](torch::stable::Tensor& destination) {
     if (M == 32) {
       using Gemm = typename
-          sm120_blockwise_fp8_config_b1_divisor_static_fixedalpha<OutType>::Gemm;
+          sm120_blockwise_fp8_config_b1_divisor_static_identity<OutType>::Gemm;
       return cutlass_gemm_caller_blockwise<Gemm>(
           destination, a, b, a_scales, b_scales);
     }
     using Gemm = typename
-        sm120_blockwise_fp8_config_b4_m128_static_fixedalpha<OutType>::Gemm;
+        sm120_blockwise_fp8_config_b4_m128_static_identity<OutType>::Gemm;
     return cutlass_gemm_caller_blockwise<Gemm>(
         destination, a, b, a_scales, b_scales);
   };
@@ -1123,17 +1045,17 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   const bool b4_m128_static_byte_ab =
       wave_variant ==
       fixed32_cutlass_wave_variant::persistent_b4_m128_static_byte_ab;
-  const bool fixedalpha_static_byte_ab =
+  const bool identity_static_byte_ab =
       wave_variant ==
-      fixed32_cutlass_wave_variant::fixedalpha_static_byte_ab;
+      fixed32_cutlass_wave_variant::identity_static_byte_ab;
   if (wave_variant ==
           fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab ||
       wide256_byte_ab || static_persistent_byte_ab ||
       divisor_static_byte_ab || b4_m128_byte_ab || b4_m128_static_byte_ab ||
-      fixedalpha_static_byte_ab) {
+      identity_static_byte_ab) {
     auto run_candidate = [&](torch::stable::Tensor& destination) {
-      if (fixedalpha_static_byte_ab) {
-        return run_fixedalpha_static(destination);
+      if (identity_static_byte_ab) {
+        return run_identity_static(destination);
       }
       if (b4_m128_static_byte_ab) {
         return run_b4_persistent_m128_static(destination);
@@ -1156,7 +1078,7 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     // entirely on stock; candidate execution starts only after the arm exists.
     std::string task_marker =
         (b4_m128_byte_ab || b4_m128_static_byte_ab ||
-         (fixedalpha_static_byte_ab && M == 128))
+         (identity_static_byte_ab && M == 128))
             ? fixed32_cutlass_b4_real_task_marker()
             : fixed32_cutlass_real_task_marker();
     if (task_marker.empty()) {
@@ -1170,7 +1092,7 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     constexpr int64_t b4_m128_byte_ab_limit = 320;
     const int64_t selected_byte_ab_limit =
         (b4_m128_byte_ab || b4_m128_static_byte_ab ||
-         (fixedalpha_static_byte_ab && M == 128))
+         (identity_static_byte_ab && M == 128))
             ? b4_m128_byte_ab_limit
             : byte_ab_limit;
     int64_t invocation = next_invocation.fetch_add(1);
@@ -1215,8 +1137,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       }
     }
     const char* log_path =
-        fixedalpha_static_byte_ab
-            ? "/logs/fr13_fixed32_cutlass_fixedalpha_static_byte_ab.jsonl"
+        identity_static_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_identity_static_byte_ab.jsonl"
         : b4_m128_static_byte_ab
             ? "/logs/fr13_fixed32_cutlass_persistent_b4_m128_static_byte_ab.jsonl"
         : b4_m128_byte_ab
@@ -1235,8 +1157,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       STD_TORCH_CHECK(log.good(),
                       "FR13 Stream-K byte A/B could not open JSONL");
       log << "{\\\"schema\\\":\\\""
-          << (fixedalpha_static_byte_ab
-                  ? "fr13.fixed32.cutlass_fixedalpha_static_byte_ab.v1"
+          << (identity_static_byte_ab
+                  ? "fr13.fixed32.cutlass_identity_static_byte_ab.v1"
               : b4_m128_static_byte_ab
                   ? "fr13.fixed32.cutlass_persistent_b4_m128_static_byte_ab.v1"
               : b4_m128_byte_ab
@@ -1300,8 +1222,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     return run_b4_persistent_m128_static(out);
   }
 
-  if (wave_variant == fixed32_cutlass_wave_variant::fixedalpha_static) {
-    return run_fixedalpha_static(out);
+  if (wave_variant == fixed32_cutlass_wave_variant::identity_static) {
+    return run_identity_static(out);
   }
 
   // Unset/unknown selectors retain the stock kernel and numeric result.

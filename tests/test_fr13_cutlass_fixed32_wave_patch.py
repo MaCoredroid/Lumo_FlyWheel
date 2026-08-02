@@ -102,8 +102,8 @@ def test_patch_is_default_off_and_shape_gated() -> None:
     assert 'value == "persistent_b4_m128_byte_ab"' in patched
     assert 'value == "persistent_b4_m128_static"' in patched
     assert 'value == "persistent_b4_m128_static_byte_ab"' in patched
-    assert 'value == "fixedalpha_static"' in patched
-    assert 'value == "fixedalpha_static_byte_ab"' in patched
+    assert 'value == "identity_static"' in patched
+    assert 'value == "identity_static_byte_ab"' in patched
     assert "return fixed32_cutlass_wave_variant::stock;" in patched
     for rows in (32, 64, 96, 128):
         assert f"m == {rows}" in patched
@@ -292,40 +292,31 @@ def test_b4_m128_static_changes_only_complete_tile_scheduler() -> None:
     )
 
 
-def test_fixedalpha_static_preserves_cross_batch_mainloops_and_output_order() -> None:
+def test_identity_static_uses_identity_epilogue_across_batches() -> None:
     module = _module()
     patched, _ = module.patch_text(_source_fixture(module))
 
-    scalar_start = patched.index("struct fr13_fixed32_one_scalar_broadcast")
     wrapper_start = patched.index(
-        "struct cutlass_3x_gemm_fp8_blockwise_fixedalpha_static"
+        "struct cutlass_3x_gemm_fp8_blockwise_identity_static"
     )
     wrapper_end = patched.index(module.CONFIG_ANCHOR, wrapper_start)
-    scalar = patched[scalar_start:wrapper_start]
     wrapper = patched[wrapper_start:wrapper_end]
-
-    assert "struct Arguments {};" in scalar
-    assert "return {Element(1)};" in scalar
-    assert "fragment.fill(scalar);" in scalar
-    assert "is_producer_load_needed() const" in scalar
-    assert "is_C_load_needed() const" in scalar
-    assert "scalar_ptrs" not in scalar
-    assert "dScalar" not in scalar
-    assert "beta" not in scalar
 
     assert "typename Base::CollectiveMainloop" in wrapper
     assert "using CollectiveEpilogue" in wrapper
     assert "typename Base::CollectiveEpilogue" not in wrapper
-    assert "cutlass::multiplies" in wrapper
+    assert "cutlass::epilogue::thread::Identity" in wrapper
     assert "cutlass::FloatRoundStyle::round_to_nearest" in wrapper
-    assert "fr13_fixed32_one_scalar_broadcast" in wrapper
+    assert "typename Base::ElementAccumulator" in wrapper
+    assert "cutlass::multiplies" not in wrapper
+    assert "fr13_fixed32_one_scalar_broadcast" not in patched
     assert "CollectiveEpilogue, TileScheduler" in wrapper
 
     b1_start = patched.index(
-        "struct sm120_blockwise_fp8_config_b1_divisor_static_fixedalpha"
+        "struct sm120_blockwise_fp8_config_b1_divisor_static_identity"
     )
     b4_start = patched.index(
-        "struct sm120_blockwise_fp8_config_b4_m128_static_fixedalpha"
+        "struct sm120_blockwise_fp8_config_b4_m128_static_identity"
     )
     config_end = patched.index("enum class fixed32_cutlass_wave_variant", b4_start)
     b1 = patched[b1_start:b4_start]
@@ -341,17 +332,17 @@ def test_fixedalpha_static_preserves_cross_batch_mainloops_and_output_order() ->
     assert "StreamKScheduler" not in b1 + b4
 
     assert "if (M != 32 && M != 128 &&" in patched
-    assert "auto run_fixedalpha_static" in patched
+    assert "auto run_identity_static" in patched
     assert "if (M == 32)" in patched
-    assert "fixedalpha_static_byte_ab && M == 128" in patched
+    assert "identity_static_byte_ab && M == 128" in patched
     assert (
-        '"/logs/fr13_fixed32_cutlass_fixedalpha_static_byte_ab.jsonl"'
+        '"/logs/fr13_fixed32_cutlass_identity_static_byte_ab.jsonl"'
         in patched
     )
-    assert "fr13.fixed32.cutlass_fixedalpha_static_byte_ab.v1" in patched
+    assert "fr13.fixed32.cutlass_identity_static_byte_ab.v1" in patched
     assert (
-        "fixed32_cutlass_wave_variant::fixedalpha_static) {\n"
-        "    return run_fixedalpha_static(out);"
+        "fixed32_cutlass_wave_variant::identity_static) {\n"
+        "    return run_identity_static(out);"
         in patched
     )
 
