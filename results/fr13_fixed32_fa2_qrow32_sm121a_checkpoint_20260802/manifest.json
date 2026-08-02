@@ -1,0 +1,120 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow32_sm121a_checkpoint.v1",
+  "status": "RESOURCE_PASS_ABI_RELINK_REQUIRED",
+  "source_commit": "5a40d0a1ac93393ad9e64a5b1ec308b72d77652d",
+  "classification": {
+    "gpu_used": false,
+    "container_used": false,
+    "performance_measurement": false,
+    "synthetic_probe_used": false,
+    "real_swe_task_used": false,
+    "byte_parity_claim": false,
+    "timing_eligible": false,
+    "production_eligible": false,
+    "default_off": true
+  },
+  "source": {
+    "fa2_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+    "patcher_sha256": "bdf9948b4fe40ad5f3e15a84a02a95755afbb6faae4df6d66dc1b56d530953fa",
+    "qrow32_gate_sha256": "ef3e3f9b37cb35c8f31c61c1a7c68ebcdf421f82478d6274c4222110a6d723a8",
+    "static_gate_sha256": "38b71819e73231e64e5ac74f707e68c6b46de0312c40bb1a83951d49a2b18137",
+    "translation_unit_sha256": "455126833a486b5307713940169fb800b703bfc81ba62c921d50065f27369de4",
+    "exact_safe_header_sha256": {
+      "flash_fwd_launch_template.h": "d9e9f4b92cb731d7955b514449e59b8e411bf7a0c929aafb454f2402d41fe976",
+      "flash_fwd_kernel.h": "934e8c6c2e72c667f3cb0a8dc53b11c16a4eba8e3ac2b5811c882eff399ac3de",
+      "flash_fwd_split_hdim256_bf16_sm80.cu": "53ac045b6b8a960a3134b4538cbde7cdca07fd8e454a39348a7b3da91f4207e0"
+    }
+  },
+  "compile": {
+    "target_arch": "sm_121a",
+    "nvcc_version": "13.0.88",
+    "cuobjdump_version": "13.0.85",
+    "optimization": "O3",
+    "use_fast_math": true,
+    "threads": 1,
+    "niceness": 19,
+    "object_sha256": "f278003683390281fc71db674832adf582a9f52895c6de342f15dece65e9507a",
+    "object_bytes": 833680,
+    "single_cubin": true,
+    "ptxas_output_retained": false
+  },
+  "kernel": {
+    "head_dim": 256,
+    "block_m": 32,
+    "block_n": 64,
+    "warps": 2,
+    "threads_per_cta": 64,
+    "physical_query_rows_per_slot": 32,
+    "b4_ctas_per_layer": 96,
+    "split_k": false,
+    "combine_kernel": false,
+    "ordered_per_row_k_loop_preserved": true,
+    "tree_mask_semantics_changed": false,
+    "bf16_output_reduction_changed": false,
+    "lse_reduction_changed": false
+  },
+  "resources": {
+    "registers": 244,
+    "stack_bytes": 0,
+    "static_local_bytes": 0,
+    "static_shared_bytes": 1024,
+    "dynamic_shared_bytes": 81920,
+    "barriers": 1,
+    "ptxas_spill_store_bytes": 0,
+    "ptxas_spill_load_bytes": 0,
+    "sass_ldl_instructions": 0,
+    "sass_stl_instructions": 0,
+    "sass_call_instructions": 4,
+    "source_specialization_required": false
+  },
+  "abi_attempt": {
+    "qualified": false,
+    "stock_so_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+    "stock_so_bytes": 299183936,
+    "rejected_host_relink_sha256": "e542927fe821e8ab9b5b8d6f724491bbfdd07bed517879a77479579a7908d0cd",
+    "rejected_host_relink_bytes": 299853224,
+    "qrow32_launcher_local": true,
+    "qrow32_launcher_absent_from_dynsym": true,
+    "defined_dynamic": {
+      "stock_records": 633,
+      "candidate_records": 673,
+      "added": 40,
+      "removed": 0,
+      "equal": false
+    },
+    "undefined_dynamic": {
+      "stock_records": 168,
+      "candidate_records": 175,
+      "added": 9,
+      "removed": 2,
+      "equal": false
+    },
+    "dt_needed": {
+      "stock_records": 10,
+      "candidate_records": 10,
+      "equal": true
+    },
+    "blocker": "host API object used GCC13.3 instead of pinned GCC11.4; exact compiler and matching Torch-header relink required"
+  },
+  "tests": {
+    "focused_passed": 18,
+    "focused_failed": 0,
+    "ruff_passed": true,
+    "py_compile_passed": true
+  },
+  "resume": {
+    "wait_for_live_b4_teardown": true,
+    "repeat_single_tu_compile_to_retain_ptxas": true,
+    "require_reproduced_object_sha256": "f278003683390281fc71db674832adf582a9f52895c6de342f15dece65e9507a",
+    "required_host_compiler": "GCC 11.4.0",
+    "compile_only_flash_api_cpp": true,
+    "reuse_unchanged_stock_cuda_objects": true,
+    "require_defined_dynamic_equal": true,
+    "require_undefined_dynamic_equal": true,
+    "require_dt_needed_equal": true,
+    "required_byte_gates": [
+      "canonical real SWE-Verified exact4 B4 Tail23",
+      "canonical real SWE-Verified exact4 B4 Hydra27"
+    ]
+  }
+}
