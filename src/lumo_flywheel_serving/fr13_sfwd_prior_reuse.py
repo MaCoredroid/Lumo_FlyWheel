@@ -553,10 +553,15 @@ def launch_fixed32_sfwd_prior_reuse(
         geometry_failures.append("spec_state_indices_dtype")
     if not spec_state_indices.is_contiguous():
         geometry_failures.append("spec_state_indices_contiguous")
-    if not conv_state.is_contiguous():
-        geometry_failures.append("conv_state_contiguous")
-    if int(conv_state.data_ptr()) % 4 != 0:
-        geometry_failures.append("conv_state_u32_alignment")
+    if conv_state.ndim == 3 and int(conv_state.stride(1)) != 1:
+        geometry_failures.append("conv_state_channel_stride")
+    if conv_state.ndim == 3 and int(conv_state.stride(2)) != channels:
+        geometry_failures.append("conv_state_state_stride")
+    if (
+        conv_state.ndim == 3
+        and int(conv_state.stride(0)) < channels * state_len
+    ):
+        geometry_failures.append("conv_state_row_stride")
     if source_stage.ndim != 2:
         geometry_failures.append("source_stage_ndim")
     if geometry_failures:
@@ -615,6 +620,7 @@ def launch_fixed32_sfwd_prior_reuse(
         bias_arg,
         out,
         source_stage,
+        CONV_STRIDE_ROW=int(conv_state.stride(0)),
         B=batch,
         N=rows,
         C=channels,

@@ -475,6 +475,10 @@ def test_channel_serial_keeps_global_rows_coalesced_and_ordered() -> None:
     argument_names = tuple(argument.arg for argument in kernel.args.args)
 
     assert fragment is not None
+    assert "CONV_STRIDE_ROW" in argument_names
+    assert "bank_row * CONV_STRIDE_ROW + offs_c" in fragment
+    assert "prior_base + C" in fragment
+    assert "prior_base + 2 * C" in fragment
     assert "tl.arange(0, BLOCK_C)" in fragment
     assert "tl.arange(0, BLOCK_C)[:, None]" not in fragment
     assert "tl.arange(0, N)" not in fragment

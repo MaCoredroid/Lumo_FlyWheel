@@ -715,6 +715,7 @@ def _fr13_fixed32_sfwd_channel_serial_kernel(
     bias,
     out,
     source_stage,
+    CONV_STRIDE_ROW: tl.constexpr,
     B: tl.constexpr,
     N: tl.constexpr,
     C: tl.constexpr,
@@ -734,13 +735,10 @@ def _fr13_fixed32_sfwd_channel_serial_kernel(
     stage_batch = source_stage + pid_b * SOURCE_ROWS * C
 
     bank_row = tl.load(spec_state_indices + pid_b * N).to(tl.int64)
-    prior_base = conv_state + bank_row * C * STATE_LEN + offs_c * STATE_LEN
-    prior_pair = tl.load(prior_base.to(tl.pointer_type(tl.uint32)))
-    prior_0 = prior_pair.to(tl.uint16).to(tl.bfloat16, bitcast=True)
-    prior_1 = (prior_pair >> 16).to(tl.uint16).to(
-        tl.bfloat16, bitcast=True
-    )
-    prior_2 = tl.load(prior_base + 2)
+    prior_base = conv_state + bank_row * CONV_STRIDE_ROW + offs_c
+    prior_0 = tl.load(prior_base)
+    prior_1 = tl.load(prior_base + C)
+    prior_2 = tl.load(prior_base + 2 * C)
 
     weight_channels = conv_weights + offs_c * WIDTH
     weight_quad = tl.load(weight_channels.to(tl.pointer_type(tl.uint64)))

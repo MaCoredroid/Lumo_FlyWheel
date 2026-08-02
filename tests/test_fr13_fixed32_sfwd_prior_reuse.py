@@ -247,7 +247,7 @@ def test_launcher_uses_channel_serial_kernel_and_exact_layout() -> None:
         path=KERNEL_MODULE_PATH,
     )
     launcher = _function_source("launch_fixed32_sfwd_prior_reuse")
-    assert kernel.index("prior_pair = tl.load(") < kernel.index(
+    assert kernel.index("prior_0 = tl.load(") < kernel.index(
         "for node in tl.static_range(0, N):"
     )
     assert "tap_0 = (" in kernel
@@ -260,10 +260,10 @@ def test_launcher_uses_channel_serial_kernel_and_exact_layout() -> None:
     assert "x_stride_row" not in kernel
     assert "weight_stride_c" not in kernel
     assert "weight_stride_w" not in kernel
-    assert "conv_stride_row" not in kernel
-    assert "conv_stride_c" not in kernel
-    assert "conv_stride_l" not in kernel
-    assert "bank_row * C * STATE_LEN" in kernel
+    assert "CONV_STRIDE_ROW" in kernel
+    assert "bank_row * CONV_STRIDE_ROW + offs_c" in kernel
+    assert "prior_base + C" in kernel
+    assert "prior_base + 2 * C" in kernel
     assert "ssi_stride_b" not in kernel
     assert "ssi_stride_s" not in kernel
     assert "spec_state_indices + pid_b * N" in kernel
@@ -273,17 +273,18 @@ def test_launcher_uses_channel_serial_kernel_and_exact_layout() -> None:
     assert kernel.count("tl.load(x_batch") == 32
     assert "grid = (batch, triton.cdiv(channels, BLOCK_C))" in launcher
     assert "fixed32_specialized_layout_contract(" in launcher
-    assert "not conv_state.is_contiguous()" in launcher
+    assert "int(conv_state.stride(1)) != 1" in launcher
+    assert "int(conv_state.stride(2)) != channels" in launcher
+    assert "int(conv_state.stride(0)) < channels * state_len" in launcher
     assert "not spec_state_indices.is_contiguous()" in launcher
     assert "int(spec_state_indices.shape[1]) != rows" in launcher
-    assert "int(conv_state.data_ptr()) % 4 != 0" in launcher
     assert "_fr13_fixed32_sfwd_channel_serial_kernel[grid](" in launcher
     assert "X_STRIDE_ROW=X_ROW_STRIDE" in launcher
     assert "ROWS_PER_PROGRAM=ROWS_PER_PROGRAM" not in launcher
     assert "BLOCK_C=BLOCK_C" in launcher
     assert "num_warps=NUM_WARPS" in launcher
     assert "source_flat" not in launcher
-    assert "int(conv_state.stride(" not in launcher
+    assert "CONV_STRIDE_ROW=int(conv_state.stride(0))" in launcher
     assert "int(spec_state_indices.stride(" not in launcher
     assert ".cpu(" not in launcher
     assert ".item(" not in launcher
@@ -336,7 +337,8 @@ def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
     assert "source_descriptor_launcher_argument=false" in runner
     assert "tree_parent=_fr10_parent" in patcher
     assert "x_stride=16384,1" in runner
-    assert "conv_state_stride=348160,34,1" in runner
+    assert "conv_state_layout=bank,channel,state" in runner
+    assert "conv_state_stride=2097152,1,10240" in runner
     assert "spec_state_indices_width=32" in runner
     assert "reference_gdn_source_bound" in gate
     assert "fr13_sfwd_prior_reuse_descriptorless.py" in gate

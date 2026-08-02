@@ -141,7 +141,8 @@ printf '%s\n' \
   'out_stride=10240,1' \
   'source_stage_stride=10240,1' \
   'conv_weights_stride=4,1' \
-  'conv_state_stride=348160,34,1' \
+  'conv_state_layout=bank,channel,state' \
+  'conv_state_stride=2097152,1,10240' \
   'spec_state_indices_width=32' \
   'spec_state_indices_contiguous=true' \
   "source_commit=$SOURCE_COMMIT" \
