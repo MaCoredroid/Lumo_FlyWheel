@@ -1168,6 +1168,198 @@ def test_qrow32_fuses_only_the_identical_initial_kv_page_address(
                     )
 
 
+def test_qrow32_carries_each_k_advance_address_into_the_next_v_copy(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    kernel = tmp_path / "flash_fwd_kernel.h"
+    signature = (
+        "template<typename Kernel_traits, bool Is_causal, bool Is_local, "
+        "bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, "
+        "bool Split, bool Append_KV, typename Params>\n"
+        "inline __device__ void compute_attn_1rowblock_splitkv"
+        "(const Params &params) {\n"
+    )
+    k_advance = """            if constexpr (kStaticPagedKV) {
+                tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block - 1, params.page_block_size,
+                    block_table, params.k_batch_stride, params.k_row_stride);
+            } else if (block_table == nullptr) {
+                tKgK.data() = tKgK.data() + (-int(kBlockN * params.k_row_stride));
+            } else {
+                tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block - 1, params.page_block_size,
+                    block_table, params.k_batch_stride, params.k_row_stride);
+            }
+"""
+    unmasked_v_advance = """        if constexpr (kStaticPagedKV) {
+            tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block, params.page_block_size,
+                block_table, params.v_batch_stride, params.v_row_stride);
+        } else if (block_table == nullptr) {
+            tVgV.data() = tVgV.data() + (-int(kBlockN * params.v_row_stride));
+        } else {
+            tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block, params.page_block_size,
+                block_table, params.v_batch_stride, params.v_row_stride);
+        }
+"""
+    prerequisites = """    // FR13_FA2_QROW32_STATIC_KV_STRIDES: canonical contiguous page layout.
+    // FR13_FA2_QROW32_FUSED_INITIAL_KV_PAGE: reuse the gated K/V page address.
+"""
+    operation_sentinels = (
+        "boundary_wait_sentinel()",
+        "boundary_gemm_sentinel()",
+        "boundary_copy_k_sentinel()",
+        "boundary_softmax_sentinel()",
+        "boundary_pv_sentinel()",
+        "steady_copy_v_sentinel()",
+        "steady_gemm_sentinel()",
+        "steady_copy_k_sentinel()",
+        "steady_softmax_sentinel()",
+        "steady_pv_sentinel()",
+    )
+    body = (
+        "    constexpr bool kStaticQueryBatch = true;\n"
+        "    constexpr bool kStaticPagedKV = true;\n"
+        "    constexpr int n_masking_steps = 1;\n"
+        + prerequisites
+        + "    boundary_wait_sentinel();\n"
+        + "    boundary_gemm_sentinel();\n"
+        + "    if (n_block > n_block_min) {\n"
+        + k_advance
+        + "        boundary_copy_k_sentinel();\n"
+        + "    }\n"
+        + "    boundary_softmax_sentinel();\n"
+        + "    boundary_pv_sentinel();\n"
+        + "    for (; n_block >= n_block_min; --n_block) {\n"
+        + unmasked_v_advance
+        + "        steady_copy_v_sentinel();\n"
+        + "        steady_gemm_sentinel();\n"
+        + "        if (n_block > n_block_min) {\n"
+        + k_advance
+        + "            steady_copy_k_sentinel();\n"
+        + "        }\n"
+        + "        steady_softmax_sentinel();\n"
+        + "        steady_pv_sentinel();\n"
+        + "    }\n"
+        + "    dynamic_k_length_sentinel(binfo.actual_seqlen_k);\n"
+        + "}\n"
+    )
+    stock = (
+        signature
+        + body
+        + "\n////////////////////////////////////////////////////////////////////////////////////////////////////\n\n"
+        + "template<typename Kernel_traits, bool Is_dropout\n"
+        + "struct UnrelatedForwardKernel;\n"
+    )
+    kernel.write_text(stock)
+
+    assert not module._patch_fixed32_query_tile32_carry_kv_page_address(kernel)
+    assert kernel.read_text() == stock
+    assert module._patch_fixed32_query_tile32_carry_kv_page_address(
+        kernel,
+        fixed32_query_tile32=True,
+    )
+    candidate = kernel.read_text()
+    assert candidate.count("FR13_FA2_QROW32_CARRY_KV_PAGE") == 1
+    assert candidate.count("const int64_t next_kv_page_offset") == 2
+    assert candidate.count(
+        "tKgK.data() = gK.data() + next_kv_page_offset;"
+    ) == 2
+    assert candidate.count(
+        "tVgV.data() = gV.data() + next_kv_page_offset;"
+    ) == 2
+    assert candidate.count("static_assert(n_masking_steps == 1);") == 3
+    carried_v_branch = candidate.split(
+        "// FR13_FA2_QROW32_CARRY_KV_PAGE", 1
+    )[1].split("} else if constexpr (kStaticPagedKV)", 1)[0]
+    assert "resolve_thread_kv_page_slice_offset" not in carried_v_branch
+    # qrow16 and generic fallbacks retain both original K sites and the V site.
+    assert candidate.count(
+        "block_table, params.k_batch_stride, params.k_row_stride);"
+    ) == 4
+    assert candidate.count(
+        "block_table, params.v_batch_stride, params.v_row_stride);"
+    ) == 2
+    assert [candidate.index(item) for item in operation_sentinels] == sorted(
+        candidate.index(item) for item in operation_sentinels
+    )
+    for sentinel in operation_sentinels + (
+        "dynamic_k_length_sentinel(binfo.actual_seqlen_k)",
+    ):
+        assert candidate.count(sentinel) == stock.count(sentinel) == 1
+    assert not module._patch_fixed32_query_tile32_carry_kv_page_address(
+        kernel,
+        fixed32_query_tile32=True,
+    )
+    assert kernel.read_text() == candidate
+
+    missing_prerequisite = tmp_path / "missing_fused_initial_page.h"
+    missing_prerequisite.write_text(
+        stock.replace(
+            "    // FR13_FA2_QROW32_FUSED_INITIAL_KV_PAGE: reuse the gated K/V page address.\n",
+            "",
+            1,
+        )
+    )
+    try:
+        module._patch_fixed32_query_tile32_carry_kv_page_address(
+            missing_prerequisite,
+            fixed32_query_tile32=True,
+        )
+    except RuntimeError as error:
+        assert "requires fused static K/V addressing" in str(error)
+    else:
+        raise AssertionError("K/V page carry accepted an unfused initial address")
+
+    block_table = (7, 3, 11, 5)
+    page_stride = 1024 * 4 * 256
+    row_stride = 4 * 256
+
+    def resolve_offset(
+        tidx: int,
+        n_block: int,
+        partial_size: int | None = None,
+    ) -> int:
+        col_offset = tidx % 8 * 8
+        block_row_offset = tidx // 8 * 8
+        if partial_size is not None:
+            final_row_offset = max(partial_size - 1, 0)
+            final_thread_row_offset = ((final_row_offset + 7) // 8) * 8
+            block_row_offset = min(block_row_offset, final_thread_row_offset)
+        page_offset = ((n_block & 15) << 6) + block_row_offset
+        virtual_page_idx = n_block >> 4
+        return (
+            block_table[virtual_page_idx] * page_stride
+            + page_offset * row_stride
+            + col_offset
+        )
+
+    for n_blocks in range(1, 65):
+        last_block = n_blocks - 1
+        for tidx in range(64):
+            for partial_size in range(1, 65):
+                initial = resolve_offset(tidx, last_block, partial_size)
+                old_k_pointer = initial
+                old_v_pointer = initial
+                carried_k_pointer = initial
+                carried_v_pointer = initial
+                old_resolver_calls = 1
+                carried_resolver_calls = 1
+                for n_block in range(last_block, -1, -1):
+                    assert old_k_pointer == carried_k_pointer
+                    assert old_v_pointer == carried_v_pointer
+                    if n_block == 0:
+                        continue
+                    next_offset = resolve_offset(tidx, n_block - 1)
+                    old_k_pointer = next_offset
+                    old_resolver_calls += 1
+                    carried_k_pointer = next_offset
+                    carried_v_pointer = next_offset
+                    carried_resolver_calls += 1
+                    old_v_pointer = resolve_offset(tidx, n_block - 1)
+                    old_resolver_calls += 1
+                assert old_resolver_calls == 2 * n_blocks - 1
+                assert carried_resolver_calls == n_blocks
+
+
 def test_qrow16_static_paged_path_folds_only_the_private_trait(
     tmp_path: Path,
 ) -> None:
