@@ -15,7 +15,7 @@ KERNEL_MARKER = "fixed32_cfwd_native_fullvalue_kernel"
 EXPECTED_RESOURCES = {
     "registers_per_thread": 64,
     "stack_bytes": 0,
-    "cuobjdump_shared_bytes": 7_576,
+    "cuobjdump_shared_bytes": 7_592,
     "local_bytes": 0,
 }
 EXPECTED_SASS_COUNTS = {

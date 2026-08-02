@@ -82,9 +82,10 @@ def test_resource_contract_maps_each_key_group_to_one_cta(batch: int) -> None:
     assert contract["precompute_waves"] == 3
     assert contract["normalized_k_shared_elements"] == 12 * 128
     assert contract["norm_partial_shared_elements"] == 16
+    assert contract["inverse_norm_shared_elements"] == 4
     assert contract["precomputed_node_shared_elements"] == 12
     assert contract["precomputed_gate_scalar_shared_elements"] == 72
-    assert contract["static_shared_bytes_source_model"] == 6_552
+    assert contract["static_shared_bytes_source_model"] == 6_568
     assert contract["k_hbm_vector_loads_per_cta_step"] == 1
     assert contract["k_norms_per_cta_step"] == 1
     assert contract["duplicate_value_head_k_loads_per_key_head_step"] == 0
@@ -273,13 +274,14 @@ def test_cuda_source_precomputes_four_steps_per_wave_without_shared_state() -> N
     assert "static_assert(kStateElementsPerThread == 32);" in source
     assert "static_assert(kStepsPerWave == 4);" in source
     assert "static_assert(kPrecomputeWaves == 3);" in source
-    assert "static_assert(kSharedBytes == 6552);" in source
+    assert "static_assert(kSharedBytes == 6568);" in source
     assert "__launch_bounds__(kThreadsPerBlock, 2)" in source
     assert "float state[kValuesPerWarp][kKeyQuads];" in source
     assert "__shared__ float shared_state" not in source
     assert "const int key_head = blockIdx.x % kKeyHeads;" in source
     assert "__shared__ float normalized_ks[kPrecomputedSteps][kDimK];" in source
     assert "__shared__ float norm_partials[kStepsPerWave]" in source
+    assert "__shared__ float inverse_norms[kStepsPerWave];" in source
     assert "__shared__ float recurrence_scalars[kPrecomputedSteps]" in source
     assert "__shared__ int32_t shared_nodes[kPrecomputedSteps];" in source
     assert "const int gate_task_count = steps * kHeadGroup;" in source
@@ -294,6 +296,12 @@ def test_cuda_source_precomputes_four_steps_per_wave_without_shared_state() -> N
     assert "for (int local_value_head = 0; local_value_head < kHeadGroup;" in source
     assert "kLayers * batch_size * kKeyHeads" in source
     assert source.count("__syncthreads();") == 5
+    wave_loop = source[
+        source.index("for (int wave = 0; wave < kPrecomputeWaves; ++wave)") :
+        source.index("// Publish every immutable normalized K row")
+    ]
+    assert wave_loop.count("__syncthreads();") == 2
+    assert "inverse_norms[step_slot]" in wave_loop
 
 
 def test_cuda_source_preserves_ordered_active_recurrence_and_fp32_store() -> None:
@@ -390,7 +398,7 @@ def _codegen_fixture(checker) -> tuple[str, str]:
 arch = sm_121a
 Resource usage:
  Function mangled_{checker.KERNEL_MARKER}_symbol:
-  REG:64 STACK:0 SHARED:7576 LOCAL:0 CONSTANT[0]:1084
+  REG:64 STACK:0 SHARED:7592 LOCAL:0 CONSTANT[0]:1084
 """
     sass = "\n".join(
         opcode

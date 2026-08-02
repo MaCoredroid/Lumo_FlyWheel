@@ -32,6 +32,7 @@ constexpr int kPrecomputeWaves =
 constexpr int kSharedBytes =
     kPrecomputedSteps * kDimK * sizeof(float) +
     kStepsPerWave * kNormPartialWarps * sizeof(float) +
+    kStepsPerWave * sizeof(float) +
     kPrecomputedSteps * kHeadGroup * 2 * sizeof(float) +
     kPrecomputedSteps * sizeof(int32_t) + 2 * sizeof(int32_t);
 constexpr unsigned kFullWarpMask = 0xffffffffu;
@@ -46,7 +47,7 @@ static_assert(kStateElementsPerThread == 32);
 static_assert(kNormPartialWarps == 4);
 static_assert(kStepsPerWave == 4);
 static_assert(kPrecomputeWaves == 3);
-static_assert(kSharedBytes == 6552);
+static_assert(kSharedBytes == 6568);
 
 __device__ __forceinline__ float load_bf16(const __nv_bfloat16* pointer) {
   return __bfloat162float(*pointer);
@@ -124,6 +125,7 @@ void fixed32_cfwd_native_fullvalue_kernel(
     int64_t spec_batch_stride, int batch_size) {
   __shared__ float normalized_ks[kPrecomputedSteps][kDimK];
   __shared__ float norm_partials[kStepsPerWave][kNormPartialWarps];
+  __shared__ float inverse_norms[kStepsPerWave];
   __shared__ float recurrence_scalars[kPrecomputedSteps][kHeadGroup][2];
   __shared__ int32_t shared_nodes[kPrecomputedSteps];
   __shared__ int32_t shared_steps;
@@ -209,7 +211,7 @@ void fixed32_cfwd_native_fullvalue_kernel(
                        : 0.0f;
       norm = triton_butterfly_four_sum(norm);
       if (lane == 0) {
-        norm_partials[step_slot][0] =
+        inverse_norms[step_slot] =
             triton_rsqrt(__fadd_rn(norm, 1.0e-6f));
       }
     }
@@ -217,11 +219,11 @@ void fixed32_cfwd_native_fullvalue_kernel(
     if (active_step) {
       const int key_index = norm_warp * 32 + lane;
       normalized_ks[step][key_index] = __fmul_rn(
-          normalized_ks[step][key_index], norm_partials[step_slot][0]);
+          normalized_ks[step][key_index], inverse_norms[step_slot]);
     }
-    // Protect the per-wave partials and publish all active immutable K rows.
-    __syncthreads();
   }
+  // Publish every immutable normalized K row before recurrence warps consume it.
+  __syncthreads();
 
   // Process one value head at a time so the same 32-element register tile is
   // reused three times without persistent shared-state storage.
