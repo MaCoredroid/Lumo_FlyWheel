@@ -1,0 +1,52 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_m128_static_abi.v1",
+  "method": "normalized nm -D name/type sets plus readelf dynamic entries",
+  "classification": "additive_static_audit",
+  "defined_dynamic_symbols": {
+    "incumbent_count": 1295,
+    "candidate_count": 1297,
+    "removed_count": 0,
+    "added_count": 2,
+    "added_summary": "weak GemmUniversal static-M128 get_grid_shape definitions for BF16 and FP16",
+    "incumbent_set_sha256": "dedb3104480255915dc91ef0e0a836f9f74433e09408e8d9e213e332775ddc3e",
+    "candidate_set_sha256": "c045f8acae1e7cb4e66b6f8c81b1a31bdb492d40e8b9125bc0d17bde3ca785cb"
+  },
+  "undefined_dynamic_symbols": {
+    "incumbent_count": 182,
+    "candidate_count": 182,
+    "removed_count": 0,
+    "added_count": 0,
+    "incumbent_set_sha256": "3c7a3751da09ddc6bccf9ef37c06c41167a7e3e77b6fd8ea057d190ebecf4b47",
+    "candidate_set_sha256": "3c7a3751da09ddc6bccf9ef37c06c41167a7e3e77b6fd8ea057d190ebecf4b47"
+  },
+  "dt_needed": {
+    "equal": true,
+    "sha256": "889ace6b86a347c794a4d252a4650ef35b65d281ea67b8c3a88d8c7ca6813255",
+    "entries": [
+      "libtorch.so",
+      "libcudart.so.13",
+      "libcuda.so.1",
+      "libtorch_cpu.so",
+      "libtorch_cuda.so",
+      "libstdc++.so.6",
+      "libgcc_s.so.1",
+      "libc.so.6",
+      "ld-linux-aarch64.so.1"
+    ]
+  },
+  "runpath": {
+    "equal": true,
+    "sha256": "9deb4fc406aab692abfbdc0bcd62e1f37a8e0cd1b209ea181d526da0d557c55c",
+    "value": "/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64"
+  },
+  "cubin_inventory": {
+    "equal": true,
+    "candidate_count": 17,
+    "incumbent_count": 17,
+    "sm_121a_count": 16,
+    "sm_89_count": 1,
+    "candidate_projection_cubin_sha256": "ada74cc48aa3f7cd14ee7f940b8201a93aa482a3f759659cf1dbe7f4f4b2ccf6"
+  },
+  "runtime_import_run": false,
+  "compatibility_claim": false
+}

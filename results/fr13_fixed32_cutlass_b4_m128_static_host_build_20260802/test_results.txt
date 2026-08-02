@@ -1,0 +1,17 @@
+42 passed in 0.17s
+Ruff: pass
+Python bytecode compilation: pass
+Pinned vLLM patch apply and idempotency: pass
+Pinned CUTLASS commit and required-header validation: pass
+Host configure: pass
+Host compile/link: 20/20 steps, pass
+Static resource audit: pass
+Static SASS audit: pass
+Static ABI/DT_NEEDED/RUNPATH audit: pass
+
+Not run:
+- GPU kernel runtime or extension import
+- Docker
+- synthetic or probe performance
+- real SWE-Verified exact4 byte gates
+- B4 full-step timing or hardware-floor acceptance

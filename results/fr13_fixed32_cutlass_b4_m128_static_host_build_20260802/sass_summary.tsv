@@ -1,0 +1,5 @@
+variant	dtype	instructions	text_bytes	ldl	stl	ld_local	st_local	qmma_16832_f32_e4m3_e4m3	ffma	fmul	ldsm_16_m88_4	stsm_16_m88_2	output_pack	sass_sha256
+incumbent_dynamic_m128	bf16	1696	27136	0	0	0	0	128	128	72	48	16	32	3b1c623bdcf12601ee205f86ec9a9f80546e2ff9619dfdd9f8d8dc18cee88f25
+incumbent_dynamic_m128	fp16	1696	27136	0	0	0	0	128	128	72	48	16	32	3155e6e9ff1e34d1783b0f3820e9edbc15d619eb72d837c391ddb3c9d901f86a
+candidate_static_m128	bf16	1440	23040	0	0	0	0	128	128	72	48	16	32	00f5c84e4993c8b0830f00fd3a2a7d33d244a66235fb9a7f3ac4eaa32e80862e
+candidate_static_m128	fp16	1440	23040	0	0	0	0	128	128	72	48	16	32	9cf989eaa9993e66dc9da8a00293c94c50a3bc00e01d7fd08d1dc0454a6df91a
