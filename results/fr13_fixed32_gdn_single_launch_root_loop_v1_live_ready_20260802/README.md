@@ -27,6 +27,9 @@ reference route. The live runner and verifier enforce the pinned launcher,
 runtime-manifest tool, and authenticated-ingress source hashes before reuse.
 The runner keeps the canonical KV-cache profile split: B1 passes no explicit
 cache-memory reservation, while B4 passes 40 GiB.
+It also clears the mutually exclusive parent-group selector without exporting
+the fail-closed literal `0`, so model architecture inspection can import the
+single-launch route before health.
 
 Each authenticated task comparison covers all 48 layers and exact raw bytes for
 `out`, `ring_k`, `ring_v`, `ring_a`, `ring_b`, `flags`, and `counter`. Candidate

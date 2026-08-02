@@ -18,6 +18,7 @@
     "candidate_shadow_only_during_gate": true,
     "b1_host_route_metadata_restored": true,
     "profile_specific_kv_cache_contract_enforced": true,
+    "legacy_parent_group_selector_disarmed": true,
     "ready_runtime_sources_enforced": true,
     "production_default_enabled": false,
     "comparison_kind": "exact_raw_bytes",
