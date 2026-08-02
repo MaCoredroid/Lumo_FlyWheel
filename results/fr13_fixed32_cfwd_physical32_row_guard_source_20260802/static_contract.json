@@ -1,0 +1,32 @@
+{
+  "destination_equivalence": {
+    "new": "pair(alias_id, running_row)",
+    "old": "alias_id * bank_rows + running_row",
+    "valid_domain": "0 <= alias_id < 16 and 0 < running_row < bank_rows"
+  },
+  "fixed_work": {
+    "active_path_semantics": "path_offset < accepted_length",
+    "compare_slots_per_program": 256,
+    "grid_programs": "48 * batch_size",
+    "path_slots_per_program": 16,
+    "physical_rows_per_program": 32
+  },
+  "guard_domain": {
+    "accepted_length": [
+      0,
+      11
+    ],
+    "alias_id": [
+      0,
+      15
+    ],
+    "path_node": [
+      0,
+      31
+    ],
+    "physical_row": "1 <= row < bank_rows"
+  },
+  "inactive_path_padding_ignored": true,
+  "schema": "fr13.fixed32.cfwd_physical32_row_guard.static_contract.v1",
+  "semantic_result_tree_changed": false
+}
