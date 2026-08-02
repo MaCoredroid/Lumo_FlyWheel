@@ -99,6 +99,9 @@ def test_contract_closes_row32_c64_for_b1_b4() -> None:
         assert contract["topology_host_validation"] == "exact_parent_each_launch"
         assert contract["source_descriptor_device_validation"] is False
         assert contract["source_descriptor_launcher_argument"] is False
+        assert contract["candidate"] == (
+            "fixed32_sfwd_priorpair_quad_xgather_fixedstrides_r32_c64_w16_v1"
+        )
     for geometry in ((0, 32, 4, 34), (1, 31, 4, 34), (1, 32, 3, 34)):
         with pytest.raises(ValueError):
             candidate.fixed32_sfwd_prior_reuse_contract(
@@ -335,6 +338,8 @@ def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
     assert "source_descriptor_launcher_argument=false" in runner
     assert "tree_parent=_fr10_parent" in patcher
     assert "x_stride=16384,1" in runner
+    assert "conv_state_stride=348160,34,1" in runner
+    assert "spec_state_indices_width=32" in runner
     assert "reference_gdn_source_bound" in gate
     assert "fr13_sfwd_prior_reuse_descriptorless.py" in gate
     assert "candidate_kernel_source_sha256" in gate

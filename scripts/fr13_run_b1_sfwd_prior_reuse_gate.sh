@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# One real SWE-Verified K64/root1 B1 byte gate for packed x-gather C64/W16.
+# One real SWE-Verified K64/root1 B1 byte gate for the fixed-stride
+# prior-pair/quad-weight packed x-gather C64/W16 candidate.
 # The candidate is shadow-only and the incumbent tensors remain served.
 set -euo pipefail
 
@@ -140,6 +141,9 @@ printf '%s\n' \
   'out_stride=10240,1' \
   'source_stage_stride=10240,1' \
   'conv_weights_stride=4,1' \
+  'conv_state_stride=348160,34,1' \
+  'spec_state_indices_width=32' \
+  'spec_state_indices_contiguous=true' \
   "source_commit=$SOURCE_COMMIT" \
   "source_manifest_sha256=$MANIFEST_SHA256" \
   >> "$RUNROOT_ABS/launcher_meta.txt"

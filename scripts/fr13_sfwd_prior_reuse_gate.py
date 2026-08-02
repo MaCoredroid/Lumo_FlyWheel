@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 
-CANDIDATE = "fixed32_sfwd_prior_reuse_packed_xgather_rowgroup32_c64_w16_v1"
+CANDIDATE = "fixed32_sfwd_priorpair_quad_xgather_fixedstrides_r32_c64_w16_v1"
 SOURCE_SCHEMA = "fr13.fixed32.sfwd_prior_reuse.source_manifest.v1"
 REFERENCE_GDN_SOURCE_SHA256 = (
     "6c0f0ad607f15ea2727c2a9b244b1fe1c5ddb88268d70264c08f10470a5d2098"
