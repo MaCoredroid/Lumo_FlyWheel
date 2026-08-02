@@ -1,0 +1,104 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_m32_static_linear_codegen.v1",
+  "created_at_utc": "2026-08-02T05:29:58Z",
+  "status": "host_compile_link_static_codegen_pass_default_off",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "gpu_task_executed": false,
+  "source": {
+    "branch": "agent/fixed32-sfwd-b1-m32-static-linear-source-20260802",
+    "implementation_commit": "246ea98e7671d787079940fee9c958b4ded9642f",
+    "spill_repair_commit": "e36d249287b9031cd1e37840ed6362a7248f8046",
+    "canonical_commit": "42269c703992ab4113cf314e04e668a930f3c8d6",
+    "patch_source_sha256": "fd1ec9a43c5bce3e1acd43072c1db1c6b0ffe2d7a21f4fba653dcefadfbe2f0e",
+    "patched_dispatch_sha256": "dce378ef501f40f061a19000945f2b74fad45955248cf00f5fe954f5f832a101",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2"
+  },
+  "canonical_binary": {
+    "published": false,
+    "local_path": "/home/mark/fr13_m32_static_linear_build/bin/_C_stable_libtorch.m32_static_linear_v3_6404e2c2e3b9bb8b.abi3.so",
+    "sha256": "6404e2c2e3b9bb8b7e39be3671bcbae3f16ea7b10adf1770056beb2c98ee833f",
+    "bytes": 113327488,
+    "mode": "0555",
+    "build_id": "3745b4c8e4799d5abd62e6649f4a7772e4bef8da",
+    "host_elf": "ELF64 AArch64 shared object",
+    "runpath": "/home/mark/fr13_streamk_build/venv/lib/python3.12/site-packages/torch/lib:/usr/local/cuda/lib64:"
+  },
+  "toolchain": {
+    "architecture": "sm_121a",
+    "cuda_release": "13.0",
+    "cuda_build": "cuda_13.0.r13.0/compiler.36424714_0",
+    "cxx": "13.3.0",
+    "cmake": "3.28.3",
+    "ninja": "1.13.0.git.kitware.jobserver-pipe-1"
+  },
+  "host_build": {
+    "result": "pass",
+    "compile_link_failures": 0,
+    "canonical_source_warnings": 0,
+    "gpu_runtime_used": false
+  },
+  "resource_audit": {
+    "result": "pass",
+    "candidate_records": 2,
+    "dtypes": ["float16", "bfloat16"],
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "detected_spills": false
+  },
+  "sass_audit": {
+    "result": "pass",
+    "candidate_slots_per_dtype": 648,
+    "candidate_text_bytes_per_dtype": 10368,
+    "generic_static_slots_per_dtype": 936,
+    "stock_slots_per_dtype": 1176,
+    "slot_reduction_vs_generic_static": 288,
+    "slot_reduction_percent_vs_generic_static": 30.769,
+    "slot_reduction_vs_stock": 528,
+    "slot_reduction_percent_vs_stock": 44.898,
+    "local_loads": 0,
+    "local_stores": 0,
+    "qmma": 32,
+    "ffma": 32,
+    "fmul": 24,
+    "ldsm": 24,
+    "stsm": 4,
+    "dtype_output_packs": 8,
+    "syncs": 38,
+    "generic_static_syncs": 38,
+    "stock_syncs": 77,
+    "v2_v3_candidate_sections_byte_identical": true,
+    "fp16_section_sha256": "d5dbd6b1a4f73e829de6f6797b1261fd5216cd96e2b38c95de93f001f7956696",
+    "bf16_section_sha256": "0880fc0141e572e7d5088d27cf6e43fbfe2131a180e1400b2ce17fbef822e7b7"
+  },
+  "rejected_revision": {
+    "source_commit": "246ea98e7671d787079940fee9c958b4ded9642f",
+    "binary_sha256": "c93e2317b3cc5812a02afb118e7345e3f9ff8011a7d782749992fd5cefb8050d",
+    "slots_per_dtype": 664,
+    "stack_bytes_per_thread": 8,
+    "local_bytes_per_thread": 0,
+    "local_stores": 1,
+    "local_loads": 3,
+    "cause": "duplicate derived scheduler direct_linear_blocks_ member"
+  },
+  "source_checks": {
+    "focused_tests": "48 passed in 0.16s",
+    "pinned_dispatch_apply": "pass",
+    "pinned_dispatch_idempotency": "pass"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "extension import",
+    "Docker",
+    "synthetic or probe workload",
+    "real SWE-Verified B1 five-shape raw-byte gate",
+    "B1 full-step timing",
+    "hardware-floor acceptance"
+  ],
+  "required_next_gate": "real SWE-Verified B1 five-shape byte gate at K64/root1 and physical 32 rows"
+}

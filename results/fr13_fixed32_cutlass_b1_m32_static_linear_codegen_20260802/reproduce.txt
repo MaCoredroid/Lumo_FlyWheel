@@ -1,0 +1,30 @@
+Canonical binary:
+/home/mark/fr13_m32_static_linear_build/bin/_C_stable_libtorch.m32_static_linear_v3_6404e2c2e3b9bb8b.abi3.so
+
+Identity and resources:
+sha256sum "$binary"
+stat -c 'size=%s mode=%a mtime=%y' "$binary"
+/usr/local/cuda/bin/cuobjdump --dump-resource-usage "$binary"
+
+Embedded cubin inventory and extraction:
+/usr/local/cuda/bin/cuobjdump -lelf "$binary"
+/usr/local/cuda/bin/cuobjdump -xelf 10 "$binary"
+
+Disassembly:
+/usr/local/cuda/bin/nvdisasm -c "$cubin" > m32_linear_v3.all.sass
+
+Candidate-section extraction selects each `m32_static_linear` section marker,
+once with `6half_t` and once with `10bfloat16_t`, and stops at the following
+section marker. A SASS slot is a line beginning with an address comment such
+as `/*0000*/`. Opcode counts strip that address and an optional predicate,
+then group on the mnemonic before the first dot.
+
+Mandatory pack mnemonics:
+- FP16: F2FP.F16.F32.PACK_AB
+- BF16: F2FP.BF16.F32.PACK_AB
+
+Comparator provenance:
+- generic-static source commit: 0adf68ed969bf488f8a050d2d3ea17573d847898
+- generic-static artifact commit: 668c06e0d1a3736266c7745adebdf9ac86ea94ae
+- comparator selector: static_persistent_stocktile
+- comparator real SWE-Verified byte gate: not run

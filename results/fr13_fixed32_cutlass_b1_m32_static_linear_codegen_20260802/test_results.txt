@@ -1,0 +1,21 @@
+48 passed in 0.16s
+
+Command:
+/home/mark/shared/lumoFlyWheel-streamk-wide256/.venv/bin/python -m pytest -q tests/test_fr13_cutlass_fixed32_wave_patch.py tests/test_fr13_cutlass_streamk_gate_wiring.py tests/test_fr13_cutlass_streamk_production.py tests/test_fr13_cutlass_wave_binary.py
+
+Additional checks:
+- canonical v3 host compile/link: pass, zero warnings
+- exact pinned vLLM dispatch input SHA256: 6e1df3f4701f58f233b3831b848c7bbf7936e6cb34b3bc28ded208fd66c48a7f
+- final patched dispatch SHA256: dce378ef501f40f061a19000945f2b74fad45955248cf00f5fe954f5f832a101
+- final patched dispatch bytes: 50563
+- patch idempotency: pass
+- canonical v3 FP16/BF16 resource gate: pass
+- canonical v3 FP16/BF16 SASS count gate: pass
+- v2/v3 candidate SASS section equality: pass
+
+Not run:
+- GPU kernel runtime or extension import
+- Docker
+- synthetic or probe performance
+- real SWE-Verified B1 byte gate
+- B1 TPS, phase timing, or hardware-floor acceptance
