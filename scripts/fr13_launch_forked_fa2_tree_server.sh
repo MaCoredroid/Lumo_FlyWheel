@@ -1814,12 +1814,6 @@ if [[ "$_fr13_sfwd_prior_production" == "1" ]]; then
     --expected-gate-sha256 "$FR13_FIXED32_SFWD_PRIOR_REUSE_GATE_SHA256" \
     --candidate-source src/lumo_flywheel_serving/fr13_sfwd_prior_reuse.py \
     >/dev/null
-  cp -- "$FR13_FIXED32_SFWD_PRIOR_REUSE_GATE_JSON" \
-    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.timing_gate.json"
-  printf '1\n' > "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.timing.arm"
-  chmod 0400 \
-    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.timing_gate.json" \
-    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.timing.arm"
   rm -f \
     "$LOG_DIR/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled" \
     "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.real_event.arm" \
@@ -1834,8 +1828,16 @@ if [[ "$_fr13_sfwd_prior_production" == "1" ]]; then
     "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.source_manifest.json" \
     "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.live_pass.json" \
     "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.byte_ab.jsonl" \
+    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.timing_gate.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.timing.arm" \
     "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.timing_engagement.json" \
     "$LOG_DIR"/fr13_fixed32_sfwd_prior_reuse.timing_engagement.json.tmp.*
+  cp -- "$FR13_FIXED32_SFWD_PRIOR_REUSE_GATE_JSON" \
+    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.timing_gate.json"
+  printf '1\n' > "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.timing.arm"
+  chmod 0400 \
+    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.timing_gate.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_prior_reuse.timing.arm"
   FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm
 elif [[ "$_fr13_sfwd_prior_reuse" == "1" ]]; then
   _fr13_sfwd_prior_manifest_host="$REPO/${FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH#/workspace/}"

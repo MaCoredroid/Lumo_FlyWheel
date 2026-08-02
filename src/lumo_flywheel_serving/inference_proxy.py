@@ -81,6 +81,9 @@ _FIXED32_SFWD_STATE_FUSION_ENABLED_NAME = (
     "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
 )
 _FIXED32_SFWD_PRIOR_REUSE_ENABLED_NAME = "fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled"
+_FIXED32_SFWD_PRIOR_REUSE_TIMING_ARM_NAME = (
+    "fr13_fixed32_sfwd_prior_reuse.timing.arm"
+)
 _FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM_NAME = (
     "fr13_fixed32_sfwd_state_fusion.production.arm"
 )
@@ -1513,6 +1516,7 @@ class Fixed32EngineIngress:
         candidates = (
             path.with_name(_FIXED32_SFWD_STATE_FUSION_ENABLED_NAME),
             path.with_name(_FIXED32_SFWD_PRIOR_REUSE_ENABLED_NAME),
+            path.with_name(_FIXED32_SFWD_PRIOR_REUSE_TIMING_ARM_NAME),
             path.with_name(_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM_NAME),
         )
         present = []
