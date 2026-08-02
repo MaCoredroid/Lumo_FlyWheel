@@ -411,6 +411,10 @@ _FR13_FIXED32_GDN_PATH_BV_PRODUCTION_SIDECARS = (
     "/logs/fr13_fixed32_gdn_path_bv_production.flag",
     "/tmp/fr13_fixed32_gdn_path_bv_production.flag",
 )
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_SIDECARS = (
+    "/logs/fr13_fixed32_gdn_single_launch_tree.arm",
+    "/tmp/fr13_fixed32_gdn_single_launch_tree.arm",
+)
 _FR13_FIXED32_GDN_PATH_BV_REAL_EVENT = (
     "/logs/fr13_fixed32_gdn_path_bv.real_event.arm"
 )
@@ -501,6 +505,78 @@ def _fr13_resolve_fixed32_mode() -> str | None:
 
 
 _FR13_FIXED32_MODE = _fr13_resolve_fixed32_mode()
+
+
+def _fr13_resolve_fixed32_gdn_single_launch(
+    fixed32_mode: str | None,
+    *,
+    environ=None,
+    sidecars=None,
+    geom_override=None,
+) -> bool:
+    """Resolve the source-only K64/root1 fixed32 single-launch candidate."""
+    env = os.environ if environ is None else environ
+    paths = (
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_SIDECARS
+        if sidecars is None
+        else tuple(sidecars)
+    )
+    sources: list[tuple[str, str]] = []
+    raw_env = env.get("FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE")
+    if raw_env is not None and str(raw_env).strip():
+        sources.append(
+            (
+                "env:FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE",
+                str(raw_env).strip(),
+            )
+        )
+    for path in paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="ascii") as handle:
+                value = handle.read(16)
+        except (OSError, UnicodeError) as error:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE cannot read sidecar "
+                f"{path}: {error}"
+            ) from error
+        if len(value) >= 16:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE sidecar exceeds "
+                f"15 bytes: {path}"
+            )
+        sources.append((f"sidecar:{path}", value.strip()))
+    if not sources:
+        return False
+    invalid = [
+        (source, value)
+        for source, value in sources
+        if value != "1"
+    ]
+    if invalid or len({value for _source, value in sources}) != 1:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE must be exactly 1 from "
+            f"agreeing sources: {sources!r}"
+        )
+    if fixed32_mode not in _FR13_FIXED32_MODES:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE requires an exact fixed32 "
+            "mode"
+        )
+    if geom_override != {"BV": 8}:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE requires geometry pinned "
+            "exactly to FR13_TREE_GDN_GEOM_OVERRIDE=BV=8"
+        )
+    if str(env.get("FR13_DRAFT_VOCAB_ROOT", "")).strip() != "1" or str(
+        env.get("FR13_DRAFT_VOCAB_K", "")
+    ).strip() != "65536":
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE requires the exact "
+            "K64/root1 drafter contract"
+        )
+    return True
 
 
 def _fr13_resolve_fixed32_gdn_path_bv_candidate(
@@ -790,6 +866,12 @@ _FR13_FIXED32_GDN_PATH_BV_PRODUCTION = (
     if _FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS is not None
     else None
 )
+_FR13_FIXED32_GDN_SINGLE_LAUNCH = (
+    _fr13_resolve_fixed32_gdn_single_launch(
+        _FR13_FIXED32_MODE,
+        geom_override=_read_tree_gdn_geom_override(),
+    )
+)
 if (
     _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
     and _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None
@@ -797,6 +879,14 @@ if (
     raise RuntimeError(
         "FR13 fixed32 GDN path-BV diagnostic and production selectors are "
         "mutually exclusive"
+    )
+if _FR13_FIXED32_GDN_SINGLE_LAUNCH and (
+    _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+    or _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None
+):
+    raise RuntimeError(
+        "FR13 fixed32 GDN single-launch and path-BV selectors are mutually "
+        "exclusive"
     )
 _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT = None
 _FR13_FIXED32_GDN_BV_CAPTURES: dict[int, dict] = {}
@@ -1070,6 +1160,11 @@ if _FR13_SUBTREE_SELFCHECK_REQUESTED and not _FR13_SUBTREE_ROUTE_REQUESTED:
         "FR13_SUBTREE_PARALLEL_SELFCHECK is armed while the path route "
         "is disabled"
     )
+if _FR13_FIXED32_GDN_SINGLE_LAUNCH and _FR13_SUBTREE_SELFCHECK_REQUESTED:
+    raise RuntimeError(
+        "FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE cannot inherit the legacy "
+        "subtree selfcheck"
+    )
 
 
 _FR13_SUBTREE_CACHE: dict = {}
@@ -1142,6 +1237,18 @@ _FR13_FIXED32_SUBTREE_LEVELS = (
 _FR13_FIXED32_EXPORT_NODES = (0, 1, 4, 9, 14)
 _FR13_FIXED32_EXPORT_SLOTS = len(_FR13_FIXED32_EXPORT_NODES)
 _FR13_FIXED32_MAX_BATCH = 4
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID = (
+    "fixed32_gdn_single_launch_tree_v2"
+)
+# Each root-chain node is immediately followed by its terminal side paths.
+# The member order is the established fixed32 level-1 descriptor order.
+_FR13_FIXED32_GDN_DEPTH_FIRST_GROUPS = (
+    (0, (1, 2)),
+    (1, (3, 4)),
+    (4, (5, 6)),
+    (9, (7, 8)),
+    (14, (0, 9, 10)),
+)
 _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID = (
     "fixed32_sfwd_state_fusion_v1"
 )
@@ -1536,6 +1643,14 @@ if (
     raise RuntimeError(
         "FR13 fixed32 B1 path-BV and B2-B4 batched wide-BV selectors are "
         "mutually exclusive"
+    )
+if _FR13_FIXED32_GDN_SINGLE_LAUNCH and (
+    _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE is not None
+    or _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None
+):
+    raise RuntimeError(
+        "FR13 fixed32 GDN single-launch and batched BV selectors are mutually "
+        "exclusive"
     )
 
 
@@ -1936,6 +2051,30 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
         raise RuntimeError(
             f"FR13 fixed32 batched GDN supports B2-B4, got B={batch}"
         )
+    if _FR13_FIXED32_GDN_SINGLE_LAUNCH:
+        for env_name in (
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB",
+            "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB",
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION",
+            "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE",
+            "FR13_FIXED32_BATCH_GDN_BV_PRODUCTION",
+        ):
+            if os.environ.get(env_name, "").strip() not in ("", "0"):
+                raise RuntimeError(
+                    f"{env_name} cannot authorize the fixed32 GDN "
+                    "single-launch candidate"
+                )
+        diagnostic, _marker = _fr13_fixed32_batch_gdn_byte_ab_control()
+        graph_diagnostic = _fr13_fixed32_batch_gdn_graph_byte_ab_control()
+        production = _fr13_fixed32_batch_gdn_production_control()
+        if diagnostic or graph_diagnostic or production is not None:
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch cannot inherit a batched GDN "
+                "diagnostic or production credential"
+            )
+        # Only the requested B4 folded launch is exposed. B2/B3 retain their
+        # established per-request dispatch and therefore exercise the B1 arm.
+        return "single_launch" if batch == 4 else None
     diagnostic, _marker = _fr13_fixed32_batch_gdn_byte_ab_control()
     graph_diagnostic = _fr13_fixed32_batch_gdn_graph_byte_ab_control()
     production = _fr13_fixed32_batch_gdn_production_control()
@@ -3437,6 +3576,143 @@ def _fr13_fixed32_schedule_contract(levels) -> dict[str, object]:
     return contract
 
 
+def _fr13_fixed32_gdn_single_launch_contract(
+    levels,
+    groups=_FR13_FIXED32_GDN_DEPTH_FIRST_GROUPS,
+) -> dict[str, object]:
+    """Validate the exact two-tile, ordered depth-first fixed32 schedule."""
+    normalized = tuple(
+        tuple(
+            (tuple(int(node) for node in path), int(parent))
+            for path, parent in level
+        )
+        for level in levels
+    )
+    normalized_groups = tuple(
+        (int(parent), tuple(int(index) for index in indices))
+        for parent, indices in groups
+    )
+    if len(normalized) != 2 or len(normalized[0]) != 1:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH requires one root path and one "
+            "terminal-path level"
+        )
+    root_path, root_parent = normalized[0][0]
+    level1 = normalized[1]
+    if root_parent != -1 or root_path != _FR13_FIXED32_EXPORT_NODES:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH root-chain drift: "
+            + repr((root_path, root_parent))
+        )
+    if tuple(parent for parent, _indices in normalized_groups) != root_path:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH interleave order drift: "
+            + repr(normalized_groups)
+        )
+    covered_paths = tuple(
+        index for _parent, indices in normalized_groups for index in indices
+    )
+    if tuple(sorted(covered_paths)) != tuple(range(len(level1))):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH branch coverage drift: "
+            + repr(covered_paths)
+        )
+    for parent, indices in normalized_groups:
+        if not indices or tuple(sorted(indices)) != indices:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_SINGLE_LAUNCH branch order drift: "
+                + repr((parent, indices))
+            )
+        for index in indices:
+            if level1[index][1] != parent:
+                raise RuntimeError(
+                    "FR13_FIXED32_GDN_SINGLE_LAUNCH parent/path mismatch: "
+                    + repr((parent, index, level1[index][1]))
+                )
+    for previous, node in zip(root_path, root_path[1:]):
+        if _FR13_FIXED32_PARENT[node] != previous:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_SINGLE_LAUNCH root edge drift: "
+                + repr((previous, node, _FR13_FIXED32_PARENT[node]))
+            )
+
+    execution_nodes = []
+    for parent, indices in normalized_groups:
+        execution_nodes.append(parent)
+        for index in indices:
+            execution_nodes.extend(level1[index][0])
+    execution = tuple(execution_nodes)
+    if (
+        tuple(sorted(execution)) != tuple(range(32))
+        or any(execution.count(node) != 1 for node in range(32))
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH output/ring writer drift: "
+            + repr(execution)
+        )
+    group_sizes = tuple(
+        len(indices) for _parent, indices in normalized_groups
+    )
+    contract = {
+        "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
+        "root_nodes": root_path,
+        "branch_path_indices": tuple(
+            indices for _parent, indices in normalized_groups
+        ),
+        "group_sizes": group_sizes,
+        "groups": len(normalized_groups),
+        "max_group_paths": max(group_sizes),
+        "launches": 1,
+        "physical_grid_z": (1,),
+        "physical_programs": 1,
+        "node_updates": len(execution),
+        "critical_node_steps": len(execution),
+        "live_state_tiles": 2,
+        "state_export_writes": 0,
+        "state_parent_reads": 0,
+        "single_writer_nodes": len(execution),
+        "outer_root_loop": "ordered_tl_range",
+        "groups_sha256": _fr13_canonical_sha256(normalized_groups),
+        "execution_sha256": _fr13_canonical_sha256(execution),
+    }
+    expected = {
+        "candidate": "fixed32_gdn_single_launch_tree_v2",
+        "root_nodes": (0, 1, 4, 9, 14),
+        "branch_path_indices": (
+            (1, 2),
+            (3, 4),
+            (5, 6),
+            (7, 8),
+            (0, 9, 10),
+        ),
+        "group_sizes": (2, 2, 2, 2, 3),
+        "groups": 5,
+        "max_group_paths": 3,
+        "launches": 1,
+        "physical_grid_z": (1,),
+        "physical_programs": 1,
+        "node_updates": 32,
+        "critical_node_steps": 32,
+        "live_state_tiles": 2,
+        "state_export_writes": 0,
+        "state_parent_reads": 0,
+        "single_writer_nodes": 32,
+        "outer_root_loop": "ordered_tl_range",
+        "groups_sha256": (
+            "cba9010f16772510ff6017e866a520552e7ada913bb786152133597cbc7c1f62"
+        ),
+        "execution_sha256": (
+            "80aed4d1a882ee4d4cde21dbf4314ed3abaae3f7553e35b6db5cd7574fe3b7db"
+        ),
+    }
+    if contract != expected:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH contract drift: "
+            + repr(contract)
+        )
+    return contract
+
+
 def _subtree_decompose(parent) -> list:
     """Heavy-path decomposition -> list of LEVELS; each level is a list of
     (path_nodes, parent_node) with parent_node = -1 for the root path.
@@ -3591,6 +3867,7 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
     _validate_subtree_decomposition(parent_tuple, levels)
     fixed_contract = None
     fixed32_parent_slots = None
+    fixed32_single_launch = None
     if parent_tuple == _FR13_FIXED32_PARENT:
         fixed_contract = _fr13_fixed32_schedule_contract(levels)
         schedule = "fixed32"
@@ -3620,6 +3897,29 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
             fixed32_parent_slots.append(
                 torch.tensor(slots, dtype=torch.int32, device=device)
             )
+        if _FR13_FIXED32_GDN_SINGLE_LAUNCH:
+            single_contract = _fr13_fixed32_gdn_single_launch_contract(levels)
+            max_group_paths = int(single_contract["max_group_paths"])
+            group_path_indices = torch.full(
+                (int(single_contract["groups"]), max_group_paths),
+                -1,
+                dtype=torch.int32,
+            )
+            for group_index, indices in enumerate(
+                single_contract["branch_path_indices"]
+            ):
+                group_path_indices[group_index, : len(indices)] = torch.tensor(
+                    indices, dtype=torch.int32
+                )
+            fixed32_single_launch = {
+                "contract": single_contract,
+                "path_indices": group_path_indices.to(device),
+                "path_counts": torch.tensor(
+                    single_contract["group_sizes"],
+                    dtype=torch.int32,
+                    device=device,
+                ),
+            }
     elif parent_tuple == _FR13_HYDRA23_PARENT:
         schedule = "hydra23_floor"
     else:
@@ -3667,6 +3967,13 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
         "schedule": schedule,
         "fixed32_contract": fixed_contract,
         "fixed32_parent_slots": fixed32_parent_slots,
+        "fixed32_single_launch": fixed32_single_launch,
+        "fixed32_single_launch_contract": (
+            fixed32_single_launch["contract"]
+            if fixed32_single_launch is not None
+            else None
+        ),
+        "last_executed_gdn": None,
         "route_armed": route_armed,
         "selfcheck_armed": selfcheck_armed,
         "engaged_announced": False,
@@ -3679,6 +3986,7 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
         f"lens={[level[2] for level in dev_levels]} "
         f"critical={sum(level[2] for level in dev_levels)} "
         f"(monolith {n_actual}) "
+        f"single_launch={int(fixed32_single_launch is not None)} "
         f"route_armed={int(route_armed)} "
         f"selfcheck_armed={int(selfcheck_armed)}",
         flush=True,
@@ -8263,6 +8571,330 @@ def _tree_gdn_path_kernel_fixed32_batch(
 
 
 @triton.jit
+def _tree_gdn_fixed32_single_launch_node(
+    state_i,
+    q,
+    k,
+    v,
+    g,
+    beta,
+    raw_a,
+    raw_b,
+    b_a_log,
+    b_dt_bias,
+    out,
+    ring_k,
+    ring_v,
+    ring_a,
+    ring_b,
+    pid_batch,
+    pid_vh,
+    pid_v,
+    pid_kh,
+    offs_k,
+    offs_v,
+    v_mask,
+    node,
+    N_ACTUAL: tl.constexpr,
+    NUM_KH: tl.constexpr,
+    NUM_VH: tl.constexpr,
+    DIM_K: tl.constexpr,
+    DIM_V: tl.constexpr,
+    OUTPUT_SCALE: tl.constexpr,
+    USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
+    RAW_GATING: tl.constexpr,
+    SCAN_ALIGN: tl.constexpr,
+    RING_EXPORT: tl.constexpr,
+):
+    """Run one unchanged GDN recurrence and its single-writer stores."""
+    n_ok = (node >= 0) & (node < N_ACTUAL)
+    node_c = tl.maximum(node, 0)
+    global_node = pid_batch * N_ACTUAL + node_c
+    head_group = NUM_VH // NUM_KH
+    b_q = tl.load(
+        q + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
+        mask=n_ok,
+        other=0.0,
+    ).to(tl.float32)
+    b_k_raw = tl.load(
+        k + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
+        mask=n_ok,
+        other=0.0,
+    )
+    b_k = b_k_raw.to(tl.float32)
+    b_v_raw = tl.load(
+        v + (global_node * NUM_VH + pid_vh) * DIM_V + offs_v,
+        mask=n_ok & v_mask,
+        other=0.0,
+    )
+    b_v = b_v_raw.to(tl.float32)
+    if RING_EXPORT:
+        tl.store(
+            ring_k + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
+            b_k_raw,
+            mask=n_ok & (pid_v == 0) & (pid_vh % head_group == 0),
+        )
+        tl.store(
+            ring_v + (global_node * NUM_VH + pid_vh) * DIM_V + offs_v,
+            b_v_raw,
+            mask=n_ok & v_mask,
+        )
+    b_b = tl.load(
+        beta + global_node * NUM_VH + pid_vh,
+        mask=n_ok,
+        other=0.0,
+    ).to(tl.float32)
+    b_g = tl.load(
+        g + global_node * NUM_VH + pid_vh,
+        mask=n_ok,
+        other=0.0,
+    ).to(tl.float32)
+    b_raw_a = b_g
+    b_raw_b = b_b
+    if RAW_GATING:
+        b_raw_b_in = tl.load(
+            raw_b + global_node * NUM_VH + pid_vh,
+            mask=n_ok,
+            other=0.0,
+        )
+        b_raw_b = b_raw_b_in.to(tl.float32)
+        b_raw_a_in = tl.load(
+            raw_a + global_node * NUM_VH + pid_vh,
+            mask=n_ok,
+            other=0.0,
+        )
+        b_raw_a = b_raw_a_in.to(tl.float32)
+        if RING_EXPORT:
+            tl.store(
+                ring_a + global_node * NUM_VH + pid_vh,
+                b_raw_a_in,
+                mask=n_ok & (pid_v == 0),
+            )
+            tl.store(
+                ring_b + global_node * NUM_VH + pid_vh,
+                b_raw_b_in,
+                mask=n_ok & (pid_v == 0),
+            )
+    new_state, out_i = _gdn_node_step(
+        state_i,
+        b_q,
+        b_k,
+        b_v,
+        b_b,
+        b_g,
+        b_raw_a,
+        b_raw_b,
+        b_a_log,
+        b_dt_bias,
+        OUTPUT_SCALE=OUTPUT_SCALE,
+        USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
+        RAW_GATING=RAW_GATING,
+        SCAN_ALIGN=SCAN_ALIGN,
+    )
+    tl.store(
+        out + (global_node * NUM_VH + pid_vh) * DIM_V + offs_v,
+        out_i,
+        mask=n_ok & v_mask,
+    )
+    return tl.where(n_ok, new_state, state_i)
+
+
+@triton.jit
+def _tree_gdn_kernel_fixed32_single_launch(
+    q,
+    k,
+    v,
+    g,
+    beta,
+    raw_a,
+    raw_b,
+    A_log,
+    dt_bias,
+    h0,
+    h0_indices,
+    h0_num_accepted_tokens,
+    invocation_counter,
+    root_nodes,
+    branch_nodes,
+    branch_lengths,
+    group_path_indices,
+    group_path_counts,
+    out,
+    ring_k,
+    ring_v,
+    ring_a,
+    ring_b,
+    flags_ptr,
+    N_ACTUAL: tl.constexpr,
+    NUM_KH: tl.constexpr,
+    NUM_VH: tl.constexpr,
+    DIM_K: tl.constexpr,
+    DIM_V: tl.constexpr,
+    BLOCK_V: tl.constexpr,
+    OUTPUT_SCALE: tl.constexpr,
+    USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
+    H0_IS_BANK: tl.constexpr,
+    H0_INDEX_ROW: tl.constexpr,
+    H0_INDEX_BATCH_STRIDE: tl.constexpr,
+    H0_BATCH_INDEX: tl.constexpr,
+    H0_ACCEPTED_BATCH_STRIDE: tl.constexpr,
+    H0_BANK_STRIDE: tl.constexpr,
+    H0_USE_ACCEPTED_COLUMN: tl.constexpr,
+    RAW_GATING: tl.constexpr,
+    COUNT_INVOCATION: tl.constexpr,
+    SCAN_ALIGN: tl.constexpr,
+    ROOT_STEPS: tl.constexpr,
+    MAX_PATH_LEN: tl.constexpr,
+    MAX_GROUP_PATHS: tl.constexpr,
+    NUM_GROUPS: tl.constexpr,
+    RING_EXPORT: tl.constexpr = False,
+    FLAGS_EXPORT: tl.constexpr = False,
+    FLAGS_ROWS: tl.constexpr = 0,
+):
+    """Run the exact fixed32 tree in one launch without an HBM state handoff."""
+    pid_vh = tl.program_id(0)
+    pid_v = tl.program_id(1)
+    pid_batch = tl.program_id(2)
+    if COUNT_INVOCATION:
+        tl.atomic_add(
+            invocation_counter,
+            1,
+            sem="relaxed",
+            mask=(pid_vh == 0) & (pid_v == 0),
+        )
+    head_group = NUM_VH // NUM_KH
+    pid_kh = pid_vh // head_group
+    offs_k = tl.arange(0, DIM_K)
+    offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
+    v_mask = offs_v < DIM_V
+
+    h0_base = h0
+    if H0_IS_BANK:
+        h0_column = 0
+        if H0_USE_ACCEPTED_COLUMN:
+            accepted_index = (
+                H0_BATCH_INDEX + pid_batch * H0_ACCEPTED_BATCH_STRIDE
+            )
+            h0_column = tl.maximum(
+                tl.load(h0_num_accepted_tokens + accepted_index).to(tl.int64)
+                - 1,
+                0,
+            )
+        h0_index_row = H0_INDEX_ROW + pid_batch * H0_INDEX_BATCH_STRIDE
+        h0_index = tl.load(h0_indices + h0_index_row + h0_column)
+        h0_base = h0 + h0_index * H0_BANK_STRIDE
+    root_state = tl.load(
+        h0_base
+        + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K
+        + offs_k[None, :],
+        mask=v_mask[:, None],
+        other=0.0,
+    ).to(tl.float32)
+    b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
+    b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
+
+    # This loop is deliberately ordered and not statically expanded. The
+    # inner fixed-cardinality member loop stays static to preserve its clean
+    # zero-stack SM121 codegen.
+    for root_index in tl.range(0, ROOT_STEPS):
+        root_node = tl.load(root_nodes + root_index)
+        root_state = _tree_gdn_fixed32_single_launch_node(
+            root_state,
+            q,
+            k,
+            v,
+            g,
+            beta,
+            raw_a,
+            raw_b,
+            b_a_log,
+            b_dt_bias,
+            out,
+            ring_k,
+            ring_v,
+            ring_a,
+            ring_b,
+            pid_batch,
+            pid_vh,
+            pid_v,
+            pid_kh,
+            offs_k,
+            offs_v,
+            v_mask,
+            root_node,
+            N_ACTUAL=N_ACTUAL,
+            NUM_KH=NUM_KH,
+            NUM_VH=NUM_VH,
+            DIM_K=DIM_K,
+            DIM_V=DIM_V,
+            OUTPUT_SCALE=OUTPUT_SCALE,
+            USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
+            RAW_GATING=RAW_GATING,
+            SCAN_ALIGN=SCAN_ALIGN,
+            RING_EXPORT=RING_EXPORT,
+        )
+        group_path_count = tl.load(group_path_counts + root_index)
+        for member in tl.static_range(0, MAX_GROUP_PATHS):
+            member_ok = member < group_path_count
+            path_index = tl.load(
+                group_path_indices
+                + root_index * MAX_GROUP_PATHS
+                + member,
+                mask=member_ok,
+                other=0,
+            )
+            path_len = tl.load(
+                branch_lengths + path_index,
+                mask=member_ok,
+                other=0,
+            )
+            branch_state = root_state
+            for path_offset in tl.range(0, path_len):
+                branch_node = tl.load(
+                    branch_nodes + path_index * MAX_PATH_LEN + path_offset
+                )
+                branch_state = _tree_gdn_fixed32_single_launch_node(
+                    branch_state,
+                    q,
+                    k,
+                    v,
+                    g,
+                    beta,
+                    raw_a,
+                    raw_b,
+                    b_a_log,
+                    b_dt_bias,
+                    out,
+                    ring_k,
+                    ring_v,
+                    ring_a,
+                    ring_b,
+                    pid_batch,
+                    pid_vh,
+                    pid_v,
+                    pid_kh,
+                    offs_k,
+                    offs_v,
+                    v_mask,
+                    branch_node,
+                    N_ACTUAL=N_ACTUAL,
+                    NUM_KH=NUM_KH,
+                    NUM_VH=NUM_VH,
+                    DIM_K=DIM_K,
+                    DIM_V=DIM_V,
+                    OUTPUT_SCALE=OUTPUT_SCALE,
+                    USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
+                    RAW_GATING=RAW_GATING,
+                    SCAN_ALIGN=SCAN_ALIGN,
+                    RING_EXPORT=RING_EXPORT,
+                )
+    if FLAGS_EXPORT:
+        flag_writer = (pid_vh == 0) & (pid_v == 0) & (pid_batch == 0)
+        tl.store(flags_ptr + 0, 1, mask=flag_writer)
+        tl.store(flags_ptr + 1, FLAGS_ROWS, mask=flag_writer)
+
+
+@triton.jit
 def _tree_gdn_replay_kernel(
     k_ring,
     v_ring,
@@ -12621,6 +13253,137 @@ def launch_tree_gdn_prepared(
                 "FR13_FIXED32: exact path I/O specialization requires the "
                 "validated fixed32 schedule"
             )
+        _single_launch = st.get("fixed32_single_launch")
+        if _FR13_FIXED32_GDN_SINGLE_LAUNCH and (
+            not _fixed32_io
+            or not isinstance(_single_launch, dict)
+            or not isinstance(_single_launch.get("contract"), dict)
+            or _single_launch["contract"].get("candidate")
+            != _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID
+            or _single_launch["contract"].get("physical_grid_z") != (1,)
+            or _single_launch["contract"].get("critical_node_steps") != 32
+            or _single_launch["contract"].get("outer_root_loop")
+            != "ordered_tl_range"
+            or _path_block_v != 8
+            or _geom != {"BV": 8}
+            or _subtree_selfcheck_armed
+            or n_actual != 32
+            or n_pad != 32
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_SINGLE_LAUNCH exact K64/root1 BV8 B1 "
+                "contract drift; no fallback is permitted"
+            )
+        if _FR13_FIXED32_GDN_SINGLE_LAUNCH:
+            assert isinstance(_single_launch, dict)
+            (
+                _root_nodes,
+                _root_parents,
+                _root_max_len,
+                _root_paths,
+                _root_lengths,
+            ) = st["levels"][0]
+            (
+                _branch_nodes,
+                _branch_parents,
+                _branch_max_len,
+                _branch_paths,
+                _branch_lengths,
+            ) = st["levels"][1]
+            _single_contract = _single_launch["contract"]
+            _tree_gdn_kernel_fixed32_single_launch[
+                (num_vh, triton.cdiv(dim_v, _path_block_v), 1)
+            ](
+                q,
+                k,
+                v,
+                g,
+                beta,
+                raw_a,
+                raw_b,
+                A_log,
+                dt_bias,
+                h0,
+                h0_indices,
+                h0_num_accepted_tokens,
+                _counter_arg,
+                _root_nodes,
+                _branch_nodes,
+                _branch_lengths,
+                _single_launch["path_indices"],
+                _single_launch["path_counts"],
+                _out,
+                ring_k,
+                ring_v,
+                ring_a,
+                ring_b,
+                _flags_arg,
+                N_ACTUAL=n_actual,
+                NUM_KH=num_kh,
+                NUM_VH=num_vh,
+                DIM_K=dim_k,
+                DIM_V=dim_v,
+                BLOCK_V=_path_block_v,
+                OUTPUT_SCALE=output_scale,
+                USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+                H0_IS_BANK=h0_is_bank,
+                H0_INDEX_ROW=h0_index_row,
+                H0_INDEX_BATCH_STRIDE=int(h0_indices.stride(0)),
+                H0_BATCH_INDEX=h0_batch_index,
+                H0_ACCEPTED_BATCH_STRIDE=int(
+                    h0_num_accepted_tokens.stride(0)
+                ),
+                H0_BANK_STRIDE=h0_bank_stride,
+                H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
+                RAW_GATING=raw_gating,
+                COUNT_INVOCATION=_count,
+                SCAN_ALIGN=_scan_align,
+                ROOT_STEPS=int(_single_contract["groups"]),
+                MAX_PATH_LEN=_branch_max_len,
+                MAX_GROUP_PATHS=int(
+                    _single_contract["max_group_paths"]
+                ),
+                NUM_GROUPS=int(_single_contract["groups"]),
+                RING_EXPORT=_ring_export,
+                FLAGS_EXPORT=_flags_export,
+                FLAGS_ROWS=_flags_rows,
+                num_warps=_num_warps,
+                **_extra_launch_kwargs,
+            )
+            st["last_executed_gdn"] = {
+                "route": "fixed32_single_launch_tree",
+                "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
+                "physical_launches": 1,
+                "physical_programs": 1,
+                "physical_grid_z": (1,),
+                "physical_recurrence_critical_path": 32,
+                "state_export_writes": 0,
+                "state_parent_reads": 0,
+                "logical_launches": 2,
+                "logical_programs": 12,
+                "logical_padded_slots": 82,
+                "logical_critical_path": 12,
+            }
+            if not st["engaged_announced"]:
+                st["engaged_announced"] = True
+                print(
+                    "[FR13_SUBTREE_PARALLEL ENGAGED] "
+                    f"n_actual={n_actual} schedule={st['schedule']} "
+                    "physical=single_launch_tree ordered_root_loop=1 "
+                    "critical=32",
+                    flush=True,
+                )
+            return {
+                "block_v": int(_path_block_v),
+                "launch_key": (
+                    "tree_gdn_path",
+                    _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
+                    int(_path_block_v),
+                    int(triton.cdiv(dim_v, _path_block_v)),
+                    int(_num_warps),
+                    tuple(sorted(_extra_launch_kwargs.items())),
+                ),
+            }
         for _li, (
             _nodes,
             _pars,
@@ -13118,7 +13881,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
     staging_flags: torch.Tensor | None = None,
     staging_rows: int = 0,
 ) -> tuple[torch.Tensor, None]:
-    """Launch the exact fixed32 path scan in two kernels for B2-B4.
+    """Launch the exact fixed32 B2-B4 path or B4 single-launch scan.
 
     Request programs are folded into path-grid axis 2. The existing 32-row
     subtree export scratch is reused as ``[batch, 5]`` compact parent slots,
@@ -13282,6 +14045,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
     )
     contract = subtree_state.get("fixed32_contract")
     parent_slots = subtree_state.get("fixed32_parent_slots")
+    single_launch = subtree_state.get("fixed32_single_launch")
     if (
         subtree_state.get("schedule") != "fixed32"
         or contract is None
@@ -13294,6 +14058,22 @@ def launch_tree_gdn_prepared_fixed32_batch(
         raise RuntimeError(
             "FR13_FIXED32_BATCH_GDN: exact two-level armed preseed contract "
             "missing or legacy subtree selfcheck is still armed"
+        )
+    if selector == "single_launch" and (
+        not _FR13_FIXED32_GDN_SINGLE_LAUNCH
+        or batch != 4
+        or not isinstance(single_launch, dict)
+        or not isinstance(single_launch.get("contract"), dict)
+        or single_launch["contract"].get("candidate")
+        != _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID
+        or single_launch["contract"].get("physical_grid_z") != (1,)
+        or single_launch["contract"].get("critical_node_steps") != 32
+        or single_launch["contract"].get("outer_root_loop")
+        != "ordered_tl_range"
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH exact K64/root1 B4 descriptor "
+            "drift; no fallback is permitted"
         )
     needed_export_rows = batch * _FR13_FIXED32_EXPORT_SLOTS
     if int(subtree_state["export"].shape[0]) < needed_export_rows:
@@ -13329,6 +14109,12 @@ def launch_tree_gdn_prepared_fixed32_batch(
             "FR13 fixed32 batched wide-BV requires the served/reference route "
             "pinned exactly to BV=8"
         )
+    if selector == "single_launch" and (
+        candidate_block_v != 8 or geom != {"BV": 8}
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH B4 route is pinned exactly to BV8"
+        )
     launch_contract = fixed32_batch_gdn_launch_contract(
         batch,
         n_actual=n_actual,
@@ -13350,6 +14136,97 @@ def launch_tree_gdn_prepared_fixed32_batch(
         )
 
     def _launch_batched(_block_v: int) -> None:
+        if selector == "single_launch":
+            assert isinstance(single_launch, dict)
+            (
+                root_nodes,
+                _root_parents,
+                _root_max_len,
+                _root_paths,
+                _root_lengths,
+            ) = subtree_state["levels"][0]
+            (
+                branch_nodes,
+                _branch_parents,
+                branch_max_len,
+                _branch_paths,
+                branch_lengths,
+            ) = subtree_state["levels"][1]
+            single_contract = single_launch["contract"]
+            _tree_gdn_kernel_fixed32_single_launch[
+                (num_vh, triton.cdiv(dim_v, _block_v), batch)
+            ](
+                q,
+                k,
+                v,
+                g,
+                beta,
+                raw_a,
+                raw_b,
+                A_log,
+                dt_bias,
+                h0,
+                h0_indices,
+                h0_num_accepted_tokens,
+                invocation_counter,
+                root_nodes,
+                branch_nodes,
+                branch_lengths,
+                single_launch["path_indices"],
+                single_launch["path_counts"],
+                out,
+                ring_k,
+                ring_v,
+                ring_a,
+                ring_b,
+                flags_arg,
+                N_ACTUAL=n_actual,
+                NUM_KH=num_kh,
+                NUM_VH=num_vh,
+                DIM_K=dim_k,
+                DIM_V=dim_v,
+                BLOCK_V=_block_v,
+                OUTPUT_SCALE=output_scale,
+                USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+                H0_IS_BANK=True,
+                H0_INDEX_ROW=int(h0_index_row),
+                H0_INDEX_BATCH_STRIDE=int(h0_indices.stride(0)),
+                H0_BATCH_INDEX=int(h0_batch_index),
+                H0_ACCEPTED_BATCH_STRIDE=int(
+                    h0_num_accepted_tokens.stride(0)
+                ),
+                H0_BANK_STRIDE=int(h0.stride(0)),
+                H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
+                RAW_GATING=True,
+                COUNT_INVOCATION=count_invocation,
+                SCAN_ALIGN=scan_align_on(),
+                ROOT_STEPS=int(single_contract["groups"]),
+                MAX_PATH_LEN=branch_max_len,
+                MAX_GROUP_PATHS=int(
+                    single_contract["max_group_paths"]
+                ),
+                NUM_GROUPS=int(single_contract["groups"]),
+                RING_EXPORT=ring_export,
+                FLAGS_EXPORT=flags_export,
+                FLAGS_ROWS=flags_rows,
+                num_warps=num_warps,
+                **extra_launch_kwargs,
+            )
+            subtree_state["last_executed_gdn"] = {
+                "route": "fixed32_single_launch_tree",
+                "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
+                "physical_launches": 1,
+                "physical_programs": batch,
+                "physical_grid_z": (batch,),
+                "physical_recurrence_critical_path": 32,
+                "state_export_writes": 0,
+                "state_parent_reads": 0,
+                "logical_launches": 2 * batch,
+                "logical_programs": 12 * batch,
+                "logical_padded_slots": 82 * batch,
+                "logical_critical_path": 12,
+            }
+            return
         for level_index, (
             nodes,
             _parents,
@@ -13731,6 +14608,8 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 flush=True,
             )
             return out, None
+    elif selector == "single_launch":
+        _launch_batched(candidate_block_v)
     elif selector == "production":
         if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION == 8:
             if (
@@ -13762,10 +14641,18 @@ def launch_tree_gdn_prepared_fixed32_batch(
         )
     if not subtree_state.get("batch_engaged_announced", False):
         subtree_state["batch_engaged_announced"] = True
+        route_detail = (
+            f"launches=1 path_grids=({batch},) export_rows=0 "
+            "ordered_root_loop=1"
+            if selector == "single_launch"
+            else (
+                f"launches=2 path_grids=({batch},{11 * batch}) "
+                f"export_rows={needed_export_rows}"
+            )
+        )
         print(
             "[FR13_FIXED32_BATCH_GDN ENGAGED] "
-            f"batch={batch} launches=2 path_grids=({batch},{11 * batch}) "
-            f"block_v={candidate_block_v} export_rows={needed_export_rows} "
+            f"batch={batch} {route_detail} block_v={candidate_block_v} "
             "fallback=0",
             flush=True,
         )
