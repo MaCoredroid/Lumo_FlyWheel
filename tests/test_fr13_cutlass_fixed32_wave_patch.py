@@ -102,8 +102,8 @@ def test_patch_is_default_off_and_shape_gated() -> None:
     assert 'value == "persistent_b4_m128_byte_ab"' in patched
     assert 'value == "persistent_b4_m128_static"' in patched
     assert 'value == "persistent_b4_m128_static_byte_ab"' in patched
-    assert 'value == "identity_static"' in patched
-    assert 'value == "identity_static_byte_ab"' in patched
+    assert 'value == "identity_stage2_static"' in patched
+    assert 'value == "identity_stage2_static_byte_ab"' in patched
     assert "return fixed32_cutlass_wave_variant::stock;" in patched
     for rows in (32, 64, 96, 128):
         assert f"m == {rows}" in patched
@@ -257,7 +257,10 @@ def test_b4_m128_static_changes_only_complete_tile_scheduler() -> None:
     config_start = patched.index(
         "struct sm120_blockwise_fp8_config_b4_persistent_m128_static"
     )
-    config_end = patched.index("enum class fixed32_cutlass_wave_variant", config_start)
+    config_end = patched.index(
+        "struct sm120_blockwise_fp8_config_b1_divisor_static_identity_stage2",
+        config_start,
+    )
     config = patched[config_start:config_end]
     assert "using TileShape = Shape<_128, _128, _128>;" in config
     assert "using ClusterShape = Shape<_1, _1, _1>;" in config
@@ -292,7 +295,7 @@ def test_b4_m128_static_changes_only_complete_tile_scheduler() -> None:
     )
 
 
-def test_identity_static_uses_identity_epilogue_across_batches() -> None:
+def test_identity_stage2_uses_identity_epilogue_across_batches() -> None:
     module = _module()
     patched, _ = module.patch_text(_source_fixture(module))
 
@@ -302,7 +305,9 @@ def test_identity_static_uses_identity_epilogue_across_batches() -> None:
     wrapper_end = patched.index(module.CONFIG_ANCHOR, wrapper_start)
     wrapper = patched[wrapper_start:wrapper_end]
 
-    assert "typename Base::CollectiveMainloop" in wrapper
+    assert "using CollectiveMainloop = conditional_t<" in wrapper
+    assert "typename Base::CollectiveMainloop" not in wrapper
+    assert "ClusterShape, MainloopStageCount, MainloopScheduler" in wrapper
     assert "using CollectiveEpilogue" in wrapper
     assert "typename Base::CollectiveEpilogue" not in wrapper
     assert "cutlass::epilogue::thread::Identity" in wrapper
@@ -325,24 +330,26 @@ def test_identity_static_uses_identity_epilogue_across_batches() -> None:
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in b1
     assert "EpilogueSchedule, KernelSchedule, true," in b1
     assert "fr13_fixed32_m128_divisor_static_scheduler" in b1
+    assert "cutlass::gemm::collective::StageCount<2>>" in b1
     assert "using TileShape = Shape<_128, _128, _128>;" in b4
     assert "OutType, 1, 128, 128, TileShape, ClusterShape" in b4
     assert "EpilogueSchedule, KernelSchedule, false," in b4
     assert "fr13_fixed32_m128_static_scheduler" in b4
+    assert "cutlass::gemm::collective::StageCount<2>>" in b4
     assert "StreamKScheduler" not in b1 + b4
 
     assert "if (M != 32 && M != 128 &&" in patched
-    assert "auto run_identity_static" in patched
+    assert "auto run_identity_stage2_static" in patched
     assert "if (M == 32)" in patched
-    assert "identity_static_byte_ab && M == 128" in patched
+    assert "identity_stage2_static_byte_ab && M == 128" in patched
     assert (
-        '"/logs/fr13_fixed32_cutlass_identity_static_byte_ab.jsonl"'
+        '"/logs/fr13_fixed32_cutlass_identity_stage2_static_byte_ab.jsonl"'
         in patched
     )
-    assert "fr13.fixed32.cutlass_identity_static_byte_ab.v1" in patched
+    assert "fr13.fixed32.cutlass_identity_stage2_static_byte_ab.v1" in patched
     assert (
-        "fixed32_cutlass_wave_variant::identity_static) {\n"
-        "    return run_identity_static(out);"
+        "fixed32_cutlass_wave_variant::identity_stage2_static) {\n"
+        "    return run_identity_stage2_static(out);"
         in patched
     )
 

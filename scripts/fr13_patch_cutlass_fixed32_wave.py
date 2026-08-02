@@ -501,13 +501,14 @@ struct cutlass_3x_gemm_fp8_blockwise_m128_divisor_static
 
 // Fixed32 projection calls have no source C and always use alpha=1, beta=0.
 // Convert the accumulator directly to the output type with the same explicit
-// round-to-nearest policy, removing the generic alpha/beta visitor and the
-// mathematically redundant FP32 multiply by one.
+// round-to-nearest policy. The fixed-shape configs also use the legal minimum
+// two-stage mainloop while preserving tile shape and ordered full-K traversal.
 template <
     class OutType, int ScaleGranularityM, int ScaleGranularityN,
     int ScaleGranularityK, class MmaTileShape, class ClusterShape,
     class EpilogueScheduler, class MainloopScheduler, bool swap_ab_,
-    class TileScheduler>
+    class TileScheduler,
+    class MainloopStageCount = cutlass::gemm::collective::StageCountAuto>
 struct cutlass_3x_gemm_fp8_blockwise_identity_static
     : cutlass_3x_gemm_fp8_blockwise<
           OutType, ScaleGranularityM, ScaleGranularityN, ScaleGranularityK,
@@ -526,6 +527,27 @@ struct cutlass_3x_gemm_fp8_blockwise_identity_static
           cutlass::FloatRoundStyle::round_to_nearest>,
       cutlass::epilogue::fusion::Sm90AccFetch>;
 
+  using CollectiveMainloop = conditional_t<
+      Base::swap_ab,
+      typename cutlass::gemm::collective::CollectiveBuilder<
+          typename Base::ArchTag, typename Base::OperatorClass,
+          typename Base::ElementB,
+          cute::tuple<typename Base::LayoutB_Transpose,
+                      typename Base::LayoutSFA>,
+          Base::AlignmentB, typename Base::ElementA,
+          cute::tuple<typename Base::LayoutA_Transpose,
+                      typename Base::LayoutSFB>,
+          Base::AlignmentA, typename Base::ElementAccumulator, MmaTileShape,
+          ClusterShape, MainloopStageCount, MainloopScheduler>::CollectiveOp,
+      typename cutlass::gemm::collective::CollectiveBuilder<
+          typename Base::ArchTag, typename Base::OperatorClass,
+          typename Base::ElementA,
+          cute::tuple<typename Base::LayoutA, typename Base::LayoutSFA>,
+          Base::AlignmentA, typename Base::ElementB,
+          cute::tuple<typename Base::LayoutB, typename Base::LayoutSFB>,
+          Base::AlignmentB, typename Base::ElementAccumulator, MmaTileShape,
+          ClusterShape, MainloopStageCount, MainloopScheduler>::CollectiveOp>;
+
   using CollectiveEpilogue =
       typename cutlass::epilogue::collective::CollectiveBuilder<
           typename Base::ArchTag, typename Base::OperatorClass,
@@ -542,7 +564,7 @@ struct cutlass_3x_gemm_fp8_blockwise_identity_static
           Fr13EpilogueCallbacks>::CollectiveOp;
 
   using KernelType = enable_sm120_family<cutlass::gemm::kernel::GemmUniversal<
-      Shape<int, int, int, int>, typename Base::CollectiveMainloop,
+      Shape<int, int, int, int>, CollectiveMainloop,
       CollectiveEpilogue, TileScheduler>>;
 
   struct GemmKernel : public KernelType {};
@@ -673,7 +695,7 @@ struct sm120_blockwise_fp8_config_b4_persistent_m128_static {
 };
 
 template <typename OutType>
-struct sm120_blockwise_fp8_config_b1_divisor_static_identity {
+struct sm120_blockwise_fp8_config_b1_divisor_static_identity_stage2 {
   using KernelSchedule =
       cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
   using EpilogueSchedule =
@@ -683,11 +705,12 @@ struct sm120_blockwise_fp8_config_b1_divisor_static_identity {
   using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
       OutType, 128, 1, 128, TileShape, ClusterShape,
       EpilogueSchedule, KernelSchedule, true,
-      fr13_fixed32_m128_divisor_static_scheduler>;
+      fr13_fixed32_m128_divisor_static_scheduler,
+      cutlass::gemm::collective::StageCount<2>>;
 };
 
 template <typename OutType>
-struct sm120_blockwise_fp8_config_b4_m128_static_identity {
+struct sm120_blockwise_fp8_config_b4_m128_static_identity_stage2 {
   using KernelSchedule =
       cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
   using EpilogueSchedule =
@@ -697,7 +720,8 @@ struct sm120_blockwise_fp8_config_b4_m128_static_identity {
   using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
       OutType, 1, 128, 128, TileShape, ClusterShape,
       EpilogueSchedule, KernelSchedule, false,
-      fr13_fixed32_m128_static_scheduler>;
+      fr13_fixed32_m128_static_scheduler,
+      cutlass::gemm::collective::StageCount<2>>;
 };
 
 enum class fixed32_cutlass_wave_variant {
@@ -714,8 +738,8 @@ enum class fixed32_cutlass_wave_variant {
   persistent_b4_m128_byte_ab,
   persistent_b4_m128_static,
   persistent_b4_m128_static_byte_ab,
-  identity_static,
-  identity_static_byte_ab,
+  identity_stage2_static,
+  identity_stage2_static_byte_ab,
 };
 
 static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
@@ -765,11 +789,11 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     if (value == "persistent_b4_m128_static_byte_ab") {
       return fixed32_cutlass_wave_variant::persistent_b4_m128_static_byte_ab;
     }
-    if (value == "identity_static") {
-      return fixed32_cutlass_wave_variant::identity_static;
+    if (value == "identity_stage2_static") {
+      return fixed32_cutlass_wave_variant::identity_stage2_static;
     }
-    if (value == "identity_static_byte_ab") {
-      return fixed32_cutlass_wave_variant::identity_static_byte_ab;
+    if (value == "identity_stage2_static_byte_ab") {
+      return fixed32_cutlass_wave_variant::identity_stage2_static_byte_ab;
     }
     return fixed32_cutlass_wave_variant::stock;
   }();
@@ -942,9 +966,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
   if (M != 32 && M != 128 &&
-      (wave_variant == fixed32_cutlass_wave_variant::identity_static ||
+      (wave_variant == fixed32_cutlass_wave_variant::identity_stage2_static ||
        wave_variant ==
-           fixed32_cutlass_wave_variant::identity_static_byte_ab)) {
+           fixed32_cutlass_wave_variant::identity_stage2_static_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
 
@@ -999,15 +1023,17 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
         destination, a, b, a_scales, b_scales);
   };
 
-  auto run_identity_static = [&](torch::stable::Tensor& destination) {
+  auto run_identity_stage2_static = [&](torch::stable::Tensor& destination) {
     if (M == 32) {
       using Gemm = typename
-          sm120_blockwise_fp8_config_b1_divisor_static_identity<OutType>::Gemm;
+          sm120_blockwise_fp8_config_b1_divisor_static_identity_stage2<
+              OutType>::Gemm;
       return cutlass_gemm_caller_blockwise<Gemm>(
           destination, a, b, a_scales, b_scales);
     }
     using Gemm = typename
-        sm120_blockwise_fp8_config_b4_m128_static_identity<OutType>::Gemm;
+        sm120_blockwise_fp8_config_b4_m128_static_identity_stage2<
+            OutType>::Gemm;
     return cutlass_gemm_caller_blockwise<Gemm>(
         destination, a, b, a_scales, b_scales);
   };
@@ -1045,17 +1071,17 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   const bool b4_m128_static_byte_ab =
       wave_variant ==
       fixed32_cutlass_wave_variant::persistent_b4_m128_static_byte_ab;
-  const bool identity_static_byte_ab =
+  const bool identity_stage2_static_byte_ab =
       wave_variant ==
-      fixed32_cutlass_wave_variant::identity_static_byte_ab;
+      fixed32_cutlass_wave_variant::identity_stage2_static_byte_ab;
   if (wave_variant ==
           fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab ||
       wide256_byte_ab || static_persistent_byte_ab ||
       divisor_static_byte_ab || b4_m128_byte_ab || b4_m128_static_byte_ab ||
-      identity_static_byte_ab) {
+      identity_stage2_static_byte_ab) {
     auto run_candidate = [&](torch::stable::Tensor& destination) {
-      if (identity_static_byte_ab) {
-        return run_identity_static(destination);
+      if (identity_stage2_static_byte_ab) {
+        return run_identity_stage2_static(destination);
       }
       if (b4_m128_static_byte_ab) {
         return run_b4_persistent_m128_static(destination);
@@ -1078,7 +1104,7 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     // entirely on stock; candidate execution starts only after the arm exists.
     std::string task_marker =
         (b4_m128_byte_ab || b4_m128_static_byte_ab ||
-         (identity_static_byte_ab && M == 128))
+         (identity_stage2_static_byte_ab && M == 128))
             ? fixed32_cutlass_b4_real_task_marker()
             : fixed32_cutlass_real_task_marker();
     if (task_marker.empty()) {
@@ -1092,7 +1118,7 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     constexpr int64_t b4_m128_byte_ab_limit = 320;
     const int64_t selected_byte_ab_limit =
         (b4_m128_byte_ab || b4_m128_static_byte_ab ||
-         (identity_static_byte_ab && M == 128))
+         (identity_stage2_static_byte_ab && M == 128))
             ? b4_m128_byte_ab_limit
             : byte_ab_limit;
     int64_t invocation = next_invocation.fetch_add(1);
@@ -1137,8 +1163,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       }
     }
     const char* log_path =
-        identity_static_byte_ab
-            ? "/logs/fr13_fixed32_cutlass_identity_static_byte_ab.jsonl"
+        identity_stage2_static_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_identity_stage2_static_byte_ab.jsonl"
         : b4_m128_static_byte_ab
             ? "/logs/fr13_fixed32_cutlass_persistent_b4_m128_static_byte_ab.jsonl"
         : b4_m128_byte_ab
@@ -1157,8 +1183,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       STD_TORCH_CHECK(log.good(),
                       "FR13 Stream-K byte A/B could not open JSONL");
       log << "{\\\"schema\\\":\\\""
-          << (identity_static_byte_ab
-                  ? "fr13.fixed32.cutlass_identity_static_byte_ab.v1"
+          << (identity_stage2_static_byte_ab
+                  ? "fr13.fixed32.cutlass_identity_stage2_static_byte_ab.v1"
               : b4_m128_static_byte_ab
                   ? "fr13.fixed32.cutlass_persistent_b4_m128_static_byte_ab.v1"
               : b4_m128_byte_ab
@@ -1222,8 +1248,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     return run_b4_persistent_m128_static(out);
   }
 
-  if (wave_variant == fixed32_cutlass_wave_variant::identity_static) {
-    return run_identity_static(out);
+  if (wave_variant ==
+      fixed32_cutlass_wave_variant::identity_stage2_static) {
+    return run_identity_stage2_static(out);
   }
 
   // Unset/unknown selectors retain the stock kernel and numeric result.
