@@ -1,0 +1,20 @@
+Fixed32 B4 FA2 qrow32 static-batch verification (2026-08-02 UTC)
+
+Host test selection:
+  tests/test_fr13_fa2_tree_kernel_candidates.py
+  tests/test_fr13_fa2_qrow32_static_gate.py
+  tests/test_fr13_fa2_qrow32_gate.py
+
+Result: 26 passed in 0.18s
+
+Additional host checks:
+  Python byte compilation: pass
+  Pinned FA2 header transform: pass
+  Second-pass transform idempotence: pass
+  Exhaustive 96-CTA mapping proof: pass
+  Packed four-sequence query-offset proof: pass
+  Split-forward mask/GEMM/softmax/K-loop census preservation: pass
+  git diff --check: pass
+
+No GPU compile, binary-resource gate, real-event byte qualification,
+synthetic performance probe, or full-step timing is represented here.

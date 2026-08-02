@@ -1,0 +1,66 @@
+{
+  "branch": "agent/fixed32-fa2-qrow16-divfree-20260802",
+  "candidate": {
+    "block_m": 32,
+    "block_n": 64,
+    "default_on": false,
+    "head_dim": 256,
+    "runtime_selector": "gate_only",
+    "split_k": false,
+    "warps": 2
+  },
+  "geometry": {
+    "after_grid": [
+      6,
+      4,
+      4
+    ],
+    "before_grid": [
+      1,
+      4,
+      24
+    ],
+    "ctas_per_layer": 96,
+    "kv_heads": 4,
+    "physical_query_rows_per_sequence": 32,
+    "query_heads": 24,
+    "query_heads_per_kv": 6,
+    "sequences": 4,
+    "target_layers": 16,
+    "total_target_ctas": 1536
+  },
+  "preservation_census": {
+    "dynamic_k_length_uses_after": 14,
+    "dynamic_k_length_uses_before": 14,
+    "gemm_sites_after": 4,
+    "gemm_sites_before": 4,
+    "k_loop_forms_after": 3,
+    "k_loop_forms_before": 3,
+    "mask_sites_after": 2,
+    "mask_sites_before": 2,
+    "softmax_sites_after": 3,
+    "softmax_sites_before": 3,
+    "tree_bias_sites_after": 2,
+    "tree_bias_sites_before": 2
+  },
+  "qualification": {
+    "gpu_compile_resource_gate": "pending",
+    "private_sass_division_census": "pending",
+    "real_swe_verified_all_layer_byte_gate": "pending",
+    "real_swe_verified_full_step_timing": "pending",
+    "synthetic_performance_probe": false,
+    "timing_eligible": false
+  },
+  "schema": "fr13.fixed32.fa2_qrow32_static_batch_source.v1",
+  "source_census": {
+    "direct_query_prefix_calls_after": 0,
+    "direct_query_prefix_calls_before": 4,
+    "gqa_division_expressions_after": 1,
+    "gqa_division_expressions_before": 6,
+    "remaining_gqa_division_branch": "nonstatic_if_constexpr_fallback",
+    "static_packed_query_offset_calls_after": 4,
+    "static_packed_query_offset_calls_before": 0
+  },
+  "source_commit": "e7bab4a89",
+  "status": "host_source_verified_gpu_and_real_swe_gates_pending"
+}
