@@ -633,11 +633,15 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
     acc = tl.zeros((ROWS_PER_PROGRAM, BLOCK_C), dtype=tl.float32)
     if HAS_BIAS:
         acc = tl.load(bias + offs_c).to(tl.float32)
-    for tap in tl.static_range(0, WIDTH - 1):
+
+    weight_pair_01 = tl.load(
+        weight_channels.to(tl.pointer_type(tl.uint32))
+    )
+    for tap in tl.static_range(0, WIDTH - 2):
         source_row = tl.where(
             tap == 0,
             source_0,
-            tl.where(tap == 1, source_1, source_2),
+            source_1,
         )
         from_prior = source_row < (WIDTH - 1)
         prior_value = tl.where(
@@ -649,15 +653,36 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
         x_index = tl.broadcast_to(x_node, ROWS_PER_PROGRAM, BLOCK_C)
         x_value = tl.gather(current_x, x_index, axis=0)
         value = tl.where(from_prior, prior_value, x_value).to(tl.bfloat16)
-        weight = tl.load(weight_channels + tap).to(tl.bfloat16)
+        weight_bits = (weight_pair_01 >> (tap << 4)).to(tl.uint16)
+        weight = weight_bits.to(tl.bfloat16, bitcast=True)
         product = (value * weight).to(tl.bfloat16).to(tl.float32)
         acc = acc + product
+
+    source_row = source_2
+    from_prior = source_row < (WIDTH - 1)
+    prior_value = tl.where(
+        source_row == 0,
+        prior_0,
+        tl.where(source_row == 1, prior_1, prior_2),
+    )
+    x_node = tl.maximum(source_row - (WIDTH - 1), 0)
+    x_index = tl.broadcast_to(x_node, ROWS_PER_PROGRAM, BLOCK_C)
+    x_value = tl.gather(current_x, x_index, axis=0)
+    value = tl.where(from_prior, prior_value, x_value).to(tl.bfloat16)
+    weight_pair_23 = tl.load(
+        (weight_channels + 2).to(tl.pointer_type(tl.uint32))
+    )
+    weight_2_bits = weight_pair_23.to(tl.uint16)
+    weight_2 = weight_2_bits.to(tl.bfloat16, bitcast=True)
+    product = (value * weight_2).to(tl.bfloat16).to(tl.float32)
+    acc = acc + product
 
     current_index = tl.broadcast_to(
         offs_n - pid_n_base, ROWS_PER_PROGRAM, BLOCK_C
     )
     current_value = tl.gather(current_x, current_index, axis=0)
-    current_weight = tl.load(weight_channels + (WIDTH - 1)).to(tl.bfloat16)
+    current_weight_bits = (weight_pair_23 >> 16).to(tl.uint16)
+    current_weight = current_weight_bits.to(tl.bfloat16, bitcast=True)
     current_product = (current_value * current_weight).to(tl.bfloat16).to(
         tl.float32
     )
