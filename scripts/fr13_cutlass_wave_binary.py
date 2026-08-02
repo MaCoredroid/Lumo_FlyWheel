@@ -284,6 +284,7 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
         with os.fdopen(descriptor, "wb") as handle:
             handle.write(encoded)
             handle.flush()
+            os.fchmod(handle.fileno(), 0o444)
             os.fsync(handle.fileno())
         temporary.replace(path)
     finally:

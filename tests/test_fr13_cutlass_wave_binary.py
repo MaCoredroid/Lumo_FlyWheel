@@ -230,6 +230,7 @@ def test_install_is_exact_attested_and_production_off(
 
     assert destination.read_bytes() == payload
     assert destination.stat().st_mode & 0o777 == 0o555
+    assert attestation.stat().st_mode & 0o777 == 0o444
     assert record["production_enabled"] is False
     assert record["schema"] == "fr13.fixed32.cutlass_streamk_binary.v2"
     assert json.loads(attestation.read_text(encoding="ascii")) == record
