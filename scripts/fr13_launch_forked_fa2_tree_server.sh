@@ -1843,6 +1843,91 @@ if [[ "${FR13_COMMITTER_GRAPH:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_committer_graph.arm" 2>/dev/null || true
 fi
+# The single-launch GDN tree is source-only and default-off. Qualification
+# captures the final graph, serves the incumbent two-launch bytes, and lets the
+# authenticated engine ingress publish the only accepted real-event markers.
+_fr13_gdn_single_launch_tree="${FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE:-0}"
+_fr13_gdn_single_launch_production="${FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION:-0}"
+_fr13_gdn_single_launch_b1="${FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB:-0}"
+_fr13_gdn_single_launch_b4="${FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB:-0}"
+for _fr13_single_value in \
+  "$_fr13_gdn_single_launch_tree" \
+  "$_fr13_gdn_single_launch_production" \
+  "$_fr13_gdn_single_launch_b1" \
+  "$_fr13_gdn_single_launch_b4"; do
+  case "$_fr13_single_value" in
+    0|1) ;;
+    *) echo "FR13 fixed32 GDN single-launch selectors must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
+done
+_fr13_gdn_single_launch_gates=$((
+  10#$_fr13_gdn_single_launch_b1 + 10#$_fr13_gdn_single_launch_b4
+))
+(( _fr13_gdn_single_launch_gates <= 1 )) \
+  || { echo "FR13 fixed32 GDN single-launch B1/B4 gates require separate processes" >&2; exit 2; }
+if (( _fr13_gdn_single_launch_gates == 1 )); then
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "$_fr13_gdn_single_launch_tree" == "1" \
+     && "$_fr13_gdn_single_launch_production" == "0" \
+     && "${ENFORCE_EAGER:-0}" == "0" \
+     && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" \
+     && "${FR13_RING_EXPORT:-1}" == "1" \
+     && "${FR13_FLAGS_INKERNEL:-1}" == "1" \
+     && "${FR13_TREE_GDN_GEOM_OVERRIDE:-}" == "BV=8" \
+     && "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" == "0" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}" \
+     && "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" ]] || {
+    echo "FR13 fixed32 GDN single-launch qualification requires its exclusive BV8 final-graph reference route" >&2
+    exit 2
+  }
+  if [[ "$_fr13_gdn_single_launch_b1" == "1" ]]; then
+    [[ "$MAX_NUM_SEQS" == "1" \
+       && "${SWE_CONCURRENCY:-}" == "1" \
+       && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" ]] || {
+      echo "FR13 fixed32 GDN single-launch B1 requires the one-task diagnostic lifecycle" >&2
+      exit 2
+    }
+  else
+    [[ "$MAX_NUM_SEQS" == "4" \
+       && "${SWE_CONCURRENCY:-}" == "4" \
+       && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+       && "${FR10_METRICS:-0}" == "1" ]] || {
+      echo "FR13 fixed32 GDN single-launch B4 requires exact4 graph/counter lifecycle" >&2
+      exit 2
+    }
+  fi
+fi
+rm -f \
+  "$LOG_DIR/fr13_fixed32_gdn_single_launch_tree.arm" \
+  "$LOG_DIR/fr13_fixed32_gdn_single_launch_b1_byte_ab.enabled" \
+  "$LOG_DIR/fr13_fixed32_gdn_single_launch_b4_byte_ab.enabled" \
+  "$LOG_DIR/fr13_fixed32_gdn_single_launch_b1.real_event.arm" \
+  "$LOG_DIR/fr13_fixed32_gdn_single_launch_b4.real_event.arm" \
+  "$LOG_DIR/fr13_fixed32_gdn_single_launch_b1.live_pass.json" \
+  "$LOG_DIR/fr13_fixed32_gdn_single_launch_b4.live_pass.json" \
+  2>/dev/null || true
+if [[ "$_fr13_gdn_single_launch_tree" == "1" ]]; then
+  printf '1\n' > "$LOG_DIR/fr13_fixed32_gdn_single_launch_tree.arm"
+  chmod 400 "$LOG_DIR/fr13_fixed32_gdn_single_launch_tree.arm"
+fi
+FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_REAL_EVENT_PATH=
+FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_REAL_EVENT_PATH=
+if [[ "$_fr13_gdn_single_launch_b1" == "1" ]]; then
+  printf '1\n' > "$LOG_DIR/fr13_fixed32_gdn_single_launch_b1_byte_ab.enabled"
+  chmod 400 "$LOG_DIR/fr13_fixed32_gdn_single_launch_b1_byte_ab.enabled"
+  FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_REAL_EVENT_PATH=/logs/fr13_fixed32_gdn_single_launch_b1.real_event.arm
+elif [[ "$_fr13_gdn_single_launch_b4" == "1" ]]; then
+  printf '1\n' > "$LOG_DIR/fr13_fixed32_gdn_single_launch_b4_byte_ab.enabled"
+  chmod 400 "$LOG_DIR/fr13_fixed32_gdn_single_launch_b4_byte_ab.enabled"
+  FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_REAL_EVENT_PATH=/logs/fr13_fixed32_gdn_single_launch_b4.real_event.arm
+fi
+export FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_REAL_EVENT_PATH \
+  FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_REAL_EVENT_PATH
+unset _fr13_single_value _fr13_gdn_single_launch_gates
+
 # The batched-GDN byte gates stay reference-served until a real SWE-Verified
 # task is explicitly armed after readiness. The EngineCore worker sees these
 # /logs sidecars even when its curated environment drops FR13_*.
@@ -2400,7 +2485,9 @@ while IFS= read -r _v; do
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
      || "$_v" == "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH" \
      || "$_v" == "FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH" \
-     || "$_v" == "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH" ]] && continue
+     || "$_v" == "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH" \
+     || "$_v" == "FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_REAL_EVENT_PATH" \
+     || "$_v" == "FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_REAL_EVENT_PATH" ]] && continue
   if [[ -n "${FR13_FIXED32_MODE:-}" \
      && "$_v" == "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION" ]]; then
     continue
@@ -2535,6 +2622,8 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_BATCH_GDN_BV_PRODUCTION="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" \
   -e FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH="${FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH:-}" \
   -e FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH="${FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH:-}" \
+  -e FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_REAL_EVENT_PATH="${FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_REAL_EVENT_PATH:-}" \
+  -e FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_REAL_EVENT_PATH="${FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_REAL_EVENT_PATH:-}" \
   -e FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB="$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" \
   -e FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION="$FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION" \
   -e FR13_FIXED32_SFWD_STATE_FUSION_ENABLED_PATH=/logs/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled \

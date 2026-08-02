@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import importlib.util
 import json
 import os
 import stat
@@ -15,6 +16,12 @@ KERNEL_PATH = (
     REPO / "src" / "lumo_flywheel_serving" / "fr10_gdn_tree_kernel.py"
 )
 PATCHER_PATH = REPO / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
+LAUNCHER_PATH = REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
+VERIFIER_PATH = REPO / "scripts" / "fr13_gdn_single_launch_live_verdict.py"
+B1_RUNNER_PATH = REPO / "scripts" / "fr13_run_b1_gdn_single_launch_live_gate.sh"
+B4_RUNNER_PATH = REPO / "scripts" / "fr13_run_b4_gdn_single_launch_live_gate.sh"
+CORE_RUNNER_PATH = REPO / "scripts" / "fr13_run_gdn_single_launch_live_gate.sh"
+RUNTIME_MANIFEST_PATH = REPO / "scripts" / "fr13_runtime_manifest.py"
 
 
 def _tree_and_source(path: Path = KERNEL_PATH) -> tuple[ast.Module, str]:
@@ -781,7 +788,7 @@ def test_authenticated_gate_restores_reference_and_emits_only_complete_pass(
     )
 
     markers = (
-        ("swe_verified:astropy__astropy-14539",)
+        ("swe_verified:astropy__astropy-12907",)
         if batch == 1
         else namespace["_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXACT4_MARKERS"]
     )
@@ -849,7 +856,7 @@ def test_single_launch_gate_restores_baseline_on_mismatch(
     marker_path = tmp_path / "real-event.arm"
     pass_path = tmp_path / "live-pass.json"
     marker_path.write_text(
-        "swe_verified:astropy__astropy-14539\n", encoding="ascii"
+        "swe_verified:astropy__astropy-12907\n", encoding="ascii"
     )
     monkeypatch.setenv("FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB", "1")
     monkeypatch.setenv(
@@ -912,3 +919,107 @@ def test_patcher_binds_single_launch_gate_and_actual_route_census() -> None:
     assert '"logical_launches": int(work["gdn_launches"])' in patcher
     assert '"physical_launches_per_layer": (' in patcher
     assert '"state_export_writes_per_layer": (' in patcher
+
+
+@pytest.mark.parametrize("batch", (1, 4))
+@pytest.mark.parametrize("mode", ("tail6_fixed32", "hydra27_fixed32"))
+def test_live_verifier_recomputes_exact_source_identity(batch: int, mode: str) -> None:
+    spec = importlib.util.spec_from_file_location(
+        "fr13_gdn_single_launch_live_verdict",
+        VERIFIER_PATH,
+    )
+    assert spec is not None and spec.loader is not None
+    verifier = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verifier)
+    namespace = _load_lifecycle_namespace()
+    contract = {
+        "schema": namespace["_FR13_FIXED32_GDN_SINGLE_LAUNCH_IDENTITY_SCHEMA"],
+        "candidate": namespace["_FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID"],
+        "kernel": namespace["_FR13_FIXED32_GDN_SINGLE_LAUNCH_KERNEL"],
+        "node_helper": namespace["_FR13_FIXED32_GDN_SINGLE_LAUNCH_NODE_HELPER"],
+        "physical_grid_z": (1,),
+        "physical_programs": 1,
+        "critical_node_steps": 32,
+        "state_export_writes": 0,
+        "state_parent_reads": 0,
+        "single_writer_nodes": 32,
+        "parent_sha256": namespace["_FR13_FIXED32_PARENT_SHA256"],
+        "ancestry_sha256": namespace["_FR13_FIXED32_ANCESTRY_SHA256"],
+        "contract_sha256": verifier.CONTRACT_SHA256,
+        "groups_sha256": verifier.GROUPS_SHA256,
+        "execution_sha256": verifier.EXECUTION_SHA256,
+    }
+    source_sha256 = hashlib.sha256(KERNEL_PATH.read_bytes()).hexdigest()
+    namespace["_FR13_FIXED32_MODE"] = mode
+    source_identity = namespace["_fr13_fixed32_gdn_single_launch_identity"](
+        contract,
+        batch,
+        source_sha256=source_sha256,
+        mode=mode,
+    )
+    verifier_identity = verifier.single_launch_identity(
+        batch_size=batch,
+        mode=mode,
+        source_sha256=source_sha256,
+    )
+    assert verifier_identity == source_identity
+
+
+def test_live_verifier_rejects_mutated_resource_audit(
+    tmp_path: Path,
+) -> None:
+    spec = importlib.util.spec_from_file_location(
+        "fr13_gdn_single_launch_live_verdict_checksums",
+        VERIFIER_PATH,
+    )
+    assert spec is not None and spec.loader is not None
+    verifier = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verifier)
+    for filename in verifier.RESOURCE_AUDIT_FILES:
+        (tmp_path / filename).write_bytes(f"{filename}\n".encode("ascii"))
+    checksum_text = "".join(
+        f"{hashlib.sha256((tmp_path / filename).read_bytes()).hexdigest()}  {filename}\n"
+        for filename in verifier.RESOURCE_AUDIT_FILES
+    )
+    (tmp_path / "SHA256SUMS").write_text(checksum_text, encoding="ascii")
+
+    expected = hashlib.sha256(checksum_text.encode("ascii")).hexdigest()
+    assert verifier._validate_checksum_manifest(tmp_path) == expected
+    (tmp_path / "verification.json").write_text("mutated\n", encoding="ascii")
+    with pytest.raises(verifier.VerdictError, match="checksum failed"):
+        verifier._validate_checksum_manifest(tmp_path)
+
+
+def test_live_launcher_and_runners_are_reference_served_k64_exact_task_only() -> None:
+    launcher = LAUNCHER_PATH.read_text(encoding="utf-8")
+    core = CORE_RUNNER_PATH.read_text(encoding="utf-8")
+    b1 = B1_RUNNER_PATH.read_text(encoding="utf-8")
+    b4 = B4_RUNNER_PATH.read_text(encoding="utf-8")
+    verifier = VERIFIER_PATH.read_text(encoding="utf-8")
+    runtime_manifest = RUNTIME_MANIFEST_PATH.read_text(encoding="utf-8")
+    assert "fr13_fixed32_gdn_single_launch_tree.arm" in launcher
+    assert "fr13_fixed32_gdn_single_launch_b1_byte_ab.enabled" in launcher
+    assert "fr13_fixed32_gdn_single_launch_b4_byte_ab.enabled" in launcher
+    assert "FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_REAL_EVENT_PATH" in launcher
+    assert "FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_REAL_EVENT_PATH" in launcher
+    assert "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION=0" in core
+    assert "FR13_DRAFT_VOCAB_K=65536" in core
+    assert "FR13_DRAFT_VOCAB_ROOT=1" in core
+    assert (
+        "STOCK_FA2_SHA256="
+        "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d" in core
+    )
+    assert "CAPTURE_ONLY=0 ACCEPT_SPEED_PROBE=0 PROBE_ONLY=0" in core
+    assert 'FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_BYTE_AB="$B1_GATE"' in core
+    assert 'FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_BYTE_AB="$B4_GATE"' in core
+    assert 'fr13_run_gdn_single_launch_live_gate.sh" b1' in b1
+    assert 'fr13_run_gdn_single_launch_live_gate.sh" b4' in b4
+    assert "core_runner_path.relative_to(REPO).as_posix()" in verifier
+    for path in (
+        "scripts/fr13_run_b1_gdn_single_launch_live_gate.sh",
+        "scripts/fr13_run_b4_gdn_single_launch_live_gate.sh",
+        "scripts/fr13_run_gdn_single_launch_live_gate.sh",
+        "scripts/fr13_gdn_single_launch_live_verdict.py",
+        "config/fr13_fixed32/subset_b1_diagnostic_one.json",
+    ):
+        assert f'"{path}"' in runtime_manifest

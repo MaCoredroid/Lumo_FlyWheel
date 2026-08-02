@@ -570,6 +570,137 @@ def test_engine_middleware_arms_batch_gdn_from_authenticated_exact4_request(
     assert marker.read_bytes() == expected
 
 
+@pytest.mark.parametrize(
+    ("batch", "task_ids", "enabled_name", "marker_name", "env_name"),
+    (
+        (
+            1,
+            EXACT4_TASK_IDS[:1],
+            "fr13_fixed32_gdn_single_launch_b1_byte_ab.enabled",
+            "fr13_fixed32_gdn_single_launch_b1.real_event.arm",
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_B1_REAL_EVENT_PATH",
+        ),
+        (
+            4,
+            EXACT4_TASK_IDS,
+            "fr13_fixed32_gdn_single_launch_b4_byte_ab.enabled",
+            "fr13_fixed32_gdn_single_launch_b4.real_event.arm",
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_B4_REAL_EVENT_PATH",
+        ),
+    ),
+)
+def test_engine_middleware_rotates_single_launch_markers_only_for_authenticated_tasks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    batch: int,
+    task_ids: tuple[str, ...],
+    enabled_name: str,
+    marker_name: str,
+    env_name: str,
+) -> None:
+    secret_path = tmp_path / "secret.json"
+    _task_seed, engine_bearer = _write_secret(secret_path)
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    enabled = logs / enabled_name
+    enabled.write_bytes(b"1\n")
+    enabled.chmod(0o400)
+    marker = logs / marker_name
+    monkeypatch.setenv(env_name, str(marker))
+    observed: list[bytes] = []
+
+    async def inner(scope: Any, receive: Any, send: Any) -> None:
+        observed.append(marker.read_bytes())
+        await receive()
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"{}", "more_body": False})
+
+    middleware = Fixed32EngineIngressMiddleware(
+        inner,
+        secret_file=secret_path,
+        canonical_task_ids=task_ids,
+        ledger_path=tmp_path / "engine.jsonl",
+    )
+    middleware.ingress.begin(_begin_payload(task_ids))
+    rejected_status, rejected_payload = asyncio.run(
+        _asgi_call(
+            middleware,
+            path="/v1/chat/completions",
+            body=b'{"messages":[]}',
+            headers=[
+                (b"authorization", f"Bearer {engine_bearer}".encode()),
+                (FIXED32_TASK_KEY_HEADER.lower().encode(), b"f" * 64),
+                (b"x-request-id", ("fr13-chat-" + "ff" * 16).encode()),
+            ],
+        )
+    )
+    assert rejected_status == 401
+    assert rejected_payload == {"error": {"code": "invalid_task_key"}}
+    assert not marker.exists()
+    assert observed == []
+    for index, task_id in enumerate(task_ids):
+        status, payload = asyncio.run(
+            _asgi_call(
+                middleware,
+                path="/v1/chat/completions",
+                body=b'{"messages":[]}',
+                headers=[
+                    (b"authorization", f"Bearer {engine_bearer}".encode()),
+                    (
+                        FIXED32_TASK_KEY_HEADER.lower().encode(),
+                        fixed32_task_key_id(task_id).encode(),
+                    ),
+                    (b"x-request-id", f"fr13-chat-{index + 1:032x}".encode()),
+                ],
+            )
+        )
+        assert status == 200
+        assert payload == {}
+
+    expected = [
+        f"swe_verified:{task_id}\n".encode("ascii") for task_id in task_ids
+    ]
+    assert observed == expected
+    assert marker.read_bytes() == expected[-1]
+    info = os.lstat(marker)
+    assert stat.S_ISREG(info.st_mode)
+    assert info.st_nlink == 1
+    assert stat.S_IMODE(info.st_mode) == 0o400
+
+
+def test_single_launch_ingress_rejects_inexact_and_injected_arms(
+    tmp_path: Path,
+) -> None:
+    secret_path = tmp_path / "secret.json"
+    _write_secret(secret_path)
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    enabled = logs / "fr13_fixed32_gdn_single_launch_b1_byte_ab.enabled"
+    enabled.write_bytes(b"1\n")
+    enabled.chmod(0o400)
+    marker = logs / "fr13_fixed32_gdn_single_launch_b1.real_event.arm"
+
+    with pytest.raises(Fixed32IngressError, match="canonical SWE-Verified task set"):
+        Fixed32EngineIngressMiddleware(
+            object(),
+            secret_file=secret_path,
+            canonical_task_ids=TASK_IDS,
+            ledger_path=tmp_path / "engine-inexact.jsonl",
+            gdn_single_launch_b1_real_event_arm=marker,
+        )
+
+    marker.write_bytes(b"swe_verified:astropy__astropy-12907\n")
+    marker.chmod(0o400)
+    with pytest.raises(Fixed32IngressError, match="must be new at engine boot"):
+        Fixed32EngineIngressMiddleware(
+            object(),
+            secret_file=secret_path,
+            canonical_task_ids=EXACT4_TASK_IDS[:1],
+            ledger_path=tmp_path / "engine-injected.jsonl",
+            gdn_single_launch_b1_real_event_arm=marker,
+        )
+
+
 def test_engine_middleware_arms_cutlass_b4_from_authenticated_exact4_request(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
