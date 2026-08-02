@@ -1,0 +1,2 @@
+kernel	encoded_instructions	nop_instructions	operational_instructions	ldg_static	lds_static	sts_static	bar_static
+fr13_bf16_gemvx_k64_m1_warp4_sharedx_pair8bits_kernel	208	13	195	5	1	1	1

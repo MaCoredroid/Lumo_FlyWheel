@@ -1,0 +1,99 @@
+{
+  "branch": "agent/fixed32-dfwd-k64-m1-warp4-sharedx-20260802",
+  "claims": {
+    "acceptance_measurement": false,
+    "b4_measurement": false,
+    "byte_equality": false,
+    "hardware_floor": false,
+    "loadable_torch_extension": false,
+    "performance_measurement": false,
+    "production_default_enabled": false,
+    "real_task_correctness": false,
+    "static_codegen": true
+  },
+  "codegen": {
+    "arch": "sm_121a",
+    "cuda_release": "13.0",
+    "cubin": {
+      "bytes": 18696,
+      "mode": "0444",
+      "path": "fr13_bf16_gemvx_k64_m1_warp4_sharedx_pair8bits.cubin",
+      "sha256": "d7072d0643ba5854ff0c8cc3e3fdd07a1f915f36b6fceeff259fcc709f75b3e9"
+    },
+    "host_wrapper_headers": "torch 2.4.1 headers; no ABI claim",
+    "nvcc": "13.0.88"
+  },
+  "kernel_contract": {
+    "block": [32, 8, 1],
+    "ctas": 2048,
+    "elements_per_vector_load": 8,
+    "gemv_mnk": [1, 65536, 5120],
+    "input_staging_uint4_loads_per_cta": 640,
+    "lane_fma_iterations": 640,
+    "lane_shared_input_iterations": 20,
+    "lane_weight_uint4_load_iterations": 80,
+    "output_rows_per_cta": 32,
+    "output_rows_per_warp": 4,
+    "warps_per_cta": 8
+  },
+  "modeled_delta_from_pair8": {
+    "input_uint4_loads_per_cta": {
+      "candidate": 640,
+      "reference": 20480,
+      "reduction_fraction": 0.96875
+    },
+    "total_warps_per_call": {
+      "candidate": 16384,
+      "reference": 65536,
+      "reduction_fraction": 0.75
+    },
+    "weight_uint4_loads_per_cta": {
+      "candidate": 20480,
+      "reference": 20480
+    }
+  },
+  "operation": "fr13_bf16_k64_head::gemvx_m1_warp4_sharedx_pair8bits_out",
+  "resources": {
+    "barriers_static": 1,
+    "calls_static": 0,
+    "ldl_static": 0,
+    "lds128_static": 1,
+    "local_bytes": 0,
+    "registers_per_thread": 38,
+    "shared_bytes_ptxas": 11264,
+    "shared_input_bytes_nominal": 10240,
+    "spills": 0,
+    "stack_bytes": 0,
+    "stl_static": 0,
+    "sts128_static": 1
+  },
+  "sass": {
+    "encoded_instructions": 208,
+    "ldg_static": 5,
+    "nop_instructions": 13,
+    "operational_instructions": 195
+  },
+  "schema": "fr13.fixed32.dfwd_k64_m1_warp4_sharedx_codegen.v1",
+  "source": {
+    "builder": {
+      "path": "scripts/fr13_build_bf16_gemvx_k64_m1_shuffle.py",
+      "sha256": "2700a310b6bd7591fa624ab7d78f496027135451d327b209a58d83c58148d1c3"
+    },
+    "commit": "8509e4a96ad39cca59d39462acffb8e940e0b4de",
+    "cuda": {
+      "path": "csrc/fr13_bf16_gemvx_k64_m1_shuffle.cu",
+      "sha256": "e6fd42f790d0a9571f49f6bc674527515eea867d48ee1e0c1ab4f129fc662c88"
+    },
+    "test": {
+      "path": "tests/test_fr13_bf16_gemvx_k64_m1_shuffle_source.py",
+      "sha256": "b086ce77955e55621e77872b65449b163ac17ef454fc8f79725464d68490d5d3"
+    }
+  },
+  "status": "STATIC_CODEGEN_PASS_LIVE_UNQUALIFIED",
+  "verification": {
+    "diff_check": "PASS",
+    "focused_tests": 7,
+    "focused_tests_status": "PASS",
+    "python_compile": "PASS"
+  }
+}
