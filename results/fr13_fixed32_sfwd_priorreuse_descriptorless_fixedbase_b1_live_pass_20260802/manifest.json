@@ -1,0 +1,30 @@
+{
+  "artifact": "fr13_fixed32_sfwd_priorreuse_descriptorless_fixedbase_b1_live_pass_20260802",
+  "batch_size": 1,
+  "candidate": "fixed32_sfwd_prior_reuse_descriptorless_fixedbase_rowgroup32_c64_v1",
+  "compared_byte_surfaces": [
+    "conv_out",
+    "commit_source_stage"
+  ],
+  "compared_bytes": 29947330560,
+  "comparison_records": 21504,
+  "differing_bytes": 0,
+  "docker_and_gpu_clean_after_run": true,
+  "draft_vocab_k": 65536,
+  "draft_vocab_root": 1,
+  "external_manifest_launch_end_equal": true,
+  "floor_acceptance_eligible": false,
+  "layer_count": 48,
+  "reference_always_served": true,
+  "resolved_tasks": 1,
+  "run_classification": "one_real_swe_verified_k64_root_b1_byte_diagnostic",
+  "runtime_manifest_launch_end_equal": true,
+  "schema": "fr13.fixed32.reduced_artifact.v1",
+  "shape_or_dtype_mismatches": 0,
+  "source_commit": "d023e7bcc4990f59f33218fb41dcc3b3de8f8abe",
+  "source_manifest_launch_end_equal": true,
+  "status": "pass",
+  "surface_instances": 43008,
+  "task_count": 1,
+  "timing_eligible": false
+}
