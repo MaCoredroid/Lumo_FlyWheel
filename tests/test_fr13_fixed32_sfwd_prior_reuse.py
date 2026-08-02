@@ -95,13 +95,11 @@ def test_contract_closes_row32_c64_for_b1_b4() -> None:
         assert contract["conv_rows_per_program"] == 32
         assert contract["conv_row_groups_per_request"] == 1
         assert contract["conv_block_c"] == 64
-        assert contract["conv_num_warps"] == 16
+        assert contract["conv_num_warps"] == 2
         assert contract["topology_host_validation"] == "exact_parent_each_launch"
         assert contract["source_descriptor_device_validation"] is False
         assert contract["source_descriptor_launcher_argument"] is False
-        assert contract["candidate"] == (
-            "fixed32_sfwd_priorpair_quad_xgather_fixedstrides_tapmask_r32_c64_w16_v1"
-        )
+        assert contract["candidate"] == "fixed32_sfwd_channel_serial_r32_c64_w2_v1"
     for geometry in ((0, 32, 4, 34), (1, 31, 4, 34), (1, 32, 3, 34)):
         with pytest.raises(ValueError):
             candidate.fixed32_sfwd_prior_reuse_contract(
@@ -243,22 +241,21 @@ def test_pass_requires_k64_root1_and_carries_source_binding(
         )
 
 
-def test_launcher_uses_packed_xgather_kernel_and_exact_layout() -> None:
+def test_launcher_uses_channel_serial_kernel_and_exact_layout() -> None:
     kernel = _function_source(
-        "_fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel",
+        "_fr13_fixed32_sfwd_channel_serial_kernel",
         path=KERNEL_MODULE_PATH,
     )
     launcher = _function_source("launch_fixed32_sfwd_prior_reuse")
     assert kernel.index("prior_pair = tl.load(") < kernel.index(
-        "for tap in tl.static_range(0, WIDTH - 2):"
+        "for node in tl.static_range(0, N):"
     )
-    assert "from_prior = offs_n < 9" in kernel
-    assert "from_prior = offs_n < 4" in kernel
-    assert "from_prior = offs_n == 0" in kernel
-    assert "tl.gather(current_x, current_index, axis=0)" in kernel
-    assert "current_value * current_weight" in kernel
-    assert "current_x * current_weight" not in kernel
-    assert "source_stage + stage_offset + 2 * C + offs_c" in kernel
+    assert "tap_0 = (" in kernel
+    assert "tap_1 = (" in kernel
+    assert "tap_2 = (" in kernel
+    assert "x_rows[node] * weight_3" in kernel
+    assert "tl.gather" not in kernel
+    assert "stage_batch + 2 * C + offs_c" in kernel
     assert "source_flat" not in kernel
     assert "x_stride_row" not in kernel
     assert "weight_stride_c" not in kernel
@@ -273,17 +270,16 @@ def test_launcher_uses_packed_xgather_kernel_and_exact_layout() -> None:
     assert "x_batch = x + pid_b * N * X_STRIDE_ROW" in kernel
     assert "weight_channels = conv_weights + offs_c * WIDTH" in kernel
     assert "weight_quad" in kernel
-    assert kernel.count("tl.load(x_batch") == 1
-    assert "tl.gather(current_x, x_index, axis=0)" in kernel
+    assert kernel.count("tl.load(x_batch") == 32
     assert "grid = (batch, triton.cdiv(channels, BLOCK_C))" in launcher
     assert "fixed32_specialized_layout_contract(" in launcher
     assert "not conv_state.is_contiguous()" in launcher
     assert "not spec_state_indices.is_contiguous()" in launcher
     assert "int(spec_state_indices.shape[1]) != rows" in launcher
     assert "int(conv_state.data_ptr()) % 4 != 0" in launcher
-    assert "_fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel[grid](" in launcher
+    assert "_fr13_fixed32_sfwd_channel_serial_kernel[grid](" in launcher
     assert "X_STRIDE_ROW=X_ROW_STRIDE" in launcher
-    assert "ROWS_PER_PROGRAM=ROWS_PER_PROGRAM" in launcher
+    assert "ROWS_PER_PROGRAM=ROWS_PER_PROGRAM" not in launcher
     assert "BLOCK_C=BLOCK_C" in launcher
     assert "num_warps=NUM_WARPS" in launcher
     assert "source_flat" not in launcher
@@ -334,7 +330,7 @@ def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
     assert "source_manifest.at_end.json" in runner
     assert "source_descriptor_in_kernel=false" in runner
     assert "current_x_global_loads_per_element=1" in runner
-    assert "conv_num_warps=16" in runner
+    assert "conv_num_warps=2" in runner
     assert "topology_host_validation=exact_parent_each_launch" in runner
     assert "source_descriptor_device_validation=false" in runner
     assert "source_descriptor_launcher_argument=false" in runner

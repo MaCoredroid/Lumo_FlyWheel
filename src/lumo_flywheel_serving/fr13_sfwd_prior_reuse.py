@@ -23,17 +23,15 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
     FIXED32_ROWS,
     SOURCE_ROWS,
     X_ROW_STRIDE,
-    _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel,
+    _fr13_fixed32_sfwd_channel_serial_kernel,
     fixed32_specialized_layout_contract,
 )
 
 
-CANDIDATE = (
-    "fixed32_sfwd_priorpair_quad_xgather_fixedstrides_tapmask_r32_c64_w16_v1"
-)
+CANDIDATE = "fixed32_sfwd_channel_serial_r32_c64_w2_v1"
 ROWS_PER_PROGRAM = 32
 BLOCK_C = 64
-NUM_WARPS = 16
+NUM_WARPS = 2
 CONV_STATE_LEN = 34
 ENABLED_PATH = "/logs/fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled"
 REAL_EVENT_PATH = "/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm"
@@ -609,7 +607,7 @@ def launch_fixed32_sfwd_prior_reuse(
 
     grid = (batch, triton.cdiv(channels, BLOCK_C))
     bias_arg = bias if bias is not None else x
-    _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel[grid](
+    _fr13_fixed32_sfwd_channel_serial_kernel[grid](
         x,
         conv_state,
         spec_state_indices,
@@ -625,7 +623,6 @@ def launch_fixed32_sfwd_prior_reuse(
         SOURCE_ROWS=source_rows_per_batch,
         HAS_BIAS=bias is not None,
         X_STRIDE_ROW=X_ROW_STRIDE,
-        ROWS_PER_PROGRAM=ROWS_PER_PROGRAM,
         BLOCK_C=BLOCK_C,
         num_warps=NUM_WARPS,
     )

@@ -131,7 +131,7 @@ printf '%s\n' \
   'physical_rows_per_request=32' \
   'conv_rows_per_program=32' \
   'conv_block_c=64' \
-  'conv_num_warps=16' \
+  'conv_num_warps=2' \
   'topology_host_validation=exact_parent_each_launch' \
   'source_descriptor_device_validation=false' \
   'source_descriptor_launcher_argument=false' \
