@@ -1,0 +1,92 @@
+{
+  "branch": "agent/fixed32-dfwd-k64-m32-quality-curve-20260802",
+  "claims": {
+    "acceptance_measurement": true,
+    "b4_measurement": false,
+    "byte_equality": false,
+    "floor_acceptance_eligible": false,
+    "gate_eligible": false,
+    "hardware_floor": false,
+    "live_cuda_graph_replay": true,
+    "lossless_output_equivalence": false,
+    "performance_measurement": true,
+    "production_default_enabled": false,
+    "real_task_correctness": true
+  },
+  "diagnostic": {
+    "classification": "b1_diagnostic",
+    "host_compile_overlap": true,
+    "manifests_unchanged_during_run": true,
+    "max_num_seqs": 1,
+    "published_evidence": "sanitized_reduction_only",
+    "swe_concurrency": 1,
+    "task_count": 1,
+    "task_resolved_count": 1
+  },
+  "floor": {
+    "mandatory_weight_read_lower_bound_ms_per_step": 119.658015414,
+    "observed_ratio": 1.89907316897,
+    "one_sided_u95_1_15x_cap_ms_per_step": 137.6067177261,
+    "observed_to_cap_ratio": 1.651367973017
+  },
+  "kernel_engagement": {
+    "candidate_rows": 32,
+    "engaged_marker_count_observed": 1,
+    "fallback_marker_count_observed": 0,
+    "fatal_marker_count_observed": 0,
+    "ready_marker_count_observed": 1,
+    "vocabulary_rows": 65536,
+    "root_reduction_enabled": true
+  },
+  "measurement": {
+    "acceptance": {
+      "accepted_draft_tokens": 2154,
+      "accepted_drafts_per_event": 4.662337662338,
+      "committed_tokens_per_event": 5.662337662338,
+      "draft_tokens_per_event": 31,
+      "spec_draft_events": 462
+    },
+    "gpu_components_ms_per_step": {
+      "cfwd": 27.234862945136,
+      "dfwd": 36.874839588335,
+      "sfwd": 153.532290545745,
+      "sum": 217.641993079216
+    },
+    "gpu_component_tps": 26.016751557117,
+    "timer_integrity": {
+      "cfwd_spans": 471,
+      "dfwd_spans": 471,
+      "sfwd_bookkeeping_errors": 0,
+      "sfwd_dropped": 0,
+      "sfwd_pending": 0,
+      "sfwd_steps": 471,
+      "wall_chain_open": false,
+      "wall_invalid_request_ids": 0,
+      "wall_steps": 461
+    },
+    "wall_ms_per_step": 227.239326524918,
+    "wall_tps": 24.917947737874
+  },
+  "prior_pair8_b1_reference": {
+    "accepted_drafts_per_event": 3.652892561983,
+    "acceptance_change_percent": 27.634130575323,
+    "pairing": "prior_diagnostic_reference_not_simultaneous_pair",
+    "wall_ms_per_step": 227.275578840612,
+    "wall_step_latency_change_percent": -0.015950818772,
+    "wall_tps": 20.472470406715,
+    "wall_tps_change_percent": 21.714415714584
+  },
+  "prior_stock_b1_reference": {
+    "accepted_drafts_per_event": 4.89,
+    "acceptance_change_percent": -4.655671526837,
+    "pairing": "prior_diagnostic_reference_not_simultaneous_pair",
+    "wall_ms_per_step": 241.709,
+    "wall_step_latency_reduction_percent": 5.986402440572,
+    "wall_tps": 24.367,
+    "wall_tps_change_percent": 2.261040496878
+  },
+  "run_source_commit": "d36153944c9c86f5789c53d247184c4c0115ecfb",
+  "source_implementation_commit": "a5fd0e0d6",
+  "schema": "fr13.fixed32.dfwd_k64_m32_quality_real_b1.v1",
+  "status": "KEEP_FOR_B4_VALIDATION"
+}
