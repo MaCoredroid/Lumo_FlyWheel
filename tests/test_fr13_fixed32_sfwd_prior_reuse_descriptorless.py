@@ -291,6 +291,17 @@ def test_packed_xgather_loads_current_x_once_and_reuses_it() -> None:
 
     assert fragment is not None
     assert fragment.count("tl.load(x_batch") == 1
+    assert fragment.count("tl.gather(current_x,") == 2
     assert "tl.gather(current_x, x_index, axis=0)" in fragment
     assert "tl.broadcast_to(x_node, ROWS_PER_PROGRAM, BLOCK_C)" in fragment
+    assert "offs_n - pid_n_base, ROWS_PER_PROGRAM, BLOCK_C" in fragment
+    assert "tl.gather(current_x, current_index, axis=0)" in fragment
+    assert "current_value * current_weight" in fragment
+    assert "current_x * current_weight" not in fragment
+    assert fragment.index("for tap in tl.static_range(0, WIDTH - 1):") < (
+        fragment.index("current_index = tl.broadcast_to(")
+    )
+    assert fragment.index("current_product =") < fragment.index(
+        "acc = acc + current_product"
+    )
     assert "((WIDTH - 1) + offs_n) * C" in fragment

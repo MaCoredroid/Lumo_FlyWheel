@@ -653,8 +653,14 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
         product = (value * weight).to(tl.bfloat16).to(tl.float32)
         acc = acc + product
 
+    current_index = tl.broadcast_to(
+        offs_n - pid_n_base, ROWS_PER_PROGRAM, BLOCK_C
+    )
+    current_value = tl.gather(current_x, current_index, axis=0)
     current_weight = tl.load(weight_channels + (WIDTH - 1)).to(tl.bfloat16)
-    current_product = (current_x * current_weight).to(tl.bfloat16).to(tl.float32)
+    current_product = (current_value * current_weight).to(tl.bfloat16).to(
+        tl.float32
+    )
     acc = acc + current_product
 
     activated = acc / (1.0 + tl.exp(0.0 - acc))

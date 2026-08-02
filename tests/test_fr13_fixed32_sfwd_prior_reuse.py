@@ -250,7 +250,9 @@ def test_launcher_uses_packed_xgather_kernel_and_exact_layout() -> None:
         "for tap in tl.static_range(0, WIDTH - 1):"
     )
     assert "tl.where(source_row == 1, prior_1, prior_2)" in kernel
-    assert "current_x * current_weight" in kernel
+    assert "tl.gather(current_x, current_index, axis=0)" in kernel
+    assert "current_value * current_weight" in kernel
+    assert "current_x * current_weight" not in kernel
     assert "source_stage + stage_offset + 2 * C + offs_c" in kernel
     assert "source_flat" not in kernel
     assert "x_stride_row" not in kernel
