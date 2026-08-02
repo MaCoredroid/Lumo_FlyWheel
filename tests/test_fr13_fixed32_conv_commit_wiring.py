@@ -315,6 +315,10 @@ def test_patcher_runtime_identity_tuple_matches_kernel_state_order() -> None:
         "id(source_offsets)",
         "id(direct_state_src)",
         "id(staging)",
+        (
+            "tuple((id(row_guard_flags_by_batch[guard_batch]) for guard_batch "
+            "in range(1, capacity + 1)))"
+        ),
     ]
     data_ptrs = assignments["source_data_ptrs"]
     assert isinstance(data_ptrs, ast.Tuple)
@@ -334,6 +338,10 @@ def test_patcher_runtime_identity_tuple_matches_kernel_state_order() -> None:
         "int(source_offsets.data_ptr())",
         "int(direct_state_src.data_ptr())",
         "int(staging.data_ptr())",
+        (
+            "tuple((int(row_guard_flags_by_batch[guard_batch].data_ptr()) for "
+            "guard_batch in range(1, capacity + 1)))"
+        ),
     ]
 
 

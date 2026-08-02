@@ -4527,6 +4527,114 @@ def _fr13_fixed32_conv_direct_col0_metadata_kernel(
 
 
 @triton.jit
+def _fr13_fixed32_conv_commit_row_guard_kernel(
+    spec_state_indices,
+    accepted_paths,
+    accepted_lens,
+    bank_alias_ids,
+    guard_flags,
+    ssi_stride_l,
+    ssi_stride_b,
+    ssi_stride_s,
+    path_stride_b,
+    path_stride_s,
+    lens_stride_b,
+    BANK_ROWS: tl.constexpr,
+    B: tl.constexpr,
+    LAYERS: tl.constexpr,
+    SPEC_COLS: tl.constexpr,
+    PATH_COLS: tl.constexpr,
+    MAX_ACCEPTED: tl.constexpr,
+    OTHER_CAP: tl.constexpr,
+):
+    """Validate one fixed physical32 layer/request destination."""
+    pid = tl.program_id(0)
+    layer = pid // B
+    request = pid - layer * B
+    ssi_base = (
+        spec_state_indices
+        + layer * ssi_stride_l
+        + request * ssi_stride_b
+    )
+
+    row_offsets = tl.arange(0, SPEC_COLS)
+    rows = tl.load(ssi_base + row_offsets * ssi_stride_s).to(tl.int64)
+    rows_ok = tl.sum(
+        ((rows > 0) & (rows < BANK_ROWS)).to(tl.int32), axis=0
+    ) == SPEC_COLS
+
+    accepted_len = tl.load(
+        accepted_lens + request * lens_stride_b
+    ).to(tl.int64)
+    path_offsets = tl.arange(0, PATH_COLS)
+    paths = tl.load(
+        accepted_paths
+        + request * path_stride_b
+        + path_offsets * path_stride_s
+    ).to(tl.int64)
+    active_paths = path_offsets < accepted_len
+    paths_ok = tl.sum(
+        (
+            (~active_paths)
+            | ((paths >= 0) & (paths < SPEC_COLS))
+        ).to(tl.int32),
+        axis=0,
+    ) == PATH_COLS
+    lens_ok = (accepted_len >= 0) & (accepted_len <= MAX_ACCEPTED)
+
+    leaf_pos = tl.maximum(accepted_len - 1, 0)
+    leaf_pos = tl.minimum(leaf_pos, PATH_COLS - 1)
+    leaf_node = tl.load(
+        accepted_paths
+        + request * path_stride_b
+        + leaf_pos * path_stride_s
+    ).to(tl.int64)
+    leaf_node = tl.where(accepted_len > 0, leaf_node, 0)
+    leaf_node = tl.maximum(0, tl.minimum(leaf_node, SPEC_COLS - 1))
+    selected_row = tl.load(ssi_base + leaf_node * ssi_stride_s).to(tl.int64)
+    selected_ok = (selected_row >= 0) & (selected_row < BANK_ROWS)
+
+    alias_id = tl.load(bank_alias_ids + layer).to(tl.int64)
+    alias_ok = (alias_id >= 0) & (alias_id < 16)
+    running_row = tl.load(ssi_base).to(tl.int64)
+    other_offsets = tl.arange(0, OTHER_CAP)
+    other_valid = other_offsets < LAYERS * B
+    other_layers = other_offsets // B
+    other_requests = other_offsets - other_layers * B
+    other_aliases = tl.load(
+        bank_alias_ids + other_layers,
+        mask=other_valid,
+        other=-1,
+    ).to(tl.int64)
+    other_rows = tl.load(
+        spec_state_indices
+        + other_layers * ssi_stride_l
+        + other_requests * ssi_stride_b,
+        mask=other_valid,
+        other=-1,
+    ).to(tl.int64)
+    duplicate_destination = (
+        other_valid
+        & (other_offsets != pid)
+        & (other_aliases == alias_id)
+        & (other_rows == running_row)
+    )
+    destination_unique = tl.sum(
+        duplicate_destination.to(tl.int32), axis=0
+    ) == 0
+
+    tl.store(
+        guard_flags + pid,
+        rows_ok
+        & paths_ok
+        & lens_ok
+        & selected_ok
+        & alias_ok
+        & destination_unique,
+    )
+
+
+@triton.jit
 def _fr13_fixed32_sfwd_state_fusion_kernel(
     x,
     conv_state,
@@ -5087,7 +5195,7 @@ def preseed_fixed32_conv_col0_pregather(
         or commit_spec_state_indices.ndim != 3
         or int(commit_spec_state_indices.shape[0]) != 48
         or int(commit_spec_state_indices.shape[1]) < capacity
-        or int(commit_spec_state_indices.shape[2]) < 1
+        or int(commit_spec_state_indices.shape[2]) != 32
         or not commit_spec_state_indices.is_contiguous()
         or not torch.is_tensor(accepted_paths)
         or accepted_paths.device != anchor.device
@@ -5183,6 +5291,14 @@ def preseed_fixed32_conv_col0_pregather(
         dtype=anchor.dtype,
         device=anchor.device,
     )
+    row_guard_flags = {
+        batch: torch.empty(
+            48 * batch,
+            dtype=torch.bool,
+            device=anchor.device,
+        )
+        for batch in batches
+    }
     expected_staging_stride = (capacity * row_elems, row_elems, 1)
     if (
         not staging.is_contiguous()
@@ -5258,6 +5374,7 @@ def preseed_fixed32_conv_col0_pregather(
             json.dumps(state_src_values).encode("ascii")
         ).hexdigest(),
         "staging": staging,
+        "row_guard_flags_by_batch": row_guard_flags,
         "row_elems": row_elems,
         "conv_c": conv_c,
         "conv_l": conv_l,
@@ -5301,6 +5418,7 @@ def preseed_fixed32_conv_col0_pregather(
             id(source_offsets),
             id(direct_state_src),
             id(staging),
+            tuple(id(row_guard_flags[batch]) for batch in batches),
         ),
         "source_data_ptrs": (
             tuple(int(bank.data_ptr()) for bank in bank_refs),
@@ -5321,6 +5439,9 @@ def preseed_fixed32_conv_col0_pregather(
             int(source_offsets.data_ptr()),
             int(direct_state_src.data_ptr()),
             int(staging.data_ptr()),
+            tuple(
+                int(row_guard_flags[batch].data_ptr()) for batch in batches
+            ),
         ),
         "commit_operand_meta": (
             tuple(int(value) for value in commit_spec_state_indices.shape),
@@ -5358,6 +5479,15 @@ def preseed_fixed32_conv_col0_pregather(
             "commit_source_pointer_entries": 48,
             "commit_source_rows_per_batch": source_rows,
             "commit_state_src_shape": (32, conv_l),
+            "commit_row_guard_route": "fixed32_triton_physical32_v1",
+            "commit_row_guard_kernel_launches_per_event": 1,
+            "commit_row_guard_programs_per_request": 48,
+            "commit_row_guard_physical_rows": 32,
+            "commit_row_guard_path_capacity": 16,
+            "commit_row_guard_compare_capacity": 256,
+            "commit_row_guard_torch_index_transforms": 0,
+            "commit_row_guard_async_scalar_reductions": 1,
+            "commit_row_guard_async_assertions": 1,
             "commit_full_node_writebacks": 0,
             "commit_conv_remaps": 0,
             "commit_bank_overlap_policy": "exact_alias_only_16x3",
@@ -5426,6 +5556,15 @@ def preseed_fixed32_conv_col0_pregather(
     )
     try:
         for batch in batches:
+            validate_fixed32_conv_commit_rows(
+                spec_state_indices=safe_commit_ssi,
+                accepted_paths=safe_paths,
+                accepted_lens=safe_lens,
+                bank_alias_ids=alias_ids_device,
+                guard_flags=row_guard_flags[batch],
+                batch=batch,
+                bank_rows=int(anchor.shape[0]),
+            )
             pregather_grid = (48, batch, triton.cdiv(row_elems, block))
             _fr13_conv_col0_pregather_kernel[pregather_grid](
                 anchor,
@@ -5806,6 +5945,10 @@ def launch_fixed32_conv_col0_pregather(
             id(state["source_off16"]),
             id(state["state_src"]),
             id(state["staging"]),
+            tuple(
+                id(state["row_guard_flags_by_batch"][batch])
+                for batch in state["preseeded_batches"]
+            ),
         )
         or state.get("source_data_ptrs")
         != (
@@ -5830,6 +5973,10 @@ def launch_fixed32_conv_col0_pregather(
             int(state["source_off16"].data_ptr()),
             int(state["state_src"].data_ptr()),
             int(state["staging"].data_ptr()),
+            tuple(
+                int(state["row_guard_flags_by_batch"][batch].data_ptr())
+                for batch in state["preseeded_batches"]
+            ),
         )
         or not state["staging"].is_contiguous()
         or tuple(int(value) for value in state["staging"].shape)
@@ -6120,6 +6267,7 @@ def launch_fixed32_conv_commit_to_col0(
         accepted_paths=accepted_paths,
         accepted_lens=accepted_lens,
         bank_alias_ids=state["bank_alias_ids_device"],
+        guard_flags=state["row_guard_flags_by_batch"][batch],
         batch=batch,
         bank_rows=validation_bank_rows,
     )
@@ -10477,10 +10625,11 @@ def validate_fixed32_conv_commit_rows(
     accepted_paths: torch.Tensor,
     accepted_lens: torch.Tensor,
     bank_alias_ids: torch.Tensor,
+    guard_flags: torch.Tensor,
     batch: int,
     bank_rows: int,
 ) -> None:
-    """Enqueue row/path guards before fixed32 raw-pointer conv access."""
+    """Enqueue one fixed-grid row/path guard before raw-pointer conv access."""
     if (
         type(batch) is not int
         or not 1 <= batch <= 4
@@ -10508,55 +10657,40 @@ def validate_fixed32_conv_commit_rows(
         or bank_alias_ids.device != spec_state_indices.device
         or tuple(bank_alias_ids.shape) != (48,)
         or not bank_alias_ids.is_contiguous()
+        or not torch.is_tensor(guard_flags)
+        or guard_flags.dtype != torch.bool
+        or guard_flags.device != spec_state_indices.device
+        or tuple(guard_flags.shape) != (48 * batch,)
+        or not guard_flags.is_contiguous()
     ):
         raise RuntimeError(
             "FR13_FIXED32_CONV_COMMIT row-guard geometry/dtype/device drift"
         )
 
-    active_rows = spec_state_indices[:, :batch, :].to(torch.long)
-    running_rows = active_rows[:, :, 0]
-    physical_destinations = (
-        bank_alias_ids.view(48, 1) * bank_rows + running_rows
-    ).reshape(-1)
-    sorted_destinations = torch.sort(physical_destinations).values
-    distinct_destinations = (
-        sorted_destinations[1:] != sorted_destinations[:-1]
-    ).all()
-    lens = accepted_lens[:batch].to(torch.long).view(batch, 1)
-    paths = accepted_paths[:batch].to(torch.long)
-    positions = torch.arange(
-        int(accepted_paths.shape[1]),
-        device=accepted_paths.device,
-        dtype=torch.long,
-    ).view(1, -1)
-    active_paths = positions < lens
-    leaf_pos = (lens.view(-1) - 1).clamp(
-        min=0, max=int(accepted_paths.shape[1]) - 1
-    )
-    leaf_nodes = paths.gather(1, leaf_pos.view(batch, 1)).view(batch)
-    leaf_nodes = torch.where(
-        lens.view(-1) > 0, leaf_nodes, torch.zeros_like(leaf_nodes)
-    ).clamp(min=0, max=int(spec_state_indices.shape[2]) - 1)
-    selected_rows = active_rows.gather(
-        2,
-        leaf_nodes.view(1, batch, 1).expand(
-            int(spec_state_indices.shape[0]), batch, 1
-        ),
-    ).view(int(spec_state_indices.shape[0]), batch)
-    contract_ok = (
-        (active_rows > 0).all()
-        & (active_rows < bank_rows).all()
-        & (bank_alias_ids >= 0).all()
-        & (bank_alias_ids < 16).all()
-        & distinct_destinations
-        & (lens >= 0).all()
-        & (lens <= _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH).all()
-        & ((~active_paths) | ((paths >= 0) & (paths < 32))).all()
-        & (selected_rows >= 0).all()
-        & (selected_rows < bank_rows).all()
+    _fr13_fixed32_conv_commit_row_guard_kernel[(48 * batch,)](
+        spec_state_indices,
+        accepted_paths,
+        accepted_lens,
+        bank_alias_ids,
+        guard_flags,
+        int(spec_state_indices.stride(0)),
+        int(spec_state_indices.stride(1)),
+        int(spec_state_indices.stride(2)),
+        int(accepted_paths.stride(0)),
+        int(accepted_paths.stride(1)),
+        int(accepted_lens.stride(0)),
+        BANK_ROWS=bank_rows,
+        B=batch,
+        LAYERS=48,
+        SPEC_COLS=32,
+        PATH_COLS=16,
+        MAX_ACCEPTED=_FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH,
+        OTHER_CAP=256,
+        num_warps=4,
+        num_stages=1,
     )
     _fr13_fixed32_device_assert(
-        contract_ok,
+        guard_flags.all(),
         "FR13_FIXED32_CONV_COMMIT precommit row/path contract violation",
     )
 

@@ -182,12 +182,11 @@ def test_layer_batch_recurrence_stops_after_root_plus_accepted_drafts() -> None:
 
 
 def test_committer_guards_reject_unreachable_padding_lengths() -> None:
-    row_guard = _text("validate_fixed32_conv_commit_rows")
+    row_guard = _text("_fr13_fixed32_conv_commit_row_guard_kernel")
     replay = _text("_fr13_fixed32_committer_replay")
 
-    bound = "lens <= _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH"
-    assert bound in row_guard
-    assert bound in replay
+    assert "accepted_len <= MAX_ACCEPTED" in row_guard
+    assert "lens <= _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH" in replay
 
 
 def test_layer_batch_consumes_prevalidated_fixed32_scan_bounds() -> None:
@@ -559,13 +558,14 @@ def test_layer_programs_have_disjoint_layer_state_and_shared_read_only_paths() -
 
 def test_candidate_binds_physical_alias_row_uniqueness_guard() -> None:
     preseed = _text("preseed_fixed32_committer_graph")
-    guard = _text("validate_fixed32_conv_commit_rows")
+    guard = _text("_fr13_fixed32_conv_commit_row_guard_kernel")
     conv_commit = _text("launch_fixed32_conv_commit_to_col0")
 
     assert '"physical_alias_row_uniqueness_guard": (' in preseed
     assert '"validate_fixed32_conv_commit_rows"' in preseed
-    assert "bank_alias_ids.view(48, 1) * bank_rows + running_rows" in guard
-    assert "distinct_destinations" in guard
+    assert "other_aliases == alias_id" in guard
+    assert "other_rows == running_row" in guard
+    assert "destination_unique" in guard
     assert conv_commit.index("validate_fixed32_conv_commit_rows(") < conv_commit.index(
         "_fr13_fixed32_conv_direct_col0_kernel[grid]("
     )
@@ -640,6 +640,14 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
     assert '"state_elements_per_thread_before_compiler_effects", -1' in patcher
     assert '"physical_alias_row_uniqueness_guard"' in patcher
     assert '!= "validate_fixed32_conv_commit_rows"' in patcher
+    assert '!= "fixed32_triton_physical32_v1"' in patcher
+    assert 'conv_commit_contract.get("row_guard_kernel_launches", -1)' in patcher
+    assert 'conv_commit_contract.get("row_guard_programs_per_request", -1)' in patcher
+    assert 'conv_commit_contract.get("row_guard_physical_rows", -1)' in patcher
+    assert 'conv_commit_contract.get("row_guard_compare_capacity", -1)' in patcher
+    assert 'conv_commit_contract.get("row_guard_torch_index_transforms", -1)' in patcher
+    assert 'conv_commit_contract.get("row_guard_async_scalar_reductions", -1)' in patcher
+    assert 'conv_commit_contract.get("row_guard_async_assertions", -1)' in patcher
     assert '!= "real_swe_all_reachable_accepted_lengths_0_11"' in patcher
     assert 'committer_contract.get("accepted_length_max", -1)' in patcher
     assert ") != 0x0FFF" in patcher
