@@ -1,0 +1,24 @@
+Focused qualification, observer, ingress, attestation, ownership, and legacy graph tests:
+147 passed in 3.77s
+
+Broad fixed32 suite:
+832 passed, 8 skipped, 4 failed in 23.13s
+
+Failure classification:
+- 2 fixture failures: repository-local .venv/bin/python absent
+- 1 fixture failure: private SWE-Verified dataset cache blob absent
+- 1 unrelated lifecycle timing fixture: passed on immediate isolated retry
+
+Additional checks:
+- Python byte compilation: pass
+- launcher, serve wrapper, and gate-runner shell syntax: pass
+- git diff whitespace validation: pass
+- independent static review: no remaining blocker
+
+Not run:
+- CUDA or Triton runtime compilation
+- Docker boot
+- real exact4 or exact16 qualification
+- production boot
+- TPS, step-wall, hardware-floor, or U95 measurement
+- synthetic probes

@@ -1,0 +1,92 @@
+{
+  "acceptance_evidence": false,
+  "branch": "agent/fixed32-gdn-parent-group-simd-20260801",
+  "campaigns": {
+    "exact16": {
+      "subset_sha256": "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c",
+      "task_count": 16
+    },
+    "exact4": {
+      "subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+      "task_count": 4
+    }
+  },
+  "candidate": "fixed32_gdn_parent_group_simd_v2",
+  "candidate_serving_permitted": false,
+  "contract": {
+    "batch_size": 4,
+    "candidate_bv": 8,
+    "candidate_physical_launches_per_layer": 2,
+    "event_grid_z": [
+      4,
+      20
+    ],
+    "grid_z_per_request": [
+      1,
+      5
+    ],
+    "group_max_path_lengths": [
+      7,
+      7,
+      1,
+      1,
+      1
+    ],
+    "groups": 5,
+    "logical_critical_path": 12,
+    "parent_loads": 5,
+    "physical_critical_path": 12,
+    "physical_rows_per_request": 32,
+    "reference_bv": 8,
+    "reference_physical_launches_per_layer": 8,
+    "simd_width": 4,
+    "single_writer_nodes": 32
+  },
+  "draft_vocab_k": 65536,
+  "draft_vocab_root": 0,
+  "gpu_or_docker_run_performed": false,
+  "hardware_floor_ms_per_step": null,
+  "kernel": "tree_gdn_parent_group_simd_width4_v2",
+  "modes": [
+    "tail6_fixed32",
+    "hydra27_fixed32"
+  ],
+  "per_mode_required_live_passes": [
+    "exact4_eager",
+    "exact4_graph",
+    "exact16_eager",
+    "exact16_graph"
+  ],
+  "production_default_enabled": false,
+  "production_status": "closed_pending_four_source_bound_live_passes_per_mode",
+  "qualification_results": {
+    "exact16_eager": "not_run",
+    "exact16_graph": "not_run",
+    "exact4_eager": "not_run",
+    "exact4_graph": "not_run"
+  },
+  "reference_kernel": "per_request_tree_gdn_path_bv8",
+  "reference_served_during_qualification": true,
+  "runner": "scripts/fr13_run_b4_gdn_parent_group_simd_live_gate.sh",
+  "schema": "fr13.fixed32.gdn_parent_group_simd.b4_qualification_readiness.v1",
+  "source_commit": "6b71ff85249064b6a44831ab56f745d4d75dab0e",
+  "source_identity": {
+    "kernel_source_sha256": "fea2cfb0fde4b60ce0b8154c5402bdb95b375b801f22fffd3b4e987ce0a76917",
+    "parent_contract_sha256": "6a480b8fee74f247f02f3e7b89f7596e75292f780acab883aab67e5c3b72c7be",
+    "writer_sha256": "23b22df6bf551a4e788327db3b3d3d96e1eca49078d2c6bd0049da2d390eca8b"
+  },
+  "status": "READY_FOR_REAL_EXACT4_EXACT16_B4_GATES_PRODUCTION_CLOSED",
+  "synthetic_probe_executed": false,
+  "tests": {
+    "broad_environment_failures": 3,
+    "broad_flaky_failure_retried_passed": 1,
+    "broad_passed": 832,
+    "broad_skipped": 8,
+    "focused_passed": 147,
+    "independent_static_review_blockers": 0,
+    "python_compile": "pass",
+    "shell_syntax": "pass"
+  },
+  "timing_evidence": false,
+  "u95_floor_acceptance_evidence": false
+}
