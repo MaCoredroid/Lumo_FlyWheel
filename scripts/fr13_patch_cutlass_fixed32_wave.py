@@ -70,6 +70,7 @@ namespace vllm {
 SCHEDULER_SPECIALIZATION_REPLACEMENT = r"""#include "cutlass_gemm_caller.cuh"
 
 namespace vllm {
+struct fr13_fixed32_m32_static_linear_scheduler {};
 struct fr13_fixed32_m128_static_scheduler {};
 struct fr13_fixed32_wide256_recompute_scheduler {};
 }  // namespace vllm
@@ -305,6 +306,143 @@ class Fr13Wide256RecomputeTileScheduler
   }
 };
 
+// The swapped stock M32 route has one N tile, one L tile, and a 1x1x1
+// cluster for every allowlisted projection. Keep CUTLASS's static-persistent
+// lifecycle, but decode the worker index directly as the M tile instead of
+// running the generic batch, raster, swizzle, and two-dimensional divmods.
+class Fr13Fixed32M32LinearScheduler100
+    : public StaticPersistentTileScheduler100 {
+ public:
+  using Base = StaticPersistentTileScheduler100;
+  using Params = typename Base::Params;
+  using RasterOrder = typename Params::RasterOrder;
+  using WorkTileInfo = typename Base::WorkTileInfo;
+  using CLCResponse = typename Base::CLCResponse;
+
+  CUTLASS_DEVICE explicit
+  Fr13Fixed32M32LinearScheduler100(Params const& params)
+      : Base(params) {
+    initialize_linear_state(params);
+  }
+
+  CUTLASS_DEVICE explicit
+  Fr13Fixed32M32LinearScheduler100(
+      CLCResponse* clc_response_ptr,
+      Params const& params,
+      dim3 block_id_in_cluster)
+      : Base(clc_response_ptr, params, block_id_in_cluster) {
+    initialize_linear_state(params);
+  }
+
+ private:
+  CUTLASS_DEVICE void
+  initialize_linear_state(Params const& params) {
+#if defined(__CUDA_ARCH__)
+    if (params.raster_order_ == RasterOrder::AlongN) {
+      current_work_linear_idx_ =
+          uint64_t(blockIdx.x) + uint64_t(blockIdx.y) * uint64_t(gridDim.x);
+    } else {
+      current_work_linear_idx_ =
+          uint64_t(blockIdx.x) * uint64_t(gridDim.y) + uint64_t(blockIdx.y);
+    }
+    total_grid_size_ =
+        uint64_t(gridDim.x) * uint64_t(gridDim.y) * uint64_t(gridDim.z);
+
+    const bool direct_linear_geometry =
+        params.problem_tiles_n_ == 1 && params.problem_tiles_l_ == 1 &&
+        params.cluster_shape_m_ == 1 && params.cluster_shape_n_ == 1 &&
+        params.log_swizzle_size_ == 0 &&
+        params.blocks_per_problem_ == uint64_t(params.problem_tiles_m_);
+    CUTLASS_ASSERT(direct_linear_geometry &&
+                   "fixed32 M32 direct scheduler requires tiled NxL=1x1");
+    direct_linear_blocks_ =
+        direct_linear_geometry ? uint64_t(params.problem_tiles_m_) : 0;
+#else
+    CUTLASS_ASSERT(false && "device-only fixed32 M32 scheduler constructor");
+#endif
+  }
+
+ public:
+  template <class ClusterShape>
+  CUTLASS_DEVICE WorkTileInfo
+  initial_work_tile_info(ClusterShape) const {
+    return get_current_work();
+  }
+
+  CUTLASS_DEVICE WorkTileInfo
+  get_current_work() const {
+    return get_current_work_for_linear_idx(current_work_linear_idx_);
+  }
+
+  CUTLASS_DEVICE WorkTileInfo
+  get_current_work_for_linear_idx(uint64_t linear_idx) const {
+    if (linear_idx >= direct_linear_blocks_) {
+      return WorkTileInfo::invalid_work_tile();
+    }
+    return {static_cast<int32_t>(linear_idx), 0, 0, true};
+  }
+
+  CUTLASS_DEVICE static auto
+  work_tile_to_cta_coord(WorkTileInfo work_tile_info) {
+    return cute::make_coord(
+        work_tile_info.M_idx, cute::Int<0>{},
+        cute::Underscore{}, cute::Int<0>{});
+  }
+
+  CUTLASS_DEVICE static auto
+  work_tile_to_cta_coord(
+      WorkTileInfo work_tile_info,
+      [[maybe_unused]] dim3 block_id_in_cluster) {
+    return work_tile_to_cta_coord(work_tile_info);
+  }
+
+  CUTLASS_DEVICE void
+  advance_to_next_work(uint32_t advance_count = 1) {
+    current_work_linear_idx_ += total_grid_size_ * uint64_t(advance_count);
+  }
+
+  CUTLASS_DEVICE bool
+  is_last_tile(WorkTileInfo&, uint32_t advance_count = 1) const {
+    return !get_current_work_for_linear_idx(
+                current_work_linear_idx_ +
+                total_grid_size_ * uint64_t(advance_count))
+                .is_valid();
+  }
+
+  CUTLASS_DEVICE auto
+  fetch_next_work(WorkTileInfo) {
+    advance_to_next_work();
+    return cute::make_tuple(get_current_work(), true);
+  }
+
+  template <class TileSchedulerPipeline, class TileSchedulerPipelineState>
+  CUTLASS_DEVICE auto
+  fetch_next_work(
+      WorkTileInfo work_tile_info,
+      TileSchedulerPipeline&,
+      TileSchedulerPipelineState) {
+    return fetch_next_work(work_tile_info);
+  }
+
+ private:
+  uint64_t current_work_linear_idx_ = 0;
+  uint64_t total_grid_size_ = 0;
+  uint64_t direct_linear_blocks_ = 0;
+};
+
+template <class TileShape, class ClusterShape,
+          uint32_t SchedulerPipelineStageCount>
+struct TileSchedulerSelector<
+    vllm::fr13_fixed32_m32_static_linear_scheduler, arch::Sm120,
+    TileShape, ClusterShape, SchedulerPipelineStageCount> {
+  static_assert(
+      cute::size<0>(ClusterShape{}) == 1 &&
+      cute::size<1>(ClusterShape{}) == 1 &&
+      cute::size<2>(ClusterShape{}) == 1,
+      "fixed32 M32 coordinate scheduler requires a 1x1x1 cluster");
+  using Scheduler = Fr13Fixed32M32LinearScheduler100;
+};
+
 template <class TileShape, class ClusterShape,
           uint32_t SchedulerPipelineStageCount>
 struct TileSchedulerSelector<
@@ -414,6 +552,28 @@ struct cutlass_3x_gemm_fp8_blockwise_m128_static
   struct GemmKernel : public KernelType {};
 };
 
+template <
+    class OutType, int ScaleGranularityM, int ScaleGranularityN,
+    int ScaleGranularityK, class MmaTileShape, class ClusterShape,
+    class EpilogueScheduler, class MainloopScheduler, bool swap_ab_>
+struct cutlass_3x_gemm_fp8_blockwise_m32_static_linear
+    : cutlass_3x_gemm_fp8_blockwise<
+          OutType, ScaleGranularityM, ScaleGranularityN, ScaleGranularityK,
+          MmaTileShape, ClusterShape, EpilogueScheduler, MainloopScheduler,
+          swap_ab_> {
+  using Base = cutlass_3x_gemm_fp8_blockwise<
+      OutType, ScaleGranularityM, ScaleGranularityN, ScaleGranularityK,
+      MmaTileShape, ClusterShape, EpilogueScheduler, MainloopScheduler,
+      swap_ab_>;
+
+  using KernelType = enable_sm120_family<cutlass::gemm::kernel::GemmUniversal<
+      Shape<int, int, int, int>, typename Base::CollectiveMainloop,
+      typename Base::CollectiveEpilogue,
+      fr13_fixed32_m32_static_linear_scheduler>>;
+
+  struct GemmKernel : public KernelType {};
+};
+
 """
 
 CONFIG_ANCHOR = """template <typename Gemm>
@@ -509,6 +669,22 @@ struct sm120_blockwise_fp8_config_b4_persistent_m128_static {
       EpilogueSchedule, KernelSchedule, false>;
 };
 
+// Preserve the stock swapped M32 tile, scale layout, mainloop, epilogue, and
+// complete ordered K reduction. Only output-tile scheduling and coordinates
+// use the fixed one-dimensional geometry.
+template <typename OutType>
+struct sm120_blockwise_fp8_config_b1_m32_static_linear {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_128, _32, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_m32_static_linear<
+      OutType, 128, 1, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, true>;
+};
+
 enum class fixed32_cutlass_wave_variant {
   stock,
   stream_k_cooperative_128,
@@ -519,6 +695,8 @@ enum class fixed32_cutlass_wave_variant {
   persistent_b4_m128_byte_ab,
   persistent_b4_m128_static,
   persistent_b4_m128_static_byte_ab,
+  m32_static_linear,
+  m32_static_linear_byte_ab,
 };
 
 static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
@@ -555,6 +733,12 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     }
     if (value == "persistent_b4_m128_static_byte_ab") {
       return fixed32_cutlass_wave_variant::persistent_b4_m128_static_byte_ab;
+    }
+    if (value == "m32_static_linear") {
+      return fixed32_cutlass_wave_variant::m32_static_linear;
+    }
+    if (value == "m32_static_linear_byte_ab") {
+      return fixed32_cutlass_wave_variant::m32_static_linear_byte_ab;
     }
     return fixed32_cutlass_wave_variant::stock;
   }();
@@ -618,6 +802,10 @@ static inline bool fixed32_cutlass_real_projection(int m, int n, int k) {
       (n == 16384 && k == 5120) ||
       (n == 14336 && k == 5120);
   return fixed32_rows && real_projection;
+}
+
+static inline bool fixed32_cutlass_m32_projection(int m, int n, int k) {
+  return m == 32 && fixed32_cutlass_real_projection(m, n, k);
 }
 
 template <typename Gemm>
@@ -715,6 +903,12 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
            fixed32_cutlass_wave_variant::persistent_b4_m128_static_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
+  if (!fixed32_cutlass_m32_projection(M, N, K) &&
+      (wave_variant == fixed32_cutlass_wave_variant::m32_static_linear ||
+       wave_variant ==
+           fixed32_cutlass_wave_variant::m32_static_linear_byte_ab)) {
+    wave_variant = fixed32_cutlass_wave_variant::stock;
+  }
 
   auto run_stream_k = [&](torch::stable::Tensor& destination) {
     if (M <= 64) {
@@ -751,6 +945,13 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
         destination, a, b, a_scales, b_scales);
   };
 
+  auto run_m32_static_linear = [&](torch::stable::Tensor& destination) {
+    using Gemm = typename
+        sm120_blockwise_fp8_config_b1_m32_static_linear<OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
   auto run_stock = [&](torch::stable::Tensor& destination) {
     bool swap_ab = (M <= 64) || (M % 4 != 0);
     if (!swap_ab) {
@@ -778,10 +979,17 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   const bool b4_m128_static_byte_ab =
       wave_variant ==
       fixed32_cutlass_wave_variant::persistent_b4_m128_static_byte_ab;
+  const bool m32_static_linear_byte_ab =
+      wave_variant ==
+      fixed32_cutlass_wave_variant::m32_static_linear_byte_ab;
   if (wave_variant ==
           fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab ||
-      wide256_byte_ab || b4_m128_byte_ab || b4_m128_static_byte_ab) {
+      wide256_byte_ab || b4_m128_byte_ab || b4_m128_static_byte_ab ||
+      m32_static_linear_byte_ab) {
     auto run_candidate = [&](torch::stable::Tensor& destination) {
+      if (m32_static_linear_byte_ab) {
+        return run_m32_static_linear(destination);
+      }
       if (b4_m128_static_byte_ab) {
         return run_b4_persistent_m128_static(destination);
       }
@@ -854,7 +1062,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       }
     }
     const char* log_path =
-        b4_m128_static_byte_ab
+        m32_static_linear_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_m32_static_linear_byte_ab.jsonl"
+        : b4_m128_static_byte_ab
             ? "/logs/fr13_fixed32_cutlass_persistent_b4_m128_static_byte_ab.jsonl"
         : b4_m128_byte_ab
             ? "/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl"
@@ -868,7 +1078,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       STD_TORCH_CHECK(log.good(),
                       "FR13 Stream-K byte A/B could not open JSONL");
       log << "{\\\"schema\\\":\\\""
-          << (b4_m128_static_byte_ab
+          << (m32_static_linear_byte_ab
+                  ? "fr13.fixed32.cutlass_m32_static_linear_byte_ab.v1"
+              : b4_m128_static_byte_ab
                   ? "fr13.fixed32.cutlass_persistent_b4_m128_static_byte_ab.v1"
               : b4_m128_byte_ab
                   ? "fr13.fixed32.cutlass_persistent_b4_m128_byte_ab.v1"
@@ -915,6 +1127,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   if (wave_variant ==
       fixed32_cutlass_wave_variant::persistent_b4_m128_static) {
     return run_b4_persistent_m128_static(out);
+  }
+
+  if (wave_variant ==
+      fixed32_cutlass_wave_variant::m32_static_linear) {
+    return run_m32_static_linear(out);
   }
 
   // Unset/unknown selectors retain the stock kernel and numeric result.
