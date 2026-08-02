@@ -381,6 +381,7 @@ def test_gate_runner_and_launcher_are_closed_over_exact_b1_contract() -> None:
     assert "export FR13_DRAFT_VOCAB_K=65536" in runner
     assert "export FR13_DRAFT_VOCAB_ROOT=1" in runner
     assert "export FR13_FIXED32_B1_DIAGNOSTIC=1" in runner
+    assert "export FR13_FIXED32_TAW_WALK_CAP=12" in runner
     assert "export FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION=1" in runner
     assert "export FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA=diagnostic" in runner
     assert "export FR13_FIXED32_CONV_SOURCE_BATCH=0" in runner
