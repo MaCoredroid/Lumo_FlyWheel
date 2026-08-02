@@ -1,0 +1,97 @@
+{
+  "branch": "agent/fixed32-sfwd-state-fusion-rowgroup8-20260802",
+  "candidate": "fixed32_sfwd_state_fusion_rowgroup8_v3",
+  "claims": {
+    "byte_equal": false,
+    "floor_acceptance_eligible": false,
+    "offline_codegen_inspected": true,
+    "performance_measured": false,
+    "production_enabled": false,
+    "real_swe_verified_run": false,
+    "resource_gate_passed": true,
+    "timing_eligible": false
+  },
+  "corrected_live_contract": {
+    "batch_sizes_compiled": [
+      1,
+      4
+    ],
+    "block_channels": 256,
+    "channels": 10240,
+    "conv_state_length": 34,
+    "conv_width": 4,
+    "has_bias": false,
+    "num_warps": 8,
+    "physical_rows_per_request": 32,
+    "rows_per_program": 8,
+    "source_descriptor_dtype": "int64",
+    "source_rows": 36,
+    "x_row_stride_explicit": true
+  },
+  "date_utc": "2026-08-02",
+  "final_codegen": {
+    "b1_compile_hash": "f9ae5df2001b711a49c4ddcdb604522aeb022541a5776a31d4e841dec6824c6e",
+    "b1_ctas": 160,
+    "b4_compile_hash": "f0099e5960187dcc78f148deadbf18aefbb5d1435cfaeb098047c8952aed24e6",
+    "b4_ctas": 640,
+    "calls": 0,
+    "cubin_bytes": 84016,
+    "cubin_sha256": "53abe443d9f7b8dd2816afac88804df46a3a48c2e4ecb797b6a97358b1f51257",
+    "elf_shared_bytes": 1024,
+    "encoded_sass_instructions": 1240,
+    "launch_shared_bytes": 4096,
+    "ldg": 116,
+    "ldl": 0,
+    "lds": 0,
+    "local_bytes": 0,
+    "ptx_sha256": "a91757481d66fd7408230ee4216bf4ccae0436350ed318b735e16586b479ea33",
+    "registers": 111,
+    "sass_sha256": "b1fe1a7dec4311a4ab4aeec27660be7308cd4108983c39934b5570a2f8d92e5d",
+    "source_function_sha256": "d2f507f51e15c0f31aae9d3b59a61f6dec9b2b31f9e9e2e96e6296b6a3e45b9c",
+    "stack_bytes": 0,
+    "static_sass_instructions": 1219,
+    "stg": 20,
+    "stl": 0,
+    "sts": 0
+  },
+  "kernel_source_sha256": "c3036ae4775553e3aeb2131e8b3609c852a22ab86493f7d9843d4aeaed825a70",
+  "previous_artifact_scope": {
+    "artifact": "results/fr13_fixed32_sfwd_state_fusion_rowgroup8_codegen_20260802",
+    "conv_state_length": 12,
+    "deployability_superseded": true
+  },
+  "required_next": [
+    "authenticated real SWE-Verified B1 K64/root1 48-layer raw-byte gate",
+    "continue serving incumbent bytes during qualification",
+    "no production timing or exact4 acceptance before exact byte equality"
+  ],
+  "resource_verdict": {
+    "b1_b4_cubins_identical": true,
+    "calls_zero": true,
+    "compile_pass": true,
+    "local_zero": true,
+    "spill_instructions_zero": true,
+    "stack_zero": true,
+    "viable_offline": true
+  },
+  "schema": "fr13.fixed32.sfwd_state_fusion.rowgroup8.live34_codegen.v1",
+  "source_revision": "8b1786a34612f789a99159ea19ffe6dea4f75dc3",
+  "status": "OFFLINE_LIVE_GEOMETRY_CODEGEN_PASS_B1_BYTE_GATE_REQUIRED",
+  "toolchain": {
+    "cuda_nvcc": "13.0.88",
+    "cuobjdump": "13.0.85",
+    "num_stages": 3,
+    "nvdisasm": "13.0.85",
+    "target": "sm_121a",
+    "torch": "2.10.0+cu130",
+    "triton": "3.6.0"
+  },
+  "verification": {
+    "b1_offline_codegen": "pass",
+    "b4_offline_codegen": "pass",
+    "focused_tests": "149 passed",
+    "fresh_rebuild_byte_identity": "pass",
+    "python_compile": "pass",
+    "shell_syntax": "pass"
+  }
+}
