@@ -1527,6 +1527,21 @@ case "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" in
     exit 2
     ;;
 esac
+case "${FR13_FIXED32_CFWD_FUSED_DECISIONS:-0}" in
+  0) ;;
+  1)
+    [[ "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "1" \
+       || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" == "1" ]] \
+      || {
+        echo "FAIL: fused decisions require TAW native diagnostic or production"
+        exit 2
+      }
+    ;;
+  *)
+    echo "FAIL: FR13_FIXED32_CFWD_FUSED_DECISIONS must be exactly 0 or 1"
+    exit 2
+    ;;
+esac
 case "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" in
   0) ;;
   1)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Real SWE-Verified exact4 B4 byte qualification for source-v7 fixed32 all-parent TAW.
+# Real SWE-Verified exact4 B4 byte qualification for source-v8 fixed32 all-parent TAW.
 # The candidate is shadow-only; the exact reference is always returned.
 set -euo pipefail
 
@@ -19,8 +19,11 @@ SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
 BLOCK_MAP=scripts/fr13_dvk_subset_blocks.json
 BLOCK_MAP_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
 TAW_SOURCE=scripts/fr13_device_multidraft_kernel.py
-TAW_SOURCE_SCHEMA=fr13-fixed32-taw-all-parent-v7
-TAW_SOURCE_SHA256=998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290
+TAW_SOURCE_SCHEMA=fr13-fixed32-taw-all-parent-v8
+TAW_SOURCE_SHA256=0f856a9e3d43f7c218d1b1f05d724fd82b5f0d3ce501c42bc742cc8cfc9acd0d
+CFWD_FUSED_SOURCE=scripts/fr13_cfwd_fused_decision_kernel.py
+CFWD_FUSED_SOURCE_SHA256=8e620a0403d7bc82e5cbe4e49f4699fcbeff839868c422bdaf8b98068ba28c6c
+CFWD_FUSED_CANDIDATE=fixed32_cfwd_sparse_decisions_v1
 TAIL_VALID_MASK=0x7a9ce7ff
 TAIL_ACTIVE_DRAFTS=23
 HYDRA_VALID_MASK=0x7abdffff
@@ -75,6 +78,8 @@ ARMDIR="$RUNROOT_ABS/$ARM"
   || { echo "canonical exact4 subset SHA-256 drift" >&2; exit 2; }
 [[ "$(sha256sum "$BLOCK_MAP" | awk '{print $1}')" == "$BLOCK_MAP_SHA256" ]] \
   || { echo "pinned K64 draft-vocabulary block map drift" >&2; exit 2; }
+[[ "$(sha256sum "$CFWD_FUSED_SOURCE" | awk '{print $1}')" == "$CFWD_FUSED_SOURCE_SHA256" ]] \
+  || { echo "pinned CFWD fused decision source drift" >&2; exit 2; }
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean" >&2; exit 2; }
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
@@ -82,7 +87,7 @@ ARMDIR="$RUNROOT_ABS/$ARM"
 
 "$PYTHON_BIN" - \
   "$TAW_SOURCE_SCHEMA" "$TAW_SOURCE_SHA256" "$FIXED32_MODE" \
-  "$VALID_MASK" "$ACTIVE_DRAFTS" <<'PY'
+  "$VALID_MASK" "$ACTIVE_DRAFTS" "$CFWD_FUSED_CANDIDATE" <<'PY'
 import importlib.util
 import sys
 from pathlib import Path
@@ -102,13 +107,14 @@ expected_active = module._fr13_fixed32_expected_active(topology, mode)
 if (
     module._FR13_FIXED32_TAW_SOURCE_SCHEMA != sys.argv[1]
     or module._FR13_FIXED32_TAW_SOURCE_SHA256 != sys.argv[2]
+    or module._FR13_FIXED32_CFWD_FUSED_DECISION_CANDIDATE != sys.argv[6]
     or source_contract.get("source_contract_sha256") != sys.argv[2]
     or int(topology.VALID_MASK_BY_MODE[mode]) != int(sys.argv[4], 0)
     or expected_active != int(sys.argv[5])
     or int(topology.PHYSICAL_DRAFTS) != 31
     or int(topology.PHYSICAL_ROWS) != 32
 ):
-    raise SystemExit("fixed32 all-parent source-v7 preflight contract drifted")
+    raise SystemExit("fixed32 all-parent source-v8 preflight contract drifted")
 PY
 
 export BSIZE=4
@@ -132,7 +138,7 @@ unset -f run_variant
   || { echo "fixed32 all-parent K64/ROOT=1 deployment contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS"
-printf 'classification=real_swe_verified_exact4_b4_byte_diagnostic\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_enabled=0\ncandidate_shadow_only=1\nreference_always_served=1\ncandidate=fixed32_all_parent_commit_v2\nsource_contract_schema=%s\nsource_contract_sha256=%s\ntopology=%s\nmode=%s\nactive_drafts=%s\nvalid_mask=%s\nphysical_drafts=31\nphysical_rows_root_inclusive=32\nrequired_observed_batches=1,2,3,4\ntask_count=4\nbatch_size=4\nconcurrency=4\ndraft_vocab_k=65536\ndraft_vocab_root=1\ndraft_vocab_blocks=/workspace/scripts/fr13_dvk_subset_blocks.json\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nraw_prompt_response_autocommit=0\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_exact4_b4_byte_diagnostic\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_enabled=0\ncandidate_shadow_only=1\nreference_always_served=1\ncandidate=fixed32_all_parent_sparse_decision_commit_v3\ndecision_candidate=fixed32_cfwd_sparse_decisions_v1\nsource_contract_schema=%s\nsource_contract_sha256=%s\ntopology=%s\nmode=%s\nactive_drafts=%s\nvalid_mask=%s\nphysical_drafts=31\nphysical_rows_root_inclusive=32\nrequired_observed_batches=1,2,3,4\ntask_count=4\nbatch_size=4\nconcurrency=4\ndraft_vocab_k=65536\ndraft_vocab_root=1\ndraft_vocab_blocks=/workspace/scripts/fr13_dvk_subset_blocks.json\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nraw_prompt_response_autocommit=0\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
   "$TAW_SOURCE_SCHEMA" "$TAW_SOURCE_SHA256" "$LOGICAL_TOPOLOGY" \
   "$FIXED32_MODE" "$ACTIVE_DRAFTS" "$VALID_MASK" \
   "$BLOCK_MAP_SHA256" "$MANDATORY_WEIGHT_BYTES" \
@@ -160,6 +166,7 @@ if env \
     FR13_DEVICE_MULTIDRAFT=1 \
     FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=1 \
     FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0 \
+    FR13_FIXED32_CFWD_FUSED_DECISIONS=1 \
     FR13_FIXED32_BATCH_GDN_BYTE_AB=0 \
     FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=0 \
     FR13_FIXED32_BATCH_GDN_BV_CANDIDATE= \
@@ -267,7 +274,7 @@ for label, path in (
 
 spec = importlib.util.spec_from_file_location("fr13_tail23_gate_verdict", source_path)
 if spec is None or spec.loader is None:
-    raise SystemExit("cannot import source-v7 all-parent implementation")
+    raise SystemExit("cannot import source-v8 all-parent implementation")
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 topology = module._fr13_fixed32_topology()
@@ -286,7 +293,7 @@ if (
     or int(topology.PHYSICAL_DRAFTS) != 31
     or int(topology.PHYSICAL_ROWS) != 32
 ):
-    raise SystemExit("fixed32 all-parent source-v7 production bundle is incomplete or drifted")
+    raise SystemExit("fixed32 all-parent source-v8 production bundle is incomplete or drifted")
 for batch in (1, 2, 3, 4):
     record = bundle["batch_passes"][str(batch)]
     if (
@@ -400,6 +407,9 @@ required_closure = {
     "scripts/fr13_device_multidraft_kernel.py": hashlib.sha256(
         source_path.read_bytes()
     ).hexdigest(),
+    "scripts/fr13_cfwd_fused_decision_kernel.py": hashlib.sha256(
+        source_path.with_name("fr13_cfwd_fused_decision_kernel.py").read_bytes()
+    ).hexdigest(),
     "scripts/fr13_fixed32_topology.py": hashlib.sha256(
         Path("scripts/fr13_fixed32_topology.py").read_bytes()
     ).hexdigest(),
@@ -436,11 +446,15 @@ verdict = {
     "candidate_returned": False,
     "production_default_enabled": False,
     "raw_prompt_response_published": False,
-    "candidate": "fixed32_all_parent_commit_v2",
+    "candidate": "fixed32_all_parent_sparse_decision_commit_v3",
+    "decision_candidate": "fixed32_cfwd_sparse_decisions_v1",
     "source_commit": source_commit,
     "source_contract_schema": source_schema,
     "source_contract_sha256": source_contract_sha256,
     "source_file_sha256": hashlib.sha256(source_path.read_bytes()).hexdigest(),
+    "cfwd_fused_decision_source_sha256": hashlib.sha256(
+        source_path.with_name("fr13_cfwd_fused_decision_kernel.py").read_bytes()
+    ).hexdigest(),
     "mode": fixed32_mode,
     "logical_topology": logical_topology,
     "active_drafts": active_drafts,

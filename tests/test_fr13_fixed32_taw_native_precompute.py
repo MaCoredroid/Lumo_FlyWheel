@@ -716,7 +716,8 @@ def test_tail23_exact4_b4_runner_pins_k64_and_requires_all_real_batches() -> Non
     assert runner_path.stat().st_mode & 0o111
     assert "SUBSET_SHA256=0e37b7137115332372" in runner
     assert "BLOCK_MAP_SHA256=85dffa58703e42aa" in runner
-    assert "TAW_SOURCE_SCHEMA=fr13-fixed32-taw-all-parent-v7" in runner
+    assert "TAW_SOURCE_SCHEMA=fr13-fixed32-taw-all-parent-v8" in runner
+    assert "FR13_FIXED32_CFWD_FUSED_DECISIONS=1" in runner
     assert "TAIL_VALID_MASK=0x7a9ce7ff" in runner
     assert "TAIL_ACTIVE_DRAFTS=23" in runner
     assert "FR13_DRAFT_VOCAB_K=65536 FR13_DRAFT_VOCAB_ROOT=1" in runner

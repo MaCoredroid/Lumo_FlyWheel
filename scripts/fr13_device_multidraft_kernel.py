@@ -1169,7 +1169,9 @@ _FR13_FIXED32_WORK_ANNOUNCED = False
 _FR13_FIXED32_BATCHES = (1, 2, 3, 4)
 _FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES = (1, 4)
 _FR13_FIXED32_INTEGER_DTYPES = None
-_FR13_FIXED32_TAW_NATIVE_CANDIDATE = "fixed32_all_parent_commit_v2"
+_FR13_FIXED32_TAW_NATIVE_CANDIDATE = (
+    "fixed32_all_parent_sparse_decision_commit_v3"
+)
 _FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_SIDECARS = (
     "/logs/fr13_fixed32_taw_native_precompute_diagnostic.arm",
     "/tmp/fr13_fixed32_taw_native_precompute_diagnostic.arm",
@@ -1187,10 +1189,20 @@ _FR13_FIXED32_TAW_NATIVE_LIVE_PASS = (
 _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS = (
     "/logs/fr13_fixed32_taw_native_precompute.production_pass.json"
 )
-_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
+_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v8"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
+    "0f856a9e3d43f7c218d1b1f05d724fd82b5f0d3ce501c42bc742cc8cfc9acd0d"
 )
+_FR13_FIXED32_CFWD_FUSED_DECISION_CANDIDATE = (
+    "fixed32_cfwd_sparse_decisions_v1"
+)
+_FR13_FIXED32_CFWD_FUSED_DECISION_SCHEMA = (
+    "fr13.fixed32.cfwd_sparse_decisions.v1"
+)
+_FR13_FIXED32_CFWD_FUSED_DECISION_SOURCE_SHA256 = (
+    "8e620a0403d7bc82e5cbe4e49f4699fcbeff839868c422bdaf8b98068ba28c6c"
+)
+_FR13_FIXED32_CFWD_FUSED_DECISION_MODULE = None
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
 _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
@@ -1204,6 +1216,8 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_taw_native_production_pass",
     "_fr13_fixed32_taw_native_selector",
     "_fr13_fixed32_taw_native_precompute_enabled",
+    "_fr13_fixed32_cfwd_fused_decisions_enabled",
+    "_fr13_fixed32_cfwd_fused_decision_module",
     "_fr13_fixed32_taw_native_real_event_marker",
     "_fr13_fixed32_taw_native_live_pass_emit",
     "_fr13_fixed32_taw_native_live_entry",
@@ -1226,6 +1240,7 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_layout_contract",
     "_fr13_fixed32_taw_probability_caches",
     "_fr13_fixed32_taw_all_parent_decisions",
+    "_fr13_fixed32_taw_all_parent_decisions_fused",
     "_fr13_fixed32_taw_all_parent_walk_torch",
     "_fr13_fixed32_taw_execute_all_parent_torch",
     "_fr13_fixed32_taw_execute_all_parent_cuda",
@@ -1299,6 +1314,40 @@ _FR13_FIXED32_TAW_NATIVE_PRODUCTION_TENSOR_CALL_CENSUS = {
     "residual_subtract_calls": 17,
     "residual_clamp_calls": 17,
     "residual_where_calls": 34,
+    "exact_commit_launches": 1,
+    "exact_commit_programs_per_request": 1,
+}
+_FR13_FIXED32_CFWD_FUSED_DIAGNOSTIC_TENSOR_CALL_CENSUS = {
+    **_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS,
+    "walk_levels": 13,
+    "full_vocab_row_gathers": 54,
+    "full_vocab_fp32_casts": 26,
+    "full_vocab_softmax_calls": 26,
+    "full_vocab_normalizations": 36,
+    "full_vocab_cdf_calls": 24,
+    "source_cdf_calls": 12,
+    "qmix_zero_fills": 12,
+    "qmix_scatter_add_calls": 12,
+    "residual_subtract_calls": 12,
+    "residual_clamp_calls": 12,
+    "residual_where_calls": 24,
+    "exact_commit_launches": 13,
+    "exact_commit_programs_per_request": 13,
+}
+_FR13_FIXED32_CFWD_FUSED_PRODUCTION_TENSOR_CALL_CENSUS = {
+    **_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS,
+    "walk_levels": 1,
+    "full_vocab_row_gathers": 30,
+    "full_vocab_fp32_casts": 2,
+    "full_vocab_softmax_calls": 2,
+    "full_vocab_normalizations": 0,
+    "full_vocab_cdf_calls": 0,
+    "source_cdf_calls": 0,
+    "qmix_zero_fills": 0,
+    "qmix_scatter_add_calls": 0,
+    "residual_subtract_calls": 0,
+    "residual_clamp_calls": 0,
+    "residual_where_calls": 0,
     "exact_commit_launches": 1,
     "exact_commit_programs_per_request": 1,
 }
@@ -1769,6 +1818,60 @@ def _fr13_fixed32_taw_native_precompute_enabled() -> bool:
     return _fr13_fixed32_taw_native_selector() != "reference"
 
 
+def _fr13_fixed32_cfwd_fused_decisions_enabled(*, environ=None) -> bool:
+    """Resolve the source-pinned sparse decision candidate; default is off."""
+    env = os.environ if environ is None else environ
+    raw = env.get("FR13_FIXED32_CFWD_FUSED_DECISIONS", "0")
+    if raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_CFWD_FUSED_DECISIONS must be exactly 0 or 1"
+        )
+    return raw == "1"
+
+
+def _fr13_fixed32_cfwd_fused_decision_module():
+    """Load the adjacent candidate only after checking its complete source."""
+    global _FR13_FIXED32_CFWD_FUSED_DECISION_MODULE
+    if _FR13_FIXED32_CFWD_FUSED_DECISION_MODULE is not None:
+        return _FR13_FIXED32_CFWD_FUSED_DECISION_MODULE
+    path = Path(__file__).resolve().with_name(
+        "fr13_cfwd_fused_decision_kernel.py"
+    )
+    if path.is_symlink() or not path.is_file():
+        raise RuntimeError(
+            "FR13 fixed32 fused decision source must be an adjacent regular file"
+        )
+    try:
+        source = path.read_bytes()
+    except OSError as error:
+        raise RuntimeError(
+            f"FR13 fixed32 cannot read fused decision source: {error}"
+        ) from error
+    digest = hashlib.sha256(source).hexdigest()
+    if digest != _FR13_FIXED32_CFWD_FUSED_DECISION_SOURCE_SHA256:
+        raise RuntimeError(
+            "FR13 fixed32 fused decision source digest drift: "
+            f"{digest} != {_FR13_FIXED32_CFWD_FUSED_DECISION_SOURCE_SHA256}"
+        )
+    spec = importlib.util.spec_from_file_location(
+        "_fr13_cfwd_fused_decision_kernel",
+        path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("FR13 fixed32 cannot load fused decision source")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if (
+        getattr(module, "CANDIDATE", None)
+        != _FR13_FIXED32_CFWD_FUSED_DECISION_CANDIDATE
+        or getattr(module, "SOURCE_SCHEMA", None)
+        != _FR13_FIXED32_CFWD_FUSED_DECISION_SCHEMA
+    ):
+        raise RuntimeError("FR13 fixed32 fused decision identity drift")
+    _FR13_FIXED32_CFWD_FUSED_DECISION_MODULE = module
+    return module
+
+
 def _fr13_fixed32_taw_native_real_event_marker() -> str | None:
     path = os.environ.get(
         "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_REAL_EVENT_PATH",
@@ -2042,7 +2145,12 @@ def _fr13_fixed32_taw_tensor_call_census(
     *, batch_size: int | None = None,
 ) -> dict[str, Any]:
     selector = _fr13_fixed32_taw_native_selector(batch_size=batch_size)
-    if selector == "diagnostic":
+    fused = _fr13_fixed32_cfwd_fused_decisions_enabled()
+    if fused and selector == "diagnostic":
+        census = _FR13_FIXED32_CFWD_FUSED_DIAGNOSTIC_TENSOR_CALL_CENSUS
+    elif fused and selector == "production":
+        census = _FR13_FIXED32_CFWD_FUSED_PRODUCTION_TENSOR_CALL_CENSUS
+    elif selector == "diagnostic":
         census = _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS
     elif selector == "production":
         census = _FR13_FIXED32_TAW_NATIVE_PRODUCTION_TENSOR_CALL_CENSUS
@@ -2148,6 +2256,14 @@ def _fr13_fixed32_taw_source_contract(
     canonical = json.dumps(
         {
             "schema": _FR13_FIXED32_TAW_SOURCE_SCHEMA,
+            "native_candidate": _FR13_FIXED32_TAW_NATIVE_CANDIDATE,
+            "cfwd_fused_decision": {
+                "candidate": _FR13_FIXED32_CFWD_FUSED_DECISION_CANDIDATE,
+                "schema": _FR13_FIXED32_CFWD_FUSED_DECISION_SCHEMA,
+                "source_sha256": (
+                    _FR13_FIXED32_CFWD_FUSED_DECISION_SOURCE_SHA256
+                ),
+            },
             "functions": normalized_sources,
             "kernels": normalized_kernels,
             "geometry": geometry,
@@ -2159,6 +2275,12 @@ def _fr13_fixed32_taw_source_contract(
                 ),
                 "native_precompute_production": (
                     _FR13_FIXED32_TAW_NATIVE_PRODUCTION_TENSOR_CALL_CENSUS
+                ),
+                "cfwd_fused_diagnostic": (
+                    _FR13_FIXED32_CFWD_FUSED_DIAGNOSTIC_TENSOR_CALL_CENSUS
+                ),
+                "cfwd_fused_production": (
+                    _FR13_FIXED32_CFWD_FUSED_PRODUCTION_TENSOR_CALL_CENSUS
                 ),
             },
         },
@@ -2574,6 +2696,12 @@ def fr13_fixed32_taw_preseed(
                 ),
             }
         )
+        if _fr13_fixed32_cfwd_fused_decisions_enabled():
+            _fr13_fixed32_cfwd_fused_decision_module().preseed_workspace(
+                native_ab_entry,
+                device=normalized_device,
+                batch_size=batch_size,
+            )
         entry["native_ab_entry"] = native_ab_entry
         entry["native_ab_probability_mismatches"] = torch.zeros(
             (),
@@ -3668,6 +3796,33 @@ def _fr13_fixed32_taw_all_parent_decisions(
     return self_token, source, selected_token, rejected_token, accepted
 
 
+def _fr13_fixed32_taw_all_parent_decisions_fused(
+    topology,
+    entry: dict[str, Any],
+    drafts,
+    uniforms,
+    probability_caches: tuple[Any, Any],
+) -> tuple[Any, Any, Any, Any, Any]:
+    """Run the source-pinned sparse Triton all-parent decision candidate."""
+    if not _fr13_fixed32_cfwd_fused_decisions_enabled():
+        raise RuntimeError("FR13 fixed32 fused decisions are not armed")
+    if (
+        int(topology.PHYSICAL_DRAFTS) != 31
+        or int(topology.PHYSICAL_ROWS) != 32
+        or int(topology.SAMPLER_MAX_FANOUT) != 3
+        or int(topology.WALK_CAP) != 12
+        or int(entry["native_self_rows_per_request"]) != 13
+        or int(entry["native_target_rows_per_request"]) != 17
+    ):
+        raise RuntimeError("FR13 fixed32 fused decision geometry drift")
+    return _fr13_fixed32_cfwd_fused_decision_module().launch(
+        entry,
+        drafts,
+        uniforms,
+        probability_caches,
+    )
+
+
 def _fr13_fixed32_taw_all_parent_walk_torch(
     topology,
     entry: dict[str, Any],
@@ -3828,13 +3983,22 @@ def _fr13_fixed32_taw_execute_all_parent_cuda(
     batch_size = int(entry["batch_size"])
     self_rows = int(entry["native_self_rows_per_request"])
     target_rows = int(entry["native_target_rows_per_request"])
-    decisions = _fr13_fixed32_taw_all_parent_decisions(
-        topology,
-        entry,
-        drafts,
-        uniforms,
-        probability_caches,
-    )
+    if _fr13_fixed32_cfwd_fused_decisions_enabled():
+        decisions = _fr13_fixed32_taw_all_parent_decisions_fused(
+            topology,
+            entry,
+            drafts,
+            uniforms,
+            probability_caches,
+        )
+    else:
+        decisions = _fr13_fixed32_taw_all_parent_decisions(
+            topology,
+            entry,
+            drafts,
+            uniforms,
+            probability_caches,
+        )
     self_token, source, selected_token, rejected_token, accepted = decisions
     expected_decisions = (
         ("self_token", self_token, (batch_size, self_rows), torch.long),
@@ -4577,6 +4741,7 @@ def _fr13_fixed32_publish_work(
     native_selector = _fr13_fixed32_taw_native_selector(
         batch_size=batch_size
     )
+    fused_decisions = _fr13_fixed32_cfwd_fused_decisions_enabled()
     base_target_rows = int(topology.WALK_CAP)
     base_self_rows = int(topology.WALK_CAP)
     candidate_target_rows = 17
@@ -4601,12 +4766,20 @@ def _fr13_fixed32_publish_work(
         product_write_multiplier = 1
     taw = {
         "route": (
-            "fixed32_native_precompute_byte_ab_reference_return"
-            if native_selector == "diagnostic"
+            "fixed32_cfwd_sparse_decisions_byte_ab_reference_return"
+            if fused_decisions and native_selector == "diagnostic"
             else (
-                "fixed32_native_precompute_production_candidate_return"
-                if native_selector == "production"
-                else "fixed32_pytorch_exact_float_triton_integer_commit"
+                "fixed32_cfwd_sparse_decisions_production_candidate_return"
+                if fused_decisions and native_selector == "production"
+                else (
+                    "fixed32_native_precompute_byte_ab_reference_return"
+                    if native_selector == "diagnostic"
+                    else (
+                        "fixed32_native_precompute_production_candidate_return"
+                        if native_selector == "production"
+                        else "fixed32_pytorch_exact_float_triton_integer_commit"
+                    )
+                )
             )
         ),
         "preseeded_batches": list(_FR13_FIXED32_BATCHES),
@@ -6465,6 +6638,7 @@ def fr13_fixed32_taw_self_test() -> None:
         "FR13_FIXED32_VALID_MASK",
         "FR13_FIXED32_ACTIVE_NODES",
         "FR13_FIXED32_TAW_WALK_CAP",
+        "FR13_FIXED32_CFWD_FUSED_DECISIONS",
         "FR13_TAW",
         "FR13_FIXED32_WORK_CENSUS",
         "LUMO_TREE_SAMPLER_DEBUG_LOG",
