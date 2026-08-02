@@ -1,0 +1,69 @@
+{
+  "schema": "fr13.fixed32.dfwd_bf16_m32_source_candidate.v1",
+  "status": "EXPERIMENTAL_NONDEPLOY",
+  "base_git_sha": "47de87295387cf25e900c566bfd3c8002df4d264",
+  "scope": {
+    "batch_size": 1,
+    "dtype": "bfloat16",
+    "hidden_size": 5120,
+    "vocab_rows": 65536,
+    "head_passes_per_event": 5,
+    "fixed_gemm_rows": 32,
+    "weight_quantization_changed": false,
+    "intended_token_selection_changed": false,
+    "candidate_logit_bytes_proven_unchanged": false
+  },
+  "measured_baseline": {
+    "artifact": "results/fr13_fixed32_b1_nsys_20260731T013952Z_curated/nsys_attribution.json",
+    "workload": "canonical real SWE-Verified exact4 B1 attribution",
+    "kernel": "cublas internal::gemvx BF16",
+    "kernel_instances": 4405,
+    "complete_events": 881,
+    "gpu_ms_per_event": 26.227316,
+    "gpu_ms_per_pass": 5.2454632,
+    "effective_weight_gb_per_s": 127.936964652
+  },
+  "candidate": {
+    "flag": "FR13_DRAFT_HEAD_M32=1",
+    "byte_ab_flag": "FR13_DRAFT_HEAD_M32_BYTE_AB=1",
+    "algorithm": "replicate the one BF16 hidden row into a persistent 32x5120 buffer, run torch.mm against the unchanged contiguous BF16 65536x5120 weight into a persistent 32x65536 output, consume row zero",
+    "graph_safe_design": "input and output are allocated once before drafter graph capture; steady state uses copy_ and mm.out only",
+    "default_off": true,
+    "strict_eligibility": "exact fixed32 B1, root subset enabled, single logits enabled, 65536 draft rows, UnquantizedLinearMethod, contiguous BF16 weight[65536,5120]",
+    "silent_fallback": false
+  },
+  "exact_work": {
+    "weight_bytes_per_pass": 671088640,
+    "weight_bytes_per_event": 3355443200,
+    "mandatory_weight_floor_ms_per_pass_at_273GBps": 2.458200147,
+    "mandatory_weight_floor_ms_per_event_at_273GBps": 12.291000733,
+    "baseline_flops_per_pass": 671088640,
+    "baseline_flops_per_event": 3355443200,
+    "candidate_flops_per_pass": 21474836480,
+    "candidate_flops_per_event": 107374182400,
+    "persistent_input_bytes": 327680,
+    "persistent_output_bytes": 4194304
+  },
+  "projection": {
+    "evidence_kernel": "postprocess BF16 verifier-head nvjet SM121 M32 GEMM",
+    "evidence_weight_bytes": 2542796800,
+    "evidence_gpu_ms": 12.153933,
+    "evidence_effective_gb_per_s": 209.215963261,
+    "projected_candidate_ms_per_pass": 3.207635926,
+    "projected_candidate_ms_per_event": 16.038179629,
+    "projected_dfwd_savings_ms_per_event": 10.189136371,
+    "projection_only": true
+  },
+  "numerical_contract": {
+    "required": "candidate full-logit BF16 bytes equal the existing gemvx output for every real head input",
+    "source_proof_available": false,
+    "reason": "cuBLAS may choose a different FP32 accumulation tree for M32 GEMM than N=1 gemvx",
+    "byte_ab_behavior": "runs candidate and reference on the same real input, accumulates int16-view mismatch count on device across root and captured loop heads, returns reference logits, and fails loud at the next root if any bit differs",
+    "deployment_allowed_before_live_byte_ab": false
+  },
+  "source_tests": {
+    "command": "/home/mark/shared/lumoFlyWheel-exact-safe-combo/.venv/bin/pytest -q tests/test_fr13_draft_head_m32.py tests/test_fr13_draft_vocab_root_wiring.py tests/test_fr13_drafter_single_logits_wiring.py",
+    "result": "18 passed",
+    "related_launcher_and_fixed32_regression_result": "74 passed"
+  }
+}

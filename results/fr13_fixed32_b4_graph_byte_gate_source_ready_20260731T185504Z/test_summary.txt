@@ -1,0 +1,12 @@
+fixed32_suite_command=pytest -q tests/test_fr13_fixed32_*.py
+fixed32_suite_result=633 passed, 7 skipped in 19.29s
+focused_command=pytest -q tests/test_fr13_fixed32_gdn_batch_graph_gate.py tests/test_fr13_fixed32_ingress_proxy.py tests/test_fr13_fixed32_gdn_batch_wide_bv.py tests/test_fr13_fixed32_process_attestation.py tests/test_fr13_fixed32_gdn_batch_launch.py
+focused_result=119 passed in 1.42s
+python_compile=pass
+shell_syntax=pass
+git_diff_check=pass
+gpu_launched=0
+container_launched=0
+timing_eligible=0
+floor_acceptance_eligible=0
+

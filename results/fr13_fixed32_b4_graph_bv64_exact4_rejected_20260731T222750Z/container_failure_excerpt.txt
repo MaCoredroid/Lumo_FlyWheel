@@ -1,0 +1,4 @@
+2026-07-31T22:37:04.372843827Z (EngineCore pid=257) INFO 07-31 22:37:04 [gpu_model_runner.py:9444] Graph capturing finished in 57 secs, took 9.12 GiB
+2026-07-31T22:39:19.213594049Z (APIServer pid=1) INFO 07-31 22:39:19 [loggers.py:271] Engine 000: Avg prompt throughput: 6814.1 tokens/s, Avg generation throughput: 0.3 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 79.5%, Prefix cache hit rate: 2.2%
+2026-07-31T22:39:20.446328911Z (EngineCore pid=257) ERROR 07-31 22:39:20 [core.py:1131] RuntimeError: FR13 fixed32 B4 graph GDN byte mismatch at record 0: graph=[] candidate=['out', 'state_export_compact']
+2026-07-31T22:39:20.447835970Z (EngineCore pid=257) ERROR 07-31 22:39:20 [core.py:1131] RuntimeError: FR13 fixed32 B4 graph GDN byte mismatch at record 0: graph=[] candidate=['out', 'state_export_compact']

@@ -1,0 +1,67 @@
+{
+  "candidate": {
+    "candidate_block_m": 8,
+    "candidate_block_q": 1,
+    "candidate_kernel": "kernel_unified_attention_2d",
+    "stock_block_m": 16,
+    "stock_block_q": 2
+  },
+  "classification": {
+    "floor_acceptance_eligible": false,
+    "formal_exact4_or_exact16_acceptance": false,
+    "gate_eligible": false,
+    "performance_evidence": false,
+    "production_evidence": false,
+    "run_classification": "b1_diagnostic"
+  },
+  "executed_source_commit": "d67e405b5f1c37a0f35f329c722af17edfe5fe4a",
+  "future_permission_fix": {
+    "commit": "fdb61d773131f703eb1a7390ccdaa5b4998d93a6",
+    "gpu_rerun": false,
+    "identity_mode": "0444",
+    "tests": "120 passed in 2.60s"
+  },
+  "launcher": {
+    "arm_serve_rc": 0,
+    "defect": "post-teardown host validator could not read root-owned mode-0400 nonsecret identity",
+    "top_level_rc": 2
+  },
+  "live_gate": {
+    "bytes_per_call": 12288,
+    "calls": 4,
+    "candidate_dispatches": 4,
+    "identity_path": "run_evidence/candidate_identity.json",
+    "identity_sha256": "d12e035acb459640b128a052cba606602d57b3dca898e81bcedbe7d9582d8058",
+    "live_result_path": "run_evidence/live_pass.json",
+    "live_result_sha256": "570caf42e3e75ff0d3717042b0dfc58b23a90041e71103f70a07f6d7563445b5",
+    "raw_byte_mismatches": 0,
+    "sequence_lengths": [
+      22872,
+      22873,
+      22874,
+      22875
+    ],
+    "served_return": "stock captured drafter graph unchanged",
+    "status": "PASS"
+  },
+  "packaging_source_commit": "fdb61d773131f703eb1a7390ccdaa5b4998d93a6",
+  "runroot": "output/fr13_b1_bm8_live_gate_20260731T175331Z",
+  "schema": "fr13.fixed32.dfwd_unified_bm8.b1_live_artifact.v1",
+  "status": "KERNEL_LIVE_PASS_WITH_POSTVALIDATOR_PERMISSION_DEFECT",
+  "task": {
+    "complete_work_census_events": 817,
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "eval_harness_exit_code": 0,
+    "forward_step_interval": [
+      0,
+      817
+    ],
+    "instance_id": "astropy__astropy-12907",
+    "pending_work": {
+      "cfwd": 0,
+      "dfwd": 0,
+      "sfwd": 0
+    },
+    "verdict": "resolved"
+  }
+}

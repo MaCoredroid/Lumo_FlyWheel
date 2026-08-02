@@ -9,7 +9,7 @@ export const meta = {
 }
 
 const BASE = [
-'FR13 on DGX Spark GB10 (sm_121, 273 GB/s, decode HBM-bound: 98.6ms weight-read floor at every deployment batch;',
+'FR13 on DGX Spark GB10 (sm_121, 273 GB/s, full-vocabulary mandatory-weight floor 153.9383846446886ms and one-sided U95 acceptance cap 177.0291423413919ms at every deployment batch;',
 'per-forward speed opts are dead ends, accept-per-forward is the only lever - reference_decode_hbm_bound_accept_',
 'is_the_lever). Repo /home/mark/shared/lumoFlyWheel, BRANCH fr13-speedfix. Read code + git history + vLLM source',
 'via scripts/vllm_src.sh (pinned 3dbe092e, NEVER /tmp). int-view never atol. Pathspec commit on fr13-speedfix',

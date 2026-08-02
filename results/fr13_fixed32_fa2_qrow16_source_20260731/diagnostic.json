@@ -1,0 +1,60 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow16_source_candidate.v1",
+  "status": "experimental_source_audited_ready_to_compile_after_hydra_not_deploy_ready",
+  "base_commit": "e45a7e7355b9ba9fea3ee6c30afbf7d8e85b1cdd",
+  "measurement_basis": {
+    "workload": "real SWE-Verified fixed32 Tail6 B1 Nsight attribution",
+    "measured_commit": "1a7a765447c8ce6068e0dd5d3a344d58ace85f2b",
+    "attribution_sha256": "685c410a0ba09d00c8b244bfa06809530337cea383b88fa92a5da1013eadf2d0",
+    "sfwd_events": 882,
+    "note": "The trace predates the current conv-remap, direct-leaf-commit, and GDN dead-I/O patches; FA2 geometry is still the pinned 64x64 four-warp kernel."
+  },
+  "observed_b1_ms_per_event": {
+    "sfwd_projected": 174.813673,
+    "fa2_tree_attention": 24.708601,
+    "target_fp8_cutlass": 112.312954,
+    "conv_source_stage_memcpy": 0.089708
+  },
+  "candidate": {
+    "scope": "BF16 B1, params.d=d_rounded=256, params.h=24, params.h_k=4, noncausal, full-window, no ALiBi, no softcap, no appended KV, paged KV with 1024-row pages, tree_bias=32x32 at offsets 0/0, seqlen_q=32, num_splits=1",
+    "stock": {
+      "block_m": 64,
+      "block_n": 64,
+      "warps": 4,
+      "ctas_per_b1_layer": 24
+    },
+    "qrow16": {
+      "block_m": 16,
+      "block_n": 64,
+      "warps": 1,
+      "ctas_per_b1_layer": 48
+    },
+    "numerical_mechanism": "Each CTA owns complete query rows and traverses the full ordered K-block loop. There is no executed KV split, output combine, or changed num_splits value. Warp-local row and lane coordinates match the stock tile for all 32 real rows. The candidate directly instantiates only the observed noncausal, nonlocal, no-ALiBi, uneven-MN, even-K, no-softcap, no-split, no-append kernel; the stock launcher remains source-identical. Static assertions fix 32 threads, eight KV-copy threads per row, and 16 rows per thread. The private default-off selector throws unless the exact production 1024-row paged-KV geometry engages.",
+    "performance_risk": "Each head rereads K/V in two query CTAs. The doubled KV traffic can offset the occupancy and masked-row gains at long contexts.",
+    "estimated_saving_ms_per_event": {
+      "low": 6.0,
+      "high": 12.0,
+      "hard_upper_bound": 24.708601,
+      "classification": "estimate, not measured"
+    }
+  },
+  "source_audit": {
+    "fa2_upstream_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+    "exact_safe_fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+    "exact_safe_launch_header_sha256": "d9e9f4b92cb731d7955b514449e59b8e411bf7a0c929aafb454f2402d41fe976",
+    "candidate_launch_header_sha256": "d9e9f4b92cb731d7955b514449e59b8e411bf7a0c929aafb454f2402d41fe976",
+    "candidate_fixed32_query_translation_unit_sha256": "a5dbcf70f5d9f85e6003684bcd377c3bf2e747d28d93de19b33b8384814c3ae3",
+    "unchanged_earlyout_kernel_header_sha256": "934e8c6c2e72c667f3cb0a8dc53b11c16a4eba8e3ac2b5811c882eff399ac3de",
+    "idempotent_application_passed": true,
+    "gpu_used": false,
+    "build_run": false
+  },
+  "required_gates": [
+    "production-toolchain CUDA compile without a GPU",
+    "same-EngineCore live-paged stock versus qrow16 raw output and FP32 LSE A/B after the first real SWE-Verified fixed32 B1 FULL-graph replay",
+    "canonical real SWE-Verified Tail6 exact4 then exact16",
+    "Hydra23 B1 and Tail6/Hydra23 B4 wall and acceptance"
+  ],
+  "b4_status": "stock fallback by construction; Q64 already launches 96 CTAs/layer on B4, so the B1 occupancy candidate is disabled",
+  "gpu_used_for_this_candidate": false
+}

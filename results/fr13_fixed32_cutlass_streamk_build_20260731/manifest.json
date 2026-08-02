@@ -1,0 +1,108 @@
+{
+  "schema": "fr13.fixed32.cutlass_streamk_build.v1",
+  "created_at_utc": "2026-07-31T18:42:46Z",
+  "review_corrected_at_utc": "2026-07-31T19:03:15Z",
+  "status": "BUILD_PASS_ABI_ADDITIVE_GATE_READY_GPU_NOT_RUN",
+  "performance_claim": false,
+  "correctness_claim": false,
+  "acceptance_valid": false,
+  "gpu_used": false,
+  "docker_used": false,
+  "repository": {
+    "integrated_base": "deb65f9429603297436356613ff66f5e0ff846db",
+    "source_candidate_commit": "a6ae2c4339",
+    "source_candidate_cherry_pick": "306d7f0aafa7cb25bdccf36965afebaca48e1ac0",
+    "branch": "agent/fixed32-cutlass-streamk-build"
+  },
+  "pinned_sources": {
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "vllm_version": "0.19.2rc1.dev134+gfe9c3d6c5",
+    "vllm_cmake_sha256": "b12cd47f5761442551d6e1966e8a37ad94175382c1b014d2b65f67b74fbb6e3b",
+    "cutlass_tag": "v4.4.2",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "dispatch_unpatched_sha256": "6e1df3f4701f58f233b3831b848c7bbf7936e6cb34b3bc28ded208fd66c48a7f",
+    "dispatch_patched_sha256": "9de2ab8096df470d10a8838941f28c06831f481089bd5eaf98cfed90119fef65"
+  },
+  "toolchain": {
+    "torch": "2.10.0+cu130",
+    "torch_cuda": "13.0",
+    "torch_target_version_macro": "0x020A000000000000ULL",
+    "cuda_compiler": "13.0.88",
+    "cuda_arch_changed_tu": "sm_121a",
+    "cmake_build_type": "RelWithDebInfo",
+    "ninja_jobs": 1,
+    "note": "Current vLLM requirements warn for Torch 2.11; fixed32 runtime and the stable ABI target are pinned to the Torch 2.10 generation."
+  },
+  "source_corrections": [
+    "TORCH_CHECK replaced by stable-ABI STD_TORCH_CHECK",
+    "Stream-K-only scheduler code placed in the if-constexpr else branch",
+    "illegal cooperative 64x128x128 candidate removed after CUTLASS static assertion",
+    "byte comparator scans and counts every output byte after pre-GPU review"
+  ],
+  "candidate": {
+    "direct_selector": "streamk_coop128",
+    "byte_gate_selector": "streamk_coop128_byte_ab",
+    "unknown_or_unset_selector": "stock",
+    "b1_swap_ab_tile_mnk": [128, 32, 128],
+    "full_tile_mnk": [128, 128, 128],
+    "scheduler": "cutlass::gemm::StreamKScheduler",
+    "reduction": "deterministic",
+    "decomposition": "heuristic",
+    "modeled_max_recovery_ms_per_event": 10.923627,
+    "modeled_value_is_timing_evidence": false
+  },
+  "binaries": {
+    "stock_runtime_rpath": {
+      "sha256": "5907843cfdfcf9ae4e6b2ec0505ef325317140294d6e5b8180e74cc50ec6aff3",
+      "bytes": 110176808
+    },
+    "candidate_raw_link": {
+      "sha256": "09216b50ba6eb3591c9e2e3312d527fd0c259fca35ca7665c919655f1c1fef48",
+      "bytes": 111383840
+    },
+    "candidate_deployment": {
+      "sha256": "fa9395754b13de26dbed38dfc551614dbb109058764426564dcbb3c77fdd6ea9",
+      "bytes": 111383840,
+      "runpath": "/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64",
+      "committed_as_blob": false
+    }
+  },
+  "abi": {
+    "classification": "additive_no_export_removals",
+    "defined_dynamic_stock": 1278,
+    "defined_dynamic_candidate": 1288,
+    "defined_removed": 0,
+    "defined_added": 10,
+    "undefined_dynamic_stock": 154,
+    "undefined_dynamic_candidate": 179,
+    "undefined_removed": 0,
+    "undefined_added": 25,
+    "dt_needed_equal": true,
+    "runpath_equal": true,
+    "stock_cubins": 17,
+    "candidate_cubins": 17,
+    "runtime_import_tested": false
+  },
+  "live_gate": {
+    "ready": true,
+    "gpu_run_completed": false,
+    "real_task": "astropy__astropy-12907",
+    "batch": 1,
+    "same_process": true,
+    "same_cuda_stream": true,
+    "comparison_limit": 256,
+    "served_result": "stock",
+    "requires_all_real_projection_shapes": true,
+    "production_enabled": false,
+    "acceptance_valid": false
+  },
+  "required_gates": {
+    "build_completed": true,
+    "abi_additive_audit_completed": true,
+    "b1_real_swe_kernel_output_byte_equal": false,
+    "b1_direct_candidate_timed": false,
+    "b4_exact4_byte_equal": false,
+    "b4_exact4_timed": false,
+    "canonical_exact16_winner_measured": false
+  }
+}

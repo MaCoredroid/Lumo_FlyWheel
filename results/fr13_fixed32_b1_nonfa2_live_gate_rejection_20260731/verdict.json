@@ -1,0 +1,32 @@
+{
+  "artifact_schema": "fr13-fixed32-b1-kernel-live-gate-rejection-v1",
+  "acceptance_eligible": false,
+  "batch_size": 1,
+  "concurrency": 1,
+  "draft_events_completed": 0,
+  "fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+  "instance_ids": [
+    "astropy__astropy-12907"
+  ],
+  "source_commit": "0fbd1a5e4cf69777661bc574f556f89dd212c512",
+  "attempts": [
+    {
+      "gpu_work_started": false,
+      "reason": "relative FA2 path rejected by Docker volume parser",
+      "runroot": "output/fr13_b1_kernel_live_gate_nonfa2_20260731T152308Z",
+      "verdict": "REJECTED_PREBOOT"
+    },
+    {
+      "gpu_work_started": true,
+      "reason": "draft-head padding requires a contiguous BF16 UnquantizedLinearMethod weight, but the deployed head does not have that representation",
+      "runroot": "output/fr13_b1_kernel_live_gate_nonfa2_20260731T152531Z",
+      "verdict": "REJECTED_FAIL_CLOSED"
+    }
+  ],
+  "candidate_verdicts": {
+    "draft_head_padding": "RETIRED",
+    "gdn_bv64": "UNTESTED",
+    "taw_native_precompute": "UNTESTED"
+  },
+  "measurements_valid": false
+}

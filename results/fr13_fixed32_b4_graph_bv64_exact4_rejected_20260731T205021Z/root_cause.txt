@@ -1,0 +1,29 @@
+Failure stage:
+  descending FULL CUDA graph capture, before server health and before tasks
+
+Observed transition:
+  B4 FULL capture iteration completed (progress 1/4)
+  B3 capture rejected at layer 0:
+    FR13_FIXED32_CONV_PREGATHER live SSI source mapping drift
+
+Source cause in 065304d4785dae95ad954ee17d9d0e79cfdaa7dc:
+  The first, capacity-B4 preseed call populated the pregather state and called
+  selfcheck_fixed32_conv_col0_ssi_sources only for B4. That added only B4 to
+  live_selfchecked_batches. The code then marked B1-B4 in the separate preseed
+  completion set, so the following B3 graph iteration skipped the producer and
+  its boot-only selfcheck. The in-capture validator requires the current batch
+  to be in live_selfchecked_batches, and rejected B3 solely because it was not.
+
+Repair:
+  c945055c7c8f048223c000586c6a3c1ef8df7b17
+  fix(fixed32): qualify all SSI batch prefixes
+
+  The initial producer must run at server capacity. Before readiness is
+  published, the repaired path calls the byte selfcheck for every live prefix
+  B1 through B4. Pointer, stride, shape, dtype, device, row-bounds, and staged
+  byte checks remain fail-closed.
+
+Claim boundary:
+  Completing one B4 graph-capture iteration is not byte qualification. There
+  was no server health, real event, gate PASS, task execution, timing result, or
+  acceptance result in this run.

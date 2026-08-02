@@ -1,0 +1,31 @@
+{
+  "schema": "fr13.fixed32.taw_native_precompute.b1_diagnostic_verification.v1",
+  "commands": [
+    {
+      "command": "jq empty results/fr13_fixed32_taw_b1_diagnostic_pass_20260731T162536Z/*.json",
+      "result": "pass"
+    },
+    {
+      "command": "CUDA_VISIBLE_DEVICES='' python -m pytest -q tests/test_fr13_fixed32_taw_native_precompute.py tests/test_fr13_taw_b1_diagnostic_pass_artifact.py",
+      "result": "16 passed"
+    },
+    {
+      "command": "python -m py_compile tests/test_fr13_taw_b1_diagnostic_pass_artifact.py",
+      "result": "pass"
+    },
+    {
+      "command": "python -m ruff check tests/test_fr13_taw_b1_diagnostic_pass_artifact.py",
+      "result": "pass"
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    }
+  ],
+  "validator_rejects_diagnostic_hash": true,
+  "candidate_math_projection_verified": true,
+  "production_eligible": false,
+  "gpu_used": false,
+  "docker_used": false,
+  "new_real_swe_verified_run": false
+}

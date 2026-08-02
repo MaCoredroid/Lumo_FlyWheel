@@ -1,0 +1,11 @@
+Command:
+python3 -m pytest -q tests/test_fr13_taw_current_b1_live_pass_artifact.py -k 'not internal_checksums' tests/test_fr13_fixed32_taw_native_precompute.py tests/test_fr13_fixed32_taw_real_task_arm.py
+
+Result:
+22 passed, 1 deselected in 1.22s
+
+Command:
+python3 -m pytest -q tests/test_fr13_taw_current_b1_live_pass_artifact.py tests/test_fr13_fixed32_taw_native_precompute.py tests/test_fr13_fixed32_taw_real_task_arm.py
+
+Result:
+23 passed in 1.01s

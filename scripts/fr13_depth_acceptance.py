@@ -13,9 +13,12 @@ import re
 import tempfile
 from typing import Any
 
-from fr13_fixed32_contract import ContractError as Fixed32ContractError
-from fr13_fixed32_contract import fixed32_trace_session_id
-from fr13_fixed32_contract import validate_fixed32_trace_model_requests
+import fr13_fixed32_contract as fixed32_contract
+from fr13_floor_gate import FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME
+from fr13_floor_gate import FIXED32_QWEN_CAMPAIGN_PROOF_SCHEMA
+from fr13_floor_gate import FIXED32_QWEN_CODE_VERSION
+from fr13_floor_gate import GateError as Fixed32FloorGateError
+from fr13_floor_gate import _fixed32_trace_model_requests
 from fr13_fixed32_work_census import CensusError as WorkCensusError
 from fr13_fixed32_work_census import CONV_PREGATHER_BLOCK
 from fr13_fixed32_work_census import CONV_PREGATHER_LAYERS
@@ -78,7 +81,7 @@ CANONICAL_SUBSET_RELATIVE_BY_COUNT = {
 }
 FIXED32_RAW_ACCEPTANCE_POSITIONS = tuple(range(31))
 FIXED32_FLOOR_GATE_SCHEMA = "fr13.canonical_swe_verified_fixed32_floor_gate.v11"
-FIXED32_CHAT_AUDIT_SCHEMA = "fr13-fixed32-chat-task-provenance-audit-v2"
+FIXED32_CHAT_AUDIT_SCHEMA = "fr13-fixed32-chat-task-provenance-audit-v3"
 FIXED32_DATASET_NAME = "princeton-nlp/SWE-bench_Verified"
 FIXED32_FLOOR_METRICS = {
     "fwd_s": "vllm:fr13_decode_forward_gpu_seconds_total",
@@ -99,7 +102,7 @@ FIXED32_CHAT_AUDIT_CHECKS = frozenset(
         "all_task_agent_and_eval_terminal",
         "all_trace_request_counts_match_authenticated_proxy",
         "all_proxy_attempts_match_engine_requests",
-        "all_successful_engine_requests_match_census",
+        "all_census_requests_match_successful_engine_requests",
         "all_census_requests_inside_task_brackets",
         "no_campaign_rejections_or_aborted_requests",
         "no_fixed32_traffic_outside_task_brackets",
@@ -578,9 +581,9 @@ def fixed32_arm_spec(expected_hydra: bool) -> dict:
         topology.TAIL6_ACTIVE_DRAFTS,
         topology.HYDRA27_ACTIVE_DRAFTS,
     )
-    if shape != (31, 21, 27):
+    if shape != (31, 23, 27):
         raise ValueError(
-            "fixed32 depth reducer requires physical/active drafts=(31, 21, 27), "
+            "fixed32 depth reducer requires physical/active drafts=(31, 23, 27), "
             f"got {shape!r}"
         )
     if expected_hydra:
@@ -592,7 +595,7 @@ def fixed32_arm_spec(expected_hydra: bool) -> dict:
             "physical_drafts": topology.PHYSICAL_DRAFTS,
         }
     return {
-        "arm": "tail21_fixed32",
+        "arm": "tail23_fixed32",
         "mode": "tail6_fixed32",
         "valid_mask": topology.TAIL6_VALID_MASK,
         "active_drafts": topology.TAIL6_ACTIVE_DRAFTS,
@@ -1771,8 +1774,11 @@ def validate_real_task_artifacts(
     expected_ids: list[str],
     *,
     mode: str,
+    concurrency: int,
     metric_bindings: dict[str, dict],
 ) -> tuple[int, dict[str, object]]:
+    if concurrency not in (1, 4):
+        raise ValueError(f"unsupported real-task concurrency {concurrency}")
     real_tasks = require_exact_keys(
         real_tasks,
         frozenset(
@@ -2026,26 +2032,33 @@ def validate_real_task_artifacts(
             if not isinstance(event, dict):
                 raise ValueError(f"{trace_path}:{line_number}: non-object record")
             trace_events.append(event)
+        metadata_path = task_dir / "runner_metadata.json"
         try:
-            trace_requests = validate_fixed32_trace_model_requests(
-                trace_events,
-                expected_session_id=fixed32_trace_session_id(task_id),
+            metadata = strict_json_text(
+                metadata_path.read_text(encoding="utf-8"),
+                label=str(metadata_path),
             )
-        except Fixed32ContractError as error:
+            task_provenance = metadata["fixed32_real_task_provenance"]
+            replayed_trace = _fixed32_trace_model_requests(
+                trace_path,
+                provenance=task_provenance,
+                require_campaign_scope=concurrency == 4,
+                expected_campaign_task_ids=(
+                    expected_ids if concurrency == 4 else None
+                ),
+            )
+        except (
+            OSError,
+            UnicodeDecodeError,
+            KeyError,
+            Fixed32FloorGateError,
+        ) as error:
             raise ValueError(f"{trace_path}: {error}") from error
-        response_ids = trace_requests["model_request_ids"]
-        completed_requests = trace_requests["completed_logical_model_requests"]
-        response_digests = sorted(
-            hashlib.sha256(value.encode("utf-8")).hexdigest()
-            for value in response_ids
-        )
-        response_set_sha256 = hashlib.sha256(
-            json.dumps(
-                response_digests,
-                ensure_ascii=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()
+        completed_requests = replayed_trace[
+            "completed_logical_model_requests"
+        ]
+        response_digests = replayed_trace["model_request_id_sha256s"]
+        response_set_sha256 = replayed_trace["model_request_ids_sha256"]
         if (
             type(trace["event_count"]) is not int
             or trace["event_count"] != len(trace_events)
@@ -2244,7 +2257,9 @@ def validate_real_task_artifacts(
         task_bindings[task_id] = {
             "task_key_id": expected_task_key,
             "trace_count": completed_requests,
-            "trace_engine_id_joinable": trace_requests["engine_id_joinable"],
+            "trace_engine_id_joinable": replayed_trace[
+                "engine_id_joinable"
+            ],
             "trace_request_id_sha256s": response_digests,
             "task_auth": task_auth,
             "interval": interval,
@@ -2782,6 +2797,9 @@ def validate_real_task_artifacts(
                 "successful_engine_requests",
                 "request_step_memberships",
                 "per_task_request_step_memberships",
+                "successful_engine_requests_with_pure_decode",
+                "successful_engine_requests_without_pure_decode",
+                "successful_engine_requests_without_pure_decode_sha256",
                 "all_successful_requests_present",
                 "all_census_requests_authenticated",
                 "all_census_requests_inside_task_brackets",
@@ -2837,8 +2855,8 @@ def validate_real_task_artifacts(
                 raise ValueError(f"{source}: census request is outside task bracket")
             membership[engine_id] += 1
             per_task_membership[task_id] += 1
-    if any(count <= 0 for count in membership.values()):
-        raise ValueError(f"{census_path}: successful request missing from census")
+    if any(count <= 0 for count in per_task_membership.values()):
+        raise ValueError(f"{census_path}: canonical task missing from census")
     successful_by_task = {
         task_id: sum(
             key == task_bindings[task_id]["task_key_id"]
@@ -2862,6 +2880,11 @@ def validate_real_task_artifacts(
         raise ValueError(
             f"{census_path}: task trace/engine request evidence differs"
         )
+    without_pure_decode = sorted(
+        engine_id
+        for engine_id, membership_count in membership.items()
+        if membership_count == 0
+    )
     expected_census_identity = {
         "event_schema": WORK_CENSUS_EVENT_SCHEMA,
         "terminal_schema": WORK_CENSUS_TERMINAL_SCHEMA,
@@ -2869,7 +2892,20 @@ def validate_real_task_artifacts(
         "successful_engine_requests": len(successful_engine_ids),
         "request_step_memberships": sum(membership.values()),
         "per_task_request_step_memberships": per_task_membership,
-        "all_successful_requests_present": True,
+        "successful_engine_requests_with_pure_decode": (
+            len(membership) - len(without_pure_decode)
+        ),
+        "successful_engine_requests_without_pure_decode": len(
+            without_pure_decode
+        ),
+        "successful_engine_requests_without_pure_decode_sha256": hashlib.sha256(
+            json.dumps(
+                without_pure_decode,
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ).encode("ascii")
+        ).hexdigest(),
+        "all_successful_requests_present": not without_pure_decode,
         "all_census_requests_authenticated": True,
         "all_census_requests_inside_task_brackets": True,
     }
@@ -3023,6 +3059,7 @@ def validate_floor_gate_binding(
             provenance.get("real_tasks"),
             expected_ids,
             mode=mode,
+            concurrency=concurrency,
             metric_bindings=normalized_brackets,
         )
         artifact_count += real_task_artifact_count
@@ -3232,10 +3269,10 @@ def build_report(
                 "scope": "self_test_fixture_only",
             }
         return {
-            "schema": "fr13.depth_acceptance.fixed32.v2",
+            "schema": "fr13.depth_acceptance.fixed32.v3",
             **common,
             "floor_gate_binding": floor_gate_binding,
-            "tail21_fixed32": tail,
+            "tail23_fixed32": tail,
             "hydra27_fixed32": hydra,
         }
     return {
@@ -3884,6 +3921,11 @@ def write_fixed32_ingress_fixture(
         "successful_engine_requests": len(membership),
         "request_step_memberships": sum(membership.values()),
         "per_task_request_step_memberships": per_task_membership,
+        "successful_engine_requests_with_pure_decode": len(membership),
+        "successful_engine_requests_without_pure_decode": 0,
+        "successful_engine_requests_without_pure_decode_sha256": hashlib.sha256(
+            b"[]"
+        ).hexdigest(),
         "all_successful_requests_present": True,
         "all_census_requests_authenticated": True,
         "all_census_requests_inside_task_brackets": True,
@@ -3961,18 +4003,11 @@ def write_floor_gate_fixture(
     def arm(root: Path, expected_hydra: bool) -> dict:
         spec = fixed32_arm_spec(expected_hydra)
         task_ids = list(canonical_task_ids(task_count))
-        task_metric_brackets: dict[str, dict[str, dict]] = {}
         intervals: dict[str, list[int]] = {}
         fetch_path = root / "offload_fetch_status.txt"
         fetch_path.write_text("ok\n")
         for task_id in task_ids:
             task_dir = root / "swe_out" / "verified" / "per_task" / task_id
-            task_metric_brackets[task_id] = {
-                snapshot: artifact_identity(
-                    task_dir / f"vllm_metrics_{snapshot}.txt"
-                )
-                for snapshot in ("pre", "post")
-            }
             pre_values = fixed32_floor_metric_values(
                 task_dir / "vllm_metrics_pre.txt"
             )
@@ -3996,6 +4031,93 @@ def write_floor_gate_fixture(
                     end,
                 )
         complete_fixture_steps = merged_fixture_intervals[-1][1]
+
+        qwen_metric_names = (
+            "vllm:prompt_tokens_total",
+            "vllm:generation_tokens_total",
+            "vllm:request_params_max_tokens_count",
+            "vllm:request_params_max_tokens_sum",
+            "vllm:request_success_total",
+            "vllm:request_params_max_tokens_bucket",
+        )
+
+        def bind_qwen_campaign_metrics(metric_path: Path, step: int) -> None:
+            if concurrency != 4:
+                return
+            completed = task_count * concurrency * step // complete_fixture_steps
+            prompt_tokens = completed * 128
+            generation_tokens = completed * 32
+            base_labels = 'engine="0",model_name="qwen3.6-27b"'
+            original_lines = metric_path.read_text(encoding="utf-8").splitlines()
+            retained = [
+                line
+                for line in original_lines
+                if not line.startswith(qwen_metric_names)
+            ]
+            qwen_lines = [
+                f"vllm:prompt_tokens_total{{{base_labels}}} {prompt_tokens}",
+                (
+                    f"vllm:generation_tokens_total{{{base_labels}}} "
+                    f"{generation_tokens}"
+                ),
+                (
+                    "vllm:request_params_max_tokens_count"
+                    f"{{{base_labels}}} {completed}"
+                ),
+                (
+                    "vllm:request_params_max_tokens_sum"
+                    f"{{{base_labels}}} "
+                    f"{completed * fixed32_contract.QWEN_VISIBLE_MAX_OUTPUT_TOKENS}"
+                ),
+            ]
+            for reason in ("stop", "length", "abort", "error", "repetition"):
+                labels = (
+                    f'engine="0",finished_reason="{reason}",'
+                    'model_name="qwen3.6-27b"'
+                )
+                value = completed if reason == "stop" else 0
+                qwen_lines.append(
+                    f"vllm:request_success_total{{{labels}}} {value}"
+                )
+            for le, value in (
+                ("10000.0", 0),
+                ("20000.0", 0),
+                ("50000.0", completed),
+                ("+Inf", completed),
+            ):
+                labels = f'engine="0",le="{le}",model_name="qwen3.6-27b"'
+                qwen_lines.append(
+                    "vllm:request_params_max_tokens_bucket"
+                    f"{{{labels}}} {value}"
+                )
+            metric_path.write_text(
+                "\n".join([*retained, *qwen_lines]) + "\n",
+                encoding="utf-8",
+            )
+
+        for task_id in task_ids:
+            task_dir = root / "swe_out" / "verified" / "per_task" / task_id
+            for snapshot, step in zip(
+                ("pre", "post"), intervals[task_id], strict=True
+            ):
+                bind_qwen_campaign_metrics(
+                    task_dir / f"vllm_metrics_{snapshot}.txt",
+                    step,
+                )
+        task_metric_brackets = {
+            task_id: {
+                snapshot: artifact_identity(
+                    root
+                    / "swe_out"
+                    / "verified"
+                    / "per_task"
+                    / task_id
+                    / f"vllm_metrics_{snapshot}.txt"
+                )
+                for snapshot in ("pre", "post")
+            }
+            for task_id in task_ids
+        }
         ingress_bundle, task_auth_fixture = write_fixed32_ingress_fixture(
             root,
             mode=spec["mode"],
@@ -4007,41 +4129,112 @@ def write_floor_gate_fixture(
             root / "logs" / "fr13_fixed32_work_census.jsonl"
         ).resolve()
 
-        audit_task_records: dict[str, dict[str, object]] = {}
+        fixture_task_records: dict[str, dict[str, Any]] = {}
         for task_index, task_id in enumerate(task_ids):
             task_dir = root / "swe_out" / "verified" / "per_task" / task_id
             fixture_auth = task_auth_fixture[task_id]
             response_ids = list(fixture_auth["request_ids"])
+            session_id = fixed32_contract.fixed32_trace_session_id(task_id)
+            trace_events: list[dict[str, Any]] = [
+                {
+                    "type": "system",
+                    "subtype": "init",
+                    "qwen_code_version": FIXED32_QWEN_CODE_VERSION,
+                    "uuid": f"fixture-init-{spec['mode']}-{task_index}",
+                    "session_id": session_id,
+                    "parent_tool_use_id": None,
+                }
+            ]
+            for request_index, response_id in enumerate(response_ids):
+                is_final = request_index == len(response_ids) - 1
+                tool_id = f"fixture-tool-{spec['mode']}-{task_index}-{request_index}"
+                trace_events.append(
+                    {
+                        "type": "assistant",
+                        "uuid": response_id,
+                        "session_id": session_id,
+                        "parent_tool_use_id": None,
+                        "message": {
+                            "id": response_id,
+                            "type": "message",
+                            "role": "assistant",
+                            "model": "qwen3.6-27b",
+                            "content": (
+                                [
+                                    {
+                                        "type": "text",
+                                        "text": f"Fixture result for {task_id}.",
+                                    }
+                                ]
+                                if is_final
+                                else [
+                                    {
+                                        "type": "tool_use",
+                                        "id": tool_id,
+                                        "name": "read_file",
+                                        "input": {},
+                                    }
+                                ]
+                            ),
+                            "stop_reason": None if is_final else "tool_use",
+                            "usage": {
+                                "input_tokens": 128,
+                                "output_tokens": 32,
+                            },
+                        },
+                    }
+                )
+                if not is_final:
+                    trace_events.append(
+                        {
+                            "type": "user",
+                            "uuid": (
+                                f"fixture-result-{spec['mode']}-"
+                                f"{task_index}-{request_index}"
+                            ),
+                            "session_id": session_id,
+                            "parent_tool_use_id": None,
+                            "message": {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "tool_result",
+                                        "tool_use_id": tool_id,
+                                        "content": "fixture result",
+                                        "is_error": False,
+                                    }
+                                ],
+                            },
+                        }
+                    )
+            trace_events.append(
+                {
+                    "type": "result",
+                    "subtype": "success",
+                    "uuid": f"fixture-final-{spec['mode']}-{task_index}",
+                    "session_id": session_id,
+                    "is_error": False,
+                    "duration_ms": 100,
+                    "duration_api_ms": 90,
+                    "num_turns": len(response_ids),
+                    "result": f"Fixture result for {task_id}.",
+                    "usage": {
+                        "input_tokens": len(response_ids) * 128,
+                        "output_tokens": len(response_ids) * 32,
+                        "total_tokens": len(response_ids) * 160,
+                    },
+                    "permission_denials": [],
+                }
+            )
             trace_path = task_dir / "qwen_trace.jsonl"
             trace_path.write_text(
                 "\n".join(
-                    json.dumps(
-                        {
-                            "type": "message",
-                            "role": "assistant",
-                            "id": response_id,
-                            "stop_reason": "end_turn",
-                            "content": "fixture result",
-                            "usage": {"total_tokens": task_index + 1},
-                        },
-                        sort_keys=True,
-                    )
-                    for response_id in response_ids
+                    json.dumps(event, sort_keys=True) for event in trace_events
                 )
-                + "\n"
+                + "\n",
+                encoding="utf-8",
             )
             trace_identity = artifact_identity(trace_path)
-            response_digests = sorted(
-                hashlib.sha256(response_id.encode()).hexdigest()
-                for response_id in response_ids
-            )
-            response_set_sha256 = hashlib.sha256(
-                json.dumps(
-                    response_digests,
-                    ensure_ascii=True,
-                    separators=(",", ":"),
-                ).encode("utf-8")
-            ).hexdigest()
 
             eval_path = task_dir / "eval" / "eval_report.json"
             eval_path.parent.mkdir(parents=True, exist_ok=True)
@@ -4062,8 +4255,18 @@ def write_floor_gate_fixture(
                         "schema": "fr13-fixed32-task-boundary-v1",
                         "instance_id": task_id,
                         "mode": spec["mode"],
-                        "pre": {"generation": pre_generation},
-                        "post": {"generation": post_generation},
+                        "pre": {
+                            "generation": pre_generation,
+                            "counters": {
+                                "pure_decode_forward_steps": interval[0],
+                            },
+                        },
+                        "post": {
+                            "generation": post_generation,
+                            "counters": {
+                                "pure_decode_forward_steps": interval[1],
+                            },
+                        },
                         "forward_step_interval": {
                             "start_forward_step": interval[0],
                             "end_forward_step": interval[1],
@@ -4084,13 +4287,212 @@ def write_floor_gate_fixture(
                 "offloaded": True,
                 "network_drop": False,
             }
+            fixture_task_records[task_id] = {
+                "fixture_auth": fixture_auth,
+                "trace_path": trace_path,
+                "trace_identity": trace_identity,
+                "trace_events": trace_events,
+                "eval_terminal": eval_terminal,
+                "eval_identity": eval_identity,
+                "boundary_identity": boundary_identity,
+                "interval": interval,
+                "pre_generation": pre_generation,
+                "post_generation": post_generation,
+                "dataset_record_sha256": dataset_record_sha256,
+                "agent_terminal": agent_terminal,
+            }
+
+        trace_replays: dict[str, dict[str, Any]] = {}
+        campaign_proof_identity: dict[str, object] | None = None
+        if concurrency == 4:
+            contract_tasks = [
+                {
+                    "instance_id": task_id,
+                    "expected_session_id": (
+                        fixed32_contract.fixed32_trace_session_id(task_id)
+                    ),
+                    "expected_completed_logical_model_requests": (
+                        task_auth_fixture[task_id][
+                            "completed_logical_model_requests"
+                        ]
+                    ),
+                    "events": fixture_task_records[task_id]["trace_events"],
+                }
+                for task_id in task_ids
+            ]
+            first_task_id = min(
+                task_ids,
+                key=lambda task_id: (
+                    intervals[task_id][0],
+                    fixture_task_records[task_id]["pre_generation"],
+                    task_id,
+                ),
+            )
+            last_task_id = max(
+                task_ids,
+                key=lambda task_id: (
+                    intervals[task_id][1],
+                    fixture_task_records[task_id]["post_generation"],
+                    task_id,
+                ),
+            )
+            first_record = fixture_task_records[first_task_id]
+            last_record = fixture_task_records[last_task_id]
+            metrics_pre_path = (
+                first_record["trace_path"].parent / "vllm_metrics_pre.txt"
+            )
+            metrics_post_path = (
+                last_record["trace_path"].parent / "vllm_metrics_post.txt"
+            )
+            campaign_replay = (
+                fixed32_contract.validate_fixed32_qwen_campaign_metrics(
+                    contract_tasks,
+                    metrics_pre=metrics_pre_path.read_bytes(),
+                    metrics_post=metrics_post_path.read_bytes(),
+                )
+            )
+            proof_path = (
+                root
+                / "swe_out"
+                / "verified"
+                / FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME
+            )
+            proof = {
+                "schema": FIXED32_QWEN_CAMPAIGN_PROOF_SCHEMA,
+                "metric_scope": "concurrent_campaign_union",
+                "concurrency": concurrency,
+                "task_ids": task_ids,
+                "selection": {
+                    "basis": "validated_forward_counter_then_generation",
+                    "pre_task_id": first_task_id,
+                    "post_task_id": last_task_id,
+                    "start_forward_step": intervals[first_task_id][0],
+                    "end_forward_step": intervals[last_task_id][1],
+                    "complete_stream_forward_steps": complete_fixture_steps,
+                    "pre_generation": first_record["pre_generation"],
+                    "post_generation": last_record["post_generation"],
+                },
+                "metrics_pre": artifact_identity(metrics_pre_path),
+                "metrics_post": artifact_identity(metrics_post_path),
+                "tasks": [
+                    {
+                        "instance_id": task_id,
+                        "task_key_id": task_auth_fixture[task_id]["task_key_id"],
+                        "expected_completed_logical_model_requests": (
+                            task_auth_fixture[task_id][
+                                "completed_logical_model_requests"
+                            ]
+                        ),
+                        "trace": fixture_task_records[task_id][
+                            "trace_identity"
+                        ],
+                    }
+                    for task_id in task_ids
+                ],
+                "metric_evidence_sha256": campaign_replay[
+                    "metric_evidence_sha256"
+                ],
+                "metric_evidence": campaign_replay["metric_evidence"],
+            }
+            proof_path.write_text(
+                json.dumps(
+                    proof,
+                    ensure_ascii=True,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                + "\n",
+                encoding="ascii",
+            )
+            campaign_proof_identity = artifact_identity(proof_path)
+            trace_replays = campaign_replay["tasks"]
+        else:
+            for task_id in task_ids:
+                trace_replays[task_id] = (
+                    fixed32_contract.validate_fixed32_trace_model_requests(
+                        fixture_task_records[task_id]["trace_events"],
+                        expected_session_id=(
+                            fixed32_contract.fixed32_trace_session_id(task_id)
+                        ),
+                    )
+                )
+
+        audit_task_records: dict[str, dict[str, object]] = {}
+        for task_id in task_ids:
+            record = fixture_task_records[task_id]
+            fixture_auth = record["fixture_auth"]
+            trace_replay = trace_replays[task_id]
+            response_digests = sorted(
+                hashlib.sha256(response_id.encode("utf-8")).hexdigest()
+                for response_id in trace_replay["model_request_ids"]
+            )
+            response_set_sha256 = hashlib.sha256(
+                json.dumps(
+                    response_digests,
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest()
+            provenance = {
+                "schema": FIXED32_REAL_TASK_PROVENANCE_SCHEMA,
+                "instance_id": task_id,
+                "task_key_id": fixture_auth["task_key_id"],
+                "qwen_code_version": FIXED32_QWEN_CODE_VERSION,
+                "qwen_metric_scope": (
+                    "campaign" if concurrency == 4 else "task"
+                ),
+                "qwen_campaign_metric_proof": campaign_proof_identity,
+                "qwen_campaign_metric_evidence_sha256": (
+                    trace_replay.get("qwen_campaign_metric_evidence_sha256")
+                    if concurrency == 4
+                    else None
+                ),
+                "qwen_compaction_metric_evidence": trace_replay.get(
+                    "qwen_compaction_metric_evidence"
+                ),
+                "trace_path": str(record["trace_path"].resolve()),
+                "trace_sha256": record["trace_identity"]["sha256"],
+                "trace_bytes": record["trace_identity"]["bytes"],
+                "event_count": len(record["trace_events"]),
+                "trace_completed_logical_model_requests": trace_replay[
+                    "completed_logical_model_requests"
+                ],
+                "trace_model_request_ids_sha256": response_set_sha256,
+                "hidden_successful_compaction_model_requests": (
+                    trace_replay.get(
+                        "hidden_successful_compaction_model_requests",
+                        trace_replay.get("hidden_compaction_model_requests", 0),
+                    )
+                ),
+                "hidden_failed_compaction_model_requests": trace_replay.get(
+                    "hidden_failed_compaction_model_requests", 0
+                ),
+                "synthetic_compaction_failure_terminal": trace_replay.get(
+                    "synthetic_compaction_failure_terminal", False
+                ),
+            }
+            runner_metadata: dict[str, object] = {
+                "instance_id": task_id,
+                "dataset_name": FIXED32_DATASET_NAME,
+                "fixed32_real_task_provenance": provenance,
+            }
+            if campaign_proof_identity is not None:
+                runner_metadata["fixed32_qwen_campaign_proof"] = (
+                    campaign_proof_identity
+                )
+            (record["trace_path"].parent / "runner_metadata.json").write_text(
+                json.dumps(runner_metadata, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
             audit_task_records[task_id] = {
                 "task_key_id": fixture_auth["task_key_id"],
-                "dataset_record_sha256": dataset_record_sha256,
+                "dataset_record_sha256": record["dataset_record_sha256"],
                 "trace": {
-                    **trace_identity,
-                    "event_count": len(response_ids),
-                    "completed_logical_model_requests": len(response_ids),
+                    **record["trace_identity"],
+                    "event_count": len(record["trace_events"]),
+                    "completed_logical_model_requests": trace_replay[
+                        "completed_logical_model_requests"
+                    ],
                     "model_request_id_sha256s": response_digests,
                     "model_request_ids_sha256": response_set_sha256,
                 },
@@ -4109,13 +4511,13 @@ def write_floor_gate_fixture(
                     )
                 },
                 "terminal": {
-                    "agent": agent_terminal,
-                    "eval": eval_terminal,
-                    "eval_artifact": eval_identity,
+                    "agent": record["agent_terminal"],
+                    "eval": record["eval_terminal"],
+                    "eval_artifact": record["eval_identity"],
                 },
                 "boundary": {
-                    **boundary_identity,
-                    "forward_step_interval": interval,
+                    **record["boundary_identity"],
+                    "forward_step_interval": record["interval"],
                 },
             }
         audit = {
@@ -4341,7 +4743,7 @@ def self_test() -> None:
         assert legacy_report["schema"] == "fr13.depth_acceptance.v2"
         assert legacy_report["tail6"] is tail
         assert legacy_report["hydra23"] is hydra
-        assert "tail21_fixed32" not in legacy_report
+        assert "tail23_fixed32" not in legacy_report
         assert tail["bracket_mode"] == "nonoverlapping_task_sum"
         assert tail["drafts"] == 40
         assert tail["accept_per_event"] == 1.4
@@ -4438,15 +4840,15 @@ def self_test() -> None:
             fixed32=True,
             self_test_fixture=True,
         )
-        assert fixed_report["schema"] == "fr13.depth_acceptance.fixed32.v2"
-        assert fixed_report["tail21_fixed32"] is fixed_tail
+        assert fixed_report["schema"] == "fr13.depth_acceptance.fixed32.v3"
+        assert fixed_report["tail23_fixed32"] is fixed_tail
         assert fixed_report["hydra27_fixed32"] is fixed_hydra
         assert "tail6" not in fixed_report
-        assert fixed_tail["arm"] == "tail21_fixed32"
+        assert fixed_tail["arm"] == "tail23_fixed32"
         assert fixed_hydra["arm"] == "hydra27_fixed32"
         assert fixed_tail["expected_tokens_per_draft"] == 31
         assert fixed_hydra["expected_tokens_per_draft"] == 31
-        assert fixed_tail["fixed32_contract"]["active_drafts"] == 21
+        assert fixed_tail["fixed32_contract"]["active_drafts"] == 23
         assert fixed_hydra["fixed32_contract"]["active_drafts"] == 27
         assert fixed_tail["bracket_mode"] == "nonoverlapping_task_sum"
         assert fixed_tail["drafts"] == 40
@@ -5094,7 +5496,7 @@ def self_test() -> None:
             expect_gate_payload_failure(
                 bad_trace_gate,
                 "self-consistent non-assistant task trace",
-                "legacy terminal response IDs are empty or duplicated",
+                "trace does not start with the pinned Qwen",
             )
         finally:
             trace_artifact.write_bytes(original_trace_bytes)
@@ -5131,30 +5533,11 @@ def self_test() -> None:
                 + "\n"
             ).encode("utf-8")
             trace_path.write_bytes(trace_bytes)
-            response_ids = [
-                event["message"]["id"]
-                if event.get("type") == "assistant"
-                else event["id"]
-                for event in events
-            ]
-            response_digests = sorted(
-                hashlib.sha256(response_id.encode("utf-8")).hexdigest()
-                for response_id in response_ids
-            )
             trace_record.update(
                 {
                     "sha256": hashlib.sha256(trace_bytes).hexdigest(),
                     "bytes": len(trace_bytes),
                     "event_count": len(events),
-                    "completed_logical_model_requests": len(response_ids),
-                    "model_request_id_sha256s": response_digests,
-                    "model_request_ids_sha256": hashlib.sha256(
-                        json.dumps(
-                            response_digests,
-                            ensure_ascii=True,
-                            separators=(",", ":"),
-                        ).encode("utf-8")
-                    ).hexdigest(),
                 }
             )
 
@@ -5177,10 +5560,16 @@ def self_test() -> None:
             ]
             for path in swap_trace_paths
         ]
-        swap_events[0][0]["id"], swap_events[1][0]["id"] = (
-            swap_events[1][0]["id"],
-            swap_events[0][0]["id"],
-        )
+        first_assistants = [
+            next(event for event in events if event.get("type") == "assistant")
+            for events in swap_events
+        ]
+        swapped_ids = [event["uuid"] for event in reversed(first_assistants)]
+        for event, swapped_id in zip(
+            first_assistants, swapped_ids, strict=True
+        ):
+            event["uuid"] = swapped_id
+            event["message"]["id"] = swapped_id
         swap_audit = json.loads(original_tail_audit)
         swap_gate = json.loads(json.dumps(original_gate))
         try:
@@ -5190,7 +5579,7 @@ def self_test() -> None:
             expect_gate_payload_failure(
                 swap_gate,
                 "cross-task terminal response ID swap",
-                "task trace/engine request evidence differs",
+                "artifact identity differs",
             )
         finally:
             for path, raw in original_swap_traces.items():
@@ -5204,7 +5593,7 @@ def self_test() -> None:
                 encoding="utf-8"
             ).splitlines()
         ]
-        replay_events.append(json.loads(json.dumps(replay_events[0])))
+        replay_events.insert(-1, json.loads(json.dumps(replay_events[1])))
         replay_audit = json.loads(original_tail_audit)
         replay_gate = json.loads(json.dumps(original_gate))
         try:
@@ -5213,7 +5602,7 @@ def self_test() -> None:
             expect_gate_payload_failure(
                 replay_gate,
                 "same-task terminal response ID replay",
-                "legacy terminal response IDs are empty or duplicated",
+                "artifact identity differs",
             )
         finally:
             for path, raw in original_swap_traces.items():
@@ -5954,7 +6343,7 @@ def main() -> None:
         "--fixed32",
         action="store_true",
         help=(
-            "reduce Tail21/Hydra27 fixed-work arms and require 31 physical "
+            "reduce Tail23/Hydra27 fixed-work arms and require 31 physical "
             "draft tokens per event"
         ),
     )

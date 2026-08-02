@@ -1,0 +1,30 @@
+{
+  "batch_size": 1,
+  "candidate_so_sha256": "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86",
+  "dispatch": "qrow16 exact geometry; no fallback",
+  "graph_id": 280703922542288,
+  "graph_signature": "6636b73026d4fa80a9d6db63700f58cc124e16971146a95d60b17c663543bd6c",
+  "layer_count": 16,
+  "layers": [
+    "language_model.model.layers.11.self_attn.attn",
+    "language_model.model.layers.15.self_attn.attn",
+    "language_model.model.layers.19.self_attn.attn",
+    "language_model.model.layers.23.self_attn.attn",
+    "language_model.model.layers.27.self_attn.attn",
+    "language_model.model.layers.3.self_attn.attn",
+    "language_model.model.layers.31.self_attn.attn",
+    "language_model.model.layers.35.self_attn.attn",
+    "language_model.model.layers.39.self_attn.attn",
+    "language_model.model.layers.43.self_attn.attn",
+    "language_model.model.layers.47.self_attn.attn",
+    "language_model.model.layers.51.self_attn.attn",
+    "language_model.model.layers.55.self_attn.attn",
+    "language_model.model.layers.59.self_attn.attn",
+    "language_model.model.layers.63.self_attn.attn",
+    "language_model.model.layers.7.self_attn.attn"
+  ],
+  "pass_sidecar_sha256": "9d2d59f4bb2b6d9a202a60f41c71ff69f7e7c60b24dade34932b3c1ceb6e407f",
+  "runtime_mode": "FULL",
+  "schema": "fr13.fixed32.fa2_qrow16_production_capture.v1",
+  "status": "ENGAGED"
+}

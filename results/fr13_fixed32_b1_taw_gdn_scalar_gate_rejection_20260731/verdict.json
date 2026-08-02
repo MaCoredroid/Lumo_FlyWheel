@@ -1,0 +1,22 @@
+{
+  "artifact_schema": "fr13-fixed32-b1-taw-gdn-scalar-gate-rejection-v1",
+  "acceptance_eligible": false,
+  "batch_size": 1,
+  "candidate_verdicts": {
+    "gdn_bv64": "UNCLASSIFIED_GATE_ERROR",
+    "taw_native_precompute": "UNCLASSIFIED"
+  },
+  "concurrency": 1,
+  "draft_events_completed": 0,
+  "fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+  "failure": {
+    "surface": "counter",
+    "type": "SCALAR_BYTE_VIEW_ERROR"
+  },
+  "instance_ids": [
+    "astropy__astropy-12907"
+  ],
+  "measurements_valid": false,
+  "runroot": "output/fr13_b1_kernel_live_gate_taw_gdn_20260731T154045Z",
+  "source_commit": "e9a6061cf5a36ca81a59783ee10e9c0c6899555d"
+}

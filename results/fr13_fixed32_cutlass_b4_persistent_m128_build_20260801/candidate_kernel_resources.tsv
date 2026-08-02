@@ -1,0 +1,2 @@
+Function _ZN7cutlass13device_kernelIN4vllm45sm120_blockwise_fp8_config_b4_persistent_m128INS_6half_tEE4Gemm10GemmKernelEEEvNT_6ParamsE:	REG:168 STACK:0 SHARED:1024 LOCAL:0 CONSTANT[0]:2560 TEXTURE:0 SURFACE:0 SAMPLER:0
+Function _ZN7cutlass13device_kernelIN4vllm45sm120_blockwise_fp8_config_b4_persistent_m128INS_10bfloat16_tEE4Gemm10GemmKernelEEEvNT_6ParamsE:	REG:168 STACK:0 SHARED:1024 LOCAL:0 CONSTANT[0]:2560 TEXTURE:0 SURFACE:0 SAMPLER:0

@@ -1,0 +1,31 @@
+{
+  "schema": "fr13.fixed32.taw_native_precompute.diagnostic_pass.v1",
+  "status": "pass",
+  "candidate": "fixed32_native_precompute_v1",
+  "source_contract_schema": "fr13-fixed32-taw-exact-commit-v3",
+  "source_contract_sha256": "fe73ad35a916e41532575e29a5f9f6442d1081d0d1c0d0fc18210fdc8f0f56f8",
+  "task_marker": "swe_verified:astropy__astropy-12907",
+  "mode": "hydra27_fixed32",
+  "batch_size": 1,
+  "covered_batches": [
+    1
+  ],
+  "geometry": {
+    "physical_drafts": 31,
+    "physical_rows": 32,
+    "walk_cap": 12,
+    "fanout": 3,
+    "output_capacity": 32,
+    "accepted_path_capacity": 16
+  },
+  "probability_mismatches": 0,
+  "product_mismatches": 0,
+  "evidence_route": "uncaptured_root_check",
+  "reference_returned": true,
+  "candidate_returned": false,
+  "derived_from_completed_run": true,
+  "task_boundary_counter_reset": false,
+  "production_eligible": false,
+  "current_production_source_contract_sha256": "42b92d872d2324bf618b35fdd71c22d0e68e5c00e25ad2a43ae553c8ab1f92da",
+  "exact_current_source_real_gate_required": true
+}

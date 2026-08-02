@@ -1,0 +1,4 @@
+89 passed in 0.45s
+python compile: pass
+ruff: pass
+git diff --check: pass

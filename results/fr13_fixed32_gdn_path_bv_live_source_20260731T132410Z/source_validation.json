@@ -1,0 +1,43 @@
+{
+  "base_commit": "e5a4029249e5b9483919056bae6542e47bbce75b",
+  "branch": "agent/fixed32-gdn-bv-select-live",
+  "candidate_block_v": [16, 32, 64, 128],
+  "candidate_served": false,
+  "counter_policy": "served counter when present; private equal-baseline counter when fixed32 FR10_METRICS=0",
+  "exact_capture_records": "48 * batch_size",
+  "fail_closed": [
+    "invalid or conflicting selector",
+    "non-fixed32 mode",
+    "served geometry other than exact BV=8",
+    "capture identity, batch, or record-count drift",
+    "false stock-vs-stock launch metadata",
+    "Triton compile, resource, or launch failure",
+    "raw-byte mismatch",
+    "served-state restoration mismatch"
+  ],
+  "gpu_executed": false,
+  "hardware_resource_viability_claimed": false,
+  "real_swe_executed": false,
+  "reference_block_v": 8,
+  "schema": "fr13-fixed32-gdn-path-bv-live-source-v1",
+  "served_block_v": 8,
+  "surfaces": [
+    "output",
+    "export",
+    "ring_k",
+    "ring_v",
+    "ring_a",
+    "ring_b",
+    "flags",
+    "counter"
+  ],
+  "synthetic_performance_executed": false,
+  "timestamp_utc": "2026-07-31T13:24:10Z",
+  "validation": {
+    "dedicated_live_gate": "9 passed",
+    "focused_fixed32": "58 passed, 1 skipped",
+    "python_compile": "passed",
+    "shell_syntax": "passed",
+    "whitespace": "passed"
+  }
+}

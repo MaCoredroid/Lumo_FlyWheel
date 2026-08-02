@@ -1,0 +1,43 @@
+Fixed32 CUTLASS B4 static-M128 diagnostic source validation
+============================================================
+
+Implementation commit:
+  432d47a60e0a0a7cef5198a330c72d82fd80bd3f
+
+Host-only identity verification:
+  PASS candidate SHA-256 9c63ed03ad73640293ba544fc5acad9047dcf9e202854d86f83a7ba4ca5a7d39
+  PASS candidate bytes 113010008
+  PASS resource credential SHA-256 7ab2c3223366f4591fc2324a47c805aa0a1e9d4a106743af4256d4089054a2dc
+  PASS resource credential bytes 5404
+  PASS audited resources: 168 registers/thread; 0 stack/local bytes/thread
+
+Static checks:
+  PASS git diff --check
+  PASS bash -n on launcher, B4 gate, and serving wrapper
+  PASS py_compile on the four modified Python runtime entry points
+  PASS Ruff on core credential/sidecar modules and focused tests
+  PASS Ruff E9 parse checks on the two modified legacy Python entry points
+
+Tests:
+  python3 -m pytest -q tests/test_fr13_cutlass*.py
+  81 passed in 0.21s
+
+  python3 -m pytest -q tests/test_fr13_fixed32_final_full_preseed.py \
+    -k 'not committer_warmup_readiness_binds_full_restore_contract and not committer_graph_body_fully_overwrites_declared_scratch'
+  52 passed, 2 deselected in 1.16s
+
+The two deselected tests require
+src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py, a generated file that is not
+present in this isolated worktree. They are unrelated to the CUTLASS route.
+
+Not run:
+  Docker
+  GPU kernel runtime
+  Synthetic or probe performance
+  Real SWE-Verified exact4 Tail23 byte gate
+  Real SWE-Verified exact4 Hydra27 byte gate
+  Full-step B4 timing
+  Hardware-floor acceptance
+
+Acceptance-valid: false
+Performance claim: false

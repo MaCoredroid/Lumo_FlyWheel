@@ -1,0 +1,78 @@
+{
+  "schema": "fr13.fixed32.cutlass_identity_epilogue_source_audit.v1",
+  "created_utc": "2026-08-02T16:39:09Z",
+  "scope": {
+    "route": "Tail23/Hydra27",
+    "draft_profile": "K64/root",
+    "batches": [1, 4],
+    "fixed_rows": 32,
+    "projection_shapes_nk": [
+      [34816, 5120],
+      [5120, 17408],
+      [5120, 6144],
+      [16384, 5120],
+      [14336, 5120]
+    ]
+  },
+  "source": {
+    "branch": "agent/fixed32-cutlass-identity-epilogue-20260802",
+    "commit": "e18ae209af54a4d0406bc007cc3f7b4a311571da",
+    "parent_commit": "c509970875cf303f10df2d193b9856213c504257",
+    "fixedalpha_source_commit": "db4465cd7e2b272c142697024a45c814b1274a46",
+    "patch_file": "scripts/fr13_patch_cutlass_fixed32_wave.py",
+    "patch_sha256": "d6369a266b2de1ae1cf756144e60b3576102669f291bd60dd9f2ed80acc142f2",
+    "patch_bytes": 55141
+  },
+  "pinned_inputs": {
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "generated_dispatch_sha256": "0022155c7abb660b689eae2b578cfed86e94f477c21c2693240d7f980df555ed",
+    "generated_dispatch_bytes": 55778
+  },
+  "build": {
+    "target": "sm_121a",
+    "cuda_compiler": "13.0.88",
+    "host_object_sha256": "0c6c984d9a357379f1f7686d8e27f400fa306b22132332d707a1c869669bbe76",
+    "host_object_bytes": 16241176,
+    "native_cubin_sha256": "d208d60b27a7ba7263f807ff7922ea87b0d8dd7131ca01f0a046ebdff0867387",
+    "native_cubin_bytes": 1601080,
+    "translation_units": 1,
+    "warnings": 0
+  },
+  "candidate": {
+    "selector": "identity_static",
+    "diagnostic_selector": "identity_static_byte_ab",
+    "default_enabled": false,
+    "b1": {
+      "tile_mnk": [128, 32, 128],
+      "scale_granularity_mnk": [128, 1, 128],
+      "swap_ab": true,
+      "scheduler": "divisor_balanced_static",
+      "k_traversal": "ordered_full_k"
+    },
+    "b4": {
+      "tile_mnk": [128, 128, 128],
+      "scale_granularity_mnk": [1, 128, 128],
+      "swap_ab": false,
+      "scheduler": "static_persistent",
+      "k_traversal": "ordered_full_k"
+    },
+    "changed_component": "epilogue_accumulator_identity",
+    "removed_numeric_operation": "explicit_fp32_multiply_by_one",
+    "retained_numeric_operation": "round_to_nearest_output_conversion"
+  },
+  "verification": {
+    "patch_tests": "pass_27_of_27",
+    "cutlass_tests": "pass_92_of_92",
+    "ruff": "pass",
+    "py_compile": "pass",
+    "git_diff_check": "pass",
+    "isolated_host_compile": "pass",
+    "resource_gate": "pass_no_regression",
+    "static_codegen_gate": "pass_reduced",
+    "runtime_byte_equality": "required_not_run",
+    "runtime_gpu_measurement": "not_run",
+    "real_workload_measurement": "not_run",
+    "performance_acceptance": false
+  }
+}

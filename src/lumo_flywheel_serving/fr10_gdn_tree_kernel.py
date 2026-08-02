@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 from dataclasses import dataclass
+from pathlib import Path
 
 import torch
 import triton
@@ -11,6 +13,24 @@ import triton.language as tl
 
 
 _FR13_COMMITTER_NATIVE_ANNOUNCED = False
+
+
+def _fr13_fixed32_committer_layer_batch_requested() -> bool:
+    """Return the boot-time arm for the experimental one-launch committer.
+
+    The EngineCore worker may receive a curated environment, so the sidecar is
+    the serving-safe arm.  The value is sampled while fixed32 graphs are
+    preseeded; adding or removing the arm after boot cannot change the route.
+    """
+    if os.environ.get("FR13_FIXED32_COMMITTER_LAYER_BATCH") == "1":
+        return True
+    return any(
+        os.path.exists(path)
+        for path in (
+            "/logs/fr13_fixed32_committer_layer_batch.arm",
+            "/tmp/fr13_fixed32_committer_layer_batch.arm",
+        )
+    )
 
 
 def _fr13_committer_native_on() -> bool:
@@ -287,6 +307,33 @@ _FR13_FIXED32_MODE_SIDECARS = (
     "/logs/fr13_fixed32_mode.flag",
     "/tmp/fr13_fixed32_mode.flag",
 )
+_FR13_FIXED32_GDN_PATH_BV_SIDECARS = (
+    "/logs/fr13_fixed32_gdn_path_bv_candidate.flag",
+    "/tmp/fr13_fixed32_gdn_path_bv_candidate.flag",
+)
+_FR13_FIXED32_GDN_PATH_BV_PRODUCTION_SIDECARS = (
+    "/logs/fr13_fixed32_gdn_path_bv_production.flag",
+    "/tmp/fr13_fixed32_gdn_path_bv_production.flag",
+)
+_FR13_FIXED32_GDN_PATH_BV_REAL_EVENT = (
+    "/logs/fr13_fixed32_gdn_path_bv.real_event.arm"
+)
+_FR13_FIXED32_GDN_PATH_BV_LIVE_PASS = (
+    "/logs/fr13_fixed32_gdn_path_bv.live_pass.json"
+)
+_FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS = (
+    "/logs/fr13_fixed32_gdn_path_bv.production_pass.json"
+)
+_FR13_FIXED32_GDN_PATH_BV_CANDIDATE_ID = "fixed32_gdn_path_bv_v1"
+_FR13_FIXED32_GDN_BV_SURFACES = (
+    "export",
+    "ring_k",
+    "ring_v",
+    "ring_a",
+    "ring_b",
+    "flags",
+    "counter",
+)
 
 
 def _fr13_resolve_fixed32_mode() -> str | None:
@@ -358,6 +405,566 @@ def _fr13_resolve_fixed32_mode() -> str | None:
 
 
 _FR13_FIXED32_MODE = _fr13_resolve_fixed32_mode()
+
+
+def _fr13_resolve_fixed32_gdn_path_bv_candidate(
+    fixed32_mode: str | None,
+    *,
+    environ=None,
+    sidecars=None,
+    geom_override=None,
+) -> int | None:
+    """Resolve the non-serving fixed32 path-BV live-gate candidate."""
+    env = os.environ if environ is None else environ
+    paths = (
+        _FR13_FIXED32_GDN_PATH_BV_SIDECARS
+        if sidecars is None
+        else tuple(sidecars)
+    )
+    sources: list[tuple[str, str]] = []
+    raw_env = env.get("FR13_FIXED32_GDN_PATH_BV_CANDIDATE")
+    if raw_env is not None and str(raw_env).strip():
+        sources.append(
+            (
+                "env:FR13_FIXED32_GDN_PATH_BV_CANDIDATE",
+                str(raw_env).strip(),
+            )
+        )
+    for path in paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="ascii") as handle:
+                raw_sidecar = handle.read(16)
+        except (OSError, UnicodeError) as error:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PATH_BV_CANDIDATE: cannot read sidecar "
+                f"{path}: {error}"
+            ) from error
+        if len(raw_sidecar) >= 16:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PATH_BV_CANDIDATE: sidecar exceeds "
+                f"15 bytes: {path}"
+            )
+        sources.append((f"sidecar:{path}", raw_sidecar.strip()))
+    if not sources:
+        return None
+    invalid = [
+        (source, value)
+        for source, value in sources
+        if value not in ("16", "32", "64", "128")
+    ]
+    if invalid:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_CANDIDATE: expected one of "
+            "16, 32, 64, or 128, got "
+            + ", ".join(
+                f"{source}={value!r}" for source, value in invalid
+            )
+        )
+    values = {value for _source, value in sources}
+    if len(values) != 1:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_CANDIDATE: conflicting sources: "
+            + ", ".join(
+                f"{source}={value!r}" for source, value in sources
+            )
+        )
+    if fixed32_mode not in _FR13_FIXED32_MODES:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_CANDIDATE requires an exact "
+            f"fixed32 mode, got {fixed32_mode!r}"
+        )
+    if geom_override != {"BV": 8}:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_CANDIDATE requires the served graph "
+            "to be pinned exactly to FR13_TREE_GDN_GEOM_OVERRIDE=BV=8"
+        )
+    return int(values.pop())
+
+
+def _fr13_fixed32_gdn_path_bv_source_sha256() -> str:
+    try:
+        payload = Path(__file__).resolve().read_bytes()
+    except OSError as error:
+        raise RuntimeError(
+            f"FR13 fixed32 GDN BV cannot hash its source: {error}"
+        ) from error
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _fr13_resolve_fixed32_gdn_path_bv_production(
+    fixed32_mode: str | None,
+    *,
+    environ=None,
+    sidecars=None,
+    geom_override=None,
+    pass_path: str | None = None,
+    source_sha256: str | None = None,
+) -> dict[str, object] | None:
+    """Resolve a source-bound, prior-live-gated BV production route."""
+    env = os.environ if environ is None else environ
+    paths = (
+        _FR13_FIXED32_GDN_PATH_BV_PRODUCTION_SIDECARS
+        if sidecars is None
+        else tuple(sidecars)
+    )
+    sources: list[tuple[str, str]] = []
+    raw_env = env.get("FR13_FIXED32_GDN_PATH_BV_PRODUCTION")
+    if raw_env is not None and str(raw_env).strip():
+        sources.append(
+            (
+                "env:FR13_FIXED32_GDN_PATH_BV_PRODUCTION",
+                str(raw_env).strip(),
+            )
+        )
+    for path in paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="ascii") as handle:
+                value = handle.read(16)
+        except (OSError, UnicodeError) as error:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PATH_BV_PRODUCTION cannot read sidecar "
+                f"{path}: {error}"
+            ) from error
+        if len(value) >= 16:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PATH_BV_PRODUCTION sidecar exceeds "
+                f"15 bytes: {path}"
+            )
+        sources.append((f"sidecar:{path}", value.strip()))
+    if not sources:
+        return None
+    invalid = [
+        (source, value)
+        for source, value in sources
+        if value not in ("16", "32", "64", "128")
+    ]
+    values = {value for _source, value in sources}
+    if invalid or len(values) != 1:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_PRODUCTION requires one of 16, 32, "
+            "64, or 128 from agreeing sources: "
+            + repr(sources)
+        )
+    candidate = int(values.pop())
+    if fixed32_mode not in _FR13_FIXED32_MODES:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_PRODUCTION requires an exact fixed32 mode"
+        )
+    if geom_override != {"BV": candidate}:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_PRODUCTION requires geometry pinned "
+            f"exactly to BV={candidate}"
+        )
+    resolved_pass_path = pass_path or env.get(
+        "FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS_PATH",
+        _FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS,
+    )
+    if os.path.islink(resolved_pass_path) or not os.path.isfile(
+        resolved_pass_path
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PATH_BV_PRODUCTION requires a regular live "
+            f"PASS JSON: {resolved_pass_path}"
+        )
+    try:
+        with open(resolved_pass_path, encoding="ascii") as handle:
+            payload = json.load(handle)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            f"FR13 fixed32 GDN BV production PASS JSON is unreadable: {error}"
+        ) from error
+    current_sha = source_sha256 or _fr13_fixed32_gdn_path_bv_source_sha256()
+    task_marker = payload.get("task_marker") if isinstance(payload, dict) else None
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != "fr13.fixed32.gdn_path_bv.live_pass.v1"
+        or payload.get("status") != "pass"
+        or payload.get("candidate") != _FR13_FIXED32_GDN_PATH_BV_CANDIDATE_ID
+        or payload.get("source_sha256") != current_sha
+        or payload.get("mode") != fixed32_mode
+        or payload.get("reference_bv") != 8
+        or payload.get("candidate_bv") != candidate
+        or payload.get("raw_byte_equal") is not True
+        or payload.get("reference_served") is not True
+        or payload.get("state_restored") is not True
+        or type(payload.get("batch_size")) is not int
+        or payload.get("batch_size") not in (1, 2, 3, 4)
+        or payload.get("covered_batches")
+        != list(range(1, payload.get("batch_size", 0) + 1))
+        or payload.get("records") != 48 * payload.get("batch_size", 0)
+        or payload.get("physical_rows") != 32
+        or not isinstance(task_marker, str)
+        or not task_marker.startswith("swe_verified:")
+        or len(task_marker) == len("swe_verified:")
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV production PASS JSON is invalid or belongs "
+            "to a different candidate/source"
+        )
+    return payload
+
+
+def _fr13_fixed32_gdn_bv_real_event_marker() -> str:
+    path = os.environ.get(
+        "FR13_FIXED32_GDN_PATH_BV_REAL_EVENT_PATH",
+        _FR13_FIXED32_GDN_PATH_BV_REAL_EVENT,
+    )
+    if not os.path.isfile(path):
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live gate requires a real SWE-Verified event arm"
+        )
+    try:
+        with open(path, encoding="ascii") as handle:
+            marker = handle.read(257)
+    except (OSError, UnicodeError) as error:
+        raise RuntimeError(
+            f"FR13 fixed32 GDN BV cannot read real-event marker: {error}"
+        ) from error
+    marker = marker.strip()
+    prefix = "swe_verified:"
+    task_id = marker[len(prefix):] if marker.startswith(prefix) else ""
+    if (
+        len(marker) > 256
+        or not task_id
+        or any(
+            character
+            not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+            for character in task_id
+        )
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV real-event marker must be "
+            "swe_verified:<task_id>"
+        )
+    return marker
+
+
+def _fr13_fixed32_gdn_bv_live_pass_emit(
+    *, task_marker: str, batch_size: int, result: dict[str, int],
+) -> None:
+    path = os.environ.get(
+        "FR13_FIXED32_GDN_PATH_BV_LIVE_JSON",
+        _FR13_FIXED32_GDN_PATH_BV_LIVE_PASS,
+    )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    payload = {
+        "schema": "fr13.fixed32.gdn_path_bv.live_pass.v1",
+        "status": "pass",
+        "candidate": _FR13_FIXED32_GDN_PATH_BV_CANDIDATE_ID,
+        "source_sha256": _fr13_fixed32_gdn_path_bv_source_sha256(),
+        "task_marker": task_marker,
+        "mode": _FR13_FIXED32_MODE,
+        "batch_size": int(batch_size),
+        "covered_batches": list(range(1, int(batch_size) + 1)),
+        "records": int(result["records"]),
+        "physical_rows": 32,
+        "reference_bv": int(result["reference_bv"]),
+        "candidate_bv": int(result["candidate_bv"]),
+        "raw_byte_equal": True,
+        "reference_served": True,
+        "state_restored": True,
+    }
+    temporary = f"{path}.tmp.{os.getpid()}"
+    with open(temporary, "w", encoding="ascii") as handle:
+        json.dump(payload, handle, sort_keys=True)
+        handle.write("\n")
+    os.replace(temporary, path)
+
+
+_FR13_FIXED32_GDN_PATH_BV_CANDIDATE = (
+    _fr13_resolve_fixed32_gdn_path_bv_candidate(
+        _FR13_FIXED32_MODE,
+        geom_override=_read_tree_gdn_geom_override(),
+    )
+)
+_FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS = (
+    _fr13_resolve_fixed32_gdn_path_bv_production(
+        _FR13_FIXED32_MODE,
+        geom_override=_read_tree_gdn_geom_override(),
+    )
+)
+_FR13_FIXED32_GDN_PATH_BV_PRODUCTION = (
+    int(_FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS["candidate_bv"])
+    if _FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS is not None
+    else None
+)
+if (
+    _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+    and _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None
+):
+    raise RuntimeError(
+        "FR13 fixed32 GDN path-BV diagnostic and production selectors are "
+        "mutually exclusive"
+    )
+_FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT = None
+_FR13_FIXED32_GDN_BV_CAPTURES: dict[int, dict] = {}
+_FR13_FIXED32_GDN_BV_LIVE_STATE = {
+    "status": (
+        "armed"
+        if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+        else "disabled"
+    ),
+    "candidate_bv": _FR13_FIXED32_GDN_PATH_BV_CANDIDATE,
+    "graph_id": None,
+    "batch_size": None,
+    "records": 0,
+}
+
+
+def fixed32_gdn_bv_live_capture_begin(
+    graph_id: int, batch_size: int
+) -> None:
+    """Open record collection for one final FULL fixed32 graph capture."""
+    global _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT
+    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is None:
+        return
+    identity = int(graph_id)
+    batch = int(batch_size)
+    if (
+        _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES
+        or identity <= 0
+        or batch not in (1, 2, 3, 4)
+        or _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT is not None
+        or identity in _FR13_FIXED32_GDN_BV_CAPTURES
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live-gate capture begin drift: "
+            + repr((identity, batch, _FR13_FIXED32_MODE))
+        )
+    _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT = {
+        "graph_id": identity,
+        "batch_size": batch,
+        "records": [],
+    }
+
+
+def _fr13_fixed32_gdn_bv_live_capture_register(record: dict) -> None:
+    """Retain the persistent operands of one captured fixed32 GDN call."""
+    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is None:
+        return
+    context = _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT
+    # Eager warmups and profile-only CUDA captures deliberately have no live
+    # gate context. The final capture-end hook requires the exact record count,
+    # so a missing final begin cannot pass silently.
+    if context is None:
+        return
+    required = {
+        "snapshot",
+        "restore",
+        "run",
+        "byte_equal",
+        "surface_names",
+    }
+    if (
+        not isinstance(context, dict)
+        or set(context) != {"graph_id", "batch_size", "records"}
+        or not isinstance(record, dict)
+        or set(record) != required
+        or tuple(record["surface_names"]) != _FR13_FIXED32_GDN_BV_SURFACES
+        or not all(callable(record[name]) for name in required - {"surface_names"})
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live-gate capture record drift"
+        )
+    if torch.cuda.is_available() and not torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live-gate record was not captured by CUDA"
+        )
+    context["records"].append(record)
+
+
+def fixed32_gdn_bv_live_capture_end(
+    graph_id: int, batch_size: int, expected_records: int
+) -> None:
+    """Freeze the launch records and bind them to the signed graph identity."""
+    global _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT
+    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is None:
+        return
+    context = _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT
+    identity = int(graph_id)
+    batch = int(batch_size)
+    expected = int(expected_records)
+    records = context.get("records") if isinstance(context, dict) else None
+    if (
+        not isinstance(context, dict)
+        or int(context.get("graph_id", -1)) != identity
+        or int(context.get("batch_size", -1)) != batch
+        or expected != 48 * batch
+        or not isinstance(records, list)
+        or len(records) != expected
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live-gate capture end drift: "
+            + repr(
+                (
+                    identity,
+                    batch,
+                    expected,
+                    len(records) if isinstance(records, list) else None,
+                )
+            )
+        )
+    _FR13_FIXED32_GDN_BV_CAPTURES[identity] = {
+        "batch_size": batch,
+        "records": tuple(records),
+    }
+    _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT = None
+
+
+def _fr13_tensor_byte_equal(left, right) -> bool:
+    return torch.equal(
+        left.contiguous().reshape(-1).view(torch.uint8),
+        right.contiguous().reshape(-1).view(torch.uint8),
+    )
+
+
+def _fr13_fixed32_gdn_bv_compare_records(
+    records, candidate_bv: int
+) -> dict[str, int]:
+    """Run BV8 then the selected candidate and restore served bytes."""
+    candidate = int(candidate_bv)
+    if candidate not in (16, 32, 64, 128) or candidate == 8:
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live gate refused stock-vs-stock: "
+            f"reference=8 candidate={candidate}"
+        )
+    checked = 0
+    for index, record in enumerate(records):
+        snapshot = record["snapshot"]
+        restore = record["restore"]
+        run = record["run"]
+        byte_equal = record["byte_equal"]
+        baseline = snapshot()
+        if tuple(baseline) != _FR13_FIXED32_GDN_BV_SURFACES:
+            raise RuntimeError(
+                "FR13 fixed32 GDN BV live-gate baseline surface drift at "
+                f"record {index}: {tuple(baseline)!r}"
+            )
+        try:
+            reference = run(8)
+            reference_surfaces = snapshot()
+            restore(baseline)
+            candidate_result = run(candidate)
+            candidate_surfaces = snapshot()
+            if (
+                set(reference) != {"block_v", "launch_key", "output"}
+                or set(candidate_result)
+                != {"block_v", "launch_key", "output"}
+                or int(reference["block_v"]) != 8
+                or int(candidate_result["block_v"]) != candidate
+                or reference["launch_key"] == candidate_result["launch_key"]
+            ):
+                raise RuntimeError(
+                    "FR13 fixed32 GDN BV live gate detected false "
+                    "stock-vs-stock launch metadata at record "
+                    f"{index}: reference={reference!r} "
+                    f"candidate={candidate_result!r}"
+                )
+            mismatches = []
+            if not byte_equal(reference["output"], candidate_result["output"]):
+                mismatches.append("output")
+            for name in _FR13_FIXED32_GDN_BV_SURFACES:
+                if not byte_equal(
+                    reference_surfaces[name], candidate_surfaces[name]
+                ):
+                    mismatches.append(name)
+            if mismatches:
+                raise RuntimeError(
+                    "FR13 fixed32 GDN BV live-gate byte mismatch at record "
+                    f"{index}: {mismatches}"
+                )
+            checked += 1
+        finally:
+            restore(baseline)
+            restored = snapshot()
+            restore_bad = [
+                name
+                for name in _FR13_FIXED32_GDN_BV_SURFACES
+                if not byte_equal(restored[name], baseline[name])
+            ]
+            if restore_bad:
+                raise RuntimeError(
+                    "FR13 fixed32 GDN BV live gate failed to restore served "
+                    f"BV8 bytes at record {index}: {restore_bad}"
+                )
+    return {"records": checked, "reference_bv": 8, "candidate_bv": candidate}
+
+
+def fixed32_gdn_bv_live_gate_on_replay(
+    graph_id: int, batch_size: int, expected_records: int
+) -> dict[str, object]:
+    """Execute the gate once, immediately after the first measured replay."""
+    state = _FR13_FIXED32_GDN_BV_LIVE_STATE
+    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is None:
+        return dict(state)
+    if state["status"] == "passed":
+        return dict(state)
+    if state["status"] != "armed":
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live gate is not runnable: " + repr(state)
+        )
+    if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live gate cannot execute during capture"
+        )
+    identity = int(graph_id)
+    batch = int(batch_size)
+    expected = int(expected_records)
+    capture = _FR13_FIXED32_GDN_BV_CAPTURES.get(identity)
+    records = capture.get("records") if isinstance(capture, dict) else None
+    if (
+        not isinstance(capture, dict)
+        or int(capture.get("batch_size", -1)) != batch
+        or expected != 48 * batch
+        or not isinstance(records, tuple)
+        or len(records) != expected
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live-gate replay/capture drift: "
+            + repr((identity, batch, expected, capture))
+        )
+    task_marker = _fr13_fixed32_gdn_bv_real_event_marker()
+    state["status"] = "running"
+    try:
+        result = _fr13_fixed32_gdn_bv_compare_records(
+            records, _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+        )
+    except Exception:
+        state["status"] = "failed"
+        raise
+    state.update(
+        status="passed",
+        graph_id=identity,
+        batch_size=batch,
+        records=int(result["records"]),
+    )
+    _fr13_fixed32_gdn_bv_live_pass_emit(
+        task_marker=task_marker,
+        batch_size=batch,
+        result=result,
+    )
+    _FR13_FIXED32_GDN_BV_CAPTURES.clear()
+    print(
+        "[FR13_FIXED32_GDN_BV_LIVE_GATE PASS] "
+        f"graph_id={identity} batch={batch} records={result['records']} "
+        f"reference_bv=8 candidate_bv={result['candidate_bv']} "
+        "surfaces=output,export,ring_k,ring_v,ring_a,ring_b,flags,counter "
+        "served_bv=8 restored=1",
+        flush=True,
+    )
+    return dict(state)
+
+
+def fixed32_gdn_bv_live_gate_report() -> dict[str, object]:
+    return dict(_FR13_FIXED32_GDN_BV_LIVE_STATE)
+
+
 _FR13_SUBTREE_ROUTE_REQUESTED = (
     subtree_parallel_on() or _FR13_FIXED32_MODE is not None
 )
@@ -436,6 +1043,140 @@ _FR13_FIXED32_SUBTREE_LEVELS = (
         ((21,), 14),
     ),
 )
+_FR13_FIXED32_EXPORT_NODES = (0, 1, 4, 9, 14)
+_FR13_FIXED32_EXPORT_SLOTS = len(_FR13_FIXED32_EXPORT_NODES)
+_FR13_FIXED32_MAX_BATCH = 4
+_FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID = (
+    "fixed32_sfwd_state_fusion_v1"
+)
+_FR13_FIXED32_SFWD_STATE_FUSION_ENABLED = (
+    "/logs/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
+)
+_FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT = (
+    "/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm"
+)
+_FR13_FIXED32_SFWD_STATE_FUSION_PASS = (
+    "/logs/fr13_fixed32_sfwd_state_fusion.live_pass.json"
+)
+_FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_IDS = (
+    "astropy__astropy-12907",
+    "astropy__astropy-13033",
+    "astropy__astropy-13236",
+    "astropy__astropy-13398",
+)
+_FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_MARKERS = tuple(
+    f"swe_verified:{task_id}"
+    for task_id in _FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_IDS
+)
+_FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_SUBSET_SHA256 = (
+    "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+)
+_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_STATE = {
+    "task_markers": None,
+    "batch": None,
+    "passed": set(),
+    "attempts": {},
+    "failed": False,
+}
+_FR13_FIXED32_BATCH_GDN_BYTE_AB_STATE = {
+    "passed": set(),
+    "attempts": {},
+    "waiting_announced": set(),
+}
+_FR13_FIXED32_BATCH_GDN_BYTE_AB_ENABLED = (
+    "/logs/fr13_fixed32_batch_gdn_byte_ab.enabled"
+)
+_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB_ENABLED = (
+    "/logs/fr13_fixed32_batch_gdn_graph_byte_ab.enabled"
+)
+_FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT = (
+    "/logs/fr13_fixed32_batch_gdn_byte_ab.real_event.arm"
+)
+_FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS = (
+    "/logs/fr13_fixed32_batch_gdn_byte_ab.pass.json"
+)
+_FR13_FIXED32_BATCH_GDN_PRODUCTION_ARM = (
+    "/logs/fr13_fixed32_batch_gdn_production.arm"
+)
+_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_SIDECARS = (
+    "/logs/fr13_fixed32_batch_gdn_bv_candidate.flag",
+    "/tmp/fr13_fixed32_batch_gdn_bv_candidate.flag",
+)
+_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION_SIDECARS = (
+    "/logs/fr13_fixed32_batch_gdn_bv_production.flag",
+    "/tmp/fr13_fixed32_batch_gdn_bv_production.flag",
+)
+_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_ID = "fixed32_batch_gdn_bv_v2"
+_FR13_FIXED32_BATCH_GDN_BV8_CANDIDATE_ID = "fixed32_batch_gdn_bv8_v1"
+_FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_SIDECAR_SCHEMA = (
+    "fr13.fixed32.batch_gdn.bv8.production_sidecar.v1"
+)
+_FR13_FIXED32_BATCH_GDN_EXACT4_SUBSET_SHA256 = (
+    "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+)
+_FR13_FIXED32_BATCH_GDN_EXACT4_TASK_IDS = (
+    "astropy__astropy-12907",
+    "astropy__astropy-13033",
+    "astropy__astropy-13236",
+    "astropy__astropy-13398",
+)
+_FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL = "per_request_tree_gdn_path"
+_FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL = "fixed32_batch_tree_gdn_path"
+_FR13_FIXED32_BATCH_GDN_BV_BYTE_SURFACES = (
+    "out",
+    "ring_k",
+    "ring_v",
+    "ring_a",
+    "ring_b",
+    "state_export_compact",
+    "state_export_untouched_tail",
+    "flags",
+    "invocation_counter",
+)
+_FR13_FIXED32_BATCH_GDN_GRAPH_SURFACES = (
+    "out",
+    "export",
+    "ring_k",
+    "ring_v",
+    "ring_a",
+    "ring_b",
+    "flags",
+    "invocation_counter",
+)
+# ``export`` is one device/shape cache shared by all 48 layers, so after a full
+# replay it contains only the final layer's bytes. It remains covered by the
+# reference/candidate compact+tail checks and the restore check, but cannot be
+# used as a per-layer graph-baseline oracle.
+_FR13_FIXED32_BATCH_GDN_GRAPH_STABLE_SURFACES = (
+    "out",
+    "ring_k",
+    "ring_v",
+    "ring_a",
+    "ring_b",
+    "flags",
+)
+_FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT = None
+_FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURES: dict[int, dict] = {}
+_FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_STATE = {
+    "status": "disabled",
+    "candidate_bv": None,
+    "graph_id": None,
+    "graph_signature": None,
+    "batch_size": None,
+    "records": 0,
+}
+_FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_ENGAGEMENT = (
+    "/logs/fr13_fixed32_batch_gdn_bv64.production_engagement.json"
+)
+_FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT = None
+_FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURES: dict[int, dict] = {}
+_FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_PUBLISHED = False
+_FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_ENGAGEMENT = (
+    "/logs/fr13_fixed32_batch_gdn_bv8.production_engagement.json"
+)
+_FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURE_CONTEXT = None
+_FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURES: dict[int, dict] = {}
+_FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_PUBLISHED = False
 _FR13_FIXED32_PARENT_SHA256 = (
     "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd"
 )
@@ -448,6 +1189,2075 @@ _FR13_FIXED32_LEVELS_SHA256 = (
 _FR13_FIXED32_COVERAGE_SHA256 = (
     "23b22df6bf551a4e788327db3b3d3d96e1eca49078d2c6bd0049da2d390eca8b"
 )
+_FR13_FIXED32_SFWD_CONV_STATE_LEN = 34
+
+
+def fixed32_sfwd_state_fusion_contract(
+    batch_size: int,
+    *,
+    tree_rows: int,
+    conv_width: int,
+    conv_state_len: int,
+) -> dict[str, object]:
+    """Validate the closed full-vocabulary SFWD state-fusion geometry.
+
+    The candidate is intentionally narrower than the generic tree-conv path:
+    exact fixed32 rows, the Qwen3-Next width-4 BF16 conv, and B1-B4 only.  It
+    replaces the per-layer prior gather, source construction/copy, four-tap
+    accumulation, activation, and persistent commit-source write with one
+    B-folded launch.  The existing two-level GDN scan remains physically
+    ``[1, 11]`` and continues to own byte-copy ring export and freshness flags.
+    """
+    batch = int(batch_size)
+    rows = int(tree_rows)
+    width = int(conv_width)
+    state_len = int(conv_state_len)
+    if batch not in (1, 2, 3, 4):
+        raise ValueError(
+            "FR13_FIXED32_SFWD_STATE_FUSION requires B1-B4, "
+            f"got B={batch}"
+        )
+    if rows != 32:
+        raise ValueError(
+            "FR13_FIXED32_SFWD_STATE_FUSION requires exactly 32 physical "
+            f"rows per request, got {rows}"
+        )
+    if width != 4 or state_len != _FR13_FIXED32_SFWD_CONV_STATE_LEN:
+        raise ValueError(
+            "FR13_FIXED32_SFWD_STATE_FUSION requires the exact width/state "
+            "geometry "
+            f"(4, {_FR13_FIXED32_SFWD_CONV_STATE_LEN}), "
+            f"got ({width}, {state_len})"
+        )
+    source_rows = width - 1 + rows + 1
+    return {
+        "candidate": _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID,
+        "batch_size": batch,
+        "physical_rows_per_request": rows,
+        "logical_rows": batch * rows,
+        "conv_width": width,
+        "conv_state_len": state_len,
+        "source_rows_per_request": source_rows,
+        "source_rows": batch * source_rows,
+        "conv_state_launches_per_layer": 1,
+        "gdn_level_path_programs": (batch, 11 * batch),
+        "gdn_physical_launches_per_layer": 2,
+        "gdn_ring_export": True,
+        "gdn_flags_export": True,
+        "reference_always_served": True,
+    }
+
+
+def _fr13_fixed32_sfwd_state_fusion_exact4_markers(
+    path: str,
+) -> tuple[str, ...]:
+    """Read the engine-published canonical exact4 marker set fail-closed."""
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(
+        os, "O_NOFOLLOW", 0
+    )
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as error:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION exact4 marker is unavailable"
+        ) from error
+    try:
+        info = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_nlink != 1
+            or stat.S_IMODE(info.st_mode) != 0o444
+            or info.st_size <= 0
+            or info.st_size > 1024
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_SFWD_STATE_FUSION exact4 marker identity is invalid"
+            )
+        chunks: list[bytes] = []
+        remaining = info.st_size
+        while remaining:
+            chunk = os.read(descriptor, remaining)
+            if not chunk:
+                raise RuntimeError(
+                    "FR13_FIXED32_SFWD_STATE_FUSION exact4 marker was truncated"
+                )
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            raise RuntimeError(
+                "FR13_FIXED32_SFWD_STATE_FUSION exact4 marker changed while reading"
+            )
+        raw = b"".join(chunks)
+    finally:
+        os.close(descriptor)
+    expected = (
+        "\n".join(_FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_MARKERS) + "\n"
+    ).encode("ascii")
+    if raw != expected:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION requires the canonical exact4 "
+            "authenticated task markers"
+        )
+    return _FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_MARKERS
+
+
+def fixed32_sfwd_state_fusion_gate_control(
+    *,
+    environ=None,
+    enabled_path: str | None = None,
+    event_path: str | None = None,
+) -> tuple[bool, tuple[str, ...] | None]:
+    """Resolve the default-off authenticated exact4 B4 byte-gate arm."""
+    env = os.environ if environ is None else environ
+    raw = str(env.get("FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB", ""))
+    if raw not in ("", "0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"
+        )
+    enabled = enabled_path or str(
+        env.get(
+            "FR13_FIXED32_SFWD_STATE_FUSION_ENABLED_PATH",
+            _FR13_FIXED32_SFWD_STATE_FUSION_ENABLED,
+        )
+    )
+    event = event_path or str(
+        env.get(
+            "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH",
+            _FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT,
+        )
+    )
+    armed = raw == "1" or os.path.exists(enabled)
+    if not armed:
+        return False, None
+    state = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_STATE
+    if bool(state.get("failed")):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION byte gate previously mismatched"
+        )
+    if len(state.get("passed", ())) == 48:
+        return True, None
+    if not os.path.exists(event):
+        return armed, None
+    if _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION byte gate requires an exact "
+            "fixed32 runtime"
+        )
+    return True, _fr13_fixed32_sfwd_state_fusion_exact4_markers(event)
+
+
+def _fr13_resolve_fixed32_batch_gdn_bv(
+    fixed32_mode: str | None,
+    *,
+    env_name: str,
+    sidecars,
+    environ=None,
+    geom_override=None,
+    allow_reference_bv: bool = False,
+) -> int | None:
+    """Resolve one explicit BV selector for the two-launch B2-B4 route."""
+    env = os.environ if environ is None else environ
+    sources: list[tuple[str, str]] = []
+    raw_env = env.get(env_name)
+    if raw_env is not None and str(raw_env).strip():
+        sources.append((f"env:{env_name}", str(raw_env).strip()))
+    for path in tuple(sidecars):
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="ascii") as handle:
+                value = handle.read(16)
+        except (OSError, UnicodeError) as error:
+            raise RuntimeError(
+                f"{env_name}: cannot read sidecar {path}: {error}"
+            ) from error
+        if len(value) >= 16:
+            raise RuntimeError(f"{env_name}: sidecar exceeds 15 bytes: {path}")
+        sources.append((f"sidecar:{path}", value.strip()))
+    if not sources:
+        return None
+    allowed = ("8", "16", "32", "64", "128") if allow_reference_bv else (
+        "16",
+        "32",
+        "64",
+        "128",
+    )
+    invalid = [
+        (source, value)
+        for source, value in sources
+        if value not in allowed
+    ]
+    values = {value for _source, value in sources}
+    if invalid or len(values) != 1:
+        allowed_text = ", ".join(allowed[:-1]) + ", or " + allowed[-1]
+        raise RuntimeError(
+            f"{env_name} requires one of {allowed_text} from agreeing "
+            f"sources: {sources!r}"
+        )
+    if fixed32_mode not in _FR13_FIXED32_MODES:
+        raise RuntimeError(f"{env_name} requires an exact fixed32 mode")
+    if geom_override != {"BV": 8}:
+        raise RuntimeError(
+            f"{env_name} requires the B1/served reference geometry pinned "
+            "exactly to BV=8"
+        )
+    return int(values.pop())
+
+
+_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE = (
+    _fr13_resolve_fixed32_batch_gdn_bv(
+        _FR13_FIXED32_MODE,
+        env_name="FR13_FIXED32_BATCH_GDN_BV_CANDIDATE",
+        sidecars=_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_SIDECARS,
+        geom_override=_read_tree_gdn_geom_override(),
+        allow_reference_bv=True,
+    )
+)
+_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION = (
+    _fr13_resolve_fixed32_batch_gdn_bv(
+        _FR13_FIXED32_MODE,
+        env_name="FR13_FIXED32_BATCH_GDN_BV_PRODUCTION",
+        sidecars=_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION_SIDECARS,
+        geom_override=_read_tree_gdn_geom_override(),
+        allow_reference_bv=True,
+    )
+)
+if (
+    _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE is not None
+    and _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None
+):
+    raise RuntimeError(
+        "FR13 fixed32 batched GDN wide-BV diagnostic and production "
+        "selectors are mutually exclusive"
+    )
+if (
+    _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE is not None
+    or _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None
+) and (
+    _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+    or _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None
+):
+    raise RuntimeError(
+        "FR13 fixed32 B1 path-BV and B2-B4 batched wide-BV selectors are "
+        "mutually exclusive"
+    )
+
+
+def _fr13_fixed32_batch_gdn_source_sha256() -> str:
+    try:
+        payload = Path(__file__).resolve().read_bytes()
+    except OSError as error:
+        raise RuntimeError(
+            f"FR13 fixed32 batched GDN cannot hash its source: {error}"
+        ) from error
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _fr13_fixed32_batch_gdn_byte_ab_control() -> tuple[bool, str | None]:
+    """Resolve the eager real-event byte gate without worker-env assumptions.
+
+    The launcher creates the enabled sidecar before boot, then authenticated
+    engine ingress creates the event arm after admitting the first canonical
+    SWE-Verified request and before executing it. This prevents graph warmup or
+    a synthetic probe from satisfying the gate. The event marker is included
+    in every gate record.
+    """
+    raw = os.environ.get("FR13_FIXED32_BATCH_GDN_BYTE_AB", "")
+    if raw not in ("", "0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1"
+        )
+    enabled_path = os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_ENABLED_PATH",
+        _FR13_FIXED32_BATCH_GDN_BYTE_AB_ENABLED,
+    )
+    event_path = os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH",
+        _FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT,
+    )
+    enabled = raw == "1" or os.path.exists(enabled_path)
+    if not os.path.exists(event_path):
+        return enabled, None
+    return enabled, _fr13_fixed32_batch_gdn_real_event_marker(event_path)
+
+
+def _fr13_fixed32_batch_gdn_real_event_marker(
+    event_path: str | None = None,
+) -> str:
+    """Read the authenticated SWE-Verified event arm shared by both gates."""
+    path = event_path or os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH",
+        _FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT,
+    )
+    if not os.path.exists(path):
+        raise RuntimeError(
+            "FR13 fixed32 batched GDN graph byte gate requires an authenticated "
+            f"real-event arm at {path}"
+        )
+    try:
+        with open(path, encoding="ascii") as handle:
+            marker = handle.read(257)
+    except (OSError, UnicodeError) as error:
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB cannot read real-event arm "
+            f"{path}: {error}"
+        ) from error
+    if len(marker) > 256:
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB real-event marker exceeds 256 bytes"
+        )
+    marker = marker.strip()
+    prefix = "swe_verified:"
+    task_id = marker[len(prefix):] if marker.startswith(prefix) else ""
+    if not task_id or any(
+        character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+        for character in task_id
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB real-event marker must be "
+            "swe_verified:<task_id>"
+        )
+    return marker
+
+
+def _fr13_fixed32_batch_gdn_graph_byte_ab_control() -> bool:
+    """Resolve the graph-replay B4 gate independently of the eager gate."""
+    raw = os.environ.get("FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB", "")
+    if raw not in ("", "0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
+        )
+    enabled_path = os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB_ENABLED_PATH",
+        _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB_ENABLED,
+    )
+    return raw == "1" or os.path.exists(enabled_path)
+
+
+def _fr13_fixed32_batch_gdn_production_control() -> dict[str, object] | None:
+    """Validate the explicit post-gate production arm and PASS record."""
+    raw = os.environ.get("FR13_FIXED32_BATCH_GDN_PRODUCTION", "")
+    if raw not in ("", "0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION must be exactly 0 or 1"
+        )
+    arm_path = os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_PRODUCTION_ARM_PATH",
+        _FR13_FIXED32_BATCH_GDN_PRODUCTION_ARM,
+    )
+    if raw != "1" and not os.path.exists(arm_path):
+        return None
+    pass_path = os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS_PATH",
+        _FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS,
+    )
+    if os.path.islink(pass_path) or not os.path.isfile(pass_path):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION requires a readable live-gate "
+            f"PASS record (regular file) at {pass_path}"
+        )
+    try:
+        with open(pass_path, encoding="ascii") as handle:
+            payload = json.load(handle)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION requires a readable live-gate "
+            f"PASS record at {pass_path}: {error}"
+        ) from error
+    if not isinstance(payload, dict):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION live-gate PASS record is invalid"
+        )
+    production_bv = _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION
+    if production_bv == 8:
+        credential = payload
+        expected_credential_keys = {
+            "schema",
+            "status",
+            "candidate",
+            "batch",
+            "subset_sha256",
+            "task_ids",
+            "task_marker",
+            "kernel_source_sha256",
+            "runtime_manifest_sha256",
+            "gate_runner_sha256",
+            "live_result_sha256",
+            "gate_verdict_sha256",
+            "reference_kernel_structure",
+            "candidate_kernel_structure",
+            "reference_bv",
+            "candidate_bv",
+            "reference_physical_launches_per_layer",
+            "candidate_physical_launches_per_layer",
+            "production_default_enabled",
+            "live_result",
+            "gate_verdict",
+        }
+        live_result = credential.get("live_result")
+        gate_verdict = credential.get("gate_verdict")
+
+        def _credential_digest(value: object) -> str:
+            raw_value = (
+                json.dumps(
+                    value,
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+                + "\n"
+            ).encode("ascii")
+            return hashlib.sha256(raw_value).hexdigest()
+
+        task_marker = credential.get("task_marker")
+        ledger_sha256 = (
+            gate_verdict.get("engine_ledger_chain_head_sha256")
+            if isinstance(gate_verdict, dict)
+            else None
+        )
+        runtime_manifest_sha256 = credential.get("runtime_manifest_sha256")
+        gate_runner_sha256 = credential.get("gate_runner_sha256")
+        expected_task_markers = {
+            "swe_verified:" + task_id
+            for task_id in _FR13_FIXED32_BATCH_GDN_EXACT4_TASK_IDS
+        }
+        credential_invalid = (
+            set(credential) != expected_credential_keys
+            or credential.get("schema")
+            != _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_SIDECAR_SCHEMA
+            or credential.get("status") != "qualified"
+            or credential.get("candidate")
+            != _FR13_FIXED32_BATCH_GDN_BV8_CANDIDATE_ID
+            or credential.get("batch") != 4
+            or credential.get("subset_sha256")
+            != _FR13_FIXED32_BATCH_GDN_EXACT4_SUBSET_SHA256
+            or credential.get("task_ids")
+            != list(_FR13_FIXED32_BATCH_GDN_EXACT4_TASK_IDS)
+            or task_marker not in expected_task_markers
+            or credential.get("kernel_source_sha256")
+            != _fr13_fixed32_batch_gdn_source_sha256()
+            or not isinstance(runtime_manifest_sha256, str)
+            or len(runtime_manifest_sha256) != 64
+            or any(
+                character not in "0123456789abcdef"
+                for character in runtime_manifest_sha256
+            )
+            or not isinstance(gate_runner_sha256, str)
+            or len(gate_runner_sha256) != 64
+            or any(
+                character not in "0123456789abcdef"
+                for character in gate_runner_sha256
+            )
+            or credential.get("reference_kernel_structure")
+            != _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL
+            or credential.get("candidate_kernel_structure")
+            != _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL
+            or credential.get("reference_bv") != 8
+            or credential.get("candidate_bv") != 8
+            or credential.get("reference_physical_launches_per_layer") != 8
+            or credential.get("candidate_physical_launches_per_layer") != 2
+            or credential.get("production_default_enabled") is not False
+            or not isinstance(live_result, dict)
+            or not isinstance(gate_verdict, dict)
+            or credential.get("live_result_sha256")
+            != _credential_digest(live_result)
+            or credential.get("gate_verdict_sha256")
+            != _credential_digest(gate_verdict)
+            or live_result.get("task_marker") != task_marker
+            or gate_verdict.get("task_marker") != task_marker
+            or gate_verdict.get("graph_live_pass_sha256")
+            != credential.get("live_result_sha256")
+            or gate_verdict.get("kernel_source_sha256")
+            != credential.get("kernel_source_sha256")
+            or gate_verdict.get("runtime_manifest_sha256")
+            != runtime_manifest_sha256
+            or gate_verdict.get("gate_runner_sha256")
+            != gate_runner_sha256
+            or gate_verdict.get("schema")
+            != "fr13.fixed32.batch_gdn.b4_diagnostic.v1"
+            or gate_verdict.get("status") != "pass"
+            or gate_verdict.get("run_classification")
+            != "exact4_b4_graph_byte_diagnostic"
+            or gate_verdict.get("timing_eligible") is not False
+            or gate_verdict.get("floor_acceptance_eligible") is not False
+            or gate_verdict.get("subset_sha256")
+            != _FR13_FIXED32_BATCH_GDN_EXACT4_SUBSET_SHA256
+            or gate_verdict.get("task_ids")
+            != list(_FR13_FIXED32_BATCH_GDN_EXACT4_TASK_IDS)
+            or gate_verdict.get("gate_mode") != "post_replay_shadow"
+            or gate_verdict.get("graph_id") != live_result.get("graph_id")
+            or gate_verdict.get("graph_signature")
+            != live_result.get("graph_signature")
+            or gate_verdict.get("candidate")
+            != _FR13_FIXED32_BATCH_GDN_BV8_CANDIDATE_ID
+            or gate_verdict.get("reference_bv") != 8
+            or gate_verdict.get("candidate_bv") != 8
+            or gate_verdict.get("reference_kernel_structure")
+            != _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL
+            or gate_verdict.get("candidate_kernel_structure")
+            != _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL
+            or gate_verdict.get("reference_physical_launches_per_layer") != 8
+            or gate_verdict.get("candidate_physical_launches_per_layer") != 2
+            or gate_verdict.get("count_invocation") is not True
+            or gate_verdict.get("ring_export") is not True
+            or gate_verdict.get("flags_inkernel") is not True
+            or gate_verdict.get("scan_align") is not False
+            or gate_verdict.get("npad_invariant") is not False
+            or gate_verdict.get("tree_gdn_geom_override") != "BV=8"
+            or gate_verdict.get("enforce_eager") != 0
+            or gate_verdict.get("cudagraph_mode")
+            != "FULL_AND_PIECEWISE"
+            or gate_verdict.get("production_eligible") is not True
+            or gate_verdict.get("b4_layer_passes") != 48
+            or gate_verdict.get("observed_pass_layers_by_batch")
+            != {"2": 0, "3": 0, "4": 48}
+            or not isinstance(ledger_sha256, str)
+            or len(ledger_sha256) != 64
+            or any(
+                character not in "0123456789abcdef"
+                for character in ledger_sha256
+            )
+            or gate_verdict.get("raw_byte_equal") is not True
+            or gate_verdict.get("reference_always_served") is not True
+            or gate_verdict.get("production_default_enabled") is not False
+        )
+        if credential_invalid:
+            raise RuntimeError(
+                "FR13 fixed32 batched BV8 production credential is invalid"
+            )
+        payload = dict(live_result)
+        payload["_production_sidecar_sha256"] = hashlib.sha256(
+            Path(pass_path).read_bytes()
+        ).hexdigest()
+        payload["_graph_pass_sha256"] = credential["live_result_sha256"]
+        payload["_gate_verdict_sha256"] = credential["gate_verdict_sha256"]
+        payload["_runtime_manifest_sha256"] = runtime_manifest_sha256
+        payload["_gate_runner_sha256"] = gate_runner_sha256
+    layer_keys = payload.get("layer_keys")
+    task_marker = payload.get("task_marker")
+    valid_layer_keys = (
+        isinstance(layer_keys, list)
+        and len(layer_keys) == 48
+        and all(
+            isinstance(key, str) and key.startswith("0x")
+            for key in layer_keys
+        )
+        and len(set(layer_keys)) == 48
+    )
+    common_invalid = (
+        payload.get("status") != "pass"
+        or payload.get("reference_always_served") is not True
+        or not isinstance(task_marker, str)
+        or not task_marker.startswith("swe_verified:")
+        or len(task_marker) == len("swe_verified:")
+        or type(payload.get("batch")) is not int
+        or not 2 <= payload["batch"] <= _FR13_FIXED32_MAX_BATCH
+        or payload.get("layer_count") != 48
+        or not valid_layer_keys
+    )
+    if production_bv is None:
+        schema_invalid = (
+            payload.get("schema") != "fr13.fixed32.batch_gdn.live_pass.v1"
+        )
+        wide_invalid = False
+    else:
+        graph_signature = payload.get("graph_signature")
+        schema_invalid = (
+            payload.get("schema")
+            != "fr13.fixed32.batch_gdn.graph_live_pass.v1"
+            or payload.get("gate_mode") != "post_replay_shadow"
+            or type(payload.get("graph_id")) is not int
+            or payload["graph_id"] <= 0
+            or not isinstance(graph_signature, str)
+            or len(graph_signature) != 64
+            or any(
+                character not in "0123456789abcdef"
+                for character in graph_signature
+            )
+            or payload.get("capture_records") != 48
+            or payload.get("real_task_authenticated") is not True
+            or payload.get("graph_baseline_byte_equal") is not True
+        )
+        candidate_id = (
+            _FR13_FIXED32_BATCH_GDN_BV8_CANDIDATE_ID
+            if production_bv == 8
+            else _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_ID
+        )
+        wide_invalid = (
+            production_bv not in (8, 64)
+            or payload.get("batch") != 4
+            or payload.get("candidate") != candidate_id
+            or payload.get("source_sha256")
+            != _fr13_fixed32_batch_gdn_source_sha256()
+            or (
+                _FR13_FIXED32_MODE
+                not in (
+                    ("tail6_fixed32", "hydra27_fixed32")
+                    if production_bv == 8
+                    else ("tail6_fixed32",)
+                )
+            )
+            or payload.get("mode") != "tail6_fixed32"
+            or payload.get("physical_rows_per_request") != 32
+            or payload.get("reference_bv") != 8
+            or payload.get("candidate_bv") != production_bv
+            or payload.get("reference_physical_launches_per_layer")
+            != 8
+            or payload.get("candidate_physical_launches_per_layer") != 2
+            or payload.get("compared_byte_surfaces")
+            != list(_FR13_FIXED32_BATCH_GDN_BV_BYTE_SURFACES)
+            or payload.get("raw_byte_equal") is not True
+            or payload.get("state_restored") is not True
+        )
+        if production_bv == 8:
+            wide_invalid = wide_invalid or (
+                payload.get("reference_kernel_structure")
+                != _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL
+                or payload.get("candidate_kernel_structure")
+                != _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL
+                or payload.get("count_invocation") is not True
+                or payload.get("ring_export") is not True
+                or payload.get("flags_inkernel") is not True
+                or payload.get("scan_align") is not False
+                or payload.get("npad_invariant") is not False
+                or payload.get("production_eligible") is not True
+            )
+    if common_invalid or schema_invalid or wide_invalid:
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION live-gate PASS record is invalid"
+        )
+    return payload
+
+
+def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
+    """Resolve diagnostics or qualified batched production; default is legacy."""
+    batch = int(batch_size)
+    if batch <= 1:
+        # B1 already has the target two launches. Keep its byte-established
+        # per-request BV8 route and batch only the B2/B3 launch-count gap.
+        return None
+    if batch > _FR13_FIXED32_MAX_BATCH:
+        raise RuntimeError(
+            f"FR13 fixed32 batched GDN supports B2-B4, got B={batch}"
+        )
+    diagnostic, _marker = _fr13_fixed32_batch_gdn_byte_ab_control()
+    graph_diagnostic = _fr13_fixed32_batch_gdn_graph_byte_ab_control()
+    production = _fr13_fixed32_batch_gdn_production_control()
+    if diagnostic and graph_diagnostic:
+        raise RuntimeError(
+            "FR13 fixed32 eager and graph-replay batched GDN diagnostics are "
+            "mutually exclusive"
+        )
+    if (diagnostic or graph_diagnostic) and production is not None:
+        raise RuntimeError(
+            "FR13 fixed32 batched GDN diagnostic and production selectors "
+            "are mutually exclusive"
+        )
+    if (
+        _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE is not None
+        and not (diagnostic or graph_diagnostic)
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE requires the batched GDN "
+            "diagnostic selector"
+        )
+    if _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE == 8 and not graph_diagnostic:
+        raise RuntimeError(
+            "FR13 fixed32 batched BV8 structure candidate requires the exact-B4 "
+            "graph diagnostic"
+        )
+    if (
+        _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None
+        and production is None
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN_BV_PRODUCTION requires the batched GDN "
+            "production selector and its live PASS"
+        )
+    if (
+        diagnostic or graph_diagnostic
+    ) and _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None:
+        raise RuntimeError(
+            "FR13 fixed32 batched GDN diagnostic and production selectors "
+            "are mutually exclusive"
+        )
+    if production is not None and _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE is not None:
+        raise RuntimeError(
+            "FR13 fixed32 batched GDN diagnostic and production selectors "
+            "are mutually exclusive"
+        )
+    if (
+        (diagnostic or graph_diagnostic or production is not None)
+        and (
+            _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+            or _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None
+        )
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 batched GDN and path-BV selectors are "
+            "mutually exclusive"
+        )
+    if diagnostic:
+        return "diagnostic"
+    if graph_diagnostic:
+        context = _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT
+        if (
+            batch == 4
+            and isinstance(context, dict)
+            and int(context.get("batch_size", -1)) == 4
+        ):
+            return "graph_capture"
+        # B1-B3 and non-capture execution remain the established per-request
+        # BV8 path. Real serving replays the graph and never re-enters Python.
+        return None
+    if production is not None:
+        production_bv = _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION
+        qualified_batch = int(production["batch"])
+        if production_bv == 8:
+            if qualified_batch != 4:
+                raise RuntimeError(
+                    "FR13 fixed32 batched BV8 production requires its exact-B4 "
+                    f"live-gate credential, got B={qualified_batch}"
+                )
+            # Request identity only expands the same two level grids for B2-B4.
+            # B1 remains on its already-two-launch legacy route.
+            return "production"
+        if production_bv is not None and batch < 4:
+            # Preserve the pre-existing generic/BV64 production scope.
+            return None
+        if qualified_batch != batch:
+            raise RuntimeError(
+                "FR13_FIXED32_BATCH_GDN_PRODUCTION batch does not match its "
+                f"live-gate PASS record: {batch} != {qualified_batch}"
+            )
+        return "production"
+    return None
+
+
+def fixed32_batch_gdn_bv64_production_capture_begin(
+    graph_id: int, batch_size: int
+) -> None:
+    """Open one FULL capture record for source-qualified BV64 production."""
+    global _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT
+    if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is None:
+        return
+    payload = _fr13_fixed32_batch_gdn_production_control()
+    identity = int(graph_id)
+    batch = int(batch_size)
+    pass_path = Path(
+        os.environ.get(
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS_PATH",
+            _FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS,
+        )
+    )
+    try:
+        pass_sha256 = hashlib.sha256(pass_path.read_bytes()).hexdigest()
+    except OSError as error:
+        raise RuntimeError(
+            "FR13 fixed32 BV64 production cannot hash its installed PASS"
+        ) from error
+    if (
+        payload is None
+        or _FR13_FIXED32_MODE != "tail6_fixed32"
+        or _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION != 64
+        or identity <= 0
+        or batch not in (1, 2, 3, 4)
+        or _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT is not None
+        or batch in _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURES
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 BV64 production capture begin drift: "
+            + repr((identity, batch, _FR13_FIXED32_MODE))
+        )
+    prior_passes = {
+        record["graph_pass_sha256"]
+        for record in _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURES.values()
+    }
+    if prior_passes and prior_passes != {pass_sha256}:
+        raise RuntimeError("FR13 fixed32 BV64 production PASS changed during capture")
+    _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT = {
+        "graph_id": identity,
+        "batch_size": batch,
+        "graph_pass_sha256": pass_sha256,
+        "kernel_source_sha256": payload["source_sha256"],
+        "layer_keys": [],
+        "candidate_bvs": [],
+    }
+
+
+def _fr13_fixed32_batch_gdn_bv64_production_capture_register(
+    *, batch_size: int, layer_key: int, candidate_bv: int
+) -> None:
+    """Record each actual wide production launch while its B4 graph captures."""
+    if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is None:
+        return
+    context = _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT
+    batch = int(batch_size)
+    key = int(layer_key)
+    selected_bv = int(candidate_bv)
+    if (
+        not isinstance(context, dict)
+        or set(context)
+        != {
+            "graph_id",
+            "batch_size",
+            "graph_pass_sha256",
+            "kernel_source_sha256",
+            "layer_keys",
+            "candidate_bvs",
+        }
+        or batch != 4
+        or int(context.get("batch_size", -1)) != 4
+        or key <= 0
+        or selected_bv != 64
+    ):
+        raise RuntimeError("FR13 fixed32 BV64 production launch scope drifted")
+    if torch.cuda.is_available() and not torch.cuda.is_current_stream_capturing():
+        raise RuntimeError("FR13 fixed32 BV64 production launch was not captured")
+    context["layer_keys"].append(key)
+    context["candidate_bvs"].append(selected_bv)
+
+
+def fixed32_batch_gdn_bv64_production_capture_end(
+    graph_id: int,
+    batch_size: int,
+    graph_signature: str,
+    expected_scan_calls: int,
+) -> None:
+    """Bind the actual B4 BV64 launches, and B1-B3 absence, to each graph."""
+    global _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT
+    if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is None:
+        return
+    context = _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT
+    identity = int(graph_id)
+    batch = int(batch_size)
+    signature = str(graph_signature)
+    layer_keys = context.get("layer_keys") if isinstance(context, dict) else None
+    candidate_bvs = (
+        context.get("candidate_bvs") if isinstance(context, dict) else None
+    )
+    expected_layers = 48 if batch == 4 else 0
+    if (
+        not isinstance(context, dict)
+        or int(context.get("graph_id", -1)) != identity
+        or int(context.get("batch_size", -1)) != batch
+        or batch not in (1, 2, 3, 4)
+        or int(expected_scan_calls) != 48 * batch
+        or not isinstance(layer_keys, list)
+        or len(layer_keys) != expected_layers
+        or len(set(layer_keys)) != expected_layers
+        or not isinstance(candidate_bvs, list)
+        or candidate_bvs != ([64] * expected_layers)
+        or len(signature) != 64
+        or any(character not in "0123456789abcdef" for character in signature)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 BV64 production capture end drift: "
+            + repr((identity, batch, expected_layers, layer_keys, candidate_bvs))
+        )
+    _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURES[batch] = {
+        "graph_id": identity,
+        "graph_signature": signature,
+        "graph_pass_sha256": context["graph_pass_sha256"],
+        "kernel_source_sha256": context["kernel_source_sha256"],
+        "layer_keys": tuple(sorted(layer_keys)),
+    }
+    _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURE_CONTEXT = None
+
+
+def fixed32_batch_gdn_bv64_production_replay_engaged(
+    graph_id: int,
+    batch_size: int,
+    graph_signature: str,
+    expected_scan_calls: int,
+) -> dict[str, object]:
+    """Publish once only after a measured replay of the captured B4 BV64 graph."""
+    global _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_PUBLISHED
+    if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is None:
+        return {"status": "disabled"}
+    identity = int(graph_id)
+    batch = int(batch_size)
+    signature = str(graph_signature)
+    captures = _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_CAPTURES
+    expected_layer_counts = {1: 0, 2: 0, 3: 0, 4: 48}
+    actual_layer_counts = {
+        captured_batch: len(record.get("layer_keys", ()))
+        for captured_batch, record in captures.items()
+    }
+    record = captures.get(batch)
+    if (
+        set(captures) != {1, 2, 3, 4}
+        or actual_layer_counts != expected_layer_counts
+        or not isinstance(record, dict)
+        or record.get("graph_id") != identity
+        or record.get("graph_signature") != signature
+        or int(expected_scan_calls) != 48 * batch
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 BV64 production replay provenance drift: "
+            + repr((identity, batch, actual_layer_counts))
+        )
+    if batch != 4:
+        return {
+            "status": "legacy_lower_batch",
+            "batch_size": batch,
+            "wide_route_capture_layers": 0,
+        }
+    if _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_PUBLISHED:
+        return {
+            "status": "ENGAGED",
+            "batch_size": 4,
+            "observed_full_graph_replays_at_least": 1,
+        }
+    layer_keys = [f"0x{key:x}" for key in record["layer_keys"]]
+    engagement = {
+        "schema": "fr13.fixed32.batch_gdn.bv64.production_engagement.v1",
+        "status": "ENGAGED",
+        "mode": "tail6_fixed32",
+        "runtime_mode": "FULL",
+        "selector": "production",
+        "batch_size": 4,
+        "candidate": _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_ID,
+        "candidate_bv": 64,
+        "physical_rows_per_request": 32,
+        "physical_launches_per_layer": 2,
+        "layer_count": 48,
+        "layer_keys": layer_keys,
+        "wide_route_capture_layers_by_batch": {
+            str(key): value for key, value in expected_layer_counts.items()
+        },
+        "graph_id": identity,
+        "graph_signature": signature,
+        "graph_pass_sha256": record["graph_pass_sha256"],
+        "kernel_source_sha256": record["kernel_source_sha256"],
+        "observed_full_graph_replays_at_least": 1,
+        "fallback": 0,
+        "production_default_enabled": False,
+    }
+    path = Path(_FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_ENGAGEMENT)
+    if path.exists() or path.is_symlink():
+        raise RuntimeError(
+            "FR13 fixed32 BV64 production engagement path already exists"
+        )
+    raw = (
+        json.dumps(
+            engagement,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode("ascii")
+    temporary = path.with_name(path.name + f".tmp.{os.getpid()}")
+    descriptor = None
+    try:
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
+            0o600,
+        )
+        offset = 0
+        while offset < len(raw):
+            written = os.write(descriptor, raw[offset:])
+            if written <= 0:
+                raise OSError("short BV64 engagement write")
+            offset += written
+        os.fchmod(descriptor, 0o400)
+        os.fsync(descriptor)
+        os.close(descriptor)
+        descriptor = None
+        os.replace(temporary, path)
+    except Exception:
+        if descriptor is not None:
+            os.close(descriptor)
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+    _FR13_FIXED32_BATCH_GDN_BV64_PRODUCTION_PUBLISHED = True
+    return dict(engagement)
+
+
+def fixed32_batch_gdn_bv8_production_capture_begin(
+    graph_id: int, batch_size: int
+) -> None:
+    """Open one FULL capture record for source-qualified batched BV8."""
+    global _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURE_CONTEXT
+    if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION != 8:
+        return
+    payload = _fr13_fixed32_batch_gdn_production_control()
+    identity = int(graph_id)
+    batch = int(batch_size)
+    if (
+        payload is None
+        or _FR13_FIXED32_MODE not in ("tail6_fixed32", "hydra27_fixed32")
+        or identity <= 0
+        or batch not in (1, 2, 3, 4)
+        or _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURE_CONTEXT is not None
+        or batch in _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURES
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 batched BV8 production capture begin drift: "
+            + repr((identity, batch, _FR13_FIXED32_MODE))
+        )
+    prior_credentials = {
+        record["production_sidecar_sha256"]
+        for record in _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURES.values()
+    }
+    sidecar_sha256 = payload.get("_production_sidecar_sha256")
+    if (
+        not isinstance(sidecar_sha256, str)
+        or len(sidecar_sha256) != 64
+        or (prior_credentials and prior_credentials != {sidecar_sha256})
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 batched BV8 production credential changed during capture"
+        )
+    _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURE_CONTEXT = {
+        "graph_id": identity,
+        "batch_size": batch,
+        "production_sidecar_sha256": sidecar_sha256,
+        "graph_pass_sha256": payload["_graph_pass_sha256"],
+        "gate_verdict_sha256": payload["_gate_verdict_sha256"],
+        "runtime_manifest_sha256": payload["_runtime_manifest_sha256"],
+        "gate_runner_sha256": payload["_gate_runner_sha256"],
+        "kernel_source_sha256": payload["source_sha256"],
+        "runtime_mode": _FR13_FIXED32_MODE,
+        "task_marker": payload["task_marker"],
+        "layer_keys": [],
+        "candidate_bvs": [],
+    }
+
+
+def _fr13_fixed32_batch_gdn_bv8_production_capture_register(
+    *, batch_size: int, layer_key: int, candidate_bv: int
+) -> None:
+    """Record each actual two-launch BV8 dispatch in a B2-B4 graph."""
+    if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION != 8:
+        return
+    context = _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURE_CONTEXT
+    batch = int(batch_size)
+    key = int(layer_key)
+    selected_bv = int(candidate_bv)
+    if (
+        not isinstance(context, dict)
+        or set(context)
+        != {
+            "graph_id",
+            "batch_size",
+            "production_sidecar_sha256",
+            "graph_pass_sha256",
+            "gate_verdict_sha256",
+            "runtime_manifest_sha256",
+            "gate_runner_sha256",
+            "kernel_source_sha256",
+            "runtime_mode",
+            "task_marker",
+            "layer_keys",
+            "candidate_bvs",
+        }
+        or batch not in (2, 3, 4)
+        or int(context.get("batch_size", -1)) != batch
+        or key <= 0
+        or selected_bv != 8
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 batched BV8 production launch scope drifted"
+        )
+    if torch.cuda.is_available() and not torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 fixed32 batched BV8 production launch was not captured"
+        )
+    context["layer_keys"].append(key)
+    context["candidate_bvs"].append(selected_bv)
+
+
+def fixed32_batch_gdn_bv8_production_capture_end(
+    graph_id: int,
+    batch_size: int,
+    graph_signature: str,
+    expected_scan_calls: int,
+) -> None:
+    """Bind B2-B4 batched launches and B1 legacy absence to each graph."""
+    global _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURE_CONTEXT
+    if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION != 8:
+        return
+    context = _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURE_CONTEXT
+    identity = int(graph_id)
+    batch = int(batch_size)
+    signature = str(graph_signature)
+    layer_keys = context.get("layer_keys") if isinstance(context, dict) else None
+    candidate_bvs = (
+        context.get("candidate_bvs") if isinstance(context, dict) else None
+    )
+    expected_layers = 0 if batch == 1 else 48
+    if (
+        not isinstance(context, dict)
+        or int(context.get("graph_id", -1)) != identity
+        or int(context.get("batch_size", -1)) != batch
+        or batch not in (1, 2, 3, 4)
+        or int(expected_scan_calls) != 48 * batch
+        or not isinstance(layer_keys, list)
+        or len(layer_keys) != expected_layers
+        or len(set(layer_keys)) != expected_layers
+        or not isinstance(candidate_bvs, list)
+        or candidate_bvs != ([8] * expected_layers)
+        or len(signature) != 64
+        or any(character not in "0123456789abcdef" for character in signature)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 batched BV8 production capture end drift: "
+            + repr((identity, batch, expected_layers, layer_keys, candidate_bvs))
+        )
+    _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURES[batch] = {
+        "graph_id": identity,
+        "graph_signature": signature,
+        "production_sidecar_sha256": context["production_sidecar_sha256"],
+        "graph_pass_sha256": context["graph_pass_sha256"],
+        "gate_verdict_sha256": context["gate_verdict_sha256"],
+        "runtime_manifest_sha256": context["runtime_manifest_sha256"],
+        "gate_runner_sha256": context["gate_runner_sha256"],
+        "kernel_source_sha256": context["kernel_source_sha256"],
+        "runtime_mode": context["runtime_mode"],
+        "task_marker": context["task_marker"],
+        "layer_keys": tuple(sorted(layer_keys)),
+    }
+    _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURE_CONTEXT = None
+
+
+def fixed32_batch_gdn_bv8_production_replay_engaged(
+    graph_id: int,
+    batch_size: int,
+    graph_signature: str,
+    expected_scan_calls: int,
+) -> dict[str, object]:
+    """Publish after B4 replay once every B1-B4 graph route is captured."""
+    global _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_PUBLISHED
+    if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION != 8:
+        return {"status": "disabled"}
+    identity = int(graph_id)
+    batch = int(batch_size)
+    signature = str(graph_signature)
+    captures = _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURES
+    expected_layer_counts = {1: 0, 2: 48, 3: 48, 4: 48}
+    actual_layer_counts = {
+        captured_batch: len(record.get("layer_keys", ()))
+        for captured_batch, record in captures.items()
+    }
+    record = captures.get(batch)
+    credential_hashes = {
+        captured.get("production_sidecar_sha256")
+        for captured in captures.values()
+    }
+    if (
+        set(captures) != {1, 2, 3, 4}
+        or actual_layer_counts != expected_layer_counts
+        or len(credential_hashes) != 1
+        or not isinstance(record, dict)
+        or record.get("graph_id") != identity
+        or record.get("graph_signature") != signature
+        or int(expected_scan_calls) != 48 * batch
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 batched BV8 production replay provenance drift: "
+            + repr((identity, batch, actual_layer_counts, credential_hashes))
+        )
+    if batch != 4:
+        return {
+            "status": (
+                "legacy_lower_batch" if batch == 1 else "batched_lower_batch"
+            ),
+            "batch_size": batch,
+            "batched_route_capture_layers": expected_layer_counts[batch],
+        }
+    if _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_PUBLISHED:
+        return {
+            "status": "ENGAGED",
+            "batch_size": 4,
+            "observed_full_graph_replays_at_least": 1,
+        }
+    layer_keys = [f"0x{key:x}" for key in record["layer_keys"]]
+    engagement = {
+        "schema": "fr13.fixed32.batch_gdn.bv8.production_engagement.v1",
+        "status": "ENGAGED",
+        "mode": record["runtime_mode"],
+        "runtime_mode": "FULL",
+        "selector": "production",
+        "batch_size": 4,
+        "candidate": _FR13_FIXED32_BATCH_GDN_BV8_CANDIDATE_ID,
+        "reference_kernel_structure": _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL,
+        "candidate_kernel_structure": _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL,
+        "reference_bv": 8,
+        "candidate_bv": 8,
+        "reference_physical_launches_per_layer": 8,
+        "candidate_physical_launches_per_layer": 2,
+        "count_invocation": True,
+        "ring_export": True,
+        "flags_inkernel": True,
+        "scan_align": False,
+        "npad_invariant": False,
+        "physical_rows_per_request": 32,
+        "layer_count": 48,
+        "layer_keys": layer_keys,
+        "batched_route_capture_layers_by_batch": {
+            str(key): value for key, value in expected_layer_counts.items()
+        },
+        "qualified_batch_sizes": [4],
+        "lower_batch_route": "b1_legacy_b2_b3_fixed32_batched_bv8",
+        "physical_launches_per_layer_by_batch": {
+            "1": 2,
+            "2": 2,
+            "3": 2,
+            "4": 2,
+        },
+        "all_b_le_4_launch_invariant": True,
+        "graph_id": identity,
+        "graph_signature": signature,
+        "graph_pass_sha256": record["graph_pass_sha256"],
+        "gate_verdict_sha256": record["gate_verdict_sha256"],
+        "runtime_manifest_sha256": record["runtime_manifest_sha256"],
+        "gate_runner_sha256": record["gate_runner_sha256"],
+        "production_sidecar_sha256": record["production_sidecar_sha256"],
+        "kernel_source_sha256": record["kernel_source_sha256"],
+        "task_marker": record["task_marker"],
+        "observed_full_graph_replays_at_least": 1,
+        "fallback": 0,
+        "production_default_enabled": False,
+    }
+    path = Path(_FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_ENGAGEMENT)
+    if path.exists() or path.is_symlink():
+        raise RuntimeError(
+            "FR13 fixed32 batched BV8 production engagement path already exists"
+        )
+    raw = (
+        json.dumps(
+            engagement,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode("ascii")
+    temporary = path.with_name(path.name + f".tmp.{os.getpid()}")
+    descriptor = None
+    try:
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
+            0o600,
+        )
+        offset = 0
+        while offset < len(raw):
+            written = os.write(descriptor, raw[offset:])
+            if written <= 0:
+                raise OSError("short batched BV8 engagement write")
+            offset += written
+        # The worker runs as container root while the timing reducer runs as
+        # the host operator through the bind mount. This record contains no
+        # credentials or request data and must remain host-readable.
+        os.fchmod(descriptor, 0o444)
+        os.fsync(descriptor)
+        os.close(descriptor)
+        descriptor = None
+        os.replace(temporary, path)
+    except Exception:
+        if descriptor is not None:
+            os.close(descriptor)
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+    _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_PUBLISHED = True
+    return dict(engagement)
+
+
+def fixed32_batch_gdn_graph_live_capture_active(batch_size: int) -> bool:
+    """Whether the final exact-B4 FULL capture is collecting layer records."""
+    context = _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT
+    return bool(
+        _fr13_fixed32_batch_gdn_graph_byte_ab_control()
+        and int(batch_size) == 4
+        and isinstance(context, dict)
+        and int(context.get("batch_size", -1)) == 4
+    )
+
+
+def fixed32_batch_gdn_graph_live_capture_begin(
+    graph_id: int, batch_size: int
+) -> None:
+    """Open the graph-shadow byte gate only for the final exact-B4 graph."""
+    global _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT
+    if not _fr13_fixed32_batch_gdn_graph_byte_ab_control():
+        return
+    identity = int(graph_id)
+    batch = int(batch_size)
+    if batch != 4:
+        return
+    if (
+        _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES
+        or _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE is None
+        or identity <= 0
+        or _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT is not None
+        or identity in _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURES
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN byte-gate capture begin drift: "
+            + repr((identity, batch, _FR13_FIXED32_MODE))
+        )
+    _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT = {
+        "graph_id": identity,
+        "batch_size": batch,
+        "records": [],
+    }
+    _FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_STATE.update(
+        status="armed",
+        candidate_bv=int(_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE),
+        graph_id=None,
+        graph_signature=None,
+        batch_size=None,
+        records=0,
+    )
+
+
+def _fr13_fixed32_batch_gdn_graph_live_capture_register(record: dict) -> None:
+    """Retain persistent B4 operands while the legacy BV8 graph is captured."""
+    if not _fr13_fixed32_batch_gdn_graph_byte_ab_control():
+        return
+    context = _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT
+    required = {
+        "layer_key",
+        "snapshot",
+        "restore",
+        "run_reference",
+        "run_candidate",
+        "carrier_nonzero",
+        "byte_equal",
+        "surface_names",
+    }
+    if (
+        not isinstance(context, dict)
+        or set(context) != {"graph_id", "batch_size", "records"}
+        or int(context.get("batch_size", -1)) != 4
+        or not isinstance(record, dict)
+        or set(record) != required
+        or type(record.get("layer_key")) is not int
+        or int(record["layer_key"]) <= 0
+        or tuple(record.get("surface_names", ()))
+        != _FR13_FIXED32_BATCH_GDN_GRAPH_SURFACES
+        or not all(
+            callable(record[name])
+            for name in required - {"layer_key", "surface_names"}
+        )
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN byte-gate capture record drift"
+        )
+    if torch.cuda.is_available() and not torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN byte-gate record was not captured by CUDA"
+        )
+    context["records"].append(record)
+
+
+def fixed32_batch_gdn_graph_live_capture_end(
+    graph_id: int,
+    batch_size: int,
+    graph_signature: str,
+    expected_records: int = 48,
+) -> None:
+    """Freeze 48 unique layer records against one signed exact-B4 graph."""
+    global _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT
+    if not _fr13_fixed32_batch_gdn_graph_byte_ab_control():
+        return
+    identity = int(graph_id)
+    batch = int(batch_size)
+    if batch != 4:
+        return
+    context = _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT
+    records = context.get("records") if isinstance(context, dict) else None
+    layer_keys = (
+        [int(record.get("layer_key", -1)) for record in records]
+        if isinstance(records, list)
+        else []
+    )
+    signature = str(graph_signature)
+    if (
+        not isinstance(context, dict)
+        or int(context.get("graph_id", -1)) != identity
+        or int(context.get("batch_size", -1)) != 4
+        or int(expected_records) != 48
+        or not isinstance(records, list)
+        or len(records) != 48
+        or len(set(layer_keys)) != 48
+        or len(signature) != 64
+        or any(character not in "0123456789abcdef" for character in signature)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN byte-gate capture end drift: "
+            + repr(
+                (
+                    identity,
+                    batch,
+                    expected_records,
+                    len(records) if isinstance(records, list) else None,
+                    len(set(layer_keys)),
+                    signature,
+                )
+            )
+        )
+    _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURES[identity] = {
+        "batch_size": 4,
+        "graph_signature": signature,
+        "records": tuple(records),
+        "layer_keys": frozenset(layer_keys),
+    }
+    _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURE_CONTEXT = None
+
+
+def _fr13_fixed32_batch_gdn_byte_diff(
+    name: str,
+    reference: torch.Tensor,
+    candidate: torch.Tensor,
+) -> dict[str, object]:
+    """Return strict byte-diff evidence including the first differing byte."""
+    if reference.shape != candidate.shape or reference.dtype != candidate.dtype:
+        return {
+            "name": name,
+            "byte_equal": False,
+            "shape_or_dtype_mismatch": True,
+            "reference_shape": tuple(int(value) for value in reference.shape),
+            "candidate_shape": tuple(int(value) for value in candidate.shape),
+            "reference_dtype": str(reference.dtype),
+            "candidate_dtype": str(candidate.dtype),
+            "differing_bytes": None,
+            "first_nonzero_byte": None,
+        }
+    reference_bytes = reference.contiguous().reshape(-1).view(torch.uint8)
+    candidate_bytes = candidate.contiguous().reshape(-1).view(torch.uint8)
+    difference = reference_bytes != candidate_bytes
+    differing_bytes = int(difference.sum().item())
+    if differing_bytes == 0:
+        first_nonzero = None
+        reference_byte = None
+        candidate_byte = None
+    else:
+        first_nonzero = int(
+            torch.nonzero(difference, as_tuple=False)[0, 0].item()
+        )
+        reference_byte = int(reference_bytes[first_nonzero].item())
+        candidate_byte = int(candidate_bytes[first_nonzero].item())
+    return {
+        "name": name,
+        "byte_equal": differing_bytes == 0,
+        "shape_or_dtype_mismatch": False,
+        "shape": tuple(int(value) for value in reference.shape),
+        "dtype": str(reference.dtype),
+        "bytes": int(reference_bytes.numel()),
+        "differing_bytes": differing_bytes,
+        "first_nonzero_byte": first_nonzero,
+        "reference_byte": reference_byte,
+        "candidate_byte": candidate_byte,
+    }
+
+
+def _fr13_fixed32_sfwd_state_fusion_emit(record: dict[str, object]) -> None:
+    path = os.environ.get(
+        "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_PATH",
+        "/logs/fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl",
+    )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    payload = dict(record)
+    payload["schema"] = "fr13.fixed32.sfwd_state_fusion.byte_ab.v1"
+    with open(path, "a", encoding="ascii") as handle:
+        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def _fr13_fixed32_sfwd_state_fusion_pass_emit(
+    *, task_markers: tuple[str, ...], batch: int, layer_keys: set[int]
+) -> None:
+    if (
+        len(layer_keys) != 48
+        or int(batch) != 4
+        or task_markers
+        != _FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_MARKERS
+    ):
+        return
+    path = os.environ.get(
+        "FR13_FIXED32_SFWD_STATE_FUSION_PASS_PATH",
+        _FR13_FIXED32_SFWD_STATE_FUSION_PASS,
+    )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    payload = {
+        "schema": "fr13.fixed32.sfwd_state_fusion.b4_source_pass.v1",
+        "status": "byte_pass_source_only",
+        "run_classification": (
+            "real_swe_verified_exact4_b4_byte_diagnostic"
+        ),
+        "candidate": _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID,
+        "source_sha256": _fr13_fixed32_batch_gdn_source_sha256(),
+        "task_set": "canonical real SWE-Verified exact4 B4",
+        "task_count": 4,
+        "task_ids": list(
+            _FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_IDS
+        ),
+        "task_markers": list(task_markers),
+        "subset_sha256": (
+            _FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_SUBSET_SHA256
+        ),
+        "real_task_authenticated": True,
+        "batch": int(batch),
+        "batch_size": 4,
+        "concurrency": 4,
+        "layer_count": 48,
+        "layer_keys": [f"0x{key:x}" for key in sorted(layer_keys)],
+        "physical_rows_per_request": 32,
+        "physical_rows_total": 128,
+        "draft_vocab_root": 0,
+        "draft_vocab_k": 0,
+        "candidate_conv_launches_per_layer": 1,
+        "gdn_level_path_programs": [int(batch), 11 * int(batch)],
+        "gdn_physical_launches_per_layer": 2,
+        "gdn_ring_export_unchanged": True,
+        "gdn_flags_export_unchanged": True,
+        "compared_byte_surfaces": ["conv_out", "commit_source_stage"],
+        "comparison_records": 48,
+        "candidate_shadow_only": True,
+        "served_result": "reference",
+        "reference_always_served": True,
+        "probe_inputs": False,
+        "synthetic_inputs": False,
+        "acceptance_valid": False,
+        "timing_eligible": False,
+        "floor_acceptance_eligible": False,
+        "production_enabled": False,
+        "production_eligible": False,
+        "production_blocker": (
+            "requires separately authenticated B1 and exact4 B4 byte PASS "
+            "artifacts bound to the same candidate kernel"
+        ),
+    }
+    temporary = f"{path}.tmp.{os.getpid()}"
+    with open(temporary, "w", encoding="ascii") as handle:
+        json.dump(payload, handle, sort_keys=True)
+        handle.write("\n")
+    os.replace(temporary, path)
+
+
+def fixed32_sfwd_state_fusion_byte_gate(
+    *,
+    task_markers: tuple[str, ...],
+    layer_key: int,
+    batch_size: int,
+    reference_out: torch.Tensor,
+    candidate_out: torch.Tensor,
+    reference_source_stage: torch.Tensor,
+    candidate_source_stage: torch.Tensor,
+) -> dict[str, object]:
+    """Compare candidate bytes on one authenticated real layer/event.
+
+    The caller has already computed both arms from the same inputs. This hook
+    only compares and records; it never replaces the reference tensors. A
+    mismatch therefore fails closed while incumbent bytes remain served.
+    """
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION byte gate is eager-only"
+        )
+    markers = tuple(task_markers) if isinstance(task_markers, tuple) else ()
+    if markers != _FR13_FIXED32_SFWD_STATE_FUSION_EXACT4_TASK_MARKERS:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION requires an authenticated "
+            "canonical exact4 SWE-Verified marker set"
+        )
+    batch = int(batch_size)
+    if batch != 4:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION byte gate requires exact B4"
+        )
+    fixed32_sfwd_state_fusion_contract(
+        batch,
+        tree_rows=32,
+        conv_width=4,
+        conv_state_len=_FR13_FIXED32_SFWD_CONV_STATE_LEN,
+    )
+    state = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_STATE
+    if state["task_markers"] is None:
+        state["task_markers"] = markers
+        state["batch"] = batch
+    elif tuple(state["task_markers"]) != markers or int(state["batch"]) != batch:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION marker set or batch changed"
+        )
+    if bool(state.get("failed")):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION byte gate previously mismatched"
+        )
+    key = int(layer_key)
+    if key in state["passed"]:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION repeated a qualified layer"
+        )
+    attempt = int(state["attempts"].get(key, 0)) + 1
+    state["attempts"][key] = attempt
+    comparisons = [
+        _fr13_fixed32_batch_gdn_byte_diff(
+            "conv_out", reference_out, candidate_out
+        ),
+        _fr13_fixed32_batch_gdn_byte_diff(
+            "commit_source_stage",
+            reference_source_stage,
+            candidate_source_stage,
+        ),
+    ]
+    first_nonzero = next(
+        (item for item in comparisons if not bool(item["byte_equal"])), None
+    )
+    passed = first_nonzero is None
+    record = {
+        "status": "pass" if passed else "mismatch_reference_served",
+        "candidate": _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID,
+        "task_markers": list(markers),
+        "real_task_authenticated": True,
+        "batch": batch,
+        "layer_key": f"0x{key:x}",
+        "attempt": attempt,
+        "physical_rows_per_request": 32,
+        "candidate_conv_launches_per_layer": 1,
+        "gdn_level_path_programs": [batch, 11 * batch],
+        "gdn_physical_launches_per_layer": 2,
+        "comparisons": comparisons,
+        "first_nonzero": first_nonzero,
+        "zero_diff": passed,
+        "candidate_shadow_only": True,
+        "served_result": "reference",
+        "reference_always_served": True,
+        "acceptance_valid": False,
+        "timing_eligible": False,
+        "production_eligible": False,
+    }
+    _fr13_fixed32_sfwd_state_fusion_emit(record)
+    if passed:
+        state["passed"].add(key)
+        _fr13_fixed32_sfwd_state_fusion_pass_emit(
+            task_markers=markers,
+            batch=batch,
+            layer_keys=set(state["passed"]),
+        )
+    else:
+        state["passed"].discard(key)
+        state["failed"] = True
+    return record
+
+
+def _fr13_fixed32_batch_gdn_byte_ab_emit(record: dict[str, object]) -> None:
+    path = os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_PATH",
+        "/logs/fr13_fixed32_batch_gdn_byte_ab.jsonl",
+    )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    payload = dict(record)
+    payload["schema"] = "fr13.fixed32.batch_gdn.byte_ab.v1"
+    with open(path, "a", encoding="ascii") as handle:
+        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def _fr13_fixed32_batch_gdn_live_pass_emit(
+    *,
+    task_marker: str,
+    batch: int,
+    layer_keys: set[int],
+    reference_bv: int | None = None,
+    candidate_bv: int | None = None,
+    graph_id: int | None = None,
+    graph_signature: str | None = None,
+    capture_records: int | None = None,
+) -> None:
+    """Publish the non-cryptographic production prerequisite after 48 passes."""
+    if len(layer_keys) != 48:
+        return
+    path = os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS_PATH",
+        _FR13_FIXED32_BATCH_GDN_BYTE_AB_PASS,
+    )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    structured_candidate = reference_bv is not None and candidate_bv is not None
+    wide_bv = (
+        structured_candidate
+        and int(reference_bv) != int(candidate_bv)
+    )
+    # The combined wide-BV gate is formally authorized only by the exact4 B4
+    # lifecycle. B2/B3 are still byte-compared and logged, but cannot publish
+    # the production prerequisite.
+    if wide_bv and int(batch) != 4:
+        return
+    graph_gate = graph_id is not None
+    if graph_gate and (
+        int(batch) != 4
+        or type(graph_id) is not int
+        or graph_id <= 0
+        or not isinstance(graph_signature, str)
+        or len(graph_signature) != 64
+        or any(
+            character not in "0123456789abcdef"
+            for character in graph_signature
+        )
+        or capture_records != 48
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN PASS identity contract drift"
+        )
+    payload = {
+        "schema": (
+            "fr13.fixed32.batch_gdn.graph_live_pass.v1"
+            if graph_gate
+            else "fr13.fixed32.batch_gdn.live_pass.v2"
+            if wide_bv
+            else "fr13.fixed32.batch_gdn.live_pass.v1"
+        ),
+        "status": "pass",
+        "task_marker": task_marker,
+        "batch": int(batch),
+        "layer_count": 48,
+        "layer_keys": [f"0x{key:x}" for key in sorted(layer_keys)],
+        "reference_always_served": True,
+    }
+    if structured_candidate:
+        selected_candidate = int(candidate_bv)
+        payload.update(
+            candidate=(
+                _FR13_FIXED32_BATCH_GDN_BV8_CANDIDATE_ID
+                if selected_candidate == 8
+                else _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE_ID
+            ),
+            source_sha256=_fr13_fixed32_batch_gdn_source_sha256(),
+            mode=_FR13_FIXED32_MODE,
+            physical_rows_per_request=32,
+            reference_bv=int(reference_bv),
+            candidate_bv=selected_candidate,
+            reference_physical_launches_per_layer=2 * int(batch),
+            candidate_physical_launches_per_layer=2,
+            compared_byte_surfaces=list(
+                _FR13_FIXED32_BATCH_GDN_BV_BYTE_SURFACES
+            ),
+            raw_byte_equal=True,
+            state_restored=True,
+        )
+        if selected_candidate == 8:
+            if graph_gate and (scan_align_on() or npad_invariant_on()):
+                raise RuntimeError(
+                    "FR13 fixed32 batched BV8 PASS specialization requires "
+                    "scan/npad invariant controls off"
+                )
+            payload.update(
+                reference_kernel_structure=_FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL,
+                candidate_kernel_structure=_FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL,
+                count_invocation=True,
+                ring_export=True,
+                flags_inkernel=True,
+                scan_align=False,
+                npad_invariant=False,
+                production_eligible=True,
+            )
+    if graph_gate:
+        payload.update(
+            gate_mode="post_replay_shadow",
+            graph_id=int(graph_id),
+            graph_signature=graph_signature,
+            capture_records=int(capture_records),
+            real_task_authenticated=True,
+            graph_baseline_byte_equal=True,
+        )
+    temporary = f"{path}.tmp.{os.getpid()}"
+    with open(temporary, "w", encoding="ascii") as handle:
+        json.dump(payload, handle, sort_keys=True)
+        handle.write("\n")
+    os.replace(temporary, path)
+
+
+def _fr13_fixed32_batch_gdn_graph_compare_records(
+    records,
+    *,
+    candidate_bv: int,
+    graph_id: int,
+    graph_signature: str,
+    task_marker: str,
+) -> dict[str, object]:
+    """Shadow the replayed per-request BV8 graph with one batched candidate."""
+    candidate = int(candidate_bv)
+    if candidate not in (8, 16, 32, 64, 128):
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN byte gate rejected candidate BV="
+            f"{candidate}"
+        )
+    checked = 0
+    layer_keys: set[int] = set()
+    for index, record in enumerate(records):
+        layer_key = int(record["layer_key"])
+        if layer_key in layer_keys:
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN byte gate reused layer key "
+                f"0x{layer_key:x}"
+            )
+        layer_keys.add(layer_key)
+        snapshot = record["snapshot"]
+        restore = record["restore"]
+        byte_equal = record["byte_equal"]
+        baseline = snapshot()
+        if tuple(baseline) != _FR13_FIXED32_BATCH_GDN_GRAPH_SURFACES:
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN baseline surface drift at record "
+                f"{index}: {tuple(baseline)!r}"
+            )
+        if not bool(record["carrier_nonzero"]()):
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN gate refused a zero real-task "
+                f"carrier at record {index}"
+            )
+        caught = None
+        graph_comparisons = []
+        comparisons = []
+        try:
+            reference_meta = record["run_reference"]()
+            reference = snapshot()
+            graph_comparisons = [
+                _fr13_fixed32_batch_gdn_byte_diff(
+                    "graph_baseline_" + name,
+                    baseline[name],
+                    reference[name],
+                )
+                for name in _FR13_FIXED32_BATCH_GDN_GRAPH_STABLE_SURFACES
+            ]
+            restore(baseline)
+            candidate_meta = record["run_candidate"](candidate)
+            candidate_surfaces = snapshot()
+            if (
+                set(reference_meta)
+                != {
+                    "block_v",
+                    "physical_launches",
+                    "kernel_structure",
+                    "compact_export",
+                }
+                or set(candidate_meta)
+                != {
+                    "block_v",
+                    "physical_launches",
+                    "kernel_structure",
+                    "compact_export",
+                }
+                or int(reference_meta["block_v"]) != 8
+                or int(reference_meta["physical_launches"]) != 8
+                or reference_meta["kernel_structure"]
+                != _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL
+                or int(candidate_meta["block_v"]) != candidate
+                or int(candidate_meta["physical_launches"]) != 2
+                or candidate_meta["kernel_structure"]
+                != _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL
+                or reference_meta["kernel_structure"]
+                == candidate_meta["kernel_structure"]
+            ):
+                raise RuntimeError(
+                    "FR13 fixed32 B4 graph GDN launch metadata drift at "
+                    f"record {index}: reference={reference_meta!r} "
+                    f"candidate={candidate_meta!r}"
+                )
+            compact_rows = 4 * _FR13_FIXED32_EXPORT_SLOTS
+            comparison_inputs = [
+                ("out", reference["out"], candidate_surfaces["out"]),
+                ("ring_k", reference["ring_k"], candidate_surfaces["ring_k"]),
+                ("ring_v", reference["ring_v"], candidate_surfaces["ring_v"]),
+                ("ring_a", reference["ring_a"], candidate_surfaces["ring_a"]),
+                ("ring_b", reference["ring_b"], candidate_surfaces["ring_b"]),
+                (
+                    "state_export_compact",
+                    reference_meta["compact_export"],
+                    candidate_meta["compact_export"],
+                ),
+                (
+                    "state_export_untouched_tail",
+                    baseline["export"][compact_rows:],
+                    candidate_surfaces["export"][compact_rows:],
+                ),
+                ("flags", reference["flags"], candidate_surfaces["flags"]),
+                (
+                    "invocation_counter",
+                    reference["invocation_counter"],
+                    candidate_surfaces["invocation_counter"],
+                ),
+            ]
+            comparisons = [
+                _fr13_fixed32_batch_gdn_byte_diff(name, left, right)
+                for name, left, right in comparison_inputs
+            ]
+        except Exception as error:
+            caught = error
+        finally:
+            restore(baseline)
+            restored = snapshot()
+            restore_bad = [
+                name
+                for name in _FR13_FIXED32_BATCH_GDN_GRAPH_SURFACES
+                if not byte_equal(restored[name], baseline[name])
+            ]
+            if restore_bad:
+                raise RuntimeError(
+                    "FR13 fixed32 B4 graph GDN byte gate failed to restore "
+                    f"graph-served bytes at record {index}: {restore_bad}"
+                )
+        if caught is not None:
+            raise caught
+        graph_bad = [
+            item["name"]
+            for item in graph_comparisons
+            if not bool(item["byte_equal"])
+        ]
+        arm_bad = [
+            item["name"]
+            for item in comparisons
+            if not bool(item["byte_equal"])
+        ]
+        zero_diff = not graph_bad and not arm_bad
+        _fr13_fixed32_batch_gdn_byte_ab_emit(
+            {
+                "gate_mode": "post_replay_shadow",
+                "task_marker": task_marker,
+                "graph_id": int(graph_id),
+                "graph_signature": graph_signature,
+                "layer_key": f"0x{layer_key:x}",
+                "batch": 4,
+                "attempt": 1,
+                "physical_rows_per_request": 32,
+                "reference_bv": 8,
+                "candidate_bv": candidate,
+                "reference_kernel_structure": (
+                    _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL
+                ),
+                "candidate_kernel_structure": (
+                    _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL
+                ),
+                "carrier_nonzero": True,
+                "legacy_physical_launches": 8,
+                "candidate_physical_launches": 2,
+                "graph_comparisons": graph_comparisons,
+                "comparisons": comparisons,
+                "graph_baseline_byte_equal": not graph_bad,
+                "zero_diff": zero_diff,
+                "reference_restored_and_served": True,
+                "status": "pass" if zero_diff else "mismatch_reference_served",
+            }
+        )
+        if not zero_diff:
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN byte mismatch at record "
+                f"{index}: graph={graph_bad} candidate={arm_bad}"
+            )
+        checked += 1
+    return {
+        "records": checked,
+        "layer_keys": layer_keys,
+        "reference_bv": 8,
+        "candidate_bv": candidate,
+        "reference_kernel_structure": _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL,
+        "candidate_kernel_structure": _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL,
+    }
+
+
+def fixed32_batch_gdn_graph_live_gate_on_replay(
+    graph_id: int,
+    graph_signature: str,
+    batch_size: int,
+    expected_records: int = 48,
+) -> dict[str, object]:
+    """Run the graph-shadow gate once after an authenticated real B4 replay."""
+    state = _FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_STATE
+    if not _fr13_fixed32_batch_gdn_graph_byte_ab_control():
+        return dict(state)
+    if int(batch_size) != 4:
+        return dict(state)
+    if state["status"] == "passed":
+        return dict(state)
+    if state["status"] != "armed":
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN byte gate is not runnable: " + repr(state)
+        )
+    if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN byte gate cannot run during capture"
+        )
+    identity = int(graph_id)
+    signature = str(graph_signature)
+    capture = _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURES.get(identity)
+    records = capture.get("records") if isinstance(capture, dict) else None
+    if (
+        not isinstance(capture, dict)
+        or int(capture.get("batch_size", -1)) != 4
+        or capture.get("graph_signature") != signature
+        or int(expected_records) != 48
+        or not isinstance(records, tuple)
+        or len(records) != 48
+        or len(capture.get("layer_keys", ())) != 48
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 B4 graph GDN replay/capture drift: "
+            + repr((identity, signature, expected_records, capture))
+        )
+    task_marker = _fr13_fixed32_batch_gdn_real_event_marker()
+    state["status"] = "running"
+    try:
+        result = _fr13_fixed32_batch_gdn_graph_compare_records(
+            records,
+            candidate_bv=int(_FR13_FIXED32_BATCH_GDN_BV_CANDIDATE),
+            graph_id=identity,
+            graph_signature=signature,
+            task_marker=task_marker,
+        )
+    except Exception:
+        state["status"] = "failed"
+        raise
+    try:
+        _fr13_fixed32_batch_gdn_live_pass_emit(
+            task_marker=task_marker,
+            batch=4,
+            layer_keys=result["layer_keys"],
+            reference_bv=int(result["reference_bv"]),
+            candidate_bv=int(result["candidate_bv"]),
+            graph_id=identity,
+            graph_signature=signature,
+            capture_records=int(result["records"]),
+        )
+    except Exception:
+        state["status"] = "failed"
+        raise
+    state.update(
+        status="passed",
+        graph_id=identity,
+        graph_signature=signature,
+        batch_size=4,
+        records=int(result["records"]),
+    )
+    _FR13_FIXED32_BATCH_GDN_GRAPH_CAPTURES.clear()
+    print(
+        "[FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB PASS] "
+        f"task={task_marker} graph_id={identity} batch=4 records=48 "
+        f"reference_bv=8 candidate_bv={result['candidate_bv']} "
+        "graph_baseline_equal=1 state_restored=1 served_bv=8",
+        flush=True,
+    )
+    return dict(state)
+
+
+def fixed32_batch_gdn_graph_live_gate_report() -> dict[str, object]:
+    return dict(_FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_STATE)
 
 
 def _fr13_canonical_sha256(value) -> str:
@@ -684,9 +3494,36 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
     levels = _subtree_decompose(parent_tuple)
     _validate_subtree_decomposition(parent_tuple, levels)
     fixed_contract = None
+    fixed32_parent_slots = None
     if parent_tuple == _FR13_FIXED32_PARENT:
         fixed_contract = _fr13_fixed32_schedule_contract(levels)
         schedule = "fixed32"
+        root_path = tuple(int(node) for node in levels[0][0][0])
+        if root_path != _FR13_FIXED32_EXPORT_NODES:
+            raise RuntimeError(
+                "FR13_FIXED32: root path no longer matches compact export slots "
+                f"root_path={root_path!r} "
+                f"export_nodes={_FR13_FIXED32_EXPORT_NODES!r}"
+            )
+        export_slot = {
+            node: slot for slot, node in enumerate(_FR13_FIXED32_EXPORT_NODES)
+        }
+        fixed32_parent_slots = []
+        for level in levels:
+            slots = []
+            for _path, parent_node in level:
+                if int(parent_node) < 0:
+                    slots.append(-1)
+                elif int(parent_node) in export_slot:
+                    slots.append(export_slot[int(parent_node)])
+                else:
+                    raise RuntimeError(
+                        "FR13_FIXED32: path parent has no compact export slot "
+                        f"parent={int(parent_node)}"
+                    )
+            fixed32_parent_slots.append(
+                torch.tensor(slots, dtype=torch.int32, device=device)
+            )
     elif parent_tuple == _FR13_HYDRA23_PARENT:
         schedule = "hydra23_floor"
     else:
@@ -733,6 +3570,7 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
         "parent": parent_tuple,
         "schedule": schedule,
         "fixed32_contract": fixed_contract,
+        "fixed32_parent_slots": fixed32_parent_slots,
         "route_armed": route_armed,
         "selfcheck_armed": selfcheck_armed,
         "engaged_announced": False,
@@ -1484,6 +4322,137 @@ def _fr13_fixed32_conv_direct_col0_kernel(
             values,
             mask=c_mask,
         )
+
+
+@triton.jit
+def _fr13_fixed32_sfwd_state_fusion_kernel(
+    x,
+    conv_state,
+    spec_state_indices,
+    source_flat,
+    conv_weights,
+    bias,
+    out,
+    source_stage,
+    x_stride_row,
+    conv_stride_row,
+    conv_stride_c,
+    conv_stride_l,
+    ssi_stride_b,
+    ssi_stride_s,
+    weight_stride_c,
+    weight_stride_w,
+    B: tl.constexpr,
+    N: tl.constexpr,
+    C: tl.constexpr,
+    WIDTH: tl.constexpr,
+    STATE_LEN: tl.constexpr,
+    SOURCE_ROWS: tl.constexpr,
+    HAS_BIAS: tl.constexpr,
+    BLOCK_C: tl.constexpr,
+):
+    """Fuse exact fixed32 conv compute and both state-motion directions.
+
+    One program owns one physical tree row and one channel tile. It reads the
+    prior col-0 state directly (removing the all-layer pregather consumer),
+    executes the same four BF16 tap products and ordered FP32 adds as the
+    incumbent, writes the BF16 conv result, and materializes the persistent
+    ``prior ++ x ++ zero`` source used by the exact post-accept col-0 commit.
+
+    Ring K/V/A/B export and freshness flags remain fused into the following
+    fixed32 GDN path scan. Keeping those stores in their natural producer
+    avoids an extra state-motion launch and preserves stream ordering.
+    """
+    pid_row = tl.program_id(0)
+    pid_c = tl.program_id(1)
+    pid_b = pid_row // N
+    pid_n = pid_row - pid_b * N
+    offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)
+    c_mask = offs_c < C
+
+    bank_row = tl.load(
+        spec_state_indices + pid_b * ssi_stride_b + 0 * ssi_stride_s
+    ).to(tl.int64)
+    acc = tl.zeros((BLOCK_C,), dtype=tl.float32)
+    if HAS_BIAS:
+        acc = tl.load(bias + offs_c, mask=c_mask, other=0.0).to(tl.float32)
+    for tap in tl.static_range(0, WIDTH):
+        source_row = tl.load(source_flat + pid_n * WIDTH + tap).to(tl.int64)
+        from_prior = source_row < (WIDTH - 1)
+        prior_value = tl.load(
+            conv_state
+            + bank_row * conv_stride_row
+            + offs_c * conv_stride_c
+            + source_row * conv_stride_l,
+            mask=c_mask & from_prior,
+            other=0.0,
+        )
+        x_node = source_row - (WIDTH - 1)
+        x_value = tl.load(
+            x
+            + (pid_b.to(tl.int64) * N + x_node) * x_stride_row
+            + offs_c,
+            mask=c_mask & (~from_prior) & (x_node >= 0) & (x_node < N),
+            other=0.0,
+        )
+        value = tl.where(from_prior, prior_value, x_value).to(tl.bfloat16)
+        weight = tl.load(
+            conv_weights
+            + offs_c * weight_stride_c
+            + tap * weight_stride_w,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.bfloat16)
+        # The incumbent rounds every tap product to BF16 before converting to
+        # FP32 and accumulating left-to-right. Keep both cast boundary and
+        # operand order explicit; reductions are deliberately absent.
+        product = (value * weight).to(tl.bfloat16).to(tl.float32)
+        acc = acc + product
+
+    activated = acc / (1.0 + tl.exp(0.0 - acc))
+    tl.store(
+        out + (pid_b * N + pid_n) * C + offs_c,
+        activated,
+        mask=c_mask,
+    )
+
+    stage_base = pid_b.to(tl.int64) * SOURCE_ROWS
+    current_x = tl.load(
+        x + (pid_b * N + pid_n) * x_stride_row + offs_c,
+        mask=c_mask,
+        other=0.0,
+    )
+    tl.store(
+        source_stage
+        + (stage_base + (WIDTH - 1) + pid_n) * C
+        + offs_c,
+        current_x,
+        mask=c_mask,
+    )
+    source_edge_writer = pid_n == 0
+    for prior_col in tl.static_range(0, WIDTH - 1):
+        prior_value = tl.load(
+            conv_state
+            + bank_row * conv_stride_row
+            + offs_c * conv_stride_c
+            + prior_col * conv_stride_l,
+            mask=c_mask & source_edge_writer,
+            other=0.0,
+        )
+        tl.store(
+            source_stage
+            + (stage_base + prior_col) * C
+            + offs_c,
+            prior_value,
+            mask=c_mask & source_edge_writer,
+        )
+    tl.store(
+        source_stage
+        + (stage_base + SOURCE_ROWS - 1) * C
+        + offs_c,
+        0.0,
+        mask=c_mask & source_edge_writer,
+    )
 
 
 _FR13_CONV_PREGATHER: dict = {}
@@ -2423,6 +5392,166 @@ def validate_fixed32_conv_col0_ssi_source(
             "FR13_FIXED32_CONV_PREGATHER live SSI source mapping drift: "
             f"layer={layer_name!r} index={index} B={batch}"
         )
+
+
+def _fr13_fixed32_conv_source_flat_expected(width: int = 4) -> tuple[int, ...]:
+    """Return the exact fixed32 window-gather descriptor in row-major order."""
+    parent = tuple(int(value) for value in _FR13_FIXED32_PARENT)
+    rows: list[int] = []
+    for node in range(len(parent)):
+        path = []
+        cursor = node
+        while cursor >= 0:
+            path.append(cursor)
+            cursor = parent[cursor]
+        path.reverse()
+        source = list(range(width - 1)) + [
+            width - 1 + path_node for path_node in path
+        ]
+        rows.extend(source[-width:])
+    return tuple(rows)
+
+
+def launch_fixed32_sfwd_state_fusion(
+    *,
+    x: torch.Tensor,
+    conv_state: torch.Tensor,
+    spec_state_indices: torch.Tensor,
+    source_flat: torch.Tensor,
+    conv_weights: torch.Tensor,
+    bias: torch.Tensor | None,
+    out: torch.Tensor,
+    source_stage: torch.Tensor,
+    batch_size: int,
+    tree_rows: int,
+) -> dict[str, object]:
+    """Launch the default-off one-kernel fixed32 conv/state candidate.
+
+    This entrypoint is deliberately byte-gate-only for the first source
+    revision. It refuses CUDA graph capture, validates the topology descriptor
+    on the host, and leaves selection/serving to the caller. A later production
+    selector must be bound to a real-task pass artifact rather than enabling
+    this function implicitly.
+    """
+    if _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION requires an exact fixed32 mode"
+        )
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION source candidate is eager "
+            "byte-gate-only; graph production is not qualified"
+        )
+    batch = int(batch_size)
+    rows = int(tree_rows)
+    if conv_state.ndim != 3:
+        raise ValueError(
+            "FR13_FIXED32_SFWD_STATE_FUSION conv_state must be [bank,C,L]"
+        )
+    channels = int(conv_state.shape[1])
+    state_len = int(conv_state.shape[2])
+    width = int(conv_weights.shape[1]) if conv_weights.ndim == 2 else -1
+    contract = fixed32_sfwd_state_fusion_contract(
+        batch,
+        tree_rows=rows,
+        conv_width=width,
+        conv_state_len=state_len,
+    )
+    required_rows = batch * rows
+    source_rows_per_batch = int(contract["source_rows_per_request"])
+    required_source_rows = batch * source_rows_per_batch
+    tensors = (x, conv_state, spec_state_indices, source_flat,
+               conv_weights, out, source_stage)
+    if any(not torch.is_tensor(tensor) for tensor in tensors):
+        raise TypeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION operands must all be tensors"
+        )
+    device = x.device
+    if device.type != "cuda" or any(tensor.device != device for tensor in tensors):
+        raise ValueError(
+            "FR13_FIXED32_SFWD_STATE_FUSION operands must share one CUDA device"
+        )
+    if x.dtype != torch.bfloat16 or any(
+        tensor.dtype != torch.bfloat16
+        for tensor in (conv_state, conv_weights, out, source_stage)
+    ):
+        raise ValueError(
+            "FR13_FIXED32_SFWD_STATE_FUSION preserves the exact BF16 conv "
+            "contract; dtype changes are forbidden"
+        )
+    if bias is not None and (
+        not torch.is_tensor(bias)
+        or bias.device != device
+        or bias.dtype not in (torch.bfloat16, torch.float32)
+        or bias.ndim != 1
+        or int(bias.numel()) != channels
+    ):
+        raise ValueError(
+            "FR13_FIXED32_SFWD_STATE_FUSION bias must be BF16/FP32 [C] or None"
+        )
+    if (
+        x.ndim != 2
+        or tuple(int(value) for value in x.shape) != (required_rows, channels)
+        or out.shape != x.shape
+        or conv_weights.shape != (channels, width)
+        or spec_state_indices.ndim != 2
+        or int(spec_state_indices.shape[0]) < batch
+        or int(spec_state_indices.shape[1]) < 1
+        or spec_state_indices.dtype != torch.int32
+        or source_flat.ndim != 1
+        or source_flat.numel() != rows * width
+        or source_flat.dtype not in (torch.int32, torch.int64)
+        or source_stage.ndim != 2
+        or int(source_stage.shape[0]) < required_source_rows
+        or int(source_stage.shape[1]) != channels
+        or int(x.stride(1)) != 1
+        or int(x.stride(0)) < channels
+        or not out.is_contiguous()
+        or not source_flat.is_contiguous()
+        or not source_stage.is_contiguous()
+    ):
+        raise ValueError(
+            "FR13_FIXED32_SFWD_STATE_FUSION operand geometry/layout drift"
+        )
+    actual_source_flat = tuple(
+        int(value) for value in source_flat.detach().cpu().tolist()
+    )
+    if actual_source_flat != _fr13_fixed32_conv_source_flat_expected(width):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_STATE_FUSION fixed32 source descriptor drift"
+        )
+
+    block_c = 256
+    grid = (required_rows, triton.cdiv(channels, block_c))
+    bias_arg = bias if bias is not None else x
+    _fr13_fixed32_sfwd_state_fusion_kernel[grid](
+        x,
+        conv_state,
+        spec_state_indices,
+        source_flat,
+        conv_weights,
+        bias_arg,
+        out,
+        source_stage,
+        int(x.stride(0)),
+        int(conv_state.stride(0)),
+        int(conv_state.stride(1)),
+        int(conv_state.stride(2)),
+        int(spec_state_indices.stride(0)),
+        int(spec_state_indices.stride(1)),
+        int(conv_weights.stride(0)),
+        int(conv_weights.stride(1)),
+        B=batch,
+        N=rows,
+        C=channels,
+        WIDTH=width,
+        STATE_LEN=state_len,
+        SOURCE_ROWS=source_rows_per_batch,
+        HAS_BIAS=bias is not None,
+        BLOCK_C=block_c,
+        num_warps=4,
+    )
+    return contract
 
 
 def launch_fixed32_conv_col0_pregather(
@@ -4159,6 +7288,8 @@ def _tree_gdn_path_kernel(
     COUNT_INVOCATION: tl.constexpr,
     SCAN_ALIGN: tl.constexpr,
     MAX_PATH_LEN: tl.constexpr,
+    STATE_SOURCE: tl.constexpr = 0,
+    EXPORT_MODE: tl.constexpr = 0,
     RING_EXPORT: tl.constexpr = False,
     FLAGS_EXPORT: tl.constexpr = False,
     FLAGS_ROWS: tl.constexpr = 0,
@@ -4185,32 +7316,44 @@ def _tree_gdn_path_kernel(
     offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
     v_mask = offs_v < DIM_V
 
-    par = tl.load(path_parent + pid_path)
-    # h0 source (identical addressing to the monolith)
-    h0_base = h0
-    if H0_IS_BANK:
-        h0_column = 0
-        if H0_USE_ACCEPTED_COLUMN:
-            h0_column = tl.maximum(
-                tl.load(h0_num_accepted_tokens + H0_BATCH_INDEX).to(tl.int64) - 1,
-                0,
-            )
-        h0_index = tl.load(h0_indices + H0_INDEX_ROW + h0_column)
-        h0_base = h0 + h0_index * H0_BANK_STRIDE
-    b_h0 = tl.load(
-        h0_base + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
-        mask=v_mask[:, None],
-        other=0.0,
-    ).to(tl.float32)
-    par_state = tl.load(
-        state_export
-        + ((tl.maximum(par, 0).to(tl.int64) * NUM_VH + pid_vh) * DIM_V
-           + offs_v[:, None]) * DIM_K
-        + offs_k[None, :],
-        mask=(par >= 0) & v_mask[:, None],
-        other=0.0,
-    )
-    state_i = tl.where(par >= 0, par_state, b_h0)
+    # STATE_SOURCE is dynamic for the generic route. The exact fixed32
+    # schedule specializes root level to h0 and level 1 to the exported
+    # parent. This removes eleven dead h0 tile reads per (VH, V-block) without
+    # changing the state bytes entering _gdn_node_step.
+    if STATE_SOURCE != 2:
+        h0_base = h0
+        if H0_IS_BANK:
+            h0_column = 0
+            if H0_USE_ACCEPTED_COLUMN:
+                h0_column = tl.maximum(
+                    tl.load(h0_num_accepted_tokens + H0_BATCH_INDEX).to(tl.int64) - 1,
+                    0,
+                )
+            h0_index = tl.load(h0_indices + H0_INDEX_ROW + h0_column)
+            h0_base = h0 + h0_index * H0_BANK_STRIDE
+        b_h0 = tl.load(
+            h0_base
+            + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K
+            + offs_k[None, :],
+            mask=v_mask[:, None],
+            other=0.0,
+        ).to(tl.float32)
+    if STATE_SOURCE != 1:
+        par = tl.load(path_parent + pid_path)
+        par_state = tl.load(
+            state_export
+            + ((tl.maximum(par, 0).to(tl.int64) * NUM_VH + pid_vh) * DIM_V
+               + offs_v[:, None]) * DIM_K
+            + offs_k[None, :],
+            mask=(par >= 0) & v_mask[:, None],
+            other=0.0,
+        )
+    if STATE_SOURCE == 1:
+        state_i = b_h0
+    elif STATE_SOURCE == 2:
+        state_i = par_state
+    else:
+        state_i = tl.where(par >= 0, par_state, b_h0)
 
     path_len = tl.load(path_lengths + pid_path)
     for i in tl.range(0, path_len):
@@ -4303,15 +7446,19 @@ def _tree_gdn_path_kernel(
             out_i,
             mask=n_ok & v_mask,
         )
-        do_exp = tl.load(export_mask + node_c)
-        tl.store(
-            state_export
-            + ((node_c.to(tl.int64) * NUM_VH + pid_vh) * DIM_V
-               + offs_v[:, None]) * DIM_K
-            + offs_k[None, :],
-            state_i,
-            mask=n_ok & (do_exp != 0) & v_mask[:, None],
-        )
+        if EXPORT_MODE != 2:
+            if EXPORT_MODE == 0:
+                do_exp = n_ok & (tl.load(export_mask + node_c) != 0)
+            else:
+                do_exp = n_ok
+            tl.store(
+                state_export
+                + ((node_c.to(tl.int64) * NUM_VH + pid_vh) * DIM_V
+                   + offs_v[:, None]) * DIM_K
+                + offs_k[None, :],
+                state_i,
+                mask=do_exp & v_mask[:, None],
+            )
     if FLAGS_EXPORT:
         # FR13_FLAGS_INKERNEL under the subtree route: same staging-freshness
         # store as the monolith tail (values identical: flags[0]=1 staged,
@@ -4321,6 +7468,244 @@ def _tree_gdn_path_kernel(
         _fl_mask = (pid_vh == 0) & (pid_v == 0) & (pid_path == 0)
         tl.store(flags_ptr + 0, 1, mask=_fl_mask)
         tl.store(flags_ptr + 1, FLAGS_ROWS, mask=_fl_mask)
+
+
+@triton.jit
+def _tree_gdn_path_kernel_fixed32_batch(
+    q,
+    k,
+    v,
+    g,
+    beta,
+    raw_a,
+    raw_b,
+    A_log,
+    dt_bias,
+    h0,
+    h0_indices,
+    h0_num_accepted_tokens,
+    invocation_counter,
+    path_nodes,
+    path_parent_slots,
+    path_lengths,
+    state_export,
+    out,
+    ring_k,
+    ring_v,
+    ring_a,
+    ring_b,
+    flags_ptr,
+    N_ACTUAL: tl.constexpr,
+    NUM_KH: tl.constexpr,
+    NUM_VH: tl.constexpr,
+    DIM_K: tl.constexpr,
+    DIM_V: tl.constexpr,
+    BLOCK_V: tl.constexpr,
+    OUTPUT_SCALE: tl.constexpr,
+    USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
+    H0_INDEX_ROW: tl.constexpr,
+    H0_INDEX_BATCH_STRIDE: tl.constexpr,
+    H0_BATCH_INDEX: tl.constexpr,
+    H0_ACCEPTED_BATCH_STRIDE: tl.constexpr,
+    H0_BANK_STRIDE: tl.constexpr,
+    H0_USE_ACCEPTED_COLUMN: tl.constexpr,
+    RAW_GATING: tl.constexpr,
+    COUNT_INVOCATION: tl.constexpr,
+    SCAN_ALIGN: tl.constexpr,
+    MAX_PATH_LEN: tl.constexpr,
+    NUM_PATHS: tl.constexpr,
+    BATCH_SIZE: tl.constexpr,
+    EXPORT_SLOTS: tl.constexpr,
+    STATE_SOURCE: tl.constexpr,
+    EXPORT_MODE: tl.constexpr,
+    RING_EXPORT: tl.constexpr = False,
+    FLAGS_EXPORT: tl.constexpr = False,
+    FLAGS_ROWS: tl.constexpr = 0,
+):
+    """Fixed32 path scan with request folded into path-grid axis 2.
+
+    This is separate from ``_tree_gdn_path_kernel`` so the deployed B1 and
+    generic Triton source/codegen stay untouched. Each request still executes
+    the same path-local ``_gdn_node_step`` sequence; only independent request
+    programs share the two level launches.
+    """
+    pid_vh = tl.program_id(0)
+    pid_v = tl.program_id(1)
+    pid_global_path = tl.program_id(2)
+    pid_batch = pid_global_path // NUM_PATHS
+    pid_path = pid_global_path - pid_batch * NUM_PATHS
+    if COUNT_INVOCATION:
+        tl.atomic_add(
+            invocation_counter,
+            1,
+            sem="relaxed",
+            mask=(pid_vh == 0) & (pid_v == 0) & (pid_path == 0),
+        )
+    head_group = NUM_VH // NUM_KH
+    pid_kh = pid_vh // head_group
+    offs_k = tl.arange(0, DIM_K)
+    offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
+    v_mask = offs_v < DIM_V
+
+    if STATE_SOURCE != 2:
+        h0_column = 0
+        if H0_USE_ACCEPTED_COLUMN:
+            accepted_index = (
+                H0_BATCH_INDEX + pid_batch * H0_ACCEPTED_BATCH_STRIDE
+            )
+            h0_column = tl.maximum(
+                tl.load(h0_num_accepted_tokens + accepted_index).to(tl.int64)
+                - 1,
+                0,
+            )
+        h0_index_row = H0_INDEX_ROW + pid_batch * H0_INDEX_BATCH_STRIDE
+        h0_index = tl.load(h0_indices + h0_index_row + h0_column)
+        h0_base = h0 + h0_index * H0_BANK_STRIDE
+        b_h0 = tl.load(
+            h0_base
+            + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K
+            + offs_k[None, :],
+            mask=v_mask[:, None],
+            other=0.0,
+        ).to(tl.float32)
+    if STATE_SOURCE != 1:
+        parent_slot = tl.load(path_parent_slots + pid_path)
+        export_row = (
+            pid_batch.to(tl.int64) * EXPORT_SLOTS
+            + tl.maximum(parent_slot, 0).to(tl.int64)
+        )
+        par_state = tl.load(
+            state_export
+            + ((export_row * NUM_VH + pid_vh) * DIM_V
+               + offs_v[:, None]) * DIM_K
+            + offs_k[None, :],
+            mask=(parent_slot >= 0) & v_mask[:, None],
+            other=0.0,
+        )
+    if STATE_SOURCE == 1:
+        state_i = b_h0
+    elif STATE_SOURCE == 2:
+        state_i = par_state
+    else:
+        state_i = tl.where(parent_slot >= 0, par_state, b_h0)
+
+    path_len = tl.load(path_lengths + pid_path)
+    for i in tl.range(0, path_len):
+        node = tl.load(path_nodes + pid_path * MAX_PATH_LEN + i)
+        n_ok = (node >= 0) & (node < N_ACTUAL) & (pid_batch < BATCH_SIZE)
+        node_c = tl.maximum(node, 0)
+        global_node = pid_batch * N_ACTUAL + node_c
+        b_q = tl.load(
+            q + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
+            mask=n_ok,
+            other=0.0,
+        ).to(tl.float32)
+        b_k_raw = tl.load(
+            k + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
+            mask=n_ok,
+            other=0.0,
+        )
+        b_k = b_k_raw.to(tl.float32)
+        b_v_raw = tl.load(
+            v + (global_node * NUM_VH + pid_vh) * DIM_V + offs_v,
+            mask=n_ok & v_mask,
+            other=0.0,
+        )
+        b_v = b_v_raw.to(tl.float32)
+        if RING_EXPORT:
+            tl.store(
+                ring_k + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
+                b_k_raw,
+                mask=n_ok
+                & (pid_v == 0)
+                & (pid_vh % head_group == 0),
+            )
+            tl.store(
+                ring_v
+                + (global_node * NUM_VH + pid_vh) * DIM_V
+                + offs_v,
+                b_v_raw,
+                mask=n_ok & v_mask,
+            )
+        b_b = tl.load(
+            beta + global_node * NUM_VH + pid_vh, mask=n_ok, other=0.0
+        ).to(tl.float32)
+        b_g = tl.load(
+            g + global_node * NUM_VH + pid_vh, mask=n_ok, other=0.0
+        ).to(tl.float32)
+        b_raw_a = b_g
+        b_raw_b = b_b
+        b_a_log = b_g
+        b_dt_bias = b_b
+        if RAW_GATING:
+            b_raw_b_in = tl.load(
+                raw_b + global_node * NUM_VH + pid_vh,
+                mask=n_ok,
+                other=0.0,
+            )
+            b_raw_b = b_raw_b_in.to(tl.float32)
+            b_raw_a_in = tl.load(
+                raw_a + global_node * NUM_VH + pid_vh,
+                mask=n_ok,
+                other=0.0,
+            )
+            b_raw_a = b_raw_a_in.to(tl.float32)
+            if RING_EXPORT:
+                tl.store(
+                    ring_a + global_node * NUM_VH + pid_vh,
+                    b_raw_a_in,
+                    mask=n_ok & (pid_v == 0),
+                )
+                tl.store(
+                    ring_b + global_node * NUM_VH + pid_vh,
+                    b_raw_b_in,
+                    mask=n_ok & (pid_v == 0),
+                )
+            b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
+            b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
+        new_state, out_i = _gdn_node_step(
+            state_i,
+            b_q,
+            b_k,
+            b_v,
+            b_b,
+            b_g,
+            b_raw_a,
+            b_raw_b,
+            b_a_log,
+            b_dt_bias,
+            OUTPUT_SCALE=OUTPUT_SCALE,
+            USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
+            RAW_GATING=RAW_GATING,
+            SCAN_ALIGN=SCAN_ALIGN,
+        )
+        state_i = tl.where(n_ok, new_state, state_i)
+        tl.store(
+            out + (global_node * NUM_VH + pid_vh) * DIM_V + offs_v,
+            out_i,
+            mask=n_ok & v_mask,
+        )
+        if EXPORT_MODE == 1:
+            compact_export_row = (
+                pid_batch.to(tl.int64) * EXPORT_SLOTS + i
+            )
+            tl.store(
+                state_export
+                + ((compact_export_row * NUM_VH + pid_vh) * DIM_V
+                   + offs_v[:, None]) * DIM_K
+                + offs_k[None, :],
+                state_i,
+                mask=n_ok & v_mask[:, None],
+            )
+    if FLAGS_EXPORT:
+        flag_writer = (
+            (pid_vh == 0)
+            & (pid_v == 0)
+            & (pid_batch == 0)
+            & (pid_path == 0)
+        )
+        tl.store(flags_ptr + 0, 1, mask=flag_writer)
+        tl.store(flags_ptr + 1, FLAGS_ROWS, mask=flag_writer)
 
 
 @triton.jit
@@ -6199,6 +9584,219 @@ def _fr13_fixed32_committer_fast_state(
     return state, batch
 
 
+@triton.jit(do_not_specialize=["N", "T"])
+def _fr13_fixed32_committer_native_layer_batch_kernel(
+    A_logs,
+    a,
+    b,
+    dt_biases,
+    q,
+    k,
+    v,
+    o,
+    bank_anchor,
+    bank_off16,
+    cu_seqlens,
+    ssm_state_indices,
+    scale,
+    N: tl.int64,
+    T: tl.int64,
+    B: tl.constexpr,
+    H: tl.constexpr,
+    HV: tl.constexpr,
+    K: tl.constexpr,
+    V: tl.constexpr,
+    BK: tl.constexpr,
+    BV: tl.constexpr,
+    BANK_STRIDE: tl.constexpr,
+    GATE_L_STRIDE: tl.constexpr,
+    AB_L_STRIDE: tl.constexpr,
+    K_L_STRIDE: tl.constexpr,
+    V_L_STRIDE: tl.constexpr,
+    O_L_STRIDE: tl.constexpr,
+    SSI_L_STRIDE: tl.constexpr,
+    SSI_SEQ_STRIDE: tl.constexpr,
+    BETA: tl.constexpr,
+    THRESHOLD: tl.constexpr,
+    USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
+):
+    """Native fused-sigmoid recurrence with layer added to the program grid.
+
+    Each program retains the native kernel's complete ordered token loop.  The
+    extra layer coordinate changes only base addresses; layers share read-only
+    path metadata and write disjoint recurrent-state banks.
+    """
+    i_k = tl.program_id(0)
+    i_v = tl.program_id(1)
+    i_lnh = tl.program_id(2)
+    layer_span = B * HV
+    i_l = i_lnh // layer_span
+    i_nh = i_lnh % layer_span
+    i_n = i_nh // HV
+    i_hv = i_nh % HV
+    i_h = i_hv // (HV // H)
+
+    bos = tl.load(cu_seqlens + i_n).to(tl.int64)
+    eos = tl.load(cu_seqlens + i_n + 1).to(tl.int64)
+    all_tokens = T
+    T = eos - bos
+    if T == 0:
+        return
+
+    o_k = i_k * BK + tl.arange(0, BK)
+    o_v = i_v * BV + tl.arange(0, BV)
+    mask_k = o_k < K
+    mask_v = o_v < V
+    mask_h = mask_v[:, None] & mask_k[None, :]
+
+    p_q = q + (bos * H + i_h) * K + o_k
+    p_k = k + i_l * K_L_STRIDE + (bos * H + i_h) * K + o_k
+    p_v = v + i_l * V_L_STRIDE + (bos * HV + i_hv) * V + o_v
+    p_a_log = A_logs + i_l * GATE_L_STRIDE + i_hv
+    p_a = a + i_l * AB_L_STRIDE + bos * HV + i_hv
+    p_dt_bias = dt_biases + i_l * GATE_L_STRIDE + i_hv
+    p_b = b + i_l * AB_L_STRIDE + bos * HV + i_hv
+    p_o = (
+        o
+        + i_l * O_L_STRIDE
+        + ((i_k * all_tokens + bos) * HV + i_hv) * V
+        + o_v
+    )
+
+    # Preserve the anchor+offset form used by the byte-gated all-layer replay.
+    # A raw pointer-table load loses 16-byte AxisInfo and changes reductions.
+    state_bank = bank_anchor + tl.load(bank_off16 + i_l) * 4
+    ssi = ssm_state_indices + i_l * SSI_L_STRIDE
+    state_idx = tl.load(ssi + i_n * SSI_SEQ_STRIDE).to(tl.int64)
+    if state_idx <= 0:
+        return
+    p_h0 = (
+        state_bank
+        + state_idx * BANK_STRIDE
+        + i_hv * V * K
+        + o_v[:, None] * K
+        + o_k[None, :]
+    )
+    b_h = tl.zeros([BV, BK], dtype=tl.float32)
+    b_h += tl.load(p_h0, mask=mask_h, other=0).to(tl.float32)
+
+    for i_t in range(0, T):
+        b_q = tl.load(p_q, mask=mask_k, other=0).to(tl.float32)
+        b_k = tl.load(p_k, mask=mask_k, other=0).to(tl.float32)
+        b_v = tl.load(p_v, mask=mask_v, other=0).to(tl.float32)
+        b_b = tl.load(p_b).to(tl.float32)
+
+        x = tl.load(p_a).to(tl.float32) + tl.load(p_dt_bias).to(tl.float32)
+        softplus_x = tl.where(
+            BETA * x <= THRESHOLD,
+            (1 / BETA) * tl.log(1 + tl.exp(BETA * x)),
+            x,
+        )
+        b_g = -tl.exp(tl.load(p_a_log).to(tl.float32)) * softplus_x
+        b_beta = tl.sigmoid(b_b.to(tl.float32))
+
+        if USE_QK_L2NORM_IN_KERNEL:
+            b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
+            b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
+        b_q = b_q * scale
+        b_h *= tl.exp(b_g)
+        b_v -= tl.sum(b_h * b_k[None, :], 1)
+        b_v *= b_beta
+        b_h += b_v[:, None] * b_k[None, :]
+        b_o = tl.sum(b_h * b_q[None, :], 1)
+        tl.store(p_o, b_o.to(p_o.dtype.element_ty), mask=mask_v)
+
+        final_state_idx = tl.load(
+            ssi + i_n * SSI_SEQ_STRIDE + i_t
+        ).to(tl.int64)
+        if final_state_idx > 0:
+            p_ht = (
+                state_bank
+                + final_state_idx * BANK_STRIDE
+                + i_hv * V * K
+                + o_v[:, None] * K
+                + o_k[None, :]
+            )
+            tl.store(p_ht, b_h.to(p_ht.dtype.element_ty), mask=mask_h)
+
+        p_q += H * K
+        p_k += H * K
+        p_o += HV * V
+        p_v += HV * V
+        p_b += HV
+        p_a += HV
+
+
+def _fr13_fixed32_committer_native_layer_batch(
+    *,
+    state,
+    banks_list,
+    A_logs,
+    dt_biases,
+    output_scale,
+    use_qk_l2norm_in_kernel,
+) -> None:
+    """Launch all 48 independent native-realization committer scans once."""
+    layers = 48
+    batch = int(state["batch"])
+    total = batch * 16
+    num_kh = int(state["num_kh"])
+    dim_k = int(state["dim_k"])
+    num_vh = int(state["num_vh"])
+    dim_v = int(state["dim_v"])
+    if (
+        len(banks_list) != layers
+        or dim_k != 128
+        or dim_v != 128
+        or int(state["bank_off16"].numel()) != layers
+        or tuple(state["obuf"].shape) != (layers, total, num_vh, dim_v)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 committer layer-batch requires the pinned "
+            "48-layer K=V=128 geometry"
+        )
+    block_k = triton.next_power_of_2(dim_k)
+    block_v = min(triton.next_power_of_2(dim_v), 32)
+    grid = (1, triton.cdiv(dim_v, block_v), layers * batch * num_vh)
+    _fr13_fixed32_committer_native_layer_batch_kernel[grid](
+        A_logs,
+        state["abuf"],
+        state["bbuf"],
+        dt_biases,
+        state["qbuf"],
+        state["kbuf"],
+        state["vbuf"],
+        state["obuf"],
+        banks_list[0],
+        state["bank_off16"],
+        state["cu"],
+        state["ssi"],
+        float(output_scale),
+        N=batch,
+        T=total,
+        B=batch,
+        H=num_kh,
+        HV=num_vh,
+        K=dim_k,
+        V=dim_v,
+        BK=block_k,
+        BV=block_v,
+        BANK_STRIDE=int(banks_list[0].stride(0)),
+        GATE_L_STRIDE=int(A_logs.stride(0)),
+        AB_L_STRIDE=int(state["abuf"].stride(0)),
+        K_L_STRIDE=int(state["kbuf"].stride(0)),
+        V_L_STRIDE=int(state["vbuf"].stride(0)),
+        O_L_STRIDE=int(state["obuf"].stride(0)),
+        SSI_L_STRIDE=int(state["ssi"].stride(0)),
+        SSI_SEQ_STRIDE=int(state["ssi"].stride(1)),
+        BETA=1.0,
+        THRESHOLD=20.0,
+        USE_QK_L2NORM_IN_KERNEL=bool(use_qk_l2norm_in_kernel),
+        num_warps=4,
+        num_stages=3,
+    )
+
+
 def _fr13_fixed32_committer_graph_body(
     *,
     state,
@@ -6212,8 +9810,9 @@ def _fr13_fixed32_committer_graph_body(
     dt_biases,
     output_scale,
     use_qk_l2norm_in_kernel,
+    layer_batch=None,
 ) -> None:
-    """Record the constant five-fill/four-gather/48-call graph body."""
+    """Record the fixed committer graph body with an optional one-call scan."""
     from vllm.model_executor.layers.fla.ops import (
         fused_sigmoid_gating_delta_rule_update as _sg,
     )
@@ -6273,22 +9872,37 @@ def _fr13_fixed32_committer_graph_body(
         .expand(layers, batch, path_cap)
     )
 
-    for layer in range(layers):
-        _sg(
-            A_log=A_logs[layer],
-            a=state["abuf"][layer].reshape(1, total, num_vh),
-            b=state["bbuf"][layer].reshape(1, total, num_vh),
-            dt_bias=dt_biases[layer],
-            q=state["qbuf"],
-            k=state["kbuf"][layer].reshape(1, total, num_kh, dim_k),
-            v=state["vbuf"][layer].reshape(1, total, num_vh, dim_v),
-            scale=output_scale,
-            initial_state=banks_list[layer],
-            inplace_final_state=True,
-            cu_seqlens=state["cu"],
-            ssm_state_indices=state["ssi"][layer],
+    use_layer_batch = (
+        state.get("layer_batch", False)
+        if layer_batch is None
+        else bool(layer_batch)
+    )
+    if use_layer_batch:
+        _fr13_fixed32_committer_native_layer_batch(
+            state=state,
+            banks_list=banks_list,
+            A_logs=A_logs,
+            dt_biases=dt_biases,
+            output_scale=output_scale,
             use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
         )
+    else:
+        for layer in range(layers):
+            _sg(
+                A_log=A_logs[layer],
+                a=state["abuf"][layer].reshape(1, total, num_vh),
+                b=state["bbuf"][layer].reshape(1, total, num_vh),
+                dt_bias=dt_biases[layer],
+                q=state["qbuf"],
+                k=state["kbuf"][layer].reshape(1, total, num_kh, dim_k),
+                v=state["vbuf"][layer].reshape(1, total, num_vh, dim_v),
+                scale=output_scale,
+                initial_state=banks_list[layer],
+                inplace_final_state=True,
+                cu_seqlens=state["cu"],
+                ssm_state_indices=state["ssi"][layer],
+                use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+            )
 
 
 def _fr13_fixed32_validate_running_rows(
@@ -6467,6 +10081,11 @@ def preseed_fixed32_committer_graph(
     dtype = k_rings.dtype
     total = batch * 16
     scratch = int(banks_list[0].shape[0]) - 1
+    layer_batch = _fr13_fixed32_committer_layer_batch_requested()
+    bank_ptrs, _bank_shape, _bank_stride = build_replay_bank_pointer_table(
+        list(banks_list)
+    )
+    anchor_ptr = bank_ptrs[0]
     state = {
         "batch": batch,
         "bank_rows": int(banks_list[0].shape[0]),
@@ -6501,6 +10120,13 @@ def preseed_fixed32_committer_graph(
         "qbuf": torch.zeros(
             1, total, num_kh, dim_k, device=device, dtype=dtype
         ),
+        "obuf": (
+            torch.empty(
+                48, total, num_vh, dim_v, device=device, dtype=dtype
+            )
+            if layer_batch
+            else None
+        ),
         "cu": (
             torch.arange(batch + 1, device=device, dtype=torch.int64) * 16
         ).to(torch.int32),
@@ -6510,6 +10136,19 @@ def preseed_fixed32_committer_graph(
             dtype=torch.int32,
             device=device,
         ),
+        "bank_off16": (
+            torch.tensor(
+                [(pointer - anchor_ptr) // 16 for pointer in bank_ptrs],
+                dtype=torch.int64,
+                device=device,
+            )
+            if layer_batch
+            else None
+        ),
+        "layer_batch": layer_batch,
+        "layer_batch_byte_gate_passed": not layer_batch,
+        "layer_batch_byte_gate_attempts": 0,
+        "reference_graph": None,
         "graph": None,
         "preseed_capacity": 0,
         "contract": {
@@ -6523,8 +10162,17 @@ def preseed_fixed32_committer_graph(
             "preseed_capacity": 0,
         },
     }
+    if layer_batch:
+        state["contract"].update(
+            {
+                "fused_calls": 1,
+                "native_reference_fused_calls": 48,
+                "layer_batch": True,
+                "byte_gate": "required_on_first_real_nonzero_accept",
+            }
+        )
 
-    def graph_body() -> None:
+    def graph_body(*, use_layer_batch=None) -> None:
         _fr13_fixed32_committer_graph_body(
             state=state,
             banks_list=banks_list,
@@ -6537,6 +10185,7 @@ def preseed_fixed32_committer_graph(
             dt_biases=dt_biases,
             output_scale=output_scale,
             use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+            layer_batch=use_layer_batch,
         )
 
     running_rows = _fr13_fixed32_validate_running_rows(
@@ -6548,28 +10197,119 @@ def preseed_fixed32_committer_graph(
         bank[running_rows[layer]].clone()
         for layer, bank in enumerate(banks_list)
     ]
-    capture_stream = torch.cuda.Stream(device=device)
-    capture_stream.wait_stream(torch.cuda.current_stream(device))
-    with torch.cuda.stream(capture_stream):
-        for _ in range(3):
-            graph_body()
-    torch.cuda.current_stream(device).wait_stream(capture_stream)
-    graph = torch.cuda.CUDAGraph()
-    with torch.cuda.graph(graph, stream=capture_stream):
-        graph_body()
-    torch.cuda.current_stream(device).wait_stream(capture_stream)
-    for layer, bank in enumerate(banks_list):
-        bank[running_rows[layer]] = saved_rows[layer]
+
+    def restore_running_rows() -> None:
+        for layer, bank in enumerate(banks_list):
+            bank[running_rows[layer]] = saved_rows[layer]
+
+    def capture_graph(*, use_layer_batch: bool):
+        capture_stream = torch.cuda.Stream(device=device)
+        capture_stream.wait_stream(torch.cuda.current_stream(device))
+        with torch.cuda.stream(capture_stream):
+            for _ in range(3):
+                graph_body(use_layer_batch=use_layer_batch)
+        torch.cuda.current_stream(device).wait_stream(capture_stream)
+        captured = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(captured, stream=capture_stream):
+            graph_body(use_layer_batch=use_layer_batch)
+        torch.cuda.current_stream(device).wait_stream(capture_stream)
+        return captured
+
+    reference_graph = capture_graph(use_layer_batch=False)
+    if layer_batch:
+        restore_running_rows()
+        graph = capture_graph(use_layer_batch=True)
+        state["reference_graph"] = reference_graph
+    else:
+        graph = reference_graph
+    restore_running_rows()
     state["graph"] = graph
     _FR13_FIXED32_COMMITTER[signature] = state
     _FR13_FIXED32_COMMITTER_COUNTERS["captures"] += 1
     print(
         "[FR13_FIXED32_COMMIT_DEVICE_FILL] preseeded: "
         f"mode={_FR13_FIXED32_MODE} B={batch} path_cap=16 "
-        "neutralizations=5 gathers=4 fused_calls=48 replays=1",
+        f"neutralizations=5 gathers=4 fused_calls={state['contract']['fused_calls']} "
+        f"layer_batch={int(layer_batch)} replays=1",
         flush=True,
     )
     return dict(state["contract"])
+
+
+def _fr13_fixed32_committer_layer_batch_byte_gate(
+    *, state, banks_list, spec_state_indices,
+) -> bool:
+    """Gate the candidate against the native graph on one real accepted path.
+
+    Zero-accept boot warmups are intentionally unpowered and keep using the
+    reference graph.  On the first event with an accepted draft, both captured
+    graphs run from identical state and inputs.  Every touched fp32 state byte,
+    including signed zero, must match before the candidate may serve.
+    """
+    if not state.get("layer_batch", False):
+        return True
+    if state.get("layer_batch_byte_gate_passed", False):
+        return True
+    if not bool((state["accepted_lens"] > 0).any().item()):
+        return False
+    reference_graph = state.get("reference_graph")
+    candidate_graph = state.get("graph")
+    if reference_graph is None or candidate_graph is None:
+        raise RuntimeError(
+            "FR13 fixed32 committer layer-batch missing paired byte-gate graphs"
+        )
+
+    batch = int(state["batch"])
+    running_rows = _fr13_fixed32_validate_running_rows(
+        spec_state_indices=spec_state_indices,
+        batch=batch,
+        bank_rows=int(state["bank_rows"]),
+    )
+    state["layer_batch_byte_gate_attempts"] += 1
+    saved_rows = tuple(
+        bank.index_select(0, running_rows[layer]).clone()
+        for layer, bank in enumerate(banks_list)
+    )
+
+    def restore() -> None:
+        for layer, bank in enumerate(banks_list):
+            bank.index_copy_(0, running_rows[layer], saved_rows[layer])
+
+    try:
+        reference_graph.replay()
+        torch.cuda.synchronize(state["accepted_lens"].device)
+        reference_rows = tuple(
+            bank.index_select(0, running_rows[layer]).clone()
+            for layer, bank in enumerate(banks_list)
+        )
+        restore()
+        candidate_graph.replay()
+        torch.cuda.synchronize(state["accepted_lens"].device)
+        mismatched_layers = tuple(
+            layer
+            for layer, (bank, reference) in enumerate(
+                zip(banks_list, reference_rows, strict=True)
+            )
+            if not _fr13_fixed32_tensor_bits_equal(
+                bank.index_select(0, running_rows[layer]), reference
+            )
+        )
+        if mismatched_layers:
+            raise RuntimeError(
+                "FR13 fixed32 committer layer-batch byte gate failed: "
+                f"B={batch} mismatched_layers={mismatched_layers}"
+            )
+        state["layer_batch_byte_gate_passed"] = True
+    finally:
+        restore()
+        torch.cuda.synchronize(state["accepted_lens"].device)
+
+    print(
+        "[FR13_FIXED32_COMMITTER_LAYER_BATCH BYTE-GATE PASS] "
+        f"B={batch} layers=48 state_bytes=exact",
+        flush=True,
+    )
+    return True
 
 
 def preseed_fixed32_committer_graphs_all_batches(
@@ -7236,7 +10976,19 @@ def _fr13_fixed32_committer_replay(
         dynamic_ok,
         "FR13_FIXED32_COMMIT_DEVICE_FILL dynamic contract violation",
     )
-    state["graph"].replay()
+    graph = state["graph"]
+    if state.get("layer_batch", False):
+        gate_passed = _fr13_fixed32_committer_layer_batch_byte_gate(
+            state=state,
+            banks_list=banks_list,
+            spec_state_indices=spec_state_indices,
+        )
+        if not gate_passed:
+            # Boot warmups carry zero accepted drafts and cannot power a
+            # recurrence A/B.  Keep serving the incumbent graph until a real
+            # nonzero accepted path is available.
+            graph = state["reference_graph"]
+    graph.replay()
 
     counters = _FR13_FIXED32_COMMITTER_COUNTERS
     counters["actual_replays_enqueued"] += 1
@@ -7648,15 +11400,16 @@ def launch_tree_gdn_prepared(
     """
     if n_actual <= 0 or n_actual > n_pad:
         raise ValueError(f"invalid tree node counts n_actual={n_actual}, n_pad={n_pad}")
-    # n_pad=32 (accept>5 32-node horizon) is register-safe ONLY with the shrink-BV
-    # geometry: the forward _tree_gdn_kernel carries h_cache=[N_PAD,BV,DIM_K]fp32, so
-    # [32,8,128] == [16,16,128] byte-for-byte (131072 B/CTA) at BV<=8, but [32,16,128]
-    # (256 KiB) spills at the deployed BV=16. Gate the lift on the effective BV (the
-    # FR13_TREE_GDN_GEOM_OVERRIDE this route applies below) so an accidental n_pad=32
-    # without BV<=8 fails loud instead of silently spilling to HBM.
+    # The monolithic scan needs BV<=8 at n_pad=32 to bound h_cache residency.
+    # Source-gated fixed32 BV production uses the path scan, which has no h_cache;
+    # let that exact route reach the stronger production checks below.
     _ov_cap = _read_tree_gdn_geom_override()
     _bv_cap = int(_ov_cap.get("BV", BV)) if _ov_cap else BV
-    _npad_cap = 32 if _bv_cap <= 8 else 16
+    _fixed32_path_bv_production = (
+        _FR13_FIXED32_MODE in _FR13_FIXED32_MODES
+        and _FR13_FIXED32_GDN_PATH_BV_PRODUCTION == _bv_cap
+    )
+    _npad_cap = 32 if _bv_cap <= 8 or _fixed32_path_bv_production else 16
     if n_pad > _npad_cap or n_pad & (n_pad - 1):
         raise ValueError(
             f"n_pad must be a power of two <={_npad_cap} (effective BV={_bv_cap}; "
@@ -7878,7 +11631,13 @@ def launch_tree_gdn_prepared(
         and _subtree_state["selfcheck_armed"]
     )
 
-    def _launch_paths(_out, _count=count_invocation):
+    def _launch_paths(
+        _out,
+        _count=count_invocation,
+        *,
+        _path_block_v=_bv,
+        _counter_arg=invocation_counter,
+    ):
         # FR13_SUBTREE_PARALLEL route: one launch per path level; paths in a
         # level scan concurrently on grid axis 2. RING/RAW semantics match
         # the monolith per node; PIGGYBACK unsupported (asserted below).
@@ -7887,6 +11646,16 @@ def launch_tree_gdn_prepared(
             raise RuntimeError(
                 f"FR13_SUBTREE_PARALLEL: no preseed for n_actual={n_actual}"
             )
+        _fixed32_io = (
+            _FR13_FIXED32_MODE is not None
+            and st.get("schedule") == "fixed32"
+            and st.get("fixed32_contract") is not None
+        )
+        if _FR13_FIXED32_MODE is not None and not _fixed32_io:
+            raise RuntimeError(
+                "FR13_FIXED32: exact path I/O specialization requires the "
+                "validated fixed32 schedule"
+            )
         for _li, (
             _nodes,
             _pars,
@@ -7894,7 +11663,22 @@ def launch_tree_gdn_prepared(
             _npaths,
             _lengths,
         ) in enumerate(st["levels"]):
-            _tree_gdn_path_kernel[(num_vh, triton.cdiv(dim_v, _bv), _npaths)](
+            # Generic schedules retain the original dynamic source/export
+            # decisions. The validated two-level fixed32 schedule has exactly
+            # one h0-rooted path whose five nodes are all handoff parents, then
+            # eleven export-rooted terminal paths.
+            _state_source = 0
+            _export_mode = 0
+            if _fixed32_io:
+                _state_source = 1 if _li == 0 else 2
+                _export_mode = 1 if _li == 0 else 2
+            _tree_gdn_path_kernel[
+                (
+                    num_vh,
+                    triton.cdiv(dim_v, _path_block_v),
+                    _npaths,
+                )
+            ](
                 q,
                 k,
                 v,
@@ -7907,7 +11691,7 @@ def launch_tree_gdn_prepared(
                 h0,
                 h0_indices,
                 h0_num_accepted_tokens,
-                invocation_counter,
+                _counter_arg,
                 _nodes,
                 _pars,
                 _lengths,
@@ -7924,7 +11708,7 @@ def launch_tree_gdn_prepared(
                 NUM_VH=num_vh,
                 DIM_K=dim_k,
                 DIM_V=dim_v,
-                BLOCK_V=_bv,
+                BLOCK_V=_path_block_v,
                 OUTPUT_SCALE=output_scale,
                 USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
                 H0_IS_BANK=h0_is_bank,
@@ -7936,6 +11720,8 @@ def launch_tree_gdn_prepared(
                 COUNT_INVOCATION=_count and (_li == 0),
                 SCAN_ALIGN=_scan_align,
                 MAX_PATH_LEN=_mlen,
+                STATE_SOURCE=_state_source,
+                EXPORT_MODE=_export_mode,
                 RING_EXPORT=_ring_export,
                 FLAGS_EXPORT=_flags_export and (_li == 0),
                 FLAGS_ROWS=_flags_rows,
@@ -7950,6 +11736,16 @@ def launch_tree_gdn_prepared(
                 f"critical={st['critical']}",
                 flush=True,
             )
+        return {
+            "block_v": int(_path_block_v),
+            "launch_key": (
+                "tree_gdn_path",
+                int(_path_block_v),
+                int(triton.cdiv(dim_v, _path_block_v)),
+                int(_num_warps),
+                tuple(sorted(_extra_launch_kwargs.items())),
+            ),
+        }
 
     def _launch(
         _out,
@@ -8014,10 +11810,7 @@ def launch_tree_gdn_prepared(
         )
 
     def _byte_equal(_left, _right):
-        return torch.equal(
-            _left.contiguous().view(torch.uint8),
-            _right.contiguous().view(torch.uint8),
-        )
+        return _fr13_tensor_byte_equal(_left, _right)
 
     def _snapshot_external():
         _snapshot = {}
@@ -8064,6 +11857,135 @@ def launch_tree_gdn_prepared(
                 f"{_label} SELFCHECK MISMATCH: invocation counter did not "
                 "advance exactly once"
             )
+
+    if _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None:
+        production_pass = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS
+        if (
+            not isinstance(production_pass, dict)
+            or _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES
+            or not _subtree_route_armed
+            or _subtree_selfcheck_armed
+            or _subtree_state is None
+            or _subtree_state.get("schedule") != "fixed32"
+            or _subtree_state.get("fixed32_contract") is None
+            or n_actual != 32
+            or n_pad != 32
+            or _bv != _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
+            or _geom != {"BV": _FR13_FIXED32_GDN_PATH_BV_PRODUCTION}
+            or _FR13_FIXED32_GDN_PATH_BV_PRODUCTION > dim_v
+            or dim_v % _FR13_FIXED32_GDN_PATH_BV_PRODUCTION != 0
+            or not _ring_export
+            or not _flags_export
+            or int(staging_rows) not in production_pass["covered_batches"]
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN BV production geometry/PASS contract drift; "
+                "no fallback is permitted"
+            )
+        if not _subtree_state.get("production_bv_announced", False):
+            _subtree_state["production_bv_announced"] = True
+            print(
+                "[FR13_FIXED32_GDN_PATH_BV_PRODUCTION ENGAGED] "
+                f"mode={_FR13_FIXED32_MODE} batch={staging_rows} "
+                f"block_v={_FR13_FIXED32_GDN_PATH_BV_PRODUCTION} "
+                "source_bound_pass=1 fallback=0",
+                flush=True,
+            )
+
+    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None:
+        # The served FULL graph remains the exact BV8 launch above. Capture
+        # only persistent operand references; the first measured replay gate
+        # allocates private outputs, runs explicit BV8 then BV16/32/64/128, and
+        # restores all shared state before returning the graph's BV8 output.
+        if (
+            _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES
+            or not _subtree_route_armed
+            or _subtree_state is None
+            or _subtree_state.get("schedule") != "fixed32"
+            or _subtree_state.get("fixed32_contract") is None
+            or n_actual != 32
+            or n_pad != 32
+            or _bv != 8
+            or _geom != {"BV": 8}
+            or not _ring_export
+            or not _flags_export
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN BV live gate requires the exact fixed32 "
+                "BV8 served path with export/rings/flags/counter"
+            )
+
+        _gdn_bv_gate_counter_holder = {}
+
+        def _gdn_bv_gate_counter():
+            if count_invocation:
+                return invocation_counter
+            # Formal fixed32 pins FR10_METRICS=0, so the served graph has no
+            # counter store. Use one private scalar for both live-gate arms to
+            # exercise and byte-compare COUNT_INVOCATION without touching the
+            # strict-mask dummy pointer used by the served graph.
+            counter = _gdn_bv_gate_counter_holder.get("counter")
+            if counter is None:
+                counter = torch.zeros(
+                    (), dtype=torch.int32, device=q.device
+                )
+                _gdn_bv_gate_counter_holder["counter"] = counter
+            return counter
+
+        def _gdn_bv_gate_snapshot():
+            assert _subtree_state is not None
+            return {
+                "export": _subtree_state["export"].clone(),
+                "ring_k": ring_k.clone(),
+                "ring_v": ring_v.clone(),
+                "ring_a": ring_a.clone(),
+                "ring_b": ring_b.clone(),
+                "flags": _flags_arg.clone(),
+                "counter": _gdn_bv_gate_counter().clone(),
+            }
+
+        def _gdn_bv_gate_restore(_snapshot):
+            assert _subtree_state is not None
+            _subtree_state["export"].copy_(_snapshot["export"])
+            ring_k.copy_(_snapshot["ring_k"])
+            ring_v.copy_(_snapshot["ring_v"])
+            ring_a.copy_(_snapshot["ring_a"])
+            ring_b.copy_(_snapshot["ring_b"])
+            _flags_arg.copy_(_snapshot["flags"])
+            _gdn_bv_gate_counter().copy_(_snapshot["counter"])
+
+        def _gdn_bv_gate_run(_path_block_v):
+            _gate_bv = int(_path_block_v)
+            if (
+                _gate_bv not in (8, 16, 32, 64, 128)
+                or _gate_bv > dim_v
+                or dim_v % _gate_bv != 0
+            ):
+                raise RuntimeError(
+                    "FR13 fixed32 GDN BV live gate rejected path geometry: "
+                    f"BLOCK_V={_gate_bv} DIM_V={dim_v}"
+                )
+            _gate_out = torch.empty_like(out)
+            _launch_meta = _launch_paths(
+                _gate_out,
+                _count=True,
+                _path_block_v=_gate_bv,
+                _counter_arg=_gdn_bv_gate_counter(),
+            )
+            return {
+                **_launch_meta,
+                "output": _gate_out,
+            }
+
+        _fr13_fixed32_gdn_bv_live_capture_register(
+            {
+                "snapshot": _gdn_bv_gate_snapshot,
+                "restore": _gdn_bv_gate_restore,
+                "run": _gdn_bv_gate_run,
+                "byte_equal": _byte_equal,
+                "surface_names": _FR13_FIXED32_GDN_BV_SURFACES,
+            }
+        )
 
     if parent_gather_selfcheck_on():
         # In-process byte-identity gate: run BOTH scans on the SAME inputs and
@@ -8151,4 +12073,735 @@ def launch_tree_gdn_prepared(
         _assert_counter_once(_counter_before, "FR13_HC_INTERNAL")
     else:
         _launch(out, _parent_gather)
+    return out, None
+
+
+def fixed32_batch_gdn_launch_contract(
+    batch_size: int,
+    *,
+    n_actual: int,
+    n_pad: int,
+    block_v: int,
+    dim_v: int,
+) -> dict[str, object]:
+    """Validate the closed fixed32 geometry and expose its launch invariant."""
+    batch = int(batch_size)
+    rows = int(n_actual)
+    padded_rows = int(n_pad)
+    bv = int(block_v)
+    width = int(dim_v)
+    if batch < 2 or batch > _FR13_FIXED32_MAX_BATCH:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: batch_size must be in [2, 4]; "
+            f"got {batch}"
+        )
+    if rows != len(_FR13_FIXED32_PARENT) or padded_rows != 32:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN requires the exact 32-row physical tree, "
+            f"got n_actual={rows} n_pad={padded_rows}"
+        )
+    if bv not in (1, 2, 4, 8, 16, 32, 64, 128):
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: BLOCK_V must be a supported power of two "
+            f"through 128, got {bv}"
+        )
+    if width <= 0 or bv > width or width % bv != 0:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: BLOCK_V must divide DIM_V without "
+            f"exceeding it, got BLOCK_V={bv} DIM_V={width}"
+        )
+    return {
+        "batch_size": batch,
+        "physical_rows_per_request": padded_rows,
+        "block_v": bv,
+        "physical_launches_per_layer": 2,
+        "level_grid_z": (batch, 11 * batch),
+        "path_programs": 12 * batch,
+    }
+
+
+def launch_tree_gdn_prepared_fixed32_batch(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    g: torch.Tensor,
+    beta: torch.Tensor,
+    h0: torch.Tensor,
+    *,
+    batch_size: int,
+    n_actual: int,
+    n_pad: int,
+    strict_mask: torch.Tensor,
+    visible_mask: torch.Tensor,
+    out: torch.Tensor,
+    h0_indices: torch.Tensor,
+    h0_num_accepted_tokens: torch.Tensor,
+    raw_a: torch.Tensor,
+    raw_b: torch.Tensor,
+    A_log: torch.Tensor,
+    dt_bias: torch.Tensor,
+    output_scale: float = 1.0,
+    use_qk_l2norm_in_kernel: bool = False,
+    h0_index_row: int = 0,
+    h0_batch_index: int = 0,
+    h0_use_accepted_column: bool = False,
+    invocation_counter: torch.Tensor | None = None,
+    ring_k: torch.Tensor | None = None,
+    ring_v: torch.Tensor | None = None,
+    ring_a: torch.Tensor | None = None,
+    ring_b: torch.Tensor | None = None,
+    staging_flags: torch.Tensor | None = None,
+    staging_rows: int = 0,
+) -> tuple[torch.Tensor, None]:
+    """Launch the exact fixed32 path scan in two kernels for B2-B4.
+
+    Request programs are folded into path-grid axis 2. The existing 32-row
+    subtree export scratch is reused as ``[batch, 5]`` compact parent slots,
+    so B4 consumes 20 rows and does not allocate inside graph capture.
+
+    The eager diagnostic compares both arms inline. The graph diagnostic
+    captures the legacy per-request BV8 route, retains only persistent operand
+    closures, and performs the candidate comparison after a real B4 replay.
+    """
+    batch = int(batch_size)
+    if batch < 2 or batch > _FR13_FIXED32_MAX_BATCH:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: batch_size must be in [2, 4]; B1 must "
+            "use the legacy per-request route, "
+            f"got {batch}"
+        )
+    selector = fixed32_batch_gdn_selector(batch)
+    if selector is None:
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN is default-off; arm either its diagnostic "
+            "or post-gate production selector"
+        )
+    if _FR13_FIXED32_MODE is None:
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN requires an armed fixed32 runtime"
+        )
+    if int(n_actual) != len(_FR13_FIXED32_PARENT) or int(n_pad) != 32:
+        fixed32_batch_gdn_launch_contract(
+            batch,
+            n_actual=n_actual,
+            n_pad=n_pad,
+            block_v=8,
+            dim_v=128,
+        )
+    for name, mask in (("strict_mask", strict_mask), ("visible_mask", visible_mask)):
+        if mask.ndim != 2 or mask.shape[0] < n_pad or mask.shape[1] < n_pad:
+            raise ValueError(
+                f"FR13_FIXED32_BATCH_GDN: {name} must cover "
+                f"{n_pad}x{n_pad}, got {tuple(mask.shape)}"
+            )
+    rows = batch * int(n_actual)
+    tensors_with_rows = {
+        "q": q,
+        "k": k,
+        "v": v,
+        "g": g,
+        "beta": beta,
+        "raw_a": raw_a,
+        "raw_b": raw_b,
+        "out": out,
+    }
+    for name, tensor in tensors_with_rows.items():
+        if tensor.shape[0] < rows:
+            raise ValueError(
+                f"FR13_FIXED32_BATCH_GDN: {name} has {tensor.shape[0]} rows, "
+                f"needs {rows}"
+            )
+        if not tensor.is_contiguous():
+            raise ValueError(
+                f"FR13_FIXED32_BATCH_GDN: {name} must be contiguous"
+            )
+
+    if q.ndim != 3 or k.shape != q.shape:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: q/k must have equal [B*32, KH, DK] "
+            f"shapes, got q={tuple(q.shape)} k={tuple(k.shape)}"
+        )
+    if v.ndim != 3:
+        raise ValueError(
+            f"FR13_FIXED32_BATCH_GDN: v must be rank 3, got {tuple(v.shape)}"
+        )
+    num_kh = int(q.shape[1])
+    num_vh = int(v.shape[1])
+    dim_k = int(q.shape[2])
+    dim_v = int(v.shape[2])
+    if num_vh % num_kh != 0:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: value heads must be a multiple of "
+            f"q/k heads, got {num_vh}/{num_kh}"
+        )
+    if v.shape[2] != dim_v or out.shape[1:] != (num_vh, dim_v):
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: v/out shape mismatch "
+            f"v={tuple(v.shape)} out={tuple(out.shape)}"
+        )
+    gate_shape = (num_vh,)
+    for name, tensor in (
+        ("g", g),
+        ("beta", beta),
+        ("raw_a", raw_a),
+        ("raw_b", raw_b),
+    ):
+        if tensor.shape[1:] != gate_shape:
+            raise ValueError(
+                f"FR13_FIXED32_BATCH_GDN: {name} trailing shape must be "
+                f"{gate_shape}, got {tuple(tensor.shape)}"
+            )
+    if A_log.numel() < num_vh or dt_bias.numel() < num_vh:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: A_log/dt_bias do not cover all value "
+            f"heads ({A_log.numel()}/{dt_bias.numel()} < {num_vh})"
+        )
+    if h0.ndim != 4 or h0.shape[1:] != (num_vh, dim_v, dim_k):
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: h0 bank shape must be "
+            f"(*, {num_vh}, {dim_v}, {dim_k}), got {tuple(h0.shape)}"
+        )
+    if h0_indices.ndim != 2 or h0_indices.shape[0] < batch:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: h0_indices must cover [B, SPEC_COLS], "
+            f"got {tuple(h0_indices.shape)} for B={batch}"
+        )
+    if h0_num_accepted_tokens.ndim != 1:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: accepted-token counts must be rank 1"
+        )
+    last_accepted_index = (
+        int(h0_batch_index) + (batch - 1) * int(h0_num_accepted_tokens.stride(0))
+    )
+    if last_accepted_index >= h0_num_accepted_tokens.numel():
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: accepted-token counts do not cover "
+            f"batch index {last_accepted_index}"
+        )
+    last_h0_row = int(h0_index_row) + (batch - 1) * int(h0_indices.stride(0))
+    if last_h0_row < 0 or last_h0_row >= h0_indices.numel():
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: h0 index rows do not cover flattened "
+            f"row {last_h0_row}"
+        )
+
+    ring_export = ring_k is not None
+    if ring_export:
+        if ring_v is None or ring_a is None or ring_b is None:
+            raise ValueError(
+                "FR13_FIXED32_BATCH_GDN: ring export requires all four rings"
+            )
+        expected_ring_shapes = (
+            ("ring_k", ring_k, (num_kh, dim_k), k.dtype),
+            ("ring_v", ring_v, (num_vh, dim_v), v.dtype),
+            ("ring_a", ring_a, (num_vh,), raw_a.dtype),
+            ("ring_b", ring_b, (num_vh,), raw_b.dtype),
+        )
+        for name, tensor, trailing_shape, dtype in expected_ring_shapes:
+            assert tensor is not None
+            if (
+                tensor.shape[0] < rows
+                or tensor.shape[1:] != trailing_shape
+                or tensor.dtype != dtype
+                or not tensor.is_contiguous()
+            ):
+                raise ValueError(
+                    f"FR13_FIXED32_BATCH_GDN: invalid {name} shape/dtype/layout "
+                    f"{tuple(tensor.shape)}/{tensor.dtype}"
+                )
+    else:
+        ring_k = ring_v = ring_a = ring_b = strict_mask
+
+    subtree_state = subtree_get(
+        n_actual, num_vh, dim_v, dim_k, q.device
+    )
+    contract = subtree_state.get("fixed32_contract")
+    parent_slots = subtree_state.get("fixed32_parent_slots")
+    if (
+        subtree_state.get("schedule") != "fixed32"
+        or contract is None
+        or int(contract.get("launches", -1)) != 2
+        or parent_slots is None
+        or len(parent_slots) != 2
+        or not bool(subtree_state.get("route_armed"))
+        or bool(subtree_state.get("selfcheck_armed"))
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN: exact two-level armed preseed contract "
+            "missing or legacy subtree selfcheck is still armed"
+        )
+    needed_export_rows = batch * _FR13_FIXED32_EXPORT_SLOTS
+    if int(subtree_state["export"].shape[0]) < needed_export_rows:
+        raise RuntimeError(
+            "FR13_FIXED32_BATCH_GDN: compact export scratch capacity "
+            f"{subtree_state['export'].shape[0]} < {needed_export_rows}"
+        )
+
+    geom = _read_tree_gdn_geom_override()
+    block_v = BV
+    num_warps = _DEPLOYED_NUM_WARPS
+    extra_launch_kwargs: dict = {}
+    if geom is not None:
+        block_v = int(geom.get("BV", block_v))
+        num_warps = int(geom.get("num_warps", num_warps))
+        if "num_stages" in geom:
+            extra_launch_kwargs["num_stages"] = int(geom["num_stages"])
+    configured_wide_bv = None
+    if selector in ("diagnostic", "graph_capture"):
+        configured_wide_bv = _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE
+    elif selector == "production":
+        configured_wide_bv = _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION
+    candidate_block_v = configured_wide_bv or block_v
+    if configured_wide_bv is None and block_v > 8:
+        raise RuntimeError(
+            "FR13 fixed32 batched GDN refuses BLOCK_V>8 without an explicit "
+            "combined wide-BV selector and live gate"
+        )
+    if configured_wide_bv is not None and (
+        block_v != 8 or geom != {"BV": 8}
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 batched wide-BV requires the served/reference route "
+            "pinned exactly to BV=8"
+        )
+    launch_contract = fixed32_batch_gdn_launch_contract(
+        batch,
+        n_actual=n_actual,
+        n_pad=n_pad,
+        block_v=candidate_block_v,
+        dim_v=dim_v,
+    )
+
+    count_invocation = invocation_counter is not None
+    if invocation_counter is None:
+        invocation_counter = strict_mask
+    flags_export = staging_flags is not None
+    flags_arg = staging_flags if flags_export else strict_mask
+    flags_rows = int(staging_rows) if flags_export else 0
+    if flags_export and flags_rows != batch:
+        raise ValueError(
+            "FR13_FIXED32_BATCH_GDN: staging_rows must equal batch_size, "
+            f"got {flags_rows}/{batch}"
+        )
+
+    def _launch_batched(_block_v: int) -> None:
+        for level_index, (
+            nodes,
+            _parents,
+            max_path_len,
+            num_paths,
+            path_lengths,
+        ) in enumerate(subtree_state["levels"]):
+            state_source = 1 if level_index == 0 else 2
+            export_mode = 1 if level_index == 0 else 2
+            _tree_gdn_path_kernel_fixed32_batch[
+                (num_vh, triton.cdiv(dim_v, _block_v), batch * num_paths)
+            ](
+                q,
+                k,
+                v,
+                g,
+                beta,
+                raw_a,
+                raw_b,
+                A_log,
+                dt_bias,
+                h0,
+                h0_indices,
+                h0_num_accepted_tokens,
+                invocation_counter,
+                nodes,
+                parent_slots[level_index],
+                path_lengths,
+                subtree_state["export"],
+                out,
+                ring_k,
+                ring_v,
+                ring_a,
+                ring_b,
+                flags_arg,
+                N_ACTUAL=n_actual,
+                NUM_KH=num_kh,
+                NUM_VH=num_vh,
+                DIM_K=dim_k,
+                DIM_V=dim_v,
+                BLOCK_V=_block_v,
+                OUTPUT_SCALE=output_scale,
+                USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+                H0_INDEX_ROW=int(h0_index_row),
+                H0_INDEX_BATCH_STRIDE=int(h0_indices.stride(0)),
+                H0_BATCH_INDEX=int(h0_batch_index),
+                H0_ACCEPTED_BATCH_STRIDE=int(
+                    h0_num_accepted_tokens.stride(0)
+                ),
+                H0_BANK_STRIDE=int(h0.stride(0)),
+                H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
+                RAW_GATING=True,
+                COUNT_INVOCATION=count_invocation and level_index == 0,
+                SCAN_ALIGN=scan_align_on(),
+                MAX_PATH_LEN=max_path_len,
+                NUM_PATHS=num_paths,
+                BATCH_SIZE=batch,
+                EXPORT_SLOTS=_FR13_FIXED32_EXPORT_SLOTS,
+                STATE_SOURCE=state_source,
+                EXPORT_MODE=export_mode,
+                RING_EXPORT=ring_export,
+                FLAGS_EXPORT=flags_export and level_index == 0,
+                FLAGS_ROWS=flags_rows,
+                num_warps=num_warps,
+                **extra_launch_kwargs,
+            )
+
+    def _launch_reference(*, collect_export: bool) -> torch.Tensor | None:
+        reference_exports = []
+        for request in range(batch):
+            start = request * int(n_actual)
+            end = start + int(n_actual)
+            launch_tree_gdn_prepared(
+                q=q[start:end],
+                k=k[start:end],
+                v=v[start:end],
+                g=g[start:end],
+                beta=beta[start:end],
+                raw_a=raw_a[start:end],
+                raw_b=raw_b[start:end],
+                A_log=A_log,
+                dt_bias=dt_bias,
+                h0=h0,
+                h0_indices=h0_indices,
+                h0_num_accepted_tokens=h0_num_accepted_tokens,
+                h0_is_bank=True,
+                h0_index_row=(
+                    int(h0_index_row)
+                    + request * int(h0_indices.stride(0))
+                ),
+                h0_batch_index=(
+                    int(h0_batch_index)
+                    + request * int(h0_num_accepted_tokens.stride(0))
+                ),
+                h0_use_accepted_column=h0_use_accepted_column,
+                n_actual=n_actual,
+                n_pad=n_pad,
+                strict_mask=strict_mask,
+                visible_mask=visible_mask,
+                out=out[start:end],
+                output_scale=output_scale,
+                use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+                invocation_counter=(
+                    invocation_counter if count_invocation else None
+                ),
+                ring_k=ring_k[start:end] if ring_export else None,
+                ring_v=ring_v[start:end] if ring_export else None,
+                ring_a=ring_a[start:end] if ring_export else None,
+                ring_b=ring_b[start:end] if ring_export else None,
+                staging_flags=flags_arg if flags_export else None,
+                staging_rows=flags_rows,
+            )
+            if collect_export:
+                reference_exports.append(
+                    torch.stack(
+                        tuple(
+                            subtree_state["export"][node]
+                            for node in _FR13_FIXED32_EXPORT_NODES
+                        ),
+                        dim=0,
+                    )
+                )
+        if not collect_export:
+            return None
+        return torch.cat(reference_exports, dim=0)
+
+    def _snapshot_external() -> dict[str, torch.Tensor]:
+        snapshot = {
+            "out": out[:rows].clone(),
+            "export": subtree_state["export"].clone(),
+        }
+        if ring_export:
+            snapshot.update(
+                ring_k=ring_k[:rows].clone(),
+                ring_v=ring_v[:rows].clone(),
+                ring_a=ring_a[:rows].clone(),
+                ring_b=ring_b[:rows].clone(),
+            )
+        if flags_export:
+            snapshot["flags"] = flags_arg.clone()
+        if count_invocation:
+            snapshot["invocation_counter"] = invocation_counter.clone()
+        return snapshot
+
+    def _restore_external(snapshot: dict[str, torch.Tensor]) -> None:
+        out[:rows].copy_(snapshot["out"])
+        subtree_state["export"].copy_(snapshot["export"])
+        if ring_export:
+            ring_k[:rows].copy_(snapshot["ring_k"])
+            ring_v[:rows].copy_(snapshot["ring_v"])
+            ring_a[:rows].copy_(snapshot["ring_a"])
+            ring_b[:rows].copy_(snapshot["ring_b"])
+        if flags_export:
+            flags_arg.copy_(snapshot["flags"])
+        if count_invocation:
+            invocation_counter.copy_(snapshot["invocation_counter"])
+
+    byte_ab_enabled = selector == "diagnostic"
+    graph_byte_ab_capture = selector == "graph_capture"
+    real_event_marker = None
+    if byte_ab_enabled:
+        _enabled, real_event_marker = (
+            _fr13_fixed32_batch_gdn_byte_ab_control()
+        )
+        if not _enabled:
+            raise RuntimeError(
+                "FR13 fixed32 batched GDN diagnostic selector drifted"
+            )
+    layer_key = int(A_log.data_ptr())
+    batch_layer_key = (batch, layer_key)
+    gate_state = _FR13_FIXED32_BATCH_GDN_BYTE_AB_STATE
+    if graph_byte_ab_capture:
+        if batch != 4 or not fixed32_batch_gdn_graph_live_capture_active(batch):
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN capture selector drifted"
+            )
+        if torch.cuda.is_available() and not torch.cuda.is_current_stream_capturing():
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN gate requires final CUDA capture"
+            )
+        if not ring_export or not flags_export or not count_invocation:
+            raise RuntimeError(
+                "FR13 fixed32 B4 graph GDN byte gate requires K/V/A/B ring "
+                "export, in-kernel flags, and the invocation counter"
+            )
+
+        def _graph_gate_run_reference() -> dict[str, object]:
+            compact_export = _launch_reference(collect_export=True)
+            assert compact_export is not None
+            return {
+                "block_v": 8,
+                "physical_launches": 2 * batch,
+                "kernel_structure": _FR13_FIXED32_BATCH_GDN_REFERENCE_KERNEL,
+                "compact_export": compact_export,
+            }
+
+        def _graph_gate_run_candidate(_candidate_bv: int) -> dict[str, object]:
+            selected_bv = int(_candidate_bv)
+            if selected_bv != int(candidate_block_v):
+                raise RuntimeError(
+                    "FR13 fixed32 B4 graph GDN candidate selector drift: "
+                    f"{selected_bv} != {candidate_block_v}"
+                )
+            _launch_batched(selected_bv)
+            return {
+                "block_v": selected_bv,
+                "physical_launches": int(
+                    launch_contract["physical_launches_per_layer"]
+                ),
+                "kernel_structure": _FR13_FIXED32_BATCH_GDN_CANDIDATE_KERNEL,
+                "compact_export": subtree_state["export"][
+                    :needed_export_rows
+                ].clone(),
+            }
+
+        _fr13_fixed32_batch_gdn_graph_live_capture_register(
+            {
+                "layer_key": layer_key,
+                "snapshot": _snapshot_external,
+                "restore": _restore_external,
+                "run_reference": _graph_gate_run_reference,
+                "run_candidate": _graph_gate_run_candidate,
+                "carrier_nonzero": lambda: bool(
+                    int(torch.count_nonzero(q[:rows]).item())
+                ),
+                "byte_equal": _fr13_tensor_byte_equal,
+                "surface_names": _FR13_FIXED32_BATCH_GDN_GRAPH_SURFACES,
+            }
+        )
+        _launch_reference(collect_export=False)
+        return out, None
+    if byte_ab_enabled:
+        if torch.cuda.is_current_stream_capturing():
+            raise RuntimeError(
+                "FR13_FIXED32_BATCH_GDN_BYTE_AB is eager-only; boot with "
+                "ENFORCE_EAGER=1"
+            )
+        if not ring_export or not flags_export or not count_invocation:
+            raise RuntimeError(
+                "FR13_FIXED32_BATCH_GDN_BYTE_AB requires K/V/A/B ring export, "
+                "in-kernel flags, and the invocation counter"
+            )
+        if batch_layer_key in gate_state["passed"]:
+            _launch_reference(collect_export=False)
+            return out, None
+        elif real_event_marker is None:
+            _launch_reference(collect_export=False)
+            if batch_layer_key not in gate_state["waiting_announced"]:
+                gate_state["waiting_announced"].add(batch_layer_key)
+                print(
+                    "[FR13_FIXED32_BATCH_GDN_BYTE_AB WAITING] "
+                    f"batch={batch} layer_key=0x{layer_key:x} "
+                    "reference_served=1",
+                    flush=True,
+                )
+            return out, None
+        elif int(torch.count_nonzero(q[:rows]).item()) == 0:
+            _launch_reference(collect_export=False)
+            _fr13_fixed32_batch_gdn_byte_ab_emit(
+                {
+                    "task_marker": real_event_marker,
+                    "layer_key": f"0x{layer_key:x}",
+                    "batch": batch,
+                    "physical_rows_per_request": int(n_pad),
+                    "reference_bv": int(block_v),
+                    "candidate_bv": int(candidate_block_v),
+                    "carrier_nonzero": False,
+                    "zero_diff": None,
+                    "reference_restored_and_served": True,
+                    "status": "zero_carrier_reference_served",
+                }
+            )
+            return out, None
+        else:
+            bound_marker = gate_state.get("task_marker")
+            bound_candidate_bv = gate_state.get("candidate_bv")
+            if bound_marker is None:
+                gate_state["task_marker"] = real_event_marker
+                gate_state["candidate_bv"] = int(candidate_block_v)
+            elif (
+                bound_marker != real_event_marker
+                or type(bound_candidate_bv) is not int
+                or int(bound_candidate_bv) != int(candidate_block_v)
+            ):
+                raise RuntimeError(
+                    "FR13 fixed32 batched GDN live gate cannot combine task "
+                    "markers or BV candidates in one process"
+                )
+            attempt = int(gate_state["attempts"].get(batch_layer_key, 0)) + 1
+            gate_state["attempts"][batch_layer_key] = attempt
+            before = _snapshot_external()
+            reference_export = _launch_reference(collect_export=True)
+            assert reference_export is not None
+            reference = _snapshot_external()
+            candidate = None
+            try:
+                _restore_external(before)
+                _launch_batched(candidate_block_v)
+                candidate = _snapshot_external()
+                comparison_inputs = [
+                    ("out", reference["out"], candidate["out"]),
+                    ("ring_k", reference["ring_k"], candidate["ring_k"]),
+                    ("ring_v", reference["ring_v"], candidate["ring_v"]),
+                    ("ring_a", reference["ring_a"], candidate["ring_a"]),
+                    ("ring_b", reference["ring_b"], candidate["ring_b"]),
+                    (
+                        "state_export_compact",
+                        reference_export,
+                        candidate["export"][:needed_export_rows],
+                    ),
+                    (
+                        "state_export_untouched_tail",
+                        before["export"][needed_export_rows:],
+                        candidate["export"][needed_export_rows:],
+                    ),
+                    ("flags", reference["flags"], candidate["flags"]),
+                    (
+                        "invocation_counter",
+                        reference["invocation_counter"],
+                        candidate["invocation_counter"],
+                    ),
+                ]
+                comparisons = [
+                    _fr13_fixed32_batch_gdn_byte_diff(name, left, right)
+                    for name, left, right in comparison_inputs
+                ]
+            finally:
+                _restore_external(reference)
+            first_nonzero = next(
+                (
+                    item
+                    for item in comparisons
+                    if not bool(item["byte_equal"])
+                ),
+                None,
+            )
+            zero_diff = first_nonzero is None
+            record = {
+                "task_marker": real_event_marker,
+                "layer_key": f"0x{layer_key:x}",
+                "batch": batch,
+                "attempt": attempt,
+                "physical_rows_per_request": int(n_pad),
+                "reference_bv": int(block_v),
+                "candidate_bv": int(candidate_block_v),
+                "carrier_nonzero": True,
+                "legacy_physical_launches": 2 * batch,
+                "candidate_physical_launches": int(
+                    launch_contract["physical_launches_per_layer"]
+                ),
+                "comparisons": comparisons,
+                "first_nonzero": first_nonzero,
+                "zero_diff": zero_diff,
+                "reference_restored_and_served": True,
+                "status": "pass" if zero_diff else "mismatch_reference_served",
+            }
+            _fr13_fixed32_batch_gdn_byte_ab_emit(record)
+            if zero_diff:
+                gate_state["passed"].add(batch_layer_key)
+                batch_layer_keys = {
+                    passed_layer_key
+                    for passed_batch, passed_layer_key in gate_state["passed"]
+                    if passed_batch == batch
+                }
+                _fr13_fixed32_batch_gdn_live_pass_emit(
+                    task_marker=real_event_marker,
+                    batch=batch,
+                    layer_keys=batch_layer_keys,
+                    reference_bv=block_v,
+                    candidate_bv=candidate_block_v,
+                )
+            print(
+                "[FR13_FIXED32_BATCH_GDN_BYTE_AB "
+                f"{'PASS' if zero_diff else 'MISMATCH'}] "
+                f"task={real_event_marker} layer_key=0x{layer_key:x} "
+                f"attempt={attempt} reference_bv={block_v} "
+                f"candidate_bv={candidate_block_v} reference_served=1 "
+                f"first_nonzero={first_nonzero}",
+                flush=True,
+            )
+            return out, None
+    elif selector == "production":
+        if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION == 8:
+            if (
+                not count_invocation
+                or not ring_export
+                or not flags_export
+                or scan_align_on()
+                or npad_invariant_on()
+            ):
+                raise RuntimeError(
+                    "FR13 fixed32 batched BV8 production specialization "
+                    "requires metrics/ring/flags on and scan/npad off"
+                )
+            _fr13_fixed32_batch_gdn_bv8_production_capture_register(
+                batch_size=batch,
+                layer_key=layer_key,
+                candidate_bv=candidate_block_v,
+            )
+        elif _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None:
+            _fr13_fixed32_batch_gdn_bv64_production_capture_register(
+                batch_size=batch,
+                layer_key=layer_key,
+                candidate_bv=candidate_block_v,
+            )
+        _launch_batched(candidate_block_v)
+    else:
+        raise RuntimeError(
+            f"FR13 fixed32 batched GDN selector is invalid: {selector!r}"
+        )
+    if not subtree_state.get("batch_engaged_announced", False):
+        subtree_state["batch_engaged_announced"] = True
+        print(
+            "[FR13_FIXED32_BATCH_GDN ENGAGED] "
+            f"batch={batch} launches=2 path_grids=({batch},{11 * batch}) "
+            f"block_v={candidate_block_v} export_rows={needed_export_rows} "
+            "fallback=0",
+            flush=True,
+        )
     return out, None

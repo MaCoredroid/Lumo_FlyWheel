@@ -1,0 +1,4 @@
+candidate	compile_result	resource_result	rejection
+normal_cooperative_128x256x128	failed	mainloop_stages=1	CUTLASS requires at least two mainloop stages
+cooperative_64x256x128	failed	not_applicable	cooperative schedule requires tile M at least 128
+pingpong_64x256x128	passed	REG=168 STACK=488 SHARED=1024 CONSTANT[0]=2560	488-byte per-thread stack is not a viable performance candidate

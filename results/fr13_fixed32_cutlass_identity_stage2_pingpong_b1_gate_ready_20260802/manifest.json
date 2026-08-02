@@ -1,0 +1,81 @@
+{
+  "schema": "fr13.fixed32.cutlass_identity_stage2_pingpong_b1_gate_ready.v1",
+  "created_utc": "2026-08-02T17:34:54Z",
+  "status": "READY_FOR_ONE_REAL_SWE_VERIFIED_B1_K64_ROOT_BYTE_GATE",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "scope": {
+    "route": "Tail23/Hydra27",
+    "qualification_profile": "k64_root",
+    "batch_size": 1,
+    "physical_rows": 32,
+    "served_result": "stock",
+    "default_enabled": false
+  },
+  "source": {
+    "branch": "agent/fixed32-cutlass-pingpong-stage2-20260802",
+    "kernel_source_commit": "d9d13b605",
+    "gate_wiring_commit": "3693f0dbce26482b27828a705091b9d95d81ce4a",
+    "patch_file": "scripts/fr13_patch_cutlass_fixed32_wave.py",
+    "patch_sha256": "3132a7824feaabde09c249b29861fe8f4160d7b3c116b4423f39ecdd16554edc",
+    "generated_dispatch_sha256": "31e51c4a783b40d40454c0cb7e055c78ed19ad7247738f6ba606373880d2064a"
+  },
+  "candidate": {
+    "selector": "identity_stage2_pingpong_b1",
+    "diagnostic_selector": "identity_stage2_pingpong_b1_byte_ab",
+    "binary_sha256": "bab51a0f346fe3230e351004732a0cc41f1bd6c0732b238e3ae592f07f47e208",
+    "binary_bytes": 115315576,
+    "object_sha256": "1cea169bee1d0441be965c4b91aa1cc4559f0300aeadc21869fba904d2dd02ea",
+    "object_bytes": 17263944,
+    "native_cubin_sha256": "002b5d5f12b3968d19271644814ed5f817fd9b045817af379cdfcba38915aee5",
+    "native_cubin_bytes": 1676936,
+    "dynamic_import": "pass"
+  },
+  "projection_policy": {
+    "total_projection_matrix_elements": 456130560,
+    "pingpong_projection_matrix_elements": 335544320,
+    "pingpong_share": 0.735632,
+    "pingpong_n": [14336, 16384, 34816],
+    "cooperative_fallback_n": [5120],
+    "tiles_per_pingpong_cta": [4, 4, 8]
+  },
+  "kernel_resources": {
+    "dtypes": ["bf16", "fp16"],
+    "registers_per_thread": 168,
+    "static_shared_bytes_per_cta": 1024,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "constant0_bytes": 2688,
+    "sass_slots": 968,
+    "detected_calls_or_local_memory": false
+  },
+  "abi_audit": {
+    "reference_family": "divisor_static_stocktile_k64_root",
+    "reference_sha256": "338e89d062c2b1ac40909dbc8d64d4ab6b0def9fd86988c9e395e8244606a9f6",
+    "reference_defined_dynamic_symbols": 1303,
+    "candidate_defined_dynamic_symbols": 1310,
+    "added_defined_dynamic_symbols": 7,
+    "removed_defined_dynamic_symbols": 0,
+    "reference_undefined_dynamic_symbols": 183,
+    "candidate_undefined_dynamic_symbols": 183,
+    "added_or_removed_undefined_dynamic_symbols": 0,
+    "dt_needed_equal": true,
+    "dt_needed_count": 9,
+    "runpath_equal": true
+  },
+  "verification": {
+    "isolated_sm121a_compile": "pass",
+    "host_link": "pass",
+    "binary_identity_verifier": "pass",
+    "dynamic_import": "pass",
+    "shell_syntax": "pass",
+    "python_compile": "pass",
+    "ruff_changed_scope": "pass",
+    "cutlass_tests": "pass_95_of_95",
+    "git_diff_check": "pass",
+    "gpu_runtime_used": false,
+    "docker_used": false,
+    "real_workload_measurement": "not_run",
+    "runtime_byte_equality": "required_not_run"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "schema": "fr13.fixed32.streamk_force_wide256_live_rejection.v1",
+  "status": "rejected_nonmeasurement",
+  "acceptance_valid": false,
+  "performance_measurement": false,
+  "runroot": "output/fr13_b1_cutlass_streamk_wide256_live_gate_20260801T054639Z",
+  "source_commit": "a8944ba91715a0961ccba9fb21c25253aebb3648",
+  "candidate_sha256": "f682560caad085cfdc0c44eec5252352a8bc4861dc634a55e0dccbab261b7892",
+  "candidate_bytes": 112351640,
+  "diagnostic_selector": "streamk_force_wide256_byte_ab",
+  "failure": {
+    "phase": "pre_health_profile_run",
+    "observed_at_utc": "2026-08-01T05:52:55Z",
+    "operation": "stock_cutlass_gemm_caller",
+    "error": "CUTLASS Error Internal at gemm_op.run in cutlass_gemm_caller.cuh:61",
+    "cause": "candidate patch changed the original stock GEMM template identity and stock mainloop stage policy",
+    "candidate_dispatched_during_boot": false
+  },
+  "traffic": {
+    "task_requests": 0,
+    "real_task_markers": 0,
+    "byte_comparison_records": 0
+  },
+  "raw_evidence": {
+    "runlog_sha256": "02b79af07213908dcec727d77d618471c79261860453b444752b05e4aca5f0c0",
+    "runtime_manifest_at_launch_sha256": "b3707d77a07bd7d21dfeb506170f5a8a9785b0c8d99dcb25797a30982089bf45",
+    "external_manifest_at_launch_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "b1_diagnostic_sha256": "7b07592f1de9d7cefaa3e56bf0430749b5d3445aedac1d64ccd9ca2d548d37a3",
+    "launcher_meta_sha256": "4da9a97a5e306170d3b81d1a19356b8995c63a42a51fd32ada9ea23661a3b791",
+    "launch_log_sha256": "b7eb025ce778c826ab6037d6bbcc23f55f4b5a95c4a8908f360d8ac9df678393"
+  },
+  "replacement": {
+    "policy": "preserve the complete stock type and isolate all Stream-K template parameters in a candidate-only type",
+    "binary_sha256": "f7d5c01ca79829fbfff4c93949d057bd740905165b0b6793b3c0007629add962"
+  }
+}

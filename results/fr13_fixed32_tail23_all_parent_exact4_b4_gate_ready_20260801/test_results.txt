@@ -1,0 +1,41 @@
+Tail23 all-parent exact4 B4 gate-ready verification
+===================================================
+
+Focused Python tests:
+  python -m pytest -q \
+    tests/test_fr13_fixed32_taw_native_precompute.py \
+    tests/test_fr13_fixed32_taw_real_task_arm.py \
+    tests/test_fr13_fixed32_b4_campaign_provenance.py \
+    tests/test_fr13_fixed32_floor_propagation.py \
+    tests/test_fr13_fixed32_trace_provenance.py \
+    tests/test_fr13_fixed32_ingress_wiring.py \
+    tests/test_fr13_fixed32_taw_exact_commit_kernel.py
+  233 passed, 1 skipped in 4.43s
+
+Work census:
+  python scripts/fr13_fixed32_work_census.py --self-test
+  PASS; 162 tamper tests; valid batches 1,2,3,4
+
+Depth reducer:
+  python scripts/fr13_depth_acceptance.py --self-test
+  self-test OK
+
+Static checks:
+  bash -n scripts/fr13_run_b4_tail23_all_parent_live_gate.sh \
+    scripts/fr13_fixed32_floor_timers_seq.sh
+  python -m py_compile scripts/fr13_runtime_manifest.py \
+    scripts/fr13_depth_acceptance.py \
+    tests/test_fr13_fixed32_taw_native_precompute.py
+  git diff --check
+  PASS
+
+Preflights:
+  source-v7 digest = 998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290
+  Tail valid mask = 0x7a9ce7ff
+  Tail logical drafts = 23
+  physical drafts/root-inclusive rows = 31/32
+  runtime manifest = PASS, including gate runner and K64 block map
+  external manifest = PASS
+
+No Docker container, GPU kernel, SWE-Verified task, timing, acceptance, TPS,
+or hardware-floor measurement was run for this preparation artifact.

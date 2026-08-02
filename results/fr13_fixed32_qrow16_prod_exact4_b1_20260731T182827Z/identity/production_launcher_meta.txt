@@ -1,0 +1,17 @@
+classification=real_swe_verified_exact4_b1_production
+source_commit=04c98057fa9d9e658282cf0b32422716660e1210
+tag=qrow16_prod_exact4_b1_20260731T182827Z
+runroot=output/fr13_fixed32_qrow16_prod_exact4_b1_20260731T182827Z
+subset=config/fr13_fixed32/subset_b4_four.json
+order=HT
+qrow16_production=1
+qrow16_candidate_sha256=1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86
+qrow16_live_sha256=36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77
+taw_production=0
+started=2026-07-31T18:28:27Z
+driver_rc=1
+ended=2026-07-31T20:08:28Z
+campaign_status=REJECTED_INCOMPLETE_TAIL_TASK
+failure_task=astropy__astropy-13398
+failure_reason=qwen_loop_detection_turn_tool_call_cap
+formal_floor_gate_produced=0

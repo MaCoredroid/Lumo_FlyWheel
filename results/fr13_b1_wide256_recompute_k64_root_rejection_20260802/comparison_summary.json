@@ -1,0 +1,61 @@
+{
+  "all_required_shapes_observed": true,
+  "by_shape": [
+    {
+      "compared_bytes": 26214400,
+      "comparisons": 80,
+      "differing_bytes": 1578,
+      "k": 6144,
+      "max_differing_bytes_per_comparison": 31,
+      "min_differing_bytes_per_comparison": 11,
+      "n": 5120
+    },
+    {
+      "compared_bytes": 26214400,
+      "comparisons": 80,
+      "differing_bytes": 2411,
+      "k": 17408,
+      "max_differing_bytes_per_comparison": 46,
+      "min_differing_bytes_per_comparison": 17,
+      "n": 5120
+    },
+    {
+      "compared_bytes": 18350080,
+      "comparisons": 20,
+      "differing_bytes": 589,
+      "k": 5120,
+      "max_differing_bytes_per_comparison": 45,
+      "min_differing_bytes_per_comparison": 16,
+      "n": 14336
+    },
+    {
+      "compared_bytes": 62914560,
+      "comparisons": 60,
+      "differing_bytes": 2639,
+      "k": 5120,
+      "max_differing_bytes_per_comparison": 58,
+      "min_differing_bytes_per_comparison": 22,
+      "n": 16384
+    },
+    {
+      "compared_bytes": 178257920,
+      "comparisons": 80,
+      "differing_bytes": 7693,
+      "k": 5120,
+      "max_differing_bytes_per_comparison": 124,
+      "min_differing_bytes_per_comparison": 45,
+      "n": 34816
+    }
+  ],
+  "compared_bytes": 311951360,
+  "comparison_call_limit": 320,
+  "comparison_jsonl_bytes": 74380,
+  "comparison_jsonl_sha256": "6bb63bab869b0558fb6e1fc1231041e28f7429e0123dce3ad5649d3d7790e52e",
+  "comparisons": 320,
+  "differing_bytes": 14910,
+  "differing_bytes_ppm": 47.795913,
+  "first_mismatch_offsets_even": true,
+  "invocations_contiguous_from_zero": true,
+  "mismatching_comparisons": 320,
+  "schema": "fr13.fixed32.cutlass_streamk_wide256_k64_root_comparison_summary.v1"
+}

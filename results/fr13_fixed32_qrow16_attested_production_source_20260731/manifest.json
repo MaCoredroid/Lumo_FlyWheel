@@ -1,0 +1,36 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow16_attested_production_source.v1",
+  "status": "SOURCE_COMPLETE_GPU_BUILD_AND_MEASUREMENT_PENDING",
+  "branch": "agent/fixed32-b1-gate-bundle",
+  "gpu_used": false,
+  "performance_claim": false,
+  "default_behavior_changed": false,
+  "selector": "FR13_FA2_QROW16_PRODUCTION=0 by default",
+  "scope": "final FULL fixed32 B1 graph capture only",
+  "attestation": {
+    "issuer": "scripts/fr13_launch_forked_fa2_tree_server.sh",
+    "canonicalizer": "scripts/fr13_qrow16_pass_sidecar.py",
+    "requires_live_status": "PASS",
+    "requires_output_raw_byte_mismatches": 0,
+    "requires_lse_raw_byte_mismatches": 0,
+    "binds_candidate_so_sha256": true,
+    "binds_live_result_sha256": true,
+    "container_reverification": true
+  },
+  "dispatch": {
+    "private_selector": "FR13_FA2_QROW16_INTERNAL_DISPATCH",
+    "geometry": "BF16 B1 q=[32,24,256], paged KV [*,1024,4,256], fp32 bias 32x32, noncausal full window",
+    "on_geometry_drift": "raise; no stock fallback",
+    "capture_postcheck": "exactly 16 distinct target tree layers",
+    "engagement_artifact": "/logs/fr13_fa2_qrow16_production_capture.json",
+    "profile_and_preseed": "stock"
+  },
+  "source_verification": {
+    "focused_tests_passed": 26,
+    "environment_skips": 1,
+    "generated_installed_tree_and_cuda_graph_py_compile": true,
+    "fr10_then_qrow_patch_order_py_compile": true,
+    "shell_syntax_passed": true
+  },
+  "next_gate": "build candidate, pass live-paged B1 gate, then measure production selector on real SWE-Verified B1"
+}

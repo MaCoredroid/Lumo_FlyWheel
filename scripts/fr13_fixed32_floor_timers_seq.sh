@@ -1,4 +1,4 @@
-# Fixed-work floor campaign: Tail21 and Hydra27 use the same 31 physical
+# Fixed-work floor campaign: Tail23 and Hydra27 use the same 31 physical
 # drafts plus the implicit root. The arm kind changes only the sampler validity
 # mask; every launch must report draft_tokens/drafts=31.
 case "${BSIZE:-}" in
@@ -80,12 +80,39 @@ export FR13_FA2_TREE_BIAS=1
 export FR13_TREE_CONV_FUSED=1
 export FR13_CONV_WB_FUSED=1
 export FR13_CONV_WB_BATCHED=1
+FR13_FIXED32_CONV_SOURCE_BATCH=${FR13_FIXED32_CONV_SOURCE_BATCH:-0}
+case "$FR13_FIXED32_CONV_SOURCE_BATCH" in
+  0|1) export FR13_FIXED32_CONV_SOURCE_BATCH ;;
+  *)
+    echo "FR13_FIXED32_CONV_SOURCE_BATCH must be 0 or 1" >&2
+    exit 2
+    ;;
+esac
 export FR13_CONV_PREGATHER=1
 export FR13_CONV_COMMITTED_PATH=1
 export FR13_APC_COMMIT_TO_RUNNING_ROW=1
 export FR13_TREE_RUNROW_INIT=1
 export FR13_FLAGS_INKERNEL=1
-export FR13_WEIGHT_FLOOR_MS=98.6
+# Optimistic mandatory-weight-read floor only. Only the exact logical head-read
+# ledgers below are admitted; inherited byte/floor declarations are replaced.
+case "${FR13_DRAFT_VOCAB_K:-65536}:$FR13_DRAFT_VOCAB_ROOT" in
+  0:0)
+    export FR13_MANDATORY_WEIGHT_BYTES=42025179008
+    export FR13_WEIGHT_FLOOR_MS=153.9383846446886
+    ;;
+  65536:0)
+    export FR13_MANDATORY_WEIGHT_BYTES=34538346368
+    export FR13_WEIGHT_FLOOR_MS=126.514089260
+    ;;
+  65536:1)
+    export FR13_MANDATORY_WEIGHT_BYTES=32666638208
+    export FR13_WEIGHT_FLOOR_MS=119.658015414
+    ;;
+  *)
+    echo "unsupported fixed32 draft-vocab floor configuration: K=${FR13_DRAFT_VOCAB_K:-unset} ROOT=$FR13_DRAFT_VOCAB_ROOT" >&2
+    exit 2
+    ;;
+esac
 export FR13_COMPUTE_MS_PER_ROW=0.54
 export MAX_MODEL_LEN=131072
 export FR13_ENABLE_APC=1

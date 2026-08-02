@@ -1,0 +1,5 @@
+variant	dtype	symbol_index	instructions	text_bytes	qmma_16832_f32_e4m3_e4m3	ffma	fmul	ldsm_16_m88_4	stsm_16_mt88_2	output_pack	bra_all	syncs_all	local_load_store	call	sass_sha256
+stock_dynamic_stocktile	bf16	56	1176	18816	32	32	24	24	4	8	75	77	0	0	abcc11ab4dab06fca7a7bc043722193f1d0af950e6e0883ba19e536ad0928eeb
+stock_dynamic_stocktile	fp16	3	1176	18816	32	32	24	24	4	8	75	77	0	0	dedd3335c354f2cf7aef75ef2cfe2e914c1a67adf42b6a7f2dc98b0d3dc9cf8e
+candidate_static_stocktile	bf16	66	936	14976	32	32	24	24	4	8	45	38	0	0	29d20e58e758ce7a6bb96b132beeba2c42f0a949e900a1e7791a660a9b385801
+candidate_static_stocktile	fp16	48	936	14976	32	32	24	24	4	8	45	38	0	0	2422233be930fa56ad59d8f129bcaec66dff5e92319c1b04ea52d1cba4986de3

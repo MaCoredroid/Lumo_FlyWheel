@@ -1,0 +1,48 @@
+[eval-offload] eval step -> alienware (native x86_64)
+[codex-offload] codex docker -> alienware (x86); endpoint=http://127.0.0.1:8023/v1 (GB10 stays vLLM-only — uncontended deploy-speed)
+=== [2026-08-01T13:20:15Z] dataset=princeton-nlp/SWE-bench_Verified tag=verified n=4 concurrency=4 ===
+[2026-08-01T13:20:16Z] -> astropy__astropy-12907
+[2026-08-01T13:20:16Z] -> astropy__astropy-13033
+[2026-08-01T13:20:16Z] -> astropy__astropy-13236
+[2026-08-01T13:20:16Z] -> astropy__astropy-13398
+Traceback (most recent call last):
+  File "/home/mark/lumoFlyWheel-b4-streamk-preflight/scripts/run_swe_bench_q36_a.py", line 4464, in pre
+    ack = self.client.snapshot()
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/lumoFlyWheel-b4-streamk-preflight/scripts/fr13_fixed32_flush_protocol.py", line 890, in snapshot
+    return self.flush("snapshot")
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/lumoFlyWheel-b4-streamk-preflight/scripts/fr13_fixed32_flush_protocol.py", line 809, in flush
+    raise FlushStateError(
+fr13_fixed32_flush_protocol.FlushStateError: flush endpoint is poisoned: generation 1 outcome is ambiguous after FlushRuntimeError: runtime returned non-ok flush status 'error:RuntimeError' for generation 1
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/mark/lumoFlyWheel-b4-streamk-preflight/scripts/run_swe_bench_q36_a.py", line 7160, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/mark/lumoFlyWheel-b4-streamk-preflight/scripts/run_swe_bench_q36_a.py", line 7131, in main
+    for res in ex.map(_job, instance_ids):
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 619, in result_iterator
+    yield _result_or_cancel(fs.pop())
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 317, in _result_or_cancel
+    return fut.result(timeout)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 456, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/lumoFlyWheel-b4-streamk-preflight/scripts/run_swe_bench_q36_a.py", line 7052, in _job
+    res = _process_one(
+          ^^^^^^^^^^^^^
+  File "/home/mark/lumoFlyWheel-b4-streamk-preflight/scripts/run_swe_bench_q36_a.py", line 6266, in _process_one
+    fixed32_bracket.pre(metrics_pre)
+  File "/home/mark/lumoFlyWheel-b4-streamk-preflight/scripts/run_swe_bench_q36_a.py", line 4478, in pre
+    raise Fixed32BoundaryError(
+Fixed32BoundaryError: fixed32 pre bracket failed: FlushStateError: flush endpoint is poisoned: generation 1 outcome is ambiguous after FlushRuntimeError: runtime returned non-ok flush status 'error:RuntimeError' for generation 1

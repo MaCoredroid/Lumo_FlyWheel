@@ -1,0 +1,13 @@
+{
+  "swe_orchestrator_rc": 0,
+  "swe_window_wall_s": 334,
+  "tasks": [
+    {
+      "instance_id": "astropy__astropy-12907",
+      "codex_elapsed_s": 272.732,
+      "codex_timed_out": false,
+      "patch_bytes": 504,
+      "verdict": "resolved"
+    }
+  ]
+}

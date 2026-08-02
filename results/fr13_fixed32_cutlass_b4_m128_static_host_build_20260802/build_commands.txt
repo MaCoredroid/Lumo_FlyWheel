@@ -1,0 +1,29 @@
+# Pinned host-only source application.
+/home/mark/fr13_streamk_build/venv/bin/python /home/mark/lumoFlyWheel-sfwd-m128-static-scheduler/scripts/fr13_patch_cutlass_fixed32_wave.py /home/mark/fr13_m128_static_build/vllm-source --cutlass-root /home/mark/fr13_streamk_build/cutlass-source
+
+# Exact isolated configure route. FETCHCONTENT_BASE_DIR shares immutable
+# dependency trees only; the vLLM source, build tree, and output are isolated.
+env TORCH_CUDA_ARCH_LIST=12.1a cmake \
+  -S /home/mark/fr13_m128_static_build/vllm-source \
+  -B /home/mark/fr13_m128_static_build/vllm-build \
+  -G Ninja \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCMAKE_CUDA_ARCHITECTURES=75 \
+  -DVLLM_TARGET_DEVICE=cuda \
+  -DVLLM_PYTHON_EXECUTABLE=/home/mark/fr13_streamk_build/venv/bin/python \
+  -DVLLM_CUTLASS_SRC_DIR=/home/mark/fr13_streamk_build/cutlass-source \
+  -DNVCC_THREADS=1 \
+  -DCMAKE_MAKE_PROGRAM=/home/mark/fr13_streamk_build/venv/bin/ninja \
+  -DFETCHCONTENT_BASE_DIR=/home/mark/fr13_streamk_build/vllm-build/_deps
+
+# Complete extension compile/link. The generated candidate object command used
+# only: -gencode arch=compute_121a,code=sm_121a.
+env TORCH_CUDA_ARCH_LIST=12.1a \
+  /home/mark/fr13_streamk_build/venv/bin/ninja \
+  -C /home/mark/fr13_m128_static_build/vllm-build \
+  -j2 _C_stable_libtorch
+
+# Focused source checks rerun after the build.
+/home/mark/shared/lumoFlyWheel-streamk-wide256/.venv/bin/python -m pytest -q tests/test_fr13_cutlass_fixed32_wave_patch.py tests/test_fr13_cutlass_streamk_gate_wiring.py tests/test_fr13_cutlass_streamk_production.py tests/test_fr13_cutlass_wave_binary.py
+/home/mark/shared/lumoFlyWheel-streamk-wide256/.venv/bin/python -m ruff check scripts/fr13_patch_cutlass_fixed32_wave.py tests/test_fr13_cutlass_fixed32_wave_patch.py
+/home/mark/shared/lumoFlyWheel-streamk-wide256/.venv/bin/python -m py_compile scripts/fr13_patch_cutlass_fixed32_wave.py tests/test_fr13_cutlass_fixed32_wave_patch.py

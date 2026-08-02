@@ -303,3 +303,22 @@ def test_patcher_preseed_binds_companion_ssm_banks() -> None:
     assert "commit_source_stagings=" in fragments[0]
     assert "commit_state_src=" in fragments[0]
     assert "source_rows_per_batch=" in fragments[0]
+
+
+def test_patcher_preseed_live_selfchecks_every_batch_prefix() -> None:
+    tree = ast.parse(PATCHER_PATH.read_text())
+    fragments = [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and "_fr13_f32_pregather_selfcheck(" in node.value
+    ]
+
+    assert len(fragments) == 1
+    fragment = fragments[0]
+    assert "_fr13_f32_B != _fr13_f32_cap" in fragment
+    assert "for _fr13_f32_live_B in range(" in fragment
+    assert "1, _fr13_f32_cap + 1" in fragment
+    assert "num_spec_decodes=(" in fragment
+    assert "_fr13_f32_live_B" in fragment

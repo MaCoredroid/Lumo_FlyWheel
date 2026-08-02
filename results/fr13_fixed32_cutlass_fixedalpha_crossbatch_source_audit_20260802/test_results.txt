@@ -1,0 +1,13 @@
+PASS patch unit tests: 27 passed
+PASS broadened CUTLASS tests: 92 passed
+PASS Ruff source and focused test
+PASS Python bytecode compilation
+PASS git diff whitespace validation
+PASS patch application and idempotency on pinned vLLM source
+PASS isolated single-translation-unit SM121a host compilation: zero warnings
+PASS static resource gate: no register, shared, stack, or local regression
+PASS SASS hard gate: math, data movement, conversion, and sync counts preserved
+NOT RUN GPU execution
+NOT RUN synthetic probe
+NOT RUN real SWE-Verified workload
+NOT CLAIMED performance or hardware-floor acceptance

@@ -1,0 +1,126 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_identity_host_build.v1",
+  "created_at_utc": "2026-08-02T18:08:37Z",
+  "status": "host_compile_link_audit_pass_default_off",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "agent/fixed32-cutlass-b4-stockshape-identity-20260802",
+    "stockshape_commit": "fd6088f66",
+    "gate_contract_commit": "7b6649842",
+    "divisor_commit": "fc321d0bc",
+    "binary_gate_commit": "a5544e180",
+    "patch_source_sha256": "73d889292a812068593a26e83b320b8e12a27811ffba07e6f8532d0030f3cd90",
+    "patched_dispatch_sha256": "9bdd435d68cf914203faf4603c068e3df53e1b80efe3335d56671d1910ac45bf",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2"
+  },
+  "candidate": {
+    "selectors": [
+      "identity_stockshape_b4",
+      "identity_divisor_b4"
+    ],
+    "diagnostic_selectors": [
+      "identity_stockshape_b4_byte_ab",
+      "identity_divisor_b4_byte_ab"
+    ],
+    "default_enabled": false,
+    "physical_m": 128,
+    "tile_mnk": [64, 128, 128],
+    "cluster_mnk": [1, 1, 1],
+    "mainloop_schedule": "KernelTmaWarpSpecializedBlockwisePingpongSm120",
+    "epilogue": "identity",
+    "stockshape_tile_scheduler": "dynamic_default",
+    "divisor_tile_scheduler": "fr13_fixed32_m128_divisor_static_scheduler",
+    "split_k": false
+  },
+  "projection_grid": [
+    {"n": 5120, "logical_tiles": 40, "resident_ctas": 80, "occurrences": 2},
+    {"n": 14336, "logical_tiles": 112, "resident_ctas": 224, "occurrences": 1},
+    {"n": 16384, "logical_tiles": 128, "resident_ctas": 256, "occurrences": 1},
+    {"n": 34816, "logical_tiles": 272, "resident_ctas": 544, "occurrences": 1}
+  ],
+  "host_build": {
+    "result": "pass",
+    "target_arch": "sm_121a",
+    "gpu_runtime_used": false,
+    "docker_used": false,
+    "candidate_binary_import": "pass"
+  },
+  "outputs": {
+    "candidate_binary": {
+      "published": false,
+      "sha256": "d7771d5a95a34d6072a796d520e8f2fa500aeccc900d57e1477941b966ea77a9",
+      "bytes": 116284480
+    },
+    "candidate_object": {
+      "published": false,
+      "sha256": "08ce854c2d819640973788960e1bf86d7809f238cd062da179479bc41baa2e36",
+      "bytes": 19111888
+    },
+    "candidate_cubin": {
+      "published": false,
+      "sha256": "586d8058bf67f39801e1587f3dc559bdea0f6eb02e648fb66890c7973d0475cd",
+      "bytes": 1887984
+    }
+  },
+  "resource_audit": {
+    "result": "pass",
+    "candidate_kernel_dtypes": ["bf16", "fp16"],
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "dynamic_scheduler_constant_bytes": 2560,
+    "divisor_scheduler_constant_bytes": 2688,
+    "detected_spills": false
+  },
+  "bf16_sass_audit": {
+    "divisor_slots": 1288,
+    "dynamic_slots": 1728,
+    "slot_delta_percent": -25.46,
+    "divisor_branches": 48,
+    "dynamic_branches": 95,
+    "branch_delta_percent": -49.47,
+    "divisor_qmma": 128,
+    "dynamic_qmma": 128,
+    "divisor_ffma": 128,
+    "dynamic_ffma": 128,
+    "divisor_fmul": 8,
+    "dynamic_fmul": 8,
+    "divisor_ldsm": 48,
+    "dynamic_ldsm": 48,
+    "divisor_stsm": 16,
+    "dynamic_stsm": 16,
+    "local_load_store_instructions": 0,
+    "calls": 0,
+    "performance_inference_allowed": false
+  },
+  "abi_audit": {
+    "classification": "additive_candidate_audit",
+    "reference_defined_dynamic_symbols": 1300,
+    "candidate_defined_dynamic_symbols": 1311,
+    "removed_defined_symbols": 0,
+    "reference_undefined_dynamic_symbols": 182,
+    "candidate_undefined_dynamic_symbols": 183,
+    "added_undefined_symbol": "memcmp@GLIBC_2.17",
+    "removed_undefined_symbols": 0,
+    "dt_needed_count": 9,
+    "dt_needed_equal": true,
+    "runpath_equal": true
+  },
+  "source_checks": {
+    "cutlass_gate_suite": "100 passed",
+    "candidate_binary_verify_stockshape": "pass",
+    "candidate_binary_verify_divisor": "pass",
+    "git_diff_check": "pass"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "real SWE-Verified exact4 B4 Tail23 raw-byte gate",
+    "real SWE-Verified exact4 B4 Hydra27 raw-byte gate",
+    "paired B4 full-step timing",
+    "hardware-floor acceptance"
+  ]
+}
+

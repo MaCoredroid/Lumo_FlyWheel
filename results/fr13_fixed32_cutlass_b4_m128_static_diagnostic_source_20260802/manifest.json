@@ -1,0 +1,98 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_m128_static_diagnostic_source.v1",
+  "created_at_utc": "2026-08-02T01:47:33Z",
+  "status": "source_route_ready_default_off_host_verified",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "production_authorized": false,
+  "timing_authorized": false,
+  "source": {
+    "branch": "agent/fixed32-sfwd-m128-static-scheduler-20260802",
+    "implementation_commit": "432d47a60e0a0a7cef5198a330c72d82fd80bd3f",
+    "host_qualification_commit": "92822663fdbf60203cc02ccb90ee9613b40b2044",
+    "patch_source_sha256": "977c0204d03d022bd3f4b745ad4a0bad8ec36d7bf82ac1c6f82aa42a62094fab",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "patched_dispatch_sha256": "446771039af31a2ae386b917540be2a018fdc8d947c001030696ec9a6608a4c4"
+  },
+  "candidate": {
+    "selector": "persistent_b4_m128_static",
+    "diagnostic_selector": "persistent_b4_m128_static_byte_ab",
+    "candidate_family": "persistent_b4_m128_static",
+    "sha256": "9c63ed03ad73640293ba544fc5acad9047dcf9e202854d86f83a7ba4ca5a7d39",
+    "bytes": 113010008,
+    "default_enabled": false,
+    "direct_install_authorized": false
+  },
+  "resource_credential": {
+    "schema": "fr13.fixed32.cutlass_b4_m128_static_host_build.v1",
+    "sha256": "7ab2c3223366f4591fc2324a47c805aa0a1e9d4a106743af4256d4089054a2dc",
+    "bytes": 5404,
+    "candidate_resource_records": 309,
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "parameter_bytes": 1792,
+    "threads_per_cta": 384,
+    "warps_per_cta": 12,
+    "detected_spills": false,
+    "host_verification": "pass"
+  },
+  "diagnostic_contract": {
+    "run_kind": "real_swe_verified_exact4_b4_raw_byte",
+    "qualification_profile": "k64_root",
+    "fixed32_modes_required": [
+      "tail6_fixed32",
+      "hydra27_fixed32"
+    ],
+    "task_count": 4,
+    "task_ids": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033",
+      "astropy__astropy-13236",
+      "astropy__astropy-13398"
+    ],
+    "batch_size": 4,
+    "concurrency": 4,
+    "physical_rows_per_request": 32,
+    "fixed_projection_rows": 128,
+    "draft_vocab_root": 1,
+    "draft_vocab_k": 65536,
+    "comparison_call_limit": 320,
+    "served_result": "stock",
+    "candidate_output_role": "comparison_only",
+    "mismatching_comparisons_required": 0,
+    "differing_bytes_required": 0
+  },
+  "source_bindings": {
+    "scripts/fr13_cutlass_wave_binary.py": "38f8035a3d4ea6e730c6f887fca1d84690762c1a98dd407e0741d72bf86191c8",
+    "scripts/fr13_cutlass_b4_pass.py": "88e1cbe27353f5b58473a66f23eee67e142233556448e34b62f98bd6f08df95e",
+    "scripts/fr13_run_b4_cutlass_persistent_m128_live_gate.sh": "370a1e6cee37d79232d6e3a6b543caf0c760092eaf411a7a33431ca585f0afe8",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh": "46bceea8e0c52d0f5de5df84322e62104cadd680a0f58b0ae722073accaa7ed5",
+    "tests/test_fr13_cutlass_b4_m128_static_diagnostic.py": "5246272c880c88c7a84592be60b7dfaeaf0c1f57ff3f2ec7be97d16c051ba02f"
+  },
+  "validation": {
+    "git_diff_check": "pass",
+    "bash_syntax": "pass",
+    "python_compile": "pass",
+    "ruff_core_and_tests": "pass",
+    "ruff_legacy_parse_e9": "pass",
+    "cutlass_focused_tests": "81 passed",
+    "broader_fixed32_selected_tests": "52 passed, 2 deselected",
+    "actual_binary_and_resource_credential_host_verify": "pass"
+  },
+  "runtime": {
+    "docker_used": false,
+    "gpu_runtime_used": false,
+    "synthetic_or_probe_performance_used": false,
+    "real_swe_verified_gate_run_used": false,
+    "full_step_timing_used": false,
+    "hardware_floor_acceptance_used": false
+  },
+  "required_next_gates": [
+    "authenticated real SWE-Verified exact4 B4 Tail23 K64-root raw-byte PASS",
+    "authenticated real SWE-Verified exact4 B4 Hydra27 K64-root raw-byte PASS",
+    "reviewed timing and production authorization only after both raw-byte PASS records"
+  ]
+}

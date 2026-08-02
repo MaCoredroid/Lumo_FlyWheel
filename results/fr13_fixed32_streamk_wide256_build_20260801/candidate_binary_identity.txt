@@ -1,0 +1,6 @@
+/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.streamk_force_wide256_gate_ready.abi3.so: ELF 64-bit LSB shared object, ARM aarch64, version 1 (GNU/Linux), dynamically linked, BuildID[sha1]=b4e9c8185f9fa4683a366bf4a87c838f3bd37723, with debug_info, not stripped
+path=/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.streamk_force_wide256_gate_ready.abi3.so
+bytes=113174464
+mode=555
+b957cf49da2977056661443192fc2725e153adba7f21fb522c07b439c04540ee  /home/mark/fr13_streamk_build/bin/_C_stable_libtorch.streamk_force_wide256_gate_ready.abi3.so
+ 0x000000000000001d (RUNPATH)            Library runpath: [/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64]

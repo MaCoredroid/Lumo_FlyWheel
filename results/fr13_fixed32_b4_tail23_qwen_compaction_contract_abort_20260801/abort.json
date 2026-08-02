@@ -1,0 +1,53 @@
+{
+  "schema": "fr13.fixed32.b4_tail23.qwen_compaction_contract_abort.v1",
+  "status": "invalid_contract_prepublication_abort",
+  "source_commit": "080c417ed627e155c98e715327e0fdeb48d542ab",
+  "fix_commit": "2177cbba1148e58f705a5bc9dc02860c6aa87156",
+  "campaign_root_name": "fr13_b4_tail23_hydra27_k64_m128_stack_20260801T205327Z",
+  "workload": "real_swe_verified_exact4",
+  "topology": "tail23_all_parent_b4_k64_physical32",
+  "failure_stage": "qwen_campaign_reconciliation_before_atomic_publication",
+  "tasks_started": 4,
+  "tasks_completed": 4,
+  "trace_structure": {
+    "valid_jsonl": 4,
+    "final_newline": 4,
+    "total_records": 512,
+    "total_bytes": 524459,
+    "normal_model_requests": 119,
+    "exact_synthetic_compaction_failure_terminals": 1
+  },
+  "authenticated_ingress": {
+    "completed_model_requests": 123,
+    "aborted_logical_requests": 0,
+    "failed_attempts": 0
+  },
+  "campaign_metric_reconciliation": {
+    "normal_requests": 119,
+    "successful_compaction_requests": 0,
+    "failed_compaction_requests": 4,
+    "total_compaction_requests": 4,
+    "max_tokens_count": 123,
+    "max_tokens_le_20000": 4,
+    "max_tokens_sum": 3979392,
+    "request_success_stop": 123,
+    "request_success_non_stop": 0
+  },
+  "publication": {
+    "pending_task_metadata": 4,
+    "final_task_metadata": 0,
+    "campaign_proof": false,
+    "formal_production_pass": false
+  },
+  "formal_artifacts": {
+    "all_parent_production_pass": false,
+    "m128_byte_gate": false,
+    "timing_summary": false,
+    "paired_summary": false
+  },
+  "timing_evidence": false,
+  "tps_evidence": false,
+  "acceptance_evidence": false,
+  "hardware_floor_evidence": false,
+  "rerun_required": true
+}

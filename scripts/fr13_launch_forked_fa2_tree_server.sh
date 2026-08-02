@@ -5,6 +5,95 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO=${REPO:-$(cd "$SCRIPT_DIR/.." && pwd)}
 REPO=$(cd "$REPO" && pwd)
 cd "$REPO"
+_FR13_CALLER_BATCH_GDN_PRODUCTION="${FR13_FIXED32_BATCH_GDN_PRODUCTION+set}:${FR13_FIXED32_BATCH_GDN_PRODUCTION-}"
+_FR13_CALLER_BATCH_GDN_BV_PRODUCTION="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION+set}:${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION-}"
+_FR13_CALLER_BATCH_GDN_GRAPH_PASS_JSON="${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON-}"
+_FR13_CALLER_BATCH_GDN_GRAPH_PASS_SHA="${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256-}"
+_FR13_CALLER_BATCH_GDN_GATE_VERDICT_JSON="${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON-}"
+_FR13_CALLER_BATCH_GDN_GATE_VERDICT_SHA="${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256-}"
+_FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST="${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON+set}:${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON-}"
+_FR13_CALLER_BATCH_GDN_GATE_RUNNER="${FR13_FIXED32_BATCH_GDN_GATE_RUNNER+set}:${FR13_FIXED32_BATCH_GDN_GATE_RUNNER-}"
+_FR13_CALLER_BATCH_GDN_BV8_TIMING="${FR13_FIXED32_BATCH_GDN_BV8_TIMING+set}:${FR13_FIXED32_BATCH_GDN_BV8_TIMING-}"
+_FR13_CALLER_FR10_METRICS="${FR10_METRICS+set}:${FR10_METRICS-}"
+_FR13_CALLER_RING_EXPORT="${FR13_RING_EXPORT+set}:${FR13_RING_EXPORT-}"
+_FR13_CALLER_FLAGS_INKERNEL="${FR13_FLAGS_INKERNEL+set}:${FR13_FLAGS_INKERNEL-}"
+_FR13_CALLER_SCAN_ALIGN="${FR13_SCAN_ALIGN+set}:${FR13_SCAN_ALIGN-}"
+_FR13_CALLER_NPAD_INVARIANT="${FR13_NPAD_INVARIANT+set}:${FR13_NPAD_INVARIANT-}"
+_FR13_CALLER_GDN_GEOM="${FR13_TREE_GDN_GEOM_OVERRIDE+set}:${FR13_TREE_GDN_GEOM_OVERRIDE-}"
+_FR13_CALLER_FIXED32_MODE="${FR13_FIXED32_MODE+set}:${FR13_FIXED32_MODE-}"
+_FR13_CALLER_MAX_NUM_SEQS="${MAX_NUM_SEQS+set}:${MAX_NUM_SEQS-}"
+_FR13_CALLER_MAX_NUM_SEQS_OVR="${MAX_NUM_SEQS_OVR+set}:${MAX_NUM_SEQS_OVR-}"
+_FR13_CALLER_SWE_CONCURRENCY="${SWE_CONCURRENCY+set}:${SWE_CONCURRENCY-}"
+_FR13_CALLER_ENFORCE_EAGER="${ENFORCE_EAGER+set}:${ENFORCE_EAGER-}"
+_FR13_CALLER_CUDAGRAPH_MODE="${CUDAGRAPH_MODE+set}:${CUDAGRAPH_MODE-}"
+_FR13_CALLER_CUTLASS_WAVE="${FR13_FIXED32_CUTLASS_WAVE+set}:${FR13_FIXED32_CUTLASS_WAVE-}"
+_FR13_CALLER_CUTLASS_WAVE_SO="${FR13_FIXED32_CUTLASS_WAVE_SO+set}:${FR13_FIXED32_CUTLASS_WAVE_SO-}"
+_FR13_CALLER_CUTLASS_WAVE_RESOURCE="${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL+set}:${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL-}"
+_FR13_CALLER_CUTLASS_WAVE_RESOURCE_SHA="${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256+set}:${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256-}"
+_FR13_CALLER_CUTLASS_WAVE_PRODUCTION="${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION+set}:${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION-}"
+_FR13_CALLER_CUTLASS_WAVE_PASS_JSON="${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON-}"
+_FR13_CALLER_CUTLASS_WAVE_PASS_SHA="${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256-}"
+_FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE="${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT+set}:${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT-}"
+_FR13_CALLER_CUTLASS_WAVE_QUAL_PROFILE="${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE+set}:${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE-}"
+_FR13_CALLER_SFWD_B4="${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB+set}:${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB-}"
+_FR13_M32_GUARD_NAMES=(
+  FR13_DRAFT_HEAD_M32_LIVE_AB
+  FR13_DRAFT_HEAD_M32_INSTANCE_ID
+  FR13_DRAFT_HEAD_M32_LIVE_JSON
+  FR13_DRAFT_HEAD_M32_PRODUCTION
+  FR13_DRAFT_HEAD_M32_LIVE_PASS_JSON
+  FR13_DRAFT_HEAD_M32_LIVE_PASS_SHA256
+  FR13_DRAFT_HEAD_M32_LIVE_FINAL_FLUSH_JSON
+  FR13_DRAFT_HEAD_M32_LIVE_BOUNDARY_SNAPSHOT_JSON
+  FR13_DRAFT_HEAD_M32_LIVE_CHAT_TRAFFIC_AUDIT_JSON
+  FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON
+  FR13_DRAFT_HEAD_M32_TIMING_ARM
+  FR13_DRAFT_HEAD_PAD_ROWS
+  FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB
+  FR13_DRAFT_VOCAB_ROOT
+  FR13_DRAFT_VOCAB_K
+  FR13_FIXED32_TAW_NATIVE_PRECOMPUTE
+  FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION
+  FR13_FA2_QROW16_LIVE_PAGED_AB
+  FR13_FA2_QROW16_PRODUCTION
+  FR13_DFWD_UNIFIED_BM8_LIVE_AB
+  FR13_DFWD_UNIFIED_BM8_PRODUCTION
+  FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+  FR13_FIXED32_GDN_PATH_BV_PRODUCTION
+  FR13_FIXED32_BATCH_GDN_PRODUCTION
+  FR13_FIXED32_BATCH_GDN_BV_PRODUCTION
+  FR13_FIXED32_BATCH_GDN_BYTE_AB
+  FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
+  FR13_FIXED32_BATCH_GDN_BV_CANDIDATE
+  FR13_FIXED32_CUTLASS_WAVE
+  FR13_FIXED32_CUTLASS_WAVE_SO
+  FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL
+  FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256
+  FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
+  FR13_FIXED32_ATTRIBUTION_ONLY
+  FR13_FIXED32_B1_DIAGNOSTIC
+  FR13_FIXED32_MODE
+  MAX_NUM_SEQS
+  MAX_NUM_SEQS_OVR
+  SWE_CONCURRENCY
+  ENFORCE_EAGER
+  CUDAGRAPH_MODE
+  FORKED_FA2_SO
+)
+declare -A _FR13_CALLER_M32_GUARD=()
+for _fr13_guard_name in "${_FR13_M32_GUARD_NAMES[@]}"; do
+  if [[ -v "$_fr13_guard_name" ]]; then
+    _FR13_CALLER_M32_GUARD["$_fr13_guard_name"]="set:${!_fr13_guard_name}"
+  else
+    _FR13_CALLER_M32_GUARD["$_fr13_guard_name"]=:
+  fi
+done
+_FR13_M32_GUARD_ACTIVE=0
+[[ "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_LIVE_AB]}" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_PRODUCTION]}" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_TIMING_ARM]}" == "set:1" \
+   || "$_FR13_CALLER_SFWD_B4" == "set:1" ]] \
+  && _FR13_M32_GUARD_ACTIVE=1
 _FR13_LOCAL_ENV_SOURCED=0
 if [[ -n "${FR13_FIXED32_MODE:-}" && -f "$REPO/.lumo.local.env" ]]; then
   set -a
@@ -12,6 +101,110 @@ if [[ -n "${FR13_FIXED32_MODE:-}" && -f "$REPO/.lumo.local.env" ]]; then
   set +a
   _FR13_LOCAL_ENV_SOURCED=1
 fi
+[[ "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" == "1" \
+   || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" == "1" \
+   || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" \
+   || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "1" ]] \
+  && _FR13_M32_GUARD_ACTIVE=1
+if (( _FR13_M32_GUARD_ACTIVE == 1 )); then
+  for _fr13_guard_name in "${_FR13_M32_GUARD_NAMES[@]}"; do
+    if [[ -v "$_fr13_guard_name" ]]; then
+      _fr13_guard_after="set:${!_fr13_guard_name}"
+    else
+      _fr13_guard_after=:
+    fi
+    if [[ "$_fr13_guard_after" \
+          != "${_FR13_CALLER_M32_GUARD[$_fr13_guard_name]}" ]]; then
+      echo ".lumo.local.env must not override credentialed kernel selectors or runtime geometry: $_fr13_guard_name" >&2
+      exit 2
+    fi
+  done
+fi
+if [[ "$_FR13_CALLER_BATCH_GDN_PRODUCTION" == set:* \
+      || "$_FR13_CALLER_BATCH_GDN_BV_PRODUCTION" == set:* \
+      || "$_FR13_CALLER_BATCH_GDN_GRAPH_PASS_JSON" == set:* \
+      || "$_FR13_CALLER_BATCH_GDN_GATE_VERDICT_JSON" == set:* \
+      || "$_FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST" == set:* \
+      || "$_FR13_CALLER_BATCH_GDN_GATE_RUNNER" == set:* \
+      || "$_FR13_CALLER_BATCH_GDN_BV8_TIMING" == set:* \
+      || "$_FR13_CALLER_CUTLASS_WAVE" == set:* \
+      || "$_FR13_CALLER_CUTLASS_WAVE_SO" == set:* \
+      || "$_FR13_CALLER_CUTLASS_WAVE_RESOURCE" == set:* \
+      || "$_FR13_CALLER_CUTLASS_WAVE_RESOURCE_SHA" == set:* \
+      || "$_FR13_CALLER_CUTLASS_WAVE_PRODUCTION" == set:* \
+      || "$_FR13_CALLER_CUTLASS_WAVE_PASS_JSON" == set:* \
+      || "$_FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE" == set:* \
+      || "$_FR13_CALLER_CUTLASS_WAVE_QUAL_PROFILE" == set:* ]]; then
+  if [[ "${FR13_FIXED32_BATCH_GDN_PRODUCTION+set}:${FR13_FIXED32_BATCH_GDN_PRODUCTION-}" != "$_FR13_CALLER_BATCH_GDN_PRODUCTION" \
+      || "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION+set}:${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION-}" != "$_FR13_CALLER_BATCH_GDN_BV_PRODUCTION" \
+      || "${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON-}" != "$_FR13_CALLER_BATCH_GDN_GRAPH_PASS_JSON" \
+      || "${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256-}" != "$_FR13_CALLER_BATCH_GDN_GRAPH_PASS_SHA" \
+      || "${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON-}" != "$_FR13_CALLER_BATCH_GDN_GATE_VERDICT_JSON" \
+      || "${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256+set}:${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256-}" != "$_FR13_CALLER_BATCH_GDN_GATE_VERDICT_SHA" \
+      || "${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON+set}:${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON-}" != "$_FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST" \
+      || "${FR13_FIXED32_BATCH_GDN_GATE_RUNNER+set}:${FR13_FIXED32_BATCH_GDN_GATE_RUNNER-}" != "$_FR13_CALLER_BATCH_GDN_GATE_RUNNER" \
+      || "${FR13_FIXED32_BATCH_GDN_BV8_TIMING+set}:${FR13_FIXED32_BATCH_GDN_BV8_TIMING-}" != "$_FR13_CALLER_BATCH_GDN_BV8_TIMING" \
+      || "${FR10_METRICS+set}:${FR10_METRICS-}" != "$_FR13_CALLER_FR10_METRICS" \
+      || "${FR13_RING_EXPORT+set}:${FR13_RING_EXPORT-}" != "$_FR13_CALLER_RING_EXPORT" \
+      || "${FR13_FLAGS_INKERNEL+set}:${FR13_FLAGS_INKERNEL-}" != "$_FR13_CALLER_FLAGS_INKERNEL" \
+      || "${FR13_SCAN_ALIGN+set}:${FR13_SCAN_ALIGN-}" != "$_FR13_CALLER_SCAN_ALIGN" \
+      || "${FR13_NPAD_INVARIANT+set}:${FR13_NPAD_INVARIANT-}" != "$_FR13_CALLER_NPAD_INVARIANT" \
+      || "${FR13_TREE_GDN_GEOM_OVERRIDE+set}:${FR13_TREE_GDN_GEOM_OVERRIDE-}" != "$_FR13_CALLER_GDN_GEOM" \
+      || "${FR13_FIXED32_MODE+set}:${FR13_FIXED32_MODE-}" != "$_FR13_CALLER_FIXED32_MODE" \
+      || "${MAX_NUM_SEQS+set}:${MAX_NUM_SEQS-}" != "$_FR13_CALLER_MAX_NUM_SEQS" \
+      || "${MAX_NUM_SEQS_OVR+set}:${MAX_NUM_SEQS_OVR-}" != "$_FR13_CALLER_MAX_NUM_SEQS_OVR" \
+      || "${SWE_CONCURRENCY+set}:${SWE_CONCURRENCY-}" != "$_FR13_CALLER_SWE_CONCURRENCY" \
+      || "${ENFORCE_EAGER+set}:${ENFORCE_EAGER-}" != "$_FR13_CALLER_ENFORCE_EAGER" \
+      || "${CUDAGRAPH_MODE+set}:${CUDAGRAPH_MODE-}" != "$_FR13_CALLER_CUDAGRAPH_MODE" \
+      || "${FR13_FIXED32_CUTLASS_WAVE+set}:${FR13_FIXED32_CUTLASS_WAVE-}" != "$_FR13_CALLER_CUTLASS_WAVE" \
+      || "${FR13_FIXED32_CUTLASS_WAVE_SO+set}:${FR13_FIXED32_CUTLASS_WAVE_SO-}" != "$_FR13_CALLER_CUTLASS_WAVE_SO" \
+      || "${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL+set}:${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL-}" != "$_FR13_CALLER_CUTLASS_WAVE_RESOURCE" \
+      || "${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256+set}:${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256-}" != "$_FR13_CALLER_CUTLASS_WAVE_RESOURCE_SHA" \
+      || "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION+set}:${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION-}" != "$_FR13_CALLER_CUTLASS_WAVE_PRODUCTION" \
+      || "${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON-}" != "$_FR13_CALLER_CUTLASS_WAVE_PASS_JSON" \
+      || "${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256-}" != "$_FR13_CALLER_CUTLASS_WAVE_PASS_SHA" \
+      || "${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT+set}:${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT-}" != "$_FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE" \
+      || "${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE+set}:${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE-}" != "$_FR13_CALLER_CUTLASS_WAVE_QUAL_PROFILE" ]]; then
+    echo ".lumo.local.env must not override B4 GDN production credentials, selectors, or runtime geometry; the same guard covers CUTLASS production" >&2
+    exit 2
+  fi
+fi
+unset \
+  _FR13_CALLER_BATCH_GDN_PRODUCTION \
+  _FR13_CALLER_BATCH_GDN_BV_PRODUCTION \
+  _FR13_CALLER_BATCH_GDN_GRAPH_PASS_JSON \
+  _FR13_CALLER_BATCH_GDN_GRAPH_PASS_SHA \
+  _FR13_CALLER_BATCH_GDN_GATE_VERDICT_JSON \
+  _FR13_CALLER_BATCH_GDN_GATE_VERDICT_SHA \
+  _FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST \
+  _FR13_CALLER_BATCH_GDN_GATE_RUNNER \
+  _FR13_CALLER_BATCH_GDN_BV8_TIMING \
+  _FR13_CALLER_FR10_METRICS \
+  _FR13_CALLER_RING_EXPORT \
+  _FR13_CALLER_FLAGS_INKERNEL \
+  _FR13_CALLER_SCAN_ALIGN \
+  _FR13_CALLER_NPAD_INVARIANT \
+  _FR13_CALLER_GDN_GEOM \
+  _FR13_CALLER_FIXED32_MODE \
+  _FR13_CALLER_MAX_NUM_SEQS \
+  _FR13_CALLER_MAX_NUM_SEQS_OVR \
+  _FR13_CALLER_SWE_CONCURRENCY \
+  _FR13_CALLER_ENFORCE_EAGER \
+  _FR13_CALLER_CUDAGRAPH_MODE \
+  _FR13_CALLER_CUTLASS_WAVE \
+  _FR13_CALLER_CUTLASS_WAVE_SO \
+  _FR13_CALLER_CUTLASS_WAVE_RESOURCE \
+  _FR13_CALLER_CUTLASS_WAVE_RESOURCE_SHA \
+  _FR13_CALLER_CUTLASS_WAVE_PRODUCTION \
+  _FR13_CALLER_CUTLASS_WAVE_PASS_JSON \
+  _FR13_CALLER_CUTLASS_WAVE_PASS_SHA \
+  _FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE \
+  _FR13_CALLER_CUTLASS_WAVE_QUAL_PROFILE \
+  _FR13_CALLER_M32_GUARD \
+  _FR13_M32_GUARD_ACTIVE \
+  _FR13_M32_GUARD_NAMES \
+  _fr13_guard_after \
+  _fr13_guard_name
 # shellcheck source=fr13_required_tree_flags.sh
 source "$SCRIPT_DIR/fr13_required_tree_flags.sh"
 for _fr13_req in "${FR13_REQUIRED_TREE_FLAGS[@]}"; do
@@ -45,6 +238,7 @@ PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 GPU_OOM_GUARD=${GPU_OOM_GUARD:-1}
 MAX_MODEL_LEN=${MAX_MODEL_LEN:-131072}
 MAX_NUM_SEQS=${MAX_NUM_SEQS:-4}
+KV_CACHE_MEMORY_BYTES=${KV_CACHE_MEMORY_BYTES:-}
 # BATCH-AWARE MEMORY (user 2026-07-06): B>=4 co-residency needs more room for KV
 # (4 concurrent contexts). B=1-tuned defaults (105g cap, 0.78 util) wedged the container
 # at B=4 (§76-77: exited container held ~100G unified mem). Agents are OFFLOADED to
@@ -107,6 +301,567 @@ esac
 if [[ "$FR13_DRAFT_VOCAB_ROOT" == "1" && -z "${FR13_FIXED32_MODE:-}" ]]; then
   echo "FR13_DRAFT_VOCAB_ROOT=1 requires FR13_FIXED32_MODE" >&2
   exit 2
+fi
+FR13_DRAFT_HEAD_PAD_ROWS=${FR13_DRAFT_HEAD_PAD_ROWS:-0}
+FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=${FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB:-0}
+FR13_DRAFT_HEAD_M32_LIVE_AB=${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}
+FR13_DRAFT_HEAD_M32_INSTANCE_ID=${FR13_DRAFT_HEAD_M32_INSTANCE_ID:-}
+FR13_DRAFT_HEAD_M32_LIVE_JSON=${FR13_DRAFT_HEAD_M32_LIVE_JSON:-/logs/fr13_draft_head_m32.live.json}
+FR13_DRAFT_HEAD_M32_PRODUCTION=${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}
+FR13_DRAFT_HEAD_M32_LIVE_PASS_JSON=${FR13_DRAFT_HEAD_M32_LIVE_PASS_JSON:-}
+FR13_DRAFT_HEAD_M32_LIVE_PASS_SHA256=${FR13_DRAFT_HEAD_M32_LIVE_PASS_SHA256:-}
+FR13_DRAFT_HEAD_M32_LIVE_FINAL_FLUSH_JSON=${FR13_DRAFT_HEAD_M32_LIVE_FINAL_FLUSH_JSON:-}
+FR13_DRAFT_HEAD_M32_LIVE_BOUNDARY_SNAPSHOT_JSON=${FR13_DRAFT_HEAD_M32_LIVE_BOUNDARY_SNAPSHOT_JSON:-}
+FR13_DRAFT_HEAD_M32_LIVE_CHAT_TRAFFIC_AUDIT_JSON=${FR13_DRAFT_HEAD_M32_LIVE_CHAT_TRAFFIC_AUDIT_JSON:-}
+FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON=${FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON:-/logs/fr13_draft_head_m32.production_engagement.json}
+FR13_DRAFT_HEAD_M32_TIMING_ARM=${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}
+FR13_DRAFT_HEAD_M32_QUALIFIED_SOURCE_SHA256=$(
+  sha256sum scripts/fr10_phase4_patch_vllm_tree_gdn.py | cut -d' ' -f1
+)
+FR13_DRAFT_HEAD_M32_SOURCE_COMMIT=$(git rev-parse HEAD)
+FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}
+FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}
+FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON:-}
+FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON:-/logs/fr13_fixed32_taw_native_precompute.live_pass.json}
+FR13_FA2_QROW16_LIVE_PAGED_AB=${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}
+FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID=${FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID:-}
+FR13_FA2_QROW16_LIVE_PAGED_AB_JSON=${FR13_FA2_QROW16_LIVE_PAGED_AB_JSON:-/logs/fr13_fa2_qrow16_live_paged_ab.json}
+FR13_FA2_QROW16_SO_SHA256=${FR13_FA2_QROW16_SO_SHA256:-}
+FR13_FA2_QROW16_PRODUCTION=${FR13_FA2_QROW16_PRODUCTION:-0}
+FR13_FA2_QROW16_LIVE_PASS_JSON=${FR13_FA2_QROW16_LIVE_PASS_JSON:-}
+FR13_FA2_QROW16_LIVE_PASS_SHA256=${FR13_FA2_QROW16_LIVE_PASS_SHA256:-}
+FR13_DFWD_UNIFIED_BM8_LIVE_AB=${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}
+FR13_DFWD_UNIFIED_BM8_INSTANCE_ID=${FR13_DFWD_UNIFIED_BM8_INSTANCE_ID:-}
+FR13_DFWD_UNIFIED_BM8_LIVE_JSON=${FR13_DFWD_UNIFIED_BM8_LIVE_JSON:-/logs/fr13_dfwd_unified_bm8.live.json}
+FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH=${FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH:-/logs/fr13_dfwd_unified_bm8.real_event.arm}
+FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON=${FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON:-/logs/fr13_dfwd_unified_bm8.identity.json}
+FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT=${FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT:-}
+FR13_DFWD_UNIFIED_BM8_PRODUCTION=${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}
+FR13_DFWD_UNIFIED_BM8_LIVE_PASS_JSON=${FR13_DFWD_UNIFIED_BM8_LIVE_PASS_JSON:-$REPO/results/fr13_fixed32_bm8_b1_live_pass_20260731T180804Z/run_evidence/live_pass.json}
+FR13_DFWD_UNIFIED_BM8_LIVE_PASS_SHA256=${FR13_DFWD_UNIFIED_BM8_LIVE_PASS_SHA256:-570caf42e3e75ff0d3717042b0dfc58b23a90041e71103f70a07f6d7563445b5}
+FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256=3baccaa1a83907e15561b1cf807f15a41bd4764513bb43c4046b434937c3274b
+FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON=${FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON:-/logs/fr13_dfwd_unified_bm8.production_capture.json}
+FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON=${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON:-}
+FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256=${FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256:-}
+FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON=${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON:-}
+FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256=${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256:-}
+FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON=${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON:-}
+FR13_FIXED32_BATCH_GDN_GATE_RUNNER=${FR13_FIXED32_BATCH_GDN_GATE_RUNNER:-}
+FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
+FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
+FR13_FIXED32_CUTLASS_WAVE=${FR13_FIXED32_CUTLASS_WAVE:-stock}
+FR13_FIXED32_CUTLASS_WAVE_SO=${FR13_FIXED32_CUTLASS_WAVE_SO:-}
+FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL=${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL:-}
+FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256=${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256:-}
+FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL=${FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL:-/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl}
+FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}
+FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON=${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON:-}
+FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256=${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256:-}
+FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT=${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT:-}
+FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE:-full_vocab}
+case "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" in
+  full_vocab) ;;
+  k64_root)
+    [[ "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+       && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+       && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
+       && "$(sha256sum scripts/fr13_dvk_subset_blocks.json | awk '{print $1}')" == "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff" ]] || {
+      echo "CUTLASS k64_root qualification requires the pinned root-64K block map" >&2
+      exit 2
+    }
+    ;;
+  *)
+    echo "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE is unsupported" >&2
+    exit 2
+    ;;
+esac
+case "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE must be 0 or 1" >&2; exit 2 ;;
+esac
+case "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "1" \
+      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1" ]]; then
+  echo "FR13 fixed32 TAW native diagnostic and production are mutually exclusive" >&2
+  exit 2
+fi
+if [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" ]] || {
+    echo "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE requires fixed32" >&2
+    exit 2
+  }
+fi
+if [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && -f "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON" \
+     && ! -L "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON" ]] || {
+    echo "FR13 TAW native production requires fixed32 and a regular live PASS JSON" >&2
+    exit 2
+  }
+fi
+case "$FR13_FA2_QROW16_LIVE_PAGED_AB" in
+  0|1) ;;
+  *) echo "FR13_FA2_QROW16_LIVE_PAGED_AB must be 0 or 1" >&2; exit 2 ;;
+esac
+case "$FR13_FA2_QROW16_PRODUCTION" in
+  0|1) ;;
+  *) echo "FR13_FA2_QROW16_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ -n "${FR13_FA2_QROW16_INTERNAL_DISPATCH:-}" \
+      || -n "${FR13_FA2_QROW16_INTERNAL_PRODUCTION_ATTESTED:-}" ]]; then
+  echo "FR13 qrow16 internal selectors are launcher-private" >&2
+  exit 2
+fi
+if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" \
+      && "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
+  echo "FR13 qrow16 live A/B and production are mutually exclusive" >&2
+  exit 2
+fi
+case "$FR13_DRAFT_HEAD_PAD_ROWS" in
+  0|32|64|128) ;;
+  *) echo "FR13_DRAFT_HEAD_PAD_ROWS must be 0, 32, 64, or 128" >&2; exit 2 ;;
+esac
+case "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" in
+  0|1) ;;
+  *) echo "FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
+esac
+case "$FR13_DRAFT_HEAD_M32_LIVE_AB" in
+  0|1) ;;
+  *) echo "FR13_DRAFT_HEAD_M32_LIVE_AB must be 0 or 1" >&2; exit 2 ;;
+esac
+case "$FR13_DRAFT_HEAD_M32_PRODUCTION" in
+  0|1) ;;
+  *) echo "FR13_DRAFT_HEAD_M32_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
+esac
+case "$FR13_DRAFT_HEAD_M32_TIMING_ARM" in
+  0|1) ;;
+  *) echo "FR13_DRAFT_HEAD_M32_TIMING_ARM must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ -n "${FR13_DRAFT_HEAD_M32_INTERNAL_PRODUCTION_ATTESTED:-}" ]]; then
+  echo "FR13 draft-head M32 internal attestation is launcher-private" >&2
+  exit 2
+fi
+if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" \
+      && "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "1" ]]; then
+  echo "FR13 draft-head M32 live A/B and production are mutually exclusive" >&2
+  exit 2
+fi
+_FR13_DRAFT_HEAD_MODES=0
+[[ "$FR13_DRAFT_HEAD_PAD_ROWS" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
+[[ "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
+[[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
+[[ "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
+if (( _FR13_DRAFT_HEAD_MODES > 1 )); then
+  echo "FR13 draft-head candidate, diagnostics, and production are mutually exclusive" >&2
+  exit 2
+fi
+if (( _FR13_DRAFT_HEAD_MODES > 0 )); then
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" ]] || {
+    echo "FR13 draft-head padding requires fixed32 B1 root64" >&2
+    exit 2
+  }
+fi
+if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" \
+      && "$FR13_DRAFT_HEAD_M32_INSTANCE_ID" != "astropy__astropy-12907" ]]; then
+  echo "FR13 draft-head M32 live A/B requires the canonical real B1 task" >&2
+  exit 2
+fi
+if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" ]]; then
+  [[ "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
+     && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+     && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+     && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" ]] || {
+    echo "FR13 draft-head M32 live A/B must be the only real-B1 diagnostic candidate" >&2
+    exit 2
+  }
+fi
+if [[ "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "1" ]]; then
+  [[ -f "$FR13_DRAFT_HEAD_M32_LIVE_PASS_JSON" \
+     && ! -L "$FR13_DRAFT_HEAD_M32_LIVE_PASS_JSON" \
+     && -f "$FR13_DRAFT_HEAD_M32_LIVE_FINAL_FLUSH_JSON" \
+     && ! -L "$FR13_DRAFT_HEAD_M32_LIVE_FINAL_FLUSH_JSON" \
+     && -f "$FR13_DRAFT_HEAD_M32_LIVE_BOUNDARY_SNAPSHOT_JSON" \
+     && ! -L "$FR13_DRAFT_HEAD_M32_LIVE_BOUNDARY_SNAPSHOT_JSON" \
+     && -f "$FR13_DRAFT_HEAD_M32_LIVE_CHAT_TRAFFIC_AUDIT_JSON" \
+     && ! -L "$FR13_DRAFT_HEAD_M32_LIVE_CHAT_TRAFFIC_AUDIT_JSON" \
+     && "$FR13_DRAFT_HEAD_M32_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
+    echo "FR13 draft-head M32 production requires regular live PASS, final-flush, boundary, and authenticated traffic-audit evidence" >&2
+    exit 2
+  }
+fi
+_FR13_FA2_QROW16_CANDIDATE_MODE=0
+if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" \
+      || "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
+  _FR13_FA2_QROW16_CANDIDATE_MODE=1
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && "$FR13_FA2_QROW16_SO_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
+    echo "FR13 qrow16 candidate modes require fixed32 B1 and candidate SO SHA-256" >&2
+    exit 2
+  }
+fi
+if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" \
+      && -z "$FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID" ]]; then
+  echo "FR13 qrow16 live paged A/B requires an instance id" >&2
+  exit 2
+fi
+if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
+  [[ -f "$FR13_FA2_QROW16_LIVE_PASS_JSON" \
+     && ! -L "$FR13_FA2_QROW16_LIVE_PASS_JSON" \
+     && "$FR13_FA2_QROW16_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
+    echo "FR13 qrow16 production requires a regular live PASS JSON and its SHA-256" >&2
+    exit 2
+  }
+fi
+case "$FR13_FIXED32_CUTLASS_WAVE" in
+  stock|streamk_coop128|streamk_coop128_byte_ab|streamk_force_wide256|streamk_force_wide256_byte_ab|static_persistent_stocktile|static_persistent_stocktile_byte_ab|divisor_static_stocktile|divisor_static_stocktile_byte_ab|identity_stage2_static|identity_stage2_static_byte_ab|identity_stage2_pingpong_b1|identity_stage2_pingpong_b1_byte_ab|identity_stockshape_b4|identity_stockshape_b4_byte_ab|identity_stockshape_stage2_b4|identity_stockshape_stage2_b4_byte_ab|identity_divisor_b4|identity_divisor_b4_byte_ab|persistent_b4_m128|persistent_b4_m128_byte_ab|persistent_b4_m128_static|persistent_b4_m128_static_byte_ab) ;;
+  *)
+    echo "FR13_FIXED32_CUTLASS_WAVE has an unsupported selector" >&2
+    exit 2
+    ;;
+esac
+case "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1" >&2; exit 2 ;;
+esac
+case "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_CUTLASS_WAVE_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ -n "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR:-}" \
+      || -n "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256:-}" ]]; then
+  echo "CUTLASS Stream-K internal production credentials are launcher-private" >&2
+  exit 2
+fi
+case "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" in
+  0|1) ;;
+  *) echo "FR13_DFWD_UNIFIED_BM8_LIVE_AB must be 0 or 1" >&2; exit 2 ;;
+esac
+case "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" in
+  0|1) ;;
+  *) echo "FR13_DFWD_UNIFIED_BM8_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" \
+      && "$FR13_FIXED32_CUTLASS_WAVE" != "stock" ]]; then
+  echo "FR13 DFWD unified BM8 production requires the stock CUTLASS wave" >&2
+  exit 2
+fi
+if [[ "$FR13_FIXED32_CUTLASS_WAVE" != "stock" \
+      && ( "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" != "0" \
+           || "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" != "0" ) ]]; then
+  echo "nonstock CUTLASS wave requires both BM8 selectors to be 0" >&2
+  exit 2
+fi
+FR13_CUTLASS_WAVE_DOCKER_ARGS=()
+if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" ]]; then
+  [[ -z "$FR13_FIXED32_CUTLASS_WAVE_SO" \
+     && -z "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL" \
+     && -z "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256" \
+     && "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "0" \
+     && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
+     && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
+     && -z "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT" ]] || {
+    echo "stock CUTLASS wave selector forbids candidate binary and production credentials" >&2
+    exit 2
+  }
+else
+  _fr13_cutlass_b4=0
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "identity_divisor_b4" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_divisor_b4_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
+    _fr13_cutlass_b4=1
+  fi
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static" ]]; then
+    echo "CUTLASS static M128 production remains unavailable until Tail23 and Hydra27 raw-byte PASS" >&2
+    exit 2
+  fi
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4" ]]; then
+    echo "CUTLASS B4 stock-shape identity production remains unavailable until Tail23 and Hydra27 raw-byte PASS" >&2
+    exit 2
+  fi
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4" ]]; then
+    echo "CUTLASS B4 stock-shape Stage2 identity production remains unavailable until Tail23 and Hydra27 raw-byte PASS" >&2
+    exit 2
+  fi
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "identity_divisor_b4" ]]; then
+    echo "CUTLASS B4 divisor identity production remains unavailable until Tail23 and Hydra27 raw-byte PASS" >&2
+    exit 2
+  fi
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "static_persistent_stocktile" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "divisor_static_stocktile" ]]; then
+    echo "CUTLASS static B1 production remains unavailable until the K64/root raw-byte PASS" >&2
+    exit 2
+  fi
+  if [[ "$_fr13_cutlass_b4" == "1" ]]; then
+    [[ -n "${FR13_FIXED32_MODE:-}" && "$MAX_NUM_SEQS" == "4" ]] || {
+      echo "CUTLASS persistent M128 candidate requires fixed32 B4" >&2
+      exit 2
+    }
+    case "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" in
+      full_vocab)
+        [[ "$FR13_DRAFT_VOCAB_ROOT" == "0" \
+           && "${FR13_DRAFT_VOCAB_K:-65536}" == "0" \
+           && "${FR13_NEEDS_ALLOW:-}" == "FR13_DRAFT_VOCAB_K=0" ]] || {
+          echo "CUTLASS full_vocab B4 qualification requires the K0 workload" >&2
+          exit 2
+        }
+        ;;
+      k64_root)
+        [[ -z "${FR13_NEEDS_ALLOW:-}" ]] || {
+          echo "CUTLASS k64_root B4 qualification forbids a K0 override" >&2
+          exit 2
+        }
+        ;;
+    esac
+  else
+    [[ -n "${FR13_FIXED32_MODE:-}" && "$MAX_NUM_SEQS" == "1" ]] || {
+      echo "CUTLASS Stream-K candidate requires fixed32 B1" >&2
+      exit 2
+    }
+    case "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" in
+      full_vocab)
+        [[ "$FR13_DRAFT_VOCAB_ROOT" == "0" \
+           && "${FR13_DRAFT_VOCAB_K:-65536}" == "0" \
+           && "${FR13_NEEDS_ALLOW:-}" == "FR13_DRAFT_VOCAB_K=0" ]] || {
+          echo "CUTLASS full_vocab B1 qualification requires the K0 workload" >&2
+          exit 2
+        }
+        ;;
+      k64_root)
+        [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256" \
+           || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
+           || "$FR13_FIXED32_CUTLASS_WAVE" == "static_persistent_stocktile" \
+           || "$FR13_FIXED32_CUTLASS_WAVE" == "static_persistent_stocktile_byte_ab" \
+           || "$FR13_FIXED32_CUTLASS_WAVE" == "divisor_static_stocktile" \
+           || "$FR13_FIXED32_CUTLASS_WAVE" == "divisor_static_stocktile_byte_ab" \
+           || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stage2_static" \
+           || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stage2_static_byte_ab" \
+           || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stage2_pingpong_b1" \
+           || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stage2_pingpong_b1_byte_ab" ]] || {
+          echo "CUTLASS k64_root B1 qualification requires a pinned B1 projection candidate" >&2
+          exit 2
+        }
+        [[ "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+           && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+           && -z "${FR13_NEEDS_ALLOW:-}" ]] || {
+          echo "CUTLASS k64_root B1 qualification requires the root-64K workload" >&2
+          exit 2
+        }
+        ;;
+    esac
+  fi
+  [[ "$FR13_FIXED32_CUTLASS_WAVE_SO" == /* \
+     && "$FR13_FIXED32_CUTLASS_WAVE_SO" != *:* \
+     && -f "$FR13_FIXED32_CUTLASS_WAVE_SO" \
+     && ! -L "$FR13_FIXED32_CUTLASS_WAVE_SO" ]] || {
+    echo "CUTLASS Stream-K candidate requires an absolute regular non-symlink SO path" >&2
+    exit 2
+  }
+  _fr13_cutlass_resource_args=()
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
+    [[ "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL" == /* \
+       && "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL" != *:* \
+       && -f "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL" \
+       && ! -L "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL" \
+       && "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256" == "7ab2c3223366f4591fc2324a47c805aa0a1e9d4a106743af4256d4089054a2dc" ]] || {
+      echo "CUTLASS static M128 diagnostic requires its pinned resource credential" >&2
+      exit 2
+    }
+    _fr13_cutlass_resource_args=(
+      --resource-credential "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL"
+      --expected-resource-credential-sha256 "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256"
+    )
+  else
+    [[ -z "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL" \
+       && -z "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256" ]] || {
+      echo "non-static CUTLASS selector forbids a static M128 resource credential" >&2
+      exit 2
+    }
+  fi
+  .venv/bin/python scripts/fr13_cutlass_wave_binary.py verify \
+    "$FR13_FIXED32_CUTLASS_WAVE_SO" \
+    --selector "$FR13_FIXED32_CUTLASS_WAVE" \
+    "${_fr13_cutlass_resource_args[@]}" >/dev/null
+  FR13_FIXED32_CUTLASS_WAVE_SO=$(realpath "$FR13_FIXED32_CUTLASS_WAVE_SO")
+  FR13_CUTLASS_WAVE_DOCKER_ARGS=(
+    -v "$FR13_FIXED32_CUTLASS_WAVE_SO:/tmp/fr13_cutlass_wave.abi3.so:ro"
+  )
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
+    FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL=$(
+      realpath "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL"
+    )
+    FR13_CUTLASS_WAVE_DOCKER_ARGS+=(
+      -v "$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL:/tmp/fr13_cutlass_wave_resource_credential.json:ro"
+    )
+  fi
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "static_persistent_stocktile_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "divisor_static_stocktile_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stage2_static_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stage2_pingpong_b1_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_divisor_b4_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
+    [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "0" \
+       && ( ( "$_fr13_cutlass_b4" == "0" \
+              && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" ) \
+            || ( "$_fr13_cutlass_b4" == "1" \
+                 && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" ) ) \
+       && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
+       && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
+       && -z "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT" \
+       && "${ENFORCE_EAGER:-0}" == "1" \
+       && ( ( "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
+              && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_streamk_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_streamk_wide256_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "static_persistent_stocktile_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_static_persistent_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "divisor_static_stocktile_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_divisor_static_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stage2_static_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_identity_stage2_static_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stage2_pingpong_b1_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_identity_stage2_pingpong_b1_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_identity_stockshape_b4_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_identity_stockshape_stage2_b4_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "identity_divisor_b4_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_identity_divisor_b4_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_persistent_b4_m128_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_persistent_b4_m128_static_byte_ab.jsonl" ) ) ]] || {
+      echo "CUTLASS byte A/B requires its exact eager B1 or B4 diagnostic contract" >&2
+      exit 2
+    }
+  else
+    [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" \
+       && -f "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
+       && ! -L "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
+       && "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
+      if [[ "$_fr13_cutlass_b4" == "1" ]]; then
+        echo "CUTLASS persistent M128 production requires fixed32 B4 and a pinned live PASS" >&2
+      else
+        echo "CUTLASS Stream-K production requires fixed32 B1 and a pinned live PASS" >&2
+      fi
+      exit 2
+    }
+    if [[ "$_fr13_cutlass_b4" == "1" ]]; then
+      [[ "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {
+        echo "CUTLASS persistent M128 production requires a pinned qualification source commit" >&2
+        exit 2
+      }
+      _fr13_cutlass_streamk_source_commit=$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT
+    else
+      [[ -z "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT" ]] || {
+        echo "CUTLASS B1 production forbids a B4 qualification source override" >&2
+        exit 2
+      }
+      _fr13_cutlass_streamk_source_commit=$(git rev-parse HEAD)
+    fi
+    _fr13_cutlass_pass_script=scripts/fr13_cutlass_streamk_pass.py
+    _fr13_cutlass_pass_profile_args=()
+    if [[ "$_fr13_cutlass_b4" == "0" ]]; then
+      _fr13_cutlass_pass_profile_args=(
+        --qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"
+        --draft-vocab-blocks scripts/fr13_dvk_subset_blocks.json
+      )
+    else
+        _fr13_cutlass_pass_script=scripts/fr13_cutlass_b4_pass.py
+        _fr13_cutlass_pass_profile_args=(
+          --qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"
+          --fixed32-mode "$FR13_FIXED32_MODE"
+        )
+    fi
+    # B1 executes scripts/fr13_cutlass_streamk_pass.py validate; B4 executes
+    # the corresponding persistent-M128 credential validator selected above.
+    .venv/bin/python "$_fr13_cutlass_pass_script" validate \
+      --live-result "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
+      --expected-live-sha256 "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
+      --candidate-so "$FR13_FIXED32_CUTLASS_WAVE_SO" \
+      --patch-source scripts/fr13_patch_cutlass_fixed32_wave.py \
+      --expected-source-commit "$_fr13_cutlass_streamk_source_commit" \
+      --candidate-selector "$FR13_FIXED32_CUTLASS_WAVE" \
+      "${_fr13_cutlass_pass_profile_args[@]}" \
+      >/dev/null
+    unset _fr13_cutlass_pass_script
+    unset _fr13_cutlass_pass_profile_args
+  fi
+  unset _fr13_cutlass_b4
+  unset _fr13_cutlass_resource_args
+fi
+if [[ -n "${FR13_DFWD_UNIFIED_BM8_INTERNAL:-}" ]]; then
+  echo "FR13 DFWD unified BM8 internal selector is launcher-private" >&2
+  exit 2
+fi
+if [[ -n "${FR13_DFWD_UNIFIED_BM8_INTERNAL_PRODUCTION_ATTESTED:-}" ]]; then
+  echo "FR13 DFWD unified BM8 production attestation is launcher-private" >&2
+  exit 2
+fi
+if [[ "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "1" \
+      && "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
+  echo "FR13 DFWD unified BM8 live A/B and production are mutually exclusive" >&2
+  exit 2
+fi
+if [[ "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
+     && "$FR13_DFWD_UNIFIED_BM8_INSTANCE_ID" == "astropy__astropy-12907" \
+     && "$FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ \
+     && "$FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH" == "/logs/fr13_dfwd_unified_bm8.real_event.arm" \
+     && "$FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON" == "/logs/fr13_dfwd_unified_bm8.identity.json" ]] || {
+    echo "FR13 DFWD unified BM8 live gate requires the pinned real SWE B1 diagnostic and exact source identity" >&2
+    exit 2
+  }
+  [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+     && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+     && "$FR13_DRAFT_HEAD_PAD_ROWS" == "0" \
+     && "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" \
+     && "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "0" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" ]] || {
+    echo "FR13 DFWD unified BM8 live gate must be the only diagnostic kernel candidate" >&2
+    exit 2
+  }
+fi
+if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && -f "$FR13_DFWD_UNIFIED_BM8_LIVE_PASS_JSON" \
+     && ! -L "$FR13_DFWD_UNIFIED_BM8_LIVE_PASS_JSON" \
+     && "$FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON" == "/logs/fr13_dfwd_unified_bm8.production_capture.json" \
+     && "$FR13_DFWD_UNIFIED_BM8_LIVE_PASS_SHA256" == "570caf42e3e75ff0d3717042b0dfc58b23a90041e71103f70a07f6d7563445b5" ]] || {
+    echo "FR13 DFWD unified BM8 production requires the pinned real-SWE B1 PASS" >&2
+    exit 2
+  }
+  [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+     && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+     && "$FR13_DRAFT_HEAD_PAD_ROWS" == "0" \
+     && "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" \
+     && "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "0" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" ]] || {
+    echo "FR13 DFWD unified BM8 production cannot overlap diagnostic kernel candidates" >&2
+    exit 2
+  }
 fi
 # FR13_EAGER_PACK (FIX-2, default OFF until the lossless gate passes): pack
 # the committer's eager DtoH/HtoD storm and batch the 48 per-layer replay
@@ -252,6 +1007,73 @@ PY
 )}
 SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$NUM_SPECULATIVE_TOKENS,\"speculative_token_tree\":\"$TREE\"}"}
 
+_fr13_gdn_path_bv_candidate=${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}
+_fr13_gdn_path_bv_production=${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}
+_fr13_gdn_path_bv_pass_json=${FR13_FIXED32_GDN_PATH_BV_PASS_JSON:-}
+if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" ]] || {
+    echo "FR13_FIXED32_GDN_PATH_BV_CANDIDATE requires FR13_FIXED32_MODE" >&2
+    exit 2
+  }
+  [[ "$_fr13_gdn_path_bv_candidate" == "16" \
+     || "$_fr13_gdn_path_bv_candidate" == "32" \
+     || "$_fr13_gdn_path_bv_candidate" == "64" \
+     || "$_fr13_gdn_path_bv_candidate" == "128" ]] || {
+    echo "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be exactly 16, 32, 64, or 128" >&2
+    exit 2
+  }
+fi
+if [[ -n "$_fr13_gdn_path_bv_production" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" ]] || {
+    echo "FR13_FIXED32_GDN_PATH_BV_PRODUCTION requires FR13_FIXED32_MODE" >&2
+    exit 2
+  }
+  [[ "$_fr13_gdn_path_bv_production" == "16" \
+     || "$_fr13_gdn_path_bv_production" == "32" \
+     || "$_fr13_gdn_path_bv_production" == "64" \
+     || "$_fr13_gdn_path_bv_production" == "128" ]] || {
+    echo "FR13_FIXED32_GDN_PATH_BV_PRODUCTION must be exactly 16, 32, 64, or 128" >&2
+    exit 2
+  }
+  [[ -f "$_fr13_gdn_path_bv_pass_json" \
+     && ! -L "$_fr13_gdn_path_bv_pass_json" ]] || {
+    echo "FR13 GDN path-BV production requires a regular live PASS JSON" >&2
+    exit 2
+  }
+fi
+if [[ -n "$_fr13_gdn_path_bv_candidate" \
+      && -n "$_fr13_gdn_path_bv_production" ]]; then
+  echo "FR13 fixed32 GDN path-BV diagnostic and production selectors are mutually exclusive" >&2
+  exit 2
+fi
+if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" \
+      || "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "1" \
+      || "$FR13_DRAFT_HEAD_M32_TIMING_ARM" == "1" ]]; then
+  [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+     && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "0" \
+     && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+     && "$FR13_FA2_QROW16_PRODUCTION" == "0" \
+     && "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "0" \
+     && "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" == "0" \
+     && -z "${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
+     && "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "0" \
+     && -z "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" \
+     && -z "$_fr13_gdn_path_bv_candidate" \
+     && -z "$_fr13_gdn_path_bv_production" \
+     && "$FR13_FIXED32_CUTLASS_WAVE" == "stock" \
+     && -z "$FR13_FIXED32_CUTLASS_WAVE_SO" \
+     && "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" == "0" ]] || {
+    echo "FR13 draft-head M32 must be the only kernel candidate in its arm" >&2
+    exit 2
+  }
+fi
+_fr13_fixed32_expected_gdn_geom="BV=8"
+if [[ -n "$_fr13_gdn_path_bv_production" ]]; then
+  _fr13_fixed32_expected_gdn_geom="BV=$_fr13_gdn_path_bv_production"
+fi
+
 # Fixed-32 is a closed execution bucket, not a generic <=32-node tree. Validate
 # the topology/mask tuple and all route pins before patching or allocating GPU
 # memory so an inherited legacy/fallback flag cannot produce evidence.
@@ -347,6 +1169,13 @@ PY
     [[ "${!_fixed32_pin:-}" == "1" ]] \
       || { echo "fixed32 requires $_fixed32_pin=1" >&2; exit 2; }
   done
+  case "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" in
+    0|1) ;;
+    *)
+      echo "FR13_FIXED32_CONV_SOURCE_BATCH must be exactly 0 or 1" >&2
+      exit 2
+      ;;
+  esac
   _fixed32_required_zero=(
     FR13_MULTIDRAFT_GPU_TIMER FR13_REPLAY_GPU_TIMER
     FR13_COMMIT_FULL_GPU_TIMER FR13_COMMITTER_SG_TIMER
@@ -568,21 +1397,132 @@ if [[ ! -f "$FORKED_FA2_SO" ]]; then
   exit 2
 fi
 if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
+  FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
+  _fr13_fixed32_batch_gdn_diagnostic=${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}
+  _fr13_fixed32_batch_gdn_graph_diagnostic=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
+  _fr13_fixed32_sfwd_b4_diagnostic=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
+  case "$FR13_FIXED32_B1_DIAGNOSTIC" in
+    0|1) ;;
+    *) echo "FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
+  case "$_fr13_fixed32_batch_gdn_diagnostic" in
+    0|1) ;;
+    *) echo "FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
+  case "$_fr13_fixed32_batch_gdn_graph_diagnostic" in
+    0|1) ;;
+    *) echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
+  case "$_fr13_fixed32_sfwd_b4_diagnostic" in
+    0|1) ;;
+    *) echo "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
+  _fr13_fixed32_batch_gdn_bv8_timing="${FR13_FIXED32_BATCH_GDN_BV8_TIMING:-0}"
+  case "$_fr13_fixed32_batch_gdn_bv8_timing" in
+    0|1) ;;
+    *) echo "FR13_FIXED32_BATCH_GDN_BV8_TIMING must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
+  if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" \
+        && "$_fr13_fixed32_batch_gdn_graph_diagnostic" == "1" ]]; then
+    echo "fixed32 eager and graph batched GDN diagnostics are mutually exclusive" >&2
+    exit 2
+  fi
+  if [[ ( "$_fr13_fixed32_batch_gdn_diagnostic" == "1" \
+          || "$_fr13_fixed32_batch_gdn_graph_diagnostic" == "1" ) \
+        && "$MAX_NUM_SEQS" != "4" ]]; then
+    echo "fixed32 batched GDN byte diagnostic requires MAX_NUM_SEQS=4" >&2
+    exit 2
+  fi
+  if [[ "$_fr13_fixed32_sfwd_b4_diagnostic" == "1" \
+        && "$MAX_NUM_SEQS" != "4" ]]; then
+    echo "fixed32 SFWD state-fusion byte diagnostic requires MAX_NUM_SEQS=4" >&2
+    exit 2
+  fi
+  if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" && "$MAX_NUM_SEQS" != "1" ]]; then
+    echo "fixed32 B1 diagnostic requires MAX_NUM_SEQS=1" >&2
+    exit 2
+  fi
   _fixed32_expected_mem=105g
-  [[ "$MAX_NUM_SEQS" == "4" ]] && _fixed32_expected_mem=112g
+  _fixed32_expected_kv_cache_memory_bytes=
+  if [[ "$MAX_NUM_SEQS" == "4" ]]; then
+    _fixed32_expected_mem=112g
+    _fixed32_expected_kv_cache_memory_bytes=42949672960
+    KV_CACHE_MEMORY_BYTES=${KV_CACHE_MEMORY_BYTES:-$_fixed32_expected_kv_cache_memory_bytes}
+  fi
+  _fixed32_expected_metrics=0
+  _fixed32_expected_eager=0
+  if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" \
+        || "$_fr13_fixed32_batch_gdn_graph_diagnostic" == "1" \
+        || "$_fr13_fixed32_batch_gdn_bv8_timing" == "1" \
+        || ( "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "1" \
+             && "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" == "8" ) ]]; then
+    # This is a real exact4 byte diagnostic, never an acceptance/timing arm.
+    # Both execution modes require the invocation counter for byte evidence.
+    _fixed32_expected_metrics=1
+  fi
+  if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" ]]; then
+    _fixed32_expected_eager=1
+  fi
+  if [[ "$_fr13_fixed32_sfwd_b4_diagnostic" == "1" ]]; then
+    _fixed32_expected_eager=1
+  fi
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "static_persistent_stocktile_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "divisor_static_stocktile_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stage2_static_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stage2_pingpong_b1_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_divisor_b4_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
+    _fixed32_expected_eager=1
+  fi
+  case "${FR13_DRAFT_VOCAB_K:-65536}:$FR13_DRAFT_VOCAB_ROOT" in
+    0:0)
+      [[ ( "$MAX_NUM_SEQS" == "1" || "$MAX_NUM_SEQS" == "4" ) \
+         && "${FR13_NEEDS_ALLOW:-}" == "FR13_DRAFT_VOCAB_K=0" ]] || {
+        echo "fixed32 full-vocabulary mode requires exact B1/B4 and its sanctioned override" >&2
+        exit 2
+      }
+      _fixed32_expected_draft_vocab_k=0
+      _fixed32_expected_mandatory_weight_bytes=42025179008
+      _fixed32_expected_weight_floor_ms=153.9383846446886
+      ;;
+    65536:0)
+      _fixed32_expected_draft_vocab_k=65536
+      _fixed32_expected_mandatory_weight_bytes=34538346368
+      _fixed32_expected_weight_floor_ms=126.514089260
+      ;;
+    65536:1)
+      _fixed32_expected_draft_vocab_k=65536
+      _fixed32_expected_mandatory_weight_bytes=32666638208
+      _fixed32_expected_weight_floor_ms=119.658015414
+      ;;
+    *)
+      echo "fixed32 draft-vocab floor configuration is unsupported: K=${FR13_DRAFT_VOCAB_K:-unset} ROOT=$FR13_DRAFT_VOCAB_ROOT" >&2
+      exit 2
+      ;;
+  esac
   [[ "$MAX_NUM_SEQS" == "1" || "$MAX_NUM_SEQS" == "4" ]] \
     || { echo "fixed32 requires MAX_NUM_SEQS=1 or 4" >&2; exit 2; }
   _fixed32_exact_pairs=(
     "GPU_UTIL|$GPU_UTIL|0.70"
     "MAX_MODEL_LEN|$MAX_MODEL_LEN|131072"
+    "KV_CACHE_MEMORY_BYTES|$KV_CACHE_MEMORY_BYTES|$_fixed32_expected_kv_cache_memory_bytes"
     "DOCKER_MEM_CAP|$DOCKER_MEM_CAP|$_fixed32_expected_mem"
     "ATTENTION_BACKEND|$ATTENTION_BACKEND|TREE_ATTN"
     "FR10_DECODE_MODE_DEFAULT|$FR10_DECODE_MODE_DEFAULT|tree_mtp"
-    "FR10_METRICS|$FR10_METRICS|0"
+    "FR10_METRICS|$FR10_METRICS|$_fixed32_expected_metrics"
+    "FR13_RING_EXPORT|${FR13_RING_EXPORT:-1}|1"
+    "FR13_FLAGS_INKERNEL|${FR13_FLAGS_INKERNEL:-1}|1"
+    "FR13_SCAN_ALIGN|${FR13_SCAN_ALIGN:-0}|0"
+    "FR13_NPAD_INVARIANT|${FR13_NPAD_INVARIANT:-0}|0"
     "BATCH_INVARIANT|$BATCH_INVARIANT|0"
     "FR13_TAIL_MODE|${FR13_TAIL_MODE:-0}|1"
     "FR13_DRAFT_SOURCE|${FR13_DRAFT_SOURCE:-mtp}|merged"
-    "FR13_TREE_GDN_GEOM_OVERRIDE|${FR13_TREE_GDN_GEOM_OVERRIDE:-}|BV=8"
+    "FR13_TREE_GDN_GEOM_OVERRIDE|${FR13_TREE_GDN_GEOM_OVERRIDE:-}|$_fr13_fixed32_expected_gdn_geom"
     "FR13_HYDRA23|${FR13_HYDRA23:-0}|0"
     "FR13_TAIL_BRANCHES|${FR13_TAIL_BRANCHES:-0}|0"
     "FR13_TAIL_BRANCH_DEPTHS|${FR13_TAIL_BRANCH_DEPTHS:-0}|0"
@@ -598,14 +1538,14 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     "LUMO_LONG_PREFILL_THRESHOLD|$LUMO_LONG_PREFILL_THRESHOLD|1024"
     "CUDAGRAPH_MODE|$CUDAGRAPH_MODE|FULL_AND_PIECEWISE"
     "FR13_FULL_ATTN_KV_FP8|${FR13_FULL_ATTN_KV_FP8:-0}|0"
-    "ENFORCE_EAGER|${ENFORCE_EAGER:-0}|0"
+    "ENFORCE_EAGER|${ENFORCE_EAGER:-0}|$_fixed32_expected_eager"
     "SEED|${SEED:-0}|0"
     "PYTORCH_CUDA_ALLOC_CONF|$PYTORCH_CUDA_ALLOC_CONF|expandable_segments:True"
     "GPU_OOM_GUARD|$GPU_OOM_GUARD|1"
     "LUMO_FB_KERNEL_ROWS|$LUMO_FB_KERNEL_ROWS|1"
     "LUMO_FB_PROJ_PAD_ROWS|$LUMO_FB_PROJ_PAD_ROWS|16"
     "FR13_INPUTPREP_GUARD|${FR13_INPUTPREP_GUARD:-}|1"
-    "FR13_DRAFT_VOCAB_K|${FR13_DRAFT_VOCAB_K:-}|65536"
+    "FR13_DRAFT_VOCAB_K|${FR13_DRAFT_VOCAB_K:-}|$_fixed32_expected_draft_vocab_k"
     "FR13_DRAFT_VOCAB_BLOCKS|${FR13_DRAFT_VOCAB_BLOCKS:-}|/workspace/scripts/fr13_dvk_subset_blocks.json"
     "FR13_APC_CONV_FIX|${FR13_APC_CONV_FIX:-}|1"
     "FR13_APC_CONV_SNAPSHOT|${FR13_APC_CONV_SNAPSHOT:-}|1"
@@ -619,7 +1559,8 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     "FR13_SFWD_SAMPLES_DUMP_S|${FR13_SFWD_SAMPLES_DUMP_S:-}|30"
     "FR13_SPAN_GPU_TIMER_DUMP_S|${FR13_SPAN_GPU_TIMER_DUMP_S:-}|0"
     "FR13_STEP_WALL_CAP_S|${FR13_STEP_WALL_CAP_S:-}|1.5"
-    "FR13_WEIGHT_FLOOR_MS|${FR13_WEIGHT_FLOOR_MS:-}|98.6"
+    "FR13_MANDATORY_WEIGHT_BYTES|${FR13_MANDATORY_WEIGHT_BYTES:-}|$_fixed32_expected_mandatory_weight_bytes"
+    "FR13_WEIGHT_FLOOR_MS|${FR13_WEIGHT_FLOOR_MS:-}|$_fixed32_expected_weight_floor_ms"
     "FR13_COMPUTE_MS_PER_ROW|${FR13_COMPUTE_MS_PER_ROW:-}|0.54"
   )
   for _fixed32_pair in "${_fixed32_exact_pairs[@]}"; do
@@ -633,35 +1574,195 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   [[ -z "$FR13_SERVE_BATCH_FLAGS" ]] \
     || { echo "fixed32 forbids FR13_SERVE_BATCH_FLAGS" >&2; exit 2; }
   PYTHONPATH="$REPO/scripts" .venv/bin/python - \
-    "$REPO" "$IMAGE" "$FORKED_FA2_SO" "$TREE" "$SPEC_CONFIG" <<'PY'
+    "$REPO" "$IMAGE" "$FORKED_FA2_SO" "$TREE" "$SPEC_CONFIG" \
+    "$_FR13_FA2_QROW16_CANDIDATE_MODE" "$FR13_FA2_QROW16_SO_SHA256" <<'PY'
 import sys
 from pathlib import Path
 
 import fr13_fixed32_contract as contract
 
-repo, image, fa2_raw, tree, spec_config = sys.argv[1:]
+repo, image, fa2_raw, tree, spec_config, qrow_candidate, qrow_sha256 = sys.argv[1:]
 fa2 = Path(fa2_raw).resolve(strict=True)
 expected_fa2 = Path(repo).resolve() / contract.FA2_REPO_RELATIVE
 if image != contract.IMAGE_REFERENCE:
     raise SystemExit(f"fixed32 image override is forbidden: {image!r}")
 contract._docker_image_record()
-if fa2 != expected_fa2:
-    raise SystemExit(f"fixed32 FA2 realpath mismatch: {fa2} != {expected_fa2}")
-if fa2.stat().st_size != contract.FA2_SIZE:
-    raise SystemExit("fixed32 FA2 size mismatch")
-if contract.sha256_file(fa2) != contract.FA2_SHA256:
-    raise SystemExit("fixed32 FA2 sha256 mismatch")
+actual_sha256 = contract.sha256_file(fa2)
+if qrow_candidate == "1":
+    if actual_sha256 != qrow_sha256:
+        raise SystemExit("fixed32 qrow16 candidate FA2 sha256 mismatch")
+    if actual_sha256 == contract.FA2_SHA256:
+        raise SystemExit("fixed32 qrow16 live gate received the stock FA2 binary")
+else:
+    if fa2 != expected_fa2:
+        raise SystemExit(f"fixed32 FA2 realpath mismatch: {fa2} != {expected_fa2}")
+    if fa2.stat().st_size != contract.FA2_SIZE:
+        raise SystemExit("fixed32 FA2 size mismatch")
+    if actual_sha256 != contract.FA2_SHA256:
+        raise SystemExit("fixed32 FA2 sha256 mismatch")
 if tree != contract.fixed32_tree_text():
     raise SystemExit("fixed32 TREE text differs from canonical contract")
 if spec_config != contract.speculative_config_text():
     raise SystemExit("fixed32 SPEC_CONFIG differs from canonical contract")
 PY
   unset _fixed32_actual _fixed32_exact_pairs _fixed32_expected
-  unset _fixed32_expected_mem _fixed32_name _fixed32_pair
+  unset _fixed32_expected_eager _fixed32_expected_mem
+  unset _fixed32_expected_draft_vocab_k
+  unset _fixed32_expected_kv_cache_memory_bytes _fixed32_expected_metrics
+  unset _fixed32_expected_mandatory_weight_bytes
+  unset _fixed32_expected_weight_floor_ms
+  unset _fixed32_name _fixed32_pair _fr13_fixed32_batch_gdn_diagnostic
+  unset _fr13_fixed32_batch_gdn_bv8_timing
+fi
+if [[ -n "$KV_CACHE_MEMORY_BYTES" \
+      && ! "$KV_CACHE_MEMORY_BYTES" =~ ^[1-9][0-9]*$ ]]; then
+  echo "KV_CACHE_MEMORY_BYTES must be a positive integer byte count" >&2
+  exit 2
 fi
 
 mkdir -p "$LOG_DIR"
 LOG_DIR=$(realpath "$LOG_DIR")
+rm -f \
+  "$LOG_DIR/fr13_fixed32_cutlass_streamk_binary.json" \
+  "$LOG_DIR/fr13_fixed32_cutlass_streamk.production_pass.json" \
+  "$LOG_DIR"/fr13_fixed32_cutlass_streamk.production_pass.json.tmp.*
+FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR=""
+FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256=""
+if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" ]]; then
+  rm -f "$LOG_DIR/fr13_fixed32_cutlass_wave.selector"
+else
+  printf '%s\n' "$FR13_FIXED32_CUTLASS_WAVE" \
+    > "$LOG_DIR/fr13_fixed32_cutlass_wave.selector"
+  chmod 0444 "$LOG_DIR/fr13_fixed32_cutlass_wave.selector"
+fi
+if [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" ]]; then
+  _fr13_cutlass_streamk_production_sidecar_host="$LOG_DIR/fr13_fixed32_cutlass_streamk.production_pass.json"
+  _fr13_cutlass_pass_script=scripts/fr13_cutlass_streamk_pass.py
+  _fr13_cutlass_pass_profile_args=()
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" != "persistent_b4_m128" ]]; then
+    _fr13_cutlass_pass_profile_args=(
+      --qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"
+      --draft-vocab-blocks scripts/fr13_dvk_subset_blocks.json
+    )
+  else
+      _fr13_cutlass_pass_script=scripts/fr13_cutlass_b4_pass.py
+      _fr13_cutlass_pass_profile_args=(
+        --qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"
+        --fixed32-mode "$FR13_FIXED32_MODE"
+      )
+  fi
+  # B1 executes scripts/fr13_cutlass_streamk_pass.py issue; B4 executes the
+  # corresponding persistent-M128 issuer selected above.
+  .venv/bin/python "$_fr13_cutlass_pass_script" issue \
+    --live-result "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
+    --expected-live-sha256 "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
+    --candidate-so "$FR13_FIXED32_CUTLASS_WAVE_SO" \
+    --patch-source scripts/fr13_patch_cutlass_fixed32_wave.py \
+    --expected-source-commit "$_fr13_cutlass_streamk_source_commit" \
+    --candidate-selector "$FR13_FIXED32_CUTLASS_WAVE" \
+    "${_fr13_cutlass_pass_profile_args[@]}" \
+    --out "$_fr13_cutlass_streamk_production_sidecar_host" \
+    >/dev/null
+  chmod 0400 "$_fr13_cutlass_streamk_production_sidecar_host"
+  FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR=/logs/fr13_fixed32_cutlass_streamk.production_pass.json
+  FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256=$(
+    sha256sum "$_fr13_cutlass_streamk_production_sidecar_host" | awk '{print $1}'
+  )
+  unset _fr13_cutlass_streamk_production_sidecar_host
+  unset _fr13_cutlass_streamk_source_commit
+  unset _fr13_cutlass_pass_script
+  unset _fr13_cutlass_pass_profile_args
+fi
+FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR=""
+FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256=""
+if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
+  FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_HOST="$LOG_DIR/fr13_fa2_qrow16_production_pass.json"
+  python3 scripts/fr13_qrow16_pass_sidecar.py issue \
+    --live-result "$FR13_FA2_QROW16_LIVE_PASS_JSON" \
+    --expected-live-sha256 "$FR13_FA2_QROW16_LIVE_PASS_SHA256" \
+    --candidate-so "$FORKED_FA2_SO" \
+    --expected-candidate-sha256 "$FR13_FA2_QROW16_SO_SHA256" \
+    --out "$FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_HOST"
+  FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR=/logs/fr13_fa2_qrow16_production_pass.json
+  FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256=$(
+    sha256sum "$FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_HOST" | cut -d' ' -f1
+  )
+  export FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR
+  export FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256
+fi
+FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR=""
+FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256=""
+if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
+  FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_HOST="$LOG_DIR/fr13_dfwd_unified_bm8.production_pass.json"
+  rm -f -- "$FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_HOST"
+  python3 scripts/fr13_bm8_pass_sidecar.py issue \
+    --live-result "$FR13_DFWD_UNIFIED_BM8_LIVE_PASS_JSON" \
+    --expected-live-sha256 "$FR13_DFWD_UNIFIED_BM8_LIVE_PASS_SHA256" \
+    --expected-candidate-source-sha256 "$FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256" \
+    --out "$FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_HOST"
+  FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR=/logs/fr13_dfwd_unified_bm8.production_pass.json
+  FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256=$(
+    sha256sum "$FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_HOST" | cut -d' ' -f1
+  )
+  export FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR
+  export FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256
+fi
+FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR=""
+FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_SHA256=""
+if [[ "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "1" ]]; then
+  FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_HOST="$LOG_DIR/fr13_draft_head_m32.production_pass.json"
+  rm -f -- "$FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_HOST"
+  .venv/bin/python scripts/fr13_draft_head_m32_pass.py issue \
+    --live-result "$FR13_DRAFT_HEAD_M32_LIVE_PASS_JSON" \
+    --expected-live-sha256 "$FR13_DRAFT_HEAD_M32_LIVE_PASS_SHA256" \
+    --final-flush "$FR13_DRAFT_HEAD_M32_LIVE_FINAL_FLUSH_JSON" \
+    --boundary-snapshot "$FR13_DRAFT_HEAD_M32_LIVE_BOUNDARY_SNAPSHOT_JSON" \
+    --chat-traffic-audit "$FR13_DRAFT_HEAD_M32_LIVE_CHAT_TRAFFIC_AUDIT_JSON" \
+    --candidate-source scripts/fr10_phase4_patch_vllm_tree_gdn.py \
+    --expected-candidate-source-sha256 "$FR13_DRAFT_HEAD_M32_QUALIFIED_SOURCE_SHA256" \
+    --out "$FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_HOST"
+  FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR=/logs/fr13_draft_head_m32.production_pass.json
+  FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_SHA256=$(
+    sha256sum "$FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_HOST" | cut -d' ' -f1
+  )
+  export FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR
+  export FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_SHA256
+fi
+if [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "1" ]]; then
+  echo "1" > "$LOG_DIR/fr13_fixed32_taw_native_precompute_diagnostic.arm"
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute_production.arm" \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute.live_pass.json"
+elif [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1" ]]; then
+  cp -- "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON" \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute.production_pass.json"
+  echo "1" > "$LOG_DIR/fr13_fixed32_taw_native_precompute_production.arm"
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute_diagnostic.arm" \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute.real_event.arm"
+else
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute_diagnostic.arm" \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute_production.arm" \
+    "$LOG_DIR/fr13_fixed32_taw_native_precompute.real_event.arm" \
+    2>/dev/null || true
+fi
+if [[ "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "1" ]]; then
+  rm -f \
+    "$LOG_DIR/fr13_dfwd_unified_bm8.real_event.arm" \
+    "$LOG_DIR/fr13_dfwd_unified_bm8.identity.json" \
+    "$LOG_DIR/fr13_dfwd_unified_bm8.live.json"
+elif [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
+  rm -f \
+    "$LOG_DIR/fr13_dfwd_unified_bm8.real_event.arm" \
+    "$LOG_DIR/fr13_dfwd_unified_bm8.identity.json" \
+    "$LOG_DIR/fr13_dfwd_unified_bm8.live.json" \
+    "$LOG_DIR/fr13_dfwd_unified_bm8.production_capture.json" \
+    2>/dev/null || true
+else
+  rm -f "$LOG_DIR/fr13_dfwd_unified_bm8.real_event.arm" 2>/dev/null || true
+fi
 FR13_FIXED32_DOCKER_ARGS=()
 FR13_FIXED32_MIDDLEWARE_FLAGS=""
 FR13_FIXED32_CIDFILE=""
@@ -728,8 +1829,14 @@ if (
 PY
   (( $? == 0 )) || exit 2
   IFS=',' read -r -a _fixed32_task_ids <<< "$FR13_FIXED32_INGRESS_TASK_IDS"
-  [[ ${#_fixed32_task_ids[@]} == 4 || ${#_fixed32_task_ids[@]} == 16 ]] \
-    || { echo "fixed32 ingress task list must contain exactly 4 or 16 IDs" >&2; exit 2; }
+  if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
+    [[ ${#_fixed32_task_ids[@]} == 1 \
+       && "${_fixed32_task_ids[0]}" == "astropy__astropy-12907" ]] \
+      || { echo "fixed32 B1 diagnostic ingress task ID is not pinned" >&2; exit 2; }
+  else
+    [[ ${#_fixed32_task_ids[@]} == 4 || ${#_fixed32_task_ids[@]} == 16 ]] \
+      || { echo "fixed32 ingress task list must contain exactly 4 or 16 IDs" >&2; exit 2; }
+  fi
   for _fixed32_task_id in "${_fixed32_task_ids[@]}"; do
     [[ "$_fixed32_task_id" =~ ^[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+$ ]] \
       || { echo "fixed32 ingress task ID is malformed" >&2; exit 2; }
@@ -789,8 +1896,30 @@ PY
     "$LOG_DIR/fr13_fixed32_ingress_secret_identity.json" \
     "$LOG_DIR/fr13_fixed32_runtime_attestation.json" \
     "$LOG_DIR"/fr13_fixed32_boundary_snapshot.*.json \
-    "$LOG_DIR/fr13_fixed32_mode.flag"
+    "$LOG_DIR/fr13_fixed32_mode.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv.production_pass.json" \
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag" \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag" \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_bv8.production_engagement.json" \
+    "$LOG_DIR"/fr13_fixed32_batch_gdn_bv8.production_engagement.json.tmp.* \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_bv64.production_engagement.json" \
+    "$LOG_DIR"/fr13_fixed32_batch_gdn_bv64.production_engagement.json.tmp.*
   printf '%s\n' "$FR13_FIXED32_MODE" > "$LOG_DIR/fr13_fixed32_mode.flag"
+  if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
+    printf '%s\n' "$_fr13_gdn_path_bv_candidate" \
+      > "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag"
+    chmod 400 "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag"
+    rm -f "$LOG_DIR/fr13_fixed32_gdn_path_bv.live_pass.json"
+  elif [[ -n "$_fr13_gdn_path_bv_production" ]]; then
+    cp -- "$_fr13_gdn_path_bv_pass_json" \
+      "$LOG_DIR/fr13_fixed32_gdn_path_bv.production_pass.json"
+    printf '%s\n' "$_fr13_gdn_path_bv_production" \
+      > "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag"
+    chmod 400 "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag"
+  fi
   printf '%s\n' \
     "mode=$FR13_FIXED32_MODE" \
     "pid=$FR13_FIXED32_ENGINE_PID_FILE" \
@@ -801,7 +1930,19 @@ PY
     "boundary=$FR13_FIXED32_BOUNDARY_SNAPSHOT_PATH" \
     > "$LOG_DIR/fr13_fixed32_runtime_paths.txt"
 else
-  rm -f "$LOG_DIR/fr13_fixed32_mode.flag" 2>/dev/null || true
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_mode.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv.production_pass.json" \
+    "$LOG_DIR/fr13_fixed32_gdn_path_bv.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag" \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag" \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_bv8.production_engagement.json" \
+    "$LOG_DIR"/fr13_fixed32_batch_gdn_bv8.production_engagement.json.tmp.* \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_bv64.production_engagement.json" \
+    "$LOG_DIR"/fr13_fixed32_batch_gdn_bv64.production_engagement.json.tmp.* \
+    2>/dev/null || true
 fi
 # FR13_COMMITTER_NATIVE sidecar (worker-env-drop-proof): the EngineCore worker drops FR13_* env vars, so
 # fr10_gdn_tree_kernel reads this sidecar (written here in pid-1 where the env IS present). See its
@@ -843,6 +1984,331 @@ if [[ "${FR13_COMMITTER_GRAPH:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_committer_graph.arm" 2>/dev/null || true
 fi
+# The batched-GDN byte gates stay reference-served until a real SWE-Verified
+# task is explicitly armed after readiness. The EngineCore worker sees these
+# /logs sidecars even when its curated environment drops FR13_*.
+_fr13_batch_gdn_byte_ab="${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}"
+_fr13_batch_gdn_graph_byte_ab="${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}"
+_fr13_batch_gdn_production="${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}"
+_fr13_batch_gdn_bv_candidate="${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}"
+_fr13_batch_gdn_bv_production="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}"
+_fr13_batch_gdn_bv8_timing="${FR13_FIXED32_BATCH_GDN_BV8_TIMING:-0}"
+case "$_fr13_batch_gdn_byte_ab" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_BATCH_GDN_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
+esac
+case "$_fr13_batch_gdn_graph_byte_ab" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
+esac
+case "$_fr13_batch_gdn_production" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_BATCH_GDN_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
+esac
+case "$_fr13_batch_gdn_bv_candidate" in
+  ""|8|16|32|64|128) ;;
+  *) echo "FR13 fixed32 batched GDN diagnostic BV must be 8, 16, 32, 64, or 128" >&2; exit 2 ;;
+esac
+case "$_fr13_batch_gdn_bv_production" in
+  ""|8|64) ;;
+  *) echo "FR13 fixed32 batched GDN production BV must be 8 or 64" >&2; exit 2 ;;
+esac
+if [[ "$_fr13_batch_gdn_bv8_timing" == "1" ]]; then
+  if [[ "$MAX_NUM_SEQS" != "4" \
+        || "${FR13_FIXED32_MODE:-}" != "hydra27_fixed32" \
+        || "${ENFORCE_EAGER:-0}" != "0" \
+        || "${CUDAGRAPH_MODE:-}" != "FULL_AND_PIECEWISE" \
+        || "$_fr13_batch_gdn_byte_ab" != "0" \
+        || "$_fr13_batch_gdn_graph_byte_ab" != "0" \
+        || -n "$_fr13_batch_gdn_bv_candidate" \
+        || ! ( ( "$_fr13_batch_gdn_production" == "0" \
+                 && -z "$_fr13_batch_gdn_bv_production" ) \
+                || ( "$_fr13_batch_gdn_production" == "1" \
+                     && "$_fr13_batch_gdn_bv_production" == "8" ) ) ]]; then
+    echo "FR13_FIXED32_BATCH_GDN_BV8_TIMING requires exact B4 Hydra fixed32 FULL-graph stock or qualified BV8 production" >&2
+    exit 2
+  fi
+fi
+_fr13_batch_gdn_diagnostic_count=$((
+  10#$_fr13_batch_gdn_byte_ab + 10#$_fr13_batch_gdn_graph_byte_ab
+))
+if (( _fr13_batch_gdn_diagnostic_count > 1 )); then
+  echo "FR13 fixed32 eager and graph batched GDN diagnostics are mutually exclusive" >&2
+  exit 2
+fi
+if [[ -n "$_fr13_batch_gdn_bv_candidate" \
+      && -n "$_fr13_batch_gdn_bv_production" ]]; then
+  echo "FR13 fixed32 batched GDN wide-BV diagnostic and production selectors are mutually exclusive" >&2
+  exit 2
+fi
+if [[ ( "$_fr13_batch_gdn_byte_ab" == "1" \
+        || "$_fr13_batch_gdn_graph_byte_ab" == "1" ) \
+      && "$_fr13_batch_gdn_production" == "1" ]]; then
+  echo "FR13 fixed32 batched GDN diagnostic and production are mutually exclusive" >&2
+  exit 2
+fi
+if [[ ( -n "$_fr13_gdn_path_bv_candidate" \
+        || -n "$_fr13_gdn_path_bv_production" ) \
+      && ( "$_fr13_batch_gdn_byte_ab" == "1" \
+           || "$_fr13_batch_gdn_graph_byte_ab" == "1" \
+           || "$_fr13_batch_gdn_production" == "1" ) ]]; then
+  echo "FR13 fixed32 batched GDN and path-BV selectors are mutually exclusive" >&2
+  exit 2
+fi
+if [[ ( -n "$_fr13_gdn_path_bv_candidate" \
+        || -n "$_fr13_gdn_path_bv_production" ) \
+      && ( -n "$_fr13_batch_gdn_bv_candidate" \
+           || -n "$_fr13_batch_gdn_bv_production" ) ]]; then
+  echo "FR13 fixed32 B1 path-BV and B2-B4 batched wide-BV selectors are mutually exclusive" >&2
+  exit 2
+fi
+if [[ -n "$_fr13_batch_gdn_bv_candidate" ]] \
+    && (( _fr13_batch_gdn_diagnostic_count != 1 )); then
+  echo "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE requires exactly one eager or graph byte diagnostic" >&2
+  exit 2
+fi
+if [[ "$_fr13_batch_gdn_bv_candidate" == "8" \
+      && "$_fr13_batch_gdn_graph_byte_ab" != "1" ]]; then
+  echo "FR13 fixed32 batched BV8 structure candidate requires the exact-B4 graph diagnostic" >&2
+  exit 2
+fi
+if [[ -n "$_fr13_batch_gdn_bv_production" \
+      && "$_fr13_batch_gdn_production" != "1" ]]; then
+  echo "FR13_FIXED32_BATCH_GDN_BV_PRODUCTION requires FR13_FIXED32_BATCH_GDN_PRODUCTION=1" >&2
+  exit 2
+fi
+if [[ "$_fr13_batch_gdn_production" != "1" \
+      && ( -n "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
+           || -n "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256" \
+           || -n "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
+           || -n "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" \
+           || -n "$FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON" \
+           || -n "$FR13_FIXED32_BATCH_GDN_GATE_RUNNER" ) ]]; then
+  echo "FR13 fixed32 B4 GDN graph PASS inputs require the production selector" >&2
+  exit 2
+fi
+rm -f \
+  "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag" \
+  "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag" \
+  2>/dev/null || true
+if [[ "$_fr13_batch_gdn_byte_ab" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires FR13_FIXED32_MODE" >&2; exit 2; }
+  [[ "${ENFORCE_EAGER:-0}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires ENFORCE_EAGER=1" >&2; exit 2; }
+  [[ "${FR10_METRICS:-0}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires FR10_METRICS=1" >&2; exit 2; }
+  [[ "${FR13_RING_EXPORT:-1}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires FR13_RING_EXPORT=1" >&2; exit 2; }
+  [[ "${FR13_FLAGS_INKERNEL:-1}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires FR13_FLAGS_INKERNEL=1" >&2; exit 2; }
+  [[ "$MAX_NUM_SEQS" =~ ^[234]$ ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_BYTE_AB requires MAX_NUM_SEQS=2, 3, or 4" >&2; exit 2; }
+  echo "1" > "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.enabled"
+else
+  rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.enabled" 2>/dev/null || true
+fi
+if [[ "$_fr13_batch_gdn_graph_byte_ab" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires FR13_FIXED32_MODE" >&2; exit 2; }
+  [[ "${ENFORCE_EAGER:-0}" == "0" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires ENFORCE_EAGER=0" >&2; exit 2; }
+  [[ "${FR10_METRICS:-0}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires FR10_METRICS=1" >&2; exit 2; }
+  [[ "${FR13_RING_EXPORT:-1}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires FR13_RING_EXPORT=1" >&2; exit 2; }
+  [[ "${FR13_FLAGS_INKERNEL:-1}" == "1" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires FR13_FLAGS_INKERNEL=1" >&2; exit 2; }
+  [[ "$MAX_NUM_SEQS" == "4" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB requires MAX_NUM_SEQS=4" >&2; exit 2; }
+  [[ "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB is incompatible with the B1 diagnostic" >&2; exit 2; }
+  echo "1" > "$LOG_DIR/fr13_fixed32_batch_gdn_graph_byte_ab.enabled"
+else
+  rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_graph_byte_ab.enabled" 2>/dev/null || true
+fi
+if (( _fr13_batch_gdn_diagnostic_count == 1 )); then
+  if [[ -n "$_fr13_batch_gdn_bv_candidate" ]]; then
+    printf '%s\n' "$_fr13_batch_gdn_bv_candidate" \
+      > "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag"
+    chmod 400 "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag"
+  fi
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json"
+  FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH=/logs/fr13_fixed32_batch_gdn_byte_ab.real_event.arm
+else
+  rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.real_event.arm" 2>/dev/null || true
+  FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH=
+fi
+export FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH
+_fr13_cutlass_b4_byte_ab=0
+if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "identity_divisor_b4_byte_ab" \
+      || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4_byte_ab" \
+      || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4_byte_ab" \
+      || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_byte_ab" \
+      || "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
+  _fr13_cutlass_b4_byte_ab=1
+fi
+if [[ "$_fr13_cutlass_b4_byte_ab" == "1" ]]; then
+  [[ "$_fr13_batch_gdn_diagnostic_count" == "0" \
+     && "$MAX_NUM_SEQS" == "4" \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+     && "${ENFORCE_EAGER:-0}" == "1" ]] || {
+    echo "CUTLASS B4 byte A/B requires exclusive eager exact-B4 diagnostics" >&2
+    exit 2
+  }
+  printf '1\n' > "$LOG_DIR/fr13_fixed32_cutlass_b4_byte_ab.enabled"
+  rm -f "$LOG_DIR/fr13_fixed32_cutlass_b4_byte_ab.real_event.arm"
+  FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH=/logs/fr13_fixed32_cutlass_b4_byte_ab.real_event.arm
+else
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_cutlass_b4_byte_ab.enabled" \
+    "$LOG_DIR/fr13_fixed32_cutlass_b4_byte_ab.real_event.arm" \
+    2>/dev/null || true
+  FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH=
+fi
+export FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH
+unset _fr13_cutlass_b4_byte_ab
+_fr13_sfwd_b4_byte_ab=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
+_fr13_sfwd_production=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
+case "$_fr13_sfwd_b4_byte_ab:$_fr13_sfwd_production" in
+  0:0|1:0) ;;
+  0:1|1:1)
+    echo "SFWD production remains unavailable until authenticated B1 and exact4 B4 byte prerequisites are bound" >&2
+    exit 2
+    ;;
+  *)
+    echo "FR13 SFWD byte and production selectors must be exactly 0 or 1" >&2
+    exit 2
+    ;;
+esac
+if [[ "$_fr13_sfwd_b4_byte_ab" == "1" ]]; then
+  if [[ -z "${FR13_FIXED32_MODE:-}" \
+        || "$MAX_NUM_SEQS" != "4" \
+        || "${SWE_CONCURRENCY:-}" != "4" \
+        || "${ENFORCE_EAGER:-0}" != "1" \
+        || "${FR13_DRAFT_VOCAB_ROOT:-0}" != "0" \
+        || "${FR13_DRAFT_VOCAB_K:-65536}" != "0" \
+        || "${FR13_NEEDS_ALLOW:-}" != "FR13_DRAFT_VOCAB_K=0" \
+        || "${FR13_RING_EXPORT:-1}" != "1" \
+        || "${FR13_FLAGS_INKERNEL:-1}" != "1" \
+        || "${FR13_TREE_RUNROW_INIT:-1}" != "1" \
+        || "${FR13_TREE_CONV_FUSED:-1}" != "1" \
+        || "${FR13_CONV_WB_BATCHED:-0}" != "1" \
+        || "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" != "1" ]]; then
+    echo "SFWD state-fusion gate requires exact4 B4 full-vocabulary eager fixed32 source staging" >&2
+    exit 2
+  fi
+  if [[ "$_fr13_batch_gdn_diagnostic_count" != "0" \
+        || "$_fr13_batch_gdn_production" != "0" \
+        || -n "$_fr13_batch_gdn_bv_candidate" \
+        || -n "$_fr13_batch_gdn_bv_production" \
+        || -n "$_fr13_gdn_path_bv_candidate" \
+        || -n "$_fr13_gdn_path_bv_production" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" \
+        || "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" != "0" \
+        || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" != "0" \
+        || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" != "0" \
+        || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" != "0" \
+        || "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" != "0" \
+        || "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" != "0" ]]; then
+    echo "SFWD state-fusion byte gate must be the only kernel candidate" >&2
+    exit 2
+  fi
+  printf '1\n' > "$LOG_DIR/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
+  chmod 400 "$LOG_DIR/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.live_pass.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl"
+  FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm
+else
+  rm -f \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.real_event.arm" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.live_pass.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl" \
+    2>/dev/null || true
+  FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=
+fi
+export FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH
+if [[ "$_fr13_batch_gdn_production" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_PRODUCTION requires FR13_FIXED32_MODE" >&2; exit 2; }
+  [[ "$MAX_NUM_SEQS" =~ ^[234]$ ]] \
+    || { echo "FR13_FIXED32_BATCH_GDN_PRODUCTION requires MAX_NUM_SEQS=2, 3, or 4" >&2; exit 2; }
+  if [[ -n "$_fr13_batch_gdn_bv_production" ]]; then
+    [[ "$MAX_NUM_SEQS" == "4" ]] \
+      || { echo "FR13 fixed32 batched B4 GDN production requires MAX_NUM_SEQS=4" >&2; exit 2; }
+    if [[ "$_fr13_batch_gdn_bv_production" == "8" ]]; then
+      [[ "${FR13_FIXED32_MODE:-}" == "tail6_fixed32" \
+         || "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" ]] \
+        || { echo "FR13 fixed32 batched BV8 production requires a qualified fixed32 mode" >&2; exit 2; }
+    else
+      [[ "${FR13_FIXED32_MODE:-}" == "tail6_fixed32" ]] \
+        || { echo "FR13 fixed32 batched BV64 production requires tail6_fixed32" >&2; exit 2; }
+    fi
+    [[ "${ENFORCE_EAGER:-0}" == "0" \
+       && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" ]] \
+      || { echo "FR13 fixed32 batched B4 GDN production requires the FULL graph runtime" >&2; exit 2; }
+    if [[ "$_fr13_batch_gdn_bv_production" == "8" ]]; then
+      [[ "${FR10_METRICS:-0}" == "1" ]] \
+        || { echo "FR13 fixed32 batched BV8 production requires FR10_METRICS=1" >&2; exit 2; }
+      [[ -f "$FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON" \
+         && ! -L "$FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON" \
+         && -f "$FR13_FIXED32_BATCH_GDN_GATE_RUNNER" \
+         && ! -L "$FR13_FIXED32_BATCH_GDN_GATE_RUNNER" ]] \
+        || { echo "FR13 fixed32 batched BV8 production requires the pinned gate runtime closure" >&2; exit 2; }
+    fi
+    [[ -f "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
+       && ! -L "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
+       && "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
+       && -f "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
+       && ! -L "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
+       && "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+      || { echo "FR13 fixed32 batched B4 GDN production requires a pinned completed exact4 graph gate" >&2; exit 2; }
+    rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json"
+    if [[ "$_fr13_batch_gdn_bv_production" == "8" ]]; then
+      python3 scripts/fr13_b4_gdn_bv8_pass.py install \
+        --live-result "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
+        --expected-live-sha256 "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256" \
+        --gate-verdict "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
+        --expected-gate-verdict-sha256 "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" \
+        --kernel-source src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py \
+        --runtime-manifest "$FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON" \
+        --gate-runner "$FR13_FIXED32_BATCH_GDN_GATE_RUNNER" \
+        --out "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json" \
+        || { echo "FR13 fixed32 batched BV8 graph PASS attestation failed" >&2; exit 2; }
+    else
+      python3 scripts/fr13_b4_gdn_bv64_pass.py install \
+        --live-result "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
+        --expected-live-sha256 "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256" \
+        --gate-verdict "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
+        --expected-gate-verdict-sha256 "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" \
+        --kernel-source src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py \
+        --out "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json" \
+        || { echo "FR13 fixed32 BV64 graph PASS attestation failed" >&2; exit 2; }
+    fi
+    printf '%s\n' "$_fr13_batch_gdn_bv_production" \
+      > "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag"
+    chmod 400 "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag"
+  else
+    [[ -z "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_JSON" \
+       && -z "$FR13_FIXED32_BATCH_GDN_GRAPH_LIVE_PASS_SHA256" \
+       && -z "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_JSON" \
+       && -z "$FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VERDICT_SHA256" \
+       && -z "$FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON" \
+       && -z "$FR13_FIXED32_BATCH_GDN_GATE_RUNNER" ]] \
+      || { echo "FR13 graph PASS inputs are exact B4 production only" >&2; exit 2; }
+    [[ -f "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json" \
+       && ! -L "$LOG_DIR/fr13_fixed32_batch_gdn_byte_ab.pass.json" ]] \
+      || { echo "FR13_FIXED32_BATCH_GDN_PRODUCTION requires a regular live-gate PASS record" >&2; exit 2; }
+  fi
+  echo "1" > "$LOG_DIR/fr13_fixed32_batch_gdn_production.arm"
+else
+  rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_production.arm" 2>/dev/null || true
+fi
 # FR13_SUBTREE_PARALLEL sidecars. EngineCore receives a curated environment
 # that drops these FR13_* gates, so env-only reads silently select the
 # monolithic scan. The worker-visible /logs arms are the serving authority;
@@ -859,6 +2325,20 @@ case "$_fr13_subtree_selfcheck" in
 esac
 if [[ "$_fr13_subtree_selfcheck" == "1" && "$_fr13_subtree_parallel" != "1" ]]; then
   echo "FR13_SUBTREE_PARALLEL_SELFCHECK=1 requires FR13_SUBTREE_PARALLEL=1" >&2
+  exit 2
+fi
+if [[ ( "$_fr13_batch_gdn_byte_ab" == "1" \
+        || "$_fr13_batch_gdn_graph_byte_ab" == "1" \
+        || "$_fr13_batch_gdn_production" == "1" ) \
+      && "$_fr13_subtree_parallel" != "1" ]]; then
+  echo "FR13 fixed32 batched GDN requires FR13_SUBTREE_PARALLEL=1" >&2
+  exit 2
+fi
+if [[ ( "$_fr13_batch_gdn_byte_ab" == "1" \
+        || "$_fr13_batch_gdn_graph_byte_ab" == "1" \
+        || "$_fr13_batch_gdn_production" == "1" ) \
+      && "$_fr13_subtree_selfcheck" == "1" ]]; then
+  echo "FR13 fixed32 batched GDN is incompatible with FR13_SUBTREE_PARALLEL_SELFCHECK=1" >&2
   exit 2
 fi
 if [[ "$_fr13_subtree_selfcheck" == "1" && "${ENFORCE_EAGER:-0}" != "1" ]]; then
@@ -1061,7 +2541,14 @@ fi
 FR13_ENV_FORWARD_ARGS=()
 while IFS= read -r _v; do
   [[ "$_v" == "FR13_FIXED32_INGRESS_SECRET_FILE" \
-     || "$_v" == "FR13_FIXED32_MIDDLEWARE_FLAGS" ]] && continue
+     || "$_v" == "FR13_FIXED32_MIDDLEWARE_FLAGS" \
+     || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_SO" \
+     || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL" \
+     || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256" \
+     || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
+     || "$_v" == "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH" \
+     || "$_v" == "FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH" \
+     || "$_v" == "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH" ]] && continue
   if [[ -n "${FR13_FIXED32_MODE:-}" \
      && "$_v" == "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION" ]]; then
     continue
@@ -1087,10 +2574,12 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
   -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
   -v "$FORKED_FA2_SO:/tmp/fr13_fork_fa2.so:ro" \
+  "${FR13_CUTLASS_WAVE_DOCKER_ARGS[@]}" \
   -v "${FR13_COMPILE_CACHE_DIR:-$HOME/.cache/fr13_vllm_container_cache}:/root/.cache" \
   "${NSYS_DOCKER_ARGS[@]}" \
   "${FR13_FIXED32_DOCKER_ARGS[@]}" \
   "${FR13_ENV_FORWARD_ARGS[@]}" \
+  -e ENFORCE_EAGER="${ENFORCE_EAGER:-0}" \
   -e FR13_FIXED32_MIDDLEWARE_FLAGS="$FR13_FIXED32_MIDDLEWARE_FLAGS" \
   -e PYTORCH_CUDA_ALLOC_CONF="$PYTORCH_CUDA_ALLOC_CONF" \
   -e VLLM_BATCH_INVARIANT="$BATCH_INVARIANT" \
@@ -1186,6 +2675,20 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_SCAN_ALIGN="${FR13_SCAN_ALIGN:-0}" \
   -e FR13_NPAD_INVARIANT="${FR13_NPAD_INVARIANT:-0}" \
   -e FR13_TREE_GDN_GEOM_OVERRIDE="${FR13_TREE_GDN_GEOM_OVERRIDE:-}" \
+  -e FR13_FIXED32_GDN_PATH_BV_CANDIDATE="${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
+  -e FR13_FIXED32_GDN_PATH_BV_PRODUCTION="${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}" \
+  -e FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS_PATH=/logs/fr13_fixed32_gdn_path_bv.production_pass.json \
+  -e FR13_FIXED32_GDN_PATH_BV_LIVE_JSON=/logs/fr13_fixed32_gdn_path_bv.live_pass.json \
+  -e FR13_FIXED32_BATCH_GDN_BV_CANDIDATE="${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
+  -e FR13_FIXED32_BATCH_GDN_BV_PRODUCTION="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" \
+  -e FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH="${FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH:-}" \
+  -e FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH="${FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH:-}" \
+  -e FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB="$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" \
+  -e FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION="$FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION" \
+  -e FR13_FIXED32_SFWD_STATE_FUSION_ENABLED_PATH=/logs/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled \
+  -e FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH="${FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH:-}" \
+  -e FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_PATH=/logs/fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl \
+  -e FR13_FIXED32_SFWD_STATE_FUSION_PASS_PATH=/logs/fr13_fixed32_sfwd_state_fusion.live_pass.json \
   -e FR13_APC_COMMIT_TO_RUNNING_ROW="${FR13_APC_COMMIT_TO_RUNNING_ROW:-1}" \
   -e FR13_TREE_RUNROW_INIT="${FR13_TREE_RUNROW_INIT:-1}" \
   -e FR13_COMMITTER_GRAPH="${FR13_COMMITTER_GRAPH:-1}" \
@@ -1197,6 +2700,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FLAGS_INKERNEL="${FR13_FLAGS_INKERNEL:-1}" \
   -e FR13_CONV_NODEBANK="${FR13_CONV_NODEBANK:-0}" \
   -e FR13_CONV_WB_BATCHED="${FR13_CONV_WB_BATCHED:-0}" \
+  -e FR13_FIXED32_CONV_SOURCE_BATCH="${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" \
   -e FR13_SPEC_BLOCKS_CAP="${FR13_SPEC_BLOCKS_CAP:-0}" \
   -e FR13_SUBTREE_PARALLEL="${FR13_SUBTREE_PARALLEL:-1}" \
   -e FR13_SUBTREE_PARALLEL_SELFCHECK="${FR13_SUBTREE_PARALLEL_SELFCHECK:-0}" \
@@ -1208,6 +2712,46 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DRAFT_VOCAB_K="${FR13_DRAFT_VOCAB_K:-65536}" \
   -e FR13_DRAFT_VOCAB_BLOCKS="${FR13_DRAFT_VOCAB_BLOCKS:-/workspace/scripts/fr13_dvk_subset_blocks.json}" \
   -e FR13_DRAFT_VOCAB_ROOT="$FR13_DRAFT_VOCAB_ROOT" \
+  -e FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" \
+  -e FR13_DRAFT_HEAD_PAD_ROWS="$FR13_DRAFT_HEAD_PAD_ROWS" \
+  -e FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB="$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" \
+  -e FR13_DRAFT_HEAD_M32_LIVE_AB="$FR13_DRAFT_HEAD_M32_LIVE_AB" \
+  -e FR13_DRAFT_HEAD_M32_INSTANCE_ID="$FR13_DRAFT_HEAD_M32_INSTANCE_ID" \
+  -e FR13_DRAFT_HEAD_M32_LIVE_JSON="$FR13_DRAFT_HEAD_M32_LIVE_JSON" \
+  -e FR13_DRAFT_HEAD_M32_PRODUCTION="$FR13_DRAFT_HEAD_M32_PRODUCTION" \
+  -e FR13_DRAFT_HEAD_M32_QUALIFIED_SOURCE_SHA256="$FR13_DRAFT_HEAD_M32_QUALIFIED_SOURCE_SHA256" \
+  -e FR13_DRAFT_HEAD_M32_SOURCE_COMMIT="$FR13_DRAFT_HEAD_M32_SOURCE_COMMIT" \
+  -e FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR="$FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR" \
+  -e FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_SHA256="$FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_SHA256" \
+  -e FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON="$FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON" \
+  -e FR13_FIXED32_TAW_NATIVE_PRECOMPUTE="$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" \
+  -e FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION="$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" \
+  -e FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_PATH=/logs/fr13_fixed32_taw_native_precompute.production_pass.json \
+  -e FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON="$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON" \
+  -e FR13_FA2_QROW16_LIVE_PAGED_AB="$FR13_FA2_QROW16_LIVE_PAGED_AB" \
+  -e FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID="$FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID" \
+  -e FR13_FA2_QROW16_LIVE_PAGED_AB_JSON="$FR13_FA2_QROW16_LIVE_PAGED_AB_JSON" \
+  -e FR13_FA2_QROW16_SO_SHA256="$FR13_FA2_QROW16_SO_SHA256" \
+  -e FR13_FA2_QROW16_PRODUCTION="$FR13_FA2_QROW16_PRODUCTION" \
+  -e FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR="$FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR" \
+  -e FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256="$FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256" \
+  -e FR13_DFWD_UNIFIED_BM8_LIVE_AB="$FR13_DFWD_UNIFIED_BM8_LIVE_AB" \
+  -e FR13_DFWD_UNIFIED_BM8_INSTANCE_ID="$FR13_DFWD_UNIFIED_BM8_INSTANCE_ID" \
+  -e FR13_DFWD_UNIFIED_BM8_LIVE_JSON="$FR13_DFWD_UNIFIED_BM8_LIVE_JSON" \
+  -e FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH="$FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH" \
+  -e FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON="$FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON" \
+  -e FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT="$FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT" \
+  -e FR13_DFWD_UNIFIED_BM8_PRODUCTION="$FR13_DFWD_UNIFIED_BM8_PRODUCTION" \
+  -e FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR="$FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR" \
+  -e FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256="$FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256" \
+  -e FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256="$FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256" \
+  -e FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON="$FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON" \
+  -e FR13_FIXED32_CUTLASS_WAVE="$FR13_FIXED32_CUTLASS_WAVE" \
+  -e FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL="$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" \
+  -e FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256="$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256" \
+  -e FR13_FIXED32_CUTLASS_WAVE_PRODUCTION="$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" \
+  -e FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR="$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR" \
+  -e FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256="$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256" \
   -e FR13_KVREMAP_TIMER="${FR13_KVREMAP_TIMER:-0}" \
   -e FR13_KVREMAP_TIMER_JSON="${FR13_KVREMAP_TIMER_JSON:-}" \
   -e FR13_STATEREMAP_TIMER="${FR13_STATEREMAP_TIMER:-0}" \
@@ -1435,12 +2979,69 @@ temporary.write_text(
 temporary.replace(identity_path)
 PY
 fi
+if [[ "\${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ]]; then
+  if [[ "\${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" == "1" ]]; then
+    python3 /workspace/scripts/fr13_cutlass_wave_binary.py install \
+      --source /tmp/fr13_cutlass_wave.abi3.so \
+      --destination /usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so \
+      --attestation /logs/fr13_fixed32_cutlass_streamk_binary.json \
+      --selector "\$FR13_FIXED32_CUTLASS_WAVE" \
+      --production-pass-sidecar "\$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR" \
+      --expected-production-pass-sha256 "\$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256" \
+      --fixed32-mode "\$FR13_FIXED32_MODE" \
+      --patch-source /workspace/scripts/fr13_patch_cutlass_fixed32_wave.py
+  elif [[ "\$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128_static_byte_ab" ]]; then
+    python3 /workspace/scripts/fr13_cutlass_wave_binary.py install \
+      --source /tmp/fr13_cutlass_wave.abi3.so \
+      --destination /usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so \
+      --attestation /logs/fr13_fixed32_cutlass_streamk_binary.json \
+      --selector "\$FR13_FIXED32_CUTLASS_WAVE" \
+      --resource-credential /tmp/fr13_cutlass_wave_resource_credential.json \
+      --expected-resource-credential-sha256 "\$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256"
+  else
+    python3 /workspace/scripts/fr13_cutlass_wave_binary.py install \
+      --source /tmp/fr13_cutlass_wave.abi3.so \
+      --destination /usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so \
+      --attestation /logs/fr13_fixed32_cutlass_streamk_binary.json \
+      --selector "\$FR13_FIXED32_CUTLASS_WAVE"
+  fi
+fi
 cp /tmp/fr13_fork_fa2.so /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so
 sha256sum /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so | tee /logs/fr13_forked_fa2.sha256
+if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
+  python3 /workspace/scripts/fr13_qrow16_pass_sidecar.py verify \
+    --sidecar "$FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR" \
+    --expected-sidecar-sha256 "$FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256" \
+    --candidate-so /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so \
+    --expected-candidate-sha256 "$FR13_FA2_QROW16_SO_SHA256"
+  export FR13_FA2_QROW16_INTERNAL_PRODUCTION_ATTESTED=1
+fi
+if [[ "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "1" ]]; then
+  python3 /workspace/scripts/fr13_draft_head_m32_pass.py verify \
+    --sidecar "$FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR" \
+    --expected-sidecar-sha256 "$FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_SHA256" \
+    --expected-live-sha256 "$FR13_DRAFT_HEAD_M32_LIVE_PASS_SHA256" \
+    --candidate-source /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py \
+    --expected-candidate-source-sha256 "$FR13_DRAFT_HEAD_M32_QUALIFIED_SOURCE_SHA256"
+  export FR13_DRAFT_HEAD_M32_INTERNAL_PRODUCTION_ATTESTED=1
+fi
 python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
-python3 /workspace/scripts/fr13_patch_fa2_tree_bias.py --skip-source
+if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
+  python3 /workspace/scripts/fr13_bm8_pass_sidecar.py verify \
+    --sidecar "$FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR" \
+    --expected-sidecar-sha256 "$FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256" \
+    --candidate-source /usr/local/lib/python3.12/dist-packages/vllm/v1/attention/ops/triton_unified_attention.py \
+    --expected-candidate-source-sha256 "$FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256"
+  export FR13_DFWD_UNIFIED_BM8_INTERNAL_PRODUCTION_ATTESTED=1
+fi
+python3 /workspace/scripts/fr13_patch_fa2_tree_bias.py --skip-source \
+  $(if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" ]]; then printf '%s' '--fixed32-query-tile16-live-ab'; elif [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then printf '%s' '--fixed32-query-tile16-production'; fi) \
+  $(if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then printf '%s' '--dfwd-unified-bm8-production'; fi)
 python3 - <<'PY'
+import hashlib
+import json
 import os
+import re
 from pathlib import Path
 
 path = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/tree_attn.py')
@@ -1448,6 +3049,112 @@ text = path.read_text()
 needle = 'FR13_FA2_PREFILL_NATIVE'
 if needle not in text:
     raise SystemExit(f'{needle} patch missing in {path}')
+if os.environ.get('FR13_FA2_QROW16_LIVE_PAGED_AB', '0') == '1':
+    live_needle = 'FR13_FA2_QROW16_LIVE_PAGED_AB'
+    if live_needle not in text:
+        raise SystemExit(f'{live_needle} patch missing in {path}')
+    graph_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/compilation/cuda_graph.py')
+    if 'FR13_FA2_QROW16_LIVE_PAGED_AB_REPLAY' not in graph_path.read_text():
+        raise SystemExit(f'qrow16 live replay patch missing in {graph_path}')
+if os.environ.get('FR13_FA2_QROW16_PRODUCTION', '0') == '1':
+    if os.environ.get('FR13_FA2_QROW16_INTERNAL_PRODUCTION_ATTESTED') != '1':
+        raise SystemExit('qrow16 production attestation missing')
+    if 'FR13_FA2_QROW16_PRODUCTION' not in text:
+        raise SystemExit(f'qrow16 production selector missing in {path}')
+    graph_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/compilation/cuda_graph.py')
+    if 'FR13_FA2_QROW16_PRODUCTION_CAPTURE_END' not in graph_path.read_text():
+        raise SystemExit(f'qrow16 production capture postcheck missing in {graph_path}')
+if os.environ.get('FR13_DFWD_UNIFIED_BM8_LIVE_AB', '0') == '1':
+    unified_path = Path(
+        '/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/ops/'
+        'triton_unified_attention.py'
+    )
+    if 'FR13_DFWD_UNIFIED_BM8_LIVE_GATE' not in unified_path.read_text():
+        raise SystemExit(f'DFWD unified BM8 patch missing in {unified_path}')
+    eagle_path = Path(
+        '/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/eagle.py'
+    )
+    if '_fr13_dfwd_unified_bm8_live_replay' not in eagle_path.read_text():
+        raise SystemExit(f'DFWD unified BM8 replay hook missing in {eagle_path}')
+    source_commit = os.environ.get('FR13_DFWD_UNIFIED_BM8_SOURCE_COMMIT', '')
+    if re.fullmatch(r'[0-9a-f]{40}', source_commit) is None:
+        raise SystemExit('DFWD unified BM8 source commit identity is invalid')
+    patcher_path = Path('/workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py')
+    identity = {
+        'schema': 'fr13.fixed32.dfwd_unified_bm8.identity.v1',
+        'source_commit': source_commit,
+        'production_enabled': False,
+        'candidate': {
+            'kernel': 'kernel_unified_attention_2d',
+            'stock_block_m': 16,
+            'stock_block_q': 2,
+            'candidate_block_m': 8,
+            'candidate_block_q': 1,
+            'required_calls': 4,
+        },
+        'files': {
+            label: {
+                'path': str(source_path.resolve()),
+                'sha256': hashlib.sha256(source_path.read_bytes()).hexdigest(),
+            }
+            for label, source_path in {
+                'patcher': patcher_path,
+                'unified_attention': unified_path,
+                'eagle_replay_hook': eagle_path,
+            }.items()
+        },
+    }
+    identity_path = Path(
+        os.environ['FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON']
+    )
+    temporary = identity_path.with_name(identity_path.name + '.tmp')
+    temporary.write_text(
+        json.dumps(identity, ensure_ascii=True, separators=(',', ':'), sort_keys=True)
+        + '\n',
+        encoding='ascii',
+    )
+    temporary.chmod(0o444)
+    temporary.replace(identity_path)
+if os.environ.get('FR13_DFWD_UNIFIED_BM8_PRODUCTION', '0') == '1':
+    if (
+        os.environ.get(
+            'FR13_DFWD_UNIFIED_BM8_INTERNAL_PRODUCTION_ATTESTED', '0'
+        )
+        != '1'
+    ):
+        raise SystemExit('DFWD unified BM8 production attestation missing')
+    if os.environ.get('FR13_DFWD_UNIFIED_BM8_INTERNAL') is not None:
+        raise SystemExit('DFWD unified BM8 internal selector leaked before capture')
+    unified_path = Path(
+        '/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/ops/'
+        'triton_unified_attention.py'
+    )
+    expected_source = os.environ.get(
+        'FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256', ''
+    )
+    if hashlib.sha256(unified_path.read_bytes()).hexdigest() != expected_source:
+        raise SystemExit('DFWD unified BM8 qualified source drifted')
+    tree_impl = text.split('class TreeAttentionImpl', 1)[-1]
+    guarded_call = '_fr13_dfwd_unified_bm8_production_call('
+    if tree_impl.count(guarded_call) != 1:
+        raise SystemExit(f'DFWD unified BM8 guarded fallback is not unique in {path}')
+    fa2_route = (
+        'if os.environ.get("FR13_FA2_TREE_BIAS", "0") == "1" '
+        'and use_tree_bias:'
+    )
+    if fa2_route not in tree_impl or 'flash_attn_varlen_func(' not in tree_impl:
+        raise SystemExit(f'DFWD unified BM8 target FA2 route missing in {path}')
+    gdn_path = Path(
+        '/usr/local/lib/python3.12/dist-packages/vllm/model_executor/'
+        'layers/mamba/gdn_linear_attn.py'
+    )
+    gdn_text = gdn_path.read_text()
+    if (
+        '_fr13_dfwd_unified_bm8_production_begin' not in gdn_text
+        or '_fr13_dfwd_unified_bm8_production_end' not in gdn_text
+        or '_fr13_dfwd_unified_bm8_production_replay_installed' not in gdn_text
+    ):
+        raise SystemExit(f'DFWD unified BM8 production scope missing in {gdn_path}')
 if os.environ.get('FR13_BI_TREE_ATTN', '0') == '1':
     bi_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/batch_invariant.py')
     bi_text = bi_path.read_text()
@@ -1545,6 +3252,7 @@ esac
 exec \"\${NSYS_PREFIX[@]}\" vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b \
   --host 0.0.0.0 --port 9950 --max-num-seqs '$MAX_NUM_SEQS' \
   --gpu-memory-utilization '$GPU_UTIL' --max-model-len '$MAX_MODEL_LEN' --seed '${SEED:-0}' \
+  $(if [[ -n "$KV_CACHE_MEMORY_BYTES" ]]; then printf '%s %s' '--kv-cache-memory-bytes' "$KV_CACHE_MEMORY_BYTES"; fi) \
   --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
   --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
   --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \

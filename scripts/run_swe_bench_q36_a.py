@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import base64
 import concurrent.futures as _cf
+import contextlib
 import datetime as _dt
 import hashlib
 import json
@@ -37,6 +38,7 @@ import os
 import secrets
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import threading
@@ -87,6 +89,9 @@ DEFAULT_DCGM_INTERVAL_S = 0.1  # 10 Hz — 1/10th of Track B's 100 Hz default to
 # campaign scale (500 + 731 instances).
 FIXED32_INGRESS_SECRET_FILE_ENV = "FR13_FIXED32_INGRESS_SECRET_FILE"
 _FIXED32_QWEN_CODE_VERSION = "0.19.4"
+_FIXED32_QWEN_CAP_CHUNK_RELATIVE_PATH = (
+    "npm/lib/node_modules/@qwen-code/qwen-code/chunks/chunk-BFG6OZN7.js"
+)
 _FIXED32_QWEN_SETTINGS_PATH = (
     REPO_ROOT / "config" / "fr13_fixed32" / "qwen_system_settings.json"
 )
@@ -108,6 +113,20 @@ _FIXED32_MOUNTED_RUNTIME_PROOF_SCHEMA = (
 _FIXED32_MOUNTED_RUNTIME_PROOF_FILENAME = (
     "qwen_mounted_runtime_proof.json"
 )
+_FIXED32_QWEN_CAMPAIGN_PROOF_SCHEMA = (
+    "fr13-fixed32-qwen-campaign-provenance-v1"
+)
+_FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME = (
+    "fixed32_qwen_campaign_provenance.json"
+)
+_FIXED32_QWEN_CAMPAIGN_METRICS_PRE_FILENAME = (
+    "fixed32_qwen_campaign_metrics_pre.txt"
+)
+_FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME = (
+    "fixed32_qwen_campaign_metrics_post.txt"
+)
+_FIXED32_PENDING_RUNNER_METADATA_FILENAME = "runner_metadata.pending.json"
+_FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY = "_fixed32_campaign_runtime_args"
 _FIXED32_AGENT_PLACEMENT_SCHEMA = "fr13-fixed32-agent-placement-v1"
 _FIXED32_AGENT_HOST_ALIAS = "alienware"
 _FIXED32_MEASURED_HOST_IDENTITY = {
@@ -147,6 +166,7 @@ _FIXED32_QWEN_BUNDLE_TREE_REQUIRED_ENTRYPOINTS = [
     "node/bin/node",
     "npm/bin/qwen",
     "npm/lib/node_modules/@qwen-code/qwen-code/cli-entry.js",
+    _FIXED32_QWEN_CAP_CHUNK_RELATIVE_PATH,
 ]
 _FIXED32_QWEN_BUNDLE_TREE_SUMMARY = {
     "entry_count": 10_499,
@@ -191,9 +211,24 @@ _FIXED32_QWEN_BUNDLE_TREE_ENTRYPOINTS = {
             "98335eda2e0eaa737640cb5d43da032dee457ff7931c429f972ba3ff8a695d3a"
         ),
     },
+    _FIXED32_QWEN_CAP_CHUNK_RELATIVE_PATH: {
+        "path": _FIXED32_QWEN_CAP_CHUNK_RELATIVE_PATH,
+        "type": "file",
+        "mode": "0644",
+        "bytes": 5_451_144,
+        "sha256": (
+            "d61b71c03180822e875976a721a856144b70ae8b7ff687910021a5cb91a7db89"
+        ),
+    },
 }
 _FIXED32_QWEN_BUNDLE_TREE_SHA256 = (
-    "2643d1d64c03887654794d9bd00a88fbf9ced7362e034557cf196b8a37e744bc"
+    "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516"
+)
+_FIXED32_QWEN_BUNDLE_REMOTE_BASENAME = (
+    "qwen_agent_bundle-" + _FIXED32_QWEN_BUNDLE_TREE_SHA256
+)
+_FIXED32_QWEN_BUNDLE_REMOTE_PATH = (
+    "~/" + _FIXED32_QWEN_BUNDLE_REMOTE_BASENAME
 )
 _FIXED32_QWEN_BUNDLE_TREE_EXPECTED = {
     "schema": _FIXED32_QWEN_BUNDLE_TREE_SCHEMA,
@@ -568,8 +603,10 @@ def _swe_agent_env() -> str:
     runs INSIDE the official SWE-bench per-instance eval image with the conda
     'testbed' env — the benchmark-faithful setup (smoke-proven §67: import astropy
     editable + qwen 0.19.4 in-image). Requires the per-instance image on the codex
-    host + the ~/qwen_agent_bundle (both provisioned; run prepare_qwen_agent_bundle.sh
-    once). Set SWE_AGENT_ENV=legacy (or worktree) to fall back to the old
+    host + the Qwen agent bundle (both provisioned). Fixed32 uses the
+    full-tree-pinned cap-256 derivation produced by
+    fr13_derive_qwen_agent_bundle_cap256.py. Set SWE_AGENT_ENV=legacy (or
+    worktree) to fall back to the old
     qwen-code-runner:v1-over-bare-worktree behavior (which cannot self-verify, §58).
     A missing image FAILS LOUD per-instance (never silently falls back)."""
     val = os.environ.get("SWE_AGENT_ENV", "instance_image").strip().lower()
@@ -691,6 +728,8 @@ _INSTANCE_CONTAINER_PATH = (
 # bind-mount (a fresh dir, NOT /testbed, so it never pollutes the diff; AGENTS.md
 # is untracked so `git diff <base_commit>` excludes it exactly as legacy does),
 # (4) preserves qwen's exit code.
+_REMOTE_AGENT_TRACE_FILENAME = "qwen_trace.jsonl"
+_INSTANCE_TRACE_OUTPUT_PATH = f"/out/{_REMOTE_AGENT_TRACE_FILENAME}"
 _INSTANCE_WRAPPER = (
     "printf %s \"$SWE_AGENTS_B64\" | base64 -d > /testbed/AGENTS.md; "
     "PROMPT=$(printf %s \"$SWE_PROMPT_B64\" | base64 -d); "
@@ -709,6 +748,33 @@ _INSTANCE_WRAPPER = (
     "git -C /testbed diff --no-color --binary HEAD > /out/patch.diff 2>/dev/null; "
     "exit $rc"
 )
+
+
+def _instance_wrapper(*, trace_output_path: str | None) -> str:
+    if trace_output_path is None:
+        return _INSTANCE_WRAPPER
+    if trace_output_path != _INSTANCE_TRACE_OUTPUT_PATH:
+        raise Fixed32BoundaryError("instance trace output path is not canonical")
+    qwen_start = "/opt/qwen/bin/qwen --yolo --output-format stream-json "
+    qwen_end = '-p "$PROMPT"; '
+    if (
+        _INSTANCE_WRAPPER.count(qwen_start) != 1
+        or _INSTANCE_WRAPPER.count(qwen_end) != 1
+    ):
+        raise Fixed32BoundaryError("instance Qwen wrapper shape is unexpected")
+    wrapper = _INSTANCE_WRAPPER.replace(
+        qwen_start,
+        (
+            f'test -f {trace_output_path} && test ! -L {trace_output_path} '
+            f"|| exit 89; {qwen_start}"
+        ),
+        1,
+    )
+    return wrapper.replace(
+        qwen_end,
+        f'-p "$PROMPT" > {trace_output_path}; ',
+        1,
+    )
 
 
 def _fixed32_canonical_json_sha256(value: Any) -> str:
@@ -1304,7 +1370,7 @@ def _inspect_fixed32_qwen_bundle_remote_path(
 def _inspect_fixed32_qwen_bundle_remote(host: str) -> dict[str, Any]:
     return _inspect_fixed32_qwen_bundle_remote_path(
         host,
-        "~/qwen_agent_bundle",
+        _FIXED32_QWEN_BUNDLE_REMOTE_PATH,
     )
 
 
@@ -1321,7 +1387,9 @@ def _create_fixed32_qwen_snapshot_remote(
             *_EVAL_SSH_OPTS,
             host,
             (
-                "set -eu; umask 077; source=$HOME/qwen_agent_bundle; "
+                "set -eu; umask 077; source=$HOME/"
+                + shlex.quote(_FIXED32_QWEN_BUNDLE_REMOTE_BASENAME)
+                + "; "
                 'test -d "$source"; test ! -L "$source"; '
                 f"test ! -e {staging}; test ! -L {staging}; "
                 f'cp -a --reflink=auto -- "$source" {staging}; '
@@ -2210,7 +2278,8 @@ def _instance_agent_command(*, container_name: str, image: str, endpoint: str,
                             agents_md_b64: str, prompt_b64: str,
                             base_commit: str, session_id: str,
                             system_settings_src: str | None = None,
-                            bundle_observation: dict[str, Any] | None = None) -> str:
+                            bundle_observation: dict[str, Any] | None = None,
+                            trace_output_path: str | None = None) -> str:
     """Render the instance_image docker command. Same qwen flags/env as the
     legacy qwen-code template, but the image is the per-instance eval image, the
     node+qwen runtime is bind-mounted read-only from the host bundle at
@@ -2238,6 +2307,7 @@ def _instance_agent_command(*, container_name: str, image: str, endpoint: str,
     cleared_environment_args = " ".join(
         f"-e {name}=" for name in _FIXED32_CLEARED_AGENT_ENV
     )
+    instance_wrapper = _instance_wrapper(trace_output_path=trace_output_path)
     return (
         f"docker run --rm --name {container_name} --network=host -u 0:0 "
         f"-e OPENAI_API_KEY -e OPENAI_BASE_URL={endpoint} "
@@ -2253,7 +2323,7 @@ def _instance_agent_command(*, container_name: str, image: str, endpoint: str,
         f"{system_settings_args}"
         f"-v {host_out_dir}:/out -v {bundle_src}:/opt/qwen:ro "
         f"-w /testbed {image} "
-        f"bash -c '{runtime_proof_wrapper}{_INSTANCE_WRAPPER}'"
+        f"bash -c '{runtime_proof_wrapper}{instance_wrapper}'"
     )
 
 # Default operator prompt (first attempt).
@@ -2335,6 +2405,85 @@ def _iso_now() -> str:
 
 _GIT_LOCK = threading.Lock()  # serialize per-task git ops when --concurrency>1
 
+_AUTOCOMMIT_TASK_ARTIFACT_RELS = (
+    "runner_metadata.json",
+    "patch.diff",
+    "qwen_trace.jsonl",
+    "eval/predictions.jsonl",
+    "eval/eval_report.json",
+    "orchestrator_crash.json",
+)
+_AUTOCOMMIT_FIXED32_CAMPAIGN_RELS = (
+    "runner_metadata.json",
+    "patch.diff",
+    "qwen_trace.jsonl",
+    "eval/predictions.jsonl",
+    "eval/eval_report.json",
+    "qwen_runtime_attestation.json",
+    "qwen_runtime_attestation_post.json",
+    _FIXED32_MOUNTED_RUNTIME_PROOF_FILENAME,
+    "fixed32_task_boundary.json",
+    "vllm_metrics_pre.txt",
+    "vllm_metrics_post.txt",
+)
+
+
+def _autocommit_paths(
+    paths: list[str],
+    message: str,
+    *,
+    strict_push: bool = False,
+) -> None:
+    """Explicit-path artifact commit and optional fail-closed push."""
+    if not paths:
+        if strict_push:
+            raise RuntimeError("artifact commit path set is empty")
+        return
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+
+    def _git(argv, timeout=120):
+        return subprocess.run(
+            ["git", *argv],
+            cwd=str(REPO_ROOT),
+            env=env,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=timeout,
+        ).returncode
+
+    with _GIT_LOCK:
+        add_rc = _git(["add", "-f", "--", *paths])
+        if add_rc != 0:
+            if strict_push:
+                raise RuntimeError(f"git add failed with rc={add_rc}")
+            return
+        staged_rc = _git(["diff", "--cached", "--quiet", "--", *paths])
+        if staged_rc not in (0, 1):
+            if strict_push:
+                raise RuntimeError(
+                    f"git staged-diff check failed with rc={staged_rc}"
+                )
+            return
+        committed = False
+        if staged_rc == 1:
+            commit_rc = _git(["commit", "-m", message, "--", *paths])
+            if commit_rc != 0:
+                if strict_push:
+                    raise RuntimeError(f"git commit failed with rc={commit_rc}")
+                return
+            committed = True
+        if strict_push:
+            for attempt in range(3):
+                push_rc = _git(["push", "origin", "HEAD"], timeout=300)
+                if push_rc == 0:
+                    return
+                if attempt < 2:
+                    time.sleep(2**attempt)
+            raise RuntimeError("git push failed after 3 attempts")
+        if committed:
+            _git(["push", "origin", "HEAD"], timeout=300)
+
 
 def _autocommit_task_artifacts(task_dir: Path, instance_id: str) -> None:
     """Best-effort auto-commit+push of ONE task's curated trace artifacts to the
@@ -2349,27 +2498,67 @@ def _autocommit_task_artifacts(task_dir: Path, instance_id: str) -> None:
     try:
         if os.environ.get("LUMO_SWE_AUTOCOMMIT", "1").strip().lower() in ("0", "off", "false", "no"):
             return
-        rels = ("runner_metadata.json", "patch.diff", "qwen_trace.jsonl",
-                "eval/predictions.jsonl", "eval/eval_report.json",
-                "orchestrator_crash.json")
-        paths = [str(task_dir / r) for r in rels if (task_dir / r).is_file()]
-        if not paths:
-            return
-        env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-        def _git(argv, timeout=120):
-            return subprocess.run(["git", *argv], cwd=str(REPO_ROOT), env=env,
-                                  check=False, stdout=subprocess.DEVNULL,
-                                  stderr=subprocess.DEVNULL, timeout=timeout).returncode
+        paths = [
+            str(task_dir / rel)
+            for rel in _AUTOCOMMIT_TASK_ARTIFACT_RELS
+            if (task_dir / rel).is_file()
+        ]
         msg = (f"FR13 SWE auto-commit: {instance_id} trace artifacts\n\n"
                "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>")
-        with _GIT_LOCK:
-            _git(["add", "-f", "--", *paths])
-            # -m/msg MUST precede the `--` pathspec separator; nothing-to-commit=>rc1
-            # (ok), non-fast-forward push=>rc!=0 (ok).
-            if _git(["commit", "-m", msg, "--", *paths]) == 0:
-                _git(["push", "origin", "HEAD"], timeout=300)
+        _autocommit_paths(paths, msg)
     except Exception:
         pass  # auto-commit is observability; a git error must never fail the run
+
+
+def _autocommit_fixed32_campaign_artifacts(
+    *,
+    dataset_out: Path,
+    per_task_root: Path,
+    instance_ids: list[str],
+    taw_campaign_arm_artifact_path: Path | None = None,
+) -> None:
+    """Commit and push one replay-complete B4 artifact unit."""
+    if os.environ.get("LUMO_SWE_AUTOCOMMIT", "1").strip().lower() in (
+        "0",
+        "off",
+        "false",
+        "no",
+    ):
+        return
+    required = [
+        dataset_out / _FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME,
+        dataset_out / _FIXED32_QWEN_CAMPAIGN_METRICS_PRE_FILENAME,
+        dataset_out / _FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME,
+        *(
+            [taw_campaign_arm_artifact_path]
+            if taw_campaign_arm_artifact_path is not None
+            else []
+        ),
+        *(
+            per_task_root / instance_id / rel
+            for instance_id in instance_ids
+            for rel in _AUTOCOMMIT_FIXED32_CAMPAIGN_RELS
+        ),
+    ]
+    missing = [
+        str(path)
+        for path in required
+        if not path.is_file() or path.is_symlink()
+    ]
+    if missing:
+        raise Fixed32BoundaryError(
+            "fixed32 B4 campaign artifact publication set is incomplete: "
+            f"{missing}"
+        )
+    msg = (
+        "FR13 SWE auto-commit: finalized B4 campaign artifacts\n\n"
+        "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+    )
+    _autocommit_paths(
+        [str(path) for path in required],
+        msg,
+        strict_push=True,
+    )
 
 
 def _metrics_text(metrics_url: str, *, strict: bool = False) -> str:
@@ -2559,6 +2748,478 @@ class Fixed32BoundaryError(RuntimeError):
     """A fixed32 task lacks a valid runtime interval or real-task provenance."""
 
 
+_FIXED32_TAW_REAL_TASK_ARM_NAME = (
+    "fr13_fixed32_taw_native_precompute.real_event.arm"
+)
+_FIXED32_BM8_REAL_TASK_ARM_NAME = "fr13_dfwd_unified_bm8.real_event.arm"
+_FIXED32_CUTLASS_REAL_TASK_ARM_NAME = (
+    "fr13_fixed32_cutlass_streamk.real_event.arm"
+)
+_FIXED32_TAW_REAL_TASK_MARKER_PREFIX = "swe_verified:"
+_FIXED32_TAW_REAL_TASK_ID_CHARACTERS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+)
+
+
+def _fixed32_taw_file_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_nlink,
+        metadata.st_uid,
+        metadata.st_gid,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def _fixed32_taw_directory_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_uid,
+        metadata.st_gid,
+    )
+
+
+class _Fixed32TawRealTaskArm:
+    """Atomically bind one diagnostic TAW run to one pinned SWE task."""
+
+    arm_name = _FIXED32_TAW_REAL_TASK_ARM_NAME
+    artifact_name = "fixed32_taw_real_task_arm.json"
+    label = "TAW"
+    schema = "fr13-fixed32-taw-real-task-arm-v1"
+
+    def __init__(self, *, path: Path, instance_id: str) -> None:
+        if (
+            not instance_id
+            or any(
+                character not in _FIXED32_TAW_REAL_TASK_ID_CHARACTERS
+                for character in instance_id
+            )
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task arm instance ID is not kernel-canonical"
+            )
+        marker = f"{_FIXED32_TAW_REAL_TASK_MARKER_PREFIX}{instance_id}"
+        marker_bytes = (marker + "\n").encode("ascii")
+        if len(marker) > 256:
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task arm marker exceeds 256 bytes"
+            )
+        if not path.is_absolute() or path.name != self.arm_name:
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task arm requires the absolute canonical filename"
+            )
+        try:
+            canonical_parent = path.parent.resolve(strict=True)
+        except OSError as error:
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task arm parent is unavailable: {error}"
+            ) from error
+        if canonical_parent != path.parent:
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task arm parent must not traverse symlinks"
+            )
+
+        self.path = path
+        self.instance_id = instance_id
+        self.marker = marker
+        self.marker_bytes = marker_bytes
+        self.marker_sha256 = hashlib.sha256(marker_bytes).hexdigest()
+        self.rotated_path = path.with_name(
+            path.name.removesuffix(".arm")
+            + f".ended.{self.marker_sha256}.arm"
+        )
+        self.state = "planned"
+        self.started_at: str | None = None
+        self.ended_at: str | None = None
+        self._live_identity: tuple[int, ...] | None = None
+        self._rotated_identity: tuple[int, ...] | None = None
+
+    @property
+    def active(self) -> bool:
+        return self.state in {"published", "active", "rotation_linked"}
+
+    def _open_parent(self) -> int:
+        try:
+            before = self.path.parent.lstat()
+        except OSError as error:
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task arm cannot inspect its parent: {error}"
+            ) from error
+        if (
+            not stat.S_ISDIR(before.st_mode)
+            or stat.S_IMODE(before.st_mode) != 0o700
+            or before.st_uid != os.geteuid()
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task arm parent must be an owned mode-0700 directory"
+            )
+        try:
+            descriptor = os.open(
+                self.path.parent,
+                os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY | os.O_NOFOLLOW,
+            )
+        except OSError as error:
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task arm cannot open its parent: {error}"
+            ) from error
+        opened = os.fstat(descriptor)
+        if (
+            _fixed32_taw_directory_identity(opened)
+            != _fixed32_taw_directory_identity(before)
+        ):
+            os.close(descriptor)
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task arm parent changed while opening"
+            )
+        return descriptor
+
+    @staticmethod
+    def _name_exists(parent_descriptor: int, name: str) -> bool:
+        try:
+            os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+        except FileNotFoundError:
+            return False
+        return True
+
+    def _read_exact(self, parent_descriptor: int, name: str) -> os.stat_result:
+        try:
+            before = os.stat(
+                name,
+                dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+        except OSError as error:
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task marker is unavailable: {error}"
+            ) from error
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_nlink != 1
+            or stat.S_IMODE(before.st_mode) != 0o400
+            or before.st_uid != os.geteuid()
+            or before.st_size != len(self.marker_bytes)
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task marker metadata is noncanonical"
+            )
+        try:
+            descriptor = os.open(
+                name,
+                os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+                dir_fd=parent_descriptor,
+            )
+        except OSError as error:
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task marker cannot be opened exactly: {error}"
+            ) from error
+        try:
+            opened = os.fstat(descriptor)
+            if _fixed32_taw_file_identity(opened) != _fixed32_taw_file_identity(before):
+                raise Fixed32BoundaryError(
+                    f"fixed32 {self.label} real-task marker changed before exact read"
+                )
+            chunks: list[bytes] = []
+            while True:
+                chunk = os.read(descriptor, 4096)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+            after_read = os.fstat(descriptor)
+            if (
+                _fixed32_taw_file_identity(after_read)
+                != _fixed32_taw_file_identity(opened)
+                ):
+                    raise Fixed32BoundaryError(
+                        f"fixed32 {self.label} real-task marker changed during exact read"
+                    )
+        finally:
+            os.close(descriptor)
+        after = os.stat(
+            name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        if _fixed32_taw_file_identity(after) != _fixed32_taw_file_identity(before):
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task marker changed after exact read"
+            )
+        if b"".join(chunks) != self.marker_bytes:
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task marker bytes are noncanonical"
+            )
+        return before
+
+    def start(self) -> None:
+        if self.state != "planned":
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task arm start was invoked twice"
+            )
+        parent_descriptor = self._open_parent()
+        temporary_name: str | None = None
+        try:
+            if self._name_exists(parent_descriptor, self.path.name):
+                raise Fixed32BoundaryError(
+                    f"fixed32 {self.label} real-task arm destination is not fresh"
+                )
+            if self._name_exists(parent_descriptor, self.rotated_path.name):
+                raise Fixed32BoundaryError(
+                    f"fixed32 {self.label} real-task arm rotation destination is not fresh"
+                )
+            temporary_name = (
+                f".{self.path.name}.tmp.{os.getpid()}.{secrets.token_hex(16)}"
+            )
+            descriptor = os.open(
+                temporary_name,
+                os.O_WRONLY
+                | os.O_CREAT
+                | os.O_EXCL
+                | os.O_CLOEXEC
+                | os.O_NOFOLLOW,
+                0o600,
+                dir_fd=parent_descriptor,
+            )
+            try:
+                view = memoryview(self.marker_bytes)
+                while view:
+                    written = os.write(descriptor, view)
+                    if written <= 0:
+                        raise Fixed32BoundaryError(
+                            f"fixed32 {self.label} real-task marker write made no progress"
+                        )
+                    view = view[written:]
+                os.fchmod(descriptor, 0o400)
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            os.link(
+                temporary_name,
+                self.path.name,
+                src_dir_fd=parent_descriptor,
+                dst_dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+            self.state = "published"
+            os.unlink(temporary_name, dir_fd=parent_descriptor)
+            temporary_name = None
+            os.fsync(parent_descriptor)
+            metadata = self._read_exact(parent_descriptor, self.path.name)
+            self._live_identity = _fixed32_taw_file_identity(metadata)
+            self.started_at = _iso_now()
+            self.state = "active"
+        except Fixed32BoundaryError:
+            raise
+        except Exception as error:
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task arm creation failed: "
+                f"{type(error).__name__}: {error}"
+            ) from error
+        finally:
+            if temporary_name is not None:
+                try:
+                    os.unlink(temporary_name, dir_fd=parent_descriptor)
+                except FileNotFoundError:
+                    pass
+            os.close(parent_descriptor)
+
+    def finish(self) -> None:
+        if not self.active:
+            if self.state == "ended":
+                return
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task arm end has no active task"
+            )
+        parent_descriptor = self._open_parent()
+        try:
+            metadata = self._read_exact(parent_descriptor, self.path.name)
+            identity = _fixed32_taw_file_identity(metadata)
+            if self._live_identity is not None and identity != self._live_identity:
+                raise Fixed32BoundaryError(
+                    f"fixed32 {self.label} real-task marker identity changed during the task"
+                )
+            if self._name_exists(parent_descriptor, self.rotated_path.name):
+                raise Fixed32BoundaryError(
+                    f"fixed32 {self.label} real-task arm rotation destination is not fresh"
+                )
+            os.link(
+                self.path.name,
+                self.rotated_path.name,
+                src_dir_fd=parent_descriptor,
+                dst_dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+            self.state = "rotation_linked"
+            os.unlink(self.path.name, dir_fd=parent_descriptor)
+            os.fsync(parent_descriptor)
+            rotated = self._read_exact(
+                parent_descriptor,
+                self.rotated_path.name,
+            )
+            self._rotated_identity = _fixed32_taw_file_identity(rotated)
+            self.ended_at = _iso_now()
+            self.state = "ended"
+        except Fixed32BoundaryError:
+            raise
+        except Exception as error:
+            raise Fixed32BoundaryError(
+                f"fixed32 {self.label} real-task arm rotation failed: "
+                f"{type(error).__name__}: {error}"
+            ) from error
+        finally:
+            os.close(parent_descriptor)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "schema": self.schema,
+            "run_classification": "b1_diagnostic",
+            "gate_eligible": False,
+            "floor_acceptance_eligible": False,
+            "instance_id": self.instance_id,
+            "marker": self.marker,
+            "marker_bytes": len(self.marker_bytes),
+            "marker_sha256": self.marker_sha256,
+            "live_path": str(self.path),
+            "rotated_path": str(self.rotated_path),
+            "state": self.state,
+            "started_at": self.started_at,
+            "ended_at": self.ended_at,
+        }
+
+
+class _Fixed32TawCampaignArm(_Fixed32TawRealTaskArm):
+    """Publish one TAW marker for an exact-B4 canonical SWE campaign."""
+
+    artifact_name = "fixed32_taw_campaign_arm.json"
+    schema = "fr13-fixed32-taw-campaign-arm-v1"
+
+    def __init__(
+        self,
+        *,
+        path: Path,
+        subset_binding: dict[str, Any],
+        concurrency: int,
+    ) -> None:
+        if concurrency != 4:
+            raise Fixed32BoundaryError(
+                "fixed32 TAW campaign arm requires exact B4 concurrency"
+            )
+        if not isinstance(subset_binding, dict):
+            raise Fixed32BoundaryError(
+                "fixed32 TAW campaign arm subset binding is not an object"
+            )
+        try:
+            from fr13_floor_gate import (
+                GateError as FloorGateError,
+                validate_canonical_subset,
+            )
+
+            binding_path = Path(subset_binding["path"])
+            validated = validate_canonical_subset(binding_path)
+        except (KeyError, TypeError, ValueError, OSError, FloorGateError) as error:
+            raise Fixed32BoundaryError(
+                f"fixed32 TAW campaign arm subset binding is invalid: {error}"
+            ) from error
+        if subset_binding != validated:
+            raise Fixed32BoundaryError(
+                "fixed32 TAW campaign arm differs from the canonical subset binding"
+            )
+        task_count = validated["task_count"]
+        if task_count not in (4, 16):
+            raise Fixed32BoundaryError(
+                "fixed32 TAW campaign arm requires a canonical 4/16-task set"
+            )
+        subset_sha256 = validated["sha256"]
+        task_ids = validated["task_ids"]
+        campaign_identity = f"campaign{task_count}_{subset_sha256}"
+        super().__init__(path=path, instance_id=campaign_identity)
+        self.task_count = task_count
+        self.concurrency = concurrency
+        self.subset_path = validated["path"]
+        self.subset_sha256 = subset_sha256
+        self.task_ids = list(task_ids)
+
+    def as_dict(self) -> dict[str, Any]:
+        payload = super().as_dict()
+        payload.pop("instance_id")
+        payload.update(
+            {
+                "run_classification": "b4_taw_diagnostic",
+                "batch_size": 4,
+                "concurrency": self.concurrency,
+                "task_count": self.task_count,
+                "subset_path": self.subset_path,
+                "subset_sha256": self.subset_sha256,
+                "task_ids": self.task_ids,
+            }
+        )
+        return payload
+
+
+def _run_with_fixed32_taw_campaign_arm(
+    *,
+    arm: _Fixed32TawCampaignArm | None,
+    artifact_path: Path | None,
+    action: Any,
+) -> Any:
+    """Keep one authenticated marker live across all concurrent B4 workers."""
+    if arm is None:
+        if artifact_path is not None:
+            raise Fixed32BoundaryError(
+                "fixed32 TAW campaign artifact path has no campaign arm"
+            )
+        return action()
+    if artifact_path is None:
+        raise Fixed32BoundaryError(
+            "fixed32 TAW campaign arm has no artifact path"
+        )
+
+    def _write_artifact() -> None:
+        temporary = artifact_path.with_suffix(artifact_path.suffix + ".tmp")
+        temporary.write_text(
+            json.dumps(
+                arm.as_dict(),
+                ensure_ascii=True,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="ascii",
+        )
+        os.replace(temporary, artifact_path)
+
+    try:
+        arm.start()
+        _write_artifact()
+        return action()
+    finally:
+        if arm.active:
+            arm.finish()
+            _write_artifact()
+
+
+class _Fixed32Bm8RealTaskArm(_Fixed32TawRealTaskArm):
+    """Atomically bind the BM8 byte gate to one pinned SWE task."""
+
+    arm_name = _FIXED32_BM8_REAL_TASK_ARM_NAME
+    artifact_name = "fixed32_bm8_real_task_arm.json"
+    label = "BM8"
+    schema = "fr13-fixed32-bm8-real-task-arm-v1"
+
+
+class _Fixed32CutlassRealTaskArm(_Fixed32TawRealTaskArm):
+    """Atomically bind the CUTLASS byte gate to one pinned SWE task."""
+
+    arm_name = _FIXED32_CUTLASS_REAL_TASK_ARM_NAME
+    artifact_name = "fixed32_cutlass_streamk_real_task_arm.json"
+    label = "CUTLASS Stream-K"
+    schema = "fr13-fixed32-cutlass-streamk-real-task-arm-v1"
+
+
 _FIXED32_TOKEN_USAGE_FIELDS = frozenset(
     {
         "input_tokens",
@@ -2624,6 +3285,106 @@ def _fixed32_usage_records(value: Any) -> list[dict[str, Any]]:
     return records
 
 
+def _fixed32_load_trace_events(
+    trace_path: Path,
+    *,
+    instance_id: str,
+) -> tuple[bytes, list[dict[str, Any]]]:
+    try:
+        trace_metadata = trace_path.lstat()
+        if (
+            not stat.S_ISREG(trace_metadata.st_mode)
+            or trace_metadata.st_nlink != 1
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                f"trace is not a single-link regular file: {trace_path}"
+            )
+        raw_trace = trace_path.read_bytes()
+    except OSError as exc:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            f"cannot read trace {trace_path}: {type(exc).__name__}: {exc}"
+        ) from exc
+    if not raw_trace:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: trace is empty: {trace_path}"
+        )
+    if not raw_trace.endswith(b"\n"):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            f"trace is not newline-framed: {trace_path}"
+        )
+    try:
+        trace_text = raw_trace.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: trace is not UTF-8: {trace_path}"
+        ) from exc
+
+    def _trace_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        parsed: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in parsed:
+                raise ValueError("duplicate trace key")
+            parsed[key] = value
+        return parsed
+
+    def _trace_nonfinite(value: str) -> Any:
+        raise ValueError(f"nonfinite trace value: {value}")
+
+    events: list[dict[str, Any]] = []
+    for line_number, line in enumerate(trace_text.splitlines(), start=1):
+        if not line.strip():
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                f"blank JSONL record at {trace_path}:{line_number}"
+            )
+        try:
+            event = json.loads(
+                line,
+                object_pairs_hook=_trace_object,
+                parse_constant=_trace_nonfinite,
+            )
+        except (ValueError, json.JSONDecodeError) as exc:
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                f"invalid JSON at {trace_path}:{line_number}: {exc}"
+            ) from exc
+        if not isinstance(event, dict):
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                f"JSONL record is not an object at {trace_path}:{line_number}"
+            )
+        events.append(event)
+    if not events:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: trace has no JSONL events"
+        )
+    return raw_trace, events
+
+
+def _fixed32_artifact_identity(path: Path, raw: bytes) -> dict[str, Any]:
+    return {
+        "path": str(path.resolve()),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "bytes": len(raw),
+    }
+
+
+def _write_fixed32_campaign_metrics(path: Path) -> bytes:
+    raw = _metrics_snapshot(
+        DEFAULT_METRICS_URL,
+        strict=True,
+    ).encode("utf-8")
+    if not raw:
+        raise Fixed32BoundaryError("fixed32 B4 campaign metric snapshot is empty")
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_bytes(raw)
+    os.replace(temporary, path)
+    return raw
+
+
 def _fixed32_real_task_provenance(
     *,
     instance_id: str,
@@ -2632,6 +3393,10 @@ def _fixed32_real_task_provenance(
     task_key_id: str,
     task_auth_before: dict[str, Any],
     task_auth_after: dict[str, Any],
+    metrics_pre_path: Path | None = None,
+    metrics_post_path: Path | None = None,
+    campaign_trace_requests: dict[str, Any] | None = None,
+    campaign_metric_binding: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Validate and describe the real offloaded model run for one fixed32 task.
 
@@ -2932,64 +3697,10 @@ def _fixed32_real_task_provenance(
             )
         attestation_artifacts[filename] = raw
 
-    try:
-        raw_trace = trace_path.read_bytes()
-    except OSError as exc:
-        raise Fixed32BoundaryError(
-            f"fixed32 real-task provenance {instance_id}: "
-            f"cannot read trace {trace_path}: {type(exc).__name__}: {exc}"
-        ) from exc
-    if not raw_trace:
-        raise Fixed32BoundaryError(
-            f"fixed32 real-task provenance {instance_id}: trace is empty: {trace_path}"
-        )
-    try:
-        trace_text = raw_trace.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise Fixed32BoundaryError(
-            f"fixed32 real-task provenance {instance_id}: trace is not UTF-8: {trace_path}"
-        ) from exc
-
-    events: list[dict[str, Any]] = []
-
-    def _trace_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-        parsed: dict[str, Any] = {}
-        for key, value in pairs:
-            if key in parsed:
-                raise ValueError("duplicate trace key")
-            parsed[key] = value
-        return parsed
-
-    def _trace_nonfinite(value: str) -> Any:
-        raise ValueError(f"nonfinite trace value: {value}")
-
-    for line_number, line in enumerate(trace_text.splitlines(), start=1):
-        if not line.strip():
-            raise Fixed32BoundaryError(
-                f"fixed32 real-task provenance {instance_id}: "
-                f"blank JSONL record at {trace_path}:{line_number}"
-            )
-        try:
-            event = json.loads(
-                line,
-                object_pairs_hook=_trace_object,
-                parse_constant=_trace_nonfinite,
-            )
-        except (ValueError, json.JSONDecodeError) as exc:
-            raise Fixed32BoundaryError(
-                f"fixed32 real-task provenance {instance_id}: "
-                f"invalid JSON at {trace_path}:{line_number}: {exc}"
-            ) from exc
-        if not isinstance(event, dict):
-            raise Fixed32BoundaryError(
-                f"fixed32 real-task provenance {instance_id}: "
-                f"JSONL record is not an object at {trace_path}:{line_number}"
-            )
-        events.append(event)
-    if not events:
-        raise Fixed32BoundaryError(
-            f"fixed32 real-task provenance {instance_id}: trace has no JSONL events"
-        )
+    raw_trace, events = _fixed32_load_trace_events(
+        trace_path,
+        instance_id=instance_id,
+    )
     init_event = events[0]
     if (
         init_event.get("type") != "system"
@@ -3038,18 +3749,179 @@ def _fixed32_real_task_provenance(
             f"fixed32 real-task provenance {instance_id}: "
             "trace contains no nonempty assistant/model output"
         )
+    metric_paths = (metrics_pre_path, metrics_post_path)
+    if any(path is not None for path in metric_paths) and any(
+        path is None for path in metric_paths
+    ):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            "pre/post vLLM metrics must be supplied together"
+        )
+    campaign_arguments = (
+        campaign_trace_requests,
+        campaign_metric_binding,
+    )
+    if any(value is not None for value in campaign_arguments) and any(
+        value is None for value in campaign_arguments
+    ):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            "campaign trace requests and metric binding must be supplied together"
+        )
+    if metrics_pre_path is not None and campaign_trace_requests is not None:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            "task and campaign metric scopes are mutually exclusive"
+        )
+    metrics_pre_raw: bytes | None = None
+    metrics_post_raw: bytes | None = None
+    if metrics_pre_path is not None and metrics_post_path is not None:
+        for label, path in (
+            ("pre", metrics_pre_path),
+            ("post", metrics_post_path),
+        ):
+            if not path.is_file() or path.is_symlink():
+                raise Fixed32BoundaryError(
+                    f"fixed32 real-task provenance {instance_id}: "
+                    f"{label} vLLM metrics are missing or symlinked"
+                )
+        try:
+            metrics_pre_raw = metrics_pre_path.read_bytes()
+            metrics_post_raw = metrics_post_path.read_bytes()
+        except OSError as exc:
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                f"cannot read vLLM metrics: {type(exc).__name__}: {exc}"
+            ) from exc
+        if not metrics_pre_raw or not metrics_post_raw:
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                "pre/post vLLM metrics are empty"
+            )
     try:
-        trace_requests = fixed32_contract.validate_fixed32_trace_model_requests(
-            events,
-            expected_session_id=fixed32_contract.fixed32_trace_session_id(
-                instance_id
-            ),
+        base_trace_requests = (
+            fixed32_contract.validate_fixed32_trace_model_requests(
+                events,
+                expected_session_id=fixed32_contract.fixed32_trace_session_id(
+                    instance_id
+                ),
+            )
+            if campaign_trace_requests is not None
+            else None
+        )
+        trace_requests = (
+            campaign_trace_requests
+            if campaign_trace_requests is not None
+            else fixed32_contract.validate_fixed32_trace_model_requests(
+                events,
+                expected_session_id=fixed32_contract.fixed32_trace_session_id(
+                    instance_id
+                ),
+                expected_completed_logical_model_requests=(
+                    task_auth_deltas["completed_logical_model_requests"]
+                    if metrics_pre_raw is not None
+                    else None
+                ),
+                metrics_pre=metrics_pre_raw,
+                metrics_post=metrics_post_raw,
+            )
         )
     except fixed32_contract.ContractError as exc:
         raise Fixed32BoundaryError(
             f"fixed32 real-task provenance {instance_id}: "
             f"trace cannot independently count completed model requests: {exc}"
         ) from exc
+    campaign_artifact: dict[str, Any] | None = None
+    campaign_metric_evidence_sha256: str | None = None
+    if campaign_trace_requests is not None:
+        if (
+            not isinstance(campaign_trace_requests, dict)
+            or base_trace_requests is None
+            or not isinstance(base_trace_requests, dict)
+            or not isinstance(campaign_metric_binding, dict)
+            or set(campaign_metric_binding)
+            != {"artifact", "metric_evidence_sha256"}
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                "campaign metric binding is not exact"
+            )
+        campaign_artifact = campaign_metric_binding["artifact"]
+        campaign_metric_evidence_sha256 = campaign_metric_binding[
+            "metric_evidence_sha256"
+        ]
+        task_metric_evidence = trace_requests.get(
+            "qwen_compaction_metric_evidence"
+        )
+        artifact_digest = (
+            campaign_artifact.get("sha256")
+            if isinstance(campaign_artifact, dict)
+            else None
+        )
+        base_request_ids = base_trace_requests["model_request_ids"]
+        base_request_ids_sha256 = hashlib.sha256(
+            json.dumps(
+                base_request_ids,
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        full_request_ids = trace_requests.get("model_request_ids")
+        if (
+            not isinstance(campaign_artifact, dict)
+            or set(campaign_artifact) != {"path", "sha256", "bytes"}
+            or not isinstance(campaign_artifact.get("path"), str)
+            or not campaign_artifact["path"]
+            or not isinstance(artifact_digest, str)
+            or len(artifact_digest) != 64
+            or any(char not in "0123456789abcdef" for char in artifact_digest)
+            or type(campaign_artifact.get("bytes")) is not int
+            or campaign_artifact["bytes"] <= 0
+            or not isinstance(campaign_metric_evidence_sha256, str)
+            or len(campaign_metric_evidence_sha256) != 64
+            or any(
+                char not in "0123456789abcdef"
+                for char in campaign_metric_evidence_sha256
+            )
+            or not isinstance(task_metric_evidence, dict)
+            or task_metric_evidence.get("schema")
+            != fixed32_contract.QWEN_CAMPAIGN_TASK_METRIC_SCHEMA
+            or task_metric_evidence.get("campaign_metric_evidence_sha256")
+            != campaign_metric_evidence_sha256
+            or trace_requests.get("qwen_campaign_metric_evidence_sha256")
+            != campaign_metric_evidence_sha256
+            or task_metric_evidence.get("base_model_request_ids_sha256")
+            != base_request_ids_sha256
+            or task_metric_evidence.get(
+                "trace_completed_requests_before_failed_compactions"
+            )
+            != len(base_request_ids)
+            or trace_requests.get(
+                "hidden_successful_compaction_model_requests"
+            )
+            != base_trace_requests.get(
+                "hidden_successful_compaction_model_requests",
+                base_trace_requests.get("hidden_compaction_model_requests", 0),
+            )
+            or trace_requests.get("synthetic_compaction_failure_terminal")
+            != base_trace_requests.get(
+                "synthetic_compaction_failure_terminal",
+                False,
+            )
+            or not isinstance(full_request_ids, list)
+            or full_request_ids[: len(base_request_ids)] != base_request_ids
+            or any(
+                not isinstance(request_id, str)
+                or not request_id.startswith(
+                    "qwen-hidden-failed-compaction-sha256:"
+                )
+                for request_id in full_request_ids[len(base_request_ids) :]
+            )
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 real-task provenance {instance_id}: "
+                "campaign trace request evidence does not bind to the trace"
+            )
     qwen_model_request_ids = trace_requests["model_request_ids"]
     request_id_digests = sorted(
         hashlib.sha256(response_id.encode("utf-8")).hexdigest()
@@ -3125,6 +3997,28 @@ def _fixed32_real_task_provenance(
             attestation_artifacts["qwen_runtime_attestation_post.json"]
         ).hexdigest(),
         "trace_completed_logical_model_requests": len(qwen_model_request_ids),
+        "hidden_successful_compaction_model_requests": trace_requests.get(
+            "hidden_successful_compaction_model_requests",
+            trace_requests.get("hidden_compaction_model_requests", 0),
+        ),
+        "hidden_failed_compaction_model_requests": trace_requests.get(
+            "hidden_failed_compaction_model_requests",
+            0,
+        ),
+        "synthetic_compaction_failure_terminal": trace_requests.get(
+            "synthetic_compaction_failure_terminal",
+            False,
+        ),
+        "qwen_metric_scope": (
+            "campaign" if campaign_artifact is not None else "task"
+        ),
+        "qwen_campaign_metric_proof": campaign_artifact,
+        "qwen_campaign_metric_evidence_sha256": (
+            campaign_metric_evidence_sha256
+        ),
+        "qwen_compaction_metric_evidence": trace_requests.get(
+            "qwen_compaction_metric_evidence"
+        ),
         "trace_model_request_ids_sha256": hashlib.sha256(
             json.dumps(
                 request_id_digests,
@@ -3967,18 +4861,25 @@ class _Fixed32TaskBracket:
         instance_id: str,
         boundary_snapshot_base: Path,
         server_capacity: int,
+        taw_real_task_arm: _Fixed32TawRealTaskArm | None = None,
     ) -> None:
         self.client = client
         self.task_dir = task_dir
         self.instance_id = instance_id
         self.boundary_snapshot_base = boundary_snapshot_base
         self.server_capacity = server_capacity
+        self.taw_real_task_arm = taw_real_task_arm
         self.pre_ack = None
         self.post_ack = None
         self.pre_snapshot_ref = None
         self.post_snapshot_ref = None
         self.post_attempted = False
         self.artifact_path = task_dir / "fixed32_task_boundary.json"
+        self.taw_arm_artifact_path = task_dir / (
+            taw_real_task_arm.artifact_name
+            if taw_real_task_arm is not None
+            else "fixed32_taw_real_task_arm.json"
+        )
 
     @property
     def started(self) -> bool:
@@ -4019,6 +4920,22 @@ class _Fixed32TaskBracket:
         )
         os.replace(temporary, self.artifact_path)
 
+    def _write_taw_arm_artifact(self) -> None:
+        if self.taw_real_task_arm is None:
+            return
+        temporary = self.taw_arm_artifact_path.with_suffix(".json.tmp")
+        temporary.write_text(
+            json.dumps(
+                self.taw_real_task_arm.as_dict(),
+                ensure_ascii=True,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, self.taw_arm_artifact_path)
+
     def pre(self, metrics_path: Path) -> None:
         if self.started or self.post_attempted:
             raise Fixed32BoundaryError("fixed32 task pre bracket was invoked twice")
@@ -4047,8 +4964,34 @@ class _Fixed32TaskBracket:
             "path": str(snapshot_path),
             "sha256": snapshot_sha,
         }
-        metrics_path.write_text(metrics, encoding="utf-8")
-        self._write_artifact()
+        try:
+            metrics_path.write_text(metrics, encoding="utf-8")
+            if self.taw_real_task_arm is not None:
+                self.taw_real_task_arm.start()
+                self._write_taw_arm_artifact()
+            self._write_artifact()
+        except Exception as exc:
+            cleanup_error = None
+            if (
+                self.taw_real_task_arm is not None
+                and self.taw_real_task_arm.active
+            ):
+                try:
+                    self.taw_real_task_arm.finish()
+                    self._write_taw_arm_artifact()
+                except Exception as error:  # noqa: BLE001
+                    cleanup_error = error
+            self.pre_ack = None
+            self.pre_snapshot_ref = None
+            detail = f"{type(exc).__name__}: {exc}"
+            if cleanup_error is not None:
+                detail += (
+                    "; arm cleanup failed: "
+                    f"{type(cleanup_error).__name__}: {cleanup_error}"
+                )
+            raise Fixed32BoundaryError(
+                f"fixed32 pre bracket publication failed: {detail}"
+            ) from exc
 
     def post(self, metrics_path: Path) -> dict[str, Any]:
         if not self.started:
@@ -4058,6 +5001,7 @@ class _Fixed32TaskBracket:
                 return json.loads(self.artifact_path.read_text(encoding="utf-8"))
             raise Fixed32BoundaryError("fixed32 post bracket already failed")
         self.post_attempted = True
+        snapshot_error = None
         try:
             ack = self.client.snapshot()
             counters = _validate_fixed32_ack(ack, label="post")
@@ -4087,9 +5031,30 @@ class _Fixed32TaskBracket:
                 snapshot=snapshot,
             )
         except Exception as exc:
+            snapshot_error = exc
+        arm_error = None
+        if self.taw_real_task_arm is not None:
+            try:
+                self.taw_real_task_arm.finish()
+                self._write_taw_arm_artifact()
+            except Exception as exc:  # noqa: BLE001
+                arm_error = exc
+        if snapshot_error is not None or arm_error is not None:
+            try:
+                self._write_artifact()
+            except Exception:
+                pass
+            details = []
+            if snapshot_error is not None:
+                details.append(
+                    f"snapshot={type(snapshot_error).__name__}: {snapshot_error}"
+                )
+            if arm_error is not None:
+                details.append(f"arm={type(arm_error).__name__}: {arm_error}")
+            cause = snapshot_error if snapshot_error is not None else arm_error
             raise Fixed32BoundaryError(
-                f"fixed32 post bracket failed: {type(exc).__name__}: {exc}"
-            ) from exc
+                "fixed32 post bracket failed: " + "; ".join(details)
+            ) from cause
         self.post_ack = ack
         self.post_snapshot_ref = {
             "schema": snapshot["schema"],
@@ -4097,8 +5062,158 @@ class _Fixed32TaskBracket:
             "path": str(snapshot_path),
             "sha256": snapshot_sha,
         }
-        metrics_path.write_text(metrics, encoding="utf-8")
-        self._write_artifact()
+        try:
+            metrics_path.write_text(metrics, encoding="utf-8")
+            self._write_artifact()
+        except Exception as exc:
+            self.post_ack = None
+            self.post_snapshot_ref = None
+            try:
+                self._write_artifact()
+            except Exception:
+                pass
+            raise Fixed32BoundaryError(
+                "fixed32 post bracket artifact failed: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+        return json.loads(self.artifact_path.read_text(encoding="utf-8"))
+
+
+class _Fixed32EagerKernelDiagnosticTaskBracket(_Fixed32TaskBracket):
+    """Authenticate a real task without claiming graph-census evidence."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.pre_metrics_ref: dict[str, Any] | None = None
+        self.post_metrics_ref: dict[str, Any] | None = None
+
+    @property
+    def started(self) -> bool:
+        return self.pre_metrics_ref is not None
+
+    @property
+    def complete(self) -> bool:
+        return self.post_metrics_ref is not None
+
+    def _write_artifact(self) -> None:
+        payload = {
+            "schema": "fr13-fixed32-eager-kernel-diagnostic-task-bracket-v1",
+            "instance_id": self.instance_id,
+            "mode": self.client.mode,
+            "producer_pid": self.client.producer_pid,
+            "run_classification": "eager_kernel_byte_diagnostic",
+            "acceptance_valid": False,
+            "flush_protocol_used": False,
+            "pre_metrics": self.pre_metrics_ref,
+            "post_metrics": self.post_metrics_ref,
+        }
+        temporary = self.artifact_path.with_suffix(".json.tmp")
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, self.artifact_path)
+
+    @staticmethod
+    def _metrics_ref(path: Path, raw: bytes) -> dict[str, Any]:
+        return {
+            "path": str(path),
+            "bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }
+
+    def pre(self, metrics_path: Path) -> None:
+        if self.started or self.post_attempted:
+            raise Fixed32BoundaryError(
+                "fixed32 eager diagnostic task pre bracket was invoked twice"
+            )
+        try:
+            metrics = _metrics_snapshot(DEFAULT_METRICS_URL).encode("utf-8")
+            metrics_path.write_bytes(metrics)
+            self.pre_metrics_ref = self._metrics_ref(metrics_path, metrics)
+            if self.taw_real_task_arm is not None:
+                self.taw_real_task_arm.start()
+                self._write_taw_arm_artifact()
+            self._write_artifact()
+        except Exception as exc:
+            cleanup_error = None
+            if (
+                self.taw_real_task_arm is not None
+                and self.taw_real_task_arm.active
+            ):
+                try:
+                    self.taw_real_task_arm.finish()
+                    self._write_taw_arm_artifact()
+                except Exception as error:  # noqa: BLE001
+                    cleanup_error = error
+            self.pre_metrics_ref = None
+            detail = f"{type(exc).__name__}: {exc}"
+            if cleanup_error is not None:
+                detail += (
+                    "; arm cleanup failed: "
+                    f"{type(cleanup_error).__name__}: {cleanup_error}"
+                )
+            raise Fixed32BoundaryError(
+                f"fixed32 eager diagnostic pre bracket failed: {detail}"
+            ) from exc
+
+    def post(self, metrics_path: Path) -> dict[str, Any]:
+        if not self.started:
+            raise Fixed32BoundaryError(
+                "fixed32 eager diagnostic post bracket has no pre bracket"
+            )
+        if self.post_attempted:
+            if self.complete:
+                return json.loads(self.artifact_path.read_text(encoding="utf-8"))
+            raise Fixed32BoundaryError(
+                "fixed32 eager diagnostic post bracket already failed"
+            )
+        self.post_attempted = True
+        metrics_error = None
+        try:
+            metrics = _metrics_snapshot(DEFAULT_METRICS_URL).encode("utf-8")
+            metrics_path.write_bytes(metrics)
+            self.post_metrics_ref = self._metrics_ref(metrics_path, metrics)
+        except Exception as exc:
+            metrics_error = exc
+        arm_error = None
+        if self.taw_real_task_arm is not None:
+            try:
+                self.taw_real_task_arm.finish()
+                self._write_taw_arm_artifact()
+            except Exception as exc:  # noqa: BLE001
+                arm_error = exc
+        if metrics_error is not None or arm_error is not None:
+            self.post_metrics_ref = None
+            try:
+                self._write_artifact()
+            except Exception:
+                pass
+            details = []
+            if metrics_error is not None:
+                details.append(
+                    f"metrics={type(metrics_error).__name__}: {metrics_error}"
+                )
+            if arm_error is not None:
+                details.append(f"arm={type(arm_error).__name__}: {arm_error}")
+            cause = metrics_error if metrics_error is not None else arm_error
+            raise Fixed32BoundaryError(
+                "fixed32 eager diagnostic post bracket failed: "
+                + "; ".join(details)
+            ) from cause
+        try:
+            self._write_artifact()
+        except Exception as exc:
+            self.post_metrics_ref = None
+            try:
+                self._write_artifact()
+            except Exception:
+                pass
+            raise Fixed32BoundaryError(
+                "fixed32 eager diagnostic post bracket artifact failed: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
         return json.loads(self.artifact_path.read_text(encoding="utf-8"))
 
 
@@ -4855,6 +5970,312 @@ def _run_agent_remote(
     return result
 
 
+_REMOTE_AGENT_TRACE_OBSERVATION_SCHEMA = (
+    "fr13-remote-qwen-trace-observation-v1"
+)
+_REMOTE_AGENT_TRACE_OBSERVATION_SCRIPT = r"""
+import hashlib
+import json
+import os
+import pathlib
+import stat
+import sys
+
+path = pathlib.Path(sys.argv[1]).expanduser()
+schema = sys.argv[2]
+parent = path.parent
+parent_metadata = parent.lstat()
+if not stat.S_ISDIR(parent_metadata.st_mode) or parent.is_symlink():
+    raise RuntimeError("trace parent is not a real directory")
+if (
+    stat.S_IMODE(parent_metadata.st_mode) != 0o700
+    or parent_metadata.st_uid != os.geteuid()
+):
+    raise RuntimeError("trace parent is not private or shell-owned")
+parent_fd = os.open(
+    parent,
+    os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY | os.O_NOFOLLOW,
+)
+
+
+def identity(metadata):
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_nlink,
+        metadata.st_uid,
+        metadata.st_gid,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+try:
+    before = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+    if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+        raise RuntimeError("trace is not a single-link regular file")
+    if (
+        stat.S_IMODE(before.st_mode) != 0o600
+        or before.st_uid != os.geteuid()
+    ):
+        raise RuntimeError("trace is not private or shell-owned")
+    if os.listxattr(path, follow_symlinks=False):
+        raise RuntimeError("trace has extended attributes")
+    descriptor = os.open(
+        path.name,
+        os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+        dir_fd=parent_fd,
+    )
+    try:
+        opened = os.fstat(descriptor)
+        if identity(opened) != identity(before):
+            raise RuntimeError("trace changed before exact read")
+        digest = hashlib.sha256()
+        byte_count = 0
+        final_byte = b""
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+            byte_count += len(chunk)
+            final_byte = chunk[-1:]
+        after_read = os.fstat(descriptor)
+        if identity(after_read) != identity(opened):
+            raise RuntimeError("trace changed during exact read")
+    finally:
+        os.close(descriptor)
+    after = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+    if identity(after) != identity(before):
+        raise RuntimeError("trace changed after exact read")
+    if os.listxattr(path, follow_symlinks=False):
+        raise RuntimeError("trace gained extended attributes")
+    print(
+        json.dumps(
+            {
+                "schema": schema,
+                "bytes": byte_count,
+                "sha256": digest.hexdigest(),
+                "newline_framed": byte_count > 0 and final_byte == b"\n",
+                "mode": f"{stat.S_IMODE(after.st_mode):04o}",
+                "uid": after.st_uid,
+                "gid": after.st_gid,
+                "nlink": after.st_nlink,
+                "xattrs": [],
+                "file_identity_sha256": hashlib.sha256(
+                    f"{after.st_dev}:{after.st_ino}".encode("ascii")
+                ).hexdigest(),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+finally:
+    os.close(parent_fd)
+"""
+
+
+def _remote_agent_trace_path(remote_out: str) -> str:
+    return f"{remote_out}/{_REMOTE_AGENT_TRACE_FILENAME}"
+
+
+def _remote_agent_trace_capture_command(
+    command: str,
+    *,
+    remote_trace_path: str,
+) -> str:
+    if remote_trace_path.startswith("~/"):
+        rendered_path = "$HOME/" + shlex.quote(remote_trace_path[2:])
+    elif remote_trace_path.startswith("/"):
+        rendered_path = shlex.quote(remote_trace_path)
+    else:
+        raise Fixed32BoundaryError("remote trace path is not absolute")
+    return (
+        "IFS= read -r OPENAI_API_KEY && export OPENAI_API_KEY && "
+        "umask 077 && "
+        f"trace_path={rendered_path} && "
+        'test -d "$(dirname -- "$trace_path")" && '
+        'test ! -L "$trace_path" && test ! -e "$trace_path" && '
+        '(set -C; : > "$trace_path") && '
+        'chmod 0600 -- "$trace_path" && '
+        "{ "
+        f"{command} > /dev/null; "
+        "qwen_rc=$?; "
+        'if [ ! -f "$trace_path" ] || [ -L "$trace_path" ]; then '
+        "exit 90; fi; "
+        'exit "$qwen_rc"; '
+        "}"
+    )
+
+
+def _validate_remote_agent_trace_observation(payload: Any) -> dict[str, Any]:
+    expected_keys = {
+        "schema",
+        "bytes",
+        "sha256",
+        "newline_framed",
+        "mode",
+        "uid",
+        "gid",
+        "nlink",
+        "xattrs",
+        "file_identity_sha256",
+    }
+    if not isinstance(payload, dict) or set(payload) != expected_keys:
+        raise Fixed32BoundaryError("remote Qwen trace observation is malformed")
+    for key in ("uid", "gid"):
+        value = payload[key]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise Fixed32BoundaryError(
+                "remote Qwen trace observation is malformed"
+            )
+    byte_count = payload["bytes"]
+    if (
+        payload["schema"] != _REMOTE_AGENT_TRACE_OBSERVATION_SCHEMA
+        or isinstance(byte_count, bool)
+        or not isinstance(byte_count, int)
+        or byte_count < 0
+        or not isinstance(payload["newline_framed"], bool)
+        or payload["mode"] != "0600"
+        or payload["nlink"] != 1
+        or payload["xattrs"] != []
+    ):
+        raise Fixed32BoundaryError("remote Qwen trace observation is malformed")
+    for key in ("sha256", "file_identity_sha256"):
+        digest = payload[key]
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
+            raise Fixed32BoundaryError(
+                "remote Qwen trace observation is malformed"
+            )
+    return payload
+
+
+def _observe_remote_agent_trace(
+    *,
+    host: str,
+    instance_id: str,
+    remote_trace_path: str,
+) -> dict[str, Any]:
+    command = " ".join(
+        (
+            "python3",
+            "-c",
+            shlex.quote(_REMOTE_AGENT_TRACE_OBSERVATION_SCRIPT),
+            shlex.quote(remote_trace_path),
+            shlex.quote(_REMOTE_AGENT_TRACE_OBSERVATION_SCHEMA),
+        )
+    )
+    observed = _net_retry(
+        ["ssh", *_EVAL_SSH_OPTS, host, command],
+        what=f"qwen_trace_observe:{instance_id}",
+        timeout=120,
+        max_attempts=3,
+    )
+    if observed.returncode != 0:
+        raise Fixed32BoundaryError(
+            "remote Qwen trace observation failed: "
+            f"host={host} instance={instance_id} rc={observed.returncode}"
+        )
+    return _validate_remote_agent_trace_observation(
+        _fixed32_load_json_object(
+            observed.stdout or "",
+            label=f"remote Qwen trace observation {instance_id}",
+        )
+    )
+
+
+def _pull_remote_agent_trace(
+    *,
+    host: str,
+    instance_id: str,
+    remote_trace_path: str,
+    trace_path: Path,
+) -> dict[str, Any]:
+    before = _observe_remote_agent_trace(
+        host=host,
+        instance_id=instance_id,
+        remote_trace_path=remote_trace_path,
+    )
+    pull_path = trace_path.with_name(
+        f".{trace_path.name}.{secrets.token_hex(8)}.pull"
+    )
+    if pull_path.exists() or pull_path.is_symlink():
+        raise Fixed32BoundaryError("local Qwen trace pull path is not fresh")
+    try:
+        pulled = _net_retry(
+            [
+                "scp",
+                *_EVAL_SSH_OPTS,
+                f"{host}:{remote_trace_path}",
+                str(pull_path),
+            ],
+            what=f"qwen_trace_down:{instance_id}",
+            timeout=120,
+            max_attempts=4,
+        )
+        if pulled.returncode != 0:
+            raise Fixed32BoundaryError(
+                "remote Qwen trace download failed: "
+                f"host={host} instance={instance_id} rc={pulled.returncode}"
+            )
+        after = _observe_remote_agent_trace(
+            host=host,
+            instance_id=instance_id,
+            remote_trace_path=remote_trace_path,
+        )
+        if after != before:
+            raise Fixed32BoundaryError(
+                "remote Qwen trace identity changed during download"
+            )
+        try:
+            local_metadata = pull_path.lstat()
+            if (
+                not stat.S_ISREG(local_metadata.st_mode)
+                or local_metadata.st_nlink != 1
+            ):
+                raise Fixed32BoundaryError(
+                    "downloaded Qwen trace is not a single-link regular file"
+                )
+            raw_trace = pull_path.read_bytes()
+        except OSError as exc:
+            raise Fixed32BoundaryError(
+                "downloaded Qwen trace cannot be read"
+            ) from exc
+        if (
+            len(raw_trace) != before["bytes"]
+            or hashlib.sha256(raw_trace).hexdigest() != before["sha256"]
+            or raw_trace.endswith(b"\n") != before["newline_framed"]
+        ):
+            raise Fixed32BoundaryError(
+                "downloaded Qwen trace identity differs from the remote capture"
+            )
+
+        # Install the exact pulled bytes before semantic validation. If the
+        # trace is malformed, the evidence remains intact at its canonical path.
+        os.replace(pull_path, trace_path)
+        _raw_trace, events = _fixed32_load_trace_events(
+            trace_path,
+            instance_id=instance_id,
+        )
+        return {
+            "schema": _REMOTE_AGENT_TRACE_OBSERVATION_SCHEMA,
+            "bytes": before["bytes"],
+            "sha256": before["sha256"],
+            "event_count": len(events),
+        }
+    finally:
+        try:
+            pull_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def _fixed32_remote_agent_paths(
     instance_id: str,
     *,
@@ -4942,6 +6363,36 @@ def _cleanup_remote_agent_task(
         raise Fixed32BoundaryError(
             "remote Qwen task cleanup failed: "
             f"host={host} instance={instance_id} rc={cleanup.returncode}"
+        )
+
+
+def _stop_remote_agent_container(
+    *,
+    host: str,
+    instance_id: str,
+    container_name: str,
+) -> None:
+    stopped = _net_retry(
+        [
+            "ssh",
+            *_EVAL_SSH_OPTS,
+            host,
+            (
+                "set -eu; "
+                f"ids=$(docker ps -aq --filter name=^/{container_name}$); "
+                'if [ -n "$ids" ]; then docker rm -f $ids >/dev/null; fi; '
+                f"test -z \"$(docker ps -aq --filter "
+                f"name=^/{container_name}$)\""
+            ),
+        ],
+        what=f"qwen_stop:{instance_id}",
+        timeout=60,
+        max_attempts=2,
+    )
+    if stopped.returncode != 0:
+        raise Fixed32BoundaryError(
+            "remote Qwen container did not stop before trace download: "
+            f"host={host} instance={instance_id} rc={stopped.returncode}"
         )
 
 
@@ -5123,6 +6574,22 @@ def _run_agent_instance(
                 session_id=trace_session_id,
                 system_settings_src=remote_system_settings,
                 bundle_observation=bundle_observation,
+                trace_output_path=(
+                    _INSTANCE_TRACE_OUTPUT_PATH if fixed32_launch else None
+                ),
+            )
+            remote_trace_path = (
+                _remote_agent_trace_path(remote_out)
+                if fixed32_launch
+                else None
+            )
+            remote_command = (
+                _remote_agent_trace_capture_command(
+                    cmd,
+                    remote_trace_path=remote_trace_path,
+                )
+                if remote_trace_path is not None
+                else _remote_agent_command(cmd)
             )
             ssh_cmd = [
                 "ssh",
@@ -5130,11 +6597,16 @@ def _run_agent_instance(
                 "-o",
                 "ConnectTimeout=20",
                 remote_host,
-                _remote_agent_command(cmd),
+                remote_command,
             ]
             try:
-                with trace_path.open("w", encoding="utf-8") as tf, (
-                    stderr_path.open("w", encoding="utf-8")
+                trace_output = (
+                    contextlib.nullcontext(subprocess.DEVNULL)
+                    if fixed32_launch
+                    else trace_path.open("w", encoding="utf-8")
+                )
+                with trace_output as tf, stderr_path.open(
+                    "w", encoding="utf-8"
                 ) as ef:
                     completed = subprocess.run(
                         ssh_cmd,
@@ -5161,23 +6633,44 @@ def _run_agent_instance(
                         f"QWEN_SSH_TRANSPORT_DROP {instance_id} rc=255 "
                         "(network-drop, not a fork)"
                     )
+                    if fixed32_launch:
+                        _stop_remote_agent_container(
+                            host=remote_host,
+                            instance_id=instance_id,
+                            container_name=container_name,
+                        )
             except subprocess.TimeoutExpired:
                 timed_out = True
-                _net_retry(
-                    [
-                        "ssh",
-                        *_EVAL_SSH_OPTS,
-                        remote_host,
-                        f"docker kill {container_name} 2>/dev/null; "
-                        f"docker wait {container_name} 2>/dev/null; "
-                        "echo killed",
-                    ],
-                    what=f"qwen_kill:{instance_id}",
-                    timeout=60,
-                    max_attempts=2,
-                )
+                if fixed32_launch:
+                    _stop_remote_agent_container(
+                        host=remote_host,
+                        instance_id=instance_id,
+                        container_name=container_name,
+                    )
+                else:
+                    _net_retry(
+                        [
+                            "ssh",
+                            *_EVAL_SSH_OPTS,
+                            remote_host,
+                            f"docker kill {container_name} 2>/dev/null; "
+                            f"docker wait {container_name} 2>/dev/null; "
+                            "echo killed",
+                        ],
+                        what=f"qwen_kill:{instance_id}",
+                        timeout=60,
+                        max_attempts=2,
+                    )
                 rc = -1
             elapsed = time.monotonic() - started
+            trace_capture: dict[str, Any] | None = None
+            if remote_trace_path is not None:
+                trace_capture = _pull_remote_agent_trace(
+                    host=remote_host,
+                    instance_id=instance_id,
+                    remote_trace_path=remote_trace_path,
+                    trace_path=trace_path,
+                )
             if fixed32_launch:
                 if bundle_observation is None:
                     raise Fixed32BoundaryError(
@@ -5308,6 +6801,11 @@ def _run_agent_instance(
                 "image_arch": sweb_arch,
             }
             if fixed32_launch:
+                if trace_capture is None:
+                    raise Fixed32BoundaryError(
+                        "fixed32 remote trace capture evidence is unavailable"
+                    )
+                result["qwen_trace_capture"] = trace_capture
                 if (
                     image_observation is None
                     or placement_observation is None
@@ -5521,12 +7019,19 @@ def _process_one(
     eval_timeout_s: int,
     skip_existing: bool,
     fixed32_bracket: _Fixed32TaskBracket | None = None,
+    fixed32_b1_diagnostic: bool = False,
 ) -> dict[str, Any]:
     # Use absolute paths everywhere so docker volume mounts and git
     # worktree add (which resolves relative to -C cache) both work.
     task_dir = (per_task_root / instance_id).resolve()
     task_dir.mkdir(parents=True, exist_ok=True)
     runner_meta_path = task_dir / "runner_metadata.json"
+    fixed32_campaign_scope = (
+        fixed32_bracket is not None and fixed32_bracket.server_capacity == 4
+    )
+    pending_runner_meta_path = (
+        task_dir / _FIXED32_PENDING_RUNNER_METADATA_FILENAME
+    )
     if skip_existing and runner_meta_path.is_file():
         return {"instance_id": instance_id, "status": "skipped_existing"}
 
@@ -5554,6 +7059,7 @@ def _process_one(
     }
     task_bearer: str | None = None
     task_key_id: str | None = None
+    fixed32_initial_provenance_args: dict[str, Any] | None = None
     if fixed32_bracket is not None:
         task_bearer, task_key_id = _fixed32_task_auth(instance_id)
         summary["fixed32_dataset_record_sha256"] = hashlib.sha256(
@@ -5564,6 +7070,12 @@ def _process_one(
                 separators=(",", ":"),
             ).encode("utf-8")
         ).hexdigest()
+        if fixed32_b1_diagnostic:
+            summary["fixed32_run_classification"] = {
+                "run_classification": "b1_diagnostic",
+                "gate_eligible": False,
+                "floor_acceptance_eligible": False,
+            }
 
     cache_path = None
     try:
@@ -5664,14 +7176,14 @@ def _process_one(
                 task_bearer=task_bearer,
                 task_key_id=task_key_id,
             )
-            summary["fixed32_real_task_provenance"] = _fixed32_real_task_provenance(
-                instance_id=instance_id,
-                trace_path=qwen_trace,
-                agent_meta=codex_meta,
-                task_key_id=task_key_id,
-                task_auth_before=task_auth_before,
-                task_auth_after=task_auth_after,
-            )
+            fixed32_initial_provenance_args = {
+                "instance_id": instance_id,
+                "trace_path": qwen_trace,
+                "agent_meta": codex_meta,
+                "task_key_id": task_key_id,
+                "task_auth_before": task_auth_before,
+                "task_auth_after": task_auth_after,
+            }
         summary["agent"] = codex_meta
         # Backward-compat: keep the legacy "codex" key so existing reducers
         # (meta.get("codex") in fr13_bigdenom_swe_serve.sh, fr13_standard_metrics.py)
@@ -5822,6 +7334,24 @@ def _process_one(
 
     if fixed32_bracket is not None:
         summary["fixed32_task_boundary"] = fixed32_bracket.post(metrics_post)
+        if fixed32_initial_provenance_args is None:
+            raise Fixed32BoundaryError(
+                "fixed32 initial task provenance inputs are unavailable"
+            )
+        if fixed32_campaign_scope:
+            summary[_FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY] = {
+                **fixed32_initial_provenance_args,
+                "metrics_pre_path": metrics_pre,
+                "metrics_post_path": metrics_post,
+            }
+        else:
+            summary["fixed32_real_task_provenance"] = (
+                _fixed32_real_task_provenance(
+                    **fixed32_initial_provenance_args,
+                    metrics_pre_path=metrics_pre,
+                    metrics_post_path=metrics_post,
+                )
+            )
     else:
         metrics_post.write_text(_metrics_snapshot(DEFAULT_METRICS_URL), encoding="utf-8")
 
@@ -5903,8 +7433,406 @@ def _process_one(
     _remove_workspace(cache_path, workspace_path)
 
     summary["ended_at"] = _iso_now()
-    runner_meta_path.write_text(json.dumps(summary, indent=2))
+    if fixed32_campaign_scope:
+        pending_summary = {
+            key: value
+            for key, value in summary.items()
+            if key != _FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY
+        }
+        pending_runner_meta_path.write_text(
+            json.dumps(pending_summary, indent=2),
+            encoding="utf-8",
+        )
+    else:
+        runner_meta_path.write_text(
+            json.dumps(summary, indent=2),
+            encoding="utf-8",
+        )
     return summary
+
+
+def _finalize_fixed32_qwen_campaign_provenance(
+    *,
+    summaries: list[dict[str, Any]],
+    instance_ids: list[str],
+    dataset_out: Path,
+    per_task_root: Path,
+    campaign_metrics_pre_path: Path,
+    campaign_metrics_post_path: Path,
+) -> dict[str, Any]:
+    """Prove one B4 union window before publishing any task provenance."""
+    if len(instance_ids) < 2 or len(summaries) != len(instance_ids):
+        raise Fixed32BoundaryError(
+            "fixed32 B4 campaign finalization has an incomplete task set"
+        )
+    summaries_by_id = {
+        summary.get("instance_id"): summary for summary in summaries
+    }
+    if (
+        len(summaries_by_id) != len(instance_ids)
+        or set(summaries_by_id) != set(instance_ids)
+    ):
+        raise Fixed32BoundaryError(
+            "fixed32 B4 campaign finalization task identities differ"
+        )
+
+    records: list[dict[str, Any]] = []
+    for instance_id in instance_ids:
+        summary = summaries_by_id[instance_id]
+        runtime_args = summary.get(_FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY)
+        boundary = summary.get("fixed32_task_boundary")
+        task_dir = (per_task_root / instance_id).resolve()
+        pending_path = task_dir / _FIXED32_PENDING_RUNNER_METADATA_FILENAME
+        runner_path = task_dir / "runner_metadata.json"
+        if (
+            not isinstance(runtime_args, dict)
+            or not isinstance(boundary, dict)
+            or boundary.get("instance_id") != instance_id
+            or runner_path.exists()
+            or not pending_path.is_file()
+            or pending_path.is_symlink()
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 campaign task {instance_id} is not unpublished and complete"
+            )
+        try:
+            pending_summary = json.loads(
+                pending_path.read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 pending metadata {pending_path} is invalid: {exc}"
+            ) from exc
+        expected_pending = {
+            key: value
+            for key, value in summary.items()
+            if key != _FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY
+        }
+        if pending_summary != expected_pending:
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 pending metadata differs for {instance_id}"
+            )
+
+        task_key_id = runtime_args.get("task_key_id")
+        task_auth_before = runtime_args.get("task_auth_before")
+        task_auth_after = runtime_args.get("task_auth_after")
+        if (
+            not isinstance(task_key_id, str)
+            or not isinstance(task_auth_before, dict)
+            or not isinstance(task_auth_after, dict)
+            or task_auth_before.get("task_key_id") != task_key_id
+            or task_auth_after.get("task_key_id") != task_key_id
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 task-auth binding is invalid for {instance_id}"
+            )
+        completed_before = task_auth_before.get(
+            "completed_logical_model_requests"
+        )
+        completed_after = task_auth_after.get(
+            "completed_logical_model_requests"
+        )
+        if (
+            type(completed_before) is not int
+            or type(completed_after) is not int
+            or completed_before < 0
+            or completed_after <= completed_before
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 task-auth request count is invalid for {instance_id}"
+            )
+        trace_path = runtime_args.get("trace_path")
+        metrics_pre_path = runtime_args.get("metrics_pre_path")
+        metrics_post_path = runtime_args.get("metrics_post_path")
+        if (
+            trace_path != task_dir / "qwen_trace.jsonl"
+            or metrics_pre_path != task_dir / "vllm_metrics_pre.txt"
+            or metrics_post_path != task_dir / "vllm_metrics_post.txt"
+        ):
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 task artifact paths differ for {instance_id}"
+            )
+        boundary_schema = boundary.get("schema")
+        start: int | None = None
+        end: int | None = None
+        pre_generation: int | None = None
+        post_generation: int | None = None
+        if boundary_schema == "fr13-fixed32-task-boundary-v1":
+            pre = boundary.get("pre")
+            post = boundary.get("post")
+            interval = boundary.get("forward_step_interval")
+            if (
+                not isinstance(pre, dict)
+                or not isinstance(post, dict)
+                or not isinstance(interval, dict)
+                or type(pre.get("generation")) is not int
+                or type(post.get("generation")) is not int
+                or pre["generation"] < 1
+                or post["generation"] <= pre["generation"]
+                or not isinstance(pre.get("counters"), dict)
+                or not isinstance(post.get("counters"), dict)
+            ):
+                raise Fixed32BoundaryError(
+                    f"fixed32 B4 boundary endpoints are invalid for {instance_id}"
+                )
+            start = pre["counters"].get("pure_decode_forward_steps")
+            end = post["counters"].get("pure_decode_forward_steps")
+            if (
+                type(start) is not int
+                or type(end) is not int
+                or start < 0
+                or end <= start
+                or interval
+                != {
+                    "start_forward_step": start,
+                    "end_forward_step": end,
+                    "expected_complete_events": end - start,
+                }
+            ):
+                raise Fixed32BoundaryError(
+                    f"fixed32 B4 forward interval is invalid for {instance_id}"
+                )
+            pre_generation = pre["generation"]
+            post_generation = post["generation"]
+        elif (
+            boundary_schema
+            == "fr13-fixed32-eager-kernel-diagnostic-task-bracket-v1"
+        ):
+            pre_metrics = boundary.get("pre_metrics")
+            post_metrics = boundary.get("post_metrics")
+            if (
+                boundary.get("run_classification")
+                != "eager_kernel_byte_diagnostic"
+                or boundary.get("acceptance_valid") is not False
+                or boundary.get("flush_protocol_used") is not False
+                or not isinstance(pre_metrics, dict)
+                or not isinstance(post_metrics, dict)
+            ):
+                raise Fixed32BoundaryError(
+                    f"fixed32 B4 eager boundary is invalid for {instance_id}"
+                )
+            for label, path, reference in (
+                ("pre", metrics_pre_path, pre_metrics),
+                ("post", metrics_post_path, post_metrics),
+            ):
+                if not path.is_file() or path.is_symlink():
+                    raise Fixed32BoundaryError(
+                        f"fixed32 B4 eager {label} metrics are missing for "
+                        f"{instance_id}"
+                    )
+                raw = path.read_bytes()
+                if reference != _fixed32_artifact_identity(path, raw):
+                    raise Fixed32BoundaryError(
+                        f"fixed32 B4 eager {label} metric identity differs for "
+                        f"{instance_id}"
+                    )
+        else:
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 boundary schema is unsupported for {instance_id}"
+            )
+        raw_trace, events = _fixed32_load_trace_events(
+            trace_path,
+            instance_id=instance_id,
+        )
+        records.append(
+            {
+                "instance_id": instance_id,
+                "summary": summary,
+                "runtime_args": runtime_args,
+                "task_dir": task_dir,
+                "pending_path": pending_path,
+                "runner_path": runner_path,
+                "boundary": boundary,
+                "boundary_schema": boundary_schema,
+                "start": start,
+                "end": end,
+                "pre_generation": pre_generation,
+                "post_generation": post_generation,
+                "task_key_id": task_key_id,
+                "completed": completed_after - completed_before,
+                "trace_path": trace_path,
+                "trace_raw": raw_trace,
+                "events": events,
+                "metrics_pre_path": metrics_pre_path,
+                "metrics_post_path": metrics_post_path,
+            }
+        )
+
+    boundary_schemas = {record["boundary_schema"] for record in records}
+    if len(boundary_schemas) != 1:
+        raise Fixed32BoundaryError(
+            "fixed32 B4 campaign mixes task-boundary schemas"
+        )
+    boundary_schema = next(iter(boundary_schemas))
+    stream_coverage: dict[str, Any] | None = None
+    if boundary_schema == "fr13-fixed32-task-boundary-v1":
+        merged: list[list[int]] = []
+        graph_records = sorted(
+            records,
+            key=lambda item: (item["start"], item["end"]),
+        )
+        for record in graph_records:
+            start = record["start"]
+            end = record["end"]
+            if not merged or start > merged[-1][1]:
+                merged.append([start, end])
+            else:
+                merged[-1][1] = max(merged[-1][1], end)
+        complete_stream_steps = max(record["end"] for record in records)
+        if merged != [[0, complete_stream_steps]]:
+            raise Fixed32BoundaryError(
+                "fixed32 B4 task intervals do not cover the complete campaign "
+                "stream"
+            )
+        stream_coverage = {
+            "start_forward_step": 0,
+            "end_forward_step": complete_stream_steps,
+            "complete_stream_forward_steps": complete_stream_steps,
+        }
+
+    for label, path in (
+        ("pre", campaign_metrics_pre_path),
+        ("post", campaign_metrics_post_path),
+    ):
+        if not path.is_file() or path.is_symlink():
+            raise Fixed32BoundaryError(
+                f"fixed32 B4 campaign {label} metrics are missing or symlinked"
+            )
+    metrics_pre_raw = campaign_metrics_pre_path.read_bytes()
+    metrics_post_raw = campaign_metrics_post_path.read_bytes()
+    if not metrics_pre_raw or not metrics_post_raw:
+        raise Fixed32BoundaryError(
+            "fixed32 B4 campaign endpoint metrics are empty"
+        )
+    campaign_tasks = [
+        {
+            "instance_id": record["instance_id"],
+            "expected_session_id": fixed32_contract.fixed32_trace_session_id(
+                record["instance_id"]
+            ),
+            "expected_completed_logical_model_requests": record["completed"],
+            "events": record["events"],
+        }
+        for record in records
+    ]
+    try:
+        reconciliation = (
+            fixed32_contract.validate_fixed32_qwen_campaign_metrics(
+                campaign_tasks,
+                metrics_pre=metrics_pre_raw,
+                metrics_post=metrics_post_raw,
+            )
+        )
+    except fixed32_contract.ContractError as exc:
+        raise Fixed32BoundaryError(
+            f"fixed32 B4 campaign metrics do not reconcile: {exc}"
+        ) from exc
+
+    proof_path = (
+        dataset_out / _FIXED32_QWEN_CAMPAIGN_PROOF_FILENAME
+    ).resolve()
+    proof = {
+        "schema": _FIXED32_QWEN_CAMPAIGN_PROOF_SCHEMA,
+        "metric_scope": "concurrent_campaign_union",
+        "concurrency": 4,
+        "task_ids": list(instance_ids),
+        "selection": {
+            "basis": "runner_owned_campaign_endpoint_metrics",
+            "task_boundary_schema": boundary_schema,
+            "task_stream_coverage": stream_coverage,
+        },
+        "metrics_pre": _fixed32_artifact_identity(
+            campaign_metrics_pre_path,
+            metrics_pre_raw,
+        ),
+        "metrics_post": _fixed32_artifact_identity(
+            campaign_metrics_post_path,
+            metrics_post_raw,
+        ),
+        "tasks": [
+            {
+                "instance_id": record["instance_id"],
+                "task_key_id": record["task_key_id"],
+                "expected_completed_logical_model_requests": record[
+                    "completed"
+                ],
+                "trace": _fixed32_artifact_identity(
+                    record["trace_path"],
+                    record["trace_raw"],
+                ),
+            }
+            for record in records
+        ],
+        "metric_evidence_sha256": reconciliation[
+            "metric_evidence_sha256"
+        ],
+        "metric_evidence": reconciliation["metric_evidence"],
+    }
+    proof_raw = (
+        json.dumps(
+            proof,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("ascii")
+    proof_identity = _fixed32_artifact_identity(proof_path, proof_raw)
+    campaign_binding = {
+        "artifact": proof_identity,
+        "metric_evidence_sha256": reconciliation[
+            "metric_evidence_sha256"
+        ],
+    }
+
+    finalized: dict[str, dict[str, Any]] = {}
+    for record in records:
+        runtime_args = {
+            key: value
+            for key, value in record["runtime_args"].items()
+            if key not in {"metrics_pre_path", "metrics_post_path"}
+        }
+        provenance = _fixed32_real_task_provenance(
+            **runtime_args,
+            campaign_trace_requests=reconciliation["tasks"][
+                record["instance_id"]
+            ],
+            campaign_metric_binding=campaign_binding,
+        )
+        finalized[record["instance_id"]] = {
+            key: value
+            for key, value in record["summary"].items()
+            if key != _FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY
+        }
+        finalized[record["instance_id"]][
+            "fixed32_real_task_provenance"
+        ] = provenance
+        finalized[record["instance_id"]][
+            "fixed32_qwen_campaign_proof"
+        ] = proof_identity
+
+    proof_tmp = proof_path.with_suffix(".json.tmp")
+    proof_tmp.write_bytes(proof_raw)
+    metadata_temps: dict[str, Path] = {}
+    for record in records:
+        runner_path = record["runner_path"]
+        temporary = runner_path.with_suffix(".json.tmp")
+        temporary.write_text(
+            json.dumps(
+                finalized[record["instance_id"]],
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        metadata_temps[record["instance_id"]] = temporary
+    os.replace(proof_tmp, proof_path)
+    for record in records:
+        instance_id = record["instance_id"]
+        os.replace(metadata_temps[instance_id], record["runner_path"])
+        record["pending_path"].unlink()
+        record["summary"].pop(_FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY, None)
+        record["summary"].update(finalized[instance_id])
+    return proof
 
 
 def _aggregate(per_task_root: Path, summary_path: Path, predictions_path: Path,
@@ -6018,6 +7946,30 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fixed32-flush-request", type=Path)
     parser.add_argument("--fixed32-flush-ack", type=Path)
     parser.add_argument("--fixed32-boundary-snapshot", type=Path)
+    parser.add_argument(
+        "--fixed32-taw-real-event-arm",
+        type=Path,
+        help=(
+            "Host path mounted at the diagnostic kernel's exact /logs "
+            "real-event marker path. B1 or exact-B4 TAW diagnostic only."
+        ),
+    )
+    parser.add_argument(
+        "--fixed32-bm8-real-event-arm",
+        type=Path,
+        help=(
+            "Host path mounted at the BM8 diagnostic kernel's exact /logs "
+            "real-event marker path. B1 diagnostic only."
+        ),
+    )
+    parser.add_argument(
+        "--fixed32-cutlass-real-event-arm",
+        type=Path,
+        help=(
+            "Host path mounted at the CUTLASS Stream-K diagnostic's exact "
+            "/logs real-event marker path. B1 diagnostic only."
+        ),
+    )
     args = parser.parse_args(argv)
 
     fixed32_values = (
@@ -6031,6 +7983,180 @@ def main(argv: list[str] | None = None) -> int:
     fixed32_enabled = any(value is not None for value in fixed32_values)
     if fixed32_enabled and any(value is None for value in fixed32_values):
         parser.error("all six --fixed32-* runtime binding options are required together")
+    diagnostic_text = os.environ.get("FR13_FIXED32_B1_DIAGNOSTIC", "0")
+    if diagnostic_text not in {"0", "1"}:
+        parser.error("FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1")
+    fixed32_b1_diagnostic = diagnostic_text == "1"
+    if fixed32_b1_diagnostic and not fixed32_enabled:
+        parser.error("FR13_FIXED32_B1_DIAGNOSTIC=1 requires fixed32 runtime binding")
+    taw_diagnostic_text = os.environ.get(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE",
+        "0",
+    )
+    if taw_diagnostic_text not in {"0", "1"}:
+        parser.error(
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE must be exactly 0 or 1"
+        )
+    fixed32_taw_diagnostic = taw_diagnostic_text == "1"
+    if fixed32_taw_diagnostic:
+        if not fixed32_enabled:
+            parser.error(
+                "fixed32 TAW native real-task arm requires fixed32 runtime binding"
+            )
+        if args.fixed32_taw_real_event_arm is None:
+            parser.error(
+                "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=1 requires "
+                "--fixed32-taw-real-event-arm"
+            )
+        if (
+            args.fixed32_flush_request is not None
+            and args.fixed32_taw_real_event_arm.parent
+            != args.fixed32_flush_request.parent
+        ):
+            parser.error(
+                "--fixed32-taw-real-event-arm must share the mounted fixed32 "
+                "logs directory"
+            )
+    elif args.fixed32_taw_real_event_arm is not None:
+        parser.error(
+            "--fixed32-taw-real-event-arm requires "
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=1"
+        )
+    bm8_diagnostic_text = os.environ.get(
+        "FR13_DFWD_UNIFIED_BM8_LIVE_AB",
+        "0",
+    )
+    if bm8_diagnostic_text not in {"0", "1"}:
+        parser.error("FR13_DFWD_UNIFIED_BM8_LIVE_AB must be exactly 0 or 1")
+    fixed32_bm8_diagnostic = bm8_diagnostic_text == "1"
+    if fixed32_bm8_diagnostic:
+        if fixed32_taw_diagnostic:
+            parser.error("fixed32 TAW and BM8 real-task diagnostics are exclusive")
+        if not fixed32_enabled or not fixed32_b1_diagnostic:
+            parser.error(
+                "fixed32 BM8 real-task arm requires fixed32 B1 diagnostic mode"
+            )
+        if args.fixed32_bm8_real_event_arm is None:
+            parser.error(
+                "FR13_DFWD_UNIFIED_BM8_LIVE_AB=1 requires "
+                "--fixed32-bm8-real-event-arm"
+            )
+        if (
+            args.fixed32_flush_request is not None
+            and args.fixed32_bm8_real_event_arm.parent
+            != args.fixed32_flush_request.parent
+        ):
+            parser.error(
+                "--fixed32-bm8-real-event-arm must share the mounted fixed32 "
+                "logs directory"
+            )
+    elif args.fixed32_bm8_real_event_arm is not None:
+        parser.error(
+            "--fixed32-bm8-real-event-arm requires "
+            "FR13_DFWD_UNIFIED_BM8_LIVE_AB=1"
+        )
+    cutlass_wave = os.environ.get("FR13_FIXED32_CUTLASS_WAVE", "stock")
+    if cutlass_wave not in {
+        "stock",
+        "streamk_coop128",
+        "streamk_coop128_byte_ab",
+        "streamk_force_wide256",
+        "streamk_force_wide256_byte_ab",
+        "static_persistent_stocktile",
+        "static_persistent_stocktile_byte_ab",
+        "divisor_static_stocktile",
+        "divisor_static_stocktile_byte_ab",
+        "identity_stage2_static",
+        "identity_stage2_static_byte_ab",
+        "identity_stage2_pingpong_b1",
+        "identity_stage2_pingpong_b1_byte_ab",
+        "identity_stockshape_b4",
+        "identity_stockshape_b4_byte_ab",
+        "identity_stockshape_stage2_b4",
+        "identity_stockshape_stage2_b4_byte_ab",
+        "identity_divisor_b4",
+        "identity_divisor_b4_byte_ab",
+        "persistent_b4_m128",
+        "persistent_b4_m128_byte_ab",
+        "persistent_b4_m128_static",
+        "persistent_b4_m128_static_byte_ab",
+    }:
+        parser.error("FR13_FIXED32_CUTLASS_WAVE has an unsupported value")
+    fixed32_cutlass_diagnostic = cutlass_wave in {
+        "streamk_coop128_byte_ab",
+        "streamk_force_wide256_byte_ab",
+        "static_persistent_stocktile_byte_ab",
+        "divisor_static_stocktile_byte_ab",
+        "identity_stage2_static_byte_ab",
+        "identity_stage2_pingpong_b1_byte_ab",
+    }
+    fixed32_cutlass_b4_diagnostic = cutlass_wave in {
+        "identity_divisor_b4_byte_ab",
+        "identity_stockshape_b4_byte_ab",
+        "identity_stockshape_stage2_b4_byte_ab",
+        "persistent_b4_m128_byte_ab",
+        "persistent_b4_m128_static_byte_ab",
+    }
+    batch_gdn_eager_diagnostic = os.environ.get(
+        "FR13_FIXED32_BATCH_GDN_BYTE_AB", "0"
+    )
+    if batch_gdn_eager_diagnostic not in {"0", "1"}:
+        parser.error("FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1")
+    sfwd_state_fusion_eager_diagnostic = os.environ.get(
+        "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB", "0"
+    )
+    if sfwd_state_fusion_eager_diagnostic not in {"0", "1"}:
+        parser.error(
+            "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"
+        )
+    fixed32_eager_kernel_diagnostic = (
+        fixed32_cutlass_diagnostic
+        or fixed32_cutlass_b4_diagnostic
+        or batch_gdn_eager_diagnostic == "1"
+        or sfwd_state_fusion_eager_diagnostic == "1"
+    )
+    if (
+        fixed32_eager_kernel_diagnostic
+        and os.environ.get("ENFORCE_EAGER", "0") != "1"
+    ):
+        parser.error("fixed32 eager kernel diagnostic requires ENFORCE_EAGER=1")
+    if fixed32_cutlass_diagnostic:
+        if fixed32_taw_diagnostic or fixed32_bm8_diagnostic:
+            parser.error(
+                "fixed32 CUTLASS, TAW, and BM8 real-task diagnostics are exclusive"
+            )
+        if not fixed32_enabled or not fixed32_b1_diagnostic:
+            parser.error(
+                "fixed32 CUTLASS real-task arm requires fixed32 B1 diagnostic mode"
+            )
+        if args.fixed32_cutlass_real_event_arm is None:
+            parser.error(
+                "a CUTLASS Stream-K byte diagnostic requires "
+                "--fixed32-cutlass-real-event-arm"
+            )
+        if (
+            args.fixed32_flush_request is not None
+            and args.fixed32_cutlass_real_event_arm.parent
+            != args.fixed32_flush_request.parent
+        ):
+            parser.error(
+                "--fixed32-cutlass-real-event-arm must share the mounted "
+                "fixed32 logs directory"
+            )
+    elif args.fixed32_cutlass_real_event_arm is not None:
+        parser.error(
+            "--fixed32-cutlass-real-event-arm requires the "
+            "CUTLASS Stream-K byte-diagnostic selector"
+        )
+    if fixed32_cutlass_b4_diagnostic:
+        if fixed32_taw_diagnostic or fixed32_bm8_diagnostic:
+            parser.error(
+                "fixed32 CUTLASS B4, TAW, and BM8 diagnostics are exclusive"
+            )
+        if not fixed32_enabled or fixed32_b1_diagnostic:
+            parser.error(
+                "fixed32 CUTLASS B4 diagnostic requires non-B1 fixed32 mode"
+            )
     fixed32_client = None
     fixed32_subset = None
     if fixed32_enabled:
@@ -6046,19 +8172,35 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(str(error))
         sys.path.insert(0, str(REPO_ROOT / "scripts"))
         from fr13_floor_gate import GateError as FloorGateError
-        from fr13_floor_gate import validate_canonical_subset
+        from fr13_floor_gate import validate_fixed32_run_subset
 
         try:
-            fixed32_subset = validate_canonical_subset(args.subset)
+            fixed32_subset = validate_fixed32_run_subset(
+                args.subset,
+                b1_diagnostic=fixed32_b1_diagnostic,
+            )
         except FloorGateError as error:
-            parser.error(f"fixed32 canonical subset validation failed: {error}")
+            parser.error(f"fixed32 run subset validation failed: {error}")
         try:
             serving_batch = int(os.environ["MAX_NUM_SEQS_OVR"])
         except (KeyError, ValueError):
             parser.error("fixed32 requires integer MAX_NUM_SEQS_OVR in the runner environment")
-        if serving_batch not in (1, 4) or args.concurrency != serving_batch:
+        if fixed32_b1_diagnostic:
+            if serving_batch != 1 or args.concurrency != 1:
+                parser.error(
+                    "fixed32 B1 diagnostic requires concurrency and serving batch exactly 1"
+                )
+        elif serving_batch not in (1, 4) or args.concurrency != serving_batch:
             parser.error(
                 "fixed32 requires concurrency to equal the serving batch (exactly B1 or B4)"
+            )
+        if (
+            fixed32_taw_diagnostic
+            and not fixed32_b1_diagnostic
+            and (serving_batch != 4 or args.concurrency != 4)
+        ):
+            parser.error(
+                "fixed32 TAW native campaign arm requires exact B4 concurrency"
             )
         from fr13_fixed32_flush_protocol import Fixed32FlushClient
 
@@ -6162,17 +8304,83 @@ def main(argv: list[str] | None = None) -> int:
 
     started_at = _iso_now()
     summaries: list[dict[str, Any]] = []
+    campaign_metrics_pre_path: Path | None = None
+    campaign_metrics_post_path: Path | None = None
+    if fixed32_enabled and serving_batch == 4:
+        campaign_metrics_pre_path = (
+            dataset_out / _FIXED32_QWEN_CAMPAIGN_METRICS_PRE_FILENAME
+        ).resolve()
+        campaign_metrics_post_path = (
+            dataset_out / _FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME
+        ).resolve()
+        _write_fixed32_campaign_metrics(campaign_metrics_pre_path)
+    taw_campaign_arm: _Fixed32TawCampaignArm | None = None
+    taw_campaign_arm_artifact_path: Path | None = None
+    if fixed32_taw_diagnostic and not fixed32_b1_diagnostic:
+        if args.fixed32_taw_real_event_arm is None or fixed32_subset is None:
+            raise Fixed32BoundaryError(
+                "fixed32 TAW B4 campaign arm lacks its validated binding"
+            )
+        taw_campaign_arm = _Fixed32TawCampaignArm(
+            path=args.fixed32_taw_real_event_arm,
+            subset_binding=fixed32_subset,
+            concurrency=args.concurrency,
+        )
+        taw_campaign_arm_artifact_path = (
+            dataset_out / taw_campaign_arm.artifact_name
+        )
 
     def _job(iid: str) -> dict[str, Any]:
         t0 = time.time()
         print(f"[{_iso_now()}] -> {iid}", flush=True)
+        taw_real_task_arm = None
+        arm_path = (
+            (
+                args.fixed32_taw_real_event_arm
+                if taw_campaign_arm is None
+                else None
+            )
+            if args.fixed32_taw_real_event_arm is not None
+            else (
+                args.fixed32_bm8_real_event_arm
+                if args.fixed32_bm8_real_event_arm is not None
+                else args.fixed32_cutlass_real_event_arm
+            )
+        )
+        if arm_path is not None:
+            pinned_task_ids = (
+                fixed32_subset.get("task_ids")
+                if isinstance(fixed32_subset, dict)
+                else None
+            )
+            if pinned_task_ids != [iid]:
+                raise Fixed32BoundaryError(
+                    "fixed32 kernel real-task arm differs from the pinned "
+                    "single-task SWE-Verified binding"
+                )
+            if args.fixed32_taw_real_event_arm is not None:
+                arm_type = _Fixed32TawRealTaskArm
+            elif args.fixed32_bm8_real_event_arm is not None:
+                arm_type = _Fixed32Bm8RealTaskArm
+            else:
+                arm_type = _Fixed32CutlassRealTaskArm
+            taw_real_task_arm = arm_type(
+                path=arm_path,
+                instance_id=iid,
+            )
+        fixed32_bracket_type = (
+            _Fixed32EagerKernelDiagnosticTaskBracket
+            if fixed32_eager_kernel_diagnostic
+            else _Fixed32TaskBracket
+        )
         fixed32_bracket = (
-            _Fixed32TaskBracket(
+            fixed32_bracket_type(
                 client=fixed32_client,
                 task_dir=(per_task_root / iid).resolve(),
                 instance_id=iid,
                 boundary_snapshot_base=args.fixed32_boundary_snapshot,
                 server_capacity=serving_batch,
+                taw_real_task_arm=taw_real_task_arm,
             )
             if fixed32_client is not None
             else None
@@ -6192,6 +8400,7 @@ def main(argv: list[str] | None = None) -> int:
                     eval_timeout_s=args.eval_timeout_s,
                     skip_existing=args.skip_existing,
                     fixed32_bracket=fixed32_bracket,
+                    fixed32_b1_diagnostic=fixed32_b1_diagnostic,
                 )
             except Fixed32BoundaryError:
                 raise
@@ -6217,6 +8426,7 @@ def main(argv: list[str] | None = None) -> int:
                 fixed32_bracket is not None
                 and fixed32_bracket.started
                 and not fixed32_bracket.complete
+                and not fixed32_bracket.post_attempted
             ):
                 fixed32_bracket.post(
                     fixed32_bracket.task_dir / "vllm_metrics_post.txt"
@@ -6248,16 +8458,43 @@ def main(argv: list[str] | None = None) -> int:
                 "is dead (offload proxy?). Aborting the campaign; completed "
                 "task artifacts are preserved."
             )
-        _autocommit_task_artifacts(per_task_root / iid, iid)
+        if fixed32_bracket is None or fixed32_bracket.server_capacity == 1:
+            _autocommit_task_artifacts(per_task_root / iid, iid)
         return res
 
-    if args.concurrency <= 1:
-        for iid in instance_ids:
-            summaries.append(_job(iid))
-    else:
-        with _cf.ThreadPoolExecutor(max_workers=args.concurrency) as ex:
-            for res in ex.map(_job, instance_ids):
-                summaries.append(res)
+    def _run_jobs() -> None:
+        if args.concurrency <= 1:
+            for iid in instance_ids:
+                summaries.append(_job(iid))
+        else:
+            with _cf.ThreadPoolExecutor(max_workers=args.concurrency) as ex:
+                for res in ex.map(_job, instance_ids):
+                    summaries.append(res)
+
+    _run_with_fixed32_taw_campaign_arm(
+        arm=taw_campaign_arm,
+        artifact_path=taw_campaign_arm_artifact_path,
+        action=_run_jobs,
+    )
+
+    if fixed32_enabled and serving_batch == 4:
+        assert campaign_metrics_pre_path is not None
+        assert campaign_metrics_post_path is not None
+        _write_fixed32_campaign_metrics(campaign_metrics_post_path)
+        _finalize_fixed32_qwen_campaign_provenance(
+            summaries=summaries,
+            instance_ids=instance_ids,
+            dataset_out=dataset_out,
+            per_task_root=per_task_root,
+            campaign_metrics_pre_path=campaign_metrics_pre_path,
+            campaign_metrics_post_path=campaign_metrics_post_path,
+        )
+        _autocommit_fixed32_campaign_artifacts(
+            dataset_out=dataset_out,
+            per_task_root=per_task_root,
+            instance_ids=instance_ids,
+            taw_campaign_arm_artifact_path=taw_campaign_arm_artifact_path,
+        )
 
     ended_at = _iso_now()
     summary = _aggregate(
@@ -6268,6 +8505,27 @@ def main(argv: list[str] | None = None) -> int:
         ended_at=ended_at,
         model_name=args.model_name,
     )
+    if fixed32_b1_diagnostic:
+        summary["fixed32_run_classification"] = {
+            "run_classification": "b1_diagnostic",
+            "gate_eligible": False,
+            "floor_acceptance_eligible": False,
+        }
+        (dataset_out / "campaign_summary.json").write_text(
+            json.dumps(summary, indent=2),
+            encoding="utf-8",
+        )
+    elif taw_campaign_arm is not None:
+        summary["fixed32_run_classification"] = {
+            "run_classification": "b4_taw_diagnostic",
+            "gate_eligible": False,
+            "floor_acceptance_eligible": False,
+            "campaign_arm": taw_campaign_arm.as_dict(),
+        }
+        (dataset_out / "campaign_summary.json").write_text(
+            json.dumps(summary, indent=2),
+            encoding="utf-8",
+        )
     print(f"=== [{ended_at}] DONE n={summary['instances_total']} "
           f"resolved_rate={summary.get('resolved_rate')} "
           f"verdicts={summary['verdict_counts']} ===", flush=True)

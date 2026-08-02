@@ -1,0 +1,48 @@
+{
+  "candidate": "fixed32_conv_source_batch_v1",
+  "default_enabled": false,
+  "gdn_cross_level_handoff_rows_per_request": 5,
+  "gdn_layers": 48,
+  "gdn_path_programs_per_layer": {
+    "b1": 12,
+    "b4": 48
+  },
+  "gdn_scan_physical_launches_per_event": {
+    "b1_stock": 96,
+    "b4_batched_bv8": 96,
+    "b4_cutlass_isolation_stock": 384
+  },
+  "gpu_or_docker_used": false,
+  "performance_claim": false,
+  "publication_kind": "static_source_audit_and_cpu_byte_gate",
+  "schema": "fr13.fixed32.b1_b4.launch_scaling_source_audit.v1",
+  "source_base_git_sha": "d42f4c7ba12a1e51f4e8fc8dc6846cd9ece0480d",
+  "source_branch": "agent/fixed32-b4-streamk-preflight-09f",
+  "source_sha256": {
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "7561b6d010c656e8e18d6ed381c84703352be51fea575e37fb8ebabea726c415",
+    "scripts/fr13_fixed32_floor_timers_seq.sh": "fb808c5e189af5e29e602acc6eff312639c9f1a585e911d978d73adb5a8648f3",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh": "0e16c20cd002768832672c64479425ac0f83a8dd4777b8efd98bad040391362f",
+    "src/lumo_flywheel_serving/fr13_tree_conv_fused.py": "dd6094878f4044ebb4f5ac690333c89225b9d7b6d84ad3b905fcb2b7e079bf8b",
+    "tests/test_fr13_fixed32_conv_source_batch.py": "f9659a10628397d2ed0f6e1e3e4ca570cf9e9d932848d84cb7d68329ea78dd1d"
+  },
+  "source_preparation_cuda_op_sites_per_event": {
+    "candidate_b1": 96,
+    "candidate_b4": 96,
+    "incumbent_b1": 144,
+    "incumbent_b4": 576,
+    "removed_b1": 48,
+    "removed_b4": 480
+  },
+  "tree_attention": {
+    "calls_per_event_b1": 16,
+    "calls_per_event_b4": 16,
+    "q_rows_per_call_b1": 32,
+    "q_rows_per_call_b4": 128
+  },
+  "verification": {
+    "candidate_cpu_tests_passed": 14,
+    "current_fixed32_contract_tests_passed": 97,
+    "gpu_byte_gate": "pending",
+    "real_swe_verified_b4_exact4": "pending"
+  }
+}

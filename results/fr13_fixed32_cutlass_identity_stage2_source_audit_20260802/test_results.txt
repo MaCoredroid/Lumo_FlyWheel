@@ -1,0 +1,15 @@
+PASS patch unit tests: 27 passed
+PASS broadened CUTLASS tests: 92 passed
+PASS Ruff source and focused test
+PASS Python bytecode compilation
+PASS git diff whitespace validation
+PASS patch application on pinned vLLM source
+PASS isolated SM121a host compilation: zero warnings
+PASS resource gate: no register, shared, stack, or local regression
+PASS B1 static codegen gate: 32 fewer slots than identity-auto
+NEUTRAL B4 static codegen: identical to identity-auto
+NOT RUN GPU execution
+NOT RUN synthetic probe
+NOT RUN real SWE-Verified workload
+REQUIRED real byte equality before timing
+NOT CLAIMED performance or hardware-floor acceptance

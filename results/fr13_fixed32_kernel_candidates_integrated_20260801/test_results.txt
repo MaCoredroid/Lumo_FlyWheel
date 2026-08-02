@@ -1,0 +1,27 @@
+Fixed32 kernel-candidate integration verification
+Date: 2026-08-01 UTC
+GPU used: no
+Docker used: no
+
+Affected pytest suite:
+  279 passed, 1 skipped, 3 deselected in 3.81s
+
+The three deselected sampled-committer wiring assertions fail identically on
+the required b41720fccd6a4f901d0d809751df826a0c87561d base. They look for
+legacy source strings absent before this integration:
+  test_phase4_tree_committer_publishes_accepted_node_without_dead_mamba_redirect
+  test_phase4_seeds_next_tree_read_linear_path_from_accepted_nodes
+  test_tree_engagement_logs_are_available_with_metrics_off
+
+Additional checks:
+  draft-head and runtime-manifest focused tests: 12 passed
+  Python py_compile for affected Python sources: PASS
+  bash -n for affected launch and gate scripts: PASS
+  git diff --check: PASS
+  fixed32 runtime-manifest build: PASS
+  draft-head validator present in host source closure: PASS
+  draft-head validator SHA-256:
+    0ac56add2662ec0e14c5a1694c7c4a30027dc22e158c99426e80cd70583faae4
+
+No byte-equality or performance result was measured. All GPU gates remain
+pending and all candidate selectors remain default OFF.

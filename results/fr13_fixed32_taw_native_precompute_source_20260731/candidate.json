@@ -1,0 +1,85 @@
+{
+  "schema": "fr13.fixed32.taw_native_precompute_source.v1",
+  "date_utc": "2026-07-31",
+  "branch": "agent/fixed32-taw-native-precompute",
+  "base_commit": "3f6868bb9",
+  "status": "default_off_reference_returning_gpu_unmeasured",
+  "flag": "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=1",
+  "default_behavior_changed": false,
+  "candidate_products_returned": false,
+  "reference_products_returned": true,
+  "gpu_used": false,
+  "performance_claim": false,
+  "fixed_rows_per_request": {
+    "self": 13,
+    "target": 17,
+    "total": 30,
+    "same_for_tail6_and_hydra27": true
+  },
+  "hypothetical_deployed_calls_per_event": {
+    "taw_softmax_reference": 24,
+    "taw_softmax_candidate": 2,
+    "softmax_launch_reduction": 22,
+    "candidate_full_vocab_row_gather_calls": 26
+  },
+  "byte_gate": {
+    "probability_dtype": "torch.float32 raw int32 view",
+    "probability_scope": "all causally consumed self and target rows",
+    "product_scope": [
+      "output_tokens",
+      "output_lens",
+      "accepted_path_rows",
+      "accepted_lens",
+      "last_row"
+    ],
+    "mismatch_accumulation": "device int64 counters",
+    "failure_point": "next uncaptured root",
+    "return_value": "reference"
+  },
+  "traffic_bytes_per_request": {
+    "baseline_softmax_min_read_write": 47677440,
+    "candidate_softmax_min_read_write": 59596800,
+    "candidate_softmax_extra": 11919360,
+    "candidate_probability_cache": 29798400,
+    "candidate_probability_cache_b4": 119193600,
+    "baseline_source_gather_read_write": 47677440,
+    "candidate_source_plus_dynamic_gather_read_write": 107274240,
+    "candidate_gather_extra": 59596800
+  },
+  "cpu_gate": {
+    "modes": [
+      "tail6_fixed32",
+      "hydra27_fixed32"
+    ],
+    "batch_sizes": [
+      1,
+      4
+    ],
+    "finite_random_seeds_per_configuration": 4,
+    "probability_mismatches": 0,
+    "product_mismatches": 0,
+    "targeted_tests_passed": 12
+  },
+  "cuda_gate": {
+    "run": false,
+    "required": true,
+    "required_workload": "real SWE-Verified B1 task",
+    "required_probability_mismatches": 0,
+    "required_product_mismatches": 0
+  },
+  "source_contract": {
+    "schema": "fr13-fixed32-taw-exact-commit-v3",
+    "sha256": "fe73ad35a916e41532575e29a5f9f6442d1081d0d1c0d0fc18210fdc8f0f56f8"
+  },
+  "nsys_evidence": {
+    "path": "results/fr13_fixed32_b1_nsys_20260731T013952Z_curated/nsys_attribution.json",
+    "sha256": "685c410a0ba09d00c8b244bfa06809530337cea383b88fa92a5da1013eadf2d0",
+    "range_instances": 881,
+    "cfwd_projected_gpu_ms_per_event": 22.755076906,
+    "native_softmax_instances_per_event": 26.0,
+    "native_softmax_ms_per_event": 2.304176126,
+    "indexed_row_gather_instances_per_event": 30.0,
+    "indexed_row_gather_ms_per_event": 0.141707696,
+    "acceptance_valid": false
+  }
+}

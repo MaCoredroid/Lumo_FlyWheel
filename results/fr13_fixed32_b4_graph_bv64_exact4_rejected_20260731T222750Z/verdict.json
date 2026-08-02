@@ -1,0 +1,130 @@
+{
+  "schema": "fr13.fixed32.b4_graph_bv64_exact4_rejected.v1",
+  "created_utc": "2026-07-31T22:39:53Z",
+  "status": "REJECTED_REAL_B4_BYTE_MISMATCH",
+  "source_commit": "99d3869d6e5438e0a1c8c0ee9321ab1c9e525d02",
+  "branch": "agent/fixed32-kernel-integrated",
+  "runroot": "output/fr13_fixed32_b4_graph_bv64_exact4_b4_20260731T222750Z",
+  "arm": "tail6_fixed32_b4_graph_bv64_exact4_b4_20260731T222750Z",
+  "serve_rc": 15,
+  "classification": "exact4_b4_graph_byte_diagnostic",
+  "timing_eligible": false,
+  "floor_acceptance_eligible": false,
+  "candidate": {
+    "name": "fixed32_batched_gdn_wide_bv",
+    "reference_bv": 8,
+    "candidate_bv": 64,
+    "reference_physical_launches_per_layer": 8,
+    "candidate_physical_launches_per_layer": 2,
+    "production_enabled": false,
+    "byte_gate_passed": false
+  },
+  "task_contract": {
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "split": "test",
+    "subset_path": "config/fr13_fixed32/subset_b4_four.json",
+    "subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "task_count": 4,
+    "tasks": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033",
+      "astropy__astropy-13236",
+      "astropy__astropy-13398"
+    ],
+    "batch_size": 4,
+    "concurrency": 4,
+    "scheduler_running_requests": 4,
+    "scheduler_waiting_requests": 0,
+    "authenticated_real_task_gate": true
+  },
+  "capacity": {
+    "kv_cache_memory_bytes": 42949672960,
+    "kv_cache_tokens": 153600,
+    "kv_usage_percent_at_physical_b4": 79.5,
+    "piecewise_capture_count": 8,
+    "full_capture_count": 4,
+    "graph_memory_gib": 9.12
+  },
+  "primary_failure": {
+    "stage": "first_authenticated_real_b4_post_replay_shadow",
+    "record": 0,
+    "layer_key": "0x3402d5c00",
+    "task_marker": "swe_verified:astropy__astropy-13033",
+    "graph_baseline_byte_equal": true,
+    "candidate_zero_diff": false,
+    "candidate_bad_surfaces": [
+      "out",
+      "state_export_compact"
+    ],
+    "out": {
+      "dtype": "torch.bfloat16",
+      "shape": [128, 48, 128],
+      "bytes": 1572864,
+      "differing_bytes": 1,
+      "first_nonzero_byte": 1481082,
+      "reference_byte": 189,
+      "candidate_byte": 188
+    },
+    "state_export_compact": {
+      "dtype": "torch.float32",
+      "shape": [20, 48, 128, 128],
+      "bytes": 62914560,
+      "differing_bytes": 195944,
+      "first_nonzero_byte": 28676,
+      "reference_byte": 28,
+      "candidate_byte": 29
+    },
+    "byte_equal_surfaces": [
+      "ring_k",
+      "ring_v",
+      "ring_a",
+      "ring_b",
+      "state_export_untouched_tail",
+      "flags",
+      "invocation_counter"
+    ],
+    "reference_restored_and_served": true
+  },
+  "diagnosis": {
+    "confidence": "high",
+    "classification": "triton_low_bit_codegen_or_reduction_layout_drift",
+    "indexing_or_semantic_bug_supported": false,
+    "attribution_limit": "the A/B changes both per-request-to-batched kernel structure and BV8-to-BV64 geometry",
+    "production_action": "reject_bv64_without_timing",
+    "next_gate": "exact4_b4_batched_bv8_vs_per_request_bv8",
+    "batched_bv8_physical_launches_per_layer": 2,
+    "batched_bv8_launch_count_scales_with_batch": false
+  },
+  "identities": {
+    "runner_sha256": "dee583840be8be112ae7cb3d207f723d9c52a97a2409c596c862a6d6e2dca303",
+    "stock_fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+    "runtime_manifest_launch_end_byte_identical": true,
+    "external_manifest_launch_end_byte_identical": true,
+    "runtime_attestation_canonical_sha256": "7a167058b7f4d3c3fbffcfaee4b14b613c591e0259de08e3510ee9559955dd5d",
+    "external_manifest_canonical_sha256": "c42fb16d2ea932f0e819c81172c49b69b312b75dd446146b6d7b6ef78af00a9e"
+  },
+  "unpublished_raw_evidence_sha256": {
+    "docker_log": "3c443cdfa47e7ec4a60e0f223f3b1f67369de09a91cbbe1c372816b64dab4dc3",
+    "docker_inspect": "427178b499d5bdc3a0c311ce10adb856777ea5e7a5849e4538abdd419849d323",
+    "process_identity": "1906dc63c327af5edd79ffa0dab627be6242aea2497c1411ead09bd3c5296bb6"
+  },
+  "cleanup": {
+    "container_identity_verified": true,
+    "container_exit_code": 0,
+    "container_removed": true,
+    "docker_containers_after_cleanup": 0,
+    "gpu_compute_processes_after_cleanup": 0,
+    "host_memory_available_gib_after_cleanup": 105,
+    "swap_used_gib_after_cleanup": 0
+  },
+  "claims": {
+    "real_swe_verified_tasks_started": true,
+    "physical_b4_reached": true,
+    "b4_byte_parity": false,
+    "candidate_correctness": false,
+    "timing": false,
+    "tps": false,
+    "acceptance": false,
+    "hardware_floor": false
+  }
+}

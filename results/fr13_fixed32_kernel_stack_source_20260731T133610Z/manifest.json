@@ -1,0 +1,36 @@
+{
+  "schema": "fr13.fixed32.kernel_stack.source_integration.v1",
+  "created_utc": "2026-07-31T13:36:10Z",
+  "branch": "agent/fixed32-kernel-stack",
+  "live_gate_base": "4220616f9684d76075b040a96aeb636ae55cb349",
+  "integrated_source_commits": [
+    "bb399adb30f210e57084bb87c6d4d99fffd4f020",
+    "c11323290e951d44f170bd964a071057908b27e6",
+    "f75c023c94973fef62ba5c35d84fdbb42f16e754",
+    "d642d7067fbf1a83cf205f281cf7fde33f903137",
+    "e0050166688b5f8d60e280492dd3524553be113f",
+    "9b1d1f19790fcfc6441bcc24742b3a00dee39017",
+    "7185e3a78456f50e0e1443832c85cebb4d0777a8"
+  ],
+  "selectors_default_off": true,
+  "b1_batched_gdn_forbidden": true,
+  "batch_gdn_diagnostic_serves_reference": true,
+  "batch_gdn_production_requires_48_layer_live_pass": true,
+  "batch_gdn_and_path_bv_mutually_exclusive": true,
+  "gpu_gate_run": false,
+  "performance_claim": false,
+  "tests": {
+    "focused_gate_suite": {
+      "passed": 45,
+      "skipped": 1,
+      "failed": 0
+    },
+    "draft_head_and_taw_kernel_suite": {
+      "passed": 11,
+      "skipped": 0,
+      "failed": 0
+    },
+    "py_compile": "pass",
+    "launcher_bash_syntax": "pass"
+  }
+}

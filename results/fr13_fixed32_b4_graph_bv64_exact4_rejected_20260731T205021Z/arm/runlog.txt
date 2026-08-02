@@ -1,0 +1,58 @@
+fixed32 SWE-Verified subset OK: tasks=4 diagnostic=0
+=== BIGDENOM-VARIANT SWEServe ARM tail6_fixed32_b4_graph_bv64_exact4_b4_20260731T205021Z kind=tail6_fixed32 launcher=forked expect=31 xflags=[FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0 FR13_FIXED32_MODE=tail6_fixed32 FR13_FIXED32_VALID_MASK=0x7a9ce73f FR13_FIXED32_ACTIVE_NODES=21 FR13_FIXED32_PHYSICAL_DRAFTS=31] subset=config/fr13_fixed32/subset_b4_four.json ===
+2026-07-31T20:50:36Z
+065304d4785dae95ad954ee17d9d0e79cfdaa7dc
+[hygiene] recover_host_memory + assert free
+[hygiene] MemAvailable=106.4GiB swap_used=0 OK
+               total        used        free      shared  buff/cache   available
+Mem:             117          11         106           0           0         106
+Swap:             15           0          15
+fixed32 container identity promoted: id=d3559a56707bfde96a282a19446605986f1ebbc05d4ee77c96620ac5a8901ef3 name=fr13-bigdenom-tail6_fixed32_b4_graph_bv64_exact4_b4_20260731T205021Z started_at=2026-07-31T20:50:40.681878667Z pid=2169456 restart_count=0
+FAIL: container died before health
+(APIServer pid=1)                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=1)   File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+(APIServer pid=1)     return await anext(self.gen)
+(APIServer pid=1)            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/api_server.py", line 100, in build_async_engine_client
+(APIServer pid=1)     async with build_async_engine_client_from_engine_args(
+(APIServer pid=1)                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=1)   File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+(APIServer pid=1)     return await anext(self.gen)
+(APIServer pid=1)            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/api_server.py", line 136, in build_async_engine_client_from_engine_args
+(APIServer pid=1)     async_llm = AsyncLLM.from_vllm_config(
+(APIServer pid=1)                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/async_llm.py", line 217, in from_vllm_config
+(APIServer pid=1)     return cls(
+(APIServer pid=1)            ^^^^
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/async_llm.py", line 146, in __init__
+(APIServer pid=1)     self.engine_core = EngineCoreClient.make_async_mp_client(
+(APIServer pid=1)                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(APIServer pid=1)     return func(*args, **kwargs)
+(APIServer pid=1)            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core_client.py", line 130, in make_async_mp_client
+(APIServer pid=1)     return AsyncMPClient(*client_args)
+(APIServer pid=1)            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(APIServer pid=1)     return func(*args, **kwargs)
+(APIServer pid=1)            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core_client.py", line 900, in __init__
+(APIServer pid=1)     super().__init__(
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core_client.py", line 535, in __init__
+(APIServer pid=1)     with launch_core_engines(
+(APIServer pid=1)          ^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=1)   File "/usr/lib/python3.12/contextlib.py", line 144, in __exit__
+(APIServer pid=1)     next(self.gen)
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/utils.py", line 1094, in launch_core_engines
+(APIServer pid=1)     wait_for_engine_startup(
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/utils.py", line 1153, in wait_for_engine_startup
+(APIServer pid=1)     raise RuntimeError(
+(APIServer pid=1) RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}
+[teardown] kill proxy + attest/remove run container + recover_host_memory
+FAIL: fixed32 terminal flush rc=1
+fixed32 container incarnation drifted after engine-ledger materialization failure: d3559a56707bfde96a282a19446605986f1ebbc05d4ee77c96620ac5a8901ef3
+               total        used        free      shared  buff/cache   available
+Mem:             117          11         106           0           0         106
+Swap:             15           0          15
+2026-07-31T20:57:27Z

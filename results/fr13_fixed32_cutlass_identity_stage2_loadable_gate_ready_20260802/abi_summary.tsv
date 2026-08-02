@@ -1,0 +1,7 @@
+surface	production_reference	identity_stage2_candidate	delta	verdict
+defined_dynamic_symbols	1303	1308	5	additive
+undefined_dynamic_symbols	183	183	0	equal
+dt_needed_entries	9	9	0	equal
+runpath	matched	matched	0	equal
+removed_defined_symbols	0	0	0	pass
+dynamic_import	pass	pass	0	pass

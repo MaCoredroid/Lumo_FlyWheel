@@ -1,0 +1,53 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_divisor_k64_gate_ready.v1",
+  "created_at_utc": "2026-08-02T13:29:01Z",
+  "status": "real_b1_k64_byte_gate_ready_default_off",
+  "acceptance_valid": false,
+  "byte_qualified": false,
+  "performance_claim": false,
+  "gpu_runtime_used": false,
+  "docker_used": false,
+  "source": {
+    "branch": "agent/fixed32-cutlass-divisor-balanced-20260802",
+    "implementation_commit": "b6c66e51cc63a4a448b8a51a91d60a185dd498fb",
+    "source_artifact_commit": "4832f7a13",
+    "gate_wiring_commit": "65725c7504d003ea3778e36e8fd11bbd4f875aac",
+    "patch_source_sha256": "f91c115447b8c563f963c507984c4d9186dd6c4815975587b5d997f01cb1cf74",
+    "patched_dispatch_sha256": "6fb538e2b875f5528828d349067f98e420ec003a2b292598dcb46bfab09bdba5"
+  },
+  "candidate": {
+    "selector": "divisor_static_stocktile",
+    "diagnostic_selector": "divisor_static_stocktile_byte_ab",
+    "candidate_sha256": "338e89d062c2b1ac40909dbc8d64d4ab6b0def9fd86988c9e395e8244606a9f6",
+    "candidate_bytes": 113837288,
+    "default_enabled": false,
+    "diagnostic_installable": true,
+    "production_enabled": false
+  },
+  "gate": {
+    "workload": "one real SWE-Verified B1 task",
+    "qualification_profile": "k64_root",
+    "draft_vocab_root": 1,
+    "draft_vocab_k": 65536,
+    "comparison_call_limit": 320,
+    "projection_shape_count": 5,
+    "requires_exact_byte_equality": true,
+    "live_schema": "fr13.fixed32.cutlass_divisor_static_k64_root_live_gate.v1",
+    "result_name": "cutlass_divisor_static_k64_root_byte_gate.json"
+  },
+  "checks": {
+    "cutlass_tests": "91 passed",
+    "selected_route_tests": "115 passed, 1 unrelated baseline assertion deselected",
+    "shell_syntax": "pass",
+    "python_compile": "pass",
+    "focused_ruff": "pass",
+    "diff_check": "pass"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "synthetic probe",
+    "real SWE-Verified B1 byte gate",
+    "B1 or B4 full-step timing",
+    "hardware-floor acceptance"
+  ]
+}

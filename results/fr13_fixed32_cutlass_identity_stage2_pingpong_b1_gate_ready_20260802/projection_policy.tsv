@@ -1,0 +1,6 @@
+n	k	logical_tiles	grid_ctas	tiles_per_cta	consumer_schedule
+5120	6144	40	40	1	cooperative
+5120	17408	40	40	1	cooperative
+14336	5120	112	28	4	pingpong
+16384	5120	128	32	4	pingpong
+34816	5120	272	34	8	pingpong

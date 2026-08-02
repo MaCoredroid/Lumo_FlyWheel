@@ -92,6 +92,244 @@ except Exception:  # pragma: no cover - torch always present in the vLLM image
 import numpy as np
 
 
+try:  # Triton is present in the serving image, not on CPU-only audit hosts.
+    import triton
+    import triton.language as tl
+except Exception:  # pragma: no cover - exercised by CPU-only source gates
+    triton = None
+    tl = None
+
+
+if triton is not None:
+
+    @triton.jit
+    def _fr13_fixed32_taw_exact_commit_kernel(
+        child_table,
+        child_counts,
+        current_input,
+        alive_input,
+        self_token,
+        bonus_token,
+        source,
+        selected_token,
+        rejected_token,
+        accepted,
+        current_state,
+        alive_state,
+        output_tokens,
+        output_lens,
+        accepted_path_rows,
+        accepted_lens,
+        last_row,
+        LEVEL: tl.constexpr,
+        PHYSICAL_DRAFTS: tl.constexpr,
+        PHYSICAL_ROWS: tl.constexpr,
+        FANOUT: tl.constexpr,
+        OUTPUT_CAPACITY: tl.constexpr,
+        PATH_CAPACITY: tl.constexpr,
+    ):
+        """Commit already-decided tokens using integer and boolean operations only."""
+        request = tl.program_id(0)
+        current = tl.load(current_input + request).to(tl.int64)
+        alive = tl.load(alive_input + request) != 0
+
+        if LEVEL == 0:
+            output_columns = tl.arange(0, OUTPUT_CAPACITY)
+            path_columns = tl.arange(0, PATH_CAPACITY)
+            tl.store(
+                output_tokens + request * OUTPUT_CAPACITY + output_columns,
+                -1,
+            )
+            tl.store(
+                accepted_path_rows + request * PATH_CAPACITY + path_columns,
+                0,
+            )
+            output_len = 0
+            path_len = 0
+            prior_last_row = 0
+        else:
+            output_len = tl.load(output_lens + request).to(tl.int64)
+            path_len = tl.load(accepted_lens + request).to(tl.int64)
+            prior_last_row = tl.load(last_row + request).to(tl.int64)
+
+        parent_slot = tl.maximum(
+            0,
+            tl.minimum(current + 1, PHYSICAL_ROWS - 1),
+        )
+        child_count = tl.load(
+            child_counts + request * PHYSICAL_ROWS + parent_slot
+        ).to(tl.int64)
+        has_kids = alive & (child_count > 0)
+        leaf = alive & (child_count == 0)
+        current_valid = (current >= 0) & (current < PHYSICAL_DRAFTS)
+
+        sampled_self = tl.load(self_token + request).to(tl.int64)
+        sampled_bonus = tl.load(bonus_token + request).to(tl.int64)
+        leaf_token = tl.where(current_valid, sampled_self, sampled_bonus)
+        tl.store(
+            output_tokens + request * OUTPUT_CAPACITY + output_len,
+            leaf_token,
+            mask=leaf,
+        )
+
+        is_accepted = tl.load(accepted + request) != 0
+        sampled_selected = tl.load(selected_token + request).to(tl.int64)
+        sampled_rejected = tl.load(rejected_token + request).to(tl.int64)
+        emitted_token = tl.where(
+            is_accepted,
+            sampled_selected,
+            sampled_rejected,
+        )
+        tl.store(
+            output_tokens + request * OUTPUT_CAPACITY + output_len,
+            emitted_token,
+            mask=has_kids,
+        )
+        output_len_new = output_len + leaf.to(tl.int64) + has_kids.to(tl.int64)
+
+        selected_source = tl.load(source + request).to(tl.int64)
+        accepted_node = tl.load(
+            child_table
+            + request * PHYSICAL_ROWS * FANOUT
+            + parent_slot * FANOUT
+            + selected_source
+        ).to(tl.int64)
+        accepted_row = accepted_node + 1
+        tl.store(
+            accepted_path_rows + request * PATH_CAPACITY + path_len,
+            accepted_row,
+            mask=is_accepted,
+        )
+        path_len_new = path_len + is_accepted.to(tl.int64)
+        current_new = tl.where(is_accepted, accepted_node, current)
+        alive_new = (alive & (~leaf)) & is_accepted
+        last_row_new = tl.where(is_accepted, accepted_row, prior_last_row)
+
+        tl.store(current_state + request, current_new)
+        tl.store(alive_state + request, alive_new)
+        tl.store(output_lens + request, output_len_new)
+        tl.store(accepted_lens + request, path_len_new)
+        tl.store(last_row + request, last_row_new)
+
+
+    @triton.jit
+    def _fr13_fixed32_taw_all_parent_commit_kernel(
+        child_table,
+        child_counts,
+        self_slot_by_node,
+        target_slot_by_parent,
+        self_token,
+        source,
+        selected_token,
+        rejected_token,
+        accepted,
+        bonus_token,
+        output_tokens,
+        output_lens,
+        accepted_path_rows,
+        accepted_lens,
+        last_row,
+        PHYSICAL_DRAFTS: tl.constexpr,
+        PHYSICAL_ROWS: tl.constexpr,
+        FANOUT: tl.constexpr,
+        SELF_ROWS: tl.constexpr,
+        TARGET_ROWS: tl.constexpr,
+        WALK_CAP: tl.constexpr,
+        OUTPUT_CAPACITY: tl.constexpr,
+        PATH_CAPACITY: tl.constexpr,
+    ):
+        """Walk predecided fixed-tree parents in one integer-only program."""
+        request = tl.program_id(0)
+        output_columns = tl.arange(0, OUTPUT_CAPACITY)
+        path_columns = tl.arange(0, PATH_CAPACITY)
+        tl.store(
+            output_tokens + request * OUTPUT_CAPACITY + output_columns,
+            -1,
+        )
+        tl.store(
+            accepted_path_rows + request * PATH_CAPACITY + path_columns,
+            0,
+        )
+
+        current = -1
+        alive = True
+        output_len = 0
+        path_len = 0
+        final_row = 0
+        for _level in tl.static_range(0, WALK_CAP):
+            parent_slot = tl.maximum(
+                0,
+                tl.minimum(current + 1, PHYSICAL_ROWS - 1),
+            )
+            child_count = tl.load(
+                child_counts + request * PHYSICAL_ROWS + parent_slot
+            ).to(tl.int64)
+            has_kids = alive & (child_count > 0)
+            leaf = alive & (child_count == 0)
+            current_valid = (current >= 0) & (current < PHYSICAL_DRAFTS)
+
+            safe_current = tl.maximum(
+                0,
+                tl.minimum(current, PHYSICAL_DRAFTS - 1),
+            )
+            self_slot = tl.load(self_slot_by_node + safe_current).to(tl.int64)
+            sampled_self = tl.load(
+                self_token + request * SELF_ROWS + self_slot
+            ).to(tl.int64)
+            sampled_bonus = tl.load(bonus_token + request).to(tl.int64)
+            leaf_token = tl.where(current_valid, sampled_self, sampled_bonus)
+            tl.store(
+                output_tokens + request * OUTPUT_CAPACITY + output_len,
+                leaf_token,
+                mask=leaf,
+            )
+
+            target_slot = tl.load(
+                target_slot_by_parent + parent_slot
+            ).to(tl.int64)
+            decision_offset = request * TARGET_ROWS + target_slot
+            is_accepted = has_kids & (tl.load(accepted + decision_offset) != 0)
+            sampled_selected = tl.load(
+                selected_token + decision_offset
+            ).to(tl.int64)
+            sampled_rejected = tl.load(
+                rejected_token + decision_offset
+            ).to(tl.int64)
+            emitted_token = tl.where(
+                is_accepted,
+                sampled_selected,
+                sampled_rejected,
+            )
+            tl.store(
+                output_tokens + request * OUTPUT_CAPACITY + output_len,
+                emitted_token,
+                mask=has_kids,
+            )
+            output_len += leaf.to(tl.int64) + has_kids.to(tl.int64)
+
+            selected_source = tl.load(source + decision_offset).to(tl.int64)
+            accepted_node = tl.load(
+                child_table
+                + request * PHYSICAL_ROWS * FANOUT
+                + parent_slot * FANOUT
+                + selected_source
+            ).to(tl.int64)
+            accepted_row = accepted_node + 1
+            tl.store(
+                accepted_path_rows + request * PATH_CAPACITY + path_len,
+                accepted_row,
+                mask=is_accepted,
+            )
+            path_len += is_accepted.to(tl.int64)
+            current = tl.where(is_accepted, accepted_node, current)
+            alive = (alive & (~leaf)) & is_accepted
+            final_row = tl.where(is_accepted, accepted_row, final_row)
+
+        tl.store(output_lens + request, output_len)
+        tl.store(accepted_lens + request, path_len)
+        tl.store(last_row + request, final_row)
+
+
 # ---------------------------------------------------------------------------
 # MEASUREMENT-ONLY commit trace (FR13 garble mechanism binding, 2026-07-10).
 # Gated on LUMO_TREE_SAMPLER_DEBUG_LOG (the ONE diagnostic flag proven to reach
@@ -929,10 +1167,29 @@ _FR13_FIXED32_TAW_LAST_WORK: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_WARMUPS: dict[tuple[Any, ...], dict[str, Any]] = {}
 _FR13_FIXED32_WORK_ANNOUNCED = False
 _FR13_FIXED32_BATCHES = (1, 2, 3, 4)
+_FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES = (1, 4)
 _FR13_FIXED32_INTEGER_DTYPES = None
-_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-source-v1"
+_FR13_FIXED32_TAW_NATIVE_CANDIDATE = "fixed32_all_parent_commit_v2"
+_FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_SIDECARS = (
+    "/logs/fr13_fixed32_taw_native_precompute_diagnostic.arm",
+    "/tmp/fr13_fixed32_taw_native_precompute_diagnostic.arm",
+)
+_FR13_FIXED32_TAW_NATIVE_PRODUCTION_SIDECARS = (
+    "/logs/fr13_fixed32_taw_native_precompute_production.arm",
+    "/tmp/fr13_fixed32_taw_native_precompute_production.arm",
+)
+_FR13_FIXED32_TAW_NATIVE_REAL_EVENT = (
+    "/logs/fr13_fixed32_taw_native_precompute.real_event.arm"
+)
+_FR13_FIXED32_TAW_NATIVE_LIVE_PASS = (
+    "/logs/fr13_fixed32_taw_native_precompute.live_pass.json"
+)
+_FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS = (
+    "/logs/fr13_fixed32_taw_native_precompute.production_pass.json"
+)
+_FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "ff9fdeb6529876732cc949ab4f2636a7cee04edaec2524c39657a34d3d8b3250"
+    "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
@@ -941,6 +1198,18 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_device_key",
     "_fr13_fixed32_expected_active",
     "_fr13_fixed32_parse_int",
+    "_fr13_fixed32_taw_topology_binding",
+    "_fr13_fixed32_taw_native_arm_sources",
+    "_fr13_fixed32_taw_validate_pass_record",
+    "_fr13_fixed32_taw_native_production_pass",
+    "_fr13_fixed32_taw_native_selector",
+    "_fr13_fixed32_taw_native_precompute_enabled",
+    "_fr13_fixed32_taw_native_real_event_marker",
+    "_fr13_fixed32_taw_native_live_pass_emit",
+    "_fr13_fixed32_taw_native_live_entry",
+    "fr13_fixed32_taw_native_live_gate_begin",
+    "fr13_fixed32_taw_native_live_gate_on_replay",
+    "_fr13_fixed32_taw_tensor_call_census",
     "_fr13_fixed32_taw_source_contract",
     "_fr13_fixed32_runtime_contract",
     "fr13_fixed32_taw_cache_key",
@@ -955,10 +1224,22 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_validate_inputs",
     "_fr13_fixed32_tensor_layout",
     "_fr13_fixed32_layout_contract",
+    "_fr13_fixed32_taw_probability_caches",
+    "_fr13_fixed32_taw_all_parent_decisions",
+    "_fr13_fixed32_taw_all_parent_walk_torch",
+    "_fr13_fixed32_taw_execute_all_parent_torch",
+    "_fr13_fixed32_taw_execute_all_parent_cuda",
+    "_fr13_fixed32_taw_execute_all_parent",
+    "_fr13_fixed32_taw_execute_torch",
+    "_fr13_fixed32_taw_execute_exact_cuda",
     "_fr13_fixed32_taw_execute",
     "_fr13_fixed32_publish_work",
     "fr13_fixed32_taw_commit",
     "_fr13_taw_inv_cdf",
+)
+_FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (
+    "_fr13_fixed32_taw_exact_commit_kernel",
+    "_fr13_fixed32_taw_all_parent_commit_kernel",
 )
 _FR13_FIXED32_TAW_GEOMETRY = {
     "physical_drafts": 31,
@@ -981,8 +1262,45 @@ _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS = {
     "residual_subtract_calls": 12,
     "residual_clamp_calls": 12,
     "residual_where_calls": 24,
-    "output_scatter_calls": 24,
-    "path_scatter_calls": 12,
+    "output_scatter_calls": 0,
+    "path_scatter_calls": 0,
+    "exact_commit_launches": 12,
+    "exact_commit_programs_per_request": 12,
+    "floating_sampling_reimplementation": False,
+}
+_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS = {
+    **_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS,
+    "walk_levels": 13,
+    "full_vocab_row_gathers": 54,
+    "full_vocab_fp32_casts": 26,
+    "full_vocab_softmax_calls": 26,
+    "full_vocab_normalizations": 83,
+    "full_vocab_cdf_calls": 54,
+    "source_cdf_calls": 29,
+    "qmix_zero_fills": 29,
+    "qmix_scatter_add_calls": 29,
+    "residual_subtract_calls": 29,
+    "residual_clamp_calls": 29,
+    "residual_where_calls": 58,
+    "exact_commit_launches": 13,
+    "exact_commit_programs_per_request": 13,
+}
+_FR13_FIXED32_TAW_NATIVE_PRODUCTION_TENSOR_CALL_CENSUS = {
+    **_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS,
+    "walk_levels": 1,
+    "full_vocab_row_gathers": 30,
+    "full_vocab_fp32_casts": 2,
+    "full_vocab_softmax_calls": 2,
+    "full_vocab_normalizations": 47,
+    "full_vocab_cdf_calls": 30,
+    "source_cdf_calls": 17,
+    "qmix_zero_fills": 17,
+    "qmix_scatter_add_calls": 17,
+    "residual_subtract_calls": 17,
+    "residual_clamp_calls": 17,
+    "residual_where_calls": 34,
+    "exact_commit_launches": 1,
+    "exact_commit_programs_per_request": 1,
 }
 
 
@@ -1073,7 +1391,671 @@ def _fr13_fixed32_parse_int(raw: str, *, name: str) -> int:
         raise RuntimeError(f"{name} must be an integer, got {raw!r}") from error
 
 
-def _fr13_fixed32_taw_source_contract(topology) -> dict[str, Any]:
+def _fr13_fixed32_taw_topology_binding(topology) -> dict[str, Any]:
+    """Derive the exact logical topology and all-parent row schedule."""
+    modes = ("tail6_fixed32", "hydra27_fixed32")
+    if set(topology.VALID_BY_MODE) != set(modes):
+        raise RuntimeError("FR13 fixed32 TAW mode set drifted")
+
+    self_source_union = set()
+    target_source_union = set()
+    sampler_tables = {}
+    sampler_counts = {}
+    for fixed_mode in modes:
+        fixed_children = topology.active_child_lists(fixed_mode)
+        fixed_active = tuple(
+            node
+            for node, enabled in enumerate(topology.valid_for_mode(fixed_mode))
+            if enabled
+        )
+        self_source_union.update(
+            node for node in fixed_active if node not in fixed_children
+        )
+        target_source_union.update(
+            children[0] for children in fixed_children.values()
+        )
+        child_table, child_counts = topology.sampler_child_table(fixed_mode)
+        sampler_tables[fixed_mode] = [list(row) for row in child_table]
+        sampler_counts[fixed_mode] = list(child_counts)
+
+    self_source_nodes = tuple(sorted(self_source_union))
+    target_source_nodes = tuple(sorted(target_source_union))
+    node_depths = []
+    for node, parent in enumerate(topology.DRAFT_PARENT):
+        if parent < 0:
+            node_depths.append(0)
+            continue
+        if parent >= node:
+            raise RuntimeError(
+                "FR13 fixed32 all-parent fusion requires topological parents"
+            )
+        node_depths.append(node_depths[parent] + 1)
+    self_uniform_levels = tuple(
+        node_depths[node] + 1 for node in self_source_nodes
+    )
+    target_parent_slots = tuple(
+        int(topology.DRAFT_PARENT[source_node]) + 1
+        for source_node in target_source_nodes
+    )
+    target_uniform_levels = tuple(
+        0 if parent_slot == 0 else node_depths[parent_slot - 1] + 1
+        for parent_slot in target_parent_slots
+    )
+    if (
+        len(self_source_nodes) != 13
+        or len(target_source_nodes) != 17
+        or len(set(target_parent_slots)) != len(target_parent_slots)
+        or max(self_uniform_levels + target_uniform_levels)
+        >= int(topology.WALK_CAP)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 all-parent source-row or depth schedule drifted"
+        )
+
+    topology_payload = {
+        "fixed_choices": [list(path) for path in topology.FIXED32_CHOICES],
+        "draft_parent": list(topology.DRAFT_PARENT),
+        "valid_by_mode": {
+            mode: [bool(value) for value in topology.valid_for_mode(mode)]
+            for mode in modes
+        },
+        "sampler_child_tables": sampler_tables,
+        "sampler_child_counts": sampler_counts,
+    }
+    topology_sha256 = hashlib.sha256(
+        json.dumps(
+            topology_payload,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+    ).hexdigest()
+    return {
+        "tail_valid_mask": int(topology.TAIL6_VALID_MASK),
+        "hydra_valid_mask": int(topology.HYDRA27_VALID_MASK),
+        "physical_parent_sha256": str(topology.PHYSICAL_PARENT_SHA256),
+        "tree_ancestry_sha256": str(topology.TREE_ANCESTRY_SHA256),
+        "topology_sha256": topology_sha256,
+        "all_parent_self_source_nodes": list(self_source_nodes),
+        "all_parent_target_source_nodes": list(target_source_nodes),
+        "all_parent_self_uniform_levels": list(self_uniform_levels),
+        "all_parent_target_parent_slots": list(target_parent_slots),
+        "all_parent_target_uniform_levels": list(target_uniform_levels),
+    }
+
+
+def _fr13_fixed32_taw_native_arm_sources(
+    *, environ, name: str, sidecars,
+) -> list[str]:
+    raw = environ.get(name, "")
+    if raw not in ("", "0", "1"):
+        raise RuntimeError(f"{name} must be unset, 0, or 1")
+    sources = [f"env:{name}"] if raw == "1" else []
+    for path in sidecars:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="ascii") as handle:
+                value = handle.read(16)
+        except (OSError, UnicodeError) as error:
+            raise RuntimeError(f"{name} cannot read sidecar {path}: {error}") from error
+        if len(value) >= 16 or value.strip() != "1":
+            raise RuntimeError(f"{name} sidecar must contain exactly 1: {path}")
+        sources.append(f"sidecar:{path}")
+    return sources
+
+
+def _fr13_fixed32_taw_validate_pass_record(
+    payload: object,
+    topology,
+    *,
+    expected_mode: str | None = None,
+    expected_batch: int | None = None,
+) -> dict[str, Any]:
+    """Validate one independently qualified real replay."""
+    expected_keys = {
+        "schema",
+        "status",
+        "candidate",
+        "source_contract_schema",
+        "source_contract_sha256",
+        "task_marker",
+        "mode",
+        "valid_mask",
+        "topology_binding",
+        "batch_size",
+        "covered_batches",
+        "geometry",
+        "probability_mismatches",
+        "product_mismatches",
+        "evidence_route",
+        "reference_returned",
+        "candidate_returned",
+    }
+    task_marker = payload.get("task_marker") if isinstance(payload, dict) else None
+    geometry = payload.get("geometry") if isinstance(payload, dict) else None
+    payload_mode = payload.get("mode") if isinstance(payload, dict) else None
+    payload_batch = payload.get("batch_size") if isinstance(payload, dict) else None
+    task_identity = (
+        task_marker[len("swe_verified:"):]
+        if isinstance(task_marker, str)
+        and task_marker.startswith("swe_verified:")
+        else ""
+    )
+    campaign_digest = ""
+    for prefix in ("campaign4_", "campaign16_"):
+        if task_identity.startswith(prefix):
+            campaign_digest = task_identity[len(prefix):]
+            break
+    campaign_bound = (
+        len(campaign_digest) == 64
+        and all(character in "0123456789abcdef" for character in campaign_digest)
+    )
+    topology_binding = _fr13_fixed32_taw_topology_binding(topology)
+    expected_valid_mask = (
+        topology.VALID_MASK_BY_MODE.get(payload_mode)
+        if isinstance(payload_mode, str)
+        else None
+    )
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != expected_keys
+        or payload.get("schema")
+        != "fr13.fixed32.taw_native_precompute.live_pass.v2"
+        or payload.get("status") != "pass"
+        or payload.get("candidate") != _FR13_FIXED32_TAW_NATIVE_CANDIDATE
+        or payload.get("source_contract_schema")
+        != _FR13_FIXED32_TAW_SOURCE_SCHEMA
+        or payload.get("source_contract_sha256")
+        != _FR13_FIXED32_TAW_SOURCE_SHA256
+        or payload.get("reference_returned") is not True
+        or payload.get("candidate_returned") is not False
+        or payload.get("probability_mismatches") != 0
+        or payload.get("product_mismatches") != 0
+        or payload.get("evidence_route")
+        not in ("full_graph_replay", "uncaptured_root_check")
+        or not isinstance(task_marker, str)
+        or not task_marker.startswith("swe_verified:")
+        or len(task_marker) == len("swe_verified:")
+        or payload_mode not in ("tail6_fixed32", "hydra27_fixed32")
+        or type(payload.get("valid_mask")) is not int
+        or payload.get("valid_mask") != expected_valid_mask
+        or payload.get("topology_binding") != topology_binding
+        or type(payload_batch) is not int
+        or payload_batch not in _FR13_FIXED32_BATCHES
+        or (payload_batch != 1 and not campaign_bound)
+        or payload.get("covered_batches") != [payload_batch]
+        or geometry != _FR13_FIXED32_TAW_GEOMETRY
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 TAW native PASS record is invalid or belongs to a "
+            "different candidate/source"
+        )
+    if expected_mode is not None and payload["mode"] != expected_mode:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native production mode does not match PASS: "
+            f"{expected_mode!r} != {payload['mode']!r}"
+        )
+    if expected_batch is not None and payload["batch_size"] != expected_batch:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native production batch is not covered by PASS: "
+            f"B{expected_batch} != B{payload['batch_size']}"
+        )
+    return payload
+
+
+def _fr13_fixed32_taw_native_production_pass(
+    *,
+    environ=None,
+    path: str | None = None,
+    expected_mode: str | None = None,
+    expected_batch: int | None = None,
+) -> dict[str, Any]:
+    """Validate a source-bound bundle of independently qualified batches."""
+    env = os.environ if environ is None else environ
+    resolved_path = path or env.get(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_PATH",
+        _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS,
+    )
+    if os.path.islink(resolved_path) or not os.path.isfile(resolved_path):
+        raise RuntimeError(
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION requires a regular "
+            f"live PASS JSON: {resolved_path}"
+        )
+    try:
+        with open(resolved_path, encoding="ascii") as handle:
+            payload = json.load(handle)
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native production PASS JSON is unreadable: "
+            f"{error}"
+        ) from error
+    topology = _fr13_fixed32_topology()
+    topology_binding = _fr13_fixed32_taw_topology_binding(topology)
+    bundle_keys = {
+        "schema",
+        "status",
+        "candidate",
+        "source_contract_schema",
+        "source_contract_sha256",
+        "mode",
+        "valid_mask",
+        "topology_binding",
+        "required_production_batches",
+        "qualified_batches",
+        "batch_passes",
+    }
+    payload_mode = payload.get("mode") if isinstance(payload, dict) else None
+    expected_valid_mask = (
+        topology.VALID_MASK_BY_MODE.get(payload_mode)
+        if isinstance(payload_mode, str)
+        else None
+    )
+    qualified_batches = (
+        payload.get("qualified_batches") if isinstance(payload, dict) else None
+    )
+    batch_passes = payload.get("batch_passes") if isinstance(payload, dict) else None
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != bundle_keys
+        or payload.get("schema")
+        != "fr13.fixed32.taw_native_precompute.pass_bundle.v1"
+        or payload.get("status") != "production_ready"
+        or payload.get("candidate") != _FR13_FIXED32_TAW_NATIVE_CANDIDATE
+        or payload.get("source_contract_schema")
+        != _FR13_FIXED32_TAW_SOURCE_SCHEMA
+        or payload.get("source_contract_sha256")
+        != _FR13_FIXED32_TAW_SOURCE_SHA256
+        or payload_mode not in ("tail6_fixed32", "hydra27_fixed32")
+        or type(payload.get("valid_mask")) is not int
+        or payload.get("valid_mask") != expected_valid_mask
+        or payload.get("topology_binding") != topology_binding
+        or payload.get("required_production_batches")
+        != list(_FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES)
+        or not isinstance(qualified_batches, list)
+        or not qualified_batches
+        or any(
+            type(batch) is not int or batch not in _FR13_FIXED32_BATCHES
+            for batch in qualified_batches
+        )
+        or qualified_batches != sorted(set(qualified_batches))
+        or not set(_FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES).issubset(
+            qualified_batches
+        )
+        or not isinstance(batch_passes, dict)
+        or set(batch_passes) != {str(batch) for batch in qualified_batches}
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 TAW native production PASS bundle is invalid or "
+            "belongs to a different candidate/source"
+        )
+    for batch in qualified_batches:
+        _fr13_fixed32_taw_validate_pass_record(
+            batch_passes[str(batch)],
+            topology,
+            expected_mode=payload_mode,
+            expected_batch=batch,
+        )
+    if expected_mode is not None and payload_mode != expected_mode:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native production mode does not match PASS: "
+            f"{expected_mode!r} != {payload_mode!r}"
+        )
+    if expected_batch is not None and expected_batch not in qualified_batches:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native production batch is not covered by PASS: "
+            f"B{expected_batch} not in {qualified_batches}"
+        )
+    return payload
+
+
+def _fr13_fixed32_taw_native_selector(
+    *,
+    environ=None,
+    diagnostic_sidecars=None,
+    production_sidecars=None,
+    batch_size: int | None = None,
+) -> str:
+    """Resolve reference, diagnostic, or source-gated production."""
+    env = os.environ if environ is None else environ
+    diagnostic = _fr13_fixed32_taw_native_arm_sources(
+        environ=env,
+        name="FR13_FIXED32_TAW_NATIVE_PRECOMPUTE",
+        sidecars=(
+            _FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_SIDECARS
+            if diagnostic_sidecars is None
+            else tuple(diagnostic_sidecars)
+        ),
+    )
+    production = _fr13_fixed32_taw_native_arm_sources(
+        environ=env,
+        name="FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION",
+        sidecars=(
+            _FR13_FIXED32_TAW_NATIVE_PRODUCTION_SIDECARS
+            if production_sidecars is None
+            else tuple(production_sidecars)
+        ),
+    )
+    if diagnostic and production:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native diagnostic and production selectors "
+            "are mutually exclusive"
+        )
+    if production:
+        mode = env.get("FR13_FIXED32_MODE", "")
+        if mode not in ("tail6_fixed32", "hydra27_fixed32"):
+            raise RuntimeError(
+                "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION requires an "
+                "exact fixed32 mode"
+            )
+        bundle = _fr13_fixed32_taw_native_production_pass(
+            environ=env,
+            expected_mode=mode,
+        )
+        if batch_size is not None:
+            if batch_size not in _FR13_FIXED32_BATCHES:
+                raise RuntimeError(
+                    f"FR13 fixed32 batch must be 1..4, got {batch_size}"
+                )
+            if batch_size not in bundle["qualified_batches"]:
+                return "reference"
+        return "production"
+    if diagnostic:
+        return "diagnostic"
+    return "reference"
+
+
+def _fr13_fixed32_taw_native_precompute_enabled() -> bool:
+    return _fr13_fixed32_taw_native_selector() != "reference"
+
+
+def _fr13_fixed32_taw_native_real_event_marker() -> str | None:
+    path = os.environ.get(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_REAL_EVENT_PATH",
+        _FR13_FIXED32_TAW_NATIVE_REAL_EVENT,
+    )
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, encoding="ascii") as handle:
+            marker = handle.read(257)
+    except (OSError, UnicodeError) as error:
+        raise RuntimeError(
+            f"FR13 fixed32 TAW native cannot read real-event marker: {error}"
+        ) from error
+    marker = marker.strip()
+    prefix = "swe_verified:"
+    task_id = marker[len(prefix):] if marker.startswith(prefix) else ""
+    if (
+        len(marker) > 256
+        or not task_id
+        or any(
+            character
+            not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+            for character in task_id
+        )
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 TAW native real-event marker must be "
+            "swe_verified:<task_id>"
+        )
+    return marker
+
+
+def _fr13_fixed32_taw_native_live_pass_emit(
+    *, mode: str, batch_size: int, task_marker: str, evidence_route: str,
+) -> None:
+    path = os.environ.get(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON",
+        _FR13_FIXED32_TAW_NATIVE_LIVE_PASS,
+    )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    topology = _fr13_fixed32_topology()
+    if mode not in topology.VALID_MASK_BY_MODE:
+        raise RuntimeError(f"unknown FR13_FIXED32_MODE {mode!r}")
+    record = {
+        "schema": "fr13.fixed32.taw_native_precompute.live_pass.v2",
+        "status": "pass",
+        "candidate": _FR13_FIXED32_TAW_NATIVE_CANDIDATE,
+        "source_contract_schema": _FR13_FIXED32_TAW_SOURCE_SCHEMA,
+        "source_contract_sha256": _FR13_FIXED32_TAW_SOURCE_SHA256,
+        "task_marker": task_marker,
+        "mode": mode,
+        "valid_mask": int(topology.VALID_MASK_BY_MODE[mode]),
+        "topology_binding": _fr13_fixed32_taw_topology_binding(topology),
+        "batch_size": int(batch_size),
+        "covered_batches": [int(batch_size)],
+        "geometry": dict(_FR13_FIXED32_TAW_GEOMETRY),
+        "probability_mismatches": 0,
+        "product_mismatches": 0,
+        "evidence_route": evidence_route,
+        "reference_returned": True,
+        "candidate_returned": False,
+    }
+    _fr13_fixed32_taw_validate_pass_record(
+        record,
+        topology,
+        expected_mode=mode,
+        expected_batch=int(batch_size),
+    )
+    binding = _fr13_fixed32_taw_topology_binding(topology)
+    bundle_common = {
+        "schema": "fr13.fixed32.taw_native_precompute.pass_bundle.v1",
+        "candidate": _FR13_FIXED32_TAW_NATIVE_CANDIDATE,
+        "source_contract_schema": _FR13_FIXED32_TAW_SOURCE_SCHEMA,
+        "source_contract_sha256": _FR13_FIXED32_TAW_SOURCE_SHA256,
+        "mode": mode,
+        "valid_mask": int(topology.VALID_MASK_BY_MODE[mode]),
+        "topology_binding": binding,
+        "required_production_batches": list(
+            _FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES
+        ),
+    }
+    batch_passes = {}
+    if os.path.lexists(path):
+        if os.path.islink(path) or not os.path.isfile(path):
+            raise RuntimeError(
+                "FR13 fixed32 TAW native live PASS bundle path is not regular: "
+                f"{path}"
+            )
+        try:
+            with open(path, encoding="ascii") as handle:
+                previous = json.load(handle)
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise RuntimeError(
+                "FR13 fixed32 TAW native live PASS bundle is unreadable: "
+                f"{error}"
+            ) from error
+        previous_common = {
+            key: previous.get(key) if isinstance(previous, dict) else None
+            for key in bundle_common
+        }
+        previous_qualified = (
+            previous.get("qualified_batches")
+            if isinstance(previous, dict)
+            else None
+        )
+        previous_passes = (
+            previous.get("batch_passes") if isinstance(previous, dict) else None
+        )
+        expected_status = (
+            "production_ready"
+            if isinstance(previous_qualified, list)
+            and set(_FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES).issubset(
+                previous_qualified
+            )
+            else "partial"
+        )
+        if (
+            not isinstance(previous, dict)
+            or set(previous)
+            != set(bundle_common)
+            | {"status", "qualified_batches", "batch_passes"}
+            or previous_common != bundle_common
+            or previous.get("status") != expected_status
+            or not isinstance(previous_qualified, list)
+            or any(
+                type(batch) is not int or batch not in _FR13_FIXED32_BATCHES
+                for batch in previous_qualified
+            )
+            or previous_qualified != sorted(set(previous_qualified))
+            or not isinstance(previous_passes, dict)
+            or set(previous_passes)
+            != {str(batch) for batch in previous_qualified}
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 TAW native live PASS bundle cannot merge stale "
+                "or malformed evidence"
+            )
+        for previous_batch in previous_qualified:
+            _fr13_fixed32_taw_validate_pass_record(
+                previous_passes[str(previous_batch)],
+                topology,
+                expected_mode=mode,
+                expected_batch=previous_batch,
+            )
+        batch_passes.update(previous_passes)
+    batch_passes[str(int(batch_size))] = record
+    qualified_batches = sorted(int(batch) for batch in batch_passes)
+    payload = {
+        **bundle_common,
+        "status": (
+            "production_ready"
+            if set(_FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES).issubset(
+                qualified_batches
+            )
+            else "partial"
+        ),
+        "qualified_batches": qualified_batches,
+        "batch_passes": {
+            str(batch): batch_passes[str(batch)] for batch in qualified_batches
+        },
+    }
+    temporary = f"{path}.tmp.{os.getpid()}"
+    with open(temporary, "w", encoding="ascii") as handle:
+        json.dump(payload, handle, sort_keys=True)
+        handle.write("\n")
+    os.replace(temporary, path)
+
+
+def _fr13_fixed32_taw_native_live_entry(
+    *, mode: str, batch_size: int,
+) -> dict[str, Any]:
+    topology, valid_mask = _fr13_fixed32_runtime_contract(mode)
+    del topology
+    matches = [
+        entry
+        for key, entry in _FR13_FIXED32_TAW_CACHE.items()
+        if (
+            len(key) == 4
+            and key[0] == mode
+            and int(key[1]) == valid_mask
+            and int(key[2]) == int(batch_size)
+            and key[3][0] == "cuda"
+        )
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native live gate requires one exact CUDA "
+            f"cache entry, found {len(matches)} for {mode} B{batch_size}"
+        )
+    return matches[0]
+
+
+def fr13_fixed32_taw_native_live_gate_begin(
+    *, mode: str, batch_size: int,
+) -> dict[str, Any]:
+    """Reset diagnostic counters immediately before a real graph replay."""
+    if _fr13_fixed32_taw_native_selector() != "diagnostic":
+        raise RuntimeError(
+            "FR13 fixed32 TAW native live gate begin requires diagnostic mode"
+        )
+    entry = _fr13_fixed32_taw_native_live_entry(
+        mode=mode, batch_size=batch_size
+    )
+    if entry.get("native_ab_live_pass_emitted", False):
+        return {"status": "passed", "batch_size": int(batch_size)}
+    task_marker = _fr13_fixed32_taw_native_real_event_marker()
+    if task_marker is None:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native live gate requires a real "
+            "SWE-Verified event arm"
+        )
+    bound_marker = entry.get("native_ab_live_marker")
+    if bound_marker is not None and bound_marker != task_marker:
+        raise RuntimeError("FR13 fixed32 TAW native live gate cannot combine tasks")
+    entry["native_ab_probability_mismatches"].zero_()
+    entry["native_ab_product_mismatches"].zero_()
+    entry["native_ab_live_marker"] = task_marker
+    entry["native_ab_live_gate_pending"] = True
+    return {"status": "armed", "batch_size": int(batch_size)}
+
+
+def fr13_fixed32_taw_native_live_gate_on_replay(
+    *, mode: str, batch_size: int,
+) -> dict[str, Any]:
+    """Read the captured A/B counters after the first real graph replay."""
+    if _fr13_fixed32_taw_native_selector() != "diagnostic":
+        raise RuntimeError(
+            "FR13 fixed32 TAW native replay gate requires diagnostic mode"
+        )
+    entry = _fr13_fixed32_taw_native_live_entry(
+        mode=mode, batch_size=batch_size
+    )
+    if entry.get("native_ab_live_pass_emitted", False):
+        return {"status": "passed", "batch_size": int(batch_size)}
+    if entry.get("native_ab_live_gate_pending") is not True:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native replay gate has no armed real event"
+        )
+    probability_bad = int(entry["native_ab_probability_mismatches"].item())
+    product_bad = int(entry["native_ab_product_mismatches"].item())
+    if probability_bad or product_bad:
+        entry["native_ab_live_gate_pending"] = False
+        raise AssertionError(
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE graph-replay byte mismatch: "
+            f"probabilities={probability_bad} products={product_bad}"
+        )
+    task_marker = entry.get("native_ab_live_marker")
+    if not isinstance(task_marker, str):
+        raise RuntimeError("FR13 fixed32 TAW native replay gate lost task binding")
+    _fr13_fixed32_taw_native_live_pass_emit(
+        mode=mode,
+        batch_size=batch_size,
+        task_marker=task_marker,
+        evidence_route="full_graph_replay",
+    )
+    entry["native_ab_live_gate_pending"] = False
+    entry["native_ab_live_pass_emitted"] = True
+    print(
+        "[FR13_FIXED32_TAW_NATIVE_PRECOMPUTE LIVE PASS] "
+        f"mode={mode} batch={batch_size} graph_replays=1 "
+        "probability_mismatches=0 product_mismatches=0 reference_returned=1",
+        flush=True,
+    )
+    return {"status": "passed", "batch_size": int(batch_size)}
+
+
+def _fr13_fixed32_taw_tensor_call_census(
+    *, batch_size: int | None = None,
+) -> dict[str, Any]:
+    selector = _fr13_fixed32_taw_native_selector(batch_size=batch_size)
+    if selector == "diagnostic":
+        census = _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS
+    elif selector == "production":
+        census = _FR13_FIXED32_TAW_NATIVE_PRODUCTION_TENSOR_CALL_CENSUS
+    else:
+        census = _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS
+    return dict(census)
+
+
+def _fr13_fixed32_taw_source_contract(
+    topology,
+    *,
+    batch_size: int | None = None,
+) -> dict[str, Any]:
     """Bind the audited fixed TAW source and geometry without tracing a live event."""
     global _FR13_FIXED32_TAW_SOURCE_CACHE
     global _FR13_FIXED32_TAW_SOURCE_CODES
@@ -1097,12 +2079,10 @@ def _fr13_fixed32_taw_source_contract(topology) -> dict[str, Any]:
                 "FR13 fixed32 TAW pinned source digest changed after binding"
             )
         return {
-            key: (
-                dict(value)
-                if isinstance(value, dict)
-                else value
-            )
-            for key, value in _FR13_FIXED32_TAW_SOURCE_CACHE.items()
+            **_FR13_FIXED32_TAW_SOURCE_CACHE,
+            "tensor_call_census": _fr13_fixed32_taw_tensor_call_census(
+                batch_size=batch_size
+            ),
         }
 
     geometry = {
@@ -1142,12 +2122,45 @@ def _fr13_fixed32_taw_source_contract(topology) -> dict[str, Any]:
             include_attributes=False,
         )
 
+    try:
+        module_tree = ast.parse(
+            Path(__file__).resolve().read_text(encoding="utf-8")
+        )
+    except (OSError, SyntaxError) as error:
+        raise RuntimeError("FR13 fixed32 cannot inspect exact commit kernel") from error
+    kernel_definitions = {
+        node.name: node
+        for node in ast.walk(module_tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in _FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS
+    }
+    if set(kernel_definitions) != set(_FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS):
+        raise RuntimeError("FR13 fixed32 exact commit kernel source is incomplete")
+    normalized_kernels = {
+        name: ast.dump(
+            kernel_definitions[name],
+            annotate_fields=True,
+            include_attributes=False,
+        )
+        for name in _FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS
+    }
+
     canonical = json.dumps(
         {
             "schema": _FR13_FIXED32_TAW_SOURCE_SCHEMA,
             "functions": normalized_sources,
+            "kernels": normalized_kernels,
             "geometry": geometry,
-            "tensor_call_census": _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS,
+            "topology_binding": _fr13_fixed32_taw_topology_binding(topology),
+            "tensor_call_census_by_route": {
+                "default": _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS,
+                "native_precompute": (
+                    _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS
+                ),
+                "native_precompute_production": (
+                    _FR13_FIXED32_TAW_NATIVE_PRODUCTION_TENSOR_CALL_CENSUS
+                ),
+            },
         },
         ensure_ascii=True,
         separators=(",", ":"),
@@ -1162,13 +2175,14 @@ def _fr13_fixed32_taw_source_contract(topology) -> dict[str, Any]:
     contract = {
         "source_contract_schema": _FR13_FIXED32_TAW_SOURCE_SCHEMA,
         "source_contract_sha256": digest,
-        "tensor_call_census": dict(_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS),
     }
     _FR13_FIXED32_TAW_SOURCE_CODES = tuple(codes)
     _FR13_FIXED32_TAW_SOURCE_CACHE = contract
     return {
-        key: dict(value) if isinstance(value, dict) else value
-        for key, value in contract.items()
+        **contract,
+        "tensor_call_census": _fr13_fixed32_taw_tensor_call_census(
+            batch_size=batch_size
+        ),
     }
 
 
@@ -1309,6 +2323,67 @@ def fr13_fixed32_taw_preseed(
         dtype=torch.long,
         device=normalized_device,
     )
+    active_children = topology.active_child_lists(mode)
+    topology_binding = _fr13_fixed32_taw_topology_binding(topology)
+    self_source_nodes = tuple(
+        topology_binding["all_parent_self_source_nodes"]
+    )
+    target_source_nodes = tuple(
+        topology_binding["all_parent_target_source_nodes"]
+    )
+    self_slot_by_node = [0] * int(topology.PHYSICAL_DRAFTS)
+    for slot, node in enumerate(self_source_nodes):
+        self_slot_by_node[node] = slot
+    target_source_slot = {
+        source_node: slot for slot, source_node in enumerate(target_source_nodes)
+    }
+    self_uniform_levels = tuple(
+        topology_binding["all_parent_self_uniform_levels"]
+    )
+    target_parent_slots = tuple(
+        topology_binding["all_parent_target_parent_slots"]
+    )
+    target_uniform_levels = tuple(
+        topology_binding["all_parent_target_uniform_levels"]
+    )
+    target_slot_by_parent = [0] * int(topology.PHYSICAL_ROWS)
+    for parent, children in active_children.items():
+        target_slot_by_parent[parent + 1] = target_source_slot[children[0]]
+    self_source_base = torch.tensor(
+        self_source_nodes,
+        dtype=torch.long,
+        device=normalized_device,
+    )
+    target_source_base = torch.tensor(
+        target_source_nodes,
+        dtype=torch.long,
+        device=normalized_device,
+    )
+    self_slot_base = torch.tensor(
+        self_slot_by_node,
+        dtype=torch.long,
+        device=normalized_device,
+    )
+    target_slot_base = torch.tensor(
+        target_slot_by_parent,
+        dtype=torch.long,
+        device=normalized_device,
+    )
+    self_uniform_level_base = torch.tensor(
+        self_uniform_levels,
+        dtype=torch.long,
+        device=normalized_device,
+    )
+    target_parent_slot_base = torch.tensor(
+        target_parent_slots,
+        dtype=torch.long,
+        device=normalized_device,
+    )
+    target_uniform_level_base = torch.tensor(
+        target_uniform_levels,
+        dtype=torch.long,
+        device=normalized_device,
+    )
 
     keys = []
     for batch_size in _FR13_FIXED32_BATCHES:
@@ -1317,6 +2392,14 @@ def fr13_fixed32_taw_preseed(
             int(valid_mask),
             batch_size,
             normalized_device,
+        )
+        starts = (
+            torch.arange(
+                batch_size,
+                dtype=torch.long,
+                device=normalized_device,
+            )
+            * int(topology.PHYSICAL_DRAFTS)
         )
         entry = {
             "mode": mode,
@@ -1331,13 +2414,63 @@ def fr13_fixed32_taw_preseed(
             "child_table": table_base.unsqueeze(0).expand(batch_size, -1, -1).clone(),
             "child_counts": counts_base.unsqueeze(0).expand(batch_size, -1).clone(),
             "expected_parent": parent_base.unsqueeze(0).expand(batch_size, -1).clone(),
-            "starts": (
+            "starts": starts,
+            "native_self_rows_per_request": len(self_source_nodes),
+            "native_target_rows_per_request": len(target_source_nodes),
+            "native_self_source_indices": (
+                starts.unsqueeze(1) + self_source_base.unsqueeze(0)
+            ).reshape(-1),
+            "native_target_source_indices": (
+                starts.unsqueeze(1) + target_source_base.unsqueeze(0)
+            ).reshape(-1),
+            "native_self_slot_by_node": self_slot_base.clone(),
+            "native_target_slot_by_parent": target_slot_base.clone(),
+            "all_parent_self_uniform_levels": self_uniform_level_base.clone(),
+            "all_parent_target_parent_slots": target_parent_slot_base.clone(),
+            "all_parent_target_uniform_levels": (
+                target_uniform_level_base.clone()
+            ),
+            "native_self_request_offsets": (
                 torch.arange(
                     batch_size,
                     dtype=torch.long,
                     device=normalized_device,
                 )
-                * int(topology.PHYSICAL_DRAFTS)
+                * len(self_source_nodes)
+            ),
+            "native_target_request_offsets": (
+                torch.arange(
+                    batch_size,
+                    dtype=torch.long,
+                    device=normalized_device,
+                )
+                * len(target_source_nodes)
+            ),
+            "request_rows": torch.arange(
+                batch_size,
+                dtype=torch.long,
+                device=normalized_device,
+            ),
+            "exact_initial_current": torch.full(
+                (batch_size,),
+                -1,
+                dtype=torch.long,
+                device=normalized_device,
+            ),
+            "exact_initial_alive": torch.ones(
+                batch_size,
+                dtype=torch.bool,
+                device=normalized_device,
+            ),
+            "exact_current": torch.empty(
+                batch_size,
+                dtype=torch.long,
+                device=normalized_device,
+            ),
+            "exact_alive": torch.empty(
+                batch_size,
+                dtype=torch.bool,
+                device=normalized_device,
             ),
             "uniforms": torch.empty(
                 (
@@ -1394,6 +2527,68 @@ def fr13_fixed32_taw_preseed(
                 device=normalized_device,
             ),
         }
+        native_ab_entry = dict(entry)
+        native_ab_entry.update(
+            {
+                "exact_current": torch.empty(
+                    batch_size,
+                    dtype=torch.long,
+                    device=normalized_device,
+                ),
+                "exact_alive": torch.empty(
+                    batch_size,
+                    dtype=torch.bool,
+                    device=normalized_device,
+                ),
+                "output_tokens": torch.full(
+                    (
+                        batch_size,
+                        int(topology.OUTPUT_PUBLISH_CAPACITY),
+                    ),
+                    -1,
+                    dtype=torch.long,
+                    device=normalized_device,
+                ),
+                "output_lens": torch.zeros(
+                    batch_size,
+                    dtype=torch.long,
+                    device=normalized_device,
+                ),
+                "accepted_path_rows": torch.zeros(
+                    (
+                        batch_size,
+                        int(topology.ACCEPTED_PATH_CAPACITY),
+                    ),
+                    dtype=torch.long,
+                    device=normalized_device,
+                ),
+                "accepted_lens": torch.zeros(
+                    batch_size,
+                    dtype=torch.long,
+                    device=normalized_device,
+                ),
+                "last_row": torch.zeros(
+                    batch_size,
+                    dtype=torch.long,
+                    device=normalized_device,
+                ),
+            }
+        )
+        entry["native_ab_entry"] = native_ab_entry
+        entry["native_ab_probability_mismatches"] = torch.zeros(
+            (),
+            dtype=torch.int64,
+            device=normalized_device,
+        )
+        entry["native_ab_product_mismatches"] = torch.zeros(
+            (),
+            dtype=torch.int64,
+            device=normalized_device,
+        )
+        entry["native_ab_root_checks"] = 0
+        entry["native_ab_live_marker"] = None
+        entry["native_ab_live_gate_pending"] = False
+        entry["native_ab_live_pass_emitted"] = False
         _FR13_FIXED32_TAW_CACHE[key] = entry
         keys.append(key)
     return tuple(keys)
@@ -1461,6 +2656,16 @@ def _fr13_fixed32_taw_cache_lease(entry: dict[str, Any]) -> tuple[Any, ...]:
         "child_counts",
         "expected_parent",
         "starts",
+        "request_rows",
+        "exact_initial_current",
+        "exact_initial_alive",
+        "exact_current",
+        "exact_alive",
+        "native_self_slot_by_node",
+        "native_target_slot_by_parent",
+        "all_parent_self_uniform_levels",
+        "all_parent_target_parent_slots",
+        "all_parent_target_uniform_levels",
         "uniforms",
         "draft_tokens",
         "bonus_tokens",
@@ -1695,14 +2900,19 @@ def fr13_fixed32_taw_warm_execute(
         "accepted_path_rows",
         "accepted_lens",
         "last_row",
+        "exact_current",
+        "exact_alive",
     )
-    saved_cache = tuple(
-        {
-            name: entry[name].clone()
-            for name in mutable_names
-        }
-        for entry in entries
-    )
+    mutable_tensors = []
+    seen_tensors = set()
+    for entry in entries:
+        for owner in (entry, entry["native_ab_entry"]):
+            for name in mutable_names:
+                tensor = owner[name]
+                identity = id(tensor)
+                if identity not in seen_tensors:
+                    seen_tensors.add(identity)
+                    mutable_tensors.append((tensor, tensor.clone()))
     generator = _fr13_bulk_gen(normalized_device)
     saved_generator_state = generator.get_state().clone()
     global _FR13_FIXED32_TAW_WORK_CALLBACK
@@ -1756,13 +2966,19 @@ def fr13_fixed32_taw_warm_execute(
                 all_greedy=False,
                 mode=str(mode),
             )
+            expected_owner = (
+                entry["native_ab_entry"]
+                if _fr13_fixed32_taw_native_selector(batch_size=batch)
+                == "production"
+                else entry
+            )
             if (
                 len(products) != 5
-                or products[0] is not entry["output_tokens"]
-                or products[1] is not entry["output_lens"]
-                or products[2] is not entry["accepted_path_rows"]
-                or products[3] is not entry["accepted_lens"]
-                or products[4] is not entry["last_row"]
+                or products[0] is not expected_owner["output_tokens"]
+                or products[1] is not expected_owner["output_lens"]
+                or products[2] is not expected_owner["accepted_path_rows"]
+                or products[3] is not expected_owner["accepted_lens"]
+                or products[4] is not expected_owner["last_row"]
             ):
                 raise RuntimeError(
                     "FR13 fixed32 TAW boot warm returned non-cache products"
@@ -1775,9 +2991,8 @@ def fr13_fixed32_taw_warm_execute(
             generator.set_state(saved_generator_state)
         finally:
             try:
-                for entry, saved in zip(entries, saved_cache, strict=True):
-                    for name in mutable_names:
-                        entry[name].copy_(saved[name])
+                for tensor, saved in mutable_tensors:
+                    tensor.copy_(saved)
             finally:
                 _FR13_FIXED32_TAW_WORK_CALLBACK = saved_callback
                 _FR13_FIXED32_TAW_LAST_WORK = saved_last_work
@@ -1787,9 +3002,8 @@ def fr13_fixed32_taw_warm_execute(
         del logits
 
     staging_state_restored = all(
-        _fr13_fixed32_tensor_bits_equal(entry[name], saved[name])
-        for entry, saved in zip(entries, saved_cache, strict=True)
-        for name in mutable_names
+        _fr13_fixed32_tensor_bits_equal(tensor, saved)
+        for tensor, saved in mutable_tensors
     )
     rng_state_restored = _fr13_fixed32_tensor_bits_equal(
         generator.get_state(),
@@ -2113,6 +3327,16 @@ def _fr13_fixed32_layout_contract(
         "child_counts": ([batch, 32], "torch.int64", [32, 1]),
         "expected_parent": ([batch, 31], "torch.int64", [31, 1]),
         "starts": ([batch], "torch.int64", [1]),
+        "request_rows": ([batch], "torch.int64", [1]),
+        "exact_initial_current": ([batch], "torch.int64", [1]),
+        "exact_initial_alive": ([batch], "torch.bool", [1]),
+        "exact_current": ([batch], "torch.int64", [1]),
+        "exact_alive": ([batch], "torch.bool", [1]),
+        "native_self_slot_by_node": ([31], "torch.int64", [1]),
+        "native_target_slot_by_parent": ([32], "torch.int64", [1]),
+        "all_parent_self_uniform_levels": ([13], "torch.int64", [1]),
+        "all_parent_target_parent_slots": ([17], "torch.int64", [1]),
+        "all_parent_target_uniform_levels": ([17], "torch.int64", [1]),
         "uniforms": ([batch, 12, 3], "torch.float32", [36, 3, 1]),
         "draft_tokens": ([batch, 31], "torch.int64", [31, 1]),
         "bonus_tokens": ([batch], "torch.int64", [1]),
@@ -2252,10 +3476,469 @@ def _fr13_fixed32_layout_contract(
         ),
         "accepted_lens_shape": list(expected_cache_layouts["accepted_lens"][0]),
         "last_row_shape": list(expected_cache_layouts["last_row"][0]),
+        "exact_current_shape": list(expected_cache_layouts["exact_current"][0]),
+        "exact_alive_shape": list(expected_cache_layouts["exact_alive"][0]),
     }
 
 
-def _fr13_fixed32_taw_execute(
+def _fr13_fixed32_taw_probability_caches(
+    entry: dict[str, Any],
+    target_logits,
+    tree_self_logits,
+    *,
+    native_precompute: bool | None = None,
+) -> tuple[Any | None, Any | None]:
+    """Batch immutable reachable rows with the native PyTorch softmax operator."""
+    if native_precompute is None:
+        native_precompute = _fr13_fixed32_taw_native_precompute_enabled()
+    if not native_precompute:
+        return None, None
+
+    batch_size = int(entry["batch_size"])
+    self_rows = int(entry["native_self_rows_per_request"])
+    target_rows = int(entry["native_target_rows_per_request"])
+    expected = {
+        "native_self_source_indices": ((batch_size * self_rows,), torch.long),
+        "native_target_source_indices": ((batch_size * target_rows,), torch.long),
+        "native_self_slot_by_node": ((31,), torch.long),
+        "native_target_slot_by_parent": ((32,), torch.long),
+        "native_self_request_offsets": ((batch_size,), torch.long),
+        "native_target_request_offsets": ((batch_size,), torch.long),
+    }
+    for name, (shape, dtype) in expected.items():
+        value = entry.get(name)
+        if (
+            not isinstance(value, torch.Tensor)
+            or tuple(value.shape) != shape
+            or value.dtype != dtype
+            or value.device != target_logits.device
+            or not value.is_contiguous()
+        ):
+            raise RuntimeError(f"FR13 fixed32 native precompute state drift: {name}")
+
+    self_prob_cache = torch.softmax(
+        tree_self_logits[entry["native_self_source_indices"]].to(torch.float32),
+        dim=-1,
+    )
+    target_prob_cache = torch.softmax(
+        target_logits[entry["native_target_source_indices"]].to(torch.float32),
+        dim=-1,
+    )
+    return self_prob_cache, target_prob_cache
+
+
+def _fr13_fixed32_taw_all_parent_decisions(
+    topology,
+    entry: dict[str, Any],
+    drafts,
+    uniforms,
+    probability_caches: tuple[Any, Any],
+) -> tuple[Any, Any, Any, Any, Any]:
+    """Decide every fixed parent in parallel with native PyTorch math."""
+    batch_size = int(entry["batch_size"])
+    physical_drafts = int(topology.PHYSICAL_DRAFTS)
+    fanout = int(topology.SAMPLER_MAX_FANOUT)
+    self_rows = int(entry["native_self_rows_per_request"])
+    target_rows = int(entry["native_target_rows_per_request"])
+    self_prob_cache, target_prob_cache = probability_caches
+    vocab_size = int(target_prob_cache.shape[-1])
+    expected = {
+        "self_probability_cache": (
+            self_prob_cache,
+            (batch_size * self_rows, vocab_size),
+            torch.float32,
+        ),
+        "target_probability_cache": (
+            target_prob_cache,
+            (batch_size * target_rows, vocab_size),
+            torch.float32,
+        ),
+        "self_uniform_levels": (
+            entry["all_parent_self_uniform_levels"],
+            (self_rows,),
+            torch.long,
+        ),
+        "target_parent_slots": (
+            entry["all_parent_target_parent_slots"],
+            (target_rows,),
+            torch.long,
+        ),
+        "target_uniform_levels": (
+            entry["all_parent_target_uniform_levels"],
+            (target_rows,),
+            torch.long,
+        ),
+    }
+    for name, (value, shape, dtype) in expected.items():
+        if (
+            not isinstance(value, torch.Tensor)
+            or tuple(value.shape) != shape
+            or value.dtype != dtype
+            or value.device != drafts.device
+        ):
+            raise RuntimeError(
+                f"FR13 fixed32 all-parent decision layout drift: {name}"
+            )
+    if tuple(drafts.shape) != (batch_size, physical_drafts):
+        raise RuntimeError("FR13 fixed32 all-parent draft layout drift")
+
+    self_prob = self_prob_cache.reshape(batch_size, self_rows, vocab_size)
+    self_prob = self_prob / self_prob.sum(dim=-1, keepdim=True)
+    self_levels = entry["all_parent_self_uniform_levels"]
+    self_uniforms = uniforms[:, self_levels, 2]
+    self_token = _fr13_taw_inv_cdf(
+        self_prob.reshape(batch_size * self_rows, vocab_size),
+        self_uniforms.reshape(batch_size * self_rows),
+    ).reshape(batch_size, self_rows)
+
+    target_prob = target_prob_cache.reshape(
+        batch_size, target_rows, vocab_size
+    )
+    target_prob = target_prob / target_prob.sum(dim=-1, keepdim=True)
+    parent_slots = entry["all_parent_target_parent_slots"]
+    kids = entry["child_table"].index_select(1, parent_slots)
+    child_count = entry["child_counts"].index_select(1, parent_slots)
+    if tuple(kids.shape) != (batch_size, target_rows, fanout):
+        raise RuntimeError("FR13 fixed32 all-parent child table drift")
+    kid_tokens = torch.gather(
+        drafts.unsqueeze(1).expand(-1, target_rows, -1),
+        2,
+        kids.clamp(min=0),
+    )
+    kid_mask = kids >= 0
+    overlaps = torch.gather(
+        target_prob,
+        2,
+        kid_tokens.clamp(min=0),
+    ) * kid_mask
+    overlap_mass = overlaps.sum(dim=-1)
+    has_kids = child_count > 0
+    zero_mass = has_kids & (overlap_mass <= 0)
+    target_levels = entry["all_parent_target_uniform_levels"]
+    source = _fr13_taw_inv_cdf(
+        overlaps.reshape(batch_size * target_rows, fanout),
+        uniforms[:, target_levels, 0].reshape(batch_size * target_rows),
+    ).reshape(batch_size, target_rows)
+    selected_token = torch.gather(
+        kid_tokens,
+        2,
+        source.unsqueeze(2),
+    ).squeeze(2)
+    same_token = (kid_tokens == selected_token.unsqueeze(2)) & kid_mask
+    q_mix_token = (overlaps * same_token).sum(dim=-1) / overlap_mass.clamp(
+        min=1e-30
+    )
+    target_at_token = torch.gather(
+        target_prob,
+        2,
+        selected_token.unsqueeze(2),
+    ).squeeze(2)
+    accept_probability = (
+        target_at_token / q_mix_token.clamp(min=1e-30)
+    ).clamp(max=1.0)
+    accepted = (
+        has_kids
+        & ~zero_mass
+        & (uniforms[:, target_levels, 1] < accept_probability)
+    )
+
+    weights = overlaps / overlap_mass.clamp(min=1e-30).unsqueeze(2)
+    q_mix_vocab = torch.zeros_like(target_prob)
+    q_mix_vocab.scatter_add_(
+        2,
+        kid_tokens.clamp(min=0),
+        weights * kid_mask,
+    )
+    residual = (target_prob - q_mix_vocab).clamp(min=0)
+    residual_mass = residual.sum(dim=-1, keepdim=True)
+    residual = torch.where(
+        residual_mass > 0,
+        residual / residual_mass.clamp(min=1e-30),
+        target_prob,
+    )
+    residual = torch.where(
+        zero_mass.unsqueeze(2),
+        target_prob,
+        residual,
+    )
+    rejected_token = _fr13_taw_inv_cdf(
+        residual.reshape(batch_size * target_rows, vocab_size),
+        uniforms[:, target_levels, 2].reshape(batch_size * target_rows),
+    ).reshape(batch_size, target_rows)
+    return self_token, source, selected_token, rejected_token, accepted
+
+
+def _fr13_fixed32_taw_all_parent_walk_torch(
+    topology,
+    entry: dict[str, Any],
+    bonus_flat,
+    decisions: tuple[Any, Any, Any, Any, Any],
+    *,
+    walk_cap: int,
+) -> tuple[Any, Any, Any, Any, Any, int]:
+    """CPU oracle for the one-program all-parent integer walk."""
+    batch_size = int(entry["batch_size"])
+    physical_drafts = int(topology.PHYSICAL_DRAFTS)
+    output_capacity = int(topology.OUTPUT_PUBLISH_CAPACITY)
+    path_capacity = int(topology.ACCEPTED_PATH_CAPACITY)
+    self_token, source, selected_token, rejected_token, accepted = decisions
+    request_rows = entry["request_rows"]
+    output_tokens = entry["output_tokens"]
+    output_lens = entry["output_lens"]
+    accepted_path_rows = entry["accepted_path_rows"]
+    accepted_lens = entry["accepted_lens"]
+    last_row = entry["last_row"]
+    output_tokens.fill_(-1)
+    output_lens.zero_()
+    accepted_path_rows.zero_()
+    accepted_lens.zero_()
+    last_row.zero_()
+    current = torch.full(
+        (batch_size,), -1, dtype=torch.long, device=bonus_flat.device
+    )
+    alive = torch.ones(batch_size, dtype=torch.bool, device=bonus_flat.device)
+    output_trash = torch.full(
+        (batch_size,),
+        output_capacity - 1,
+        dtype=torch.long,
+        device=bonus_flat.device,
+    )
+    path_trash = torch.full(
+        (batch_size,),
+        path_capacity - 1,
+        dtype=torch.long,
+        device=bonus_flat.device,
+    )
+
+    for _level in range(walk_cap):
+        parent_slots = current + 1
+        kids = entry["child_table"][request_rows, parent_slots]
+        child_count = entry["child_counts"][request_rows, parent_slots]
+        has_kids = alive & (child_count > 0)
+        leaf = alive & (child_count == 0)
+        safe_current = current.clamp(min=0, max=physical_drafts - 1)
+        self_slots = entry["native_self_slot_by_node"][safe_current]
+        sampled_self = self_token[request_rows, self_slots]
+        leaf_token = torch.where(current >= 0, sampled_self, bonus_flat)
+        output_tokens.scatter_(
+            1,
+            torch.where(leaf, output_lens, output_trash).unsqueeze(1),
+            leaf_token.unsqueeze(1),
+        )
+
+        target_slots = entry["native_target_slot_by_parent"][parent_slots]
+        sampled_source = source[request_rows, target_slots]
+        sampled_selected = selected_token[request_rows, target_slots]
+        sampled_rejected = rejected_token[request_rows, target_slots]
+        is_accepted = has_kids & accepted[request_rows, target_slots]
+        emitted_token = torch.where(
+            is_accepted,
+            sampled_selected,
+            sampled_rejected,
+        )
+        output_tokens.scatter_(
+            1,
+            torch.where(has_kids, output_lens, output_trash).unsqueeze(1),
+            emitted_token.unsqueeze(1),
+        )
+        output_lens.add_(leaf.to(output_lens.dtype))
+        output_lens.add_(has_kids.to(output_lens.dtype))
+
+        accepted_node = kids[request_rows, sampled_source]
+        accepted_row = accepted_node + 1
+        accepted_path_rows.scatter_(
+            1,
+            torch.where(is_accepted, accepted_lens, path_trash).unsqueeze(1),
+            accepted_row.unsqueeze(1),
+        )
+        accepted_lens.add_(is_accepted.to(accepted_lens.dtype))
+        current = torch.where(is_accepted, accepted_node, current)
+        alive = (alive & ~leaf) & is_accepted
+        last_row.copy_(torch.where(is_accepted, accepted_row, last_row))
+
+    output_columns = torch.arange(
+        output_capacity, device=bonus_flat.device
+    ).unsqueeze(0)
+    output_tokens.copy_(
+        torch.where(
+            output_columns < output_lens.unsqueeze(1),
+            output_tokens,
+            torch.full_like(output_tokens, -1),
+        )
+    )
+    path_columns = torch.arange(
+        path_capacity, device=bonus_flat.device
+    ).unsqueeze(0)
+    accepted_path_rows.copy_(
+        torch.where(
+            path_columns < accepted_lens.unsqueeze(1),
+            accepted_path_rows,
+            torch.zeros_like(accepted_path_rows),
+        )
+    )
+    return (
+        output_tokens,
+        output_lens,
+        accepted_path_rows,
+        accepted_lens,
+        last_row,
+        walk_cap,
+    )
+
+
+def _fr13_fixed32_taw_execute_all_parent_torch(
+    topology,
+    entry: dict[str, Any],
+    drafts,
+    bonus_flat,
+    uniforms,
+    *,
+    walk_cap: int,
+    probability_caches: tuple[Any, Any],
+) -> tuple[Any, Any, Any, Any, Any, int]:
+    decisions = _fr13_fixed32_taw_all_parent_decisions(
+        topology,
+        entry,
+        drafts,
+        uniforms,
+        probability_caches,
+    )
+    return _fr13_fixed32_taw_all_parent_walk_torch(
+        topology,
+        entry,
+        bonus_flat,
+        decisions,
+        walk_cap=walk_cap,
+    )
+
+
+def _fr13_fixed32_taw_execute_all_parent_cuda(
+    topology,
+    entry: dict[str, Any],
+    drafts,
+    bonus_flat,
+    uniforms,
+    *,
+    walk_cap: int,
+    probability_caches: tuple[Any, Any],
+) -> tuple[Any, Any, Any, Any, Any, int]:
+    """Launch one integer walk after all fixed-parent float decisions."""
+    if triton is None or tl is None:
+        raise RuntimeError("FR13 fixed32 all-parent commit requires Triton")
+    batch_size = int(entry["batch_size"])
+    self_rows = int(entry["native_self_rows_per_request"])
+    target_rows = int(entry["native_target_rows_per_request"])
+    decisions = _fr13_fixed32_taw_all_parent_decisions(
+        topology,
+        entry,
+        drafts,
+        uniforms,
+        probability_caches,
+    )
+    self_token, source, selected_token, rejected_token, accepted = decisions
+    expected_decisions = (
+        ("self_token", self_token, (batch_size, self_rows), torch.long),
+        ("source", source, (batch_size, target_rows), torch.long),
+        (
+            "selected_token",
+            selected_token,
+            (batch_size, target_rows),
+            torch.long,
+        ),
+        (
+            "rejected_token",
+            rejected_token,
+            (batch_size, target_rows),
+            torch.long,
+        ),
+        ("accepted", accepted, (batch_size, target_rows), torch.bool),
+    )
+    for name, value, shape, dtype in expected_decisions:
+        if (
+            tuple(value.shape) != shape
+            or value.dtype != dtype
+            or value.device != drafts.device
+            or not value.is_contiguous()
+        ):
+            raise RuntimeError(
+                f"FR13 fixed32 all-parent product layout drift: {name}"
+            )
+    _fr13_fixed32_taw_all_parent_commit_kernel[(batch_size,)](
+        entry["child_table"],
+        entry["child_counts"],
+        entry["native_self_slot_by_node"],
+        entry["native_target_slot_by_parent"],
+        self_token,
+        source,
+        selected_token,
+        rejected_token,
+        accepted,
+        bonus_flat,
+        entry["output_tokens"],
+        entry["output_lens"],
+        entry["accepted_path_rows"],
+        entry["accepted_lens"],
+        entry["last_row"],
+        PHYSICAL_DRAFTS=int(topology.PHYSICAL_DRAFTS),
+        PHYSICAL_ROWS=int(topology.PHYSICAL_ROWS),
+        FANOUT=int(topology.SAMPLER_MAX_FANOUT),
+        SELF_ROWS=self_rows,
+        TARGET_ROWS=target_rows,
+        WALK_CAP=walk_cap,
+        OUTPUT_CAPACITY=int(topology.OUTPUT_PUBLISH_CAPACITY),
+        PATH_CAPACITY=int(topology.ACCEPTED_PATH_CAPACITY),
+        num_warps=1,
+    )
+    _fr13_fixed32_device_assert(
+        torch.all(entry["output_lens"] <= int(topology.OUTPUT_PUBLISH_CAPACITY)),
+        "FR13 fixed32 all-parent output overflow",
+    )
+    _fr13_fixed32_device_assert(
+        torch.all(entry["accepted_lens"] <= int(topology.ACCEPTED_PATH_CAPACITY)),
+        "FR13 fixed32 all-parent accepted-path overflow",
+    )
+    return (
+        entry["output_tokens"],
+        entry["output_lens"],
+        entry["accepted_path_rows"],
+        entry["accepted_lens"],
+        entry["last_row"],
+        walk_cap,
+    )
+
+
+def _fr13_fixed32_taw_execute_all_parent(
+    topology,
+    entry: dict[str, Any],
+    drafts,
+    bonus_flat,
+    uniforms,
+    *,
+    walk_cap: int,
+    probability_caches: tuple[Any, Any],
+) -> tuple[Any, Any, Any, Any, Any, int]:
+    if drafts.is_cuda:
+        return _fr13_fixed32_taw_execute_all_parent_cuda(
+            topology,
+            entry,
+            drafts,
+            bonus_flat,
+            uniforms,
+            walk_cap=walk_cap,
+            probability_caches=probability_caches,
+        )
+    return _fr13_fixed32_taw_execute_all_parent_torch(
+        topology,
+        entry,
+        drafts,
+        bonus_flat,
+        uniforms,
+        walk_cap=walk_cap,
+        probability_caches=probability_caches,
+    )
+
+
+def _fr13_fixed32_taw_execute_torch(
     topology,
     entry: dict[str, Any],
     drafts,
@@ -2265,8 +3948,12 @@ def _fr13_fixed32_taw_execute(
     uniforms,
     *,
     walk_cap: int,
+    native_precompute: bool | None = None,
+    probability_caches: tuple[Any, Any] | None = None,
+    comparison_probability_caches: tuple[Any, Any] | None = None,
+    probability_mismatches=None,
 ) -> tuple[Any, Any, Any, Any, Any, int]:
-    """Run the fixed device core; every loop body has the same B/V shapes."""
+    """Run the exact PyTorch oracle; every loop body has the same B/V shapes."""
     batch_size = entry["batch_size"]
     physical_drafts = int(topology.PHYSICAL_DRAFTS)
     output_capacity = int(topology.OUTPUT_PUBLISH_CAPACITY)
@@ -2331,6 +4018,21 @@ def _fr13_fixed32_taw_execute(
         dtype=torch.long,
         device=device,
     )
+    if native_precompute is None:
+        native_precompute = _fr13_fixed32_taw_native_precompute_enabled()
+    if native_precompute:
+        if probability_caches is None:
+            probability_caches = _fr13_fixed32_taw_probability_caches(
+                entry,
+                target_logits,
+                tree_self_logits,
+                native_precompute=True,
+            )
+        self_prob_cache, target_prob_cache = probability_caches
+    else:
+        self_prob_cache, target_prob_cache = None, None
+    if (comparison_probability_caches is None) != (probability_mismatches is None):
+        raise RuntimeError("FR13 fixed32 probability byte gate is incomplete")
     loop_iterations = 0
 
     for level in range(walk_cap):
@@ -2343,11 +4045,40 @@ def _fr13_fixed32_taw_execute(
 
         # Full-vocab self CDF rows execute for every request at every level.
         current_valid = (current >= 0) & (current < physical_drafts)
-        self_indices = starts + current.clamp(min=0, max=physical_drafts - 1)
-        self_prob = torch.softmax(
-            tree_self_logits[self_indices].to(torch.float32),
-            dim=-1,
-        )
+        if self_prob_cache is None:
+            self_indices = starts + current.clamp(
+                min=0,
+                max=physical_drafts - 1,
+            )
+            self_prob = torch.softmax(
+                tree_self_logits[self_indices].to(torch.float32),
+                dim=-1,
+            )
+            if comparison_probability_caches is not None:
+                self_slots = entry["native_self_slot_by_node"][
+                    current.clamp(min=0, max=physical_drafts - 1)
+                ]
+                comparison_indices = (
+                    entry["native_self_request_offsets"] + self_slots
+                )
+                comparison_prob = comparison_probability_caches[0][
+                    comparison_indices
+                ]
+                probability_mismatches.add_(
+                    torch.count_nonzero(
+                        (
+                            self_prob.view(torch.int32)
+                            != comparison_prob.view(torch.int32)
+                        )
+                        & leaf.unsqueeze(1)
+                    )
+                )
+        else:
+            self_slots = entry["native_self_slot_by_node"][
+                current.clamp(min=0, max=physical_drafts - 1)
+            ]
+            self_indices = entry["native_self_request_offsets"] + self_slots
+            self_prob = self_prob_cache[self_indices]
         self_prob = self_prob / self_prob.sum(dim=-1, keepdim=True)
         self_token = _fr13_taw_inv_cdf(
             self_prob,
@@ -2365,11 +4096,33 @@ def _fr13_fixed32_taw_execute(
         # Full-vocab target/source/qmix/residual rows also execute for every
         # request at every level. The validity mask exists only in child_table.
         first_child = kids[:, 0].clamp(min=0)
-        target_indices = starts + first_child
-        target_prob = torch.softmax(
-            target_logits[target_indices].to(torch.float32),
-            dim=-1,
-        )
+        if target_prob_cache is None:
+            target_indices = starts + first_child
+            target_prob = torch.softmax(
+                target_logits[target_indices].to(torch.float32),
+                dim=-1,
+            )
+            if comparison_probability_caches is not None:
+                target_slots = entry["native_target_slot_by_parent"][parent_slots]
+                comparison_indices = (
+                    entry["native_target_request_offsets"] + target_slots
+                )
+                comparison_prob = comparison_probability_caches[1][
+                    comparison_indices
+                ]
+                probability_mismatches.add_(
+                    torch.count_nonzero(
+                        (
+                            target_prob.view(torch.int32)
+                            != comparison_prob.view(torch.int32)
+                        )
+                        & has_kids.unsqueeze(1)
+                    )
+                )
+        else:
+            target_slots = entry["native_target_slot_by_parent"][parent_slots]
+            target_indices = entry["native_target_request_offsets"] + target_slots
+            target_prob = target_prob_cache[target_indices]
         target_prob = target_prob / target_prob.sum(dim=-1, keepdim=True)
         kid_tokens = drafts.gather(1, kids.clamp(min=0))
         kid_mask = kids >= 0
@@ -2500,6 +4253,317 @@ def _fr13_fixed32_taw_execute(
     )
 
 
+def _fr13_fixed32_taw_execute_exact_cuda(
+    topology,
+    entry: dict[str, Any],
+    drafts,
+    target_logits,
+    tree_self_logits,
+    bonus_flat,
+    uniforms,
+    *,
+    walk_cap: int,
+    native_precompute: bool | None = None,
+    probability_caches: tuple[Any, Any] | None = None,
+    comparison_probability_caches: tuple[Any, Any] | None = None,
+    probability_mismatches=None,
+) -> tuple[Any, Any, Any, Any, Any, int]:
+    """Preserve PyTorch sampling math and fuse only integer product commits."""
+    if triton is None or tl is None:
+        raise RuntimeError("FR13 fixed32 exact commit requires Triton")
+    if not target_logits.is_cuda:
+        raise RuntimeError("FR13 fixed32 exact commit requires CUDA tensors")
+
+    batch_size = int(entry["batch_size"])
+    physical_drafts = int(topology.PHYSICAL_DRAFTS)
+    physical_rows = int(topology.PHYSICAL_ROWS)
+    output_capacity = int(topology.OUTPUT_PUBLISH_CAPACITY)
+    path_capacity = int(topology.ACCEPTED_PATH_CAPACITY)
+    fanout = int(topology.SAMPLER_MAX_FANOUT)
+    if walk_cap != int(topology.WALK_CAP):
+        raise RuntimeError(f"FR13 fixed32 core walk {walk_cap} != {topology.WALK_CAP}")
+    if walk_cap > path_capacity or walk_cap > output_capacity:
+        raise RuntimeError("FR13 fixed32 walk can overflow fixed products")
+
+    child_table = entry["child_table"]
+    child_counts = entry["child_counts"]
+    if tuple(child_table.shape) != (batch_size, physical_rows, fanout):
+        raise RuntimeError(
+            f"FR13 fixed32 child-table shape drifted: {tuple(child_table.shape)}"
+        )
+    if tuple(child_counts.shape) != (batch_size, physical_rows):
+        raise RuntimeError(
+            f"FR13 fixed32 child-count shape drifted: {tuple(child_counts.shape)}"
+        )
+    _fr13_fixed32_device_assert(
+        torch.all((child_counts >= 0) & (child_counts <= fanout)),
+        "FR13 fixed32 sampler fanout overflow",
+    )
+
+    expected_state = {
+        "request_rows": ((batch_size,), torch.long),
+        "exact_initial_current": ((batch_size,), torch.long),
+        "exact_initial_alive": ((batch_size,), torch.bool),
+        "exact_current": ((batch_size,), torch.long),
+        "exact_alive": ((batch_size,), torch.bool),
+    }
+    for name, (shape, dtype) in expected_state.items():
+        value = entry.get(name)
+        if (
+            not isinstance(value, torch.Tensor)
+            or tuple(value.shape) != shape
+            or value.dtype != dtype
+            or value.device != target_logits.device
+            or not value.is_contiguous()
+        ):
+            raise RuntimeError(f"FR13 fixed32 exact commit state drift: {name}")
+
+    starts = entry["starts"]
+    request_rows = entry["request_rows"]
+    initial_current = entry["exact_initial_current"]
+    initial_alive = entry["exact_initial_alive"]
+    current_state = entry["exact_current"]
+    alive_state = entry["exact_alive"]
+    output_tokens = entry["output_tokens"]
+    output_lens = entry["output_lens"]
+    accepted_path_rows = entry["accepted_path_rows"]
+    accepted_lens = entry["accepted_lens"]
+    last_row = entry["last_row"]
+    if native_precompute is None:
+        native_precompute = _fr13_fixed32_taw_native_precompute_enabled()
+    if native_precompute:
+        if probability_caches is None:
+            probability_caches = _fr13_fixed32_taw_probability_caches(
+                entry,
+                target_logits,
+                tree_self_logits,
+                native_precompute=True,
+            )
+        self_prob_cache, target_prob_cache = probability_caches
+    else:
+        self_prob_cache, target_prob_cache = None, None
+    if (comparison_probability_caches is None) != (probability_mismatches is None):
+        raise RuntimeError("FR13 fixed32 probability byte gate is incomplete")
+
+    for level in range(walk_cap):
+        current = initial_current if level == 0 else current_state
+        alive = initial_alive if level == 0 else alive_state
+        parent_slots = current + 1
+        kids = child_table[request_rows, parent_slots]
+        child_count = child_counts[request_rows, parent_slots]
+        has_kids = alive & (child_count > 0)
+        leaf = alive & (child_count == 0)
+
+        # This floating path is intentionally identical to the PyTorch oracle.
+        if self_prob_cache is None:
+            self_indices = starts + current.clamp(
+                min=0,
+                max=physical_drafts - 1,
+            )
+            self_prob = torch.softmax(
+                tree_self_logits[self_indices].to(torch.float32),
+                dim=-1,
+            )
+            if comparison_probability_caches is not None:
+                self_slots = entry["native_self_slot_by_node"][
+                    current.clamp(min=0, max=physical_drafts - 1)
+                ]
+                comparison_indices = (
+                    entry["native_self_request_offsets"] + self_slots
+                )
+                comparison_prob = comparison_probability_caches[0][
+                    comparison_indices
+                ]
+                probability_mismatches.add_(
+                    torch.count_nonzero(
+                        (
+                            self_prob.view(torch.int32)
+                            != comparison_prob.view(torch.int32)
+                        )
+                        & leaf.unsqueeze(1)
+                    )
+                )
+        else:
+            self_slots = entry["native_self_slot_by_node"][
+                current.clamp(min=0, max=physical_drafts - 1)
+            ]
+            self_indices = entry["native_self_request_offsets"] + self_slots
+            self_prob = self_prob_cache[self_indices]
+        self_prob = self_prob / self_prob.sum(dim=-1, keepdim=True)
+        self_token = _fr13_taw_inv_cdf(
+            self_prob,
+            uniforms[:, level, 2],
+        )
+
+        first_child = kids[:, 0].clamp(min=0)
+        if target_prob_cache is None:
+            target_indices = starts + first_child
+            target_prob = torch.softmax(
+                target_logits[target_indices].to(torch.float32),
+                dim=-1,
+            )
+            if comparison_probability_caches is not None:
+                target_slots = entry["native_target_slot_by_parent"][parent_slots]
+                comparison_indices = (
+                    entry["native_target_request_offsets"] + target_slots
+                )
+                comparison_prob = comparison_probability_caches[1][
+                    comparison_indices
+                ]
+                probability_mismatches.add_(
+                    torch.count_nonzero(
+                        (
+                            target_prob.view(torch.int32)
+                            != comparison_prob.view(torch.int32)
+                        )
+                        & has_kids.unsqueeze(1)
+                    )
+                )
+        else:
+            target_slots = entry["native_target_slot_by_parent"][parent_slots]
+            target_indices = entry["native_target_request_offsets"] + target_slots
+            target_prob = target_prob_cache[target_indices]
+        target_prob = target_prob / target_prob.sum(dim=-1, keepdim=True)
+        kid_tokens = drafts.gather(1, kids.clamp(min=0))
+        kid_mask = kids >= 0
+        overlaps = torch.gather(target_prob, 1, kid_tokens.clamp(min=0)) * kid_mask
+        overlap_mass = overlaps.sum(dim=-1)
+        zero_mass = has_kids & (overlap_mass <= 0)
+        source = _fr13_taw_inv_cdf(
+            overlaps,
+            uniforms[:, level, 0],
+        )
+        selected_token = kid_tokens[request_rows, source]
+        same_token = (kid_tokens == selected_token.unsqueeze(1)) & kid_mask
+        q_mix_token = (overlaps * same_token).sum(dim=-1) / overlap_mass.clamp(
+            min=1e-30
+        )
+        target_at_token = torch.gather(
+            target_prob,
+            1,
+            selected_token.unsqueeze(1),
+        ).squeeze(1)
+        accept_probability = (target_at_token / q_mix_token.clamp(min=1e-30)).clamp(
+            max=1.0
+        )
+        accepted = has_kids & ~zero_mass & (uniforms[:, level, 1] < accept_probability)
+
+        weights = overlaps / overlap_mass.clamp(min=1e-30).unsqueeze(1)
+        q_mix_vocab = torch.zeros_like(target_prob)
+        q_mix_vocab.scatter_add_(
+            1,
+            kid_tokens.clamp(min=0),
+            weights * kid_mask,
+        )
+        residual = (target_prob - q_mix_vocab).clamp(min=0)
+        residual_mass = residual.sum(dim=-1, keepdim=True)
+        residual = torch.where(
+            residual_mass > 0,
+            residual / residual_mass.clamp(min=1e-30),
+            target_prob,
+        )
+        residual = torch.where(
+            zero_mass.unsqueeze(1),
+            target_prob,
+            residual,
+        )
+        rejected_token = _fr13_taw_inv_cdf(
+            residual,
+            uniforms[:, level, 2],
+        )
+
+        _fr13_fixed32_taw_exact_commit_kernel[(batch_size,)](
+            child_table,
+            child_counts,
+            current,
+            alive,
+            self_token,
+            bonus_flat,
+            source,
+            selected_token,
+            rejected_token,
+            accepted,
+            current_state,
+            alive_state,
+            output_tokens,
+            output_lens,
+            accepted_path_rows,
+            accepted_lens,
+            last_row,
+            LEVEL=level,
+            PHYSICAL_DRAFTS=physical_drafts,
+            PHYSICAL_ROWS=physical_rows,
+            FANOUT=fanout,
+            OUTPUT_CAPACITY=output_capacity,
+            PATH_CAPACITY=path_capacity,
+            num_warps=1,
+        )
+
+    _fr13_fixed32_device_assert(
+        torch.all(output_lens <= output_capacity),
+        "FR13 fixed32 output overflow",
+    )
+    _fr13_fixed32_device_assert(
+        torch.all(accepted_lens <= path_capacity),
+        "FR13 fixed32 accepted-path overflow",
+    )
+    return (
+        output_tokens,
+        output_lens,
+        accepted_path_rows,
+        accepted_lens,
+        last_row,
+        walk_cap,
+    )
+
+
+def _fr13_fixed32_taw_execute(
+    topology,
+    entry: dict[str, Any],
+    drafts,
+    target_logits,
+    tree_self_logits,
+    bonus_flat,
+    uniforms,
+    *,
+    walk_cap: int,
+    native_precompute: bool | None = None,
+    probability_caches: tuple[Any, Any] | None = None,
+    comparison_probability_caches: tuple[Any, Any] | None = None,
+    probability_mismatches=None,
+) -> tuple[Any, Any, Any, Any, Any, int]:
+    """Dispatch CUDA to exact integer commit fusion and retain the CPU oracle."""
+    if target_logits.is_cuda:
+        return _fr13_fixed32_taw_execute_exact_cuda(
+            topology,
+            entry,
+            drafts,
+            target_logits,
+            tree_self_logits,
+            bonus_flat,
+            uniforms,
+            walk_cap=walk_cap,
+            native_precompute=native_precompute,
+            probability_caches=probability_caches,
+            comparison_probability_caches=comparison_probability_caches,
+            probability_mismatches=probability_mismatches,
+        )
+    return _fr13_fixed32_taw_execute_torch(
+        topology,
+        entry,
+        drafts,
+        target_logits,
+        tree_self_logits,
+        bonus_flat,
+        uniforms,
+        walk_cap=walk_cap,
+        native_precompute=native_precompute,
+        probability_caches=probability_caches,
+        comparison_probability_caches=comparison_probability_caches,
+        probability_mismatches=probability_mismatches,
+    )
+
+
 def _fr13_fixed32_publish_work(
     topology,
     *,
@@ -2510,7 +4574,41 @@ def _fr13_fixed32_publish_work(
     source_contract: dict[str, Any],
     layout_contract: dict[str, Any],
 ) -> None:
+    native_selector = _fr13_fixed32_taw_native_selector(
+        batch_size=batch_size
+    )
+    base_target_rows = int(topology.WALK_CAP)
+    base_self_rows = int(topology.WALK_CAP)
+    candidate_target_rows = 17
+    candidate_self_rows = 13
+    if native_selector == "diagnostic":
+        target_rows = base_target_rows + candidate_target_rows
+        self_rows = base_self_rows + candidate_self_rows
+        exact_commit_launches = int(topology.WALK_CAP) + 1
+        exact_commit_programs_per_request = int(topology.WALK_CAP) + 1
+        product_write_multiplier = 2
+    elif native_selector == "production":
+        target_rows = candidate_target_rows
+        self_rows = candidate_self_rows
+        exact_commit_launches = 1
+        exact_commit_programs_per_request = 1
+        product_write_multiplier = 1
+    else:
+        target_rows = base_target_rows
+        self_rows = base_self_rows
+        exact_commit_launches = int(topology.WALK_CAP)
+        exact_commit_programs_per_request = int(topology.WALK_CAP)
+        product_write_multiplier = 1
     taw = {
+        "route": (
+            "fixed32_native_precompute_byte_ab_reference_return"
+            if native_selector == "diagnostic"
+            else (
+                "fixed32_native_precompute_production_candidate_return"
+                if native_selector == "production"
+                else "fixed32_pytorch_exact_float_triton_integer_commit"
+            )
+        ),
         "preseeded_batches": list(_FR13_FIXED32_BATCHES),
         "topology_cache_hit": True,
         "cache_misses": 0,
@@ -2522,16 +4620,29 @@ def _fr13_fixed32_publish_work(
         "buffer_capacity": int(topology.OUTPUT_PUBLISH_CAPACITY),
         "loop_iterations": int(loop_iterations),
         "uniform_slots": int(topology.TAW_UNIFORM_SLOTS) * batch_size,
-        "child_lanes": int(topology.TAW_CHILD_LANES) * batch_size,
-        "target_rows": int(topology.WALK_CAP) * batch_size,
-        "self_rows": int(topology.WALK_CAP) * batch_size,
-        "self_cdf_rows": int(topology.WALK_CAP) * batch_size,
-        "source_cdf_rows": int(topology.WALK_CAP) * batch_size,
-        "residual_cdf_rows": int(topology.WALK_CAP) * batch_size,
-        "qmix_rows": int(topology.WALK_CAP) * batch_size,
-        "residual_rows": int(topology.WALK_CAP) * batch_size,
-        "row_scatter_slots": int(topology.TAW_ROW_SCATTER_SLOTS) * batch_size,
-        "path_scatter_slots": int(topology.TAW_PATH_SCATTER_SLOTS) * batch_size,
+        "child_lanes": (
+            target_rows * int(topology.SAMPLER_MAX_FANOUT) * batch_size
+        ),
+        "target_rows": target_rows * batch_size,
+        "self_rows": self_rows * batch_size,
+        "self_cdf_rows": self_rows * batch_size,
+        "source_cdf_rows": target_rows * batch_size,
+        "residual_cdf_rows": target_rows * batch_size,
+        "qmix_rows": target_rows * batch_size,
+        "residual_rows": target_rows * batch_size,
+        "row_scatter_slots": (
+            int(topology.TAW_ROW_SCATTER_SLOTS)
+            * batch_size
+            * product_write_multiplier
+        ),
+        "path_scatter_slots": (
+            int(topology.TAW_PATH_SCATTER_SLOTS)
+            * batch_size
+            * product_write_multiplier
+        ),
+        "exact_commit_launches": exact_commit_launches,
+        "exact_commit_programs": exact_commit_programs_per_request * batch_size,
+        "floating_sampling_reimplementation": False,
     }
     if (
         set(source_contract)
@@ -2545,7 +4656,7 @@ def _fr13_fixed32_publish_work(
         or source_contract["source_contract_sha256"]
         != _FR13_FIXED32_TAW_SOURCE_SHA256
         or source_contract["tensor_call_census"]
-        != _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS
+        != _fr13_fixed32_taw_tensor_call_census(batch_size=batch_size)
     ):
         raise RuntimeError("FR13 fixed32 TAW source contract drift at publish")
     overlap = (
@@ -2625,7 +4736,6 @@ def fr13_fixed32_taw_commit(
     if mode is None:
         mode = os.environ.get("FR13_FIXED32_MODE", "")
     topology, valid_mask = _fr13_fixed32_runtime_contract(mode)
-    source_contract = _fr13_fixed32_taw_source_contract(topology)
     if all_greedy:
         raise RuntimeError(
             "FR13 fixed32 acceptance route requires sampled temp>0 requests"
@@ -2639,6 +4749,10 @@ def fr13_fixed32_taw_commit(
     batch_size = int(num_draft_tokens.shape[0])
     if batch_size not in _FR13_FIXED32_BATCHES:
         raise RuntimeError(f"FR13 fixed32 batch must be 1..4, got {batch_size}")
+    source_contract = _fr13_fixed32_taw_source_contract(
+        topology,
+        batch_size=batch_size,
+    )
     key = fr13_fixed32_taw_cache_key(
         mode,
         valid_mask,
@@ -2679,23 +4793,145 @@ def fr13_fixed32_taw_commit(
         fixed_uniforms,
         rng_route=rng_route,
     )
-    (
-        output_tokens,
-        output_lens,
-        accepted_path_rows,
-        accepted_lens,
-        last_row,
-        loop_iterations,
-    ) = _fr13_fixed32_taw_execute(
-        topology,
-        entry,
-        drafts,
-        target_logits,
-        tree_self_logits,
-        bonus_flat,
-        fixed_uniforms,
-        walk_cap=int(topology.WALK_CAP),
+    native_selector = _fr13_fixed32_taw_native_selector(
+        batch_size=batch_size
     )
+    if native_selector == "diagnostic":
+        probability_mismatches = entry["native_ab_probability_mismatches"]
+        product_mismatches = entry["native_ab_product_mismatches"]
+        if target_logits.is_cuda and not torch.cuda.is_current_stream_capturing():
+            task_marker = _fr13_fixed32_taw_native_real_event_marker()
+            bound_marker = entry.get("native_ab_live_marker")
+            if task_marker is not None and bound_marker is None:
+                probability_mismatches.zero_()
+                product_mismatches.zero_()
+                entry["native_ab_root_checks"] = 0
+                entry["native_ab_live_marker"] = task_marker
+                entry["native_ab_live_pass_emitted"] = False
+                bound_marker = task_marker
+            elif (
+                task_marker is not None
+                and bound_marker is not None
+                and task_marker != bound_marker
+            ):
+                raise RuntimeError(
+                    "FR13 fixed32 TAW native live gate cannot combine tasks"
+                )
+            root_checks = int(entry["native_ab_root_checks"])
+            if root_checks:
+                probability_bad = int(probability_mismatches.item())
+                product_bad = int(product_mismatches.item())
+                if probability_bad or product_bad:
+                    raise AssertionError(
+                        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE byte mismatch: "
+                        f"probabilities={probability_bad} products={product_bad}"
+                    )
+                if (
+                    task_marker is not None
+                    and task_marker == bound_marker
+                    and not entry.get("native_ab_live_pass_emitted", False)
+                ):
+                    _fr13_fixed32_taw_native_live_pass_emit(
+                        mode=mode,
+                        batch_size=batch_size,
+                        task_marker=task_marker,
+                        evidence_route="uncaptured_root_check",
+                    )
+                    entry["native_ab_live_pass_emitted"] = True
+                if root_checks % 128 == 0 or task_marker is not None:
+                    print(
+                        "[FR13_FIXED32_TAW_NATIVE_PRECOMPUTE] PASS "
+                        f"root_checks={root_checks} probability_mismatches=0 "
+                        "product_mismatches=0 reference_returned=1",
+                        flush=True,
+                    )
+            entry["native_ab_root_checks"] = root_checks + 1
+        probability_caches = _fr13_fixed32_taw_probability_caches(
+            entry,
+            target_logits,
+            tree_self_logits,
+            native_precompute=True,
+        )
+        reference = _fr13_fixed32_taw_execute(
+            topology,
+            entry,
+            drafts,
+            target_logits,
+            tree_self_logits,
+            bonus_flat,
+            fixed_uniforms,
+            walk_cap=int(topology.WALK_CAP),
+            native_precompute=False,
+            comparison_probability_caches=probability_caches,
+            probability_mismatches=probability_mismatches,
+        )
+        candidate = _fr13_fixed32_taw_execute_all_parent(
+            topology,
+            entry["native_ab_entry"],
+            drafts,
+            bonus_flat,
+            fixed_uniforms,
+            walk_cap=int(topology.WALK_CAP),
+            probability_caches=probability_caches,
+        )
+        for reference_product, candidate_product in zip(
+            reference[:5],
+            candidate[:5],
+            strict=True,
+        ):
+            product_mismatches.add_(
+                torch.count_nonzero(reference_product != candidate_product)
+            )
+        (
+            output_tokens,
+            output_lens,
+            accepted_path_rows,
+            accepted_lens,
+            last_row,
+            loop_iterations,
+        ) = reference
+    elif native_selector == "production":
+        probability_caches = _fr13_fixed32_taw_probability_caches(
+            entry,
+            target_logits,
+            tree_self_logits,
+            native_precompute=True,
+        )
+        (
+            output_tokens,
+            output_lens,
+            accepted_path_rows,
+            accepted_lens,
+            last_row,
+            loop_iterations,
+        ) = _fr13_fixed32_taw_execute_all_parent(
+            topology,
+            entry["native_ab_entry"],
+            drafts,
+            bonus_flat,
+            fixed_uniforms,
+            walk_cap=int(topology.WALK_CAP),
+            probability_caches=probability_caches,
+        )
+    else:
+        (
+            output_tokens,
+            output_lens,
+            accepted_path_rows,
+            accepted_lens,
+            last_row,
+            loop_iterations,
+        ) = _fr13_fixed32_taw_execute(
+            topology,
+            entry,
+            drafts,
+            target_logits,
+            tree_self_logits,
+            bonus_flat,
+            fixed_uniforms,
+            walk_cap=int(topology.WALK_CAP),
+            native_precompute=False,
+        )
     _fr13_fixed32_publish_work(
         topology,
         mode=mode,
@@ -3666,6 +5902,8 @@ def _fr13_fixed32_test_boot_warm_state(topology) -> None:
         "accepted_path_rows",
         "accepted_lens",
         "last_row",
+        "exact_current",
+        "exact_alive",
     )
     saved_tensors = tuple(
         {
@@ -3794,6 +6032,7 @@ def _fr13_fixed32_test_mode_switch_batches(topology) -> None:
     callback_rows = []
     taw_by_batch = {}
     expected_taw_keys = {
+        "route",
         "preseeded_batches",
         "topology_cache_hit",
         "cache_misses",
@@ -3811,6 +6050,9 @@ def _fr13_fixed32_test_mode_switch_batches(topology) -> None:
         "residual_rows",
         "row_scatter_slots",
         "path_scatter_slots",
+        "exact_commit_launches",
+        "exact_commit_programs",
+        "floating_sampling_reimplementation",
         "source_contract_schema",
         "source_contract_sha256",
         "tensor_call_census",
@@ -3852,6 +6094,8 @@ def _fr13_fixed32_test_mode_switch_batches(topology) -> None:
         "accepted_path_shape",
         "accepted_lens_shape",
         "last_row_shape",
+        "exact_current_shape",
+        "exact_alive_shape",
     }
     fr13_fixed32_taw_set_work_callback(callback_rows.append)
     for mode in ("tail6_fixed32", "hydra27_fixed32"):
@@ -3967,6 +6211,8 @@ def _fr13_fixed32_test_mode_switch_batches(topology) -> None:
                 "accepted_path_shape": [batch_size, 16],
                 "accepted_lens_shape": [batch_size],
                 "last_row_shape": [batch_size],
+                "exact_current_shape": [batch_size],
+                "exact_alive_shape": [batch_size],
             }
             for name, expected in expected_layout_values.items():
                 if work["taw"][name] != expected:

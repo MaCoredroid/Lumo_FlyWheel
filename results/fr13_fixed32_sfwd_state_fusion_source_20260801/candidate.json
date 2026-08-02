@@ -1,0 +1,91 @@
+{
+  "schema": "fr13.fixed32.sfwd_state_fusion.source_candidate.v1",
+  "created_at_utc": "2026-08-01T06:00:57Z",
+  "status": "SOURCE_ONLY_DEFAULT_OFF_NO_GPU_MEASUREMENT",
+  "base": {
+    "branch": "origin/agent/fixed32-bv8-allb-campaignfix",
+    "commit": "11cdeb7c0b5d1adbd9c908c1c8b7944942778912",
+    "draft_vocabulary_k": 0,
+    "draft_vocabulary_root": 0
+  },
+  "input_audit": {
+    "branch": "origin/agent/fixed32-fullvocab-floor-gap-audit",
+    "commit": "26745775600e4587fad5346f596ebdfa1138c0f1",
+    "path": "results/fr13_fixed32_fullvocab_floor_gap_audit_20260801/audit.json",
+    "historical_conv_state_motion_ms_per_event": 15.014089253968255,
+    "timing_class": "stale_real_workload_attribution_not_current_full_vocab_timing"
+  },
+  "candidate": {
+    "id": "fixed32_sfwd_state_fusion_v1",
+    "kernel": "_fr13_fixed32_sfwd_state_fusion_kernel",
+    "entrypoint": "launch_fixed32_sfwd_state_fusion",
+    "file": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+    "patch_wiring": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+    "dtypes": {
+      "activation": "BF16",
+      "conv_state": "BF16",
+      "weights": "BF16",
+      "tap_product_rounding": "BF16",
+      "accumulation": "FP32 ordered left-to-right",
+      "output": "BF16",
+      "quantization_or_compression": false
+    },
+    "fixed_geometry": {
+      "batch_sizes": [1, 2, 3, 4],
+      "physical_tree_rows_per_request": 32,
+      "conv_width": 4,
+      "conv_state_length": 12,
+      "source_rows_per_request": 36,
+      "channel_block": 256,
+      "grid": ["B*32", "ceil(C/256)"],
+      "physical_launches_per_layer": 1
+    },
+    "fused_surfaces": [
+      "conv col0 prior gather",
+      "prior plus input plus zero source construction",
+      "persistent post-accept commit-source write",
+      "four BF16 tap products",
+      "ordered FP32 tap accumulation",
+      "ex2-compatible SiLU",
+      "BF16 conv output"
+    ],
+    "existing_gdn_fusion_preserved": {
+      "level_path_programs": ["B", "11*B"],
+      "physical_launches_per_layer": 2,
+      "ring_exports": ["K", "V", "raw_a", "raw_b"],
+      "freshness_flags": true,
+      "legacy_gdn_kernel_changed": false
+    }
+  },
+  "qualification_boundary": {
+    "default_off": true,
+    "production_selector_present": true,
+    "production_selector_fail_closed": true,
+    "cuda_graph_candidate_allowed": false,
+    "real_event_marker_prefix": "swe_verified:",
+    "candidate_runs_before_reference": true,
+    "reference_always_served": true,
+    "byte_surfaces": ["conv_out", "commit_source_stage"],
+    "required_unique_layers": 48,
+    "mismatch_behavior": "record mismatch and retain incumbent served bytes",
+    "pass_artifact_production_eligible": false
+  },
+  "measurement": {
+    "gpu_used": false,
+    "synthetic_or_probe_timing": false,
+    "real_swe_verified_timing": false,
+    "b1_full_wall_ms_per_event": null,
+    "b4_full_wall_ms_per_event": null,
+    "savings_claim_ms_per_event": null
+  },
+  "required_next_gates": [
+    "Rerun the authenticated full-vocabulary B1 byte credential with the eager boot-warm lifecycle repair and require all 48 layers on both byte surfaces.",
+    "Run the same-process candidate-versus-incumbent hook on authenticated canonical SWE-Verified exact4 B4 and require B4/concurrency 4, 32 rows per request, root0/K0, all 48 layers, and reference serving.",
+    "Bind source-identical B1 and B4 byte prerequisites without enabling candidate serving; acceptance, timing, and production require separate future evidence and policy."
+  ],
+  "source_sha256": {
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "1cdbff72a7188b5efd092a70a39731edc2699a512cc4aef10a1266a659fb6b3c",
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "92a611a4673fcb8678f5b37216ffd43ea26384a240ce2b00e9079aeedda071b8",
+    "tests/test_fr13_fixed32_sfwd_state_fusion.py": "3c5254c1dd139c57ace77be77cfe034d38bbd42884c3b909ffc00213e46f7ea9"
+  }
+}

@@ -1,0 +1,37 @@
+STATIC ONLY - no Docker/GPU campaign was launched from this worktree.
+
+Focused topology, K64 credential, all-parent, and process-attestation suite:
+  94 passed in 2.07s
+
+Broader CUTLASS, all-parent, campaign provenance, floor, ingress, trace, and
+exact-commit suite:
+  345 passed, 1 skipped in 4.49s
+
+Static checks:
+  bash syntax: PASS
+  embedded Python compilation: PASS (6 blocks across 4 runners)
+  Python byte compilation: PASS
+  Ruff check: PASS
+  git diff --check: PASS
+  fixed32 work-census self-test: PASS
+  depth-acceptance self-test: PASS
+
+Preflights:
+  runtime manifest: PASS
+  runtime manifest canonical SHA-256:
+    3cb8cd901f65372e421e8747f62b339403a530345e8a2e716f43cda1fc46e989
+  external manifest: PASS
+  external manifest canonical SHA-256:
+    c42fb16d2ea932f0e819c81172c49b69b312b75dd446146b6d7b6ef78af00a9e
+
+Route source identities:
+  orchestrator:
+    8fdd920963711ce571af672f8cd0182b018ce7c86d4c81cd4088c4e5d2883542
+  all-parent gate:
+    8b3292480b8497f4f595b492e025e370ef74b27517db804f98f724d0cd744676
+  persistent-M128 gate:
+    570f5f6041a3e3ae195b3f0c4cea3fa7be75bd16fed8aa22eade1a7345ae8b7a
+  persistent-M128 timing:
+    5d511ceccb062df499af37f74f9eadc6de14737c643b1bd97ac7151d6820c7a4
+
+No timing, acceptance, TPS, or hardware-floor number is claimed here.

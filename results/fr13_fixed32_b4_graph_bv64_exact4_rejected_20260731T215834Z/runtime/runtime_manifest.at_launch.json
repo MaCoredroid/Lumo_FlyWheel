@@ -1,0 +1,348 @@
+{
+  "canonical_format": "utf8-json-sort-keys-compact-v1",
+  "closures": {
+    "host_script_source": [
+      {
+        "path": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+        "sha256": "8526b62b40578b8c5038fda1eef557b640b5ca2e873a453d15363912e9721a14",
+        "size": 1615592
+      },
+      {
+        "path": "scripts/fr10_quick_decode_tps_probe.py",
+        "sha256": "043afc93421c09e7a05992a5928c53015ea4747ac69414d3dc7d47e38afeaf8d",
+        "size": 18631
+      },
+      {
+        "path": "scripts/fr13_arctic_suffix_adapter.py",
+        "sha256": "ff1476a944fd6740cc1ab349cd1dbaf346ba5684260234fed7456b67b109ad1e",
+        "size": 9888
+      },
+      {
+        "path": "scripts/fr13_b4_campaign_driver.sh",
+        "sha256": "ee35adf615ba48c81a4eac08fc969a90ce4fb40edc76ec0ab7467d61a98b6e64",
+        "size": 9861
+      },
+      {
+        "path": "scripts/fr13_b4_gdn_bv64_pass.py",
+        "sha256": "44fa82dfdde4152b94f1ed7aa768e481b08a92ada8cf90dfb41ee77c037749a3",
+        "size": 20014
+      },
+      {
+        "path": "scripts/fr13_bigdenom_swe_serve_variant.sh",
+        "sha256": "f93a9c96711b5b4127a20ec5dd7314f0ba872590615c83b69ed6abe3c90259c8",
+        "size": 116316
+      },
+      {
+        "path": "scripts/fr13_canonical_env.sh",
+        "sha256": "51587c14024181a2e0b4b0f8ff2ae9fab404ce6df15a5c34a124cb51bdc52bd5",
+        "size": 4868
+      },
+      {
+        "path": "scripts/fr13_device_multidraft_kernel.py",
+        "sha256": "da2ce3bd73f5de6d5c2a12ba83830bc4f03ecd4f2023bfbc581696f5a61b9d3a",
+        "size": 215120
+      },
+      {
+        "path": "scripts/fr13_fixed32_contract.py",
+        "sha256": "46d105b924d99ec75c954339e9640ffcb8ec34f1dbbab3f8332607367acb918b",
+        "size": 93083
+      },
+      {
+        "path": "scripts/fr13_fixed32_floor_timers_seq.sh",
+        "sha256": "2a7483c6665e42db4b52f9161744d1a497c7741946c31079f90cae95b67e59ee",
+        "size": 6836
+      },
+      {
+        "path": "scripts/fr13_fixed32_flush_protocol.py",
+        "sha256": "a9bcf2b0e5129da88346a1ed3220ec0da2582ffd3b3d4a0012ba50564fb2cb8a",
+        "size": 53219
+      },
+      {
+        "path": "scripts/fr13_fixed32_topology.py",
+        "sha256": "fb67fa48260f05fdb0a8dafe3a08bb2d740cde2fc5f221361cd36de385162a74",
+        "size": 22965
+      },
+      {
+        "path": "scripts/fr13_hardware_floor_ledger.py",
+        "sha256": "bede7da29d0829550162572d61df9010725cfd87145736f5e0fdb830ab991040",
+        "size": 5785
+      },
+      {
+        "path": "scripts/fr13_launch_forked_fa2_tree_server.sh",
+        "sha256": "5550444925a02042a02ad4f78c9e7f4d55991cdbd018ea64a18a0a46d504c14d",
+        "size": 130980
+      },
+      {
+        "path": "scripts/fr13_measure.py",
+        "sha256": "5be801e2016d938241fe9e2a5f6bb9e5a3979a956bb0242fff8e51d5a2b9bee9",
+        "size": 130211
+      },
+      {
+        "path": "scripts/fr13_merged_drafter.py",
+        "sha256": "874c41284e6f4c1254257abdc96f22de1ea02c361256de5057e24d922a365261",
+        "size": 50993
+      },
+      {
+        "path": "scripts/fr13_merged_fill.py",
+        "sha256": "365200400b924fd3d19db2cbe62b258577a48d86fa1626577782cf4bce2b2de3",
+        "size": 14187
+      },
+      {
+        "path": "scripts/fr13_patch_fa2_tree_bias.py",
+        "sha256": "aa9149c62e46add4ed92ccd762b43584866543cbca6ffc42b1a1e4bffcb39fc5",
+        "size": 92147
+      },
+      {
+        "path": "scripts/fr13_required_tree_flags.sh",
+        "sha256": "2997fadb99c1c98651b3ea9c04c44c5e4b55184e75471c1040d07459fd659ac5",
+        "size": 6403
+      },
+      {
+        "path": "scripts/fr13_sg_warmup_capture_inject.py",
+        "sha256": "d9aaca07ce6817a44953832aa09ac6486d73fb0c4d07e3c13a917e1a7c50a5d6",
+        "size": 20728
+      },
+      {
+        "path": "scripts/gpu_oom_guard.sh",
+        "sha256": "36c1342c09f4d4793d29c4aca91226d4df0959cb55da544db60e8bad501e05bc",
+        "size": 4414
+      },
+      {
+        "path": "scripts/run_swe_bench_q36_a.py",
+        "sha256": "c540c9b3e1b344f2e9adc095a6667f5ee422c6f761597b4c582beaf3bbcac67a",
+        "size": 275293
+      },
+      {
+        "path": "scripts/sample_dcgm_during_task.py",
+        "sha256": "2b6c5a6d2ab12da152d10949b58d9b5c4da9cfa2bb853bfa3fd1fcef03204315",
+        "size": 4980
+      },
+      {
+        "path": "scripts/swe_x86_helpers/offload_codex_proxy.sh",
+        "sha256": "1e6c78a2697177d27d06000411c7c7c487c5b6f3485964052363041a4e638577",
+        "size": 24181
+      },
+      {
+        "path": "scripts/swe_x86_helpers/relaunch_proxy_remote.sh",
+        "sha256": "0b18cc228e1a0a1175d9fed56e94ddaf40c5c033393323e5d5a24f7747897295",
+        "size": 7224
+      }
+    ],
+    "python_package_source": [
+      {
+        "path": "src/lumo_flywheel_serving/__init__.py",
+        "sha256": "084234e3461dadf506e087e8ec023f7695c88a50e68e69eca4228c06b0d9c5aa",
+        "size": 3533
+      },
+      {
+        "path": "src/lumo_flywheel_serving/auto_research.py",
+        "sha256": "fcaf056bf5acd211133fbdb1fab6e5d27ec4101faa27351f0411c792d08dd18c",
+        "size": 659031
+      },
+      {
+        "path": "src/lumo_flywheel_serving/cutlass_overlay_runtime.py",
+        "sha256": "fe8615d7e88ba0a0f8917ebdb6c2b904fea2434eecc515b4115ea8d1aa577a12",
+        "size": 9508
+      },
+      {
+        "path": "src/lumo_flywheel_serving/data_pool.py",
+        "sha256": "b4ce6148f9615841d99135e3bef4a18475874200bea651a104c2c2b54cf0c5c0",
+        "size": 94249
+      },
+      {
+        "path": "src/lumo_flywheel_serving/fr10_decode_modes.py",
+        "sha256": "9111854366d4856559d9b42c23d5ca6c84800638c08f98d9f15bbeb09d93499b",
+        "size": 6387
+      },
+      {
+        "path": "src/lumo_flywheel_serving/fr10_equivalence_gate.py",
+        "sha256": "7981789c16d84c88175611313e20e70137223a7119d8488df2528b407c3e2572",
+        "size": 20484
+      },
+      {
+        "path": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+        "sha256": "662a63d4a97b7610bd9eb653381ae3e4249b5d196dd94bd70864e59f28671f0d",
+        "size": 444579
+      },
+      {
+        "path": "src/lumo_flywheel_serving/fr10_tree_rejection_sampler.py",
+        "sha256": "34e39d1552d3e0b879a0759f7ca5235f499c0325d33a318c74e0461f406e4e71",
+        "size": 11379
+      },
+      {
+        "path": "src/lumo_flywheel_serving/fr13_ex2_silu.py",
+        "sha256": "c6942a5f6265d750f24299cda721a752c6efc4aa0c08de1aefb891599809381b",
+        "size": 1457
+      },
+      {
+        "path": "src/lumo_flywheel_serving/fr13_fa2_spine_reorder.py",
+        "sha256": "557d93d411014b3ed77dfafabd46fd45329754afcd8ce3684ea8de72364e0258",
+        "size": 11575
+      },
+      {
+        "path": "src/lumo_flywheel_serving/fr13_replay_conv_remap.py",
+        "sha256": "e07641338c111f1bcff2c1fbe674b8a313b3890801832fbe69d361c49506f70c",
+        "size": 5923
+      },
+      {
+        "path": "src/lumo_flywheel_serving/fr13_tree_conv_fused.py",
+        "sha256": "3b8e9cbde534926e9f6e6f4bd1a485e8e5e5e9bf8ca1c30387a71cfe59a893d7",
+        "size": 38068
+      },
+      {
+        "path": "src/lumo_flywheel_serving/inference_proxy.py",
+        "sha256": "d853ef31357d0672777900d4204ba284bd7e2a34aa3410be1983f74fce6af77c",
+        "size": 231881
+      },
+      {
+        "path": "src/lumo_flywheel_serving/kernel_activation.py",
+        "sha256": "8389877fb9e03ceaede4f8c692e8be3cd44a53b59cc77109958758948c81b527",
+        "size": 19221
+      },
+      {
+        "path": "src/lumo_flywheel_serving/measurement_harness.py",
+        "sha256": "d7467a27c969ec5066856eaf56549ef672f8b41fb8df430ee2261d1df590e4be",
+        "size": 23196
+      },
+      {
+        "path": "src/lumo_flywheel_serving/metrics.py",
+        "sha256": "b6fb7a757441c537965958e3fb56b6e7930f5b4346463342ee7d84655bb18d21",
+        "size": 41023
+      },
+      {
+        "path": "src/lumo_flywheel_serving/model_server.py",
+        "sha256": "12cf68ca8db777db6e8eda1432bc5189231fb50a078de9d2f91200859a8a2632",
+        "size": 61862
+      },
+      {
+        "path": "src/lumo_flywheel_serving/parity_fixture.py",
+        "sha256": "4620c7b1d7ede207f92c032628b71441ed8c3ae9e6b8968cd281eff26b2c2f5e",
+        "size": 41569
+      },
+      {
+        "path": "src/lumo_flywheel_serving/parity_probe.py",
+        "sha256": "2b2bd321eb3f937a230ea04cd9e6bdda80a1ba383c9044eec94532a8f39a72d3",
+        "size": 40746
+      },
+      {
+        "path": "src/lumo_flywheel_serving/registry.py",
+        "sha256": "1ef8c95c2fabad0c65185307174f704751048c50f833beb95a76fe4d4dfdfbf6",
+        "size": 9173
+      },
+      {
+        "path": "src/lumo_flywheel_serving/round_driver.py",
+        "sha256": "c7521aa857c46f52847341b57ce7053bf0280f3d3f5d44eaeff58d74796fdc19",
+        "size": 36594
+      },
+      {
+        "path": "src/lumo_flywheel_serving/task_orchestrator.py",
+        "sha256": "409b5b24897bd24f51f923774eb6536a7496d52b1f090fd1eb55245ca0af5f3a",
+        "size": 120161
+      },
+      {
+        "path": "src/lumo_flywheel_serving/tuned_config.py",
+        "sha256": "d7a864fdf6d181b7af6cab8f5503a70a4b705ac1b6e0e2f6548d1f2638dd4ed6",
+        "size": 27939
+      },
+      {
+        "path": "src/lumo_flywheel_serving/workload_p1.py",
+        "sha256": "624a2fd352c87addccfab99f14419c37dd2eb64a54d130d499840e24557985c7",
+        "size": 16295
+      },
+      {
+        "path": "src/lumo_flywheel_serving/yaml_utils.py",
+        "sha256": "acfd5351d2750df468ad8c8937bd0feab28c3a30ccad01804cf3b759f11ec7fa",
+        "size": 1276
+      }
+    ],
+    "runtime_data_and_config": [
+      {
+        "path": ".cache/huggingface/hub/datasets--princeton-nlp--SWE-bench_Verified/blobs/a45b1fe4e2f0c8390b2b2938ac83e92ed5979000856808f3679c07812e9e6dcd",
+        "sha256": "a45b1fe4e2f0c8390b2b2938ac83e92ed5979000856808f3679c07812e9e6dcd",
+        "size": 2096679
+      },
+      {
+        "path": ".cache/huggingface/hub/datasets--princeton-nlp--SWE-bench_Verified/refs/main",
+        "sha256": "fcc83c1ac718625f8496c612986cc7a04420dcf4b4fb2c31259946f63e828c7d",
+        "size": 40
+      },
+      {
+        "path": ".lumo.local.env",
+        "sha256": "6b5557d005bb7f172ae18a270a02ffd731ab8ad129bf6a9f0b6cbcccfb896a04",
+        "size": 137
+      },
+      {
+        "path": "config/fr13_fixed32/qwen_system_settings.json",
+        "sha256": "8a872a4f6f257f6d7a45f24f42500964f56e1500c5342218b71d02afe4d31fb6",
+        "size": 37
+      },
+      {
+        "path": "config/fr13_fixed32/subset_b4_four.json",
+        "sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+        "size": 549
+      },
+      {
+        "path": "config/fr13_fixed32/subset_b4_sixteen.json",
+        "sha256": "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c",
+        "size": 1073
+      },
+      {
+        "path": "docker/chat_templates/qwen3-openai-codex.jinja",
+        "sha256": "c166a05aaf5ad4b807a7c46497f92180e3df24e64d4b54d27fd26ec61bec38da",
+        "size": 11526
+      },
+      {
+        "path": "model_registry.yaml",
+        "sha256": "55842369fbaec076e81e5f81bef714138e4b81e288e9c68a82e3415a732bd34b",
+        "size": 1923
+      },
+      {
+        "path": "output/fr13_acceptance_ladder/prompts_swe4.json",
+        "sha256": "3e2b14ba90a999b08290d5be0e474aa7a73df5b98bb7ad2e5d58869b04e2839d",
+        "size": 17026
+      },
+      {
+        "path": "scripts/fr13_dvk_subset_blocks.json",
+        "sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+        "size": 3721
+      }
+    ],
+    "verdict_tools": [
+      {
+        "path": "scripts/fr13_depth_acceptance.py",
+        "sha256": "b6dae61fba07e9cb7253f355786c7c4284c21997b11a7f833ab437aecd1fa571",
+        "size": 231141
+      },
+      {
+        "path": "scripts/fr13_fixed32_work_census.py",
+        "sha256": "e62fb6906dc5d144924aeccedd6ea0d5c3a55370013611d37c6188e5f4026446",
+        "size": 153847
+      },
+      {
+        "path": "scripts/fr13_floor_gate.py",
+        "sha256": "2751ee022a46ff66f703ee3c3c0c885d9813dc5677f11c3e4c6ccc97940b0f61",
+        "size": 417764
+      },
+      {
+        "path": "scripts/fr13_runtime_manifest.py",
+        "sha256": "4e3e4ef817686edfdfb1c270557b3d252b873afb1f9e152f66c38f540034ded6",
+        "size": 25578
+      }
+    ]
+  },
+  "overall_canonical_sha256": "d7afde28ac70b5c71c13d4aa7bbda28d91a78c9c8d2807edaa53ef261a369a01",
+  "profile": "fixed32",
+  "required_absence": [
+    {
+      "path": "output/fr13_prewarm/corpus_active.jsonl",
+      "required_state": "absent"
+    }
+  ],
+  "schema": "fr13-runtime-manifest-v1",
+  "sequence": "scripts/fr13_fixed32_floor_timers_seq.sh",
+  "summary": {
+    "file_count": 64,
+    "python_package_file_count": 25,
+    "total_size": 7892069
+  }
+}

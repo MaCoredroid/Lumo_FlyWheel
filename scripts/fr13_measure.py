@@ -149,11 +149,25 @@ import json
 import math
 import os
 import statistics
+import sys
 import time
 import urllib.request
 from itertools import combinations
 from pathlib import Path
 from typing import Any
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from fr13_hardware_floor_ledger import (  # noqa: E402
+    BANDWIDTH_BYTES_PER_S,
+    CURRENT_MANDATORY_WEIGHT_BYTES,
+    FIXED32_MANDATORY_WEIGHT_BYTES,
+    FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
+    FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
+    FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
+)
 
 REPO = Path(__file__).resolve().parent.parent
 DEFAULT_ENDPOINT = "http://127.0.0.1:9950"
@@ -1510,6 +1524,17 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         per_task.append({
             "instance_id": d.name,
             "drafts": drafts,
+            "fwd_gpu_seconds": fwd_gpu_d,
+            "fwd_gpu_steps": md.get(M_DECODE_FWD_GPU_STEPS, 0.0),
+            "fwd_gpu_drafts": fwd_gpu_drafts_d,
+            "wall_seconds": md.get(M_STEP_WALL_S, 0.0),
+            "wall_steps": md.get(M_STEP_WALL_STEPS, 0.0),
+            "wall_drafts": md.get(M_STEP_WALL_DRAFTS, 0.0),
+            "drafter_gpu_seconds": md.get(M_DRAFTER_GPU_S, 0.0),
+            "drafter_gpu_spans": md.get(M_DRAFTER_GPU_SPANS, 0.0),
+            "committer_gpu_seconds": md.get(M_COMMITTER_GPU_S, 0.0),
+            "committer_gpu_spans": md.get(M_COMMITTER_GPU_SPANS, 0.0),
+            "accepted_tokens": md.get(M_ACCEPTED, 0.0),
             "tok_per_draft": (md[M_DRAFT_TOK] / drafts) if drafts > 0 else None,
             "s_per_fwd": (md[M_DECODE_S] / drafts) if drafts > 0 else None,
             # FR13_SFWD_GPU_TIMER: prefill-INDEPENDENT decode-forward GPU time per
@@ -1625,10 +1650,64 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         (committed_per_event / wall_s_per_event)
         if (wall_s_per_event and committed_per_event) else None
     )
-    # Legacy FR13 lower-bound accounting: distance to one target weight stream.
-    # This reference excludes drafter/head weight reads, KV/state traffic, and
-    # auxiliary phases, so it is not a full speculative-step hardware floor.
-    _weight_floor_ms = float(os.environ.get("FR13_WEIGHT_FLOOR_MS", "98.6"))
+    # Corrected fixed32 lower-bound accounting includes every mandatory target,
+    # verifier-head, MTP, and drafter-head weight stream in one event. It remains
+    # optimistic because nonweight traffic and execution costs are excluded.
+    _draft_vocab_config = (
+        int(os.environ.get("FR13_DRAFT_VOCAB_K", "65536")),
+        int(os.environ.get("FR13_DRAFT_VOCAB_ROOT", "0")),
+    )
+    _known_weight_ledgers = {
+        (0, 0): (
+            FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
+            FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
+            "five full-vocabulary drafter-head reads",
+        ),
+        (65_536, 0): (
+            CURRENT_MANDATORY_WEIGHT_BYTES,
+            CURRENT_MANDATORY_WEIGHT_BYTES * 1000.0 / BANDWIDTH_BYTES_PER_S,
+            "one full and four 64K drafter-head reads",
+        ),
+        (65_536, 1): (
+            FIXED32_MANDATORY_WEIGHT_BYTES,
+            FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
+            "five 64K drafter-head reads",
+        ),
+    }
+    if _draft_vocab_config not in _known_weight_ledgers:
+        raise RuntimeError(
+            "unsupported fixed32 draft-vocabulary floor configuration: "
+            f"K={_draft_vocab_config[0]} ROOT={_draft_vocab_config[1]}"
+        )
+    (
+        _mandatory_weight_bytes,
+        _expected_weight_floor_ms,
+        _drafter_head_floor_scope,
+    ) = _known_weight_ledgers[_draft_vocab_config]
+    _declared_weight_bytes = int(
+        os.environ.get("FR13_MANDATORY_WEIGHT_BYTES", _mandatory_weight_bytes)
+    )
+    if _declared_weight_bytes != _mandatory_weight_bytes:
+        raise RuntimeError(
+            "FR13_MANDATORY_WEIGHT_BYTES does not match draft-vocabulary "
+            f"configuration: {_declared_weight_bytes} != {_mandatory_weight_bytes}"
+        )
+    _weight_floor_ms = float(
+        os.environ.get(
+            "FR13_WEIGHT_FLOOR_MS",
+            str(_expected_weight_floor_ms),
+        )
+    )
+    if not math.isclose(
+        _weight_floor_ms,
+        _expected_weight_floor_ms,
+        rel_tol=0.0,
+        abs_tol=1e-9,
+    ):
+        raise RuntimeError(
+            "FR13_WEIGHT_FLOOR_MS does not match draft-vocabulary "
+            f"configuration: {_weight_floor_ms} != {_expected_weight_floor_ms}"
+        )
     _events_per_step_f = events_per_step if events_per_step else None
     step_wall_ms = (
         wall_s_per_event * 1000.0 * _events_per_step_f
@@ -1638,10 +1717,10 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     # max(weight-read, GEMM-compute x token-rows). Weight read is B-invariant
     # (shared); compute = 2*params*rows / peak ~ 0.54 ms/row on GB10 (override
     # FR13_COMPUTE_MS_PER_ROW). rows/step = events_per_step x (tok_per_draft
-    # + 1 committed/bonus row). The tree (22 rows/event) crosses into
-    # compute-bound near B_eff~8; native (6 rows/event) stays weight-bound.
+    # + 1 committed/bonus row). Fixed32 is 32 rows/event: B1 is 17.28 ms and
+    # B4 is 69.12 ms, both below the corrected 119.658015414 ms weight term.
     # KV/state reads (context-dependent, cache-ON keeps contexts long) are
-    # NOT modeled — they live in the measured step wall.
+    # NOT modeled - they live in the measured step wall.
     _compute_ms_row = float(os.environ.get("FR13_COMPUTE_MS_PER_ROW", "0.54"))
     _tok_per_draft = (
         (agg[M_DRAFT_TOK] / agg[M_DRAFTS])
@@ -1821,26 +1900,29 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "measured_tps_fullstep_wall": measured_tps_fullstep_wall,
         "step_wall_ms": step_wall_ms,
         "weight_floor_ms": _weight_floor_ms,
+        "mandatory_weight_bytes": _mandatory_weight_bytes,
+        "draft_vocab_k": _draft_vocab_config[0],
+        "draft_vocab_root": _draft_vocab_config[1],
+        "weight_floor_bandwidth_bytes_per_s": BANDWIDTH_BYTES_PER_S,
         "compute_floor_ms": _compute_floor_ms,
         "rows_per_step": _rows_per_step,
         "floor_ms": _floor_ms,
         "floor_ratio": floor_ratio,
         "floor_reference_scope": (
-            "legacy_target_weight_stream_or_row_compute_lower_bound"
+            "fixed32_mandatory_weight_read_or_row_compute_lower_bound"
         ),
         "floor_is_full_step_hardware_floor": False,
         "floor_ratio_note": (
             "step_wall_ms / floor(B), where floor(B) = max(weight-read "
-            "98.6ms [FR13_WEIGHT_FLOOR_MS], compute 0.54ms/row x rows_per_step "
-            "[FR13_COMPUTE_MS_PER_ROW]) — DECODE-ONLY, B-aware (B-sweep "
-            "2026-07-25). rows_per_step = events_per_step x (tok_per_draft+1). "
-            "Weight read is co-residency-INVARIANT (shared); the tree "
-            "(22 rows/event) crosses to compute-bound near B_eff~8, native "
-            "(6 rows/event) stays weight-bound. KV/state reads are unmodeled "
-            "(context-dependent; cache-ON keeps contexts long), as are drafter "
-            "and auxiliary weight reads. Those costs live in the measured wall. "
-            "A ratio of 1.0 is only equality with this incomplete legacy lower "
-            "bound; it is not a physically complete hardware-floor step."
+            f"{_weight_floor_ms:.9f}ms [FR13_WEIGHT_FLOOR_MS], compute "
+            "0.54ms/row x rows_per_step [FR13_COMPUTE_MS_PER_ROW]). The "
+            f"weight term is {_mandatory_weight_bytes:,} mandatory bytes "
+            f"/ {BANDWIDTH_BYTES_PER_S:,} bytes/s and includes target, verifier "
+            f"head, five MTP forwards, and {_drafter_head_floor_scope}. It is an "
+            "optimistic weight-read-only lower bound: KV/state/activation traffic, "
+            "attention, scan, sampling, committer work, launches, synchronization, "
+            "and host gaps are excluded. A ratio of 1.0 is equality with that "
+            "lower bound, not a physically complete hardware-floor step."
         ),
         "measured_tps_fullstep_wall_note": (
             "committed_per_event / MEASURED wall per event (start-to-start deltas "

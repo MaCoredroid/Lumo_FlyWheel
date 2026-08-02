@@ -1,0 +1,6 @@
+cd /home/mark/lumoFlyWheel-b4-streamk-preflight
+RUNROOT="$PWD/output/fr13_b4_cutlass_persistent_m128_live_gate_20260801T092540Z" \
+TAG="cutlass_persistent_m128_fullvocab_hydra27_exact4_20260801T092540Z" \
+FORKED_FA2_SO="/home/mark/shared/lumoFlyWheel-streamk-wide256/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so" \
+CUTLASS_B4_SO="/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.persistent_b4_m128_stock_symbol_exact_compare320_gate_ready.abi3.so" \
+bash scripts/fr13_run_b4_cutlass_persistent_m128_live_gate.sh

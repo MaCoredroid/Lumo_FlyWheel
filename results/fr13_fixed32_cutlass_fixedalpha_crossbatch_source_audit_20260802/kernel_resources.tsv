@@ -1,0 +1,9 @@
+batch	dtype	variant	registers	shared_bytes	stack_bytes	local_bytes	constant0_bytes
+B1	fp16	baseline_divisor_static	168	1024	0	0	2688
+B1	fp16	fixedalpha_divisor_static	168	1024	0	0	2688
+B1	bf16	baseline_divisor_static	168	1024	0	0	2688
+B1	bf16	fixedalpha_divisor_static	168	1024	0	0	2688
+B4	fp16	baseline_m128_static	168	1024	0	0	2688
+B4	fp16	fixedalpha_m128_static	168	1024	0	0	2688
+B4	bf16	baseline_m128_static	168	1024	0	0	2688
+B4	bf16	fixedalpha_m128_static	168	1024	0	0	2688

@@ -1,0 +1,66 @@
+{
+  "schema": "fr13.fixed32.tail23_all_parent.exact4_b4_gate_ready.v1",
+  "status": "launch_ready_gpu_not_run",
+  "branch": "agent/fixed32-node32-nonscaling-0f2",
+  "source_commit": "f4dba7d7b9be8288e6c2eb22eda96493eb16b2fb",
+  "candidate": {
+    "name": "fixed32_all_parent_commit_v2",
+    "source_contract_schema": "fr13-fixed32-taw-all-parent-v7",
+    "source_contract_sha256": "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290",
+    "diagnostic_route": "shadow_candidate_reference_returned",
+    "production_default_enabled": false
+  },
+  "topology": {
+    "mode": "tail6_fixed32",
+    "logical_name": "Tail23",
+    "logical_active_drafts": 23,
+    "valid_mask": "0x7a9ce7ff",
+    "physical_drafts": 31,
+    "physical_rows_root_inclusive": 32
+  },
+  "deployment": {
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "draft_vocab_blocks": "/workspace/scripts/fr13_dvk_subset_blocks.json",
+    "draft_vocab_blocks_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+    "mandatory_weight_bytes": 32666638208,
+    "mandatory_weight_floor_ms": 119.658015414,
+    "one_sided_u95_cap_ms": 137.6067177261
+  },
+  "traffic": {
+    "dataset": "SWE-bench_Verified",
+    "task_set": "canonical_exact4",
+    "subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "batch_size": 4,
+    "concurrency": 4,
+    "required_observed_batches": [1, 2, 3, 4]
+  },
+  "source_sha256": {
+    "scripts/fr13_run_b4_tail23_all_parent_live_gate.sh": "4526ab4266563061ae3545becfddec24e4d9917b7b36169ac12766513b9e894f",
+    "scripts/fr13_device_multidraft_kernel.py": "3f5a0246ccf429bb95de24a8dfff3a7fcb155a05ea92e9201acb1ed89d8f6fca",
+    "scripts/fr13_fixed32_topology.py": "146bdeace494f79cf15ef4fe54ee6c71d38cf086b5f2acfbf5149b46d102e311",
+    "scripts/fr13_dvk_subset_blocks.json": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+    "config/fr13_fixed32/subset_b4_four.json": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "scripts/fr13_runtime_manifest.py": "4787ad037c75b6392ba8f1c21e0c1b3f7f979eedcc13ff57b48e482c5074ee2e",
+    "scripts/fr13_depth_acceptance.py": "5025a2f8ae2e5937e5439c986d77683a8ad705ccc90989225425bb3ea86dd9c6",
+    "scripts/fr13_fixed32_floor_timers_seq.sh": "c6bc0e4c81b50209747d7c4f14dc4b0e91916b96211bf6f05adde9b06dbf7484"
+  },
+  "verification": {
+    "focused_pytest": "233 passed, 1 skipped",
+    "work_census_self_test": "PASS, 162 tamper tests",
+    "depth_reducer_self_test": "PASS",
+    "source_v7_self_hash": "PASS",
+    "runtime_manifest_preflight": "PASS",
+    "external_manifest_preflight": "PASS",
+    "bash_syntax": "PASS",
+    "python_compile": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "measurement": {
+    "gpu_or_container_run": false,
+    "real_swe_verified_run": false,
+    "timing_claim": false,
+    "acceptance_claim": false,
+    "hardware_floor_claim": false
+  }
+}

@@ -1,0 +1,743 @@
+from __future__ import annotations
+
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+import pytest
+import torch
+
+
+MODULE_PATH = Path("scripts/fr13_device_multidraft_kernel.py")
+SPEC = importlib.util.spec_from_file_location(
+    "fr13_fixed32_taw_native_precompute",
+    MODULE_PATH,
+)
+assert SPEC is not None and SPEC.loader is not None
+taw = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(taw)
+
+CENSUS_PATH = Path("scripts/fr13_fixed32_work_census.py")
+sys.path.insert(0, str(CENSUS_PATH.parent.resolve()))
+CENSUS_SPEC = importlib.util.spec_from_file_location(
+    "fr13_fixed32_taw_native_precompute_census",
+    CENSUS_PATH,
+)
+assert CENSUS_SPEC is not None and CENSUS_SPEC.loader is not None
+census_validator = importlib.util.module_from_spec(CENSUS_SPEC)
+sys.modules[CENSUS_SPEC.name] = census_validator
+CENSUS_SPEC.loader.exec_module(census_validator)
+
+
+def _set_fixed_env(
+    monkeypatch: pytest.MonkeyPatch,
+    topology,
+    mode: str,
+) -> None:
+    monkeypatch.setenv("FR13_FIXED32_MODE", mode)
+    monkeypatch.setenv(
+        "FR13_FIXED32_VALID_MASK",
+        hex(int(topology.VALID_MASK_BY_MODE[mode])),
+    )
+    active = taw._fr13_fixed32_expected_active(topology, mode)
+    monkeypatch.setenv("FR13_FIXED32_ACTIVE_NODES", str(active))
+    monkeypatch.setenv("FR13_FIXED32_TAW_WALK_CAP", str(topology.WALK_CAP))
+    monkeypatch.setenv("FR13_TAW", "1")
+    monkeypatch.setenv("FR13_FIXED32_WORK_CENSUS", "1")
+
+
+def _fixture(topology, mode: str, batch_size: int, seed: int):
+    generator = torch.Generator(device="cpu").manual_seed(seed)
+    fixture = taw._fr13_fixed32_test_fixture(
+        topology,
+        mode,
+        batch_size,
+        vocab_size=97,
+    )
+    fixture["target"].copy_(
+        torch.randn(fixture["target"].shape, generator=generator)
+    )
+    fixture["self"].copy_(
+        torch.randn(fixture["self"].shape, generator=generator)
+    )
+    fixture["uniforms"].copy_(
+        torch.rand(fixture["uniforms"].shape, generator=generator)
+    )
+    return fixture
+
+
+def _pass_record(*, mode: str, batch_size: int) -> dict:
+    topology = taw._fr13_fixed32_topology()
+    task_marker = (
+        "swe_verified:django__django-12345"
+        if batch_size == 1
+        else "swe_verified:campaign4_" + "a" * 64
+    )
+    return {
+        "schema": "fr13.fixed32.taw_native_precompute.live_pass.v2",
+        "status": "pass",
+        "candidate": taw._FR13_FIXED32_TAW_NATIVE_CANDIDATE,
+        "source_contract_schema": taw._FR13_FIXED32_TAW_SOURCE_SCHEMA,
+        "source_contract_sha256": taw._FR13_FIXED32_TAW_SOURCE_SHA256,
+        "task_marker": task_marker,
+        "mode": mode,
+        "valid_mask": int(topology.VALID_MASK_BY_MODE[mode]),
+        "topology_binding": taw._fr13_fixed32_taw_topology_binding(topology),
+        "batch_size": batch_size,
+        "covered_batches": [batch_size],
+        "geometry": taw._FR13_FIXED32_TAW_GEOMETRY,
+        "probability_mismatches": 0,
+        "product_mismatches": 0,
+        "evidence_route": "full_graph_replay",
+        "reference_returned": True,
+        "candidate_returned": False,
+    }
+
+
+def _write_pass_bundle(
+    path: Path,
+    *,
+    mode: str,
+    batches: tuple[int, ...] = (1, 4),
+) -> None:
+    topology = taw._fr13_fixed32_topology()
+    qualified = sorted(set(batches))
+    records = {
+        str(batch): _pass_record(mode=mode, batch_size=batch)
+        for batch in qualified
+    }
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "fr13.fixed32.taw_native_precompute.pass_bundle.v1",
+                "status": (
+                    "production_ready"
+                    if {1, 4}.issubset(qualified)
+                    else "partial"
+                ),
+                "candidate": taw._FR13_FIXED32_TAW_NATIVE_CANDIDATE,
+                "source_contract_schema": taw._FR13_FIXED32_TAW_SOURCE_SCHEMA,
+                "source_contract_sha256": taw._FR13_FIXED32_TAW_SOURCE_SHA256,
+                "mode": mode,
+                "valid_mask": int(topology.VALID_MASK_BY_MODE[mode]),
+                "topology_binding": taw._fr13_fixed32_taw_topology_binding(
+                    topology
+                ),
+                "required_production_batches": [1, 4],
+                "qualified_batches": qualified,
+                "batch_passes": records,
+            }
+        ),
+        encoding="ascii",
+    )
+
+
+@pytest.mark.parametrize("mode", ("tail6_fixed32", "hydra27_fixed32"))
+@pytest.mark.parametrize("batch_size", (1, 4))
+def test_native_precompute_is_full_byte_equivalent_on_cpu(
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    batch_size: int,
+) -> None:
+    topology = taw._fr13_fixed32_topology()
+    _set_fixed_env(monkeypatch, topology, mode)
+    monkeypatch.delenv("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", raising=False)
+    valid_mask = int(topology.VALID_MASK_BY_MODE[mode])
+    taw.fr13_fixed32_taw_preseed(
+        torch.device("cpu"),
+        mode=mode,
+        valid_mask=valid_mask,
+    )
+    callback_rows = []
+    taw.fr13_fixed32_taw_set_work_callback(callback_rows.append)
+
+    for seed in range(16):
+        fixture = _fixture(topology, mode, batch_size, seed)
+        baseline = tuple(
+            tensor.clone()
+            for tensor in taw._fr13_fixed32_test_call(topology, mode, fixture)
+        )
+        monkeypatch.setenv("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", "1")
+        candidate = tuple(
+            tensor.clone()
+            for tensor in taw._fr13_fixed32_test_call(topology, mode, fixture)
+        )
+        for expected, actual in zip(baseline, candidate, strict=True):
+            assert expected.numpy().tobytes() == actual.numpy().tobytes()
+        key = taw.fr13_fixed32_taw_cache_key(
+            mode,
+            valid_mask,
+            batch_size,
+            torch.device("cpu"),
+        )
+        entry = taw._FR13_FIXED32_TAW_CACHE[key]
+        assert entry["native_ab_probability_mismatches"].item() == 0
+        assert entry["native_ab_product_mismatches"].item() == 0
+        monkeypatch.setenv("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", "0")
+
+    baseline_work, candidate_work = callback_rows[-2:]
+    assert baseline_work["taw"]["route"] == (
+        "fixed32_pytorch_exact_float_triton_integer_commit"
+    )
+    assert candidate_work["taw"]["route"] == (
+        "fixed32_native_precompute_byte_ab_reference_return"
+    )
+
+
+def test_native_precompute_uses_one_fixed_row_union_for_both_modes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    topology = taw._fr13_fixed32_topology()
+    sources = {}
+    for mode in ("tail6_fixed32", "hydra27_fixed32"):
+        _set_fixed_env(monkeypatch, topology, mode)
+        valid_mask = int(topology.VALID_MASK_BY_MODE[mode])
+        taw.fr13_fixed32_taw_preseed(
+            torch.device("cpu"),
+            mode=mode,
+            valid_mask=valid_mask,
+        )
+        key = taw.fr13_fixed32_taw_cache_key(
+            mode,
+            valid_mask,
+            1,
+            torch.device("cpu"),
+        )
+        entry = taw._FR13_FIXED32_TAW_CACHE[key]
+        assert entry["native_self_rows_per_request"] == 13
+        assert entry["native_target_rows_per_request"] == 17
+        sources[mode] = (
+            entry["native_self_source_indices"].tolist(),
+            entry["native_target_source_indices"].tolist(),
+        )
+    assert sources["tail6_fixed32"] == sources["hydra27_fixed32"]
+
+
+def test_native_precompute_work_census_is_pinned() -> None:
+    event = census_validator.reference_event(
+        "tail6_fixed32",
+        1,
+        "native-precompute-contract",
+    )
+    event["taw"]["route"] = census_validator.TAW_NATIVE_PRECOMPUTE_ROUTE
+    event["taw"]["tensor_call_census"] = dict(
+        census_validator.TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS
+    )
+    event["taw"].update(
+        {
+            "child_lanes": 87,
+            "target_rows": 29,
+            "self_rows": 25,
+            "self_cdf_rows": 25,
+            "source_cdf_rows": 29,
+            "residual_cdf_rows": 29,
+            "qmix_rows": 29,
+            "residual_rows": 29,
+            "row_scatter_slots": 48,
+            "path_scatter_slots": 24,
+            "exact_commit_launches": 13,
+            "exact_commit_programs": 13,
+        }
+    )
+    validated = census_validator.validate_event(
+        event,
+        source="native-precompute-contract",
+    )
+    assert validated.normalized_work["taw"]["tensor_call_census"][
+        "full_vocab_softmax_calls"
+    ] == 26
+
+    event = census_validator.reference_event(
+        "tail6_fixed32",
+        1,
+        "native-precompute-production-contract",
+    )
+    event["taw"]["route"] = (
+        census_validator.TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE
+    )
+    event["taw"]["tensor_call_census"] = dict(
+        census_validator.TAW_NATIVE_PRECOMPUTE_PRODUCTION_TENSOR_CALL_CENSUS
+    )
+    event["taw"].update(
+        {
+            "child_lanes": 51,
+            "target_rows": 17,
+            "self_rows": 13,
+            "self_cdf_rows": 13,
+            "source_cdf_rows": 17,
+            "residual_cdf_rows": 17,
+            "qmix_rows": 17,
+            "residual_rows": 17,
+            "exact_commit_launches": 1,
+            "exact_commit_programs": 1,
+        }
+    )
+    validated = census_validator.validate_event(
+        event,
+        source="native-precompute-production-contract",
+    )
+    assert validated.normalized_work["taw"]["tensor_call_census"][
+        "full_vocab_softmax_calls"
+    ] == 2
+    assert validated.normalized_work["taw"]["exact_commit_launches"] == 1
+
+
+def test_all_parent_schedule_and_integer_kernel_are_fixed() -> None:
+    topology = taw._fr13_fixed32_topology()
+    mode = "hydra27_fixed32"
+    valid_mask = int(topology.VALID_MASK_BY_MODE[mode])
+    taw.fr13_fixed32_taw_preseed(
+        torch.device("cpu"), mode=mode, valid_mask=valid_mask
+    )
+    entry = taw._FR13_FIXED32_TAW_CACHE[
+        taw.fr13_fixed32_taw_cache_key(
+            mode, valid_mask, 1, torch.device("cpu")
+        )
+    ]
+    binding = taw._fr13_fixed32_taw_topology_binding(topology)
+    assert binding["tail_valid_mask"] == 0x7A9CE7FF
+    assert binding["hydra_valid_mask"] == 0x7ABDFFFF
+    assert binding["physical_parent_sha256"] == topology.PHYSICAL_PARENT_SHA256
+    assert binding["tree_ancestry_sha256"] == topology.TREE_ANCESTRY_SHA256
+    assert binding["topology_sha256"] == (
+        "99b1255b1c1ffeda8bbbd7800e777cfa7184f48c1f13494537a01bc70bc9bf79"
+    )
+    assert binding["all_parent_self_source_nodes"] == [
+        4, 5, 6, 7, 9, 10, 12, 14, 15, 19, 20, 21, 30
+    ]
+    assert binding["all_parent_target_source_nodes"] == [
+        0, 3, 6, 7, 8, 11, 12, 13, 16, 18, 21, 23, 25, 27, 28, 29, 30
+    ]
+    assert entry["all_parent_self_uniform_levels"].tolist() == [
+        2, 2, 2, 2, 3, 3, 3, 4, 4, 5, 5, 5, 11
+    ]
+    assert entry["all_parent_target_uniform_levels"].tolist() == [
+        0, 1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 6, 7, 8, 9, 10
+    ]
+    source = MODULE_PATH.read_text(encoding="utf-8")
+    start = source.index("def _fr13_fixed32_taw_all_parent_commit_kernel(")
+    end = source.index("\n\n#", start)
+    kernel = source[start:end]
+    assert "tl.static_range(0, WALK_CAP)" in kernel
+    assert "torch." not in kernel
+    assert "softmax" not in kernel
+    assert "tl.exp" not in kernel
+
+
+@pytest.mark.parametrize("mode", ("tail6_fixed32", "hydra27_fixed32"))
+@pytest.mark.parametrize("batch_size", (1, 4))
+def test_all_parent_matches_zero_overlap_and_duplicate_siblings(
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    batch_size: int,
+) -> None:
+    topology = taw._fr13_fixed32_topology()
+    _set_fixed_env(monkeypatch, topology, mode)
+    monkeypatch.delenv("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", raising=False)
+    valid_mask = int(topology.VALID_MASK_BY_MODE[mode])
+    taw.fr13_fixed32_taw_preseed(
+        torch.device("cpu"), mode=mode, valid_mask=valid_mask
+    )
+    fixture = _fixture(topology, mode, batch_size, 20260801)
+    fixture["drafts"].fill_(1)
+    fixture["target"].fill_(float("-inf"))
+    fixture["target"][:, 0] = 0.0
+    fixture["self"].fill_(float("-inf"))
+    fixture["self"][:, 2] = 0.0
+    fixture["uniforms"][:, :, 0] = 0.0
+    fixture["uniforms"][:, :, 1] = 1.0 - torch.finfo(torch.float32).eps
+    fixture["uniforms"][:, :, 2] = 1.0 - torch.finfo(torch.float32).eps
+
+    reference = tuple(
+        tensor.clone()
+        for tensor in taw._fr13_fixed32_test_call(topology, mode, fixture)
+    )
+    monkeypatch.setenv("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", "1")
+    diagnostic = tuple(
+        tensor.clone()
+        for tensor in taw._fr13_fixed32_test_call(topology, mode, fixture)
+    )
+    assert all(
+        expected.numpy().tobytes() == actual.numpy().tobytes()
+        for expected, actual in zip(reference, diagnostic, strict=True)
+    )
+    entry = taw._FR13_FIXED32_TAW_CACHE[
+        taw.fr13_fixed32_taw_cache_key(
+            mode, valid_mask, batch_size, torch.device("cpu")
+        )
+    ]
+    assert entry["native_ab_probability_mismatches"].item() == 0
+    assert entry["native_ab_product_mismatches"].item() == 0
+
+
+def test_native_precompute_flag_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", "yes")
+    with pytest.raises(RuntimeError, match="must be unset, 0, or 1"):
+        taw._fr13_fixed32_taw_native_precompute_enabled()
+
+
+def test_native_production_is_default_off_source_bound_and_exclusive(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    topology = taw._fr13_fixed32_topology()
+    _set_fixed_env(monkeypatch, topology, "tail6_fixed32")
+    diagnostic = tmp_path / "diagnostic.arm"
+    production = tmp_path / "production.arm"
+    live_pass = tmp_path / "pass.json"
+    monkeypatch.delenv("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", raising=False)
+    monkeypatch.delenv(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION", raising=False
+    )
+    monkeypatch.setattr(
+        taw,
+        "_FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_SIDECARS",
+        (str(diagnostic),),
+    )
+    monkeypatch.setattr(
+        taw,
+        "_FR13_FIXED32_TAW_NATIVE_PRODUCTION_SIDECARS",
+        (str(production),),
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_PATH", str(live_pass)
+    )
+
+    assert taw._fr13_fixed32_taw_native_selector() == "reference"
+    production.write_text("1\n", encoding="ascii")
+    with pytest.raises(RuntimeError, match="requires a regular live PASS"):
+        taw._fr13_fixed32_taw_native_selector()
+
+    _write_pass_bundle(live_pass, mode="tail6_fixed32")
+    assert taw._fr13_fixed32_taw_native_selector() == "production"
+
+    diagnostic.write_text("1\n", encoding="ascii")
+    with pytest.raises(RuntimeError, match="mutually exclusive"):
+        taw._fr13_fixed32_taw_native_selector()
+
+    diagnostic.unlink()
+    payload = json.loads(live_pass.read_text(encoding="ascii"))
+    payload["source_contract_sha256"] = "0" * 64
+    live_pass.write_text(json.dumps(payload), encoding="ascii")
+    with pytest.raises(RuntimeError, match="different candidate/source"):
+        taw._fr13_fixed32_taw_native_selector()
+
+
+@pytest.mark.parametrize(
+    ("batch_size", "expected_route", "expected_softmax_calls"),
+    (
+        (1, "fixed32_native_precompute_production_candidate_return", 2),
+        (2, "fixed32_pytorch_exact_float_triton_integer_commit", 24),
+        (3, "fixed32_pytorch_exact_float_triton_integer_commit", 24),
+        (4, "fixed32_native_precompute_production_candidate_return", 2),
+    ),
+)
+def test_native_production_uses_candidate_or_exact_reference_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    batch_size: int,
+    expected_route: str,
+    expected_softmax_calls: int,
+) -> None:
+    topology = taw._fr13_fixed32_topology()
+    mode = "tail6_fixed32"
+    _set_fixed_env(monkeypatch, topology, mode)
+    monkeypatch.delenv("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", raising=False)
+    monkeypatch.delenv(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION", raising=False
+    )
+    monkeypatch.setattr(
+        taw, "_FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_SIDECARS", ()
+    )
+    monkeypatch.setattr(
+        taw, "_FR13_FIXED32_TAW_NATIVE_PRODUCTION_SIDECARS", ()
+    )
+    valid_mask = int(topology.VALID_MASK_BY_MODE[mode])
+    taw.fr13_fixed32_taw_preseed(
+        torch.device("cpu"), mode=mode, valid_mask=valid_mask
+    )
+    fixture = _fixture(topology, mode, batch_size, 991)
+    reference = tuple(
+        tensor.clone()
+        for tensor in taw._fr13_fixed32_test_call(topology, mode, fixture)
+    )
+
+    live_pass = tmp_path / "pass.json"
+    _write_pass_bundle(live_pass, mode=mode)
+    monkeypatch.setenv(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION", "1"
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_PATH", str(live_pass)
+    )
+    candidate = tuple(
+        tensor.clone()
+        for tensor in taw._fr13_fixed32_test_call(topology, mode, fixture)
+    )
+    assert all(
+        expected.numpy().tobytes() == actual.numpy().tobytes()
+        for expected, actual in zip(reference, candidate, strict=True)
+    )
+    work = taw.fr13_fixed32_taw_last_work()
+    assert work is not None
+    assert work["taw"]["route"] == expected_route
+    assert work["taw"]["tensor_call_census"]["full_vocab_softmax_calls"] == (
+        expected_softmax_calls
+    )
+
+
+def test_native_production_bundle_warms_all_batches_with_reference_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    topology = taw._fr13_fixed32_topology()
+    mode = "hydra27_fixed32"
+    _set_fixed_env(monkeypatch, topology, mode)
+    monkeypatch.setattr(
+        taw, "_FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_SIDECARS", ()
+    )
+    monkeypatch.setattr(
+        taw, "_FR13_FIXED32_TAW_NATIVE_PRODUCTION_SIDECARS", ()
+    )
+    live_pass = tmp_path / "pass.json"
+    _write_pass_bundle(live_pass, mode=mode)
+    payload = taw._fr13_fixed32_taw_native_production_pass(
+        path=str(live_pass), expected_mode=mode, expected_batch=4
+    )
+    assert payload["qualified_batches"] == [1, 4]
+    monkeypatch.setenv(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION", "1"
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_PATH", str(live_pass)
+    )
+    assert taw._fr13_fixed32_taw_native_selector(batch_size=1) == "production"
+    assert taw._fr13_fixed32_taw_native_selector(batch_size=2) == "reference"
+    assert taw._fr13_fixed32_taw_native_selector(batch_size=3) == "reference"
+    assert taw._fr13_fixed32_taw_native_selector(batch_size=4) == "production"
+    with pytest.raises(RuntimeError, match="batch is not covered by PASS"):
+        taw._fr13_fixed32_taw_native_production_pass(
+            path=str(live_pass), expected_mode=mode, expected_batch=2
+        )
+
+    valid_mask = int(topology.VALID_MASK_BY_MODE[mode])
+    taw._FR13_FIXED32_TAW_WARMUPS.clear()
+    taw.fr13_fixed32_taw_preseed(
+        torch.device("cpu"), mode=mode, valid_mask=valid_mask
+    )
+    evidence = taw.fr13_fixed32_taw_warm_execute(
+        torch.device("cpu"),
+        mode=mode,
+        valid_mask=valid_mask,
+        max_batch_size=4,
+        vocab_size=101,
+    )
+    assert evidence["ready"] is True
+    assert evidence["batches"] == (1, 2, 3, 4)
+    assert evidence["executions"] == 4
+    assert evidence["staging_state_restored"] is True
+
+    _write_pass_bundle(live_pass, mode=mode, batches=(4,))
+    with pytest.raises(RuntimeError, match="PASS bundle is invalid"):
+        taw._fr13_fixed32_taw_native_production_pass(
+            path=str(live_pass), expected_mode=mode, expected_batch=4
+        )
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    (
+        lambda payload: payload.__setitem__("valid_mask", 0x7A9CE73F),
+        lambda payload: payload["topology_binding"].__setitem__(
+            "tail_valid_mask", 0x7A9CE73F
+        ),
+        lambda payload: payload["topology_binding"][
+            "all_parent_self_source_nodes"
+        ].__setitem__(0, 3),
+        lambda payload: payload["topology_binding"][
+            "all_parent_self_uniform_levels"
+        ].__setitem__(0, 1),
+        lambda payload: payload["topology_binding"][
+            "all_parent_target_source_nodes"
+        ].__setitem__(0, 1),
+        lambda payload: payload["topology_binding"][
+            "all_parent_target_uniform_levels"
+        ].__setitem__(0, 1),
+        lambda payload: payload["batch_passes"]["4"].__setitem__(
+            "task_marker", "swe_verified:django__django-12345"
+        ),
+    ),
+)
+def test_native_production_rejects_tail21_or_derived_schedule_pass(
+    tmp_path: Path,
+    mutate,
+) -> None:
+    path = tmp_path / "pass.json"
+    mode = "hydra27_fixed32"
+    _write_pass_bundle(path, mode=mode)
+    payload = json.loads(path.read_text(encoding="ascii"))
+    mutate(payload)
+    path.write_text(json.dumps(payload), encoding="ascii")
+
+    with pytest.raises(RuntimeError, match="different candidate/source"):
+        taw._fr13_fixed32_taw_native_production_pass(
+            path=str(path), expected_mode=mode, expected_batch=1
+        )
+
+
+def test_native_live_pass_emitter_binds_source_and_real_task(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "live.json"
+    monkeypatch.setenv(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON", str(path)
+    )
+    taw._fr13_fixed32_taw_native_live_pass_emit(
+        mode="hydra27_fixed32",
+        batch_size=4,
+        task_marker="swe_verified:campaign4_" + "b" * 64,
+        evidence_route="full_graph_replay",
+    )
+    payload = json.loads(path.read_text(encoding="ascii"))
+    assert payload["source_contract_sha256"] == (
+        taw._FR13_FIXED32_TAW_SOURCE_SHA256
+    )
+    assert payload["candidate"] == taw._FR13_FIXED32_TAW_NATIVE_CANDIDATE
+    assert payload["valid_mask"] == 0x7ABDFFFF
+    assert payload["topology_binding"] == (
+        taw._fr13_fixed32_taw_topology_binding(
+            taw._fr13_fixed32_topology()
+        )
+    )
+    assert payload["status"] == "partial"
+    assert payload["qualified_batches"] == [4]
+    assert payload["batch_passes"]["4"]["covered_batches"] == [4]
+
+    taw._fr13_fixed32_taw_native_live_pass_emit(
+        mode="hydra27_fixed32",
+        batch_size=1,
+        task_marker="swe_verified:astropy__astropy-13033",
+        evidence_route="full_graph_replay",
+    )
+    payload = json.loads(path.read_text(encoding="ascii"))
+    assert payload["status"] == "production_ready"
+    assert payload["qualified_batches"] == [1, 4]
+    assert payload["batch_passes"]["1"]["covered_batches"] == [1]
+    assert payload["batch_passes"]["4"]["covered_batches"] == [4]
+
+
+def test_native_live_gate_binds_and_checks_one_graph_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mode = "tail6_fixed32"
+    topology = taw._fr13_fixed32_topology()
+    _set_fixed_env(monkeypatch, topology, mode)
+    valid_mask = int(topology.VALID_MASK_BY_MODE[mode])
+    entry = {
+        "native_ab_probability_mismatches": torch.ones((), dtype=torch.int64),
+        "native_ab_product_mismatches": torch.ones((), dtype=torch.int64),
+        "native_ab_live_marker": None,
+        "native_ab_live_gate_pending": False,
+        "native_ab_live_pass_emitted": False,
+    }
+    monkeypatch.setitem(
+        taw._FR13_FIXED32_TAW_CACHE,
+        (mode, valid_mask, 4, ("cuda", 0)),
+        entry,
+    )
+    monkeypatch.setattr(
+        taw, "_fr13_fixed32_taw_native_selector", lambda: "diagnostic"
+    )
+    monkeypatch.setattr(
+        taw,
+        "_fr13_fixed32_taw_native_real_event_marker",
+        lambda: "swe_verified:django__django-12345",
+    )
+    emitted = []
+    monkeypatch.setattr(
+        taw,
+        "_fr13_fixed32_taw_native_live_pass_emit",
+        lambda **payload: emitted.append(payload),
+    )
+
+    armed = taw.fr13_fixed32_taw_native_live_gate_begin(
+        mode=mode, batch_size=4
+    )
+    assert armed == {"status": "armed", "batch_size": 4}
+    assert entry["native_ab_probability_mismatches"].item() == 0
+    assert entry["native_ab_product_mismatches"].item() == 0
+
+    passed = taw.fr13_fixed32_taw_native_live_gate_on_replay(
+        mode=mode, batch_size=4
+    )
+    assert passed == {"status": "passed", "batch_size": 4}
+    assert emitted == [
+        {
+            "mode": mode,
+            "batch_size": 4,
+            "task_marker": "swe_verified:django__django-12345",
+            "evidence_route": "full_graph_replay",
+        }
+    ]
+
+
+def test_launcher_keeps_taw_native_production_default_off_and_source_gated() -> None:
+    launcher = Path(
+        "scripts/fr13_launch_forked_fa2_tree_server.sh"
+    ).read_text(encoding="utf-8")
+    patcher = Path(
+        "scripts/fr10_phase4_patch_vllm_tree_gdn.py"
+    ).read_text(encoding="utf-8")
+    assert (
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=${"
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}"
+    ) in launcher
+    assert "TAW native diagnostic and production are mutually exclusive" in launcher
+    assert "TAW native production requires fixed32 and a regular live PASS JSON" in launcher
+    assert "fr13_fixed32_taw_native_precompute_production.arm" in launcher
+    assert "fr13_fixed32_taw_native_precompute.production_pass.json" in launcher
+    assert "fr13_fixed32_taw_native_live_gate_begin(" in patcher
+    assert "fr13_fixed32_taw_native_live_gate_on_replay(" in patcher
+
+
+def test_tail23_exact4_b4_runner_pins_k64_and_requires_all_real_batches() -> None:
+    runner_path = Path(
+        "scripts/fr13_run_b4_tail23_all_parent_live_gate.sh"
+    )
+    runner = runner_path.read_text(encoding="utf-8")
+    manifest = Path("scripts/fr13_runtime_manifest.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert runner_path.stat().st_mode & 0o111
+    assert "SUBSET_SHA256=0e37b7137115332372" in runner
+    assert "BLOCK_MAP_SHA256=85dffa58703e42aa" in runner
+    assert "TAW_SOURCE_SCHEMA=fr13-fixed32-taw-all-parent-v7" in runner
+    assert "TAIL_VALID_MASK=0x7a9ce7ff" in runner
+    assert "TAIL_ACTIVE_DRAFTS=23" in runner
+    assert "FR13_DRAFT_VOCAB_K=65536 FR13_DRAFT_VOCAB_ROOT=1" in runner
+    assert (
+        "FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/"
+        "fr13_dvk_subset_blocks.json"
+    ) in runner
+    assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in runner
+    assert "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=1" in runner
+    assert "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0" in runner
+    assert '"$ARM" "$FIXED32_MODE" "$SUBSET"' in runner
+    assert "FR13_FIXED32_ALL_PARENT_MODE" in runner
+    assert "HYDRA_VALID_MASK=0x7abdffff" in runner
+    assert "HYDRA_ACTIVE_DRAFTS=27" in runner
+    assert 'bundle.get("qualified_batches") != [1, 2, 3, 4]' in runner
+    assert 'record.get("covered_batches") != [batch]' in runner
+    assert 'record.get("reference_returned") is not True' in runner
+    assert 'record.get("candidate_returned") is not False' in runner
+    assert '"raw_prompt_response_published": False' in runner
+    assert "LUMO_SWE_AUTOCOMMIT=0" in runner
+    assert (
+        '"scripts/fr13_run_b4_tail23_all_parent_live_gate.sh"'
+        in manifest
+    )

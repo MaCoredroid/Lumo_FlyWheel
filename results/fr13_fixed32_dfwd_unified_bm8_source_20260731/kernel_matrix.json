@@ -1,0 +1,135 @@
+{
+  "schema": "fr13.fixed32.dfwd_unified_bm8_source.v1",
+  "created_at_utc": "2026-07-31T15:00:00Z",
+  "status": "SOURCE_IMPLEMENTED_GPU_GATE_NOT_RUN",
+  "default_behavior_changed": false,
+  "gpu_used": false,
+  "synthetic_or_probe_timing_used": false,
+  "candidate": {
+    "phase": "dfwd",
+    "kernel": "kernel_unified_attention_2d",
+    "scope": "fixed32 B1 four-call MTP drafter graph only",
+    "selector": "FR13_DFWD_UNIFIED_BM8_LIVE_AB",
+    "internal_selector": "launcher-private",
+    "stock_block_m": 16,
+    "stock_block_q": 2,
+    "candidate_block_m": 8,
+    "candidate_block_q": 1,
+    "query_heads": 24,
+    "kv_heads": 4,
+    "query_heads_per_kv": 6,
+    "stock_valid_rows": 6,
+    "stock_invalid_rows": 10,
+    "candidate_valid_rows": 6,
+    "candidate_invalid_rows": 2,
+    "invalid_row_reduction_fraction": 0.8,
+    "unchanged": [
+      "valid query-head mapping",
+      "K/V tile size",
+      "K/V traversal order",
+      "online-softmax update order per valid row",
+      "output dtype and store boundary",
+      "K/V cache traffic"
+    ]
+  },
+  "live_gate": {
+    "suite": "SWE-Verified",
+    "batch_size": 1,
+    "concurrency": 1,
+    "required_calls": 4,
+    "operand_capture": "per-call graph-recorded query and sequence-length snapshots",
+    "comparison": "raw output bytes for stock BM16 versus candidate BM8 on every call",
+    "false_stock_vs_stock_guard": "require exactly four BM8 dispatch counter increments",
+    "served_return": "stock captured drafter graph unchanged",
+    "failure_policy": "write ERROR or FAIL sidecar and raise",
+    "performance_measurement": false,
+    "run_completed": false
+  },
+  "current_real_swe_b1": {
+    "artifact": "results/fr13_fixed32_exactsafe_hydra27_b1_20260731/measurement_summary.json",
+    "artifact_sha256": "211041d7e42ba420e1e5d178bfd9ce029a8faba2d79b264fb8eac3ea8c23a4fc",
+    "source_commit": "e5a4029249e5b9483919056bae6542e47bbce75b",
+    "arm": "hydra27_fixed32",
+    "tasks": 4,
+    "forward_events": 5754,
+    "dfwd_gpu_ms_per_event": 38.129275628250134,
+    "cfwd_gpu_ms_per_event": 20.686583207057186,
+    "gpu_component_ms_per_event": 222.55840833774676,
+    "wall_ms_per_event": 239.02663423872843,
+    "corrected_floor_ms_per_event": 119.658015414,
+    "acceptance_cap_ms_per_event": 137.6067177261
+  },
+  "real_swe_nsight_attribution": {
+    "artifact": "results/fr13_fixed32_b1_nsys_20260731T013952Z_curated/nsys_attribution.json",
+    "artifact_sha256": "685c410a0ba09d00c8b244bfa06809530337cea383b88fa92a5da1013eadf2d0",
+    "measured_source_commit": "1a7a765447c8ce6068e0dd5d3a344d58ace85f2b",
+    "workload": "canonical real SWE-Verified exact4 attribution capture",
+    "acceptance_valid": false,
+    "attribution_only": true,
+    "dfwd_gpu_ms_per_event": 47.435717,
+    "groups_ms_per_event": [
+      {
+        "name": "bf16_vocab_heads",
+        "ms": 26.227316,
+        "covered_elsewhere": "BF16 head row padding"
+      },
+      {
+        "name": "mtp_fp8_cutlass",
+        "ms": 8.514285,
+        "covered_elsewhere": "already near mandatory MTP weight stream cost"
+      },
+      {
+        "name": "unified_attention",
+        "ms": 6.967564,
+        "covered_elsewhere": null
+      },
+      {
+        "name": "other_dfwd",
+        "ms": 5.726552,
+        "covered_elsewhere": "heterogeneous remainder"
+      }
+    ],
+    "cfwd_gpu_ms_per_event": 22.755077,
+    "cfwd_groups_ms_per_event": [
+      {
+        "name": "gdn_replay",
+        "ms": 4.082147,
+        "covered_elsewhere": "CFWD GDN layer batching"
+      },
+      {
+        "name": "softmax",
+        "ms": 2.304176,
+        "covered_elsewhere": "TAW native precompute"
+      },
+      {
+        "name": "elementwise_float_add",
+        "ms": 1.600615,
+        "covered_elsewhere": "TAW native precompute path"
+      },
+      {
+        "name": "topk_topp",
+        "ms": 1.107767,
+        "excluded": "distribution-touching sampling path"
+      }
+    ]
+  },
+  "floor_accounting": {
+    "dfwd_mandatory_weight_bytes": 5741441920,
+    "bandwidth_bytes_per_second": 273000000000,
+    "dfwd_mandatory_weight_floor_ms": 21.030922783882787,
+    "current_dfwd_excess_over_weight_floor_ms": 17.098352844367348,
+    "unified_attention_share_of_current_dfwd_percent": 18.2735283720882,
+    "unified_attention_share_of_current_dfwd_excess_percent": 40.74991353506488,
+    "optimistic_candidate_group_ceiling_ms": 6.967564,
+    "optimistic_gpu_component_after_full_group_elimination_ms": 215.59084433774674,
+    "optimistic_gpu_component_floor_ratio": 1.8017250544548358,
+    "optimistic_gap_to_acceptance_cap_ms": 77.98412661164676,
+    "warning": "The ceiling combines a prior real-SWE Nsight group with the current exact4 phase total; it is a prioritization bound, not a measured candidate speedup."
+  },
+  "verification": {
+    "focused_tests": 49,
+    "focused_tests_status": "PASS",
+    "emitted_vllm_python_compile": "PASS",
+    "launcher_bash_syntax": "PASS"
+  }
+}

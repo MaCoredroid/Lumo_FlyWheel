@@ -1,0 +1,27 @@
+{
+  "schema": "fr13-fixed32-fa2-qrow16-thin-build-v1",
+  "status": "REJECTED_PRE_GPU",
+  "source_commit": "ba5a602e0",
+  "base_so": {
+    "sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+    "size": 299183936
+  },
+  "candidate_so": {
+    "sha256": "71881915b18da1b9f144982e83adabc6ff626ab3bcc4a11cbf7f8c9eafaf0dde",
+    "size": 299340352
+  },
+  "build_work": {
+    "cuda_objects": 1,
+    "links": 1
+  },
+  "abi_gate": {
+    "defined_dynamic_symbol_counts": {
+      "base": 685,
+      "candidate": 685
+    },
+    "zero_name_type_delta": false,
+    "verdict": "REJECT"
+  },
+  "gpu_used": false,
+  "swe_task_sent": false
+}

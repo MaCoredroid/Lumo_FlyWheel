@@ -34,6 +34,46 @@ ARM=${1:?usage: fr13_bigdenom_swe_serve_variant.sh <arm> [KIND=tail6] [subset.js
 # FR13_CLEANUP_BAKE_PLAN.md): cat33333 head + 6-node Arctic tail, 21 nodes, BV=8.
 KIND=${2:-tail6}
 SUBSET=${3:?subset json}
+FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
+FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
+FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
+FR13_FIXED32_COMMITTER_LAYER_BATCH=${FR13_FIXED32_COMMITTER_LAYER_BATCH:-0}
+case "$FR13_FIXED32_B1_DIAGNOSTIC" in
+  0|1) ;;
+  *) echo "FAIL: FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1"; exit 2 ;;
+esac
+case "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" in
+  0|1) ;;
+  *) echo "FAIL: FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"; exit 2 ;;
+esac
+case "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" in
+  0|1) ;;
+  *) echo "FAIL: FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1"; exit 2 ;;
+esac
+case "$FR13_FIXED32_COMMITTER_LAYER_BATCH" in
+  0|1) ;;
+  *) echo "FAIL: FR13_FIXED32_COMMITTER_LAYER_BATCH must be exactly 0 or 1"; exit 2 ;;
+esac
+export FR13_FIXED32_B1_DIAGNOSTIC FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB \
+  FR13_FIXED32_COMMITTER_LAYER_BATCH FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
+_fixed32_eager_kernel_diagnostic=0
+if [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "1" \
+      || "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "divisor_static_stocktile_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_static_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_pingpong_b1_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_divisor_b4_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stockshape_b4_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stockshape_stage2_b4_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_static_byte_ab" ]]; then
+  _fixed32_eager_kernel_diagnostic=1
+  [[ "${ENFORCE_EAGER:-0}" == "1" ]] \
+    || { echo "FAIL: eager kernel diagnostic requires ENFORCE_EAGER=1"; exit 2; }
+fi
 
 RUNROOT=${RUNROOT:-output/fr13_bigdenom_swe}
 ARMDIR="$RUNROOT/$ARM"
@@ -70,12 +110,22 @@ if [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" ]]; then
   chmod 700 "$ARMDIR" "$ARMDIR/logs" \
     || { echo "FAIL: fixed32 arm directories could not be made private"; exit 2; }
 fi
+if [[ "$FR13_FIXED32_COMMITTER_LAYER_BATCH" == "1" ]]; then
+  [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" ]] \
+    || { echo "FAIL: committer layer-batch arm requires a fixed32 kind"; exit 2; }
+  install -m 600 /dev/null \
+    "$ARMDIR/logs/fr13_fixed32_committer_layer_batch.arm" \
+    || { echo "FAIL: could not create committer layer-batch arm sidecar"; exit 2; }
+fi
 FIXED32_MODE=""
 FIXED32_PRODUCER_PID=""
 FIXED32_REQUEST_PATH="$ARMDIR_ABS/logs/fr13_fixed32_flush_request.json"
 FIXED32_ACK_PATH="$ARMDIR_ABS/logs/fr13_fixed32_flush_ack.json"
 FIXED32_PID_PATH="$ARMDIR_ABS/logs/fr13_fixed32_engine_pid"
 FIXED32_BOUNDARY_SNAPSHOT_PATH="$ARMDIR_ABS/logs/fr13_fixed32_boundary_snapshot"
+FIXED32_TAW_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_fixed32_taw_native_precompute.real_event.arm"
+FIXED32_BM8_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_dfwd_unified_bm8.real_event.arm"
+FIXED32_CUTLASS_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_fixed32_cutlass_streamk.real_event.arm"
 FIXED32_INGRESS_SECRET_FILE=""
 FR13_FIXED32_INGRESS_TASK_IDS=""
 
@@ -335,6 +385,21 @@ case "$KIND" in
   *) echo "FAIL: unknown KIND=$KIND"; exit 2 ;;
 esac
 
+if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" && -z "$FIXED32_MODE" ]]; then
+  echo "FAIL: FR13_FIXED32_B1_DIAGNOSTIC=1 requires a fixed32 arm"
+  exit 2
+fi
+if [[ "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" == "1" \
+      && -z "$FIXED32_MODE" ]]; then
+  echo "FAIL: FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=1 requires a fixed32 arm"
+  exit 2
+fi
+if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" \
+      && -z "$FIXED32_MODE" ]]; then
+  echo "FAIL: FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=1 requires a fixed32 arm"
+  exit 2
+fi
+
 if [[ -n "$FIXED32_MODE" ]]; then
   # Fixed32 must never operate on a reusable Docker name. The launcher-created
   # cidfile promotes this to the immutable container ID after a successful run.
@@ -387,29 +452,89 @@ if [[ -n "$FIXED32_MODE" ]]; then
     }
   [[ "$SWE_CONCURRENCY" == "1" || "$SWE_CONCURRENCY" == "4" ]] \
     || { echo "FAIL: fixed32 concurrency must be exactly 1 or 4"; exit 2; }
+  if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
+    [[ "$MAX_NUM_SEQS_OVR" == "1" && "$SWE_CONCURRENCY" == "1" ]] \
+      || {
+        echo "FAIL: fixed32 B1 diagnostic requires MAX_NUM_SEQS_OVR=1 and SWE_CONCURRENCY=1"
+        exit 2
+      }
+  fi
+  if [[ "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" == "1" ]]; then
+    [[ "$MAX_NUM_SEQS_OVR" == "4" && "$SWE_CONCURRENCY" == "4" ]] \
+      || {
+        echo "FAIL: fixed32 graph byte diagnostic requires MAX_NUM_SEQS_OVR=4 and SWE_CONCURRENCY=4"
+        exit 2
+      }
+  fi
+  if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" ]]; then
+    [[ "$MAX_NUM_SEQS_OVR" == "4" && "$SWE_CONCURRENCY" == "4" \
+       && "$FR13_FIXED32_B1_DIAGNOSTIC" == "0" ]] \
+      || {
+        echo "FAIL: SFWD state-fusion byte diagnostic requires exact B4 concurrency"
+        exit 2
+      }
+  fi
   mapfile -t _fixed32_subset_binding < <(
-    .venv/bin/python - "$SUBSET" <<'PY'
+    .venv/bin/python - \
+      "$SUBSET" \
+      "$FR13_FIXED32_B1_DIAGNOSTIC" \
+      "$ARMDIR" \
+      "$MAX_NUM_SEQS_OVR" \
+      "$SWE_CONCURRENCY" <<'PY'
+import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, "scripts")
-from fr13_floor_gate import validate_canonical_subset
+from fr13_floor_gate import validate_fixed32_run_subset
 
 
 subset_path = Path(sys.argv[1]).resolve()
-binding = validate_canonical_subset(subset_path)
+diagnostic = sys.argv[2] == "1"
+arm_dir = Path(sys.argv[3]).resolve()
+max_num_seqs = int(sys.argv[4])
+concurrency = int(sys.argv[5])
+binding = validate_fixed32_run_subset(
+    subset_path,
+    b1_diagnostic=diagnostic,
+)
+if diagnostic:
+    output_path = arm_dir / "fixed32_b1_diagnostic.json"
+    payload = {
+        "schema": "fr13-fixed32-b1-diagnostic-v1",
+        "run_classification": "b1_diagnostic",
+        "gate_eligible": False,
+        "floor_acceptance_eligible": False,
+        "max_num_seqs": max_num_seqs,
+        "swe_concurrency": concurrency,
+        "subset_path": str(subset_path),
+        "subset_sha256": binding["sha256"],
+        "task_ids": binding["task_ids"],
+    }
+    temporary = output_path.with_name(output_path.name + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+        + "\n",
+        encoding="ascii",
+    )
+    temporary.replace(output_path)
 print(binding["task_count"])
 print(",".join(binding["task_ids"]))
 PY
   )
   (( $? == 0 && ${#_fixed32_subset_binding[@]} == 2 )) \
     || { echo "FAIL: fixed32 canonical task-set binding"; exit 2; }
-  [[ "${_fixed32_subset_binding[0]}" == "4" \
-     || "${_fixed32_subset_binding[0]}" == "16" ]] \
-    || { echo "FAIL: fixed32 canonical task count is invalid"; exit 2; }
+  if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
+    [[ "${_fixed32_subset_binding[0]}" == "1" ]] \
+      || { echo "FAIL: fixed32 B1 diagnostic task count is invalid"; exit 2; }
+  else
+    [[ "${_fixed32_subset_binding[0]}" == "4" \
+       || "${_fixed32_subset_binding[0]}" == "16" ]] \
+      || { echo "FAIL: fixed32 canonical task count is invalid"; exit 2; }
+  fi
   FR13_FIXED32_INGRESS_TASK_IDS=${_fixed32_subset_binding[1]}
   export FR13_FIXED32_INGRESS_TASK_IDS
-  echo "fixed32 canonical SWE-Verified subset OK: tasks=${_fixed32_subset_binding[0]}"
+  echo "fixed32 SWE-Verified subset OK: tasks=${_fixed32_subset_binding[0]} diagnostic=$FR13_FIXED32_B1_DIAGNOSTIC"
   unset _fixed32_subset_binding
 fi
 
@@ -431,7 +556,8 @@ fixed32_engine_ingress_control(){
     "$FR13_FIXED32_INGRESS_TASK_IDS" \
     "$PORT" \
     "$action" \
-    "$output_path" <<'PY'
+    "$output_path" \
+    "$FR13_FIXED32_B1_DIAGNOSTIC" <<'PY'
 import hashlib
 import json
 import os
@@ -462,6 +588,10 @@ task_ids = sys.argv[2].split(",")
 port = int(sys.argv[3])
 action = sys.argv[4]
 output_path = Path(sys.argv[5])
+diagnostic_text = sys.argv[6]
+if diagnostic_text not in {"0", "1"}:
+    raise SystemExit("fixed32 B1 diagnostic selector is invalid")
+diagnostic = diagnostic_text == "1"
 secret_info = os.lstat(secret_path)
 if (
     not stat.S_ISREG(secret_info.st_mode)
@@ -486,14 +616,17 @@ if (
 ):
     raise SystemExit("fixed32 engine secret contract mismatch")
 if (
-    len(task_ids) not in (4, 16)
+    len(task_ids) not in ((1,) if diagnostic else (4, 16))
     or len(set(task_ids)) != len(task_ids)
+    or (diagnostic and task_ids != ["astropy__astropy-12907"])
     or any(
         re.fullmatch(r"[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+", task_id) is None
         for task_id in task_ids
     )
 ):
-    raise SystemExit("fixed32 engine task set must be canonical exact4/exact16")
+    raise SystemExit(
+        "fixed32 engine task set does not match its formal/diagnostic run class"
+    )
 canonical_task_set_sha256 = hashlib.sha256(
     json.dumps(
         sorted(task_ids),
@@ -621,7 +754,9 @@ write_fixed32_chat_traffic_audit(){
     "$SUBSET" \
     "$ARMDIR" \
     "$FIXED32_MODE" \
-    "$ARMDIR/fixed32_chat_traffic_audit.json" <<'PY'
+    "$ARMDIR/fixed32_chat_traffic_audit.json" \
+    "$FR13_FIXED32_B1_DIAGNOSTIC" \
+    "$SWE_CONCURRENCY" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -632,20 +767,30 @@ sys.path.insert(0, str(repo / "scripts"))
 from fr13_floor_gate import (  # noqa: E402
     build_fixed32_chat_traffic_audit,
     pinned_dataset_record_digests,
-    validate_canonical_subset,
+    validate_fixed32_run_subset,
 )
 
 subset_path = Path(sys.argv[1]).resolve()
 arm_dir = Path(sys.argv[2]).resolve()
 mode = sys.argv[3]
 output_path = Path(sys.argv[4]).resolve()
-subset = validate_canonical_subset(subset_path)
+diagnostic_text = sys.argv[5]
+concurrency_text = sys.argv[6]
+if diagnostic_text not in {"0", "1"}:
+    raise SystemExit("fixed32 B1 diagnostic selector is invalid")
+if concurrency_text not in {"1", "4"}:
+    raise SystemExit("fixed32 chat-task audit concurrency is invalid")
+subset = validate_fixed32_run_subset(
+    subset_path,
+    b1_diagnostic=diagnostic_text == "1",
+)
 task_ids = subset["task_ids"]
 audit = build_fixed32_chat_traffic_audit(
     arm_dir,
     mode=mode,
     subset=subset,
     dataset_record_digests=pinned_dataset_record_digests(str(repo)),
+    concurrency=int(concurrency_text),
 )
 temporary = output_path.with_name(output_path.name + ".tmp")
 temporary.write_text(
@@ -981,7 +1126,7 @@ _fixed32_snapshot_engine_ingress_ledger() {
   fi
   if ! .venv/bin/python - \
       "$snapshot_tmp" "$destination" "$SUBSET" "$ARMDIR_ABS" \
-      "$expected_owner" <<'PY'
+      "$expected_owner" "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" <<'PY'
 import hashlib
 import os
 import stat
@@ -997,7 +1142,7 @@ from fr13_floor_gate import (  # noqa: E402
     fixed32_canonical_task_set_sha256,
     fixed32_task_key_id,
     load_fixed32_ingress_ledger,
-    validate_canonical_subset,
+    validate_fixed32_run_subset,
 )
 
 snapshot_path = Path(sys.argv[1])
@@ -1005,6 +1150,9 @@ destination = Path(sys.argv[2])
 subset_path = Path(sys.argv[3]).resolve()
 arm_dir = Path(sys.argv[4]).resolve()
 expected_owner = int(sys.argv[5])
+diagnostic_text = sys.argv[6]
+if diagnostic_text not in {"0", "1"}:
+    raise SystemExit("fixed32 B1 diagnostic selector is invalid")
 if destination.parent != arm_dir / "logs":
     raise SystemExit("fixed32 engine-ledger destination escaped the arm logs directory")
 
@@ -1074,7 +1222,10 @@ def validate_ledger_bytes(raw, label):
     return hashlib.sha256(raw).hexdigest()
 
 
-subset = validate_canonical_subset(subset_path)
+subset = validate_fixed32_run_subset(
+    subset_path,
+    b1_diagnostic=diagnostic_text == "1",
+)
 task_ids = subset["task_ids"]
 canonical_task_keys = {fixed32_task_key_id(task_id) for task_id in task_ids}
 canonical_task_set_sha256 = fixed32_canonical_task_set_sha256(task_ids)
@@ -1232,6 +1383,10 @@ teardown(){
       fixed32_container_attested=0
       echo "fixed32 teardown skipped container operations: immutable incarnation attestation failed" \
         > "$ARMDIR/fixed32_final_flush.stderr"
+    elif [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then
+      printf '{"acceptance_valid":false,"flush_protocol_used":false,"run_classification":"eager_kernel_byte_diagnostic","schema":"fr13-fixed32-eager-kernel-terminal-v1"}\n' \
+        > "$ARMDIR/fixed32_final_flush_skipped.json"
+      : > "$ARMDIR/fixed32_final_flush.stderr"
     elif [[ -n "$FIXED32_PRODUCER_PID" && -f "$FIXED32_ACK_PATH" ]]; then
       .venv/bin/python scripts/fr13_fixed32_flush_protocol.py \
         --container "$CONTAINER_RUNTIME_REF" \
@@ -1263,6 +1418,16 @@ teardown(){
       echo "FAIL: fixed32 terminal engine-ledger snapshot rc=$ledger_snapshot_rc" >&2
       tail -20 "$ARMDIR/fixed32_engine_ingress_snapshot.log" >&2 || true
       (( rc == 0 )) && rc=16
+    elif [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then
+      printf '%s\n' \
+        '{"acceptance_valid":false,"authenticated_engine_ledger_snapshotted":true,"graph_census_audit_used":false,"reason":"eager_mode_has_no_cuda_graph_census","run_classification":"eager_kernel_byte_diagnostic","schema":"fr13-fixed32-eager-kernel-traffic-audit-skip-v1"}' \
+        > "$ARMDIR/fixed32_chat_traffic_audit_skipped.json" \
+        2> "$ARMDIR/fixed32_chat_traffic_audit.log"
+      audit_rc=$?
+      if (( audit_rc != 0 )); then
+        echo "FAIL: fixed32 eager diagnostic audit marker rc=$audit_rc" >&2
+        (( rc == 0 )) && rc=16
+      fi
     else
       write_fixed32_chat_traffic_audit \
         > "$ARMDIR/fixed32_chat_traffic_audit.log" 2>&1
@@ -1352,6 +1517,96 @@ fi
 # ---- boot server (class 11: everything pinned except the arm lever/shape) ----
 # extra flags exported into THIS shell so the launcher's docker -e picks them up.
 for kv in "${XFLAGS[@]:-}"; do [[ -n "$kv" ]] && export "$kv"; done
+case "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" in
+  0) ;;
+  1)
+    [[ -n "$FIXED32_MODE" ]] \
+      || { echo "FAIL: fixed32 TAW native real-event arm requires fixed32"; exit 2; }
+    if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "0" ]]; then
+      [[ "$MAX_NUM_SEQS_OVR" == "4" && "$SWE_CONCURRENCY" == "4" ]] \
+        || {
+          echo "FAIL: fixed32 TAW native campaign arm requires exact B4 concurrency"
+          exit 2
+        }
+    fi
+    ;;
+  *)
+    echo "FAIL: FR13_FIXED32_TAW_NATIVE_PRECOMPUTE must be exactly 0 or 1"
+    exit 2
+    ;;
+esac
+case "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" in
+  0) ;;
+  1)
+    [[ -n "$FIXED32_MODE" && "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]] \
+      || {
+        echo "FAIL: fixed32 BM8 real-task arm is B1 diagnostic only"
+        exit 2
+      }
+    [[ "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "0" ]] \
+      || {
+        echo "FAIL: fixed32 BM8 and TAW real-task diagnostics are exclusive"
+        exit 2
+      }
+    ;;
+  *)
+    echo "FAIL: FR13_DFWD_UNIFIED_BM8_LIVE_AB must be exactly 0 or 1"
+    exit 2
+    ;;
+esac
+if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "divisor_static_stocktile_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_static_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_pingpong_b1_byte_ab" ]]; then
+  [[ -n "$FIXED32_MODE" && "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]] \
+    || {
+      echo "FAIL: fixed32 CUTLASS Stream-K real-task arm is B1 diagnostic only"
+      exit 2
+    }
+  [[ "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "0" \
+     && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" ]] \
+    || {
+      echo "FAIL: fixed32 CUTLASS, TAW, and BM8 real-task diagnostics are exclusive"
+      exit 2
+    }
+elif [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_divisor_b4_byte_ab" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stockshape_b4_byte_ab" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stockshape_stage2_b4_byte_ab" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_byte_ab" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_static_byte_ab" ]]; then
+  [[ -n "$FIXED32_MODE" \
+     && "$FR13_FIXED32_B1_DIAGNOSTIC" == "0" \
+     && "$MAX_NUM_SEQS_OVR" == "4" ]] || {
+    echo "FAIL: fixed32 CUTLASS B4 byte diagnostic requires exact B4 mode"
+    exit 2
+  }
+  [[ "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "0" \
+     && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" == "0" ]] || {
+    echo "FAIL: fixed32 CUTLASS B4 byte diagnostic must be exclusive"
+    exit 2
+  }
+fi
+if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" ]]; then
+  [[ -n "$FIXED32_MODE" \
+     && "$FR13_FIXED32_B1_DIAGNOSTIC" == "0" \
+     && "$MAX_NUM_SEQS_OVR" == "4" \
+     && "$SWE_CONCURRENCY" == "4" ]] || {
+    echo "FAIL: fixed32 SFWD state-fusion byte diagnostic requires exact4 B4"
+    exit 2
+  }
+  [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
+     && "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" == "0" \
+     && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+     && "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "0" \
+     && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" ]] || {
+    echo "FAIL: fixed32 SFWD state-fusion byte diagnostic must be exclusive"
+    exit 2
+  }
+fi
 if [[ "$LAUNCHER" == "locked" ]]; then
   CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.78}" MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
   FR13_RUN_DIR="$ARMDIR_ABS" LOG_DIR="$ARMDIR_ABS/logs" \
@@ -1386,7 +1641,7 @@ else
   done
   unset _fr13_req _fr13_req_k _fr13_req_v
   CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.78}" MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
-  TREE="$TREEARG" FR10_METRICS=0 BATCH_INVARIANT="${BATCH_INVARIANT:-0}" \
+  TREE="$TREEARG" FR10_METRICS="${FR10_METRICS:-0}" BATCH_INVARIANT="${BATCH_INVARIANT:-0}" \
   LUMO_FB_KERNEL_ROWS=1 LUMO_FB_PROJ_PAD_ROWS=16 \
   FR13_RUN_DIR="$ARMDIR_ABS" LOG_DIR="$ARMDIR_ABS/logs" \
   scripts/fr13_launch_forked_fa2_tree_server.sh > "$ARMDIR/launch.log" 2>&1
@@ -1501,7 +1756,11 @@ PY
     "$CONTAINER_RUNTIME_REF" \
     "$CONTAINER" \
     "$ARMDIR/fixed32_container_identity.json" \
-    "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" <<'PY'
+    "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" \
+    "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" \
+    "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" \
+    "${FR13_FIXED32_CUTLASS_WAVE:-stock}" \
+    "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" <<'PY'
 import json
 import subprocess
 import sys
@@ -1517,6 +1776,10 @@ container_ref = sys.argv[4]
 container_name = sys.argv[5]
 container_identity_path = Path(sys.argv[6])
 attribution_only_text = sys.argv[7]
+batch_gdn_byte_ab_text = sys.argv[8]
+batch_gdn_graph_byte_ab_text = sys.argv[9]
+cutlass_wave = sys.argv[10]
+sfwd_b4_byte_ab_text = sys.argv[11]
 runtime = contract.validate_runtime_attestation(
     json.loads(runtime_path.read_text(encoding="utf-8"))
 )
@@ -1531,11 +1794,72 @@ if attribution_only_text not in {"0", "1"}:
     raise SystemExit(
         "fixed32 attribution-only selector must be exactly 0 or 1"
     )
+if batch_gdn_byte_ab_text not in {"0", "1"}:
+    raise SystemExit(
+        "fixed32 batch-GDN byte diagnostic selector must be exactly 0 or 1"
+    )
+if batch_gdn_graph_byte_ab_text not in {"0", "1"}:
+    raise SystemExit(
+        "fixed32 batch-GDN graph byte diagnostic selector must be exactly 0 or 1"
+    )
+if sfwd_b4_byte_ab_text not in {"0", "1"}:
+    raise SystemExit(
+        "fixed32 SFWD B4 byte diagnostic selector must be exactly 0 or 1"
+    )
+if cutlass_wave not in {
+    "stock",
+    "streamk_coop128_byte_ab",
+    "streamk_coop128",
+    "streamk_force_wide256_byte_ab",
+    "streamk_force_wide256",
+    "static_persistent_stocktile_byte_ab",
+    "static_persistent_stocktile",
+    "divisor_static_stocktile_byte_ab",
+    "divisor_static_stocktile",
+    "identity_stage2_static_byte_ab",
+    "identity_stage2_static",
+    "identity_stage2_pingpong_b1_byte_ab",
+    "identity_stage2_pingpong_b1",
+    "identity_stockshape_b4_byte_ab",
+    "identity_stockshape_b4",
+    "identity_stockshape_stage2_b4_byte_ab",
+    "identity_stockshape_stage2_b4",
+    "identity_divisor_b4_byte_ab",
+    "identity_divisor_b4",
+    "persistent_b4_m128_byte_ab",
+    "persistent_b4_m128",
+    "persistent_b4_m128_static_byte_ab",
+    "persistent_b4_m128_static",
+}:
+    raise SystemExit("fixed32 CUTLASS wave selector is invalid")
 try:
     contract.validate_process_pid1_argv(
         pid1.get("argv"),
         concurrency,
         attribution_only=attribution_only_text == "1",
+        eager_diagnostic=(
+            batch_gdn_byte_ab_text == "1"
+            or cutlass_wave in {
+                "identity_divisor_b4_byte_ab",
+                "identity_stockshape_b4_byte_ab",
+                "identity_stockshape_stage2_b4_byte_ab",
+                "persistent_b4_m128_byte_ab",
+                "persistent_b4_m128_static_byte_ab",
+            }
+            or sfwd_b4_byte_ab_text == "1"
+        ),
+        graph_diagnostic=batch_gdn_graph_byte_ab_text == "1",
+        streamk_eager_diagnostic=(
+            cutlass_wave
+            in (
+                "streamk_coop128_byte_ab",
+                "streamk_force_wide256_byte_ab",
+                "static_persistent_stocktile_byte_ab",
+                "divisor_static_stocktile_byte_ab",
+                "identity_stage2_static_byte_ab",
+                "identity_stage2_pingpong_b1_byte_ab",
+            )
+        ),
     )
 except contract.ContractError as error:
     raise SystemExit(str(error)) from error
@@ -2026,6 +2350,26 @@ if [[ -n "$FIXED32_MODE" ]]; then
     --fixed32-flush-ack "$FIXED32_ACK_PATH"
     --fixed32-boundary-snapshot "$FIXED32_BOUNDARY_SNAPSHOT_PATH"
   )
+  if [[ "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "1" ]]; then
+    FIXED32_RUNNER_ARGS+=(
+      --fixed32-taw-real-event-arm "$FIXED32_TAW_REAL_EVENT_ARM_PATH"
+    )
+  fi
+  if [[ "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "1" ]]; then
+    FIXED32_RUNNER_ARGS+=(
+      --fixed32-bm8-real-event-arm "$FIXED32_BM8_REAL_EVENT_ARM_PATH"
+    )
+  fi
+  if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "divisor_static_stocktile_byte_ab" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_static_byte_ab" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_pingpong_b1_byte_ab" ]]; then
+    FIXED32_RUNNER_ARGS+=(
+      --fixed32-cutlass-real-event-arm "$FIXED32_CUTLASS_REAL_EVENT_ARM_PATH"
+    )
+  fi
 fi
 
 # NETWORK-LINK WATCHDOG (OFFLOAD only; req #4/#5) — see fr13_bigdenom_swe_serve.sh
@@ -2323,13 +2667,17 @@ PY
       "$ARMDIR/docker_after_tasks.log" >/dev/null \
       || { echo "FAIL: fixed32 canonical tasks emitted no subtree runtime needle"; SWERC=15; }
   fi
-  grep -F -m1 \
-    "[FR13_FIXED32] topology engaged: mode=$FIXED32_MODE" \
-    "$ARMDIR/docker_after_tasks.log" >/dev/null \
-    || { echo "FAIL: fixed32 canonical tasks emitted no topology needle"; SWERC=15; }
-  grep -F -m1 "[FR13_FIXED32_WORK] engaged:" \
-    "$ARMDIR/docker_after_tasks.log" >/dev/null \
-    || { echo "FAIL: fixed32 canonical tasks emitted no work needle"; SWERC=15; }
+  if [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then
+    echo "fixed32 eager kernel diagnostic: graph-census needles are ineligible"
+  else
+    grep -F -m1 \
+      "[FR13_FIXED32] topology engaged: mode=$FIXED32_MODE" \
+      "$ARMDIR/docker_after_tasks.log" >/dev/null \
+      || { echo "FAIL: fixed32 canonical tasks emitted no topology needle"; SWERC=15; }
+    grep -F -m1 "[FR13_FIXED32_WORK] engaged:" \
+      "$ARMDIR/docker_after_tasks.log" >/dev/null \
+      || { echo "FAIL: fixed32 canonical tasks emitted no work needle"; SWERC=15; }
+  fi
 fi
 
 # ---- OPT-1 post-run engagement needle ----

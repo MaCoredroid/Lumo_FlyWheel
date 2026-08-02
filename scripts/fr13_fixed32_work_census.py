@@ -98,6 +98,7 @@ from fr13_fixed32_topology import (
 SCHEMA = "fr13-fixed32-work-census-v9"
 TERMINAL_SCHEMA = "fr13-fixed32-work-census-terminal-v9"
 REPORT_SCHEMA = "fr13-fixed32-work-census-report-v9"
+ARM_REPORT_SCHEMA = "fr13-fixed32-work-census-arm-report-v9"
 SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v9"
 
 TAIL_MODE = "tail6_fixed32"
@@ -134,9 +135,20 @@ TAW_LOOP_ITERATIONS = WALK_CAP
 TAW_CHILD_LANES_PER_REQUEST = TAW_CHILD_LANES
 TAW_ROWS_PER_REQUEST = WALK_CAP
 TAW_BUFFER_CAPACITY = OUTPUT_PUBLISH_CAPACITY
-TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-source-v1"
+TAW_ROUTE = "fixed32_pytorch_exact_float_triton_integer_commit"
+TAW_NATIVE_PRECOMPUTE_ROUTE = (
+    "fixed32_native_precompute_byte_ab_reference_return"
+)
+TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE = (
+    "fixed32_native_precompute_production_candidate_return"
+)
+TAW_EXACT_COMMIT_LAUNCHES = WALK_CAP
+TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST = WALK_CAP
+TAW_ALL_PARENT_SELF_ROWS_PER_REQUEST = 13
+TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST = 17
+TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 TAW_SOURCE_CONTRACT_SHA256 = (
-    "ff9fdeb6529876732cc949ab4f2636a7cee04edaec2524c39657a34d3d8b3250"
+    "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
 )
 TAW_TENSOR_CALL_CENSUS = {
     "walk_levels": 12,
@@ -151,8 +163,45 @@ TAW_TENSOR_CALL_CENSUS = {
     "residual_subtract_calls": 12,
     "residual_clamp_calls": 12,
     "residual_where_calls": 24,
-    "output_scatter_calls": 24,
-    "path_scatter_calls": 12,
+    "output_scatter_calls": 0,
+    "path_scatter_calls": 0,
+    "exact_commit_launches": 12,
+    "exact_commit_programs_per_request": 12,
+    "floating_sampling_reimplementation": False,
+}
+TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS = {
+    **TAW_TENSOR_CALL_CENSUS,
+    "walk_levels": 13,
+    "full_vocab_row_gathers": 54,
+    "full_vocab_fp32_casts": 26,
+    "full_vocab_softmax_calls": 26,
+    "full_vocab_normalizations": 83,
+    "full_vocab_cdf_calls": 54,
+    "source_cdf_calls": 29,
+    "qmix_zero_fills": 29,
+    "qmix_scatter_add_calls": 29,
+    "residual_subtract_calls": 29,
+    "residual_clamp_calls": 29,
+    "residual_where_calls": 58,
+    "exact_commit_launches": 13,
+    "exact_commit_programs_per_request": 13,
+}
+TAW_NATIVE_PRECOMPUTE_PRODUCTION_TENSOR_CALL_CENSUS = {
+    **TAW_TENSOR_CALL_CENSUS,
+    "walk_levels": 1,
+    "full_vocab_row_gathers": 30,
+    "full_vocab_fp32_casts": 2,
+    "full_vocab_softmax_calls": 2,
+    "full_vocab_normalizations": 47,
+    "full_vocab_cdf_calls": 30,
+    "source_cdf_calls": 17,
+    "qmix_zero_fills": 17,
+    "qmix_scatter_add_calls": 17,
+    "residual_subtract_calls": 17,
+    "residual_clamp_calls": 17,
+    "residual_where_calls": 34,
+    "exact_commit_launches": 1,
+    "exact_commit_programs_per_request": 1,
 }
 TAW_COUNT_ROUTE = "preseeded_cuda_fixed31"
 TAW_RNG_ROUTE = "bulk_device_generator"
@@ -285,6 +334,7 @@ GDN_KEYS = frozenset(
 )
 TAW_KEYS = frozenset(
     {
+        "route",
         "preseeded_batches",
         "topology_cache_hit",
         "cache_misses",
@@ -302,6 +352,9 @@ TAW_KEYS = frozenset(
         "residual_rows",
         "row_scatter_slots",
         "path_scatter_slots",
+        "exact_commit_launches",
+        "exact_commit_programs",
+        "floating_sampling_reimplementation",
         "source_contract_schema",
         "source_contract_sha256",
         "tensor_call_census",
@@ -343,6 +396,8 @@ TAW_KEYS = frozenset(
         "accepted_path_shape",
         "accepted_lens_shape",
         "last_row_shape",
+        "exact_current_shape",
+        "exact_alive_shape",
     }
 )
 TAW_TENSOR_CALL_CENSUS_KEYS = frozenset(TAW_TENSOR_CALL_CENSUS)
@@ -1355,6 +1410,53 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     taw_path_scatter_slots = _integer(
         taw["path_scatter_slots"], f"{source}.taw.path_scatter_slots"
     )
+    taw_route = _string(taw["route"], f"{source}.taw.route")
+    if taw_route not in (
+        TAW_ROUTE,
+        TAW_NATIVE_PRECOMPUTE_ROUTE,
+        TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+    ):
+        raise CensusError(
+            f"{source}.taw.route: expected a pinned fixed32 TAW route, "
+            f"got {taw_route!r}"
+        )
+    if taw_route == TAW_NATIVE_PRECOMPUTE_ROUTE:
+        expected_target_rows = (
+            TAW_ROWS_PER_REQUEST + TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST
+        )
+        expected_self_rows = (
+            TAW_ROWS_PER_REQUEST + TAW_ALL_PARENT_SELF_ROWS_PER_REQUEST
+        )
+        expected_product_write_multiplier = 2
+        expected_exact_commit_launches = TAW_EXACT_COMMIT_LAUNCHES + 1
+        expected_exact_commit_programs = (
+            TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST + 1
+        )
+    elif taw_route == TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE:
+        expected_target_rows = TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST
+        expected_self_rows = TAW_ALL_PARENT_SELF_ROWS_PER_REQUEST
+        expected_product_write_multiplier = 1
+        expected_exact_commit_launches = 1
+        expected_exact_commit_programs = 1
+    else:
+        expected_target_rows = TAW_ROWS_PER_REQUEST
+        expected_self_rows = TAW_ROWS_PER_REQUEST
+        expected_product_write_multiplier = 1
+        expected_exact_commit_launches = TAW_EXACT_COMMIT_LAUNCHES
+        expected_exact_commit_programs = TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST
+    taw_exact_commit_launches = _integer(
+        taw["exact_commit_launches"],
+        f"{source}.taw.exact_commit_launches",
+    )
+    taw_exact_commit_programs = _integer(
+        taw["exact_commit_programs"],
+        f"{source}.taw.exact_commit_programs",
+    )
+    if taw["floating_sampling_reimplementation"] is not False:
+        raise CensusError(
+            f"{source}.taw.floating_sampling_reimplementation: "
+            "expected literal false"
+        )
     _expect(
         taw_preseeded_batches,
         SUPPORTED_BATCH_SIZES,
@@ -1383,32 +1485,46 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     )
     _expect(
         taw_child_lanes,
-        TAW_CHILD_LANES_PER_REQUEST * batch_size,
+        expected_target_rows * SAMPLER_MAX_FANOUT * batch_size,
         f"{source}.taw.child_lanes",
     )
-    for field_name, field_value in (
-        ("target_rows", taw_target_rows),
-        ("self_rows", taw_self_rows),
-        ("self_cdf_rows", taw_self_cdf_rows),
-        ("source_cdf_rows", taw_source_cdf_rows),
-        ("residual_cdf_rows", taw_residual_cdf_rows),
-        ("qmix_rows", taw_qmix_rows),
-        ("residual_rows", taw_residual_rows),
+    for field_name, field_value, expected_rows in (
+        ("target_rows", taw_target_rows, expected_target_rows),
+        ("self_rows", taw_self_rows, expected_self_rows),
+        ("self_cdf_rows", taw_self_cdf_rows, expected_self_rows),
+        ("source_cdf_rows", taw_source_cdf_rows, expected_target_rows),
+        ("residual_cdf_rows", taw_residual_cdf_rows, expected_target_rows),
+        ("qmix_rows", taw_qmix_rows, expected_target_rows),
+        ("residual_rows", taw_residual_rows, expected_target_rows),
     ):
         _expect(
             field_value,
-            TAW_ROWS_PER_REQUEST * batch_size,
+            expected_rows * batch_size,
             f"{source}.taw.{field_name}",
         )
     _expect(
         taw_row_scatter_slots,
-        TAW_ROW_SCATTER_SLOTS * batch_size,
+        TAW_ROW_SCATTER_SLOTS
+        * batch_size
+        * expected_product_write_multiplier,
         f"{source}.taw.row_scatter_slots",
     )
     _expect(
         taw_path_scatter_slots,
-        TAW_PATH_SCATTER_SLOTS * batch_size,
+        TAW_PATH_SCATTER_SLOTS
+        * batch_size
+        * expected_product_write_multiplier,
         f"{source}.taw.path_scatter_slots",
+    )
+    _expect(
+        taw_exact_commit_launches,
+        expected_exact_commit_launches,
+        f"{source}.taw.exact_commit_launches",
+    )
+    _expect(
+        taw_exact_commit_programs,
+        expected_exact_commit_programs * batch_size,
+        f"{source}.taw.exact_commit_programs",
     )
     taw_source_schema = _string(
         taw["source_contract_schema"],
@@ -1437,16 +1553,29 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         TAW_TENSOR_CALL_CENSUS_KEYS,
         f"{source}.taw.tensor_call_census",
     )
-    taw_tensor_calls = {
-        name: _integer(
-            raw_tensor_calls[name],
-            f"{source}.taw.tensor_call_census.{name}",
+    taw_tensor_calls = {}
+    for name in sorted(TAW_TENSOR_CALL_CENSUS_KEYS):
+        label = f"{source}.taw.tensor_call_census.{name}"
+        if name == "floating_sampling_reimplementation":
+            if raw_tensor_calls[name] is not False:
+                raise CensusError(f"{label}: expected literal false")
+            taw_tensor_calls[name] = False
+        else:
+            taw_tensor_calls[name] = _integer(raw_tensor_calls[name], label)
+    if taw_route == TAW_NATIVE_PRECOMPUTE_ROUTE:
+        expected_tensor_calls = TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS
+    elif taw_route == TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE:
+        expected_tensor_calls = (
+            TAW_NATIVE_PRECOMPUTE_PRODUCTION_TENSOR_CALL_CENSUS
         )
-        for name in sorted(TAW_TENSOR_CALL_CENSUS_KEYS)
-    }
+    else:
+        expected_tensor_calls = TAW_TENSOR_CALL_CENSUS
     _expect(
         taw_tensor_calls,
-        {name: TAW_TENSOR_CALL_CENSUS[name] for name in sorted(TAW_TENSOR_CALL_CENSUS)},
+        {
+            name: expected_tensor_calls[name]
+            for name in sorted(expected_tensor_calls)
+        },
         f"{source}.taw.tensor_call_census",
     )
     taw_count_route = _string(taw["count_route"], f"{source}.taw.count_route")
@@ -1526,6 +1655,8 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         "accepted_path_shape": (batch_size, ACCEPTED_PATH_CAPACITY),
         "accepted_lens_shape": (batch_size,),
         "last_row_shape": (batch_size,),
+        "exact_current_shape": (batch_size,),
+        "exact_alive_shape": (batch_size,),
     }
     taw_cache_shapes: dict[str, list[int]] = {}
     for field_name, expected_shape in expected_taw_cache_shapes.items():
@@ -1709,8 +1840,20 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         },
         label=f"{source}.conv_pregather",
     )
+    committer_raw = _mapping(event["committer"], f"{source}.committer")
+    _exact_keys(committer_raw, COMMITTER_KEYS, f"{source}.committer")
+    committer_fused_calls = _integer(
+        committer_raw["fused_layer_calls"],
+        f"{source}.committer.fused_layer_calls",
+        minimum=1,
+    )
+    if committer_fused_calls not in (1, GDN_LAYERS):
+        raise CensusError(
+            f"{source}.committer.fused_layer_calls: expected 1 or "
+            f"{GDN_LAYERS}, got {committer_fused_calls}"
+        )
     committer = _fixed_section(
-        event["committer"],
+        committer_raw,
         keys=COMMITTER_KEYS,
         expected={
             "route": COMMITTER_ROUTE,
@@ -1723,7 +1866,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
                 COMMITTER_RING_LAYER_PATH_ROWS_PER_REQUEST * batch_size
             ),
             "neutralize_ops": COMMITTER_NEUTRALIZE_OPS,
-            "fused_layer_calls": GDN_LAYERS,
+            "fused_layer_calls": committer_fused_calls,
             "graph_replays": 1,
             "graph_captures": 0,
             "host_lens_readbacks": 0,
@@ -1868,6 +2011,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "export_or_mask": gdn_export_or_mask,
         },
         "taw": {
+            "route": taw_route,
             "preseeded_batches": list(taw_preseeded_batches),
             "topology_cache_hit": True,
             "cache_misses": taw_cache_misses,
@@ -1886,6 +2030,11 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "residual_rows_per_request": taw_residual_rows // batch_size,
             "row_scatter_slots_per_request": taw_row_scatter_slots // batch_size,
             "path_scatter_slots_per_request": taw_path_scatter_slots // batch_size,
+            "exact_commit_launches": taw_exact_commit_launches,
+            "exact_commit_programs_per_request": (
+                taw_exact_commit_programs // batch_size
+            ),
+            "floating_sampling_reimplementation": False,
             "source_contract_schema": taw_source_schema,
             "source_contract_sha256": taw_source_sha256,
             "tensor_call_census": taw_tensor_calls,
@@ -2118,8 +2267,36 @@ def load_jsonl(path: Path) -> list[LocatedRecord]:
     return records
 
 
+def load_jsonl_bytes(raw: bytes, *, source: str) -> list[LocatedRecord]:
+    """Load strict JSONL from authenticated bytes without a path reread."""
+
+    try:
+        lines = raw.decode("utf-8").splitlines()
+    except UnicodeError as error:
+        raise CensusError(f"cannot decode census JSONL {source}: {error}") from error
+    if not lines:
+        raise CensusError(f"{source}: census JSONL is empty")
+    records: list[LocatedRecord] = []
+    for line_number, line in enumerate(lines, start=1):
+        location = f"{source}:{line_number}"
+        if not line.strip():
+            raise CensusError(f"{location}: blank JSONL records are forbidden")
+        try:
+            record = json.loads(line, object_pairs_hook=_duplicate_checked_object)
+        except (json.JSONDecodeError, DuplicateJsonKey) as error:
+            raise CensusError(f"{location}: invalid JSON: {error}") from error
+        records.append((record, location))
+    return records
+
+
 def _canonical_json(value: object) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+
+def normalized_work_sha256(value: object) -> str:
+    """Return the canonical digest used for mode-neutral physical work."""
+
+    return hashlib.sha256(_canonical_json(value).encode("ascii")).hexdigest()
 
 
 def _events_sha256(events: Sequence[object]) -> str:
@@ -2530,6 +2707,222 @@ def _validate_terminal(
     }
 
 
+def validate_arm(
+    records: Sequence[LocatedRecord],
+    *,
+    expected_mode: str,
+    expected_route: str,
+    required_batches: Sequence[int],
+) -> dict[str, Any]:
+    """Validate one complete census and require one physical-work signature."""
+
+    if expected_mode not in MODE_SEMANTICS:
+        raise CensusError(f"unsupported fixed32 mode {expected_mode!r}")
+    batches = tuple(required_batches)
+    if (
+        not batches
+        or len(set(batches)) != len(batches)
+        or any(batch not in SUPPORTED_BATCH_SIZES for batch in batches)
+    ):
+        raise CensusError(
+            "required_batches must be a non-empty unique subset of (1, 2, 3, 4)"
+        )
+
+    event_records, (terminal_raw, terminal_source) = _split_terminal(
+        records, expected_mode=expected_mode
+    )
+    events: list[ValidatedEvent] = []
+    raw_events: list[object] = []
+    for raw, source in event_records:
+        event = validate_event(raw, source=source)
+        raw_mapping = _mapping(raw, source)
+        taw = _mapping(raw_mapping.get("taw"), f"{source}.taw")
+        if event.mode != expected_mode:
+            raise CensusError(
+                f"{source}.mode: record was supplied as {expected_mode}, "
+                f"but declares {event.mode}"
+            )
+        if taw.get("route") != expected_route:
+            raise CensusError(
+                f"{source}.taw.route: expected {expected_route!r}, "
+                f"got {taw.get('route')!r}"
+            )
+        events.append(event)
+        raw_events.append(raw)
+
+    terminal = _validate_terminal(
+        terminal_raw,
+        source=terminal_source,
+        expected_mode=expected_mode,
+        raw_events=raw_events,
+        events=events,
+    )
+    event_ids = [event.event_id for event in events]
+    if len(event_ids) != len(set(event_ids)):
+        raise CensusError(f"{expected_mode}: duplicate event_id within census")
+    event_indices = [event.event_index for event in events]
+    expected_indices = list(range(len(events)))
+    if event_indices != expected_indices:
+        raise CensusError(
+            f"{expected_mode}: event_index sequence must be {expected_indices}, "
+            f"got {event_indices}"
+        )
+    forward_step_indices = [event.forward_step_index for event in events]
+    if any(
+        current <= previous
+        for previous, current in zip(
+            forward_step_indices, forward_step_indices[1:]
+        )
+    ):
+        raise CensusError(
+            f"{expected_mode}: forward_step_index values must be strictly "
+            f"increasing and unique, got {forward_step_indices}"
+        )
+    producer_pids = {event.producer_pid for event in events}
+    if len(producer_pids) != 1:
+        raise CensusError(
+            f"{expected_mode}: census has multiple producer PIDs "
+            f"{sorted(producer_pids)}"
+        )
+    event_counts = {
+        str(batch): sum(event.batch_size == batch for event in events)
+        for batch in SUPPORTED_BATCH_SIZES
+    }
+    for batch in batches:
+        if event_counts[str(batch)] == 0:
+            raise CensusError(f"{expected_mode}: missing required B{batch} events")
+
+    signatures: dict[str, int] = {}
+    for event in events:
+        signature = normalized_work_sha256(event.normalized_work)
+        signatures[signature] = signatures.get(signature, 0) + 1
+    if len(signatures) != 1:
+        raise CensusError(
+            f"{expected_mode}: census has multiple normalized physical-work "
+            f"signatures {sorted(signatures)}"
+        )
+    signature_sha256 = next(iter(signatures))
+    baseline = events[0]
+    return {
+        "schema": ARM_REPORT_SCHEMA,
+        "status": "PASS",
+        "mode": expected_mode,
+        "route": expected_route,
+        "required_batch_sizes": list(batches),
+        "event_count": len(events),
+        "event_counts_by_batch": event_counts,
+        "batch_size_sequence": [event.batch_size for event in events],
+        "forward_step_indices": forward_step_indices,
+        "producer_pid": next(iter(producer_pids)),
+        "terminal_summary": terminal,
+        "normalized_work_signature": baseline.normalized_work,
+        "normalized_work_signature_sha256": signature_sha256,
+    }
+
+
+def validate_bound_arm_report(
+    raw: object,
+    *,
+    census_raw: bytes,
+    census_source: str,
+    expected_mode: str,
+    expected_route: str,
+    required_batches: Sequence[int],
+) -> dict[str, Any]:
+    """Revalidate a persisted arm report against the live census bytes."""
+
+    report = _mapping(raw, "arm_report")
+    _exact_keys(
+        report,
+        frozenset(
+            {
+                "schema",
+                "status",
+                "mode",
+                "route",
+                "required_batch_sizes",
+                "event_count",
+                "event_counts_by_batch",
+                "batch_size_sequence",
+                "forward_step_indices",
+                "producer_pid",
+                "terminal_summary",
+                "normalized_work_signature",
+                "normalized_work_signature_sha256",
+                "census_sha256",
+                "census_bytes",
+            }
+        ),
+        "arm_report",
+    )
+    if (
+        report["schema"] != ARM_REPORT_SCHEMA
+        or report["status"] != "PASS"
+        or report["mode"] != expected_mode
+        or report["route"] != expected_route
+        or report["required_batch_sizes"] != list(required_batches)
+    ):
+        raise CensusError("arm_report identity or route contract drifted")
+    event_count = _integer(report["event_count"], "arm_report.event_count", minimum=1)
+    event_counts = _mapping(
+        report["event_counts_by_batch"], "arm_report.event_counts_by_batch"
+    )
+    _exact_keys(
+        event_counts,
+        frozenset(str(batch) for batch in SUPPORTED_BATCH_SIZES),
+        "arm_report.event_counts_by_batch",
+    )
+    parsed_counts = {
+        str(batch): _integer(
+            event_counts[str(batch)],
+            f"arm_report.event_counts_by_batch.{batch}",
+        )
+        for batch in SUPPORTED_BATCH_SIZES
+    }
+    if sum(parsed_counts.values()) != event_count:
+        raise CensusError("arm_report event counts do not sum to event_count")
+    for batch in required_batches:
+        if parsed_counts[str(batch)] == 0:
+            raise CensusError(f"arm_report is missing required B{batch} events")
+    terminal = _mapping(report["terminal_summary"], "arm_report.terminal_summary")
+    if terminal.get("final") is not True or terminal.get("event_count") != event_count:
+        raise CensusError("arm_report terminal summary is incomplete")
+    normalized = _mapping(
+        report["normalized_work_signature"],
+        "arm_report.normalized_work_signature",
+    )
+    normalized_sha256 = _sha256(
+        report["normalized_work_signature_sha256"],
+        "arm_report.normalized_work_signature_sha256",
+    )
+    if normalized_work_sha256(normalized) != normalized_sha256:
+        raise CensusError("arm_report normalized-work digest mismatch")
+    census_sha256 = _sha256(report["census_sha256"], "arm_report.census_sha256")
+    census_bytes = _integer(
+        report["census_bytes"], "arm_report.census_bytes", minimum=1
+    )
+    if (
+        census_bytes != len(census_raw)
+        or census_sha256 != hashlib.sha256(census_raw).hexdigest()
+    ):
+        raise CensusError("arm_report no longer binds the live census bytes")
+    derived = validate_arm(
+        load_jsonl_bytes(census_raw, source=census_source),
+        expected_mode=expected_mode,
+        expected_route=expected_route,
+        required_batches=required_batches,
+    )
+    derived.update(
+        {
+            "census_sha256": hashlib.sha256(census_raw).hexdigest(),
+            "census_bytes": len(census_raw),
+        }
+    )
+    if dict(report) != derived:
+        raise CensusError("arm_report differs from canonical live-census derivation")
+    return derived
+
+
 def validate_campaign(
     tail_records: Sequence[LocatedRecord],
     hydra_records: Sequence[LocatedRecord],
@@ -2623,17 +3016,6 @@ def validate_campaign(
                 counts[mode][str(batch_size)] = len(selected)
         all_events.extend(events)
 
-    baseline = all_events[0]
-    baseline_json = _canonical_json(baseline.normalized_work)
-    for event in all_events[1:]:
-        event_json = _canonical_json(event.normalized_work)
-        if event_json != baseline_json:
-            raise CensusError(
-                "normalized work mismatch: "
-                f"{event.source} differs from baseline {baseline.source}"
-            )
-
-    signature_sha256 = hashlib.sha256(baseline_json.encode("ascii")).hexdigest()
     physical_work_histograms: dict[str, dict[str, dict[str, Any]]] = {}
     for mode, events in validated_by_mode.items():
         physical_work_histograms[mode] = {}
@@ -2642,9 +3024,7 @@ def validate_campaign(
             signatures: dict[str, int] = {}
             graph_signatures: set[str] = set()
             for event in selected:
-                signature = hashlib.sha256(
-                    _canonical_json(event.normalized_work).encode("ascii")
-                ).hexdigest()
+                signature = normalized_work_sha256(event.normalized_work)
                 signatures[signature] = signatures.get(signature, 0) + 1
                 graph_signatures.add(event.drafter_graph_signature)
             if len(signatures) > 1:
@@ -2659,7 +3039,12 @@ def validate_campaign(
                 "event_count": len(selected),
                 "normalized_event_signatures": dict(sorted(signatures.items())),
             }
-    for batch_size in batches:
+    shared_batches = {
+        event.batch_size for event in validated_by_mode[TAIL_MODE]
+    } & {
+        event.batch_size for event in validated_by_mode[HYDRA_MODE]
+    }
+    for batch_size in shared_batches:
         tail_signatures = set(
             physical_work_histograms[TAIL_MODE][str(batch_size)][
                 "normalized_event_signatures"
@@ -2678,6 +3063,8 @@ def validate_campaign(
             raise CensusError(
                 f"B{batch_size}: Tail/Hydra physical-work signature mismatch"
             )
+    baseline = all_events[0]
+    signature_sha256 = normalized_work_sha256(baseline.normalized_work)
     tail_forward = {
         row["batch_size"]: (
             row["graph_signature"],
@@ -2731,6 +3118,7 @@ def validate_campaign(
 def _reference_taw(batch_size: int) -> dict[str, Any]:
     rows = batch_size * PHYSICAL_DRAFTS
     return {
+        "route": TAW_ROUTE,
         "preseeded_batches": list(SUPPORTED_BATCH_SIZES),
         "topology_cache_hit": True,
         "cache_misses": 0,
@@ -2748,6 +3136,11 @@ def _reference_taw(batch_size: int) -> dict[str, Any]:
         "residual_rows": TAW_ROWS_PER_REQUEST * batch_size,
         "row_scatter_slots": TAW_ROW_SCATTER_SLOTS * batch_size,
         "path_scatter_slots": TAW_PATH_SCATTER_SLOTS * batch_size,
+        "exact_commit_launches": TAW_EXACT_COMMIT_LAUNCHES,
+        "exact_commit_programs": (
+            TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST * batch_size
+        ),
+        "floating_sampling_reimplementation": False,
         "source_contract_schema": TAW_SOURCE_CONTRACT_SCHEMA,
         "source_contract_sha256": TAW_SOURCE_CONTRACT_SHA256,
         "tensor_call_census": dict(TAW_TENSOR_CALL_CENSUS),
@@ -2793,7 +3186,41 @@ def _reference_taw(batch_size: int) -> dict[str, Any]:
         "accepted_path_shape": [batch_size, ACCEPTED_PATH_CAPACITY],
         "accepted_lens_shape": [batch_size],
         "last_row_shape": [batch_size],
+        "exact_current_shape": [batch_size],
+        "exact_alive_shape": [batch_size],
     }
+
+
+def _native_production_taw(batch_size: int) -> dict[str, Any]:
+    """Build the independently qualified all-parent production TAW census."""
+    taw = _reference_taw(batch_size)
+    taw.update(
+        {
+            "route": TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+            "child_lanes": (
+                TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST
+                * SAMPLER_MAX_FANOUT
+                * batch_size
+            ),
+            "target_rows": TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST * batch_size,
+            "self_rows": TAW_ALL_PARENT_SELF_ROWS_PER_REQUEST * batch_size,
+            "self_cdf_rows": TAW_ALL_PARENT_SELF_ROWS_PER_REQUEST * batch_size,
+            "source_cdf_rows": (
+                TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST * batch_size
+            ),
+            "residual_cdf_rows": (
+                TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST * batch_size
+            ),
+            "qmix_rows": TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST * batch_size,
+            "residual_rows": TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST * batch_size,
+            "exact_commit_launches": 1,
+            "exact_commit_programs": batch_size,
+            "tensor_call_census": dict(
+                TAW_NATIVE_PRECOMPUTE_PRODUCTION_TENSOR_CALL_CENSUS
+            ),
+        }
+    )
+    return taw
 
 
 def reference_event(
@@ -3310,6 +3737,63 @@ def run_self_test() -> dict[str, Any]:
         raise AssertionError("valid fixture did not preserve unequal event counts")
     if valid_report["forward_step_indices"][TAIL_MODE] != [5, 6, 9, 10]:
         raise AssertionError("valid fixture did not preserve global forward indices")
+
+    # Regression for the B4 timing gate: the mandatory final record is not an
+    # event and therefore has no TAW section. A complete event+terminal stream
+    # must pass strict arm validation.
+    single_b4 = reference_event(
+        TAIL_MODE,
+        4,
+        "single-tail-b4",
+        taw=_native_production_taw(4),
+    )
+    single_records = _located_campaign([single_b4], "single-tail-b4")
+    single_arm_report = validate_arm(
+        single_records,
+        expected_mode=TAIL_MODE,
+        expected_route=TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+        required_batches=(4,),
+    )
+    if (
+        single_arm_report["event_count"] != 1
+        or single_arm_report["event_counts_by_batch"]["4"] != 1
+        or single_arm_report["terminal_summary"]["final"] is not True
+    ):
+        raise AssertionError("single-event arm did not preserve its terminal proof")
+    single_census_raw = "".join(
+        _canonical_json(record) + "\n" for record, _source in single_records
+    ).encode("ascii")
+    bound_arm_report = {
+        **single_arm_report,
+        "census_sha256": hashlib.sha256(single_census_raw).hexdigest(),
+        "census_bytes": len(single_census_raw),
+    }
+    validate_bound_arm_report(
+        bound_arm_report,
+        census_raw=single_census_raw,
+        census_source="single-tail-b4",
+        expected_mode=TAIL_MODE,
+        expected_route=TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+        required_batches=(4,),
+    )
+
+    mixed_tail, mixed_hydra = _valid_fixture()
+    for record in (*mixed_tail, *mixed_hydra):
+        batch_size = record["batch_size"]
+        if batch_size in SUPPORTED_CAMPAIGN_CAPACITIES:
+            record["taw"] = _native_production_taw(batch_size)
+    mixed_report = validate_campaign(
+        _located_campaign(mixed_tail, "mixed-route-tail"),
+        _located_campaign(mixed_hydra, "mixed-route-hydra"),
+    )
+    for mode in (TAIL_MODE, HYDRA_MODE):
+        for batch_size in SUPPORTED_CAMPAIGN_CAPACITIES:
+            if not mixed_report["physical_work_histograms"][mode][
+                str(batch_size)
+            ]["normalized_event_signatures"]:
+                raise AssertionError(
+                    f"mixed-route fixture lost required B{batch_size} census"
+                )
     for incomplete_kwargs in (
         {},
         {
@@ -3336,6 +3820,101 @@ def run_self_test() -> dict[str, Any]:
             )
 
     tamper_tests: list[tuple[str, Callable[[], object]]] = []
+
+    bad_bound_signature = json.loads(json.dumps(bound_arm_report))
+    bad_bound_signature["normalized_work_signature"]["physical_drafts"] = 30
+    bad_bound_signature["normalized_work_signature_sha256"] = (
+        normalized_work_sha256(bad_bound_signature["normalized_work_signature"])
+    )
+    tamper_tests.append(
+        (
+            "bound-arm-normalized-signature",
+            lambda: validate_bound_arm_report(
+                bad_bound_signature,
+                census_raw=single_census_raw,
+                census_source="single-tail-b4",
+                expected_mode=TAIL_MODE,
+                expected_route=TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+                required_batches=(4,),
+            ),
+        )
+    )
+    tamper_tests.append(
+        (
+            "bound-arm-census-substitution",
+            lambda: validate_bound_arm_report(
+                bound_arm_report,
+                census_raw=single_census_raw + b"\n",
+                census_source="single-tail-b4",
+                expected_mode=TAIL_MODE,
+                expected_route=TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+                required_batches=(4,),
+            ),
+        )
+    )
+
+    wrong_route = reference_event(TAIL_MODE, 4, "arm-wrong-route")
+    tamper_tests.append(
+        (
+            "arm-route",
+            lambda: validate_arm(
+                _located_campaign([wrong_route], "arm-wrong-route"),
+                expected_mode=TAIL_MODE,
+                expected_route=TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+                required_batches=(4,),
+            ),
+        )
+    )
+
+    wrong_mode = reference_event(
+        HYDRA_MODE,
+        4,
+        "arm-wrong-mode",
+        taw=_native_production_taw(4),
+    )
+    wrong_mode_terminal = reference_terminal_summary(
+        [wrong_mode], fixture_synthetic_runtime_proof=True
+    )
+    wrong_mode_terminal["mode"] = TAIL_MODE
+    tamper_tests.append(
+        (
+            "arm-mode",
+            lambda: validate_arm(
+                _located(
+                    [wrong_mode, wrong_mode_terminal],
+                    "arm-wrong-mode",
+                ),
+                expected_mode=TAIL_MODE,
+                expected_route=TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+                required_batches=(4,),
+            ),
+        )
+    )
+
+    bad_arm_event = reference_event(
+        TAIL_MODE,
+        4,
+        "arm-bad-terminal",
+        taw=_native_production_taw(4),
+    )
+    bad_arm_terminal = reference_terminal_summary(
+        [bad_arm_event], fixture_synthetic_runtime_proof=True
+    )
+    bad_arm_terminal["events_sha256"] = "0" * 64
+    tamper_tests.append(
+        (
+            "arm-terminal",
+            lambda: validate_arm(
+                _located(
+                    [bad_arm_event, bad_arm_terminal],
+                    "arm-bad-terminal",
+                ),
+                expected_mode=TAIL_MODE,
+                expected_route=TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+                required_batches=(4,),
+            ),
+        )
+    )
 
     def event_tamper(
         name: str,
@@ -3538,6 +4117,22 @@ def run_self_test() -> dict[str, Any]:
     event_tamper("taw-child-lanes", ("taw", "child_lanes"), 63)
     event_tamper("taw-target-rows", ("taw", "target_rows"), 21)
     event_tamper("taw-source-cdf", ("taw", "source_cdf_rows"), 11)
+    event_tamper("taw-route", ("taw", "route"), "pytorch_float_and_integer")
+    event_tamper(
+        "taw-exact-commit-launches",
+        ("taw", "exact_commit_launches"),
+        TAW_EXACT_COMMIT_LAUNCHES - 1,
+    )
+    event_tamper(
+        "taw-exact-commit-programs",
+        ("taw", "exact_commit_programs"),
+        TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST - 1,
+    )
+    event_tamper(
+        "taw-floating-reimplementation",
+        ("taw", "floating_sampling_reimplementation"),
+        True,
+    )
     event_tamper(
         "taw-source-schema",
         ("taw", "source_contract_schema"),
@@ -3630,6 +4225,8 @@ def run_self_test() -> dict[str, Any]:
         [2],
     )
     event_tamper("taw-last-row-shape", ("taw", "last_row_shape"), [2])
+    event_tamper("taw-exact-current-shape", ("taw", "exact_current_shape"), [2])
+    event_tamper("taw-exact-alive-shape", ("taw", "exact_alive_shape"), [2])
     event_tamper("output-slots", ("output_publish", "slots_written"), 31)
     event_tamper(
         "output-copy-calls",

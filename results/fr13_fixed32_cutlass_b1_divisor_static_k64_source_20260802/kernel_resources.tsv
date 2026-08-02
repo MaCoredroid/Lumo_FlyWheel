@@ -1,0 +1,6 @@
+variant	dtype	registers	stack_bytes	local_bytes	static_shared_bytes	constant0_bytes	threads_per_cta
+generic_static_stocktile	bf16	168	0	0	1024	2688	384
+divisor_static_stocktile	bf16	168	0	0	1024	2688	384
+generic_static_stocktile	fp16	168	0	0	1024	2688	384
+divisor_static_stocktile	fp16	168	0	0	1024	2688	384
+

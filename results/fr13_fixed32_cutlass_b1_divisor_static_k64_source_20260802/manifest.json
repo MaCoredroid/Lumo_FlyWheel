@@ -1,0 +1,84 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_divisor_static_k64_source.v1",
+  "created_at_utc": "2026-08-02T13:20:00Z",
+  "status": "host_compile_link_static_audit_pass_default_off",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "gpu_runtime_used": false,
+  "docker_used": false,
+  "source": {
+    "branch": "agent/fixed32-cutlass-divisor-balanced-20260802",
+    "implementation_commit": "b6c66e51cc63a4a448b8a51a91d60a185dd498fb",
+    "patch_source_sha256": "f91c115447b8c563f963c507984c4d9186dd6c4815975587b5d997f01cb1cf74",
+    "patched_dispatch_sha256": "6fb538e2b875f5528828d349067f98e420ec003a2b292598dcb46bfab09bdba5",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2"
+  },
+  "candidate": {
+    "selector": "divisor_static_stocktile",
+    "diagnostic_selector": "divisor_static_stocktile_byte_ab",
+    "default_enabled": false,
+    "runtime_route_wired": false,
+    "physical_m": 32,
+    "tile_mnk": [128, 32, 128],
+    "cluster_mnk": [1, 1, 1],
+    "scale_granularity_mnk": [128, 1, 128],
+    "swap_ab": true,
+    "split_k": false,
+    "ordered_full_k_per_output_tile": true,
+    "minimum_balanced_ctas": 28,
+    "pinned_tile_count_to_grid_ctas": {
+      "40": 40,
+      "112": 28,
+      "128": 32,
+      "272": 34
+    }
+  },
+  "host_build": {
+    "result": "pass",
+    "target_arch": "sm_121a",
+    "compile_recipe_sha256": "b8db9694a4bc693faa2cddad5950ca3278ef8c1987bcdaa33775efee55f08db2",
+    "link_recipe_sha256": "87886ee7264d38b6e6af728c4913526fbe312930052c4b12708c9d65b41e1d5f",
+    "object_sha256": "55e23434e3c8b08e3559fee0ae3a37dec4cc35df3234a779bceed63175a41099",
+    "object_bytes": 14585048,
+    "candidate_sha256": "338e89d062c2b1ac40909dbc8d64d4ab6b0def9fd86988c9e395e8244606a9f6",
+    "candidate_bytes": 113837288,
+    "candidate_mode": "0444",
+    "embedded_cubins": 17,
+    "max_required_glibc": "2.32"
+  },
+  "static_audit": {
+    "dtypes": ["bf16", "fp16"],
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "sass_instructions": 936,
+    "qmma": 32,
+    "ffma": 32,
+    "fmul": 24,
+    "ldsm": 24,
+    "stsm": 4,
+    "branches": 45,
+    "syncs": 38,
+    "local_load_store": 0,
+    "calls": 0,
+    "matches_generic_static_device_counts": true
+  },
+  "source_checks": {
+    "cutlass_focused_tests": "89 passed",
+    "python_compile": "pass",
+    "ruff": "pass",
+    "diff_check": "pass"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "Docker",
+    "synthetic performance probe",
+    "real SWE-Verified B1 byte gate",
+    "B1 or B4 full-step timing",
+    "hardware-floor acceptance"
+  ]
+}
+

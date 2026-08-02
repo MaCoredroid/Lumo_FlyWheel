@@ -1,0 +1,81 @@
+{
+  "arm_provenance": {
+    "archived_marker_mode": "0400",
+    "archived_marker_sha256": "04fe7f61a0e0bbd48bf28127385c481b85550b291535f3705511494ba24c8463",
+    "archived_marker_still_present": true,
+    "executed_lifecycle": "external_atomic_task_start_writer",
+    "future_supported_lifecycle_commit": "d8f25f10032d7769ff024cc1d9cbe5e5e7fdccc4",
+    "task_marker": "swe_verified:astropy__astropy-12907"
+  },
+  "checks": {
+    "b1_diagnostic_classification": true,
+    "b1_only_coverage": true,
+    "complete_event_count": 968,
+    "complete_events_all_true": true,
+    "contiguous_event_indices": [
+      0,
+      967
+    ],
+    "contiguous_forward_steps": [
+      0,
+      967
+    ],
+    "event_failure_sums": {
+      "fallback": 0,
+      "graph_dead": 0,
+      "mixed_pseudo": 0,
+      "overflow": 0,
+      "taw_cache_miss": 0
+    },
+    "external_manifest_launch_end_byte_equal": true,
+    "final_flush_pending": {
+      "cfwd": 0,
+      "dfwd": 0,
+      "sfwd": 0
+    },
+    "live_pass_count": 1,
+    "live_pass_product_mismatches": 0,
+    "live_pass_probability_mismatches": 0,
+    "live_pass_reference_returned": true,
+    "nonzero_mismatch_log_records": 0,
+    "production_validator_b1": true,
+    "production_validator_b4": false,
+    "resolved_task_count": 1,
+    "root_check_pass_count": 968,
+    "root_check_terminal_value": 968,
+    "runtime_manifest_launch_end_byte_equal": true,
+    "serve_rc": 0,
+    "swe_orchestrator_rc": 0,
+    "terminal_census_final": true,
+    "terminal_census_sha256": "980cc862dff0b60d951aad9a7cecdc6fa47ab3d650d6211ea1f50496206eb608"
+  },
+  "flags": {
+    "FR13_DFWD_UNIFIED_BM8_LIVE_AB": "0",
+    "FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB": "0",
+    "FR13_DRAFT_HEAD_PAD_ROWS": "0",
+    "FR13_FA2_QROW16_LIVE_PAGED_AB": "0",
+    "FR13_FA2_QROW16_PRODUCTION": "0",
+    "FR13_FIXED32_MODE": "hydra27_fixed32",
+    "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE": "1",
+    "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION": "0"
+  },
+  "manifests": {
+    "external_overall_canonical_sha256": "c42fb16d2ea932f0e819c81172c49b69b312b75dd446146b6d7b6ef78af00a9e",
+    "runtime_overall_canonical_sha256": "ad8017c2b6b957e05c405ccf14d1fe1b8b873862e1c3dd9b66f0cec53519d2e0"
+  },
+  "schema": "fr13.fixed32.taw_native_precompute.current_b1_verification.v1",
+  "source_identity": {
+    "artifact_base_commit": "d8f25f10032d7769ff024cc1d9cbe5e5e7fdccc4",
+    "executed_kernel_file_sha256": "da2ce3bd73f5de6d5c2a12ba83830bc4f03ecd4f2023bfbc581696f5a61b9d3a",
+    "executed_source_commit": "c8d8bda914af632741d3f2bd9ff0980256b3e897",
+    "kernel_file_identical_on_artifact_base": true,
+    "source_contract_sha256": "42b92d872d2324bf618b35fdd71c22d0e68e5c00e25ad2a43ae553c8ab1f92da"
+  },
+  "teardown": {
+    "arm_done": true,
+    "container_removal_evidence": "launcher_attest_remove_record",
+    "free_memory_gib_after": 105,
+    "offload_proxy_stopped": true,
+    "serve_rc": 0
+  }
+}

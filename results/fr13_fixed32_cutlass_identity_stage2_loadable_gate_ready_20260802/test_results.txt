@@ -1,0 +1,13 @@
+host_link=pass
+binary_identity_verifier=pass
+dynamic_import=pass
+shell_syntax=pass
+python_compile=pass
+ruff_changed_scope=pass_with_three_preexisting_unrelated_f841_excluded
+cutlass_tests=93_passed
+git_diff_check=pass
+gpu_runtime_used=0
+docker_used=0
+real_workload_used=0
+runtime_byte_equality=required_not_run
+acceptance_valid=0

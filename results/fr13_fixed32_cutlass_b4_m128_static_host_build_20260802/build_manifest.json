@@ -1,0 +1,139 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_m128_static_host_build.v1",
+  "created_at_utc": "2026-08-02T01:17:10Z",
+  "status": "host_compile_link_audit_pass_default_off",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "agent/fixed32-sfwd-m128-static-scheduler-20260802",
+    "implementation_commit": "7422082edb7e588b7ddc26b15552bba1aa201f7d",
+    "patch_source_sha256": "977c0204d03d022bd3f4b745ad4a0bad8ec36d7bf82ac1c6f82aa42a62094fab",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "vllm_cmake_sha256": "b12cd47f5761442551d6e1966e8a37ad94175382c1b014d2b65f67b74fbb6e3b",
+    "patched_dispatch_sha256": "446771039af31a2ae386b917540be2a018fdc8d947c001030696ec9a6608a4c4",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2"
+  },
+  "candidate": {
+    "selector": "persistent_b4_m128_static",
+    "diagnostic_selector": "persistent_b4_m128_static_byte_ab",
+    "default_enabled": false,
+    "physical_m": 128,
+    "tile_mnk": [128, 128, 128],
+    "cluster_mnk": [1, 1, 1],
+    "mainloop_schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+    "incumbent_tile_scheduler": "PersistentTileSchedulerSm100",
+    "candidate_tile_scheduler": "StaticPersistentTileScheduler100",
+    "source_delta": "complete_output_tile_scheduler_only"
+  },
+  "host_build": {
+    "result": "pass",
+    "target": "_C_stable_libtorch",
+    "build_type": "RelWithDebInfo",
+    "host_elf": "ELF64 AArch64 shared object",
+    "cuda_compiler": "/usr/local/cuda/bin/nvcc",
+    "cuda_release": "13.0",
+    "cuda_build": "cuda_13.0.r13.0/compiler.36424714_0",
+    "cxx_compiler": "/usr/bin/c++",
+    "cxx_version": "13.3.0",
+    "cmake_version": "3.28.3",
+    "ninja_version": "1.13.0.git.kitware.jobserver-pipe-1",
+    "torch_cuda_arch_list": "12.1a",
+    "cmake_cuda_architectures_argument": "75",
+    "candidate_object_observed_gencode": "arch=compute_121a,code=sm_121a",
+    "nvcc_threads": 1,
+    "parallel_jobs": 2,
+    "compile_steps": 20,
+    "compile_link_failures": 0,
+    "gpu_runtime_used": false,
+    "docker_used": false
+  },
+  "outputs": {
+    "candidate_binary": {
+      "published": false,
+      "local_path": "/home/mark/fr13_m128_static_build/bin/_C_stable_libtorch.persistent_b4_m128_static_host_build.abi3.so",
+      "sha256": "9c63ed03ad73640293ba544fc5acad9047dcf9e202854d86f83a7ba4ca5a7d39",
+      "bytes": 113010008,
+      "mode": "0555"
+    },
+    "candidate_object": {
+      "published": false,
+      "sha256": "c24be8fceb52bf54220b94bedfe47380684e1b30402ad3bd4a281c36ccd07af1",
+      "bytes": 13145056
+    },
+    "incumbent_binary": {
+      "published": false,
+      "local_path": "/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.persistent_b4_m128_stock_symbol_exact_compare320_gate_ready.abi3.so",
+      "sha256": "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f",
+      "bytes": 112698512
+    },
+    "candidate_size_delta_bytes": 311496,
+    "candidate_size_delta_percent": 0.276
+  },
+  "resource_audit": {
+    "result": "pass",
+    "incumbent_resource_records": 307,
+    "candidate_resource_records": 309,
+    "removed_or_changed_incumbent_records": 0,
+    "added_candidate_records": 2,
+    "candidate_kernel_dtypes": ["bf16", "fp16"],
+    "candidate_registers_per_thread": 168,
+    "candidate_stack_bytes_per_thread": 0,
+    "candidate_local_bytes_per_thread": 0,
+    "candidate_static_shared_bytes_per_cta": 1024,
+    "candidate_constant0_bytes": 2688,
+    "candidate_parameter_bytes": 1792,
+    "threads_per_cta": 384,
+    "warps_per_cta": 12,
+    "detected_spills": false,
+    "constant0_and_parameter_delta_bytes_vs_incumbent": 128
+  },
+  "sass_audit": {
+    "candidate_instructions_per_dtype": 1440,
+    "incumbent_instructions_per_dtype": 1696,
+    "instruction_delta_per_dtype": -256,
+    "candidate_text_bytes_per_dtype": 23040,
+    "incumbent_text_bytes_per_dtype": 27136,
+    "text_delta_bytes_per_dtype": -4096,
+    "static_size_delta_percent": -15.094,
+    "incumbent_m128_sass_unchanged_in_candidate_binary": true,
+    "projection_math_instruction_counts_unchanged": true,
+    "local_load_store_instructions": 0,
+    "performance_inference_allowed": false
+  },
+  "abi_audit": {
+    "classification": "additive_static_audit",
+    "candidate_defined_dynamic_symbols": 1297,
+    "incumbent_defined_dynamic_symbols": 1295,
+    "added_defined_symbols": 2,
+    "removed_defined_symbols": 0,
+    "candidate_undefined_dynamic_symbols": 182,
+    "incumbent_undefined_dynamic_symbols": 182,
+    "added_or_removed_undefined_symbols": 0,
+    "dt_needed_equal": true,
+    "runpath_equal": true,
+    "cubin_inventory_equal": true,
+    "runtime_import_run": false
+  },
+  "source_checks": {
+    "focused_tests": "42 passed",
+    "ruff": "pass",
+    "pycompile": "pass",
+    "pinned_source_apply": "pass",
+    "pinned_source_idempotency": "pass"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "Docker",
+    "synthetic or probe performance",
+    "real SWE-Verified exact4 B4 Tail23 byte gate",
+    "real SWE-Verified exact4 B4 Hydra27 byte gate",
+    "B4 full-step timing",
+    "hardware-floor acceptance"
+  ],
+  "required_next_gates": [
+    "authenticated real SWE-Verified exact4 B4 Tail23 raw-byte comparison",
+    "authenticated real SWE-Verified exact4 B4 Hydra27 raw-byte comparison",
+    "paired exact4 B4 full-step timing only after both byte gates pass"
+  ]
+}

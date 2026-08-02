@@ -1,0 +1,56 @@
+{
+  "base_git_sha": "f94e0a130fc8c607a8bc81d8b5f219c55b0f1527",
+  "branch": "agent/fixed32-floor-propagation-20260731",
+  "canonical_floor": {
+    "acceptance_multiplier": 1.15,
+    "bandwidth_bytes_per_s": 273000000000,
+    "mandatory_weight_bytes_per_event": 32666638208,
+    "mandatory_weight_floor_ms_per_event": 119.658015414,
+    "weight_bound_one_sided_u95_cap_ms_per_event": 137.606717726
+  },
+  "floor_scope": {
+    "included": [
+      "target_model_weight_read",
+      "verifier_head_weight_read",
+      "five_mtp_forward_weight_reads",
+      "five_64k_drafter_head_weight_reads"
+    ],
+    "is_measured_full_physical_hardware_floor": false,
+    "kind": "optimistic_mandatory_weight_read_only_lower_bound",
+    "nonweight_costs_included": false,
+    "representative_exclusions": [
+      "kv_state_and_activation_traffic",
+      "attention_and_scan",
+      "sampling_and_committer",
+      "kernel_launch_and_synchronization",
+      "allocator_runtime_and_host_gaps"
+    ]
+  },
+  "historical_results_rewritten": false,
+  "publication_kind": "source_only_no_gpu_no_swe",
+  "schema": "fr13.fixed32.corrected_floor_source_audit.v1",
+  "source_sha256": {
+    "scripts/fr13_fixed32_floor_timers_seq.sh": "2a7483c6665e42db4b52f9161744d1a497c7741946c31079f90cae95b67e59ee",
+    "scripts/fr13_floor_gate.py": "2751ee022a46ff66f703ee3c3c0c885d9813dc5677f11c3e4c6ccc97940b0f61",
+    "scripts/fr13_hardware_floor_ledger.py": "bede7da29d0829550162572d61df9010725cfd87145736f5e0fdb830ab991040",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh": "219918d0db0182eb23d4b75ea742e6091cbdfe5fa90fbc271053ff79ddf495aa",
+    "scripts/fr13_measure.py": "5be801e2016d938241fe9e2a5f6bb9e5a3979a956bb0242fff8e51d5a2b9bee9",
+    "scripts/fr13_runtime_manifest.py": "9b0ccd52b2e7f01d5c3ac24e3cdd3dcc3de3fded6e8f2ff5a920402d761bda87",
+    "tests/test_fr13_fixed32_floor_propagation.py": "ef897ae950a5b1f91151b90f9f78b9cda5f1f9017cb2a89bdb6e79de83e8253b",
+    "tests/test_fr13_measure_floor_semantics.py": "a431d5d477aad07e7cde6be7029da4d43b4b9a54b0af3a887afdd6e27480c0cc"
+  },
+  "verification": {
+    "bash_syntax": "pass",
+    "floor_gate_monolithic_self_test": {
+      "base_reproduced": true,
+      "status": "pre_existing_fixture_failure",
+      "stop_reason": "v3 provenance does not match strict trace request evidence"
+    },
+    "python_compile": "pass",
+    "runtime_manifest_self_test": "pass",
+    "targeted_pytest": {
+      "passed": 60,
+      "status": "pass"
+    }
+  }
+}

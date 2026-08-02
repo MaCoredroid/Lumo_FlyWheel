@@ -1,0 +1,86 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_m128_static_source.v1",
+  "created_at_utc": "2026-08-02T00:55:53Z",
+  "status": "source_only_default_off",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "source": {
+    "repo_base_commit": "2f76c744510384b780899b7f3b5a1dda74efc903",
+    "implementation_commit": "7422082edb7e588b7ddc26b15552bba1aa201f7d",
+    "branch": "agent/fixed32-sfwd-m128-static-scheduler-20260802",
+    "patch_source_sha256": "977c0204d03d022bd3f4b745ad4a0bad8ec36d7bf82ac1c6f82aa42a62094fab",
+    "patched_dispatch_sha256": "446771039af31a2ae386b917540be2a018fdc8d947c001030696ec9a6608a4c4",
+    "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2"
+  },
+  "candidate": {
+    "selector": "persistent_b4_m128_static",
+    "diagnostic_selector": "persistent_b4_m128_static_byte_ab",
+    "default_enabled": false,
+    "dispatch_m": 128,
+    "projection_shapes_mnk": [
+      [128, 34816, 5120],
+      [128, 5120, 17408],
+      [128, 5120, 6144],
+      [128, 16384, 5120],
+      [128, 14336, 5120]
+    ],
+    "output_tiles_per_shape": [272, 40, 40, 128, 112],
+    "tile_mnk": [128, 128, 128],
+    "cluster_mnk": [1, 1, 1],
+    "kernel_schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+    "scale_granularity_mnk": [1, 128, 128],
+    "base_candidate": "persistent_b4_m128",
+    "incumbent_tile_scheduler": "PersistentTileSchedulerSm100",
+    "candidate_tile_scheduler": "StaticPersistentTileScheduler100",
+    "only_source_level_change": "complete_output_tile_scheduler"
+  },
+  "exactness_construction": {
+    "collective_mainloop_reused": true,
+    "collective_epilogue_reused": true,
+    "k_tile_unchanged": true,
+    "k_iteration_order_unchanged_per_output": true,
+    "split_k": false,
+    "stream_k": false,
+    "output_tile_count_unchanged": true,
+    "physical_rows_unchanged": true,
+    "tail23_hydra27_mask_ignored_by_projection": true,
+    "raw_byte_gate_still_required": true
+  },
+  "static_scheduler_source": {
+    "is_dynamic_persistent": false,
+    "pipeline": "PipelineEmpty",
+    "workspace_bytes": 0,
+    "work_assignment": "blockIdx plus physical-grid stride",
+    "scheduler_header_sha256": "0ed331127afe83d20ec23b1a92e160f7388bb3727c77f05e496cc72371c664fd",
+    "base_scheduler_header_sha256": "3cf17407654833666b3be9f7e807f299779ef5f4492bf844d0da180409f2f5f6"
+  },
+  "fixed_campaign_contract": {
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "physical_rows_root_inclusive_per_request": 32,
+    "batch_size": 4,
+    "tail23_active_mask": "0x7a9ce7ff",
+    "hydra27_active_mask": "0x7abdffff",
+    "changed_by_candidate": false
+  },
+  "verification": {
+    "focused_tests": "42 passed",
+    "ruff": "pass",
+    "pycompile": "pass",
+    "pinned_source_apply": "pass",
+    "pinned_source_idempotency": "pass",
+    "gpu_build": "not_run",
+    "resource_audit": "not_run",
+    "real_swe_verified_byte_gate": "not_run",
+    "b4_timing": "not_run"
+  },
+  "required_next_gates": [
+    "pinned SM121 build and resource audit",
+    "real SWE-Verified exact4 B4 Tail23 raw-byte gate",
+    "real SWE-Verified exact4 B4 Hydra27 raw-byte gate",
+    "paired exact4 B4 timing only after both byte gates pass"
+  ]
+}
+

@@ -1,0 +1,38 @@
+{
+  "schema": "fr13.fixed32.b4_gdn_livegate_readiness.verification.v1",
+  "code_commit": "35758a4a6a2c6a83e1d9232edd08519e53961f40",
+  "commands": [
+    {
+      "command": "python -m pytest -q tests/test_fr13_fixed32_ingress_proxy.py tests/test_fr13_fixed32_gdn_batch_byte_ab.py tests/test_fr13_fixed32_gdn_batch_wide_bv.py tests/test_fr13_fixed32_ingress_wiring.py tests/test_fr13_fixed32_b1_diagnostic.py tests/test_fr13_fixed32_real_swe_profiler.py",
+      "result": "113 passed"
+    },
+    {
+      "command": "CUDA_VISIBLE_DEVICES='' python -m pytest -q tests/test_fr13_fixed32*.py -k 'not fixed32_runtime_manifest_includes_qwen_settings'",
+      "result": "609 passed, 8 skipped, 1 deselected"
+    },
+    {
+      "command": "python -m py_compile src/lumo_flywheel_serving/inference_proxy.py src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py tests/test_fr13_fixed32_ingress_proxy.py tests/test_fr13_fixed32_gdn_batch_byte_ab.py tests/test_fr13_fixed32_gdn_batch_wide_bv.py",
+      "result": "pass"
+    },
+    {
+      "command": "ruff check --ignore F841,E701,E402 <changed Python files>",
+      "result": "pass",
+      "note": "ignored rules are pre-existing findings outside the changed regions"
+    },
+    {
+      "command": "bash -n scripts/fr13_run_b4_gdn_wide_live_gate.sh scripts/fr13_launch_forked_fa2_tree_server.sh scripts/fr13_bigdenom_swe_serve_variant.sh",
+      "result": "pass"
+    },
+    {
+      "command": "git show --check --oneline --stat 35758a4a6",
+      "result": "pass"
+    }
+  ],
+  "temporary_test_environment": {
+    "isolated_worktree_venv": "/home/mark/shared/lumoFlyWheel/.venv",
+    "cuda_visible_devices": ""
+  },
+  "gpu_used": false,
+  "docker_used": false,
+  "real_swe_verified_run": false
+}

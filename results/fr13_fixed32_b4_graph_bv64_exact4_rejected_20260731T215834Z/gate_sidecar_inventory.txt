@@ -1,0 +1,3 @@
+fr13_fixed32_batch_gdn_bv_candidate.flag 3 bytes
+fr13_fixed32_batch_gdn_byte_ab.real_event.arm 36 bytes
+fr13_fixed32_batch_gdn_graph_byte_ab.enabled 2 bytes

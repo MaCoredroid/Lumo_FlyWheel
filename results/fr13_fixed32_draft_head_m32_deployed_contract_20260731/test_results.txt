@@ -1,0 +1,31 @@
+FR13 fixed32 deployed-format BF16 draft-head M32 source qualification
+Date: 2026-07-31 UTC
+Branch: agent/fixed32-draft-head-replacement
+Base: 6bbafd5caee2d95081ec049faeaa2a2d1b4743a5
+
+Safe targeted tests:
+- 35 passed:
+  pytest -q tests/test_fr13_draft_head_m32_production.py tests/test_fr13_draft_head_pad_rows.py tests/test_fr13_draft_vocab_root_wiring.py tests/test_fr13_drafter_single_logits_wiring.py tests/test_fr13_fixed32_b1_diagnostic.py tests/test_fr13_measure_floor_semantics.py
+- 101 passed:
+  pytest -q tests/test_fr13_fixed32_task_boundary_snapshot.py tests/test_fr13_fixed32_sfwd_wall_timer.py tests/test_fr13_fixed32_ingress_proxy.py tests/test_fr13_fixed32_request_id_binding.py tests/test_fr13_fixed32_real_swe_profiler.py
+- The 35-test set includes an executable unmeasured-capture to measured-replay production lifecycle test.
+- Canonical rebuild of the existing authenticated real-B1 traffic audit passed against its source arm.
+- Python compilation, shell syntax, embedded timing-reducer compilation, JSON parsing, and git diff whitespace checks passed.
+
+Environment-limited checks:
+- The separate worktree has no project .venv and system Python has no triton package.
+- Eight drafter-tree ownership cases therefore fail at import time on triton; 59 other tests in that attempted focused set passed.
+- A full repository run was not completed. The command
+  PYTHONPATH=src python3 -m pytest -q --ignore=tests/test_fr13_attn_kv_remap.py
+  unexpectedly reached an unrelated existing test that invoked docker run. The pytest and Docker client were terminated immediately after detection.
+
+Cleanup verification after the terminated broad run:
+- docker ps -a --format '{{.ID}} {{.Status}} {{.Names}}': empty
+- nvidia-smi --query-compute-apps=pid,process_name,used_gpu_memory --format=csv,noheader,nounits: empty
+
+Execution limits:
+- No candidate live gate was run.
+- No B4 campaign command was run or touched.
+- No GPU workload was run.
+- No candidate timing or performance result exists.
+- The 10.189136 ms/event recovery remains a modeled hypothesis only.

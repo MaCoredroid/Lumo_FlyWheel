@@ -1,0 +1,15 @@
+{
+  "ended_at": "2026-07-31T18:05:58Z",
+  "floor_acceptance_eligible": false,
+  "gate_eligible": false,
+  "instance_id": "astropy__astropy-12907",
+  "live_path": "/home/mark/shared/lumoFlyWheel-kernel-unified-bm8/output/fr13_b1_bm8_live_gate_20260731T175331Z/hydra27_fixed32_bm8_20260731T175331Z/logs/fr13_dfwd_unified_bm8.real_event.arm",
+  "marker": "swe_verified:astropy__astropy-12907",
+  "marker_bytes": 36,
+  "marker_sha256": "04fe7f61a0e0bbd48bf28127385c481b85550b291535f3705511494ba24c8463",
+  "rotated_path": "/home/mark/shared/lumoFlyWheel-kernel-unified-bm8/output/fr13_b1_bm8_live_gate_20260731T175331Z/hydra27_fixed32_bm8_20260731T175331Z/logs/fr13_dfwd_unified_bm8.real_event.ended.04fe7f61a0e0bbd48bf28127385c481b85550b291535f3705511494ba24c8463.arm",
+  "run_classification": "b1_diagnostic",
+  "schema": "fr13-fixed32-bm8-real-task-arm-v1",
+  "started_at": "2026-07-31T18:01:22Z",
+  "state": "ended"
+}

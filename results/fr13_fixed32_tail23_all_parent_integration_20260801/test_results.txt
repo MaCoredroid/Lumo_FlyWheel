@@ -1,0 +1,91 @@
+Static verification (2026-08-01 UTC)
+
+1. Fixed32 semantics
+Command:
+python3 scripts/fr13_fixed32_semantics_test.py
+Result:
+PASS: 7 tests across tail6_fixed32 and hydra27_fixed32; physical 31/32.
+
+2. All-parent focused suite
+Command:
+CUDA_VISIBLE_DEVICES='' python3 -m pytest -q \
+  tests/test_fr13_fixed32_taw_exact_commit_kernel.py \
+  tests/test_fr13_fixed32_taw_native_precompute.py \
+  tests/test_fr13_fixed32_taw_real_task_arm.py \
+  tests/test_fr13_fixed32_taw_exact_commit_cuda.py \
+  tests/test_fr13_taw_current_b1_live_pass_artifact.py
+Result:
+53 passed, 1 skipped (CUDA unavailable on this host).
+
+Coverage includes rejection of the pre-Tail23 live PASS, Tail21 mask tampering,
+source-row identity drift, uniform-level drift, independent B1/B4 production
+qualification, B2/B3 exact-reference fallback, and a complete B1-B4 warm loop.
+
+3. Real-task B1/B4 harness
+Command:
+CUDA_VISIBLE_DEVICES='' python3 -m pytest -q \
+  tests/test_fr13_fixed32_taw_real_task_arm.py \
+  tests/test_fr13_fixed32_b1_diagnostic.py \
+  tests/test_fr13_fixed32_b4_campaign_provenance.py \
+  tests/test_fr13_fixed32_subset_binding.py
+Result:
+36 passed.
+
+Coverage includes canonical exact4/exact16 campaign markers, concurrent marker
+lifetime, failure cleanup, subset tamper rejection, and atomic campaign
+artifact publication.
+
+4. Fixed-work, preseed, and ownership suite
+Command:
+python3 -m pytest -q \
+  tests/test_fr13_fixed32_conv_pregather_geometry.py \
+  tests/test_fr13_hardware_floor_ledger.py \
+  tests/test_fr13_fixed32_floor_propagation.py \
+  tests/test_fr13_fixed32_pretask_metrics.py \
+  tests/test_fr13_fixed32_final_full_preseed.py \
+  tests/test_fr13_fixed32_drafter_tree_ownership.py \
+  -k 'not target_tree_attention_requires_exact_layer_set and not target_correct_geometry_wrong_layer_fails'
+Result:
+109 passed, 8 deselected (optional package unavailable in this worktree).
+
+5. Work-census self-test
+Command:
+python3 scripts/fr13_fixed32_work_census.py --self-test
+Result:
+PASS; all 162 tamper tests passed, plus the mixed B1/B4 candidate and B2/B3
+reference-fallback campaign route.
+
+6. Depth acceptance self-test
+Command:
+PYTHONPATH=scripts CUDA_VISIBLE_DEVICES='' \
+  python3 scripts/fr13_depth_acceptance.py --self-test
+Result:
+PASS (`self-test OK`).
+
+Coverage includes Tail23 topology/report checks and the repaired synthetic
+Qwen task/campaign provenance fixture, including per-task runner metadata.
+
+7. Trace-provenance suite
+Command:
+CUDA_VISIBLE_DEVICES='' python3 -m pytest -q \
+  tests/test_fr13_fixed32_trace_provenance.py
+Result:
+150 passed, 1 skipped, 1 environment-only failure. The failure is the runtime
+manifest test because this worktree lacks the pinned SWE-Verified dataset cache
+blob under `.cache/huggingface`; it is unrelated to the edited code.
+
+8. Ingress wiring suite
+Command:
+CUDA_VISIBLE_DEVICES='' python3 -m pytest -q \
+  tests/test_fr13_fixed32_ingress_wiring.py
+Result:
+12 passed, 2 environment-only failures. Both execute extracted shell helpers
+that require `.venv/bin/python`, which is absent in this worktree.
+
+9. Additional checks
+- python py_compile: passed
+- git diff --check: passed
+
+Environment limitation:
+No GPU/container or real SWE-Verified task was run. These results make no
+timing, TPS, acceptance, or hardware-floor claim.

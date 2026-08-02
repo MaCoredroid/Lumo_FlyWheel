@@ -1,0 +1,18 @@
+classification: physical B4 blocked by insufficient real-task KV capacity
+source_commit: c22d23c9c04993fc9891e640c6e7a15fc9dce9c6
+repair_commit: be2aa3032
+
+The exact4 arm booted with max-num-seqs=4, concurrency=4, and a 20 GiB manual
+KV allocation. Boot produced 76,800 cache tokens and captured PIECEWISE 8/8
+plus FULL 4/4 graphs. Runtime/process attestation and the zero-traffic baseline
+passed, and all four canonical SWE-Verified tasks started.
+
+Under real traffic the engine repeatedly reported two running requests, two
+waiting for capacity, and 71.3% to 86.3% KV utilization. It never admitted the
+physical B4 full-graph replay required to run the 48-layer BV8/BV64 byte
+comparison. No byte record or graph-live PASS was published.
+
+The operator stopped the non-timing gate rather than finish a campaign that
+could not exercise its target batch. The arm had already accumulated 434
+complete real decode events. The interrupted terminal flush failed and the task
+set did not complete. No correctness, timing, TPS, or floor claim is made.

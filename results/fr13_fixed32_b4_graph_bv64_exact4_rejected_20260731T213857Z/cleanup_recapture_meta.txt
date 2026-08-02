@@ -1,0 +1,7 @@
+captured_at_utc=2026-07-31T21:57:40Z
+docker_command=docker ps -a --no-trunc
+docker_exit_code=0
+docker_container_count=0
+gpu_command=nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv
+gpu_exit_code=0
+gpu_compute_process_count=0

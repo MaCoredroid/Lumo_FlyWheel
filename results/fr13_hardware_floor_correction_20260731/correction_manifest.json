@@ -1,0 +1,50 @@
+{
+  "artifacts": {
+    "corrected_floor_ledger": "floor_ledger.json",
+    "corrected_floor_ledger_sha256": "1ae91dec2c31ba33c8d9d4fb78958a903e096d8892a0e3c9792e2eba24d97453"
+  },
+  "correction": {
+    "added_mandatory_bytes_per_event": 477199744,
+    "reason": "The prior ledger counted the four post-root graph MTP forwards but omitted the initial MTP forward executed before proposal-tree expansion.",
+    "scope": "mandatory logical weight-read accounting only; historical measurements and artifacts are unchanged"
+  },
+  "corrected_root64_acceptance": {
+    "floor_ms": 119.658015414,
+    "mandatory_weight_bytes_per_event": 32666638208,
+    "one_sided_u95_cap_ms": 137.606717726,
+    "required_one_sided_u95_floor_ratio_lte": 1.15
+  },
+  "historical_artifact": {
+    "mtp_forward_passes": 4,
+    "path": "results/fr13_fixed32_b1_nsys_20260731T013952Z_curated/floor_ledger.json",
+    "preserved_unchanged": true,
+    "schema": "fr13.speculative_step_weight_ledger.v1",
+    "sha256": "3507bc71b5b7cf72d090de00d45b03a736493121be0a1680e4db19519714c8b4"
+  },
+  "nsys_confirmation": {
+    "dfwd_range_instances": 881,
+    "draft_head_kernel_instances": 4405,
+    "draft_head_passes_per_event": 5,
+    "mtp_gemm_instances": 17620,
+    "mtp_gemms_per_forward": 4,
+    "mtp_passes_per_event": 5,
+    "path": "results/fr13_fixed32_b1_nsys_20260731T013952Z_curated/nsys_attribution.json",
+    "sha256": "685c410a0ba09d00c8b244bfa06809530337cea383b88fa92a5da1013eadf2d0"
+  },
+  "production_execution_invariants": {
+    "initial_mtp_forward_passes_per_event": 1,
+    "post_root_graph_mtp_forward_passes_per_event": 4,
+    "post_root_graph_source": "scripts/fr13_fixed32_topology.py:MTP_FORWARD_CALLS",
+    "total_mtp_forward_passes_per_event": 5
+  },
+  "published_at_utc": "2026-07-31",
+  "recomputed_directleaf_diagnostic": {
+    "acceptance_valid": false,
+    "floor_ratio": 2.043629720810374,
+    "gap_to_1_15x_cap_ms": 106.92995890713623,
+    "measured_wall_ms_per_step": 244.53667663323623,
+    "note": "This recomputation corrects floor accounting only; the historical exact4 diagnostic remains provenance-invalid."
+  },
+  "schema": "fr13.hardware_floor_correction_manifest.v1",
+  "source_parent_commit": "e5a402924"
+}

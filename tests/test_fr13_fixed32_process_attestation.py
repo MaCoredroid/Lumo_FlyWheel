@@ -56,6 +56,177 @@ def test_direct_pid1_is_required_for_acceptance() -> None:
         )
 
 
+def test_default_graph_and_eager_pid1_are_exact_distinct_contracts() -> None:
+    default = contract.expected_process_pid1_argv(
+        4,
+        attribution_only=False,
+    )
+    eager = contract.expected_process_pid1_argv(
+        4,
+        attribution_only=False,
+        eager_diagnostic=True,
+    )
+    graph = contract.expected_process_pid1_argv(
+        4,
+        attribution_only=False,
+        graph_diagnostic=True,
+    )
+
+    assert default == contract.expected_pid1_argv(4)
+    kv_index = default.index("--kv-cache-memory-bytes")
+    assert default[kv_index : kv_index + 2] == [
+        "--kv-cache-memory-bytes",
+        str(contract.FIXED32_B4_KV_CACHE_MEMORY_BYTES),
+    ]
+    assert len(default) == 49
+    assert graph == default
+    assert len(graph) == 49
+    assert eager == [*default, "--enforce-eager"]
+    assert len(eager) == 50
+    assert contract.validate_process_pid1_argv(
+        graph,
+        4,
+        attribution_only=False,
+        graph_diagnostic=True,
+    ) == graph
+    assert contract.validate_process_pid1_argv(
+        eager,
+        4,
+        attribution_only=False,
+        eager_diagnostic=True,
+    ) == eager
+    with pytest.raises(contract.ContractError, match="PID1 argv mismatch"):
+        contract.validate_process_pid1_argv(
+            eager,
+            4,
+            attribution_only=False,
+        )
+    with pytest.raises(contract.ContractError, match="PID1 argv mismatch"):
+        contract.validate_process_pid1_argv(
+            default,
+            4,
+            attribution_only=False,
+            eager_diagnostic=True,
+        )
+    with pytest.raises(contract.ContractError, match="PID1 argv mismatch"):
+        contract.validate_process_pid1_argv(
+            eager,
+            4,
+            attribution_only=False,
+            graph_diagnostic=True,
+        )
+
+
+def test_b1_omits_manual_kv_cache_and_b4_rejects_kv_tamper() -> None:
+    b1 = contract.expected_pid1_argv(1)
+    b4 = contract.expected_pid1_argv(4)
+
+    assert "--kv-cache-memory-bytes" not in b1
+    kv_index = b4.index("--kv-cache-memory-bytes")
+    b4[kv_index + 1] = str(contract.FIXED32_B4_KV_CACHE_MEMORY_BYTES - 1)
+    with pytest.raises(contract.ContractError, match="PID1 argv mismatch"):
+        contract.validate_process_pid1_argv(
+            b4,
+            4,
+            attribution_only=False,
+            graph_diagnostic=True,
+        )
+
+
+def test_eager_diagnostic_is_not_an_attribution_contract() -> None:
+    with pytest.raises(
+        contract.ContractError,
+        match="eager diagnostic cannot be attribution-only",
+    ):
+        contract.expected_process_pid1_argv(
+            4,
+            attribution_only=True,
+            eager_diagnostic=True,
+        )
+
+
+def test_eager_diagnostic_is_b4_only() -> None:
+    with pytest.raises(
+        contract.ContractError,
+        match="eager diagnostic requires concurrency 4",
+    ):
+        contract.expected_process_pid1_argv(
+            1,
+            attribution_only=False,
+            eager_diagnostic=True,
+        )
+
+
+def test_streamk_eager_diagnostic_is_exact_b1_contract() -> None:
+    default = contract.expected_pid1_argv(1)
+    eager = contract.expected_process_pid1_argv(
+        1,
+        attribution_only=False,
+        streamk_eager_diagnostic=True,
+    )
+
+    assert eager == [*default, "--enforce-eager"]
+    assert contract.validate_process_pid1_argv(
+        eager,
+        1,
+        attribution_only=False,
+        streamk_eager_diagnostic=True,
+    ) == eager
+    with pytest.raises(
+        contract.ContractError,
+        match="Stream-K eager diagnostic requires concurrency 1",
+    ):
+        contract.expected_process_pid1_argv(
+            4,
+            attribution_only=False,
+            streamk_eager_diagnostic=True,
+        )
+
+
+def test_graph_diagnostic_is_b4_only_and_not_attribution() -> None:
+    with pytest.raises(
+        contract.ContractError,
+        match="graph diagnostic requires concurrency 4",
+    ):
+        contract.expected_process_pid1_argv(
+            1,
+            attribution_only=False,
+            graph_diagnostic=True,
+        )
+    with pytest.raises(
+        contract.ContractError,
+        match="graph diagnostic cannot be attribution-only",
+    ):
+        contract.expected_process_pid1_argv(
+            4,
+            attribution_only=True,
+            graph_diagnostic=True,
+        )
+
+
+def test_eager_and_graph_diagnostics_are_mutually_exclusive() -> None:
+    with pytest.raises(
+        contract.ContractError,
+        match="process diagnostics are mutually exclusive",
+    ):
+        contract.expected_process_pid1_argv(
+            4,
+            attribution_only=False,
+            eager_diagnostic=True,
+            graph_diagnostic=True,
+        )
+    with pytest.raises(
+        contract.ContractError,
+        match="process diagnostics are mutually exclusive",
+    ):
+        contract.expected_process_pid1_argv(
+            1,
+            attribution_only=False,
+            eager_diagnostic=True,
+            streamk_eager_diagnostic=True,
+        )
+
+
 def test_exact_nsys_pid1_is_required_for_attribution() -> None:
     expected = [
         *EXPECTED_NSYS_PREFIX,
@@ -130,6 +301,23 @@ def test_live_attestation_receives_the_selector_explicitly() -> None:
         REPO / "scripts" / "fr13_bigdenom_swe_serve_variant.sh"
     ).read_text(encoding="utf-8")
 
-    assert '"${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" <<\'PY\'' in serve
+    assert '"${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" \\' in serve
+    assert '"${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" \\' in serve
+    assert '"${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" \\' in serve
+    assert '"${FR13_FIXED32_CUTLASS_WAVE:-stock}" \\' in serve
+    assert '"$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" <<\'PY\'' in serve
     assert "attribution_only_text = sys.argv[7]" in serve
+    assert "batch_gdn_byte_ab_text = sys.argv[8]" in serve
+    assert "batch_gdn_graph_byte_ab_text = sys.argv[9]" in serve
+    assert "cutlass_wave = sys.argv[10]" in serve
+    assert "sfwd_b4_byte_ab_text = sys.argv[11]" in serve
     assert "attribution_only_text = os.environ" not in serve
+    assert "batch_gdn_byte_ab_text = os.environ" not in serve
+    assert "batch_gdn_graph_byte_ab_text = os.environ" not in serve
+    assert "eager_diagnostic=(" in serve
+    assert "batch_gdn_byte_ab_text == \"1\"" in serve
+    assert 'or cutlass_wave == "persistent_b4_m128_byte_ab"' in serve
+    assert 'or sfwd_b4_byte_ab_text == "1"' in serve
+    assert (
+        "graph_diagnostic=batch_gdn_graph_byte_ab_text == \"1\"" in serve
+    )

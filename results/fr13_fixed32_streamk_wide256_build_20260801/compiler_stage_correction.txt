@@ -1,0 +1,12 @@
+Initial exact compile result: FAILED
+CUTLASS diagnostic: static assertion failed: Specialization requires Stages set to value 2 or more
+Cause: StageCountAuto selected one stage for the 128x256x128 normal tile.
+
+Correction: parameterize the mainloop stage policy and use StageCount<2> only
+for the two forced-wide256 specializations. Stock and coop128 retain automatic
+staging. Tile shapes, scale granularities, cooperative schedule, forced
+Stream-K decomposition, deterministic reduction, and splits=1 are unchanged.
+
+Final exact compile result: PASSED
+[1/2] Building CUDA object for scaled_mm_blockwise_sm120_fp8.cu
+[2/2] Linking _C_stable_libtorch.abi3.so

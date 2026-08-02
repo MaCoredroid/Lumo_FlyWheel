@@ -86,8 +86,9 @@ def test_fixed32_runtime_consumers_use_content_bound_subset_validation() -> None
     serve = (REPO / "scripts/fr13_bigdenom_swe_serve_variant.sh").read_text()
     runner = (REPO / "scripts/run_swe_bench_q36_a.py").read_text()
 
-    for source in (driver, serve, runner):
-        assert "validate_canonical_subset" in source
+    assert "validate_canonical_subset" in driver
+    for source in (serve, runner):
+        assert "validate_fixed32_run_subset" in source
     assert 'case "$(realpath "$SUBSET")"' not in driver
     assert "canonical_subsets = {" not in runner
     assert 'raw_subset.get("task_ids")' not in serve

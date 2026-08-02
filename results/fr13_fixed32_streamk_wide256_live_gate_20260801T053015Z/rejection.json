@@ -1,0 +1,43 @@
+{
+  "schema": "fr13.fixed32.streamk_force_wide256_live_rejection.v1",
+  "status": "rejected_nonmeasurement",
+  "acceptance_valid": false,
+  "performance_measurement": false,
+  "runroot": "output/fr13_b1_cutlass_streamk_wide256_live_gate_20260801T053015Z",
+  "source_commit": "7fa0ac0e4061f62bd3661ea1ae8f8af66c6dde66",
+  "candidate_sha256": "b957cf49da2977056661443192fc2725e153adba7f21fb522c07b439c04540ee",
+  "candidate_bytes": 113174464,
+  "diagnostic_selector": "streamk_force_wide256_byte_ab",
+  "failure": {
+    "phase": "pre_health_profile_run",
+    "observed_at_utc": "2026-08-01T05:36:24Z",
+    "operation": "GDN in_proj_qkvz",
+    "error": "CUTLASS Error Internal at gemm_op.run in cutlass_gemm_caller.cuh:61",
+    "cause": "empty-marker boot route executed the normal-layout forced-StreamK candidate",
+    "profile_m_exact_recoverable": false,
+    "profile_m_branch": [96, 128]
+  },
+  "traffic": {
+    "task_requests": 0,
+    "real_task_markers": 0,
+    "byte_comparison_records": 0
+  },
+  "cleanup": {
+    "exited_container_id": "4733624bd5d8a4576a825f8de18b23fa374d58190f5877bdb24aa735ca60505d",
+    "container_removed_manually": true,
+    "docker_empty_after_cleanup": true,
+    "gpu_idle_after_cleanup": true
+  },
+  "raw_evidence": {
+    "runlog_sha256": "555fb16b519114218d046db070fa9ee0891b9816555d0b1468acb97cf1f35012",
+    "runtime_manifest_at_launch_sha256": "e5ae96f5a58836acfbf6a91e9e357c1418766ebae7176b29f142f45644374049",
+    "external_manifest_at_launch_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "binary_attestation_sha256": "42da7cb51483b6657dd0e615fbe72cc4aa6e2ea4a3ede4bc8b10e5c20244e176",
+    "b1_diagnostic_sha256": "7b07592f1de9d7cefaa3e56bf0430749b5d3445aedac1d64ccd9ca2d548d37a3",
+    "launcher_meta_sha256": "539ce1c292e5abc40fd6d1214d89e8ef5098bbd660ef6046bb4c7e3a9326495e"
+  },
+  "replacement": {
+    "policy": "wide256 is B1-only; rows above 64 route stock and unarmed diagnostics route stock",
+    "binary_sha256": "f682560caad085cfdc0c44eec5252352a8bc4861dc634a55e0dccbab261b7892"
+  }
+}

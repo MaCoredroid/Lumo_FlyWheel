@@ -1,0 +1,121 @@
+{
+  "acceptance_contract": {
+    "batch_size": 4,
+    "concurrency": 4,
+    "draft_vocab_k": 0,
+    "draft_vocab_root": 0,
+    "mandatory_weight_bytes": 42025179008,
+    "one_sided_u95_cap_ms": 177.0291423413919,
+    "ratio_cap": 1.15,
+    "weight_floor_ms": 153.9383846446886
+  },
+  "candidate": {
+    "binary": {
+      "bytes": 112698512,
+      "mode": "0555",
+      "path": "/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.persistent_b4_m128_stock_symbol_exact_compare320_gate_ready.abi3.so",
+      "sha256": "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
+    },
+    "comparison_call_limit": 320,
+    "diagnostic_selector": "persistent_b4_m128_byte_ab",
+    "dispatch_m": 128,
+    "kernel_schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+    "projection_gate_nk": [
+      [
+        5120,
+        6144
+      ],
+      [
+        5120,
+        17408
+      ],
+      [
+        14336,
+        5120
+      ],
+      [
+        16384,
+        5120
+      ],
+      [
+        34816,
+        5120
+      ]
+    ],
+    "selector": "persistent_b4_m128",
+    "tile_mnk": [
+      128,
+      128,
+      128
+    ]
+  },
+  "execution": {
+    "byte_gate_launched": false,
+    "gpu_used": false,
+    "performance_measured": false,
+    "reason": "this comparator and topology repair is a no-launch preflight",
+    "timing_acceptance_valid": false
+  },
+  "kernel_audit": {
+    "accumulator_type": "float",
+    "base_template": "cutlass_3x_gemm_fp8_blockwise",
+    "compute_type": "float",
+    "cross_cta_k_reduction": false,
+    "k_tile": 128,
+    "no_fp32_reassociation_static_prerequisite": true,
+    "split_k": false,
+    "stream_k": false,
+    "stream_k_scheduler": false,
+    "verdict": "pass"
+  },
+  "provenance": {
+    "patched_dispatch": {
+      "path": "/home/mark/fr13_streamk_build/vllm-build-source/csrc/libtorch_stable/quantization/w8a8/cutlass/c3x/scaled_mm_blockwise_sm120_fp8_dispatch.cuh",
+      "sha256": "13debfa754beeb4a6ae9818612b4bf729619f0be03637372626de3778b2b3780"
+    },
+    "patch_source": {
+      "path": "scripts/fr13_patch_cutlass_fixed32_wave.py",
+      "sha256": "656c53b20497fc08cc7fdfb18256235b07cfad9868fde2faa70e6b0b9dfca41a"
+    },
+    "preflight_base_commit": "ad64df5e6a181d9f93def728516fddc121936da8",
+    "prepared_at": "2026-08-01T09:55:52Z",
+    "stock_fa2": {
+      "bytes": 299183936,
+      "path": "/home/mark/shared/lumoFlyWheel-streamk-wide256/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so",
+      "sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d"
+    }
+  },
+  "schema": "fr13.fixed32.cutlass_b4_persistent_m128.preflight.v1",
+  "stock_byte_capability": {
+    "candidate_output_destination": "temporary",
+    "comparison": "every BF16 output byte",
+    "comparison_call_limit": 320,
+    "live_byte_equality": "pending",
+    "mismatch_is_fatal": true,
+    "served_output": "stock",
+    "static_verdict": "pass"
+  },
+  "task_set": {
+    "classification": "real SWE-Verified exact4 B4",
+    "instance_ids": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033",
+      "astropy__astropy-13236",
+      "astropy__astropy-13398"
+    ],
+    "path": "config/fr13_fixed32/subset_b4_four.json",
+    "sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "topology": "hydra27_fixed32"
+  },
+  "verification": {
+    "bash_syntax": "pass",
+    "git_diff_check": "pass",
+    "python_compile": "pass",
+    "ruff": "pass",
+    "targeted_tests": {
+      "passed": 211,
+      "status": "pass",
+      "wall_seconds": 2.88
+    }
+  }
+}

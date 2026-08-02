@@ -1,0 +1,75 @@
+{
+  "schema": "fr13.fixed32.kernel_next_stack.source.v1",
+  "created_utc": "2026-07-31T16:09:36Z",
+  "status": "SOURCE_INTEGRATED_GPU_NOT_RUN",
+  "branch": "agent/fixed32-kernel-next-stack",
+  "base_commit": "850355982cf747d2a960e7dae5f769edb660d772",
+  "integrated_source_tip": "1f5b63c162b82f7aca29b09a1af28fd71b2ba32d",
+  "source_commits": {
+    "production_selectors": "39907d3dc10808b7d5b610483576e953467626a4",
+    "unified_bm8": "a64b883504cd8aa600942f130cad51b4d0897335",
+    "qrow16_source": "c938ef2a9ca54915035bc258107dac4cdb7cab62",
+    "qrow16_default_off": "ff1937f1b6f7be93e6783780ce60c3cd346d2a1a",
+    "batched_wide_bv": "df7494658ce160411ab7dfadffd6394895e0c61a",
+    "batched_wide_bv_artifact": "d509384639eedea391b55f46cebbe0c75ae173e2",
+    "batched_wide_bv_b1_rejection_binding": "86f72da79bffac34e68cbfabda2bb13b66ae2a21"
+  },
+  "selectors_default_off": true,
+  "selector_defaults": {
+    "taw_diagnostic": "0",
+    "taw_production": "0",
+    "qrow16_diagnostic": "0",
+    "qrow16_production": "0",
+    "unified_bm8_diagnostic": "0",
+    "gdn_path_bv_diagnostic": "",
+    "gdn_path_bv_production": "",
+    "batched_gdn_diagnostic": "0",
+    "batched_gdn_production": "0",
+    "batched_gdn_bv_diagnostic": "",
+    "batched_gdn_bv_production": ""
+  },
+  "b1_rejection_preserved": {
+    "evidence_commit": "850355982cf747d2a960e7dae5f769edb660d772",
+    "candidate": "gdn_path_bv64",
+    "status": "REJECTED_BYTE_MISMATCH",
+    "mismatched_surface": "export",
+    "stock_restored": true,
+    "pass_record_emitted": false,
+    "production_eligible": false
+  },
+  "b4_wide_bv_state": {
+    "diagnostic_only": true,
+    "formal_batch": 4,
+    "formal_task_set": "exact4",
+    "real_swe_verified_required": true,
+    "eager_required": true,
+    "metrics_required": true,
+    "all_48_layers_required": true,
+    "reference_served": true,
+    "v2_pass_present": false,
+    "production_armed": false,
+    "timing_eligible": false
+  },
+  "verification": {
+    "focused": {
+      "passed": 89,
+      "failed": 0
+    },
+    "broad_fixed32": {
+      "passed": 590,
+      "skipped": 8,
+      "deselected_known_environment_prerequisites": 10,
+      "failed": 0
+    },
+    "shell_syntax": "pass",
+    "python_compile": "pass",
+    "ruff_merged_sources": "pass"
+  },
+  "gpu_used": false,
+  "docker_used": false,
+  "real_swe_verified_run": false,
+  "byte_parity_claim": false,
+  "performance_claim": false,
+  "acceptance_claim": false,
+  "hardware_floor_claim": false
+}

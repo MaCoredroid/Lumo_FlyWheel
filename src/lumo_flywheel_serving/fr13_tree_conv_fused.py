@@ -199,6 +199,90 @@ def fused_tree_conv_source(
     return torch.cat((prior_window.transpose(0, 1), x, zero_row), dim=0)
 
 
+def fused_tree_conv_sources_batched(
+    *,
+    prior_bank: torch.Tensor,
+    prior_cols: torch.Tensor,
+    x: torch.Tensor,
+    zero_row: torch.Tensor,
+    staging: torch.Tensor,
+    batch: int,
+    tree_n: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Build all fixed32 request sources directly in persistent staging.
+
+    This is the batched, byte-copy-only form of ``fused_tree_conv_source``.
+    It replaces B independent prior gathers, B cats, and B staging copies with
+    one prior gather and one cat whose ``out`` is the already-preseeded source
+    staging.  Request order and each source row's bytes stay unchanged.
+    """
+    b = int(batch)
+    n = int(tree_n)
+    if b not in (1, 2, 3, 4) or n != 32:
+        raise ValueError(
+            "FR13_FIXED32_CONV_SOURCE_BATCH requires B=1..4 and tree_n=32, "
+            f"got B={b} tree_n={n}"
+        )
+    if (
+        prior_bank.ndim != 3
+        or int(prior_bank.shape[0]) < b
+        or x.ndim != 2
+        or int(x.shape[0]) < b * n
+        or zero_row.ndim != 2
+        or int(zero_row.shape[0]) != 1
+        or staging.ndim != 2
+        or prior_cols.ndim != 1
+        or prior_cols.dtype != torch.long
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_SOURCE_BATCH tensor geometry drift: "
+            f"prior={tuple(prior_bank.shape)} cols={tuple(prior_cols.shape)} "
+            f"x={tuple(x.shape)} zero={tuple(zero_row.shape)} "
+            f"staging={tuple(staging.shape)}"
+        )
+    channels = int(x.shape[1])
+    prior_rows = int(prior_cols.numel())
+    source_rows = prior_rows + n + 1
+    if (
+        int(prior_bank.shape[1]) != channels
+        or int(zero_row.shape[1]) != channels
+        or int(staging.shape[0]) < b * source_rows
+        or int(staging.shape[1]) != channels
+        or prior_bank.dtype != x.dtype
+        or zero_row.dtype != x.dtype
+        or staging.dtype != x.dtype
+        or prior_bank.device != x.device
+        or zero_row.device != x.device
+        or staging.device != x.device
+        or prior_cols.device != x.device
+        or int(x.stride(1)) != 1
+        or int(x.stride(0)) < channels
+        or not zero_row.is_contiguous()
+        or not staging.is_contiguous()
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_SOURCE_BATCH source contract drift: "
+            f"B={b} rows={source_rows} channels={channels} "
+            f"x_shape={tuple(x.shape)} x_stride={tuple(x.stride())} "
+            f"dtype={prior_bank.dtype}/{x.dtype}/{zero_row.dtype}/"
+            f"{staging.dtype} device={prior_bank.device}/{x.device}/"
+            f"{zero_row.device}/{staging.device}"
+        )
+
+    prior_windows = prior_bank[:b].index_select(2, prior_cols)
+    sources = staging[: b * source_rows].view(b, source_rows, channels)
+    torch.cat(
+        (
+            prior_windows.transpose(1, 2),
+            x[: b * n].view(b, n, channels),
+            zero_row.view(1, 1, channels).expand(b, 1, channels),
+        ),
+        dim=1,
+        out=sources,
+    )
+    return sources, prior_windows
+
+
 def fused_tree_conv_taps_acc(
     *,
     window: torch.Tensor,

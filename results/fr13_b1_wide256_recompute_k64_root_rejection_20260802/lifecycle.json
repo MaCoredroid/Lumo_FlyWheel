@@ -1,0 +1,27 @@
+{
+  "container_present_after_teardown": false,
+  "ended_at": "2026-08-02T04:45:56Z",
+  "external_manifest_end_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+  "external_manifest_launch_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+  "finalizer": {
+    "initial_error": "PermissionError reading root-owned binary attestation",
+    "initial_file_mode": "0600",
+    "initial_file_owner": "root:root",
+    "repair_commit": "fad40550b",
+    "recovered_reducer_rc": 4,
+    "recovered_reducer_status": "fail",
+    "recovery": "made the existing attestation readable and replayed the same reducer over the unchanged 320-record comparator log"
+  },
+  "health_sha256": "13bd9559f27e0055b39377d02e76a948b57b06d4e3c74b518fbdf4e3dba444ea",
+  "launcher_meta_sha256": "508b4fa93f7e55525fa107d6f734c2ff9b839335f52f4036337b4bdc80ad7265",
+  "runtime_manifest_end_sha256": "51cd5ac0675181f3f7ce52ed466e7fce8b92b4933168e3ffa1cc98fc7b049f9c",
+  "runtime_manifest_launch_sha256": "51cd5ac0675181f3f7ce52ed466e7fce8b92b4933168e3ffa1cc98fc7b049f9c",
+  "schema": "fr13.fixed32.cutlass_streamk_wide256_k64_root_lifecycle.v1",
+  "serve_rc": 0,
+  "started_at": "2026-08-02T04:30:50Z",
+  "swe_orchestrator_rc": 0,
+  "swe_window_wall_s": 262,
+  "task_count": 1,
+  "task_timed_out": false,
+  "task_verdict": "resolved"
+}

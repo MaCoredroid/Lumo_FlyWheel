@@ -1,0 +1,21 @@
+Host-only verification; no GPU runtime, Docker, probe, or timing was launched.
+
+Focused pytest:
+150 passed in 1.25s
+
+Static checks:
+- bash -n on gate, kernel gate, launcher, and SWE serve variant: PASS
+- py_compile on edited Python integration sources: PASS
+- targeted ruff on candidate core and tests: PASS
+- pinned patched vLLM source idempotency: PASS
+- git diff --check before source commit: PASS
+
+Host build:
+- nvcc compile: PASS
+- complete extension link: PASS
+- read-only immutable candidate copy SHA/size verification: PASS
+
+The repository-wide formatter was not applied because the large existing
+patch/runner sources are not globally ruff-formatted. A broader ruff invocation
+also reports three unrelated pre-existing F841 findings in
+scripts/fr10_phase4_patch_vllm_tree_gdn.py outside this change.

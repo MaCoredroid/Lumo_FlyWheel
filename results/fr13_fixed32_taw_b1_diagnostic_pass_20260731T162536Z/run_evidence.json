@@ -1,0 +1,93 @@
+{
+  "schema": "fr13.fixed32.taw_native_precompute.b1_diagnostic_evidence.v1",
+  "created_utc": "2026-07-31T16:25:36Z",
+  "status": "DIAGNOSTIC_BYTE_EQUIVALENCE_PASS",
+  "production_eligible": false,
+  "acceptance_eligible": false,
+  "timing_eligible": false,
+  "runroot": "output/fr13_b1_kernel_live_gate_taw_only_20260731T160322Z",
+  "absolute_runroot": "/home/mark/shared/lumoFlyWheel-kernel-livegate/output/fr13_b1_kernel_live_gate_taw_only_20260731T160322Z",
+  "arm": "hydra27_fixed32_kernel_live_taw_only_b1_20260731T160322Z",
+  "run_source_commit": "850355982cf747d2a960e7dae5f769edb660d772",
+  "run_source_file_sha256": "8a870b9f432074cbf851a1d457de5fa6e0987e56190b972931d9cda2694fdb73",
+  "run_source_contract_schema": "fr13-fixed32-taw-exact-commit-v3",
+  "run_source_contract_sha256": "fe73ad35a916e41532575e29a5f9f6442d1081d0d1c0d0fc18210fdc8f0f56f8",
+  "fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+  "serve_rc": 0,
+  "started_utc": "2026-07-31T16:03:22Z",
+  "ended_utc": "2026-07-31T16:16:45Z",
+  "mode": "hydra27_fixed32",
+  "batch_size": 1,
+  "concurrency": 1,
+  "task": {
+    "instance_id": "astropy__astropy-12907",
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "verdict": "resolved",
+    "passed": true,
+    "failure_mode": "tests_passed",
+    "harness_exit_code": 0,
+    "campaign_instances": 1,
+    "campaign_resolved": 1,
+    "resolved_rate": 1.0
+  },
+  "task_boundary": {
+    "pre_complete_work_census_events": 0,
+    "post_complete_work_census_events": 762,
+    "expected_complete_events": 762,
+    "start_forward_step": 0,
+    "end_forward_step": 762,
+    "first_event_index": 0,
+    "last_event_index": 761,
+    "events_sha256": "e5423fbf0475713abe2a698ff3eaef27ca81dc14665e95488024153478eef9f1"
+  },
+  "marker_counts": {
+    "periodic_taw_pass": 5,
+    "periodic_root_checks": [
+      128,
+      256,
+      384,
+      512,
+      640
+    ],
+    "taw_mismatch": 0,
+    "current_schema_live_pass": 0,
+    "gdn_bv_gate": 0,
+    "qrow16_gate": 0,
+    "draft_head_gate": 0
+  },
+  "work_census": {
+    "event_rows": 762,
+    "terminal_rows": 1,
+    "batch_1_rows": 762,
+    "diagnostic_route_rows": 762,
+    "run_source_contract_rows": 762,
+    "fallback_sum": 0,
+    "graph_dead_sum": 0,
+    "mixed_pseudo_sum": 0,
+    "overflow_sum": 0,
+    "taw_cache_miss_sum": 0
+  },
+  "gates": {
+    "taw_native_precompute": true,
+    "gdn_path_bv": false,
+    "qrow16": false,
+    "draft_head_pad": false
+  },
+  "raw_evidence_sha256": {
+    "docker_full.log": "3ce52d60f0c19b8463fd870bed35148e724fdf194d2bdf0cf8c7e78573a159b9",
+    "logs/fr13_fixed32_work_census.jsonl": "9f9028696be6dc50ffe517962675c6a026296541b052f1850df7eaf40856c834",
+    "fixed32_b1_diagnostic.json": "d0802fd463e42a4837a52d49b3a3ddfd195df37f19c5f496ca0768866a7669aa",
+    "swe_out/verified/campaign_summary.json": "f1285211be6949f419853e43b21146fe0d4385db25a42ed204b5ec5f0fd659ab",
+    "swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json": "e3481d8ba7e7180b9af86a4c48b87b87f89e735b34141b91da63a49903fc70f0",
+    "swe_out/verified/per_task/astropy__astropy-12907/fixed32_task_boundary.json": "8a695fc257959bb66a95afb019d3139428e1905b36e4914b00b35ea1bd974157",
+    "swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json": "df6204812b9d87db3bf8d4f8289034445a55667f459deb25133984c8692a87d8",
+    "git_head.txt": "e5fdb0e4c3675dd18492a6496d8bbbd695b8d08677d7b37577442b80161230c9",
+    "../launcher_meta.txt": "1b5b3806ebc22d2f9acafc9483e1a3138902dbfa03130dd4e7814a7a63760e2c"
+  },
+  "limitations": {
+    "runtime_emitted_current_schema_live_pass": false,
+    "real_event_arm_bound_inside_run_source": false,
+    "run_contract_matches_current_production_contract": false,
+    "exact_current_source_rerun_required": true
+  }
+}

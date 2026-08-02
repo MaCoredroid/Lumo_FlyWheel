@@ -1,0 +1,70 @@
+{
+  "acceptance_valid": false,
+  "candidate": {
+    "bytes": 113079680,
+    "mode": "0555",
+    "path": "/home/mark/fr13_streamk_build/bin/_C_stable_libtorch.streamk_force_wide256_b1_recompute_stack0_k64_root1_gate_ready_cap320.abi3.so",
+    "sha256": "503277a2dca6784502b709007adfe45f42d0f1a1851107e7b913e1e85a00de5a"
+  },
+  "candidate_selector": "streamk_force_wide256",
+  "common_fa2": {
+    "bytes": 299183936,
+    "path": "/home/mark/lumoFlyWheel-b1-wide256-k64-root-profile/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so",
+    "selector": "stock",
+    "sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d"
+  },
+  "diagnostic_selector": "streamk_force_wide256_byte_ab",
+  "draft_vocab": {
+    "blocks_container_path": "/workspace/scripts/fr13_dvk_subset_blocks.json",
+    "blocks_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+    "k": 65536,
+    "root": 1
+  },
+  "hardware_floor": {
+    "mandatory_weight_bytes": 32666638208,
+    "mandatory_weight_floor_ms": 119.658015414,
+    "one_sided_u95_cap_ms": 137.6067177261
+  },
+  "kernel_static_gate": {
+    "candidate_kernel_records": 2,
+    "constant0_bytes": 2944,
+    "local_bytes_per_thread": 0,
+    "registers_per_thread": 168,
+    "sass_calls": 0,
+    "sass_ldl": 0,
+    "sass_stl": 0,
+    "stack_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "stock_kernel_records_exact": 6
+  },
+  "max_comparisons": 320,
+  "old_candidate_rejected": {
+    "reason": "The 256-call cap exhausted before the fifth required real projection shape.",
+    "sha256": "c668c584b84f97e3ff53448238a0b03e3ea610549b1dc2b7fd6664fdd22c4098"
+  },
+  "profile": "k64_root",
+  "run_state": "ready_for_one_real_swe_verified_b1_byte_gate",
+  "schema": "fr13.fixed32.b1_wide256_k64_root_gate_profile.v1",
+  "source": {
+    "branch": "agent/fixed32-b1-wide256-k64-root-profile-20260802",
+    "gate_source_commit_policy": "current clean branch HEAD at execution",
+    "patch_source_sha256": "1119c135b0828f70e4be289fed670a57c19d4429e8397a75b7feedb3514475cc",
+    "patched_dispatch_sha256": "f3a3d8191d1f64bf7f63c4816ca1b979c042c6d511d134e1794f3e3330178b11",
+    "profile_source_commit": "2dd48fa072c348e6498f49991e2bde23544d3427",
+    "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
+  },
+  "task_policy": {
+    "acceptance_valid": false,
+    "served_result": "stock",
+    "task_count": 1,
+    "task_id": "astropy__astropy-12907",
+    "use": "byte-equality qualification only"
+  },
+  "verification": {
+    "binary_identity_preflight": "pass",
+    "gpu_or_container_run": false,
+    "inline_reducer_compile": "pass",
+    "shell_syntax": "pass",
+    "tests_passed": 85
+  }
+}

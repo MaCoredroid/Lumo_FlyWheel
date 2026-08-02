@@ -1,0 +1,80 @@
+{
+  "schema": "fr13.fixed32.b4_tail23_hydra27_k64_m128.static_review.v1",
+  "status": "launch_ready_after_fixes",
+  "reviewed_tip": "aac82d0b19ffce16a1d69490147c2fa8697be02e",
+  "review_branch": "agent/fixed32-b4-tail23-hydra27-k64-m128-review",
+  "code_commit": "9f30d84dc68f97bfd871862db829b7048e921847",
+  "gpu_executed": false,
+  "docker_executed": false,
+  "swe_verified_tasks_executed": false,
+  "synthetic_probe_executed": false,
+  "timing_evidence": false,
+  "acceptance_evidence": false,
+  "fixed_findings": [
+    {
+      "id": "F1",
+      "severity": "high",
+      "title": "B4 SFWD per-event value mislabeled as per-step",
+      "resolution": "Use s_per_fwd_gpu_per_forward and reconcile event, step, TPS, floor, and phase arithmetic"
+    },
+    {
+      "id": "F2",
+      "severity": "high",
+      "title": "All-parent production bundle not bound to canonical exact4 verdict",
+      "resolution": "Require and hash-bind the verdict, exact task marker, source, K64 topology, bundle, and measured production work-census route"
+    },
+    {
+      "id": "F3",
+      "severity": "high",
+      "title": "Remote Qwen stdout could be truncated before pipe drain",
+      "resolution": "Write Qwen stdout inside the container to a private regular file, attest it before and after exact transfer, then validate JSONL"
+    },
+    {
+      "id": "F4",
+      "severity": "high",
+      "title": "B4 timing rejected the mandatory terminal census record",
+      "resolution": "Strictly rederive event and terminal reports from raw census bytes and require one physical-work signature across both modes and timing arms"
+    }
+  ],
+  "topologies": {
+    "Tail23": {
+      "mode": "tail6_fixed32",
+      "active_drafts": 23,
+      "valid_mask": "0x7a9ce7ff"
+    },
+    "Hydra27": {
+      "mode": "hydra27_fixed32",
+      "active_drafts": 27,
+      "valid_mask": "0x7abdffff"
+    }
+  },
+  "physical_drafts_per_request": 31,
+  "physical_rows_root_inclusive": 32,
+  "sfwd_projection_rows_b4": 128,
+  "draft_vocab_root": 1,
+  "draft_vocab_k": 65536,
+  "draft_vocab_blocks_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+  "target_verifier_vocabulary": "full",
+  "qwen_code_version": "0.19.4",
+  "qwen_turn_tool_call_cap": 256,
+  "qwen_bundle_tree_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+  "candidate_sha256": "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f",
+  "mandatory_weight_bytes": 32666638208,
+  "mandatory_weight_floor_ms": 119.658015414,
+  "one_sided_u95_cap_ms": 137.6067177261,
+  "formal_floor_acceptance_eligible": false,
+  "launch_command": "bash scripts/fr13_run_b4_tail23_hydra27_k64_m128_stack.sh",
+  "tests": {
+    "focused_passed": 72,
+    "broader_passed": 313,
+    "broader_skipped": 1,
+    "post_capture_integration_passed": 322,
+    "post_capture_integration_skipped": 1,
+    "post_census_integration_passed": 322,
+    "post_census_integration_skipped": 1,
+    "work_census_tamper_tests_passed": 167,
+    "work_census_normalized_signature_sha256": "ecda43b5d25a22911ba7a009f2901cd02ce75f4f871ab16eb2a804f6758d4660",
+    "runtime_manifest_sha256": "8996529e514caf31584c0701a8661c0cb4d3fece6666352e0c09d3a85ea40b2c",
+    "external_manifest_sha256": "c42fb16d2ea932f0e819c81172c49b69b312b75dd446146b6d7b6ef78af00a9e"
+  }
+}
