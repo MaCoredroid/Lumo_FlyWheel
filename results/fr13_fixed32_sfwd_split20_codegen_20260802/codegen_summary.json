@@ -1,0 +1,75 @@
+{
+  "candidate": "fixed32_sfwd_channel_serial_r32_b1c128w4_bxc256w8_u32x2_s20_v1",
+  "classification": "offline_codegen_only",
+  "source_commit": "34a83376a855ec90d6b7b4f44c618056d2870c99",
+  "source_hashes": {
+    "launcher_sha256": "062b98c282db089cfbf446db2c4dfdb7d324584158e79c2b21e1140dd79ec9c1",
+    "kernel_sha256": "39d3d6234318770a44b6dbea463b04caf74b0c648cd43938b43598e98d50db2f",
+    "gate_sha256": "b155ca9fe42833282a5069f7e047c2630c635322ef04c4afb30867d412c132bf",
+    "runner_sha256": "1a48c0c63fce6ef3eea4430c0aa28093bab58757062217db9e385168377dcb1c"
+  },
+  "split_sweep_b1": [
+    {"split_row": 8, "registers": 56, "static_sass_instructions": 912},
+    {"split_row": 12, "registers": 50, "static_sass_instructions": 902},
+    {"split_row": 16, "registers": 40, "static_sass_instructions": 922},
+    {"split_row": 17, "registers": 40, "static_sass_instructions": 930},
+    {"split_row": 18, "registers": 40, "static_sass_instructions": 927},
+    {"split_row": 19, "registers": 48, "static_sass_instructions": 899},
+    {"split_row": 20, "registers": 48, "static_sass_instructions": 897},
+    {"split_row": 21, "registers": 48, "static_sass_instructions": 900},
+    {"split_row": 22, "registers": 48, "static_sass_instructions": 903},
+    {"split_row": 23, "registers": 48, "static_sass_instructions": 905},
+    {"split_row": 24, "registers": 48, "static_sass_instructions": 901}
+  ],
+  "selected_schedules": {
+    "b1": {
+      "block_c": 128,
+      "num_warps": 4,
+      "ctas_per_request": 80,
+      "ctas_per_launch": 80,
+      "registers": 48,
+      "static_sass_instructions": 897,
+      "encoded_sass_instructions": 912,
+      "ldg": 38,
+      "stg": 68,
+      "cubin_bytes": 66784,
+      "compile_hash": "1737b84d1e5103771b63d37058bb550921b15656f3071d6921b5de257885596a",
+      "cubin_sha256": "bf88aaf10829636889c1e9015abd2b83c664d3dd9c38b5e2b08795dcbe91a4be",
+      "sass_sha256": "0b813733fef09e136f60a1bcb23742895a8496738be612304ce9ed7cd05e6aed",
+      "ptx_sha256": "8493828110aef60de68dd59f7da75a6ad0b471a3e465fb081faa10aeb79e3af9"
+    },
+    "b4": {
+      "block_c": 256,
+      "num_warps": 8,
+      "ctas_per_request": 40,
+      "ctas_per_launch": 160,
+      "registers": 48,
+      "static_sass_instructions": 895,
+      "encoded_sass_instructions": 912,
+      "ldg": 38,
+      "stg": 68,
+      "cubin_bytes": 66712,
+      "compile_hash": "7820d784e0bcc22c6fc393d18e218107f77c71a3042e26be6fdb0bc037ecb0c3",
+      "cubin_sha256": "fd705b57a9dbff7083667b0b888212851e7270b3412342688c0f7498075646f2",
+      "sass_sha256": "6771acba729f09f041cb9ff20687da22a37926414a2ff3b34934366a8f252d07",
+      "ptx_sha256": "e5d8c68241948d2cd2e27655dad9572ac304ef54f34c78522c700afef74962bc"
+    }
+  },
+  "kernel_function_sha256": "1b7e33ffc458b6b71ec4b8b11b2b9f259bc8d866a22e44a70766dc520c75e2b3",
+  "common_zero_resources": {
+    "bar": 0,
+    "calls": 0,
+    "elf_shared_bytes": 0,
+    "launch_shared_bytes": 0,
+    "ldl": 0,
+    "lds": 0,
+    "local_bytes": 0,
+    "stack_bytes": 0,
+    "stl": 0,
+    "sts": 0
+  },
+  "fresh_cache_results_identical": true,
+  "performance_claim": false,
+  "real_task_gate_required": true,
+  "production_eligible": false
+}
