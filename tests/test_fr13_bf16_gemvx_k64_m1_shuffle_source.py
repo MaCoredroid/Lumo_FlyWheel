@@ -9,15 +9,15 @@ CUDA = REPO / "csrc" / "fr13_bf16_gemvx_k64_m1_shuffle.cu"
 BUILDER = REPO / "scripts" / "fr13_build_bf16_gemvx_k64_m1_shuffle.py"
 
 
-def test_cuda_source_is_strict_k64_m1_full_warp() -> None:
+def test_cuda_source_is_strict_k64_m1_full_warp_r32() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert "constexpr int kHidden = 5120;" in source
     assert "constexpr int kVocab = 65536;" in source
     assert "constexpr int kLanes = 32;" in source
-    assert "constexpr int kRowsPerCta = 16;" in source
-    assert "static_assert(kLanes * kRowsPerCta == 512);" in source
-    assert "static_assert(kCtas == 4096);" in source
+    assert "constexpr int kRowsPerCta = 32;" in source
+    assert "static_assert(kLanes * kRowsPerCta == 1024);" in source
+    assert "static_assert(kCtas == 2048);" in source
     assert "const dim3 block(kLanes, kRowsPerCta, 1);" in source
     assert "<<<kCtas, block, 0, at::cuda::getCurrentCUDAStream()>>>" in source
     assert "__syncthreads" not in source
@@ -58,7 +58,7 @@ def test_cuda_op_is_out_variant_with_strict_k64_geometry() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert (
-        "gemvx_m1_warp32_out(Tensor(a!) output, Tensor input, "
+        "gemvx_m1_warp32_r32_out(Tensor(a!) output, Tensor input, "
         "Tensor weight) -> ()" in source
     )
     assert "input.sizes() == at::IntArrayRef({1, kHidden})" in source
@@ -86,8 +86,8 @@ def test_builder_is_pinned_default_off_and_claims_no_qualification() -> None:
     assert '"resource_claim": False' in source
     assert '"performance_measurement": False' in source
     assert '"production_default_enabled": False' in source
-    assert '"grid": [4096, 1, 1]' in source
-    assert '"block": [32, 16, 1]' in source
-    assert '"output_rows_per_cta": 16' in source
+    assert '"grid": [2048, 1, 1]' in source
+    assert '"block": [32, 32, 1]' in source
+    assert '"output_rows_per_cta": 32' in source
     assert '"k_partition_lanes": 32' in source
     assert '"lane_k_iterations": 160' in source
