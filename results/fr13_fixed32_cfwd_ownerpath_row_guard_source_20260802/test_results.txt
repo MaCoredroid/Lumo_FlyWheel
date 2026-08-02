@@ -1,0 +1,32 @@
+Source commit: 392c16929b40d527f5097eb198479f3370fae9f8
+
+Host-only checks:
+- AST parse of changed kernel, observer, census, schema consumer, and tests: pass
+- Focused row-guard, conv-row-guard, conv-wiring, committer, and pregather suite: 64 passed in 2.46s
+- Fixed32 work-census v12 self-test: PASS; 177 tamper tests passed
+- Normalized work signature: 30a937d1e8fb9e4e77d21b561cd32812ba3eb38f518fde63badbf18f0fab80be
+- git diff --check: pass
+
+Static semantic coverage:
+- B1 and B4 valid fixtures
+- null and out-of-range SSI rows
+- invalid alias IDs
+- accepted lengths below zero and above 11
+- invalid active path nodes
+- duplicate physical destinations within an alias class
+- ignored inactive path padding
+- owner-only path/length validation
+- event-owner alias validation
+- no selected-row reload
+
+Known pre-existing checks outside the focused suite:
+- draft-head production file: 9 passed, 2 pre-existing failures (launcher text and stale integration hash)
+- full observer patcher self-test: pre-existing stale conv-runtime fixture drift
+
+Not run:
+- Triton/CUDA compilation or code generation
+- SASS/resource inspection
+- Docker or GPU execution
+- synthetic performance probes
+- real SWE-Verified byte qualification or timing
+- hardware-floor or one-sided U95 acceptance measurement

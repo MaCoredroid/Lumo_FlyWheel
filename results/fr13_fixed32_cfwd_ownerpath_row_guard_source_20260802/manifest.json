@@ -1,0 +1,64 @@
+{
+  "acceptance_evidence": false,
+  "base_commit": "6deadde54",
+  "branch": "agent/fixed32-committer-ownerpath-rowguard-20260802",
+  "candidate_serving_permitted": false,
+  "codegen": {
+    "calls": null,
+    "local_bytes": null,
+    "registers": null,
+    "shared_bytes": null,
+    "spills": null,
+    "stack_bytes": null,
+    "status": "pending_real_gate_gpu_teardown"
+  },
+  "gpu_or_docker_run_performed": false,
+  "optimization": {
+    "accepted_length_loads_after": "batch_size",
+    "accepted_length_loads_before": "48 * batch_size",
+    "alias_id_values_after_b1": 48,
+    "alias_id_values_after_b4": 48,
+    "alias_id_values_before_b1": 192,
+    "alias_id_values_before_b4": 2496,
+    "alias_validation_programs_per_event": 1,
+    "event_launch_count_change": 0,
+    "guard_programs_per_request": 48,
+    "path_validation_programs_per_request": 1,
+    "path_vector_loads_after": "batch_size",
+    "path_vector_loads_before": "48 * batch_size",
+    "peer_topology_proof": "preseed_lease_audit",
+    "physical_rows_per_program": 32,
+    "route": "fixed32_triton_alias3_ownerpath_physical32_v3",
+    "selected_path_loads_after": 0,
+    "selected_path_loads_before": "48 * batch_size",
+    "selected_row_loads_after": 0,
+    "selected_row_loads_before": "48 * batch_size"
+  },
+  "qualification": {
+    "b1_real_swe_byte_gate": "not_run",
+    "b4_exact16_real_swe_byte_gate": "not_run",
+    "b4_exact4_real_swe_byte_gate": "not_run"
+  },
+  "schema": "fr13.fixed32.cfwd_ownerpath_row_guard.source.v1",
+  "source_commit": "392c16929b40d527f5097eb198479f3370fae9f8",
+  "source_sha256": {
+    "kernel": "fb5590a0cd2bc001a5df3036e2020fdc3169a110d68c0776b64028f766b6c635",
+    "observer_patcher": "45d6aaa450e5f3ca96a691c780b7915649c310c2f935685cdba0b6e684a3f86b",
+    "row_guard_test": "ca60c90a9fb163e5dd2f2099d72eaab52aeffe3a018f4919e8129b6682035e95",
+    "work_census": "9b56d4ec5b6df85a4687747aaafeb297ef9c685127e8b3ef7f80f04f26cae71f"
+  },
+  "status": "SOURCE_STATIC_ONLY_CODEGEN_BYTE_TIMING_PENDING",
+  "synthetic_probe_executed": false,
+  "tests": {
+    "ast_parse": "pass",
+    "focused_ownerpath_row_guard_suite": "64_passed",
+    "git_diff_check": "pass",
+    "work_census_self_test": "177_tamper_tests_passed"
+  },
+  "timing_evidence": false,
+  "u95_floor_acceptance_evidence": false,
+  "work_census": {
+    "event_schema": "fr13-fixed32-work-census-v12",
+    "normalized_work_signature_sha256": "30a937d1e8fb9e4e77d21b561cd32812ba3eb38f518fde63badbf18f0fab80be"
+  }
+}
