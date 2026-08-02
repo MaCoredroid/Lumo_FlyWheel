@@ -1,0 +1,18 @@
+42 passed in 0.17s
+
+Command:
+/home/mark/shared/lumoFlyWheel-streamk-wide256/.venv/bin/python -m pytest -q tests/test_fr13_cutlass_fixed32_wave_patch.py tests/test_fr13_cutlass_streamk_gate_wiring.py tests/test_fr13_cutlass_streamk_production.py tests/test_fr13_cutlass_wave_binary.py
+
+Additional source checks:
+- ruff: pass
+- pycompile: pass
+- exact pinned vLLM patch apply: pass
+- exact pinned vLLM patch idempotency: pass
+- CUTLASS commit and required-header digest validation: pass
+
+Not run:
+- GPU or Docker
+- SM121 compile/resource audit
+- synthetic or probe performance
+- real SWE-Verified byte gate
+- B4 timing or hardware-floor acceptance
