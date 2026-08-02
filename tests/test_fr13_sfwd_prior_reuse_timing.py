@@ -27,11 +27,15 @@ except ModuleNotFoundError:
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 CANDIDATE_PATH = ROOT / "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse.py"
+KERNEL_PATH = (
+    ROOT
+    / "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py"
+)
 TIMING_PATH = ROOT / "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_timing.py"
 PASS_PATH = ROOT / "scripts/fr13_sfwd_prior_reuse_timing_pass.py"
 GATE_PATH = (
     ROOT
-    / "results/fr13_fixed32_sfwd_prior_reuse_k64_root_b1_gate_20260802/gate_summary.json"
+    / "results/fr13_fixed32_sfwd_priorreuse_packed_xgather_b1_byte_pass_20260802/gate_summary.json"
 )
 
 
@@ -51,7 +55,8 @@ def _reset_state() -> None:
     timing._STATE.update(
         gate_sha256=None,
         candidate_source_sha256=None,
-        task_marker=None,
+        candidate_kernel_source_sha256=None,
+        task_marker_sha256=None,
         layers=set(),
         launches=0,
         emitted=False,
@@ -62,6 +67,9 @@ def test_qualified_candidate_source_and_reduced_gate_are_exact() -> None:
     assert hashlib.sha256(CANDIDATE_PATH.read_bytes()).hexdigest() == (
         timing.QUALIFIED_CANDIDATE_SOURCE_SHA256
     )
+    assert hashlib.sha256(KERNEL_PATH.read_bytes()).hexdigest() == (
+        timing.QUALIFIED_CANDIDATE_KERNEL_SOURCE_SHA256
+    )
     assert hashlib.sha256(GATE_PATH.read_bytes()).hexdigest() == (
         timing.QUALIFIED_REDUCED_GATE_SHA256
     )
@@ -69,9 +77,13 @@ def test_qualified_candidate_source_and_reduced_gate_are_exact() -> None:
         GATE_PATH,
         expected_gate_sha256=timing.QUALIFIED_REDUCED_GATE_SHA256,
         candidate_source=CANDIDATE_PATH,
+        candidate_kernel_source=KERNEL_PATH,
     )
     assert result["candidate_serving_permitted"] is True
     assert result["candidate_source_sha256"] == timing.QUALIFIED_CANDIDATE_SOURCE_SHA256
+    assert result["candidate_kernel_source_sha256"] == (
+        timing.QUALIFIED_CANDIDATE_KERNEL_SOURCE_SHA256
+    )
 
 
 def test_timing_control_is_default_off_and_rejects_gate_drift(
@@ -101,6 +113,10 @@ def test_timing_control_is_default_off_and_rejects_gate_drift(
     assert credential["runtime_candidate_source_sha256"] == (
         timing.QUALIFIED_CANDIDATE_SOURCE_SHA256
     )
+    assert credential["runtime_candidate_kernel_source_sha256"] == (
+        timing.QUALIFIED_CANDIDATE_KERNEL_SOURCE_SHA256
+    )
+    assert credential["task_marker_sha256"] == timing.TASK_MARKER_SHA256
     gate.write_bytes(GATE_PATH.read_bytes() + b"\n")
     with pytest.raises(RuntimeError, match="SHA-256 mismatch"):
         timing.fixed32_sfwd_prior_reuse_timing_control(
@@ -115,7 +131,10 @@ def test_engagement_attests_sole_candidate_producer_and_closes_at_48(
     credential = {
         "reduced_gate_sha256": timing.QUALIFIED_REDUCED_GATE_SHA256,
         "runtime_candidate_source_sha256": timing.QUALIFIED_CANDIDATE_SOURCE_SHA256,
-        "task_marker": timing.TASK_MARKER,
+        "runtime_candidate_kernel_source_sha256": (
+            timing.QUALIFIED_CANDIDATE_KERNEL_SOURCE_SHA256
+        ),
+        "task_marker_sha256": timing.TASK_MARKER_SHA256,
     }
     timing._CREDENTIAL_IDS.add(id(credential))
     engagement = tmp_path / "engagement.json"
@@ -124,18 +143,28 @@ def test_engagement_attests_sole_candidate_producer_and_closes_at_48(
     )
     monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
     monkeypatch.setattr(
-        timing, "_authenticated_real_event", lambda _: timing.TASK_MARKER
+        timing, "_authenticated_real_event", lambda _: timing.TASK_MARKER_SHA256
     )
     for layer in range(48):
         timing.fixed32_sfwd_prior_reuse_timing_engagement(
             credential=credential, layer_key=layer, batch_size=1
         )
     payload = json.loads(engagement.read_text(encoding="ascii"))
+    assert payload["schema"] == "fr13.fixed32.sfwd_xgather.timing_engagement.v1"
+    assert payload["candidate"] == timing.CANDIDATE
+    assert payload["candidate_kernel"] == (
+        "_fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel"
+    )
+    assert payload["conv_num_warps"] == 16
     assert payload["candidate_served"] is True
     assert payload["sole_conv_source_producer"] is True
     assert payload["incumbent_conv_launches_per_layer"] == 0
     assert payload["fallback_permitted"] is False
     assert payload["layer_count"] == 48
+    assert payload["task_marker_sha256"] == timing.TASK_MARKER_SHA256
+    assert len(payload["layer_key_digest"]) == 64
+    assert "task_marker" not in payload
+    assert "layer_keys" not in payload
     with pytest.raises(RuntimeError, match="more than 48 layers"):
         timing.fixed32_sfwd_prior_reuse_timing_engagement(
             credential=credential, layer_key=49, batch_size=1
@@ -161,7 +190,27 @@ def test_route_wiring_is_exclusive_timed_and_source_bound() -> None:
     assert "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB=0" in runner
     assert "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB=0" in runner
     assert "unset FR10_ALLOW_LINEAR_FALLBACK" in runner
+    assert "fr13_sfwd_prior_reuse_descriptorless.py" in runner
+    assert "--candidate-kernel-source" in runner
+    assert "fr13.fixed32.sfwd_xgather.timing_source_manifest.v1" in runner
+    assert "write_host_zero_census" in runner
+    assert "host_zero.after_candidate_arm.json" in runner
+    assert "task_marker_sha256=$TASK_MARKER_SHA256" in runner
+    assert '"task_ids":' not in runner
+    assert "astropy__astropy" not in runner
     assert timing.QUALIFIED_REDUCED_GATE_SHA256 in PASS_PATH.read_text()
+
+
+def test_host_gate_rejects_kernel_source_drift(tmp_path: Path) -> None:
+    kernel = tmp_path / "candidate_kernel.py"
+    kernel.write_bytes(KERNEL_PATH.read_bytes() + b"\n")
+    with pytest.raises(ValueError, match="kernel source SHA-256 drift"):
+        _pass_module().validate_gate(
+            GATE_PATH,
+            expected_gate_sha256=timing.QUALIFIED_REDUCED_GATE_SHA256,
+            candidate_source=CANDIDATE_PATH,
+            candidate_kernel_source=kernel,
+        )
 
 
 def test_launcher_cleans_all_sfwd_routes_before_publishing_timing_arm() -> None:

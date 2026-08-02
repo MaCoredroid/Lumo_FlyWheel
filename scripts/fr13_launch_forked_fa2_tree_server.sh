@@ -1813,6 +1813,8 @@ if [[ "$_fr13_sfwd_prior_production" == "1" ]]; then
     --gate "$FR13_FIXED32_SFWD_PRIOR_REUSE_GATE_JSON" \
     --expected-gate-sha256 "$FR13_FIXED32_SFWD_PRIOR_REUSE_GATE_SHA256" \
     --candidate-source src/lumo_flywheel_serving/fr13_sfwd_prior_reuse.py \
+    --candidate-kernel-source \
+      src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py \
     >/dev/null
   rm -f \
     "$LOG_DIR/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled" \

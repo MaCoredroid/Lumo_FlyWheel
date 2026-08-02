@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Source-gated real SWE-Verified B1 timing diagnostic: stock then SFWD prior-reuse.
+# Source-gated real SWE-Verified B1 diagnostic: stock then packed x-gather.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -16,7 +16,7 @@ cd "$REPO"
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
 SUBSET_SHA256=cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb
-TASK_ID=astropy__astropy-12907
+TASK_MARKER_SHA256=04fe7f61a0e0bbd48bf28127385c481b85550b291535f3705511494ba24c8463
 DRAFT_VOCAB_BLOCKS=scripts/fr13_dvk_subset_blocks.json
 DRAFT_VOCAB_BLOCKS_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
 DRAFT_VOCAB_BLOCKS_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
@@ -29,7 +29,7 @@ FA2_SHA256=$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 RUNROOT_REL=${RUNROOT_ABS#"$REPO/"}
 STOCK_ARM="hydra27_fixed32_sfwd_stock_${TAG}"
-CANDIDATE_ARM="hydra27_fixed32_sfwd_prior_reuse_${TAG}"
+CANDIDATE_ARM="hydra27_fixed32_sfwd_packed_xgather_${TAG}"
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
   || { echo "TAG contains unsafe characters" >&2; exit 2; }
@@ -63,9 +63,9 @@ unset required
   --gate "$PRIOR_REUSE_GATE_JSON" \
   --expected-gate-sha256 "$PRIOR_REUSE_GATE_SHA256" \
   --candidate-source src/lumo_flywheel_serving/fr13_sfwd_prior_reuse.py \
+  --candidate-kernel-source \
+    src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py \
   >/dev/null
-[[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
-  || { echo "all Docker containers must be absent before timing" >&2; exit 2; }
 
 export BSIZE=1
 export CONC=1
@@ -99,6 +99,7 @@ paths = (
     "scripts/fr13_run_b1_sfwd_prior_reuse_timing.sh",
     "scripts/fr13_sfwd_prior_reuse_timing_pass.py",
     "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse.py",
+    "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py",
     "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_timing.py",
     "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
     "src/lumo_flywheel_serving/inference_proxy.py",
@@ -109,6 +110,10 @@ paths = (
     "scripts/fr13_measure.py",
     "scripts/fr13_dvk_subset_blocks.json",
     "config/fr13_fixed32/subset_b1_diagnostic_one.json",
+    "results/fr13_fixed32_sfwd_priorreuse_packed_xgather_b1_byte_pass_20260802/gate_summary.json",
+    "results/fr13_fixed32_sfwd_priorreuse_packed_xgather_b1_byte_pass_20260802/identity_and_lifecycle.json",
+    "results/fr13_fixed32_sfwd_priorreuse_packed_xgather_b1_byte_pass_20260802/record_summary.json",
+    "results/fr13_fixed32_sfwd_priorreuse_packed_xgather_b1_byte_pass_20260802/traffic_model.json",
 )
 files = {}
 for relative in paths:
@@ -122,7 +127,7 @@ for relative in paths:
         "sha256": hashlib.sha256(raw).hexdigest(),
     }
 payload = {
-    "schema": "fr13.fixed32.sfwd_prior_reuse.timing_source_manifest.v1",
+    "schema": "fr13.fixed32.sfwd_xgather.timing_source_manifest.v1",
     "files": files,
 }
 raw = json.dumps(
@@ -134,7 +139,56 @@ temporary.replace(output_path)
 PY
 }
 
+write_host_zero_census() {
+  local checkpoint=$1
+  local output_path=$2
+  local docker_count
+  local compute_count
+  local gpu_memory_used_mib
+  docker_count=$(docker ps -aq | wc -l)
+  compute_count=$(
+    nvidia-smi --query-compute-apps=pid --format=csv,noheader,nounits \
+      | awk '$1 ~ /^[0-9]+$/ { count += 1 } END { print count + 0 }'
+  )
+  gpu_memory_used_mib=$(
+    nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits \
+      | awk '$1 ~ /^[0-9]+$/ { total += $1 } END { print total + 0 }'
+  )
+  [[ "$docker_count" -eq 0 \
+     && "$compute_count" -eq 0 \
+     && "$gpu_memory_used_mib" -eq 0 ]] || {
+    echo "host resource census is nonzero at $checkpoint" >&2
+    return 2
+  }
+  "$PYTHON_BIN" - \
+    "$output_path" "$checkpoint" \
+    "$docker_count" "$compute_count" "$gpu_memory_used_mib" <<'PY'
+import json
+import os
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+payload = {
+    "schema": "fr13.fixed32.sfwd_xgather.host_zero_census.v1",
+    "checkpoint": sys.argv[2],
+    "all_zero": True,
+    "docker_containers": int(sys.argv[3]),
+    "gpu_compute_processes": int(sys.argv[4]),
+    "gpu_memory_used_mib": int(sys.argv[5]),
+}
+raw = json.dumps(
+    payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+) + "\n"
+temporary = path.with_name(path.name + f".tmp.{os.getpid()}")
+temporary.write_text(raw, encoding="ascii")
+temporary.replace(path)
+PY
+}
+
 mkdir -p "$RUNROOT_ABS/sidecars"
+write_host_zero_census \
+  before_first_arm "$RUNROOT_ABS/host_zero.before_first_arm.json"
 write_sfwd_prior_reuse_source_manifest "$RUNROOT_ABS/sfwd_prior_reuse_source_manifest.at_launch.json"
 "$PYTHON_BIN" scripts/fr13_runtime_manifest.py \
   --repo "$PWD" --profile fixed32 \
@@ -143,7 +197,7 @@ write_sfwd_prior_reuse_source_manifest "$RUNROOT_ABS/sfwd_prior_reuse_source_man
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
 printf '%s\n' \
-  'classification=one_real_swe_verified_k64_root_b1_sfwd_prior_reuse_timing_diagnostic' \
+  'classification=one_real_swe_verified_k64_root_b1_sfwd_packed_xgather_timing_diagnostic' \
   'task_set=one' \
   'task_count=1' \
   'timing_eligible=false' \
@@ -158,7 +212,7 @@ printf '%s\n' \
   'draft_vocab_root=1' \
   'draft_vocab_k=65536' \
   "draft_vocab_blocks_sha256=$DRAFT_VOCAB_BLOCKS_SHA256" \
-  "task_id=$TASK_ID" \
+  "task_marker_sha256=$TASK_MARKER_SHA256" \
   "source_commit=$SOURCE_COMMIT" \
   "runner_sha256=$RUNNER_SHA256" \
   "subset_sha256=$SUBSET_SHA256" \
@@ -342,9 +396,10 @@ run_arm "$STOCK_ARM" 0
 STOCK_ENGAGEMENT="$RUNROOT_ABS/$STOCK_ARM/logs/fr13_fixed32_sfwd_prior_reuse.timing_engagement.json"
 [[ ! -e "$STOCK_ENGAGEMENT" && ! -L "$STOCK_ENGAGEMENT" ]] \
   || { echo "stock arm emitted SFWD candidate engagement" >&2; exit 4; }
-[[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
-  || { echo "Docker state was not clean after stock arm" >&2; exit 2; }
+write_host_zero_census after_stock_arm "$RUNROOT_ABS/host_zero.after_stock_arm.json"
 run_arm "$CANDIDATE_ARM" 1
+write_host_zero_census \
+  after_candidate_arm "$RUNROOT_ABS/host_zero.after_candidate_arm.json"
 
 CANDIDATE_ENGAGEMENT="$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_sfwd_prior_reuse.timing_engagement.json"
 CANDIDATE_REAL_EVENT="$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm"
@@ -352,19 +407,22 @@ CANDIDATE_REAL_EVENT="$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_sfwd_state_f
   --engagement "$CANDIDATE_ENGAGEMENT" \
   --expected-gate-sha256 "$PRIOR_REUSE_GATE_SHA256" \
   --candidate-source src/lumo_flywheel_serving/fr13_sfwd_prior_reuse.py \
+  --candidate-kernel-source \
+    src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py \
   >/dev/null
 [[ -f "$CANDIDATE_REAL_EVENT" && ! -L "$CANDIDATE_REAL_EVENT" \
    && "$(stat -c '%a' "$CANDIDATE_REAL_EVENT")" == "444" \
-   && "$(cat "$CANDIDATE_REAL_EVENT")" == "swe_verified:$TASK_ID" ]] \
+   && "$(sha256sum "$CANDIDATE_REAL_EVENT" | awk '{print $1}')" == "$TASK_MARKER_SHA256" ]] \
   || { echo "candidate lacks the authenticated real-task engagement marker" >&2; exit 4; }
 [[ "$(sha256sum "$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_sfwd_prior_reuse.timing_gate.json" | awk '{print $1}')" == "$PRIOR_REUSE_GATE_SHA256" ]] \
   || { echo "candidate installed reduced-gate identity drift" >&2; exit 4; }
 
+finalize_manifests
 "$PYTHON_BIN" - \
   "$RUNROOT_ABS" "$STOCK_ARM" "$CANDIDATE_ARM" "$SOURCE_COMMIT" \
   "$RUNNER_SHA256" "$SUBSET_SHA256" "$FA2_SHA256" "$PRIOR_REUSE_GATE_SHA256" \
   "$K64_ROOT_WEIGHT_BYTES" "$K64_ROOT_FLOOR_MS" "$K64_ROOT_CAP_MS" \
-  "$DRAFT_VOCAB_BLOCKS_SHA256" <<'PY'
+  "$DRAFT_VOCAB_BLOCKS_SHA256" "$TASK_MARKER_SHA256" <<'PY'
 import hashlib
 import json
 import math
@@ -378,6 +436,7 @@ source_commit, runner_sha, subset_sha, fa2_sha, gate_sha = sys.argv[4:9]
 weight_bytes = int(sys.argv[9])
 floor_ms, cap_ms = map(float, sys.argv[10:12])
 draft_vocab_blocks_sha256 = sys.argv[12]
+task_marker_sha256 = sys.argv[13]
 
 
 def load(path: Path) -> tuple[dict, bytes]:
@@ -389,6 +448,13 @@ def load(path: Path) -> tuple[dict, bytes]:
     if not isinstance(payload, dict):
         raise SystemExit(f"timing artifact is not an object: {path}")
     return payload, raw
+
+
+def real_task_marker_sha256(instance_id: object) -> str | None:
+    if not isinstance(instance_id, str) or not instance_id:
+        return None
+    marker = f"swe_verified:{instance_id}\n".encode("ascii", errors="strict")
+    return hashlib.sha256(marker).hexdigest()
 
 
 def gather_log(arm: str) -> dict:
@@ -461,7 +527,8 @@ def campaign(arm: str) -> dict:
     if (
         boundary.get("schema")
         != "fr13-fixed32-eager-timing-task-boundary-v1"
-        or boundary.get("instance_id") != "astropy__astropy-12907"
+        or real_task_marker_sha256(boundary.get("instance_id"))
+        != task_marker_sha256
         or boundary.get("run_classification")
         != "eager_kernel_timing_diagnostic"
         or boundary.get("flush_protocol_used") is not True
@@ -555,7 +622,12 @@ def measure(arm: str) -> tuple[dict, bytes]:
     for key, expected in required.items():
         if payload.get(key) != expected:
             raise SystemExit(f"{arm} measure {key} mismatch")
-    if payload.get("task_instance_ids") != ["astropy__astropy-12907"]:
+    task_instance_ids = payload.get("task_instance_ids")
+    if (
+        not isinstance(task_instance_ids, list)
+        or len(task_instance_ids) != 1
+        or real_task_marker_sha256(task_instance_ids[0]) != task_marker_sha256
+    ):
         raise SystemExit(f"{arm} measure task identity mismatch")
     for key in (
         "step_wall_ms", "measured_tps_fullstep_wall", "accept_per_event",
@@ -609,6 +681,27 @@ def phase_breakdown(payload: dict) -> dict:
     }
 
 
+def zero_census(name: str, checkpoint: str) -> dict:
+    payload, raw = load(root / name)
+    required = {
+        "schema": "fr13.fixed32.sfwd_xgather.host_zero_census.v1",
+        "checkpoint": checkpoint,
+        "all_zero": True,
+        "docker_containers": 0,
+        "gpu_compute_processes": 0,
+        "gpu_memory_used_mib": 0,
+    }
+    if any(payload.get(key) != value for key, value in required.items()):
+        raise SystemExit(f"host zero census mismatch at {checkpoint}")
+    return {
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "all_zero": True,
+        "docker_containers": 0,
+        "gpu_compute_processes": 0,
+        "gpu_memory_used_mib": 0,
+    }
+
+
 stock, stock_raw = measure(stock_arm)
 candidate, candidate_raw = measure(candidate_arm)
 engagement, engagement_raw = load(
@@ -618,19 +711,51 @@ engagement, engagement_raw = load(
 source_manifest, source_manifest_raw = load(
     root / "sfwd_prior_reuse_source_manifest.at_launch.json"
 )
+source_manifest_end, source_manifest_end_raw = load(
+    root / "sfwd_prior_reuse_source_manifest.at_end.json"
+)
+runtime_manifest, runtime_manifest_raw = load(
+    root / "runtime_manifest.at_launch.json"
+)
+runtime_manifest_end, runtime_manifest_end_raw = load(
+    root / "runtime_manifest.at_end.json"
+)
+external_manifest, external_manifest_raw = load(
+    root / "external_manifest.at_launch.json"
+)
+external_manifest_end, external_manifest_end_raw = load(
+    root / "external_manifest.at_end.json"
+)
 if (
     source_manifest.get("schema")
-    != "fr13.fixed32.sfwd_prior_reuse.timing_source_manifest.v1"
-    or len(source_manifest.get("files", {})) != 13
+    != "fr13.fixed32.sfwd_xgather.timing_source_manifest.v1"
+    or len(source_manifest.get("files", {})) != 18
+    or source_manifest != source_manifest_end
+    or source_manifest_raw != source_manifest_end_raw
+    or runtime_manifest != runtime_manifest_end
+    or runtime_manifest_raw != runtime_manifest_end_raw
+    or external_manifest != external_manifest_end
+    or external_manifest_raw != external_manifest_end_raw
 ):
-    raise SystemExit("SFWD timing source manifest is incomplete")
+    raise SystemExit("SFWD packed x-gather manifest identity is incomplete")
+host_zero_census = {
+    "before_first_arm": zero_census(
+        "host_zero.before_first_arm.json", "before_first_arm"
+    ),
+    "after_stock_arm": zero_census(
+        "host_zero.after_stock_arm.json", "after_stock_arm"
+    ),
+    "after_candidate_arm": zero_census(
+        "host_zero.after_candidate_arm.json", "after_candidate_arm"
+    ),
+}
 summary = {
-    "schema": "fr13.fixed32.sfwd_prior_reuse.b1_timing_pair.v1",
+    "schema": "fr13.fixed32.sfwd_xgather.b1_timing_pair.v1",
     "status": "complete_diagnostic",
     "run_classification": (
-        "one_real_swe_verified_k64_root_b1_sfwd_prior_reuse_timing_diagnostic"
+        "one_real_swe_verified_k64_root_b1_sfwd_packed_xgather_timing_diagnostic"
     ),
-    "task_ids": ["astropy__astropy-12907"],
+    "task_marker_sha256": task_marker_sha256,
     "task_count": 1,
     "batch_size": 1,
     "physical_rows_per_request": 32,
@@ -645,6 +770,12 @@ summary = {
     "sfwd_prior_reuse_source_manifest_sha256": hashlib.sha256(
         source_manifest_raw
     ).hexdigest(),
+    "source_manifest_launch_end_equal": True,
+    "runtime_manifest_sha256": hashlib.sha256(runtime_manifest_raw).hexdigest(),
+    "runtime_manifest_launch_end_equal": True,
+    "external_manifest_sha256": hashlib.sha256(external_manifest_raw).hexdigest(),
+    "external_manifest_launch_end_equal": True,
+    "host_zero_census": host_zero_census,
     "mandatory_weight_bytes": weight_bytes,
     "mandatory_weight_floor_ms": floor_ms,
     "floor_scope": "optimistic_mandatory_weight_read_lower_bound",
@@ -656,6 +787,8 @@ summary = {
     "acceptance_blocker": "one task is diagnostic only; exact4 or exact16 required",
     "stock": {
         "arm": stock_arm,
+        "candidate_production_enabled": False,
+        "candidate_engagement_present": False,
         "deploy_speed_sha256": hashlib.sha256(stock_raw).hexdigest(),
         "step_wall_ms": stock["step_wall_ms"],
         "fullstep_wall_tps": stock["measured_tps_fullstep_wall"],
@@ -671,6 +804,9 @@ summary = {
     },
     "candidate": {
         "arm": candidate_arm,
+        "candidate": engagement.get("candidate"),
+        "candidate_kernel": engagement.get("candidate_kernel"),
+        "conv_num_warps": engagement.get("conv_num_warps"),
         "deploy_speed_sha256": hashlib.sha256(candidate_raw).hexdigest(),
         "engagement_sha256": hashlib.sha256(engagement_raw).hexdigest(),
         "real_event_marker_sha256": hashlib.sha256(
@@ -678,6 +814,8 @@ summary = {
              "fr13_fixed32_sfwd_state_fusion.real_event.arm").read_bytes()
         ).hexdigest(),
         "candidate_served": engagement.get("candidate_served"),
+        "sole_conv_source_producer": engagement.get("sole_conv_source_producer"),
+        "fallback_permitted": engagement.get("fallback_permitted"),
         "step_wall_ms": candidate["step_wall_ms"],
         "fullstep_wall_tps": candidate["measured_tps_fullstep_wall"],
         "accept_per_event": candidate["accept_per_event"],
@@ -701,7 +839,6 @@ summary = {
 )
 PY
 
-finalize_manifests
 mv -- \
   "$RUNROOT_ABS/timing_summary.pending.json" \
   "$RUNROOT_ABS/timing_summary.json"
