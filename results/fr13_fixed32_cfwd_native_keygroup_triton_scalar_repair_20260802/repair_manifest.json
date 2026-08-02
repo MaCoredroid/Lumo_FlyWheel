@@ -1,0 +1,39 @@
+{
+  "candidate": {
+    "default_on": false,
+    "event_gate_scalar_math": "triton_incumbent_lowering",
+    "event_gate_scalar_precompute_launches": 1,
+    "launches_per_event": 2,
+    "name": "fixed32_cfwd_native_keygroup_triton_scalar_cuda_v4",
+    "native_gate_transcendentals": 0,
+    "native_recurrence_launches": 1,
+    "production_authorized": false,
+    "timing_eligible": false
+  },
+  "live_qualification": {
+    "b1_all_depth_byte_gate": "pending",
+    "b4": "forbidden_until_b1_pass",
+    "timing": "forbidden_until_byte_qualification"
+  },
+  "repair_rationale": {
+    "addressability_rejected_as_failure_class": true,
+    "known_v3_source_risk": "cuda_logf_vs_triton_tl_log_lowering",
+    "observed_mismatched_layers": 48,
+    "remediation": "captured_triton_event_scalars_before_native_recurrence"
+  },
+  "schema": "fr13.fixed32.cfwd_native_keygroup_triton_scalar_repair.v1",
+  "source_sha256": {
+    "native/fr13_fixed32_cfwd_native_fullvalue.cu": "5699ab062624bd2f6368143c48068bfccf1f9c3b5629e243d92616b94359bc54",
+    "scripts/fr13_check_cfwd_native_keygroup_codegen.py": "5cbe501855f0b458528347b523c980a440c88cd7d6bdb902b52aa3fd32f971d0",
+    "scripts/fr13_patch_vllm_cfwd_native_fullvalue_cuda.py": "78aadbbf0cd5c1150ff26f6345804d309781a34de0469bd319897c2ad640a4e0",
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "0dbef69fa5d4fd3f3a9a43ba341317f48a504d09c9ec779de7a716809d22a4a3",
+    "src/lumo_flywheel_serving/fr13_cfwd_native_fullvalue_cuda.py": "8b989610c12fcb0693ce70349e4e2f709e32fa9a51647056f61f804c2b24fd76"
+  },
+  "verification": {
+    "focused_tests_passed": 99,
+    "full_pinned_image_extension_built": false,
+    "host_sm121a_compile_passed": true,
+    "py_compile_passed": true,
+    "ruff_passed": true
+  }
+}

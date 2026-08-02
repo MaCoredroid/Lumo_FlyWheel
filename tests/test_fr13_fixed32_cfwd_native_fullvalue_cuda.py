@@ -109,7 +109,9 @@ def test_resource_contract_maps_each_key_group_to_one_cta(batch: int) -> None:
     assert contract["ctas_per_layer_request_key_head"] == 1
     assert contract["value_heads_per_cta"] == 3
     assert contract["value_heads_processed_sequentially"] is True
-    assert contract["launches_per_event"] == 1
+    assert contract["launches_per_event"] == 2
+    assert contract["event_gate_scalar_precompute_launches"] == 1
+    assert contract["native_recurrence_launches"] == 1
     assert contract["threads_per_cta"] == 512
     assert contract["warps_per_cta"] == 16
     assert contract["value_rows_per_warp_per_head"] == 8
@@ -125,6 +127,9 @@ def test_resource_contract_maps_each_key_group_to_one_cta(batch: int) -> None:
     assert contract["inverse_norm_shared_elements"] == 4
     assert contract["precomputed_node_shared_elements"] == 12
     assert contract["precomputed_gate_scalar_shared_elements"] == 72
+    assert contract["event_gate_scalar_elements"] == 48 * batch * 12 * 48 * 2
+    assert contract["event_gate_scalar_math"] == "triton_incumbent_lowering"
+    assert contract["native_gate_transcendentals"] == 0
     assert contract["static_shared_bytes_source_model"] == 6_568
     assert contract["k_hbm_vector_loads_per_cta_step"] == 1
     assert contract["k_norms_per_cta_step"] == 1
@@ -314,9 +319,7 @@ def test_operator_probe_and_launch_are_source_bound() -> None:
             "spec_state_indices",
             "k_rings",
             "v_rings",
-            "a_rings",
-            "b_rings",
-            "gate_coeffs",
+            "event_gate_scalars",
         )
     }
     candidate.launch_candidate(
@@ -325,7 +328,7 @@ def test_operator_probe_and_launch_are_source_bound() -> None:
         **tensors,
     )
     assert len(calls) == 1
-    assert calls[0][:10] == tuple(tensors.values())
+    assert calls[0][:8] == tuple(tensors.values())
     assert calls[0][-3:] == (4, True, True)
 
 
@@ -350,9 +353,7 @@ def test_launch_rejects_unqualified_or_non_source_selection() -> None:
             "spec_state_indices",
             "k_rings",
             "v_rings",
-            "a_rings",
-            "b_rings",
-            "gate_coeffs",
+            "event_gate_scalars",
         )
     }
     for field, value in (
@@ -394,7 +395,7 @@ def test_cuda_source_precomputes_four_steps_per_wave_without_shared_state() -> N
     assert "__shared__ float normalized_ks[kPrecomputedSteps][kDimK];" in source
     assert "__shared__ float norm_partials[kStepsPerWave]" in source
     assert "__shared__ float inverse_norms[kStepsPerWave];" in source
-    assert "__shared__ float recurrence_scalars[kPrecomputedSteps]" in source
+    assert "__shared__ float shared_recurrence_scalars[kPrecomputedSteps]" in source
     assert "__shared__ int32_t shared_nodes[kPrecomputedSteps];" in source
     assert "const int gate_task_count = steps * kHeadGroup;" in source
     assert "const int step_slot = warp / kNormPartialWarps;" in source
@@ -448,14 +449,14 @@ def test_cuda_source_preserves_ordered_active_recurrence_and_fp32_store() -> Non
     assert 'asm volatile("mov.u32 %0, %%tid.x;"' in source
 
 
-def test_cuda_source_pins_incumbent_ptx_math_and_reduction_order() -> None:
+def test_cuda_source_pins_incumbent_reduction_order_without_gate_math() -> None:
     source = CUDA_SOURCE.read_text(encoding="utf-8")
-    assert "constexpr float kLog2E = 0x1.715476p+0f;" in source
-    assert 'asm volatile("ex2.approx.f32 %0, %1;"' in source
     assert 'asm volatile("rsqrt.approx.ftz.f32 %0, %1;"' in source
-    assert 'asm volatile("div.full.f32 %0, %1, %2;"' in source
     assert "expf(" not in source
     assert "rsqrtf(" not in source
+    assert "logf(" not in source
+    assert "softplus(" not in source
+    assert "sigmoid(" not in source
     helper = source[
         source.index("float triton_butterfly_product_sum"):
         source.index("float triton_butterfly_four_sum")
@@ -477,7 +478,7 @@ def test_cuda_source_pins_incumbent_ptx_math_and_reduction_order() -> None:
     )
 
 
-def test_cuda_source_precomputes_root_nodes_and_three_head_gates() -> None:
+def test_cuda_source_loads_root_nodes_and_precomputed_three_head_gates() -> None:
     source = CUDA_SOURCE.read_text(encoding="utf-8")
     precompute = source[
         source.index("const int gate_task_count"):
@@ -488,21 +489,23 @@ def test_cuda_source_precomputes_root_nodes_and_three_head_gates() -> None:
     assert "if (step > 0)" in precompute
     assert "step - 1" in precompute
     assert "shared_nodes[step] = node;" in precompute
-    assert "recurrence_scalars[step][local_value_head][0]" in precompute
-    assert "recurrence_scalars[step][local_value_head][1]" in precompute
-    assert precompute.index("recurrence_scalars") < precompute.index(
+    assert "shared_recurrence_scalars[step][local_value_head][0]" in precompute
+    assert "shared_recurrence_scalars[step][local_value_head][1]" in precompute
+    assert "event_gate_scalars[gate_offset]" in precompute
+    assert "event_gate_scalars[gate_offset + 1]" in precompute
+    assert precompute.index("shared_recurrence_scalars") < precompute.index(
         "for (int wave = 0;"
     )
 
 
-def test_cuda_source_checks_narrow_gate_ring_offset_contract() -> None:
+def test_cuda_source_checks_event_gate_scalar_contract() -> None:
     source = CUDA_SOURCE.read_text(encoding="utf-8")
-    assert "const int ab_offset =" in source
-    assert "const int64_t ab_offset =" not in source
-    assert "static_cast<int>(ring_ab_layer_stride)" in source
-    assert "static_cast<int>(ring_ab_batch_stride)" in source
-    assert "static_cast<int>(ring_ab_node_stride)" in source
-    assert "a_rings.numel() <= INT32_MAX" in source
+    assert "event_gate_scalars.scalar_type() == torch::kFloat32" in source
+    assert "event_gate_scalars.size(2) == kPrecomputedSteps" in source
+    assert "event_gate_scalars.size(3) == kValueHeads" in source
+    assert "event_gate_scalars.size(4) == 2" in source
+    assert "a_rings" not in source
+    assert "b_rings" not in source
 
 
 def _codegen_fixture(checker) -> tuple[str, str]:
@@ -547,7 +550,7 @@ def test_codegen_checker_rejects_resource_or_math_drift() -> None:
     with pytest.raises(RuntimeError, match="resource drift"):
         checker.check_codegen(resource_report.replace("REG:64", "REG:63"), sass)
     with pytest.raises(RuntimeError, match="SASS shape drift"):
-        checker.check_codegen(resource_report, sass.replace("MUFU.EX2", "NOP", 1))
+        checker.check_codegen(resource_report, f"{sass}\nMUFU.EX2")
 
 
 def test_codegen_checker_cli_binds_source_object_command_and_toolchain() -> None:
@@ -569,7 +572,7 @@ def test_cuda_extension_contract_is_sm121_and_strict() -> None:
     assert "bank_offset_table_prevalidated" in source
     assert "accepted_paths.scalar_type() == torch::kInt32" in source
     assert "k_rings.scalar_type() == torch::kBFloat16" in source
-    assert "gate_coeffs.scalar_type() == torch::kFloat32" in source
+    assert "event_gate_scalars.scalar_type() == torch::kFloat32" in source
 
 
 def test_patcher_adds_one_source_to_pinned_extension_and_is_idempotent(

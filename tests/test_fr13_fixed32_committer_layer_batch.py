@@ -256,6 +256,10 @@ def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> No
 def test_native_keygroup_reuses_reference_served_all_layer_byte_gate() -> None:
     selection = _text("_fr13_fixed32_cfwd_native_keygroup_selection")
     launch = _text("_fr13_fixed32_committer_native_keygroup")
+    scalar_kernel = _text("_fr13_fixed32_committer_event_gate_scalar_kernel")
+    scalar_launch = _text(
+        "_fr13_fixed32_committer_event_gate_scalar_precompute"
+    )
     body = _text("_fr13_fixed32_committer_graph_body")
     preseed = _text("preseed_fixed32_committer_graph")
     gate = _text("_fr13_fixed32_committer_layer_batch_byte_gate")
@@ -266,7 +270,21 @@ def test_native_keygroup_reuses_reference_served_all_layer_byte_gate() -> None:
     assert "native_keygroup.launch_candidate(" in launch
     assert 'bank_anchor=banks_list[0]' in launch
     assert 'bank_off16=state["bank_off16"]' in launch
-    assert 'gate_coeffs=state["gate_coeffs"]' in launch
+    assert "_fr13_fixed32_committer_event_gate_scalar_precompute(" in launch
+    assert launch.index(
+        "_fr13_fixed32_committer_event_gate_scalar_precompute("
+    ) < launch.index("native_keygroup.launch_candidate(")
+    assert 'event_gate_scalars=state["event_gate_scalars"]' in launch
+    assert "softplus_x = tl.where(" in scalar_kernel
+    assert "(1 / BETA) * tl.log(1 + tl.exp(BETA * x))" in scalar_kernel
+    assert "b_g = b_a_scale * softplus_x" in scalar_kernel
+    assert "decay = tl.exp(b_g)" in scalar_kernel
+    assert "beta = tl.sigmoid(b_b.to(tl.float32))" in scalar_kernel
+    assert "mask=active" in scalar_kernel
+    assert "event_gate_scalars" in scalar_launch
+    assert '"candidate_scalar_precompute_launches": 1' in preseed
+    assert '"candidate_kernel_launches_per_event": 2' in preseed
+    assert '"native_gate_transcendentals": 0' in preseed
     assert 'state.get("native_keygroup_selection")' in body
     assert "_fr13_fixed32_committer_native_keygroup(" in body
     assert '"candidate_route": "native_keygroup_precompute_cuda"' in preseed

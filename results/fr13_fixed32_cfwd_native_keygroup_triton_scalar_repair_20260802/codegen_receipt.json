@@ -1,0 +1,42 @@
+{
+  "architecture": "sm_121a",
+  "binding": {
+    "object_sha256": "0eec6a28c710bf1b8fe77c52b25cad96761565f2875e3bba5d3642378413da38",
+    "source_sha256": "5699ab062624bd2f6368143c48068bfccf1f9c3b5629e243d92616b94359bc54"
+  },
+  "classification": "offline_host_compile_resource_evidence",
+  "contract_pass": true,
+  "forbidden_sass_counts": {
+    "CALL": 0,
+    "LDL": 0,
+    "STL": 0
+  },
+  "resources": {
+    "cuobjdump_shared_bytes": 7592,
+    "local_bytes": 0,
+    "registers_per_thread": 64,
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0,
+    "stack_bytes": 0
+  },
+  "sass_counts": {
+    "FFMA": 70,
+    "MUFU.EX2": 0,
+    "MUFU.RCP": 1,
+    "MUFU.RSQ": 3,
+    "SHFL.BFLY": 202,
+    "SHFL.DOWN": 0,
+    "SHFL.IDX": 16
+  },
+  "schema": "fr13.fixed32.cfwd_native_keygroup_triton_scalar_codegen.v1",
+  "scope": {
+    "full_pinned_image_extension_built": false,
+    "gpu_launched": false,
+    "performance_measured": false
+  },
+  "toolchain": {
+    "cuda_release": "13.0",
+    "cuobjdump_version": "13.0.85",
+    "nvcc_version": "13.0.88"
+  }
+}

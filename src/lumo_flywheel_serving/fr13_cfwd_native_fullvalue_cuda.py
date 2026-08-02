@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 
-CANDIDATE = "fixed32_cfwd_native_keygroup_precompute_cuda_v3"
+CANDIDATE = "fixed32_cfwd_native_keygroup_triton_scalar_cuda_v4"
 SELECTOR_ENV = "FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA"
 SELECTOR_VALUE = "diagnostic"
 FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
@@ -18,21 +18,21 @@ OPERATOR = "_C::fr13_fixed32_cfwd_native_fullvalue"
 BINARY_BINDING_SCHEMA = "fr13.fixed32.cfwd_native_keygroup_binary.v1"
 CUDA_SOURCE_PATH = "native/fr13_fixed32_cfwd_native_fullvalue.cu"
 CUDA_SOURCE_SHA256 = (
-    "1c1a9813410dcf15bcbb4d23bec71ee16ddcd7e2dbe3b1a3698e58f71bd96985"
+    "5699ab062624bd2f6368143c48068bfccf1f9c3b5629e243d92616b94359bc54"
 )
 PATCHER_SOURCE_PATH = "scripts/fr13_patch_vllm_cfwd_native_fullvalue_cuda.py"
 PATCHER_SOURCE_SHA256 = (
-    "50bcdb4cbe71db7d75f1a233cfe6d2e5d18d6a6cf1bcf97af87db339a8452184"
+    "78aadbbf0cd5c1150ff26f6345804d309781a34de0469bd319897c2ad640a4e0"
 )
 PATCHED_VLLM_SHA256 = {
     "CMakeLists.txt": (
-        "bf040399fd8f5e94a1ee7aa0076da17e4f7de44aa9e99170806401b5c8983fa0"
+        "2a82eabaf9b6ab63bcb357932a5bf60b46506d81528845ac651d250759b9a1ba"
     ),
     "csrc/ops.h": (
-        "a3182a4f38af21ff001de6ec80454420c9d1800b64ff3e19de594746b589f5c0"
+        "01cf1cd80d4e78509bc9298c487a64d54e5622595d69bfe395b1a9bfaf57581f"
     ),
     "csrc/torch_bindings.cpp": (
-        "e8c3dbc98131ee62cda7a0072d5cb47c469652237076f394a5deef9a6667fda7"
+        "3849a0d5a2e6928b311a76c34039b97b0156a61f56e33c94a6db41a88fde5e27"
     ),
     "csrc/fr13_fixed32_cfwd_native_fullvalue.cu": CUDA_SOURCE_SHA256,
 }
@@ -277,7 +277,9 @@ def resource_contract(batch_size: int) -> dict[str, object]:
         "ctas_per_layer_request_key_head": 1,
         "value_heads_per_cta": 3,
         "value_heads_processed_sequentially": True,
-        "launches_per_event": 1,
+        "launches_per_event": 2,
+        "event_gate_scalar_precompute_launches": 1,
+        "native_recurrence_launches": 1,
         "threads_per_cta": 512,
         "warps_per_cta": 16,
         "value_rows_per_warp_per_head": 8,
@@ -293,6 +295,9 @@ def resource_contract(batch_size: int) -> dict[str, object]:
         "inverse_norm_shared_elements": 4,
         "precomputed_node_shared_elements": 12,
         "precomputed_gate_scalar_shared_elements": 12 * 3 * 2,
+        "event_gate_scalar_elements": 48 * batch * 12 * 48 * 2,
+        "event_gate_scalar_math": "triton_incumbent_lowering",
+        "native_gate_transcendentals": 0,
         "static_shared_bytes_source_model": 6_568,
         "k_hbm_vector_loads_per_cta_step": 1,
         "k_norms_per_cta_step": 1,
@@ -447,9 +452,7 @@ def launch_candidate(
     spec_state_indices: object,
     k_rings: object,
     v_rings: object,
-    a_rings: object,
-    b_rings: object,
-    gate_coeffs: object,
+    event_gate_scalars: object,
 ) -> None:
     """Launch a source-bound diagnostic selection or fail before dispatch."""
     if selection.get("candidate") != CANDIDATE:
@@ -493,9 +496,7 @@ def launch_candidate(
         spec_state_indices,
         k_rings,
         v_rings,
-        a_rings,
-        b_rings,
-        gate_coeffs,
+        event_gate_scalars,
         int(selection["batch_size"]),
         True,
         True,

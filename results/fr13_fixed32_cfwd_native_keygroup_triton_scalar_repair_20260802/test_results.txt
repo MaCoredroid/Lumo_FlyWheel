@@ -1,0 +1,14 @@
+Focused tests:
+  99 passed in 0.60s
+
+Checks:
+  Ruff: pass
+  Python byte compilation: pass
+  git diff --check: pass
+  SM121a native compile: pass
+  Native codegen contract: pass
+
+Live status:
+  Prior v3 B1 real-task byte gate: rejected, all 48 layers mismatched
+  Repaired v4 B1 byte gate: pending
+  Timing eligibility: false

@@ -1,0 +1,36 @@
+{
+  "boot": {
+    "candidate_graph_captured": true,
+    "server_ready": true
+  },
+  "classification": "authenticated_real_swe_verified_b1_byte_rejection",
+  "gate": {
+    "candidate_replay_completed": true,
+    "comparison": "raw_bytes_all_fp32_running_bank_rows",
+    "layers_compared": 48,
+    "mismatched_layer_count": 48,
+    "passed": false,
+    "reference_replay_completed": true
+  },
+  "prior_candidate": {
+    "name": "fixed32_cfwd_native_keygroup_precompute_cuda_v3",
+    "source_sha256": "1c1a9813410dcf15bcbb4d23bec71ee16ddcd7e2dbe3b1a3698e58f71bd96985"
+  },
+  "qualification_profile": {
+    "batch_size": 1,
+    "draft_vocab": "k64",
+    "root_reduction": true,
+    "topology": "hydra27_fixed32"
+  },
+  "result": {
+    "completed_tasks": 0,
+    "floor_acceptance_eligible": false,
+    "timing_eligible": false,
+    "timing_samples": 0
+  },
+  "schema": "fr13.fixed32.cfwd_native_keygroup_rejection.v1",
+  "teardown": {
+    "failing_arm_container_removed": true,
+    "failing_arm_gpu_compute_processes": 0
+  }
+}

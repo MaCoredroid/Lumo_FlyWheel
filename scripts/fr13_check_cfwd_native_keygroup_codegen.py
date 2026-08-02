@@ -19,13 +19,13 @@ EXPECTED_RESOURCES = {
     "local_bytes": 0,
 }
 EXPECTED_SASS_COUNTS = {
-    "MUFU.EX2": 3,
+    "MUFU.EX2": 0,
     "MUFU.RSQ": 3,
-    "MUFU.RCP": 2,
+    "MUFU.RCP": 1,
     "SHFL.BFLY": 202,
     "SHFL.IDX": 16,
     "SHFL.DOWN": 0,
-    "FFMA": 82,
+    "FFMA": 70,
 }
 
 
