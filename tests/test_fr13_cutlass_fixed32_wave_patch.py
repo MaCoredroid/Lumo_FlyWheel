@@ -102,6 +102,8 @@ def test_patch_is_default_off_and_shape_gated() -> None:
     assert 'value == "persistent_b4_m128_byte_ab"' in patched
     assert 'value == "persistent_b4_m128_static"' in patched
     assert 'value == "persistent_b4_m128_static_byte_ab"' in patched
+    assert 'value == "fixedalpha_static"' in patched
+    assert 'value == "fixedalpha_static_byte_ab"' in patched
     assert "return fixed32_cutlass_wave_variant::stock;" in patched
     for rows in (32, 64, 96, 128):
         assert f"m == {rows}" in patched
@@ -121,7 +123,7 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 2
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 7
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 9
     assert "PingpongSm120" not in module.CONFIG_REPLACEMENT
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
@@ -287,6 +289,70 @@ def test_b4_m128_static_changes_only_complete_tile_scheduler() -> None:
     )
     assert (
         "fr13.fixed32.cutlass_persistent_b4_m128_static_byte_ab.v1" in patched
+    )
+
+
+def test_fixedalpha_static_preserves_cross_batch_mainloops_and_output_order() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    scalar_start = patched.index("struct fr13_fixed32_one_scalar_broadcast")
+    wrapper_start = patched.index(
+        "struct cutlass_3x_gemm_fp8_blockwise_fixedalpha_static"
+    )
+    wrapper_end = patched.index(module.CONFIG_ANCHOR, wrapper_start)
+    scalar = patched[scalar_start:wrapper_start]
+    wrapper = patched[wrapper_start:wrapper_end]
+
+    assert "struct Arguments {};" in scalar
+    assert "return {Element(1)};" in scalar
+    assert "fragment.fill(scalar);" in scalar
+    assert "is_producer_load_needed() const" in scalar
+    assert "is_C_load_needed() const" in scalar
+    assert "scalar_ptrs" not in scalar
+    assert "dScalar" not in scalar
+    assert "beta" not in scalar
+
+    assert "typename Base::CollectiveMainloop" in wrapper
+    assert "using CollectiveEpilogue" in wrapper
+    assert "typename Base::CollectiveEpilogue" not in wrapper
+    assert "cutlass::multiplies" in wrapper
+    assert "cutlass::FloatRoundStyle::round_to_nearest" in wrapper
+    assert "fr13_fixed32_one_scalar_broadcast" in wrapper
+    assert "CollectiveEpilogue, TileScheduler" in wrapper
+
+    b1_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b1_divisor_static_fixedalpha"
+    )
+    b4_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b4_m128_static_fixedalpha"
+    )
+    config_end = patched.index("enum class fixed32_cutlass_wave_variant", b4_start)
+    b1 = patched[b1_start:b4_start]
+    b4 = patched[b4_start:config_end]
+    assert "using TileShape = Shape<_128, _32, _128>;" in b1
+    assert "OutType, 128, 1, 128, TileShape, ClusterShape" in b1
+    assert "EpilogueSchedule, KernelSchedule, true," in b1
+    assert "fr13_fixed32_m128_divisor_static_scheduler" in b1
+    assert "using TileShape = Shape<_128, _128, _128>;" in b4
+    assert "OutType, 1, 128, 128, TileShape, ClusterShape" in b4
+    assert "EpilogueSchedule, KernelSchedule, false," in b4
+    assert "fr13_fixed32_m128_static_scheduler" in b4
+    assert "StreamKScheduler" not in b1 + b4
+
+    assert "if (M != 32 && M != 128 &&" in patched
+    assert "auto run_fixedalpha_static" in patched
+    assert "if (M == 32)" in patched
+    assert "fixedalpha_static_byte_ab && M == 128" in patched
+    assert (
+        '"/logs/fr13_fixed32_cutlass_fixedalpha_static_byte_ab.jsonl"'
+        in patched
+    )
+    assert "fr13.fixed32.cutlass_fixedalpha_static_byte_ab.v1" in patched
+    assert (
+        "fixed32_cutlass_wave_variant::fixedalpha_static) {\n"
+        "    return run_fixedalpha_static(out);"
+        in patched
     )
 
 
