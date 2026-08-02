@@ -570,15 +570,23 @@ def test_engine_middleware_arms_batch_gdn_from_authenticated_exact4_request(
     assert marker.read_bytes() == expected
 
 
+@pytest.mark.parametrize(
+    "route_sidecar_name",
+    (
+        "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled",
+        "fr13_fixed32_sfwd_state_fusion.production.arm",
+    ),
+)
 def test_engine_middleware_arms_sfwd_fusion_only_after_authenticated_b1_request(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    route_sidecar_name: str,
 ) -> None:
     secret_path = tmp_path / "secret.json"
     _task_seed, engine_bearer = _write_secret(secret_path)
     logs = tmp_path / "logs"
     logs.mkdir()
-    enabled = logs / "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
+    enabled = logs / route_sidecar_name
     enabled.write_bytes(b"1\n")
     enabled.chmod(0o400)
     marker = logs / "fr13_fixed32_sfwd_state_fusion.real_event.arm"
@@ -644,6 +652,41 @@ def test_engine_middleware_arms_sfwd_fusion_only_after_authenticated_b1_request(
     assert stat.S_ISREG(info.st_mode)
     assert info.st_nlink == 1
     assert stat.S_IMODE(info.st_mode) == 0o444
+
+
+@pytest.mark.parametrize(
+    "route_sidecar_names",
+    (
+        (),
+        (
+            "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled",
+            "fr13_fixed32_sfwd_state_fusion.production.arm",
+        ),
+    ),
+)
+def test_engine_middleware_rejects_missing_or_conflicting_sfwd_route_sidecars(
+    tmp_path: Path,
+    route_sidecar_names: tuple[str, ...],
+) -> None:
+    secret_path = tmp_path / "secret.json"
+    _write_secret(secret_path)
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    for name in route_sidecar_names:
+        sidecar = logs / name
+        sidecar.write_bytes(b"1\n")
+        sidecar.chmod(0o400)
+
+    with pytest.raises(Fixed32IngressError, match="exactly one route sidecar"):
+        Fixed32EngineIngressMiddleware(
+            object(),
+            secret_file=secret_path,
+            canonical_task_ids=("astropy__astropy-12907",),
+            ledger_path=tmp_path / "engine.jsonl",
+            sfwd_state_fusion_real_event_arm=(
+                logs / "fr13_fixed32_sfwd_state_fusion.real_event.arm"
+            ),
+        )
 
 
 def test_engine_middleware_rejects_inexact_sfwd_fusion_arm_configuration(

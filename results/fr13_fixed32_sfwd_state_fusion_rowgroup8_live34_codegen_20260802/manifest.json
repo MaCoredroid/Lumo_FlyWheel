@@ -31,10 +31,11 @@
   "date_utc": "2026-08-02",
   "final_codegen": {
     "b1_compile_hash": "f9ae5df2001b711a49c4ddcdb604522aeb022541a5776a31d4e841dec6824c6e",
-    "b1_ctas": 160,
+    "b1_ctas_per_launch": 160,
     "b4_compile_hash": "f0099e5960187dcc78f148deadbf18aefbb5d1435cfaeb098047c8952aed24e6",
-    "b4_ctas": 640,
+    "b4_ctas_per_launch": 640,
     "calls": 0,
+    "ctas_per_request": 160,
     "cubin_bytes": 84016,
     "cubin_sha256": "53abe443d9f7b8dd2816afac88804df46a3a48c2e4ecb797b6a97358b1f51257",
     "elf_shared_bytes": 1024,
@@ -78,13 +79,15 @@
   "source_revision": "8b1786a34612f789a99159ea19ffe6dea4f75dc3",
   "status": "OFFLINE_LIVE_GEOMETRY_CODEGEN_PASS_B1_BYTE_GATE_REQUIRED",
   "toolchain": {
-    "cuda_nvcc": "13.0.88",
-    "cuobjdump": "13.0.85",
+    "system_cuobjdump_inspection": "13.0.85",
+    "system_nvcc_present_not_invoked": "13.0.88",
+    "system_nvdisasm_inspection": "13.0.85",
     "num_stages": 3,
-    "nvdisasm": "13.0.85",
     "target": "sm_121a",
     "torch": "2.10.0+cu130",
-    "triton": "3.6.0"
+    "torch_cuda": "13.0",
+    "triton": "3.6.0",
+    "triton_ptxas": "ptxas-blackwell CUDA 12.9 V12.9.86"
   },
   "verification": {
     "b1_offline_codegen": "pass",

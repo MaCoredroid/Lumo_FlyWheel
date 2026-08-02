@@ -12,5 +12,8 @@ pytest focused SFWD/lifecycle/ingress suite
 fresh-cache offline B1/B4 compile at rows=8, block_c=256, state_len=34, warps=8
 PASS; repeated summaries and cubins are byte-identical
 
+Triton producer provenance
+PASS; bundled ptxas-blackwell CUDA 12.9 V12.9.86, target sm_121a
+
 git diff --check
 PASS

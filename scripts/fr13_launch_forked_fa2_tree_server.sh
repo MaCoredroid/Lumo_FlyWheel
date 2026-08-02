@@ -1011,6 +1011,12 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     echo "fixed32 SFWD state-fusion byte gate requires the B1 diagnostic" >&2
     exit 2
   fi
+  if [[ "$_fr13_fixed32_sfwd_state_fusion_timing" == "1" \
+        && ( "$FR13_FIXED32_B1_DIAGNOSTIC" != "1" \
+             || "$MAX_NUM_SEQS" != "1" ) ]]; then
+    echo "fixed32 SFWD state-fusion timing requires the B1 diagnostic" >&2
+    exit 2
+  fi
   if [[ "$_fr13_fixed32_sfwd_state_fusion_production" == "1" \
         && ( "$FR13_FIXED32_B1_DIAGNOSTIC" != "1" \
              || "$MAX_NUM_SEQS" != "1" ) ]]; then
@@ -1038,7 +1044,8 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" ]]; then
     _fixed32_expected_eager=1
   fi
-  if [[ "$_fr13_fixed32_sfwd_state_fusion_diagnostic" == "1" ]]; then
+  if [[ "$_fr13_fixed32_sfwd_state_fusion_diagnostic" == "1" \
+        || "$_fr13_fixed32_sfwd_state_fusion_timing" == "1" ]]; then
     _fixed32_expected_eager=1
   fi
   if [[ "$_fr13_fixed32_sfwd_state_fusion_production" == "1" ]]; then
@@ -1488,6 +1495,7 @@ fi
 # real SWE-Verified request is admitted. The EngineCore worker sees these /logs
 # sidecars even when its curated environment drops FR13_*.
 _fr13_sfwd_state_fusion_byte_ab="${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}"
+_fr13_sfwd_state_fusion_timing="${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB:-0}"
 _fr13_sfwd_state_fusion_production="${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}"
 _fr13_batch_gdn_byte_ab="${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}"
 _fr13_batch_gdn_graph_byte_ab="${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}"
@@ -1499,6 +1507,10 @@ case "$_fr13_sfwd_state_fusion_byte_ab" in
   0|1) ;;
   *) echo "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
 esac
+case "$_fr13_sfwd_state_fusion_timing" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB must be 0 or 1" >&2; exit 2 ;;
+esac
 case "$_fr13_sfwd_state_fusion_production" in
   0|1) ;;
   *) echo "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
@@ -1506,6 +1518,11 @@ esac
 if [[ "$_fr13_sfwd_state_fusion_byte_ab" == "1" \
       && "$_fr13_sfwd_state_fusion_production" == "1" ]]; then
   echo "FR13 SFWD state-fusion byte gate and production timing are mutually exclusive" >&2
+  exit 2
+fi
+if [[ "$_fr13_sfwd_state_fusion_byte_ab" == "1" \
+      && "$_fr13_sfwd_state_fusion_timing" == "1" ]]; then
+  echo "FR13 SFWD state-fusion byte and timing diagnostics are mutually exclusive" >&2
   exit 2
 fi
 if [[ "$_fr13_sfwd_state_fusion_production" != "1" \
@@ -1609,6 +1626,7 @@ if [[ "$_fr13_batch_gdn_production" != "1" \
   exit 2
 fi
 if [[ "$_fr13_sfwd_state_fusion_byte_ab" == "1" \
+      || "$_fr13_sfwd_state_fusion_timing" == "1" \
       || "$_fr13_sfwd_state_fusion_production" == "1" ]]; then
   [[ -n "${FR13_FIXED32_MODE:-}" \
      && "$MAX_NUM_SEQS" == "1" \
@@ -1688,7 +1706,7 @@ elif [[ "$_fr13_sfwd_state_fusion_production" == "1" ]]; then
     "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.byte_ab.jsonl" \
     "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.production_engagement.json" \
     "$LOG_DIR"/fr13_fixed32_sfwd_state_fusion.production_engagement.json.tmp.*
-  FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=
+  FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm
 else
   rm -f \
     "$LOG_DIR/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled" \

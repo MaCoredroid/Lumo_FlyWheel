@@ -17,9 +17,12 @@ PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
 SUBSET_SHA256=cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb
 TASK_ID=astropy__astropy-12907
-FULL_VOCAB_WEIGHT_BYTES=42025179008
-FULL_VOCAB_FLOOR_MS=153.9383846446886
-FULL_VOCAB_CAP_MS=177.0291423413919
+DRAFT_VOCAB_BLOCKS=scripts/fr13_dvk_subset_blocks.json
+DRAFT_VOCAB_BLOCKS_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
+DRAFT_VOCAB_BLOCKS_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
+K64_ROOT_WEIGHT_BYTES=32666638208
+K64_ROOT_FLOOR_MS=119.658015414
+K64_ROOT_CAP_MS=137.6067177261
 SOURCE_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 FA2_SHA256=$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')
@@ -45,6 +48,10 @@ unset required
   || { echo "SFWD_PASS_SHA256 must be lowercase SHA-256" >&2; exit 2; }
 [[ "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" ]] \
   || { echo "canonical one-task B1 subset SHA-256 drift" >&2; exit 2; }
+[[ -f "$DRAFT_VOCAB_BLOCKS" && ! -L "$DRAFT_VOCAB_BLOCKS" ]] \
+  || { echo "K64 draft-vocabulary block map must be a regular source file" >&2; exit 2; }
+[[ "$(sha256sum "$DRAFT_VOCAB_BLOCKS" | awk '{print $1}')" == "$DRAFT_VOCAB_BLOCKS_SHA256" ]] \
+  || { echo "K64 draft-vocabulary block map SHA-256 drift" >&2; exit 2; }
 [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ && "$FA2_SHA256" =~ ^[0-9a-f]{64}$ ]] \
   || { echo "source or FA2 identity is invalid" >&2; exit 2; }
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
@@ -63,19 +70,70 @@ unset required
 export BSIZE=1
 export CONC=1
 export WALL=0
-export FR13_DRAFT_VOCAB_ROOT=0
-export FR13_DRAFT_VOCAB_K=0
-export FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'
+export FR13_DRAFT_VOCAB_ROOT=1
+export FR13_DRAFT_VOCAB_K=65536
+export FR13_DRAFT_VOCAB_BLOCKS="$DRAFT_VOCAB_BLOCKS_CONTAINER"
+unset FR13_NEEDS_ALLOW
 export FR13_FLOOR_ORDER=TH
 source scripts/fr13_canonical_env.sh
 run_variant() { :; }
 source scripts/fr13_fixed32_floor_timers_seq.sh
 unset -f run_variant
-[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "$FULL_VOCAB_WEIGHT_BYTES" \
-   && "$FR13_WEIGHT_FLOOR_MS" == "$FULL_VOCAB_FLOOR_MS" ]] \
-  || { echo "full-vocabulary floor contract drift" >&2; exit 2; }
+[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "$K64_ROOT_WEIGHT_BYTES" \
+   && "$FR13_WEIGHT_FLOOR_MS" == "$K64_ROOT_FLOOR_MS" ]] \
+  || { echo "K64/root1 floor contract drift" >&2; exit 2; }
+
+write_sfwd_source_manifest() {
+  "$PYTHON_BIN" - "$1" "$REPO" <<'PY'
+import hashlib
+import json
+import os
+import stat
+import sys
+from pathlib import Path
+
+output_path = Path(sys.argv[1])
+repo = Path(sys.argv[2]).resolve()
+paths = (
+    "scripts/fr13_run_b1_sfwd_state_fusion_timing.sh",
+    "scripts/fr13_sfwd_state_fusion_pass.py",
+    "src/lumo_flywheel_serving/fr13_sfwd_state_fusion_production.py",
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+    "src/lumo_flywheel_serving/inference_proxy.py",
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh",
+    "scripts/fr13_bigdenom_swe_serve_variant.sh",
+    "scripts/run_swe_bench_q36_a.py",
+    "scripts/fr13_measure.py",
+    "scripts/fr13_dvk_subset_blocks.json",
+    "config/fr13_fixed32/subset_b1_diagnostic_one.json",
+)
+files = {}
+for relative in paths:
+    path = repo / relative
+    info = path.lstat()
+    if path.is_symlink() or not stat.S_ISREG(info.st_mode):
+        raise SystemExit(f"SFWD timing source is not regular: {relative}")
+    raw = path.read_bytes()
+    files[relative] = {
+        "bytes": len(raw),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+    }
+payload = {
+    "schema": "fr13.fixed32.sfwd_state_fusion.timing_source_manifest.v1",
+    "files": files,
+}
+raw = json.dumps(
+    payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+) + "\n"
+temporary = output_path.with_name(output_path.name + f".tmp.{os.getpid()}")
+temporary.write_text(raw, encoding="ascii")
+temporary.replace(output_path)
+PY
+}
 
 mkdir -p "$RUNROOT_ABS/sidecars"
+write_sfwd_source_manifest "$RUNROOT_ABS/sfwd_source_manifest.at_launch.json"
 "$PYTHON_BIN" scripts/fr13_runtime_manifest.py \
   --repo "$PWD" --profile fixed32 \
   --sequence scripts/fr13_fixed32_floor_timers_seq.sh \
@@ -83,7 +141,7 @@ mkdir -p "$RUNROOT_ABS/sidecars"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
 printf '%s\n' \
-  'classification=one_real_swe_verified_full_vocab_b1_sfwd_state_fusion_timing_diagnostic' \
+  'classification=one_real_swe_verified_k64_root_b1_sfwd_state_fusion_timing_diagnostic' \
   'task_set=one' \
   'task_count=1' \
   'timing_eligible=false' \
@@ -95,36 +153,87 @@ printf '%s\n' \
   'incumbent_candidate_arm_conv_launches_per_layer=0' \
   'gdn_level_path_programs=1,11' \
   'gdn_physical_launches_per_layer=2' \
+  'draft_vocab_root=1' \
+  'draft_vocab_k=65536' \
+  "draft_vocab_blocks_sha256=$DRAFT_VOCAB_BLOCKS_SHA256" \
   "task_id=$TASK_ID" \
   "source_commit=$SOURCE_COMMIT" \
   "runner_sha256=$RUNNER_SHA256" \
   "subset_sha256=$SUBSET_SHA256" \
   "fa2_sha256=$FA2_SHA256" \
   "sfwd_pass_sha256=$SFWD_PASS_SHA256" \
-  "mandatory_weight_bytes=$FULL_VOCAB_WEIGHT_BYTES" \
-  "mandatory_weight_floor_ms=$FULL_VOCAB_FLOOR_MS" \
-  "one_sided_u95_cap_ms=$FULL_VOCAB_CAP_MS" \
+  "sfwd_source_manifest_sha256=$(sha256sum "$RUNROOT_ABS/sfwd_source_manifest.at_launch.json" | awk '{print $1}')" \
+  "mandatory_weight_bytes=$K64_ROOT_WEIGHT_BYTES" \
+  "mandatory_weight_floor_ms=$K64_ROOT_FLOOR_MS" \
+  "one_sided_u95_cap_ms=$K64_ROOT_CAP_MS" \
   "stock_arm=$STOCK_ARM" \
   "candidate_arm=$CANDIDATE_ARM" \
   "started=$(date -u +%FT%TZ)" \
   > "$RUNROOT_ABS/launcher_meta.txt"
+
+MANIFEST_FINALIZED=0
+finalize_manifests() {
+  (( MANIFEST_FINALIZED == 0 )) || return 0
+  write_sfwd_source_manifest "$RUNROOT_ABS/sfwd_source_manifest.at_end.json" \
+    || return $?
+  "$PYTHON_BIN" scripts/fr13_runtime_manifest.py \
+    --repo "$PWD" --profile fixed32 \
+    --sequence scripts/fr13_fixed32_floor_timers_seq.sh \
+    --output "$RUNROOT_ABS/runtime_manifest.at_end.json" \
+    || return $?
+  "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
+    --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_end.json" \
+    || return $?
+  cmp -s \
+    "$RUNROOT_ABS/sfwd_source_manifest.at_launch.json" \
+    "$RUNROOT_ABS/sfwd_source_manifest.at_end.json" \
+    || { echo "SFWD timing source manifest changed during timing" >&2; return 14; }
+  cmp -s \
+    "$RUNROOT_ABS/runtime_manifest.at_launch.json" \
+    "$RUNROOT_ABS/runtime_manifest.at_end.json" \
+    || { echo "runtime/source manifest changed during timing" >&2; return 14; }
+  cmp -s \
+    "$RUNROOT_ABS/external_manifest.at_launch.json" \
+    "$RUNROOT_ABS/external_manifest.at_end.json" \
+    || { echo "external manifest changed during timing" >&2; return 14; }
+  [[ "$(sha256sum "$RUNNER_PATH" | awk '{print $1}')" == "$RUNNER_SHA256" ]] \
+    || { echo "timing runner changed during execution" >&2; return 14; }
+  MANIFEST_FINALIZED=1
+}
+
+runner_exit() {
+  local rc=$?
+  trap - EXIT
+  if (( MANIFEST_FINALIZED == 0 )); then
+    if finalize_manifests; then
+      :
+    else
+      local manifest_rc=$?
+      (( rc == 0 )) && rc=$manifest_rc
+    fi
+  fi
+  exit "$rc"
+}
+trap runner_exit EXIT
 
 run_arm() {
   local arm=$1
   local production=$2
   local pass_json=""
   local pass_sha=""
+  local real_event_path=""
   if [[ "$production" == "1" ]]; then
     pass_json=$SFWD_PASS_JSON
     pass_sha=$SFWD_PASS_SHA256
+    real_event_path=/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm
   fi
   if env \
       OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
       FR13_FIXED32_B1_DIAGNOSTIC=1 \
-      FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0 \
-      FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0' \
-      FR13_MANDATORY_WEIGHT_BYTES="$FULL_VOCAB_WEIGHT_BYTES" \
-      FR13_WEIGHT_FLOOR_MS="$FULL_VOCAB_FLOOR_MS" \
+      FR13_DRAFT_VOCAB_ROOT=1 FR13_DRAFT_VOCAB_K=65536 \
+      FR13_DRAFT_VOCAB_BLOCKS="$DRAFT_VOCAB_BLOCKS_CONTAINER" \
+      FR13_MANDATORY_WEIGHT_BYTES="$K64_ROOT_WEIGHT_BYTES" \
+      FR13_WEIGHT_FLOOR_MS="$K64_ROOT_FLOOR_MS" \
       ENFORCE_EAGER=1 CUDAGRAPH_MODE=FULL_AND_PIECEWISE FR10_METRICS=0 \
       FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1 \
       FR13_SFWD_GPU_TIMER_JSON="/workspace/$RUNROOT_REL/sidecars/${arm}.json" \
@@ -177,14 +286,39 @@ run_arm() {
   for expected in \
       'FR13_FIXED32_MODE=hydra27_fixed32' \
       'FR13_FIXED32_B1_DIAGNOSTIC=1' \
-      'FR13_DRAFT_VOCAB_ROOT=0' \
-      'FR13_DRAFT_VOCAB_K=0' \
+      'FR13_DRAFT_VOCAB_ROOT=1' \
+      'FR13_DRAFT_VOCAB_K=65536' \
+      "FR13_DRAFT_VOCAB_BLOCKS=$DRAFT_VOCAB_BLOCKS_CONTAINER" \
       'ENFORCE_EAGER=1' \
       'FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB=1' \
+      "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=$real_event_path" \
       "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=$production"; do
     [[ "$(grep -Fxc "$expected" "$env_path")" -eq 1 ]] \
       || { echo "$arm lacks exact environment pin: $expected" >&2; return 4; }
   done
+  "$PYTHON_BIN" - "$RUNROOT_ABS/$arm/docker_after_tasks.log" <<'PY'
+import os
+import stat
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+info = os.lstat(path)
+if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
+    raise SystemExit(f"K64 gather audit input is not a regular file: {path}")
+log = path.read_text(encoding="utf-8", errors="replace")
+shim_prefix = "[FR13_DRAFT_VOCAB] shim built K=65536 "
+root_prefix = "[FR13_DRAFT_VOCAB_ROOT] engaged K=65536 "
+disabled_prefix = "[FR13_DRAFT_VOCAB] DISABLED"
+shim_lines = [line for line in log.splitlines() if shim_prefix in line]
+root_lines = [line for line in log.splitlines() if root_prefix in line]
+if len(shim_lines) != 1 or "mode=gather" not in shim_lines[0]:
+    raise SystemExit("K64 draft-vocabulary gather shim did not engage exactly once")
+if len(root_lines) != 1 or "mode=gather" not in root_lines[0]:
+    raise SystemExit("K64 root gather did not engage exactly once")
+if disabled_prefix in log:
+    raise SystemExit("draft-vocabulary runtime fallback to full vocabulary engaged")
+PY
   "$PYTHON_BIN" scripts/fr13_measure.py deploy-speed \
     --arm "$arm" \
     --out-root "$RUNROOT_ABS/$arm/swe_out" \
@@ -205,18 +339,24 @@ STOCK_ENGAGEMENT="$RUNROOT_ABS/$STOCK_ARM/logs/fr13_fixed32_sfwd_state_fusion.pr
 run_arm "$CANDIDATE_ARM" 1
 
 CANDIDATE_ENGAGEMENT="$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_sfwd_state_fusion.production_engagement.json"
+CANDIDATE_REAL_EVENT="$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm"
 "$PYTHON_BIN" scripts/fr13_sfwd_state_fusion_pass.py verify-engagement \
   --engagement "$CANDIDATE_ENGAGEMENT" \
   --expected-live-sha256 "$SFWD_PASS_SHA256" \
   --kernel-source src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py \
   >/dev/null
+[[ -f "$CANDIDATE_REAL_EVENT" && ! -L "$CANDIDATE_REAL_EVENT" \
+   && "$(stat -c '%a' "$CANDIDATE_REAL_EVENT")" == "444" \
+   && "$(cat "$CANDIDATE_REAL_EVENT")" == "swe_verified:$TASK_ID" ]] \
+  || { echo "candidate lacks the authenticated real-task engagement marker" >&2; exit 4; }
 [[ "$(sha256sum "$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_sfwd_state_fusion.production_pass.json" | awk '{print $1}')" == "$SFWD_PASS_SHA256" ]] \
   || { echo "candidate installed PASS identity drift" >&2; exit 4; }
 
 "$PYTHON_BIN" - \
   "$RUNROOT_ABS" "$STOCK_ARM" "$CANDIDATE_ARM" "$SOURCE_COMMIT" \
   "$RUNNER_SHA256" "$SUBSET_SHA256" "$FA2_SHA256" "$SFWD_PASS_SHA256" \
-  "$FULL_VOCAB_FLOOR_MS" "$FULL_VOCAB_CAP_MS" <<'PY'
+  "$K64_ROOT_WEIGHT_BYTES" "$K64_ROOT_FLOOR_MS" "$K64_ROOT_CAP_MS" \
+  "$DRAFT_VOCAB_BLOCKS_SHA256" <<'PY'
 import hashlib
 import json
 import math
@@ -227,7 +367,9 @@ from pathlib import Path
 root = Path(sys.argv[1])
 stock_arm, candidate_arm = sys.argv[2:4]
 source_commit, runner_sha, subset_sha, fa2_sha, live_sha = sys.argv[4:9]
-floor_ms, cap_ms = map(float, sys.argv[9:11])
+weight_bytes = int(sys.argv[9])
+floor_ms, cap_ms = map(float, sys.argv[10:12])
+draft_vocab_blocks_sha256 = sys.argv[12]
 
 
 def load(path: Path) -> tuple[dict, bytes]:
@@ -239,6 +381,81 @@ def load(path: Path) -> tuple[dict, bytes]:
     if not isinstance(payload, dict):
         raise SystemExit(f"timing artifact is not an object: {path}")
     return payload, raw
+
+
+def gather_log(arm: str) -> dict:
+    path = root / arm / "docker_after_tasks.log"
+    info = path.lstat()
+    if path.is_symlink() or not stat.S_ISREG(info.st_mode):
+        raise SystemExit(f"non-regular K64 gather audit: {path}")
+    raw = path.read_bytes()
+    log = raw.decode("utf-8", errors="replace")
+    shim_prefix = "[FR13_DRAFT_VOCAB] shim built K=65536 "
+    root_prefix = "[FR13_DRAFT_VOCAB_ROOT] engaged K=65536 "
+    disabled_prefix = "[FR13_DRAFT_VOCAB] DISABLED"
+    shim_lines = [line for line in log.splitlines() if shim_prefix in line]
+    root_lines = [line for line in log.splitlines() if root_prefix in line]
+    if len(shim_lines) != 1 or "mode=gather" not in shim_lines[0]:
+        raise SystemExit(f"{arm} lacks exactly one K64 gather-shim engagement")
+    if len(root_lines) != 1 or "mode=gather" not in root_lines[0]:
+        raise SystemExit(f"{arm} lacks exactly one K64 root-gather engagement")
+    if disabled_prefix in log:
+        raise SystemExit(f"{arm} fell back to the full vocabulary")
+    return {
+        "docker_after_tasks_sha256": hashlib.sha256(raw).hexdigest(),
+        "shim_engagements": 1,
+        "root_engagements": 1,
+        "fallbacks": 0,
+    }
+
+
+def campaign(arm: str) -> dict:
+    payload, raw = load(root / arm / "swe_out" / "verified" / "campaign_summary.json")
+    if (
+        payload.get("instances_total") != 1
+        or payload.get("verdict_counts") != {"resolved": 1}
+        or payload.get("failure_mode_counts") != {"tests_passed": 1}
+        or payload.get("resolved_rate") != 1.0
+        or payload.get("fixed32_run_classification")
+        != {
+            "run_classification": "b1_diagnostic",
+            "gate_eligible": False,
+            "floor_acceptance_eligible": False,
+        }
+    ):
+        raise SystemExit(f"{arm} did not resolve its one real SWE-Verified task")
+    metadata_paths = list(
+        (root / arm / "swe_out" / "verified" / "per_task").glob(
+            "*/runner_metadata.json"
+        )
+    )
+    if len(metadata_paths) != 1:
+        raise SystemExit(f"{arm} lacks exactly one real-task runner metadata file")
+    metadata, metadata_raw = load(metadata_paths[0])
+    agent = metadata.get("agent")
+    codex = metadata.get("codex")
+    evaluation = metadata.get("eval")
+    if (
+        not isinstance(agent, dict)
+        or agent.get("timed_out") is not False
+        or agent.get("exit_code") != 0
+        or not isinstance(codex, dict)
+        or codex.get("timed_out") is not False
+        or codex.get("exit_code") != 0
+        or not isinstance(evaluation, dict)
+        or evaluation.get("exit_code") != 0
+    ):
+        raise SystemExit(f"{arm} real task did not complete cleanly")
+    return {
+        "campaign_summary_sha256": hashlib.sha256(raw).hexdigest(),
+        "runner_metadata_sha256": hashlib.sha256(metadata_raw).hexdigest(),
+        "instances_total": 1,
+        "resolved": 1,
+        "tests_passed": 1,
+        "agent_timed_out": False,
+        "agent_exit_code": 0,
+        "eval_exit_code": 0,
+    }
 
 
 def timer(arm: str, suffix: str, schema: str) -> dict:
@@ -268,8 +485,8 @@ def measure(arm: str) -> tuple[dict, bytes]:
         "instrument": "OFF",
         "batch_size": 1,
         "n_tasks": 1,
-        "draft_vocab_k": 0,
-        "draft_vocab_root": 0,
+        "draft_vocab_k": 65536,
+        "draft_vocab_root": 1,
         "floor_is_full_step_hardware_floor": False,
     }
     for key, expected in required.items():
@@ -280,12 +497,53 @@ def measure(arm: str) -> tuple[dict, bytes]:
     for key in (
         "step_wall_ms", "measured_tps_fullstep_wall", "accept_per_event",
         "s_per_fwd_gpu", "drafter_gpu_ms_per_step", "committer_gpu_ms_per_step",
+        "derived_tps_fullstep_gpu", "committed_per_event", "events_per_step",
+        "wall_steps_measured", "floor_ms", "weight_floor_ms",
     ):
         value = payload.get(key)
         if isinstance(value, bool) or not isinstance(value, (int, float)) \
                 or not math.isfinite(float(value)) or float(value) <= 0:
             raise SystemExit(f"{arm} measure lacks positive {key}")
+    residual = payload.get("overhead_other_ms_per_event")
+    if isinstance(residual, bool) or not isinstance(residual, (int, float)) \
+            or not math.isfinite(float(residual)):
+        raise SystemExit(f"{arm} measure lacks finite overhead_other_ms_per_event")
+    if not math.isclose(
+        float(payload["events_per_step"]), 1.0, rel_tol=0.0, abs_tol=1e-12
+    ):
+        raise SystemExit(f"{arm} B1 measure must have exactly one event per step")
+    if payload.get("mandatory_weight_bytes") != weight_bytes:
+        raise SystemExit(f"{arm} mandatory weight-byte ledger mismatch")
+    if not math.isclose(
+        float(payload["weight_floor_ms"]), floor_ms, rel_tol=0.0, abs_tol=1e-9
+    ):
+        raise SystemExit(f"{arm} K64/root1 weight floor mismatch")
+    if not math.isclose(
+        float(payload["floor_ms"]), floor_ms, rel_tol=0.0, abs_tol=1e-9
+    ):
+        raise SystemExit(f"{arm} B1 floor is not the K64/root1 weight bound")
     return payload, raw
+
+
+def phase_breakdown(payload: dict) -> dict:
+    events_per_step = float(payload["events_per_step"])
+    sfwd_ms = float(payload["s_per_fwd_gpu"]) * 1000.0 * events_per_step
+    drafter_ms = float(payload["drafter_gpu_ms_per_step"])
+    committer_ms = float(payload["committer_gpu_ms_per_step"])
+    other_ms = float(payload["overhead_other_ms_per_event"]) * events_per_step
+    component_sum_ms = sfwd_ms + drafter_ms + committer_ms + other_ms
+    wall_ms = float(payload["step_wall_ms"])
+    if not math.isclose(component_sum_ms, wall_ms, rel_tol=1e-9, abs_tol=1e-6):
+        raise SystemExit("full-step phase breakdown does not close to measured wall")
+    return {
+        "sfwd_verify_gpu_ms": sfwd_ms,
+        "dfwd_drafter_gpu_ms": drafter_ms,
+        "cfwd_committer_gpu_ms": committer_ms,
+        "other_wall_ms": other_ms,
+        "component_sum_ms": component_sum_ms,
+        "measured_wall_ms": wall_ms,
+        "events_per_step": events_per_step,
+    }
 
 
 stock, stock_raw = measure(stock_arm)
@@ -294,22 +552,40 @@ engagement, engagement_raw = load(
     root / candidate_arm / "logs" /
     "fr13_fixed32_sfwd_state_fusion.production_engagement.json"
 )
+source_manifest, source_manifest_raw = load(
+    root / "sfwd_source_manifest.at_launch.json"
+)
+if (
+    source_manifest.get("schema")
+    != "fr13.fixed32.sfwd_state_fusion.timing_source_manifest.v1"
+    or len(source_manifest.get("files", {})) != 12
+):
+    raise SystemExit("SFWD timing source manifest is incomplete")
 summary = {
     "schema": "fr13.fixed32.sfwd_state_fusion.b1_timing_pair.v1",
     "status": "complete_diagnostic",
     "run_classification": (
-        "one_real_swe_verified_full_vocab_b1_sfwd_state_fusion_timing_diagnostic"
+        "one_real_swe_verified_k64_root_b1_sfwd_state_fusion_timing_diagnostic"
     ),
     "task_ids": ["astropy__astropy-12907"],
     "task_count": 1,
     "batch_size": 1,
     "physical_rows_per_request": 32,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "draft_vocab_blocks_sha256": draft_vocab_blocks_sha256,
     "source_commit": source_commit,
     "runner_sha256": runner_sha,
     "subset_sha256": subset_sha,
     "fa2_sha256": fa2_sha,
     "live_pass_sha256": live_sha,
+    "sfwd_source_manifest_sha256": hashlib.sha256(
+        source_manifest_raw
+    ).hexdigest(),
+    "mandatory_weight_bytes": weight_bytes,
     "mandatory_weight_floor_ms": floor_ms,
+    "floor_scope": "optimistic_mandatory_weight_read_lower_bound",
+    "floor_is_full_step_hardware_floor": False,
     "one_sided_u95_cap_ms": cap_ms,
     "timing_eligible": False,
     "floor_acceptance_eligible": False,
@@ -321,6 +597,11 @@ summary = {
         "step_wall_ms": stock["step_wall_ms"],
         "fullstep_wall_tps": stock["measured_tps_fullstep_wall"],
         "accept_per_event": stock["accept_per_event"],
+        "committed_per_event": stock["committed_per_event"],
+        "derived_fullstep_gpu_tps": stock["derived_tps_fullstep_gpu"],
+        "phase_breakdown_ms_per_step": phase_breakdown(stock),
+        "k64_gather": gather_log(stock_arm),
+        "real_task_outcome": campaign(stock_arm),
         "sfwd": timer(stock_arm, "", "fr13.sfwd_gpu_timer.v2"),
         "dfwd": timer(stock_arm, "_dfwd", "fr13.span_gpu_timer.v1"),
         "cfwd": timer(stock_arm, "_cfwd", "fr13.span_gpu_timer.v1"),
@@ -329,10 +610,19 @@ summary = {
         "arm": candidate_arm,
         "deploy_speed_sha256": hashlib.sha256(candidate_raw).hexdigest(),
         "engagement_sha256": hashlib.sha256(engagement_raw).hexdigest(),
+        "real_event_marker_sha256": hashlib.sha256(
+            (root / candidate_arm / "logs" /
+             "fr13_fixed32_sfwd_state_fusion.real_event.arm").read_bytes()
+        ).hexdigest(),
         "candidate_served": engagement.get("candidate_served"),
         "step_wall_ms": candidate["step_wall_ms"],
         "fullstep_wall_tps": candidate["measured_tps_fullstep_wall"],
         "accept_per_event": candidate["accept_per_event"],
+        "committed_per_event": candidate["committed_per_event"],
+        "derived_fullstep_gpu_tps": candidate["derived_tps_fullstep_gpu"],
+        "phase_breakdown_ms_per_step": phase_breakdown(candidate),
+        "k64_gather": gather_log(candidate_arm),
+        "real_task_outcome": campaign(candidate_arm),
         "sfwd": timer(candidate_arm, "", "fr13.sfwd_gpu_timer.v2"),
         "dfwd": timer(candidate_arm, "_dfwd", "fr13.span_gpu_timer.v1"),
         "cfwd": timer(candidate_arm, "_cfwd", "fr13.span_gpu_timer.v1"),
@@ -340,27 +630,20 @@ summary = {
     "candidate_over_stock_step_wall_ratio": (
         candidate["step_wall_ms"] / stock["step_wall_ms"]
     ),
-    "candidate_over_floor_ratio": candidate["step_wall_ms"] / floor_ms,
+    "candidate_over_optimistic_floor_ratio": candidate["step_wall_ms"] / floor_ms,
 }
-(root / "timing_summary.json").write_text(
+(root / "timing_summary.pending.json").write_text(
     json.dumps(summary, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
     encoding="ascii",
 )
-print(json.dumps(summary, ensure_ascii=True, sort_keys=True))
 PY
 
-"$PYTHON_BIN" scripts/fr13_runtime_manifest.py \
-  --repo "$PWD" --profile fixed32 \
-  --sequence scripts/fr13_fixed32_floor_timers_seq.sh \
-  --output "$RUNROOT_ABS/runtime_manifest.at_end.json"
-"$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
-  --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_end.json"
-cmp -s "$RUNROOT_ABS/runtime_manifest.at_launch.json" "$RUNROOT_ABS/runtime_manifest.at_end.json" \
-  || { echo "runtime/source manifest changed during timing" >&2; exit 14; }
-cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" "$RUNROOT_ABS/external_manifest.at_end.json" \
-  || { echo "external manifest changed during timing" >&2; exit 14; }
-[[ "$(sha256sum "$RUNNER_PATH" | awk '{print $1}')" == "$RUNNER_SHA256" ]] \
-  || { echo "timing runner changed during execution" >&2; exit 14; }
+finalize_manifests
+mv -- \
+  "$RUNROOT_ABS/timing_summary.pending.json" \
+  "$RUNROOT_ABS/timing_summary.json"
+trap - EXIT
+cat "$RUNROOT_ABS/timing_summary.json"
 printf 'timing_summary=%s completed=%s\n' \
   "$RUNROOT_ABS/timing_summary.json" "$(date -u +%FT%TZ)" \
   >> "$RUNROOT_ABS/launcher_meta.txt"

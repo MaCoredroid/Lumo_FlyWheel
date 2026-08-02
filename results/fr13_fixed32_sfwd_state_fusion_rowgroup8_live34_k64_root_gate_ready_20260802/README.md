@@ -31,7 +31,8 @@ incumbent result.
 The corrected offline artifact is
 `../fr13_fixed32_sfwd_state_fusion_rowgroup8_live34_codegen_20260802/`.
 It reports identical B1/B4 cubins, 111 registers, zero stack/local/spill/call
-evidence, and 160/640 CTAs. It is codegen evidence, not a runtime result.
+evidence, 160 CTAs per request, and 160/640 CTAs per B1/B4 launch. It is
+codegen evidence, not a runtime result.
 
 ## Launch prerequisites
 

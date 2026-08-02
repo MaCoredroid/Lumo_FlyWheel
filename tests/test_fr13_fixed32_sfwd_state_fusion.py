@@ -395,12 +395,17 @@ def _production_live_pass(source_sha256: str) -> dict[str, object]:
         "schema": "fr13.fixed32.sfwd_state_fusion.live_pass.v1",
         "status": "byte_pass_source_only",
         "run_classification": (
-            "one_real_swe_verified_full_vocab_b1_byte_timing_diagnostic"
+            "one_real_swe_verified_k64_root_b1_byte_diagnostic"
         ),
-        "candidate": "fixed32_sfwd_state_fusion_v1",
+        "candidate": "fixed32_sfwd_state_fusion_rowgroup8_v3",
         "source_sha256": source_sha256,
         "task_marker": "swe_verified:astropy__astropy-12907",
         "batch": 1,
+        "draft_vocab_k": 65536,
+        "draft_vocab_root": 1,
+        "draft_vocab_blocks_sha256": (
+            "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
+        ),
         "layer_count": 48,
         "layer_keys": [f"0x{index + 1:x}" for index in range(48)],
         "physical_rows_per_request": 32,
@@ -451,6 +456,21 @@ def test_production_control_is_default_off_and_source_bound(
         production._CREDENTIAL_IDS
     )
 
+    payload["draft_vocab_root"] = 0
+    bad_raw = json.dumps(payload, sort_keys=True).encode("ascii") + b"\n"
+    live.write_bytes(bad_raw)
+    digest.write_text(
+        hashlib.sha256(bad_raw).hexdigest() + "\n", encoding="ascii"
+    )
+    with pytest.raises(RuntimeError, match="draft_vocab_root"):
+        production.fixed32_sfwd_state_fusion_production_control(
+            environ={},
+            arm_path=str(arm),
+            pass_path=str(live),
+            pass_sha256_path=str(digest),
+        )
+
+    payload["draft_vocab_root"] = 1
     payload["source_sha256"] = "0" * 64
     bad_raw = json.dumps(payload, sort_keys=True).encode("ascii") + b"\n"
     live.write_bytes(bad_raw)
@@ -470,9 +490,11 @@ def test_production_engagement_and_served_wiring_cover_all_layers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     engagement = tmp_path / "engagement.json"
+    real_event = tmp_path / "fr13_fixed32_sfwd_state_fusion.real_event.arm"
     credential = {
         "live_pass_sha256": "1" * 64,
         "runtime_source_sha256": "2" * 64,
+        "task_marker": "swe_verified:astropy__astropy-12907",
     }
     monkeypatch.setattr(kernel, "_FR13_FIXED32_MODE", "hydra27_fixed32")
     monkeypatch.setattr(
@@ -486,6 +508,7 @@ def test_production_engagement_and_served_wiring_cover_all_layers(
         {
             "live_pass_sha256": None,
             "source_sha256": None,
+            "task_marker": None,
             "layers": set(),
             "launches": 0,
             "emitted": False,
@@ -496,13 +519,38 @@ def test_production_engagement_and_served_wiring_cover_all_layers(
         "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ENGAGEMENT_PATH",
         str(engagement),
     )
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH",
+        str(real_event),
+    )
+    warm = production.fixed32_sfwd_state_fusion_production_engagement(
+        credential=credential, layer_key=1, batch_size=1
+    )
+    assert warm["real_task_bound"] is False
+    assert production._STATE["launches"] == 0
+    assert not engagement.exists()
+
+    real_event.write_text("swe_verified:wrong-task\n", encoding="ascii")
+    real_event.chmod(0o444)
+    with pytest.raises(RuntimeError, match="not credential-bound"):
+        production.fixed32_sfwd_state_fusion_production_engagement(
+            credential=credential, layer_key=1, batch_size=1
+        )
+
+    real_event.chmod(0o600)
+    real_event.write_text("swe_verified:astropy__astropy-12907\n", encoding="ascii")
+    real_event.chmod(0o444)
     for layer in range(48):
         production.fixed32_sfwd_state_fusion_production_engagement(
             credential=credential, layer_key=layer + 1, batch_size=1
         )
     record = json.loads(engagement.read_text(encoding="ascii"))
     assert record["candidate_served"] is True
+    assert record["real_task_bound"] is True
+    assert record["task_marker"] == "swe_verified:astropy__astropy-12907"
     assert record["layer_count"] == 48
+    assert record["draft_vocab_k"] == 65536
+    assert record["draft_vocab_root"] == 1
     assert record["incumbent_conv_launches_per_layer"] == 0
     assert record["timing_eligible"] is False
     assert record["floor_acceptance_eligible"] is False
@@ -612,16 +660,49 @@ def test_sfwd_gate_uses_eager_lifecycle_without_graph_acceptance() -> None:
 
 def test_source_gated_timing_pair_is_stock_first_and_nonacceptance() -> None:
     runner = TIMING_RUNNER_PATH.read_text(encoding="utf-8")
+    launcher = LAUNCHER_PATH.read_text(encoding="utf-8")
     assert "subset_b1_diagnostic_one.json" in runner
     assert "subset_b4_four.json" not in runner
     assert "subset_b16" not in runner
     assert "PROBE_ONLY" not in runner
     assert "ACCEPT_SPEED_PROBE" not in runner
-    assert "FR13_DRAFT_VOCAB_ROOT=0" in runner
-    assert "FR13_DRAFT_VOCAB_K=0" in runner
+    assert "FR13_DRAFT_VOCAB_ROOT=1" in runner
+    assert "FR13_DRAFT_VOCAB_K=65536" in runner
+    assert "FR13_DRAFT_VOCAB_BLOCKS=\"$DRAFT_VOCAB_BLOCKS_CONTAINER\"" in runner
+    assert "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff" in runner
+    assert "K64_ROOT_WEIGHT_BYTES=32666638208" in runner
+    assert "K64_ROOT_FLOOR_MS=119.658015414" in runner
+    assert "K64_ROOT_CAP_MS=137.6067177261" in runner
+    assert 'shim_prefix = "[FR13_DRAFT_VOCAB] shim built K=65536 "' in runner
+    assert 'root_prefix = "[FR13_DRAFT_VOCAB_ROOT] engaged K=65536 "' in runner
+    assert 'disabled_prefix = "[FR13_DRAFT_VOCAB] DISABLED"' in runner
+    assert "full_vocab" not in runner
+    assert '"floor_is_full_step_hardware_floor": False' in runner
+    assert '"phase_breakdown_ms_per_step": phase_breakdown' in runner
+    assert '"real_task_outcome": campaign' in runner
+    assert 'payload.get("verdict_counts") != {"resolved": 1}' in runner
+    assert 'agent.get("timed_out") is not False' in runner
+    assert 'float(payload["events_per_step"]), 1.0' in runner
+    assert '"runner_metadata_sha256"' in runner
+    assert "sfwd_source_manifest.at_launch.json" in runner
+    assert "sfwd_source_manifest.at_end.json" in runner
+    assert "SFWD timing source manifest changed during timing" in runner
+    assert "src/lumo_flywheel_serving/fr13_sfwd_state_fusion_production.py" in runner
+    assert "scripts/fr13_sfwd_state_fusion_pass.py" in runner
+    assert "timing_summary.pending.json" in runner
+    assert runner.index("timing_summary.pending.json") < runner.rindex(
+        "finalize_manifests"
+    )
+    publish_index = runner.rindex("mv --")
+    assert runner.rindex("finalize_manifests") < publish_index
+    assert runner.index("timing_summary.pending.json", publish_index) < runner.index(
+        "timing_summary.json", publish_index
+    )
     assert "ENFORCE_EAGER=1 CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in runner
     assert "FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1" in runner
     assert "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB=1" in runner
+    assert "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=$real_event_path" in runner
+    assert "candidate lacks the authenticated real-task engagement marker" in runner
     assert "scripts/fr13_measure.py deploy-speed" in runner
     assert "scripts/fr13_sfwd_state_fusion_pass.py validate" in runner
     assert "scripts/fr13_sfwd_state_fusion_pass.py verify-engagement" in runner
@@ -634,3 +715,6 @@ def test_source_gated_timing_pair_is_stock_first_and_nonacceptance() -> None:
     assert runner.index("fr13_sfwd_state_fusion_pass.py validate") < runner.index(
         "docker ps -aq"
     )
+    assert (
+        '|| "$_fr13_fixed32_sfwd_state_fusion_timing" == "1"'
+    ) in launcher

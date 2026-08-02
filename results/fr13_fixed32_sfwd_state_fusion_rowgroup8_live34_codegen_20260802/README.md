@@ -22,7 +22,12 @@ request log, environment dump, process identity, credential, or secret.
 - `B=1` and `B=4`, `N=32`, `C=10240`, width `4`, state length `34`
 - source rows `36`, `BLOCK_C=256`, row group `8`, eight warps, three stages
 - BF16 data surfaces, int32 state indices, int64 source descriptor, no bias
-- Triton 3.6.0, Torch 2.10.0+cu130, CUDA 13.0 target `sm_121a`
+- Triton 3.6.0 with bundled `ptxas-blackwell` CUDA 12.9 V12.9.86,
+  Torch 2.10.0+cu130, target `sm_121a`
+
+The system `nvdisasm` and `cuobjdump` inspection tools are CUDA 13.0.85.
+System nvcc 13.0.88 was present but was not invoked; the bundled Triton ptxas
+above produced the cubin.
 
 The audit reads the kernel through `git show` at the bound revision. It runs
 with CUDA visibility explicitly empty and calls the offline Triton compiler;
@@ -36,7 +41,8 @@ same.
 
 | Metric | B1 | B4 |
 |---|---:|---:|
-| CTAs per request | 160 | 640 |
+| CTAs per request | 160 | 160 |
+| CTAs per launch | 160 | 640 |
 | Registers | 111 | 111 |
 | Stack / local bytes | 0 / 0 | 0 / 0 |
 | Launch / ELF shared bytes | 4096 / 1024 | 4096 / 1024 |
