@@ -7862,14 +7862,33 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(
             "FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB must be exactly 0 or 1"
         )
-    if sfwd_state_fusion_text == sfwd_state_fusion_timing_text == "1":
-        parser.error("fixed32 SFWD byte and timing diagnostics are exclusive")
+    sfwd_prior_reuse_text = os.environ.get(
+        "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB",
+        "0",
+    )
+    if sfwd_prior_reuse_text not in {"0", "1"}:
+        parser.error(
+            "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB must be exactly 0 or 1"
+        )
+    if (
+        sum(
+            value == "1"
+            for value in (
+                sfwd_state_fusion_text,
+                sfwd_state_fusion_timing_text,
+                sfwd_prior_reuse_text,
+            )
+        )
+        > 1
+    ):
+        parser.error("fixed32 SFWD diagnostics are exclusive")
     fixed32_sfwd_state_fusion_timing = (
         sfwd_state_fusion_timing_text == "1"
     )
     fixed32_sfwd_state_fusion_diagnostic = (
         sfwd_state_fusion_text == "1"
         or fixed32_sfwd_state_fusion_timing
+        or sfwd_prior_reuse_text == "1"
     )
     if fixed32_sfwd_state_fusion_diagnostic:
         if fixed32_taw_diagnostic or fixed32_bm8_diagnostic:

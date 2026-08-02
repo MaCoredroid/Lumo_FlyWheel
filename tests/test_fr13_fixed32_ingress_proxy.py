@@ -574,6 +574,7 @@ def test_engine_middleware_arms_batch_gdn_from_authenticated_exact4_request(
     "route_sidecar_name",
     (
         "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled",
+        "fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled",
         "fr13_fixed32_sfwd_state_fusion.production.arm",
     ),
 )

@@ -80,6 +80,7 @@ _FIXED32_SFWD_STATE_FUSION_REAL_EVENT_ARM_NAME = (
 _FIXED32_SFWD_STATE_FUSION_ENABLED_NAME = (
     "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
 )
+_FIXED32_SFWD_PRIOR_REUSE_ENABLED_NAME = "fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled"
 _FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM_NAME = (
     "fr13_fixed32_sfwd_state_fusion.production.arm"
 )
@@ -1511,6 +1512,7 @@ class Fixed32EngineIngress:
     def _validate_sfwd_state_fusion_enabled_sidecar(self, path: Path) -> None:
         candidates = (
             path.with_name(_FIXED32_SFWD_STATE_FUSION_ENABLED_NAME),
+            path.with_name(_FIXED32_SFWD_PRIOR_REUSE_ENABLED_NAME),
             path.with_name(_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM_NAME),
         )
         present = []
