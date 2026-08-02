@@ -1,0 +1,3 @@
+variant	batch	build_passes	physical_launches_per_layer	grid	ctas_per_request	ctas_per_launch	warps_per_cta	registers_per_thread	registers_per_cta	stack_bytes	local_bytes	shared_bytes_cuobjdump	ldl	stl	calls	indirect_branches	global_scratch_bytes	tmem_bytes	sass_instructions	primary_text_bytes	capmerc_text_bytes	cubin_bytes	qualification
+ordered_root_loop	1	2	1	48x16x1	768	768	8	112	28672	0	0	1024	0	0	0	0	0	0	1592	25472	3594	131128	pass_zero_spill_ready_not_executed
+ordered_root_loop	4	2	1	48x16x4	768	3072	8	112	28672	0	0	1024	0	0	0	0	0	0	1592	25472	3594	131256	pass_zero_spill_ready_not_executed

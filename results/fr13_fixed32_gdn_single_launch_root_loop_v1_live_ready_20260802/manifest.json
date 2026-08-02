@@ -1,0 +1,45 @@
+{
+  "schema": "fr13.fixed32.gdn_single_launch.root_loop.live_ready.manifest.v1",
+  "status": "READY_NOT_EXECUTED",
+  "candidate": "fixed32_gdn_single_launch_root_loop_v1",
+  "implementation_commit": "08dc6187a0ccf70b13f8c988f77b02d126ffdc79",
+  "target": "sm_121a",
+  "batches": [1, 4],
+  "source_report_sha256": "91a9570fa192162107c29d173902773bda612a076d891f211a536a5387fd57ad",
+  "qualification": {
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "physical_rows_per_request": 32,
+    "b1_diagnostic_task_count": 1,
+    "b4_decisive_task_count": 4,
+    "authenticated_real_tasks_only": true,
+    "probe_and_synthetic_routes_forbidden": true,
+    "reference_always_served_during_gate": true,
+    "candidate_shadow_only_during_gate": true,
+    "production_default_enabled": false,
+    "comparison_kind": "exact_raw_bytes",
+    "authoritative_surfaces": [
+      "out",
+      "ring_k",
+      "ring_v",
+      "ring_a",
+      "ring_b",
+      "flags",
+      "counter"
+    ]
+  },
+  "production_kernel_bodies": {
+    "node_helper_source_sha256": "39734a9dcfaf14c45de0fd35d8e0b12f6c099a8c3850fdc4c2b472dd3229ca6c",
+    "static_root_kernel_source_sha256": "870fe9943a8e33b7dff6457b4e8524ef85173cbbea4ddd432a3effd9991cd03d",
+    "unchanged": true
+  },
+  "inventory": [
+    "README.md",
+    "codegen.json",
+    "manifest.json",
+    "resources.tsv",
+    "source_hashes.tsv",
+    "verification.json",
+    "SHA256SUMS"
+  ]
+}
