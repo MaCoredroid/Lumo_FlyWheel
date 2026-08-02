@@ -1,0 +1,102 @@
+{
+  "schema": "fr13.fixed32.dfwd_k64_m1_warp32_r32_pair2_build.v1",
+  "created_at_utc": "2026-08-02T14:07:46Z",
+  "status": "host_build_static_audit_pass_runtime_route_pending",
+  "acceptance_valid": false,
+  "lossless_runtime_bound": false,
+  "timing_eligible": false,
+  "performance_claim": false,
+  "byte_equality_expected": false,
+  "production_default_enabled": false,
+  "gpu_used": false,
+  "docker_build_used": true,
+  "docker_workload_used": false,
+  "source": {
+    "branch": "agent/fixed32-dfwd-k64-m1-warp32-r32-pair2-20260802",
+    "commit": "840bd0fd5806fc114dd921e3e9a9298c44f7c354",
+    "cuda_sha256": "e4e2989d6e931ea7cb8f1506c74103dd33023e1bc0fd766b7f0fc251c560ce87",
+    "builder_sha256": "19e8bdc1a2487c99a2ffb89cbe2a891799ca878f1f979a8d9d7c02595866bbb6",
+    "test_sha256": "3431f18d889b99b830639174153f69a3ba5fa57988f45abaf80f34650c26f40d"
+  },
+  "toolchain": {
+    "torch": "2.11.0+cu130",
+    "cuda_release": "13.0",
+    "target_arch": "sm_121a",
+    "network_enabled": false,
+    "gpu_exposed": false
+  },
+  "candidate": {
+    "operation": "fr13_bf16_k64_head::gemvx_m1_warp32_r32_pair2_out",
+    "binary_sha256": "60cad2aa39f2d36769070d8947294759e9af6158c02b9c9feaa8c43860236d72",
+    "binary_bytes": 114304,
+    "binary_mode": "0444",
+    "object_sha256": "17badb26517e2447403a7dce0e1a4b40648c9befc7d9a2618a1a03a2ea9929f6",
+    "object_bytes": 155584,
+    "grid": [2048, 1, 1],
+    "block": [32, 32, 1],
+    "rows_per_cta": 32,
+    "k_partition_lanes": 32,
+    "elements_per_load": 2,
+    "lane_load_iterations": 80,
+    "lane_fma_iterations": 160,
+    "dynamic_loop_instructions_per_lane": 1280,
+    "parent_dynamic_loop_instructions_per_lane": 1760,
+    "dynamic_loop_instruction_reduction_fraction": 0.2727272727,
+    "dynamic_shared_bytes": 0
+  },
+  "resources": {
+    "registers_per_thread": 20,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 0,
+    "constant0_bytes": 928
+  },
+  "sass": {
+    "encoded_instructions_including_nop": 72,
+    "nop": 14,
+    "operational_instructions": 58,
+    "ldg_32": 2,
+    "ldg_u16": 0,
+    "stg_u16": 1,
+    "shuffle_down": 5,
+    "fadd": 5,
+    "ffma_static": 3,
+    "prmt": 2,
+    "shf": 2,
+    "bf16_conversion": 1,
+    "barrier": 0,
+    "local_load_store": 0,
+    "calls": 0,
+    "atomics": 0
+  },
+  "deterministic_proposal_contract": {
+    "fixed32_draft_probs": null,
+    "proposal_selection": "argmax",
+    "candidate_may_change_draft_argmax": true,
+    "target_distribution_proof": "deterministic one-hot multi-draft rejection",
+    "reference_tests": "7 passed",
+    "runtime_binding_pending": true
+  },
+  "abi": {
+    "max_glibc": "2.32",
+    "max_glibcxx": "3.4.21",
+    "max_cxxabi": "1.3.9"
+  },
+  "checks": {
+    "focused_source_tests": "5 passed",
+    "deterministic_rejection_tests": "7 passed",
+    "python_compile": "pass",
+    "ruff": "pass",
+    "diff_check": "pass",
+    "extension_registration": "pass",
+    "resource_audit": "pass",
+    "sass_audit": "pass"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "runtime losslessness binding gate",
+    "real SWE-Verified task",
+    "full-step timing",
+    "hardware-floor acceptance"
+  ]
+}
