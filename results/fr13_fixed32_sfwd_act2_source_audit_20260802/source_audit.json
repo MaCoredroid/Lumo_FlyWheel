@@ -1,0 +1,53 @@
+{
+  "schema": "fr13.fixed32.sfwd.activation_window.source_audit.v1",
+  "status": "source_only_validated",
+  "candidate": "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_u32x2_frontier5_loadonce_act2_v4",
+  "source_commit": "9b54beec6cb4e196cdfde7d9daa1e58af94da64e",
+  "classification": "source_only_no_triton_cuda_compile_or_gpu_execution",
+  "construction": {
+    "activation_window": 2,
+    "activation_windows": 16,
+    "node_order": [27, 25, 23, 18, 13, 8, 3, 0, 2, 7, 12, 17, 22, 1, 5, 6, 4, 10, 11, 9, 15, 16, 14, 20, 21, 19, 24, 26, 28, 29, 30, 31],
+    "node_pairs": [[27, 25], [23, 18], [13, 8], [3, 0], [2, 7], [12, 17], [22, 1], [5, 6], [4, 10], [11, 9], [15, 16], [14, 20], [21, 19], [24, 26], [28, 29], [30, 31]],
+    "x_global_loads_per_channel": 32,
+    "x_reload_count": 0,
+    "bf16_rounded_products": 128,
+    "fp32_bias_starts": 32,
+    "ordered_fp32_product_adds": 96,
+    "silu_expressions": 32,
+    "saved_first_accumulators": 16,
+    "output_stores": 32,
+    "source_stage_current_row_stores": 32,
+    "base_peak_live_x": 5,
+    "base_live_x_sum": 116,
+    "peak_live_x_with_deferred_stage": 5,
+    "live_x_sum_with_deferred_stage": 125,
+    "peak_live_acc": 2
+  },
+  "launch_geometry": {
+    "b1_block_c": 128,
+    "b1_num_warps": 2,
+    "b2_b4_block_c": 256,
+    "b2_b4_num_warps": 4
+  },
+  "validation": {
+    "sfwd_source_tests_passed": 68,
+    "sfwd_source_tests_failed": 0,
+    "ruff": "pass",
+    "python_syntax": "pass",
+    "shell_syntax": "pass",
+    "git_diff_check": "pass"
+  },
+  "performance_claim": false,
+  "kernel_codegen_claim": false,
+  "gpu_correctness_claim": false,
+  "hardware_floor_acceptance_claim": false,
+  "files": {
+    "scripts/fr13_run_b1_sfwd_prior_reuse_gate.sh": {"bytes": 7025, "sha256": "63ebbdc920c224397402a998f7e2a194a7e648681592a4fd8c0de23b2af9e33e"},
+    "scripts/fr13_sfwd_prior_reuse_gate.py": {"bytes": 34001, "sha256": "1a548ec3cefda9d8a3f763f221f65d3c18a41fb5211d2621f82a74a32ca212ad"},
+    "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse.py": {"bytes": 26893, "sha256": "f1d29edf4a092295822db6acc81b3db4c8862a6a6f3b304a1a8596b8dd044393"},
+    "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py": {"bytes": 47060, "sha256": "dcb8a21e5c708a2773fda2dbb266346fc771c69efeac63996154288752d5af6d"},
+    "tests/test_fr13_fixed32_sfwd_prior_reuse.py": {"bytes": 22122, "sha256": "1f170bf25720f546baa7438b2f7311923a8a3252ef05a6d92fc1968b7128f812"},
+    "tests/test_fr13_fixed32_sfwd_prior_reuse_descriptorless.py": {"bytes": 29189, "sha256": "38628b76f00ff88a3eaf510a0cf4dcc1a433280787d5ce5606d2f4f95987458a"}
+  }
+}
