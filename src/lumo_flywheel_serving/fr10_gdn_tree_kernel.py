@@ -1050,6 +1050,7 @@ _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID = (
 )
 _FR13_FIXED32_SFWD_ROWS_PER_PROGRAM = 8
 _FR13_FIXED32_SFWD_BLOCK_C = 256
+_FR13_FIXED32_SFWD_CHANNELS = 10240
 _FR13_FIXED32_SFWD_STATE_FUSION_ENABLED = (
     "/logs/fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
 )
@@ -1221,6 +1222,7 @@ def fixed32_sfwd_state_fusion_contract(
         "logical_rows": batch * rows,
         "conv_width": width,
         "conv_state_len": state_len,
+        "channels": _FR13_FIXED32_SFWD_CHANNELS,
         "source_rows_per_request": source_rows,
         "source_rows": batch * source_rows,
         "conv_state_launches_per_layer": 1,
@@ -4265,14 +4267,13 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
     pid_n_base = pid_n_group * ROWS_PER_PROGRAM
     offs_n = pid_n_base + tl.arange(0, ROWS_PER_PROGRAM)[:, None]
     offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)[None, :]
-    c_mask = offs_c < C
 
     bank_row = tl.load(
         spec_state_indices + pid_b * ssi_stride_b + 0 * ssi_stride_s
     ).to(tl.int64)
     acc = tl.zeros((ROWS_PER_PROGRAM, BLOCK_C), dtype=tl.float32)
     if HAS_BIAS:
-        acc = tl.load(bias + offs_c, mask=c_mask, other=0.0).to(tl.float32)
+        acc = tl.load(bias + offs_c).to(tl.float32)
     for tap in tl.static_range(0, WIDTH):
         source_row = tl.load(source_flat + offs_n * WIDTH + tap).to(tl.int64)
         from_prior = source_row < (WIDTH - 1)
@@ -4281,7 +4282,7 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
             + bank_row * conv_stride_row
             + offs_c * conv_stride_c
             + source_row * conv_stride_l,
-            mask=c_mask & from_prior,
+            mask=from_prior,
             other=0.0,
         )
         x_node = source_row - (WIDTH - 1)
@@ -4289,21 +4290,12 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
             x
             + (pid_b.to(tl.int64) * N + x_node) * C
             + offs_c,
-            mask=(
-                c_mask
-                & (~from_prior)
-                & (x_node >= 0)
-                & (x_node < N)
-            ),
+            mask=(~from_prior) & (x_node >= 0) & (x_node < N),
             other=0.0,
         )
         value = tl.where(from_prior, prior_value, x_value).to(tl.bfloat16)
         weight = tl.load(
-            conv_weights
-            + offs_c * weight_stride_c
-            + tap * weight_stride_w,
-            mask=c_mask,
-            other=0.0,
+            conv_weights + offs_c * weight_stride_c + tap * weight_stride_w
         ).to(tl.bfloat16)
         # The incumbent rounds every tap product to BF16 before converting to
         # FP32 and accumulating left-to-right. Keep both cast boundary and
@@ -4312,24 +4304,15 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
         acc = acc + product
 
     activated = acc / (1.0 + tl.exp(0.0 - acc))
-    tl.store(
-        out + (pid_b * N + offs_n) * C + offs_c,
-        activated,
-        mask=c_mask,
-    )
+    tl.store(out + (pid_b * N + offs_n) * C + offs_c, activated)
 
     stage_base = pid_b.to(tl.int64) * SOURCE_ROWS
-    current_x = tl.load(
-        x + (pid_b * N + offs_n) * C + offs_c,
-        mask=c_mask,
-        other=0.0,
-    )
+    current_x = tl.load(x + (pid_b * N + offs_n) * C + offs_c)
     tl.store(
         source_stage
         + (stage_base + (WIDTH - 1) + offs_n) * C
         + offs_c,
         current_x,
-        mask=c_mask,
     )
     source_edge_writer = pid_n_base == 0
     for prior_col in tl.static_range(0, WIDTH - 1):
@@ -4338,7 +4321,7 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
             + bank_row * conv_stride_row
             + offs_c * conv_stride_c
             + prior_col * conv_stride_l,
-            mask=c_mask & source_edge_writer,
+            mask=source_edge_writer,
             other=0.0,
         )
         tl.store(
@@ -4346,14 +4329,14 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
             + (stage_base + prior_col) * C
             + offs_c,
             prior_value,
-            mask=c_mask & source_edge_writer,
+            mask=source_edge_writer,
         )
     tl.store(
         source_stage
         + (stage_base + SOURCE_ROWS - 1) * C
         + offs_c,
         0.0,
-        mask=c_mask & source_edge_writer,
+        mask=source_edge_writer,
     )
 
 
@@ -5394,6 +5377,7 @@ def launch_fixed32_sfwd_state_fusion(
     if (
         x.ndim != 2
         or tuple(int(value) for value in x.shape) != (required_rows, channels)
+        or channels != _FR13_FIXED32_SFWD_CHANNELS
         or out.shape != x.shape
         or conv_weights.shape != (channels, width)
         or spec_state_indices.ndim != 2

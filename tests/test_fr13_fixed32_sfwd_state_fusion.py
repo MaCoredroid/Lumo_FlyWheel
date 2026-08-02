@@ -59,6 +59,7 @@ def test_contract_is_closed_and_launch_invariant_for_b1_b4() -> None:
         assert contract["logical_rows"] == batch * 32
         assert contract["source_rows_per_request"] == 36
         assert contract["source_rows"] == batch * 36
+        assert contract["channels"] == 10240
         assert contract["conv_state_launches_per_layer"] == 1
         assert contract["conv_rows_per_program"] == 8
         assert contract["conv_row_groups_per_request"] == 4
@@ -283,6 +284,8 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     assert "tl.arange(0, ROWS_PER_PROGRAM)[:, None]" in candidate
     assert "row_groups = N // ROWS_PER_PROGRAM" in candidate
     assert "n_mask" not in candidate
+    assert "c_mask" not in candidate
+    assert "channels != _FR13_FIXED32_SFWD_CHANNELS" in launcher
     assert "source_edge_writer = pid_n_base == 0" in candidate
     assert "source_stage" in candidate
     assert "rows_per_program = _FR13_FIXED32_SFWD_ROWS_PER_PROGRAM" in launcher
