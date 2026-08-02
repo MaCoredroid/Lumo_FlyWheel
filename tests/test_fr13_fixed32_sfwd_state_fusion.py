@@ -71,8 +71,8 @@ def test_contract_is_closed_and_launch_invariant_for_b1_b4() -> None:
         assert contract["channels"] == 10240
         assert contract["conv_state_len"] == 34
         assert contract["conv_state_launches_per_layer"] == 1
-        assert contract["conv_rows_per_program"] == 8
-        assert contract["conv_row_groups_per_request"] == 4
+        assert contract["conv_rows_per_program"] == 16
+        assert contract["conv_row_groups_per_request"] == 2
         assert contract["gdn_level_path_programs"] == (batch, 11 * batch)
         assert contract["gdn_physical_launches_per_layer"] == 2
         assert contract["gdn_ring_export"] is True
@@ -366,10 +366,11 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     ast.parse(textwrap.dedent(fragment))
 
 
-def test_rowgroup8_covers_each_b1_b4_physical_row_once() -> None:
+def test_rowgroup16_c128_covers_each_b1_b4_physical_row_once() -> None:
     rows = 32
     rows_per_program = kernel._FR13_FIXED32_SFWD_ROWS_PER_PROGRAM
-    assert rows_per_program == 8
+    assert rows_per_program == 16
+    assert kernel._FR13_FIXED32_SFWD_BLOCK_C == 128
     for batch in (1, 2, 3, 4):
         row_groups = rows // rows_per_program
         covered: list[tuple[int, int]] = []
