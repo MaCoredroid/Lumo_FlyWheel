@@ -102,7 +102,7 @@ def test_contract_closes_adaptive_row32_geometry_for_b1_b4() -> None:
         assert contract["source_descriptor_launcher_argument"] is False
         assert contract["candidate"] == (
             "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_"
-            "u32x2_s20_lane2_v1"
+            "u32x2_firstuse_r21_v1"
         )
     for geometry in ((0, 32, 4, 34), (1, 31, 4, 34), (1, 32, 3, 34)):
         with pytest.raises(ValueError):
@@ -275,10 +275,10 @@ def test_launcher_uses_channel_serial_kernel_and_exact_layout() -> None:
     assert "weight_pair_01" in kernel
     assert "weight_pair_23" in kernel
     assert "tl.pointer_type(tl.uint64)" not in kernel
-    assert kernel.count("tl.load(x_batch") == 32
+    assert kernel.count("tl.load(x_batch") == 33
     assert kernel.count("tl.store(out_batch +") == 32
     assert kernel.count("tl.store(stage_batch + ((WIDTH - 1) +") == 32
-    assert kernel.index("x_19 = tl.load(") < kernel.index("product_0 = (")
+    assert kernel.count("x_4 = tl.load(x_batch + 4 * X_STRIDE_ROW + offs_c)") == 2
     assert kernel.index(
         "tl.store(stage_batch + ((WIDTH - 1) + 19) * C + offs_c, x_19)"
     ) < kernel.index("x_20 = tl.load(")
@@ -344,7 +344,8 @@ def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
     assert "source_manifest.at_launch.json" in runner
     assert "source_manifest.at_end.json" in runner
     assert "source_descriptor_in_kernel=false" in runner
-    assert "current_x_global_loads_per_element=1" in runner
+    assert "x_global_loads_per_channel=33" in runner
+    assert "long_edge_reload=row21_from_row4" in runner
     assert "conv_block_c=128" in runner
     assert "conv_num_warps=2" in runner
     assert "topology_host_validation=exact_parent_each_launch" in runner

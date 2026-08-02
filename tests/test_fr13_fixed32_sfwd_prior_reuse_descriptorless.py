@@ -499,9 +499,20 @@ def test_channel_serial_keeps_global_rows_coalesced_and_ordered() -> None:
     assert "tl.arange(0, BLOCK_C)" in fragment
     assert "tl.arange(0, BLOCK_C)[:, None]" not in fragment
     assert "tl.arange(0, N)" not in fragment
-    assert fragment.count("tl.load(x_batch +") == FIXED32_ROWS
+    assert fragment.count("tl.load(x_batch +") == FIXED32_ROWS + 1
     for row in range(FIXED32_ROWS):
-        assert f"x_batch + {row} * X_STRIDE_ROW + offs_c" in fragment
+        load = f"x_{row} = tl.load(x_batch + {row} * X_STRIDE_ROW + offs_c)"
+        product = f"product_3 = (x_{row} * weight_3)"
+        assert fragment.count(
+            f"x_batch + {row} * X_STRIDE_ROW + offs_c"
+        ) == (2 if row == 4 else 1)
+        assert fragment.index(load) < fragment.index(product)
+        if row:
+            prior_store = (
+                "tl.store(stage_batch + ((WIDTH - 1) + "
+                f"{row - 1}) * C + offs_c, x_{row - 1})"
+            )
+            assert fragment.index(prior_store) < fragment.index(load)
     assert "tl.gather" not in fragment
     assert "tl.join" not in fragment
     assert "tl.permute" not in fragment
@@ -511,7 +522,9 @@ def test_channel_serial_keeps_global_rows_coalesced_and_ordered() -> None:
     assert "for node in tl.static_range(0, N):" not in fragment
     assert fragment.count("tl.store(out_batch +") == FIXED32_ROWS
     assert fragment.count("tl.store(stage_batch + ((WIDTH - 1) +") == FIXED32_ROWS
-    assert fragment.index("x_19 = tl.load(") < fragment.index("product_0 = (")
+    assert fragment.count(
+        "x_4 = tl.load(x_batch + 4 * X_STRIDE_ROW + offs_c)"
+    ) == 2
     assert fragment.index(
         "tl.store(stage_batch + ((WIDTH - 1) + 19) * C + offs_c, x_19)"
     ) < fragment.index("x_20 = tl.load(")
