@@ -29,6 +29,12 @@ INTEGRATION_MANIFEST = (
     / "fr13_fixed32_kernel_candidates_integrated_20260801"
     / "manifest.json"
 )
+PAIR8_RUNTIME_MANIFEST = (
+    REPO
+    / "results"
+    / "fr13_fixed32_dfwd_k64_m1_pair8_runtime_source_20260802"
+    / "manifest.json"
+)
 
 
 def _module():
@@ -727,11 +733,23 @@ def test_published_contract_matches_candidate_source_and_exact_math() -> None:
     assert payload["live_b1_reference_contract"]["gemm_mnk"] == [1, 65536, 5120]
     assert payload["live_b1_reference_contract"]["calls_per_event"] == 5
     assert payload["replacement"]["candidate_gemm_mnk"] == [32, 65536, 5120]
-    assert integration["components"]["draft_head_m32"][
+    qualified_source_sha = integration["components"]["draft_head_m32"][
         "candidate_source_sha256"
-    ] == hashlib.sha256(
-        PATCHER.read_bytes()
-    ).hexdigest()
+    ]
+    current_source_sha = hashlib.sha256(PATCHER.read_bytes()).hexdigest()
+    if qualified_source_sha != current_source_sha:
+        pair8_runtime = json.loads(
+            PAIR8_RUNTIME_MANIFEST.read_text(encoding="ascii")
+        )
+        invalidation = pair8_runtime["historical_qualification_effect"]
+        assert invalidation["status"] == (
+            "INVALIDATED_PENDING_SEPARATE_REQUALIFICATION"
+        )
+        assert invalidation["draft_head_m32_qualified_patcher_sha256"] == (
+            qualified_source_sha
+        )
+        assert invalidation["current_patcher_sha256"] == current_source_sha
+        assert pair8_runtime["claims"]["production_default_enabled"] is False
     assert integration["components"]["draft_head_m32"]["source_commit"] == (
         "3b06acebbd673466703268bf0b3647f4bf4a3070"
     )

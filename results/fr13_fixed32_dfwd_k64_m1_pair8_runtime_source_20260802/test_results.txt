@@ -1,0 +1,8 @@
+32 focused tests passed in 18.86 seconds.
+
+Coverage included pair8 runtime/launcher wiring, K64 root mapping, draft-head
+padding coexistence, CUDA source contracts, and deterministic rejection
+sampling. Python compilation, Bash syntax, and git diff checks passed.
+
+No GPU, Docker, real-task, acceptance, throughput, or hardware-floor result is
+included in this source artifact.
