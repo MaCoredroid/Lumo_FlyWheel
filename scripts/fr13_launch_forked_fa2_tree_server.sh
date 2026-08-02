@@ -1547,14 +1547,15 @@ if [[ "$_fr13_sfwd_state_fusion_byte_ab" == "1" ]]; then
      && "$MAX_NUM_SEQS" == "1" \
      && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
      && "${ENFORCE_EAGER:-0}" == "1" \
-     && "${FR13_DRAFT_VOCAB_K:-65536}" == "0" \
-     && "$FR13_DRAFT_VOCAB_ROOT" == "0" \
+     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+     && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+     && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
      && "${FR13_CONV_WB_BATCHED:-0}" == "1" \
      && "${FR13_TREE_CONV_FUSED:-1}" == "1" \
      && "${FR13_RING_EXPORT:-1}" == "1" \
      && "${FR13_FLAGS_INKERNEL:-1}" == "1" \
      && "${FR13_TREE_RUNROW_INIT:-1}" == "1" ]] || {
-    echo "FR13 SFWD state-fusion byte gate requires exact full-vocab eager fixed32 B1" >&2
+    echo "FR13 SFWD state-fusion byte gate requires exact K64/root1 eager fixed32 B1" >&2
     exit 2
   }
   [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \

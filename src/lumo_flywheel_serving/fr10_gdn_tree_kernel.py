@@ -2609,6 +2609,28 @@ def _fr13_fixed32_sfwd_state_fusion_pass_emit(
 ) -> None:
     if len(layer_keys) != 48:
         return
+    draft_vocab_k = int(os.environ.get("FR13_DRAFT_VOCAB_K", "0") or 0)
+    draft_vocab_root = int(os.environ.get("FR13_DRAFT_VOCAB_ROOT", "0") or 0)
+    draft_vocab_blocks = os.environ.get("FR13_DRAFT_VOCAB_BLOCKS", "")
+    try:
+        draft_vocab_blocks_sha256 = hashlib.sha256(
+            Path(draft_vocab_blocks).read_bytes()
+        ).hexdigest()
+    except OSError as error:
+        raise RuntimeError(
+            "FR13 fixed32 SFWD K64/root1 block map is unreadable"
+        ) from error
+    expected_blocks_sha256 = (
+        "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
+    )
+    if (
+        draft_vocab_k != 65536
+        or draft_vocab_root != 1
+        or draft_vocab_blocks_sha256 != expected_blocks_sha256
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 SFWD live PASS requires the audited K64/root1 block map"
+        )
     path = os.environ.get(
         "FR13_FIXED32_SFWD_STATE_FUSION_PASS_PATH",
         _FR13_FIXED32_SFWD_STATE_FUSION_PASS,
@@ -2620,12 +2642,15 @@ def _fr13_fixed32_sfwd_state_fusion_pass_emit(
         "schema": "fr13.fixed32.sfwd_state_fusion.live_pass.v1",
         "status": "byte_pass_source_only",
         "run_classification": (
-            "one_real_swe_verified_full_vocab_b1_byte_timing_diagnostic"
+            "one_real_swe_verified_k64_root_b1_byte_diagnostic"
         ),
         "candidate": _FR13_FIXED32_SFWD_STATE_FUSION_CANDIDATE_ID,
         "source_sha256": _fr13_fixed32_batch_gdn_source_sha256(),
         "task_marker": task_marker,
         "batch": int(batch),
+        "draft_vocab_k": draft_vocab_k,
+        "draft_vocab_root": draft_vocab_root,
+        "draft_vocab_blocks_sha256": draft_vocab_blocks_sha256,
         "layer_count": 48,
         "layer_keys": [f"0x{key:x}" for key in sorted(layer_keys)],
         "physical_rows_per_request": 32,

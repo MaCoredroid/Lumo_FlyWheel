@@ -210,6 +210,12 @@ def test_byte_gate_is_strict_and_never_marks_candidate_production(
     pass_path = tmp_path / "pass.json"
     monkeypatch.setenv("FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_PATH", str(log_path))
     monkeypatch.setenv("FR13_FIXED32_SFWD_STATE_FUSION_PASS_PATH", str(pass_path))
+    monkeypatch.setenv("FR13_DRAFT_VOCAB_K", "65536")
+    monkeypatch.setenv("FR13_DRAFT_VOCAB_ROOT", "1")
+    monkeypatch.setenv(
+        "FR13_DRAFT_VOCAB_BLOCKS",
+        str(ROOT / "scripts" / "fr13_dvk_subset_blocks.json"),
+    )
     monkeypatch.setattr(
         kernel,
         "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB_STATE",
@@ -257,6 +263,14 @@ def test_byte_gate_is_strict_and_never_marks_candidate_production(
     )
     payload = json.loads(pass_path.read_text(encoding="ascii"))
     assert payload["status"] == "byte_pass_source_only"
+    assert payload["run_classification"] == (
+        "one_real_swe_verified_k64_root_b1_byte_diagnostic"
+    )
+    assert payload["draft_vocab_k"] == 65536
+    assert payload["draft_vocab_root"] == 1
+    assert payload["draft_vocab_blocks_sha256"] == (
+        "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
+    )
     assert payload["layer_count"] == 48
     assert payload["reference_always_served"] is True
     assert payload["real_task_authenticated"] is True
@@ -268,6 +282,26 @@ def test_byte_gate_is_strict_and_never_marks_candidate_production(
         "pass",
         "mismatch_reference_served",
     ]
+
+
+def test_live_pass_rejects_non_k64_root_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_STATE_FUSION_PASS_PATH", str(tmp_path / "pass.json")
+    )
+    monkeypatch.setenv("FR13_DRAFT_VOCAB_K", "0")
+    monkeypatch.setenv("FR13_DRAFT_VOCAB_ROOT", "0")
+    monkeypatch.setenv(
+        "FR13_DRAFT_VOCAB_BLOCKS",
+        str(ROOT / "scripts" / "fr13_dvk_subset_blocks.json"),
+    )
+    with pytest.raises(RuntimeError, match="audited K64/root1 block map"):
+        kernel._fr13_fixed32_sfwd_state_fusion_pass_emit(
+            task_marker="swe_verified:astropy__astropy-12907",
+            batch=1,
+            layer_keys=set(range(48)),
+        )
 
 
 def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
@@ -334,15 +368,20 @@ def test_rowgroup8_covers_each_b1_b4_physical_row_once() -> None:
         assert edge_writers == [(request, 0) for request in range(batch)]
 
 
-def test_b1_full_vocab_runner_is_reference_returning_and_nonacceptance() -> None:
+def test_b1_k64_root_runner_is_reference_returning_and_nonacceptance() -> None:
     runner = RUNNER_PATH.read_text(encoding="utf-8")
     launcher = LAUNCHER_PATH.read_text(encoding="utf-8")
 
     assert "subset_b1_diagnostic_one.json" in runner
     assert "subset_b4_four.json" not in runner
     assert "subset_b16" not in runner
-    assert "FR13_DRAFT_VOCAB_ROOT=0" in runner
-    assert "FR13_DRAFT_VOCAB_K=0" in runner
+    assert "FR13_DRAFT_VOCAB_ROOT=1" in runner
+    assert "FR13_DRAFT_VOCAB_K=65536" in runner
+    assert "FR13_DRAFT_VOCAB_BLOCKS=\"$DRAFT_VOCAB_BLOCKS_CONTAINER\"" in runner
+    assert "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff" in runner
+    assert "K64_ROOT_WEIGHT_BYTES=32666638208" in runner
+    assert "K64_ROOT_FLOOR_MS=119.658015414" in runner
+    assert "K64_ROOT_CAP_MS=137.6067177261" in runner
     assert "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=1" in runner
     assert "FR13_CONV_WB_BATCHED=1" in runner
     assert "FR13_TREE_CONV_FUSED=1" in runner
@@ -359,5 +398,5 @@ def test_b1_full_vocab_runner_is_reference_returning_and_nonacceptance() -> None
         "fr13_fixed32_sfwd_state_fusion.real_event.arm"
     ) in launcher
     assert "must be the only kernel candidate" in launcher
-    assert "requires exact full-vocab eager fixed32 B1" in launcher
+    assert "requires exact K64/root1 eager fixed32 B1" in launcher
     assert "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled" in launcher
