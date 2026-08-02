@@ -4306,7 +4306,7 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
     acc = tl.zeros((ROWS_PER_PROGRAM, BLOCK_C), dtype=tl.float32)
     if HAS_BIAS:
         acc = tl.load(bias + offs_c).to(tl.float32)
-    for tap in tl.static_range(0, WIDTH):
+    for tap in tl.static_range(0, WIDTH - 1):
         source_row = tl.load(source_flat + offs_n * WIDTH + tap).to(tl.int64)
         from_prior = source_row < (WIDTH - 1)
         prior_value = tl.load(
@@ -4335,13 +4335,26 @@ def _fr13_fixed32_sfwd_state_fusion_kernel(
         product = (value * weight).to(tl.bfloat16).to(tl.float32)
         acc = acc + product
 
+    # The host-validated fixed32 descriptor always ends each row's window at
+    # its current node. Specialize that final tap so it does not pay for a
+    # descriptor load and a dynamically masked prior/current gather.
+    current_x = tl.load(
+        x + (pid_b.to(tl.int64) * N + offs_n) * x_stride_row + offs_c
+    )
+    current_weight = tl.load(
+        conv_weights
+        + offs_c * weight_stride_c
+        + (WIDTH - 1) * weight_stride_w
+    ).to(tl.bfloat16)
+    current_product = (
+        current_x * current_weight
+    ).to(tl.bfloat16).to(tl.float32)
+    acc = acc + current_product
+
     activated = acc / (1.0 + tl.exp(0.0 - acc))
     tl.store(out + (pid_b * N + offs_n) * C + offs_c, activated)
 
     stage_base = pid_b.to(tl.int64) * SOURCE_ROWS
-    # The final tap is the validated fixed32 descriptor's current node. Reuse
-    # that BF16 load for commit-source staging instead of reading x twice.
-    current_x = x_value
     tl.store(
         source_stage
         + (stage_base + (WIDTH - 1) + offs_n) * C

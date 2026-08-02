@@ -325,7 +325,7 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     launcher = _function_source("launch_fixed32_sfwd_state_fusion")
     patcher = PATCHER_PATH.read_text(encoding="utf-8")
 
-    assert "for tap in tl.static_range(0, WIDTH):" in candidate
+    assert "for tap in tl.static_range(0, WIDTH - 1):" in candidate
     assert "product = (value * weight).to(tl.bfloat16).to(tl.float32)" in candidate
     assert "acc = acc + product" in candidate
     assert "tl.sum" not in candidate
@@ -340,8 +340,11 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     assert "source_stage" in candidate
     assert "rows_per_program = _FR13_FIXED32_SFWD_ROWS_PER_PROGRAM" in launcher
     assert "num_warps=8" in launcher
-    assert "current_x = x_value" in candidate
-    assert "x + (pid_b * N + offs_n) * x_stride_row + offs_c" not in candidate
+    assert "current_x = tl.load(" in candidate
+    assert "pid_b.to(tl.int64) * N + offs_n" in candidate
+    assert "+ (WIDTH - 1) * weight_stride_w" in candidate
+    assert "current_product = (" in candidate
+    assert "acc = acc + current_product" in candidate
     assert "x_stride_row" in candidate
     assert "* x_stride_row" in candidate
     assert "FR13_FIXED32_SFWD_STATE_FUSION source candidate is eager" in launcher
