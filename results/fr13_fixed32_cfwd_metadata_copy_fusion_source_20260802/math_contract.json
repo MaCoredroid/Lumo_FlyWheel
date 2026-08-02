@@ -1,0 +1,16 @@
+{
+  "accepted_steps_max": 12,
+  "armed_conv_body_equal_to_default": true,
+  "armed_conv_body_sha256": "de4c2592e5de56ab5b19f6b7f367d7bbad124e1fe022ee610ad287bbcdc76b96",
+  "default_conv_kernel_equal_to_parent": true,
+  "default_conv_kernel_sha256": "c98ee7605839e27a02fc2532ba2a3f1df0016ab21d29e55679335155b31bed66",
+  "lossless_byte_qualification": "not_run",
+  "ordered_recurrence_math_equal": true,
+  "ordered_recurrence_math_sha256": "d16ad65fe4affb85a85051bf8dc7530c17a34dd85826c05d6bd8adec67b1ce22",
+  "physical_node_domain": 32,
+  "recurrence_dependency_change": 0,
+  "schema": "fr13.fixed32.cfwd_metadata_copy_fusion.math.v1",
+  "state_ownership_change": false,
+  "validation_reuse": "stronger_conv_guard_exact_lease_or_absent_lease_fallback",
+  "wrong_stream_or_operand_lease": "latched_fail_closed"
+}

@@ -1,0 +1,60 @@
+{
+  "acceptance_evidence": false,
+  "branch": "agent/fixed32-cfwd-metadata-fusion-20260802",
+  "candidate_serving_permitted": false,
+  "codegen": {
+    "calls": null,
+    "local_bytes": null,
+    "registers": null,
+    "shared_bytes": null,
+    "spills": null,
+    "stack_bytes": null,
+    "status": "pending_active_b1_teardown"
+  },
+  "gpu_or_docker_run_performed": false,
+  "optimization": {
+    "added_launches_per_event": 0,
+    "added_recurrence_dependencies": 0,
+    "added_storage_bytes": 0,
+    "arm": "FR13_FIXED32_COMMITTER_METADATA_FUSION=1",
+    "default_off": true,
+    "duplicate_validation_physical_kernel_count": "requires_nsight",
+    "fused_destination_int32_stores_per_request": 17,
+    "fused_source_int32_loads_per_request": 16,
+    "guarded_fallback": "absent_lease_only",
+    "lease": "exact_pointer_batch_shape_stride_dtype_device_stream_one_shot",
+    "removed_high_level_copy_calls_per_event": 2,
+    "requires_committer_layer_batch": true,
+    "mismatched_or_malformed_lease_policy": "latched_fail_closed",
+    "stale_lease_policy": "latched_fail_closed",
+    "unique_metadata_writer_programs_per_request": 1
+  },
+  "qualification": {
+    "b1_real_swe_byte_gate": "not_run",
+    "b1_real_swe_timing": "not_run",
+    "b4_exact16_real_swe_byte_gate": "not_run",
+    "b4_exact16_real_swe_timing": "not_run",
+    "b4_exact4_real_swe_byte_gate": "not_run",
+    "b4_exact4_real_swe_timing": "not_run"
+  },
+  "schema": "fr13.fixed32.cfwd_metadata_copy_fusion.source.v1",
+  "source_commit": "bbfe2bfa6d30c1e3dfe48e6e00f68f793d28dd93",
+  "source_parent": "59bc4332ca6ec8f61dad8756bf8dc6e0f1dc80b0",
+  "source_sha256": {
+    "kernel": "7056997055d3849fc446b96f9b828cd391d55e1179e81f1c8bca7195037499c3",
+    "launcher": "a76edb6899d33cc53fda62e527584d3fc6b6656d2d866392024330091886dd55",
+    "observer_patcher": "3837b4b91bb8eafba56f7e2532ffae93a1c9ec85008aaed2db2a7525f703081d",
+    "test_committer": "e39213665a2211c86651eff03b7ac395b83cdd76baaa124ef3d870adc047dfb7",
+    "test_conv_wiring": "64342a8579ea3d3655f36985491f59f7b397859d730443a200e8e10ebc177e20"
+  },
+  "status": "SOURCE_STATIC_ONLY_CODEGEN_BYTE_TIMING_PENDING",
+  "synthetic_probe_executed": false,
+  "tests": {
+    "conv_commit_wiring": "11_passed",
+    "final_full_preseed_observer": "54_passed",
+    "shell_syntax": "pass",
+    "task_lifecycle_committer": "90_passed"
+  },
+  "timing_evidence": false,
+  "u95_floor_acceptance_evidence": false
+}
