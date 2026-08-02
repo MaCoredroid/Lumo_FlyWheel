@@ -11,15 +11,15 @@ CUDA = REPO / "csrc" / "fr13_bf16_gemvx_k64_m1_shuffle.cu"
 BUILDER = REPO / "scripts" / "fr13_build_bf16_gemvx_k64_m1_shuffle.py"
 
 
-def test_cuda_source_is_strict_k64_m1_full_warp_r32_pair8bits() -> None:
+def test_cuda_source_is_strict_k64_m1_full_warp_r32_pair16bits() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert "constexpr int kHidden = 5120;" in source
     assert "constexpr int kVocab = 65536;" in source
     assert "constexpr int kLanes = 32;" in source
     assert "constexpr int kRowsPerCta = 32;" in source
-    assert "constexpr int kElementsPerLoad = 8;" in source
-    assert "constexpr int kOctets = kHidden / kElementsPerLoad;" in source
+    assert "constexpr int kElementsPerLoad = 16;" in source
+    assert "constexpr int kGroups = kHidden / kElementsPerLoad;" in source
     assert "static_assert(kLanes * kRowsPerCta == 1024);" in source
     assert "static_assert(kCtas == 2048);" in source
     assert "const dim3 block(kLanes, kRowsPerCta, 1);" in source
@@ -28,19 +28,17 @@ def test_cuda_source_is_strict_k64_m1_full_warp_r32_pair8bits() -> None:
     assert "extern __shared__" not in source
 
 
-def test_cuda_source_uses_packed_octet_loads_and_fp32_accumulation() -> None:
+def test_cuda_source_uses_packed_group_loads_and_fp32_accumulation() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert "float accumulator = 0.0f;" in source
     assert "#pragma unroll 1" in source
-    assert "for (int octet = lane; octet < kOctets; octet += kLanes)" in source
-    assert "reinterpret_cast<const uint4*>(input)" in source
-    assert "reinterpret_cast<const uint4*>(weight)" in source
-    assert source.count("__uint_as_float(") == 16
-    for half in ("x.x", "x.y", "x.z", "x.w", "w.x", "w.y", "w.z", "w.w"):
-        assert f"{half} << 16" in source
-        assert f"{half} & 0xffff0000u" in source
-    assert source.count("accumulator = __fmaf_rn(x") == 8
+    assert "for (int group = lane; group < kGroups; group += kLanes)" in source
+    assert "reinterpret_cast<const PackedBf16x16*>(input)" in source
+    assert "reinterpret_cast<const PackedBf16x16*>(weight)" in source
+    assert source.count("FR13_ACCUMULATE_PACKED_WORD(") == 9
+    for half in ("lo.x", "lo.y", "lo.z", "lo.w", "hi.x", "hi.y", "hi.z", "hi.w"):
+        assert f"x.{half}, w.{half}" in source
     assert source.count("__shfl_down_sync(") == 5
     assert source.count("__fadd_rn(") == 5
     for stride in (16, 8, 4, 2, 1):
@@ -78,15 +76,15 @@ def test_cuda_op_is_out_variant_with_strict_k64_geometry() -> None:
     source = CUDA.read_text(encoding="ascii")
 
     assert (
-        "gemvx_m1_warp32_r32_pair8bits_out(Tensor(a!) output, Tensor input, "
+        "gemvx_m1_warp32_r32_pair16bits_out(Tensor(a!) output, Tensor input, "
         "Tensor weight) -> ()" in source
     )
     assert "input.sizes() == at::IntArrayRef({1, kHidden})" in source
     assert "weight.sizes() == at::IntArrayRef({kVocab, kHidden})" in source
     assert "output.sizes() == at::IntArrayRef({1, kVocab})" in source
     assert "weight must be contiguous [65536,5120]" in source
-    assert "pair8bits inputs must be 16-byte aligned" in source
-    assert "alignof(uint4)" in source
+    assert "pair16bits inputs must be 16-byte aligned" in source
+    assert "alignof(PackedBf16x16)" in source
     assert "at::cuda::getCurrentCUDAStream()" in source
     assert "C10_CUDA_KERNEL_LAUNCH_CHECK();" in source
     assert "TORCH_LIBRARY_FRAGMENT(fr13_bf16_k64_head, library)" in source
@@ -112,7 +110,7 @@ def test_builder_is_pinned_default_off_and_claims_no_qualification() -> None:
     assert '"block": [32, 32, 1]' in source
     assert '"output_rows_per_cta": 32' in source
     assert '"k_partition_lanes": 32' in source
-    assert '"elements_per_load": 8' in source
-    assert '"lane_load_iterations": 20' in source
+    assert '"elements_per_load": 16' in source
+    assert '"lane_load_iterations": 10' in source
     assert '"lane_fma_iterations": 160' in source
     assert '"packed_unpack": "BF16 bits shifted/masked into exact FP32 bits"' in source
