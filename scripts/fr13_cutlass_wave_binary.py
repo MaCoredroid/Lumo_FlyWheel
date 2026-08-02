@@ -64,13 +64,15 @@ CANDIDATE_SELECTORS = (
     | STATIC_B4_M128_SELECTORS
 )
 PRODUCTION_SELECTORS = frozenset(
-    {"streamk_coop128", "streamk_force_wide256", "persistent_b4_m128"}
+    {
+        "streamk_coop128",
+        "streamk_force_wide256",
+        "static_persistent_stocktile",
+        "divisor_static_stocktile",
+        "persistent_b4_m128",
+    }
 )
-INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
-    "static_persistent_stocktile",
-    "divisor_static_stocktile",
-    "persistent_b4_m128_static",
-}
+INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {"persistent_b4_m128_static"}
 CONTAINER_SOURCE = Path("/tmp/fr13_cutlass_wave.abi3.so")
 CONTAINER_DESTINATION = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so"
@@ -334,6 +336,8 @@ def _verify_production_qualification(
     if selector not in {
         "streamk_coop128",
         "streamk_force_wide256",
+        "static_persistent_stocktile",
+        "divisor_static_stocktile",
         "persistent_b4_m128",
     }:
         raise ValueError(f"unsupported production candidate selector: {selector!r}")
@@ -369,14 +373,6 @@ def install_candidate(
     if selector not in CANDIDATE_SELECTORS:
         raise ValueError(f"unsupported candidate selector: {selector!r}")
     if selector not in INSTALLABLE_SELECTORS:
-        if selector in {
-            "static_persistent_stocktile",
-            "divisor_static_stocktile",
-        }:
-            raise ValueError(
-                "static B1 production remains unavailable until the K64/root "
-                "raw-byte gate passes"
-            )
         raise ValueError(
             "static M128 production remains unavailable until Tail23 and Hydra27 "
             "raw-byte gates pass"

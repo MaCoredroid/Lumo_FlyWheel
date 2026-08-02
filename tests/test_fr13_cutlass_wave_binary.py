@@ -48,6 +48,10 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "persistent_b4_m128_static",
         "persistent_b4_m128_static_byte_ab",
     }
+    assert {
+        "static_persistent_stocktile",
+        "divisor_static_stocktile",
+    } <= module.PRODUCTION_SELECTORS
     assert module.WIDE256_CANDIDATE_SHA256 == (
         "503277a2dca6784502b709007adfe45f42d0f1a1851107e7b913e1e85a00de5a"
     )
@@ -244,7 +248,7 @@ def test_wide256_diagnostic_install_uses_its_own_pinned_identity(
         ),
     ),
 )
-def test_static_b1_diagnostic_installs_but_production_stays_blocked(
+def test_static_b1_diagnostic_installs_and_production_requires_qualification(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     size_attr: str,
@@ -277,7 +281,7 @@ def test_static_b1_diagnostic_installs_but_production_stays_blocked(
 
     destination.chmod(0o644)
     destination.write_bytes(b"stock-extension\n")
-    with pytest.raises(ValueError, match="K64/root raw-byte gate"):
+    with pytest.raises(ValueError, match="requires a pinned production sidecar"):
         module.install_candidate(
             source,
             destination,
