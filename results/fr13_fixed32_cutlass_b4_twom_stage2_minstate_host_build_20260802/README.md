@@ -15,6 +15,11 @@ per dtype. Its total SASS instruction count is 1040 instead of 1688, and its
 branch count is 39 instead of 89. These are static compiler facts, not a
 runtime speed claim.
 
+The two FP16/BF16 stock-scheduler Stage2 functions are SASS-identical to the
+same functions in the prior pinned Stage2 binary. The complete extension hash
+still changed because it now contains the revised two-M kernel, so the new
+binary remains bound to a fresh real byte gate.
+
 No GPU kernel or real task was run for this artifact. The binary, object, and
 cubin remain unpublished host-build outputs. Real SWE-Verified B4 byte equality
 must pass before any timing or hardware-floor claim.

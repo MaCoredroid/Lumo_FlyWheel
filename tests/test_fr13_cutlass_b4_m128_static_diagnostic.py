@@ -349,6 +349,12 @@ def test_identity_stockshape_stage2_selector_is_exact_b4_diagnostic_only() -> No
         module.IDENTITY_STOCKSHAPE_STAGE2_PATCH_SOURCE_SHA256,
         module.IDENTITY_STOCKSHAPE_STAGE2_PATCHED_DISPATCH_SHA256,
     )
+    assert module.IDENTITY_STOCKSHAPE_STAGE2_PATCH_SOURCE_SHA256 == (
+        "841b5dfc0741aa5051037e3eda005e5a65f7a425b76235a61e8a0779bd31a155"
+    )
+    assert module.IDENTITY_STOCKSHAPE_STAGE2_PATCHED_DISPATCH_SHA256 == (
+        "9880496498d47cec37f2b6f143e16236d0af4a3606ee770a8b93de6a179fc88d"
+    )
 
     sources = {
         name: (SCRIPTS / name).read_text(encoding="utf-8")

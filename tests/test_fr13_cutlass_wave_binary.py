@@ -106,6 +106,10 @@ def test_pinned_binary_identity_and_selectors() -> None:
         module.IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SIZE,
         "identity_stockshape_stage2_b4",
     )
+    assert module.IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SHA256 == (
+        "c5da32258e678494cd2b6b34da0b2aa96e70096b215db0938ed1e0750aa43d29"
+    )
+    assert module.IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SIZE == 117_488_608
     assert module.B4_M128_CANDIDATE_SHA256 == (
         "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
     )
