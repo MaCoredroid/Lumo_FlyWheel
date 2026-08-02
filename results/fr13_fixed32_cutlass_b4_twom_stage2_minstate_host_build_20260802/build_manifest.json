@@ -1,0 +1,130 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_twom_stage2_minstate_host_build.v1",
+  "created_at_utc": "2026-08-02T23:18:17Z",
+  "status": "host_compile_link_audit_pass_default_off",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "agent/fixed32-cutlass-b4-divisor-stage2-20260802",
+    "source_commit": "2d2314bffed233cc94da0c544fca10daf5aa321a",
+    "patch_source_sha256": "841b5dfc0741aa5051037e3eda005e5a65f7a425b76235a61e8a0779bd31a155",
+    "patched_dispatch_sha256": "9880496498d47cec37f2b6f143e16236d0af4a3606ee770a8b93de6a179fc88d",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2"
+  },
+  "candidate": {
+    "selector": "identity_twom_b4",
+    "diagnostic_selector": "identity_twom_b4_byte_ab",
+    "default_enabled": false,
+    "production_authorized": false,
+    "shape_gate": "M=128,N<=65536",
+    "physical_m": 128,
+    "tile_mnk": [64, 128, 128],
+    "cluster_mnk": [1, 1, 1],
+    "mainloop_schedule": "KernelTmaWarpSpecializedBlockwisePingpongSm120",
+    "mainloop_stage_count": 2,
+    "epilogue": "identity",
+    "tile_scheduler": "fr13_fixed32_b4_twom_static_scheduler",
+    "candidate_owned_state_fields": 1,
+    "work_mapping": "m=linear_index_and_1,n=linear_index_shift_1,l=0",
+    "split_k": false
+  },
+  "host_build": {
+    "result": "pass",
+    "target_arch": "sm_121a",
+    "gpu_runtime_used": false,
+    "docker_used": false,
+    "candidate_binary_import": "pass",
+    "pinned_vllm_cutlass_source_validation": "pass"
+  },
+  "outputs": {
+    "candidate_binary": {
+      "published": false,
+      "sha256": "c5da32258e678494cd2b6b34da0b2aa96e70096b215db0938ed1e0750aa43d29",
+      "bytes": 117488608
+    },
+    "candidate_object": {
+      "published": false,
+      "sha256": "a41009b247e63878095b6edeb18e9bdf4b0ffd996e9724b5c96494992843abc9",
+      "bytes": 21251392
+    },
+    "candidate_cubin": {
+      "published": false,
+      "sha256": "ab61f9e8ee156f1ce9455d87d6b429673040dd7d1e6d5d28b67bcf0ebdb1d31e",
+      "bytes": 2173184
+    }
+  },
+  "candidate_resource_audit": {
+    "result": "pass",
+    "candidate_kernel_count": 2,
+    "candidate_kernel_dtypes": ["fp16", "bf16"],
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant_bytes": 2688,
+    "detected_spills": false
+  },
+  "candidate_sass_per_dtype": {
+    "instruction_slots": 1040,
+    "branches": 39,
+    "calls": 0,
+    "local_loads": 0,
+    "local_stores": 0,
+    "qmma": 128,
+    "ffma": 128,
+    "ldsm": 48,
+    "stsm": 16
+  },
+  "same_binary_stock_stage2_control_per_dtype": {
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant_bytes": 2560,
+    "instruction_slots": 1688,
+    "branches": 89,
+    "calls": 0,
+    "local_loads": 0,
+    "local_stores": 0,
+    "qmma": 128,
+    "ffma": 128,
+    "ldsm": 48,
+    "stsm": 16
+  },
+  "static_control_delta": {
+    "instruction_slots": -648,
+    "instruction_slots_percent": -38.39,
+    "branches": -50,
+    "branches_percent": -56.18,
+    "qmma": 0,
+    "ffma": 0,
+    "ldsm": 0,
+    "stsm": 0,
+    "performance_inference_allowed": false
+  },
+  "prior_twom_candidate_per_dtype": {
+    "binary_sha256": "6a33fcfc13f70e0d5a6d10d4d8cdfd279056a391257683496e1e397857ab94a1",
+    "mainloop_stage_count": "auto",
+    "candidate_owned_state_fields": 3,
+    "stack_bytes_per_thread": 8,
+    "instruction_slots": 1064,
+    "branches": 43,
+    "local_loads": 3,
+    "local_stores": 1
+  },
+  "source_checks": {
+    "focused_tests": "34 passed",
+    "ruff": "pass",
+    "pycompile": "pass",
+    "git_diff_check": "pass"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "real SWE-Verified B4 byte equality",
+    "real SWE-Verified task execution",
+    "full-step timing",
+    "hardware-floor acceptance"
+  ]
+}
