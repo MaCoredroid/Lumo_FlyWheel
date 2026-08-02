@@ -354,4 +354,8 @@ def test_packed_xgather_loads_first_two_prior_values_as_exact_pair() -> None:
     assert "prior_base.to(tl.pointer_type(tl.uint32))" in fragment
     assert "prior_pair.to(tl.uint16).to(tl.bfloat16, bitcast=True)" in fragment
     assert "(prior_pair >> 16).to(tl.uint16).to(" in fragment
-    assert "prior_base + 2 * conv_stride_l" in fragment
+    assert (
+        "(prior_base + 2 * conv_stride_l).to(tl.pointer_type(tl.uint32))"
+        in fragment
+    )
+    assert "prior_tail_pair.to(tl.uint16).to(tl.bfloat16, bitcast=True)" in fragment

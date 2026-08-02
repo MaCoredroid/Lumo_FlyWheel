@@ -584,7 +584,10 @@ def _fr13_fixed32_sfwd_prior_reuse_packed_xgather_kernel(
     prior_1 = (prior_pair >> 16).to(tl.uint16).to(
         tl.bfloat16, bitcast=True
     )
-    prior_2 = tl.load(prior_base + 2 * conv_stride_l)
+    prior_tail_pair = tl.load(
+        (prior_base + 2 * conv_stride_l).to(tl.pointer_type(tl.uint32))
+    )
+    prior_2 = prior_tail_pair.to(tl.uint16).to(tl.bfloat16, bitcast=True)
 
     source_group = offs_n >> 2
     packed = tl.where(
