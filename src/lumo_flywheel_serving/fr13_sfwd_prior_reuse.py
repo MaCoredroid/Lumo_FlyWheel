@@ -19,10 +19,14 @@ from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
 from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
     CHANNELS,
     CONV_WIDTH,
+    FIXED32_CHANNEL_SERIAL_ACTIVATION_WINDOW,
+    FIXED32_CHANNEL_SERIAL_DEFERRED_STAGE_LIVE_X_SUM,
+    FIXED32_CHANNEL_SERIAL_DEFERRED_STAGE_PEAK_LIVE_X,
     FIXED32_CHANNEL_SERIAL_FRONTIER5_LIVE_X_SUM,
     FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER,
     FIXED32_CHANNEL_SERIAL_FRONTIER5_PEAK_LIVE_X,
     FIXED32_CHANNEL_SERIAL_LOADS_PER_CHANNEL,
+    FIXED32_CHANNEL_SERIAL_PEAK_LIVE_ACC,
     FIXED32_PARENT,
     FIXED32_ROWS,
     SOURCE_ROWS,
@@ -34,7 +38,7 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
 
 CANDIDATE = (
     "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_"
-    "u32x2_frontier5_loadonce_v3"
+    "u32x2_frontier5_loadonce_act2_v4"
 )
 ROWS_PER_PROGRAM = 32
 BLOCK_C = 128
@@ -105,6 +109,14 @@ def fixed32_sfwd_prior_reuse_contract(
         "conv_node_order": FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER,
         "conv_peak_live_x": FIXED32_CHANNEL_SERIAL_FRONTIER5_PEAK_LIVE_X,
         "conv_live_x_sum": FIXED32_CHANNEL_SERIAL_FRONTIER5_LIVE_X_SUM,
+        "conv_activation_window": FIXED32_CHANNEL_SERIAL_ACTIVATION_WINDOW,
+        "conv_peak_live_acc": FIXED32_CHANNEL_SERIAL_PEAK_LIVE_ACC,
+        "conv_peak_live_x_with_deferred_stage": (
+            FIXED32_CHANNEL_SERIAL_DEFERRED_STAGE_PEAK_LIVE_X
+        ),
+        "conv_live_x_sum_with_deferred_stage": (
+            FIXED32_CHANNEL_SERIAL_DEFERRED_STAGE_LIVE_X_SUM
+        ),
         "x_global_loads_per_channel": (
             FIXED32_CHANNEL_SERIAL_LOADS_PER_CHANNEL
         ),
@@ -320,6 +332,14 @@ def _pass_emit(
         "conv_node_order": list(FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER),
         "conv_peak_live_x": FIXED32_CHANNEL_SERIAL_FRONTIER5_PEAK_LIVE_X,
         "conv_live_x_sum": FIXED32_CHANNEL_SERIAL_FRONTIER5_LIVE_X_SUM,
+        "conv_activation_window": FIXED32_CHANNEL_SERIAL_ACTIVATION_WINDOW,
+        "conv_peak_live_acc": FIXED32_CHANNEL_SERIAL_PEAK_LIVE_ACC,
+        "conv_peak_live_x_with_deferred_stage": (
+            FIXED32_CHANNEL_SERIAL_DEFERRED_STAGE_PEAK_LIVE_X
+        ),
+        "conv_live_x_sum_with_deferred_stage": (
+            FIXED32_CHANNEL_SERIAL_DEFERRED_STAGE_LIVE_X_SUM
+        ),
         "x_global_loads_per_channel": (
             FIXED32_CHANNEL_SERIAL_LOADS_PER_CHANNEL
         ),
@@ -452,6 +472,14 @@ def fixed32_sfwd_prior_reuse_byte_gate(
         "conv_node_order": list(FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER),
         "conv_peak_live_x": FIXED32_CHANNEL_SERIAL_FRONTIER5_PEAK_LIVE_X,
         "conv_live_x_sum": FIXED32_CHANNEL_SERIAL_FRONTIER5_LIVE_X_SUM,
+        "conv_activation_window": FIXED32_CHANNEL_SERIAL_ACTIVATION_WINDOW,
+        "conv_peak_live_acc": FIXED32_CHANNEL_SERIAL_PEAK_LIVE_ACC,
+        "conv_peak_live_x_with_deferred_stage": (
+            FIXED32_CHANNEL_SERIAL_DEFERRED_STAGE_PEAK_LIVE_X
+        ),
+        "conv_live_x_sum_with_deferred_stage": (
+            FIXED32_CHANNEL_SERIAL_DEFERRED_STAGE_LIVE_X_SUM
+        ),
         "x_global_loads_per_channel": (
             FIXED32_CHANNEL_SERIAL_LOADS_PER_CHANNEL
         ),

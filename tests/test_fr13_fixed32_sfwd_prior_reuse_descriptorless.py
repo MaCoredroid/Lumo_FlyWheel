@@ -25,18 +25,23 @@ except ModuleNotFoundError:
 from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
     CHANNELS,
     CONV_WIDTH,
+    FIXED32_CHANNEL_SERIAL_ACTIVATION_WINDOW,
+    FIXED32_CHANNEL_SERIAL_DEFERRED_STAGE_LIVE_X_SUM,
+    FIXED32_CHANNEL_SERIAL_DEFERRED_STAGE_PEAK_LIVE_X,
     FIXED32_CHANNEL_SERIAL_FRONTIER5_LIVE_X_SUM,
     FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER,
     FIXED32_CHANNEL_SERIAL_FRONTIER5_PEAK_LIVE_X,
     FIXED32_CHANNEL_SERIAL_LOADS_PER_CHANNEL,
+    FIXED32_CHANNEL_SERIAL_PEAK_LIVE_ACC,
     FIXED32_PARENT,
     FIXED32_PACKED_SOURCE_DELTAS,
     FIXED32_ROWS,
     SIGNED_INT32_MAX,
     SOURCE_ROWS,
     X_ROW_STRIDE,
-    fixed32_derived_parent_q,
     fixed32_channel_serial_liveness_profile,
+    fixed32_channel_serial_windowed_liveness_profile,
+    fixed32_derived_parent_q,
     fixed32_descriptorless_sources,
     fixed32_i32_address_contract,
     fixed32_packed_source_entry,
@@ -142,6 +147,32 @@ def test_channel_serial_frontier5_schedule_is_load_once_optimal() -> None:
         return False
 
     assert has_peak4_schedule(0) is False
+
+
+def test_channel_serial_activation_window_keeps_frontier_five() -> None:
+    profile = fixed32_channel_serial_windowed_liveness_profile()
+
+    assert profile["activation_window"] == 2
+    assert profile["activation_window"] == FIXED32_CHANNEL_SERIAL_ACTIVATION_WINDOW
+    assert profile["peak_live_acc"] == 2
+    assert profile["peak_live_acc"] == FIXED32_CHANNEL_SERIAL_PEAK_LIVE_ACC
+    assert profile["live_counts_with_deferred_stage"] == (
+        4, 5, 4, 5, 4, 4, 2, 2, 2, 3, 4, 5, 5, 3, 3, 4,
+        3, 4, 4, 5, 4, 5, 4, 4, 4, 5, 4, 4, 4, 4, 4, 4,
+    )
+    assert profile["peak_live_x_with_deferred_stage"] == 5
+    assert (
+        profile["peak_live_x_with_deferred_stage"]
+        == FIXED32_CHANNEL_SERIAL_DEFERRED_STAGE_PEAK_LIVE_X
+    )
+    assert profile["live_x_sum_with_deferred_stage"] == 125
+    assert (
+        profile["live_x_sum_with_deferred_stage"]
+        == FIXED32_CHANNEL_SERIAL_DEFERRED_STAGE_LIVE_X_SUM
+    )
+    assert fixed32_channel_serial_windowed_liveness_profile(1)[
+        "live_counts_with_deferred_stage"
+    ] == fixed32_channel_serial_liveness_profile()["live_counts"]
 
 
 def test_packed_source_decoder_rejects_out_of_range_nodes() -> None:
@@ -553,25 +584,93 @@ def test_channel_serial_frontier5_math_matches_every_fixed_source() -> None:
         CONV_WIDTH - 1 + node
         for node in FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER
     )
-    expected_activation = ast.parse(
-        "acc / (1.0 + tl.exp(0.0 - acc))", mode="eval"
-    ).body
-    activations = [
-        node
-        for node in kernel.body
+    activation_items = [
+        (position, node)
+        for position, node in enumerate(kernel.body)
         if isinstance(node, ast.Assign)
         and len(node.targets) == 1
         and isinstance(node.targets[0], ast.Name)
         and node.targets[0].id.startswith("activated_")
     ]
+    activations = [node for _, node in activation_items]
     assert tuple(
         int(node.targets[0].id.removeprefix("activated_"))
         for node in activations
     ) == FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER
-    assert all(
-        ast.dump(node.value) == ast.dump(expected_activation)
-        for node in activations
+    saved_accumulators = {
+        node.targets[0].id: position
+        for position, node in enumerate(kernel.body)
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id.startswith("acc_")
+    }
+    assert tuple(saved_accumulators) == tuple(
+        f"acc_{node}" for node in FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER[::2]
     )
+    for pair_position in range(0, FIXED32_ROWS, 2):
+        first_node = FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER[pair_position]
+        second_node = FIXED32_CHANNEL_SERIAL_FRONTIER5_ORDER[pair_position + 1]
+        first_activation_position, first_activation = activation_items[pair_position]
+        second_activation_position, second_activation = activation_items[
+            pair_position + 1
+        ]
+        first_accumulator = f"acc_{first_node}"
+        expected_first = ast.parse(
+            f"{first_accumulator} / "
+            f"(1.0 + tl.exp(0.0 - {first_accumulator}))",
+            mode="eval",
+        ).body
+        expected_second = ast.parse(
+            "acc / (1.0 + tl.exp(0.0 - acc))", mode="eval"
+        ).body
+
+        assert ast.dump(first_activation.value) == ast.dump(expected_first)
+        assert ast.dump(second_activation.value) == ast.dump(expected_second)
+        assert first_activation_position + 1 == second_activation_position
+        saved_position = saved_accumulators[first_accumulator]
+        assert saved_position < first_activation_position
+        compute_targets = [
+            statement.targets[0].id
+            for statement in kernel.body[
+                saved_position + 1 : first_activation_position
+            ]
+            if isinstance(statement, ast.Assign)
+            and len(statement.targets) == 1
+            and isinstance(statement.targets[0], ast.Name)
+            and not statement.targets[0].id.startswith("x_")
+        ]
+        assert compute_targets == [
+            "product_0", "acc", "product_1", "acc",
+            "product_2", "acc", "product_3", "acc",
+        ]
+        assert all(
+            not (
+                isinstance(statement, ast.Expr)
+                and isinstance(statement.value, ast.Call)
+                and isinstance(statement.value.func, ast.Attribute)
+                and statement.value.func.attr == "store"
+            )
+            for statement in kernel.body[
+                saved_position + 1 : first_activation_position
+            ]
+        )
+        store_fragments = tuple(
+            ast.get_source_segment(source, statement)
+            for statement in kernel.body[
+                second_activation_position + 1 : second_activation_position + 5
+            ]
+        )
+        assert store_fragments == (
+            f"tl.store(out_batch + {first_node} * C + offs_c, "
+            f"activated_{first_node})",
+            "tl.store(stage_batch + ((WIDTH - 1) + "
+            f"{first_node}) * C + offs_c, x_{first_node})",
+            f"tl.store(out_batch + {second_node} * C + offs_c, "
+            f"activated_{second_node})",
+            "tl.store(stage_batch + ((WIDTH - 1) + "
+            f"{second_node}) * C + offs_c, x_{second_node})",
+        )
 
 
 def test_channel_serial_keeps_global_rows_coalesced_and_ordered() -> None:
@@ -645,7 +744,7 @@ def test_channel_serial_keeps_global_rows_coalesced_and_ordered() -> None:
     assert fragment.count(".to(tl.bfloat16).to(tl.float32)") == 128
     assert fragment.count("acc = bias_value + product_0") == FIXED32_ROWS
     assert fragment.count("acc = acc + product_") == 3 * FIXED32_ROWS
-    assert fragment.count("acc / (1.0 + tl.exp(0.0 - acc))") == FIXED32_ROWS
+    assert fragment.count("tl.exp(0.0 - ") == FIXED32_ROWS
     assert fragment.count("tl.store(out_batch +") == FIXED32_ROWS
     assert fragment.count("tl.store(stage_batch + ((WIDTH - 1) +") == FIXED32_ROWS
     output_positions = tuple(

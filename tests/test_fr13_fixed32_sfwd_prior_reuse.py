@@ -105,6 +105,10 @@ def test_contract_closes_adaptive_row32_geometry_for_b1_b4() -> None:
         assert contract["conv_num_warps"] == expected_geometry[1]
         assert contract["conv_peak_live_x"] == 5
         assert contract["conv_live_x_sum"] == 116
+        assert contract["conv_activation_window"] == 2
+        assert contract["conv_peak_live_acc"] == 2
+        assert contract["conv_peak_live_x_with_deferred_stage"] == 5
+        assert contract["conv_live_x_sum_with_deferred_stage"] == 125
         assert contract["x_global_loads_per_channel"] == 32
         assert contract["x_reload_count"] == 0
         assert tuple(contract["conv_node_order"]) == (
@@ -116,7 +120,7 @@ def test_contract_closes_adaptive_row32_geometry_for_b1_b4() -> None:
         assert contract["source_descriptor_launcher_argument"] is False
         assert contract["candidate"] == (
             "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_"
-            "u32x2_frontier5_loadonce_v3"
+            "u32x2_frontier5_loadonce_act2_v4"
         )
     for geometry in ((0, 32, 4, 34), (1, 31, 4, 34), (1, 32, 3, 34)):
         with pytest.raises(ValueError):
@@ -296,7 +300,8 @@ def test_launcher_uses_channel_serial_kernel_and_exact_layout() -> None:
         assert kernel.count(
             f"x_{row} = tl.load(x_batch + {row} * X_STRIDE_ROW + offs_c)"
         ) == 1
-    assert "Exact load-once order minimizes the current-row frontier: peak 5" in kernel
+    assert "Exact load-once order keeps the peak 5 frontier" in kernel
+    assert "two independent activation chains" in kernel
     assert 'block_c = int(contract["conv_block_c"])' in launcher
     assert 'num_warps = int(contract["conv_num_warps"])' in launcher
     assert "grid = (batch, triton.cdiv(channels, block_c))" in launcher
@@ -367,6 +372,10 @@ def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
     assert "x_reload_count=0" in runner
     assert "conv_peak_live_x=5" in runner
     assert "conv_live_x_sum=116" in runner
+    assert "conv_activation_window=2" in runner
+    assert "conv_peak_live_acc=2" in runner
+    assert "conv_peak_live_x_with_deferred_stage=5" in runner
+    assert "conv_live_x_sum_with_deferred_stage=125" in runner
     assert "conv_node_order=27,25,23,18,13,8,3,0" in runner
     assert "conv_block_c=128" in runner
     assert "conv_num_warps=2" in runner

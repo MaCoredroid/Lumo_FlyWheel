@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 
-CANDIDATE = "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_u32x2_frontier5_loadonce_v3"
+CANDIDATE = "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_u32x2_frontier5_loadonce_act2_v4"
 SOURCE_SCHEMA = "fr13.fixed32.sfwd_prior_reuse.source_manifest.v1"
 HOST_READINESS_SCHEMA = "fr13.fixed32.sfwd_prior_reuse.host_readiness.v1"
 REFERENCE_GDN_SOURCE_SHA256 = (

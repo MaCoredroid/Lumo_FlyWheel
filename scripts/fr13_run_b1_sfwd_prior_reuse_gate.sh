@@ -151,6 +151,10 @@ printf '%s\n' \
   'x_reload_count=0' \
   'conv_peak_live_x=5' \
   'conv_live_x_sum=116' \
+  'conv_activation_window=2' \
+  'conv_peak_live_acc=2' \
+  'conv_peak_live_x_with_deferred_stage=5' \
+  'conv_live_x_sum_with_deferred_stage=125' \
   'conv_node_order=27,25,23,18,13,8,3,0,2,7,12,17,22,1,5,6,4,10,11,9,15,16,14,20,21,19,24,26,28,29,30,31' \
   'x_stride=16384,1' \
   'out_stride=10240,1' \
