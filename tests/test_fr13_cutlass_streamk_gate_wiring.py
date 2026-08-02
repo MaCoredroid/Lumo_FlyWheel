@@ -127,11 +127,14 @@ def test_launcher_cross_kernel_preflight_runs_before_sidecar_and_docker(
 def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> None:
     gate = GATE.read_text(encoding="utf-8")
     kernel_gate = B1_KERNEL_GATE.read_text(encoding="utf-8")
+    launcher = LAUNCHER.read_text(encoding="utf-8")
 
     for assignment in (
         "FR13_GATE_QROW16=0",
         "FR13_GATE_TAW_NATIVE=0",
         "FR13_GATE_DRAFT_HEAD_PAD=0",
+        "FR13_GATE_DRAFT_HEAD_M32=0",
+        "FR13_GATE_BM8=0",
         "FR13_GATE_GDN_BV=0",
         "FR13_DFWD_UNIFIED_BM8_LIVE_AB=0",
         "FR13_DFWD_UNIFIED_BM8_PRODUCTION=0",
@@ -155,22 +158,43 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "binary.CONTAINER_DESTINATION" in gate
     assert '"served_result": "stock"' in gate
     assert '"acceptance_valid": False' in gate
-    assert "LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_live_gate.v3" in gate
-    assert "LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_live_gate.v1" in gate
+    assert "FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_live_gate.v3" in gate
+    assert (
+        "FULL_VOCAB_LIVE_SCHEMA="
+        "fr13.fixed32.cutlass_streamk_wide256_live_gate.v1" in gate
+    )
+    assert (
+        "LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_k64_root_live_gate.v1"
+        in gate
+    )
     assert '"schema": expected_live_schema' in gate
     assert "fixed32_cutlass_streamk_real_task_arm.json" in gate
+    assert "LUMO_SWE_AUTOCOMMIT=0" in kernel_gate
     assert "fr13-fixed32-cutlass-streamk-real-task-arm-v1" in gate
     assert '"task_marker": expected_task_marker' in gate
     assert '"real_task_arm_sha256": hashlib.sha256(arm_raw).hexdigest()' in gate
-    assert "export FR13_DRAFT_VOCAB_ROOT=0" in gate
-    assert "export FR13_DRAFT_VOCAB_K=0" in gate
-    assert "export FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'" in gate
-    assert '"draft_vocab_root": 0' in gate
-    assert '"draft_vocab_k": 0' in gate
-    assert '"mandatory_weight_bytes": 42025179008' in gate
+    assert 'DRAFT_VOCAB_ROOT=0' in gate
+    assert 'DRAFT_VOCAB_ROOT=1' in gate
+    assert 'DRAFT_VOCAB_K=0' in gate
+    assert 'DRAFT_VOCAB_K=65536' in gate
+    assert 'NEEDS_ALLOW=FR13_DRAFT_VOCAB_K=0' in gate
+    assert 'export FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT"' in gate
+    assert 'export FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K"' in gate
+    assert '"draft_vocab_root": expected_draft_vocab_root' in gate
+    assert '"draft_vocab_k": expected_draft_vocab_k' in gate
+    assert 'MANDATORY_WEIGHT_BYTES=42025179008' in gate
+    assert 'MANDATORY_WEIGHT_BYTES=32666638208' in gate
+    assert 'MAX_COMPARISONS=320' in gate
+    assert '"comparison_call_limit": expected_max_comparisons' in gate
+    assert '"qualification_profile": expected_profile' in gate
+    assert "pinned root-64K draft-vocabulary block map drifted" in gate
     assert '"comparator_timing_eligible": False' in gate
     assert '"patch_source_sha256": patch_source_sha256' in gate
     assert '"binary_attestation_sha256"' in gate
+    assert "B1 k64_root qualification is restricted to streamk_force_wide256" in gate
+    assert "CUTLASS k64_root B1 qualification requires wide256" in launcher
+    assert '--qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"' in launcher
+    assert "--draft-vocab-blocks scripts/fr13_dvk_subset_blocks.json" in launcher
     sequence = kernel_gate.index(
         "source scripts/fr13_fixed32_floor_timers_seq.sh"
     )
@@ -224,7 +248,7 @@ def test_exact4_timing_is_real_full_wall_full_vocab_and_source_bound() -> None:
     )
     assert (
         "STREAMK_SHA256="
-        "f7d5c01ca79829fbfff4c93949d057bd740905165b0b6793b3c0007629add962"
+        "503277a2dca6784502b709007adfe45f42d0f1a1851107e7b913e1e85a00de5a"
         in timing
     )
     assert (

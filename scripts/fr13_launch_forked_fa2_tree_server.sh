@@ -605,14 +605,33 @@ else
         ;;
     esac
   else
-    [[ "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" == "full_vocab" ]] || {
-      echo "CUTLASS B1 candidates do not accept a B4 qualification profile" >&2
-      exit 2
-    }
     [[ -n "${FR13_FIXED32_MODE:-}" && "$MAX_NUM_SEQS" == "1" ]] || {
       echo "CUTLASS Stream-K candidate requires fixed32 B1" >&2
       exit 2
     }
+    case "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" in
+      full_vocab)
+        [[ "$FR13_DRAFT_VOCAB_ROOT" == "0" \
+           && "${FR13_DRAFT_VOCAB_K:-65536}" == "0" \
+           && "${FR13_NEEDS_ALLOW:-}" == "FR13_DRAFT_VOCAB_K=0" ]] || {
+          echo "CUTLASS full_vocab B1 qualification requires the K0 workload" >&2
+          exit 2
+        }
+        ;;
+      k64_root)
+        [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256" \
+           || "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_force_wide256_byte_ab" ]] || {
+          echo "CUTLASS k64_root B1 qualification requires wide256" >&2
+          exit 2
+        }
+        [[ "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+           && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+           && -z "${FR13_NEEDS_ALLOW:-}" ]] || {
+          echo "CUTLASS k64_root B1 qualification requires the root-64K workload" >&2
+          exit 2
+        }
+        ;;
+    esac
   fi
   [[ "$FR13_FIXED32_CUTLASS_WAVE_SO" == /* \
      && "$FR13_FIXED32_CUTLASS_WAVE_SO" != *:* \
@@ -709,14 +728,18 @@ else
     fi
     _fr13_cutlass_pass_script=scripts/fr13_cutlass_streamk_pass.py
     _fr13_cutlass_pass_profile_args=()
-    [[ "$_fr13_cutlass_b4" == "0" ]] \
-      || {
+    if [[ "$_fr13_cutlass_b4" == "0" ]]; then
+      _fr13_cutlass_pass_profile_args=(
+        --qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"
+        --draft-vocab-blocks scripts/fr13_dvk_subset_blocks.json
+      )
+    else
         _fr13_cutlass_pass_script=scripts/fr13_cutlass_b4_pass.py
         _fr13_cutlass_pass_profile_args=(
           --qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"
           --fixed32-mode "$FR13_FIXED32_MODE"
         )
-      }
+    fi
     # B1 executes scripts/fr13_cutlass_streamk_pass.py validate; B4 executes
     # the corresponding persistent-M128 credential validator selected above.
     .venv/bin/python "$_fr13_cutlass_pass_script" validate \
@@ -1557,14 +1580,18 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" ]]; then
   _fr13_cutlass_streamk_production_sidecar_host="$LOG_DIR/fr13_fixed32_cutlass_streamk.production_pass.json"
   _fr13_cutlass_pass_script=scripts/fr13_cutlass_streamk_pass.py
   _fr13_cutlass_pass_profile_args=()
-  [[ "$FR13_FIXED32_CUTLASS_WAVE" != "persistent_b4_m128" ]] \
-    || {
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" != "persistent_b4_m128" ]]; then
+    _fr13_cutlass_pass_profile_args=(
+      --qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"
+      --draft-vocab-blocks scripts/fr13_dvk_subset_blocks.json
+    )
+  else
       _fr13_cutlass_pass_script=scripts/fr13_cutlass_b4_pass.py
       _fr13_cutlass_pass_profile_args=(
         --qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"
         --fixed32-mode "$FR13_FIXED32_MODE"
       )
-    }
+  fi
   # B1 executes scripts/fr13_cutlass_streamk_pass.py issue; B4 executes the
   # corresponding persistent-M128 issuer selected above.
   .venv/bin/python "$_fr13_cutlass_pass_script" issue \

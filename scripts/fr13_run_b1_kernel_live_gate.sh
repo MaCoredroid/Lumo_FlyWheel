@@ -54,7 +54,46 @@ if [[ "$FR13_GATE_DRAFT_HEAD_M32" == "1" \
   exit 2
 fi
 
-ARM="hydra27_fixed32_${TAG}"
+B1_WORKLOAD_PROFILE=${FR13_B1_WORKLOAD_PROFILE:-full_vocab}
+DRAFT_VOCAB_BLOCKS_HOST=scripts/fr13_dvk_subset_blocks.json
+DRAFT_VOCAB_BLOCKS_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
+DRAFT_VOCAB_BLOCKS_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
+case "$B1_WORKLOAD_PROFILE" in
+  full_vocab)
+    DRAFT_VOCAB_ROOT=0
+    DRAFT_VOCAB_K=0
+    NEEDS_ALLOW=FR13_DRAFT_VOCAB_K=0
+    MANDATORY_WEIGHT_BYTES=42025179008
+    MANDATORY_WEIGHT_FLOOR_MS=153.9383846446886
+    ONE_SIDED_U95_CAP_MS=177.0291423413919
+    PROFILE_SUFFIX=
+    ;;
+  k64_root)
+    [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
+       && "$FR13_GATE_QROW16" == "0" \
+       && "$FR13_GATE_TAW_NATIVE" == "0" \
+       && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
+       && "$FR13_GATE_DRAFT_HEAD_M32" == "0" \
+       && "$FR13_GATE_BM8" == "0" \
+       && "$FR13_GATE_GDN_BV" == "0" ]] || {
+      echo "B1 k64_root is restricted to the isolated wide256 byte gate" >&2
+      exit 2
+    }
+    DRAFT_VOCAB_ROOT=1
+    DRAFT_VOCAB_K=65536
+    NEEDS_ALLOW=
+    MANDATORY_WEIGHT_BYTES=32666638208
+    MANDATORY_WEIGHT_FLOOR_MS=119.658015414
+    ONE_SIDED_U95_CAP_MS=137.6067177261
+    PROFILE_SUFFIX=_k64_root
+    ;;
+  *)
+    echo "FR13_B1_WORKLOAD_PROFILE must be full_vocab or k64_root" >&2
+    exit 2
+    ;;
+esac
+
+ARM="hydra27_fixed32${PROFILE_SUFFIX}_${TAG}"
 SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
 FA2_SHA=$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')
 SOURCE_COMMIT=$(git rev-parse HEAD)
@@ -63,29 +102,42 @@ SOURCE_COMMIT=$(git rev-parse HEAD)
 [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]]
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]]
+if [[ "$B1_WORKLOAD_PROFILE" == "k64_root" ]]; then
+  [[ -f "$DRAFT_VOCAB_BLOCKS_HOST" \
+     && ! -L "$DRAFT_VOCAB_BLOCKS_HOST" \
+     && "$(sha256sum "$DRAFT_VOCAB_BLOCKS_HOST" | awk '{print $1}')" == "$DRAFT_VOCAB_BLOCKS_SHA256" ]] \
+    || { echo "pinned root-64K draft-vocabulary block map drifted" >&2; exit 2; }
+fi
 
 export BSIZE=1
 export CONC=1
 export WALL=0
-export FR13_DRAFT_VOCAB_ROOT=0
-export FR13_DRAFT_VOCAB_K=0
-export FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'
+export FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT"
+export FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K"
+export FR13_DRAFT_VOCAB_BLOCKS="$DRAFT_VOCAB_BLOCKS_CONTAINER"
+export FR13_NEEDS_ALLOW="$NEEDS_ALLOW"
 export FR13_FLOOR_ORDER=TH
 
 source scripts/fr13_canonical_env.sh
 run_variant() { :; }
 source scripts/fr13_fixed32_floor_timers_seq.sh
-export FR13_MANDATORY_WEIGHT_BYTES=42025179008
-export FR13_WEIGHT_FLOOR_MS=153.9383846446886
+[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "$MANDATORY_WEIGHT_BYTES" \
+   && "$FR13_WEIGHT_FLOOR_MS" == "$MANDATORY_WEIGHT_FLOOR_MS" ]] \
+  || { echo "canonical B1 workload floor contract drifted" >&2; exit 2; }
 if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" ]]; then
   export ENFORCE_EAGER=1
 fi
 
 mkdir -p "$RUNROOT"
-printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_m32_gate=%s\ndraft_vocab_root=0\ndraft_vocab_k=0\nfr13_needs_allow=FR13_DRAFT_VOCAB_K=0\nmandatory_weight_bytes=42025179008\nmandatory_weight_floor_ms=153.9383846446886\none_sided_u95_cap_ms=177.0291423413919\nstarted=%s\n' \
+printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_m32_gate=%s\nworkload_profile=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nstarted=%s\n' \
   "$$" "$RUNROOT" "$ARM" "$SOURCE_COMMIT" "$FA2_SHA" "$FR13_GATE_BM8" \
-  "$FR13_GATE_DRAFT_HEAD_M32" "$(date -u +%FT%TZ)" > "$RUNROOT/launcher_meta.txt"
+  "$FR13_GATE_DRAFT_HEAD_M32" "$B1_WORKLOAD_PROFILE" \
+  "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" "$NEEDS_ALLOW" \
+  "$DRAFT_VOCAB_BLOCKS_CONTAINER" "$DRAFT_VOCAB_BLOCKS_SHA256" \
+  "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
+  "$ONE_SIDED_U95_CAP_MS" "$(date -u +%FT%TZ)" \
+  > "$RUNROOT/launcher_meta.txt"
 
 .venv/bin/python scripts/fr13_runtime_manifest.py \
   --repo "$PWD" --profile fixed32 \
@@ -95,6 +147,7 @@ printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=
   --repo "$PWD" --output "$RUNROOT/external_manifest.at_launch.json"
 
 OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
+  LUMO_SWE_AUTOCOMMIT=0 \
   FR13_FIXED32_B1_DIAGNOSTIC=1 \
   FR13_DEVICE_MULTIDRAFT=1 \
   FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
