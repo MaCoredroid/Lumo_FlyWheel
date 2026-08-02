@@ -1,0 +1,63 @@
+{
+  "base_commit": "a79581171789c60bba34b89e1cc58813d1637995",
+  "branch": "agent/fixed32-cfwd-hotloop-reduction-20260802",
+  "candidate": {
+    "default_on": false,
+    "duplicate_value_tile_k_loads_per_step": 0,
+    "full_value_tile": true,
+    "kernel_warps": 8,
+    "new_programs_per_layer_request_value_head": 1,
+    "old_programs_per_layer_request_value_head": 2,
+    "state_elements_per_thread_before_compiler_effects": 64,
+    "value_tile": 128
+  },
+  "geometry": {
+    "dim_k": 128,
+    "dim_v": 128,
+    "layers": 48,
+    "value_heads": 48
+  },
+  "qualification": {
+    "gpu_compile_resource_gate": "pending",
+    "real_swe_verified_byte_coverage": "pending",
+    "real_swe_verified_timing": "pending",
+    "timing_eligible": false
+  },
+  "schema": "fr13.fixed32.cfwd_full_value_tile_source.v1",
+  "source_commit": "0f56038fa7cf7d628ba8593444e638a4b8dfad17",
+  "static_work_model": {
+    "b1": {
+      "bv128_programs_per_event": 2304,
+      "bv128_warps_per_event": 18432,
+      "bv64_programs_per_event": 4608,
+      "bv64_warps_per_event": 36864,
+      "duplicate_k_vector_loads_removed_per_step": 2304,
+      "k_norm_fp32_multiplications_removed_per_step": 589824,
+      "k_norm_reductions_removed_per_step": 2304,
+      "k_norm_rsqrt_removed_per_step": 2304,
+      "logical_k_load_mib_removed_per_step": 0.5625
+    },
+    "b4": {
+      "bv128_programs_per_event": 9216,
+      "bv128_warps_per_event": 73728,
+      "bv64_programs_per_event": 18432,
+      "bv64_warps_per_event": 147456,
+      "duplicate_k_vector_loads_removed_per_step": 9216,
+      "k_norm_fp32_multiplications_removed_per_step": 2359296,
+      "k_norm_reductions_removed_per_step": 9216,
+      "k_norm_rsqrt_removed_per_step": 9216,
+      "logical_k_load_mib_removed_per_step": 2.25
+    },
+    "classification": "logical_source_work_not_latency_or_dram_measurement",
+    "hydra27_mean_root_inclusive_steps": 5.753885,
+    "logical_k_load_mib_removed_at_mean": {
+      "b1": 3.23656,
+      "b4": 12.946241
+    },
+    "logical_k_load_mib_removed_at_max12": {
+      "b1": 6.75,
+      "b4": 27.0
+    }
+  },
+  "status": "source_static_only_gpu_and_real_swe_gates_pending"
+}
