@@ -83,11 +83,28 @@ class Fr13Fixed32M128LinearScheduler100
  public:
   using Base = StaticPersistentTileScheduler100;
   using Params = typename Base::Params;
+  using RasterOrder = typename Params::RasterOrder;
   using WorkTileInfo = typename Base::WorkTileInfo;
+  using CLCResponse = typename Base::CLCResponse;
 
   CUTLASS_DEVICE explicit
   Fr13Fixed32M128LinearScheduler100(Params const& params)
       : Base(params) {
+    initialize_linear_state(params);
+  }
+
+  CUTLASS_DEVICE explicit
+  Fr13Fixed32M128LinearScheduler100(
+      CLCResponse* clc_response_ptr,
+      Params const& params,
+      dim3 block_id_in_cluster)
+      : Base(clc_response_ptr, params, block_id_in_cluster) {
+    initialize_linear_state(params);
+  }
+
+ private:
+  CUTLASS_DEVICE void
+  initialize_linear_state(Params const& params) {
 #if defined(__CUDA_ARCH__)
     if (params.raster_order_ == RasterOrder::AlongN) {
       current_work_linear_idx_ =
@@ -98,10 +115,22 @@ class Fr13Fixed32M128LinearScheduler100
     }
     total_grid_size_ =
         uint64_t(gridDim.x) * uint64_t(gridDim.y) * uint64_t(gridDim.z);
+
+    const bool direct_linear_geometry =
+        params.problem_tiles_m_ == 1 && params.problem_tiles_l_ == 1 &&
+        params.cluster_shape_m_ == 1 && params.cluster_shape_n_ == 1 &&
+        params.log_swizzle_size_ == 0 &&
+        params.blocks_per_problem_ == uint64_t(params.problem_tiles_n_);
+    CUTLASS_ASSERT(direct_linear_geometry &&
+                   "fixed32 M128 direct scheduler requires tiled MxL=1x1");
+    direct_linear_blocks_ =
+        direct_linear_geometry ? uint64_t(params.problem_tiles_n_) : 0;
 #else
     CUTLASS_ASSERT(false && "device-only fixed32 M128 scheduler constructor");
 #endif
   }
+
+ public:
 
   template <class ClusterShape>
   CUTLASS_DEVICE WorkTileInfo
@@ -116,7 +145,7 @@ class Fr13Fixed32M128LinearScheduler100
 
   CUTLASS_DEVICE WorkTileInfo
   get_current_work_for_linear_idx(uint64_t linear_idx) const {
-    if (linear_idx >= this->scheduler_params.blocks_per_problem_) {
+    if (linear_idx >= direct_linear_blocks_) {
       return WorkTileInfo::invalid_work_tile();
     }
     return {0, static_cast<int32_t>(linear_idx), 0, true};
@@ -153,6 +182,7 @@ class Fr13Fixed32M128LinearScheduler100
  private:
   uint64_t current_work_linear_idx_ = 0;
   uint64_t total_grid_size_ = 0;
+  uint64_t direct_linear_blocks_ = 0;
 };
 
 template <class TileShape, class ClusterShape,

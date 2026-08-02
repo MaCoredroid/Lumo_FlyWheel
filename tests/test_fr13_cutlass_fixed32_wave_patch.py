@@ -178,11 +178,20 @@ def test_b4_m128_static_changes_only_complete_tile_scheduler() -> None:
     assert "arch::Sm120" in module.SCHEDULER_SPECIALIZATION_REPLACEMENT
 
     scheduler = module.SCHEDULER_SPECIALIZATION_REPLACEMENT
+    assert "using CLCResponse = typename Base::CLCResponse;" in scheduler
+    assert "CLCResponse* clc_response_ptr" in scheduler
+    assert ": Base(clc_response_ptr, params, block_id_in_cluster)" in scheduler
+    assert "params.problem_tiles_m_ == 1" in scheduler
+    assert "params.problem_tiles_l_ == 1" in scheduler
+    assert "params.cluster_shape_m_ == 1" in scheduler
+    assert "params.cluster_shape_n_ == 1" in scheduler
+    assert "params.log_swizzle_size_ == 0" in scheduler
+    assert "direct_linear_geometry ? uint64_t(params.problem_tiles_n_) : 0" in scheduler
     assert "return {0, static_cast<int32_t>(linear_idx), 0, true};" in scheduler
     assert "scheduler_params.divmod_batch_" not in scheduler
     assert "divmod_cluster_blk_major_" not in scheduler
     assert "current_work_linear_idx_ += total_grid_size_" in scheduler
-    assert "linear_idx >= this->scheduler_params.blocks_per_problem_" in scheduler
+    assert "linear_idx >= direct_linear_blocks_" in scheduler
 
     config_start = patched.index(
         "struct sm120_blockwise_fp8_config_b4_persistent_m128_static"
